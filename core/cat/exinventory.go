@@ -82,6 +82,14 @@ const exP4MaxBytes = 12
 // and ParseEXAddress test membership purely by lookup — no independent
 // numeric range logic on P1/P2/P3 — so out-of-range or negative inputs simply
 // miss the map rather than being range-checked.
+//
+// exMembers ITSELF IS NO LONGER READ as of Task 53: KnownEXAddress now
+// delegates to FT710.KnownEXAddress, which consults the Dialect's own
+// exMembers FIELD of the same name, not this package var. This one is kept
+// only because exByTriple's init loop still builds both together, and is
+// removed alongside the delegates in Task 55. Do not reach for it from
+// inside a Dialect method — that would be exactly the global-not-receiver
+// bug this milestone exists to prevent (codex review Minor-5).
 var (
 	exMembers  map[EXAddress]bool
 	exByTriple map[[3]int]EXAddress

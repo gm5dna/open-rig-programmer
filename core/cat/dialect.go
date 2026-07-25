@@ -8,7 +8,7 @@ package cat
 type slotSpace struct {
 	memoryLo, memoryHi int    // inclusive decimal range, e.g. 1..99
 	sixtyLo, sixtyHi   int    // inclusive decimal range, e.g. 501..599; 0,0 if absent
-	pmsPairs           int    // e.g. 9 -> P1L..P9U; 0 if absent
+	pmsPairs           int    // e.g. 9 -> P1L..P9U; valid range 0..9 — the pair number is a single wire digit ('1'-'9'), so this can never validly exceed 9; consumers must go through pmsCap() rather than trust this raw; 0 if absent
 	emgWire            string // "" if this family has no emergency channel
 	noneWire           string // the "VFO or MT or QMB" form, e.g. "000"
 }
@@ -27,13 +27,13 @@ type slotSpace struct {
 // methods delegate to, must read this struct rather than a package-level
 // global. A method that takes a Dialect and consults a global has the
 // shape of a seam and none of the substance, and while only one dialect
-// exists no ordinary test catches it — see seconddialect_test.go, which
-// is the test that does.
+// exists no ordinary test catches it — see seconddialect_test.go (Task
+// 57), which is the test that does.
 //
 // The ZERO VALUE IS INERT, deliberately. An exported struct always has a
 // constructible zero value, so `var d cat.Dialect` compiles and
-// d.AllowedCommand is a non-nil method value that would satisfy
-// transport.NewEngine's nil check. A zero Dialect therefore carries no
+// d.AllowedCommand (from Task 54) is a non-nil method value that would
+// satisfy transport.NewEngine's nil check. A zero Dialect therefore carries no
 // slot space, no modes and no inventory, and consequently builds nothing
 // and accepts nothing.
 type Dialect struct {
@@ -114,6 +114,20 @@ func (d Dialect) EXAddresses() []EXAddress {
 // are not contiguous.
 func (d Dialect) KnownEXAddress(a EXAddress) bool { return d.exMembers[a] }
 
+// pmsCap returns this dialect's PMS pair count, clamped to 9. The wire
+// form's pair digit is a single ASCII byte ('1'-'9'), so pmsPairs can
+// never validly exceed 9 no matter what a dialect's data configures —
+// codex review Important-2 measured an uncapped pmsPairs building
+// multi-byte wire forms ("P12L") that the SAME dialect's own ParseSlot
+// then rejected. classifySlot and PMSSlot both consume this rather than
+// the raw field, so the cap is expressed exactly once.
+func (d Dialect) pmsCap() int {
+	if d.slots.pmsPairs > 9 {
+		return 9
+	}
+	return d.slots.pmsPairs
+}
+
 // classifySlot reports what kind of slot, if any, wire represents under
 // this dialect's slot space. Every slot-taking method routes through it.
 func (d Dialect) classifySlot(wire string) slotKind {
@@ -147,9 +161,9 @@ func (d Dialect) classifySlot(wire string) slotKind {
 		}
 	}
 
-	if d.slots.pmsPairs > 0 &&
+	if pc := d.pmsCap(); pc > 0 &&
 		wire[0] == 'P' &&
-		wire[1] >= '1' && wire[1] <= byte('0'+d.slots.pmsPairs) &&
+		wire[1] >= '1' && wire[1] <= byte('0'+pc) &&
 		(wire[2] == 'L' || wire[2] == 'U') {
 		return slotKindPMS
 	}

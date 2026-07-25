@@ -85,8 +85,11 @@ func (m Mode) Wire() byte {
 	return byte(m)
 }
 
-// unknownModeName renders a Mode no dialect recognises. Shared by
-// Mode.String and Dialect.ModeName so the two cannot drift.
+// unknownModeName renders a Mode no dialect recognises. Used by
+// Dialect.ModeName today; will be shared with Mode.String from Task 56,
+// which is what stops the two from drifting apart. Mode.String keeps its
+// own inline, byte-identical formatting until then — Task 56's to change,
+// not this one's; see the M9b plan.
 func unknownModeName(m Mode) string {
 	return fmt.Sprintf("Mode(%#02x)", byte(m))
 }

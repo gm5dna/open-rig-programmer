@@ -57,8 +57,9 @@ func (d Dialect) ParseSlot(wire string) (Slot, error) {
 	return Slot{wire: wire}, nil
 }
 
-// MemorySlot builds the Slot for memory channel n (M-01…M-99) under this
-// dialect's memory range. Reference: "001-099 | Memory channels
+// MemorySlot builds the Slot for memory channel n under this dialect's
+// configured memory range (memoryLo..memoryHi). For FT710 that range is
+// 1..99, i.e. M-01…M-99; reference: "001-099 | Memory channels
 // M-01…M-99".
 func (d Dialect) MemorySlot(n int) (Slot, error) {
 	if n < d.slots.memoryLo || n > d.slots.memoryHi || d.slots.memoryHi == 0 {
@@ -71,7 +72,7 @@ func (d Dialect) MemorySlot(n int) (Slot, error) {
 // dialect's PMS pair count. Reference: "P1L-P9U | PMS pairs (9
 // lower/upper pairs)".
 func (d Dialect) PMSSlot(pair int, upper bool) (Slot, error) {
-	if pair < 1 || pair > d.slots.pmsPairs {
+	if pair < 1 || pair > d.pmsCap() {
 		return Slot{}, newParseError([]byte(fmt.Sprintf("PMSSlot(%d)", pair)), "PMS pair out of range 1-9")
 	}
 	suffix := byte('L')
@@ -81,22 +82,25 @@ func (d Dialect) PMSSlot(pair int, upper bool) (Slot, error) {
 	return Slot{wire: fmt.Sprintf("P%d%c", pair, suffix)}, nil
 }
 
-// SixtyMSlot builds the Slot for 60m channel n under this dialect's 60m
-// range.
+// SixtyMSlot builds the Slot for 60m channel n (an ordinal starting at 1)
+// under this dialect's 60m range: the wire form is the dialect's own
+// sixtyLo+n-1, capped at sixtyHi, so the result is always inside this
+// SAME dialect's own slot space — codex review Important-1 caught an
+// earlier version that read the receiver only for the bounds check and
+// hardcoded a '5' prefix for the wire form itself, which a differently
+// numbered 60m dialect's own ParseSlot then rejected. For FT710 (sixtyLo
+// 501, sixtyHi 599) that is n=1 -> "501" through n=99 -> "599".
 //
 // ASSUMED: the reference documents the wire form only as "5xx" with
 // "ASSUMED 501… numbering" — neither the numbering start nor the channel
-// count is confirmed by the manual. This constructor assumes numbering
-// starts at n=1 -> "501" and, because the wire form is fixed at 3 bytes
-// ('5' + 2 digits), caps n at the dialect's channel count (99 -> "599"
-// for FT710). Both bounds must be verified at the M5a/M5b hardware
-// sessions.
+// count is confirmed by the manual for FT710. Both bounds must be
+// verified at the M5a/M5b hardware sessions.
 func (d Dialect) SixtyMSlot(n int) (Slot, error) {
 	count := d.slots.sixtyHi - d.slots.sixtyLo + 1
 	if d.slots.sixtyHi == 0 || n < 1 || n > count {
 		return Slot{}, newParseError([]byte(fmt.Sprintf("SixtyMSlot(%d)", n)), "60m channel out of ASSUMED range 1-99")
 	}
-	return Slot{wire: fmt.Sprintf("5%02d", n)}, nil
+	return Slot{wire: fmt.Sprintf("%03d", d.slots.sixtyLo+n-1)}, nil
 }
 
 // EMGSlot returns the Slot for this dialect's Alaska-emergency-equivalent
