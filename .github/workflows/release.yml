@@ -1,0 +1,367 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Release packaging for open-rig-programmer. Triggered by pushing a
+# `v*` tag. Builds the rigprog CLI (darwin-universal via `lipo`,
+# linux-amd64, linux-arm64) and the desktop GUI (darwin universal .app,
+# zipped; linux amd64, packaged as an AppImage), computes a SHA256SUMS
+# file over every artefact, and publishes everything to a DRAFT GitHub
+# release for a human to review before publishing.
+#
+# The release stays a DRAFT: this workflow never runs
+# `gh release edit --draft=false`. Per docs/hardware-notes.md and
+# docs/linux-setup.md, Linux artefacts must not ship publicly until the
+# project's pre-release Linux real-radio session has run — building
+# them here (to prove the packaging pipeline works) is fine; publishing
+# the draft is a separate, human decision.
+#
+# go.bug.st/serial (this project's only serial-port dependency) is pure
+# Go on Linux — its enumerator package's Linux implementation
+# (go.bug.st/serial/enumerator's usb_linux.go) reads /sys/bus/usb
+# directly with no cgo — so the Linux CLI builds with CGO_ENABLED=0
+# (confirmed locally: GOOS=linux GOARCH=amd64/arm64 CGO_ENABLED=0 go
+# build ./cmd/rigprog succeeds both arches). The same package's darwin
+# implementation (usb_darwin.go) DOES use cgo (IOKit), so the darwin CLI
+# build needs CGO_ENABLED=1 explicitly — Go disables cgo by default for
+# a cross-arch build even on a matching OS (building the amd64 slice on
+# an arm64 runner, or vice versa), so leaving CGO_ENABLED unset would
+# silently drop the enumerator's darwin backend and fail to link.
+
+name: Release
+
+permissions:
+  contents: read
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  VERSION: ${{ github.ref_name }}
+  WAILS_VERSION: v2.13.0
+  # Link-time version stamp. Every Go build below sets
+  # -X <VERSION_PKG>.version=<tag>; without it the artefact reports
+  # "dev (unreleased build)" — see internal/buildinfo. Each job that can
+  # RUN what it just built asserts the stamp landed, because a dropped
+  # ldflags is otherwise silent until a user reads the version off a
+  # release binary and finds "dev".
+  VERSION_PKG: github.com/gm5dna/open-rig-programmer/internal/buildinfo
+
+jobs:
+  cli-darwin-universal:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build amd64 slice
+        env:
+          CGO_ENABLED: '1'
+          GOOS: darwin
+          GOARCH: amd64
+        run: go build -trimpath -ldflags="-s -w -X ${VERSION_PKG}.version=${VERSION}" -o dist/rigprog-amd64 ./cmd/rigprog
+
+      - name: Build arm64 slice
+        env:
+          CGO_ENABLED: '1'
+          GOOS: darwin
+          GOARCH: arm64
+        run: go build -trimpath -ldflags="-s -w -X ${VERSION_PKG}.version=${VERSION}" -o dist/rigprog-arm64 ./cmd/rigprog
+
+      - name: lipo -create universal binary
+        run: |
+          lipo -create -output dist/rigprog dist/rigprog-amd64 dist/rigprog-arm64
+          rm dist/rigprog-amd64 dist/rigprog-arm64
+          archs="$(lipo -archs dist/rigprog)"
+          echo "Universal binary architectures: $archs"
+          echo "$archs" | grep -qw x86_64
+          echo "$archs" | grep -qw arm64
+
+      - name: Verify the version stamp landed
+        run: |
+          set -eu
+          chmod +x dist/rigprog
+          reported="$(./dist/rigprog version | head -1 | cut -d' ' -f2)"
+          echo "rigprog reports: ${reported} (tag: ${VERSION})"
+          test "${reported}" = "${VERSION}"
+          ! ./dist/rigprog version | grep -q 'unreleased build'
+
+      - name: Package
+        run: |
+          chmod +x dist/rigprog
+          tar -C dist -czf "rigprog-${VERSION}-darwin-universal.tar.gz" rigprog
+
+      - name: Upload artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-darwin-universal
+          path: rigprog-${{ env.VERSION }}-darwin-universal.tar.gz
+          if-no-files-found: error
+
+  cli-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        env:
+          CGO_ENABLED: '0'
+          GOOS: linux
+          GOARCH: ${{ matrix.arch }}
+        run: go build -trimpath -ldflags="-s -w -X ${VERSION_PKG}.version=${VERSION}" -o dist/rigprog ./cmd/rigprog
+
+      # amd64 only: the arm64 slice cannot run on this x86 runner. Both
+      # arches take the same ldflags, so proving the stamp on the runnable
+      # one proves the mechanism.
+      - name: Verify the version stamp landed
+        if: matrix.arch == 'amd64'
+        run: |
+          set -eu
+          chmod +x dist/rigprog
+          reported="$(./dist/rigprog version | head -1 | cut -d' ' -f2)"
+          echo "rigprog reports: ${reported} (tag: ${VERSION})"
+          test "${reported}" = "${VERSION}"
+          ! ./dist/rigprog version | grep -q 'unreleased build'
+
+      - name: Package
+        run: |
+          chmod +x dist/rigprog
+          tar -C dist -czf "rigprog-${VERSION}-linux-${{ matrix.arch }}.tar.gz" rigprog
+
+      - name: Upload artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-linux-${{ matrix.arch }}
+          path: rigprog-${{ env.VERSION }}-linux-${{ matrix.arch }}.tar.gz
+          if-no-files-found: error
+
+  gui-darwin-universal:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Add Go bin to PATH
+        run: echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Install Wails CLI
+        run: go install "github.com/wailsapp/wails/v2/cmd/wails@${WAILS_VERSION}"
+
+      - name: wails build (darwin/universal)
+        working-directory: app
+        env:
+          # go.bug.st/serial's enumerator is cgo on darwin (same reason the
+          # CLI universal build sets this explicitly) — do not rely on the
+          # runner's default.
+          CGO_ENABLED: '1'
+        run: |
+          set -u
+          # `wails build` ends with its OWN ad-hoc codesign, and that step
+          # can fail with "resource fork, Finder information, or similar
+          # detritus not allowed" when the freshly-built binary carries
+          # com.apple.provenance extended attributes. app/README.md
+          # documents the identical failure in a local checkout, and a
+          # local dry-run of this workflow (25/07/2026) reproduced it: the
+          # .app is COMPLETE at that point — only the signature is missing
+          # — and wails still exits 1.
+          #
+          # The very next step strips those xattrs and signs the bundle
+          # properly, so a failure here is not fatal in itself. What IS
+          # fatal is a missing or non-universal bundle, which is what the
+          # checks below assert: a compile or frontend failure never
+          # produces one, so nothing real is being swallowed.
+          wails build -platform darwin/universal -ldflags "-X ${VERSION_PKG}.version=${VERSION}" || \
+            echo "wails build exited non-zero — checking whether the bundle is nonetheless complete"
+
+          app="build/bin/Open Rig Programmer.app"
+          test -d "$app"
+          test -x "$app/Contents/MacOS/open-rig-programmer"
+          archs="$(lipo -archs "$app/Contents/MacOS/open-rig-programmer")"
+          echo "App binary architectures: $archs"
+          echo "$archs" | grep -qw x86_64
+          echo "$archs" | grep -qw arm64
+
+      - name: Verify the version stamp landed
+        working-directory: app
+        run: |
+          set -eu
+          # The GUI cannot be asked its version from a shell, so this
+          # inspects the binary instead — a weaker check than the CLI
+          # jobs' `rigprog version`, and deliberately stated as such.
+          LC_ALL=C grep -qa -- "${VERSION}" "build/bin/Open Rig Programmer.app/Contents/MacOS/open-rig-programmer"
+          echo "version string ${VERSION} present in the .app binary"
+
+      # Must run BEFORE the codesign step: signing seals the bundle's
+      # resources, and Info.plist is one of them.
+      - name: Stamp the bundle version into Info.plist
+        working-directory: app
+        run: |
+          set -eu
+          # wails.json's info block deliberately omits productVersion —
+          # a static version there would drift from the tag — so wails
+          # falls back to its own default of "1.0.0", right for the
+          # v1.0.0 tag and wrong for every tag after it. The tag is the
+          # single source of truth, applied here (leading "v" stripped:
+          # CFBundle* version keys are conventionally bare).
+          plist="build/bin/Open Rig Programmer.app/Contents/Info.plist"
+          bundle_version="${VERSION#v}"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${bundle_version}" "$plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${bundle_version}" "$plist"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$plist"
+
+      - name: Ad-hoc codesign
+        working-directory: app
+        run: |
+          xattr -cr "build/bin/Open Rig Programmer.app"
+          codesign --force --deep -s - "build/bin/Open Rig Programmer.app"
+          codesign -dv --verbose=2 "build/bin/Open Rig Programmer.app"
+
+      - name: Zip the .app
+        working-directory: app/build/bin
+        run: zip -r -y "../../../open-rig-programmer-${VERSION}-darwin-universal.app.zip" "Open Rig Programmer.app"
+
+      - name: Upload artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gui-darwin-universal
+          path: open-rig-programmer-${{ env.VERSION }}-darwin-universal.app.zip
+          if-no-files-found: error
+
+  gui-linux-amd64:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux GUI dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Add Go bin to PATH
+        run: echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Install Wails CLI
+        run: go install "github.com/wailsapp/wails/v2/cmd/wails@${WAILS_VERSION}"
+
+      - name: wails build (linux/amd64)
+        working-directory: app
+        run: wails build -tags webkit2_41 -ldflags "-X ${VERSION_PKG}.version=${VERSION}"
+
+      - name: Assemble AppDir
+        run: |
+          set -eu
+          mkdir -p AppDir/usr/bin
+          install -m 0755 app/build/bin/open-rig-programmer AppDir/usr/bin/open-rig-programmer
+          cp app/build/appicon.png AppDir/open-rig-programmer.png
+
+          cat > AppDir/AppRun <<'EOF'
+          #!/bin/sh
+          HERE="$(dirname "$(readlink -f "$0")")"
+          exec "$HERE/usr/bin/open-rig-programmer" "$@"
+          EOF
+          chmod +x AppDir/AppRun
+
+          cat > AppDir/open-rig-programmer.desktop <<'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=Open Rig Programmer
+          Comment=Memory-channel programmer for the Yaesu FT-710
+          Exec=open-rig-programmer
+          Icon=open-rig-programmer
+          Categories=Utility;
+          Terminal=false
+          EOF
+
+      - name: Download appimagetool
+        run: |
+          curl -fL -o appimagetool \
+            https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          # Supply-chain pin: sha256 of the 1.9.1 x86_64 asset, computed and
+          # recorded 13/07/2026 (task-23 review finding).
+          echo "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  appimagetool" | sha256sum -c -
+          chmod +x appimagetool
+
+      - name: Build AppImage
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: '1'
+        run: ./appimagetool AppDir "open-rig-programmer-${VERSION}-linux-amd64.AppImage"
+
+      - name: Upload artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gui-linux-amd64
+          path: open-rig-programmer-${{ env.VERSION }}-linux-amd64.AppImage
+          if-no-files-found: error
+
+  release:
+    needs:
+      - cli-darwin-universal
+      - cli-linux
+      - gui-darwin-universal
+      - gui-linux-amd64
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artefacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: artifacts
+        run: sha256sum -- * > SHA256SUMS
+
+      - name: Write release notes
+        run: |
+          sed "s/__VERSION__/${VERSION}/g" .github/release-notes-template.md > release-notes.md
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${VERSION}" \
+            --draft \
+            --title "Open Rig Programmer ${VERSION}" \
+            --notes-file release-notes.md \
+            artifacts/*

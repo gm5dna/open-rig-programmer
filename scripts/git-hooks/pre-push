@@ -1,0 +1,10 @@
+#!/bin/sh
+# Refuse to push while any tracked file matches a private-fixture pattern.
+# Mirrors the CI guard in .github/workflows/ci.yml so the safety net does
+# not depend on CI being available. Enable once per clone with:
+#   git config core.hooksPath scripts/git-hooks
+if git ls-files | grep -iE '(^|/)fixtures-private/|\.memlist$|(^|/)memory[^/]*\.dat$|\.private-capture$'; then
+  echo 'pre-push: tracked file matches a private-fixture pattern (listed above); push refused.' >&2
+  exit 1
+fi
+exit 0

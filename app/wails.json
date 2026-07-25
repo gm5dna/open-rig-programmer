@@ -1,0 +1,15 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "Open Rig Programmer",
+  "outputfilename": "open-rig-programmer",
+  "frontend:install": "npm ci",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "info": {
+    "companyName": "Open Rig Programmer",
+    "productName": "Open Rig Programmer",
+    "copyright": "Licensed under the GNU General Public License v3.0 or later",
+    "comments": "Memory-channel programmer for the Yaesu FT-710"
+  }
+}

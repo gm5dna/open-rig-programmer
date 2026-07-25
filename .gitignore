@@ -1,0 +1,40 @@
+# Go build artefacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/bin/
+/dist/
+
+# Coverage
+*.cover
+coverage.txt
+coverage.html
+
+# Node / frontend
+node_modules/
+
+# Wails build outputs
+app/build/bin/
+app/frontend/dist/
+app/frontend/node_modules/
+
+# Superpowers scratch state
+.superpowers/
+
+# OS cruft
+.DS_Store
+
+# ---------------------------------------------------------------------------
+# PRIVATE FIXTURES — personal radio backups and serial captures.
+# These contain callsigns and personal channel data and must NEVER be
+# committed. Raw captures belong in a fixtures-private/ directory only;
+# anything checked in must first be redacted (see docs/fixtures.md).
+# ---------------------------------------------------------------------------
+**/fixtures-private/
+*.[Mm][Ee][Mm][Ll][Ii][Ss][Tt]
+[Mm][Ee][Mm][Oo][Rr][Yy]*.[Dd][Aa][Tt]
+*.private-capture

@@ -1,0 +1,281 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
+/* Design tokens — the one place the palette/type/spacing scale lives
+ * (task-16 brief: "CSS custom properties for the palette in one place").
+ * Anchor colour (--colour-panel) is the M0 scaffold's deep navy,
+ * rgba(27,38,54,1), kept deliberately — see main.go's window
+ * BackgroundColour, unchanged. Everything else is new for the M6 shell:
+ * a calm dark instrument-panel palette (amber/teal/violet each carry a
+ * distinct MEANING — primary/dirty, connected/good, demo — never
+ * decorative), a system-ui face for UI chrome and a monospace face for
+ * anything that reads like a radio's own digital readout (ports, CAT
+ * IDs, digests, counters). */
+:root {
+	--colour-bg: #10161f;
+	--colour-panel: #1b2636;
+	--colour-panel-raised: #233047;
+	--colour-panel-sunken: #141b26;
+	--colour-hairline: #324160;
+	--colour-hairline-soft: #263349;
+
+	--colour-text: #eef2f8;
+	--colour-text-dim: #93a1b8;
+	--colour-text-faint: #66748c;
+
+	--colour-accent: #f5a623;
+	--colour-accent-strong: #ffc966;
+	--colour-good: #43d1b0;
+	--colour-demo: #b48cf2;
+	--colour-danger: #ff7a7a;
+	--colour-danger-bg: #3a2027;
+	--colour-warn: #e8c547;
+	--colour-warn-bg: #38301a;
+
+	--font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+	--font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
+
+	--radius-sm: 4px;
+	--radius-md: 8px;
+
+	--space-1: 4px;
+	--space-2: 8px;
+	--space-3: 12px;
+	--space-4: 16px;
+	--space-5: 24px;
+
+	--transition-fast: 120ms ease;
+	--focus-ring: 0 0 0 2px var(--colour-bg), 0 0 0 4px var(--colour-accent-strong);
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	height: 100%;
+	margin: 0;
+}
+
+html {
+	background-color: var(--colour-bg);
+	color: var(--colour-text);
+	color-scheme: dark;
+}
+
+body {
+	font-family: var(--font-ui);
+	font-size: 13px;
+	line-height: 1.45;
+	-webkit-font-smoothing: antialiased;
+}
+
+#app {
+	height: 100vh;
+	display: flex;
+	flex-direction: column;
+}
+
+button,
+input,
+select {
+	font: inherit;
+	color: inherit;
+}
+
+button {
+	background: none;
+	border: none;
+	cursor: pointer;
+}
+
+button:disabled {
+	cursor: not-allowed;
+}
+
+/* One visible, consistent focus treatment everywhere — never suppressed. */
+:focus-visible {
+	outline: none;
+	box-shadow: var(--focus-ring);
+	border-radius: var(--radius-sm);
+}
+
+/* --- modal chrome (task 18) ---
+ * Shared header/body/footer/button layout for every in-app dialogue
+ * (Modal.svelte's content: send review/transfer, dirty guard, import
+ * result) — one place, so three-plus dialogues don't each redeclare
+ * identical spacing/button rules. Named modal-btn* (not .btn*) so they
+ * never collide with ConnectionBar's own component-scoped .btn styles. */
+.modal-header {
+	padding: var(--space-4) var(--space-5);
+	border-bottom: 1px solid var(--colour-hairline);
+	flex-shrink: 0;
+}
+
+.modal-title {
+	margin: 0;
+	font-size: 15px;
+	font-weight: 600;
+	color: var(--colour-text);
+}
+
+.modal-subtitle {
+	margin: var(--space-1) 0 0;
+	font-size: 12.5px;
+	color: var(--colour-text-dim);
+}
+
+.modal-body {
+	padding: var(--space-4) var(--space-5);
+	overflow-y: auto;
+	flex: 1;
+	min-height: 0;
+	font-size: 12.5px;
+	color: var(--colour-text);
+}
+
+.modal-body > * + * {
+	margin-top: var(--space-3);
+}
+
+.modal-footer {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: var(--space-2);
+	padding: var(--space-3) var(--space-5);
+	border-top: 1px solid var(--colour-hairline);
+	flex-shrink: 0;
+	background: var(--colour-panel);
+}
+
+.modal-footer-note {
+	margin-right: auto;
+	font-size: 11.5px;
+	color: var(--colour-text-faint);
+}
+
+.modal-btn {
+	padding: var(--space-2) var(--space-4);
+	border-radius: var(--radius-sm);
+	border: 1px solid var(--colour-hairline);
+	background: transparent;
+	color: var(--colour-text);
+	font-weight: 600;
+	font-size: 12.5px;
+	transition: border-color var(--transition-fast), background-color var(--transition-fast), opacity var(--transition-fast);
+}
+
+.modal-btn:hover:not(:disabled) {
+	border-color: var(--colour-text-dim);
+}
+
+.modal-btn:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+.modal-btn-primary {
+	background: var(--colour-accent);
+	border-color: var(--colour-accent);
+	color: #241605;
+}
+
+.modal-btn-primary:hover:not(:disabled) {
+	background: var(--colour-accent-strong);
+	border-color: var(--colour-accent-strong);
+}
+
+.modal-btn-danger {
+	background: transparent;
+	border-color: var(--colour-danger);
+	color: var(--colour-danger);
+}
+
+.modal-btn-danger:hover:not(:disabled) {
+	background: var(--colour-danger-bg);
+}
+
+/* Compact manifest-style count pills (task 18's "signature" for this
+ * task: the send review's counts line, read like a customs tally —
+ * reuses the grid's issue-chip vocabulary rather than inventing a new
+ * one). */
+.count-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-family: var(--font-mono);
+	font-size: 11.5px;
+	padding: 2px 8px;
+	border-radius: 10px;
+	background: var(--colour-panel-sunken);
+	border: 1px solid var(--colour-hairline);
+	color: var(--colour-text-dim);
+}
+
+.count-chip strong {
+	color: var(--colour-text);
+	font-weight: 700;
+}
+
+.count-chip-added strong {
+	color: var(--colour-good);
+}
+
+.count-chip-modified strong {
+	color: var(--colour-accent-strong);
+}
+
+.count-chip-blocked strong,
+.count-chip-blocked {
+	color: var(--colour-danger);
+	border-color: var(--colour-danger);
+}
+
+.report-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 12px;
+}
+
+.report-table th {
+	text-align: left;
+	font-weight: 500;
+	font-size: 10.5px;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--colour-text-faint);
+	padding: var(--space-1) var(--space-2);
+	border-bottom: 1px solid var(--colour-hairline);
+}
+
+.report-table td {
+	padding: var(--space-1) var(--space-2);
+	border-bottom: 1px solid var(--colour-hairline-soft);
+	font-family: var(--font-mono);
+	vertical-align: top;
+}
+
+.report-table tr:last-child td {
+	border-bottom: none;
+}
+
+.path-line {
+	font-family: var(--font-mono);
+	font-size: 11.5px;
+	color: var(--colour-text-dim);
+	word-break: break-all;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.001ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.001ms !important;
+		scroll-behavior: auto !important;
+	}
+}
