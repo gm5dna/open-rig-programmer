@@ -8,48 +8,56 @@ MC.set.mem001	MC001;
 MT.set.tag.mem001	MT0011TAG;
 MT.set.clear.mem001	MT0010            ;
 MW.set.mem001	MW001014250000+000000210000;
+MW.set.variant.mem001	MW001014250000-012011211002;
 MR.read.mem050	MR050;
 MT.read.mem050	MT050;
 MC.set.mem050	MC050;
 MT.set.tag.mem050	MT0501TAG;
 MT.set.clear.mem050	MT0500            ;
 MW.set.mem050	MW050014250000+000000210000;
+MW.set.variant.mem050	MW050014250000-012011211002;
 MR.read.mem099	MR099;
 MT.read.mem099	MT099;
 MC.set.mem099	MC099;
 MT.set.tag.mem099	MT0991TAG;
 MT.set.clear.mem099	MT0990            ;
 MW.set.mem099	MW099014250000+000000210000;
+MW.set.variant.mem099	MW099014250000-012011211002;
 MR.read.pms1L	MRP1L;
 MT.read.pms1L	MTP1L;
 MC.set.pms1L	MCP1L;
 MT.set.tag.pms1L	MTP1L1TAG;
 MT.set.clear.pms1L	MTP1L0            ;
 MW.set.pms1L	MWP1L014250000+000000210000;
+MW.set.variant.pms1L	MWP1L014250000-012011211002;
 MR.read.pms9U	MRP9U;
 MT.read.pms9U	MTP9U;
 MC.set.pms9U	MCP9U;
 MT.set.tag.pms9U	MTP9U1TAG;
 MT.set.clear.pms9U	MTP9U0            ;
 MW.set.pms9U	MWP9U014250000+000000210000;
+MW.set.variant.pms9U	MWP9U014250000-012011211002;
 MR.read.sixty501	MR501;
 MT.read.sixty501	MT501;
 MC.set.sixty501	MC501;
 MT.set.tag.sixty501	REJECTED: cat: parse error: MT: slot must be memory (001-099) or PMS (P1L-P9U); 5xx/EMG rejected by project policy pending M5a, "000"/invalid rejected per reference (input="501")
 MT.set.clear.sixty501	REJECTED: cat: parse error: MT: slot must be memory (001-099) or PMS (P1L-P9U); 5xx/EMG rejected by project policy pending M5a, "000"/invalid rejected per reference (input="501")
 MW.set.sixty501	REJECTED: cat: parse error: MW: slot must be Writable() (memory 001-099 or PMS P1L-P9U; 5xx/EMG/"000" rejected) (input="501")
+MW.set.variant.sixty501	REJECTED: cat: parse error: MW: slot must be Writable() (memory 001-099 or PMS P1L-P9U; 5xx/EMG/"000" rejected) (input="501")
 MR.read.sixty599	MR599;
 MT.read.sixty599	MT599;
 MC.set.sixty599	MC599;
 MT.set.tag.sixty599	REJECTED: cat: parse error: MT: slot must be memory (001-099) or PMS (P1L-P9U); 5xx/EMG rejected by project policy pending M5a, "000"/invalid rejected per reference (input="599")
 MT.set.clear.sixty599	REJECTED: cat: parse error: MT: slot must be memory (001-099) or PMS (P1L-P9U); 5xx/EMG rejected by project policy pending M5a, "000"/invalid rejected per reference (input="599")
 MW.set.sixty599	REJECTED: cat: parse error: MW: slot must be Writable() (memory 001-099 or PMS P1L-P9U; 5xx/EMG/"000" rejected) (input="599")
+MW.set.variant.sixty599	REJECTED: cat: parse error: MW: slot must be Writable() (memory 001-099 or PMS P1L-P9U; 5xx/EMG/"000" rejected) (input="599")
 MR.read.emg	MREMG;
 MT.read.emg	MTEMG;
 MC.set.emg	MCEMG;
 MT.set.tag.emg	REJECTED: cat: parse error: MT: slot must be memory (001-099) or PMS (P1L-P9U); 5xx/EMG rejected by project policy pending M5a, "000"/invalid rejected per reference (input="EMG")
 MT.set.clear.emg	REJECTED: cat: parse error: MT: slot must be memory (001-099) or PMS (P1L-P9U); 5xx/EMG rejected by project policy pending M5a, "000"/invalid rejected per reference (input="EMG")
 MW.set.emg	REJECTED: cat: parse error: MW: slot must be Writable() (memory 001-099 or PMS P1L-P9U; 5xx/EMG/"000" rejected) (input="EMG")
+MW.set.variant.emg	REJECTED: cat: parse error: MW: slot must be Writable() (memory 001-099 or PMS P1L-P9U; 5xx/EMG/"000" rejected) (input="EMG")
 EX.read.010101	EX010101;
 EX.read.010102	EX010102;
 EX.read.010103	EX010103;
@@ -346,3 +354,4 @@ EX.read.060515	EX060515;
 EX.read.060516	EX060516;
 EX.read.060517	EX060517;
 EX.read.060518	EX060518;
+EX.read.invalid	REJECTED: cat: parse error: EX: address is not a known Table 2 member (input="000000")

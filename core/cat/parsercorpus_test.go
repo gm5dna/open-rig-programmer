@@ -59,7 +59,8 @@ func buildParserCorpus(t *testing.T) []string {
 		out = append(out, record("ParseMTAnswer."+in.label, fmt.Sprintf("%s|%v|%q", slotWire(s), disp, tag), err))
 
 		md, err := ParseMRAnswer(f)
-		out = append(out, record("ParseMRAnswer."+in.label, fmt.Sprintf("%s|%d|%c|%c", slotWire(md.Slot), md.FreqHz, md.Mode.Wire(), md.Kind), err))
+		out = append(out, record("ParseMRAnswer."+in.label, fmt.Sprintf("%s|%d|%c|%c|%v|%v|%c|%c",
+			slotWire(md.Slot), md.FreqHz, md.Mode.Wire(), md.Kind, md.RxClar, md.TxClar, md.CTCSS.Wire(), md.Shift.Wire()), err))
 
 		addr, raw, err := ParseEXAnswer(f)
 		out = append(out, record("ParseEXAnswer."+in.label, fmt.Sprintf("%s|%q", addr.Wire(), raw), err))
@@ -67,11 +68,16 @@ func buildParserCorpus(t *testing.T) []string {
 
 	// A real MR answer, taken from the existing golden vectors rather
 	// than invented — read core/cat/mr_test.go for G4/G6/G7 and use those
-	// frames verbatim here.
+	// frames verbatim here. The record includes every P3/P4/P5/P8/P10
+	// field (ClarHz, RxClar, TxClar, CTCSS, Shift) precisely because G7 is
+	// the one golden vector where all of them are non-default — a silent
+	// CTCSS/Shift remap or a clarifier sign inversion must show up here
+	// (fix-round finding C1).
 	for _, gv := range goldenMRFramesForCorpus() {
 		md, err := ParseMRAnswer([]byte(gv.frame))
 		out = append(out, record("ParseMRAnswer.golden."+gv.label,
-			fmt.Sprintf("%s|%d|%c|%c|%d", slotWire(md.Slot), md.FreqHz, md.Mode.Wire(), md.Kind, md.ClarHz), err))
+			fmt.Sprintf("%s|%d|%c|%c|%d|%v|%v|%c|%c",
+				slotWire(md.Slot), md.FreqHz, md.Mode.Wire(), md.Kind, md.ClarHz, md.RxClar, md.TxClar, md.CTCSS.Wire(), md.Shift.Wire()), err))
 	}
 
 	// Membership rules, most at risk of being silently hardwired.
@@ -81,7 +87,24 @@ func buildParserCorpus(t *testing.T) []string {
 	}
 	for _, c := range []byte{'0', '1', '9', 'A', 'F', 'G', 'a', '!'} {
 		m, err := ParseMode(c)
-		out = append(out, record(fmt.Sprintf("ParseMode.%c", c), string(m.Wire()), err))
+		// Includes m.String() alongside the wire byte (fix-round finding
+		// I4): ParseMode(c).Wire() == c is nearly an identity function and
+		// on its own pins only the accept/reject boundary, carrying
+		// nothing about modeNames' 16-entry display table (mode.go).
+		out = append(out, record(fmt.Sprintf("ParseMode.%c", c), fmt.Sprintf("%c|%s", m.Wire(), m.String()), err))
+	}
+	// ParseShift and ParseCTCSSState are byte-membership parsers
+	// structurally identical to ParseMode, but previously appeared in no
+	// corpus at all — including not indirectly, since neither field was
+	// rendered by the ParseMRAnswer records above before this fix
+	// (fix-round finding C1).
+	for _, c := range []byte{'0', '1', '2', '3', '9', 'a', '!'} {
+		s, err := ParseShift(c)
+		out = append(out, record(fmt.Sprintf("ParseShift.%c", c), string(s.Wire()), err))
+	}
+	for _, c := range []byte{'0', '1', '2', '3', '9', 'a', '!'} {
+		cs, err := ParseCTCSSState(c)
+		out = append(out, record(fmt.Sprintf("ParseCTCSSState.%c", c), string(cs.Wire()), err))
 	}
 	for _, w := range []string{"010101", "010321", "050101", "999999", "01010"} {
 		a, err := ParseEXAddress(w)

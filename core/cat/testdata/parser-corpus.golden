@@ -100,9 +100,9 @@ ParseMCAnswer.EX.nonmember	ERR: cat: parse error: MC answer must be 6 bytes (inp
 ParseMTAnswer.EX.nonmember	ERR: cat: parse error: MT answer missing "MT" prefix (input="EX050101000;")
 ParseMRAnswer.EX.nonmember	ERR: cat: parse error: MR frame must be 28 bytes (input="EX050101000;")
 ParseEXAnswer.EX.nonmember	ERR: cat: parse error: EX answer: invalid or unknown address field (input="EX050101000;")
-ParseMRAnswer.golden.G4	OK: 001|7000000|1|1|0
-ParseMRAnswer.golden.G6	OK: P1L|1810000|1|5|0
-ParseMRAnswer.golden.G7	OK: 099|52354000|4|1|-120
+ParseMRAnswer.golden.G4	OK: 001|7000000|1|1|0|false|false|0|0
+ParseMRAnswer.golden.G6	OK: P1L|1810000|1|5|0|false|false|0|0
+ParseMRAnswer.golden.G7	OK: 099|52354000|4|1|-120|true|false|1|2
 ParseSlot.001	OK: 001
 ParseSlot.099	OK: 099
 ParseSlot.100	ERR: cat: parse error: not a valid slot wire form (input="100")
@@ -116,14 +116,28 @@ ParseSlot.EMG	OK: EMG
 ParseSlot.000	OK: 000
 ParseSlot.00001	ERR: cat: parse error: not a valid slot wire form (input="00001")
 ParseSlot.abc	ERR: cat: parse error: not a valid slot wire form (input="abc")
-ParseMode.0	OK: 0
-ParseMode.1	OK: 1
-ParseMode.9	OK: 9
-ParseMode.A	OK: A
-ParseMode.F	OK: F
+ParseMode.0	OK: 0|-
+ParseMode.1	OK: 1|LSB
+ParseMode.9	OK: 9|RTTY-U
+ParseMode.A	OK: A|DATA-FM
+ParseMode.F	OK: F|DATA-FM-N
 ParseMode.G	ERR: cat: parse error: invalid mode code: want '0'-'9' or 'A'-'F' (input="G")
 ParseMode.a	ERR: cat: parse error: invalid mode code: want '0'-'9' or 'A'-'F' (input="a")
 ParseMode.!	ERR: cat: parse error: invalid mode code: want '0'-'9' or 'A'-'F' (input="!")
+ParseShift.0	OK: 0
+ParseShift.1	OK: 1
+ParseShift.2	OK: 2
+ParseShift.3	ERR: cat: parse error: invalid shift code: want '0'-'2' (input="3")
+ParseShift.9	ERR: cat: parse error: invalid shift code: want '0'-'2' (input="9")
+ParseShift.a	ERR: cat: parse error: invalid shift code: want '0'-'2' (input="a")
+ParseShift.!	ERR: cat: parse error: invalid shift code: want '0'-'2' (input="!")
+ParseCTCSSState.0	OK: 0
+ParseCTCSSState.1	OK: 1
+ParseCTCSSState.2	OK: 2
+ParseCTCSSState.3	ERR: cat: parse error: invalid CTCSS code: want '0'-'2' (input="3")
+ParseCTCSSState.9	ERR: cat: parse error: invalid CTCSS code: want '0'-'2' (input="9")
+ParseCTCSSState.a	ERR: cat: parse error: invalid CTCSS code: want '0'-'2' (input="a")
+ParseCTCSSState.!	ERR: cat: parse error: invalid CTCSS code: want '0'-'2' (input="!")
 ParseEXAddress.010101	OK: 010101
 ParseEXAddress.010321	OK: 010321
 ParseEXAddress.050101	ERR: cat: parse error: EX address is not a known Table 2 member (input="5,1,1")

@@ -17,9 +17,9 @@ import (
 
 const evidenceLiteralsPath = "testdata/evidence-literals.golden"
 
-// literalRecord is one string literal identified by WHERE it is and WHICH
-// occurrence it is — not merely by its spelling. That is what lets the
-// pin detect a literal being moved, orphaned or deleted while an
+// literalRecord is one STRING, CHAR or INT literal identified by WHERE it
+// is and WHICH occurrence it is — not merely by its spelling. That is what
+// lets the pin detect a literal being moved, orphaned or deleted while an
 // identical spelling survives elsewhere.
 type literalRecord struct {
 	file    string
@@ -32,7 +32,10 @@ func (r literalRecord) String() string {
 }
 
 // collectTestStringLiterals walks this package's evidence test files in a
-// stable order, recording every string literal with its file and ordinal.
+// stable order, recording every STRING, CHAR and INT literal with its file
+// and ordinal. (Name kept from revision 1 for git-blame continuity; it now
+// collects more than strings — see the INT/CHAR handling below, fix-round
+// finding I1.)
 func collectTestStringLiterals(t *testing.T) []literalRecord {
 	t.Helper()
 
@@ -48,8 +51,15 @@ func collectTestStringLiterals(t *testing.T) []literalRecord {
 		}
 		// The pin's own tooling is not evidence; its literals would churn
 		// as the tooling evolves.
+		//
+		// parsercorpus_test.go is DELIBERATELY NOT in this list (fix-round
+		// finding C2): goldenMRFramesForCorpus there holds the three MR
+		// golden frames copied verbatim from mr_test.go — hardware- and
+		// manual-derived evidence, exactly the kind of literal this pin
+		// exists to protect. Excluding it as "tooling" let a one-character
+		// edit to a golden MR frame pass silently.
 		switch n {
-		case "evidence_literals_test.go", "framecorpus_test.go", "parsercorpus_test.go",
+		case "evidence_literals_test.go", "framecorpus_test.go", "allowlistcorpus_test.go",
 			"dialect_test.go", "seconddialect_test.go":
 			continue
 		}
@@ -71,19 +81,35 @@ func collectTestStringLiterals(t *testing.T) []literalRecord {
 		n := 0
 		ast.Inspect(f, func(node ast.Node) bool {
 			bl, ok := node.(*ast.BasicLit)
-			if !ok || bl.Kind != token.STRING {
+			if !ok {
 				return true
 			}
-			// bl.Value is the raw source token including its quotes or
-			// backticks. Unquote then re-quote, so a backtick and a
-			// double-quoted form of the same value compare equal and
-			// every record occupies one line.
-			val, err := strconv.Unquote(bl.Value)
-			if err != nil {
-				val = bl.Value
+			// STRING and CHAR literals share Go's quoting rules, so both
+			// unquote/re-quote the same way (a backtick and a
+			// double-quoted form of the same value compare equal). INT
+			// literals are not quoted at all; bl.Value already IS the
+			// exact source text (e.g. "29_620_000" or "0x1F"), so it is
+			// quoted as-is rather than evaluated — this pin cares whether
+			// the SOURCE TEXT changed, not its numeric value, and
+			// evaluating first would make "007" and "7" compare equal.
+			//
+			// CHAR and INT were added in the fix round (finding I1):
+			// without them, hardware-derived evidence expressed as a
+			// number rather than a string — e.g. hw_derived_test.go's live
+			// capture FreqHz/Mode/CTCSS/Shift fields, or mr_test.go's whole
+			// MemoryData{...} want literals — was invisible to this pin.
+			switch bl.Kind {
+			case token.STRING, token.CHAR:
+				val, err := strconv.Unquote(bl.Value)
+				if err != nil {
+					val = bl.Value
+				}
+				out = append(out, literalRecord{file: name, ordinal: n, token: strconv.Quote(val)})
+				n++
+			case token.INT:
+				out = append(out, literalRecord{file: name, ordinal: n, token: strconv.Quote(bl.Value)})
+				n++
 			}
-			out = append(out, literalRecord{file: name, ordinal: n, token: strconv.Quote(val)})
-			n++
 			return true
 		})
 	}
