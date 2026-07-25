@@ -85,6 +85,12 @@ func (m Mode) Wire() byte {
 	return byte(m)
 }
 
+// unknownModeName renders a Mode no dialect recognises. Shared by
+// Mode.String and Dialect.ModeName so the two cannot drift.
+func unknownModeName(m Mode) string {
+	return fmt.Sprintf("Mode(%#02x)", byte(m))
+}
+
 // String returns the reference table's display name for m (e.g. "LSB",
 // "DATA-FM-N"), or "-" for ModeUnset. Modes constructed by an invalid cast
 // rather than ParseMode return a diagnostic placeholder.

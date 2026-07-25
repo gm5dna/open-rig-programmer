@@ -115,8 +115,10 @@ func init() {
 // provenance requires, and membership behaviour is unchanged by the
 // finding — the evidence is consistent with the reading this inventory
 // already had rather than prompting a change to it.
+//
+// Migration scaffold: delegates to FT710; removed in Task 55.
 func KnownEXAddress(a EXAddress) bool {
-	return exMembers[a]
+	return FT710.KnownEXAddress(a)
 }
 
 // NewEXAddress returns the member EXAddress for the decimal triple
@@ -153,18 +155,16 @@ func ParseEXAddress(wire string) (EXAddress, error) {
 // EXItems returns a fresh copy of the full inventory, sorted by (P1,P2,P3),
 // with exactly 296 items. Callers may freely mutate the returned slice; it
 // never aliases the package's own data.
+//
+// Migration scaffold: delegates to FT710; removed in Task 55.
 func EXItems() []EXItem {
-	out := make([]EXItem, len(exItemsGen))
-	copy(out, exItemsGen)
-	return out
+	return FT710.EXItems()
 }
 
 // EXAddresses returns a fresh copy of every inventory address, sorted by
 // (P1,P2,P3). Callers may freely mutate the returned slice.
+//
+// Migration scaffold: delegates to FT710; removed in Task 55.
 func EXAddresses() []EXAddress {
-	out := make([]EXAddress, len(exItemsGen))
-	for i, it := range exItemsGen {
-		out[i] = it.Addr
-	}
-	return out
+	return FT710.EXAddresses()
 }
