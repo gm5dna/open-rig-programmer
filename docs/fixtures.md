@@ -71,39 +71,51 @@ the reflog no longer references it, and `git gc --prune=now` (or the
 hosting provider's equivalent) has actually pruned it — before treating
 the exposure as resolved.
 
-## Pre-public audit — carried out 25/07/2026
+## Pre-public audit and history reset — 25/07/2026
 
-The audit above was performed against the whole object database before
-the public flip. Recorded here so it is not repeated from scratch, and
-so the conclusion is not mistaken for an oversight.
+The audit described above was carried out against the whole object
+database of the project's pre-publication development repository, and
+this repository's history was then reset. Recorded here so neither is
+repeated from scratch, and so the single-commit history below is not
+mistaken for carelessness.
 
-**Working tree: clean.** No tracked file matches any private-fixture
-pattern (this is also enforced on every CI run — see the "Guard against
-committed private fixtures" step in `.github/workflows/ci.yml`), and no
-tracked file carries a callsign, device identifier or other personal
-datum. The project owner's own identity appears deliberately, in the Go
-module path (`github.com/gm5dna/open-rig-programmer`) and the macOS
-bundle identifier — a public GitHub account name, published knowingly.
+**This repository begins at a squashed initial commit.** The project
+was developed privately over several months; that history was collapsed
+into one commit before publication so that the author's personal e-mail
+address, which git records on every commit as author and committer
+metadata, does not appear in the published record. No change to a
+tracked file can remove an address from commit metadata — only a rewrite
+can — and the development history is retained privately by the project
+owner rather than destroyed.
 
-**History: scanned blob by blob across every ref.** Three findings, and
-nothing else:
+Because the reset produced a brand-new repository rather than a
+force-push over the old one, no unreachable objects from the previous
+history survive here to be fetched by direct SHA. That was deliberate:
+whether a hosting provider has actually pruned unreachable objects is
+not verifiable from outside.
 
-| Found | Extent | Disposition |
+**What the audit found before the reset.** Scanned blob by blob across
+every ref of the development repository. Three findings, and nothing
+else — none of which reaches this repository, since none is in the tree:
+
+| Found | Extent in the old history | Disposition |
 | --- | --- | --- |
-| `01600D4F`, the USB-serial adapter's device identifier, embedded in a macOS port node name | **One blob**: `docs/hardware-notes.md` at commit 9e17539. Redacted in the very next commit (9ae7d7a) | Accepted. It identifies a USB adapter, not a person; the exposure is one line of one superseded revision of one file |
-| `GB3TST`, in two `cmd/rigprog` test files | ~16 commits, replaced by `MYCALL` at 10b4877 | Not personal data: an invented test string. It was changed for consistency with this document's `MYCALL` convention (Codex M4 finding #8, LOW), not for privacy |
-| The owner's callsign, in `core/cat/ex_test.go` | ~68 commits, replaced with a synthetic vector during M8c | Accepted deliberately (owner's decision, 25/07/2026): the module path and bundle identifier carry the same identity publicly, so a history rewrite would hide nothing |
+| `01600D4F`, the USB-serial adapter's device identifier, embedded in a macOS port node name | One blob, in an early revision of `docs/hardware-notes.md`; redacted in the very next commit | Identifies a USB adapter, not a person. Superseded by the reset in any case |
+| `GB3TST`, in two `cmd/rigprog` test files | ~16 commits, replaced by `MYCALL` partway through | Not personal data: an invented test string. It was changed for consistency with the `MYCALL` convention above, not for privacy |
+| The owner's callsign, in `core/cat/ex_test.go` | ~68 commits, replaced with a synthetic vector later | Accepted deliberately: the module path and bundle identifier carry the same identity publicly |
 
-**No raw capture ever entered history.** No `fixtures-private/` path,
-`.MemList`, `MEMORY*.dat` or `.private-capture` object exists in any
-reachable commit — the case this document's rewrite guidance above was
-written for did not arise. **No history rewrite was performed, and none
-is planned**; the commit SHAs cited throughout `docs/` and the guard
-pins remain valid.
+**No raw capture ever entered the history.** No `fixtures-private/`
+path, `.MemList`, `MEMORY*.dat` or `.private-capture` object existed in
+any reachable commit — the case the rewrite guidance above was written
+for did not arise, and the reset was done for the e-mail metadata, not
+because a fixture had leaked.
 
-If a future session finds something this audit missed, the rewrite
-guidance above still stands — it is the procedure, and the fact that it
-was not needed once does not retire it.
+**Current state of the tree**, re-verified after the reset: no tracked
+file carries a callsign, device identifier, or e-mail address. The
+owner's name appears where he is credited as the author of a decision
+(`docs/menu-write-decision.md`) and as the git author, both by choice.
+The guidance above still stands for any future finding; the fact that
+it was not needed for a fixture leak once does not retire it.
 
 ## Redacted-fixture convention
 
