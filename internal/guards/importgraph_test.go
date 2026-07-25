@@ -191,9 +191,16 @@ func looksLikeOnce(expr ast.Expr) bool {
 //     unrelated type's .Do would false-positive, and a dot-import would
 //     false-negative. Neither exists in this repo, and a false positive
 //     merely prompts a human look at a genuinely unusual file.
-//   - BuildMWSet/BuildMTSet are detected as selector uses on core/cat's
-//     import name — exact in practice, since they are package-level
-//     functions.
+//   - BuildMWSet/BuildMTSet are detected as ANY selector named
+//     BuildMWSet or BuildMTSet, matched by method name alone, whatever
+//     the receiver — the same approximation this test already applies to
+//     WriteChannel below. Amended at M9b: before the dialect seam these
+//     were package-level functions and an exact package-qualified check
+//     (sel.X an *ast.Ident naming the core/cat import) sufficed; the
+//     seam turns every call into a nested selector — cat.FT710.BuildMWSet
+//     — that check cannot see. Name-only is strictly MORE inclusive, not
+//     weaker: it catches every call the old form caught, plus the new
+//     shape.
 //   - "Session.WriteChannel" is detected as ANY selector named
 //     WriteChannel outside the allowed trees, whatever the receiver's
 //     type. A future unrelated type with a WriteChannel method elsewhere
@@ -241,28 +248,36 @@ func TestWritePathReachableOnlyThroughDriver(t *testing.T) {
 			})
 		}
 
-		// (a) cat.BuildMWSet / cat.BuildMTSet.
-		if catName, ok := importsPath(pf.file, catPath); ok && !inTree(pf.relDir, "core/cat") {
-			ast.Inspect(pf.file, func(n ast.Node) bool {
-				sel, isSel := n.(*ast.SelectorExpr)
-				if !isSel {
-					return true
-				}
-				x, isIdent := sel.X.(*ast.Ident)
-				if !isIdent || x.Name != catName {
-					return true
-				}
-				if sel.Sel.Name != "BuildMWSet" && sel.Sel.Name != "BuildMTSet" {
-					return true
-				}
-				if inDriver {
-					sawDriverBuildMW = true
-					return true
-				}
-				t.Errorf("%s: references cat.%s — the Set-frame builders may be used outside core/cat only from core/driver/** (composition-root discipline; see this test's doc comment)", pf.relPath, sel.Sel.Name)
+		// (a) BuildMWSet / BuildMTSet, matched by NAME alone, whatever
+		// the receiver.
+		//
+		// Amended at M9b. Before the dialect seam these were
+		// package-level functions and this check required sel.X to be an
+		// *ast.Ident naming the core/cat import. The seam makes every
+		// call a nested selector — cat.FT710.BuildMWSet, or
+		// s.dialect.BuildMWSet — which that form silently stops
+		// matching. Amended AHEAD of the migration precisely so no task
+		// lands on a red tree; this form recognises both shapes.
+		//
+		// Name-only is LOOSER but strictly MORE INCLUSIVE: every call the
+		// old form caught, this one catches. It is also the approximation
+		// this guard already applies to WriteChannel in (b) below, so it
+		// is house precedent rather than a new compromise.
+		ast.Inspect(pf.file, func(n ast.Node) bool {
+			sel, isSel := n.(*ast.SelectorExpr)
+			if !isSel {
 				return true
-			})
-		}
+			}
+			if sel.Sel.Name != "BuildMWSet" && sel.Sel.Name != "BuildMTSet" {
+				return true
+			}
+			if inTree(pf.relDir, "core/driver") {
+				sawDriverBuildMW = true
+				return true
+			}
+			t.Errorf("%s: references .%s — the Set-frame builders may be used outside core/cat only from core/driver/** (composition-root discipline; see this test's doc comment)", pf.relPath, sel.Sel.Name)
+			return true
+		})
 
 		// (b) Session.WriteChannel — approximate; see the test doc comment.
 		if !inDriver && !inClone {
