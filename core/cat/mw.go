@@ -81,7 +81,9 @@ func (d Dialect) validateMWFields(m MemoryData) error {
 		return newParseError([]byte(m.Slot.Wire()), "MW: slot must be Writable() (memory 001-099 or PMS P1L-P9U; 5xx/EMG/\"000\" rejected)")
 	}
 
-	// Kind-on-write pairing: HW-CONFIRMED 2026-07-13 (M5b write trials
+	// Kind-on-write pairing, from THIS DIALECT'S policy.
+	//
+	// THE FT-710's VALUE IS HW-CONFIRMED 2026-07-13 (M5b write trials
 	// against Stuart's real UK FT-710 — see docs/hardware-notes.md's M5b
 	// findings section). The manual does not document P7's meaning in a
 	// Set at all; this project's former ASSUMED pairing (KindMemory '1'
@@ -89,13 +91,24 @@ func (d Dialect) validateMWFields(m MemoryData) error {
 	// the radio requires P7 = KindMemory ('1') on EVERY MW write,
 	// regardless of slot bank — a PMS write carrying KindPMS ('5') is
 	// REJECTED with an immediate "?;" (~10ms), while the identical PMS
-	// write carrying KindMemory ('1') is accepted. Because
-	// d.writableSlot(m.Slot) above already guarantees memory XOR PMS,
-	// this single check also structurally rejects every OTHER Kind value
-	// (KindVFO, KindMemTune, KindQMB, KindUnset, KindPMS) for either slot
-	// kind — no separate validKindByte call is needed here.
-	if m.Kind != KindMemory {
-		return newParseError([]byte{m.Kind}, "MW: Kind must be KindMemory ('1') for both memory-channel and PMS slots (HW-CONFIRMED 2026-07-13: PMS writes with KindPMS ('5') are REJECTED by the radio — docs/hardware-notes.md)")
+	// write carrying KindMemory ('1') is accepted.
+	//
+	// That evidence is about ONE RADIO, and it is why the value is dialect
+	// data rather than a constant. Until M9c-0 this read `m.Kind !=
+	// KindMemory`, so every dialect inherited the FT-710's hardware
+	// finding — and because the outbound gate reaches this validator
+	// through validMWCommand, a second radio with a different P7 rule
+	// would have had its legitimate writes refused by this program's own
+	// gate. No claim is made that any other radio DOES differ; only that
+	// the FT-710's value is the FT-710's.
+	//
+	// Because d.writableSlot(m.Slot) above already guarantees memory XOR
+	// PMS, this single check also structurally rejects every OTHER Kind
+	// value for either slot kind — no separate validKindByte call is
+	// needed here. NewDialect has already checked that the policy byte is
+	// itself a documented P7 value.
+	if m.Kind != d.mwWriteKind {
+		return newParseError([]byte{m.Kind}, fmt.Sprintf("MW: Kind must be %q for both memory-channel and PMS slots (the FT-710's own value is KindMemory ('1'), HW-CONFIRMED 2026-07-13: PMS writes with KindPMS ('5') are REJECTED by the radio — docs/hardware-notes.md)", d.mwWriteKind))
 	}
 
 	// Mode is a raw byte alias (mode.go): never trust a caller-forged
