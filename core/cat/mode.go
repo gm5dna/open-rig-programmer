@@ -60,6 +60,30 @@ var modeNames = map[Mode]string{
 	ModeDATAFMN: "DATA-FM-N",
 }
 
+// ParseMode parses a single P6 wire byte into a Mode under THIS dialect's
+// mode set. Membership is decided by the dialect's own table (ValidMode),
+// never by a hardcoded byte range: a radio whose mode set differs must
+// reject the bytes it does not know, and accept only its own. For FT710
+// that table holds exactly '0'-'9' and 'A'-'F' (upper case only — that is
+// all the radio ever emits), so this accepts exactly what the former
+// package-level range check accepted.
+//
+// '0' parses successfully to ModeUnset (Mode's underlying byte IS the wire
+// byte, so Mode('0') and ModeUnset are the same value); callers building a
+// Set frame must separately reject ModeUnset if it is not a valid value to
+// send.
+//
+// Anything the dialect does not know — including lower-case hex digits
+// under FT710 — is rejected with a *ParseError. A zero Dialect knows no
+// modes at all and therefore rejects every byte.
+func (d Dialect) ParseMode(c byte) (Mode, error) {
+	m := Mode(c)
+	if !d.ValidMode(m) {
+		return 0, newParseError([]byte{c}, "invalid mode code: want '0'-'9' or 'A'-'F'")
+	}
+	return m, nil
+}
+
 // ParseMode parses a single P6 wire byte into a Mode. It accepts exactly
 // '0'-'9' and 'A'-'F' (upper case only — that is all the radio ever emits).
 // '0' parses successfully to ModeUnset; callers building a Set frame must
@@ -67,17 +91,10 @@ var modeNames = map[Mode]string{
 //
 // Anything else, including lower-case hex digits, is rejected with a
 // *ParseError.
+//
+// Migration scaffold: delegates to FT710; removed in Task 55.
 func ParseMode(c byte) (Mode, error) {
-	switch {
-	case c == '0':
-		return ModeUnset, nil
-	case c >= '1' && c <= '9':
-		return Mode(c), nil
-	case c >= 'A' && c <= 'F':
-		return Mode(c), nil
-	default:
-		return 0, newParseError([]byte{c}, "invalid mode code: want '0'-'9' or 'A'-'F'")
-	}
+	return FT710.ParseMode(c)
 }
 
 // Wire returns the single wire byte for m.

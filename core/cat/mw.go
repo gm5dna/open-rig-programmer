@@ -15,8 +15,8 @@ import "fmt"
 // every check and is shared with AllowedCommand's MW grammar check
 // (allowlist.go) so the write-direction policy is expressed in exactly one
 // place.
-func BuildMWSet(m MemoryData) (Command, error) {
-	if err := validateMWFields(m); err != nil {
+func (d Dialect) BuildMWSet(m MemoryData) (Command, error) {
+	if err := d.validateMWFields(m); err != nil {
 		return Command{}, err
 	}
 
@@ -46,11 +46,19 @@ func BuildMWSet(m MemoryData) (Command, error) {
 	return newCommand(frame), nil
 }
 
+// BuildMWSet builds a strict 28-byte MW (memory channel write) Set frame
+// from m. Golden vectors G5, G7.
+//
+// Migration scaffold: delegates to FT710; removed in Task 55.
+func BuildMWSet(m MemoryData) (Command, error) {
+	return FT710.BuildMWSet(m)
+}
+
 // validateMWFields applies MW's write-direction policy to m, returning a
 // *ParseError describing the first violation found, or nil if m is safe to
-// encode as an MW Set frame. It rejects:
-//   - a slot that is not Writable() (5xx, EMG, "000"/none, or an invalid
-//     Slot);
+// encode as an MW Set frame UNDER THIS DIALECT. It rejects:
+//   - a slot that is not writable under this dialect's slot space (5xx,
+//     EMG, "000"/none, or an invalid Slot);
 //   - a Kind other than KindMemory ('1') — HW-CONFIRMED 2026-07-13, the
 //     radio requires KindMemory on EVERY MW write regardless of slot
 //     bank (see the Kind-pairing note below);
@@ -68,8 +76,16 @@ func BuildMWSet(m MemoryData) (Command, error) {
 // raw wire frame via parseMemoryFrame and then runs the SAME policy check
 // against the result — so the write-direction rules governing what may
 // reach the radio as an MW command live in exactly one place, not two.
-func validateMWFields(m MemoryData) error {
-	if !m.Slot.Writable() {
+//
+// SEAM NOTE (Task 54): writability is decided by Dialect.writableSlot
+// (slot.go), not by Slot.Writable, and the mode by d.ParseMode, not the
+// package-level ParseMode. Both of those package-level forms answer for
+// the FT-710 whatever dialect this method was called on, which would make
+// the receiver here decorative — and, because this same validator is what
+// AllowedCommand's MW check runs, would let a frame legal only under
+// another radio's slot space through the outbound write gate.
+func (d Dialect) validateMWFields(m MemoryData) error {
+	if !d.writableSlot(m.Slot) {
 		return newParseError([]byte(m.Slot.Wire()), "MW: slot must be Writable() (memory 001-099 or PMS P1L-P9U; 5xx/EMG/\"000\" rejected)")
 	}
 
@@ -82,7 +98,7 @@ func validateMWFields(m MemoryData) error {
 	// regardless of slot bank — a PMS write carrying KindPMS ('5') is
 	// REJECTED with an immediate "?;" (~10ms), while the identical PMS
 	// write carrying KindMemory ('1') is accepted. Because
-	// m.Slot.Writable() above already guarantees IsMemory() XOR IsPMS(),
+	// d.writableSlot(m.Slot) above already guarantees memory XOR PMS,
 	// this single check also structurally rejects every OTHER Kind value
 	// (KindVFO, KindMemTune, KindQMB, KindUnset, KindPMS) for either slot
 	// kind — no separate validKindByte call is needed here.
@@ -91,10 +107,10 @@ func validateMWFields(m MemoryData) error {
 	}
 
 	// Mode is a raw byte alias (mode.go): never trust a caller-forged
-	// value. Re-validate via ParseMode and separately reject ModeUnset,
-	// which parsers must accept but builders must never emit (mode.go
-	// doc comment; Task 2 review note).
-	validMode, err := ParseMode(m.Mode.Wire())
+	// value. Re-validate via THIS DIALECT'S ParseMode and separately
+	// reject ModeUnset, which parsers must accept but builders must never
+	// emit (mode.go doc comment; Task 2 review note).
+	validMode, err := d.ParseMode(m.Mode.Wire())
 	if err != nil {
 		return newParseError([]byte{m.Mode.Wire()}, "MW: mode field (P6) is not a valid Mode")
 	}

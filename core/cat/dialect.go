@@ -41,8 +41,9 @@ type Dialect struct {
 	modeNames map[Mode]string
 	slots     slotSpace
 
-	exItems   []EXItem
-	exMembers map[EXAddress]bool // this dialect's OWN membership index
+	exItems    []EXItem
+	exMembers  map[EXAddress]bool   // this dialect's OWN membership index
+	exByTriple map[[3]int]EXAddress // this dialect's OWN decimal-triple index
 }
 
 // FT710 is the Yaesu FT-710 dialect: the only configured one that exists.
@@ -56,8 +57,9 @@ var FT710 = Dialect{
 		emgWire:  "EMG",
 		noneWire: "000",
 	},
-	exItems:   exItemsGen,
-	exMembers: buildEXMembers(exItemsGen),
+	exItems:    exItemsGen,
+	exMembers:  buildEXMembers(exItemsGen),
+	exByTriple: buildEXByTriple(exItemsGen),
 }
 
 // buildEXMembers indexes items for membership tests.
@@ -65,6 +67,19 @@ func buildEXMembers(items []EXItem) map[EXAddress]bool {
 	m := make(map[EXAddress]bool, len(items))
 	for _, it := range items {
 		m[it.Addr] = true
+	}
+	return m
+}
+
+// buildEXByTriple indexes items by their decimal (P1,P2,P3) triple, so
+// Dialect.NewEXAddress can validate a caller-supplied triple by lookup
+// alone — no numeric range logic on the components, exactly as the
+// package-level NewEXAddress has always done, but against THIS dialect's
+// own inventory rather than a package global.
+func buildEXByTriple(items []EXItem) map[[3]int]EXAddress {
+	m := make(map[[3]int]EXAddress, len(items))
+	for _, it := range items {
+		m[[3]int{int(it.Addr.P1), int(it.Addr.P2), int(it.Addr.P3)}] = it.Addr
 	}
 	return m
 }

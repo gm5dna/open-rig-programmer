@@ -33,12 +33,19 @@ const (
 //
 // FT-710-SCOPED (deferred, ledgered in the M9b plan's "Deferred, and
 // ledgered as such" list, item 2): Slot's own predicates below — Wire,
-// IsMemory, IsPMS, Is60m, IsEMG, IsNone, Writable, and the package-level
-// readableSlot — classify through this helper rather than through a
-// Dialect receiver, because Slot itself carries no dialect tag yet. That
-// is harmless while only the FT-710 dialect exists. Giving Slot a dialect
-// tag, so these predicates read the Slot's own dialect instead, is M9c's,
-// once a second slot space exists to force it.
+// IsMemory, IsPMS, Is60m, IsEMG, IsNone and Writable — classify through
+// this helper rather than through a Dialect receiver, because Slot itself
+// carries no dialect tag yet. That is harmless while only the FT-710
+// dialect exists. Giving Slot a dialect tag, so these predicates read the
+// Slot's own dialect instead, is M9c's, once a second slot space exists to
+// force it.
+//
+// NOTHING REACHED FROM A DIALECT METHOD MAY CALL THIS (Task 54). The
+// former package-level readableSlot did, and is now Dialect.readableSlot;
+// the one Dialect-method use of Slot.Writable is now Dialect.writableSlot.
+// Both classify through d.classifySlot. A Dialect method routed through
+// this helper would silently answer for the FT-710 whatever dialect it was
+// called on — the exact failure mode M9b exists to prevent.
 func classifySlotWire(wire string) slotKind {
 	return FT710.classifySlot(wire)
 }
@@ -204,8 +211,9 @@ func (s Slot) Writable() bool {
 }
 
 // readableSlot reports whether s is a legal target for a bare slot-only
-// READ command (MR read, MT read): any slot ParseSlot accepts EXCEPT the
-// special "000" placeholder (Slot.IsNone), whose semantics the reference
+// READ command (MR read, MT read) UNDER THIS DIALECT'S slot space: any
+// slot this dialect's ParseSlot accepts EXCEPT the special "000"
+// placeholder (this dialect's noneWire), whose semantics the reference
 // marks UNKNOWN/ASSUMED with an explicit "do not emit". Reads carry none
 // of the write-direction hardware-verification concern that restricts
 // MW/MT SET to memory and PMS slots only, so 5xx and EMG are both legal
@@ -214,11 +222,34 @@ func (s Slot) Writable() bool {
 // Shared by BuildMRRead, BuildMTRead, and AllowedCommand's MR/MT-read
 // grammar checks (allowlist.go), so this rule is expressed in exactly one
 // place.
-func readableSlot(s Slot) bool {
-	switch classifySlotWire(s.wire) {
+//
+// It classifies through d.classifySlot, NOT through the package-level
+// classifySlotWire: this helper is reached from inside Dialect methods,
+// and a Dialect method that consults a package global has the shape of a
+// seam and none of the substance (see Dialect's doc comment).
+func (d Dialect) readableSlot(s Slot) bool {
+	switch d.classifySlot(s.wire) {
 	case slotKindInvalid, slotKindNone:
 		return false
 	default:
 		return true
 	}
+}
+
+// writableSlot reports whether s is valid as the target of an MW (memory
+// write) command UNDER THIS DIALECT'S slot space: memory and PMS slots
+// only. Reference: "MW — ... P1 restricted to 001-099, P1L-P9U (no 5xx, no
+// EMG; 000 listed but semantics unknown — reject in builder)".
+//
+// This is the dialect-aware counterpart of Slot.Writable, and exists
+// because validateMWFields — reached from BuildMWSet AND from
+// AllowedCommand's MW grammar check — must decide writability against the
+// dialect it was called on. Slot.Writable classifies through
+// classifySlotWire (i.e. through FT710) because a Slot carries no dialect
+// tag of its own; giving Slot that tag is deferred to M9c, ledgered in the
+// M9b plan. Until then the two must not be confused: Slot's own predicates
+// are the FT-710-scoped convenience form, this is the seam-correct one.
+func (d Dialect) writableSlot(s Slot) bool {
+	kind := d.classifySlot(s.wire)
+	return kind == slotKindMemory || kind == slotKindPMS
 }

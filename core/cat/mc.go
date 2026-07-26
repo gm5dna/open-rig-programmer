@@ -10,7 +10,8 @@ const mcSetLen = 6
 // Answer MC P1 P1 P1;".
 const mcReadFrame = "MC;"
 
-// mcValid reports whether s is a legal MC target: memory, PMS, 60m or EMG.
+// mcValid reports whether s is a legal MC target UNDER THIS DIALECT'S slot
+// space: memory, PMS, 60m or EMG.
 // Reference slot table's "MC set" column is ✗ only for "000" (semantics
 // unknown, do not emit); 001-099, P1L-P9U, 5xx and EMG are all ✓.
 //
@@ -33,8 +34,12 @@ const mcReadFrame = "MC;"
 // that "000" means "no stored-memory state" as a general CAT concept,
 // but not direct evidence for MC's own answer shape. Still ASSUMED;
 // verify with a direct "MC;" query in VFO mode at a future session.
-func mcValid(s Slot) bool {
-	switch classifySlotWire(s.Wire()) {
+//
+// It classifies through d.classifySlot, not the package-level
+// classifySlotWire: this helper is shared by BuildMCSet, ParseMCAnswer and
+// AllowedCommand's MC grammar check, all Dialect methods.
+func (d Dialect) mcValid(s Slot) bool {
+	switch d.classifySlot(s.Wire()) {
 	case slotKindMemory, slotKindPMS, slotKind60m, slotKindEMG:
 		return true
 	default:
@@ -49,8 +54,8 @@ func mcValid(s Slot) bool {
 // bytes): MC P1 P1 P1 ; ... Side effect: recalls the channel on the
 // radio (changes operating state!)." Golden vector G11: "MC099;" -> recall
 // M-99.
-func BuildMCSet(s Slot) (Command, error) {
-	if !mcValid(s) {
+func (d Dialect) BuildMCSet(s Slot) (Command, error) {
+	if !d.mcValid(s) {
 		return Command{}, newParseError([]byte(s.Wire()), "MC: slot must not be \"000\"/invalid (reference MC set column: ✗)")
 	}
 	frame := make([]byte, 0, mcSetLen)
@@ -60,14 +65,35 @@ func BuildMCSet(s Slot) (Command, error) {
 	return newCommand(frame), nil
 }
 
+// BuildMCSet builds an MC (memory channel recall) Set frame for slot s.
+// Golden vector G11: "MC099;".
+//
+// Migration scaffold: delegates to FT710; removed in Task 55.
+func BuildMCSet(s Slot) (Command, error) {
+	return FT710.BuildMCSet(s)
+}
+
 // BuildMCRead builds the MC read request. Reference: "Read: MC;".
-func BuildMCRead() Command {
+//
+// Takes a dialect receiver even though nothing about this frame varies by
+// radio: uniform method form means M9c adds a dialect by writing a table
+// rather than by re-plumbing signatures. Do not "tidy" this back to a
+// package-level function.
+func (d Dialect) BuildMCRead() Command {
 	return newCommand([]byte(mcReadFrame))
 }
 
+// BuildMCRead builds the MC read request. Reference: "Read: MC;".
+//
+// Migration scaffold: delegates to FT710; removed in Task 55.
+func BuildMCRead() Command {
+	return FT710.BuildMCRead()
+}
+
 // ParseMCAnswer parses an MC answer frame ("MC" + 3-byte slot + ";") into
-// the recalled Slot. See mcValid's doc for why "000" is rejected here too.
-func ParseMCAnswer(frame []byte) (Slot, error) {
+// the recalled Slot, under this dialect's slot space. See mcValid's doc
+// for why "000" is rejected here too.
+func (d Dialect) ParseMCAnswer(frame []byte) (Slot, error) {
 	if len(frame) != mcSetLen {
 		return Slot{}, newParseError(frame, "MC answer must be 6 bytes")
 	}
@@ -77,12 +103,20 @@ func ParseMCAnswer(frame []byte) (Slot, error) {
 	if frame[5] != ';' {
 		return Slot{}, newParseError(frame, "MC answer missing ';' terminator")
 	}
-	s, err := ParseSlot(string(frame[2:5]))
+	s, err := d.ParseSlot(string(frame[2:5]))
 	if err != nil {
 		return Slot{}, newParseError(frame, "MC answer: invalid slot field")
 	}
-	if !mcValid(s) {
+	if !d.mcValid(s) {
 		return Slot{}, newParseError(frame, "MC answer: slot must not be \"000\" (reference MC set column: ✗)")
 	}
 	return s, nil
+}
+
+// ParseMCAnswer parses an MC answer frame ("MC" + 3-byte slot + ";") into
+// the recalled Slot.
+//
+// Migration scaffold: delegates to FT710; removed in Task 55.
+func ParseMCAnswer(frame []byte) (Slot, error) {
+	return FT710.ParseMCAnswer(frame)
 }

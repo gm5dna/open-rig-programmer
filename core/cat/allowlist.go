@@ -40,7 +40,29 @@ package cat
 // satisfy AllowedCommand — enforced by
 // TestAllowedCommand_PropertyEveryBuilderOutput — and every golden ANSWER
 // frame in this package's tests MUST NOT.
-func AllowedCommand(frame []byte) bool {
+//
+// IT GATES FOR THE DIALECT IT IS CALLED ON, and for no other (Task 54).
+// Every per-command check below is a Dialect method reaching only
+// dialect-aware helpers, so a frame legal under one radio's slot space,
+// mode set or EX inventory is refused by a dialect that does not share it.
+// A gate that re-validated against a package global would accept, on any
+// radio, whatever the FT-710 accepts — the failure this milestone exists
+// to prevent, and here it is a safety failure rather than merely a
+// correctness one.
+//
+// FAIL-CLOSED ON AN UNCONFIGURED DIALECT. A zero Dialect is constructible
+// by any caller (`var d cat.Dialect`) and its AllowedCommand is a non-nil
+// method value that satisfies transport.NewEngine's nil check, so it must
+// accept NOTHING. The dialect-aware checks give that for free wherever
+// slot, mode or EX data is consulted — an empty slot space matches no
+// slot — but ID, AI and the bare "MC;" read are literal matches that
+// consult no dialect data at all and would otherwise pass. The
+// Configured() guard below is what closes them, so the property holds for
+// every frame rather than most of them.
+func (d Dialect) AllowedCommand(frame []byte) bool {
+	if !d.Configured() {
+		return false
+	}
 	if len(frame) < 3 { // shortest possible legal frame: "ID;"
 		return false
 	}
@@ -50,22 +72,31 @@ func AllowedCommand(frame []byte) bool {
 
 	switch string(frame[0:2]) {
 	case "ID":
-		return validIDCommand(frame)
+		return d.validIDCommand(frame)
 	case "AI":
-		return validAICommand(frame)
+		return d.validAICommand(frame)
 	case "MR":
-		return validMRCommand(frame)
+		return d.validMRCommand(frame)
 	case "MW":
-		return validMWCommand(frame)
+		return d.validMWCommand(frame)
 	case "MT":
-		return validMTCommand(frame)
+		return d.validMTCommand(frame)
 	case "MC":
-		return validMCCommand(frame)
+		return d.validMCCommand(frame)
 	case "EX":
-		return validEXRead(frame)
+		return d.validEXRead(frame)
 	default:
 		return false
 	}
+}
+
+// AllowedCommand reports whether frame is safe to write to the radio. See
+// Dialect.AllowedCommand for the full contract, including the EX
+// REVIEWED DECISION.
+//
+// Migration scaffold: delegates to FT710; removed in Task 55.
+func AllowedCommand(frame []byte) bool {
+	return FT710.AllowedCommand(frame)
 }
 
 // exactlyOneTrailingSemicolon reports whether frame contains exactly one
@@ -85,7 +116,14 @@ func exactlyOneTrailingSemicolon(frame []byte) bool {
 // validIDCommand reports whether frame is the ID read request. ID has no
 // Set form and BuildIDRead produces exactly this one frame, so this is a
 // literal match rather than a field-by-field parse.
-func validIDCommand(frame []byte) bool {
+//
+// Takes a dialect receiver even though nothing about this frame varies by
+// radio — same rationale as BuildIDRead's, plus one specific to the gate:
+// a mixed switch, half methods and half package functions, is exactly the
+// shape in which a hardwired check hides. Dialect.AllowedCommand's
+// Configured() guard, not this function, is what stops a zero Dialect
+// accepting "ID;".
+func (d Dialect) validIDCommand(frame []byte) bool {
 	return string(frame) == "ID;"
 }
 
@@ -94,7 +132,10 @@ func validIDCommand(frame []byte) bool {
 // ("AI;") — reference: "AI0; disables Auto Information ... Set/Read/Answer
 // all exist." No builder emits "AI;" yet, but it is legitimate protocol
 // grammar, not merely a builder-output check.
-func validAICommand(frame []byte) bool {
+//
+// Takes a dialect receiver even though nothing about this frame varies by
+// radio; see validIDCommand's note.
+func (d Dialect) validAICommand(frame []byte) bool {
 	switch string(frame) {
 	case "AI;", "AI0;", "AI1;":
 		return true
@@ -104,19 +145,19 @@ func validAICommand(frame []byte) bool {
 }
 
 // validMRCommand reports whether frame is a legal MR read request: exactly
-// mrReadLen (6) bytes, with a slot readableSlot accepts (the same rule
-// BuildMRRead enforces — see readableSlot's doc comment, slot.go). MR has
-// no Set form, so anything else with an "MR" prefix — including a 28-byte
-// MR ANSWER frame — is rejected here.
-func validMRCommand(frame []byte) bool {
+// mrReadLen (6) bytes, with a slot this dialect's readableSlot accepts (the
+// same rule BuildMRRead enforces — see Dialect.readableSlot's doc comment,
+// slot.go). MR has no Set form, so anything else with an "MR" prefix —
+// including a 28-byte MR ANSWER frame — is rejected here.
+func (d Dialect) validMRCommand(frame []byte) bool {
 	if len(frame) != mrReadLen {
 		return false
 	}
-	slot, err := ParseSlot(string(frame[2:5]))
+	slot, err := d.ParseSlot(string(frame[2:5]))
 	if err != nil {
 		return false
 	}
-	return readableSlot(slot)
+	return d.readableSlot(slot)
 }
 
 // validMWCommand reports whether frame is a legal, fully in-policy MW Set
@@ -128,12 +169,12 @@ func validMRCommand(frame []byte) bool {
 // that is shaped like a valid memory frame but targets an unwritable slot,
 // or pairs the wrong Kind with its slot, is rejected here exactly as
 // BuildMWSet would reject it if asked to build the equivalent MemoryData.
-func validMWCommand(frame []byte) bool {
-	m, err := parseMemoryFrame(frame, "MW")
+func (d Dialect) validMWCommand(frame []byte) bool {
+	m, err := d.parseMemoryFrame(frame, "MW")
 	if err != nil {
 		return false
 	}
-	return validateMWFields(m) == nil
+	return d.validateMWFields(m) == nil
 }
 
 // validMTCommand reports whether frame is a legal MT read or Set frame.
@@ -149,13 +190,13 @@ func validMWCommand(frame []byte) bool {
 // NUL, no embedded ';') correctly rejected: the old prefix-plus-terminator
 // check saw one allowlisted prefix and one trailing ';' and let it
 // through; re-validating the tag body byte-for-byte does not.
-func validMTCommand(frame []byte) bool {
+func (d Dialect) validMTCommand(frame []byte) bool {
 	if len(frame) == mtReadLen {
-		slot, err := ParseSlot(string(frame[2:5]))
+		slot, err := d.ParseSlot(string(frame[2:5]))
 		if err != nil {
 			return false
 		}
-		return readableSlot(slot)
+		return d.readableSlot(slot)
 	}
 
 	if len(frame) < mtAnswerMinLen || len(frame) > mtAnswerMaxLen {
@@ -164,8 +205,8 @@ func validMTCommand(frame []byte) bool {
 	if frame[0] != 'M' || frame[1] != 'T' {
 		return false
 	}
-	slot, err := ParseSlot(string(frame[2:5]))
-	if err != nil || !mtSlotValid(slot) {
+	slot, err := d.ParseSlot(string(frame[2:5]))
+	if err != nil || !d.mtSlotValid(slot) {
 		return false
 	}
 	if _, err := parseBoolDigit(frame[5]); err != nil {
@@ -178,18 +219,18 @@ func validMTCommand(frame []byte) bool {
 // validMCCommand reports whether frame is a legal MC read or Set/Answer
 // frame: the fixed "MC;" read request, or mcSetLen (6) bytes with a slot
 // mcValid accepts (the same rule BuildMCSet and ParseMCAnswer share).
-func validMCCommand(frame []byte) bool {
+func (d Dialect) validMCCommand(frame []byte) bool {
 	if string(frame) == mcReadFrame {
 		return true
 	}
 	if len(frame) != mcSetLen {
 		return false
 	}
-	slot, err := ParseSlot(string(frame[2:5]))
+	slot, err := d.ParseSlot(string(frame[2:5]))
 	if err != nil {
 		return false
 	}
-	return mcValid(slot)
+	return d.mcValid(slot)
 }
 
 // validEXRead reports whether frame is a legal EX READ: exactly
@@ -208,10 +249,10 @@ func validMCCommand(frame []byte) bool {
 // TestAllowedCommand_AcceptsAllowlistedSingleFrames (~allowlist_test.go:137)
 // for the precedent — and the classes named in that decision document
 // stay denied regardless. Loosening this is a REVIEWED DECISION.
-func validEXRead(frame []byte) bool {
+func (d Dialect) validEXRead(frame []byte) bool {
 	if len(frame) != exReadLen {
 		return false
 	}
-	_, err := ParseEXAddress(string(frame[2:8]))
+	_, err := d.ParseEXAddress(string(frame[2:8]))
 	return err == nil
 }

@@ -78,18 +78,21 @@ const exP4MaxBytes = 12
 
 // exMembers is the membership set keyed by the concrete EXAddress; exByTriple
 // maps a decimal (P1,P2,P3) triple to its member address. Both are built once
-// at package init from the generated inventory. exByTriple lets NewEXAddress
-// and ParseEXAddress test membership purely by lookup — no independent
-// numeric range logic on P1/P2/P3 — so out-of-range or negative inputs simply
-// miss the map rather than being range-checked.
+// at package init from the generated inventory. The Dialect fields of the
+// same shape (dialect.go) let Dialect.NewEXAddress and Dialect.ParseEXAddress
+// test membership purely by lookup — no independent numeric range logic on
+// P1/P2/P3 — so out-of-range or negative inputs simply miss the map rather
+// than being range-checked.
 //
-// exMembers ITSELF IS NO LONGER READ as of Task 53: KnownEXAddress now
-// delegates to FT710.KnownEXAddress, which consults the Dialect's own
-// exMembers FIELD of the same name, not this package var. This one is kept
-// only because exByTriple's init loop still builds both together, and is
-// removed alongside the delegates in Task 55. Do not reach for it from
-// inside a Dialect method — that would be exactly the global-not-receiver
-// bug this milestone exists to prevent (codex review Minor-5).
+// NEITHER IS READ ANY LONGER. exMembers stopped being read at Task 53
+// (KnownEXAddress delegates to FT710.KnownEXAddress, which consults the
+// Dialect's own exMembers FIELD of the same name); exByTriple stopped at
+// Task 54, when NewEXAddress/ParseEXAddress became Dialect methods reading
+// d.exByTriple, the dialect's own decimal-triple index. Both are kept only
+// because this init loop still builds them together, and both are removed
+// alongside the delegates in Task 55. Do not reach for either from inside a
+// Dialect method — that would be exactly the global-not-receiver bug this
+// milestone exists to prevent (codex review Minor-5).
 var (
 	exMembers  map[EXAddress]bool
 	exByTriple map[[3]int]EXAddress
@@ -130,22 +133,28 @@ func KnownEXAddress(a EXAddress) bool {
 }
 
 // NewEXAddress returns the member EXAddress for the decimal triple
-// (p1,p2,p3), or a *ParseError if that triple is not in the inventory.
-// Validation is membership-only: there is no numeric range check on the
-// components, so any non-member triple — including negative or oversized
-// values — is rejected by the same lookup miss.
-func NewEXAddress(p1, p2, p3 int) (EXAddress, error) {
-	if a, ok := exByTriple[[3]int{p1, p2, p3}]; ok {
+// (p1,p2,p3) in THIS DIALECT'S inventory, or a *ParseError if that triple
+// is not a member of it. Validation is membership-only: there is no numeric
+// range check on the components, so any non-member triple — including
+// negative or oversized values — is rejected by the same lookup miss.
+//
+// It consults d.exByTriple, the dialect's own index (dialect.go), never the
+// package-level one: membership is dialect data, and a second radio's menu
+// inventory is a different table, not a different function. A zero Dialect
+// has an empty index and is therefore a member of nothing.
+func (d Dialect) NewEXAddress(p1, p2, p3 int) (EXAddress, error) {
+	if a, ok := d.exByTriple[[3]int{p1, p2, p3}]; ok {
 		return a, nil
 	}
 	return EXAddress{}, newParseError([]byte(fmt.Sprintf("%d,%d,%d", p1, p2, p3)), "EX address is not a known Table 2 member")
 }
 
-// ParseEXAddress parses a six-ASCII-digit wire field ("010203") into a member
-// EXAddress. It performs only a shape check (exactly six digits) followed by
-// a membership lookup; it applies NO numeric range logic to the parsed
-// components. A malformed shape or a non-member address yields a *ParseError.
-func ParseEXAddress(wire string) (EXAddress, error) {
+// ParseEXAddress parses a six-ASCII-digit wire field ("010203") into an
+// address that is a member of THIS DIALECT'S inventory. It performs only a
+// shape check (exactly six digits) followed by a membership lookup; it
+// applies NO numeric range logic to the parsed components. A malformed
+// shape or a non-member address yields a *ParseError.
+func (d Dialect) ParseEXAddress(wire string) (EXAddress, error) {
 	if len(wire) != 6 {
 		return EXAddress{}, newParseError([]byte(wire), "EX address must be exactly six digits")
 	}
@@ -157,7 +166,23 @@ func ParseEXAddress(wire string) (EXAddress, error) {
 	p1 := int(wire[0]-'0')*10 + int(wire[1]-'0')
 	p2 := int(wire[2]-'0')*10 + int(wire[3]-'0')
 	p3 := int(wire[4]-'0')*10 + int(wire[5]-'0')
-	return NewEXAddress(p1, p2, p3)
+	return d.NewEXAddress(p1, p2, p3)
+}
+
+// NewEXAddress returns the member EXAddress for the decimal triple
+// (p1,p2,p3), or a *ParseError if that triple is not in the inventory.
+//
+// Migration scaffold: delegates to FT710; removed in Task 55.
+func NewEXAddress(p1, p2, p3 int) (EXAddress, error) {
+	return FT710.NewEXAddress(p1, p2, p3)
+}
+
+// ParseEXAddress parses a six-ASCII-digit wire field ("010203") into a member
+// EXAddress.
+//
+// Migration scaffold: delegates to FT710; removed in Task 55.
+func ParseEXAddress(wire string) (EXAddress, error) {
+	return FT710.ParseEXAddress(wire)
 }
 
 // EXItems returns a fresh copy of the full inventory, sorted by (P1,P2,P3),

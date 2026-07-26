@@ -22,16 +22,16 @@ const (
 
 // BuildEXRead builds the 9-byte EX read frame for addr. Reference: the EX
 // grammar block's Read frame (manual extract line ~629). The only
-// validation is Table 2 membership (KnownEXAddress) — never a numeric
-// range check on P1/P2/P3, mirroring NewEXAddress/ParseEXAddress in
-// exinventory.go. This rejects both the zero value and the P1==05
+// validation is membership of THIS DIALECT'S inventory
+// (d.KnownEXAddress) — never a numeric range check on P1/P2/P3, mirroring
+// Dialect.NewEXAddress/Dialect.ParseEXAddress in exinventory.go. This rejects both the zero value and the P1==05
 // grammar/Table-2 anomaly address (see KnownEXAddress's doc comment in
 // exinventory.go): the grammar block names P1 "01 - 04, 05" but Table 2
 // has no P1==05 group, so no (05,*,*) triple is ever a member. M8c put two
 // such addresses to a real radio and both were rejected with "?;", which
 // supports that reading without surveying the whole P1=05 space.
-func BuildEXRead(addr EXAddress) (Command, error) {
-	if !KnownEXAddress(addr) {
+func (d Dialect) BuildEXRead(addr EXAddress) (Command, error) {
+	if !d.KnownEXAddress(addr) {
 		return Command{}, newParseError([]byte(addr.Wire()), "EX: address is not a known Table 2 member")
 	}
 	frame := make([]byte, 0, exReadLen)
@@ -41,14 +41,23 @@ func BuildEXRead(addr EXAddress) (Command, error) {
 	return newCommand(frame), nil
 }
 
+// BuildEXRead builds the 9-byte EX read frame for addr. Reference: the EX
+// grammar block's Read frame (manual extract line ~629).
+//
+// Migration scaffold: delegates to FT710; removed in Task 55.
+func BuildEXRead(addr EXAddress) (Command, error) {
+	return FT710.BuildEXRead(addr)
+}
+
 // ParseEXAnswer parses an EX Answer frame ("EX" + 6-digit address + a
 // 1-to-exP4MaxBytes-byte raw P4 body + ";", reference: the EX grammar
 // block's Answer frame, manual extract line ~629) and returns the address
 // and the raw P4 body.
 //
 // SHAPE (total length bounds, "EX" prefix, ';' terminator, six ASCII
-// digits in the address field) and Table 2 MEMBERSHIP of the address are
-// both strictly enforced, via ParseEXAddress applied to the address
+// digits in the address field) and MEMBERSHIP of the address in THIS
+// DIALECT'S inventory are both strictly enforced, via d.ParseEXAddress
+// applied to the address
 // field — mirroring ParseMCAnswer's precedent of applying mcValid to the
 // answer, not just the set/read direction (mc.go). One consequence: a
 // frame answering at the phantom P1==05 address the grammar block names
@@ -73,7 +82,7 @@ func BuildEXRead(addr EXAddress) (Command, error) {
 // Trimming, width checks and a typed value model remain M8e's business,
 // and any Set-direction width policy needs M8f evidence — none of the
 // above is evidence about what the radio ACCEPTS.
-func ParseEXAnswer(frame []byte) (EXAddress, string, error) {
+func (d Dialect) ParseEXAnswer(frame []byte) (EXAddress, string, error) {
 	if len(frame) < exAnswerMinLen || len(frame) > exAnswerMaxLen {
 		return EXAddress{}, "", newParseError(frame, fmt.Sprintf("EX answer must be %d-%d bytes", exAnswerMinLen, exAnswerMaxLen))
 	}
@@ -83,10 +92,18 @@ func ParseEXAnswer(frame []byte) (EXAddress, string, error) {
 	if frame[len(frame)-1] != ';' {
 		return EXAddress{}, "", newParseError(frame, "EX answer missing ';' terminator")
 	}
-	addr, err := ParseEXAddress(string(frame[2:8]))
+	addr, err := d.ParseEXAddress(string(frame[2:8]))
 	if err != nil {
 		return EXAddress{}, "", newParseError(frame, "EX answer: invalid or unknown address field")
 	}
 	raw := string(frame[8 : len(frame)-1])
 	return addr, raw, nil
+}
+
+// ParseEXAnswer parses an EX Answer frame and returns the address and the
+// raw P4 body, verbatim.
+//
+// Migration scaffold: delegates to FT710; removed in Task 55.
+func ParseEXAnswer(frame []byte) (EXAddress, string, error) {
+	return FT710.ParseEXAnswer(frame)
 }
