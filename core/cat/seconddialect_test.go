@@ -21,6 +21,26 @@ type namedDialect struct {
 // The zero Dialect is deliberately absent: it is unconfigured by design
 // and its property is the opposite one (it must do nothing at all), tested
 // separately by TestZeroDialectRejectsEveryCorpusFrame.
+//
+// KNOWN LIMIT — PEER-NESS IS NOT ENFORCED. Nothing here checks that at
+// least one entry accepts a wire form the FT-710 rejects. A dialect added
+// later that is a silent SUBSET of the FT-710, or that has an identical
+// slot space, joins this table and every property below still passes —
+// which is precisely the root cause that let 18 mutations escape the first
+// round of this task (see task-57-report.md §9). peerDialect is currently
+// the only entry that is a peer rather than a subset, and it is held here
+// by nothing stronger than this comment. A future assertion could compute
+// it: for each dialect, require at least one wire form its classifySlot
+// accepts and FT710's rejects. Not added now because it would need every
+// dialect to be a peer, and testDialect/noneWireDialect are deliberately
+// not.
+//
+// STRUCTURAL LIMIT — NO DIALECT CAN EVER BE A PMS PEER. pmsCap() clamps to
+// 9 and the FT-710 already has 9, so every representable PMS pair set is a
+// SUBSET of the FT-710's and peerDialect's P1L-P4U coincides with it.
+// Benign in practice — every PMS hardwiring tried is observable from
+// testDialect in the narrowing direction — but it is a permanent property
+// of this fixture design, not an oversight to fix.
 func allTestDialects() []namedDialect {
 	return []namedDialect{
 		{"FT710", FT710},
@@ -640,6 +660,18 @@ func TestPeerDialect_AcceptsWhatTheFT710Rejects(t *testing.T) {
 // The invariant is simple and dialect-independent: WHAT A DIALECT BUILDS,
 // THAT SAME DIALECT MUST PARSE, as the kind it meant. peerDialect's 60m
 // bank at 600-620 is what gives it teeth.
+//
+// KNOWN LIMIT — THIS SAMPLES RANGE ENDPOINTS ONLY (memoryLo/memoryHi, the
+// first and last 60m channel). A structurally inconsistent slot space
+// whose collision falls in the INTERIOR of a range passes green: a
+// noneWire or emgWire equal to, say, the middle of its own memory bank is
+// caught only if it happens to land on an endpoint. An independent sweep
+// measured 8 of 9 structural inconsistencies bound by this property
+// (overlapping ranges, inverted ranges, emgWire colliding with a PMS form,
+// a 2-byte emgWire, pmsPairs 90, memoryHi 1500); the interior-collision
+// case is the ninth. Exhaustive sampling is affordable for the ranges
+// these dialects declare, but not for a 5-digit slot space, so this stays
+// endpoint-sampled deliberately rather than by omission.
 func TestEveryDialect_ConstructorsRoundTripThroughTheirOwnParser(t *testing.T) {
 	for _, d := range allTestDialects() {
 		check := func(what string, s Slot, err error, want slotKind) {
@@ -756,9 +788,64 @@ func TestPeerDialect_EXInventoryIsItsOwn(t *testing.T) {
 	if _, _, err := peerDialect.ParseEXAnswer([]byte("EX" + own.Wire() + "123;")); err != nil {
 		t.Errorf("peerDialect.ParseEXAnswer failed for its own member %s: %v", own.Wire(), err)
 	}
-	if n := len(peerDialect.EXItems()); n != len(peerEXItems) {
-		t.Errorf("peerDialect.EXItems() returned %d items, want %d — this is reading a global inventory", n, len(peerEXItems))
+	// THE INVENTORY ACCESSORS, ELEMENT BY ELEMENT — NOT BY LENGTH.
+	//
+	// FIX ROUND 2. This asserted only the CARDINALITY, which pins almost
+	// nothing: three mutations of the form "take the length from the
+	// receiver, take the payload from the package global" —
+	//
+	//	out := make([]EXItem, len(d.exItems)); copy(out, exItemsGen)
+	//
+	// — passed gofmt, go vet and the ENTIRE repository test suite. Under
+	// the first, peerDialect.EXItems() returned the FT-710's AF TREBLE
+	// GAIN and AF MIDDLE TONE GAIN at 010101/010102 in place of this
+	// dialect's own PEER ITEM ONE/TWO at 090101/090102, and every test
+	// stayed green. A third variant returned the right ADDRESSES while
+	// copying Name/Digits/P1Label from exItemsGen.
+	//
+	// That is byte-for-byte the shape this whole fix round exists to close
+	// — receiver consulted for the bound, datum taken from a global — the
+	// Task 53 SixtyMSlot bug wearing a third hat. Cardinality is exactly
+	// the property such a mutation preserves, so comparing lengths can
+	// never see it. Compare the CONTENT.
+	//
+	// Digits is not incidental: it is the field ParseEXAnswer's doc
+	// comment discusses at length (the M8c read-characterisation, and the
+	// one address where the manual is wrong), so an inventory that
+	// silently carried the FT-710's widths would mislead exactly the
+	// reader that comment is written for.
+	items := peerDialect.EXItems()
+	if len(items) != len(peerEXItems) {
+		t.Fatalf("peerDialect.EXItems() returned %d items, want %d — this is reading a global inventory", len(items), len(peerEXItems))
 	}
+	for i, want := range peerEXItems {
+		if items[i] != want {
+			t.Errorf("peerDialect.EXItems()[%d] = %+v,\n want %+v\n — the LENGTH comes from this dialect and the CONTENT from a package global", i, items[i], want)
+		}
+	}
+
+	// EXAddresses() is a SEPARATE method over the same field and was not
+	// called anywhere in this file before fix round 2, so it was pinned by
+	// nothing at all for any dialect but the FT-710.
+	addrs := peerDialect.EXAddresses()
+	if len(addrs) != len(peerEXItems) {
+		t.Fatalf("peerDialect.EXAddresses() returned %d addresses, want %d — this is reading a global inventory", len(addrs), len(peerEXItems))
+	}
+	for i, it := range peerEXItems {
+		if addrs[i] != it.Addr {
+			t.Errorf("peerDialect.EXAddresses()[%d] = %s, want %s — the length comes from this dialect and the content from a package global", i, addrs[i].Wire(), it.Addr.Wire())
+		}
+	}
+
+	// Belt and braces: not one address this dialect reports may be a
+	// member of the FT-710's inventory. This is the assertion that stays
+	// meaningful if peerEXItems is ever extended.
+	for _, a := range addrs {
+		if FT710.KnownEXAddress(a) {
+			t.Errorf("peerDialect.EXAddresses() reported %s, which is a member of the FT-710's inventory — this is a global leaking through", a.Wire())
+		}
+	}
+
 	// And the FT-710 must refuse peerDialect's address.
 	if _, err := FT710.ParseEXAddress(own.Wire()); err == nil {
 		t.Errorf("FT710.ParseEXAddress(%q) succeeded for an address it does not have", own.Wire())
