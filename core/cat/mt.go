@@ -7,19 +7,26 @@ import (
 	"strings"
 )
 
-// mtTagMaxBytes is the maximum tag length in BYTES (not runes) accepted by
-// BuildMTSet/ParseMTAnswer. Reference P2: "tag, up to 12 ASCII characters".
-const mtTagMaxBytes = 12
-
 // mtReadLen is the fixed length of an MT read request: "MT" + 3-byte slot
 // + ";". Golden vector G10: "MT001;".
 const mtReadLen = 6
 
 // mtAnswerMinLen/mtAnswerMaxLen bound an MT Set/Answer frame's total
 // length: "MT"(2) + slot(3) + display(1) + tag(0-12) + ";"(1).
+//
+// These stay sized to the FT-710's own 12-byte tag rather than becoming
+// receiver-derived. M9c-0 task 64 promotes the TAG-LENGTH POLICY itself
+// (Dialect.mt.TagMaxBytes) onto the receiver — see validMTTag and
+// clearTagForm below — but a per-dialect FRAME-LENGTH ceiling is a
+// separate concern this task's own scope does not reach: every dialect
+// exercised anywhere in this package (the FT-710, and this task's own
+// 6-byte peer, mtpolicy_test.go) has a tag no wider than 12, so this outer
+// bound is never the thing doing the rejecting for either. A future
+// dialect wider than 12 bytes would need this constant revisited into a
+// receiver method; recorded here rather than left to be rediscovered.
 const (
 	mtAnswerMinLen = 2 + 3 + 1 + 0 + 1
-	mtAnswerMaxLen = 2 + 3 + 1 + mtTagMaxBytes + 1
+	mtAnswerMaxLen = 2 + 3 + 1 + 12 + 1
 )
 
 // mtSlotValid reports whether s is a legal MT SET target under project
@@ -60,11 +67,19 @@ func validMTTagByte(b byte) bool {
 
 // validMTTag reports whether tag is short enough (measured in BYTES, so a
 // multi-byte UTF-8 rune counts for every byte it occupies, never just one)
-// and contains only validMTTagByte bytes. Any byte >= 0x80 (which includes
-// every byte of a multi-byte UTF-8 rune such as 'é') is rejected by the
-// charset check alone, before the length check is even relevant.
-func validMTTag(tag string) bool {
-	if len(tag) > mtTagMaxBytes {
+// and contains only validMTTagByte bytes, against THIS DIALECT'S tag-length
+// policy (d.mt.TagMaxBytes). Any byte >= 0x80 (which includes every byte of
+// a multi-byte UTF-8 rune such as 'é') is rejected by the charset check
+// alone, before the length check is even relevant.
+//
+// A Dialect method rather than a package function taking a fixed constant,
+// because TagMaxBytes varies by radio family (Dialect.mt, task 62) — and
+// this is reached by the OUTBOUND WRITE GATE, allowlist.go's
+// AllowedCommand -> validMTCommand, so a hardwired bound here would let the
+// gate authorise, on every dialect, whatever tag length the FT-710 happens
+// to accept (or refuse a wider dialect's genuinely valid tag).
+func (d Dialect) validMTTag(tag string) bool {
+	if len(tag) > d.mt.TagMaxBytes {
 		return false
 	}
 	for i := 0; i < len(tag); i++ {
@@ -75,35 +90,44 @@ func validMTTag(tag string) bool {
 	return true
 }
 
-// mtClearTag is the wire form BuildMTSet emits for an EMPTY tag: the
-// all-spaces 12-byte tag, the FT-710's one hardware-proven tag-CLEAR
-// mechanism. HW-PROBED 13/07/2026 (docs/fixtures-private/
+// clearTagForm is the wire form BuildMTSet emits for an EMPTY tag under
+// THIS dialect: TagMaxBytes repetitions of ClearTagByte.
+//
+// HW-PROBED 13/07/2026, FT-710 ONLY (docs/fixtures-private/
 // m5b-trials.private-capture, stages tagclear/tagclear2;
 // docs/hardware-notes.md §Empty-slot create, tag-clear): the 0-byte-tag
 // Set form ("MT0960;") is REJECTED ("?;", ~4 ms) and the existing tag
-// SURVIVES, while this spaces form is accepted and reads back as spaces
-// (which ParseMTAnswer's trim models as "" — the two halves of the tag
-// normalisation fix meet exactly here).
-const mtClearTag = "            " // 12 spaces (mtTagMaxBytes)
+// SURVIVES, while the all-spaces 12-byte form is accepted and reads back
+// as spaces (which ParseMTAnswer's trim models as "" — the two halves of
+// the tag normalisation fix meet exactly here). No equivalent hardware
+// evidence exists for any other dialect: this generalises the MECHANISM
+// (fill the field with the dialect's own clear byte) onto the receiver,
+// not the specific 12-space FT-710 form, so FT710.clearTagForm() is still
+// exactly the same 12-space string as before while a dialect with its own
+// TagMaxBytes/ClearTagByte gets its own.
+func (d Dialect) clearTagForm() string {
+	return strings.Repeat(string(d.mt.ClearTagByte), d.mt.TagMaxBytes)
+}
 
 // BuildMTSet builds an MT (memory channel tag) Set frame. NON-EMPTY tags
 // are variable length, no padding — reference: "MT — MEMORY CHANNEL TAG
 // WRITE" Set frame table; golden vectors G8 ("MT0011CALLING FREQ;",
 // 12-byte tag, display on), G9 ("MT005040M;", 3-byte tag, display off);
 // live-accepted M5b write-trial vectors (hw_derived_m5b_test.go). An
-// EMPTY tag is the ONE special case: it is encoded as the all-spaces
-// 12-byte clear form (mtClearTag), because the 0-byte form the frame
-// grammar would otherwise produce is HW-CONFIRMED REJECTED by the radio
-// — both forms are hardware-proven, see mtClearTag's doc comment.
+// EMPTY tag is the ONE special case: it is encoded as this dialect's own
+// clear form (d.clearTagForm()), because the 0-byte form the frame
+// grammar would otherwise produce is HW-CONFIRMED REJECTED by the
+// FT-710 — both forms are hardware-proven for the FT-710, see
+// clearTagForm's doc comment.
 func (d Dialect) BuildMTSet(s Slot, display bool, tag string) (Command, error) {
 	if !d.mtSlotValid(s) {
 		return Command{}, newParseError([]byte(s.Wire()), "MT: slot must be memory (001-099) or PMS (P1L-P9U); 5xx/EMG rejected by project policy pending M5a, \"000\"/invalid rejected per reference")
 	}
-	if !validMTTag(tag) {
-		return Command{}, newParseError([]byte(tag), "MT: tag must be 0-12 bytes of printable ASCII 0x20-0x7E, excluding ';', with no control bytes")
+	if !d.validMTTag(tag) {
+		return Command{}, newParseError([]byte(tag), fmt.Sprintf("MT: tag must be 0-%d bytes of printable ASCII 0x20-0x7E, excluding ';', with no control bytes", d.mt.TagMaxBytes))
 	}
 	if tag == "" {
-		tag = mtClearTag
+		tag = d.clearTagForm()
 	}
 
 	frame := make([]byte, 0, mtAnswerMinLen+len(tag))
@@ -162,17 +186,26 @@ func (d Dialect) BuildMTRead(s Slot) (Command, error) {
 // (candidate "PROD TEST" vs read-back "PROD TEST   ").
 //
 // ADJUDICATED FIX (Fix: tag normalisation): padding is a WIRE-ENCODING
-// concern only — this function TRIMS trailing spaces (ASCII 0x20 only;
-// mid-tag/leading spaces and every other byte are preserved verbatim,
-// still passed through with no charset re-validation) before returning,
-// so the model's canonical tag form is never space-padded regardless of
-// how the radio chose to pad the wire reply. An all-spaces tag (the
-// radio's own tag-CLEAR form, hw_derived_m5b_test.go) trims to "",
-// matching the model's "no tag" representation exactly. Every caller
-// downstream (codeplug JSON, Diff, clone's write-verify compare, the
-// GUI, CSV) therefore compares and stores trimmed tags uniformly; see
-// codeplug.Load for the mirrored normalisation on the JSON-file side (a
-// hand-edited or pre-fix file may still carry an old padded tag).
+// concern only — this function TRIMS trailing occurrences of THIS
+// DIALECT'S OWN clear byte (d.mt.ClearTagByte; mid-tag/leading occurrences
+// and every other byte are preserved verbatim, still passed through with
+// no charset re-validation) before returning, so the model's canonical tag
+// form is never padded regardless of how the radio chose to pad the wire
+// reply. For the FT-710 this is ASCII 0x20 (space) exactly as before —
+// FT710.ParseMTAnswer's behaviour is byte-identical to the pre-M9c-0
+// hardcoded strings.TrimRight(tag, " "). An all-clear-byte tag (the
+// FT-710's own tag-CLEAR form, hw_derived_m5b_test.go — TagMaxBytes
+// repetitions of ClearTagByte, see clearTagForm) trims to "", matching
+// the model's "no tag" representation exactly, and this is the direction
+// that MUST move together with BuildMTSet's own clear-form emission: a
+// receiver-aware BUILD paired with a hardcoded-to-spaces DECODE would
+// parse a non-FT-710 dialect's own cleared tag back as a string of its
+// clear bytes rather than empty (mtpolicy_test.go's
+// TestMTPolicy_ClearFormDecodeIsNotJustSpaces). Every caller downstream
+// (codeplug JSON, Diff, clone's write-verify compare, the GUI, CSV)
+// therefore compares and stores trimmed tags uniformly; see codeplug.Load
+// for the mirrored normalisation on the JSON-file side (a hand-edited or
+// pre-fix file may still carry an old padded tag).
 func (d Dialect) ParseMTAnswer(frame []byte) (Slot, bool, string, error) {
 	if len(frame) < mtAnswerMinLen || len(frame) > mtAnswerMaxLen {
 		return Slot{}, false, "", newParseError(frame, fmt.Sprintf("MT answer must be %d-%d bytes", mtAnswerMinLen, mtAnswerMaxLen))
@@ -198,6 +231,6 @@ func (d Dialect) ParseMTAnswer(frame []byte) (Slot, bool, string, error) {
 	if err != nil {
 		return Slot{}, false, "", newParseError(frame, "MT answer: display field must be '0' or '1'")
 	}
-	tag := strings.TrimRight(string(frame[6:len(frame)-1]), " ")
+	tag := strings.TrimRight(string(frame[6:len(frame)-1]), string(d.mt.ClearTagByte))
 	return slot, display, tag, nil
 }
