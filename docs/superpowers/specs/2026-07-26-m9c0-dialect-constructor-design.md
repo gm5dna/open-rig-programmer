@@ -1,7 +1,16 @@
 # M9c-0 — the exported `Dialect` constructor
 
 **Date:** 26/07/2026
-**Status:** revision 2, awaiting approval
+**Status:** revision 2.1, awaiting approval
+
+> **2.1 correction (26/07/2026, Codex plan review finding 2).** The API
+> block said `MWWriteKind Kind`. **There is no `Kind` type.**
+> `MemoryData.Kind` is a plain `byte` and every `Kind*` constant is
+> declared `byte = '0'`…`'5'` (`core/cat/memdata.go:76`, `:82`), so the
+> field is `MWWriteKind byte` and Task 62 would not have compiled as
+> written. No alias is introduced: the constants are already `byte`, and
+> inventing `type Kind = byte` here would add a name the rest of the
+> package does not use.
 **Milestone:** M9c-0, an enabler executed before M9c (FTdx10 vertical slice)
 
 > **Revision 2 (26/07/2026).** Revision 1 was reviewed adversarially by
@@ -138,7 +147,7 @@ type DialectConfig struct {
     EXItems     []EXItem
     MT          MTPolicy
     Clarifier   ClarifierPolicy
-    MWWriteKind Kind // FT-710: KindMemory
+    MWWriteKind byte // FT-710: KindMemory
 }
 
 func NewDialect(cfg DialectConfig) (Dialect, error)

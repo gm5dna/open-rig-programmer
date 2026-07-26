@@ -2,32 +2,35 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Revision 2 (26/07/2026).** Revision 1 was reviewed adversarially by Codex and returned **NEEDS-REVISION with 12 findings, 7 HIGH**. All twelve verified against source and **accepted**; the adjudication table is at the end and the transcript is at `.superpowers/sdd/m9c0-codex-plan-review.md`. Revision 1's task split, its baseline commands, its equivalence test and its gate property were all defective. **Do not execute revision 1** (git `960b0d0`).
+
 **Goal:** Give `cat.Dialect` an exported, validating constructor so `core/cat/ftdx10` can exist, and promote the five FT-710 facts that reach the outbound write gate into dialect data — with FT-710 behaviour unchanged.
 
 **Architecture:** A flat `DialectConfig` (plus `SlotSpace`, `MTPolicy`, `ClarifierPolicy`) validated by `NewDialect`, which copies every input and derives the EX indices. `MustNewDialect` serves compile-time model tables so roadmap A1's `func Dialect() cat.Dialect` signature stands. Five gate-affecting constants move onto the receiver; frame offsets stay put.
 
 **Tech Stack:** Go 1.25, stdlib only in `core/`, existing table-driven test style, `go/parser`+`go/ast` for guards.
 
-**Design spec:** `docs/superpowers/specs/2026-07-26-m9c0-dialect-constructor-design.md` (**revision 2** — do not implement revision 1). Where this plan and the spec disagree, **the spec wins and the plan is wrong** — say so rather than guessing.
+**Design spec:** `docs/superpowers/specs/2026-07-26-m9c0-dialect-constructor-design.md` (**revision 2.1**). Where this plan and the spec disagree, **the spec wins and the plan is wrong** — say so rather than guessing.
 
 ## Global Constraints
 
 - **stdlib only in `core/`.** No new dependencies anywhere.
 - **SPDX header** `// SPDX-License-Identifier: GPL-3.0-or-later` on every new file.
-- **British English** in all user-facing copy. "Snapshot", never "backup".
+- **British English** in user-facing copy. "Snapshot", never "backup".
 - **FT-710 behaviour is unchanged**, stated precisely: CAT frames, golden and hardware-derived vectors, codeplug JSON, digest, schema (stays 2) and CLI output are byte-identical. This is a read/render + corpus claim; no hardware runs.
 - **Never regenerate a golden.** `core/cat/testdata/` is not to be rewritten. If a corpus fails, the change is wrong, not the corpus.
-- **The receiver must be load-bearing.** A method taking a `Dialect` that reads a package global has the shape of a seam and none of the substance. For any datum this milestone promotes, no package-level fallback may remain.
-- **The gate may never be weakened.** `Dialect.AllowedCommand` is what stands between this program and a radio. No accepted config may cause a byte outside the permitted wire-byte domain (printable ASCII `0x20`–`0x7E` excluding `';'`) to be emitted or admitted.
-- **Every validation rule needs a rejecting test AND an accepting test.** A file of "rejects X" assertions all pass when the rejection helper is stubbed to `return false`.
-- **Errors are returned, never panicked** — except `MustNewDialect`, which exists for that purpose and is forbidden on caller-supplied data.
+- **The receiver must be load-bearing.** For any datum this milestone promotes, no package-level fallback may remain — in the predicate *or in the diagnostic it emits*.
+- **The gate may never be weakened.** No accepted config may cause a byte outside the permitted wire-byte domain to appear in a frame's **interior**. The domain is printable ASCII `0x20`–`0x7E` excluding `';'`; the terminator is the one `';'` a frame is required to end with.
+- **Every rule needs a rejecting test AND an accepting test, per clause** — not per numbered rule. A file of "rejects X" assertions all pass when the rejection helper is stubbed to `return false`.
+- **Assert on error content, not just non-nil.** A validator returning a generic error must fail its test.
+- **Run every command before writing it into a report.** Revision 1's baseline commands were written without being executed and did not work. The sequence in Task 60 has been run; if you change it, run it again.
 - CI is billing-dead; the full local gate substitutes.
 
 ## Process
 
 - Branch: `m9c0-dialect-constructor`; merge to `main` at milestone end.
 - Task numbering continues the ledger. Next free: **task-60**.
-- Each task: brief → fresh implementer → TDD → opus review gate → report, all in `.superpowers/sdd/`.
+- Each task: brief → fresh implementer → TDD → opus review gate → report, in `.superpowers/sdd/`.
 - Milestone end: Codex adversarial review → adjudicate → fix wave → re-review → merge.
 
 ## File Structure
@@ -35,14 +38,16 @@
 | File | Responsibility |
 |---|---|
 | `core/cat/dialectconfig.go` **(new)** | `SlotSpace`, `MTPolicy`, `ClarifierPolicy`, `DialectConfig`, `NewDialect`, `MustNewDialect` |
-| `core/cat/dialectvalidate.go` **(new)** | The eleven rules, one function each, plus the wire-byte domain helpers |
-| `core/cat/dialect.go` | `Dialect` gains `mt`, `clar`, `mwWriteKind` fields and their accessors; `ModeByName` |
-| `core/cat/mt.go` | `mtTagMaxBytes`/`mtClearTag` deleted; `validMTTag` becomes a method |
-| `core/cat/memdata.go` | `clarMaxAbsHz`/`clarStepHz` deleted; `validClarHz` becomes a method |
-| `core/cat/mw.go` | `KindMemory` literal replaced by `d.mwWriteKind` |
-| `core/driver/ft710/caps.go`, `write.go` | Write path routes through `Dialect.ModeByName` |
+| `core/cat/dialectvalidate.go` **(new)** | Wire-byte domain helpers and the eleven rules, one function each |
+| `core/cat/dialect.go` | `Dialect` gains `mt`, `clar`, `mwWriteKind`, `modeByName`; `ModeByName` accessor |
+| `core/cat/mt.go` | `mtTagMaxBytes`/`mtClearTag` deleted; tag validation, clear emission, clear **decoding** and diagnostics all receiver-borne |
+| `core/cat/memdata.go`, `core/cat/mr.go` | `clarMaxAbsHz`/`clarStepHz` deleted; `validClarHz` and its diagnostics receiver-borne |
+| `core/cat/mw.go` | `KindMemory` literal replaced by `d.mwWriteKind`; diagnostic derived |
+| `core/driver/ft710/caps.go`, `write.go` | Write path resolves modes through `Dialect.ModeByName` |
 | `core/cat/seconddialect_test.go` | Peer fixtures rebuilt through `NewDialect` |
-| `docs/superpowers/m9c0-baseline-manifest.md` **(new, tracked)** | Baseline hashes and reproduction commands |
+| `core/cat/dialectexternal_test.go` **(new, `package cat_test`)** | Proves an *external* package can construct a dialect |
+| `internal/guards/dialectglobals_test.go` **(new)** | Reproducible transitive audit |
+| `docs/superpowers/m9c0-baseline-manifest.md` **(new, tracked)** | Baseline hashes and the verified command sequence |
 
 ---
 
@@ -50,304 +55,221 @@
 
 **Files:** Create `docs/superpowers/m9c0-baseline-manifest.md`. No source changes.
 
-- [ ] **Step 1: Record the base commit.** `git rev-parse HEAD` — this is the byte-identity reference. Put it in the manifest.
+**This exact sequence has been run and produces seven non-empty artefacts.** Revision 1's did not work: `settings` has no `--fake` and takes a file argument (`cmd/rigprog/settings.go:32`), `read` uses `--out` not `-o` (`cmd/rigprog/read.go:115`), and `export` uses `--csv OUT FILE` (`cmd/rigprog/export.go:23`).
 
-- [ ] **Step 2: Capture the four no-normalisation artefacts** into a scratch dir (NOT the repo):
-
-```bash
-go run ./cmd/rigprog probe --fake            > probe-fake.txt
-go run ./cmd/rigprog settings --fake         > settings.txt
-go run ./cmd/rigprog read --fake -o /tmp/m9c0-read.json && \
-  go run ./cmd/rigprog export /tmp/m9c0-read.json -o export.csv
-go run ./cmd/rigprog --help                  > help.txt
-```
-
-- [ ] **Step 3: Hash them and the four corpora.**
+- [ ] **Step 1: Capture, failing fast.** `set -e` matters: without it a failed command leaves an empty file that gets hashed as a baseline.
 
 ```bash
-shasum -a 256 probe-fake.txt settings.txt export.csv help.txt
-shasum -a 256 core/cat/testdata/*.golden
+set -e
+git rev-parse HEAD                       # record as BASE in the manifest
+B=.superpowers/sdd/m9c0-baselines        # relative, inside the repo, git-ignored
+mkdir -p "$B"
+go run ./cmd/rigprog probe --fake                                            > "$B/probe-fake.txt" 2>&1
+go run ./cmd/rigprog read --fake --settings --out "$B/read-fake.json"        > "$B/read-fake.txt"  2>&1
+go run ./cmd/rigprog settings "$B/read-fake.json"                            > "$B/settings.txt"   2>&1
+go run ./cmd/rigprog export --csv "$B/export.csv" "$B/read-fake.json"        > "$B/export.txt"     2>&1
+go run ./cmd/rigprog help                                                    > "$B/help.txt"       2>&1
 ```
 
-- [ ] **Step 4: Write the manifest** with every hash, the base commit, and the exact commands. Record any artefact with a known noise floor (a timestamp, an echoed path) as a **mismatch to normalise**, never adjusted away.
+- [ ] **Step 2: Prove nothing silently failed.**
 
-- [ ] **Step 5: Commit.** `git commit -m "m9c0: task 60 — baselines before the constructor"`
+```bash
+find "$B" -size 0 -print          # MUST print nothing
+cd "$B" && shasum -a 256 *
+```
+
+Expected orders of magnitude from the verified run: `export.csv` ≈ 2.8 kB, `read-fake.json` ≈ 35 kB, `settings.txt` ≈ 13 kB, `help.txt` ≈ 0.9 kB. A file far from these is a failed command, not a baseline.
+
+- [ ] **Step 3: Hash the corpora too.** `shasum -a 256 core/cat/testdata/*.golden`
+
+- [ ] **Step 4: Write the manifest** — BASE commit, every hash, the sequence above verbatim, and the **normalisation rule**: `read-fake.json`'s `read_at` and the echoed `Output:` paths in `read-fake.txt`/`export.txt` are the *only* permitted differences. **Schema and baseline digest stay inside the comparison** — they are exactly what a mistake would change. Any other difference is a defect, never a baseline to update.
+
+- [ ] **Step 5: Commit.** `"m9c0: task 60 — baselines before the constructor"`
 
 **Depends on:** nothing.
 
 ---
 
-### Task 61: The permitted wire-byte domain
+### Task 61: Config types, the wire-byte domain, and the eleven validators
 
-**Files:** Create `core/cat/dialectvalidate.go`, `core/cat/dialectvalidate_test.go`.
+**Files:** Create `core/cat/dialectconfig.go` (types only), `core/cat/dialectvalidate.go`, `core/cat/dialectvalidate_test.go`.
 
-**Interfaces produced:** `validWireByte(b byte) bool`, `validWireString(s string) bool` — consumed by Tasks 62–65.
+Types exactly as the spec's API block, noting **`MWWriteKind byte`** — there is no `Kind` type; `MemoryData.Kind` is a plain `byte` and the `Kind*` constants are `byte` (`core/cat/memdata.go:76`, `:82`).
 
-- [ ] **Step 1: Write the failing test.**
+- [ ] **Step 1: The domain, tested over all 256 bytes.** Sampling six rejects would let an untested control byte through.
 
 ```go
-func TestValidWireByte_Domain(t *testing.T) {
-	// ACCEPT: the printable ASCII range, endpoints included.
-	for b := byte(0x20); b <= 0x7E; b++ {
-		if b == ';' {
-			continue
-		}
-		if !validWireByte(b) {
-			t.Errorf("validWireByte(%#02x %q) = false, want true", b, b)
-		}
-	}
-	// REJECT: the terminator, and everything outside printable ASCII.
-	for _, b := range []byte{';', 0x00, 0x1F, 0x7F, 0x80, 0xFF} {
-		if validWireByte(b) {
-			t.Errorf("validWireByte(%#02x) = true, want false", b)
+func TestValidWireByte_EveryByteValue(t *testing.T) {
+	for i := 0; i < 256; i++ {
+		b := byte(i)
+		want := b >= 0x20 && b <= 0x7E && b != ';'
+		if got := validWireByte(b); got != want {
+			t.Errorf("validWireByte(%#02x) = %v, want %v", b, got, want)
 		}
 	}
 }
 ```
 
-- [ ] **Step 2: Run it, confirm it fails** with "undefined: validWireByte".
+- [ ] **Step 2: Run, confirm it fails**, then implement `validWireByte`/`validWireString`. `';'` is excluded because it TERMINATES a frame: a dialect datum carrying one would split a single command into two on the wire.
 
-- [ ] **Step 3: Implement.**
+- [ ] **Step 3: Write the eleven validators**, one function per rule, each returning an error that **names the field and the offending value**. Rules and their reasons are the spec's validation table — read it; do not infer them from this plan.
+
+- [ ] **Step 4: Test every CLAUSE, both directions, asserting on error text.** V2 alone has four clauses (empty map, empty name, duplicate name, key outside the domain); V4 has four (two fields × absence form, length, domain). A `wantErr bool` check alone passes for a validator that returns a generic error from the wrong branch.
 
 ```go
-// validWireByte reports whether b may appear inside a CAT frame this
-// package builds. The domain is printable ASCII excluding ';'.
-//
-// ';' is excluded because it TERMINATES a frame: a byte of dialect data
-// carrying one would split a single command into two on the wire, and the
-// gate's whole-frame checks count semicolons rather than re-deriving
-// structure. Non-printable bytes are excluded because no CAT field in any
-// reference documents one, and admitting them would let a caller-built
-// dialect emit a gate-approved frame containing a NUL (Codex spec review,
-// finding 2).
-func validWireByte(b byte) bool {
-	return b >= 0x20 && b <= 0x7E && b != ';'
-}
-
-// validWireString reports whether every byte of s is in the domain. Empty
-// is true: callers decide separately whether empty is permitted.
-func validWireString(s string) bool {
-	for i := 0; i < len(s); i++ {
-		if !validWireByte(s[i]) {
-			return false
-		}
-	}
-	return true
+tests := []struct {
+	name       string
+	mutate     func(*DialectConfig)
+	wantErrHas string // "" = must succeed
+}{
+	{"baseline is valid", func(*DialectConfig) {}, ""},
+	{"V2 empty mode map", func(c *DialectConfig) { c.ModeNames = map[Mode]string{} }, "ModeNames"},
+	{"V2 empty mode name", func(c *DialectConfig) { c.ModeNames[Mode('2')] = "" }, "ModeNames"},
+	{"V2 duplicate mode name", func(c *DialectConfig) { c.ModeNames[Mode('9')] = c.ModeNames[Mode('2')] }, "duplicate"},
+	{"V2 mode key outside wire domain", func(c *DialectConfig) { c.ModeNames[Mode(0x00)] = "NUL" }, "0x00"},
+	{"V3 pmsPairs 10 rejected not clamped", func(c *DialectConfig) { c.Slots.PMSPairs = 10 }, "PMSPairs"},
+	{"V5 MemoryLo 0 is PERMITTED", func(c *DialectConfig) { c.Slots.MemoryLo = 0 }, ""},
+	{"V5 dead absence 99..0", func(c *DialectConfig) { c.Slots.MemoryLo, c.Slots.MemoryHi = 99, 0 }, "MemoryLo"},
+	{"V7 noneWire shadows memory", func(c *DialectConfig) { c.Slots.MemoryLo, c.Slots.NoneWire = 0, "000" }, "NoneWire"},
+	{"V7 emergencyWire collides with PMS", func(c *DialectConfig) { c.Slots.PMSPairs, c.Slots.EmergencyWire = 1, "P1L" }, "EmergencyWire"},
+	{"V8 EX component over 99", func(c *DialectConfig) { c.EXItems[0].Addr.P1 = 100 }, "P1"},
+	// ...every remaining clause of every rule, both directions
 }
 ```
 
-- [ ] **Step 4: Run, confirm pass.**
+**`MemoryLo: 0` must be ACCEPTED.** `noneWireDialect` depends on it, and revision 1's `>= 1` rule would have rejected the fixture the sufficiency proof needs.
 
-- [ ] **Step 5: Commit.** `git commit -m "m9c0: task 61 — the permitted wire-byte domain"`
+- [ ] **Step 5: Commit.** `"m9c0: task 61 — config types, wire-byte domain, eleven validators"`
 
 **Depends on:** Task 60.
 
 ---
 
-### Task 62: `DialectConfig`, `NewDialect`, and rules V1–V8
+### Task 62: `NewDialect`, `MustNewDialect`, storage and initialisation
 
-**Files:** Create `core/cat/dialectconfig.go`; extend `core/cat/dialectvalidate.go` and its test; new `core/cat/dialectconfig_test.go`.
+**Files:** `core/cat/dialectconfig.go`, `core/cat/dialect.go`, `core/cat/seconddialect_test.go`, tests.
 
-**Interfaces produced:** the config types and both constructors, exactly as the spec's API section gives them. `Dialect` gains no new fields in this task — `MT`, `Clarifier` and `MWWriteKind` are accepted and validated here but only *stored* from Task 63 on. Land them as fields on `Dialect` now (unused is fine; `go vet` does not object to unused struct fields) so Tasks 63–65 do not each re-open the struct.
+Revision 1 said Task 62 "gains no new fields" *and* "lands all three fields", then told Tasks 63–65 to add them again — following it literally produced duplicate fields. **This task adds and populates all four new fields; Tasks 64–67 only reroute consumers.**
 
-- [ ] **Step 1: Write the config and constructor** per the spec's API block verbatim. `NewDialect` must:
-  1. validate (V1–V11; V9–V11 are cheap and belong here even though their data is not consumed until 63–65),
-  2. **copy** `ModeNames` into a fresh map and `EXItems` into a fresh slice,
-  3. derive `exMembers`, `exByTriple`, `exP4Max` from the *copy*.
+- [ ] **Step 1: Add the fields** to `Dialect`: `mt MTPolicy`, `clar ClarifierPolicy`, `mwWriteKind byte`, `modeByName map[string]Mode`.
 
-- [ ] **Step 2: Write the eleven rules**, one function each, in `dialectvalidate.go`. Each returns a descriptive `error` naming the field and the offending value. Exact rules and their reasons are the spec's validation table — **read it, do not infer them from this plan.**
+- [ ] **Step 2: `NewDialect`** validates (Task 61's rules), **copies** `ModeNames` and `EXItems` into fresh containers, then derives `exMembers`, `exByTriple`, `exP4Max` **and** `modeByName` from the copies.
 
-- [ ] **Step 3: Write the rejecting AND accepting tests.** One table per rule. Every rule needs a config that trips it and a minimally-different config that does not:
+- [ ] **Step 3: `MustNewDialect`** panics on error. Its doc says it exists for compile-time-constant model tables where failure is a build-time programming error, and **forbids** its use on caller-supplied data.
 
-```go
-// Each entry names the ONE field it perturbs from a known-good baseline,
-// so a failure identifies the rule rather than the fixture.
-tests := []struct {
-	name    string
-	mutate  func(*DialectConfig)
-	wantErr bool
-}{
-	{"baseline is valid", func(*DialectConfig) {}, false},
-	{"V2 mode key outside wire domain", func(c *DialectConfig) { c.ModeNames[Mode(0x00)] = "NUL" }, true},
-	{"V2 duplicate mode name", func(c *DialectConfig) { c.ModeNames[Mode('9')] = c.ModeNames[Mode('2')] }, true},
-	{"V3 pmsPairs 10 rejected not clamped", func(c *DialectConfig) { c.Slots.PMSPairs = 10 }, true},
-	{"V5 MemoryLo 0 is PERMITTED", func(c *DialectConfig) { c.Slots.MemoryLo = 0 }, false},
-	{"V5 dead absence 99..0", func(c *DialectConfig) { c.Slots.MemoryLo, c.Slots.MemoryHi = 99, 0 }, true},
-	{"V7 noneWire shadows memory", func(c *DialectConfig) { c.Slots.MemoryLo, c.Slots.NoneWire = 0, "000" }, true},
-	{"V7 emergencyWire collides with PMS", func(c *DialectConfig) { c.Slots.PMSPairs, c.Slots.EmergencyWire = 1, "P1L" }, true},
-	{"V8 EX component over 99", func(c *DialectConfig) { c.EXItems[0].Addr.P1 = 100 }, true},
-	// ... one per rule, both directions
-}
-```
+- [ ] **Step 4: Initialise every existing configured literal.** This is the step revision 1 missed entirely: once clarifier validation is receiver-based, a literal with a zero `StepHz` reaches a modulo by zero. Populate the new fields on `FT710` (`core/cat/dialect.go:78`) and on all three fixtures — `testDialect` (`:62`), `noneWireDialect` (`:93`), `peerDialect` (`:143`).
 
-**`MemoryLo: 0` must be ACCEPTED.** It is not an oversight: `noneWireDialect` depends on it and revision 1's rule rejected the very fixture the sufficiency proof needs.
+- [ ] **Step 5: Test both `MustNewDialect` outcomes** — a valid config returns a working dialect; an invalid one panics (`defer recover()`).
 
-- [ ] **Step 4: The FT-710 equivalence test.**
+- [ ] **Step 6: Run the full package.** Green, and `git status` shows `core/cat/testdata/` untouched.
 
-```go
-// TestNewDialect_ReproducesFT710 proves the exported API is expressive
-// enough for a real radio, and that FT710's own data passes its own
-// validation.
-//
-// The config is built from INDEPENDENT LITERALS, never by reading FT710's
-// fields back into a DialectConfig: an expectation derived from the code
-// under test moves with it and proves nothing. Same discipline as
-// ft710P4MaxBytes in seconddialect_test.go.
-func TestNewDialect_ReproducesFT710(t *testing.T) {
-	got, err := NewDialect(DialectConfig{
-		CATID:     "0800",
-		ModeNames: modeNames, // copied by the constructor; compared below
-		Slots: SlotSpace{
-			MemoryLo: 1, MemoryHi: 99,
-			SixtyLo: 501, SixtyHi: 599,
-			PMSPairs: 9, EmergencyWire: "EMG", NoneWire: "000",
-		},
-		EXItems:     exItemsGen,
-		MT:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' '},
-		Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-		MWWriteKind: KindMemory,
-	})
-	if err != nil {
-		t.Fatalf("NewDialect with FT-710's data: %v", err)
-	}
-	// Compare behaviour, not reflect.DeepEqual: the literal and a
-	// constructed dialect may legitimately differ in nil-vs-empty derived
-	// maps while behaving identically.
-	assertDialectsBehaveIdentically(t, FT710, got)
-}
-```
-
-Write `assertDialectsBehaveIdentically` to compare `CATID()`, every mode's `ValidMode`/`ModeName` over all 256 byte values, `classifySlot` over a slot corpus, `KnownEXAddress` over both inventories, and `exP4MaxBytes()`.
-
-- [ ] **Step 5: Input-independence test.** Mutate the caller's map and slice after construction; assert the dialect is unchanged, **including derived EX membership and width**.
-
-- [ ] **Step 6: Run the full package.** Confirm green and that `core/cat/testdata/` is untouched (`git status`).
-
-- [ ] **Step 7: Commit.** `git commit -m "m9c0: task 62 — DialectConfig, NewDialect, MustNewDialect, rules V1-V11"`
+- [ ] **Step 7: Commit.** `"m9c0: task 62 — NewDialect, MustNewDialect, field storage and initialisation"`
 
 **Depends on:** Task 61.
 
 ---
 
-### Task 63: MT tag width and clear-tag byte onto the receiver
+### Task 63: Equivalence, input independence, external construction
 
-**Files:** `core/cat/mt.go`, `core/cat/dialect.go`, `core/cat/mt_test.go`, `core/cat/seconddialect_test.go`.
+**Files:** `core/cat/dialectconfig_test.go`, new `core/cat/dialectexternal_test.go` (`package cat_test`).
 
-- [ ] **Step 1: Write the failing peer test first.**
+- [ ] **Step 1: FT-710 equivalence, from genuinely independent data.** Revision 1 passed `modeNames` and `exItemsGen` — *the very objects the production literal uses* (`dialect.go:80`, `:88`) — so it compared the literal against itself. Write the mode table and EX items out as fresh literals in the test.
+
+- [ ] **Step 2: Make the helper complete.** Revision 1's would pass while `FT710` had zero policies or a corrupted EX index. `assertDialectsBehaveIdentically` must compare:
+  - `CATID()`; `ValidMode`/`ModeName` over **all 256** byte values;
+  - `classifySlot` over an **exhaustive** corpus: every 3-digit numeric `000`–`999`, every `P<1-9><L|U>`, both special wires, and a sample of malformed forms;
+  - `EXItems()` **exactly** — length, order, and every field including metadata;
+  - `EXAddresses()` order;
+  - **both** EX lookup paths — `KnownEXAddress` and `NewEXAddress`/`ParseEXAddress`, which is how `exByTriple` becomes observable;
+  - `exP4MaxBytes()` and all three policies.
+
+- [ ] **Step 3: Input independence.** Mutate the caller's map and slice after construction; assert unchanged behaviour through **all three** derived EX structures (`exMembers`, `exByTriple`, `exP4Max`) plus `modeByName`.
+
+- [ ] **Step 4: External construction proof**, in `package cat_test`, so it cannot reach package internals:
 
 ```go
-// TestPeerDialect_MTTagPolicyIsItsOwn proves the MT tag bound and the
-// clear-tag encoding come from the RECEIVER. A peer whose tag is 6 bytes
-// wide and whose clear byte is '-' must accept its own 6-byte tag, reject
-// 7, and clear with six '-' — none of which the FT-710's 12-and-space
-// policy would produce.
-func TestPeerDialect_MTTagPolicyIsItsOwn(t *testing.T) { /* ... */ }
+// Proves the EXPORTED API alone is sufficient — the property M9c depends
+// on. An in-package test can pass while quietly using an unexported field.
+func TestExternalPackageCanConstructADialect(t *testing.T) { /* cat.NewDialect(...) */ }
 ```
 
-- [ ] **Step 2: Run it, confirm it fails** (the peer will be bound by 12 and pad with spaces).
-
-- [ ] **Step 3: Move the data.** Delete `mtTagMaxBytes` and `mtClearTag` from `mt.go`. Add to `Dialect`: `mt MTPolicy`. Turn `validMTTag` into `func (d Dialect) validMTTag(tag string) bool` — **it is reached by the gate through `validMTCommand`, which is why it must take the receiver**. Replace `mtAnswerMaxLen` with a method deriving from `d.mt.TagMaxBytes`. Build the clear tag by repeating `d.mt.ClearTagByte`.
-
-- [ ] **Step 4: Run.** Peer test passes; FT-710's `mt_test.go` unchanged and green.
-
-- [ ] **Step 5: Verify FT-710 is untouched.** `go test ./core/cat/ -run 'MT|Corpus'` and confirm `frame-corpus.golden` still matches without regeneration.
-
-- [ ] **Step 6: Commit.** `git commit -m "m9c0: task 63 — MT tag policy onto the receiver"`
+- [ ] **Step 5: Commit.** `"m9c0: task 63 — equivalence, input independence, external construction"`
 
 **Depends on:** Task 62.
 
 ---
 
-### Task 64: Clarifier step and range onto the receiver
+### Tasks 64–67: reroute consumers onto the receiver
 
-**Files:** `core/cat/memdata.go`, `core/cat/dialect.go`, tests.
+These four are **independent of one another** and may run in any order or in parallel: their production paths are MT, clarifier, MW Kind and the driver's mode lookup respectively, and Task 62 already landed every field. Each follows the same shape — **write the failing peer test first, confirm it fails, then move the datum.**
 
-Same shape as Task 63. Delete `clarMaxAbsHz`/`clarStepHz`; add `clar ClarifierPolicy` to `Dialect`; `validClarHz` becomes a method. **It is reached by the gate through `validateMWFields`.**
+Each task must also **derive its diagnostics from receiver policy** while leaving FT-710's rendered strings byte-identical. Moving only the predicate yields correct acceptance with false peer-facing error text (`mt.go:103` "0-12 bytes", `mr.go:109` and `mw.go:114` "10 Hz … 9990").
 
-- [ ] **Step 1:** Failing peer test — a dialect with `StepHz: 1, MaxAbsHz: 9999` must accept a clarifier of 7 Hz that the FT-710 rejects, and the FT-710 must still reject it.
-- [ ] **Step 2:** Confirm it fails.
-- [ ] **Step 3:** Move the data; `validClarHz` takes the receiver.
-- [ ] **Step 4:** Run; FT-710 unchanged.
-- [ ] **Step 5:** Commit — `"m9c0: task 64 — clarifier policy onto the receiver"`
+#### Task 64: MT tag policy
 
-**Depends on:** Task 63.
+- [ ] Peer with `TagMaxBytes: 6`, `ClearTagByte: '-'`. Assert it accepts a 6-byte tag, rejects 7, and clears with six `'-'`.
+- [ ] **Move BOTH directions.** Revision 1 moved emission (`mt.go:106`) and said nothing about decoding — but `ParseMTAnswer` trims **spaces only** (`mt.go:201`), so the peer's cleared tag parses back as `"------"`, not empty, failing the spec's round-trip requirement. Clear-form decoding must recognise `TagMaxBytes` repetitions of `ClearTagByte` as empty, preserving FT-710's existing space behaviour exactly.
+- [ ] **Round-trip test:** build → gate → parse, asserting an empty tag survives as empty for both dialects.
+- [ ] Commit: `"m9c0: task 64 — MT tag policy onto the receiver"`
 
----
+#### Task 65: Clarifier policy
 
-### Task 65: MW write Kind onto the receiver
+- [ ] Peer with `StepHz: 1, MaxAbsHz: 9999`. **Test 7 Hz AND 9999 Hz.** 7 Hz alone proves only `StepHz`: it sits inside both ranges, so an implementation taking the step from the receiver while keeping the global `clarMaxAbsHz` passes. **9999 is the load-bearing range mutation.**
+- [ ] For each value assert: builder succeeds, parser round-trips, the peer's own gate admits it, and FT-710 rejects it.
+- [ ] Commit: `"m9c0: task 65 — clarifier policy onto the receiver"`
 
-**Files:** `core/cat/mw.go`, `core/cat/dialect.go`, tests.
+#### Task 66: MW write Kind
 
-`mw.go`'s `if m.Kind != KindMemory` becomes `if m.Kind != d.mwWriteKind`. **Preserve the hardware-evidence comment verbatim** — it records an M5b hardware finding (a PMS write carrying `KindPMS` is rejected by the real radio) and must be rescoped to "the FT-710's policy", not deleted.
+- [ ] Peer with `MWWriteKind: KindPMS` accepts a PMS-kind MW write its own gate admits, while FT-710 still rejects that exact frame.
+- [ ] `mw.go:98`'s `m.Kind != KindMemory` becomes `m.Kind != d.mwWriteKind`. **Preserve the M5b hardware evidence in substance** — a PMS write carrying `KindPMS` is rejected by the real radio — and label it explicitly FT-710-specific. Revision 1 said "preserve verbatim" *and* "rescope", which is self-contradictory: rescoping is the point, and the evidence must survive it.
+- [ ] Commit: `"m9c0: task 66 — MW write Kind onto the receiver"`
 
-- [ ] **Step 1:** Failing peer test — a dialect with `MWWriteKind: KindPMS` accepts a PMS-kind MW write its own gate admits, while FT-710 still rejects that exact frame.
-- [ ] **Step 2:** Confirm it fails.
-- [ ] **Step 3:** Move the datum; rescope the comment.
-- [ ] **Step 4:** Run; FT-710 unchanged; `frame-corpus.golden` unregenerated.
-- [ ] **Step 5:** Commit — `"m9c0: task 65 — MW write Kind onto the receiver"`
+#### Task 67: `ModeByName` and the driver write path
 
-**Depends on:** Task 64.
+- [ ] `func (d Dialect) ModeByName(name string) (Mode, bool)`, served from the index Task 62 built.
+- [ ] Route `core/driver/ft710/write.go:210` through `s.dialect.ModeByName`. This is what makes V2's uniqueness rule *mean* something: today `modeByName` is built from the driver's own `modeTable`, independent of the dialect.
+- [ ] Keep `modeTable` for capability rendering, and **pin its equivalence to the dialect** — it remains a second transcription.
+- [ ] Extend `assertDialectsBehaveIdentically` to cover `ModeByName`.
+- [ ] Commit: `"m9c0: task 67 — ModeByName; the write path resolves through the dialect"`
 
----
-
-### Task 66: `Dialect.ModeByName` and the driver write path
-
-**Files:** `core/cat/dialect.go`, `core/driver/ft710/caps.go`, `core/driver/ft710/write.go`, tests.
-
-This is the task that makes V2's uniqueness rule *mean* something. Today `modeByName` is built from the driver's own `modeTable`, independent of the dialect — so validating the config protected nothing (Codex finding 7).
-
-- [ ] **Step 1: Add the method.**
-
-```go
-// ModeByName is the inverse of ModeName for this dialect's own table.
-// NewDialect rejects duplicate names, so the inverse is well defined for
-// any constructed dialect. The zero value has no modes and reports false.
-func (d Dialect) ModeByName(name string) (Mode, bool)
-```
-
-Build the reverse index once, at construction, beside `exMembers`.
-
-- [ ] **Step 2: Failing test** — `core/driver/ft710`'s write path resolves a mode through the dialect, so a dialect whose `ModeNames` differ resolves differently.
-- [ ] **Step 3:** Route `write.go:210` through `s.dialect.ModeByName`. Keep `modeTable` for capability rendering; **pin its equivalence to the dialect** with a test, since it remains a second transcription.
-- [ ] **Step 4:** Run; `TestModes_MatchCatModeNames` still green.
-- [ ] **Step 5:** Commit — `"m9c0: task 66 — ModeByName; the write path resolves through the dialect"`
-
-**Depends on:** Task 65.
+**All four depend on:** Task 63.
 
 ---
 
-### Task 67: Peer fixtures through the public API, and gate integrity
+### Task 68: Peer fixtures through the public API, and gate integrity
 
 **Files:** `core/cat/seconddialect_test.go`, new `core/cat/dialectgate_test.go`.
 
-This is the milestone's sufficiency proof.
+- [ ] **Step 1: Rebuild the three peer fixtures through `NewDialect`.** If any cannot be expressed, **stop and report** — that is the API being wrong, and it is the finding this task exists to produce. Any fixture that must stay a literal is named in the file with its reason.
 
-- [ ] **Step 1: Rebuild `testDialect`, `noneWireDialect` and `peerDialect` through `NewDialect`** instead of unexported struct literals. If any cannot be expressed, **stop and report** — that is the API being wrong, and it is the finding this task exists to produce. Any fixture that must stay a literal is named in the file with its reason.
+- [ ] **Step 2: The gate property, correctly stated.** Revision 1's would not have caught the NUL finding it was written for: every existing fixture already uses safe bytes, so deleting V2/V4's domain checks left it green. And "no frame contains a byte outside the domain" is **literally false** — every frame ends with the `';'` the domain excludes.
 
-- [ ] **Step 2: The gate-integrity property.** For every dialect in the test set:
+  - Drive **adversarial configs** varying mode keys, special slot wires, CATID and clear bytes — including ones `NewDialect` must reject.
+  - For each **accepted** config, build the affected command and scan `frame[:len(frame)-1]` for domain violations.
+  - Separately assert the frame ends with **exactly one** `';'` and contains no other.
+  - Assert a **non-vacuity count** per builder and per dialect: a property that ran zero times passes silently.
 
-```go
-// TestEveryDialect_BuildersProduceOnlyGateAdmissibleWireBytes is the test
-// that would have caught Codex spec-review finding 2: a config accepted by
-// NewDialect must not be able to emit a frame containing a byte outside the
-// permitted domain, and every builder output must pass its OWN dialect's
-// gate.
-func TestEveryDialect_BuildersProduceOnlyGateAdmissibleWireBytes(t *testing.T) { /* ... */ }
-```
+- [ ] **Step 3: Prove each assertion fails for its own reason.** Temporarily break one builder, confirm exactly the expected test goes red, restore.
 
-- [ ] **Step 3: Run.** Confirm each assertion fails for its own reason — temporarily break one builder and check exactly the expected test goes red.
+- [ ] **Step 4: Commit.** `"m9c0: task 68 — peer fixtures through the public API; gate integrity"`
 
-- [ ] **Step 4: Commit.** `"m9c0: task 67 — peer fixtures through the public API; gate-integrity property"`
-
-**Depends on:** Task 66.
+**Depends on:** Tasks 64–67.
 
 ---
 
-### Task 68: Byte-identity, gate, docs, ledger
+### Task 69: Reproducible audit, byte-identity, gate, docs
 
-- [ ] **Step 1: Re-capture Task 60's four artefacts** and diff against the manifest. Any difference that is not a recorded noise field is a **defect, not a baseline to update**.
-- [ ] **Step 2: Confirm no golden was regenerated:** `git log --oneline -- core/cat/testdata/` must show no new commit.
-- [ ] **Step 3: Run the full local gate.**
+**Files:** new `internal/guards/dialectglobals_test.go`; manifest comparison; ledger.
+
+- [ ] **Step 1: Make the transitive audit reproducible.** The spec quotes a result with no committed way to re-derive it — exactly the "claim written without running the mechanism" failure it warns about. Write a guard that walks from each `Dialect` method **transitively through the package-level functions it calls** (never descending into `SelectorExpr.Sel`, which is a field name, not a package identifier) and reports the reachable `const`/`var` set.
+
+  Assert **usage, not absence**: `KindMemory` stays legitimately reachable via `validKindByte`. The check is that `validateMWFields`, `validClarHz` and `validMTTag` read the **receiver**.
+
+- [ ] **Step 2: Re-capture all seven artefacts** with Task 60's sequence and compare. Revision 1 compared only four and never hashed the codeplug JSON — so schema, digest and JSON content could all have changed silently. Normalise `read_at` and echoed paths **only**.
+
+- [ ] **Step 3: Confirm no golden was regenerated:** `git log --oneline -- core/cat/testdata/` shows no new commit.
+
+- [ ] **Step 4: Full local gate.**
 
 ```sh
 gofmt -l .                                   # empty
@@ -358,38 +280,39 @@ cd app && wails generate module && git diff --exit-code frontend/wailsjs
 cd frontend && npm run check && npm run test && npm run build
 ```
 
-- [ ] **Step 4: Re-run the transitive audit** from the spec and record the new count — the five promoted constants must be gone from the gate-affecting class.
-- [ ] **Step 5: Write the milestone summary** at `.superpowers/sdd/m9c0-milestone-summary.md`, scoping every claim: what the peer fixtures prove (plumbing) versus what they do not (that any real radio differs).
-- [ ] **Step 6: Ledger, commit, then Codex adversarial milestone review.**
+- [ ] **Step 5: Milestone summary** at `.superpowers/sdd/m9c0-milestone-summary.md`, scoping every claim: what the peer fixtures prove (the receiver is consulted) versus what they do not (that any real radio differs).
 
-**Depends on:** all prior.
+- [ ] **Step 6: Ledger, commit, Codex adversarial milestone review.**
+
+**Depends on:** Task 68.
 
 ## Dependency graph
 
 ```
-60 -> 61 -> 62 -> 63 -> 64 -> 65 -> 66 -> 67 -> 68
+60 -> 61 -> 62 -> 63 -> (64 | 65 | 66 | 67) -> 68 -> 69
 ```
 
-Strictly sequential: Tasks 63–66 each add a field to `Dialect` and touch
-`dialect.go`, so parallelising them only manufactures conflicts. Task 62
-lands all three new fields at once precisely so 63–65 need not re-open the
-struct.
+Tasks 64–67 are genuinely independent once Task 62 has landed and populated the fields — revision 1 serialised them on a conflict rationale that contradicted its own claim that Task 62 prevented reopening the struct.
 
 ## Verification
 
-The spec's Verification section is authoritative. In summary: FT-710
-byte-identity against Task 60's manifest; the peer fixtures rebuilt through
-the public constructor; gate integrity under a caller-built dialect; both
-directions tested for every rule; input independence; and a mutation that
-reads FT-710's data instead of the receiver's must fail a test.
+The spec's Verification section is authoritative. In summary: FT-710 byte-identity across all seven artefacts against Task 60's manifest; the peer fixtures rebuilt through the public constructor; an external-package construction proof; gate integrity under adversarial caller-built dialects with non-vacuity counts; every validator clause tested both directions with error-content assertions; input independence across all derived structures; and a reproducible transitive audit asserting receiver use.
 
-## Self-review notes
+## Codex plan review — adjudication
 
-- **Spec coverage:** V1–V11 → Task 62; the five promoted data → 63, 64, 65;
-  `ModeByName` → 66; verification 1 → 68; 2 and 3 → 67; 4 → 62; 5 → 62;
-  6 → 63–65; 7 → 68.
-- **Type consistency:** `MTPolicy`/`ClarifierPolicy`/`SlotSpace`/
-  `DialectConfig` are used with identical field names in every task above.
-- **Known risk carried into execution:** Task 67 may discover the API cannot
-  express a fixture. That is a real possible outcome, not a failure of the
-  plan — the instruction is to stop and report rather than weaken the fixture.
+All twelve findings **accepted**; seven were HIGH.
+
+| # | Sev | Disposition |
+|---|---|---|
+| 1 | HIGH | Task 60's commands were wrong and untested. Replaced with a sequence **that has been run**, producing seven non-empty artefacts; `set -e` and an empty-file check added. |
+| 2 | HIGH | `MWWriteKind Kind` referenced a nonexistent type. Spec corrected to `byte` (revision 2.1); no alias introduced. |
+| 3 | HIGH | The field lifecycle was self-contradictory and would have produced duplicate fields. Task 62 now adds **and populates** all four, including `FT710` and all three fixtures; 64–67 only reroute. |
+| 4 | HIGH | The equivalence test compared the literal against itself and omitted policies, EX metadata, ordering and `exByTriple`. Rewritten with independent literals and an exhaustive helper. |
+| 5 | HIGH | 7 Hz proves only `StepHz`. 9999 Hz added as the range mutation. |
+| 6 | HIGH | MT clear **decoding** was never moved; `ParseMTAnswer` trims spaces only, so the peer's cleared tag would not round-trip. Both directions now in scope. |
+| 7 | HIGH | The gate property would not have caught finding 2, and was literally false about the terminator. Rewritten: adversarial configs, interior-only scan, exactly-one-terminator, non-vacuity counts; Task 61 now exhausts all 256 bytes. |
+| 8 | MED | Testing is now per **clause** with error-content assertions, both `MustNewDialect` outcomes, `exByTriple` in the mutation test, and an external `package cat_test` proof. |
+| 9 | MED | All seven artefacts captured and compared, not four; schema and digest stay inside the comparison. |
+| 10 | MED | Task 69 adds a committed transitive-audit guard asserting **receiver use**, not identifier absence. |
+| 11 | MED | Tasks 64–66 must derive diagnostics from receiver policy; Task 66's "verbatim **and** rescoped" contradiction resolved in favour of preserving the evidence's substance while labelling it FT-710-specific. |
+| 12 | MED | Re-split: old Task 61 folded into the validation slice; old Task 62 split three ways (61/62/63); 64–67 unserialised. |
