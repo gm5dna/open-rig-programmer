@@ -2,6 +2,8 @@
 
 package cat
 
+import "sort"
+
 // slotSpace describes one radio family's memory slot numbering: which
 // 3-byte wire forms exist and what each means. DATA, not code, so a
 // second dialect is a different table rather than a different function.
@@ -72,6 +74,38 @@ type Dialect struct {
 	exMembers  map[EXAddress]bool   // this dialect's OWN membership index
 	exByTriple map[[3]int]EXAddress // this dialect's OWN decimal-triple index
 	exP4Max    int                  // this dialect's OWN widest P4 answer field, derived from exItems
+
+	// modeByName is the inverse of modeNames, derived at construction.
+	// NewDialect rejects duplicate names, so it is total over this
+	// dialect's own table.
+	modeByName map[string]Mode
+
+	// mt, clar and mwWriteKind are the FT-710 facts that used to be
+	// package constants read THROUGH a Dialect receiver — the exact shape
+	// this seam exists to eliminate. All three reach the OUTBOUND WRITE
+	// GATE: mt through validMTCommand, clar through validateMWFields, and
+	// mwWriteKind through the same MW validator the builder uses. A wrong
+	// value here can authorise bytes that reach a radio, which is why they
+	// are dialect data and the pure frame offsets are not.
+	mt          MTPolicy
+	clar        ClarifierPolicy
+	mwWriteKind byte
+}
+
+// ModeByName resolves a display name to this dialect's own mode nibble.
+//
+// It is the inverse of ModeName, and it exists so a write path can turn a
+// stored channel's mode string back into a wire byte WITHOUT consulting a
+// table of its own. Before it, core/driver/ft710 built a private reverse
+// map from its own modeTable, independent of the dialect — so a dialect
+// whose mode names differed had no effect on what got written, and
+// NewDialect's name-uniqueness rule protected nothing (Codex spec review,
+// finding 7).
+//
+// The zero value has no modes and reports false for everything.
+func (d Dialect) ModeByName(name string) (Mode, bool) {
+	m, ok := d.modeByName[name]
+	return m, ok
 }
 
 // FT710 is the Yaesu FT-710 dialect: the only configured one that exists.
@@ -89,6 +123,32 @@ var FT710 = Dialect{
 	exMembers:  buildEXMembers(exItemsGen),
 	exByTriple: buildEXByTriple(exItemsGen),
 	exP4Max:    maxEXP4Bytes(exItemsGen),
+	modeByName: buildModeByName(modeNames),
+
+	// The FT-710's own values for the three promoted policies. Each was a
+	// package constant until M9c-0; TestNewDialect_ReproducesFT710 pins
+	// that this literal and a config-built equivalent agree.
+	mt:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' '},
+	clar:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	mwWriteKind: KindMemory,
+}
+
+// buildModeByName inverts a mode table. On a duplicate name the LAST
+// insertion in sorted-key order wins, deterministically — but NewDialect
+// rejects duplicates outright, so a constructed dialect never reaches that
+// case. The determinism matters only for literals built inside this
+// package, which bypass validation.
+func buildModeByName(names map[Mode]string) map[string]Mode {
+	out := make(map[string]Mode, len(names))
+	keys := make([]int, 0, len(names))
+	for m := range names {
+		keys = append(keys, int(m))
+	}
+	sort.Ints(keys)
+	for _, k := range keys {
+		out[names[Mode(k)]] = Mode(k)
+	}
+	return out
 }
 
 // buildEXMembers indexes items for membership tests.

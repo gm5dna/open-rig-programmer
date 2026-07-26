@@ -203,6 +203,13 @@ func TestExternalPackageCanConstructADialect(t *testing.T) { /* cat.NewDialect(.
 
 These four are **independent of one another** and may run in any order or in parallel: their production paths are MT, clarifier, MW Kind and the driver's mode lookup respectively, and Task 62 already landed every field. Each follows the same shape — **write the failing peer test first, confirm it fails, then move the datum.**
 
+> **Parallel execution, decided 26/07/2026.** These four run as concurrent implementers. Two rules make that safe, and both must hold or the agents collide:
+>
+> 1. **Each task owns its own test file** — `mtpolicy_test.go`, `clarifier_test.go`, `mwkind_test.go`, `modebyname_test.go`. **No task edits `seconddialect_test.go`**, which revision 2 originally had all four writing into. Rebuilding the shared fixtures there is Task 68's job, after all four have landed.
+> 2. **No task edits `core/cat/dialect.go`.** Task 62 lands every field *and its accessor*, so each of these tasks touches only its own production file plus its own test file.
+>
+> Each still runs its own gate before committing. The combined byte-identity comparison is Task 69's.
+
 Each task must also **derive its diagnostics from receiver policy** while leaving FT-710's rendered strings byte-identical. Moving only the predicate yields correct acceptance with false peer-facing error text (`mt.go:103` "0-12 bytes", `mr.go:109` and `mw.go:114` "10 Hz … 9990").
 
 #### Task 64: MT tag policy

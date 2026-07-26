@@ -154,3 +154,79 @@ func validWireString(s string) bool {
 	}
 	return true
 }
+
+// NewDialect validates cfg and returns the Dialect it describes.
+//
+// This is the API M9c depends on: every Dialect field is unexported, which
+// is what makes the zero value inert, so before this constructor existed no
+// package outside core/cat could express a radio at all — and the roadmap
+// requires exactly that of core/cat/ftdx10 and its siblings.
+//
+// It COPIES every slice and map it is given and derives the EX and mode
+// indices from the copies. A caller that mutates its input afterwards must
+// not be able to change a constructed dialect: a Dialect is consulted by
+// the outbound gate on every write, and a gate whose data can be edited
+// after the fact by whoever built it is not a gate.
+//
+// Validation is exhaustive rather than advisory. See dialectvalidate.go for
+// the eleven rules and, for each, the concrete failure it prevents — three
+// of them (the wire-byte domain on mode keys, on special slot forms, and on
+// the MT clear byte) exist specifically because a caller-built dialect
+// could otherwise put a byte no CAT reference documents inside a frame this
+// program's own gate then approved.
+func NewDialect(cfg DialectConfig) (Dialect, error) {
+	if err := validateDialectConfig(cfg); err != nil {
+		return Dialect{}, err
+	}
+
+	modes := make(map[Mode]string, len(cfg.ModeNames))
+	for m, name := range cfg.ModeNames {
+		modes[m] = name
+	}
+
+	items := make([]EXItem, len(cfg.EXItems))
+	copy(items, cfg.EXItems)
+
+	return Dialect{
+		catID:     cfg.CATID,
+		modeNames: modes,
+		slots: slotSpace{
+			memoryLo: cfg.Slots.MemoryLo,
+			memoryHi: cfg.Slots.MemoryHi,
+			sixtyLo:  cfg.Slots.SixtyLo,
+			sixtyHi:  cfg.Slots.SixtyHi,
+			pmsPairs: cfg.Slots.PMSPairs,
+			emgWire:  cfg.Slots.EmergencyWire,
+			noneWire: cfg.Slots.NoneWire,
+		},
+		exItems:     items,
+		exMembers:   buildEXMembers(items),
+		exByTriple:  buildEXByTriple(items),
+		exP4Max:     maxEXP4Bytes(items),
+		modeByName:  buildModeByName(modes),
+		mt:          cfg.MT,
+		clar:        cfg.Clarifier,
+		mwWriteKind: cfg.MWWriteKind,
+	}, nil
+}
+
+// MustNewDialect is NewDialect for COMPILE-TIME-CONSTANT model tables, and
+// panics if cfg is invalid.
+//
+// It exists to satisfy the roadmap's `func Dialect() cat.Dialect` shape for
+// per-model packages, which cannot propagate an error, without threading
+// error returns through model registration for a failure that can only ever
+// be a programming mistake in a literal.
+//
+// Do NOT call it on caller-supplied, file-derived, or otherwise dynamic
+// data. A malformed table baked into the binary is a build-time defect that
+// should stop the programme loudly on first use; a malformed table read
+// from a file at runtime is an ordinary error, and NewDialect is the
+// function for that.
+func MustNewDialect(cfg DialectConfig) Dialect {
+	d, err := NewDialect(cfg)
+	if err != nil {
+		panic("cat: MustNewDialect: " + err.Error())
+	}
+	return d
+}

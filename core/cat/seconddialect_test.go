@@ -75,6 +75,19 @@ var testDialect = Dialect{
 	},
 	exItems:   nil,
 	exMembers: map[EXAddress]bool{},
+
+	// The three promoted policies, set to the FT-710's OWN values on
+	// purpose. These fixtures exist to disagree with the FT-710 about slot
+	// space, modes and EX membership; making them disagree about MT,
+	// clarifier and MW-kind policy as well would change what their existing
+	// assertions mean the moment tasks 64-66 route those through the
+	// receiver. The peers that DO differ in each policy live in that task's
+	// own file (mtpolicy_test.go, clarifier_test.go, mwkind_test.go), which
+	// is also what lets those tasks run concurrently without touching this
+	// shared file.
+	mt:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' '},
+	clar:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	mwWriteKind: KindMemory,
 }
 
 // noneWireDialect exists for ONE attribute: slotSpace.noneWire, the only
@@ -102,6 +115,19 @@ var noneWireDialect = Dialect{
 	},
 	exItems:   nil,
 	exMembers: map[EXAddress]bool{},
+
+	// The three promoted policies, set to the FT-710's OWN values on
+	// purpose. These fixtures exist to disagree with the FT-710 about slot
+	// space, modes and EX membership; making them disagree about MT,
+	// clarifier and MW-kind policy as well would change what their existing
+	// assertions mean the moment tasks 64-66 route those through the
+	// receiver. The peers that DO differ in each policy live in that task's
+	// own file (mtpolicy_test.go, clarifier_test.go, mwkind_test.go), which
+	// is also what lets those tasks run concurrently without touching this
+	// shared file.
+	mt:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' '},
+	clar:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	mwWriteKind: KindMemory,
 }
 
 // peerDialect is the dialect that makes this file's proof complete, and it
@@ -158,6 +184,19 @@ var peerDialect = Dialect{
 	exMembers:  buildEXMembers(peerEXItems),
 	exByTriple: buildEXByTriple(peerEXItems),
 	exP4Max:    maxEXP4Bytes(peerEXItems),
+
+	// The three promoted policies, set to the FT-710's OWN values on
+	// purpose. These fixtures exist to disagree with the FT-710 about slot
+	// space, modes and EX membership; making them disagree about MT,
+	// clarifier and MW-kind policy as well would change what their existing
+	// assertions mean the moment tasks 64-66 route those through the
+	// receiver. The peers that DO differ in each policy live in that task's
+	// own file (mtpolicy_test.go, clarifier_test.go, mwkind_test.go), which
+	// is also what lets those tasks run concurrently without touching this
+	// shared file.
+	mt:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' '},
+	clar:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	mwWriteKind: KindMemory,
 }
 
 // ft710P4MaxBytes is the FT-710's own widest P4 answer field: 12, the
@@ -1415,4 +1454,61 @@ func TestZeroDialectRejectsEveryCorpusFrame(t *testing.T) {
 		t.Fatalf("checked only %d frames, below the floor of %d — buildFrameCorpus has collapsed (a trimmed slot table, an EX inventory that failed to generate, or a builder rejecting everything), and this test was about to pass on a fraction of its intended corpus", checked, corpusFloor)
 	}
 	t.Logf("zero Dialect refused all %d frames FT710's builders produced (%d further corpus lines were builder rejections, which carry no frame)", checked, rejected)
+}
+
+// The three fixtures above are struct literals, so they bypass NewDialect
+// and therefore never get the derived mode reverse index the constructor
+// builds. Filling it here keeps every configured dialect COMPLETE, so a
+// general property over "every dialect" can be written without silently
+// skipping these three — a nil modeByName makes ModeByName return false for
+// every name, which reads exactly like a dialect that legitimately knows no
+// modes.
+//
+// Task 68 rebuilds these fixtures through NewDialect, at which point this
+// init and the hand-set policy fields above both go away.
+func init() {
+	testDialect.modeByName = buildModeByName(testDialect.modeNames)
+	noneWireDialect.modeByName = buildModeByName(noneWireDialect.modeNames)
+	peerDialect.modeByName = buildModeByName(peerDialect.modeNames)
+}
+
+// TestEveryConfiguredDialect_ModeNameRoundTripsThroughModeByName is the
+// general property ModeByName exists for: for every dialect, every mode's
+// display name must resolve back to that same mode.
+//
+// It binds dialects not yet written, which is the durable half of this
+// milestone's evidence — a specific fixture proves one case, a property
+// over allDialects() constrains the next radio someone adds.
+func TestEveryConfiguredDialect_ModeNameRoundTripsThroughModeByName(t *testing.T) {
+	for _, nd := range allTestDialects() {
+		checked := 0
+		for _, m := range allModeValues() {
+			if !nd.dia.ValidMode(m) {
+				continue
+			}
+			name := nd.dia.ModeName(m)
+			got, ok := nd.dia.ModeByName(name)
+			if !ok {
+				t.Errorf("%s: ModeByName(%q) not found, but ModeName(%#02x) returned it", nd.name, name, byte(m))
+				continue
+			}
+			if got != m {
+				t.Errorf("%s: ModeByName(%q) = %#02x, want %#02x", nd.name, name, byte(got), byte(m))
+			}
+			checked++
+		}
+		if checked == 0 {
+			t.Errorf("%s: no modes checked — the property ran vacuously", nd.name)
+		}
+	}
+}
+
+// allModeValues enumerates every possible Mode byte, so the property above
+// cannot miss a mode by only walking a table it also trusts.
+func allModeValues() []Mode {
+	out := make([]Mode, 0, 256)
+	for i := 0; i < 256; i++ {
+		out = append(out, Mode(i))
+	}
+	return out
 }
