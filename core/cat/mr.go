@@ -11,19 +11,20 @@ import (
 // + ";". Golden vector G3: "MR007;".
 const mrReadLen = 6
 
-// BuildMRRead builds an MR (memory channel read) request for slot s.
-// Reference: "MR — MEMORY CHANNEL READ (Read/Answer only; no Set) ... Read
-// frame (6 bytes): MR P0 P0 P0 ;", golden vector G3.
+// BuildMRRead builds an MR (memory channel read) request for slot s under
+// this dialect's slot space. Reference: "MR — MEMORY CHANNEL READ
+// (Read/Answer only; no Set) ... Read frame (6 bytes): MR P0 P0 P0 ;",
+// golden vector G3.
 //
-// Any slot ParseSlot would accept is a legal read target EXCEPT the
-// special "000" placeholder (Slot.IsNone): the reference marks its
-// semantics UNKNOWN/ASSUMED and says "do not emit". 5xx and EMG slots are
-// explicitly readable per the reference's slot table ("MR read" column: ✓
-// for both) — unlike MW/MT set, a read has no write-direction
-// hardware-verification concern. See readableSlot (slot.go), shared with
-// BuildMTRead and AllowedCommand's MR/MT grammar checks.
-func BuildMRRead(s Slot) (Command, error) {
-	if !readableSlot(s) {
+// Any slot this dialect's ParseSlot would accept is a legal read target
+// EXCEPT the special "000" placeholder: the reference marks its semantics
+// UNKNOWN/ASSUMED and says "do not emit". 5xx and EMG slots are explicitly
+// readable per the reference's slot table ("MR read" column: ✓ for both) —
+// unlike MW/MT set, a read has no write-direction hardware-verification
+// concern. See Dialect.readableSlot (slot.go), shared with BuildMTRead and
+// AllowedCommand's MR/MT grammar checks.
+func (d Dialect) BuildMRRead(s Slot) (Command, error) {
+	if !d.readableSlot(s) {
 		return Command{}, newParseError([]byte(s.Wire()), "MR: slot must be a readable memory/PMS/60m/EMG slot, not \"000\" or invalid")
 	}
 	frame := make([]byte, 0, mrReadLen)
@@ -45,8 +46,8 @@ func BuildMRRead(s Slot) (Command, error) {
 // (memdata.go's field offsets are shared by both), so the wire-level field
 // validation lives in exactly one place rather than being duplicated
 // between a parser and a validator.
-func ParseMRAnswer(frame []byte) (MemoryData, error) {
-	return parseMemoryFrame(frame, "MR")
+func (d Dialect) ParseMRAnswer(frame []byte) (MemoryData, error) {
+	return d.parseMemoryFrame(frame, "MR")
 }
 
 // parseMemoryFrame strictly parses a 28-byte MR-answer/MW-set-shaped frame
@@ -55,7 +56,15 @@ func ParseMRAnswer(frame []byte) (MemoryData, error) {
 // doc comment for why this is factored out: it is shared, unchanged,
 // between ParseMRAnswer (wantPrefix "MR") and AllowedCommand's MW grammar
 // check (wantPrefix "MW").
-func parseMemoryFrame(frame []byte, wantPrefix string) (MemoryData, error) {
+//
+// THIS IS THE HELPER THE MILESTONE TURNS ON (Codex plan-review F3). It is
+// reached from two Dialect methods with different jobs — a parser and the
+// outbound write gate — so every membership decision inside it must be
+// taken against the RECEIVER: d.ParseSlot for the slot field (P1) and
+// d.ParseMode for the mode field (P6), never the package-level
+// delegates. With one dialect configured, a package-level call here would
+// pass every test in the tree while the seam was fiction.
+func (d Dialect) parseMemoryFrame(frame []byte, wantPrefix string) (MemoryData, error) {
 	if len(frame) != memoryFrameLen {
 		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame must be %d bytes", wantPrefix, memoryFrameLen))
 	}
@@ -66,7 +75,7 @@ func parseMemoryFrame(frame []byte, wantPrefix string) (MemoryData, error) {
 		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame missing ';' terminator", wantPrefix))
 	}
 
-	slot, err := ParseSlot(string(frame[memSlotOffset : memSlotOffset+3]))
+	slot, err := d.ParseSlot(string(frame[memSlotOffset : memSlotOffset+3]))
 	if err != nil {
 		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: invalid slot field (P1)", wantPrefix))
 	}
@@ -109,7 +118,7 @@ func parseMemoryFrame(frame []byte, wantPrefix string) (MemoryData, error) {
 		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: TX CLAR field (P5) must be '0' or '1'", wantPrefix))
 	}
 
-	mode, err := ParseMode(frame[memModeOffset])
+	mode, err := d.ParseMode(frame[memModeOffset])
 	if err != nil {
 		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: mode field (P6) invalid", wantPrefix))
 	}

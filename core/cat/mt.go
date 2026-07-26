@@ -23,16 +23,22 @@ const (
 )
 
 // mtSlotValid reports whether s is a legal MT SET target under project
-// policy: memory or PMS slots only.
+// policy AND THIS DIALECT'S slot space: memory or PMS slots only.
 //
 // The manual's slot table marks 5xx and EMG as ✓ for MT — but reference
 // §MT states explicitly: "our policy: reject sets to 5xx/EMG until
 // hardware-verified" (a project decision, not a manual requirement,
 // repeated verbatim in the Task 3 brief). "000" is ✗ for MT in the manual
 // itself (semantics unknown, do not emit) and is rejected unconditionally
-// by classifySlotWire returning slotKindNone/slotKindInvalid here.
-func mtSlotValid(s Slot) bool {
-	switch classifySlotWire(s.Wire()) {
+// by d.classifySlot returning slotKindNone/slotKindInvalid here.
+//
+// It classifies through d.classifySlot, not the package-level
+// classifySlotWire: this helper is shared by BuildMTSet and
+// AllowedCommand's MT Set grammar check, both Dialect methods, and either
+// consulting a global would decide against the FT-710 whatever dialect it
+// was called on.
+func (d Dialect) mtSlotValid(s Slot) bool {
+	switch d.classifySlot(s.Wire()) {
 	case slotKindMemory, slotKindPMS:
 		return true
 	default:
@@ -89,8 +95,8 @@ const mtClearTag = "            " // 12 spaces (mtTagMaxBytes)
 // 12-byte clear form (mtClearTag), because the 0-byte form the frame
 // grammar would otherwise produce is HW-CONFIRMED REJECTED by the radio
 // — both forms are hardware-proven, see mtClearTag's doc comment.
-func BuildMTSet(s Slot, display bool, tag string) (Command, error) {
-	if !mtSlotValid(s) {
+func (d Dialect) BuildMTSet(s Slot, display bool, tag string) (Command, error) {
+	if !d.mtSlotValid(s) {
 		return Command{}, newParseError([]byte(s.Wire()), "MT: slot must be memory (001-099) or PMS (P1L-P9U); 5xx/EMG rejected by project policy pending M5a, \"000\"/invalid rejected per reference")
 	}
 	if !validMTTag(tag) {
@@ -117,10 +123,10 @@ func BuildMTSet(s Slot, display bool, tag string) (Command, error) {
 // hardware-verification concern the project policy above is about, so 5xx
 // and EMG (✓ in the manual's MT column) are allowed here. "000" remains
 // rejected (✗ in the manual's MT column, semantics unknown). See
-// readableSlot (slot.go), shared with BuildMRRead and AllowedCommand's
-// MR/MT grammar checks.
-func BuildMTRead(s Slot) (Command, error) {
-	if !readableSlot(s) {
+// Dialect.readableSlot (slot.go), shared with BuildMRRead and
+// AllowedCommand's MR/MT grammar checks.
+func (d Dialect) BuildMTRead(s Slot) (Command, error) {
+	if !d.readableSlot(s) {
 		return Command{}, newParseError([]byte(s.Wire()), "MT: slot must not be \"000\"/invalid (reference MT column: ✗)")
 	}
 	frame := make([]byte, 0, mtReadLen)
@@ -167,7 +173,7 @@ func BuildMTRead(s Slot) (Command, error) {
 // GUI, CSV) therefore compares and stores trimmed tags uniformly; see
 // codeplug.Load for the mirrored normalisation on the JSON-file side (a
 // hand-edited or pre-fix file may still carry an old padded tag).
-func ParseMTAnswer(frame []byte) (Slot, bool, string, error) {
+func (d Dialect) ParseMTAnswer(frame []byte) (Slot, bool, string, error) {
 	if len(frame) < mtAnswerMinLen || len(frame) > mtAnswerMaxLen {
 		return Slot{}, false, "", newParseError(frame, fmt.Sprintf("MT answer must be %d-%d bytes", mtAnswerMinLen, mtAnswerMaxLen))
 	}
@@ -177,11 +183,15 @@ func ParseMTAnswer(frame []byte) (Slot, bool, string, error) {
 	if frame[len(frame)-1] != ';' {
 		return Slot{}, false, "", newParseError(frame, "MT answer missing ';' terminator")
 	}
-	slot, err := ParseSlot(string(frame[2:5]))
+	slot, err := d.ParseSlot(string(frame[2:5]))
 	if err != nil {
 		return Slot{}, false, "", newParseError(frame, "MT answer: invalid slot field")
 	}
-	if slot.IsNone() {
+	// d.classifySlot, not slot.IsNone(): the latter classifies through
+	// classifySlotWire (i.e. the FT-710) whatever dialect this method was
+	// called on, and "which wire form means none" is dialect data
+	// (slotSpace.noneWire).
+	if d.classifySlot(slot.Wire()) == slotKindNone {
 		return Slot{}, false, "", newParseError(frame, "MT answer: slot must not be \"000\" (reference MT column: ✗)")
 	}
 	display, err := parseBoolDigit(frame[5])

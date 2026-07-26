@@ -20,15 +20,16 @@ import (
 const settingsDescriptorVersion = "ft710-ex@1"
 
 // ft710SettingsDescriptor is built ONCE, at package init, from the M8a
-// generated EX inventory (cat.EXItems) — see buildSettingsDescriptor.
+// generated EX inventory this package's dialect carries
+// (cat.Dialect.EXItems) — see buildSettingsDescriptor.
 // Every getter (the package-level SettingsDescriptor func and
 // Session.SettingsDescriptor) returns a Clone() of this, never the value
 // itself: nothing outside this file may ever hold a reference to the
 // shared original.
-var ft710SettingsDescriptor = buildSettingsDescriptor()
+var ft710SettingsDescriptor = buildSettingsDescriptor(catDialect)
 
 // buildSettingsDescriptor builds the FT-710's driver.SettingsDescriptor
-// from cat.EXItems(): one SettingMenu per distinct P1 (ID the 2-digit
+// from the dialect's EXItems(): one SettingMenu per distinct P1 (ID the 2-digit
 // decimal P1, e.g. "01"; Label the manual's P1Label), one SettingGroup per
 // distinct (P1,P2) pair nested under its menu (ID the 4-digit P1P2, e.g.
 // "0101"; Label the manual's P2Label), and one SettingItem per inventory
@@ -36,7 +37,7 @@ var ft710SettingsDescriptor = buildSettingsDescriptor()
 // wire address via EXAddress.Wire, Label the manual's Function name,
 // Display the human "P1-P2-P3" form, e.g. "01-01-01").
 //
-// cat.EXItems already returns its 296 rows sorted by (P1,P2,P3) (see its
+// Dialect.EXItems already returns its rows sorted by (P1,P2,P3) (see its
 // doc comment), so a single linear pass — opening a new menu or group only
 // when the running P1/P2 changes from the PREVIOUS item — reproduces Table
 // 2's own grouping without any extra sorting or map bookkeeping. Each
@@ -45,8 +46,8 @@ var ft710SettingsDescriptor = buildSettingsDescriptor()
 // question of whether an earlier append's slice growth could invalidate a
 // held pointer, at the cost of one extra slice index per item — a
 // non-issue at 296 items, run once at package init.
-func buildSettingsDescriptor() driver.SettingsDescriptor {
-	items := cat.EXItems()
+func buildSettingsDescriptor(dialect cat.Dialect) driver.SettingsDescriptor {
+	items := dialect.EXItems()
 
 	d := driver.SettingsDescriptor{Version: settingsDescriptorVersion}
 
@@ -96,7 +97,7 @@ func (s *Session) SettingsDescriptor() driver.SettingsDescriptor {
 // UnknownSettingError reports that ReadSetting's id argument does not name
 // a known FT-710 EX (MENU) address — refused BEFORE any wire traffic,
 // exactly like ReadChannel's malformed-slot refusal (read.go,
-// cat.ParseSlot's error path).
+// cat.Dialect.ParseSlot's error path).
 type UnknownSettingError struct {
 	// ID is the caller-supplied setting ID that did not parse.
 	ID string
@@ -147,12 +148,13 @@ func exSpec(addr cat.EXAddress) transport.CommandSpec {
 //     NO error — mirroring the project's established "?;" -> empty-result
 //     rule (ReadChannel's empty-slot mapping, read.go);
 //   - a well-formed EX answer naming requested's own address maps to
-//     SettingKnown, with Raw the P4 body verbatim (cat.ParseEXAnswer's own
-//     no-trim, no-typed-value policy — see its doc comment);
+//     SettingKnown, with Raw the P4 body verbatim
+//     (cat.Dialect.ParseEXAnswer's own no-trim, no-typed-value policy —
+//     see its doc comment);
 //   - a well-formed EX answer naming a DIFFERENT address is refused with
 //     *SettingAnswerMismatchError;
-//   - anything else (a malformed frame cat.ParseEXAnswer rejects) is a
-//     plain wrapped error.
+//   - anything else (a malformed frame cat.Dialect.ParseEXAnswer
+//     rejects) is a plain wrapped error.
 //
 // This is a PURE function — no ctx, no *Session, no wire I/O — deliberately
 // separated from ReadSetting's exchange so it can be (and is)
@@ -172,14 +174,14 @@ func exSpec(addr cat.EXAddress) transport.CommandSpec {
 // real: a genuine rejection is reconstructed as the literal "?;" bytes
 // (see ReadSetting) before being handed to this same function, so all
 // three response-interpretation rules live in exactly one place.
-func parseEXResponse(requested cat.EXAddress, frame []byte) (driver.SettingValue, error) {
+func parseEXResponse(dialect cat.Dialect, requested cat.EXAddress, frame []byte) (driver.SettingValue, error) {
 	id := requested.Wire()
 
 	if cat.IsRejection(frame) {
 		return driver.SettingValue{ID: id, State: driver.SettingUnavailable}, nil
 	}
 
-	addr, raw, err := cat.ParseEXAnswer(frame)
+	addr, raw, err := dialect.ParseEXAnswer(frame)
 	if err != nil {
 		return driver.SettingValue{}, fmt.Errorf("ft710: ReadSetting %s: %w", id, err)
 	}
@@ -200,11 +202,11 @@ var rejectionFrameBytes = []byte("?;")
 // (which the FT-710 mints as the setting's 6-digit EX wire address — see
 // buildSettingsDescriptor).
 //
-// id is parsed via cat.ParseEXAddress FIRST, entirely before any wire
-// traffic: a failure (malformed shape, or a syntactically well-formed
-// address that is not a Table 2 member) returns *UnknownSettingError and
-// nothing is ever sent — exactly ReadChannel's malformed-slot refusal
-// shape (read.go).
+// id is parsed via cat.Dialect.ParseEXAddress FIRST, entirely before
+// any wire traffic: a failure (malformed shape, or a syntactically
+// well-formed address that is not a Table 2 member) returns
+// *UnknownSettingError and nothing is ever sent — exactly ReadChannel's
+// malformed-slot refusal shape (read.go).
 //
 // The whole exchange holds s.opMu for its full duration, mirroring
 // ReadChannel's Fix-2 discipline (see Session's doc comment, ft710.go):
@@ -226,7 +228,7 @@ var rejectionFrameBytes = []byte("?;")
 // which interprets what a response means, for every outcome alike (see
 // its own doc comment).
 func (s *Session) ReadSetting(ctx context.Context, id string) (driver.SettingValue, error) {
-	addr, err := cat.ParseEXAddress(id)
+	addr, err := s.dialect.ParseEXAddress(id)
 	if err != nil {
 		return driver.SettingValue{}, &UnknownSettingError{ID: id}
 	}
@@ -234,11 +236,11 @@ func (s *Session) ReadSetting(ctx context.Context, id string) (driver.SettingVal
 	s.opMu.Lock()
 	defer s.opMu.Unlock()
 
-	cmd, err := cat.BuildEXRead(addr)
+	cmd, err := s.dialect.BuildEXRead(addr)
 	if err != nil {
-		// Unreachable in practice: cat.ParseEXAddress above already
+		// Unreachable in practice: cat.Dialect.ParseEXAddress above already
 		// enforces the identical Table 2 membership BuildEXRead itself
-		// checks (both via cat.KnownEXAddress) — kept as defence in
+		// checks (both via cat.Dialect.KnownEXAddress) — kept as defence in
 		// depth rather than a silent assumption.
 		return driver.SettingValue{}, fmt.Errorf("ft710: ReadSetting %s: %w", addr.Wire(), err)
 	}
@@ -251,5 +253,5 @@ func (s *Session) ReadSetting(ctx context.Context, id string) (driver.SettingVal
 		return driver.SettingValue{}, fmt.Errorf("ft710: ReadSetting %s: %w", addr.Wire(), err)
 	}
 
-	return parseEXResponse(addr, frame)
+	return parseEXResponse(s.dialect, addr, frame)
 }

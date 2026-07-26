@@ -9,11 +9,13 @@ import (
 )
 
 // TestSimulatedProfileTokensConfinement is the DATA-DRIVEN, N-driver
-// generalisation of the (currently pinned) single-driver guard
-// TestSimulatedTokenSingleNonTestFileRepoWide in importgraph_test.go. For
-// every concrete driver listed in simulatedProfiles it pins the same
-// structural-exclusivity invariant (task-11 brief §3) that the single-
-// driver guard pins for ft710 alone: the driver's simulated-profile
+// generalisation of the single-driver guard
+// TestSimulatedTokenSingleNonTestFileRepoWide that used to live in
+// importgraph_test.go — retired at Task 58 once its pin lifted (see the
+// PIN-LIFT LEDGER NOTE below). For every concrete driver listed in
+// simulatedProfiles it pins the same structural-exclusivity invariant
+// (task-11 brief §3) that the retired single-driver guard pinned for
+// ft710 alone: the driver's simulated-profile
 // selector — e.g. ft710.Simulated — may appear in exactly ONE non-test
 // .go file across the whole repository; that one file must live in
 // internal/wiring (the shared fake-wiring home since task-15's
@@ -24,17 +26,17 @@ import (
 // second, stray reference to a simulated-profile constant leaking the
 // fake-only path into production wiring.
 //
-// PIN-LIFT LEDGER NOTE. This guard runs in parallel with the pinned
+// PIN-LIFT LEDGER NOTE. This guard ran in parallel with the pinned
 // single-driver TestSimulatedTokenSingleNonTestFileRepoWide, which the
-// M8 roadmap keeps byte-identical in importgraph_test.go. The pin now
-// lifts at M9b alone — M8e was the other candidate, and the M8d
-// menu-write no-go (25/07/2026) removed it. When it lifts, the
-// single-driver guard is folded into this table (its
-// ft710 row is already the sole current entry here) and then deleted;
-// until then BOTH stay green, checking the same ft710 fact by two routes.
+// M8 roadmap kept byte-identical in importgraph_test.go. The pin lifted
+// at M9b, as planned — M8e was the other candidate, and the M8d
+// menu-write no-go (25/07/2026) removed it. It folded into this table
+// (its ft710 row was already the sole entry here) and was deleted from
+// importgraph_test.go at Task 58 (26/07/2026); this data-driven guard is
+// now the sole check of the ft710 fact.
 //
-// ALIAS-PROOF, deliberately (Codex plan-review F10). Unlike the pinned
-// guard's bare `x.Name == "ft710"` identifier match, this guard resolves
+// ALIAS-PROOF, deliberately (Codex plan-review F10). Unlike the retired
+// single-driver guard's bare `x.Name == "ft710"` identifier match, this guard resolves
 // the driver package through each file's AST import map: it looks for the
 // token selector on whatever LOCAL name core/driver/<pkg> is imported as.
 // A file that smuggled in a second reference via an aliased import —

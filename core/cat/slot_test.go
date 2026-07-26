@@ -43,7 +43,7 @@ func TestMemorySlot(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			s, err := MemorySlot(tc.n)
+			s, err := FT710.MemorySlot(tc.n)
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("MemorySlot(%d): want error, got Slot %q", tc.n, s.Wire())
@@ -82,7 +82,7 @@ func TestPMSSlot(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			s, err := PMSSlot(tc.pair, tc.upper)
+			s, err := FT710.PMSSlot(tc.pair, tc.upper)
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("PMSSlot(%d,%v): want error, got Slot %q", tc.pair, tc.upper, s.Wire())
@@ -120,7 +120,7 @@ func TestSixtyMSlot(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			s, err := SixtyMSlot(tc.n)
+			s, err := FT710.SixtyMSlot(tc.n)
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("SixtyMSlot(%d): want error, got Slot %q", tc.n, s.Wire())
@@ -141,7 +141,7 @@ func TestSixtyMSlot(t *testing.T) {
 // --- EMGSlot: reference "EMG | Alaska emergency channel" ---
 
 func TestEMGSlot(t *testing.T) {
-	s := EMGSlot()
+	s := FT710.EMGSlot()
 	if s.Wire() != "EMG" {
 		t.Errorf("EMGSlot().Wire() = %q, want %q", s.Wire(), "EMG")
 	}
@@ -186,7 +186,7 @@ func TestParseSlot(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			s, err := ParseSlot(tc.wire)
+			s, err := FT710.ParseSlot(tc.wire)
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("ParseSlot(%q): want error, got Slot %q", tc.wire, s.Wire())
@@ -212,19 +212,19 @@ func TestParseSlot(t *testing.T) {
 // PMS slots only; 5xx, EMG and 000 are all excluded from MW. ---
 
 func TestSlot_Writable(t *testing.T) {
-	memory, err := MemorySlot(1)
+	memory, err := FT710.MemorySlot(1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pms, err := PMSSlot(1, false)
+	pms, err := FT710.PMSSlot(1, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sixtym, err := SixtyMSlot(1)
+	sixtym, err := FT710.SixtyMSlot(1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	none, err := ParseSlot("000")
+	none, err := FT710.ParseSlot("000")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,7 +237,7 @@ func TestSlot_Writable(t *testing.T) {
 		{"memory writable", memory, true},
 		{"pms writable", pms, true},
 		{"60m not writable: reference MW P1 excludes 5xx", sixtym, false},
-		{"emg not writable: reference MW P1 excludes EMG", EMGSlot(), false},
+		{"emg not writable: reference MW P1 excludes EMG", FT710.EMGSlot(), false},
 		{"none (000) not writable: semantics unknown, reference says do not emit", none, false},
 	}
 	for _, tc := range tests {
@@ -251,17 +251,17 @@ func TestSlot_Writable(t *testing.T) {
 
 func TestSlot_WireIsThreeBytes(t *testing.T) {
 	slots := []Slot{}
-	if s, err := MemorySlot(1); err == nil {
+	if s, err := FT710.MemorySlot(1); err == nil {
 		slots = append(slots, s)
 	}
-	if s, err := PMSSlot(1, true); err == nil {
+	if s, err := FT710.PMSSlot(1, true); err == nil {
 		slots = append(slots, s)
 	}
-	if s, err := SixtyMSlot(1); err == nil {
+	if s, err := FT710.SixtyMSlot(1); err == nil {
 		slots = append(slots, s)
 	}
-	slots = append(slots, EMGSlot())
-	if s, err := ParseSlot("000"); err == nil {
+	slots = append(slots, FT710.EMGSlot())
+	if s, err := FT710.ParseSlot("000"); err == nil {
 		slots = append(slots, s)
 	}
 	for _, s := range slots {
@@ -284,7 +284,7 @@ func FuzzParseSlot(f *testing.F) {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, wire string) {
-		s, err := ParseSlot(wire)
+		s, err := FT710.ParseSlot(wire)
 		if err != nil {
 			var pe *ParseError
 			if !errors.As(err, &pe) {

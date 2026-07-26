@@ -7,7 +7,12 @@ package cat
 const idAnswerLen = 7
 
 // BuildIDRead builds the ID read request. Golden vector G1.
-func BuildIDRead() Command {
+//
+// Takes a dialect receiver even though nothing about this frame varies by
+// radio: uniform method form means M9c adds a dialect by writing a table
+// rather than by re-plumbing signatures. Do not "tidy" this back to a
+// package-level function.
+func (d Dialect) BuildIDRead() Command {
 	return newCommand([]byte("ID;"))
 }
 
@@ -16,7 +21,17 @@ func BuildIDRead() Command {
 // "0800", fixed for the FT-710). It enforces exact length, prefix, and
 // terminator; the reference does not otherwise constrain the ID body's
 // charset, so any 4 bytes there are accepted structurally.
-func ParseIDAnswer(frame []byte) (radioID string, err error) {
+//
+// It does NOT check the returned ID against this dialect's own CATID: the
+// whole point of reading ID is to discover which radio answered, so the
+// comparison belongs to the caller doing the identification, not to the
+// parser. Nothing about this frame therefore varies by radio.
+//
+// Takes a dialect receiver even though nothing about this frame varies by
+// radio: uniform method form means M9c adds a dialect by writing a table
+// rather than by re-plumbing signatures. Do not "tidy" this back to a
+// package-level function.
+func (d Dialect) ParseIDAnswer(frame []byte) (radioID string, err error) {
 	if len(frame) != idAnswerLen {
 		return "", newParseError(frame, "ID answer must be 7 bytes")
 	}

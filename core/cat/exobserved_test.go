@@ -92,7 +92,7 @@ func TestObservedCSV_HeaderIsPinned(t *testing.T) {
 // member must appear, and nothing else may.
 func TestObservedCSV_CoversEveryInventoryAddressExactlyOnce(t *testing.T) {
 	recs := readObservedRows(t)
-	items := cat.EXItems()
+	items := cat.FT710.EXItems()
 	if len(recs) != len(items) {
 		t.Fatalf("observed rows = %d, inventory items = %d — the artefact must cover the inventory exactly", len(recs), len(items))
 	}
@@ -237,7 +237,7 @@ func readCorrectionRows(t *testing.T) [][]string {
 // exist would be evidence about nothing.
 func TestCorrectionsCSV_AddressesAreInventoryMembers(t *testing.T) {
 	members := map[string]bool{}
-	for _, it := range cat.EXItems() {
+	for _, it := range cat.FT710.EXItems() {
 		members[it.Addr.Wire()] = true
 	}
 	seen := map[string]bool{}
@@ -277,7 +277,7 @@ func TestCorrectionsCSV_WidthCorrectionAgreesWithTheObservations(t *testing.T) {
 			recorded[rec[0]+rec[1]+rec[2]] = true
 		}
 	}
-	for _, it := range cat.EXItems() {
+	for _, it := range cat.FT710.EXItems() {
 		want := it.Digits
 		if it.Text {
 			want = 12

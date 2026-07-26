@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/gm5dna/open-rig-programmer/core/cat"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
@@ -50,11 +49,11 @@ func (s *Session) CurrentMemory(ctx context.Context) (string, error) {
 	s.opMu.Lock()
 	defer s.opMu.Unlock()
 
-	frame, err := s.eng.Do(ctx, cat.BuildMCRead(), mcReadSpec())
+	frame, err := s.eng.Do(ctx, s.dialect.BuildMCRead(), mcReadSpec())
 	if err != nil {
 		return "", fmt.Errorf("ft710: CurrentMemory: %w: %w", ErrMCSnapshotUnavailable, err)
 	}
-	slot, err := cat.ParseMCAnswer(frame)
+	slot, err := s.dialect.ParseMCAnswer(frame)
 	if err != nil {
 		return "", fmt.Errorf("ft710: CurrentMemory: %w: %w", ErrMCSnapshotUnavailable, err)
 	}
@@ -73,11 +72,11 @@ func (s *Session) RecallMemory(ctx context.Context, slot string) error {
 	s.opMu.Lock()
 	defer s.opMu.Unlock()
 
-	sl, err := cat.ParseSlot(slot)
+	sl, err := s.dialect.ParseSlot(slot)
 	if err != nil {
 		return fmt.Errorf("ft710: RecallMemory: %w", err)
 	}
-	cmd, err := cat.BuildMCSet(sl)
+	cmd, err := s.dialect.BuildMCSet(sl)
 	if err != nil {
 		return fmt.Errorf("ft710: RecallMemory: %w", err)
 	}

@@ -249,13 +249,13 @@ func TestLoad_CorruptedTruncatedJSON(t *testing.T) {
 const minimalCodeplugBody = `{"schema":1,"generator":"x","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z"},"channels":[{"slot":"001","data":{"freq_hz":14250000,"mode":"USB","ctcss":"OFF","ctcss_tone":{"state":"unknown"},"shift":"SIMPLEX","scan_skip":{"state":"unknown"}}}]}`
 
 // TestLoad_TrimsTrailingSpacesFromTag pins the JSON-file mirror of
-// cat.ParseMTAnswer's trim fix: a LEGACY file (written before this
-// normalisation existed, or hand-edited from one) may still carry a
-// space-padded tag exactly as a pre-fix Read left it — Load must trim it
-// on the way in, rather than perpetuating the false verify-mismatch this
-// whole fix exists to prevent. Two channels: an ordinary padded tag, and
-// an all-spaces tag (the radio's own tag-CLEAR form), which must trim to
-// "" — matching "no tag", not a 12-space tag.
+// cat.Dialect.ParseMTAnswer's trim fix: a LEGACY file (written before
+// this normalisation existed, or hand-edited from one) may still carry
+// a space-padded tag exactly as a pre-fix Read left it — Load must trim
+// it on the way in, rather than perpetuating the false verify-mismatch
+// this whole fix exists to prevent. Two channels: an ordinary padded
+// tag, and an all-spaces tag (the radio's own tag-CLEAR form), which
+// must trim to "" — matching "no tag", not a 12-space tag.
 func TestLoad_TrimsTrailingSpacesFromTag(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "legacy-padded-tag.json")

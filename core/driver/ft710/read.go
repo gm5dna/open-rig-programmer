@@ -79,7 +79,7 @@ var shiftByName = map[string]cat.Shift{
 // KindPMS} — rather than narrowing to just '1'. Memory-bank slots
 // (memory channels ONLY) accept {KindVFO, KindMemory, KindUnset}: '0'
 // (VFO), '1' (Memory, the overwhelmingly common case), and '4' (the
-// documented "-" placeholder cat.ParseMRAnswer already accepts
+// documented "-" placeholder cat.Dialect.ParseMRAnswer already accepts
 // structurally) — all three genuinely observed on MEM (M5a/M5b).
 //
 // Discovered 60m/EMG banks (Codex M5b fix wave, Fix 5, adjudicated
@@ -136,9 +136,9 @@ func kindAccepted(slot cat.Slot, got byte) bool {
 // "preserve whatever the radio has" to every write path downstream).
 // M5a is scoped to investigate a tone-index side channel (e.g. whether
 // the MR answer's fixed "00" P9 field is really a tone index on some
-// firmware); nothing is stored for P9 today — cat.ParseMRAnswer already
-// validates it is the documented constant "00", so there is nothing
-// slot-specific to preserve.
+// firmware); nothing is stored for P9 today — cat.Dialect.ParseMRAnswer
+// already validates it is the documented constant "00", so there is
+// nothing slot-specific to preserve.
 //
 // Kind sanity: the answer's P7 kind byte must be one of the slot's
 // bank's acceptedKinds (LENIENT, HW-CONFIRMED 2026-07-13 — see
@@ -152,12 +152,12 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 	s.opMu.Lock()
 	defer s.opMu.Unlock()
 
-	sl, err := cat.ParseSlot(slot)
+	sl, err := s.dialect.ParseSlot(slot)
 	if err != nil {
 		return codeplug.Channel{}, fmt.Errorf("ft710: ReadChannel: %w", err)
 	}
 
-	mrCmd, err := cat.BuildMRRead(sl)
+	mrCmd, err := s.dialect.BuildMRRead(sl)
 	if err != nil {
 		// e.g. the answer-only "000" placeholder: grammatical per
 		// ParseSlot, but never a legal read target.
@@ -173,7 +173,7 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 		return codeplug.Channel{}, fmt.Errorf("ft710: ReadChannel %s: MR: %w", sl.Wire(), err)
 	}
 
-	m, err := cat.ParseMRAnswer(frame)
+	m, err := s.dialect.ParseMRAnswer(frame)
 	if err != nil {
 		return codeplug.Channel{}, fmt.Errorf("ft710: ReadChannel %s: %w", sl.Wire(), err)
 	}
@@ -191,7 +191,7 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 	// Tag + display via MT. fakeradio (register item 4) answers MT for
 	// ANY grammatical slot, populated or not, so after a successful MR a
 	// rejection here is a genuine error, not an empty-slot signal.
-	mtCmd, err := cat.BuildMTRead(sl)
+	mtCmd, err := s.dialect.BuildMTRead(sl)
 	if err != nil {
 		return codeplug.Channel{}, fmt.Errorf("ft710: ReadChannel %s: %w", sl.Wire(), err)
 	}
@@ -199,7 +199,7 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 	if err != nil {
 		return codeplug.Channel{}, fmt.Errorf("ft710: ReadChannel %s: MT: %w", sl.Wire(), err)
 	}
-	tslot, display, tag, err := cat.ParseMTAnswer(tframe)
+	tslot, display, tag, err := s.dialect.ParseMTAnswer(tframe)
 	if err != nil {
 		return codeplug.Channel{}, fmt.Errorf("ft710: ReadChannel %s: %w", sl.Wire(), err)
 	}
@@ -222,10 +222,16 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 		Slot: sl.Wire(),
 		Data: &codeplug.ChannelData{
 			FreqHz: m.FreqHz,
-			// Mode.String() is the display name (e.g. "USB"); for the
-			// odd-state ModeUnset it is "-", mapped through faithfully —
-			// codeplug.Validate flags it as not a selectable mode.
-			Mode:       m.Mode.String(),
+			// Rendered through THIS session's dialect, not cat.Mode.String:
+			// this string is user-visible (it lands in the codeplug, the
+			// CLI's channel listing and the GUI's grid), so it must be the
+			// mode table of the radio that answered, never the FT-710's
+			// table on some other radio's behalf. ModeName gives the
+			// display name (e.g. "USB"); for the odd-state ModeUnset it is
+			// "-", mapped through faithfully — codeplug.Validate flags it
+			// as not a selectable mode. Mode.String survives as a
+			// dialect-free diagnostic fallback only (see its doc comment).
+			Mode:       s.dialect.ModeName(m.Mode),
 			ClarHz:     int(m.ClarHz),
 			RxClar:     m.RxClar,
 			TxClar:     m.TxClar,

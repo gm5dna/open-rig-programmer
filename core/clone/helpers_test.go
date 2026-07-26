@@ -205,7 +205,7 @@ func openSimSession(t *testing.T, opts ...fakeradio.Option) (*fakeradio.Radio, d
 
 // tagPadWireInterceptor wraps a fakeradio port, rewriting exactly one
 // wire reply (wantFrame, matched byte-for-byte) to padFrame before the
-// bytes ever reach cat.ParseMTAnswer. It exists SOLELY so
+// bytes ever reach cat.Dialect.ParseMTAnswer. It exists SOLELY so
 // TestExecute_LiveBugRepro_UnpaddedTagWriteReadBackPadded can reproduce,
 // at the wire level, the HW-CONFIRMED live-radio behaviour this task
 // fixes (docs/fixtures-private, 13/07/2026 production write: an MT-set

@@ -43,8 +43,8 @@ type MemState struct {
 	// is a DELIBERATE simplification (see doc.go register item 8): the
 	// real radio IS now HW-CONFIRMED to pad a CAT-MT-set tag to 12 bytes
 	// internally and echo it padded on read, but this fake's own default
-	// behaviour stays exactly as it is — core/cat.ParseMTAnswer's trim
-	// fix (Fix: tag normalisation) is what makes the model-level tag
+	// behaviour stays exactly as it is — core/cat.Dialect.ParseMTAnswer's
+	// trim fix (Fix: tag normalisation) is what makes the model-level tag
 	// correct regardless of which side pads the wire bytes.
 	Tag string
 	// TagDisplay is the MT display flag (P1 of MT: '0' off, '1' on).

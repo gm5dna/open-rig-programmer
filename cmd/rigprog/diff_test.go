@@ -215,7 +215,7 @@ func buildUKShapedCodeplug() *codeplug.Codeplug {
 // test-only seam ... the flag parser must never populate them for real
 // use"), moved to internal/wiring by task-15's extraction. See
 // internal/wiring/fake.go's doc comment on FakeSessionOpts: no flag
-// exists that can set it, and TestSimulatedTokenSingleNonTestFileRepoWide
+// exists that can set it, and TestSimulatedProfileTokensConfinement
 // (internal/guards) keeps passing unchanged because this seam does not
 // add a second ft710.Simulated reference to any non-test file.
 func TestCmdDiff_InventoryMismatch(t *testing.T) {

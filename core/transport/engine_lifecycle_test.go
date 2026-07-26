@@ -35,7 +35,7 @@ func TestEngine_Init_SendsAI0AndDrains(t *testing.T) {
 }
 
 // TestEngine_Init_WritesExactlyAI0 pins Init's wire-level behaviour: exactly
-// one write, byte-for-byte identical to cat.BuildAISet(false).Bytes()
+// one write, byte-for-byte identical to cat.FT710.BuildAISet(false).Bytes()
 // ("AI0;"), before it moves on to draining. A stub Port is used here
 // (rather than fakeradio) specifically because the property under test is
 // "what bytes did Do's write call actually send", which fakeradio's
@@ -43,7 +43,10 @@ func TestEngine_Init_SendsAI0AndDrains(t *testing.T) {
 func TestEngine_Init_WritesExactlyAI0(t *testing.T) {
 	port := newStubPort("") // no replies at all: AI0's error window and the drain both just see silence
 	t.Cleanup(func() { _ = port.Close() })
-	eng := NewEngine(port)
+	eng, err := NewEngine(port, cat.FT710.AllowedCommand)
+	if err != nil {
+		t.Fatalf("NewEngine: unexpected error: %v", err)
+	}
 	t.Cleanup(func() { _ = eng.Close() })
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -60,7 +63,7 @@ func TestEngine_Init_WritesExactlyAI0(t *testing.T) {
 	if len(writes) != 1 {
 		t.Fatalf("Init wrote %d frames, want exactly 1: %q", len(writes), writes)
 	}
-	want := cat.BuildAISet(false).Bytes()
+	want := cat.FT710.BuildAISet(false).Bytes()
 	if string(writes[0]) != string(want) {
 		t.Errorf("Init wrote %q, want %q", writes[0], want)
 	}
@@ -90,7 +93,7 @@ func TestEngine_Close_UnblocksInFlightDo(t *testing.T) {
 	})
 	ctx := testCtx(t)
 
-	idCmd := cat.BuildIDRead()
+	idCmd := cat.FT710.BuildIDRead()
 	done := make(chan error, 1)
 	go func() {
 		_, err := eng.Do(ctx, idCmd, CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Timeout: 30 * time.Second})
@@ -128,10 +131,13 @@ func TestEngine_Close_NoGoroutineLeak(t *testing.T) {
 	const n = 25
 	for i := 0; i < n; i++ {
 		r := fakeradio.New()
-		eng := NewEngine(r.Port())
+		eng, err := NewEngine(r.Port(), cat.FT710.AllowedCommand)
+		if err != nil {
+			t.Fatalf("iteration %d: NewEngine: unexpected error: %v", i, err)
+		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		_, _ = eng.Do(ctx, cat.BuildIDRead(), CommandSpec{ExpectPrefix: "ID", ExpectLen: 7})
+		_, _ = eng.Do(ctx, cat.FT710.BuildIDRead(), CommandSpec{ExpectPrefix: "ID", ExpectLen: 7})
 		cancel()
 
 		if err := eng.Close(); err != nil {
@@ -177,19 +183,19 @@ func TestEngine_ConcurrentDo_Serialises(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			slot, err := cat.MemorySlot(10 + g)
+			slot, err := cat.FT710.MemorySlot(10 + g)
 			if err != nil {
 				errCh <- fmt.Errorf("goroutine %d: MemorySlot: %w", g, err)
 				return
 			}
-			mode, _ := cat.ParseMode('2')
+			mode, _ := cat.FT710.ParseMode('2')
 			ctcss, _ := cat.ParseCTCSSState('0')
 			shift, _ := cat.ParseShift('0')
 
 			for i := 0; i < opsPerGoroutine; i++ {
 				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 				freq := uint32(7000000 + g*1000 + i)
-				writeCmd, err := cat.BuildMWSet(cat.MemoryData{Slot: slot, FreqHz: freq, Mode: mode, Kind: cat.KindMemory, CTCSS: ctcss, Shift: shift})
+				writeCmd, err := cat.FT710.BuildMWSet(cat.MemoryData{Slot: slot, FreqHz: freq, Mode: mode, Kind: cat.KindMemory, CTCSS: ctcss, Shift: shift})
 				if err != nil {
 					errCh <- fmt.Errorf("goroutine %d op %d: BuildMWSet: %w", g, i, err)
 					cancel()
@@ -201,7 +207,7 @@ func TestEngine_ConcurrentDo_Serialises(t *testing.T) {
 					continue
 				}
 
-				readCmd, err := cat.BuildMRRead(slot)
+				readCmd, err := cat.FT710.BuildMRRead(slot)
 				if err != nil {
 					errCh <- fmt.Errorf("goroutine %d op %d: BuildMRRead: %w", g, i, err)
 					cancel()
@@ -213,7 +219,7 @@ func TestEngine_ConcurrentDo_Serialises(t *testing.T) {
 					errCh <- fmt.Errorf("goroutine %d op %d: MR Do: %w", g, i, err)
 					continue
 				}
-				m, err := cat.ParseMRAnswer(got)
+				m, err := cat.FT710.ParseMRAnswer(got)
 				if err != nil {
 					errCh <- fmt.Errorf("goroutine %d op %d: ParseMRAnswer(%q): %w", g, i, got, err)
 					continue
@@ -316,14 +322,17 @@ func TestEngine_WithClock_SettleUsesInjectedClock(t *testing.T) {
 	port := newStubPort("ID0800;")
 	t.Cleanup(func() { _ = port.Close() })
 	fc := newFakeClock()
-	eng := NewEngine(port, WithClock(fc))
+	eng, err := NewEngine(port, cat.FT710.AllowedCommand, WithClock(fc))
+	if err != nil {
+		t.Fatalf("NewEngine: unexpected error: %v", err)
+	}
 	t.Cleanup(func() { _ = eng.Close() })
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
 	settle := 37 * time.Millisecond
-	_, err := eng.Do(ctx, cat.BuildIDRead(), CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Settle: settle})
+	_, err = eng.Do(ctx, cat.FT710.BuildIDRead(), CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Settle: settle})
 	if err != nil {
 		t.Fatalf("Do: unexpected error: %v", err)
 	}
@@ -349,14 +358,17 @@ func TestEngine_Settle_AppliesAfterRejectionToo(t *testing.T) {
 	port := newStubPort("?;")
 	t.Cleanup(func() { _ = port.Close() })
 	fc := newFakeClock()
-	eng := NewEngine(port, WithClock(fc))
+	eng, err := NewEngine(port, cat.FT710.AllowedCommand, WithClock(fc))
+	if err != nil {
+		t.Fatalf("NewEngine: unexpected error: %v", err)
+	}
 	t.Cleanup(func() { _ = eng.Close() })
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
 	settle := 41 * time.Millisecond
-	_, err := eng.Do(ctx, cat.BuildIDRead(), CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Settle: settle})
+	_, err = eng.Do(ctx, cat.FT710.BuildIDRead(), CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Settle: settle})
 	if !errors.Is(err, cat.ErrRejected) {
 		t.Fatalf("Do = %v, want errors.Is match against cat.ErrRejected", err)
 	}
@@ -389,13 +401,16 @@ func TestEngine_WithMaxFrame_TriggersContaminationSooner(t *testing.T) {
 	}
 	port := newStubPort(string(overLong))
 	t.Cleanup(func() { _ = port.Close() })
-	eng := NewEngine(port, WithMaxFrame(8))
+	eng, err := NewEngine(port, cat.FT710.AllowedCommand, WithMaxFrame(8))
+	if err != nil {
+		t.Fatalf("NewEngine: unexpected error: %v", err)
+	}
 	t.Cleanup(func() { _ = eng.Close() })
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	_, err := eng.Do(ctx, cat.BuildIDRead(), CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Timeout: time.Second})
+	_, err = eng.Do(ctx, cat.FT710.BuildIDRead(), CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Timeout: time.Second})
 	if !errors.Is(err, ErrContaminated) {
 		t.Fatalf("Do = %v, want errors.Is match against ErrContaminated (WithMaxFrame(8) should have made a 20-byte unterminated reply overflow)", err)
 	}

@@ -39,7 +39,7 @@ func TestModeRoundTrip(t *testing.T) {
 	}
 	for _, tc := range modeTable {
 		t.Run(string(tc.code), func(t *testing.T) {
-			m, err := ParseMode(tc.code)
+			m, err := FT710.ParseMode(tc.code)
 			if err != nil {
 				t.Fatalf("ParseMode(%q) unexpected error: %v", tc.code, err)
 			}
@@ -80,14 +80,14 @@ func TestModeNamedConstantCount(t *testing.T) {
 }
 
 func TestParseMode_RejectsLowerCase(t *testing.T) {
-	_, err := ParseMode('a')
+	_, err := FT710.ParseMode('a')
 	if err == nil {
 		t.Fatal("ParseMode('a') should be rejected: only upper case comes from the radio")
 	}
 }
 
 func TestParseMode_RejectsOutOfRangeLetter(t *testing.T) {
-	_, err := ParseMode('G')
+	_, err := FT710.ParseMode('G')
 	if err == nil {
 		t.Fatal("ParseMode('G') should be rejected: not in '0'-'9','A'-'F'")
 	}
@@ -95,7 +95,7 @@ func TestParseMode_RejectsOutOfRangeLetter(t *testing.T) {
 
 func TestParseMode_RejectsOtherGarbage(t *testing.T) {
 	for _, c := range []byte{' ', '!', '/', ':', '@', '['} {
-		if _, err := ParseMode(c); err == nil {
+		if _, err := FT710.ParseMode(c); err == nil {
 			t.Errorf("ParseMode(%q) should be rejected", c)
 		}
 	}
@@ -103,7 +103,7 @@ func TestParseMode_RejectsOtherGarbage(t *testing.T) {
 
 // ParseMode failures must be a typed *ParseError, per package convention.
 func TestParseMode_ErrorIsParseError(t *testing.T) {
-	_, err := ParseMode('Z')
+	_, err := FT710.ParseMode('Z')
 	var pe *ParseError
 	if err == nil {
 		t.Fatal("expected error")

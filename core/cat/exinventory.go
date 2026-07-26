@@ -45,6 +45,12 @@ type EXItem struct {
 	// Digits is the manual's Digits column: 1..4 for a numeric field, or 12
 	// for a Text item. A signed field counts its sign in the width (e.g. the
 	// manual's "-20".."+10" is 3).
+	//
+	// It is also the source of a dialect's P4 answer-length bound: the
+	// largest Digits over an inventory sets that dialect's exAnswerMaxLen
+	// (dialect.go's maxEXP4Bytes). Those ranges describe the FT-710's Table
+	// 2 and are enforced for it by internal/extable's CSV validator; another
+	// radio's inventory is free to be wider, and its parser widens with it.
 	Digits int
 	// Text marks the six free-text items (MY CALL + 5x PRESET NAME), whose
 	// P4 is "Up to 12 characters" rather than an enumerated/numeric range.
@@ -70,72 +76,29 @@ type EXItem struct {
 	ObservedReadShape string
 }
 
-// exP4MaxBytes is the maximum P4 field width over the whole inventory: 12,
-// the width of the six Text items. A test pins it equal to the largest
-// Digits value returned by EXItems, so it can never silently drift from the
-// data.
-const exP4MaxBytes = 12
-
-// exMembers is the membership set keyed by the concrete EXAddress; exByTriple
-// maps a decimal (P1,P2,P3) triple to its member address. Both are built once
-// at package init from the generated inventory. exByTriple lets NewEXAddress
-// and ParseEXAddress test membership purely by lookup — no independent
-// numeric range logic on P1/P2/P3 — so out-of-range or negative inputs simply
-// miss the map rather than being range-checked.
-var (
-	exMembers  map[EXAddress]bool
-	exByTriple map[[3]int]EXAddress
-)
-
-func init() {
-	exMembers = make(map[EXAddress]bool, len(exItemsGen))
-	exByTriple = make(map[[3]int]EXAddress, len(exItemsGen))
-	for _, it := range exItemsGen {
-		exMembers[it.Addr] = true
-		exByTriple[[3]int{int(it.Addr.P1), int(it.Addr.P2), int(it.Addr.P3)}] = it.Addr
-	}
-}
-
-// KnownEXAddress reports whether a is a member of the transcribed Table 2
-// inventory. Membership is descriptor-based: an address is valid iff it
-// appears in table2.csv, never because its components fall in some numeric
-// range.
-//
-// P1 ANOMALY — evidence at M8c (24/07/2026): the EX grammar block (manual
-// extract line ~629) says "P1: 01 - 04, 05", yet Table 2 names four groups
-// at P1 01-04 plus EXTENSION SETTING at P1=06 (manual extract line ~904)
-// and none at P1=05. This inventory follows Table 2: it holds members at P1
-// in {1,2,3,4,6} and none at 5. A real radio then rejected both probed
-// P1=05 addresses (EX050101, EX050505) with "?;" — consistent with Table 2
-// being right and the grammar note's "05" being a typo, on two samples
-// rather than a survey of the P1=05 space (docs/hardware-notes.md). It is
-// deliberately NOT in table2-corrections.csv: that artefact records
-// corrections the manual needs, and two samples do not establish one. The
-// transcription in table2.csv still records the manual as found, as its own
-// provenance requires, and membership behaviour is unchanged by the
-// finding — the evidence is consistent with the reading this inventory
-// already had rather than prompting a change to it.
-func KnownEXAddress(a EXAddress) bool {
-	return exMembers[a]
-}
-
 // NewEXAddress returns the member EXAddress for the decimal triple
-// (p1,p2,p3), or a *ParseError if that triple is not in the inventory.
-// Validation is membership-only: there is no numeric range check on the
-// components, so any non-member triple — including negative or oversized
-// values — is rejected by the same lookup miss.
-func NewEXAddress(p1, p2, p3 int) (EXAddress, error) {
-	if a, ok := exByTriple[[3]int{p1, p2, p3}]; ok {
+// (p1,p2,p3) in THIS DIALECT'S inventory, or a *ParseError if that triple
+// is not a member of it. Validation is membership-only: there is no numeric
+// range check on the components, so any non-member triple — including
+// negative or oversized values — is rejected by the same lookup miss.
+//
+// It consults d.exByTriple, the dialect's own index (dialect.go), never the
+// package-level one: membership is dialect data, and a second radio's menu
+// inventory is a different table, not a different function. A zero Dialect
+// has an empty index and is therefore a member of nothing.
+func (d Dialect) NewEXAddress(p1, p2, p3 int) (EXAddress, error) {
+	if a, ok := d.exByTriple[[3]int{p1, p2, p3}]; ok {
 		return a, nil
 	}
 	return EXAddress{}, newParseError([]byte(fmt.Sprintf("%d,%d,%d", p1, p2, p3)), "EX address is not a known Table 2 member")
 }
 
-// ParseEXAddress parses a six-ASCII-digit wire field ("010203") into a member
-// EXAddress. It performs only a shape check (exactly six digits) followed by
-// a membership lookup; it applies NO numeric range logic to the parsed
-// components. A malformed shape or a non-member address yields a *ParseError.
-func ParseEXAddress(wire string) (EXAddress, error) {
+// ParseEXAddress parses a six-ASCII-digit wire field ("010203") into an
+// address that is a member of THIS DIALECT'S inventory. It performs only a
+// shape check (exactly six digits) followed by a membership lookup; it
+// applies NO numeric range logic to the parsed components. A malformed
+// shape or a non-member address yields a *ParseError.
+func (d Dialect) ParseEXAddress(wire string) (EXAddress, error) {
 	if len(wire) != 6 {
 		return EXAddress{}, newParseError([]byte(wire), "EX address must be exactly six digits")
 	}
@@ -147,24 +110,5 @@ func ParseEXAddress(wire string) (EXAddress, error) {
 	p1 := int(wire[0]-'0')*10 + int(wire[1]-'0')
 	p2 := int(wire[2]-'0')*10 + int(wire[3]-'0')
 	p3 := int(wire[4]-'0')*10 + int(wire[5]-'0')
-	return NewEXAddress(p1, p2, p3)
-}
-
-// EXItems returns a fresh copy of the full inventory, sorted by (P1,P2,P3),
-// with exactly 296 items. Callers may freely mutate the returned slice; it
-// never aliases the package's own data.
-func EXItems() []EXItem {
-	out := make([]EXItem, len(exItemsGen))
-	copy(out, exItemsGen)
-	return out
-}
-
-// EXAddresses returns a fresh copy of every inventory address, sorted by
-// (P1,P2,P3). Callers may freely mutate the returned slice.
-func EXAddresses() []EXAddress {
-	out := make([]EXAddress, len(exItemsGen))
-	for i, it := range exItemsGen {
-		out[i] = it.Addr
-	}
-	return out
+	return d.NewEXAddress(p1, p2, p3)
 }

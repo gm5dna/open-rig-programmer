@@ -474,11 +474,12 @@ func migratedMenusPresent(raw json.RawMessage) bool {
 // normaliseTags trims trailing ASCII spaces from every populated
 // channel's Tag, in place. This package's canonical tag form is always
 // trimmed (padding is a wire-encoding concern only — see
-// cat.ParseMTAnswer's doc comment for the HW-CONFIRMED radio behaviour
-// this mirrors); a file written before this normalisation existed (or
-// hand-edited from a padded value a pre-fix Read left in place) still
-// loads correctly, rather than re-triggering the false verify-mismatch
-// this normalisation exists to prevent. An all-spaces legacy tag (the
+// cat.Dialect.ParseMTAnswer's doc comment for the HW-CONFIRMED radio
+// behaviour this mirrors); a file written before this normalisation
+// existed (or hand-edited from a padded value a pre-fix Read left in
+// place) still loads correctly, rather than re-triggering the false
+// verify-mismatch this normalisation exists to prevent. An all-spaces
+// legacy tag (the
 // radio's own tag-CLEAR form) trims to "", matching "no tag".
 func normaliseTags(cp *Codeplug) {
 	for i := range cp.Channels {

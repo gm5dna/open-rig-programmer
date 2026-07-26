@@ -1,0 +1,145 @@
+ParseIDAnswer.ID.valid	OK: 0800
+ParseAIAnswer.ID.valid	ERR: cat: parse error: AI frame must be 4 bytes (input="ID0800;")
+ParseMCAnswer.ID.valid	ERR: cat: parse error: MC answer must be 6 bytes (input="ID0800;")
+ParseMTAnswer.ID.valid	ERR: cat: parse error: MT answer missing "MT" prefix (input="ID0800;")
+ParseMRAnswer.ID.valid	ERR: cat: parse error: MR frame must be 28 bytes (input="ID0800;")
+ParseEXAnswer.ID.valid	ERR: cat: parse error: EX answer must be 10-21 bytes (input="ID0800;")
+ParseIDAnswer.ID.other	OK: 0761
+ParseAIAnswer.ID.other	ERR: cat: parse error: AI frame must be 4 bytes (input="ID0761;")
+ParseMCAnswer.ID.other	ERR: cat: parse error: MC answer must be 6 bytes (input="ID0761;")
+ParseMTAnswer.ID.other	ERR: cat: parse error: MT answer missing "MT" prefix (input="ID0761;")
+ParseMRAnswer.ID.other	ERR: cat: parse error: MR frame must be 28 bytes (input="ID0761;")
+ParseEXAnswer.ID.other	ERR: cat: parse error: EX answer must be 10-21 bytes (input="ID0761;")
+ParseIDAnswer.ID.short	ERR: cat: parse error: ID answer must be 7 bytes (input="ID080;")
+ParseAIAnswer.ID.short	ERR: cat: parse error: AI frame must be 4 bytes (input="ID080;")
+ParseMCAnswer.ID.short	ERR: cat: parse error: MC answer missing "MC" prefix (input="ID080;")
+ParseMTAnswer.ID.short	ERR: cat: parse error: MT answer must be 7-19 bytes (input="ID080;")
+ParseMRAnswer.ID.short	ERR: cat: parse error: MR frame must be 28 bytes (input="ID080;")
+ParseEXAnswer.ID.short	ERR: cat: parse error: EX answer must be 10-21 bytes (input="ID080;")
+ParseIDAnswer.AI.on	ERR: cat: parse error: ID answer must be 7 bytes (input="AI1;")
+ParseAIAnswer.AI.on	OK: true
+ParseMCAnswer.AI.on	ERR: cat: parse error: MC answer must be 6 bytes (input="AI1;")
+ParseMTAnswer.AI.on	ERR: cat: parse error: MT answer must be 7-19 bytes (input="AI1;")
+ParseMRAnswer.AI.on	ERR: cat: parse error: MR frame must be 28 bytes (input="AI1;")
+ParseEXAnswer.AI.on	ERR: cat: parse error: EX answer must be 10-21 bytes (input="AI1;")
+ParseIDAnswer.AI.off	ERR: cat: parse error: ID answer must be 7 bytes (input="AI0;")
+ParseAIAnswer.AI.off	OK: false
+ParseMCAnswer.AI.off	ERR: cat: parse error: MC answer must be 6 bytes (input="AI0;")
+ParseMTAnswer.AI.off	ERR: cat: parse error: MT answer must be 7-19 bytes (input="AI0;")
+ParseMRAnswer.AI.off	ERR: cat: parse error: MR frame must be 28 bytes (input="AI0;")
+ParseEXAnswer.AI.off	ERR: cat: parse error: EX answer must be 10-21 bytes (input="AI0;")
+ParseIDAnswer.AI.garbage	ERR: cat: parse error: ID answer must be 7 bytes (input="AI2;")
+ParseAIAnswer.AI.garbage	ERR: cat: parse error: AI state byte must be '0' or '1' (input="AI2;")
+ParseMCAnswer.AI.garbage	ERR: cat: parse error: MC answer must be 6 bytes (input="AI2;")
+ParseMTAnswer.AI.garbage	ERR: cat: parse error: MT answer must be 7-19 bytes (input="AI2;")
+ParseMRAnswer.AI.garbage	ERR: cat: parse error: MR frame must be 28 bytes (input="AI2;")
+ParseEXAnswer.AI.garbage	ERR: cat: parse error: EX answer must be 10-21 bytes (input="AI2;")
+ParseIDAnswer.MC.mem	ERR: cat: parse error: ID answer must be 7 bytes (input="MC001;")
+ParseAIAnswer.MC.mem	ERR: cat: parse error: AI frame must be 4 bytes (input="MC001;")
+ParseMCAnswer.MC.mem	OK: 001
+ParseMTAnswer.MC.mem	ERR: cat: parse error: MT answer must be 7-19 bytes (input="MC001;")
+ParseMRAnswer.MC.mem	ERR: cat: parse error: MR frame must be 28 bytes (input="MC001;")
+ParseEXAnswer.MC.mem	ERR: cat: parse error: EX answer must be 10-21 bytes (input="MC001;")
+ParseIDAnswer.MC.pms	ERR: cat: parse error: ID answer must be 7 bytes (input="MCP1L;")
+ParseAIAnswer.MC.pms	ERR: cat: parse error: AI frame must be 4 bytes (input="MCP1L;")
+ParseMCAnswer.MC.pms	OK: P1L
+ParseMTAnswer.MC.pms	ERR: cat: parse error: MT answer must be 7-19 bytes (input="MCP1L;")
+ParseMRAnswer.MC.pms	ERR: cat: parse error: MR frame must be 28 bytes (input="MCP1L;")
+ParseEXAnswer.MC.pms	ERR: cat: parse error: EX answer must be 10-21 bytes (input="MCP1L;")
+ParseIDAnswer.MC.sixty	ERR: cat: parse error: ID answer must be 7 bytes (input="MC501;")
+ParseAIAnswer.MC.sixty	ERR: cat: parse error: AI frame must be 4 bytes (input="MC501;")
+ParseMCAnswer.MC.sixty	OK: 501
+ParseMTAnswer.MC.sixty	ERR: cat: parse error: MT answer must be 7-19 bytes (input="MC501;")
+ParseMRAnswer.MC.sixty	ERR: cat: parse error: MR frame must be 28 bytes (input="MC501;")
+ParseEXAnswer.MC.sixty	ERR: cat: parse error: EX answer must be 10-21 bytes (input="MC501;")
+ParseIDAnswer.MC.emg	ERR: cat: parse error: ID answer must be 7 bytes (input="MCEMG;")
+ParseAIAnswer.MC.emg	ERR: cat: parse error: AI frame must be 4 bytes (input="MCEMG;")
+ParseMCAnswer.MC.emg	OK: EMG
+ParseMTAnswer.MC.emg	ERR: cat: parse error: MT answer must be 7-19 bytes (input="MCEMG;")
+ParseMRAnswer.MC.emg	ERR: cat: parse error: MR frame must be 28 bytes (input="MCEMG;")
+ParseEXAnswer.MC.emg	ERR: cat: parse error: EX answer must be 10-21 bytes (input="MCEMG;")
+ParseIDAnswer.MC.outofspace	ERR: cat: parse error: ID answer must be 7 bytes (input="MC100;")
+ParseAIAnswer.MC.outofspace	ERR: cat: parse error: AI frame must be 4 bytes (input="MC100;")
+ParseMCAnswer.MC.outofspace	ERR: cat: parse error: MC answer: invalid slot field (input="MC100;")
+ParseMTAnswer.MC.outofspace	ERR: cat: parse error: MT answer must be 7-19 bytes (input="MC100;")
+ParseMRAnswer.MC.outofspace	ERR: cat: parse error: MR frame must be 28 bytes (input="MC100;")
+ParseEXAnswer.MC.outofspace	ERR: cat: parse error: EX answer must be 10-21 bytes (input="MC100;")
+ParseIDAnswer.MT.short	ERR: cat: parse error: ID answer must be 7 bytes (input="MT0011TAG;")
+ParseAIAnswer.MT.short	ERR: cat: parse error: AI frame must be 4 bytes (input="MT0011TAG;")
+ParseMCAnswer.MT.short	ERR: cat: parse error: MC answer must be 6 bytes (input="MT0011TAG;")
+ParseMTAnswer.MT.short	OK: 001|true|"TAG"
+ParseMRAnswer.MT.short	ERR: cat: parse error: MR frame must be 28 bytes (input="MT0011TAG;")
+ParseEXAnswer.MT.short	ERR: cat: parse error: EX answer missing "EX" prefix (input="MT0011TAG;")
+ParseIDAnswer.MT.emptytag	ERR: cat: parse error: ID answer missing "ID" prefix (input="MT0011;")
+ParseAIAnswer.MT.emptytag	ERR: cat: parse error: AI frame must be 4 bytes (input="MT0011;")
+ParseMCAnswer.MT.emptytag	ERR: cat: parse error: MC answer must be 6 bytes (input="MT0011;")
+ParseMTAnswer.MT.emptytag	OK: 001|true|""
+ParseMRAnswer.MT.emptytag	ERR: cat: parse error: MR frame must be 28 bytes (input="MT0011;")
+ParseEXAnswer.MT.emptytag	ERR: cat: parse error: EX answer must be 10-21 bytes (input="MT0011;")
+ParseIDAnswer.MT.badslot	ERR: cat: parse error: ID answer must be 7 bytes (input="MT1001TAG;")
+ParseAIAnswer.MT.badslot	ERR: cat: parse error: AI frame must be 4 bytes (input="MT1001TAG;")
+ParseMCAnswer.MT.badslot	ERR: cat: parse error: MC answer must be 6 bytes (input="MT1001TAG;")
+ParseMTAnswer.MT.badslot	ERR: cat: parse error: MT answer: invalid slot field (input="MT1001TAG;")
+ParseMRAnswer.MT.badslot	ERR: cat: parse error: MR frame must be 28 bytes (input="MT1001TAG;")
+ParseEXAnswer.MT.badslot	ERR: cat: parse error: EX answer missing "EX" prefix (input="MT1001TAG;")
+ParseIDAnswer.MR.badlen	ERR: cat: parse error: ID answer must be 7 bytes (input="MR001;")
+ParseAIAnswer.MR.badlen	ERR: cat: parse error: AI frame must be 4 bytes (input="MR001;")
+ParseMCAnswer.MR.badlen	ERR: cat: parse error: MC answer missing "MC" prefix (input="MR001;")
+ParseMTAnswer.MR.badlen	ERR: cat: parse error: MT answer must be 7-19 bytes (input="MR001;")
+ParseMRAnswer.MR.badlen	ERR: cat: parse error: MR frame must be 28 bytes (input="MR001;")
+ParseEXAnswer.MR.badlen	ERR: cat: parse error: EX answer must be 10-21 bytes (input="MR001;")
+ParseIDAnswer.EX.valid	ERR: cat: parse error: ID answer must be 7 bytes (input="EX010101000;")
+ParseAIAnswer.EX.valid	ERR: cat: parse error: AI frame must be 4 bytes (input="EX010101000;")
+ParseMCAnswer.EX.valid	ERR: cat: parse error: MC answer must be 6 bytes (input="EX010101000;")
+ParseMTAnswer.EX.valid	ERR: cat: parse error: MT answer missing "MT" prefix (input="EX010101000;")
+ParseMRAnswer.EX.valid	ERR: cat: parse error: MR frame must be 28 bytes (input="EX010101000;")
+ParseEXAnswer.EX.valid	OK: 010101|"000"
+ParseIDAnswer.EX.nonmember	ERR: cat: parse error: ID answer must be 7 bytes (input="EX050101000;")
+ParseAIAnswer.EX.nonmember	ERR: cat: parse error: AI frame must be 4 bytes (input="EX050101000;")
+ParseMCAnswer.EX.nonmember	ERR: cat: parse error: MC answer must be 6 bytes (input="EX050101000;")
+ParseMTAnswer.EX.nonmember	ERR: cat: parse error: MT answer missing "MT" prefix (input="EX050101000;")
+ParseMRAnswer.EX.nonmember	ERR: cat: parse error: MR frame must be 28 bytes (input="EX050101000;")
+ParseEXAnswer.EX.nonmember	ERR: cat: parse error: EX answer: invalid or unknown address field (input="EX050101000;")
+ParseMRAnswer.golden.G4	OK: 001|7000000|1|1|0|false|false|0|0
+ParseMRAnswer.golden.G6	OK: P1L|1810000|1|5|0|false|false|0|0
+ParseMRAnswer.golden.G7	OK: 099|52354000|4|1|-120|true|false|1|2
+ParseSlot.001	OK: 001
+ParseSlot.099	OK: 099
+ParseSlot.100	ERR: cat: parse error: not a valid slot wire form (input="100")
+ParseSlot.P1L	OK: P1L
+ParseSlot.P9U	OK: P9U
+ParseSlot.P0L	ERR: cat: parse error: not a valid slot wire form (input="P0L")
+ParseSlot.501	OK: 501
+ParseSlot.599	OK: 599
+ParseSlot.600	ERR: cat: parse error: not a valid slot wire form (input="600")
+ParseSlot.EMG	OK: EMG
+ParseSlot.000	OK: 000
+ParseSlot.00001	ERR: cat: parse error: not a valid slot wire form (input="00001")
+ParseSlot.abc	ERR: cat: parse error: not a valid slot wire form (input="abc")
+ParseMode.0	OK: 0|-
+ParseMode.1	OK: 1|LSB
+ParseMode.9	OK: 9|RTTY-U
+ParseMode.A	OK: A|DATA-FM
+ParseMode.F	OK: F|DATA-FM-N
+ParseMode.G	ERR: cat: parse error: invalid mode code: want '0'-'9' or 'A'-'F' (input="G")
+ParseMode.a	ERR: cat: parse error: invalid mode code: want '0'-'9' or 'A'-'F' (input="a")
+ParseMode.!	ERR: cat: parse error: invalid mode code: want '0'-'9' or 'A'-'F' (input="!")
+ParseShift.0	OK: 0
+ParseShift.1	OK: 1
+ParseShift.2	OK: 2
+ParseShift.3	ERR: cat: parse error: invalid shift code: want '0'-'2' (input="3")
+ParseShift.9	ERR: cat: parse error: invalid shift code: want '0'-'2' (input="9")
+ParseShift.a	ERR: cat: parse error: invalid shift code: want '0'-'2' (input="a")
+ParseShift.!	ERR: cat: parse error: invalid shift code: want '0'-'2' (input="!")
+ParseCTCSSState.0	OK: 0
+ParseCTCSSState.1	OK: 1
+ParseCTCSSState.2	OK: 2
+ParseCTCSSState.3	ERR: cat: parse error: invalid CTCSS code: want '0'-'2' (input="3")
+ParseCTCSSState.9	ERR: cat: parse error: invalid CTCSS code: want '0'-'2' (input="9")
+ParseCTCSSState.a	ERR: cat: parse error: invalid CTCSS code: want '0'-'2' (input="a")
+ParseCTCSSState.!	ERR: cat: parse error: invalid CTCSS code: want '0'-'2' (input="!")
+ParseEXAddress.010101	OK: 010101
+ParseEXAddress.010321	OK: 010321
+ParseEXAddress.050101	ERR: cat: parse error: EX address is not a known Table 2 member (input="5,1,1")
+ParseEXAddress.999999	ERR: cat: parse error: EX address is not a known Table 2 member (input="99,99,99")
+ParseEXAddress.01010	ERR: cat: parse error: EX address must be exactly six digits (input="01010")

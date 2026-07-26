@@ -86,9 +86,9 @@ func requestedFields(data codeplug.ChannelData) []spec.Field {
 // docs/hardware-notes.md): the former ASSUMED pairing (KindPMS '5' for a
 // PMS slot) is hardware-refuted — the radio REJECTS a PMS write carrying
 // KindPMS with an immediate "?;", and accepts the identical write when
-// it carries KindMemory instead. cat.BuildMWSet enforces the same rule
-// (see core/cat/mw.go) and fakeradio mirrors the radio's rejection (see
-// internal/fakeradio/parser.go's handleMW).
+// it carries KindMemory instead. cat.Dialect.BuildMWSet enforces the
+// same rule (see core/cat/mw.go) and fakeradio mirrors the radio's
+// rejection (see internal/fakeradio/parser.go's handleMW).
 //
 // NO read-back: WriteChannel reports only sent/unrejected (see
 // driver.WriteResult). Reading the slot back and comparing is the clone
@@ -105,7 +105,7 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 
 	var res driver.WriteResult
 
-	if _, err := cat.ParseSlot(ch.Slot); err != nil {
+	if _, err := s.dialect.ParseSlot(ch.Slot); err != nil {
 		return res, &driver.WriteRefusedError{Slot: ch.Slot, Reason: fmt.Sprintf("not a valid slot: %v", err)}
 	}
 	bank, ok := s.bankFor(ch.Slot)
@@ -167,7 +167,7 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 
 	// Build BOTH frames before any wire traffic, so a mapping/validation
 	// failure in either can still refuse the whole write cleanly.
-	mwCmd, mtCmd, err := buildWriteCommands(ch)
+	mwCmd, mtCmd, err := buildWriteCommands(s.dialect, ch)
 	if err != nil {
 		return res, err
 	}
@@ -200,8 +200,8 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 // frames, refusing (typed, via *driver.WriteRefusedError) any value the
 // codec cannot express. Called only after WriteChannel's capability gate
 // has passed.
-func buildWriteCommands(ch codeplug.Channel) (mwCmd, mtCmd cat.Command, err error) {
-	sl, err := cat.ParseSlot(ch.Slot)
+func buildWriteCommands(dialect cat.Dialect, ch codeplug.Channel) (mwCmd, mtCmd cat.Command, err error) {
+	sl, err := dialect.ParseSlot(ch.Slot)
 	if err != nil {
 		return cat.Command{}, cat.Command{}, &driver.WriteRefusedError{Slot: ch.Slot, Reason: err.Error()}
 	}
@@ -241,8 +241,8 @@ func buildWriteCommands(ch codeplug.Channel) (mwCmd, mtCmd cat.Command, err erro
 	// comment): always KindMemory ('1'), for both memory and PMS slots.
 	// Discovered banks (5xx/EMG) can never reach here — their fields are
 	// read-only, so the capability gate refused them already;
-	// cat.BuildMWSet would reject their slots too (not Writable()).
-	mwCmd, err = cat.BuildMWSet(cat.MemoryData{
+	// cat.Dialect.BuildMWSet would reject their slots too (not Writable()).
+	mwCmd, err = dialect.BuildMWSet(cat.MemoryData{
 		Slot:   sl,
 		FreqHz: data.FreqHz,
 		ClarHz: int16(data.ClarHz),
@@ -257,7 +257,7 @@ func buildWriteCommands(ch codeplug.Channel) (mwCmd, mtCmd cat.Command, err erro
 		return cat.Command{}, cat.Command{}, &driver.WriteRefusedError{Slot: ch.Slot, Reason: fmt.Sprintf("cannot encode MW frame: %v", err)}
 	}
 
-	mtCmd, err = cat.BuildMTSet(sl, data.TagDisplay, data.Tag)
+	mtCmd, err = dialect.BuildMTSet(sl, data.TagDisplay, data.Tag)
 	if err != nil {
 		return cat.Command{}, cat.Command{}, &driver.WriteRefusedError{
 			Slot: ch.Slot, Fields: []spec.Field{spec.FieldTag},

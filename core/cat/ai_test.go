@@ -18,7 +18,7 @@ func TestBuildAISet_G2(t *testing.T) {
 		{true, "AI1;"},
 	}
 	for _, tc := range tests {
-		if got := string(BuildAISet(tc.on).Bytes()); got != tc.want {
+		if got := string(FT710.BuildAISet(tc.on).Bytes()); got != tc.want {
 			t.Errorf("BuildAISet(%v) = %q, want %q", tc.on, got, tc.want)
 		}
 	}
@@ -44,7 +44,7 @@ func TestParseAIAnswer(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			on, err := ParseAIAnswer([]byte(tc.frame))
+			on, err := FT710.ParseAIAnswer([]byte(tc.frame))
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("ParseAIAnswer(%q): want error, got on=%v", tc.frame, on)
@@ -70,8 +70,8 @@ func TestParseAIAnswer(t *testing.T) {
 // per the reference: "Set/Read/Answer all exist").
 func TestAISet_RoundTrip(t *testing.T) {
 	for _, on := range []bool{true, false} {
-		frame := BuildAISet(on).Bytes()
-		got, err := ParseAIAnswer(frame)
+		frame := FT710.BuildAISet(on).Bytes()
+		got, err := FT710.ParseAIAnswer(frame)
 		if err != nil {
 			t.Fatalf("ParseAIAnswer(BuildAISet(%v)) unexpected error: %v", on, err)
 		}

@@ -115,7 +115,7 @@ func bankSlotViews(bank spec.Bank, live bool, working *codeplug.Codeplug) []Slot
 // channels would otherwise render nowhere.
 //
 // Task 41 (M9a-5, the GUI-backend neutralisation) migrates this off the
-// local cat.ParseSlot-based classification onto
+// local cat.Dialect.ParseSlot-based classification onto
 // wiring.SynthesiseDiscoveredBanks(wiring.DefaultModel, ...) — the
 // driver.DiscoveredBankSynthesizer capability (core/driver/optional.go),
 // introduced task 37 for exactly this call site. That function already

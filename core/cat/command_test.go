@@ -112,48 +112,48 @@ func TestCommand_StringEscapesControlBytes(t *testing.T) {
 // --- Builder integration: every builder must return a non-zero Command ---
 
 func TestCommand_AllFallibleBuildersReturnZeroCommandOnError(t *testing.T) {
-	if _, err := BuildMRRead(Slot{}); err == nil {
+	if _, err := FT710.BuildMRRead(Slot{}); err == nil {
 		t.Fatal("BuildMRRead(Slot{}): want error")
-	} else if c, _ := BuildMRRead(Slot{}); !c.IsZero() {
+	} else if c, _ := FT710.BuildMRRead(Slot{}); !c.IsZero() {
 		t.Errorf("BuildMRRead(Slot{}) on error: Command = %v, want zero value", c)
 	}
 
-	if _, err := BuildMWSet(MemoryData{}); err == nil {
+	if _, err := FT710.BuildMWSet(MemoryData{}); err == nil {
 		t.Fatal("BuildMWSet(MemoryData{}): want error")
-	} else if c, _ := BuildMWSet(MemoryData{}); !c.IsZero() {
+	} else if c, _ := FT710.BuildMWSet(MemoryData{}); !c.IsZero() {
 		t.Errorf("BuildMWSet(MemoryData{}) on error: Command = %v, want zero value", c)
 	}
 
-	if _, err := BuildMTSet(Slot{}, true, "x"); err == nil {
+	if _, err := FT710.BuildMTSet(Slot{}, true, "x"); err == nil {
 		t.Fatal("BuildMTSet(Slot{}, ...): want error")
-	} else if c, _ := BuildMTSet(Slot{}, true, "x"); !c.IsZero() {
+	} else if c, _ := FT710.BuildMTSet(Slot{}, true, "x"); !c.IsZero() {
 		t.Errorf("BuildMTSet(Slot{}, ...) on error: Command = %v, want zero value", c)
 	}
 
-	if _, err := BuildMTRead(Slot{}); err == nil {
+	if _, err := FT710.BuildMTRead(Slot{}); err == nil {
 		t.Fatal("BuildMTRead(Slot{}): want error")
-	} else if c, _ := BuildMTRead(Slot{}); !c.IsZero() {
+	} else if c, _ := FT710.BuildMTRead(Slot{}); !c.IsZero() {
 		t.Errorf("BuildMTRead(Slot{}) on error: Command = %v, want zero value", c)
 	}
 
-	if _, err := BuildMCSet(Slot{}); err == nil {
+	if _, err := FT710.BuildMCSet(Slot{}); err == nil {
 		t.Fatal("BuildMCSet(Slot{}): want error")
-	} else if c, _ := BuildMCSet(Slot{}); !c.IsZero() {
+	} else if c, _ := FT710.BuildMCSet(Slot{}); !c.IsZero() {
 		t.Errorf("BuildMCSet(Slot{}) on error: Command = %v, want zero value", c)
 	}
 }
 
 func TestCommand_InfallibleBuildersReturnNonZeroCommand(t *testing.T) {
-	if BuildIDRead().IsZero() {
+	if FT710.BuildIDRead().IsZero() {
 		t.Error("BuildIDRead().IsZero() = true, want false")
 	}
-	if BuildAISet(true).IsZero() {
+	if FT710.BuildAISet(true).IsZero() {
 		t.Error("BuildAISet(true).IsZero() = true, want false")
 	}
-	if BuildAISet(false).IsZero() {
+	if FT710.BuildAISet(false).IsZero() {
 		t.Error("BuildAISet(false).IsZero() = true, want false")
 	}
-	if BuildMCRead().IsZero() {
+	if FT710.BuildMCRead().IsZero() {
 		t.Error("BuildMCRead().IsZero() = true, want false")
 	}
 }

@@ -28,61 +28,58 @@ const (
 	slotKindNone
 )
 
-// classifySlotWire reports what kind of slot, if any, wire represents.
-// Reference: "Slot codes (3 bytes on the wire)" table.
+// classifySlotWire reports what kind of slot, if any, wire represents,
+// under the FT-710 dialect's slot space.
+//
+// FT-710-SCOPED (deferred, ledgered in the M9b plan's "Deferred, and
+// ledgered as such" list, item 2): Slot's own predicates below — Wire,
+// IsMemory, IsPMS, Is60m, IsEMG, IsNone and Writable — classify through
+// this helper rather than through a Dialect receiver, because Slot itself
+// carries no dialect tag yet. That is harmless while only the FT-710
+// dialect exists. Giving Slot a dialect tag, so these predicates read the
+// Slot's own dialect instead, is M9c's, once a second slot space exists to
+// force it.
+//
+// NOTHING REACHED FROM A DIALECT METHOD MAY CALL THIS (Task 54). The
+// former package-level readableSlot did, and is now Dialect.readableSlot;
+// the one Dialect-method use of Slot.Writable is now Dialect.writableSlot.
+// Both classify through d.classifySlot. A Dialect method routed through
+// this helper would silently answer for the FT-710 whatever dialect it was
+// called on — the exact failure mode M9b exists to prevent.
 func classifySlotWire(wire string) slotKind {
-	if len(wire) != 3 {
-		return slotKindInvalid
-	}
-
-	switch wire {
-	case "000":
-		// Reference: "000 | In MR answers: 'VFO or MT or QMB'."
-		return slotKindNone
-	case "EMG":
-		return slotKindEMG
-	}
-
-	allDigits := true
-	for i := 0; i < len(wire); i++ {
-		if wire[i] < '0' || wire[i] > '9' {
-			allDigits = false
-			break
-		}
-	}
-	if allDigits {
-		n := int(wire[0]-'0')*100 + int(wire[1]-'0')*10 + int(wire[2]-'0')
-		switch {
-		case n >= 1 && n <= 99:
-			return slotKindMemory
-		case n >= 501 && n <= 599:
-			// ASSUMED: reference marks 5xx numbering as unverified.
-			return slotKind60m
-		default:
-			return slotKindInvalid
-		}
-	}
-
-	if wire[0] == 'P' && wire[1] >= '1' && wire[1] <= '9' && (wire[2] == 'L' || wire[2] == 'U') {
-		return slotKindPMS
-	}
-
-	return slotKindInvalid
+	return FT710.classifySlot(wire)
 }
 
-// MemorySlot builds the Slot for memory channel n (M-01…M-99), n in
-// [1, 99]. Reference: "001-099 | Memory channels M-01…M-99".
-func MemorySlot(n int) (Slot, error) {
-	if n < 1 || n > 99 {
+// ParseSlot parses a 3-byte wire slot code under this dialect's slot
+// space, accepting exactly the forms produced by MemorySlot, PMSSlot,
+// SixtyMSlot and EMGSlot, plus the dialect's "000"-equivalent (which only
+// ever appears in MR answers; see Slot.IsNone). Anything else —
+// including out-of-range numbers, malformed PMS suffixes, and lower case
+// — is rejected with a *ParseError. Reference: "Slot codes (3 bytes on
+// the wire)".
+func (d Dialect) ParseSlot(wire string) (Slot, error) {
+	if d.classifySlot(wire) == slotKindInvalid {
+		return Slot{}, newParseError([]byte(wire), "not a valid slot wire form")
+	}
+	return Slot{wire: wire}, nil
+}
+
+// MemorySlot builds the Slot for memory channel n under this dialect's
+// configured memory range (memoryLo..memoryHi). For FT710 that range is
+// 1..99, i.e. M-01…M-99; reference: "001-099 | Memory channels
+// M-01…M-99".
+func (d Dialect) MemorySlot(n int) (Slot, error) {
+	if n < d.slots.memoryLo || n > d.slots.memoryHi || d.slots.memoryHi == 0 {
 		return Slot{}, newParseError([]byte(fmt.Sprintf("MemorySlot(%d)", n)), "memory channel out of range 1-99")
 	}
 	return Slot{wire: fmt.Sprintf("%03d", n)}, nil
 }
 
-// PMSSlot builds the Slot for PMS pair (1-9), lower or upper.
-// Reference: "P1L-P9U | PMS pairs (9 lower/upper pairs)".
-func PMSSlot(pair int, upper bool) (Slot, error) {
-	if pair < 1 || pair > 9 {
+// PMSSlot builds the Slot for PMS pair (1-9), lower or upper, under this
+// dialect's PMS pair count. Reference: "P1L-P9U | PMS pairs (9
+// lower/upper pairs)".
+func (d Dialect) PMSSlot(pair int, upper bool) (Slot, error) {
+	if pair < 1 || pair > d.pmsCap() {
 		return Slot{}, newParseError([]byte(fmt.Sprintf("PMSSlot(%d)", pair)), "PMS pair out of range 1-9")
 	}
 	suffix := byte('L')
@@ -92,37 +89,35 @@ func PMSSlot(pair int, upper bool) (Slot, error) {
 	return Slot{wire: fmt.Sprintf("P%d%c", pair, suffix)}, nil
 }
 
-// SixtyMSlot builds the Slot for 60m channel n.
+// SixtyMSlot builds the Slot for 60m channel n (an ordinal starting at 1)
+// under this dialect's 60m range: the wire form is the dialect's own
+// sixtyLo+n-1, capped at sixtyHi, so the result is always inside this
+// SAME dialect's own slot space — codex review Important-1 caught an
+// earlier version that read the receiver only for the bounds check and
+// hardcoded a '5' prefix for the wire form itself, which a differently
+// numbered 60m dialect's own ParseSlot then rejected. For FT710 (sixtyLo
+// 501, sixtyHi 599) that is n=1 -> "501" through n=99 -> "599".
 //
 // ASSUMED: the reference documents the wire form only as "5xx" with
 // "ASSUMED 501… numbering" — neither the numbering start nor the channel
-// count is confirmed by the manual. This constructor assumes numbering
-// starts at n=1 -> "501" and, because the wire form is fixed at 3 bytes
-// ('5' + 2 digits), caps n at 99 -> "599". Both bounds must be verified at
-// the M5a/M5b hardware sessions.
-func SixtyMSlot(n int) (Slot, error) {
-	if n < 1 || n > 99 {
+// count is confirmed by the manual for FT710. Both bounds must be
+// verified at the M5a/M5b hardware sessions.
+func (d Dialect) SixtyMSlot(n int) (Slot, error) {
+	count := d.slots.sixtyHi - d.slots.sixtyLo + 1
+	if d.slots.sixtyHi == 0 || n < 1 || n > count {
 		return Slot{}, newParseError([]byte(fmt.Sprintf("SixtyMSlot(%d)", n)), "60m channel out of ASSUMED range 1-99")
 	}
-	return Slot{wire: fmt.Sprintf("5%02d", n)}, nil
+	return Slot{wire: fmt.Sprintf("%03d", d.slots.sixtyLo+n-1)}, nil
 }
 
-// EMGSlot returns the Slot for the Alaska emergency channel.
-// Reference: "EMG | Alaska emergency channel".
-func EMGSlot() Slot {
-	return Slot{wire: "EMG"}
-}
-
-// ParseSlot parses a 3-byte wire slot code, accepting exactly the forms
-// produced by MemorySlot, PMSSlot, SixtyMSlot and EMGSlot, plus "000"
-// (which only ever appears in MR answers; see Slot.IsNone). Anything else
-// — including out-of-range numbers, malformed PMS suffixes, and lower case
-// — is rejected with a *ParseError.
-func ParseSlot(wire string) (Slot, error) {
-	if classifySlotWire(wire) == slotKindInvalid {
-		return Slot{}, newParseError([]byte(wire), "not a valid slot wire form")
+// EMGSlot returns the Slot for this dialect's Alaska-emergency-equivalent
+// channel, or the zero Slot if this dialect has none. Reference: "EMG |
+// Alaska emergency channel".
+func (d Dialect) EMGSlot() Slot {
+	if d.slots.emgWire == "" {
+		return Slot{}
 	}
-	return Slot{wire: wire}, nil
+	return Slot{wire: d.slots.emgWire}
 }
 
 // Wire returns the canonical 3-byte wire form of s.
@@ -167,8 +162,9 @@ func (s Slot) Writable() bool {
 }
 
 // readableSlot reports whether s is a legal target for a bare slot-only
-// READ command (MR read, MT read): any slot ParseSlot accepts EXCEPT the
-// special "000" placeholder (Slot.IsNone), whose semantics the reference
+// READ command (MR read, MT read) UNDER THIS DIALECT'S slot space: any
+// slot this dialect's ParseSlot accepts EXCEPT the special "000"
+// placeholder (this dialect's noneWire), whose semantics the reference
 // marks UNKNOWN/ASSUMED with an explicit "do not emit". Reads carry none
 // of the write-direction hardware-verification concern that restricts
 // MW/MT SET to memory and PMS slots only, so 5xx and EMG are both legal
@@ -177,11 +173,34 @@ func (s Slot) Writable() bool {
 // Shared by BuildMRRead, BuildMTRead, and AllowedCommand's MR/MT-read
 // grammar checks (allowlist.go), so this rule is expressed in exactly one
 // place.
-func readableSlot(s Slot) bool {
-	switch classifySlotWire(s.wire) {
+//
+// It classifies through d.classifySlot, NOT through the package-level
+// classifySlotWire: this helper is reached from inside Dialect methods,
+// and a Dialect method that consults a package global has the shape of a
+// seam and none of the substance (see Dialect's doc comment).
+func (d Dialect) readableSlot(s Slot) bool {
+	switch d.classifySlot(s.wire) {
 	case slotKindInvalid, slotKindNone:
 		return false
 	default:
 		return true
 	}
+}
+
+// writableSlot reports whether s is valid as the target of an MW (memory
+// write) command UNDER THIS DIALECT'S slot space: memory and PMS slots
+// only. Reference: "MW — ... P1 restricted to 001-099, P1L-P9U (no 5xx, no
+// EMG; 000 listed but semantics unknown — reject in builder)".
+//
+// This is the dialect-aware counterpart of Slot.Writable, and exists
+// because validateMWFields — reached from BuildMWSet AND from
+// AllowedCommand's MW grammar check — must decide writability against the
+// dialect it was called on. Slot.Writable classifies through
+// classifySlotWire (i.e. through FT710) because a Slot carries no dialect
+// tag of its own; giving Slot that tag is deferred to M9c, ledgered in the
+// M9b plan. Until then the two must not be confused: Slot's own predicates
+// are the FT-710-scoped convenience form, this is the seam-correct one.
+func (d Dialect) writableSlot(s Slot) bool {
+	kind := d.classifySlot(s.wire)
+	return kind == slotKindMemory || kind == slotKindPMS
 }

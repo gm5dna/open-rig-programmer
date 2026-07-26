@@ -96,12 +96,15 @@ const (
 // enforce is unchanged by this flip.
 const writeTrialsComplete = true
 
-// modelName and catID are the FT-710's display name and fixed 4-character
-// CAT ID answer ("ID; -> ID0800;", golden vector G1).
-const (
-	modelName = "FT-710"
-	catID     = "0800"
-)
+// modelName is the FT-710's display name.
+const modelName = "FT-710"
+
+// catID is the identity an FT-710 answers "ID;" with ("ID; -> ID0800;",
+// golden vector G1), sourced from the codec's dialect rather than restated
+// here — one place this string exists, and the value M9c's driver
+// registration will read too. TestCATID_ComesFromTheDialect pins both the
+// linkage and the documented literal.
+var catID = catDialect.CATID()
 
 // Profile selects which capability profile New builds the driver with.
 //
@@ -129,11 +132,23 @@ const (
 )
 
 // modeTable is the single source of truth pairing each selectable cat
-// mode with its display name, in wire-code order. caps Modes lists derive
-// from it and the write path's modeByName reverse lookup is built from
-// it, so the read path (cat.Mode.String()) and the write path can never
-// disagree on a spelling — TestModes_MatchCatModeNames pins the
-// round-trip. ModeUnset ('0', "-") is deliberately absent: it is a
+// mode with its display name, in wire-code order. caps Modes lists
+// derive from it and the write path's modeByName reverse lookup is
+// built from it, so the read path and the write path can never disagree
+// on a spelling — TestModes_MatchCatModeNames pins the round-trip.
+//
+// The read path is s.dialect.ModeName (read.go's ReadChannel, rerouted
+// at M9b task 56), NOT cat.Mode.String: a rendered mode string is
+// user-visible, so it must come from the mode table of the radio that
+// answered rather than the FT-710's on some other radio's behalf.
+// Mode.String survives only as a dialect-free diagnostic fallback (see
+// its own doc comment). For cat.FT710 the two are byte-identical by
+// construction — cat/dialect.go wires the dialect's modeNames field to
+// the package map Mode.String reads — which is why this table can pin
+// both spellings at once, and TestModes_MatchCatModeNames renders
+// through the dialect so it guards the real path, not the fallback.
+//
+// ModeUnset ('0', "-") is deliberately absent: it is a
 // parse-accept-only placeholder, never a selectable mode.
 var modeTable = []struct {
 	name string

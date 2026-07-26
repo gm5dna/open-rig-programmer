@@ -68,13 +68,30 @@ var ErrInvalidSpec = errors.New("transport: invalid CommandSpec")
 // timer) is reachable too — see QuarantineFailedError.
 var ErrQuarantineFailed = errors.New("transport: entry quarantine drain failed, refusing to transmit")
 
-// ErrDisallowedCommand means cmd.Bytes() failed cat.AllowedCommand and was
-// refused before ever reaching the wire — safety obligation 1. This should
-// be unreachable for any Command actually produced by a core/cat builder
+// ErrDisallowedCommand means cmd.Bytes() failed the Engine's injected
+// AllowFunc gate (in this repository's composition, the driver's own
+// cat.Dialect.AllowedCommand) and was refused before ever reaching the
+// wire — safety obligation 1. This should be unreachable for any Command
+// actually produced by that same dialect's builders
 // (TestAllowedCommand_PropertyEveryBuilderOutput in core/cat pins that
 // invariant); Engine still checks defensively, because it is the last
 // defence before a physical radio ever sees these bytes.
 var ErrDisallowedCommand = errors.New("transport: command failed AllowedCommand, refused")
+
+// ErrNoAllowlist means an Engine was asked to transmit with no allowlist.
+// Distinct from ErrDisallowedCommand deliberately: that one means "this
+// frame is not permitted", this one means "this Engine was misassembled".
+// Both refuse, but conflating them would have a diagnostic blame the
+// frame for a composition bug.
+//
+// NewEngine returns this (wrapped) for a nil AllowFunc, before it starts
+// the reader goroutine, so NewEngine cannot RETURN an ungated Engine. A
+// HAND-BUILT one still can be — Engine is exported, so `new(transport.Engine)`
+// compiles in any package — and that is exactly what this sentinel is for
+// at the other end: Do returns it too, so such a value fails closed on the
+// last line before the wire rather than being prevented from existing
+// (M9b fix wave, Codex finding 3).
+var ErrNoAllowlist = errors.New("transport: engine has no allowlist, refusing to transmit")
 
 // PortClosedError wraps ErrPortClosed with the underlying cause, when one
 // is known: the io error (typically io.EOF) the reader goroutine observed

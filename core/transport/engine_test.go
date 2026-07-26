@@ -28,7 +28,10 @@ func newTestEngine(t *testing.T, radioOpts []fakeradio.Option, engineOpts ...Opt
 	t.Helper()
 	r := fakeradio.New(radioOpts...)
 	t.Cleanup(func() { _ = r.Close() })
-	e := NewEngine(r.Port(), engineOpts...)
+	e, err := NewEngine(r.Port(), cat.FT710.AllowedCommand, engineOpts...)
+	if err != nil {
+		t.Fatalf("NewEngine: unexpected error: %v", err)
+	}
 	t.Cleanup(func() { _ = e.Close() })
 	return r, e
 }
@@ -112,11 +115,11 @@ func TestEngine_MR_GoldenRoundTrip(t *testing.T) {
 	_, eng := newTestEngine(t, nil)
 	ctx := testCtx(t)
 
-	slot, err := cat.MemorySlot(1)
+	slot, err := cat.FT710.MemorySlot(1)
 	if err != nil {
 		t.Fatalf("MemorySlot: %v", err)
 	}
-	cmd, err := cat.BuildMRRead(slot)
+	cmd, err := cat.FT710.BuildMRRead(slot)
 	if err != nil {
 		t.Fatalf("BuildMRRead: %v", err)
 	}
@@ -136,11 +139,11 @@ func TestEngine_MW_FireAndForget_Success(t *testing.T) {
 	_, eng := newTestEngine(t, nil)
 	ctx := testCtx(t)
 
-	slot, err := cat.MemorySlot(5)
+	slot, err := cat.FT710.MemorySlot(5)
 	if err != nil {
 		t.Fatalf("MemorySlot: %v", err)
 	}
-	mode, err := cat.ParseMode('2') // USB
+	mode, err := cat.FT710.ParseMode('2') // USB
 	if err != nil {
 		t.Fatalf("ParseMode: %v", err)
 	}
@@ -152,7 +155,7 @@ func TestEngine_MW_FireAndForget_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseShift: %v", err)
 	}
-	cmd, err := cat.BuildMWSet(cat.MemoryData{
+	cmd, err := cat.FT710.BuildMWSet(cat.MemoryData{
 		Slot:   slot,
 		FreqHz: 14250000,
 		Mode:   mode,
@@ -173,7 +176,7 @@ func TestEngine_MW_FireAndForget_Success(t *testing.T) {
 	}
 
 	// Prove it actually landed: MR005; must now echo it back.
-	readCmd, err := cat.BuildMRRead(slot)
+	readCmd, err := cat.FT710.BuildMRRead(slot)
 	if err != nil {
 		t.Fatalf("BuildMRRead: %v", err)
 	}
@@ -191,11 +194,11 @@ func TestEngine_MT_VariableLengthAnswer(t *testing.T) {
 	_, eng := newTestEngine(t, nil)
 	ctx := testCtx(t)
 
-	slot, err := cat.MemorySlot(1)
+	slot, err := cat.FT710.MemorySlot(1)
 	if err != nil {
 		t.Fatalf("MemorySlot: %v", err)
 	}
-	setCmd, err := cat.BuildMTSet(slot, true, "CALLING FREQ")
+	setCmd, err := cat.FT710.BuildMTSet(slot, true, "CALLING FREQ")
 	if err != nil {
 		t.Fatalf("BuildMTSet: %v", err)
 	}
@@ -203,7 +206,7 @@ func TestEngine_MT_VariableLengthAnswer(t *testing.T) {
 		t.Fatalf("Do (MT set): unexpected error: %v", err)
 	}
 
-	readCmd, err := cat.BuildMTRead(slot)
+	readCmd, err := cat.FT710.BuildMTRead(slot)
 	if err != nil {
 		t.Fatalf("BuildMTRead: %v", err)
 	}
@@ -221,11 +224,11 @@ func TestEngine_MR_EmptySlot_Rejected(t *testing.T) {
 	_, eng := newTestEngine(t, nil)
 	ctx := testCtx(t)
 
-	slot, err := cat.MemorySlot(7) // not in the factory image
+	slot, err := cat.FT710.MemorySlot(7) // not in the factory image
 	if err != nil {
 		t.Fatalf("MemorySlot: %v", err)
 	}
-	cmd, err := cat.BuildMRRead(slot)
+	cmd, err := cat.FT710.BuildMRRead(slot)
 	if err != nil {
 		t.Fatalf("BuildMRRead: %v", err)
 	}
@@ -255,7 +258,7 @@ func TestEngine_Do_PreCancelledCtx_NeverTransmits(t *testing.T) {
 	cancelledCtx, cancel := context.WithCancel(context.Background())
 	cancel() // already dead before Do is even called
 
-	idCmd := cat.BuildIDRead()
+	idCmd := cat.FT710.BuildIDRead()
 	_, err := eng.Do(cancelledCtx, idCmd, CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Timeout: time.Second})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("Do (pre-cancelled ctx) = %v, want errors.Is match against context.Canceled", err)
@@ -277,7 +280,8 @@ func TestEngine_Do_DisallowedCommandNeverWritten(t *testing.T) {
 	ctx := testCtx(t)
 
 	// The zero Command: IsZero() == true, Bytes() returns an empty slice,
-	// which cat.AllowedCommand rejects (len < 3). Do must refuse it
+	// which this Engine's injected gate (cat.FT710.AllowedCommand — see
+	// newTestEngine) rejects (len < 3). Do must refuse it
 	// BEFORE writing anything — proven by checking that a SUBSEQUENT
 	// real command is still exchange 1 (garbled), not exchange 2 (which
 	// it would be if the disallowed command had actually reached the
@@ -288,7 +292,7 @@ func TestEngine_Do_DisallowedCommandNeverWritten(t *testing.T) {
 		t.Fatalf("Do(zero Command) = %v, want errors.Is match against ErrDisallowedCommand", err)
 	}
 
-	idCmd := cat.BuildIDRead()
+	idCmd := cat.FT710.BuildIDRead()
 	_, err = eng.Do(ctx, idCmd, CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Timeout: 300 * time.Millisecond})
 	if !errors.Is(err, ErrTimeout) {
 		t.Fatalf("Do(ID;) after a refused disallowed command = %v, want ErrTimeout (proving ID; was exchange 1, hit by FaultGarbleReply(1) — the disallowed command must not have consumed exchange 1)", err)

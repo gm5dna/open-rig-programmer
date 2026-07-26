@@ -32,13 +32,13 @@ import (
 // core/cat/table2-corrections.csv).
 
 // TestEXInventoryCrossCheck_AddressSetsIdentical compares the set of
-// core/cat.EXItems() wire addresses against the key set of
+// core/cat's FT710 dialect (cat.FT710.EXItems()) wire addresses against the key set of
 // fakeradio.EXDefaults(). On any disagreement it reports BOTH diff
 // directions, so a NEEDS_CONTEXT report can quote the exact addresses
 // without needing to re-derive the diff.
 func TestEXInventoryCrossCheck_AddressSetsIdentical(t *testing.T) {
 	catAddrs := make(map[string]bool)
-	for _, item := range cat.EXItems() {
+	for _, item := range cat.FT710.EXItems() {
 		catAddrs[item.Addr.Wire()] = true
 	}
 	fakeAddrs := fakeradio.EXDefaults()
@@ -59,8 +59,8 @@ func TestEXInventoryCrossCheck_AddressSetsIdentical(t *testing.T) {
 
 	if len(inCatNotFake) > 0 || len(inFakeNotCat) > 0 {
 		t.Errorf("EX address inventories disagree between the two independent Table 2 transcriptions (core/cat has %d addresses, fakeradio has %d):\n"+
-			"  in core/cat.EXItems() but NOT in fakeradio.EXDefaults() (%d): %v\n"+
-			"  in fakeradio.EXDefaults() but NOT in core/cat.EXItems() (%d): %v\n"+
+			"  in cat.FT710.EXItems() but NOT in fakeradio.EXDefaults() (%d): %v\n"+
+			"  in fakeradio.EXDefaults() but NOT in cat.FT710.EXItems() (%d): %v\n"+
 			"This is a genuine cross-check finding, not a bug in this test: do not modify either table to make it pass — report NEEDS_CONTEXT with this diff.",
 			len(catAddrs), len(fakeAddrs), len(inCatNotFake), inCatNotFake, len(inFakeNotCat), inFakeNotCat)
 	}
@@ -77,7 +77,7 @@ func TestEXInventoryCrossCheck_WidthsAgree(t *testing.T) {
 
 	var mismatches []string
 	checked := 0
-	for _, item := range cat.EXItems() {
+	for _, item := range cat.FT710.EXItems() {
 		addr := item.Addr.Wire()
 		p4, ok := fakeAddrs[addr]
 		if !ok {
@@ -160,7 +160,7 @@ func (r *exFrameReader) readOneFrame() []byte {
 }
 
 // TestEXFakeradioRoundTrip_All296RawPort exhaustively reads every one of
-// the 296 Table 2 addresses (per core/cat.EXItems, sorted by
+// the 296 Table 2 addresses (per cat.FT710.EXItems, sorted by
 // (P1,P2,P3)), one at a time, directly against fakeradio's Port() —
 // bypassing Engine.Do entirely (see exFrameReader's doc comment). Each
 // answer must echo the address it was asked for and carry the fake's own
@@ -175,15 +175,15 @@ func TestEXFakeradioRoundTrip_All296RawPort(t *testing.T) {
 	t.Cleanup(func() { _ = r.Close() })
 
 	fakeDefaults := fakeradio.EXRuntimeDefaults()
-	items := cat.EXItems() // sorted by (P1,P2,P3); exactly 296 per EXItems' doc comment
+	items := cat.FT710.EXItems() // sorted by (P1,P2,P3); exactly 296 per EXItems' doc comment
 	if len(items) != 296 {
-		t.Fatalf("cat.EXItems() returned %d items, want 296", len(items))
+		t.Fatalf("cat.FT710.EXItems() returned %d items, want 296", len(items))
 	}
 
 	reader := newEXFrameReader(t, r)
 
 	for _, item := range items {
-		cmd, err := cat.BuildEXRead(item.Addr)
+		cmd, err := cat.FT710.BuildEXRead(item.Addr)
 		if err != nil {
 			t.Fatalf("BuildEXRead(%v): unexpected error: %v", item.Addr, err)
 		}
@@ -193,7 +193,7 @@ func TestEXFakeradioRoundTrip_All296RawPort(t *testing.T) {
 
 		frame := reader.readOneFrame()
 
-		gotAddr, gotRaw, err := cat.ParseEXAnswer(frame)
+		gotAddr, gotRaw, err := cat.FT710.ParseEXAnswer(frame)
 		if err != nil {
 			t.Fatalf("ParseEXAnswer(%q) for %v: unexpected error: %v", frame, item.Addr, err)
 		}
@@ -233,7 +233,7 @@ func TestEXCrossCheck_FakeRuntimeMatchesObservedReads(t *testing.T) {
 
 	var mismatches []string
 	checked := 0
-	for _, item := range cat.EXItems() {
+	for _, item := range cat.FT710.EXItems() {
 		addr := item.Addr.Wire()
 		p4, ok := runtime[addr]
 		if !ok {

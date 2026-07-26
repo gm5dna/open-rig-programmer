@@ -36,6 +36,21 @@ func WithTransportLogger(l transport.Logger) Option {
 	}
 }
 
+// catDialect is the CAT dialect this driver speaks: the ONE place
+// core/driver/ft710 names an instance from core/cat. Everything else here
+// derives from it — ft710Driver.dialect (and through it every Session's),
+// catID (caps.go), and the package-level settings descriptor built at init
+// (settings.go) — so the package has a single construction site rather
+// than three dozen scattered references for M9c's second radio to miss.
+//
+// Deliberately a package-level binding rather than a per-driver argument:
+// the FT-710's dialect is what makes this package the FT-710's driver, and
+// the two package-level constructions that run before any driver exists
+// (catID, the settings descriptor) need it too. What Task 56 changed is
+// that no method reaches for it — every codec call goes through the
+// dialect field the driver or session carries.
+var catDialect = cat.FT710
+
 // New builds the FT-710 driver for profile. RealHardware selects the
 // hardware-verified profile now writeTrialsComplete is true
 // (CapabilitiesRealHardware — see writeTrialsComplete's doc comment for
@@ -45,7 +60,7 @@ func WithTransportLogger(l transport.Logger) Option {
 // a writable set. See Profile and writeTrialsComplete. Options:
 // WithTransportLogger.
 func New(profile Profile, opts ...Option) driver.Driver {
-	d := &ft710Driver{profile: profile}
+	d := &ft710Driver{profile: profile, dialect: catDialect}
 	for _, opt := range opts {
 		opt(d)
 	}
@@ -55,6 +70,15 @@ func New(profile Profile, opts ...Option) driver.Driver {
 // ft710Driver implements driver.Driver for the Yaesu FT-710.
 type ft710Driver struct {
 	profile Profile
+	// dialect is the CAT dialect every codec call this driver makes — and
+	// every Session it Opens makes — goes through. Set from catDialect in
+	// New; no Option touches it.
+	//
+	// It lives HERE rather than only on Session because Open builds the
+	// transport.Engine (and hands it the gate, d.dialect.AllowedCommand)
+	// BEFORE any Session exists: a dialect reachable only from Session
+	// would be reachable too late to gate the engine at all.
+	dialect cat.Dialect
 	// transportLogger, when non-nil, is threaded into every Session's
 	// transport.Engine at Open time — see WithTransportLogger.
 	transportLogger transport.Logger
@@ -145,6 +169,13 @@ const max60mProbe = 15
 // Session whose effective capabilities include the discovered banks as
 // read-only. Open takes ownership of port: on any error the engine (and
 // with it the port) is closed before returning.
+//
+// The engine is gated by THIS driver's own dialect (d.dialect.AllowedCommand
+// — see transport.AllowFunc): the outbound allowlist a session enforces is
+// the one belonging to the radio the session is for, never a package-level
+// default that would gate every radio by whatever the FT-710 permits.
+// transport.NewEngine refuses a nil gate outright, so there is no ungated
+// path through here even if the field were somehow left zero.
 func (d *ft710Driver) Open(ctx context.Context, port transport.Port, id driver.Identity) (driver.Session, error) {
 	var engOpts []transport.Option
 	if d.transportLogger != nil {
@@ -152,7 +183,14 @@ func (d *ft710Driver) Open(ctx context.Context, port transport.Port, id driver.I
 		// see WithTransportLogger.
 		engOpts = append(engOpts, transport.WithLogger(d.transportLogger))
 	}
-	eng := transport.NewEngine(port, engOpts...)
+	eng, err := transport.NewEngine(port, d.dialect.AllowedCommand, engOpts...)
+	if err != nil {
+		// NewEngine has not taken the port on this path (it refuses before
+		// touching it), so closing it here is Open's own ownership
+		// obligation, not a double close.
+		_ = port.Close()
+		return nil, fmt.Errorf("ft710: Open: %w", err)
+	}
 	sess, err := d.open(ctx, eng, id)
 	if err != nil {
 		_ = eng.Close()
@@ -171,11 +209,11 @@ func (d *ft710Driver) open(ctx context.Context, eng *transport.Engine, id driver
 	// Identity probe: the ID; answer is authoritative, and anything
 	// other than the FT-710's fixed "0800" means the wrong radio (or
 	// something else that speaks CAT) is on this port.
-	frame, err := eng.Do(ctx, cat.BuildIDRead(), idSpec())
+	frame, err := eng.Do(ctx, d.dialect.BuildIDRead(), idSpec())
 	if err != nil {
 		return nil, fmt.Errorf("ft710: Open: ID probe: %w", err)
 	}
-	got, err := cat.ParseIDAnswer(frame)
+	got, err := d.dialect.ParseIDAnswer(frame)
 	if err != nil {
 		return nil, fmt.Errorf("ft710: Open: ID probe: %w", err)
 	}
@@ -188,16 +226,17 @@ func (d *ft710Driver) open(ctx context.Context, eng *transport.Engine, id driver
 	if logger == nil {
 		logger = nopLogger{}
 	}
-	slots60m, emg, overflow60m, err := discoverInventory(ctx, eng, logger)
+	slots60m, emg, overflow60m, err := discoverInventory(ctx, d.dialect, eng, logger)
 	if err != nil {
 		return nil, fmt.Errorf("ft710: Open: 60m/EMG discovery: %w", err)
 	}
 
 	return &Session{
-		eng:    eng,
-		id:     id,
-		caps:   effectiveCapabilities(d.Capabilities(), slots60m, emg),
-		region: deriveRegion(len(slots60m), emg, overflow60m),
+		eng:     eng,
+		dialect: d.dialect,
+		id:      id,
+		caps:    effectiveCapabilities(d.Capabilities(), slots60m, emg),
+		region:  deriveRegion(len(slots60m), emg, overflow60m),
 	}, nil
 }
 
@@ -231,13 +270,13 @@ func (nopLogger) Printf(string, ...any) {}
 // rejection is taken as the end of the region's inventory — an
 // empty-but-existing 60 m slot would be indistinguishable and would
 // truncate discovery. Both must be checked against real hardware at M5a.
-func discoverInventory(ctx context.Context, eng *transport.Engine, logger transport.Logger) (slots60m []string, emg, overflow60m bool, err error) {
+func discoverInventory(ctx context.Context, dialect cat.Dialect, eng *transport.Engine, logger transport.Logger) (slots60m []string, emg, overflow60m bool, err error) {
 	for n := 1; n <= max60mProbe; n++ {
-		slot, err := cat.SixtyMSlot(n)
+		slot, err := dialect.SixtyMSlot(n)
 		if err != nil {
 			return nil, false, false, err
 		}
-		populated, err := probeSlot(ctx, eng, slot)
+		populated, err := probeSlot(ctx, dialect, eng, slot)
 		if err != nil {
 			return nil, false, false, err
 		}
@@ -250,11 +289,11 @@ func discoverInventory(ctx context.Context, eng *transport.Engine, logger transp
 	if len(slots60m) == max60mProbe {
 		// Every known slot answered: probe the sentinel — see this
 		// function's doc comment.
-		sentinel, serr := cat.SixtyMSlot(max60mProbe + 1)
+		sentinel, serr := dialect.SixtyMSlot(max60mProbe + 1)
 		if serr != nil {
 			return nil, false, false, serr
 		}
-		populated, perr := probeSlot(ctx, eng, sentinel)
+		populated, perr := probeSlot(ctx, dialect, eng, sentinel)
 		if perr != nil {
 			return nil, false, false, perr
 		}
@@ -264,7 +303,7 @@ func discoverInventory(ctx context.Context, eng *transport.Engine, logger transp
 		}
 	}
 
-	emg, err = probeSlot(ctx, eng, cat.EMGSlot())
+	emg, err = probeSlot(ctx, dialect, eng, dialect.EMGSlot())
 	if err != nil {
 		return nil, false, false, err
 	}
@@ -276,8 +315,8 @@ func discoverInventory(ctx context.Context, eng *transport.Engine, logger transp
 // populated (ASSUMED — see discoverInventory); anything else is an
 // error. Unlike Session.ReadChannel it does not map fields or check
 // kind: discovery only needs to know whether the slot answered.
-func probeSlot(ctx context.Context, eng *transport.Engine, slot cat.Slot) (bool, error) {
-	cmd, err := cat.BuildMRRead(slot)
+func probeSlot(ctx context.Context, dialect cat.Dialect, eng *transport.Engine, slot cat.Slot) (bool, error) {
+	cmd, err := dialect.BuildMRRead(slot)
 	if err != nil {
 		return false, err
 	}
@@ -288,7 +327,7 @@ func probeSlot(ctx context.Context, eng *transport.Engine, slot cat.Slot) (bool,
 	if err != nil {
 		return false, err
 	}
-	m, err := cat.ParseMRAnswer(frame)
+	m, err := dialect.ParseMRAnswer(frame)
 	if err != nil {
 		return false, err
 	}
@@ -385,7 +424,7 @@ func effectiveCapabilities(base spec.Capabilities, slots60m []string, emg bool) 
 // Classification: a slot already claimed by one of base's own static
 // banks (MEM/PMS) is excluded before classification — this method only
 // ever adds banks Open's discovery would ADD, never restates a static
-// one. Every remaining slot is parsed via cat.ParseSlot (the SAME
+// one. Every remaining slot is parsed via cat.Dialect.ParseSlot (the SAME
 // authoritative slot parser discoverInventory's own SixtyMSlot/EMGSlot
 // builders agree with) and classified by Slot.Is60m/IsEMG, preserving
 // the ORDER slots appeared in the input slice; a slot that parses to
@@ -423,7 +462,7 @@ func (d *ft710Driver) SynthesiseDiscoveredBanks(slots []string) []spec.Bank {
 		if claimed[raw] {
 			continue
 		}
-		s, err := cat.ParseSlot(raw)
+		s, err := d.dialect.ParseSlot(raw)
 		if err != nil {
 			continue
 		}
@@ -508,10 +547,17 @@ func cloneCapabilities(caps spec.Capabilities) spec.Capabilities {
 // by holding it for the WHOLE of ReadChannel or WriteChannel, not just
 // around each's individual Do calls.
 type Session struct {
-	eng    *transport.Engine
-	id     driver.Identity
-	caps   spec.Capabilities // effective; never mutated after Open
-	region string
+	eng *transport.Engine
+	// dialect is the CAT dialect this session's every codec call goes
+	// through — builders, parsers, and the mode rendering ReadChannel
+	// puts in front of the user. Copied from the ft710Driver that Opened
+	// it (which is also where the engine's own gate came from), so a
+	// session can never encode with one radio's dialect while its
+	// transport gates with another's.
+	dialect cat.Dialect
+	id      driver.Identity
+	caps    spec.Capabilities // effective; never mutated after Open
+	region  string
 
 	opMu sync.Mutex
 }

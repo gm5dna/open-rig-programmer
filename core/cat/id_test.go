@@ -9,7 +9,7 @@ import (
 
 // TestBuildIDRead: golden vector G1's request half, "ID;".
 func TestBuildIDRead(t *testing.T) {
-	got := BuildIDRead().Bytes()
+	got := FT710.BuildIDRead().Bytes()
 	want := "ID;"
 	if string(got) != want {
 		t.Errorf("BuildIDRead() = %q, want %q", got, want)
@@ -19,7 +19,7 @@ func TestBuildIDRead(t *testing.T) {
 // TestParseIDAnswer_G1: golden vector G1, "ID; -> ID0800;" — the FT-710's
 // fixed radio ID.
 func TestParseIDAnswer_G1(t *testing.T) {
-	id, err := ParseIDAnswer([]byte("ID0800;"))
+	id, err := FT710.ParseIDAnswer([]byte("ID0800;"))
 	if err != nil {
 		t.Fatalf("ParseIDAnswer(%q): unexpected error: %v", "ID0800;", err)
 	}
@@ -46,7 +46,7 @@ func TestParseIDAnswer_RejectTable(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := ParseIDAnswer([]byte(tc.frame))
+			_, err := FT710.ParseIDAnswer([]byte(tc.frame))
 			if err == nil {
 				t.Fatalf("ParseIDAnswer(%q): want error, got none", tc.frame)
 			}
@@ -72,7 +72,7 @@ func TestParseIDAnswer_AcceptsAnyFourByteBody(t *testing.T) {
 		{"ID\x00\x01\x02\x03;", "\x00\x01\x02\x03"},
 	}
 	for _, tc := range tests {
-		id, err := ParseIDAnswer([]byte(tc.frame))
+		id, err := FT710.ParseIDAnswer([]byte(tc.frame))
 		if err != nil {
 			t.Fatalf("ParseIDAnswer(%q): unexpected error: %v", tc.frame, err)
 		}
@@ -101,7 +101,7 @@ func FuzzParseIDAnswer(f *testing.F) {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, frame []byte) {
-		id, err := ParseIDAnswer(frame)
+		id, err := FT710.ParseIDAnswer(frame)
 		if err != nil {
 			var pe *ParseError
 			if !errors.As(err, &pe) {
