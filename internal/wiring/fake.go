@@ -23,8 +23,8 @@ import (
 //
 // No production flag or GUI control populates this — it does not add a
 // second ft710.Simulated reference to any non-test file:
-// TestSimulatedTokenSingleNonTestFileRepoWide (internal/guards) keeps
-// passing unchanged. It is analogous to core/clone's Service.openJournal field,
+// TestSimulatedProfileTokensConfinement (internal/guards) keeps passing
+// unchanged. It is analogous to core/clone's Service.openJournal field,
 // which a test in that package overwrites directly for the same reason.
 //
 // A test that sets it MUST restore the previous value (e.g. via
@@ -38,7 +38,7 @@ var FakeSessionOpts []fakeradio.Option
 // realDrivers, but kept wholly in this file (task 39 brief) because the
 // entries themselves are where ft710.Simulated and fakeradio.New are
 // referenced, and both tokens must stay confined to this one file
-// (TestSimulatedTokenSingleNonTestFileRepoWide, internal/guards).
+// (TestSimulatedProfileTokensConfinement, internal/guards).
 type fakeDriverEntry struct {
 	// newDriver builds this model's simulated-profile driver.Driver.
 	newDriver func() driver.Driver
@@ -53,16 +53,18 @@ type fakeDriverEntry struct {
 // model name -> (simulated-profile driver constructor, fake-rig
 // constructor). This is the ONLY place in this repository — non-test
 // file, repo-wide — that references ft710.Simulated (task-11 brief §3,
-// pinned by internal/guards' TestSimulatedTokenSingleNonTestFileRepoWide
-// since task-15's extraction) and the sole place a fakeradio.Radio is
+// pinned by internal/guards' TestSimulatedProfileTokensConfinement since
+// task-15's extraction — folded from the single-driver guard task-15
+// originally extended into this data-driven guard at Task 58) and the
+// sole place a fakeradio.Radio is
 // constructed for a live session: the wire pattern proven at
 // core/clone/helpers_test.go:194 —
 // fakeradio.New() -> ft710.New(ft710.Simulated).Open(ctx, r.Port(), ...).
 //
 // newRadio is deliberately a closure CALLING fakeradio.New, not
 // fakeradio.New assigned directly — internal/guards'
-// TestSimulatedTokenSingleNonTestFileRepoWide's AST walk looks for an
-// actual fakeradio.New(...) CALL expression in this file, not merely a
+// TestSimulatedProfileTokensConfinement's AST walk looks for an actual
+// fakeradio.New(...) CALL expression in this file, not merely a
 // reference to the function value, so the call must stay textually
 // present here.
 var fakeDrivers = map[string]fakeDriverEntry{

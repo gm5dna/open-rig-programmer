@@ -15,8 +15,9 @@
 // structurally unrepresentable in the code shape, not merely unreached.
 // ft710.Simulated is referenced in exactly ONE non-test .go file
 // repo-wide — fake.go — pinned by internal/guards'
-// TestSimulatedTokenSingleNonTestFileRepoWide (extended by task-15 to be
-// repo-wide rather than cmd/rigprog-local).
+// TestSimulatedProfileTokensConfinement (extended by task-15 to be
+// repo-wide rather than cmd/rigprog-local; folded from the single-driver
+// guard task-15 extended into this data-driven guard at Task 58).
 //
 // Task 39 (the M9a radio-neutral core refactor) generalised this package
 // to model-keyed dispatch: OpenRealSessionFor (this file) and
