@@ -85,8 +85,12 @@ var ErrDisallowedCommand = errors.New("transport: command failed AllowedCommand,
 // frame for a composition bug.
 //
 // NewEngine returns this (wrapped) for a nil AllowFunc, before it starts
-// the reader goroutine, so an ungated Engine cannot be constructed at all;
-// Do returns it too, as defence in depth on the last line before the wire.
+// the reader goroutine, so NewEngine cannot RETURN an ungated Engine. A
+// HAND-BUILT one still can be — Engine is exported, so `new(transport.Engine)`
+// compiles in any package — and that is exactly what this sentinel is for
+// at the other end: Do returns it too, so such a value fails closed on the
+// last line before the wire rather than being prevented from existing
+// (M9b fix wave, Codex finding 3).
 var ErrNoAllowlist = errors.New("transport: engine has no allowlist, refusing to transmit")
 
 // PortClosedError wraps ErrPortClosed with the underlying cause, when one

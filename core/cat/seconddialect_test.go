@@ -4,6 +4,7 @@ package cat
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -134,6 +135,7 @@ var noneWireDialect = Dialect{
 //	noneWire "777"     (FT-710 "000"     — different again)
 //	mode     'z'       (outside '0'-'9'/'A'-'F' entirely)
 //	EX       09 01 01  (FT-710 has no P1=09 group at all)
+//	EX P4    16 bytes  (FT-710's widest is 12 — WIDER, not narrower)
 //
 // Every one of those wire forms is REJECTED by FT710.classifySlot, and
 // every peerDialect positive control below therefore fails the moment an
@@ -155,7 +157,18 @@ var peerDialect = Dialect{
 	exItems:    peerEXItems,
 	exMembers:  buildEXMembers(peerEXItems),
 	exByTriple: buildEXByTriple(peerEXItems),
+	exP4Max:    maxEXP4Bytes(peerEXItems),
 }
+
+// ft710P4MaxBytes is the FT-710's own widest P4 answer field: 12, the
+// width of its six Table 2 Text items, and until M9b's fix wave the value
+// of a package const that EVERY dialect's ParseEXAnswer was bounded by.
+//
+// It is written here as a LITERAL rather than read back from FT710,
+// because the assertions below are the FT-710's bit-identity guard: an
+// expectation derived from the same data as the code under test would move
+// with it and prove nothing.
+const ft710P4MaxBytes = 12
 
 // peerEXItems is a small inventory sharing NO address with the FT-710's:
 // that inventory holds P1 groups {1,2,3,4,6} and nothing at P1=9, so no
@@ -163,9 +176,20 @@ var peerDialect = Dialect{
 // this. An EMPTY inventory (testDialect's) only ever proves the negative
 // direction; this proves the positive one too, which is what catches an EX
 // check widened to the FT-710's index.
+//
+// THE THIRD ITEM IS 16 DIGITS WIDE, and that is the point of it. The first
+// two use widths 3 and 1, both inside the FT-710's 12, and while those
+// were the only two here the parser's answer-length bound could be — and
+// was — taken from the FT-710's widest Text item and read through every
+// dialect's receiver, with no test able to see it. A peer whose menu
+// carries a WIDER field than the FT-710's is the only fixture that can:
+// under the old bound it would have rejected its own valid answers. See
+// TestPeerDialect_EXAnswerLengthBoundIsItsOwn (M9b fix wave, Codex
+// finding 1).
 var peerEXItems = []EXItem{
 	{Addr: EXAddress{P1: 9, P2: 1, P3: 1}, P1Label: "PEER SETTING", P2Label: "PEER GROUP", Name: "PEER ITEM ONE", Digits: 3},
 	{Addr: EXAddress{P1: 9, P2: 1, P3: 2}, P1Label: "PEER SETTING", P2Label: "PEER GROUP", Name: "PEER ITEM TWO", Digits: 1},
+	{Addr: EXAddress{P1: 9, P2: 1, P3: 3}, P1Label: "PEER SETTING", P2Label: "PEER GROUP", Name: "PEER ITEM THREE (WIDE)", Digits: 16, Text: true},
 }
 
 // EVERY ASSERTION IN THIS FILE MUST FAIL FOR ITS OWN REASON. A test that
@@ -788,6 +812,9 @@ func TestPeerDialect_EXInventoryIsItsOwn(t *testing.T) {
 	if _, _, err := peerDialect.ParseEXAnswer([]byte("EX" + own.Wire() + "123;")); err != nil {
 		t.Errorf("peerDialect.ParseEXAnswer failed for its own member %s: %v", own.Wire(), err)
 	}
+	// The P4 body above is 3 bytes, INSIDE the FT-710's 12: this assertion
+	// proves membership, and is blind to the answer-length bound. That is
+	// TestPeerDialect_EXAnswerLengthBoundIsItsOwn's job.
 	// THE INVENTORY ACCESSORS, ELEMENT BY ELEMENT — NOT BY LENGTH.
 	//
 	// FIX ROUND 2. This asserted only the CARDINALITY, which pins almost
@@ -849,6 +876,128 @@ func TestPeerDialect_EXInventoryIsItsOwn(t *testing.T) {
 	// And the FT-710 must refuse peerDialect's address.
 	if _, err := FT710.ParseEXAddress(own.Wire()); err == nil {
 		t.Errorf("FT710.ParseEXAddress(%q) succeeded for an address it does not have", own.Wire())
+	}
+}
+
+// TestPeerDialect_EXAnswerLengthBoundIsItsOwn is the M9b fix wave's answer
+// to Codex finding 1, and the one assertion in this file that fails
+// against the tree as it stood at f8fbbda.
+//
+// ParseEXAnswer bounded EVERY dialect's answer length by a package const,
+// exP4MaxBytes = 12, derived from the width of the FT-710's six Table 2
+// Text items. A Dialect method reading a package global for a value that
+// is plainly per-radio data is the exact shape this milestone exists to
+// eliminate, and here it had a consequence rather than merely a smell: a
+// dialect whose menu carries a P4 field wider than 12 REJECTED ITS OWN
+// VALID ANSWERS. No test in the tree could see it, because every fixture
+// inventory was empty or narrower than the FT-710's — peerEXItems used
+// only widths 3 and 1, and the positive parser assertion above supplies
+// three bytes.
+//
+// The bound is now derived per dialect from its own inventory
+// (dialect.go's maxEXP4Bytes) and this test pins BOTH directions:
+//
+//   - the peer accepts its own widest answer at exactly its maximum, and
+//     rejects one byte past it, so the bound tracks the peer's data and is
+//     still a bound rather than "no bound";
+//   - the FT-710's stays 12 to the byte — asserted against a literal, not
+//     against the code under test — so widening the seam widened nothing
+//     for the radio this program actually talks to.
+//
+// The FT-710 rejections use ITS OWN member address, so the refusal is by
+// WIDTH and not by membership; a bound hardwired to the widest inventory
+// in the process (16) would pass every other assertion here and fail
+// those.
+func TestPeerDialect_EXAnswerLengthBoundIsItsOwn(t *testing.T) {
+	wide := peerEXItems[2]
+	if wide.Digits <= ft710P4MaxBytes {
+		t.Fatalf("fixture broken: peerEXItems[2].Digits = %d, which does not exceed the FT-710's %d — the premise of this whole test is a peer whose menu is WIDER", wide.Digits, ft710P4MaxBytes)
+	}
+
+	// The derived bounds themselves.
+	if got := FT710.exP4MaxBytes(); got != ft710P4MaxBytes {
+		t.Errorf("FT710.exP4MaxBytes() = %d, want %d — the FT-710's own answer-length bound has MOVED, which is a behaviour change for the only radio this program talks to", got, ft710P4MaxBytes)
+	}
+	if got := peerDialect.exP4MaxBytes(); got != wide.Digits {
+		t.Errorf("peerDialect.exP4MaxBytes() = %d, want %d (its own widest item) — the bound is not derived from this dialect's inventory", got, wide.Digits)
+	}
+
+	// THE PEER, at its maximum and one byte past it.
+	atMax := "EX" + wide.Addr.Wire() + strings.Repeat("W", wide.Digits) + ";"
+	if _, raw, err := peerDialect.ParseEXAnswer([]byte(atMax)); err != nil {
+		t.Errorf("peerDialect.ParseEXAnswer(%q) REJECTED its own valid answer at its own maximum width of %d — the length bound is the FT-710's, not this dialect's: %v", atMax, wide.Digits, err)
+	} else if len(raw) != wide.Digits {
+		t.Errorf("peerDialect.ParseEXAnswer(%q) returned a %d-byte P4, want %d", atMax, len(raw), wide.Digits)
+	}
+	overMax := "EX" + wide.Addr.Wire() + strings.Repeat("W", wide.Digits+1) + ";"
+	if _, raw, err := peerDialect.ParseEXAnswer([]byte(overMax)); err == nil {
+		t.Errorf("peerDialect.ParseEXAnswer(%q) ACCEPTED a %d-byte P4, one past its own maximum, returning %q — the bound is not being enforced at all", overMax, wide.Digits+1, raw)
+	}
+
+	// THE FT-710, at its maximum and one byte past it, both at one of ITS
+	// OWN member addresses so that membership cannot be what decides.
+	var ownTwelve EXAddress
+	var found bool
+	for _, it := range FT710.EXItems() {
+		if it.Digits == ft710P4MaxBytes {
+			ownTwelve, found = it.Addr, true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("fixture broken: no FT-710 inventory item has Digits == %d, so there is no address at which to test its own maximum", ft710P4MaxBytes)
+	}
+	ft710AtMax := "EX" + ownTwelve.Wire() + strings.Repeat("0", ft710P4MaxBytes) + ";"
+	if _, raw, err := FT710.ParseEXAnswer([]byte(ft710AtMax)); err != nil {
+		t.Errorf("FT710.ParseEXAnswer(%q) rejected a %d-byte P4 at its own %d-digit item — the FT-710's bound has NARROWED: %v", ft710AtMax, ft710P4MaxBytes, ft710P4MaxBytes, err)
+	} else if len(raw) != ft710P4MaxBytes {
+		t.Errorf("FT710.ParseEXAnswer(%q) returned a %d-byte P4, want %d", ft710AtMax, len(raw), ft710P4MaxBytes)
+	}
+	ft710OverMax := "EX" + ownTwelve.Wire() + strings.Repeat("0", ft710P4MaxBytes+1) + ";"
+	if _, raw, err := FT710.ParseEXAnswer([]byte(ft710OverMax)); err == nil {
+		t.Errorf("FT710.ParseEXAnswer(%q) ACCEPTED a %d-byte P4 at its own address, returning %q — the FT-710's bound has WIDENED, most likely to the widest inventory in the process rather than to its own", ft710OverMax, ft710P4MaxBytes+1, raw)
+	}
+	// And at the peer's width specifically, which is the value a
+	// process-wide maximum would have taken.
+	ft710AtPeerWidth := "EX" + ownTwelve.Wire() + strings.Repeat("0", wide.Digits) + ";"
+	if _, raw, err := FT710.ParseEXAnswer([]byte(ft710AtPeerWidth)); err == nil {
+		t.Errorf("FT710.ParseEXAnswer(%q) ACCEPTED a %d-byte P4 — the peer dialect's width, at an FT-710 address — returning %q: the bound is shared across dialects", ft710AtPeerWidth, wide.Digits, raw)
+	}
+}
+
+// TestEveryDialect_EXAnswerBoundIsWellOrdered holds of ANY dialect,
+// including the two with no EX inventory at all and the zero value: the
+// answer-length range must never be inverted.
+//
+// It exists because the per-dialect bound has a floor. A dialect with no
+// items has a true maximum of 0, which would give the range 10..9 — every
+// EX answer rejected on LENGTH, before the membership check that ought to
+// be doing that work and that the empty fixtures above assert on. The
+// floor of 1 keeps the range well-ordered; this pins that it does, and the
+// paired membership assertion pins that the rejection still comes from the
+// right place.
+func TestEveryDialect_EXAnswerBoundIsWellOrdered(t *testing.T) {
+	dialects := append(allTestDialects(), namedDialect{"zero", Dialect{}})
+	for _, d := range dialects {
+		if got := d.dia.exAnswerMaxLen(); got < exAnswerMinLen {
+			t.Errorf("%s: exAnswerMaxLen() = %d, below exAnswerMinLen (%d) — the answer-length range is inverted, so this dialect rejects every EX answer on length before membership is ever consulted", d.name, got, exAnswerMinLen)
+		}
+	}
+
+	// An inventory-less dialect must still reject an FT-710 answer for the
+	// right reason: it is a member of nothing. The frame is exactly
+	// exAnswerMinLen bytes, so the length check cannot be what refuses it.
+	ft710Addr := FT710.EXAddresses()[0]
+	minimal := []byte("EX" + ft710Addr.Wire() + "0;")
+	if len(minimal) != exAnswerMinLen {
+		t.Fatalf("fixture broken: %q is %d bytes, want exAnswerMinLen (%d)", minimal, len(minimal), exAnswerMinLen)
+	}
+	for _, d := range []namedDialect{{"testDialect", testDialect}, {"noneWireDialect", noneWireDialect}, {"zero", Dialect{}}} {
+		if _, _, err := d.dia.ParseEXAnswer(minimal); err == nil {
+			t.Errorf("%s: ParseEXAnswer(%q) succeeded for an address it does not have", d.name, minimal)
+		} else if !strings.Contains(err.Error(), "address") {
+			t.Errorf("%s: ParseEXAnswer(%q) was refused by %q, not by the membership check — an empty inventory's answer bound has stopped being well-ordered", d.name, minimal, err)
+		}
 	}
 }
 

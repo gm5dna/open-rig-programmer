@@ -58,6 +58,7 @@ type Dialect struct {
 	exItems    []EXItem
 	exMembers  map[EXAddress]bool   // this dialect's OWN membership index
 	exByTriple map[[3]int]EXAddress // this dialect's OWN decimal-triple index
+	exP4Max    int                  // this dialect's OWN widest P4 answer field, derived from exItems
 }
 
 // FT710 is the Yaesu FT-710 dialect: the only configured one that exists.
@@ -74,6 +75,7 @@ var FT710 = Dialect{
 	exItems:    exItemsGen,
 	exMembers:  buildEXMembers(exItemsGen),
 	exByTriple: buildEXByTriple(exItemsGen),
+	exP4Max:    maxEXP4Bytes(exItemsGen),
 }
 
 // buildEXMembers indexes items for membership tests.
@@ -96,6 +98,51 @@ func buildEXByTriple(items []EXItem) map[[3]int]EXAddress {
 		m[[3]int{int(it.Addr.P1), int(it.Addr.P2), int(it.Addr.P3)}] = it.Addr
 	}
 	return m
+}
+
+// maxEXP4Bytes returns the widest P4 answer field this inventory
+// declares: the largest Digits over items, 0 for an empty inventory.
+//
+// It is DIALECT DATA, derived at construction exactly as exMembers and
+// exByTriple are, and for the same reason. Before M9b's fix wave this
+// bound was a package const (exP4MaxBytes = 12, the width of the FT-710's
+// six Text items) that Dialect.ParseEXAnswer consulted through its
+// receiver — the precise shape this milestone exists to eliminate, and
+// with a real consequence: a dialect whose menu has a P4 field wider than
+// the FT-710's widest would have rejected its own valid answers. The
+// second-dialect proof could not see it because peerEXItems then used only
+// widths 3 and 1; it now carries a 16-digit item for exactly that reason.
+//
+// Consumers must go through Dialect.exP4MaxBytes rather than this field,
+// which floors the bound at 1 so an inventory-less dialect still has a
+// well-ordered length range.
+func maxEXP4Bytes(items []EXItem) int {
+	max := 0
+	for _, it := range items {
+		if it.Digits > max {
+			max = it.Digits
+		}
+	}
+	return max
+}
+
+// exP4MaxBytes is the P4 upper bound Dialect.ParseEXAnswer enforces for
+// THIS dialect, floored at 1.
+//
+// The floor matters for a dialect with no EX inventory — the zero value,
+// and the empty fixtures in seconddialect_test.go. Their true maximum is
+// 0, which would make the frame-length range 10..9: inverted, so the
+// LENGTH check would reject every EX answer before the MEMBERSHIP check
+// ever ran. Membership is the check that should be doing that work (such a
+// dialect is a member of nothing), and it is the check those fixtures
+// assert on. Flooring at 1 keeps the range well-ordered and leaves the
+// rejection where it belongs, with no effect on any dialect that has an
+// inventory.
+func (d Dialect) exP4MaxBytes() int {
+	if d.exP4Max < 1 {
+		return 1
+	}
+	return d.exP4Max
 }
 
 // Configured reports whether this Dialect carries data. False for the

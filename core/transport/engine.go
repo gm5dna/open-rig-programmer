@@ -299,9 +299,19 @@ type Engine struct {
 // wrapping ErrNoAllowlist, returning a nil *Engine — and refused BEFORE
 // the reader goroutine is started, so a rejected call leaves nothing
 // running and no half-built Engine for a caller to ignore the error and
-// use anyway. An ungated Engine therefore cannot exist. Do re-checks the
-// same thing before every write regardless (defence in depth: this is the
-// last line before a physical radio).
+// use anyway. NewEngine therefore CANNOT RETURN an ungated Engine.
+//
+// That is a claim about this constructor, not about the type, and the
+// difference is real (M9b fix wave, Codex finding 3): Engine is exported,
+// so any package may write `var e transport.Engine`, `new(transport.Engine)`
+// or an empty literal, and neither this function nor the AST guard in
+// internal/guards prohibits an external type use. Such a value is not a
+// write-safety failure — it has no usable port, and its nil allow makes Do
+// fail closed with ErrNoAllowlist — but it exists, and the earlier wording
+// here ("an ungated Engine cannot exist") said otherwise.
+//
+// Do re-checks the same thing before every write regardless (defence in
+// depth: this is the last line before a physical radio).
 //
 // NewEngine does NOT take ownership of p on the nil-allow path: it has not
 // touched the port at all by then, so closing it stays the caller's

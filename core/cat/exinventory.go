@@ -45,6 +45,12 @@ type EXItem struct {
 	// Digits is the manual's Digits column: 1..4 for a numeric field, or 12
 	// for a Text item. A signed field counts its sign in the width (e.g. the
 	// manual's "-20".."+10" is 3).
+	//
+	// It is also the source of a dialect's P4 answer-length bound: the
+	// largest Digits over an inventory sets that dialect's exAnswerMaxLen
+	// (dialect.go's maxEXP4Bytes). Those ranges describe the FT-710's Table
+	// 2 and are enforced for it by internal/extable's CSV validator; another
+	// radio's inventory is free to be wider, and its parser widens with it.
 	Digits int
 	// Text marks the six free-text items (MY CALL + 5x PRESET NAME), whose
 	// P4 is "Up to 12 characters" rather than an enumerated/numeric range.
@@ -69,12 +75,6 @@ type EXItem struct {
 	// ObservedReadWidth. Empty means no observation.
 	ObservedReadShape string
 }
-
-// exP4MaxBytes is the maximum P4 field width over the whole inventory: 12,
-// the width of the six Text items. A test pins it equal to the largest
-// Digits value returned by EXItems, so it can never silently drift from the
-// data.
-const exP4MaxBytes = 12
 
 // NewEXAddress returns the member EXAddress for the decimal triple
 // (p1,p2,p3) in THIS DIALECT'S inventory, or a *ParseError if that triple

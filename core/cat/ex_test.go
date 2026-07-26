@@ -286,8 +286,8 @@ func FuzzParseEXAnswer(f *testing.F) {
 		if !FT710.KnownEXAddress(addr) {
 			t.Fatalf("ParseEXAnswer(%q) succeeded with unknown address %v", frame, addr)
 		}
-		if len(raw) < 1 || len(raw) > exP4MaxBytes {
-			t.Fatalf("ParseEXAnswer(%q) succeeded with raw %q of length %d, want 1-%d", frame, raw, len(raw), exP4MaxBytes)
+		if len(raw) < 1 || len(raw) > FT710.exP4MaxBytes() {
+			t.Fatalf("ParseEXAnswer(%q) succeeded with raw %q of length %d, want 1-%d", frame, raw, len(raw), FT710.exP4MaxBytes())
 		}
 		reconstructed := "EX" + addr.Wire() + raw + ";"
 		if reconstructed != string(frame) {

@@ -242,8 +242,16 @@ func TestEXInventory_ExactlySixTextItems(t *testing.T) {
 	}
 }
 
-// TestEXP4MaxBytesMatchesMaxDigits pins exP4MaxBytes == the largest Digits
-// over the inventory, so the constant can never drift from the data.
+// TestEXP4MaxBytesMatchesMaxDigits pins FT710.exP4MaxBytes() == the
+// largest Digits over ITS OWN inventory, recomputed here from the public
+// EXItems() rather than read from the stored field, so the bound the
+// parser enforces can never drift from the data it is supposed to describe
+// — including by a dialect literal that simply forgets to derive it, which
+// the 1-byte floor would otherwise mask.
+//
+// It was a package const until M9b's fix wave (Codex finding 1); the
+// per-dialect direction is proved in seconddialect_test.go, which is where
+// a peer whose widest field is NOT the FT-710's lives.
 func TestEXP4MaxBytesMatchesMaxDigits(t *testing.T) {
 	max := 0
 	for _, it := range FT710.EXItems() {
@@ -251,8 +259,8 @@ func TestEXP4MaxBytesMatchesMaxDigits(t *testing.T) {
 			max = it.Digits
 		}
 	}
-	if max != exP4MaxBytes {
-		t.Errorf("max Digits over inventory = %d, but exP4MaxBytes = %d", max, exP4MaxBytes)
+	if max != FT710.exP4MaxBytes() {
+		t.Errorf("max Digits over inventory = %d, but exP4MaxBytes = %d", max, FT710.exP4MaxBytes())
 	}
 }
 
@@ -388,12 +396,13 @@ func TestEXItems_ObservedReadShapes(t *testing.T) {
 }
 
 // TestEXItems_ObservedReadWidthWithinP4Bounds proves the observations stay
-// inside the wire bound the parser enforces (exP4MaxBytes), so no
-// observation can describe a frame ParseEXAnswer would reject.
+// inside the wire bound the parser enforces for THIS dialect
+// (FT710.exP4MaxBytes()), so no observation can describe a frame
+// FT710.ParseEXAnswer would reject.
 func TestEXItems_ObservedReadWidthWithinP4Bounds(t *testing.T) {
 	for _, it := range FT710.EXItems() {
-		if it.ObservedReadWidth < 1 || it.ObservedReadWidth > exP4MaxBytes {
-			t.Errorf("%s: observed read width %d is outside 1..%d", it.Addr.Wire(), it.ObservedReadWidth, exP4MaxBytes)
+		if it.ObservedReadWidth < 1 || it.ObservedReadWidth > FT710.exP4MaxBytes() {
+			t.Errorf("%s: observed read width %d is outside 1..%d", it.Addr.Wire(), it.ObservedReadWidth, FT710.exP4MaxBytes())
 		}
 	}
 }

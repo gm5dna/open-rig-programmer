@@ -135,9 +135,11 @@
 //     byte slice, and writes THAT SAME byte slice — never a second,
 //     independently obtained copy. The gate is supplied at construction and
 //     fail-closed at both ends: NewEngine refuses a nil AllowFunc before
-//     starting the reader goroutine, so an ungated Engine cannot be built,
-//     and Do refuses again (ErrNoAllowlist) before every write regardless.
-//     See Do's doc comment.
+//     starting the reader goroutine, so NewEngine cannot RETURN an ungated
+//     Engine, and Do refuses again (ErrNoAllowlist) before every write
+//     regardless — which is what covers the hand-built case the
+//     constructor cannot reach, Engine being an exported type (M9b fix
+//     wave, Codex finding 3). See Do's doc comment.
 //  2. Retries are only for idempotent reads (CommandSpec.RetryReads,
 //     ExpectPrefix != ""); a write's timeout or failure is NEVER resolved
 //     by resending — enforced structurally via ErrInvalidSpec, not merely
