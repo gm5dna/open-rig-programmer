@@ -1543,6 +1543,54 @@ func TestSecondDialect_ParsersHonourTheirReceiver(t *testing.T) {
 	if _, _, _, err := testDialect.ParseMTAnswer([]byte("MT0501TAG;")); err == nil {
 		t.Error("testDialect.ParseMTAnswer accepted slot 050")
 	}
+
+	// parseMemoryFrame is the helper Codex F3 named, and ParseMRAnswer is
+	// its ONLY direct caller. Without this case a hardwired slot decode
+	// inside it is invisible to every other test in this file: BuildMWSet
+	// reaches validateMWFields rather than parseMemoryFrame, the allowlist
+	// case builds an MR *read*, and the zero-dialect test short-circuits on
+	// the Configured() guard before any per-command check.
+	//
+	// ADDED IN REVISION 3 (Task 54's implementer measured the gap and wrote
+	// this case, verifying it FAILS on a deliberately reverted tree and
+	// PASSES on the committed one — see task-54-report.md).
+	mr := []byte("MR099052354000-012010411002;") // golden G7
+	mr[21] = '1'                                 // mode LSB, which testDialect DOES know,
+	                                             // so only the slot field can reject
+	if _, err := FT710.ParseMRAnswer(mr); err != nil {
+		t.Fatalf("FT710 rejected its own golden frame: %v", err)
+	}
+	if _, err := testDialect.ParseMRAnswer(mr); err == nil {
+		t.Error("testDialect.ParseMRAnswer accepted slot 099, outside its 1-5 memory range — parseMemoryFrame is reading a global")
+	}
+}
+
+// TestEveryConfiguredDialect_HasASaneSlotSpace positively asserts the
+// bounds that Dialect.pmsCap() otherwise only clamps.
+//
+// ADDED IN REVISION 3, carried from Task 53's re-review: clamping an
+// out-of-range pmsPairs to 9 closes the correctness cliff but MASKS
+// misconfiguration — a data-entry slip of `pmsPairs: 90` would silently
+// present as 9, indistinguishable from a deliberate 9, with no error, no
+// log and no test failure. That is quieter than this package's fail-closed
+// philosophy elsewhere (the zero Dialect is deliberately INERT, not
+// plausible-looking). Until M9c's dialect constructor can reject at
+// construction time, this table walk is the backstop.
+func TestEveryConfiguredDialect_HasASaneSlotSpace(t *testing.T) {
+	for _, d := range []struct {
+		name string
+		dia  Dialect
+	}{
+		{"FT710", FT710},
+		{"testDialect", testDialect},
+	} {
+		if d.dia.slots.pmsPairs < 0 || d.dia.slots.pmsPairs > 9 {
+			t.Errorf("%s: pmsPairs = %d, outside the representable 0-9 (the wire form is P<digit><L|U>) — pmsCap would silently clamp this rather than surface it", d.name, d.dia.slots.pmsPairs)
+		}
+		if d.dia.slots.memoryHi > 999 || d.dia.slots.sixtyHi > 999 {
+			t.Errorf("%s: a slot bound exceeds 999, which the 3-digit wire form cannot represent", d.name)
+		}
+	}
 }
 
 // TestSecondDialect_AllowlistHonoursItsReceiver is the security half: the
