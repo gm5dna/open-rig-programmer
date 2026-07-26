@@ -90,15 +90,6 @@ func (d Dialect) AllowedCommand(frame []byte) bool {
 	}
 }
 
-// AllowedCommand reports whether frame is safe to write to the radio. See
-// Dialect.AllowedCommand for the full contract, including the EX
-// REVIEWED DECISION.
-//
-// Migration scaffold: delegates to FT710; removed in Task 55.
-func AllowedCommand(frame []byte) bool {
-	return FT710.AllowedCommand(frame)
-}
-
 // exactlyOneTrailingSemicolon reports whether frame contains exactly one
 // ';' byte, and that byte is the very last byte of frame.
 func exactlyOneTrailingSemicolon(frame []byte) bool {

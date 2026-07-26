@@ -37,14 +37,14 @@ func TestEngine_LateRejectionAfterFireAndForgetWindow_QuarantinedByPostWriteDrai
 	})
 	ctx := testCtx(t)
 
-	slot, err := cat.MemorySlot(5)
+	slot, err := cat.FT710.MemorySlot(5)
 	if err != nil {
 		t.Fatalf("MemorySlot: %v", err)
 	}
-	mode, _ := cat.ParseMode('2')
+	mode, _ := cat.FT710.ParseMode('2')
 	ctcss, _ := cat.ParseCTCSSState('0')
 	shift, _ := cat.ParseShift('0')
-	mwCmd, err := cat.BuildMWSet(cat.MemoryData{Slot: slot, FreqHz: 14250000, Mode: mode, Kind: cat.KindMemory, CTCSS: ctcss, Shift: shift})
+	mwCmd, err := cat.FT710.BuildMWSet(cat.MemoryData{Slot: slot, FreqHz: 14250000, Mode: mode, Kind: cat.KindMemory, CTCSS: ctcss, Shift: shift})
 	if err != nil {
 		t.Fatalf("BuildMWSet: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestEngine_LateRejectionAfterFireAndForgetWindow_QuarantinedByPostWriteDrai
 	// The critical assertion (finding (a)): the NEXT Do must get its OWN
 	// correct answer, and must NOT be spuriously rejected by the stale
 	// "?;" that belonged to the abandoned MW exchange.
-	idCmd := cat.BuildIDRead()
+	idCmd := cat.FT710.BuildIDRead()
 	got, err := eng.Do(ctx, idCmd, CommandSpec{ExpectPrefix: "ID", ExpectLen: 7})
 	if err != nil {
 		t.Fatalf("Do (ID; after quarantine): unexpected error: %v", err)
@@ -91,11 +91,11 @@ func TestEngine_SlowAnswerAfterFinalTimeout_NeverContaminatesDifferentSlotRead(t
 	})
 	ctx := testCtx(t)
 
-	slot1, err := cat.MemorySlot(1) // factory image: 7.000000 MHz LSB
+	slot1, err := cat.FT710.MemorySlot(1) // factory image: 7.000000 MHz LSB
 	if err != nil {
 		t.Fatalf("MemorySlot: %v", err)
 	}
-	cmd1, err := cat.BuildMRRead(slot1)
+	cmd1, err := cat.FT710.BuildMRRead(slot1)
 	if err != nil {
 		t.Fatalf("BuildMRRead: %v", err)
 	}
@@ -105,11 +105,11 @@ func TestEngine_SlowAnswerAfterFinalTimeout_NeverContaminatesDifferentSlotRead(t
 		t.Fatalf("Do (slot 1, delayed reply): %v, want errors.Is match against ErrTimeout", err)
 	}
 
-	slotP1L, err := cat.PMSSlot(1, false) // factory image: P1L, 1.810000 MHz LSB
+	slotP1L, err := cat.FT710.PMSSlot(1, false) // factory image: P1L, 1.810000 MHz LSB
 	if err != nil {
 		t.Fatalf("PMSSlot: %v", err)
 	}
-	cmd2, err := cat.BuildMRRead(slotP1L)
+	cmd2, err := cat.FT710.BuildMRRead(slotP1L)
 	if err != nil {
 		t.Fatalf("BuildMRRead: %v", err)
 	}
@@ -152,11 +152,11 @@ func TestEngine_CtxCancelAfterWrite_NextDoRunsSuspectDrainAndSucceeds(t *testing
 		WithLogger(recordingLogger{records: &records}),
 	)
 
-	slot1, err := cat.MemorySlot(1)
+	slot1, err := cat.FT710.MemorySlot(1)
 	if err != nil {
 		t.Fatalf("MemorySlot: %v", err)
 	}
-	cmd1, err := cat.BuildMRRead(slot1)
+	cmd1, err := cat.FT710.BuildMRRead(slot1)
 	if err != nil {
 		t.Fatalf("BuildMRRead: %v", err)
 	}
@@ -168,11 +168,11 @@ func TestEngine_CtxCancelAfterWrite_NextDoRunsSuspectDrainAndSucceeds(t *testing
 		t.Fatalf("Do (slot 1, ctx cancelled mid-wait) = %v, want errors.Is match against context.DeadlineExceeded", err)
 	}
 
-	slotP1L, err := cat.PMSSlot(1, false)
+	slotP1L, err := cat.FT710.PMSSlot(1, false)
 	if err != nil {
 		t.Fatalf("PMSSlot: %v", err)
 	}
-	cmd2, err := cat.BuildMRRead(slotP1L)
+	cmd2, err := cat.FT710.BuildMRRead(slotP1L)
 	if err != nil {
 		t.Fatalf("BuildMRRead: %v", err)
 	}
@@ -232,11 +232,11 @@ func TestEngine_EntryPurge_BufferedStaleFrame_NextDoStillGetsOwnAnswer(t *testin
 	})
 	ctx := testCtx(t)
 
-	slot1, err := cat.MemorySlot(1)
+	slot1, err := cat.FT710.MemorySlot(1)
 	if err != nil {
 		t.Fatalf("MemorySlot: %v", err)
 	}
-	cmd1, err := cat.BuildMRRead(slot1)
+	cmd1, err := cat.FT710.BuildMRRead(slot1)
 	if err != nil {
 		t.Fatalf("BuildMRRead: %v", err)
 	}
@@ -255,11 +255,11 @@ func TestEngine_EntryPurge_BufferedStaleFrame_NextDoStillGetsOwnAnswer(t *testin
 
 	before := eng.UnexpectedFrames()
 
-	slotP1L, err := cat.PMSSlot(1, false)
+	slotP1L, err := cat.FT710.PMSSlot(1, false)
 	if err != nil {
 		t.Fatalf("PMSSlot: %v", err)
 	}
-	cmd2, err := cat.BuildMRRead(slotP1L)
+	cmd2, err := cat.FT710.BuildMRRead(slotP1L)
 	if err != nil {
 		t.Fatalf("BuildMRRead: %v", err)
 	}
@@ -316,14 +316,14 @@ func TestEngine_PostWriteQuarantineDrainExceedsBudget_MarksSuspectForNextDo(t *t
 	_, eng := newTestEngine(t, opts, WithLogger(recordingLogger{records: &records}))
 	ctx := testCtx(t)
 
-	slot, err := cat.MemorySlot(5)
+	slot, err := cat.FT710.MemorySlot(5)
 	if err != nil {
 		t.Fatalf("MemorySlot: %v", err)
 	}
-	mode, _ := cat.ParseMode('2')
+	mode, _ := cat.FT710.ParseMode('2')
 	ctcss, _ := cat.ParseCTCSSState('0')
 	shift, _ := cat.ParseShift('0')
-	mwCmd, err := cat.BuildMWSet(cat.MemoryData{Slot: slot, FreqHz: 14250000, Mode: mode, Kind: cat.KindMemory, CTCSS: ctcss, Shift: shift})
+	mwCmd, err := cat.FT710.BuildMWSet(cat.MemoryData{Slot: slot, FreqHz: 14250000, Mode: mode, Kind: cat.KindMemory, CTCSS: ctcss, Shift: shift})
 	if err != nil {
 		t.Fatalf("BuildMWSet: %v", err)
 	}
@@ -355,7 +355,7 @@ func TestEngine_PostWriteQuarantineDrainExceedsBudget_MarksSuspectForNextDo(t *t
 	// The critical assertion: the NEXT Do, of any kind, must observe
 	// e.suspect and run a full entry drain BEFORE transmitting — proven by
 	// its own elapsed time, not just by it eventually succeeding.
-	idCmd := cat.BuildIDRead()
+	idCmd := cat.FT710.BuildIDRead()
 	start2 := time.Now()
 	got, err := eng.Do(ctx, idCmd, CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Timeout: time.Second})
 	elapsed2 := time.Since(start2)
@@ -385,11 +385,11 @@ func TestEngine_EntrySuspectDrainFailure_ReturnsTypedQuarantineError(t *testing.
 	})
 	ctx := testCtx(t)
 
-	slot1, err := cat.MemorySlot(1)
+	slot1, err := cat.FT710.MemorySlot(1)
 	if err != nil {
 		t.Fatalf("MemorySlot: %v", err)
 	}
-	cmd1, err := cat.BuildMRRead(slot1)
+	cmd1, err := cat.FT710.BuildMRRead(slot1)
 	if err != nil {
 		t.Fatalf("BuildMRRead: %v", err)
 	}
@@ -399,7 +399,7 @@ func TestEngine_EntrySuspectDrainFailure_ReturnsTypedQuarantineError(t *testing.
 		t.Fatalf("Do (slot 1): %v, want errors.Is match against ErrTimeout", err)
 	}
 
-	idCmd := cat.BuildIDRead()
+	idCmd := cat.FT710.BuildIDRead()
 	_, err = eng.Do(ctx, idCmd, CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Timeout: time.Second})
 	if !errors.Is(err, ErrQuarantineFailed) {
 		t.Fatalf("Do (entry suspect drain, port closes mid-drain) = %v, want errors.Is match against ErrQuarantineFailed", err)

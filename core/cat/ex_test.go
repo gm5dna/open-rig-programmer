@@ -26,7 +26,7 @@ func TestBuildEXRead_WireShape(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			cmd, err := BuildEXRead(tc.addr)
+			cmd, err := FT710.BuildEXRead(tc.addr)
 			if err != nil {
 				t.Fatalf("BuildEXRead(%v): unexpected error: %v", tc.addr, err)
 			}
@@ -43,7 +43,7 @@ func TestBuildEXRead_WireShape(t *testing.T) {
 
 // TestBuildEXRead_RejectsNonMembers covers the zero value, the P1==05
 // grammar/Table-2 anomaly address (M8c put two such addresses to a real
-// radio and both were rejected — exinventory.go's KnownEXAddress doc
+// radio and both were rejected — dialect.go's Dialect.KnownEXAddress doc
 // comment), an
 // address one past the SSB subgroup's last item ((01,01,19) CW AUTO MODE
 // is the last P1=1,P2=1 item per exinventory_gen.go), and a wildly
@@ -61,7 +61,7 @@ func TestBuildEXRead_RejectsNonMembers(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			cmd, err := BuildEXRead(tc.addr)
+			cmd, err := FT710.BuildEXRead(tc.addr)
 			if err == nil {
 				t.Fatalf("BuildEXRead(%v): want error, got %q", tc.addr, cmd.Bytes())
 			}
@@ -82,10 +82,10 @@ func TestBuildEXRead_RejectsNonMembers(t *testing.T) {
 // (Wire() is injective over the inventory, exinventory_test.go's
 // TestEXInventory_NoDuplicatesSortedAndWireStable).
 func TestBuildEXRead_PropertyAll296(t *testing.T) {
-	items := EXItems()
+	items := FT710.EXItems()
 	seen := make(map[string]bool, len(items))
 	for _, it := range items {
-		cmd, err := BuildEXRead(it.Addr)
+		cmd, err := FT710.BuildEXRead(it.Addr)
 		if err != nil {
 			t.Fatalf("BuildEXRead(%v): unexpected error: %v", it.Addr, err)
 		}
@@ -141,7 +141,7 @@ func TestParseEXAnswer_Vectors(t *testing.T) {
 			if tc.name == "12-byte text: MY CALL TESTER" && len(tc.frame) != 21 {
 				t.Fatalf("test fixture bug: frame %q is %d bytes, want 21", tc.frame, len(tc.frame))
 			}
-			addr, raw, err := ParseEXAnswer([]byte(tc.frame))
+			addr, raw, err := FT710.ParseEXAnswer([]byte(tc.frame))
 			if err != nil {
 				t.Fatalf("ParseEXAnswer(%q): unexpected error: %v", tc.frame, err)
 			}
@@ -160,8 +160,8 @@ func TestParseEXAnswer_Vectors(t *testing.T) {
 // bytes, one below exAnswerMinLen), a 22-byte frame (P4 would be 13 bytes,
 // one above exP4MaxBytes), missing prefix, missing terminator, non-digit
 // address bytes, a non-member address at two different P4 widths (the
-// P1==05 anomaly, with M8c evidence — exinventory.go's KnownEXAddress doc
-// comment), empty and nil input, and the radio's generic NAK frame "?;".
+// P1==05 anomaly, with M8c evidence — dialect.go's Dialect.KnownEXAddress
+// doc comment), empty and nil input, and the radio's generic NAK frame "?;".
 func TestParseEXAnswer_RejectTable(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -180,7 +180,7 @@ func TestParseEXAnswer_RejectTable(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			addr, raw, err := ParseEXAnswer(tc.frame)
+			addr, raw, err := FT710.ParseEXAnswer(tc.frame)
 			if err == nil {
 				t.Fatalf("ParseEXAnswer(%q): want error, got addr=%v raw=%q", tc.frame, addr, raw)
 			}
@@ -211,7 +211,7 @@ func TestParseEXAnswer_RawP4Verbatim(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, raw, err := ParseEXAnswer([]byte(tc.frame))
+			_, raw, err := FT710.ParseEXAnswer([]byte(tc.frame))
 			if err != nil {
 				t.Fatalf("ParseEXAnswer(%q): unexpected error: %v", tc.frame, err)
 			}
@@ -229,11 +229,11 @@ func TestParseEXAnswer_RawP4Verbatim(t *testing.T) {
 // already 12 for the six Text items, exinventory.go's EXItem.Digits doc
 // comment).
 func TestParseEXAnswer_RoundTripAll296(t *testing.T) {
-	items := EXItems()
+	items := FT710.EXItems()
 	for _, it := range items {
 		rawWant := strings.Repeat("0", it.Digits)
 		frame := "EX" + it.Addr.Wire() + rawWant + ";"
-		addr, raw, err := ParseEXAnswer([]byte(frame))
+		addr, raw, err := FT710.ParseEXAnswer([]byte(frame))
 		if err != nil {
 			t.Fatalf("ParseEXAnswer(%q) for %v: unexpected error: %v", frame, it.Addr, err)
 		}
@@ -275,7 +275,7 @@ func FuzzParseEXAnswer(f *testing.F) {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, frame []byte) {
-		addr, raw, err := ParseEXAnswer(frame)
+		addr, raw, err := FT710.ParseEXAnswer(frame)
 		if err != nil {
 			var pe *ParseError
 			if !errors.As(err, &pe) {
@@ -283,7 +283,7 @@ func FuzzParseEXAnswer(f *testing.F) {
 			}
 			return
 		}
-		if !KnownEXAddress(addr) {
+		if !FT710.KnownEXAddress(addr) {
 			t.Fatalf("ParseEXAnswer(%q) succeeded with unknown address %v", frame, addr)
 		}
 		if len(raw) < 1 || len(raw) > exP4MaxBytes {

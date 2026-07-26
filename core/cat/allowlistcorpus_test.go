@@ -51,11 +51,11 @@ func buildAllowlistCorpus(t *testing.T) []string {
 			// feed AllowedCommand.
 			continue
 		}
-		out = append(out, cl.label+"\t"+allowedLabel(AllowedCommand([]byte(cl.frame))))
+		out = append(out, cl.label+"\t"+allowedLabel(FT710.AllowedCommand([]byte(cl.frame))))
 	}
 
 	for _, gv := range goldenMRFramesForCorpus() {
-		out = append(out, "golden."+gv.label+"\t"+allowedLabel(AllowedCommand([]byte(gv.frame))))
+		out = append(out, "golden."+gv.label+"\t"+allowedLabel(FT710.AllowedCommand([]byte(gv.frame))))
 	}
 
 	return out

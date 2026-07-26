@@ -76,62 +76,6 @@ type EXItem struct {
 // data.
 const exP4MaxBytes = 12
 
-// exMembers is the membership set keyed by the concrete EXAddress; exByTriple
-// maps a decimal (P1,P2,P3) triple to its member address. Both are built once
-// at package init from the generated inventory. The Dialect fields of the
-// same shape (dialect.go) let Dialect.NewEXAddress and Dialect.ParseEXAddress
-// test membership purely by lookup — no independent numeric range logic on
-// P1/P2/P3 — so out-of-range or negative inputs simply miss the map rather
-// than being range-checked.
-//
-// NEITHER IS READ ANY LONGER. exMembers stopped being read at Task 53
-// (KnownEXAddress delegates to FT710.KnownEXAddress, which consults the
-// Dialect's own exMembers FIELD of the same name); exByTriple stopped at
-// Task 54, when NewEXAddress/ParseEXAddress became Dialect methods reading
-// d.exByTriple, the dialect's own decimal-triple index. Both are kept only
-// because this init loop still builds them together, and both are removed
-// alongside the delegates in Task 55. Do not reach for either from inside a
-// Dialect method — that would be exactly the global-not-receiver bug this
-// milestone exists to prevent (codex review Minor-5).
-var (
-	exMembers  map[EXAddress]bool
-	exByTriple map[[3]int]EXAddress
-)
-
-func init() {
-	exMembers = make(map[EXAddress]bool, len(exItemsGen))
-	exByTriple = make(map[[3]int]EXAddress, len(exItemsGen))
-	for _, it := range exItemsGen {
-		exMembers[it.Addr] = true
-		exByTriple[[3]int{int(it.Addr.P1), int(it.Addr.P2), int(it.Addr.P3)}] = it.Addr
-	}
-}
-
-// KnownEXAddress reports whether a is a member of the transcribed Table 2
-// inventory. Membership is descriptor-based: an address is valid iff it
-// appears in table2.csv, never because its components fall in some numeric
-// range.
-//
-// P1 ANOMALY — evidence at M8c (24/07/2026): the EX grammar block (manual
-// extract line ~629) says "P1: 01 - 04, 05", yet Table 2 names four groups
-// at P1 01-04 plus EXTENSION SETTING at P1=06 (manual extract line ~904)
-// and none at P1=05. This inventory follows Table 2: it holds members at P1
-// in {1,2,3,4,6} and none at 5. A real radio then rejected both probed
-// P1=05 addresses (EX050101, EX050505) with "?;" — consistent with Table 2
-// being right and the grammar note's "05" being a typo, on two samples
-// rather than a survey of the P1=05 space (docs/hardware-notes.md). It is
-// deliberately NOT in table2-corrections.csv: that artefact records
-// corrections the manual needs, and two samples do not establish one. The
-// transcription in table2.csv still records the manual as found, as its own
-// provenance requires, and membership behaviour is unchanged by the
-// finding — the evidence is consistent with the reading this inventory
-// already had rather than prompting a change to it.
-//
-// Migration scaffold: delegates to FT710; removed in Task 55.
-func KnownEXAddress(a EXAddress) bool {
-	return FT710.KnownEXAddress(a)
-}
-
 // NewEXAddress returns the member EXAddress for the decimal triple
 // (p1,p2,p3) in THIS DIALECT'S inventory, or a *ParseError if that triple
 // is not a member of it. Validation is membership-only: there is no numeric
@@ -167,37 +111,4 @@ func (d Dialect) ParseEXAddress(wire string) (EXAddress, error) {
 	p2 := int(wire[2]-'0')*10 + int(wire[3]-'0')
 	p3 := int(wire[4]-'0')*10 + int(wire[5]-'0')
 	return d.NewEXAddress(p1, p2, p3)
-}
-
-// NewEXAddress returns the member EXAddress for the decimal triple
-// (p1,p2,p3), or a *ParseError if that triple is not in the inventory.
-//
-// Migration scaffold: delegates to FT710; removed in Task 55.
-func NewEXAddress(p1, p2, p3 int) (EXAddress, error) {
-	return FT710.NewEXAddress(p1, p2, p3)
-}
-
-// ParseEXAddress parses a six-ASCII-digit wire field ("010203") into a member
-// EXAddress.
-//
-// Migration scaffold: delegates to FT710; removed in Task 55.
-func ParseEXAddress(wire string) (EXAddress, error) {
-	return FT710.ParseEXAddress(wire)
-}
-
-// EXItems returns a fresh copy of the full inventory, sorted by (P1,P2,P3),
-// with exactly 296 items. Callers may freely mutate the returned slice; it
-// never aliases the package's own data.
-//
-// Migration scaffold: delegates to FT710; removed in Task 55.
-func EXItems() []EXItem {
-	return FT710.EXItems()
-}
-
-// EXAddresses returns a fresh copy of every inventory address, sorted by
-// (P1,P2,P3). Callers may freely mutate the returned slice.
-//
-// Migration scaffold: delegates to FT710; removed in Task 55.
-func EXAddresses() []EXAddress {
-	return FT710.EXAddresses()
 }

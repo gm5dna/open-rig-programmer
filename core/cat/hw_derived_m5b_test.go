@@ -69,7 +69,7 @@ func TestBuildMWSet_HWDerived_M5b_Accepted(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			cmd, err := BuildMWSet(tc.m)
+			cmd, err := FT710.BuildMWSet(tc.m)
 			if err != nil {
 				t.Fatalf("BuildMWSet(%+v): unexpected error: %v", tc.m, err)
 			}
@@ -137,7 +137,7 @@ func TestBuildMWSet_HWDerived_M5b_Rejected(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := BuildMWSet(tc.m); err == nil {
+			if _, err := FT710.BuildMWSet(tc.m); err == nil {
 				t.Fatalf("BuildMWSet(%+v): want error (HW-CONFIRMED rejected), got success", tc.m)
 			}
 		})
@@ -158,7 +158,7 @@ func TestAllowedCommand_HWDerived_M5b_RejectsSameFrames(t *testing.T) {
 	}
 	for _, frame := range tests {
 		t.Run(frame, func(t *testing.T) {
-			if AllowedCommand([]byte(frame)) {
+			if FT710.AllowedCommand([]byte(frame)) {
 				t.Errorf("AllowedCommand(%q) = true, want false (HW-CONFIRMED rejected)", frame)
 			}
 		})
@@ -174,7 +174,7 @@ func TestAllowedCommand_HWDerived_M5b_AcceptsSameFrames(t *testing.T) {
 	}
 	for _, frame := range tests {
 		t.Run(frame, func(t *testing.T) {
-			if !AllowedCommand([]byte(frame)) {
+			if !FT710.AllowedCommand([]byte(frame)) {
 				t.Errorf("AllowedCommand(%q) = false, want true (HW-CONFIRMED accepted)", frame)
 			}
 		})
@@ -194,7 +194,7 @@ func TestAllowedCommand_HWDerived_M5b_AcceptsSameFrames(t *testing.T) {
 // vector this exact frame's decoded fields feed).
 func TestParseMRAnswer_HWDerived_M5b_P1L(t *testing.T) {
 	frame := "MRP1L007100000+000000110000;"
-	got, err := ParseMRAnswer([]byte(frame))
+	got, err := FT710.ParseMRAnswer([]byte(frame))
 	if err != nil {
 		t.Fatalf("ParseMRAnswer(%q): unexpected error: %v", frame, err)
 	}
@@ -248,7 +248,7 @@ func TestBuildMTSet_HWDerived_M5b_TagSetAndClear(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			cmd, err := BuildMTSet(tc.slot, false, tc.tag)
+			cmd, err := FT710.BuildMTSet(tc.slot, false, tc.tag)
 			if err != nil {
 				t.Fatalf("BuildMTSet(%q, false, %q): unexpected error: %v", tc.slot.Wire(), tc.tag, err)
 			}
@@ -270,7 +270,7 @@ func TestBuildMTSet_HWDerived_M5b_TagSetAndClear(t *testing.T) {
 // exact frame the write path used to send for Tag == "", which made
 // every tag-clear write abort against the real radio.
 func TestBuildMTSet_HWDerived_ZeroByteFormNeverEmitted(t *testing.T) {
-	cmd, err := BuildMTSet(mustMemorySlot(t, 96), false, "")
+	cmd, err := FT710.BuildMTSet(mustMemorySlot(t, 96), false, "")
 	if err != nil {
 		t.Fatalf("BuildMTSet(096, false, \"\"): unexpected error: %v", err)
 	}
@@ -302,7 +302,7 @@ func TestBuildMWSet_HWDerived_M5b_Batch9_HighNibbleMode(t *testing.T) {
 		CTCSS:  CTCSSOff,
 		Shift:  ShiftSimplex,
 	}
-	cmd, err := BuildMWSet(m)
+	cmd, err := FT710.BuildMWSet(m)
 	if err != nil {
 		t.Fatalf("BuildMWSet(%+v): unexpected error: %v", m, err)
 	}
@@ -348,7 +348,7 @@ func TestBuildMTSet_HWDerived_M5b_Batch9_TagBoundariesAndPMS(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			cmd, err := BuildMTSet(tc.slot, tc.display, tc.tag)
+			cmd, err := FT710.BuildMTSet(tc.slot, tc.display, tc.tag)
 			if err != nil {
 				t.Fatalf("BuildMTSet(%q, %v, %q): unexpected error: %v", tc.slot.Wire(), tc.display, tc.tag, err)
 			}

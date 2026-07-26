@@ -22,14 +22,6 @@ func (d Dialect) BuildAISet(on bool) Command {
 	return newCommand([]byte("AI0;"))
 }
 
-// BuildAISet builds the Auto Information (AI) set frame. Golden vector G2:
-// on=false -> "AI0;".
-//
-// Migration scaffold: delegates to FT710; removed in Task 55.
-func BuildAISet(on bool) Command {
-	return FT710.BuildAISet(on)
-}
-
 // ParseAIAnswer parses an AI Set or Answer frame ("AI" + '0'/'1' + ";")
 // and reports whether Auto Information is on. It enforces exact length,
 // prefix, terminator, and that the state byte is exactly '0' or '1'.
@@ -56,12 +48,4 @@ func (d Dialect) ParseAIAnswer(frame []byte) (on bool, err error) {
 	default:
 		return false, newParseError(frame, "AI state byte must be '0' or '1'")
 	}
-}
-
-// ParseAIAnswer parses an AI Set or Answer frame and reports whether Auto
-// Information is on.
-//
-// Migration scaffold: delegates to FT710; removed in Task 55.
-func ParseAIAnswer(frame []byte) (on bool, err error) {
-	return FT710.ParseAIAnswer(frame)
 }

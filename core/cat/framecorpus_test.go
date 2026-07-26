@@ -33,14 +33,14 @@ func corpusSlots(t *testing.T) []corpusSlot {
 		return s
 	}
 	return []corpusSlot{
-		{"mem001", must(MemorySlot(1))},
-		{"mem050", must(MemorySlot(50))},
-		{"mem099", must(MemorySlot(99))},
-		{"pms1L", must(PMSSlot(1, false))},
-		{"pms9U", must(PMSSlot(9, true))},
-		{"sixty501", must(SixtyMSlot(1))},
-		{"sixty599", must(SixtyMSlot(99))},
-		{"emg", EMGSlot()},
+		{"mem001", must(FT710.MemorySlot(1))},
+		{"mem050", must(FT710.MemorySlot(50))},
+		{"mem099", must(FT710.MemorySlot(99))},
+		{"pms1L", must(FT710.PMSSlot(1, false))},
+		{"pms9U", must(FT710.PMSSlot(9, true))},
+		{"sixty501", must(FT710.SixtyMSlot(1))},
+		{"sixty599", must(FT710.SixtyMSlot(99))},
+		{"emg", FT710.EMGSlot()},
 	}
 }
 
@@ -144,30 +144,30 @@ func buildFrameCorpus(t *testing.T) []string {
 	var out []string
 	emit := func(label, frame string) { out = append(out, label+"\t"+frame) }
 
-	emit("ID.read", string(BuildIDRead().Bytes()))
-	emit("AI.set.on", string(BuildAISet(true).Bytes()))
-	emit("AI.set.off", string(BuildAISet(false).Bytes()))
-	emit("MC.read", string(BuildMCRead().Bytes()))
+	emit("ID.read", string(FT710.BuildIDRead().Bytes()))
+	emit("AI.set.on", string(FT710.BuildAISet(true).Bytes()))
+	emit("AI.set.off", string(FT710.BuildAISet(false).Bytes()))
+	emit("MC.read", string(FT710.BuildMCRead().Bytes()))
 
 	for _, sc := range corpusSlots(t) {
-		recordOrReject(t, &out, "MR.read."+sc.label, func() (Command, error) { return BuildMRRead(sc.slot) })
-		recordOrReject(t, &out, "MT.read."+sc.label, func() (Command, error) { return BuildMTRead(sc.slot) })
-		recordOrReject(t, &out, "MC.set."+sc.label, func() (Command, error) { return BuildMCSet(sc.slot) })
-		recordOrReject(t, &out, "MT.set.tag."+sc.label, func() (Command, error) { return BuildMTSet(sc.slot, true, "TAG") })
-		recordOrReject(t, &out, "MT.set.clear."+sc.label, func() (Command, error) { return BuildMTSet(sc.slot, false, "") })
-		recordOrReject(t, &out, "MW.set."+sc.label, func() (Command, error) { return BuildMWSet(corpusMemoryData(sc.slot)) })
-		recordOrReject(t, &out, "MW.set.variant."+sc.label, func() (Command, error) { return BuildMWSet(corpusMemoryDataVariant(sc.slot)) })
+		recordOrReject(t, &out, "MR.read."+sc.label, func() (Command, error) { return FT710.BuildMRRead(sc.slot) })
+		recordOrReject(t, &out, "MT.read."+sc.label, func() (Command, error) { return FT710.BuildMTRead(sc.slot) })
+		recordOrReject(t, &out, "MC.set."+sc.label, func() (Command, error) { return FT710.BuildMCSet(sc.slot) })
+		recordOrReject(t, &out, "MT.set.tag."+sc.label, func() (Command, error) { return FT710.BuildMTSet(sc.slot, true, "TAG") })
+		recordOrReject(t, &out, "MT.set.clear."+sc.label, func() (Command, error) { return FT710.BuildMTSet(sc.slot, false, "") })
+		recordOrReject(t, &out, "MW.set."+sc.label, func() (Command, error) { return FT710.BuildMWSet(corpusMemoryData(sc.slot)) })
+		recordOrReject(t, &out, "MW.set.variant."+sc.label, func() (Command, error) { return FT710.BuildMWSet(corpusMemoryDataVariant(sc.slot)) })
 	}
 
-	for _, a := range EXAddresses() {
-		recordOrReject(t, &out, "EX.read."+a.Wire(), func() (Command, error) { return BuildEXRead(a) })
+	for _, a := range FT710.EXAddresses() {
+		recordOrReject(t, &out, "EX.read."+a.Wire(), func() (Command, error) { return FT710.BuildEXRead(a) })
 	}
 
 	// The zero-value EXAddress is not a Table 2 member: exercises
 	// BuildEXRead's KnownEXAddress guard (ex.go), previously untested here
 	// because the EXAddresses() loop above only ever supplies real
 	// members, so all 296 always succeeded (fix-round finding I6).
-	recordOrReject(t, &out, "EX.read.invalid", func() (Command, error) { return BuildEXRead(EXAddress{}) })
+	recordOrReject(t, &out, "EX.read.invalid", func() (Command, error) { return FT710.BuildEXRead(EXAddress{}) })
 
 	return out
 }

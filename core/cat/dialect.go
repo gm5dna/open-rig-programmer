@@ -127,6 +127,22 @@ func (d Dialect) EXAddresses() []EXAddress {
 // KnownEXAddress reports whether a is in THIS dialect's inventory.
 // MEMBERSHIP, never a numeric range: Table 2 is sparse and its P1 groups
 // are not contiguous.
+//
+// P1 ANOMALY — evidence at M8c (24/07/2026), FT710-specific: the EX
+// grammar block (manual extract line ~629) says "P1: 01 - 04, 05", yet
+// Table 2 names four groups at P1 01-04 plus EXTENSION SETTING at P1=06
+// (manual extract line ~904) and none at P1=05. FT710's inventory follows
+// Table 2: it holds members at P1 in {1,2,3,4,6} and none at 5. A real
+// radio then rejected both probed P1=05 addresses (EX050101, EX050505)
+// with "?;" — consistent with Table 2 being right and the grammar note's
+// "05" being a typo, on two samples rather than a survey of the P1=05
+// space (docs/hardware-notes.md). It is deliberately NOT in
+// table2-corrections.csv: that artefact records corrections the manual
+// needs, and two samples do not establish one. The transcription in
+// table2.csv still records the manual as found, as its own provenance
+// requires, and membership behaviour is unchanged by the finding — the
+// evidence is consistent with the reading this inventory already had
+// rather than prompting a change to it.
 func (d Dialect) KnownEXAddress(a EXAddress) bool { return d.exMembers[a] }
 
 // pmsCap returns this dialect's PMS pair count, clamped to 9. The wire

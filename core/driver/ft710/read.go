@@ -152,12 +152,12 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 	s.opMu.Lock()
 	defer s.opMu.Unlock()
 
-	sl, err := cat.ParseSlot(slot)
+	sl, err := cat.FT710.ParseSlot(slot)
 	if err != nil {
 		return codeplug.Channel{}, fmt.Errorf("ft710: ReadChannel: %w", err)
 	}
 
-	mrCmd, err := cat.BuildMRRead(sl)
+	mrCmd, err := cat.FT710.BuildMRRead(sl)
 	if err != nil {
 		// e.g. the answer-only "000" placeholder: grammatical per
 		// ParseSlot, but never a legal read target.
@@ -173,7 +173,7 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 		return codeplug.Channel{}, fmt.Errorf("ft710: ReadChannel %s: MR: %w", sl.Wire(), err)
 	}
 
-	m, err := cat.ParseMRAnswer(frame)
+	m, err := cat.FT710.ParseMRAnswer(frame)
 	if err != nil {
 		return codeplug.Channel{}, fmt.Errorf("ft710: ReadChannel %s: %w", sl.Wire(), err)
 	}
@@ -191,7 +191,7 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 	// Tag + display via MT. fakeradio (register item 4) answers MT for
 	// ANY grammatical slot, populated or not, so after a successful MR a
 	// rejection here is a genuine error, not an empty-slot signal.
-	mtCmd, err := cat.BuildMTRead(sl)
+	mtCmd, err := cat.FT710.BuildMTRead(sl)
 	if err != nil {
 		return codeplug.Channel{}, fmt.Errorf("ft710: ReadChannel %s: %w", sl.Wire(), err)
 	}
@@ -199,7 +199,7 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 	if err != nil {
 		return codeplug.Channel{}, fmt.Errorf("ft710: ReadChannel %s: MT: %w", sl.Wire(), err)
 	}
-	tslot, display, tag, err := cat.ParseMTAnswer(tframe)
+	tslot, display, tag, err := cat.FT710.ParseMTAnswer(tframe)
 	if err != nil {
 		return codeplug.Channel{}, fmt.Errorf("ft710: ReadChannel %s: %w", sl.Wire(), err)
 	}

@@ -10,11 +10,11 @@ import (
 // --- BuildMCSet: golden vector G11 ---
 
 func TestBuildMCSet_G11(t *testing.T) {
-	s, err := MemorySlot(99)
+	s, err := FT710.MemorySlot(99)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd, err := BuildMCSet(s)
+	cmd, err := FT710.BuildMCSet(s)
 	if err != nil {
 		t.Fatalf("BuildMCSet: unexpected error: %v", err)
 	}
@@ -29,16 +29,16 @@ func TestBuildMCSet_G11(t *testing.T) {
 // allows 5xx and EMG per the reference's slot table ("MC set" column: ✓
 // for both).
 func TestBuildMCSet_AllowsWiderSlotSetThanMW(t *testing.T) {
-	sixtyM, err := SixtyMSlot(1)
+	sixtyM, err := FT710.SixtyMSlot(1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cmd, err := BuildMCSet(sixtyM); err != nil {
+	if cmd, err := FT710.BuildMCSet(sixtyM); err != nil {
 		t.Errorf("BuildMCSet(5xx): unexpected error: %v", err)
 	} else if got, want := cmd.Bytes(), "MC501;"; string(got) != want {
 		t.Errorf("BuildMCSet(5xx) = %q, want %q", got, want)
 	}
-	if cmd, err := BuildMCSet(EMGSlot()); err != nil {
+	if cmd, err := FT710.BuildMCSet(FT710.EMGSlot()); err != nil {
 		t.Errorf("BuildMCSet(EMG): unexpected error: %v", err)
 	} else if got, want := cmd.Bytes(), "MCEMG;"; string(got) != want {
 		t.Errorf("BuildMCSet(EMG) = %q, want %q", got, want)
@@ -46,11 +46,11 @@ func TestBuildMCSet_AllowsWiderSlotSetThanMW(t *testing.T) {
 }
 
 func TestBuildMCSet_RejectsNoneAnd000(t *testing.T) {
-	none, err := ParseSlot("000")
+	none, err := FT710.ParseSlot("000")
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = BuildMCSet(none)
+	_, err = FT710.BuildMCSet(none)
 	if err == nil {
 		t.Fatal("BuildMCSet(\"000\"): want error, reference MC set column: ✗")
 	}
@@ -61,7 +61,7 @@ func TestBuildMCSet_RejectsNoneAnd000(t *testing.T) {
 }
 
 func TestBuildMCSet_RejectsZeroValueSlot(t *testing.T) {
-	if _, err := BuildMCSet(Slot{}); err == nil {
+	if _, err := FT710.BuildMCSet(Slot{}); err == nil {
 		t.Fatal("BuildMCSet(Slot{}): want error")
 	}
 }
@@ -69,7 +69,7 @@ func TestBuildMCSet_RejectsZeroValueSlot(t *testing.T) {
 // --- BuildMCRead ---
 
 func TestBuildMCRead(t *testing.T) {
-	got := BuildMCRead().Bytes()
+	got := FT710.BuildMCRead().Bytes()
 	want := "MC;"
 	if string(got) != want {
 		t.Errorf("BuildMCRead() = %q, want %q", got, want)
@@ -79,32 +79,32 @@ func TestBuildMCRead(t *testing.T) {
 // --- ParseMCAnswer: golden vector G11's shape (Answer mirrors Set) ---
 
 func TestParseMCAnswer_G11(t *testing.T) {
-	got, err := ParseMCAnswer([]byte("MC099;"))
+	got, err := FT710.ParseMCAnswer([]byte("MC099;"))
 	if err != nil {
 		t.Fatalf("ParseMCAnswer: unexpected error: %v", err)
 	}
-	want, _ := MemorySlot(99)
+	want, _ := FT710.MemorySlot(99)
 	if got != want {
 		t.Errorf("ParseMCAnswer(%q) = %q, want %q", "MC099;", got.Wire(), want.Wire())
 	}
 }
 
 func TestParseMCAnswer_Allows5xxAndEMG(t *testing.T) {
-	got, err := ParseMCAnswer([]byte("MC501;"))
+	got, err := FT710.ParseMCAnswer([]byte("MC501;"))
 	if err != nil {
 		t.Fatalf("ParseMCAnswer(5xx): unexpected error: %v", err)
 	}
-	want, _ := SixtyMSlot(1)
+	want, _ := FT710.SixtyMSlot(1)
 	if got != want {
 		t.Errorf("ParseMCAnswer(5xx) = %q, want %q", got.Wire(), want.Wire())
 	}
 
-	got, err = ParseMCAnswer([]byte("MCEMG;"))
+	got, err = FT710.ParseMCAnswer([]byte("MCEMG;"))
 	if err != nil {
 		t.Fatalf("ParseMCAnswer(EMG): unexpected error: %v", err)
 	}
-	if got != EMGSlot() {
-		t.Errorf("ParseMCAnswer(EMG) = %q, want %q", got.Wire(), EMGSlot().Wire())
+	if got != FT710.EMGSlot() {
+		t.Errorf("ParseMCAnswer(EMG) = %q, want %q", got.Wire(), FT710.EMGSlot().Wire())
 	}
 }
 
@@ -125,7 +125,7 @@ func TestParseMCAnswer_RejectTable(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := ParseMCAnswer([]byte(tc.frame))
+			_, err := FT710.ParseMCAnswer([]byte(tc.frame))
 			if err == nil {
 				t.Fatalf("ParseMCAnswer(%q): want error, got none", tc.frame)
 			}
@@ -155,7 +155,7 @@ func FuzzParseMCAnswer(f *testing.F) {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, frame []byte) {
-		got, err := ParseMCAnswer(frame)
+		got, err := FT710.ParseMCAnswer(frame)
 		if err != nil {
 			var pe *ParseError
 			if !errors.As(err, &pe) {

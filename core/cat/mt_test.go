@@ -10,11 +10,11 @@ import (
 // --- BuildMTSet: golden vectors G8, G9 ---
 
 func TestBuildMTSet_G8(t *testing.T) {
-	s, err := MemorySlot(1)
+	s, err := FT710.MemorySlot(1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd, err := BuildMTSet(s, true, "CALLING FREQ")
+	cmd, err := FT710.BuildMTSet(s, true, "CALLING FREQ")
 	if err != nil {
 		t.Fatalf("BuildMTSet: unexpected error: %v", err)
 	}
@@ -29,11 +29,11 @@ func TestBuildMTSet_G8(t *testing.T) {
 }
 
 func TestBuildMTSet_G9(t *testing.T) {
-	s, err := MemorySlot(5)
+	s, err := FT710.MemorySlot(5)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd, err := BuildMTSet(s, false, "40M")
+	cmd, err := FT710.BuildMTSet(s, false, "40M")
 	if err != nil {
 		t.Fatalf("BuildMTSet: unexpected error: %v", err)
 	}
@@ -54,11 +54,11 @@ func TestBuildMTSet_G9(t *testing.T) {
 // TestBuildMTSet_HWDerived_ZeroByteFormNeverEmitted
 // (hw_derived_m5b_test.go) for the paired HW-derived vector.
 func TestBuildMTSet_EmptyTagEmitsClearForm(t *testing.T) {
-	s, err := MemorySlot(1)
+	s, err := FT710.MemorySlot(1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd, err := BuildMTSet(s, true, "")
+	cmd, err := FT710.BuildMTSet(s, true, "")
 	if err != nil {
 		t.Fatalf("BuildMTSet with empty tag: unexpected error: %v", err)
 	}
@@ -79,11 +79,11 @@ func TestBuildMTSet_EmptyTagEmitsClearForm(t *testing.T) {
 // 13/07/2026 production write, whose unpadded "PROD TEST" MT-set was
 // accepted on the wire).
 func TestBuildMTSet_NonEmptyTagsStayUnpadded(t *testing.T) {
-	s, err := MemorySlot(1)
+	s, err := FT710.MemorySlot(1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd, err := BuildMTSet(s, false, "X")
+	cmd, err := FT710.BuildMTSet(s, false, "X")
 	if err != nil {
 		t.Fatalf("BuildMTSet: unexpected error: %v", err)
 	}
@@ -93,11 +93,11 @@ func TestBuildMTSet_NonEmptyTagsStayUnpadded(t *testing.T) {
 }
 
 func TestBuildMTSet_AllowsPMSSlot(t *testing.T) {
-	s, err := PMSSlot(1, true)
+	s, err := FT710.PMSSlot(1, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd, err := BuildMTSet(s, false, "TOP")
+	cmd, err := FT710.BuildMTSet(s, false, "TOP")
 	if err != nil {
 		t.Fatalf("BuildMTSet(PMS): unexpected error: %v", err)
 	}
@@ -114,15 +114,15 @@ func TestBuildMTSet_AllowsPMSSlot(t *testing.T) {
 // rune ('é'), a 13-byte ASCII tag, and a tag that is 12 runes but 13
 // bytes. Also: policy-reject of 5xx/EMG slots, and "000".
 func TestBuildMTSet_RejectTable(t *testing.T) {
-	memSlot, err := MemorySlot(1)
+	memSlot, err := FT710.MemorySlot(1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sixtyM, err := SixtyMSlot(1)
+	sixtyM, err := FT710.SixtyMSlot(1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	noneSlot, err := ParseSlot("000")
+	noneSlot, err := FT710.ParseSlot("000")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,12 +142,12 @@ func TestBuildMTSet_RejectTable(t *testing.T) {
 		{"tag 13 ASCII chars: exceeds 12-byte max", memSlot, "ABCDEFGHIJKLM"},
 		{"tag 12 runes but 13 bytes (multi-byte rune)", memSlot, "ABCDEFGHIJKé"}, // 11 ASCII + é (2 bytes) = 12 runes, 13 bytes
 		{"slot 5xx rejected: project policy pending M5a", sixtyM, "40M"},
-		{"slot EMG rejected: project policy pending M5a", EMGSlot(), "EMG"},
+		{"slot EMG rejected: project policy pending M5a", FT710.EMGSlot(), "EMG"},
 		{"slot 000 rejected: reference MT column ✗", noneSlot, "VFO"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			out, err := BuildMTSet(tc.slot, true, tc.tag)
+			out, err := FT710.BuildMTSet(tc.slot, true, tc.tag)
 			if err == nil {
 				t.Fatalf("BuildMTSet(%q, true, %q): want error, got %q", tc.slot.Wire(), tc.tag, out.Bytes())
 			}
@@ -169,45 +169,45 @@ func TestBuildMTSet_ByteLengthNotRuneCount(t *testing.T) {
 	if n := len(tag); n != 13 {
 		t.Fatalf("test tag has %d bytes, want 13 (fix the fixture)", n)
 	}
-	s, err := MemorySlot(1)
+	s, err := FT710.MemorySlot(1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := BuildMTSet(s, true, tag); err == nil {
+	if _, err := FT710.BuildMTSet(s, true, tag); err == nil {
 		t.Fatal("BuildMTSet: 12-rune/13-byte tag must be rejected on byte length")
 	}
 }
 
 func TestBuildMTSet_AcceptsExactly12Bytes(t *testing.T) {
-	s, err := MemorySlot(1)
+	s, err := FT710.MemorySlot(1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tag := "ABCDEFGHIJKL" // exactly 12 bytes
-	if _, err := BuildMTSet(s, true, tag); err != nil {
+	if _, err := FT710.BuildMTSet(s, true, tag); err != nil {
 		t.Errorf("BuildMTSet(12-byte tag): unexpected error: %v", err)
 	}
 }
 
 func TestBuildMTSet_AcceptsBoundaryPrintableBytes(t *testing.T) {
-	s, err := MemorySlot(1)
+	s, err := FT710.MemorySlot(1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// 0x20 (space) and 0x7E ('~') are the inclusive charset boundaries.
 	tag := "\x20\x7E"
-	if _, err := BuildMTSet(s, true, tag); err != nil {
+	if _, err := FT710.BuildMTSet(s, true, tag); err != nil {
 		t.Errorf("BuildMTSet(boundary bytes 0x20,0x7E): unexpected error: %v", err)
 	}
 }
 
 func TestBuildMTSet_RejectsJustOutsideBoundary(t *testing.T) {
-	s, err := MemorySlot(1)
+	s, err := FT710.MemorySlot(1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, b := range []byte{0x1F, 0x7F} {
-		if _, err := BuildMTSet(s, true, string(b)); err == nil {
+		if _, err := FT710.BuildMTSet(s, true, string(b)); err == nil {
 			t.Errorf("BuildMTSet(tag=%#02x): want error (just outside 0x20-0x7E)", b)
 		}
 	}
@@ -216,11 +216,11 @@ func TestBuildMTSet_RejectsJustOutsideBoundary(t *testing.T) {
 // --- BuildMTRead: golden vector G10 ---
 
 func TestBuildMTRead_G10(t *testing.T) {
-	s, err := MemorySlot(1)
+	s, err := FT710.MemorySlot(1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd, err := BuildMTRead(s)
+	cmd, err := FT710.BuildMTRead(s)
 	if err != nil {
 		t.Fatalf("BuildMTRead: unexpected error: %v", err)
 	}
@@ -232,36 +232,36 @@ func TestBuildMTRead_G10(t *testing.T) {
 }
 
 func TestBuildMTRead_Allows5xxAndEMG(t *testing.T) {
-	sixtyM, err := SixtyMSlot(1)
+	sixtyM, err := FT710.SixtyMSlot(1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := BuildMTRead(sixtyM); err != nil {
+	if _, err := FT710.BuildMTRead(sixtyM); err != nil {
 		t.Errorf("BuildMTRead(5xx): unexpected error: %v (reads have no write-direction hardware concern)", err)
 	}
-	if _, err := BuildMTRead(EMGSlot()); err != nil {
+	if _, err := FT710.BuildMTRead(FT710.EMGSlot()); err != nil {
 		t.Errorf("BuildMTRead(EMG): unexpected error: %v", err)
 	}
 }
 
 func TestBuildMTRead_RejectsNone(t *testing.T) {
-	none, err := ParseSlot("000")
+	none, err := FT710.ParseSlot("000")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := BuildMTRead(none); err == nil {
+	if _, err := FT710.BuildMTRead(none); err == nil {
 		t.Fatal("BuildMTRead(\"000\"): want error, reference MT column: ✗")
 	}
 }
 
 func TestBuildMTSet_RejectsZeroValueSlot(t *testing.T) {
-	if _, err := BuildMTSet(Slot{}, true, "40M"); err == nil {
+	if _, err := FT710.BuildMTSet(Slot{}, true, "40M"); err == nil {
 		t.Fatal("BuildMTSet(Slot{}): want error for uninitialised/invalid slot")
 	}
 }
 
 func TestBuildMTRead_RejectsZeroValueSlot(t *testing.T) {
-	if _, err := BuildMTRead(Slot{}); err == nil {
+	if _, err := FT710.BuildMTRead(Slot{}); err == nil {
 		t.Fatal("BuildMTRead(Slot{}): want error for uninitialised/invalid slot")
 	}
 }
@@ -269,33 +269,33 @@ func TestBuildMTRead_RejectsZeroValueSlot(t *testing.T) {
 // --- ParseMTAnswer: golden vectors G8, G9; round-trips with BuildMTSet ---
 
 func TestParseMTAnswer_G8(t *testing.T) {
-	slot, display, tag, err := ParseMTAnswer([]byte("MT0011CALLING FREQ;"))
+	slot, display, tag, err := FT710.ParseMTAnswer([]byte("MT0011CALLING FREQ;"))
 	if err != nil {
 		t.Fatalf("ParseMTAnswer: unexpected error: %v", err)
 	}
-	wantSlot, _ := MemorySlot(1)
+	wantSlot, _ := FT710.MemorySlot(1)
 	if slot != wantSlot || !display || tag != "CALLING FREQ" {
 		t.Errorf("ParseMTAnswer(G8) = (%q,%v,%q), want (%q,true,%q)", slot.Wire(), display, tag, wantSlot.Wire(), "CALLING FREQ")
 	}
 }
 
 func TestParseMTAnswer_G9(t *testing.T) {
-	slot, display, tag, err := ParseMTAnswer([]byte("MT005040M;"))
+	slot, display, tag, err := FT710.ParseMTAnswer([]byte("MT005040M;"))
 	if err != nil {
 		t.Fatalf("ParseMTAnswer: unexpected error: %v", err)
 	}
-	wantSlot, _ := MemorySlot(5)
+	wantSlot, _ := FT710.MemorySlot(5)
 	if slot != wantSlot || display || tag != "40M" {
 		t.Errorf("ParseMTAnswer(G9) = (%q,%v,%q), want (%q,false,%q)", slot.Wire(), display, tag, wantSlot.Wire(), "40M")
 	}
 }
 
 func TestParseMTAnswer_EmptyTag(t *testing.T) {
-	slot, display, tag, err := ParseMTAnswer([]byte("MT0011;"))
+	slot, display, tag, err := FT710.ParseMTAnswer([]byte("MT0011;"))
 	if err != nil {
 		t.Fatalf("ParseMTAnswer: unexpected error: %v", err)
 	}
-	wantSlot, _ := MemorySlot(1)
+	wantSlot, _ := FT710.MemorySlot(1)
 	if slot != wantSlot || !display || tag != "" {
 		t.Errorf("ParseMTAnswer(empty tag) = (%q,%v,%q), want (%q,true,\"\")", slot.Wire(), display, tag, wantSlot.Wire())
 	}
@@ -316,7 +316,7 @@ func TestParseMTAnswer_EmptyTag(t *testing.T) {
 // (hw_derived_test.go).
 func TestParseMTAnswer_TrimsTrailingSpaces(t *testing.T) {
 	frame := "MT0011AB          ;" // "AB" + 10 trailing spaces = 12 bytes
-	_, _, tag, err := ParseMTAnswer([]byte(frame))
+	_, _, tag, err := FT710.ParseMTAnswer([]byte(frame))
 	if err != nil {
 		t.Fatalf("ParseMTAnswer: unexpected error: %v", err)
 	}
@@ -332,7 +332,7 @@ func TestParseMTAnswer_TrimsTrailingSpaces(t *testing.T) {
 // not a 12-space string.
 func TestParseMTAnswer_AllSpacesTagTrimsToEmpty(t *testing.T) {
 	frame := "MT0010            ;" // 12 spaces
-	_, _, tag, err := ParseMTAnswer([]byte(frame))
+	_, _, tag, err := FT710.ParseMTAnswer([]byte(frame))
 	if err != nil {
 		t.Fatalf("ParseMTAnswer: unexpected error: %v", err)
 	}
@@ -347,11 +347,11 @@ func TestParseMTAnswer_AllSpacesTagTrimsToEmpty(t *testing.T) {
 // model-level value, so a byte-equality compare (as clone's write-verify
 // does) never manufactures a false mismatch out of padding alone.
 func TestParseMTAnswer_PaddedAndUnpaddedTagsCompareEqualPostNormalisation(t *testing.T) {
-	_, _, padded, err := ParseMTAnswer([]byte("MT0011PROD TEST   ;")) // radio's padded read-back
+	_, _, padded, err := FT710.ParseMTAnswer([]byte("MT0011PROD TEST   ;")) // radio's padded read-back
 	if err != nil {
 		t.Fatalf("ParseMTAnswer(padded): unexpected error: %v", err)
 	}
-	_, _, unpadded, err := ParseMTAnswer([]byte("MT0011PROD TEST;")) // caller's unpadded candidate, itself parsed
+	_, _, unpadded, err := FT710.ParseMTAnswer([]byte("MT0011PROD TEST;")) // caller's unpadded candidate, itself parsed
 	if err != nil {
 		t.Fatalf("ParseMTAnswer(unpadded): unexpected error: %v", err)
 	}
@@ -380,7 +380,7 @@ func TestParseMTAnswer_RejectTable(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, _, err := ParseMTAnswer([]byte(tc.frame))
+			_, _, _, err := FT710.ParseMTAnswer([]byte(tc.frame))
 			if err == nil {
 				t.Fatalf("ParseMTAnswer(%q): want error, got none", tc.frame)
 			}
@@ -405,7 +405,7 @@ func TestParseMTAnswer_LenientOnTagCharset(t *testing.T) {
 	// frame's SHAPE (length, prefix, slot, display digit, terminator) is
 	// still exactly valid.
 	frame := "MT0011AB\x00CD;" // 4-byte tag body, mid-tag NUL
-	_, _, tag, err := ParseMTAnswer([]byte(frame))
+	_, _, tag, err := FT710.ParseMTAnswer([]byte(frame))
 	if err != nil {
 		t.Fatalf("ParseMTAnswer(%q): unexpected error: %v (charset enforcement is BUILD-only)", frame, err)
 	}
@@ -429,12 +429,12 @@ func TestBuildMTSet_ParseMTAnswer_RoundTrip(t *testing.T) {
 		{mustPMSSlot(t, 1, true), false, "TOP"},
 	}
 	for _, tc := range tests {
-		cmd, err := BuildMTSet(tc.slot, tc.display, tc.tag)
+		cmd, err := FT710.BuildMTSet(tc.slot, tc.display, tc.tag)
 		if err != nil {
 			t.Fatalf("BuildMTSet(%q,%v,%q): unexpected error: %v", tc.slot.Wire(), tc.display, tc.tag, err)
 		}
 		built := cmd.Bytes()
-		gotSlot, gotDisplay, gotTag, err := ParseMTAnswer(built)
+		gotSlot, gotDisplay, gotTag, err := FT710.ParseMTAnswer(built)
 		if err != nil {
 			t.Fatalf("ParseMTAnswer(%q): unexpected error: %v", built, err)
 		}
@@ -447,7 +447,7 @@ func TestBuildMTSet_ParseMTAnswer_RoundTrip(t *testing.T) {
 
 func mustMemorySlot(t *testing.T, n int) Slot {
 	t.Helper()
-	s, err := MemorySlot(n)
+	s, err := FT710.MemorySlot(n)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -456,7 +456,7 @@ func mustMemorySlot(t *testing.T, n int) Slot {
 
 func mustPMSSlot(t *testing.T, pair int, upper bool) Slot {
 	t.Helper()
-	s, err := PMSSlot(pair, upper)
+	s, err := FT710.PMSSlot(pair, upper)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -483,7 +483,7 @@ func FuzzParseMTAnswer(f *testing.F) {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, frame []byte) {
-		slot, _, tag, err := ParseMTAnswer(frame)
+		slot, _, tag, err := FT710.ParseMTAnswer(frame)
 		if err != nil {
 			var pe *ParseError
 			if !errors.As(err, &pe) {
@@ -525,11 +525,11 @@ func FuzzBuildMTSet(f *testing.F) {
 		f.Add(s.slot, s.display, s.tag)
 	}
 	f.Fuzz(func(t *testing.T, slotWire string, display bool, tag string) {
-		slot, err := ParseSlot(slotWire)
+		slot, err := FT710.ParseSlot(slotWire)
 		if err != nil {
 			return // not a well-formed slot at all; nothing to exercise
 		}
-		cmd, err := BuildMTSet(slot, display, tag)
+		cmd, err := FT710.BuildMTSet(slot, display, tag)
 		if err != nil {
 			var pe *ParseError
 			if !errors.As(err, &pe) {
@@ -550,7 +550,7 @@ func FuzzBuildMTSet(f *testing.F) {
 		if count != 1 || out[len(out)-1] != ';' {
 			t.Fatalf("BuildMTSet(%q,%v,%q) = %q: want exactly one ';' at the end", slotWire, display, tag, out)
 		}
-		if !AllowedCommand(out) {
+		if !FT710.AllowedCommand(out) {
 			t.Fatalf("BuildMTSet(%q,%v,%q) = %q: AllowedCommand = false, want true", slotWire, display, tag, out)
 		}
 	})

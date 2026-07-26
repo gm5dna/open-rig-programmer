@@ -115,14 +115,6 @@ func (d Dialect) BuildMTSet(s Slot, display bool, tag string) (Command, error) {
 	return newCommand(frame), nil
 }
 
-// BuildMTSet builds an MT (memory channel tag) Set frame. Golden vectors
-// G8, G9.
-//
-// Migration scaffold: delegates to FT710; removed in Task 55.
-func BuildMTSet(s Slot, display bool, tag string) (Command, error) {
-	return FT710.BuildMTSet(s, display, tag)
-}
-
 // BuildMTRead builds an MT read request for slot s. Reference: "Read frame
 // (6 bytes): MT P0 P0 P0 ;", golden vector G10: "MT001;".
 //
@@ -142,14 +134,6 @@ func (d Dialect) BuildMTRead(s Slot) (Command, error) {
 	frame = append(frame, s.Wire()...)
 	frame = append(frame, ';')
 	return newCommand(frame), nil
-}
-
-// BuildMTRead builds an MT read request for slot s. Reference: "Read frame
-// (6 bytes): MT P0 P0 P0 ;", golden vector G10: "MT001;".
-//
-// Migration scaffold: delegates to FT710; removed in Task 55.
-func BuildMTRead(s Slot) (Command, error) {
-	return FT710.BuildMTRead(s)
 }
 
 // ParseMTAnswer strictly parses the SHAPE of an MT Set/Answer frame
@@ -216,12 +200,4 @@ func (d Dialect) ParseMTAnswer(frame []byte) (Slot, bool, string, error) {
 	}
 	tag := strings.TrimRight(string(frame[6:len(frame)-1]), " ")
 	return slot, display, tag, nil
-}
-
-// ParseMTAnswer strictly parses the SHAPE of an MT Set/Answer frame and
-// returns the slot, display flag and trailing-space-trimmed tag.
-//
-// Migration scaffold: delegates to FT710; removed in Task 55.
-func ParseMTAnswer(frame []byte) (Slot, bool, string, error) {
-	return FT710.ParseMTAnswer(frame)
 }

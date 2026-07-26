@@ -39,11 +39,11 @@ import "testing"
 // capability-level consequence.
 func TestParseMRAnswer_HWDerived_M06(t *testing.T) {
 	frame := "MR006029620000+000000411002;"
-	got, err := ParseMRAnswer([]byte(frame))
+	got, err := FT710.ParseMRAnswer([]byte(frame))
 	if err != nil {
 		t.Fatalf("ParseMRAnswer(%q): unexpected error: %v", frame, err)
 	}
-	wantSlot, _ := MemorySlot(6)
+	wantSlot, _ := FT710.MemorySlot(6)
 	want := MemoryData{
 		Slot:   wantSlot,
 		FreqHz: 29_620_000,
@@ -78,11 +78,11 @@ func TestParseMRAnswer_HWDerived_M06(t *testing.T) {
 // comment and mt_test.go's TestParseMTAnswer_TrimsTrailingSpaces).
 func TestParseMTAnswer_HWDerived_M06_ShortForm(t *testing.T) {
 	frame := "MT0061MYCALL      ;" // redacted: real tag was a 4-char callsign + 8 spaces
-	slot, display, tag, err := ParseMTAnswer([]byte(frame))
+	slot, display, tag, err := FT710.ParseMTAnswer([]byte(frame))
 	if err != nil {
 		t.Fatalf("ParseMTAnswer(%q): unexpected error: %v", frame, err)
 	}
-	wantSlot, _ := MemorySlot(6)
+	wantSlot, _ := FT710.MemorySlot(6)
 	wantTag := "MYCALL"
 	if slot != wantSlot || !display || tag != wantTag {
 		t.Errorf("ParseMTAnswer(%q) = (%q,%v,%q), want (%q,true,%q)", frame, slot.Wire(), display, tag, wantSlot.Wire(), wantTag)
@@ -98,11 +98,11 @@ func TestParseMTAnswer_HWDerived_M06_ShortForm(t *testing.T) {
 // remains open about MC's "000" answer case).
 func TestParseMCAnswer_HWDerived_M06(t *testing.T) {
 	frame := "MC006;"
-	got, err := ParseMCAnswer([]byte(frame))
+	got, err := FT710.ParseMCAnswer([]byte(frame))
 	if err != nil {
 		t.Fatalf("ParseMCAnswer(%q): unexpected error: %v", frame, err)
 	}
-	want, _ := MemorySlot(6)
+	want, _ := FT710.MemorySlot(6)
 	if got != want {
 		t.Errorf("ParseMCAnswer(%q) = %q, want %q", frame, got.Wire(), want.Wire())
 	}
@@ -113,7 +113,7 @@ func TestParseMCAnswer_HWDerived_M06(t *testing.T) {
 // hardware-derived confirmation that the radio's AI-off answer is
 // byte-identical to the documented one, not a new parse path.
 func TestParseAIAnswer_HWDerived(t *testing.T) {
-	on, err := ParseAIAnswer([]byte("AI0;"))
+	on, err := FT710.ParseAIAnswer([]byte("AI0;"))
 	if err != nil {
 		t.Fatalf("ParseAIAnswer: unexpected error: %v", err)
 	}

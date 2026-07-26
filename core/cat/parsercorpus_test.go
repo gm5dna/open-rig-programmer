@@ -46,23 +46,23 @@ func buildParserCorpus(t *testing.T) []string {
 	for _, in := range parserInputs() {
 		f := []byte(in.frame)
 
-		id, err := ParseIDAnswer(f)
+		id, err := FT710.ParseIDAnswer(f)
 		out = append(out, record("ParseIDAnswer."+in.label, id, err))
 
-		on, err := ParseAIAnswer(f)
+		on, err := FT710.ParseAIAnswer(f)
 		out = append(out, record("ParseAIAnswer."+in.label, fmt.Sprintf("%v", on), err))
 
-		slot, err := ParseMCAnswer(f)
+		slot, err := FT710.ParseMCAnswer(f)
 		out = append(out, record("ParseMCAnswer."+in.label, slotWire(slot), err))
 
-		s, disp, tag, err := ParseMTAnswer(f)
+		s, disp, tag, err := FT710.ParseMTAnswer(f)
 		out = append(out, record("ParseMTAnswer."+in.label, fmt.Sprintf("%s|%v|%q", slotWire(s), disp, tag), err))
 
-		md, err := ParseMRAnswer(f)
+		md, err := FT710.ParseMRAnswer(f)
 		out = append(out, record("ParseMRAnswer."+in.label, fmt.Sprintf("%s|%d|%c|%c|%v|%v|%c|%c",
 			slotWire(md.Slot), md.FreqHz, md.Mode.Wire(), md.Kind, md.RxClar, md.TxClar, md.CTCSS.Wire(), md.Shift.Wire()), err))
 
-		addr, raw, err := ParseEXAnswer(f)
+		addr, raw, err := FT710.ParseEXAnswer(f)
 		out = append(out, record("ParseEXAnswer."+in.label, fmt.Sprintf("%s|%q", addr.Wire(), raw), err))
 	}
 
@@ -74,7 +74,7 @@ func buildParserCorpus(t *testing.T) []string {
 	// CTCSS/Shift remap or a clarifier sign inversion must show up here
 	// (fix-round finding C1).
 	for _, gv := range goldenMRFramesForCorpus() {
-		md, err := ParseMRAnswer([]byte(gv.frame))
+		md, err := FT710.ParseMRAnswer([]byte(gv.frame))
 		out = append(out, record("ParseMRAnswer.golden."+gv.label,
 			fmt.Sprintf("%s|%d|%c|%c|%d|%v|%v|%c|%c",
 				slotWire(md.Slot), md.FreqHz, md.Mode.Wire(), md.Kind, md.ClarHz, md.RxClar, md.TxClar, md.CTCSS.Wire(), md.Shift.Wire()), err))
@@ -82,11 +82,11 @@ func buildParserCorpus(t *testing.T) []string {
 
 	// Membership rules, most at risk of being silently hardwired.
 	for _, w := range []string{"001", "099", "100", "P1L", "P9U", "P0L", "501", "599", "600", "EMG", "000", "00001", "abc"} {
-		s, err := ParseSlot(w)
+		s, err := FT710.ParseSlot(w)
 		out = append(out, record("ParseSlot."+w, slotWire(s), err))
 	}
 	for _, c := range []byte{'0', '1', '9', 'A', 'F', 'G', 'a', '!'} {
-		m, err := ParseMode(c)
+		m, err := FT710.ParseMode(c)
 		// Includes m.String() alongside the wire byte (fix-round finding
 		// I4): ParseMode(c).Wire() == c is nearly an identity function and
 		// on its own pins only the accept/reject boundary, carrying
@@ -107,7 +107,7 @@ func buildParserCorpus(t *testing.T) []string {
 		out = append(out, record(fmt.Sprintf("ParseCTCSSState.%c", c), string(cs.Wire()), err))
 	}
 	for _, w := range []string{"010101", "010321", "050101", "999999", "01010"} {
-		a, err := ParseEXAddress(w)
+		a, err := FT710.ParseEXAddress(w)
 		out = append(out, record("ParseEXAddress."+w, a.Wire(), err))
 	}
 

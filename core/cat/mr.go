@@ -34,15 +34,6 @@ func (d Dialect) BuildMRRead(s Slot) (Command, error) {
 	return newCommand(frame), nil
 }
 
-// BuildMRRead builds an MR (memory channel read) request for slot s.
-// Reference: "MR — MEMORY CHANNEL READ (Read/Answer only; no Set) ... Read
-// frame (6 bytes): MR P0 P0 P0 ;", golden vector G3.
-//
-// Migration scaffold: delegates to FT710; removed in Task 55.
-func BuildMRRead(s Slot) (Command, error) {
-	return FT710.BuildMRRead(s)
-}
-
 // ParseMRAnswer strictly parses a 28-byte MR answer frame per the
 // reference's fixed-offset position table (P1-P10). Every field is
 // validated; any deviation from the documented wire form is rejected with
@@ -57,14 +48,6 @@ func BuildMRRead(s Slot) (Command, error) {
 // between a parser and a validator.
 func (d Dialect) ParseMRAnswer(frame []byte) (MemoryData, error) {
 	return d.parseMemoryFrame(frame, "MR")
-}
-
-// ParseMRAnswer strictly parses a 28-byte MR answer frame per the
-// reference's fixed-offset position table (P1-P10).
-//
-// Migration scaffold: delegates to FT710; removed in Task 55.
-func ParseMRAnswer(frame []byte) (MemoryData, error) {
-	return FT710.ParseMRAnswer(frame)
 }
 
 // parseMemoryFrame strictly parses a 28-byte MR-answer/MW-set-shaped frame

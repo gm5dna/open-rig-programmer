@@ -65,14 +65,6 @@ func (d Dialect) BuildMCSet(s Slot) (Command, error) {
 	return newCommand(frame), nil
 }
 
-// BuildMCSet builds an MC (memory channel recall) Set frame for slot s.
-// Golden vector G11: "MC099;".
-//
-// Migration scaffold: delegates to FT710; removed in Task 55.
-func BuildMCSet(s Slot) (Command, error) {
-	return FT710.BuildMCSet(s)
-}
-
 // BuildMCRead builds the MC read request. Reference: "Read: MC;".
 //
 // Takes a dialect receiver even though nothing about this frame varies by
@@ -81,13 +73,6 @@ func BuildMCSet(s Slot) (Command, error) {
 // package-level function.
 func (d Dialect) BuildMCRead() Command {
 	return newCommand([]byte(mcReadFrame))
-}
-
-// BuildMCRead builds the MC read request. Reference: "Read: MC;".
-//
-// Migration scaffold: delegates to FT710; removed in Task 55.
-func BuildMCRead() Command {
-	return FT710.BuildMCRead()
 }
 
 // ParseMCAnswer parses an MC answer frame ("MC" + 3-byte slot + ";") into
@@ -111,12 +96,4 @@ func (d Dialect) ParseMCAnswer(frame []byte) (Slot, error) {
 		return Slot{}, newParseError(frame, "MC answer: slot must not be \"000\" (reference MC set column: ✗)")
 	}
 	return s, nil
-}
-
-// ParseMCAnswer parses an MC answer frame ("MC" + 3-byte slot + ";") into
-// the recalled Slot.
-//
-// Migration scaffold: delegates to FT710; removed in Task 55.
-func ParseMCAnswer(frame []byte) (Slot, error) {
-	return FT710.ParseMCAnswer(frame)
 }

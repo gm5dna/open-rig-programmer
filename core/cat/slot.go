@@ -120,55 +120,6 @@ func (d Dialect) EMGSlot() Slot {
 	return Slot{wire: d.slots.emgWire}
 }
 
-// MemorySlot builds the Slot for memory channel n (M-01…M-99), n in
-// [1, 99]. Reference: "001-099 | Memory channels M-01…M-99".
-//
-// Migration scaffold: delegates to FT710; removed in Task 55.
-func MemorySlot(n int) (Slot, error) {
-	return FT710.MemorySlot(n)
-}
-
-// PMSSlot builds the Slot for PMS pair (1-9), lower or upper.
-// Reference: "P1L-P9U | PMS pairs (9 lower/upper pairs)".
-//
-// Migration scaffold: delegates to FT710; removed in Task 55.
-func PMSSlot(pair int, upper bool) (Slot, error) {
-	return FT710.PMSSlot(pair, upper)
-}
-
-// SixtyMSlot builds the Slot for 60m channel n.
-//
-// ASSUMED: the reference documents the wire form only as "5xx" with
-// "ASSUMED 501… numbering" — neither the numbering start nor the channel
-// count is confirmed by the manual. This constructor assumes numbering
-// starts at n=1 -> "501" and, because the wire form is fixed at 3 bytes
-// ('5' + 2 digits), caps n at 99 -> "599". Both bounds must be verified at
-// the M5a/M5b hardware sessions.
-//
-// Migration scaffold: delegates to FT710; removed in Task 55.
-func SixtyMSlot(n int) (Slot, error) {
-	return FT710.SixtyMSlot(n)
-}
-
-// EMGSlot returns the Slot for the Alaska emergency channel.
-// Reference: "EMG | Alaska emergency channel".
-//
-// Migration scaffold: delegates to FT710; removed in Task 55.
-func EMGSlot() Slot {
-	return FT710.EMGSlot()
-}
-
-// ParseSlot parses a 3-byte wire slot code, accepting exactly the forms
-// produced by MemorySlot, PMSSlot, SixtyMSlot and EMGSlot, plus "000"
-// (which only ever appears in MR answers; see Slot.IsNone). Anything else
-// — including out-of-range numbers, malformed PMS suffixes, and lower case
-// — is rejected with a *ParseError.
-//
-// Migration scaffold: delegates to FT710; removed in Task 55.
-func ParseSlot(wire string) (Slot, error) {
-	return FT710.ParseSlot(wire)
-}
-
 // Wire returns the canonical 3-byte wire form of s.
 func (s Slot) Wire() string {
 	return s.wire

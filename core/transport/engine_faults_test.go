@@ -25,14 +25,14 @@ func TestEngine_MW_FireAndForget_DelayedRejection(t *testing.T) {
 	})
 	ctx := testCtx(t)
 
-	slot, err := cat.MemorySlot(1)
+	slot, err := cat.FT710.MemorySlot(1)
 	if err != nil {
 		t.Fatalf("MemorySlot: %v", err)
 	}
-	mode, _ := cat.ParseMode('2')
+	mode, _ := cat.FT710.ParseMode('2')
 	ctcss, _ := cat.ParseCTCSSState('0')
 	shift, _ := cat.ParseShift('0')
-	cmd, err := cat.BuildMWSet(cat.MemoryData{Slot: slot, FreqHz: 7000000, Mode: mode, Kind: cat.KindMemory, CTCSS: ctcss, Shift: shift})
+	cmd, err := cat.FT710.BuildMWSet(cat.MemoryData{Slot: slot, FreqHz: 7000000, Mode: mode, Kind: cat.KindMemory, CTCSS: ctcss, Shift: shift})
 	if err != nil {
 		t.Fatalf("BuildMWSet: %v", err)
 	}
@@ -75,11 +75,11 @@ func TestEngine_ReadTimeout_DrainThenRetry_Succeeds(t *testing.T) {
 	})
 	ctx := testCtx(t)
 
-	slot, err := cat.MemorySlot(1)
+	slot, err := cat.FT710.MemorySlot(1)
 	if err != nil {
 		t.Fatalf("MemorySlot: %v", err)
 	}
-	cmd, err := cat.BuildMRRead(slot)
+	cmd, err := cat.FT710.BuildMRRead(slot)
 	if err != nil {
 		t.Fatalf("BuildMRRead: %v", err)
 	}
@@ -113,11 +113,11 @@ func TestEngine_ReadTimeout_ExhaustsRetries_ReturnsErrTimeout(t *testing.T) {
 	})
 	ctx := testCtx(t)
 
-	slot, err := cat.MemorySlot(1)
+	slot, err := cat.FT710.MemorySlot(1)
 	if err != nil {
 		t.Fatalf("MemorySlot: %v", err)
 	}
-	cmd, err := cat.BuildMRRead(slot)
+	cmd, err := cat.FT710.BuildMRRead(slot)
 	if err != nil {
 		t.Fatalf("BuildMRRead: %v", err)
 	}
@@ -151,14 +151,14 @@ func TestEngine_WriteFireAndForget_NeverRetries_ExactlyOneExchange(t *testing.T)
 	})
 	ctx := testCtx(t)
 
-	slot, err := cat.MemorySlot(1)
+	slot, err := cat.FT710.MemorySlot(1)
 	if err != nil {
 		t.Fatalf("MemorySlot: %v", err)
 	}
-	mode, _ := cat.ParseMode('2')
+	mode, _ := cat.FT710.ParseMode('2')
 	ctcss, _ := cat.ParseCTCSSState('0')
 	shift, _ := cat.ParseShift('0')
-	mwCmd, err := cat.BuildMWSet(cat.MemoryData{Slot: slot, FreqHz: 7000000, Mode: mode, Kind: cat.KindMemory, CTCSS: ctcss, Shift: shift})
+	mwCmd, err := cat.FT710.BuildMWSet(cat.MemoryData{Slot: slot, FreqHz: 7000000, Mode: mode, Kind: cat.KindMemory, CTCSS: ctcss, Shift: shift})
 	if err != nil {
 		t.Fatalf("BuildMWSet: %v", err)
 	}
@@ -172,7 +172,7 @@ func TestEngine_WriteFireAndForget_NeverRetries_ExactlyOneExchange(t *testing.T)
 		t.Fatalf("Do (fire-and-forget MW): unexpected error: %v", err)
 	}
 
-	idCmd := cat.BuildIDRead()
+	idCmd := cat.FT710.BuildIDRead()
 	_, err = eng.Do(ctx, idCmd, CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Timeout: 200 * time.Millisecond})
 	if !errors.Is(err, ErrTimeout) {
 		t.Fatalf("Do(ID;) = %v, want ErrTimeout (proving the MW write was exchange 1 only — no resend occurred)", err)
@@ -189,14 +189,14 @@ func TestEngine_Do_FireAndForgetWithRetryReads_Invalid(t *testing.T) {
 	})
 	ctx := testCtx(t)
 
-	slot, err := cat.MemorySlot(1)
+	slot, err := cat.FT710.MemorySlot(1)
 	if err != nil {
 		t.Fatalf("MemorySlot: %v", err)
 	}
-	mode, _ := cat.ParseMode('2')
+	mode, _ := cat.FT710.ParseMode('2')
 	ctcss, _ := cat.ParseCTCSSState('0')
 	shift, _ := cat.ParseShift('0')
-	mwCmd, err := cat.BuildMWSet(cat.MemoryData{Slot: slot, FreqHz: 7000000, Mode: mode, Kind: cat.KindMemory, CTCSS: ctcss, Shift: shift})
+	mwCmd, err := cat.FT710.BuildMWSet(cat.MemoryData{Slot: slot, FreqHz: 7000000, Mode: mode, Kind: cat.KindMemory, CTCSS: ctcss, Shift: shift})
 	if err != nil {
 		t.Fatalf("BuildMWSet: %v", err)
 	}
@@ -206,7 +206,7 @@ func TestEngine_Do_FireAndForgetWithRetryReads_Invalid(t *testing.T) {
 		t.Fatalf("Do(fire-and-forget, RetryReads=3) = %v, want errors.Is match against ErrInvalidSpec", err)
 	}
 
-	idCmd := cat.BuildIDRead()
+	idCmd := cat.FT710.BuildIDRead()
 	_, err = eng.Do(ctx, idCmd, CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Timeout: 200 * time.Millisecond})
 	if !errors.Is(err, ErrTimeout) {
 		t.Fatalf("Do(ID;) = %v, want ErrTimeout (proving the invalid MW call wrote NOTHING — ID; is still exchange 1, hit by FaultGarbleReply(1))", err)
@@ -224,7 +224,7 @@ func TestEngine_UnexpectedFrame_LoggedAndCounted_NotFatal(t *testing.T) {
 	)
 	ctx := testCtx(t)
 
-	idCmd := cat.BuildIDRead()
+	idCmd := cat.FT710.BuildIDRead()
 	got, err := eng.Do(ctx, idCmd, CommandSpec{ExpectPrefix: "ID", ExpectLen: 7})
 	if err != nil {
 		t.Fatalf("Do: unexpected error: %v", err)
@@ -282,7 +282,7 @@ func TestEngine_Contamination_DrainToQuiet_Recovers(t *testing.T) {
 	)
 	ctx := testCtx(t)
 
-	idCmd := cat.BuildIDRead()
+	idCmd := cat.FT710.BuildIDRead()
 	_, err := eng.Do(ctx, idCmd, CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Timeout: 300 * time.Millisecond})
 	if !errors.Is(err, ErrContaminated) {
 		t.Fatalf("Do = %v, want errors.Is match against ErrContaminated", err)
@@ -317,7 +317,7 @@ func TestEngine_Disconnect_ReturnsErrPortClosed(t *testing.T) {
 	})
 	ctx := testCtx(t)
 
-	idCmd := cat.BuildIDRead()
+	idCmd := cat.FT710.BuildIDRead()
 	_, err := eng.Do(ctx, idCmd, CommandSpec{ExpectPrefix: "ID", ExpectLen: 7})
 	if err != nil {
 		t.Fatalf("Do (exchange 1, before disconnect): unexpected error: %v", err)

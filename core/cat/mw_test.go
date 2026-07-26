@@ -13,7 +13,7 @@ import (
 // case.
 func validMW5(t *testing.T) MemoryData {
 	t.Helper()
-	slot, err := MemorySlot(5)
+	slot, err := FT710.MemorySlot(5)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +33,7 @@ func validMW5(t *testing.T) MemoryData {
 // --- BuildMWSet: golden vectors G5, G7 ---
 
 func TestBuildMWSet_G5(t *testing.T) {
-	cmd, err := BuildMWSet(validMW5(t))
+	cmd, err := FT710.BuildMWSet(validMW5(t))
 	if err != nil {
 		t.Fatalf("BuildMWSet: unexpected error: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestBuildMWSet_G5(t *testing.T) {
 }
 
 func TestBuildMWSet_G7(t *testing.T) {
-	slot, err := MemorySlot(99)
+	slot, err := FT710.MemorySlot(99)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestBuildMWSet_G7(t *testing.T) {
 		CTCSS:  CTCSSEncDec,
 		Shift:  ShiftMinus,
 	}
-	cmd, err := BuildMWSet(m)
+	cmd, err := FT710.BuildMWSet(m)
 	if err != nil {
 		t.Fatalf("BuildMWSet: unexpected error: %v", err)
 	}
@@ -80,14 +80,14 @@ func TestBuildMWSet_G7(t *testing.T) {
 // TestBuildMWSet_RejectsKindPMSOnPMSSlot_HWConfirmed for the new
 // rejection this task adds alongside it.
 func TestBuildMWSet_PMSAcceptsKindMemory_HWConfirmed(t *testing.T) {
-	slot, err := PMSSlot(1, false)
+	slot, err := FT710.PMSSlot(1, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	m := validMW5(t)
 	m.Slot = slot
 	m.Kind = KindMemory
-	cmd, err := BuildMWSet(m)
+	cmd, err := FT710.BuildMWSet(m)
 	if err != nil {
 		t.Fatalf("BuildMWSet(PMS, Kind=Memory): unexpected error: %v", err)
 	}
@@ -104,14 +104,14 @@ func TestBuildMWSet_PMSAcceptsKindMemory_HWConfirmed(t *testing.T) {
 // "?;" (live vector: MWP1L007100000+000000150000;). BuildMWSet must
 // refuse it too, the same way it refuses any other non-KindMemory value.
 func TestBuildMWSet_RejectsKindPMSOnPMSSlot_HWConfirmed(t *testing.T) {
-	slot, err := PMSSlot(1, false)
+	slot, err := FT710.PMSSlot(1, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	m := validMW5(t)
 	m.Slot = slot
 	m.Kind = KindPMS
-	if _, err := BuildMWSet(m); err == nil {
+	if _, err := FT710.BuildMWSet(m); err == nil {
 		t.Fatal("BuildMWSet(PMS, Kind=PMS): want error (HW-CONFIRMED rejected), got success")
 	}
 }
@@ -129,7 +129,7 @@ func TestBuildMWSet_RejectTable(t *testing.T) {
 		{
 			name: "slot 501 not writable: reference rejection list",
 			altSlot: func(t *testing.T) Slot {
-				s, err := SixtyMSlot(1)
+				s, err := FT710.SixtyMSlot(1)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -139,13 +139,13 @@ func TestBuildMWSet_RejectTable(t *testing.T) {
 		{
 			name: "slot EMG not writable: reference rejection list",
 			altSlot: func(t *testing.T) Slot {
-				return EMGSlot()
+				return FT710.EMGSlot()
 			},
 		},
 		{
 			name: "slot 000 not writable: reference rejection list",
 			altSlot: func(t *testing.T) Slot {
-				s, err := ParseSlot("000")
+				s, err := FT710.ParseSlot("000")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -162,7 +162,7 @@ func TestBuildMWSet_RejectTable(t *testing.T) {
 		{
 			name: "Kind mismatch: PMS kind on a PMS slot (HW-CONFIRMED rejected, was wrongly accepted pre-M5b)",
 			altSlot: func(t *testing.T) Slot {
-				s, err := PMSSlot(1, false)
+				s, err := FT710.PMSSlot(1, false)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -260,7 +260,7 @@ func TestBuildMWSet_RejectTable(t *testing.T) {
 			if tc.mutate != nil {
 				m = tc.mutate(m)
 			}
-			out, err := BuildMWSet(m)
+			out, err := FT710.BuildMWSet(m)
 			if err == nil {
 				t.Fatalf("BuildMWSet(%+v): want error, got %q", m, out.Bytes())
 			}
@@ -275,7 +275,7 @@ func TestBuildMWSet_RejectTable(t *testing.T) {
 func TestBuildMWSet_RejectsZeroValueSlot(t *testing.T) {
 	m := validMW5(t)
 	m.Slot = Slot{}
-	if _, err := BuildMWSet(m); err == nil {
+	if _, err := FT710.BuildMWSet(m); err == nil {
 		t.Fatal("BuildMWSet(zero-value Slot): want error")
 	}
 }
@@ -288,7 +288,7 @@ func TestParseMRAnswer_RoundTripsBuildMWSet(t *testing.T) {
 	cases := []MemoryData{
 		validMW5(t),
 	}
-	if slot, err := MemorySlot(99); err == nil {
+	if slot, err := FT710.MemorySlot(99); err == nil {
 		cases = append(cases, MemoryData{
 			Slot:   slot,
 			FreqHz: 52_354_000,
@@ -301,7 +301,7 @@ func TestParseMRAnswer_RoundTripsBuildMWSet(t *testing.T) {
 			Shift:  ShiftMinus,
 		})
 	}
-	if slot, err := PMSSlot(1, false); err == nil {
+	if slot, err := FT710.PMSSlot(1, false); err == nil {
 		m := validMW5(t)
 		m.Slot = slot
 		m.Kind = KindMemory // HW-CONFIRMED 2026-07-13: PMS writes carry KindMemory, not KindPMS
@@ -310,13 +310,13 @@ func TestParseMRAnswer_RoundTripsBuildMWSet(t *testing.T) {
 
 	for _, want := range cases {
 		t.Run(want.Slot.Wire(), func(t *testing.T) {
-			cmd, err := BuildMWSet(want)
+			cmd, err := FT710.BuildMWSet(want)
 			if err != nil {
 				t.Fatalf("BuildMWSet(%+v): unexpected error: %v", want, err)
 			}
 			built := cmd.Bytes()
 			mrFrame := append([]byte("MR"), built[2:]...)
-			got, err := ParseMRAnswer(mrFrame)
+			got, err := FT710.ParseMRAnswer(mrFrame)
 			if err != nil {
 				t.Fatalf("ParseMRAnswer(%q): unexpected error: %v", mrFrame, err)
 			}

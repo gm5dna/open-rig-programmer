@@ -46,14 +46,6 @@ func (d Dialect) BuildMWSet(m MemoryData) (Command, error) {
 	return newCommand(frame), nil
 }
 
-// BuildMWSet builds a strict 28-byte MW (memory channel write) Set frame
-// from m. Golden vectors G5, G7.
-//
-// Migration scaffold: delegates to FT710; removed in Task 55.
-func BuildMWSet(m MemoryData) (Command, error) {
-	return FT710.BuildMWSet(m)
-}
-
 // validateMWFields applies MW's write-direction policy to m, returning a
 // *ParseError describing the first violation found, or nil if m is safe to
 // encode as an MW Set frame UNDER THIS DIALECT. It rejects:

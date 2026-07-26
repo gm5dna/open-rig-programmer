@@ -84,19 +84,6 @@ func (d Dialect) ParseMode(c byte) (Mode, error) {
 	return m, nil
 }
 
-// ParseMode parses a single P6 wire byte into a Mode. It accepts exactly
-// '0'-'9' and 'A'-'F' (upper case only — that is all the radio ever emits).
-// '0' parses successfully to ModeUnset; callers building a Set frame must
-// separately reject ModeUnset if it is not a valid value to send.
-//
-// Anything else, including lower-case hex digits, is rejected with a
-// *ParseError.
-//
-// Migration scaffold: delegates to FT710; removed in Task 55.
-func ParseMode(c byte) (Mode, error) {
-	return FT710.ParseMode(c)
-}
-
 // Wire returns the single wire byte for m.
 func (m Mode) Wire() byte {
 	return byte(m)

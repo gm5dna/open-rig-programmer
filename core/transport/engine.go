@@ -291,7 +291,7 @@ func (e *Engine) UnexpectedFrames() int64 {
 // this session started talking to the radio (a stale unsolicited push, or
 // a reply to a command sent by a previous, now-gone session).
 func (e *Engine) Init(ctx context.Context) error {
-	aiCmd := cat.BuildAISet(false)
+	aiCmd := cat.FT710.BuildAISet(false)
 	if _, err := e.Do(ctx, aiCmd, CommandSpec{}); err != nil {
 		return fmt.Errorf("transport: Init: AI0: %w", err)
 	}
@@ -433,7 +433,7 @@ func (e *Engine) Do(ctx context.Context, cmd cat.Command, spec CommandSpec) ([]b
 		// the SAME slice checked and written — never two independently
 		// obtained copies.
 		frame := cmd.Bytes()
-		if !cat.AllowedCommand(frame) {
+		if !cat.FT710.AllowedCommand(frame) {
 			return nil, fmt.Errorf("%w: %s", ErrDisallowedCommand, cmd.String())
 		}
 		if _, err := e.port.Write(frame); err != nil {

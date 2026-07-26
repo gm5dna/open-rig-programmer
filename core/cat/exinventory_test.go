@@ -11,7 +11,7 @@ import (
 // exercise the public surface end to end.
 func findItem(t *testing.T, p1, p2, p3 uint8) (EXItem, bool) {
 	t.Helper()
-	for _, it := range EXItems() {
+	for _, it := range FT710.EXItems() {
 		if it.Addr == (EXAddress{p1, p2, p3}) {
 			return it, true
 		}
@@ -23,7 +23,7 @@ func findItem(t *testing.T, p1, p2, p3 uint8) (EXItem, bool) {
 // total. These numbers are the milestone's load-bearing cross-check.
 func TestEXInventory_CountsPerGroup(t *testing.T) {
 	perP1 := map[uint8]int{}
-	for _, it := range EXItems() {
+	for _, it := range FT710.EXItems() {
 		perP1[it.Addr.P1]++
 	}
 	want := map[uint8]int{1: 94, 2: 31, 3: 65, 4: 16, 6: 90}
@@ -35,7 +35,7 @@ func TestEXInventory_CountsPerGroup(t *testing.T) {
 	if len(perP1) != len(want) {
 		t.Errorf("got %d distinct P1 menus, want %d (%v)", len(perP1), len(want), perP1)
 	}
-	if total := len(EXItems()); total != 296 {
+	if total := len(FT710.EXItems()); total != 296 {
 		t.Errorf("total items = %d, want 296", total)
 	}
 }
@@ -44,7 +44,7 @@ func TestEXInventory_CountsPerGroup(t *testing.T) {
 // (P1,P2) subgroups, non-empty labels, label constancy within a menu/
 // subgroup, and (P1,P2,P3) sort order.
 func TestEXInventory_MenuAndGroupStructure(t *testing.T) {
-	items := EXItems()
+	items := FT710.EXItems()
 
 	menus := map[uint8]bool{}
 	subgroups := map[[2]uint8]bool{}
@@ -111,7 +111,7 @@ func addrLess(a, b EXAddress) bool {
 // see KnownEXAddress's doc comment.)
 func TestEXInventory_P1AnomalyRecorded(t *testing.T) {
 	var sawP5, sawP6 bool
-	for _, it := range EXItems() {
+	for _, it := range FT710.EXItems() {
 		switch it.Addr.P1 {
 		case 5:
 			sawP5 = true
@@ -131,7 +131,7 @@ func TestEXInventory_P1AnomalyRecorded(t *testing.T) {
 // Wire() output, and a ParseEXAddress(Wire()) round-trip for every item.
 func TestEXInventory_NoDuplicatesSortedAndWireStable(t *testing.T) {
 	seen := map[EXAddress]bool{}
-	for _, a := range EXAddresses() {
+	for _, a := range FT710.EXAddresses() {
 		if seen[a] {
 			t.Errorf("duplicate address %v", a)
 		}
@@ -151,7 +151,7 @@ func TestEXInventory_NoDuplicatesSortedAndWireStable(t *testing.T) {
 			t.Errorf("String()=%q != Wire()=%q for %v", a.String(), wire, a)
 		}
 
-		back, err := ParseEXAddress(wire)
+		back, err := FT710.ParseEXAddress(wire)
 		if err != nil {
 			t.Errorf("ParseEXAddress(%q) round-trip failed: %v", wire, err)
 			continue
@@ -206,7 +206,7 @@ func TestEXInventory_SpotChecksAgainstManual(t *testing.T) {
 // MY CALL and the five PRESET NAME items, each 12 digits wide.
 func TestEXInventory_ExactlySixTextItems(t *testing.T) {
 	var texts []EXItem
-	for _, it := range EXItems() {
+	for _, it := range FT710.EXItems() {
 		if it.Text {
 			texts = append(texts, it)
 			if it.Digits != 12 {
@@ -246,7 +246,7 @@ func TestEXInventory_ExactlySixTextItems(t *testing.T) {
 // over the inventory, so the constant can never drift from the data.
 func TestEXP4MaxBytesMatchesMaxDigits(t *testing.T) {
 	max := 0
-	for _, it := range EXItems() {
+	for _, it := range FT710.EXItems() {
 		if it.Digits > max {
 			max = it.Digits
 		}
@@ -258,8 +258,8 @@ func TestEXP4MaxBytesMatchesMaxDigits(t *testing.T) {
 
 func TestKnownEXAddress(t *testing.T) {
 	// Every inventory address is known.
-	for _, a := range EXAddresses() {
-		if !KnownEXAddress(a) {
+	for _, a := range FT710.EXAddresses() {
+		if !FT710.KnownEXAddress(a) {
 			t.Errorf("KnownEXAddress(%v) = false, want true", a)
 		}
 	}
@@ -272,7 +272,7 @@ func TestKnownEXAddress(t *testing.T) {
 		{6, 6, 19},
 	}
 	for _, a := range nonMembers {
-		if KnownEXAddress(a) {
+		if FT710.KnownEXAddress(a) {
 			t.Errorf("KnownEXAddress(%v) = true, want false", a)
 		}
 	}
@@ -282,7 +282,7 @@ func TestParseEXAddress_RejectTable(t *testing.T) {
 	// Well-formed six-digit shapes that are not members.
 	nonMemberWires := []string{"000000", "050101", "010199", "060619"}
 	for _, w := range nonMemberWires {
-		if _, err := ParseEXAddress(w); err == nil {
+		if _, err := FT710.ParseEXAddress(w); err == nil {
 			t.Errorf("ParseEXAddress(%q): expected error (non-member), got nil", w)
 		} else if _, ok := err.(*ParseError); !ok {
 			t.Errorf("ParseEXAddress(%q): error is %T, want *ParseError", w, err)
@@ -291,7 +291,7 @@ func TestParseEXAddress_RejectTable(t *testing.T) {
 	// Malformed shapes: non-digits and wrong lengths.
 	malformed := []string{"", "01020", "0102030", "01020a", "abcdef", "01 203", "-10203"}
 	for _, w := range malformed {
-		if _, err := ParseEXAddress(w); err == nil {
+		if _, err := FT710.ParseEXAddress(w); err == nil {
 			t.Errorf("ParseEXAddress(%q): expected error (bad shape), got nil", w)
 		} else if _, ok := err.(*ParseError); !ok {
 			t.Errorf("ParseEXAddress(%q): error is %T, want *ParseError", w, err)
@@ -301,7 +301,7 @@ func TestParseEXAddress_RejectTable(t *testing.T) {
 	// NewEXAddress rejects a non-member triple (incl. the zero triple) as a
 	// *ParseError, with no numeric-range shortcut.
 	for _, tr := range [][3]int{{0, 0, 0}, {5, 1, 1}, {-1, 2, 3}, {256, 1, 1}} {
-		if _, err := NewEXAddress(tr[0], tr[1], tr[2]); err == nil {
+		if _, err := FT710.NewEXAddress(tr[0], tr[1], tr[2]); err == nil {
 			t.Errorf("NewEXAddress%v: expected error, got nil", tr)
 		} else if _, ok := err.(*ParseError); !ok {
 			t.Errorf("NewEXAddress%v: error is %T, want *ParseError", tr, err)
@@ -313,21 +313,21 @@ func TestParseEXAddress_RejectTable(t *testing.T) {
 // the package's backing data: mutating a returned slice cannot affect a later
 // call.
 func TestEXItems_ReturnsFreshCopies(t *testing.T) {
-	items := EXItems()
+	items := FT710.EXItems()
 	if len(items) == 0 {
 		t.Fatal("EXItems returned nothing")
 	}
 	firstName := items[0].Name
 	items[0].Name = "CLOBBERED"
 	items[0].Addr = EXAddress{9, 9, 9}
-	if again := EXItems(); again[0].Name != firstName || again[0].Addr == (EXAddress{9, 9, 9}) {
+	if again := FT710.EXItems(); again[0].Name != firstName || again[0].Addr == (EXAddress{9, 9, 9}) {
 		t.Errorf("EXItems leaked backing data: second call sees %q / %v", again[0].Name, again[0].Addr)
 	}
 
-	addrs := EXAddresses()
+	addrs := FT710.EXAddresses()
 	firstAddr := addrs[0]
 	addrs[0] = EXAddress{9, 9, 9}
-	if again := EXAddresses(); again[0] != firstAddr {
+	if again := FT710.EXAddresses(); again[0] != firstAddr {
 		t.Errorf("EXAddresses leaked backing data: second call sees %v", again[0])
 	}
 }
@@ -345,7 +345,7 @@ func TestEXItems_ReturnsFreshCopies(t *testing.T) {
 // did not probe.
 func TestEXItems_ObservedReadWidthDeviatesOnlyForToneFreq(t *testing.T) {
 	var deviations []EXItem
-	for _, it := range EXItems() {
+	for _, it := range FT710.EXItems() {
 		if it.ObservedReadWidth == 0 {
 			t.Errorf("%s has no M8c observation — every inventory address was read", it.Addr.Wire())
 			continue
@@ -374,7 +374,7 @@ func TestEXItems_ObservedReadWidthDeviatesOnlyForToneFreq(t *testing.T) {
 // digits.
 func TestEXItems_ObservedReadShapes(t *testing.T) {
 	counts := map[string]int{}
-	for _, it := range EXItems() {
+	for _, it := range FT710.EXItems() {
 		counts[it.ObservedReadShape]++
 		if it.Text && it.ObservedReadShape != "text" {
 			t.Errorf("%s is a Text item but its observed read shape is %q", it.Addr.Wire(), it.ObservedReadShape)
@@ -391,7 +391,7 @@ func TestEXItems_ObservedReadShapes(t *testing.T) {
 // inside the wire bound the parser enforces (exP4MaxBytes), so no
 // observation can describe a frame ParseEXAnswer would reject.
 func TestEXItems_ObservedReadWidthWithinP4Bounds(t *testing.T) {
-	for _, it := range EXItems() {
+	for _, it := range FT710.EXItems() {
 		if it.ObservedReadWidth < 1 || it.ObservedReadWidth > exP4MaxBytes {
 			t.Errorf("%s: observed read width %d is outside 1..%d", it.Addr.Wire(), it.ObservedReadWidth, exP4MaxBytes)
 		}

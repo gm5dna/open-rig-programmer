@@ -171,11 +171,11 @@ func (d *ft710Driver) open(ctx context.Context, eng *transport.Engine, id driver
 	// Identity probe: the ID; answer is authoritative, and anything
 	// other than the FT-710's fixed "0800" means the wrong radio (or
 	// something else that speaks CAT) is on this port.
-	frame, err := eng.Do(ctx, cat.BuildIDRead(), idSpec())
+	frame, err := eng.Do(ctx, cat.FT710.BuildIDRead(), idSpec())
 	if err != nil {
 		return nil, fmt.Errorf("ft710: Open: ID probe: %w", err)
 	}
-	got, err := cat.ParseIDAnswer(frame)
+	got, err := cat.FT710.ParseIDAnswer(frame)
 	if err != nil {
 		return nil, fmt.Errorf("ft710: Open: ID probe: %w", err)
 	}
@@ -233,7 +233,7 @@ func (nopLogger) Printf(string, ...any) {}
 // truncate discovery. Both must be checked against real hardware at M5a.
 func discoverInventory(ctx context.Context, eng *transport.Engine, logger transport.Logger) (slots60m []string, emg, overflow60m bool, err error) {
 	for n := 1; n <= max60mProbe; n++ {
-		slot, err := cat.SixtyMSlot(n)
+		slot, err := cat.FT710.SixtyMSlot(n)
 		if err != nil {
 			return nil, false, false, err
 		}
@@ -250,7 +250,7 @@ func discoverInventory(ctx context.Context, eng *transport.Engine, logger transp
 	if len(slots60m) == max60mProbe {
 		// Every known slot answered: probe the sentinel — see this
 		// function's doc comment.
-		sentinel, serr := cat.SixtyMSlot(max60mProbe + 1)
+		sentinel, serr := cat.FT710.SixtyMSlot(max60mProbe + 1)
 		if serr != nil {
 			return nil, false, false, serr
 		}
@@ -264,7 +264,7 @@ func discoverInventory(ctx context.Context, eng *transport.Engine, logger transp
 		}
 	}
 
-	emg, err = probeSlot(ctx, eng, cat.EMGSlot())
+	emg, err = probeSlot(ctx, eng, cat.FT710.EMGSlot())
 	if err != nil {
 		return nil, false, false, err
 	}
@@ -277,7 +277,7 @@ func discoverInventory(ctx context.Context, eng *transport.Engine, logger transp
 // error. Unlike Session.ReadChannel it does not map fields or check
 // kind: discovery only needs to know whether the slot answered.
 func probeSlot(ctx context.Context, eng *transport.Engine, slot cat.Slot) (bool, error) {
-	cmd, err := cat.BuildMRRead(slot)
+	cmd, err := cat.FT710.BuildMRRead(slot)
 	if err != nil {
 		return false, err
 	}
@@ -288,7 +288,7 @@ func probeSlot(ctx context.Context, eng *transport.Engine, slot cat.Slot) (bool,
 	if err != nil {
 		return false, err
 	}
-	m, err := cat.ParseMRAnswer(frame)
+	m, err := cat.FT710.ParseMRAnswer(frame)
 	if err != nil {
 		return false, err
 	}
@@ -423,7 +423,7 @@ func (d *ft710Driver) SynthesiseDiscoveredBanks(slots []string) []spec.Bank {
 		if claimed[raw] {
 			continue
 		}
-		s, err := cat.ParseSlot(raw)
+		s, err := cat.FT710.ParseSlot(raw)
 		if err != nil {
 			continue
 		}

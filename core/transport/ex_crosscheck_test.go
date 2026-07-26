@@ -38,7 +38,7 @@ import (
 // without needing to re-derive the diff.
 func TestEXInventoryCrossCheck_AddressSetsIdentical(t *testing.T) {
 	catAddrs := make(map[string]bool)
-	for _, item := range cat.EXItems() {
+	for _, item := range cat.FT710.EXItems() {
 		catAddrs[item.Addr.Wire()] = true
 	}
 	fakeAddrs := fakeradio.EXDefaults()
@@ -77,7 +77,7 @@ func TestEXInventoryCrossCheck_WidthsAgree(t *testing.T) {
 
 	var mismatches []string
 	checked := 0
-	for _, item := range cat.EXItems() {
+	for _, item := range cat.FT710.EXItems() {
 		addr := item.Addr.Wire()
 		p4, ok := fakeAddrs[addr]
 		if !ok {
@@ -175,7 +175,7 @@ func TestEXFakeradioRoundTrip_All296RawPort(t *testing.T) {
 	t.Cleanup(func() { _ = r.Close() })
 
 	fakeDefaults := fakeradio.EXRuntimeDefaults()
-	items := cat.EXItems() // sorted by (P1,P2,P3); exactly 296 per EXItems' doc comment
+	items := cat.FT710.EXItems() // sorted by (P1,P2,P3); exactly 296 per EXItems' doc comment
 	if len(items) != 296 {
 		t.Fatalf("cat.EXItems() returned %d items, want 296", len(items))
 	}
@@ -183,7 +183,7 @@ func TestEXFakeradioRoundTrip_All296RawPort(t *testing.T) {
 	reader := newEXFrameReader(t, r)
 
 	for _, item := range items {
-		cmd, err := cat.BuildEXRead(item.Addr)
+		cmd, err := cat.FT710.BuildEXRead(item.Addr)
 		if err != nil {
 			t.Fatalf("BuildEXRead(%v): unexpected error: %v", item.Addr, err)
 		}
@@ -193,7 +193,7 @@ func TestEXFakeradioRoundTrip_All296RawPort(t *testing.T) {
 
 		frame := reader.readOneFrame()
 
-		gotAddr, gotRaw, err := cat.ParseEXAnswer(frame)
+		gotAddr, gotRaw, err := cat.FT710.ParseEXAnswer(frame)
 		if err != nil {
 			t.Fatalf("ParseEXAnswer(%q) for %v: unexpected error: %v", frame, item.Addr, err)
 		}
@@ -233,7 +233,7 @@ func TestEXCrossCheck_FakeRuntimeMatchesObservedReads(t *testing.T) {
 
 	var mismatches []string
 	checked := 0
-	for _, item := range cat.EXItems() {
+	for _, item := range cat.FT710.EXItems() {
 		addr := item.Addr.Wire()
 		p4, ok := runtime[addr]
 		if !ok {

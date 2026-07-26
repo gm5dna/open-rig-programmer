@@ -45,7 +45,7 @@ func TestFT710SettingsDescriptor_StaticEqualsSession(t *testing.T) {
 		t.Errorf("static SettingsDescriptor().Validate() = %v, want nil", err)
 	}
 
-	wantItems := len(cat.EXItems())
+	wantItems := len(cat.FT710.EXItems())
 	if wantItems != 296 {
 		t.Fatalf("cat.EXItems() = %d items, want 296 (test's own assumption is stale)", wantItems)
 	}
@@ -193,7 +193,7 @@ func TestSession_ReadSetting_UnknownID_RefusedBeforeWire(t *testing.T) {
 // wrong-address branch can ONLY be exercised this way, not through the
 // real Session.ReadSetting path.
 func TestParseEXResponse_Table(t *testing.T) {
-	items := cat.EXItems()
+	items := cat.FT710.EXItems()
 	requested := items[0].Addr // "010101"
 	other := items[1].Addr     // "010102" — a DIFFERENT known address
 

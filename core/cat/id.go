@@ -16,13 +16,6 @@ func (d Dialect) BuildIDRead() Command {
 	return newCommand([]byte("ID;"))
 }
 
-// BuildIDRead builds the ID read request. Golden vector G1.
-//
-// Migration scaffold: delegates to FT710; removed in Task 55.
-func BuildIDRead() Command {
-	return FT710.BuildIDRead()
-}
-
 // ParseIDAnswer parses an ID answer frame ("ID" + 4-char ID + ";",
 // golden vector G1: "ID0800;") and returns the 4-character radio ID (e.g.
 // "0800", fixed for the FT-710). It enforces exact length, prefix, and
@@ -49,12 +42,4 @@ func (d Dialect) ParseIDAnswer(frame []byte) (radioID string, err error) {
 		return "", newParseError(frame, "ID answer missing ';' terminator")
 	}
 	return string(frame[2:6]), nil
-}
-
-// ParseIDAnswer parses an ID answer frame and returns the 4-character
-// radio ID.
-//
-// Migration scaffold: delegates to FT710; removed in Task 55.
-func ParseIDAnswer(frame []byte) (radioID string, err error) {
-	return FT710.ParseIDAnswer(frame)
 }

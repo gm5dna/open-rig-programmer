@@ -45,7 +45,7 @@ func exReadSpec(addr cat.EXAddress) CommandSpec {
 // fixture itself picked a bad triple, not a genuine finding.
 func mustEXAddr(t *testing.T, p1, p2, p3 int) cat.EXAddress {
 	t.Helper()
-	addr, err := cat.NewEXAddress(p1, p2, p3)
+	addr, err := cat.FT710.NewEXAddress(p1, p2, p3)
 	if err != nil {
 		t.Fatalf("NewEXAddress(%d,%d,%d): unexpected error: %v", p1, p2, p3, err)
 	}
@@ -59,7 +59,7 @@ func TestEngine_EXRead_FullAddressSpec_HappyPath(t *testing.T) {
 		_, eng := newTestEngine(t, nil)
 		ctx := testCtx(t)
 
-		cmd, err := cat.BuildEXRead(addr)
+		cmd, err := cat.FT710.BuildEXRead(addr)
 		if err != nil {
 			t.Fatalf("BuildEXRead: %v", err)
 		}
@@ -68,7 +68,7 @@ func TestEngine_EXRead_FullAddressSpec_HappyPath(t *testing.T) {
 			t.Fatalf("Do: unexpected error: %v", err)
 		}
 
-		gotAddr, gotRaw, err := cat.ParseEXAnswer(got)
+		gotAddr, gotRaw, err := cat.FT710.ParseEXAnswer(got)
 		if err != nil {
 			t.Fatalf("ParseEXAnswer(%q): unexpected error: %v", got, err)
 		}
@@ -88,7 +88,7 @@ func TestEngine_EXRead_FullAddressSpec_HappyPath(t *testing.T) {
 		})
 		ctx := testCtx(t)
 
-		cmd, err := cat.BuildEXRead(addr)
+		cmd, err := cat.FT710.BuildEXRead(addr)
 		if err != nil {
 			t.Fatalf("BuildEXRead: %v", err)
 		}
@@ -97,7 +97,7 @@ func TestEngine_EXRead_FullAddressSpec_HappyPath(t *testing.T) {
 			t.Fatalf("Do: unexpected error: %v", err)
 		}
 
-		gotAddr, gotRaw, err := cat.ParseEXAnswer(got)
+		gotAddr, gotRaw, err := cat.FT710.ParseEXAnswer(got)
 		if err != nil {
 			t.Fatalf("ParseEXAnswer(%q): unexpected error: %v", got, err)
 		}
@@ -124,7 +124,7 @@ func TestEngine_EXRead_WrongAddressInjectedFirst_NotConsumed(t *testing.T) {
 	})
 	ctx := testCtx(t)
 
-	cmd, err := cat.BuildEXRead(addr)
+	cmd, err := cat.FT710.BuildEXRead(addr)
 	if err != nil {
 		t.Fatalf("BuildEXRead: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestEngine_EXRead_WrongAddressInjectedFirst_NotConsumed(t *testing.T) {
 		t.Fatalf("Do: unexpected error: %v", err)
 	}
 
-	gotAddr, gotRaw, err := cat.ParseEXAnswer(got)
+	gotAddr, gotRaw, err := cat.FT710.ParseEXAnswer(got)
 	if err != nil {
 		t.Fatalf("ParseEXAnswer(%q): unexpected error: %v", got, err)
 	}
@@ -170,7 +170,7 @@ func TestEngine_EXRead_AIChatterStorm_StillCorrelates(t *testing.T) {
 	_, eng := newTestEngine(t, opts)
 	ctx := testCtx(t)
 
-	cmd, err := cat.BuildEXRead(addr)
+	cmd, err := cat.FT710.BuildEXRead(addr)
 	if err != nil {
 		t.Fatalf("BuildEXRead: %v", err)
 	}
@@ -179,7 +179,7 @@ func TestEngine_EXRead_AIChatterStorm_StillCorrelates(t *testing.T) {
 		t.Fatalf("Do: unexpected error: %v", err)
 	}
 
-	gotAddr, gotRaw, err := cat.ParseEXAnswer(got)
+	gotAddr, gotRaw, err := cat.FT710.ParseEXAnswer(got)
 	if err != nil {
 		t.Fatalf("ParseEXAnswer(%q): unexpected error: %v", got, err)
 	}
@@ -212,7 +212,7 @@ func TestEngine_EXRead_PrefixOnlySpec_DemonstratesWrongAddressHazard(t *testing.
 	})
 	ctx := testCtx(t)
 
-	cmd, err := cat.BuildEXRead(addr)
+	cmd, err := cat.FT710.BuildEXRead(addr)
 	if err != nil {
 		t.Fatalf("BuildEXRead: %v", err)
 	}
@@ -228,7 +228,7 @@ func TestEngine_EXRead_PrefixOnlySpec_DemonstratesWrongAddressHazard(t *testing.
 		t.Fatalf("Do (bare \"EX\" prefix) = %q, want %q — expected the hazard to reproduce: a prefix-only spec correlates ANY EX answer, including a different address's", got, wrongFrame)
 	}
 
-	gotAddr, _, err := cat.ParseEXAnswer(got)
+	gotAddr, _, err := cat.FT710.ParseEXAnswer(got)
 	if err != nil {
 		t.Fatalf("ParseEXAnswer(%q): unexpected error: %v", got, err)
 	}
@@ -255,7 +255,7 @@ func TestEngine_EXRead_DelayedPriorAnswer_NeverCrossesToNextRead(t *testing.T) {
 	ctx := testCtx(t)
 
 	addrA := mustEXAddr(t, 1, 1, 1) // "010101", 3-digit numeric
-	cmdA, err := cat.BuildEXRead(addrA)
+	cmdA, err := cat.FT710.BuildEXRead(addrA)
 	if err != nil {
 		t.Fatalf("BuildEXRead(A): %v", err)
 	}
@@ -269,7 +269,7 @@ func TestEngine_EXRead_DelayedPriorAnswer_NeverCrossesToNextRead(t *testing.T) {
 	}
 
 	addrB := mustEXAddr(t, 1, 1, 4) // "010104", 4-digit numeric — different address AND width from A
-	cmdB, err := cat.BuildEXRead(addrB)
+	cmdB, err := cat.FT710.BuildEXRead(addrB)
 	if err != nil {
 		t.Fatalf("BuildEXRead(B): %v", err)
 	}

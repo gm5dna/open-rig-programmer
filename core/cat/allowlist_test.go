@@ -84,7 +84,7 @@ func TestAllowedCommand_RejectTable(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if AllowedCommand(tc.frame) {
+			if FT710.AllowedCommand(tc.frame) {
 				t.Errorf("AllowedCommand(%q) = true, want false", tc.frame)
 			}
 		})
@@ -111,7 +111,7 @@ func TestAllowedCommand_RejectsGoldenAnswerFrames(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if AllowedCommand([]byte(tc.frame)) {
+			if FT710.AllowedCommand([]byte(tc.frame)) {
 				t.Errorf("AllowedCommand(%q) = true, want false (inbound-only answer frame)", tc.frame)
 			}
 		})
@@ -145,7 +145,7 @@ func TestAllowedCommand_AcceptsAllowlistedSingleFrames(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if !AllowedCommand(tc.frame) {
+			if !FT710.AllowedCommand(tc.frame) {
 				t.Errorf("AllowedCommand(%q) = false, want true", tc.frame)
 			}
 		})
@@ -160,23 +160,23 @@ func TestAllowedCommand_AcceptsAllowlistedSingleFrames(t *testing.T) {
 func TestAllowedCommand_PropertyEveryBuilderOutput(t *testing.T) {
 	memSlot := mustMemorySlot(t, 1)
 	pmsSlot := mustPMSSlot(t, 1, false)
-	sixtyM, err := SixtyMSlot(1)
+	sixtyM, err := FT710.SixtyMSlot(1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	var outputs []Command
 
-	outputs = append(outputs, BuildIDRead())
-	outputs = append(outputs, BuildAISet(false))
-	outputs = append(outputs, BuildAISet(true))
+	outputs = append(outputs, FT710.BuildIDRead())
+	outputs = append(outputs, FT710.BuildAISet(false))
+	outputs = append(outputs, FT710.BuildAISet(true))
 
-	if out, err := BuildMRRead(memSlot); err == nil {
+	if out, err := FT710.BuildMRRead(memSlot); err == nil {
 		outputs = append(outputs, out)
 	} else {
 		t.Fatalf("BuildMRRead: %v", err)
 	}
-	if out, err := BuildMRRead(sixtyM); err == nil {
+	if out, err := FT710.BuildMRRead(sixtyM); err == nil {
 		outputs = append(outputs, out)
 	} else {
 		t.Fatalf("BuildMRRead(5xx): %v", err)
@@ -186,7 +186,7 @@ func TestAllowedCommand_PropertyEveryBuilderOutput(t *testing.T) {
 		Slot: memSlot, FreqHz: 14_250_000, Mode: ModeUSB, Kind: KindMemory,
 		CTCSS: CTCSSOff, Shift: ShiftSimplex,
 	}
-	if out, err := BuildMWSet(mw); err == nil {
+	if out, err := FT710.BuildMWSet(mw); err == nil {
 		outputs = append(outputs, out)
 	} else {
 		t.Fatalf("BuildMWSet: %v", err)
@@ -194,58 +194,58 @@ func TestAllowedCommand_PropertyEveryBuilderOutput(t *testing.T) {
 	mwPMS := mw
 	mwPMS.Slot = pmsSlot
 	mwPMS.Kind = KindMemory // HW-CONFIRMED 2026-07-13: PMS writes carry KindMemory, not KindPMS
-	if out, err := BuildMWSet(mwPMS); err == nil {
+	if out, err := FT710.BuildMWSet(mwPMS); err == nil {
 		outputs = append(outputs, out)
 	} else {
 		t.Fatalf("BuildMWSet(PMS): %v", err)
 	}
 
-	if out, err := BuildMTSet(memSlot, true, "CALLING FREQ"); err == nil {
+	if out, err := FT710.BuildMTSet(memSlot, true, "CALLING FREQ"); err == nil {
 		outputs = append(outputs, out)
 	} else {
 		t.Fatalf("BuildMTSet: %v", err)
 	}
-	if out, err := BuildMTSet(memSlot, false, ""); err == nil {
+	if out, err := FT710.BuildMTSet(memSlot, false, ""); err == nil {
 		outputs = append(outputs, out)
 	} else {
 		t.Fatalf("BuildMTSet(empty tag): %v", err)
 	}
-	if out, err := BuildMTRead(memSlot); err == nil {
+	if out, err := FT710.BuildMTRead(memSlot); err == nil {
 		outputs = append(outputs, out)
 	} else {
 		t.Fatalf("BuildMTRead: %v", err)
 	}
-	if out, err := BuildMTRead(sixtyM); err == nil {
+	if out, err := FT710.BuildMTRead(sixtyM); err == nil {
 		outputs = append(outputs, out)
 	} else {
 		t.Fatalf("BuildMTRead(5xx): %v", err)
 	}
 
-	if out, err := BuildMCSet(memSlot); err == nil {
+	if out, err := FT710.BuildMCSet(memSlot); err == nil {
 		outputs = append(outputs, out)
 	} else {
 		t.Fatalf("BuildMCSet: %v", err)
 	}
-	if out, err := BuildMCSet(sixtyM); err == nil {
+	if out, err := FT710.BuildMCSet(sixtyM); err == nil {
 		outputs = append(outputs, out)
 	} else {
 		t.Fatalf("BuildMCSet(5xx): %v", err)
 	}
-	outputs = append(outputs, BuildMCRead())
+	outputs = append(outputs, FT710.BuildMCRead())
 
-	if out, err := BuildEXRead(EXAddress{P1: 1, P2: 1, P3: 1}); err == nil {
+	if out, err := FT710.BuildEXRead(EXAddress{P1: 1, P2: 1, P3: 1}); err == nil {
 		outputs = append(outputs, out)
 	} else {
 		t.Fatalf("BuildEXRead((01,01,01)): %v", err)
 	}
-	if out, err := BuildEXRead(EXAddress{P1: 6, P2: 5, P3: 18}); err == nil {
+	if out, err := FT710.BuildEXRead(EXAddress{P1: 6, P2: 5, P3: 18}); err == nil {
 		outputs = append(outputs, out)
 	} else {
 		t.Fatalf("BuildEXRead((06,05,18)): %v", err)
 	}
 
 	for _, out := range outputs {
-		if !AllowedCommand(out.Bytes()) {
+		if !FT710.AllowedCommand(out.Bytes()) {
 			t.Errorf("AllowedCommand(%q) = false, want true (builder output)", out.Bytes())
 		}
 	}
@@ -256,13 +256,13 @@ func TestAllowedCommand_PropertyEveryBuilderOutput(t *testing.T) {
 // EX analogue of TestAllowedCommand_PropertyEveryBuilderOutput, run at full
 // inventory scale so no single address is missed.
 func TestAllowedCommand_EXPropertyAll296Reads(t *testing.T) {
-	items := EXItems()
+	items := FT710.EXItems()
 	for _, it := range items {
-		cmd, err := BuildEXRead(it.Addr)
+		cmd, err := FT710.BuildEXRead(it.Addr)
 		if err != nil {
 			t.Fatalf("BuildEXRead(%v): unexpected error: %v", it.Addr, err)
 		}
-		if !AllowedCommand(cmd.Bytes()) {
+		if !FT710.AllowedCommand(cmd.Bytes()) {
 			t.Errorf("AllowedCommand(%q) = false, want true (EX read for %v)", cmd.Bytes(), it.Addr)
 		}
 	}
@@ -287,7 +287,7 @@ func TestAllowedCommand_EXPropertyAll296Reads(t *testing.T) {
 // see validEXRead's doc comment and the MT set/answer-shaped ACCEPT
 // entry in TestAllowedCommand_AcceptsAllowlistedSingleFrames.
 func TestAllowedCommand_EXAnswersRejectedOutboundAll296(t *testing.T) {
-	items := EXItems()
+	items := FT710.EXItems()
 	for _, it := range items {
 		var p4 string
 		if it.Text {
@@ -296,7 +296,7 @@ func TestAllowedCommand_EXAnswersRejectedOutboundAll296(t *testing.T) {
 			p4 = strings.Repeat("0", it.Digits)
 		}
 		frame := "EX" + it.Addr.Wire() + p4 + ";"
-		if AllowedCommand([]byte(frame)) {
+		if FT710.AllowedCommand([]byte(frame)) {
 			t.Errorf("AllowedCommand(%q) = true, want false (EX Set/Answer-shaped, phase-scoped rejection) for %v", frame, it.Addr)
 		}
 	}

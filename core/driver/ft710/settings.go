@@ -46,7 +46,7 @@ var ft710SettingsDescriptor = buildSettingsDescriptor()
 // held pointer, at the cost of one extra slice index per item — a
 // non-issue at 296 items, run once at package init.
 func buildSettingsDescriptor() driver.SettingsDescriptor {
-	items := cat.EXItems()
+	items := cat.FT710.EXItems()
 
 	d := driver.SettingsDescriptor{Version: settingsDescriptorVersion}
 
@@ -179,7 +179,7 @@ func parseEXResponse(requested cat.EXAddress, frame []byte) (driver.SettingValue
 		return driver.SettingValue{ID: id, State: driver.SettingUnavailable}, nil
 	}
 
-	addr, raw, err := cat.ParseEXAnswer(frame)
+	addr, raw, err := cat.FT710.ParseEXAnswer(frame)
 	if err != nil {
 		return driver.SettingValue{}, fmt.Errorf("ft710: ReadSetting %s: %w", id, err)
 	}
@@ -226,7 +226,7 @@ var rejectionFrameBytes = []byte("?;")
 // which interprets what a response means, for every outcome alike (see
 // its own doc comment).
 func (s *Session) ReadSetting(ctx context.Context, id string) (driver.SettingValue, error) {
-	addr, err := cat.ParseEXAddress(id)
+	addr, err := cat.FT710.ParseEXAddress(id)
 	if err != nil {
 		return driver.SettingValue{}, &UnknownSettingError{ID: id}
 	}
@@ -234,7 +234,7 @@ func (s *Session) ReadSetting(ctx context.Context, id string) (driver.SettingVal
 	s.opMu.Lock()
 	defer s.opMu.Unlock()
 
-	cmd, err := cat.BuildEXRead(addr)
+	cmd, err := cat.FT710.BuildEXRead(addr)
 	if err != nil {
 		// Unreachable in practice: cat.ParseEXAddress above already
 		// enforces the identical Table 2 membership BuildEXRead itself
