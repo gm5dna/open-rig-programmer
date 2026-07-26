@@ -414,7 +414,7 @@ func TestNewEngineReachableOnlyFromDriver(t *testing.T) {
 				sawDriverConstruction = true
 				return
 			}
-			t.Errorf("%s: references NewEngine as a %s — an Engine's allowlist is chosen at construction, so only core/driver/** may construct one", pf.relPath, shape)
+			t.Errorf("%s: references NewEngine as a %s — an Engine's allowlist is chosen at construction, so only core/driver/** may reference NewEngine", pf.relPath, shape)
 		}
 
 		reportTypeUse := func(node ast.Node, kind, name string) {
@@ -422,7 +422,7 @@ func TestNewEngineReachableOnlyFromDriver(t *testing.T) {
 				sawExemptEngineLiteral = true
 				return
 			}
-			t.Errorf("%s: %s %s outside NewEngine's own declaration — an Engine's allowlist is chosen at construction, so only NewEngine (called exclusively from core/driver/**) may build one", pf.relPath, kind, name)
+			t.Errorf("%s: %s %s outside NewEngine's own declaration — an Engine's allowlist is chosen at construction, so of the construction shapes this guard checks, only NewEngine's own declaration may use one (this is not a proof that nothing else builds an Engine: see the APPROXIMATE section)", pf.relPath, kind, name)
 		}
 
 		// visit is a hand-rolled walk, not a bare ast.Inspect callback,

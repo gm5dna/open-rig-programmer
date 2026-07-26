@@ -838,6 +838,8 @@ Expected: FAIL — `undefined: FT710`.
 
 Create `core/cat/dialect.go`:
 
+> **Corrected post-merge, 26/07/2026 (Codex per-commit review).** The sketch's doc comment said every method and delegated helper "must read this struct rather than a package-level global", unqualified. That is false for the MT tag width: `mtTagMaxBytes` is a package const read by `BuildMTSet`, by `ParseMTAnswer` via `mtAnswerMaxLen`, and by the outbound gate's MT arm — a deliberate M9c deferral, since `Dialect` carries no field to derive it from. The shipped file now scopes the rule to dialect data and names the exception; the sketch below is corrected to match so it cannot re-seed the unqualified form. Note this is the *second* claim in this plan to reach shipped code by transcription from a sketch — the seed matters as much as the code.
+
 ```go
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -864,12 +866,14 @@ type slotSpace struct {
 // is the precedent for a manual being wrong about exactly this.
 // Per-command frame-shape variants are M9c's.
 //
-// THE RECEIVER IS LOAD-BEARING. Every method here, and every helper those
-// methods delegate to, must read this struct rather than a package-level
-// global. A method that takes a Dialect and consults a global has the
-// shape of a seam and none of the substance, and while only one dialect
-// exists no ordinary test catches it — see seconddialect_test.go, which
-// is the test that does.
+// THE RECEIVER IS LOAD-BEARING FOR DIALECT DATA. Every method here, and
+// every helper those methods delegate to, must read this struct rather
+// than a package-level global for anything this struct carries. A method
+// that takes a Dialect and consults a global has the shape of a seam and
+// none of the substance, and while only one dialect exists no ordinary
+// test catches it — see seconddialect_test.go, which is the test that
+// does. (One live exception, deferred to M9c: the MT tag width — see the
+// shipped file for the full note.)
 //
 // The ZERO VALUE IS INERT, deliberately. An exported struct always has a
 // constructible zero value, so `var d cat.Dialect` compiles and
@@ -1684,6 +1688,8 @@ Verified to catch a regression by reverting one helper to a global."
 
 Revision 1's version matched only a `SelectorExpr` named `NewEngine` and skipped the whole `core/transport` tree — so a dot-import would evade it, and a production wrapper inside `core/transport` could construct an Engine with any gate and hand it out.
 
+> **Corrected post-merge, 26/07/2026 (Codex per-commit review).** The failure string in the sketch below said "only `core/driver/**` may construct one". The guard does not check that and cannot: it checks *references to `NewEngine`*, plus selected construction shapes of `Engine` scoped to `core/transport` — its own APPROXIMATE section lists what it misses, and `Engine` is exported, so a zero value in a future package violates nothing here. This is the same overclaim as finding 3, in different words. The shipped guard's messages are now scoped ("may reference `NewEngine`"; "of the construction shapes this guard checks"); the sketch is corrected to match so it cannot re-seed the claim a third time — which is exactly how it reached the shipped test the first time.
+
 ```go
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -1741,7 +1747,7 @@ func TestNewEngineReachableOnlyFromDriver(t *testing.T) {
 				sawDriverConstruction = true
 				return true
 			}
-			t.Errorf("%s: calls NewEngine — an Engine's allowlist is chosen at construction, so only core/driver/** may construct one", pf.relPath)
+			t.Errorf("%s: calls NewEngine — an Engine's allowlist is chosen at construction, so only core/driver/** may reference NewEngine", pf.relPath)
 			return true
 		})
 	}

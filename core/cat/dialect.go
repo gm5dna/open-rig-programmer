@@ -23,12 +23,25 @@ type slotSpace struct {
 // is the precedent for a manual being wrong about exactly this.
 // Per-command frame-shape variants are M9c's.
 //
-// THE RECEIVER IS LOAD-BEARING. Every method here, and every helper those
-// methods delegate to, must read this struct rather than a package-level
-// global. A method that takes a Dialect and consults a global has the
-// shape of a seam and none of the substance, and while only one dialect
-// exists no ordinary test catches it — see seconddialect_test.go (Task
-// 57), which is the test that does.
+// THE RECEIVER IS LOAD-BEARING FOR DIALECT DATA. Every method here, and
+// every helper those methods delegate to, must read this struct rather
+// than a package-level global for anything this struct carries: slot
+// space, mode set, EX inventory and the bounds derived from it, CAT ID. A
+// method that takes a Dialect and consults a global has the shape of a
+// seam and none of the substance, and while only one dialect exists no
+// ordinary test catches it — see seconddialect_test.go (Task 57), which
+// is the test that does.
+//
+// ONE LIVE EXCEPTION, deliberate and deferred to M9c: the MT tag width.
+// mtTagMaxBytes (mt.go) is a package const, read by BuildMTSet, by
+// ParseMTAnswer via mtAnswerMaxLen, and by the outbound gate's MT arm in
+// allowlist.go. It is NOT a bypassed seam — Dialect carries no field to
+// derive it from, so closing it means ADDING dialect data rather than
+// restoring a receiver, which is why it is M9c's and not this
+// milestone's. The unqualified form of the rule above ("every method …
+// must read this struct rather than a package-level global", full stop)
+// was an overclaim for exactly this family, found by the Codex per-commit
+// review on 26/07/2026 and scoped here rather than left standing.
 //
 // The ZERO VALUE IS INERT, deliberately. An exported struct always has a
 // constructible zero value, so `var d cat.Dialect` compiles and
