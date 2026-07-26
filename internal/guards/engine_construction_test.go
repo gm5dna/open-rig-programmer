@@ -308,12 +308,22 @@ import (
 //     this without effectively re-deriving a borrow-checker, since the
 //     shape is indistinguishable, syntactically, from copying any other
 //     ordinary struct. MEDIUM, not HIGH, for a reason worth stating
-//     precisely: go vet's copylocks check ALREADY flags every one of
-//     these ("assignment copies lock value... contains sync.Mutex"),
-//     because Engine embeds sync.Mutex — confirmed by running go vet
-//     against this exact shape. go vet ./... is both a CI step and this
-//     repository's documented local gate, so the class is not silent in
-//     the TOOLCHAIN, only in this ONE guard. It is, however, the ONE
+//     precisely, and precisely SCOPED (Codex fix-round-5: an earlier
+//     version of this entry claimed the backstop below covers "every
+//     one of these", which does not hold for all four shapes — checked
+//     one at a time, in one file, rather than assumed): go vet's
+//     copylocks check flags the dereference copy, the append(s, *e),
+//     and the v.(Engine) assertion ("assignment copies lock value...
+//     contains sync.Mutex" — Engine does not EMBED sync.Mutex, it HAS a
+//     named field, mu sync.Mutex; "contains" is vet's own word and the
+//     accurate one). It does NOT flag the case Engine: type-switch
+//     arm's binding — confirmed by running go vet against that exact
+//     shape in isolation, silent where the other three, in the same
+//     file, were not. That arm has NO backstop at all, neither this
+//     guard nor vet. For the three shapes copylocks does catch: go vet
+//     ./... is both a CI step and this repository's documented local
+//     gate, so those three are not silent in the TOOLCHAIN, only in
+//     this ONE guard. Across all four shapes, this is, however, the ONE
 //     class in this file whose ACCIDENTAL form is not fail-safe (see
 //     the SEVERITY CONTEXT entry above): a copy inherits the original's
 //     already-non-nil allow, so an accidental "c := *e" yields a
