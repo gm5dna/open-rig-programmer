@@ -250,13 +250,56 @@ type stubPort struct {
 	writes   [][]byte
 	closed   bool
 	closeSig chan struct{}
+	// replyGate is nil for newStubPort (reply available immediately) and
+	// non-nil for newReplyOnWriteStubPort, where Read parks on it until the
+	// first Write closes it. See newReplyOnWriteStubPort for why both
+	// behaviours are needed.
+	replyGate chan struct{}
+	gateOnce  sync.Once
 }
 
 func newStubPort(reply string) *stubPort {
 	return &stubPort{toRead: []byte(reply), closeSig: make(chan struct{})}
 }
 
+// newReplyOnWriteStubPort withholds the canned reply until the first Write,
+// the way a real radio answers a command rather than volunteering bytes.
+//
+// Use it for any test that performs a request/response EXCHANGE. The plain
+// newStubPort hands its reply to the first Read regardless of any write,
+// which races Engine construction: NewEngine starts the reader goroutine
+// immediately, so under load the reader can consume and buffer the reply
+// BEFORE Do runs — whereupon Do's entry purge (purgeBufferedLocked)
+// correctly discards it as a stale unsolicited frame, and the read then
+// times out with its answer already thrown away. Measured at 1 failure in
+// 480 runs of the settle/clock tests at 16-way concurrency on 11 cores.
+//
+// Note the failure is a LOST reply, not a late one, so raising timeouts
+// does not fix it: a 10s bound was tried first and failed identically, just
+// 10s later. That is the tell for this class — a bigger timeout that buys
+// nothing means the data is gone, not slow.
+//
+// newStubPort is deliberately left ungated rather than replaced:
+// TestNewEngine_NilAllowFuncIsRefusedBeforeReaderStarts detects a wrongly
+// started reader goroutine precisely BY its consuming those bytes with no
+// write, so gating it would make that guard pass whether or not the
+// goroutine started.
+func newReplyOnWriteStubPort(reply string) *stubPort {
+	return &stubPort{
+		toRead:    []byte(reply),
+		closeSig:  make(chan struct{}),
+		replyGate: make(chan struct{}),
+	}
+}
+
 func (p *stubPort) Read(b []byte) (int, error) {
+	if p.replyGate != nil {
+		select {
+		case <-p.replyGate:
+		case <-p.closeSig:
+			return 0, errClosedStub
+		}
+	}
 	p.mu.Lock()
 	if len(p.toRead) > 0 {
 		n := copy(b, p.toRead)
@@ -274,6 +317,12 @@ func (p *stubPort) Write(b []byte) (int, error) {
 	cp := append([]byte(nil), b...)
 	p.writes = append(p.writes, cp)
 	p.mu.Unlock()
+	// Release the gated reply, if this port has one. Done after recording
+	// the write so a reader that wakes immediately cannot observe a reply
+	// the write list does not yet account for.
+	if p.replyGate != nil {
+		p.gateOnce.Do(func() { close(p.replyGate) })
+	}
 	return len(b), nil
 }
 
@@ -319,7 +368,9 @@ func (c *fakeClock) Sleep(d time.Duration) {
 }
 
 func TestEngine_WithClock_SettleUsesInjectedClock(t *testing.T) {
-	port := newStubPort("ID0800;")
+	// Gated: this is a real exchange, so the reply must not be able to
+	// arrive before the request. See newReplyOnWriteStubPort.
+	port := newReplyOnWriteStubPort("ID0800;")
 	t.Cleanup(func() { _ = port.Close() })
 	fc := newFakeClock()
 	eng, err := NewEngine(port, cat.FT710.AllowedCommand, WithClock(fc))
@@ -355,7 +406,9 @@ func TestEngine_WithClock_SettleUsesInjectedClock(t *testing.T) {
 // — the radio parsed the command and replied — so Settle applies to it too,
 // not only to success. Only a genuine non-response (ErrTimeout) skips it.
 func TestEngine_Settle_AppliesAfterRejectionToo(t *testing.T) {
-	port := newStubPort("?;")
+	// Gated for the same reason as the clock test above: a "?;" rejection
+	// is still an answer to a command, and must not precede it.
+	port := newReplyOnWriteStubPort("?;")
 	t.Cleanup(func() { _ = port.Close() })
 	fc := newFakeClock()
 	eng, err := NewEngine(port, cat.FT710.AllowedCommand, WithClock(fc))
