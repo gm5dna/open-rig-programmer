@@ -318,6 +318,16 @@ func validateClarifier(cfg DialectConfig) error {
 	if c.StepHz < 1 {
 		return fmt.Errorf("cat: Clarifier.StepHz is %d, want >= 1 — validClarHz takes a modulo by it", c.StepHz)
 	}
+	// An upper bound as well as a lower one (milestone review, finding 1).
+	// A step wider than the whole 4-digit field is meaningless, and without
+	// this an enormous StepHz passed every clause here — MaxAbsHz 0 is >= 0,
+	// is <= 9999, and 0 % anything is 0 — and then panicked validClarHz,
+	// which narrowed it to int16 and divided by the resulting zero. That
+	// narrowing is gone too, but a policy this validator cannot justify
+	// should not reach a dialect in the first place.
+	if c.StepHz > clarFieldMaxHz {
+		return fmt.Errorf("cat: Clarifier.StepHz is %d, want <= %d — a step wider than the 4-digit clarifier field cannot describe any legal value", c.StepHz, clarFieldMaxHz)
+	}
 	if c.MaxAbsHz < 0 {
 		return fmt.Errorf("cat: Clarifier.MaxAbsHz is %d, want >= 0", c.MaxAbsHz)
 	}
@@ -334,8 +344,30 @@ func validateClarifier(cfg DialectConfig) error {
 // admitted by this dialect's own gate, since the builder and the gate share
 // this validator.
 func validateMWWriteKind(cfg DialectConfig) error {
-	if !validKindByte(cfg.MWWriteKind) {
-		return fmt.Errorf("cat: MWWriteKind is %#02x, which is not a documented P7 value (see validKindByte)", cfg.MWWriteKind)
+	if !validMWWriteKindByte(cfg.MWWriteKind) {
+		return fmt.Errorf("cat: MWWriteKind is %q, which is not a P7 value a builder may EMIT — KindUnset ('4') is the documented \"-\" placeholder that parsers must accept and builders must never write", cfg.MWWriteKind)
 	}
 	return nil
+}
+
+// validMWWriteKindByte reports whether b is a P7 value a BUILDER may emit.
+//
+// It is deliberately NOT validKindByte. That predicate is the READ-side
+// domain: it accepts KindUnset ('4') because ParseMRAnswer must, since the
+// reference documents '4' as a "-" placeholder a radio can send. A builder
+// must never write it — memdata.go says so at KindUnset's own declaration.
+//
+// V11 delegated to validKindByte until the M9c-0 milestone review (finding
+// 2), so a dialect could declare MWWriteKind: KindUnset and its builder
+// would then emit P7 '4' with its own gate admitting the frame. Reproduced:
+// "MW005007100000+000000240000;", built and gate-approved. Reusing a
+// read-side domain for a write-side decision is the whole of the bug, and
+// separating the two predicates is the whole of the fix.
+func validMWWriteKindByte(b byte) bool {
+	switch b {
+	case KindVFO, KindMemory, KindMemTune, KindQMB, KindPMS:
+		return true
+	default: // KindUnset and anything undocumented
+		return false
+	}
 }

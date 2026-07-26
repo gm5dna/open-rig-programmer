@@ -34,14 +34,21 @@ type slotSpace struct {
 // ordinary test catches it — see seconddialect_test.go (Task 57), which
 // is the test that does.
 //
-// ONE LIVE EXCEPTION, deliberate and deferred to M9c: the MT tag width.
-// mtTagMaxBytes (mt.go) is a package const, read by BuildMTSet, by
-// ParseMTAnswer via mtAnswerMaxLen, and by the outbound gate's MT arm in
-// allowlist.go. It is NOT a bypassed seam — Dialect carries no field to
-// derive it from, so closing it means ADDING dialect data rather than
-// restoring a receiver, which is why it is M9c's and not this
-// milestone's. The unqualified form of the rule above ("every method …
-// must read this struct rather than a package-level global", full stop)
+// THE MT TAG WIDTH IS NO LONGER AN EXCEPTION. It was one, and this
+// comment described it as deferred until M9c-0 closed it: the width and
+// the empty-tag encoding are now Dialect.mt (MTPolicy), alongside
+// Dialect.clar (the clarifier step and range) and Dialect.mwWriteKind (the
+// P7 value a builder may emit). All three reach the OUTBOUND WRITE GATE,
+// which is why they were promoted while the pure frame offsets were not.
+//
+// What remains genuinely deferred is per-command FRAME SHAPE — the
+// offsets, lengths and field widths in memdata.go and the mt*Len constants
+// — plus Slot's predicates and Mode.String. Those are M9c's. The dividing
+// line is that a wrong assumption in the gate can authorise bytes that
+// reach a radio, whereas a wrong offset merely fails to parse.
+//
+// The unqualified form of the rule above ("every method … must read this
+// struct rather than a package-level global", full stop)
 // was an overclaim for exactly this family, found by the Codex per-commit
 // review on 26/07/2026 and scoped here rather than left standing.
 //

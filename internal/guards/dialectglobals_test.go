@@ -51,14 +51,48 @@ var promotedConstants = []string{
 	"clarStepHz",    // ditto, and a radio characteristic, not a field width
 }
 
-// gateReachingValidators must be Dialect METHODS. Each is reached by
-// Dialect.AllowedCommand, so a package-level version would bind every
-// dialect to the FT-710's rule at the one point that decides what is
-// written to a radio.
-var gateReachingValidators = []string{
-	"validMTTag",
-	"validClarHz",
-	"validateMWFields",
+// gateReachingValidators must be Dialect METHODS, and each must READ the
+// receiver field naming its policy.
+//
+// Both halves are required, and the second is the one that matters. Until
+// the M9c-0 milestone review (finding 3) this guard checked only that the
+// functions were methods — so reverting validateMWFields to the hardcoded
+// KindMemory, while leaving it a method, left the guard GREEN. Mutation-
+// tested and confirmed: the cat package's own tests caught that
+// regression; this guard did not, while its doc comment and the milestone
+// summary both claimed it "asserts usage rather than absence".
+//
+// That is this project's recurring defect — a plausible mechanism written
+// without running it — committed inside the instrument built to detect it.
+// The root cause is worth recording: task 66's fix WAS mutation-tested and
+// the mutation WAS caught, and the catch was attributed to this guard
+// without checking which test had gone red.
+//
+// Each is reached by Dialect.AllowedCommand, so a version that consults a
+// package global binds every dialect to the FT-710's rule at the one point
+// that decides what is written to a radio.
+// The `forbidden` list is the second lesson, learned while fixing the
+// first. Requiring the body to MENTION its receiver field is still too
+// weak, because an incidental mention satisfies it: hardwiring
+// validateMWFields' decision to KindMemory left `d.mwWriteKind` in the
+// diagnostic string, and hardwiring validClarHz' arithmetic to FT710 left
+// a `d.clar.StepHz < 1` guard at the top. Both mutations passed the
+// mention check. Naming the identifiers that must NOT appear closes the
+// two shapes a mention cannot distinguish.
+var gateReachingValidators = []struct {
+	fn        string
+	field     string   // the receiver field its body must read
+	forbidden []string // identifiers its body must NOT reference
+}{
+	// FT710 is forbidden in all three: a Dialect method reaching for the
+	// package's one configured dialect is the defect by definition,
+	// whatever else it also reads.
+	{"validMTTag", "mt", []string{"FT710"}},
+	{"validClarHz", "clar", []string{"FT710"}},
+	// KindMemory too: after M9c-0 this validator has no business naming
+	// the FT-710's own P7 value. Its diagnostic mentions it as a STRING,
+	// which is not an identifier, so this stays satisfiable.
+	{"validateMWFields", "mwWriteKind", []string{"FT710", "KindMemory"}},
 }
 
 // TestDialectPromotedDataIsNotAPackageGlobal pins that none of the promoted
@@ -102,6 +136,16 @@ func TestDialectPromotedDataIsNotAPackageGlobal(t *testing.T) {
 	t.Logf("scanned %d core/cat files, %d package-level declarations", len(files), len(declared))
 }
 
+// funcDeclInfo is one function or method declaration, with enough of it
+// retained to ask whether its body reads a particular receiver field.
+type funcDeclInfo struct {
+	isMethod bool
+	recvType string
+	recvName string // "" for a package function or an unnamed receiver
+	where    string
+	body     *ast.BlockStmt
+}
+
 // TestGateReachingValidatorsTakeADialectReceiver is the usage half.
 //
 // A promoted constant could be deleted and the value hardcoded inline at
@@ -111,12 +155,7 @@ func TestDialectPromotedDataIsNotAPackageGlobal(t *testing.T) {
 func TestGateReachingValidatorsTakeADialectReceiver(t *testing.T) {
 	files := catFiles(t)
 
-	type decl struct {
-		isMethod bool
-		recvType string
-		where    string
-	}
-	found := map[string][]decl{}
+	found := map[string][]funcDeclInfo{}
 
 	for _, pf := range files {
 		for _, d := range pf.file.Decls {
@@ -124,7 +163,7 @@ func TestGateReachingValidatorsTakeADialectReceiver(t *testing.T) {
 			if !ok {
 				continue
 			}
-			rec := decl{where: pf.relPath}
+			rec := funcDeclInfo{where: pf.relPath, body: fd.Body}
 			if fd.Recv != nil && len(fd.Recv.List) > 0 {
 				rt := fd.Recv.List[0].Type
 				if se, ok := rt.(*ast.StarExpr); ok {
@@ -134,27 +173,96 @@ func TestGateReachingValidatorsTakeADialectReceiver(t *testing.T) {
 					rec.isMethod = true
 					rec.recvType = id.Name
 				}
+				// The receiver's NAME, needed to recognise reads of its
+				// own fields. An unnamed receiver (func (Dialect) f())
+				// cannot read one at all, and leaving recvName empty makes
+				// readsRecvField report false, which is the correct answer.
+				if names := fd.Recv.List[0].Names; len(names) > 0 {
+					rec.recvName = names[0].Name
+				}
 			}
 			found[fd.Name.Name] = append(found[fd.Name.Name], rec)
 		}
 	}
 
-	for _, name := range gateReachingValidators {
-		decls, ok := found[name]
+	for _, want := range gateReachingValidators {
+		decls, ok := found[want.fn]
 		if !ok {
-			t.Errorf("%s is not declared anywhere in core/cat — if it was renamed, update this guard deliberately rather than letting it pass vacuously", name)
+			t.Errorf("%s is not declared anywhere in core/cat — if it was renamed, update this guard deliberately rather than letting it pass vacuously", want.fn)
 			continue
 		}
 		for _, d := range decls {
 			if !d.isMethod {
-				t.Errorf("%s at %s is a package-level function, want a method on Dialect — it is reached by AllowedCommand, so a package-level version binds every dialect to the FT-710's rule at the gate", name, d.where)
+				t.Errorf("%s at %s is a package-level function, want a method on Dialect — it is reached by AllowedCommand, so a package-level version binds every dialect to the FT-710's rule at the gate", want.fn, d.where)
 				continue
 			}
 			if d.recvType != "Dialect" {
-				t.Errorf("%s at %s has receiver %s, want Dialect", name, d.where, d.recvType)
+				t.Errorf("%s at %s has receiver %s, want Dialect", want.fn, d.where, d.recvType)
+			}
+			// THE ASSERTION THAT MAKES THIS A USAGE GUARD. Being a method
+			// is a shape; reading the receiver's own policy field is the
+			// substance. Without this, hardwiring the datum back to a
+			// package global or an inline literal leaves the guard green,
+			// which is exactly what it did before finding 3.
+			if !d.readsRecvField(want.field) {
+				t.Errorf("%s at %s is a Dialect method but never reads %s.%s — it takes a receiver and gets its datum somewhere else, which is the shape of a seam with none of the substance",
+					want.fn, d.where, d.recvName, want.field)
+			}
+			for _, bad := range want.forbidden {
+				if d.referencesIdent(bad) {
+					t.Errorf("%s at %s references %s — a gate-reaching validator must decide from its own receiver, not from the package's configured dialect or the FT-710's own constants",
+						want.fn, d.where, bad)
+				}
 			}
 		}
 	}
+}
+
+// readsRecvField reports whether the declaration's body contains a
+// selector on its own receiver naming field.
+//
+// It matches `<recv>.<field>` at any depth, including through further
+// selectors such as d.clar.StepHz, by looking for a SelectorExpr whose X
+// is the receiver identifier and whose Sel is the field. A method that
+// reads the field only via a helper it delegates to will NOT satisfy this
+// — deliberately: the three validators named here are the ones the gate
+// reaches directly, and the point is that each consults its own receiver.
+// referencesIdent reports whether the body names ident anywhere, INCLUDING
+// as the Sel of a selector, so both `FT710` and `FT710.clar.StepHz` match.
+//
+// String literals do not match: a diagnostic that mentions "KindMemory" in
+// prose is documentation, not a decision, and forbidding that would make
+// the honest error messages this milestone added unwritable.
+func (d funcDeclInfo) referencesIdent(ident string) bool {
+	if d.body == nil {
+		return false
+	}
+	found := false
+	ast.Inspect(d.body, func(n ast.Node) bool {
+		if id, ok := n.(*ast.Ident); ok && id.Name == ident {
+			found = true
+		}
+		return true
+	})
+	return found
+}
+
+func (d funcDeclInfo) readsRecvField(field string) bool {
+	if d.recvName == "" || d.body == nil {
+		return false
+	}
+	found := false
+	ast.Inspect(d.body, func(n ast.Node) bool {
+		se, ok := n.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		if id, ok := se.X.(*ast.Ident); ok && id.Name == d.recvName && se.Sel.Name == field {
+			found = true
+		}
+		return true
+	})
+	return found
 }
 
 // TestTransitiveGlobalReachSetIsReported re-derives the audit and reports

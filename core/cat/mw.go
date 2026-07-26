@@ -51,9 +51,13 @@ func (d Dialect) BuildMWSet(m MemoryData) (Command, error) {
 // encode as an MW Set frame UNDER THIS DIALECT. It rejects:
 //   - a slot that is not writable under this dialect's slot space (5xx,
 //     EMG, "000"/none, or an invalid Slot);
-//   - a Kind other than KindMemory ('1') — HW-CONFIRMED 2026-07-13, the
-//     radio requires KindMemory on EVERY MW write regardless of slot
-//     bank (see the Kind-pairing note below);
+//   - a Kind other than THIS DIALECT'S declared write kind
+//     (Dialect.mwWriteKind). The FT-710's is KindMemory ('1'),
+//     HW-CONFIRMED 2026-07-13: that radio requires it on EVERY MW write
+//     regardless of slot bank. Since M9c-0 the value comes from the
+//     receiver rather than a constant, because that finding is about one
+//     radio and the outbound gate reaches this validator (see the
+//     Kind-pairing note below);
 //   - m.Mode == ModeUnset, or any Mode value that does not round-trip
 //     through ParseMode (Mode is a raw byte alias, mode.go — never trust a
 //     caller-forged Mode value, per Task 2 review);

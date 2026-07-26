@@ -231,6 +231,34 @@ func (d Dialect) ParseMTAnswer(frame []byte) (Slot, bool, string, error) {
 	if err != nil {
 		return Slot{}, false, "", newParseError(frame, "MT answer: display field must be '0' or '1'")
 	}
-	tag := strings.TrimRight(string(frame[6:len(frame)-1]), string(d.mt.ClearTagByte))
+	tag := d.decodeMTTag(string(frame[6 : len(frame)-1]))
 	return slot, display, tag, nil
+}
+
+// decodeMTTag turns an MT answer's raw tag field into a tag value.
+//
+// TWO DISTINCT THINGS, which this code conflated until the M9c-0 milestone
+// review (finding 4):
+//
+//  1. THE CLEAR FORM. An empty tag is written as exactly TagMaxBytes
+//     repetitions of ClearTagByte, so exactly that field means "no tag".
+//     This is dialect data, and it is what BuildMTSet emits.
+//
+//  2. PADDING. The radio pads a short tag with SPACES to fill the field.
+//     That is a property of the wire format, not of the clear encoding.
+//
+// The previous version trimmed every trailing ClearTagByte, which is right
+// for the FT-710 only because its clear byte IS a space, so the two rules
+// coincide. For a dialect clearing with any other byte it silently
+// destroyed data: on a peer clearing with '-', the tag "CALL-" built,
+// passed the gate, and came back as "CALL".
+//
+// FT-710 behaviour is unchanged in both directions. A full field of spaces
+// still decodes to "" by rule 1, and "CALL" followed by spaces still
+// decodes to "CALL" by rule 2 — the same string TrimRight produced.
+func (d Dialect) decodeMTTag(raw string) string {
+	if w := d.mt.TagMaxBytes; w > 0 && len(raw) == w && raw == strings.Repeat(string(d.mt.ClearTagByte), w) {
+		return ""
+	}
+	return strings.TrimRight(raw, " ")
 }

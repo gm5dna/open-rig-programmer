@@ -65,9 +65,13 @@ type MemoryData struct {
 	// byte, not a wrapped type like Mode/CTCSSState/Shift: unlike those,
 	// P7's semantics are NOT fully settled even after M5b. The
 	// write-direction PAIRING rule IS HW-CONFIRMED 2026-07-13 (M5b write
-	// trials, docs/hardware-notes.md) — every MW write, memory or PMS
-	// slot alike, must carry KindMemory ('1'); mw.go's validateMWFields
-	// enforces exactly this. But P7's full semantics stay partially
+	// trials, docs/hardware-notes.md) FOR THE FT-710 — every MW write to
+	// that radio, memory or PMS slot alike, must carry KindMemory ('1').
+	// Since M9c-0 that is DIALECT DATA (Dialect.mwWriteKind), not a
+	// universal rule: mw.go's validateMWFields enforces whichever value
+	// the receiver declares, and the FT-710's value is KindMemory because
+	// its hardware says so, not because the grammar requires it. But P7's
+	// full semantics stay partially
 	// murky: MEM channels have been observed reading BOTH '0' and '1'
 	// (front-panel-created), only '1' is writable, the '0' state is not
 	// recreatable via CAT, and '2'/'3'/'4' have never been sent or read
@@ -231,11 +235,28 @@ func (d Dialect) validClarHz(v int16) bool {
 	if d.clar.StepHz < 1 {
 		return false
 	}
-	max, step := int16(d.clar.MaxAbsHz), int16(d.clar.StepHz)
-	if v < -max || v > max {
+	// Arithmetic in int, NEVER narrowed to int16.
+	//
+	// This function took int16(d.clar.StepHz) until the M9c-0 milestone
+	// review (finding 1). The StepHz < 1 guard above looks like the
+	// defence and is not: the narrowing happened AFTER it, so a policy of
+	// StepHz 65536 — which passes that guard, and passed every clause of
+	// V10 — became int16(65536) == 0 and executed v % 0. Reproduced as a
+	// genuine "integer divide by zero" from a CONSTRUCTOR-APPROVED config,
+	// reachable through both BuildMWSet and AllowedCommand, so a caller
+	// could panic the outbound write gate.
+	//
+	// V10 now also bounds StepHz, which closes the same hole at
+	// construction. Both fixes are kept: this one makes the arithmetic
+	// correct for any value the type permits, rather than correct only for
+	// values some other function happened to filter.
+	iv, max, step := int(v), d.clar.MaxAbsHz, d.clar.StepHz
+	if iv < -max || iv > max {
 		return false
 	}
-	return v%step == 0
+	// Go's % preserves the sign of the dividend for a positive step, so
+	// this is correct for negative v without a separate abs().
+	return iv%step == 0
 }
 
 // allDigits reports whether every byte in b is an ASCII digit '0'-'9'

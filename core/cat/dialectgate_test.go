@@ -94,6 +94,13 @@ func TestNewDialect_RefusesEveryAdversarialWireByteConfig(t *testing.T) {
 func TestEveryDialect_BuiltFramesAreCleanAndGateAdmissible(t *testing.T) {
 	totalFrames := 0
 
+	// perBuilder counts across ALL dialects, so a builder that stopped
+	// contributing anywhere is caught. The plan required this and the
+	// first version had only per-dialect and total counts (finding 5): a
+	// broken or omitted MW corpus still passed, because every dialect
+	// contributed three fixed frames and the totals stayed healthy.
+	perBuilder := map[string]int{}
+
 	for _, nd := range allTestDialects() {
 		perDialect := 0
 
@@ -103,6 +110,7 @@ func TestEveryDialect_BuiltFramesAreCleanAndGateAdmissible(t *testing.T) {
 				return // a dialect legitimately refusing to build is not this test's business
 			}
 			perDialect++
+			perBuilder[what]++
 			totalFrames++
 
 			if len(frame) == 0 {
@@ -165,6 +173,37 @@ func TestEveryDialect_BuiltFramesAreCleanAndGateAdmissible(t *testing.T) {
 			}
 		}
 
+		// MW SETS — the path this property exists for, and the one it
+		// omitted until the milestone review (finding 5). Mode keys, the
+		// clarifier policy and the MW write kind ALL reach the wire only
+		// here: every other builder above emits fixed forms or a slot. A
+		// dialect whose mode key was a NUL would have produced a clean
+		// bill of health from this test while its MW frames carried the
+		// NUL, which is precisely the defect the property was written for.
+		for _, m := range allModeValues() {
+			if !nd.dia.ValidMode(m) {
+				continue
+			}
+			for n := 0; n <= 999; n++ {
+				slot, err := nd.dia.ParseSlot(threeDigits(n))
+				if err != nil {
+					continue
+				}
+				ctcss, _ := ParseCTCSSState('0')
+				shift, _ := ParseShift('0')
+				cmd, err := nd.dia.BuildMWSet(MemoryData{
+					Slot: slot, FreqHz: 7100000, Mode: m,
+					Kind: nd.dia.mwWriteKind, CTCSS: ctcss, Shift: shift,
+				})
+				if err != nil {
+					continue
+				}
+				build("MW set", cmd.Bytes(), nil)
+				break // one slot per mode is enough; the slot space is
+				// already exhausted by the read builders above
+			}
+		}
+
 		// NON-VACUITY, per dialect. A property that ran zero times for a
 		// dialect passes in silence, which is exactly how a fixture with a
 		// mistyped slot space would go unnoticed.
@@ -176,7 +215,23 @@ func TestEveryDialect_BuiltFramesAreCleanAndGateAdmissible(t *testing.T) {
 	if totalFrames < 100 {
 		t.Errorf("only %d frames checked across all dialects; expected hundreds — the walk is not reaching the builders", totalFrames)
 	}
-	t.Logf("checked %d built frames across %d dialects", totalFrames, len(allTestDialects()))
+
+	// EVERY builder must have contributed. Without this, deleting a whole
+	// builder's loop leaves the property green on the strength of the
+	// others — which is exactly how MW went missing.
+	for _, what := range []string{
+		"ID read", "AI set", "MC read",
+		"MR read", "MT read", "MC set",
+		"MT set (cleared tag)", "MT set (tagged)",
+		"EX read", "MW set",
+	} {
+		if perBuilder[what] == 0 {
+			t.Errorf("builder %q contributed no frames — either it was dropped from this walk or every dialect refuses it, and both are defects this property must not pass over", what)
+		}
+	}
+
+	t.Logf("checked %d built frames across %d dialects; per builder: %v",
+		totalFrames, len(allTestDialects()), perBuilder)
 }
 
 func threeDigits(n int) string {

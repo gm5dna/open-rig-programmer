@@ -223,19 +223,55 @@ func TestNewDialect_DerivedEXIndicesMatchRecomputation(t *testing.T) {
 		t.Fatal("no EX items — this test would run vacuously")
 	}
 
-	// Membership, recomputed by linear scan rather than by map lookup.
+	// CARDINALITY FIRST. Iterating the items and asking "is each a member?"
+	// can only ever prove POSITIVE membership — it cannot see an index
+	// that contains entries the inventory does not (milestone review,
+	// finding 6). A mutation adding bogus entries to both the literal and
+	// the constructed index passed the old version of this test.
+	if got, want := len(d.exMembers), len(items); got != want {
+		t.Errorf("exMembers holds %d addresses, inventory holds %d — the index carries entries the inventory does not", got, want)
+	}
+	if got, want := len(d.exByTriple), len(items); got != want {
+		t.Errorf("exByTriple holds %d triples, inventory holds %d", got, want)
+	}
+
+	// Then agreement over a BOUNDED SWEEP of the address space, not just
+	// over the members. Every component is validated to 0..99, and the
+	// FT-710's inventory lives at P1 in {1,2,3,4,6}, so this window covers
+	// it with margin and visits far more NON-members than members — which
+	// is the direction the old test could not check at all.
+	inInventory := make(map[EXAddress]bool, len(items))
 	for _, it := range items {
-		found := false
-		for _, other := range items {
-			if other.Addr == it.Addr {
-				found = true
-				break
+		inInventory[it.Addr] = true
+	}
+	swept, members, nonMembers := 0, 0, 0
+	for p1 := 0; p1 <= 9; p1++ {
+		for p2 := 0; p2 <= 20; p2++ {
+			for p3 := 0; p3 <= 25; p3++ {
+				a := EXAddress{P1: uint8(p1), P2: uint8(p2), P3: uint8(p3)}
+				want := inInventory[a]
+				swept++
+				if want {
+					members++
+				} else {
+					nonMembers++
+				}
+				if got := d.KnownEXAddress(a); got != want {
+					t.Errorf("KnownEXAddress(%v) = %v, inventory scan says %v", a, got, want)
+				}
+				// BOTH indices, over the same sweep: NewEXAddress reads
+				// exByTriple, which KnownEXAddress never touches.
+				_, err := d.NewEXAddress(p1, p2, p3)
+				if (err == nil) != want {
+					t.Errorf("NewEXAddress(%d,%d,%d) error = %v, but membership is %v", p1, p2, p3, err, want)
+				}
 			}
 		}
-		if found != d.KnownEXAddress(it.Addr) {
-			t.Errorf("KnownEXAddress(%v) = %v, linear scan says %v", it.Addr, d.KnownEXAddress(it.Addr), found)
-		}
 	}
+	if members == 0 || nonMembers == 0 {
+		t.Fatalf("sweep visited %d addresses: %d members, %d non-members — both directions must be exercised or this proves nothing", swept, members, nonMembers)
+	}
+	t.Logf("swept %d addresses: %d members, %d non-members", swept, members, nonMembers)
 
 	// Widest P4, recomputed by scan.
 	widest := 0
@@ -248,9 +284,9 @@ func TestNewDialect_DerivedEXIndicesMatchRecomputation(t *testing.T) {
 		t.Errorf("exP4MaxBytes = %d, scan of the inventory says %d", got, widest)
 	}
 
-	// The triple index, checked against a scan for a sample of members and
-	// for a triple no item holds.
-	for _, it := range items[:10] {
+	// Every member reachable through NewEXAddress, including any that fall
+	// outside the sweep window above.
+	for _, it := range items {
 		if _, err := d.NewEXAddress(int(it.Addr.P1), int(it.Addr.P2), int(it.Addr.P3)); err != nil {
 			t.Errorf("NewEXAddress(%v) = %v, but that triple is in the inventory", it.Addr, err)
 		}
