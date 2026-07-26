@@ -2,7 +2,33 @@
 
 package cat
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
+
+// namedDialect pairs a dialect with a label for table-driven tests.
+type namedDialect struct {
+	name string
+	dia  Dialect
+}
+
+// allTestDialects is every CONFIGURED dialect this package can see: the
+// real one plus the three fictions in this file. Tests asserting a
+// property that must hold of ANY dialect walk this, so adding a dialect
+// later cannot quietly skip them.
+//
+// The zero Dialect is deliberately absent: it is unconfigured by design
+// and its property is the opposite one (it must do nothing at all), tested
+// separately by TestZeroDialectRejectsEveryCorpusFrame.
+func allTestDialects() []namedDialect {
+	return []namedDialect{
+		{"FT710", FT710},
+		{"testDialect", testDialect},
+		{"noneWireDialect", noneWireDialect},
+		{"peerDialect", peerDialect},
+	}
+}
 
 // testDialect is a deliberately WRONG dialect: a fictional radio whose
 // every varying attribute differs from the FT-710's. It exists only in
@@ -57,20 +83,92 @@ var noneWireDialect = Dialect{
 	exMembers: map[EXAddress]bool{},
 }
 
+// peerDialect is the dialect that makes this file's proof complete, and it
+// exists because of a MEASURED gap in the two above.
+//
+// testDialect and noneWireDialect are both SUBSETS of the FT-710: memory
+// 1-5 ⊂ 1-99, 2 PMS pairs ⊂ 9, no 60m bank, no EMG, and noneWireDialect's
+// 000-005 all parse under FT710 too. Every slot they accept, the FT-710
+// accepts. That has a consequence neither of them can escape: WIDENING an
+// inner check to the FT-710's rules can never admit anything the outer
+// check then rejects, so a whole family of hardwirings — six of them,
+// where a Dialect method delegates to an inner d.ParseSlot or
+// d.parseMemoryFrame and then re-checks the result — is INVISIBLE to a
+// subset dialect. Task 57's first round conceded one of those as
+// "undetectable in principle". That was wrong: it is detectable, by a
+// dialect that is a PEER of the FT-710 rather than a subset of it.
+//
+// Three attributes were also varied only by PRESENCE and never by VALUE:
+// both dialects above set emgWire "" and sixtyLo/sixtyHi 0,0, which
+// exercises each guard and never the datum. Four further hardwirings
+// escaped the ENTIRE core/cat suite because of it — including SixtyMSlot
+// formatting its wire as fmt.Sprintf("5%02d", n), which is byte-for-byte
+// the bug an external review caught at Task 53 and which the constructor
+// test below cites as its own reason for existing.
+//
+// So peerDialect ACCEPTS WHAT THE FT-710 REJECTS, at every attribute:
+//
+//	memory   100-200   (FT-710 1-99      — disjoint)
+//	60m      600-620   (FT-710 501-599   — present, DIFFERENTLY NUMBERED)
+//	emgWire  "XYZ"     (FT-710 "EMG"     — present, DIFFERENT VALUE)
+//	noneWire "777"     (FT-710 "000"     — different again)
+//	mode     'z'       (outside '0'-'9'/'A'-'F' entirely)
+//	EX       09 01 01  (FT-710 has no P1=09 group at all)
+//
+// Every one of those wire forms is REJECTED by FT710.classifySlot, and
+// every peerDialect positive control below therefore fails the moment an
+// inner check is widened to the FT-710's.
+var peerDialect = Dialect{
+	catID: "7777",
+	modeNames: map[Mode]string{
+		ModeUSB:   "USB-PEER", // shared with the FT-710, so frames build for both
+		Mode('z'): "ZULU",     // OUTSIDE '0'-'9'/'A'-'F': a mode no range check admits
+		// Deliberately omits ModeLSB, which the FT-710 has.
+	},
+	slots: slotSpace{
+		memoryLo: 100, memoryHi: 200, // FT-710: 1-99, disjoint
+		sixtyLo: 600, sixtyHi: 620, // FT-710: 501-599, present but renumbered
+		pmsPairs: 4,     // FT-710: 9
+		emgWire:  "XYZ", // FT-710: "EMG", present but different
+		noneWire: "777", // FT-710: "000"
+	},
+	exItems:    peerEXItems,
+	exMembers:  buildEXMembers(peerEXItems),
+	exByTriple: buildEXByTriple(peerEXItems),
+}
+
+// peerEXItems is a small inventory sharing NO address with the FT-710's:
+// that inventory holds P1 groups {1,2,3,4,6} and nothing at P1=9, so no
+// address here is a member of it and no address of its 296 is a member of
+// this. An EMPTY inventory (testDialect's) only ever proves the negative
+// direction; this proves the positive one too, which is what catches an EX
+// check widened to the FT-710's index.
+var peerEXItems = []EXItem{
+	{Addr: EXAddress{P1: 9, P2: 1, P3: 1}, P1Label: "PEER SETTING", P2Label: "PEER GROUP", Name: "PEER ITEM ONE", Digits: 3},
+	{Addr: EXAddress{P1: 9, P2: 1, P3: 2}, P1Label: "PEER SETTING", P2Label: "PEER GROUP", Name: "PEER ITEM TWO", Digits: 1},
+}
+
 // EVERY ASSERTION IN THIS FILE MUST FAIL FOR ITS OWN REASON. A test that
 // asserts "testDialect rejects X" passes just as happily when the helper
 // is correct, when it is broken in some unrelated way, and when the test's
-// own premise is wrong. Two habits keep that honest and both are load
-// bearing here:
+// own premise is wrong. Three habits keep that honest and all three are
+// load bearing here:
 //
-//   - Every rejection is paired with the SAME call on FT710 succeeding, so
-//     a helper that started rejecting everything cannot masquerade as a
-//     working seam.
-//   - Every rejection is paired with a POSITIVE CONTROL on testDialect —
-//     the same entry point, an input inside testDialect's own slot space or
-//     mode set, which must be ACCEPTED. Without those, replacing any
+//   - Every rejection is paired with a POSITIVE CONTROL on the same
+//     dialect — the same entry point, an input inside ITS OWN slot space
+//     or mode set, which must be ACCEPTED. Without those, replacing any
 //     converted helper's body with `return false` would turn this whole
-//     file green.
+//     file green. (Measured: a reviewer ran `return false` AND `return
+//     true` over eleven helpers; all 20 blanket mutations were caught.)
+//   - Wherever a wire form is legal under BOTH dialects, the FT710 side is
+//     asserted too, so a helper that started rejecting everything cannot
+//     masquerade as a working seam. This does NOT hold call-for-call:
+//     ParseSlot("501"), ("EMG") and ("P3L") have no FT710.ParseSlot
+//     counterpart here, because the FT710 side of those three is asserted
+//     through the CONSTRUCTORS instead (SixtyMSlot, EMGSlot, PMSSlot in
+//     TestSecondDialect_SlotConstructorsHonourTheirReceiver).
+//   - At least one dialect must be a PEER of the FT-710 rather than a
+//     subset, or a widened inner check is unobservable. See peerDialect.
 //
 // Task 57's report records, assertion by assertion, which of these were
 // observed to fail against a deliberately re-hardwired tree.
@@ -487,6 +585,329 @@ func TestSecondDialect_MTAndMCParsersAcceptTheirOwnSlots(t *testing.T) {
 	}
 }
 
+// TestPeerDialect_AcceptsWhatTheFT710Rejects is the positive direction no
+// subset dialect can express: four wire forms that are legal under
+// peerDialect and INVALID under the FT-710, one per varying slot
+// attribute. Any hardwiring of classifySlot's legs, or of any caller that
+// widens to the FT-710's rules, turns these from accept to reject.
+func TestPeerDialect_AcceptsWhatTheFT710Rejects(t *testing.T) {
+	for _, tc := range []struct {
+		wire string
+		kind slotKind
+		what string
+	}{
+		{"150", slotKindMemory, "memory channel (peer 100-200)"},
+		{"605", slotKind60m, "60m channel (peer 600-620)"},
+		{"XYZ", slotKindEMG, "emergency channel (peer \"XYZ\")"},
+		{"777", slotKindNone, "none placeholder (peer \"777\")"},
+	} {
+		// The FT-710 must NOT know this form. If it did, the case would
+		// prove nothing.
+		if _, err := FT710.ParseSlot(tc.wire); err == nil {
+			t.Fatalf("premise broken: FT710.ParseSlot(%q) succeeded, so this case cannot distinguish the two dialects", tc.wire)
+		}
+		if _, err := peerDialect.ParseSlot(tc.wire); err != nil {
+			t.Errorf("peerDialect.ParseSlot(%q) failed, though it is this dialect's own %s — a slot check is reading the FT-710's slot space: %v", tc.wire, tc.what, err)
+		}
+		if got := peerDialect.classifySlot(tc.wire); got != tc.kind {
+			t.Errorf("peerDialect.classifySlot(%q) = %v, want %v (%s)", tc.wire, got, tc.kind, tc.what)
+		}
+	}
+
+	// And the reverse: forms the FT-710 knows and peerDialect must not.
+	for _, wire := range []string{"050", "501", "EMG", "000"} {
+		if _, err := FT710.ParseSlot(wire); err != nil {
+			t.Fatalf("premise broken: FT710.ParseSlot(%q) failed: %v", wire, err)
+		}
+		if _, err := peerDialect.ParseSlot(wire); err == nil {
+			t.Errorf("peerDialect.ParseSlot(%q) succeeded, though that form belongs to the FT-710's slot space and not to its own", wire)
+		}
+	}
+}
+
+// TestEveryDialect_ConstructorsRoundTripThroughTheirOwnParser is the
+// property that pins the Task 53 bug for the first time in this
+// repository.
+//
+// A constructor may read its receiver for the BOUNDS and still hardwire
+// the WIRE FORM — SixtyMSlot did exactly that, formatting a '5' prefix
+// while range-checking against the dialect. An external review caught it
+// then; nothing in the tree pinned it afterwards, because both earlier
+// test dialects have no 60m bank at all and so exercise the guard rather
+// than the datum. Reverting the wire form to fmt.Sprintf("5%02d", n)
+// escaped the entire core/cat suite.
+//
+// The invariant is simple and dialect-independent: WHAT A DIALECT BUILDS,
+// THAT SAME DIALECT MUST PARSE, as the kind it meant. peerDialect's 60m
+// bank at 600-620 is what gives it teeth.
+func TestEveryDialect_ConstructorsRoundTripThroughTheirOwnParser(t *testing.T) {
+	for _, d := range allTestDialects() {
+		check := func(what string, s Slot, err error, want slotKind) {
+			t.Helper()
+			if err != nil {
+				t.Errorf("%s: %s failed: %v", d.name, what, err)
+				return
+			}
+			got, perr := d.dia.ParseSlot(s.Wire())
+			if perr != nil {
+				t.Errorf("%s: %s built %q, which this SAME dialect's own ParseSlot then rejected — the constructor is reading its receiver for the bounds and hardwiring the wire form: %v", d.name, what, s.Wire(), perr)
+				return
+			}
+			if kind := d.dia.classifySlot(got.Wire()); kind != want {
+				t.Errorf("%s: %s built %q, which this dialect classifies as %v, not %v", d.name, what, s.Wire(), kind, want)
+			}
+		}
+
+		sl := d.dia.slots
+		if sl.memoryHi > 0 {
+			for _, n := range []int{sl.memoryLo, sl.memoryHi} {
+				s, err := d.dia.MemorySlot(n)
+				check(fmt.Sprintf("MemorySlot(%d)", n), s, err, slotKindMemory)
+			}
+		}
+		for pair := 1; pair <= d.dia.pmsCap(); pair++ {
+			for _, upper := range []bool{false, true} {
+				s, err := d.dia.PMSSlot(pair, upper)
+				check(fmt.Sprintf("PMSSlot(%d, %v)", pair, upper), s, err, slotKindPMS)
+			}
+		}
+		if sl.sixtyHi > 0 {
+			for _, n := range []int{1, sl.sixtyHi - sl.sixtyLo + 1} {
+				s, err := d.dia.SixtyMSlot(n)
+				check(fmt.Sprintf("SixtyMSlot(%d)", n), s, err, slotKind60m)
+			}
+		}
+		if sl.emgWire != "" {
+			check("EMGSlot()", d.dia.EMGSlot(), nil, slotKindEMG)
+		}
+	}
+}
+
+// TestPeerDialect_SixtyMSlotWireFormIsItsOwn states the Task 53 case
+// directly as well as by property, so a failure names the bug rather than
+// leaving a reader to infer it from a round-trip message.
+func TestPeerDialect_SixtyMSlotWireFormIsItsOwn(t *testing.T) {
+	for _, tc := range []struct {
+		n    int
+		want string
+	}{
+		{1, "600"}, {2, "601"}, {21, "620"},
+	} {
+		s, err := peerDialect.SixtyMSlot(tc.n)
+		if err != nil {
+			t.Errorf("peerDialect.SixtyMSlot(%d) failed: %v", tc.n, err)
+			continue
+		}
+		if s.Wire() != tc.want {
+			t.Errorf("peerDialect.SixtyMSlot(%d).Wire() = %q, want %q — the wire form is hardwired to the FT-710's 5xx numbering while only the BOUNDS read the receiver (the Task 53 bug)", tc.n, s.Wire(), tc.want)
+		}
+	}
+	// 22 is out of peerDialect's 21-channel bank.
+	if _, err := peerDialect.SixtyMSlot(22); err == nil {
+		t.Error("peerDialect.SixtyMSlot(22) succeeded, though its bank is 600-620 (21 channels)")
+	}
+	// EMGSlot's wire form, same shape of bug.
+	if got := peerDialect.EMGSlot().Wire(); got != "XYZ" {
+		t.Errorf("peerDialect.EMGSlot().Wire() = %q, want %q — the wire form is hardwired to the FT-710's", got, "XYZ")
+	}
+}
+
+// TestPeerDialect_ModeSetIsItsOwn uses a mode byte OUTSIDE '0'-'9'/'A'-'F'
+// so that a ParseMode reverted to a hardcoded range check — which is
+// exactly what the package-level form used to be — cannot accept it, and a
+// mode the FT-710 has but peerDialect does not, so the converse holds.
+func TestPeerDialect_ModeSetIsItsOwn(t *testing.T) {
+	if _, err := FT710.ParseMode('z'); err == nil {
+		t.Fatal("premise broken: FT710.ParseMode('z') succeeded")
+	}
+	if m, err := peerDialect.ParseMode('z'); err != nil {
+		t.Errorf("peerDialect.ParseMode('z') failed, though 'z' is in its own mode set — this is range-checking rather than consulting the receiver: %v", err)
+	} else if got := peerDialect.ModeName(m); got != "ZULU" {
+		t.Errorf("peerDialect.ModeName('z') = %q, want %q", got, "ZULU")
+	}
+	// LSB is the FT-710's and not peerDialect's.
+	if _, err := peerDialect.ParseMode('1'); err == nil {
+		t.Error("peerDialect.ParseMode('1') succeeded, though LSB is not in its mode set")
+	}
+}
+
+// TestPeerDialect_EXInventoryIsItsOwn is the positive EX direction an
+// EMPTY inventory cannot express. peerDialect's two members sit at P1=09,
+// a group the FT-710's Table 2 does not have at all, so each assertion
+// below fails the moment an EX check is widened to the FT-710's index.
+func TestPeerDialect_EXInventoryIsItsOwn(t *testing.T) {
+	own := peerEXItems[0].Addr
+
+	if FT710.KnownEXAddress(own) {
+		t.Fatalf("premise broken: FT710 claims to know %s", own.Wire())
+	}
+	if !peerDialect.KnownEXAddress(own) {
+		t.Errorf("peerDialect does not know %s, its OWN inventory member — KnownEXAddress is reading a global index", own.Wire())
+	}
+	if _, err := peerDialect.NewEXAddress(9, 1, 1); err != nil {
+		t.Errorf("peerDialect.NewEXAddress(9,1,1) failed for its own member: %v", err)
+	}
+	if _, err := peerDialect.ParseEXAddress(own.Wire()); err != nil {
+		t.Errorf("peerDialect.ParseEXAddress(%q) failed for its own member: %v", own.Wire(), err)
+	}
+	if _, err := peerDialect.BuildEXRead(own); err != nil {
+		t.Errorf("peerDialect.BuildEXRead failed for its own member %s: %v", own.Wire(), err)
+	}
+	if _, _, err := peerDialect.ParseEXAnswer([]byte("EX" + own.Wire() + "123;")); err != nil {
+		t.Errorf("peerDialect.ParseEXAnswer failed for its own member %s: %v", own.Wire(), err)
+	}
+	if n := len(peerDialect.EXItems()); n != len(peerEXItems) {
+		t.Errorf("peerDialect.EXItems() returned %d items, want %d — this is reading a global inventory", n, len(peerEXItems))
+	}
+	// And the FT-710 must refuse peerDialect's address.
+	if _, err := FT710.ParseEXAddress(own.Wire()); err == nil {
+		t.Errorf("FT710.ParseEXAddress(%q) succeeded for an address it does not have", own.Wire())
+	}
+}
+
+// TestPeerDialect_ParsersAcceptItsOwnFrames closes the read-direction half
+// of the subsumption family: each parser delegates to an inner d.ParseSlot
+// or d.parseMemoryFrame, and widening that inner call to the FT-710's
+// rules is invisible to a SUBSET dialect but rejects a PEER's own frames
+// outright.
+func TestPeerDialect_ParsersAcceptItsOwnFrames(t *testing.T) {
+	if s, err := peerDialect.ParseMCAnswer([]byte("MC150;")); err != nil {
+		t.Errorf("peerDialect.ParseMCAnswer rejected MC150;, its own memory channel — the inner slot parse is reading the FT-710's slot space: %v", err)
+	} else if s.Wire() != "150" {
+		t.Errorf("peerDialect.ParseMCAnswer decoded %q, want %q", s.Wire(), "150")
+	}
+	if _, _, tag, err := peerDialect.ParseMTAnswer([]byte("MT1501TAG;")); err != nil {
+		t.Errorf("peerDialect.ParseMTAnswer rejected MT1501TAG;, its own memory channel: %v", err)
+	} else if tag != "TAG" {
+		t.Errorf("peerDialect.ParseMTAnswer decoded tag %q, want %q", tag, "TAG")
+	}
+
+	// parseMemoryFrame, read direction: peerDialect's own slot 150 and its
+	// own mode 'z', neither of which the FT-710 can decode.
+	mr := []byte("MR150052354000-012010411002;")
+	mr[21] = 'z'
+	if _, err := FT710.ParseMRAnswer(mr); err == nil {
+		t.Fatalf("premise broken: FT710.ParseMRAnswer accepted %q", mr)
+	}
+	m, err := peerDialect.ParseMRAnswer(mr)
+	if err != nil {
+		t.Fatalf("peerDialect.ParseMRAnswer rejected %q, whose slot and mode are both its own — parseMemoryFrame is reading a global: %v", mr, err)
+	}
+	if m.Slot.Wire() != "150" || m.Mode != Mode('z') {
+		t.Errorf("peerDialect.ParseMRAnswer decoded slot %q mode %q, want %q / %q", m.Slot.Wire(), byte(m.Mode), "150", "z")
+	}
+}
+
+// TestPeerDialect_GateAcceptsItsOwnFrames is the security half of the same
+// argument, and it is what closes five of the six subsumption instances.
+//
+// AllowedCommand's per-command checks each parse a slot and then re-check
+// it. Under a SUBSET dialect, widening the inner parse to FT710.ParseSlot
+// changes nothing observable, because the outer check still rejects
+// everything the inner one newly admits — which is why Task 57's first
+// round recorded these as escapes and argued one of them was undetectable.
+// Under a PEER, the inner FT-710 parse REJECTS the dialect's own legal
+// frame and the gate wrongly refuses it. Each case below therefore fails
+// on the ACCEPT, not on the refuse.
+func TestPeerDialect_GateAcceptsItsOwnFrames(t *testing.T) {
+	own, err := peerDialect.MemorySlot(150)
+	if err != nil {
+		t.Fatalf("peerDialect.MemorySlot(150) failed: %v", err)
+	}
+
+	cases := []struct {
+		name  string
+		build func() (Command, error)
+	}{
+		{"MR read", func() (Command, error) { return peerDialect.BuildMRRead(own) }},
+		{"MT read", func() (Command, error) { return peerDialect.BuildMTRead(own) }},
+		{"MC set", func() (Command, error) { return peerDialect.BuildMCSet(own) }},
+		{"MT set", func() (Command, error) { return peerDialect.BuildMTSet(own, true, "TAG") }},
+		{"MW set", func() (Command, error) { return peerDialect.BuildMWSet(corpusMemoryData(own)) }},
+		{"EX read", func() (Command, error) { return peerDialect.BuildEXRead(peerEXItems[0].Addr) }},
+	}
+
+	for _, tc := range cases {
+		cmd, err := tc.build()
+		if err != nil {
+			t.Fatalf("%s: peerDialect failed to build for its own slot/address: %v", tc.name, err)
+		}
+		if !peerDialect.AllowedCommand(cmd.Bytes()) {
+			t.Errorf("%s: peerDialect REFUSED %q, its OWN builder's output — this per-command check parses through the FT-710's rules, which reject a peer dialect's legal frame", tc.name, cmd.Bytes())
+		}
+		if FT710.AllowedCommand(cmd.Bytes()) {
+			t.Errorf("%s: FT710 ACCEPTED %q, a frame legal only under another radio's slot space or EX inventory — the gate is not dialect-aware", tc.name, cmd.Bytes())
+		}
+	}
+}
+
+// TestPeerDialect_GateMWDecodeIsIsolated pins the ONE membership decision
+// the rest of this file reaches only in company: parseMemoryFrame as
+// called by AllowedCommand's MW check (validMWCommand), i.e. the WRITE
+// direction of the helper an external review named as the milestone's
+// central risk.
+//
+// The read direction is genuinely isolated — ParseMRAnswer's slot decode
+// and its mode decode each fail on their own assertion. The write
+// direction was not: the earlier allowlist case mutated
+// FT710.parseMemoryFrame AND FT710.validateMWFields together, so mutating
+// only the DECODE escaped. Not a live safety bug, since validateMWFields
+// re-decides writability and mode on the receiver — but it is one layer
+// inside the exact "we only tested it via the accepting path" shape that
+// three separate agents already fell into on this specific helper.
+//
+// Both frames below are rejected by FT710.parseMemoryFrame and accepted by
+// peerDialect's, one on the slot field and one on the mode field, so
+// either leg of the decode being widened is caught here alone.
+func TestPeerDialect_GateMWDecodeIsIsolated(t *testing.T) {
+	own, err := peerDialect.MemorySlot(150)
+	if err != nil {
+		t.Fatalf("peerDialect.MemorySlot(150) failed: %v", err)
+	}
+
+	// Leg 1 — the SLOT field. Mode USB is shared, so only the slot can
+	// distinguish the two decoders.
+	bySlot, err := peerDialect.BuildMWSet(corpusMemoryData(own))
+	if err != nil {
+		t.Fatalf("peerDialect.BuildMWSet failed: %v", err)
+	}
+	if _, err := FT710.parseMemoryFrame(bySlot.Bytes(), "MW"); err == nil {
+		t.Fatalf("premise broken: FT710.parseMemoryFrame decoded %q", bySlot.Bytes())
+	}
+	if !peerDialect.AllowedCommand(bySlot.Bytes()) {
+		t.Errorf("peerDialect REFUSED its own MW frame %q — validMWCommand's parseMemoryFrame call is decoding against the FT-710's slot space", bySlot.Bytes())
+	}
+
+	// Leg 2 — the MODE field. Slot 150 is peer-only either way, so to make
+	// the mode the deciding field this frame uses peerDialect's own 'z'
+	// mode and asserts the decode leg through the SAME entry point.
+	md := corpusMemoryData(own)
+	md.Mode = Mode('z')
+	byMode, err := peerDialect.BuildMWSet(md)
+	if err != nil {
+		t.Fatalf("peerDialect.BuildMWSet with mode 'z' failed: %v", err)
+	}
+	if _, err := FT710.parseMemoryFrame(byMode.Bytes(), "MW"); err == nil {
+		t.Fatalf("premise broken: FT710.parseMemoryFrame decoded %q", byMode.Bytes())
+	}
+	if !peerDialect.AllowedCommand(byMode.Bytes()) {
+		t.Errorf("peerDialect REFUSED its own MW frame %q, whose mode 'z' is in its own mode set — validMWCommand's decode is reading a global mode table", byMode.Bytes())
+	}
+
+	// The write-direction POLICY still bites on the receiver: a 60m slot is
+	// readable but never writable, under any dialect.
+	sixty, err := peerDialect.SixtyMSlot(6) // "605"
+	if err != nil {
+		t.Fatalf("peerDialect.SixtyMSlot(6) failed: %v", err)
+	}
+	if _, err := peerDialect.BuildMWSet(corpusMemoryData(sixty)); err == nil {
+		t.Error("peerDialect.BuildMWSet accepted its own 60m slot 605, which is not writable under any dialect")
+	}
+	if _, err := peerDialect.BuildMRRead(sixty); err != nil {
+		t.Errorf("peerDialect.BuildMRRead rejected its own 60m slot 605, which IS readable: %v", err)
+	}
+}
+
 // TestEveryConfiguredDialect_HasASaneSlotSpace positively asserts the
 // bounds that Dialect.pmsCap() otherwise only clamps.
 //
@@ -498,14 +919,14 @@ func TestSecondDialect_MTAndMCParsersAcceptTheirOwnSlots(t *testing.T) {
 // philosophy elsewhere (the zero Dialect is deliberately INERT, not
 // plausible-looking). Until M9c's dialect constructor can reject at
 // construction time, this table walk is the backstop.
+//
+// FIX ROUND: it walked only FT710 and testDialect, silently omitting
+// noneWireDialect — the dialect whose whole stated role is to be a
+// backstop — and would have omitted peerDialect too. It now walks
+// allTestDialects(), so a dialect added later is covered by construction
+// rather than by whoever remembers to extend a literal.
 func TestEveryConfiguredDialect_HasASaneSlotSpace(t *testing.T) {
-	for _, d := range []struct {
-		name string
-		dia  Dialect
-	}{
-		{"FT710", FT710},
-		{"testDialect", testDialect},
-	} {
+	for _, d := range allTestDialects() {
 		if d.dia.slots.pmsPairs < 0 || d.dia.slots.pmsPairs > 9 {
 			t.Errorf("%s: pmsPairs = %d, outside the representable 0-9 (the wire form is P<digit><L|U>) — pmsCap would silently clamp this rather than surface it", d.name, d.dia.slots.pmsPairs)
 		}
@@ -703,13 +1124,28 @@ func TestNoneWireIsDialectData(t *testing.T) {
 // caller and its AllowedCommand is a non-nil method value satisfying
 // transport.NewEngine's nil check — so it must accept NOTHING.
 //
-// IT MUST NOT BE ALLOWED TO PASS VACUOUSLY. splitCorpusLine deliberately
-// distinguishes a genuine builder REJECTION from a MALFORMED line
-// (framecorpus_test.go, fix-round finding M5); folding the second into the
-// first would let a truncated or mis-read corpus present as an
-// all-rejections clean sweep. So malformed is FATAL here, an empty frame
-// with no rejection is FATAL, and the count of frames actually put to the
-// zero dialect is asserted non-zero and logged.
+// IT MUST NOT BE ALLOWED TO PASS VACUOUSLY, and the guards below are
+// ordered by how likely each is to fire.
+//
+// The REAL exposure is the count. buildFrameCorpus's structural floor is
+// only 4 lines — the four fixed-literal frames emitted before any loop —
+// so a slot table trimmed to nothing, an EX inventory that failed to
+// generate, or a builder that started rejecting everything would leave
+// this test walking a handful of frames and still reporting PASS. The
+// floor of 300 below is what makes that loud. It is set well under the
+// current 344 so that adding or removing a corpus case is not a failure,
+// and well over 4 so that a collapse is.
+//
+// The malformed guard is a STRUCTURAL INVARIANT, not a live risk: nothing
+// is read from disk here, the corpus is built in memory by
+// buildFrameCorpus, and every line it emits is "label\tvalue" by
+// construction — so splitCorpusLine cannot presently return malformed at
+// all. It is kept, and kept FATAL, because the distinction exists in
+// splitCorpusLine for a reason (framecorpus_test.go, fix-round finding
+// M5): if buildFrameCorpus's line format ever changes, folding malformed
+// into rejected is how this test would degrade to a silent all-skip
+// instead of failing. Fatal-on-malformed costs nothing and removes that
+// future mode.
 func TestZeroDialectRejectsEveryCorpusFrame(t *testing.T) {
 	var zero Dialect
 
@@ -736,8 +1172,11 @@ func TestZeroDialectRejectsEveryCorpusFrame(t *testing.T) {
 			t.Errorf("zero Dialect ACCEPTED %q (%s) — an unconfigured dialect must accept nothing", cl.frame, cl.label)
 		}
 	}
-	if checked == 0 {
-		t.Fatal("checked no frames — the corpus or its parser is broken, and this passed vacuously")
+	// ASSERTED, not merely logged. See the doc comment: the structural
+	// floor is 4, so "checked > 0" is nearly no assurance at all.
+	const corpusFloor = 300
+	if checked < corpusFloor {
+		t.Fatalf("checked only %d frames, below the floor of %d — buildFrameCorpus has collapsed (a trimmed slot table, an EX inventory that failed to generate, or a builder rejecting everything), and this test was about to pass on a fraction of its intended corpus", checked, corpusFloor)
 	}
 	t.Logf("zero Dialect refused all %d frames FT710's builders produced (%d further corpus lines were builder rejections, which carry no frame)", checked, rejected)
 }
