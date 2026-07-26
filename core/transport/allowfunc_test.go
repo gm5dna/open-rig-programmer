@@ -23,7 +23,7 @@ func TestNewEngine_NilAllowFuncIsRefused(t *testing.T) {
 
 	e, err := NewEngine(port, nil)
 	if err == nil {
-		t.Fatal("NewEngine(port, nil) returned no error — an ungated Engine must not be constructable")
+		t.Fatal("NewEngine(port, nil) returned no error — NewEngine must not RETURN an ungated Engine (a hand-built one still compiles; it fails closed at Do instead)")
 	}
 	if !errors.Is(err, ErrNoAllowlist) {
 		t.Errorf("NewEngine(port, nil) error = %v, want it to wrap ErrNoAllowlist", err)
