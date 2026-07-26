@@ -86,30 +86,51 @@ import (
 // walk over parsed non-test source, not a type-checked or dataflow
 // analysis. The package doc comment's own framing matters here: these
 // guards pin THIS REPOSITORY'S OWN COMPOSITION, not a determined
-// adversary. Concretely:
+// adversary. The list below is the KNOWN set of gaps, found across four
+// Codex re-review rounds, each of which found at least one shape the
+// previous round's list did not name (round 4 found the value-copy
+// class below, which rounds 1-3 missed entirely) — it is offered as the
+// known set, not claimed as the complete one, and a future round would
+// not be surprising. Concretely:
+//
 //   - SEVERITY CONTEXT, which belongs here because it reframes the
-//     whole type-use family above: every runtime proof in both fix
-//     rounds (Codex e13/e22, e18) EXPLICITLY set a permissive allow
-//     func. An Engine reached through any of these routes with allow
-//     left at its zero value is FAIL-SAFE, not fail-open — Do returns
-//     ErrNoAllowlist and writes nothing (see NewEngine's own doc
-//     comment and Do's nil-check). So the risk a genuinely accidental
-//     refactor — a struct gaining an Engine field, a helper minting one
-//     via make() for a slice, a named result — actually carries on its
-//     own is a NIL gate, which refuses. Reaching the wire through any
-//     of these shapes requires DELIBERATELY assigning a permissive
-//     AllowFunc afterwards, which is a different, more deliberate act
-//     than the accidental-refactor framing below. This does NOT excuse
-//     leaving the classes open — a nil-gated Engine escaping into
-//     production is still a live bug this guard should catch, and a
-//     deliberately-gated one is strictly worse — it only corrects the
-//     record on what an accidental hit, by itself, would actually do.
+//     whole type-use family above: every runtime proof in fix rounds 2
+//     and 3 (Codex e13/e22, e18) EXPLICITLY set a permissive allow func.
+//     An Engine reached through any of the CONSTRUCTION shapes this
+//     guard's type-use rule targets, with allow left at its zero value,
+//     is FAIL-SAFE, not fail-open — Do returns ErrNoAllowlist and
+//     writes nothing (see NewEngine's own doc comment and Do's
+//     nil-check). So the risk a genuinely accidental refactor — a
+//     struct gaining an Engine field, a helper minting one via make()
+//     for a slice, a named result — actually carries on its own is a
+//     NIL gate, which refuses. Reaching the wire through any of THOSE
+//     shapes requires DELIBERATELY assigning a permissive AllowFunc
+//     afterwards, a different, more deliberate act than the
+//     accidental-refactor framing below.
+//
+//     ONE CLASS IS THE EXCEPTION, and it matters (Codex fix-round-4):
+//     value-copy construction (see the GAP entry below) does NOT start
+//     from a zero value at all — c := *e copies whatever gate the
+//     ORIGINAL Engine already had, non-nil included. An accidental
+//     "widen a copy, forget to re-gate it" refactor of that shape is
+//     NOT fail-safe: it silently inherits a working, already-permissive
+//     gate. This is the one place in this family where "accidental"
+//     does not imply "refused".
+//
+//     None of this excuses leaving any class open — a nil-gated Engine
+//     escaping into production is still a live bug this guard should
+//     catch (and does, for every class it closes), and a
+//     deliberately-gated one is strictly worse. It only corrects the
+//     record on what an accidental hit, by itself, would actually do —
+//     which, for every class except value-copy, is nothing.
+//
 //   - Test files are excluded — parseRepo skips every *_test.go file
 //     entirely (see its own doc comment). Deliberate, not an oversight:
 //     test doubles, table-driven fixtures, and this task's own probe
 //     files legitimately construct engines outside core/driver, and
 //     policing them here would only get in the way of testing
 //     core/transport itself.
+//
 //   - The FuncDecl exemption is name-AND-shape-narrow: only fd.Recv ==
 //     nil, fd.Name.Name == "NewEngine", declared directly in
 //     core/transport (relDir == "core/transport" exactly — Engine's
@@ -121,16 +142,32 @@ import (
 //     the body: NewEngine's own return type names *Engine, and a future
 //     signature change naming Engine directly (e.g. a named result)
 //     must not be mistaken for a violation of its own declaration.
-//   - CONFIRMED FALSE POSITIVE, accepted: because matching is by name
-//     alone, an entirely unrelated identifier that merely happens to
-//     share a matched name — "NewEngine", "Engine", or (package-wide,
-//     since fix round 3) any local alias of it — with no relationship
-//     at all to transport's own symbols, is also flagged. Nothing in
-//     this repository does this today; if something ever does, the
-//     failure prompts a human look at a genuinely unusual name choice,
+//
+//   - CONFIRMED FALSE POSITIVE, accepted, precisely stated (Codex
+//     fix-round-4 corrected an earlier over-broad version of this
+//     entry, which claimed an unrelated "Engine" type could collide —
+//     it cannot: the type-use rule is core/transport-scoped, and Go
+//     forbids two same-package types sharing a name, so no unrelated
+//     "Engine" type can exist there to be confused with the real one).
+//     The genuine false positive is the "NewEngine" bare-identifier/
+//     selector match, which IS repo-wide by design: an entirely
+//     unrelated function or var named "NewEngine" anywhere in the
+//     repository, with no relationship to transport's own symbol, is
+//     flagged (demonstrated directly by this task's own probes). A
+//     SEPARATE, smaller false positive comes from engineTypeNames
+//     itself: because the package-wide alias fixed point resolves
+//     through typeBaseName's FULL unwrap, a pointer or collection alias
+//     — type P = *Engine, type S = []Engine — is added to
+//     engineTypeNames exactly as a direct alias would be, and
+//     declaredTypeBaseName then matches "P" or "S" directly at a var or
+//     field declaration (var e P) even though P and S themselves
+//     allocate nothing on their own (P is a nil pointer, S a nil slice)
+//     — confirmed by construction. Both are accepted, not fixed: each
+//     failure prompts a human look at a genuinely unusual construct,
 //     the same trade this package's other guards (WriteChannel,
 //     BuildMWSet/BuildMTSet) already accept for their own name-only
 //     matches.
+//
 //   - GAP, not closed — a driver-tree re-export (Codex e15). A package
 //     under core/driver/** that does nothing but forward NewEngine's
 //     own parameters straight through — e.g.
@@ -159,19 +196,30 @@ import (
 //     composition threat model — recorded as a live gap, not dismissed
 //     as out of scope, because closing it would need a call-graph
 //     analysis this guard does not attempt.
-//   - GAP, not closed — field mutation after construction (Codex e19).
-//     Every guard in this package pins CONSTRUCTION sites, not the
-//     field afterwards: nothing stops a future
-//     func (e *Engine) SetAllow(AllowFunc) being added to core/transport
-//     and called from app/ to widen an already-built engine's gate at
-//     any time after NewEngine returns. Engine.allow's own doc comment
-//     (core/transport/engine.go:249) already asserts it is "immutable
-//     after construction… so Do reads it without synchronisation" — a
-//     convention nothing in the type system or this guard enforces, and
-//     whose breach would ALSO be a data race. A plausible accidental
-//     addition, inside this package's own threat model, recorded as a
-//     gap because pinning it needs a second guard against any exported
-//     method assigning to Engine.allow, which this file does not have.
+//
+//   - GAP, not closed — field mutation after construction (Codex e19,
+//     widened at fix round 4). Every guard in this package pins
+//     CONSTRUCTION sites, not the field afterwards: nothing stops a
+//     future EXPORTED SYMBOL of any kind — not only a method — assigning
+//     to Engine.allow from being added to core/transport.
+//     func (e *Engine) SetAllow(AllowFunc) is one shape; the SHARPER one
+//     is an Option func, since NewEngine applies every opt AFTER setting
+//     e.allow from its own allow parameter (see NewEngine's body): a
+//     hypothetical func WithAllow(a AllowFunc) Option { return func(e
+//     *Engine) { e.allow = a } } would let WithAllow(permissive)
+//     override the gate from INSIDE an otherwise fully compliant
+//     NewEngine(p, restrictive, WithAllow(permissive)) call — one this
+//     guard's own non-vacuity counter would count as the sanctioned
+//     core/driver/** construction, since it genuinely is one. Engine.
+//     allow's own doc comment (core/transport/engine.go:249) already
+//     asserts it is "immutable after construction… so Do reads it
+//     without synchronisation" — a convention nothing in the type
+//     system or this guard enforces, and whose breach would ALSO be a
+//     data race. A plausible accidental addition, inside this package's
+//     own threat model, recorded as a gap because pinning it needs a
+//     second guard against any exported symbol assigning to
+//     Engine.allow, which this file does not have.
+//
 //   - GAP, not closed — a defined (non-alias) type sharing Engine's
 //     layout (Codex e06): `type shadowEngine Engine` (no "=") is a
 //     DISTINCT type under Go's rules, not caught by engineTypeNames'
@@ -191,6 +239,7 @@ import (
 //     go/ast walk, not a go/types-checked one (see the package doc
 //     comment); closing this properly would need the latter. Recorded
 //     as a gap, not chased with another syntactic special case.
+//
 //   - GAP, not closed — a Go package beneath app/frontend (Codex e09).
 //     parseRepo's app/frontend skip (fixed to an exact PATH match at
 //     task-58 fix round 2, closing a different, broader blind spot —
@@ -206,6 +255,7 @@ import (
 //     holds only the generated frontend" by path alone is exactly the
 //     kind of narrow, brittle carve-out this package's guards otherwise
 //     avoid.
+//
 //   - OUT OF THIS GUARD'S THREAT MODEL — //go:linkname (Codex e17). A
 //     //go:linkname directive can reach the real constructor with the
 //     name "NewEngine" appearing only inside a comment pragma;
@@ -215,20 +265,61 @@ import (
 //     toolchain, not an accidental composition mistake — the same
 //     carve-out the package doc comment already states for a third
 //     party hand-building a wire frame.
+//
 //   - OUT OF THIS GUARD'S THREAT MODEL — reflect + unsafe (Codex e18,
 //     confirmed at runtime: a frame reached the wire).
 //     reflect.New(reflect.TypeOf((*transport.Engine)(nil)).Elem()) MINTS
-//     a fresh Engine from OUTSIDE the package — note that
-//     (*transport.Engine)(nil) genuinely IS a type-position use of
-//     Engine, textually; the reason this guard still cannot see it is
-//     that the reference sits in app/, and the type-use rule above is
-//     deliberately scoped to core/transport ONLY (the one package where
-//     an ordinary, non-reflective assignment to the unexported allow
-//     field could ever compile at all). reflect.NewAt over an
-//     unsafe.Pointer then sets allow directly, bypassing Go's own
-//     visibility rules entirely — deliberate subversion, outside "our
-//     own composition", the same threat-model boundary the package doc
-//     comment already draws.
+//     a fresh Engine from OUTSIDE the package. (*transport.Engine)(nil)
+//     genuinely IS a type-position use of Engine, textually — but the
+//     TRUE reason this guard cannot see it is NOT scope (an earlier
+//     version of this entry wrongly blamed "scoped to core/transport
+//     ONLY"; fix round 4 disproved that by construction: the IDENTICAL
+//     expression, moved INSIDE core/transport —
+//     func zzP27() reflect.Type { return reflect.TypeOf((*Engine)(nil)).Elem() }
+//     — is STILL not flagged). The real reason is that a type
+//     CONVERSION — (*Engine)(x), parsed as CallExpr{Fun:
+//     ParenExpr{StarExpr{...}}} — is not a checked position anywhere in
+//     this guard, at any scope: the *ast.CallExpr case above inspects
+//     x.Fun.(*ast.Ident) only for "new"/"make", and a ParenExpr is never
+//     an *ast.Ident. This is the SAME unchecked position the e06 entry
+//     above already names, for the same underlying reason (soundly
+//     recognising a conversion as "this names Engine" needs to rule out
+//     every OTHER, harmless same-shaped conversion, which needs real
+//     type information this go/ast walk does not have). Even were
+//     conversions added as a checked position, it would not fully close
+//     THIS shape regardless: reflect.New and reflect.NewAt take a
+//     runtime reflect.Type/reflect.Value, not source-visible "Engine"
+//     syntax at their OWN call site, so the actual allocation and field
+//     write stay fundamentally opaque to any AST-level check. reflect.
+//     NewAt over an unsafe.Pointer then sets allow directly, bypassing
+//     Go's own visibility rules entirely — deliberate subversion,
+//     outside "our own composition" regardless of any of the above, the
+//     same threat-model boundary the package doc comment already draws.
+//
+//   - GAP, not closed — value-copy construction (Codex fix-round-4
+//     re-review, a class rounds 1-3 missed entirely).
+//     func widen(e *Engine) *Engine { c := *e; c.allow = permissive;
+//     return &c } — and the same class via append(s, *e), a v.(Engine)
+//     type assertion, or a case Engine: type-switch arm — contains NO
+//     Engine type-position use and NO "NewEngine" mention at all: only
+//     *e, a plain dereference of an already-legitimately-obtained
+//     *Engine. Confirmed by construction: not flagged by this guard.
+//     No matcher this guard could add at the AST-shape level closes
+//     this without effectively re-deriving a borrow-checker, since the
+//     shape is indistinguishable, syntactically, from copying any other
+//     ordinary struct. MEDIUM, not HIGH, for a reason worth stating
+//     precisely: go vet's copylocks check ALREADY flags every one of
+//     these ("assignment copies lock value... contains sync.Mutex"),
+//     because Engine embeds sync.Mutex — confirmed by running go vet
+//     against this exact shape. go vet ./... is both a CI step and this
+//     repository's documented local gate, so the class is not silent in
+//     the TOOLCHAIN, only in this ONE guard. It is, however, the ONE
+//     class in this file whose ACCIDENTAL form is not fail-safe (see
+//     the SEVERITY CONTEXT entry above): a copy inherits the original's
+//     already-non-nil allow, so an accidental "c := *e" yields a
+//     working, permissively-gated Engine on the spot — not a nil-gated
+//     one Do would refuse.
+//
 //   - scanned == 0 can no longer actually fire in practice: parseRepo
 //     itself already t.Fatals on an empty walk. Kept as defence-in-depth
 //     alongside the two sawX counters below, not because it is

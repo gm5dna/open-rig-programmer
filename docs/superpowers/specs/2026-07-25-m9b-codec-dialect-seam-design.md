@@ -172,18 +172,24 @@ names Engine. Test files are out of scope only because `parseRepo`
 itself never parses them at all, not by any deliberate carve-out in
 this guard. This is NOT a claim that nothing else can reach the wire
 with a permissive gate: the guard's own APPROXIMATE section records,
-by name, a bounded set of gaps this AST walk cannot close (a
+by name, a KNOWN set of gaps this AST walk cannot close (a
 driver-tree re-export that hands the gate choice back to its own
 caller; field mutation after construction; a defined, non-alias type
 requiring real type information to resolve safely; a Go package
-beneath `app/frontend`) and two that sit outside its stated threat
-model entirely (`//go:linkname`; `reflect`+`unsafe`). What the guard
-enforces is exactly that enumerated boundary, no more — see the guard's
-own doc comment for the current, authoritative account of what is and
-is not covered, and its SEVERITY CONTEXT note that every runtime proof
-of these gaps required deliberately assigning a permissive gate; a nil
-one, which an accidental refactor would actually produce, is refused by
-`Do`.
+beneath `app/frontend`; value-copy construction, e.g.
+`c := *e; c.allow = permissive`, which mentions no Engine type at all)
+and two that sit outside its stated threat model entirely
+(`//go:linkname`; `reflect`+`unsafe`). That list is offered as KNOWN,
+not COMPLETE: four Codex re-review rounds each found at least one shape
+the previous round's list did not name, and a future round would not
+be surprising — see the guard's own doc comment for the current,
+authoritative account of what is and is not covered. Its SEVERITY
+CONTEXT note matters too: every runtime proof of these gaps required
+deliberately assigning a permissive gate, and a nil one — which an
+accidental refactor would ordinarily produce — is refused by `Do`,
+with ONE exception: value-copy construction inherits whatever gate the
+original Engine already had, non-nil included, so an accidental copy
+of that shape is not fail-safe the way every other documented gap is.
 
 **The byte-identical pin on `importgraph_test.go` is formally amended
 here** — which the roadmap always intended M9b or M8e to do, and M8e is
