@@ -59,36 +59,25 @@ func allTestDialects() []namedDialect {
 // FT-710 data through a Dialect receiver. If someone converts a helper's
 // signature but leaves its body reading a global, these tests go red and
 // nothing else in the suite does.
-var testDialect = Dialect{
-	catID: "9999",
-	modeNames: map[Mode]string{
+var testDialect = mustFixtureDialect(DialectConfig{
+	CATID: "9999",
+	ModeNames: map[Mode]string{
 		ModeLSB: "LOWER", // the FT-710 calls this "LSB"
 		ModeUSB: "UPPER", // the FT-710 calls this "USB"
 		// Deliberately omits every other mode the FT-710 knows.
 	},
-	slots: slotSpace{
-		memoryLo: 1, memoryHi: 5, // FT-710: 1-99
-		sixtyLo: 0, sixtyHi: 0, // no 60m bank at all
-		pmsPairs: 2,  // FT-710: 9
-		emgWire:  "", // no emergency channel
-		noneWire: "000",
+	Slots: SlotSpace{
+		MemoryLo: 1, MemoryHi: 5, // FT-710: 1-99
+		SixtyLo: 0, SixtyHi: 0, // no 60m bank at all
+		PMSPairs:      2,  // FT-710: 9
+		EmergencyWire: "", // no emergency channel
+		NoneWire:      "000",
 	},
-	exItems:   nil,
-	exMembers: map[EXAddress]bool{},
-
-	// The three promoted policies, set to the FT-710's OWN values on
-	// purpose. These fixtures exist to disagree with the FT-710 about slot
-	// space, modes and EX membership; making them disagree about MT,
-	// clarifier and MW-kind policy as well would change what their existing
-	// assertions mean the moment tasks 64-66 route those through the
-	// receiver. The peers that DO differ in each policy live in that task's
-	// own file (mtpolicy_test.go, clarifier_test.go, mwkind_test.go), which
-	// is also what lets those tasks run concurrently without touching this
-	// shared file.
-	mt:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' '},
-	clar:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-	mwWriteKind: KindMemory,
-}
+	EXItems:     nil,
+	MT:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' '},
+	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MWWriteKind: KindMemory,
+})
 
 // noneWireDialect exists for ONE attribute: slotSpace.noneWire, the only
 // field of a slotSpace that testDialect above shares with the FT-710
@@ -103,32 +92,21 @@ var testDialect = Dialect{
 // makes "000" an ordinary MEMORY channel under this dialect and the
 // unemittable none placeholder under the FT-710. Every assertion in
 // TestNoneWireIsDialectData turns on that inversion, in both directions.
-var noneWireDialect = Dialect{
-	catID:     "8888",
-	modeNames: map[Mode]string{ModeLSB: "LOWER", ModeUSB: "UPPER"},
-	slots: slotSpace{
-		memoryLo: 0, memoryHi: 5, // 000 is an ordinary channel here
-		sixtyLo: 0, sixtyHi: 0,
-		pmsPairs: 0,
-		emgWire:  "",
-		noneWire: "900", // FT-710: "000"
+var noneWireDialect = mustFixtureDialect(DialectConfig{
+	CATID:     "8888",
+	ModeNames: map[Mode]string{ModeLSB: "LOWER", ModeUSB: "UPPER"},
+	Slots: SlotSpace{
+		MemoryLo: 0, MemoryHi: 5, // 000 is an ordinary channel here
+		SixtyLo: 0, SixtyHi: 0,
+		PMSPairs:      0,
+		EmergencyWire: "",
+		NoneWire:      "900", // FT-710: "000"
 	},
-	exItems:   nil,
-	exMembers: map[EXAddress]bool{},
-
-	// The three promoted policies, set to the FT-710's OWN values on
-	// purpose. These fixtures exist to disagree with the FT-710 about slot
-	// space, modes and EX membership; making them disagree about MT,
-	// clarifier and MW-kind policy as well would change what their existing
-	// assertions mean the moment tasks 64-66 route those through the
-	// receiver. The peers that DO differ in each policy live in that task's
-	// own file (mtpolicy_test.go, clarifier_test.go, mwkind_test.go), which
-	// is also what lets those tasks run concurrently without touching this
-	// shared file.
-	mt:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' '},
-	clar:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-	mwWriteKind: KindMemory,
-}
+	EXItems:     nil,
+	MT:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' '},
+	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MWWriteKind: KindMemory,
+})
 
 // peerDialect is the dialect that makes this file's proof complete, and it
 // exists because of a MEASURED gap in the two above.
@@ -166,38 +144,25 @@ var noneWireDialect = Dialect{
 // Every one of those wire forms is REJECTED by FT710.classifySlot, and
 // every peerDialect positive control below therefore fails the moment an
 // inner check is widened to the FT-710's.
-var peerDialect = Dialect{
-	catID: "7777",
-	modeNames: map[Mode]string{
+var peerDialect = mustFixtureDialect(DialectConfig{
+	CATID: "7777",
+	ModeNames: map[Mode]string{
 		ModeUSB:   "USB-PEER", // shared with the FT-710, so frames build for both
 		Mode('z'): "ZULU",     // OUTSIDE '0'-'9'/'A'-'F': a mode no range check admits
 		// Deliberately omits ModeLSB, which the FT-710 has.
 	},
-	slots: slotSpace{
-		memoryLo: 100, memoryHi: 200, // FT-710: 1-99, disjoint
-		sixtyLo: 600, sixtyHi: 620, // FT-710: 501-599, present but renumbered
-		pmsPairs: 4,     // FT-710: 9
-		emgWire:  "XYZ", // FT-710: "EMG", present but different
-		noneWire: "777", // FT-710: "000"
+	Slots: SlotSpace{
+		MemoryLo: 100, MemoryHi: 200, // FT-710: 1-99, disjoint
+		SixtyLo: 600, SixtyHi: 620, // FT-710: 501-599, present but renumbered
+		PMSPairs:      4,     // FT-710: 9
+		EmergencyWire: "XYZ", // FT-710: "EMG", present but different
+		NoneWire:      "777", // FT-710: "000"
 	},
-	exItems:    peerEXItems,
-	exMembers:  buildEXMembers(peerEXItems),
-	exByTriple: buildEXByTriple(peerEXItems),
-	exP4Max:    maxEXP4Bytes(peerEXItems),
-
-	// The three promoted policies, set to the FT-710's OWN values on
-	// purpose. These fixtures exist to disagree with the FT-710 about slot
-	// space, modes and EX membership; making them disagree about MT,
-	// clarifier and MW-kind policy as well would change what their existing
-	// assertions mean the moment tasks 64-66 route those through the
-	// receiver. The peers that DO differ in each policy live in that task's
-	// own file (mtpolicy_test.go, clarifier_test.go, mwkind_test.go), which
-	// is also what lets those tasks run concurrently without touching this
-	// shared file.
-	mt:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' '},
-	clar:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-	mwWriteKind: KindMemory,
-}
+	EXItems:     peerEXItems,
+	MT:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' '},
+	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MWWriteKind: KindMemory,
+})
 
 // ft710P4MaxBytes is the FT-710's own widest P4 answer field: 12, the
 // width of its six Table 2 Text items, and until M9b's fix wave the value
@@ -1456,22 +1421,6 @@ func TestZeroDialectRejectsEveryCorpusFrame(t *testing.T) {
 	t.Logf("zero Dialect refused all %d frames FT710's builders produced (%d further corpus lines were builder rejections, which carry no frame)", checked, rejected)
 }
 
-// The three fixtures above are struct literals, so they bypass NewDialect
-// and therefore never get the derived mode reverse index the constructor
-// builds. Filling it here keeps every configured dialect COMPLETE, so a
-// general property over "every dialect" can be written without silently
-// skipping these three — a nil modeByName makes ModeByName return false for
-// every name, which reads exactly like a dialect that legitimately knows no
-// modes.
-//
-// Task 68 rebuilds these fixtures through NewDialect, at which point this
-// init and the hand-set policy fields above both go away.
-func init() {
-	testDialect.modeByName = buildModeByName(testDialect.modeNames)
-	noneWireDialect.modeByName = buildModeByName(noneWireDialect.modeNames)
-	peerDialect.modeByName = buildModeByName(peerDialect.modeNames)
-}
-
 // TestEveryConfiguredDialect_ModeNameRoundTripsThroughModeByName is the
 // general property ModeByName exists for: for every dialect, every mode's
 // display name must resolve back to that same mode.
@@ -1511,4 +1460,25 @@ func allModeValues() []Mode {
 		out = append(out, Mode(i))
 	}
 	return out
+}
+
+// mustFixtureDialect builds a test fixture through the PUBLIC constructor.
+//
+// Until M9c-0 these three were raw struct literals reaching straight into
+// unexported fields. Routing them through NewDialect is this milestone's
+// sufficiency proof, and it is a real test rather than tidying: if the
+// exported API cannot express a fixture, that is the API being WRONG, and
+// M9c would have discovered it at its first task instead of here.
+//
+// It also removes two hazards the literals carried. They bypassed
+// validation entirely, so a fixture could describe a dialect NewDialect
+// would refuse; and they left every derived index unset unless someone
+// remembered to fill it, which is how a nil mode reverse index made
+// ModeByName silently return false for all three.
+func mustFixtureDialect(cfg DialectConfig) Dialect {
+	d, err := NewDialect(cfg)
+	if err != nil {
+		panic("seconddialect_test: fixture rejected by NewDialect: " + err.Error())
+	}
+	return d
 }
