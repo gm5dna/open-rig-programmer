@@ -159,8 +159,17 @@ outside the allowed trees, whatever the receiver's type" — house
 precedent, not a new compromise. Non-vacuity counters stay.
 
 **New guard:** `transport.NewEngine` may be referenced only from
-`core/driver/**`, excluding `core/transport` itself and test files, so
-nothing outside the driver tree can mint an Engine and choose its gate.
+`core/driver/**`. `core/transport` itself is SCANNED, not excluded —
+only NewEngine's own top-level declaration is exempt, and Task 58's fix
+wave (Codex review) closed the composite-literal, type-alias, `new()`,
+and generic-instantiation constructions that a name-only match cannot
+see there. Test files are out of scope only because `parseRepo` itself
+never parses them at all, not by any deliberate carve-out in this
+guard — so nothing outside the driver tree can mint an Engine and
+choose its gate, other than the honestly-documented approximation gaps
+recorded in the guard's own APPROXIMATE section (re-exports inside
+`core/driver/**`, `//go:linkname`, `unsafe`/`reflect`, and an
+unenforced `SetAllow`-shaped seam).
 
 **The byte-identical pin on `importgraph_test.go` is formally amended
 here** — which the roadmap always intended M9b or M8e to do, and M8e is

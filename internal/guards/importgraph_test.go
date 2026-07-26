@@ -94,7 +94,25 @@ func parseRepo(t *testing.T) []parsedFile {
 		}
 		name := d.Name()
 		if d.IsDir() {
-			if path != root && (strings.HasPrefix(name, ".") || name == "node_modules" || name == "frontend") {
+			if path == root {
+				return nil
+			}
+			if strings.HasPrefix(name, ".") || name == "node_modules" {
+				return filepath.SkipDir
+			}
+			// app/frontend by PATH, not by directory name (task-58 fix
+			// round 2, Codex e16): a name-only match skips ANY directory
+			// literally called "frontend" at any depth, which would also
+			// hide an unrelated Go package that happened to share that
+			// name from every guard in this package — exactly the blind
+			// spot the review demonstrated with a throwaway probe package
+			// go list itself could see. Only the one Wails-generated
+			// JS/TS tree this comment names is meant to be excluded.
+			rel, rerr := filepath.Rel(root, path)
+			if rerr != nil {
+				return rerr
+			}
+			if filepath.ToSlash(rel) == "app/frontend" {
 				return filepath.SkipDir
 			}
 			return nil
