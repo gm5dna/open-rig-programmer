@@ -89,21 +89,33 @@ func (m Mode) Wire() byte {
 	return byte(m)
 }
 
-// unknownModeName renders a Mode no dialect recognises. Used by
-// Dialect.ModeName today; will be shared with Mode.String from Task 56,
-// which is what stops the two from drifting apart. Mode.String keeps its
-// own inline, byte-identical formatting until then — Task 56's to change,
-// not this one's; see the M9b plan.
+// unknownModeName renders a Mode no dialect recognises. Shared by
+// Dialect.ModeName and Mode.String (Task 56), which is what stops the two
+// from drifting apart on the one string they must still agree about.
 func unknownModeName(m Mode) string {
 	return fmt.Sprintf("Mode(%#02x)", byte(m))
 }
 
-// String returns the reference table's display name for m (e.g. "LSB",
-// "DATA-FM-N"), or "-" for ModeUnset. Modes constructed by an invalid cast
-// rather than ParseMode return a diagnostic placeholder.
+// String is a DIAGNOSTIC FALLBACK, not a rendering path: it reads the
+// FT-710's mode table (the package-level modeNames) whatever radio the
+// Mode came from, because a bare Mode carries no dialect and fmt.Stringer
+// gives it nowhere to receive one. Use it for logs, test failure messages
+// and %v of a Mode in isolation.
+//
+// ANYTHING USER-VISIBLE MUST GO THROUGH Dialect.ModeName INSTEAD. The
+// driver does: core/driver/ft710's ReadChannel renders a channel's mode
+// with s.dialect.ModeName(m.Mode), so what reaches a codeplug, the CLI
+// listing and the GUI grid is the mode table of the radio that answered.
+// The two agree exactly for the FT-710 — same table, same unknown-mode
+// formatting via unknownModeName — so this distinction costs nothing today
+// and is the whole point the moment a second dialect exists.
+//
+// Returns the reference table's display name for m (e.g. "LSB",
+// "DATA-FM-N"), or "-" for ModeUnset. A Mode constructed by an invalid
+// cast rather than ParseMode returns unknownModeName's placeholder.
 func (m Mode) String() string {
 	if name, ok := modeNames[m]; ok {
 		return name
 	}
-	return fmt.Sprintf("Mode(%#02x)", byte(m))
+	return unknownModeName(m)
 }

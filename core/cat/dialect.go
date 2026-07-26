@@ -32,10 +32,24 @@ type slotSpace struct {
 //
 // The ZERO VALUE IS INERT, deliberately. An exported struct always has a
 // constructible zero value, so `var d cat.Dialect` compiles and
-// d.AllowedCommand (from Task 54) is a non-nil method value that would
-// satisfy transport.NewEngine's nil check. A zero Dialect therefore carries no
-// slot space, no modes and no inventory, and consequently builds nothing
-// and accepts nothing.
+// d.AllowedCommand (from Task 54) is a non-nil method value that satisfies
+// transport.NewEngine's nil-AllowFunc check (Task 56) and would be
+// installed as a real engine's gate. A zero Dialect therefore carries no
+// slot space, no modes and no inventory, and consequently ACCEPTS NOTHING
+// — measured, all 1,187 frames FT710 accepts refused — which is the
+// property that matters, since AllowedCommand is what stands between this
+// program and a radio.
+//
+// It builds ALMOST nothing, which is not the same claim. Every builder
+// that can fail does: it validates against slot space, mode set or EX
+// inventory a zero Dialect does not have. The three that CANNOT fail —
+// BuildIDRead, BuildAISet and BuildMCRead, which return a Command with no
+// error because their frames are fixed literals ("ID;", "AI0;"/"AI1;",
+// "MC;") — return those literals from a zero Dialect exactly as from
+// FT710. Nothing unsafe follows: AllowedCommand's Configured() guard means
+// the same zero Dialect refuses to let any of them past the gate. Giving
+// those three an error return is a later milestone's call, deliberately
+// not made here.
 type Dialect struct {
 	catID     string
 	modeNames map[Mode]string

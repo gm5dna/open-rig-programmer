@@ -20,15 +20,16 @@ import (
 const settingsDescriptorVersion = "ft710-ex@1"
 
 // ft710SettingsDescriptor is built ONCE, at package init, from the M8a
-// generated EX inventory (cat.EXItems) — see buildSettingsDescriptor.
+// generated EX inventory this package's dialect carries
+// (cat.Dialect.EXItems) — see buildSettingsDescriptor.
 // Every getter (the package-level SettingsDescriptor func and
 // Session.SettingsDescriptor) returns a Clone() of this, never the value
 // itself: nothing outside this file may ever hold a reference to the
 // shared original.
-var ft710SettingsDescriptor = buildSettingsDescriptor()
+var ft710SettingsDescriptor = buildSettingsDescriptor(catDialect)
 
 // buildSettingsDescriptor builds the FT-710's driver.SettingsDescriptor
-// from cat.EXItems(): one SettingMenu per distinct P1 (ID the 2-digit
+// from the dialect's EXItems(): one SettingMenu per distinct P1 (ID the 2-digit
 // decimal P1, e.g. "01"; Label the manual's P1Label), one SettingGroup per
 // distinct (P1,P2) pair nested under its menu (ID the 4-digit P1P2, e.g.
 // "0101"; Label the manual's P2Label), and one SettingItem per inventory
@@ -36,7 +37,7 @@ var ft710SettingsDescriptor = buildSettingsDescriptor()
 // wire address via EXAddress.Wire, Label the manual's Function name,
 // Display the human "P1-P2-P3" form, e.g. "01-01-01").
 //
-// cat.EXItems already returns its 296 rows sorted by (P1,P2,P3) (see its
+// Dialect.EXItems already returns its rows sorted by (P1,P2,P3) (see its
 // doc comment), so a single linear pass — opening a new menu or group only
 // when the running P1/P2 changes from the PREVIOUS item — reproduces Table
 // 2's own grouping without any extra sorting or map bookkeeping. Each
@@ -45,8 +46,8 @@ var ft710SettingsDescriptor = buildSettingsDescriptor()
 // question of whether an earlier append's slice growth could invalidate a
 // held pointer, at the cost of one extra slice index per item — a
 // non-issue at 296 items, run once at package init.
-func buildSettingsDescriptor() driver.SettingsDescriptor {
-	items := cat.FT710.EXItems()
+func buildSettingsDescriptor(dialect cat.Dialect) driver.SettingsDescriptor {
+	items := dialect.EXItems()
 
 	d := driver.SettingsDescriptor{Version: settingsDescriptorVersion}
 
@@ -172,14 +173,14 @@ func exSpec(addr cat.EXAddress) transport.CommandSpec {
 // real: a genuine rejection is reconstructed as the literal "?;" bytes
 // (see ReadSetting) before being handed to this same function, so all
 // three response-interpretation rules live in exactly one place.
-func parseEXResponse(requested cat.EXAddress, frame []byte) (driver.SettingValue, error) {
+func parseEXResponse(dialect cat.Dialect, requested cat.EXAddress, frame []byte) (driver.SettingValue, error) {
 	id := requested.Wire()
 
 	if cat.IsRejection(frame) {
 		return driver.SettingValue{ID: id, State: driver.SettingUnavailable}, nil
 	}
 
-	addr, raw, err := cat.FT710.ParseEXAnswer(frame)
+	addr, raw, err := dialect.ParseEXAnswer(frame)
 	if err != nil {
 		return driver.SettingValue{}, fmt.Errorf("ft710: ReadSetting %s: %w", id, err)
 	}
@@ -226,7 +227,7 @@ var rejectionFrameBytes = []byte("?;")
 // which interprets what a response means, for every outcome alike (see
 // its own doc comment).
 func (s *Session) ReadSetting(ctx context.Context, id string) (driver.SettingValue, error) {
-	addr, err := cat.FT710.ParseEXAddress(id)
+	addr, err := s.dialect.ParseEXAddress(id)
 	if err != nil {
 		return driver.SettingValue{}, &UnknownSettingError{ID: id}
 	}
@@ -234,7 +235,7 @@ func (s *Session) ReadSetting(ctx context.Context, id string) (driver.SettingVal
 	s.opMu.Lock()
 	defer s.opMu.Unlock()
 
-	cmd, err := cat.FT710.BuildEXRead(addr)
+	cmd, err := s.dialect.BuildEXRead(addr)
 	if err != nil {
 		// Unreachable in practice: cat.ParseEXAddress above already
 		// enforces the identical Table 2 membership BuildEXRead itself
@@ -251,5 +252,5 @@ func (s *Session) ReadSetting(ctx context.Context, id string) (driver.SettingVal
 		return driver.SettingValue{}, fmt.Errorf("ft710: ReadSetting %s: %w", addr.Wire(), err)
 	}
 
-	return parseEXResponse(addr, frame)
+	return parseEXResponse(s.dialect, addr, frame)
 }

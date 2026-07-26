@@ -130,9 +130,14 @@
 // # Safety obligations (binding, from earlier reviews)
 //
 //  1. Engine.Do calls cmd.Bytes() EXACTLY ONCE per transmission attempt,
-//     checks cat.AllowedCommand on THAT byte slice, and writes THAT SAME
-//     byte slice — never a second, independently obtained copy. See Do's
-//     doc comment.
+//     checks the Engine's INJECTED gate (AllowFunc — in this repository's
+//     composition, the driver's own cat.Dialect.AllowedCommand) on THAT
+//     byte slice, and writes THAT SAME byte slice — never a second,
+//     independently obtained copy. The gate is supplied at construction and
+//     fail-closed at both ends: NewEngine refuses a nil AllowFunc before
+//     starting the reader goroutine, so an ungated Engine cannot be built,
+//     and Do refuses again (ErrNoAllowlist) before every write regardless.
+//     See Do's doc comment.
 //  2. Retries are only for idempotent reads (CommandSpec.RetryReads,
 //     ExpectPrefix != ""); a write's timeout or failure is NEVER resolved
 //     by resending — enforced structurally via ErrInvalidSpec, not merely
@@ -147,8 +152,9 @@
 //
 // # The policy-gated write path (composition-root discipline)
 //
-// Engine.Do is MECHANISM: it will transmit any cat.AllowedCommand frame,
-// including the Set frames (MW, MT) that mutate a radio's memory. It is
+// Engine.Do is MECHANISM: it will transmit any frame its injected
+// AllowFunc admits, including the Set frames (MW, MT) that mutate a
+// radio's memory. It is
 // not, and cannot be, a policy layer — the hardware write guard (the
 // capability profiles, codeplug.Diff's gates, the clone service's
 // choreography, and driver.Session.WriteChannel's own re-check) lives

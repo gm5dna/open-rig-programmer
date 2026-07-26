@@ -105,7 +105,7 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 
 	var res driver.WriteResult
 
-	if _, err := cat.FT710.ParseSlot(ch.Slot); err != nil {
+	if _, err := s.dialect.ParseSlot(ch.Slot); err != nil {
 		return res, &driver.WriteRefusedError{Slot: ch.Slot, Reason: fmt.Sprintf("not a valid slot: %v", err)}
 	}
 	bank, ok := s.bankFor(ch.Slot)
@@ -167,7 +167,7 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 
 	// Build BOTH frames before any wire traffic, so a mapping/validation
 	// failure in either can still refuse the whole write cleanly.
-	mwCmd, mtCmd, err := buildWriteCommands(ch)
+	mwCmd, mtCmd, err := buildWriteCommands(s.dialect, ch)
 	if err != nil {
 		return res, err
 	}
@@ -200,8 +200,8 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 // frames, refusing (typed, via *driver.WriteRefusedError) any value the
 // codec cannot express. Called only after WriteChannel's capability gate
 // has passed.
-func buildWriteCommands(ch codeplug.Channel) (mwCmd, mtCmd cat.Command, err error) {
-	sl, err := cat.FT710.ParseSlot(ch.Slot)
+func buildWriteCommands(dialect cat.Dialect, ch codeplug.Channel) (mwCmd, mtCmd cat.Command, err error) {
+	sl, err := dialect.ParseSlot(ch.Slot)
 	if err != nil {
 		return cat.Command{}, cat.Command{}, &driver.WriteRefusedError{Slot: ch.Slot, Reason: err.Error()}
 	}
@@ -242,7 +242,7 @@ func buildWriteCommands(ch codeplug.Channel) (mwCmd, mtCmd cat.Command, err erro
 	// Discovered banks (5xx/EMG) can never reach here — their fields are
 	// read-only, so the capability gate refused them already;
 	// cat.BuildMWSet would reject their slots too (not Writable()).
-	mwCmd, err = cat.FT710.BuildMWSet(cat.MemoryData{
+	mwCmd, err = dialect.BuildMWSet(cat.MemoryData{
 		Slot:   sl,
 		FreqHz: data.FreqHz,
 		ClarHz: int16(data.ClarHz),
@@ -257,7 +257,7 @@ func buildWriteCommands(ch codeplug.Channel) (mwCmd, mtCmd cat.Command, err erro
 		return cat.Command{}, cat.Command{}, &driver.WriteRefusedError{Slot: ch.Slot, Reason: fmt.Sprintf("cannot encode MW frame: %v", err)}
 	}
 
-	mtCmd, err = cat.FT710.BuildMTSet(sl, data.TagDisplay, data.Tag)
+	mtCmd, err = dialect.BuildMTSet(sl, data.TagDisplay, data.Tag)
 	if err != nil {
 		return cat.Command{}, cat.Command{}, &driver.WriteRefusedError{
 			Slot: ch.Slot, Fields: []spec.Field{spec.FieldTag},

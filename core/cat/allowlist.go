@@ -52,8 +52,11 @@ package cat
 //
 // FAIL-CLOSED ON AN UNCONFIGURED DIALECT. A zero Dialect is constructible
 // by any caller (`var d cat.Dialect`) and its AllowedCommand is a non-nil
-// method value that satisfies transport.NewEngine's nil check, so it must
-// accept NOTHING. The dialect-aware checks give that for free wherever
+// method value, so it passes transport.NewEngine's nil-AllowFunc check
+// (added at Task 56) and would be installed as a real engine's gate. It
+// must therefore accept NOTHING itself: the constructor's check catches a
+// MISSING gate, not an empty one. The dialect-aware checks give that for
+// free wherever
 // slot, mode or EX data is consulted — an empty slot space matches no
 // slot — but ID, AI and the bare "MC;" read are literal matches that
 // consult no dialect data at all and would otherwise pass. The

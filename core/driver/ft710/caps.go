@@ -96,12 +96,15 @@ const (
 // enforce is unchanged by this flip.
 const writeTrialsComplete = true
 
-// modelName and catID are the FT-710's display name and fixed 4-character
-// CAT ID answer ("ID; -> ID0800;", golden vector G1).
-const (
-	modelName = "FT-710"
-	catID     = "0800"
-)
+// modelName is the FT-710's display name.
+const modelName = "FT-710"
+
+// catID is the identity an FT-710 answers "ID;" with ("ID; -> ID0800;",
+// golden vector G1), sourced from the codec's dialect rather than restated
+// here — one place this string exists, and the value M9c's driver
+// registration will read too. TestCATID_ComesFromTheDialect pins both the
+// linkage and the documented literal.
+var catID = catDialect.CATID()
 
 // Profile selects which capability profile New builds the driver with.
 //

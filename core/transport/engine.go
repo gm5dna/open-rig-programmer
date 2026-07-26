@@ -176,6 +176,23 @@ type readerEvent struct {
 	err   error  // *cat.FrameTooLongError (stream contamination), or a raw I/O error (port gone)
 }
 
+// AllowFunc is the outbound write gate an Engine is constructed with: it
+// reports whether frame is safe to write to the radio. It is the last
+// defence before a physical radio ever sees these bytes (safety obligation
+// 1), and it is INJECTED rather than reached for, so an Engine gates for
+// the dialect of the driver that built it and for no other.
+//
+// cat.Dialect.AllowedCommand matches this signature exactly, so a driver
+// passes the method value of its OWN dialect — d.dialect.AllowedCommand —
+// with no adapter, no closure and nothing for a second radio's driver to
+// forget. Reaching for a package-level allowlist instead would gate every
+// radio by whatever the FT-710 permits, which is a safety failure rather
+// than merely a correctness one.
+//
+// A nil AllowFunc is refused by NewEngine (ErrNoAllowlist) before the
+// reader goroutine is even started, and refused again by Do.
+type AllowFunc func(frame []byte) bool
+
 // Option configures a *Engine at construction time. See NewEngine.
 type Option func(*Engine)
 
@@ -224,9 +241,14 @@ func WithMaxFrame(n int) Option {
 // (and accumulator errors) to whichever call currently holds mu via the
 // buffered events channel.
 type Engine struct {
-	port     Port
-	logger   Logger
-	clk      clock
+	port   Port
+	logger Logger
+	clk    clock
+	// allow is the outbound write gate, supplied at construction and
+	// never nil for an Engine NewEngine actually returned — see
+	// AllowFunc and ErrNoAllowlist. Immutable after construction (no
+	// Option touches it), so Do reads it without synchronisation.
+	allow    AllowFunc
 	maxFrame int
 
 	mu sync.Mutex // serialises Do/DrainToQuiet: "single outstanding request"
@@ -258,13 +280,31 @@ type Engine struct {
 	unexpectedFrames atomic.Int64
 }
 
-// NewEngine constructs an Engine over p and starts its reader goroutine.
-// Options: WithLogger, WithClock, WithMaxFrame.
-func NewEngine(p Port, opts ...Option) *Engine {
+// NewEngine constructs an Engine over p, gated by allow, and starts its
+// reader goroutine. Options: WithLogger, WithClock, WithMaxFrame.
+//
+// FAIL-CLOSED AT CONSTRUCTION: a nil allow is refused with an error
+// wrapping ErrNoAllowlist, returning a nil *Engine — and refused BEFORE
+// the reader goroutine is started, so a rejected call leaves nothing
+// running and no half-built Engine for a caller to ignore the error and
+// use anyway. An ungated Engine therefore cannot exist. Do re-checks the
+// same thing before every write regardless (defence in depth: this is the
+// last line before a physical radio).
+//
+// NewEngine does NOT take ownership of p on the nil-allow path: it has not
+// touched the port at all by then, so closing it stays the caller's
+// business, exactly as it is for any other construction the caller
+// abandons.
+func NewEngine(p Port, allow AllowFunc, opts ...Option) (*Engine, error) {
+	if allow == nil {
+		return nil, fmt.Errorf("%w: NewEngine requires an AllowFunc (a driver passes its own dialect's AllowedCommand)", ErrNoAllowlist)
+	}
+
 	e := &Engine{
 		port:       p,
 		logger:     nopLogger{},
 		clk:        realClock{},
+		allow:      allow,
 		events:     make(chan readerEvent, 16),
 		closeCh:    make(chan struct{}),
 		readerDone: make(chan struct{}),
@@ -274,7 +314,7 @@ func NewEngine(p Port, opts ...Option) *Engine {
 	}
 
 	go e.readLoop()
-	return e
+	return e, nil
 }
 
 // UnexpectedFrames reports how many frames Do/DrainToQuiet have received
@@ -313,10 +353,12 @@ func (e *Engine) Init(ctx context.Context) error {
 // e.suspect in the first place.
 //
 // Transmission (safety obligation 1): cmd.Bytes() is called EXACTLY ONCE
-// per transmission attempt, the resulting slice is checked with
-// cat.AllowedCommand, and — only if that check passes — the SAME slice is
-// written to the Port. A command that fails AllowedCommand is refused with
-// ErrDisallowedCommand and NEVER reaches the wire.
+// per transmission attempt, the resulting slice is checked with the
+// Engine's injected gate (e.allow — see AllowFunc), and — only if that
+// check passes — the SAME slice is written to the Port. A command the gate
+// rejects is refused with ErrDisallowedCommand and NEVER reaches the wire;
+// an Engine with no gate at all refuses with ErrNoAllowlist instead
+// (unreachable via NewEngine, which will not build one — defence in depth).
 //
 // Fire-and-forget (spec.ExpectPrefix == ""): after writing, Do listens for
 // spec.ErrorWindow. A "?;" arriving in that window returns cat.ErrRejected.
@@ -433,7 +475,15 @@ func (e *Engine) Do(ctx context.Context, cmd cat.Command, spec CommandSpec) ([]b
 		// the SAME slice checked and written — never two independently
 		// obtained copies.
 		frame := cmd.Bytes()
-		if !cat.FT710.AllowedCommand(frame) {
+		if e.allow == nil {
+			// Unreachable through NewEngine by construction (it refuses a
+			// nil AllowFunc outright) — checked anyway, exactly as
+			// ErrDisallowedCommand's own doc comment argues for the layer
+			// below. Distinct sentinel: a missing gate is a composition
+			// bug, not a fault of this frame.
+			return nil, ErrNoAllowlist
+		}
+		if !e.allow(frame) {
 			return nil, fmt.Errorf("%w: %s", ErrDisallowedCommand, cmd.String())
 		}
 		if _, err := e.port.Write(frame); err != nil {

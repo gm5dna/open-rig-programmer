@@ -152,12 +152,12 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 	s.opMu.Lock()
 	defer s.opMu.Unlock()
 
-	sl, err := cat.FT710.ParseSlot(slot)
+	sl, err := s.dialect.ParseSlot(slot)
 	if err != nil {
 		return codeplug.Channel{}, fmt.Errorf("ft710: ReadChannel: %w", err)
 	}
 
-	mrCmd, err := cat.FT710.BuildMRRead(sl)
+	mrCmd, err := s.dialect.BuildMRRead(sl)
 	if err != nil {
 		// e.g. the answer-only "000" placeholder: grammatical per
 		// ParseSlot, but never a legal read target.
@@ -173,7 +173,7 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 		return codeplug.Channel{}, fmt.Errorf("ft710: ReadChannel %s: MR: %w", sl.Wire(), err)
 	}
 
-	m, err := cat.FT710.ParseMRAnswer(frame)
+	m, err := s.dialect.ParseMRAnswer(frame)
 	if err != nil {
 		return codeplug.Channel{}, fmt.Errorf("ft710: ReadChannel %s: %w", sl.Wire(), err)
 	}
@@ -191,7 +191,7 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 	// Tag + display via MT. fakeradio (register item 4) answers MT for
 	// ANY grammatical slot, populated or not, so after a successful MR a
 	// rejection here is a genuine error, not an empty-slot signal.
-	mtCmd, err := cat.FT710.BuildMTRead(sl)
+	mtCmd, err := s.dialect.BuildMTRead(sl)
 	if err != nil {
 		return codeplug.Channel{}, fmt.Errorf("ft710: ReadChannel %s: %w", sl.Wire(), err)
 	}
@@ -199,7 +199,7 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 	if err != nil {
 		return codeplug.Channel{}, fmt.Errorf("ft710: ReadChannel %s: MT: %w", sl.Wire(), err)
 	}
-	tslot, display, tag, err := cat.FT710.ParseMTAnswer(tframe)
+	tslot, display, tag, err := s.dialect.ParseMTAnswer(tframe)
 	if err != nil {
 		return codeplug.Channel{}, fmt.Errorf("ft710: ReadChannel %s: %w", sl.Wire(), err)
 	}
@@ -222,10 +222,16 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 		Slot: sl.Wire(),
 		Data: &codeplug.ChannelData{
 			FreqHz: m.FreqHz,
-			// Mode.String() is the display name (e.g. "USB"); for the
-			// odd-state ModeUnset it is "-", mapped through faithfully —
-			// codeplug.Validate flags it as not a selectable mode.
-			Mode:       m.Mode.String(),
+			// Rendered through THIS session's dialect, not cat.Mode.String:
+			// this string is user-visible (it lands in the codeplug, the
+			// CLI's channel listing and the GUI's grid), so it must be the
+			// mode table of the radio that answered, never the FT-710's
+			// table on some other radio's behalf. ModeName gives the
+			// display name (e.g. "USB"); for the odd-state ModeUnset it is
+			// "-", mapped through faithfully — codeplug.Validate flags it
+			// as not a selectable mode. Mode.String survives as a
+			// dialect-free diagnostic fallback only (see its doc comment).
+			Mode:       s.dialect.ModeName(m.Mode),
 			ClarHz:     int(m.ClarHz),
 			RxClar:     m.RxClar,
 			TxClar:     m.TxClar,

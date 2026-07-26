@@ -15,7 +15,7 @@ import (
 
 // TestFT710SettingsDescriptor_StaticEqualsSession pins the FT-710
 // descriptor's shape against the M8a generated inventory it is built
-// from: 296 items (cat.EXItems' documented count), exactly 5 menus (P1 in
+// from: 296 items (cat.Dialect.EXItems' documented count), exactly 5 menus (P1 in
 // {01,02,03,04,06} — no P1=05, see cat.KnownEXAddress's doc comment) and
 // 21 groups (internal/fakeradio's own independently-derived exGroups has
 // the identical count, ex.go), every item ID six digits, and a literal
@@ -47,7 +47,7 @@ func TestFT710SettingsDescriptor_StaticEqualsSession(t *testing.T) {
 
 	wantItems := len(cat.FT710.EXItems())
 	if wantItems != 296 {
-		t.Fatalf("cat.EXItems() = %d items, want 296 (test's own assumption is stale)", wantItems)
+		t.Fatalf("cat.FT710.EXItems() = %d items, want 296 (test's own assumption is stale)", wantItems)
 	}
 
 	var gotItems, gotGroups int
@@ -65,7 +65,7 @@ func TestFT710SettingsDescriptor_StaticEqualsSession(t *testing.T) {
 		}
 	}
 	if gotItems != wantItems {
-		t.Errorf("total items = %d, want %d (== len(cat.EXItems()))", gotItems, wantItems)
+		t.Errorf("total items = %d, want %d (== len(cat.FT710.EXItems()))", gotItems, wantItems)
 	}
 	if len(itemIDs) != wantItems {
 		t.Errorf("distinct item IDs = %d, want %d — item IDs must be globally unique", len(itemIDs), wantItems)
@@ -229,7 +229,7 @@ func TestParseEXResponse_Table(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseEXResponse(requested, tt.frame)
+			got, err := parseEXResponse(cat.FT710, requested, tt.frame)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("parseEXResponse: got nil error, want an error")

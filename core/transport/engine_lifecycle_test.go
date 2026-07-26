@@ -35,7 +35,7 @@ func TestEngine_Init_SendsAI0AndDrains(t *testing.T) {
 }
 
 // TestEngine_Init_WritesExactlyAI0 pins Init's wire-level behaviour: exactly
-// one write, byte-for-byte identical to cat.BuildAISet(false).Bytes()
+// one write, byte-for-byte identical to cat.FT710.BuildAISet(false).Bytes()
 // ("AI0;"), before it moves on to draining. A stub Port is used here
 // (rather than fakeradio) specifically because the property under test is
 // "what bytes did Do's write call actually send", which fakeradio's
@@ -43,7 +43,10 @@ func TestEngine_Init_SendsAI0AndDrains(t *testing.T) {
 func TestEngine_Init_WritesExactlyAI0(t *testing.T) {
 	port := newStubPort("") // no replies at all: AI0's error window and the drain both just see silence
 	t.Cleanup(func() { _ = port.Close() })
-	eng := NewEngine(port)
+	eng, err := NewEngine(port, cat.FT710.AllowedCommand)
+	if err != nil {
+		t.Fatalf("NewEngine: unexpected error: %v", err)
+	}
 	t.Cleanup(func() { _ = eng.Close() })
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -128,7 +131,10 @@ func TestEngine_Close_NoGoroutineLeak(t *testing.T) {
 	const n = 25
 	for i := 0; i < n; i++ {
 		r := fakeradio.New()
-		eng := NewEngine(r.Port())
+		eng, err := NewEngine(r.Port(), cat.FT710.AllowedCommand)
+		if err != nil {
+			t.Fatalf("iteration %d: NewEngine: unexpected error: %v", i, err)
+		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		_, _ = eng.Do(ctx, cat.FT710.BuildIDRead(), CommandSpec{ExpectPrefix: "ID", ExpectLen: 7})
@@ -316,14 +322,17 @@ func TestEngine_WithClock_SettleUsesInjectedClock(t *testing.T) {
 	port := newStubPort("ID0800;")
 	t.Cleanup(func() { _ = port.Close() })
 	fc := newFakeClock()
-	eng := NewEngine(port, WithClock(fc))
+	eng, err := NewEngine(port, cat.FT710.AllowedCommand, WithClock(fc))
+	if err != nil {
+		t.Fatalf("NewEngine: unexpected error: %v", err)
+	}
 	t.Cleanup(func() { _ = eng.Close() })
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
 	settle := 37 * time.Millisecond
-	_, err := eng.Do(ctx, cat.FT710.BuildIDRead(), CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Settle: settle})
+	_, err = eng.Do(ctx, cat.FT710.BuildIDRead(), CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Settle: settle})
 	if err != nil {
 		t.Fatalf("Do: unexpected error: %v", err)
 	}
@@ -349,14 +358,17 @@ func TestEngine_Settle_AppliesAfterRejectionToo(t *testing.T) {
 	port := newStubPort("?;")
 	t.Cleanup(func() { _ = port.Close() })
 	fc := newFakeClock()
-	eng := NewEngine(port, WithClock(fc))
+	eng, err := NewEngine(port, cat.FT710.AllowedCommand, WithClock(fc))
+	if err != nil {
+		t.Fatalf("NewEngine: unexpected error: %v", err)
+	}
 	t.Cleanup(func() { _ = eng.Close() })
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
 	settle := 41 * time.Millisecond
-	_, err := eng.Do(ctx, cat.FT710.BuildIDRead(), CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Settle: settle})
+	_, err = eng.Do(ctx, cat.FT710.BuildIDRead(), CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Settle: settle})
 	if !errors.Is(err, cat.ErrRejected) {
 		t.Fatalf("Do = %v, want errors.Is match against cat.ErrRejected", err)
 	}
@@ -389,13 +401,16 @@ func TestEngine_WithMaxFrame_TriggersContaminationSooner(t *testing.T) {
 	}
 	port := newStubPort(string(overLong))
 	t.Cleanup(func() { _ = port.Close() })
-	eng := NewEngine(port, WithMaxFrame(8))
+	eng, err := NewEngine(port, cat.FT710.AllowedCommand, WithMaxFrame(8))
+	if err != nil {
+		t.Fatalf("NewEngine: unexpected error: %v", err)
+	}
 	t.Cleanup(func() { _ = eng.Close() })
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	_, err := eng.Do(ctx, cat.FT710.BuildIDRead(), CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Timeout: time.Second})
+	_, err = eng.Do(ctx, cat.FT710.BuildIDRead(), CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Timeout: time.Second})
 	if !errors.Is(err, ErrContaminated) {
 		t.Fatalf("Do = %v, want errors.Is match against ErrContaminated (WithMaxFrame(8) should have made a 20-byte unterminated reply overflow)", err)
 	}
