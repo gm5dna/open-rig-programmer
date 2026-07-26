@@ -17,6 +17,18 @@ frequency list, no other operator-identifying data appears here.
 Sections up to and including "Consequences applied" record M5a; the
 "M5b write-trial protocol" section and everything after it record M5b.
 
+**Code symbols named in this log are historical, not a current API
+reference.** Function and type names from `core/` are recorded as they
+stood at the session date of each entry, because this document's value
+is being an accurate record of what was observed and decided at the
+time; entries are not retro-edited when the code later moves. A later
+refactor may therefore have renamed or relocated a symbol named here —
+M9b, for instance, moved `core/cat`'s builders and parsers off
+package-level functions and onto `cat.Dialect` methods, so `cat.BuildMWSet`
+and `cat.ParseMTAnswer` below are now `cat.Dialect.BuildMWSet` and
+`cat.Dialect.ParseMTAnswer`. Read the names as they were; check the
+source for what they are.
+
 ## Session metadata
 
 - **Date**: 13 July 2026, at Stuart's home.
