@@ -110,8 +110,8 @@ func (d Dialect) validateMWFields(m MemoryData) error {
 		return newParseError([]byte{m.Mode.Wire()}, "MW: mode field (P6) must not be ModeUnset in a Set frame")
 	}
 
-	if !validClarHz(m.ClarHz) {
-		return newParseError([]byte(fmt.Sprintf("%d", m.ClarHz)), "MW: ClarHz must be a multiple of 10 Hz, magnitude <= 9990")
+	if !d.validClarHz(m.ClarHz) {
+		return newParseError([]byte(fmt.Sprintf("%d", m.ClarHz)), fmt.Sprintf("MW: ClarHz must be a multiple of %d Hz, magnitude <= %d", d.clar.StepHz, d.clar.MaxAbsHz))
 	}
 
 	if m.FreqHz == 0 || m.FreqHz > memFreqMax {

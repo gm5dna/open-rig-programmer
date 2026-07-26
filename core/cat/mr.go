@@ -105,8 +105,8 @@ func (d Dialect) parseMemoryFrame(frame []byte, wantPrefix string) (MemoryData, 
 	if sign == '-' {
 		clar = -clar
 	}
-	if !validClarHz(clar) {
-		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: clarifier (P3) must be a multiple of 10 Hz, magnitude <= 9990", wantPrefix))
+	if !d.validClarHz(clar) {
+		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: clarifier (P3) must be a multiple of %d Hz, magnitude <= %d", wantPrefix, d.clar.StepHz, d.clar.MaxAbsHz))
 	}
 
 	rxClar, err := parseBoolDigit(frame[memRxClarOffset])

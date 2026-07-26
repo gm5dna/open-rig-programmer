@@ -205,22 +205,49 @@ func (s Shift) String() string {
 	return fmt.Sprintf("Shift(%#02x)", byte(s))
 }
 
-// clarMaxAbsHz/clarStepHz bound MemoryData.ClarHz. Reference P3: "4-digit
-// offset 0000-9990 Hz" (magnitude); brief: "10 Hz steps".
-const (
-	clarMaxAbsHz = 9990
-	clarStepHz   = 10
-)
-
-// validClarHz reports whether v is a legal clarifier value: a multiple of
-// clarStepHz Hz, with magnitude at most clarMaxAbsHz. Go's % operator
-// preserves the sign of the dividend, so this works correctly for negative
-// v without a separate abs() step.
-func validClarHz(v int16) bool {
-	if v < -clarMaxAbsHz || v > clarMaxAbsHz {
+// validClarHz reports whether v is a legal clarifier value UNDER THIS
+// DIALECT'S ClarifierPolicy (dialectconfig.go): a multiple of d.clar.StepHz
+// Hz, with magnitude at most d.clar.MaxAbsHz. Reference P3's "4-digit
+// offset 0000-9990 Hz" (magnitude) is the FT-710's OWN figure — see
+// FT710's clar literal (dialect.go) — not a package constant any more:
+// clarifier_test.go's peer dialect legally builds and admits clarifier
+// values (e.g. 9999 Hz, 1 Hz steps) the FT-710 rejects outright.
+//
+// Promoted from a package-level function reading two former package
+// constants (clarMaxAbsHz, clarStepHz) to a Dialect method: THE SEAM M9c-0
+// task 65 exists to close. mr.go's parseMemoryFrame and mw.go's
+// validateMWFields both reach the OUTBOUND WRITE GATE, so a hardwired
+// bound here would authorise, or refuse, bytes on the strength of another
+// radio's clarifier policy rather than this dialect's own.
+//
+// A StepHz below 1 (only reachable via a hand-built Dialect literal that
+// bypasses NewDialect's validation, e.g. the zero Dialect) reports false
+// rather than dividing by zero — consistent with the zero value's
+// documented fail-closed behaviour (dialect.go), not merely an accident of
+// avoiding a panic. Go's % operator preserves the sign of the dividend for
+// a positive step, so this works correctly for negative v without a
+// separate abs() step.
+func (d Dialect) validClarHz(v int16) bool {
+	if d.clar.StepHz < 1 {
 		return false
 	}
-	return v%clarStepHz == 0
+	max, step := int16(d.clar.MaxAbsHz), int16(d.clar.StepHz)
+	if v < -max || v > max {
+		return false
+	}
+	return v%step == 0
+}
+
+// validClarHz (the package-level function below) is a compatibility shim
+// kept ONLY because memdata_test.go's TestValidClarHz — outside this
+// task's file ownership (M9c-0 task 65: memdata.go, mr.go, mw.go,
+// clarifier_test.go) — still calls it directly by this name and int16
+// signature. No production code reaches this any longer: mr.go and mw.go
+// both call the Dialect method above on their own receiver, which is the
+// seam this task closes. It delegates to FT710's OWN policy rather than
+// restating 9990/10 as a second, independently-drifting literal.
+func validClarHz(v int16) bool {
+	return FT710.validClarHz(v)
 }
 
 // allDigits reports whether every byte in b is an ASCII digit '0'-'9'
