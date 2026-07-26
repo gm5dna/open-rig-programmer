@@ -238,18 +238,6 @@ func (d Dialect) validClarHz(v int16) bool {
 	return v%step == 0
 }
 
-// validClarHz (the package-level function below) is a compatibility shim
-// kept ONLY because memdata_test.go's TestValidClarHz — outside this
-// task's file ownership (M9c-0 task 65: memdata.go, mr.go, mw.go,
-// clarifier_test.go) — still calls it directly by this name and int16
-// signature. No production code reaches this any longer: mr.go and mw.go
-// both call the Dialect method above on their own receiver, which is the
-// seam this task closes. It delegates to FT710's OWN policy rather than
-// restating 9990/10 as a second, independently-drifting literal.
-func validClarHz(v int16) bool {
-	return FT710.validClarHz(v)
-}
-
 // allDigits reports whether every byte in b is an ASCII digit '0'-'9'
 // (vacuously true for an empty slice).
 func allDigits(b []byte) bool {
