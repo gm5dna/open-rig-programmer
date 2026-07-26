@@ -1243,6 +1243,8 @@ behaviour did not."
 
 Create `core/transport/allowfunc_test.go`. **Read `core/transport/engine_test.go` first** and use its existing port doubles and command/spec constructors — do not invent parallel helpers.
 
+> **Corrected post-merge, 26/07/2026 (Codex M9b review, finding 3).** The sketch below originally said an ungated Engine "cannot be constructed at all" / "must not be constructable", in both the comment and the failure string. That claim is false — `Engine` is exported, so `new(transport.Engine)` compiles anywhere — and it was copied verbatim into the shipped test, where it survived one round of correction because only the failure string was fixed and the comment twelve lines above it was not. Both are now scoped to the constructor. The shipped file is the authority; this sketch is corrected to match so it cannot re-seed the claim.
+
 ```go
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -1253,13 +1255,14 @@ import (
 	"testing"
 )
 
-// TestNewEngine_NilAllowFuncIsRefused: an Engine without a gate cannot be
-// constructed at all.
+// TestNewEngine_NilAllowFuncIsRefused: NewEngine cannot RETURN an Engine
+// without a gate. Engine is exported, so a hand-built zero value still
+// compiles; it fails closed at Do instead.
 func TestNewEngine_NilAllowFuncIsRefused(t *testing.T) {
 	// Use whatever port double this package's tests already provide.
 	e, err := NewEngine(newTestPort(t), nil)
 	if err == nil {
-		t.Fatal("NewEngine(port, nil) returned no error — an ungated Engine must not be constructable")
+		t.Fatal("NewEngine(port, nil) returned no error — NewEngine must not RETURN an ungated Engine")
 	}
 	if !errors.Is(err, ErrNoAllowlist) {
 		t.Errorf("NewEngine(port, nil) error = %v, want it to wrap ErrNoAllowlist", err)

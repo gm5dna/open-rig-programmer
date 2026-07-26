@@ -11,8 +11,12 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/cat"
 )
 
-// TestNewEngine_NilAllowFuncIsRefused: an Engine without a gate cannot be
-// constructed at all. The reader goroutine must not have started either —
+// TestNewEngine_NilAllowFuncIsRefused: NewEngine cannot RETURN an Engine
+// without a gate. That is a claim about this constructor, not about the
+// type — Engine is exported, so a hand-built zero value compiles in any
+// package; it fails closed at Do instead, on its nil allow (see
+// TestEngineDo_RefusesWithNoAllowlist, the defence-in-depth half).
+// The reader goroutine must not have started either —
 // NewEngine's nil check runs before it, so a refused construction leaves
 // nothing running; the stub port's Read blocks until Close, so a leaked
 // reader would be observable as a goroutine parked on a port this test

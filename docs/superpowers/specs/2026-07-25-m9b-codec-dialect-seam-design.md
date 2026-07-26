@@ -111,9 +111,22 @@ func NewEngine(p Port, allow AllowFunc, opts ...Option) (*Engine, error)
 driver passes the method value directly — no adapter, no wrapper type.
 
 **Fail-closed, twice.** The roadmap says a nil `allow` means every `Do`
-refuses. This design also makes the bad state unconstructable:
-`NewEngine` returns a typed error for a nil `allow` before starting the
-read goroutine, *and* `Do` still checks defensively before writing. That
+refuses. This design also stops the constructor from producing the bad
+state: `NewEngine` returns a typed error for a nil `allow` before starting
+the read goroutine, *and* `Do` still checks defensively before writing.
+
+> **Corrected post-merge, 26/07/2026 (Codex M9b review, finding 3).** This
+> paragraph said the design "makes the bad state **unconstructable**". It
+> does not, and cannot: `Engine` is exported, so `var e transport.Engine`
+> or `new(transport.Engine)` compiles in any package and no guard forbids
+> it. What the design delivers is narrower and is what the two-layer
+> structure below actually argues for — **`NewEngine` cannot return an
+> ungated Engine, and a hand-built one fails closed at `Do`**. The second
+> layer is not belt-and-braces for an impossible state; it is the layer
+> that covers the state the constructor cannot reach. Original wording kept
+> in this note rather than silently rewritten.
+
+That
 is the same reasoning `ErrDisallowedCommand` already documents — the
 check "should be unreachable for any Command actually produced by a
 core/cat builder", and the Engine "still checks defensively, because it
