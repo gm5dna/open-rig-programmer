@@ -132,11 +132,23 @@ const (
 )
 
 // modeTable is the single source of truth pairing each selectable cat
-// mode with its display name, in wire-code order. caps Modes lists derive
-// from it and the write path's modeByName reverse lookup is built from
-// it, so the read path (cat.Mode.String()) and the write path can never
-// disagree on a spelling — TestModes_MatchCatModeNames pins the
-// round-trip. ModeUnset ('0', "-") is deliberately absent: it is a
+// mode with its display name, in wire-code order. caps Modes lists
+// derive from it and the write path's modeByName reverse lookup is
+// built from it, so the read path and the write path can never disagree
+// on a spelling — TestModes_MatchCatModeNames pins the round-trip.
+//
+// The read path is s.dialect.ModeName (read.go's ReadChannel, rerouted
+// at M9b task 56), NOT cat.Mode.String: a rendered mode string is
+// user-visible, so it must come from the mode table of the radio that
+// answered rather than the FT-710's on some other radio's behalf.
+// Mode.String survives only as a dialect-free diagnostic fallback (see
+// its own doc comment). For cat.FT710 the two are byte-identical by
+// construction — cat/dialect.go wires the dialect's modeNames field to
+// the package map Mode.String reads — which is why this table can pin
+// both spellings at once, and TestModes_MatchCatModeNames renders
+// through the dialect so it guards the real path, not the fallback.
+//
+// ModeUnset ('0', "-") is deliberately absent: it is a
 // parse-accept-only placeholder, never a selectable mode.
 var modeTable = []struct {
 	name string

@@ -154,14 +154,33 @@
 //
 // Engine.Do is MECHANISM: it will transmit any frame its injected
 // AllowFunc admits, including the Set frames (MW, MT) that mutate a
-// radio's memory. It is
-// not, and cannot be, a policy layer — the hardware write guard (the
-// capability profiles, codeplug.Diff's gates, the clone service's
-// choreography, and driver.Session.WriteChannel's own re-check) lives
-// entirely above it. Within THIS repository, Engine.Do is therefore
-// reached outside this package only from core/driver/** — enforced by the
-// import-graph guard test (internal/guards), whose threat model is our
-// own composition, not external importers. The compiler-enforced version
-// of this boundary (a separate write-capability split) is a ledgered
-// M5b-flip precondition.
+// radio's memory. It is not, and cannot be, a policy layer — the
+// hardware write guard (the capability profiles, codeplug.Diff's gates,
+// the clone service's choreography, and driver.Session.WriteChannel's
+// own re-check) lives entirely above it. Within THIS repository,
+// Engine.Do is therefore reached outside this package only from
+// core/driver/** — enforced by the import-graph guard test
+// (internal/guards), whose threat model is our own composition, not
+// external importers. The compiler-enforced version of this boundary (a
+// separate write-capability split) is a ledgered M5b-flip precondition.
+//
+// # What M9b did NOT change about this package's core/cat dependency
+//
+// M9b (the codec dialect seam) injected the write GATE and nothing else.
+// Transport still imports core/cat, and deliberately so, for three
+// things that are not radio-behaviour policy:
+//
+//   - the frame accumulator (cat.NewFrameAccumulator,
+//     cat.FrameTooLongError, cat.ErrFrameTooLong) — framing is the CAT
+//     protocol's own ";"-terminated shape, shared by every Yaesu dialect;
+//   - rejection detection (cat.IsRejection, cat.ErrRejected) — "?;" is
+//     likewise protocol-level, not per-radio;
+//   - cat.FT710.BuildAISet for the AI init frame in Engine.Init.
+//
+// The third of those IS a hardwiring, and is ledgered as such: see
+// Init's own doc comment. Making the init frame injectable is deferred
+// to whenever a second rig actually differs on it (roadmap risk 10).
+// Nothing else in this package reaches for a dialect: every outbound
+// frame Do transmits arrives from its caller already built, and is
+// judged solely by the AllowFunc the Engine was constructed with.
 package transport

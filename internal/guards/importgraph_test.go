@@ -196,8 +196,10 @@ func looksLikeOnce(expr ast.Expr) bool {
 // TestWritePathReachableOnlyThroughDriver pins the composition-root
 // discipline (see the package doc comment): the raw wire-write mechanisms
 // — transport.Engine.Do (the only place bytes cross the wire) and
-// cat.BuildMWSet/cat.BuildMTSet (the only builders of Set frames that
-// mutate a radio's memory) — are referenced OUTSIDE their own packages
+// the BuildMWSet/BuildMTSet builders (the only builders of Set frames
+// that mutate a radio's memory; cat.Dialect methods since M9b, matched
+// by NAME rather than by package qualifier — see the matcher's own
+// comment below) — are referenced OUTSIDE their own packages
 // only by core/driver/**; and driver.Session.WriteChannel (the policy-
 // gated write seam those mechanisms compose into) is referenced only by
 // core/driver/** and core/clone/** (the clone service being the single
@@ -339,7 +341,7 @@ func TestWritePathReachableOnlyThroughDriver(t *testing.T) {
 		t.Error("never saw core/driver/** call Engine.Do — the walker or its filters are broken, and every check above passed vacuously")
 	}
 	if !sawDriverBuildMW {
-		t.Error("never saw core/driver/** reference cat.BuildMWSet/BuildMTSet — the walker or its filters are broken, and every check above passed vacuously")
+		t.Error("never saw core/driver/** reference BuildMWSet/BuildMTSet — the walker or its filters are broken, and every check above passed vacuously")
 	}
 	if !sawCloneWriteChannel {
 		t.Error("never saw core/clone/** reference Session.WriteChannel — the walker or its filters are broken, and every check above passed vacuously")

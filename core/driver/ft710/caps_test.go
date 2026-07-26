@@ -339,8 +339,18 @@ func TestFieldCTCSSTone_ReadUnsupported_HWConfirmed(t *testing.T) {
 // TestModes_MatchCatModeNames pins that the capability Modes list is
 // exactly the 15 named cat modes, in wire-code order, and that each name
 // round-trips through the driver's own name->Mode table back to the same
-// display name — the read path (Mode.String()) and the write path
-// (modeByName) must agree on every spelling.
+// display name — the read path and the write path (modeByName) must
+// agree on every spelling.
+//
+// The round-trip renders through catDialect.ModeName, which is what
+// read.go's ReadChannel actually calls since M9b task 56 rerouted it.
+// Deliberately NOT cat.Mode.String: that survives only as a
+// dialect-free diagnostic fallback, so a test round-tripping through it
+// would guard the fallback rather than the real rendering path —
+// exactly what Mode.String's own doc comment warns against. For
+// cat.FT710 the two are byte-identical by construction (cat/dialect.go
+// wires the dialect's mode table to the package map Mode.String reads),
+// so aiming at the dialect costs nothing and pins the right thing.
 func TestModes_MatchCatModeNames(t *testing.T) {
 	caps := CapabilitiesUnverified()
 	if len(caps.Modes) != 15 {
@@ -356,8 +366,8 @@ func TestModes_MatchCatModeNames(t *testing.T) {
 			t.Errorf("mode %q has no modeByName entry", name)
 			continue
 		}
-		if mode.String() != name {
-			t.Errorf("modeByName[%q].String() = %q, want the same name back", name, mode.String())
+		if got := catDialect.ModeName(mode); got != name {
+			t.Errorf("catDialect.ModeName(modeByName[%q]) = %q, want the same name back", name, got)
 		}
 	}
 	if len(modeByName) != len(caps.Modes) {

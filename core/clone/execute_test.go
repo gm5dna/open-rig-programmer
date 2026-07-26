@@ -1141,7 +1141,8 @@ func TestExecute_InertClarifier_UnchangedFlowsCleanly(t *testing.T) {
 // 8) — reproducing it end to end without touching that shared behaviour
 // (and the many other tests that depend on it staying exactly as it is)
 // uses tagPadWireInterceptor to rewrite this ONE wire reply, below
-// cat.ParseMTAnswer, to what the live radio is now confirmed to send.
+// cat.Dialect.ParseMTAnswer, to what the live radio is now confirmed
+// to send.
 func TestExecute_LiveBugRepro_UnpaddedTagWriteReadBackPadded(t *testing.T) {
 	wantFrame := []byte("MT0011PROD TEST;")
 	padFrame := []byte("MT0011PROD TEST   ;")
@@ -1185,9 +1186,10 @@ func TestExecute_LiveBugRepro_UnpaddedTagWriteReadBackPadded(t *testing.T) {
 // old tag SURVIVES; its one proven clear mechanism is the all-spaces
 // 12-byte tag. fakeradio now mirrors that rejection, so against the OLD
 // 0-byte encoding this test aborts at the write ("MT rejected by
-// radio") — with the spaces-form encoding (cat.BuildMTSet, this fix)
-// the write is accepted, the read-back echoes all spaces, ParseMTAnswer
-// trims it to "", and the verify compares "" == "" clean.
+// radio") — with the spaces-form encoding (cat.Dialect.BuildMTSet,
+// this fix) the write is accepted, the read-back echoes all spaces,
+// ParseMTAnswer trims it to "", and the verify compares "" == ""
+// clean.
 func TestExecute_TagClear_EndToEnd(t *testing.T) {
 	// minimalFactoryImage's M-01, plus the non-empty tag to be cleared.
 	taggedImage := minimalFactoryImage()

@@ -15,8 +15,9 @@ import (
 
 // TestFT710SettingsDescriptor_StaticEqualsSession pins the FT-710
 // descriptor's shape against the M8a generated inventory it is built
-// from: 296 items (cat.Dialect.EXItems' documented count), exactly 5 menus (P1 in
-// {01,02,03,04,06} — no P1=05, see cat.KnownEXAddress's doc comment) and
+// from: 296 items (cat.Dialect.EXItems' documented count), exactly 5
+// menus (P1 in {01,02,03,04,06} — no P1=05, see
+// cat.Dialect.KnownEXAddress's doc comment) and
 // 21 groups (internal/fakeradio's own independently-derived exGroups has
 // the identical count, ex.go), every item ID six digits, and a literal
 // spot-check on the very first inventory row.

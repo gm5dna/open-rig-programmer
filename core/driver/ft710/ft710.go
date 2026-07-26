@@ -424,7 +424,7 @@ func effectiveCapabilities(base spec.Capabilities, slots60m []string, emg bool) 
 // Classification: a slot already claimed by one of base's own static
 // banks (MEM/PMS) is excluded before classification — this method only
 // ever adds banks Open's discovery would ADD, never restates a static
-// one. Every remaining slot is parsed via cat.ParseSlot (the SAME
+// one. Every remaining slot is parsed via cat.Dialect.ParseSlot (the SAME
 // authoritative slot parser discoverInventory's own SixtyMSlot/EMGSlot
 // builders agree with) and classified by Slot.Is60m/IsEMG, preserving
 // the ORDER slots appeared in the input slice; a slot that parses to

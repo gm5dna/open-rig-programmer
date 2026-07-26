@@ -186,7 +186,7 @@ func TestAllowedCommand_HWDerived_M5b_AcceptsSameFrames(t *testing.T) {
 // "MRP1L007100000+000000110000;" — the M5b read-back of the CAT-written
 // P1L slot, carrying kind '1' (KindMemory), not kind '5' (KindPMS). At
 // the codec level (this test) the frame has always parsed cleanly —
-// cat.ParseMRAnswer only checks that P7 is a STRUCTURALLY valid kind
+// Dialect.ParseMRAnswer only checks that P7 is a STRUCTURALLY valid kind
 // digit, never bank-specific pairing; the abort lived one layer up, in
 // core/driver/ft710's wantKind check (see
 // core/driver/ft710/read_test.go's

@@ -86,9 +86,9 @@ func requestedFields(data codeplug.ChannelData) []spec.Field {
 // docs/hardware-notes.md): the former ASSUMED pairing (KindPMS '5' for a
 // PMS slot) is hardware-refuted — the radio REJECTS a PMS write carrying
 // KindPMS with an immediate "?;", and accepts the identical write when
-// it carries KindMemory instead. cat.BuildMWSet enforces the same rule
-// (see core/cat/mw.go) and fakeradio mirrors the radio's rejection (see
-// internal/fakeradio/parser.go's handleMW).
+// it carries KindMemory instead. cat.Dialect.BuildMWSet enforces the
+// same rule (see core/cat/mw.go) and fakeradio mirrors the radio's
+// rejection (see internal/fakeradio/parser.go's handleMW).
 //
 // NO read-back: WriteChannel reports only sent/unrejected (see
 // driver.WriteResult). Reading the slot back and comparing is the clone
@@ -241,7 +241,7 @@ func buildWriteCommands(dialect cat.Dialect, ch codeplug.Channel) (mwCmd, mtCmd 
 	// comment): always KindMemory ('1'), for both memory and PMS slots.
 	// Discovered banks (5xx/EMG) can never reach here — their fields are
 	// read-only, so the capability gate refused them already;
-	// cat.BuildMWSet would reject their slots too (not Writable()).
+	// cat.Dialect.BuildMWSet would reject their slots too (not Writable()).
 	mwCmd, err = dialect.BuildMWSet(cat.MemoryData{
 		Slot:   sl,
 		FreqHz: data.FreqHz,

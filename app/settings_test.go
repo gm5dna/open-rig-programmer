@@ -328,7 +328,8 @@ func TestReadSettingsRadio_PreservesLegacyAndUnsupported(t *testing.T) {
 		t.Fatalf("ReadRadio: %v", err)
 	}
 
-	const unrecognisedID = "999999" // not a Table 2 member — see cat.KnownEXAddress.
+	// not a Table 2 member — see cat.Dialect.KnownEXAddress.
+	const unrecognisedID = "999999"
 	a.mu.Lock()
 	a.working.Menus = &codeplug.MenuSnapshot{
 		Descriptor: "some-older-build@1",

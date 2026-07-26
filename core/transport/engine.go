@@ -191,6 +191,18 @@ type readerEvent struct {
 //
 // A nil AllowFunc is refused by NewEngine (ErrNoAllowlist) before the
 // reader goroutine is even started, and refused again by Do.
+//
+// CONTRACT ON frame — an implementation MUST NOT mutate it, and MUST
+// NOT retain it beyond the call. Do hands the gate the very slice it
+// then writes (safety obligation 1 requires exactly one Bytes() call,
+// checked and written), so the slice is writable and live. A gate that
+// edited it would make the bytes checked and the bytes written differ
+// while still passing every "same slice" check; a gate that kept a
+// reference could observe or alter a later attempt's frame, since Do
+// re-derives and re-gates inside the retry loop. cat.Command.Bytes()
+// already returns a fresh defensive copy per call, so this obligation
+// is what makes its promise — that the transport writes bytes nobody
+// else can reach — true of the gate as well as of the caller.
 type AllowFunc func(frame []byte) bool
 
 // Option configures a *Engine at construction time. See NewEngine.
@@ -330,6 +342,15 @@ func (e *Engine) UnexpectedFrames() int64 {
 // drains the port to quiet — clearing out anything left over from before
 // this session started talking to the radio (a stale unsolicited push, or
 // a reply to a command sent by a previous, now-gone session).
+//
+// M9b note, no behaviour change today: this is the ONE place in the
+// repository where a frame built by a HARDWIRED cat.FT710 meets an
+// INJECTED gate that may belong to a different dialect. With one
+// configured dialect the two are the same and the frame passes; with a
+// second dialect whose AllowFunc does not admit the FT-710's AI0; form,
+// Init would fail closed — safe, but baffling to diagnose. Making the
+// init frame injectable is deferred to M9c/roadmap risk 10, when a rig
+// that actually differs exists to design against.
 func (e *Engine) Init(ctx context.Context) error {
 	aiCmd := cat.FT710.BuildAISet(false)
 	if _, err := e.Do(ctx, aiCmd, CommandSpec{}); err != nil {

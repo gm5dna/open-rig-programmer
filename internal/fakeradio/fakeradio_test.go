@@ -528,8 +528,8 @@ func TestRejection_MT_TagWithControlByte(t *testing.T) {
 //     cleared the tag, which the real radio provably does not.
 //  2. The all-spaces 12-byte tag Set IS the radio's (one proven)
 //     tag-CLEAR mechanism: accepted, and the tag reads back all-spaces
-//     — which cat.ParseMTAnswer's trim then models as "" (the earlier
-//     half of this fix wave).
+//     — which cat.Dialect.ParseMTAnswer's trim then models as "" (the
+//     earlier half of this fix wave).
 func TestHWDerived_MT_ZeroByteTagSetRejected_SpacesFormClears(t *testing.T) {
 	_, conn := newTestRadio(t)
 
@@ -549,7 +549,7 @@ func TestHWDerived_MT_ZeroByteTagSetRejected_SpacesFormClears(t *testing.T) {
 
 	// 2. The all-spaces 12-byte Set clears: accepted, reads back as the
 	// spaces it stored (wire-level; the model-level "" comes from
-	// cat.ParseMTAnswer's trim, not from this fake).
+	// cat.Dialect.ParseMTAnswer's trim, not from this fake).
 	writeFrame(t, conn, "MT0010            ;")
 	assertNoReply(t, conn)
 	writeFrame(t, conn, "MT001;")

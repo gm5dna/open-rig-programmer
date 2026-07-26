@@ -113,7 +113,7 @@
 //  5. MT short-form answer (read.go, ReadChannel; fakeradio register
 //     items 4 and 8, and fakeradio's buildMTReply). The driver parses
 //     the MT answer as the Set-shaped short form ("MT" + slot + display
-//     + 0-12 byte tag + ";") via cat.ParseMTAnswer. HW-CONFIRMED
+//     + 0-12 byte tag + ";") via cat.Dialect.ParseMTAnswer. HW-CONFIRMED
 //     2026-07-13 (docs/hardware-notes.md §MT short-form answer): live
 //     probe "MT006;" -> "MT0061" + a 4-char tag + 8 trailing spaces
 //     (12 bytes total) — the short form, not Hamlib's longer combined
@@ -121,7 +121,7 @@
 //     the full 12-byte field, both for a front-panel-origin tag and
 //     (HW-CONFIRMED the hard way, 13/07/2026, the first real-radio
 //     production write — see fakeradio register item 8) for a tag
-//     written via CAT MT-set. cat.ParseMTAnswer now TRIMS those
+//     written via CAT MT-set. cat.Dialect.ParseMTAnswer now TRIMS those
 //     trailing spaces before returning (Fix: tag normalisation) rather
 //     than preserving them verbatim: padding is purely a wire-encoding
 //     detail, and the driver's ReadChannel result — like every other
@@ -138,15 +138,15 @@
 //
 //  7. P9 carries nothing worth preserving (read.go; core/cat/mr.go).
 //     The MR answer's P9 field is documented as fixed "00" and
-//     cat.ParseMRAnswer rejects anything else, so the driver stores
-//     nothing for it. HW-CONFIRMED 2026-07-13 (docs/hardware-notes.md
-//     §MR bytes-25/26 refutation): M5a's scoped tone-index question is
-//     SETTLED — bytes 25-26 read "00" on M-06 even with a CTCSS tone
-//     (146.2 Hz) SET and ACTIVE (P8=1) on the radio at capture time. P9
-//     is NOT a live tone index on this firmware; there is nothing
-//     slot-specific to preserve here, and there will not be. See
-//     caps.go's FieldCTCSSTone doc comment for the capability-level
-//     consequence.
+//     cat.Dialect.ParseMRAnswer rejects anything else, so the driver
+//     stores nothing for it. HW-CONFIRMED 2026-07-13
+//     (docs/hardware-notes.md §MR bytes-25/26 refutation): M5a's
+//     scoped tone-index question is SETTLED — bytes 25-26 read "00" on
+//     M-06 even with a CTCSS tone (146.2 Hz) SET and ACTIVE (P8=1) on
+//     the radio at capture time. P9 is NOT a live tone index on this
+//     firmware; there is nothing slot-specific to preserve here, and
+//     there will not be. See caps.go's FieldCTCSSTone doc comment for
+//     the capability-level consequence.
 //
 // # Out of scope (deliberately)
 //

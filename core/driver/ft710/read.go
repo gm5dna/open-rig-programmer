@@ -79,7 +79,7 @@ var shiftByName = map[string]cat.Shift{
 // KindPMS} — rather than narrowing to just '1'. Memory-bank slots
 // (memory channels ONLY) accept {KindVFO, KindMemory, KindUnset}: '0'
 // (VFO), '1' (Memory, the overwhelmingly common case), and '4' (the
-// documented "-" placeholder cat.ParseMRAnswer already accepts
+// documented "-" placeholder cat.Dialect.ParseMRAnswer already accepts
 // structurally) — all three genuinely observed on MEM (M5a/M5b).
 //
 // Discovered 60m/EMG banks (Codex M5b fix wave, Fix 5, adjudicated
@@ -136,9 +136,9 @@ func kindAccepted(slot cat.Slot, got byte) bool {
 // "preserve whatever the radio has" to every write path downstream).
 // M5a is scoped to investigate a tone-index side channel (e.g. whether
 // the MR answer's fixed "00" P9 field is really a tone index on some
-// firmware); nothing is stored for P9 today — cat.ParseMRAnswer already
-// validates it is the documented constant "00", so there is nothing
-// slot-specific to preserve.
+// firmware); nothing is stored for P9 today — cat.Dialect.ParseMRAnswer
+// already validates it is the documented constant "00", so there is
+// nothing slot-specific to preserve.
 //
 // Kind sanity: the answer's P7 kind byte must be one of the slot's
 // bank's acceptedKinds (LENIENT, HW-CONFIRMED 2026-07-13 — see

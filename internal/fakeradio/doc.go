@@ -108,7 +108,7 @@
 //     cleared the tag, a proven divergence, now fixed to mirror the
 //     radio. The radio's one proven tag-CLEAR mechanism is the
 //     all-spaces 12-byte tag (accepted through the normal path;
-//     cat.BuildMTSet emits exactly that form for an empty tag).
+//     cat.Dialect.BuildMTSet emits exactly that form for an empty tag).
 //     (parser.go, validTag and handleMT's zero-byte rejection)
 //
 //  8. MT read replies echo the stored tag exactly as last written (0-12
@@ -125,8 +125,8 @@
 //     write (13/07/2026, docs/fixtures-private/) wrote an unpadded tag
 //     via CAT MT-set and read it back padded, which aborted clone's
 //     write-verify with a false mismatch until fixed (Fix: tag
-//     normalisation). core/cat.ParseMTAnswer now TRIMS trailing spaces
-//     on parse instead of preserving them verbatim, so the model's
+//     normalisation). core/cat.Dialect.ParseMTAnswer now TRIMS trailing
+//     spaces on parse instead of preserving them verbatim, so the model's
 //     canonical tag is never padded regardless of which side (radio or
 //     this fake) chose to pad the wire reply. This fake's OWN default
 //     behaviour is intentionally UNCHANGED by that fix — it still stores

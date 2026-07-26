@@ -97,7 +97,7 @@ func (s *Session) SettingsDescriptor() driver.SettingsDescriptor {
 // UnknownSettingError reports that ReadSetting's id argument does not name
 // a known FT-710 EX (MENU) address — refused BEFORE any wire traffic,
 // exactly like ReadChannel's malformed-slot refusal (read.go,
-// cat.ParseSlot's error path).
+// cat.Dialect.ParseSlot's error path).
 type UnknownSettingError struct {
 	// ID is the caller-supplied setting ID that did not parse.
 	ID string
@@ -148,12 +148,13 @@ func exSpec(addr cat.EXAddress) transport.CommandSpec {
 //     NO error — mirroring the project's established "?;" -> empty-result
 //     rule (ReadChannel's empty-slot mapping, read.go);
 //   - a well-formed EX answer naming requested's own address maps to
-//     SettingKnown, with Raw the P4 body verbatim (cat.ParseEXAnswer's own
-//     no-trim, no-typed-value policy — see its doc comment);
+//     SettingKnown, with Raw the P4 body verbatim
+//     (cat.Dialect.ParseEXAnswer's own no-trim, no-typed-value policy —
+//     see its doc comment);
 //   - a well-formed EX answer naming a DIFFERENT address is refused with
 //     *SettingAnswerMismatchError;
-//   - anything else (a malformed frame cat.ParseEXAnswer rejects) is a
-//     plain wrapped error.
+//   - anything else (a malformed frame cat.Dialect.ParseEXAnswer
+//     rejects) is a plain wrapped error.
 //
 // This is a PURE function — no ctx, no *Session, no wire I/O — deliberately
 // separated from ReadSetting's exchange so it can be (and is)
@@ -201,11 +202,11 @@ var rejectionFrameBytes = []byte("?;")
 // (which the FT-710 mints as the setting's 6-digit EX wire address — see
 // buildSettingsDescriptor).
 //
-// id is parsed via cat.ParseEXAddress FIRST, entirely before any wire
-// traffic: a failure (malformed shape, or a syntactically well-formed
-// address that is not a Table 2 member) returns *UnknownSettingError and
-// nothing is ever sent — exactly ReadChannel's malformed-slot refusal
-// shape (read.go).
+// id is parsed via cat.Dialect.ParseEXAddress FIRST, entirely before
+// any wire traffic: a failure (malformed shape, or a syntactically
+// well-formed address that is not a Table 2 member) returns
+// *UnknownSettingError and nothing is ever sent — exactly ReadChannel's
+// malformed-slot refusal shape (read.go).
 //
 // The whole exchange holds s.opMu for its full duration, mirroring
 // ReadChannel's Fix-2 discipline (see Session's doc comment, ft710.go):
@@ -237,9 +238,9 @@ func (s *Session) ReadSetting(ctx context.Context, id string) (driver.SettingVal
 
 	cmd, err := s.dialect.BuildEXRead(addr)
 	if err != nil {
-		// Unreachable in practice: cat.ParseEXAddress above already
+		// Unreachable in practice: cat.Dialect.ParseEXAddress above already
 		// enforces the identical Table 2 membership BuildEXRead itself
-		// checks (both via cat.KnownEXAddress) — kept as defence in
+		// checks (both via cat.Dialect.KnownEXAddress) — kept as defence in
 		// depth rather than a silent assumption.
 		return driver.SettingValue{}, fmt.Errorf("ft710: ReadSetting %s: %w", addr.Wire(), err)
 	}

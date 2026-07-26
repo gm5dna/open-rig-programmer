@@ -315,8 +315,8 @@ func Import(r io.Reader) ([]codeplug.Channel, error) {
 		// tag-normalisation fix, or hand-edited from one) may still carry
 		// a space-padded tag exactly as a pre-fix Export/radio read left
 		// it. codeplug's canonical tag form is always trimmed (see
-		// cat.ParseMTAnswer/codeplug.Load's doc comments) — trimming here
-		// too keeps a legacy cell importing correctly instead of
+		// cat.Dialect.ParseMTAnswer/codeplug.Load's doc comments) —
+		// trimming here too keeps a legacy cell importing correctly instead of
 		// resurrecting the false verify-mismatch this fix exists to
 		// prevent. A fresh export never has trailing spaces to trim, so
 		// this is a no-op for any file this package itself wrote.

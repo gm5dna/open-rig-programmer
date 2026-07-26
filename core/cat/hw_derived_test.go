@@ -33,7 +33,7 @@ import "testing"
 // (bytes 25-26, 1-indexed) is the fixed "00" DESPITE a CTCSS tone
 // (146.2 Hz) being demonstrably SET and ACTIVE on the radio at capture
 // time: this REFUTES the Hamlib live-tone-index theory. MemoryData
-// carries no field for P9 (cat.ParseMRAnswer already validates it is
+// carries no field for P9 (Dialect.ParseMRAnswer already validates it is
 // the constant "00"), so there is nothing slot-specific to preserve —
 // see core/driver/ft710/caps.go's FieldCTCSSTone doc comment for the
 // capability-level consequence.
