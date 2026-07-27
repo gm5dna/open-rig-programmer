@@ -43,28 +43,29 @@ import (
 // to that field; it does not rebind the receiver's name; and it does not
 // take the receiver's address.
 //
-// WHAT IT CANNOT ASSERT, MEASURED RATHER THAN GUESSED. This is an UNTYPED
-// AST check: it matches a selector whose base identifier has the
-// receiver's spelling. It cannot follow dataflow, so it cannot establish
-// that the value the caller passed actually REACHES the decision. Probing
-// it found two shapes that still pass, both confirmed to compile:
+// WHAT IT CANNOT ASSERT. This guard is NOT EXHAUSTIVE and no claim is made
+// that it is. It is an untyped AST check matching selectors by the
+// receiver's spelling; it does not resolve types and does not follow
+// dataflow, so it cannot establish that the caller's value REACHES the
+// decision. A known-passing shape:
 //
 //	_ = d.mwWriteKind          // satisfies the selector requirement
 //	if m.Kind != '1' { ... }   // decides on a literal anyway
 //
-//	k := d.mwWriteKind
-//	_ = k
-//	if m.Kind != '1' { ... }
+// FIVE SUCCESSIVE REVIEW ROUNDS each found a shape this guard missed, and
+// four of the five needed no dataflow analysis at all — they were shapes
+// it could have caught and simply matched wrongly: an assignment to the
+// field, a rebound receiver, &d, a nested write, a pointer-receiver
+// method, a method value, an aliased receiver type. Each was closed. The
+// pattern is the point: every previous version of this comment named a
+// boundary, and the next round found something inside it.
 //
-// Closing those needs go/types plus dataflow analysis, which is a
-// different instrument from this one. THE BEHAVIOURAL PEER-DIALECT TESTS
-// CATCH BOTH — verified, not assumed — and they are the primary defence.
-// This guard is a structural tripwire for the cheap regressions: a
-// validator demoted to a package function, or one reaching for FT710.
-//
-// Stated this way deliberately. Two earlier versions of this comment
-// claimed more than the code did, and each claim was falsified by the next
-// review.
+// So this one names no boundary. The list of caught shapes is a record of
+// what has been tried, not a claim about what is possible. THE
+// BEHAVIOURAL PEER-DIALECT TESTS ARE THE DEFENCE — verified to catch every
+// shape listed here, including the ones this guard cannot. This is a
+// tripwire for cheap regressions, and treating it as more than that is
+// the mistake five rounds of review kept correcting.
 
 // promotedConstants are the package-level names M9c-0 moved onto the
 // Dialect receiver. Each was read by a method through its receiver while
@@ -215,6 +216,28 @@ func TestGateReachingValidatorsTakeADialectReceiver(t *testing.T) {
 	// the value receiver — d.forceMWWriteKind() — makes Go implicitly take
 	// &d, so it can rewrite the policy with no `&d` and no assignment
 	// appearing anywhere in this body (re-review 4, finding 3).
+	// Names that ARE Dialect: the type itself plus any alias of it.
+	// `type dialectAlias = Dialect` with a pointer method on the alias was
+	// otherwise invisible, since collection matched the spelling "Dialect"
+	// only (re-review 5).
+	dialectNames := map[string]bool{"Dialect": true}
+	for _, pf := range files {
+		for _, dcl := range pf.file.Decls {
+			gd, ok := dcl.(*ast.GenDecl)
+			if !ok || gd.Tok != token.TYPE {
+				continue
+			}
+			for _, spec := range gd.Specs {
+				ts, ok := spec.(*ast.TypeSpec)
+				if !ok || !ts.Assign.IsValid() { // Assign set => alias
+					continue
+				}
+				if id, ok := ts.Type.(*ast.Ident); ok && dialectNames[id.Name] {
+					dialectNames[ts.Name.Name] = true
+				}
+			}
+		}
+	}
 	ptrMethods := map[string]bool{}
 	for _, pf := range files {
 		for _, dcl := range pf.file.Decls {
@@ -223,7 +246,7 @@ func TestGateReachingValidatorsTakeADialectReceiver(t *testing.T) {
 				continue
 			}
 			if se, ok := fd.Recv.List[0].Type.(*ast.StarExpr); ok {
-				if id, ok := se.X.(*ast.Ident); ok && id.Name == "Dialect" {
+				if id, ok := se.X.(*ast.Ident); ok && dialectNames[id.Name] {
 					ptrMethods[fd.Name.Name] = true
 				}
 			}
@@ -311,18 +334,20 @@ func (d funcDeclInfo) callsPointerMethodOnReceiver(ptrMethods map[string]bool) s
 	if d.recvName == "" || d.body == nil || len(ptrMethods) == 0 {
 		return ""
 	}
+	// Match the SELECTOR itself, in any expression context — not only as a
+	// CallExpr's Fun. Matching the call form alone let a method VALUE
+	// through (`force := d.forceMWWriteKind; force()`) and the
+	// parenthesised call `(d.forceMWWriteKind)()`, because in those the
+	// Fun is an Ident and a ParenExpr respectively (re-review 5).
+	// Referencing such a method at all is enough to flag: there is no
+	// legitimate reason for a gate-reaching validator to name one.
 	name := ""
 	ast.Inspect(d.body, func(n ast.Node) bool {
-		call, ok := n.(*ast.CallExpr)
+		se, ok := n.(*ast.SelectorExpr)
 		if !ok {
 			return true
 		}
-		se, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok {
-			return true
-		}
-		id, ok := se.X.(*ast.Ident)
-		if ok && id.Name == d.recvName && ptrMethods[se.Sel.Name] {
+		if id, ok := se.X.(*ast.Ident); ok && id.Name == d.recvName && ptrMethods[se.Sel.Name] {
 			name = se.Sel.Name
 		}
 		return true
