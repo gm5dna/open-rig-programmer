@@ -199,6 +199,94 @@ func TestImportCHIRP_ToneNotInCapsChartBlocks(t *testing.T) {
 	}
 }
 
+// TestImportCHIRP_MissingOffStateBlocks covers chirp.go's Tone "" branch
+// when caps has no (Encodes:false, Decodes:false) CTCSSStates entry: a
+// radio that cannot express "CTCSS off" at all must refuse the row, and
+// the refusal's Detail wording is pinned here (nothing else in the suite
+// asserts it — the review that requested this test found the wording
+// otherwise unverified).
+func TestImportCHIRP_MissingOffStateBlocks(t *testing.T) {
+	caps := deviantCapabilities()
+	caps.CTCSSStates = []spec.ToneState{
+		{Value: "TONE-TX", RequiresTone: true, Encodes: true, Decodes: false},
+		{Value: "TONE-BOTH", RequiresTone: true, Encodes: true, Decodes: true},
+	}
+
+	_, report, err := ImportCHIRP(strings.NewReader("Location,Frequency,Mode\n1,145.500000,USB\n"), caps)
+	if err != nil {
+		t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+	}
+	entries := entriesForLine(report, 2)
+	want := "DEVIANT-1 expresses no off CTCSS state"
+	if len(entries) != 1 || !entries[0].Blocking || entries[0].Detail != want {
+		t.Fatalf("entries = %+v, want exactly one Blocking entry with Detail %q", entries, want)
+	}
+}
+
+// TestImportCHIRP_MissingEncodeDecodeStateBlocks covers chirp.go's Tone
+// "TSQL" branch when caps has no (Encodes:true, Decodes:true) CTCSSStates
+// entry: pins the Detail wording for a radio that cannot express
+// encode+decode CTCSS at all.
+func TestImportCHIRP_MissingEncodeDecodeStateBlocks(t *testing.T) {
+	caps := deviantCapabilities()
+	caps.CTCSSStates = []spec.ToneState{
+		{Value: "DISABLED", RequiresTone: false, Encodes: false, Decodes: false},
+		{Value: "TONE-TX", RequiresTone: true, Encodes: true, Decodes: false},
+	}
+
+	_, report, err := ImportCHIRP(strings.NewReader("Location,Frequency,Mode,Tone,cToneFreq\n1,145.500000,USB,TSQL,88.5\n"), caps)
+	if err != nil {
+		t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+	}
+	entries := entriesForLine(report, 2)
+	want := "DEVIANT-1 expresses no encode+decode CTCSS state"
+	if len(entries) != 1 || !entries[0].Blocking || entries[0].Detail != want {
+		t.Fatalf("entries = %+v, want exactly one Blocking entry with Detail %q", entries, want)
+	}
+}
+
+// TestImportCHIRP_TSQLToneNotInCapsChartBlocks covers the cToneFreq/TSQL
+// side of the tone-chart-failure branch (TestImportCHIRP_ToneNotInCapsChartBlocks
+// above only exercises the rToneFreq/"Tone" side): pins the Detail
+// wording when a TSQL row's cToneFreq value is not in caps' chart.
+func TestImportCHIRP_TSQLToneNotInCapsChartBlocks(t *testing.T) {
+	caps := deviantCapabilities()
+	caps.CTCSSTones = []spec.Tone{670} // 67.0 Hz only
+
+	_, report, err := ImportCHIRP(strings.NewReader("Location,Frequency,Mode,Tone,cToneFreq\n1,145.500000,USB,TSQL,88.5\n"), caps)
+	if err != nil {
+		t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+	}
+	entries := entriesForLine(report, 2)
+	want := "tone frequency is not in the DEVIANT-1's CTCSS chart"
+	if len(entries) != 1 || !entries[0].Blocking || entries[0].Column != "cToneFreq" || entries[0].Detail != want {
+		t.Fatalf("entries = %+v, want exactly one Blocking cToneFreq entry with Detail %q", entries, want)
+	}
+}
+
+// TestImportCHIRP_MissingDownShiftDirectionBlocks covers the Duplex "-"
+// side of the missing-shift-direction branch
+// (TestImportCHIRP_MissingShiftDirectionBlocks above only exercises the
+// "+"/up-shift side): pins the Detail wording for a radio with no
+// down-shift option.
+func TestImportCHIRP_MissingDownShiftDirectionBlocks(t *testing.T) {
+	caps := deviantCapabilities()
+	caps.ShiftOptions = []spec.ShiftOption{
+		{Value: "SPLIT-NONE", Direction: spec.ShiftNone},
+		{Value: "SPLIT-PLUS", Direction: spec.ShiftUp},
+	}
+
+	_, report, err := ImportCHIRP(strings.NewReader("Location,Frequency,Mode,Duplex\n1,145.500000,USB,-\n"), caps)
+	if err != nil {
+		t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+	}
+	entries := entriesForLine(report, 2)
+	want := "DEVIANT-1 expresses no down-shift option"
+	if len(entries) != 1 || !entries[0].Blocking || entries[0].Detail != want {
+		t.Fatalf("entries = %+v, want exactly one Blocking entry with Detail %q", entries, want)
+	}
+}
+
 func TestImportCHIRP_SlotSpaceFromCaps(t *testing.T) {
 	csv := "Location,Frequency,Mode\n2,145.500000,USB\n"
 

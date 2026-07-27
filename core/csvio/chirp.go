@@ -479,7 +479,7 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string, caps spe
 		if !ok {
 			entries = append(entries, LossEntry{
 				Line: line, Column: "Tone", Value: toneRaw, Action: ActionUnsupported, Blocking: true,
-				Detail: fmt.Sprintf("%s expresses no CTCSS-off state", caps.Model),
+				Detail: fmt.Sprintf("%s expresses no off CTCSS state", caps.Model),
 			})
 			break
 		}
