@@ -396,10 +396,14 @@ func deviantVocabCapabilities() spec.Capabilities {
 		ClarStepHz:   10,
 		Bauds:        []int{9600},
 		DefaultBaud:  9600,
-		ShiftOptions: []string{"SPLIT-MINUS", "SPLIT-PLUS", "SPLIT-NONE"},
+		ShiftOptions: []spec.ShiftOption{
+			{Value: "SPLIT-MINUS", Direction: spec.ShiftDown},
+			{Value: "SPLIT-PLUS", Direction: spec.ShiftUp},
+			{Value: "SPLIT-NONE", Direction: spec.ShiftNone},
+		},
 		CTCSSStates: []spec.ToneState{
-			{Value: "DISABLED", RequiresTone: false},
-			{Value: "TONE", RequiresTone: true},
+			{Value: "DISABLED", RequiresTone: false, Encodes: false, Decodes: false},
+			{Value: "TONE", RequiresTone: true, Encodes: true, Decodes: false},
 		},
 	}
 }

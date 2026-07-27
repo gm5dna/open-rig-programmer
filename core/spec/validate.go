@@ -58,6 +58,18 @@ func validateVocab(fieldName string, values []string) []string {
 	return problems
 }
 
+// shiftOptionValues returns the Value of every entry in opts, in order —
+// so validateVocab can check a ShiftOption list with the same blank and
+// duplicate rules it applies to every other vocabulary, without a
+// []string being built by hand at the call site.
+func shiftOptionValues(opts []ShiftOption) []string {
+	values := make([]string, len(opts))
+	for i, o := range opts {
+		values[i] = o.Value
+	}
+	return values
+}
+
 // Validate checks c for internal STRUCTURAL consistency — not hardware
 // truth (proving a field actually works on real hardware is what M5b
 // verification sessions are for), but the basic shape guarantees generic
@@ -91,6 +103,9 @@ func validateVocab(fieldName string, values []string) []string {
 //   - CTCSSStates must be non-empty and contain no blank or duplicate
 //     Values (its RequiresTone is a plain bool, so it cannot itself be
 //     invalid).
+//   - No two ShiftOptions may express the same ShiftDirection.
+//   - No two CTCSSStates may express the same Encodes/Decodes pair.
+//   - Every CTCSSStates entry's RequiresTone must equal Encodes||Decodes.
 //
 // Every radio driver constructor is expected to call Validate on the
 // Capabilities value it builds and fail construction if it returns a
@@ -178,13 +193,46 @@ func (c Capabilities) Validate() error {
 		}
 	}
 
-	problems = append(problems, validateVocab("ShiftOptions", c.ShiftOptions)...)
+	problems = append(problems, validateVocab("ShiftOptions", shiftOptionValues(c.ShiftOptions))...)
+
+	// Each ShiftDirection must be expressed by AT MOST ONE option:
+	// core/csvio maps a foreign dialect's "+"/"-" by asking for the option
+	// with a given Direction, and that question must have exactly one
+	// answer. Two options sharing a direction would make the answer
+	// depend on slice order.
+	seenDirection := make(map[ShiftDirection]string, len(c.ShiftOptions))
+	for _, o := range c.ShiftOptions {
+		if prev, dup := seenDirection[o.Direction]; dup {
+			problems = append(problems, fmt.Sprintf("ShiftOptions %q and %q express the same direction", prev, o.Value))
+			continue
+		}
+		seenDirection[o.Direction] = o.Value
+	}
 
 	ctcssValues := make([]string, len(c.CTCSSStates))
 	for i, ts := range c.CTCSSStates {
 		ctcssValues[i] = ts.Value
 	}
 	problems = append(problems, validateVocab("CTCSSStates", ctcssValues)...)
+
+	// RequiresTone is derivable from Encodes/Decodes (a state that either
+	// transmits or listens for a tone needs one), so it is CHECKED here
+	// rather than left free to drift out of step with them. And, for the
+	// same reason ShiftOptions' directions must be unique, each
+	// encode/decode combination must name at most one state.
+	type encodeDecodePair struct{ encodes, decodes bool }
+	seenPair := make(map[encodeDecodePair]string, len(c.CTCSSStates))
+	for _, ts := range c.CTCSSStates {
+		if ts.RequiresTone != (ts.Encodes || ts.Decodes) {
+			problems = append(problems, fmt.Sprintf("CTCSSStates %q has RequiresTone %t but Encodes %t and Decodes %t", ts.Value, ts.RequiresTone, ts.Encodes, ts.Decodes))
+		}
+		p := encodeDecodePair{ts.Encodes, ts.Decodes}
+		if prev, dup := seenPair[p]; dup {
+			problems = append(problems, fmt.Sprintf("CTCSSStates %q and %q express the same encode/decode pair", prev, ts.Value))
+			continue
+		}
+		seenPair[p] = ts.Value
+	}
 
 	if len(problems) == 0 {
 		return nil

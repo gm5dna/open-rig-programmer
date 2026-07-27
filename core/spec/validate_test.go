@@ -225,13 +225,25 @@ func TestCapabilitiesValidate_RequiresVocab(t *testing.T) {
 			wantSub: "ShiftOptions must not be empty",
 		},
 		{
-			name:    "ShiftOptions blank value",
-			mutate:  func(c *Capabilities) { c.ShiftOptions = []string{"SIMPLEX", "", "MINUS"} },
+			name: "ShiftOptions blank value",
+			mutate: func(c *Capabilities) {
+				c.ShiftOptions = []ShiftOption{
+					{Value: "SIMPLEX", Direction: ShiftNone},
+					{Value: "", Direction: ShiftUp},
+					{Value: "MINUS", Direction: ShiftDown},
+				}
+			},
 			wantSub: "ShiftOptions must not contain a blank value",
 		},
 		{
-			name:    "ShiftOptions duplicate value",
-			mutate:  func(c *Capabilities) { c.ShiftOptions = []string{"SIMPLEX", "PLUS", "SIMPLEX"} },
+			name: "ShiftOptions duplicate value",
+			mutate: func(c *Capabilities) {
+				c.ShiftOptions = []ShiftOption{
+					{Value: "SIMPLEX", Direction: ShiftNone},
+					{Value: "PLUS", Direction: ShiftUp},
+					{Value: "SIMPLEX", Direction: ShiftDown},
+				}
+			},
 			wantSub: `ShiftOptions contains duplicate value "SIMPLEX"`,
 		},
 		{
@@ -242,14 +254,14 @@ func TestCapabilitiesValidate_RequiresVocab(t *testing.T) {
 		{
 			name: "CTCSSStates blank Value",
 			mutate: func(c *Capabilities) {
-				c.CTCSSStates = []ToneState{{Value: "OFF"}, {Value: "", RequiresTone: true}}
+				c.CTCSSStates = []ToneState{{Value: "OFF"}, {Value: "", RequiresTone: true, Encodes: true}}
 			},
 			wantSub: "CTCSSStates must not contain a blank value",
 		},
 		{
 			name: "CTCSSStates duplicate Value",
 			mutate: func(c *Capabilities) {
-				c.CTCSSStates = []ToneState{{Value: "OFF"}, {Value: "OFF", RequiresTone: true}}
+				c.CTCSSStates = []ToneState{{Value: "OFF"}, {Value: "OFF", RequiresTone: true, Encodes: true}}
 			},
 			wantSub: `CTCSSStates contains duplicate value "OFF"`,
 		},
@@ -267,5 +279,52 @@ func TestCapabilitiesValidate_RequiresVocab(t *testing.T) {
 				t.Errorf("Validate() error = %q, want substring %q", err.Error(), tc.wantSub)
 			}
 		})
+	}
+}
+
+func TestValidate_ShiftOptionsDuplicateDirection(t *testing.T) {
+	c := validTestCapabilities()
+	c.ShiftOptions = []ShiftOption{
+		{Value: "SIMPLEX", Direction: ShiftNone},
+		{Value: "PLUS", Direction: ShiftUp},
+		{Value: "UP-ALSO", Direction: ShiftUp},
+	}
+	err := c.Validate()
+	if err == nil {
+		t.Fatal("Validate() = nil, want an error: two ShiftOptions share ShiftUp")
+	}
+	if !strings.Contains(err.Error(), "same direction") {
+		t.Errorf("Validate() error = %q, want it to mention \"same direction\"", err)
+	}
+}
+
+func TestValidate_CTCSSStatesDuplicateEncodeDecodePair(t *testing.T) {
+	c := validTestCapabilities()
+	c.CTCSSStates = []ToneState{
+		{Value: "OFF", RequiresTone: false, Encodes: false, Decodes: false},
+		{Value: "ENC", RequiresTone: true, Encodes: true, Decodes: false},
+		{Value: "ENC-AGAIN", RequiresTone: true, Encodes: true, Decodes: false},
+	}
+	err := c.Validate()
+	if err == nil {
+		t.Fatal("Validate() = nil, want an error: two ToneStates share the encode/decode pair")
+	}
+	if !strings.Contains(err.Error(), "same encode/decode pair") {
+		t.Errorf("Validate() error = %q, want it to mention \"same encode/decode pair\"", err)
+	}
+}
+
+func TestValidate_CTCSSStatesRequiresToneInconsistent(t *testing.T) {
+	c := validTestCapabilities()
+	c.CTCSSStates = []ToneState{
+		{Value: "OFF", RequiresTone: false, Encodes: false, Decodes: false},
+		{Value: "BROKEN", RequiresTone: true, Encodes: false, Decodes: false},
+	}
+	err := c.Validate()
+	if err == nil {
+		t.Fatal("Validate() = nil, want an error: RequiresTone true but neither Encodes nor Decodes")
+	}
+	if !strings.Contains(err.Error(), "RequiresTone") {
+		t.Errorf("Validate() error = %q, want it to mention RequiresTone", err)
 	}
 }

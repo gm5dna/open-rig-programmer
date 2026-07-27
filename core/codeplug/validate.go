@@ -83,6 +83,17 @@ func toneStateValues(states []spec.ToneState) []string {
 	return values
 }
 
+// shiftOptionValues returns the Value of every entry in opts, in order —
+// for building a caps-driven vocabulary list for an error message
+// without re-deriving a []string by hand at the call site.
+func shiftOptionValues(opts []spec.ShiftOption) []string {
+	values := make([]string, len(opts))
+	for i, o := range opts {
+		values[i] = o.Value
+	}
+	return values
+}
+
 // quotedList formats vals as a comma-separated list of double-quoted
 // values, e.g. []string{"OFF", "ENC"} -> `"OFF", "ENC"` — so a Validate
 // error message names caps' own vocabulary list rather than a hardcoded
@@ -336,10 +347,10 @@ func validateChannelData(slot string, d ChannelData, caps spec.Capabilities) []I
 		})
 	}
 
-	if !containsString(caps.ShiftOptions, d.Shift) {
+	if !containsString(shiftOptionValues(caps.ShiftOptions), d.Shift) {
 		issues = append(issues, Issue{
 			Slot: slot, Field: spec.FieldShift, Severity: SeverityError,
-			Msg: fmt.Sprintf("slot %q: shift %q must be one of %s", slot, d.Shift, quotedList(caps.ShiftOptions)),
+			Msg: fmt.Sprintf("slot %q: shift %q must be one of %s", slot, d.Shift, quotedList(shiftOptionValues(caps.ShiftOptions))),
 		})
 	}
 
