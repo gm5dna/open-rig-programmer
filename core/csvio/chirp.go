@@ -118,9 +118,12 @@ var chirpKnownColumns = func() map[string]bool {
 	return set
 }()
 
-// chirpModeMap maps a CHIRP Mode value to its FT-710 display-name
-// equivalent. CW and CWR both exist on the FT-710 as sideband-specific
-// CW modes (CW-U/CW-L) rather than a single "CW" — see the brief.
+// chirpModeMap maps a CHIRP Mode value to this radio family's
+// display-name equivalent. CW and CWR both exist on the FT-710 as
+// sideband-specific CW modes (CW-U/CW-L) rather than a single "CW" — see
+// the brief. The RESULT is membership-checked against caps.Modes (see
+// containsMode): mapping to a mode name is CHIRP-dialect knowledge, but
+// whether THIS radio actually has that mode is caps' question.
 var chirpModeMap = map[string]string{
 	"FM":   "FM",
 	"NFM":  "FM-N",
@@ -208,22 +211,68 @@ func parseCHIRPFrequency(s string) (uint32, error) {
 // parseCHIRPTone parses a CHIRP rToneFreq/cToneFreq cell (decimal Hz,
 // e.g. "88.5") EXACTLY (see parseExactToneDeciHz — no floating point, and
 // no more than one decimal place of precision; "88.54" is rejected
-// outright rather than rounded) and reports whether the result satisfies
-// spec.ValidTone — the only tones the FT-710's CAT protocol can express.
-// A cell that fails to parse, carries more precision than one decimal
-// place, or parses but matches no standard tone, returns (0, false): all
-// three are equally unusable and the caller reports a single Blocking
-// LossEntry either way.
-func parseCHIRPTone(s string) (spec.Tone, bool) {
+// outright rather than rounded) and reports whether the result appears in
+// this radio's own CTCSS chart (caps.CTCSSTones). A cell that fails to
+// parse, carries more precision than one decimal place, or parses but
+// matches no tone in caps' chart, returns (0, false): all three are
+// equally unusable and the caller reports a single Blocking LossEntry
+// either way.
+func parseCHIRPTone(s string, caps spec.Capabilities) (spec.Tone, bool) {
 	deciHz, err := parseExactToneDeciHz(strings.TrimSpace(s))
 	if err != nil {
 		return 0, false
 	}
 	t := spec.Tone(deciHz)
-	if !spec.ValidTone(t) {
+	if !capsHasTone(caps, t) {
 		return 0, false
 	}
 	return t, true
+}
+
+// shiftFor returns the wire-form shift value caps uses for direction, and
+// true, or ("", false) when this radio expresses no such shift. Capabilities
+// with two options for one direction cannot reach here: spec.Validate
+// rejects them, so the answer is unambiguous by construction.
+func shiftFor(caps spec.Capabilities, d spec.ShiftDirection) (string, bool) {
+	for _, o := range caps.ShiftOptions {
+		if o.Direction == d {
+			return o.Value, true
+		}
+	}
+	return "", false
+}
+
+// toneStateFor returns the wire-form CTCSS state caps uses for the given
+// encode/decode combination, and true, or ("", false) when this radio
+// expresses no such state. As with shiftFor, spec.Validate guarantees at
+// most one state per combination.
+func toneStateFor(caps spec.Capabilities, encodes, decodes bool) (string, bool) {
+	for _, s := range caps.CTCSSStates {
+		if s.Encodes == encodes && s.Decodes == decodes {
+			return s.Value, true
+		}
+	}
+	return "", false
+}
+
+// capsHasTone reports whether t is in this radio's CTCSS chart.
+func capsHasTone(caps spec.Capabilities, t spec.Tone) bool {
+	for _, x := range caps.CTCSSTones {
+		if x == t {
+			return true
+		}
+	}
+	return false
+}
+
+// containsMode reports whether caps lists the given display-name mode.
+func containsMode(caps spec.Capabilities, mode string) bool {
+	for _, m := range caps.Modes {
+		if m == mode {
+			return true
+		}
+	}
+	return false
 }
 
 // chirpTagByteOK reports whether b is a legal FT-710 tag byte: printable
@@ -343,35 +392,65 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string, caps spe
 		data.FreqHz = freqHz
 	}
 
-	// Mode.
+	// Mode. chirpModeMap is CHIRP-dialect knowledge — which of this radio
+	// family's display modes a CHIRP mode name should become — and stays
+	// here. Whether the radio actually HAS that mode is caps' question,
+	// and a mapped mode the radio lacks blocks rather than being written.
 	modeRaw := cell("Mode")
-	if mapped, ok := chirpModeMap[modeRaw]; ok {
-		data.Mode = mapped
-	} else {
+	mapped, mappable := chirpModeMap[modeRaw]
+	switch {
+	case !mappable:
 		entries = append(entries, LossEntry{
 			Line: line, Column: "Mode", Value: modeRaw, Action: ActionUnsupported, Blocking: true,
-			Detail: fmt.Sprintf("CHIRP mode %q has no FT-710 equivalent", modeRaw),
+			Detail: fmt.Sprintf("CHIRP mode %q has no %s equivalent", modeRaw, caps.Model),
 		})
+	case !containsMode(caps, mapped):
+		entries = append(entries, LossEntry{
+			Line: line, Column: "Mode", Value: modeRaw, Action: ActionUnsupported, Blocking: true,
+			Detail: fmt.Sprintf("CHIRP mode %q maps to %q, which %s does not support", modeRaw, mapped, caps.Model),
+		})
+	default:
+		data.Mode = mapped
 	}
 
-	// Duplex -> Shift.
+	// Duplex -> Shift. Which wire value means "up", "down" or "none" is
+	// this radio's own vocabulary, so it is asked for by DIRECTION rather
+	// than named here.
 	switch duplexRaw := cell("Duplex"); duplexRaw {
-	case "":
-		data.Shift = "SIMPLEX"
-	case "+":
-		data.Shift = "PLUS"
-	case "-":
-		data.Shift = "MINUS"
-	case "off":
-		data.Shift = "SIMPLEX"
-		entries = append(entries, LossEntry{
-			Line: line, Column: "Duplex", Value: duplexRaw, Action: ActionDropped, Blocking: false,
-			Detail: "CHIRP \"off\" duplex mapped to SIMPLEX; the distinction between \"no duplex configured\" and \"simplex\" is not representable",
-		})
+	case "", "off":
+		v, ok := shiftFor(caps, spec.ShiftNone)
+		if !ok {
+			entries = append(entries, LossEntry{
+				Line: line, Column: "Duplex", Value: duplexRaw, Action: ActionUnsupported, Blocking: true,
+				Detail: fmt.Sprintf("%s expresses no simplex shift option", caps.Model),
+			})
+			break
+		}
+		data.Shift = v
+		if duplexRaw == "off" {
+			entries = append(entries, LossEntry{
+				Line: line, Column: "Duplex", Value: duplexRaw, Action: ActionDropped, Blocking: false,
+				Detail: fmt.Sprintf("CHIRP \"off\" duplex mapped to %s; the distinction between \"no duplex configured\" and \"simplex\" is not representable", v),
+			})
+		}
+	case "+", "-":
+		dir, label := spec.ShiftUp, "up"
+		if duplexRaw == "-" {
+			dir, label = spec.ShiftDown, "down"
+		}
+		v, ok := shiftFor(caps, dir)
+		if !ok {
+			entries = append(entries, LossEntry{
+				Line: line, Column: "Duplex", Value: duplexRaw, Action: ActionUnsupported, Blocking: true,
+				Detail: fmt.Sprintf("%s expresses no %s-shift option", caps.Model, label),
+			})
+			break
+		}
+		data.Shift = v
 	case "split":
 		entries = append(entries, LossEntry{
 			Line: line, Column: "Duplex", Value: duplexRaw, Action: ActionUnsupported, Blocking: true,
-			Detail: "split-frequency duplex (independent TX/RX frequencies) has no FT-710 equivalent",
+			Detail: fmt.Sprintf("split-frequency duplex (independent TX/RX frequencies) has no %s equivalent", caps.Model),
 		})
 	default:
 		entries = append(entries, LossEntry{
@@ -395,12 +474,29 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string, caps spe
 	// the report with noise on every ordinary row.
 	switch toneRaw := cell("Tone"); toneRaw {
 	case "":
-		data.CTCSS = "OFF"
 		data.CTCSSTone = codeplug.ToneField{State: codeplug.Unknown}
+		v, ok := toneStateFor(caps, false, false)
+		if !ok {
+			entries = append(entries, LossEntry{
+				Line: line, Column: "Tone", Value: toneRaw, Action: ActionUnsupported, Blocking: true,
+				Detail: fmt.Sprintf("%s expresses no CTCSS-off state", caps.Model),
+			})
+			break
+		}
+		data.CTCSS = v
 	case "Tone":
 		rToneRaw := cell("rToneFreq")
-		data.CTCSS = "ENC"
-		if tone, ok := parseCHIRPTone(rToneRaw); ok {
+		data.CTCSSTone = codeplug.ToneField{State: codeplug.Unknown}
+		v, ok := toneStateFor(caps, true, false)
+		if !ok {
+			entries = append(entries, LossEntry{
+				Line: line, Column: "Tone", Value: toneRaw, Action: ActionUnsupported, Blocking: true,
+				Detail: fmt.Sprintf("%s expresses no encode-only CTCSS state", caps.Model),
+			})
+			break
+		}
+		data.CTCSS = v
+		if tone, ok := parseCHIRPTone(rToneRaw, caps); ok {
 			// CAT cannot yet write a per-channel CTCSS tone (see
 			// spec.FieldCTCSSTone / testCapabilities Write:Unverified),
 			// but the VALUE is genuinely known here, so it is recorded
@@ -410,22 +506,29 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string, caps spe
 			// enabled without a Known tone, which this is not).
 			data.CTCSSTone = codeplug.ToneField{State: codeplug.Known, Value: tone}
 		} else {
-			data.CTCSSTone = codeplug.ToneField{State: codeplug.Unknown}
 			entries = append(entries, LossEntry{
 				Line: line, Column: "rToneFreq", Value: rToneRaw, Action: ActionUnsupported, Blocking: true,
-				Detail: "tone frequency is not in the FT-710's standard CTCSS chart (spec.StandardCTCSSTones)",
+				Detail: fmt.Sprintf("tone frequency is not in the %s's CTCSS chart", caps.Model),
 			})
 		}
 	case "TSQL":
 		cToneRaw := cell("cToneFreq")
-		data.CTCSS = "ENC-DEC"
-		if tone, ok := parseCHIRPTone(cToneRaw); ok {
+		data.CTCSSTone = codeplug.ToneField{State: codeplug.Unknown}
+		v, ok := toneStateFor(caps, true, true)
+		if !ok {
+			entries = append(entries, LossEntry{
+				Line: line, Column: "Tone", Value: toneRaw, Action: ActionUnsupported, Blocking: true,
+				Detail: fmt.Sprintf("%s expresses no encode+decode CTCSS state", caps.Model),
+			})
+			break
+		}
+		data.CTCSS = v
+		if tone, ok := parseCHIRPTone(cToneRaw, caps); ok {
 			data.CTCSSTone = codeplug.ToneField{State: codeplug.Known, Value: tone}
 		} else {
-			data.CTCSSTone = codeplug.ToneField{State: codeplug.Unknown}
 			entries = append(entries, LossEntry{
 				Line: line, Column: "cToneFreq", Value: cToneRaw, Action: ActionUnsupported, Blocking: true,
-				Detail: "tone frequency is not in the FT-710's standard CTCSS chart (spec.StandardCTCSSTones)",
+				Detail: fmt.Sprintf("tone frequency is not in the %s's CTCSS chart", caps.Model),
 			})
 		}
 	case "DTCS", "Cross":
@@ -433,7 +536,7 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string, caps spe
 		data.CTCSSTone = codeplug.ToneField{State: codeplug.Unknown}
 		entries = append(entries, LossEntry{
 			Line: line, Column: "Tone", Value: toneRaw, Action: ActionUnsupported, Blocking: true,
-			Detail: fmt.Sprintf("FT-710 CAT has no DCS memory write; %s tone squelch cannot be imported", toneRaw),
+			Detail: fmt.Sprintf("%s CAT has no DCS memory write; %s tone squelch cannot be imported", caps.Model, toneRaw),
 		})
 	default:
 		data.CTCSS = ""

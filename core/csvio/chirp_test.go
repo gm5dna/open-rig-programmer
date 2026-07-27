@@ -113,6 +113,92 @@ func deviantCapabilities() spec.Capabilities {
 	}
 }
 
+func TestImportCHIRP_ShiftVocabFromCaps(t *testing.T) {
+	csv := "Location,Frequency,Mode,Duplex\n1,145.500000,USB,+\n2,145.500000,USB,-\n3,145.500000,USB,\n"
+
+	channels, report, err := ImportCHIRP(strings.NewReader(csv), deviantCapabilities())
+	if err != nil {
+		t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+	}
+	if report.HasBlocking() {
+		t.Fatalf("unexpected blocking entries: %+v", report.Entries)
+	}
+	want := []string{"SPLIT-PLUS", "SPLIT-MINUS", "SPLIT-NONE"}
+	if len(channels) != 3 {
+		t.Fatalf("len(channels) = %d, want 3", len(channels))
+	}
+	for i, w := range want {
+		if got := channels[i].Data.Shift; got != w {
+			t.Errorf("channels[%d].Data.Shift = %q, want %q (deviant vocabulary, not the FT-710's)", i, got, w)
+		}
+	}
+}
+
+func TestImportCHIRP_CTCSSVocabFromCaps(t *testing.T) {
+	csv := "Location,Frequency,Mode,Tone,rToneFreq,cToneFreq\n" +
+		"1,145.500000,USB,Tone,88.5,88.5\n" +
+		"2,145.500000,USB,TSQL,88.5,88.5\n" +
+		"3,145.500000,USB,,,\n"
+
+	channels, report, err := ImportCHIRP(strings.NewReader(csv), deviantCapabilities())
+	if err != nil {
+		t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+	}
+	if report.HasBlocking() {
+		t.Fatalf("unexpected blocking entries: %+v", report.Entries)
+	}
+	want := []string{"TONE-TX", "TONE-BOTH", "DISABLED"}
+	if len(channels) != 3 {
+		t.Fatalf("len(channels) = %d, want 3", len(channels))
+	}
+	for i, w := range want {
+		if got := channels[i].Data.CTCSS; got != w {
+			t.Errorf("channels[%d].Data.CTCSS = %q, want %q (deviant vocabulary, not the FT-710's)", i, got, w)
+		}
+	}
+}
+
+func TestImportCHIRP_ModeAbsentFromCapsBlocks(t *testing.T) {
+	// FM maps to the display name "FM", which deviantCapabilities does
+	// not list — a radio that cannot express the mapped mode must refuse
+	// the row, not write a mode it has no equivalent for.
+	csv := "Location,Frequency,Mode\n1,145.500000,FM\n"
+
+	_, report, err := ImportCHIRP(strings.NewReader(csv), deviantCapabilities())
+	if err != nil {
+		t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+	}
+	if !report.HasBlocking() {
+		t.Fatalf("HasBlocking() = false, want true: %+v", report.Entries)
+	}
+}
+
+func TestImportCHIRP_MissingShiftDirectionBlocks(t *testing.T) {
+	caps := deviantCapabilities()
+	caps.ShiftOptions = []spec.ShiftOption{{Value: "SPLIT-NONE", Direction: spec.ShiftNone}}
+
+	_, report, err := ImportCHIRP(strings.NewReader("Location,Frequency,Mode,Duplex\n1,145.500000,USB,+\n"), caps)
+	if err != nil {
+		t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+	}
+	if !report.HasBlocking() {
+		t.Fatalf("HasBlocking() = false, want true: a radio with no up-shift option must refuse a \"+\" row: %+v", report.Entries)
+	}
+}
+
+func TestImportCHIRP_ToneNotInCapsChartBlocks(t *testing.T) {
+	caps := deviantCapabilities()
+	caps.CTCSSTones = []spec.Tone{670} // 67.0 Hz only
+
+	_, report, err := ImportCHIRP(strings.NewReader("Location,Frequency,Mode,Tone,rToneFreq\n1,145.500000,USB,Tone,88.5\n"), caps)
+	if err != nil {
+		t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+	}
+	if !report.HasBlocking() {
+		t.Fatalf("HasBlocking() = false, want true: 88.5 is not in this radio's chart: %+v", report.Entries)
+	}
+}
+
 func TestImportCHIRP_SlotSpaceFromCaps(t *testing.T) {
 	csv := "Location,Frequency,Mode\n2,145.500000,USB\n"
 
@@ -826,7 +912,7 @@ func TestParseCHIRPTone(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			gotTone, gotOK := parseCHIRPTone(tc.in)
+			gotTone, gotOK := parseCHIRPTone(tc.in, ft710LikeCapabilities())
 			if gotTone != tc.wantTone || gotOK != tc.wantOK {
 				t.Errorf("parseCHIRPTone(%q) = (%v, %v), want (%v, %v)", tc.in, gotTone, gotOK, tc.wantTone, tc.wantOK)
 			}
