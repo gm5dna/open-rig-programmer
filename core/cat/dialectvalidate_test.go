@@ -193,6 +193,18 @@ func TestValidateDialectConfig_EveryClause(t *testing.T) {
 		{"V9 clear byte is NUL", func(c *DialectConfig) { c.MT.ClearTagByte = 0x00 }, "ClearTagByte"},
 		{"V9 clear byte is a terminator", func(c *DialectConfig) { c.MT.ClearTagByte = ';' }, "ClearTagByte"},
 		{"V9 space clear byte accepted", func(c *DialectConfig) { c.MT.ClearTagByte = ' ' }, ""},
+		// PadByte: 0 is the "no padding declared" sentinel, unambiguous
+		// because 0 is outside the permitted tag-byte domain. Anything
+		// else must be a byte that can legitimately appear in a tag, since
+		// decoding trims it from answers. Without these the validation
+		// clause could be deleted and the suite stayed green (re-review 4).
+		{"V9 PadByte 0 accepted (no padding declared)", func(c *DialectConfig) { c.MT.PadByte = 0 }, ""},
+		{"V9 PadByte space accepted", func(c *DialectConfig) { c.MT.PadByte = ' ' }, ""},
+		{"V9 PadByte printable accepted", func(c *DialectConfig) { c.MT.PadByte = '.' }, ""},
+		{"V9 PadByte NUL-adjacent control byte", func(c *DialectConfig) { c.MT.PadByte = 0x01 }, "PadByte"},
+		{"V9 PadByte terminator", func(c *DialectConfig) { c.MT.PadByte = ';' }, "PadByte"},
+		{"V9 PadByte high byte", func(c *DialectConfig) { c.MT.PadByte = 0x80 }, "PadByte"},
+		{"V9 PadByte DEL", func(c *DialectConfig) { c.MT.PadByte = 0x7F }, "PadByte"},
 
 		// V10 — clarifier
 		{"V10 zero step", func(c *DialectConfig) { c.Clarifier.StepHz = 0 }, "StepHz"},

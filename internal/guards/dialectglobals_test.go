@@ -211,6 +211,25 @@ func TestGateReachingValidatorsTakeADialectReceiver(t *testing.T) {
 		}
 	}
 
+	// Methods declared with a POINTER receiver on Dialect. Calling one on
+	// the value receiver — d.forceMWWriteKind() — makes Go implicitly take
+	// &d, so it can rewrite the policy with no `&d` and no assignment
+	// appearing anywhere in this body (re-review 4, finding 3).
+	ptrMethods := map[string]bool{}
+	for _, pf := range files {
+		for _, dcl := range pf.file.Decls {
+			fd, ok := dcl.(*ast.FuncDecl)
+			if !ok || fd.Recv == nil || len(fd.Recv.List) == 0 {
+				continue
+			}
+			if se, ok := fd.Recv.List[0].Type.(*ast.StarExpr); ok {
+				if id, ok := se.X.(*ast.Ident); ok && id.Name == "Dialect" {
+					ptrMethods[fd.Name.Name] = true
+				}
+			}
+		}
+	}
+
 	for _, want := range gateReachingValidators {
 		decls, ok := found[want.fn]
 		if !ok {
@@ -266,6 +285,10 @@ func TestGateReachingValidatorsTakeADialectReceiver(t *testing.T) {
 				t.Errorf("%s at %s takes the address of its receiver %q — a write through that pointer changes the policy without any assignment to %s.%s appearing",
 					want.fn, d.where, d.recvName, d.recvName, want.field)
 			}
+			if m := d.callsPointerMethodOnReceiver(ptrMethods); m != "" {
+				t.Errorf("%s at %s calls pointer-receiver method %s on %q — Go takes &%s implicitly, so that call can rewrite the policy with no address-of and no assignment visible here",
+					want.fn, d.where, m, d.recvName, d.recvName)
+			}
 		}
 	}
 }
@@ -279,6 +302,34 @@ func TestGateReachingValidatorsTakeADialectReceiver(t *testing.T) {
 // reads the field only via a helper it delegates to will NOT satisfy this
 // — deliberately: the three validators named here are the ones the gate
 // reaches directly, and the point is that each consults its own receiver.
+// callsPointerMethodOnReceiver reports the name of any pointer-receiver
+// Dialect method the body invokes on its own receiver, or "".
+//
+// Go inserts the address-of automatically for such a call, so it is a
+// write path that leaves no syntactic trace of taking an address.
+func (d funcDeclInfo) callsPointerMethodOnReceiver(ptrMethods map[string]bool) string {
+	if d.recvName == "" || d.body == nil || len(ptrMethods) == 0 {
+		return ""
+	}
+	name := ""
+	ast.Inspect(d.body, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		se, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		id, ok := se.X.(*ast.Ident)
+		if ok && id.Name == d.recvName && ptrMethods[se.Sel.Name] {
+			name = se.Sel.Name
+		}
+		return true
+	})
+	return name
+}
+
 // takesAddressOfReceiver reports whether the body evaluates &<recv>.
 func (d funcDeclInfo) takesAddressOfReceiver() bool {
 	if d.recvName == "" || d.body == nil {
@@ -304,13 +355,22 @@ func (d funcDeclInfo) assignsRecvField(field string) bool {
 	if d.recvName == "" || d.body == nil {
 		return false
 	}
-	isTarget := func(e ast.Expr) bool {
+	// Matches <recv>.<field> AND anything rooted at it, so a nested write
+	// like `d.clar.StepHz = 10` counts. Requiring the LHS to be exactly
+	// `d.clar` missed that entirely, while the inner `d.clar` still
+	// satisfied the read check — the policy overwritten and the guard
+	// green (re-review 4, finding 3). This needs no type information; it
+	// was simply the wrong shape to match on.
+	var isTarget func(ast.Expr) bool
+	isTarget = func(e ast.Expr) bool {
 		se, ok := e.(*ast.SelectorExpr)
 		if !ok {
 			return false
 		}
-		id, ok := se.X.(*ast.Ident)
-		return ok && id.Name == d.recvName && se.Sel.Name == field
+		if id, ok := se.X.(*ast.Ident); ok {
+			return id.Name == d.recvName && se.Sel.Name == field
+		}
+		return isTarget(se.X) // d.field.inner = ...
 	}
 	found := false
 	ast.Inspect(d.body, func(n ast.Node) bool {

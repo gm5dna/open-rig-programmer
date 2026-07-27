@@ -257,8 +257,10 @@ func (d Dialect) ParseMTAnswer(frame []byte) (Slot, bool, string, error) {
 //     repetitions of ClearTagByte, so exactly that field means "no tag".
 //     This is dialect data, and it is what BuildMTSet emits.
 //
-//  2. PADDING. The radio pads a short tag with SPACES to fill the field.
-//     That is a property of the wire format, not of the clear encoding.
+//  2. PADDING. The radio may pad a short tag to fill the field. WHICH
+//     byte it pads with is the dialect's own declaration, MTPolicy.PadByte
+//     — not a space by assumption, and not derived from ClearTagByte.
+//     PadByte 0 means the family declares no padding at all.
 //
 // The previous version trimmed every trailing ClearTagByte, which is right
 // for the FT-710 only because its clear byte IS a space, so the two rules

@@ -87,13 +87,20 @@ type Dialect struct {
 	// dialect's own table.
 	modeByName map[string]Mode
 
-	// mt, clar and mwWriteKind are the FT-710 facts that used to be
-	// package constants read THROUGH a Dialect receiver — the exact shape
-	// this seam exists to eliminate. All three reach the OUTBOUND WRITE
-	// GATE: mt through validMTCommand, clar through validateMWFields, and
+	// mt, clar and mwWriteKind carry this dialect's own policy where the
+	// package once carried the FT-710's. Most of it was package constants
+	// read THROUGH a Dialect receiver — the exact shape this seam exists
+	// to eliminate — and all of that reaches the OUTBOUND WRITE GATE: mt
+	// through validMTCommand, clar through validateMWFields, and
 	// mwWriteKind through the same MW validator the builder uses. A wrong
-	// value here can authorise bytes that reach a radio, which is why they
-	// are dialect data and the pure frame offsets are not.
+	// value there can authorise bytes that reach a radio, which is why
+	// they are dialect data and the pure frame offsets are not.
+	//
+	// MTPolicy.PadByte is the exception to that history: it was never a
+	// package constant and does not reach the gate. It exists because
+	// answer-side padding and the empty-tag encoding are different facts
+	// that happened to coincide for the FT-710, and conflating them
+	// destroyed data on any dialect where they do not.
 	mt          MTPolicy
 	clar        ClarifierPolicy
 	mwWriteKind byte
@@ -132,9 +139,12 @@ var FT710 = Dialect{
 	exP4Max:    maxEXP4Bytes(exItemsGen),
 	modeByName: buildModeByName(modeNames),
 
-	// The FT-710's own values for the three promoted policies. Each was a
-	// package constant until M9c-0; TestNewDialect_ReproducesFT710 pins
-	// that this literal and a config-built equivalent agree.
+	// The FT-710's own policy values. The tag width, clear byte, clarifier
+	// step/range and write kind were package constants until M9c-0;
+	// PadByte is new, and declares explicitly the space-padding this radio
+	// was previously assumed to share with every dialect.
+	// TestNewDialect_ReproducesFT710 pins that this literal and a
+	// config-built equivalent agree.
 	mt:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	clar:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	mwWriteKind: KindMemory,

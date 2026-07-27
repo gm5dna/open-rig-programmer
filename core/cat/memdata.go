@@ -105,14 +105,11 @@ const (
 	// Before M9c-0's milestone review the two domains were the same and a
 	// dialect COULD declare it, emitting P7 '4' past its own gate.
 	//
-	// NOTE that validateMWFields accepts THIS DIALECT'S OWN configured
-	// mwWriteKind, not KindMemory specifically — KindMemory is merely the
-	// FT-710's value. An earlier version of this comment said the
-	// validator "only ever accepts KindMemory", which stopped being true
-	// when the policy moved onto the receiver. Its Kind
-	// check (mw.go, validateMWFields) only ever accepts KindMemory, for
-	// ANY writable slot, so KindUnset is rejected there by construction,
-	// with no separate check required.
+	// validateMWFields (mw.go) accepts THIS DIALECT'S OWN configured
+	// mwWriteKind for any writable slot — not KindMemory specifically.
+	// KindMemory is merely the FT-710's value. KindUnset is rejected there
+	// by construction whatever a dialect declares, because NewDialect will
+	// not let any dialect declare it in the first place.
 	KindUnset byte = '4'
 
 	// KindPMS is the P7 value the manual's own worked example implies for
