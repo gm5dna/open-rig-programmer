@@ -309,6 +309,12 @@ func validateMTPolicy(cfg DialectConfig) error {
 	if !validWireByte(cfg.MT.ClearTagByte) {
 		return fmt.Errorf("cat: MT.ClearTagByte is %#02x, which is outside printable ASCII 0x20-0x7E excluding ';' — it is emitted into every cleared tag", cfg.MT.ClearTagByte)
 	}
+	// PadByte 0 means "this family declares no padding"; any other value
+	// must be a byte that can legitimately appear in a tag, since decoding
+	// trims it from answers.
+	if cfg.MT.PadByte != 0 && !validWireByte(cfg.MT.PadByte) {
+		return fmt.Errorf("cat: MT.PadByte is %#02x, want 0 (no padding) or a byte inside printable ASCII 0x20-0x7E excluding ';'", cfg.MT.PadByte)
+	}
 	return nil
 }
 

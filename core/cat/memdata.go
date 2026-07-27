@@ -48,9 +48,13 @@ type MemoryData struct {
 	// Hz, 9 digits zero-padded" -> max representable value 999,999,999.
 	FreqHz uint32
 
-	// ClarHz is the clarifier offset in Hz: signed, a multiple of 10,
-	// magnitude 0-9990. Reference P3: "clarifier: +/- then 4-digit offset
-	// 0000-9990 Hz".
+	// ClarHz is the clarifier offset in Hz: signed, and constrained by the
+	// DIALECT'S OWN clarifier policy (Dialect.clar) — a multiple of its
+	// step, within its range. The FT-710's policy is 10 Hz steps to
+	// +-9990 Hz, which is what Reference P3 documents ("clarifier: +/- then
+	// 4-digit offset 0000-9990 Hz"); a constructed dialect may declare
+	// another, and this package's own tests use a 1 Hz/9999 Hz peer. The
+	// 4-digit wire field bounds every dialect at 9999.
 	ClarHz int16
 
 	RxClar bool // Reference P4: "RX CLAR: 0 off, 1 on".
@@ -99,7 +103,13 @@ const (
 	// is deliberately narrower than this read-side predicate), so no
 	// constructed dialect can declare it as the value its builder writes.
 	// Before M9c-0's milestone review the two domains were the same and a
-	// dialect COULD declare it, emitting P7 '4' past its own gate. Its Kind
+	// dialect COULD declare it, emitting P7 '4' past its own gate.
+	//
+	// NOTE that validateMWFields accepts THIS DIALECT'S OWN configured
+	// mwWriteKind, not KindMemory specifically — KindMemory is merely the
+	// FT-710's value. An earlier version of this comment said the
+	// validator "only ever accepts KindMemory", which stopped being true
+	// when the policy moved onto the receiver. Its Kind
 	// check (mw.go, validateMWFields) only ever accepts KindMemory, for
 	// ANY writable slot, so KindUnset is rejected there by construction,
 	// with no separate check required.

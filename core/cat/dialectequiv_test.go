@@ -59,7 +59,7 @@ func ft710ConfigFromIndependentLiterals() DialectConfig {
 			NoneWire:      "000",
 		},
 		EXItems:     exItemsGen, // NOT independent — see the doc comment
-		MT:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' '},
+		MT:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 		Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 		MWWriteKind: KindMemory,
 	}

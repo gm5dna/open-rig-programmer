@@ -37,9 +37,34 @@ import (
 // an enum membership test and not a per-radio policy. Absence is the wrong
 // question.
 //
-// It asserts USAGE: that the five data this milestone promoted are read
-// from the receiver, and that the three validators reaching the outbound
-// write gate are Dialect methods rather than package-level functions.
+// WHAT IT ASSERTS, PRECISELY. For each gate-reaching validator: it is a
+// Dialect method; its body contains a selector <recv>.<field>; it does not
+// reference FT710 (or KindMemory, for validateMWFields); it does not assign
+// to that field; it does not rebind the receiver's name; and it does not
+// take the receiver's address.
+//
+// WHAT IT CANNOT ASSERT, MEASURED RATHER THAN GUESSED. This is an UNTYPED
+// AST check: it matches a selector whose base identifier has the
+// receiver's spelling. It cannot follow dataflow, so it cannot establish
+// that the value the caller passed actually REACHES the decision. Probing
+// it found two shapes that still pass, both confirmed to compile:
+//
+//	_ = d.mwWriteKind          // satisfies the selector requirement
+//	if m.Kind != '1' { ... }   // decides on a literal anyway
+//
+//	k := d.mwWriteKind
+//	_ = k
+//	if m.Kind != '1' { ... }
+//
+// Closing those needs go/types plus dataflow analysis, which is a
+// different instrument from this one. THE BEHAVIOURAL PEER-DIALECT TESTS
+// CATCH BOTH — verified, not assumed — and they are the primary defence.
+// This guard is a structural tripwire for the cheap regressions: a
+// validator demoted to a package function, or one reaching for FT710.
+//
+// Stated this way deliberately. Two earlier versions of this comment
+// claimed more than the code did, and each claim was falsified by the next
+// review.
 
 // promotedConstants are the package-level names M9c-0 moved onto the
 // Dialect receiver. Each was read by a method through its receiver while
@@ -233,6 +258,14 @@ func TestGateReachingValidatorsTakeADialectReceiver(t *testing.T) {
 				t.Errorf("%s at %s rebinds %q, shadowing its own receiver — selectors on it no longer refer to the dialect this method was called on",
 					want.fn, d.where, d.recvName)
 			}
+			// Taking the address of the WHOLE receiver aliases it, and a
+			// write through that pointer reaches the field without any
+			// selector on the receiver appearing on an assignment's left
+			// side. Found by probing this guard rather than by review.
+			if d.takesAddressOfReceiver() {
+				t.Errorf("%s at %s takes the address of its receiver %q — a write through that pointer changes the policy without any assignment to %s.%s appearing",
+					want.fn, d.where, d.recvName, d.recvName, want.field)
+			}
 		}
 	}
 }
@@ -246,6 +279,25 @@ func TestGateReachingValidatorsTakeADialectReceiver(t *testing.T) {
 // reads the field only via a helper it delegates to will NOT satisfy this
 // — deliberately: the three validators named here are the ones the gate
 // reaches directly, and the point is that each consults its own receiver.
+// takesAddressOfReceiver reports whether the body evaluates &<recv>.
+func (d funcDeclInfo) takesAddressOfReceiver() bool {
+	if d.recvName == "" || d.body == nil {
+		return false
+	}
+	found := false
+	ast.Inspect(d.body, func(n ast.Node) bool {
+		ue, ok := n.(*ast.UnaryExpr)
+		if !ok || ue.Op != token.AND {
+			return true
+		}
+		if id, ok := ue.X.(*ast.Ident); ok && id.Name == d.recvName {
+			found = true
+		}
+		return true
+	})
+	return found
+}
+
 // assignsRecvField reports whether the body assigns to <recv>.<field>,
 // including compound assignment and taking its address.
 func (d funcDeclInfo) assignsRecvField(field string) bool {
@@ -284,11 +336,12 @@ func (d funcDeclInfo) assignsRecvField(field string) bool {
 	return found
 }
 
-// shadowsReceiver reports whether the body rebinds the receiver's name.
+// shadowsReceiver reports whether the body rebinds the receiver's name,
+// by declaration OR by plain assignment.
 //
-// Covers the declaring forms: `d := ...`, `var d ...`, `for d := range`,
-// and a function-literal parameter or named result called d. It does not
-// attempt full scope analysis — see the guard's stated limits.
+// Covers `d := ...`, `d = ...`, `var d ...`, `for d := range`, `for d =
+// range`, and a function-literal parameter or named result called d. It
+// does not attempt full scope analysis — see the guard's stated limits.
 func (d funcDeclInfo) shadowsReceiver() bool {
 	if d.recvName == "" || d.body == nil {
 		return false
@@ -304,21 +357,22 @@ func (d funcDeclInfo) shadowsReceiver() bool {
 	ast.Inspect(d.body, func(n ast.Node) bool {
 		switch x := n.(type) {
 		case *ast.AssignStmt:
-			if x.Tok == token.DEFINE {
-				for _, lhs := range x.Lhs {
-					if id, ok := lhs.(*ast.Ident); ok && id.Name == d.recvName {
-						found = true
-					}
+			// Both DEFINE (`d := ...`) and plain assignment (`d = ...`).
+			// Restricting this to declaring forms let a whole-receiver
+			// overwrite through: `r := d; r.field = '1'; d = r` rebinds the
+			// policy without any assignment to d.field appearing
+			// (fix-wave re-review 3, finding 3).
+			for _, lhs := range x.Lhs {
+				if id, ok := lhs.(*ast.Ident); ok && id.Name == d.recvName {
+					found = true
 				}
 			}
 		case *ast.ValueSpec:
 			names(x.Names)
 		case *ast.RangeStmt:
-			if x.Tok == token.DEFINE {
-				for _, e := range []ast.Expr{x.Key, x.Value} {
-					if id, ok := e.(*ast.Ident); ok && id.Name == d.recvName {
-						found = true
-					}
+			for _, ex := range []ast.Expr{x.Key, x.Value} {
+				if id, ok := ex.(*ast.Ident); ok && id.Name == d.recvName {
+					found = true
 				}
 			}
 		case *ast.FuncLit:

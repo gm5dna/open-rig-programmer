@@ -52,16 +52,35 @@ type MTPolicy struct {
 	// BYTES. FT-710: 12.
 	TagMaxBytes int
 
-	// ClearTagByte is the byte an EMPTY tag is padded with to produce the
+	// ClearTagByte is the byte an EMPTY tag is filled with to produce the
 	// clear form. FT-710: ' '.
 	//
 	// It is carried separately from TagMaxBytes rather than derived,
 	// because "an empty tag becomes TagMaxBytes spaces" bundles a width
-	// with a padding convention and only the FT-710's is evidenced. A
+	// with a fill convention and only the FT-710's is evidenced. A
 	// family clearing with some other byte is expressible; one deriving the
 	// clear form some entirely different way is not, and would need this
 	// type extended rather than reinterpreted.
 	ClearTagByte byte
+
+	// PadByte is the byte the RADIO pads a short tag with in its answers,
+	// trimmed on decode. 0 means this family declares no padding, and its
+	// answers are returned verbatim.
+	//
+	// SEPARATE FROM ClearTagByte ON PURPOSE, and the separation is the
+	// whole point. Conflating the two is the defect this field exists to
+	// end: decoding first trimmed every trailing ClearTagByte, destroying
+	// "CALL-" on a '-'-clearing dialect; the repair trimmed spaces
+	// universally, destroying "CALL " instead; the second repair trimmed
+	// spaces only for a space-clearing dialect, which merely relocated the
+	// assumption — a constructed dialect declaring a space clear byte
+	// silently inherited the FT-710's padding behaviour without ever
+	// declaring it (milestone review finding 4, three rounds).
+	//
+	// ClearTagByte says how an EMPTY tag is written. PadByte says how a
+	// SHORT tag comes back. They happen to coincide for the FT-710, which
+	// is exactly why the conflation survived so long.
+	PadByte byte
 }
 
 // ClarifierPolicy bounds MemoryData.ClarHz for one family.

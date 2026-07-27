@@ -135,7 +135,7 @@ var FT710 = Dialect{
 	// The FT-710's own values for the three promoted policies. Each was a
 	// package constant until M9c-0; TestNewDialect_ReproducesFT710 pins
 	// that this literal and a config-built equivalent agree.
-	mt:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' '},
+	mt:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	clar:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	mwWriteKind: KindMemory,
 }

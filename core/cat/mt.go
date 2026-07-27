@@ -126,6 +126,18 @@ func (d Dialect) BuildMTSet(s Slot, display bool, tag string) (Command, error) {
 	if !d.validMTTag(tag) {
 		return Command{}, newParseError([]byte(tag), fmt.Sprintf("MT: tag must be 0-%d bytes of printable ASCII 0x20-0x7E, excluding ';', with no control bytes", d.mt.TagMaxBytes))
 	}
+	// A non-empty tag identical to the clear form round-trips to "". That
+	// is the PROTOCOL'S SEMANTICS, not data loss, and it must not be
+	// rejected here.
+	//
+	// The third milestone-review round read it as a defect and this code
+	// briefly refused such a tag — which broke
+	// TestBuildMTSet_HWDerived_M5b_TagSetAndClear, because the M5b trial
+	// CLEARED a tag on the real FT-710 by sending exactly twelve spaces
+	// and the radio accepted it. Sending a full field of the clear byte IS
+	// how a tag is cleared; getting "" back is the correct reading of it.
+	// The finding was verified to describe real behaviour and then
+	// rejected on hardware evidence.
 	if tag == "" {
 		tag = d.clearTagForm()
 	}
@@ -187,12 +199,12 @@ func (d Dialect) BuildMTRead(s Slot) (Command, error) {
 //
 // ADJUDICATED FIX (Fix: tag normalisation): padding is a WIRE-ENCODING
 // concern only — this function normalises it via d.decodeMTTag, which
-// recognises a full field of this dialect's own clear byte as an empty
-// tag and, for a SPACE-clearing dialect only, trims trailing spaces as
-// padding. Leading and mid-tag bytes are preserved verbatim, still passed
-// through with no charset re-validation, so the model's canonical tag
-// form is never padded regardless of how the radio chose to pad the wire
-// reply. For the FT-710 this is ASCII 0x20 (space) exactly as before —
+// recognises a full field of this dialect's own ClearTagByte as an empty
+// tag, and trims trailing PadByte only when the dialect DECLARES one.
+// A dialect with PadByte 0 declares no padding and gets its field back
+// verbatim: nothing is trimmed from it at all. Leading and mid-tag bytes
+// are always preserved, still passed through with no charset
+// re-validation. For the FT-710 this is ASCII 0x20 (space) exactly as before —
 // FT710.ParseMTAnswer's behaviour is byte-identical to the pre-M9c-0
 // hardcoded strings.TrimRight(tag, " "). An all-clear-byte tag (the
 // FT-710's own tag-CLEAR form, hw_derived_m5b_test.go — TagMaxBytes
@@ -263,22 +275,16 @@ func (d Dialect) decodeMTTag(raw string) string {
 	if w := d.mt.TagMaxBytes; w > 0 && len(raw) == w && raw == strings.Repeat(string(d.mt.ClearTagByte), w) {
 		return ""
 	}
-	// 2. Padding, ONLY where it is evidenced.
+	// 2. Padding, from the dialect's OWN declaration.
 	//
-	// The FT-710 pads a short tag with spaces, hardware-observed, and its
-	// clear byte IS a space. For a dialect declaring some other clear byte
-	// there is NO evidence of any padding convention at all — MTPolicy
-	// does not carry one, deliberately — so trimming spaces from its
-	// answers would be inventing a fact about a radio nobody has run.
-	//
-	// The first version of this fix trimmed spaces universally and did
-	// exactly that, exchanging one silent data loss for another: on a
-	// peer clearing with '-', the legitimate tag "CALL " came back as
-	// "CALL" (fix-wave re-review, finding 4). A dialect whose padding is
-	// later evidenced should gain an explicit MTPolicy field rather than
-	// inherit the FT-710's by default.
-	if d.mt.ClearTagByte == ' ' {
-		return strings.TrimRight(raw, " ")
+	// PadByte 0 means the family declares no padding and its answers come
+	// back verbatim. Deriving this from ClearTagByte instead — "trim
+	// spaces if the clear byte is a space" — is what the second repair
+	// did, and it merely relocated the assumption: a constructed dialect
+	// declaring a space clear byte inherited the FT-710's padding without
+	// ever declaring it.
+	if d.mt.PadByte != 0 {
+		return strings.TrimRight(raw, string(d.mt.PadByte))
 	}
 	return raw
 }

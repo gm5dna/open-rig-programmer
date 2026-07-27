@@ -51,7 +51,7 @@ func renamedUSBDialect(t *testing.T) cat.Dialect {
 			EmergencyWire: "EMG",
 			NoneWire:      "000",
 		},
-		MT:          cat.MTPolicy{TagMaxBytes: 12, ClearTagByte: ' '},
+		MT:          cat.MTPolicy{TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 		Clarifier:   cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 		MWWriteKind: cat.KindMemory,
 	})

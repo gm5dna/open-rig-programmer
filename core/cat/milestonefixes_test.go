@@ -204,3 +204,59 @@ func TestMTClearTag_FT710RoundTripUnchanged(t *testing.T) {
 		t.Errorf("space-padded answer decoded to %q (err %v), want \"CALL\"", got, err)
 	}
 }
+
+// TestMTClearTag_FullWidthClearByteTagMeansCleared pins that a tag which
+// is exactly the clear form round-trips to "" — and that this is CORRECT.
+//
+// The third review round called this data loss and it briefly became a
+// build-time rejection. That broke TestBuildMTSet_HWDerived_M5b_TagSetAndClear:
+// the M5b trial cleared a tag on the real FT-710 by sending twelve spaces,
+// and the radio accepted it. A full field of the clear byte IS the clear
+// instruction, so decoding it as "" is right. The finding was real about
+// the behaviour and wrong about the verdict.
+func TestMTClearTag_FullWidthClearByteTagMeansCleared(t *testing.T) {
+	slot, err := FT710.MemorySlot(96)
+	if err != nil {
+		t.Fatalf("MemorySlot: %v", err)
+	}
+	cmd, err := FT710.BuildMTSet(slot, false, "            ") // 12 spaces
+	if err != nil {
+		t.Fatalf("FT710.BuildMTSet with its own clear form: %v — the M5b trial sent exactly this to a real radio", err)
+	}
+	if got, want := string(cmd.Bytes()), "MT0960            ;"; got != want {
+		t.Errorf("built %q, want %q (the M5b wire form)", got, want)
+	}
+	if _, _, tag, err := FT710.ParseMTAnswer(cmd.Bytes()); err != nil || tag != "" {
+		t.Errorf("decoded %q (err %v), want \"\" — a full field of the clear byte means cleared", tag, err)
+	}
+}
+
+// TestMTPadByte_DeclaredNotInferred covers the other half: padding is now
+// declared by MTPolicy.PadByte, not inferred from ClearTagByte.
+//
+// The previous repair trimmed spaces whenever the clear byte was a space,
+// so a constructed dialect inherited the FT-710's padding behaviour
+// without ever declaring it. Two dialects here differ ONLY in PadByte.
+func TestMTPadByte_DeclaredNotInferred(t *testing.T) {
+	mk := func(pad byte) Dialect {
+		d, err := NewDialect(DialectConfig{
+			CATID: "6668", ModeNames: map[Mode]string{Mode('2'): "USB"},
+			Slots:     SlotSpace{MemoryLo: 1, MemoryHi: 9, NoneWire: "000"},
+			MT:        MTPolicy{TagMaxBytes: 8, ClearTagByte: '-', PadByte: pad},
+			Clarifier: ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990}, MWWriteKind: KindMemory,
+		})
+		if err != nil {
+			t.Fatalf("NewDialect(pad=%#02x): %v", pad, err)
+		}
+		return d
+	}
+	padded, unpadded := mk(' '), mk(0)
+
+	const frame = "MT0050CALL  ;"
+	if _, _, got, err := padded.ParseMTAnswer([]byte(frame)); err != nil || got != "CALL" {
+		t.Errorf("PadByte ' ': decoded %q (err %v), want \"CALL\"", got, err)
+	}
+	if _, _, got, err := unpadded.ParseMTAnswer([]byte(frame)); err != nil || got != "CALL  " {
+		t.Errorf("PadByte 0: decoded %q (err %v), want \"CALL  \" verbatim — this dialect declares no padding", got, err)
+	}
+}
