@@ -94,7 +94,12 @@ const (
 	// (documented placeholder — parsers must ACCEPT it as unset, builders
 	// reject)". This mirrors ModeUnset's '0' = "-" convention (mode.go):
 	// ParseMRAnswer accepts it as a structurally valid kind byte, but
-	// BuildMWSet must never emit it — and never can, because its Kind
+	// BuildMWSet must never emit it — and never can, because NewDialect
+	// refuses it as a dialect's MWWriteKind (validMWWriteKindByte, which
+	// is deliberately narrower than this read-side predicate), so no
+	// constructed dialect can declare it as the value its builder writes.
+	// Before M9c-0's milestone review the two domains were the same and a
+	// dialect COULD declare it, emitting P7 '4' past its own gate. Its Kind
 	// check (mw.go, validateMWFields) only ever accepts KindMemory, for
 	// ANY writable slot, so KindUnset is rejected there by construction,
 	// with no separate check required.

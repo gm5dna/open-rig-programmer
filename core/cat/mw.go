@@ -63,7 +63,9 @@ func (d Dialect) BuildMWSet(m MemoryData) (Command, error) {
 //     caller-forged Mode value, per Task 2 review);
 //   - a forged CTCSSState/Shift byte that does not round-trip through
 //     their own Parse functions, for the same reason;
-//   - a ClarHz that is not a multiple of 10 Hz or exceeds +-9990 Hz;
+//   - a ClarHz that violates THIS DIALECT'S clarifier policy
+//     (Dialect.clar): not a multiple of its step, or beyond its range.
+//     The FT-710's own policy is 10 Hz steps to +-9990 Hz;
 //   - a FreqHz that needs more than 9 digits, or is zero.
 //
 // This is shared, unchanged, between BuildMWSet (validating a

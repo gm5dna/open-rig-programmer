@@ -186,10 +186,11 @@ func (d Dialect) BuildMTRead(s Slot) (Command, error) {
 // (candidate "PROD TEST" vs read-back "PROD TEST   ").
 //
 // ADJUDICATED FIX (Fix: tag normalisation): padding is a WIRE-ENCODING
-// concern only — this function TRIMS trailing occurrences of THIS
-// DIALECT'S OWN clear byte (d.mt.ClearTagByte; mid-tag/leading occurrences
-// and every other byte are preserved verbatim, still passed through with
-// no charset re-validation) before returning, so the model's canonical tag
+// concern only — this function normalises it via d.decodeMTTag, which
+// recognises a full field of this dialect's own clear byte as an empty
+// tag and, for a SPACE-clearing dialect only, trims trailing spaces as
+// padding. Leading and mid-tag bytes are preserved verbatim, still passed
+// through with no charset re-validation, so the model's canonical tag
 // form is never padded regardless of how the radio chose to pad the wire
 // reply. For the FT-710 this is ASCII 0x20 (space) exactly as before —
 // FT710.ParseMTAnswer's behaviour is byte-identical to the pre-M9c-0
@@ -257,8 +258,27 @@ func (d Dialect) ParseMTAnswer(frame []byte) (Slot, bool, string, error) {
 // still decodes to "" by rule 1, and "CALL" followed by spaces still
 // decodes to "CALL" by rule 2 — the same string TrimRight produced.
 func (d Dialect) decodeMTTag(raw string) string {
+	// 1. The clear form: exactly a full field of this dialect's own clear
+	//    byte. Dialect data, and what BuildMTSet emits for an empty tag.
 	if w := d.mt.TagMaxBytes; w > 0 && len(raw) == w && raw == strings.Repeat(string(d.mt.ClearTagByte), w) {
 		return ""
 	}
-	return strings.TrimRight(raw, " ")
+	// 2. Padding, ONLY where it is evidenced.
+	//
+	// The FT-710 pads a short tag with spaces, hardware-observed, and its
+	// clear byte IS a space. For a dialect declaring some other clear byte
+	// there is NO evidence of any padding convention at all — MTPolicy
+	// does not carry one, deliberately — so trimming spaces from its
+	// answers would be inventing a fact about a radio nobody has run.
+	//
+	// The first version of this fix trimmed spaces universally and did
+	// exactly that, exchanging one silent data loss for another: on a
+	// peer clearing with '-', the legitimate tag "CALL " came back as
+	// "CALL" (fix-wave re-review, finding 4). A dialect whose padding is
+	// later evidenced should gain an explicit MTPolicy field rather than
+	// inherit the FT-710's by default.
+	if d.mt.ClearTagByte == ' ' {
+		return strings.TrimRight(raw, " ")
+	}
+	return raw
 }

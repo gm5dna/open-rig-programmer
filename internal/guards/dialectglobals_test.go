@@ -4,6 +4,7 @@ package guards
 
 import (
 	"go/ast"
+	"go/token"
 	"sort"
 	"testing"
 )
@@ -214,6 +215,24 @@ func TestGateReachingValidatorsTakeADialectReceiver(t *testing.T) {
 						want.fn, d.where, bad)
 				}
 			}
+			// A READ, not a write. Requiring the selector to appear is
+			// satisfied by OVERWRITING it first: `d.mwWriteKind = '1'`
+			// followed by a read of d.mwWriteKind passes every clause
+			// above while substituting the FT-710's value for whatever the
+			// caller configured. Confirmed by mutation — the guard stayed
+			// green and only the behavioural peer tests caught it (fix-wave
+			// re-review, finding 3 still open).
+			if d.assignsRecvField(want.field) {
+				t.Errorf("%s at %s ASSIGNS to %s.%s — the incoming policy is overwritten, so reading it back proves nothing about the dialect the caller built",
+					want.fn, d.where, d.recvName, want.field)
+			}
+			// And the receiver's name must not be rebound: a local `d`
+			// shadowing the receiver makes every `d.field` in scope a read
+			// of something else entirely.
+			if d.shadowsReceiver() {
+				t.Errorf("%s at %s rebinds %q, shadowing its own receiver — selectors on it no longer refer to the dialect this method was called on",
+					want.fn, d.where, d.recvName)
+			}
 		}
 	}
 }
@@ -227,6 +246,98 @@ func TestGateReachingValidatorsTakeADialectReceiver(t *testing.T) {
 // reads the field only via a helper it delegates to will NOT satisfy this
 // — deliberately: the three validators named here are the ones the gate
 // reaches directly, and the point is that each consults its own receiver.
+// assignsRecvField reports whether the body assigns to <recv>.<field>,
+// including compound assignment and taking its address.
+func (d funcDeclInfo) assignsRecvField(field string) bool {
+	if d.recvName == "" || d.body == nil {
+		return false
+	}
+	isTarget := func(e ast.Expr) bool {
+		se, ok := e.(*ast.SelectorExpr)
+		if !ok {
+			return false
+		}
+		id, ok := se.X.(*ast.Ident)
+		return ok && id.Name == d.recvName && se.Sel.Name == field
+	}
+	found := false
+	ast.Inspect(d.body, func(n ast.Node) bool {
+		switch x := n.(type) {
+		case *ast.AssignStmt:
+			for _, lhs := range x.Lhs {
+				if isTarget(lhs) {
+					found = true
+				}
+			}
+		case *ast.IncDecStmt:
+			if isTarget(x.X) {
+				found = true
+			}
+		case *ast.UnaryExpr:
+			// &d.field hands a mutable pointer to something else.
+			if x.Op == token.AND && isTarget(x.X) {
+				found = true
+			}
+		}
+		return true
+	})
+	return found
+}
+
+// shadowsReceiver reports whether the body rebinds the receiver's name.
+//
+// Covers the declaring forms: `d := ...`, `var d ...`, `for d := range`,
+// and a function-literal parameter or named result called d. It does not
+// attempt full scope analysis — see the guard's stated limits.
+func (d funcDeclInfo) shadowsReceiver() bool {
+	if d.recvName == "" || d.body == nil {
+		return false
+	}
+	found := false
+	names := func(idents []*ast.Ident) {
+		for _, id := range idents {
+			if id != nil && id.Name == d.recvName {
+				found = true
+			}
+		}
+	}
+	ast.Inspect(d.body, func(n ast.Node) bool {
+		switch x := n.(type) {
+		case *ast.AssignStmt:
+			if x.Tok == token.DEFINE {
+				for _, lhs := range x.Lhs {
+					if id, ok := lhs.(*ast.Ident); ok && id.Name == d.recvName {
+						found = true
+					}
+				}
+			}
+		case *ast.ValueSpec:
+			names(x.Names)
+		case *ast.RangeStmt:
+			if x.Tok == token.DEFINE {
+				for _, e := range []ast.Expr{x.Key, x.Value} {
+					if id, ok := e.(*ast.Ident); ok && id.Name == d.recvName {
+						found = true
+					}
+				}
+			}
+		case *ast.FuncLit:
+			if x.Type.Params != nil {
+				for _, f := range x.Type.Params.List {
+					names(f.Names)
+				}
+			}
+			if x.Type.Results != nil {
+				for _, f := range x.Type.Results.List {
+					names(f.Names)
+				}
+			}
+		}
+		return true
+	})
+	return found
+}
+
 // referencesIdent reports whether the body names ident anywhere, INCLUDING
 // as the Sel of a selector, so both `FT710` and `FT710.clar.StepHz` match.
 //

@@ -151,6 +151,12 @@ func TestMTClearTag_DecodingPreservesLegitimateTrailingBytes(t *testing.T) {
 		{"a tag that is all clear bytes but short survives", "--", "--"},
 		{"an ordinary tag survives", "CALL", "CALL"},
 		{"an EMPTY tag round-trips as empty", "", ""},
+		// The first version of the fix trimmed spaces universally and
+		// destroyed these instead — one silent data loss exchanged for
+		// another (fix-wave re-review, finding 4). This dialect declares
+		// no padding convention, so nothing may be trimmed from it.
+		{"a tag ending in a SPACE survives on a non-space-clearing dialect", "CALL ", "CALL "},
+		{"a tag of only spaces survives", "   ", "   "},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cmd, err := peer.BuildMTSet(slot, false, tc.tag)
