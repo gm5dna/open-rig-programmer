@@ -235,13 +235,13 @@ func chirpTagByteOK(b byte) bool {
 	return b >= 0x20 && b <= 0x7E && b != ';'
 }
 
-// sanitizeCHIRPName turns a CHIRP Name into an FT-710 tag: any byte
-// outside the FT-710 tag charset is replaced with a space (byte for
-// byte, so this never has to worry about splitting a multi-byte UTF-8
-// rune), and the result is then truncated to the FT-710's 12-byte tag
-// limit. Each transformation that actually changed something produces
-// its own non-blocking ActionApproximated LossEntry.
-func sanitizeCHIRPName(line int, name string) (string, []LossEntry) {
+// sanitizeCHIRPName turns a CHIRP Name into a radio tag: any byte outside
+// the radio's tag charset is replaced with a space (byte for byte, so
+// this never has to worry about splitting a multi-byte UTF-8 rune), and
+// the result is then truncated to caps.TagLen. Each transformation that
+// actually changed something produces its own non-blocking
+// ActionApproximated LossEntry.
+func sanitizeCHIRPName(line int, name string, caps spec.Capabilities) (string, []LossEntry) {
 	var entries []LossEntry
 	b := []byte(name)
 	sanitized := false
@@ -254,15 +254,15 @@ func sanitizeCHIRPName(line int, name string) (string, []LossEntry) {
 	if sanitized {
 		entries = append(entries, LossEntry{
 			Line: line, Column: "Name", Value: name, Action: ActionApproximated, Blocking: false,
-			Detail: "Name contained a byte outside the FT-710 tag charset (printable ASCII 0x20-0x7E, excluding ';'); replaced with a space",
+			Detail: fmt.Sprintf("Name contained a byte outside the %s tag charset (printable ASCII 0x20-0x7E, excluding ';'); replaced with a space", caps.Model),
 		})
 	}
-	if len(b) > 12 {
+	if len(b) > caps.TagLen {
 		full := string(b)
-		b = b[:12]
+		b = b[:caps.TagLen]
 		entries = append(entries, LossEntry{
 			Line: line, Column: "Name", Value: name, Action: ActionApproximated, Blocking: false,
-			Detail: fmt.Sprintf("Name %q is %d bytes, exceeds the FT-710's 12-byte tag limit; truncated to %q", full, len(full), string(b)),
+			Detail: fmt.Sprintf("Name %q is %d bytes, exceeds the %s's %d-byte tag limit; truncated to %q", full, len(full), caps.Model, caps.TagLen, string(b)),
 		})
 	}
 	return string(b), entries
@@ -275,7 +275,7 @@ func sanitizeCHIRPName(line int, name string) (string, []LossEntry) {
 // name regardless of column order; a column absent from the header (any
 // chirpExtraColumns/Tone-pair column beyond the three required columns)
 // reads as "".
-func importCHIRPRow(line int, colIndex map[string]int, record []string) (*codeplug.Channel, []LossEntry) {
+func importCHIRPRow(line int, colIndex map[string]int, record []string, caps spec.Capabilities) (*codeplug.Channel, []LossEntry) {
 	// cell looks up name by column name; a name absent from the header
 	// at all (any recognised column beyond the three required ones, see
 	// chirpCoreColumns) reads as "". ImportCHIRP guarantees
@@ -293,7 +293,11 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string) (*codepl
 
 	// Location -> slot. No slot means no Channel can be built at all:
 	// this is the one field whose failure drops the whole row rather
-	// than just leaving a field unresolved.
+	// than just leaving a field unresolved. CHIRP Locations are 1-based
+	// positions in the radio's main memory bank, so Location N is that
+	// bank's Nth slot — the bank supplies both the range and the slot's
+	// canonical wire form, neither of which this package may assume.
+	memBank, haveMemBank := caps.Bank(spec.BankMemory)
 	locRaw := cell("Location")
 	locN, err := strconv.Atoi(strings.TrimSpace(locRaw))
 	if err != nil {
@@ -302,18 +306,24 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string) (*codepl
 			Detail: "Location is not a valid integer; cannot map to a memory slot",
 		})
 	}
-	if locN < 1 || locN > 99 {
+	if !haveMemBank || len(memBank.Slots) == 0 {
 		return nil, append(entries, LossEntry{
 			Line: line, Column: "Location", Value: locRaw, Action: ActionUnsupported, Blocking: true,
-			Detail: "FT-710 memory slots are 001-099; Location is out of range",
+			Detail: fmt.Sprintf("%s has no memory bank to import into", caps.Model),
 		})
 	}
-	slot := fmt.Sprintf("%03d", locN)
+	if locN < 1 || locN > len(memBank.Slots) {
+		return nil, append(entries, LossEntry{
+			Line: line, Column: "Location", Value: locRaw, Action: ActionUnsupported, Blocking: true,
+			Detail: fmt.Sprintf("%s memory slots are %s-%s; Location is out of range", caps.Model, memBank.Slots[0], memBank.Slots[len(memBank.Slots)-1]),
+		})
+	}
+	slot := memBank.Slots[locN-1]
 
 	data := &codeplug.ChannelData{}
 
 	// Name -> Tag.
-	tag, nameEntries := sanitizeCHIRPName(line, cell("Name"))
+	tag, nameEntries := sanitizeCHIRPName(line, cell("Name"), caps)
 	data.Tag = tag
 	entries = append(entries, nameEntries...)
 
@@ -523,7 +533,7 @@ func isNonZeroCHIRPOffset(s string) bool {
 // ActionUnsupported LossEntry naming the column, distinct from the
 // recognised-but-unmapped columns (chirpExtraColumns), which are
 // non-blocking even when they carry data.
-func ImportCHIRP(rd io.Reader) ([]codeplug.Channel, LossReport, error) {
+func ImportCHIRP(rd io.Reader, caps spec.Capabilities) ([]codeplug.Channel, LossReport, error) {
 	cr := csv.NewReader(rd)
 	cr.FieldsPerRecord = -1
 
@@ -605,7 +615,7 @@ func ImportCHIRP(rd io.Reader) ([]codeplug.Channel, LossReport, error) {
 			continue
 		}
 
-		ch, entries := importCHIRPRow(line, colIndex, record)
+		ch, entries := importCHIRPRow(line, colIndex, record, caps)
 		report.Entries = append(report.Entries, entries...)
 
 		for _, col := range unrecognisedColumns {

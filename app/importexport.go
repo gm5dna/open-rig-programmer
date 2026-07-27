@@ -117,7 +117,8 @@ func (a *App) ImportCHIRP() (ImportResultView, error) {
 	if err != nil {
 		return ImportResultView{Path: path, ParseError: err.Error()}, nil
 	}
-	imported, report, err := csvio.ImportCHIRP(f)
+	caps, _ := currentCaps(a.conn)
+	imported, report, err := csvio.ImportCHIRP(f, caps)
 	_ = f.Close()
 	lossEntries := lossEntriesToView(report)
 
@@ -151,7 +152,7 @@ func (a *App) ImportCHIRP() (ImportResultView, error) {
 	a.bumpWorkingRevLocked() // Fix 4: working-copy channels merged
 	a.dirty = true
 
-	caps, _ := currentCaps(a.conn)
+	// caps was fetched above, ahead of the csvio.ImportCHIRP call.
 	issues := codeplug.Validate(a.working, caps)
 	return ImportResultView{Path: path, Merged: true, LossEntries: lossEntries, Issues: issuesToView(issues), Dirty: true}, nil
 }

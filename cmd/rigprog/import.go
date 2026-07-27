@@ -186,6 +186,34 @@ func cmdImport(args []string, stdout, stderr io.Writer) int {
 		return code
 	}
 
+	// The offline static baseline (task-13 brief §2; post-M5b-flip this
+	// is model's hardware-verified real-hardware profile — its WRITE
+	// supports are irrelevant here, since import only Validates values):
+	// honest for an artefact with no live session behind it yet. Note
+	// this never asserts a 60m/EMG bank (those are discovered per
+	// session, not static — core/driver/ft710/caps.go for the FT-710),
+	// so a codeplug carrying real 60m/EMG channels will always report
+	// them here as "not part of any bank this radio supports". AMENDED by
+	// the controller: this is ADVISORY ONLY — never exit-gating. Gating
+	// on it would fail every legitimate file from a 60m-region radio;
+	// real write-gating happens at send time against the live session's
+	// discovered Capabilities.
+	//
+	// wiring.StaticCapabilities(*model) (task 40: no core/driver/ft710
+	// import needed here any more) already validated model is supported
+	// above — this call cannot fail on that account, but errors are still
+	// handled rather than assumed, since a future model's registry
+	// construction could in principle fail for other reasons
+	// (wiring.RegisterDriverError). Hoisted above the --csv/--chirp branch
+	// (M9c-1 task 2) so --chirp's csvio.ImportCHIRP call, which now needs
+	// caps to drive its memory-slot mapping and tag width, has it in
+	// scope too.
+	caps, err := wiring.StaticCapabilities(*model)
+	if err != nil {
+		fmt.Fprintf(stderr, "rigprog import: %v\n", err)
+		return exitError
+	}
+
 	if haveCSV {
 		f, err := os.Open(*csvIn)
 		if err != nil {
@@ -208,7 +236,7 @@ func cmdImport(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stderr, "rigprog import: opening --chirp %s: %v\n", *chirpIn, err)
 			return exitError
 		}
-		imported, report, err := csvio.ImportCHIRP(f)
+		imported, report, err := csvio.ImportCHIRP(f, caps)
 		f.Close()
 
 		// ImportCHIRP's contract: ALWAYS print the fullest report it
@@ -241,30 +269,7 @@ func cmdImport(args []string, stdout, stderr io.Writer) int {
 	// one).
 	base.Generator = cliGeneratorID
 
-	// The offline static baseline (task-13 brief §2; post-M5b-flip this
-	// is model's hardware-verified real-hardware profile — its WRITE
-	// supports are irrelevant here, since import only Validates values):
-	// honest for an artefact with no live session behind it yet. Note
-	// this never asserts a 60m/EMG bank (those are discovered per
-	// session, not static — core/driver/ft710/caps.go for the FT-710),
-	// so a codeplug carrying real 60m/EMG channels will always report
-	// them here as "not part of any bank this radio supports". AMENDED by
-	// the controller: this is ADVISORY ONLY — never exit-gating. Gating
-	// on it would fail every legitimate file from a 60m-region radio;
-	// real write-gating happens at send time against the live session's
-	// discovered Capabilities.
-	//
-	// wiring.StaticCapabilities(*model) (task 40: no core/driver/ft710
-	// import needed here any more) already validated model is supported
-	// above — this call cannot fail on that account, but errors are still
-	// handled rather than assumed, since a future model's registry
-	// construction could in principle fail for other reasons
-	// (wiring.RegisterDriverError).
-	caps, err := wiring.StaticCapabilities(*model)
-	if err != nil {
-		fmt.Fprintf(stderr, "rigprog import: %v\n", err)
-		return exitError
-	}
+	// caps was fetched above, ahead of the --csv/--chirp branch.
 	issues := codeplug.Validate(base, caps)
 	writeIssues(stdout, issues)
 

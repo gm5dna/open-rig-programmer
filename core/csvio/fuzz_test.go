@@ -72,7 +72,7 @@ func FuzzImportCHIRP(f *testing.F) {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, s string) {
-		channels, report, err := ImportCHIRP(strings.NewReader(s))
+		channels, report, err := ImportCHIRP(strings.NewReader(s), ft710LikeCapabilities())
 		if err != nil {
 			var pe *ParseError
 			if !errors.As(err, &pe) {

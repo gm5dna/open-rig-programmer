@@ -4,6 +4,7 @@ package csvio
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"os"
 	"strings"
@@ -56,6 +57,110 @@ func findChannel(channels []codeplug.Channel, slot string) (codeplug.Channel, bo
 	return codeplug.Channel{}, false
 }
 
+// ft710LikeCapabilities mirrors the FT-710 fields ImportCHIRP consults
+// (core/driver/ft710/caps.go). It is a hand-built fixture rather than the
+// real driver's Capabilities because core/csvio sits BELOW core/driver in
+// the import graph and must not depend on it, even in tests. Drift
+// between this and the real driver is caught end-to-end by the CLI
+// byte-identity baseline, which does use the real driver.
+func ft710LikeCapabilities() spec.Capabilities {
+	tones := spec.StandardCTCSSTones()
+	slots := make([]string, 0, 99)
+	for i := 1; i <= 99; i++ {
+		slots = append(slots, fmt.Sprintf("%03d", i))
+	}
+	return spec.Capabilities{
+		Model: "FT-710",
+		CATID: "0800",
+		Banks: []spec.Bank{
+			{ID: spec.BankMemory, Label: "Memories", Slots: slots},
+		},
+		Modes:        []string{"LSB", "USB", "CW-U", "CW-L", "FM", "AM", "RTTY-U", "FM-N"},
+		TagLen:       12,
+		CTCSSTones:   tones[:],
+		ShiftOptions: spec.StandardShiftOptions(),
+		CTCSSStates:  spec.StandardCTCSSStates(),
+	}
+}
+
+// deviantCapabilities is a radio that agrees with the FT-710 about
+// NOTHING ImportCHIRP consults: 4 memory slots named differently, a
+// 6-byte tag, renamed shift and CTCSS vocabulary, one mode. A chirp.go
+// that threaded its caps parameter through and then ignored it would
+// still pass every ft710LikeCapabilities test; only this fixture can tell
+// the difference.
+func deviantCapabilities() spec.Capabilities {
+	tones := spec.StandardCTCSSTones()
+	return spec.Capabilities{
+		Model: "DEVIANT-1",
+		CATID: "0001",
+		Banks: []spec.Bank{
+			{ID: spec.BankMemory, Label: "Memories", Slots: []string{"M1", "M2", "M3", "M4"}},
+		},
+		Modes:      []string{"USB"},
+		TagLen:     6,
+		CTCSSTones: tones[:],
+		ShiftOptions: []spec.ShiftOption{
+			{Value: "SPLIT-NONE", Direction: spec.ShiftNone},
+			{Value: "SPLIT-PLUS", Direction: spec.ShiftUp},
+			{Value: "SPLIT-MINUS", Direction: spec.ShiftDown},
+		},
+		CTCSSStates: []spec.ToneState{
+			{Value: "DISABLED", RequiresTone: false, Encodes: false, Decodes: false},
+			{Value: "TONE-TX", RequiresTone: true, Encodes: true, Decodes: false},
+			{Value: "TONE-BOTH", RequiresTone: true, Encodes: true, Decodes: true},
+		},
+	}
+}
+
+func TestImportCHIRP_SlotSpaceFromCaps(t *testing.T) {
+	csv := "Location,Frequency,Mode\n2,145.500000,USB\n"
+
+	channels, report, err := ImportCHIRP(strings.NewReader(csv), deviantCapabilities())
+	if err != nil {
+		t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+	}
+	if report.HasBlocking() {
+		t.Fatalf("ImportCHIRP: unexpected blocking entries: %+v", report.Entries)
+	}
+	if len(channels) != 1 {
+		t.Fatalf("len(channels) = %d, want 1", len(channels))
+	}
+	if channels[0].Slot != "M2" {
+		t.Errorf("Slot = %q, want %q (deviant bank's second slot, NOT the FT-710's \"002\")", channels[0].Slot, "M2")
+	}
+}
+
+func TestImportCHIRP_LocationBeyondBankBlocks(t *testing.T) {
+	csv := "Location,Frequency,Mode\n5,145.500000,USB\n"
+
+	channels, report, err := ImportCHIRP(strings.NewReader(csv), deviantCapabilities())
+	if err != nil {
+		t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+	}
+	if len(channels) != 0 {
+		t.Errorf("len(channels) = %d, want 0: Location 5 is beyond the deviant radio's 4 slots", len(channels))
+	}
+	if !report.HasBlocking() {
+		t.Fatal("HasBlocking() = false, want true for an out-of-range Location")
+	}
+}
+
+func TestImportCHIRP_TagLenFromCaps(t *testing.T) {
+	csv := "Location,Name,Frequency,Mode\n1,ABCDEFGHIJ,145.500000,USB\n"
+
+	channels, _, err := ImportCHIRP(strings.NewReader(csv), deviantCapabilities())
+	if err != nil {
+		t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+	}
+	if len(channels) != 1 {
+		t.Fatalf("len(channels) = %d, want 1", len(channels))
+	}
+	if got := channels[0].Data.Tag; got != "ABCDEF" {
+		t.Errorf("Tag = %q, want %q (truncated to the deviant radio's TagLen 6, not the FT-710's 12)", got, "ABCDEF")
+	}
+}
+
 // TestImportCHIRP_Fixture drives testdata/chirp_sample.csv — one row per
 // mapping rule in the brief — against a table of expected channels and
 // expected LossEntries (line/column/action/blocking all asserted, per
@@ -67,7 +172,7 @@ func TestImportCHIRP_Fixture(t *testing.T) {
 	}
 	defer f.Close()
 
-	channels, report, err := ImportCHIRP(f)
+	channels, report, err := ImportCHIRP(f, ft710LikeCapabilities())
 	if err != nil {
 		t.Fatalf("ImportCHIRP() error = %v", err)
 	}
@@ -430,7 +535,7 @@ func TestImportCHIRP_MissingCoreColumns(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, err := ImportCHIRP(strings.NewReader(tc.header + "\n"))
+			_, _, err := ImportCHIRP(strings.NewReader(tc.header + "\n"), ft710LikeCapabilities())
 			if err == nil {
 				t.Fatal("ImportCHIRP() error = nil, want error for missing core column")
 			}
@@ -446,7 +551,7 @@ func TestImportCHIRP_MissingCoreColumns(t *testing.T) {
 // which are non-blocking.
 func TestImportCHIRP_UnknownColumnWithDataBlocks(t *testing.T) {
 	body := "Location,Name,Frequency,Mode,SomeExtraColumn\n1,TESTCH,145.500000,FM,anything\n"
-	channels, report, err := ImportCHIRP(strings.NewReader(body))
+	channels, report, err := ImportCHIRP(strings.NewReader(body), ft710LikeCapabilities())
 	if err != nil {
 		t.Fatalf("ImportCHIRP() error = %v", err)
 	}
@@ -465,7 +570,7 @@ func TestImportCHIRP_UnknownColumnWithDataBlocks(t *testing.T) {
 // problem.
 func TestImportCHIRP_UnknownColumnAllEmptySilent(t *testing.T) {
 	body := "Location,Name,Frequency,Mode,SomeExtraColumn\n1,TESTCH,145.500000,FM,\n"
-	channels, report, err := ImportCHIRP(strings.NewReader(body))
+	channels, report, err := ImportCHIRP(strings.NewReader(body), ft710LikeCapabilities())
 	if err != nil {
 		t.Fatalf("ImportCHIRP() error = %v", err)
 	}
@@ -482,7 +587,7 @@ func TestImportCHIRP_UnknownColumnAllEmptySilent(t *testing.T) {
 // duplicate.
 func TestImportCHIRP_DuplicateHeaderColumn(t *testing.T) {
 	body := "Location,Location,Frequency,Mode\n1,1,145.500000,FM\n"
-	_, _, err := ImportCHIRP(strings.NewReader(body))
+	_, _, err := ImportCHIRP(strings.NewReader(body), ft710LikeCapabilities())
 	if err == nil {
 		t.Fatal("ImportCHIRP() error = nil, want error for duplicate header column")
 	}
@@ -508,7 +613,7 @@ func TestImportCHIRP_PhysicalLineNumbers_QuotedMultilineField(t *testing.T) {
 	body := "Location,Name,Frequency,Mode\n" +
 		"1,\"A\nB\",145.500000,FM\n" +
 		"999,BADROW,145.500000,FM\n"
-	_, report, err := ImportCHIRP(strings.NewReader(body))
+	_, report, err := ImportCHIRP(strings.NewReader(body), ft710LikeCapabilities())
 	if err != nil {
 		t.Fatalf("ImportCHIRP() error = %v", err)
 	}
@@ -525,7 +630,7 @@ func TestImportCHIRP_PhysicalLineNumbers_QuotedMultilineField(t *testing.T) {
 // stream.
 func TestImportCHIRP_UnparseableCSV(t *testing.T) {
 	body := "Location,Name,Frequency,Mode\n1,\"unterminated,145.5,FM\n"
-	_, _, err := ImportCHIRP(strings.NewReader(body))
+	_, _, err := ImportCHIRP(strings.NewReader(body), ft710LikeCapabilities())
 	if err == nil {
 		t.Fatal("ImportCHIRP() error = nil, want error for malformed CSV")
 	}
@@ -537,7 +642,7 @@ func TestImportCHIRP_UnparseableCSV(t *testing.T) {
 // every other row still imports.
 func TestImportCHIRP_RowLengthMismatch(t *testing.T) {
 	body := "Location,Name,Frequency,Mode\n1,SHORT,145.500000\n2,GOOD,145.525000,FM\n"
-	channels, report, err := ImportCHIRP(strings.NewReader(body))
+	channels, report, err := ImportCHIRP(strings.NewReader(body), ft710LikeCapabilities())
 	if err != nil {
 		t.Fatalf("ImportCHIRP() error = %v", err)
 	}
@@ -562,7 +667,7 @@ func TestImportCHIRP_RowLengthMismatch(t *testing.T) {
 func TestImportCHIRP_DuplexAndToneDefaultCases(t *testing.T) {
 	t.Run("unrecognised Duplex value", func(t *testing.T) {
 		body := "Location,Name,Frequency,Duplex,Mode\n1,TESTCH,145.500000,weird,FM\n"
-		_, report, err := ImportCHIRP(strings.NewReader(body))
+		_, report, err := ImportCHIRP(strings.NewReader(body), ft710LikeCapabilities())
 		if err != nil {
 			t.Fatalf("ImportCHIRP() error = %v", err)
 		}
@@ -573,7 +678,7 @@ func TestImportCHIRP_DuplexAndToneDefaultCases(t *testing.T) {
 	})
 	t.Run("unrecognised Tone value", func(t *testing.T) {
 		body := "Location,Name,Frequency,Tone,Mode\n1,TESTCH,145.500000,Weird,FM\n"
-		_, report, err := ImportCHIRP(strings.NewReader(body))
+		_, report, err := ImportCHIRP(strings.NewReader(body), ft710LikeCapabilities())
 		if err != nil {
 			t.Fatalf("ImportCHIRP() error = %v", err)
 		}
@@ -584,7 +689,7 @@ func TestImportCHIRP_DuplexAndToneDefaultCases(t *testing.T) {
 	})
 	t.Run("TSQL cToneFreq not in standard chart", func(t *testing.T) {
 		body := "Location,Name,Frequency,Tone,cToneFreq,Mode\n1,TESTCH,145.500000,TSQL,99.9,FM\n"
-		channels, report, err := ImportCHIRP(strings.NewReader(body))
+		channels, report, err := ImportCHIRP(strings.NewReader(body), ft710LikeCapabilities())
 		if err != nil {
 			t.Fatalf("ImportCHIRP() error = %v", err)
 		}
@@ -602,7 +707,7 @@ func TestImportCHIRP_DuplexAndToneDefaultCases(t *testing.T) {
 	})
 	t.Run("Tone=Tone with rToneFreq column entirely absent from header", func(t *testing.T) {
 		body := "Location,Name,Frequency,Tone,Mode\n1,TESTCH,145.500000,Tone,FM\n"
-		_, report, err := ImportCHIRP(strings.NewReader(body))
+		_, report, err := ImportCHIRP(strings.NewReader(body), ft710LikeCapabilities())
 		if err != nil {
 			t.Fatalf("ImportCHIRP() error = %v", err)
 		}
@@ -620,7 +725,7 @@ func TestImportCHIRP_DuplexAndToneDefaultCases(t *testing.T) {
 // chart.
 func TestImportCHIRP_ToneExcessPrecisionBlocks(t *testing.T) {
 	body := "Location,Name,Frequency,Tone,rToneFreq,Mode\n1,TESTCH,145.500000,Tone,88.54,FM\n"
-	channels, report, err := ImportCHIRP(strings.NewReader(body))
+	channels, report, err := ImportCHIRP(strings.NewReader(body), ft710LikeCapabilities())
 	if err != nil {
 		t.Fatalf("ImportCHIRP() error = %v", err)
 	}
@@ -643,7 +748,7 @@ func TestImportCHIRP_ToneExcessPrecisionBlocks(t *testing.T) {
 // importCHIRPRow selects the right Detail message for that error).
 func TestImportCHIRP_FrequencyOutOfRange(t *testing.T) {
 	body := "Location,Name,Frequency,Mode\n1,TESTCH,5000.000000,FM\n"
-	channels, report, err := ImportCHIRP(strings.NewReader(body))
+	channels, report, err := ImportCHIRP(strings.NewReader(body), ft710LikeCapabilities())
 	if err != nil {
 		t.Fatalf("ImportCHIRP() error = %v", err)
 	}
@@ -770,7 +875,7 @@ func TestSanitizeCHIRPName(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, entries := sanitizeCHIRPName(1, tc.in)
+			got, entries := sanitizeCHIRPName(1, tc.in, ft710LikeCapabilities())
 			if got != tc.want {
 				t.Errorf("sanitizeCHIRPName(%q) tag = %q, want %q", tc.in, got, tc.want)
 			}
