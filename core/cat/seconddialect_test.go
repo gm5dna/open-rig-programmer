@@ -59,23 +59,25 @@ func allTestDialects() []namedDialect {
 // FT-710 data through a Dialect receiver. If someone converts a helper's
 // signature but leaves its body reading a global, these tests go red and
 // nothing else in the suite does.
-var testDialect = Dialect{
-	catID: "9999",
-	modeNames: map[Mode]string{
+var testDialect = mustFixtureDialect(DialectConfig{
+	CATID: "9999",
+	ModeNames: map[Mode]string{
 		ModeLSB: "LOWER", // the FT-710 calls this "LSB"
 		ModeUSB: "UPPER", // the FT-710 calls this "USB"
 		// Deliberately omits every other mode the FT-710 knows.
 	},
-	slots: slotSpace{
-		memoryLo: 1, memoryHi: 5, // FT-710: 1-99
-		sixtyLo: 0, sixtyHi: 0, // no 60m bank at all
-		pmsPairs: 2,  // FT-710: 9
-		emgWire:  "", // no emergency channel
-		noneWire: "000",
+	Slots: SlotSpace{
+		MemoryLo: 1, MemoryHi: 5, // FT-710: 1-99
+		SixtyLo: 0, SixtyHi: 0, // no 60m bank at all
+		PMSPairs:      2,  // FT-710: 9
+		EmergencyWire: "", // no emergency channel
+		NoneWire:      "000",
 	},
-	exItems:   nil,
-	exMembers: map[EXAddress]bool{},
-}
+	EXItems:     nil,
+	MT:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MWWriteKind: KindMemory,
+})
 
 // noneWireDialect exists for ONE attribute: slotSpace.noneWire, the only
 // field of a slotSpace that testDialect above shares with the FT-710
@@ -90,19 +92,21 @@ var testDialect = Dialect{
 // makes "000" an ordinary MEMORY channel under this dialect and the
 // unemittable none placeholder under the FT-710. Every assertion in
 // TestNoneWireIsDialectData turns on that inversion, in both directions.
-var noneWireDialect = Dialect{
-	catID:     "8888",
-	modeNames: map[Mode]string{ModeLSB: "LOWER", ModeUSB: "UPPER"},
-	slots: slotSpace{
-		memoryLo: 0, memoryHi: 5, // 000 is an ordinary channel here
-		sixtyLo: 0, sixtyHi: 0,
-		pmsPairs: 0,
-		emgWire:  "",
-		noneWire: "900", // FT-710: "000"
+var noneWireDialect = mustFixtureDialect(DialectConfig{
+	CATID:     "8888",
+	ModeNames: map[Mode]string{ModeLSB: "LOWER", ModeUSB: "UPPER"},
+	Slots: SlotSpace{
+		MemoryLo: 0, MemoryHi: 5, // 000 is an ordinary channel here
+		SixtyLo: 0, SixtyHi: 0,
+		PMSPairs:      0,
+		EmergencyWire: "",
+		NoneWire:      "900", // FT-710: "000"
 	},
-	exItems:   nil,
-	exMembers: map[EXAddress]bool{},
-}
+	EXItems:     nil,
+	MT:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MWWriteKind: KindMemory,
+})
 
 // peerDialect is the dialect that makes this file's proof complete, and it
 // exists because of a MEASURED gap in the two above.
@@ -140,25 +144,25 @@ var noneWireDialect = Dialect{
 // Every one of those wire forms is REJECTED by FT710.classifySlot, and
 // every peerDialect positive control below therefore fails the moment an
 // inner check is widened to the FT-710's.
-var peerDialect = Dialect{
-	catID: "7777",
-	modeNames: map[Mode]string{
+var peerDialect = mustFixtureDialect(DialectConfig{
+	CATID: "7777",
+	ModeNames: map[Mode]string{
 		ModeUSB:   "USB-PEER", // shared with the FT-710, so frames build for both
 		Mode('z'): "ZULU",     // OUTSIDE '0'-'9'/'A'-'F': a mode no range check admits
 		// Deliberately omits ModeLSB, which the FT-710 has.
 	},
-	slots: slotSpace{
-		memoryLo: 100, memoryHi: 200, // FT-710: 1-99, disjoint
-		sixtyLo: 600, sixtyHi: 620, // FT-710: 501-599, present but renumbered
-		pmsPairs: 4,     // FT-710: 9
-		emgWire:  "XYZ", // FT-710: "EMG", present but different
-		noneWire: "777", // FT-710: "000"
+	Slots: SlotSpace{
+		MemoryLo: 100, MemoryHi: 200, // FT-710: 1-99, disjoint
+		SixtyLo: 600, SixtyHi: 620, // FT-710: 501-599, present but renumbered
+		PMSPairs:      4,     // FT-710: 9
+		EmergencyWire: "XYZ", // FT-710: "EMG", present but different
+		NoneWire:      "777", // FT-710: "000"
 	},
-	exItems:    peerEXItems,
-	exMembers:  buildEXMembers(peerEXItems),
-	exByTriple: buildEXByTriple(peerEXItems),
-	exP4Max:    maxEXP4Bytes(peerEXItems),
-}
+	EXItems:     peerEXItems,
+	MT:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MWWriteKind: KindMemory,
+})
 
 // ft710P4MaxBytes is the FT-710's own widest P4 answer field: 12, the
 // width of its six Table 2 Text items, and until M9b's fix wave the value
@@ -1415,4 +1419,66 @@ func TestZeroDialectRejectsEveryCorpusFrame(t *testing.T) {
 		t.Fatalf("checked only %d frames, below the floor of %d — buildFrameCorpus has collapsed (a trimmed slot table, an EX inventory that failed to generate, or a builder rejecting everything), and this test was about to pass on a fraction of its intended corpus", checked, corpusFloor)
 	}
 	t.Logf("zero Dialect refused all %d frames FT710's builders produced (%d further corpus lines were builder rejections, which carry no frame)", checked, rejected)
+}
+
+// TestEveryConfiguredDialect_ModeNameRoundTripsThroughModeByName is the
+// general property ModeByName exists for: for every dialect, every mode's
+// display name must resolve back to that same mode.
+//
+// It binds dialects not yet written, which is the durable half of this
+// milestone's evidence — a specific fixture proves one case, a property
+// over allDialects() constrains the next radio someone adds.
+func TestEveryConfiguredDialect_ModeNameRoundTripsThroughModeByName(t *testing.T) {
+	for _, nd := range allTestDialects() {
+		checked := 0
+		for _, m := range allModeValues() {
+			if !nd.dia.ValidMode(m) {
+				continue
+			}
+			name := nd.dia.ModeName(m)
+			got, ok := nd.dia.ModeByName(name)
+			if !ok {
+				t.Errorf("%s: ModeByName(%q) not found, but ModeName(%#02x) returned it", nd.name, name, byte(m))
+				continue
+			}
+			if got != m {
+				t.Errorf("%s: ModeByName(%q) = %#02x, want %#02x", nd.name, name, byte(got), byte(m))
+			}
+			checked++
+		}
+		if checked == 0 {
+			t.Errorf("%s: no modes checked — the property ran vacuously", nd.name)
+		}
+	}
+}
+
+// allModeValues enumerates every possible Mode byte, so the property above
+// cannot miss a mode by only walking a table it also trusts.
+func allModeValues() []Mode {
+	out := make([]Mode, 0, 256)
+	for i := 0; i < 256; i++ {
+		out = append(out, Mode(i))
+	}
+	return out
+}
+
+// mustFixtureDialect builds a test fixture through the PUBLIC constructor.
+//
+// Until M9c-0 these three were raw struct literals reaching straight into
+// unexported fields. Routing them through NewDialect is this milestone's
+// sufficiency proof, and it is a real test rather than tidying: if the
+// exported API cannot express a fixture, that is the API being WRONG, and
+// M9c would have discovered it at its first task instead of here.
+//
+// It also removes two hazards the literals carried. They bypassed
+// validation entirely, so a fixture could describe a dialect NewDialect
+// would refuse; and they left every derived index unset unless someone
+// remembered to fill it, which is how a nil mode reverse index made
+// ModeByName silently return false for all three.
+func mustFixtureDialect(cfg DialectConfig) Dialect {
+	d, err := NewDialect(cfg)
+	if err != nil {
+		panic("seconddialect_test: fixture rejected by NewDialect: " + err.Error())
+	}
+	return d
 }

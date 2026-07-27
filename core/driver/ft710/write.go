@@ -207,7 +207,11 @@ func buildWriteCommands(dialect cat.Dialect, ch codeplug.Channel) (mwCmd, mtCmd 
 	}
 	data := *ch.Data
 
-	mode, ok := modeByName[data.Mode]
+	// Resolved through THIS dialect (task 67, M9c-0), not a driver-private
+	// table: before this, a dialect that renamed a mode had no effect on
+	// what got written — see modeTable's doc comment (caps.go) and
+	// cat.Dialect.ModeByName's own for the finding this closes.
+	mode, ok := dialect.ModeByName(data.Mode)
 	if !ok {
 		return cat.Command{}, cat.Command{}, &driver.WriteRefusedError{
 			Slot: ch.Slot, Fields: []spec.Field{spec.FieldMode},

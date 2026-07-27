@@ -147,7 +147,7 @@ func TestValidClarHz(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := validClarHz(tc.v); got != tc.want {
+			if got := FT710.validClarHz(tc.v); got != tc.want {
 				t.Errorf("validClarHz(%d) = %v, want %v", tc.v, got, tc.want)
 			}
 		})

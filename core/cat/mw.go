@@ -51,15 +51,21 @@ func (d Dialect) BuildMWSet(m MemoryData) (Command, error) {
 // encode as an MW Set frame UNDER THIS DIALECT. It rejects:
 //   - a slot that is not writable under this dialect's slot space (5xx,
 //     EMG, "000"/none, or an invalid Slot);
-//   - a Kind other than KindMemory ('1') — HW-CONFIRMED 2026-07-13, the
-//     radio requires KindMemory on EVERY MW write regardless of slot
-//     bank (see the Kind-pairing note below);
+//   - a Kind other than THIS DIALECT'S declared write kind
+//     (Dialect.mwWriteKind). The FT-710's is KindMemory ('1'),
+//     HW-CONFIRMED 2026-07-13: that radio requires it on EVERY MW write
+//     regardless of slot bank. Since M9c-0 the value comes from the
+//     receiver rather than a constant, because that finding is about one
+//     radio and the outbound gate reaches this validator (see the
+//     Kind-pairing note below);
 //   - m.Mode == ModeUnset, or any Mode value that does not round-trip
 //     through ParseMode (Mode is a raw byte alias, mode.go — never trust a
 //     caller-forged Mode value, per Task 2 review);
 //   - a forged CTCSSState/Shift byte that does not round-trip through
 //     their own Parse functions, for the same reason;
-//   - a ClarHz that is not a multiple of 10 Hz or exceeds +-9990 Hz;
+//   - a ClarHz that violates THIS DIALECT'S clarifier policy
+//     (Dialect.clar): not a multiple of its step, or beyond its range.
+//     The FT-710's own policy is 10 Hz steps to +-9990 Hz;
 //   - a FreqHz that needs more than 9 digits, or is zero.
 //
 // This is shared, unchanged, between BuildMWSet (validating a
@@ -81,7 +87,9 @@ func (d Dialect) validateMWFields(m MemoryData) error {
 		return newParseError([]byte(m.Slot.Wire()), "MW: slot must be Writable() (memory 001-099 or PMS P1L-P9U; 5xx/EMG/\"000\" rejected)")
 	}
 
-	// Kind-on-write pairing: HW-CONFIRMED 2026-07-13 (M5b write trials
+	// Kind-on-write pairing, from THIS DIALECT'S policy.
+	//
+	// THE FT-710's VALUE IS HW-CONFIRMED 2026-07-13 (M5b write trials
 	// against Stuart's real UK FT-710 — see docs/hardware-notes.md's M5b
 	// findings section). The manual does not document P7's meaning in a
 	// Set at all; this project's former ASSUMED pairing (KindMemory '1'
@@ -89,13 +97,24 @@ func (d Dialect) validateMWFields(m MemoryData) error {
 	// the radio requires P7 = KindMemory ('1') on EVERY MW write,
 	// regardless of slot bank — a PMS write carrying KindPMS ('5') is
 	// REJECTED with an immediate "?;" (~10ms), while the identical PMS
-	// write carrying KindMemory ('1') is accepted. Because
-	// d.writableSlot(m.Slot) above already guarantees memory XOR PMS,
-	// this single check also structurally rejects every OTHER Kind value
-	// (KindVFO, KindMemTune, KindQMB, KindUnset, KindPMS) for either slot
-	// kind — no separate validKindByte call is needed here.
-	if m.Kind != KindMemory {
-		return newParseError([]byte{m.Kind}, "MW: Kind must be KindMemory ('1') for both memory-channel and PMS slots (HW-CONFIRMED 2026-07-13: PMS writes with KindPMS ('5') are REJECTED by the radio — docs/hardware-notes.md)")
+	// write carrying KindMemory ('1') is accepted.
+	//
+	// That evidence is about ONE RADIO, and it is why the value is dialect
+	// data rather than a constant. Until M9c-0 this read `m.Kind !=
+	// KindMemory`, so every dialect inherited the FT-710's hardware
+	// finding — and because the outbound gate reaches this validator
+	// through validMWCommand, a second radio with a different P7 rule
+	// would have had its legitimate writes refused by this program's own
+	// gate. No claim is made that any other radio DOES differ; only that
+	// the FT-710's value is the FT-710's.
+	//
+	// Because d.writableSlot(m.Slot) above already guarantees memory XOR
+	// PMS, this single check also structurally rejects every OTHER Kind
+	// value for either slot kind — no separate validKindByte call is
+	// needed here. NewDialect has already checked that the policy byte is
+	// itself a documented P7 value.
+	if m.Kind != d.mwWriteKind {
+		return newParseError([]byte{m.Kind}, fmt.Sprintf("MW: Kind must be %q for both memory-channel and PMS slots (the FT-710's own value is KindMemory ('1'), HW-CONFIRMED 2026-07-13: PMS writes with KindPMS ('5') are REJECTED by the radio — docs/hardware-notes.md)", d.mwWriteKind))
 	}
 
 	// Mode is a raw byte alias (mode.go): never trust a caller-forged
@@ -110,8 +129,8 @@ func (d Dialect) validateMWFields(m MemoryData) error {
 		return newParseError([]byte{m.Mode.Wire()}, "MW: mode field (P6) must not be ModeUnset in a Set frame")
 	}
 
-	if !validClarHz(m.ClarHz) {
-		return newParseError([]byte(fmt.Sprintf("%d", m.ClarHz)), "MW: ClarHz must be a multiple of 10 Hz, magnitude <= 9990")
+	if !d.validClarHz(m.ClarHz) {
+		return newParseError([]byte(fmt.Sprintf("%d", m.ClarHz)), fmt.Sprintf("MW: ClarHz must be a multiple of %d Hz, magnitude <= %d", d.clar.StepHz, d.clar.MaxAbsHz))
 	}
 
 	if m.FreqHz == 0 || m.FreqHz > memFreqMax {

@@ -179,11 +179,16 @@ func (d Dialect) validMWCommand(frame []byte) bool {
 // Set: mtAnswerMinLen-mtAnswerMaxLen (7-19) bytes, "MT" prefix, a slot
 // mtSlotValid accepts (memory/PMS only — the same write-direction policy
 // BuildMTSet enforces), a valid display digit, and a tag body that passes
-// validMTTag — the same printable-ASCII-excluding-';' charset BuildMTSet
+// d.validMTTag — the same printable-ASCII-excluding-';' charset AND
+// per-dialect length bound (d.mt.TagMaxBytes, M9c-0 task 64) BuildMTSet
 // enforces. This is what makes a frame like "MT0011A\x00TX1;" (a hidden
 // NUL, no embedded ';') correctly rejected: the old prefix-plus-terminator
 // check saw one allowlisted prefix and one trailing ';' and let it
-// through; re-validating the tag body byte-for-byte does not.
+// through; re-validating the tag body byte-for-byte does not. It is also
+// what makes THIS DIALECT'S tag-length policy — not the FT-710's — the one
+// the gate enforces: d.validMTTag reads d.mt.TagMaxBytes off the receiver
+// this method was called on, so a dialect whose tag is narrower than 12
+// bytes has its own bound enforced here, not the FT-710's wider one.
 func (d Dialect) validMTCommand(frame []byte) bool {
 	if len(frame) == mtReadLen {
 		slot, err := d.ParseSlot(string(frame[2:5]))
@@ -207,7 +212,7 @@ func (d Dialect) validMTCommand(frame []byte) bool {
 		return false
 	}
 	tag := string(frame[6 : len(frame)-1])
-	return validMTTag(tag)
+	return d.validMTTag(tag)
 }
 
 // validMCCommand reports whether frame is a legal MC read or Set/Answer

@@ -2,6 +2,8 @@
 
 package cat
 
+import "sort"
+
 // slotSpace describes one radio family's memory slot numbering: which
 // 3-byte wire forms exist and what each means. DATA, not code, so a
 // second dialect is a different table rather than a different function.
@@ -32,14 +34,21 @@ type slotSpace struct {
 // ordinary test catches it — see seconddialect_test.go (Task 57), which
 // is the test that does.
 //
-// ONE LIVE EXCEPTION, deliberate and deferred to M9c: the MT tag width.
-// mtTagMaxBytes (mt.go) is a package const, read by BuildMTSet, by
-// ParseMTAnswer via mtAnswerMaxLen, and by the outbound gate's MT arm in
-// allowlist.go. It is NOT a bypassed seam — Dialect carries no field to
-// derive it from, so closing it means ADDING dialect data rather than
-// restoring a receiver, which is why it is M9c's and not this
-// milestone's. The unqualified form of the rule above ("every method …
-// must read this struct rather than a package-level global", full stop)
+// THE MT TAG WIDTH IS NO LONGER AN EXCEPTION. It was one, and this
+// comment described it as deferred until M9c-0 closed it: the width and
+// the empty-tag encoding are now Dialect.mt (MTPolicy), alongside
+// Dialect.clar (the clarifier step and range) and Dialect.mwWriteKind (the
+// P7 value a builder may emit). All three reach the OUTBOUND WRITE GATE,
+// which is why they were promoted while the pure frame offsets were not.
+//
+// What remains genuinely deferred is per-command FRAME SHAPE — the
+// offsets, lengths and field widths in memdata.go and the mt*Len constants
+// — plus Slot's predicates and Mode.String. Those are M9c's. The dividing
+// line is that a wrong assumption in the gate can authorise bytes that
+// reach a radio, whereas a wrong offset merely fails to parse.
+//
+// The unqualified form of the rule above ("every method … must read this
+// struct rather than a package-level global", full stop)
 // was an overclaim for exactly this family, found by the Codex per-commit
 // review on 26/07/2026 and scoped here rather than left standing.
 //
@@ -72,6 +81,45 @@ type Dialect struct {
 	exMembers  map[EXAddress]bool   // this dialect's OWN membership index
 	exByTriple map[[3]int]EXAddress // this dialect's OWN decimal-triple index
 	exP4Max    int                  // this dialect's OWN widest P4 answer field, derived from exItems
+
+	// modeByName is the inverse of modeNames, derived at construction.
+	// NewDialect rejects duplicate names, so it is total over this
+	// dialect's own table.
+	modeByName map[string]Mode
+
+	// mt, clar and mwWriteKind carry this dialect's own policy where the
+	// package once carried the FT-710's. Most of it was package constants
+	// read THROUGH a Dialect receiver — the exact shape this seam exists
+	// to eliminate — and all of that reaches the OUTBOUND WRITE GATE: mt
+	// through validMTCommand, clar through validateMWFields, and
+	// mwWriteKind through the same MW validator the builder uses. A wrong
+	// value there can authorise bytes that reach a radio, which is why
+	// they are dialect data and the pure frame offsets are not.
+	//
+	// MTPolicy.PadByte is the exception to that history: it was never a
+	// package constant and does not reach the gate. It exists because
+	// answer-side padding and the empty-tag encoding are different facts
+	// that happened to coincide for the FT-710, and conflating them
+	// destroyed data on any dialect where they do not.
+	mt          MTPolicy
+	clar        ClarifierPolicy
+	mwWriteKind byte
+}
+
+// ModeByName resolves a display name to this dialect's own mode nibble.
+//
+// It is the inverse of ModeName, and it exists so a write path can turn a
+// stored channel's mode string back into a wire byte WITHOUT consulting a
+// table of its own. Before it, core/driver/ft710 built a private reverse
+// map from its own modeTable, independent of the dialect — so a dialect
+// whose mode names differed had no effect on what got written, and
+// NewDialect's name-uniqueness rule protected nothing (Codex spec review,
+// finding 7).
+//
+// The zero value has no modes and reports false for everything.
+func (d Dialect) ModeByName(name string) (Mode, bool) {
+	m, ok := d.modeByName[name]
+	return m, ok
 }
 
 // FT710 is the Yaesu FT-710 dialect: the only configured one that exists.
@@ -89,6 +137,35 @@ var FT710 = Dialect{
 	exMembers:  buildEXMembers(exItemsGen),
 	exByTriple: buildEXByTriple(exItemsGen),
 	exP4Max:    maxEXP4Bytes(exItemsGen),
+	modeByName: buildModeByName(modeNames),
+
+	// The FT-710's own policy values. The tag width, clear byte, clarifier
+	// step/range and write kind were package constants until M9c-0;
+	// PadByte is new, and declares explicitly the space-padding this radio
+	// was previously assumed to share with every dialect.
+	// TestNewDialect_ReproducesFT710 pins that this literal and a
+	// config-built equivalent agree.
+	mt:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	clar:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	mwWriteKind: KindMemory,
+}
+
+// buildModeByName inverts a mode table. On a duplicate name the LAST
+// insertion in sorted-key order wins, deterministically — but NewDialect
+// rejects duplicates outright, so a constructed dialect never reaches that
+// case. The determinism matters only for literals built inside this
+// package, which bypass validation.
+func buildModeByName(names map[Mode]string) map[string]Mode {
+	out := make(map[string]Mode, len(names))
+	keys := make([]int, 0, len(names))
+	for m := range names {
+		keys = append(keys, int(m))
+	}
+	sort.Ints(keys)
+	for _, k := range keys {
+		out[names[Mode(k)]] = Mode(k)
+	}
+	return out
 }
 
 // buildEXMembers indexes items for membership tests.

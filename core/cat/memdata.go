@@ -48,9 +48,13 @@ type MemoryData struct {
 	// Hz, 9 digits zero-padded" -> max representable value 999,999,999.
 	FreqHz uint32
 
-	// ClarHz is the clarifier offset in Hz: signed, a multiple of 10,
-	// magnitude 0-9990. Reference P3: "clarifier: +/- then 4-digit offset
-	// 0000-9990 Hz".
+	// ClarHz is the clarifier offset in Hz: signed, and constrained by the
+	// DIALECT'S OWN clarifier policy (Dialect.clar) — a multiple of its
+	// step, within its range. The FT-710's policy is 10 Hz steps to
+	// +-9990 Hz, which is what Reference P3 documents ("clarifier: +/- then
+	// 4-digit offset 0000-9990 Hz"); a constructed dialect may declare
+	// another, and this package's own tests use a 1 Hz/9999 Hz peer. The
+	// 4-digit wire field bounds every dialect at 9999.
 	ClarHz int16
 
 	RxClar bool // Reference P4: "RX CLAR: 0 off, 1 on".
@@ -65,9 +69,13 @@ type MemoryData struct {
 	// byte, not a wrapped type like Mode/CTCSSState/Shift: unlike those,
 	// P7's semantics are NOT fully settled even after M5b. The
 	// write-direction PAIRING rule IS HW-CONFIRMED 2026-07-13 (M5b write
-	// trials, docs/hardware-notes.md) — every MW write, memory or PMS
-	// slot alike, must carry KindMemory ('1'); mw.go's validateMWFields
-	// enforces exactly this. But P7's full semantics stay partially
+	// trials, docs/hardware-notes.md) FOR THE FT-710 — every MW write to
+	// that radio, memory or PMS slot alike, must carry KindMemory ('1').
+	// Since M9c-0 that is DIALECT DATA (Dialect.mwWriteKind), not a
+	// universal rule: mw.go's validateMWFields enforces whichever value
+	// the receiver declares, and the FT-710's value is KindMemory because
+	// its hardware says so, not because the grammar requires it. But P7's
+	// full semantics stay partially
 	// murky: MEM channels have been observed reading BOTH '0' and '1'
 	// (front-panel-created), only '1' is writable, the '0' state is not
 	// recreatable via CAT, and '2'/'3'/'4' have never been sent or read
@@ -90,10 +98,18 @@ const (
 	// (documented placeholder — parsers must ACCEPT it as unset, builders
 	// reject)". This mirrors ModeUnset's '0' = "-" convention (mode.go):
 	// ParseMRAnswer accepts it as a structurally valid kind byte, but
-	// BuildMWSet must never emit it — and never can, because its Kind
-	// check (mw.go, validateMWFields) only ever accepts KindMemory, for
-	// ANY writable slot, so KindUnset is rejected there by construction,
-	// with no separate check required.
+	// BuildMWSet must never emit it — and never can, because NewDialect
+	// refuses it as a dialect's MWWriteKind (validMWWriteKindByte, which
+	// is deliberately narrower than this read-side predicate), so no
+	// constructed dialect can declare it as the value its builder writes.
+	// Before M9c-0's milestone review the two domains were the same and a
+	// dialect COULD declare it, emitting P7 '4' past its own gate.
+	//
+	// validateMWFields (mw.go) accepts THIS DIALECT'S OWN configured
+	// mwWriteKind for any writable slot — not KindMemory specifically.
+	// KindMemory is merely the FT-710's value. KindUnset is rejected there
+	// by construction whatever a dialect declares, because NewDialect will
+	// not let any dialect declare it in the first place.
 	KindUnset byte = '4'
 
 	// KindPMS is the P7 value the manual's own worked example implies for
@@ -205,22 +221,54 @@ func (s Shift) String() string {
 	return fmt.Sprintf("Shift(%#02x)", byte(s))
 }
 
-// clarMaxAbsHz/clarStepHz bound MemoryData.ClarHz. Reference P3: "4-digit
-// offset 0000-9990 Hz" (magnitude); brief: "10 Hz steps".
-const (
-	clarMaxAbsHz = 9990
-	clarStepHz   = 10
-)
-
-// validClarHz reports whether v is a legal clarifier value: a multiple of
-// clarStepHz Hz, with magnitude at most clarMaxAbsHz. Go's % operator
-// preserves the sign of the dividend, so this works correctly for negative
-// v without a separate abs() step.
-func validClarHz(v int16) bool {
-	if v < -clarMaxAbsHz || v > clarMaxAbsHz {
+// validClarHz reports whether v is a legal clarifier value UNDER THIS
+// DIALECT'S ClarifierPolicy (dialectconfig.go): a multiple of d.clar.StepHz
+// Hz, with magnitude at most d.clar.MaxAbsHz. Reference P3's "4-digit
+// offset 0000-9990 Hz" (magnitude) is the FT-710's OWN figure — see
+// FT710's clar literal (dialect.go) — not a package constant any more:
+// clarifier_test.go's peer dialect legally builds and admits clarifier
+// values (e.g. 9999 Hz, 1 Hz steps) the FT-710 rejects outright.
+//
+// Promoted from a package-level function reading two former package
+// constants (clarMaxAbsHz, clarStepHz) to a Dialect method: THE SEAM M9c-0
+// task 65 exists to close. mr.go's parseMemoryFrame and mw.go's
+// validateMWFields both reach the OUTBOUND WRITE GATE, so a hardwired
+// bound here would authorise, or refuse, bytes on the strength of another
+// radio's clarifier policy rather than this dialect's own.
+//
+// A StepHz below 1 (only reachable via a hand-built Dialect literal that
+// bypasses NewDialect's validation, e.g. the zero Dialect) reports false
+// rather than dividing by zero — consistent with the zero value's
+// documented fail-closed behaviour (dialect.go), not merely an accident of
+// avoiding a panic. Go's % operator preserves the sign of the dividend for
+// a positive step, so this works correctly for negative v without a
+// separate abs() step.
+func (d Dialect) validClarHz(v int16) bool {
+	if d.clar.StepHz < 1 {
 		return false
 	}
-	return v%clarStepHz == 0
+	// Arithmetic in int, NEVER narrowed to int16.
+	//
+	// This function took int16(d.clar.StepHz) until the M9c-0 milestone
+	// review (finding 1). The StepHz < 1 guard above looks like the
+	// defence and is not: the narrowing happened AFTER it, so a policy of
+	// StepHz 65536 — which passes that guard, and passed every clause of
+	// V10 — became int16(65536) == 0 and executed v % 0. Reproduced as a
+	// genuine "integer divide by zero" from a CONSTRUCTOR-APPROVED config,
+	// reachable through both BuildMWSet and AllowedCommand, so a caller
+	// could panic the outbound write gate.
+	//
+	// V10 now also bounds StepHz, which closes the same hole at
+	// construction. Both fixes are kept: this one makes the arithmetic
+	// correct for any value the type permits, rather than correct only for
+	// values some other function happened to filter.
+	iv, max, step := int(v), d.clar.MaxAbsHz, d.clar.StepHz
+	if iv < -max || iv > max {
+		return false
+	}
+	// Go's % preserves the sign of the dividend for a positive step, so
+	// this is correct for negative v without a separate abs().
+	return iv%step == 0
 }
 
 // allDigits reports whether every byte in b is an ASCII digit '0'-'9'

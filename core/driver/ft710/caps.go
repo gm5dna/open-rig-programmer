@@ -132,10 +132,22 @@ const (
 )
 
 // modeTable is the single source of truth pairing each selectable cat
-// mode with its display name, in wire-code order. caps Modes lists
-// derive from it and the write path's modeByName reverse lookup is
-// built from it, so the read path and the write path can never disagree
-// on a spelling — TestModes_MatchCatModeNames pins the round-trip.
+// mode with its display name, in wire-code order, for CAPABILITY
+// RENDERING (caps.Modes and the modeByName lookup below) ONLY.
+//
+// It is NOT consulted by the write path. Before task 67 (M9c-0),
+// buildWriteCommands (write.go) resolved a channel's Mode string through
+// modeByName, built from this table independently of any session's
+// dialect — so a dialect that renamed a mode had no effect on what got
+// written, and cat.Dialect's own name-uniqueness rule protected nothing
+// (Codex spec review, finding 7, recorded on cat.Dialect.ModeByName's own
+// doc comment). buildWriteCommands now resolves through
+// dialect.ModeByName instead — the SESSION's own dialect, copied from
+// whichever driver Opened it — so this table's names must still agree
+// with cat.FT710's: TestModeTable_MatchesFT710Dialect
+// (modebyname_test.go) pins that every name here resolves through
+// cat.FT710.ModeByName to the same cat.Mode, and TestModes_MatchCatModeNames
+// pins this table's round-trip against caps.Modes.
 //
 // The read path is s.dialect.ModeName (read.go's ReadChannel, rerouted
 // at M9b task 56), NOT cat.Mode.String: a rendered mode string is
@@ -171,8 +183,10 @@ var modeTable = []struct {
 	{"DATA-FM-N", cat.ModeDATAFMN},
 }
 
-// modeByName is the write path's display-name -> cat.Mode lookup, built
-// from modeTable (see its doc comment for the round-trip invariant).
+// modeByName is a capability-rendering display-name -> cat.Mode lookup,
+// built from modeTable (see its doc comment for the round-trip
+// invariant). The write path does NOT use it — see modeTable's doc
+// comment — it exists for TestModes_MatchCatModeNames' round-trip pin.
 var modeByName = buildModeByName()
 
 func buildModeByName() map[string]cat.Mode {

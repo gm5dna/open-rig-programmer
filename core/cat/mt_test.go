@@ -67,8 +67,8 @@ func TestBuildMTSet_EmptyTagEmitsClearForm(t *testing.T) {
 	if string(got) != want {
 		t.Errorf("BuildMTSet(empty tag) = %q, want %q (the all-spaces clear form)", got, want)
 	}
-	if len(mtClearTag) != mtTagMaxBytes {
-		t.Fatalf("mtClearTag is %d bytes, want %d (must fill the tag field exactly)", len(mtClearTag), mtTagMaxBytes)
+	if got, want := len(FT710.clearTagForm()), FT710.mt.TagMaxBytes; got != want {
+		t.Fatalf("mtClearTag is %d bytes, want %d (must fill the tag field exactly)", got, want)
 	}
 }
 
@@ -494,8 +494,8 @@ func FuzzParseMTAnswer(f *testing.F) {
 		if len(slot.Wire()) != 3 {
 			t.Fatalf("ParseMTAnswer(%q) succeeded with malformed Slot %q", frame, slot.Wire())
 		}
-		if len(tag) > mtTagMaxBytes {
-			t.Fatalf("ParseMTAnswer(%q) succeeded with tag %q longer than %d bytes", frame, tag, mtTagMaxBytes)
+		if len(tag) > FT710.mt.TagMaxBytes {
+			t.Fatalf("ParseMTAnswer(%q) succeeded with tag %q longer than %d bytes", frame, tag, FT710.mt.TagMaxBytes)
 		}
 	})
 }
