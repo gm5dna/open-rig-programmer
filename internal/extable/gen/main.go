@@ -63,6 +63,12 @@ func main() {
 
 	// A manual-only profile has no observation source; RenderGo requires the
 	// map to be empty for it, and a nil map is empty.
+	//
+	// This branches on ObservedCSV while RenderGo ENFORCES the regime on
+	// p.Observations — two proxies for one fact, safe only because Validate
+	// has already run (ParseCSV above validates p, as every extable API
+	// does) and forces the biconditional: ObservedCSV is non-empty iff
+	// Observations is ObservationsRequired.
 	var observed map[string]extable.Observed
 	if p.ObservedCSV != "" {
 		observedData, err := os.ReadFile(p.ObservedCSV)

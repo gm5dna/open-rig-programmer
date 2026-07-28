@@ -299,7 +299,7 @@ render into an `EXAddress` whose `Wire()` is seven digits (Codex finding
 | `internal/extable/extable.go` | `ParseCSV(p, data)`, `ParseObservedCSV(p, data)`, `RenderGo(p, rows, observed)`. Bounds, identity, package/type/import emission, `ExpectedRows` and the address range all come from `p`. `maxObservedWidth` is deleted. |
 | `internal/extable/gen/main.go` | `-profile ft710` replaces `-csv`/`-observed`/`-out`; those paths are profile data now. |
 | `core/cat/exinventory.go:5` | The `go:generate` directive shortens to match. |
-| `internal/extable/observe/main.go` | Its two `ParseCSV` call sites take the FT-710 profile. `textWidth` stays. |
+| `internal/extable/observe/main.go` | Its one `ParseCSV` call site (plus two in `main_test.go`) takes the FT-710 profile. `textWidth` stays. |
 | `internal/extable/observe/main_test.go:40,155` | Two further `ParseCSV` call sites (Codex finding 7 — absent from revision 1's list). |
 | `core/cat/exinventory_stale_test.go` | Profile argument threaded through its three `extable` calls. **Nothing else.** See below. |
 
