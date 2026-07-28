@@ -116,7 +116,7 @@ func TestParseCSV_Strictness(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := ParseCSV([]byte(tc.csv))
+			_, err := ParseCSV(withRows(FT710Profile(), 1), []byte(tc.csv))
 			if tc.wantErr && err == nil {
 				t.Fatalf("ParseCSV(%q): expected error, got nil", tc.csv)
 			}
@@ -132,7 +132,7 @@ func TestParseCSV_Strictness(t *testing.T) {
 func TestParseCSV_FieldsParsed(t *testing.T) {
 	// P4 carries a comma, so the field must be CSV-quoted.
 	csv := "03,01,05,OPERATION SETTING,GENERAL,CAT-1 RATE,\"0: 4800 bps, 1: 9600 bps\",1,false,801\n"
-	rows, err := ParseCSV([]byte(csv))
+	rows, err := ParseCSV(withRows(FT710Profile(), 1), []byte(csv))
 	if err != nil {
 		t.Fatalf("ParseCSV: %v", err)
 	}
@@ -165,11 +165,11 @@ func TestRenderGo_Deterministic(t *testing.T) {
 		"010102": {ReadWidth: 1, ReadShape: "numeric"},
 	}
 
-	first, err := RenderGo(rows, observed)
+	first, err := RenderGo(withRows(FT710Profile(), 3), rows, observed)
 	if err != nil {
 		t.Fatalf("RenderGo (first): %v", err)
 	}
-	second, err := RenderGo(rows, observed)
+	second, err := RenderGo(withRows(FT710Profile(), 3), rows, observed)
 	if err != nil {
 		t.Fatalf("RenderGo (second): %v", err)
 	}
@@ -213,7 +213,7 @@ func TestRenderGo_Deterministic(t *testing.T) {
 const observedBody = "01,01,01,3,signed\n01,03,21,3,numeric\n"
 
 func TestParseObservedCSV_Valid(t *testing.T) {
-	got, err := ParseObservedCSV([]byte("# provenance comment\n" + observedBody))
+	got, err := ParseObservedCSV(FT710Profile(), []byte("# provenance comment\n"+observedBody))
 	if err != nil {
 		t.Fatalf("ParseObservedCSV: %v", err)
 	}
@@ -251,7 +251,7 @@ func TestParseObservedCSV_Strictness(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := ParseObservedCSV([]byte(tc.csv)); err == nil {
+			if _, err := ParseObservedCSV(FT710Profile(), []byte(tc.csv)); err == nil {
 				t.Error("ParseObservedCSV accepted a malformed artefact; want an error")
 			}
 		})
@@ -262,12 +262,18 @@ func TestParseObservedCSV_Strictness(t *testing.T) {
 // set-equal in both directions: an inventory row with no observation, and
 // an observation for an address the inventory lacks, are each refused.
 // Silence in either direction would leave ObservedReadWidth quietly zero.
+//
+// The first two subtests vary CARDINALITY, so the len(observed) != len(rows)
+// gate alone refuses both and the per-address lookup inside the row loop is
+// never the thing that says no. The third holds cardinality equal and moves
+// the address instead: only the membership check can refuse it, so deleting
+// that check now turns the suite red.
 func TestRenderGo_RequiresExactObservationCoverage(t *testing.T) {
 	rows := []Row{
 		{P1: 1, P2: 1, P3: 1, P1Label: "RADIO SETTING", P2Label: "MODE SSB", Name: "AF TREBLE GAIN", P4: "-20 - +10", Digits: 3, Text: false, ManualLine: 646},
 	}
 	t.Run("missing observation", func(t *testing.T) {
-		if _, err := RenderGo(rows, map[string]Observed{}); err == nil {
+		if _, err := RenderGo(withRows(FT710Profile(), 1), rows, map[string]Observed{}); err == nil {
 			t.Error("RenderGo accepted an inventory row with no observation; want an error")
 		}
 	})
@@ -276,8 +282,19 @@ func TestRenderGo_RequiresExactObservationCoverage(t *testing.T) {
 			"010101": {ReadWidth: 3, ReadShape: "signed"},
 			"999999": {ReadWidth: 1, ReadShape: "numeric"},
 		}
-		if _, err := RenderGo(rows, observed); err == nil {
+		if _, err := RenderGo(withRows(FT710Profile(), 1), rows, observed); err == nil {
 			t.Error("RenderGo accepted an observation for an address the inventory lacks; want an error")
+		}
+	})
+	t.Run("wrong address at equal cardinality", func(t *testing.T) {
+		// One row, one observation, ExpectedRows 1: both counting gates are
+		// satisfied and the sets are still disjoint. The generated item would
+		// otherwise carry the absence sentinels of a model that HAS hardware.
+		observed := map[string]Observed{
+			"999999": {ReadWidth: 1, ReadShape: "numeric"},
+		}
+		if _, err := RenderGo(withRows(FT710Profile(), 1), rows, observed); err == nil {
+			t.Error("RenderGo accepted an observation set of the right size for the wrong address; want an error")
 		}
 	})
 }
@@ -290,7 +307,7 @@ func TestRenderGo_EmitsObservedFields(t *testing.T) {
 		{P1: 1, P2: 3, P3: 21, P1Label: "RADIO SETTING", P2Label: "MODE FM", Name: "TONE FREQ", P4: "00: 67.0 - 49: 254.1Hz", Digits: 2, Text: false, ManualLine: 711},
 	}
 	observed := map[string]Observed{"010321": {ReadWidth: 3, ReadShape: "numeric"}}
-	out, err := RenderGo(rows, observed)
+	out, err := RenderGo(withRows(FT710Profile(), 1), rows, observed)
 	if err != nil {
 		t.Fatalf("RenderGo: %v", err)
 	}
@@ -299,4 +316,268 @@ func TestRenderGo_EmitsObservedFields(t *testing.T) {
 			t.Errorf("generated output does not contain %q — both the manual's width and the observed read width must survive", want)
 		}
 	}
+}
+
+// TestParseCSV_BoundsComeFromProfile proves each digit bound is READ from
+// the profile rather than hardcoded, by asserting rows that are legal under
+// one profile and illegal under the other — in both directions. A test that
+// only checked one direction would pass with the bounds still constant.
+func TestParseCSV_BoundsComeFromProfile(t *testing.T) {
+	const (
+		text12  = "04,01,01,DISPLAY SETTING,DISPLAY,MY CALL,Up to 12 characters,12,true,879\n"
+		text8   = "04,01,01,DISPLAY SETTING,DISPLAY,MY CALL,Up to 8 characters,8,true,879\n"
+		digits1 = "01,01,01,RADIO SETTING,MODE SSB,AF TREBLE GAIN,x,1,false,646\n"
+		digits6 = "01,01,01,RADIO SETTING,MODE SSB,AF TREBLE GAIN,x,6,false,646\n"
+	)
+	ft := withRows(FT710Profile(), 1)
+	fx := withRows(fixtureRequired, 1)
+
+	cases := []struct {
+		name    string
+		profile Profile
+		csv     string
+		wantErr bool
+	}{
+		{"text width 12 under FT-710", ft, text12, false},
+		{"text width 12 under fixture", fx, text12, true},
+		{"text width 8 under fixture", fx, text8, false},
+		{"text width 8 under FT-710", ft, text8, true},
+		{"digits 1 under FT-710", ft, digits1, false},
+		{"digits 1 under fixture", fx, digits1, true},
+		{"digits 6 under fixture", fx, digits6, false},
+		{"digits 6 under FT-710", ft, digits6, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := ParseCSV(tc.profile, []byte(tc.csv))
+			if tc.wantErr && err == nil {
+				t.Error("ParseCSV accepted a row its profile forbids; want an error")
+			}
+			if !tc.wantErr && err != nil {
+				t.Errorf("ParseCSV rejected a row its profile permits: %v", err)
+			}
+		})
+	}
+}
+
+// TestParseCSV_AddressComponentRange closes a gate that used to exist only
+// by accident. ParseCSV never range-checked P1/P2/P3; the observation CSV's
+// exactly-two-digits rule rejected the matching row instead. Under
+// ObservationsAbsent there is no observation CSV, so a component of 100
+// would render into an EXAddress whose Wire() is seven digits.
+func TestParseCSV_AddressComponentRange(t *testing.T) {
+	cases := []struct {
+		name    string
+		csv     string
+		wantErr bool
+	}{
+		{"99 accepted", "99,01,01,RADIO SETTING,MODE SSB,AF TREBLE GAIN,x,3,false,646\n", false},
+		{"P1 100 rejected", "100,01,01,RADIO SETTING,MODE SSB,AF TREBLE GAIN,x,3,false,646\n", true},
+		{"P2 100 rejected", "01,100,01,RADIO SETTING,MODE SSB,AF TREBLE GAIN,x,3,false,646\n", true},
+		{"P3 100 rejected", "01,01,100,RADIO SETTING,MODE SSB,AF TREBLE GAIN,x,3,false,646\n", true},
+		{"negative P1 rejected", "-1,01,01,RADIO SETTING,MODE SSB,AF TREBLE GAIN,x,3,false,646\n", true},
+	}
+	// fixtureAbsent, because the motivating exposure is the manual-only
+	// regime, where no observation-side two-digit rule exists to catch a
+	// bad component indirectly. (Its digit bounds 2..6 admit these rows.)
+	p := withRows(fixtureAbsent, 1)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := ParseCSV(p, []byte(tc.csv))
+			if tc.wantErr && err == nil {
+				t.Error("ParseCSV accepted an out-of-range address component; want an error")
+			}
+			if !tc.wantErr && err != nil {
+				t.Errorf("ParseCSV rejected a valid address: %v", err)
+			}
+		})
+	}
+}
+
+// TestParseCSV_RefusesInvalidProfile pins that the API validates its own
+// profile: the registry cannot vouch for a profile that never went through
+// it.
+//
+// The invalidity is a BLANK MODEL, and the CSV is a row the fixture's own
+// 2..6 digit bounds accept. ParseCSV's own logic never consults Model — it
+// reads TextWidth, MinDigits and MaxDigits, and none of its error strings
+// name the model — so this call succeeds the moment the p.Validate() call
+// is deleted. That is the point: an earlier version passed Profile{}, whose
+// zero bounds refuse every row downstream of the validation, so the test
+// stayed green with the validation removed and pinned nothing.
+func TestParseCSV_RefusesInvalidProfile(t *testing.T) {
+	p := withRows(fixtureRequired, 1)
+	p.Model = ""
+	if _, err := ParseCSV(p, []byte(goodRow)); err == nil {
+		t.Error("ParseCSV accepted a profile with a blank Model; want a validation error")
+	}
+}
+
+// TestParseObservedCSV_CeilingComesFromProfile is the test that kills
+// revision 1's derived ceiling. The fixture's MaxDigits is 6 and its
+// TextWidth is 8, so a ceiling still computed as max(MaxDigits, TextWidth)
+// would be 8 and would wrongly REJECT a width of 9. The rejection case
+// alone passes under either implementation and proves nothing — the pair is
+// the point.
+func TestParseObservedCSV_CeilingComesFromProfile(t *testing.T) {
+	cases := []struct {
+		name    string
+		profile Profile
+		csv     string
+		wantErr bool
+	}{
+		{"width 9 under the fixture's ceiling of 9", fixtureRequired, "01,01,01,9,numeric\n", false},
+		{"width 10 above the fixture's ceiling of 9", fixtureRequired, "01,01,01,10,numeric\n", true},
+		{"width 10 under the FT-710's ceiling of 12", FT710Profile(), "01,01,01,10,numeric\n", false},
+		{"width 13 above the FT-710's ceiling of 12", FT710Profile(), "01,01,01,13,numeric\n", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := ParseObservedCSV(tc.profile, []byte(tc.csv))
+			if tc.wantErr && err == nil {
+				t.Error("ParseObservedCSV accepted a width above its profile's ceiling; want an error")
+			}
+			if !tc.wantErr && err != nil {
+				t.Errorf("ParseObservedCSV rejected a width its profile permits: %v", err)
+			}
+		})
+	}
+}
+
+// TestParseObservedCSV_RefusesInvalidProfile mirrors ParseCSV's pin, and
+// bites for the same reason: a blank Model is invalid, yet the widths in
+// observedBody are 3, comfortably inside the fixture's ceiling of 9, and
+// nothing in ParseObservedCSV reads Model. Delete the p.Validate() call and
+// this parse succeeds.
+func TestParseObservedCSV_RefusesInvalidProfile(t *testing.T) {
+	p := withRows(fixtureRequired, 1)
+	p.Model = ""
+	if _, err := ParseObservedCSV(p, []byte(observedBody)); err == nil {
+		t.Error("ParseObservedCSV accepted a profile with a blank Model; want a validation error")
+	}
+}
+
+// TestRenderGo_IdentityComesFromProfile proves the generated file's package
+// clause, import, variable name and type qualification are all read from the
+// profile. The FT-710 must emit none of the qualified forms; the fixture
+// must emit all of them.
+func TestRenderGo_IdentityComesFromProfile(t *testing.T) {
+	rows := []Row{
+		{P1: 1, P2: 1, P3: 1, P1Label: "RADIO SETTING", P2Label: "MODE SSB", Name: "AF TREBLE GAIN", P4: "-20 - +10", Digits: 3, Text: false, ManualLine: 646},
+	}
+	observed := map[string]Observed{"010101": {ReadWidth: 3, ReadShape: "signed"}}
+
+	t.Run("fixture emits qualified identity", func(t *testing.T) {
+		out, err := RenderGo(withRows(fixtureRequired, 1), rows, observed)
+		if err != nil {
+			t.Fatalf("RenderGo: %v", err)
+		}
+		for _, want := range []string{
+			"package ftdx10",
+			`import cat "github.com/gm5dna/open-rig-programmer/core/cat"`,
+			"var exItems = []cat.EXItem{",
+			"{Addr: cat.EXAddress{",
+			"// exItems is the fixture inventory.",
+			"// Code generated by internal/extable/gen from fixture.csv and",
+			"// fixture-observed.csv. DO NOT EDIT.",
+		} {
+			if !strings.Contains(string(out), want) {
+				t.Errorf("fixture output missing %q", want)
+			}
+		}
+	})
+
+	t.Run("FT-710 emits unqualified identity", func(t *testing.T) {
+		out, err := RenderGo(withRows(FT710Profile(), 1), rows, observed)
+		if err != nil {
+			t.Fatalf("RenderGo: %v", err)
+		}
+		s := string(out)
+		for _, want := range []string{"package cat", "var exItemsGen = []EXItem{", "{Addr: EXAddress{"} {
+			if !strings.Contains(s, want) {
+				t.Errorf("FT-710 output missing %q", want)
+			}
+		}
+		for _, unwanted := range []string{"cat.EXItem", "cat.EXAddress", "import "} {
+			if strings.Contains(s, unwanted) {
+				t.Errorf("FT-710 output must not contain %q", unwanted)
+			}
+		}
+	})
+}
+
+// TestRenderGo_RefusesInvalidProfile mirrors the parsers' pins. The inputs
+// are a complete render under the required fixture — one row, one matching
+// observation, ExpectedRows 1 — so every gate downstream of the validation
+// is satisfied and only the blank Model stands between this call and a
+// successful render. RenderGo names p.Model in error text but never reads
+// it otherwise, so deleting the p.Validate() call turns this into a
+// successful render and the test red.
+func TestRenderGo_RefusesInvalidProfile(t *testing.T) {
+	p := withRows(fixtureRequired, 1)
+	p.Model = ""
+	rows := []Row{
+		{P1: 1, P2: 1, P3: 1, P1Label: "RADIO SETTING", P2Label: "MODE SSB", Name: "AF TREBLE GAIN", P4: "-20 - +10", Digits: 3, Text: false, ManualLine: 646},
+	}
+	observed := map[string]Observed{"010101": {ReadWidth: 3, ReadShape: "signed"}}
+	if _, err := RenderGo(p, rows, observed); err == nil {
+		t.Error("RenderGo accepted a profile with a blank Model; want a validation error")
+	}
+}
+
+// TestRenderGo_ObservationRegimes pins both regimes, including the states
+// revision 1 of the spec wrongly claimed were impossible.
+func TestRenderGo_ObservationRegimes(t *testing.T) {
+	row := Row{P1: 1, P2: 1, P3: 1, P1Label: "RADIO SETTING", P2Label: "MODE SSB", Name: "AF TREBLE GAIN", P4: "-20 - +10", Digits: 3, Text: false, ManualLine: 646}
+	obs := map[string]Observed{"010101": {ReadWidth: 3, ReadShape: "signed"}}
+
+	t.Run("absent regime refuses a non-empty map", func(t *testing.T) {
+		if _, err := RenderGo(withRows(fixtureAbsent, 1), []Row{row}, obs); err == nil {
+			t.Error("RenderGo accepted observations under ObservationsAbsent; want an error")
+		}
+	})
+	t.Run("absent regime accepts an empty map", func(t *testing.T) {
+		if _, err := RenderGo(withRows(fixtureAbsent, 1), []Row{row}, nil); err != nil {
+			t.Errorf("RenderGo refused a valid manual-only render: %v", err)
+		}
+	})
+	t.Run("jointly truncated sources are refused", func(t *testing.T) {
+		// Both sides consistently one row short. Nothing in the set-equality
+		// check can see this: the two supplied sets agree with each other.
+		if _, err := RenderGo(withRows(FT710Profile(), 2), []Row{row}, obs); err == nil {
+			t.Error("RenderGo accepted an inventory one row short of ExpectedRows; want an error")
+		}
+	})
+	t.Run("both sources empty are refused", func(t *testing.T) {
+		if _, err := RenderGo(FT710Profile(), nil, map[string]Observed{}); err == nil {
+			t.Error("RenderGo accepted two empty sources; want an error")
+		}
+		if _, err := RenderGo(fixtureAbsent, nil, nil); err == nil {
+			t.Error("RenderGo accepted an empty manual-only inventory; want an error")
+		}
+	})
+	t.Run("exact row count is accepted", func(t *testing.T) {
+		if _, err := RenderGo(withRows(FT710Profile(), 1), []Row{row}, obs); err != nil {
+			t.Errorf("RenderGo refused a complete inventory: %v", err)
+		}
+	})
+	t.Run("manual-only profile renders and names one source", func(t *testing.T) {
+		// Moved here from Task 4 by plan review: this render can only
+		// succeed once THIS task's regime switch replaces the old
+		// unconditional coverage rule.
+		out, err := RenderGo(withRows(fixtureAbsent, 1), []Row{row}, nil)
+		if err != nil {
+			t.Fatalf("RenderGo: %v", err)
+		}
+		s := string(out)
+		if !strings.Contains(s, "// Code generated by internal/extable/gen from fixture.csv. DO NOT EDIT.") {
+			t.Error("manual-only output should name exactly one source CSV")
+		}
+		if strings.Contains(s, "fixture-observed.csv") {
+			t.Error("manual-only output must not name an observation CSV it has none of")
+		}
+		if !strings.Contains(s, `ObservedReadWidth: 0`) || !strings.Contains(s, `ObservedReadShape: ""`) {
+			t.Error("manual-only rows must render the documented absence sentinels")
+		}
+	})
 }

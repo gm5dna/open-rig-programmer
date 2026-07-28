@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Package extable transcodes the FT-710 CAT manual's Table 2 (the "MENU
-// Chart") into the generated Go inventory (core/cat/exinventory_gen.go),
-// joining two committed sources of different provenance:
+// Package extable transcodes a radio model's menu chart (for the FT-710, the
+// CAT manual's Table 2) into that model's generated Go inventory, under a
+// per-model Profile, joining two committed sources of different provenance:
 //
 //   - core/cat/table2.csv — the manual TRANSCRIPTION: what Yaesu's chart
 //     says, typos included, never edited from hardware.
@@ -42,10 +42,11 @@ const numColumns = 10
 // Row is one transcribed Table 2 entry. P1/P2/P3 are the decimal (P1,P2,P3)
 // triple; the *Label and Name fields are verbatim manual text; P4 is the
 // manual's parameter-description column (retained for the audit trail, not
-// emitted into the generated Go); Digits is the manual's Digits column
-// (1..4, or 12 for the six text items); Text marks those text items; and
-// ManualLine is the source line in the manual extract the row was
-// transcribed from.
+// emitted into the generated Go); Digits is the manual's Digits column:
+// within the profile's MinDigits..MaxDigits for a numeric field, or exactly
+// the profile's TextWidth for a text item (1..4 and 12 respectively for the
+// FT-710); Text marks those text items; and ManualLine is the source line
+// in the manual extract the row was transcribed from.
 type Row struct {
 	P1, P2, P3 int
 	P1Label    string
@@ -57,15 +58,24 @@ type Row struct {
 	ManualLine int
 }
 
-// ParseCSV decodes the Table 2 CSV. Lines beginning with '#' are treated as
-// provenance comments and skipped. Parsing is deliberately strict: a
-// malformed row (wrong column count, unparseable integer/boolean fields), a
-// blank (empty or whitespace-only) P1Label, P2Label, Name, or P4, a
-// non-positive ManualLine, a duplicate (P1,P2,P3) triple, a non-text row
-// whose Digits is not 1..4, or a text row whose Digits is not 12 each fail
-// with a non-nil error rather than being guessed at. The returned rows
+// ParseCSV decodes the Table 2 CSV against the model profile p, which it
+// validates first. Lines beginning with '#' are treated as provenance
+// comments and skipped. Parsing is deliberately strict: a malformed row
+// (wrong column count, unparseable integer/boolean fields), a blank (empty
+// or whitespace-only) P1Label, P2Label, Name, or P4, a non-positive
+// ManualLine, a duplicate (P1,P2,P3) triple, a non-text row whose Digits
+// falls outside the profile's MinDigits..MaxDigits, a text row whose Digits
+// is not the profile's TextWidth, an address component outside 0..99 each
+// fail with a non-nil error rather than being guessed at. The returned rows
 // preserve CSV order.
-func ParseCSV(data []byte) ([]Row, error) {
+func ParseCSV(p Profile, data []byte) ([]Row, error) {
+	// The registry validates registered profiles, but nothing forces a
+	// caller through the registry — the test fixtures do not go through it.
+	// An unvalidated profile here would let omitted digit bounds be READ as
+	// bounds (Codex plan review, finding 4).
+	if err := p.Validate(); err != nil {
+		return nil, err
+	}
 	r := csv.NewReader(bytes.NewReader(data))
 	r.Comment = '#'
 	r.FieldsPerRecord = numColumns
@@ -77,7 +87,7 @@ func ParseCSV(data []byte) ([]Row, error) {
 	rows := make([]Row, 0, len(records))
 	seen := make(map[[3]int]bool, len(records))
 	for i, rec := range records {
-		row, err := parseRecord(rec)
+		row, err := parseRecord(p, rec)
 		if err != nil {
 			return nil, fmt.Errorf("extable: CSV data row %d: %w", i+1, err)
 		}
@@ -92,7 +102,7 @@ func ParseCSV(data []byte) ([]Row, error) {
 }
 
 // parseRecord decodes one already-length-checked CSV record.
-func parseRecord(rec []string) (Row, error) {
+func parseRecord(p Profile, rec []string) (Row, error) {
 	var row Row
 	var err error
 	if row.P1, err = strconv.Atoi(rec[0]); err != nil {
@@ -103,6 +113,11 @@ func parseRecord(rec []string) (Row, error) {
 	}
 	if row.P3, err = strconv.Atoi(rec[2]); err != nil {
 		return Row{}, fmt.Errorf("bad P3 %q: %w", rec[2], err)
+	}
+	for i, v := range []int{row.P1, row.P2, row.P3} {
+		if v < 0 || v > 99 {
+			return Row{}, fmt.Errorf("address component P%d must be 0..99, got %d", i+1, v)
+		}
 	}
 	row.P1Label = rec[3]
 	row.P2Label = rec[4]
@@ -133,14 +148,14 @@ func parseRecord(rec []string) (Row, error) {
 		return Row{}, fmt.Errorf("manual_line must be > 0, got %d", row.ManualLine)
 	}
 
-	// Digits/Text consistency: the six text items carry Digits 12 (the max
-	// P4 byte width); every other item is a numeric field of 1..4 digits.
+	// Digits/Text consistency: a text item carries exactly this radio's text
+	// width; every other item is a numeric field within its digit bounds.
 	if row.Text {
-		if row.Digits != 12 {
-			return Row{}, fmt.Errorf("text row (%s) must have digits 12, got %d", row.Name, row.Digits)
+		if row.Digits != p.TextWidth {
+			return Row{}, fmt.Errorf("text row (%s) must have digits %d, got %d", row.Name, p.TextWidth, row.Digits)
 		}
-	} else if row.Digits < 1 || row.Digits > 4 {
-		return Row{}, fmt.Errorf("non-text row (%s) digits must be 1..4, got %d", row.Name, row.Digits)
+	} else if row.Digits < p.MinDigits || row.Digits > p.MaxDigits {
+		return Row{}, fmt.Errorf("non-text row (%s) digits must be %d..%d, got %d", row.Name, p.MinDigits, p.MaxDigits, row.Digits)
 	}
 	return row, nil
 }
@@ -148,10 +163,6 @@ func parseRecord(rec []string) (Row, error) {
 // observedColumns is the fixed observation CSV column count:
 // p1,p2,p3,observed_read_width,observed_read_shape.
 const observedColumns = 5
-
-// maxObservedWidth is the largest P4 width any EX item can have (the
-// 12-byte Text items). A wider observation means a malformed artefact.
-const maxObservedWidth = 12
 
 // Observed is one address's M8c hardware READ observation: the P4 wire
 // width the radio answered with, and that answer's shape class
@@ -167,18 +178,29 @@ type Observed struct {
 	ReadShape string
 }
 
-// ParseObservedCSV decodes the hardware observation CSV
-// (core/cat/table2-observed.csv) into observations keyed by six-digit wire
+// ParseObservedCSV decodes a model's hardware observation CSV — for the
+// FT-710, core/cat/table2-observed.csv, but the path is the profile's
+// ObservedCSV, not this one — into observations keyed by six-digit wire
 // address, e.g. "010321". Lines beginning with '#' are provenance comments
 // and are skipped, as in ParseCSV.
 //
 // Parsing is strict for privacy as much as correctness: each address
-// component must be exactly two digits, each width an integer in
-// 1..maxObservedWidth, and each shape one of the three known classes, so a
-// row cannot carry free text. Duplicates are rejected. Error text names the
-// row and address only — never another field — so a malformed artefact
-// cannot leak captured content through a build log.
-func ParseObservedCSV(data []byte) (map[string]Observed, error) {
+// component must be exactly two digits, each width an integer in 1..the
+// profile's MaxObservedWidth, and each shape one of the three known
+// classes, so a row cannot carry free text. Duplicates are rejected. Error
+// text names the row and address only — never another field — so a
+// malformed artefact cannot leak captured content through a build log.
+//
+// That bound is hardware-evidence policy and is deliberately independent of
+// the manual-schema widths in MinDigits/MaxDigits/TextWidth — the two
+// categories can disagree, as table2-corrections.csv records.
+func ParseObservedCSV(p Profile, data []byte) (map[string]Observed, error) {
+	// Same self-validation as ParseCSV: nothing forces a caller through the
+	// registry, and an unvalidated zero MaxObservedWidth would refuse every
+	// width rather than the right ones.
+	if err := p.Validate(); err != nil {
+		return nil, err
+	}
 	r := csv.NewReader(bytes.NewReader(data))
 	r.Comment = '#'
 	r.FieldsPerRecord = observedColumns
@@ -196,8 +218,8 @@ func ParseObservedCSV(data []byte) (map[string]Observed, error) {
 		}
 		addr := rec[0] + rec[1] + rec[2]
 		width, err := strconv.Atoi(rec[3])
-		if err != nil || width < 1 || width > maxObservedWidth {
-			return nil, fmt.Errorf("extable: observation row %d (%s): observed_read_width must be an integer in 1..%d", i+1, addr, maxObservedWidth)
+		if err != nil || width < 1 || width > p.MaxObservedWidth {
+			return nil, fmt.Errorf("extable: observation row %d (%s): observed_read_width must be an integer in 1..%d", i+1, addr, p.MaxObservedWidth)
 		}
 		switch rec[4] {
 		case "numeric", "signed", "text":
@@ -220,21 +242,53 @@ func isTwoDigits(s string) bool {
 	return s[0] >= '0' && s[0] <= '9' && s[1] >= '0' && s[1] <= '9'
 }
 
-// RenderGo renders rows as the core/cat generated inventory file
-// (exinventory_gen.go), joined with the hardware READ observations keyed by
-// wire address. The output is deterministic — rows are sorted by (P1,P2,P3)
-// before emission and the result is run through go/format, so two calls on
-// equal input produce byte-identical, gofmt-clean output. The audit-only P4
-// column is intentionally NOT emitted; each item's manual line is preserved
-// as a trailing comment.
+// RenderGo renders rows as the profile's generated inventory file, joined
+// with the hardware READ observations keyed by wire address. The output is
+// deterministic — rows are sorted by (P1,P2,P3) before emission and the
+// result is run through go/format, so two calls on equal input produce
+// byte-identical, gofmt-clean output. The audit-only P4 column is
+// intentionally NOT emitted; each item's manual line is preserved as a
+// trailing comment.
 //
-// The join is set-equal in BOTH directions: an inventory row with no
-// observation, or an observation for an address the inventory does not
-// have, is an error. Neither is a case to paper over with a zero value —
-// the artefact is meant to be a complete sweep of exactly this inventory.
-func RenderGo(rows []Row, observed map[string]Observed) ([]byte, error) {
-	if len(observed) != len(rows) {
-		return nil, fmt.Errorf("extable: %d observations for %d inventory rows — the observation CSV must cover the inventory exactly", len(observed), len(rows))
+// The profile declares which of two observation regimes applies. Under
+// ObservationsRequired the join is set-equal in BOTH directions: an
+// inventory row with no observation, or an observation for an address the
+// inventory does not have, is an error. Neither is a case to paper over
+// with a zero value — the artefact is meant to be a complete sweep of
+// exactly this inventory. Under ObservationsAbsent no hardware exists for
+// the model, so the observation map must be EMPTY rather than partial, and
+// every row renders the absence sentinels ObservedReadWidth 0 and
+// ObservedReadShape "" that core/cat's EXItem already documents.
+//
+// Both regimes compare the two SUPPLIED sets against each other only, so
+// neither can see a jointly truncated pair of sources. The profile's
+// ExpectedRows is therefore checked first: the inventory must carry exactly
+// that many rows, which is what makes deleting the same address from both
+// CSVs — or emptying both — a refusal rather than a smaller happy render.
+func RenderGo(p Profile, rows []Row, observed map[string]Observed) ([]byte, error) {
+	// Self-validation, as in both parsers: a caller with an unvalidated
+	// profile must get a refusal, not a plausible wrong file.
+	if err := p.Validate(); err != nil {
+		return nil, err
+	}
+	// Completeness first. Neither regime below can detect a JOINTLY
+	// truncated pair of sources: RenderGo compares the two supplied sets
+	// against each other, so deleting the same address from both — or
+	// emptying both — would otherwise render happily.
+	if len(rows) != p.ExpectedRows {
+		return nil, fmt.Errorf("extable: profile %s: parsed %d inventory rows, want exactly %d — a source is incomplete", p.Model, len(rows), p.ExpectedRows)
+	}
+	switch p.Observations {
+	case ObservationsRequired:
+		if len(observed) != len(rows) {
+			return nil, fmt.Errorf("extable: profile %s: %d observations for %d inventory rows — the observation CSV must cover the inventory exactly", p.Model, len(observed), len(rows))
+		}
+	case ObservationsAbsent:
+		if len(observed) != 0 {
+			return nil, fmt.Errorf("extable: profile %s declares no hardware observations, but %d were supplied", p.Model, len(observed))
+		}
+	default:
+		return nil, fmt.Errorf("extable: profile %s: ObservationPolicy %v must be set explicitly", p.Model, p.Observations)
 	}
 	sorted := make([]Row, len(rows))
 	copy(sorted, rows)
@@ -251,25 +305,48 @@ func RenderGo(rows []Row, observed map[string]Observed) ([]byte, error) {
 
 	var buf bytes.Buffer
 	buf.WriteString("// SPDX-License-Identifier: GPL-3.0-or-later\n\n")
-	buf.WriteString("// Code generated by internal/extable/gen from table2.csv and\n")
-	buf.WriteString("// table2-observed.csv. DO NOT EDIT.\n\n")
-	buf.WriteString("package cat\n\n")
-	buf.WriteString("// exItemsGen is the EX address inventory, sorted by (P1,P2,P3), built from\n")
-	buf.WriteString("// TWO sources of different provenance: the manual transcription in\n")
-	buf.WriteString("// table2.csv (the FT-710 CAT manual's Table 2 \"MENU Chart\"), and the M8c\n")
-	buf.WriteString("// hardware READ observations in table2-observed.csv (what one radio\n")
-	buf.WriteString("// answered — see that file's header for the scope). Regenerate with\n")
-	buf.WriteString("// `go generate ./core/cat`; do not edit by hand.\n")
-	buf.WriteString("var exItemsGen = []EXItem{\n")
+	// The generated-by marker names the profile's own sources. It is split
+	// across two physical lines for a two-source profile because that is how
+	// the FT-710's committed file has always been written; no physical line
+	// matches Go's ^// Code generated .* DO NOT EDIT\.$ convention, and it
+	// never has. Byte identity of the committed artefact is the acceptance
+	// bar for M9c-2, so the non-conformance is preserved deliberately rather
+	// than fixed here.
+	//
+	// The regime is branched on ObservedCSV here while it is ENFORCED on
+	// p.Observations above — two proxies for one fact, safe only because
+	// Validate runs first and forces the biconditional (ObservedCSV is
+	// non-empty iff Observations is ObservationsRequired).
+	if p.ObservedCSV != "" {
+		fmt.Fprintf(&buf, "// Code generated by internal/extable/gen from %s and\n// %s. DO NOT EDIT.\n\n", p.ManualCSV, p.ObservedCSV)
+	} else {
+		fmt.Fprintf(&buf, "// Code generated by internal/extable/gen from %s. DO NOT EDIT.\n\n", p.ManualCSV)
+	}
+	fmt.Fprintf(&buf, "package %s\n\n", p.Package)
+	// Under TypesImported the type qualifier IS the import alias, emitted
+	// explicitly on the import — one string, so qualifier and import cannot
+	// drift apart (Codex plan review, finding 3).
+	qual := ""
+	if p.Types == TypesImported {
+		qual = p.ImportAlias + "."
+		fmt.Fprintf(&buf, "import %s %s\n\n", p.ImportAlias, strconv.Quote(p.ImportPath))
+	}
+	for _, l := range p.DocLines {
+		fmt.Fprintf(&buf, "// %s\n", l)
+	}
+	fmt.Fprintf(&buf, "var %s = []%sEXItem{\n", p.VarName, qual)
 	for _, r := range sorted {
 		addr := fmt.Sprintf("%02d%02d%02d", r.P1, r.P2, r.P3)
-		obs, ok := observed[addr]
-		if !ok {
-			return nil, fmt.Errorf("extable: no hardware observation for address %s", addr)
+		var obs Observed
+		if p.Observations == ObservationsRequired {
+			var ok bool
+			if obs, ok = observed[addr]; !ok {
+				return nil, fmt.Errorf("extable: no hardware observation for address %s", addr)
+			}
 		}
 		fmt.Fprintf(&buf,
-			"\t{Addr: EXAddress{P1: %d, P2: %d, P3: %d}, P1Label: %s, P2Label: %s, Name: %s, Digits: %d, Text: %t, ObservedReadWidth: %d, ObservedReadShape: %s}, // manual line %d\n",
-			r.P1, r.P2, r.P3,
+			"\t{Addr: %sEXAddress{P1: %d, P2: %d, P3: %d}, P1Label: %s, P2Label: %s, Name: %s, Digits: %d, Text: %t, ObservedReadWidth: %d, ObservedReadShape: %s}, // manual line %d\n",
+			qual, r.P1, r.P2, r.P3,
 			strconv.Quote(r.P1Label), strconv.Quote(r.P2Label), strconv.Quote(r.Name),
 			r.Digits, r.Text, obs.ReadWidth, strconv.Quote(obs.ReadShape), r.ManualLine)
 	}

@@ -64,6 +64,22 @@ const header = `# FT-710 EX read-characterisation observations (M8c, 24/07/2026)
 `
 
 // textWidth is the fixed wire width of an EX text item's raw P4 field.
+//
+// It equals the FT-710 profile's TextWidth today, and that is a COINCIDENCE
+// of the FT-710, not a shared definition. The two belong to different
+// categories: this constant is evidence-collection policy — what a text
+// answer must LOOK like on the wire before this tool will record it — while
+// Profile.TextWidth is manual schema — what the Digits column must SAY for a
+// text row. core/cat/table2-corrections.csv is the standing proof that the
+// two categories can disagree on one radio: TONE FREQ declares two digits in
+// the manual and answered three on the wire.
+//
+// So this is not a missed parameterisation to fold into the profile later.
+// Folding it would make the tool structurally incapable of recording a
+// text-width correction, which is exactly the class of finding it exists to
+// surface. If a future model's two numbers diverge, classify fails closed —
+// it refuses the capture rather than summarising a width — and that refusal
+// is the intended outcome, not a bug to route around.
 const textWidth = 12
 
 // capture is the subset of a codeplug file this tool reads: the menu
@@ -140,7 +156,7 @@ func derive(captureJSON, manualCSV []byte) ([]byte, error) {
 		return nil, fmt.Errorf("parsing capture: %w", err)
 	}
 
-	rows, err := extable.ParseCSV(manualCSV)
+	rows, err := extable.ParseCSV(extable.FT710Profile(), manualCSV)
 	if err != nil {
 		return nil, fmt.Errorf("parsing manual CSV: %w", err)
 	}

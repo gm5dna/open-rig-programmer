@@ -23,7 +23,7 @@ func TestEXInventoryGenerated_NotStale(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading table2.csv: %v", err)
 	}
-	rows, err := extable.ParseCSV(csv)
+	rows, err := extable.ParseCSV(extable.FT710Profile(), csv)
 	if err != nil {
 		t.Fatalf("ParseCSV(table2.csv): %v", err)
 	}
@@ -31,11 +31,11 @@ func TestEXInventoryGenerated_NotStale(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading table2-observed.csv: %v", err)
 	}
-	observed, err := extable.ParseObservedCSV(observedCSV)
+	observed, err := extable.ParseObservedCSV(extable.FT710Profile(), observedCSV)
 	if err != nil {
 		t.Fatalf("ParseObservedCSV(table2-observed.csv): %v", err)
 	}
-	want, err := extable.RenderGo(rows, observed)
+	want, err := extable.RenderGo(extable.FT710Profile(), rows, observed)
 	if err != nil {
 		t.Fatalf("RenderGo: %v", err)
 	}
