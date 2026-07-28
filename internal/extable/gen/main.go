@@ -33,6 +33,13 @@ func main() {
 	profileName := flag.String("profile", "", "name of the registered extable profile to generate (e.g. ft710)")
 	flag.Parse()
 
+	// gen takes no operands. Silently ignoring them would let the old
+	// three-path invocation — or `gen ft710` written without the flag — read
+	// as a successful run that generated something other than what was
+	// asked for.
+	if flag.NArg() > 0 {
+		log.Fatalf("unexpected positional arguments %v — gen takes only -profile", flag.Args())
+	}
 	if *profileName == "" {
 		log.Fatal("-profile is required; see internal/extable/profile.go for the registered names")
 	}
