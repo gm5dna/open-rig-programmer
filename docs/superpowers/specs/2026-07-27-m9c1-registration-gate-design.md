@@ -477,3 +477,50 @@ already covered, and a process review judged that disproportionate. The
 `radiotext` coverage guard in §3 is a data check over a map, not an AST
 walk — but the standing rule applies regardless: **"an approximate guard has
 another bypass" is non-blocking, not "the product is wrong".**
+
+---
+
+## Post-review amendment (28/07/2026)
+
+Recorded after this spec's body was written and implemented, following the
+Codex adversarial milestone review and its three dispatched fix-up rounds
+(A, B, C). The body above is left as originally approved; this note
+records where subsequent findings changed its conclusions.
+
+- **§5's `currentCaps` exclusion was REVERSED.** §5 decided "leave it
+  alone": `currentCaps` would keep resolving its disconnected baseline from
+  `wiring.StaticCapabilities(wiring.DefaultModel)` regardless of the
+  working copy's own `Radio.Model`, on the grounds that fixing it belonged
+  with the GUI model picker in the FTdx10 slice. Dispatch B's fix B1
+  reversed this: an offline CHIRP import against a non-FT-710 working copy
+  was transforming data against the wrong radio's vocabulary, with the
+  mismatch clearing itself the moment the user reconnected — corrupted
+  data passing the send gate with no trace. `currentCaps` now resolves the
+  disconnected baseline from `working.Radio.Model` when it is non-empty and
+  recognised, falling back to `wiring.DefaultModel` otherwise. FT-710
+  behaviour is unchanged (see `app/app.go`'s `currentCaps` doc comment and
+  `TestCurrentCaps_DisconnectedFT710WorkingIsByteIdentical`).
+- **Two findings from the final review are carried forward, not closed.**
+  Both are recorded as explicit, named prerequisites for the FTdx10 slice
+  in `.superpowers/sdd/HANDOFF-m9c.md`'s "STILL OPEN" section
+  (preconditions 10 and 11), not fixed by this milestone:
+  - `app/`'s own consumers (`connection.go`, `uispec.go`, `send.go`,
+    `settings.go`) still assume `wiring.DefaultModel`/the FT-710 in several
+    places even though `currentCaps` itself is now model-aware — a drift
+    between what capabilities resolve to and what the rest of `app/`
+    assumes. `app/settings.go`'s `currentSettingsDescriptor` additionally
+    carried a factually false doc comment (claiming a zero-descriptor
+    fallback that the code never actually took), corrected in place by fix
+    C3.
+  - `internal/wiring/fake.go`'s `fakeDriverEntry` is concretely typed to
+    `*fakeradio.Radio`/`[]fakeradio.Option` — the FT-710 simulator — so the
+    planned `internal/fakedx10` cannot be added as merely another table
+    row; the table abstraction itself needs to change first, and the
+    existing tests would not catch a mismatched pairing if it were added
+    anyway.
+- **The tone-chart ownership question (§ absent from this spec's original
+  scope, raised by the milestone review) was ruled on and closed**, not
+  carried forward: `codeplug.ToneField.Valid` now takes the radio's
+  `spec.Capabilities` and checks against `caps.CTCSSTones` rather than the
+  package-global `spec.ValidTone` (fix C1). See
+  `.superpowers/sdd/HANDOFF-m9c.md`'s corresponding "RESOLVED" note.
