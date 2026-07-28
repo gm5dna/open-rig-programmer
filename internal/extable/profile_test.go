@@ -1,0 +1,247 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package extable
+
+import (
+	"strings"
+	"testing"
+)
+
+// fixtureRequired is a second-model profile that disagrees with the FT-710
+// in EVERY parameterised dimension: package, type qualifier, import path,
+// variable name, digit bounds, text width, observation ceiling, expected
+// row count and doc prose. A fixture that merely differs proves little —
+// the M9b lesson is that only a fixture built to DISAGREE ever found a
+// defect. It is deliberately NOT registered, so no staleness consumer goes
+// looking for a generated file that does not exist.
+var fixtureRequired = Profile{
+	Model:       "FIXTURE",
+	Package:     "ftdx10",
+	Types:       TypesImported,
+	ImportPath:  "github.com/gm5dna/open-rig-programmer/core/cat",
+	ImportAlias: "cat",
+	VarName:     "exItems",
+	OutFile:     "exinventory_gen.go",
+	ManualCSV:   "fixture.csv",
+	ObservedCSV: "fixture-observed.csv",
+
+	MinDigits:        2,
+	MaxDigits:        6,
+	TextWidth:        8,
+	MaxObservedWidth: 9,
+	ExpectedRows:     1,
+
+	Observations: ObservationsRequired,
+	DocLines:     []string{"exItems is the fixture inventory."},
+}
+
+// fixtureAbsent is fixtureRequired under the manual-only regime. The two
+// exist as a pair because an ObservationsAbsent profile never reaches the
+// observation-width ceiling at all, so it cannot exercise MaxObservedWidth.
+var fixtureAbsent = func() Profile {
+	p := fixtureRequired
+	p.Observations = ObservationsAbsent
+	p.ObservedCSV = ""
+	p.DocLines = []string{"exItems is the fixture inventory (manual only)."}
+	return p
+}()
+
+// withRows returns p with ExpectedRows set to n. Tests whose subject is not
+// the row-count gate use it so each test asserts one thing.
+func withRows(p Profile, n int) Profile {
+	p.ExpectedRows = n
+	return p
+}
+
+func TestProfileValidate_AcceptsRegisteredAndFixtures(t *testing.T) {
+	for _, p := range []Profile{FT710Profile(), fixtureRequired, fixtureAbsent} {
+		if err := p.Validate(); err != nil {
+			t.Errorf("Validate() on %s: unexpected error: %v", p.Model, err)
+		}
+	}
+}
+
+func TestProfileValidate_Refusals(t *testing.T) {
+	cases := []struct {
+		name string
+		mut  func(*Profile)
+	}{
+		{"blank Model", func(p *Profile) { p.Model = "" }},
+		{"blank Package", func(p *Profile) { p.Package = "" }},
+		{"Package not an identifier", func(p *Profile) { p.Package = "core/cat" }},
+		{"Package is a keyword", func(p *Profile) { p.Package = "range" }},
+		{"blank VarName", func(p *Profile) { p.VarName = "" }},
+		{"VarName not an identifier", func(p *Profile) { p.VarName = "ex items" }},
+		{"blank OutFile", func(p *Profile) { p.OutFile = "" }},
+		{"absolute OutFile", func(p *Profile) { p.OutFile = "/tmp/out.go" }},
+		{"OutFile equals ManualCSV", func(p *Profile) { p.OutFile = p.ManualCSV }},
+		{"OutFile equals ObservedCSV", func(p *Profile) { p.OutFile = p.ObservedCSV }},
+		{"escaping ManualCSV", func(p *Profile) { p.ManualCSV = "../table2.csv" }},
+		{"unclean ManualCSV", func(p *Profile) { p.ManualCSV = "./table2.csv" }},
+		{"dot-dot ManualCSV", func(p *Profile) { p.ManualCSV = ".." }},
+		{"dot ManualCSV", func(p *Profile) { p.ManualCSV = "." }},
+		{"blank ManualCSV", func(p *Profile) { p.ManualCSV = "" }},
+		{"omitted TypeRefPolicy", func(p *Profile) { p.Types = 0 }},
+		{"unknown TypeRefPolicy", func(p *Profile) { p.Types = TypeRefPolicy(99) }},
+		{"TypesImported without ImportPath", func(p *Profile) { p.ImportPath = "" }},
+		{"TypesImported without ImportAlias", func(p *Profile) { p.ImportAlias = "" }},
+		{"ImportAlias not an identifier", func(p *Profile) { p.ImportAlias = "not an ident" }},
+		{"zero MinDigits", func(p *Profile) { p.MinDigits = 0 }},
+		{"zero MaxDigits", func(p *Profile) { p.MaxDigits = 0 }},
+		{"zero TextWidth", func(p *Profile) { p.TextWidth = 0 }},
+		{"zero MaxObservedWidth", func(p *Profile) { p.MaxObservedWidth = 0 }},
+		{"zero ExpectedRows", func(p *Profile) { p.ExpectedRows = 0 }},
+		{"negative ExpectedRows", func(p *Profile) { p.ExpectedRows = -1 }},
+		{"MinDigits above MaxDigits", func(p *Profile) { p.MinDigits = 7; p.MaxDigits = 6 }},
+		{"MaxDigits above ceiling", func(p *Profile) { p.MaxDigits = MaxDigitsCeiling + 1 }},
+		{"TextWidth above ceiling", func(p *Profile) { p.TextWidth = MaxDigitsCeiling + 1 }},
+		{"MaxObservedWidth above ceiling", func(p *Profile) { p.MaxObservedWidth = MaxDigitsCeiling + 1 }},
+		{"omitted ObservationPolicy", func(p *Profile) { p.Observations = 0 }},
+		{"unknown ObservationPolicy", func(p *Profile) { p.Observations = ObservationPolicy(99) }},
+		{"ObservedCSV blank under Required", func(p *Profile) { p.ObservedCSV = "" }},
+		{"empty DocLines", func(p *Profile) { p.DocLines = nil }},
+		{"blank DocLine", func(p *Profile) { p.DocLines = []string{"   "} }},
+		{"DocLine with newline", func(p *Profile) { p.DocLines = []string{"a\nb"} }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := fixtureRequired
+			tc.mut(&p)
+			if err := p.Validate(); err == nil {
+				t.Error("Validate() accepted an invalid profile; want an error")
+			}
+		})
+	}
+}
+
+// TestProfileValidate_ObservedCSVSetUnderAbsent is separate because it
+// mutates the ABSENT fixture, not the required one.
+func TestProfileValidate_ObservedCSVSetUnderAbsent(t *testing.T) {
+	p := fixtureAbsent
+	p.ObservedCSV = "fixture-observed.csv"
+	if err := p.Validate(); err == nil {
+		t.Error("Validate() accepted ObservedCSV under ObservationsAbsent; want an error")
+	}
+}
+
+// TestProfileValidate_TypesLocalRefusesImportFields is separate because it
+// needs a TypesLocal base — the FT-710 — where the refusal table mutates the
+// TypesImported fixture.
+func TestProfileValidate_TypesLocalRefusesImportFields(t *testing.T) {
+	t.Run("ImportPath set under TypesLocal", func(t *testing.T) {
+		p := FT710Profile()
+		p.ImportPath = "x/y"
+		if err := p.Validate(); err == nil {
+			t.Error("Validate() accepted ImportPath under TypesLocal; want an error")
+		}
+	})
+	t.Run("ImportAlias set under TypesLocal", func(t *testing.T) {
+		p := FT710Profile()
+		p.ImportAlias = "cat"
+		if err := p.Validate(); err == nil {
+			t.Error("Validate() accepted ImportAlias under TypesLocal; want an error")
+		}
+	})
+}
+
+func TestValidateRegistry_RejectsDuplicatesAndEmptiness(t *testing.T) {
+	a := fixtureRequired
+	b := fixtureRequired
+
+	if err := validateRegistry(map[string]Profile{}); err == nil {
+		t.Error("validateRegistry accepted an empty registry; want an error")
+	}
+
+	t.Run("duplicate package and out file", func(t *testing.T) {
+		b.VarName = "other"
+		if err := validateRegistry(map[string]Profile{"a": a, "b": b}); err == nil {
+			t.Error("accepted two profiles writing the same package/OutFile; want an error")
+		}
+	})
+	t.Run("duplicate package and var name", func(t *testing.T) {
+		b.VarName = a.VarName
+		b.OutFile = "other_gen.go"
+		if err := validateRegistry(map[string]Profile{"a": a, "b": b}); err == nil {
+			t.Error("accepted two profiles declaring the same package variable; want an error")
+		}
+	})
+	t.Run("same names in different packages are fine", func(t *testing.T) {
+		b.Package = "other"
+		b.VarName = a.VarName
+		b.OutFile = a.OutFile
+		if err := validateRegistry(map[string]Profile{"a": a, "b": b}); err != nil {
+			t.Errorf("rejected identical names in different packages: %v", err)
+		}
+	})
+	t.Run("blank lookup name", func(t *testing.T) {
+		if err := validateRegistry(map[string]Profile{"": a}); err == nil {
+			t.Error("accepted a blank lookup name; want an error — the name is the CLI-facing -profile token")
+		}
+	})
+	t.Run("lookup name with whitespace", func(t *testing.T) {
+		if err := validateRegistry(map[string]Profile{"ft 710": a}); err == nil {
+			t.Error("accepted a lookup name containing whitespace; want an error")
+		}
+	})
+	t.Run("one profile's output is another's input", func(t *testing.T) {
+		// Same package directory: b's generated file would overwrite a's
+		// committed source CSV on the next go generate.
+		b = fixtureRequired
+		b.VarName = "other"
+		b.OutFile = a.ManualCSV
+		b.ManualCSV = "third.csv"
+		if err := validateRegistry(map[string]Profile{"a": a, "b": b}); err == nil {
+			t.Error("accepted a profile whose OutFile is another profile's source CSV in the same package; want an error")
+		}
+	})
+}
+
+func TestRegistry_LookupAndEnumeration(t *testing.T) {
+	if _, ok := Lookup("no-such-model"); ok {
+		t.Error("Lookup succeeded for an unregistered name")
+	}
+	p, ok := Lookup("ft710")
+	if !ok {
+		t.Fatal("Lookup(\"ft710\") failed; the FT-710 must be registered")
+	}
+	if p.Model != "FT-710" {
+		t.Errorf("Lookup(\"ft710\").Model = %q, want \"FT-710\"", p.Model)
+	}
+
+	got := RegisteredProfiles()
+	if len(got) == 0 {
+		t.Fatal("RegisteredProfiles() returned nothing")
+	}
+	for i := 1; i < len(got); i++ {
+		if got[i-1].Name >= got[i].Name {
+			t.Errorf("RegisteredProfiles() not sorted: %q before %q", got[i-1].Name, got[i].Name)
+		}
+	}
+
+	// Mutating a returned profile must not reach the registry.
+	got[0].Profile.DocLines[0] = "mutated"
+	if again := RegisteredProfiles(); again[0].Profile.DocLines[0] == "mutated" {
+		t.Error("RegisteredProfiles() shares its DocLines backing array with the registry")
+	}
+}
+
+// TestFT710Profile_MatchesTodaysConstants pins the profile against the
+// literals it replaces, so a typo cannot silently change what is generated.
+func TestFT710Profile_MatchesTodaysConstants(t *testing.T) {
+	p := FT710Profile()
+	if p.Package != "cat" || p.VarName != "exItemsGen" || p.Types != TypesLocal || p.ImportPath != "" || p.ImportAlias != "" {
+		t.Errorf("identity drifted: %+v", p)
+	}
+	if p.MinDigits != 1 || p.MaxDigits != 4 || p.TextWidth != 12 || p.MaxObservedWidth != 12 {
+		t.Errorf("bounds drifted: %+v", p)
+	}
+	if p.ExpectedRows != 296 {
+		t.Errorf("ExpectedRows = %d, want 296", p.ExpectedRows)
+	}
+	if p.Observations != ObservationsRequired {
+		t.Errorf("Observations = %v, want ObservationsRequired", p.Observations)
+	}
+	if !strings.HasPrefix(p.DocLines[0], "exItemsGen is the EX address inventory") {
+		t.Errorf("DocLines[0] = %q", p.DocLines[0])
+	}
+}
