@@ -19,10 +19,10 @@ import (
 // LossEntry.
 const (
 	// ActionDropped means the CHIRP data was discarded outright: the
-	// FT-710 has no field to hold it at all.
+	// radio has no field to hold it at all.
 	ActionDropped = "dropped"
 	// ActionApproximated means the CHIRP data was kept but altered to
-	// fit the FT-710's constraints (e.g. a tag truncated or
+	// fit the radio's constraints (e.g. a tag truncated or
 	// charset-sanitised).
 	ActionApproximated = "approximated"
 	// ActionUnsupported means the CHIRP data could not be mapped at
@@ -73,7 +73,7 @@ func (r LossReport) HasBlocking() bool {
 var chirpCoreColumns = []string{"Location", "Frequency", "Mode"}
 
 // chirpExtraColumns lists CHIRP columns this package recognises but has
-// no FT-710 field for. Per row, an empty cell in one of these is
+// no radio field for. Per row, an empty cell in one of these is
 // silently ignored (it is that column's default/absent state); a
 // non-empty cell is a non-blocking ActionDropped LossEntry. DtcsCode and
 // DtcsPolarity get a second "default" value each (CHIRP's own
@@ -100,7 +100,7 @@ var chirpExtraColumnDefaults = map[string]string{
 var chirpOtherKnownColumns = []string{"Name", "Duplex", "Offset", "Tone", "rToneFreq", "cToneFreq", "Skip"}
 
 // chirpKnownColumns is the set of every CHIRP column name ImportCHIRP
-// recognises at all, whether or not it maps to an FT-710 field
+// recognises at all, whether or not it maps to a field on the radio
 // (chirpCoreColumns + chirpExtraColumns + chirpOtherKnownColumns). A
 // header column NOT in this set is unknown to this package entirely: see
 // ImportCHIRP's unrecognisedColumns and its Header doc paragraph.
@@ -119,7 +119,7 @@ var chirpKnownColumns = func() map[string]bool {
 }()
 
 // chirpModeMap maps a CHIRP Mode value to this radio family's
-// display-name equivalent. CW and CWR both exist on the FT-710 as
+// display-name equivalent. CW and CWR both exist on this radio family as
 // sideband-specific CW modes (CW-U/CW-L) rather than a single "CW" — see
 // the brief. The RESULT is membership-checked against caps.Modes (see
 // containsMode): mapping to a mode name is CHIRP-dialect knowledge, but
@@ -159,7 +159,7 @@ func isCHIRPDigits(s string) bool {
 // value cannot represent every whole-Hz frequency exactly, and exactness
 // here is safety-relevant: this value may be sent to a radio). Any
 // digits beyond the 6th decimal place (whole-Hz precision at MHz scale)
-// must all be zero, or the value has a sub-Hz remainder the FT-710
+// must all be zero, or the value has a sub-Hz remainder the radio
 // cannot store (errCHIRPFreqFractionalHz).
 func parseCHIRPFrequency(s string) (uint32, error) {
 	s = strings.TrimSpace(s)
@@ -275,11 +275,13 @@ func containsMode(caps spec.Capabilities, mode string) bool {
 	return false
 }
 
-// chirpTagByteOK reports whether b is a legal FT-710 tag byte: printable
-// ASCII 0x20-0x7E, excluding ';' (0x3B). This restates
-// codeplug's validTagByte (which is unexported) rather than reaching
-// into that package for it — core/csvio depends only on core/codeplug's
-// exported surface, core/spec, and stdlib.
+// chirpTagByteOK reports whether b is a legal tag byte for this radio
+// family: printable ASCII 0x20-0x7E, excluding ';' (0x3B). Printable
+// ASCII excluding ';' is a family-wide CAT fact — ';' is the protocol
+// terminator, not a per-model choice — so this needs no capability. This
+// restates codeplug's validTagByte (which is unexported) rather than
+// reaching into that package for it — core/csvio depends only on
+// core/codeplug's exported surface, core/spec, and stdlib.
 func chirpTagByteOK(b byte) bool {
 	return b >= 0x20 && b <= 0x7E && b != ';'
 }
@@ -318,7 +320,7 @@ func sanitizeCHIRPName(line int, name string, caps spec.Capabilities) (string, [
 }
 
 // importCHIRPRow builds the Channel one CHIRP data row describes (nil if
-// its Location cannot be mapped to any FT-710 slot at all) and every
+// its Location cannot be mapped to a slot at all) and every
 // LossEntry that row produced. line is the row's 1-based CSV line;
 // header/colIndex/record let cell values be looked up by CHIRP column
 // name regardless of column order; a column absent from the header (any
@@ -383,7 +385,7 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string, caps spe
 		detail := "Frequency is not a valid decimal MHz value"
 		switch {
 		case errors.Is(err, errCHIRPFreqFractionalHz):
-			detail = "Frequency has a sub-Hz fractional remainder the FT-710 cannot store"
+			detail = fmt.Sprintf("Frequency has a sub-Hz fractional remainder the %s cannot store", caps.Model)
 		case errors.Is(err, errCHIRPFreqRange):
 			detail = "Frequency exceeds the representable range"
 		}
@@ -459,11 +461,11 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string, caps spe
 		})
 	}
 
-	// Offset: FT-710 has no per-channel repeater offset at all.
+	// Offset: the radio has no per-channel repeater offset at all.
 	if offsetRaw := cell("Offset"); isNonZeroCHIRPOffset(offsetRaw) {
 		entries = append(entries, LossEntry{
 			Line: line, Column: "Offset", Value: offsetRaw, Action: ActionDropped, Blocking: false,
-			Detail: "FT-710 stores no per-channel repeater offset; shift magnitude is a global menu setting",
+			Detail: fmt.Sprintf("%s stores no per-channel repeater offset; shift magnitude is a global menu setting", caps.Model),
 		})
 	}
 
@@ -557,7 +559,7 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string, caps spe
 		data.ScanSkip = codeplug.BoolField{State: codeplug.Unknown}
 		entries = append(entries, LossEntry{
 			Line: line, Column: "Skip", Value: skipRaw, Action: ActionDropped, Blocking: false,
-			Detail: fmt.Sprintf("CHIRP Skip value %q has no FT-710 equivalent; scan-skip left unresolved", skipRaw),
+			Detail: fmt.Sprintf("CHIRP Skip value %q has no %s equivalent; scan-skip left unresolved", skipRaw, caps.Model),
 		})
 	}
 
@@ -571,7 +573,7 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string, caps spe
 		}
 		entries = append(entries, LossEntry{
 			Line: line, Column: col, Value: v, Action: ActionDropped, Blocking: false,
-			Detail: fmt.Sprintf("FT-710 has no equivalent field for CHIRP %s; value discarded", col),
+			Detail: fmt.Sprintf("%s has no equivalent field for CHIRP %s; value discarded", caps.Model, col),
 		})
 	}
 
@@ -613,11 +615,13 @@ func isNonZeroCHIRPOffset(s string) bool {
 // never refuses to return data because of a Blocking entry — the CLI/GUI
 // enforces the gate, this function only reports it.
 //
-// Like Import, this is a SYNTACTIC transform: it does not consult
-// codeplug.Validate or any Capabilities, and a channel with no Blocking
-// entries against it is not thereby guaranteed valid for any particular
-// radio (e.g. its frequency band). Validate remains the semantic gate
-// callers must run before a send.
+// Unlike Import, this consults caps — but only for VOCABULARY AND SHAPE:
+// the memory bank's slot space, the tag length, the shift and CTCSS state
+// vocabularies, and the mode and CTCSS-tone tables. It still does NOT run
+// codeplug.Validate, and a channel with no Blocking entries against it is
+// still not thereby guaranteed valid for the radio (its frequency band,
+// its per-field write support, its radio identity). Validate remains the
+// semantic gate a caller must run before a send.
 //
 // Header: recognised at minimum are Location, Name, Frequency, Duplex,
 // Offset, Tone, rToneFreq, cToneFreq, DtcsCode, DtcsPolarity, Mode,

@@ -14,8 +14,8 @@
 //
 //   - ImportCHIRP is a best-effort MIGRATION path from CHIRP-next's CSV
 //     export format, which models a materially different (and in places
-//     incompatible) radio: fields the FT-710 has no equivalent for are
-//     dropped, values that need reshaping to fit are approximated, and
+//     incompatible) radio: fields the target radio has no equivalent for
+//     are dropped, values that need reshaping to fit are approximated, and
 //     values with no safe interpretation at all are flagged blocking.
 //     Every one of these is recorded as a LossEntry in the returned
 //     LossReport — nothing is ever silently discarded. See ImportCHIRP's
@@ -25,14 +25,16 @@
 //     usable for a send — this project never sends data to a radio that
 //     was imported with an unresolved loss.
 //
-// Both import paths are SYNTACTIC ONLY: they turn well-formed CSV cells
-// into codeplug.Channel/ChannelData values without judging whether those
-// values make sense for any particular radio. Neither consults
-// codeplug.Validate or a spec.Capabilities, and successfully imported
-// data is not thereby guaranteed valid — codeplug.Validate remains the
-// one semantic gate a caller must run before treating any codeplug
-// (regardless of its origin) as ready to send. This package does not
-// duplicate any of Validate's rules.
+// Import is SYNTACTIC ONLY: it turns well-formed CSV cells into
+// codeplug.Channel/ChannelData values without judging whether those values
+// make sense for any particular radio. ImportCHIRP additionally consults a
+// spec.Capabilities, but only for VOCABULARY AND SHAPE — slot space, tag
+// length, shift/CTCSS vocabulary, mode and tone tables — never for
+// semantic validity. Neither import runs codeplug.Validate, and
+// successfully imported data is not thereby guaranteed valid:
+// codeplug.Validate remains the one semantic gate a caller must run before
+// treating any codeplug (regardless of its origin) as ready to send. This
+// package does not duplicate any of Validate's rules.
 //
 // Dependency rule: this package imports core/codeplug, core/spec, and
 // the standard library only — never core/cat. It has no knowledge of

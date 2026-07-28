@@ -34,7 +34,7 @@ var plainSignedInt = regexp.MustCompile(`^[+-]?[0-9]+$`)
 // "-120" is real data and is left untouched.
 //
 // A cell that already begins with a literal apostrophe (a legitimate
-// value: the apostrophe is in the FT-710 tag charset) is ALSO escaped, by
+// value: the apostrophe is in the radio's tag charset) is ALSO escaped, by
 // prefixing a second apostrophe — otherwise Import's unescape
 // (unescapeFormulaCell, which unconditionally strips exactly one leading
 // apostrophe) would strip the data's own apostrophe rather than an
