@@ -14,6 +14,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
+	"github.com/gm5dna/open-rig-programmer/internal/radiotext"
 )
 
 const testCtxTimeout = 30 * time.Second
@@ -159,6 +160,52 @@ func TestSupportedModels_SortedNonEmpty(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("SupportedModels() = %v, want it to contain DefaultModel %q", got, DefaultModel)
+	}
+}
+
+// Every model this package can open a real session against MUST have
+// user-facing prose, or its CLI and GUI silently serve blank advisories
+// (cmd/rigprog/write.go's erase procedure, probe.go's firmware note,
+// app/uispec.go's grid legend all degrade to "" rather than failing).
+// This is the M9c registration precondition: adding a driver without
+// prose fails here rather than shipping.
+func TestEverySupportedModelHasRadiotext(t *testing.T) {
+	for _, model := range SupportedModels() {
+		if _, ok := radiotext.For(model); !ok {
+			t.Errorf("radiotext.For(%q) = _, false; every model in SupportedModels() must have prose", model)
+		}
+	}
+}
+
+// realDrivers and fakeDrivers must offer the same models: a model
+// openable for real but not simulated (or vice versa) would fail only at
+// the moment a user tried it.
+func TestRealAndFakeDriverTablesAgree(t *testing.T) {
+	for model := range realDrivers {
+		if _, ok := fakeDrivers[model]; !ok {
+			t.Errorf("model %q is in realDrivers but not fakeDrivers", model)
+		}
+	}
+	for model := range fakeDrivers {
+		if _, ok := realDrivers[model]; !ok {
+			t.Errorf("model %q is in fakeDrivers but not realDrivers", model)
+		}
+	}
+}
+
+// Each table key must equal the driver's own Model(). StaticCapabilities
+// registers a driver and then looks it up BY THE CALLER'S KEY; if the two
+// disagreed the lookup would miss and the result would be nil.
+func TestDriverTableKeysMatchDriverModel(t *testing.T) {
+	for model, ctor := range realDrivers {
+		if got := ctor().Model(); got != model {
+			t.Errorf("realDrivers[%q] builds a driver whose Model() = %q", model, got)
+		}
+	}
+	for model, entry := range fakeDrivers {
+		if got := entry.newDriver().Model(); got != model {
+			t.Errorf("fakeDrivers[%q] builds a driver whose Model() = %q", model, got)
+		}
 	}
 }
 
