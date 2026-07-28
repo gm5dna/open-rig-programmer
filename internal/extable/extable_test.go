@@ -380,9 +380,19 @@ func TestParseCSV_AddressComponentRange(t *testing.T) {
 // TestParseCSV_RefusesInvalidProfile pins that the API validates its own
 // profile: the registry cannot vouch for a profile that never went through
 // it.
+//
+// The invalidity is a BLANK MODEL, and the CSV is a row the fixture's own
+// 2..6 digit bounds accept. ParseCSV's own logic never consults Model — it
+// reads TextWidth, MinDigits and MaxDigits, and none of its error strings
+// name the model — so this call succeeds the moment the p.Validate() call
+// is deleted. That is the point: an earlier version passed Profile{}, whose
+// zero bounds refuse every row downstream of the validation, so the test
+// stayed green with the validation removed and pinned nothing.
 func TestParseCSV_RefusesInvalidProfile(t *testing.T) {
-	if _, err := ParseCSV(Profile{}, []byte(goodRow)); err == nil {
-		t.Error("ParseCSV accepted a zero Profile; want a validation error")
+	p := withRows(fixtureRequired, 1)
+	p.Model = ""
+	if _, err := ParseCSV(p, []byte(goodRow)); err == nil {
+		t.Error("ParseCSV accepted a profile with a blank Model; want a validation error")
 	}
 }
 
@@ -417,10 +427,16 @@ func TestParseObservedCSV_CeilingComesFromProfile(t *testing.T) {
 	}
 }
 
-// TestParseObservedCSV_RefusesInvalidProfile mirrors ParseCSV's pin.
+// TestParseObservedCSV_RefusesInvalidProfile mirrors ParseCSV's pin, and
+// bites for the same reason: a blank Model is invalid, yet the widths in
+// observedBody are 3, comfortably inside the fixture's ceiling of 9, and
+// nothing in ParseObservedCSV reads Model. Delete the p.Validate() call and
+// this parse succeeds.
 func TestParseObservedCSV_RefusesInvalidProfile(t *testing.T) {
-	if _, err := ParseObservedCSV(Profile{}, []byte(observedBody)); err == nil {
-		t.Error("ParseObservedCSV accepted a zero Profile; want a validation error")
+	p := withRows(fixtureRequired, 1)
+	p.Model = ""
+	if _, err := ParseObservedCSV(p, []byte(observedBody)); err == nil {
+		t.Error("ParseObservedCSV accepted a profile with a blank Model; want a validation error")
 	}
 }
 
@@ -473,10 +489,22 @@ func TestRenderGo_IdentityComesFromProfile(t *testing.T) {
 	})
 }
 
-// TestRenderGo_RefusesInvalidProfile mirrors the parsers' pins.
+// TestRenderGo_RefusesInvalidProfile mirrors the parsers' pins. The inputs
+// are a complete render under the required fixture — one row, one matching
+// observation, ExpectedRows 1 — so every gate downstream of the validation
+// is satisfied and only the blank Model stands between this call and a
+// successful render. RenderGo names p.Model in error text but never reads
+// it otherwise, so deleting the p.Validate() call turns this into a
+// successful render and the test red.
 func TestRenderGo_RefusesInvalidProfile(t *testing.T) {
-	if _, err := RenderGo(Profile{}, nil, nil); err == nil {
-		t.Error("RenderGo accepted a zero Profile; want a validation error")
+	p := withRows(fixtureRequired, 1)
+	p.Model = ""
+	rows := []Row{
+		{P1: 1, P2: 1, P3: 1, P1Label: "RADIO SETTING", P2Label: "MODE SSB", Name: "AF TREBLE GAIN", P4: "-20 - +10", Digits: 3, Text: false, ManualLine: 646},
+	}
+	observed := map[string]Observed{"010101": {ReadWidth: 3, ReadShape: "signed"}}
+	if _, err := RenderGo(p, rows, observed); err == nil {
+		t.Error("RenderGo accepted a profile with a blank Model; want a validation error")
 	}
 }
 
