@@ -262,6 +262,12 @@ func TestParseObservedCSV_Strictness(t *testing.T) {
 // set-equal in both directions: an inventory row with no observation, and
 // an observation for an address the inventory lacks, are each refused.
 // Silence in either direction would leave ObservedReadWidth quietly zero.
+//
+// The first two subtests vary CARDINALITY, so the len(observed) != len(rows)
+// gate alone refuses both and the per-address lookup inside the row loop is
+// never the thing that says no. The third holds cardinality equal and moves
+// the address instead: only the membership check can refuse it, so deleting
+// that check now turns the suite red.
 func TestRenderGo_RequiresExactObservationCoverage(t *testing.T) {
 	rows := []Row{
 		{P1: 1, P2: 1, P3: 1, P1Label: "RADIO SETTING", P2Label: "MODE SSB", Name: "AF TREBLE GAIN", P4: "-20 - +10", Digits: 3, Text: false, ManualLine: 646},
@@ -278,6 +284,17 @@ func TestRenderGo_RequiresExactObservationCoverage(t *testing.T) {
 		}
 		if _, err := RenderGo(withRows(FT710Profile(), 1), rows, observed); err == nil {
 			t.Error("RenderGo accepted an observation for an address the inventory lacks; want an error")
+		}
+	})
+	t.Run("wrong address at equal cardinality", func(t *testing.T) {
+		// One row, one observation, ExpectedRows 1: both counting gates are
+		// satisfied and the sets are still disjoint. The generated item would
+		// otherwise carry the absence sentinels of a model that HAS hardware.
+		observed := map[string]Observed{
+			"999999": {ReadWidth: 1, ReadShape: "numeric"},
+		}
+		if _, err := RenderGo(withRows(FT710Profile(), 1), rows, observed); err == nil {
+			t.Error("RenderGo accepted an observation set of the right size for the wrong address; want an error")
 		}
 	})
 }
