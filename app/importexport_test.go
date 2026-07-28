@@ -3,14 +3,19 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/csvio"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/spec"
+	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
 
 // buildImportBase mirrors cmd/rigprog/import_test.go's buildValidBase:
@@ -213,4 +218,155 @@ func TestExportCSV_NothingLoaded(t *testing.T) {
 	if _, err := a.ExportCSV(); err == nil {
 		t.Error("ExportCSV with nothing loaded: err = nil, want ErrNothingLoaded")
 	}
+}
+
+// changingCapsSession is a minimal driver.Session stub whose Capabilities
+// method returns caps[0] on its first call, caps[1] on its second, and
+// holds at caps[len(caps)-1] thereafter. It exists solely so
+// TestImportCHIRP_RefusesOnStaleCapabilities can reproduce "the target's
+// capabilities changed between the pre-parse snapshot and the merge-time
+// recheck" (Fix B2) DETERMINISTICALLY and without any concurrency at all:
+// ImportCHIRP calls currentCaps exactly twice when connected (once before
+// csvio.ImportCHIRP's transform, once again immediately before the
+// merge), so a call-counted stub changes the answer between those two
+// calls with no timing dependency whatsoever. Every other Session method
+// is unreachable from ImportCHIRP's own code path (it never reads a
+// channel, writes one, or asks for Identity) and panics if ever called,
+// so a wiring mistake in the test itself fails loudly rather than
+// silently returning a zero value.
+type changingCapsSession struct {
+	mu    sync.Mutex
+	calls int
+	caps  []spec.Capabilities
+}
+
+func (s *changingCapsSession) Capabilities() spec.Capabilities {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	idx := s.calls
+	if idx >= len(s.caps) {
+		idx = len(s.caps) - 1
+	}
+	s.calls++
+	return s.caps[idx]
+}
+
+func (s *changingCapsSession) Identity() driver.Identity {
+	panic("changingCapsSession: Identity is not reachable from ImportCHIRP")
+}
+
+func (s *changingCapsSession) ReadChannel(context.Context, string) (codeplug.Channel, error) {
+	panic("changingCapsSession: ReadChannel is not reachable from ImportCHIRP")
+}
+
+func (s *changingCapsSession) WriteChannel(context.Context, codeplug.Channel) (driver.WriteResult, error) {
+	panic("changingCapsSession: WriteChannel is not reachable from ImportCHIRP")
+}
+
+func (s *changingCapsSession) Close() error { return nil }
+
+// TestImportCHIRP_RefusesOnStaleCapabilities is Fix B2's (Codex fix-B
+// review, MEDIUM) functional regression test: capabilities captured
+// before the (possibly slow) parse/transform must be reconfirmed before
+// they are used to merge — a mismatch must refuse the merge outright
+// (refuse, never corrupt), not merge data transformed against
+// capabilities that no longer describe the live target. Uses
+// changingCapsSession to force exactly this disagreement between
+// ImportCHIRP's two currentCaps calls without any goroutines or timing at
+// all.
+func TestImportCHIRP_RefusesOnStaleCapabilities(t *testing.T) {
+	a, _ := newTestApp(t)
+	a.mu.Lock()
+	a.working = buildImportBase()
+	a.mu.Unlock()
+
+	capsBefore, err := wiring.StaticCapabilities(wiring.DefaultModel)
+	if err != nil {
+		t.Fatalf("wiring.StaticCapabilities: unexpected error: %v", err)
+	}
+	capsAfter := capsBefore
+	capsAfter.TagLen = capsBefore.TagLen + 1 // any observable difference
+
+	sess := &changingCapsSession{caps: []spec.Capabilities{capsBefore, capsAfter}}
+	a.mu.Lock()
+	a.conn = &connectionState{session: sess}
+	a.mu.Unlock()
+
+	chirpPath := filepath.Join(t.TempDir(), "stale.csv")
+	body := chirpHeaderLine + "\n" + "2,MYCALL,7.100000,,,,,USB,\n"
+	if err := os.WriteFile(chirpPath, []byte(body), 0o600); err != nil {
+		t.Fatalf("writing CHIRP fixture: %v", err)
+	}
+	a.dialogs.(*fakeDialogs).openFilePath = chirpPath
+
+	result, err := a.ImportCHIRP()
+	if err != nil {
+		t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+	}
+	if result.Merged {
+		t.Error("ImportCHIRP with capabilities that changed mid-import: Merged = true, want false (refuse, never corrupt)")
+	}
+	if result.RefusalReason == "" {
+		t.Error("ImportCHIRP with capabilities that changed mid-import: RefusalReason empty, want a diagnostic")
+	}
+	if a.IsDirty() {
+		t.Error("ImportCHIRP refused for stale capabilities set dirty, want working untouched")
+	}
+	if sess.calls != 2 {
+		t.Errorf("changingCapsSession.Capabilities() called %d times, want exactly 2 (pre-parse snapshot + merge-time recheck)", sess.calls)
+	}
+}
+
+// TestImportCHIRP_ConnReadIsSynchronised is Fix B2's (Codex fix-B review,
+// MEDIUM) race-detector regression test: "The capabilities hoist added
+// earlier in this milestone reads [a.conn] at app/importexport.go ~:120
+// without holding the lock, while Disconnect ... mutates and closes it
+// ... a genuine Go data race." Two goroutines are started independently
+// (never joined to each other, only to the test via wg.Wait() at the very
+// end, so Go's happens-before rules establish NO ordering between them)
+// and run concurrently for many iterations: one hammering ImportCHIRP,
+// the other toggling a.conn under a.mu exactly as connect/Disconnect do.
+// Before this fix, `go test -race ./app/ -run
+// TestImportCHIRP_ConnReadIsSynchronised` flags a DATA RACE on a.conn
+// between this test's writer goroutine and ImportCHIRP's unsynchronised
+// read; after it, the same run is race-clean. This test asserts nothing
+// beyond "no panic" — its entire value is what -race observes, not its
+// pass/fail outcome under a race-less `go test` run.
+func TestImportCHIRP_ConnReadIsSynchronised(t *testing.T) {
+	a, _ := newTestApp(t)
+	a.mu.Lock()
+	a.working = buildImportBase()
+	a.mu.Unlock()
+
+	chirpPath := filepath.Join(t.TempDir(), "race.csv")
+	body := chirpHeaderLine + "\n" + "2,MYCALL,7.100000,,,,,USB,\n"
+	if err := os.WriteFile(chirpPath, []byte(body), 0o600); err != nil {
+		t.Fatalf("writing CHIRP fixture: %v", err)
+	}
+	a.dialogs.(*fakeDialogs).openFilePath = chirpPath
+
+	sess := openTestSimSession(t)
+
+	const iterations = 200
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			_, _ = a.ImportCHIRP()
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			a.mu.Lock()
+			if a.conn == nil {
+				a.conn = &connectionState{session: sess}
+			} else {
+				a.conn = nil
+			}
+			a.mu.Unlock()
+		}
+	}()
+	wg.Wait()
 }

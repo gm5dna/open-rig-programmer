@@ -14,6 +14,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
+	"github.com/gm5dna/open-rig-programmer/internal/radiotext"
 )
 
 const testCtxTimeout = 30 * time.Second
@@ -162,6 +163,77 @@ func TestSupportedModels_SortedNonEmpty(t *testing.T) {
 	}
 }
 
+// Every model this package can open a real session against MUST have
+// user-facing prose, or its CLI and GUI silently serve blank advisories
+// (cmd/rigprog/write.go's erase procedure, probe.go's firmware note,
+// app/uispec.go's grid legend all degrade to "" rather than failing).
+// This is the M9c registration precondition: adding a driver without
+// prose fails here rather than shipping.
+//
+// ok==true alone is not enough: a texts["SomeModel"] = radiotext.Text{}
+// entry — every field blank — satisfies radiotext.For's ok return just
+// as well as a properly populated one, which is exactly the silent-
+// blank-advisory outcome this test exists to prevent. So this also
+// requires a NAMED SUBSET of fields to be non-empty:
+// EraseProcedure, FirmwareGuidance, ProbeFirmwareNote. Deliberately not
+// the full set — ToneScanSkipVerification states what IS and is NOT
+// hardware-verified about Tone/Scan Skip preservation for this radio,
+// and for a model pinned at writeTrialsComplete=false (the next
+// milestone's FTdx10, at its expected first state) it legitimately has
+// nothing true to say yet; requiring it here would force either a false
+// hardware claim or a registration failure for a model correctly
+// awaiting its own M5b-equivalent trials.
+func TestEverySupportedModelHasRadiotext(t *testing.T) {
+	for _, model := range SupportedModels() {
+		text, ok := radiotext.For(model)
+		if !ok {
+			t.Errorf("radiotext.For(%q) = _, false; every model in SupportedModels() must have prose", model)
+			continue
+		}
+		if text.EraseProcedure == "" {
+			t.Errorf("radiotext.For(%q).EraseProcedure is empty; every model must have prose", model)
+		}
+		if text.FirmwareGuidance == "" {
+			t.Errorf("radiotext.For(%q).FirmwareGuidance is empty; every model must have prose", model)
+		}
+		if text.ProbeFirmwareNote == "" {
+			t.Errorf("radiotext.For(%q).ProbeFirmwareNote is empty; every model must have prose", model)
+		}
+	}
+}
+
+// realDrivers and fakeDrivers must offer the same models: a model
+// openable for real but not simulated (or vice versa) would fail only at
+// the moment a user tried it.
+func TestRealAndFakeDriverTablesAgree(t *testing.T) {
+	for model := range realDrivers {
+		if _, ok := fakeDrivers[model]; !ok {
+			t.Errorf("model %q is in realDrivers but not fakeDrivers", model)
+		}
+	}
+	for model := range fakeDrivers {
+		if _, ok := realDrivers[model]; !ok {
+			t.Errorf("model %q is in fakeDrivers but not realDrivers", model)
+		}
+	}
+}
+
+// Each table key must equal the driver's own Model(). StaticCapabilities
+// registers a driver and then looks it up BY THE CALLER'S KEY; if the two
+// disagreed the lookup would miss and the result would be nil.
+func TestDriverTableKeysMatchDriverModel(t *testing.T) {
+	for model, ctor := range realDrivers {
+		if got := ctor().Model(); got != model {
+			t.Errorf("realDrivers[%q] builds a driver whose Model() = %q", model, got)
+		}
+	}
+	for model, entry := range fakeDrivers {
+		if got := entry.newDriver().Model(); got != model {
+			t.Errorf("fakeDrivers[%q] builds a driver whose Model() = %q", model, got)
+		}
+	}
+}
+
 // TestStaticCapabilities_FT710EqualsDriver pins StaticCapabilities'
 // equivalence to the table's own constructor: for DefaultModel, it must
 // return exactly what realDrivers[DefaultModel]().Capabilities() (i.e.
@@ -291,12 +363,16 @@ func TestOpenFakeSessionFor_UnknownModel(t *testing.T) {
 
 // TestResolveSnapshotDir_Override pins the same --snapshot-dir override
 // rule cmd/rigprog's own resolveSnapshotDir pins (fileio.go): given a
-// non-empty override, return it verbatim. internal/wiring's copy exists
-// so app/ (which cannot import cmd/rigprog, a cmd-local package) has
-// somewhere shared to get this 3-line UserConfigDir rule from, per
-// task-15 brief §2's Connect bullet.
+// non-empty override AND DefaultModel, return the override verbatim.
+// internal/wiring's copy exists so app/ (which cannot import
+// cmd/rigprog, a cmd-local package) has somewhere shared to get this
+// 3-line UserConfigDir rule from, per task-15 brief §2's Connect
+// bullet. Threaded with DefaultModel by task-7 (D9) so it keeps pinning
+// the same override-passthrough property now that ResolveSnapshotDir is
+// model-keyed — see TestResolveSnapshotDir_OtherModelGetsSubdir for the
+// non-default-model override case.
 func TestResolveSnapshotDir_Override(t *testing.T) {
-	got, err := ResolveSnapshotDir("/tmp/some/override")
+	got, err := ResolveSnapshotDir("/tmp/some/override", DefaultModel)
 	if err != nil {
 		t.Fatalf("ResolveSnapshotDir(override): unexpected error: %v", err)
 	}
@@ -308,18 +384,80 @@ func TestResolveSnapshotDir_Override(t *testing.T) {
 // TestResolveSnapshotDir_Default pins the default:
 // <UserConfigDir>/rigprog/snapshots — the same default cmd/rigprog uses,
 // so a GUI snapshot/journal and a CLI one land in the same place absent
-// an override.
+// an override. Threaded with DefaultModel by task-7 (D9): DefaultModel
+// stays at this base directory unchanged, so every snapshot written
+// before per-model subdirectories existed is still found.
 func TestResolveSnapshotDir_Default(t *testing.T) {
 	cfgDir, err := os.UserConfigDir()
 	if err != nil {
 		t.Skipf("os.UserConfigDir unavailable in this environment: %v", err)
 	}
-	got, err := ResolveSnapshotDir("")
+	got, err := ResolveSnapshotDir("", DefaultModel)
 	if err != nil {
 		t.Fatalf("ResolveSnapshotDir(\"\"): unexpected error: %v", err)
 	}
 	want := filepath.Join(cfgDir, "rigprog", "snapshots")
 	if got != want {
 		t.Errorf("ResolveSnapshotDir(\"\") = %q, want %q", got, want)
+	}
+}
+
+// TestModelSlug pins ModelSlug's filesystem-safe-directory-component
+// rule (task-7, D9): lowercase, with each run of non-alphanumeric
+// characters collapsed to a single "-".
+func TestModelSlug(t *testing.T) {
+	for _, tc := range []struct{ model, want string }{
+		{"FT-710", "ft-710"},
+		{"FTdx10", "ftdx10"},
+		{"FTDX101D/MP", "ftdx101d-mp"},
+		{"FTX-1", "ftx-1"},
+	} {
+		if got := ModelSlug(tc.model); got != tc.want {
+			t.Errorf("ModelSlug(%q) = %q, want %q", tc.model, got, tc.want)
+		}
+	}
+}
+
+// TestResolveSnapshotDir_DefaultModelStaysAtRoot pins task-7's (D9) most
+// important property: DefaultModel resolves to the base directory
+// unchanged, byte-identical to the pre-task-7 behaviour, so every
+// snapshot written before per-model subdirectories existed is still
+// found.
+func TestResolveSnapshotDir_DefaultModelStaysAtRoot(t *testing.T) {
+	got, err := ResolveSnapshotDir("/tmp/snaps", DefaultModel)
+	if err != nil {
+		t.Fatalf("ResolveSnapshotDir: %v", err)
+	}
+	if got != "/tmp/snaps" {
+		t.Errorf("ResolveSnapshotDir(override, DefaultModel) = %q, want %q unchanged — existing FT-710 snapshots must keep working", got, "/tmp/snaps")
+	}
+}
+
+// TestResolveSnapshotDir_OtherModelGetsSubdir pins task-7's (D9)
+// collision-avoidance rule: any model other than DefaultModel gets its
+// own <base>/<model-slug>/ subdirectory — applied to an explicit
+// override too, since two models sharing one named directory is exactly
+// the collision this rule exists to prevent.
+func TestResolveSnapshotDir_OtherModelGetsSubdir(t *testing.T) {
+	got, err := ResolveSnapshotDir("/tmp/snaps", "FTdx10")
+	if err != nil {
+		t.Fatalf("ResolveSnapshotDir: %v", err)
+	}
+	if want := "/tmp/snaps/ftdx10"; got != want {
+		t.Errorf("ResolveSnapshotDir(override, %q) = %q, want %q", "FTdx10", got, want)
+	}
+}
+
+// TestResolveSnapshotDir_EmptySlugIsError pins fix-round-1's finding: a
+// non-DefaultModel name that slugs to "" must not silently fall back to
+// the base directory. filepath.Join drops empty elements, so
+// filepath.Join(base, "") == base — without this guard such a model
+// would collapse into exactly DefaultModel's own directory, precisely
+// the collision this task exists to prevent, with no error raised.
+func TestResolveSnapshotDir_EmptySlugIsError(t *testing.T) {
+	for _, model := range []string{"", "---", "!!!", ".", ".."} {
+		if got, err := ResolveSnapshotDir("/tmp/snaps", model); err == nil {
+			t.Errorf("ResolveSnapshotDir(override, %q) = %q, <nil error>, want an error (empty slug must not silently collapse into DefaultModel's directory)", model, got)
+		}
 	}
 }

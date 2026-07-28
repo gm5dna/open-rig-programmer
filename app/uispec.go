@@ -191,7 +191,7 @@ func (a *App) GetUISpec() (UISpecView, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	caps, advisory := currentCaps(a.conn)
+	caps, advisory := currentCaps(a.conn, a.working)
 	live := !advisory
 
 	banks := make([]BankView, 0, len(caps.Banks))
@@ -223,10 +223,16 @@ func (a *App) GetUISpec() (UISpecView, error) {
 	// TestGetUISpec_VocabMatchesValidate — task 38 landed
 	// spec.Capabilities.ShiftOptions/CTCSSStates as the same vocabulary's
 	// authoritative, driver-populated home, so this now reads it rather
-	// than restating it. CTCSSStateOptions extracts each ToneState's Value,
-	// preserving caps' own order; the RequiresTone fact each state also
-	// carries is not needed by the grid's option list today.
-	shiftOptions := append([]string(nil), caps.ShiftOptions...)
+	// than restating it. ShiftOptions extracts each ShiftOption's Value,
+	// preserving caps' own order; the Direction each option also carries
+	// is not needed by the grid's option list today. CTCSSStateOptions
+	// extracts each ToneState's Value, preserving caps' own order; the
+	// RequiresTone fact each state also carries is not needed by the
+	// grid's option list today.
+	shiftOptions := make([]string, len(caps.ShiftOptions))
+	for i, o := range caps.ShiftOptions {
+		shiftOptions[i] = o.Value
+	}
 	ctcssStateOptions := make([]string, len(caps.CTCSSStates))
 	for i, s := range caps.CTCSSStates {
 		ctcssStateOptions[i] = s.Value
@@ -242,17 +248,18 @@ func (a *App) GetUISpec() (UISpecView, error) {
 	text, _ := radiotext.For(wiring.DefaultModel)
 
 	return UISpecView{
-		Live:              live,
-		Banks:             banks,
-		Modes:             append([]string(nil), caps.Modes...),
-		ShiftOptions:      shiftOptions,
-		CTCSSStateOptions: ctcssStateOptions,
-		Tones:             tones,
-		TagMaxBytes:       caps.TagLen,
-		ClarMaxHz:         caps.ClarMaxHz,
-		ClarStepHz:        caps.ClarStepHz,
-		ToneScanSkipNote:  text.ToneScanSkipNote,
-		EraseDialogNote:   text.EraseDialogNote,
+		Live:                     live,
+		Banks:                    banks,
+		Modes:                    append([]string(nil), caps.Modes...),
+		ShiftOptions:             shiftOptions,
+		CTCSSStateOptions:        ctcssStateOptions,
+		Tones:                    tones,
+		TagMaxBytes:              caps.TagLen,
+		ClarMaxHz:                caps.ClarMaxHz,
+		ClarStepHz:               caps.ClarStepHz,
+		ToneScanSkipNote:         text.ToneScanSkipNote,
+		ToneScanSkipVerification: text.ToneScanSkipVerification,
+		EraseDialogNote:          text.EraseDialogNote,
 		PreservationTooltips: PreservationTooltipsView{
 			Tone:     text.PreservationTooltips.Tone,
 			ScanSkip: text.PreservationTooltips.ScanSkip,

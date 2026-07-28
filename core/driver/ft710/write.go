@@ -132,7 +132,7 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	// FieldState sanity before anything else trusts .State: a malformed
 	// field (unknown State, or a non-Known value smuggled alongside) is
 	// refused, not interpreted.
-	if err := ch.Data.CTCSSTone.Valid(); err != nil {
+	if err := ch.Data.CTCSSTone.Valid(s.caps); err != nil {
 		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{spec.FieldCTCSSTone}, Reason: err.Error()}
 	}
 	if err := ch.Data.ScanSkip.Valid(); err != nil {

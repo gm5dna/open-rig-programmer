@@ -5,6 +5,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"reflect"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/csvio"
@@ -80,7 +81,7 @@ func (a *App) ImportCSV() (ImportResultView, error) {
 	a.bumpWorkingRevLocked() // Fix 4: working-copy channels merged
 	a.dirty = true
 
-	caps, _ := currentCaps(a.conn)
+	caps, _ := currentCaps(a.conn, a.working)
 	issues := codeplug.Validate(a.working, caps)
 	return ImportResultView{Path: path, Merged: true, Issues: issuesToView(issues), Dirty: true}, nil
 }
@@ -117,7 +118,16 @@ func (a *App) ImportCHIRP() (ImportResultView, error) {
 	if err != nil {
 		return ImportResultView{Path: path, ParseError: err.Error()}, nil
 	}
-	imported, report, err := csvio.ImportCHIRP(f)
+	// Fix B2 (Codex fix-B review, MEDIUM): a.conn/a.working are guarded by
+	// a.mu (Disconnect, connect, ReadRadio, and LoadFile all mutate one or
+	// both of them under it) — snapshotted under the lock here rather
+	// than read live, which used to race a concurrent Disconnect (a
+	// genuine data race under `go test -race`; see
+	// TestImportCHIRP_ConnReadIsSynchronised).
+	a.mu.Lock()
+	caps, _ := currentCaps(a.conn, a.working)
+	a.mu.Unlock()
+	imported, report, err := csvio.ImportCHIRP(f, caps)
 	_ = f.Close()
 	lossEntries := lossEntriesToView(report)
 
@@ -145,13 +155,28 @@ func (a *App) ImportCHIRP() (ImportResultView, error) {
 	if a.working == nil {
 		return ImportResultView{}, ErrNothingLoaded
 	}
+	// Fix B2 (Codex fix-B review, MEDIUM): caps above was captured under
+	// a.mu, then the lock was released for the (potentially slow)
+	// parse/transform above — the connection or the working copy's own
+	// model may have changed underneath in that window (a Disconnect, a
+	// reconnect to a different session, or a concurrent LoadFile/
+	// ReadRadio replacing the working copy). imported was already
+	// transformed against the OLD caps; merging it against a codeplug
+	// that now describes a DIFFERENT target would recreate Fix B1's bug
+	// by another route. Re-resolve now and refuse outright on any
+	// disagreement — refuse, never corrupt — rather than merging
+	// possibly-stale data. See TestImportCHIRP_RefusesOnStaleCapabilities.
+	if fresh, _ := currentCaps(a.conn, a.working); !reflect.DeepEqual(fresh, caps) {
+		return ImportResultView{Path: path, LossEntries: lossEntries, RefusalReason: "the target radio's capabilities changed while this import was in progress (reconnected, disconnected, or the codeplug was replaced); re-import to continue"}, nil
+	}
 	if err := csvmerge.MergeCHIRP(a.working, imported); err != nil {
 		return ImportResultView{Path: path, LossEntries: lossEntries, RefusalReason: err.Error()}, nil
 	}
 	a.bumpWorkingRevLocked() // Fix 4: working-copy channels merged
 	a.dirty = true
 
-	caps, _ := currentCaps(a.conn)
+	// caps was fetched above, ahead of the csvio.ImportCHIRP call, and
+	// just reconfirmed unchanged above.
 	issues := codeplug.Validate(a.working, caps)
 	return ImportResultView{Path: path, Merged: true, LossEntries: lossEntries, Issues: issuesToView(issues), Dirty: true}, nil
 }

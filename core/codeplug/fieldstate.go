@@ -54,19 +54,26 @@ type ToneField struct {
 	Value spec.Tone `json:"value,omitempty"`
 }
 
-// Valid reports whether f is internally consistent: State must be one of
-// the three FieldState constants; Value must be the zero Tone unless
-// State == Known; and a Known Value must satisfy spec.ValidTone (i.e. be
-// present in the standard CTCSS chart) — the only tones this project's
-// CAT protocol can express, so a Known tone outside that table can never
-// have come from (or be sendable to) a real radio.
-func (f ToneField) Valid() error {
+// Valid reports whether f is internally consistent against caps: State
+// must be one of the three FieldState constants; Value must be the zero
+// Tone unless State == Known; and a Known Value must appear in
+// caps.CTCSSTones — THIS radio's own CTCSS chart, and the only tones its
+// CAT protocol can express, so a Known tone outside that chart can never
+// have come from (or be sendable to) it. caps.CTCSSTones is authoritative
+// here, not spec.StandardCTCSSTones: two radios in this project's family
+// can have different charts (see spec.Capabilities.CTCSSTones), and a
+// codeplug is only ever sendable to the one radio caps describes. An
+// empty caps.CTCSSTones is deliberately NOT "anything goes" — it fails
+// closed, rejecting every Known tone, consistent with this project's
+// refuse-never-corrupt posture: "no chart known" must never be treated as
+// "no chart needed".
+func (f ToneField) Valid(caps spec.Capabilities) error {
 	switch f.State {
 	case Known:
-		if spec.ValidTone(f.Value) {
+		if toneInChart(f.Value, caps.CTCSSTones) {
 			return nil
 		}
-		return fmt.Errorf("codeplug: ToneField: Known value %v is not in spec.StandardCTCSSTones", f.Value)
+		return fmt.Errorf("codeplug: ToneField: Known value %v is not in this radio's CTCSS chart", f.Value)
 	case Unknown, Unavailable:
 		if f.Value != 0 {
 			return fmt.Errorf("codeplug: ToneField: State %q must have zero Value, got %v", f.State, f.Value)
@@ -75,6 +82,18 @@ func (f ToneField) Valid() error {
 	default:
 		return fmt.Errorf("codeplug: ToneField: invalid State %q", f.State)
 	}
+}
+
+// toneInChart reports whether t appears in chart (a radio's
+// caps.CTCSSTones). An empty chart matches nothing — see Valid's doc
+// comment on why that is a deliberate fail-closed choice, not a bug.
+func toneInChart(t spec.Tone, chart []spec.Tone) bool {
+	for _, x := range chart {
+		if x == t {
+			return true
+		}
+	}
+	return false
 }
 
 // BoolField holds a boolean value together with how confidently it is

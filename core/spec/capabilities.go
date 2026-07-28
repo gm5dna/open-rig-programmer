@@ -43,13 +43,18 @@ type Capabilities struct {
 	// PMS): RequiredSlots is for individual slots.
 	RequiredSlots []string
 	// ShiftOptions lists the repeater shift vocabulary this radio's wire
-	// protocol expresses, in the UI's preferred order, e.g. "SIMPLEX",
-	// "PLUS", "MINUS". Typically built from StandardShiftOptions().
-	ShiftOptions []string
+	// protocol expresses, in the UI's preferred order, e.g. {Value: "PLUS",
+	// Direction: ShiftUp}. Typically built from StandardShiftOptions().
+	// Every entry's Direction must be one of ShiftNone/ShiftUp/ShiftDown
+	// (never the zero value, ShiftUnspecified) — see Validate.
+	ShiftOptions []ShiftOption
 	// CTCSSStates lists the CTCSS state vocabulary this radio's wire
-	// protocol expresses, each paired with whether that state requires a
-	// known CTCSS tone to accompany it (see ToneState.RequiresTone).
-	// Typically built from StandardCTCSSStates().
+	// protocol expresses, each paired with the semantic fact of whether
+	// that state requires a known CTCSS tone to accompany it (see
+	// ToneState.RequiresTone). Typically built from StandardCTCSSStates().
+	// Every entry's Semantics must be one of ToneOff/ToneEncode/
+	// ToneEncodeDecode (never the zero value, ToneSemanticsUnspecified) —
+	// see Validate.
 	CTCSSStates []ToneState
 }
 

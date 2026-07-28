@@ -97,7 +97,19 @@ func OpenFakeSessionFor(ctx context.Context, model string) (driver.Session, func
 		_ = r.Close()
 		return nil, nil, err
 	}
-	drv, _ := reg.Get(model) // just registered under this exact key
+	drv, ok := reg.Get(model)
+	if !ok {
+		// Unreachable while TestDriverTableKeysMatchDriverModel holds:
+		// entry.newDriver() was just registered under its own Model(),
+		// which that test pins equal to this table key. Returned rather
+		// than ignored so a future table whose key drifted from its
+		// driver's Model() fails with this package's own typed error
+		// instead of a nil-pointer panic when drv is used below — and the
+		// fake rig r, already constructed above, is closed first so it is
+		// never leaked.
+		_ = r.Close()
+		return nil, nil, &UnknownModelError{Model: model, Supported: SupportedModels()}
+	}
 
 	sess, err := drv.Open(ctx, r.Port(), driver.Identity{Port: "fake", USBSerial: "SIM0001"})
 	if err != nil {

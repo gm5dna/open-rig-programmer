@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
 
 // TestCheckOverwrite_NoExistingFile pins checkOverwrite's baseline case:
@@ -123,9 +124,13 @@ func TestLoadCodeplugStrict_SchemaTooNew(t *testing.T) {
 // when given, overrides the default outright. Moved here from
 // read_test.go by task 14, since write.go now uses resolveSnapshotDir
 // too (see fileio.go's doc comment on the function itself) — behaviour
-// unchanged.
+// unchanged. Threaded with wiring.DefaultModel by task-7 (D9) so it
+// keeps pinning the same override-passthrough property now that
+// resolveSnapshotDir is model-keyed — see
+// TestResolveSnapshotDir_OtherModelGetsSubdir for the non-default-model
+// override case.
 func TestResolveSnapshotDir_Override(t *testing.T) {
-	got, err := resolveSnapshotDir("/tmp/some/override")
+	got, err := resolveSnapshotDir("/tmp/some/override", wiring.DefaultModel)
 	if err != nil {
 		t.Fatalf("resolveSnapshotDir(override): unexpected error: %v", err)
 	}
@@ -135,18 +140,69 @@ func TestResolveSnapshotDir_Override(t *testing.T) {
 }
 
 // TestResolveSnapshotDir_Default pins the default: <UserConfigDir>/rigprog/snapshots.
+// Threaded with wiring.DefaultModel by task-7 (D9): DefaultModel stays
+// at this base directory unchanged, so every snapshot written before
+// per-model subdirectories existed is still found.
 func TestResolveSnapshotDir_Default(t *testing.T) {
 	cfgDir, err := os.UserConfigDir()
 	if err != nil {
 		t.Skipf("os.UserConfigDir unavailable in this environment: %v", err)
 	}
-	got, err := resolveSnapshotDir("")
+	got, err := resolveSnapshotDir("", wiring.DefaultModel)
 	if err != nil {
 		t.Fatalf("resolveSnapshotDir(\"\"): unexpected error: %v", err)
 	}
 	want := filepath.Join(cfgDir, "rigprog", "snapshots")
 	if got != want {
 		t.Errorf("resolveSnapshotDir(\"\") = %q, want %q", got, want)
+	}
+}
+
+// TestResolveSnapshotDir_DefaultModelStaysAtRoot mirrors
+// internal/wiring's own test of the same name: pins task-7's (D9) most
+// important property, that DefaultModel resolves to the base directory
+// unchanged, byte-identical to the pre-task-7 behaviour, so every
+// snapshot written before per-model subdirectories existed is still
+// found.
+func TestResolveSnapshotDir_DefaultModelStaysAtRoot(t *testing.T) {
+	got, err := resolveSnapshotDir("/tmp/snaps", wiring.DefaultModel)
+	if err != nil {
+		t.Fatalf("resolveSnapshotDir: %v", err)
+	}
+	if got != "/tmp/snaps" {
+		t.Errorf("resolveSnapshotDir(override, DefaultModel) = %q, want %q unchanged — existing FT-710 snapshots must keep working", got, "/tmp/snaps")
+	}
+}
+
+// TestResolveSnapshotDir_OtherModelGetsSubdir mirrors internal/wiring's
+// own test of the same name: pins task-7's (D9) collision-avoidance
+// rule, that any model other than DefaultModel gets its own
+// <base>/<model-slug>/ subdirectory — applied to an explicit override
+// too, since two models sharing one named directory is exactly the
+// collision this rule exists to prevent.
+func TestResolveSnapshotDir_OtherModelGetsSubdir(t *testing.T) {
+	got, err := resolveSnapshotDir("/tmp/snaps", "FTdx10")
+	if err != nil {
+		t.Fatalf("resolveSnapshotDir: %v", err)
+	}
+	if want := "/tmp/snaps/ftdx10"; got != want {
+		t.Errorf("resolveSnapshotDir(override, %q) = %q, want %q", "FTdx10", got, want)
+	}
+}
+
+// TestResolveSnapshotDir_EmptySlugIsError mirrors internal/wiring's own
+// test of the same name: pins fix-round-1's finding, that a
+// non-wiring.DefaultModel name which slugs to "" must not silently fall
+// back to the base directory. filepath.Join drops empty elements, so
+// filepath.Join(base, "") == base — without this guard such a model
+// would collapse into exactly wiring.DefaultModel's own directory,
+// precisely the collision this task exists to prevent, with no error
+// raised.
+func TestResolveSnapshotDir_EmptySlugIsError(t *testing.T) {
+	for _, model := range []string{"", "---", "!!!", ".", ".."} {
+		if got, err := resolveSnapshotDir("/tmp/snaps", model); err == nil {
+			t.Errorf("resolveSnapshotDir(override, %q) = %q, <nil error>, want an error (empty slug must not silently collapse into DefaultModel's directory)", model, got)
+		}
 	}
 }
 

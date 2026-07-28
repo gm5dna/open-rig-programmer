@@ -360,6 +360,15 @@ type UISpecView struct {
 	// CAT — served from internal/radiotext.Text.ToneScanSkipNote and
 	// rendered by the frontend from this field.
 	ToneScanSkipNote string
+	// ToneScanSkipVerification is the grid legend's second sentence,
+	// stating what is and is not hardware-verified about Tone/Scan Skip
+	// preservation across a rewrite for this radio — served from
+	// internal/radiotext.Text.ToneScanSkipVerification. Left in the
+	// frontend by task 41 when it migrated ToneScanSkipNote; moved here
+	// to close ledger minor m42a, since it is a claim about THIS radio's
+	// write trials that a future model pinned at
+	// writeTrialsComplete=false could not truthfully make.
+	ToneScanSkipVerification string
 	// EraseDialogNote is the "no CAT erase command" explanation shown when
 	// a user asks to delete a channel, or reviews a blocked-erase entry
 	// before sending — served from internal/radiotext.Text.EraseDialogNote

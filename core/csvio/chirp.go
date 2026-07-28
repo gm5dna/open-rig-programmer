@@ -19,10 +19,10 @@ import (
 // LossEntry.
 const (
 	// ActionDropped means the CHIRP data was discarded outright: the
-	// FT-710 has no field to hold it at all.
+	// radio has no field to hold it at all.
 	ActionDropped = "dropped"
 	// ActionApproximated means the CHIRP data was kept but altered to
-	// fit the FT-710's constraints (e.g. a tag truncated or
+	// fit the radio's constraints (e.g. a tag truncated or
 	// charset-sanitised).
 	ActionApproximated = "approximated"
 	// ActionUnsupported means the CHIRP data could not be mapped at
@@ -73,7 +73,7 @@ func (r LossReport) HasBlocking() bool {
 var chirpCoreColumns = []string{"Location", "Frequency", "Mode"}
 
 // chirpExtraColumns lists CHIRP columns this package recognises but has
-// no FT-710 field for. Per row, an empty cell in one of these is
+// no radio field for. Per row, an empty cell in one of these is
 // silently ignored (it is that column's default/absent state); a
 // non-empty cell is a non-blocking ActionDropped LossEntry. DtcsCode and
 // DtcsPolarity get a second "default" value each (CHIRP's own
@@ -100,7 +100,7 @@ var chirpExtraColumnDefaults = map[string]string{
 var chirpOtherKnownColumns = []string{"Name", "Duplex", "Offset", "Tone", "rToneFreq", "cToneFreq", "Skip"}
 
 // chirpKnownColumns is the set of every CHIRP column name ImportCHIRP
-// recognises at all, whether or not it maps to an FT-710 field
+// recognises at all, whether or not it maps to a field on the radio
 // (chirpCoreColumns + chirpExtraColumns + chirpOtherKnownColumns). A
 // header column NOT in this set is unknown to this package entirely: see
 // ImportCHIRP's unrecognisedColumns and its Header doc paragraph.
@@ -118,9 +118,12 @@ var chirpKnownColumns = func() map[string]bool {
 	return set
 }()
 
-// chirpModeMap maps a CHIRP Mode value to its FT-710 display-name
-// equivalent. CW and CWR both exist on the FT-710 as sideband-specific
-// CW modes (CW-U/CW-L) rather than a single "CW" — see the brief.
+// chirpModeMap maps a CHIRP Mode value to this radio family's
+// display-name equivalent. CW and CWR both exist on this radio family as
+// sideband-specific CW modes (CW-U/CW-L) rather than a single "CW" — see
+// the brief. The RESULT is membership-checked against caps.Modes (see
+// containsMode): mapping to a mode name is CHIRP-dialect knowledge, but
+// whether THIS radio actually has that mode is caps' question.
 var chirpModeMap = map[string]string{
 	"FM":   "FM",
 	"NFM":  "FM-N",
@@ -156,7 +159,7 @@ func isCHIRPDigits(s string) bool {
 // value cannot represent every whole-Hz frequency exactly, and exactness
 // here is safety-relevant: this value may be sent to a radio). Any
 // digits beyond the 6th decimal place (whole-Hz precision at MHz scale)
-// must all be zero, or the value has a sub-Hz remainder the FT-710
+// must all be zero, or the value has a sub-Hz remainder the radio
 // cannot store (errCHIRPFreqFractionalHz).
 func parseCHIRPFrequency(s string) (uint32, error) {
 	s = strings.TrimSpace(s)
@@ -208,40 +211,88 @@ func parseCHIRPFrequency(s string) (uint32, error) {
 // parseCHIRPTone parses a CHIRP rToneFreq/cToneFreq cell (decimal Hz,
 // e.g. "88.5") EXACTLY (see parseExactToneDeciHz — no floating point, and
 // no more than one decimal place of precision; "88.54" is rejected
-// outright rather than rounded) and reports whether the result satisfies
-// spec.ValidTone — the only tones the FT-710's CAT protocol can express.
-// A cell that fails to parse, carries more precision than one decimal
-// place, or parses but matches no standard tone, returns (0, false): all
-// three are equally unusable and the caller reports a single Blocking
-// LossEntry either way.
-func parseCHIRPTone(s string) (spec.Tone, bool) {
+// outright rather than rounded) and reports whether the result appears in
+// this radio's own CTCSS chart (caps.CTCSSTones). A cell that fails to
+// parse, carries more precision than one decimal place, or parses but
+// matches no tone in caps' chart, returns (0, false): all three are
+// equally unusable and the caller reports a single Blocking LossEntry
+// either way.
+func parseCHIRPTone(s string, caps spec.Capabilities) (spec.Tone, bool) {
 	deciHz, err := parseExactToneDeciHz(strings.TrimSpace(s))
 	if err != nil {
 		return 0, false
 	}
 	t := spec.Tone(deciHz)
-	if !spec.ValidTone(t) {
+	if !capsHasTone(caps, t) {
 		return 0, false
 	}
 	return t, true
 }
 
-// chirpTagByteOK reports whether b is a legal FT-710 tag byte: printable
-// ASCII 0x20-0x7E, excluding ';' (0x3B). This restates
-// codeplug's validTagByte (which is unexported) rather than reaching
-// into that package for it — core/csvio depends only on core/codeplug's
-// exported surface, core/spec, and stdlib.
+// shiftFor returns the wire-form shift value caps uses for direction, and
+// true, or ("", false) when this radio expresses no such shift. Capabilities
+// with two options for one direction cannot reach here: spec.Validate
+// rejects them, so the answer is unambiguous by construction.
+func shiftFor(caps spec.Capabilities, d spec.ShiftDirection) (string, bool) {
+	for _, o := range caps.ShiftOptions {
+		if o.Direction == d {
+			return o.Value, true
+		}
+	}
+	return "", false
+}
+
+// toneStateFor returns the wire-form CTCSS state caps uses for the given
+// tone semantics, and true, or ("", false) when this radio expresses no
+// such state. As with shiftFor, spec.Validate guarantees at most one
+// state per semantics value.
+func toneStateFor(caps spec.Capabilities, semantics spec.ToneSemantics) (string, bool) {
+	for _, s := range caps.CTCSSStates {
+		if s.Semantics == semantics {
+			return s.Value, true
+		}
+	}
+	return "", false
+}
+
+// capsHasTone reports whether t is in this radio's CTCSS chart.
+func capsHasTone(caps spec.Capabilities, t spec.Tone) bool {
+	for _, x := range caps.CTCSSTones {
+		if x == t {
+			return true
+		}
+	}
+	return false
+}
+
+// containsMode reports whether caps lists the given display-name mode.
+func containsMode(caps spec.Capabilities, mode string) bool {
+	for _, m := range caps.Modes {
+		if m == mode {
+			return true
+		}
+	}
+	return false
+}
+
+// chirpTagByteOK reports whether b is a legal tag byte for this radio
+// family: printable ASCII 0x20-0x7E, excluding ';' (0x3B). Printable
+// ASCII excluding ';' is a family-wide CAT fact — ';' is the protocol
+// terminator, not a per-model choice — so this needs no capability. This
+// restates codeplug's validTagByte (which is unexported) rather than
+// reaching into that package for it — core/csvio depends only on
+// core/codeplug's exported surface, core/spec, and stdlib.
 func chirpTagByteOK(b byte) bool {
 	return b >= 0x20 && b <= 0x7E && b != ';'
 }
 
-// sanitizeCHIRPName turns a CHIRP Name into an FT-710 tag: any byte
-// outside the FT-710 tag charset is replaced with a space (byte for
-// byte, so this never has to worry about splitting a multi-byte UTF-8
-// rune), and the result is then truncated to the FT-710's 12-byte tag
-// limit. Each transformation that actually changed something produces
-// its own non-blocking ActionApproximated LossEntry.
-func sanitizeCHIRPName(line int, name string) (string, []LossEntry) {
+// sanitizeCHIRPName turns a CHIRP Name into a radio tag: any byte outside
+// the radio's tag charset is replaced with a space (byte for byte, so
+// this never has to worry about splitting a multi-byte UTF-8 rune), and
+// the result is then truncated to caps.TagLen. Each transformation that
+// actually changed something produces its own non-blocking
+// ActionApproximated LossEntry.
+func sanitizeCHIRPName(line int, name string, caps spec.Capabilities) (string, []LossEntry) {
 	var entries []LossEntry
 	b := []byte(name)
 	sanitized := false
@@ -254,28 +305,28 @@ func sanitizeCHIRPName(line int, name string) (string, []LossEntry) {
 	if sanitized {
 		entries = append(entries, LossEntry{
 			Line: line, Column: "Name", Value: name, Action: ActionApproximated, Blocking: false,
-			Detail: "Name contained a byte outside the FT-710 tag charset (printable ASCII 0x20-0x7E, excluding ';'); replaced with a space",
+			Detail: fmt.Sprintf("Name contained a byte outside the %s tag charset (printable ASCII 0x20-0x7E, excluding ';'); replaced with a space", caps.Model),
 		})
 	}
-	if len(b) > 12 {
+	if len(b) > caps.TagLen {
 		full := string(b)
-		b = b[:12]
+		b = b[:caps.TagLen]
 		entries = append(entries, LossEntry{
 			Line: line, Column: "Name", Value: name, Action: ActionApproximated, Blocking: false,
-			Detail: fmt.Sprintf("Name %q is %d bytes, exceeds the FT-710's 12-byte tag limit; truncated to %q", full, len(full), string(b)),
+			Detail: fmt.Sprintf("Name %q is %d bytes, exceeds the %s's %d-byte tag limit; truncated to %q", full, len(full), caps.Model, caps.TagLen, string(b)),
 		})
 	}
 	return string(b), entries
 }
 
 // importCHIRPRow builds the Channel one CHIRP data row describes (nil if
-// its Location cannot be mapped to any FT-710 slot at all) and every
+// its Location cannot be mapped to a slot at all) and every
 // LossEntry that row produced. line is the row's 1-based CSV line;
 // header/colIndex/record let cell values be looked up by CHIRP column
 // name regardless of column order; a column absent from the header (any
 // chirpExtraColumns/Tone-pair column beyond the three required columns)
 // reads as "".
-func importCHIRPRow(line int, colIndex map[string]int, record []string) (*codeplug.Channel, []LossEntry) {
+func importCHIRPRow(line int, colIndex map[string]int, record []string, caps spec.Capabilities) (*codeplug.Channel, []LossEntry) {
 	// cell looks up name by column name; a name absent from the header
 	// at all (any recognised column beyond the three required ones, see
 	// chirpCoreColumns) reads as "". ImportCHIRP guarantees
@@ -293,7 +344,11 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string) (*codepl
 
 	// Location -> slot. No slot means no Channel can be built at all:
 	// this is the one field whose failure drops the whole row rather
-	// than just leaving a field unresolved.
+	// than just leaving a field unresolved. CHIRP Locations are 1-based
+	// positions in the radio's main memory bank, so Location N is that
+	// bank's Nth slot — the bank supplies both the range and the slot's
+	// canonical wire form, neither of which this package may assume.
+	memBank, haveMemBank := caps.Bank(spec.BankMemory)
 	locRaw := cell("Location")
 	locN, err := strconv.Atoi(strings.TrimSpace(locRaw))
 	if err != nil {
@@ -302,18 +357,24 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string) (*codepl
 			Detail: "Location is not a valid integer; cannot map to a memory slot",
 		})
 	}
-	if locN < 1 || locN > 99 {
+	if !haveMemBank || len(memBank.Slots) == 0 {
 		return nil, append(entries, LossEntry{
 			Line: line, Column: "Location", Value: locRaw, Action: ActionUnsupported, Blocking: true,
-			Detail: "FT-710 memory slots are 001-099; Location is out of range",
+			Detail: fmt.Sprintf("%s has no memory bank to import into", caps.Model),
 		})
 	}
-	slot := fmt.Sprintf("%03d", locN)
+	if locN < 1 || locN > len(memBank.Slots) {
+		return nil, append(entries, LossEntry{
+			Line: line, Column: "Location", Value: locRaw, Action: ActionUnsupported, Blocking: true,
+			Detail: fmt.Sprintf("%s memory slots are %s-%s; Location is out of range", caps.Model, memBank.Slots[0], memBank.Slots[len(memBank.Slots)-1]),
+		})
+	}
+	slot := memBank.Slots[locN-1]
 
 	data := &codeplug.ChannelData{}
 
 	// Name -> Tag.
-	tag, nameEntries := sanitizeCHIRPName(line, cell("Name"))
+	tag, nameEntries := sanitizeCHIRPName(line, cell("Name"), caps)
 	data.Tag = tag
 	entries = append(entries, nameEntries...)
 
@@ -324,7 +385,7 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string) (*codepl
 		detail := "Frequency is not a valid decimal MHz value"
 		switch {
 		case errors.Is(err, errCHIRPFreqFractionalHz):
-			detail = "Frequency has a sub-Hz fractional remainder the FT-710 cannot store"
+			detail = fmt.Sprintf("Frequency has a sub-Hz fractional remainder the %s cannot store", caps.Model)
 		case errors.Is(err, errCHIRPFreqRange):
 			detail = "Frequency exceeds the representable range"
 		}
@@ -333,35 +394,65 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string) (*codepl
 		data.FreqHz = freqHz
 	}
 
-	// Mode.
+	// Mode. chirpModeMap is CHIRP-dialect knowledge — which of this radio
+	// family's display modes a CHIRP mode name should become — and stays
+	// here. Whether the radio actually HAS that mode is caps' question,
+	// and a mapped mode the radio lacks blocks rather than being written.
 	modeRaw := cell("Mode")
-	if mapped, ok := chirpModeMap[modeRaw]; ok {
-		data.Mode = mapped
-	} else {
+	mapped, mappable := chirpModeMap[modeRaw]
+	switch {
+	case !mappable:
 		entries = append(entries, LossEntry{
 			Line: line, Column: "Mode", Value: modeRaw, Action: ActionUnsupported, Blocking: true,
-			Detail: fmt.Sprintf("CHIRP mode %q has no FT-710 equivalent", modeRaw),
+			Detail: fmt.Sprintf("CHIRP mode %q has no %s equivalent", modeRaw, caps.Model),
 		})
+	case !containsMode(caps, mapped):
+		entries = append(entries, LossEntry{
+			Line: line, Column: "Mode", Value: modeRaw, Action: ActionUnsupported, Blocking: true,
+			Detail: fmt.Sprintf("CHIRP mode %q maps to %q, which %s does not support", modeRaw, mapped, caps.Model),
+		})
+	default:
+		data.Mode = mapped
 	}
 
-	// Duplex -> Shift.
+	// Duplex -> Shift. Which wire value means "up", "down" or "none" is
+	// this radio's own vocabulary, so it is asked for by DIRECTION rather
+	// than named here.
 	switch duplexRaw := cell("Duplex"); duplexRaw {
-	case "":
-		data.Shift = "SIMPLEX"
-	case "+":
-		data.Shift = "PLUS"
-	case "-":
-		data.Shift = "MINUS"
-	case "off":
-		data.Shift = "SIMPLEX"
-		entries = append(entries, LossEntry{
-			Line: line, Column: "Duplex", Value: duplexRaw, Action: ActionDropped, Blocking: false,
-			Detail: "CHIRP \"off\" duplex mapped to SIMPLEX; the distinction between \"no duplex configured\" and \"simplex\" is not representable",
-		})
+	case "", "off":
+		v, ok := shiftFor(caps, spec.ShiftNone)
+		if !ok {
+			entries = append(entries, LossEntry{
+				Line: line, Column: "Duplex", Value: duplexRaw, Action: ActionUnsupported, Blocking: true,
+				Detail: fmt.Sprintf("%s expresses no simplex shift option", caps.Model),
+			})
+			break
+		}
+		data.Shift = v
+		if duplexRaw == "off" {
+			entries = append(entries, LossEntry{
+				Line: line, Column: "Duplex", Value: duplexRaw, Action: ActionDropped, Blocking: false,
+				Detail: fmt.Sprintf("CHIRP \"off\" duplex mapped to %s; the distinction between \"no duplex configured\" and \"simplex\" is not representable", v),
+			})
+		}
+	case "+", "-":
+		dir, label := spec.ShiftUp, "up"
+		if duplexRaw == "-" {
+			dir, label = spec.ShiftDown, "down"
+		}
+		v, ok := shiftFor(caps, dir)
+		if !ok {
+			entries = append(entries, LossEntry{
+				Line: line, Column: "Duplex", Value: duplexRaw, Action: ActionUnsupported, Blocking: true,
+				Detail: fmt.Sprintf("%s expresses no %s-shift option", caps.Model, label),
+			})
+			break
+		}
+		data.Shift = v
 	case "split":
 		entries = append(entries, LossEntry{
 			Line: line, Column: "Duplex", Value: duplexRaw, Action: ActionUnsupported, Blocking: true,
-			Detail: "split-frequency duplex (independent TX/RX frequencies) has no FT-710 equivalent",
+			Detail: fmt.Sprintf("split-frequency duplex (independent TX/RX frequencies) has no %s equivalent", caps.Model),
 		})
 	default:
 		entries = append(entries, LossEntry{
@@ -370,11 +461,11 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string) (*codepl
 		})
 	}
 
-	// Offset: FT-710 has no per-channel repeater offset at all.
+	// Offset: the radio has no per-channel repeater offset at all.
 	if offsetRaw := cell("Offset"); isNonZeroCHIRPOffset(offsetRaw) {
 		entries = append(entries, LossEntry{
 			Line: line, Column: "Offset", Value: offsetRaw, Action: ActionDropped, Blocking: false,
-			Detail: "FT-710 stores no per-channel repeater offset; shift magnitude is a global menu setting",
+			Detail: fmt.Sprintf("%s stores no per-channel repeater offset; shift magnitude is a global menu setting", caps.Model),
 		})
 	}
 
@@ -385,12 +476,29 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string) (*codepl
 	// the report with noise on every ordinary row.
 	switch toneRaw := cell("Tone"); toneRaw {
 	case "":
-		data.CTCSS = "OFF"
 		data.CTCSSTone = codeplug.ToneField{State: codeplug.Unknown}
+		v, ok := toneStateFor(caps, spec.ToneOff)
+		if !ok {
+			entries = append(entries, LossEntry{
+				Line: line, Column: "Tone", Value: toneRaw, Action: ActionUnsupported, Blocking: true,
+				Detail: fmt.Sprintf("%s expresses no off CTCSS state", caps.Model),
+			})
+			break
+		}
+		data.CTCSS = v
 	case "Tone":
 		rToneRaw := cell("rToneFreq")
-		data.CTCSS = "ENC"
-		if tone, ok := parseCHIRPTone(rToneRaw); ok {
+		data.CTCSSTone = codeplug.ToneField{State: codeplug.Unknown}
+		v, ok := toneStateFor(caps, spec.ToneEncode)
+		if !ok {
+			entries = append(entries, LossEntry{
+				Line: line, Column: "Tone", Value: toneRaw, Action: ActionUnsupported, Blocking: true,
+				Detail: fmt.Sprintf("%s expresses no encode-only CTCSS state", caps.Model),
+			})
+			break
+		}
+		data.CTCSS = v
+		if tone, ok := parseCHIRPTone(rToneRaw, caps); ok {
 			// CAT cannot yet write a per-channel CTCSS tone (see
 			// spec.FieldCTCSSTone / testCapabilities Write:Unverified),
 			// but the VALUE is genuinely known here, so it is recorded
@@ -400,22 +508,29 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string) (*codepl
 			// enabled without a Known tone, which this is not).
 			data.CTCSSTone = codeplug.ToneField{State: codeplug.Known, Value: tone}
 		} else {
-			data.CTCSSTone = codeplug.ToneField{State: codeplug.Unknown}
 			entries = append(entries, LossEntry{
 				Line: line, Column: "rToneFreq", Value: rToneRaw, Action: ActionUnsupported, Blocking: true,
-				Detail: "tone frequency is not in the FT-710's standard CTCSS chart (spec.StandardCTCSSTones)",
+				Detail: fmt.Sprintf("tone frequency is not in the %s's CTCSS chart", caps.Model),
 			})
 		}
 	case "TSQL":
 		cToneRaw := cell("cToneFreq")
-		data.CTCSS = "ENC-DEC"
-		if tone, ok := parseCHIRPTone(cToneRaw); ok {
+		data.CTCSSTone = codeplug.ToneField{State: codeplug.Unknown}
+		v, ok := toneStateFor(caps, spec.ToneEncodeDecode)
+		if !ok {
+			entries = append(entries, LossEntry{
+				Line: line, Column: "Tone", Value: toneRaw, Action: ActionUnsupported, Blocking: true,
+				Detail: fmt.Sprintf("%s expresses no encode+decode CTCSS state", caps.Model),
+			})
+			break
+		}
+		data.CTCSS = v
+		if tone, ok := parseCHIRPTone(cToneRaw, caps); ok {
 			data.CTCSSTone = codeplug.ToneField{State: codeplug.Known, Value: tone}
 		} else {
-			data.CTCSSTone = codeplug.ToneField{State: codeplug.Unknown}
 			entries = append(entries, LossEntry{
 				Line: line, Column: "cToneFreq", Value: cToneRaw, Action: ActionUnsupported, Blocking: true,
-				Detail: "tone frequency is not in the FT-710's standard CTCSS chart (spec.StandardCTCSSTones)",
+				Detail: fmt.Sprintf("tone frequency is not in the %s's CTCSS chart", caps.Model),
 			})
 		}
 	case "DTCS", "Cross":
@@ -423,7 +538,7 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string) (*codepl
 		data.CTCSSTone = codeplug.ToneField{State: codeplug.Unknown}
 		entries = append(entries, LossEntry{
 			Line: line, Column: "Tone", Value: toneRaw, Action: ActionUnsupported, Blocking: true,
-			Detail: fmt.Sprintf("FT-710 CAT has no DCS memory write; %s tone squelch cannot be imported", toneRaw),
+			Detail: fmt.Sprintf("%s CAT has no DCS memory write; %s tone squelch cannot be imported", caps.Model, toneRaw),
 		})
 	default:
 		data.CTCSS = ""
@@ -444,7 +559,7 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string) (*codepl
 		data.ScanSkip = codeplug.BoolField{State: codeplug.Unknown}
 		entries = append(entries, LossEntry{
 			Line: line, Column: "Skip", Value: skipRaw, Action: ActionDropped, Blocking: false,
-			Detail: fmt.Sprintf("CHIRP Skip value %q has no FT-710 equivalent; scan-skip left unresolved", skipRaw),
+			Detail: fmt.Sprintf("CHIRP Skip value %q has no %s equivalent; scan-skip left unresolved", skipRaw, caps.Model),
 		})
 	}
 
@@ -458,7 +573,7 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string) (*codepl
 		}
 		entries = append(entries, LossEntry{
 			Line: line, Column: col, Value: v, Action: ActionDropped, Blocking: false,
-			Detail: fmt.Sprintf("FT-710 has no equivalent field for CHIRP %s; value discarded", col),
+			Detail: fmt.Sprintf("%s has no equivalent field for CHIRP %s; value discarded", caps.Model, col),
 		})
 	}
 
@@ -500,11 +615,13 @@ func isNonZeroCHIRPOffset(s string) bool {
 // never refuses to return data because of a Blocking entry — the CLI/GUI
 // enforces the gate, this function only reports it.
 //
-// Like Import, this is a SYNTACTIC transform: it does not consult
-// codeplug.Validate or any Capabilities, and a channel with no Blocking
-// entries against it is not thereby guaranteed valid for any particular
-// radio (e.g. its frequency band). Validate remains the semantic gate
-// callers must run before a send.
+// Unlike Import, this consults caps — but only for VOCABULARY AND SHAPE:
+// the memory bank's slot space, the tag length, the shift and CTCSS state
+// vocabularies, and the mode and CTCSS-tone tables. It still does NOT run
+// codeplug.Validate, and a channel with no Blocking entries against it is
+// still not thereby guaranteed valid for the radio (its frequency band,
+// its per-field write support, its radio identity). Validate remains the
+// semantic gate a caller must run before a send.
 //
 // Header: recognised at minimum are Location, Name, Frequency, Duplex,
 // Offset, Tone, rToneFreq, cToneFreq, DtcsCode, DtcsPolarity, Mode,
@@ -523,7 +640,7 @@ func isNonZeroCHIRPOffset(s string) bool {
 // ActionUnsupported LossEntry naming the column, distinct from the
 // recognised-but-unmapped columns (chirpExtraColumns), which are
 // non-blocking even when they carry data.
-func ImportCHIRP(rd io.Reader) ([]codeplug.Channel, LossReport, error) {
+func ImportCHIRP(rd io.Reader, caps spec.Capabilities) ([]codeplug.Channel, LossReport, error) {
 	cr := csv.NewReader(rd)
 	cr.FieldsPerRecord = -1
 
@@ -605,7 +722,7 @@ func ImportCHIRP(rd io.Reader) ([]codeplug.Channel, LossReport, error) {
 			continue
 		}
 
-		ch, entries := importCHIRPRow(line, colIndex, record)
+		ch, entries := importCHIRPRow(line, colIndex, record, caps)
 		report.Entries = append(report.Entries, entries...)
 
 		for _, col := range unrecognisedColumns {

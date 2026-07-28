@@ -110,7 +110,7 @@ func (a *App) applyEditsLocked(chs []codeplug.Channel) (EditResult, error) {
 	a.bumpWorkingRevLocked() // Fix 4: working-copy channels mutated
 	a.dirty = true
 
-	caps, _ := currentCaps(a.conn)
+	caps, _ := currentCaps(a.conn, a.working)
 	issues := codeplug.Validate(a.working, caps)
 	return EditResult{Issues: issuesToView(issues), Dirty: a.dirty}, nil
 }
@@ -157,7 +157,7 @@ func (a *App) Validate() (ValidationView, error) {
 	if a.working == nil {
 		return ValidationView{}, ErrNothingLoaded
 	}
-	caps, advisory := currentCaps(a.conn)
+	caps, advisory := currentCaps(a.conn, a.working)
 	issues := codeplug.Validate(a.working, caps)
 	return ValidationView{Issues: issuesToView(issues), Advisory: advisory}, nil
 }

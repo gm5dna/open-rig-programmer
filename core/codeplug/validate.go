@@ -83,6 +83,17 @@ func toneStateValues(states []spec.ToneState) []string {
 	return values
 }
 
+// shiftOptionValues returns the Value of every entry in opts, in order —
+// for building a caps-driven vocabulary list for an error message
+// without re-deriving a []string by hand at the call site.
+func shiftOptionValues(opts []spec.ShiftOption) []string {
+	values := make([]string, len(opts))
+	for i, o := range opts {
+		values[i] = o.Value
+	}
+	return values
+}
+
 // quotedList formats vals as a comma-separated list of double-quoted
 // values, e.g. []string{"OFF", "ENC"} -> `"OFF", "ENC"` — so a Validate
 // error message names caps' own vocabulary list rather than a hardcoded
@@ -310,7 +321,7 @@ func validateChannelData(slot string, d ChannelData, caps spec.Capabilities) []I
 		})
 	}
 
-	if err := d.CTCSSTone.Valid(); err != nil {
+	if err := d.CTCSSTone.Valid(caps); err != nil {
 		issues = append(issues, Issue{
 			Slot: slot, Field: spec.FieldCTCSSTone, Severity: SeverityError,
 			Msg: fmt.Sprintf("slot %q: %v", slot, err),
@@ -323,23 +334,23 @@ func validateChannelData(slot string, d ChannelData, caps spec.Capabilities) []I
 		})
 	}
 
-	// A CTCSS state that requires a tone (RequiresTone true for a state
+	// A CTCSS state that requires a tone (RequiresTone() true for a state
 	// matched against caps; an unmatched state — already flagged as an
 	// Error above — is conservatively treated the same way, since it
 	// cannot make a positive claim about not needing one) but has no
 	// known CTCSSTone gets a Warning: CAT cannot set a per-channel tone,
 	// so the radio's own existing tone will apply as-is.
-	if (!ctcssKnown || ctcssState.RequiresTone) && d.CTCSSTone.State != Known {
+	if (!ctcssKnown || ctcssState.RequiresTone()) && d.CTCSSTone.State != Known {
 		issues = append(issues, Issue{
 			Slot: slot, Field: spec.FieldCTCSSTone, Severity: SeverityWarning,
 			Msg: fmt.Sprintf("slot %q: tone cannot be set via CAT; the radio's current per-channel tone will apply", slot),
 		})
 	}
 
-	if !containsString(caps.ShiftOptions, d.Shift) {
+	if !containsString(shiftOptionValues(caps.ShiftOptions), d.Shift) {
 		issues = append(issues, Issue{
 			Slot: slot, Field: spec.FieldShift, Severity: SeverityError,
-			Msg: fmt.Sprintf("slot %q: shift %q must be one of %s", slot, d.Shift, quotedList(caps.ShiftOptions)),
+			Msg: fmt.Sprintf("slot %q: shift %q must be one of %s", slot, d.Shift, quotedList(shiftOptionValues(caps.ShiftOptions))),
 		})
 	}
 

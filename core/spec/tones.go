@@ -56,11 +56,14 @@ func StandardCTCSSTones() [50]Tone {
 	return standardCTCSSTones
 }
 
-// ValidTone reports whether t appears in StandardCTCSSTones — the only
-// tones this project's CAT protocol can express. Prefer this over
-// fetching the whole table with StandardCTCSSTones when a caller only
-// needs to answer "is this a real tone", e.g.
-// codeplug.ToneField.Valid.
+// ValidTone reports whether t appears in StandardCTCSSTones. Prefer this
+// over fetching the whole table with StandardCTCSSTones when a caller
+// only needs to answer "is this a real tone in the standard family-wide
+// chart" — a generic, radio-neutral question. It is NOT the check for
+// whether a tone is sendable to a specific radio: that is
+// codeplug.ToneField.Valid, which consults a Capabilities' own
+// CTCSSTones, since not every radio in this family necessarily shares
+// the standard chart.
 func ValidTone(t Tone) bool {
 	for _, s := range standardCTCSSTones {
 		if s == t {

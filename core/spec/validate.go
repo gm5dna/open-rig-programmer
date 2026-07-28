@@ -58,6 +58,46 @@ func validateVocab(fieldName string, values []string) []string {
 	return problems
 }
 
+// shiftOptionValues returns the Value of every entry in opts, in order —
+// so validateVocab can check a ShiftOption list with the same blank and
+// duplicate rules it applies to every other vocabulary, without a
+// []string being built by hand at the call site.
+func shiftOptionValues(opts []ShiftOption) []string {
+	values := make([]string, len(opts))
+	for i, o := range opts {
+		values[i] = o.Value
+	}
+	return values
+}
+
+// validShiftDirection reports whether d is one of the three declared,
+// meaningful ShiftDirection constants. ShiftUnspecified (the zero value)
+// is deliberately excluded: a ShiftOption whose Direction was simply
+// never set must fail here, not silently read as ShiftNone — see
+// ShiftDirection's doc comment.
+func validShiftDirection(d ShiftDirection) bool {
+	switch d {
+	case ShiftNone, ShiftUp, ShiftDown:
+		return true
+	default:
+		return false
+	}
+}
+
+// validToneSemantics reports whether s is one of the three declared,
+// meaningful ToneSemantics constants. ToneSemanticsUnspecified (the zero
+// value) is deliberately excluded: a ToneState whose Semantics was simply
+// never set must fail here, not silently read as ToneOff — see
+// ToneSemantics' doc comment.
+func validToneSemantics(s ToneSemantics) bool {
+	switch s {
+	case ToneOff, ToneEncode, ToneEncodeDecode:
+		return true
+	default:
+		return false
+	}
+}
+
 // Validate checks c for internal STRUCTURAL consistency — not hardware
 // truth (proving a field actually works on real hardware is what M5b
 // verification sessions are for), but the basic shape guarantees generic
@@ -69,8 +109,13 @@ func validateVocab(fieldName string, values []string) []string {
 // just the first):
 //
 //   - Model and CATID must both be non-empty.
+//   - TagLen must be greater than zero.
 //   - No two Banks may share a BankID.
 //   - No slot (Bank.Slots entry) may be claimed by more than one Bank.
+//   - No slot (Bank.Slots entry) may be blank: a blank slot is not a
+//     real canonical wire-form identifier, and core/csvio's CHIRP
+//     importer would otherwise build a Channel{Slot: ""} for it with no
+//     blocking loss entry to catch the mistake.
 //   - Every FieldSupport.Read and .Write across every Bank's Fields must
 //     be one of the four declared Support constants (see validSupport)
 //     — a value constructed any other way must never reach
@@ -78,6 +123,12 @@ func validateVocab(fieldName string, values []string) []string {
 //   - MinFreqHz must not exceed MaxFreqHz, but ONLY when both are set
 //     (non-zero): either being the zero value means "no bound", not "zero
 //     Hz", so it is not compared.
+//   - Every entry in Bauds must be greater than zero, and DefaultBaud
+//     must be greater than zero: a non-positive entry cannot be a real
+//     serial baud rate, and core/transport.OpenSerial treats any
+//     non-positive SerialConfig.Baud as "unset" and silently substitutes
+//     its own DefaultBaud (38400) — Validate must catch a bogus baud
+//     here, before that substitution can happen unnoticed.
 //   - DefaultBaud must appear in Bauds.
 //   - CTCSSTones, if non-empty, must be strictly ascending (matching
 //     StandardCTCSSTones's own shape) — this is what lets a caller
@@ -89,8 +140,25 @@ func validateVocab(fieldName string, values []string) []string {
 //   - ShiftOptions must be non-empty and contain no blank or duplicate
 //     values.
 //   - CTCSSStates must be non-empty and contain no blank or duplicate
-//     Values (its RequiresTone is a plain bool, so it cannot itself be
-//     invalid).
+//     Values.
+//   - Every ShiftOptions entry's Direction must be one of the three
+//     declared ShiftDirection constants (ShiftNone/ShiftUp/ShiftDown) —
+//     never the zero value, ShiftUnspecified: see ShiftDirection's doc
+//     comment for why the zero value must not be allowed to mean
+//     anything.
+//   - Every CTCSSStates entry's Semantics must be one of the three
+//     declared ToneSemantics constants (ToneOff/ToneEncode/
+//     ToneEncodeDecode) — never the zero value, ToneSemanticsUnspecified
+//     — for the same reason.
+//   - No two ShiftOptions may express the same ShiftDirection.
+//   - No two CTCSSStates may express the same Semantics.
+//
+// There is no separate "RequiresTone must equal Encodes||Decodes"
+// invariant: that used to be checked because RequiresTone, Encodes and
+// Decodes were three independent stored bool fields that could disagree.
+// ToneState now stores only Semantics; RequiresTone is a method fully
+// derived from it (see ToneState.RequiresTone), so there is no
+// independent value left for it to disagree with.
 //
 // Every radio driver constructor is expected to call Validate on the
 // Capabilities value it builds and fail construction if it returns a
@@ -109,6 +177,16 @@ func (c Capabilities) Validate() error {
 	if c.CATID == "" {
 		problems = append(problems, "CATID must not be empty")
 	}
+	// A TagLen of zero (or less) is not "no tag support" — core/csvio's
+	// CHIRP import truncates every imported name to b[:caps.TagLen], so a
+	// zero TagLen silently discards every channel name to "" and reports
+	// it as an approximated, non-blocking loss rather than refusing. This
+	// project's standing posture is refuse, never corrupt: a driver that
+	// forgets to set TagLen must fail construction here, not reach a
+	// radio having erased every tag.
+	if c.TagLen <= 0 {
+		problems = append(problems, fmt.Sprintf("TagLen %d must be greater than zero", c.TagLen))
+	}
 
 	seenBank := make(map[BankID]bool, len(c.Banks))
 	seenSlot := make(map[string]BankID, len(c.Banks))
@@ -119,6 +197,10 @@ func (c Capabilities) Validate() error {
 		seenBank[b.ID] = true
 
 		for _, slot := range b.Slots {
+			if slot == "" {
+				problems = append(problems, fmt.Sprintf("bank %s has a blank slot", b.ID))
+				continue
+			}
 			if owner, ok := seenSlot[slot]; ok {
 				problems = append(problems, fmt.Sprintf("slot %q is claimed by both bank %s and bank %s", slot, owner, b.ID))
 				continue
@@ -150,6 +232,21 @@ func (c Capabilities) Validate() error {
 		problems = append(problems, fmt.Sprintf("MinFreqHz %d is greater than MaxFreqHz %d", c.MinFreqHz, c.MaxFreqHz))
 	}
 
+	// A non-positive Bauds entry or DefaultBaud cannot be a real serial
+	// baud rate: core/transport.OpenSerial's resolveConfig treats any
+	// SerialConfig.Baud <= 0 as "unset" and silently substitutes its own
+	// DefaultBaud (38400), so a Capabilities that let one through here
+	// would have its bogus value replaced by a guess deep in the
+	// transport layer, never refused.
+	for _, baud := range c.Bauds {
+		if baud <= 0 {
+			problems = append(problems, fmt.Sprintf("Bauds contains non-positive entry %d", baud))
+		}
+	}
+	if c.DefaultBaud <= 0 {
+		problems = append(problems, fmt.Sprintf("DefaultBaud %d must be greater than zero", c.DefaultBaud))
+	}
+
 	if !containsInt(c.Bauds, c.DefaultBaud) {
 		problems = append(problems, fmt.Sprintf("DefaultBaud %d is not present in Bauds %v", c.DefaultBaud, c.Bauds))
 	}
@@ -178,13 +275,58 @@ func (c Capabilities) Validate() error {
 		}
 	}
 
-	problems = append(problems, validateVocab("ShiftOptions", c.ShiftOptions)...)
+	problems = append(problems, validateVocab("ShiftOptions", shiftOptionValues(c.ShiftOptions))...)
+
+	// Every ShiftOptions entry's Direction must be a declared, meaningful
+	// ShiftDirection — never ShiftUnspecified, its zero value: an option
+	// whose Direction was simply omitted must be refused here, not
+	// silently read as ShiftNone (see ShiftDirection's doc comment).
+	for _, o := range c.ShiftOptions {
+		if !validShiftDirection(o.Direction) {
+			problems = append(problems, fmt.Sprintf("ShiftOptions %q has invalid Direction %d", o.Value, o.Direction))
+		}
+	}
+
+	// Each ShiftDirection must be expressed by AT MOST ONE option:
+	// core/csvio maps a foreign dialect's "+"/"-" by asking for the option
+	// with a given Direction, and that question must have exactly one
+	// answer. Two options sharing a direction would make the answer
+	// depend on slice order.
+	seenDirection := make(map[ShiftDirection]string, len(c.ShiftOptions))
+	for _, o := range c.ShiftOptions {
+		if prev, dup := seenDirection[o.Direction]; dup {
+			problems = append(problems, fmt.Sprintf("ShiftOptions %q and %q express the same direction", prev, o.Value))
+			continue
+		}
+		seenDirection[o.Direction] = o.Value
+	}
 
 	ctcssValues := make([]string, len(c.CTCSSStates))
 	for i, ts := range c.CTCSSStates {
 		ctcssValues[i] = ts.Value
 	}
 	problems = append(problems, validateVocab("CTCSSStates", ctcssValues)...)
+
+	// Every CTCSSStates entry's Semantics must be a declared, meaningful
+	// ToneSemantics — never ToneSemanticsUnspecified, its zero value: a
+	// state whose Semantics was simply omitted must be refused here, not
+	// silently read as ToneOff (see ToneSemantics' doc comment).
+	for _, ts := range c.CTCSSStates {
+		if !validToneSemantics(ts.Semantics) {
+			problems = append(problems, fmt.Sprintf("CTCSSStates %q has invalid Semantics %d", ts.Value, ts.Semantics))
+		}
+	}
+
+	// For the same reason ShiftOptions' directions must be unique, each
+	// Semantics value must name at most one state.
+	seenSemantics := make(map[ToneSemantics]string, len(c.CTCSSStates))
+	for _, ts := range c.CTCSSStates {
+		if prev, dup := seenSemantics[ts.Semantics]; dup {
+			problems = append(problems, fmt.Sprintf("CTCSSStates %q and %q express the same semantics", prev, ts.Value))
+			continue
+		}
+		seenSemantics[ts.Semantics] = ts.Value
+	}
 
 	if len(problems) == 0 {
 		return nil

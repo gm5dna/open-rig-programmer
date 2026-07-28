@@ -346,28 +346,32 @@ func TestSession_CapabilitiesDefensiveCopy(t *testing.T) {
 // to the two vocab slices.
 func TestCloneCapabilities_VocabIndependence(t *testing.T) {
 	orig := spec.Capabilities{
-		ShiftOptions: []string{"SIMPLEX", "PLUS", "MINUS"},
+		ShiftOptions: []spec.ShiftOption{
+			{Value: "SIMPLEX", Direction: spec.ShiftNone},
+			{Value: "PLUS", Direction: spec.ShiftUp},
+			{Value: "MINUS", Direction: spec.ShiftDown},
+		},
 		CTCSSStates: []spec.ToneState{
-			{Value: "OFF", RequiresTone: false},
-			{Value: "ENC-DEC", RequiresTone: true},
-			{Value: "ENC", RequiresTone: true},
+			{Value: "OFF", Semantics: spec.ToneOff},
+			{Value: "ENC-DEC", Semantics: spec.ToneEncodeDecode},
+			{Value: "ENC", Semantics: spec.ToneEncode},
 		},
 	}
 
 	clone := cloneCapabilities(orig)
-	clone.ShiftOptions[0] = "TAMPERED"
-	clone.CTCSSStates[0] = spec.ToneState{Value: "TAMPERED", RequiresTone: true}
-	clone.ShiftOptions = append(clone.ShiftOptions, "EXTRA")
+	clone.ShiftOptions[0] = spec.ShiftOption{Value: "TAMPERED"}
+	clone.CTCSSStates[0] = spec.ToneState{Value: "TAMPERED", Semantics: spec.ToneEncode}
+	clone.ShiftOptions = append(clone.ShiftOptions, spec.ShiftOption{Value: "EXTRA"})
 	clone.CTCSSStates = append(clone.CTCSSStates, spec.ToneState{Value: "EXTRA"})
 
-	if orig.ShiftOptions[0] != "SIMPLEX" {
-		t.Errorf("orig.ShiftOptions[0] = %q after mutating a clone, want unaffected %q", orig.ShiftOptions[0], "SIMPLEX")
+	if orig.ShiftOptions[0].Value != "SIMPLEX" {
+		t.Errorf("orig.ShiftOptions[0].Value = %q after mutating a clone, want unaffected %q", orig.ShiftOptions[0].Value, "SIMPLEX")
 	}
 	if len(orig.ShiftOptions) != 3 {
 		t.Errorf("len(orig.ShiftOptions) = %d after appending to a clone, want unaffected 3", len(orig.ShiftOptions))
 	}
-	if orig.CTCSSStates[0] != (spec.ToneState{Value: "OFF", RequiresTone: false}) {
-		t.Errorf("orig.CTCSSStates[0] = %+v after mutating a clone, want unaffected {OFF false}", orig.CTCSSStates[0])
+	if orig.CTCSSStates[0] != (spec.ToneState{Value: "OFF", Semantics: spec.ToneOff}) {
+		t.Errorf("orig.CTCSSStates[0] = %+v after mutating a clone, want unaffected {OFF ToneOff}", orig.CTCSSStates[0])
 	}
 	if len(orig.CTCSSStates) != 3 {
 		t.Errorf("len(orig.CTCSSStates) = %d after appending to a clone, want unaffected 3", len(orig.CTCSSStates))
@@ -377,10 +381,10 @@ func TestCloneCapabilities_VocabIndependence(t *testing.T) {
 	// also be unaffected — confirming the tampering never reached the
 	// shared source either.
 	again := cloneCapabilities(orig)
-	if again.ShiftOptions[0] != "SIMPLEX" || len(again.ShiftOptions) != 3 {
-		t.Errorf("cloneCapabilities(orig).ShiftOptions = %v after a prior clone was mutated, want unaffected [SIMPLEX PLUS MINUS]", again.ShiftOptions)
+	if again.ShiftOptions[0].Value != "SIMPLEX" || len(again.ShiftOptions) != 3 {
+		t.Errorf("cloneCapabilities(orig).ShiftOptions = %+v after a prior clone was mutated, want unaffected [SIMPLEX PLUS MINUS]", again.ShiftOptions)
 	}
-	if again.CTCSSStates[0] != (spec.ToneState{Value: "OFF", RequiresTone: false}) || len(again.CTCSSStates) != 3 {
+	if again.CTCSSStates[0] != (spec.ToneState{Value: "OFF", Semantics: spec.ToneOff}) || len(again.CTCSSStates) != 3 {
 		t.Errorf("cloneCapabilities(orig).CTCSSStates = %+v after a prior clone was mutated, want unaffected", again.CTCSSStates)
 	}
 }

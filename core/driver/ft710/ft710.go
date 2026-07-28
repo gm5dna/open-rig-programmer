@@ -524,7 +524,7 @@ func cloneCapabilities(caps spec.Capabilities) spec.Capabilities {
 	out.CTCSSTones = append([]spec.Tone(nil), caps.CTCSSTones...)
 	out.Bauds = append([]int(nil), caps.Bauds...)
 	out.RequiredSlots = append([]string(nil), caps.RequiredSlots...)
-	out.ShiftOptions = append([]string(nil), caps.ShiftOptions...)
+	out.ShiftOptions = append([]spec.ShiftOption(nil), caps.ShiftOptions...)
 	out.CTCSSStates = append([]spec.ToneState(nil), caps.CTCSSStates...)
 	return out
 }

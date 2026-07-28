@@ -165,7 +165,7 @@ func cmdRead(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return exitError
 	}
 
-	snapshotDir, err := resolveSnapshotDir(*snapshotDirFlag)
+	snapshotDir, err := resolveSnapshotDir(*snapshotDirFlag, *model)
 	if err != nil {
 		fmt.Fprintf(stderr, "rigprog read: %v\n", err)
 		return exitError
