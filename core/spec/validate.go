@@ -112,6 +112,10 @@ func validToneSemantics(s ToneSemantics) bool {
 //   - TagLen must be greater than zero.
 //   - No two Banks may share a BankID.
 //   - No slot (Bank.Slots entry) may be claimed by more than one Bank.
+//   - No slot (Bank.Slots entry) may be blank: a blank slot is not a
+//     real canonical wire-form identifier, and core/csvio's CHIRP
+//     importer would otherwise build a Channel{Slot: ""} for it with no
+//     blocking loss entry to catch the mistake.
 //   - Every FieldSupport.Read and .Write across every Bank's Fields must
 //     be one of the four declared Support constants (see validSupport)
 //     — a value constructed any other way must never reach
@@ -187,6 +191,10 @@ func (c Capabilities) Validate() error {
 		seenBank[b.ID] = true
 
 		for _, slot := range b.Slots {
+			if slot == "" {
+				problems = append(problems, fmt.Sprintf("bank %s has a blank slot", b.ID))
+				continue
+			}
 			if owner, ok := seenSlot[slot]; ok {
 				problems = append(problems, fmt.Sprintf("slot %q is claimed by both bank %s and bank %s", slot, owner, b.ID))
 				continue

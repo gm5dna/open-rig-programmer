@@ -413,3 +413,21 @@ func TestValidate_CTCSSStateSemanticsOutOfRange(t *testing.T) {
 		t.Errorf("Validate() error = %q, want it to mention \"invalid Semantics\"", err)
 	}
 }
+
+// TestValidate_BlankSlotRejected is FIX A2's failing-first test: before
+// this fix, a blank Bank.Slots entry passed the bank loop's duplicate-
+// ownership check untouched (an empty string is a value like any other
+// to that check), and core/csvio's CHIRP importer would go on to build a
+// Channel{Slot: ""} for it with no blocking loss entry to catch the
+// mistake.
+func TestValidate_BlankSlotRejected(t *testing.T) {
+	c := validTestCapabilities()
+	c.Banks[0].Slots = append(c.Banks[0].Slots, "")
+	err := c.Validate()
+	if err == nil {
+		t.Fatal("Validate() = nil, want an error: a blank slot must be rejected")
+	}
+	if !strings.Contains(err.Error(), "blank slot") {
+		t.Errorf("Validate() error = %q, want it to mention \"blank slot\"", err)
+	}
+}
