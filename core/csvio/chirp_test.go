@@ -709,7 +709,7 @@ func TestImportCHIRP_MissingCoreColumns(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, err := ImportCHIRP(strings.NewReader(tc.header + "\n"), ft710LikeCapabilities())
+			_, _, err := ImportCHIRP(strings.NewReader(tc.header+"\n"), ft710LikeCapabilities())
 			if err == nil {
 				t.Fatal("ImportCHIRP() error = nil, want error for missing core column")
 			}
