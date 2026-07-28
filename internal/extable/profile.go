@@ -158,11 +158,21 @@ func (p Profile) Validate() error {
 	// The generator reads the CSVs and then writes OutFile unconditionally,
 	// so an OutFile naming a source would DESTROY that source on the next
 	// go generate (Codex plan review, finding 2).
-	if p.OutFile == p.ManualCSV {
-		return fmt.Errorf("extable: profile %s: OutFile %q is also its ManualCSV — generating would overwrite the source", p.Model, p.OutFile)
+	//
+	// The comparison is case-INSENSITIVE because the filesystems this
+	// repository is developed and built on resolve case-aliased names to one
+	// file: APFS is case-insensitive by default on macOS, as is NTFS on
+	// Windows. Under a byte-equal compare, "TABLE2.CSV" alongside
+	// "table2.csv" would validate happily and the generator would then
+	// overwrite the committed source. Folding costs nothing on a
+	// case-sensitive filesystem — it only refuses a spelling no profile has
+	// any reason to use — and the refuse-early posture is worth more than
+	// that theoretical freedom.
+	if strings.EqualFold(p.OutFile, p.ManualCSV) {
+		return fmt.Errorf("extable: profile %s: OutFile %q collides with its ManualCSV %q (compared case-insensitively) — generating would overwrite the source", p.Model, p.OutFile, p.ManualCSV)
 	}
-	if p.ObservedCSV != "" && p.OutFile == p.ObservedCSV {
-		return fmt.Errorf("extable: profile %s: OutFile %q is also its ObservedCSV — generating would overwrite the source", p.Model, p.OutFile)
+	if p.ObservedCSV != "" && strings.EqualFold(p.OutFile, p.ObservedCSV) {
+		return fmt.Errorf("extable: profile %s: OutFile %q collides with its ObservedCSV %q (compared case-insensitively) — generating would overwrite the source", p.Model, p.OutFile, p.ObservedCSV)
 	}
 	switch p.Types {
 	case TypesLocal:
@@ -326,9 +336,23 @@ func validateRegistry(m map[string]Profile) error {
 	}
 	sort.Strings(names)
 
-	outFiles := map[string]string{}
+	// Path collision keys are LOWER-CASED, for the reason Validate's
+	// intra-profile checks fold: on APFS and on NTFS a case-only difference
+	// is not a different file, so a byte-equal key would let two profiles
+	// that write one file, or one profile that writes another's source, pass
+	// the sweep and then collide on disk.
+	//
+	// VarName is deliberately NOT folded. It is a Go identifier, and case is
+	// significant to the compiler: two package-level variables in one package
+	// differing only in case — exItems and EXItems — are legal Go that
+	// compiles and links, one unexported and one exported. Folding that key
+	// would refuse a pair of profiles Go itself accepts, which is a
+	// correctness loss, not a safety gain. The Package component of each key
+	// is left verbatim for the same reason: it is an identifier, not a path.
+	type outFile struct{ entry, path string }
+	outFiles := map[string]outFile{}
 	varNames := map[string]string{}
-	inputs := map[string]string{} // package-qualified source CSVs -> entry
+	inputs := map[string]string{} // package-qualified source CSVs, folded -> entry
 	for _, n := range names {
 		p := m[n]
 		// The name is the CLI-facing -profile token; a blank or
@@ -339,11 +363,12 @@ func validateRegistry(m map[string]Profile) error {
 		if err := p.Validate(); err != nil {
 			return fmt.Errorf("extable: registry entry %q: %w", n, err)
 		}
-		outKey := p.Package + "/" + p.OutFile
+		outPath := p.Package + "/" + p.OutFile
+		outKey := p.Package + "/" + strings.ToLower(p.OutFile)
 		if prev, dup := outFiles[outKey]; dup {
-			return fmt.Errorf("extable: registry entries %q and %q both write %s", prev, n, outKey)
+			return fmt.Errorf("extable: registry entries %q and %q both write %s (paths compared case-insensitively: %s)", prev.entry, n, outPath, prev.path)
 		}
-		outFiles[outKey] = n
+		outFiles[outKey] = outFile{entry: n, path: outPath}
 
 		varKey := p.Package + "." + p.VarName
 		if prev, dup := varNames[varKey]; dup {
@@ -351,15 +376,15 @@ func validateRegistry(m map[string]Profile) error {
 		}
 		varNames[varKey] = n
 
-		inputs[p.Package+"/"+p.ManualCSV] = n
+		inputs[p.Package+"/"+strings.ToLower(p.ManualCSV)] = n
 		if p.ObservedCSV != "" {
-			inputs[p.Package+"/"+p.ObservedCSV] = n
+			inputs[p.Package+"/"+strings.ToLower(p.ObservedCSV)] = n
 		}
 	}
 	// Cross-profile output-vs-input collisions, both registration orders.
-	for outKey, writer := range outFiles {
+	for outKey, out := range outFiles {
 		if owner, hit := inputs[outKey]; hit {
-			return fmt.Errorf("extable: registry entry %q writes %s, which is entry %q's source CSV", writer, outKey, owner)
+			return fmt.Errorf("extable: registry entry %q writes %s, which is entry %q's source CSV (paths compared case-insensitively)", out.entry, out.path, owner)
 		}
 	}
 	return nil

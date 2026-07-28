@@ -77,6 +77,11 @@ func TestProfileValidate_Refusals(t *testing.T) {
 		{"absolute OutFile", func(p *Profile) { p.OutFile = "/tmp/out.go" }},
 		{"OutFile equals ManualCSV", func(p *Profile) { p.OutFile = p.ManualCSV }},
 		{"OutFile equals ObservedCSV", func(p *Profile) { p.OutFile = p.ObservedCSV }},
+		// On APFS and on Windows these name the SAME file as the source they
+		// upper-case, so byte-equality would wave them through and the next
+		// `go generate` would overwrite a committed CSV.
+		{"OutFile case-aliases ManualCSV", func(p *Profile) { p.OutFile = strings.ToUpper(p.ManualCSV) }},
+		{"OutFile case-aliases ObservedCSV", func(p *Profile) { p.OutFile = strings.ToUpper(p.ObservedCSV) }},
 		{"escaping ManualCSV", func(p *Profile) { p.ManualCSV = "../table2.csv" }},
 		{"unclean ManualCSV", func(p *Profile) { p.ManualCSV = "./table2.csv" }},
 		{"dot-dot ManualCSV", func(p *Profile) { p.ManualCSV = ".." }},
@@ -193,6 +198,27 @@ func TestValidateRegistry_RejectsDuplicatesAndEmptiness(t *testing.T) {
 		b.ManualCSV = "third.csv"
 		if err := validateRegistry(map[string]Profile{"a": a, "b": b}); err == nil {
 			t.Error("accepted a profile whose OutFile is another profile's source CSV in the same package; want an error")
+		}
+	})
+	t.Run("out files differing only in case", func(t *testing.T) {
+		// APFS and Windows resolve these to one file: the second profile's
+		// generate would silently replace the first's artefact.
+		b = fixtureRequired
+		b.VarName = "other"
+		b.OutFile = strings.ToUpper(a.OutFile)
+		if err := validateRegistry(map[string]Profile{"a": a, "b": b}); err == nil {
+			t.Error("accepted two profiles whose OutFiles differ only in case; want an error")
+		}
+	})
+	t.Run("output case-aliases another profile's input", func(t *testing.T) {
+		// The destructive form of the same aliasing: b's generated file lands
+		// on a's committed source CSV.
+		b = fixtureRequired
+		b.VarName = "other"
+		b.OutFile = strings.ToUpper(a.ManualCSV)
+		b.ManualCSV = "third.csv"
+		if err := validateRegistry(map[string]Profile{"a": a, "b": b}); err == nil {
+			t.Error("accepted a profile whose OutFile case-aliases another profile's source CSV; want an error")
 		}
 	})
 }
