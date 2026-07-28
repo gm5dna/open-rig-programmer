@@ -52,7 +52,7 @@ func main() {
 		log.Fatalf("parsing %s: %v", *observedPath, err)
 	}
 
-	out, err := extable.RenderGo(rows, observed)
+	out, err := extable.RenderGo(extable.FT710Profile(), rows, observed)
 	if err != nil {
 		log.Fatalf("rendering Go: %v", err)
 	}
