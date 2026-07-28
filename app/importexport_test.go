@@ -317,7 +317,7 @@ func TestImportCHIRP_RefusesOnStaleCapabilities(t *testing.T) {
 	}
 }
 
-// TestImportCHIRP_ConnReadIsSynchronized is Fix B2's (Codex fix-B review,
+// TestImportCHIRP_ConnReadIsSynchronised is Fix B2's (Codex fix-B review,
 // MEDIUM) race-detector regression test: "The capabilities hoist added
 // earlier in this milestone reads [a.conn] at app/importexport.go ~:120
 // without holding the lock, while Disconnect ... mutates and closes it
@@ -327,12 +327,12 @@ func TestImportCHIRP_RefusesOnStaleCapabilities(t *testing.T) {
 // and run concurrently for many iterations: one hammering ImportCHIRP,
 // the other toggling a.conn under a.mu exactly as connect/Disconnect do.
 // Before this fix, `go test -race ./app/ -run
-// TestImportCHIRP_ConnReadIsSynchronized` flags a DATA RACE on a.conn
+// TestImportCHIRP_ConnReadIsSynchronised` flags a DATA RACE on a.conn
 // between this test's writer goroutine and ImportCHIRP's unsynchronised
 // read; after it, the same run is race-clean. This test asserts nothing
 // beyond "no panic" — its entire value is what -race observes, not its
 // pass/fail outcome under a race-less `go test` run.
-func TestImportCHIRP_ConnReadIsSynchronized(t *testing.T) {
+func TestImportCHIRP_ConnReadIsSynchronised(t *testing.T) {
 	a, _ := newTestApp(t)
 	a.mu.Lock()
 	a.working = buildImportBase()

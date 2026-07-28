@@ -307,10 +307,10 @@ func TestValidate_CTCSSStatesDuplicateEncodeDecodePair(t *testing.T) {
 	}
 	err := c.Validate()
 	if err == nil {
-		t.Fatal("Validate() = nil, want an error: two ToneStates share the encode/decode pair")
+		t.Fatal("Validate() = nil, want an error: two ToneStates share the same semantics")
 	}
-	if !strings.Contains(err.Error(), "same encode/decode pair") {
-		t.Errorf("Validate() error = %q, want it to mention \"same encode/decode pair\"", err)
+	if !strings.Contains(err.Error(), "same semantics") {
+		t.Errorf("Validate() error = %q, want it to mention \"same semantics\"", err)
 	}
 }
 

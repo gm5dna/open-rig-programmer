@@ -123,7 +123,7 @@ func (a *App) ImportCHIRP() (ImportResultView, error) {
 	// both of them under it) — snapshotted under the lock here rather
 	// than read live, which used to race a concurrent Disconnect (a
 	// genuine data race under `go test -race`; see
-	// TestImportCHIRP_ConnReadIsSynchronized).
+	// TestImportCHIRP_ConnReadIsSynchronised).
 	a.mu.Lock()
 	caps, _ := currentCaps(a.conn, a.working)
 	a.mu.Unlock()

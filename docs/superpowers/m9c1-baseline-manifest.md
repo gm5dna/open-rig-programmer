@@ -32,7 +32,9 @@ quietly folded into a clean-looking report.
   Codex milestone review's fix-wave (`292d723`, `a45ccba`, `2381c19`,
   `5586824`) and the three dispatched fix rounds this handles, dispatch A
   (`609d27d`, `3ca1c8e`, `1b77741`), dispatch B (`6adab37`, `76768e1`) and
-  dispatch C (`6b5a208`, `670405a`, `d00b2d2`).
+  dispatch C (`6b5a208`, `670405a`, `d00b2d2`). Baselines were captured at
+  `d00b2d2`; all commits after it are documentation-only and do not affect
+  baseline validity.
 - **Branch:** `m9c1-registration-gate`
 - **Toolchain:** `go1.26.5 darwin/arm64`
 - **Artefacts** were captured to an ephemeral scratch directory (not

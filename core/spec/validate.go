@@ -322,7 +322,7 @@ func (c Capabilities) Validate() error {
 	seenSemantics := make(map[ToneSemantics]string, len(c.CTCSSStates))
 	for _, ts := range c.CTCSSStates {
 		if prev, dup := seenSemantics[ts.Semantics]; dup {
-			problems = append(problems, fmt.Sprintf("CTCSSStates %q and %q express the same encode/decode pair", prev, ts.Value))
+			problems = append(problems, fmt.Sprintf("CTCSSStates %q and %q express the same semantics", prev, ts.Value))
 			continue
 		}
 		seenSemantics[ts.Semantics] = ts.Value
