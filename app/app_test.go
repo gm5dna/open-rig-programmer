@@ -5,12 +5,16 @@ package main
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/gm5dna/open-rig-programmer/core/clone"
+	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/spec"
+	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -111,9 +115,131 @@ func TestNewApp_InitialState(t *testing.T) {
 }
 
 func TestCurrentCaps_DisconnectedIsAdvisory(t *testing.T) {
-	_, advisory := currentCaps(nil)
+	_, advisory := currentCaps(nil, nil)
 	if !advisory {
-		t.Error("currentCaps(nil): advisory = false, want true (disconnected caps are always advisory)")
+		t.Error("currentCaps(nil, nil): advisory = false, want true (disconnected caps are always advisory)")
+	}
+}
+
+// defaultModelCaps is wiring.StaticCapabilities(wiring.DefaultModel) — the
+// FT-710's own static baseline — fetched fresh so every comparison below
+// is against the real registry rather than a hand-copied literal.
+func defaultModelCaps(t *testing.T) spec.Capabilities {
+	t.Helper()
+	caps, err := wiring.StaticCapabilities(wiring.DefaultModel)
+	if err != nil {
+		t.Fatalf("wiring.StaticCapabilities(%q): unexpected error: %v", wiring.DefaultModel, err)
+	}
+	return caps
+}
+
+// TestCurrentCaps_DisconnectedNilWorkingIsDefaultModel pins the
+// pre-existing (and still-required) behaviour: with no working copy at
+// all, disconnected resolution is exactly wiring.DefaultModel's static
+// baseline.
+func TestCurrentCaps_DisconnectedNilWorkingIsDefaultModel(t *testing.T) {
+	got, advisory := currentCaps(nil, nil)
+	if !advisory {
+		t.Error("currentCaps(nil, nil): advisory = false, want true")
+	}
+	if !reflect.DeepEqual(got, defaultModelCaps(t)) {
+		t.Errorf("currentCaps(nil, nil) = %+v, want the default model's static caps", got)
+	}
+}
+
+// TestCurrentCaps_DisconnectedFT710WorkingIsByteIdentical is the FT-710
+// byte-identity requirement (Codex fix-B review, Fix B1): a working copy
+// whose Radio.Model is exactly "FT-710" (wiring.DefaultModel's own value)
+// must resolve EXACTLY as the nil-working case above.
+func TestCurrentCaps_DisconnectedFT710WorkingIsByteIdentical(t *testing.T) {
+	working := &codeplug.Codeplug{Radio: codeplug.RadioInfo{Model: "FT-710"}}
+	got, advisory := currentCaps(nil, working)
+	if !advisory {
+		t.Error("currentCaps(nil, FT-710 working): advisory = false, want true")
+	}
+	if !reflect.DeepEqual(got, defaultModelCaps(t)) {
+		t.Errorf("currentCaps(nil, FT-710 working) = %+v, want byte-identical to the default model's static caps", got)
+	}
+}
+
+// TestCurrentCaps_DisconnectedEmptyModelFallsBack: a working copy present
+// but with Radio.Model left "" (e.g. a hand-built Codeplug that never set
+// RadioInfo) must fall back to wiring.DefaultModel, not fail or panic.
+func TestCurrentCaps_DisconnectedEmptyModelFallsBack(t *testing.T) {
+	working := &codeplug.Codeplug{Radio: codeplug.RadioInfo{}}
+	got, advisory := currentCaps(nil, working)
+	if !advisory {
+		t.Error("currentCaps(nil, empty-model working): advisory = false, want true")
+	}
+	if !reflect.DeepEqual(got, defaultModelCaps(t)) {
+		t.Errorf("currentCaps(nil, empty-model working) = %+v, want the default model's static caps", got)
+	}
+}
+
+// TestCurrentCaps_DisconnectedUnregisteredModelFallsBack: a working copy
+// naming a model internal/wiring does not (yet) register — e.g. a second
+// radio's dialect exists in core/cat but no driver/registry entry has
+// landed yet (see .superpowers/sdd/HANDOFF-m9c.md's still-open "FTdx10
+// slice"), or a hand-edited/corrupt file — must fall back to
+// wiring.DefaultModel rather than erroring: refuse-before-corrupt means
+// this falls back to a KNOWN-safe baseline, never propagates the lookup
+// failure into a zero/garbage Capabilities.
+func TestCurrentCaps_DisconnectedUnregisteredModelFallsBack(t *testing.T) {
+	working := &codeplug.Codeplug{Radio: codeplug.RadioInfo{Model: "NoSuchRadioModel"}}
+	got, advisory := currentCaps(nil, working)
+	if !advisory {
+		t.Error("currentCaps(nil, unregistered-model working): advisory = false, want true")
+	}
+	if !reflect.DeepEqual(got, defaultModelCaps(t)) {
+		t.Errorf("currentCaps(nil, unregistered-model working) = %+v, want the default model's static caps (fallback)", got)
+	}
+}
+
+// TestCurrentCaps_DisconnectedUsesWorkingCopyModel is Fix B1's positive
+// case: given a model wiring.StaticCapabilities WOULD resolve, currentCaps
+// must use THAT model's own capabilities, not silently substitute the
+// FT-710's. internal/wiring registers only "FT-710" today (no second
+// driver exists yet — see HANDOFF-m9c.md), so this substitutes
+// capsForModel (see its own doc comment, app.go) to exercise the
+// resolution against a model name of the test's choosing, restoring the
+// real function via t.Cleanup.
+func TestCurrentCaps_DisconnectedUsesWorkingCopyModel(t *testing.T) {
+	fakeCaps := spec.Capabilities{Model: "TESTMODEL", CATID: "9999", TagLen: 42}
+	orig := capsForModel
+	capsForModel = func(model string) (spec.Capabilities, error) {
+		if model == "TESTMODEL" {
+			return fakeCaps, nil
+		}
+		return orig(model)
+	}
+	t.Cleanup(func() { capsForModel = orig })
+
+	working := &codeplug.Codeplug{Radio: codeplug.RadioInfo{Model: "TESTMODEL"}}
+	got, advisory := currentCaps(nil, working)
+	if !advisory {
+		t.Error("currentCaps(nil, TESTMODEL working): advisory = false, want true")
+	}
+	if !reflect.DeepEqual(got, fakeCaps) {
+		t.Errorf("currentCaps(nil, TESTMODEL working) = %+v, want the working copy's OWN model's caps %+v", got, fakeCaps)
+	}
+}
+
+// TestCurrentCaps_ConnectedIgnoresWorkingCopyModel: connected resolution
+// must keep returning the session's own capabilities exactly as before
+// this fix, regardless of what the working copy's Radio.Model says (a
+// stale/mismatched working copy while connected is Validate's job to
+// flag, not currentCaps' job to second-guess the live session over).
+func TestCurrentCaps_ConnectedIgnoresWorkingCopyModel(t *testing.T) {
+	sess := openTestSimSession(t)
+	conn := &connectionState{session: sess}
+	working := &codeplug.Codeplug{Radio: codeplug.RadioInfo{Model: "SomeOtherModel"}}
+
+	got, advisory := currentCaps(conn, working)
+	if advisory {
+		t.Error("currentCaps(conn, working): advisory = true, want false (connected is authoritative)")
+	}
+	if !reflect.DeepEqual(got, sess.Capabilities()) {
+		t.Errorf("currentCaps(conn, working) = %+v, want the connected session's own Capabilities()", got)
 	}
 }
 

@@ -191,7 +191,7 @@ func (a *App) GetUISpec() (UISpecView, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	caps, advisory := currentCaps(a.conn)
+	caps, advisory := currentCaps(a.conn, a.working)
 	live := !advisory
 
 	banks := make([]BankView, 0, len(caps.Banks))

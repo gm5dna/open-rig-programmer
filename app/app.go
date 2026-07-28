@@ -217,26 +217,69 @@ func (a *App) bumpWorkingRevLocked() {
 	a.workingRev++
 }
 
-// currentCaps returns the capabilities Validate/UpdateChannel(s) should
-// validate against, and whether that result is merely advisory (task-15
-// brief §2's Validate bullet): the connected session's OWN effective
-// capabilities (authoritative — includes discovered regional banks) when
-// conn is non-nil, otherwise the static offline baseline
-// (wiring.StaticCapabilities(wiring.DefaultModel), advisory: true — it
-// lacks discovered regional banks, matching the CLI's offline import
-// adjudication).
+// currentCaps returns the capabilities Validate/UpdateChannel(s)/import
+// should validate/transform against, and whether that result is merely
+// advisory (task-15 brief §2's Validate bullet): the connected session's
+// OWN effective capabilities (authoritative — includes discovered
+// regional banks) when conn is non-nil, otherwise a static offline
+// baseline, advisory: true — it lacks discovered regional banks, matching
+// the CLI's offline import adjudication.
 //
-// wiring.DefaultModel is a hardcoded, always-registered model name
-// (internal/wiring's own TestStaticCapabilities_FT710EqualsDriver pins
-// this) — the lookup cannot fail for it in practice, so the error is
-// discarded here rather than propagated: every caller of currentCaps
-// already treats the disconnected baseline as advisory, never a hard
-// failure, and this function's two-result signature predates task 41
-// (M9a-5) and is unchanged by it.
-func currentCaps(conn *connectionState) (spec.Capabilities, bool) {
+// Disconnected resolution (Codex fix-B review, Fix B1, HIGH: "offline
+// import transforms data against the WRONG model's capabilities, and the
+// result can later pass the send gate"): the static baseline is working's
+// OWN Radio.Model (core/codeplug/radioinfo.go) when that is non-empty AND
+// wiring.StaticCapabilities recognises it — so an offline import or edit
+// against a working copy that is NOT an FT-710 is transformed/validated
+// against THAT radio's own vocabulary, never silently against the
+// FT-710's (the bug: a mismatch Validate flags as merely advisory today
+// would otherwise clear itself the moment the user reconnects to the
+// working copy's real model, because the vocabulary transform had
+// already baked in the wrong radio's rules by then). Falls back to
+// wiring.DefaultModel (the FT-710) when working is nil, its Radio.Model
+// is "", or that model names no registered driver (a future dialect-only
+// model with no driver yet — see .superpowers/sdd/HANDOFF-m9c.md's
+// still-open "FTdx10 slice" — or a hand-edited/corrupt file): refuse-
+// before-corrupt means an unresolvable model degrades to a KNOWN-safe
+// baseline, never a zero/garbage Capabilities. wiring.DefaultModel is a
+// hardcoded, always-registered model name (internal/wiring's own
+// TestStaticCapabilities_FT710EqualsDriver pins this), so this fallback
+// path cannot itself fail.
+//
+// FT-710 byte-identity: a working copy whose Radio.Model is "FT-710"
+// (wiring.DefaultModel's own value), or is empty, or is nil, resolves via
+// the EXACT SAME capsForModel(wiring.DefaultModel) call this function
+// made unconditionally before this fix — see
+// TestCurrentCaps_DisconnectedFT710WorkingIsByteIdentical.
+//
+// Both results are discarded (capsForModel's error on the fallback call)
+// or checked-then-ignored (on the working-model call, whose failure is
+// the deliberate signal to fall back) rather than propagated: every
+// caller of currentCaps already treats the disconnected baseline as
+// advisory, never a hard failure, and this function's two-result
+// signature predates task 41 (M9a-5) and is unchanged by it.
+func currentCaps(conn *connectionState, working *codeplug.Codeplug) (spec.Capabilities, bool) {
 	if conn != nil {
 		return conn.session.Capabilities(), false
 	}
-	caps, _ := wiring.StaticCapabilities(wiring.DefaultModel)
+	if working != nil && working.Radio.Model != "" {
+		if caps, err := capsForModel(working.Radio.Model); err == nil {
+			return caps, true
+		}
+	}
+	caps, _ := capsForModel(wiring.DefaultModel)
 	return caps, true
 }
+
+// capsForModel indirects wiring.StaticCapabilities — currentCaps' only
+// caller — so this package's own tests can exercise the working-copy-
+// model resolution above against a model name wiring itself does not
+// register (no second real driver exists yet: internal/wiring's
+// realDrivers table lists only "FT-710" today — see
+// .superpowers/sdd/HANDOFF-m9c.md). Reassigned ONLY by tests (e.g.
+// TestCurrentCaps_DisconnectedUsesWorkingCopyModel), restored via
+// t.Cleanup; production code must never reassign it. Mirrors
+// internal/wiring's own FakeSessionOpts seam (internal/wiring/fake.go)
+// for the identical reason: process-global, unsynchronised state, safe
+// only for tests that do not call t.Parallel().
+var capsForModel = wiring.StaticCapabilities

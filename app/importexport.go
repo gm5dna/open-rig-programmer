@@ -80,7 +80,7 @@ func (a *App) ImportCSV() (ImportResultView, error) {
 	a.bumpWorkingRevLocked() // Fix 4: working-copy channels merged
 	a.dirty = true
 
-	caps, _ := currentCaps(a.conn)
+	caps, _ := currentCaps(a.conn, a.working)
 	issues := codeplug.Validate(a.working, caps)
 	return ImportResultView{Path: path, Merged: true, Issues: issuesToView(issues), Dirty: true}, nil
 }
@@ -117,7 +117,7 @@ func (a *App) ImportCHIRP() (ImportResultView, error) {
 	if err != nil {
 		return ImportResultView{Path: path, ParseError: err.Error()}, nil
 	}
-	caps, _ := currentCaps(a.conn)
+	caps, _ := currentCaps(a.conn, a.working)
 	imported, report, err := csvio.ImportCHIRP(f, caps)
 	_ = f.Close()
 	lossEntries := lossEntriesToView(report)
