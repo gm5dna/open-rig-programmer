@@ -1,8 +1,35 @@
 # M9c-2 — parameterising the EX inventory generator
 
 **Date:** 28/07/2026
-**Status:** revision 2, awaiting approval
+**Status:** revision 2.1, approved (plan-review corrections folded)
 **Milestone:** M9c-2, the second enabler before M9c-3 (the FTdx10 vertical slice)
+
+> **2.1 correction (28/07/2026, from the adversarial PLAN reviews — Codex
+> NEEDS-REVISION 3 HIGH, Fable APPROVE-WITH-FIXES; adjudication at
+> `.superpowers/sdd/m9c2-plan-review-adjudication.md`).** Three design
+> refinements over revision 2, all in the plan:
+>
+> 1. **The `TypeQual string` + `ImportPath string` pair is replaced by a
+>    zero-invalid `Types TypeRefPolicy` (`TypesLocal`/`TypesImported`) with
+>    `ImportPath`/`ImportAlias`.** Revision 2's both-empty pair was
+>    simultaneously the FT-710's legitimate value and what an omitted pair
+>    produces — this spec's own M9c-1 rule applied to its own new field.
+>    Under `TypesImported` the type qualifier IS the emitted import alias,
+>    so qualifier and import cannot drift.
+> 2. **`Validate` additionally refuses an `OutFile` equal to the profile's
+>    own `ManualCSV`/`ObservedCSV`, and the registry refuses one profile's
+>    output naming another's input within a package** — the generator
+>    writes `OutFile` unconditionally, so this was a validated path to
+>    destroying a committed source CSV.
+> 3. **`ParseCSV`, `ParseObservedCSV` and `RenderGo` each validate their
+>    profile themselves.** Nothing forces a caller through the registry.
+>
+> Two claims of revision 2 are narrowed, deliberately: `OutFile`/`VarName`
+> uniqueness is enforced **per package**, not globally (the ftdx10 profile
+> will legitimately reuse the filename `exinventory_gen.go` in its own
+> directory); and duplicate registry lookup names are delivered by map
+> construction (duplicate literal keys are a compile error), not by a
+> check.
 
 > **Revision 2 (28/07/2026).** Revision 1 was reviewed adversarially by
 > **Codex** (NEEDS-REVISION, 11 findings, 6 HIGH) and by **Fable**

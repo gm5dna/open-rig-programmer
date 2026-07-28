@@ -93,9 +93,10 @@ so this task changes no behaviour and cannot break the generated file.
 **Interfaces:**
 - Consumes: nothing.
 - Produces: `Profile` (struct, fields below); `ObservationPolicy` with
-  `ObservationsRequired`/`ObservationsAbsent`; `NamedProfile{Name string;
-  Profile Profile}`; `MaxDigitsCeiling = 247`; `func (Profile) Validate()
-  error`; `func Lookup(name string) (Profile, bool)`; `func FT710Profile()
+  `ObservationsRequired`/`ObservationsAbsent`; `TypeRefPolicy` with
+  `TypesLocal`/`TypesImported`; `NamedProfile{Name string; Profile
+  Profile}`; `MaxDigitsCeiling = 247`; `func (Profile) Validate() error`;
+  `func Lookup(name string) (Profile, bool)`; `func FT710Profile()
   Profile`; `func RegisteredProfiles() []NamedProfile`. Test-only:
   `fixtureRequired`, `fixtureAbsent`, `withRows(Profile, int) Profile`.
 
@@ -123,8 +124,9 @@ import (
 var fixtureRequired = Profile{
 	Model:       "FIXTURE",
 	Package:     "ftdx10",
-	TypeQual:    "cat.",
+	Types:       TypesImported,
 	ImportPath:  "github.com/gm5dna/open-rig-programmer/core/cat",
+	ImportAlias: "cat",
 	VarName:     "exItems",
 	OutFile:     "exinventory_gen.go",
 	ManualCSV:   "fixture.csv",
@@ -179,12 +181,18 @@ func TestProfileValidate_Refusals(t *testing.T) {
 		{"VarName not an identifier", func(p *Profile) { p.VarName = "ex items" }},
 		{"blank OutFile", func(p *Profile) { p.OutFile = "" }},
 		{"absolute OutFile", func(p *Profile) { p.OutFile = "/tmp/out.go" }},
+		{"OutFile equals ManualCSV", func(p *Profile) { p.OutFile = p.ManualCSV }},
+		{"OutFile equals ObservedCSV", func(p *Profile) { p.OutFile = p.ObservedCSV }},
 		{"escaping ManualCSV", func(p *Profile) { p.ManualCSV = "../table2.csv" }},
 		{"unclean ManualCSV", func(p *Profile) { p.ManualCSV = "./table2.csv" }},
+		{"dot-dot ManualCSV", func(p *Profile) { p.ManualCSV = ".." }},
+		{"dot ManualCSV", func(p *Profile) { p.ManualCSV = "." }},
 		{"blank ManualCSV", func(p *Profile) { p.ManualCSV = "" }},
-		{"ImportPath without TypeQual", func(p *Profile) { p.TypeQual = ""; p.ImportPath = "x/y" }},
-		{"TypeQual without ImportPath", func(p *Profile) { p.TypeQual = "cat."; p.ImportPath = "" }},
-		{"TypeQual missing dot", func(p *Profile) { p.TypeQual = "cat"; p.ImportPath = "x/y" }},
+		{"omitted TypeRefPolicy", func(p *Profile) { p.Types = 0 }},
+		{"unknown TypeRefPolicy", func(p *Profile) { p.Types = TypeRefPolicy(99) }},
+		{"TypesImported without ImportPath", func(p *Profile) { p.ImportPath = "" }},
+		{"TypesImported without ImportAlias", func(p *Profile) { p.ImportAlias = "" }},
+		{"ImportAlias not an identifier", func(p *Profile) { p.ImportAlias = "not an ident" }},
 		{"zero MinDigits", func(p *Profile) { p.MinDigits = 0 }},
 		{"zero MaxDigits", func(p *Profile) { p.MaxDigits = 0 }},
 		{"zero TextWidth", func(p *Profile) { p.TextWidth = 0 }},
@@ -223,6 +231,26 @@ func TestProfileValidate_ObservedCSVSetUnderAbsent(t *testing.T) {
 	}
 }
 
+// TestProfileValidate_TypesLocalRefusesImportFields is separate because it
+// needs a TypesLocal base — the FT-710 — where the refusal table mutates the
+// TypesImported fixture.
+func TestProfileValidate_TypesLocalRefusesImportFields(t *testing.T) {
+	t.Run("ImportPath set under TypesLocal", func(t *testing.T) {
+		p := FT710Profile()
+		p.ImportPath = "x/y"
+		if err := p.Validate(); err == nil {
+			t.Error("Validate() accepted ImportPath under TypesLocal; want an error")
+		}
+	})
+	t.Run("ImportAlias set under TypesLocal", func(t *testing.T) {
+		p := FT710Profile()
+		p.ImportAlias = "cat"
+		if err := p.Validate(); err == nil {
+			t.Error("Validate() accepted ImportAlias under TypesLocal; want an error")
+		}
+	})
+}
+
 func TestValidateRegistry_RejectsDuplicatesAndEmptiness(t *testing.T) {
 	a := fixtureRequired
 	b := fixtureRequired
@@ -250,6 +278,27 @@ func TestValidateRegistry_RejectsDuplicatesAndEmptiness(t *testing.T) {
 		b.OutFile = a.OutFile
 		if err := validateRegistry(map[string]Profile{"a": a, "b": b}); err != nil {
 			t.Errorf("rejected identical names in different packages: %v", err)
+		}
+	})
+	t.Run("blank lookup name", func(t *testing.T) {
+		if err := validateRegistry(map[string]Profile{"": a}); err == nil {
+			t.Error("accepted a blank lookup name; want an error — the name is the CLI-facing -profile token")
+		}
+	})
+	t.Run("lookup name with whitespace", func(t *testing.T) {
+		if err := validateRegistry(map[string]Profile{"ft 710": a}); err == nil {
+			t.Error("accepted a lookup name containing whitespace; want an error")
+		}
+	})
+	t.Run("one profile's output is another's input", func(t *testing.T) {
+		// Same package directory: b's generated file would overwrite a's
+		// committed source CSV on the next go generate.
+		b = fixtureRequired
+		b.VarName = "other"
+		b.OutFile = a.ManualCSV
+		b.ManualCSV = "third.csv"
+		if err := validateRegistry(map[string]Profile{"a": a, "b": b}); err == nil {
+			t.Error("accepted a profile whose OutFile is another profile's source CSV in the same package; want an error")
 		}
 	})
 }
@@ -287,7 +336,7 @@ func TestRegistry_LookupAndEnumeration(t *testing.T) {
 // literals it replaces, so a typo cannot silently change what is generated.
 func TestFT710Profile_MatchesTodaysConstants(t *testing.T) {
 	p := FT710Profile()
-	if p.Package != "cat" || p.VarName != "exItemsGen" || p.TypeQual != "" || p.ImportPath != "" {
+	if p.Package != "cat" || p.VarName != "exItemsGen" || p.Types != TypesLocal || p.ImportPath != "" || p.ImportAlias != "" {
 		t.Errorf("identity drifted: %+v", p)
 	}
 	if p.MinDigits != 1 || p.MaxDigits != 4 || p.TextWidth != 12 || p.MaxObservedWidth != 12 {
@@ -323,6 +372,7 @@ import (
 	"fmt"
 	"go/token"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -360,6 +410,39 @@ func (o ObservationPolicy) String() string {
 	}
 }
 
+// TypeRefPolicy declares how the generated file refers to EXItem and
+// EXAddress. Its zero value is deliberately NOT a valid policy: emitting
+// into core/cat and emitting elsewhere are both legitimate, so an OMITTED
+// policy must refuse rather than silently choosing one — a profile for a
+// foreign package that forgot its import would otherwise validate and then
+// emit a file that does not compile (Codex plan review, finding 3; the
+// M9c-1 omitted-semantics ruling again).
+type TypeRefPolicy int
+
+const (
+	// TypesLocal: the file is emitted into core/cat itself; EXItem and
+	// EXAddress are unqualified and nothing is imported. ImportPath and
+	// ImportAlias must both be empty.
+	TypesLocal TypeRefPolicy = iota + 1
+	// TypesImported: the file is emitted into another package; ImportPath
+	// is imported under the explicit alias ImportAlias, and every type
+	// reference is qualified by that alias. Deriving the qualifier FROM the
+	// alias makes qualifier/import drift structurally impossible — they are
+	// one string, not two.
+	TypesImported
+)
+
+func (t TypeRefPolicy) String() string {
+	switch t {
+	case TypesLocal:
+		return "TypesLocal"
+	case TypesImported:
+		return "TypesImported"
+	default:
+		return fmt.Sprintf("TypeRefPolicy(%d)", int(t))
+	}
+}
+
 // Profile is every fact about one radio model that the transcoder needs and
 // that differs between models. It is the single source those facts have: the
 // generator and every staleness test read the same value, so they cannot
@@ -371,12 +454,15 @@ type Profile struct {
 	Model string
 	// Package is the generated file's package clause.
 	Package string
-	// TypeQual qualifies EXItem/EXAddress in the generated file — "" when
-	// emitting into core/cat itself, "cat." from anywhere else. Set it and
-	// ImportPath together or not at all.
-	TypeQual string
-	// ImportPath is imported by the generated file. Set iff TypeQual is.
-	ImportPath string
+	// Types declares how the generated file refers to EXItem/EXAddress —
+	// TypesLocal inside core/cat, TypesImported anywhere else. Zero is
+	// refused.
+	Types TypeRefPolicy
+	// ImportPath is imported by the generated file under ImportAlias.
+	// Both are set iff Types is TypesImported; the alias is also the type
+	// qualifier, so the two cannot drift.
+	ImportPath  string
+	ImportAlias string
 	// VarName is the generated slice variable.
 	VarName string
 	// OutFile, ManualCSV and ObservedCSV are relative to the profile's own
@@ -435,15 +521,29 @@ func (p Profile) Validate() error {
 			return fmt.Errorf("extable: profile %s: %w", p.Model, err)
 		}
 	}
-	switch {
-	case p.TypeQual == "" && p.ImportPath != "":
-		return fmt.Errorf("extable: profile %s: ImportPath is set but TypeQual is not", p.Model)
-	case p.TypeQual != "" && p.ImportPath == "":
-		return fmt.Errorf("extable: profile %s: TypeQual is set but ImportPath is not", p.Model)
-	case p.TypeQual != "":
-		if !strings.HasSuffix(p.TypeQual, ".") || !isGoIdent(strings.TrimSuffix(p.TypeQual, ".")) {
-			return fmt.Errorf("extable: profile %s: TypeQual %q must be a Go identifier followed by a dot", p.Model, p.TypeQual)
+	// The generator reads the CSVs and then writes OutFile unconditionally,
+	// so an OutFile naming a source would DESTROY that source on the next
+	// go generate (Codex plan review, finding 2).
+	if p.OutFile == p.ManualCSV {
+		return fmt.Errorf("extable: profile %s: OutFile %q is also its ManualCSV — generating would overwrite the source", p.Model, p.OutFile)
+	}
+	if p.ObservedCSV != "" && p.OutFile == p.ObservedCSV {
+		return fmt.Errorf("extable: profile %s: OutFile %q is also its ObservedCSV — generating would overwrite the source", p.Model, p.OutFile)
+	}
+	switch p.Types {
+	case TypesLocal:
+		if p.ImportPath != "" || p.ImportAlias != "" {
+			return fmt.Errorf("extable: profile %s: ImportPath/ImportAlias are set under TypesLocal", p.Model)
 		}
+	case TypesImported:
+		if p.ImportPath == "" {
+			return fmt.Errorf("extable: profile %s: TypesImported requires an ImportPath", p.Model)
+		}
+		if !isGoIdent(p.ImportAlias) {
+			return fmt.Errorf("extable: profile %s: ImportAlias %q must be a valid non-keyword Go identifier", p.Model, p.ImportAlias)
+		}
+	default:
+		return fmt.Errorf("extable: profile %s: TypeRefPolicy %v must be set explicitly", p.Model, p.Types)
 	}
 	for _, f := range []struct {
 		name string
@@ -511,12 +611,14 @@ func isGoIdent(s string) bool {
 	return s != "" && token.IsIdentifier(s) && !token.IsKeyword(s)
 }
 
+// checkRelPath requires a clean, strictly local relative path.
+// filepath.IsLocal does the heavy lifting — it rejects "", "..", parent
+// traversal, platform-native absolute paths and Windows reserved names —
+// and the two explicit checks close what it leaves: "." (the directory
+// itself) and unclean spellings like "./x".
 func checkRelPath(name, v string) error {
-	if v == "" {
-		return fmt.Errorf("%s is blank", name)
-	}
-	if path.IsAbs(v) || v != path.Clean(v) || strings.HasPrefix(v, "../") {
-		return fmt.Errorf("%s %q must be a clean relative path", name, v)
+	if v == "." || !filepath.IsLocal(v) || v != path.Clean(v) {
+		return fmt.Errorf("%s %q must be a clean local relative path", name, v)
 	}
 	return nil
 }
@@ -533,6 +635,7 @@ type NamedProfile struct {
 var ft710Profile = Profile{
 	Model:       "FT-710",
 	Package:     "cat",
+	Types:       TypesLocal,
 	VarName:     "exItemsGen",
 	OutFile:     "exinventory_gen.go",
 	ManualCSV:   "table2.csv",
@@ -569,10 +672,16 @@ func mustRegistry(m map[string]Profile) map[string]Profile {
 	return m
 }
 
-// validateRegistry checks each profile and the invariants that only exist
-// because profiles share namespaces: two profiles writing the same file in
-// the same package would have the second `go generate` silently overwrite
-// the first's artefact.
+// validateRegistry checks each profile, its lookup name, and the invariants
+// that only exist because profiles share namespaces: two profiles writing
+// the same file in the same package would have the second `go generate`
+// silently overwrite the first's artefact, and one profile's OUTPUT naming
+// another's INPUT in the same package directory would destroy a committed
+// source.
+//
+// Duplicate lookup NAMES need no check here: the registry is built as a map
+// literal, where a duplicate key is a compile error. (A map cannot even
+// carry a duplicate to detect.)
 func validateRegistry(m map[string]Profile) error {
 	if len(m) == 0 {
 		return fmt.Errorf("extable: the profile registry is empty")
@@ -585,8 +694,14 @@ func validateRegistry(m map[string]Profile) error {
 
 	outFiles := map[string]string{}
 	varNames := map[string]string{}
+	inputs := map[string]string{} // package-qualified source CSVs -> entry
 	for _, n := range names {
 		p := m[n]
+		// The name is the CLI-facing -profile token; a blank or
+		// whitespace-bearing one would be unselectable or ambiguous.
+		if strings.TrimSpace(n) == "" || strings.ContainsAny(n, " \t\n") {
+			return fmt.Errorf("extable: registry has an entry whose lookup name %q is blank or contains whitespace", n)
+		}
 		if err := p.Validate(); err != nil {
 			return fmt.Errorf("extable: registry entry %q: %w", n, err)
 		}
@@ -601,6 +716,17 @@ func validateRegistry(m map[string]Profile) error {
 			return fmt.Errorf("extable: registry entries %q and %q both declare %s", prev, n, varKey)
 		}
 		varNames[varKey] = n
+
+		inputs[p.Package+"/"+p.ManualCSV] = n
+		if p.ObservedCSV != "" {
+			inputs[p.Package+"/"+p.ObservedCSV] = n
+		}
+	}
+	// Cross-profile output-vs-input collisions, both registration orders.
+	for outKey, writer := range outFiles {
+		if owner, hit := inputs[outKey]; hit {
+			return fmt.Errorf("extable: registry entry %q writes %s, which is entry %q's source CSV", writer, outKey, owner)
+		}
 	}
 	return nil
 }
@@ -739,7 +865,10 @@ func TestParseCSV_AddressComponentRange(t *testing.T) {
 		{"P3 100 rejected", "01,01,100,RADIO SETTING,MODE SSB,AF TREBLE GAIN,x,3,false,646\n", true},
 		{"negative P1 rejected", "-1,01,01,RADIO SETTING,MODE SSB,AF TREBLE GAIN,x,3,false,646\n", true},
 	}
-	p := withRows(FT710Profile(), 1)
+	// fixtureAbsent, because the motivating exposure is the manual-only
+	// regime, where no observation-side two-digit rule exists to catch a
+	// bad component indirectly. (Its digit bounds 2..6 admit these rows.)
+	p := withRows(fixtureAbsent, 1)
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := ParseCSV(p, []byte(tc.csv))
@@ -752,6 +881,15 @@ func TestParseCSV_AddressComponentRange(t *testing.T) {
 		})
 	}
 }
+
+// TestParseCSV_RefusesInvalidProfile pins that the API validates its own
+// profile: the registry cannot vouch for a profile that never went through
+// it.
+func TestParseCSV_RefusesInvalidProfile(t *testing.T) {
+	if _, err := ParseCSV(Profile{}, []byte(goodRow)); err == nil {
+		t.Error("ParseCSV accepted a zero Profile; want a validation error")
+	}
+}
 ```
 
 - [ ] **Step 2: Run to verify it fails**
@@ -762,10 +900,17 @@ Expected: FAIL to compile — `too many arguments in call to ParseCSV`.
 - [ ] **Step 3: Change `ParseCSV` and `parseRecord`**
 
 In `internal/extable/extable.go`, change the two signatures and the bound
-reads. `ParseCSV`'s first line becomes:
+reads. `ParseCSV`'s first lines become:
 
 ```go
 func ParseCSV(p Profile, data []byte) ([]Row, error) {
+	// The registry validates registered profiles, but nothing forces a
+	// caller through the registry — the test fixtures do not go through it.
+	// An unvalidated profile here would let omitted digit bounds be READ as
+	// bounds (Codex plan review, finding 4).
+	if err := p.Validate(); err != nil {
+		return nil, err
+	}
 ```
 
 and its call to `parseRecord` becomes `parseRecord(p, rec)`. Then:
@@ -804,17 +949,26 @@ and replace the Digits/Text consistency block at the end with:
 Update `ParseCSV`'s doc comment: replace "a non-text row whose Digits is not
 1..4, or a text row whose Digits is not 12" with "a non-text row whose Digits
 falls outside the profile's MinDigits..MaxDigits, a text row whose Digits is
-not the profile's TextWidth, an address component outside 0..99".
+not the profile's TextWidth, an address component outside 0..99". Also note
+it validates the profile first.
 
-- [ ] **Step 4: Update the six other call sites**
+Also update the `Row` type's doc comment (`extable.go:46-48`): "Digits is
+the manual's Digits column (1..4, or 12 for the six text items)" hardcodes
+in prose the exact bounds this task removes from code. Replace with "Digits
+is the manual's Digits column: within the profile's MinDigits..MaxDigits
+for a numeric field, or exactly the profile's TextWidth for a text item
+(1..4 and 12 respectively for the FT-710)."
+
+- [ ] **Step 4: Update the seven other call sites**
 
 `internal/extable/extable_test.go:119` → `ParseCSV(withRows(FT710Profile(), 1), []byte(tc.csv))`.
 
-> The existing `TestParseCSV_Strictness` has a "duplicate triple" case whose
-> CSV has two rows; use `withRows(FT710Profile(), 2)` for that one, or set
-> `ExpectedRows` per case. `ExpectedRows` is not enforced by `ParseCSV` until
-> Task 5, so either is fine now — but write it correctly now so Task 5 needs
-> no revisit.
+> `ExpectedRows` is **never** enforced by `ParseCSV` — the completeness gate
+> lands in `RenderGo`, in Task 5. The `withRows` values here only need the
+> profile to *validate* (positive), not to match the CSV's row count; 1 is
+> fine throughout `TestParseCSV_Strictness`. Do NOT add a row-count check to
+> `ParseCSV` in any task — it would break `observe`'s synthetic small CSVs
+> parsed under the FT-710 profile.
 
 `internal/extable/extable_test.go:135` → `ParseCSV(withRows(FT710Profile(), 1), []byte(csv))`.
 
@@ -847,8 +1001,9 @@ gofmt -l .
 go build ./... && go vet ./...
 git diff --exit-code -- core/cat/exinventory_gen.go core/cat/testdata/evidence-literals.golden
 ```
-Expected: every `ParseCSV(` hit passes a profile as its first argument; no
-other output.
+Expected: every `ParseCSV(` hit passes a profile as its first argument or is
+an error-message string literal (`"ParseCSV(table2.csv): %v"` and friends);
+nothing else, and no output from the other commands.
 
 - [ ] **Step 7: Commit**
 
@@ -923,10 +1078,16 @@ Delete these four lines from `internal/extable/extable.go`:
 const maxObservedWidth = 12
 ```
 
-Change the signature to:
+Change the signature and opening to:
 
 ```go
 func ParseObservedCSV(p Profile, data []byte) (map[string]Observed, error) {
+	// Same self-validation as ParseCSV: nothing forces a caller through the
+	// registry, and an unvalidated zero MaxObservedWidth would refuse every
+	// width rather than the right ones.
+	if err := p.Validate(); err != nil {
+		return nil, err
+	}
 ```
 
 and the width check to:
@@ -944,7 +1105,18 @@ with "each width an integer in 1..the profile's MaxObservedWidth", and add:
 the manual-schema widths in MinDigits/MaxDigits/TextWidth — the two
 categories can disagree, as table2-corrections.csv records."
 
-- [ ] **Step 4: Update the three other call sites**
+- [ ] **Step 4: Update the four other call sites, and add the self-validation pin**
+
+Append to `internal/extable/extable_test.go`:
+
+```go
+// TestParseObservedCSV_RefusesInvalidProfile mirrors ParseCSV's pin.
+func TestParseObservedCSV_RefusesInvalidProfile(t *testing.T) {
+	if _, err := ParseObservedCSV(Profile{}, []byte(observedBody)); err == nil {
+		t.Error("ParseObservedCSV accepted a zero Profile; want a validation error")
+	}
+}
+```
 
 - `internal/extable/extable_test.go:216` → `ParseObservedCSV(FT710Profile(), []byte("# provenance comment\n"+observedBody))`
 - `internal/extable/extable_test.go:254` → `ParseObservedCSV(FT710Profile(), []byte(tc.csv))`
@@ -971,8 +1143,8 @@ gofmt -l .
 go build ./... && go vet ./...
 git diff --exit-code -- core/cat/exinventory_gen.go core/cat/testdata/evidence-literals.golden
 ```
-Expected: every call passes a profile; `maxObservedWidth` has no hits at all;
-no other output.
+Expected: every call passes a profile (error-message string literals are
+expected residue); `maxObservedWidth` has no hits at all; no other output.
 
 - [ ] **Step 7: Commit**
 
@@ -1019,7 +1191,7 @@ func TestRenderGo_IdentityComesFromProfile(t *testing.T) {
 		}
 		for _, want := range []string{
 			"package ftdx10",
-			`import "github.com/gm5dna/open-rig-programmer/core/cat"`,
+			`import cat "github.com/gm5dna/open-rig-programmer/core/cat"`,
 			"var exItems = []cat.EXItem{",
 			"{Addr: cat.EXAddress{",
 			"// exItems is the fixture inventory.",
@@ -1050,24 +1222,23 @@ func TestRenderGo_IdentityComesFromProfile(t *testing.T) {
 		}
 	})
 
-	t.Run("manual-only profile names one source", func(t *testing.T) {
-		out, err := RenderGo(withRows(fixtureAbsent, 1), rows, nil)
-		if err != nil {
-			t.Fatalf("RenderGo: %v", err)
-		}
-		s := string(out)
-		if !strings.Contains(s, "// Code generated by internal/extable/gen from fixture.csv. DO NOT EDIT.") {
-			t.Error("manual-only output should name exactly one source CSV")
-		}
-		if strings.Contains(s, "fixture-observed.csv") {
-			t.Error("manual-only output must not name an observation CSV it has none of")
-		}
-		if !strings.Contains(s, `ObservedReadWidth: 0`) || !strings.Contains(s, `ObservedReadShape: ""`) {
-			t.Error("manual-only rows must render the documented absence sentinels")
-		}
-	})
+}
+
+// TestRenderGo_RefusesInvalidProfile mirrors the parsers' pins.
+func TestRenderGo_RefusesInvalidProfile(t *testing.T) {
+	if _, err := RenderGo(Profile{}, nil, nil); err == nil {
+		t.Error("RenderGo accepted a zero Profile; want a validation error")
+	}
 }
 ```
+
+> **Deliberately absent here:** the manual-only (`fixtureAbsent`) rendering
+> subtest lives in **Task 5**, not this task. Task 4 leaves the old
+> observation-coverage rule in place, and that rule refuses an empty
+> observation map — so a manual-only render cannot succeed until Task 5
+> replaces the rule. A version of this plan had that subtest here, and both
+> plan reviewers independently caught that Task 4 could never go green with
+> it (Codex finding 1, Fable finding 1).
 
 - [ ] **Step 2: Run to verify it fails**
 
@@ -1076,10 +1247,15 @@ Expected: FAIL to compile.
 
 - [ ] **Step 3: Rewrite `RenderGo`'s header and entry emission**
 
-Change the signature to:
+Change the signature and opening to:
 
 ```go
 func RenderGo(p Profile, rows []Row, observed map[string]Observed) ([]byte, error) {
+	// Self-validation, as in both parsers: a caller with an unvalidated
+	// profile must get a refusal, not a plausible wrong file.
+	if err := p.Validate(); err != nil {
+		return nil, err
+	}
 ```
 
 Replace the fixed header block (the eleven `buf.WriteString` calls from
@@ -1102,13 +1278,18 @@ with:
 		fmt.Fprintf(&buf, "// Code generated by internal/extable/gen from %s. DO NOT EDIT.\n\n", p.ManualCSV)
 	}
 	fmt.Fprintf(&buf, "package %s\n\n", p.Package)
-	if p.ImportPath != "" {
-		fmt.Fprintf(&buf, "import %s\n\n", strconv.Quote(p.ImportPath))
+	// Under TypesImported the type qualifier IS the import alias, emitted
+	// explicitly on the import — one string, so qualifier and import cannot
+	// drift apart (Codex plan review, finding 3).
+	qual := ""
+	if p.Types == TypesImported {
+		qual = p.ImportAlias + "."
+		fmt.Fprintf(&buf, "import %s %s\n\n", p.ImportAlias, strconv.Quote(p.ImportPath))
 	}
 	for _, l := range p.DocLines {
 		fmt.Fprintf(&buf, "// %s\n", l)
 	}
-	fmt.Fprintf(&buf, "var %s = []%sEXItem{\n", p.VarName, p.TypeQual)
+	fmt.Fprintf(&buf, "var %s = []%sEXItem{\n", p.VarName, qual)
 ```
 
 and the per-row `fmt.Fprintf` with:
@@ -1116,14 +1297,26 @@ and the per-row `fmt.Fprintf` with:
 ```go
 		fmt.Fprintf(&buf,
 			"\t{Addr: %sEXAddress{P1: %d, P2: %d, P3: %d}, P1Label: %s, P2Label: %s, Name: %s, Digits: %d, Text: %t, ObservedReadWidth: %d, ObservedReadShape: %s}, // manual line %d\n",
-			p.TypeQual, r.P1, r.P2, r.P3,
+			qual, r.P1, r.P2, r.P3,
 			strconv.Quote(r.P1Label), strconv.Quote(r.P2Label), strconv.Quote(r.Name),
 			r.Digits, r.Text, obs.ReadWidth, strconv.Quote(obs.ReadShape), r.ManualLine)
 ```
 
+Also update two doc comments this task makes stale (both plan reviewers
+flagged them):
+
+- The package doc (`extable.go:3-26`) opens "Package extable transcodes the
+  FT-710 CAT manual's Table 2 …". Reword the opening to "Package extable
+  transcodes a radio model's menu chart (for the FT-710, the CAT manual's
+  Table 2) into that model's generated Go inventory, under a per-model
+  Profile". Keep the two-sources provenance paragraph — it is still true.
+- `RenderGo`'s doc opens "renders rows as the core/cat generated inventory
+  file (exinventory_gen.go)". Reword to "renders rows as the profile's
+  generated inventory file", and keep the determinism sentence.
+
 Leave the observation lookup exactly as it is for now — Task 5 changes it.
 
-- [ ] **Step 4: Update the six other call sites**
+- [ ] **Step 4: Update the seven other call sites**
 
 - `extable_test.go:168,172` → `RenderGo(withRows(FT710Profile(), 3), rows, observed)`
 - `extable_test.go:270,279` → `RenderGo(withRows(FT710Profile(), 1), rows, ...)`
@@ -1208,6 +1401,25 @@ func TestRenderGo_ObservationRegimes(t *testing.T) {
 	t.Run("exact row count is accepted", func(t *testing.T) {
 		if _, err := RenderGo(withRows(FT710Profile(), 1), []Row{row}, obs); err != nil {
 			t.Errorf("RenderGo refused a complete inventory: %v", err)
+		}
+	})
+	t.Run("manual-only profile renders and names one source", func(t *testing.T) {
+		// Moved here from Task 4 by plan review: this render can only
+		// succeed once THIS task's regime switch replaces the old
+		// unconditional coverage rule.
+		out, err := RenderGo(withRows(fixtureAbsent, 1), []Row{row}, nil)
+		if err != nil {
+			t.Fatalf("RenderGo: %v", err)
+		}
+		s := string(out)
+		if !strings.Contains(s, "// Code generated by internal/extable/gen from fixture.csv. DO NOT EDIT.") {
+			t.Error("manual-only output should name exactly one source CSV")
+		}
+		if strings.Contains(s, "fixture-observed.csv") {
+			t.Error("manual-only output must not name an observation CSV it has none of")
+		}
+		if !strings.Contains(s, `ObservedReadWidth: 0`) || !strings.Contains(s, `ObservedReadShape: ""`) {
+			t.Error("manual-only rows must render the documented absence sentinels")
 		}
 	})
 }
@@ -1315,10 +1527,13 @@ git commit -m "M9c-2 task 5: declared observation regimes and an ExpectedRows co
 - Consumes: `Lookup`, `MaxDigitsCeiling`, all three parameterised APIs.
 - Produces: nothing further.
 
-- [ ] **Step 1: Write the failing ceiling pin**
+- [ ] **Step 1: Write the ceiling pin**
 
-Create `core/cat/exdigits_ceiling_test.go`. It is a **new file**, so it has
-no records in the evidence golden and is safe to add:
+This pin is expected to PASS immediately (both values are 247 today) — it
+exists to fail in the future if either side drifts, not to drive this
+task's implementation. Create `core/cat/exdigits_ceiling_test.go`; it is a
+**new file**, so it has no records in the evidence golden and is safe to
+add:
 
 ```go
 // SPDX-License-Identifier: GPL-3.0-or-later
@@ -1437,10 +1652,16 @@ go build ./...
 go vet ./...
 go test ./...
 git diff --exit-code -- core/cat/exinventory_gen.go core/cat/testdata/evidence-literals.golden
-grep -rn "ParseCSV(\|ParseObservedCSV(\|RenderGo(" --include=*.go . | grep -v "^./internal/extable/extable.go"
+grep -rn "ParseCSV(\|ParseObservedCSV(\|RenderGo(" --include=*.go . | grep -v "func ParseCSV\|func ParseObservedCSV\|func RenderGo"
 ```
 Expected: `gofmt` silent; build, vet and the full suite green; no diff; every
-call site passing a profile.
+remaining hit either passes a profile as its first argument or is an
+error-message STRING LITERAL (e.g. `"ParseCSV(table2.csv): %v"` in the
+staleness test) — those are expected residue, not call sites.
+
+> On this machine `grep -rn … .` emits paths WITHOUT a `./` prefix, so
+> `grep -v "^./…"`-style filters remove nothing; filter on the `func `
+> definitions instead, as above (Fable plan review, finding 3).
 
 - [ ] **Step 7: Commit**
 
@@ -1475,3 +1696,44 @@ on. `fixtureRequired`/`fixtureAbsent` are defined once.
 `extable.FT710Profile()` directly; Task 6 replaces that with the
 `-profile`-resolved value. This is deliberate — it keeps every intermediate
 commit compiling and green.
+
+## Plan review fold (28/07/2026)
+
+This plan was adversarially reviewed before execution by Codex
+(NEEDS-REVISION: 3 HIGH, 3 MEDIUM, 2 LOW) and by a second independent
+reviewer on Fable (APPROVE-WITH-FIXES: 1 HIGH, 3 MEDIUM, 4 LOW).
+Adjudication: `.superpowers/sdd/m9c2-plan-review-adjudication.md`. All
+accepted findings are folded into the task text above; the ones that changed
+the DESIGN rather than the wording:
+
+- **`TypeRefPolicy` replaces the bare `TypeQual`/`ImportPath` pair** (Codex
+  3, HIGH). Both-empty was simultaneously the FT-710's legitimate value and
+  the omitted-pair zero value — the M9c-1 defect shape. The policy enum is
+  zero-invalid, and under `TypesImported` the type qualifier IS the emitted
+  import alias, so the two cannot drift.
+- **A profile's `OutFile` must not name any source CSV**, its own or —
+  within the same package — another profile's (Codex 2, HIGH). The generator
+  writes unconditionally, so this was a validated path to destroying a
+  committed transcription.
+- **All three APIs self-validate their profile** (Codex 4, MEDIUM). Nothing
+  forces a caller through the registry; the fixtures themselves do not go
+  through it.
+- **The manual-only rendering subtest moved from Task 4 to Task 5** (Codex 1
+  + Fable 1, both HIGH, found independently): it needs Task 5's regime
+  switch, so Task 4 could never have gone green with it.
+
+Recorded as deliberate, per review:
+
+- `validateRegistry` keys `OutFile`/`VarName` uniqueness **within a
+  package**, narrower than the spec's literal "duplicate `OutFile`s" — the
+  future ftdx10 profile will legitimately reuse the filename
+  `exinventory_gen.go` in its own directory.
+- A manual-only profile must still supply a positive `MaxObservedWidth`
+  even though nothing consults it under `ObservationsAbsent` (Fable 7).
+  Uniform positivity is kept in preference to making zero meaningful for
+  one regime — the invented value is inert, and the twin case
+  (`TextWidth` for a model with no text rows) is already recorded in the
+  spec.
+- Duplicate registry lookup NAMES are structurally impossible (map literal;
+  duplicate keys are a compile error) — the spec's "duplicate lookup names
+  refused" is delivered by construction, not by a check.
