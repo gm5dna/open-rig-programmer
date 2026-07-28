@@ -289,8 +289,12 @@ may appear.
 - **Form-refusal matrix**, both directions, each case failing if the
   form check is deleted.
 - **Round trip:** exact for every accepted tag, including empty →
-  all-fill → `""`, on both fixtures; trailing-fill refusal tested at
-  build AND gate.
+  all-fill → `""`, on both fixtures; the trailing-fill refusal is a
+  **builder-input rule tested at build only** — the gate sees the padded
+  wire field, where trailing fill is inevitable and the data-vs-padding
+  distinction is erased, so it validates raw bytes per-charset without
+  the suffix rule (plan-review correction, Codex finding 8; revision
+  2's original "tested at build AND gate" wording was incoherent).
 - **Gate-admissibility walk:** the non-vacuity counters become
   form-aware — each dialect's own-form builders must contribute, and
   wrong-form builders must be SEEN to refuse.

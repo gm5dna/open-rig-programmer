@@ -42,36 +42,52 @@ the import cycle that makes `allTestDialects()` unreachable to it.
 - `go test -race ./core/...` exceeds ten minutes foreground; background
   it if run.
 
-> ### ⚠️ THE PINNED-FILE EDITING DISCIPLINE — read before touching any `core/cat/*_test.go`
+> ### ⚠️ THE EVIDENCE-LITERAL MODEL — read before touching any `core/cat/*_test.go`
 >
-> `core/cat/evidence_literals_test.go` walks EVERY `*_test.go` in
-> `core/cat` and `core/cat/testdata/evidence-literals.golden` pins each
-> file's STRING/CHAR/INT literals by `(file, ordinal)`. The check is
-> survival: a pinned literal that moves, changes or disappears fails, and
-> the golden must never be regenerated. Therefore, in ANY existing
-> `core/cat/*_test.go`:
+> (Corrected by both plan reviewers — revision 1 materially
+> over-claimed the pin's scope.)
 >
-> - **Adding, removing or reordering literals mid-file is FATAL** — every
->   later ordinal shifts.
-> - **Identifier-only edits are safe** (e.g. adding `Form: MTFormShort`
->   to a composite literal — `MTFormShort` is a constant identifier, not
->   a literal; a field name is an identifier).
-> - **Appending after a file's last literal is safe** (new ordinals
->   beyond the golden's records).
-> - **New `*_test.go` files are safe** (no golden records; ordinals are
->   per-file).
+> `core/cat/evidence_literals_test.go` walks `core/cat`'s `*_test.go`
+> files EXCEPT an explicit exclusion list (`evidence_literals_test.go:
+> 61-65`): `evidence_literals_test.go`, `framecorpus_test.go`,
+> `allowlistcorpus_test.go`, `dialect_test.go` and
+> **`seconddialect_test.go`** are NOT walked. The golden pins
+> STRING/CHAR/INT literals by `(file, ordinal)` for the ~21 files that
+> have records, and the check is survival-only: it verifies golden
+> records still hold; it never checks literals the golden does not
+> record. The golden must never be regenerated.
 >
-> This plan is engineered so that every literal-bearing addition lands in
-> NEW files (`mtform_test.go`, `mtcombined_test.go`,
-> `dialecttest/…`) or as end-of-file appends, and every edit inside a
-> pinned file is identifier-only. If a task seems to need a mid-file
-> literal, stop and report — do not improvise.
+> Consequences for this plan:
 >
-> Also note from scoping (verified): the existing
+> - **Files this plan edits that ARE golden-pinned**: `mt.go`'s tests
+>   live in pinned files (`mt_test.go`, `mtpolicy_test.go`,
+>   `dialectequiv_test.go`, `dialectvalidate_test.go`,
+>   `milestonefixes_test.go`, `clarifier_test.go`, `mwkind_test.go`,
+>   `dialectexternal_test.go` — but note some of THESE may hold no
+>   records either; the golden, not this list, is the authority). In a
+>   file with golden records: adding/removing/reordering literals
+>   BEFORE a pinned one is fatal; identifier-only edits (e.g. adding
+>   `Form: MTFormShort` — a constant identifier, not a literal) are
+>   always safe; appends after the last pinned literal are safe.
+> - **`seconddialect_test.go` is EXCLUDED from the walker** — Task 6's
+>   fixtures and the `allTestDialects()` entries (which include string
+>   literals) are unconstrained by the golden.
+> - **New `*_test.go` files are always safe** (no golden records).
+> - **A passing evidence test does NOT prove edits were literal-safe**
+>   (it only proves pinned records survived). Each task's reviewer must
+>   inspect the diff for literal changes in golden-recorded files
+>   directly.
+>
+> If an edit genuinely requires disturbing a pinned literal, stop and
+> report — do not improvise.
+>
+> Also note from scoping (verified by both reviewers across all five
+> `allTestDialects()` consumers): the existing
 > `TestEveryDialect_BuiltFramesAreCleanAndGateAdmissible` needs **no
 > edit** — its `build()` silently skips builders that return errors, so
 > combined fixtures that refuse `BuildMTSet` contribute via their other
-> builders and the per-builder floors stay satisfied by the short-form
+> builders, the MW loop's `Kind: nd.dia.mwWriteKind` works for kinds
+> '1'/'2', and the per-builder floors stay satisfied by the short-form
 > dialects.
 
 ## File Structure
@@ -96,14 +112,19 @@ the import cycle that makes `allTestDialects()` unreachable to it.
 | `core/driver/ft710/modebyname_test.go` | One `MTPolicy` literal gains `Form:` (identifier-only; not a pinned package). |
 | `docs/superpowers/m9c3-baseline-manifest.md` | **New.** Byte-identity manifest. |
 
-Existing `core/cat` pinned files receiving **identifier-only** edits:
-`seconddialect_test.go` (fixture `MTPolicy` literals gain
-`Form: MTFormShort`; new fixtures appended at end),
-`dialectequiv_test.go:62,317`, `dialectvalidate_test.go:103`,
-`milestonefixes_test.go:133,245`, `clarifier_test.go:48`,
-`mwkind_test.go:30`, `dialectexternal_test.go:46`, `mtpolicy_test.go:16`
-(all: add `Form: MTFormShort`). The blast-radius list is a hypothesis —
-Task 1's gate is `grep -rn "MTPolicy{" --include=*.go .`.
+Existing `core/cat` test files receiving **identifier-only** edits (safe
+regardless of golden status): `seconddialect_test.go` (excluded from the
+walker entirely; three `MTPolicy` literals gain `Form: MTFormShort`; new
+fixtures appended at end), `dialectequiv_test.go:62,317`,
+`dialectvalidate_test.go:103`, `milestonefixes_test.go:133,245`,
+`clarifier_test.go:48`, `mwkind_test.go:30`, `mtpolicy_test.go:16` —
+all add `Form: MTFormShort`. Two sites need the QUALIFIED form
+`Form: cat.MTFormShort`: `dialectexternal_test.go:46` (`package
+cat_test`) and `core/driver/ft710/modebyname_test.go:54`. Both reviewers
+verified the repo-wide count is exactly **14** `MTPolicy{` composite
+literals with no aliased or non-literal construction anywhere — but the
+blast-radius list remains a hypothesis; Task 1's gate is
+`grep -rn "MTPolicy{" --include=*.go .`.
 
 ---
 
@@ -118,13 +139,49 @@ Task 1's gate is `grep -rn "MTPolicy{" --include=*.go .`.
 **Interfaces:**
 - Produces: `type MTForm int` with `MTFormUnspecified`/`MTFormShort`/`MTFormCombined` (String() in the ObservationPolicy style); `MTPolicy{Form, TagMaxBytes, ClearTagByte, PadByte, TagFill}` (comparable — scalars only); V9 rules below.
 
-- [ ] **Step 1: write the failing V9 tests** in NEW file `core/cat/mtform_test.go` (`package cat`). Table-driven over a valid short base (the FT-710's policy plus `Form: MTFormShort`) and a valid combined base (`MTPolicy{Form: MTFormCombined, TagMaxBytes: 6, TagFill: ' '}`), asserting `NewDialect` refusal for each: omitted Form (zero); out-of-enum Form (`MTForm(9)`); short with `TagFill` set; combined with `ClearTagByte` set; combined with `PadByte` set; combined with `TagFill` zero; combined with invalid `TagFill` (`';'`, `0x1F`); combined whose `29+TagMaxBytes > DefaultMaxFrame` (TagMaxBytes 64 is fine — the existing `maxMTTagBytes` cap already keeps 29+64=93 under 256, so this rule needs a direct unit call on the validator with a synthetic ceiling check — assert the ERROR TEXT names both numbers); acceptance of both bases. Use full `DialectConfig` fixtures modelled on `dialectvalidate_test.go`'s existing pattern (copy a valid config, mutate `MT`).
+- [ ] **Step 1: write the failing V9 tests** in NEW file `core/cat/mtform_test.go` (`package cat`). Table-driven over a valid short base (the FT-710's policy plus `Form: MTFormShort`) and a valid combined base (`MTPolicy{Form: MTFormCombined, TagMaxBytes: 6, TagFill: ' '}`), asserting `NewDialect` refusal for each: omitted Form (zero); out-of-enum Form (`MTForm(9)`); short with `TagFill` set; combined with `ClearTagByte` set; combined with `PadByte` set; combined with `TagFill` zero; combined with invalid `TagFill` (`';'`, `0x1F`); acceptance of both bases. Use full `DialectConfig` fixtures modelled on `dialectvalidate_test.go`'s existing pattern (copy a valid config, mutate `MT`).
+
+  **The frame-ceiling proof is a constants-relationship invariant, NOT a
+  runtime branch** (both reviewers: `maxMTTagBytes` = 64 makes any
+  runtime ceiling check dead code — short max 7+64=71 and combined max
+  29+64=93 are both static facts under `DefaultMaxFrame` 256, and no
+  config can reach a ceiling error past the TagMaxBytes cap). Write one
+  test asserting BOTH form invariants directly:
+
+```go
+// TestMTFrameCeilings_FitTransportFrame is the spec's "V9 proves each
+// form's derived maximum fits DefaultMaxFrame", in the only honest
+// shape: maxMTTagBytes caps TagMaxBytes at 64, so the maxima are
+// compile-time facts, proven here rather than by an unreachable
+// runtime branch.
+func TestMTFrameCeilings_FitTransportFrame(t *testing.T) {
+	if short := mtAnswerMinLen + maxMTTagBytes; short > DefaultMaxFrame {
+		t.Errorf("short-form ceiling %d exceeds DefaultMaxFrame %d", short, DefaultMaxFrame)
+	}
+	if combined := 29 + maxMTTagBytes; combined > DefaultMaxFrame {
+		t.Errorf("combined-form ceiling %d exceeds DefaultMaxFrame %d", combined, DefaultMaxFrame)
+	}
+}
+```
+
+  V9 itself carries a comment recording the same reasoning; it gains NO
+  ceiling branch.
 - [ ] **Step 2: run** `go test ./core/cat/ -run 'TestValidateMTPolicy|TestMTForm' -v` — expect compile failure (`undefined: MTFormShort`).
 - [ ] **Step 3: implement.** In `dialectconfig.go`: the enum + String(); add `Form MTForm` (first field) and `TagFill byte` (last) to `MTPolicy`; REWRITE the type's doc per-form — it currently says "This type describes the SHORT form only", which becomes false this commit; give `TagMaxBytes` its dual-meaning doc for the combined form INCLUDING the recorded bet from the spec ("policy bound AND tag-field width; coinciding on the evidenced radio; a TagFieldWidth split is additive if a counter-radio appears"); `ClearTagByte`/`PadByte` docs gain "short-form only; must be zero under MTFormCombined"; `TagFill` doc: "combined-form only: the outbound fill byte AND the answer trim byte; zero-invalid there — an omitted fill must not silently emit NUL". In `dialectvalidate.go` V9 (`validateMTPolicy`): keep the existing TagMaxBytes and per-byte checks, add the ownership switch:
 
 ```go
 	switch cfg.MT.Form {
 	case MTFormShort:
+		// The pre-existing short-form requirements, verbatim: ClearTagByte
+		// must be a valid wire byte (it is emitted into every cleared
+		// tag), and PadByte keeps its 0-or-valid rule. Only TagFill is
+		// new here, as an ownership refusal.
+		if !validWireByte(cfg.MT.ClearTagByte) {
+			return fmt.Errorf("cat: MT.ClearTagByte is %#02x, which is outside printable ASCII 0x20-0x7E excluding ';' — it is emitted into every cleared tag", cfg.MT.ClearTagByte)
+		}
+		if cfg.MT.PadByte != 0 && !validWireByte(cfg.MT.PadByte) {
+			return fmt.Errorf("cat: MT.PadByte is %#02x, want 0 (no padding) or a byte inside printable ASCII 0x20-0x7E excluding ';'", cfg.MT.PadByte)
+		}
 		if cfg.MT.TagFill != 0 {
 			return fmt.Errorf("cat: MT.TagFill %#02x is set under MTFormShort — TagFill is combined-form data and an inapplicable field must be explicitly zero", cfg.MT.TagFill)
 		}
@@ -138,20 +195,20 @@ Task 1's gate is `grep -rn "MTPolicy{" --include=*.go .`.
 		if !validWireByte(cfg.MT.TagFill) {
 			return fmt.Errorf("cat: MT.TagFill is %#02x under MTFormCombined, want printable ASCII 0x20-0x7E excluding ';' — it fills every outbound tag field, and zero would silently emit NUL", cfg.MT.TagFill)
 		}
-		if maxFrame := 29 + cfg.MT.TagMaxBytes; maxFrame > DefaultMaxFrame {
-			return fmt.Errorf("cat: combined MT frame length %d (29+TagMaxBytes) exceeds the %d-byte transport ceiling", maxFrame, DefaultMaxFrame)
-		}
 	default:
 		return fmt.Errorf("cat: MT.Form %v must be set explicitly — the zero value is not a form (an omitted form must refuse, not default)", cfg.MT.Form)
 	}
 ```
 
-Note the existing `ClearTagByte` unconditional check must become
-short-form-only (move it into the `MTFormShort` case, unchanged text).
-`dialect.go:148` gains `Form: MTFormShort` (identifier-only edit in a
-non-test file — unconstrained).
-- [ ] **Step 4: sweep the blast radius.** Gate: `grep -rn "MTPolicy{" --include=*.go .` — every composite literal gains `Form: MTFormShort` (identifier-only; NO literal added). Expected ≈14 sites; the grep decides. `TestNewDialect_ReproducesFT710` (`dialectequiv_test.go`) must pass unchanged — its `want.mt != got.mt` now compares five fields.
-- [ ] **Step 5: full verify** — `go test ./core/cat/ ./internal/guards/ ./core/driver/ft710/`, `gofmt -l .`, `git diff --exit-code -- core/cat/testdata/ core/cat/exinventory_gen.go`. The evidence-literal test passing proves the identifier-only discipline held.
+The pre-existing unconditional `ClearTagByte` and `PadByte` checks are
+MOVED into the `MTFormShort` case with their text unchanged (shown
+above) — the executable block is authoritative; there is no separate
+"move it" step to interpret. The `TagMaxBytes` cap stays where it is,
+before the switch. V9 gains a comment recording why there is no
+runtime frame-ceiling branch (see Step 1). `dialect.go:148` gains
+`Form: MTFormShort` (a non-test file — unconstrained).
+- [ ] **Step 4: sweep the blast radius.** Gate: `grep -rn "MTPolicy{" --include=*.go .` — every composite literal gains `Form: MTFormShort` (identifier-only; NO literal added), with the QUALIFIED `cat.MTFormShort` at the two external sites (`dialectexternal_test.go:46`, `core/driver/ft710/modebyname_test.go:54`). Both reviewers verified the count is exactly 14 today; the grep decides. `TestNewDialect_ReproducesFT710` (`dialectequiv_test.go`) must pass unchanged — its `want.mt != got.mt` now compares five fields.
+- [ ] **Step 5: full verify** — `go test ./core/cat/ ./internal/guards/ ./core/driver/ft710/`, `gofmt -l .`, `git diff --exit-code -- core/cat/testdata/ core/cat/exinventory_gen.go`. NOTE: a passing evidence-literal test does NOT prove the edits were literal-safe (it checks only golden-recorded literals) — additionally inspect `git diff` over the edited test files and confirm the only changes are the `Form:` identifier additions.
 - [ ] **Step 6: commit** `M9c-3 task 1: MTForm and TagFill with per-form ownership enforced by V9`.
 
 ---
@@ -161,7 +218,7 @@ non-test file — unconstrained).
 **Files:** Modify `core/cat/mt.go`, `core/cat/allowlist.go:201`; append tests to `core/cat/mtform_test.go`.
 
 **Interfaces:**
-- Produces: `func (d Dialect) MTForm() MTForm` (exported accessor — dialecttest and M9c-4/5 consume it); unexported `func (d Dialect) mtShortAnswerMax() int` (= `mtAnswerMinLen - 1 + d.mt.TagMaxBytes`, i.e. `6 + ... `— **compute as `mtAnswerMinLen + d.mt.TagMaxBytes` MINUS the 0-tag: precisely `2+3+1+1 + d.mt.TagMaxBytes = 7 + TagMaxBytes`**; for the FT-710, 19); short APIs refuse on `MTFormCombined`.
+- Produces: `func (d Dialect) MTForm() MTForm`, `func (d Dialect) MWWriteKind() byte`, `func (d Dialect) Clarifier() ClarifierPolicy` (all exported — `dialecttest` (Task 7), the driver fixes (Task 9) and M9c-4/5 consume them; the accessors live HERE because Task 7 needs `MWWriteKind()` and is sequenced before Task 9); unexported `func (d Dialect) mtShortAnswerMax() int` returning exactly `mtAnswerMinLen + d.mt.TagMaxBytes` (`mtAnswerMinLen` is 7 and already carries the zero-length tag, so this is 19 for the FT-710 — both reviewers flagged revision 1's contradictory minus-one text; THIS formula is the only one); short APIs refuse on `MTFormCombined`.
 
 - [ ] **Step 1: failing tests** (append to `mtform_test.go`): (a) FT-710's `ParseMTAnswer` error text for a 20-byte frame is EXACTLY `"MT answer must be 7-19 bytes"` (string-compare the `*ParseError` message — this pins the corpus bytes); (b) the 6-byte-tag short peer (reuse `mtpolicy_test.go`'s peer config pattern, built fresh here) REFUSES a 14-byte answer (`7+6=13` max) that the FT-710 accepts — the derived-window disagreement test; (c) `BuildMTSet`/`ParseMTAnswer` on a combined fixture (a minimal `MustNewDialect` combined config built in this file) return errors naming the form; (d) `MTForm()` returns the right value for FT710/combined/zero dialect.
 - [ ] **Step 2: run, expect failures** ((b) passes today's global window — it must FAIL before the change; verify it does, then the others fail to compile).
@@ -176,11 +233,15 @@ non-test file — unconstrained).
 (exact wording implementer's, but it must name the form); the window
 check becomes `if len(frame) < mtAnswerMinLen || len(frame) > d.mtShortAnswerMax()`
 with the SAME `fmt.Sprintf("MT answer must be %d-%d bytes", ...)` —
-rendering `7-19` for the FT-710. `allowlist.go:201` uses the same method.
-`BuildMTRead` stays form-independent. Add `MTForm()`.
-Update `mt.go:14-26`'s constant commentary (it documented this exact
-future).
-- [ ] **Step 4: peer churn sweep.** Run `go test ./core/cat/`; fix any existing peer-dialect test that asserted acceptance inside the old global window (expected: `mtpolicy_test.go` region — identifier/expression edits only if the file is pinned; if an expectation literal must change, STOP and report per the boxed discipline). Then the corpus: `go test ./core/cat/ -run 'Corpus' -v` — byte-identical, no golden touched.
+rendering `7-19` for the FT-710. `allowlist.go:201` uses the same
+method, and **`allowlist.go:179`'s comment** ("Set:
+mtAnswerMinLen-mtAnswerMaxLen (7-19) bytes") is updated — it would
+otherwise reference the deleted identifier. `BuildMTRead` stays
+form-independent. Add the three accessors (`MTForm()`, `MWWriteKind()`,
+`Clarifier()` — each a two-line method with a doc comment naming its
+consumers). Update `mt.go:14-26`'s constant commentary (it documented
+this exact future).
+- [ ] **Step 4: peer churn sweep — expected result: NO churn.** Both reviewers verified every existing non-12-`TagMaxBytes` fixture already sits within its future derived window (the 6-byte peer's longest frames are exactly 13 bytes = its new max; the corpora are FT-710-only), so `go test ./core/cat/` should pass with NO test edits. Do not manufacture any. If a test DOES fail here, that is new information both reviews missed — STOP and report rather than editing expectations. Then the corpus: `go test ./core/cat/ -run 'Corpus' -v` — byte-identical, no golden touched.
 - [ ] **Step 5: verify + commit** (gates as Task 1). `M9c-3 task 2: the short MT window derives from the receiver; short APIs refuse a combined dialect`.
 
 ---
@@ -190,11 +251,12 @@ future).
 **Files:** Modify `core/cat/mr.go`, `core/cat/mw.go`, `core/cat/memdata.go`.
 
 **Interfaces:**
-- Produces: `func (d Dialect) parseMemoryFields(frame []byte, wantPrefix string) (MemoryData, error)` — validates and decodes offsets 2-26 ONLY (no length, no terminator, no kind-vocabulary narrowing beyond today's `validKindByte`); `func encodeMemoryFields(frame []byte, m MemoryData)` — writes offsets 2-26 into a caller-sized buffer. `parseMemoryFrame` becomes: length==28 check + terminator-at-27 check + `parseMemoryFields`; `BuildMWSet`'s body writes via `encodeMemoryFields`.
+- Produces: `func (d Dialect) parseMemoryFields(frame []byte, wantPrefix string) (MemoryData, error)` — validates and decodes offsets 2-26 ONLY, threading `wantPrefix` solely for error text (no length, no prefix, no terminator, no kind-vocabulary narrowing beyond today's `validKindByte`); `func encodeMemoryFields(frame []byte, m MemoryData)` — writes offsets 2-26 into a caller-sized buffer. **`parseMemoryFrame`'s order is EXACTLY today's: length → prefix → terminator → `parseMemoryFields`** — both reviewers caught that revision 1 omitted the prefix check and would have swapped prefix/terminator error order for doubly-bad frames. `ParseMTAnswerCombined` (Task 4) uses the same order: length → prefix → terminator → fields → kind-narrow/P11/tag. `BuildMWSet`'s body writes via `encodeMemoryFields`.
 
-- [ ] **Step 1**: this is a refactor with NO behaviour change — the proof is the existing suite plus the corpus goldens, not new tests. Extract exactly; keep every error message byte-identical (they all carry `wantPrefix`, so the extraction must thread it).
-- [ ] **Step 2: verify hard** — full `go test ./core/cat/` (corpus + goldens + evidence literals), `go test ./core/driver/ft710/ ./internal/fakeradio/ ./core/transport/`, gates as Task 1.
-- [ ] **Step 3: commit** `M9c-3 task 3: extract the shared memory field block encoder/decoder; MR/MW byte-identical`.
+- [ ] **Step 1: pin the error order first.** In NEW file `core/cat/memfields_test.go`, write `TestParseMemoryFrame_DoublyInvalidFrameErrorOrder`: a 28-byte frame with BOTH a bad prefix and a bad terminator must yield the PREFIX error (exact `Reason` string-compare); a 28-byte frame with a good prefix and bad terminator yields the terminator error; a wrong-length frame yields the length error whatever else is wrong. Nothing pins this today (the reject tables assert error type only), which is exactly why the refactor must pin it before moving code. These pass against TODAY's code — write and run them green BEFORE extracting, then keep them green through the refactor.
+- [ ] **Step 2**: extract exactly; keep every error message byte-identical (they all carry `wantPrefix`).
+- [ ] **Step 3: verify hard** — full `go test ./core/cat/` (corpus + goldens + evidence literals + the new order pins), `go test ./core/driver/ft710/ ./internal/fakeradio/ ./core/transport/`, gates as Task 1.
+- [ ] **Step 4: commit** `M9c-3 task 3: extract the shared memory field block encoder/decoder; MR/MW byte-identical, error order pinned`.
 
 ---
 
@@ -220,24 +282,41 @@ func (d Dialect) MTAnswerBounds() (min, max int, err error) // in mt.go
 
 Rules (all from the spec — implement exactly):
 - Both refuse on `Form != MTFormCombined`, symmetric with Task 2.
-- Build: `mtSlotValid` slot; `m.Kind == combinedMTSetKind` required
-  (validate-don't-rewrite; error text explains Set-'0' is "(Fixed)");
-  the same field validations `BuildMWSet` applies (via `validateMWFields`?
-  NO — that checks `m.Kind == d.mwWriteKind`, which is exactly the
-  coupling the spec forbids here; instead apply the memory-field checks
-  directly: writableSlot is NOT the rule — `mtSlotValid` is (memory/PMS
-  only), then mode via `d.ParseMode` round-trip as `BuildMWSet` does,
-  clarifier via `d.validClarHz`, `FreqHz <= memFreqMax`, CTCSS/shift by
-  their existing Valid predicates — mirror `validateMWFields` MINUS the
-  kind rule, and say so in a comment); tag: charset per `validMTTagByte`,
-  `len(tag) <= d.mt.TagMaxBytes`, and **refuse trailing `TagFill`**
-  (`strings.HasSuffix(tag, string(d.mt.TagFill)) && tag != ""` → error
-  "trailing fill byte would not round-trip; trim it") — validate, don't
-  canonicalise. Emission: buffer of `29 + d.mt.TagMaxBytes`; `'M','T'`;
-  `encodeMemoryFields`; `combinedMTSetKind` OVERWRITES the kind offset?
-  NO — `m.Kind` already equals it (validated); P11 `'0'` at offset 27;
-  tag + `TagFill` padding to exactly TagMaxBytes at 28..; `';'` last.
-  Empty tag → all-fill field (no distinct clear form).
+- Build validation is **one shared Dialect method,
+  `validateCombinedMTFields(m MemoryData) error`** (the gate reuses it in
+  Task 5, and Task 8 adds its name to `gateReachingValidators`). Its
+  checklist is `validateMWFields`' COMPLETE list (`mw.go:85-151`) with
+  exactly two substitutions and nothing silently dropped — both
+  reviewers caught revision 1 omitting two rules:
+  1. slot via `mtSlotValid` (MT's own write policy — memory/PMS only;
+     behaviourally identical to `writableSlot` today, but the MT
+     lineage);
+  2. kind: `m.Kind == combinedMTSetKind` (the schema constant, NOT
+     `d.mwWriteKind`; error text explains Set-'0' is "(Fixed)");
+  3. mode via `d.ParseMode` round-trip **AND the `ModeUnset` refusal**
+     (`mw.go:128-130` — revision 1 dropped it);
+  4. clarifier via `d.validClarHz`;
+  5. **`FreqHz != 0` AND `<= memFreqMax`** (`mw.go:136` checks both —
+     revision 1 dropped the nonzero half);
+  6. CTCSS and Shift by re-parse round-trip (`ParseCTCSSState`/
+     `ParseShift` — there are no "Valid predicates"; revision 1
+     misnamed them).
+- Tag (builder INPUT rules — these apply to the LOGICAL tag only, see
+  Task 5 for why the gate must not reuse them): charset per
+  `validMTTagByte`; `len(tag) <= d.mt.TagMaxBytes`; refuse a NON-EMPTY
+  logical tag ending in `TagFill` ("trailing fill byte would not
+  round-trip; trim it") — a tag of ONLY fill bytes is thereby refused
+  too, `""` being its canonical spelling. Validate, don't canonicalise.
+- Emission: buffer of `29 + d.mt.TagMaxBytes`; `'M','T'`;
+  `encodeMemoryFields` (m.Kind already equals the constant — validated,
+  not overwritten); P11 `'0'` at offset 27; tag + `TagFill` padding to
+  exactly TagMaxBytes at 28..; `';'` last. Empty tag → all-fill field
+  (no distinct clear form).
+- **Every refusal returns `(Command{}, err)`** — the zero-Command
+  contract `command.go:50-52` documents for all fallible builders.
+  `command_test.go`'s builder enumeration is golden-pinned and must NOT
+  be spliced; instead `mtcombined_test.go` asserts, for each refusal
+  case, both a non-nil error and `cmd.IsZero()` (Codex plan finding 2).
 - Parse: exact length `29 + d.mt.TagMaxBytes`; `"MT"` prefix; terminator
   last; `parseMemoryFields`; then NARROW kind to `{'0','1'}` (the
   documented read vocabulary — MR's 0-5 `validKindByte` would turn
@@ -268,7 +347,15 @@ Rules (all from the spec — implement exactly):
   - `MTAnswerBounds` for FT710 (7,19), combined (35,35), zero dialect
     (error).
 - [ ] **Step 2** run → compile failure. **Step 3** implement per the
-  rules above. **Step 4** run all; gates as Task 1. **Step 5: commit**
+  rules above. **Step 4 — the documentation this task makes false**
+  (Codex plan finding 10), updated in the same commit:
+  `core/cat/doc.go:8-15` (the memory-mutating mechanisms list gains
+  `BuildMTSetCombined`, consistent with Task 8's fence);
+  `core/cat/dialect.go:21-26,44-46` ("carries DATA, not frame shapes"
+  and "per-command frame shape is M9c's" — rewrite to record that M9c-3
+  delivered exactly that seam, as `MTForm` data plus form branches);
+  `core/cat/memdata.go:40-43` (`MemoryData` now also feeds the combined
+  MT frame). **Step 5** run all; gates as Task 1. **Step 6: commit**
   `M9c-3 task 4: BuildMTSetCombined, ParseMTAnswerCombined and MTAnswerBounds`.
 
 ---
@@ -289,11 +376,18 @@ Rules (all from the spec — implement exactly):
 - [ ] **Step 2/3**: implement — `validMTCommand` keeps the read branch
   first (form-independent), then `switch d.mt.Form`: short = today's
   logic verbatim; combined = exact `29+TagMaxBytes` length, prefix,
-  terminator, `parseMemoryFields`-based field validation + slot via
-  `mtSlotValid` (write policy: memory/PMS only) + kind `== combinedMTSetKind`
-  + P11 + tag charset with trailing-fill consistency; document the
-  narrowed exception in the function comment and in `allowlist.go`'s
-  exception-table commentary.
+  terminator, then `parseMemoryFields` + `validateCombinedMTFields`
+  (Task 4's shared method — slot/kind/mode/clarifier/freq/CTCSS/shift in
+  one place) + P11 + **the RAW tag field validated per-byte with
+  `validMTTagByte` ONLY — no trailing-fill rule at the gate.** Codex
+  plan finding 8: every padded wire field necessarily ends in `TagFill`
+  (an empty tag is ALL fill), and the wire erases the data-vs-padding
+  distinction, so applying the builder's logical-input suffix refusal to
+  the raw field would make the gate reject its own builder's every
+  non-full-width tag. The builder-input rule and the gate-wire rule are
+  different rules on different representations; say so in the gate's
+  comment. Document the narrowed exception in the function comment and
+  in `allowlist.go`'s exception-table commentary.
 - [ ] **Step 4**: run `go test ./core/cat/` including the allowlist
   corpus (byte-identical); gates. **Step 5: commit** `M9c-3 task 5: the
   gate's combined MT branch; the Set/Answer collision narrows to P7-'0'`.
@@ -339,7 +433,15 @@ Rules (all from the spec — implement exactly):
 - Produces: `package dialecttest` with `func Run(t *testing.T, d cat.Dialect)` — the exported-API conformance subset: every built frame (ID/AI/MC/MR/MT-read/MT-set-by-form/MW/EX over the dialect's own tables) is clean, single-terminator, and admitted by the dialect's own gate; build→parse round-trips for MT (by form), MR is not round-trippable without a radio — skip; `MTAnswerBounds` coherent with the form; a zero `cat.Dialect` refuses everything it is offered. This is what M9c-4 runs over the real FTdx10 dialect (the in-package `allTestDialects()` is unreachable to it — import cycle, Codex M9c-3 spec finding 1).
 
 - [ ] **Step 1: failing test**: `dialecttest_test.go` runs `Run(t, cat.FT710)` and `Run` over a combined dialect built EXTERNALLY via `cat.MustNewDialect` (the `dialectexternal_test.go` pattern — this doubles as proof the combined form is constructible from outside). 
-- [ ] **Step 2/3**: implement `Run` using ONLY exported API (`MTForm()`, `MTAnswerBounds()`, builders, parsers, `AllowedCommand`, `EXAddresses`, `ParseSlot`, mode iteration via `AllModes()`-equivalent — check what is exported; where iteration needs unexported data, iterate wire space exhaustively as the gate walk does with `threeDigits`).
+- [ ] **Step 2/3**: implement `Run` using ONLY exported API — all
+  verified available by review: `MTForm()`, `MTAnswerBounds()`,
+  `MWWriteKind()` (Task 2's accessor — this is why the accessors moved
+  there; Fable plan finding 6 caught the original T7-before-T9 ordering
+  hole), `ParseSlot`/`MemorySlot`/`PMSSlot`, `EXAddresses`,
+  `ParseCTCSSState`, `ParseShift`, builders, parsers, `AllowedCommand`.
+  There is no `AllModes` — iterate the mode wire space exhaustively
+  through `ParseMode`, as the gate walk does with `threeDigits` for
+  slots.
 - [ ] **Step 4**: verify + guards (the new package imports `core/cat` — confirm `go list -deps` shows no cycle and the importgraph guard passes; if the guard's composition rules flag the new package, STOP and report rather than editing guard rules beyond Task 8's sanctioned additions). Gates. **Step 5: commit** `M9c-3 task 7: dialecttest — the exported conformance suite M9c-4 runs over the real dialect`.
 
 ---
@@ -355,7 +457,9 @@ Rules (all from the spec — implement exactly):
   evidence-literal discipline does not bind them; their own red-proof
   conventions do.
 - [ ] **Step 2: red-proof both**: temporarily add a decoy
-  `BuildMTSetCombined` call in an unauthorised package → fence fires;
+  `BuildMTSetCombined` call in an unauthorised package — **in a
+  NON-test file** (the guard walker skips `_test.go` entirely, so a
+  test-file decoy fires nothing; Fable plan finding 11) → fence fires;
   temporarily demote one new validator to a package function → guard
   fires. Revert both, show the evidence in the report.
 - [ ] **Step 3**: full guard run green; gates; commit `M9c-3 task 8:
@@ -374,13 +478,24 @@ Rules (all from the spec — implement exactly):
   `dialect.Clarifier().MaxAbsHz` is refused BEFORE any wire traffic;
   plus a byte-identity pin: the exact MW+MT frames for a reference
   channel are unchanged against their current literal expectations.
-- [ ] **Step 2/3**: add exported `func (d Dialect) MWWriteKind() byte`
-  and `func (d Dialect) Clarifier() ClarifierPolicy` (returns the
-  policy by value — comparable, no mutation surface); replace
+- [ ] **Step 2/3**: the accessors already exist (Task 2). Replace
   `write.go:256`'s `Kind: cat.KindMemory` with
-  `Kind: dialect.MWWriteKind()` and `:237`'s `9990` with
-  `dialect.Clarifier().MaxAbsHz` (keep the error text byte-identical —
-  it interpolates the bound; FT-710 renders the same bytes).
+  `Kind: dialect.MWWriteKind()`, and rework the clarifier pre-check:
+  today `:237` hardcodes the bound in the COMPARISON and `:240`
+  independently hardcodes `"+/-9990"` in the FORMAT STRING (both
+  reviewers caught revision 1's claim that the text already
+  interpolates — it does not). Bind the policy once and interpolate:
+
+```go
+	clar := dialect.Clarifier()
+	if data.ClarHz > clar.MaxAbsHz || data.ClarHz < -clar.MaxAbsHz {
+		... fmt.Sprintf("clarifier %d Hz exceeds +/-%d Hz", data.ClarHz, clar.MaxAbsHz) ...
+	}
+```
+
+  Byte-identical for the FT-710 (`MaxAbsHz` 9990 renders the same
+  bytes), receiver-correct for everyone else. Match the surrounding
+  error-construction style exactly.
 - [ ] **Step 4**: `go test ./core/driver/ft710/ ./core/clone/` green;
   gates; commit `M9c-3 task 9: the write path consults its receiver —
   MWWriteKind and Clarifier accessors replace the literals`.
@@ -415,8 +530,37 @@ obligations and ASSUMED markers are documentation, carried in the spec
 itself. **Placeholders:** none; two implementer-choice points (short-API
 refusal wording, ft710 test file placement) are bounded and stated.
 **Type consistency:** `MTAnswerBounds() (min, max int, err error)`
-declared in T4 and consumed in T7; `MTForm()` declared T2, consumed T7;
-`combinedMTSetKind` declared T4, consumed T5. **Ordering:** T2 needs T1's
-Form field; T4 needs T3's extraction; T5 needs T4's builder for
-admissibility tests; T6 needs T4+T5; T7 needs T2's accessors; T8 needs
-T4-5's names; T9 independent after T1; T10 last.
+declared in T4 and consumed in T7; `MTForm()`/`MWWriteKind()`/
+`Clarifier()` declared T2, consumed T7 and T9;
+`validateCombinedMTFields` declared T4, consumed T5, named in T8;
+`combinedMTSetKind` declared T4, consumed T5. **Ordering:** T2 needs
+T1's Form field; T4 needs T3's extraction; T5 needs T4's builder AND
+its shared validator; T6 needs T4+T5; T7 needs T2's three accessors and
+T4's bounds; T8 needs T4-5's names; T9 needs T2's accessors; T10 last.
+
+## Plan review fold (29/07/2026)
+
+Reviewed before execution by Codex (NEEDS-REVISION: 4 HIGH, 5 MEDIUM,
+1 LOW) and Fable (APPROVE-WITH-FIXES: 2 HIGH, 4 MEDIUM, 5 LOW);
+adjudication in `.superpowers/sdd/m9c3-plan-review-adjudication.md`.
+Seven findings were convergent. The design-relevant outcomes, all folded
+above: the evidence-literal model corrected (the golden's real scope;
+`seconddialect_test.go` excluded; a passing pin test proves nothing
+about new literals); the V9 ceiling became a constants-relationship
+test (the runtime branch is dead code behind the 64-byte cap); the V9
+sketch now carries the short-form `ClearTagByte`/`PadByte` rules
+verbatim in the executable block; `parseMemoryFrame`'s order is pinned
+(length → prefix → terminator → fields) with a new doubly-invalid
+exact-text test BEFORE the refactor; the combined validation checklist
+is complete (ModeUnset and `FreqHz != 0` restored) and shared as
+`validateCombinedMTFields`; the gate validates the RAW tag per-byte
+only — the builder's trailing-fill rule applies to logical input, and
+applying it to the padded wire field would reject the builder's own
+output; `BuildMTSetCombined` joins the zero-Command contract via
+assertions in the new file (the pinned `command_test.go` enumeration is
+not spliced); the accessors moved to Task 2 (Task 7 needed
+`MWWriteKind()` before Task 9 existed); the driver's clarifier error
+text is rewritten to interpolate the bound (it never did); doc
+call-sites (`doc.go`, `dialect.go`, `memdata.go`) assigned to Task 4;
+Task 2's expected churn corrected to NONE (verified by both reviewers —
+a failing test there is new information, not something to edit around).
