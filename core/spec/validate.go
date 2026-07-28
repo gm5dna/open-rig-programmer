@@ -123,6 +123,12 @@ func validToneSemantics(s ToneSemantics) bool {
 //   - MinFreqHz must not exceed MaxFreqHz, but ONLY when both are set
 //     (non-zero): either being the zero value means "no bound", not "zero
 //     Hz", so it is not compared.
+//   - Every entry in Bauds must be greater than zero, and DefaultBaud
+//     must be greater than zero: a non-positive entry cannot be a real
+//     serial baud rate, and core/transport.OpenSerial treats any
+//     non-positive SerialConfig.Baud as "unset" and silently substitutes
+//     its own DefaultBaud (38400) — Validate must catch a bogus baud
+//     here, before that substitution can happen unnoticed.
 //   - DefaultBaud must appear in Bauds.
 //   - CTCSSTones, if non-empty, must be strictly ascending (matching
 //     StandardCTCSSTones's own shape) — this is what lets a caller
@@ -224,6 +230,21 @@ func (c Capabilities) Validate() error {
 
 	if c.MinFreqHz != 0 && c.MaxFreqHz != 0 && c.MinFreqHz > c.MaxFreqHz {
 		problems = append(problems, fmt.Sprintf("MinFreqHz %d is greater than MaxFreqHz %d", c.MinFreqHz, c.MaxFreqHz))
+	}
+
+	// A non-positive Bauds entry or DefaultBaud cannot be a real serial
+	// baud rate: core/transport.OpenSerial's resolveConfig treats any
+	// SerialConfig.Baud <= 0 as "unset" and silently substitutes its own
+	// DefaultBaud (38400), so a Capabilities that let one through here
+	// would have its bogus value replaced by a guess deep in the
+	// transport layer, never refused.
+	for _, baud := range c.Bauds {
+		if baud <= 0 {
+			problems = append(problems, fmt.Sprintf("Bauds contains non-positive entry %d", baud))
+		}
+	}
+	if c.DefaultBaud <= 0 {
+		problems = append(problems, fmt.Sprintf("DefaultBaud %d must be greater than zero", c.DefaultBaud))
 	}
 
 	if !containsInt(c.Bauds, c.DefaultBaud) {

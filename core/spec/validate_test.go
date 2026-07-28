@@ -431,3 +431,41 @@ func TestValidate_BlankSlotRejected(t *testing.T) {
 		t.Errorf("Validate() error = %q, want it to mention \"blank slot\"", err)
 	}
 }
+
+// TestValidate_NonPositiveBaudRejected is FIX A3's failing-first test:
+// before this fix, {Bauds: []int{0}, DefaultBaud: 0} passed Validate
+// outright (0 is present in Bauds, so the old DefaultBaud-membership
+// check alone did not catch it), and core/transport/port.go's
+// resolveConfig then silently substituted 38400 for any non-positive
+// SerialConfig.Baud — a guessed value standing in for a capability that
+// was never actually validated.
+func TestValidate_NonPositiveBaudRejected(t *testing.T) {
+	c := validTestCapabilities()
+	c.Bauds = []int{0}
+	c.DefaultBaud = 0
+	err := c.Validate()
+	if err == nil {
+		t.Fatal("Validate() = nil, want an error: Bauds/DefaultBaud of 0 must be rejected")
+	}
+	if !strings.Contains(err.Error(), "Bauds contains non-positive entry") {
+		t.Errorf("Validate() error = %q, want it to mention \"Bauds contains non-positive entry\"", err)
+	}
+	if !strings.Contains(err.Error(), "DefaultBaud 0 must be greater than zero") {
+		t.Errorf("Validate() error = %q, want it to mention \"DefaultBaud 0 must be greater than zero\"", err)
+	}
+}
+
+// TestValidate_NegativeBaudRejected covers a negative (not just zero)
+// Bauds entry and DefaultBaud.
+func TestValidate_NegativeBaudRejected(t *testing.T) {
+	c := validTestCapabilities()
+	c.Bauds = []int{-9600}
+	c.DefaultBaud = -9600
+	err := c.Validate()
+	if err == nil {
+		t.Fatal("Validate() = nil, want an error: a negative Bauds entry/DefaultBaud must be rejected")
+	}
+	if !strings.Contains(err.Error(), "Bauds contains non-positive entry -9600") {
+		t.Errorf("Validate() error = %q, want it to mention the negative entry", err)
+	}
+}
