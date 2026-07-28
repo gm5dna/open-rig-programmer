@@ -28,9 +28,9 @@ func TestStandardVocab_MatchesLegacyLiterals(t *testing.T) {
 	}
 
 	wantCTCSS := []ToneState{
-		{Value: "OFF", RequiresTone: false, Encodes: false, Decodes: false},
-		{Value: "ENC-DEC", RequiresTone: true, Encodes: true, Decodes: true},
-		{Value: "ENC", RequiresTone: true, Encodes: true, Decodes: false},
+		{Value: "OFF", Semantics: ToneOff},
+		{Value: "ENC-DEC", Semantics: ToneEncodeDecode},
+		{Value: "ENC", Semantics: ToneEncode},
 	}
 	gotCTCSS := StandardCTCSSStates()
 	if len(gotCTCSS) != len(wantCTCSS) {
@@ -63,12 +63,31 @@ func TestStandardShiftOptionsReturnsCopy(t *testing.T) {
 // must never be observable through a second, separate call.
 func TestStandardCTCSSStatesReturnsCopy(t *testing.T) {
 	a := StandardCTCSSStates()
-	a[0] = ToneState{Value: "TAMPERED", RequiresTone: true, Encodes: true}
+	a[0] = ToneState{Value: "TAMPERED", Semantics: ToneEncode}
 	b := StandardCTCSSStates()
 	if b[0].Value == "TAMPERED" {
 		t.Fatal("mutating one call's result changed a later call's result: StandardCTCSSStates() is not returning an independent copy")
 	}
-	if b[0] != (ToneState{Value: "OFF", RequiresTone: false, Encodes: false, Decodes: false}) {
-		t.Errorf("StandardCTCSSStates()[0] = %+v after a prior call was mutated, want {OFF false false false} (unaffected)", b[0])
+	if b[0] != (ToneState{Value: "OFF", Semantics: ToneOff}) {
+		t.Errorf("StandardCTCSSStates()[0] = %+v after a prior call was mutated, want {OFF ToneOff} (unaffected)", b[0])
+	}
+}
+
+// TestToneState_RequiresTone covers the RequiresTone method directly: true
+// for ToneEncode/ToneEncodeDecode, false for ToneOff.
+func TestToneState_RequiresTone(t *testing.T) {
+	cases := []struct {
+		semantics ToneSemantics
+		want      bool
+	}{
+		{ToneOff, false},
+		{ToneEncode, true},
+		{ToneEncodeDecode, true},
+	}
+	for _, tc := range cases {
+		ts := ToneState{Value: "X", Semantics: tc.semantics}
+		if got := ts.RequiresTone(); got != tc.want {
+			t.Errorf("ToneState{Semantics: %d}.RequiresTone() = %v, want %v", tc.semantics, got, tc.want)
+		}
 	}
 }

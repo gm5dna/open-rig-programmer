@@ -334,13 +334,13 @@ func validateChannelData(slot string, d ChannelData, caps spec.Capabilities) []I
 		})
 	}
 
-	// A CTCSS state that requires a tone (RequiresTone true for a state
+	// A CTCSS state that requires a tone (RequiresTone() true for a state
 	// matched against caps; an unmatched state — already flagged as an
 	// Error above — is conservatively treated the same way, since it
 	// cannot make a positive claim about not needing one) but has no
 	// known CTCSSTone gets a Warning: CAT cannot set a per-channel tone,
 	// so the radio's own existing tone will apply as-is.
-	if (!ctcssKnown || ctcssState.RequiresTone) && d.CTCSSTone.State != Known {
+	if (!ctcssKnown || ctcssState.RequiresTone()) && d.CTCSSTone.State != Known {
 		issues = append(issues, Issue{
 			Slot: slot, Field: spec.FieldCTCSSTone, Severity: SeverityWarning,
 			Msg: fmt.Sprintf("slot %q: tone cannot be set via CAT; the radio's current per-channel tone will apply", slot),

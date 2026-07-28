@@ -402,8 +402,8 @@ func deviantVocabCapabilities() spec.Capabilities {
 			{Value: "SPLIT-NONE", Direction: spec.ShiftNone},
 		},
 		CTCSSStates: []spec.ToneState{
-			{Value: "DISABLED", RequiresTone: false, Encodes: false, Decodes: false},
-			{Value: "TONE", RequiresTone: true, Encodes: true, Decodes: false},
+			{Value: "DISABLED", Semantics: spec.ToneOff},
+			{Value: "TONE", Semantics: spec.ToneEncode},
 		},
 	}
 }

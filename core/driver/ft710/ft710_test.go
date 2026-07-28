@@ -352,15 +352,15 @@ func TestCloneCapabilities_VocabIndependence(t *testing.T) {
 			{Value: "MINUS", Direction: spec.ShiftDown},
 		},
 		CTCSSStates: []spec.ToneState{
-			{Value: "OFF", RequiresTone: false, Encodes: false, Decodes: false},
-			{Value: "ENC-DEC", RequiresTone: true, Encodes: true, Decodes: true},
-			{Value: "ENC", RequiresTone: true, Encodes: true, Decodes: false},
+			{Value: "OFF", Semantics: spec.ToneOff},
+			{Value: "ENC-DEC", Semantics: spec.ToneEncodeDecode},
+			{Value: "ENC", Semantics: spec.ToneEncode},
 		},
 	}
 
 	clone := cloneCapabilities(orig)
 	clone.ShiftOptions[0] = spec.ShiftOption{Value: "TAMPERED"}
-	clone.CTCSSStates[0] = spec.ToneState{Value: "TAMPERED", RequiresTone: true}
+	clone.CTCSSStates[0] = spec.ToneState{Value: "TAMPERED", Semantics: spec.ToneEncode}
 	clone.ShiftOptions = append(clone.ShiftOptions, spec.ShiftOption{Value: "EXTRA"})
 	clone.CTCSSStates = append(clone.CTCSSStates, spec.ToneState{Value: "EXTRA"})
 
@@ -370,8 +370,8 @@ func TestCloneCapabilities_VocabIndependence(t *testing.T) {
 	if len(orig.ShiftOptions) != 3 {
 		t.Errorf("len(orig.ShiftOptions) = %d after appending to a clone, want unaffected 3", len(orig.ShiftOptions))
 	}
-	if orig.CTCSSStates[0] != (spec.ToneState{Value: "OFF", RequiresTone: false, Encodes: false, Decodes: false}) {
-		t.Errorf("orig.CTCSSStates[0] = %+v after mutating a clone, want unaffected {OFF false false false}", orig.CTCSSStates[0])
+	if orig.CTCSSStates[0] != (spec.ToneState{Value: "OFF", Semantics: spec.ToneOff}) {
+		t.Errorf("orig.CTCSSStates[0] = %+v after mutating a clone, want unaffected {OFF ToneOff}", orig.CTCSSStates[0])
 	}
 	if len(orig.CTCSSStates) != 3 {
 		t.Errorf("len(orig.CTCSSStates) = %d after appending to a clone, want unaffected 3", len(orig.CTCSSStates))
@@ -384,7 +384,7 @@ func TestCloneCapabilities_VocabIndependence(t *testing.T) {
 	if again.ShiftOptions[0].Value != "SIMPLEX" || len(again.ShiftOptions) != 3 {
 		t.Errorf("cloneCapabilities(orig).ShiftOptions = %+v after a prior clone was mutated, want unaffected [SIMPLEX PLUS MINUS]", again.ShiftOptions)
 	}
-	if again.CTCSSStates[0] != (spec.ToneState{Value: "OFF", RequiresTone: false, Encodes: false, Decodes: false}) || len(again.CTCSSStates) != 3 {
+	if again.CTCSSStates[0] != (spec.ToneState{Value: "OFF", Semantics: spec.ToneOff}) || len(again.CTCSSStates) != 3 {
 		t.Errorf("cloneCapabilities(orig).CTCSSStates = %+v after a prior clone was mutated, want unaffected", again.CTCSSStates)
 	}
 }

@@ -243,12 +243,12 @@ func shiftFor(caps spec.Capabilities, d spec.ShiftDirection) (string, bool) {
 }
 
 // toneStateFor returns the wire-form CTCSS state caps uses for the given
-// encode/decode combination, and true, or ("", false) when this radio
-// expresses no such state. As with shiftFor, spec.Validate guarantees at
-// most one state per combination.
-func toneStateFor(caps spec.Capabilities, encodes, decodes bool) (string, bool) {
+// tone semantics, and true, or ("", false) when this radio expresses no
+// such state. As with shiftFor, spec.Validate guarantees at most one
+// state per semantics value.
+func toneStateFor(caps spec.Capabilities, semantics spec.ToneSemantics) (string, bool) {
 	for _, s := range caps.CTCSSStates {
-		if s.Encodes == encodes && s.Decodes == decodes {
+		if s.Semantics == semantics {
 			return s.Value, true
 		}
 	}
@@ -477,7 +477,7 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string, caps spe
 	switch toneRaw := cell("Tone"); toneRaw {
 	case "":
 		data.CTCSSTone = codeplug.ToneField{State: codeplug.Unknown}
-		v, ok := toneStateFor(caps, false, false)
+		v, ok := toneStateFor(caps, spec.ToneOff)
 		if !ok {
 			entries = append(entries, LossEntry{
 				Line: line, Column: "Tone", Value: toneRaw, Action: ActionUnsupported, Blocking: true,
@@ -489,7 +489,7 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string, caps spe
 	case "Tone":
 		rToneRaw := cell("rToneFreq")
 		data.CTCSSTone = codeplug.ToneField{State: codeplug.Unknown}
-		v, ok := toneStateFor(caps, true, false)
+		v, ok := toneStateFor(caps, spec.ToneEncode)
 		if !ok {
 			entries = append(entries, LossEntry{
 				Line: line, Column: "Tone", Value: toneRaw, Action: ActionUnsupported, Blocking: true,
@@ -516,7 +516,7 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string, caps spe
 	case "TSQL":
 		cToneRaw := cell("cToneFreq")
 		data.CTCSSTone = codeplug.ToneField{State: codeplug.Unknown}
-		v, ok := toneStateFor(caps, true, true)
+		v, ok := toneStateFor(caps, spec.ToneEncodeDecode)
 		if !ok {
 			entries = append(entries, LossEntry{
 				Line: line, Column: "Tone", Value: toneRaw, Action: ActionUnsupported, Blocking: true,

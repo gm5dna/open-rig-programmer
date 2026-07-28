@@ -70,6 +70,34 @@ func shiftOptionValues(opts []ShiftOption) []string {
 	return values
 }
 
+// validShiftDirection reports whether d is one of the three declared,
+// meaningful ShiftDirection constants. ShiftUnspecified (the zero value)
+// is deliberately excluded: a ShiftOption whose Direction was simply
+// never set must fail here, not silently read as ShiftNone — see
+// ShiftDirection's doc comment.
+func validShiftDirection(d ShiftDirection) bool {
+	switch d {
+	case ShiftNone, ShiftUp, ShiftDown:
+		return true
+	default:
+		return false
+	}
+}
+
+// validToneSemantics reports whether s is one of the three declared,
+// meaningful ToneSemantics constants. ToneSemanticsUnspecified (the zero
+// value) is deliberately excluded: a ToneState whose Semantics was simply
+// never set must fail here, not silently read as ToneOff — see
+// ToneSemantics' doc comment.
+func validToneSemantics(s ToneSemantics) bool {
+	switch s {
+	case ToneOff, ToneEncode, ToneEncodeDecode:
+		return true
+	default:
+		return false
+	}
+}
+
 // Validate checks c for internal STRUCTURAL consistency — not hardware
 // truth (proving a field actually works on real hardware is what M5b
 // verification sessions are for), but the basic shape guarantees generic
@@ -102,11 +130,25 @@ func shiftOptionValues(opts []ShiftOption) []string {
 //   - ShiftOptions must be non-empty and contain no blank or duplicate
 //     values.
 //   - CTCSSStates must be non-empty and contain no blank or duplicate
-//     Values (its RequiresTone is a plain bool, so it cannot itself be
-//     invalid).
+//     Values.
+//   - Every ShiftOptions entry's Direction must be one of the three
+//     declared ShiftDirection constants (ShiftNone/ShiftUp/ShiftDown) —
+//     never the zero value, ShiftUnspecified: see ShiftDirection's doc
+//     comment for why the zero value must not be allowed to mean
+//     anything.
+//   - Every CTCSSStates entry's Semantics must be one of the three
+//     declared ToneSemantics constants (ToneOff/ToneEncode/
+//     ToneEncodeDecode) — never the zero value, ToneSemanticsUnspecified
+//     — for the same reason.
 //   - No two ShiftOptions may express the same ShiftDirection.
-//   - No two CTCSSStates may express the same Encodes/Decodes pair.
-//   - Every CTCSSStates entry's RequiresTone must equal Encodes||Decodes.
+//   - No two CTCSSStates may express the same Semantics.
+//
+// There is no separate "RequiresTone must equal Encodes||Decodes"
+// invariant: that used to be checked because RequiresTone, Encodes and
+// Decodes were three independent stored bool fields that could disagree.
+// ToneState now stores only Semantics; RequiresTone is a method fully
+// derived from it (see ToneState.RequiresTone), so there is no
+// independent value left for it to disagree with.
 //
 // Every radio driver constructor is expected to call Validate on the
 // Capabilities value it builds and fail construction if it returns a
@@ -206,6 +248,16 @@ func (c Capabilities) Validate() error {
 
 	problems = append(problems, validateVocab("ShiftOptions", shiftOptionValues(c.ShiftOptions))...)
 
+	// Every ShiftOptions entry's Direction must be a declared, meaningful
+	// ShiftDirection — never ShiftUnspecified, its zero value: an option
+	// whose Direction was simply omitted must be refused here, not
+	// silently read as ShiftNone (see ShiftDirection's doc comment).
+	for _, o := range c.ShiftOptions {
+		if !validShiftDirection(o.Direction) {
+			problems = append(problems, fmt.Sprintf("ShiftOptions %q has invalid Direction %d", o.Value, o.Direction))
+		}
+	}
+
 	// Each ShiftDirection must be expressed by AT MOST ONE option:
 	// core/csvio maps a foreign dialect's "+"/"-" by asking for the option
 	// with a given Direction, and that question must have exactly one
@@ -226,23 +278,25 @@ func (c Capabilities) Validate() error {
 	}
 	problems = append(problems, validateVocab("CTCSSStates", ctcssValues)...)
 
-	// RequiresTone is derivable from Encodes/Decodes (a state that either
-	// transmits or listens for a tone needs one), so it is CHECKED here
-	// rather than left free to drift out of step with them. And, for the
-	// same reason ShiftOptions' directions must be unique, each
-	// encode/decode combination must name at most one state.
-	type encodeDecodePair struct{ encodes, decodes bool }
-	seenPair := make(map[encodeDecodePair]string, len(c.CTCSSStates))
+	// Every CTCSSStates entry's Semantics must be a declared, meaningful
+	// ToneSemantics — never ToneSemanticsUnspecified, its zero value: a
+	// state whose Semantics was simply omitted must be refused here, not
+	// silently read as ToneOff (see ToneSemantics' doc comment).
 	for _, ts := range c.CTCSSStates {
-		if ts.RequiresTone != (ts.Encodes || ts.Decodes) {
-			problems = append(problems, fmt.Sprintf("CTCSSStates %q has RequiresTone %t but Encodes %t and Decodes %t", ts.Value, ts.RequiresTone, ts.Encodes, ts.Decodes))
+		if !validToneSemantics(ts.Semantics) {
+			problems = append(problems, fmt.Sprintf("CTCSSStates %q has invalid Semantics %d", ts.Value, ts.Semantics))
 		}
-		p := encodeDecodePair{ts.Encodes, ts.Decodes}
-		if prev, dup := seenPair[p]; dup {
+	}
+
+	// For the same reason ShiftOptions' directions must be unique, each
+	// Semantics value must name at most one state.
+	seenSemantics := make(map[ToneSemantics]string, len(c.CTCSSStates))
+	for _, ts := range c.CTCSSStates {
+		if prev, dup := seenSemantics[ts.Semantics]; dup {
 			problems = append(problems, fmt.Sprintf("CTCSSStates %q and %q express the same encode/decode pair", prev, ts.Value))
 			continue
 		}
-		seenPair[p] = ts.Value
+		seenSemantics[ts.Semantics] = ts.Value
 	}
 
 	if len(problems) == 0 {

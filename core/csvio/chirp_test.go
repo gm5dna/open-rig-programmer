@@ -106,9 +106,9 @@ func deviantCapabilities() spec.Capabilities {
 			{Value: "SPLIT-MINUS", Direction: spec.ShiftDown},
 		},
 		CTCSSStates: []spec.ToneState{
-			{Value: "DISABLED", RequiresTone: false, Encodes: false, Decodes: false},
-			{Value: "TONE-TX", RequiresTone: true, Encodes: true, Decodes: false},
-			{Value: "TONE-BOTH", RequiresTone: true, Encodes: true, Decodes: true},
+			{Value: "DISABLED", Semantics: spec.ToneOff},
+			{Value: "TONE-TX", Semantics: spec.ToneEncode},
+			{Value: "TONE-BOTH", Semantics: spec.ToneEncodeDecode},
 		},
 	}
 }
@@ -208,8 +208,8 @@ func TestImportCHIRP_ToneNotInCapsChartBlocks(t *testing.T) {
 func TestImportCHIRP_MissingOffStateBlocks(t *testing.T) {
 	caps := deviantCapabilities()
 	caps.CTCSSStates = []spec.ToneState{
-		{Value: "TONE-TX", RequiresTone: true, Encodes: true, Decodes: false},
-		{Value: "TONE-BOTH", RequiresTone: true, Encodes: true, Decodes: true},
+		{Value: "TONE-TX", Semantics: spec.ToneEncode},
+		{Value: "TONE-BOTH", Semantics: spec.ToneEncodeDecode},
 	}
 
 	_, report, err := ImportCHIRP(strings.NewReader("Location,Frequency,Mode\n1,145.500000,USB\n"), caps)
@@ -230,8 +230,8 @@ func TestImportCHIRP_MissingOffStateBlocks(t *testing.T) {
 func TestImportCHIRP_MissingEncodeDecodeStateBlocks(t *testing.T) {
 	caps := deviantCapabilities()
 	caps.CTCSSStates = []spec.ToneState{
-		{Value: "DISABLED", RequiresTone: false, Encodes: false, Decodes: false},
-		{Value: "TONE-TX", RequiresTone: true, Encodes: true, Decodes: false},
+		{Value: "DISABLED", Semantics: spec.ToneOff},
+		{Value: "TONE-TX", Semantics: spec.ToneEncode},
 	}
 
 	_, report, err := ImportCHIRP(strings.NewReader("Location,Frequency,Mode,Tone,cToneFreq\n1,145.500000,USB,TSQL,88.5\n"), caps)

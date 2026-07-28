@@ -254,14 +254,14 @@ func TestCapabilitiesValidate_RequiresVocab(t *testing.T) {
 		{
 			name: "CTCSSStates blank Value",
 			mutate: func(c *Capabilities) {
-				c.CTCSSStates = []ToneState{{Value: "OFF"}, {Value: "", RequiresTone: true, Encodes: true}}
+				c.CTCSSStates = []ToneState{{Value: "OFF", Semantics: ToneOff}, {Value: "", Semantics: ToneEncode}}
 			},
 			wantSub: "CTCSSStates must not contain a blank value",
 		},
 		{
 			name: "CTCSSStates duplicate Value",
 			mutate: func(c *Capabilities) {
-				c.CTCSSStates = []ToneState{{Value: "OFF"}, {Value: "OFF", RequiresTone: true, Encodes: true}}
+				c.CTCSSStates = []ToneState{{Value: "OFF", Semantics: ToneOff}, {Value: "OFF", Semantics: ToneEncode}}
 			},
 			wantSub: `CTCSSStates contains duplicate value "OFF"`,
 		},
@@ -301,9 +301,9 @@ func TestValidate_ShiftOptionsDuplicateDirection(t *testing.T) {
 func TestValidate_CTCSSStatesDuplicateEncodeDecodePair(t *testing.T) {
 	c := validTestCapabilities()
 	c.CTCSSStates = []ToneState{
-		{Value: "OFF", RequiresTone: false, Encodes: false, Decodes: false},
-		{Value: "ENC", RequiresTone: true, Encodes: true, Decodes: false},
-		{Value: "ENC-AGAIN", RequiresTone: true, Encodes: true, Decodes: false},
+		{Value: "OFF", Semantics: ToneOff},
+		{Value: "ENC", Semantics: ToneEncode},
+		{Value: "ENC-AGAIN", Semantics: ToneEncode},
 	}
 	err := c.Validate()
 	if err == nil {
@@ -337,17 +337,79 @@ func TestValidate_TagLenNotPositive(t *testing.T) {
 	}
 }
 
-func TestValidate_CTCSSStatesRequiresToneInconsistent(t *testing.T) {
+// TestValidate_ShiftOptionZeroValueDirectionRejected is FIX A1's failing-
+// first test: before this fix, ShiftNone was ShiftDirection's zero value,
+// so a ShiftOption whose Direction was simply omitted from a struct
+// literal (as "RADIO-UP" is here) silently read as simplex — a semantic
+// value the author never wrote — and passed Validate outright because
+// "SIMPLEX" was still a member of the declared vocabulary. Now the zero
+// value is ShiftUnspecified, which Validate must reject.
+func TestValidate_ShiftOptionZeroValueDirectionRejected(t *testing.T) {
 	c := validTestCapabilities()
-	c.CTCSSStates = []ToneState{
-		{Value: "OFF", RequiresTone: false, Encodes: false, Decodes: false},
-		{Value: "BROKEN", RequiresTone: true, Encodes: false, Decodes: false},
+	c.ShiftOptions = []ShiftOption{
+		{Value: "RADIO-UP"}, // Direction accidentally omitted
+		{Value: "RADIO-DOWN", Direction: ShiftDown},
 	}
 	err := c.Validate()
 	if err == nil {
-		t.Fatal("Validate() = nil, want an error: RequiresTone true but neither Encodes nor Decodes")
+		t.Fatal("Validate() = nil, want an error: a ShiftOption with an omitted (zero-value) Direction must be rejected")
 	}
-	if !strings.Contains(err.Error(), "RequiresTone") {
-		t.Errorf("Validate() error = %q, want it to mention RequiresTone", err)
+	if !strings.Contains(err.Error(), "invalid Direction") {
+		t.Errorf("Validate() error = %q, want it to mention \"invalid Direction\"", err)
+	}
+}
+
+// TestValidate_ShiftOptionDirectionOutOfRange covers a Direction value
+// outside the three declared ShiftDirection constants entirely (not just
+// the zero value) — e.g. a corrupted or hand-built Capabilities.
+func TestValidate_ShiftOptionDirectionOutOfRange(t *testing.T) {
+	c := validTestCapabilities()
+	c.ShiftOptions = []ShiftOption{
+		{Value: "WEIRD", Direction: ShiftDirection(99)},
+	}
+	err := c.Validate()
+	if err == nil {
+		t.Fatal("Validate() = nil, want an error: Direction 99 is out of range")
+	}
+	if !strings.Contains(err.Error(), "invalid Direction") {
+		t.Errorf("Validate() error = %q, want it to mention \"invalid Direction\"", err)
+	}
+}
+
+// TestValidate_CTCSSStateZeroValueSemanticsRejected is FIX A1's failing-
+// first test for the CTCSS side: before this fix, (Encodes: false,
+// Decodes: false) — CTCSS off — was the zero value of the old bool-triple
+// shape, so a ToneState whose semantics were simply omitted (as
+// "RADIO-ENC" is here) silently read as "off" and passed Validate because
+// "OFF" was still a member of the declared vocabulary. Now the zero value
+// is ToneSemanticsUnspecified, which Validate must reject.
+func TestValidate_CTCSSStateZeroValueSemanticsRejected(t *testing.T) {
+	c := validTestCapabilities()
+	c.CTCSSStates = []ToneState{
+		{Value: "RADIO-ENC"}, // Semantics accidentally omitted
+		{Value: "RADIO-BOTH", Semantics: ToneEncodeDecode},
+	}
+	err := c.Validate()
+	if err == nil {
+		t.Fatal("Validate() = nil, want an error: a ToneState with omitted (zero-value) Semantics must be rejected")
+	}
+	if !strings.Contains(err.Error(), "invalid Semantics") {
+		t.Errorf("Validate() error = %q, want it to mention \"invalid Semantics\"", err)
+	}
+}
+
+// TestValidate_CTCSSStateSemanticsOutOfRange covers a Semantics value
+// outside the three declared ToneSemantics constants entirely.
+func TestValidate_CTCSSStateSemanticsOutOfRange(t *testing.T) {
+	c := validTestCapabilities()
+	c.CTCSSStates = []ToneState{
+		{Value: "WEIRD", Semantics: ToneSemantics(99)},
+	}
+	err := c.Validate()
+	if err == nil {
+		t.Fatal("Validate() = nil, want an error: Semantics 99 is out of range")
+	}
+	if !strings.Contains(err.Error(), "invalid Semantics") {
+		t.Errorf("Validate() error = %q, want it to mention \"invalid Semantics\"", err)
 	}
 }
