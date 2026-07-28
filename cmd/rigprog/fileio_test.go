@@ -190,6 +190,22 @@ func TestResolveSnapshotDir_OtherModelGetsSubdir(t *testing.T) {
 	}
 }
 
+// TestResolveSnapshotDir_EmptySlugIsError mirrors internal/wiring's own
+// test of the same name: pins fix-round-1's finding, that a
+// non-wiring.DefaultModel name which slugs to "" must not silently fall
+// back to the base directory. filepath.Join drops empty elements, so
+// filepath.Join(base, "") == base — without this guard such a model
+// would collapse into exactly wiring.DefaultModel's own directory,
+// precisely the collision this task exists to prevent, with no error
+// raised.
+func TestResolveSnapshotDir_EmptySlugIsError(t *testing.T) {
+	for _, model := range []string{"", "---", "!!!", ".", ".."} {
+		if got, err := resolveSnapshotDir("/tmp/snaps", model); err == nil {
+			t.Errorf("resolveSnapshotDir(override, %q) = %q, <nil error>, want an error (empty slug must not silently collapse into DefaultModel's directory)", model, got)
+		}
+	}
+}
+
 // --- saveCodeplugNoClobber / openCSVCommit (Fix 3, adjudicated MEDIUM,
 // Codex M4 #3): checkOverwrite is Stat-then-act — a TOCTOU race against
 // whatever a long radio read spends its time on. These two commit

@@ -331,7 +331,12 @@ func ModelSlug(model string) string {
 // found. Any other model gets its own <base>/<model-slug>/
 // subdirectory, applied to an explicit override too, since two models
 // sharing one explicitly-named directory is exactly the collision this
-// rule exists to prevent.
+// rule exists to prevent. A model whose ModelSlug is "" (no
+// alphanumeric characters at all) is refused with an error rather than
+// silently falling back to the base directory — filepath.Join drops
+// empty elements, so an unguarded empty slug would resolve to exactly
+// DefaultModel's own path, the very collision this rule exists to
+// prevent.
 //
 // Deliberately duplicated here rather than exported from cmd/rigprog:
 // cmd/rigprog is a cmd-local package app/ must not import (task-15
@@ -350,5 +355,9 @@ func ResolveSnapshotDir(override, model string) (string, error) {
 	if model == DefaultModel {
 		return base, nil
 	}
-	return filepath.Join(base, ModelSlug(model)), nil
+	slug := ModelSlug(model)
+	if slug == "" {
+		return "", fmt.Errorf("wiring: resolving snapshot directory: model %q has no filesystem-safe characters to slug — refusing to fall back to the base directory and collide with %s's", model, DefaultModel)
+	}
+	return filepath.Join(base, slug), nil
 }

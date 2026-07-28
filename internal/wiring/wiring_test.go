@@ -422,3 +422,17 @@ func TestResolveSnapshotDir_OtherModelGetsSubdir(t *testing.T) {
 		t.Errorf("ResolveSnapshotDir(override, %q) = %q, want %q", "FTdx10", got, want)
 	}
 }
+
+// TestResolveSnapshotDir_EmptySlugIsError pins fix-round-1's finding: a
+// non-DefaultModel name that slugs to "" must not silently fall back to
+// the base directory. filepath.Join drops empty elements, so
+// filepath.Join(base, "") == base — without this guard such a model
+// would collapse into exactly DefaultModel's own directory, precisely
+// the collision this task exists to prevent, with no error raised.
+func TestResolveSnapshotDir_EmptySlugIsError(t *testing.T) {
+	for _, model := range []string{"", "---", "!!!", ".", ".."} {
+		if got, err := ResolveSnapshotDir("/tmp/snaps", model); err == nil {
+			t.Errorf("ResolveSnapshotDir(override, %q) = %q, <nil error>, want an error (empty slug must not silently collapse into DefaultModel's directory)", model, got)
+		}
+	}
+}
