@@ -589,6 +589,9 @@ func TestGetUISpec_ServesProse(t *testing.T) {
 		if got.ToneScanSkipNote != want.ToneScanSkipNote {
 			t.Errorf("ToneScanSkipNote = %q, want %q", got.ToneScanSkipNote, want.ToneScanSkipNote)
 		}
+		if got.ToneScanSkipVerification != want.ToneScanSkipVerification {
+			t.Errorf("ToneScanSkipVerification = %q, want %q", got.ToneScanSkipVerification, want.ToneScanSkipVerification)
+		}
 		if got.EraseDialogNote != want.EraseDialogNote {
 			t.Errorf("EraseDialogNote = %q, want %q", got.EraseDialogNote, want.EraseDialogNote)
 		}

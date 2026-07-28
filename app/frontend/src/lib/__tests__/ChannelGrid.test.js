@@ -65,6 +65,11 @@ const UI_SPEC = {
 	// keep asserting the real, end-to-end FT-710 wording even though the
 	// component itself no longer hardcodes any of it.
 	ToneScanSkipNote: "Tone and Scan Skip aren't carried by the FT-710's CAT protocol — set them on the radio.",
+	// m42a: the grid-legend's second sentence, previously hardcoded in
+	// ChannelGrid.svelte itself — now served the same way ToneScanSkipNote
+	// is, so this fixture is the only place either sentence is written out.
+	ToneScanSkipVerification:
+		"Preservation across a rewrite is hardware-verified for Tone; Scan Skip preservation is not yet verified (see each cell's tooltip).",
 	EraseDialogNote:
 		'The FT-710 has no CAT erase command. To delete a channel on the radio: press and hold [V/M] to open the memory channel list, select the channel, then touch [ERASE].',
 	PreservationTooltips: {
@@ -975,11 +980,32 @@ describe('legend (task 22 §3: Tone/Scan-skip discoverability)', () => {
 		expect(screen.getByText(/Scan Skip preservation is/)).toBeInTheDocument()
 	})
 
-	it('task 42: an empty served ToneScanSkipNote leaves the second (locally-owned) sentence rendering alone, with no hardcoded fallback for the first', () => {
+	// m42a: pins the FULL rendered legend, whitespace-normalised the way a
+	// browser collapses it visually, against the exact two-sentence string
+	// the pre-move component rendered — the regression this task must not
+	// break: moving the second sentence from a Svelte literal to a served
+	// field must produce byte-identical rendered prose.
+	it('m42a: renders both legend sentences with a single space between them, matching the pre-move rendering exactly', () => {
+		const { container } = render(ChannelGrid)
+		const legend = container.querySelector('.grid-legend')
+		const normalised = legend.textContent.replace(/\s+/g, ' ').trim()
+		expect(normalised).toBe(
+			"Tone and Scan Skip aren't carried by the FT-710's CAT protocol — set them on the radio. Preservation across a rewrite is hardware-verified for Tone; Scan Skip preservation is not yet verified (see each cell's tooltip)."
+		)
+	})
+
+	it('task 42: an empty served ToneScanSkipNote leaves ToneScanSkipVerification rendering alone, with no hardcoded fallback for either sentence', () => {
 		appState.setUISpec({ ...UI_SPEC, ToneScanSkipNote: '' })
 		render(ChannelGrid)
 		expect(screen.queryByText(/aren't carried by the FT-710's CAT protocol/)).not.toBeInTheDocument()
 		expect(screen.getByText(/hardware-verified for Tone/)).toBeInTheDocument()
+	})
+
+	it('m42a: an empty served ToneScanSkipVerification leaves ToneScanSkipNote rendering alone, with no hardcoded fallback for either sentence', () => {
+		appState.setUISpec({ ...UI_SPEC, ToneScanSkipVerification: '' })
+		render(ChannelGrid)
+		expect(screen.getByText(/aren't carried by the FT-710's CAT protocol/)).toBeInTheDocument()
+		expect(screen.queryByText(/hardware-verified for Tone/)).not.toBeInTheDocument()
 	})
 })
 

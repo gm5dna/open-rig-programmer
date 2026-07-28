@@ -1019,8 +1019,7 @@
 
 		<p class="grid-legend" title="See docs/hardware-notes.md § M5b write trials">
 			{appState.uiSpec.ToneScanSkipNote}
-			Preservation across a rewrite is hardware-verified for Tone; Scan Skip preservation is
-			not yet verified (see each cell's tooltip).
+			{appState.uiSpec.ToneScanSkipVerification}
 		</p>
 	{/if}
 

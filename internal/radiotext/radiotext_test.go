@@ -22,6 +22,9 @@ import (
 //   - FirmwareGuidance: app/send.go's firmwareGuidance const.
 //   - ToneScanSkipNote: the first sentence of ChannelGrid.svelte's
 //     grid-legend paragraph.
+//   - ToneScanSkipVerification: the second sentence of ChannelGrid.svelte's
+//     grid-legend paragraph (m42a: left behind in the frontend when task
+//     41 captured the first sentence).
 //   - PreservationTooltips: ChannelGrid.svelte's PRESERVED_TOOLTIP_TONE/
 //     PRESERVED_TOOLTIP_SKIP consts.
 //   - FirmwarePlaceholder: SendFlowDialog.svelte's firmware-input
@@ -29,10 +32,11 @@ import (
 //   - ProbeFirmwareNote: cmd/rigprog/probe.go's writeProbeReport.
 func TestRadiotext_FT710Verbatim(t *testing.T) {
 	want := radiotext.Text{
-		EraseProcedure:   "The FT-710 has no CAT erase command. To delete a channel on the radio: press and hold [V/M] to open the memory channel list, select the channel, then touch [ERASE].",
-		FirmwareGuidance: "Memory CAT (read/write) requires firmware V01-10 or later. There is no CAT query for the firmware version — check the radio's front panel (or SD-card version screen) and enter it here before sending.",
-		ToneScanSkipNote: "Tone and Scan Skip aren't carried by the FT-710's CAT protocol — set them on the radio.",
-		EraseDialogNote:  "The FT-710 has no CAT erase command. To delete a channel on the radio: press and hold [V/M] to open the memory channel list, select the channel, then touch [ERASE].",
+		EraseProcedure:           "The FT-710 has no CAT erase command. To delete a channel on the radio: press and hold [V/M] to open the memory channel list, select the channel, then touch [ERASE].",
+		FirmwareGuidance:         "Memory CAT (read/write) requires firmware V01-10 or later. There is no CAT query for the firmware version — check the radio's front panel (or SD-card version screen) and enter it here before sending.",
+		ToneScanSkipNote:         "Tone and Scan Skip aren't carried by the FT-710's CAT protocol — set them on the radio.",
+		ToneScanSkipVerification: "Preservation across a rewrite is hardware-verified for Tone; Scan Skip preservation is not yet verified (see each cell's tooltip).",
+		EraseDialogNote:          "The FT-710 has no CAT erase command. To delete a channel on the radio: press and hold [V/M] to open the memory channel list, select the channel, then touch [ERASE].",
 		PreservationTooltips: radiotext.PreservationTooltips{
 			Tone:     "not readable over CAT — preserved when writing (hardware-verified 13/07/2026)",
 			ScanSkip: "not readable over CAT — preservation when writing is unverified (never probed)",

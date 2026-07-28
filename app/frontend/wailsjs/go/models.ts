@@ -798,6 +798,7 @@ export namespace main {
 	    ClarMaxHz: number;
 	    ClarStepHz: number;
 	    ToneScanSkipNote: string;
+	    ToneScanSkipVerification: string;
 	    EraseDialogNote: string;
 	    PreservationTooltips: PreservationTooltipsView;
 	    FirmwarePlaceholder: string;
@@ -818,6 +819,7 @@ export namespace main {
 	        this.ClarMaxHz = source["ClarMaxHz"];
 	        this.ClarStepHz = source["ClarStepHz"];
 	        this.ToneScanSkipNote = source["ToneScanSkipNote"];
+	        this.ToneScanSkipVerification = source["ToneScanSkipVerification"];
 	        this.EraseDialogNote = source["EraseDialogNote"];
 	        this.PreservationTooltips = this.convertValues(source["PreservationTooltips"], PreservationTooltipsView);
 	        this.FirmwarePlaceholder = source["FirmwarePlaceholder"];
