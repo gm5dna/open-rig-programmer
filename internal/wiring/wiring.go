@@ -180,7 +180,16 @@ func OpenRealSessionFor(ctx context.Context, model, portPath string) (driver.Ses
 	if err != nil {
 		return nil, nil, err
 	}
-	drv, _ := reg.Get(model) // just registered under this exact key
+	drv, ok := reg.Get(model)
+	if !ok {
+		// Unreachable while TestDriverTableKeysMatchDriverModel holds: d
+		// was just registered under its own Model(), which that test pins
+		// equal to this table key. Returned rather than ignored so a
+		// future table whose key drifted from its driver's Model() fails
+		// with this package's own typed error instead of a nil-pointer
+		// panic when drv is used below.
+		return nil, nil, &UnknownModelError{Model: model, Supported: SupportedModels()}
+	}
 
 	port, err := transport.OpenSerial(portPath, transport.SerialConfig{
 		Baud:     transport.DefaultBaud,
