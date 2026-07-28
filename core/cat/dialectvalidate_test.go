@@ -100,7 +100,7 @@ func validBaselineConfig() DialectConfig {
 			{Addr: EXAddress{P1: 7, P2: 1, P3: 1}, Name: "ITEM ONE", Digits: 2},
 			{Addr: EXAddress{P1: 7, P2: 1, P3: 2}, Name: "ITEM TWO", Digits: 5},
 		},
-		MT:          MTPolicy{TagMaxBytes: 8, ClearTagByte: '_'},
+		MT:          MTPolicy{Form: MTFormShort, TagMaxBytes: 8, ClearTagByte: '_'},
 		Clarifier:   ClarifierPolicy{StepHz: 5, MaxAbsHz: 500},
 		MWWriteKind: KindMemory,
 	}

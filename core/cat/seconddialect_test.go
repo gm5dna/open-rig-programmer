@@ -74,7 +74,7 @@ var testDialect = mustFixtureDialect(DialectConfig{
 		NoneWire:      "000",
 	},
 	EXItems:     nil,
-	MT:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	MT:          MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MWWriteKind: KindMemory,
 })
@@ -103,7 +103,7 @@ var noneWireDialect = mustFixtureDialect(DialectConfig{
 		NoneWire:      "900", // FT-710: "000"
 	},
 	EXItems:     nil,
-	MT:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	MT:          MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MWWriteKind: KindMemory,
 })
@@ -159,7 +159,7 @@ var peerDialect = mustFixtureDialect(DialectConfig{
 		NoneWire:      "777", // FT-710: "000"
 	},
 	EXItems:     peerEXItems,
-	MT:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	MT:          MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MWWriteKind: KindMemory,
 })

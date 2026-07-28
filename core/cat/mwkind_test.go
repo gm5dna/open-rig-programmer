@@ -27,7 +27,7 @@ func kindPeerDialect(t *testing.T) Dialect {
 			PMSPairs: 9,
 			NoneWire: "000",
 		},
-		MT:        MTPolicy{TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+		MT:        MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 		Clarifier: ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 		// The whole point of this fixture.
 		MWWriteKind: KindPMS,

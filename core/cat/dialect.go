@@ -145,7 +145,7 @@ var FT710 = Dialect{
 	// was previously assumed to share with every dialect.
 	// TestNewDialect_ReproducesFT710 pins that this literal and a
 	// config-built equivalent agree.
-	mt:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	mt:          MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	clar:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	mwWriteKind: KindMemory,
 }
