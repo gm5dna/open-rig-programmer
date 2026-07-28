@@ -140,7 +140,7 @@ func derive(captureJSON, manualCSV []byte) ([]byte, error) {
 		return nil, fmt.Errorf("parsing capture: %w", err)
 	}
 
-	rows, err := extable.ParseCSV(manualCSV)
+	rows, err := extable.ParseCSV(extable.FT710Profile(), manualCSV)
 	if err != nil {
 		return nil, fmt.Errorf("parsing manual CSV: %w", err)
 	}

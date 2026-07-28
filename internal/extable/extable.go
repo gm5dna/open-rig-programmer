@@ -42,10 +42,11 @@ const numColumns = 10
 // Row is one transcribed Table 2 entry. P1/P2/P3 are the decimal (P1,P2,P3)
 // triple; the *Label and Name fields are verbatim manual text; P4 is the
 // manual's parameter-description column (retained for the audit trail, not
-// emitted into the generated Go); Digits is the manual's Digits column
-// (1..4, or 12 for the six text items); Text marks those text items; and
-// ManualLine is the source line in the manual extract the row was
-// transcribed from.
+// emitted into the generated Go); Digits is the manual's Digits column:
+// within the profile's MinDigits..MaxDigits for a numeric field, or exactly
+// the profile's TextWidth for a text item (1..4 and 12 respectively for the
+// FT-710); Text marks those text items; and ManualLine is the source line
+// in the manual extract the row was transcribed from.
 type Row struct {
 	P1, P2, P3 int
 	P1Label    string
@@ -57,15 +58,24 @@ type Row struct {
 	ManualLine int
 }
 
-// ParseCSV decodes the Table 2 CSV. Lines beginning with '#' are treated as
-// provenance comments and skipped. Parsing is deliberately strict: a
-// malformed row (wrong column count, unparseable integer/boolean fields), a
-// blank (empty or whitespace-only) P1Label, P2Label, Name, or P4, a
-// non-positive ManualLine, a duplicate (P1,P2,P3) triple, a non-text row
-// whose Digits is not 1..4, or a text row whose Digits is not 12 each fail
-// with a non-nil error rather than being guessed at. The returned rows
+// ParseCSV decodes the Table 2 CSV against the model profile p, which it
+// validates first. Lines beginning with '#' are treated as provenance
+// comments and skipped. Parsing is deliberately strict: a malformed row
+// (wrong column count, unparseable integer/boolean fields), a blank (empty
+// or whitespace-only) P1Label, P2Label, Name, or P4, a non-positive
+// ManualLine, a duplicate (P1,P2,P3) triple, a non-text row whose Digits
+// falls outside the profile's MinDigits..MaxDigits, a text row whose Digits
+// is not the profile's TextWidth, an address component outside 0..99 each
+// fail with a non-nil error rather than being guessed at. The returned rows
 // preserve CSV order.
-func ParseCSV(data []byte) ([]Row, error) {
+func ParseCSV(p Profile, data []byte) ([]Row, error) {
+	// The registry validates registered profiles, but nothing forces a
+	// caller through the registry — the test fixtures do not go through it.
+	// An unvalidated profile here would let omitted digit bounds be READ as
+	// bounds (Codex plan review, finding 4).
+	if err := p.Validate(); err != nil {
+		return nil, err
+	}
 	r := csv.NewReader(bytes.NewReader(data))
 	r.Comment = '#'
 	r.FieldsPerRecord = numColumns
@@ -77,7 +87,7 @@ func ParseCSV(data []byte) ([]Row, error) {
 	rows := make([]Row, 0, len(records))
 	seen := make(map[[3]int]bool, len(records))
 	for i, rec := range records {
-		row, err := parseRecord(rec)
+		row, err := parseRecord(p, rec)
 		if err != nil {
 			return nil, fmt.Errorf("extable: CSV data row %d: %w", i+1, err)
 		}
@@ -92,7 +102,7 @@ func ParseCSV(data []byte) ([]Row, error) {
 }
 
 // parseRecord decodes one already-length-checked CSV record.
-func parseRecord(rec []string) (Row, error) {
+func parseRecord(p Profile, rec []string) (Row, error) {
 	var row Row
 	var err error
 	if row.P1, err = strconv.Atoi(rec[0]); err != nil {
@@ -103,6 +113,11 @@ func parseRecord(rec []string) (Row, error) {
 	}
 	if row.P3, err = strconv.Atoi(rec[2]); err != nil {
 		return Row{}, fmt.Errorf("bad P3 %q: %w", rec[2], err)
+	}
+	for i, v := range []int{row.P1, row.P2, row.P3} {
+		if v < 0 || v > 99 {
+			return Row{}, fmt.Errorf("address component P%d must be 0..99, got %d", i+1, v)
+		}
 	}
 	row.P1Label = rec[3]
 	row.P2Label = rec[4]
@@ -133,14 +148,14 @@ func parseRecord(rec []string) (Row, error) {
 		return Row{}, fmt.Errorf("manual_line must be > 0, got %d", row.ManualLine)
 	}
 
-	// Digits/Text consistency: the six text items carry Digits 12 (the max
-	// P4 byte width); every other item is a numeric field of 1..4 digits.
+	// Digits/Text consistency: a text item carries exactly this radio's text
+	// width; every other item is a numeric field within its digit bounds.
 	if row.Text {
-		if row.Digits != 12 {
-			return Row{}, fmt.Errorf("text row (%s) must have digits 12, got %d", row.Name, row.Digits)
+		if row.Digits != p.TextWidth {
+			return Row{}, fmt.Errorf("text row (%s) must have digits %d, got %d", row.Name, p.TextWidth, row.Digits)
 		}
-	} else if row.Digits < 1 || row.Digits > 4 {
-		return Row{}, fmt.Errorf("non-text row (%s) digits must be 1..4, got %d", row.Name, row.Digits)
+	} else if row.Digits < p.MinDigits || row.Digits > p.MaxDigits {
+		return Row{}, fmt.Errorf("non-text row (%s) digits must be %d..%d, got %d", row.Name, p.MinDigits, p.MaxDigits, row.Digits)
 	}
 	return row, nil
 }

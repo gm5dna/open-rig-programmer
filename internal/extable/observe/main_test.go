@@ -37,7 +37,7 @@ func manualCSV(t *testing.T) []byte {
 // digits-only value of the manual's own width.
 func syntheticCapture(t *testing.T, csv []byte) []byte {
 	t.Helper()
-	rows, err := extable.ParseCSV(csv)
+	rows, err := extable.ParseCSV(extable.FT710Profile(), csv)
 	if err != nil {
 		t.Fatalf("ParseCSV: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestDerive_RefusesIncompleteSweep(t *testing.T) {
 // a value, a reordered row — fails here.
 func TestDerive_ProducesExactlyTheExpectedBytes(t *testing.T) {
 	csv := manualCSV(t)
-	rows, err := extable.ParseCSV(csv)
+	rows, err := extable.ParseCSV(extable.FT710Profile(), csv)
 	if err != nil {
 		t.Fatalf("ParseCSV: %v", err)
 	}

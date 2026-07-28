@@ -23,7 +23,7 @@ func TestEXInventoryGenerated_NotStale(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading table2.csv: %v", err)
 	}
-	rows, err := extable.ParseCSV(csv)
+	rows, err := extable.ParseCSV(extable.FT710Profile(), csv)
 	if err != nil {
 		t.Fatalf("ParseCSV(table2.csv): %v", err)
 	}

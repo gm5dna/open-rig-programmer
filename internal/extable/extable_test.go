@@ -116,7 +116,7 @@ func TestParseCSV_Strictness(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := ParseCSV([]byte(tc.csv))
+			_, err := ParseCSV(withRows(FT710Profile(), 1), []byte(tc.csv))
 			if tc.wantErr && err == nil {
 				t.Fatalf("ParseCSV(%q): expected error, got nil", tc.csv)
 			}
@@ -132,7 +132,7 @@ func TestParseCSV_Strictness(t *testing.T) {
 func TestParseCSV_FieldsParsed(t *testing.T) {
 	// P4 carries a comma, so the field must be CSV-quoted.
 	csv := "03,01,05,OPERATION SETTING,GENERAL,CAT-1 RATE,\"0: 4800 bps, 1: 9600 bps\",1,false,801\n"
-	rows, err := ParseCSV([]byte(csv))
+	rows, err := ParseCSV(withRows(FT710Profile(), 1), []byte(csv))
 	if err != nil {
 		t.Fatalf("ParseCSV: %v", err)
 	}
@@ -298,5 +298,90 @@ func TestRenderGo_EmitsObservedFields(t *testing.T) {
 		if !strings.Contains(string(out), want) {
 			t.Errorf("generated output does not contain %q — both the manual's width and the observed read width must survive", want)
 		}
+	}
+}
+
+// TestParseCSV_BoundsComeFromProfile proves each digit bound is READ from
+// the profile rather than hardcoded, by asserting rows that are legal under
+// one profile and illegal under the other — in both directions. A test that
+// only checked one direction would pass with the bounds still constant.
+func TestParseCSV_BoundsComeFromProfile(t *testing.T) {
+	const (
+		text12  = "04,01,01,DISPLAY SETTING,DISPLAY,MY CALL,Up to 12 characters,12,true,879\n"
+		text8   = "04,01,01,DISPLAY SETTING,DISPLAY,MY CALL,Up to 8 characters,8,true,879\n"
+		digits1 = "01,01,01,RADIO SETTING,MODE SSB,AF TREBLE GAIN,x,1,false,646\n"
+		digits6 = "01,01,01,RADIO SETTING,MODE SSB,AF TREBLE GAIN,x,6,false,646\n"
+	)
+	ft := withRows(FT710Profile(), 1)
+	fx := withRows(fixtureRequired, 1)
+
+	cases := []struct {
+		name    string
+		profile Profile
+		csv     string
+		wantErr bool
+	}{
+		{"text width 12 under FT-710", ft, text12, false},
+		{"text width 12 under fixture", fx, text12, true},
+		{"text width 8 under fixture", fx, text8, false},
+		{"text width 8 under FT-710", ft, text8, true},
+		{"digits 1 under FT-710", ft, digits1, false},
+		{"digits 1 under fixture", fx, digits1, true},
+		{"digits 6 under fixture", fx, digits6, false},
+		{"digits 6 under FT-710", ft, digits6, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := ParseCSV(tc.profile, []byte(tc.csv))
+			if tc.wantErr && err == nil {
+				t.Error("ParseCSV accepted a row its profile forbids; want an error")
+			}
+			if !tc.wantErr && err != nil {
+				t.Errorf("ParseCSV rejected a row its profile permits: %v", err)
+			}
+		})
+	}
+}
+
+// TestParseCSV_AddressComponentRange closes a gate that used to exist only
+// by accident. ParseCSV never range-checked P1/P2/P3; the observation CSV's
+// exactly-two-digits rule rejected the matching row instead. Under
+// ObservationsAbsent there is no observation CSV, so a component of 100
+// would render into an EXAddress whose Wire() is seven digits.
+func TestParseCSV_AddressComponentRange(t *testing.T) {
+	cases := []struct {
+		name    string
+		csv     string
+		wantErr bool
+	}{
+		{"99 accepted", "99,01,01,RADIO SETTING,MODE SSB,AF TREBLE GAIN,x,3,false,646\n", false},
+		{"P1 100 rejected", "100,01,01,RADIO SETTING,MODE SSB,AF TREBLE GAIN,x,3,false,646\n", true},
+		{"P2 100 rejected", "01,100,01,RADIO SETTING,MODE SSB,AF TREBLE GAIN,x,3,false,646\n", true},
+		{"P3 100 rejected", "01,01,100,RADIO SETTING,MODE SSB,AF TREBLE GAIN,x,3,false,646\n", true},
+		{"negative P1 rejected", "-1,01,01,RADIO SETTING,MODE SSB,AF TREBLE GAIN,x,3,false,646\n", true},
+	}
+	// fixtureAbsent, because the motivating exposure is the manual-only
+	// regime, where no observation-side two-digit rule exists to catch a
+	// bad component indirectly. (Its digit bounds 2..6 admit these rows.)
+	p := withRows(fixtureAbsent, 1)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := ParseCSV(p, []byte(tc.csv))
+			if tc.wantErr && err == nil {
+				t.Error("ParseCSV accepted an out-of-range address component; want an error")
+			}
+			if !tc.wantErr && err != nil {
+				t.Errorf("ParseCSV rejected a valid address: %v", err)
+			}
+		})
+	}
+}
+
+// TestParseCSV_RefusesInvalidProfile pins that the API validates its own
+// profile: the registry cannot vouch for a profile that never went through
+// it.
+func TestParseCSV_RefusesInvalidProfile(t *testing.T) {
+	if _, err := ParseCSV(Profile{}, []byte(goodRow)); err == nil {
+		t.Error("ParseCSV accepted a zero Profile; want a validation error")
 	}
 }
