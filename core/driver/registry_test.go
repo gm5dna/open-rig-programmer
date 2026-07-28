@@ -32,6 +32,7 @@ func validStubCaps(model string) spec.Capabilities {
 		CATID:        "9999",
 		Bauds:        []int{38400},
 		DefaultBaud:  38400,
+		TagLen:       12,
 		ShiftOptions: spec.StandardShiftOptions(),
 		CTCSSStates:  spec.StandardCTCSSStates(),
 	}

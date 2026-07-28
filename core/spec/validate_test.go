@@ -314,6 +314,29 @@ func TestValidate_CTCSSStatesDuplicateEncodeDecodePair(t *testing.T) {
 	}
 }
 
+// TestValidate_TagLenNotPositive pins Validate's TagLen invariant. Task 2
+// of this milestone (core/csvio/chirp.go) replaced a hardcoded 12-byte
+// tag-truncation limit with caps.TagLen; without this check, a
+// capabilities value that simply omits TagLen (leaving it at its zero
+// value) passed Validate() outright, and CHIRP import then truncated
+// EVERY channel name to "" — reported only as a non-blocking
+// "approximated" loss entry, not the refusal this project's safety
+// posture ("refuse, never corrupt") requires. Both the zero value and a
+// negative TagLen must be rejected.
+func TestValidate_TagLenNotPositive(t *testing.T) {
+	for _, tagLen := range []int{0, -1} {
+		c := validTestCapabilities()
+		c.TagLen = tagLen
+		err := c.Validate()
+		if err == nil {
+			t.Fatalf("Validate() = nil for TagLen %d, want an error", tagLen)
+		}
+		if !strings.Contains(err.Error(), "TagLen") {
+			t.Errorf("Validate() error = %q, want it to mention \"TagLen\"", err)
+		}
+	}
+}
+
 func TestValidate_CTCSSStatesRequiresToneInconsistent(t *testing.T) {
 	c := validTestCapabilities()
 	c.CTCSSStates = []ToneState{

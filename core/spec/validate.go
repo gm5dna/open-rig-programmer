@@ -81,6 +81,7 @@ func shiftOptionValues(opts []ShiftOption) []string {
 // just the first):
 //
 //   - Model and CATID must both be non-empty.
+//   - TagLen must be greater than zero.
 //   - No two Banks may share a BankID.
 //   - No slot (Bank.Slots entry) may be claimed by more than one Bank.
 //   - Every FieldSupport.Read and .Write across every Bank's Fields must
@@ -123,6 +124,16 @@ func (c Capabilities) Validate() error {
 	}
 	if c.CATID == "" {
 		problems = append(problems, "CATID must not be empty")
+	}
+	// A TagLen of zero (or less) is not "no tag support" — core/csvio's
+	// CHIRP import truncates every imported name to b[:caps.TagLen], so a
+	// zero TagLen silently discards every channel name to "" and reports
+	// it as an approximated, non-blocking loss rather than refusing. This
+	// project's standing posture is refuse, never corrupt: a driver that
+	// forgets to set TagLen must fail construction here, not reach a
+	// radio having erased every tag.
+	if c.TagLen <= 0 {
+		problems = append(problems, fmt.Sprintf("TagLen %d must be greater than zero", c.TagLen))
 	}
 
 	seenBank := make(map[BankID]bool, len(c.Banks))
