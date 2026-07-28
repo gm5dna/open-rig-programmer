@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
 
 // checkOverwrite reports whether path already exists (refused == true
@@ -164,13 +165,28 @@ func loadCodeplugStrict(stderr io.Writer, cmdName, label, path string) (*codeplu
 // moved here (task 14) since write.go needs it too and this file is
 // where cross-subcommand file/path helpers live (checkOverwrite,
 // loadCodeplugStrict) — behaviour unchanged.
-func resolveSnapshotDir(override string) (string, error) {
-	if override != "" {
-		return override, nil
+//
+// model then decides whether that base directory is used directly or
+// namespaced (task-7, D9): wiring.DefaultModel stays at the base
+// directory unchanged — byte-identical to the pre-task-7 behaviour — so
+// every snapshot written before per-model subdirectories existed is
+// still found. Any other model gets its own <base>/<model-slug>/
+// subdirectory, applied to an explicit override too, since two models
+// sharing one explicitly-named directory is exactly the collision this
+// rule exists to prevent. Deliberately duplicated from
+// internal/wiring's own ResolveSnapshotDir rather than shared: see that
+// function's doc comment (internal/wiring/wiring.go) for why.
+func resolveSnapshotDir(override, model string) (string, error) {
+	base := override
+	if base == "" {
+		cfgDir, err := os.UserConfigDir()
+		if err != nil {
+			return "", fmt.Errorf("determining default snapshot directory: %w", err)
+		}
+		base = filepath.Join(cfgDir, "rigprog", "snapshots")
 	}
-	cfgDir, err := os.UserConfigDir()
-	if err != nil {
-		return "", fmt.Errorf("determining default snapshot directory: %w", err)
+	if model == wiring.DefaultModel {
+		return base, nil
 	}
-	return filepath.Join(cfgDir, "rigprog", "snapshots"), nil
+	return filepath.Join(base, wiring.ModelSlug(model)), nil
 }

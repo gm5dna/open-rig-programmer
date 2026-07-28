@@ -295,6 +295,27 @@ func (e *OpenSessionError) Error() string {
 
 func (e *OpenSessionError) Unwrap() error { return e.Cause }
 
+// ModelSlug turns a model name into a filesystem-safe directory
+// component: lowercased, with each run of non-alphanumeric characters
+// collapsed to a single "-" (e.g. "FTDX101D/MP" -> "ftdx101d-mp"). Used
+// to give each model its own snapshot/journal directory.
+func ModelSlug(model string) string {
+	var b strings.Builder
+	dash := false
+	for _, r := range strings.ToLower(model) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			dash = false
+			continue
+		}
+		if !dash && b.Len() > 0 {
+			b.WriteByte('-')
+			dash = true
+		}
+	}
+	return strings.TrimSuffix(b.String(), "-")
+}
+
 // ResolveSnapshotDir returns the snapshot/journal directory a
 // radio-touching composition root should use: override verbatim if
 // non-empty, otherwise "<os.UserConfigDir()>/rigprog/snapshots" — the
@@ -303,18 +324,31 @@ func (e *OpenSessionError) Unwrap() error { return e.Cause }
 // one land in the same place absent an override. It does not touch the
 // filesystem — callers create the directory (mode 0700) on demand.
 //
+// model then decides whether that base directory is used directly or
+// namespaced (task-7, D9): DefaultModel stays at the base directory
+// unchanged — byte-identical to the pre-task-7 behaviour — so every
+// snapshot written before per-model subdirectories existed is still
+// found. Any other model gets its own <base>/<model-slug>/
+// subdirectory, applied to an explicit override too, since two models
+// sharing one explicitly-named directory is exactly the collision this
+// rule exists to prevent.
+//
 // Deliberately duplicated here rather than exported from cmd/rigprog:
 // cmd/rigprog is a cmd-local package app/ must not import (task-15
 // brief §2's Connect bullet); this 3-line rule is cheap enough to
 // restate directly rather than force an import cmd/rigprog was never
 // meant to expose.
-func ResolveSnapshotDir(override string) (string, error) {
-	if override != "" {
-		return override, nil
+func ResolveSnapshotDir(override, model string) (string, error) {
+	base := override
+	if base == "" {
+		cfgDir, err := os.UserConfigDir()
+		if err != nil {
+			return "", fmt.Errorf("wiring: determining default snapshot directory: %w", err)
+		}
+		base = filepath.Join(cfgDir, "rigprog", "snapshots")
 	}
-	cfgDir, err := os.UserConfigDir()
-	if err != nil {
-		return "", fmt.Errorf("wiring: determining default snapshot directory: %w", err)
+	if model == DefaultModel {
+		return base, nil
 	}
-	return filepath.Join(cfgDir, "rigprog", "snapshots"), nil
+	return filepath.Join(base, ModelSlug(model)), nil
 }

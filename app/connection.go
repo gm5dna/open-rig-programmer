@@ -68,7 +68,7 @@ func (a *App) connect(demo bool, portPath string) (ConnectionInfo, error) {
 	}
 	a.mu.Unlock()
 
-	snapshotDir, err := wiring.ResolveSnapshotDir("")
+	snapshotDir, err := wiring.ResolveSnapshotDir("", wiring.DefaultModel)
 	if err != nil {
 		return ConnectionInfo{}, fmt.Errorf("app: resolving snapshot directory: %w", err)
 	}

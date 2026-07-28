@@ -699,7 +699,7 @@ func cmdWrite(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 		return code
 	}
 
-	snapshotDir, err := resolveSnapshotDir(*snapshotDirFlag)
+	snapshotDir, err := resolveSnapshotDir(*snapshotDirFlag, *model)
 	if err != nil {
 		fmt.Fprintf(stderr, "rigprog write: %v\n", err)
 		return exitError

@@ -338,12 +338,16 @@ func TestOpenFakeSessionFor_UnknownModel(t *testing.T) {
 
 // TestResolveSnapshotDir_Override pins the same --snapshot-dir override
 // rule cmd/rigprog's own resolveSnapshotDir pins (fileio.go): given a
-// non-empty override, return it verbatim. internal/wiring's copy exists
-// so app/ (which cannot import cmd/rigprog, a cmd-local package) has
-// somewhere shared to get this 3-line UserConfigDir rule from, per
-// task-15 brief §2's Connect bullet.
+// non-empty override AND DefaultModel, return the override verbatim.
+// internal/wiring's copy exists so app/ (which cannot import
+// cmd/rigprog, a cmd-local package) has somewhere shared to get this
+// 3-line UserConfigDir rule from, per task-15 brief §2's Connect
+// bullet. Threaded with DefaultModel by task-7 (D9) so it keeps pinning
+// the same override-passthrough property now that ResolveSnapshotDir is
+// model-keyed — see TestResolveSnapshotDir_OtherModelGetsSubdir for the
+// non-default-model override case.
 func TestResolveSnapshotDir_Override(t *testing.T) {
-	got, err := ResolveSnapshotDir("/tmp/some/override")
+	got, err := ResolveSnapshotDir("/tmp/some/override", DefaultModel)
 	if err != nil {
 		t.Fatalf("ResolveSnapshotDir(override): unexpected error: %v", err)
 	}
@@ -355,18 +359,66 @@ func TestResolveSnapshotDir_Override(t *testing.T) {
 // TestResolveSnapshotDir_Default pins the default:
 // <UserConfigDir>/rigprog/snapshots — the same default cmd/rigprog uses,
 // so a GUI snapshot/journal and a CLI one land in the same place absent
-// an override.
+// an override. Threaded with DefaultModel by task-7 (D9): DefaultModel
+// stays at this base directory unchanged, so every snapshot written
+// before per-model subdirectories existed is still found.
 func TestResolveSnapshotDir_Default(t *testing.T) {
 	cfgDir, err := os.UserConfigDir()
 	if err != nil {
 		t.Skipf("os.UserConfigDir unavailable in this environment: %v", err)
 	}
-	got, err := ResolveSnapshotDir("")
+	got, err := ResolveSnapshotDir("", DefaultModel)
 	if err != nil {
 		t.Fatalf("ResolveSnapshotDir(\"\"): unexpected error: %v", err)
 	}
 	want := filepath.Join(cfgDir, "rigprog", "snapshots")
 	if got != want {
 		t.Errorf("ResolveSnapshotDir(\"\") = %q, want %q", got, want)
+	}
+}
+
+// TestModelSlug pins ModelSlug's filesystem-safe-directory-component
+// rule (task-7, D9): lowercase, with each run of non-alphanumeric
+// characters collapsed to a single "-".
+func TestModelSlug(t *testing.T) {
+	for _, tc := range []struct{ model, want string }{
+		{"FT-710", "ft-710"},
+		{"FTdx10", "ftdx10"},
+		{"FTDX101D/MP", "ftdx101d-mp"},
+		{"FTX-1", "ftx-1"},
+	} {
+		if got := ModelSlug(tc.model); got != tc.want {
+			t.Errorf("ModelSlug(%q) = %q, want %q", tc.model, got, tc.want)
+		}
+	}
+}
+
+// TestResolveSnapshotDir_DefaultModelStaysAtRoot pins task-7's (D9) most
+// important property: DefaultModel resolves to the base directory
+// unchanged, byte-identical to the pre-task-7 behaviour, so every
+// snapshot written before per-model subdirectories existed is still
+// found.
+func TestResolveSnapshotDir_DefaultModelStaysAtRoot(t *testing.T) {
+	got, err := ResolveSnapshotDir("/tmp/snaps", DefaultModel)
+	if err != nil {
+		t.Fatalf("ResolveSnapshotDir: %v", err)
+	}
+	if got != "/tmp/snaps" {
+		t.Errorf("ResolveSnapshotDir(override, DefaultModel) = %q, want %q unchanged — existing FT-710 snapshots must keep working", got, "/tmp/snaps")
+	}
+}
+
+// TestResolveSnapshotDir_OtherModelGetsSubdir pins task-7's (D9)
+// collision-avoidance rule: any model other than DefaultModel gets its
+// own <base>/<model-slug>/ subdirectory — applied to an explicit
+// override too, since two models sharing one named directory is exactly
+// the collision this rule exists to prevent.
+func TestResolveSnapshotDir_OtherModelGetsSubdir(t *testing.T) {
+	got, err := ResolveSnapshotDir("/tmp/snaps", "FTdx10")
+	if err != nil {
+		t.Fatalf("ResolveSnapshotDir: %v", err)
+	}
+	if want := "/tmp/snaps/ftdx10"; got != want {
+		t.Errorf("ResolveSnapshotDir(override, %q) = %q, want %q", "FTdx10", got, want)
 	}
 }
