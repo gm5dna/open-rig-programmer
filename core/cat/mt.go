@@ -11,23 +11,63 @@ import (
 // + ";". Golden vector G10: "MT001;".
 const mtReadLen = 6
 
-// mtAnswerMinLen/mtAnswerMaxLen bound an MT Set/Answer frame's total
-// length: "MT"(2) + slot(3) + display(1) + tag(0-12) + ";"(1).
+// mtAnswerMinLen is the SHORT form's structural floor: an MT Set/Answer
+// frame with a zero-length tag — "MT"(2) + slot(3) + display(1) + tag(0) +
+// ";"(1). It is a property of the frame GRAMMAR, shared by every short-form
+// dialect, so it stays a constant.
 //
-// These stay sized to the FT-710's own 12-byte tag rather than becoming
-// receiver-derived. M9c-0 task 64 promotes the TAG-LENGTH POLICY itself
-// (Dialect.mt.TagMaxBytes) onto the receiver — see validMTTag and
-// clearTagForm below — but a per-dialect FRAME-LENGTH ceiling is a
-// separate concern this task's own scope does not reach: every dialect
-// exercised anywhere in this package (the FT-710, and this task's own
-// 6-byte peer, mtpolicy_test.go) has a tag no wider than 12, so this outer
-// bound is never the thing doing the rejecting for either. A future
-// dialect wider than 12 bytes would need this constant revisited into a
-// receiver method; recorded here rather than left to be rediscovered.
-const (
-	mtAnswerMinLen = 2 + 3 + 1 + 0 + 1
-	mtAnswerMaxLen = 2 + 3 + 1 + 12 + 1
-)
+// The MAXIMUM is not. It was a sibling constant here, sized to the FT-710's
+// own 12-byte tag, with a comment recording that a dialect with a wider tag
+// would need it revisited into a receiver method. M9c-3 is that
+// revision: see mtShortAnswerMax below, which adds THIS dialect's
+// TagMaxBytes to this floor. The prediction held exactly — the constant was
+// never the thing doing the rejecting for either dialect that existed, so
+// deleting it moves no FT-710 byte and no FT-710 error text (12 + 7 = 19,
+// the number the old constant already carried).
+const mtAnswerMinLen = 2 + 3 + 1 + 0 + 1
+
+// mtShortAnswerMax is the longest SHORT-form MT Set/Answer frame THIS
+// dialect can produce or accept: the zero-tag floor plus its own tag width.
+// FT-710: 7 + 12 = 19, byte-identical to the constant it replaces.
+//
+// A receiver method rather than a package constant because it reaches the
+// OUTBOUND WRITE GATE (allowlist.go's validMTCommand) as well as
+// ParseMTAnswer, and a gate consulting the FT-710's width on every dialect
+// is the exact shape this seam exists to eliminate: a 6-byte-tag family
+// would have had frames up to 19 bytes admitted as "within the window",
+// leaving only the tag charset check between a forged frame and the radio.
+//
+// It is meaningful only under MTFormShort; both callers refuse any other
+// form before consulting it.
+func (d Dialect) mtShortAnswerMax() int {
+	return mtAnswerMinLen + d.mt.TagMaxBytes
+}
+
+// MTForm reports which MT frame shape this dialect declares. The zero
+// Dialect reports MTFormUnspecified — a form it can never be given, since
+// NewDialect refuses a config omitting one.
+//
+// Exported for consumers OUTSIDE this package that must branch on the form:
+// core/cat/dialecttest's conformance suite (which cannot see the unexported
+// field, and is what M9c-4 runs over the real FTdx10 dialect), and M9c-4/5's
+// per-model packages.
+func (d Dialect) MTForm() MTForm { return d.mt.Form }
+
+// MWWriteKind is the single P7 "kind" byte this family accepts on every
+// memory write. FT-710: KindMemory.
+//
+// Exported for core/driver/ft710's write path, which hardcodes cat.KindMemory
+// into the MemoryData it builds (M9c-3 task 9) and so writes the FT-710's
+// byte whatever dialect it was handed, and for core/cat/dialecttest, which
+// needs it to build a valid MW frame for an arbitrary dialect.
+func (d Dialect) MWWriteKind() byte { return d.mwWriteKind }
+
+// Clarifier returns this family's clarifier step and range.
+//
+// Exported for core/driver/ft710's write path, which pre-checks the
+// clarifier against a hardcoded +/-9990 before any wire traffic (M9c-3 task
+// 9), and for core/cat/dialecttest.
+func (d Dialect) Clarifier() ClarifierPolicy { return d.clar }
 
 // mtSlotValid reports whether s is a legal MT SET target under project
 // policy AND THIS DIALECT'S slot space: memory or PMS slots only.
@@ -120,6 +160,17 @@ func (d Dialect) clearTagForm() string {
 // FT-710 — both forms are hardware-proven for the FT-710, see
 // clearTagForm's doc comment.
 func (d Dialect) BuildMTSet(s Slot, display bool, tag string) (Command, error) {
+	// FORM FIRST. This builder emits ONE shape, and a dialect declaring the
+	// other must be refused here rather than handed a frame whose layout was
+	// never its own: the combined form's record begins "MT" and ends ';'
+	// too, so the radio would be sent a plausible-looking frame carrying its
+	// tag where its slot field belongs.
+	//
+	// The error carries no input frame because the offending value is the
+	// RECEIVER, not any argument.
+	if d.mt.Form != MTFormShort {
+		return Command{}, newParseError(nil, fmt.Sprintf("MT: short-form Set called on a %v dialect — use the combined-form API", d.mt.Form))
+	}
 	if !d.mtSlotValid(s) {
 		return Command{}, newParseError([]byte(s.Wire()), "MT: slot must be memory (001-099) or PMS (P1L-P9U); 5xx/EMG rejected by project policy pending M5a, \"000\"/invalid rejected per reference")
 	}
@@ -172,10 +223,11 @@ func (d Dialect) BuildMTRead(s Slot) (Command, error) {
 	return newCommand(frame), nil
 }
 
-// ParseMTAnswer strictly parses the SHAPE of an MT Set/Answer frame
-// (prefix, slot, display digit, terminator, and the 0-12 byte tag-length
-// bound) but — unlike BuildMTSet — does NOT re-validate the tag body's
-// charset.
+// ParseMTAnswer strictly parses the SHAPE of a SHORT-FORM MT Set/Answer
+// frame (prefix, slot, display digit, terminator, and the length window
+// this dialect's own tag width derives — see mtShortAnswerMax) but — unlike
+// BuildMTSet — does NOT re-validate the tag body's charset. It refuses any
+// dialect that is not MTFormShort.
 //
 // This mirrors ParseIDAnswer's precedent (id.go): the reference documents
 // the tag charset only as "ASCII code" and explicitly flags it "TBD at
@@ -220,8 +272,15 @@ func (d Dialect) BuildMTRead(s Slot) (Command, error) {
 // for the mirrored normalisation on the JSON-file side (a hand-edited or
 // pre-fix file may still carry an old padded tag).
 func (d Dialect) ParseMTAnswer(frame []byte) (Slot, bool, string, error) {
-	if len(frame) < mtAnswerMinLen || len(frame) > mtAnswerMaxLen {
-		return Slot{}, false, "", newParseError(frame, fmt.Sprintf("MT answer must be %d-%d bytes", mtAnswerMinLen, mtAnswerMaxLen))
+	// FORM FIRST, symmetric with BuildMTSet: this parser reads ONE layout,
+	// and a combined-form frame would yield data from the wrong offsets
+	// rather than an error, since it shares this one's prefix and
+	// terminator.
+	if d.mt.Form != MTFormShort {
+		return Slot{}, false, "", newParseError(frame, fmt.Sprintf("MT: short-form answer parsed on a %v dialect — use the combined-form API", d.mt.Form))
+	}
+	if len(frame) < mtAnswerMinLen || len(frame) > d.mtShortAnswerMax() {
+		return Slot{}, false, "", newParseError(frame, fmt.Sprintf("MT answer must be %d-%d bytes", mtAnswerMinLen, d.mtShortAnswerMax()))
 	}
 	if frame[0] != 'M' || frame[1] != 'T' {
 		return Slot{}, false, "", newParseError(frame, "MT answer missing \"MT\" prefix")

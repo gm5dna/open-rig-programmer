@@ -176,7 +176,9 @@ func (d Dialect) validMWCommand(frame []byte) bool {
 // Read: exactly mtReadLen (6) bytes, with a slot readableSlot accepts (the
 // same rule BuildMTRead enforces).
 //
-// Set: mtAnswerMinLen-mtAnswerMaxLen (7-19) bytes, "MT" prefix, a slot
+// Set: mtAnswerMinLen to d.mtShortAnswerMax() bytes — the floor is the
+// frame grammar's, the ceiling THIS dialect's own tag width plus that floor
+// (7-19 for the FT-710, 7-13 for a 6-byte-tag family) — "MT" prefix, a slot
 // mtSlotValid accepts (memory/PMS only — the same write-direction policy
 // BuildMTSet enforces), a valid display digit, and a tag body that passes
 // d.validMTTag — the same printable-ASCII-excluding-';' charset AND
@@ -198,7 +200,7 @@ func (d Dialect) validMTCommand(frame []byte) bool {
 		return d.readableSlot(slot)
 	}
 
-	if len(frame) < mtAnswerMinLen || len(frame) > mtAnswerMaxLen {
+	if len(frame) < mtAnswerMinLen || len(frame) > d.mtShortAnswerMax() {
 		return false
 	}
 	if frame[0] != 'M' || frame[1] != 'T' {
