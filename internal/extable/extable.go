@@ -164,10 +164,6 @@ func parseRecord(p Profile, rec []string) (Row, error) {
 // p1,p2,p3,observed_read_width,observed_read_shape.
 const observedColumns = 5
 
-// maxObservedWidth is the largest P4 width any EX item can have (the
-// 12-byte Text items). A wider observation means a malformed artefact.
-const maxObservedWidth = 12
-
 // Observed is one address's M8c hardware READ observation: the P4 wire
 // width the radio answered with, and that answer's shape class
 // ("numeric", "signed" or "text").
@@ -188,12 +184,22 @@ type Observed struct {
 // and are skipped, as in ParseCSV.
 //
 // Parsing is strict for privacy as much as correctness: each address
-// component must be exactly two digits, each width an integer in
-// 1..maxObservedWidth, and each shape one of the three known classes, so a
-// row cannot carry free text. Duplicates are rejected. Error text names the
-// row and address only — never another field — so a malformed artefact
-// cannot leak captured content through a build log.
-func ParseObservedCSV(data []byte) (map[string]Observed, error) {
+// component must be exactly two digits, each width an integer in 1..the
+// profile's MaxObservedWidth, and each shape one of the three known
+// classes, so a row cannot carry free text. Duplicates are rejected. Error
+// text names the row and address only — never another field — so a
+// malformed artefact cannot leak captured content through a build log.
+//
+// That bound is hardware-evidence policy and is deliberately independent of
+// the manual-schema widths in MinDigits/MaxDigits/TextWidth — the two
+// categories can disagree, as table2-corrections.csv records.
+func ParseObservedCSV(p Profile, data []byte) (map[string]Observed, error) {
+	// Same self-validation as ParseCSV: nothing forces a caller through the
+	// registry, and an unvalidated zero MaxObservedWidth would refuse every
+	// width rather than the right ones.
+	if err := p.Validate(); err != nil {
+		return nil, err
+	}
 	r := csv.NewReader(bytes.NewReader(data))
 	r.Comment = '#'
 	r.FieldsPerRecord = observedColumns
@@ -211,8 +217,8 @@ func ParseObservedCSV(data []byte) (map[string]Observed, error) {
 		}
 		addr := rec[0] + rec[1] + rec[2]
 		width, err := strconv.Atoi(rec[3])
-		if err != nil || width < 1 || width > maxObservedWidth {
-			return nil, fmt.Errorf("extable: observation row %d (%s): observed_read_width must be an integer in 1..%d", i+1, addr, maxObservedWidth)
+		if err != nil || width < 1 || width > p.MaxObservedWidth {
+			return nil, fmt.Errorf("extable: observation row %d (%s): observed_read_width must be an integer in 1..%d", i+1, addr, p.MaxObservedWidth)
 		}
 		switch rec[4] {
 		case "numeric", "signed", "text":

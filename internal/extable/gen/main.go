@@ -47,7 +47,7 @@ func main() {
 		log.Fatalf("reading %s: %v", *observedPath, err)
 	}
 
-	observed, err := extable.ParseObservedCSV(observedData)
+	observed, err := extable.ParseObservedCSV(extable.FT710Profile(), observedData)
 	if err != nil {
 		log.Fatalf("parsing %s: %v", *observedPath, err)
 	}

@@ -213,7 +213,7 @@ func TestRenderGo_Deterministic(t *testing.T) {
 const observedBody = "01,01,01,3,signed\n01,03,21,3,numeric\n"
 
 func TestParseObservedCSV_Valid(t *testing.T) {
-	got, err := ParseObservedCSV([]byte("# provenance comment\n" + observedBody))
+	got, err := ParseObservedCSV(FT710Profile(), []byte("# provenance comment\n"+observedBody))
 	if err != nil {
 		t.Fatalf("ParseObservedCSV: %v", err)
 	}
@@ -251,7 +251,7 @@ func TestParseObservedCSV_Strictness(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := ParseObservedCSV([]byte(tc.csv)); err == nil {
+			if _, err := ParseObservedCSV(FT710Profile(), []byte(tc.csv)); err == nil {
 				t.Error("ParseObservedCSV accepted a malformed artefact; want an error")
 			}
 		})
@@ -383,5 +383,43 @@ func TestParseCSV_AddressComponentRange(t *testing.T) {
 func TestParseCSV_RefusesInvalidProfile(t *testing.T) {
 	if _, err := ParseCSV(Profile{}, []byte(goodRow)); err == nil {
 		t.Error("ParseCSV accepted a zero Profile; want a validation error")
+	}
+}
+
+// TestParseObservedCSV_CeilingComesFromProfile is the test that kills
+// revision 1's derived ceiling. The fixture's MaxDigits is 6 and its
+// TextWidth is 8, so a ceiling still computed as max(MaxDigits, TextWidth)
+// would be 8 and would wrongly REJECT a width of 9. The rejection case
+// alone passes under either implementation and proves nothing — the pair is
+// the point.
+func TestParseObservedCSV_CeilingComesFromProfile(t *testing.T) {
+	cases := []struct {
+		name    string
+		profile Profile
+		csv     string
+		wantErr bool
+	}{
+		{"width 9 under the fixture's ceiling of 9", fixtureRequired, "01,01,01,9,numeric\n", false},
+		{"width 10 above the fixture's ceiling of 9", fixtureRequired, "01,01,01,10,numeric\n", true},
+		{"width 10 under the FT-710's ceiling of 12", FT710Profile(), "01,01,01,10,numeric\n", false},
+		{"width 13 above the FT-710's ceiling of 12", FT710Profile(), "01,01,01,13,numeric\n", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := ParseObservedCSV(tc.profile, []byte(tc.csv))
+			if tc.wantErr && err == nil {
+				t.Error("ParseObservedCSV accepted a width above its profile's ceiling; want an error")
+			}
+			if !tc.wantErr && err != nil {
+				t.Errorf("ParseObservedCSV rejected a width its profile permits: %v", err)
+			}
+		})
+	}
+}
+
+// TestParseObservedCSV_RefusesInvalidProfile mirrors ParseCSV's pin.
+func TestParseObservedCSV_RefusesInvalidProfile(t *testing.T) {
+	if _, err := ParseObservedCSV(Profile{}, []byte(observedBody)); err == nil {
+		t.Error("ParseObservedCSV accepted a zero Profile; want a validation error")
 	}
 }
