@@ -568,11 +568,15 @@ func TestImportCHIRP_Fixture(t *testing.T) {
 			line:     20,
 			wantSlot: "017",
 			check: func(t *testing.T, d *codeplug.ChannelData) {
-				if d.Tag != "LONGNAMEEXC" && d.Tag != "LONGNAMEEXCE" {
-					t.Errorf("Tag = %q, want a 12-byte-or-fewer truncation of LONGNAMEEXCEEDS12", d.Tag)
-				}
-				if len(d.Tag) > 12 {
-					t.Errorf("Tag = %q is %d bytes, want <=12", d.Tag, len(d.Tag))
+				// "LONGNAMEEXCEEDS12" is 17 bytes; ft710LikeCapabilities'
+				// TagLen is 12, so the only correct truncation is the
+				// first 12 bytes, "LONGNAMEEXCE". This exact assertion
+				// (FIX C2, m9c1 registration-gate dispatch C) replaces a
+				// looser one that also accepted an 11-byte truncation,
+				// which would have let an off-by-one bug through
+				// undetected.
+				if d.Tag != "LONGNAMEEXCE" {
+					t.Errorf("Tag = %q, want exactly \"LONGNAMEEXCE\" (the first 12 bytes of LONGNAMEEXCEEDS12)", d.Tag)
 				}
 			},
 			want: []wantEntry{{20, "Name", "approximated", false}},
