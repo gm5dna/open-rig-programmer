@@ -249,18 +249,45 @@ func isTwoDigits(s string) bool {
 // intentionally NOT emitted; each item's manual line is preserved as a
 // trailing comment.
 //
-// The join is set-equal in BOTH directions: an inventory row with no
-// observation, or an observation for an address the inventory does not
-// have, is an error. Neither is a case to paper over with a zero value —
-// the artefact is meant to be a complete sweep of exactly this inventory.
+// The profile declares which of two observation regimes applies. Under
+// ObservationsRequired the join is set-equal in BOTH directions: an
+// inventory row with no observation, or an observation for an address the
+// inventory does not have, is an error. Neither is a case to paper over
+// with a zero value — the artefact is meant to be a complete sweep of
+// exactly this inventory. Under ObservationsAbsent no hardware exists for
+// the model, so the observation map must be EMPTY rather than partial, and
+// every row renders the absence sentinels ObservedReadWidth 0 and
+// ObservedReadShape "" that core/cat's EXItem already documents.
+//
+// Both regimes compare the two SUPPLIED sets against each other only, so
+// neither can see a jointly truncated pair of sources. The profile's
+// ExpectedRows is therefore checked first: the inventory must carry exactly
+// that many rows, which is what makes deleting the same address from both
+// CSVs — or emptying both — a refusal rather than a smaller happy render.
 func RenderGo(p Profile, rows []Row, observed map[string]Observed) ([]byte, error) {
 	// Self-validation, as in both parsers: a caller with an unvalidated
 	// profile must get a refusal, not a plausible wrong file.
 	if err := p.Validate(); err != nil {
 		return nil, err
 	}
-	if len(observed) != len(rows) {
-		return nil, fmt.Errorf("extable: %d observations for %d inventory rows — the observation CSV must cover the inventory exactly", len(observed), len(rows))
+	// Completeness first. Neither regime below can detect a JOINTLY
+	// truncated pair of sources: RenderGo compares the two supplied sets
+	// against each other, so deleting the same address from both — or
+	// emptying both — would otherwise render happily.
+	if len(rows) != p.ExpectedRows {
+		return nil, fmt.Errorf("extable: profile %s: parsed %d inventory rows, want exactly %d — a source is incomplete", p.Model, len(rows), p.ExpectedRows)
+	}
+	switch p.Observations {
+	case ObservationsRequired:
+		if len(observed) != len(rows) {
+			return nil, fmt.Errorf("extable: profile %s: %d observations for %d inventory rows — the observation CSV must cover the inventory exactly", p.Model, len(observed), len(rows))
+		}
+	case ObservationsAbsent:
+		if len(observed) != 0 {
+			return nil, fmt.Errorf("extable: profile %s declares no hardware observations, but %d were supplied", p.Model, len(observed))
+		}
+	default:
+		return nil, fmt.Errorf("extable: profile %s: ObservationPolicy %v must be set explicitly", p.Model, p.Observations)
 	}
 	sorted := make([]Row, len(rows))
 	copy(sorted, rows)
@@ -304,9 +331,12 @@ func RenderGo(p Profile, rows []Row, observed map[string]Observed) ([]byte, erro
 	fmt.Fprintf(&buf, "var %s = []%sEXItem{\n", p.VarName, qual)
 	for _, r := range sorted {
 		addr := fmt.Sprintf("%02d%02d%02d", r.P1, r.P2, r.P3)
-		obs, ok := observed[addr]
-		if !ok {
-			return nil, fmt.Errorf("extable: no hardware observation for address %s", addr)
+		var obs Observed
+		if p.Observations == ObservationsRequired {
+			var ok bool
+			if obs, ok = observed[addr]; !ok {
+				return nil, fmt.Errorf("extable: no hardware observation for address %s", addr)
+			}
 		}
 		fmt.Fprintf(&buf,
 			"\t{Addr: %sEXAddress{P1: %d, P2: %d, P3: %d}, P1Label: %s, P2Label: %s, Name: %s, Digits: %d, Text: %t, ObservedReadWidth: %d, ObservedReadShape: %s}, // manual line %d\n",
