@@ -169,10 +169,35 @@ func TestSupportedModels_SortedNonEmpty(t *testing.T) {
 // app/uispec.go's grid legend all degrade to "" rather than failing).
 // This is the M9c registration precondition: adding a driver without
 // prose fails here rather than shipping.
+//
+// ok==true alone is not enough: a texts["SomeModel"] = radiotext.Text{}
+// entry — every field blank — satisfies radiotext.For's ok return just
+// as well as a properly populated one, which is exactly the silent-
+// blank-advisory outcome this test exists to prevent. So this also
+// requires a NAMED SUBSET of fields to be non-empty:
+// EraseProcedure, FirmwareGuidance, ProbeFirmwareNote. Deliberately not
+// the full set — ToneScanSkipVerification states what IS and is NOT
+// hardware-verified about Tone/Scan Skip preservation for this radio,
+// and for a model pinned at writeTrialsComplete=false (the next
+// milestone's FTdx10, at its expected first state) it legitimately has
+// nothing true to say yet; requiring it here would force either a false
+// hardware claim or a registration failure for a model correctly
+// awaiting its own M5b-equivalent trials.
 func TestEverySupportedModelHasRadiotext(t *testing.T) {
 	for _, model := range SupportedModels() {
-		if _, ok := radiotext.For(model); !ok {
+		text, ok := radiotext.For(model)
+		if !ok {
 			t.Errorf("radiotext.For(%q) = _, false; every model in SupportedModels() must have prose", model)
+			continue
+		}
+		if text.EraseProcedure == "" {
+			t.Errorf("radiotext.For(%q).EraseProcedure is empty; every model must have prose", model)
+		}
+		if text.FirmwareGuidance == "" {
+			t.Errorf("radiotext.For(%q).FirmwareGuidance is empty; every model must have prose", model)
+		}
+		if text.ProbeFirmwareNote == "" {
+			t.Errorf("radiotext.For(%q).ProbeFirmwareNote is empty; every model must have prose", model)
 		}
 	}
 }
