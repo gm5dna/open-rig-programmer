@@ -321,7 +321,7 @@ func validateChannelData(slot string, d ChannelData, caps spec.Capabilities) []I
 		})
 	}
 
-	if err := d.CTCSSTone.Valid(); err != nil {
+	if err := d.CTCSSTone.Valid(caps); err != nil {
 		issues = append(issues, Issue{
 			Slot: slot, Field: spec.FieldCTCSSTone, Severity: SeverityError,
 			Msg: fmt.Sprintf("slot %q: %v", slot, err),

@@ -483,6 +483,64 @@ func TestValidate_ShiftCTCSSVocabFromCaps(t *testing.T) {
 	})
 }
 
+// narrowToneChartCapabilities returns testCapabilities() with CTCSSTones
+// replaced by a single-entry chart (the standard chart's own first tone).
+// Deliberately narrower than spec.StandardCTCSSTones (which testCapabilities
+// otherwise uses in full) so a test can tell a genuinely caps-driven
+// CTCSSTone check apart from one still secretly comparing against
+// spec.StandardCTCSSTones/spec.ValidTone: the standard chart's LAST tone
+// (2541) is a value a hardcoded-standard-chart implementation would wrongly
+// accept here.
+func narrowToneChartCapabilities() spec.Capabilities {
+	caps := testCapabilities()
+	caps.CTCSSTones = []spec.Tone{670}
+	return caps
+}
+
+// TestValidate_CTCSSToneChartFromCaps proves the send gate's CTCSSTone
+// check (via ToneField.Valid) is driven by caps.CTCSSTones — THIS radio's
+// own chart — not the package-global spec.StandardCTCSSTones: a tone
+// standard-chart-valid but absent from a narrower radio's own chart is
+// rejected, a tone the narrower chart DOES have is accepted, and an empty
+// caps.CTCSSTones fails closed (rejects every Known tone) rather than
+// silently accepting everything. See FIX C1 (m9c1 registration-gate,
+// dispatch C): before this fix, ToneField.Valid consulted the global
+// spec.ValidTone regardless of caps, so a radio with a narrower chart than
+// the FT-710 could not be safely represented.
+func TestValidate_CTCSSToneChartFromCaps(t *testing.T) {
+	t.Run("tone present in this radio's own (narrower) chart is accepted", func(t *testing.T) {
+		cp := testBaselineCodeplug()
+		cp.Channels[0].Data.CTCSS = "ENC"
+		cp.Channels[0].Data.CTCSSTone = ToneField{State: Known, Value: spec.Tone(670)}
+		issues := Validate(cp, narrowToneChartCapabilities())
+		if hasIssue(issues, SeverityError, spec.FieldCTCSSTone, "001", "") {
+			t.Errorf("Validate() = %+v, want no CTCSSTone error for a tone in this radio's own chart", issues)
+		}
+	})
+
+	t.Run("tone in the standard chart but absent from this radio's narrower chart is rejected", func(t *testing.T) {
+		cp := testBaselineCodeplug()
+		cp.Channels[0].Data.CTCSS = "ENC"
+		cp.Channels[0].Data.CTCSSTone = ToneField{State: Known, Value: spec.Tone(2541)} // last standard-chart tone; not in the narrow chart
+		issues := Validate(cp, narrowToneChartCapabilities())
+		if !hasIssue(issues, SeverityError, spec.FieldCTCSSTone, "001", "CTCSS chart") {
+			t.Errorf("Validate() = %+v, want a CTCSSTone error for a tone outside this radio's own chart", issues)
+		}
+	})
+
+	t.Run("empty caps.CTCSSTones fails closed rather than accepting every tone", func(t *testing.T) {
+		cp := testBaselineCodeplug()
+		cp.Channels[0].Data.CTCSS = "ENC"
+		cp.Channels[0].Data.CTCSSTone = ToneField{State: Known, Value: spec.Tone(670)}
+		caps := testCapabilities()
+		caps.CTCSSTones = nil
+		issues := Validate(cp, caps)
+		if !hasIssue(issues, SeverityError, spec.FieldCTCSSTone, "001", "CTCSS chart") {
+			t.Errorf("Validate() = %+v, want a CTCSSTone error when caps.CTCSSTones is empty (fail closed, not fail open)", issues)
+		}
+	})
+}
+
 // TestHasErrors covers the HasErrors convenience: true only when at least
 // one Issue is SeverityError.
 func TestHasErrors(t *testing.T) {
