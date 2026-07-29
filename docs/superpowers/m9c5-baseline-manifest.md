@@ -460,12 +460,16 @@ The MILESTONE-REVIEW commits after `80f95ee` — the six-fix wave
 paste regression test — are NOT documentation-only: the wave changes
 production frontend code, Go comments and tests. So the capture does
 not speak for the branch tip, and this manifest does not claim it
-does. What covers those commits instead is their own evidence: the
-full gate re-run green at each (regen idempotence ×2, svelte-check,
-the frontend suite, `go test ./...` all packages, gofmt silent, and
-the four-path golden gate at exit 0 — no golden moved), plus the two
-adjudicated milestone-review rounds that demanded and then re-examined
-them. The byte-identity claim this manifest supports is therefore
+does. What covers those commits instead is their own evidence, stated
+PER COMMIT: the full gate ran green at the wave commit `bc3b6f1`
+(regen idempotence ×2, svelte-check, the frontend suite,
+`go test ./...` all packages, gofmt silent, and the four-path golden
+gate at exit 0 — no golden moved), and the same full set — not
+inherited, re-run whole — ran green again at the follow-up `8721a91`;
+plus the two adjudicated milestone-review rounds that demanded and
+then re-examined them. (The commit adding this sentence touches only
+this manifest, so that evidence stands under the invariant above.)
+The byte-identity claim this manifest supports is therefore
 scoped to the task commits, `6b84335` to `f64f688`; the review commits
 are adjudicated deltas ON TOP of that proven base, not part of it.
 
