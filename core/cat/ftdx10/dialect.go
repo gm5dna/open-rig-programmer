@@ -69,6 +69,10 @@ var dialect = cat.MustNewDialect(cat.DialectConfig{
 	// from every FTdx10 legend; parsers must accept the placeholder.
 	Slots: cat.SlotSpace{
 		MemoryLo: 1, MemoryHi: 99,
+		// ASSUMED bounds — the FTdx10 legends say only "5xx (5MHz
+		// BAND)"; 501..599 (start, ceiling and count) is interpretation
+		// inherited from the FT-710, whose own reference marks exactly
+		// this numbering unverified. Register entry 5.
 		SixtyLo: 501, SixtyHi: 599,
 		PMSPairs:      9,
 		EmergencyWire: "EMG",

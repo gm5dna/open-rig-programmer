@@ -2,7 +2,8 @@
 
 // Package dialecttest_test drives the conformance suite from a package that
 // can see nothing but core/cat's EXPORTED API — exactly the position
-// core/cat/ftdx10 will be in at M9c-4, and the reason this suite exists at
+// core/cat/ftdx10 occupies since M9c-4 (its dialect_test.go runs this
+// suite over the real FTdx10 dialect), and the reason this suite exists at
 // all: allTestDialects() is an in-package fixture, unreachable from any
 // model package without an import cycle.
 //
@@ -20,10 +21,12 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/cat/dialecttest"
 )
 
-// TestRun_FT710 runs the suite over the only real dialect that exists today.
-// It is the short form's half of the conformance evidence, and it is what
-// makes the combined half below meaningful: a suite that passed only on the
-// form it was written against would prove nothing about the seam.
+// TestRun_FT710 runs the suite over the built-in reference dialect. (The
+// other real dialect, core/cat/ftdx10's, runs this suite from its own
+// tests — since M9c-4 "the only real dialect" is no longer true.) It is
+// the short form's half of the conformance evidence, and it is what makes
+// the combined half below meaningful: a suite that passed only on the form
+// it was written against would prove nothing about the seam.
 func TestRun_FT710(t *testing.T) {
 	dialecttest.Run(t, cat.FT710)
 }

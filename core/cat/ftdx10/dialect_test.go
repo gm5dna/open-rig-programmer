@@ -274,6 +274,13 @@ func TestDifferencePinMTForm(t *testing.T) {
 // ANSWER for this radio, which the manual's own Set/Answer chart runs to
 // (layout 1230-1251: the 28 shared positions, P11 at 28, a 12-byte P12 tag at
 // 29-40, ';' at 41).
+//
+// EXACTNESS IS ASSUMED, NOT CHART-PROVEN (M9c-4 milestone review; register
+// entry 6 in doc.go): the grid draws the MAXIMAL frame, and the FT-710
+// precedent makes a variable-width answer live. What this pin proves is
+// that the DIALECT declares the exact form core/cat's combined seam
+// currently implements; Stage R's short-tag answer capture decides whether
+// the radio agrees, and the recorded contingency is a 30..41 window.
 func TestDifferencePinMTAnswerBounds(t *testing.T) {
 	min, max, err := ftdx10.Dialect().MTAnswerBounds()
 	if err != nil {

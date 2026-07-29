@@ -4,8 +4,9 @@
 #   Table 2 "MENU Chart".
 # Method: LAYOUT-TEXT-LED, PDF-CHECKED. The working text was the layout
 #   extraction docs/fixtures-private/manuals/ftdx10_layout.txt, where Table
-#   2 spans lines 652-899 (chart pages 9-12 of the manual, contiguous page
-#   footers -- no dropped page); the rendered PDF's ruled cells (PDF pages
+#   2 spans lines 652-899 (printed folios 10-12 of the manual, contiguous
+#   page footers -- no dropped page; the M9c-4 review corrected this line's
+#   original "pages 9-12"); the rendered PDF's ruled cells (PDF pages
 #   11-13) arbitrated wherever the layout was unclear. A SECOND,
 #   PDF-PRIMARY transcription of the same chart is derived independently at
 #   M9c-4 task 4 and reconciled against this one and against the
@@ -21,8 +22,14 @@
 #   p2_label     subgroup label (chart P2 column), verbatim
 #   name         chart Function column, verbatim
 #   p4           chart P4 parameter-description column (audit trail only --
-#                it is not emitted into the generated Go, and it is
-#                single-sourced HERE: transcription B does not carry it)
+#                it is not emitted into the generated Go, and it is EMITTED
+#                only from this transcription: B delivered a bonus verbatim
+#                P4 of its own, kept as extra audit and deliberately NOT
+#                cross-bound -- the two transcriptions' glyph conventions
+#                differ, so binding P4 would compare extractors, not the
+#                chart; see crosscheck_test.go adjudication (c). The M9c-4
+#                review corrected this note's original claim that B does
+#                not carry P4.)
 #   digits       chart Digits column (1..4; 12 for the single text item)
 #   text         true only for the single text item, MY CALL.
 #   manual_line  line in ftdx10_layout.txt this row was transcribed from --

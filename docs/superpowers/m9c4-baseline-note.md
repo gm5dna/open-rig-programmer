@@ -232,3 +232,17 @@ invokes it (no CLI path selects the FTdx10 yet), so these hashes say
 nothing whatever about it; or any `-race` result — `go test -race` was
 **not** run in this gate, which ran the full non-race
 `go test ./...` in the foreground instead, per the plan's Task 8.
+
+## Evidence addenda (M9c-4 milestone review fix wave)
+
+- **The gate-vs-tip invariant, stated:** the byte-identity capture was
+  taken at the last CODE commit of the branch; every commit after a
+  capture must be documentation-only for the capture to speak for the
+  branch tip. That held here (the only post-capture commits are this
+  note and the review fix wave, all prose), and it is the invariant —
+  not any particular hash — that a merge reviewer should check.
+- **The ledger companion's hash, recorded** (task 2's commit recorded
+  the CSV's only): `group-ledger.md` SHA-256
+  `367c369ce2c62f6dd6636957ddbb7e3ae8426452831316e6940e347cc38643f7`,
+  unchanged since its placement commit `99976bc` (verified by
+  `git log --follow` — one touching commit).

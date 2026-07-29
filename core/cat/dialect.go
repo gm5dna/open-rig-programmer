@@ -136,7 +136,10 @@ func (d Dialect) ModeByName(name string) (Mode, bool) {
 	return m, ok
 }
 
-// FT710 is the Yaesu FT-710 dialect: the only configured one that exists.
+// FT710 is the Yaesu FT-710 dialect — the built-in reference dialect, and
+// the only one configured as a package literal. Since M9c-4 it is no longer
+// the only real dialect: core/cat/ftdx10 builds the FTdx10's through
+// MustNewDialect, exactly as A1 intended.
 var FT710 = Dialect{
 	catID:     "0800",
 	modeNames: modeNames,

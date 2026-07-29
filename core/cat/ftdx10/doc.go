@@ -77,7 +77,7 @@
 //
 // # The ASSUMED register
 //
-// Four members of this dialect are NOT FTdx10-manual facts. They are
+// Six members of this dialect are NOT FTdx10-manual facts. They are
 // inherited or structurally required, they are marked ASSUMED at the point
 // of use, and the identity-pin tests that compare this dialect with the
 // FT-710's therefore compare tables that embed them. Each is listed here so
@@ -141,6 +141,34 @@
 //     radio has never had written to. The P6 byte of that answer is what this
 //     radio says for "no mode". If it is not '0', this member is wrong rather
 //     than merely unattested, and the real byte replaces it.
+//
+//   - SlotSpace.SixtyLo/SixtyHi = 501/599 (dialect.go). The 60 m bank's
+//     NUMBERING. Every FTdx10 slot legend says only "5xx (5MHz BAND)"
+//     (layout 1131-1133, 1184-1185): the start at 501 rather than 500, the
+//     ceiling at 599 and therefore the channel count are interpretation
+//     inherited from the FT-710 — whose own reference marks exactly this
+//     numbering unverified (core/cat/slot.go's 60 m note). Added to this
+//     register by the M9c-4 milestone review (both reviewers): it was the
+//     fifth assumption travelling unregistered.
+//     STAGE R LIFTS IT WITH: an MR enumeration of the 5xx range INCLUDING
+//     500 — which wire numbers answer as populated-or-empty channels and
+//     which answer "?;" fixes the real bounds. A radio accepting 500
+//     moves SixtyLo; one refusing 599 moves SixtyHi.
+//
+//   - The combined MT answer's EXACT length (consumed here as
+//     MTAnswerBounds() = (41, 41)). Not a field of this dialect but an
+//     assumption it inherits from core/cat's combined form
+//     (mtcombined.go's own ASSUMED-until-Stage-R note): the manual's grid
+//     draws the maximal frame, and the FT-710 precedent (hardware
+//     accepting short MT Sets against a maximal grid) makes a
+//     variable-width ANSWER live. The golden vectors are Set-direction
+//     frames and do not establish answer width. Added to this register by
+//     the M9c-4 milestone review (Codex): the provenance ledger's
+//     completeness claim was false without it.
+//     STAGE R LIFTS IT WITH: one MT READ of a channel carrying a tag
+//     SHORTER than 12 characters, the raw answer captured whole. A 41-byte
+//     answer confirms exactness; anything shorter converts the parser and
+//     gate to the recorded 30..41 window contingency.
 //
 // # Reused-command verification
 //
