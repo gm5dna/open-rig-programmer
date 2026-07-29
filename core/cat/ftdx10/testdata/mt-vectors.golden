@@ -1,0 +1,53 @@
+# MT (MEMORY CHANNEL WRITE/TAG) - Set-direction combined-record frames
+# Source: Yaesu FTDX10 CAT Operation Reference Manual, revision 2308-F.
+#   Position chart: printed page 16 (PDF page 17), block "MT MEMORY CHANNEL WRITE/TAG".
+#   CHART USED FOR LAYOUT: the ANSWER chart (printed cleanly, positions 1-50 in
+#   five numbered rows). The Set chart on the same page was cross-checked at
+#   300 dpi and is byte-for-byte identical in layout; it is the Set chart that
+#   interleaves with the parameter legend in normal-size rendering.
+#   P7 value taken from the legend line "P7  Set: 0: (Fixed) / Read: 0: VFO  1: Memory"
+#   -> Set direction fixes P7 = '0'.
+# Derived 29/07/2026 by hand from the position chart and its parameter legend only.
+# NO code, no generator, no other file and no other document was consulted.
+#
+# Frame length: 41 bytes. Field map read off the chart's numbered positions:
+#   1-2    "MT"
+#   3-5    P1  memory channel, 3 chars      (legend: 001-099, P1L-P9U, 5xx, EMG)
+#   6-14   P2  frequency in Hz, 9 digits    (legend: "Frequency (Hz)")
+#   15-19  P3  clarifier direction (1) + clarifier offset (4)
+#              (legend: "+: Plus Shift, -: Minus Shift" / "Offset: 0000 - 9990 (Hz)")
+#   20     P4  0: RX CLAR "OFF"  1: RX CLAR "ON"
+#   21     P5  0: TX CLAR "OFF"  1: TX CLAR "ON"
+#   22     P6  MODE nibble (1: LSB  2: USB  3: CW-U  4: FM  5: AM  6: RTTY-L
+#              7: CW-L  8: DATA-L  9: RTTY-U  A: DATA-FM  B: FM-N  C: DATA-U
+#              D: AM-N  E: PSK  F: DATA-FM-N)
+#   23     P7  Set direction: '0' (Fixed)
+#   24     P8  0: CTCSS "OFF"  1: CTCSS ENC/DEC  2: CTCSS ENC
+#   25-26  P9  "00" (Fixed)  <- two positions
+#   27     P10 0: Simplex  1: Plus Shift  2: Minus Shift
+#   28     P11 '0' (Fixed)
+#   29-40  P12 TAG characters, 12 positions (legend: "up to 12 characters (ASCII)")
+#   41     ";" terminator
+#
+# PADDING BYTE: the TAG field P12 is padded to its full printed width of 12
+#   positions with ASCII SPACE, 0x20. The manual states only "TAG Characters
+#   (up to 12 characters) (ASCII)"; it does NOT state a pad byte anywhere.
+#   THE SPACE PAD IS AN INHERITED ASSUMPTION, NOT MANUAL-DOCUMENTED.
+#   (The nearest manual text, printed page 4, concerns inapplicable parameters:
+#    "the parameter digits should be filled using any character except the ASCII
+#    control codes (00 to 1Fh) and the terminator (;)" - it does not name a pad
+#    byte for a short TAG.)
+#
+# Hardware status: UNVERIFIED. No frame here has been sent to or captured from a
+#   real FTDX10.
+#
+# Radio values chosen: 7.100000 MHz (40 m phone), LSB, simplex, no clarifier,
+#   CTCSS off - identical across all three so the only difference is the TAG field.
+# TAG payload strings are SYNTHETIC placeholders picked by the author to exercise
+#   the field widths; they are not derived from the manual and are deliberately
+#   not real amateur callsigns. "GB3TST" is an invented test string.
+# Trailing SPACE characters before the ';' are significant frame content.
+# Format: name<TAB>frame
+mt_ch001_7m100_lsb_tag_full12	MT001007100000+0000001000000SCOTLAND-40M;
+mt_ch017_7m100_lsb_tag_short_pad_space	MT017007100000+0000001000000GB3TST      ;
+mt_ch099_7m100_lsb_tag_cleared_all_pad	MT099007100000+0000001000000            ;

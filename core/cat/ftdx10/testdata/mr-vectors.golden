@@ -1,0 +1,44 @@
+# MR (MEMORY CHANNEL READ) - one Read request, one Answer
+# Source: Yaesu FTDX10 CAT Operation Reference Manual, revision 2308-F.
+#   Position chart: printed page 16 (PDF page 17), block "MR MEMORY CHANNEL READ".
+#   The Set row of that chart is printed empty (Control Command List, printed
+#   page 5: MR Set=X, Read=O, Ans.=O), so only Read and Answer exist.
+# Derived 29/07/2026 by hand from the position chart and its parameter legend only.
+# NO code, no generator, no other file and no other document was consulted.
+#
+# READ request - 6 bytes. Chart row: M R P0 P0 P0 ;
+#   1-2  "MR"
+#   3-5  P0  memory channel, 3 chars (legend: 001-099, P1L-P9U, 5xx, EMG)
+#   6    ";" terminator
+#
+# ANSWER - 28 bytes. Field map read off the chart's numbered positions:
+#   1-2    "MR"
+#   3-5    P1  memory channel, 3 chars
+#   6-14   P2  frequency in Hz, 9 digits
+#   15-19  P3  clarifier direction (1) + clarifier offset (4)
+#   20     P4  0: RX CLAR "OFF"  1: RX CLAR "ON"
+#   21     P5  0: TX CLAR "OFF"  1: TX CLAR "ON"
+#   22     P6  MODE nibble (1: LSB here)
+#   23     P7  READ-DIRECTION VOCABULARY: 0: VFO  1: Memory  -> '1' (Memory)
+#   24     P8  0: CTCSS "OFF"  1: CTCSS ENC/DEC  2: CTCSS ENC
+#   25-26  P9  "00" (Fixed)
+#   27     P10 0: Simplex  1: Plus Shift  2: Minus Shift
+#   28     ";" terminator
+#
+# ASSUMPTIONS in the Answer vector:
+#   (i)  The MR legend defines P0 (the channel) but never defines P1, which is
+#        what the Answer chart puts at positions 3-5. P1 = memory channel is
+#        taken from the MT legend on the SAME printed page, which reads
+#        "P0/1  001-099 (Memory Channel), ...". INHERITED ASSUMPTION.
+#   (ii) P7='1' (Memory): the legend lists both 0: VFO and 1: Memory but does not
+#        say which a memory-read answer carries. '1' assumed because the record
+#        being reported is a memory channel. INHERITED ASSUMPTION.
+#   (iii) The P2..P10 payload values are illustrative (they mirror the MT/MW
+#        vectors: 7.100000 MHz LSB simplex, no clarifier, CTCSS off). They are
+#        not a manual-documented claim about any particular radio's state.
+#
+# Hardware status: UNVERIFIED. Neither frame has been sent to or captured from a
+#   real FTDX10.
+# Format: name<TAB>frame
+mr_read_ch001	MR001;
+mr_answer_ch001_7m100_lsb_memory	MR001007100000+000000110000;
