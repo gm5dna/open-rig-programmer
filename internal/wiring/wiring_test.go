@@ -81,31 +81,86 @@ func TestNewRealDriver_HWVerifiedWriteSet(t *testing.T) {
 	}
 }
 
-// TestOpenFakeSessionFor_DefaultModel exercises the fake wiring path
-// end-to-end at DefaultModel against the default (ImageUK) fakeradio
-// image, confirming it yields a working driver.Session and that closeAll
-// releases both the session and the fakeradio cleanly.
-func TestOpenFakeSessionFor_DefaultModel(t *testing.T) {
+// TestOpenFakeSessionFor_EveryRegisteredModel exercises the fake wiring
+// path end-to-end for EVERY model SupportedModels lists, one subtest each
+// (M9c-5 E5: the table-driven rewrite of the old DefaultModel-only test).
+// It closes the MISMATCHED-PAIRING gap the single-model version could not
+// even express: fakeDrivers pairs a simulated-profile DRIVER with a fake
+// RIG per model, TestRealAndFakeDriverTablesAgree checks only that the
+// keys line up, and nothing before this test checked that the two halves
+// of an entry describe the SAME radio. A second entry that paired one
+// model's driver with another's rig would satisfy every other test in
+// this file.
+//
+// The identity check is what catches it: the session's Identity().CATID
+// is what the RIG answered when the DRIVER probed it, and it must equal
+// the CAT ID that model's own driver declares in its static capabilities.
+// A crossed pairing answers the wrong one (or fails the probe outright).
+// Capabilities().Model is checked alongside it so a session cannot merely
+// be well-formed — it must be THIS model's.
+//
+// Structure over content, deliberately: today SupportedModels() returns
+// one row, so this test's value is that the second registered model gets
+// this coverage by existing, with no new test to write.
+func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
+	models := SupportedModels()
+	if len(models) == 0 {
+		t.Fatal("SupportedModels() is empty — this table would run zero cases and pass vacuously")
+	}
+	for _, model := range models {
+		t.Run(model, func(t *testing.T) {
+			caps, err := StaticCapabilities(model)
+			if err != nil {
+				t.Fatalf("StaticCapabilities(%q): unexpected error: %v", model, err)
+			}
+			if caps.CATID == "" {
+				t.Fatalf("StaticCapabilities(%q).CATID is empty — the identity check below would pass vacuously", model)
+			}
+
+			sess, closeAll, err := OpenFakeSessionFor(testCtx(t), model)
+			if err != nil {
+				t.Fatalf("OpenFakeSessionFor(%q): unexpected error: %v", model, err)
+			}
+			if sess == nil {
+				t.Fatal("OpenFakeSessionFor: nil session with nil error")
+			}
+			if got := sess.Capabilities().Model; got != model {
+				t.Errorf("session Capabilities().Model = %q, want %q", got, model)
+			}
+			if got := sess.Identity().CATID; got != caps.CATID {
+				t.Errorf("Identity().CATID = %q, want %q — the fake rig answering this session is not %s's own", got, caps.CATID, model)
+			}
+			if err := closeAll(); err != nil {
+				t.Errorf("closeAll: unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// TestOpenFakeSessionFor_DefaultModelDefaultImage keeps the one assertion
+// the table above cannot carry: the DEFAULT fakeradio image is ImageUK,
+// HW-CONFIRMED 2026-07-13 to have no 5xx bank, so an FT-710 fake session
+// opened with no FakeSessionOpts reports region "no-60m". That is a fact
+// about internal/fakeradio's FT-710 simulator and its default image, not
+// a property every registered model has (driver.RegionReporter is an
+// OPTIONAL capability), so it stays model-specific rather than being
+// forced into the table.
+func TestOpenFakeSessionFor_DefaultModelDefaultImage(t *testing.T) {
 	sess, closeAll, err := OpenFakeSessionFor(testCtx(t), DefaultModel)
 	if err != nil {
 		t.Fatalf("OpenFakeSessionFor: unexpected error: %v", err)
 	}
-	if sess == nil {
-		t.Fatal("OpenFakeSessionFor: nil session with nil error")
-	}
-	id := sess.Identity()
-	if id.CATID != "0800" {
-		t.Errorf("Identity().CATID = %q, want %q", id.CATID, "0800")
-	}
+	t.Cleanup(func() {
+		if err := closeAll(); err != nil {
+			t.Errorf("closeAll: unexpected error: %v", err)
+		}
+	})
 	region, ok := sess.(driver.RegionReporter)
 	if !ok {
 		t.Fatal("session does not implement driver.RegionReporter — sanity check failed")
 	}
 	if got := region.Region(); got != "no-60m" {
 		t.Errorf("Region() = %q, want %q (default fakeradio image is ImageUK, HW-CONFIRMED 2026-07-13 to have no 5xx bank)", got, "no-60m")
-	}
-	if err := closeAll(); err != nil {
-		t.Errorf("closeAll: unexpected error: %v", err)
 	}
 }
 
