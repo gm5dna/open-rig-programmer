@@ -43,7 +43,7 @@ func TestEngine_Init_SendsAI0AndDrains(t *testing.T) {
 func TestEngine_Init_WritesExactlyAI0(t *testing.T) {
 	port := newStubPort("") // no replies at all: AI0's error window and the drain both just see silence
 	t.Cleanup(func() { _ = port.Close() })
-	eng, err := NewEngine(port, cat.FT710.AllowedCommand)
+	eng, err := NewEngine(port, cat.FT710)
 	if err != nil {
 		t.Fatalf("NewEngine: unexpected error: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestEngine_Close_NoGoroutineLeak(t *testing.T) {
 	const n = 25
 	for i := 0; i < n; i++ {
 		r := fakeradio.New()
-		eng, err := NewEngine(r.Port(), cat.FT710.AllowedCommand)
+		eng, err := NewEngine(r.Port(), cat.FT710)
 		if err != nil {
 			t.Fatalf("iteration %d: NewEngine: unexpected error: %v", i, err)
 		}
@@ -280,10 +280,10 @@ func newStubPort(reply string) *stubPort {
 // nothing means the data is gone, not slow.
 //
 // newStubPort is deliberately left ungated rather than replaced:
-// TestNewEngine_NilAllowFuncIsRefusedBeforeReaderStarts detects a wrongly
-// started reader goroutine precisely BY its consuming those bytes with no
-// write, so gating it would make that guard pass whether or not the
-// goroutine started.
+// TestNewEngine_UnconfiguredDialectIsRefused detects a wrongly started
+// reader goroutine precisely BY its consuming those bytes with no write,
+// so gating it would make that guard pass whether or not the goroutine
+// started.
 func newReplyOnWriteStubPort(reply string) *stubPort {
 	return &stubPort{
 		toRead:    []byte(reply),
@@ -373,7 +373,7 @@ func TestEngine_WithClock_SettleUsesInjectedClock(t *testing.T) {
 	port := newReplyOnWriteStubPort("ID0800;")
 	t.Cleanup(func() { _ = port.Close() })
 	fc := newFakeClock()
-	eng, err := NewEngine(port, cat.FT710.AllowedCommand, WithClock(fc))
+	eng, err := NewEngine(port, cat.FT710, WithClock(fc))
 	if err != nil {
 		t.Fatalf("NewEngine: unexpected error: %v", err)
 	}
@@ -411,7 +411,7 @@ func TestEngine_Settle_AppliesAfterRejectionToo(t *testing.T) {
 	port := newReplyOnWriteStubPort("?;")
 	t.Cleanup(func() { _ = port.Close() })
 	fc := newFakeClock()
-	eng, err := NewEngine(port, cat.FT710.AllowedCommand, WithClock(fc))
+	eng, err := NewEngine(port, cat.FT710, WithClock(fc))
 	if err != nil {
 		t.Fatalf("NewEngine: unexpected error: %v", err)
 	}
@@ -454,7 +454,7 @@ func TestEngine_WithMaxFrame_TriggersContaminationSooner(t *testing.T) {
 	}
 	port := newStubPort(string(overLong))
 	t.Cleanup(func() { _ = port.Close() })
-	eng, err := NewEngine(port, cat.FT710.AllowedCommand, WithMaxFrame(8))
+	eng, err := NewEngine(port, cat.FT710, WithMaxFrame(8))
 	if err != nil {
 		t.Fatalf("NewEngine: unexpected error: %v", err)
 	}

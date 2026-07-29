@@ -176,21 +176,28 @@ type readerEvent struct {
 	err   error  // *cat.FrameTooLongError (stream contamination), or a raw I/O error (port gone)
 }
 
-// AllowFunc is the outbound write gate an Engine is constructed with: it
-// reports whether frame is safe to write to the radio. It is the last
-// defence before a physical radio ever sees these bytes (safety obligation
-// 1), and it is INJECTED rather than reached for, so an Engine gates for
-// the dialect of the driver that built it and for no other.
+// AllowFunc is the outbound write gate an Engine holds: it reports whether
+// frame is safe to write to the radio. It is the last defence before a
+// physical radio ever sees these bytes (safety obligation 1), and it is
+// DERIVED FROM THE ENGINE'S OWN DIALECT rather than reached for from a
+// package global, so an Engine gates for the radio of the driver that
+// built it and for no other.
 //
-// cat.Dialect.AllowedCommand matches this signature exactly, so a driver
-// passes the method value of its OWN dialect — d.dialect.AllowedCommand —
-// with no adapter, no closure and nothing for a second radio's driver to
-// forget. Reaching for a package-level allowlist instead would gate every
+// It is no longer a CONSTRUCTOR PARAMETER (M9c-5, E3). NewEngine takes the
+// cat.Dialect whole and takes d.AllowedCommand itself — the method value
+// matches this signature exactly — so the gate and the session-init frame
+// (Init, d.BuildAISet(false)) provably come from ONE value. Passing the
+// two separately made it structurally possible to gate for one radio and
+// initialise for another; nothing had ever done so, and no defect existed
+// (see Init's ledger note), but the shape allowed it and the type does not
+// have to. Reaching for a package-level allowlist instead would gate every
 // radio by whatever the FT-710 permits, which is a safety failure rather
 // than merely a correctness one.
 //
-// A nil AllowFunc is refused by NewEngine (ErrNoAllowlist) before the
-// reader goroutine is even started, and refused again by Do.
+// An unconfigured (zero) cat.Dialect is refused by NewEngine
+// (ErrUnconfiguredDialect) before the reader goroutine is even started; a
+// nil gate — reachable only in a hand-built Engine, never one NewEngine
+// returned — is refused by Do (ErrNoAllowlist).
 //
 // CONTRACT ON frame — an implementation MUST NOT mutate it, and MUST
 // NOT retain it beyond the call. Do hands the gate the very slice it
@@ -256,10 +263,24 @@ type Engine struct {
 	port   Port
 	logger Logger
 	clk    clock
-	// allow is the outbound write gate, supplied at construction and
-	// never nil for an Engine NewEngine actually returned — see
-	// AllowFunc and ErrNoAllowlist. Immutable after construction (no
-	// Option touches it), so Do reads it without synchronisation.
+	// dialect is the ONE cat.Dialect this Engine is bound to, supplied at
+	// construction. Both allow (below) and Init's AI frame derive from
+	// it, so the gate and the init frame cannot belong to different
+	// radios. Immutable after construction (no Option touches it), and
+	// cat.Dialect is a value type carrying only copied maps and slices,
+	// so Init reads it without synchronisation. Configured() for an
+	// Engine NewEngine actually returned — see ErrUnconfiguredDialect.
+	dialect cat.Dialect
+	// allow is the outbound write gate, taken from dialect at
+	// construction (d.AllowedCommand) and never nil for an Engine
+	// NewEngine actually returned — see AllowFunc and ErrNoAllowlist.
+	// Immutable after construction (no Option touches it), so Do reads
+	// it without synchronisation. Held as a field, rather than called as
+	// e.dialect.AllowedCommand at each write, so that Do's own
+	// defence-in-depth nil check keeps meaning something for a
+	// hand-built Engine, whose zero dialect would otherwise present a
+	// non-nil method value that refuses everything for a different
+	// reason.
 	allow    AllowFunc
 	maxFrame int
 
@@ -292,14 +313,26 @@ type Engine struct {
 	unexpectedFrames atomic.Int64
 }
 
-// NewEngine constructs an Engine over p, gated by allow, and starts its
-// reader goroutine. Options: WithLogger, WithClock, WithMaxFrame.
+// NewEngine constructs an Engine over p, bound to the cat.Dialect d, and
+// starts its reader goroutine. Options: WithLogger, WithClock, WithMaxFrame.
 //
-// FAIL-CLOSED AT CONSTRUCTION: a nil allow is refused with an error
-// wrapping ErrNoAllowlist, returning a nil *Engine — and refused BEFORE
-// the reader goroutine is started, so a rejected call leaves nothing
-// running and no half-built Engine for a caller to ignore the error and
-// use anyway. NewEngine therefore CANNOT RETURN an ungated Engine.
+// THE DIALECT IS THE BINDING, and it is REQUIRED (M9c-5, E3). Both the
+// outbound write gate (d.AllowedCommand — see AllowFunc) and the
+// session-init frame (d.BuildAISet(false) — see Init) derive from this one
+// value, so an Engine cannot gate for one radio while initialising for
+// another. It is a plain parameter rather than a defaulted Option
+// precisely because a default does not enforce same-dialect binding: a
+// caller could supply one half and inherit the other.
+//
+// FAIL-CLOSED AT CONSTRUCTION: an UNCONFIGURED (zero) dialect is refused
+// with an error wrapping ErrUnconfiguredDialect, returning a nil *Engine —
+// and refused BEFORE the reader goroutine is started, so a rejected call
+// leaves nothing running and no half-built Engine for a caller to ignore
+// the error and use anyway. NewEngine therefore CANNOT RETURN an Engine
+// that gates for no radio. The check is Configured() rather than a nil
+// test because cat.Dialect is a struct: `var d cat.Dialect` yields a
+// non-nil AllowedCommand method value that would have satisfied any nil
+// check while describing no radio at all.
 //
 // That is a claim about this constructor, not about the type, and the
 // difference is real (M9b fix wave, Codex finding 3): Engine is exported,
@@ -310,23 +343,24 @@ type Engine struct {
 // fail closed with ErrNoAllowlist — but it exists, and the earlier wording
 // here ("an ungated Engine cannot exist") said otherwise.
 //
-// Do re-checks the same thing before every write regardless (defence in
-// depth: this is the last line before a physical radio).
+// Do re-checks the gate before every write regardless (defence in depth:
+// this is the last line before a physical radio).
 //
-// NewEngine does NOT take ownership of p on the nil-allow path: it has not
+// NewEngine does NOT take ownership of p on the refusal path: it has not
 // touched the port at all by then, so closing it stays the caller's
 // business, exactly as it is for any other construction the caller
 // abandons.
-func NewEngine(p Port, allow AllowFunc, opts ...Option) (*Engine, error) {
-	if allow == nil {
-		return nil, fmt.Errorf("%w: NewEngine requires an AllowFunc (a driver passes its own dialect's AllowedCommand)", ErrNoAllowlist)
+func NewEngine(p Port, d cat.Dialect, opts ...Option) (*Engine, error) {
+	if !d.Configured() {
+		return nil, fmt.Errorf("%w: NewEngine requires a configured cat.Dialect (a driver passes its own — the gate and the init frame both come from it)", ErrUnconfiguredDialect)
 	}
 
 	e := &Engine{
 		port:       p,
 		logger:     nopLogger{},
 		clk:        realClock{},
-		allow:      allow,
+		dialect:    d,
+		allow:      d.AllowedCommand,
 		events:     make(chan readerEvent, 16),
 		closeCh:    make(chan struct{}),
 		readerDone: make(chan struct{}),
@@ -353,16 +387,24 @@ func (e *Engine) UnexpectedFrames() int64 {
 // this session started talking to the radio (a stale unsolicited push, or
 // a reply to a command sent by a previous, now-gone session).
 //
-// M9b note, no behaviour change today: this is the ONE place in the
-// repository where a frame built by a HARDWIRED cat.FT710 meets an
-// INJECTED gate that may belong to a different dialect. With one
-// configured dialect the two are the same and the frame passes; with a
-// second dialect whose AllowFunc does not admit the FT-710's AI0; form,
-// Init would fail closed — safe, but baffling to diagnose. Making the
-// init frame injectable is deferred to M9c/roadmap risk 10, when a rig
-// that actually differs exists to design against.
+// The frame is built by THIS Engine's own dialect, the same value its
+// gate came from (see NewEngine): one binding, so the frame Init builds
+// and the gate that judges it can never belong to different radios.
+//
+// M9b's ledger note here is CLOSED, and its premise CORRECTED (M9c-5,
+// E3). It read: this is the one place a HARDWIRED cat.FT710 frame meets
+// an INJECTED gate, and a second dialect whose gate did not admit the
+// FT-710's AI0; form would make Init fail closed — safe, but baffling to
+// diagnose. THAT FAILURE COULD NOT OCCUR. AllowedCommand sees bytes, not
+// provenance; every configured dialect builds exactly "AI0;" and every
+// configured dialect's gate admits that form, so no fixture could ever
+// have demonstrated the refusal, and none was ever observed. What the
+// hardwiring actually was is architectural impurity — a package-level
+// dialect reached for inside a type that already held one — and taking
+// the dialect whole at construction removes it. The bytes are unchanged
+// ("AI0;"), pinned by TestEngine_Init_WritesExactlyAI0.
 func (e *Engine) Init(ctx context.Context) error {
-	aiCmd := cat.FT710.BuildAISet(false)
+	aiCmd := e.dialect.BuildAISet(false)
 	if _, err := e.Do(ctx, aiCmd, CommandSpec{}); err != nil {
 		return fmt.Errorf("transport: Init: AI0: %w", err)
 	}
@@ -507,8 +549,9 @@ func (e *Engine) Do(ctx context.Context, cmd cat.Command, spec CommandSpec) ([]b
 		// obtained copies.
 		frame := cmd.Bytes()
 		if e.allow == nil {
-			// Unreachable through NewEngine by construction (it refuses a
-			// nil AllowFunc outright) — checked anyway, exactly as
+			// Unreachable through NewEngine by construction (it refuses
+			// an unconfigured dialect outright and takes allow from the
+			// configured one it kept) — checked anyway, exactly as
 			// ErrDisallowedCommand's own doc comment argues for the layer
 			// below. Distinct sentinel: a missing gate is a composition
 			// bug, not a fault of this frame.

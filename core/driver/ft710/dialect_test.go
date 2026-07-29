@@ -27,13 +27,14 @@ func TestCATID_ComesFromTheDialect(t *testing.T) {
 }
 
 // TestDriver_CarriesADialect pins that New actually populates the field
-// Open reads to gate the engine. A zero cat.Dialect would still compile
-// and would still produce a non-nil AllowedCommand method value that
-// transport.NewEngine accepts — it just would not accept a single frame
-// (see cat.Dialect's doc comment), so every session would fail on its own
-// AI0 init. Checking Configured() here catches that at the composition,
-// where the cause is legible, rather than as a mystifying refusal on the
-// wire.
+// Open hands the engine. A zero cat.Dialect would still compile, and
+// (before M9c-5) would still have produced a non-nil AllowedCommand
+// method value that transport.NewEngine's nil check could not see, so
+// every session would have failed on its own AI0 init instead. Since
+// M9c-5 the constructor takes the dialect whole and refuses an
+// unconfigured one outright (see TestOpen_UnconfiguredDialectRefusesToOpen
+// below), but this check stays: it catches the omission at the
+// composition, where the cause is legible, rather than at the first Open.
 func TestDriver_CarriesADialect(t *testing.T) {
 	d, ok := New(Simulated).(*ft710Driver)
 	if !ok {
@@ -64,16 +65,24 @@ func TestSession_CarriesTheDriversDialect(t *testing.T) {
 	}
 }
 
-// TestOpen_UnconfiguredDialectRefusesEveryFrame is the driver-side half of
-// the fail-closed story. An ft710Driver whose dialect field is zero-valued
-// still hands transport.NewEngine a NON-nil AllowedCommand method value,
-// so the constructor's nil check does not (and should not) fire — what
-// stops it instead is that an unconfigured dialect's gate accepts nothing,
-// so the very first frame the session sends is refused before it reaches
-// the wire. Pinned here so the two halves are known to compose: a MISSING
-// gate is refused at construction (core/transport's allowfunc_test.go), an
-// EMPTY one at the write.
-func TestOpen_UnconfiguredDialectRefusesEveryFrame(t *testing.T) {
+// TestOpen_UnconfiguredDialectRefusesToOpen is the driver-side half of the
+// fail-closed story, and M9c-5 (E3) moved WHERE it fires. Until then an
+// ft710Driver whose dialect field was zero-valued still handed
+// transport.NewEngine a NON-nil AllowedCommand method value, so the
+// constructor's nil check could not fire; what stopped the session was
+// that an unconfigured dialect's gate accepts nothing, so its very first
+// frame was refused at the write (transport.ErrDisallowedCommand). Now
+// NewEngine takes the cat.Dialect whole and checks Configured(), so the
+// refusal happens EARLIER and says something truer — the driver was never
+// given a radio to speak for — and no engine, reader goroutine or wire
+// exchange is created on the way to finding out.
+//
+// The wire-level backstop has not gone anywhere: core/cat still refuses
+// every frame for an unconfigured dialect (its own dialect_test.go pins
+// it), and Do still consults the gate before every write. This test now
+// pins the outermost of the three refusals, which is the one a
+// misassembled driver actually meets.
+func TestOpen_UnconfiguredDialectRefusesToOpen(t *testing.T) {
 	r := fakeradio.New(fakeradio.WithFactoryImage(minimalImage))
 	t.Cleanup(func() { _ = r.Close() })
 
@@ -83,9 +92,9 @@ func TestOpen_UnconfiguredDialectRefusesEveryFrame(t *testing.T) {
 	sess, err := d.Open(testCtx(t), r.Port(), testIdentity)
 	if err == nil {
 		_ = sess.Close()
-		t.Fatal("Open with a zero dialect succeeded — an unconfigured gate must refuse every frame, so nothing can get out")
+		t.Fatal("Open with a zero dialect succeeded — a driver with no dialect must not reach the wire at all")
 	}
-	if !errors.Is(err, transport.ErrDisallowedCommand) {
-		t.Errorf("Open with a zero dialect = %v, want errors.Is match against transport.ErrDisallowedCommand", err)
+	if !errors.Is(err, transport.ErrUnconfiguredDialect) {
+		t.Errorf("Open with a zero dialect = %v, want errors.Is match against transport.ErrUnconfiguredDialect", err)
 	}
 }
