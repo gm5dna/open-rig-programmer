@@ -84,28 +84,63 @@
 // that the set has one statement of record, and each is lifted individually
 // by a named Stage R capture, never wholesale.
 //
-// The four sections below are the register's headings. Their CONTENT — the
-// values, the exact wording of each caveat, and the config fields carrying
-// them — arrives with dialect.go at M9c-4 task 6; this file names them now so
-// that the register exists before the first assumption is written down.
+// Each entry below names the field, the value it carries, the evidence gap,
+// and the ONE Stage R capture that lifts it. The captures are individual on
+// purpose: a single FTdx10 session does not retire this register wholesale,
+// it retires the assumptions its own frames actually speak to, and an entry
+// whose capture was not taken stays here afterwards.
 //
-//   - MTPolicy.TagFill — the byte the FTdx10 pads a short memory tag with.
-//     Inherited from the FT-710, whose padding is spaces. The FTdx10's has
-//     never been observed.
+//   - MTPolicy.TagFill = ' ' (dialect.go). The byte the FTdx10 pads a short
+//     memory tag with, in both directions: builds pad the outbound P12 field
+//     to 12 bytes with it, and parses trim it from the answer. Inherited from
+//     the FT-710, whose padding is spaces; the FTdx10's has never been
+//     observed. The manual's P12 legend says only "TAG Characters (up to 12
+//     characters) (ASCII)" (layout 1236) and names no fill.
+//     STAGE R LIFTS IT WITH: one MT Set of a tag SHORTER than 12 characters
+//     to a memory channel, then an MT read of that channel — the bytes the
+//     radio returns after the written characters ARE the fill. If they are
+//     not spaces, this field changes and the goldens' padding bytes change
+//     with it; if the field comes back short instead, the assumption that
+//     failed is the answer's exact width, not this byte (see mtcombined.go).
 //
-//   - ClarifierPolicy.StepHz — the clarifier's offset granularity. NO step
-//     is stated anywhere in this manual. The 0000-9990 Hz range the MR/MT/MW
-//     legends and the RD/RU command pages (layout 1507, 1605) all agree on
-//     SUPPORTS the inherited value without proving it.
+//   - ClarifierPolicy.StepHz = 10 (dialect.go). The clarifier's offset
+//     granularity, which core/cat enforces as a multiple-of-step rule on
+//     every MW and combined-MT Set. NO step is stated anywhere in this
+//     manual. The 0000-9990 Hz range the MR/MT/MW legends and the RD/RU
+//     command pages (layout 1507, 1605) all agree on SUPPORTS the inherited
+//     value without proving it: a 20 Hz radio could not reach its own stated
+//     9990, a 10 Hz one can, and a 1 Hz one would be free to stop at 9999 and
+//     does not.
+//     STAGE R LIFTS IT WITH: one MW Set carrying a clarifier offset that is
+//     NOT a multiple of 10 — 0005 Hz — followed by an MR read of the same
+//     channel. A radio answering 0005 has a finer step than this and the
+//     value drops; a radio answering 0000 or 0010 has quantised, and 10 is
+//     confirmed at that resolution.
 //
-//   - SlotSpace.NoneWire — the wire form of "no slot". It appears in no
-//     FTdx10 slot legend; it is the FT-710's MR-answer fact. A none-wire is
-//     structurally required by the slot space, so one is supplied.
+//   - SlotSpace.NoneWire = "000" (dialect.go). The wire form of "no slot" —
+//     the value an MR answer carries when the source is not a memory. It
+//     appears in NO FTdx10 slot legend: MC's gives 001-099, P1L-P9U, 5xx and
+//     EMG (layout 1131-1133), MR's the same (1184-1185), MW's only 001-099
+//     and P1L-P9U (1259). It is the FT-710's MR-answer fact, and cat.SlotSpace
+//     structurally requires a none form, so one is supplied.
+//     STAGE R LIFTS IT WITH: one MR read taken while the radio is on a VFO
+//     rather than a memory — the P1 field of the answer is this radio's own
+//     none form. Note the collision this field guards against: a radio
+//     numbering memories from 000 would make "000" ambiguous, which is why
+//     cat.NewDialect validates the two against each other rather than
+//     assuming.
 //
-//   - the ModeUnset member of the mode table — the placeholder mode. Every
-//     FTdx10 mode legend runs 1-F with no '0' member (e.g. MR's at layout
-//     1192-1194, MD's at 1146-1149). It is included because parsers must
-//     accept the placeholder, not because the manual names it.
+//   - the cat.ModeUnset member of the mode table (dialect.go's modeNames).
+//     The '0' = "-" placeholder. EVERY FTdx10 mode legend runs 1-F with no
+//     '0' member, and there are four of them, all identical: MD's at layout
+//     1146-1149, MR's P6 at 1192-1194, MT's P6 at 1227-1229, MW's P6 at
+//     1267-1269. It is included because parsers must accept the placeholder —
+//     core/cat refuses to EMIT it in any Set frame, so its presence widens
+//     only what this dialect can read — not because the manual names it.
+//     STAGE R LIFTS IT WITH: one MR read of an EMPTY memory channel, one the
+//     radio has never had written to. The P6 byte of that answer is what this
+//     radio says for "no mode". If it is not '0', this member is wrong rather
+//     than merely unattested, and the real byte replaces it.
 //
 // # Reused-command verification
 //
