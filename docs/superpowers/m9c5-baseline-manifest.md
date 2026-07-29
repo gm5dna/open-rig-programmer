@@ -441,10 +441,28 @@ hash:
 > the capture to speak for the branch tip.
 
 That holds here. The capture was taken at `f64f688`, the tenth and last
-code commit. The only commit after it is Task 11's own — this manifest,
-the CHIRP fixture it names (a test INPUT, read by no production code
-path), and the handoff updates. No `.go` file, no frontend file, and no
-golden is touched by it.
+code commit. The only commit after it is Task 11's own, and it TRACKS
+exactly two files:
+
+| Path | Kind |
+| --- | --- |
+| `docs/superpowers/m9c5-baseline-manifest.md` | this manifest |
+| `docs/superpowers/m9c5-fixtures/chirp_minimal.csv` | a test INPUT, read by no production code path |
+
+No `.go` file, no frontend file, and no golden is touched by it —
+`git show --stat 80f95ee` is the whole of that commit's contents.
+
+The handoff updates that accompanied the same piece of work are a
+separate thing and are deliberately NOT in it: `.superpowers/` is
+gitignored (see `.gitignore`, "Superpowers scratch state"), as is
+`docs/fixtures-private/`, so `HANDOFF-m9c.md` in either location is an
+ON-DISK working file that no commit on this branch contains. An earlier
+version of this paragraph listed them alongside the manifest and the
+fixture as though all three were commit contents, which would have had a
+reviewer looking for a third tracked path that does not exist. The
+distinction also matters to the invariant above: only tracked files can
+affect whether a post-capture commit is documentation-only, and the
+gitignored handoff cannot make it otherwise however much it changes.
 
 ## Scope of the claim this manifest supports
 

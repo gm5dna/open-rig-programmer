@@ -68,16 +68,29 @@ package cat
 //
 // FAIL-CLOSED ON AN UNCONFIGURED DIALECT. A zero Dialect is constructible
 // by any caller (`var d cat.Dialect`) and its AllowedCommand is a non-nil
-// method value, so it passes transport.NewEngine's nil-AllowFunc check
-// (added at Task 56) and would be installed as a real engine's gate. It
-// must therefore accept NOTHING itself: the constructor's check catches a
-// MISSING gate, not an empty one. The dialect-aware checks give that for
-// free wherever
-// slot, mode or EX data is consulted — an empty slot space matches no
-// slot — but ID, AI and the bare "MC;" read are literal matches that
-// consult no dialect data at all and would otherwise pass. The
-// Configured() guard below is what closes them, so the property holds for
-// every frame rather than most of them.
+// method value, so nothing about the METHOD's existence says which radio
+// it speaks for — or that it speaks for one at all.
+//
+// The constructor that used to be the concern here is gone (M9c-5, E3):
+// transport.NewEngine no longer takes an AllowFunc parameter to nil-check,
+// it takes the cat.Dialect WHOLE and refuses an unconfigured one outright
+// (transport.ErrUnconfiguredDialect), taking d.AllowedCommand itself. So a
+// zero Dialect can no longer become a real engine's gate by that route.
+// This check is not thereby redundant — the two answer different
+// questions. NewEngine refuses to BUILD an engine that would gate for no
+// radio; the guard below refuses to ADMIT a frame, wherever the judgement
+// is asked for, and that is the property this package can actually
+// guarantee. Anything holding a zero Dialect outside that constructor — a
+// hand-built transport.Engine (whose unexported allow field core/transport
+// itself can assign directly), a test double, a future caller asking
+// AllowedCommand on its own — gets the same answer: NOTHING is allowed.
+//
+// The dialect-aware checks give that for free wherever slot, mode or EX
+// data is consulted — an empty slot space matches no slot — but ID, AI and
+// the bare "MC;" read are literal matches that consult no dialect data at
+// all and would otherwise pass. The Configured() guard below is what
+// closes them, so the property holds for every frame rather than most of
+// them.
 func (d Dialect) AllowedCommand(frame []byte) bool {
 	if !d.Configured() {
 		return false

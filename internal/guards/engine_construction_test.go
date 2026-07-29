@@ -8,10 +8,21 @@ import (
 )
 
 // TestNewEngineReachableOnlyFromDriver pins the other half of M9b's
-// fail-closed story. NewEngine takes the outbound allowlist as a
-// parameter, so WHOEVER CALLS IT CHOOSES THE GATE. That choice belongs to
-// the driver layer: a call site in app/ or cmd/ could pass a permissive
-// func and bypass every policy layer above it.
+// fail-closed story. NewEngine takes the cat.Dialect the gate is DERIVED
+// from as a parameter — since M9c-5 (E3) that, rather than the outbound
+// transport.AllowFunc it used to take — so WHOEVER CALLS IT STILL CHOOSES
+// THE GATE: the caller supplies the dialect, and both the write gate
+// (d.AllowedCommand) and the session-init frame come from it. That choice
+// belongs to the driver layer: a call site in app/ or cmd/ could pass a
+// dialect of its own devising and gate for a radio no policy layer above
+// it authorised.
+//
+// E3 narrowed WHAT a caller can get wrong, not WHO chooses. It removed the
+// ability to gate for one radio while initialising for another (two
+// parameters, one binding now), and it made an unconfigured dialect a
+// construction-time refusal (ErrUnconfiguredDialect) rather than something
+// a nil-check could not see. Neither moves the choice of radio out of the
+// caller's hands, which is the whole of what this guard is for.
 //
 // Matches the name "NewEngine" WHEREVER it appears — as a
 // *ast.SelectorExpr.Sel or a bare *ast.Ident — not only inside a
@@ -171,8 +182,10 @@ import (
 //   - GAP, not closed — a driver-tree re-export (Codex e15). A package
 //     under core/driver/** that does nothing but forward NewEngine's
 //     own parameters straight through — e.g.
-//     func Open(p transport.Port, allow transport.AllowFunc)
-//     (*transport.Engine, error) { return transport.NewEngine(p, allow) }
+//     func Open(p transport.Port, d cat.Dialect)
+//     (*transport.Engine, error) { return transport.NewEngine(p, d) }
+//     (the signature E3 gave it; the shape was identical when the
+//     forwarded parameter was a transport.AllowFunc)
 //     — satisfies inTree(pf.relDir, "core/driver") and is treated as a
 //     legitimate driver-tree construction, yet the re-export's own
 //     caller chooses the gate. This guard pins WHERE the identifier
@@ -204,21 +217,28 @@ import (
 //     to Engine.allow from being added to core/transport.
 //     func (e *Engine) SetAllow(AllowFunc) is one shape; the SHARPER one
 //     is an Option func, since NewEngine applies every opt AFTER setting
-//     e.allow from its own allow parameter (see NewEngine's body): a
-//     hypothetical func WithAllow(a AllowFunc) Option { return func(e
-//     *Engine) { e.allow = a } } would let WithAllow(permissive)
-//     override the gate from INSIDE an otherwise fully compliant
-//     NewEngine(p, restrictive, WithAllow(permissive)) call — one this
-//     guard's own non-vacuity counter would count as the sanctioned
-//     core/driver/** construction, since it genuinely is one. Engine.
-//     allow's own doc comment (core/transport/engine.go:249) already
-//     asserts it is "immutable after construction… so Do reads it
-//     without synchronisation" — a convention nothing in the type
-//     system or this guard enforces, and whose breach would ALSO be a
-//     data race. A plausible accidental addition, inside this package's
-//     own threat model, recorded as a gap because pinning it needs a
-//     second guard against any exported symbol assigning to
-//     Engine.allow, which this file does not have.
+//     e.allow from its dialect (e.allow = d.AllowedCommand — see
+//     NewEngine's body; before E3 it was a separate allow parameter, and
+//     the gap is identical either way, because what an Option overwrites
+//     is the FIELD, whatever filled it): a hypothetical func WithAllow(a
+//     AllowFunc) Option { return func(e *Engine) { e.allow = a } } would
+//     let WithAllow(permissive) override the gate from INSIDE an
+//     otherwise fully compliant NewEngine(p, ft710Dialect,
+//     WithAllow(permissive)) call — one this guard's own non-vacuity
+//     counter would count as the sanctioned core/driver/** construction,
+//     since it genuinely is one. Note this survives E3's binding
+//     guarantee: the DIALECT would still be the FT-710's, so Init would
+//     still send its AI0;, while the gate judging every subsequent frame
+//     came from somewhere else entirely. Engine.allow's own doc comment
+//     (core/transport/engine.go — named rather than cited by line, which
+//     is how the previous reference here went stale) already asserts it
+//     is "immutable after construction… so Do reads it without
+//     synchronisation" — a convention nothing in the type system or this
+//     guard enforces, and whose breach would ALSO be a data race. A
+//     plausible accidental addition, inside this package's own threat
+//     model, recorded as a gap because pinning it needs a second guard
+//     against any exported symbol assigning to Engine.allow, which this
+//     file does not have.
 //
 //   - GAP, not closed — a defined (non-alias) type sharing Engine's
 //     layout (Codex e06): `type shadowEngine Engine` (no "=") is a

@@ -307,7 +307,12 @@
 				return cancelEditor()
 			}
 			if (data && hz === data.freq_hz) return cancelEditor() // unchanged
-			submitEdit(sv.Slot, (fresh) => (fresh ? { ...cloneData(fresh), freq_hz: hz } : newChannelData(spec, hz)))
+			// The Added row's tag-display default is the ACTIVE BANK's
+			// (BankView.TagDisplayDefault — M9c-5 review W1), so the bank goes
+			// with the spec: sv came from activeBank's own Slots, so it is
+			// non-null here.
+			const bank = /** @type {BankView} */ (activeBank)
+			submitEdit(sv.Slot, (fresh) => (fresh ? { ...cloneData(fresh), freq_hz: hz } : newChannelData(spec, bank, hz)))
 			return
 		}
 		// Tag: exact text (unclamped — Go validates bytes/charset).

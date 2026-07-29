@@ -30,6 +30,11 @@ const UI_SPEC = {
 				{ Slot: '002', Display: 'M-02' },
 				{ Slot: '003', Display: 'M-03' },
 			],
+			// M9c-5 review W1: GetUISpec serves the Added-row tag-display
+			// default per bank now (bankTagDisplayDefault). Known-off is the
+			// FT-710's own answer for every one of its banks — the value this
+			// module used to hardcode.
+			TagDisplayDefault: { state: 'known', value: false },
 		},
 		{
 			ID: 'PMS',
@@ -39,6 +44,7 @@ const UI_SPEC = {
 				{ Slot: 'P1L', Display: 'P1L' },
 				{ Slot: 'P1U', Display: 'P1U' },
 			],
+			TagDisplayDefault: { state: 'known', value: false },
 		},
 		{
 			ID: '60M',
@@ -48,6 +54,7 @@ const UI_SPEC = {
 				{ Slot: '501', Display: '5-01' },
 				{ Slot: '502', Display: '5-02' },
 			],
+			TagDisplayDefault: { state: 'known', value: false },
 		},
 	],
 	Modes: ['LSB', 'USB', 'CW-U', 'FM'],

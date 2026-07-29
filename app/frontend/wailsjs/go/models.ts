@@ -180,6 +180,7 @@ export namespace main {
 	    Label: string;
 	    ReadOnly: boolean;
 	    Slots: SlotView[];
+	    TagDisplayDefault: codeplug.BoolField;
 	
 	    static createFrom(source: any = {}) {
 	        return new BankView(source);
@@ -191,6 +192,7 @@ export namespace main {
 	        this.Label = source["Label"];
 	        this.ReadOnly = source["ReadOnly"];
 	        this.Slots = this.convertValues(source["Slots"], SlotView);
+	        this.TagDisplayDefault = this.convertValues(source["TagDisplayDefault"], codeplug.BoolField);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

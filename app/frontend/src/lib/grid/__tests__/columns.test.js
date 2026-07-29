@@ -9,10 +9,25 @@
 import { describe, it, expect } from 'vitest'
 import { COLUMNS, isCellEditable, displayValue, newChannelData, cloneData, parsePasteCell } from '../columns.js'
 
+/** A bank whose radio DOES carry the memory frame's display flag — the
+ * FT-710 shape GetUISpec serves for MEM/PMS (bankTagDisplayDefault,
+ * app/uispec.go). */
+const flagBank = {
+	ID: 'MEM',
+	Label: 'Memories',
+	ReadOnly: false,
+	Slots: [{ Slot: '001', Display: 'M-01' }],
+	TagDisplayDefault: { state: 'known', value: false },
+}
+
+/** A bank whose radio's memory frame has NO display flag at all: the
+ * Unavailable default a second model can legitimately serve. */
+const noFlagBank = { ...flagBank, TagDisplayDefault: { state: 'unavailable' } }
+
 /** Synthetic UISpec (MYCALL-fixture convention — no real off-air data). */
 const uiSpec = {
 	Live: false,
-	Banks: [],
+	Banks: [flagBank, noFlagBank],
 	Modes: ['LSB', 'USB', 'CW-U', 'FM'],
 	ShiftOptions: ['SIMPLEX', 'PLUS', 'MINUS'],
 	CTCSSStateOptions: ['OFF', 'ENC-DEC', 'ENC'],
@@ -177,7 +192,7 @@ describe('displayValue', () => {
 
 describe('newChannelData', () => {
 	it('builds Added-channel defaults entirely from the UISpec (no JS literals)', () => {
-		const d = newChannelData(uiSpec, 7100000)
+		const d = newChannelData(uiSpec, flagBank, 7100000)
 		expect(d).toEqual({
 			freq_hz: 7100000,
 			mode: uiSpec.Modes[0],
@@ -188,11 +203,32 @@ describe('newChannelData', () => {
 			ctcss_tone: { state: 'unknown' },
 			shift: uiSpec.ShiftOptions[0],
 			tag: '',
-			// A mandatory wire field: an Added row is Known-off, never
-			// 'unknown' (which the send plan would block).
-			tag_display: { state: 'known', value: false },
+			// The claim in this test's name is now literally true of every
+			// key: tag_display was the last JS literal here, and it is the
+			// BANK's own capability-derived default (Known-off for a radio
+			// whose frame carries the flag — see bankTagDisplayDefault).
+			tag_display: flagBank.TagDisplayDefault,
 			scan_skip: { state: 'unknown' },
 		})
+	})
+
+	it("takes tag_display from the bank, so a radio with no display flag stays Unavailable", () => {
+		const d = newChannelData(uiSpec, noFlagBank, 7100000)
+		expect(d.tag_display).toEqual({ state: 'unavailable' })
+	})
+
+	it('copies the bank default rather than aliasing the UISpec object', () => {
+		const d = newChannelData(uiSpec, flagBank, 7100000)
+		expect(d.tag_display).not.toBe(flagBank.TagDisplayDefault)
+	})
+
+	it('refuses to invent a value for a bank carrying no default at all', () => {
+		// Go always emits TagDisplayDefault (no omitempty), so an absent one
+		// can only be a hand-built BankView — treated exactly as cloneData
+		// treats an absent field state: 'unknown', never a manufactured
+		// Known.
+		const d = newChannelData(uiSpec, { ID: 'X', Label: 'X', ReadOnly: false, Slots: [] }, 7100000)
+		expect(d.tag_display).toEqual({ state: 'unknown' })
 	})
 })
 

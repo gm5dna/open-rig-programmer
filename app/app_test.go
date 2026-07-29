@@ -258,6 +258,18 @@ const testModel = "TESTMODEL"
 func recogniseTestModel(t *testing.T) spec.Capabilities {
 	t.Helper()
 	caps := spec.Capabilities{Model: testModel, CATID: "9999", TagLen: 42}
+	recogniseModelCaps(t, caps)
+	return caps
+}
+
+// recogniseModelCaps is recogniseTestModel's caller-supplied-capabilities
+// sibling: the same capsForModel substitution, but for a test that needs
+// testModel to describe a SHAPE the FT-710 does not have — a bank whose
+// FieldTagDisplay is Unsupported in both directions, say. Splitting it out
+// keeps one substitution implementation rather than two that could drift
+// on which model name they answer to or whether they restore the original.
+func recogniseModelCaps(t *testing.T, caps spec.Capabilities) {
+	t.Helper()
 	orig := capsForModel
 	capsForModel = func(model string) (spec.Capabilities, error) {
 		if model == testModel {
@@ -266,7 +278,6 @@ func recogniseTestModel(t *testing.T) spec.Capabilities {
 		return orig(model)
 	}
 	t.Cleanup(func() { capsForModel = orig })
-	return caps
 }
 
 // TestCurrentModel_FallbackChain pins the ONE resolver's whole chain

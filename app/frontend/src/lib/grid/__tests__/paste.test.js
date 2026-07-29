@@ -96,13 +96,22 @@ const memBank = {
 		{ Slot: '002', Display: 'M-02' },
 		{ Slot: '003', Display: 'M-03' },
 	],
+	// The FT-710 shape: the memory frame carries a display flag, so an
+	// Added row states it and states it off (app/uispec.go's
+	// bankTagDisplayDefault).
+	TagDisplayDefault: { state: 'known', value: false },
 }
+
+/** memBank on a radio whose memory frame has NO display flag: every row
+ * in it, added or existing, is Unavailable for tag_display. */
+const noFlagBank = { ...memBank, TagDisplayDefault: { state: 'unavailable' } }
 
 const lockedBank = {
 	ID: '60M',
 	Label: '60 m channels',
 	ReadOnly: true,
 	Slots: [{ Slot: '501', Display: '5-01' }],
+	TagDisplayDefault: { state: 'known', value: false },
 }
 
 function populatedData(freqHz, mode) {
@@ -145,6 +154,19 @@ function ctx(overrides = {}) {
 		uiSpec,
 		...overrides,
 	}
+}
+
+/** One paste row starting at FREQ_COL carrying the given per-column texts,
+ * with every other cell empty (mapPasteToChannels skips those). Spelling
+ * the sparse row out by hand would be nine mostly-empty cells whose
+ * alignment is the whole point.
+ * @param {Record<string, string>} cells   keyed by COLUMNS id
+ * @returns {string[][]}
+ */
+function rowFrom(cells) {
+	const row = []
+	for (let c = FREQ_COL; c < COLUMNS.length; c++) row.push(cells[COLUMNS[c].id] ?? '')
+	return [row]
 }
 
 describe('mapPasteToChannels — happy paths', () => {
@@ -230,17 +252,66 @@ describe('mapPasteToChannels — rejections (whole paste, nothing applied)', () 
 		expect(result.channels[0].data.ctcss_tone).toEqual({ state: 'known', value: 885 })
 	})
 
-	it('accepts a Tag display cell whose state is NOT known — the deliberate asymmetry with tone/skip', () => {
+	it('accepts a Tag display cell whose state is UNKNOWN — the deliberate asymmetry with tone/skip', () => {
 		// M9c-5 E1: an Unknown tag display blocks its channel at plan time
 		// ("set On or Off before sending"), so a paste must be able to SET
-		// it. Only tone/skip — fields the CAT protocol cannot write at all
-		// when unknown — are refused here.
+		// it — the bulk mitigation the design records for a column
+		// isCellEditable leaves uneditable. Tone/skip, which the CAT
+		// protocol cannot write at all when unknown, stay refused.
 		const bySlot = channelBySlot()
 		bySlot.get('001').data.tag_display = { state: 'unknown' }
 		const rows = parseBlock('on')
 		const result = mapPasteToChannels(rows, ctx({ startCol: TAG_DISPLAY_COL, channelBySlot: bySlot }))
 		expect(result.ok).toBe(true)
 		expect(result.channels[0].data.tag_display).toEqual({ state: 'known', value: true })
+	})
+
+	it('accepts a Tag display paste that POPULATES an empty slot in a bank whose radio carries the flag', () => {
+		// The new row takes tag_display from the bank default (Known-off),
+		// and the pasted 'on' then overrides it.
+		const rows = rowFrom({ freq: '7.1', tagDisplay: 'on' })
+		const result = mapPasteToChannels(rows, ctx({ startRow: 1 }))
+		expect(result.ok).toBe(true)
+		expect(result.channels[0].slot).toBe('002') // was EMPTY
+		expect(result.channels[0].data.tag_display).toEqual({ state: 'known', value: true })
+	})
+
+	it('REFUSES a Tag display paste into a populated row whose state is UNAVAILABLE', () => {
+		// {state:'unavailable'} means this radio's memory frame has no
+		// display flag at all (core/codeplug/fieldstate.go). Unknown→Known
+		// is a user decision the wire can carry; Unavailable→Known would
+		// manufacture a value for a field that does not exist, and the whole
+		// paste is refused rather than silently inventing one.
+		const bySlot = channelBySlot()
+		bySlot.get('001').data.tag_display = { state: 'unavailable' }
+		const rows = parseBlock('on')
+		const result = mapPasteToChannels(rows, ctx({ startCol: TAG_DISPLAY_COL, channelBySlot: bySlot, bank: noFlagBank }))
+		expect(result.ok).toBe(false)
+		expect(result.reason).toContain('M-01')
+		expect(result.reason).toContain('Tag display')
+		expect(result.reason).toContain('nothing was pasted')
+	})
+
+	it('REFUSES a Tag display paste that would populate an EMPTY slot in a bank with no display flag', () => {
+		// The new row would take its tag_display from the bank default —
+		// Unavailable — so the same refusal applies before any row is built.
+		const rows = rowFrom({ freq: '7.1', tagDisplay: 'on' })
+		const result = mapPasteToChannels(rows, ctx({ startRow: 1, bank: noFlagBank }))
+		expect(result.ok).toBe(false)
+		expect(result.reason).toContain('M-02')
+		expect(result.reason).toContain('Tag display')
+	})
+
+	it('leaves a Tag display cell untouched when the paste does not reach that column', () => {
+		// The refusal is per CELL PASTED, never a blanket ban on pasting
+		// into a bank whose flag is Unavailable: a frequency-only paste onto
+		// an Unavailable row still succeeds, carrying the state through.
+		const bySlot = channelBySlot()
+		bySlot.get('001').data.tag_display = { state: 'unavailable' }
+		const rows = parseBlock('7.1')
+		const result = mapPasteToChannels(rows, ctx({ channelBySlot: bySlot, bank: noFlagBank }))
+		expect(result.ok).toBe(true)
+		expect(result.channels[0].data.tag_display).toEqual({ state: 'unavailable' })
 	})
 
 	it('rejects an unparseable cell, naming the position', () => {

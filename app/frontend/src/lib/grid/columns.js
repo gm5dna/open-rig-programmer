@@ -7,8 +7,9 @@
 // no state module.
 //
 // NO protocol vocabulary lives here (task-17 brief, controller
-// amendment): modes, shift/CTCSS-state options, the tone table and the
-// tag/clarifier limits all arrive via the UISpec (GetUISpec — see
+// amendment): modes, shift/CTCSS-state options, the tone table, the
+// tag/clarifier limits and — since M9c-5's review (W1) — the Added-row
+// tag-display default all arrive via the UISpec (GetUISpec — see
 // bridge/bindings.js). The only fixed knowledge is STRUCTURAL: which
 // columns exist, which ChannelData key each edits, and the
 // codeplug.FieldState write rule (only 'known' is ever sent; a
@@ -18,6 +19,7 @@
 import { hzToMHz, mhzToHz } from './freq.js'
 
 /** @typedef {import('../../../wailsjs/go/models').codeplug.ChannelData} ChannelData */
+/** @typedef {import('../../../wailsjs/go/models').main.BankView} BankView */
 /** @typedef {import('../../../wailsjs/go/models').main.UISpecView} UISpecView */
 
 /**
@@ -59,10 +61,12 @@ export const COLUMNS = [
  *     tone/skip: the CAT protocol DOES read it, so a radio read and a
  *     migrated legacy file both leave it 'known', while a CHIRP import
  *     leaves it honestly 'unknown' and the send plan blocks that channel
- *     ("tag display unknown — set On or Off before sending"). A cell
- *     this leaves uneditable is still settable by PASTING on/off into
- *     the column (see paste.js, which refuses only tone/skip) — the
- *     bulk route the design records as the mitigation.
+ *     ("tag display unknown — set On or Off before sending"). An UNKNOWN
+ *     cell this leaves uneditable is still settable by PASTING on/off
+ *     into the column — the bulk route the design records as the
+ *     mitigation. An UNAVAILABLE one is not: paste refuses it too (M9c-5
+ *     review W2, see paste.js), because there is no flag in that radio's
+ *     frame for any value to go into.
  * @param {Column} column
  * @param {ChannelData | null | undefined} data
  * @returns {boolean}
@@ -156,18 +160,31 @@ export function displayValue(column, data, uiSpec) {
  * setting is actually preserved by an unrelated write is a separate,
  * still-open M5b question), exactly as a radio read leaves them.
  *
- * Tag display is the deliberate exception: it is a MANDATORY wire field
- * (core/cat's MT set frame takes the display flag as a required
- * argument), so a row this factory creates is Known and off — the
- * design's blank-row rule. An 'unknown' here would create a channel the
- * send plan immediately blocks. The design states that default
- * per-model; the UISpec carries no model today, so this is the FT-710's
- * value, unconditionally — revisit when it does.
+ * Tag display comes from the BANK, and that closes the last hardcoded
+ * protocol fact in this module (M9c-5 review W1). It used to be the JS
+ * literal `{state:'known', value:false}` — the FT-710's answer, asserted
+ * unconditionally, with a revisit point recorded because the UISpec
+ * carried no model. The UISpec now carries the answer itself:
+ * BankView.TagDisplayDefault is derived per bank from that radio's own
+ * spec.FieldTagDisplay support (app/uispec.go's bankTagDisplayDefault),
+ * so a radio whose memory frame has no display flag serves
+ * {state:'unavailable'} and this factory carries it straight through
+ * instead of manufacturing a Known value the radio has no room for. For
+ * the FT-710 the served value is the same Known-off it always was, for
+ * the recorded reason: tag display is a MANDATORY wire field where it
+ * exists (core/cat's MT set frame takes the display flag as a required
+ * argument), and an 'unknown' would create a channel the send plan
+ * immediately blocks.
+ *
+ * The value is COPIED (cloneFieldState), never aliased: the UISpec is
+ * shared, long-lived state, and a row handed a reference into it would
+ * let one channel's later edit reach every other Added row.
  * @param {UISpecView} uiSpec
+ * @param {BankView} bank   the bank the new row belongs to
  * @param {number} freqHz
  * @returns {ChannelData}
  */
-export function newChannelData(uiSpec, freqHz) {
+export function newChannelData(uiSpec, bank, freqHz) {
 	return /** @type {ChannelData} */ ({
 		freq_hz: freqHz,
 		mode: uiSpec.Modes[0],
@@ -178,7 +195,10 @@ export function newChannelData(uiSpec, freqHz) {
 		ctcss_tone: { state: 'unknown' },
 		shift: uiSpec.ShiftOptions[0],
 		tag: '',
-		tag_display: { state: 'known', value: false },
+		// Go always emits TagDisplayDefault (no omitempty), so the
+		// 'unknown' fallback only bites on a hand-built BankView — where it
+		// refuses to invent a value, exactly as cloneData does.
+		tag_display: cloneFieldState(bank?.TagDisplayDefault),
 		scan_skip: { state: 'unknown' },
 	})
 }

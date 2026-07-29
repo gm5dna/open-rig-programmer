@@ -10,9 +10,21 @@
 //
 // Rejection/acceptance policy, documented for the component:
 //   - A read-only bank, the Slot column, a Tone/Scan-skip cell whose
-//     FieldState is not 'known', an unparseable cell, or a row that
-//     targets an EMPTY slot without a parseable frequency ⇒ the whole
-//     paste is rejected with a single readable reason.
+//     FieldState is not 'known', a Tag-display cell that is
+//     'unavailable', an unparseable cell, or a row that targets an EMPTY
+//     slot without a parseable frequency ⇒ the whole paste is rejected
+//     with a single readable reason.
+//   - Tag display is the deliberate asymmetry (M9c-5 review W2): an
+//     UNKNOWN one is PERMITTED to be pasted to Known — the bulk
+//     mitigation for a column isCellEditable leaves uneditable, since an
+//     Unknown tag display blocks its channel at plan time and the user
+//     needs some way to decide it — while an UNAVAILABLE one is refused.
+//     'unavailable' means this radio's memory frame has no display flag
+//     at all (core/codeplug/fieldstate.go), so accepting a value for it
+//     would manufacture one; and it is judged for the row the paste would
+//     actually produce, which for an EMPTY slot means the bank's own
+//     capability-derived default (BankView.TagDisplayDefault), not the
+//     absent existing channel.
 //   - Rows past the end of the bank and columns past the last visible
 //     column are clipped; empty cells leave that field unchanged.
 //   - Parsing is formatting, not validation: vocabulary and ranges stay
@@ -122,6 +134,15 @@ export function mapPasteToChannels(rows, { startRow, startCol, bank, channelBySl
 	for (let r = 0; r < rows.length && startRow + r < slots.length; r++) {
 		const slotView = slots[startRow + r]
 		const existingData = channelBySlot.get(slotView.Slot)?.data ?? null
+		// The tag_display state of the row this paste would produce: the
+		// existing channel's own, or — for an EMPTY slot, which
+		// newChannelData is about to populate — the bank's own
+		// capability-derived default. Judging the empty case against the
+		// absent channel instead would let a paste into a radio with no
+		// display flag succeed purely because there was nothing there yet.
+		const tagDisplayState = existingData
+			? existingData.tag_display?.state
+			: bank.TagDisplayDefault?.state
 
 		/** @type {{column: typeof COLUMNS[number], patch: object}[]} */
 		const patches = []
@@ -139,6 +160,12 @@ export function mapPasteToChannels(rows, { startRow, startCol, bank, channelBySl
 				return {
 					ok: false,
 					reason: `${slotView.Display}: the ${column.label} column is not settable over CAT for this channel — nothing was pasted`,
+				}
+			}
+			if (column.id === 'tagDisplay' && tagDisplayState === 'unavailable') {
+				return {
+					ok: false,
+					reason: `${slotView.Display}: this radio's memory frame has no ${column.label} flag — nothing was pasted`,
 				}
 			}
 			const parsed = parsePasteCell(column, text, uiSpec)
@@ -161,7 +188,7 @@ export function mapPasteToChannels(rows, { startRow, startCol, bank, channelBySl
 					reason: `${slotView.Display} is empty — a paste must include a frequency to populate it`,
 				}
 			}
-			data = newChannelData(uiSpec, pastedFreqHz)
+			data = newChannelData(uiSpec, bank, pastedFreqHz)
 		} else {
 			data = cloneData(existingData)
 		}
