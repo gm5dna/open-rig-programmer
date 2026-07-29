@@ -9,7 +9,7 @@ import (
 )
 
 // Guards over core/cat's dialect data: that the policies M9c-0 promoted
-// onto cat.Dialect have not drifted back to package level, that the three
+// onto cat.Dialect have not drifted back to package level, that the
 // gate-reaching validators still take a receiver, and that the milestone's
 // transitive audit can be RE-DERIVED rather than merely quoted.
 //
@@ -40,16 +40,23 @@ import (
 // is ever wanted, the instrument is go/types plus dataflow analysis — not
 // more AST shapes.
 
-// promotedConstants are the package-level names M9c-0 moved onto the
-// Dialect receiver. Each was previously read by a method THROUGH its
-// receiver while the datum came from a package const — the defect shape the
-// milestone existed to remove — and each reaches the OUTBOUND WRITE GATE,
-// where a wrong value can authorise bytes that reach a radio.
+// promotedConstants are the package-level names moved onto the Dialect
+// receiver — by M9c-0, and then by M9c-3's derived MT window. Each was
+// previously read by a method THROUGH its receiver while the datum came
+// from a package const — the defect shape those milestones existed to
+// remove — and each reaches the OUTBOUND WRITE GATE, where a wrong value
+// can authorise bytes that reach a radio. A name on this list must never
+// reappear as a package-level declaration: the receiver methods that
+// replaced these (mtShortAnswerMax, mtCombinedLen) are receiver-varying
+// gate-reaching geometry, and demoting one back to a constant would
+// resurrect the deleted defect with nothing else watching (Task 8
+// adjudication, 29/07/2026).
 var promotedConstants = []string{
-	"mtTagMaxBytes", // bounded build, parse AND validMTCommand
-	"mtClearTag",    // the empty-tag encoding, emitted into MT Set frames
-	"clarMaxAbsHz",  // reached the gate through validateMWFields
-	"clarStepHz",    // ditto, and a radio characteristic, not a field width
+	"mtTagMaxBytes",  // bounded build, parse AND validMTCommand
+	"mtClearTag",     // the empty-tag encoding, emitted into MT Set frames
+	"clarMaxAbsHz",   // reached the gate through validateMWFields
+	"clarStepHz",     // ditto, and a radio characteristic, not a field width
+	"mtAnswerMaxLen", // M9c-3: the short MT window's top, now mtShortAnswerMax on the receiver
 }
 
 // gateReachingValidators must be Dialect METHODS. Each is reached by
@@ -57,12 +64,31 @@ var promotedConstants = []string{
 // dialect to the FT-710's rule at the one point deciding what is written to
 // a radio.
 //
+// WHAT BELONGS HERE: a method that applies WRITE-DIRECTION POLICY on the
+// path from AllowedCommand to a verdict — the rules saying which slots,
+// values and tags may reach a radio. Not parsers (parseMemoryFrame and
+// parseMemoryFields are Dialect methods the gate reaches too, and neither
+// is listed: they decode a frame, they do not decide policy), and not
+// frame GEOMETRY (d.mtShortAnswerMax, d.mtCombinedLen — receiver methods
+// for the same reason, but lengths rather than rules; their own doc
+// comments carry that obligation, and the milestone gate greps for a
+// package-level constant reappearing in their place).
+//
 // SHAPE ONLY — that the seam exists. Whether a body then honours its
 // receiver is the behavioural tests' job, not this one's.
 var gateReachingValidators = []string{
 	"validMTTag",
 	"validClarHz",
 	"validateMWFields",
+	// M9c-3: the combined MT Set's write-direction policy, shared by
+	// BuildMTSetCombined and validMTCommand's combined branch exactly as
+	// validateMWFields is shared by BuildMWSet and validMWCommand. It is
+	// the ONE new gate-reaching validator the milestone added — the
+	// combined branch's other new names are geometry (mtCombinedLen), a
+	// parser (parseMemoryFields), or deliberately package-level
+	// (validMTTagByte, the form-invariant printable-ASCII charset, which
+	// is a command-injection defence no dialect may relax).
+	"validateCombinedMTFields",
 }
 
 // TestDialectPromotedDataIsNotAPackageGlobal pins that none of the promoted
@@ -106,8 +132,8 @@ func TestDialectPromotedDataIsNotAPackageGlobal(t *testing.T) {
 	t.Logf("scanned %d core/cat files, %d package-level declarations", len(files), len(declared))
 }
 
-// TestGateReachingValidatorsAreDialectMethods pins that the three
-// gate-reaching validators still take a Dialect receiver.
+// TestGateReachingValidatorsAreDialectMethods pins that every
+// gate-reaching validator still takes a Dialect receiver.
 //
 // A package-level version cannot consult a dialect at all, so this catches
 // the cheap regression — a validator demoted back to a function taking a

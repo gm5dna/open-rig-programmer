@@ -18,12 +18,21 @@ type slotSpace struct {
 // Dialect is one radio family's CAT variation: everything this codec
 // needs that differs between models sharing the classic NEWCAT grammar.
 //
-// It carries DATA, not frame shapes. A deliberate M9b scope decision
-// recorded in the design document: the FTdx10/101 manuals document a
-// combined ~50-byte MT record frame against the FT-710's short form, but
-// that difference is unverified against hardware, and the FT-710's own MT
-// is the precedent for a manual being wrong about exactly this.
-// Per-command frame-shape variants are M9c's.
+// It carries DATA, and since M9c-3 that DATA INCLUDES ONE FRAME SHAPE.
+// This comment used to read "it carries DATA, not frame shapes … per-command
+// frame-shape variants are M9c's"; this is that milestone. The FTdx10/101
+// manuals document a combined MT record — the whole memory record and its
+// tag in a single command, 41 bytes for a 12-byte tag, not the "~50" the
+// earlier reading recorded — against the FT-710's short form, and M9b
+// deliberately scoped the difference out because it was unverified against
+// hardware. M9c-3 delivered the seam in the only shape that keeps every one
+// of the FT-710's own bytes:
+// the form is DATA (MTPolicy.Form, dialectconfig.go) and the two layouts
+// are BRANCHES selected by it (mt.go, mtcombined.go), each form's API
+// refusing a dialect declaring the other rather than emitting a plausible
+// frame in the wrong shape. That is still not a claim about hardware — the
+// combined form's answer geometry stays ASSUMED until Stage R — only a
+// claim about which frame this codec builds for a dialect that declares it.
 //
 // THE RECEIVER IS LOAD-BEARING FOR DIALECT DATA. Every method here, and
 // every helper those methods delegate to, must read this struct rather
@@ -41,11 +50,16 @@ type slotSpace struct {
 // P7 value a builder may emit). All three reach the OUTBOUND WRITE GATE,
 // which is why they were promoted while the pure frame offsets were not.
 //
-// What remains genuinely deferred is per-command FRAME SHAPE — the
-// offsets, lengths and field widths in memdata.go and the mt*Len constants
-// — plus Slot's predicates and Mode.String. Those are M9c's. The dividing
-// line is that a wrong assumption in the gate can authorise bytes that
-// reach a radio, whereas a wrong offset merely fails to parse.
+// WHAT REMAINS DEFERRED IS NARROWER SINCE M9c-3. The MT command's frame
+// shape and its length window are no longer deferred: the form is the
+// datum above, and the window derives from this dialect's own tag width
+// (Dialect.mtShortAnswerMax, Dialect.MTAnswerBounds) rather than from a
+// package constant sized to the FT-710. Both reach the gate, which is why
+// they moved. Still deferred: memdata.go's field offsets, which the
+// evidence shows both families share byte for byte; Slot's own predicates;
+// and Mode.String. The dividing line is unchanged — a wrong assumption in
+// the gate can authorise bytes that reach a radio, whereas a wrong offset
+// merely fails to parse — and it is what decided which of these moved.
 //
 // The unqualified form of the rule above ("every method … must read this
 // struct rather than a package-level global", full stop)
@@ -145,7 +159,7 @@ var FT710 = Dialect{
 	// was previously assumed to share with every dialect.
 	// TestNewDialect_ReproducesFT710 pins that this literal and a
 	// config-built equivalent agree.
-	mt:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	mt:          MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	clar:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	mwWriteKind: KindMemory,
 }

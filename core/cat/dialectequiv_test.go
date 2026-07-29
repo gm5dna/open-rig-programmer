@@ -59,7 +59,7 @@ func ft710ConfigFromIndependentLiterals() DialectConfig {
 			NoneWire:      "000",
 		},
 		EXItems:     exItemsGen, // NOT independent — see the doc comment
-		MT:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+		MT:          MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 		Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 		MWWriteKind: KindMemory,
 	}
@@ -314,7 +314,7 @@ func TestNewDialect_InputIndependenceAcrossEveryDerivedStructure(t *testing.T) {
 			{Addr: EXAddress{P1: 3, P2: 1, P3: 1}, Name: "A", Digits: 2},
 			{Addr: EXAddress{P1: 3, P2: 1, P3: 2}, Name: "B", Digits: 4},
 		},
-		MT:          MTPolicy{TagMaxBytes: 10, ClearTagByte: ' '},
+		MT:          MTPolicy{Form: MTFormShort, TagMaxBytes: 10, ClearTagByte: ' '},
 		Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 100},
 		MWWriteKind: KindMemory,
 	}

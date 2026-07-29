@@ -301,19 +301,49 @@ func validateEXItems(cfg DialectConfig) error {
 	return nil
 }
 
-// validateMTPolicy is V9.
+// validateMTPolicy is V9: the TagMaxBytes ceiling, then per-form field
+// ownership.
+//
+// There is deliberately NO runtime frame-ceiling branch here, though the
+// spec asks V9 to prove each form's derived maximum fits DefaultMaxFrame.
+// The TagMaxBytes cap below makes both maxima compile-time facts — the
+// short form reaches at most mtAnswerMinLen+64 = 71 bytes and the combined
+// form at most 29+64 = 93, against a DefaultMaxFrame of 256 — so no config
+// this validator admits can reach such a branch, and a branch no input can
+// take is dead code pretending to be a proof. The relationship is asserted
+// instead as a constants invariant, in
+// TestMTFrameCeilings_FitTransportFrame.
 func validateMTPolicy(cfg DialectConfig) error {
 	if n := cfg.MT.TagMaxBytes; n < 1 || n > maxMTTagBytes {
 		return fmt.Errorf("cat: MT.TagMaxBytes is %d, want 1..%d — it bounds the outbound write gate, so an unbounded value would authorise a pathologically long MT frame", n, maxMTTagBytes)
 	}
-	if !validWireByte(cfg.MT.ClearTagByte) {
-		return fmt.Errorf("cat: MT.ClearTagByte is %#02x, which is outside printable ASCII 0x20-0x7E excluding ';' — it is emitted into every cleared tag", cfg.MT.ClearTagByte)
-	}
-	// PadByte 0 means "this family declares no padding"; any other value
-	// must be a byte that can legitimately appear in a tag, since decoding
-	// trims it from answers.
-	if cfg.MT.PadByte != 0 && !validWireByte(cfg.MT.PadByte) {
-		return fmt.Errorf("cat: MT.PadByte is %#02x, want 0 (no padding) or a byte inside printable ASCII 0x20-0x7E excluding ';'", cfg.MT.PadByte)
+	switch cfg.MT.Form {
+	case MTFormShort:
+		// The pre-existing short-form requirements, verbatim: ClearTagByte
+		// must be a valid wire byte (it is emitted into every cleared
+		// tag), and PadByte keeps its 0-or-valid rule. Only TagFill is
+		// new here, as an ownership refusal.
+		if !validWireByte(cfg.MT.ClearTagByte) {
+			return fmt.Errorf("cat: MT.ClearTagByte is %#02x, which is outside printable ASCII 0x20-0x7E excluding ';' — it is emitted into every cleared tag", cfg.MT.ClearTagByte)
+		}
+		if cfg.MT.PadByte != 0 && !validWireByte(cfg.MT.PadByte) {
+			return fmt.Errorf("cat: MT.PadByte is %#02x, want 0 (no padding) or a byte inside printable ASCII 0x20-0x7E excluding ';'", cfg.MT.PadByte)
+		}
+		if cfg.MT.TagFill != 0 {
+			return fmt.Errorf("cat: MT.TagFill %#02x is set under MTFormShort — TagFill is combined-form data and an inapplicable field must be explicitly zero", cfg.MT.TagFill)
+		}
+	case MTFormCombined:
+		if cfg.MT.ClearTagByte != 0 {
+			return fmt.Errorf("cat: MT.ClearTagByte %#02x is set under MTFormCombined — no distinct clear encoding is documented for the combined form; an empty tag is the all-TagFill field", cfg.MT.ClearTagByte)
+		}
+		if cfg.MT.PadByte != 0 {
+			return fmt.Errorf("cat: MT.PadByte %#02x is set under MTFormCombined — answer trimming is TagFill's job in this form", cfg.MT.PadByte)
+		}
+		if !validWireByte(cfg.MT.TagFill) {
+			return fmt.Errorf("cat: MT.TagFill is %#02x under MTFormCombined, want printable ASCII 0x20-0x7E excluding ';' — it fills every outbound tag field, and zero would silently emit NUL", cfg.MT.TagFill)
+		}
+	default:
+		return fmt.Errorf("cat: MT.Form %v must be set explicitly — the zero value is not a form (an omitted form must refuse, not default)", cfg.MT.Form)
 	}
 	return nil
 }

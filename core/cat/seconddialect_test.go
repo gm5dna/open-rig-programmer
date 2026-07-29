@@ -15,9 +15,9 @@ type namedDialect struct {
 }
 
 // allTestDialects is every CONFIGURED dialect this package can see: the
-// real one plus the three fictions in this file. Tests asserting a
-// property that must hold of ANY dialect walk this, so adding a dialect
-// later cannot quietly skip them.
+// real one plus the five fictions in this file — three SHORT-form and two
+// COMBINED-form. Tests asserting a property that must hold of ANY dialect
+// walk this, so adding a dialect later cannot quietly skip them.
 //
 // The zero Dialect is deliberately absent: it is unconfigured by design
 // and its property is the opposite one (it must do nothing at all), tested
@@ -28,13 +28,13 @@ type namedDialect struct {
 // later that is a silent SUBSET of the FT-710, or that has an identical
 // slot space, joins this table and every property below still passes —
 // which is precisely the root cause that let 18 mutations escape the first
-// round of this task (see task-57-report.md §9). peerDialect is currently
-// the only entry that is a peer rather than a subset, and it is held here
-// by nothing stronger than this comment. A future assertion could compute
-// it: for each dialect, require at least one wire form its classifySlot
-// accepts and FT710's rejects. Not added now because it would need every
-// dialect to be a peer, and testDialect/noneWireDialect are deliberately
-// not.
+// round of this task (see task-57-report.md §9). peerDialect and
+// combinedPeerDialect are the only entries that are peers rather than
+// subsets, and they are held here by nothing stronger than this comment.
+// A future assertion could compute it: for each dialect, require at least
+// one wire form its classifySlot accepts and FT710's rejects. Not added
+// now because it would need every dialect to be a peer, and
+// testDialect/noneWireDialect are deliberately not.
 //
 // STRUCTURAL LIMIT — NO DIALECT CAN EVER BE A PMS PEER. pmsCap() clamps to
 // 9 and the FT-710 already has 9, so every representable PMS pair set is a
@@ -48,6 +48,8 @@ func allTestDialects() []namedDialect {
 		{"testDialect", testDialect},
 		{"noneWireDialect", noneWireDialect},
 		{"peerDialect", peerDialect},
+		{"combinedDialect", combinedDialect},
+		{"combinedPeerDialect", combinedPeerDialect},
 	}
 }
 
@@ -74,7 +76,7 @@ var testDialect = mustFixtureDialect(DialectConfig{
 		NoneWire:      "000",
 	},
 	EXItems:     nil,
-	MT:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	MT:          MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MWWriteKind: KindMemory,
 })
@@ -103,7 +105,7 @@ var noneWireDialect = mustFixtureDialect(DialectConfig{
 		NoneWire:      "900", // FT-710: "000"
 	},
 	EXItems:     nil,
-	MT:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	MT:          MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MWWriteKind: KindMemory,
 })
@@ -159,7 +161,7 @@ var peerDialect = mustFixtureDialect(DialectConfig{
 		NoneWire:      "777", // FT-710: "000"
 	},
 	EXItems:     peerEXItems,
-	MT:          MTPolicy{TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	MT:          MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MWWriteKind: KindMemory,
 })
@@ -1482,3 +1484,96 @@ func mustFixtureDialect(cfg DialectConfig) Dialect {
 	}
 	return d
 }
+
+// combinedDialect is the first of this file's two COMBINED-form fictions,
+// and it is here so that every property this package states over "any
+// dialect" is stated over a dialect whose MT frames are the FTdx10 family's
+// 29+tag combined record rather than the FT-710's short one. Until M9c-3
+// every entry above spoke the short form, so "any dialect" meant "any
+// short-form dialect" and no walk could tell the difference.
+//
+// It is the NARROW geometry — a 6-byte tag field padded with ' ' — chosen to
+// disagree with combinedPeerDialect on both dimensions the combined form
+// derives from its receiver: the exact frame length (35 here, 41 there) and
+// the byte that both pads an outbound tag and trims an inbound one.
+//
+// Its MW write kind is KindMemory ('1'), which is NOT the combined Set's own
+// P7 schema constant ('0'), so this fixture carries the DECOUPLING proof into
+// every walk that builds its frames: MT-Set P7 and MW-Set P7 are two
+// command-specific facts that merely coincide on the evidenced radio, and a
+// builder deriving one from the other would put '1' on the wire here.
+//
+// Its slot space and mode table are the FT-710's, because this fixture's job
+// is to vary the MT FORM and nothing else — combinedPeerDialect is the one
+// that varies the slot space along with it.
+//
+// THE FORM-AWARE COUNTERS LIVE IN mtcombined_test.go, in
+// TestEveryDialect_MTFormCoverage. The walk in dialectgate_test.go skips any
+// builder that returns an error, which is right for it and is exactly why it
+// cannot see either half of this seam: the combined frames this dialect DOES
+// build reach that walk through no builder it knows, and its refusal of
+// BuildMTSet is indistinguishable there from a slot it merely does not have.
+var combinedDialect = mustFixtureDialect(DialectConfig{
+	CATID:     "6666",
+	ModeNames: modeNames, // the FT-710's own table: only the FORM varies here
+	Slots: SlotSpace{
+		MemoryLo: 1, MemoryHi: 99,
+		SixtyLo: 501, SixtyHi: 599,
+		PMSPairs:      9,
+		EmergencyWire: "EMG",
+		NoneWire:      "000",
+	},
+	EXItems:     combinedEXItems,
+	MT:          MTPolicy{Form: MTFormCombined, TagMaxBytes: 6, TagFill: ' '},
+	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MWWriteKind: KindMemory,
+})
+
+// combinedEXItems is combinedDialect's own small inventory. Its P1 group is
+// 07, which the FT-710's Table 2 does not have at all, so no address here is
+// a member of the FT-710's inventory and the EX properties that walk every
+// dialect keep their meaning for this entry.
+var combinedEXItems = []EXItem{
+	{Addr: EXAddress{P1: 7, P2: 1, P3: 1}, P1Label: "COMBINED SETTING", P2Label: "COMBINED GROUP", Name: "COMBINED ITEM ONE", Digits: 3},
+}
+
+// combinedPeerDialect is the second COMBINED-form fiction, and it is a PEER
+// in both of this file's senses at once.
+//
+// In the SLOT sense it carries peerDialect's whole disagreeing posture —
+// memory 100-200, a 60m bank at 600-620, "XYZ" for emergency, "777" for
+// none, a mode byte outside '0'-'9'/'A'-'F', and the P1=09 inventory whose
+// widest item is wider than the FT-710's — so an inner check widened to the
+// FT-710's rules is as visible through the combined form as peerDialect
+// makes it through the short one. Without this entry the combined form would
+// be exercised only by a fixture that is a SUBSET of the FT-710, which is
+// the measured gap peerDialect itself exists to close.
+//
+// In the FORM sense it disagrees with combinedDialect at every dimension the
+// combined record derives from its receiver: a 12-byte tag field (the
+// geometry the FTdx10 evidence records) rather than 6, filled with '_'
+// rather than ' ', and an MW write kind of KindMemTune ('2') rather than
+// KindMemory ('1'). A frame length, fill byte or Set kind hardwired to
+// either fixture's value is refused by the other.
+//
+// THE FORM-AWARE COUNTERS LIVE IN mtcombined_test.go, in
+// TestEveryDialect_MTFormCoverage — see combinedDialect's comment for why
+// the walk in dialectgate_test.go cannot state them.
+var combinedPeerDialect = mustFixtureDialect(DialectConfig{
+	CATID: "5555",
+	ModeNames: map[Mode]string{
+		ModeUSB:   "USB-PEER", // shared with the FT-710, so frames build for both
+		Mode('z'): "ZULU",     // OUTSIDE '0'-'9'/'A'-'F', as peerDialect's is
+	},
+	Slots: SlotSpace{
+		MemoryLo: 100, MemoryHi: 200, // FT-710: 1-99, disjoint
+		SixtyLo: 600, SixtyHi: 620, // FT-710: 501-599, present but renumbered
+		PMSPairs:      4,     // FT-710: 9
+		EmergencyWire: "XYZ", // FT-710: "EMG"
+		NoneWire:      "777", // FT-710: "000"
+	},
+	EXItems:     peerEXItems,
+	MT:          MTPolicy{Form: MTFormCombined, TagMaxBytes: 12, TagFill: '_'},
+	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MWWriteKind: KindMemTune,
+})

@@ -2,6 +2,8 @@
 
 package cat
 
+import "fmt"
+
 // SlotSpace is the exported description of one radio family's memory slot
 // numbering: which 3-byte wire forms exist and what each means.
 //
@@ -42,18 +44,85 @@ type SlotSpace struct {
 	NoneWire string
 }
 
-// MTPolicy carries the MT short form's dialect-varying dimensions.
+// MTForm names the FRAME SHAPE a family's MT command takes.
 //
-// Per-command frame-shape variants — the combined record frame the
-// FTdx10/101 manuals document against the FT-710's short form — are a later
-// milestone's. This type describes the SHORT form only.
+// Its zero value is deliberately NOT a valid form, so a config that omits
+// it is refused rather than defaulting to one — the M9c-1 ruling on
+// ShiftDirection and ToneSemantics, for the same reason. Defaulting here
+// would silently give a combined-form config the FT-710's layout, and the
+// resulting frame would be built, gate-approved and sent.
+type MTForm int
+
+const (
+	// MTFormUnspecified is the zero value: refused by V9, never a form.
+	MTFormUnspecified MTForm = iota
+	// MTFormShort is "MT" + slot(3) + display(1) + tag(0..TagMaxBytes) +
+	// ";" — the FT-710's, and the only shape evidenced by hardware.
+	MTFormShort
+	// MTFormCombined is "MT" + the shared 28-position memory field block's
+	// fields + P11 '0' + tag(TagMaxBytes) + ";" — the FTdx10 family's.
+	//
+	// This value pins EXACTLY that layout: the classic memory block at
+	// memdata.go's offsets, then P11, then the tag. A future radio whose
+	// combined frame differs in its FIELD BLOCK is a new form (or, if slot,
+	// mode and policy sharing has broken down entirely, a sibling codec) —
+	// it is NOT a parameterisation of this one.
+	MTFormCombined
+)
+
+func (f MTForm) String() string {
+	switch f {
+	case MTFormUnspecified:
+		return "MTFormUnspecified"
+	case MTFormShort:
+		return "MTFormShort"
+	case MTFormCombined:
+		return "MTFormCombined"
+	default:
+		return fmt.Sprintf("MTForm(%d)", int(f))
+	}
+}
+
+// MTPolicy carries the MT command's dialect-varying dimensions, ACROSS BOTH
+// evidenced frame forms.
+//
+// EVERY FIELD BELONGS TO ONE FORM, and V9 enforces that ownership in both
+// directions: an inapplicable field must be explicitly zero, an applicable
+// one explicitly valid. Form itself selects which set applies, and its zero
+// value is refused.
+//
+//	Field        | MTFormShort              | MTFormCombined
+//	-------------|--------------------------|---------------------------
+//	TagMaxBytes  | longest accepted tag     | longest accepted tag AND
+//	             |                          | the tag field's width
+//	ClearTagByte | required valid wire byte | must be 0
+//	PadByte      | 0, or a valid wire byte  | must be 0
+//	TagFill      | must be 0                | required valid wire byte
+//
+// The type stays comparable — scalars only — because Dialect equivalence is
+// asserted with != (dialectequiv_test.go).
 type MTPolicy struct {
+	// Form is this family's MT frame shape. It has no default: see MTForm.
+	Form MTForm
+
 	// TagMaxBytes is the longest tag this family accepts, measured in
 	// BYTES. FT-710: 12.
+	//
+	// UNDER MTFormCombined IT CARRIES A SECOND MEANING: the width of the
+	// frame's fixed tag FIELD, which builds pad to exactly. That is a bet,
+	// recorded rather than hidden — the policy bound and the field width
+	// coincide on the evidenced radio (12/12 on the FTdx10), and two
+	// independently configurable facts that must always agree is the worse
+	// default. A combined family whose field is WIDER than the tag length
+	// it accepts is inexpressible until a TagFieldWidth split, which is
+	// additive: if such a counter-radio appears, the field is added then
+	// and this field keeps the policy meaning.
 	TagMaxBytes int
 
 	// ClearTagByte is the byte an EMPTY tag is filled with to produce the
-	// clear form. FT-710: ' '.
+	// clear form. FT-710: ' '. SHORT-FORM ONLY; must be zero under
+	// MTFormCombined, where no distinct clear encoding is documented — an
+	// empty tag there is simply the all-TagFill field.
 	//
 	// It is carried separately from TagMaxBytes rather than derived,
 	// because "an empty tag becomes TagMaxBytes spaces" bundles a width
@@ -65,7 +134,8 @@ type MTPolicy struct {
 
 	// PadByte is the byte the RADIO pads a short tag with in its answers,
 	// trimmed on decode. 0 means this family declares no padding, and its
-	// answers are returned verbatim.
+	// answers are returned verbatim. SHORT-FORM ONLY; must be zero under
+	// MTFormCombined, where answer trimming is TagFill's job.
 	//
 	// SEPARATE FROM ClearTagByte ON PURPOSE, and the separation is the
 	// whole point. Conflating the two is the defect this field exists to
@@ -81,6 +151,19 @@ type MTPolicy struct {
 	// SHORT tag comes back. They happen to coincide for the FT-710, which
 	// is exactly why the conflation survived so long.
 	PadByte byte
+
+	// TagFill is the COMBINED FORM'S fill byte, and it is both halves of
+	// that job: the byte a build pads the outbound tag field to
+	// TagMaxBytes with, AND the byte a parse trims from the answer. The two
+	// are one field here because the combined form's field is fixed-width
+	// in both directions — unlike the short form, where ClearTagByte and
+	// PadByte describe genuinely different events and must stay apart.
+	//
+	// COMBINED-FORM ONLY; must be zero under MTFormShort. Under
+	// MTFormCombined it is ZERO-INVALID: an omitted fill must not silently
+	// emit NUL into every outbound tag field, so V9 requires a valid wire
+	// byte rather than defaulting to ' '.
+	TagFill byte
 }
 
 // ClarifierPolicy bounds MemoryData.ClarHz for one family.
@@ -124,7 +207,7 @@ type DialectConfig struct {
 	// no modelled EX surface is representable.
 	EXItems []EXItem
 
-	// MT is the MT short form's tag policy.
+	// MT is the MT command's frame form and tag policy.
 	MT MTPolicy
 
 	// Clarifier bounds the clarifier field.

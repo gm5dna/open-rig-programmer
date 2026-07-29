@@ -196,14 +196,14 @@ func looksLikeOnce(expr ast.Expr) bool {
 // TestWritePathReachableOnlyThroughDriver pins the composition-root
 // discipline (see the package doc comment): the raw wire-write mechanisms
 // — transport.Engine.Do (the only place bytes cross the wire) and
-// the BuildMWSet/BuildMTSet builders (the only builders of Set frames
-// that mutate a radio's memory; cat.Dialect methods since M9b, matched
-// by NAME rather than by package qualifier — see the matcher's own
-// comment below) — are referenced OUTSIDE their own packages
-// only by core/driver/**; and driver.Session.WriteChannel (the policy-
-// gated write seam those mechanisms compose into) is referenced only by
-// core/driver/** and core/clone/** (the clone service being the single
-// sanctioned policy layer above it).
+// the BuildMWSet/BuildMTSet/BuildMTSetCombined builders (the only
+// builders of Set frames that mutate a radio's memory; cat.Dialect
+// methods since M9b, matched by NAME rather than by package qualifier —
+// see the matcher's own comment below) — are referenced OUTSIDE their
+// own packages only by core/driver/**; and driver.Session.WriteChannel
+// (the policy-gated write seam those mechanisms compose into) is
+// referenced only by core/driver/** and core/clone/** (the clone service
+// being the single sanctioned policy layer above it).
 //
 // APPROXIMATE, deliberately (and per the adjudication): this is a plain
 // AST walk over selector expressions, not a type-checked analysis.
@@ -214,17 +214,27 @@ func looksLikeOnce(expr ast.Expr) bool {
 //     unrelated type's .Do would false-positive, and a dot-import would
 //     false-negative. Neither exists in this repo, and a false positive
 //     merely prompts a human look at a genuinely unusual file.
-//   - BuildMWSet/BuildMTSet are detected as ANY selector named
-//     BuildMWSet or BuildMTSet OUTSIDE core/cat's own tree, matched by
-//     method name alone, whatever the receiver — the SAME two-part shape
-//     (name-only match + owning-tree carve-out) this test already applies
-//     to WriteChannel below, not name-only alone. The core/cat carve-out
-//     is not a migration-window nicety: this check's job has never been
-//     to police core/cat's own internals, only what happens outside it
+//   - The Set-frame builders are detected as ANY selector named
+//     BuildMWSet, BuildMTSet or BuildMTSetCombined OUTSIDE core/cat's
+//     own tree, matched by method name alone, whatever the receiver —
+//     the SAME two-part shape (name-only match + owning-tree carve-out)
+//     this test already applies to WriteChannel below, not name-only
+//     alone. The core/cat carve-out is not a migration-window nicety:
+//     this check's job has never been to police core/cat's own
+//     internals, only what happens outside it
 //     that isn't core/driver/**, and after the dialect seam lands,
 //     core/cat's own dialect implementations will keep calling one
 //     another via selectors (e.g. d.BuildMWSet(...)) forever, not just
 //     during Task 54's transitional package-level delegates.
+//     THE CARVE-OUT IS PREFIX-BASED (inTree), so core/cat's SUBPACKAGES
+//     are inside it too. Today that matters for exactly one: since M9c-3
+//     task 7, core/cat/dialecttest — a NON-test file, and so genuinely
+//     walked here — calls all three builders as part of the exported
+//     conformance suite M9c-4 runs over a real dialect. That is the
+//     intended reading (a conformance suite for core/cat's own API is
+//     core/cat's own tree, not a new write-path call site), and it was
+//     VERIFIED rather than assumed when BuildMTSetCombined was added:
+//     the fence stayed green, naming nothing in dialecttest.
 //     Amended at M9b: before the dialect seam these were package-level
 //     functions and an exact package-qualified check (sel.X an
 //     *ast.Ident naming the core/cat import) sufficed; the seam turns
@@ -232,6 +242,13 @@ func looksLikeOnce(expr ast.Expr) bool {
 //     check cannot see. Name-only is strictly MORE inclusive within the
 //     tree this check still applies to, not weaker: it catches every
 //     call the old form caught outside core/cat, plus the new shape.
+//     Amended again at M9c-3: BuildMTSetCombined joined the list. It is
+//     the FTdx10 family's one-command form of the very same memory write
+//     — record and tag in a single Set frame — so it belongs to the same
+//     mechanism, and the match is by EXACT name, which means the
+//     "BuildMTSet" comparison does not cover it. A new Set-frame builder
+//     must therefore be added here BY NAME; nothing about the shape of
+//     this check makes that automatic.
 //   - "Session.WriteChannel" is detected as ANY selector named
 //     WriteChannel outside the allowed trees, whatever the receiver's
 //     type. A future unrelated type with a WriteChannel method elsewhere
@@ -276,9 +293,10 @@ func TestWritePathReachableOnlyThroughDriver(t *testing.T) {
 			})
 		}
 
-		// (a) BuildMWSet / BuildMTSet, matched by NAME alone, whatever
-		// the receiver — OUTSIDE core/cat's own tree (the carve-out a
-		// same-day Codex review, C1, found missing from the first cut of
+		// (a) BuildMWSet / BuildMTSet / BuildMTSetCombined, matched by
+		// NAME alone, whatever the receiver — OUTSIDE core/cat's own
+		// tree, subpackages included (the carve-out a same-day Codex
+		// review, C1, found missing from the first cut of
 		// this amendment: without it, the check fired inside core/cat
 		// itself, which defeats the whole point — Task 54's package-level
 		// delegates, and every dialect implementation's internal calls
@@ -299,13 +317,20 @@ func TestWritePathReachableOnlyThroughDriver(t *testing.T) {
 		// two-part shape (name-only match + owning-tree carve-out) this
 		// guard already applies to WriteChannel in (b) below, so it is
 		// house precedent rather than a new compromise.
+		//
+		// Amended again at M9c-3 (task 8): BuildMTSetCombined, the FTdx10
+		// family's one-command form of the same memory write, joins the
+		// two names by EXACT match — "BuildMTSet" does not cover it. See
+		// the doc comment for the dialecttest note: core/cat/dialecttest
+		// is a NON-test file calling all three, and inTree's prefix
+		// semantics keep it inside the carve-out.
 		if !inTree(pf.relDir, "core/cat") {
 			ast.Inspect(pf.file, func(n ast.Node) bool {
 				sel, isSel := n.(*ast.SelectorExpr)
 				if !isSel {
 					return true
 				}
-				if sel.Sel.Name != "BuildMWSet" && sel.Sel.Name != "BuildMTSet" {
+				if sel.Sel.Name != "BuildMWSet" && sel.Sel.Name != "BuildMTSet" && sel.Sel.Name != "BuildMTSetCombined" {
 					return true
 				}
 				if inDriver {
@@ -340,8 +365,15 @@ func TestWritePathReachableOnlyThroughDriver(t *testing.T) {
 	if !sawDriverEngineDo {
 		t.Error("never saw core/driver/** call Engine.Do — the walker or its filters are broken, and every check above passed vacuously")
 	}
+	// A DISJUNCTION over the fenced family, deliberately, and not a counter
+	// per name. core/driver/** builds SHORT-form MT Sets today (the FT-710
+	// is MTFormShort), so there is no BuildMTSetCombined call site for this
+	// walk to see; the combined driver work is M9c-4/5. Demanding each name
+	// separately would assert a schedule rather than the property this check
+	// is for, which is that the walk and its filters can see core/driver/**
+	// at all — any one of the three rules out the blind sweep.
 	if !sawDriverBuildMW {
-		t.Error("never saw core/driver/** reference BuildMWSet/BuildMTSet — the walker or its filters are broken, and every check above passed vacuously")
+		t.Error("never saw core/driver/** reference any of BuildMWSet/BuildMTSet/BuildMTSetCombined — the walker or its filters are broken, and every check above passed vacuously")
 	}
 	if !sawCloneWriteChannel {
 		t.Error("never saw core/clone/** reference Session.WriteChannel — the walker or its filters are broken, and every check above passed vacuously")

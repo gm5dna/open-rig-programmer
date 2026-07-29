@@ -515,7 +515,15 @@ Rules (all from the spec — implement exactly):
   `go test ./...` foreground; guards verbose; `git diff --exit-code --
   core/cat/testdata/ core/cat/exinventory_gen.go`; the repo-wide greps
   (`MTPolicy{` all carrying Form; no `mtAnswerMaxLen` survivor; no new
-  package-level MT geometry constant).
+  package-level constant carrying DIALECT-VARYING MT geometry).
+  **Adjudicated at Task 4** (orchestrator, 29/07/2026): the rule's
+  target is receiver-varying geometry like the deleted `mtAnswerMaxLen`.
+  Three form-INVARIANT constants are sanctioned by name —
+  `mtCombinedP11Offset`, `mtCombinedTagOffset`, `combinedMTP11` —
+  because they are identical for every combined dialect and shared
+  between the builder (Task 4) and the gate (Task 5); the frame LENGTH
+  stays a receiver method (`mtCombinedLen`). Anything beyond these
+  three needs its own adjudication.
 - [ ] **Step 3**: commit the manifest; remove the worktree.
 
 ## Self-review

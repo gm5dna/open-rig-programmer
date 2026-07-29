@@ -13,7 +13,7 @@ import "testing"
 // task brief.
 func mtPeerConfig() DialectConfig {
 	cfg := validBaselineConfig()
-	cfg.MT = MTPolicy{TagMaxBytes: 6, ClearTagByte: '-'}
+	cfg.MT = MTPolicy{Form: MTFormShort, TagMaxBytes: 6, ClearTagByte: '-'}
 	return cfg
 }
 
