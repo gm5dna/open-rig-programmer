@@ -302,11 +302,71 @@ var ft710Profile = Profile{
 	},
 }
 
+// ftdx10Profile carries the FTdx10's Table 2 transcription facts. It is the
+// registry's first TypesImported entry: the inventory is emitted into
+// core/cat/ftdx10, a model package OUTSIDE core/cat, so EXItem and EXAddress
+// are qualified by the explicit "cat" alias rather than being local names.
+//
+// Evidence, all from CAT manual rev 2308-F's Table 2 "MENU Chart" (see
+// core/cat/ftdx10/table2.csv's own provenance header, which records the
+// chart's header-vs-chart anomaly): the chart's Digits column runs 1..4 for
+// every numeric row, and its ONE text row — MY CALL. at (04,01,01) — is 12.
+// MinDigits/MaxDigits/TextWidth are therefore chart-verified for THIS radio,
+// not inherited from the FT-710's identical-looking values.
+//
+// Deliberately NOT given a named accessor of its own (compare FT710Profile):
+// its only consumers reach it through Lookup/RegisteredProfiles, which is
+// what lets core/cat/ftdx10's staleness test select its registration by
+// Package rather than by hardcoding a lookup name.
+var ftdx10Profile = Profile{
+	Model:       "FTdx10",
+	Package:     "ftdx10",
+	Types:       TypesImported,
+	ImportPath:  "github.com/gm5dna/open-rig-programmer/core/cat",
+	ImportAlias: "cat",
+	VarName:     "exItems",
+	OutFile:     "exinventory_gen.go",
+	ManualCSV:   "table2.csv",
+
+	MinDigits: 1,
+	MaxDigits: 4,
+	TextWidth: 12,
+	// MaxObservedWidth is an INERT API-REQUIRED SENTINEL here. Validate
+	// demands a positive value from every profile, but this profile declares
+	// ObservationsAbsent — no FTdx10 hardware exists to this project, so no
+	// observation CSV is ever parsed and this bound is never consulted. It
+	// carries NO hardware claim about the FTdx10, and must not be read as
+	// one: the moment observations do exist, it is re-derived from them
+	// rather than kept. It is spelt 12 only because a sentinel has to be
+	// spelt something.
+	MaxObservedWidth: 12,
+	// ExpectedRows comes from the group-boundary ledger
+	// (core/cat/ftdx10/testdata/group-ledger.csv), which was derived from
+	// the rendered PDF before any transcription existed — NOT from
+	// transcription A and B agreeing with each other. The distinction is the
+	// point: this gate freezes an externally established count, it does not
+	// create one. If A and B agree on a number that is not this one, the
+	// answer is arbitration against the PDF, never an edit here.
+	ExpectedRows: 197,
+
+	Observations: ObservationsAbsent,
+	DocLines: []string{
+		"exItems is the FTdx10's EX address inventory, sorted by (P1,P2,P3), built",
+		`from ONE source: the manual transcription in table2.csv (the FTdx10 CAT`,
+		`manual rev 2308-F's Table 2 "MENU Chart"). Unlike the FT-710's inventory`,
+		"there are no hardware READ observations to join — no FTdx10 has ever been",
+		"asked anything — so every item carries the absence sentinels",
+		"ObservedReadWidth 0 and ObservedReadShape \"\". Regenerate with",
+		"`go generate ./core/cat/ftdx10`; do not edit by hand.",
+	},
+}
+
 // registry maps a lookup name to its profile. It is validated at init, so an
 // inconsistent profile panics the build tooling rather than emitting a wrong
 // inventory.
 var registry = mustRegistry(map[string]Profile{
-	"ft710": ft710Profile,
+	"ft710":  ft710Profile,
+	"ftdx10": ftdx10Profile,
 })
 
 func mustRegistry(m map[string]Profile) map[string]Profile {
