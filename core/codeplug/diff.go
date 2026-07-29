@@ -49,14 +49,17 @@ type DiffEntry struct {
 	// Blocked is true when this change cannot be sent to a radio: the bank
 	// does not support writing FieldFrequency at all (e.g. 60M/EMG); it
 	// is an erase and FieldErase is not yet write-Supported for this
-	// bank; or (Modified/Added only) the change touches at least one
-	// field that is not write-Supported for this bank — see Diff's
-	// Blocked doc for the exact rule and precedence order.
+	// bank; (Modified/Added only) its TagDisplay is not Known while this
+	// bank does transmit the display flag; or (Modified/Added only) the
+	// change touches at least one field that is not write-Supported for
+	// this bank — see Diff's Blocked doc for the exact rule and
+	// precedence order.
 	Blocked bool
 	// BlockReason explains Blocked, e.g. "erase not supported on this
-	// radio", "bank 60M is read-only", "ctcss_tone not writable on this
-	// radio", or "clarifier changes are ignored by the radio and cannot
-	// be sent". Empty when Blocked is false.
+	// radio", "bank 60M is read-only", "tag display unknown — set On or
+	// Off before sending", "ctcss_tone not writable on this radio", or
+	// "clarifier changes are ignored by the radio and cannot be sent".
+	// Empty when Blocked is false.
 	BlockReason string
 }
 
@@ -184,11 +187,28 @@ func changedFields(before, after ChannelData) []spec.Field {
 // introduces — i.e. every field whose value will actually be sent to the
 // radio when this channel is written. Every plain (non-FieldState) field
 // is always introduced, even at its zero value (e.g. ClarHz == 0 is a
-// real requested "no clarifier", not an absent value). CTCSSTone and
-// ScanSkip are FieldState-carrying: per FieldState's write rule, only a
-// Known value is ever sent — Unknown or Unavailable means "preserve
-// whatever the radio has", i.e. nothing is requested for that field at
-// all, so it is deliberately NOT counted as introduced here.
+// real requested "no clarifier", not an absent value). CTCSSTone,
+// TagDisplay and ScanSkip are FieldState-carrying: per FieldState's write
+// rule, only a Known value is ever sent — Unknown or Unavailable means
+// "preserve whatever the radio has", i.e. nothing is requested for that
+// field at all, so it is deliberately NOT counted as introduced here.
+//
+// ORDER IS PART OF THE CONTRACT, not incidental: this slice is what
+// Diff's generic per-field gate walks, and therefore the order in which
+// fieldGateBlockReason/modifiedBlockReason name fields in a BlockReason a
+// user reads. TagDisplay keeps its PLACE — after tag, before the
+// tone/skip conditionals, i.e. seventh whenever it appears at all —
+// exactly where it sat when it was unconditional
+// (TestAddedFields_MembershipAndOrder pins this).
+//
+// TagDisplay's conditional is subtler than the other two, because a
+// non-Known TagDisplay is normally refused OUTRIGHT before this set is
+// ever consulted (see Diff's doc comment, gate 3): the conditional here
+// is what makes the one case that survives that gate come out right — a
+// target whose FieldTagDisplay.Write is Unsupported never transmits the
+// display flag at all, so an unknown value for it is not a problem to
+// report, and leaving it in this set would have blocked the channel with
+// a not-writable reason for a field nobody asked to write.
 func addedFields(data ChannelData) []spec.Field {
 	out := []spec.Field{
 		spec.FieldFrequency,
@@ -197,7 +217,9 @@ func addedFields(data ChannelData) []spec.Field {
 		spec.FieldCTCSSState,
 		spec.FieldShift,
 		spec.FieldTag,
-		spec.FieldTagDisplay,
+	}
+	if data.TagDisplay.State == Known {
+		out = append(out, spec.FieldTagDisplay)
 	}
 	if data.CTCSSTone.State == Known {
 		out = append(out, spec.FieldCTCSSTone)
@@ -207,6 +229,17 @@ func addedFields(data ChannelData) []spec.Field {
 	}
 	return out
 }
+
+// tagDisplayUnknownReason is the BlockReason Diff's TagDisplay gate
+// produces (see Diff's doc comment, gate 3). It is deliberately phrased
+// as an INSTRUCTION rather than a description: unlike every other block
+// reason in this file — a bank the radio will not write, a field awaiting
+// hardware verification, a value the radio provably ignores — this one
+// names something the user can fix immediately, and the whole reason the
+// gate is ordered ahead of the generic aggregation is so that instruction
+// is never buried in a "; "-joined list of problems they cannot fix at
+// all. "On"/"Off" are the front panel's own words for the setting.
+const tagDisplayUnknownReason = "tag display unknown — set On or Off before sending"
 
 // fieldGateBlockReason builds a DiffEntry.BlockReason naming every field
 // in fields (assumed non-empty) that is not write-Supported for this
@@ -222,7 +255,7 @@ func fieldGateBlockReason(fields []spec.Field) string {
 // modifiedBlockReason is fieldGateBlockReason for a DiffModified entry,
 // additionally noting — per named field — when that field is NOT among
 // changed (M3 Codex-review fix wave, Fix 4): since fields is now every
-// TRANSMITTED field (see Diff's per-field gate doc, point 3), not merely
+// TRANSMITTED field (see Diff's per-field gate doc, point 4), not merely
 // every CHANGED one, a field that blocks the whole entry despite this
 // particular edit leaving its value untouched is the surprising case a
 // reviewer needs called out explicitly — indistinguishable from a field
@@ -287,7 +320,7 @@ func inertBlockReason(fields []spec.Field) string {
 //  1. Bank-level: does the slot's bank support writing FieldFrequency at
 //     all — Supported, OR spec.Inert (Fix 4, Codex M5b fix wave,
 //     adjudicated MEDIUM: transmissible, even if the radio may ignore it —
-//     mirrors point 3's per-field Inert exception, and Session.WriteChannel's
+//     mirrors point 4's per-field Inert exception, and Session.WriteChannel's
 //     own gate) — (an Unknown-bank slot counts as not supporting it)? If
 //     not, the WHOLE entry is Blocked with a "bank ... is read-only" (or
 //     unknown-bank) reason, regardless of Kind.
@@ -296,12 +329,40 @@ func inertBlockReason(fields []spec.Field) string {
 //     FieldErase write-Supported? If not, Blocked with an "erase not
 //     supported..." reason.
 //
-//  3. Per-field (v1, all-or-nothing per channel): for a DiffModified OR a
+//  3. TagDisplay knowledge (M9c-5, E1b): for a DiffModified OR a DiffAdded
+//     entry, is After's TagDisplay.State anything other than Known while
+//     this bank's FieldTagDisplay.Write is anything other than
+//     spec.Unsupported? If so, the WHOLE entry is Blocked with
+//     tagDisplayUnknownReason, and gate 4 does not run for it.
+//
+//     Why a gate of its own rather than another contributor to gate 4:
+//     the display flag in a write frame is MANDATORY on this radio family
+//     — there is no "leave it alone" encoding — so a non-Known TagDisplay
+//     cannot be transmitted at all without manufacturing a value the user
+//     never chose. That is a different KIND of problem from gate 4's
+//     ("this radio cannot write that field"): it is the one block a user
+//     can clear themselves, by deciding. Ordering it ahead of gate 4, and
+//     stopping there, is what keeps that instruction from being merged
+//     into a "; "-joined list of unfixable findings.
+//
+//     The Write != Unsupported condition (read DIRECTLY from caps here —
+//     gate 4 cannot report it, because a non-Known TagDisplay is by then
+//     no longer in addedFields' set at all) is the honest converse: a
+//     target that never transmits the display flag needs no value for it,
+//     so such a channel is not blocked by this gate — or by gate 4, per
+//     addedFields' doc comment. The condition is deliberately NOT
+//     FieldSupport.CanWrite(), which is false for Unverified and Inert
+//     too: a merely-unverified field is still a field the frame carries a
+//     value for, so the unknown-value problem is real there and this
+//     reason (which names the remedy) must win over gate 4's (which does
+//     not).
+//
+//  4. Per-field (v1, all-or-nothing per channel): for a DiffModified OR a
 //     DiffAdded entry, Diff computes "touched" as addedFields(after) —
 //     the SAME field set for both Kinds (M3 Codex-review fix wave, Fix
-//     4): every field the write would actually TRANSMIT (the seven
+//     4): every field the write would actually TRANSMIT (the six
 //     always-sent fields, frequency/mode/clarifier/ctcss_state/shift/
-//     tag/tag_display, plus CTCSSTone/ScanSkip only when their FieldState
+//     tag, plus TagDisplay/CTCSSTone/ScanSkip only when their FieldState
 //     is Known — per FieldState's write rule, an Unknown/Unavailable
 //     field is never sent, so it introduces no write request to gate).
 //     This is DELIBERATELY NOT "only the fields that changed"
@@ -331,7 +392,9 @@ func inertBlockReason(fields []spec.Field) string {
 //     field (the FT-710's clarifier) would block EVERY Added/Modified
 //     entry project-wide, which is exactly the contradiction the M5b
 //     adjudication resolved by introducing Inert. An entry with both
-//     unwritable and changed-Inert fields names both, joined with "; ".
+//     unwritable and changed-Inert fields names both, joined with "; " —
+//     the two findings THIS gate can make. Gate 3's reason never appears
+//     in that join: it is a stop, not a contributor.
 //
 // Before/After are always defensive copies (see copyChannelData): mutating
 // a DiffResult's entries never mutates baseline or file.
@@ -388,7 +451,7 @@ func Diff(baseline, file *Codeplug, caps spec.Capabilities) (DiffResult, error) 
 			// HW-observed) is still TRANSMISSIBLE, just possibly ignored,
 			// so it must count as transmissible here too, mirroring
 			// Session.WriteChannel's own gate (core/driver/ft710/write.go)
-			// and the generic per-field Inert exception below (point 3).
+			// and the generic per-field Inert exception below (point 4).
 			// Leaving this bank-gate check as CanWrite()-only would
 			// wrongly Block EVERY entry — even a tag-only edit with an
 			// unchanged frequency — as "bank ... is read-only", before the
@@ -413,18 +476,38 @@ func Diff(baseline, file *Codeplug, caps spec.Capabilities) (DiffResult, error) 
 					// radio-generic, since this package is.
 					reason = "erase not supported on this radio"
 				}
+			} else if (kind == DiffModified || kind == DiffAdded) &&
+				after.TagDisplay.State != Known &&
+				caps.FieldSupport(bankID, spec.FieldTagDisplay).Write != spec.Unsupported {
+				// Gate 3 (M9c-5, E1b — see this function's doc comment):
+				// the write frame's display flag is mandatory, so a
+				// channel whose TagDisplay is not Known cannot be sent to
+				// a target that transmits that flag without inventing a
+				// value. Refuse it HERE, per channel, at plan time, and
+				// stop: gate 4 must not run, because its findings would
+				// bury the one instruction that actually clears this
+				// block.
+				//
+				// caps is read DIRECTLY rather than through the touched
+				// set gate 4 walks: a non-Known TagDisplay is no longer
+				// in addedFields' result at all (that is what keeps the
+				// Write-Unsupported case from blocking), so the support
+				// entry has to be fetched explicitly to decide whether
+				// the flag would be transmitted in the first place.
+				isBlocked = true
+				reason = tagDisplayUnknownReason
 			} else if kind == DiffModified || kind == DiffAdded {
 				// M3 Codex-review fix wave, Fix 4: DiffModified is gated
 				// against the SAME field set as DiffAdded — addedFields(after),
 				// every field the write would actually TRANSMIT — not just
-				// changedFields. See this function's doc comment, point 3,
+				// changedFields. See this function's doc comment, point 4,
 				// for why: MW+MT rewrite every expressible field each time,
 				// whether or not its value changed, so an unwritable field
 				// left unchanged by THIS particular edit would still be
 				// clobbered by the write.
 				//
 				// The Inert rule (M5b, HW-CONFIRMED 2026-07-13 — see
-				// spec.Inert and this function's doc comment, point 3): a
+				// spec.Inert and this function's doc comment, point 4): a
 				// transmitted field whose Write support is Inert blocks the
 				// entry ONLY when its value differs Before->After — the
 				// radio ignores the transmitted value, so a CHANGED value

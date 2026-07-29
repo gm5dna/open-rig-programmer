@@ -423,6 +423,122 @@ func TestExecute_RealHardwareProfile_BlockedEntriesNeverWritten(t *testing.T) {
 	}
 }
 
+// wantTagDisplayUnknownReason is codeplug.Diff's exact E1b BlockReason,
+// repeated here as a literal on purpose: this package is a CONSUMER of
+// that string (it lands in a SlotResult.Detail a user reads), so the pin
+// must be independent of codeplug's own.
+const wantTagDisplayUnknownReason = "tag display unknown — set On or Off before sending"
+
+// TestExecute_TagDisplayUnknown_BlockedSlotNeverReachesTheWire is spec
+// E1's blocked-send proof obligation, end to end (M9c-5, E1b): one
+// channel whose TagDisplay is Unknown, among Known siblings, in a single
+// send. The MT frame's display flag is mandatory, so that channel cannot
+// be transmitted without manufacturing a value — codeplug.Diff blocks it
+// at PLAN time with the named reason, Execute skips it per channel, and
+// the run proceeds normally for everything else: refuse early, never
+// mid-Execute, and never a whole-send refusal.
+//
+// The wire assertion is the load-bearing one. A count alone would not do
+// here (a sibling IS legitimately written in the same run), so the
+// counting port's captured bytes are sliced from a mark taken after
+// PrepareSend and every frame Execute emitted is checked: not one of them
+// addresses the blocked slot — not a write, and not even the verify-read
+// that precedes one.
+func TestExecute_TagDisplayUnknown_BlockedSlotNeverReachesTheWire(t *testing.T) {
+	radio, port, sess := openCountingSimSession(t, fakeradio.WithFactoryImage(happyPathImage))
+	svc := NewService(sess, newStore(t), WithNow(stepClock(fixedNow)))
+
+	caps := sess.Capabilities()
+	unknownDisplay := writableChannel("001", 14_100_000, "NO-DISPLAY").Data
+	unknownDisplay.TagDisplay = codeplug.BoolField{State: codeplug.Unknown}
+	file := matchingCandidateFile(caps, happyPathPopulated(), map[string]*codeplug.ChannelData{
+		"001": unknownDisplay,
+		"005": writableChannel("005", 14_200_000, "SIBLING").Data,
+	})
+
+	plan, err := svc.PrepareSend(testCtx(t), file)
+	if err != nil {
+		t.Fatalf("PrepareSend: %v", err)
+	}
+
+	// The plan itself must already carry the block, with the exact reason
+	// — this is a plan-time refusal, not something Execute discovers.
+	var blockedEntry codeplug.DiffEntry
+	for _, e := range plan.diff.Entries {
+		if e.Slot == "001" {
+			blockedEntry = e
+		}
+	}
+	if !blockedEntry.Blocked {
+		t.Fatalf("plan entry for \"001\" = %+v, want Blocked", blockedEntry)
+	}
+	if blockedEntry.BlockReason != wantTagDisplayUnknownReason {
+		t.Errorf("plan entry BlockReason = %q, want %q", blockedEntry.BlockReason, wantTagDisplayUnknownReason)
+	}
+
+	mark := port.mark()
+
+	report, err := svc.Execute(testCtx(t), plan, plan.ConfirmationDigest(), ExecuteOptions{FirmwareConfirmed: "1.0"})
+	if err != nil {
+		t.Fatalf("Execute: unexpected error: %v", err)
+	}
+	if report.Aborted {
+		t.Errorf("Aborted = true (reason %q), want false — a blocked channel is skipped, never an abort", report.AbortReason)
+	}
+	if report.SkippedBlocked != 1 {
+		t.Errorf("SkippedBlocked = %d, want 1", report.SkippedBlocked)
+	}
+	if report.Written != 1 || report.Verified != 1 {
+		t.Errorf("Written/Verified = %d/%d, want 1/1 (the Known sibling still sends)", report.Written, report.Verified)
+	}
+
+	var sawBlocked bool
+	for _, sr := range report.Slots {
+		if sr.Slot != "001" {
+			continue
+		}
+		sawBlocked = true
+		if sr.Action != actionSkippedBlocked {
+			t.Errorf("SlotResult(\"001\").Action = %q, want %q", sr.Action, actionSkippedBlocked)
+		}
+		if sr.Detail != wantTagDisplayUnknownReason {
+			t.Errorf("SlotResult(\"001\").Detail = %q, want %q", sr.Detail, wantTagDisplayUnknownReason)
+		}
+	}
+	if !sawBlocked {
+		t.Error("no SlotResult for \"001\" in the report")
+	}
+
+	// Nothing Execute put on the wire may address the blocked slot. The
+	// sibling's own frames are asserted FIRST, as this negative's control:
+	// without them, "no frame addresses 001" would also pass if
+	// frameTargetsSlot simply never recognised anything.
+	frames := port.framesSince(mark)
+	var sawSibling bool
+	for _, f := range frames {
+		if frameTargetsSlot(f, "005") {
+			sawSibling = true
+		}
+	}
+	if !sawSibling {
+		t.Fatalf("no frame on the wire addressed the written sibling \"005\" — the wire assertion below would be vacuous; frames: %q", frames)
+	}
+	for _, f := range frames {
+		if frameTargetsSlot(f, "001") {
+			t.Errorf("Execute put frame %q on the wire for the blocked slot \"001\"; all frames: %q", f, frames)
+		}
+	}
+
+	// The radio's own memory is the final witness: "001" still holds the
+	// factory image, and the sibling was actually written.
+	if st, ok := radio.SlotState("001"); !ok || st.Freq != "007000000" || st.Tag != "" {
+		t.Errorf("SlotState(\"001\") = %+v, ok=%v, want the untouched factory image (Freq 007000000, no tag)", st, ok)
+	}
+	if st, ok := radio.SlotState("005"); !ok || st.Freq != freqDigits(14_200_000) || st.Tag != "SIBLING" {
+		t.Errorf("SlotState(\"005\") = %+v, ok=%v, want the sibling's written values", st, ok)
+	}
+}
+
 // TestExecute_VerifyReadPhase_BaselineDrift (obligation 11): after
 // PrepareSend, the radio's content for the to-be-written slot is changed
 // by a DIFFERENT means (a direct WriteChannel through the same session,
@@ -1654,6 +1770,61 @@ func TestWritableFieldsMismatch_Table(t *testing.T) {
 			bad := writableFieldsMismatch(want, got)
 			if !reflect.DeepEqual(bad, tt.want) {
 				t.Errorf("writableFieldsMismatch(want, got) = %v, want %v", bad, tt.want)
+			}
+		})
+	}
+}
+
+// TestWritableFieldsMismatch_TagDisplayMutualKnowledge (M9c-5, E1b):
+// TagDisplay is a BoolField now, so verification has to say WHICH
+// BoolFields it can verify. CTCSSTone and ScanSkip are excluded outright
+// (never readable at all); TagDisplay is excluded CONDITIONALLY — it is
+// compared only when BOTH sides are Known. A read-back that is Unknown or
+// Unavailable (a radio whose frame carries no display flag: E1's first
+// real producer of that state) says nothing about what was stored, so
+// comparing it against the Known value that was sent would manufacture a
+// mismatch and abort a write that in fact landed perfectly.
+func TestWritableFieldsMismatch_TagDisplayMutualKnowledge(t *testing.T) {
+	tests := []struct {
+		name       string
+		want, got  codeplug.BoolField
+		wantFields []spec.Field
+	}{
+		{
+			name: "both Known and equal",
+			want: codeplug.BoolField{State: codeplug.Known, Value: true},
+			got:  codeplug.BoolField{State: codeplug.Known, Value: true},
+		},
+		{
+			name:       "both Known and different — the one comparable case, and it must still bite",
+			want:       codeplug.BoolField{State: codeplug.Known, Value: true},
+			got:        codeplug.BoolField{State: codeplug.Known, Value: false},
+			wantFields: []spec.Field{spec.FieldTagDisplay},
+		},
+		{
+			name: "read back Unavailable — no shared knowledge, no comparison",
+			want: codeplug.BoolField{State: codeplug.Known, Value: true},
+			got:  codeplug.BoolField{State: codeplug.Unavailable},
+		},
+		{
+			name: "read back Unknown — no shared knowledge, no comparison",
+			want: codeplug.BoolField{State: codeplug.Known, Value: true},
+			got:  codeplug.BoolField{State: codeplug.Unknown},
+		},
+		{
+			name: "sent non-Known — nothing was requested, so nothing to verify",
+			want: codeplug.BoolField{State: codeplug.Unknown},
+			got:  codeplug.BoolField{State: codeplug.Known, Value: true},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			want := baseVerifyChannelData()
+			want.TagDisplay = tt.want
+			got := baseVerifyChannelData()
+			got.TagDisplay = tt.got
+			if bad := writableFieldsMismatch(want, got); !reflect.DeepEqual(bad, tt.wantFields) {
+				t.Errorf("writableFieldsMismatch = %v, want %v", bad, tt.wantFields)
 			}
 		})
 	}

@@ -3,12 +3,21 @@
 package codeplug
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
+
+// wantTagDisplayUnknownReason is the EXACT BlockReason the M9c-5 E1b
+// ordered TagDisplay gate must produce, spelled out here as a literal
+// rather than referencing the production constant: the string itself is
+// the contract (it is what a user reads, and what tells them the one
+// action that clears the block), so a test that merely echoed the
+// production value could never catch it changing.
+const wantTagDisplayUnknownReason = "tag display unknown — set On or Off before sending"
 
 // findDiffEntry returns the DiffEntry for slot, failing the test if absent.
 func findDiffEntry(t *testing.T, result DiffResult, slot string) DiffEntry {
@@ -759,6 +768,508 @@ func TestDiffInertGate_FrequencyInert_ChangedFrequencyBlocks(t *testing.T) {
 	want := "frequency changes are ignored by the radio and cannot be sent"
 	if e.BlockReason != want {
 		t.Errorf("BlockReason = %q, want %q", e.BlockReason, want)
+	}
+}
+
+// tagDisplayCaps is testCapabilities with MEM's FieldTagDisplay set to
+// write, letting each TagDisplay-gate test below state the ONE support
+// value it is about.
+func tagDisplayCaps(write spec.Support) spec.Capabilities {
+	caps := testCapabilities()
+	for i, b := range caps.Banks {
+		if b.ID == spec.BankMemory {
+			caps.Banks[i].Fields[spec.FieldTagDisplay] = spec.FieldSupport{Read: spec.Supported, Write: write}
+		}
+	}
+	return caps
+}
+
+// TestDiffTagDisplayGate_UnknownBlocksModified is the E1b gate's core
+// case (M9c-5, spec E1's send-path decision): the MT frame's display flag
+// is MANDATORY — there is no "leave it alone" encoding — so a channel
+// whose TagDisplay is not Known cannot be transmitted at all without
+// manufacturing a value. Diff refuses it at PLAN time, per channel, with
+// the one reason that names the user's only remedy.
+func TestDiffTagDisplayGate_UnknownBlocksModified(t *testing.T) {
+	baseline := testBaselineCodeplug()
+	file := testBaselineCodeplug()
+	for i := range file.Channels {
+		if file.Channels[i].Slot == "002" {
+			file.Channels[i].Data.Tag = "RENAMED"
+			file.Channels[i].Data.TagDisplay = BoolField{State: Unknown}
+		}
+	}
+
+	result, err := Diff(baseline, file, testCapabilities())
+	if err != nil {
+		t.Fatalf("Diff() error = %v, want nil", err)
+	}
+	e := findDiffEntry(t, result, "002")
+	if e.Kind != DiffModified {
+		t.Fatalf("Kind = %v, want %v", e.Kind, DiffModified)
+	}
+	if !e.Blocked {
+		t.Fatal("Blocked = false, want true (a non-Known TagDisplay cannot be put on the wire)")
+	}
+	if e.BlockReason != wantTagDisplayUnknownReason {
+		t.Errorf("BlockReason = %q, want %q", e.BlockReason, wantTagDisplayUnknownReason)
+	}
+}
+
+// TestDiffTagDisplayGate_UnknownBlocksAdded: the gate applies to Added
+// entries exactly as to Modified ones — a freshly-created channel's write
+// transmits the display flag just the same.
+func TestDiffTagDisplayGate_UnknownBlocksAdded(t *testing.T) {
+	baseline := testBaselineCodeplug()
+	file := testBaselineCodeplug()
+	for i := range file.Channels {
+		if file.Channels[i].Slot == "003" {
+			file.Channels[i].Data = &ChannelData{
+				FreqHz: 14100000, Mode: "USB", CTCSS: "OFF",
+				CTCSSTone: ToneField{State: Unknown}, Shift: "SIMPLEX",
+				TagDisplay: BoolField{State: Unknown},
+				ScanSkip:   BoolField{State: Known},
+			}
+		}
+	}
+
+	result, err := Diff(baseline, file, testCapabilities())
+	if err != nil {
+		t.Fatalf("Diff() error = %v, want nil", err)
+	}
+	e := findDiffEntry(t, result, "003")
+	if e.Kind != DiffAdded {
+		t.Fatalf("Kind = %v, want %v", e.Kind, DiffAdded)
+	}
+	if !e.Blocked {
+		t.Fatal("Blocked = false, want true (an Added channel's non-Known TagDisplay is unsendable too)")
+	}
+	if e.BlockReason != wantTagDisplayUnknownReason {
+		t.Errorf("BlockReason = %q, want %q", e.BlockReason, wantTagDisplayUnknownReason)
+	}
+}
+
+// TestDiffTagDisplayGate_UnavailableBlocksToo: the gate's condition is
+// "not Known", not "Unknown" — an Unavailable TagDisplay (a radio whose
+// frame has no display flag, E1's first real producer of that state) is
+// just as unsendable to a target that DOES write the field.
+func TestDiffTagDisplayGate_UnavailableBlocksToo(t *testing.T) {
+	baseline := testBaselineCodeplug()
+	file := testBaselineCodeplug()
+	for i := range file.Channels {
+		if file.Channels[i].Slot == "002" {
+			file.Channels[i].Data.TagDisplay = BoolField{State: Unavailable}
+		}
+	}
+
+	result, err := Diff(baseline, file, testCapabilities())
+	if err != nil {
+		t.Fatalf("Diff() error = %v, want nil", err)
+	}
+	e := findDiffEntry(t, result, "002")
+	if !e.Blocked {
+		t.Fatal("Blocked = false, want true (Unavailable is not Known)")
+	}
+	if e.BlockReason != wantTagDisplayUnknownReason {
+		t.Errorf("BlockReason = %q, want %q", e.BlockReason, wantTagDisplayUnknownReason)
+	}
+}
+
+// TestDiffTagDisplayGate_UnverifiedWriteStillBlocks pins that the gate
+// reads Write != spec.Unsupported — NOT FieldSupport.CanWrite(), which is
+// false for Unverified and Inert alike. A field the target merely has not
+// PROVEN it can write is still a field the write frame must carry a value
+// for, so the unknown-value problem is real there and this reason (which
+// names the user's remedy) must win over the generic not-writable one
+// (which does not).
+func TestDiffTagDisplayGate_UnverifiedWriteStillBlocks(t *testing.T) {
+	baseline := testBaselineCodeplug()
+	file := testBaselineCodeplug()
+	for i := range file.Channels {
+		if file.Channels[i].Slot == "002" {
+			file.Channels[i].Data.TagDisplay = BoolField{State: Unknown}
+		}
+	}
+
+	result, err := Diff(baseline, file, tagDisplayCaps(spec.Unverified))
+	if err != nil {
+		t.Fatalf("Diff() error = %v, want nil", err)
+	}
+	e := findDiffEntry(t, result, "002")
+	if !e.Blocked {
+		t.Fatal("Blocked = false, want true")
+	}
+	if e.BlockReason != wantTagDisplayUnknownReason {
+		t.Errorf("BlockReason = %q, want %q (the gate tests Write != Unsupported, not CanWrite())", e.BlockReason, wantTagDisplayUnknownReason)
+	}
+}
+
+// TestDiffTagDisplayGate_UnsupportedWriteDoesNotBlock is the gate's
+// carve-out and the reason addedFields needed its own Known-conditional:
+// a target that cannot write the display flag AT ALL never transmits it,
+// so an unknown value for it is not a problem to solve — neither this
+// gate nor the generic per-field aggregation may block the channel.
+func TestDiffTagDisplayGate_UnsupportedWriteDoesNotBlock(t *testing.T) {
+	baseline := testBaselineCodeplug()
+	file := testBaselineCodeplug()
+	for i := range file.Channels {
+		if file.Channels[i].Slot == "002" {
+			file.Channels[i].Data.Tag = "RENAMED"
+			file.Channels[i].Data.TagDisplay = BoolField{State: Unknown}
+		}
+	}
+
+	result, err := Diff(baseline, file, tagDisplayCaps(spec.Unsupported))
+	if err != nil {
+		t.Fatalf("Diff() error = %v, want nil", err)
+	}
+	e := findDiffEntry(t, result, "002")
+	if e.Kind != DiffModified {
+		t.Fatalf("Kind = %v, want %v", e.Kind, DiffModified)
+	}
+	if e.Blocked {
+		t.Errorf("Blocked = true (reason %q), want false — a field this target never transmits needs no known value", e.BlockReason)
+	}
+}
+
+// TestDiffTagDisplayGate_KnownUnsupportedStillGatesGenerically is the
+// preserved half of the previous test: a KNOWN TagDisplay is still a real
+// write request, so a target that cannot write the field must still block
+// the channel — through the GENERIC per-field aggregation, with its own
+// wording, exactly as before E1b.
+func TestDiffTagDisplayGate_KnownUnsupportedStillGatesGenerically(t *testing.T) {
+	baseline := testBaselineCodeplug()
+	file := testBaselineCodeplug()
+	for i := range file.Channels {
+		if file.Channels[i].Slot == "002" {
+			file.Channels[i].Data.TagDisplay = BoolField{State: Known, Value: true}
+		}
+	}
+
+	result, err := Diff(baseline, file, tagDisplayCaps(spec.Unsupported))
+	if err != nil {
+		t.Fatalf("Diff() error = %v, want nil", err)
+	}
+	e := findDiffEntry(t, result, "002")
+	if !e.Blocked {
+		t.Fatal("Blocked = false, want true (a Known TagDisplay IS a write request the target cannot honour)")
+	}
+	if !strings.Contains(e.BlockReason, "tag_display not writable on this radio") {
+		t.Errorf("BlockReason = %q, want the generic not-writable wording naming tag_display", e.BlockReason)
+	}
+}
+
+// TestDiffTagDisplayGate_StopsBeforeGenericAggregation is the COMBINED
+// case, and the whole point of making this an ORDERED gate rather than
+// another contributor to the generic per-field aggregation: a channel
+// that ALSO carries an unwritable request (a Known tone, Unverified here)
+// and a changed Inert field (the clarifier) must report the TagDisplay
+// reason ALONE. The gate fires first and later gates do not run, so the
+// user is told the one thing they can actually do — not handed a "; "
+// merge in which that instruction is buried among problems they cannot
+// fix at all.
+func TestDiffTagDisplayGate_StopsBeforeGenericAggregation(t *testing.T) {
+	baseline := testBaselineCodeplug()
+	file := testBaselineCodeplug()
+	for i := range baseline.Channels {
+		if baseline.Channels[i].Slot == "002" {
+			baseline.Channels[i].Data.CTCSS = "ENC"
+			baseline.Channels[i].Data.CTCSSTone = ToneField{State: Known, Value: spec.Tone(670)}
+		}
+	}
+	for i := range file.Channels {
+		if file.Channels[i].Slot == "002" {
+			file.Channels[i].Data.CTCSS = "ENC"
+			file.Channels[i].Data.CTCSSTone = ToneField{State: Known, Value: spec.Tone(693)}
+			file.Channels[i].Data.ClarHz = 100
+			file.Channels[i].Data.TagDisplay = BoolField{State: Unknown}
+		}
+	}
+
+	result, err := Diff(baseline, file, inertClarifierCaps())
+	if err != nil {
+		t.Fatalf("Diff() error = %v, want nil", err)
+	}
+	e := findDiffEntry(t, result, "002")
+	if !e.Blocked {
+		t.Fatal("Blocked = false, want true")
+	}
+	if e.BlockReason != wantTagDisplayUnknownReason {
+		t.Errorf("BlockReason = %q, want EXACTLY %q — the ordered gate stops before the generic aggregation, so no \"; \" merge may appear", e.BlockReason, wantTagDisplayUnknownReason)
+	}
+	if strings.Contains(e.BlockReason, "; ") {
+		t.Errorf("BlockReason = %q, want no \"; \" merge (later gates must not run once this one fires)", e.BlockReason)
+	}
+	for _, unwanted := range []string{"ctcss_tone", "clarifier"} {
+		if strings.Contains(e.BlockReason, unwanted) {
+			t.Errorf("BlockReason = %q, want it NOT to name %s (a later gate's finding)", e.BlockReason, unwanted)
+		}
+	}
+}
+
+// TestDiffTagDisplayGate_BankGateTakesPrecedence pins the gate's position
+// from the other side: it runs AFTER the bank-level gate, so a slot in a
+// read-only bank reports "bank ... is read-only" even when its TagDisplay
+// is also Unknown. The bank reason is the more fundamental one — setting
+// the display flag would not make that channel sendable.
+func TestDiffTagDisplayGate_BankGateTakesPrecedence(t *testing.T) {
+	baseline := testBaselineCodeplug()
+	file := testBaselineCodeplug()
+	for i := range file.Channels {
+		if file.Channels[i].Slot == "501" {
+			file.Channels[i].Data.Mode = "LSB"
+			file.Channels[i].Data.TagDisplay = BoolField{State: Unknown}
+		}
+	}
+
+	result, err := Diff(baseline, file, testCapabilities())
+	if err != nil {
+		t.Fatalf("Diff() error = %v, want nil", err)
+	}
+	e := findDiffEntry(t, result, "501")
+	if !e.Blocked {
+		t.Fatal("Blocked = false, want true")
+	}
+	if e.BlockReason != "bank 60M is read-only" {
+		t.Errorf("BlockReason = %q, want %q (the bank gate runs first)", e.BlockReason, "bank 60M is read-only")
+	}
+}
+
+// TestDiffTagDisplayGate_EraseGateTakesPrecedence pins the other half of
+// the ordering, and the reason the gate must sit INSIDE the Added/
+// Modified branch: an Erased entry has no After at all, so there is no
+// TagDisplay to inspect — the erase gate's reason stands.
+func TestDiffTagDisplayGate_EraseGateTakesPrecedence(t *testing.T) {
+	baseline := testBaselineCodeplug()
+	file := testBaselineCodeplug()
+	for i := range baseline.Channels {
+		if baseline.Channels[i].Slot == "002" {
+			baseline.Channels[i].Data.TagDisplay = BoolField{State: Unknown}
+		}
+	}
+	for i := range file.Channels {
+		if file.Channels[i].Slot == "002" {
+			file.Channels[i].Data = nil
+		}
+	}
+
+	result, err := Diff(baseline, file, testCapabilities())
+	if err != nil {
+		t.Fatalf("Diff() error = %v, want nil", err)
+	}
+	e := findDiffEntry(t, result, "002")
+	if e.Kind != DiffErased {
+		t.Fatalf("Kind = %v, want %v", e.Kind, DiffErased)
+	}
+	if e.BlockReason != "erase not supported on this radio" {
+		t.Errorf("BlockReason = %q, want %q", e.BlockReason, "erase not supported on this radio")
+	}
+}
+
+// TestDiffTagDisplayGate_UnchangedNeverBlocked: a channel whose TagDisplay
+// is Unknown on BOTH sides is DiffUnchanged, and an Unchanged entry is
+// never Blocked — there is nothing to send, so there is nothing to refuse.
+// Without this pin the gate could plausibly be written to fire on every
+// entry carrying a non-Known TagDisplay, mass-blocking channels no one
+// asked to write.
+func TestDiffTagDisplayGate_UnchangedNeverBlocked(t *testing.T) {
+	baseline := testBaselineCodeplug()
+	file := testBaselineCodeplug()
+	for _, cp := range []*Codeplug{baseline, file} {
+		for i := range cp.Channels {
+			if cp.Channels[i].Slot == "002" {
+				cp.Channels[i].Data.TagDisplay = BoolField{State: Unknown}
+			}
+		}
+	}
+
+	result, err := Diff(baseline, file, testCapabilities())
+	if err != nil {
+		t.Fatalf("Diff() error = %v, want nil", err)
+	}
+	e := findDiffEntry(t, result, "002")
+	if e.Kind != DiffUnchanged {
+		t.Fatalf("Kind = %v, want %v", e.Kind, DiffUnchanged)
+	}
+	if e.Blocked {
+		t.Errorf("Blocked = true (reason %q), want false (an Unchanged entry sends nothing)", e.BlockReason)
+	}
+}
+
+// TestAddedFields_MembershipAndOrder pins addedFields' membership AND its
+// ORDER exhaustively (spec E1's explicit obligation). TagDisplay's
+// position is load-bearing, not incidental: it is the SEVENTH field, after
+// tag and before the tone/skip conditionals, and it must stay there now
+// that it has become conditional itself — the order is what every
+// generated BlockReason's field list reads out, so moving it would change
+// user-visible strings for reasons unrelated to any decision.
+func TestAddedFields_MembershipAndOrder(t *testing.T) {
+	always := []spec.Field{
+		spec.FieldFrequency,
+		spec.FieldMode,
+		spec.FieldClarifier,
+		spec.FieldCTCSSState,
+		spec.FieldShift,
+		spec.FieldTag,
+	}
+	withTagDisplay := append(append([]spec.Field{}, always...), spec.FieldTagDisplay)
+
+	tests := []struct {
+		name string
+		data ChannelData
+		want []spec.Field
+	}{
+		{
+			name: "every FieldState-carrying field Known",
+			data: ChannelData{
+				CTCSSTone:  ToneField{State: Known},
+				TagDisplay: BoolField{State: Known},
+				ScanSkip:   BoolField{State: Known},
+			},
+			want: append(append([]spec.Field{}, withTagDisplay...), spec.FieldCTCSSTone, spec.FieldScanSkip),
+		},
+		{
+			name: "every FieldState-carrying field Unknown",
+			data: ChannelData{
+				CTCSSTone:  ToneField{State: Unknown},
+				TagDisplay: BoolField{State: Unknown},
+				ScanSkip:   BoolField{State: Unknown},
+			},
+			want: always,
+		},
+		{
+			name: "TagDisplay Unknown, tone and skip Known — order preserved around the gap",
+			data: ChannelData{
+				CTCSSTone:  ToneField{State: Known},
+				TagDisplay: BoolField{State: Unknown},
+				ScanSkip:   BoolField{State: Known},
+			},
+			want: append(append([]spec.Field{}, always...), spec.FieldCTCSSTone, spec.FieldScanSkip),
+		},
+		{
+			name: "TagDisplay Unavailable is excluded exactly as Unknown is",
+			data: ChannelData{
+				CTCSSTone:  ToneField{State: Unknown},
+				TagDisplay: BoolField{State: Unavailable},
+				ScanSkip:   BoolField{State: Unknown},
+			},
+			want: always,
+		},
+		{
+			name: "TagDisplay Known, tone and skip Unknown — TagDisplay is seventh",
+			data: ChannelData{
+				CTCSSTone:  ToneField{State: Unknown},
+				TagDisplay: BoolField{State: Known, Value: true},
+				ScanSkip:   BoolField{State: Unknown},
+			},
+			want: withTagDisplay,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := addedFields(tt.data)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("addedFields() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestChangedFields_TagDisplayUntouched pins spec E1's "for free" claim
+// for changedFields: it needs NOTHING from E1b, because it compares
+// TagDisplay as a WHOLE STRUCT, so a FieldState transition already counts
+// as a change exactly like a Value change. Pinned so a later reader does
+// not "helpfully" add a Known-conditional here to match addedFields' one
+// — that would silently stop reporting the very transitions the diff
+// exists to show.
+func TestChangedFields_TagDisplayUntouched(t *testing.T) {
+	known := ChannelData{TagDisplay: BoolField{State: Known, Value: true}}
+	knownFalse := ChannelData{TagDisplay: BoolField{State: Known, Value: false}}
+	unknown := ChannelData{TagDisplay: BoolField{State: Unknown}}
+
+	for _, tt := range []struct {
+		name          string
+		before, after ChannelData
+		want          bool
+	}{
+		{"value change Known-true -> Known-false", known, knownFalse, true},
+		{"state change Known -> Unknown", known, unknown, true},
+		{"state change Unknown -> Known", unknown, knownFalse, true},
+		{"identical", unknown, unknown, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var found bool
+			for _, f := range changedFields(tt.before, tt.after) {
+				if f == spec.FieldTagDisplay {
+					found = true
+				}
+			}
+			if found != tt.want {
+				t.Errorf("changedFields reports tag_display changed = %v, want %v", found, tt.want)
+			}
+		})
+	}
+}
+
+// diffReport renders result deterministically — one
+// slot|bank|kind|blocked|reason line per entry in Entries order, then the
+// aggregate counts — so a test can pin Diff's ENTIRE user-visible output
+// as one exact string rather than field by field.
+func diffReport(result DiffResult) string {
+	var b strings.Builder
+	for _, e := range result.Entries {
+		fmt.Fprintf(&b, "%s|%s|%s|%t|%s\n", e.Slot, e.Bank, e.Kind, e.Blocked, e.BlockReason)
+	}
+	fmt.Fprintf(&b, "added=%d modified=%d erased=%d unchanged=%d blocked=%d\n",
+		result.Added, result.Modified, result.Erased, result.Unchanged, result.Blocked)
+	return b.String()
+}
+
+// TestDiffReferenceOutput_AllKnownTagDisplayUnchanged is E1b's byte-
+// identity proof: for a codeplug in which every channel's TagDisplay is
+// Known — which is EVERY FT-710-read codeplug, since the driver's read
+// path always produces Known (core/driver/ft710/read.go) — the new
+// ordered gate changes nothing whatsoever about Diff's output. The
+// reference scenario deliberately exercises all four Kinds and both
+// pre-existing block reasons at once, and the expected block below is
+// pinned as an exact string: any drift in membership, order, counts, or
+// wording fails here, whether or not it was intended.
+func TestDiffReferenceOutput_AllKnownTagDisplayUnchanged(t *testing.T) {
+	baseline := testBaselineCodeplug()
+	file := testBaselineCodeplug()
+	for i := range file.Channels {
+		switch file.Channels[i].Slot {
+		case "001":
+			file.Channels[i].Data.Tag = "RENAMED"
+			file.Channels[i].Data.TagDisplay = BoolField{State: Known, Value: true}
+		case "002":
+			file.Channels[i].Data = nil
+		case "003":
+			file.Channels[i].Data = &ChannelData{
+				FreqHz: 14100000, Mode: "USB", CTCSS: "OFF",
+				CTCSSTone: ToneField{State: Unknown}, Shift: "SIMPLEX",
+				TagDisplay: BoolField{State: Known, Value: false},
+				ScanSkip:   BoolField{State: Known},
+			}
+		case "501":
+			file.Channels[i].Data.Mode = "LSB"
+		}
+	}
+
+	result, err := Diff(baseline, file, testCapabilities())
+	if err != nil {
+		t.Fatalf("Diff() error = %v, want nil", err)
+	}
+
+	want := "001|MEM|modified|false|\n" +
+		"002|MEM|erased|true|erase not supported on this radio\n" +
+		"003|MEM|added|false|\n" +
+		"P1L|PMS|unchanged|false|\n" +
+		"P1U|PMS|unchanged|false|\n" +
+		"501|60M|modified|true|bank 60M is read-only\n" +
+		"added=1 modified=2 erased=1 unchanged=2 blocked=2\n"
+	if got := diffReport(result); got != want {
+		t.Errorf("Diff output drifted.\n got:\n%s\nwant:\n%s", got, want)
 	}
 }
 

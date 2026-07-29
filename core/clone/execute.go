@@ -111,10 +111,30 @@ const (
 
 // writableFieldsMismatch compares want (what was sent) against got (the
 // read-back) on every field this project's write path can express.
-// CTCSSTone and ScanSkip are deliberately excluded: both always read back
-// FieldState Unknown by construction (driver.Session.ReadChannel's doc
-// comment — the CAT protocol has no command to read either), so comparing
-// them would manufacture a false mismatch on every single write.
+//
+// The exclusion list, and the two DIFFERENT mechanisms behind it:
+//
+// CTCSSTone and ScanSkip are excluded UNCONDITIONALLY — not compared at
+// all, in any circumstance: both always read back FieldState Unknown by
+// construction (driver.Session.ReadChannel's doc comment — the CAT
+// protocol has no command to read either), so comparing them would
+// manufacture a false mismatch on every single write.
+//
+// TagDisplay is excluded CONDITIONALLY (M9c-5, E1b), by mutual knowledge:
+// it is compared only when BOTH sides are Known. Unlike the two above it
+// IS readable — a radio whose frame carries a display flag reads it back
+// Known, and on that radio the comparison is real and must bite, since a
+// display flag that did not land is a write that did not do what it said.
+// But this project no longer assumes every radio has that flag: a model
+// whose frame lacks one reads back Unavailable (codeplug.FieldState's
+// first real producer of that state), and comparing Unavailable against
+// the Known value that was sent would abort a write that in fact landed
+// perfectly — exactly the false mismatch the two blanket exclusions above
+// exist to avoid. The sent side's guard is defence in depth rather than a
+// live case: codeplug.Diff blocks a non-Known TagDisplay at plan time
+// whenever the target transmits the field, and the driver refuses one
+// before the wire, so what reaches here should always be Known — the
+// check makes "should" unnecessary.
 func writableFieldsMismatch(want, got codeplug.ChannelData) []spec.Field {
 	var bad []spec.Field
 	if want.FreqHz != got.FreqHz {
@@ -135,7 +155,8 @@ func writableFieldsMismatch(want, got codeplug.ChannelData) []spec.Field {
 	if want.Tag != got.Tag {
 		bad = append(bad, spec.FieldTag)
 	}
-	if want.TagDisplay != got.TagDisplay {
+	if want.TagDisplay.State == codeplug.Known && got.TagDisplay.State == codeplug.Known &&
+		want.TagDisplay.Value != got.TagDisplay.Value {
 		bad = append(bad, spec.FieldTagDisplay)
 	}
 	return bad
