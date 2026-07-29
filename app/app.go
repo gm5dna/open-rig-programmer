@@ -217,62 +217,98 @@ func (a *App) bumpWorkingRevLocked() {
 	a.workingRev++
 }
 
+// currentModel is THE model resolver for this package (M9c-5 E4): the one
+// answer to "which radio is this?" that every model-keyed lookup here —
+// capabilities, snapshot directory, bank synthesis, prose, settings
+// descriptor — is required to consume, so no site re-derives it and
+// drifts from the others. It returns a model NAME (the driver.Registry
+// key internal/wiring's tables are keyed by), never capabilities.
+//
+// The chain, in order:
+//
+//  1. The connected session's own model. A live session IS the radio, so
+//     its Capabilities().Model is authoritative — and
+//     driver.Registry.Register refuses any driver whose Model() and
+//     Capabilities().Model disagree, so this is exactly the registry key
+//     the session was opened under.
+//  2. Otherwise the working copy's own Radio.Model
+//     (core/codeplug/radioinfo.go), but ONLY when capsForModel recognises
+//     it. This is Fix B1's rule (Codex fix-B review, HIGH: "offline
+//     import transforms data against the WRONG model's capabilities, and
+//     the result can later pass the send gate"), generalised from
+//     currentCaps to every site: an offline import or edit against a
+//     working copy that is NOT an FT-710 must be transformed/validated
+//     against THAT radio's own vocabulary, never silently against the
+//     FT-710's.
+//  3. Otherwise wiring.DefaultModel (the FT-710) — when working is nil,
+//     its Radio.Model is "", or that model names no registered driver (a
+//     future dialect-only model with no driver yet — see
+//     .superpowers/sdd/HANDOFF-m9c.md's still-open "FTdx10 slice" — or a
+//     hand-edited/corrupt file). Refuse-before-corrupt: an unresolvable
+//     model degrades to a KNOWN-safe baseline rather than being handed on
+//     to lookups that would all fail on it at once. wiring.DefaultModel is
+//     a hardcoded, always-registered model name (internal/wiring's own
+//     TestStaticCapabilities_FT710EqualsDriver pins this), so this tail
+//     cannot itself fail to resolve.
+//
+// Step 2's recognition check is the whole reason this is a resolver
+// rather than a field read (M9c-5 E4's design note): handing a RAW,
+// unrecognised Radio.Model to wiring.SynthesiseDiscoveredBanks would make
+// it report ok == false and SILENTLY DROP a legacy file's discovered
+// 60m/EMG channels out of the grid — data loaded but invisible, the exact
+// failure synthesiseDiscoveredBanks exists to prevent.
+func currentModel(conn *connectionState, working *codeplug.Codeplug) string {
+	if conn != nil {
+		return conn.session.Capabilities().Model
+	}
+	if working != nil && working.Radio.Model != "" {
+		if _, err := capsForModel(working.Radio.Model); err == nil {
+			return working.Radio.Model
+		}
+	}
+	return wiring.DefaultModel
+}
+
 // currentCaps returns the capabilities Validate/UpdateChannel(s)/import
 // should validate/transform against, and whether that result is merely
 // advisory (task-15 brief §2's Validate bullet): the connected session's
 // OWN effective capabilities (authoritative — includes discovered
-// regional banks) when conn is non-nil, otherwise a static offline
-// baseline, advisory: true — it lacks discovered regional banks, matching
-// the CLI's offline import adjudication.
+// regional banks) when conn is non-nil, otherwise the static offline
+// baseline of currentModel's resolved model, advisory: true — it lacks
+// discovered regional banks, matching the CLI's offline import
+// adjudication.
 //
-// Disconnected resolution (Codex fix-B review, Fix B1, HIGH: "offline
-// import transforms data against the WRONG model's capabilities, and the
-// result can later pass the send gate"): the static baseline is working's
-// OWN Radio.Model (core/codeplug/radioinfo.go) when that is non-empty AND
-// wiring.StaticCapabilities recognises it — so an offline import or edit
-// against a working copy that is NOT an FT-710 is transformed/validated
-// against THAT radio's own vocabulary, never silently against the
-// FT-710's (the bug: a mismatch Validate flags as merely advisory today
-// would otherwise clear itself the moment the user reconnects to the
-// working copy's real model, because the vocabulary transform had
-// already baked in the wrong radio's rules by then). Falls back to
-// wiring.DefaultModel (the FT-710) when working is nil, its Radio.Model
-// is "", or that model names no registered driver (a future dialect-only
-// model with no driver yet — see .superpowers/sdd/HANDOFF-m9c.md's
-// still-open "FTdx10 slice" — or a hand-edited/corrupt file): refuse-
-// before-corrupt means an unresolvable model degrades to a KNOWN-safe
-// baseline, never a zero/garbage Capabilities. wiring.DefaultModel is a
-// hardcoded, always-registered model name (internal/wiring's own
-// TestStaticCapabilities_FT710EqualsDriver pins this), so this fallback
-// path cannot itself fail.
+// The disconnected model resolution is currentModel's, not a second copy
+// of it (M9c-5 E4): see that function for the fallback chain and why an
+// unrecognised working-copy model degrades to wiring.DefaultModel. The
+// connected branch deliberately does NOT go through currentModel —
+// currentModel would only name the model, and this function needs the
+// session's own EFFECTIVE capabilities (discovered 60m/EMG inventory
+// included), which no static per-model lookup can reproduce.
 //
 // FT-710 byte-identity: a working copy whose Radio.Model is "FT-710"
 // (wiring.DefaultModel's own value), or is empty, or is nil, resolves via
 // the EXACT SAME capsForModel(wiring.DefaultModel) call this function
-// made unconditionally before this fix — see
+// made unconditionally before Fix B1 — see
 // TestCurrentCaps_DisconnectedFT710WorkingIsByteIdentical.
 //
-// Both results are discarded (capsForModel's error on the fallback call)
-// or checked-then-ignored (on the working-model call, whose failure is
-// the deliberate signal to fall back) rather than propagated: every
-// caller of currentCaps already treats the disconnected baseline as
-// advisory, never a hard failure, and this function's two-result
-// signature predates task 41 (M9a-5) and is unchanged by it.
+// capsForModel's error is discarded rather than propagated: currentModel
+// has already established that the model it returns is either recognised
+// or wiring.DefaultModel, every caller of currentCaps treats the
+// disconnected baseline as advisory rather than a hard failure, and this
+// function's two-result signature predates task 41 (M9a-5) and is
+// unchanged by it.
 func currentCaps(conn *connectionState, working *codeplug.Codeplug) (spec.Capabilities, bool) {
 	if conn != nil {
 		return conn.session.Capabilities(), false
 	}
-	if working != nil && working.Radio.Model != "" {
-		if caps, err := capsForModel(working.Radio.Model); err == nil {
-			return caps, true
-		}
-	}
-	caps, _ := capsForModel(wiring.DefaultModel)
+	caps, _ := capsForModel(currentModel(conn, working))
 	return caps, true
 }
 
-// capsForModel indirects wiring.StaticCapabilities — currentCaps' only
-// caller — so this package's own tests can exercise the working-copy-
+// capsForModel indirects wiring.StaticCapabilities — called only by
+// currentModel (the recognition check) and currentCaps (the value it
+// returns) — so this package's own tests can exercise the working-copy-
 // model resolution above against a model name wiring itself does not
 // register (no second real driver exists yet: internal/wiring's
 // realDrivers table lists only "FT-710" today — see
@@ -283,3 +319,15 @@ func currentCaps(conn *connectionState, working *codeplug.Codeplug) (spec.Capabi
 // for the identical reason: process-global, unsynchronised state, safe
 // only for tests that do not call t.Parallel().
 var capsForModel = wiring.StaticCapabilities
+
+// supportedModels indirects wiring.SupportedModels — connectModel's
+// (connection.go) only caller — for exactly the same reason capsForModel
+// exists, and under exactly the same rules: internal/wiring registers one
+// model today, so the ONLY way to prove that Connect/ConnectDemo's
+// validated model parameter is genuinely THREADED into the three
+// model-keyed wiring calls the connect path makes — rather than each
+// still naming wiring.DefaultModel — is to let a test admit a second
+// model name at the validation gate and then observe where it arrives
+// (see TestConnect_ResolvedModelThreadsIntoWiring). Reassigned ONLY by
+// tests, restored via t.Cleanup; production code must never reassign it.
+var supportedModels = wiring.SupportedModels

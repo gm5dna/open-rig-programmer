@@ -15,7 +15,7 @@ import (
 // sets baseline+working+events".
 func TestReadRadio_SetsBaselineWorkingAndEvents(t *testing.T) {
 	a, rec := newTestApp(t)
-	if _, err := a.ConnectDemo(); err != nil {
+	if _, err := a.ConnectDemo(""); err != nil {
 		t.Fatalf("ConnectDemo: %v", err)
 	}
 
@@ -164,7 +164,7 @@ func TestValidate_DisconnectedIsAdvisory(t *testing.T) {
 // (after the connection check has already passed).
 func TestDiffAgainstRadio_NothingLoaded(t *testing.T) {
 	a, _ := newTestApp(t)
-	if _, err := a.ConnectDemo(); err != nil {
+	if _, err := a.ConnectDemo(""); err != nil {
 		t.Fatalf("ConnectDemo: %v", err)
 	}
 	if _, err := a.DiffAgainstRadio(); !errors.Is(err, ErrNothingLoaded) {

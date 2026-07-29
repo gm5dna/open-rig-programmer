@@ -15,6 +15,8 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeradio"
+	"github.com/gm5dna/open-rig-programmer/internal/radiotext"
+	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
 
 // containsCI reports whether s contains substr, case-insensitively.
@@ -441,5 +443,23 @@ func TestConfirmSend_ConcurrentCalls_ReserveAtomically(t *testing.T) {
 	}
 	if sendDoneCount != 1 {
 		t.Errorf("transfer:done Kind=send count = %d, want exactly 1", sendDoneCount)
+	}
+}
+
+// TestFirmwareGuidance_FollowsResolvedModel is the send cluster's
+// threading pin (M9c-5 E4): the firmware advisory PrepareSend attaches is
+// keyed off the resolved model, and radiotext.For's ok is honoured — a
+// model with no entry yields "" (no advisory shown at all), never the
+// FT-710's own firmware sentence attributed to a different radio.
+func TestFirmwareGuidance_FollowsResolvedModel(t *testing.T) {
+	want, ok := radiotext.For(wiring.DefaultModel)
+	if !ok || want.FirmwareGuidance == "" {
+		t.Fatalf("test setup: radiotext.For(%q) ok=%v with empty FirmwareGuidance — the contrast below would be vacuous", wiring.DefaultModel, ok)
+	}
+	if got := firmwareGuidance(wiring.DefaultModel); got != want.FirmwareGuidance {
+		t.Errorf("firmwareGuidance(%q) = %q, want %q", wiring.DefaultModel, got, want.FirmwareGuidance)
+	}
+	if got := firmwareGuidance("NoSuchRadioModel"); got != "" {
+		t.Errorf("firmwareGuidance(unknown model) = %q, want \"\" (silence, never another radio's advisory)", got)
 	}
 }

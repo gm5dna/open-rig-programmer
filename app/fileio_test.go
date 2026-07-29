@@ -221,7 +221,7 @@ func editChannelFreq(slot string, freq int64) codeplug.Channel {
 // deterministic companion to the concurrent race test below.
 func TestWorkingRev_MutationsBumpItAndSaveDoesNot(t *testing.T) {
 	a, _ := newTestApp(t)
-	if _, err := a.ConnectDemo(); err != nil {
+	if _, err := a.ConnectDemo(""); err != nil {
 		t.Fatalf("ConnectDemo: %v", err)
 	}
 	if _, err := a.ReadRadio(); err != nil {
@@ -278,7 +278,7 @@ func TestWorkingRev_MutationsBumpItAndSaveDoesNot(t *testing.T) {
 // dirty is true.
 func TestSaveFile_RevisionGuard_NoSilentLossUnderConcurrentMutation(t *testing.T) {
 	a, _ := newTestApp(t)
-	if _, err := a.ConnectDemo(); err != nil {
+	if _, err := a.ConnectDemo(""); err != nil {
 		t.Fatalf("ConnectDemo: %v", err)
 	}
 	if _, err := a.ReadRadio(); err != nil {

@@ -10,7 +10,6 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/clone"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/internal/radiotext"
-	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
 
 // isCancelled reports whether err is (or wraps) a context cancellation —
@@ -207,13 +206,19 @@ func classifyExecuteOutcome(err error) (outcome, message string) {
 //
 // Task 41 (M9a-5, the GUI-backend neutralisation) sources this from
 // internal/radiotext rather than a hardcoded const — the same served
-// value (byte-identical to the old const), keyed off wiring.DefaultModel
-// (app/ has no model-selection surface yet). ok is discarded: it is false
-// only for a model radiotext has no entry for, and wiring.DefaultModel
-// always has one; a future such gap would degrade to an empty advisory
-// string rather than invented wording.
-func firmwareGuidance() string {
-	text, _ := radiotext.For(wiring.DefaultModel)
+// value, byte-identical to the old const, for the FT-710.
+//
+// M9c-5 (E4) keys it off model — currentModel's resolved answer, taken
+// under a.mu by the caller — instead of wiring.DefaultModel, and HONOURS
+// radiotext.For's ok: a model with no radiotext entry yields "" (the
+// frontend then shows no advisory at all), never the FT-710's own
+// firmware sentence attributed to some other radio. The same silence-on-
+// false rule cmd/rigprog's prose sites follow.
+func firmwareGuidance(model string) string {
+	text, ok := radiotext.For(model)
+	if !ok {
+		return ""
+	}
 	return text.FirmwareGuidance
 }
 
@@ -288,11 +293,15 @@ func (a *App) PrepareSend() (SendPlanView, error) {
 	a.mu.Lock()
 	a.currentPlan = plan
 	firmwareRequired := a.firmwareRequiredLocked()
+	// Resolved under a.mu (currentModel reads a.conn/a.working), used
+	// outside it: the string it returns is a value, not a live view of
+	// App state.
+	model := currentModel(a.conn, a.working)
 	a.mu.Unlock()
 
 	guidance := ""
 	if firmwareRequired {
-		guidance = firmwareGuidance()
+		guidance = firmwareGuidance(model)
 	}
 
 	diff := plan.Diff()

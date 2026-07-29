@@ -576,9 +576,11 @@ func TestGetUISpec_VocabMatchesValidate(t *testing.T) {
 // internal/radiotext.For(wiring.DefaultModel)'s own value — not merely
 // non-empty — so a future edit to either side (this call site or
 // radiotext's own FT-710 entry) that let them drift would fail here
-// first. Checked both offline and connected, since the source is the
-// same in both branches (wiring.DefaultModel, never the live session's
-// own model today — see GetUISpec's doc comment).
+// first. Checked both offline and connected: since M9c-5 (E4) the prose
+// is keyed off currentModel's resolved model rather than
+// wiring.DefaultModel, and both branches resolve to the FT-710 here — the
+// simulated session's own model offline-or-not — so both must still serve
+// exactly these strings.
 func TestGetUISpec_ServesProse(t *testing.T) {
 	want, ok := radiotext.For(wiring.DefaultModel)
 	if !ok {
@@ -626,4 +628,86 @@ func TestGetUISpec_ServesProse(t *testing.T) {
 		}
 		assertProse(t, got)
 	})
+}
+
+// TestGetUISpec_ProseFollowsResolvedModel is the prose cluster's
+// threading pin (M9c-5 E4): the served sentences follow the model
+// currentModel resolves, and radiotext.For's ok is honoured — a model
+// with no radiotext entry gets SILENCE (every prose field empty), never
+// the FT-710's own wording attributed to a different radio.
+//
+// testModel is admitted through the capsForModel seam only, so
+// internal/radiotext genuinely has no entry for it; the empty fields
+// below are therefore the honest served value for a model whose prose has
+// not been written yet, and they are observably different from the
+// FT-710's (pinned non-empty first, so this cannot pass vacuously).
+func TestGetUISpec_ProseFollowsResolvedModel(t *testing.T) {
+	ft710Text, ok := radiotext.For(wiring.DefaultModel)
+	if !ok || ft710Text.ToneScanSkipNote == "" || ft710Text.EraseDialogNote == "" {
+		t.Fatalf("test setup: radiotext.For(%q) ok=%v with empty prose — the contrast below would be vacuous", wiring.DefaultModel, ok)
+	}
+	recogniseTestModel(t)
+
+	a, _ := newTestApp(t)
+	a.mu.Lock()
+	a.working = &codeplug.Codeplug{
+		Schema:   codeplug.CurrentSchema,
+		Radio:    codeplug.RadioInfo{Model: testModel},
+		Channels: []codeplug.Channel{{Slot: "001"}},
+	}
+	a.mu.Unlock()
+
+	got, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec: unexpected error: %v", err)
+	}
+	for _, f := range []struct {
+		name string
+		got  string
+	}{
+		{"ToneScanSkipNote", got.ToneScanSkipNote},
+		{"ToneScanSkipVerification", got.ToneScanSkipVerification},
+		{"EraseDialogNote", got.EraseDialogNote},
+		{"PreservationTooltips.Tone", got.PreservationTooltips.Tone},
+		{"PreservationTooltips.ScanSkip", got.PreservationTooltips.ScanSkip},
+		{"FirmwarePlaceholder", got.FirmwarePlaceholder},
+	} {
+		if f.got != "" {
+			t.Errorf("%s = %q for a model radiotext has no entry for, want \"\" (silence, never another radio's wording)", f.name, f.got)
+		}
+	}
+}
+
+// TestGetUISpec_UnrecognisedWorkingModelStillSynthesisesBanks pins the
+// reason the bank-synthesis site consumes the RESOLVER rather than the
+// working copy's raw Radio.Model (M9c-5 E4's recorded design note): a
+// legacy or hand-edited file naming a model no driver is registered for
+// must still show its 60m/EMG channels. Handed the raw name,
+// wiring.SynthesiseDiscoveredBanks would report ok == false and those
+// channels would vanish from the grid — loaded but invisible. The
+// resolver falls back to wiring.DefaultModel, so they stay.
+func TestGetUISpec_UnrecognisedWorkingModelStillSynthesisesBanks(t *testing.T) {
+	a, _ := newTestApp(t)
+	a.mu.Lock()
+	a.working = &codeplug.Codeplug{
+		Schema: codeplug.CurrentSchema,
+		Radio:  codeplug.RadioInfo{Model: "NoSuchRadioModel"},
+		Channels: []codeplug.Channel{
+			{Slot: "001"}, {Slot: "P1L"}, {Slot: "501"}, {Slot: "EMG"},
+		},
+	}
+	a.mu.Unlock()
+
+	got, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec: unexpected error: %v", err)
+	}
+	sixty := findBank(t, got.Banks, "60M")
+	if s := slotSet(sixty.Slots); len(s) != 1 || s["501"] != "5-01" {
+		t.Errorf("synthesised 60M.Slots = %v, want exactly {501:5-01}", s)
+	}
+	emg := findBank(t, got.Banks, "EMG")
+	if s := slotSet(emg.Slots); len(s) != 1 || s["EMG"] != "EMG" {
+		t.Errorf("synthesised EMG.Slots = %v, want exactly {EMG:EMG}", s)
+	}
 }

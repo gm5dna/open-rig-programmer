@@ -116,29 +116,37 @@ func bankSlotViews(bank spec.Bank, live bool, working *codeplug.Codeplug) []Slot
 //
 // Task 41 (M9a-5, the GUI-backend neutralisation) migrates this off the
 // local cat.Dialect.ParseSlot-based classification onto
-// wiring.SynthesiseDiscoveredBanks(wiring.DefaultModel, ...) — the
-// driver.DiscoveredBankSynthesizer capability (core/driver/optional.go),
-// introduced task 37 for exactly this call site. That function already
-// excludes any slot claimed by wiring.DefaultModel's own static banks
-// (MEM/PMS) before classifying the rest, which subsumes the OLD
-// alreadyPresent double-emission guard: a future static profile that DID
-// define a 60M/EMG bank would simply leave nothing left to synthesise for
-// it, never a duplicate. ok is false only for an unrecognised model or one
-// whose driver lacks the capability — neither true for wiring.DefaultModel
-// today — in which case this returns nil (no synthesised banks) rather
-// than inventing any.
+// wiring.SynthesiseDiscoveredBanks — the driver.DiscoveredBankSynthesizer
+// capability (core/driver/optional.go), introduced task 37 for exactly
+// this call site. That function already excludes any slot claimed by
+// model's own static banks (MEM/PMS) before classifying the rest, which
+// subsumes the OLD alreadyPresent double-emission guard: a future static
+// profile that DID define a 60M/EMG bank would simply leave nothing left
+// to synthesise for it, never a duplicate. ok is false only for an
+// unrecognised model or one whose driver lacks the capability, in which
+// case this returns nil (no synthesised banks) rather than inventing any.
+//
+// model is currentModel's resolved answer (M9c-5 E4), passed in rather
+// than re-derived here, and that indirection is load-bearing: the raw
+// working.Radio.Model would be handed straight through to
+// wiring.SynthesiseDiscoveredBanks, so a working copy naming a model no
+// driver is registered for — a legacy or hand-edited file — would take
+// the ok == false branch and silently drop its 60m/EMG channels out of
+// the grid entirely, which is the very outcome this function exists to
+// prevent. currentModel falls back to wiring.DefaultModel for exactly
+// that case, so those channels stay visible.
 //
 // ReadOnly is unconditionally true for every synthesised bank: MW cannot
 // target 5xx/EMG slots at all (the wire-protocol fact
 // core/driver/ft710.effectiveCapabilities' Field map already encodes by
 // forcing every Write to Unsupported for these banks, on every profile,
 // whenever a live session does discover them).
-func synthesiseDiscoveredBanks(working *codeplug.Codeplug) []BankView {
+func synthesiseDiscoveredBanks(model string, working *codeplug.Codeplug) []BankView {
 	slots := make([]string, len(working.Channels))
 	for i, ch := range working.Channels {
 		slots[i] = ch.Slot
 	}
-	discovered, ok := wiring.SynthesiseDiscoveredBanks(wiring.DefaultModel, slots)
+	discovered, ok := wiring.SynthesiseDiscoveredBanks(model, slots)
 	if !ok {
 		return nil
 	}
@@ -166,7 +174,7 @@ func synthesiseDiscoveredBanks(working *codeplug.Codeplug) []BankView {
 // currentCaps' "advisory" bool carries Validate-specific meaning): the
 // connected session's OWN effective capabilities (authoritative —
 // includes discovered 60m/EMG inventory) when connected, otherwise the
-// static offline baseline (ft710.New(ft710.RealHardware).Capabilities()).
+// static offline baseline of the model currentModel resolves.
 //
 // BankView.ReadOnly: see bankReadOnly's doc comment — a PERMANENT
 // protocol fact, never merely "not yet hardware-verified".
@@ -193,6 +201,11 @@ func (a *App) GetUISpec() (UISpecView, error) {
 
 	caps, advisory := currentCaps(a.conn, a.working)
 	live := !advisory
+	// The ONE resolver (M9c-5 E4), consulted ONCE per call: the
+	// synthesised-bank classification below and the prose lookup further
+	// down must describe the same radio as caps, and resolving twice would
+	// let them disagree.
+	model := currentModel(a.conn, a.working)
 
 	banks := make([]BankView, 0, len(caps.Banks))
 	for _, b := range caps.Banks {
@@ -206,10 +219,10 @@ func (a *App) GetUISpec() (UISpecView, error) {
 	if !live && a.working != nil {
 		// wiring.SynthesiseDiscoveredBanks (called inside
 		// synthesiseDiscoveredBanks) already excludes any slot claimed by
-		// wiring.DefaultModel's own static banks before classifying the
+		// the resolved model's own static banks before classifying the
 		// rest, so no separate "already present" guard is needed here —
 		// see that function's doc comment.
-		banks = append(banks, synthesiseDiscoveredBanks(a.working)...)
+		banks = append(banks, synthesiseDiscoveredBanks(model, a.working)...)
 	}
 
 	tones := make([]ToneView, 0, len(caps.CTCSSTones))
@@ -241,11 +254,17 @@ func (a *App) GetUISpec() (UISpecView, error) {
 	// Prose fields (task 41, M9a-5): served from internal/radiotext rather
 	// than hardcoded in this package or the frontend — see UISpecView's
 	// doc comment (types.go) for what each field is and its exact source.
-	// radiotext.For(wiring.DefaultModel) cannot fail for the hardcoded
-	// FT-710 entry in practice; a future model with no radiotext entry yet
-	// would fall back to the zero Text (every field empty) rather than
-	// invented wording.
-	text, _ := radiotext.For(wiring.DefaultModel)
+	// Keyed off the resolved model (M9c-5 E4), and radiotext.For's ok is
+	// HONOURED rather than discarded: a model with no radiotext entry
+	// leaves every prose field empty — silence — exactly as cmd/rigprog's
+	// own prose sites do (probe.go's ProbeFirmwareNote, write.go's
+	// EraseProcedure, both `if text, ok := radiotext.For(model); ok`).
+	// Never another radio's wording, and never a fabricated generic
+	// sentence.
+	var text radiotext.Text
+	if t, ok := radiotext.For(model); ok {
+		text = t
+	}
 
 	return UISpecView{
 		Live:                     live,

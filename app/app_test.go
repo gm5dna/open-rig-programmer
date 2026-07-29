@@ -243,6 +243,101 @@ func TestCurrentCaps_ConnectedIgnoresWorkingCopyModel(t *testing.T) {
 	}
 }
 
+// testModel is the model name every M9c-5 E4 threading test injects: a
+// name internal/wiring does not register, so that "the resolved model
+// reached this call site" is observable as an outcome that DIFFERS from
+// the wiring.DefaultModel one, rather than being indistinguishable from
+// the hardcoded behaviour these tests exist to prove is gone.
+const testModel = "TESTMODEL"
+
+// recogniseTestModel makes capsForModel (app.go's seam) recognise
+// testModel, returning caps of the test's own, and restores the real
+// function afterwards. internal/wiring registers exactly one model today
+// (see capsForModel's doc comment), so this is the only way to exercise
+// currentModel's "recognised working-copy model" branch at all.
+func recogniseTestModel(t *testing.T) spec.Capabilities {
+	t.Helper()
+	caps := spec.Capabilities{Model: testModel, CATID: "9999", TagLen: 42}
+	orig := capsForModel
+	capsForModel = func(model string) (spec.Capabilities, error) {
+		if model == testModel {
+			return caps, nil
+		}
+		return orig(model)
+	}
+	t.Cleanup(func() { capsForModel = orig })
+	return caps
+}
+
+// TestCurrentModel_FallbackChain pins the ONE resolver's whole chain
+// (M9c-5 E4) in the order it must be applied: the connected session
+// first, then the working copy's model when it is RECOGNISED, then
+// wiring.DefaultModel. Every model-keyed site in this package consumes
+// this function, so this test is what stops those sites drifting apart.
+func TestCurrentModel_FallbackChain(t *testing.T) {
+	recogniseTestModel(t)
+	sess := openTestSimSession(t)
+	conn := &connectionState{session: sess}
+
+	tests := []struct {
+		name    string
+		conn    *connectionState
+		working *codeplug.Codeplug
+		want    string
+	}{
+		{
+			name: "no connection, no working copy -> the default model",
+			want: wiring.DefaultModel,
+		},
+		{
+			name:    "working copy with no model -> the default model",
+			working: &codeplug.Codeplug{Radio: codeplug.RadioInfo{}},
+			want:    wiring.DefaultModel,
+		},
+		{
+			name:    "working copy naming an unregistered model -> the default model",
+			working: &codeplug.Codeplug{Radio: codeplug.RadioInfo{Model: "NoSuchRadioModel"}},
+			want:    wiring.DefaultModel,
+		},
+		{
+			name:    "working copy naming a recognised model -> that model",
+			working: &codeplug.Codeplug{Radio: codeplug.RadioInfo{Model: testModel}},
+			want:    testModel,
+		},
+		{
+			name:    "connected -> the session's own model, whatever the working copy says",
+			conn:    conn,
+			working: &codeplug.Codeplug{Radio: codeplug.RadioInfo{Model: testModel}},
+			want:    sess.Capabilities().Model,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := currentModel(tc.conn, tc.working); got != tc.want {
+				t.Errorf("currentModel() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestCurrentModel_ConnectedModelIsTheRegistryKey pins the assumption the
+// connected branch rests on: a session's Capabilities().Model is the
+// registry key internal/wiring's model-keyed tables use, so handing it
+// straight to wiring.StaticSettingsDescriptor/SynthesiseDiscoveredBanks
+// resolves rather than failing. driver.Registry.Register enforces
+// Model() == Capabilities().Model; this pins that the value that reaches
+// those lookups really is a supported model name.
+func TestCurrentModel_ConnectedModelIsTheRegistryKey(t *testing.T) {
+	sess := openTestSimSession(t)
+	got := currentModel(&connectionState{session: sess}, nil)
+	for _, m := range wiring.SupportedModels() {
+		if m == got {
+			return
+		}
+	}
+	t.Errorf("currentModel(connected) = %q, want one of wiring.SupportedModels() %v", got, wiring.SupportedModels())
+}
+
 func TestFriendlyErr_WrapsBusyError(t *testing.T) {
 	busy := &clone.BusyError{InProgress: "Execute"}
 	got := friendlyErr(busy)

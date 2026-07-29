@@ -163,11 +163,18 @@ export async function listPorts() {
 	}
 }
 
-/** @param {string} portPath */
+/** M9c-5 (E4): App.Connect/App.ConnectDemo now take a model name, and the
+ * empty string means the default model (internal/wiring.DefaultModel) —
+ * the exact behaviour these two call sites had before the parameter
+ * existed. It is passed EXPLICITLY, with no compat wrapper on the Go
+ * side, so the day a model picker lands the only change here is
+ * forwarding the user's choice instead of ''. There is no model-selection
+ * surface yet: appState carries no chosen model to forward.
+ * @param {string} portPath */
 export async function connect(portPath) {
 	appState.setConnecting(true)
 	try {
-		const info = await App.Connect(portPath)
+		const info = await App.Connect(portPath, '')
 		appState.setConnection(info)
 		await refreshUISpec()
 		await refreshSettingsSpec() // task 36: Live flips true now connected
@@ -184,7 +191,7 @@ export async function connect(portPath) {
 export async function connectDemo() {
 	appState.setConnecting(true)
 	try {
-		const info = await App.ConnectDemo()
+		const info = await App.ConnectDemo('') // see connect(): '' is the default model
 		appState.setConnection(info)
 		await refreshUISpec()
 		await refreshSettingsSpec() // task 36: Live flips true now connected

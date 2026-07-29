@@ -4,6 +4,7 @@ package main
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -25,7 +26,7 @@ import (
 func TestConnectDemo_Lifecycle(t *testing.T) {
 	a, _ := newTestApp(t)
 
-	info, err := a.ConnectDemo()
+	info, err := a.ConnectDemo("")
 	if err != nil {
 		t.Fatalf("ConnectDemo: unexpected error: %v", err)
 	}
@@ -44,7 +45,7 @@ func TestConnectDemo_Lifecycle(t *testing.T) {
 		t.Errorf("ConnectDemo: Region = %q, want %q", info.Region, "no-60m")
 	}
 
-	if _, err := a.ConnectDemo(); !errors.Is(err, ErrAlreadyConnected) {
+	if _, err := a.ConnectDemo(""); !errors.Is(err, ErrAlreadyConnected) {
 		t.Errorf("ConnectDemo while connected: err = %v, want ErrAlreadyConnected", err)
 	}
 
@@ -56,7 +57,7 @@ func TestConnectDemo_Lifecycle(t *testing.T) {
 	}
 
 	// Reconnecting after a clean disconnect must work.
-	if _, err := a.ConnectDemo(); err != nil {
+	if _, err := a.ConnectDemo(""); err != nil {
 		t.Fatalf("ConnectDemo after Disconnect: unexpected error: %v", err)
 	}
 }
@@ -69,7 +70,7 @@ func TestConnectDemo_Lifecycle(t *testing.T) {
 // entirely on this Go contract already holding.
 func TestDisconnect_KeepsWorkingCopy(t *testing.T) {
 	a, _ := newTestApp(t)
-	if _, err := a.ConnectDemo(); err != nil {
+	if _, err := a.ConnectDemo(""); err != nil {
 		t.Fatalf("ConnectDemo: %v", err)
 	}
 	if _, err := a.ReadRadio(); err != nil {
@@ -144,6 +145,151 @@ func TestGetSupportedModels_ContainsDefaultModel(t *testing.T) {
 	}
 }
 
+// TestConnect_EmptyModelIsTheDefaultModel pins Connect/ConnectDemo's new
+// model parameter's empty case (M9c-5 E4): "" means wiring.DefaultModel,
+// so every existing caller — including the frontend's two bridge sites,
+// which pass the empty string explicitly — connects exactly as it did
+// before the parameter existed. Naming the default model explicitly must
+// reach the same place.
+func TestConnect_EmptyModelIsTheDefaultModel(t *testing.T) {
+	for _, model := range []string{"", wiring.DefaultModel} {
+		t.Run("model="+model, func(t *testing.T) {
+			a, _ := newTestApp(t)
+			info, err := a.ConnectDemo(model)
+			if err != nil {
+				t.Fatalf("ConnectDemo(%q): unexpected error: %v", model, err)
+			}
+			t.Cleanup(func() { _ = a.Disconnect() })
+			if info.Model != wiring.DefaultModel {
+				t.Errorf("ConnectDemo(%q): Model = %q, want %q", model, info.Model, wiring.DefaultModel)
+			}
+		})
+	}
+	if got, err := connectModel(""); err != nil || got != wiring.DefaultModel {
+		t.Errorf("connectModel(\"\") = %q, %v; want %q, nil", got, err, wiring.DefaultModel)
+	}
+}
+
+// TestConnect_UnknownModelRefused pins the validation half of the model
+// parameter (M9c-5 E4): a model naming no registered driver is refused
+// with the CLI's own error shape — a *wiring.UnknownModelError carrying
+// the offending name and the full supported list, whose Error() text
+// therefore names every model the caller could have asked for — and
+// refused BEFORE any side effect, so nothing is created and no session is
+// left behind.
+func TestConnect_UnknownModelRefused(t *testing.T) {
+	const bogus = "NoSuchRadioModel"
+	calls := []struct {
+		name string
+		call func(*App) (ConnectionInfo, error)
+	}{
+		{"Connect", func(a *App) (ConnectionInfo, error) {
+			return a.Connect("/dev/nonexistent-rigprog-test-port", bogus)
+		}},
+		{"ConnectDemo", func(a *App) (ConnectionInfo, error) { return a.ConnectDemo(bogus) }},
+	}
+	for _, tc := range calls {
+		t.Run(tc.name, func(t *testing.T) {
+			a, _ := newTestApp(t)
+			if _, err := tc.call(a); err == nil {
+				t.Fatalf("%s(%q): err = nil, want a *wiring.UnknownModelError", tc.name, bogus)
+			} else {
+				var unknown *wiring.UnknownModelError
+				if !errors.As(err, &unknown) {
+					t.Fatalf("%s(%q): err = %v, want a *wiring.UnknownModelError", tc.name, bogus, err)
+				}
+				if unknown.Model != bogus {
+					t.Errorf("%s(%q): UnknownModelError.Model = %q, want %q", tc.name, bogus, unknown.Model, bogus)
+				}
+				if !reflect.DeepEqual(unknown.Supported, wiring.SupportedModels()) {
+					t.Errorf("%s(%q): UnknownModelError.Supported = %v, want wiring.SupportedModels() %v", tc.name, bogus, unknown.Supported, wiring.SupportedModels())
+				}
+			}
+			a.mu.Lock()
+			conn := a.conn
+			a.mu.Unlock()
+			if conn != nil {
+				t.Errorf("%s(%q): a.conn is set, want nil (the refusal must leave no session behind)", tc.name, bogus)
+			}
+		})
+	}
+}
+
+// TestConnect_ResolvedModelThreadsIntoWiring is the connect cluster's
+// threading pin (M9c-5 E4): the ONE model the connect path resolves must
+// reach all THREE of its model-keyed wiring calls —
+// wiring.ResolveSnapshotDir, wiring.OpenFakeSessionFor and
+// wiring.OpenRealSessionFor — rather than each naming wiring.DefaultModel
+// for itself, which is what a snapshot directory belonging to a different
+// radio than the session writing into it would mean.
+//
+// The evidence is arranged so that a model that did NOT arrive cannot
+// produce it. internal/wiring registers one model, so testModel is
+// admitted at app/'s validation gate ONLY (the supportedModels seam):
+// wiring itself still refuses it, and each of the two session
+// constructors reports that refusal as a *wiring.UnknownModelError
+// NAMING testModel — an error only reachable by having been handed
+// testModel. The snapshot directory is the third site's evidence: it is
+// testModel's own per-model subdirectory (wiring.ResolveSnapshotDir's
+// slug rule), it is asserted absent first, and connect creates it only
+// AFTER validation has passed — so its existence proves both that
+// validation admitted the model and that ResolveSnapshotDir received it
+// rather than wiring.DefaultModel (whose directory is the un-slugged base
+// one).
+func TestConnect_ResolvedModelThreadsIntoWiring(t *testing.T) {
+	// connect() creates the snapshot directory for real, under
+	// os.UserConfigDir(); contain it in a temp HOME so this test writes
+	// nothing into the developer's own config directory.
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
+
+	orig := supportedModels
+	supportedModels = func() []string { return append(orig(), testModel) }
+	t.Cleanup(func() { supportedModels = orig })
+
+	wantDir, err := wiring.ResolveSnapshotDir("", testModel)
+	if err != nil {
+		t.Fatalf("wiring.ResolveSnapshotDir(\"\", %q): unexpected error: %v", testModel, err)
+	}
+	if _, err := os.Stat(wantDir); !os.IsNotExist(err) {
+		t.Fatalf("test setup: %s already exists (err = %v) — the assertion below would pass vacuously", wantDir, err)
+	}
+
+	a, _ := newTestApp(t)
+
+	// The demo path: OpenFakeSessionFor's own lookup is what refuses.
+	_, err = a.ConnectDemo(testModel)
+	assertUnknownModel(t, "ConnectDemo", err)
+
+	if _, statErr := os.Stat(wantDir); statErr != nil {
+		t.Errorf("snapshot directory %s: %v; want it created — ResolveSnapshotDir did not receive the resolved model", wantDir, statErr)
+	}
+
+	// The real path: OpenRealSessionFor's model lookup refuses before any
+	// port is touched, so this needs no hardware and opens nothing.
+	_, err = a.Connect("/dev/nonexistent-rigprog-test-port", testModel)
+	assertUnknownModel(t, "Connect", err)
+}
+
+// assertUnknownModel fails unless err is a *wiring.UnknownModelError
+// naming testModel — the evidence that internal/wiring, not app/'s own
+// validation gate, refused it, and therefore that testModel reached the
+// wiring call at all.
+func assertUnknownModel(t *testing.T, call string, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("%s(%q): err = nil, want internal/wiring's own *wiring.UnknownModelError", call, testModel)
+	}
+	var unknown *wiring.UnknownModelError
+	if !errors.As(err, &unknown) {
+		t.Fatalf("%s(%q): err = %v, want a *wiring.UnknownModelError", call, testModel, err)
+	}
+	if unknown.Model != testModel {
+		t.Errorf("%s(%q): UnknownModelError.Model = %q, want %q — the model did not reach the wiring call", call, testModel, unknown.Model, testModel)
+	}
+}
+
 // TestReadRadio_NotConnected pins the connection-required guard shared
 // by every radio-touching bound method.
 func TestReadRadio_NotConnected(t *testing.T) {
@@ -174,7 +320,7 @@ func TestPrepareSend_NotConnected(t *testing.T) {
 // "no plan" pre-check.
 func TestConfirmSend_NoActivePlan(t *testing.T) {
 	a, _ := newTestApp(t)
-	if _, err := a.ConnectDemo(); err != nil {
+	if _, err := a.ConnectDemo(""); err != nil {
 		t.Fatalf("ConnectDemo: %v", err)
 	}
 	if err := a.ConfirmSend("anything", ""); !errors.Is(err, ErrNoActivePlan) {

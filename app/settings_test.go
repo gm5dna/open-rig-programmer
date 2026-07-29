@@ -66,7 +66,7 @@ func TestGetSettingsSpec_Offline(t *testing.T) {
 // SettingsDescriptor().
 func TestGetSettingsSpec_ConnectedSim(t *testing.T) {
 	a, _ := newTestApp(t)
-	if _, err := a.ConnectDemo(); err != nil {
+	if _, err := a.ConnectDemo(""); err != nil {
 		t.Fatalf("ConnectDemo: %v", err)
 	}
 
@@ -104,7 +104,7 @@ func TestGetSettings_NothingLoaded(t *testing.T) {
 // state (settings acquisition is opt-in), not an error.
 func TestGetSettings_NoSnapshot(t *testing.T) {
 	a, _ := newTestApp(t)
-	if _, err := a.ConnectDemo(); err != nil {
+	if _, err := a.ConnectDemo(""); err != nil {
 		t.Fatalf("ConnectDemo: %v", err)
 	}
 	if _, err := a.ReadRadio(); err != nil {
@@ -179,7 +179,7 @@ func TestReadSettingsRadio_NotConnected(t *testing.T) {
 // partial state change, when there is a connection but no working copy.
 func TestReadSettingsRadio_NothingLoaded(t *testing.T) {
 	a, _ := newTestApp(t)
-	if _, err := a.ConnectDemo(); err != nil {
+	if _, err := a.ConnectDemo(""); err != nil {
 		t.Fatalf("ConnectDemo: %v", err)
 	}
 
@@ -200,7 +200,7 @@ func TestReadSettingsRadio_NothingLoaded(t *testing.T) {
 // and exactly one transfer:done{Kind:"settings",Outcome:"ok"}.
 func TestReadSettingsRadio_FullCycle_Sim(t *testing.T) {
 	a, rec := newTestApp(t)
-	if _, err := a.ConnectDemo(); err != nil {
+	if _, err := a.ConnectDemo(""); err != nil {
 		t.Fatalf("ConnectDemo: %v", err)
 	}
 	if _, err := a.ReadRadio(); err != nil {
@@ -281,7 +281,7 @@ func TestReadSettingsRadio_FullCycle_Sim(t *testing.T) {
 // TargetID whose codeplug.DisplaySlot equals both TargetDisplay and Slot.
 func TestChannelProgress_TargetFieldsAndSlotCompat(t *testing.T) {
 	a, rec := newTestApp(t)
-	if _, err := a.ConnectDemo(); err != nil {
+	if _, err := a.ConnectDemo(""); err != nil {
 		t.Fatalf("ConnectDemo: %v", err)
 	}
 	if _, err := a.ReadRadio(); err != nil {
@@ -321,7 +321,7 @@ func TestChannelProgress_TargetFieldsAndSlotCompat(t *testing.T) {
 // SaveFile -> LoadFile round trip.
 func TestReadSettingsRadio_PreservesLegacyAndUnsupported(t *testing.T) {
 	a, _ := newTestApp(t)
-	if _, err := a.ConnectDemo(); err != nil {
+	if _, err := a.ConnectDemo(""); err != nil {
 		t.Fatalf("ConnectDemo: %v", err)
 	}
 	if _, err := a.ReadRadio(); err != nil {
@@ -387,7 +387,7 @@ func TestReadSettingsRadio_PreservesLegacyAndUnsupported(t *testing.T) {
 // codeplug.Load, independent of the App).
 func TestSaveFile_PersistsSettings(t *testing.T) {
 	a, _ := newTestApp(t)
-	if _, err := a.ConnectDemo(); err != nil {
+	if _, err := a.ConnectDemo(""); err != nil {
 		t.Fatalf("ConnectDemo: %v", err)
 	}
 	if _, err := a.ReadRadio(); err != nil {
@@ -450,7 +450,7 @@ func TestLoadFile_SettingsSurvive(t *testing.T) {
 // Live false once offline.
 func TestDisconnect_SettingsSurviveOffline(t *testing.T) {
 	a, _ := newTestApp(t)
-	if _, err := a.ConnectDemo(); err != nil {
+	if _, err := a.ConnectDemo(""); err != nil {
 		t.Fatalf("ConnectDemo: %v", err)
 	}
 	if _, err := a.ReadRadio(); err != nil {
@@ -479,5 +479,35 @@ func TestDisconnect_SettingsSurviveOffline(t *testing.T) {
 	}
 	if spec.Live {
 		t.Error("GetSettingsSpec after Disconnect: Live = true, want false")
+	}
+}
+
+// TestCurrentSettingsDescriptor_FollowsResolvedModel is the settings
+// cluster's threading pin, and the closure of the drift M9c-5 E4 was
+// written to close: this fallback used to name wiring.DefaultModel
+// literally, so a model with no settings surface of its own silently
+// received the FT-710's entire EX menu tree. It now follows currentModel,
+// and a model wiring.StaticSettingsDescriptor cannot resolve yields the
+// ZERO descriptor — an empty settings tree — never another radio's.
+//
+// The FT-710 leg is pinned first and asserted non-empty, so the empty
+// result below is a genuine contrast rather than a vacuous pass.
+func TestCurrentSettingsDescriptor_FollowsResolvedModel(t *testing.T) {
+	ft710Descriptor, live := currentSettingsDescriptor(nil, nil)
+	if live {
+		t.Error("currentSettingsDescriptor(nil, nil): live = true, want false (no session)")
+	}
+	if len(ft710Descriptor.Menus) == 0 {
+		t.Fatal("test setup: the default model's static descriptor has no menus — the contrast below would be vacuous")
+	}
+
+	recogniseTestModel(t)
+	working := &codeplug.Codeplug{Radio: codeplug.RadioInfo{Model: testModel}}
+	got, live := currentSettingsDescriptor(nil, working)
+	if live {
+		t.Error("currentSettingsDescriptor(nil, testModel working): live = true, want false")
+	}
+	if len(got.Menus) != 0 {
+		t.Errorf("currentSettingsDescriptor(nil, testModel working): %d menus, want 0 — another radio's settings tree must never be served for a model that has none", len(got.Menus))
 	}
 }
