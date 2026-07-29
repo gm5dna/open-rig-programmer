@@ -108,9 +108,13 @@ func parseToneFieldCell(s string) (codeplug.ToneField, error) {
 	}
 }
 
-// parseBoolFieldCell parses this schema's scan_skip column: "" ->
-// Unknown, "n/a" -> Unavailable, "yes"/"no" -> Known.
-func parseBoolFieldCell(s string) (codeplug.BoolField, error) {
+// parseBoolFieldCell parses one of this schema's BoolField columns: "" ->
+// Unknown, "n/a" -> Unavailable, "yes"/"no" -> Known. column is the
+// column's name, used ONLY for the diagnostic — it was hardcoded
+// "scan_skip" while scan_skip was the sole BoolField column, and became a
+// parameter at M9c-5 (E1d) when tag_display joined it, so that a bad
+// tag_display cell is never reported as a scan_skip problem.
+func parseBoolFieldCell(s, column string) (codeplug.BoolField, error) {
 	switch s {
 	case "":
 		return codeplug.BoolField{State: codeplug.Unknown}, nil
@@ -121,7 +125,7 @@ func parseBoolFieldCell(s string) (codeplug.BoolField, error) {
 	case "no":
 		return codeplug.BoolField{State: codeplug.Known, Value: false}, nil
 	default:
-		return codeplug.BoolField{}, fmt.Errorf("scan_skip must be \"\", \"n/a\", \"yes\" or \"no\", got %q", s)
+		return codeplug.BoolField{}, fmt.Errorf("%s must be \"\", \"n/a\", \"yes\" or \"no\", got %q", column, s)
 	}
 }
 
@@ -198,8 +202,20 @@ func validateImportHeader(got []string) error {
 // and the line of the first occurrence. A row whose data columns (see
 // dataColumns) are ALL empty decodes to an empty Channel (Data == nil);
 // otherwise every data column is parsed into ChannelData, with
-// ctcss_tone/scan_skip's "" -> Unknown, "n/a" -> Unavailable, value ->
-// Known mapping applied exactly as Export produced it.
+// ctcss_tone/scan_skip/tag_display's "" -> Unknown, "n/a" -> Unavailable,
+// value -> Known mapping applied exactly as Export produced it.
+//
+// tag_display joined that mapping at M9c-5 (E1d), and the change is not
+// backward-compatible in ONE direction, recorded here because a user can
+// meet it: a CSV exported BEFORE that milestone wrote Known-false as an
+// EMPTY cell (the old spelling had only "yes" and ""), so re-importing
+// such a file yields Unknown rather than Known-false, and
+// codeplug.Diff then blocks those channels until the display is set. The
+// mitigation is to put an explicit "no" (or "yes") in the column before
+// importing the old file, or to set the value in the UI afterwards; every
+// export from this version onwards writes an explicit spelling, so the
+// reinterpretation can only bite pre-E1 files. See
+// TestImport_PreE1EmptyTagDisplayCell_ReinterpretedAsUnknown.
 func Import(r io.Reader) ([]codeplug.Channel, error) {
 	cr := csv.NewReader(r)
 	cr.FieldsPerRecord = -1
@@ -322,13 +338,13 @@ func Import(r io.Reader) ([]codeplug.Channel, error) {
 		// this is a no-op for any file this package itself wrote.
 		data.Tag = strings.TrimRight(cell("tag"), " ")
 
-		tagDisplay, err := parseYesEmpty(cell("tag_display"))
+		tagDisplay, err := parseBoolFieldCell(cell("tag_display"), "tag_display")
 		if err != nil {
-			return nil, &ParseError{Line: line, Reason: fmt.Sprintf("tag_display: %v", err)}
+			return nil, &ParseError{Line: line, Reason: err.Error()}
 		}
 		data.TagDisplay = tagDisplay
 
-		scanSkip, err := parseBoolFieldCell(cell("scan_skip"))
+		scanSkip, err := parseBoolFieldCell(cell("scan_skip"), "scan_skip")
 		if err != nil {
 			return nil, &ParseError{Line: line, Reason: err.Error()}
 		}

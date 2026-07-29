@@ -26,14 +26,31 @@ func (s *Session) bankFor(slot string) (spec.BankID, bool) {
 }
 
 // requestedFields lists every spec.Field a write of data actually
-// requests: the seven codec-expressible fields are ALWAYS requested (the
-// MW frame carries frequency/mode/clarifier/ctcss-state/shift whether or
-// not they changed, and the MT frame likewise carries tag+display), plus
-// CTCSSTone/ScanSkip when — and only when — their FieldState is Known:
-// per codeplug's write rule, Unknown/Unavailable mean "preserve whatever
-// the radio has", i.e. nothing is requested for that field. This mirrors
-// codeplug.Diff's addedFields so the driver's defence-in-depth gate and
-// the diff layer's gate judge the same set.
+// requests: the six plain fields are ALWAYS requested (the MW frame
+// carries frequency/mode/clarifier/ctcss-state/shift whether or not they
+// changed, and the MT frame likewise carries the tag), plus TagDisplay,
+// CTCSSTone and ScanSkip when — and only when — their FieldState is
+// Known: per codeplug's write rule, Unknown/Unavailable mean "preserve
+// whatever the radio has", i.e. nothing is requested for that field.
+//
+// This mirrors codeplug.Diff's addedFields EXACTLY — same membership, the
+// same three conditionals, the same order — so the driver's
+// defence-in-depth gate and the diff layer's gate judge the same set.
+// TagDisplay keeps the PLACE it held while it was unconditional: after
+// Tag, before the tone/skip conditionals, i.e. seventh whenever it appears
+// at all (TestRequestedFields_MembershipAndOrder pins this, as
+// TestAddedFields_MembershipAndOrder pins the other side).
+//
+// TagDisplay's conditional needs a word its two neighbours do not, because
+// MT's display flag (P1) is MANDATORY on the frame: a non-Known TagDisplay
+// is never quietly omitted from the wire, it is REFUSED outright by
+// buildWriteCommands before any other field mapping. Dropping it from this
+// set therefore cannot let a non-Known value through — what it fixes is
+// the one channel that would otherwise meet the wrong gate first: on a
+// session whose FieldTagDisplay is not write-Supported, the loop below
+// would have refused it naming a not-writable field NOBODY ASKED TO
+// WRITE, instead of the refusal that names the real problem. (addedFields
+// carries the conditional for the same reason — see its doc comment.)
 func requestedFields(data codeplug.ChannelData) []spec.Field {
 	fields := []spec.Field{
 		spec.FieldFrequency,
@@ -42,7 +59,9 @@ func requestedFields(data codeplug.ChannelData) []spec.Field {
 		spec.FieldCTCSSState,
 		spec.FieldShift,
 		spec.FieldTag,
-		spec.FieldTagDisplay,
+	}
+	if data.TagDisplay.State == codeplug.Known {
+		fields = append(fields, spec.FieldTagDisplay)
 	}
 	if data.CTCSSTone.State == codeplug.Known {
 		fields = append(fields, spec.FieldCTCSSTone)
@@ -70,6 +89,11 @@ func requestedFields(data codeplug.ChannelData) []spec.Field {
 //     profile: the CAT codec cannot express either, and silently
 //     dropping a value the caller explicitly marked Known would be a
 //     lie.
+//   - A TagDisplay that is not Known is refused, in buildWriteCommands and
+//     before ANY other field mapping: MT's display flag is mandatory, so
+//     there is no way to send the channel without inventing a value for it
+//     (see buildWriteCommands). codeplug.Diff blocks such a channel at plan
+//     time; this refusal is the defence-in-depth behind that.
 //   - An empty channel (erase) is refused: no CAT erase command exists
 //     (HW-CONFIRMED 2026-07-13 by a properly isolated re-probe — four
 //     range/mode-isolated candidate MW frames, every one rejected; see
@@ -105,7 +129,13 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	s.opMu.Lock()
 	defer s.opMu.Unlock()
 
-	var res driver.WriteResult
+	// Every refusal below this point returns res unchanged, i.e. an
+	// EXPLICITLY EMPTY step list — never nil. The distinction is not
+	// cosmetic: the clone service journals this result, and a nil slice
+	// marshals as JSON null, which an auditor would have to read as
+	// "unknown" rather than the truth, "no frame was ever built, so
+	// nothing was attempted".
+	res := driver.WriteResult{Steps: []driver.WriteStep{}}
 
 	if _, err := s.dialect.ParseSlot(ch.Slot); err != nil {
 		return res, &driver.WriteRefusedError{Slot: ch.Slot, Reason: fmt.Sprintf("not a valid slot: %v", err)}
@@ -139,6 +169,9 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	}
 	if err := ch.Data.ScanSkip.Valid(); err != nil {
 		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{spec.FieldScanSkip}, Reason: err.Error()}
+	}
+	if err := ch.Data.TagDisplay.Valid(); err != nil {
+		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{spec.FieldTagDisplay}, Reason: err.Error()}
 	}
 
 	// THE write gate (defence in depth below the clone service): every
@@ -174,26 +207,41 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 		return res, err
 	}
 
+	// THE step list, declared in full HERE: after both frames provably
+	// exist, before either goes near the wire. Declaring the whole
+	// choreography up front is what makes a partial outcome legible — an
+	// MT step that is present but never Sent says "the tag write was part
+	// of this write and never went out", where a step list appended to as
+	// frames succeed could only say nothing at all, which is
+	// indistinguishable from a driver that never intended an MT.
+	res.Steps = []driver.WriteStep{{Command: "MW"}, {Command: "MT"}}
+	const (
+		mwStep = 0
+		mtStep = 1
+	)
+
 	// MW first: channel data before its label. Fire-and-forget — the
 	// transport listens for a bounded window for a delayed "?;".
 	if _, err := s.eng.Do(ctx, mwCmd, fnfSpec()); err != nil {
 		if errors.Is(err, cat.ErrRejected) {
 			// The frame WAS transmitted; the radio explicitly refused it.
-			res.MWSent = true
+			res.Steps[mwStep].Sent = true
 			return res, fmt.Errorf("ft710: WriteChannel %s: MW rejected by radio: %w", ch.Slot, err)
 		}
+		// Transport-level failure: the frame's fate is not attributable,
+		// so Sent stays false.
 		return res, fmt.Errorf("ft710: WriteChannel %s: MW: %w", ch.Slot, err)
 	}
-	res.MWSent, res.MWConfirmed = true, true
+	res.Steps[mwStep].Sent, res.Steps[mwStep].Confirmed = true, true
 
 	if _, err := s.eng.Do(ctx, mtCmd, fnfSpec()); err != nil {
 		if errors.Is(err, cat.ErrRejected) {
-			res.MTSent = true
+			res.Steps[mtStep].Sent = true
 			return res, fmt.Errorf("ft710: WriteChannel %s: MT rejected by radio: %w", ch.Slot, err)
 		}
 		return res, fmt.Errorf("ft710: WriteChannel %s: MT: %w", ch.Slot, err)
 	}
-	res.MTSent, res.MTConfirmed = true, true
+	res.Steps[mtStep].Sent, res.Steps[mtStep].Confirmed = true, true
 
 	return res, nil
 }
@@ -208,6 +256,30 @@ func buildWriteCommands(dialect cat.Dialect, ch codeplug.Channel) (mwCmd, mtCmd 
 		return cat.Command{}, cat.Command{}, &driver.WriteRefusedError{Slot: ch.Slot, Reason: err.Error()}
 	}
 	data := *ch.Data
+
+	// THE pre-wire refusal for TagDisplay, FIRST and before any other field
+	// mapping. The MT frame's display flag (P1) is MANDATORY — the frame has
+	// no "leave it alone" encoding — so sending a channel whose TagDisplay is
+	// not Known would MANUFACTURE a value for a field whose FieldState says
+	// "preserve whatever the radio has", which is exactly what codeplug's
+	// write rule forbids.
+	//
+	// Position is load-bearing, not stylistic: a channel that is wrong in
+	// several ways at once must still name THIS field, because this is the
+	// one whose failure mode is a silent wrong byte on the wire rather than
+	// a refusal. From this commit there is no path from here to BuildMTSet
+	// that carries a non-Known display flag.
+	//
+	// codeplug.Diff blocks such a channel at PLAN time, which is the
+	// user-facing route and the one that produces a helpful message; this is
+	// the belt to that pair of braces, in the same spirit as WriteChannel's
+	// capability gate.
+	if data.TagDisplay.State != codeplug.Known {
+		return cat.Command{}, cat.Command{}, &driver.WriteRefusedError{
+			Slot: ch.Slot, Fields: []spec.Field{spec.FieldTagDisplay},
+			Reason: fmt.Sprintf("tag display FieldState is %q, not %q; only a Known value is ever sent to a radio", data.TagDisplay.State, codeplug.Known),
+		}
+	}
 
 	// Resolved through THIS dialect (task 67, M9c-0), not a driver-private
 	// table: before this, a dialect that renamed a mode had no effect on
@@ -276,7 +348,9 @@ func buildWriteCommands(dialect cat.Dialect, ch codeplug.Channel) (mwCmd, mtCmd 
 		return cat.Command{}, cat.Command{}, &driver.WriteRefusedError{Slot: ch.Slot, Reason: fmt.Sprintf("cannot encode MW frame: %v", err)}
 	}
 
-	mtCmd, err = dialect.BuildMTSet(sl, data.TagDisplay, data.Tag)
+	// data.TagDisplay.Value is safe to read here and ONLY here: the refusal
+	// at the top of this function has already established State == Known.
+	mtCmd, err = dialect.BuildMTSet(sl, data.TagDisplay.Value, data.Tag)
 	if err != nil {
 		return cat.Command{}, cat.Command{}, &driver.WriteRefusedError{
 			Slot: ch.Slot, Fields: []spec.Field{spec.FieldTag},

@@ -130,16 +130,17 @@
 // # Safety obligations (binding, from earlier reviews)
 //
 //  1. Engine.Do calls cmd.Bytes() EXACTLY ONCE per transmission attempt,
-//     checks the Engine's INJECTED gate (AllowFunc — in this repository's
-//     composition, the driver's own cat.Dialect.AllowedCommand) on THAT
+//     checks the Engine's own gate (AllowFunc — since M9c-5, the
+//     AllowedCommand of the cat.Dialect NewEngine was given) on THAT
 //     byte slice, and writes THAT SAME byte slice — never a second,
-//     independently obtained copy. The gate is supplied at construction and
-//     fail-closed at both ends: NewEngine refuses a nil AllowFunc before
-//     starting the reader goroutine, so NewEngine cannot RETURN an ungated
-//     Engine, and Do refuses again (ErrNoAllowlist) before every write
-//     regardless — which is what covers the hand-built case the
-//     constructor cannot reach, Engine being an exported type (M9b fix
-//     wave, Codex finding 3). See Do's doc comment.
+//     independently obtained copy. The gate is fixed at construction and
+//     fail-closed at both ends: NewEngine refuses an unconfigured dialect
+//     (ErrUnconfiguredDialect) before starting the reader goroutine, so
+//     NewEngine cannot RETURN an Engine that speaks for no radio, and Do
+//     refuses again (ErrNoAllowlist) before every write regardless —
+//     which is what covers the hand-built case the constructor cannot
+//     reach, Engine being an exported type (M9b fix wave, Codex finding
+//     3). See Do's doc comment.
 //  2. Retries are only for idempotent reads (CommandSpec.RetryReads,
 //     ExpectPrefix != ""); a write's timeout or failure is NEVER resolved
 //     by resending — enforced structurally via ErrInvalidSpec, not merely
@@ -154,8 +155,8 @@
 //
 // # The policy-gated write path (composition-root discipline)
 //
-// Engine.Do is MECHANISM: it will transmit any frame its injected
-// AllowFunc admits, including the Set frames (MW, MT) that mutate a
+// Engine.Do is MECHANISM: it will transmit any frame its own dialect's
+// gate admits, including the Set frames (MW, MT) that mutate a
 // radio's memory. It is not, and cannot be, a policy layer — the
 // hardware write guard (the capability profiles, codeplug.Diff's gates,
 // the clone service's choreography, and driver.Session.WriteChannel's
@@ -166,9 +167,26 @@
 // external importers. The compiler-enforced version of this boundary (a
 // separate write-capability split) is a ledgered M5b-flip precondition.
 //
-// # What M9b did NOT change about this package's core/cat dependency
+// # This package's core/cat dependency, and the M9b hardwiring now closed
 //
-// M9b (the codec dialect seam) injected the write GATE and nothing else.
+// M9b (the codec dialect seam) injected the write GATE and nothing else,
+// leaving one hardwiring ledgered here: Engine.Init reached for the
+// package-level cat.FT710 to build its AI frame while the gate came from
+// the caller. M9c-5 (E3) CLOSED IT. NewEngine takes a cat.Dialect whole
+// and derives both the gate (d.AllowedCommand) and the init frame
+// (d.BuildAISet(false)) from that one value.
+//
+// THE CORRECTION THAT CAME WITH IT, because the old ledger note claimed
+// more than was true: it said a second dialect whose gate did not admit
+// the FT-710's AI0; form would make Init "fail closed". It never failed
+// at all, and could not have. AllowedCommand judges BYTES, not
+// provenance; every configured dialect builds exactly "AI0;", and every
+// configured dialect's gate admits that form. There was no live defect
+// here and no fixture could have shown one. What there was is
+// architectural impurity — a type that already held a dialect reaching
+// past it for a package-level one — and that is what was removed, with
+// the bytes unchanged.
+//
 // Transport still imports core/cat, and deliberately so, for three
 // things that are not radio-behaviour policy:
 //
@@ -177,12 +195,11 @@
 //     protocol's own ";"-terminated shape, shared by every Yaesu dialect;
 //   - rejection detection (cat.IsRejection, cat.ErrRejected) — "?;" is
 //     likewise protocol-level, not per-radio;
-//   - cat.FT710.BuildAISet for the AI init frame in Engine.Init.
+//   - the cat.Dialect type itself, as NewEngine's parameter.
 //
-// The third of those IS a hardwiring, and is ledgered as such: see
-// Init's own doc comment. Making the init frame injectable is deferred
-// to whenever a second rig actually differs on it (roadmap risk 10).
-// Nothing else in this package reaches for a dialect: every outbound
-// frame Do transmits arrives from its caller already built, and is
-// judged solely by the AllowFunc the Engine was constructed with.
+// No package-level dialect VALUE is reached for anywhere in this
+// package's production code: every outbound frame Do transmits arrives
+// from its caller already built, the one frame Engine builds for itself
+// comes from the dialect it was constructed with, and every frame is
+// judged solely by that same dialect's gate.
 package transport

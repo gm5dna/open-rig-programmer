@@ -40,8 +40,20 @@ type ChannelData struct {
 	Shift string `json:"shift"`
 	// Tag is the channel's display name/label.
 	Tag string `json:"tag,omitempty"`
-	// TagDisplay is whether the tag is shown in place of the frequency.
-	TagDisplay bool `json:"tag_display,omitempty"`
+	// TagDisplay is whether the tag is shown in place of the frequency,
+	// together with how confidently that is known. See FieldState for the
+	// write rule: only a Known TagDisplay is ever sent to a radio. The MT
+	// frame's display flag is MANDATORY — there is no "leave it alone"
+	// encoding — so a non-Known TagDisplay cannot be transmitted at all
+	// without manufacturing a value; Diff blocks such a channel at plan
+	// time, and the driver refuses it as defence in depth.
+	//
+	// NO omitempty, deliberately: a BoolField is a struct, so the key is
+	// always written. An Unknown TagDisplay is a real state that must be
+	// VISIBLE in a saved file, not elided into indistinguishability from
+	// Known-false — which is precisely the ambiguity the pre-schema-3
+	// `bool` with omitempty created and this field exists to end.
+	TagDisplay BoolField `json:"tag_display"`
 	// ScanSkip is whether this channel is skipped during scanning.
 	ScanSkip BoolField `json:"scan_skip"`
 }

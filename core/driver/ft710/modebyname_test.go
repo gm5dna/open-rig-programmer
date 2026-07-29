@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
-	"github.com/gm5dna/open-rig-programmer/core/driver"
 )
 
 // ft710EquivalentConfig returns a cat.DialectConfig whose every field is
@@ -93,10 +92,7 @@ func TestWriteChannel_ResolvesModeThroughSessionDialect(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WriteChannel with a dialect-only mode name %q: unexpected error: %v (the driver's private modeByName table was consulted instead of the session's own dialect)", ch.Data.Mode, err)
 	}
-	want := driver.WriteResult{MWSent: true, MWConfirmed: true, MTSent: true, MTConfirmed: true}
-	if res != want {
-		t.Errorf("WriteResult = %+v, want %+v", res, want)
-	}
+	assertSteps(t, res, wantSteps(true, true, true, true))
 
 	state, ok := radio.SlotState("010")
 	if !ok {

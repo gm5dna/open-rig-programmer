@@ -17,7 +17,7 @@ import (
 // highest version it will read. Load rejects a file whose Schema is
 // greater than CurrentSchema (see ErrSchemaTooNew) rather than guessing
 // at forward compatibility with a format it does not know.
-const CurrentSchema = 2
+const CurrentSchema = 3
 
 // maxCodeplugFileSize is the largest file Load will read, in bytes. A
 // full multi-bank FT-710 image in this package's indented JSON encoding
@@ -102,8 +102,8 @@ func (e *UnknownFieldError) Error() string {
 // DuplicateKeyError reports that Load rejected a codeplug file because one
 // schema-controlled JSON object — i.e. any object outside the single
 // opaque subtree the file's schema exempts (the whole "menus" subtree in
-// schema 1; only "menus.legacy" in schema 2 — see MenuSnapshot.Legacy) —
-// repeats the same key twice. encoding/json's normal behaviour for a
+// schema 1; only "menus.legacy" in schema 2 and later — see
+// MenuSnapshot.Legacy) — repeats the same key twice. encoding/json's normal behaviour for a
 // duplicate key is silent "last value wins"; that is unsafe here because a
 // hand-edited file could carry two "freq_hz" values and this package would
 // accept whichever happened to come last with no indication anything was
@@ -160,10 +160,11 @@ func menusWholeExempt(path, key string) bool {
 	return path == "" && key == "menus"
 }
 
-// menusLegacyExempt exempts ONLY "menus.legacy" — the schema-2 rule. In
-// schema 2 the "menus" object is itself schema-controlled (its keys are
-// policed like any other), and the sole opaque bag is MenuSnapshot.Legacy,
-// which preserves a migrated v1 payload verbatim (duplicate keys included).
+// menusLegacyExempt exempts ONLY "menus.legacy" — the schema-2-and-later
+// rule. From schema 2 on, the "menus" object is itself schema-controlled
+// (its keys are policed like any other), and the sole opaque bag is
+// MenuSnapshot.Legacy, which preserves a migrated v1 payload verbatim
+// (duplicate keys included).
 func menusLegacyExempt(path, key string) bool {
 	return path == "menus" && key == "legacy"
 }
@@ -316,7 +317,7 @@ func (e *OversizeSaveError) Error() string {
 //     (*DuplicateKeyError) rather than resolved "last wins" — except
 //     inside the one opaque subtree this package does not police, which
 //     the schema selects: the whole "menus" subtree in schema 1, but only
-//     "menus.legacy" in schema 2 (see MenuSnapshot.Legacy);
+//     "menus.legacy" in schema 2 and later (see MenuSnapshot.Legacy);
 //   - trailing data after the top-level JSON value is rejected;
 //   - a Schema of 0 or negative, and a Schema greater than CurrentSchema
 //     (see ErrSchemaTooNew), are both rejected via a wrapped *SchemaError;
@@ -326,11 +327,19 @@ func (e *OversizeSaveError) Error() string {
 // the "schema" field and rejects an out-of-range version straight away, so
 // a file from a newer program reports "upgrade the app" (ErrSchemaTooNew)
 // rather than a misleading unknown-field error from a premature strict
-// decode. Pass 2 then does the strict, version-appropriate decode. A
-// schema-1 file is migrated on load — its opaque "menus" payload preserved
-// verbatim as MenuSnapshot.Legacy (a literal null or absent key becomes a
-// nil snapshot; anything else, including {}, is preserved) — and its
-// in-memory Schema set to CurrentSchema so Save always re-emits schema 2.
+// decode. Pass 2 then does the strict, version-appropriate decode, through
+// that version's own FROZEN decode structs (see legacyChannel) rather than
+// through the live ones.
+//
+// Both older schemas are migrated on load, and both have their in-memory
+// Schema set to CurrentSchema so Save always re-emits the current version:
+//
+//   - schema 1: its opaque "menus" payload is preserved verbatim as
+//     MenuSnapshot.Legacy (a literal null or absent key becomes a nil
+//     snapshot; anything else, including {}, is preserved);
+//   - schema 1 and schema 2 alike: every populated channel's legacy
+//     "tag_display" bool becomes a BoolField (see
+//     migrateLegacyTagDisplay for the rule and the reasoning).
 //
 // Load never panics: a missing file, malformed JSON, or truncated/corrupted
 // JSON are all reported as an error.
@@ -378,6 +387,8 @@ func Load(path string) (*Codeplug, error) {
 	// Pass 2: version-appropriate strict decode.
 	var cp *Codeplug
 	switch probe.Schema {
+	case 3:
+		cp, err = loadV3(b, path)
 	case 2:
 		cp, err = loadV2(b, path)
 	case 1:
@@ -396,10 +407,13 @@ func Load(path string) (*Codeplug, error) {
 	return cp, nil
 }
 
-// loadV2 strictly decodes a schema-2 file into the current Codeplug shape
-// (typed *MenuSnapshot), checks for trailing data and duplicate keys
-// (exempting only menus.legacy), and validates the menu snapshot.
-func loadV2(b []byte, path string) (*Codeplug, error) {
+// loadV3 strictly decodes a schema-3 (current) file into the live
+// Codeplug shape, checks for trailing data and duplicate keys (exempting
+// only menus.legacy), and validates the menu snapshot. No migration: this
+// IS the current schema, so the live structs are the right ones — the
+// frozen shapes below exist precisely so that stays true as the live
+// structs move on.
+func loadV3(b []byte, path string) (*Codeplug, error) {
 	var cp Codeplug
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields()
@@ -418,22 +432,118 @@ func loadV2(b []byte, path string) (*Codeplug, error) {
 	return &cp, nil
 }
 
-// codeplugV1 is the schema-1 on-disk shape: identical to Codeplug except
-// that Menus is the opaque json.RawMessage the v1.1 reservation carried.
-// loadV1 decodes into this, then migrates it into a current Codeplug.
+// legacyChannel is the FROZEN schema-1/schema-2 on-disk shape of one
+// memory-channel slot.
+//
+// ONE shape serves BOTH old versions on purpose, and the reason is
+// recorded rather than assumed: schemas 1 and 2 differ only at the TOP
+// level (v1's "menus" is an opaque blob, v2's is typed) — their channel
+// objects are provably identical, key for key and type for type, as of
+// schema 3's introduction. Declaring the same thing twice would only
+// invite the two copies to drift.
+//
+// "Frozen" is the whole point of these types. They must NEVER be replaced
+// by, nor made to embed, the live Channel/ChannelData: a legacy decoder
+// that follows the live struct silently stops decoding the format it is
+// named for the moment the live struct changes — which is exactly what
+// schema 3 has just done to tag_display. Editing them is only ever
+// correct in order to fix a MIS-STATEMENT of what v1/v2 actually held.
+type legacyChannel struct {
+	Slot string             `json:"slot"`
+	Data *legacyChannelData `json:"data,omitempty"`
+}
+
+// legacyChannelData is the frozen schema-1/schema-2 shape of a populated
+// channel's data: every key those schemas could carry, with the types they
+// carried. It is deliberately exhaustive — a key omitted here would be
+// REJECTED by DisallowUnknownFields when a perfectly valid legacy file
+// carried it.
+//
+// tag_display is a *bool, not a bool: v1 and v2 both wrote it with
+// omitempty, so a false value and an absent key were indistinguishable in
+// the file. The pointer is what lets migrateLegacyTagDisplay tell the two
+// apart — and the migration rule is stated for each case separately even
+// though both reach the same result today, so that a later revisit changes
+// a decision rather than discovering one.
+//
+// The leaf types (ToneField, BoolField, RadioInfo, MenuSnapshot) are the
+// LIVE ones, reused deliberately and on the record: schema 3 does not
+// change any of them, so reusing them states the truth about what v1/v2
+// held rather than cloning declarations that would immediately drift. That
+// reuse is conditional, not permanent — a future schema that changes one
+// of those types must freeze it here in the same change, exactly as
+// tag_display is being frozen now.
+type legacyChannelData struct {
+	FreqHz     uint32    `json:"freq_hz"`
+	Mode       string    `json:"mode"`
+	ClarHz     int       `json:"clar_hz,omitempty"`
+	RxClar     bool      `json:"rx_clar,omitempty"`
+	TxClar     bool      `json:"tx_clar,omitempty"`
+	CTCSS      string    `json:"ctcss"`
+	CTCSSTone  ToneField `json:"ctcss_tone"`
+	Shift      string    `json:"shift"`
+	Tag        string    `json:"tag,omitempty"`
+	TagDisplay *bool     `json:"tag_display,omitempty"`
+	ScanSkip   BoolField `json:"scan_skip"`
+}
+
+// codeplugV2 is the frozen schema-2 top-level shape: the schema-2 channel
+// list, with the TYPED menu snapshot schema 2 introduced.
+type codeplugV2 struct {
+	Schema    int             `json:"schema"`
+	Generator string          `json:"generator"`
+	Radio     RadioInfo       `json:"radio"`
+	Channels  []legacyChannel `json:"channels"`
+	Menus     *MenuSnapshot   `json:"menus,omitempty"`
+}
+
+// codeplugV1 is the frozen schema-1 top-level shape: the same channel list
+// as v2, but with Menus the opaque json.RawMessage the v1.1 reservation
+// carried.
 type codeplugV1 struct {
 	Schema    int             `json:"schema"`
 	Generator string          `json:"generator"`
 	Radio     RadioInfo       `json:"radio"`
-	Channels  []Channel       `json:"channels"`
+	Channels  []legacyChannel `json:"channels"`
 	Menus     json.RawMessage `json:"menus,omitempty"`
 }
 
-// loadV1 strictly decodes a schema-1 file (whole-"menus" duplicate-key
-// exemption, matching how v1 was written), then migrates it to the current
-// schema: the opaque menus payload is preserved verbatim as
-// MenuSnapshot.Legacy, and Schema is set to CurrentSchema so Save re-emits
-// schema 2.
+// loadV2 strictly decodes a schema-2 file through the frozen v2 shape
+// (typed *MenuSnapshot), checks for trailing data and duplicate keys
+// (exempting only menus.legacy), validates the menu snapshot, and migrates
+// the result to the current schema.
+func loadV2(b []byte, path string) (*Codeplug, error) {
+	var v2 codeplugV2
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&v2); err != nil {
+		return nil, fmt.Errorf("codeplug: load %s: %w", path, wrapDecodeError(err))
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return nil, fmt.Errorf("codeplug: load %s: trailing data after the top-level JSON value", path)
+	}
+	if err := checkDuplicateKeys(b, menusLegacyExempt); err != nil {
+		return nil, fmt.Errorf("codeplug: load %s: %w", path, err)
+	}
+	if err := v2.Menus.Validate(); err != nil {
+		return nil, fmt.Errorf("codeplug: load %s: %w", path, err)
+	}
+
+	return &Codeplug{
+		Schema:    CurrentSchema, // migrate-on-load: Save always emits the current schema.
+		Generator: v2.Generator,
+		Radio:     v2.Radio,
+		Channels:  migrateLegacyChannels(v2.Channels),
+		Menus:     v2.Menus,
+	}, nil
+}
+
+// loadV1 strictly decodes a schema-1 file through the frozen v1 shape
+// (whole-"menus" duplicate-key exemption, matching how v1 was written),
+// then migrates it to the current schema: the opaque menus payload is
+// preserved verbatim as MenuSnapshot.Legacy, the channels are migrated
+// like v2's, and Schema is set to CurrentSchema so Save re-emits the
+// current version.
 func loadV1(b []byte, path string) (*Codeplug, error) {
 	var v1 codeplugV1
 	dec := json.NewDecoder(bytes.NewReader(b))
@@ -449,15 +559,81 @@ func loadV1(b []byte, path string) (*Codeplug, error) {
 	}
 
 	cp := &Codeplug{
-		Schema:    CurrentSchema, // migrate-on-load: Save always emits schema 2.
+		Schema:    CurrentSchema, // migrate-on-load: Save always emits the current schema.
 		Generator: v1.Generator,
 		Radio:     v1.Radio,
-		Channels:  v1.Channels,
+		Channels:  migrateLegacyChannels(v1.Channels),
 	}
 	if migratedMenusPresent(v1.Menus) {
 		cp.Menus = &MenuSnapshot{Legacy: append(json.RawMessage(nil), v1.Menus...)}
 	}
 	return cp, nil
+}
+
+// migrateLegacyChannels converts a decoded schema-1/schema-2 channel list
+// into the current shape. A nil list migrates to nil, so a legacy file
+// with no "channels" key still loads with nil Channels exactly as it did
+// before schema 3; an empty list stays an empty (non-nil) list.
+func migrateLegacyChannels(legacy []legacyChannel) []Channel {
+	if legacy == nil {
+		return nil
+	}
+	out := make([]Channel, len(legacy))
+	for i, lc := range legacy {
+		out[i] = Channel{Slot: lc.Slot, Data: migrateLegacyChannelData(lc.Data)}
+	}
+	return out
+}
+
+// migrateLegacyChannelData converts one decoded legacy channel's data into
+// the current shape, or returns nil for an empty slot (Data == nil is the
+// sole empty/populated discriminator — see Channel). Every field but
+// TagDisplay carries across unchanged, because schema 3 changed only that
+// one.
+func migrateLegacyChannelData(d *legacyChannelData) *ChannelData {
+	if d == nil {
+		return nil
+	}
+	return &ChannelData{
+		FreqHz:     d.FreqHz,
+		Mode:       d.Mode,
+		ClarHz:     d.ClarHz,
+		RxClar:     d.RxClar,
+		TxClar:     d.TxClar,
+		CTCSS:      d.CTCSS,
+		CTCSSTone:  d.CTCSSTone,
+		Shift:      d.Shift,
+		Tag:        d.Tag,
+		TagDisplay: migrateLegacyTagDisplay(d.TagDisplay),
+		ScanSkip:   d.ScanSkip,
+	}
+}
+
+// migrateLegacyTagDisplay maps a schema-1/schema-2 "tag_display" onto the
+// current BoolField. Both cases produce Known; only the value differs:
+//
+//   - PRESENT (true OR false) → {Known, that value}. The file states the
+//     flag, so it is known — there is nothing to infer.
+//   - ABSENT (nil) → {Known, false}. This is justified as strict
+//     BEHAVIOUR PRESERVATION, not as a claim about provenance: v1/v2 wrote
+//     the field with omitempty, so an absent key decoded to the zero bool
+//     false and WAS ALREADY BEING SENT to the radio as false. Migrating it
+//     to Known-false therefore sends exactly the byte it sent before, and
+//     nothing about a legacy file's behaviour worsens.
+//
+// The rejected alternative is recorded: migrating absent → Unknown would
+// have been the honest-provenance answer, but it would mass-BLOCK every
+// channel of every legacy FT-710 file at plan time (see Diff's TagDisplay
+// gate) for a value the program was already, silently, sending. One
+// caveat is accepted openly: a CHIRP-sourced schema-2 channel carries a
+// MANUFACTURED false, which this rule baptises as Known-false. It too was
+// already being sent as false, so no behaviour worsens — and CHIRP imports
+// made from schema 3 onwards produce an honest Unknown instead.
+func migrateLegacyTagDisplay(v *bool) BoolField {
+	if v == nil {
+		return BoolField{State: Known, Value: false}
+	}
+	return BoolField{State: Known, Value: *v}
 }
 
 // migratedMenusPresent reports whether a v1 "menus" payload carries data

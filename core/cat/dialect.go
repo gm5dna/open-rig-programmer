@@ -68,13 +68,22 @@ type slotSpace struct {
 //
 // The ZERO VALUE IS INERT, deliberately. An exported struct always has a
 // constructible zero value, so `var d cat.Dialect` compiles and
-// d.AllowedCommand (from Task 54) is a non-nil method value that satisfies
-// transport.NewEngine's nil-AllowFunc check (Task 56) and would be
-// installed as a real engine's gate. A zero Dialect therefore carries no
-// slot space, no modes and no inventory, and consequently ACCEPTS NOTHING
-// — measured, all 1,187 frames FT710 accepts refused — which is the
-// property that matters, since AllowedCommand is what stands between this
-// program and a radio.
+// d.AllowedCommand (from Task 54) is a non-nil method value: a gate that
+// LOOKS installable while describing no radio at all.
+//
+// Since M9c-5 (E3) transport.NewEngine takes the cat.Dialect whole and
+// REFUSES an unconfigured one (transport.ErrUnconfiguredDialect, before
+// its reader goroutine starts, returning a nil *Engine), so no engine that
+// constructor returns can be gated by one — the retired shape, a nil-check
+// on a separately-passed AllowFunc, could not have seen a zero Dialect at
+// all, since the method value it yields is perfectly non-nil. That is a
+// claim about the constructor, though, not about this type: a hand-built
+// Engine inside core/transport, a test double, or any caller asking
+// AllowedCommand directly can still hold a zero Dialect, and this type
+// must answer for that itself. It carries no slot space, no modes and no
+// inventory, and consequently ACCEPTS NOTHING — measured, all 1,187 frames
+// FT710 accepts refused — which is the property that matters, since
+// AllowedCommand is what stands between this program and a radio.
 //
 // It builds ALMOST nothing, which is not the same claim. Every builder
 // that can fail does: it validates against slot space, mode set or EX

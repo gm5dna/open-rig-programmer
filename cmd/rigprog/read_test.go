@@ -50,9 +50,9 @@ func TestApplyDefaultGenerator_LeavesNonEmpty(t *testing.T) {
 func TestWriteReadSummary(t *testing.T) {
 	cp := &codeplug.Codeplug{
 		Channels: []codeplug.Channel{
-			{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 7_000_000}},
+			{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 7_000_000, TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}},
 			{Slot: "002"}, // empty
-			{Slot: "003", Data: &codeplug.ChannelData{FreqHz: 14_000_000}},
+			{Slot: "003", Data: &codeplug.ChannelData{FreqHz: 14_000_000, TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}},
 		},
 		Radio: codeplug.RadioInfo{
 			Region:         "UK",

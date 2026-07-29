@@ -31,35 +31,70 @@ type Identity struct {
 	Port string
 }
 
-// WriteResult reports, per sub-command, how far a Session.WriteChannel
-// call got. The CAT protocol's write commands are fire-and-forget — a
-// successful Set produces NO acknowledgement, only a bounded listen for a
-// possible "?;" rejection (transport.CommandSpec.ErrorWindow) — so
-// "confirmed" here means exactly "no rejection arrived in the window",
-// never "the radio positively acknowledged it". Positive verification
-// (reading the slot back and comparing) is deliberately NOT the driver's
-// job: it belongs to the clone service, which owns the whole
-// write-then-verify workflow.
+// WriteStep reports how far ONE frame of a Session.WriteChannel call got.
 //
-// A false Sent flag means the write's outcome is NOT known-clean: the
-// frame may never have been transmitted at all (refused before the wire,
-// or an earlier sub-command failed first), or a transport-level failure
-// left its outcome unknowable. The accompanying error distinguishes the
-// cases; either way the caller must treat the slot's on-radio state as
+// Command is that frame's mnemonic as the radio's own protocol names it
+// (e.g. "MW", "MT") — a LABEL for the audit trail and for a human reading
+// a journal, never a token a generic layer is expected to branch on. No
+// code above the driver seam may switch on its value: two radios may
+// choose different mnemonics, different numbers of steps, or one combined
+// frame where another needs two, and every such shape is equally valid
+// here.
+//
+// The CAT protocol's write commands are fire-and-forget — a successful Set
+// produces NO acknowledgement, only a bounded listen for a possible "?;"
+// rejection (transport.CommandSpec.ErrorWindow) — so Confirmed means
+// exactly "no rejection arrived in the window", never "the radio
+// positively acknowledged it". Positive verification (reading the slot
+// back and comparing) is deliberately NOT the driver's job: it belongs to
+// the clone service, which owns the whole write-then-verify workflow.
+//
+// A false Sent flag means the frame's outcome is NOT known-clean: it may
+// never have been transmitted at all (an earlier step failed first, so
+// this one was never reached), or a transport-level failure left its
+// outcome unknowable. The accompanying error distinguishes the cases;
+// either way the caller must treat the slot's on-radio state as
 // unverified.
+type WriteStep struct {
+	// Command is the frame's mnemonic, e.g. "MW", "MT".
+	Command string
+	// Sent reports that the frame was transmitted with an attributable
+	// outcome — success or an explicit rejection.
+	Sent bool
+	// Confirmed reports that the frame's error window elapsed with no
+	// "?;" rejection (fire-and-forget accepted).
+	Confirmed bool
+}
+
+// WriteResult reports, step by step, how far a Session.WriteChannel call
+// got: one WriteStep per frame the driver's write choreography intends,
+// in the order the driver intends to send them.
+//
+// The steps are the WHOLE intended sequence, declared once the frames have
+// been built and before the first goes out — not a log of what happened to
+// be attempted. A step that is present with Sent false therefore reads as
+// "this frame was part of the plan and never attributably went out", which
+// is precisely what an aborted sequence should report. A refusal that
+// happens BEFORE the frames are built has no sequence to describe and
+// reports an empty (non-nil) Steps slice.
+//
+// Why steps rather than named flags: this type sits on the NEUTRAL driver
+// seam, above which nothing may know a wire protocol. Its predecessor
+// (removed by M9c-5's E6) carried four booleans named for the FT-710's
+// own two frames — the sent/confirmed pair of each, spelt out — which was
+// that one radio's choreography written into the seam every future radio
+// plugs into. A radio that writes a channel and its label in ONE combined
+// frame has no honest answer to such flags: reported as "the tag frame
+// went, the data frame did not", its perfectly ordinary write would read,
+// in FT-710 terms, as a tag-only write that never touched the channel
+// data. Steps let each driver report what it actually did, and let the
+// neutral layers record it without pretending to understand it.
+// internal/guards' TestRetiredWriteResultNamesAreGone holds the retired
+// names down.
 type WriteResult struct {
-	// MWSent reports that the MW (channel data) frame was transmitted
-	// with an attributable outcome — success or an explicit rejection.
-	MWSent bool
-	// MWConfirmed reports that the MW frame's error window elapsed with
-	// no "?;" rejection (fire-and-forget accepted).
-	MWConfirmed bool
-	// MTSent reports that the MT (tag) frame was transmitted with an
-	// attributable outcome.
-	MTSent bool
-	// MTConfirmed reports that the MT frame's error window elapsed with
-	// no "?;" rejection.
-	MTConfirmed bool
+	// Steps are the write's frames in send order. Empty (never nil) when
+	// the write was refused before any frame was built.
+	Steps []WriteStep
 }
 
 // Driver is one radio model's protocol implementation: the seam every
@@ -131,9 +166,9 @@ type Session interface {
 	// ErrWriteRefused), BEFORE any wire traffic. A field carrying
 	// FieldState Known that the protocol cannot express (e.g. CTCSS
 	// tone, scan skip) is likewise refused, never silently dropped. The
-	// returned WriteResult reports which sub-commands were sent and
-	// unrejected; WriteChannel performs NO read-back verification — that
-	// is the clone service's job.
+	// returned WriteResult reports which of the write's steps were sent
+	// and unrejected; WriteChannel performs NO read-back verification —
+	// that is the clone service's job.
 	WriteChannel(ctx context.Context, ch codeplug.Channel) (WriteResult, error)
 
 	// Close releases the session and its underlying port. Idempotent.

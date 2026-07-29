@@ -75,9 +75,10 @@ type ft710Driver struct {
 	// New; no Option touches it.
 	//
 	// It lives HERE rather than only on Session because Open builds the
-	// transport.Engine (and hands it the gate, d.dialect.AllowedCommand)
-	// BEFORE any Session exists: a dialect reachable only from Session
-	// would be reachable too late to gate the engine at all.
+	// transport.Engine — handing it this very value, from which the
+	// engine takes both its gate and its init frame — BEFORE any Session
+	// exists: a dialect reachable only from Session would be reachable
+	// too late to bind the engine at all.
 	dialect cat.Dialect
 	// transportLogger, when non-nil, is threaded into every Session's
 	// transport.Engine at Open time — see WithTransportLogger.
@@ -170,12 +171,16 @@ const max60mProbe = 15
 // read-only. Open takes ownership of port: on any error the engine (and
 // with it the port) is closed before returning.
 //
-// The engine is gated by THIS driver's own dialect (d.dialect.AllowedCommand
-// — see transport.AllowFunc): the outbound allowlist a session enforces is
-// the one belonging to the radio the session is for, never a package-level
-// default that would gate every radio by whatever the FT-710 permits.
-// transport.NewEngine refuses a nil gate outright, so there is no ungated
-// path through here even if the field were somehow left zero.
+// The engine is bound to THIS driver's own dialect, passed WHOLE
+// (d.dialect — see transport.NewEngine): both the outbound allowlist a
+// session enforces and the AI init frame it opens with are the ones
+// belonging to the radio the session is for, never a package-level default
+// that would gate every radio by whatever the FT-710 permits. Passing the
+// dialect rather than its AllowedCommand method value is M9c-5's E3: the
+// two derivations can no longer come from different radios, because there
+// is only one value to derive from. transport.NewEngine refuses an
+// unconfigured dialect outright, so there is no ungated path through here
+// even if the field were somehow left zero.
 func (d *ft710Driver) Open(ctx context.Context, port transport.Port, id driver.Identity) (driver.Session, error) {
 	var engOpts []transport.Option
 	if d.transportLogger != nil {
@@ -183,7 +188,7 @@ func (d *ft710Driver) Open(ctx context.Context, port transport.Port, id driver.I
 		// see WithTransportLogger.
 		engOpts = append(engOpts, transport.WithLogger(d.transportLogger))
 	}
-	eng, err := transport.NewEngine(port, d.dialect.AllowedCommand, engOpts...)
+	eng, err := transport.NewEngine(port, d.dialect, engOpts...)
 	if err != nil {
 		// NewEngine has not taken the port on this path (it refuses before
 		// touching it), so closing it here is Open's own ownership

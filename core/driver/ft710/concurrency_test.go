@@ -71,7 +71,7 @@ func TestSession_ReadChannel_NotTornByConcurrentWriteChannel(t *testing.T) {
 				CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
 				Shift:      "SIMPLEX",
 				Tag:        "NEW",
-				TagDisplay: true,
+				TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: true},
 				ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
 			},
 		})
@@ -163,7 +163,7 @@ func TestSession_ReadWriteChannel_ConcurrentHammer_Coherent(t *testing.T) {
 						CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
 						Shift:      "SIMPLEX",
 						Tag:        tag,
-						TagDisplay: true,
+						TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: true},
 						ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
 					},
 				}

@@ -28,7 +28,29 @@ type RadioInfo struct {
 	Region string `json:"region,omitempty"`
 	// BaselineDigest is the hex-encoded SHA-256 digest (see Digest) of
 	// the Channels this RadioInfo accompanies, computed at read time. A
-	// send confirmation is bound to this value: any later reconnect,
-	// re-read, or edit produces a different digest.
+	// send confirmation is bound to this value, and what that binding
+	// detects is CONTENT identity — nothing else. Any EDIT changes it:
+	// change one field of one channel and the digest changes. A later
+	// reconnect or re-read does NOT, by itself: one that reads back
+	// content-identical channels produces the very SAME digest.
+	//
+	// The earlier wording here said "any later reconnect, re-read, or edit
+	// produces a different digest", which Digest's own doc comment
+	// contradicts in terms — corrected at M9c-5's review (W4). Binding a
+	// send to the session or device that produced the baseline (the CAT ID
+	// currently answering, the USB serial, a read generation counter) is a
+	// SEPARATE concern this value cannot address on its own; see Digest and
+	// DiffResult.CandidateDigest for how a sender is expected to combine
+	// the two.
+	//
+	// In a SAVED file this is a DURABLE content digest, and it is
+	// evidence rather than a checksum to re-verify. A file written under
+	// an older schema keeps the digest it was written with, and after
+	// migration (schema 2 to 3, where ChannelData.TagDisplay became a
+	// BoolField) that value no longer equals Digest over the migrated
+	// channels. Such a digest is non-recomputable legacy evidence and is
+	// deliberately left alone — never rewritten on load, and never
+	// treated as a mismatch to report. See Digest's doc comment for the
+	// full reasoning, including why digest versioning was rejected.
 	BaselineDigest string `json:"baseline_digest,omitempty"`
 }

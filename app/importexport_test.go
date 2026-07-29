@@ -157,6 +157,67 @@ func TestImportCHIRP_DuplicateLocationRefuses(t *testing.T) {
 	}
 }
 
+// TestImportCHIRP_MergedChannelCarriesUnknownTagDisplay is M9c-5 E1d's
+// downstream pin at the app seam (the plan names this file explicitly):
+// a clean CHIRP merge puts an honestly UNRESOLVED tag_display into the
+// working copy, beside radio-read siblings that keep their Known one.
+//
+// This is the state the GUI must be able to show and let the user set
+// (task 5) and the state codeplug.Diff blocks a send on until they do
+// (task 2) — so the app layer is where a regression to the pre-E1
+// manufactured false would do its damage, silently switching the front
+// panel display off for every imported channel.
+//
+// The merge is also asserted to leave Validate quiet: {Unknown, false} is
+// well-formed data (only {Unknown, true} is a contradiction), so the
+// import completes normally and the friction arrives at SEND time, not
+// here.
+func TestImportCHIRP_MergedChannelCarriesUnknownTagDisplay(t *testing.T) {
+	a, _ := newTestApp(t)
+	a.mu.Lock()
+	a.working = buildImportBase()
+	a.mu.Unlock()
+
+	chirpPath := filepath.Join(t.TempDir(), "clean.csv")
+	// Location 2 -> slot "002", empty in buildImportBase.
+	body := chirpHeaderLine + "\n" + "2,MYCALL,7.100000,,,,,USB,\n"
+	if err := os.WriteFile(chirpPath, []byte(body), 0o600); err != nil {
+		t.Fatalf("writing CHIRP fixture: %v", err)
+	}
+	a.dialogs.(*fakeDialogs).openFilePath = chirpPath
+
+	result, err := a.ImportCHIRP()
+	if err != nil {
+		t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+	}
+	if !result.Merged {
+		t.Fatalf("ImportCHIRP(clean CHIRP row) = %+v, want Merged=true", result)
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	var imported, untouched codeplug.Channel
+	for _, ch := range a.working.Channels {
+		switch ch.Slot {
+		case "002":
+			imported = ch
+		case "001":
+			untouched = ch
+		}
+	}
+	if want := (codeplug.BoolField{State: codeplug.Unknown}); imported.Data == nil || imported.Data.TagDisplay != want {
+		t.Errorf("merged slot 002 TagDisplay = %+v, want %+v (CHIRP says nothing about the display flag)", imported.Data, want)
+	}
+	if untouched.Data == nil || untouched.Data.TagDisplay.State != codeplug.Known {
+		t.Errorf("untouched slot 001 TagDisplay = %+v, want a Known state (a CHIRP merge must not disturb its neighbours' provenance)", untouched.Data)
+	}
+	for _, issue := range result.Issues {
+		if strings.Contains(issue.Field, "tag_display") {
+			t.Errorf("Validate reported %+v for an Unknown tag_display, want silence: {Unknown, false} is well-formed data and the send gate is Diff's, not Validate's", issue)
+		}
+	}
+}
+
 func TestImportCHIRP_BlockingLossRefuses(t *testing.T) {
 	a, _ := newTestApp(t)
 	a.mu.Lock()

@@ -125,8 +125,9 @@ func findChannel(channels []Channel, slot string) (Channel, bool) {
 // issues, in cp.Channels slice order: for each channel, slot-inventory
 // membership, then (if the slot is a duplicate of an earlier channel) the
 // duplicate-slot issue, then — for a populated channel — Frequency, Mode,
-// Clarifier, CTCSS state, CTCSSTone.Valid(), ScanSkip.Valid(), the
-// CTCSS-tone-pairing warning, Shift, and Tag, in that fixed order.
+// Clarifier, CTCSS state, CTCSSTone.Valid(), ScanSkip.Valid(),
+// TagDisplay.Valid(), the CTCSS-tone-pairing warning, Shift, and Tag, in
+// that fixed order.
 // Codeplug-level issues come last, in a fixed order: the completeness
 // check (see below; caps.Banks order, each bank's Slots in bank order),
 // then caps.RequiredSlots (in caps order) for the populated-ness check,
@@ -330,6 +331,18 @@ func validateChannelData(slot string, d ChannelData, caps spec.Capabilities) []I
 	if err := d.ScanSkip.Valid(); err != nil {
 		issues = append(issues, Issue{
 			Slot: slot, Field: spec.FieldScanSkip, Severity: SeverityError,
+			Msg: fmt.Sprintf("slot %q: %v", slot, err),
+		})
+	}
+	// TagDisplay's own shape check. This is what rejects a {Unknown, true}
+	// or {Unavailable, true} channel: a non-Known state means "preserve
+	// whatever the radio has", so carrying a true alongside it is a value
+	// that could otherwise be read as an intent to send. Only the SHAPE is
+	// judged here — a well-formed {Unknown, false} is perfectly valid data,
+	// and blocking its SEND is Diff's job, not Validate's.
+	if err := d.TagDisplay.Valid(); err != nil {
+		issues = append(issues, Issue{
+			Slot: slot, Field: spec.FieldTagDisplay, Severity: SeverityError,
 			Msg: fmt.Sprintf("slot %q: %v", slot, err),
 		})
 	}

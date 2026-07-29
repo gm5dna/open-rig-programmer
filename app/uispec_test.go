@@ -123,6 +123,113 @@ func TestBankReadOnly_ExcludesUnexpressibleFields(t *testing.T) {
 	}
 }
 
+// TestBankTagDisplayDefault_Table is a pure unit test of
+// bankTagDisplayDefault against hand-built spec.Capabilities, independent
+// of App/session plumbing: the ONE trigger for Unavailable is BOTH
+// directions Unsupported, and every other combination — including the
+// write-Unsupported-but-readable shape the discovered 60M/EMG banks
+// actually carry — is a Known-false blank-row default.
+func TestBankTagDisplayDefault_Table(t *testing.T) {
+	known := codeplug.BoolField{State: codeplug.Known, Value: false}
+	unavailable := codeplug.BoolField{State: codeplug.Unavailable}
+
+	tests := []struct {
+		name   string
+		fields map[spec.Field]spec.FieldSupport
+		want   codeplug.BoolField
+	}{
+		{"Read and Write Supported -> Known-false", map[spec.Field]spec.FieldSupport{
+			spec.FieldTagDisplay: {Read: spec.Supported, Write: spec.Supported},
+		}, known},
+		{"readable, write Unsupported (the discovered 60M/EMG shape) -> Known-false", map[spec.Field]spec.FieldSupport{
+			spec.FieldTagDisplay: {Read: spec.Supported, Write: spec.Unsupported},
+		}, known},
+		{"writable, read Unsupported -> Known-false", map[spec.Field]spec.FieldSupport{
+			spec.FieldTagDisplay: {Read: spec.Unsupported, Write: spec.Supported},
+		}, known},
+		{"Unverified both ways -> Known-false (not yet proven is not absent)", map[spec.Field]spec.FieldSupport{
+			spec.FieldTagDisplay: {Read: spec.Unverified, Write: spec.Unverified},
+		}, known},
+		{"Inert write -> Known-false (transmitted-but-ignored is still a frame field)", map[spec.Field]spec.FieldSupport{
+			spec.FieldTagDisplay: {Read: spec.Supported, Write: spec.Inert},
+		}, known},
+		{"both Unsupported -> Unavailable", map[spec.Field]spec.FieldSupport{
+			spec.FieldTagDisplay: {},
+		}, unavailable},
+		{"field absent from a present bank -> Unavailable", map[spec.Field]spec.FieldSupport{
+			spec.FieldFrequency: {Read: spec.Supported, Write: spec.Supported},
+		}, unavailable},
+		{"absent bank entirely -> Unavailable", nil, unavailable},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			caps := spec.Capabilities{}
+			if tc.fields != nil {
+				caps.Banks = []spec.Bank{{ID: "TEST", Fields: tc.fields}}
+			}
+			got := bankTagDisplayDefault(caps, "TEST")
+			if got != tc.want {
+				t.Errorf("bankTagDisplayDefault() = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestGetUISpec_TagDisplayDefaultFollowsCapabilities is W1's Unavailable
+// shape, served through the whole GetUISpec path rather than the helper
+// alone: a model whose one bank's FieldTagDisplay is Unsupported in BOTH
+// directions must hand the grid {state:"unavailable"}, so a blank row
+// created there never manufactures a Known value for a flag that radio's
+// frame does not carry. The second bank — identical but for a
+// Read/Write-Supported FieldTagDisplay — is the contrast that stops this
+// passing vacuously: one UISpecView, two different per-bank defaults.
+//
+// The FT-710's own (Known-false) side of the pair is asserted against the
+// real static baseline in TestGetUISpec_Disconnected_StaticBaseline and
+// against live discovered banks in TestGetUISpec_ConnectedSimulated; no
+// registered driver has an Unsupported tag-display flag today, so this
+// shape is only reachable through the capsForModel seam.
+func TestGetUISpec_TagDisplayDefaultFollowsCapabilities(t *testing.T) {
+	rw := spec.FieldSupport{Read: spec.Supported, Write: spec.Supported}
+	fieldsWith := func(tagDisplay spec.FieldSupport) map[spec.Field]spec.FieldSupport {
+		m := make(map[spec.Field]spec.FieldSupport, len(bankCoreFields))
+		for _, f := range bankCoreFields {
+			m[f] = rw
+		}
+		m[spec.FieldTagDisplay] = tagDisplay
+		return m
+	}
+	recogniseModelCaps(t, spec.Capabilities{
+		Model: testModel, CATID: "9999", TagLen: 42,
+		Banks: []spec.Bank{
+			{ID: "FLAG", Label: "Flag readable and writable", Slots: []string{"001"}, Fields: fieldsWith(rw)},
+			{ID: "NOFLAG", Label: "No display flag in the frame", Slots: []string{"002"}, Fields: fieldsWith(spec.FieldSupport{})},
+		},
+	})
+
+	a, _ := newTestApp(t)
+	a.mu.Lock()
+	a.working = &codeplug.Codeplug{
+		Schema:   codeplug.CurrentSchema,
+		Radio:    codeplug.RadioInfo{Model: testModel},
+		Channels: []codeplug.Channel{{Slot: "001"}, {Slot: "002"}},
+	}
+	a.mu.Unlock()
+
+	got, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec: unexpected error: %v", err)
+	}
+	if flag := findBank(t, got.Banks, "FLAG"); flag.TagDisplayDefault != (codeplug.BoolField{State: codeplug.Known, Value: false}) {
+		t.Errorf("FLAG.TagDisplayDefault = %+v, want {known false}", flag.TagDisplayDefault)
+	}
+	noflag := findBank(t, got.Banks, "NOFLAG")
+	if noflag.TagDisplayDefault != (codeplug.BoolField{State: codeplug.Unavailable}) {
+		t.Errorf("NOFLAG.TagDisplayDefault = %+v, want {unavailable false} — the grid must never invent a Known value for a flag this radio's frame has no room for", noflag.TagDisplayDefault)
+	}
+}
+
 // TestGetUISpec_Disconnected_StaticBaseline pins the offline/no-session
 // shape: Live false, only MEM/PMS banks (the static baseline never
 // carries 60M/EMG), both editable, slot lists exactly the static bank
@@ -154,6 +261,18 @@ func TestGetUISpec_Disconnected_StaticBaseline(t *testing.T) {
 	pms := findBank(t, got.Banks, "PMS")
 	if pms.ReadOnly {
 		t.Error("PMS.ReadOnly = true while disconnected (static caps), want false — Unverified must not lock the grid")
+	}
+
+	// The FT-710's own blank-row default (W1's first shape, from the REAL
+	// static literals, not a fixture): the CAT protocol reads and writes
+	// this radio's display flag on both banks, so a row added there is
+	// Known-off — the value the grid used to hardcode in JS.
+	wantKnownOff := codeplug.BoolField{State: codeplug.Known, Value: false}
+	if mem.TagDisplayDefault != wantKnownOff {
+		t.Errorf("MEM.TagDisplayDefault = %+v, want %+v", mem.TagDisplayDefault, wantKnownOff)
+	}
+	if pms.TagDisplayDefault != wantKnownOff {
+		t.Errorf("PMS.TagDisplayDefault = %+v, want %+v", pms.TagDisplayDefault, wantKnownOff)
 	}
 
 	memBank, _ := staticCaps.Bank(spec.BankMemory)
@@ -259,6 +378,20 @@ func TestGetUISpec_ConnectedSimulated(t *testing.T) {
 	emgSlots := slotSet(emg.Slots)
 	if disp, ok := emgSlots["EMG"]; !ok || disp != "EMG" {
 		t.Errorf("EMG.Slots[\"EMG\"].Display = %q, ok=%v, want \"EMG\"", disp, ok)
+	}
+
+	// Every bank, discovered ones included, carries the Known-false
+	// blank-row default on this radio: the 60M/EMG field maps mirror MEM's
+	// READ supports with Write forced Unsupported
+	// (core/driver/ft710.effectiveCapabilities), and read-Supported alone
+	// is enough — the flag exists in the frame, it is only unwritable
+	// there. Pinned here as well as offline because a live session's caps
+	// and the offline synthesis are different code paths that must agree.
+	wantKnownOff := codeplug.BoolField{State: codeplug.Known, Value: false}
+	for _, b := range got.Banks {
+		if b.TagDisplayDefault != wantKnownOff {
+			t.Errorf("%s.TagDisplayDefault = %+v, want %+v", b.ID, b.TagDisplayDefault, wantKnownOff)
+		}
 	}
 }
 
@@ -375,6 +508,20 @@ func TestGetUISpec_OfflineWorkingCopy_Synthesises60mEMGBanks(t *testing.T) {
 	emgSlots := slotSet(emg.Slots)
 	if len(emgSlots) != 1 || emgSlots["EMG"] != "EMG" {
 		t.Errorf("EMG.Slots = %v, want exactly {EMG:EMG}", emgSlots)
+	}
+
+	// The SYNTHESISED banks' blank-row default must match what a live
+	// session's discovered banks report (TestGetUISpec_ConnectedSimulated
+	// asserts the same literal): the synthesis derives it from the
+	// synthesised banks' OWN field maps, not from the static baseline —
+	// which defines no 60M/EMG bank at all and would therefore have
+	// answered Unavailable for both, contradicting the same radio's live
+	// answer.
+	wantKnownOff := codeplug.BoolField{State: codeplug.Known, Value: false}
+	for _, b := range got.Banks {
+		if b.TagDisplayDefault != wantKnownOff {
+			t.Errorf("%s.TagDisplayDefault = %+v, want %+v", b.ID, b.TagDisplayDefault, wantKnownOff)
+		}
 	}
 
 	// The invariant: the union of every BankView's slots is EXACTLY the
@@ -531,12 +678,13 @@ func TestGetUISpec_VocabMatchesValidate(t *testing.T) {
 
 	baseData := func() codeplug.ChannelData {
 		return codeplug.ChannelData{
-			FreqHz:    7_000_000,
-			Mode:      "USB",
-			CTCSS:     "OFF",
-			CTCSSTone: codeplug.ToneField{State: codeplug.Unknown},
-			Shift:     "SIMPLEX",
-			ScanSkip:  codeplug.BoolField{State: codeplug.Unknown},
+			FreqHz:     7_000_000,
+			Mode:       "USB",
+			CTCSS:      "OFF",
+			CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+			Shift:      "SIMPLEX",
+			TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
+			ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
 		}
 	}
 
@@ -575,9 +723,11 @@ func TestGetUISpec_VocabMatchesValidate(t *testing.T) {
 // internal/radiotext.For(wiring.DefaultModel)'s own value — not merely
 // non-empty — so a future edit to either side (this call site or
 // radiotext's own FT-710 entry) that let them drift would fail here
-// first. Checked both offline and connected, since the source is the
-// same in both branches (wiring.DefaultModel, never the live session's
-// own model today — see GetUISpec's doc comment).
+// first. Checked both offline and connected: since M9c-5 (E4) the prose
+// is keyed off currentModel's resolved model rather than
+// wiring.DefaultModel, and both branches resolve to the FT-710 here — the
+// simulated session's own model offline-or-not — so both must still serve
+// exactly these strings.
 func TestGetUISpec_ServesProse(t *testing.T) {
 	want, ok := radiotext.For(wiring.DefaultModel)
 	if !ok {
@@ -625,4 +775,86 @@ func TestGetUISpec_ServesProse(t *testing.T) {
 		}
 		assertProse(t, got)
 	})
+}
+
+// TestGetUISpec_ProseFollowsResolvedModel is the prose cluster's
+// threading pin (M9c-5 E4): the served sentences follow the model
+// currentModel resolves, and radiotext.For's ok is honoured — a model
+// with no radiotext entry gets SILENCE (every prose field empty), never
+// the FT-710's own wording attributed to a different radio.
+//
+// testModel is admitted through the capsForModel seam only, so
+// internal/radiotext genuinely has no entry for it; the empty fields
+// below are therefore the honest served value for a model whose prose has
+// not been written yet, and they are observably different from the
+// FT-710's (pinned non-empty first, so this cannot pass vacuously).
+func TestGetUISpec_ProseFollowsResolvedModel(t *testing.T) {
+	ft710Text, ok := radiotext.For(wiring.DefaultModel)
+	if !ok || ft710Text.ToneScanSkipNote == "" || ft710Text.EraseDialogNote == "" {
+		t.Fatalf("test setup: radiotext.For(%q) ok=%v with empty prose — the contrast below would be vacuous", wiring.DefaultModel, ok)
+	}
+	recogniseTestModel(t)
+
+	a, _ := newTestApp(t)
+	a.mu.Lock()
+	a.working = &codeplug.Codeplug{
+		Schema:   codeplug.CurrentSchema,
+		Radio:    codeplug.RadioInfo{Model: testModel},
+		Channels: []codeplug.Channel{{Slot: "001"}},
+	}
+	a.mu.Unlock()
+
+	got, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec: unexpected error: %v", err)
+	}
+	for _, f := range []struct {
+		name string
+		got  string
+	}{
+		{"ToneScanSkipNote", got.ToneScanSkipNote},
+		{"ToneScanSkipVerification", got.ToneScanSkipVerification},
+		{"EraseDialogNote", got.EraseDialogNote},
+		{"PreservationTooltips.Tone", got.PreservationTooltips.Tone},
+		{"PreservationTooltips.ScanSkip", got.PreservationTooltips.ScanSkip},
+		{"FirmwarePlaceholder", got.FirmwarePlaceholder},
+	} {
+		if f.got != "" {
+			t.Errorf("%s = %q for a model radiotext has no entry for, want \"\" (silence, never another radio's wording)", f.name, f.got)
+		}
+	}
+}
+
+// TestGetUISpec_UnrecognisedWorkingModelStillSynthesisesBanks pins the
+// reason the bank-synthesis site consumes the RESOLVER rather than the
+// working copy's raw Radio.Model (M9c-5 E4's recorded design note): a
+// legacy or hand-edited file naming a model no driver is registered for
+// must still show its 60m/EMG channels. Handed the raw name,
+// wiring.SynthesiseDiscoveredBanks would report ok == false and those
+// channels would vanish from the grid — loaded but invisible. The
+// resolver falls back to wiring.DefaultModel, so they stay.
+func TestGetUISpec_UnrecognisedWorkingModelStillSynthesisesBanks(t *testing.T) {
+	a, _ := newTestApp(t)
+	a.mu.Lock()
+	a.working = &codeplug.Codeplug{
+		Schema: codeplug.CurrentSchema,
+		Radio:  codeplug.RadioInfo{Model: "NoSuchRadioModel"},
+		Channels: []codeplug.Channel{
+			{Slot: "001"}, {Slot: "P1L"}, {Slot: "501"}, {Slot: "EMG"},
+		},
+	}
+	a.mu.Unlock()
+
+	got, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec: unexpected error: %v", err)
+	}
+	sixty := findBank(t, got.Banks, "60M")
+	if s := slotSet(sixty.Slots); len(s) != 1 || s["501"] != "5-01" {
+		t.Errorf("synthesised 60M.Slots = %v, want exactly {501:5-01}", s)
+	}
+	emg := findBank(t, got.Banks, "EMG")
+	if s := slotSet(emg.Slots); len(s) != 1 || s["EMG"] != "EMG" {
+		t.Errorf("synthesised EMG.Slots = %v, want exactly {EMG:EMG}", s)
+	}
 }

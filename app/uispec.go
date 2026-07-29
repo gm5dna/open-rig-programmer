@@ -62,6 +62,55 @@ func bankReadOnly(caps spec.Capabilities, id spec.BankID) bool {
 	return true
 }
 
+// bankTagDisplayDefault derives the tag_display value a row ADDED in the
+// bank identified by id must carry (BankView.TagDisplayDefault), from that
+// bank's own spec.FieldTagDisplay support and nothing else:
+//
+//   - Read AND Write both spec.Unsupported → codeplug.Unavailable. This
+//     radio's memory frame has no display flag at all, so there is no
+//     value to hold: Unavailable is what BoolField means by that (see
+//     core/codeplug/fieldstate.go), and it is never sent.
+//   - anything else → {codeplug.Known, false}. The flag exists in the
+//     frame, so a blank row states it, and states it OFF.
+//
+// The asymmetry is deliberate and it is the whole point: only "absent from
+// the frame in BOTH directions" justifies Unavailable. A field that is
+// merely unwritable (the discovered 60M/EMG banks, whose Write is forced
+// Unsupported while Read is inherited from MEM), merely unproven
+// (spec.Unverified), or transmitted-but-ignored (spec.Inert) is still a
+// field this radio's frame carries, and a blank row must state it rather
+// than claim the radio has no such flag.
+//
+// Known-false, rather than the honest-provenance codeplug.Unknown, because
+// tag_display is a MANDATORY wire field wherever it exists: an Unknown one
+// blocks its channel at plan time (codeplug.Diff's TagDisplay gate), so a
+// factory that produced Unknown would create rows the send plan
+// immediately refuses. That was already the frontend's rule; what changes
+// here (M9c-5 review W1) is only WHERE the value comes from — this
+// derivation, per bank, instead of a JS literal that spoke for the FT-710
+// on every radio's behalf.
+//
+// PER-BANK, not per-model, and that is finer than the design text asked
+// for ("the GUI's blank-row factory defaults per-model"): support is
+// declared per bank by spec.Capabilities, a radio may perfectly well carry
+// the flag on one bank and not another, and answering per model would have
+// had to pick one bank's truth for all of them. Per bank subsumes per
+// model at no cost — every bank of a radio that carries the flag
+// everywhere gets the same answer.
+//
+// The zero-value lookup does the work for both "bank absent from caps
+// entirely" and "bank present but not listing the field"
+// (spec.Capabilities.FieldSupport returns the zero FieldSupport for
+// either), so both fall out as Unavailable with no special-casing: caps
+// that say nothing about a display flag are not evidence that one exists.
+func bankTagDisplayDefault(caps spec.Capabilities, id spec.BankID) codeplug.BoolField {
+	fs := caps.FieldSupport(id, spec.FieldTagDisplay)
+	if fs.Read == spec.Unsupported && fs.Write == spec.Unsupported {
+		return codeplug.BoolField{State: codeplug.Unavailable}
+	}
+	return codeplug.BoolField{State: codeplug.Known, Value: false}
+}
+
 // slotViewsFor maps a bare slot-identifier list (a spec.Bank.Slots value)
 // into display-form SlotViews, preserving order.
 func slotViewsFor(slots []string) []SlotView {
@@ -116,39 +165,60 @@ func bankSlotViews(bank spec.Bank, live bool, working *codeplug.Codeplug) []Slot
 //
 // Task 41 (M9a-5, the GUI-backend neutralisation) migrates this off the
 // local cat.Dialect.ParseSlot-based classification onto
-// wiring.SynthesiseDiscoveredBanks(wiring.DefaultModel, ...) — the
-// driver.DiscoveredBankSynthesizer capability (core/driver/optional.go),
-// introduced task 37 for exactly this call site. That function already
-// excludes any slot claimed by wiring.DefaultModel's own static banks
-// (MEM/PMS) before classifying the rest, which subsumes the OLD
-// alreadyPresent double-emission guard: a future static profile that DID
-// define a 60M/EMG bank would simply leave nothing left to synthesise for
-// it, never a duplicate. ok is false only for an unrecognised model or one
-// whose driver lacks the capability — neither true for wiring.DefaultModel
-// today — in which case this returns nil (no synthesised banks) rather
-// than inventing any.
+// wiring.SynthesiseDiscoveredBanks — the driver.DiscoveredBankSynthesizer
+// capability (core/driver/optional.go), introduced task 37 for exactly
+// this call site. That function already excludes any slot claimed by
+// model's own static banks (MEM/PMS) before classifying the rest, which
+// subsumes the OLD alreadyPresent double-emission guard: a future static
+// profile that DID define a 60M/EMG bank would simply leave nothing left
+// to synthesise for it, never a duplicate. ok is false only for an
+// unrecognised model or one whose driver lacks the capability, in which
+// case this returns nil (no synthesised banks) rather than inventing any.
+//
+// model is currentModel's resolved answer (M9c-5 E4), passed in rather
+// than re-derived here, and that indirection is load-bearing: the raw
+// working.Radio.Model would be handed straight through to
+// wiring.SynthesiseDiscoveredBanks, so a working copy naming a model no
+// driver is registered for — a legacy or hand-edited file — would take
+// the ok == false branch and silently drop its 60m/EMG channels out of
+// the grid entirely, which is the very outcome this function exists to
+// prevent. currentModel falls back to wiring.DefaultModel for exactly
+// that case, so those channels stay visible.
 //
 // ReadOnly is unconditionally true for every synthesised bank: MW cannot
 // target 5xx/EMG slots at all (the wire-protocol fact
 // core/driver/ft710.effectiveCapabilities' Field map already encodes by
 // forcing every Write to Unsupported for these banks, on every profile,
 // whenever a live session does discover them).
-func synthesiseDiscoveredBanks(working *codeplug.Codeplug) []BankView {
+func synthesiseDiscoveredBanks(model string, working *codeplug.Codeplug) []BankView {
 	slots := make([]string, len(working.Channels))
 	for i, ch := range working.Channels {
 		slots[i] = ch.Slot
 	}
-	discovered, ok := wiring.SynthesiseDiscoveredBanks(wiring.DefaultModel, slots)
+	discovered, ok := wiring.SynthesiseDiscoveredBanks(model, slots)
 	if !ok {
 		return nil
 	}
+	// The synthesised banks' OWN capabilities, for the per-bank
+	// tag-display derivation below. It has to be these rather than the
+	// static baseline caps GetUISpec holds: the baseline defines no 60M/EMG
+	// bank at all, so looking the field up there would answer Unavailable
+	// for every synthesised bank — claiming, of the very same radio, that
+	// its 60m channels have no display flag while a LIVE session's
+	// discovered banks (which inherit MEM's read supports — see
+	// core/driver/ft710.effectiveCapabilities) report that they do. The
+	// synthesis exists precisely to agree with live discovery, and the
+	// spec.Bank values wiring.SynthesiseDiscoveredBanks returns carry the
+	// same Fields maps live discovery would have produced.
+	discoveredCaps := spec.Capabilities{Banks: discovered}
 	out := make([]BankView, 0, len(discovered))
 	for _, b := range discovered {
 		out = append(out, BankView{
-			ID:       string(b.ID),
-			Label:    b.Label,
-			ReadOnly: true,
-			Slots:    slotViewsFor(b.Slots),
+			ID:                string(b.ID),
+			Label:             b.Label,
+			ReadOnly:          true,
+			Slots:             slotViewsFor(b.Slots),
+			TagDisplayDefault: bankTagDisplayDefault(discoveredCaps, b.ID),
 		})
 	}
 	return out
@@ -166,10 +236,15 @@ func synthesiseDiscoveredBanks(working *codeplug.Codeplug) []BankView {
 // currentCaps' "advisory" bool carries Validate-specific meaning): the
 // connected session's OWN effective capabilities (authoritative —
 // includes discovered 60m/EMG inventory) when connected, otherwise the
-// static offline baseline (ft710.New(ft710.RealHardware).Capabilities()).
+// static offline baseline of the model currentModel resolves.
 //
 // BankView.ReadOnly: see bankReadOnly's doc comment — a PERMANENT
 // protocol fact, never merely "not yet hardware-verified".
+//
+// BankView.TagDisplayDefault: see bankTagDisplayDefault's doc comment —
+// the blank-row tag_display value, derived per bank from this radio's own
+// FieldTagDisplay support, so the grid's Added-row factory no longer
+// speaks for the FT-710 on every radio's behalf (M9c-5 review W1).
 //
 // BankView.Slots (kept deliberately simple, per bank):
 //   - Connected (Live true): bank.Slots (from caps) is authoritative —
@@ -193,23 +268,29 @@ func (a *App) GetUISpec() (UISpecView, error) {
 
 	caps, advisory := currentCaps(a.conn, a.working)
 	live := !advisory
+	// The ONE resolver (M9c-5 E4), consulted ONCE per call: the
+	// synthesised-bank classification below and the prose lookup further
+	// down must describe the same radio as caps, and resolving twice would
+	// let them disagree.
+	model := currentModel(a.conn, a.working)
 
 	banks := make([]BankView, 0, len(caps.Banks))
 	for _, b := range caps.Banks {
 		banks = append(banks, BankView{
-			ID:       string(b.ID),
-			Label:    b.Label,
-			ReadOnly: bankReadOnly(caps, b.ID),
-			Slots:    bankSlotViews(b, live, a.working),
+			ID:                string(b.ID),
+			Label:             b.Label,
+			ReadOnly:          bankReadOnly(caps, b.ID),
+			Slots:             bankSlotViews(b, live, a.working),
+			TagDisplayDefault: bankTagDisplayDefault(caps, b.ID),
 		})
 	}
 	if !live && a.working != nil {
 		// wiring.SynthesiseDiscoveredBanks (called inside
 		// synthesiseDiscoveredBanks) already excludes any slot claimed by
-		// wiring.DefaultModel's own static banks before classifying the
+		// the resolved model's own static banks before classifying the
 		// rest, so no separate "already present" guard is needed here —
 		// see that function's doc comment.
-		banks = append(banks, synthesiseDiscoveredBanks(a.working)...)
+		banks = append(banks, synthesiseDiscoveredBanks(model, a.working)...)
 	}
 
 	tones := make([]ToneView, 0, len(caps.CTCSSTones))
@@ -241,11 +322,17 @@ func (a *App) GetUISpec() (UISpecView, error) {
 	// Prose fields (task 41, M9a-5): served from internal/radiotext rather
 	// than hardcoded in this package or the frontend — see UISpecView's
 	// doc comment (types.go) for what each field is and its exact source.
-	// radiotext.For(wiring.DefaultModel) cannot fail for the hardcoded
-	// FT-710 entry in practice; a future model with no radiotext entry yet
-	// would fall back to the zero Text (every field empty) rather than
-	// invented wording.
-	text, _ := radiotext.For(wiring.DefaultModel)
+	// Keyed off the resolved model (M9c-5 E4), and radiotext.For's ok is
+	// HONOURED rather than discarded: a model with no radiotext entry
+	// leaves every prose field empty — silence — exactly as cmd/rigprog's
+	// own prose sites do (probe.go's ProbeFirmwareNote, write.go's
+	// EraseProcedure, both `if text, ok := radiotext.For(model); ok`).
+	// Never another radio's wording, and never a fabricated generic
+	// sentence.
+	var text radiotext.Text
+	if t, ok := radiotext.For(model); ok {
+		text = t
+	}
 
 	return UISpecView{
 		Live:                     live,

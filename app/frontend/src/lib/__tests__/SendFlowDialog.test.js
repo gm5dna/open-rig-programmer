@@ -46,7 +46,7 @@ function channelData(freqHz, mode, extra = {}) {
 		ctcss_tone: { state: 'unknown' },
 		shift: 'SIMPLEX',
 		tag: 'MYCALL',
-		tag_display: true,
+		tag_display: { state: 'known', value: true },
 		scan_skip: { state: 'unknown' },
 		...extra,
 	}

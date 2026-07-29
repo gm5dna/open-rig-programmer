@@ -20,14 +20,23 @@ import (
 // CTCSSTone/ScanSkip left Unknown (the CAT-honest state for fields no CAT
 // command can read or write — see core/driver/ft710/caps.go's
 // bankFields doc comment).
+//
+// TagDisplay is Known-false, and stays so through M9c-5 (E1d): this
+// stands in for a codeplug READ FROM A RADIO, and an MT answer genuinely
+// carries the display flag (core/driver/ft710/read.go), so Known is its
+// honest provenance. Only CHIRP-derived channels — which no file says
+// anything about the display flag for — are Unknown; see
+// TestCmdImport_CHIRP_Success, which asserts both sides of that contrast
+// in one merged output.
 func validChannelData(freqHz uint32, mode string) *codeplug.ChannelData {
 	return &codeplug.ChannelData{
-		FreqHz:    freqHz,
-		Mode:      mode,
-		CTCSS:     "OFF",
-		CTCSSTone: codeplug.ToneField{State: codeplug.Unknown},
-		Shift:     "SIMPLEX",
-		ScanSkip:  codeplug.BoolField{State: codeplug.Unknown},
+		FreqHz:     freqHz,
+		Mode:       mode,
+		CTCSS:      "OFF",
+		CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+		Shift:      "SIMPLEX",
+		TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
+		ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
 	}
 }
 
@@ -376,6 +385,13 @@ func writeCHIRPFixture(t *testing.T, name string, rows ...string) string {
 // §3): a row mapping cleanly into an empty MEM slot merges cleanly,
 // untouched slots (including M-01 and every PMS pair) are preserved,
 // exit 0.
+//
+// It also pins M9c-5 E1d's PROVENANCE at the CLI level (the downstream
+// pin the plan names): the CHIRP-imported slot carries an Unknown
+// tag_display all the way into the saved --out file, while an untouched
+// radio-read slot beside it keeps its Known one. The two states surviving
+// side by side in one file is what schema 3's always-present tag_display
+// key exists for.
 func TestCmdImport_CHIRP_Success(t *testing.T) {
 	baseCp := buildValidBase()
 	basePath := saveFixture(t, baseCp, "base.json")
@@ -407,6 +423,12 @@ func TestCmdImport_CHIRP_Success(t *testing.T) {
 	}
 	if slot001.Data == nil || slot001.Data.FreqHz != 7_000_000 {
 		t.Errorf("cmdImport(--chirp): slot 001 (untouched) = %+v, want it preserved from base", slot001)
+	}
+	if want := (codeplug.BoolField{State: codeplug.Unknown}); slot002.Data == nil || slot002.Data.TagDisplay != want {
+		t.Errorf("cmdImport(--chirp): slot 002 TagDisplay = %+v, want %+v (CHIRP carries no display flag; the imported channel must stay honestly unresolved through the merge and the save)", slot002.Data, want)
+	}
+	if want := (codeplug.BoolField{State: codeplug.Known, Value: false}); slot001.Data == nil || slot001.Data.TagDisplay != want {
+		t.Errorf("cmdImport(--chirp): slot 001 TagDisplay = %+v, want %+v (an untouched radio-read slot keeps its Known state; the CHIRP import must not reinterpret its neighbours)", slot001.Data, want)
 	}
 	if len(result.Channels) != len(baseCp.Channels) {
 		t.Errorf("cmdImport(--chirp): channel count = %d, want %d (inventory unchanged)", len(result.Channels), len(baseCp.Channels))

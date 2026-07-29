@@ -316,6 +316,19 @@ type BankView struct {
 	// spec.Unverified.
 	ReadOnly bool
 	Slots    []SlotView
+	// TagDisplayDefault is the codeplug.BoolField a row ADDED in this bank
+	// must carry for tag_display, derived from this bank's own
+	// FieldTagDisplay support — see bankTagDisplayDefault's doc comment
+	// for the rule and why the default is per-BANK rather than per-model.
+	//
+	// It is a codeplug.BoolField, not a bespoke view struct, deliberately:
+	// the frontend copies this value STRAIGHT into the ChannelData it
+	// sends back (app/frontend/src/lib/grid/columns.js's newChannelData),
+	// so it must marshal to the identical JSON shape
+	// ChannelData.TagDisplay does — same keys, same omitempty on value.
+	// A parallel view type would be one rename away from a default the
+	// grid could no longer use.
+	TagDisplayDefault codeplug.BoolField
 }
 
 // ToneView is one CTCSS tone option: Decihertz is the raw value

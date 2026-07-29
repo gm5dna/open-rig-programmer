@@ -84,14 +84,33 @@ var ErrDisallowedCommand = errors.New("transport: command failed AllowedCommand,
 // Both refuse, but conflating them would have a diagnostic blame the
 // frame for a composition bug.
 //
-// NewEngine returns this (wrapped) for a nil AllowFunc, before it starts
-// the reader goroutine, so NewEngine cannot RETURN an ungated Engine. A
-// HAND-BUILT one still can be — Engine is exported, so `new(transport.Engine)`
-// compiles in any package — and that is exactly what this sentinel is for
-// at the other end: Do returns it too, so such a value fails closed on the
-// last line before the wire rather than being prevented from existing
-// (M9b fix wave, Codex finding 3).
+// Since M9c-5 (E3) this is the HAND-BUILT Engine's sentinel and nothing
+// else: NewEngine takes a cat.Dialect and always sets the gate from it, so
+// no Engine it returns can have a nil one, and the constructor's own
+// refusal is ErrUnconfiguredDialect instead. A hand-built Engine still
+// exists — the type is exported, so `new(transport.Engine)` compiles in
+// any package — and that is exactly what this sentinel is for: Do returns
+// it, so such a value fails closed on the last line before the wire rather
+// than being prevented from existing (M9b fix wave, Codex finding 3).
 var ErrNoAllowlist = errors.New("transport: engine has no allowlist, refusing to transmit")
+
+// ErrUnconfiguredDialect means NewEngine was handed a cat.Dialect that
+// describes no radio — the zero value, whose Configured() is false. It is
+// refused before the reader goroutine starts, so NewEngine cannot RETURN
+// an Engine bound to nothing.
+//
+// DISTINCT FROM ErrNoAllowlist deliberately, and the distinction is not
+// cosmetic. cat.Dialect is a struct, so `var d cat.Dialect` yields a
+// perfectly non-nil AllowedCommand method value: a missing-gate check
+// cannot see it, and the value would have been installed as a real
+// Engine's gate. What saves that case is core/cat's own fail-closed rule
+// (an unconfigured dialect admits NOTHING), which means the resulting
+// Engine refuses every frame — correct, but silently, and at Do rather
+// than at construction. This sentinel says the true thing at the true
+// moment: the engine was never given a radio to speak for. ErrNoAllowlist
+// keeps its own, different meaning — a hand-built Engine reached Do with
+// no gate at all.
+var ErrUnconfiguredDialect = errors.New("transport: engine was given an unconfigured dialect, refusing to construct")
 
 // PortClosedError wraps ErrPortClosed with the underlying cause, when one
 // is known: the io error (typically io.EOF) the reader goroutine observed

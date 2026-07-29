@@ -15,7 +15,7 @@ import (
 // sets baseline+working+events".
 func TestReadRadio_SetsBaselineWorkingAndEvents(t *testing.T) {
 	a, rec := newTestApp(t)
-	if _, err := a.ConnectDemo(); err != nil {
+	if _, err := a.ConnectDemo(""); err != nil {
 		t.Fatalf("ConnectDemo: %v", err)
 	}
 
@@ -81,7 +81,7 @@ func TestUpdateChannel_UnknownSlotRefuses(t *testing.T) {
 	a.working = &codeplug.Codeplug{Schema: codeplug.CurrentSchema, Channels: []codeplug.Channel{{Slot: "001"}}}
 	a.mu.Unlock()
 
-	_, err := a.UpdateChannel(codeplug.Channel{Slot: "999", Data: &codeplug.ChannelData{FreqHz: 7_000_000, Mode: "USB"}})
+	_, err := a.UpdateChannel(codeplug.Channel{Slot: "999", Data: &codeplug.ChannelData{FreqHz: 7_000_000, Mode: "USB", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}})
 	var unknown *UnknownSlotError
 	if !errors.As(err, &unknown) {
 		t.Fatalf("UpdateChannel(unknown slot): err = %v, want *UnknownSlotError", err)
@@ -105,8 +105,8 @@ func TestUpdateChannels_UnknownSlotRefusesWholeBatch(t *testing.T) {
 	a.mu.Unlock()
 
 	chs := []codeplug.Channel{
-		{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 7_000_000, Mode: "USB"}},
-		{Slot: "999", Data: &codeplug.ChannelData{FreqHz: 7_000_000, Mode: "USB"}},
+		{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 7_000_000, Mode: "USB", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}},
+		{Slot: "999", Data: &codeplug.ChannelData{FreqHz: 7_000_000, Mode: "USB", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}},
 	}
 	if _, err := a.UpdateChannels(chs); err == nil {
 		t.Fatal("UpdateChannels(one unknown slot): err = nil, want a refusal")
@@ -146,7 +146,7 @@ func TestValidate_DisconnectedIsAdvisory(t *testing.T) {
 		Schema: codeplug.CurrentSchema,
 		Radio:  codeplug.RadioInfo{Model: "FT-710", CATID: "0800"},
 		Channels: []codeplug.Channel{
-			{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 7_000_000, Mode: "USB", CTCSS: "OFF", Shift: "SIMPLEX", CTCSSTone: codeplug.ToneField{State: codeplug.Unknown}, ScanSkip: codeplug.BoolField{State: codeplug.Unknown}}},
+			{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 7_000_000, Mode: "USB", CTCSS: "OFF", Shift: "SIMPLEX", CTCSSTone: codeplug.ToneField{State: codeplug.Unknown}, ScanSkip: codeplug.BoolField{State: codeplug.Unknown}, TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}},
 		},
 	}
 	a.mu.Unlock()
@@ -164,7 +164,7 @@ func TestValidate_DisconnectedIsAdvisory(t *testing.T) {
 // (after the connection check has already passed).
 func TestDiffAgainstRadio_NothingLoaded(t *testing.T) {
 	a, _ := newTestApp(t)
-	if _, err := a.ConnectDemo(); err != nil {
+	if _, err := a.ConnectDemo(""); err != nil {
 		t.Fatalf("ConnectDemo: %v", err)
 	}
 	if _, err := a.DiffAgainstRadio(); !errors.Is(err, ErrNothingLoaded) {

@@ -169,24 +169,26 @@ describe('listPorts', () => {
 })
 
 describe('connect / connectDemo / disconnect', () => {
-	it('connect calls App.Connect(portPath) and stores the ConnectionInfo', async () => {
+	it('connect calls App.Connect(portPath, model) and stores the ConnectionInfo', async () => {
 		const info = { Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false }
 		window.go.main.App.Connect.mockResolvedValue(info)
 
 		await bindings.connect('/dev/tty.usb')
 
-		expect(window.go.main.App.Connect).toHaveBeenCalledWith('/dev/tty.usb')
+		// M9c-5 (E4): the model is passed EXPLICITLY, and '' means the
+		// default model — no compat wrapper hides the new parameter.
+		expect(window.go.main.App.Connect).toHaveBeenCalledWith('/dev/tty.usb', '')
 		expect(appState.connection).toEqual(info)
 		expect(appState.connecting).toBe(false)
 	})
 
-	it('connectDemo calls App.ConnectDemo with no arguments', async () => {
+	it("connectDemo calls App.ConnectDemo('') — the default model", async () => {
 		const info = { Model: 'FT-710', CATID: '0800', Port: 'fake', USBSerial: 'SIM0001', Region: '', Demo: true }
 		window.go.main.App.ConnectDemo.mockResolvedValue(info)
 
 		await bindings.connectDemo()
 
-		expect(window.go.main.App.ConnectDemo).toHaveBeenCalledWith()
+		expect(window.go.main.App.ConnectDemo).toHaveBeenCalledWith('')
 		expect(appState.connection?.Demo).toBe(true)
 	})
 

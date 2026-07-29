@@ -21,35 +21,38 @@ import (
 // Live true; otherwise (disconnected, or a connected session whose driver
 // does not implement driver.SettingsReader — every ft710.Session
 // implements it unconditionally today, so that branch is currently only
-// reachable offline) the static wiring.StaticSettingsDescriptor(wiring.
-// DefaultModel) baseline, Live false. Callers must hold a.mu (mirrors
-// currentCaps' own contract: this reads only its conn argument, never a
-// itself).
+// reachable offline) the static baseline of the model currentModel
+// resolves, Live false. Callers must hold a.mu (mirrors currentCaps' own
+// contract: this reads only its arguments, never a itself).
 //
-// KNOWN DRIFT, deliberately NOT fixed here (see
-// .superpowers/sdd/HANDOFF-m9c.md's "STILL OPEN" app/ consumer-drift
-// precondition): unlike currentCaps (app.go, fixed by the m9c1
-// registration-gate's fix B1), this fallback is hardcoded to
-// wiring.DefaultModel rather than resolved from the connected session's
-// or working copy's own model. A PREVIOUS version of this comment claimed
-// that a future model lacking a settings surface would fall back to the
-// zero SettingsDescriptor — that claim is FALSE and has been corrected:
-// because the call names wiring.DefaultModel (the FT-710) literally,
-// wiring.StaticSettingsDescriptor always succeeds (the FT-710 driver
-// implements driver.StaticSettingsProvider), so a CONNECTED session for
-// some other, future model whose driver does not implement
-// driver.SettingsReader would silently receive the FT-710's own
-// StaticSettingsDescriptor here, not a zero-value one. The ok/error
-// results are discarded because this call cannot fail for
-// wiring.DefaultModel specifically — not because a genuinely absent
-// capability degrades safely for whichever model is actually connected.
-func currentSettingsDescriptor(conn *connectionState) (d driver.SettingsDescriptor, live bool) {
+// THE DRIFT IS CLOSED HERE (M9c-5 E4; .superpowers/sdd/HANDOFF-m9c.md's
+// precondition 10, "app/ consumer drift"). This fallback used to
+// name wiring.DefaultModel literally, which had a consequence the comment
+// on it recorded honestly as a defect: because the FT-710's driver
+// implements driver.StaticSettingsProvider, that call ALWAYS succeeded, so
+// a connected session for some other, future model whose driver does not
+// implement driver.SettingsReader silently received the FT-710's OWN
+// settings tree — a menu structure belonging to a different radio,
+// rendered as if it were this one's. Resolving through currentModel
+// instead, both results are now honoured for real:
+//   - a non-nil error (model names no registered driver) and
+//   - ok == false (a registered model whose driver has no settings
+//     surface at all)
+//
+// each yield the ZERO descriptor with live false — an empty settings tree,
+// which the frontend renders as "no settings", rather than another
+// radio's. For wiring.DefaultModel the resolved call is byte-identical to
+// the old one.
+func currentSettingsDescriptor(conn *connectionState, working *codeplug.Codeplug) (d driver.SettingsDescriptor, live bool) {
 	if conn != nil {
 		if reader, ok := conn.session.(driver.SettingsReader); ok {
 			return reader.SettingsDescriptor(), true
 		}
 	}
-	descriptor, _, _ := wiring.StaticSettingsDescriptor(wiring.DefaultModel)
+	descriptor, ok, err := wiring.StaticSettingsDescriptor(currentModel(conn, working))
+	if err != nil || !ok {
+		return driver.SettingsDescriptor{}, false
+	}
 	return descriptor, false
 }
 
@@ -83,7 +86,7 @@ func settingsDisplayMap(d driver.SettingsDescriptor) map[string]string {
 func (a *App) GetSettingsSpec() (SettingsSpecView, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	d, live := currentSettingsDescriptor(a.conn)
+	d, live := currentSettingsDescriptor(a.conn, a.working)
 	return descriptorToSpecView(d, live), nil
 }
 
@@ -191,7 +194,7 @@ func (a *App) ReadSettingsRadio() (SettingsView, error) {
 		a.mu.Unlock()
 		return SettingsView{}, err
 	}
-	d, _ := currentSettingsDescriptor(conn)
+	d, _ := currentSettingsDescriptor(conn, a.working)
 	a.settingsDisplay = settingsDisplayMap(d)
 	a.mu.Unlock()
 	defer a.releaseOp()

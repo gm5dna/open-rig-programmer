@@ -423,6 +423,122 @@ func TestExecute_RealHardwareProfile_BlockedEntriesNeverWritten(t *testing.T) {
 	}
 }
 
+// wantTagDisplayUnknownReason is codeplug.Diff's exact E1b BlockReason,
+// repeated here as a literal on purpose: this package is a CONSUMER of
+// that string (it lands in a SlotResult.Detail a user reads), so the pin
+// must be independent of codeplug's own.
+const wantTagDisplayUnknownReason = "tag display unknown — set On or Off before sending"
+
+// TestExecute_TagDisplayUnknown_BlockedSlotNeverReachesTheWire is spec
+// E1's blocked-send proof obligation, end to end (M9c-5, E1b): one
+// channel whose TagDisplay is Unknown, among Known siblings, in a single
+// send. The MT frame's display flag is mandatory, so that channel cannot
+// be transmitted without manufacturing a value — codeplug.Diff blocks it
+// at PLAN time with the named reason, Execute skips it per channel, and
+// the run proceeds normally for everything else: refuse early, never
+// mid-Execute, and never a whole-send refusal.
+//
+// The wire assertion is the load-bearing one. A count alone would not do
+// here (a sibling IS legitimately written in the same run), so the
+// counting port's captured bytes are sliced from a mark taken after
+// PrepareSend and every frame Execute emitted is checked: not one of them
+// addresses the blocked slot — not a write, and not even the verify-read
+// that precedes one.
+func TestExecute_TagDisplayUnknown_BlockedSlotNeverReachesTheWire(t *testing.T) {
+	radio, port, sess := openCountingSimSession(t, fakeradio.WithFactoryImage(happyPathImage))
+	svc := NewService(sess, newStore(t), WithNow(stepClock(fixedNow)))
+
+	caps := sess.Capabilities()
+	unknownDisplay := writableChannel("001", 14_100_000, "NO-DISPLAY").Data
+	unknownDisplay.TagDisplay = codeplug.BoolField{State: codeplug.Unknown}
+	file := matchingCandidateFile(caps, happyPathPopulated(), map[string]*codeplug.ChannelData{
+		"001": unknownDisplay,
+		"005": writableChannel("005", 14_200_000, "SIBLING").Data,
+	})
+
+	plan, err := svc.PrepareSend(testCtx(t), file)
+	if err != nil {
+		t.Fatalf("PrepareSend: %v", err)
+	}
+
+	// The plan itself must already carry the block, with the exact reason
+	// — this is a plan-time refusal, not something Execute discovers.
+	var blockedEntry codeplug.DiffEntry
+	for _, e := range plan.diff.Entries {
+		if e.Slot == "001" {
+			blockedEntry = e
+		}
+	}
+	if !blockedEntry.Blocked {
+		t.Fatalf("plan entry for \"001\" = %+v, want Blocked", blockedEntry)
+	}
+	if blockedEntry.BlockReason != wantTagDisplayUnknownReason {
+		t.Errorf("plan entry BlockReason = %q, want %q", blockedEntry.BlockReason, wantTagDisplayUnknownReason)
+	}
+
+	mark := port.mark()
+
+	report, err := svc.Execute(testCtx(t), plan, plan.ConfirmationDigest(), ExecuteOptions{FirmwareConfirmed: "1.0"})
+	if err != nil {
+		t.Fatalf("Execute: unexpected error: %v", err)
+	}
+	if report.Aborted {
+		t.Errorf("Aborted = true (reason %q), want false — a blocked channel is skipped, never an abort", report.AbortReason)
+	}
+	if report.SkippedBlocked != 1 {
+		t.Errorf("SkippedBlocked = %d, want 1", report.SkippedBlocked)
+	}
+	if report.Written != 1 || report.Verified != 1 {
+		t.Errorf("Written/Verified = %d/%d, want 1/1 (the Known sibling still sends)", report.Written, report.Verified)
+	}
+
+	var sawBlocked bool
+	for _, sr := range report.Slots {
+		if sr.Slot != "001" {
+			continue
+		}
+		sawBlocked = true
+		if sr.Action != actionSkippedBlocked {
+			t.Errorf("SlotResult(\"001\").Action = %q, want %q", sr.Action, actionSkippedBlocked)
+		}
+		if sr.Detail != wantTagDisplayUnknownReason {
+			t.Errorf("SlotResult(\"001\").Detail = %q, want %q", sr.Detail, wantTagDisplayUnknownReason)
+		}
+	}
+	if !sawBlocked {
+		t.Error("no SlotResult for \"001\" in the report")
+	}
+
+	// Nothing Execute put on the wire may address the blocked slot. The
+	// sibling's own frames are asserted FIRST, as this negative's control:
+	// without them, "no frame addresses 001" would also pass if
+	// frameTargetsSlot simply never recognised anything.
+	frames := port.framesSince(mark)
+	var sawSibling bool
+	for _, f := range frames {
+		if frameTargetsSlot(f, "005") {
+			sawSibling = true
+		}
+	}
+	if !sawSibling {
+		t.Fatalf("no frame on the wire addressed the written sibling \"005\" — the wire assertion below would be vacuous; frames: %q", frames)
+	}
+	for _, f := range frames {
+		if frameTargetsSlot(f, "001") {
+			t.Errorf("Execute put frame %q on the wire for the blocked slot \"001\"; all frames: %q", f, frames)
+		}
+	}
+
+	// The radio's own memory is the final witness: "001" still holds the
+	// factory image, and the sibling was actually written.
+	if st, ok := radio.SlotState("001"); !ok || st.Freq != "007000000" || st.Tag != "" {
+		t.Errorf("SlotState(\"001\") = %+v, ok=%v, want the untouched factory image (Freq 007000000, no tag)", st, ok)
+	}
+	if st, ok := radio.SlotState("005"); !ok || st.Freq != freqDigits(14_200_000) || st.Tag != "SIBLING" {
+		t.Errorf("SlotState(\"005\") = %+v, ok=%v, want the sibling's written values", st, ok)
+	}
+}
+
 // TestExecute_VerifyReadPhase_BaselineDrift (obligation 11): after
 // PrepareSend, the radio's content for the to-be-written slot is changed
 // by a DIFFERENT means (a direct WriteChannel through the same session,
@@ -1079,6 +1195,155 @@ func TestExecute_WriteChannelFailure_MTRejectedAfterMWSucceeds_AttemptsReadback(
 	}
 }
 
+// writeResultFor returns the first "write_result" journal record for
+// slot, failing the test if there is none.
+func writeResultFor(t *testing.T, path, slot string) map[string]any {
+	t.Helper()
+	for _, rec := range readJournalRecords(t, path) {
+		if rec["event"] == "write_result" && rec["slot"] == slot {
+			return rec
+		}
+	}
+	t.Fatalf("journal %s has no \"write_result\" record for slot %q", path, slot)
+	return nil
+}
+
+// assertJournalSteps checks a write_result record's format stamp and its
+// projected step list against want, whose rows are {command, sent,
+// confirmed}. It reads the DECODED JSON, so it asserts the bytes that
+// actually reached the file rather than any Go value on the way there.
+func assertJournalSteps(t *testing.T, rec map[string]any, want [][3]any) {
+	t.Helper()
+	if got, ok := rec["write_result_format"].(float64); !ok || int(got) != writeResultFormat {
+		t.Errorf("write_result[\"write_result_format\"] = %v, want %d", rec["write_result_format"], writeResultFormat)
+	}
+	raw, ok := rec["steps"].([]any)
+	if !ok {
+		t.Fatalf("write_result[\"steps\"] = %#v, want a JSON array", rec["steps"])
+	}
+	if len(raw) != len(want) {
+		t.Fatalf("write_result[\"steps\"] has %d entries, want %d: %#v", len(raw), len(want), raw)
+	}
+	for i, w := range want {
+		step, ok := raw[i].(map[string]any)
+		if !ok {
+			t.Fatalf("steps[%d] = %#v, want a JSON object", i, raw[i])
+		}
+		if len(step) != 3 {
+			t.Errorf("steps[%d] has %d keys (%v), want exactly command/sent/confirmed", i, len(step), step)
+		}
+		if step["command"] != w[0] || step["sent"] != w[1] || step["confirmed"] != w[2] {
+			t.Errorf("steps[%d] = %v, want command=%v sent=%v confirmed=%v", i, step, w[0], w[1], w[2])
+		}
+	}
+}
+
+// TestExecute_JournalStepRecords_TheThreeOutcomes is E6's journal pin, and
+// the twin of the driver's own TestWriteChannel_OutcomeTable
+// (core/driver/ft710/write_test.go): that test pins the three outcomes in
+// driver.WriteResult form, this one pins the SAME three outcomes in
+// journal form, so a change made to one side and not the other fails one
+// of the pair.
+//
+// What is pinned here beyond the flags is the PROJECTION. The journal
+// marshals whatever map it is handed, so writing the step structs straight
+// through would put Go field names ("Command", "Sent", "Confirmed") into a
+// durable, user-visible file and couple its schema to a struct in another
+// package. The lower-case keys, the exactly-three-keys-per-step check, and
+// the raw-bytes check at the end are that projection asserted rather than
+// assumed.
+//
+// Exchange arithmetic is preparedThreeDeltaPlan's: the first delta
+// ("001") writes MW at exchange 127 and MT at 128.
+func TestExecute_JournalStepRecords_TheThreeOutcomes(t *testing.T) {
+	t.Run("success: MW then MT, both sent and confirmed", func(t *testing.T) {
+		svc, _, _, plan, digest := preparedThreeDeltaPlan(t)
+
+		report, err := svc.Execute(testCtx(t), plan, digest, ExecuteOptions{FirmwareConfirmed: "1.0"})
+		if err != nil {
+			t.Fatalf("Execute: unexpected error: %v", err)
+		}
+		rec := writeResultFor(t, report.JournalPath, "001")
+		assertJournalSteps(t, rec, [][3]any{
+			{"MW", true, true},
+			{"MT", true, true},
+		})
+		if got := rec["error"]; got != "" {
+			t.Errorf("write_result[\"error\"] = %v, want \"\"", got)
+		}
+
+		// The projection, on the bytes themselves: a raw marshal of
+		// []driver.WriteStep would put GO FIELD NAMES into this durable
+		// file, so their absence is asserted directly rather than inferred
+		// from the decoded keys above. (That the RETIRED format-1 keys are
+		// gone repo-wide is internal/guards'
+		// TestRetiredWriteResultNamesAreGone, which owns that check for
+		// every file, not just this one.)
+		raw, rerr := os.ReadFile(report.JournalPath)
+		if rerr != nil {
+			t.Fatalf("ReadFile(%s): %v", report.JournalPath, rerr)
+		}
+		text := string(raw)
+		for _, forbidden := range []string{`"Command"`, `"Sent"`, `"Confirmed"`} {
+			if strings.Contains(text, forbidden) {
+				t.Errorf("journal contains %s — write_result must be PROJECTED onto this package's own key names, never marshalled from the driver struct", forbidden)
+			}
+		}
+		if !strings.Contains(text, `"command":"MW"`) {
+			t.Error("journal has no `\"command\":\"MW\"` — the projected step records are missing")
+		}
+	})
+
+	t.Run("MW rejected: MT present but never reached", func(t *testing.T) {
+		const firstWriteMWExchange = 127
+		svc, _, _, plan, digest := preparedThreeDeltaPlan(t,
+			fakeradio.WithFault(fakeradio.FaultDelayedRejection(firstWriteMWExchange, 10*time.Millisecond)),
+		)
+
+		report, err := svc.Execute(testCtx(t), plan, digest, ExecuteOptions{FirmwareConfirmed: "1.0"})
+		if err == nil {
+			t.Fatal("Execute = nil error, want an abort (the 1st write's MW was rejected)")
+		}
+		if report == nil {
+			t.Fatal("report is nil, want a non-nil partial report")
+		}
+		rec := writeResultFor(t, report.JournalPath, "001")
+		assertJournalSteps(t, rec, [][3]any{
+			{"MW", true, false},
+			{"MT", false, false},
+		})
+		if got, _ := rec["error"].(string); !strings.Contains(got, "MW rejected") {
+			t.Errorf("write_result[\"error\"] = %q, want it to name the MW rejection", got)
+		}
+	})
+
+	t.Run("MT rejected: MW confirmed, MT sent and refused", func(t *testing.T) {
+		// The outcome that matters most in an audit trail: the radio's
+		// memory HAS changed (MW landed clean) though the write as a whole
+		// failed. See the driver-side twin's own note.
+		const firstWriteMTExchange = 128
+		svc, _, _, plan, digest := preparedThreeDeltaPlan(t,
+			fakeradio.WithFault(fakeradio.FaultDelayedRejection(firstWriteMTExchange, 10*time.Millisecond)),
+		)
+
+		report, err := svc.Execute(testCtx(t), plan, digest, ExecuteOptions{FirmwareConfirmed: "1.0"})
+		if err == nil {
+			t.Fatal("Execute = nil error, want an abort (the 1st write's MT was rejected)")
+		}
+		if report == nil {
+			t.Fatal("report is nil, want a non-nil partial report")
+		}
+		rec := writeResultFor(t, report.JournalPath, "001")
+		assertJournalSteps(t, rec, [][3]any{
+			{"MW", true, true},
+			{"MT", true, false},
+		})
+		if got, _ := rec["error"].(string); !strings.Contains(got, "MT rejected") {
+			t.Errorf("write_result[\"error\"] = %q, want it to name the MT rejection", got)
+		}
+	})
+}
+
 // TestExecute_InertClarifier_UnchangedFlowsCleanly is the amended M5b
 // brief's named end-to-end proof: a TAG-ONLY edit on a channel whose
 // clarifier is zero (matching its baseline) must write AND verify clean
@@ -1603,7 +1868,7 @@ func readJournalEventDetails(t *testing.T, path string) []journalEventDetail {
 func baseVerifyChannelData() codeplug.ChannelData {
 	return codeplug.ChannelData{
 		FreqHz: 14_100_000, Mode: "USB", CTCSS: "OFF", Shift: "SIMPLEX",
-		Tag: "BASE", TagDisplay: true,
+		Tag: "BASE", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: true},
 		CTCSSTone: codeplug.ToneField{State: codeplug.Unknown},
 		ScanSkip:  codeplug.BoolField{State: codeplug.Unknown},
 	}
@@ -1632,7 +1897,9 @@ func TestWritableFieldsMismatch_Table(t *testing.T) {
 		{"ctcss differs", func(c *codeplug.ChannelData) { c.CTCSS = "ENC" }, []spec.Field{spec.FieldCTCSSState}},
 		{"shift differs", func(c *codeplug.ChannelData) { c.Shift = "PLUS" }, []spec.Field{spec.FieldShift}},
 		{"tag differs", func(c *codeplug.ChannelData) { c.Tag = "OTHER" }, []spec.Field{spec.FieldTag}},
-		{"tagDisplay differs", func(c *codeplug.ChannelData) { c.TagDisplay = false }, []spec.Field{spec.FieldTagDisplay}},
+		{"tagDisplay differs", func(c *codeplug.ChannelData) {
+			c.TagDisplay = codeplug.BoolField{State: codeplug.Known, Value: false}
+		}, []spec.Field{spec.FieldTagDisplay}},
 		{"CTCSSTone differs — excluded (read back Unknown by construction)", func(c *codeplug.ChannelData) {
 			c.CTCSSTone = codeplug.ToneField{State: codeplug.Known, Value: 100}
 		}, nil},
@@ -1652,6 +1919,61 @@ func TestWritableFieldsMismatch_Table(t *testing.T) {
 			bad := writableFieldsMismatch(want, got)
 			if !reflect.DeepEqual(bad, tt.want) {
 				t.Errorf("writableFieldsMismatch(want, got) = %v, want %v", bad, tt.want)
+			}
+		})
+	}
+}
+
+// TestWritableFieldsMismatch_TagDisplayMutualKnowledge (M9c-5, E1b):
+// TagDisplay is a BoolField now, so verification has to say WHICH
+// BoolFields it can verify. CTCSSTone and ScanSkip are excluded outright
+// (never readable at all); TagDisplay is excluded CONDITIONALLY — it is
+// compared only when BOTH sides are Known. A read-back that is Unknown or
+// Unavailable (a radio whose frame carries no display flag: E1's first
+// real producer of that state) says nothing about what was stored, so
+// comparing it against the Known value that was sent would manufacture a
+// mismatch and abort a write that in fact landed perfectly.
+func TestWritableFieldsMismatch_TagDisplayMutualKnowledge(t *testing.T) {
+	tests := []struct {
+		name       string
+		want, got  codeplug.BoolField
+		wantFields []spec.Field
+	}{
+		{
+			name: "both Known and equal",
+			want: codeplug.BoolField{State: codeplug.Known, Value: true},
+			got:  codeplug.BoolField{State: codeplug.Known, Value: true},
+		},
+		{
+			name:       "both Known and different — the one comparable case, and it must still bite",
+			want:       codeplug.BoolField{State: codeplug.Known, Value: true},
+			got:        codeplug.BoolField{State: codeplug.Known, Value: false},
+			wantFields: []spec.Field{spec.FieldTagDisplay},
+		},
+		{
+			name: "read back Unavailable — no shared knowledge, no comparison",
+			want: codeplug.BoolField{State: codeplug.Known, Value: true},
+			got:  codeplug.BoolField{State: codeplug.Unavailable},
+		},
+		{
+			name: "read back Unknown — no shared knowledge, no comparison",
+			want: codeplug.BoolField{State: codeplug.Known, Value: true},
+			got:  codeplug.BoolField{State: codeplug.Unknown},
+		},
+		{
+			name: "sent non-Known — nothing was requested, so nothing to verify",
+			want: codeplug.BoolField{State: codeplug.Unknown},
+			got:  codeplug.BoolField{State: codeplug.Known, Value: true},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			want := baseVerifyChannelData()
+			want.TagDisplay = tt.want
+			got := baseVerifyChannelData()
+			got.TagDisplay = tt.got
+			if bad := writableFieldsMismatch(want, got); !reflect.DeepEqual(bad, tt.wantFields) {
+				t.Errorf("writableFieldsMismatch = %v, want %v", bad, tt.wantFields)
 			}
 		})
 	}

@@ -232,15 +232,18 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 			// "-", mapped through faithfully — codeplug.Validate flags it
 			// as not a selectable mode. Mode.String survives as a
 			// dialect-free diagnostic fallback only (see its doc comment).
-			Mode:       s.dialect.ModeName(m.Mode),
-			ClarHz:     int(m.ClarHz),
-			RxClar:     m.RxClar,
-			TxClar:     m.TxClar,
-			CTCSS:      ctcss,
-			CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown}, // unreadable via CAT — see doc comment
-			Shift:      shift,
-			Tag:        tag,
-			TagDisplay: display,
+			Mode:      s.dialect.ModeName(m.Mode),
+			ClarHz:    int(m.ClarHz),
+			RxClar:    m.RxClar,
+			TxClar:    m.TxClar,
+			CTCSS:     ctcss,
+			CTCSSTone: codeplug.ToneField{State: codeplug.Unknown}, // unreadable via CAT — see doc comment
+			Shift:     shift,
+			Tag:       tag,
+			// Known, unlike the two Unknown fields below: the MT answer this
+			// channel was built from CARRIES the display flag (P1), so it was
+			// genuinely read from the radio rather than assumed.
+			TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: display},
 			ScanSkip:   codeplug.BoolField{State: codeplug.Unknown}, // unreadable via CAT — see doc comment
 		},
 	}, nil

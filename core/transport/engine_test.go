@@ -28,7 +28,7 @@ func newTestEngine(t *testing.T, radioOpts []fakeradio.Option, engineOpts ...Opt
 	t.Helper()
 	r := fakeradio.New(radioOpts...)
 	t.Cleanup(func() { _ = r.Close() })
-	e, err := NewEngine(r.Port(), cat.FT710.AllowedCommand, engineOpts...)
+	e, err := NewEngine(r.Port(), cat.FT710, engineOpts...)
 	if err != nil {
 		t.Fatalf("NewEngine: unexpected error: %v", err)
 	}
@@ -280,7 +280,7 @@ func TestEngine_Do_DisallowedCommandNeverWritten(t *testing.T) {
 	ctx := testCtx(t)
 
 	// The zero Command: IsZero() == true, Bytes() returns an empty slice,
-	// which this Engine's injected gate (cat.FT710.AllowedCommand — see
+	// which this Engine's own dialect's gate (cat.FT710's — see
 	// newTestEngine) rejects (len < 3). Do must refuse it
 	// BEFORE writing anything — proven by checking that a SUBSEQUENT
 	// real command is still exchange 1 (garbled), not exchange 2 (which

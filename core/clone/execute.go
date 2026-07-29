@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -111,10 +112,30 @@ const (
 
 // writableFieldsMismatch compares want (what was sent) against got (the
 // read-back) on every field this project's write path can express.
-// CTCSSTone and ScanSkip are deliberately excluded: both always read back
-// FieldState Unknown by construction (driver.Session.ReadChannel's doc
-// comment — the CAT protocol has no command to read either), so comparing
-// them would manufacture a false mismatch on every single write.
+//
+// The exclusion list, and the two DIFFERENT mechanisms behind it:
+//
+// CTCSSTone and ScanSkip are excluded UNCONDITIONALLY — not compared at
+// all, in any circumstance: both always read back FieldState Unknown by
+// construction (driver.Session.ReadChannel's doc comment — the CAT
+// protocol has no command to read either), so comparing them would
+// manufacture a false mismatch on every single write.
+//
+// TagDisplay is excluded CONDITIONALLY (M9c-5, E1b), by mutual knowledge:
+// it is compared only when BOTH sides are Known. Unlike the two above it
+// IS readable — a radio whose frame carries a display flag reads it back
+// Known, and on that radio the comparison is real and must bite, since a
+// display flag that did not land is a write that did not do what it said.
+// But this project no longer assumes every radio has that flag: a model
+// whose frame lacks one reads back Unavailable (codeplug.FieldState's
+// first real producer of that state), and comparing Unavailable against
+// the Known value that was sent would abort a write that in fact landed
+// perfectly — exactly the false mismatch the two blanket exclusions above
+// exist to avoid. The sent side's guard is defence in depth rather than a
+// live case: codeplug.Diff blocks a non-Known TagDisplay at plan time
+// whenever the target transmits the field, and the driver refuses one
+// before the wire, so what reaches here should always be Known — the
+// check makes "should" unnecessary.
 func writableFieldsMismatch(want, got codeplug.ChannelData) []spec.Field {
 	var bad []spec.Field
 	if want.FreqHz != got.FreqHz {
@@ -135,7 +156,8 @@ func writableFieldsMismatch(want, got codeplug.ChannelData) []spec.Field {
 	if want.Tag != got.Tag {
 		bad = append(bad, spec.FieldTag)
 	}
-	if want.TagDisplay != got.TagDisplay {
+	if want.TagDisplay.State == codeplug.Known && got.TagDisplay.State == codeplug.Known &&
+		want.TagDisplay.Value != got.TagDisplay.Value {
 		bad = append(bad, spec.FieldTagDisplay)
 	}
 	return bad
@@ -408,6 +430,51 @@ func (s *Service) Execute(ctx context.Context, plan *SendPlan, confirmedDigest s
 	return report, nil
 }
 
+// writeResultFormat is the version stamped into every "write_result"
+// journal line, so a reader of an append-only journal can tell the shapes
+// apart without guessing.
+//
+// Format 1 (unversioned, implicit) is every line written before M9c-5:
+// four booleans named for the FT-710's own two frames, carrying the
+// sent/confirmed pair of each (the exact keys are listed in
+// internal/guards' retiredWriteResultNames, which now forbids them
+// returning, and in docs/superpowers' M9c-5 spec). Format 2 is the
+// neutral "steps" list below, one record per frame the driver intended,
+// with the frame's own mnemonic as its "command".
+//
+// Pre-change journals are not migrated and cannot be:
+// they are local, append-only audit evidence of what a past run did, and
+// rewriting them would destroy the only thing they are for. They are read
+// as the legacy evidence they are — the same standing this milestone's
+// snapshot digests already carry.
+const writeResultFormat = 2
+
+// journalSteps PROJECTS a driver.WriteResult's steps onto the journal's
+// own wire names.
+//
+// The projection is the point, and it is not a stylistic choice: journal
+// records are marshalled straight from the map they are given
+// (journal.Append), so handing it a []driver.WriteStep would put GO FIELD
+// NAMES — "Command", "Sent", "Confirmed" — into a durable, user-visible,
+// append-only file, and would then couple that file's schema to a struct
+// definition in another package, where an ordinary field rename becomes a
+// silent format change nothing tests. Naming the three keys here makes the
+// journal's schema this package's own, declared in one place.
+//
+// The result is always a non-nil slice, so a refused write journals
+// "steps": [] rather than "steps": null — an empty sequence is a fact
+// ("nothing was attempted"), where null would read as an absence of
+// information.
+func journalSteps(res driver.WriteResult) []map[string]any {
+	steps := make([]map[string]any, 0, len(res.Steps))
+	for _, st := range res.Steps {
+		steps = append(steps, map[string]any{
+			"command": st.Command, "sent": st.Sent, "confirmed": st.Confirmed,
+		})
+	}
+	return steps
+}
+
 // writePair runs one delta entry's write+verify pair (obligations 6, 7,
 // 8) — write_attempt journal, WriteChannel, write_result journal,
 // read-back ReadChannel, verify_result journal — mutating report in
@@ -453,9 +520,8 @@ func (s *Service) writePair(journal journalAppender, report *Report, i, total in
 	// already did, so it aborts all FURTHER writes (standard abort
 	// machinery) rather than refusing for free.
 	jfe := s.appendDeltaJournal(journal, "write_result", e.Slot, map[string]any{
-		"slot": e.Slot, "mw_sent": res.MWSent, "mw_confirmed": res.MWConfirmed,
-		"mt_sent": res.MTSent, "mt_confirmed": res.MTConfirmed,
-		"error": errString(err),
+		"slot": e.Slot, "write_result_format": writeResultFormat,
+		"steps": journalSteps(res), "error": errString(err),
 	})
 	if jfe != nil {
 		if err == nil {

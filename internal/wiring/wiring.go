@@ -156,6 +156,24 @@ func NewRealDriver() driver.Driver {
 	return ft710.New(ft710.RealHardware)
 }
 
+// openSerial is OpenRealSessionFor's test seam: production code always
+// leaves this at transport.OpenSerial, and OpenRealSessionFor calls it
+// instead of transport.OpenSerial directly. It exists for exactly one
+// property — that the baud handed to the serial layer is the DRIVER's
+// own Capabilities().DefaultBaud rather than transport's package
+// default — which is otherwise inexpressible from this package:
+// transport.SerialConfig is carried into an OS-level open, and nothing
+// transport exports lets a test read back the config a completed open
+// used (transport's own openPort seam is package-private, and a test
+// here cannot reach it). A recording seam at THIS call site is therefore
+// the only place the disagreement between a driver's DefaultBaud and
+// transport.DefaultBaud can be observed at all. Deliberately a
+// package-level variable rather than a parameter on OpenRealSessionFor:
+// adding one would put a port-construction hook in the public signature
+// of a constructor whose whole shape (see this file's package comment)
+// exists to keep invalid profile/port pairings unrepresentable.
+var openSerial = transport.OpenSerial
+
 // OpenRealSessionFor opens a session against a real radio of model,
 // attached at portPath: a real serial port via transport.OpenSerial,
 // paired with model's own real-hardware driver constructor from
@@ -164,6 +182,13 @@ func NewRealDriver() driver.Driver {
 // no shared helper taking a port alongside an ft710.Profile, so the
 // invalid RealHardware/fakeradio (or Simulated/real-port) pairing stays
 // unrepresentable in the code shape, not merely unreached.
+//
+// The port is opened at the DRIVER's own factory-default CAT baud
+// (Capabilities().DefaultBaud), not at transport's package default: the
+// two agree for the FT-710 (both 38400) and there is no behaviour change
+// today, but a second registered model whose radio ships at a different
+// rate would otherwise have been opened at the FT-710's — a
+// radio-specific fact read from the wrong radio's table.
 //
 // An unrecognised model fails with *UnknownModelError BEFORE any port is
 // touched. transport.OpenSerial (like driver.Driver.Open) owns the port
@@ -191,8 +216,19 @@ func OpenRealSessionFor(ctx context.Context, model, portPath string) (driver.Ses
 		return nil, nil, &UnknownModelError{Model: model, Supported: SupportedModels()}
 	}
 
-	port, err := transport.OpenSerial(portPath, transport.SerialConfig{
-		Baud:     transport.DefaultBaud,
+	port, err := openSerial(portPath, transport.SerialConfig{
+		// The baud is the radio's, read from the driver in hand (d is
+		// the very value NewRegistry registered and reg.Get returned
+		// above as drv — TestDriverTableKeysMatchDriverModel pins the
+		// key they share).
+		Baud: d.Capabilities().DefaultBaud,
+		// The stop bits are NOT model-derived, BY RECORDED DECISION
+		// (M9c-5 E2): spec.Capabilities gains no framing field this
+		// milestone, so every model opens at transport's fixed default
+		// (8-N-2). The FTdx10 is ASSUMED to share it until its framing
+		// is verified against its own manual at M9c-6; if it does not,
+		// the field is added then, with hardware evidence, rather than
+		// guessed now.
 		StopBits: transport.DefaultStopBits,
 	})
 	if err != nil {

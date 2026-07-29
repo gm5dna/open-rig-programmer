@@ -29,24 +29,65 @@ func (a *App) ListPorts() ([]PortEntry, error) {
 // GetSupportedModels returns every radio model name this build can open a
 // real session against (internal/wiring.SupportedModels' own sorted
 // output) — registry-driven, so a future second driver appears here with
-// no change to this method. app/ has no model-selection surface yet
-// (task 41, M9a-5: every Connect/ConnectDemo call still keys off
-// wiring.DefaultModel) — this method exists so the frontend can start
-// rendering the list before that surface lands.
+// no change to this method. It is the list Connect/ConnectDemo's own
+// model parameter is validated against (see connectModel), so a frontend
+// model picker built on this method can never offer a model the connect
+// path would then refuse.
 func (a *App) GetSupportedModels() []string {
 	return wiring.SupportedModels()
 }
 
-// Connect opens a session against a real FT-710 on portPath.
-func (a *App) Connect(portPath string) (ConnectionInfo, error) {
-	return a.connect(false, portPath)
+// Connect opens a session against a real radio of model, attached at
+// portPath. An empty model means wiring.DefaultModel (the FT-710); any
+// other value must name a model GetSupportedModels lists, or the call is
+// refused before anything is opened or created — see connectModel.
+func (a *App) Connect(portPath, model string) (ConnectionInfo, error) {
+	return a.connect(false, portPath, model)
 }
 
-// ConnectDemo opens a session against the in-process simulated radio
-// (internal/fakeradio, via internal/wiring.OpenFakeSessionFor) — never
-// real hardware.
-func (a *App) ConnectDemo() (ConnectionInfo, error) {
-	return a.connect(true, "")
+// ConnectDemo opens a session against the in-process simulated radio for
+// model (internal/fakeradio, via internal/wiring.OpenFakeSessionFor) —
+// never real hardware. model follows Connect's rule exactly.
+func (a *App) ConnectDemo(model string) (ConnectionInfo, error) {
+	return a.connect(true, "", model)
+}
+
+// connectModel resolves Connect/ConnectDemo's model parameter to the model
+// name the connect path's three model-keyed wiring calls all use (M9c-5
+// E4).
+//
+// An empty request resolves through currentModel's OWN no-state tail
+// rather than naming wiring.DefaultModel a second time here: this package
+// has one model resolver, and routing the default through it keeps the
+// connect default and the offline default structurally the same value,
+// unable to drift apart.
+//
+// nil/nil is passed deliberately, and is not merely "there is no
+// connection yet". The connect path must NEVER infer which radio to open
+// from a loaded working copy: a user who loads an FTdx10 file and then
+// clicks Connect with a real FT-710 on the cable would otherwise have the
+// FTdx10's driver opened against FT-710 hardware. An empty model means
+// "the default", never "whatever the file says" — naming a model is the
+// caller's explicit act.
+//
+// A non-empty model is validated against supportedModels() — the same
+// membership check, over the same list, that cmd/rigprog's validateModel
+// (cmd/rigprog/wiring.go) applies to --model, reported with the same
+// *wiring.UnknownModelError shape, whose Error() names every supported
+// model. Validation runs BEFORE any side-effecting step (a directory
+// created, a session opened), matching the CLI, rather than relying on
+// the eventual OpenRealSessionFor/OpenFakeSessionFor lookup's own
+// identical error after the snapshot directory has already been made.
+func connectModel(requested string) (string, error) {
+	if requested == "" {
+		return currentModel(nil, nil), nil
+	}
+	for _, m := range supportedModels() {
+		if m == requested {
+			return requested, nil
+		}
+	}
+	return "", &wiring.UnknownModelError{Model: requested, Supported: supportedModels()}
 }
 
 // connect is Connect/ConnectDemo's shared body. It deliberately calls
@@ -54,9 +95,21 @@ func (a *App) ConnectDemo() (ConnectionInfo, error) {
 // own two self-contained, model-keyed constructors — rather than
 // re-deriving the profile/session pairing here, preserving the
 // structural-exclusivity shape those constructors exist to enforce.
-// Both are called at wiring.DefaultModel: app/ has no model-selection
-// surface yet (task 41, M9a-5).
-func (a *App) connect(demo bool, portPath string) (ConnectionInfo, error) {
+// Both, and the snapshot directory alongside them, are called at the ONE
+// model connectModel resolved from requestedModel (M9c-5 E4) — never at
+// wiring.DefaultModel independently, so a session, its snapshot directory
+// and its journal can never belong to different radios.
+//
+// The model is validated first, before the already-connected/transfer
+// guards: it is a pure argument check, and refusing a bad argument before
+// reading App state keeps the refusal independent of when the call
+// happens to arrive.
+func (a *App) connect(demo bool, portPath, requestedModel string) (ConnectionInfo, error) {
+	model, err := connectModel(requestedModel)
+	if err != nil {
+		return ConnectionInfo{}, fmt.Errorf("app: connecting: %w", err)
+	}
+
 	a.mu.Lock()
 	if a.conn != nil {
 		a.mu.Unlock()
@@ -68,7 +121,7 @@ func (a *App) connect(demo bool, portPath string) (ConnectionInfo, error) {
 	}
 	a.mu.Unlock()
 
-	snapshotDir, err := wiring.ResolveSnapshotDir("", wiring.DefaultModel)
+	snapshotDir, err := wiring.ResolveSnapshotDir("", model)
 	if err != nil {
 		return ConnectionInfo{}, fmt.Errorf("app: resolving snapshot directory: %w", err)
 	}
@@ -81,9 +134,9 @@ func (a *App) connect(demo bool, portPath string) (ConnectionInfo, error) {
 		closer func() error
 	)
 	if demo {
-		sess, closer, err = wiring.OpenFakeSessionFor(a.ctx, wiring.DefaultModel)
+		sess, closer, err = wiring.OpenFakeSessionFor(a.ctx, model)
 	} else {
-		sess, closer, err = wiring.OpenRealSessionFor(a.ctx, wiring.DefaultModel, portPath)
+		sess, closer, err = wiring.OpenRealSessionFor(a.ctx, model, portPath)
 	}
 	if err != nil {
 		return ConnectionInfo{}, fmt.Errorf("app: connecting: %w", err)

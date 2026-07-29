@@ -14,6 +14,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
+	"github.com/gm5dna/open-rig-programmer/core/transport"
 	"github.com/gm5dna/open-rig-programmer/internal/radiotext"
 )
 
@@ -80,31 +81,86 @@ func TestNewRealDriver_HWVerifiedWriteSet(t *testing.T) {
 	}
 }
 
-// TestOpenFakeSessionFor_DefaultModel exercises the fake wiring path
-// end-to-end at DefaultModel against the default (ImageUK) fakeradio
-// image, confirming it yields a working driver.Session and that closeAll
-// releases both the session and the fakeradio cleanly.
-func TestOpenFakeSessionFor_DefaultModel(t *testing.T) {
+// TestOpenFakeSessionFor_EveryRegisteredModel exercises the fake wiring
+// path end-to-end for EVERY model SupportedModels lists, one subtest each
+// (M9c-5 E5: the table-driven rewrite of the old DefaultModel-only test).
+// It closes the MISMATCHED-PAIRING gap the single-model version could not
+// even express: fakeDrivers pairs a simulated-profile DRIVER with a fake
+// RIG per model, TestRealAndFakeDriverTablesAgree checks only that the
+// keys line up, and nothing before this test checked that the two halves
+// of an entry describe the SAME radio. A second entry that paired one
+// model's driver with another's rig would satisfy every other test in
+// this file.
+//
+// The identity check is what catches it: the session's Identity().CATID
+// is what the RIG answered when the DRIVER probed it, and it must equal
+// the CAT ID that model's own driver declares in its static capabilities.
+// A crossed pairing answers the wrong one (or fails the probe outright).
+// Capabilities().Model is checked alongside it so a session cannot merely
+// be well-formed — it must be THIS model's.
+//
+// Structure over content, deliberately: today SupportedModels() returns
+// one row, so this test's value is that the second registered model gets
+// this coverage by existing, with no new test to write.
+func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
+	models := SupportedModels()
+	if len(models) == 0 {
+		t.Fatal("SupportedModels() is empty — this table would run zero cases and pass vacuously")
+	}
+	for _, model := range models {
+		t.Run(model, func(t *testing.T) {
+			caps, err := StaticCapabilities(model)
+			if err != nil {
+				t.Fatalf("StaticCapabilities(%q): unexpected error: %v", model, err)
+			}
+			if caps.CATID == "" {
+				t.Fatalf("StaticCapabilities(%q).CATID is empty — the identity check below would pass vacuously", model)
+			}
+
+			sess, closeAll, err := OpenFakeSessionFor(testCtx(t), model)
+			if err != nil {
+				t.Fatalf("OpenFakeSessionFor(%q): unexpected error: %v", model, err)
+			}
+			if sess == nil {
+				t.Fatal("OpenFakeSessionFor: nil session with nil error")
+			}
+			if got := sess.Capabilities().Model; got != model {
+				t.Errorf("session Capabilities().Model = %q, want %q", got, model)
+			}
+			if got := sess.Identity().CATID; got != caps.CATID {
+				t.Errorf("Identity().CATID = %q, want %q — the fake rig answering this session is not %s's own", got, caps.CATID, model)
+			}
+			if err := closeAll(); err != nil {
+				t.Errorf("closeAll: unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// TestOpenFakeSessionFor_DefaultModelDefaultImage keeps the one assertion
+// the table above cannot carry: the DEFAULT fakeradio image is ImageUK,
+// HW-CONFIRMED 2026-07-13 to have no 5xx bank, so an FT-710 fake session
+// opened with no FakeSessionOpts reports region "no-60m". That is a fact
+// about internal/fakeradio's FT-710 simulator and its default image, not
+// a property every registered model has (driver.RegionReporter is an
+// OPTIONAL capability), so it stays model-specific rather than being
+// forced into the table.
+func TestOpenFakeSessionFor_DefaultModelDefaultImage(t *testing.T) {
 	sess, closeAll, err := OpenFakeSessionFor(testCtx(t), DefaultModel)
 	if err != nil {
 		t.Fatalf("OpenFakeSessionFor: unexpected error: %v", err)
 	}
-	if sess == nil {
-		t.Fatal("OpenFakeSessionFor: nil session with nil error")
-	}
-	id := sess.Identity()
-	if id.CATID != "0800" {
-		t.Errorf("Identity().CATID = %q, want %q", id.CATID, "0800")
-	}
+	t.Cleanup(func() {
+		if err := closeAll(); err != nil {
+			t.Errorf("closeAll: unexpected error: %v", err)
+		}
+	})
 	region, ok := sess.(driver.RegionReporter)
 	if !ok {
 		t.Fatal("session does not implement driver.RegionReporter — sanity check failed")
 	}
 	if got := region.Region(); got != "no-60m" {
 		t.Errorf("Region() = %q, want %q (default fakeradio image is ImageUK, HW-CONFIRMED 2026-07-13 to have no 5xx bank)", got, "no-60m")
-	}
-	if err := closeAll(); err != nil {
-		t.Errorf("closeAll: unexpected error: %v", err)
 	}
 }
 
@@ -118,6 +174,108 @@ func TestOpenRealSessionFor_BadPort(t *testing.T) {
 	}
 	if sess != nil || closeAll != nil {
 		t.Errorf("OpenRealSessionFor: expected nil session/closeAll on error, got sess=%v closeAllIsNil=%v", sess, closeAll == nil)
+	}
+}
+
+// errSeamRefused is what the recording openSerial seam below returns
+// instead of a port. The seam's job is to capture the transport.SerialConfig
+// OpenRealSessionFor built and then stop the call dead: no port is opened,
+// no driver session is attempted, and the test asserts against the captured
+// config rather than against anything that touched hardware.
+var errSeamRefused = errors.New("wiring test: the openSerial seam opens no port")
+
+// recordSerialConfig swaps the package's openSerial seam for a recorder,
+// restoring it on cleanup, and returns a pointer to the transport.SerialConfig
+// the next OpenRealSessionFor call builds. It is the only way to observe that
+// config at all — see openSerial's own doc comment for why transport cannot
+// answer this question itself.
+func recordSerialConfig(t *testing.T) *transport.SerialConfig {
+	t.Helper()
+	var got transport.SerialConfig
+	prev := openSerial
+	openSerial = func(_ string, cfg transport.SerialConfig) (transport.Port, error) {
+		got = cfg
+		return nil, errSeamRefused
+	}
+	t.Cleanup(func() { openSerial = prev })
+	return &got
+}
+
+// baudFixtureDriver is a minimal driver.Driver carrying nothing but a
+// canned spec.Capabilities: enough to be registered (Registry.Register
+// runs Capabilities().Validate) and looked up, and never opened — the
+// recording seam above fails before OpenRealSessionFor reaches Open.
+type baudFixtureDriver struct{ caps spec.Capabilities }
+
+func (d baudFixtureDriver) Model() string                   { return d.caps.Model }
+func (d baudFixtureDriver) Capabilities() spec.Capabilities { return d.caps }
+func (d baudFixtureDriver) Open(context.Context, transport.Port, driver.Identity) (driver.Session, error) {
+	return nil, errors.New("baudFixtureDriver: Open is unreachable — the openSerial seam refuses first")
+}
+
+// TestOpenRealSessionFor_BaudIsTheDriversDefault pins E2's FT-710 half:
+// the real wiring path opens the serial port at the DRIVER's own
+// Capabilities().DefaultBaud, which for the FT-710 is 38400 — the same
+// value transport.DefaultBaud carries, so this is a no-change pin for
+// today's only model and the baseline the disagreeing-driver test below
+// is measured against. Stop bits are asserted too, because they are the
+// half that deliberately did NOT become model-derived (see the call
+// site's recorded decision).
+func TestOpenRealSessionFor_BaudIsTheDriversDefault(t *testing.T) {
+	got := recordSerialConfig(t)
+
+	_, _, err := OpenRealSessionFor(testCtx(t), DefaultModel, "/dev/nonexistent-rigprog-test-port")
+	if !errors.Is(err, errSeamRefused) {
+		t.Fatalf("OpenRealSessionFor: err = %v, want it to wrap the seam's own error (the seam must have been consulted)", err)
+	}
+
+	want := NewRealDriver().Capabilities().DefaultBaud
+	if want != 38400 {
+		t.Fatalf("sanity check failed: the FT-710 driver reports DefaultBaud %d, want 38400", want)
+	}
+	if got.Baud != want {
+		t.Errorf("SerialConfig.Baud = %d, want %d (the driver's own DefaultBaud)", got.Baud, want)
+	}
+	if got.StopBits != transport.DefaultStopBits {
+		t.Errorf("SerialConfig.StopBits = %d, want transport.DefaultStopBits (%d) — stop bits stay the fixed transport default by recorded decision", got.StopBits, transport.DefaultStopBits)
+	}
+}
+
+// TestOpenRealSessionFor_BaudFollowsADisagreeingDriver is E2's actual
+// proof, and the one the FT-710 alone cannot give: with a registered
+// model whose DefaultBaud DISAGREES with transport.DefaultBaud, the port
+// must be opened at the driver's 4800, not at transport's 38400. Before
+// this milestone the call site passed transport.DefaultBaud outright, so
+// this fixture would have been opened at the FT-710's rate — the exact
+// failure a second registered model would have met.
+func TestOpenRealSessionFor_BaudFollowsADisagreeingDriver(t *testing.T) {
+	const fixtureModel = "TEST-BAUD-FIXTURE"
+	const fixtureBaud = 4800
+	if fixtureBaud == transport.DefaultBaud {
+		t.Fatalf("sanity check failed: the fixture baud %d equals transport.DefaultBaud, so this test could not distinguish the two sources", fixtureBaud)
+	}
+
+	realDrivers[fixtureModel] = func() driver.Driver {
+		return baudFixtureDriver{caps: spec.Capabilities{
+			Model:        fixtureModel,
+			CATID:        "9999",
+			Bauds:        []int{fixtureBaud},
+			DefaultBaud:  fixtureBaud,
+			TagLen:       12,
+			ShiftOptions: spec.StandardShiftOptions(),
+			CTCSSStates:  spec.StandardCTCSSStates(),
+		}}
+	}
+	t.Cleanup(func() { delete(realDrivers, fixtureModel) })
+
+	got := recordSerialConfig(t)
+
+	_, _, err := OpenRealSessionFor(testCtx(t), fixtureModel, "/dev/nonexistent-rigprog-test-port")
+	if !errors.Is(err, errSeamRefused) {
+		t.Fatalf("OpenRealSessionFor: err = %v, want it to wrap the seam's own error", err)
+	}
+	if got.Baud != fixtureBaud {
+		t.Errorf("SerialConfig.Baud = %d, want %d — the baud must come from the driver's own capabilities, not from transport.DefaultBaud (%d)", got.Baud, fixtureBaud, transport.DefaultBaud)
 	}
 }
 

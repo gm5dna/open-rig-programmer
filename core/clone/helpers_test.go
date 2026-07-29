@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -141,17 +142,69 @@ func matchingCandidateFile(caps spec.Capabilities, populated map[string]*codeplu
 // countingPort wraps a Port and counts Write calls, so a test can assert
 // that a phase of execution produced ZERO (or an exact number of) wire
 // writes. Mirrors core/driver/ft710's test helper of the same name/shape.
+//
+// It also KEEPS the bytes (M9c-5 task 2): a count alone cannot answer
+// "did anything at all reach the wire for THIS slot" when some other slot
+// is legitimately being written in the same run, which is exactly what
+// the blocked-send end-to-end test has to prove. See frames.
 type countingPort struct {
 	inner  io.ReadWriteCloser
 	writes atomic.Int64
+	mu     sync.Mutex
+	sent   []byte
 }
 
 func (p *countingPort) Read(b []byte) (int, error) { return p.inner.Read(b) }
 func (p *countingPort) Write(b []byte) (int, error) {
 	p.writes.Add(1)
+	p.mu.Lock()
+	p.sent = append(p.sent, b...)
+	p.mu.Unlock()
 	return p.inner.Write(b)
 }
 func (p *countingPort) Close() error { return p.inner.Close() }
+
+// mark returns the number of bytes written to the port so far, for
+// framesSince below: a test takes a mark after PrepareSend, so what it
+// then inspects is EXACTLY Execute's own wire traffic and not the
+// preceding full-image read's.
+func (p *countingPort) mark() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return len(p.sent)
+}
+
+// framesSince returns every complete ';'-terminated frame written after
+// mark, in order. The transport writes whole commands, so splitting on
+// ';' recovers exactly the frames this project put on the wire.
+func (p *countingPort) framesSince(mark int) []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	var out []string
+	for _, f := range strings.Split(string(p.sent[mark:]), ";") {
+		if f != "" {
+			out = append(out, f+";")
+		}
+	}
+	return out
+}
+
+// frameTargetsSlot reports whether frame is one of this project's
+// slot-addressed commands (MW/MT/MR/MC — every frame either the write
+// path or the read path emits for a specific channel) aimed at slot. All
+// four carry the canonical 3-character slot immediately after the
+// two-character mnemonic, so one test can ask the question for any of
+// them without knowing which phase produced it.
+func frameTargetsSlot(frame, slot string) bool {
+	if len(frame) < 5 {
+		return false
+	}
+	switch frame[:2] {
+	case "MW", "MT", "MR", "MC":
+		return frame[2:5] == slot
+	}
+	return false
+}
 
 // openCountingSimSession is openSimSession, but with the session's port
 // wrapped in a countingPort so a test can inspect wire-write counts at any
@@ -412,7 +465,7 @@ func writableChannel(slot string, freqHz uint32, tag string) codeplug.Channel {
 			CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
 			Shift:      "SIMPLEX",
 			Tag:        tag,
-			TagDisplay: tag != "",
+			TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: tag != ""},
 			ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
 		},
 	}

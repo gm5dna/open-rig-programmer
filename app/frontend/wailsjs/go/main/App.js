@@ -10,12 +10,12 @@ export function ConfirmSend(arg1, arg2) {
   return window['go']['main']['App']['ConfirmSend'](arg1, arg2);
 }
 
-export function Connect(arg1) {
-  return window['go']['main']['App']['Connect'](arg1);
+export function Connect(arg1, arg2) {
+  return window['go']['main']['App']['Connect'](arg1, arg2);
 }
 
-export function ConnectDemo() {
-  return window['go']['main']['App']['ConnectDemo']();
+export function ConnectDemo(arg1) {
+  return window['go']['main']['App']['ConnectDemo'](arg1);
 }
 
 export function DiffAgainstRadio() {

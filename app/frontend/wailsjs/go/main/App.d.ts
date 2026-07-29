@@ -7,9 +7,9 @@ export function CancelTransfer():Promise<void>;
 
 export function ConfirmSend(arg1:string,arg2:string):Promise<void>;
 
-export function Connect(arg1:string):Promise<main.ConnectionInfo>;
+export function Connect(arg1:string,arg2:string):Promise<main.ConnectionInfo>;
 
-export function ConnectDemo():Promise<main.ConnectionInfo>;
+export function ConnectDemo(arg1:string):Promise<main.ConnectionInfo>;
 
 export function DiffAgainstRadio():Promise<main.DiffView>;
 

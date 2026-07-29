@@ -43,7 +43,7 @@ func fullCodeplug() *Codeplug {
 				CTCSSTone:  ToneField{State: Known, Value: spec.Tone(885)},
 				Shift:      "PLUS",
 				Tag:        "MB9XYZ",
-				TagDisplay: true,
+				TagDisplay: BoolField{State: Known, Value: true},
 				ScanSkip:   BoolField{State: Known, Value: true},
 			}},
 			{Slot: "002"}, // empty
@@ -844,7 +844,7 @@ func TestSave_InvalidSnapshotRejected(t *testing.T) {
 // reported as ErrSchemaTooNew (upgrade the app), NOT as an
 // *UnknownFieldError from a premature strict decode.
 func TestLoad_SchemaTooNew_VersionFirst(t *testing.T) {
-	body := `{"schema":3,"generator":"x","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z"},"channels":[],"bogus_extra_field":true}`
+	body := `{"schema":4,"generator":"x","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z"},"channels":[],"bogus_extra_field":true}`
 	_, err := writeAndLoad(t, body)
 	if err == nil {
 		t.Fatal("Load() error = nil, want ErrSchemaTooNew")
