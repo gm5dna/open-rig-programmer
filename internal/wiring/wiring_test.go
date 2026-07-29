@@ -14,6 +14,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
+	"github.com/gm5dna/open-rig-programmer/core/transport"
 	"github.com/gm5dna/open-rig-programmer/internal/radiotext"
 )
 
@@ -118,6 +119,108 @@ func TestOpenRealSessionFor_BadPort(t *testing.T) {
 	}
 	if sess != nil || closeAll != nil {
 		t.Errorf("OpenRealSessionFor: expected nil session/closeAll on error, got sess=%v closeAllIsNil=%v", sess, closeAll == nil)
+	}
+}
+
+// errSeamRefused is what the recording openSerial seam below returns
+// instead of a port. The seam's job is to capture the transport.SerialConfig
+// OpenRealSessionFor built and then stop the call dead: no port is opened,
+// no driver session is attempted, and the test asserts against the captured
+// config rather than against anything that touched hardware.
+var errSeamRefused = errors.New("wiring test: the openSerial seam opens no port")
+
+// recordSerialConfig swaps the package's openSerial seam for a recorder,
+// restoring it on cleanup, and returns a pointer to the transport.SerialConfig
+// the next OpenRealSessionFor call builds. It is the only way to observe that
+// config at all — see openSerial's own doc comment for why transport cannot
+// answer this question itself.
+func recordSerialConfig(t *testing.T) *transport.SerialConfig {
+	t.Helper()
+	var got transport.SerialConfig
+	prev := openSerial
+	openSerial = func(_ string, cfg transport.SerialConfig) (transport.Port, error) {
+		got = cfg
+		return nil, errSeamRefused
+	}
+	t.Cleanup(func() { openSerial = prev })
+	return &got
+}
+
+// baudFixtureDriver is a minimal driver.Driver carrying nothing but a
+// canned spec.Capabilities: enough to be registered (Registry.Register
+// runs Capabilities().Validate) and looked up, and never opened — the
+// recording seam above fails before OpenRealSessionFor reaches Open.
+type baudFixtureDriver struct{ caps spec.Capabilities }
+
+func (d baudFixtureDriver) Model() string                   { return d.caps.Model }
+func (d baudFixtureDriver) Capabilities() spec.Capabilities { return d.caps }
+func (d baudFixtureDriver) Open(context.Context, transport.Port, driver.Identity) (driver.Session, error) {
+	return nil, errors.New("baudFixtureDriver: Open is unreachable — the openSerial seam refuses first")
+}
+
+// TestOpenRealSessionFor_BaudIsTheDriversDefault pins E2's FT-710 half:
+// the real wiring path opens the serial port at the DRIVER's own
+// Capabilities().DefaultBaud, which for the FT-710 is 38400 — the same
+// value transport.DefaultBaud carries, so this is a no-change pin for
+// today's only model and the baseline the disagreeing-driver test below
+// is measured against. Stop bits are asserted too, because they are the
+// half that deliberately did NOT become model-derived (see the call
+// site's recorded decision).
+func TestOpenRealSessionFor_BaudIsTheDriversDefault(t *testing.T) {
+	got := recordSerialConfig(t)
+
+	_, _, err := OpenRealSessionFor(testCtx(t), DefaultModel, "/dev/nonexistent-rigprog-test-port")
+	if !errors.Is(err, errSeamRefused) {
+		t.Fatalf("OpenRealSessionFor: err = %v, want it to wrap the seam's own error (the seam must have been consulted)", err)
+	}
+
+	want := NewRealDriver().Capabilities().DefaultBaud
+	if want != 38400 {
+		t.Fatalf("sanity check failed: the FT-710 driver reports DefaultBaud %d, want 38400", want)
+	}
+	if got.Baud != want {
+		t.Errorf("SerialConfig.Baud = %d, want %d (the driver's own DefaultBaud)", got.Baud, want)
+	}
+	if got.StopBits != transport.DefaultStopBits {
+		t.Errorf("SerialConfig.StopBits = %d, want transport.DefaultStopBits (%d) — stop bits stay the fixed transport default by recorded decision", got.StopBits, transport.DefaultStopBits)
+	}
+}
+
+// TestOpenRealSessionFor_BaudFollowsADisagreeingDriver is E2's actual
+// proof, and the one the FT-710 alone cannot give: with a registered
+// model whose DefaultBaud DISAGREES with transport.DefaultBaud, the port
+// must be opened at the driver's 4800, not at transport's 38400. Before
+// this milestone the call site passed transport.DefaultBaud outright, so
+// this fixture would have been opened at the FT-710's rate — the exact
+// failure a second registered model would have met.
+func TestOpenRealSessionFor_BaudFollowsADisagreeingDriver(t *testing.T) {
+	const fixtureModel = "TEST-BAUD-FIXTURE"
+	const fixtureBaud = 4800
+	if fixtureBaud == transport.DefaultBaud {
+		t.Fatalf("sanity check failed: the fixture baud %d equals transport.DefaultBaud, so this test could not distinguish the two sources", fixtureBaud)
+	}
+
+	realDrivers[fixtureModel] = func() driver.Driver {
+		return baudFixtureDriver{caps: spec.Capabilities{
+			Model:        fixtureModel,
+			CATID:        "9999",
+			Bauds:        []int{fixtureBaud},
+			DefaultBaud:  fixtureBaud,
+			TagLen:       12,
+			ShiftOptions: spec.StandardShiftOptions(),
+			CTCSSStates:  spec.StandardCTCSSStates(),
+		}}
+	}
+	t.Cleanup(func() { delete(realDrivers, fixtureModel) })
+
+	got := recordSerialConfig(t)
+
+	_, _, err := OpenRealSessionFor(testCtx(t), fixtureModel, "/dev/nonexistent-rigprog-test-port")
+	if !errors.Is(err, errSeamRefused) {
+		t.Fatalf("OpenRealSessionFor: err = %v, want it to wrap the seam's own error", err)
+	}
+	if got.Baud != fixtureBaud {
+		t.Errorf("SerialConfig.Baud = %d, want %d — the baud must come from the driver's own capabilities, not from transport.DefaultBaud (%d)", got.Baud, fixtureBaud, transport.DefaultBaud)
 	}
 }
 
