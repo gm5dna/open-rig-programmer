@@ -1,0 +1,4 @@
+Location,Name,Frequency,Duplex,Offset,Tone,rToneFreq,cToneFreq,DtcsCode,DtcsPolarity,Mode,TStep,Skip,Comment
+1,MINIMALUSB,14.200000,,0.000000,,88.5,88.5,023,NN,USB,,,
+2,MINIMALLSB,7.150000,,0.000000,,88.5,88.5,023,NN,LSB,,,
+3,MINIMALCW,14.050000,,0.000000,,88.5,88.5,023,NN,CW,,,
