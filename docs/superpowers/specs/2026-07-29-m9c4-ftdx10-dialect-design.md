@@ -102,8 +102,9 @@ All from CAT manual rev 2308-F (gitignored,
   verify against the PDF, respec the profile and B's width encoding —
   extable refuses loudly at parse, which is the right failure mode).
 - **CAT ID 0761** (layout 977). **MW Set P7 "0: (Fixed)"** →
-  `MWWriteKind: cat.KindVFO` (admitted by `validMWWriteKindByte`,
-  verified). **MT combined, 41 bytes** → `MTAnswerBounds() == (41,41)`
+  `MWWriteKind: cat.CombinedMTSetKind` after closure 3's rename (the
+  byte '0', admitted by `validMWWriteKindByte`, verified; plan-review
+  correction — this bullet previously spelt it `cat.KindVFO`). **MT combined, 41 bytes** → `MTAnswerBounds() == (41,41)`
   (chart- and code-verified).
 - **The slot literal, stated exactly** (not "identical"): memory
   001-099, 60m 501-599, nine PMS pairs, EMG wire `"EMG"`, none wire
