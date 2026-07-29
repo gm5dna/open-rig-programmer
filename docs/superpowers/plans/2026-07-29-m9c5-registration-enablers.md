@@ -1,230 +1,268 @@
-# M9c-5 registration enablers — Implementation Plan
+# M9c-5 registration enablers — Implementation Plan (revision 2)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** the six neutral-core enablers of
+> **Revision 2 (29/07/2026).** Revision 1 was reviewed by Codex
+> (NEEDS-REVISION: 2 CRITICAL, 5 HIGH) and Fable (NEEDS-REVISION:
+> 1 CRITICAL, 2 HIGH); adjudication in
+> `.superpowers/sdd/m9c5-plan-review-adjudication.md`. The convergent
+> CRITICAL: the E1 task split could not compile as sequenced. The
+> adjudicated shape (Fable's, with Codex's safety objection closed
+> inside it) is below: Task 1 carries the type flip PLUS the repo-wide
+> mechanical propagation PLUS the driver's safety refusal, ending fully
+> green; Tasks 2-5 keep genuine semantic REDs. Codex's second CRITICAL:
+> Task 11's manifest procedure was not executable (`import-out.json`
+> never existed — the historical import leg exits 3 writing nothing);
+> rewritten. Do not implement revision 1.
+
+**Goal:** the six enablers of
 `docs/superpowers/specs/2026-07-29-m9c5-registration-enablers-design.md`
-(revision 2 — READ IT IN FULL FIRST; it is the authority on every
-decision, including the adjudicated migration semantics, the plan-time
-block, E3's corrected premise and E6's step-neutral shape).
+(revision 2 + the Task-11 obligation correction — READ IT IN FULL).
 
-**Architecture:** eleven sequential tasks. E1 spans five (model+schema,
-diff+clone, driver, csvio, frontend+docs); E2-E6 one each; the manifest
-closes. Every task: `gofmt -l .` silent; `git diff --exit-code --
-core/cat/testdata/ core/cat/exinventory_gen.go core/cat/ftdx10/testdata/
-core/cat/ftdx10/exinventory_gen.go`; the named test commands green.
-British English; SPDX on new files; no golden regeneration; no push.
-`core/cat` is untouched by this milestone — any diff under it is a STOP.
+## Global Constraints
 
-## Global facts (verified at source, cited for the implementers)
+British English; SPDX on new files; `gofmt -l .` silent per task;
+`git diff --exit-code -- core/cat/testdata/ core/cat/exinventory_gen.go
+core/cat/ftdx10/testdata/ core/cat/ftdx10/exinventory_gen.go` per task
+(`core/cat` is untouched — any diff under it is a STOP); no golden
+regeneration; no push; every task's named test commands green at its
+commit. **Frontend staleness is sanctioned mid-branch** (recorded): at
+Tasks 1-4 the wailsjs `boolean` typing and the JS usage are coherently
+wrong together (svelte-check/vitest green); runtime GUI incoherence
+exists only if `wails dev` is run mid-branch; Task 5 ends it.
 
-- `BoolField` serialises `{"state":"...","value":true-or-absent}`
-  (`fieldstate.go:104-107`, `value,omitempty`); `ScanSkip` is the
-  in-file precedent. `CurrentSchema = 2` (`file.go:20`);
-  `ErrSchemaTooNew` machinery at `file.go:49-76`; `loadV1` decodes v1
-  channels into the CURRENT struct (the thing Task 1 must stop).
-- Diff's conditional-append precedent: `diff.go:200-206` (`addedFields`
-  — tone/skip appended only when Known, AFTER the unconditional seven);
-  `changedFields` (`diff.go:151-181`) compares whole structs and NEEDS
-  NO CHANGE.
-- The journal's write-record keys today: `execute.go:456-457`
-  (`mw_sent`/`mw_confirmed`/`mt_sent`/`mt_confirmed` from
-  `res.MWSent`…); the four bools live at `driver.go:51-63` and are set
-  at `write.go:182-196`.
-- The app resolver pattern: `app/app.go:262-272` (`currentCaps`); the
-  CLI prose pattern honouring `ok`: `cmd/rigprog/write.go:116`,
-  `probe.go:140`.
-- The seven `wiring.DefaultModel` drift sites:
-  `connection.go:71,84,86`, `uispec.go:141,248`, `send.go:216`,
-  `settings.go:52`.
-- The fake table: `fake.go:42-50` (`newRadio … *fakeradio.Radio`);
-  consumers use only `Port()`/`Close()`; `Port()` returns
-  `io.ReadWriteCloser`.
-- Serial open: `wiring.go:194-197`; caps `Bauds`/`DefaultBaud` at
-  `core/driver/ft710/caps.go:326-327`, validated at
-  `spec/validate.go:241-252`, read by nothing.
-- Engine init: `engine.go:364-370`; sole constructor call
-  `ft710.go:186`; sole `Init` production call `ft710.go:205`;
-  `BuildAISet` is already a Dialect method producing "AI0;" for every
-  dialect.
+## Verified global facts (for the implementers)
+
+As revision 1's list, plus: both legacy loaders use
+`DisallowUnknownFields` recursively (`file.go:405,440`); `loadV1`
+decodes v1 channels into the CURRENT struct (`file.go:424-429`);
+`inertBlockReason`'s shape and the `"; "` parts join (`diff.go:246-259`,
+`:475`); `NewEngine` has ONE production call (`ft710.go:186`) and TEN
+test call expressions (`allowfunc_test.go:28,59,85,123`,
+`engine_test.go:31`, `engine_lifecycle_test.go:46,134,376,414,457`);
+`Journal.Append` json.Marshals the map it is given (a raw
+`[]WriteStep` would emit Go field names — the journal must PROJECT);
+the historical import leg exits 3 and writes NO output file.
 
 ---
 
-### Task 1: E1a — the field, the schema, the migration
+### Task 1: E1 lands compilable — the flip, the propagation, the safety refusal
 
-**Files:** `core/codeplug/channel.go` (the field), `fieldstate.go` (no
-change expected — verify `BoolField` suffices), `validate.go`
-(TagDisplay `Valid()` + the `{Unknown, true}` refusal), `file.go`
-(`CurrentSchema = 3`; frozen `legacyChannelV1`/`legacyChannelV2` decode
-structs with `TagDisplay *bool `json:"tag_display"``; the migration
-rule — pointer-present true/false → `{Known, v}`, nil → `{Known,
-false}`, with the spec's behaviour-preservation comment verbatim in
-spirit; `loadV1` and the v2 path both route through the frozen
-structs), plus their tests.
+**One commit, fully green (`go build ./...`, `go test ./... -count=1`,
+frontend svelte-check/vitest/build).** Contents:
 
-Test matrix (all in `file_test.go`/`validate_test.go` style, table-
-driven): v1 × {present-true, present-false, absent}; v2 × the same;
-schema-3 round-trips for Known-true/Known-false/Unknown/Unavailable;
-`ErrSchemaTooNew` for schema 4; `Validate` refuses `{Unknown, true}`
-and `{Unavailable, true}`; a saved schema-3 file re-loads identically.
-Commit: `M9c-5 task 1: TagDisplay is a BoolField; schema 3 with frozen
-legacy migration`.
+- **The type flip**: `ChannelData.TagDisplay codeplug.BoolField`
+  (`json:"tag_display"` — NO omitempty; the field is always an object
+  now).
+- **Schema 3 + frozen legacy shapes, COMPLETE** (Codex 2): frozen
+  strict decode structs for v1 AND v2 — channel wrapper
+  (`slot`,`data`), channel data with EVERY current key
+  (`freq_hz,mode,clar_hz,rx_clar,tx_clar,ctcss,ctcss_tone,shift,tag,
+  tag_display *bool,scan_skip`), the v1 top level with raw `menus`, the
+  v2 top level with typed `menus`. The two versions MAY share one
+  channel-data shape (documented: their channel shapes are provably
+  identical today). Live leaf types (`ToneField`, `BoolField` for
+  scan_skip, `RadioInfo`, `MenuSnapshot`) are reused — recorded as
+  acceptable BECAUSE this milestone does not change them; embedding
+  the live `ChannelData` is FORBIDDEN (un-freezes the struct).
+  Migration rule: present bool (true OR false) → `{Known, v}`; absent
+  (nil) → `{Known, false}` with the spec's behaviour-preservation
+  justification in the comment. Duplicate-slot/menu validation
+  preserved; a test proves an actually-unknown legacy field is still
+  rejected; `ErrSchemaTooNew` for 4.
+- **`Validate`**: `TagDisplay.Valid()` slots directly after
+  `ScanSkip.Valid()` (the fixed issue order — doc comment updated);
+  refuses `{Unknown, true}`/`{Unavailable, true}`.
+- **The mechanical propagation, behaviour-preserving** (each site with
+  a one-line comment where non-obvious):
+  - `core/driver/ft710/read.go:243` → `codeplug.BoolField{State:
+    codeplug.Known, Value: display}`.
+  - `core/driver/ft710/write.go`: **THE SAFETY REFUSAL LANDS HERE, NOT
+    IN TASK 3** (the adjudication's closure of Codex's staging
+    objection): `TagDisplay.Valid()` joins `WriteChannel`'s FieldState
+    sanity block, and at the TOP of `buildWriteCommands`, immediately
+    after `data := *ch.Data`, `data.TagDisplay.State != codeplug.Known`
+    → `WriteRefusedError{Fields: []spec.Field{spec.FieldTagDisplay}}`
+    before ANY other field mapping; only then `data.TagDisplay.Value`
+    flows to `BuildMTSet`. From this commit no path sends non-Known.
+  - `core/csvio/export.go:134` → `yesEmpty(d.TagDisplay.Value)`
+    (interim — Task 4 replaces the spelling); `import.go:325-329` →
+    the parsed bool wrapped `{Known, v}` (interim).
+  - `core/csvio/chirp.go` → explicit `TagDisplay:
+    codeplug.BoolField{State: codeplug.Known, Value: false}` with the
+    comment naming it the pre-E1 manufactured false (Fable's trap:
+    without this, chirp compiles into invalid `{State:""}` and every
+    import fails the new Validate). Task 4's RED flips it to Unknown.
+  - **The repo-wide fixture audit** (Codex 3 — bigger than
+    `.TagDisplay` greps): EVERY `ChannelData{` composite literal gains
+    an explicit state by provenance — radio-read/hand-built-as-real →
+    `{Known, v}` preserving the old bool; CHIRP-derived fixtures →
+    keep Known-false at this task (they flip with Task 4). The gate is
+    `grep -rn "ChannelData{" --include=*.go .` — every hit either sets
+    TagDisplay explicitly or is a deliberate zero-value (listed in the
+    report). Inspected-no-change sites recorded in the commit message:
+    `internal/fakeradio` (its TagDisplay is wire state, not
+    ChannelData), `app/convert.go`, `app/uispec.go` bankCoreFields,
+    `internal/csvmerge` production code.
+- Tests: the migration matrix (v1/v2 × present-true/present-false/
+  absent), schema-3 round-trips (all four states), the Validate
+  refusals, the driver refusal unit test, unknown-legacy-field
+  rejection.
 
-### Task 2: E1b — diff and clone honour the state
+Commit: `M9c-5 task 1: TagDisplay is a BoolField — schema 3, frozen
+legacy migration, repo-wide propagation, and the pre-wire refusal`.
 
-**Files:** `core/codeplug/diff.go` (`addedFields`: `FieldTagDisplay`
-moves from the unconditional list to a Known-conditional append AT ITS
-CURRENT POSITION — before the tone/skip appends; the new plan-time
-block: in the per-field gate, a channel whose `TagDisplay.State !=
-Known` while the target's `FieldTagDisplay.Write != Unsupported` gains
-`Blocked` with reason exactly `"tag display unknown — set On or Off
-before sending"`; `changedFields` UNTOUCHED), `core/clone/execute.go`
-(`writableFieldsMismatch` compares TagDisplay only when both sides
-Known — the mechanism replacing the exclusion-list rationale; extend
-that doc comment), tests: the blocked-send end-to-end (one Unknown
-channel among Known siblings → that channel Blocked with the exact
-reason, siblings plan and send; nothing reaches the wire for it);
-membership AND ORDER of `addedFields` pinned; the FT-710 all-Known path
-produces byte-identical diff output (pin exact strings).
-Commit: `M9c-5 task 2: the diff blocks non-Known TagDisplay at plan
-time; clone verifies only mutual knowledge`.
+### Task 2: E1b — the plan-time gate in Diff; clone verifies mutual knowledge
 
-### Task 3: E1c — the FT-710 driver produces and consumes state
+- **The block is a NEW ORDERED GATE** (Codex 4): after the bank/erase
+  gates, BEFORE the generic per-field aggregation, Diff reads
+  `caps.FieldSupport(bankID, spec.FieldTagDisplay).Write` DIRECTLY
+  (once TagDisplay leaves `touched` on non-Known, the generic loop no
+  longer consults it — the read must be explicit); if
+  `TagDisplay.State != Known` and Write != Unsupported → Blocked with
+  EXACTLY `"tag display unknown — set On or Off before sending"`, and
+  later gates do not run for the channel. Applies to Added and
+  Modified. A test pins the gate ORDER and the combined case (Unknown
+  TagDisplay + another unwritable/Inert field: the mandated reason,
+  not a generic `"; "` merge — the gate stops first).
+- `addedFields`: the Known-conditional at TagDisplay's CURRENT position
+  (after Tag, before tone/skip); membership AND order pinned.
+  `changedFields` untouched.
+- `core/clone`'s `writableFieldsMismatch`: mutual-Known comparison; the
+  exclusion-list doc extended.
+- The end-to-end blocked-send test (one Unknown among Known siblings —
+  blocked with the exact reason, siblings send, nothing on the wire for
+  it).
 
-**Files:** `core/driver/ft710/read.go` (`TagDisplay:
-codeplug.BoolField{State: Known, Value: display}`), `write.go`
-(`requestedFields` conditional; the defence-in-depth refusal — a
-non-Known display reaching `buildWriteCommands` returns
-`WriteRefusedError` naming the field, before any wire traffic;
-`BuildMTSet(sl, data.TagDisplay.Value, …)` only after the Known check),
-`caps.go` untouched (rw stands). Tests: read produces Known; the
-refusal unit test; **the MW+MT wire-identity test** — a reference
-Known-true and Known-false channel's frames byte-equal their pre-E1
-literals.
-Commit: `M9c-5 task 3: the ft710 driver reads Known and refuses
-non-Known display before the wire`.
+Commit: `M9c-5 task 2: the diff's ordered TagDisplay gate; clone
+verifies only mutual knowledge`.
 
-### Task 4: E1d — csvio
+### Task 3: E1c — the driver's remaining pieces
 
-**Files:** `core/csvio/export.go` (`tag_display` via `exportBoolField`),
-`import.go` (`parseBoolFieldCell` gains a column-name parameter — its
-diagnostic hardcodes `scan_skip` today; `tag_display` parses
-yes/no/""/n-a → Known-t/Known-f/Unknown/Unavailable), `chirp.go`
-(imported channels: `TagDisplay: {State: Unknown}` with a comment
-naming the pre-E1 manufactured-false defect). Tests: export spellings
-for all four states; import round-trips; the CHIRP fixture's channels
-carry Unknown; the recorded reinterpretation (an old CSV's "" now
-Unknown) demonstrated in a test comment + case.
+(The refusal landed in Task 1.) `requestedFields` gains the
+Known-conditional at the preserved position; the refusal-PRIORITY test
+(a multiply-invalid channel reports TagDisplay first — the top-of-
+function placement pinned); **the MW+MT wire-identity test** (reference
+Known-true and Known-false channels' frames byte-equal their pre-E1
+literals); the read-produces-Known PIN (green since Task 1 — labelled a
+pin, not a RED, per the adjudication).
+
+Commit: `M9c-5 task 3: requestedFields honours state; refusal priority
+and wire identity pinned`.
+
+### Task 4: E1d — csvio's four states
+
+As revision 1 (export via `exportBoolField`; `parseBoolFieldCell`
+parameterised; import's four spellings; chirp flips to
+`{State: Unknown}` — THE RED of this task, with the import-validate
+consequence tested: a CHIRP import now carries Unknown and the diff
+blocks it until set), plus the downstream pins Codex 3 named:
+`cmd/rigprog` import tests and `app/importexport_test.go` assert the
+Unknown provenance.
+
 Commit: `M9c-5 task 4: csvio speaks TagDisplay's four states; CHIRP
 imports honestly Unknown`.
 
 ### Task 5: E1e — frontend and the digest docs
 
-**Files:** regenerate wailsjs (`models.ts`); `columns.js` (five
-behaviours on the `skip` pattern: editability `state === 'known'`,
-render "—" for non-Known, added-row default `{state:'known',
-value:false}`, clone and paste-patch carry the object), 
-`ChannelGrid.svelte` (the toggle: state-aware, no `?? false`);
-`core/codeplug/digest.go` + `radioinfo.go` doc updates (the two
-digests distinguished; migrated snapshots and pre-change journals =
-non-recomputable legacy evidence). Frontend checks: svelte-check +
-vitest + build (the M9a-established commands); regen idempotent.
+As revision 1 (regen; columns.js's five behaviours; the Svelte toggle;
+digest/radioinfo doc updates), closing the sanctioned mid-branch
+staleness.
+
 Commit: `M9c-5 task 5: the frontend renders TagDisplay's states; the
 digest docs tell the truth`.
 
-### Task 6: E2 — the baud
+### Task 6: E2 — the baud (as revision 1, unchanged)
 
-`wiring.go`: `Baud: d.Capabilities().DefaultBaud` (resolve `d` before
-open — it already is); an unexported `openSerial` seam var for tests;
-tests: FT-710 opens 38400 (the seam records the config); a fixture
-driver with `DefaultBaud: 4800` reaches 4800; the stop-bits decision
-recorded in a comment (fixed transport default; FTdx10 framing verified
-at M9c-6).
-Commit: `M9c-5 task 6: the serial baud comes from the driver's
-capabilities`.
+### Task 7: E3 — Engine binds to one dialect (the enumerated migration)
 
-### Task 7: E3 — Engine binds to one dialect
+`NewEngine(port, d cat.Dialect, opts...)`; gate = `d.AllowedCommand`
+internally; `Init` uses `d.BuildAISet(false)`; **a NEW sentinel
+`ErrUnconfiguredDialect`** for a zero/unconfigured dialect at
+construction (distinct from `ErrNoAllowlist`, which remains the
+hand-built/nil-`e.allow` `Do`-path sentinel); error text reworded.
+The ELEVEN call expressions, prescribed per case (Codex 6):
+- `ft710.go:186` → `d.dialect`.
+- Routine test constructors (`engine_test.go:31`,
+  `engine_lifecycle_test.go:46,134,376,414,457`,
+  `allowfunc_test.go:28`) → `cat.FT710`.
+- `allowfunc_test.go:59` (nil-gate refusal) → a zero `cat.Dialect`,
+  asserting `ErrUnconfiguredDialect` before the reader starts.
+- `allowfunc_test.go:85` (permissive custom gate) and `:123` (the
+  recording-refusing gate) → redesigned around a configured dialect
+  plus commands it admits/rejects respectively, PRESERVING the no-wire
+  assertion (`:123`'s recorder becomes a port-level write recorder —
+  the refusal must show zero port writes); the in-package
+  `e.allow = nil` override (precedent `allowfunc_test.go:90`) remains
+  for the `Do`-path `ErrNoAllowlist` test, seeded from a
+  `cat.FT710`-constructed engine.
+The constructor test proving gate and init from ONE dialect; "AI0;"
+bytes unchanged; the guard green; the engine doc + handoff P9
+correction as revision 1.
 
-`transport.NewEngine(port, d cat.Dialect, opts...)` — the dialect
-REQUIRED; `AllowFunc` derived internally (`d.AllowedCommand`), `Init`
-uses `d.BuildAISet(false)`; the old allow-func parameter GOES (sole
-caller updated: `ft710.go:186` passes `d.dialect`). Every transport
-test's constructor call updates (they are the other callers — enumerate
-by grep, expect churn, it is sanctioned); the nil-gate refusal becomes
-an unconfigured-dialect refusal (same fail-closed posture — check
-`NewEngine`'s current nil-check and mirror it as
-`!d.Configured()`). Guard `TestNewEngineReachableOnlyFromDriver` must
-stay green unchanged. Tests: a constructor test proving gate and init
-frame come from the SAME dialect value; FT-710 init bytes "AI0;"
-unchanged. Include the handoff/doc corrections: `engine.go:350-363`'s
-ledger note and `doc.go:180-186` rewritten (the impurity is CLOSED and
-the old "fails closed" claim corrected — it never failed).
-Commit: `M9c-5 task 7: Engine takes its dialect whole — gate and init
-frame from one binding`.
+Commit: `M9c-5 task 7: Engine takes its dialect whole; unconfigured
+dialects refuse at construction`.
 
-### Task 8: E4 — app model-awareness
+### Task 8: E4 — app model-awareness (as revision 1, unchanged)
 
-One unexported resolver (the `currentCaps` shape, returning the model
-string) consumed by all seven sites; `Connect`/`ConnectDemo` gain a
-`model string` parameter (empty → `DefaultModel`, else validated
-against `SupportedModels()` with the CLI's error shape); prose sites
-honour `radiotext.For`'s `ok` (silence on false); `settings.go`'s
-descriptor follows the resolved model; wailsjs regenerated; the TWO
-bridge call sites (`bindings.js:170/187`-region) pass `""`. Tests: the
-threading pins (a seam-injected model reaches snapshot dir, prose,
-settings); UISpec literals unchanged for the FT-710; frontend
-svelte-check/vitest/build green.
-Commit: `M9c-5 task 8: app resolves its model once and threads it
-everywhere`.
+### Task 9: E5 — the fake table interface (as revision 1, unchanged)
 
-### Task 9: E5 — the fake table interface
+### Task 10: E6 — WriteResult goes step-neutral (the pinned encoding)
 
-`fake.go`: `type fakeRadio interface { Port() io.ReadWriteCloser;
-Close() error }`; `newRadio func() fakeRadio` (options captured in the
-FT-710 entry's closure; `FakeSessionOpts` untouched and documented
-FT-710-specific); `var _ fakeRadio = (*fakeradio.Radio)(nil)`;
-`TestOpenFakeSessionFor_DefaultModel` → table-driven over
-`SupportedModels()` asserting each model's fake session identifies as
-its own driver (CATID via the session). Guards green (the textual
-`fakeradio.New` call survives).
-Commit: `M9c-5 task 9: the fake table is interface-typed; the
-fake-path test covers every registered model`.
+`driver.go`: the spec's `WriteStep`/`WriteResult`; four bools deleted.
+`write.go`: **both FT-710 steps PREALLOCATED after successful command
+construction, before the first `Do`** (`Steps: []WriteStep{{Command:
+"MW"}, {Command: "MT"}}`), flags set at the existing points — the
+outcome table pinned by test: success → MW true/true + MT true/true;
+MW rejection → MW true/false + MT false/false; MT rejection → MW
+true/true + MT true/false; transport-ambiguous Sent stays false as
+today; a pre-build refusal returns `Steps: []driver.WriteStep{}` —
+EXPLICIT EMPTY, never nil (nil marshals `null`). `core/clone`
+**PROJECTS** steps into the journal map (Codex 7 — raw struct marshal
+would emit Go field names): each step →
+`{"command": s.Command, "sent": s.Sent, "confirmed": s.Confirmed}`,
+plus `"write_result_format": 2`. Grep gate, ALL EIGHT legacy names:
+`MWSent|MWConfirmed|MTSent|MTConfirmed|mw_sent|mw_confirmed|mt_sent|
+mt_confirmed` → zero hits outside historical docs. Journal tests for
+the three outcomes in both WriteResult and journal form.
 
-### Task 10: E6 — WriteResult goes step-neutral
-
-`driver.go`: the spec's `WriteStep`/`WriteResult` verbatim; the four
-bools DELETED. `write.go:170-196`: build `Steps` (MW step, MT step —
-sent/confirmed at the same points). `execute.go:450-460`: the journal
-record becomes `"steps": [...]` (each `{"command","sent","confirmed"}`)
-plus `"write_result_format": 2` — the format-version note; the old four
-keys go. Repo-wide grep gate: `MWSent|MTSent|mw_sent|mt_sent` → zero
-hits outside historical docs. Tests: the FT-710 write's journal steps
-pinned (MW then MT, both sent+confirmed on success; the partial-failure
-cases mirror the old bools' semantics — read the existing tests and
-carry each case over); clone's consumers updated.
 Commit: `M9c-5 task 10: WriteResult reports neutral steps; the journal
-is step-keyed`.
+projects step records`.
 
-### Task 11: the manifest with enumerated carve-outs
+### Task 11: the manifest — EXECUTABLE this time
 
-The full 16-artefact recipe vs the M9c-3/M9c-4 recorded hashes, with
-the spec's EXPECTED-DIFF table verified artefact by artefact:
-`read.stdout` differs ONLY in the digest line; both JSONs ONLY in
-schema/`tag_display`/`baseline_digest`; `import-out.json` the same
-class; `export.csv` ONLY the `tag_display` column; probe.*, both
-stderr, all exit codes, and every other byte IDENTICAL. Prove each
-"only" by diff, not hash (the diffs are the evidence). A schema-2→3
-load round-trip to semantic identity. Full local gate; guards -v.
-Write `docs/superpowers/m9c5-baseline-manifest.md`; update the handoff
-per the spec's acceptance item 4.
-Commit: `M9c-5 task 11: the enumerated-carve-out manifest and full
-gate`.
+(Codex's second CRITICAL: revision 1's procedure could not run.)
+
+- **Base worktree build at the fork commit** (the M9c-3 procedure) —
+  both sides' BYTES preserved; recorded hashes authenticate the base
+  run but the DIFFS are the evidence.
+- The artefact list, corrected: the historical import leg contributes
+  stdout/stderr/exit ONLY (it exits 3 writing no file — expected
+  UNCHANGED on all three); a NEW deterministic successful-import
+  recipe (a minimal valid CHIRP CSV fixture committed under the
+  manifest's own fixtures dir, imported into a fake-read codeplug,
+  output written) evidences the import direction's changed class on
+  BOTH sides.
+- Procedure per artefact: `cmp` the unchanged set (probe.*, both
+  stderr, all exits, import leg's three); `read.stdout` diff empty
+  after removing ONLY the digest line; both JSONs — normalise
+  `read_at` FIRST (the recorded command; the declared noise), then
+  diff empty after removing ONLY schema/`tag_display`/
+  `baseline_digest`; `export.csv` diff empty after removing ONLY the
+  `tag_display` column; the new import output the same class. Raw
+  diffs recorded separately, timestamp noise included. The count
+  stated honestly; the gate-at-final-code-tip invariant per the M9c-4
+  note.
+- The schema-2→3 load round-trip; full local gate; guards -v; the
+  handoff updates per the spec's acceptance item 4.
+
+Commit: `M9c-5 task 11: the executable enumerated-carve-out manifest
+and full gate`.
 
 ## Self-review
 
-Spec coverage: E1→T1-5, E2→T6, E3→T7, E4→T8, E5→T9, E6→T10,
-manifest→T11. Ordering: T1 before T2-5 (the type); T2 before T3 (the
-block the driver's refusal backstops); T5 after T1-4 (regen once);
-T6-T10 independent after T1 where they touch it (T10 touches clone —
-after T2); T11 last. The evidence-literal discipline: no `core/cat`
-file is touched. Placeholders: none; every rule is the spec's, cited.
+Coverage as revision 1 with the adjudicated reshapes. Ordering: T1 is
+the keystone (fully green, safety-complete); T2-T5 semantic; T6-T10
+after T1 (T10 after T2 for clone); T11 last. The spec's Task-11
+obligation wording is corrected in the same commit as this plan.
+Placeholders: none.

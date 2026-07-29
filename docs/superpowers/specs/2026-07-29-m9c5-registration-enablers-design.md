@@ -183,14 +183,20 @@ consumption), minus what E6 absorbed.
 ## Proof obligations
 
 - **Byte identity with the ENUMERATED carve-outs** (rev 1's single
-  carve-out was false by its own sanctions). Expected diffs, per
-  artefact of the 16-artefact recipe: `read.stdout` (the digest line
-  only); `read-fake.json` raw and normalised (the schema field, every
-  channel's `tag_display` shape, AND `radio.baseline_digest`);
-  `import-out.json` (same class); `export.csv` (the `tag_display`
-  column's spelling). EVERYTHING else byte-identical, including
-  `probe.*`, both stderr streams, all exit codes, and every diff/refusal
-  string. A schema-2→3 load round-trip reaches semantic identity.
+  carve-out was false by its own sanctions; the plan review corrected
+  a fiction here — the historical import leg exits 3 and writes NO
+  `import-out.json`, so that artefact never existed). Expected diffs:
+  `read.stdout` (the digest line only); `read-fake.json` raw and
+  normalised (after the recorded `read_at` normalisation: the schema
+  field, every channel's `tag_display` shape, AND
+  `radio.baseline_digest`); `export.csv` (the `tag_display` column's
+  spelling); a NEW deterministic successful-import recipe evidences
+  the import direction's changed class on both sides. EVERYTHING else
+  byte-identical, including `probe.*`, both stderr streams, all exit
+  codes (the historical import leg's stdout/stderr/exit unchanged),
+  and every diff/refusal string — each "only" proven by diff against a
+  base worktree build, not inferred from hashes. A schema-2→3 load
+  round-trip reaches semantic identity.
 - **The blocked-send scenario end-to-end**: an FT-710-bound channel with
   Unknown TagDisplay → Diff Blocked with the named reason → excluded
   per-channel while siblings send → never reaches the wire; the
