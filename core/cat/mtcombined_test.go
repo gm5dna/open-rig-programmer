@@ -823,3 +823,250 @@ func TestValidMTCommand_ZeroDialectRefusesEveryMTShape(t *testing.T) {
 		}
 	}
 }
+
+// --- Task 6: the form-aware walk over every dialect ---
+
+// mtFormWalkTag is the one logical tag TestEveryDialect_MTFormCoverage
+// offers every dialect. Two bytes, both ordinary: it fits the narrowest tag
+// field any fixture declares, and its last byte is neither fixture's fill
+// byte, so it is never refused by the combined builder's trailing-fill rule.
+// The walk asserts both of those premises per dialect rather than trusting
+// them, because a fixture added later could break either.
+const mtFormWalkTag = "AB"
+
+// mtFormWalkRecord is the record TestEveryDialect_MTFormCoverage offers a
+// dialect for slot s and mode m: validCombinedMemory's field values, with
+// this dialect's OWN slot and its OWN mode substituted in.
+//
+// It carries combinedMTSetKind rather than any dialect's MW write kind, for
+// the reason TestBuildMTSetCombined_P7IsAFormConstantNotTheMWWriteKind states
+// at length — and that is what makes the walk's round trip meaningful over
+// combinedPeerDialect, whose MW writes carry '2'.
+func mtFormWalkRecord(s Slot, m Mode) MemoryData {
+	return MemoryData{
+		Slot:   s,
+		FreqHz: 14_250_000,
+		ClarHz: -10,
+		RxClar: true,
+		TxClar: false,
+		Mode:   m,
+		Kind:   combinedMTSetKind,
+		CTCSS:  CTCSSEncDec,
+		Shift:  ShiftPlus,
+	}
+}
+
+// firstEmittableMode returns the first mode d declares that a builder may
+// actually write, and whether there is one.
+//
+// ModeUnset is skipped rather than picked: it is the documented "-"
+// placeholder parsers must accept and builders must never emit (mode.go), and
+// the FT-710's table — which combinedDialect borrows — contains it.
+func firstEmittableMode(d Dialect) (Mode, bool) {
+	for _, m := range allModeValues() {
+		if m == ModeUnset || !d.ValidMode(m) {
+			continue
+		}
+		return m, true
+	}
+	return ModeUnset, false
+}
+
+// TestEveryDialect_MTFormCoverage is the form seam's non-vacuity proof, and
+// it exists because the walk in dialectgate_test.go cannot state it.
+//
+// That walk's build() helper silently skips any builder returning an error —
+// right for it, since a dialect legitimately refusing to build is not its
+// business — and that is precisely why it goes green whether a combined
+// fixture's BuildMTSetCombined works, refuses everything, or was deleted
+// outright. BOTH halves of the seam are invisible there: the frames a
+// combined dialect DOES build reach it through no builder it knows, and the
+// refusal a wrong-form call must produce is indistinguishable from a slot
+// the dialect merely does not have. Its per-builder floors stay satisfied by
+// the short-form dialects either way.
+//
+// So this walk counts both, per form and per dialect:
+//
+//   - the OWN-form Set builders must CONTRIBUTE frames, tagged and cleared,
+//     with a floor of one per builder across the whole walk — so a form
+//     whose fixtures all vanished from allTestDialects() is caught here
+//     rather than passing as silence;
+//   - the WRONG-form Set builder must be SEEN TO REFUSE at least once per
+//     dialect, naming that dialect's own form. A silent skip and an enforced
+//     seam look identical from the outside, and that is the vacuity this
+//     test exists to prevent;
+//   - every combined frame built here must round-trip through
+//     ParseMTAnswerCombined AND be admitted by its own dialect's gate. A
+//     frame this package builds and cannot read back is a codec defect; one
+//     its own gate refuses is a frame it could never send.
+func TestEveryDialect_MTFormCoverage(t *testing.T) {
+	// perBuilder counts across ALL dialects, exactly as the gate walk's does
+	// and for the same reason: a builder that stopped contributing anywhere
+	// would otherwise hide behind the other form's healthy totals.
+	perBuilder := map[string]int{}
+	refusalsSeen := map[string]int{}
+	totalFrames := 0
+
+	for _, nd := range allTestDialects() {
+		d := nd.dia
+
+		switch d.MTForm() {
+		case MTFormShort, MTFormCombined:
+		default:
+			t.Errorf("%s: MTForm() = %v — allTestDialects() holds only CONFIGURED dialects, and one with no form is not configured", nd.name, d.MTForm())
+			continue
+		}
+
+		mode, ok := firstEmittableMode(d)
+		if !ok {
+			t.Errorf("%s: declares no emittable mode, so no MT Set record can be offered to it and this dialect's half of the walk would run vacuously", nd.name)
+			continue
+		}
+
+		// The walk's tag must suit this dialect, or a refusal below would be
+		// about the tag and not about the form.
+		if d.MTForm() == MTFormCombined {
+			if d.mt.TagMaxBytes < len(mtFormWalkTag) {
+				t.Errorf("%s: TagMaxBytes = %d, narrower than the walk's tag %q — this fixture needs a shorter walk tag, not a skipped case", nd.name, d.mt.TagMaxBytes, mtFormWalkTag)
+				continue
+			}
+			if d.mt.TagFill == mtFormWalkTag[len(mtFormWalkTag)-1] {
+				t.Errorf("%s: TagFill is %q, the last byte of the walk's tag %q — the builder's trailing-fill rule would refuse it, and this walk would then be counting the wrong refusal", nd.name, d.mt.TagFill, mtFormWalkTag)
+				continue
+			}
+		}
+
+		ownFormFrames, wrongFormRefusals := 0, 0
+
+		// built records one own-form frame and holds it to the gate.
+		built := func(what string, frame []byte) {
+			t.Helper()
+			perBuilder[what]++
+			ownFormFrames++
+			totalFrames++
+			if !d.AllowedCommand(frame) {
+				t.Errorf("%s: its own gate refused %s frame %q — a builder and a gate that disagree mean this package cannot send a command it believes is valid", nd.name, what, frame)
+			}
+		}
+
+		// refused records one wrong-form refusal, and checks it is a refusal
+		// BY FORM: an error naming something else would leave the seam
+		// unproven while looking exactly like proof of it.
+		refused := func(what string, cmd Command, err error) {
+			t.Helper()
+			if err == nil {
+				t.Errorf("%s: %s SUCCEEDED on a %v dialect, emitting %q — the form seam is not being enforced at all", nd.name, what, d.MTForm(), cmd.Bytes())
+				return
+			}
+			var pe *ParseError
+			if !errors.As(err, &pe) {
+				t.Errorf("%s: %s: error is %T, want *ParseError", nd.name, what, err)
+			}
+			if !strings.Contains(err.Error(), d.MTForm().String()) {
+				t.Errorf("%s: %s was refused by %q, which does not name this dialect's form (%v) — a refusal for some other reason proves nothing about the seam", nd.name, what, err, d.MTForm())
+			}
+			if !cmd.IsZero() {
+				t.Errorf("%s: %s returned a non-zero Command alongside its error; every fallible builder returns Command{} (command.go)", nd.name, what)
+			}
+			wrongFormRefusals++
+			refusalsSeen[what]++
+		}
+
+		for n := 0; n <= 999; n++ {
+			slot, err := d.ParseSlot(threeDigits(n))
+			if err != nil {
+				continue
+			}
+			// MT's own write policy — memory or PMS. Confining the sweep to
+			// slots this dialect may write means the ONLY thing left that can
+			// refuse a Set below is the form, which is what is counted.
+			if !d.mtSlotValid(slot) {
+				continue
+			}
+			m := mtFormWalkRecord(slot, mode)
+
+			switch d.MTForm() {
+			case MTFormShort:
+				if cmd, err := d.BuildMTSet(slot, false, mtFormWalkTag); err != nil {
+					t.Errorf("%s: BuildMTSet(%q, false, %q) = %v — its OWN form must build for a slot its own MT write policy admits", nd.name, slot.Wire(), mtFormWalkTag, err)
+				} else {
+					built("MT set short (tagged)", cmd.Bytes())
+				}
+				// The cleared form, which is where this dialect's own
+				// ClearTagByte reaches the wire.
+				if cmd, err := d.BuildMTSet(slot, false, ""); err != nil {
+					t.Errorf("%s: BuildMTSet(%q, false, \"\") = %v — its OWN form must build the cleared tag for a slot its own MT write policy admits", nd.name, slot.Wire(), err)
+				} else {
+					built("MT set short (cleared)", cmd.Bytes())
+				}
+				cmd, err := d.BuildMTSetCombined(m, mtFormWalkTag)
+				refused("BuildMTSetCombined on a short-form dialect", cmd, err)
+
+			case MTFormCombined:
+				for _, tag := range []string{mtFormWalkTag, ""} {
+					what := "MT set combined (tagged)"
+					if tag == "" {
+						// No distinct clear encoding exists in this form: the
+						// cleared tag IS the all-fill field.
+						what = "MT set combined (cleared)"
+					}
+					cmd, err := d.BuildMTSetCombined(m, tag)
+					if err != nil {
+						t.Errorf("%s: BuildMTSetCombined(%q, %q) = %v — its OWN form must build for a slot its own MT write policy admits", nd.name, slot.Wire(), tag, err)
+						continue
+					}
+					frame := cmd.Bytes()
+					built(what, frame)
+
+					gotM, gotTag, err := d.ParseMTAnswerCombined(frame)
+					if err != nil {
+						t.Errorf("%s: ParseMTAnswerCombined(%q) = %v, want its own builder's record back", nd.name, frame, err)
+						continue
+					}
+					if gotM != m {
+						t.Errorf("%s: %s for slot %q round-tripped to %+v, want %+v", nd.name, what, slot.Wire(), gotM, m)
+					}
+					if gotTag != tag {
+						t.Errorf("%s: %s for slot %q round-tripped tag %q, want %q — the fill padding is a wire-encoding concern and must not survive the parse", nd.name, what, slot.Wire(), gotTag, tag)
+					}
+				}
+				cmd, err := d.BuildMTSet(slot, false, mtFormWalkTag)
+				refused("BuildMTSet on a combined-form dialect", cmd, err)
+			}
+		}
+
+		// NON-VACUITY, PER DIALECT, on both halves.
+		if ownFormFrames == 0 {
+			t.Errorf("%s: built no %v MT Set frames at all — this dialect contributed nothing and the property passed vacuously for it", nd.name, d.MTForm())
+		}
+		if wrongFormRefusals == 0 {
+			t.Errorf("%s: its wrong-form MT Set builder was never SEEN to refuse — a call that was skipped and a seam that is enforced are indistinguishable here, which is exactly the vacuity this walk exists to prevent", nd.name)
+		}
+	}
+
+	// EVERY own-form builder must have contributed, across the walk. Without
+	// this, dropping a whole FORM from allTestDialects() would leave the
+	// property green on the strength of the other one.
+	for _, what := range []string{
+		"MT set combined (tagged)", "MT set combined (cleared)",
+		"MT set short (tagged)", "MT set short (cleared)",
+	} {
+		if perBuilder[what] == 0 {
+			t.Errorf("builder %q contributed no frames anywhere in the walk — either its form has no fixture in allTestDialects() or the builder was dropped, and both are defects this property must not pass over", what)
+		}
+	}
+	// And both refusal directions must have been observed at least once, for
+	// the same reason: a walk that only ever met one form would count zero
+	// refusals in the other direction and say nothing about it.
+	for _, what := range []string{
+		"BuildMTSet on a combined-form dialect",
+		"BuildMTSetCombined on a short-form dialect",
+	} {
+		if refusalsSeen[what] == 0 {
+			t.Errorf("no %s was observed anywhere in the walk — that direction of the seam is untested", what)
+		}
+	}
+
+	t.Logf("checked %d built MT Set frames across %d dialects; per builder: %v; wrong-form refusals seen: %v",
+		totalFrames, len(allTestDialects()), perBuilder, refusalsSeen)
+}
