@@ -1,0 +1,296 @@
+# FTdx10 CAT manual Table 2 (MENU Chart) -- EX address inventory.
+# Source: Yaesu FTdx10 CAT Operation Reference Manual, edition 2308-F
+#   (docs/fixtures-private/manuals/ftdx10_cat_2308-F.pdf, gitignored),
+#   Table 2 "MENU Chart".
+# Method: LAYOUT-TEXT-LED, PDF-CHECKED. The working text was the layout
+#   extraction docs/fixtures-private/manuals/ftdx10_layout.txt, where Table
+#   2 spans lines 652-899 (printed folios 10-12 of the manual, contiguous
+#   page footers -- no dropped page; the M9c-4 review corrected this line's
+#   original "pages 9-12"); the rendered PDF's ruled cells (PDF pages
+#   11-13) arbitrated wherever the layout was unclear. A SECOND,
+#   PDF-PRIMARY transcription of the same chart is derived independently at
+#   M9c-4 task 4 and reconciled against this one and against the
+#   group-boundary ledger; this file was written without sight of either.
+# Transcribed: 29/07/2026 (M9c-4 task 3). Values are the manual's own; this
+#   file makes no claim about what any radio does. No FTdx10 hardware is
+#   available to this project, so there is no observation CSV and no
+#   corrections file to accompany it.
+#
+# Columns: p1,p2,p3,p1_label,p2_label,name,p4,digits,text,manual_line
+#   p1,p2,p3     decimal (P1,P2,P3) triple -- the EX address
+#   p1_label     menu label (chart P1 column), verbatim
+#   p2_label     subgroup label (chart P2 column), verbatim
+#   name         chart Function column, verbatim
+#   p4           chart P4 parameter-description column (audit trail only --
+#                it is not emitted into the generated Go, and it is EMITTED
+#                only from this transcription: B delivered a bonus verbatim
+#                P4 of its own, kept as extra audit and deliberately NOT
+#                cross-bound -- the two transcriptions' glyph conventions
+#                differ, so binding P4 would compare extractors, not the
+#                chart; see crosscheck_test.go adjudication (c). The M9c-4
+#                review corrected this note's original claim that B does
+#                not carry P4.)
+#   digits       chart Digits column (1..4; 12 for the single text item)
+#   text         true only for the single text item, MY CALL.
+#   manual_line  line in ftdx10_layout.txt this row was transcribed from --
+#                specifically the line carrying the row's P3 number, which
+#                for a wrapped row is not the line carrying all of its name
+#                (see MOUSE POINTER SPEED below)
+#
+# TRANSCRIPTION CONVENTIONS -- what was and was not normalised
+#   VERBATIM, DEFECTS INCLUDED. The chart's own spellings and typos are
+#   transcribed as found, never corrected:
+#     - "LCUT SLOP" (no trailing E) at six addresses -- (01,01,08),
+#       (01,02,08), (01,03,08), (01,04,10), (01,05,10), (02,01,08) -- while
+#       "HCUT SLOPE" in the same six blocks does carry it;
+#     - "MY CALL." (04,01,01) carries a trailing full stop; so do "MAIN
+#       STEPS PER REV." and "MPVD STEPS PER REV." (03,05,06 / 03,05,07);
+#     - (01,05,16) SHIFT FREQUENCY's P4 reads "1: 170 Hz 1: 200 Hz ..." --
+#       two options numbered 1, the same defect the FT-710's chart carries
+#       at its own SHIFT FREQUENCY row;
+#     - (02,01,17) QSK DELAY TIME's P4 reads "2: 25 mesc" for "msec".
+#   GROUP LABELS are printed parenthesised in the chart's P1/P2 columns
+#   ("01 (MODE SSB)"). The enclosing parentheses are the chart's
+#   typographic bracketing of the label, not part of it, and are stripped
+#   -- the FT-710 transcription's established convention.
+#   P4 whitespace: runs of whitespace are collapsed to single spaces, as in
+#   the FT-710 transcription. Six rows' P4 wraps across layout lines and is
+#   joined in reading order: (03,01,20) KEYBOARD LANGUAGE (layout 823-827),
+#   (03,03,05) and (03,03,08) PRMTRC EQ2/EQ3 FREQ (843-845, 848-850), and
+#   (03,03,14) and (03,03,17) P PRMTRC EQ2/EQ3 FREQ (858-860, 864-866).
+#   P4 CHARACTERS are NOT transliterated. This manual's extraction renders
+#   ranges as "~" and negative signs as U+2013 EN DASH; the FT-710's
+#   extraction rendered both as ASCII "-". Neither is normalised to the
+#   other -- each transcription records the characters its own source
+#   presented, which is what "verbatim" means here.
+#   WRAPPED ROW NAME: (04,01,05) MOUSE POINTER SPEED is printed over three
+#   layout lines -- "MOUSE POINTER" (891), the P3/P4/Digits row (892), and
+#   "SPEED" (893). The name is joined; manual_line is 892, the line
+#   carrying the P3 number.
+#
+# HEADER-VS-CHART ANOMALY -- recorded here and in doc.go, the FT-710's
+#   established style. Deliberately NOT in a corrections file: that format
+#   records corrections hardware evidence establishes, and no FTdx10
+#   hardware has ever been asked anything.
+#   The EX command's grammar block (layout 637-641) states "P1 : 01 - 05",
+#   "P2 : 01 - 07" and "P3 : 01 - 23". Table 2 refutes two of the three.
+#   The chart populates P1 01-04 ONLY -- RADIO SETTING, CW SETTING,
+#   OPERATION SETTING, DISPLAY SETTING -- with no P1=05 group, and no
+#   EXTENSION group anywhere in this manual; and its P3 tops out at 21, at
+#   (01,03,21) ENC/DEC. "P2 : 01 - 07" does hold. This inventory therefore
+#   holds items at P1 in {01,02,03,04}, none at 05, and no P3 above 21.
+#   The grammar block's "05" and "23" are transcribed as found in this
+#   note, not reconciled away.
+#   PRECEDENT: this is the FTdx10's own instance of the header-vs-chart
+#   anomaly the FT-710 carries -- see the P1 ANOMALY note on
+#   KnownEXAddress in core/cat/dialect.go (that radio's grammar block said
+#   "P1: 01 - 04, 05", its Table 2 named {01,02,03,04,06}, and at M8c a
+#   real FT-710 rejected both probed P1=05 addresses). The FT-710's
+#   anomaly was put to hardware; this one cannot be, and is recorded
+#   unresolved.
+#
+# Counts: 197 items / 4 menus / 18 (P1,P2) subgroups --
+#   P1=01 RADIO SETTING     99  (7 subgroups: 16+17+21+18+16+5+6)
+#   P1=02 CW SETTING        30  (3 subgroups: 18+11+1)
+#   P1=03 OPERATION SETTING 57  (5 subgroups: 20+4+19+7+7)
+#   P1=04 DISPLAY SETTING   11  (3 subgroups: 5+4+2)
+#   Digits are 1..4 for every numeric row; the one wider row is the one
+#   text row, (04,01,01) MY CALL. at 12 (layout 887).
+#
+01,01,01,RADIO SETTING,MODE SSB,AF TREBLE GAIN,–10 ~ +00 ~ +10,3,false,654
+01,01,02,RADIO SETTING,MODE SSB,AF MIDDLE TONE GAIN,–10 ~ +00 ~ +10,3,false,655
+01,01,03,RADIO SETTING,MODE SSB,AF BASS GAIN,–10 ~ +00 ~ +10,3,false,656
+01,01,04,RADIO SETTING,MODE SSB,AGC FAST DELAY,"20 ~ 4000 msec (P4= 0020 ~ 4000, 20 msec/step)",4,false,657
+01,01,05,RADIO SETTING,MODE SSB,AGC MID DELAY,"20 ~ 4000 msec (P4= 0020 ~ 4000, 20 msec/step)",4,false,658
+01,01,06,RADIO SETTING,MODE SSB,AGC SLOW DELAY,"20 ~ 4000 msec (P4= 0020 ~ 4000, 20 msec/step)",4,false,659
+01,01,07,RADIO SETTING,MODE SSB,LCUT FREQ,00: OFF 01: 100 Hz ~ 19: 1000 Hz (50 Hz steps),2,false,660
+01,01,08,RADIO SETTING,MODE SSB,LCUT SLOP,0: 6 dB/oct 1: 18 dB/oct,1,false,661
+01,01,09,RADIO SETTING,MODE SSB,HCUT FREQ,00: OFF 01: 700 Hz ~ 67: 4000 Hz (50 Hz steps),2,false,662
+01,01,10,RADIO SETTING,MODE SSB,HCUT SLOPE,0: 6 dB/oct 1: 18 dB/oct,1,false,663
+01,01,11,RADIO SETTING,MODE SSB,SSB OUT LEVEL,0 ~ 100 (P4 = 000 ~ 100),3,false,664
+01,01,12,RADIO SETTING,MODE SSB,TX BPF SEL,0: 50 ~ 3050 1: 100 ~ 2900 2: 200 ~ 2800 3: 300 ~ 2700 4: 400 ~ 2600,1,false,665
+01,01,13,RADIO SETTING,MODE SSB,SSB MOD SOURCE,0: MIC 1: REAR,1,false,666
+01,01,14,RADIO SETTING,MODE SSB,REAR SELECT,0: DATA 1: USB,1,false,667
+01,01,15,RADIO SETTING,MODE SSB,RPORT GAIN,0 ~ 100 (P4 = 000 ~ 100),3,false,668
+01,01,16,RADIO SETTING,MODE SSB,RPTT SELECT,0: DAKY 1: RTS 2: DTR,1,false,669
+01,02,01,RADIO SETTING,MODE AM,AF TREBLE GAIN,–10 ~ +00 ~ +10,3,false,670
+01,02,02,RADIO SETTING,MODE AM,AF MIDDLE TONE GAIN,–10 ~ +00 ~ +10,3,false,671
+01,02,03,RADIO SETTING,MODE AM,AF BASS GAIN,–10 ~ +00 ~ +10,3,false,672
+01,02,04,RADIO SETTING,MODE AM,AGC FAST DELAY,"20 ~ 4000 msec (P4= 0020 ~ 4000, 20 msec/step)",4,false,673
+01,02,05,RADIO SETTING,MODE AM,AGC MID DELAY,"20 ~ 4000 msec (P4= 0020 ~ 4000, 20 msec/step)",4,false,674
+01,02,06,RADIO SETTING,MODE AM,AGC SLOW DELAY,"20 ~ 4000 msec (P4= 0020 ~ 4000, 20 msec/step)",4,false,675
+01,02,07,RADIO SETTING,MODE AM,LCUT FREQ,00: OFF 01: 100 Hz ~ 19: 1000 Hz (50 Hz steps),2,false,676
+01,02,08,RADIO SETTING,MODE AM,LCUT SLOP,0: 6 dB/oct 1: 18 dB/oct,1,false,677
+01,02,09,RADIO SETTING,MODE AM,HCUT FREQ,00: OFF 01: 700 Hz ~ 67: 4000 Hz (50 Hz steps),2,false,679
+01,02,10,RADIO SETTING,MODE AM,HCUT SLOPE,0: 6 dB/oct 1: 18 dB/oct,1,false,681
+01,02,11,RADIO SETTING,MODE AM,AM OUT LEVEL,0 ~ 100 (P4 = 000 ~ 100),3,false,682
+01,02,12,RADIO SETTING,MODE AM,TX BPF SEL,0: 50 ~ 3050 1: 100 ~ 2900 2: 200 ~ 2800 3: 300 ~ 2700 4: 400 ~ 2600,1,false,683
+01,02,13,RADIO SETTING,MODE AM,AM MOD SOURCE,0: MIC 1: REAR,1,false,684
+01,02,14,RADIO SETTING,MODE AM,MIC GAIN,1000: MCVR 0000 ~ 0100: FIX,4,false,685
+01,02,15,RADIO SETTING,MODE AM,REAR SELECT,0: DATA 1: USB,1,false,686
+01,02,16,RADIO SETTING,MODE AM,RPORT GAIN,0 ~ 100 (P4 = 000 ~ 100),3,false,687
+01,02,17,RADIO SETTING,MODE AM,RPTT SELECT,0: DAKY 1: RTS 2: DTR,1,false,688
+01,03,01,RADIO SETTING,MODE FM,AF TREBLE GAIN,–10 ~ +00 ~ +10,3,false,689
+01,03,02,RADIO SETTING,MODE FM,AF MIDDLE TONE GAIN,–10 ~ +00 ~ +10,3,false,690
+01,03,03,RADIO SETTING,MODE FM,AF BASS GAIN,–10 ~ +00 ~ +10,3,false,691
+01,03,04,RADIO SETTING,MODE FM,AGC FAST DELAY,"20 ~ 4000 msec (P4= 0020 ~ 4000, 20 msec/step)",4,false,692
+01,03,05,RADIO SETTING,MODE FM,AGC MID DELAY,"20 ~ 4000 msec (P4= 0020 ~ 4000, 20 msec/step)",4,false,693
+01,03,06,RADIO SETTING,MODE FM,AGC SLOW DELAY,"20 ~ 4000 msec (P4= 0020 ~ 4000, 20 msec/step)",4,false,694
+01,03,07,RADIO SETTING,MODE FM,LCUT FREQ,00: OFF 01: 100 Hz ~ 19: 1000 Hz (50 Hz steps),2,false,695
+01,03,08,RADIO SETTING,MODE FM,LCUT SLOP,0: 6 dB/oct 1: 18 dB/oct,1,false,696
+01,03,09,RADIO SETTING,MODE FM,HCUT FREQ,00: OFF 01: 700 Hz ~ 67: 4000 Hz (50 Hz steps),2,false,697
+01,03,10,RADIO SETTING,MODE FM,HCUT SLOPE,0: 6 dB/oct 1: 18 dB/oct,1,false,698
+01,03,11,RADIO SETTING,MODE FM,FM OUT LEVEL,0 ~ 100 (P4 = 000 ~ 100),3,false,700
+01,03,12,RADIO SETTING,MODE FM,FM MOD SOURCE,0: MIC 1: REAR,1,false,702
+01,03,13,RADIO SETTING,MODE FM,MIC GAIN,1000: MCVR 0000 ~ 0100: FIX,4,false,703
+01,03,14,RADIO SETTING,MODE FM,REAR SELECT,0: DATA 1: USB,1,false,704
+01,03,15,RADIO SETTING,MODE FM,RPORT GAIN,0 ~ 100 (P4 = 000 ~ 100),3,false,705
+01,03,16,RADIO SETTING,MODE FM,RPTT SELECT,0: DAKY 1: RTS 2: DTR,1,false,706
+01,03,17,RADIO SETTING,MODE FM,RPT SHIFT(28MHz),"0 ~ 1000 kHz (P4 = 0000 ~ 1000, 10 kHz/step)",4,false,707
+01,03,18,RADIO SETTING,MODE FM,RPT SHIFT(50MHz),"0 ~ 4000 kHz (P4 = 0000 ~ 4000, 10 kHz/step)",4,false,708
+01,03,19,RADIO SETTING,MODE FM,RPT,0: - 1: SIMPLEX 2: +,1,false,709
+01,03,20,RADIO SETTING,MODE FM,TONE FREQ,00: 67.0 ~ 49: 254.1Hz,2,false,710
+01,03,21,RADIO SETTING,MODE FM,ENC/DEC,0: OFF 1: ENC 2: TSQ,1,false,711
+01,04,01,RADIO SETTING,MODE PSK/DATA,AF TREBLE GAIN,–10 ~ +00 ~ +10,3,false,712
+01,04,02,RADIO SETTING,MODE PSK/DATA,AF MIDDLE TONE GAIN,–10 ~ +00 ~ +10,3,false,713
+01,04,03,RADIO SETTING,MODE PSK/DATA,AF BASS GAIN,–10 ~ +00 ~ +10,3,false,714
+01,04,04,RADIO SETTING,MODE PSK/DATA,AGC FAST DELAY,"20 ~ 4000 msec (P4= 0020 ~ 4000, 20 msec/step)",4,false,715
+01,04,05,RADIO SETTING,MODE PSK/DATA,AGC MID DELAY,"20 ~ 4000 msec (P4= 0020 ~ 4000, 20 msec/step)",4,false,716
+01,04,06,RADIO SETTING,MODE PSK/DATA,AGC SLOW DELAY,"20 ~ 4000 msec (P4= 0020 ~ 4000, 20 msec/step)",4,false,717
+01,04,07,RADIO SETTING,MODE PSK/DATA,PSK TONE,0: 1000Hz 1: 1500Hz 2: 2000Hz,1,false,718
+01,04,08,RADIO SETTING,MODE PSK/DATA,DATA SHIFT (SSB),"0 ~ 3000 Hz (P4 = 0000 ~ 3000, 10 Hz steps)",4,false,719
+01,04,09,RADIO SETTING,MODE PSK/DATA,LCUT FREQ,00: OFF 01: 100 Hz ~ 19: 1000 Hz (50 Hz steps),2,false,720
+01,04,10,RADIO SETTING,MODE PSK/DATA,LCUT SLOP,0: 6 dB/oct 1: 18 dB/oct,1,false,721
+01,04,11,RADIO SETTING,MODE PSK/DATA,HCUT FREQ,00: OFF 01: 700 Hz ~ 67: 4000 Hz (50 Hz steps),2,false,722
+01,04,12,RADIO SETTING,MODE PSK/DATA,HCUT SLOPE,0: 6 dB/oct 1: 18 dB/oct,1,false,723
+01,04,13,RADIO SETTING,MODE PSK/DATA,DATA OUT LEVEL,0 ~ 100 (P4 = 000 ~ 100),3,false,724
+01,04,14,RADIO SETTING,MODE PSK/DATA,TX BPF SEL,0: 50 ~ 3050 1: 100 ~ 2900 2: 200 ~ 2800 3: 300 ~ 2700 4: 400 ~ 2600,1,false,725
+01,04,15,RADIO SETTING,MODE PSK/DATA,DATA MOD SOURCE,0: MIC 1: REAR,1,false,726
+01,04,16,RADIO SETTING,MODE PSK/DATA,REAR SELECT,0: DATA 1: USB,1,false,727
+01,04,17,RADIO SETTING,MODE PSK/DATA,RPORT GAIN,0 ~ 100 (P4 = 000 ~ 100),3,false,728
+01,04,18,RADIO SETTING,MODE PSK/DATA,RPTT SELECT,0: DAKY 1: RTS 2: DTR,1,false,729
+01,05,01,RADIO SETTING,MODE RTTY,AF TREBLE GAIN,–10 ~ +00 ~ +10,3,false,738
+01,05,02,RADIO SETTING,MODE RTTY,AF MIDDLE TONE GAIN,–10 ~ +00 ~ +10,3,false,739
+01,05,03,RADIO SETTING,MODE RTTY,AF BASS GAIN,–10 ~ +00 ~ +10,3,false,740
+01,05,04,RADIO SETTING,MODE RTTY,AGC FAST DELAY,"20 ~ 4000 msec (P4= 0020 ~ 4000, 20 msec/step)",4,false,741
+01,05,05,RADIO SETTING,MODE RTTY,AGC MID DELAY,"20 ~ 4000 msec (P4= 0020 ~ 4000, 20 msec/step)",4,false,742
+01,05,06,RADIO SETTING,MODE RTTY,AGC SLOW DELAY,"20 ~ 4000 msec (P4= 0020 ~ 4000, 20 msec/step)",4,false,743
+01,05,07,RADIO SETTING,MODE RTTY,POLARITY-RX,0: NOR 1: REV,1,false,744
+01,05,08,RADIO SETTING,MODE RTTY,POLARITY-TX,0: NOR 1: REV,1,false,745
+01,05,09,RADIO SETTING,MODE RTTY,LCUT FREQ,00: OFF 01: 100 Hz ~ 19: 1000 Hz (50 Hz steps),2,false,746
+01,05,10,RADIO SETTING,MODE RTTY,LCUT SLOP,0: 6 dB/oct 1: 18 dB/oct,1,false,747
+01,05,11,RADIO SETTING,MODE RTTY,HCUT FREQ,00: OFF 01: 700 Hz ~ 67: 4000 Hz (50 Hz steps),2,false,748
+01,05,12,RADIO SETTING,MODE RTTY,HCUT SLOPE,0: 6 dB/oct 1: 18 dB/oct,1,false,749
+01,05,13,RADIO SETTING,MODE RTTY,RTTY OUT LEVEL,0 ~ 100 (P4 = 000 ~ 100),3,false,750
+01,05,14,RADIO SETTING,MODE RTTY,SHIFT PORT,0: SHIFT 1: DTR 2: RTS,1,false,752
+01,05,15,RADIO SETTING,MODE RTTY,MARK FREQUENCY,1: 1275 Hz 2: 2125 Hz,1,false,754
+01,05,16,RADIO SETTING,MODE RTTY,SHIFT FREQUENCY,1: 170 Hz 1: 200 Hz 2: 425 Hz 3: 850 Hz,1,false,755
+01,06,01,RADIO SETTING,ENC/DEC PSK,PSK MODE,0: BPSK 1: QPSK,1,false,756
+01,06,02,RADIO SETTING,ENC/DEC PSK,DECODE AFC RANGE,0: 8 1: 1.5 2: 30 Hz,1,false,757
+01,06,03,RADIO SETTING,ENC/DEC PSK,QPSK POLARITY RX,0: NOR 1: REV,1,false,759
+01,06,04,RADIO SETTING,ENC/DEC PSK,QPSK POLARITY TX,0: NOR 1: REV,1,false,761
+01,06,05,RADIO SETTING,ENC/DEC PSK,PSK TX LEVEL,0 ~ 100,3,false,762
+01,07,01,RADIO SETTING,ENC/DEC RTTY,RX USOS,0: DISABLE 1: ENABLE,1,false,763
+01,07,02,RADIO SETTING,ENC/DEC RTTY,TX USOS,0: DISABLE 1: ENABLE,1,false,764
+01,07,03,RADIO SETTING,ENC/DEC RTTY,RX NEW LINE CODE,"0: CR or LF or CR+LF 1: CR,LF,CR+LF",1,false,765
+01,07,04,RADIO SETTING,ENC/DEC RTTY,TX AUTO CR+LF,0: DISABLE 1: ENABLE,1,false,766
+01,07,05,RADIO SETTING,ENC/DEC RTTY,TX DIDDLE,0: OFF 1: BLANK 2: LTRS,1,false,767
+01,07,06,RADIO SETTING,ENC/DEC RTTY,BAUDOT CODE,0: CCIT 1: US,1,false,768
+02,01,01,CW SETTING,MODE CW,AF TREBLE GAIN,–10 ~ +00 ~ +10,3,false,769
+02,01,02,CW SETTING,MODE CW,AF MIDDLE TONE GAIN,–10 ~ +00 ~ +10,3,false,770
+02,01,03,CW SETTING,MODE CW,AF BASS GAIN,–10 ~ +00 ~ +10,3,false,771
+02,01,04,CW SETTING,MODE CW,AGC FAST DELAY,"20 ~ 4000 msec (P4= 0020 ~ 4000, 20 msec/step)",4,false,772
+02,01,05,CW SETTING,MODE CW,AGC MID DELAY,"20 ~ 4000 msec (P4= 0020 ~ 4000, 20 msec/step)",4,false,773
+02,01,06,CW SETTING,MODE CW,AGC SLOW DELAY,"20 ~ 4000 msec (P4= 0020 ~ 4000, 20 msec/step)",4,false,774
+02,01,07,CW SETTING,MODE CW,LCUT FREQ,00: OFF 01: 100 Hz ~ 19: 1000 Hz (50 Hz steps),2,false,775
+02,01,08,CW SETTING,MODE CW,LCUT SLOP,0: 6 dB/oct 1: 18 dB/oct,1,false,776
+02,01,09,CW SETTING,MODE CW,HCUT FREQ,00: OFF 01: 700 Hz ~ 67: 4000 Hz (50 Hz steps),2,false,777
+02,01,10,CW SETTING,MODE CW,HCUT SLOPE,0: 6 dB/oct 1: 18 dB/oct,1,false,778
+02,01,11,CW SETTING,MODE CW,CW OUT LEVEL,0 ~ 100 (P4 = 000 ~ 100),3,false,779
+02,01,12,CW SETTING,MODE CW,CW AUTO MODE,0: OFF 1: 50 MHz 2: ON,1,false,780
+02,01,13,CW SETTING,MODE CW,CW BK-IN TYPE,0: SEMI 1: FULL,1,false,781
+02,01,14,CW SETTING,MODE CW,CW WAVE SHAPE,0: 1 msec 1: 2 msec 2: 4 msec 3: 6 msec,1,false,782
+02,01,15,CW SETTING,MODE CW,CW FREQ DISPLAY,0: DIRECT FREQ 1: PITCH OFFSET,1,false,783
+02,01,16,CW SETTING,MODE CW,PC KEYING,0: OFF 1: DAKY 2: RTS 3: DTR,1,false,785
+02,01,17,CW SETTING,MODE CW,QSK DELAY TIME,0: 15 msec 1: 20 msec 2: 25 mesc 3: 30 msec,1,false,786
+02,01,18,CW SETTING,MODE CW,CW INDICATOR,0: OFF 1: ON,1,false,787
+02,02,01,CW SETTING,KEYER,KEYER TYPE,0: OFF 1: BUG 2: ELEKEY-A 3: ELEKEY-B 4: ELEKEY-Y 5: ACS,1,false,788
+02,02,02,CW SETTING,KEYER,KEYER DOT/DASH,0: NOR 1: REV,1,false,789
+02,02,03,CW SETTING,KEYER,CW WEIGHT,2.5 ~ 4.5 (P4 = 25 ~ 45),2,false,790
+02,02,04,CW SETTING,KEYER,NUMBER STYLE,0: 1290 1: AUNO 2: AUNT 3: A2NO 4: A2NT 5: 12NO 6: 12NT,1,false,791
+02,02,05,CW SETTING,KEYER,CONTEST NUMBER,0001 ~ 9999,4,false,792
+02,02,06,CW SETTING,KEYER,CW MEMORY 1,0: TEXT 1: MESSAGE,1,false,794
+02,02,07,CW SETTING,KEYER,CW MEMORY 2,0: TEXT 1: MESSAGE,1,false,796
+02,02,08,CW SETTING,KEYER,CW MEMORY 3,0: TEXT 1: MESSAGE,1,false,797
+02,02,09,CW SETTING,KEYER,CW MEMORY 4,0: TEXT 1: MESSAGE,1,false,798
+02,02,10,CW SETTING,KEYER,CW MEMORY 5,0: TEXT 1: MESSAGE,1,false,799
+02,02,11,CW SETTING,KEYER,REPEAT INTERVAL,1 ~ 60 sec (P4 = 01 ~ 60),2,false,800
+02,03,01,CW SETTING,DECODE CW,CW DECODE BW,0: 25 1: 50 2: 100 3: 250 (Hz),1,false,802
+03,01,01,OPERATION SETTING,GENERAL,NB WIDTH,0: 1 ms 1: 3 ms 2: 10 ms,1,false,804
+03,01,02,OPERATION SETTING,GENERAL,NB REJECTION,0: 10 dB 1: 30 dB 2: 50 dB,1,false,805
+03,01,03,OPERATION SETTING,GENERAL,BEEP LEVEL,0 ~ 100 (P4 = 000 ~ 100),3,false,806
+03,01,04,OPERATION SETTING,GENERAL,RF/SQL VR,0: RF 1: SQL,1,false,807
+03,01,05,OPERATION SETTING,GENERAL,TUNER SELECT,0: INT 1: EXT1 2: EXT2 3: EXT3,1,false,808
+03,01,06,OPERATION SETTING,GENERAL,232C RATE,0: 4800 bps 1: 9600 bps 2: 19200 bps 3: 38400 bps,1,false,809
+03,01,07,OPERATION SETTING,GENERAL,232C TIME OUT TIMER,0: 10 msec 1: 100 msec 2: 1000 msec 3: 3000 msec,1,false,810
+03,01,08,OPERATION SETTING,GENERAL,CAT RATE,0: 4800 bps 1: 9600 bps 2: 19200 bps 3: 38400 bps,1,false,811
+03,01,09,OPERATION SETTING,GENERAL,CAT TIME OUT TIMER,0: 10 msec 1: 100 msec 2: 1000 msec 3: 3000 msec,1,false,812
+03,01,10,OPERATION SETTING,GENERAL,CAT RTS,0: DISABLE 1: ENABLE,1,false,813
+03,01,11,OPERATION SETTING,GENERAL,QMB CH,0: 5ch 1: 10ch,1,false,814
+03,01,12,OPERATION SETTING,GENERAL,MEM GROUP,0: DISABLE 1: ENABLE,1,false,815
+03,01,13,OPERATION SETTING,GENERAL,QUICK SPLIT INPUT,0: DISABLE 1: ENABLE,1,false,816
+03,01,14,OPERATION SETTING,GENERAL,QUICK SPLIT FREQ,–20 kHz ~ +00 (or –00) ~ +20 kHz (P4= –20 ~ +00 or –00 ~ +20),3,false,817
+03,01,15,OPERATION SETTING,GENERAL,SPLIT FREQ DISPLAY,0: FREQ 1: DELTA,1,false,818
+03,01,16,OPERATION SETTING,GENERAL,TX TIME OUT TIMER,0 (OFF) ~ 30 min (P4= 00 ~ 30),2,false,819
+03,01,17,OPERATION SETTING,GENERAL,MIC SCAN,0: DISABLE 1: ENABLE,1,false,820
+03,01,18,OPERATION SETTING,GENERAL,MIC SCAN RESUME,0: PAUSE 1: TIME,1,false,821
+03,01,19,OPERATION SETTING,GENERAL,REF FREQ ADJ,–25 ~ +00 (or –00) ~ +25 (P4= –25 ~ +00 or –00 ~ +25),3,false,822
+03,01,20,OPERATION SETTING,GENERAL,KEYBOARD LANGUAGE,00: JAPANESE 01: ENGLISH(US) 02: ENGLISH(UK) 03: FRENCH 04: FRENCH(CA) 05: GERMAN 06: PORTUGUESE 07: PORTUGUESE(BR) 08: SPANISH 09: SPANISH(LATAM) 10: ITALIAN 11: LEVEL,2,false,825
+03,02,01,OPERATION SETTING,RX-DSP,APF WIDTH,0: NARROW 1: MEDIUM 2: WIDE,1,false,835
+03,02,02,OPERATION SETTING,RX-DSP,CONTOUR LEVEL,–40 ~ 0 ~ +20 (P4 = –40 ~ –00 or +00 ~ +20),3,false,836
+03,02,03,OPERATION SETTING,RX-DSP,CONTOUR WIDTH,01 ~ 11,2,false,837
+03,02,04,OPERATION SETTING,RX-DSP,IF NOTCH WIDTH,0: NARROW 1: WIDE,1,false,838
+03,03,01,OPERATION SETTING,TX AUDIO,AMC RELEASE TIME,0: FAST 1: MID 2: SLOW,1,false,839
+03,03,02,OPERATION SETTING,TX AUDIO,PRMTRC EQ1 FREQ,00 : OFF 01: 100 02: 200 03: 300 04: 400 05: 500 06: 600 07: 700 Hz,2,false,840
+03,03,03,OPERATION SETTING,TX AUDIO,PRMTRC EQ1 LEVEL,–20 ~ 0 ~ +10 (P4 = –20 ~ –00 or +00 ~ +10),3,false,841
+03,03,04,OPERATION SETTING,TX AUDIO,PRMTRC EQ1 BWTH,01 ~ 10,2,false,842
+03,03,05,OPERATION SETTING,TX AUDIO,PRMTRC EQ2 FREQ,00: OFF 01: 700 02: 800 03: 900 04: 1000 05: 1100 06: 1200 07: 1300 08: 1400 09: 1500 Hz,2,false,844
+03,03,06,OPERATION SETTING,TX AUDIO,PRMTRC EQ2 LEVEL,–20 ~ 0 ~ +10 (P4 = –20 ~ –00 or +00 ~ +10),3,false,846
+03,03,07,OPERATION SETTING,TX AUDIO,PRMTRC EQ2 BWTH,01 ~ 10,2,false,847
+03,03,08,OPERATION SETTING,TX AUDIO,PRMTRC EQ3 FREQ,00 : OFF 01: 1500 02: 1600 03: 1700 04: 1800 05: 1900 06: 2000 ~ 18: 3200 Hz,2,false,849
+03,03,09,OPERATION SETTING,TX AUDIO,PRMTRC EQ3 LEVEL,–20 ~ 0 ~ +10 (P4 = –20 ~ –00 or +00 ~ +10),3,false,851
+03,03,10,OPERATION SETTING,TX AUDIO,PRMTRC EQ3 BWTH,01 ~ 10,2,false,853
+03,03,11,OPERATION SETTING,TX AUDIO,P PRMTRC EQ1 FREQ,00 : OFF 01: 100 02: 200 03: 300 04: 400 05: 500 06: 600 07: 700 Hz,2,false,855
+03,03,12,OPERATION SETTING,TX AUDIO,P PRMTRC EQ1 LEVEL,–20 ~ 0 ~ +10 (P4 = –20 ~ –00 or +00 ~ +10),3,false,856
+03,03,13,OPERATION SETTING,TX AUDIO,P PRMTRC EQ1 BWTH,01 ~ 10,2,false,857
+03,03,14,OPERATION SETTING,TX AUDIO,P PRMTRC EQ2 FREQ,00: OFF 01: 700 02: 800 03: 900 04: 1000 05: 1100 06: 1200 07: 1300 08: 1400 09: 1500 Hz,2,false,859
+03,03,15,OPERATION SETTING,TX AUDIO,P PRMTRC EQ2 LEVEL,–20 ~ 0 ~ +10 (P4 = –20 ~ –00 or +00 ~ +10),3,false,862
+03,03,16,OPERATION SETTING,TX AUDIO,P PRMTRC EQ2 BWTH,01 ~ 10,2,false,863
+03,03,17,OPERATION SETTING,TX AUDIO,P PRMTRC EQ3 FREQ,00 : OFF 01: 1500 02: 1600 03: 1700 04: 1800 05: 1900 06: 2000 ~ 18: 3200 Hz,2,false,865
+03,03,18,OPERATION SETTING,TX AUDIO,P PRMTRC EQ3 LEVEL,–20 ~ 0 ~ +10 (P4 = –20 ~ –00 or +00 ~ +10),3,false,867
+03,03,19,OPERATION SETTING,TX AUDIO,P PRMTRC EQ3 BWTH,01 ~ 10,2,false,868
+03,04,01,OPERATION SETTING,TX GENERAL,HF MAX POWER,5 ~ 100 (P4 = 005 ~ 100),3,false,869
+03,04,02,OPERATION SETTING,TX GENERAL,50M MAX POWER,5 ~ 100 (P4 = 005 ~ 100),3,false,870
+03,04,03,OPERATION SETTING,TX GENERAL,70M MAX POWER,5 ~ 50 (P4 = 005 ~ 050),3,false,871
+03,04,04,OPERATION SETTING,TX GENERAL,AM MAX POWER,5 ~ 25 (P4 = 005 ~ 025),3,false,873
+03,04,05,OPERATION SETTING,TX GENERAL,VOX SELECT,0: MIC 1: DATA,1,false,875
+03,04,06,OPERATION SETTING,TX GENERAL,DATA VOX GAIN,0 ~ 100 (P4 = 000 ~ 100),3,false,876
+03,04,07,OPERATION SETTING,TX GENERAL,EMERGENCY FREQ TX,0: DISABLE 1: ENABLE,1,false,877
+03,05,01,OPERATION SETTING,TUNING,SSB/CW DIAL STEP,0: 5 1: 10 (Hz),1,false,878
+03,05,02,OPERATION SETTING,TUNING,RTTY/PSK DIAL STEP,0: 5 1: 10 (Hz),1,false,879
+03,05,03,OPERATION SETTING,TUNING,CH STEP,0: 1 1: 2.5 2: 5 3: 10 (kHz),1,false,880
+03,05,04,OPERATION SETTING,TUNING,AM CH STEP,0: 2.5 1: 5 2: 9 3: 10 4: 12.5 5: 25 (kHz),1,false,882
+03,05,05,OPERATION SETTING,TUNING,FM CH STEP,0: 5 1: 6.25 2: 10 3: 12.5 4: 20 5: 25 (kHz),1,false,884
+03,05,06,OPERATION SETTING,TUNING,MAIN STEPS PER REV.,0: 250 1: 500 2: 1000,1,false,885
+03,05,07,OPERATION SETTING,TUNING,MPVD STEPS PER REV.,0: 50 1: 250 2: 500,1,false,886
+04,01,01,DISPLAY SETTING,DISPLAY,MY CALL.,Up to 12 characters,12,true,887
+04,01,02,DISPLAY SETTING,DISPLAY,MY CALL TIME,0: OFF 1: 0.5 2: 1 3: 2 4: 3 5: 5 (sec),1,false,888
+04,01,03,DISPLAY SETTING,DISPLAY,SCREEN SAVER,0: OFF 1: 15 2: 30 3: 60 (min),1,false,889
+04,01,04,DISPLAY SETTING,DISPLAY,DIMMER LED,00 ~ 20,2,false,890
+04,01,05,DISPLAY SETTING,DISPLAY,MOUSE POINTER SPEED,00 ~ 20,2,false,892
+04,02,01,DISPLAY SETTING,SCOPE,RBW,0: HIGH 1: MID 2: LOW,1,false,894
+04,02,02,DISPLAY SETTING,SCOPE,SCOPE CTR,0: FILTER 1: CAR POINT,1,false,895
+04,02,03,DISPLAY SETTING,SCOPE,2D DISP SENSITIVITY,0: NORMAL 1: HI,1,false,896
+04,02,04,DISPLAY SETTING,SCOPE,3DSS DISP SENSITIVITY,0: NORMAL 1: HI,1,false,897
+04,03,01,DISPLAY SETTING,EXT-MONITOR,EXT DISPLAY,0: DISABLE 1: ENABLE,1,false,898
+04,03,02,DISPLAY SETTING,EXT-MONITOR,PIXEL,0: 800x480 1: 800x600,1,false,899

@@ -567,12 +567,14 @@ func (r *conformanceRun) checkCombinedMTSets(s cat.Slot) {
 	if !ok {
 		return
 	}
-	// cat.KindVFO is the byte the combined Set's P7 schema constant carries.
-	// In the SET direction the reference documents it "(Fixed)", not "VFO":
-	// core/cat spells that meaning with an unexported constant, so a package
-	// outside it has only the byte's read-side name to write. The assertion
-	// on the parsed record below is what pins that the byte survived.
-	m := recordFor(s, r.emittable[0], cat.KindVFO, 0, ctcss, shift)
+	// cat.CombinedMTSetKind IS the combined Set's P7 schema constant, named
+	// directly. In the SET direction the reference documents the byte
+	// "(Fixed)", not "VFO"; before M9c-4 core/cat spelt that meaning with an
+	// unexported constant and a package outside it had only the byte's
+	// read-side name (cat.KindVFO) to write, which said the wrong thing at
+	// the right value. The rename closed that. The assertion on the parsed
+	// record below is what pins that the byte survived.
+	m := recordFor(s, r.emittable[0], cat.CombinedMTSetKind, 0, ctcss, shift)
 
 	for _, tag := range append([]string{""}, conformanceTags...) {
 		what := "MT set combined (tagged)"

@@ -7,17 +7,34 @@ import (
 	"strings"
 )
 
-// combinedMTSetKind is the combined Set's P7 schema value, "0: (Fixed)".
+// CombinedMTSetKind is the combined Set's P7 schema value, "0: (Fixed)".
 // A FORM constant, deliberately NOT the dialect's mwWriteKind: MT-Set P7
 // and MW-Set P7 are two command-specific facts that coincide on the
 // evidenced radio, and deriving one from the other is the PadByte
-// conflation (spec revision 2, adjudication). Set-direction '0' means
-// "(Fixed)", not "VFO".
-const combinedMTSetKind byte = '0'
+// conflation (M9c-3 spec revision 2, adjudication). Set-direction '0'
+// means "(Fixed)", not "VFO".
+//
+// EXPORTED at M9c-4 BY RENAME, not by an added alias: a combined-form
+// dialect built outside this package (core/cat/ftdx10 is the first) must be
+// able to NAME this value where it declares its own MWWriteKind, and a
+// synonym pair — an exported alias beside a surviving unexported original —
+// is exactly the shape that lets two spellings of one fact drift apart.
+// There is one name.
+//
+// It is defined as the literal byte '0' and deliberately NOT as KindVFO,
+// even though the two are equal. That equality is INCIDENTAL, across two
+// different command meanings: KindVFO is the READ-side P7 vocabulary's
+// "0: VFO" (memdata.go), whereas this is the combined Set's write-direction
+// "0: (Fixed)". Defining one through the other would encode the coincidence
+// as a rule, and a radio that ever separated them would take this constant
+// with it. TestCombinedMTSetKindCoincidesWithKindVFO asserts the equality
+// with that caveat, so the coincidence is on record without being load-
+// bearing.
+const CombinedMTSetKind byte = '0'
 
 // combinedMTP11 is the combined record's P11, documented "0" fixed in both
 // directions: emitted by the builder and required by the parser. A form
-// constant for the same reason as combinedMTSetKind — it is schema, not
+// constant for the same reason as CombinedMTSetKind — it is schema, not
 // policy, and no dialect may vary it. If hardware ever divorces the two,
 // an MT-specific policy field is added then, additively.
 const combinedMTP11 byte = '0'
@@ -69,7 +86,7 @@ func (d Dialect) mtCombinedLen() int {
 //     hardware verification. Behaviourally identical to d.writableSlot
 //     today, but it is the MT lineage, and the two rules are free to
 //     diverge when 5xx/EMG are verified for one command and not the other;
-//  2. the kind is the FORM's schema constant, combinedMTSetKind, NOT this
+//  2. the kind is the FORM's schema constant, CombinedMTSetKind, NOT this
 //     dialect's mwWriteKind. See that constant's doc comment.
 //
 // Everything else is MW's rule, for MW's reason: Mode, CTCSSState and Shift
@@ -93,8 +110,8 @@ func (d Dialect) validateCombinedMTFields(m MemoryData) error {
 	// validate-don't-rewrite posture MW takes with its own kind: a record
 	// carrying anything else is refused rather than silently corrected, so a
 	// caller that believed it was writing a VFO or Memory record finds out.
-	if m.Kind != combinedMTSetKind {
-		return newParseError([]byte{m.Kind}, fmt.Sprintf("MT: Kind must be %q, the combined Set's fixed P7 — the reference documents it \"(Fixed)\" in the SET direction, not \"VFO\", and it is deliberately not this dialect's MW write kind", combinedMTSetKind))
+	if m.Kind != CombinedMTSetKind {
+		return newParseError([]byte{m.Kind}, fmt.Sprintf("MT: Kind must be %q, the combined Set's fixed P7 — the reference documents it \"(Fixed)\" in the SET direction, not \"VFO\", and it is deliberately not this dialect's MW write kind", CombinedMTSetKind))
 	}
 
 	// Mode is a raw byte alias (mode.go): never trust a caller-forged value.

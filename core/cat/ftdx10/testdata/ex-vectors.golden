@@ -1,0 +1,32 @@
+# EX (MENU) - Read request frames for three menu addresses
+# Source: Yaesu FTDX10 CAT Operation Reference Manual, revision 2308-F.
+#   Position chart: printed page 9 (PDF page 10), block "EX MENU", Read row.
+#   Menu addresses: "Table 2 (MENU Chart)", printed pages 10-12 (PDF 11-13);
+#   the specific rows used are on printed page 10 and printed page 11.
+# Derived 29/07/2026 by hand from the position chart, its legend and Table 2 only.
+# NO code, no generator, no other file and no other document was consulted.
+#
+# READ request - 9 bytes. Chart Read row: E X P1 P1 P2 P2 P3 P3 ;
+#   1-2  "EX"
+#   3-4  P1  menu group,    2 digits (legend: "P1 : 01 - 05")
+#   5-6  P2  menu subgroup, 2 digits (legend: "P2 : 01 - 07")
+#   7-8  P3  menu item,     2 digits (legend: "P3 : 01 - 23")
+#   9    ";" terminator
+#   (P4, the parameter, appears only in the Set and Answer rows: positions 9..nn,
+#    variable width, "See Table 2" - not used by a Read request.)
+#
+# Addresses, all from different P1 groups, each row verified in Table 2:
+#   01/01/11  RADIO SETTING / MODE SSB / SSB OUT LEVEL    (printed page 10; P4 3 digits, 0-100)
+#   02/02/03  CW SETTING / KEYER / CW WEIGHT              (printed page 11; P4 2 digits, 25-45)
+#   03/01/08  OPERATION SETTING / GENERAL / CAT RATE      (printed page 11; P4 1 digit, 0-3)
+#
+# NOTE: the EX legend gives P1: 01-05 and P3: 01-23, but Table 2 as printed in
+#   this revision tabulates only P1 groups 01-04 (and no P3 above 21). All three
+#   addresses above come from tabulated rows, so none depends on that gap.
+#
+# Hardware status: UNVERIFIED. No frame here has been sent to or captured from a
+#   real FTDX10.
+# Format: name<TAB>frame
+ex_read_01_01_11_ssb_out_level	EX010111;
+ex_read_02_02_03_cw_weight	EX020203;
+ex_read_03_01_08_cat_rate	EX030108;

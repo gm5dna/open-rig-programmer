@@ -68,7 +68,7 @@ func validCombinedMemory(t *testing.T, d Dialect) MemoryData {
 		RxClar: true,
 		TxClar: false,
 		Mode:   ModeUSB,
-		Kind:   combinedMTSetKind,
+		Kind:   CombinedMTSetKind,
 		CTCSS:  CTCSSEncDec,
 		Shift:  ShiftPlus,
 	}
@@ -323,13 +323,13 @@ func TestBuildMTSetCombined_P7IsAFormConstantNotTheMWWriteKind(t *testing.T) {
 	if d.MWWriteKind() != KindMemory {
 		t.Fatalf("fixture MWWriteKind() = %q, want %q — the case needs a dialect whose MW kind is NOT the MT Set constant", d.MWWriteKind(), KindMemory)
 	}
-	if KindMemory == combinedMTSetKind {
+	if KindMemory == CombinedMTSetKind {
 		t.Fatal("the fixture's MW write kind equals the MT Set constant, so this test proves nothing")
 	}
 
 	got := mustCombinedFrame(t, d, "CQ")
-	if got[memKindOffset] != combinedMTSetKind {
-		t.Errorf("P7 = %q, want %q — the combined Set's kind is the FORM's schema constant (\"(Fixed)\"), not the dialect's MW write kind (%q)", got[memKindOffset], combinedMTSetKind, d.MWWriteKind())
+	if got[memKindOffset] != CombinedMTSetKind {
+		t.Errorf("P7 = %q, want %q — the combined Set's kind is the FORM's schema constant (\"(Fixed)\"), not the dialect's MW write kind (%q)", got[memKindOffset], CombinedMTSetKind, d.MWWriteKind())
 	}
 
 	// And the mirror: the dialect's own MW write kind is not admissible here.
@@ -346,8 +346,8 @@ func TestBuildMTSetCombined_P7IsAFormConstantNotTheMWWriteKind(t *testing.T) {
 	// A second fixture, differing only in MW write kind, emits the same P7.
 	other := mustCombinedDialect(t, 6, ' ', KindMemTune)
 	otherFrame := mustCombinedFrame(t, other, "CQ")
-	if otherFrame[memKindOffset] != combinedMTSetKind {
-		t.Errorf("P7 = %q on a %q-writing dialect, want %q", otherFrame[memKindOffset], other.MWWriteKind(), combinedMTSetKind)
+	if otherFrame[memKindOffset] != CombinedMTSetKind {
+		t.Errorf("P7 = %q on a %q-writing dialect, want %q", otherFrame[memKindOffset], other.MWWriteKind(), CombinedMTSetKind)
 	}
 }
 
@@ -472,7 +472,7 @@ func TestMTCombinedAPIs_RefuseAShortDialect(t *testing.T) {
 	}
 	m := MemoryData{
 		Slot: slot, FreqHz: 14_250_000, ClarHz: 0,
-		Mode: ModeUSB, Kind: combinedMTSetKind,
+		Mode: ModeUSB, Kind: CombinedMTSetKind,
 		CTCSS: CTCSSOff, Shift: ShiftSimplex,
 	}
 
@@ -663,8 +663,8 @@ func TestAllowedCommand_CombinedSetAnswerCollisionNarrowsToP7Zero(t *testing.T) 
 	d := mustCombinedDialect(t, 6, ' ', KindMemory)
 	set := mustCombinedFrame(t, d, "CQ")
 
-	if set[memKindOffset] != combinedMTSetKind {
-		t.Fatalf("fixture P7 = %q, want the Set constant %q", set[memKindOffset], combinedMTSetKind)
+	if set[memKindOffset] != CombinedMTSetKind {
+		t.Fatalf("fixture P7 = %q, want the Set constant %q", set[memKindOffset], CombinedMTSetKind)
 	}
 	if !d.AllowedCommand(set) {
 		t.Errorf("AllowedCommand(%q) = false, want true — this is the residual: a P7-'0' record is a legal Set, and an Answer carrying one is admitted with it", set)
@@ -838,7 +838,7 @@ const mtFormWalkTag = "AB"
 // dialect for slot s and mode m: validCombinedMemory's field values, with
 // this dialect's OWN slot and its OWN mode substituted in.
 //
-// It carries combinedMTSetKind rather than any dialect's MW write kind, for
+// It carries CombinedMTSetKind rather than any dialect's MW write kind, for
 // the reason TestBuildMTSetCombined_P7IsAFormConstantNotTheMWWriteKind states
 // at length — and that is what makes the walk's round trip meaningful over
 // combinedPeerDialect, whose MW writes carry '2'.
@@ -850,7 +850,7 @@ func mtFormWalkRecord(s Slot, m Mode) MemoryData {
 		RxClar: true,
 		TxClar: false,
 		Mode:   m,
-		Kind:   combinedMTSetKind,
+		Kind:   CombinedMTSetKind,
 		CTCSS:  CTCSSEncDec,
 		Shift:  ShiftPlus,
 	}
@@ -1069,4 +1069,29 @@ func TestEveryDialect_MTFormCoverage(t *testing.T) {
 
 	t.Logf("checked %d built MT Set frames across %d dialects; per builder: %v; wrong-form refusals seen: %v",
 		totalFrames, len(allTestDialects()), perBuilder, refusalsSeen)
+}
+
+// --- M9c-4 task 1: the exported constant's incidental coincidence ---
+
+// TestCombinedMTSetKindCoincidesWithKindVFO records that the combined Set's
+// P7 schema constant and the read-side P7 vocabulary's "VFO" value are the
+// same byte — AS A COINCIDENCE, and never as a definition.
+//
+// THE CAVEAT IS THE WHOLE POINT. CombinedMTSetKind is the WRITE-direction
+// "0: (Fixed)" of the combined MT Set's own position table; KindVFO is the
+// READ-direction "0: VFO" of the shared memory record's P7 (memdata.go).
+// Two different command-specific facts that happen to land on the same
+// character. So the constant is defined as the literal '0' and never as
+// KindVFO (see its doc comment), and this is the ONE place the equality is
+// written down: a reference — or a radio — that ever separated the two would
+// fail HERE, visibly, instead of silently carrying a Set-direction schema
+// value away under a read-side name.
+//
+// Nothing in the codec may depend on this assertion holding. If it ever
+// fails, the remedy is to delete it, not to redefine either constant through
+// the other.
+func TestCombinedMTSetKindCoincidesWithKindVFO(t *testing.T) {
+	if CombinedMTSetKind != KindVFO {
+		t.Errorf("CombinedMTSetKind = %q, KindVFO = %q — on the evidenced radio the combined Set's \"(Fixed)\" P7 and the read-side \"VFO\" P7 are the same byte; this test only records that coincidence, so if it has genuinely ended, delete this test rather than deriving either constant from the other", CombinedMTSetKind, KindVFO)
+	}
 }

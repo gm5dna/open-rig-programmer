@@ -1,0 +1,36 @@
+# MW (MEMORY CHANNEL WRITE) - Set-direction frames
+# Source: Yaesu FTDX10 CAT Operation Reference Manual, revision 2308-F.
+#   Position chart: printed page 17 (PDF page 18), block "MW MEMORY CHANNEL WRITE",
+#   Set chart (the Read and Answer rows of that chart are printed empty; the
+#   Control Command List on printed page 5 likewise gives MW as Set=O, Read=X,
+#   Ans.=X, so Set is the only direction that exists for MW).
+# Derived 29/07/2026 by hand from the position chart and its parameter legend only.
+# NO code, no generator, no other file and no other document was consulted.
+#
+# Frame length: 28 bytes. Field map read off the chart's numbered positions:
+#   1-2    "MW"
+#   3-5    P1  memory channel, 3 chars  (legend: 001-099, P1L-P9U (PMS))
+#   6-14   P2  frequency in Hz, 9 digits
+#   15-19  P3  clarifier direction (1) + clarifier offset (4), 0000-9990 Hz
+#   20     P4  0: RX CLAR "OFF"  1: RX CLAR "ON"
+#   21     P5  0: TX CLAR "OFF"  1: TX CLAR "ON"
+#   22     P6  MODE nibble
+#   23     P7  '0' (Fixed)   <- MW legend gives P7 as fixed 0, no Read vocabulary
+#   24     P8  0: CTCSS "OFF"  1: CTCSS ENC/DEC  2: CTCSS ENC
+#   25-26  P9  "00" (Fixed)
+#   27     P10 0: Simplex  1: Plus Shift  2: Minus Shift
+#   28     ";" terminator
+#
+# NOTE - MINUS SIGN: vector 2 uses ASCII HYPHEN-MINUS 0x2D for the P3 minus
+#   direction. The 2308-F legend renders that glyph as a double dash ("--: Minus
+#   Shift"); the same legend for the IF command on printed page 14 renders it as a
+#   single "-". The single ASCII 0x2D byte is an INHERITED ASSUMPTION.
+# NOTE - ZERO OFFSET SIGN: '+' is used when the clarifier offset is 0000. The
+#   manual defines only two direction characters and does not say which one
+#   accompanies a zero offset. INHERITED ASSUMPTION.
+#
+# Hardware status: UNVERIFIED. Neither frame has been sent to or captured from a
+#   real FTDX10.
+# Format: name<TAB>frame
+mw_ch003_14m250_usb_simplex_noclar	MW003014250000+000000200000;
+mw_ch021_29m600_fm_minusshift_rxclar_ctcss	MW021029600000-050010401002;
