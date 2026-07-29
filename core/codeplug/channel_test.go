@@ -69,7 +69,7 @@ func TestChannelJSON_RoundTrip(t *testing.T) {
 			CTCSSTone:  ToneField{State: Known, Value: spec.Tone(885)},
 			Shift:      "PLUS",
 			Tag:        "MB9XYZ",
-			TagDisplay: true,
+			TagDisplay: BoolField{State: Known, Value: true},
 			ScanSkip:   BoolField{State: Known, Value: true},
 		},
 	}

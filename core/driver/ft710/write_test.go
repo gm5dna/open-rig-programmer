@@ -4,6 +4,8 @@ package ft710
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,7 +30,7 @@ func writableChannel(slot string) codeplug.Channel {
 			CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
 			Shift:      "SIMPLEX",
 			Tag:        "TEST",
-			TagDisplay: true,
+			TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: true},
 			ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
 		},
 	}
@@ -230,6 +232,121 @@ func TestWriteChannel_RefusalNamesFields(t *testing.T) {
 	if wre.Slot != "010" {
 		t.Errorf("WriteRefusedError.Slot = %q, want \"010\"", wre.Slot)
 	}
+}
+
+// TestWriteChannel_NonKnownTagDisplayRefusedBeforeWire is E1's
+// defence-in-depth pin: a channel whose TagDisplay is not Known must be
+// refused BEFORE any wire traffic, naming spec.FieldTagDisplay, in every
+// non-Known shape.
+//
+// MT's display flag (P1) is mandatory — the frame has no "leave it alone"
+// encoding — so the only alternatives to refusing are to invent a value or
+// to skip the tag write entirely, and both would break codeplug's write
+// rule that a non-Known field is never present on the wire.
+//
+// The zero BoolField is included deliberately: it is what a
+// composite-literal ChannelData that simply forgets the field produces, and
+// it must be refused rather than read as "off".
+func TestWriteChannel_NonKnownTagDisplayRefusedBeforeWire(t *testing.T) {
+	tests := []struct {
+		name       string
+		tagDisplay codeplug.BoolField
+	}{
+		{"Unknown", codeplug.BoolField{State: codeplug.Unknown}},
+		{"Unavailable", codeplug.BoolField{State: codeplug.Unavailable}},
+		{"zero value (State unset)", codeplug.BoolField{}},
+		{"unrecognised State", codeplug.BoolField{State: codeplug.FieldState("maybe")}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cp, sess := openCountingSession(t, Simulated)
+			ch := writableChannel("010")
+			ch.Data.TagDisplay = tt.tagDisplay
+
+			baseline := cp.writes.Load()
+			_, err := sess.WriteChannel(testCtx(t), ch)
+			if !errors.Is(err, driver.ErrWriteRefused) {
+				t.Fatalf("WriteChannel = %v, want errors.Is match against driver.ErrWriteRefused", err)
+			}
+			if got := cp.writes.Load(); got != baseline {
+				t.Errorf("refused WriteChannel produced %d wire writes, want 0 (refusal must precede ALL wire traffic)", got-baseline)
+			}
+			var wre *driver.WriteRefusedError
+			if !errors.As(err, &wre) {
+				t.Fatalf("WriteChannel = %v, want a *driver.WriteRefusedError", err)
+			}
+			if len(wre.Fields) != 1 || wre.Fields[0] != spec.FieldTagDisplay {
+				t.Errorf("WriteRefusedError.Fields = %v, want exactly [%s]", wre.Fields, spec.FieldTagDisplay)
+			}
+			if wre.Slot != "010" {
+				t.Errorf("WriteRefusedError.Slot = %q, want %q", wre.Slot, "010")
+			}
+		})
+	}
+}
+
+// TestBuildWriteCommands_NonKnownTagDisplayRefusedFirst pins the REFUSAL'S
+// PLACEMENT, not merely its existence: buildWriteCommands must reject a
+// non-Known TagDisplay before it maps any other field, so a channel that is
+// wrong in several ways at once still names the one field whose failure
+// mode would otherwise be a silently wrong byte on the wire.
+//
+// The fixture is invalid in three further ways the function checks LATER
+// (mode, ctcss state, clarifier); only the TagDisplay refusal may surface.
+func TestBuildWriteCommands_NonKnownTagDisplayRefusedFirst(t *testing.T) {
+	ch := writableChannel("010")
+	ch.Data.TagDisplay = codeplug.BoolField{State: codeplug.Unknown}
+	ch.Data.Mode = "NOT-A-MODE"
+	ch.Data.CTCSS = "NOT-A-CTCSS-STATE"
+	ch.Data.ClarHz = 999_999
+
+	_, _, err := buildWriteCommands(cat.FT710, ch)
+	var wre *driver.WriteRefusedError
+	if !errors.As(err, &wre) {
+		t.Fatalf("buildWriteCommands = %v, want a *driver.WriteRefusedError", err)
+	}
+	if len(wre.Fields) != 1 || wre.Fields[0] != spec.FieldTagDisplay {
+		t.Fatalf("WriteRefusedError.Fields = %v, want exactly [%s] — the TagDisplay check must run before every other field mapping", wre.Fields, spec.FieldTagDisplay)
+	}
+	if !strings.Contains(wre.Reason, "only a Known value is ever sent") {
+		t.Errorf("WriteRefusedError.Reason = %q, want it to state the Known-only write rule", wre.Reason)
+	}
+}
+
+// TestBuildWriteCommands_KnownTagDisplayReachesTheFrame is the refusal's
+// other half: a Known TagDisplay — true or false alike — still flows
+// through to the MT frame, so the new gate blocks only what it should.
+// Known-FALSE is the case worth stating: it is a real value, not an
+// absence, and must be sent.
+func TestBuildWriteCommands_KnownTagDisplayReachesTheFrame(t *testing.T) {
+	for _, value := range []bool{true, false} {
+		t.Run(fmt.Sprintf("known/%v", value), func(t *testing.T) {
+			ch := writableChannel("010")
+			ch.Data.TagDisplay = codeplug.BoolField{State: codeplug.Known, Value: value}
+
+			_, mtCmd, err := buildWriteCommands(cat.FT710, ch)
+			if err != nil {
+				t.Fatalf("buildWriteCommands = %v, want success for a Known TagDisplay", err)
+			}
+			want, err := cat.FT710.BuildMTSet(mustParseSlot(t, "010"), value, ch.Data.Tag)
+			if err != nil {
+				t.Fatalf("building the reference MT frame: %v", err)
+			}
+			if got, wantBytes := string(mtCmd.Bytes()), string(want.Bytes()); got != wantBytes {
+				t.Errorf("MT frame = %q, want %q (the Known value must reach the wire unchanged)", got, wantBytes)
+			}
+		})
+	}
+}
+
+// mustParseSlot parses wire through the FT-710 dialect or fails the test.
+func mustParseSlot(t *testing.T, wire string) cat.Slot {
+	t.Helper()
+	sl, err := cat.FT710.ParseSlot(wire)
+	if err != nil {
+		t.Fatalf("ParseSlot(%q): %v", wire, err)
+	}
+	return sl
 }
 
 // mwKindOffset is P7's 0-indexed offset in the 28-byte MW Set frame. It

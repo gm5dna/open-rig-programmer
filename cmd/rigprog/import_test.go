@@ -22,12 +22,13 @@ import (
 // bankFields doc comment).
 func validChannelData(freqHz uint32, mode string) *codeplug.ChannelData {
 	return &codeplug.ChannelData{
-		FreqHz:    freqHz,
-		Mode:      mode,
-		CTCSS:     "OFF",
-		CTCSSTone: codeplug.ToneField{State: codeplug.Unknown},
-		Shift:     "SIMPLEX",
-		ScanSkip:  codeplug.BoolField{State: codeplug.Unknown},
+		FreqHz:     freqHz,
+		Mode:       mode,
+		CTCSS:      "OFF",
+		CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+		Shift:      "SIMPLEX",
+		TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
+		ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
 	}
 }
 

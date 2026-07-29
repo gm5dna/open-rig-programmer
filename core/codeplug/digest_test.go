@@ -13,22 +13,24 @@ import (
 func baseDigestChannels() []Channel {
 	return []Channel{
 		{Slot: "001", Data: &ChannelData{
-			FreqHz:    14250000,
-			Mode:      "USB",
-			CTCSS:     "OFF",
-			CTCSSTone: ToneField{State: Unknown},
-			Shift:     "SIMPLEX",
-			Tag:       "ALPHA",
-			ScanSkip:  BoolField{State: Known, Value: false},
+			FreqHz:     14250000,
+			Mode:       "USB",
+			CTCSS:      "OFF",
+			CTCSSTone:  ToneField{State: Unknown},
+			Shift:      "SIMPLEX",
+			Tag:        "ALPHA",
+			TagDisplay: BoolField{State: Known, Value: false},
+			ScanSkip:   BoolField{State: Known, Value: false},
 		}},
 		{Slot: "002", Data: &ChannelData{
-			FreqHz:    43012500,
-			Mode:      "FM",
-			CTCSS:     "ENC-DEC",
-			CTCSSTone: ToneField{State: Known, Value: spec.Tone(885)},
-			Shift:     "PLUS",
-			Tag:       "BRAVO",
-			ScanSkip:  BoolField{State: Known, Value: true},
+			FreqHz:     43012500,
+			Mode:       "FM",
+			CTCSS:      "ENC-DEC",
+			CTCSSTone:  ToneField{State: Known, Value: spec.Tone(885)},
+			Shift:      "PLUS",
+			Tag:        "BRAVO",
+			TagDisplay: BoolField{State: Known, Value: false},
+			ScanSkip:   BoolField{State: Known, Value: true},
 		}},
 		{Slot: "003"}, // empty slot
 	}
@@ -99,7 +101,7 @@ func TestDigest_ContentIdenticalReReadDigestsEqual(t *testing.T) {
 // populated, produces different digests.
 func TestDigest_EmptyVsPopulatedDiffers(t *testing.T) {
 	empty := []Channel{{Slot: "001"}}
-	populated := []Channel{{Slot: "001", Data: &ChannelData{FreqHz: 14250000, Mode: "USB", CTCSS: "OFF", Shift: "SIMPLEX"}}}
+	populated := []Channel{{Slot: "001", Data: &ChannelData{FreqHz: 14250000, Mode: "USB", CTCSS: "OFF", Shift: "SIMPLEX", TagDisplay: BoolField{State: Known, Value: false}}}}
 
 	de, dp := Digest(empty), Digest(populated)
 	if de == dp {

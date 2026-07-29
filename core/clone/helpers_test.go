@@ -412,7 +412,7 @@ func writableChannel(slot string, freqHz uint32, tag string) codeplug.Channel {
 			CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
 			Shift:      "SIMPLEX",
 			Tag:        tag,
-			TagDisplay: tag != "",
+			TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: tag != ""},
 			ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
 		},
 	}

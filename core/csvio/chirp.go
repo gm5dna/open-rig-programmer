@@ -378,6 +378,20 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string, caps spe
 	data.Tag = tag
 	entries = append(entries, nameEntries...)
 
+	// TagDisplay: CHIRP's schema has no display-flag column at all, so
+	// nothing in the file says whether the tag should replace the frequency
+	// on the front panel.
+	//
+	// Until M9c-5 task 4 this stays the PRE-E1 MANUFACTURED FALSE: the zero
+	// bool a CHIRP-derived ChannelData carried before TagDisplay became a
+	// BoolField, and therefore the value such a channel was already being
+	// sent with. Stating it explicitly is not decoration — the zero
+	// BoolField is {State: ""}, which codeplug.Validate rejects outright, so
+	// leaving it implicit would fail EVERY CHIRP import. Task 4 replaces it
+	// with the honest {State: Unknown}, which the diff then blocks until the
+	// user decides.
+	data.TagDisplay = codeplug.BoolField{State: codeplug.Known, Value: false}
+
 	// Frequency -> FreqHz.
 	freqRaw := cell("Frequency")
 	freqHz, err := parseCHIRPFrequency(freqRaw)

@@ -50,7 +50,7 @@ func fullImage() []codeplug.Channel {
 				CTCSSTone:  codeplug.ToneField{State: codeplug.Known, Value: spec.Tone(885)},
 				Shift:      "PLUS",
 				Tag:        "MB9XYZ",
-				TagDisplay: true,
+				TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: true},
 				ScanSkip:   codeplug.BoolField{State: codeplug.Known, Value: true},
 			},
 		},
@@ -58,25 +58,27 @@ func fullImage() []codeplug.Channel {
 		{
 			Slot: "003",
 			Data: &codeplug.ChannelData{
-				FreqHz:    14300000,
-				Mode:      "LSB",
-				CTCSS:     "OFF",
-				CTCSSTone: codeplug.ToneField{State: codeplug.Unknown},
-				Shift:     "SIMPLEX",
-				Tag:       "NET",
-				ScanSkip:  codeplug.BoolField{State: codeplug.Known, Value: false},
+				FreqHz:     14300000,
+				Mode:       "LSB",
+				CTCSS:      "OFF",
+				CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+				Shift:      "SIMPLEX",
+				Tag:        "NET",
+				TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
+				ScanSkip:   codeplug.BoolField{State: codeplug.Known, Value: false},
 			},
 		},
 		{
 			Slot: "501",
 			Data: &codeplug.ChannelData{
-				FreqHz:    5330500,
-				Mode:      "AM",
-				ClarHz:    370,
-				CTCSS:     "OFF",
-				CTCSSTone: codeplug.ToneField{State: codeplug.Unavailable},
-				Shift:     "SIMPLEX",
-				ScanSkip:  codeplug.BoolField{State: codeplug.Unavailable},
+				FreqHz:     5330500,
+				Mode:       "AM",
+				ClarHz:     370,
+				CTCSS:      "OFF",
+				CTCSSTone:  codeplug.ToneField{State: codeplug.Unavailable},
+				Shift:      "SIMPLEX",
+				TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
+				ScanSkip:   codeplug.BoolField{State: codeplug.Unavailable},
 			},
 		},
 		{Slot: "099"}, // empty slot, trailing
@@ -119,13 +121,14 @@ func TestExportImport_ApostropheTagRoundTrip(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			d := codeplug.ChannelData{
-				FreqHz:    14250000,
-				Mode:      "USB",
-				CTCSS:     "OFF",
-				CTCSSTone: codeplug.ToneField{State: codeplug.Unknown},
-				Shift:     "SIMPLEX",
-				Tag:       tc.tag,
-				ScanSkip:  codeplug.BoolField{State: codeplug.Unknown},
+				FreqHz:     14250000,
+				Mode:       "USB",
+				CTCSS:      "OFF",
+				CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+				Shift:      "SIMPLEX",
+				Tag:        tc.tag,
+				TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
+				ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
 			}
 			want := []codeplug.Channel{{Slot: "001", Data: &d}}
 
@@ -164,13 +167,14 @@ func TestExportImport_ApostropheTagRoundTrip(t *testing.T) {
 // byte-for-byte).
 func TestImport_TrimsLegacyPaddedTagCell(t *testing.T) {
 	want := codeplug.ChannelData{
-		FreqHz:    14250000,
-		Mode:      "USB",
-		CTCSS:     "OFF",
-		CTCSSTone: codeplug.ToneField{State: codeplug.Unknown},
-		Shift:     "SIMPLEX",
-		Tag:       "BBC ANT 3",
-		ScanSkip:  codeplug.BoolField{State: codeplug.Unknown},
+		FreqHz:     14250000,
+		Mode:       "USB",
+		CTCSS:      "OFF",
+		CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+		Shift:      "SIMPLEX",
+		Tag:        "BBC ANT 3",
+		TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
+		ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
 	}
 	var buf bytes.Buffer
 	if err := Export(&buf, []codeplug.Channel{{Slot: "001", Data: &want}}); err != nil {

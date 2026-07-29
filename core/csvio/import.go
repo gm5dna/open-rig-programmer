@@ -326,7 +326,11 @@ func Import(r io.Reader) ([]codeplug.Channel, error) {
 		if err != nil {
 			return nil, &ParseError{Line: line, Reason: fmt.Sprintf("tag_display: %v", err)}
 		}
-		data.TagDisplay = tagDisplay
+		// Interim (M9c-5 task 1): the native CSV still speaks the pre-E1
+		// yes/empty spelling, which can only express a value, never a state —
+		// so a parsed cell is exactly as known as it was before the flip.
+		// Task 4 replaces this with the four-state BoolField spelling.
+		data.TagDisplay = codeplug.BoolField{State: codeplug.Known, Value: tagDisplay}
 
 		scanSkip, err := parseBoolFieldCell(cell("scan_skip"))
 		if err != nil {

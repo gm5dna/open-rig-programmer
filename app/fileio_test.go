@@ -18,7 +18,7 @@ func syntheticWorking() *codeplug.Codeplug {
 		Generator: "test",
 		Radio:     codeplug.RadioInfo{Model: "FT-710", CATID: "0800"},
 		Channels: []codeplug.Channel{
-			{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 7_000_000, Mode: "USB", CTCSS: "OFF", Shift: "SIMPLEX", CTCSSTone: codeplug.ToneField{State: codeplug.Unknown}, ScanSkip: codeplug.BoolField{State: codeplug.Unknown}}},
+			{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 7_000_000, Mode: "USB", CTCSS: "OFF", Shift: "SIMPLEX", CTCSSTone: codeplug.ToneField{State: codeplug.Unknown}, ScanSkip: codeplug.BoolField{State: codeplug.Unknown}, TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}},
 			{Slot: "002"},
 		},
 	}
@@ -167,7 +167,7 @@ func TestIsDirty_IsTheDirtyLoadProtectionSurface(t *testing.T) {
 	a.working = syntheticWorking()
 	a.mu.Unlock()
 
-	if _, err := a.UpdateChannel(codeplug.Channel{Slot: "002", Data: &codeplug.ChannelData{FreqHz: 14_000_000, Mode: "USB", CTCSS: "OFF", Shift: "SIMPLEX", CTCSSTone: codeplug.ToneField{State: codeplug.Unknown}, ScanSkip: codeplug.BoolField{State: codeplug.Unknown}}}); err != nil {
+	if _, err := a.UpdateChannel(codeplug.Channel{Slot: "002", Data: &codeplug.ChannelData{FreqHz: 14_000_000, Mode: "USB", CTCSS: "OFF", Shift: "SIMPLEX", CTCSSTone: codeplug.ToneField{State: codeplug.Unknown}, ScanSkip: codeplug.BoolField{State: codeplug.Unknown}, TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}}); err != nil {
 		t.Fatalf("UpdateChannel: %v", err)
 	}
 	if !a.IsDirty() {
@@ -208,8 +208,9 @@ func freqOfSlot(cp *codeplug.Codeplug, slot string) int64 {
 func editChannelFreq(slot string, freq int64) codeplug.Channel {
 	return codeplug.Channel{Slot: slot, Data: &codeplug.ChannelData{
 		FreqHz: uint32(freq), Mode: "USB", CTCSS: "OFF", Shift: "SIMPLEX",
-		CTCSSTone: codeplug.ToneField{State: codeplug.Unknown},
-		ScanSkip:  codeplug.BoolField{State: codeplug.Unknown},
+		CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+		TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
+		ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
 	}}
 }
 

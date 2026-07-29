@@ -131,7 +131,12 @@ func exportRow(ch codeplug.Channel) []string {
 		row[8] = exportToneField(d.CTCSSTone)
 		row[9] = d.Shift
 		row[10] = d.Tag
-		row[11] = yesEmpty(d.TagDisplay)
+		// Interim (M9c-5 task 1): still the PRE-E1 yes/empty spelling, over
+		// the BoolField's Value alone. Behaviour-preserving by construction —
+		// Known-true renders "yes" and Known-false "" exactly as the old bool
+		// did. Task 4 replaces this with exportBoolField's four-state
+		// spelling, which is the change that alters the column's output.
+		row[11] = yesEmpty(d.TagDisplay.Value)
 		row[12] = exportBoolField(d.ScanSkip)
 	}
 

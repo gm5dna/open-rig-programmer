@@ -1603,7 +1603,7 @@ func readJournalEventDetails(t *testing.T, path string) []journalEventDetail {
 func baseVerifyChannelData() codeplug.ChannelData {
 	return codeplug.ChannelData{
 		FreqHz: 14_100_000, Mode: "USB", CTCSS: "OFF", Shift: "SIMPLEX",
-		Tag: "BASE", TagDisplay: true,
+		Tag: "BASE", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: true},
 		CTCSSTone: codeplug.ToneField{State: codeplug.Unknown},
 		ScanSkip:  codeplug.BoolField{State: codeplug.Unknown},
 	}
@@ -1632,7 +1632,9 @@ func TestWritableFieldsMismatch_Table(t *testing.T) {
 		{"ctcss differs", func(c *codeplug.ChannelData) { c.CTCSS = "ENC" }, []spec.Field{spec.FieldCTCSSState}},
 		{"shift differs", func(c *codeplug.ChannelData) { c.Shift = "PLUS" }, []spec.Field{spec.FieldShift}},
 		{"tag differs", func(c *codeplug.ChannelData) { c.Tag = "OTHER" }, []spec.Field{spec.FieldTag}},
-		{"tagDisplay differs", func(c *codeplug.ChannelData) { c.TagDisplay = false }, []spec.Field{spec.FieldTagDisplay}},
+		{"tagDisplay differs", func(c *codeplug.ChannelData) {
+			c.TagDisplay = codeplug.BoolField{State: codeplug.Known, Value: false}
+		}, []spec.Field{spec.FieldTagDisplay}},
 		{"CTCSSTone differs — excluded (read back Unknown by construction)", func(c *codeplug.ChannelData) {
 			c.CTCSSTone = codeplug.ToneField{State: codeplug.Known, Value: 100}
 		}, nil},

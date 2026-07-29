@@ -60,7 +60,7 @@ func TestValidate(t *testing.T) {
 			mutate: func(cp *Codeplug) {
 				cp.Channels = append(cp.Channels, Channel{
 					Slot: "999",
-					Data: &ChannelData{FreqHz: 14000000, Mode: "USB", CTCSS: "OFF", CTCSSTone: ToneField{State: Unknown}, Shift: "SIMPLEX", ScanSkip: BoolField{State: Known}},
+					Data: &ChannelData{FreqHz: 14000000, Mode: "USB", CTCSS: "OFF", CTCSSTone: ToneField{State: Unknown}, Shift: "SIMPLEX", TagDisplay: BoolField{State: Known}, ScanSkip: BoolField{State: Known}},
 				})
 			},
 			wantSeverity: SeverityError,
@@ -72,7 +72,7 @@ func TestValidate(t *testing.T) {
 			mutate: func(cp *Codeplug) {
 				cp.Channels = append(cp.Channels, Channel{
 					Slot: "002",
-					Data: &ChannelData{FreqHz: 14000000, Mode: "USB", CTCSS: "OFF", CTCSSTone: ToneField{State: Unknown}, Shift: "SIMPLEX", ScanSkip: BoolField{State: Known}},
+					Data: &ChannelData{FreqHz: 14000000, Mode: "USB", CTCSS: "OFF", CTCSSTone: ToneField{State: Unknown}, Shift: "SIMPLEX", TagDisplay: BoolField{State: Known}, ScanSkip: BoolField{State: Known}},
 				})
 			},
 			wantSeverity: SeverityError,
@@ -278,6 +278,48 @@ func TestValidate(t *testing.T) {
 			wantMsgSub:   "002",
 		},
 		{
+			// E1's first refusal: a non-Known TagDisplay means "preserve
+			// whatever the radio has", so a true smuggled alongside it is a
+			// value that must never be treated as an intent to send.
+			name: "TagDisplay invalid (Unknown with true value)",
+			mutate: func(cp *Codeplug) {
+				cp.Channels[1].Data.TagDisplay = BoolField{State: Unknown, Value: true}
+			},
+			wantSeverity: SeverityError,
+			wantField:    spec.FieldTagDisplay,
+			wantSlot:     "002",
+			wantMsgSub:   "002",
+		},
+		{
+			name: "TagDisplay invalid (Unavailable with true value)",
+			mutate: func(cp *Codeplug) {
+				cp.Channels[1].Data.TagDisplay = BoolField{State: Unavailable, Value: true}
+			},
+			wantSeverity: SeverityError,
+			wantField:    spec.FieldTagDisplay,
+			wantSlot:     "002",
+			wantMsgSub:   "002",
+		},
+		{
+			name: "TagDisplay invalid (unrecognised State)",
+			mutate: func(cp *Codeplug) {
+				cp.Channels[1].Data.TagDisplay = BoolField{State: FieldState("maybe")}
+			},
+			wantSeverity: SeverityError,
+			wantField:    spec.FieldTagDisplay,
+			wantSlot:     "002",
+			wantMsgSub:   "invalid State",
+		},
+		{
+			// The other half of the rule, stated so it cannot be lost: a
+			// well-formed Unknown TagDisplay is VALID data. Validate judges
+			// shape only — blocking its SEND is Diff's job (M9c-5 task 2).
+			name: "TagDisplay Unknown with false value is valid",
+			mutate: func(cp *Codeplug) {
+				cp.Channels[1].Data.TagDisplay = BoolField{State: Unknown}
+			},
+		},
+		{
 			name: "CTCSS tone pairing warning",
 			mutate: func(cp *Codeplug) {
 				cp.Channels[1].Data.CTCSS = "ENC"
@@ -371,6 +413,41 @@ func TestValidateDeterministic(t *testing.T) {
 	}
 }
 
+// TestValidate_TagDisplayIssueOrder pins WHERE the TagDisplay shape issue
+// lands in the fixed per-channel order Validate's doc comment promises:
+// directly after ScanSkip's and BEFORE the CTCSS-tone-pairing warning.
+//
+// Position is contractual here, not incidental — Validate's determinism
+// guarantee is what lets callers (and golden output) rely on the sequence,
+// so a field slotted in "somewhere sensible" would silently reorder every
+// multi-issue channel's report.
+func TestValidate_TagDisplayIssueOrder(t *testing.T) {
+	cp := testBaselineCodeplug()
+	d := cp.Channels[1].Data
+	// Break tone, skip and display at once, and force the tone-pairing
+	// warning too, so all four issues are present for one channel.
+	d.CTCSS = "ENC"
+	d.CTCSSTone = ToneField{State: Unknown, Value: spec.Tone(670)}
+	d.ScanSkip = BoolField{State: Unknown, Value: true}
+	d.TagDisplay = BoolField{State: Unknown, Value: true}
+
+	var got []spec.Field
+	for _, is := range Validate(cp, testCapabilities()) {
+		if is.Slot == "002" {
+			got = append(got, is.Field)
+		}
+	}
+	want := []spec.Field{
+		spec.FieldCTCSSTone,  // CTCSSTone.Valid()
+		spec.FieldScanSkip,   // ScanSkip.Valid()
+		spec.FieldTagDisplay, // TagDisplay.Valid() — directly after it
+		spec.FieldCTCSSTone,  // then the tone-pairing warning
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("slot 002 issue field order = %v, want %v", got, want)
+	}
+}
+
 // deviantVocabCapabilities returns a minimal, self-consistent
 // Capabilities whose Shift and CTCSS vocabularies are deliberately NOT
 // the FT-710's own literals — in particular, its "disabled" CTCSS state
@@ -423,12 +500,13 @@ func deviantChannel(shift, ctcss string, toneKnown bool) *Codeplug {
 			{
 				Slot: "001",
 				Data: &ChannelData{
-					FreqHz:    14250000,
-					Mode:      "USB",
-					CTCSS:     ctcss,
-					CTCSSTone: tone,
-					Shift:     shift,
-					ScanSkip:  BoolField{State: Known, Value: false},
+					FreqHz:     14250000,
+					Mode:       "USB",
+					CTCSS:      ctcss,
+					CTCSSTone:  tone,
+					Shift:      shift,
+					TagDisplay: BoolField{State: Known, Value: false},
+					ScanSkip:   BoolField{State: Known, Value: false},
 				},
 			},
 		},

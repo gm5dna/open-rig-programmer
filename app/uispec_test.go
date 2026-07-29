@@ -531,12 +531,13 @@ func TestGetUISpec_VocabMatchesValidate(t *testing.T) {
 
 	baseData := func() codeplug.ChannelData {
 		return codeplug.ChannelData{
-			FreqHz:    7_000_000,
-			Mode:      "USB",
-			CTCSS:     "OFF",
-			CTCSSTone: codeplug.ToneField{State: codeplug.Unknown},
-			Shift:     "SIMPLEX",
-			ScanSkip:  codeplug.BoolField{State: codeplug.Unknown},
+			FreqHz:     7_000_000,
+			Mode:       "USB",
+			CTCSS:      "OFF",
+			CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+			Shift:      "SIMPLEX",
+			TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
+			ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
 		}
 	}
 

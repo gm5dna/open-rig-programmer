@@ -133,7 +133,7 @@ func TestCmdExport_Success(t *testing.T) {
 	fixture := &codeplug.Codeplug{
 		Schema: codeplug.CurrentSchema,
 		Channels: []codeplug.Channel{
-			{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 7_000_000, Mode: "USB", CTCSS: "OFF", Shift: "SIMPLEX", Tag: "MYCALL"}},
+			{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 7_000_000, Mode: "USB", CTCSS: "OFF", Shift: "SIMPLEX", Tag: "MYCALL", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}},
 			{Slot: "002"}, // empty
 		},
 	}

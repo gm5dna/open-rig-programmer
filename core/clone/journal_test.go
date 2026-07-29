@@ -128,8 +128,9 @@ func TestSnapshotStore_SaveSnapshot_SameInstantOverwrites(t *testing.T) {
 		Radio:  codeplug.RadioInfo{Model: "FT-710", CATID: "0800"},
 		Channels: []codeplug.Channel{{Slot: "001", Data: &codeplug.ChannelData{
 			FreqHz: 7_000_000, Mode: "LSB", CTCSS: "OFF", Shift: "SIMPLEX",
-			CTCSSTone: codeplug.ToneField{State: codeplug.Unknown},
-			ScanSkip:  codeplug.BoolField{State: codeplug.Unknown},
+			CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+			TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
+			ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
 		}}},
 	}
 	second := &codeplug.Codeplug{
@@ -137,8 +138,9 @@ func TestSnapshotStore_SaveSnapshot_SameInstantOverwrites(t *testing.T) {
 		Radio:  codeplug.RadioInfo{Model: "FT-710", CATID: "0800"},
 		Channels: []codeplug.Channel{{Slot: "001", Data: &codeplug.ChannelData{
 			FreqHz: 14_000_000, Mode: "USB", CTCSS: "OFF", Shift: "SIMPLEX",
-			CTCSSTone: codeplug.ToneField{State: codeplug.Unknown},
-			ScanSkip:  codeplug.BoolField{State: codeplug.Unknown},
+			CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+			TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
+			ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
 		}}},
 	}
 

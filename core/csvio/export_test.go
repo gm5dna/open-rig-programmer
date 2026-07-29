@@ -98,7 +98,7 @@ func TestExport_PopulatedSlot(t *testing.T) {
 				CTCSSTone:  codeplug.ToneField{State: codeplug.Known, Value: spec.Tone(885)},
 				Shift:      "PLUS",
 				Tag:        "MB9XYZ",
-				TagDisplay: true,
+				TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: true},
 				ScanSkip:   codeplug.BoolField{State: codeplug.Known, Value: true},
 			},
 			want: []string{"14250000", "USB", "-120", "yes", "yes", "ENC-DEC", "88.5", "PLUS", "MB9XYZ", "yes", "yes"},
@@ -106,38 +106,41 @@ func TestExport_PopulatedSlot(t *testing.T) {
 		{
 			name: "unknown tone, known scan_skip false, no bools",
 			data: codeplug.ChannelData{
-				FreqHz:    14300000,
-				Mode:      "LSB",
-				CTCSS:     "OFF",
-				CTCSSTone: codeplug.ToneField{State: codeplug.Unknown},
-				Shift:     "SIMPLEX",
-				Tag:       "NET",
-				ScanSkip:  codeplug.BoolField{State: codeplug.Known, Value: false},
+				FreqHz:     14300000,
+				Mode:       "LSB",
+				CTCSS:      "OFF",
+				CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+				Shift:      "SIMPLEX",
+				Tag:        "NET",
+				TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
+				ScanSkip:   codeplug.BoolField{State: codeplug.Known, Value: false},
 			},
 			want: []string{"14300000", "LSB", "", "", "", "OFF", "", "SIMPLEX", "NET", "", "no"},
 		},
 		{
 			name: "unavailable tone, unavailable scan_skip",
 			data: codeplug.ChannelData{
-				FreqHz:    5330500,
-				Mode:      "AM",
-				CTCSS:     "OFF",
-				CTCSSTone: codeplug.ToneField{State: codeplug.Unavailable},
-				Shift:     "SIMPLEX",
-				ScanSkip:  codeplug.BoolField{State: codeplug.Unavailable},
+				FreqHz:     5330500,
+				Mode:       "AM",
+				CTCSS:      "OFF",
+				CTCSSTone:  codeplug.ToneField{State: codeplug.Unavailable},
+				Shift:      "SIMPLEX",
+				TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
+				ScanSkip:   codeplug.BoolField{State: codeplug.Unavailable},
 			},
 			want: []string{"5330500", "AM", "", "", "", "OFF", "n/a", "SIMPLEX", "", "", "n/a"},
 		},
 		{
 			name: "clar_hz zero omitted",
 			data: codeplug.ChannelData{
-				FreqHz:    7100000,
-				Mode:      "LSB",
-				ClarHz:    0,
-				CTCSS:     "OFF",
-				CTCSSTone: codeplug.ToneField{State: codeplug.Unknown},
-				Shift:     "SIMPLEX",
-				ScanSkip:  codeplug.BoolField{State: codeplug.Unknown},
+				FreqHz:     7100000,
+				Mode:       "LSB",
+				ClarHz:     0,
+				CTCSS:      "OFF",
+				CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+				Shift:      "SIMPLEX",
+				TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
+				ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
 			},
 			want: []string{"7100000", "LSB", "", "", "", "OFF", "", "SIMPLEX", "", "", ""},
 		},
@@ -196,14 +199,15 @@ func TestExport_FormulaInjectionEscaping(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var buf bytes.Buffer
 			d := codeplug.ChannelData{
-				FreqHz:    14250000,
-				Mode:      "USB",
-				ClarHz:    tc.clarHz,
-				CTCSS:     "OFF",
-				CTCSSTone: codeplug.ToneField{State: codeplug.Unknown},
-				Shift:     "SIMPLEX",
-				Tag:       tc.tag,
-				ScanSkip:  codeplug.BoolField{State: codeplug.Unknown},
+				FreqHz:     14250000,
+				Mode:       "USB",
+				ClarHz:     tc.clarHz,
+				CTCSS:      "OFF",
+				CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+				Shift:      "SIMPLEX",
+				Tag:        tc.tag,
+				TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
+				ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
 			}
 			channels := []codeplug.Channel{{Slot: "001", Data: &d}}
 			if err := Export(&buf, channels); err != nil {
@@ -275,13 +279,14 @@ func TestExport_WriteFailure(t *testing.T) {
 // rather than only being caught by the final Flush/Error check.
 func TestExport_WriteFailure_MidRow(t *testing.T) {
 	d := codeplug.ChannelData{
-		FreqHz:    14250000,
-		Mode:      "USB",
-		CTCSS:     "OFF",
-		CTCSSTone: codeplug.ToneField{State: codeplug.Unknown},
-		Shift:     "SIMPLEX",
-		Tag:       strings.Repeat("A", 8192), // forces csv.Writer's bufio flush mid-row
-		ScanSkip:  codeplug.BoolField{State: codeplug.Unknown},
+		FreqHz:     14250000,
+		Mode:       "USB",
+		CTCSS:      "OFF",
+		CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+		Shift:      "SIMPLEX",
+		Tag:        strings.Repeat("A", 8192), // forces csv.Writer's bufio flush mid-row
+		TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
+		ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
 	}
 	err := Export(failingWriter{}, []codeplug.Channel{{Slot: "001", Data: &d}})
 	if err == nil {
@@ -297,9 +302,9 @@ func TestExport_WriteFailure_MidRow(t *testing.T) {
 func TestExport_FullImageRoundTripSlotOrder(t *testing.T) {
 	var buf bytes.Buffer
 	channels := []codeplug.Channel{
-		{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 14250000, Mode: "USB", CTCSS: "OFF", CTCSSTone: codeplug.ToneField{State: codeplug.Unknown}, Shift: "SIMPLEX", ScanSkip: codeplug.BoolField{State: codeplug.Unknown}}},
+		{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 14250000, Mode: "USB", CTCSS: "OFF", CTCSSTone: codeplug.ToneField{State: codeplug.Unknown}, Shift: "SIMPLEX", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}, ScanSkip: codeplug.BoolField{State: codeplug.Unknown}}},
 		{Slot: "002"},
-		{Slot: "003", Data: &codeplug.ChannelData{FreqHz: 7100000, Mode: "LSB", CTCSS: "OFF", CTCSSTone: codeplug.ToneField{State: codeplug.Unknown}, Shift: "SIMPLEX", ScanSkip: codeplug.BoolField{State: codeplug.Unknown}}},
+		{Slot: "003", Data: &codeplug.ChannelData{FreqHz: 7100000, Mode: "LSB", CTCSS: "OFF", CTCSSTone: codeplug.ToneField{State: codeplug.Unknown}, Shift: "SIMPLEX", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}, ScanSkip: codeplug.BoolField{State: codeplug.Unknown}}},
 	}
 	if err := Export(&buf, channels); err != nil {
 		t.Fatalf("Export() error = %v", err)

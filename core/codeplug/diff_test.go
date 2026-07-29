@@ -42,7 +42,8 @@ func TestDiffKinds(t *testing.T) {
 			file.Channels[i].Data = &ChannelData{
 				FreqHz: 14100000, Mode: "USB", CTCSS: "OFF",
 				CTCSSTone: ToneField{State: Unknown}, Shift: "SIMPLEX",
-				ScanSkip: BoolField{State: Known},
+				TagDisplay: BoolField{State: Known, Value: false},
+				ScanSkip:   BoolField{State: Known},
 			}
 		case "501":
 			file.Channels[i].Data.Mode = "LSB"
@@ -321,12 +322,13 @@ func TestDiffPerFieldGate_AddedChannelKnownToneBlocks(t *testing.T) {
 	for i := range file.Channels {
 		if file.Channels[i].Slot == "003" {
 			file.Channels[i].Data = &ChannelData{
-				FreqHz:    14100000,
-				Mode:      "USB",
-				CTCSS:     "ENC",
-				CTCSSTone: ToneField{State: Known, Value: spec.Tone(670)},
-				Shift:     "SIMPLEX",
-				ScanSkip:  BoolField{State: Known},
+				FreqHz:     14100000,
+				Mode:       "USB",
+				CTCSS:      "ENC",
+				CTCSSTone:  ToneField{State: Known, Value: spec.Tone(670)},
+				Shift:      "SIMPLEX",
+				TagDisplay: BoolField{State: Known, Value: false},
+				ScanSkip:   BoolField{State: Known},
 			}
 		}
 	}
@@ -358,12 +360,13 @@ func TestDiffPerFieldGate_AddedChannelUnknownToneNotBlockedByTone(t *testing.T) 
 	for i := range file.Channels {
 		if file.Channels[i].Slot == "003" {
 			file.Channels[i].Data = &ChannelData{
-				FreqHz:    14100000,
-				Mode:      "USB",
-				CTCSS:     "OFF",
-				CTCSSTone: ToneField{State: Unknown},
-				Shift:     "SIMPLEX",
-				ScanSkip:  BoolField{State: Known},
+				FreqHz:     14100000,
+				Mode:       "USB",
+				CTCSS:      "OFF",
+				CTCSSTone:  ToneField{State: Unknown},
+				Shift:      "SIMPLEX",
+				TagDisplay: BoolField{State: Known, Value: false},
+				ScanSkip:   BoolField{State: Known},
 			}
 		}
 	}
@@ -587,7 +590,8 @@ func TestDiffInertGate_AddedZeroClarifierFlows(t *testing.T) {
 			file.Channels[i].Data = &ChannelData{
 				FreqHz: 14100000, Mode: "USB", CTCSS: "OFF",
 				CTCSSTone: ToneField{State: Unknown}, Shift: "SIMPLEX",
-				ScanSkip: BoolField{State: Known},
+				TagDisplay: BoolField{State: Known, Value: false},
+				ScanSkip:   BoolField{State: Known},
 			}
 		}
 	}
@@ -617,8 +621,9 @@ func TestDiffInertGate_AddedNonZeroClarifierBlocks(t *testing.T) {
 			file.Channels[i].Data = &ChannelData{
 				FreqHz: 14100000, Mode: "USB", CTCSS: "OFF",
 				CTCSSTone: ToneField{State: Unknown}, Shift: "SIMPLEX",
-				ClarHz:   -150,
-				ScanSkip: BoolField{State: Known},
+				ClarHz:     -150,
+				TagDisplay: BoolField{State: Known, Value: false},
+				ScanSkip:   BoolField{State: Known},
 			}
 		}
 	}
@@ -770,7 +775,8 @@ func TestDiffDeterministic(t *testing.T) {
 			file.Channels[i].Data = &ChannelData{
 				FreqHz: 14100000, Mode: "USB", CTCSS: "OFF",
 				CTCSSTone: ToneField{State: Unknown}, Shift: "SIMPLEX",
-				ScanSkip: BoolField{State: Known},
+				TagDisplay: BoolField{State: Known, Value: false},
+				ScanSkip:   BoolField{State: Known},
 			}
 		}
 	}

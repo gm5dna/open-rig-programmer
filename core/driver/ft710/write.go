@@ -70,6 +70,11 @@ func requestedFields(data codeplug.ChannelData) []spec.Field {
 //     profile: the CAT codec cannot express either, and silently
 //     dropping a value the caller explicitly marked Known would be a
 //     lie.
+//   - A TagDisplay that is not Known is refused, in buildWriteCommands and
+//     before ANY other field mapping: MT's display flag is mandatory, so
+//     there is no way to send the channel without inventing a value for it
+//     (see buildWriteCommands). codeplug.Diff blocks such a channel at plan
+//     time; this refusal is the defence-in-depth behind that.
 //   - An empty channel (erase) is refused: no CAT erase command exists
 //     (HW-CONFIRMED 2026-07-13 by a properly isolated re-probe — four
 //     range/mode-isolated candidate MW frames, every one rejected; see
@@ -140,6 +145,9 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	if err := ch.Data.ScanSkip.Valid(); err != nil {
 		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{spec.FieldScanSkip}, Reason: err.Error()}
 	}
+	if err := ch.Data.TagDisplay.Valid(); err != nil {
+		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{spec.FieldTagDisplay}, Reason: err.Error()}
+	}
 
 	// THE write gate (defence in depth below the clone service): every
 	// requested field must be write-Supported for this slot's bank in
@@ -209,6 +217,30 @@ func buildWriteCommands(dialect cat.Dialect, ch codeplug.Channel) (mwCmd, mtCmd 
 	}
 	data := *ch.Data
 
+	// THE pre-wire refusal for TagDisplay, FIRST and before any other field
+	// mapping. The MT frame's display flag (P1) is MANDATORY — the frame has
+	// no "leave it alone" encoding — so sending a channel whose TagDisplay is
+	// not Known would MANUFACTURE a value for a field whose FieldState says
+	// "preserve whatever the radio has", which is exactly what codeplug's
+	// write rule forbids.
+	//
+	// Position is load-bearing, not stylistic: a channel that is wrong in
+	// several ways at once must still name THIS field, because this is the
+	// one whose failure mode is a silent wrong byte on the wire rather than
+	// a refusal. From this commit there is no path from here to BuildMTSet
+	// that carries a non-Known display flag.
+	//
+	// codeplug.Diff blocks such a channel at PLAN time, which is the
+	// user-facing route and the one that produces a helpful message; this is
+	// the belt to that pair of braces, in the same spirit as WriteChannel's
+	// capability gate.
+	if data.TagDisplay.State != codeplug.Known {
+		return cat.Command{}, cat.Command{}, &driver.WriteRefusedError{
+			Slot: ch.Slot, Fields: []spec.Field{spec.FieldTagDisplay},
+			Reason: fmt.Sprintf("tag display FieldState is %q, not %q; only a Known value is ever sent to a radio", data.TagDisplay.State, codeplug.Known),
+		}
+	}
+
 	// Resolved through THIS dialect (task 67, M9c-0), not a driver-private
 	// table: before this, a dialect that renamed a mode had no effect on
 	// what got written — see modeTable's doc comment (caps.go) and
@@ -276,7 +308,9 @@ func buildWriteCommands(dialect cat.Dialect, ch codeplug.Channel) (mwCmd, mtCmd 
 		return cat.Command{}, cat.Command{}, &driver.WriteRefusedError{Slot: ch.Slot, Reason: fmt.Sprintf("cannot encode MW frame: %v", err)}
 	}
 
-	mtCmd, err = dialect.BuildMTSet(sl, data.TagDisplay, data.Tag)
+	// data.TagDisplay.Value is safe to read here and ONLY here: the refusal
+	// at the top of this function has already established State == Known.
+	mtCmd, err = dialect.BuildMTSet(sl, data.TagDisplay.Value, data.Tag)
 	if err != nil {
 		return cat.Command{}, cat.Command{}, &driver.WriteRefusedError{
 			Slot: ch.Slot, Fields: []spec.Field{spec.FieldTag},

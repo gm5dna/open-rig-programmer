@@ -46,9 +46,9 @@ func TestWriteDiffReport_NoChanges(t *testing.T) {
 // before->after for Modified, and the pre-M5b "UNSUPPORTED" marking plus
 // BlockReason for a Blocked Erased entry.
 func TestWriteDiffReport_AddedModifiedErased(t *testing.T) {
-	before := codeplug.ChannelData{FreqHz: 7_000_000, Mode: "LSB", Tag: "OLD"}
-	after := codeplug.ChannelData{FreqHz: 7_010_000, Mode: "USB", Tag: "NEW"}
-	added := codeplug.ChannelData{FreqHz: 14_000_000, Mode: "USB", Tag: "ADDED"}
+	before := codeplug.ChannelData{FreqHz: 7_000_000, Mode: "LSB", Tag: "OLD", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}
+	after := codeplug.ChannelData{FreqHz: 7_010_000, Mode: "USB", Tag: "NEW", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}
+	added := codeplug.ChannelData{FreqHz: 14_000_000, Mode: "USB", Tag: "ADDED", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}
 
 	result := codeplug.DiffResult{
 		Entries: []codeplug.DiffEntry{

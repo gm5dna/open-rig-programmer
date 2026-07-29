@@ -54,7 +54,7 @@ func TestReadChannel_GoldenMappings(t *testing.T) {
 				CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
 				Shift:      "SIMPLEX",
 				Tag:        "",
-				TagDisplay: false,
+				TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
 				ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
 			},
 		},
@@ -71,7 +71,7 @@ func TestReadChannel_GoldenMappings(t *testing.T) {
 				CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
 				Shift:      "PLUS",
 				Tag:        "CALLING",
-				TagDisplay: true,
+				TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: true},
 				ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
 			},
 		},
@@ -80,12 +80,13 @@ func TestReadChannel_GoldenMappings(t *testing.T) {
 			name: "PMS P1L golden 1.810000 MHz LSB (kind check passes for '5')",
 			slot: "P1L",
 			want: codeplug.ChannelData{
-				FreqHz:    1_810_000,
-				Mode:      "LSB",
-				CTCSS:     "OFF",
-				CTCSSTone: codeplug.ToneField{State: codeplug.Unknown},
-				Shift:     "SIMPLEX",
-				ScanSkip:  codeplug.BoolField{State: codeplug.Unknown},
+				FreqHz:     1_810_000,
+				Mode:       "LSB",
+				CTCSS:      "OFF",
+				CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+				Shift:      "SIMPLEX",
+				TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
+				ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
 			},
 		},
 		{
@@ -98,12 +99,13 @@ func TestReadChannel_GoldenMappings(t *testing.T) {
 			name: "60m channel 501",
 			slot: "501",
 			want: codeplug.ChannelData{
-				FreqHz:    5_260_000,
-				Mode:      "USB",
-				CTCSS:     "OFF",
-				CTCSSTone: codeplug.ToneField{State: codeplug.Unknown},
-				Shift:     "SIMPLEX",
-				ScanSkip:  codeplug.BoolField{State: codeplug.Unknown},
+				FreqHz:     5_260_000,
+				Mode:       "USB",
+				CTCSS:      "OFF",
+				CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+				Shift:      "SIMPLEX",
+				TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
+				ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
 			},
 		},
 	}
@@ -214,12 +216,13 @@ func TestReadChannel_HWDerived_M5b_PMSKindLeniency(t *testing.T) {
 		t.Fatal("ReadChannel(P1L) = empty, want populated")
 	}
 	want := codeplug.ChannelData{
-		FreqHz:    7_100_000,
-		Mode:      "LSB",
-		CTCSS:     "OFF",
-		CTCSSTone: codeplug.ToneField{State: codeplug.Unknown},
-		Shift:     "SIMPLEX",
-		ScanSkip:  codeplug.BoolField{State: codeplug.Unknown},
+		FreqHz:     7_100_000,
+		Mode:       "LSB",
+		CTCSS:      "OFF",
+		CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+		Shift:      "SIMPLEX",
+		TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
+		ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
 	}
 	if *got.Data != want {
 		t.Errorf("ReadChannel(P1L) data =\n%+v\nwant\n%+v", *got.Data, want)

@@ -16,7 +16,7 @@ func buildBase() *codeplug.Codeplug {
 	return &codeplug.Codeplug{
 		Schema: codeplug.CurrentSchema,
 		Channels: []codeplug.Channel{
-			{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 7_000_000, Mode: "USB", Tag: "MYCALL1"}},
+			{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 7_000_000, Mode: "USB", Tag: "MYCALL1", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}},
 			{Slot: "002"},
 		},
 	}
@@ -29,8 +29,8 @@ func buildBase() *codeplug.Codeplug {
 func TestMergeCSV_ExactInventoryReplacesChannelsWholesale(t *testing.T) {
 	base := buildBase()
 	imported := []codeplug.Channel{
-		{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 14_000_000, Mode: "USB", Tag: "MYCALL2"}},
-		{Slot: "002", Data: &codeplug.ChannelData{FreqHz: 14_100_000, Mode: "USB", Tag: "MYCALL3"}},
+		{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 14_000_000, Mode: "USB", Tag: "MYCALL2", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}},
+		{Slot: "002", Data: &codeplug.ChannelData{FreqHz: 14_100_000, Mode: "USB", Tag: "MYCALL3", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}},
 	}
 	if err := MergeCSV(base, imported); err != nil {
 		t.Fatalf("MergeCSV: unexpected error: %v", err)
@@ -47,8 +47,8 @@ func TestMergeCSV_InventoryMismatchRefusesAndNamesSlots(t *testing.T) {
 	base := buildBase()
 	original := append([]codeplug.Channel(nil), base.Channels...)
 	imported := []codeplug.Channel{
-		{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 7_000_000, Mode: "USB"}},
-		{Slot: "003", Data: &codeplug.ChannelData{FreqHz: 7_000_000, Mode: "USB"}},
+		{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 7_000_000, Mode: "USB", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}},
+		{Slot: "003", Data: &codeplug.ChannelData{FreqHz: 7_000_000, Mode: "USB", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}},
 	}
 	err := MergeCSV(base, imported)
 	if err == nil {
@@ -82,7 +82,7 @@ func TestMergeCSV_InventoryMismatchRefusesAndNamesSlots(t *testing.T) {
 func TestMergeCHIRP_SparseMergeBySlot(t *testing.T) {
 	base := buildBase()
 	imported := []codeplug.Channel{
-		{Slot: "002", Data: &codeplug.ChannelData{FreqHz: 14_200_000, Mode: "USB", Tag: "MYCALL4"}},
+		{Slot: "002", Data: &codeplug.ChannelData{FreqHz: 14_200_000, Mode: "USB", Tag: "MYCALL4", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}},
 	}
 	if err := MergeCHIRP(base, imported); err != nil {
 		t.Fatalf("MergeCHIRP: unexpected error: %v", err)
@@ -101,7 +101,7 @@ func TestMergeCHIRP_SparseMergeBySlot(t *testing.T) {
 func TestMergeCHIRP_UnknownSlotRefusesWholesale(t *testing.T) {
 	base := buildBase()
 	imported := []codeplug.Channel{
-		{Slot: "099", Data: &codeplug.ChannelData{FreqHz: 7_000_000, Mode: "USB"}},
+		{Slot: "099", Data: &codeplug.ChannelData{FreqHz: 7_000_000, Mode: "USB", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}},
 	}
 	err := MergeCHIRP(base, imported)
 	if err == nil {
@@ -127,8 +127,8 @@ func TestMergeCHIRP_UnknownSlotRefusesWholesale(t *testing.T) {
 func TestMergeCHIRP_DuplicateLocationRefusesWholesale(t *testing.T) {
 	base := buildBase()
 	imported := []codeplug.Channel{
-		{Slot: "002", Data: &codeplug.ChannelData{FreqHz: 7_100_000, Mode: "USB", Tag: "MYCALL5"}},
-		{Slot: "002", Data: &codeplug.ChannelData{FreqHz: 7_150_000, Mode: "USB", Tag: "MYCALL6"}},
+		{Slot: "002", Data: &codeplug.ChannelData{FreqHz: 7_100_000, Mode: "USB", Tag: "MYCALL5", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}},
+		{Slot: "002", Data: &codeplug.ChannelData{FreqHz: 7_150_000, Mode: "USB", Tag: "MYCALL6", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}},
 	}
 	err := MergeCHIRP(base, imported)
 	if err == nil {

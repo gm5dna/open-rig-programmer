@@ -32,8 +32,8 @@ func TestIssuesToView(t *testing.T) {
 func TestBuildDiffSummary_GroupsByKindAndCounts(t *testing.T) {
 	result := codeplug.DiffResult{
 		Entries: []codeplug.DiffEntry{
-			{Slot: "001", Bank: "MEM", Kind: codeplug.DiffAdded, After: &codeplug.ChannelData{FreqHz: 7_000_000}},
-			{Slot: "002", Bank: "MEM", Kind: codeplug.DiffModified, Before: &codeplug.ChannelData{FreqHz: 1}, After: &codeplug.ChannelData{FreqHz: 2}},
+			{Slot: "001", Bank: "MEM", Kind: codeplug.DiffAdded, After: &codeplug.ChannelData{FreqHz: 7_000_000, TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}},
+			{Slot: "002", Bank: "MEM", Kind: codeplug.DiffModified, Before: &codeplug.ChannelData{FreqHz: 1, TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}, After: &codeplug.ChannelData{FreqHz: 2}},
 			{Slot: "501", Bank: "60M", Kind: codeplug.DiffErased, Blocked: true, BlockReason: "erase unsupported"},
 			{Slot: "003", Bank: "MEM", Kind: codeplug.DiffUnchanged},
 		},
@@ -96,7 +96,7 @@ func TestLossEntriesToView(t *testing.T) {
 }
 
 func TestCopyChannels_IndependentDeepCopy(t *testing.T) {
-	original := []codeplug.Channel{{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 7_000_000, Tag: "MYCALL"}}}
+	original := []codeplug.Channel{{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 7_000_000, Tag: "MYCALL", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}}}
 	copied := copyChannels(original)
 	copied[0].Data.Tag = "CHANGED"
 	if original[0].Data.Tag != "MYCALL" {
@@ -109,7 +109,7 @@ func TestDeepCopyCodeplug_IndependentOfSource(t *testing.T) {
 		Schema:    codeplug.CurrentSchema,
 		Generator: "test",
 		Radio:     codeplug.RadioInfo{Model: "FT-710", CATID: "0800"},
-		Channels:  []codeplug.Channel{{Slot: "001", Data: &codeplug.ChannelData{Tag: "MYCALL"}}},
+		Channels:  []codeplug.Channel{{Slot: "001", Data: &codeplug.ChannelData{Tag: "MYCALL", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}}},
 	}
 	dup := deepCopyCodeplug(src)
 	dup.Channels[0].Data.Tag = "CHANGED"
@@ -129,7 +129,7 @@ func TestDeepCopyCodeplug_MenuSnapshotIndependence(t *testing.T) {
 		Schema:    codeplug.CurrentSchema,
 		Generator: "test",
 		Radio:     codeplug.RadioInfo{Model: "FT-710", CATID: "0800"},
-		Channels:  []codeplug.Channel{{Slot: "001", Data: &codeplug.ChannelData{Tag: "MYCALL"}}},
+		Channels:  []codeplug.Channel{{Slot: "001", Data: &codeplug.ChannelData{Tag: "MYCALL", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}}},
 		Menus: &codeplug.MenuSnapshot{
 			Descriptor: "ft710-ex@1",
 			Entries:    []codeplug.MenuEntry{{ID: "000101", Value: "3", State: codeplug.MenuKnown}},
