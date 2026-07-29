@@ -4,8 +4,10 @@ package ft710
 
 import (
 	"errors"
+	"io"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -15,6 +17,52 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeradio"
 )
+
+// wantSteps builds the expected two-step MW-then-MT result for the four
+// flags, in the fixed order this driver always reports: MW first, MT
+// second. Every outcome-table assertion in this package goes through it,
+// so the ORDER and the mnemonics are asserted alongside the flags rather
+// than being spelt out (and possibly mis-spelt) at each site.
+func wantSteps(mwSent, mwConfirmed, mtSent, mtConfirmed bool) []driver.WriteStep {
+	return []driver.WriteStep{
+		{Command: "MW", Sent: mwSent, Confirmed: mwConfirmed},
+		{Command: "MT", Sent: mtSent, Confirmed: mtConfirmed},
+	}
+}
+
+// assertSteps fails t unless res.Steps is exactly want, element for
+// element and in order. driver.WriteResult is no longer comparable with
+// == (its Steps slice), so this replaces the `res != want` form the four
+// bools allowed.
+func assertSteps(t *testing.T, res driver.WriteResult, want []driver.WriteStep) {
+	t.Helper()
+	if !slices.Equal(res.Steps, want) {
+		t.Errorf("WriteResult.Steps = %+v, want %+v", res.Steps, want)
+	}
+}
+
+// failableWritePort wraps a port and, once armed, fails every Write with a
+// transport-level error: the outcome the write path CANNOT attribute,
+// since the host has no way to tell whether the frame reached the radio.
+//
+// Arming happens after Open, deliberately — it keeps the fixture
+// independent of how many exchanges the probe and discovery sequence
+// happen to spend, which the exchange-numbered fault tests are not.
+type failableWritePort struct {
+	inner io.ReadWriteCloser
+	armed atomic.Bool
+}
+
+func (p *failableWritePort) Read(b []byte) (int, error) { return p.inner.Read(b) }
+
+func (p *failableWritePort) Write(b []byte) (int, error) {
+	if p.armed.Load() {
+		return 0, errors.New("failableWritePort: injected transport-level write failure")
+	}
+	return p.inner.Write(b)
+}
+
+func (p *failableWritePort) Close() error { return p.inner.Close() }
 
 // writableChannel returns a fully-writable populated channel for slot:
 // every FieldState-carrying field Unknown (nothing inexpressible
@@ -61,10 +109,7 @@ func TestWriteChannel_HappyPath(t *testing.T) {
 			if err != nil {
 				t.Fatalf("WriteChannel: unexpected error: %v", err)
 			}
-			want := driver.WriteResult{MWSent: true, MWConfirmed: true, MTSent: true, MTConfirmed: true}
-			if res != want {
-				t.Errorf("WriteResult = %+v, want %+v", res, want)
-			}
+			assertSteps(t, res, wantSteps(true, true, true, true))
 
 			state, ok := radio.SlotState(tt.slot)
 			if !ok {
@@ -115,10 +160,7 @@ func TestWriteChannel_InertClarifierTransmitted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WriteChannel (non-zero Inert clarifier): unexpected error: %v", err)
 	}
-	want := driver.WriteResult{MWSent: true, MWConfirmed: true, MTSent: true, MTConfirmed: true}
-	if res != want {
-		t.Errorf("WriteResult = %+v, want %+v", res, want)
-	}
+	assertSteps(t, res, wantSteps(true, true, true, true))
 
 	state, ok := radio.SlotState("010")
 	if !ok || !state.Populated {
@@ -131,9 +173,15 @@ func TestWriteChannel_InertClarifierTransmitted(t *testing.T) {
 
 // TestWriteChannel_DelayedRejection: the MW frame draws a "?;" that
 // arrives DELAYED but still inside the transport's error window
-// (fakeradio FaultDelayedRejection). WriteChannel must report MWSent
-// (the frame went out) but NOT MWConfirmed, must not send MT at all, and
-// must surface the rejection as a typed error.
+// (fakeradio FaultDelayedRejection). WriteChannel must report the MW step
+// Sent (the frame went out) but NOT Confirmed, must not send MT at all,
+// and must surface the rejection as a typed error.
+//
+// The MT step is still PRESENT, flags false: the write intended two
+// frames, and the second never went out. That is the report the
+// preallocated step list exists to make possible — an appended list could
+// only omit MT, which is indistinguishable from a driver that never
+// intended one.
 //
 // Exchange arithmetic (minimalImage pins it): Open produces AI0;=1,
 // ID;=2, MR501;=3 (rejected: no 60m), MREMG;=4 (rejected: no EMG) — so
@@ -148,9 +196,132 @@ func TestWriteChannel_DelayedRejection(t *testing.T) {
 	if !errors.Is(err, cat.ErrRejected) {
 		t.Fatalf("WriteChannel = %v, want errors.Is match against cat.ErrRejected", err)
 	}
-	want := driver.WriteResult{MWSent: true, MWConfirmed: false, MTSent: false, MTConfirmed: false}
-	if res != want {
-		t.Errorf("WriteResult = %+v, want %+v (MW sent but rejected; MT never attempted)", res, want)
+	assertSteps(t, res, wantSteps(true, false, false, false))
+}
+
+// TestWriteChannel_OutcomeTable is E6's pin: the FOUR outcomes a
+// two-frame write can reach, each with the exact step list it must
+// report. The three rows below that end in an error are the partial
+// outcomes the old four booleans encoded; they are carried over here
+// unchanged in meaning, one row per pre-existing case, plus the MT
+// rejection (which the driver's own tests never covered, only clone's)
+// and the transport-ambiguous case.
+//
+// Read the table as a whole: the ONLY difference between "the radio
+// refused this frame" and "we could not tell what happened to it" is the
+// Sent flag, and the only difference between a refused frame and one that
+// was never reached is which step carries it.
+//
+// Exchange arithmetic, minimalImage as above: Open spends 1..4, so
+// WriteChannel's MW is exchange 5 and its MT exchange 6.
+func TestWriteChannel_OutcomeTable(t *testing.T) {
+	t.Run("success: both frames sent and unrejected", func(t *testing.T) {
+		_, sess := openSession(t, Simulated, fakeradio.WithFactoryImage(minimalImage))
+
+		res, err := sess.WriteChannel(testCtx(t), writableChannel("010"))
+		if err != nil {
+			t.Fatalf("WriteChannel: unexpected error: %v", err)
+		}
+		assertSteps(t, res, wantSteps(true, true, true, true))
+	})
+
+	t.Run("MW rejected: MT never reached", func(t *testing.T) {
+		_, sess := openSession(t, Simulated,
+			fakeradio.WithFactoryImage(minimalImage),
+			fakeradio.WithFault(fakeradio.FaultDelayedRejection(5, 50*time.Millisecond)),
+		)
+
+		res, err := sess.WriteChannel(testCtx(t), writableChannel("010"))
+		if !errors.Is(err, cat.ErrRejected) {
+			t.Fatalf("WriteChannel = %v, want errors.Is match against cat.ErrRejected", err)
+		}
+		assertSteps(t, res, wantSteps(true, false, false, false))
+	})
+
+	t.Run("MT rejected: MW already confirmed", func(t *testing.T) {
+		// The dangerous outcome, and the reason the steps are per-frame:
+		// the radio's memory HAS changed (MW landed and drew no rejection)
+		// even though the write as a whole failed. Reported as a single
+		// pair of "did it go" flags, that state would be invisible.
+		_, sess := openSession(t, Simulated,
+			fakeradio.WithFactoryImage(minimalImage),
+			fakeradio.WithFault(fakeradio.FaultDelayedRejection(6, 50*time.Millisecond)),
+		)
+
+		res, err := sess.WriteChannel(testCtx(t), writableChannel("010"))
+		if !errors.Is(err, cat.ErrRejected) {
+			t.Fatalf("WriteChannel = %v, want errors.Is match against cat.ErrRejected", err)
+		}
+		assertSteps(t, res, wantSteps(true, true, true, false))
+	})
+
+	t.Run("transport-ambiguous MW: Sent stays false", func(t *testing.T) {
+		// A transport-level failure is NOT a rejection: the host cannot
+		// attribute the frame's fate at all, so Sent stays false — exactly
+		// as it did before E6 — and the error, not the flags, carries the
+		// distinction.
+		r := fakeradio.New(fakeradio.WithFactoryImage(minimalImage))
+		t.Cleanup(func() { _ = r.Close() })
+		port := &failableWritePort{inner: r.Port()}
+
+		opened, err := New(Simulated).Open(testCtx(t), port, testIdentity)
+		if err != nil {
+			t.Fatalf("Open: unexpected error: %v", err)
+		}
+		t.Cleanup(func() { _ = opened.Close() })
+		port.armed.Store(true)
+
+		res, err := opened.WriteChannel(testCtx(t), writableChannel("010"))
+		if err == nil {
+			t.Fatal("WriteChannel = nil error, want the injected transport write failure")
+		}
+		if errors.Is(err, cat.ErrRejected) {
+			t.Fatalf("WriteChannel = %v, want a transport failure, NOT a radio rejection", err)
+		}
+		assertSteps(t, res, wantSteps(false, false, false, false))
+	})
+}
+
+// TestWriteChannel_RefusedBeforeBuild_StepsAreEmptyNotNil pins the shape
+// of a refusal that happens before either frame is built: an EXPLICITLY
+// EMPTY step list, never nil.
+//
+// The distinction is durable and user-visible, not internal: clone's
+// journal marshals this list into an append-only audit file, where nil
+// renders as `null` — an auditor would have to read that as "unknown",
+// where the truth is the far stronger "no frame was ever built, so
+// nothing whatever was attempted". len() cannot tell the two apart, so
+// the nil check is explicit.
+func TestWriteChannel_RefusedBeforeBuild_StepsAreEmptyNotNil(t *testing.T) {
+	unknownDisplay := writableChannel("010")
+	unknownDisplay.Data.TagDisplay = codeplug.BoolField{State: codeplug.Unknown}
+
+	knownTone := writableChannel("010")
+	knownTone.Data.CTCSSTone = codeplug.ToneField{State: codeplug.Known, Value: 670}
+
+	for _, tt := range []struct {
+		name string
+		ch   codeplug.Channel
+	}{
+		{"refused by the capability gate (Known tone)", knownTone},
+		{"refused inside buildWriteCommands (non-Known TagDisplay)", unknownDisplay},
+		{"refused as an erase (empty channel)", codeplug.Channel{Slot: "010"}},
+		{"refused as an unknown slot", writableChannel("000")},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, sess := openSession(t, Simulated, fakeradio.WithFactoryImage(minimalImage))
+
+			res, err := sess.WriteChannel(testCtx(t), tt.ch)
+			if !errors.Is(err, driver.ErrWriteRefused) {
+				t.Fatalf("WriteChannel = %v, want errors.Is match against driver.ErrWriteRefused", err)
+			}
+			if res.Steps == nil {
+				t.Fatal("WriteResult.Steps is nil, want an explicitly EMPTY slice (nil marshals as JSON null in the clone journal)")
+			}
+			if len(res.Steps) != 0 {
+				t.Errorf("WriteResult.Steps = %+v, want empty — no frame was built, so no step was intended", res.Steps)
+			}
+		})
 	}
 }
 

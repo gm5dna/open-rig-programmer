@@ -1195,6 +1195,155 @@ func TestExecute_WriteChannelFailure_MTRejectedAfterMWSucceeds_AttemptsReadback(
 	}
 }
 
+// writeResultFor returns the first "write_result" journal record for
+// slot, failing the test if there is none.
+func writeResultFor(t *testing.T, path, slot string) map[string]any {
+	t.Helper()
+	for _, rec := range readJournalRecords(t, path) {
+		if rec["event"] == "write_result" && rec["slot"] == slot {
+			return rec
+		}
+	}
+	t.Fatalf("journal %s has no \"write_result\" record for slot %q", path, slot)
+	return nil
+}
+
+// assertJournalSteps checks a write_result record's format stamp and its
+// projected step list against want, whose rows are {command, sent,
+// confirmed}. It reads the DECODED JSON, so it asserts the bytes that
+// actually reached the file rather than any Go value on the way there.
+func assertJournalSteps(t *testing.T, rec map[string]any, want [][3]any) {
+	t.Helper()
+	if got, ok := rec["write_result_format"].(float64); !ok || int(got) != writeResultFormat {
+		t.Errorf("write_result[\"write_result_format\"] = %v, want %d", rec["write_result_format"], writeResultFormat)
+	}
+	raw, ok := rec["steps"].([]any)
+	if !ok {
+		t.Fatalf("write_result[\"steps\"] = %#v, want a JSON array", rec["steps"])
+	}
+	if len(raw) != len(want) {
+		t.Fatalf("write_result[\"steps\"] has %d entries, want %d: %#v", len(raw), len(want), raw)
+	}
+	for i, w := range want {
+		step, ok := raw[i].(map[string]any)
+		if !ok {
+			t.Fatalf("steps[%d] = %#v, want a JSON object", i, raw[i])
+		}
+		if len(step) != 3 {
+			t.Errorf("steps[%d] has %d keys (%v), want exactly command/sent/confirmed", i, len(step), step)
+		}
+		if step["command"] != w[0] || step["sent"] != w[1] || step["confirmed"] != w[2] {
+			t.Errorf("steps[%d] = %v, want command=%v sent=%v confirmed=%v", i, step, w[0], w[1], w[2])
+		}
+	}
+}
+
+// TestExecute_JournalStepRecords_TheThreeOutcomes is E6's journal pin, and
+// the twin of the driver's own TestWriteChannel_OutcomeTable
+// (core/driver/ft710/write_test.go): that test pins the three outcomes in
+// driver.WriteResult form, this one pins the SAME three outcomes in
+// journal form, so a change made to one side and not the other fails one
+// of the pair.
+//
+// What is pinned here beyond the flags is the PROJECTION. The journal
+// marshals whatever map it is handed, so writing the step structs straight
+// through would put Go field names ("Command", "Sent", "Confirmed") into a
+// durable, user-visible file and couple its schema to a struct in another
+// package. The lower-case keys, the exactly-three-keys-per-step check, and
+// the raw-bytes check at the end are that projection asserted rather than
+// assumed.
+//
+// Exchange arithmetic is preparedThreeDeltaPlan's: the first delta
+// ("001") writes MW at exchange 127 and MT at 128.
+func TestExecute_JournalStepRecords_TheThreeOutcomes(t *testing.T) {
+	t.Run("success: MW then MT, both sent and confirmed", func(t *testing.T) {
+		svc, _, _, plan, digest := preparedThreeDeltaPlan(t)
+
+		report, err := svc.Execute(testCtx(t), plan, digest, ExecuteOptions{FirmwareConfirmed: "1.0"})
+		if err != nil {
+			t.Fatalf("Execute: unexpected error: %v", err)
+		}
+		rec := writeResultFor(t, report.JournalPath, "001")
+		assertJournalSteps(t, rec, [][3]any{
+			{"MW", true, true},
+			{"MT", true, true},
+		})
+		if got := rec["error"]; got != "" {
+			t.Errorf("write_result[\"error\"] = %v, want \"\"", got)
+		}
+
+		// The projection, on the bytes themselves: a raw marshal of
+		// []driver.WriteStep would put GO FIELD NAMES into this durable
+		// file, so their absence is asserted directly rather than inferred
+		// from the decoded keys above. (That the RETIRED format-1 keys are
+		// gone repo-wide is internal/guards'
+		// TestRetiredWriteResultNamesAreGone, which owns that check for
+		// every file, not just this one.)
+		raw, rerr := os.ReadFile(report.JournalPath)
+		if rerr != nil {
+			t.Fatalf("ReadFile(%s): %v", report.JournalPath, rerr)
+		}
+		text := string(raw)
+		for _, forbidden := range []string{`"Command"`, `"Sent"`, `"Confirmed"`} {
+			if strings.Contains(text, forbidden) {
+				t.Errorf("journal contains %s — write_result must be PROJECTED onto this package's own key names, never marshalled from the driver struct", forbidden)
+			}
+		}
+		if !strings.Contains(text, `"command":"MW"`) {
+			t.Error("journal has no `\"command\":\"MW\"` — the projected step records are missing")
+		}
+	})
+
+	t.Run("MW rejected: MT present but never reached", func(t *testing.T) {
+		const firstWriteMWExchange = 127
+		svc, _, _, plan, digest := preparedThreeDeltaPlan(t,
+			fakeradio.WithFault(fakeradio.FaultDelayedRejection(firstWriteMWExchange, 10*time.Millisecond)),
+		)
+
+		report, err := svc.Execute(testCtx(t), plan, digest, ExecuteOptions{FirmwareConfirmed: "1.0"})
+		if err == nil {
+			t.Fatal("Execute = nil error, want an abort (the 1st write's MW was rejected)")
+		}
+		if report == nil {
+			t.Fatal("report is nil, want a non-nil partial report")
+		}
+		rec := writeResultFor(t, report.JournalPath, "001")
+		assertJournalSteps(t, rec, [][3]any{
+			{"MW", true, false},
+			{"MT", false, false},
+		})
+		if got, _ := rec["error"].(string); !strings.Contains(got, "MW rejected") {
+			t.Errorf("write_result[\"error\"] = %q, want it to name the MW rejection", got)
+		}
+	})
+
+	t.Run("MT rejected: MW confirmed, MT sent and refused", func(t *testing.T) {
+		// The outcome that matters most in an audit trail: the radio's
+		// memory HAS changed (MW landed clean) though the write as a whole
+		// failed. See the driver-side twin's own note.
+		const firstWriteMTExchange = 128
+		svc, _, _, plan, digest := preparedThreeDeltaPlan(t,
+			fakeradio.WithFault(fakeradio.FaultDelayedRejection(firstWriteMTExchange, 10*time.Millisecond)),
+		)
+
+		report, err := svc.Execute(testCtx(t), plan, digest, ExecuteOptions{FirmwareConfirmed: "1.0"})
+		if err == nil {
+			t.Fatal("Execute = nil error, want an abort (the 1st write's MT was rejected)")
+		}
+		if report == nil {
+			t.Fatal("report is nil, want a non-nil partial report")
+		}
+		rec := writeResultFor(t, report.JournalPath, "001")
+		assertJournalSteps(t, rec, [][3]any{
+			{"MW", true, true},
+			{"MT", true, false},
+		})
+		if got, _ := rec["error"].(string); !strings.Contains(got, "MT rejected") {
+			t.Errorf("write_result[\"error\"] = %q, want it to name the MT rejection", got)
+		}
+	})
+}
+
 // TestExecute_InertClarifier_UnchangedFlowsCleanly is the amended M5b
 // brief's named end-to-end proof: a TAG-ONLY edit on a channel whose
 // clarifier is zero (matching its baseline) must write AND verify clean

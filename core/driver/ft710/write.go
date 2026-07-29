@@ -129,7 +129,13 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	s.opMu.Lock()
 	defer s.opMu.Unlock()
 
-	var res driver.WriteResult
+	// Every refusal below this point returns res unchanged, i.e. an
+	// EXPLICITLY EMPTY step list — never nil. The distinction is not
+	// cosmetic: the clone service journals this result, and a nil slice
+	// marshals as JSON null, which an auditor would have to read as
+	// "unknown" rather than the truth, "no frame was ever built, so
+	// nothing was attempted".
+	res := driver.WriteResult{Steps: []driver.WriteStep{}}
 
 	if _, err := s.dialect.ParseSlot(ch.Slot); err != nil {
 		return res, &driver.WriteRefusedError{Slot: ch.Slot, Reason: fmt.Sprintf("not a valid slot: %v", err)}
@@ -201,26 +207,41 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 		return res, err
 	}
 
+	// THE step list, declared in full HERE: after both frames provably
+	// exist, before either goes near the wire. Declaring the whole
+	// choreography up front is what makes a partial outcome legible — an
+	// MT step that is present but never Sent says "the tag write was part
+	// of this write and never went out", where a step list appended to as
+	// frames succeed could only say nothing at all, which is
+	// indistinguishable from a driver that never intended an MT.
+	res.Steps = []driver.WriteStep{{Command: "MW"}, {Command: "MT"}}
+	const (
+		mwStep = 0
+		mtStep = 1
+	)
+
 	// MW first: channel data before its label. Fire-and-forget — the
 	// transport listens for a bounded window for a delayed "?;".
 	if _, err := s.eng.Do(ctx, mwCmd, fnfSpec()); err != nil {
 		if errors.Is(err, cat.ErrRejected) {
 			// The frame WAS transmitted; the radio explicitly refused it.
-			res.MWSent = true
+			res.Steps[mwStep].Sent = true
 			return res, fmt.Errorf("ft710: WriteChannel %s: MW rejected by radio: %w", ch.Slot, err)
 		}
+		// Transport-level failure: the frame's fate is not attributable,
+		// so Sent stays false.
 		return res, fmt.Errorf("ft710: WriteChannel %s: MW: %w", ch.Slot, err)
 	}
-	res.MWSent, res.MWConfirmed = true, true
+	res.Steps[mwStep].Sent, res.Steps[mwStep].Confirmed = true, true
 
 	if _, err := s.eng.Do(ctx, mtCmd, fnfSpec()); err != nil {
 		if errors.Is(err, cat.ErrRejected) {
-			res.MTSent = true
+			res.Steps[mtStep].Sent = true
 			return res, fmt.Errorf("ft710: WriteChannel %s: MT rejected by radio: %w", ch.Slot, err)
 		}
 		return res, fmt.Errorf("ft710: WriteChannel %s: MT: %w", ch.Slot, err)
 	}
-	res.MTSent, res.MTConfirmed = true, true
+	res.Steps[mtStep].Sent, res.Steps[mtStep].Confirmed = true, true
 
 	return res, nil
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -429,6 +430,51 @@ func (s *Service) Execute(ctx context.Context, plan *SendPlan, confirmedDigest s
 	return report, nil
 }
 
+// writeResultFormat is the version stamped into every "write_result"
+// journal line, so a reader of an append-only journal can tell the shapes
+// apart without guessing.
+//
+// Format 1 (unversioned, implicit) is every line written before M9c-5:
+// four booleans named for the FT-710's own two frames, carrying the
+// sent/confirmed pair of each (the exact keys are listed in
+// internal/guards' retiredWriteResultNames, which now forbids them
+// returning, and in docs/superpowers' M9c-5 spec). Format 2 is the
+// neutral "steps" list below, one record per frame the driver intended,
+// with the frame's own mnemonic as its "command".
+//
+// Pre-change journals are not migrated and cannot be:
+// they are local, append-only audit evidence of what a past run did, and
+// rewriting them would destroy the only thing they are for. They are read
+// as the legacy evidence they are — the same standing this milestone's
+// snapshot digests already carry.
+const writeResultFormat = 2
+
+// journalSteps PROJECTS a driver.WriteResult's steps onto the journal's
+// own wire names.
+//
+// The projection is the point, and it is not a stylistic choice: journal
+// records are marshalled straight from the map they are given
+// (journal.Append), so handing it a []driver.WriteStep would put GO FIELD
+// NAMES — "Command", "Sent", "Confirmed" — into a durable, user-visible,
+// append-only file, and would then couple that file's schema to a struct
+// definition in another package, where an ordinary field rename becomes a
+// silent format change nothing tests. Naming the three keys here makes the
+// journal's schema this package's own, declared in one place.
+//
+// The result is always a non-nil slice, so a refused write journals
+// "steps": [] rather than "steps": null — an empty sequence is a fact
+// ("nothing was attempted"), where null would read as an absence of
+// information.
+func journalSteps(res driver.WriteResult) []map[string]any {
+	steps := make([]map[string]any, 0, len(res.Steps))
+	for _, st := range res.Steps {
+		steps = append(steps, map[string]any{
+			"command": st.Command, "sent": st.Sent, "confirmed": st.Confirmed,
+		})
+	}
+	return steps
+}
+
 // writePair runs one delta entry's write+verify pair (obligations 6, 7,
 // 8) — write_attempt journal, WriteChannel, write_result journal,
 // read-back ReadChannel, verify_result journal — mutating report in
@@ -474,9 +520,8 @@ func (s *Service) writePair(journal journalAppender, report *Report, i, total in
 	// already did, so it aborts all FURTHER writes (standard abort
 	// machinery) rather than refusing for free.
 	jfe := s.appendDeltaJournal(journal, "write_result", e.Slot, map[string]any{
-		"slot": e.Slot, "mw_sent": res.MWSent, "mw_confirmed": res.MWConfirmed,
-		"mt_sent": res.MTSent, "mt_confirmed": res.MTConfirmed,
-		"error": errString(err),
+		"slot": e.Slot, "write_result_format": writeResultFormat,
+		"steps": journalSteps(res), "error": errString(err),
 	})
 	if jfe != nil {
 		if err == nil {
