@@ -276,6 +276,22 @@ describe('mapPasteToChannels — rejections (whole paste, nothing applied)', () 
 		expect(result.channels[0].data.tag_display).toEqual({ state: 'known', value: true })
 	})
 
+	it('accepts a Tag display paste onto an EMPTY slot whose bank default is UNKNOWN — the asymmetry holds for new rows too', () => {
+		// app/uispec.go's bankTagDisplayDefault never hands a bank an
+		// Unknown default today (Read+Write both Unsupported → Unavailable,
+		// anything else → Known-off), so this bank is hand-built. The test
+		// pins the refusal to UNAVAILABLE alone on the new-row path: if a
+		// future capability rule ever does produce an Unknown default, a
+		// paste must keep treating it as the decidable state it is
+		// everywhere else, not refuse it.
+		const unknownBank = { ...memBank, TagDisplayDefault: { state: 'unknown' } }
+		const rows = rowFrom({ freq: '7.1', tagDisplay: 'on' })
+		const result = mapPasteToChannels(rows, ctx({ startRow: 1, bank: unknownBank }))
+		expect(result.ok).toBe(true)
+		expect(result.channels[0].slot).toBe('002') // was EMPTY
+		expect(result.channels[0].data.tag_display).toEqual({ state: 'known', value: true })
+	})
+
 	it('REFUSES a Tag display paste into a populated row whose state is UNAVAILABLE', () => {
 		// {state:'unavailable'} means this radio's memory frame has no
 		// display flag at all (core/codeplug/fieldstate.go). Unknown→Known

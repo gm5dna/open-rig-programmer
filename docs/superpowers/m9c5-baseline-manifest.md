@@ -440,9 +440,12 @@ hash:
 > branch. Every commit after the capture must be documentation-only for
 > the capture to speak for the branch tip.
 
-That holds here. The capture was taken at `f64f688`, the tenth and last
-code commit. The only commit after it is Task 11's own, and it TRACKS
-exactly two files:
+The capture was taken at `f64f688`, the tenth and last TASK code
+commit. Two kinds of commit sit after it, and they satisfy the
+invariant differently.
+
+Task 11's own commit (`80f95ee`) is documentation-only in the
+invariant's sense. It TRACKS exactly two files:
 
 | Path | Kind |
 | --- | --- |
@@ -451,6 +454,20 @@ exactly two files:
 
 No `.go` file, no frontend file, and no golden is touched by it —
 `git show --stat 80f95ee` is the whole of that commit's contents.
+
+The MILESTONE-REVIEW commits after `80f95ee` — the six-fix wave
+`bc3b6f1` and the re-review follow-up that adds this paragraph and one
+paste regression test — are NOT documentation-only: the wave changes
+production frontend code, Go comments and tests. So the capture does
+not speak for the branch tip, and this manifest does not claim it
+does. What covers those commits instead is their own evidence: the
+full gate re-run green at each (regen idempotence ×2, svelte-check,
+the frontend suite, `go test ./...` all packages, gofmt silent, and
+the four-path golden gate at exit 0 — no golden moved), plus the two
+adjudicated milestone-review rounds that demanded and then re-examined
+them. The byte-identity claim this manifest supports is therefore
+scoped to the task commits, `6b84335` to `f64f688`; the review commits
+are adjudicated deltas ON TOP of that proven base, not part of it.
 
 The handoff updates that accompanied the same piece of work are a
 separate thing and are deliberately NOT in it: `.superpowers/` is
