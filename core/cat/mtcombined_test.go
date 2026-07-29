@@ -4,6 +4,7 @@ package cat
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -542,5 +543,283 @@ func TestMTAnswerBounds(t *testing.T) {
 		t.Errorf("zero.MTAnswerBounds() = (%d, %d), nil — want an error, never plausible zeros", min, max)
 	} else if !strings.Contains(err.Error(), "MTFormUnspecified") {
 		t.Errorf("zero.MTAnswerBounds() = %q, want the message to name the dialect's form (MTFormUnspecified)", err)
+	}
+}
+
+// --- Task 5: the outbound write gate's combined branch ---
+
+// TestAllowedCommand_AdmitsItsOwnCombinedSets is the combined form's half of
+// the property TestAllowedCommand_PropertyEveryBuilderOutput states for the
+// FT-710: a dialect's gate must admit its own builder's output, or this
+// package has written a frame it would refuse to send.
+//
+// It is run over two geometries because the gate's length check is
+// RECEIVER-DERIVED (d.mtCombinedLen()): a gate hardwired to the evidenced
+// 12-byte-tag family's 41 bytes would refuse every frame of the first three
+// cases, and one hardwired to 35 would refuse the fourth.
+func TestAllowedCommand_AdmitsItsOwnCombinedSets(t *testing.T) {
+	tests := []struct {
+		name   string
+		tagMax int
+		fill   byte
+		tag    string
+	}{
+		{"a five-byte tag in a six-byte field", 6, ' ', "CQ DX"},
+		{"a full-width tag, no padding at all", 6, ' ', "CQ DXX"},
+		{"an empty tag: the all-fill field", 6, ' ', ""},
+		{"the evidenced 12-byte geometry, filling with '_'", 12, '_', "CQ DX"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			d := mustCombinedDialect(t, tc.tagMax, tc.fill, KindMemory)
+			frame := mustCombinedFrame(t, d, tc.tag)
+			if !d.AllowedCommand(frame) {
+				t.Errorf("AllowedCommand(%q) = false, want true — a dialect's gate must admit its own builder's output", frame)
+			}
+		})
+	}
+}
+
+// TestAllowedCommand_CombinedTagFieldIsARawFieldNotALogicalTag is the
+// REVIEWER-ADJUDICATED rule, and the reason it needs a test of its own: the
+// gate validates the RAW tag field per byte with validMTTagByte ONLY. The
+// builder's trailing-fill refusal is an INPUT rule on the LOGICAL tag and
+// must NOT be applied here.
+//
+// The two are different rules on different representations. On the wire the
+// field is always full width, so a logical tag shorter than the field
+// necessarily leaves it ending in TagFill — and an empty tag IS the all-fill
+// field. Applying the builder's rule to the raw field would make the gate
+// refuse its own builder's every non-full-width tag, which is precisely what
+// each admitted case below would catch: every one of them is a frame whose
+// raw tag field ends in the fill byte, asserted here so the case cannot pass
+// vacuously.
+//
+// What DOES cross the representation boundary is the charset, because that
+// is the command-injection defence rather than a round-trip property — hence
+// the refusals: a NUL smuggled into the field is rejected exactly as
+// allowlist_test.go's short-form "MT0011A\x00TX1;" entry is.
+func TestAllowedCommand_CombinedTagFieldIsARawFieldNotALogicalTag(t *testing.T) {
+	d := mustCombinedDialect(t, 6, ' ', KindMemory)
+
+	for _, tag := range []string{"CQ DX", "CQ", "C", ""} {
+		t.Run("padded field for tag "+strconv.Quote(tag), func(t *testing.T) {
+			frame := mustCombinedFrame(t, d, tag)
+			field := frame[mtCombinedTagOffset : mtCombinedTagOffset+6]
+			if field[len(field)-1] != ' ' {
+				t.Fatalf("tag field %q does not end in the fill byte — this case cannot prove the gate tolerates trailing fill", field)
+			}
+			if !d.AllowedCommand(frame) {
+				t.Errorf("AllowedCommand(%q) = false, want true — the raw field's trailing fill is padding, not a logical tag ending in fill", frame)
+			}
+		})
+	}
+
+	// The charset half, which does cross: forge bytes into the raw field
+	// that no builder would ever emit. Without these the per-byte rule could
+	// be missing entirely and every case above would still pass.
+	base := mustCombinedFrame(t, d, "CQ")
+	for _, tc := range []struct {
+		name string
+		b    byte
+	}{
+		{"a hidden NUL", 0x00},
+		{"a control byte", 0x1F},
+		{"a byte past printable ASCII", 0x80},
+		{"a high byte of a multi-byte rune", 0xC3},
+	} {
+		t.Run("forged tag byte: "+tc.name, func(t *testing.T) {
+			frame := append([]byte(nil), base...)
+			frame[mtCombinedTagOffset] = tc.b
+			if d.AllowedCommand(frame) {
+				t.Errorf("AllowedCommand(%q) = true, want false — the raw tag field is validated byte by byte", frame)
+			}
+		})
+	}
+}
+
+// TestAllowedCommand_CombinedSetAnswerCollisionNarrowsToP7Zero is this
+// task's headline: the MT set/answer collision, acknowledged for the short
+// form, is NARROWER under the combined one.
+//
+// The short form's Set and Answer share one wire shape exactly, so admitting
+// the Set admits the Answer with it and nothing in the bytes tells them
+// apart — the accepted "MT set/answer-shaped G8" entry in
+// TestAllowedCommand_AcceptsAllowlistedSingleFrames (allowlist_test.go:138)
+// is that exception written down.
+//
+// The combined record carries a P7 kind byte, and the SET direction
+// documents exactly one value there: '0', "(Fixed)". An Answer reporting a
+// Memory channel carries '1'. So the residual collision is ONLY the P7-'0'
+// case — a genuine Answer that happens to report a Fixed record is still
+// indistinguishable from a Set, and is still admitted — while every P7-'1'
+// answer is refused outbound, which the short form has no means to do.
+//
+// Both halves are asserted, and the refused frame is first shown to be a
+// frame ParseMTAnswerCombined ACCEPTS: a refusal that came from some other
+// malformation would prove nothing about the kind byte.
+func TestAllowedCommand_CombinedSetAnswerCollisionNarrowsToP7Zero(t *testing.T) {
+	d := mustCombinedDialect(t, 6, ' ', KindMemory)
+	set := mustCombinedFrame(t, d, "CQ")
+
+	if set[memKindOffset] != combinedMTSetKind {
+		t.Fatalf("fixture P7 = %q, want the Set constant %q", set[memKindOffset], combinedMTSetKind)
+	}
+	if !d.AllowedCommand(set) {
+		t.Errorf("AllowedCommand(%q) = false, want true — this is the residual: a P7-'0' record is a legal Set, and an Answer carrying one is admitted with it", set)
+	}
+
+	answer := append([]byte(nil), set...)
+	answer[memKindOffset] = KindMemory
+	if _, _, err := d.ParseMTAnswerCombined(answer); err != nil {
+		t.Fatalf("ParseMTAnswerCombined(%q) = %v, want accepted — the refusal below must be about the kind byte's WRITE policy, not a malformed frame", answer, err)
+	}
+	if d.AllowedCommand(answer) {
+		t.Errorf("AllowedCommand(%q) = true, want false — P7 '1' is Answer-only vocabulary; the combined form's collision narrows to the P7-'0' case alone", answer)
+	}
+}
+
+// TestAllowedCommand_MTFormsDoNotCrossAdmit is the seam itself, at the gate.
+//
+// Both forms' frames begin "MT" and end ';'. A gate that branched on the
+// prefix alone — or on one family's length window whatever dialect it was
+// called on — would let a short-form Set through to a radio that reads its
+// first six bytes as a slot and a display flag, or refuse a combined Set on
+// the family that speaks it. Each direction is asserted against the dialect
+// that DOES admit the frame, so neither half can pass by refusing everything.
+func TestAllowedCommand_MTFormsDoNotCrossAdmit(t *testing.T) {
+	narrow := mustCombinedDialect(t, 6, ' ', KindMemory)
+	wide := mustCombinedDialect(t, 12, '_', KindMemory)
+
+	shortSets := [][]byte{
+		[]byte("MT0071CQ;"),
+		[]byte("MT0011CALLING FREQ;"), // golden G8, the short form's own set/answer shape
+		[]byte("MT0050;"),             // the zero-length-tag short Set shape
+	}
+	for _, frame := range shortSets {
+		if !FT710.AllowedCommand(frame) {
+			t.Fatalf("FT710.AllowedCommand(%q) = false — the fixture must be a frame the SHORT form admits, or its refusal below proves nothing", frame)
+		}
+		if narrow.AllowedCommand(frame) {
+			t.Errorf("combined.AllowedCommand(%q) = true, want false — a short-form Set is not this dialect's frame", frame)
+		}
+	}
+
+	combinedSets := [][]byte{
+		mustCombinedFrame(t, narrow, "CQ DX"),
+		mustCombinedFrame(t, wide, "CQ DX"),
+	}
+	for _, frame := range combinedSets {
+		if FT710.AllowedCommand(frame) {
+			t.Errorf("FT710.AllowedCommand(%q) = true, want false — the FT-710 speaks the short form", frame)
+		}
+	}
+	if !narrow.AllowedCommand(combinedSets[0]) || !wide.AllowedCommand(combinedSets[1]) {
+		t.Fatal("a combined dialect refused its own frame — the refusals above would then prove nothing")
+	}
+}
+
+// TestAllowedCommand_MTReadIsFormIndependent pins the read branch's position
+// at the top of validMTCommand, ahead of the form switch.
+//
+// The 6-byte read request carries neither a record nor a tag, so its shape
+// is identical on both forms and neither form's Set branch can claim a
+// 6-byte frame (the combined form's shortest possible record is 30 bytes).
+// It must therefore be admitted by every dialect whose slot space contains
+// the slot, and refused for a slot none of them may read.
+func TestAllowedCommand_MTReadIsFormIndependent(t *testing.T) {
+	dialects := map[string]Dialect{
+		"FT710 (short)":                 FT710,
+		"combined, 6-byte tag":          mustCombinedDialect(t, 6, ' ', KindMemory),
+		"combined, 12-byte tag":         mustCombinedDialect(t, 12, '_', KindMemory),
+		"combined, MW kind '2' fixture": mustCombinedDialect(t, 6, ' ', KindMemTune),
+	}
+	for name, d := range dialects {
+		t.Run(name, func(t *testing.T) {
+			for _, frame := range []string{"MT001;", "MT099;", "MT501;"} {
+				if !d.AllowedCommand([]byte(frame)) {
+					t.Errorf("AllowedCommand(%q) = false, want true — the MT read is form-independent", frame)
+				}
+			}
+			// Still a real check, not a length wildcard: "000" is ✗ in the
+			// manual's MT column for every dialect here.
+			if d.AllowedCommand([]byte("MT000;")) {
+				t.Errorf("AllowedCommand(\"MT000;\") = true, want false — the read branch still validates its slot")
+			}
+		})
+	}
+}
+
+// TestAllowedCommand_RefusesWrongLengthCombinedFrames covers the combined
+// branch's EXACT-length rule.
+//
+// Unlike the short form's window — whose gate line is unobservable, since
+// any over-window short frame fails the tag rules too — this check is
+// directly observable: the 41-byte frame in the last case is a perfectly
+// valid combined Set that its OWN dialect admits, refused here only because
+// this receiver's tag field is six bytes wide. That is the receiver-derived
+// geometry the milestone exists to deliver.
+//
+// The exact length is ASSUMED UNTIL STAGE R, as ParseMTAnswerCombined's own
+// shape test records: if an FTdx10 turns out to answer variable-width, the
+// contingency is a 30..29+TagMaxBytes window here and there, and nothing
+// else. The gate's exactness is safe either way — it judges OUTBOUND frames,
+// and this package only ever builds full width.
+func TestAllowedCommand_RefusesWrongLengthCombinedFrames(t *testing.T) {
+	d := mustCombinedDialect(t, 6, ' ', KindMemory)
+	wide := mustCombinedDialect(t, 12, '_', KindMemory)
+	base := mustCombinedFrame(t, d, "CQ")
+
+	short := append([]byte(nil), base[:len(base)-2]...)
+	short = append(short, ';')
+	long := append([]byte(nil), base[:len(base)-1]...)
+	long = append(long, ' ', ';')
+
+	tests := []struct {
+		name  string
+		frame []byte
+	}{
+		{"34 bytes, one short of this dialect's derived length", short},
+		{"36 bytes, one over it", long},
+		{"41 bytes: another combined dialect's valid Set", mustCombinedFrame(t, wide, "CQ")},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.frame[len(tc.frame)-1] != ';' {
+				t.Fatalf("length fixture %q does not end in ';' — it would be refused by the terminator rule instead", tc.frame)
+			}
+			if d.AllowedCommand(tc.frame) {
+				t.Errorf("AllowedCommand(%q) = true, want false — the combined length is exactly 29 + this dialect's TagMaxBytes", tc.frame)
+			}
+		})
+	}
+}
+
+// TestValidMTCommand_ZeroDialectRefusesEveryMTShape asserts the MT path
+// specifically for a dialect with no form at all.
+//
+// AllowedCommand's Configured() guard already refuses everything a zero
+// Dialect is offered, and that is asserted here first. But the guard is not
+// what this test is about: validMTCommand is called DIRECTLY as well, so the
+// form switch's own default branch is proven to refuse. A default that fell
+// through to the short form's logic would be invisible behind Configured()
+// today and would decide real frames the moment any other caller reached it.
+func TestValidMTCommand_ZeroDialectRefusesEveryMTShape(t *testing.T) {
+	var zero Dialect
+	combined := mustCombinedFrame(t, mustCombinedDialect(t, 6, ' ', KindMemory), "CQ")
+
+	frames := [][]byte{
+		[]byte("MT001;"),              // read
+		[]byte("MT0011CALLING FREQ;"), // short-form Set
+		combined,                      // combined Set
+	}
+	for _, frame := range frames {
+		if zero.AllowedCommand(frame) {
+			t.Errorf("zero.AllowedCommand(%q) = true, want false", frame)
+		}
+		if zero.validMTCommand(frame) {
+			t.Errorf("zero.validMTCommand(%q) = true, want false — an unconfigured form must refuse in the switch itself, not only behind Configured()", frame)
+		}
 	}
 }

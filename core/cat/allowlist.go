@@ -21,9 +21,24 @@ package cat
 //
 // The per-command checks below share their field-validation logic with
 // the corresponding builder (readableSlot, parseMemoryFrame,
-// validateMWFields, mtSlotValid, validMTTag, mcValid) rather than
-// duplicating it, so "what AllowedCommand accepts" and "what the builders
-// produce" cannot drift apart.
+// parseMemoryFields, validateMWFields, validateCombinedMTFields,
+// mtSlotValid, validMTTag, validMTTagByte, mcValid) rather than duplicating
+// it, so "what AllowedCommand accepts" and "what the builders produce"
+// cannot drift apart.
+//
+// MT IS THE ONE ACKNOWLEDGED SET/ANSWER EXCEPTION, and since M9c-3 it is
+// narrower under one form than the other. A SHORT-form MT Set and its
+// Answer are one wire shape exactly, so admitting the Set admits the Answer
+// with it and no byte tells them apart — the accepted "MT set/answer-shaped
+// G8" entry in TestAllowedCommand_AcceptsAllowlistedSingleFrames
+// (~allowlist_test.go:138) is that exception written down. The COMBINED
+// form carries a P7 kind byte whose SET direction documents exactly one
+// value, '0' "(Fixed)", while an Answer reporting a Memory channel carries
+// '1'. So under that form the exception shrinks to the P7-'0' case alone:
+// a P7-'1' answer is refused outbound even though this package parses it
+// happily inbound. This is a NARROWING of an existing exception, not a new
+// one — see validMTCommand, which enforces it by reusing the builder's own
+// validateCombinedMTFields rather than by a rule of its own.
 //
 // EX is deliberately narrower than the other six: only the 9-byte EX READ
 // frame is accepted. EX Set and Answer share an identical wire shape —
@@ -44,7 +59,8 @@ package cat
 // IT GATES FOR THE DIALECT IT IS CALLED ON, and for no other (Task 54).
 // Every per-command check below is a Dialect method reaching only
 // dialect-aware helpers, so a frame legal under one radio's slot space,
-// mode set or EX inventory is refused by a dialect that does not share it.
+// mode set, EX inventory or MT frame form (M9c-3) is refused by a dialect
+// that does not share it.
 // A gate that re-validated against a package global would accept, on any
 // radio, whatever the FT-710 accepts — the failure this milestone exists
 // to prevent, and here it is a safety failure rather than merely a
@@ -171,12 +187,22 @@ func (d Dialect) validMWCommand(frame []byte) bool {
 	return d.validateMWFields(m) == nil
 }
 
-// validMTCommand reports whether frame is a legal MT read or Set frame.
+// validMTCommand reports whether frame is a legal MT read or Set frame
+// UNDER THIS DIALECT'S OWN MT FORM. MT is the one command whose Set frame
+// has two shapes (dialectconfig.go's MTForm), and they share a prefix and a
+// terminator: a gate that branched on "MT" alone, or applied one family's
+// length window to every receiver, would pass a short-form Set to a radio
+// that reads its first six bytes as a slot and a display flag. So the form
+// switch below is a safety boundary, not a convenience.
 //
-// Read: exactly mtReadLen (6) bytes, with a slot readableSlot accepts (the
-// same rule BuildMTRead enforces).
+// READ (form-independent, and checked FIRST): exactly mtReadLen (6) bytes,
+// with a slot readableSlot accepts — the same rule BuildMTRead enforces.
+// The read request carries neither a record nor a tag, so its shape is the
+// same under both forms, and no Set branch can claim a 6-byte frame: the
+// short form's floor is 7 bytes and the combined form's shortest possible
+// record is 30.
 //
-// Set: mtAnswerMinLen to d.mtShortAnswerMax() bytes — the floor is the
+// SHORT Set: mtAnswerMinLen to d.mtShortAnswerMax() bytes — the floor is the
 // frame grammar's, the ceiling THIS dialect's own tag width plus that floor
 // (7-19 for the FT-710, 7-13 for a 6-byte-tag family) — "MT" prefix, a slot
 // mtSlotValid accepts (memory/PMS only — the same write-direction policy
@@ -191,6 +217,29 @@ func (d Dialect) validMWCommand(frame []byte) bool {
 // the gate enforces: d.validMTTag reads d.mt.TagMaxBytes off the receiver
 // this method was called on, so a dialect whose tag is narrower than 12
 // bytes has its own bound enforced here, not the FT-710's wider one.
+//
+// COMBINED Set: exactly d.mtCombinedLen() bytes (29 + this dialect's tag
+// width — 41 for the evidenced 12-byte family, and a receiver method
+// precisely so this line cannot become another radio's number), "MT" prefix,
+// ';' terminator, then the shared field block through parseMemoryFields and
+// the SAME write-direction policy the builder applies,
+// validateCombinedMTFields — slot, kind, mode, clarifier, frequency, CTCSS
+// and shift in one place, so "what BuildMTSetCombined produces" and "what
+// this admits" cannot drift apart. Then P11, fixed. Then the tag field, on
+// the rule below.
+//
+// THE COMBINED FORM NARROWS MT'S SET/ANSWER COLLISION to the P7-'0' case:
+// validateCombinedMTFields requires the Set direction's own kind constant,
+// so a combined ANSWER reporting a Memory channel (P7 '1' — legal inbound,
+// and accepted by ParseMTAnswerCombined) is REFUSED outbound. The short form
+// cannot do that, its Set and Answer being one wire shape; see
+// AllowedCommand's exception commentary above.
+//
+// THE EXACT COMBINED LENGTH IS ASSUMED UNTIL STAGE R, matching
+// ParseMTAnswerCombined. It is the safe direction to be wrong in: this gate
+// judges OUTBOUND frames and this package only ever builds full width, so
+// even if a radio turns out to ANSWER short, nothing this package sends is
+// affected.
 func (d Dialect) validMTCommand(frame []byte) bool {
 	if len(frame) == mtReadLen {
 		slot, err := d.ParseSlot(string(frame[2:5]))
@@ -200,21 +249,82 @@ func (d Dialect) validMTCommand(frame []byte) bool {
 		return d.readableSlot(slot)
 	}
 
-	if len(frame) < mtAnswerMinLen || len(frame) > d.mtShortAnswerMax() {
+	switch d.mt.Form {
+	case MTFormShort:
+		if len(frame) < mtAnswerMinLen || len(frame) > d.mtShortAnswerMax() {
+			return false
+		}
+		if frame[0] != 'M' || frame[1] != 'T' {
+			return false
+		}
+		slot, err := d.ParseSlot(string(frame[2:5]))
+		if err != nil || !d.mtSlotValid(slot) {
+			return false
+		}
+		if _, err := parseBoolDigit(frame[5]); err != nil {
+			return false
+		}
+		tag := string(frame[6 : len(frame)-1])
+		return d.validMTTag(tag)
+
+	case MTFormCombined:
+		// Framing first, in ParseMTAnswerCombined's order: length, prefix,
+		// terminator. The length is exact, so everything below indexes a
+		// frame already known to be long enough.
+		if len(frame) != d.mtCombinedLen() {
+			return false
+		}
+		if frame[0] != 'M' || frame[1] != 'T' {
+			return false
+		}
+		if frame[len(frame)-1] != ';' {
+			return false
+		}
+		m, err := d.parseMemoryFields(frame, "MT")
+		if err != nil {
+			return false
+		}
+		if d.validateCombinedMTFields(m) != nil {
+			return false
+		}
+		if frame[mtCombinedP11Offset] != combinedMTP11 {
+			return false
+		}
+		// THE RAW TAG FIELD, PER BYTE, WITH validMTTagByte ONLY —
+		// deliberately NOT d.validMTTag, and deliberately NOT the builder's
+		// refusal of a tag ENDING IN TagFill (REVIEWER-ADJUDICATED, Codex
+		// plan finding 8).
+		//
+		// Those are INPUT rules on a LOGICAL tag; this is a WIRE field, and
+		// they are different rules on different representations. The field
+		// is fixed at the full width, so validMTTag's length bound is
+		// already decided by the exact frame length above; and the field
+		// ALWAYS ends in TagFill whenever the logical tag was shorter than
+		// the field — an empty tag IS the all-fill field. Padding erases the
+		// data-versus-fill distinction on the wire, so applying the builder's
+		// suffix rule here would make the gate refuse its own builder's every
+		// non-full-width tag.
+		//
+		// What does cross the boundary is the CHARSET, because that is the
+		// command-injection defence rather than a round-trip property: a ';'
+		// or a control byte is refused in whichever representation it
+		// appears. TagFill itself is always admissible here — V9 requires it
+		// to be a valid wire byte.
+		for _, b := range frame[mtCombinedTagOffset : mtCombinedTagOffset+d.mt.TagMaxBytes] {
+			if !validMTTagByte(b) {
+				return false
+			}
+		}
+		return true
+
+	default:
+		// FAIL-CLOSED on a dialect with no form. AllowedCommand's
+		// Configured() guard already refuses everything an unconfigured
+		// dialect is offered, and this is the second lock: falling through to
+		// either form's logic would have a formless dialect judging real
+		// frames by a shape it never declared.
 		return false
 	}
-	if frame[0] != 'M' || frame[1] != 'T' {
-		return false
-	}
-	slot, err := d.ParseSlot(string(frame[2:5]))
-	if err != nil || !d.mtSlotValid(slot) {
-		return false
-	}
-	if _, err := parseBoolDigit(frame[5]); err != nil {
-		return false
-	}
-	tag := string(frame[6 : len(frame)-1])
-	return d.validMTTag(tag)
 }
 
 // validMCCommand reports whether frame is a legal MC read or Set/Answer
