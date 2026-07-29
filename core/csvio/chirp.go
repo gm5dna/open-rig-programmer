@@ -380,17 +380,18 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string, caps spe
 
 	// TagDisplay: CHIRP's schema has no display-flag column at all, so
 	// nothing in the file says whether the tag should replace the frequency
-	// on the front panel.
+	// on the front panel. Unknown is therefore the only honest answer, and
+	// since M9c-5 (E1d) the field can give it.
 	//
-	// Until M9c-5 task 4 this stays the PRE-E1 MANUFACTURED FALSE: the zero
-	// bool a CHIRP-derived ChannelData carried before TagDisplay became a
-	// BoolField, and therefore the value such a channel was already being
-	// sent with. Stating it explicitly is not decoration — the zero
-	// BoolField is {State: ""}, which codeplug.Validate rejects outright, so
-	// leaving it implicit would fail EVERY CHIRP import. Task 4 replaces it
-	// with the honest {State: Unknown}, which the diff then blocks until the
-	// user decides.
-	data.TagDisplay = codeplug.BoolField{State: codeplug.Known, Value: false}
+	// It is not a defect that this state is inconvenient. A CHIRP-imported
+	// channel is blocked at plan time by codeplug.Diff ("tag display
+	// unknown — set On or Off before sending") until the user decides, and
+	// that friction is the POINT: before E1 this line manufactured a false
+	// and every such channel silently switched the radio's display off,
+	// with nothing anywhere able to tell that from a deliberate choice.
+	// Refusing to guess costs one decision per import; guessing cost a
+	// setting the user never made.
+	data.TagDisplay = codeplug.BoolField{State: codeplug.Unknown}
 
 	// Frequency -> FreqHz.
 	freqRaw := cell("Frequency")

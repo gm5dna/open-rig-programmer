@@ -79,7 +79,11 @@ func TestExport_EmptySlot(t *testing.T) {
 
 // TestExport_PopulatedSlot covers a fully populated channel with every
 // field at a non-default, non-zero value, including the three FieldState
-// values for ctcss_tone and scan_skip.
+// values for ctcss_tone, scan_skip and tag_display.
+//
+// M9c-5 task 4 (E1d): tag_display's Known-FALSE cell changed from "" to
+// "no" here. That is the spelling change the spec records, not an
+// incidental fixture edit — see TestExport_TagDisplayFourStates.
 func TestExport_PopulatedSlot(t *testing.T) {
 	cases := []struct {
 		name string
@@ -115,7 +119,7 @@ func TestExport_PopulatedSlot(t *testing.T) {
 				TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
 				ScanSkip:   codeplug.BoolField{State: codeplug.Known, Value: false},
 			},
-			want: []string{"14300000", "LSB", "", "", "", "OFF", "", "SIMPLEX", "NET", "", "no"},
+			want: []string{"14300000", "LSB", "", "", "", "OFF", "", "SIMPLEX", "NET", "no", "no"},
 		},
 		{
 			name: "unavailable tone, unavailable scan_skip",
@@ -128,7 +132,7 @@ func TestExport_PopulatedSlot(t *testing.T) {
 				TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
 				ScanSkip:   codeplug.BoolField{State: codeplug.Unavailable},
 			},
-			want: []string{"5330500", "AM", "", "", "", "OFF", "n/a", "SIMPLEX", "", "", "n/a"},
+			want: []string{"5330500", "AM", "", "", "", "OFF", "n/a", "SIMPLEX", "", "no", "n/a"},
 		},
 		{
 			name: "clar_hz zero omitted",
@@ -142,7 +146,7 @@ func TestExport_PopulatedSlot(t *testing.T) {
 				TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
 				ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
 			},
-			want: []string{"7100000", "LSB", "", "", "", "OFF", "", "SIMPLEX", "", "", ""},
+			want: []string{"7100000", "LSB", "", "", "", "OFF", "", "SIMPLEX", "", "no", ""},
 		},
 	}
 	for _, tc := range cases {
@@ -169,6 +173,51 @@ func TestExport_PopulatedSlot(t *testing.T) {
 				if got[i] != tc.want[i] {
 					t.Errorf("col[%d] = %q, want %q", i+2, got[i], tc.want[i])
 				}
+			}
+		})
+	}
+}
+
+// TestExport_TagDisplayFourStates pins M9c-5 E1d's headline export
+// change: tag_display is written with the BoolField spelling
+// (exportBoolField), exactly as scan_skip already was — "yes"/"no" when
+// Known, "" when Unknown, "n/a" when Unavailable — rather than the
+// pre-E1 yes/empty spelling, which could only ever express a VALUE and
+// therefore had to invent Known-ness on the way back in.
+//
+// The recorded consequence (spec E1, "Native CSV"): Known-FALSE's cell
+// changes from "" to "no". Every other state's spelling is new, because
+// no other state could previously be written at all.
+func TestExport_TagDisplayFourStates(t *testing.T) {
+	cases := []struct {
+		name     string
+		field    codeplug.BoolField
+		wantCell string
+	}{
+		{"Known true", codeplug.BoolField{State: codeplug.Known, Value: true}, "yes"},
+		{"Known false", codeplug.BoolField{State: codeplug.Known, Value: false}, "no"},
+		{"Unknown", codeplug.BoolField{State: codeplug.Unknown}, ""},
+		{"Unavailable", codeplug.BoolField{State: codeplug.Unavailable}, "n/a"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			d := codeplug.ChannelData{
+				FreqHz:     14250000,
+				Mode:       "USB",
+				CTCSS:      "OFF",
+				CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+				Shift:      "SIMPLEX",
+				Tag:        "MB9XYZ",
+				TagDisplay: tc.field,
+				ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
+			}
+			if err := Export(&buf, []codeplug.Channel{{Slot: "001", Data: &d}}); err != nil {
+				t.Fatalf("Export() error = %v", err)
+			}
+			rows := readCSV(t, buf.Bytes())
+			if got := rows[1][11]; got != tc.wantCell { // tag_display column index
+				t.Errorf("tag_display cell for %+v = %q, want %q", tc.field, got, tc.wantCell)
 			}
 		})
 	}

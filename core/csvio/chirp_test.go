@@ -335,6 +335,159 @@ func TestImportCHIRP_TagLenFromCaps(t *testing.T) {
 	}
 }
 
+// TestImportCHIRP_TagDisplayIsUnknown is M9c-5 E1d's headline CHIRP
+// change, and the one place in this milestone where csvio stops
+// manufacturing a value it was never told.
+//
+// CHIRP's schema has no display-flag column at all. Before E1 that had to
+// become a plain false, because ChannelData.TagDisplay was a plain bool
+// and there was no third answer to give. Now there is: every
+// CHIRP-imported channel carries {State: Unknown}, whatever the row said,
+// because nothing in the file speaks to it.
+//
+// The consequence is deliberate, not incidental — see
+// TestImportCHIRP_UnknownTagDisplayBlocksTheDiff.
+func TestImportCHIRP_TagDisplayIsUnknown(t *testing.T) {
+	// Rows chosen to span the mapping paths that DO carry data (a named
+	// channel with a tone and a scan skip, and a bare minimal row): none
+	// of them says anything about the front-panel display, so all of them
+	// must land on Unknown.
+	csv := "Location,Name,Frequency,Duplex,Tone,rToneFreq,cToneFreq,Mode,Skip\n" +
+		"1,MYCALL,145.500000,+,Tone,88.5,88.5,FM,S\n" +
+		"2,,7.100000,,,,,USB,\n"
+
+	channels, report, err := ImportCHIRP(strings.NewReader(csv), ft710LikeCapabilities())
+	if err != nil {
+		t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+	}
+	if report.HasBlocking() {
+		t.Fatalf("unexpected blocking entries: %+v", report.Entries)
+	}
+	if len(channels) != 2 {
+		t.Fatalf("len(channels) = %d, want 2", len(channels))
+	}
+	want := codeplug.BoolField{State: codeplug.Unknown}
+	for i, ch := range channels {
+		if ch.Data == nil {
+			t.Fatalf("channels[%d].Data = nil, want a populated channel", i)
+		}
+		if got := ch.Data.TagDisplay; got != want {
+			t.Errorf("channels[%d].Data.TagDisplay = %+v, want %+v (CHIRP says nothing about the display flag; inventing false would be a lie the diff cannot see through)", i, got, want)
+		}
+	}
+}
+
+// writableCapabilities is ft710LikeCapabilities plus a deliberately
+// PERMISSIVE field-support table: every field a CHIRP-imported channel
+// transmits is write-Supported. It is not a claim about any real radio —
+// it exists so that the only thing capable of blocking a diff in
+// TestImportCHIRP_UnknownTagDisplayBlocksTheDiff is the TagDisplay gate
+// itself, rather than some unrelated unwritable field masking it.
+func writableCapabilities() spec.Capabilities {
+	caps := ft710LikeCapabilities()
+	rw := spec.FieldSupport{Read: spec.Supported, Write: spec.Supported}
+	fields := map[spec.Field]spec.FieldSupport{
+		spec.FieldFrequency:  rw,
+		spec.FieldMode:       rw,
+		spec.FieldClarifier:  rw,
+		spec.FieldCTCSSState: rw,
+		spec.FieldCTCSSTone:  rw,
+		spec.FieldShift:      rw,
+		spec.FieldTag:        rw,
+		spec.FieldTagDisplay: rw,
+		spec.FieldScanSkip:   rw,
+	}
+	banks := make([]spec.Bank, len(caps.Banks))
+	copy(banks, caps.Banks)
+	for i := range banks {
+		banks[i].Fields = fields
+	}
+	caps.Banks = banks
+	return caps
+}
+
+// TestImportCHIRP_UnknownTagDisplayBlocksTheDiff pins E1d's whole point:
+// the honest Unknown is not cosmetic — it reaches the plan-time gate E1b
+// installed and stops the channel, per channel, with the one BlockReason
+// that tells the user what to do about it.
+//
+// The reason string is spelled out as a literal here rather than
+// referencing core/codeplug's unexported constant: this test's job is to
+// prove the two halves of E1 meet, and a test that echoed the production
+// value could not tell if the meeting point moved.
+//
+// The second half proves the friction is FINITE: once the user answers
+// the question (Known, either way), the same channel plans cleanly.
+func TestImportCHIRP_UnknownTagDisplayBlocksTheDiff(t *testing.T) {
+	const wantTagDisplayUnknownReason = "tag display unknown — set On or Off before sending"
+
+	caps := writableCapabilities()
+	// Location 2 -> slot "002", empty in the baseline: a DiffAdded entry.
+	csv := "Location,Name,Frequency,Duplex,Tone,rToneFreq,cToneFreq,Mode,Skip\n" +
+		"2,MYCALL,7.100000,,,,,USB,\n"
+	imported, report, err := ImportCHIRP(strings.NewReader(csv), caps)
+	if err != nil {
+		t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+	}
+	if report.HasBlocking() {
+		t.Fatalf("unexpected blocking entries: %+v", report.Entries)
+	}
+	if len(imported) != 1 || imported[0].Slot != "002" {
+		t.Fatalf("ImportCHIRP = %+v, want exactly slot 002", imported)
+	}
+
+	// A baseline (as read from the radio) and a candidate file sharing one
+	// slot inventory, per Diff's contract. Both slots are empty in the
+	// baseline; the candidate carries the CHIRP-imported channel at 002.
+	newCodeplug := func(imported *codeplug.Channel) *codeplug.Codeplug {
+		channels := []codeplug.Channel{{Slot: "001"}, {Slot: "002"}}
+		if imported != nil {
+			channels[1] = *imported
+		}
+		return &codeplug.Codeplug{Schema: codeplug.CurrentSchema, Channels: channels}
+	}
+
+	result, err := codeplug.Diff(newCodeplug(nil), newCodeplug(&imported[0]), caps)
+	if err != nil {
+		t.Fatalf("codeplug.Diff: unexpected error: %v", err)
+	}
+	var entry codeplug.DiffEntry
+	for _, e := range result.Entries {
+		if e.Slot == "002" {
+			entry = e
+		}
+	}
+	if entry.Kind != codeplug.DiffAdded {
+		t.Fatalf("slot 002 Kind = %v, want %v", entry.Kind, codeplug.DiffAdded)
+	}
+	if !entry.Blocked {
+		t.Fatal("slot 002 Blocked = false, want true: a CHIRP-imported channel's Unknown tag_display must not reach the wire")
+	}
+	if entry.BlockReason != wantTagDisplayUnknownReason {
+		t.Errorf("slot 002 BlockReason = %q, want %q", entry.BlockReason, wantTagDisplayUnknownReason)
+	}
+
+	// The mitigation: the user answers the question, and the same channel
+	// plans cleanly.
+	resolved := imported[0]
+	data := *resolved.Data
+	data.TagDisplay = codeplug.BoolField{State: codeplug.Known, Value: false}
+	resolved.Data = &data
+
+	result, err = codeplug.Diff(newCodeplug(nil), newCodeplug(&resolved), caps)
+	if err != nil {
+		t.Fatalf("codeplug.Diff (resolved): unexpected error: %v", err)
+	}
+	for _, e := range result.Entries {
+		if e.Slot == "002" {
+			entry = e
+		}
+	}
+	if entry.Blocked {
+		t.Errorf("slot 002 with a Known tag_display is Blocked (%q), want it sendable", entry.BlockReason)
+	}
+}
+
 // TestImportCHIRP_Fixture drives testdata/chirp_sample.csv — one row per
 // mapping rule in the brief — against a table of expected channels and
 // expected LossEntries (line/column/action/blocking all asserted, per

@@ -69,8 +69,11 @@ func EscapeCell(s string) string {
 }
 
 // yesEmpty renders a plain bool as this schema's "yes"/"" convention
-// (used for rx_clar, tx_clar, tag_display): empty means no, so sheets
-// stay visually clean.
+// (used for rx_clar and tx_clar): empty means no, so sheets stay
+// visually clean. It suits a plain bool and nothing else — a field that
+// can also be Unknown or Unavailable needs exportBoolField's four
+// spellings, which is why tag_display left this convention at M9c-5
+// (E1d).
 func yesEmpty(b bool) string {
 	if b {
 		return "yes"
@@ -92,9 +95,9 @@ func exportToneField(f codeplug.ToneField) string {
 	}
 }
 
-// exportBoolField renders a BoolField as this schema's scan_skip
-// column: "yes"/"no" when Known, "" when Unknown, "n/a" when
-// Unavailable.
+// exportBoolField renders a BoolField as this schema's BoolField columns
+// (scan_skip, and tag_display since M9c-5's E1d) are spelled: "yes"/"no"
+// when Known, "" when Unknown, "n/a" when Unavailable.
 func exportBoolField(f codeplug.BoolField) string {
 	switch f.State {
 	case codeplug.Known:
@@ -131,12 +134,13 @@ func exportRow(ch codeplug.Channel) []string {
 		row[8] = exportToneField(d.CTCSSTone)
 		row[9] = d.Shift
 		row[10] = d.Tag
-		// Interim (M9c-5 task 1): still the PRE-E1 yes/empty spelling, over
-		// the BoolField's Value alone. Behaviour-preserving by construction —
-		// Known-true renders "yes" and Known-false "" exactly as the old bool
-		// did. Task 4 replaces this with exportBoolField's four-state
-		// spelling, which is the change that alters the column's output.
-		row[11] = yesEmpty(d.TagDisplay.Value)
+		// M9c-5 (E1d): the four-state BoolField spelling, the same one
+		// scan_skip has always used. This CHANGES the column's output for a
+		// Known-FALSE display — "" before, "no" now — which is the recorded
+		// consequence of the field gaining a state: "" is needed as the
+		// spelling for Unknown, and can no longer double as "off". See
+		// Import's own doc comment for what that means for a pre-E1 file.
+		row[11] = exportBoolField(d.TagDisplay)
 		row[12] = exportBoolField(d.ScanSkip)
 	}
 

@@ -35,7 +35,10 @@ func channelsEqual(t *testing.T, a, b []codeplug.Channel) bool {
 
 // fullImage is a mixed radio image exercising every field-state
 // combination this schema supports, plus an interleaved empty slot, used
-// by the round-trip tests below.
+// by the round-trip tests below. Since M9c-5 task 4 (E1d) that includes
+// all FOUR tag_display states — Known-true (001), Known-false (003),
+// Unknown (007) and Unavailable (501) — which is only round-trippable at
+// all now the column speaks the BoolField spelling.
 func fullImage() []codeplug.Channel {
 	return []codeplug.Channel{
 		{
@@ -69,6 +72,19 @@ func fullImage() []codeplug.Channel {
 			},
 		},
 		{
+			Slot: "007",
+			Data: &codeplug.ChannelData{
+				FreqHz:     10118000,
+				Mode:       "CW-U",
+				CTCSS:      "OFF",
+				CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+				Shift:      "SIMPLEX",
+				Tag:        "WSPR",
+				TagDisplay: codeplug.BoolField{State: codeplug.Unknown},
+				ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
+			},
+		},
+		{
 			Slot: "501",
 			Data: &codeplug.ChannelData{
 				FreqHz:     5330500,
@@ -77,7 +93,7 @@ func fullImage() []codeplug.Channel {
 				CTCSS:      "OFF",
 				CTCSSTone:  codeplug.ToneField{State: codeplug.Unavailable},
 				Shift:      "SIMPLEX",
-				TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
+				TagDisplay: codeplug.BoolField{State: codeplug.Unavailable},
 				ScanSkip:   codeplug.BoolField{State: codeplug.Unavailable},
 			},
 		},
@@ -436,6 +452,90 @@ func TestImport_FieldStateMapping(t *testing.T) {
 	}
 }
 
+// TestImport_TagDisplayFourStates is E1d's import side: the tag_display
+// column now speaks the same four spellings scan_skip does, and each maps
+// to exactly one BoolField. "no" is the spelling that did not exist
+// before (Known-false used to be ""), and "" now means Unknown rather
+// than Known-false — see
+// TestImport_PreE1EmptyTagDisplayCell_ReinterpretedAsUnknown.
+func TestImport_TagDisplayFourStates(t *testing.T) {
+	cases := []struct {
+		name      string
+		cell      string
+		wantState codeplug.FieldState
+		wantValue bool
+	}{
+		{"yes -> Known true", "yes", codeplug.Known, true},
+		{"no -> Known false", "no", codeplug.Known, false},
+		{"empty -> Unknown", "", codeplug.Unknown, false},
+		{"n/a -> Unavailable", "n/a", codeplug.Unavailable, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body := "001,,14250000,USB,,,,OFF,,SIMPLEX,TAG," + tc.cell + ",\n"
+			got, err := Import(strings.NewReader(testHeader + body))
+			if err != nil {
+				t.Fatalf("Import() error = %v", err)
+			}
+			if len(got) != 1 || got[0].Data == nil {
+				t.Fatalf("Import() = %+v, want exactly one populated channel", got)
+			}
+			gotField := got[0].Data.TagDisplay
+			if gotField.State != tc.wantState || gotField.Value != tc.wantValue {
+				t.Errorf("tag_display cell %q -> %+v, want {State:%v Value:%v}", tc.cell, gotField, tc.wantState, tc.wantValue)
+			}
+		})
+	}
+}
+
+// TestImport_PreE1EmptyTagDisplayCell_ReinterpretedAsUnknown is THE
+// RECORDED REINTERPRETATION of M9c-5 E1d, kept as an executable statement
+// of it rather than prose alone.
+//
+// A CSV exported BEFORE this milestone wrote Known-false as an EMPTY
+// tag_display cell (the old yes/empty spelling had no third symbol). The
+// same file re-imported today yields Unknown, not Known-false: the empty
+// cell is now the schema's "not yet known" spelling, shared with
+// ctcss_tone and scan_skip. This is deliberate — the old spelling could
+// not distinguish "off" from "nobody has said" — but it does mean a
+// pre-E1 file's channels arrive unresolved, and codeplug.Diff then BLOCKS
+// each of them ("tag display unknown — set On or Off before sending")
+// until the user decides.
+//
+// The mitigation, for a user who hits this: write an explicit "no" (or
+// "yes") into the tag_display column of the old file before importing it,
+// or set the value in the UI after import. Either resolves the state
+// permanently; a fresh export from this version onwards always writes an
+// explicit spelling, so the reinterpretation can only ever bite once, on
+// files written before E1.
+func TestImport_PreE1EmptyTagDisplayCell_ReinterpretedAsUnknown(t *testing.T) {
+	// Byte-for-byte what a pre-E1 Export wrote for a Known-FALSE
+	// tag_display: the cell is empty.
+	const preE1Row = "001,M-01,14250000,USB,,,,OFF,,SIMPLEX,MB9XYZ,,\n"
+
+	got, err := Import(strings.NewReader(testHeader + preE1Row))
+	if err != nil {
+		t.Fatalf("Import(pre-E1 CSV) error = %v", err)
+	}
+	if len(got) != 1 || got[0].Data == nil {
+		t.Fatalf("Import(pre-E1 CSV) = %+v, want exactly one populated channel", got)
+	}
+	if want := (codeplug.BoolField{State: codeplug.Unknown}); got[0].Data.TagDisplay != want {
+		t.Errorf("pre-E1 empty tag_display cell imported as %+v, want %+v (the reinterpretation E1 records: previously Known-false)", got[0].Data.TagDisplay, want)
+	}
+
+	// The mitigation, proven: the same row with an explicit "no" imports
+	// as the Known-false the pre-E1 file meant.
+	const mitigatedRow = "001,M-01,14250000,USB,,,,OFF,,SIMPLEX,MB9XYZ,no,\n"
+	fixed, err := Import(strings.NewReader(testHeader + mitigatedRow))
+	if err != nil {
+		t.Fatalf("Import(mitigated CSV) error = %v", err)
+	}
+	if want := (codeplug.BoolField{State: codeplug.Known, Value: false}); fixed[0].Data.TagDisplay != want {
+		t.Errorf("explicit \"no\" imported as %+v, want %+v", fixed[0].Data.TagDisplay, want)
+	}
+}
+
 // TestImport_AllDataColumnsEmpty_ProducesEmptyChannel covers a row whose
 // slot is set but every data column is blank: it must decode to an empty
 // Channel (Data == nil), not a populated one with zero values.
@@ -502,6 +602,102 @@ func TestParseToneFieldCell(t *testing.T) {
 			}
 			if got.State != tc.wantState || got.Value != tc.wantValue {
 				t.Errorf("parseToneFieldCell(%q) = %+v, want {State:%v Value:%v}", tc.in, got, tc.wantState, tc.wantValue)
+			}
+		})
+	}
+}
+
+// TestParseBoolFieldCell covers parseBoolFieldCell directly, including
+// M9c-5 E1d's parameterisation: the function serves TWO columns now
+// (scan_skip and tag_display), so the column name it puts in its
+// diagnostic must come from its caller rather than being hardcoded. Both
+// callers' names are asserted — a hardcoded "scan_skip" would pass the
+// first sub-test and fail the second, which is exactly the regression
+// this test exists to catch.
+func TestParseBoolFieldCell(t *testing.T) {
+	states := []struct {
+		name      string
+		in        string
+		wantState codeplug.FieldState
+		wantValue bool
+	}{
+		{"empty is Unknown", "", codeplug.Unknown, false},
+		{"n/a is Unavailable", "n/a", codeplug.Unavailable, false},
+		{"yes is Known true", "yes", codeplug.Known, true},
+		{"no is Known false", "no", codeplug.Known, false},
+	}
+	for _, column := range []string{"scan_skip", "tag_display"} {
+		t.Run(column, func(t *testing.T) {
+			for _, tc := range states {
+				t.Run(tc.name, func(t *testing.T) {
+					got, err := parseBoolFieldCell(tc.in, column)
+					if err != nil {
+						t.Fatalf("parseBoolFieldCell(%q, %q) unexpected error: %v", tc.in, column, err)
+					}
+					if got.State != tc.wantState || got.Value != tc.wantValue {
+						t.Errorf("parseBoolFieldCell(%q, %q) = %+v, want {State:%v Value:%v}", tc.in, column, got, tc.wantState, tc.wantValue)
+					}
+				})
+			}
+			t.Run("diagnostic names this column", func(t *testing.T) {
+				_, err := parseBoolFieldCell("maybe", column)
+				if err == nil {
+					t.Fatalf("parseBoolFieldCell(%q, %q) error = nil, want non-nil", "maybe", column)
+				}
+				if !strings.HasPrefix(err.Error(), column+" must be ") {
+					t.Errorf("parseBoolFieldCell(%q, %q) error = %q, want it to open by naming %q", "maybe", column, err.Error(), column)
+				}
+				if !strings.Contains(err.Error(), `got "maybe"`) {
+					t.Errorf("parseBoolFieldCell(%q, %q) error = %q, want it to quote the offending value", "maybe", column, err.Error())
+				}
+			})
+		})
+	}
+}
+
+// TestImport_BadBoolCellDiagnostics pins the parameterised diagnostic
+// through the full Import path, for BOTH columns parseBoolFieldCell now
+// serves: a bad tag_display cell must not be reported as a scan_skip
+// problem (and vice versa), which is precisely what the pre-E1d hardcoded
+// column name would have produced.
+func TestImport_BadBoolCellDiagnostics(t *testing.T) {
+	cases := []struct {
+		name      string
+		body      string
+		wantNamed string
+		notNamed  string
+	}{
+		{
+			name:      "bad tag_display",
+			body:      "001,,14250000,USB,,,,OFF,,SIMPLEX,TAG,maybe,\n",
+			wantNamed: "tag_display",
+			notNamed:  "scan_skip",
+		},
+		{
+			name:      "bad scan_skip",
+			body:      "001,,14250000,USB,,,,OFF,,SIMPLEX,TAG,,maybe\n",
+			wantNamed: "scan_skip",
+			notNamed:  "tag_display",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Import(strings.NewReader(testHeader + tc.body))
+			if err == nil {
+				t.Fatal("Import() error = nil, want a *ParseError")
+			}
+			var pe *ParseError
+			if !errors.As(err, &pe) {
+				t.Fatalf("Import() error = %T, want *ParseError", err)
+			}
+			if !strings.Contains(pe.Reason, tc.wantNamed) {
+				t.Errorf("ParseError.Reason = %q, want it to name %q", pe.Reason, tc.wantNamed)
+			}
+			if strings.Contains(pe.Reason, tc.notNamed) {
+				t.Errorf("ParseError.Reason = %q, want it NOT to name the other column %q", pe.Reason, tc.notNamed)
+			}
+			if !strings.Contains(pe.Reason, `"yes"`) || !strings.Contains(pe.Reason, `"no"`) || !strings.Contains(pe.Reason, `"n/a"`) {
+				t.Errorf("ParseError.Reason = %q, want it to list the accepted spellings", pe.Reason)
 			}
 		})
 	}

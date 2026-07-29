@@ -81,8 +81,12 @@ func TestMergeCSV_InventoryMismatchRefusesAndNamesSlots(t *testing.T) {
 // imported slot overwrites the matching base slot.
 func TestMergeCHIRP_SparseMergeBySlot(t *testing.T) {
 	base := buildBase()
+	// TagDisplay Unknown throughout MergeCHIRP's fixtures: these stand in
+	// for csvio.ImportCHIRP's output, and since M9c-5 (E1d) that importer
+	// can produce no other state — CHIRP files carry no display flag. base
+	// keeps its Known one: it is the radio-read side of the merge.
 	imported := []codeplug.Channel{
-		{Slot: "002", Data: &codeplug.ChannelData{FreqHz: 14_200_000, Mode: "USB", Tag: "MYCALL4", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}},
+		{Slot: "002", Data: &codeplug.ChannelData{FreqHz: 14_200_000, Mode: "USB", Tag: "MYCALL4", TagDisplay: codeplug.BoolField{State: codeplug.Unknown}}},
 	}
 	if err := MergeCHIRP(base, imported); err != nil {
 		t.Fatalf("MergeCHIRP: unexpected error: %v", err)
@@ -101,7 +105,7 @@ func TestMergeCHIRP_SparseMergeBySlot(t *testing.T) {
 func TestMergeCHIRP_UnknownSlotRefusesWholesale(t *testing.T) {
 	base := buildBase()
 	imported := []codeplug.Channel{
-		{Slot: "099", Data: &codeplug.ChannelData{FreqHz: 7_000_000, Mode: "USB", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}},
+		{Slot: "099", Data: &codeplug.ChannelData{FreqHz: 7_000_000, Mode: "USB", TagDisplay: codeplug.BoolField{State: codeplug.Unknown}}},
 	}
 	err := MergeCHIRP(base, imported)
 	if err == nil {
@@ -127,8 +131,8 @@ func TestMergeCHIRP_UnknownSlotRefusesWholesale(t *testing.T) {
 func TestMergeCHIRP_DuplicateLocationRefusesWholesale(t *testing.T) {
 	base := buildBase()
 	imported := []codeplug.Channel{
-		{Slot: "002", Data: &codeplug.ChannelData{FreqHz: 7_100_000, Mode: "USB", Tag: "MYCALL5", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}},
-		{Slot: "002", Data: &codeplug.ChannelData{FreqHz: 7_150_000, Mode: "USB", Tag: "MYCALL6", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}}},
+		{Slot: "002", Data: &codeplug.ChannelData{FreqHz: 7_100_000, Mode: "USB", Tag: "MYCALL5", TagDisplay: codeplug.BoolField{State: codeplug.Unknown}}},
+		{Slot: "002", Data: &codeplug.ChannelData{FreqHz: 7_150_000, Mode: "USB", Tag: "MYCALL6", TagDisplay: codeplug.BoolField{State: codeplug.Unknown}}},
 	}
 	err := MergeCHIRP(base, imported)
 	if err == nil {
