@@ -81,8 +81,10 @@ func requestedFields(data codeplug.ChannelData) []spec.Field {
 //     changed value from an unchanged one. codeplug.Diff owns that
 //     half of the Inert rule (see spec.Inert's doc comment).
 //
-// Kind-on-write: the MW frame's P7 is ALWAYS '1' (KindMemory), for both
-// memory and PMS slots. HW-CONFIRMED 2026-07-13 (M5b write trials,
+// Kind-on-write: the MW frame's P7 is the SESSION DIALECT's declared write
+// kind (cat.Dialect.MWWriteKind, consulted since M9c-3 task 9), which for
+// the FT-710 is ALWAYS '1' (KindMemory), for both memory and PMS slots.
+// HW-CONFIRMED 2026-07-13 (M5b write trials,
 // docs/hardware-notes.md): the former ASSUMED pairing (KindPMS '5' for a
 // PMS slot) is hardware-refuted — the radio REJECTS a PMS write carrying
 // KindPMS with an immediate "?;", and accepts the identical write when
@@ -234,15 +236,28 @@ func buildWriteCommands(dialect cat.Dialect, ch codeplug.Channel) (mwCmd, mtCmd 
 	}
 	// Bounds-check BEFORE the int -> int16 conversion below can wrap; the
 	// builder re-validates magnitude and step on top.
-	if data.ClarHz < -9990 || data.ClarHz > 9990 {
+	//
+	// The bound is THIS DIALECT'S (M9c-3 task 9), in the comparison and in
+	// the message alike: both hardcoded +-9990 until now, so a receiver with
+	// a narrower range had its over-range values waved past this check, and
+	// a wider one had its legitimate values refused here with a bound that
+	// was never its own. cat.FT710's own MaxAbsHz is 9990, so this renders
+	// byte-identically for the FT-710.
+	clar := dialect.Clarifier()
+	if data.ClarHz < -clar.MaxAbsHz || data.ClarHz > clar.MaxAbsHz {
 		return cat.Command{}, cat.Command{}, &driver.WriteRefusedError{
 			Slot: ch.Slot, Fields: []spec.Field{spec.FieldClarifier},
-			Reason: fmt.Sprintf("clarifier %d Hz exceeds +/-9990 Hz", data.ClarHz),
+			Reason: fmt.Sprintf("clarifier %d Hz exceeds +/-%d Hz", data.ClarHz, clar.MaxAbsHz),
 		}
 	}
 
-	// Kind-on-write (HW-CONFIRMED 2026-07-13 — see WriteChannel's doc
-	// comment): always KindMemory ('1'), for both memory and PMS slots.
+	// Kind-on-write: THIS DIALECT'S declared write kind, for both memory and
+	// PMS slots. The FT-710's is KindMemory ('1'), HW-CONFIRMED 2026-07-13
+	// (see WriteChannel's doc comment) — but that evidence is about one
+	// radio, so since M9c-3 task 9 the byte comes from the receiver rather
+	// than a cat.KindMemory literal here, which wrote the FT-710's finding
+	// onto whatever dialect this path was handed and had
+	// cat.Dialect.BuildMWSet refuse another receiver's legitimate write.
 	// Discovered banks (5xx/EMG) can never reach here — their fields are
 	// read-only, so the capability gate refused them already;
 	// cat.Dialect.BuildMWSet would reject their slots too (not Writable()).
@@ -253,7 +268,7 @@ func buildWriteCommands(dialect cat.Dialect, ch codeplug.Channel) (mwCmd, mtCmd 
 		RxClar: data.RxClar,
 		TxClar: data.TxClar,
 		Mode:   mode,
-		Kind:   cat.KindMemory,
+		Kind:   dialect.MWWriteKind(),
 		CTCSS:  ctcss,
 		Shift:  shift,
 	})

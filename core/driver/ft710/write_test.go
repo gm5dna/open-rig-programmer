@@ -10,6 +10,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/cat"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeradio"
 )
 
@@ -228,5 +229,150 @@ func TestWriteChannel_RefusalNamesFields(t *testing.T) {
 	}
 	if wre.Slot != "010" {
 		t.Errorf("WriteRefusedError.Slot = %q, want \"010\"", wre.Slot)
+	}
+}
+
+// mwKindOffset is P7's 0-indexed offset in the 28-byte MW Set frame. It
+// duplicates core/cat's own memKindOffset (memdata.go), which is unexported
+// there — a driver test cannot see it, and the alternative (re-deriving the
+// position by parsing) would test the parser rather than the byte that was
+// emitted.
+const mwKindOffset = 22
+
+// receiverDialect builds an otherwise-FT710-equivalent cat.Dialect carrying
+// the caller's MW write kind and clarifier policy — the two facts M9c-3
+// task 9 moved out of write.go's literals and onto the receiver.
+func receiverDialect(t *testing.T, mwKind byte, clar cat.ClarifierPolicy) cat.Dialect {
+	t.Helper()
+	cfg := ft710EquivalentConfig()
+	cfg.MWWriteKind = mwKind
+	cfg.Clarifier = clar
+	d, err := cat.NewDialect(cfg)
+	if err != nil {
+		t.Fatalf("cat.NewDialect(MWWriteKind %q, clarifier %+v): unexpected error: %v", mwKind, clar, err)
+	}
+	return d
+}
+
+// TestBuildWriteCommands_MWKindComesFromTheReceiver (M9c-3 task 9): the MW
+// frame's P7 byte is the DIALECT's declared write kind, not this package's
+// own cat.KindMemory literal.
+//
+// The peer fixture declares cat.KindPMS — a value V11 accepts (see
+// core/cat's TestMWWriteKind_PeerAcceptsWhatFT710Rejects) and the FT-710's
+// own dialect rejects. Before this task write.go hardcoded cat.KindMemory
+// into the MemoryData it built, so BuildMWSet refused the peer's own
+// legitimate write outright: the driver wrote the FT-710's hardware finding
+// onto whatever dialect it was handed.
+func TestBuildWriteCommands_MWKindComesFromTheReceiver(t *testing.T) {
+	ft710Clar := cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990}
+	peer := receiverDialect(t, cat.KindPMS, ft710Clar)
+	if peer.MWWriteKind() != cat.KindPMS {
+		t.Fatalf("fixture MWWriteKind() = %q, want %q — the case needs a dialect whose write kind is NOT the FT-710's", peer.MWWriteKind(), cat.KindPMS)
+	}
+
+	for _, tt := range []struct {
+		name    string
+		dialect cat.Dialect
+	}{
+		{"FT-710 (KindMemory)", cat.FT710},
+		{"peer declaring KindPMS", peer},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			mwCmd, _, err := buildWriteCommands(tt.dialect, writableChannel("010"))
+			if err != nil {
+				t.Fatalf("buildWriteCommands: unexpected error: %v (the write path emitted a kind byte its receiver does not accept)", err)
+			}
+			frame := mwCmd.Bytes()
+			if got, want := frame[mwKindOffset], tt.dialect.MWWriteKind(); got != want {
+				t.Errorf("MW P7 = %q, want %q (the receiver's own MWWriteKind()); frame = %q", got, want, frame)
+			}
+		})
+	}
+}
+
+// TestWriteChannel_ClarifierBoundComesFromTheReceiver (M9c-3 task 9): the
+// pre-wire clarifier bounds check consults the DIALECT's clarifier policy,
+// and its refusal text names that dialect's bound.
+//
+// The peer's range stops at 4990 Hz, so 5000 Hz is one step past it while
+// sitting well inside the FT-710's +-9990. Before this task the comparison
+// AND the "+/-9990" in the message were both hardcoded, so the peer's
+// over-range value sailed past this check and was caught only downstream by
+// BuildMWSet — refused, but as an opaque "cannot encode MW frame" naming no
+// field. The refusal must still precede ALL wire traffic.
+func TestWriteChannel_ClarifierBoundComesFromTheReceiver(t *testing.T) {
+	cp, sess := openCountingSession(t, Simulated)
+	sess.dialect = receiverDialect(t, cat.KindMemory, cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 4990})
+
+	ch := writableChannel("010")
+	ch.Data.ClarHz = 5000
+
+	baseline := cp.writes.Load()
+	_, err := sess.WriteChannel(testCtx(t), ch)
+	var wre *driver.WriteRefusedError
+	if !errors.As(err, &wre) {
+		t.Fatalf("WriteChannel = %v, want a *driver.WriteRefusedError", err)
+	}
+	if want := "clarifier 5000 Hz exceeds +/-4990 Hz"; wre.Reason != want {
+		t.Errorf("WriteRefusedError.Reason = %q, want %q (the receiver's own bound, not the FT-710's)", wre.Reason, want)
+	}
+	found := false
+	for _, f := range wre.Fields {
+		if f == spec.FieldClarifier {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("WriteRefusedError.Fields = %v, want %v named", wre.Fields, spec.FieldClarifier)
+	}
+	if got := cp.writes.Load(); got != baseline {
+		t.Errorf("refused WriteChannel produced %d wire writes, want 0 (refusal must precede ALL wire traffic)", got-baseline)
+	}
+}
+
+// TestBuildWriteCommands_FT710ByteIdentity is M9c-3's byte-identity bar for
+// the write path: for one reference channel, the FT-710's MW and MT Set
+// frames are exactly these bytes. Task 9 replaced two literals in
+// buildWriteCommands with receiver accessors, and cat.FT710 declares
+// precisely the values those literals carried — so not a byte may move.
+func TestBuildWriteCommands_FT710ByteIdentity(t *testing.T) {
+	mwCmd, mtCmd, err := buildWriteCommands(cat.FT710, writableChannel("010"))
+	if err != nil {
+		t.Fatalf("buildWriteCommands(cat.FT710): unexpected error: %v", err)
+	}
+	if got, want := string(mwCmd.Bytes()), "MW010014250000+000000210000;"; got != want {
+		t.Errorf("MW frame = %q, want %q", got, want)
+	}
+	if got, want := string(mtCmd.Bytes()), "MT0101TEST;"; got != want {
+		t.Errorf("MT frame = %q, want %q", got, want)
+	}
+}
+
+// TestBuildWriteCommands_FT710ClarifierRefusalText is the other half of the
+// byte-identity bar: interpolating the receiver's MaxAbsHz must render, for
+// the FT-710's 9990, exactly the text the hardcoded "+/-9990" rendered.
+func TestBuildWriteCommands_FT710ClarifierRefusalText(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		clarHz int
+		want   string
+	}{
+		{"over the positive bound", 10000, "clarifier 10000 Hz exceeds +/-9990 Hz"},
+		{"under the negative bound", -10000, "clarifier -10000 Hz exceeds +/-9990 Hz"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ch := writableChannel("010")
+			ch.Data.ClarHz = tt.clarHz
+
+			_, _, err := buildWriteCommands(cat.FT710, ch)
+			var wre *driver.WriteRefusedError
+			if !errors.As(err, &wre) {
+				t.Fatalf("buildWriteCommands = %v, want a *driver.WriteRefusedError", err)
+			}
+			if wre.Reason != tt.want {
+				t.Errorf("WriteRefusedError.Reason = %q, want %q", wre.Reason, tt.want)
+			}
+		})
 	}
 }

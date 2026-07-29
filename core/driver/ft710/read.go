@@ -94,7 +94,8 @@ var shiftByName = map[string]cat.Shift{
 // (there is no radio with a populated 5xx/EMG bank in this project's
 // evidence to date). This is a READ-direction leniency ONLY, for every
 // bank alike: write NEVER re-emits a read kind — write.go's
-// buildWriteCommands always builds a fresh MW frame with KindMemory (and
+// buildWriteCommands always builds a fresh MW frame carrying the session
+// dialect's own declared write kind, KindMemory for the FT-710 (and
 // 60m/EMG slots can never reach a write at all: cat.Slot.Writable
 // structurally excludes them) — so accepting a wider read-side set on
 // MEM/PMS cannot smuggle a stale or wrong kind back onto the wire.

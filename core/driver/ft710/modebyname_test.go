@@ -9,27 +9,21 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 )
 
-// renamedUSBDialect builds an otherwise-FT710-equivalent cat.Dialect whose
-// ONLY difference is cat.ModeUSB's display name: "USB-ALT" rather than
-// "USB". Every other field is copied from cat.FT710's own construction
-// (dialect.go) so slot parsing, MT and clarifier validation, and the MW
-// write-kind check all behave exactly as the production dialect's do — the
-// rename is the single variable under test.
+// ft710EquivalentConfig returns a cat.DialectConfig whose every field is
+// copied from cat.FT710's own construction (dialect.go), so a dialect built
+// from it parses slots, validates MT tags and clarifier values, and checks
+// the MW write kind exactly as the production dialect does.
 //
-// It exists to prove buildWriteCommands (and, through it,
-// Session.WriteChannel) resolves a channel's Mode string through the
-// SESSION's own dialect rather than this package's private modeByName
-// table (built from modeTable — see caps.go): a dialect that renames a
-// mode is exactly the case NewDialect's name-uniqueness rule was meant to
-// protect, and until this task nothing downstream of the write path
-// noticed a rename at all.
-func renamedUSBDialect(t *testing.T) cat.Dialect {
-	t.Helper()
-	d, err := cat.NewDialect(cat.DialectConfig{
+// A test that needs a dialect differing from the FT-710 in ONE respect
+// mutates one field of a fresh copy and builds — the single difference is
+// then the only variable under test. (The ModeNames map is freshly
+// allocated on every call, so a caller may mutate it in place.)
+func ft710EquivalentConfig() cat.DialectConfig {
+	return cat.DialectConfig{
 		CATID: "0800",
 		ModeNames: map[cat.Mode]string{
 			cat.ModeLSB:     "LSB",
-			cat.ModeUSB:     "USB-ALT", // renamed from FT710's "USB"
+			cat.ModeUSB:     "USB",
 			cat.ModeCWU:     "CW-U",
 			cat.ModeFM:      "FM",
 			cat.ModeAM:      "AM",
@@ -54,7 +48,25 @@ func renamedUSBDialect(t *testing.T) cat.Dialect {
 		MT:          cat.MTPolicy{Form: cat.MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 		Clarifier:   cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 		MWWriteKind: cat.KindMemory,
-	})
+	}
+}
+
+// renamedUSBDialect builds an otherwise-FT710-equivalent cat.Dialect whose
+// ONLY difference is cat.ModeUSB's display name: "USB-ALT" rather than
+// "USB".
+//
+// It exists to prove buildWriteCommands (and, through it,
+// Session.WriteChannel) resolves a channel's Mode string through the
+// SESSION's own dialect rather than this package's private modeByName
+// table (built from modeTable — see caps.go): a dialect that renames a
+// mode is exactly the case NewDialect's name-uniqueness rule was meant to
+// protect, and until this task nothing downstream of the write path
+// noticed a rename at all.
+func renamedUSBDialect(t *testing.T) cat.Dialect {
+	t.Helper()
+	cfg := ft710EquivalentConfig()
+	cfg.ModeNames[cat.ModeUSB] = "USB-ALT" // renamed from FT710's "USB"
+	d, err := cat.NewDialect(cfg)
 	if err != nil {
 		t.Fatalf("cat.NewDialect(renamed-USB config): unexpected error: %v", err)
 	}
