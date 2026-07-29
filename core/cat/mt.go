@@ -43,6 +43,33 @@ func (d Dialect) mtShortAnswerMax() int {
 	return mtAnswerMinLen + d.mt.TagMaxBytes
 }
 
+// MTAnswerBounds returns the validated answer-length bounds, in bytes, for
+// this dialect's MT form: [min, max] inclusive. The short form's window is
+// its structural floor plus its own tag width (FT-710: 7-19); the combined
+// form's length is EXACT, so its bounds are equal (29 + TagMaxBytes, 41 for
+// the evidenced 12-byte tag).
+//
+// An unconfigured dialect gets an ERROR, not zeros. This is the
+// receiver-derived geometry M9c-5's transport spec factories consume
+// instead of hardcoding 41 or re-deriving 29+TagMaxBytes for themselves, and
+// a driver reading a plausible (0, 0) would build a CommandSpec that admits
+// no answer at all and says nothing about why.
+//
+// It lives here rather than in mtcombined.go because it spans both forms:
+// the whole point is that a caller asks the dialect for its geometry instead
+// of branching on the form itself.
+func (d Dialect) MTAnswerBounds() (min, max int, err error) {
+	switch d.mt.Form {
+	case MTFormShort:
+		return mtAnswerMinLen, d.mtShortAnswerMax(), nil
+	case MTFormCombined:
+		n := d.mtCombinedLen()
+		return n, n, nil
+	default:
+		return 0, 0, newParseError(nil, fmt.Sprintf("MT: no answer bounds for a %v dialect — a form must be configured before its frame geometry can be derived", d.mt.Form))
+	}
+}
+
 // MTForm reports which MT frame shape this dialect declares. The zero
 // Dialect reports MTFormUnspecified — a form it can never be given, since
 // NewDialect refuses a config omitting one.

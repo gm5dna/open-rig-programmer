@@ -5,13 +5,15 @@
 //
 // # The policy-gated write path (composition-root discipline)
 //
-// BuildMWSet and BuildMTSet are MECHANISM: they encode the two Set frames
-// that mutate a radio's memory, validating wire grammar and per-field
+// BuildMWSet, BuildMTSet and BuildMTSetCombined are MECHANISM: they encode
+// the Set frames that mutate a radio's memory — the memory record, and the
+// channel tag in each of the two evidenced MT frame forms (the combined one
+// since M9c-3, mtcombined.go) — validating wire grammar and per-field
 // safety (charset, ranges, slot writability) — but they know nothing of
 // the hardware write guard's POLICY layers (capability profiles,
 // codeplug.Diff's gates, the clone service's choreography,
 // driver.Session.WriteChannel's re-check), which live entirely above
-// them. Within THIS repository, these two builders are therefore used
+// them. Within THIS repository, these builders are therefore used
 // outside this package only from core/driver/** — enforced by the
 // import-graph guard test (internal/guards), whose threat model is our
 // own composition, not external importers. The compiler-enforced version

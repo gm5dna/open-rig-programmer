@@ -51,6 +51,15 @@ const memFreqMax = 999_999_999
 // one memory/PMS/5xx/EMG channel's frequency, clarifier, mode and related
 // state. Reference: "MR — MEMORY CHANNEL READ" position table (P1-P10),
 // shared byte-for-byte with MW's Set frame.
+//
+// SINCE M9c-3 IT ALSO FEEDS THE COMBINED MT RECORD (mtcombined.go), which
+// carries this same P1-P10 block at these same offsets and then adds P11
+// and a fixed-width tag field. So a MemoryData is not "an MR/MW frame's
+// contents" so much as one channel's state in whichever frame a dialect's
+// form declares — and the write-direction rules that judge it before it is
+// encoded are per-command, not per-type: validateMWFields (mw.go) and
+// validateCombinedMTFields (mtcombined.go) differ on exactly two of them,
+// the slot predicate and the P7 kind.
 type MemoryData struct {
 	Slot Slot
 
