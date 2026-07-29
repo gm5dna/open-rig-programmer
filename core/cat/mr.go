@@ -2,10 +2,7 @@
 
 package cat
 
-import (
-	"fmt"
-	"strconv"
-)
+import "fmt"
 
 // mrReadLen is the fixed length of an MR read request: "MR" + 3-byte slot
 // + ";". Golden vector G3: "MR007;".
@@ -57,13 +54,24 @@ func (d Dialect) ParseMRAnswer(frame []byte) (MemoryData, error) {
 // between ParseMRAnswer (wantPrefix "MR") and AllowedCommand's MW grammar
 // check (wantPrefix "MW").
 //
+// Since M9c-3 task 3 this function is the 28-byte form's FRAMING only —
+// length, prefix, terminator — and delegates the field block at offsets
+// 2-26 to parseMemoryFields (memdata.go), which the combined MT record
+// shares. THE ORDER OF THESE THREE CHECKS IS DELIBERATE AND PINNED: a frame
+// that is wrong in several ways reports its length first, then its prefix,
+// then its terminator, and only then a field. See
+// memfields_test.go's TestParseMemoryFrame_DoublyInvalidFrameErrorOrder,
+// which was written and run green BEFORE the extraction for exactly this
+// reason.
+//
 // THIS IS THE HELPER THE MILESTONE TURNS ON (Codex plan-review F3). It is
 // reached from two Dialect methods with different jobs — a parser and the
 // outbound write gate — so every membership decision inside it must be
 // taken against the RECEIVER: d.ParseSlot for the slot field (P1) and
 // d.ParseMode for the mode field (P6), never the package-level
 // delegates. With one dialect configured, a package-level call here would
-// pass every test in the tree while the seam was fiction.
+// pass every test in the tree while the seam was fiction. That obligation
+// moved intact into parseMemoryFields, which is a Dialect method for it.
 func (d Dialect) parseMemoryFrame(frame []byte, wantPrefix string) (MemoryData, error) {
 	if len(frame) != memoryFrameLen {
 		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame must be %d bytes", wantPrefix, memoryFrameLen))
@@ -74,83 +82,5 @@ func (d Dialect) parseMemoryFrame(frame []byte, wantPrefix string) (MemoryData, 
 	if frame[memTermOffset] != ';' {
 		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame missing ';' terminator", wantPrefix))
 	}
-
-	slot, err := d.ParseSlot(string(frame[memSlotOffset : memSlotOffset+3]))
-	if err != nil {
-		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: invalid slot field (P1)", wantPrefix))
-	}
-
-	freqField := frame[memFreqOffset : memFreqOffset+memFreqDigits]
-	if !allDigits(freqField) {
-		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: frequency field (P2) must be 9 digits", wantPrefix))
-	}
-	freq, err := strconv.ParseUint(string(freqField), 10, 32)
-	if err != nil {
-		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: frequency field (P2) out of range", wantPrefix))
-	}
-
-	sign := frame[memClarSignOffset]
-	if sign != '+' && sign != '-' {
-		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: clarifier sign (P3) must be '+' or '-'", wantPrefix))
-	}
-	clarField := frame[memClarMagOffset : memClarMagOffset+memClarMagDigits]
-	if !allDigits(clarField) {
-		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: clarifier field (P3) must be 4 digits", wantPrefix))
-	}
-	clarMag, err := strconv.ParseUint(string(clarField), 10, 16)
-	if err != nil {
-		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: clarifier field (P3) out of range", wantPrefix))
-	}
-	clar := int16(clarMag)
-	if sign == '-' {
-		clar = -clar
-	}
-	if !d.validClarHz(clar) {
-		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: clarifier (P3) must be a multiple of %d Hz, magnitude <= %d", wantPrefix, d.clar.StepHz, d.clar.MaxAbsHz))
-	}
-
-	rxClar, err := parseBoolDigit(frame[memRxClarOffset])
-	if err != nil {
-		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: RX CLAR field (P4) must be '0' or '1'", wantPrefix))
-	}
-	txClar, err := parseBoolDigit(frame[memTxClarOffset])
-	if err != nil {
-		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: TX CLAR field (P5) must be '0' or '1'", wantPrefix))
-	}
-
-	mode, err := d.ParseMode(frame[memModeOffset])
-	if err != nil {
-		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: mode field (P6) invalid", wantPrefix))
-	}
-
-	kind := frame[memKindOffset]
-	if !validKindByte(kind) {
-		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: kind field (P7) must be one of '0','1','2','3','4','5'", wantPrefix))
-	}
-
-	ctcss, err := ParseCTCSSState(frame[memCTCSSOffset])
-	if err != nil {
-		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: CTCSS field (P8) invalid", wantPrefix))
-	}
-
-	if string(frame[memP9Offset:memP9Offset+2]) != "00" {
-		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: P9 field must be fixed \"00\"", wantPrefix))
-	}
-
-	shift, err := ParseShift(frame[memShiftOffset])
-	if err != nil {
-		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: shift field (P10) invalid", wantPrefix))
-	}
-
-	return MemoryData{
-		Slot:   slot,
-		FreqHz: uint32(freq),
-		ClarHz: clar,
-		RxClar: rxClar,
-		TxClar: txClar,
-		Mode:   mode,
-		Kind:   kind,
-		CTCSS:  ctcss,
-		Shift:  shift,
-	}, nil
+	return d.parseMemoryFields(frame, wantPrefix)
 }

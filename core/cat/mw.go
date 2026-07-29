@@ -20,27 +20,13 @@ func (d Dialect) BuildMWSet(m MemoryData) (Command, error) {
 		return Command{}, err
 	}
 
+	// Framing here, field block in encodeMemoryFields (memdata.go): the
+	// same offsets 2-26 the combined MT record writes, extracted from this
+	// body in M9c-3 task 3 with the golden vectors G5/G7 as the proof that
+	// not a byte moved.
 	frame := make([]byte, memoryFrameLen)
 	frame[0], frame[1] = 'M', 'W'
-	copy(frame[memSlotOffset:], m.Slot.Wire())
-	copy(frame[memFreqOffset:], fmt.Sprintf("%0*d", memFreqDigits, m.FreqHz))
-
-	clarMag := m.ClarHz
-	sign := byte('+')
-	if clarMag < 0 {
-		sign = '-'
-		clarMag = -clarMag
-	}
-	frame[memClarSignOffset] = sign
-	copy(frame[memClarMagOffset:], fmt.Sprintf("%0*d", memClarMagDigits, clarMag))
-
-	frame[memRxClarOffset] = boolDigit(m.RxClar)
-	frame[memTxClarOffset] = boolDigit(m.TxClar)
-	frame[memModeOffset] = m.Mode.Wire()
-	frame[memKindOffset] = m.Kind
-	frame[memCTCSSOffset] = m.CTCSS.Wire()
-	copy(frame[memP9Offset:], "00")
-	frame[memShiftOffset] = m.Shift.Wire()
+	encodeMemoryFields(frame, m)
 	frame[memTermOffset] = ';'
 
 	return newCommand(frame), nil
