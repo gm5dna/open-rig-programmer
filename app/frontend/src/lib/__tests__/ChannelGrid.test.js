@@ -90,7 +90,7 @@ function data(freqHz, mode, extra = {}) {
 		ctcss_tone: { state: 'unknown' },
 		shift: 'SIMPLEX',
 		tag: 'MYCALL',
-		tag_display: true,
+		tag_display: { state: 'known', value: true },
 		scan_skip: { state: 'unknown' },
 		...extra,
 	}
@@ -353,7 +353,7 @@ describe('editing', () => {
 				ctcss_tone: { state: 'unknown' },
 				shift: 'SIMPLEX',
 				tag: 'MYCALL',
-				tag_display: true,
+				tag_display: { state: 'known', value: true },
 				scan_skip: { state: 'unknown' },
 			},
 		})
@@ -435,7 +435,7 @@ describe('editing', () => {
 				ctcss_tone: { state: 'unknown' },
 				shift: 'SIMPLEX',
 				tag: '',
-				tag_display: false,
+				tag_display: { state: 'known', value: false },
 				scan_skip: { state: 'unknown' },
 			},
 		})
@@ -450,7 +450,37 @@ describe('editing', () => {
 		expect(updateChannel).toHaveBeenCalledTimes(1)
 		const arg = updateChannelMock.mock.calls[0][0]
 		expect(arg.slot).toBe('001')
-		expect(arg.data.tag_display).toBe(false) // was true in the fixture
+		expect(arg.data.tag_display).toEqual({ state: 'known', value: false }) // was Known-true in the fixture
+	})
+
+	it('a non-Known Tag display renders an em dash and neither Enter nor Space toggles it (the Scan skip rule)', async () => {
+		// M9c-5 E1: tag_display is a BoolField. A CHIRP import leaves it
+		// Unknown, and a toggle would have to INVENT the state it flips
+		// from — so the cell behaves exactly as an unreadable Scan skip
+		// does. (Pasting on/off into the column remains the way to make it
+		// Known — see grid/paste.js, which refuses only tone/skip cells.)
+		const cp = codeplugFixture()
+		cp.Channels[0].data = data(7074000, 'USB', { tag_display: { state: 'unknown' } })
+		appState.setCodeplug(cp)
+		const { container } = render(ChannelGrid)
+		const toggle = cell(container, 0, TAG_DISPLAY)
+		expect(toggle.textContent).toBe('—')
+
+		toggle.focus()
+		await fireEvent.keyDown(toggle, { key: 'Enter' })
+		await fireEvent.keyDown(toggle, { key: ' ' })
+		expect(updateChannel).not.toHaveBeenCalled()
+
+		// Unavailable behaves identically — both mean "preserve whatever
+		// the radio has".
+		cp.Channels[0].data = data(7074000, 'USB', { tag_display: { state: 'unavailable' } })
+		appState.setCodeplug(cp)
+		const second = render(ChannelGrid)
+		const unavailable = cell(second.container, 0, TAG_DISPLAY)
+		expect(unavailable.textContent).toBe('—')
+		unavailable.focus()
+		await fireEvent.keyDown(unavailable, { key: 'Enter' })
+		expect(updateChannel).not.toHaveBeenCalled()
 	})
 
 	it('the clarifier editor takes its min/max/step from the UISpec and commits value + Rx/Tx as one edit', async () => {

@@ -38,7 +38,7 @@ export namespace codeplug {
 	    ctcss_tone: ToneField;
 	    shift: string;
 	    tag?: string;
-	    tag_display?: boolean;
+	    tag_display: BoolField;
 	    scan_skip: BoolField;
 	
 	    static createFrom(source: any = {}) {
@@ -56,7 +56,7 @@ export namespace codeplug {
 	        this.ctcss_tone = this.convertValues(source["ctcss_tone"], ToneField);
 	        this.shift = source["shift"];
 	        this.tag = source["tag"];
-	        this.tag_display = source["tag_display"];
+	        this.tag_display = this.convertValues(source["tag_display"], BoolField);
 	        this.scan_skip = this.convertValues(source["scan_skip"], BoolField);
 	    }
 	

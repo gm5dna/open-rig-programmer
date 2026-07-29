@@ -26,7 +26,9 @@ const uiSpec = {
 }
 
 /** A populated channel's data, tone/skip unreadable over CAT (the state
- * every radio read produces for them — see core/driver/ft710/read.go). */
+ * every radio read produces for them — see core/driver/ft710/read.go).
+ * Tag display is a BoolField too (M9c-5 E1), but the CAT protocol DOES
+ * read it, so a read leaves it Known. */
 function readData() {
 	return {
 		freq_hz: 7074000,
@@ -38,7 +40,7 @@ function readData() {
 		ctcss_tone: { state: 'unknown' },
 		shift: 'SIMPLEX',
 		tag: 'MYCALL',
-		tag_display: true,
+		tag_display: { state: 'known', value: true },
 		scan_skip: { state: 'unknown' },
 	}
 }
@@ -48,6 +50,16 @@ function fileData() {
 	const d = readData()
 	d.ctcss_tone = { state: 'known', value: 885 }
 	d.scan_skip = { state: 'known', value: true }
+	return d
+}
+
+/** readData with tag_display in the given BoolField state — the four
+ * cases this column now has to survive: Known-true, Known-false,
+ * Unknown (a CHIRP import) and Unavailable (a radio whose frame carries
+ * no display flag). @param {object} tagDisplay */
+function withTagDisplay(tagDisplay) {
+	const d = readData()
+	d.tag_display = tagDisplay
 	return d
 }
 
@@ -95,8 +107,15 @@ describe('isCellEditable', () => {
 		expect(isCellEditable(col('skip'), fileData())).toBe(true)
 	})
 
+	it('Tag display is editable only when its FieldState is known (all four states)', () => {
+		expect(isCellEditable(col('tagDisplay'), withTagDisplay({ state: 'known', value: true }))).toBe(true)
+		expect(isCellEditable(col('tagDisplay'), withTagDisplay({ state: 'known', value: false }))).toBe(true)
+		expect(isCellEditable(col('tagDisplay'), withTagDisplay({ state: 'unknown' }))).toBe(false)
+		expect(isCellEditable(col('tagDisplay'), withTagDisplay({ state: 'unavailable' }))).toBe(false)
+	})
+
 	it('every other column is editable on a populated channel', () => {
-		for (const id of ['freq', 'mode', 'clar', 'shift', 'ctcss', 'tag', 'tagDisplay']) {
+		for (const id of ['freq', 'mode', 'clar', 'shift', 'ctcss', 'tag']) {
 			expect(isCellEditable(col(id), readData()), id).toBe(true)
 		}
 	})
@@ -132,6 +151,17 @@ describe('displayValue', () => {
 		expect(displayValue(col('tone'), d, uiSpec)).toBe('—')
 	})
 
+	it('renders Tag display On/Off only when Known, an em dash otherwise (all four states)', () => {
+		const show = (tagDisplay) => displayValue(col('tagDisplay'), withTagDisplay(tagDisplay), uiSpec)
+		expect(show({ state: 'known', value: true })).toBe('On')
+		expect(show({ state: 'known', value: false })).toBe('Off')
+		// A Known-false BoolField arrives from Go with `value` omitted
+		// (json:"value,omitempty") — that is Off, not unknown.
+		expect(show({ state: 'known' })).toBe('Off')
+		expect(show({ state: 'unknown' })).toBe('—')
+		expect(show({ state: 'unavailable' })).toBe('—')
+	})
+
 	it('falls back to decihertz maths for a known tone missing from the table', () => {
 		const d = readData()
 		d.ctcss_tone = { state: 'known', value: 693 }
@@ -158,7 +188,9 @@ describe('newChannelData', () => {
 			ctcss_tone: { state: 'unknown' },
 			shift: uiSpec.ShiftOptions[0],
 			tag: '',
-			tag_display: false,
+			// A mandatory wire field: an Added row is Known-off, never
+			// 'unknown' (which the send plan would block).
+			tag_display: { state: 'known', value: false },
 			scan_skip: { state: 'unknown' },
 		})
 	})
@@ -172,6 +204,19 @@ describe('cloneData', () => {
 		expect(copy).not.toBe(original)
 		expect(copy.ctcss_tone).not.toBe(original.ctcss_tone)
 		expect(copy.scan_skip).not.toBe(original.scan_skip)
+		expect(copy.tag_display).not.toBe(original.tag_display)
+	})
+
+	it('carries every Tag display state through unchanged (all four states)', () => {
+		for (const tagDisplay of [
+			{ state: 'known', value: true },
+			{ state: 'known', value: false },
+			{ state: 'unknown' },
+			{ state: 'unavailable' },
+		]) {
+			const copy = cloneData(withTagDisplay(tagDisplay))
+			expect(copy.tag_display, tagDisplay.state).toEqual(tagDisplay)
+		}
 	})
 
 	it('normalises absent optional fields to explicit zero values, omitting non-Known field-state values', () => {
@@ -181,7 +226,10 @@ describe('cloneData', () => {
 		expect(copy.rx_clar).toBe(false)
 		expect(copy.tx_clar).toBe(false)
 		expect(copy.tag).toBe('')
-		expect(copy.tag_display).toBe(false)
+		// Go always emits tag_display now; an absent one can only be a
+		// hand-built shape, and the clone refuses to invent a value for it
+		// exactly as it does for tone/scan skip.
+		expect(copy.tag_display).toEqual({ state: 'unknown' })
 		// codeplug.ToneField/BoolField.Valid: a non-Known state must carry a
 		// ZERO value — the key must therefore stay absent, not default in.
 		expect('value' in copy.ctcss_tone).toBe(false)
@@ -221,8 +269,13 @@ describe('parsePasteCell', () => {
 	it('booleans: on/off vocabulary for Scan skip and Tag display', () => {
 		expect(parsePasteCell(col('skip'), 'on', uiSpec)).toEqual({ ok: true, patch: { scan_skip: { state: 'known', value: true } } })
 		expect(parsePasteCell(col('skip'), 'No', uiSpec)).toEqual({ ok: true, patch: { scan_skip: { state: 'known', value: false } } })
-		expect(parsePasteCell(col('tagDisplay'), 'TRUE', uiSpec)).toEqual({ ok: true, patch: { tag_display: true } })
-		expect(parsePasteCell(col('tagDisplay'), '0', uiSpec)).toEqual({ ok: true, patch: { tag_display: false } })
+		// Tag display parses to a KNOWN BoolField: pasting on/off is how a
+		// user makes an Unknown display honest (paste.js refuses only
+		// tone/skip cells, so this route stays open where the cell editor
+		// is closed).
+		expect(parsePasteCell(col('tagDisplay'), 'TRUE', uiSpec)).toEqual({ ok: true, patch: { tag_display: { state: 'known', value: true } } })
+		expect(parsePasteCell(col('tagDisplay'), '0', uiSpec)).toEqual({ ok: true, patch: { tag_display: { state: 'known', value: false } } })
+		expect(parsePasteCell(col('tagDisplay'), 'maybe', uiSpec).ok).toBe(false)
 		expect(parsePasteCell(col('skip'), 'maybe', uiSpec).ok).toBe(false)
 	})
 

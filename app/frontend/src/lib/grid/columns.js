@@ -54,6 +54,15 @@ export const COLUMNS = [
  *     unrelated write is unverified pending M5b hardware trials — see
  *     docs/hardware-notes.md's "M5b write-trial protocol"); a loaded
  *     file may carry them 'known'.
+ *   - Tag display: only when its FieldState is 'known' (M9c-5 E1 — it is
+ *     a BoolField now, not a bare bool). Its provenance differs from
+ *     tone/skip: the CAT protocol DOES read it, so a radio read and a
+ *     migrated legacy file both leave it 'known', while a CHIRP import
+ *     leaves it honestly 'unknown' and the send plan blocks that channel
+ *     ("tag display unknown — set On or Off before sending"). A cell
+ *     this leaves uneditable is still settable by PASTING on/off into
+ *     the column (see paste.js, which refuses only tone/skip) — the
+ *     bulk route the design records as the mitigation.
  * @param {Column} column
  * @param {ChannelData | null | undefined} data
  * @returns {boolean}
@@ -68,6 +77,8 @@ export function isCellEditable(column, data) {
 			return data?.ctcss_tone?.state === 'known'
 		case 'skip':
 			return data?.scan_skip?.state === 'known'
+		case 'tagDisplay':
+			return data?.tag_display?.state === 'known'
 		default:
 			return data != null
 	}
@@ -91,7 +102,9 @@ function toneDisplay(decihertz, uiSpec) {
  * The cell's display text. Empty slots render '' for every non-slot
  * column (the component adds the "empty" affordance itself); unreadable
  * tone/skip render an em dash (greyed by the component, with the
- * unverified-preservation tooltip).
+ * unverified-preservation tooltip), and so does a tag display that is
+ * not 'known' — On/Off is a claim about the radio, and this grid does
+ * not make claims it cannot support.
  * @param {Column} column
  * @param {ChannelData | null | undefined} data
  * @param {UISpecView} uiSpec
@@ -124,8 +137,11 @@ export function displayValue(column, data, uiSpec) {
 		}
 		case 'tag':
 			return data.tag ?? ''
-		case 'tagDisplay':
-			return data.tag_display ? 'On' : 'Off'
+		case 'tagDisplay': {
+			const display = data.tag_display
+			if (display?.state !== 'known') return '—'
+			return display.value ? 'On' : 'Off'
+		}
 		default:
 			return ''
 	}
@@ -139,6 +155,14 @@ export function displayValue(column, data, uiSpec) {
  * core/codeplug/fieldstate.go's write rule; whether the radio's own
  * setting is actually preserved by an unrelated write is a separate,
  * still-open M5b question), exactly as a radio read leaves them.
+ *
+ * Tag display is the deliberate exception: it is a MANDATORY wire field
+ * (core/cat's MT set frame takes the display flag as a required
+ * argument), so a row this factory creates is Known and off — the
+ * design's blank-row rule. An 'unknown' here would create a channel the
+ * send plan immediately blocks. The design states that default
+ * per-model; the UISpec carries no model today, so this is the FT-710's
+ * value, unconditionally — revisit when it does.
  * @param {UISpecView} uiSpec
  * @param {number} freqHz
  * @returns {ChannelData}
@@ -154,7 +178,7 @@ export function newChannelData(uiSpec, freqHz) {
 		ctcss_tone: { state: 'unknown' },
 		shift: uiSpec.ShiftOptions[0],
 		tag: '',
-		tag_display: false,
+		tag_display: { state: 'known', value: false },
 		scan_skip: { state: 'unknown' },
 	})
 }
@@ -191,7 +215,10 @@ export function cloneData(data) {
 		ctcss_tone: cloneFieldState(data.ctcss_tone),
 		shift: data.shift,
 		tag: data.tag ?? '',
-		tag_display: data.tag_display ?? false,
+		// Go always emits tag_display now (no omitempty), so the fallback
+		// only bites on a hand-built shape: 'unknown' there refuses to
+		// invent a value, exactly as tone/scan skip do.
+		tag_display: cloneFieldState(data.tag_display),
 		scan_skip: cloneFieldState(data.scan_skip),
 	})
 }
@@ -250,7 +277,7 @@ export function parsePasteCell(column, text, uiSpec) {
 		case 'tagDisplay': {
 			const value = BOOL_WORDS.get(text.trim().toLowerCase())
 			if (value === undefined) return { ok: false, reason: `"${text.trim()}" is not on/off for Tag display` }
-			return { ok: true, patch: { tag_display: value } }
+			return { ok: true, patch: { tag_display: /** @type {ChannelData['tag_display']} */ ({ state: 'known', value }) } }
 		}
 		default:
 			return { ok: false, reason: `the ${column.label} column cannot be pasted into` }

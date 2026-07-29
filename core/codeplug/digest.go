@@ -40,6 +40,42 @@ import (
 // and sensitive to every field of every channel: changing any field of
 // any channel changes the digest, and an empty slot (Data == nil) never
 // digests the same as a populated one at the same Slot.
+//
+// # Two uses, one ephemeral and one durable
+//
+// Callers use this function for two different jobs, and a schema change
+// affects only the second:
+//
+//   - The CONFIRMATION digests (DiffResult.BaselineDigest and
+//     CandidateDigest, and the SendPlan values derived from them) are
+//     EPHEMERAL by design: they live in one in-memory plan for one
+//     session, and both sides are computed by the same binary from
+//     Channel values it is holding. A send recomputes them immediately
+//     before transmission (see DiffResult.CandidateDigest). No stored
+//     digest is ever compared against a later binary's output, so a
+//     schema change cannot desynchronise them.
+//   - The CONTENT digests written to disk are DURABLE:
+//     RadioInfo.BaselineDigest in a saved codeplug file, and the
+//     baseline/candidate values a clone journal records. These outlive
+//     the binary that computed them.
+//
+// # Durable digests written before a schema change are LEGACY EVIDENCE
+//
+// Digest is a pure function of the CURRENT Channel shape, so changing
+// that shape changes every digest. A file saved at schema 2 and loaded
+// after the schema-3 migration therefore carries a baseline_digest that
+// no longer equals Digest over its migrated channels (M9c-5 turned
+// ChannelData.TagDisplay from a bare bool into a BoolField object — the
+// marshalled bytes differ, so the sum does too); the same is true of
+// journal records written before the change.
+//
+// Those values are left exactly as they were written. They are evidence
+// of what was read and sent at the time — non-recomputable, and not a
+// checksum for a later run to re-verify. Nothing in this project replays
+// a journal or re-checks a saved file's digest, so digest versioning was
+// considered and REJECTED as machinery without a consumer; recording the
+// limitation here (and on RadioInfo.BaselineDigest) is the whole of the
+// mitigation, deliberately.
 func Digest(channels []Channel) string {
 	sorted := make([]Channel, len(channels))
 	copy(sorted, channels)

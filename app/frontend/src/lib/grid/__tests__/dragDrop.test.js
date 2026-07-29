@@ -142,7 +142,7 @@ describe('buildDragOpChannels', () => {
 		ctcss_tone: { state: 'unknown' },
 		shift: 'SIMPLEX',
 		tag: 'MYCALL',
-		tag_display: true,
+		tag_display: { state: 'known', value: true },
 		scan_skip: { state: 'unknown' },
 	}
 	const TARGET_DATA = {
@@ -155,7 +155,7 @@ describe('buildDragOpChannels', () => {
 		ctcss_tone: { state: 'known', value: 885 },
 		shift: 'PLUS',
 		tag: 'OTHER',
-		tag_display: false,
+		tag_display: { state: 'known', value: false },
 		scan_skip: { state: 'known', value: true },
 	}
 

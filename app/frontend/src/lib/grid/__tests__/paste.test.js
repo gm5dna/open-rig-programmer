@@ -116,7 +116,7 @@ function populatedData(freqHz, mode) {
 		ctcss_tone: { state: 'unknown' },
 		shift: 'SIMPLEX',
 		tag: 'MYCALL',
-		tag_display: false,
+		tag_display: { state: 'known', value: false },
 		scan_skip: { state: 'unknown' },
 	}
 }
@@ -134,6 +134,7 @@ const FREQ_COL = COLUMNS.findIndex((c) => c.id === 'freq')
 const MODE_COL = COLUMNS.findIndex((c) => c.id === 'mode')
 const TONE_COL = COLUMNS.findIndex((c) => c.id === 'tone')
 const TAG_COL = COLUMNS.findIndex((c) => c.id === 'tag')
+const TAG_DISPLAY_COL = COLUMNS.findIndex((c) => c.id === 'tagDisplay')
 
 function ctx(overrides = {}) {
 	return {
@@ -188,7 +189,7 @@ describe('mapPasteToChannels — happy paths', () => {
 		const result = mapPasteToChannels(rows, ctx({ startCol: TAG_COL }))
 		expect(result.ok).toBe(true)
 		expect(result.channels[0].data.tag).toBe('CALL 40M')
-		expect(result.channels[0].data.tag_display).toBe(true)
+		expect(result.channels[0].data.tag_display).toEqual({ state: 'known', value: true })
 	})
 
 	it('a fully clipped or all-empty paste yields ok with zero channels (no-op)', () => {
@@ -227,6 +228,19 @@ describe('mapPasteToChannels — rejections (whole paste, nothing applied)', () 
 		const result = mapPasteToChannels(rows, ctx({ startCol: TONE_COL, channelBySlot: bySlot }))
 		expect(result.ok).toBe(true)
 		expect(result.channels[0].data.ctcss_tone).toEqual({ state: 'known', value: 885 })
+	})
+
+	it('accepts a Tag display cell whose state is NOT known — the deliberate asymmetry with tone/skip', () => {
+		// M9c-5 E1: an Unknown tag display blocks its channel at plan time
+		// ("set On or Off before sending"), so a paste must be able to SET
+		// it. Only tone/skip — fields the CAT protocol cannot write at all
+		// when unknown — are refused here.
+		const bySlot = channelBySlot()
+		bySlot.get('001').data.tag_display = { state: 'unknown' }
+		const rows = parseBlock('on')
+		const result = mapPasteToChannels(rows, ctx({ startCol: TAG_DISPLAY_COL, channelBySlot: bySlot }))
+		expect(result.ok).toBe(true)
+		expect(result.channels[0].data.tag_display).toEqual({ state: 'known', value: true })
 	})
 
 	it('rejects an unparseable cell, naming the position', () => {
