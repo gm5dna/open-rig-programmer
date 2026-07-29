@@ -226,15 +226,27 @@ func looksLikeOnce(expr ast.Expr) bool {
 //     core/cat's own dialect implementations will keep calling one
 //     another via selectors (e.g. d.BuildMWSet(...)) forever, not just
 //     during Task 54's transitional package-level delegates.
-//     THE CARVE-OUT IS PREFIX-BASED (inTree), so core/cat's SUBPACKAGES
-//     are inside it too. Today that matters for exactly one: since M9c-3
-//     task 7, core/cat/dialecttest — a NON-test file, and so genuinely
-//     walked here — calls all three builders as part of the exported
-//     conformance suite M9c-4 runs over a real dialect. That is the
-//     intended reading (a conformance suite for core/cat's own API is
-//     core/cat's own tree, not a new write-path call site), and it was
-//     VERIFIED rather than assumed when BuildMTSetCombined was added:
-//     the fence stayed green, naming nothing in dialecttest.
+//     THE CARVE-OUT IS AN EXACT TWO-PACKAGE SET — core/cat and
+//     core/cat/dialecttest, nothing else — and NOT a prefix. It was
+//     prefix-based (inTree) from M9b until M9c-4 task 1 NARROWED it, the
+//     first of that milestone's closures: a prefix exempts every future
+//     core/cat subpackage in advance, and M9c-4 introduces the first ones
+//     (core/cat/ftdx10). Those are DATA-ONLY model packages — a dialect
+//     literal and a generated EX inventory — so a Set-builder call site
+//     appearing in one is precisely the regression this fence exists to
+//     refuse, and the old blanket would have waved it through.
+//     Both members are deliberate, for different reasons. core/cat is the
+//     builders' own package. core/cat/dialecttest is named because since
+//     M9c-3 task 7 it is a NON-test file — and so genuinely walked here —
+//     calling all three builders as part of the exported conformance suite
+//     M9c-4 runs over a real dialect. That remains the intended reading (a
+//     conformance suite for core/cat's own API is core/cat's own tree, not
+//     a new write-path call site), and it was VERIFIED rather than assumed
+//     when BuildMTSetCombined was added: the fence stayed green, naming
+//     nothing in dialecttest. Any FUTURE core/cat subpackage that
+//     legitimately needs a builder must be ADDED HERE BY NAME with its
+//     reason — the same "nothing about this check is automatic" discipline
+//     the builder-name list carries below.
 //     Amended at M9b: before the dialect seam these were package-level
 //     functions and an exact package-qualified check (sel.X an
 //     *ast.Ident naming the core/cat import) sufficed; the seam turns
@@ -294,14 +306,15 @@ func TestWritePathReachableOnlyThroughDriver(t *testing.T) {
 		}
 
 		// (a) BuildMWSet / BuildMTSet / BuildMTSetCombined, matched by
-		// NAME alone, whatever the receiver — OUTSIDE core/cat's own
-		// tree, subpackages included (the carve-out a same-day Codex
-		// review, C1, found missing from the first cut of
-		// this amendment: without it, the check fired inside core/cat
-		// itself, which defeats the whole point — Task 54's package-level
-		// delegates, and every dialect implementation's internal calls
-		// after Task 55, are selectors named BuildMWSet/BuildMTSet living
-		// INSIDE core/cat).
+		// NAME alone, whatever the receiver — OUTSIDE the carve-out, which
+		// since M9c-4 task 1 is the EXACT SET {core/cat,
+		// core/cat/dialecttest} rather than the core/cat prefix it was
+		// before (having a carve-out at all is what a same-day Codex
+		// review, C1, found missing from the first cut of this amendment:
+		// without one the check fired inside core/cat itself, which
+		// defeats the whole point — Task 54's package-level delegates, and
+		// every dialect implementation's internal calls after Task 55, are
+		// selectors named BuildMWSet/BuildMTSet living INSIDE core/cat).
 		//
 		// Amended at M9b. Before the dialect seam these were
 		// package-level functions and this check required sel.X to be an
@@ -320,11 +333,17 @@ func TestWritePathReachableOnlyThroughDriver(t *testing.T) {
 		//
 		// Amended again at M9c-3 (task 8): BuildMTSetCombined, the FTdx10
 		// family's one-command form of the same memory write, joins the
-		// two names by EXACT match — "BuildMTSet" does not cover it. See
-		// the doc comment for the dialecttest note: core/cat/dialecttest
-		// is a NON-test file calling all three, and inTree's prefix
-		// semantics keep it inside the carve-out.
-		if !inTree(pf.relDir, "core/cat") {
+		// two names by EXACT match — "BuildMTSet" does not cover it.
+		//
+		// NARROWED at M9c-4 (task 1), and the condition below now says so
+		// literally: core/cat/dialecttest is a NON-test file calling all
+		// three, so it is EXEMPT BY NAME instead of being swept in by
+		// prefix, and NOTHING else under core/cat is exempt at all. That
+		// is the property this milestone's data-only model packages rest
+		// on — see the doc comment, and the recorded red-proof in
+		// docs/superpowers/m9c4-red-proofs.md, which fires this very check
+		// from a transient non-test decoy in core/cat/ftdx10.
+		if !(pf.relDir == "core/cat" || pf.relDir == "core/cat/dialecttest") {
 			ast.Inspect(pf.file, func(n ast.Node) bool {
 				sel, isSel := n.(*ast.SelectorExpr)
 				if !isSel {
@@ -337,7 +356,7 @@ func TestWritePathReachableOnlyThroughDriver(t *testing.T) {
 					sawDriverBuildMW = true
 					return true
 				}
-				t.Errorf("%s: references .%s — the Set-frame builders may be used outside core/cat only from core/driver/** (composition-root discipline; see this test's doc comment)", pf.relPath, sel.Sel.Name)
+				t.Errorf("%s: references .%s — the Set-frame builders may be used only from core/cat, core/cat/dialecttest (the conformance suite) and core/driver/**; other core/cat subpackages are NOT exempt, the carve-out having been narrowed from the core/cat prefix to those two packages at M9c-4 (composition-root discipline; see this test's doc comment)", pf.relPath, sel.Sel.Name)
 				return true
 			})
 		}

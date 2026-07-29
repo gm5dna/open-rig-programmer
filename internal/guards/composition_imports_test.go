@@ -14,10 +14,12 @@ import (
 // application only through the sanctioned composition root, never
 // directly.
 //
-// Two rules, both over NON-TEST files (the guards' standing convention;
+// Three rules, all over NON-TEST files (the guards' standing convention;
 // parseRepo already excludes _test.go, so the two cmd/rigprog test files
 // and the core/clone tests that legitimately import core/driver/ft710 are
-// out of scope exactly as the other guards intend):
+// out of scope exactly as the other guards intend — and so, under Rule 3,
+// is a model package's own dialect_test.go importing the conformance
+// suite):
 //
 //  1. CONCRETE-DRIVER CONFINEMENT. Outside core/ itself, only files in
 //     internal/wiring (the composition root) may import a concrete driver
@@ -31,8 +33,40 @@ import (
 //     string and let internal/wiring pick the driver.
 //
 //  2. CAT ISOLATION. No file under app/ or cmd/rigprog may import
-//     core/cat: the CAT frame layer is a driver-internal detail, and the
-//     UI/CLI layers must speak only the neutral driver.Session contract.
+//     core/cat OR ANY PACKAGE BENEATH IT: the CAT frame layer is a
+//     driver-internal detail, and the UI/CLI layers must speak only the
+//     neutral driver.Session contract.
+//
+//     BARE PATH **OR** PREFIX, and that is deliberately NOT Rule 1's
+//     shape. Rule 1 matches the trailing-slash form ALONE precisely
+//     because it must EXCLUDE the bare path — "core/driver" is the
+//     neutral seam app/ and cmd/rigprog import freely. Here the bare path
+//     is the very thing forbidden, so reusing Rule 1's technique verbatim
+//     would silently DROP the bare core/cat match and regress this rule
+//     into permitting exactly what it was written to stop. The prefix
+//     half is the M9c-4 addition (Fable 4): from this milestone the model
+//     packages live at core/cat/ftdx10 and its successors, and importing
+//     one drags core/cat in transitively, so the exact-path match this
+//     rule carried until now would have fired NOTHING at a UI layer
+//     re-coupling to the wire protocol through a subpackage. Both halves
+//     have their own recorded red-proof.
+//
+//  3. THE CONFORMANCE SUITE IS TEST-ONLY. No production file anywhere in
+//     the repository may import core/cat/dialecttest. It is an exported
+//     but testing-only package — it takes a *testing.T and drives a
+//     dialect through the whole conformance corpus — and the walk's
+//     standing _test.go exclusion is exactly what makes the rule
+//     expressible rather than absurd: a model package's dialect_test.go
+//     may and must import it, while a production file doing so would pull
+//     the testing machinery into a shipped binary and, worse, make the
+//     conformance suite reachable at runtime.
+//
+//     A forbidden-import rule has NO legitimate positive site, so it gets
+//     no non-vacuity counter here — there is nothing true to count. Its
+//     proof of teeth is instead an explicit transient decoy, recorded
+//     failing in docs/superpowers/m9c4-red-proofs.md (Codex 8). Note the
+//     walk itself is the non-vacuity backstop the rule does have:
+//     parseRepo fails the whole package if it parses zero files.
 //
 // The failure each rule exists to catch is a quiet new call site that
 // re-couples a UI/CLI (or a non-wiring internal package) directly to a
@@ -48,7 +82,9 @@ func TestCompositionRootImportDiscipline(t *testing.T) {
 	const (
 		neutralSeam  = "core/driver"  // the bare, radio-neutral seam (allowed everywhere)
 		driverPrefix = "core/driver/" // concrete drivers live below here (trailing slash: F10)
-		catPath      = "core/cat"
+		catPath      = "core/cat"     // Rule 2 forbids this AND everything beneath it
+		// dialecttestPath is testing-only despite being exported: Rule 3.
+		dialecttestPath = "core/cat/dialecttest"
 	)
 
 	files := parseRepo(t)
@@ -96,9 +132,22 @@ func TestCompositionRootImportDiscipline(t *testing.T) {
 				sawNeutralSeamFromAppOrCmd = true
 			}
 
-			// Rule 2: CAT isolation (app/ and cmd/rigprog).
-			if rel == catPath && (inApp || inCmd) {
-				t.Errorf("%s: imports %q — app/ and cmd/rigprog must never import core/cat; the CAT frame layer is a driver-internal detail behind the neutral driver.Session contract (M9a neutral-core discipline)", pf.relPath, raw)
+			// Rule 2: CAT isolation (app/ and cmd/rigprog) — the bare
+			// package OR anything beneath it. The bare test is NOT
+			// redundant with the prefix test and must not be collapsed
+			// into Rule 1's trailing-slash-only form: see the doc comment.
+			if rel == catPath || strings.HasPrefix(rel, catPath+"/") {
+				if inApp || inCmd {
+					t.Errorf("%s: imports %q — app/ and cmd/rigprog must never import core/cat or any package beneath it; the CAT frame layer is a driver-internal detail behind the neutral driver.Session contract, and a core/cat/** model package drags it in transitively (M9a neutral-core discipline; prefix half added M9c-4)", pf.relPath, raw)
+				}
+			}
+
+			// Rule 3: the conformance suite is test-only, everywhere. No
+			// tree qualifier — this walk sees production files only, and
+			// there is no production file in the repository for which
+			// importing a *testing.T-driven suite is correct.
+			if rel == dialecttestPath {
+				t.Errorf("%s: imports %q — core/cat/dialecttest is an exported TESTING-ONLY package (it drives a dialect through the conformance corpus against a *testing.T) and may be imported only from _test.go files, such as a model package's own dialect_test.go; a production import would link the test machinery into a shipped binary (M9c-4 closure 2)", pf.relPath, raw)
 			}
 		}
 	}
