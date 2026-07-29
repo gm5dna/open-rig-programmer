@@ -128,6 +128,71 @@ func TestReadChannel_GoldenMappings(t *testing.T) {
 	}
 }
 
+// TestReadChannel_TagDisplayIsKnown is E1's read-direction PIN — a PIN, not
+// a RED: it has been green since Task 1 flipped ChannelData.TagDisplay to a
+// codeplug.BoolField and gave read.go's literal an explicit
+// codeplug.Known, and it exists to keep it green.
+//
+// What it pins: the MT answer this channel is built from CARRIES the
+// display flag (P1), so the value was genuinely READ from the radio, and
+// ReadChannel must therefore report {Known, flag} — never Unknown, never
+// Unavailable, and for BOTH flag values. The FALSE case is the one worth
+// stating: Known-false and Unknown are exactly the pair a careless
+// refactor conflates, since both render as "the tag is not displayed", yet
+// only the first of them may be written back to a radio (buildWriteCommands
+// refuses the other outright — see write_test.go's refusal pins). A
+// regression here would not be loud: it would quietly turn every read
+// channel into one the diff layer blocks.
+//
+// CTCSSTone and ScanSkip are asserted alongside as the deliberate CONTRAST:
+// those two are genuinely unreadable over CAT and must stay Unknown, so the
+// three fields together show that Unknown is a statement about the PROTOCOL
+// here, not this driver's default.
+func TestReadChannel_TagDisplayIsKnown(t *testing.T) {
+	displayed := fakeradio.MemState{
+		Freq: "014250000", ClarSign: '+', ClarMag: "0000",
+		Mode: '2', Kind: '1', CTCSS: '0', Shift: '0',
+		Tag: "SHOWN", TagDisplay: true,
+		Populated: true,
+	}
+	hidden := displayed
+	hidden.Tag, hidden.TagDisplay = "HIDDEN", false
+
+	_, sess := openSession(t, Simulated,
+		fakeradio.WithSlot("011", displayed),
+		fakeradio.WithSlot("012", hidden),
+	)
+
+	for _, tt := range []struct {
+		name string
+		slot string
+		want bool
+	}{
+		{"wire display flag set", "011", true},
+		{"wire display flag clear", "012", false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := sess.ReadChannel(testCtx(t), tt.slot)
+			if err != nil {
+				t.Fatalf("ReadChannel(%q): unexpected error: %v", tt.slot, err)
+			}
+			if got.Empty() {
+				t.Fatalf("ReadChannel(%q) = empty, want populated", tt.slot)
+			}
+			want := codeplug.BoolField{State: codeplug.Known, Value: tt.want}
+			if got.Data.TagDisplay != want {
+				t.Errorf("TagDisplay = %+v, want %+v (the MT answer carries P1, so the value is READ, not assumed)", got.Data.TagDisplay, want)
+			}
+			if got.Data.CTCSSTone.State != codeplug.Unknown {
+				t.Errorf("CTCSSTone.State = %q, want %q (unreadable over CAT)", got.Data.CTCSSTone.State, codeplug.Unknown)
+			}
+			if got.Data.ScanSkip.State != codeplug.Unknown {
+				t.Errorf("ScanSkip.State = %q, want %q (unreadable over CAT)", got.Data.ScanSkip.State, codeplug.Unknown)
+			}
+		})
+	}
+}
+
 // TestReadChannel_EmptySlot: fakeradio answers "?;" for an MR read of an
 // unpopulated slot (its ASSUMED register, item 2); the driver must map
 // that — and ONLY that — to an EMPTY channel, never an error.

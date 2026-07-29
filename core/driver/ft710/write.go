@@ -26,14 +26,31 @@ func (s *Session) bankFor(slot string) (spec.BankID, bool) {
 }
 
 // requestedFields lists every spec.Field a write of data actually
-// requests: the seven codec-expressible fields are ALWAYS requested (the
-// MW frame carries frequency/mode/clarifier/ctcss-state/shift whether or
-// not they changed, and the MT frame likewise carries tag+display), plus
-// CTCSSTone/ScanSkip when — and only when — their FieldState is Known:
-// per codeplug's write rule, Unknown/Unavailable mean "preserve whatever
-// the radio has", i.e. nothing is requested for that field. This mirrors
-// codeplug.Diff's addedFields so the driver's defence-in-depth gate and
-// the diff layer's gate judge the same set.
+// requests: the six plain fields are ALWAYS requested (the MW frame
+// carries frequency/mode/clarifier/ctcss-state/shift whether or not they
+// changed, and the MT frame likewise carries the tag), plus TagDisplay,
+// CTCSSTone and ScanSkip when — and only when — their FieldState is
+// Known: per codeplug's write rule, Unknown/Unavailable mean "preserve
+// whatever the radio has", i.e. nothing is requested for that field.
+//
+// This mirrors codeplug.Diff's addedFields EXACTLY — same membership, the
+// same three conditionals, the same order — so the driver's
+// defence-in-depth gate and the diff layer's gate judge the same set.
+// TagDisplay keeps the PLACE it held while it was unconditional: after
+// Tag, before the tone/skip conditionals, i.e. seventh whenever it appears
+// at all (TestRequestedFields_MembershipAndOrder pins this, as
+// TestAddedFields_MembershipAndOrder pins the other side).
+//
+// TagDisplay's conditional needs a word its two neighbours do not, because
+// MT's display flag (P1) is MANDATORY on the frame: a non-Known TagDisplay
+// is never quietly omitted from the wire, it is REFUSED outright by
+// buildWriteCommands before any other field mapping. Dropping it from this
+// set therefore cannot let a non-Known value through — what it fixes is
+// the one channel that would otherwise meet the wrong gate first: on a
+// session whose FieldTagDisplay is not write-Supported, the loop below
+// would have refused it naming a not-writable field NOBODY ASKED TO
+// WRITE, instead of the refusal that names the real problem. (addedFields
+// carries the conditional for the same reason — see its doc comment.)
 func requestedFields(data codeplug.ChannelData) []spec.Field {
 	fields := []spec.Field{
 		spec.FieldFrequency,
@@ -42,7 +59,9 @@ func requestedFields(data codeplug.ChannelData) []spec.Field {
 		spec.FieldCTCSSState,
 		spec.FieldShift,
 		spec.FieldTag,
-		spec.FieldTagDisplay,
+	}
+	if data.TagDisplay.State == codeplug.Known {
+		fields = append(fields, spec.FieldTagDisplay)
 	}
 	if data.CTCSSTone.State == codeplug.Known {
 		fields = append(fields, spec.FieldCTCSSTone)

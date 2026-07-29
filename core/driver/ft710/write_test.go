@@ -4,7 +4,7 @@ package ft710
 
 import (
 	"errors"
-	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -291,62 +291,239 @@ func TestWriteChannel_NonKnownTagDisplayRefusedBeforeWire(t *testing.T) {
 // wrong in several ways at once still names the one field whose failure
 // mode would otherwise be a silently wrong byte on the wire.
 //
-// The fixture is invalid in three further ways the function checks LATER
-// (mode, ctcss state, clarifier); only the TagDisplay refusal may surface.
+// Both directions are pinned, because "first" is a claim about ORDER and a
+// one-sided test cannot tell an ordering apart from a swallow: over one
+// fixture that is invalid in three further ways the function checks LATER
+// (mode, ctcss state, clarifier), a non-Known TagDisplay must outrank all
+// three, and a KNOWN one must stand aside and let the next check —
+// mode — surface its own refusal.
 func TestBuildWriteCommands_NonKnownTagDisplayRefusedFirst(t *testing.T) {
-	ch := writableChannel("010")
-	ch.Data.TagDisplay = codeplug.BoolField{State: codeplug.Unknown}
-	ch.Data.Mode = "NOT-A-MODE"
-	ch.Data.CTCSS = "NOT-A-CTCSS-STATE"
-	ch.Data.ClarHz = 999_999
+	// multiplyInvalid is the shared fixture. writableChannel supplies a
+	// Known-true TagDisplay, so only the sub-test that wants a non-Known one
+	// touches the field: the two cases differ in that alone.
+	multiplyInvalid := func() codeplug.Channel {
+		ch := writableChannel("010")
+		ch.Data.Mode = "NOT-A-MODE"
+		ch.Data.CTCSS = "NOT-A-CTCSS-STATE"
+		ch.Data.ClarHz = 999_999
+		return ch
+	}
 
-	_, _, err := buildWriteCommands(cat.FT710, ch)
-	var wre *driver.WriteRefusedError
-	if !errors.As(err, &wre) {
-		t.Fatalf("buildWriteCommands = %v, want a *driver.WriteRefusedError", err)
-	}
-	if len(wre.Fields) != 1 || wre.Fields[0] != spec.FieldTagDisplay {
-		t.Fatalf("WriteRefusedError.Fields = %v, want exactly [%s] — the TagDisplay check must run before every other field mapping", wre.Fields, spec.FieldTagDisplay)
-	}
-	if !strings.Contains(wre.Reason, "only a Known value is ever sent") {
-		t.Errorf("WriteRefusedError.Reason = %q, want it to state the Known-only write rule", wre.Reason)
-	}
+	t.Run("non-Known TagDisplay outranks all three later checks", func(t *testing.T) {
+		ch := multiplyInvalid()
+		ch.Data.TagDisplay = codeplug.BoolField{State: codeplug.Unknown}
+
+		_, _, err := buildWriteCommands(cat.FT710, ch)
+		var wre *driver.WriteRefusedError
+		if !errors.As(err, &wre) {
+			t.Fatalf("buildWriteCommands = %v, want a *driver.WriteRefusedError", err)
+		}
+		if len(wre.Fields) != 1 || wre.Fields[0] != spec.FieldTagDisplay {
+			t.Fatalf("WriteRefusedError.Fields = %v, want exactly [%s] — the TagDisplay check must run before every other field mapping", wre.Fields, spec.FieldTagDisplay)
+		}
+		if !strings.Contains(wre.Reason, "only a Known value is ever sent") {
+			t.Errorf("WriteRefusedError.Reason = %q, want it to state the Known-only write rule", wre.Reason)
+		}
+	})
+
+	t.Run("Known TagDisplay yields to the next check", func(t *testing.T) {
+		// The converse, and the half that makes the first meaningful: the
+		// top-of-function check is a PRIORITY, not a gate that swallows every
+		// other diagnosis. With TagDisplay Known the same broken channel must
+		// report the FIRST of the three later failures — mode — by its own
+		// name, exactly as it did before E1 added the check above it.
+		_, _, err := buildWriteCommands(cat.FT710, multiplyInvalid())
+		var wre *driver.WriteRefusedError
+		if !errors.As(err, &wre) {
+			t.Fatalf("buildWriteCommands = %v, want a *driver.WriteRefusedError", err)
+		}
+		if len(wre.Fields) != 1 || wre.Fields[0] != spec.FieldMode {
+			t.Fatalf("WriteRefusedError.Fields = %v, want exactly [%s] — a Known TagDisplay must not mask the next failure", wre.Fields, spec.FieldMode)
+		}
+		if want := `mode "NOT-A-MODE" is not a mode this radio supports`; wre.Reason != want {
+			t.Errorf("WriteRefusedError.Reason = %q, want %q", wre.Reason, want)
+		}
+	})
 }
 
-// TestBuildWriteCommands_KnownTagDisplayReachesTheFrame is the refusal's
-// other half: a Known TagDisplay — true or false alike — still flows
-// through to the MT frame, so the new gate blocks only what it should.
-// Known-FALSE is the case worth stating: it is a real value, not an
-// absence, and must be sent.
-func TestBuildWriteCommands_KnownTagDisplayReachesTheFrame(t *testing.T) {
-	for _, value := range []bool{true, false} {
-		t.Run(fmt.Sprintf("known/%v", value), func(t *testing.T) {
-			ch := writableChannel("010")
-			ch.Data.TagDisplay = codeplug.BoolField{State: codeplug.Known, Value: value}
+// TestBuildWriteCommands_TagDisplayWireIdentity is E1's WIRE-IDENTITY bar,
+// and the extension of Task 1's
+// TestBuildWriteCommands_KnownTagDisplayReachesTheFrame, which it replaces:
+// where that test proved only that a Known value reached the MT frame, this
+// pins BOTH frames, for Known-true and Known-false alike, to exactly the
+// bytes the pre-E1 plain `TagDisplay bool` put on the wire. Known-FALSE is
+// the case worth stating: it is a real value, not an absence, and must be
+// sent.
+//
+// The expectations are STRING LITERALS, deliberately, and this is the
+// change of substance over the test it replaces: that one built its
+// reference by calling cat.FT710.BuildMTSet itself, which is the code under
+// test — a reference built by the same code cannot catch an error the two
+// share, so it would have passed unchanged had the flip corrupted the
+// display byte at its source. The literals are derived from the frame
+// grammar instead, which makes them deterministic:
+//
+// MW Set, 28 bytes, offsets per core/cat/memdata.go — IDENTICAL in both
+// cases, because cat.MemoryData carries no display field at all, so
+// TagDisplay cannot reach this frame:
+//
+//	"MW" | slot "010" | freq %09d of 14_250_000 -> "014250000" |
+//	clar sign '+' (ClarHz 0) | clar magnitude "0000" | RxClar '0' |
+//	TxClar '0' | mode "USB" -> '2' | kind cat.FT710.MWWriteKind() =
+//	KindMemory -> '1' | ctcss "OFF" -> '0' | P9 fixed "00" |
+//	shift "SIMPLEX" -> '0' | ';'
+//	= "MW010014250000+000000210000;"
+//
+// MT Set, short form, per core/cat/mt.go's BuildMTSet — the ONE byte
+// TagDisplay controls:
+//
+//	"MT" | slot "010" | boolDigit(display) | tag "TEST" | ';'
+//	boolDigit (core/cat/memdata.go): true -> '1', false -> '0'
+//	true  = "MT0101TEST;"
+//	false = "MT0100TEST;"
+//
+// The true-case pair is independently authenticated: they are the very
+// bytes commit 6b84335's TestBuildWriteCommands_FT710ByteIdentity asserted
+// BEFORE the type flip, over the same reference channel.
+func TestBuildWriteCommands_TagDisplayWireIdentity(t *testing.T) {
+	const wantMW = "MW010014250000+000000210000;"
 
-			_, mtCmd, err := buildWriteCommands(cat.FT710, ch)
+	for _, tt := range []struct {
+		name    string
+		display bool
+		wantMT  string
+	}{
+		{"Known true", true, "MT0101TEST;"},
+		{"Known false", false, "MT0100TEST;"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ch := writableChannel("010")
+			ch.Data.TagDisplay = codeplug.BoolField{State: codeplug.Known, Value: tt.display}
+
+			mwCmd, mtCmd, err := buildWriteCommands(cat.FT710, ch)
 			if err != nil {
 				t.Fatalf("buildWriteCommands = %v, want success for a Known TagDisplay", err)
 			}
-			want, err := cat.FT710.BuildMTSet(mustParseSlot(t, "010"), value, ch.Data.Tag)
-			if err != nil {
-				t.Fatalf("building the reference MT frame: %v", err)
+			if got := string(mwCmd.Bytes()); got != wantMW {
+				t.Errorf("MW frame = %q, want %q (TagDisplay's state must move no MW byte — the MW frame carries no display field)", got, wantMW)
 			}
-			if got, wantBytes := string(mtCmd.Bytes()), string(want.Bytes()); got != wantBytes {
-				t.Errorf("MT frame = %q, want %q (the Known value must reach the wire unchanged)", got, wantBytes)
+			if got := string(mtCmd.Bytes()); got != tt.wantMT {
+				t.Errorf("MT frame = %q, want %q (the Known value must reach the wire unchanged, in P1 and nowhere else)", got, tt.wantMT)
 			}
 		})
 	}
 }
 
-// mustParseSlot parses wire through the FT-710 dialect or fails the test.
-func mustParseSlot(t *testing.T, wire string) cat.Slot {
-	t.Helper()
-	sl, err := cat.FT710.ParseSlot(wire)
-	if err != nil {
-		t.Fatalf("ParseSlot(%q): %v", wire, err)
+// TestRequestedFields_MembershipAndOrder pins the driver gate's field set,
+// which requestedFields' doc comment claims mirrors codeplug.Diff's
+// addedFields EXACTLY. That claim was momentarily untrue mid-branch — Task 2
+// gave addedFields its TagDisplay conditional while this side still listed
+// the field unconditionally — and a comment is not a gate, so the shape is
+// asserted rather than described.
+//
+// addedFields is unexported, so the mirror is held by the two sides pinning
+// the SAME expectations in the same shape: this test is the deliberate twin
+// of codeplug's TestAddedFields_MembershipAndOrder (diff_test.go), and a
+// change made to one gate but not the other fails one of the pair.
+//
+// Order is part of the contract, not incidental: this slice is what
+// WriteChannel's gate walks, and therefore the order in which a
+// WriteRefusedError names fields. TagDisplay sits seventh whenever it
+// appears at all — after Tag, before the tone/skip conditionals — exactly
+// where it sat when it was unconditional.
+func TestRequestedFields_MembershipAndOrder(t *testing.T) {
+	base := []spec.Field{
+		spec.FieldFrequency,
+		spec.FieldMode,
+		spec.FieldClarifier,
+		spec.FieldCTCSSState,
+		spec.FieldShift,
+		spec.FieldTag,
 	}
-	return sl
+	known := func(v bool) codeplug.BoolField {
+		return codeplug.BoolField{State: codeplug.Known, Value: v}
+	}
+
+	for _, tt := range []struct {
+		name string
+		data codeplug.ChannelData
+		want []spec.Field
+	}{
+		{
+			// writableChannel's shape: only TagDisplay Known.
+			name: "TagDisplay Known, tone and skip Unknown",
+			data: codeplug.ChannelData{
+				TagDisplay: known(true),
+				CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+				ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
+			},
+			want: append(append([]spec.Field{}, base...), spec.FieldTagDisplay),
+		},
+		{
+			// Known-FALSE is a Known value: it is requested, not omitted.
+			name: "TagDisplay Known false",
+			data: codeplug.ChannelData{
+				TagDisplay: known(false),
+				CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+				ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
+			},
+			want: append(append([]spec.Field{}, base...), spec.FieldTagDisplay),
+		},
+		{
+			name: "TagDisplay Unknown drops out",
+			data: codeplug.ChannelData{
+				TagDisplay: codeplug.BoolField{State: codeplug.Unknown},
+				CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+				ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
+			},
+			want: base,
+		},
+		{
+			name: "TagDisplay Unavailable drops out",
+			data: codeplug.ChannelData{
+				TagDisplay: codeplug.BoolField{State: codeplug.Unavailable},
+				CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+				ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
+			},
+			want: base,
+		},
+		{
+			// The zero ChannelData: a composite literal that forgets every
+			// FieldState field requests none of the three.
+			name: "zero data requests only the six plain fields",
+			data: codeplug.ChannelData{},
+			want: base,
+		},
+		{
+			// All three Known: the seventh/eighth/ninth positions in order.
+			name: "all three Known keep TagDisplay seventh",
+			data: codeplug.ChannelData{
+				TagDisplay: known(true),
+				CTCSSTone:  codeplug.ToneField{State: codeplug.Known, Value: 670},
+				ScanSkip:   known(true),
+			},
+			want: append(append([]spec.Field{}, base...), spec.FieldTagDisplay, spec.FieldCTCSSTone, spec.FieldScanSkip),
+		},
+		{
+			// The case that would survive a wrongly-ordered conditional:
+			// TagDisplay absent, its neighbours present, the gap closing
+			// without disturbing what follows.
+			name: "TagDisplay Unknown, tone and skip Known — order preserved around the gap",
+			data: codeplug.ChannelData{
+				TagDisplay: codeplug.BoolField{State: codeplug.Unknown},
+				CTCSSTone:  codeplug.ToneField{State: codeplug.Known, Value: 670},
+				ScanSkip:   known(true),
+			},
+			want: append(append([]spec.Field{}, base...), spec.FieldCTCSSTone, spec.FieldScanSkip),
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got := requestedFields(tt.data)
+			if !slices.Equal(got, tt.want) {
+				t.Fatalf("requestedFields = %v, want %v (membership AND order are the contract)", got, tt.want)
+			}
+		})
+	}
 }
 
 // mwKindOffset is P7's 0-indexed offset in the 28-byte MW Set frame. It
