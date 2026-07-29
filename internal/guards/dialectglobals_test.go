@@ -40,16 +40,23 @@ import (
 // is ever wanted, the instrument is go/types plus dataflow analysis — not
 // more AST shapes.
 
-// promotedConstants are the package-level names M9c-0 moved onto the
-// Dialect receiver. Each was previously read by a method THROUGH its
-// receiver while the datum came from a package const — the defect shape the
-// milestone existed to remove — and each reaches the OUTBOUND WRITE GATE,
-// where a wrong value can authorise bytes that reach a radio.
+// promotedConstants are the package-level names moved onto the Dialect
+// receiver — by M9c-0, and then by M9c-3's derived MT window. Each was
+// previously read by a method THROUGH its receiver while the datum came
+// from a package const — the defect shape those milestones existed to
+// remove — and each reaches the OUTBOUND WRITE GATE, where a wrong value
+// can authorise bytes that reach a radio. A name on this list must never
+// reappear as a package-level declaration: the receiver methods that
+// replaced these (mtShortAnswerMax, mtCombinedLen) are receiver-varying
+// gate-reaching geometry, and demoting one back to a constant would
+// resurrect the deleted defect with nothing else watching (Task 8
+// adjudication, 29/07/2026).
 var promotedConstants = []string{
-	"mtTagMaxBytes", // bounded build, parse AND validMTCommand
-	"mtClearTag",    // the empty-tag encoding, emitted into MT Set frames
-	"clarMaxAbsHz",  // reached the gate through validateMWFields
-	"clarStepHz",    // ditto, and a radio characteristic, not a field width
+	"mtTagMaxBytes",  // bounded build, parse AND validMTCommand
+	"mtClearTag",     // the empty-tag encoding, emitted into MT Set frames
+	"clarMaxAbsHz",   // reached the gate through validateMWFields
+	"clarStepHz",     // ditto, and a radio characteristic, not a field width
+	"mtAnswerMaxLen", // M9c-3: the short MT window's top, now mtShortAnswerMax on the receiver
 }
 
 // gateReachingValidators must be Dialect METHODS. Each is reached by
