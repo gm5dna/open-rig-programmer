@@ -14,9 +14,12 @@
 // codeplug.Diff's gates, the clone service's choreography,
 // driver.Session.WriteChannel's re-check), which live entirely above
 // them. Within THIS repository, these builders are therefore used
-// outside this package only from core/driver/** — enforced by the
-// import-graph guard test (internal/guards), whose threat model is our
-// own composition, not external importers. The compiler-enforced version
+// outside the core/cat/** tree only from core/driver/** — enforced by the
+// import-graph guard test (internal/guards), whose carve-out is the
+// core/cat tree by prefix; the one sanctioned in-tree consumer outside
+// this package is core/cat/dialecttest, the conformance suite, which
+// builds frames only under a *testing.T and reaches no transport. The
+// guard's threat model is our own composition, not external importers. The compiler-enforced version
 // of this boundary (a separate write-capability split) is a ledgered
 // M5b-flip precondition.
 package cat

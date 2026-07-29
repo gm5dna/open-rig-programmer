@@ -296,10 +296,11 @@ func TestMTForm_Accessor(t *testing.T) {
 // TestFT710_WriteKindAndClarifierAccessors pins the other two accessors
 // against the FT-710's own literal (dialect.go).
 //
-// They exist for the ft710 driver's write path, which hardcodes both values
-// today (M9c-3 task 9), and for the exported conformance suite. Pinning
-// them here means a later edit to the FT-710 literal cannot change what the
-// driver writes without a test saying so.
+// They exist for the ft710 driver's write path — which formerly hardcoded
+// both values, and since M9c-3 task 9 consults these accessors — and for
+// the exported conformance suite. Pinning them here means a later edit to
+// the FT-710 literal cannot change what the driver writes without a test
+// saying so.
 func TestFT710_WriteKindAndClarifierAccessors(t *testing.T) {
 	if got := FT710.MWWriteKind(); got != KindMemory {
 		t.Errorf("FT710.MWWriteKind() = %q, want KindMemory (%q)", got, KindMemory)

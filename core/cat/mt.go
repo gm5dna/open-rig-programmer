@@ -83,17 +83,18 @@ func (d Dialect) MTForm() MTForm { return d.mt.Form }
 // MWWriteKind is the single P7 "kind" byte this family accepts on every
 // memory write. FT-710: KindMemory.
 //
-// Exported for core/driver/ft710's write path, which hardcodes cat.KindMemory
-// into the MemoryData it builds (M9c-3 task 9) and so writes the FT-710's
-// byte whatever dialect it was handed, and for core/cat/dialecttest, which
-// needs it to build a valid MW frame for an arbitrary dialect.
+// Exported for core/driver/ft710's write path, which FORMERLY hardcoded
+// cat.KindMemory into the MemoryData it built — writing the FT-710's byte
+// whatever dialect it was handed — and since M9c-3 task 9 consults this
+// accessor instead; and for core/cat/dialecttest, which needs it to build
+// a valid MW frame for an arbitrary dialect.
 func (d Dialect) MWWriteKind() byte { return d.mwWriteKind }
 
 // Clarifier returns this family's clarifier step and range.
 //
-// Exported for core/driver/ft710's write path, which pre-checks the
-// clarifier against a hardcoded +/-9990 before any wire traffic (M9c-3 task
-// 9), and for core/cat/dialecttest.
+// Exported for core/driver/ft710's write path, which FORMERLY pre-checked
+// the clarifier against a hardcoded +/-9990 and since M9c-3 task 9
+// consults this accessor's bound instead; and for core/cat/dialecttest.
 func (d Dialect) Clarifier() ClarifierPolicy { return d.clar }
 
 // mtSlotValid reports whether s is a legal MT SET target under project

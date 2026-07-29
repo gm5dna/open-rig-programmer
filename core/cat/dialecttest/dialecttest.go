@@ -967,8 +967,8 @@ func (r *conformanceRun) checkNonVacuity() {
 // an uninitialised dialect reaching a conformance suite must be a loud
 // failure, not a different suite quietly passing.
 //
-// TWO THINGS DO STILL EMIT, and they are asserted here rather than left to
-// look like gaps: BuildIDRead, BuildAISet and BuildMCRead take a receiver
+// THREE BUILDERS DO STILL EMIT, and they are asserted here rather than left
+// to look like gaps: BuildIDRead, BuildAISet and BuildMCRead take a receiver
 // only for uniformity — nothing about those frames varies by radio, as their
 // own doc comments say — so they produce bytes on any receiver at all,
 // including this one. The containment is the GATE: a zero dialect's
