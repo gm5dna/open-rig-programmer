@@ -42,6 +42,39 @@
 // deliberately not written as a corrections file: that artefact format
 // records corrections hardware evidence establishes.
 //
+// # Chart printing defects
+//
+// Transcription B (M9c-4 task 4) was derived from the rendered PDF by an
+// agent with no repository access and no sight of transcription A, the
+// ledger or any row count. It found four printing defects in the chart's
+// VALUE legends BLIND, and they are recorded here because an undocumented
+// defect is one somebody later silently "corrects":
+//
+//   - (01,05,16) SHIFT FREQUENCY numbers two options 1 — "1: 170 Hz 1: 200
+//     Hz 2: 425 Hz 3: 850 Hz" — and has no index 0. This is the FTdx10's
+//     own analogue of the duplicate-index defect the FT-710's chart carries
+//     at its own SHIFT FREQUENCY row.
+//
+//   - (01,05,15) MARK FREQUENCY likewise has no index 0: its legend opens
+//     at "1: 1275 Hz" and runs "2: 2125 Hz".
+//
+//   - (01,06,02) DECODE AFC RANGE is non-monotonic — "0: 8 1: 1.5 2: 30 Hz"
+//     — so the printed order of its indices is not the order of its values.
+//
+//   - (01,06,05) PSK TX LEVEL declares Digits 3 but prints its range as
+//     bare "0 ~ 100", with no zero-padded form, where every comparable row
+//     spells the padding out (e.g. "0 ~ 100 (P4 = 000 ~ 100)").
+//
+// NONE of the four affects M9c-4. The EX inventory models an item's NAME,
+// its DIGITS and its TEXT flag only — it neither models nor validates the
+// value legends all four defects live in — and transcriptions A and B and
+// the ledger agree on every field it does model (crosscheck_test.go). The
+// four are recorded against M9c-5 and later, where menu VALUES are
+// interpreted for read-only display and each becomes a question that
+// display must answer: which index SHIFT FREQUENCY's second "1" really is,
+// whether an unpadded P4 is admissible for PSK TX LEVEL, and so on. None of
+// them can be settled from this manual alone.
+//
 // # The ASSUMED register
 //
 // Four members of this dialect are NOT FTdx10-manual facts. They are
