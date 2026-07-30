@@ -1,0 +1,4 @@
+Location,Name,Frequency,Duplex,Offset,Tone,rToneFreq,cToneFreq,DtcsCode,DtcsPolarity,Mode,TStep,Skip,Comment
+1,SKIPUSB,14.200000,,0.000000,,88.5,88.5,023,NN,USB,,S,
+2,SKIPLSB,7.150000,,0.000000,,88.5,88.5,023,NN,LSB,,S,
+3,SKIPCW,14.050000,,0.000000,,88.5,88.5,023,NN,CW,,S,
