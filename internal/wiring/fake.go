@@ -9,6 +9,8 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft710"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx10"
+	"github.com/gm5dna/open-rig-programmer/internal/fakedx10"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeradio"
 )
 
@@ -33,6 +35,12 @@ import (
 // meaning. The seam stays as narrow as the one test need that justifies
 // it.
 //
+// The FTdx10's registration (M9c-6) is that design's first real test, and
+// it held: FTdx10FakeSessionOpts below is a SEPARATE variable of a
+// different element type ([]fakedx10.Option), read in its own closure. No
+// generic option plumbing was needed, and neither model's options can
+// reach the other's rig.
+//
 // No production flag or GUI control populates this — it does not add a
 // second ft710.Simulated reference to any non-test file:
 // TestSimulatedProfileTokensConfinement (internal/guards) keeps passing
@@ -44,12 +52,45 @@ import (
 // only because no test using it calls t.Parallel().
 var FakeSessionOpts []fakeradio.Option
 
+// FTdx10FakeSessionOpts is the FTdx10's own option source: extra
+// fakedx10.Option values applied, on top of the always-empty production
+// default, to the FTdx10's fake rig on every OpenFakeSessionFor call in
+// this process. It is FakeSessionOpts' FTdx10 counterpart and NOT a
+// generalisation of it (M9c-5 E5, realised at M9c-6 task 6) — a separate
+// variable, of a different element type, read at CALL time inside the
+// FTdx10 entry's own newRadio closure below.
+//
+// Its element type is the point. internal/fakedx10 simulates the FTdx10;
+// its Option is a func(*fakedx10.Radio) and cannot configure an
+// *fakeradio.Radio, nor the reverse. Two typed variables therefore make a
+// crossed application a COMPILE error, where one shared generically-typed
+// option channel would have made it a silent no-op at runtime.
+//
+// Its users today are a wiring test that opens an FTdx10 fake carrying a
+// populated 5 MHz bank (fakedx10.With5xx) through the very code path a
+// real "--fake --model FTdx10" invocation uses, and app/uispec_test.go's
+// D5c acceptance tests, which reach GetUISpec through the same path with
+// a discovered bank present — the discovery-through-wiring
+// property no default-image session can express, since the default FTdx10
+// image deliberately has no 5xx bank at all.
+//
+// No production flag or GUI control populates this — it adds no second
+// ftdx10.Simulated reference to any non-test file, so
+// TestSimulatedProfileTokensConfinement's new ftdx10 row keeps passing.
+//
+// A test that sets it MUST restore the previous value (e.g. via
+// t.Cleanup) — this is shared, unsynchronised package state, acceptable
+// only because no test using it calls t.Parallel().
+var FTdx10FakeSessionOpts []fakedx10.Option
+
 // fakeRadio is everything OpenFakeSessionFor needs from a model's fake
 // rig: a port to hand the driver, and a way to shut the rig down
 // afterwards. Interface-typed rather than *fakeradio.Radio (M9c-5 E5)
 // because internal/fakeradio simulates the FT-710 specifically — a second
 // model's simulator is a different type, and a concretely-typed table
-// could not hold it at all.
+// could not hold it at all. The FTdx10's *fakedx10.Radio (M9c-6) is that
+// second type, and it needed no change here: it satisfies this interface
+// as written, which is what the interface was extracted for.
 //
 // Port returns io.ReadWriteCloser, NOT transport.Port, and that is
 // forced: Go matches interface methods by EXACT signature, so a
@@ -63,10 +104,13 @@ type fakeRadio interface {
 	Close() error
 }
 
-// The compile-time proof that the FT-710's simulator satisfies the
-// interface its table entry is typed by — so a change to either side is a
-// build failure here rather than a surprise at the entry.
-var _ fakeRadio = (*fakeradio.Radio)(nil)
+// The compile-time proofs that each registered model's simulator satisfies
+// the interface its table entry is typed by — so a change to either side is
+// a build failure here rather than a surprise at the entry.
+var (
+	_ fakeRadio = (*fakeradio.Radio)(nil)
+	_ fakeRadio = (*fakedx10.Radio)(nil)
+)
 
 // fakeDriverEntry pairs one model's simulated-profile driver constructor
 // with the fake-rig constructor OpenFakeSessionFor uses to build a live
@@ -90,43 +134,66 @@ type fakeDriverEntry struct {
 // fakeDrivers is the model-keyed table OpenFakeSessionFor looks up:
 // model name -> (simulated-profile driver constructor, fake-rig
 // constructor). This is the ONLY place in this repository — non-test
-// file, repo-wide — that references ft710.Simulated (task-11 brief §3,
-// pinned by internal/guards' TestSimulatedProfileTokensConfinement since
-// task-15's extraction — folded from the single-driver guard task-15
-// originally extended into this data-driven guard at Task 58) and the
-// sole place a fakeradio.Radio is
-// constructed for a live session: the wire pattern proven at
-// core/clone/helpers_test.go:194 —
+// file, repo-wide — that references ft710.Simulated or ftdx10.Simulated
+// (task-11 brief §3, pinned per driver by internal/guards'
+// TestSimulatedProfileTokensConfinement since task-15's extraction —
+// folded from the single-driver guard task-15 originally extended into
+// this data-driven guard at Task 58) and the sole place a fakeradio.Radio
+// or a fakedx10.Radio is constructed for a live session: the wire pattern
+// proven at core/clone/helpers_test.go:194 —
 // fakeradio.New() -> ft710.New(ft710.Simulated).Open(ctx, r.Port(), ...).
 //
-// newRadio is deliberately a closure CALLING fakeradio.New, not
-// fakeradio.New assigned directly — internal/guards'
+// Each newRadio is deliberately a closure CALLING the simulator's own
+// constructor, not that function assigned directly — internal/guards'
 // TestSimulatedProfileTokensConfinement's AST walk looks for an actual
-// fakeradio.New(...) CALL expression in this file, not merely a
-// reference to the function value, so the call must stay textually
-// present here. The FT-710 entry's closure is also where FakeSessionOpts
-// is read — at CALL time, never captured at package init, so a test that
-// sets it before OpenFakeSessionFor still takes effect — and reading it
-// HERE rather than in OpenFakeSessionFor is what keeps that seam
-// FT-710-specific (M9c-5 E5; see FakeSessionOpts' own doc comment).
+// fakeradio.New(...) / fakedx10.New(...) CALL expression in this file, not
+// merely a reference to the function value, so both calls must stay
+// textually present here. Each entry's closure is also where THAT model's
+// option source is read — FakeSessionOpts for the FT-710,
+// FTdx10FakeSessionOpts for the FTdx10, at CALL time, never captured at
+// package init, so a test that sets one before OpenFakeSessionFor still
+// takes effect — and reading them HERE rather than in OpenFakeSessionFor is
+// what keeps each seam its own model's (M9c-5 E5; see those variables' own
+// doc comments).
+//
+// The FTdx10's driver half is ftdx10.Simulated, and that profile is
+// write-SUPPORTED (unlike its RealHardware half, where
+// writeTrialsComplete=false leaves nothing writable). That is deliberate
+// and it is a claim about the FAKE, not about any radio: this pairing is
+// the only place ftdx10.Simulated is legal, and internal/fakedx10 stores
+// and returns what the combined MT Set carries — see
+// core/driver/ftdx10/doc.go's "The Simulated profile's clarifier is
+// Supported, not Inert".
 var fakeDrivers = map[string]fakeDriverEntry{
 	DefaultModel: {
 		newDriver: func() driver.Driver { return ft710.New(ft710.Simulated) },
 		newRadio:  func() fakeRadio { return fakeradio.New(FakeSessionOpts...) },
+	},
+	FTdx10Model: {
+		newDriver: func() driver.Driver { return ftdx10.New(ftdx10.Simulated) },
+		newRadio:  func() fakeRadio { return fakedx10.New(FTdx10FakeSessionOpts...) },
 	},
 }
 
 // OpenFakeSessionFor opens a session against a fresh in-process fake rig
 // for model, via model's own entry in fakeDrivers. This function knows
 // nothing about any model's simulator options: each entry's newRadio
-// closure carries its own (M9c-5 E5 — see FakeSessionOpts, the FT-710's,
-// for the one test-only seam of that kind that exists today).
+// closure carries its own (M9c-5 E5 — see FakeSessionOpts and
+// FTdx10FakeSessionOpts, the two test-only seams of that kind, one per
+// registered model).
 //
 // An unrecognised model fails with *UnknownModelError BEFORE any fake rig
 // is constructed. The returned close function releases the session first,
-// then the fake rig (fakeradio's Close is prompt — see fakeradio's
+// then the fake rig (both simulators' Close is prompt — see their
 // interruptible scripted delays), returning the session's error if both
 // fail.
+//
+// An FTdx10 open is SLOW by design and that is not a defect to fix here:
+// core/driver/ftdx10's Open probes the whole declared 5xx range plus EMG
+// (~100 exchanges) because that radio has no verified discovery
+// termination rule, so each call costs seconds rather than milliseconds
+// (M9c-6 plan: acknowledged and budgeted). Anybody shortening it must read
+// that driver's doc.go first — the shortening IS the assumption.
 func OpenFakeSessionFor(ctx context.Context, model string) (driver.Session, func() error, error) {
 	entry, ok := fakeDrivers[model]
 	if !ok {

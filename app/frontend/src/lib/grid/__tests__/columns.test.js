@@ -122,11 +122,22 @@ describe('isCellEditable', () => {
 		expect(isCellEditable(col('skip'), fileData())).toBe(true)
 	})
 
-	it('Tag display is editable only when its FieldState is known (all four states)', () => {
+	it('Tag display is editable when known OR unknown, never when unavailable (all four states)', () => {
+		// M9c-6 D5b: an UNKNOWN tag display is a question the user is being
+		// asked (the send plan blocks that channel until it is answered),
+		// so the cell admits it and the toggle's first press routes it to
+		// Known-off — see ChannelGrid.svelte's toggleCell. Tone and scan
+		// skip stay known-only above: the protocol cannot write them, so
+		// their 'unknown' is not a user decision.
 		expect(isCellEditable(col('tagDisplay'), withTagDisplay({ state: 'known', value: true }))).toBe(true)
 		expect(isCellEditable(col('tagDisplay'), withTagDisplay({ state: 'known', value: false }))).toBe(true)
-		expect(isCellEditable(col('tagDisplay'), withTagDisplay({ state: 'unknown' }))).toBe(false)
+		expect(isCellEditable(col('tagDisplay'), withTagDisplay({ state: 'unknown' }))).toBe(true)
+		// UNAVAILABLE is the one D5b left refused: no flag in the frame,
+		// so no question outstanding and nothing to answer.
 		expect(isCellEditable(col('tagDisplay'), withTagDisplay({ state: 'unavailable' }))).toBe(false)
+		// A hand-built shape with no tag_display key at all is refused too
+		// (Go always emits the field, so this only bites on a fixture).
+		expect(isCellEditable(col('tagDisplay'), withTagDisplay(undefined))).toBe(false)
 	})
 
 	it('every other column is editable on a populated channel', () => {

@@ -63,17 +63,41 @@ func findChannel(channels []codeplug.Channel, slot string) (codeplug.Channel, bo
 // the import graph and must not depend on it, even in tests. Drift
 // between this and the real driver is caught end-to-end by the CLI
 // byte-identity baseline, which does use the real driver.
+//
+// The MEM bank's Fields map is part of that mirroring since M9c-6
+// (D-tagdisplay): ImportCHIRP now derives tag_display from the target
+// bank's own spec.FieldTagDisplay support, so a fixture that declared no
+// fields at all would describe a radio with NO display flag — the FTdx10's
+// shape, not the FT-710's — and this fixture's job is to be an FT-710. The
+// real driver's own MEM map is Read/Write Supported for tag_display in
+// every profile that ships (ft710/caps.go's bankFields, rw), which is what
+// the rw value below states.
 func ft710LikeCapabilities() spec.Capabilities {
 	tones := spec.StandardCTCSSTones()
 	slots := make([]string, 0, 99)
 	for i := 1; i <= 99; i++ {
 		slots = append(slots, fmt.Sprintf("%03d", i))
 	}
+	rw := spec.FieldSupport{Read: spec.Supported, Write: spec.Supported}
 	return spec.Capabilities{
 		Model: "FT-710",
 		CATID: "0800",
 		Banks: []spec.Bank{
-			{ID: spec.BankMemory, Label: "Memories", Slots: slots},
+			{ID: spec.BankMemory, Label: "Memories", Slots: slots, Fields: map[spec.Field]spec.FieldSupport{
+				spec.FieldFrequency:  rw,
+				spec.FieldMode:       rw,
+				spec.FieldClarifier:  rw,
+				spec.FieldCTCSSState: rw,
+				spec.FieldShift:      rw,
+				spec.FieldTag:        rw,
+				spec.FieldTagDisplay: rw,
+				// Tone and scan skip are the zero FieldSupport on the real
+				// FT-710 too (its CAT protocol reaches neither); erase is
+				// {Unsupported, Unverified} on MEM there, and neither shape
+				// is anything ImportCHIRP consults.
+				spec.FieldCTCSSTone: {},
+				spec.FieldScanSkip:  {},
+			}},
 		},
 		Modes:        []string{"LSB", "USB", "CW-U", "CW-L", "FM", "AM", "RTTY-U", "FM-N"},
 		TagLen:       12,
@@ -347,6 +371,11 @@ func TestImportCHIRP_TagLenFromCaps(t *testing.T) {
 //
 // The consequence is deliberate, not incidental — see
 // TestImportCHIRP_UnknownTagDisplayBlocksTheDiff.
+//
+// Unchanged by M9c-6 (D-tagdisplay), and that is the half of that decision
+// this test now also pins: Unknown remains the answer for a radio whose
+// frame HAS the flag. The other half — a radio whose frame has none — is
+// TestImportCHIRP_TagDisplayUnavailableWhenTheFrameHasNoFlag.
 func TestImportCHIRP_TagDisplayIsUnknown(t *testing.T) {
 	// Rows chosen to span the mapping paths that DO carry data (a named
 	// channel with a tone and a scan skip, and a bare minimal row): none
@@ -374,6 +403,217 @@ func TestImportCHIRP_TagDisplayIsUnknown(t *testing.T) {
 		if got := ch.Data.TagDisplay; got != want {
 			t.Errorf("channels[%d].Data.TagDisplay = %+v, want %+v (CHIRP says nothing about the display flag; inventing false would be a lie the diff cannot see through)", i, got, want)
 		}
+	}
+}
+
+// ftdx10LikeCapabilities mirrors the FTdx10 fields ImportCHIRP consults
+// (core/driver/ftdx10/caps.go), hand-built for the same reason
+// ft710LikeCapabilities is: core/csvio sits below core/driver and must not
+// import it, even in tests.
+//
+// The ONE difference that matters here is spec.FieldTagDisplay: the zero
+// FieldSupport, on every bank and in every profile, because the FTdx10's
+// combined MT record has no display flag at all — a MANUAL fact (that
+// record's 41 positions are fully accounted for, and
+// cat.Dialect.BuildMTSetCombined takes no display argument), not an
+// assumption. Everything else is a 99-slot MEM bank with the same
+// vocabularies, so a chirp.go that ignored capabilities would import
+// identically against this fixture and the FT-710's.
+func ftdx10LikeCapabilities() spec.Capabilities {
+	caps := ft710LikeCapabilities()
+	caps.Model = "FTdx10"
+	caps.CATID = "0761"
+	rw := spec.FieldSupport{Read: spec.Supported, Write: spec.Supported}
+	banks := make([]spec.Bank, len(caps.Banks))
+	copy(banks, caps.Banks)
+	for i := range banks {
+		banks[i].Fields = map[spec.Field]spec.FieldSupport{
+			spec.FieldFrequency:  rw,
+			spec.FieldMode:       rw,
+			spec.FieldClarifier:  rw,
+			spec.FieldCTCSSState: rw,
+			spec.FieldShift:      rw,
+			spec.FieldTag:        rw,
+			// No display flag exists in this radio's memory frame.
+			spec.FieldTagDisplay: {},
+			spec.FieldCTCSSTone:  {},
+			spec.FieldScanSkip:   {},
+		}
+	}
+	caps.Banks = banks
+	return caps
+}
+
+// TestImportCHIRP_TagDisplayUnavailableWhenTheFrameHasNoFlag is M9c-6
+// D-tagdisplay's headline: the imported tag_display comes from the TARGET
+// BANK's own support, so a radio whose memory frame carries no display
+// flag imports Unavailable — "this radio has no such field" — rather than
+// Unknown, which would say the answer is merely not yet known.
+//
+// The distinction is not cosmetic. Unknown is a question put to the user,
+// and M9c-6 D5b opens an in-cell route for answering it (an Unknown
+// tag-display cell toggles to Known-off on first press); an Unavailable
+// one is refused by that cell AND by the paste path (M9c-5 review W2). An
+// FTdx10 import that produced Unknown would therefore hand the user a way
+// to manufacture a flag the radio cannot store, and a send plan carrying a
+// Known tag_display for a radio whose Write support is Unsupported.
+//
+// Every row is asserted, including the bare minimal one: the derivation is
+// per import, not per row, and a per-row divergence would mean the field
+// had been reconstructed somewhere else.
+func TestImportCHIRP_TagDisplayUnavailableWhenTheFrameHasNoFlag(t *testing.T) {
+	csv := "Location,Name,Frequency,Duplex,Tone,rToneFreq,cToneFreq,Mode,Skip\n" +
+		"1,MYCALL,145.500000,+,Tone,88.5,88.5,FM,S\n" +
+		"2,,7.100000,,,,,USB,\n" +
+		"3,GB3XX,430.925000,-,,,,FM,\n"
+
+	channels, report, err := ImportCHIRP(strings.NewReader(csv), ftdx10LikeCapabilities())
+	if err != nil {
+		t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+	}
+	if report.HasBlocking() {
+		t.Fatalf("unexpected blocking entries: %+v", report.Entries)
+	}
+	if len(channels) != 3 {
+		t.Fatalf("len(channels) = %d, want 3", len(channels))
+	}
+	want := codeplug.BoolField{State: codeplug.Unavailable}
+	for i, ch := range channels {
+		if ch.Data == nil {
+			t.Fatalf("channels[%d].Data = nil, want a populated channel", i)
+		}
+		if got := ch.Data.TagDisplay; got != want {
+			t.Errorf("channels[%d].Data.TagDisplay = %+v, want %+v (this radio's memory frame has no display flag; Unknown would invite a value it cannot store)", i, got, want)
+		}
+	}
+}
+
+// TestImportCHIRP_TagDisplayFollowsTheTargetBank is the derivation itself,
+// stated as a table over the support shapes a bank can declare, with the
+// two real radios' own shapes named among them. Its job is to stop the
+// rule collapsing back into a constant in either direction: the FT-710's
+// side (Unknown) and the FTdx10's (Unavailable) both come out of ONE
+// expression, and every intermediate shape — readable but unwritable, the
+// merely unproven Unverified, the transmitted-but-ignored Inert — stays
+// Unknown, because only "absent from the frame in BOTH directions"
+// justifies Unavailable.
+func TestImportCHIRP_TagDisplayFollowsTheTargetBank(t *testing.T) {
+	const csv = "Location,Name,Frequency,Mode\n1,MYCALL,145.500000,FM\n"
+
+	tests := []struct {
+		name        string
+		tagDisplay  spec.FieldSupport
+		absentField bool
+		want        codeplug.BoolField
+	}{
+		{name: "Read+Write Supported (the FT-710's own shape)", tagDisplay: spec.FieldSupport{Read: spec.Supported, Write: spec.Supported}, want: codeplug.BoolField{State: codeplug.Unknown}},
+		{name: "Read+Write Unverified (an unproven radio still has the flag)", tagDisplay: spec.FieldSupport{Read: spec.Unverified, Write: spec.Unverified}, want: codeplug.BoolField{State: codeplug.Unknown}},
+		{name: "readable, write Unsupported (the discovered 60M/EMG shape)", tagDisplay: spec.FieldSupport{Read: spec.Supported, Write: spec.Unsupported}, want: codeplug.BoolField{State: codeplug.Unknown}},
+		{name: "writable, read Unsupported", tagDisplay: spec.FieldSupport{Read: spec.Unsupported, Write: spec.Supported}, want: codeplug.BoolField{State: codeplug.Unknown}},
+		{name: "Inert write (transmitted-but-ignored is still a frame field)", tagDisplay: spec.FieldSupport{Read: spec.Supported, Write: spec.Inert}, want: codeplug.BoolField{State: codeplug.Unknown}},
+		{name: "both Unsupported (the FTdx10's own shape)", tagDisplay: spec.FieldSupport{}, want: codeplug.BoolField{State: codeplug.Unavailable}},
+		{name: "field absent from the bank's map entirely", absentField: true, want: codeplug.BoolField{State: codeplug.Unavailable}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			caps := ft710LikeCapabilities()
+			banks := make([]spec.Bank, len(caps.Banks))
+			copy(banks, caps.Banks)
+			fields := make(map[spec.Field]spec.FieldSupport, len(banks[0].Fields))
+			for f, fs := range banks[0].Fields {
+				fields[f] = fs
+			}
+			if tc.absentField {
+				delete(fields, spec.FieldTagDisplay)
+			} else {
+				fields[spec.FieldTagDisplay] = tc.tagDisplay
+			}
+			banks[0].Fields = fields
+			caps.Banks = banks
+
+			channels, _, err := ImportCHIRP(strings.NewReader(csv), caps)
+			if err != nil {
+				t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+			}
+			if len(channels) != 1 {
+				t.Fatalf("len(channels) = %d, want 1", len(channels))
+			}
+			if got := channels[0].Data.TagDisplay; got != tc.want {
+				t.Errorf("TagDisplay = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestImportCHIRP_UnavailableTagDisplayDoesNotBlockTheDiff is the
+// consequence of D-tagdisplay that makes it worth having, and the mirror
+// image of TestImportCHIRP_UnknownTagDisplayBlocksTheDiff: an imported
+// channel whose tag_display is Unavailable plans CLEANLY, because there is
+// no question outstanding for the user to answer. Had the import produced
+// Unknown against a radio with no display flag, every single imported
+// channel would have been blocked at plan time by a gate the user could
+// only clear by asserting a value the radio cannot store.
+func TestImportCHIRP_UnavailableTagDisplayDoesNotBlockTheDiff(t *testing.T) {
+	// writableCapabilities' permissive table with ONLY tag_display zeroed,
+	// for the reason that fixture exists at all: every other field a
+	// CHIRP-imported channel transmits stays write-Supported, so the only
+	// thing that can block this entry is the tag_display gate. (Against a
+	// real FTdx10 — or a real FT-710 — a CHIRP import also meets the
+	// scan_skip gate, since neither radio can write that field and CHIRP's
+	// Skip column produces a Known one. That is E1-independent, predates
+	// this milestone, and is exactly the masking this fixture removes.)
+	caps := writableCapabilities()
+	banks := make([]spec.Bank, len(caps.Banks))
+	copy(banks, caps.Banks)
+	for i := range banks {
+		fields := make(map[spec.Field]spec.FieldSupport, len(banks[i].Fields))
+		for f, fs := range banks[i].Fields {
+			fields[f] = fs
+		}
+		fields[spec.FieldTagDisplay] = spec.FieldSupport{}
+		banks[i].Fields = fields
+	}
+	caps.Banks = banks
+	csv := "Location,Name,Frequency,Mode\n2,MYCALL,145.500000,FM\n"
+
+	imported, report, err := ImportCHIRP(strings.NewReader(csv), caps)
+	if err != nil {
+		t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+	}
+	if report.HasBlocking() {
+		t.Fatalf("unexpected blocking loss entries: %+v", report.Entries)
+	}
+	if len(imported) != 1 {
+		t.Fatalf("len(imported) = %d, want 1", len(imported))
+	}
+
+	// A baseline reading both slots as EMPTY, so the imported channel is an
+	// Added delta — the shape a real "import into a fresh read" produces.
+	// Same two-slot inventory on each side, per Diff's contract.
+	newCodeplug := func(ch *codeplug.Channel) *codeplug.Codeplug {
+		channels := []codeplug.Channel{{Slot: "001"}, {Slot: "002"}}
+		if ch != nil {
+			channels[1] = *ch
+		}
+		return &codeplug.Codeplug{Schema: codeplug.CurrentSchema, Channels: channels}
+	}
+
+	result, err := codeplug.Diff(newCodeplug(nil), newCodeplug(&imported[0]), caps)
+	if err != nil {
+		t.Fatalf("codeplug.Diff: unexpected error: %v", err)
+	}
+	var entry codeplug.DiffEntry
+	for _, e := range result.Entries {
+		if e.Slot == "002" {
+			entry = e
+		}
+	}
+	if entry.Kind != codeplug.DiffAdded {
+		t.Fatalf("slot 002 Kind = %v, want %v", entry.Kind, codeplug.DiffAdded)
+	}
+	if entry.Blocked {
+		t.Errorf("slot 002 Blocked = true (%q), want false — an Unavailable tag_display asks the user nothing, so there is nothing for the plan to wait on", entry.BlockReason)
 	}
 }
 

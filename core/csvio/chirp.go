@@ -319,6 +319,59 @@ func sanitizeCHIRPName(line int, name string, caps spec.Capabilities) (string, [
 	return string(b), entries
 }
 
+// chirpTagDisplay derives the tag_display value every channel imported
+// from a CHIRP file into bank must carry, from that bank's own
+// spec.FieldTagDisplay support and nothing else (M9c-6 D-tagdisplay):
+//
+//   - Read AND Write both spec.Unsupported → codeplug.Unavailable. This
+//     radio's memory frame carries no display flag at all, so there is no
+//     value for the imported channel to hold and no question for the user
+//     to answer: Unavailable is what BoolField means by that
+//     (core/codeplug/fieldstate.go), and it is never sent.
+//   - anything else → codeplug.Unknown. The flag exists in the frame and
+//     CHIRP's schema has no column that speaks to it, so the file simply
+//     does not say — see below.
+//
+// The Unknown arm is M9c-5 (E1d)'s behaviour, unchanged and still the
+// point: CHIRP has no display-flag column, so before E1 this line
+// manufactured a plain false and every imported channel silently switched
+// the radio's display off, with nothing anywhere able to tell that from a
+// deliberate choice. The honest Unknown blocks its channel at plan time
+// instead (codeplug.Diff, "tag display unknown — set On or Off before
+// sending") until the user decides. Refusing to guess costs one decision
+// per import; guessing cost a setting the user never made.
+//
+// What M9c-6 adds is that Unknown is only honest for a radio that HAS the
+// flag. The FTdx10's combined MT record has none (core/driver/ftdx10's
+// bankFields: spec.FieldTagDisplay is the zero FieldSupport on every bank
+// and profile), and an Unknown there would state that the answer is merely
+// not yet known — inviting the very in-cell route to Known that M9c-6 D5b
+// opens, and so handing the user a way to manufacture a flag the radio
+// cannot store. Unavailable says the true thing, and both the grid cell
+// and the paste path already refuse it.
+//
+// The rule is deliberately the SAME rule, applied to the same field, as
+// app/uispec.go's bankTagDisplayDefault (the blank-row factory's default):
+// "absent from the frame in BOTH directions" is the one trigger for
+// Unavailable, and merely unwritable / merely unproven (spec.Unverified) /
+// transmitted-but-ignored (spec.Inert) all remain fields this radio's
+// frame carries. Restated here rather than shared because that one lives
+// in package main; if a third caller appears the rule should move to a
+// package both can import, not be copied again.
+//
+// The zero-value lookup covers "bank absent from caps entirely" and "bank
+// present but not listing the field" alike (spec.Capabilities.FieldSupport
+// returns the zero FieldSupport for either), so both fall out as
+// Unavailable with no special-casing: caps that say nothing about a
+// display flag are not evidence that one exists.
+func chirpTagDisplay(caps spec.Capabilities, bank spec.BankID) codeplug.BoolField {
+	fs := caps.FieldSupport(bank, spec.FieldTagDisplay)
+	if fs.Read == spec.Unsupported && fs.Write == spec.Unsupported {
+		return codeplug.BoolField{State: codeplug.Unavailable}
+	}
+	return codeplug.BoolField{State: codeplug.Unknown}
+}
+
 // importCHIRPRow builds the Channel one CHIRP data row describes (nil if
 // its Location cannot be mapped to a slot at all) and every
 // LossEntry that row produced. line is the row's 1-based CSV line;
@@ -378,20 +431,9 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string, caps spe
 	data.Tag = tag
 	entries = append(entries, nameEntries...)
 
-	// TagDisplay: CHIRP's schema has no display-flag column at all, so
-	// nothing in the file says whether the tag should replace the frequency
-	// on the front panel. Unknown is therefore the only honest answer, and
-	// since M9c-5 (E1d) the field can give it.
-	//
-	// It is not a defect that this state is inconvenient. A CHIRP-imported
-	// channel is blocked at plan time by codeplug.Diff ("tag display
-	// unknown — set On or Off before sending") until the user decides, and
-	// that friction is the POINT: before E1 this line manufactured a false
-	// and every such channel silently switched the radio's display off,
-	// with nothing anywhere able to tell that from a deliberate choice.
-	// Refusing to guess costs one decision per import; guessing cost a
-	// setting the user never made.
-	data.TagDisplay = codeplug.BoolField{State: codeplug.Unknown}
+	// TagDisplay: from the TARGET BANK's own support, never a constant —
+	// see chirpTagDisplay for the rule and why the two answers differ.
+	data.TagDisplay = chirpTagDisplay(caps, memBank.ID)
 
 	// Frequency -> FreqHz.
 	freqRaw := cell("Frequency")

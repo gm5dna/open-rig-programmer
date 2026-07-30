@@ -272,12 +272,12 @@ func TestCmdImport_CSV_Success(t *testing.T) {
 func TestCmdImport_UnknownModel(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "out.json")
 	var stdout, stderr bytes.Buffer
-	got := cmdImport([]string{"--model", "FTdx10", "--csv", "a.csv", "--into", "/nonexistent/base.json", "--out", out}, &stdout, &stderr)
+	got := cmdImport([]string{"--model", unknownModelSentinel, "--csv", "a.csv", "--into", "/nonexistent/base.json", "--out", out}, &stdout, &stderr)
 	if got != exitUsage {
-		t.Fatalf("cmdImport(--model FTdx10) = %d, want exitUsage (%d); stderr=%q", got, exitUsage, stderr.String())
+		t.Fatalf("cmdImport(--model %s) = %d, want exitUsage (%d); stderr=%q", unknownModelSentinel, got, exitUsage, stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "FTdx10") || !strings.Contains(stderr.String(), "FT-710") {
-		t.Errorf("cmdImport(--model FTdx10) stderr = %q, want it to name both the rejected and supported model", stderr.String())
+	if !strings.Contains(stderr.String(), unknownModelSentinel) || !strings.Contains(stderr.String(), "FT-710") {
+		t.Errorf("cmdImport(--model %s) stderr = %q, want it to name both the rejected and supported model", unknownModelSentinel, stderr.String())
 	}
 }
 

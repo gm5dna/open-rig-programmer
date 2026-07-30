@@ -134,12 +134,12 @@ func TestCmdProbe_FakeExplicitModel(t *testing.T) {
 // never opens a session (no fakeradio invocation, no port touched).
 func TestCmdProbe_UnknownModel(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	got := cmdProbe(testCtx(t), []string{"--fake", "--model", "FTdx10"}, &stdout, &stderr)
+	got := cmdProbe(testCtx(t), []string{"--fake", "--model", unknownModelSentinel}, &stdout, &stderr)
 	if got != exitUsage {
-		t.Fatalf("cmdProbe(--model FTdx10) = %d, want exitUsage (%d); stderr=%q", got, exitUsage, stderr.String())
+		t.Fatalf("cmdProbe(--model %s) = %d, want exitUsage (%d); stderr=%q", unknownModelSentinel, got, exitUsage, stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "FTdx10") || !strings.Contains(stderr.String(), "FT-710") {
-		t.Errorf("cmdProbe(--model FTdx10) stderr = %q, want it to name both the rejected and supported model", stderr.String())
+	if !strings.Contains(stderr.String(), unknownModelSentinel) || !strings.Contains(stderr.String(), "FT-710") {
+		t.Errorf("cmdProbe(--model %s) stderr = %q, want it to name both the rejected and supported model", unknownModelSentinel, stderr.String())
 	}
 }
 
@@ -161,15 +161,16 @@ func TestWrongRadioMessage_NamesSelectedModel(t *testing.T) {
 		t.Errorf("wrongRadioMessage(FT-710, ...) = %q, want %q", got, want)
 	}
 
-	// A different selected model (even one this build cannot itself open
-	// a session against) must be named verbatim — the function is a pure
-	// string formatter, never re-validating model itself.
-	got2 := wrongRadioMessage("FTdx10", wr)
-	if !strings.Contains(got2, "FTdx10") {
-		t.Errorf("wrongRadioMessage(FTdx10, ...) = %q, want it to name FTdx10", got2)
+	// A different selected model — here one this build cannot open a
+	// session against AT ALL (the never-registrable sentinel) — must be
+	// named verbatim: the function is a pure string formatter, never
+	// re-validating model itself.
+	got2 := wrongRadioMessage(unknownModelSentinel, wr)
+	if !strings.Contains(got2, unknownModelSentinel) {
+		t.Errorf("wrongRadioMessage(%s, ...) = %q, want it to name %s", unknownModelSentinel, got2, unknownModelSentinel)
 	}
 	if strings.Contains(got2, "FT-710") {
-		t.Errorf("wrongRadioMessage(FTdx10, ...) = %q, want it NOT to mention FT-710", got2)
+		t.Errorf("wrongRadioMessage(%s, ...) = %q, want it NOT to mention FT-710", unknownModelSentinel, got2)
 	}
 }
 

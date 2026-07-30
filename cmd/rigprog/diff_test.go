@@ -244,12 +244,12 @@ func TestCmdDiff_InventoryMismatch(t *testing.T) {
 // prove rejection happens before any file I/O is attempted).
 func TestCmdDiff_UnknownModel(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	got := cmdDiff(testCtx(t), []string{"--fake", "--model", "FTdx10", "/nonexistent/rigprog-test.json"}, &stdout, &stderr)
+	got := cmdDiff(testCtx(t), []string{"--fake", "--model", unknownModelSentinel, "/nonexistent/rigprog-test.json"}, &stdout, &stderr)
 	if got != exitUsage {
-		t.Fatalf("cmdDiff(--model FTdx10) = %d, want exitUsage (%d); stderr=%q", got, exitUsage, stderr.String())
+		t.Fatalf("cmdDiff(--model %s) = %d, want exitUsage (%d); stderr=%q", unknownModelSentinel, got, exitUsage, stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "FTdx10") || !strings.Contains(stderr.String(), "FT-710") {
-		t.Errorf("cmdDiff(--model FTdx10) stderr = %q, want it to name both the rejected and supported model", stderr.String())
+	if !strings.Contains(stderr.String(), unknownModelSentinel) || !strings.Contains(stderr.String(), "FT-710") {
+		t.Errorf("cmdDiff(--model %s) stderr = %q, want it to name both the rejected and supported model", unknownModelSentinel, stderr.String())
 	}
 }
 

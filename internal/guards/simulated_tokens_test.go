@@ -61,8 +61,15 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 	// simulatedProfiles is the driver table this guard walks. Each row
 	// names a concrete driver package (core/driver/<pkg>), its simulated-
 	// profile constant (<pkg>.<token>), and the fake constructor the sole
-	// file referencing that token must also call. ONE row today (ft710);
-	// a second driver adds a row, not a new test.
+	// file referencing that token must also call.
+	//
+	// TWO rows since M9c-6 task 6, and that is the design working: the
+	// FTdx10's registration added a ROW here — not a second test, not a
+	// second walk — so the FTdx10's simulated profile is confined by
+	// exactly the check that already confined the FT-710's, including the
+	// pairing clause (the one file naming ftdx10.Simulated must also call
+	// fakedx10.New, so a Simulated driver can never be wired to another
+	// model's rig or to a real port). Each further driver is one more row.
 	simulatedProfiles := []struct {
 		pkg          string // base name of core/driver/<pkg>
 		token        string // the simulated-profile constant, e.g. "Simulated"
@@ -70,6 +77,7 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		fakeCtorPath string // the constructor package's FULL import path, below modulePrefix (e.g. "internal/fakeradio")
 	}{
 		{"ft710", "Simulated", "fakeradio.New", "internal/fakeradio"},
+		{"ftdx10", "Simulated", "fakedx10.New", "internal/fakedx10"},
 	}
 
 	// Non-vacuity: an empty table would make the loop below a no-op and

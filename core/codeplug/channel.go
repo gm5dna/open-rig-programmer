@@ -42,11 +42,25 @@ type ChannelData struct {
 	Tag string `json:"tag,omitempty"`
 	// TagDisplay is whether the tag is shown in place of the frequency,
 	// together with how confidently that is known. See FieldState for the
-	// write rule: only a Known TagDisplay is ever sent to a radio. The MT
-	// frame's display flag is MANDATORY — there is no "leave it alone"
-	// encoding — so a non-Known TagDisplay cannot be transmitted at all
-	// without manufacturing a value; Diff blocks such a channel at plan
-	// time, and the driver refuses it as defence in depth.
+	// write rule: only a Known TagDisplay is ever sent to a radio.
+	//
+	// WHY that rule bites is PER RADIO, and this comment used to state one
+	// radio's reason as though it were the seam's. On a radio whose memory
+	// frame CARRIES a display flag — the FT-710, whose MT Set has one and
+	// where the flag is MANDATORY, with no "leave it alone" encoding — a
+	// non-Known TagDisplay cannot be transmitted at all without
+	// manufacturing a value: Diff blocks such a channel at plan time and the
+	// driver refuses it as defence in depth. On a radio whose frame has NO
+	// display flag (the FTdx10's combined MT form takes none), there is
+	// nothing to manufacture and nothing to send: every channel legitimately
+	// reads back Unavailable, that radio's capabilities report the field
+	// Unsupported both ways, and a Known value arriving from a file written
+	// for a DIFFERENT radio is refused by the capability gate instead.
+	//
+	// Both radios reach the same place — a non-Known value is never
+	// transmitted — by different routes, and neither route is a property of
+	// this struct. Unavailable in particular is a real, expected state here,
+	// not an error condition.
 	//
 	// NO omitempty, deliberately: a BoolField is a struct, so the key is
 	// always written. An Unknown TagDisplay is a real state that must be

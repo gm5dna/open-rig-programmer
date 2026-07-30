@@ -108,15 +108,15 @@ func TestCmdRead_UnknownModel(t *testing.T) {
 	out := filepath.Join(dir, "unknown-model.json")
 
 	var stdout, stderr bytes.Buffer
-	got := cmdRead(testCtx(t), []string{"--fake", "--out", out, "--model", "FTdx10"}, &stdout, &stderr)
+	got := cmdRead(testCtx(t), []string{"--fake", "--out", out, "--model", unknownModelSentinel}, &stdout, &stderr)
 	if got != exitUsage {
-		t.Fatalf("cmdRead(--model FTdx10) = %d, want exitUsage (%d); stderr=%q", got, exitUsage, stderr.String())
+		t.Fatalf("cmdRead(--model %s) = %d, want exitUsage (%d); stderr=%q", unknownModelSentinel, got, exitUsage, stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "FTdx10") || !strings.Contains(stderr.String(), "FT-710") {
-		t.Errorf("cmdRead(--model FTdx10) stderr = %q, want it to name both the rejected and supported model", stderr.String())
+	if !strings.Contains(stderr.String(), unknownModelSentinel) || !strings.Contains(stderr.String(), "FT-710") {
+		t.Errorf("cmdRead(--model %s) stderr = %q, want it to name both the rejected and supported model", unknownModelSentinel, stderr.String())
 	}
 	if _, err := os.Stat(out); !os.IsNotExist(err) {
-		t.Errorf("cmdRead(--model FTdx10): --out = %s, want it to not exist (rejected before any file I/O)", out)
+		t.Errorf("cmdRead(--model %s): --out = %s, want it to not exist (rejected before any file I/O)", unknownModelSentinel, out)
 	}
 }
 

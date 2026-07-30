@@ -922,7 +922,7 @@ func TestPeerDialect_EXAnswerLengthBoundIsItsOwn(t *testing.T) {
 
 	// The derived bounds themselves.
 	if got := FT710.exP4MaxBytes(); got != ft710P4MaxBytes {
-		t.Errorf("FT710.exP4MaxBytes() = %d, want %d — the FT-710's own answer-length bound has MOVED, which is a behaviour change for the only radio this program talks to", got, ft710P4MaxBytes)
+		t.Errorf("FT710.exP4MaxBytes() = %d, want %d — the FT-710's own answer-length bound has MOVED, which is a behaviour change for every existing FT-710 user of this program", got, ft710P4MaxBytes)
 	}
 	if got := peerDialect.exP4MaxBytes(); got != wide.Digits {
 		t.Errorf("peerDialect.exP4MaxBytes() = %d, want %d (its own widest item) — the bound is not derived from this dialect's inventory", got, wide.Digits)

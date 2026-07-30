@@ -460,14 +460,51 @@ describe('editing', () => {
 		expect(arg.data.tag_display).toEqual({ state: 'known', value: false }) // was Known-true in the fixture
 	})
 
-	it('a non-Known Tag display renders an em dash and neither Enter nor Space toggles it (the Scan skip rule)', async () => {
-		// M9c-5 E1: tag_display is a BoolField. A CHIRP import leaves it
-		// Unknown, and a toggle would have to INVENT the state it flips
-		// from — so the cell behaves exactly as an unreadable Scan skip
-		// does. (Pasting on/off into the column remains the way to make it
-		// Known — see grid/paste.js, which refuses only tone/skip cells.)
+	it('an UNKNOWN Tag display walks Unknown → Off → On through the real toggle path (M9c-6 D5b)', async () => {
+		// M9c-5 E1 made tag_display a BoolField, and a CHIRP import leaves
+		// it Unknown — a QUESTION put to the user, since the send plan
+		// blocks that channel until it is answered. M9c-6 D5b lets the
+		// answer be given in the cell: the first press invents the single
+		// value newChannelData already justifies for a blank row (OFF, the
+		// wire-neutral one), and it flips normally from there. Pasting
+		// on/off into the column remains the bulk route (grid/paste.js).
+		updateChannelMock.mockImplementation(async (ch) => {
+			appState.applyChannelEdits([ch])
+			return { Issues: [], Dirty: true }
+		})
 		const cp = codeplugFixture()
 		cp.Channels[0].data = data(7074000, 'USB', { tag_display: { state: 'unknown' } })
+		appState.setCodeplug(cp)
+		const { container } = render(ChannelGrid)
+		expect(cell(container, 0, TAG_DISPLAY).textContent).toBe('—')
+
+		// First press: Unknown -> Known-false, and the cell now says so.
+		let toggle = cell(container, 0, TAG_DISPLAY)
+		toggle.focus()
+		await fireEvent.keyDown(toggle, { key: 'Enter' })
+		await Promise.resolve()
+		expect(updateChannel).toHaveBeenCalledTimes(1)
+		expect(updateChannelMock.mock.calls[0][0].data.tag_display).toEqual({ state: 'known', value: false })
+		expect(cell(container, 0, TAG_DISPLAY).textContent).toBe('Off')
+
+		// Second press (Space this time): an ordinary flip to On.
+		toggle = cell(container, 0, TAG_DISPLAY)
+		toggle.focus()
+		await fireEvent.keyDown(toggle, { key: ' ' })
+		await Promise.resolve()
+		expect(updateChannel).toHaveBeenCalledTimes(2)
+		expect(updateChannelMock.mock.calls[1][0].data.tag_display).toEqual({ state: 'known', value: true })
+		expect(cell(container, 0, TAG_DISPLAY).textContent).toBe('On')
+	})
+
+	it('an UNAVAILABLE Tag display renders an em dash and neither Enter nor Space toggles it', async () => {
+		// The state D5b deliberately did NOT open: this radio's memory
+		// frame has no display flag at all (the FTdx10 — see
+		// app/uispec.go's bankTagDisplayDefault), so there is no question
+		// outstanding and any value would be a fiction. Paste refuses it
+		// too (M9c-5 review W2).
+		const cp = codeplugFixture()
+		cp.Channels[0].data = data(7074000, 'USB', { tag_display: { state: 'unavailable' } })
 		appState.setCodeplug(cp)
 		const { container } = render(ChannelGrid)
 		const toggle = cell(container, 0, TAG_DISPLAY)
@@ -477,17 +514,29 @@ describe('editing', () => {
 		await fireEvent.keyDown(toggle, { key: 'Enter' })
 		await fireEvent.keyDown(toggle, { key: ' ' })
 		expect(updateChannel).not.toHaveBeenCalled()
+	})
 
-		// Unavailable behaves identically — both mean "preserve whatever
-		// the radio has".
-		cp.Channels[0].data = data(7074000, 'USB', { tag_display: { state: 'unavailable' } })
-		appState.setCodeplug(cp)
-		const second = render(ChannelGrid)
-		const unavailable = cell(second.container, 0, TAG_DISPLAY)
-		expect(unavailable.textContent).toBe('—')
-		unavailable.focus()
-		await fireEvent.keyDown(unavailable, { key: 'Enter' })
+	it('an UNKNOWN Scan skip is still refused by the toggle — its unknown is not a user decision', async () => {
+		// The asymmetry D5b rests on, pinned so the two fields cannot be
+		// "unified" later: the CAT protocol cannot write scan skip at all,
+		// so answering the question would only manufacture a value that is
+		// never sent. Row 0's fixture Scan skip is Unknown.
+		const { container } = render(ChannelGrid)
+		const skip = cell(container, 0, SKIP)
+		expect(skip.textContent).toBe('—')
+		skip.focus()
+		await fireEvent.keyDown(skip, { key: 'Enter' })
+		await fireEvent.keyDown(skip, { key: ' ' })
 		expect(updateChannel).not.toHaveBeenCalled()
+
+		// Row 2 (slot 003) carries a Known Scan skip from a file: that one
+		// toggles, so the refusal above is about the STATE, not the column.
+		const known = cell(container, 2, SKIP)
+		known.focus()
+		await fireEvent.keyDown(known, { key: 'Enter' })
+		await Promise.resolve()
+		expect(updateChannel).toHaveBeenCalledTimes(1)
+		expect(updateChannelMock.mock.calls[0][0].data.scan_skip).toEqual({ state: 'known', value: true })
 	})
 
 	it('the clarifier editor takes its min/max/step from the UISpec and commits value + Rx/Tx as one edit', async () => {
