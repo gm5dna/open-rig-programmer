@@ -9,29 +9,79 @@ import (
 	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
 
-// bankCoreFields is the seven memory-channel fields the grid actually
-// edits via UpdateChannel/UpdateChannels (task-17 brief's controller
-// amendment): frequency, mode, clarifier, ctcss_state, shift, tag,
-// tag_display. Deliberately excludes ctcss_tone/scan_skip/erase — the
-// CAT protocol can never read OR write ctcss_tone/scan_skip on ANY bank,
-// on ANY profile (core/driver/ft710/caps.go's bankFields doc comment:
-// "the CAT protocol has no way to read OR write a memory channel's tone
-// or scan skip"), and erase is a distinct write-time concern — so
-// folding any of the three into this test would make a bank's
-// editability turn on fields the grid never renders as an editable
-// column, for the wrong reason.
-var bankCoreFields = []spec.Field{
+// bankCoreCandidates is the CANDIDATE universe bankCoreFields derives a
+// bank's core set from: the nine spec.Fields the channel grid renders as
+// editable DATA columns and sends back through
+// UpdateChannel/UpdateChannels (task-17 brief's controller amendment).
+// It is the grid's own column list minus the Slot column, in
+// app/frontend/src/lib/grid/columns.js's COLUMNS order — a STRUCTURAL
+// fact about this application's UI, not a claim about any radio.
+//
+// spec.FieldErase is excluded STRUCTURALLY, and the exclusion cannot be
+// left to the zero-value test below (M9c-6 D5a). Erase is not a
+// codeplug.ChannelData field and not a grid column at all: it is a
+// write-time concern with its own gate (codeplug.Diff's erase check), and
+// no cell anywhere edits it. It is also not reliably zero — the FT-710's
+// fail-safe profile declares MEM erase {Read: Unsupported, Write:
+// Unverified} (core/driver/ft710/caps.go's CapabilitiesUnverified), which
+// is NON-zero — so a derivation that admitted every non-zero field would
+// quietly re-admit erase on exactly that profile and make a bank's
+// editability turn on a field the grid never renders. Membership must be
+// decided by what the grid EDITS first, and only then by what the radio
+// supports.
+var bankCoreCandidates = []spec.Field{
 	spec.FieldFrequency, spec.FieldMode, spec.FieldClarifier,
-	spec.FieldCTCSSState, spec.FieldShift, spec.FieldTag, spec.FieldTagDisplay,
+	spec.FieldShift, spec.FieldCTCSSState, spec.FieldCTCSSTone,
+	spec.FieldScanSkip, spec.FieldTag, spec.FieldTagDisplay,
+}
+
+// bankCoreFields derives the core field set of the bank identified by id:
+// every bankCoreCandidates entry whose FieldSupport on THAT BANK is
+// non-zero, in candidate order.
+//
+// Non-zero means "this radio's memory frame carries the field on this
+// bank", in either direction and to any degree of confidence — Unverified,
+// Inert and read-but-not-write all count, since each describes a field
+// that EXISTS. Only the zero FieldSupport (Unsupported both ways) says the
+// frame has no such field, and spec.Capabilities.FieldSupport returns
+// exactly that for a bank absent from caps entirely or a field absent from
+// a present bank's map, so "says nothing" and "says no" answer alike with
+// no special-casing.
+//
+// PER BANK, from the capability data, replacing the fixed seven-field list
+// this file carried until M9c-6 (D5a). That list was right for its one
+// radio and justified by an FT-710 doc-comment citation — "the CAT
+// protocol has no way to read OR write a memory channel's tone or scan
+// skip" — which is a fact about the FT-710's protocol, not a universal
+// truth, and reading it as one is what a second registered radio makes
+// visible: the FTdx10's memory frame has no display flag at all
+// (core/driver/ftdx10/caps.go's bankFields), so tag_display belongs in ITS
+// core set no more than tone does in the FT-710's. A radio whose frame DID
+// carry a writable tone would, symmetrically, have to have it counted.
+// Derivation answers all three cases from the same rule, and the citation
+// is no longer load-bearing for any radio but the one it describes.
+//
+// What this deliberately is NOT: per-CELL editability from capabilities.
+// The grid's per-cell rules stay state-based (columns.js's isCellEditable
+// — a FieldState question), and that is ledgered with the model picker,
+// not narrowed here. This derivation feeds bankReadOnly's WHOLE-BANK
+// verdict and nothing else.
+func bankCoreFields(caps spec.Capabilities, id spec.BankID) []spec.Field {
+	out := make([]spec.Field, 0, len(bankCoreCandidates))
+	for _, f := range bankCoreCandidates {
+		if caps.FieldSupport(id, f) != (spec.FieldSupport{}) {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // bankReadOnly reports whether the bank identified by id is READ-ONLY as
-// a PERMANENT protocol fact: true iff every one of bankCoreFields has
-// Write == spec.Unsupported for that bank (spec.Capabilities.FieldSupport
-// already returns the zero FieldSupport — Unsupported/Unsupported — for
-// a bank absent from caps entirely, or a field absent from a present
-// bank's Fields map, so both cases fall out of the same loop with no
-// special-casing).
+// a PERMANENT protocol fact: true iff every field in that bank's derived
+// core set (bankCoreFields) has Write == spec.Unsupported. A bank whose
+// derived set is EMPTY — nothing the grid edits exists in this radio's
+// frame there at all, which is also what an absent bank looks like — is
+// vacuously read-only, and rightly: there is nothing to type into.
 //
 // This is deliberately NOT "has this field been hardware-verified yet".
 // spec.Unverified — documented in the manual/assumed by analogy, but
@@ -53,8 +103,27 @@ var bankCoreFields = []spec.Field{
 // Session.WriteChannel) — this derivation only answers "can the grid
 // let the user type into this cell at all", not "will a send actually
 // reach the radio".
+//
+// M9c-6 divergence, recorded rather than silently resolved: the milestone
+// spec's D5a states as a CONSEQUENCE that a real (RealHardware-profile)
+// FTdx10 yields ReadOnly true on every bank — "a read-only grid pre-trials
+// is CORRECT". Under the rule above it does not, and cannot: that
+// profile's MEM/PMS fields are Write spec.Unverified
+// (core/driver/ftdx10's writeTrialsComplete is false, so RealHardware
+// selects CapabilitiesUnverified), Unverified is not Unsupported, and the
+// paragraph above is the standing adjudication that says so. Making the
+// spec's sentence true would mean re-testing on CanWrite() instead —
+// reversing that adjudication for every radio, re-locking the FT-710's own
+// fail-safe profile, and contradicting this package's own pinned case
+// ("all Unverified -> not read-only (awaiting hardware trials, not
+// locked)", TestBankReadOnly_Table). D5a's operative rule changes the
+// candidate SET only, so the set is all this implements; the observed
+// per-bank verdicts for a registered FTdx10 are pinned exactly as they
+// are by TestBankReadOnly_RegisteredFTdx10_RealHardwareProfile, and which
+// of the two rules the project wants is an adjudication, not an
+// implementation detail.
 func bankReadOnly(caps spec.Capabilities, id spec.BankID) bool {
-	for _, f := range bankCoreFields {
+	for _, f := range bankCoreFields(caps, id) {
 		if caps.FieldSupport(id, f).Write != spec.Unsupported {
 			return false
 		}

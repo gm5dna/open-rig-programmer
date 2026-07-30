@@ -7,6 +7,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
+	"github.com/gm5dna/open-rig-programmer/internal/fakedx10"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeradio"
 	"github.com/gm5dna/open-rig-programmer/internal/radiotext"
 	"github.com/gm5dna/open-rig-programmer/internal/wiring"
@@ -43,6 +44,14 @@ func slotSet(slots []SlotView) map[string]string {
 // TestBankReadOnly_Table is a pure unit test of bankReadOnly against
 // hand-built spec.Capabilities, independent of App/session plumbing —
 // table-driven per the task's TDD requirement.
+//
+// The fixtures are built over bankCoreCandidates (M9c-6 D5a: the CANDIDATE
+// universe, from which each bank's core set is now DERIVED) rather than
+// over a fixed field list. Every case's expectation is unchanged by that
+// derivation, deliberately: a bank whose candidates are uniformly
+// supported/unverified/unsupported derives the same verdict either way,
+// and the cases that DO distinguish the two rules are
+// TestBankCoreFields_* below.
 func TestBankReadOnly_Table(t *testing.T) {
 	rw := spec.FieldSupport{Read: spec.Supported, Write: spec.Supported}
 	unverified := spec.FieldSupport{Read: spec.Unverified, Write: spec.Unverified}
@@ -53,7 +62,7 @@ func TestBankReadOnly_Table(t *testing.T) {
 	allUnsupported := map[spec.Field]spec.FieldSupport{}
 	mixedOneWritable := map[spec.Field]spec.FieldSupport{}
 	inertClarifier := map[spec.Field]spec.FieldSupport{}
-	for _, f := range bankCoreFields {
+	for _, f := range bankCoreCandidates {
 		allWritable[f] = rw
 		allUnverified[f] = unverified
 		allUnsupported[f] = unsupported
@@ -95,31 +104,302 @@ func TestBankReadOnly_Table(t *testing.T) {
 	}
 }
 
-// TestBankReadOnly_ExcludesUnexpressibleFields pins that
-// FieldCTCSSTone/FieldScanSkip/FieldErase (never CAT-expressible on any
-// bank, per core/driver/ft710/caps.go's bankFields) are NOT among the
-// fields bankReadOnly tests: a bank whose only writable field is one of
-// those must still read ReadOnly (those never move it out of that
-// state), and their being Unsupported must never itself be read as "this
-// bank is protocol-read-only" when a core field IS writable.
-func TestBankReadOnly_ExcludesUnexpressibleFields(t *testing.T) {
-	rw := spec.FieldSupport{Read: spec.Supported, Write: spec.Supported}
+// fieldSet reduces a derived core-field list to a set, for membership
+// assertions that must not depend on order.
+func fieldSet(fields []spec.Field) map[spec.Field]bool {
+	out := make(map[spec.Field]bool, len(fields))
+	for _, f := range fields {
+		out[f] = true
+	}
+	return out
+}
+
+// wantFields fails t unless got's membership is exactly want's, naming
+// every missing and every unexpected field (membership is the acceptance
+// criterion M9c-6 D5a settled on — a count would pass on a swap).
+func wantFields(t *testing.T, context string, got, want []spec.Field) {
+	t.Helper()
+	gotSet, wantSet := fieldSet(got), fieldSet(want)
+	for f := range wantSet {
+		if !gotSet[f] {
+			t.Errorf("%s: derived core set is MISSING %q; got %v, want exactly %v", context, f, got, want)
+		}
+	}
+	for f := range gotSet {
+		if !wantSet[f] {
+			t.Errorf("%s: derived core set unexpectedly CONTAINS %q; got %v, want exactly %v", context, f, got, want)
+		}
+	}
+}
+
+// ft710CoreSeven is the core set every FT-710 bank derives, on every
+// profile: the seven fields its memory frame carries. Tone and scan skip
+// are absent because that radio's CAT protocol reaches neither (its own
+// bankFields zeroes both); erase is absent structurally.
+var ft710CoreSeven = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldClarifier,
+	spec.FieldShift, spec.FieldCTCSSState, spec.FieldTag, spec.FieldTagDisplay,
+}
+
+// ftdx10CoreSix is the core set every FTdx10 bank derives, on every
+// profile: ft710CoreSeven minus tag_display, whose flag that radio's
+// combined MT record has no room for at all.
+var ftdx10CoreSix = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldClarifier,
+	spec.FieldShift, spec.FieldCTCSSState, spec.FieldTag,
+}
+
+// TestBankCoreFields_ExcludesEraseStructurally is M9c-6 D5a's structural
+// exclusion, and the case that shows why the zero-value test alone could
+// not carry it: spec.FieldErase is NON-zero on the FT-710's own fail-safe
+// profile, where MEM erase is {Read: Unsupported, Write: Unverified}
+// (core/driver/ft710/caps.go's CapabilitiesUnverified). A derivation that
+// admitted every non-zero field would therefore re-admit erase on exactly
+// that profile — and, worse, would then report the bank EDITABLE on the
+// strength of an erase support, since Unverified is not Unsupported.
+//
+// The fixture is that profile's MEM shape, hand-built: this package must
+// not import a concrete driver (the M9a-5 composition discipline
+// internal/guards pins), and what the assertion needs is the SHAPE, not
+// the driver's own value.
+func TestBankCoreFields_ExcludesEraseStructurally(t *testing.T) {
+	unverified := spec.FieldSupport{Read: spec.Unverified, Write: spec.Unverified}
 	fields := map[spec.Field]spec.FieldSupport{
-		spec.FieldFrequency:  {}, // Unsupported
-		spec.FieldMode:       {},
-		spec.FieldClarifier:  {},
-		spec.FieldCTCSSState: {},
-		spec.FieldShift:      {},
-		spec.FieldTag:        {},
-		spec.FieldTagDisplay: {},
-		// The three fields bankReadOnly must NOT consult:
-		spec.FieldCTCSSTone: rw,
-		spec.FieldScanSkip:  rw,
-		spec.FieldErase:     rw,
+		spec.FieldFrequency:  unverified,
+		spec.FieldMode:       unverified,
+		spec.FieldClarifier:  {Read: spec.Unverified, Write: spec.Inert},
+		spec.FieldCTCSSState: unverified,
+		spec.FieldShift:      unverified,
+		spec.FieldTag:        unverified,
+		spec.FieldTagDisplay: unverified,
+		spec.FieldCTCSSTone:  {},
+		spec.FieldScanSkip:   {},
+		// The FT-710 fail-safe profile's MEM erase — non-zero, and the
+		// whole point of this test.
+		spec.FieldErase: {Read: spec.Unsupported, Write: spec.Unverified},
 	}
 	caps := spec.Capabilities{Banks: []spec.Bank{{ID: "TEST", Fields: fields}}}
-	if !bankReadOnly(caps, "TEST") {
-		t.Error("bankReadOnly() = false, want true (only unexpressible fields are writable; every core field is Unsupported)")
+	wantFields(t, "the FT-710 fail-safe profile's MEM shape", bankCoreFields(caps, "TEST"), ft710CoreSeven)
+
+	// And the same fixture with every GRID field zeroed: erase alone is
+	// non-zero and write-Unverified, and the bank must still be read-only.
+	// Before D5a this fell out of a fixed list that never named erase;
+	// now it falls out of the structural exclusion, and the assertion is
+	// what stops the two ever being confused.
+	eraseOnly := map[spec.Field]spec.FieldSupport{spec.FieldErase: {Read: spec.Unsupported, Write: spec.Unverified}}
+	eraseCaps := spec.Capabilities{Banks: []spec.Bank{{ID: "TEST", Fields: eraseOnly}}}
+	if got := bankCoreFields(eraseCaps, "TEST"); len(got) != 0 {
+		t.Errorf("erase-only bank derived %v, want an empty core set", got)
+	}
+	if !bankReadOnly(eraseCaps, "TEST") {
+		t.Error("bankReadOnly(erase-only bank) = false, want true — erase is not a grid column and can never make one editable")
+	}
+}
+
+// TestBankCoreFields_WritableToneIsLoadBearing is M9c-6 D5a's proof that
+// the derivation is not decorative. A radio whose memory frame DID carry a
+// tone number would have tone in its core set — eight fields, not the
+// FT-710's seven — and a bank of that radio on which ONLY the tone is
+// writable must report EDITABLE, where the pre-D5a fixed list (which never
+// consulted tone at all) called it read-only.
+//
+// This is the direction the old list could not express, and the one that
+// matters most: it would have locked a whole bank of a future radio out of
+// the grid on the strength of a comment about the FT-710's protocol.
+func TestBankCoreFields_WritableToneIsLoadBearing(t *testing.T) {
+	rw := spec.FieldSupport{Read: spec.Supported, Write: spec.Supported}
+	readOnly := spec.FieldSupport{Read: spec.Supported, Write: spec.Unsupported}
+	fields := map[spec.Field]spec.FieldSupport{
+		spec.FieldFrequency:  readOnly,
+		spec.FieldMode:       readOnly,
+		spec.FieldClarifier:  readOnly,
+		spec.FieldCTCSSState: readOnly,
+		spec.FieldShift:      readOnly,
+		spec.FieldTag:        readOnly,
+		spec.FieldTagDisplay: readOnly,
+		// The one writable field, and one the FT-710 could never carry.
+		spec.FieldCTCSSTone: rw,
+		spec.FieldScanSkip:  {},
+	}
+	caps := spec.Capabilities{Banks: []spec.Bank{{ID: "TEST", Fields: fields}}}
+
+	wantEight := append(append([]spec.Field(nil), ft710CoreSeven...), spec.FieldCTCSSTone)
+	wantFields(t, "a radio whose frame carries a tone number", bankCoreFields(caps, "TEST"), wantEight)
+	if bankReadOnly(caps, "TEST") {
+		t.Error("bankReadOnly() = true, want false — the tone is writable on this bank, and the grid renders it as an editable column")
+	}
+}
+
+// TestBankCoreFields_ZeroValueDecidesMembership is the inclusion rule
+// itself, one support shape at a time: NON-ZERO means "this radio's frame
+// carries the field here", to any degree of confidence and in either
+// direction, and only the zero FieldSupport — declared zero, field absent
+// from the bank, or bank absent from caps — excludes.
+func TestBankCoreFields_ZeroValueDecidesMembership(t *testing.T) {
+	tests := []struct {
+		name    string
+		support spec.FieldSupport
+		want    bool
+	}{
+		{"Read+Write Supported", spec.FieldSupport{Read: spec.Supported, Write: spec.Supported}, true},
+		{"Read+Write Unverified (documented, unproven — still a field)", spec.FieldSupport{Read: spec.Unverified, Write: spec.Unverified}, true},
+		{"readable, write Unsupported (the discovered 60M/EMG shape)", spec.FieldSupport{Read: spec.Supported, Write: spec.Unsupported}, true},
+		{"writable, read Unsupported", spec.FieldSupport{Read: spec.Unsupported, Write: spec.Supported}, true},
+		{"Inert write (transmitted-but-ignored is still a frame field)", spec.FieldSupport{Read: spec.Unsupported, Write: spec.Inert}, true},
+		{"the zero FieldSupport", spec.FieldSupport{}, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			caps := spec.Capabilities{Banks: []spec.Bank{{ID: "TEST", Fields: map[spec.Field]spec.FieldSupport{
+				spec.FieldTagDisplay: tc.support,
+			}}}}
+			got := fieldSet(bankCoreFields(caps, "TEST"))[spec.FieldTagDisplay]
+			if got != tc.want {
+				t.Errorf("tag_display in derived core set = %v, want %v", got, tc.want)
+			}
+		})
+	}
+
+	absent := spec.Capabilities{Banks: []spec.Bank{{ID: "TEST", Fields: map[spec.Field]spec.FieldSupport{
+		spec.FieldFrequency: {Read: spec.Supported, Write: spec.Supported},
+	}}}}
+	wantFields(t, "a bank listing only frequency", bankCoreFields(absent, "TEST"), []spec.Field{spec.FieldFrequency})
+	if got := bankCoreFields(spec.Capabilities{}, "NOSUCHBANK"); len(got) != 0 {
+		t.Errorf("bankCoreFields(absent bank) = %v, want an empty core set", got)
+	}
+}
+
+// registeredProfileCaps returns every capability profile of model that is
+// REACHABLE THROUGH REAL REGISTRATION, keyed by a name for subtest output:
+// the static baseline internal/wiring serves for the real-hardware driver,
+// and the effective capabilities of a session opened against that model's
+// own registered fake (the Simulated profile, plus whatever inventory
+// discovery found).
+//
+// Registration, not construction, is the point: these are the capability
+// values the GUI can actually be handed, obtained the way GetUISpec obtains
+// them, so a model registered with the wrong profile — or a profile whose
+// field map drifted — shows up here rather than in a hand-copied fixture
+// that would drift with it. A model's remaining profiles (the FT-710's
+// fail-safe CapabilitiesUnverified, reachable only by constructing the
+// driver with an invalid Profile) cannot be reached from this package,
+// which imports no concrete driver by design; its SHAPE is covered by
+// TestBankCoreFields_ExcludesEraseStructurally.
+func registeredProfileCaps(t *testing.T, model string) map[string]spec.Capabilities {
+	t.Helper()
+	static, err := wiring.StaticCapabilities(model)
+	if err != nil {
+		t.Fatalf("wiring.StaticCapabilities(%q): unexpected error: %v", model, err)
+	}
+	sess, closeAll, err := wiring.OpenFakeSessionFor(testAppCtx(t), model)
+	if err != nil {
+		t.Fatalf("wiring.OpenFakeSessionFor(%q): unexpected error: %v", model, err)
+	}
+	t.Cleanup(func() { _ = closeAll() })
+	return map[string]spec.Capabilities{
+		"RealHardware (wiring.StaticCapabilities)": static,
+		"Simulated (registered fake session)":      sess.Capabilities(),
+	}
+}
+
+// TestBankCoreFields_EveryRegisteredModel_Membership is M9c-6 D5a's
+// acceptance, stated as MEMBERSHIP per model, per reachable profile, per
+// bank — never a count, which a swapped pair would satisfy.
+//
+// It walks wiring.SupportedModels() and fails on a model it has no
+// expectation for, so registering a third radio cannot leave this test
+// silently vacuous: whoever adds it must state that radio's core set here,
+// which is the moment to notice if it is a surprising one.
+func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
+	want := map[string][]spec.Field{
+		"FT-710": ft710CoreSeven,
+		"FTdx10": ftdx10CoreSix,
+	}
+	models := wiring.SupportedModels()
+	if len(models) == 0 {
+		t.Fatal("wiring.SupportedModels() is empty — this test would assert nothing")
+	}
+	for _, model := range models {
+		wantSet, ok := want[model]
+		if !ok {
+			t.Errorf("model %q is registered but has no expected core set here — state it (and check it is the honest one) rather than deleting this failure", model)
+			continue
+		}
+		t.Run(model, func(t *testing.T) {
+			for profile, caps := range registeredProfileCaps(t, model) {
+				if len(caps.Banks) == 0 {
+					t.Fatalf("%s: no banks — nothing asserted", profile)
+				}
+				for _, b := range caps.Banks {
+					wantFields(t, model+" "+profile+" bank "+string(b.ID), bankCoreFields(caps, b.ID), wantSet)
+				}
+			}
+		})
+	}
+}
+
+// TestBankReadOnly_RegisteredFTdx10_RealHardwareProfile pins what a REAL
+// FTdx10's grid does today, bank by bank, through real registration.
+//
+// The FTdx10's RealHardware profile is its all-Unverified one
+// (writeTrialsComplete is false: no FTdx10 has ever been written to by
+// this project), so its six derived fields are Write spec.Unverified on
+// MEM and PMS — which is NOT spec.Unsupported, and therefore NOT read-only
+// under bankReadOnly's standing rule. Those two banks stay EDITABLE, and
+// every write is refused later, at the capability gate, exactly as the
+// FT-710's were between M5a and the M5b trials that unlocked them: the
+// offline clone workflow (read, edit, save a file) is the reason that rule
+// exists, and it is as valuable for an unproven radio as it was for a
+// proven one.
+//
+// The milestone spec's D5a asserts the opposite consequence ("bankReadOnly
+// is TRUE for a real FTdx10 — a read-only grid pre-trials is CORRECT").
+// That sentence does not follow from D5a's own rule, which changes the
+// candidate SET and not the Unsupported test; making it true would mean
+// re-testing on FieldSupport.CanWrite() and reversing a documented
+// adjudication for every radio. See bankReadOnly's doc comment. This test
+// therefore pins the OBSERVED verdicts, so that whichever way the project
+// adjudicates it, the change is a visible edit here and not a drift.
+//
+// The discovered 5 MHz bank is the contrast that keeps the test honest:
+// its Writes ARE forced Unsupported (no profile may claim a 5xx slot
+// writable), so it derives the same six fields and reports read-only true
+// — one capability set, two different verdicts, from one rule.
+func TestBankReadOnly_RegisteredFTdx10_RealHardwareProfile(t *testing.T) {
+	caps, err := wiring.StaticCapabilities("FTdx10")
+	if err != nil {
+		t.Fatalf("wiring.StaticCapabilities(\"FTdx10\"): unexpected error: %v", err)
+	}
+	if len(caps.Banks) == 0 {
+		t.Fatal("the registered FTdx10's static baseline has no banks — nothing asserted")
+	}
+	for _, b := range caps.Banks {
+		for _, f := range bankCoreFields(caps, b.ID) {
+			if got := caps.FieldSupport(b.ID, f).Write; got != spec.Unverified {
+				t.Errorf("bank %s field %s Write = %v, want Unverified (the premise: nothing on a real FTdx10 is proven writable)", b.ID, f, got)
+			}
+		}
+		if bankReadOnly(caps, b.ID) {
+			t.Errorf("bankReadOnly(%s) = true, want false — Unverified is not Unsupported, and locking it would break the offline clone workflow", b.ID)
+		}
+	}
+
+	// A discovered 5 MHz bank, whose Writes ARE Unsupported: read-only.
+	prev := wiring.FTdx10FakeSessionOpts
+	wiring.FTdx10FakeSessionOpts = []fakedx10.Option{fakedx10.With5xx()}
+	t.Cleanup(func() { wiring.FTdx10FakeSessionOpts = prev })
+	sess, closeAll, err := wiring.OpenFakeSessionFor(testAppCtx(t), "FTdx10")
+	if err != nil {
+		t.Fatalf("wiring.OpenFakeSessionFor(\"FTdx10\"): unexpected error: %v", err)
+	}
+	t.Cleanup(func() { _ = closeAll() })
+	live := sess.Capabilities()
+	if _, ok := live.Bank(spec.Bank60m); !ok {
+		t.Fatal("the 5xx-populated fake produced no 60M bank — the contrast half of this test would be vacuous")
+	}
+	wantFields(t, "the discovered 60M bank", bankCoreFields(live, spec.Bank60m), ftdx10CoreSix)
+	if !bankReadOnly(live, spec.Bank60m) {
+		t.Error("bankReadOnly(60M) = false, want true — no profile may claim a discovered 5xx slot writable")
 	}
 }
 
@@ -187,14 +467,17 @@ func TestBankTagDisplayDefault_Table(t *testing.T) {
 //
 // The FT-710's own (Known-false) side of the pair is asserted against the
 // real static baseline in TestGetUISpec_Disconnected_StaticBaseline and
-// against live discovered banks in TestGetUISpec_ConnectedSimulated; no
-// registered driver has an Unsupported tag-display flag today, so this
-// shape is only reachable through the capsForModel seam.
+// against live discovered banks in TestGetUISpec_ConnectedSimulated. What
+// the capsForModel seam buys here is the CONTRAST — two banks of ONE radio
+// disagreeing — which no registered model provides: the FTdx10 (registered
+// since M9c-6, and the first real Unavailable producer) answers Unavailable
+// on every bank it has, and is asserted doing so, end to end and without
+// any seam, by TestGetUISpec_RegisteredFTdx10_EveryBankUnavailable.
 func TestGetUISpec_TagDisplayDefaultFollowsCapabilities(t *testing.T) {
 	rw := spec.FieldSupport{Read: spec.Supported, Write: spec.Supported}
 	fieldsWith := func(tagDisplay spec.FieldSupport) map[spec.Field]spec.FieldSupport {
-		m := make(map[spec.Field]spec.FieldSupport, len(bankCoreFields))
-		for _, f := range bankCoreFields {
+		m := make(map[spec.Field]spec.FieldSupport, len(bankCoreCandidates))
+		for _, f := range bankCoreCandidates {
 			m[f] = rw
 		}
 		m[spec.FieldTagDisplay] = tagDisplay
@@ -227,6 +510,109 @@ func TestGetUISpec_TagDisplayDefaultFollowsCapabilities(t *testing.T) {
 	noflag := findBank(t, got.Banks, "NOFLAG")
 	if noflag.TagDisplayDefault != (codeplug.BoolField{State: codeplug.Unavailable}) {
 		t.Errorf("NOFLAG.TagDisplayDefault = %+v, want {unavailable false} — the grid must never invent a Known value for a flag this radio's frame has no room for", noflag.TagDisplayDefault)
+	}
+}
+
+// TestGetUISpec_RegisteredFTdx10_EveryBankUnavailable is M9c-6 D5c — the
+// end-to-end acceptance test for the whole E1 chain, and the first time
+// this project's Unavailable state is produced by a REAL radio's real
+// capability data rather than by a test fixture.
+//
+// GetUISpec is driven for model FTdx10 through real registration, twice,
+// because the two paths reach bankTagDisplayDefault with different
+// capability values and the grid must get the same answer from both:
+//
+//   - CONNECTED to the registered fake (Live true, the Simulated profile
+//     plus discovery's own inventory — a populated 5 MHz bank here, so
+//     "every bank" spans a discovered one too). This is the `--fake
+//     --model FTdx10` path a user actually walks.
+//   - DISCONNECTED with an FTdx10 working copy loaded (Live false, the
+//     static RealHardware baseline, resolved by currentModel from the
+//     file's own Radio.Model). This is the offline clone workflow's path.
+//
+// Every bank of both must serve {state: "unavailable"}: the FTdx10's
+// combined MT record has no display flag at all, so a blank row added
+// anywhere in that grid must not carry a Known one. The FT-710 assertion
+// at the end is the contrast that stops the whole thing passing because
+// something returned a zero value — one call each, two registered radios,
+// two different answers, no seam and no fixture in either.
+func TestGetUISpec_RegisteredFTdx10_EveryBankUnavailable(t *testing.T) {
+	unavailable := codeplug.BoolField{State: codeplug.Unavailable}
+
+	prev := wiring.FTdx10FakeSessionOpts
+	wiring.FTdx10FakeSessionOpts = []fakedx10.Option{fakedx10.With5xx()}
+	t.Cleanup(func() { wiring.FTdx10FakeSessionOpts = prev })
+	sess, closeAll, err := wiring.OpenFakeSessionFor(testAppCtx(t), "FTdx10")
+	if err != nil {
+		t.Fatalf("wiring.OpenFakeSessionFor(\"FTdx10\"): unexpected error: %v", err)
+	}
+	t.Cleanup(func() { _ = closeAll() })
+
+	a, _ := newTestApp(t)
+	connectDirect(t, a, sess, nil)
+	got, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (connected to the FTdx10 fake): unexpected error: %v", err)
+	}
+	if !got.Live {
+		t.Error("Live = false, want true (connected to the registered fake)")
+	}
+	if len(got.Banks) < 3 {
+		t.Fatalf("banks = %v, want MEM, PMS and the discovered 60M — 'every bank' must span a discovered one", bankIDs(got.Banks))
+	}
+	for _, b := range got.Banks {
+		if b.TagDisplayDefault != unavailable {
+			t.Errorf("connected FTdx10 bank %s TagDisplayDefault = %+v, want %+v — this radio's memory frame has no display flag", b.ID, b.TagDisplayDefault, unavailable)
+		}
+	}
+
+	// Offline, from an FTdx10 file: the same answer, from the static
+	// RealHardware baseline this time.
+	a.mu.Lock()
+	a.conn = nil
+	a.working = &codeplug.Codeplug{
+		Schema:   codeplug.CurrentSchema,
+		Radio:    codeplug.RadioInfo{Model: "FTdx10"},
+		Channels: []codeplug.Channel{{Slot: "001"}},
+	}
+	a.mu.Unlock()
+	offline, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (offline, FTdx10 working copy): unexpected error: %v", err)
+	}
+	if offline.Live {
+		t.Error("Live = true, want false (disconnected)")
+	}
+	if len(offline.Banks) == 0 {
+		t.Fatal("offline FTdx10 UISpec has no banks — nothing asserted")
+	}
+	for _, b := range offline.Banks {
+		if b.TagDisplayDefault != unavailable {
+			t.Errorf("offline FTdx10 bank %s TagDisplayDefault = %+v, want %+v", b.ID, b.TagDisplayDefault, unavailable)
+		}
+	}
+
+	// The contrast: the FT-710, through the same offline path, still
+	// answers Known-false on every bank.
+	a.mu.Lock()
+	a.working = &codeplug.Codeplug{
+		Schema:   codeplug.CurrentSchema,
+		Radio:    codeplug.RadioInfo{Model: wiring.DefaultModel},
+		Channels: []codeplug.Channel{{Slot: "001"}},
+	}
+	a.mu.Unlock()
+	ft710, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (offline, FT-710 working copy): unexpected error: %v", err)
+	}
+	if len(ft710.Banks) == 0 {
+		t.Fatal("offline FT-710 UISpec has no banks — the contrast would be vacuous")
+	}
+	knownOff := codeplug.BoolField{State: codeplug.Known, Value: false}
+	for _, b := range ft710.Banks {
+		if b.TagDisplayDefault != knownOff {
+			t.Errorf("offline FT-710 bank %s TagDisplayDefault = %+v, want %+v", b.ID, b.TagDisplayDefault, knownOff)
+		}
 	}
 }
 

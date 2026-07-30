@@ -218,6 +218,93 @@ func TestImportCHIRP_MergedChannelCarriesUnknownTagDisplay(t *testing.T) {
 	}
 }
 
+// buildFTdx10ImportBase is buildImportBase's FTdx10 sibling: the same
+// MEM 001-099 + PMS P1L-P9U inventory (that radio's static banks carry
+// exactly those slots too), with slot 001 populated in the shape a real
+// FTdx10 READ produces — tag_display Unavailable, since its combined MT
+// record has no display flag, and tone/skip Unknown.
+//
+// The Radio.Model is what makes this test an end-to-end one: currentModel
+// resolves it through real registration (the FTdx10 has been a registered
+// model since M9c-6), so currentCaps hands ImportCHIRP that driver's OWN
+// capability data and nothing here has to describe the radio.
+func buildFTdx10ImportBase() *codeplug.Codeplug {
+	channels := make([]codeplug.Channel, 0, 99+18)
+	channels = append(channels, codeplug.Channel{Slot: "001", Data: &codeplug.ChannelData{
+		FreqHz:     7_000_000,
+		Mode:       "USB",
+		CTCSS:      "OFF",
+		CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+		Shift:      "SIMPLEX",
+		Tag:        "MYCALL",
+		TagDisplay: codeplug.BoolField{State: codeplug.Unavailable},
+		ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
+	}})
+	for n := 2; n <= 99; n++ {
+		channels = append(channels, codeplug.Channel{Slot: fmt.Sprintf("%03d", n)})
+	}
+	for pair := 1; pair <= 9; pair++ {
+		channels = append(channels,
+			codeplug.Channel{Slot: fmt.Sprintf("P%dL", pair)},
+			codeplug.Channel{Slot: fmt.Sprintf("P%dU", pair)},
+		)
+	}
+	return &codeplug.Codeplug{
+		Schema:   codeplug.CurrentSchema,
+		Radio:    codeplug.RadioInfo{Model: "FTdx10", CATID: "0761"},
+		Channels: channels,
+	}
+}
+
+// TestImportCHIRP_FTdx10MergedChannelCarriesUnavailableTagDisplay is
+// M9c-6 D-tagdisplay at the app seam, and the counterpart of
+// TestImportCHIRP_MergedChannelCarriesUnknownTagDisplay above: the same
+// CHIRP row, the same code path, a different registered radio — and
+// therefore a different, honest answer.
+//
+// Nothing here says what the FTdx10 can do. The working copy names the
+// model, currentModel resolves it through real registration, currentCaps
+// hands ImportCHIRP that driver's own capability data, and core/csvio
+// derives tag_display from the target bank's FieldTagDisplay support. An
+// Unknown here would be a question the user cannot answer — the radio has
+// no display flag to set — and D5b's in-cell route would then let them
+// manufacture one anyway. Unavailable is what the whole chain exists to
+// produce.
+func TestImportCHIRP_FTdx10MergedChannelCarriesUnavailableTagDisplay(t *testing.T) {
+	a, _ := newTestApp(t)
+	a.mu.Lock()
+	a.working = buildFTdx10ImportBase()
+	a.mu.Unlock()
+
+	chirpPath := filepath.Join(t.TempDir(), "ftdx10.csv")
+	// Location 2 -> slot "002", empty in the base.
+	body := chirpHeaderLine + "\n" + "2,MYCALL,7.100000,,,,,USB,\n"
+	if err := os.WriteFile(chirpPath, []byte(body), 0o600); err != nil {
+		t.Fatalf("writing CHIRP fixture: %v", err)
+	}
+	a.dialogs.(*fakeDialogs).openFilePath = chirpPath
+
+	result, err := a.ImportCHIRP()
+	if err != nil {
+		t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+	}
+	if !result.Merged {
+		t.Fatalf("ImportCHIRP(clean CHIRP row into an FTdx10 working copy) = %+v, want Merged=true", result)
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	var imported codeplug.Channel
+	for _, ch := range a.working.Channels {
+		if ch.Slot == "002" {
+			imported = ch
+		}
+	}
+	if want := (codeplug.BoolField{State: codeplug.Unavailable}); imported.Data == nil || imported.Data.TagDisplay != want {
+		t.Errorf("merged slot 002 TagDisplay = %+v, want %+v (this radio's memory frame has no display flag — Unknown would pose a question it cannot answer)", imported.Data, want)
+	}
+}
+
 func TestImportCHIRP_BlockingLossRefuses(t *testing.T) {
 	a, _ := newTestApp(t)
 	a.mu.Lock()

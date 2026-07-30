@@ -376,21 +376,42 @@
 		submitEdit(sv.Slot, (fresh) => ({ ...cloneData(fresh ?? data), clar_hz: hz, rx_clar: rx, tx_clar: tx }))
 	}
 
-	/** Toggle a boolean cell (Tag display or Scan skip, each only when its
-	 * FieldState is Known) as an immediate one-keystroke commit — no
-	 * editor needed. A non-Known cell is not toggled: the toggle would
-	 * have to INVENT the state it flips from, and both fields are
-	 * BoolFields whose 'unknown' means "preserve whatever the radio has"
-	 * (core/codeplug/fieldstate.go). isCellEditable already refuses those
-	 * cells before openEditor reaches here; the guards are the second
-	 * line of that defence.
+	/** Toggle a boolean cell (Tag display or Scan skip) as an immediate
+	 * one-keystroke commit — no editor needed.
+	 *
+	 * SCAN SKIP flips only from Known. A non-Known one is not toggled: the
+	 * toggle would have to INVENT the state it flips from, and its
+	 * 'unknown' means "preserve whatever the radio has"
+	 * (core/codeplug/fieldstate.go) — a value this protocol cannot write
+	 * at all, so there is nothing for the user to decide and no honest
+	 * value to decide it to.
+	 *
+	 * TAG DISPLAY flips from Known, and from UNKNOWN it ROUTES TO KNOWN
+	 * (M9c-6 D5b): the first press commits {known, false} — Display OFF —
+	 * and it flips normally from there, so the cell walks Unknown → Off →
+	 * On. The invention rule is named and it is single: OFF is the same
+	 * conservative, wire-neutral value newChannelData already justifies
+	 * for a blank row (grid/columns.js), chosen for the same reason —
+	 * where the flag exists it is a MANDATORY wire field, so SOME value
+	 * will be sent, and the one that changes least is the one to invent.
+	 * This is a decision the user is being ASKED for (an Unknown tag
+	 * display blocks its channel at plan time until answered), which is
+	 * exactly what makes inventing a starting point legitimate here and
+	 * not for scan skip.
+	 *
+	 * UNAVAILABLE is never toggled, either field: the radio's frame has no
+	 * such flag, so there is no question outstanding and any value would
+	 * be a fiction. isCellEditable refuses it before openEditor reaches
+	 * here; these guards are the second line of that defence.
 	 * @param {number} rowIdx @param {typeof COLUMNS[number]} column */
 	function toggleCell(rowIdx, column) {
 		const sv = slots[rowIdx]
 		const data = dataAt(rowIdx)
 		if (!sv || !data) return
-		if (column.id === 'tagDisplay' && data.tag_display?.state === 'known') {
-			const nextTagDisplay = !data.tag_display.value
+		const tagDisplayState = data.tag_display?.state
+		if (column.id === 'tagDisplay' && (tagDisplayState === 'known' || tagDisplayState === 'unknown')) {
+			// Unknown's first press lands on false; Known flips.
+			const nextTagDisplay = tagDisplayState === 'unknown' ? false : !data.tag_display.value
 			submitEdit(sv.Slot, (fresh) => ({
 				...cloneData(fresh ?? data),
 				tag_display: /** @type {ChannelData['tag_display']} */ ({ state: 'known', value: nextTagDisplay }),

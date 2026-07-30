@@ -56,17 +56,29 @@ export const COLUMNS = [
  *     unrelated write is unverified pending M5b hardware trials — see
  *     docs/hardware-notes.md's "M5b write-trial protocol"); a loaded
  *     file may carry them 'known'.
- *   - Tag display: only when its FieldState is 'known' (M9c-5 E1 — it is
- *     a BoolField now, not a bare bool). Its provenance differs from
- *     tone/skip: the CAT protocol DOES read it, so a radio read and a
+ *   - Tag display: when its FieldState is 'known' OR 'unknown', and never
+ *     when it is 'unavailable' (M9c-5 E1 — it is a BoolField now, not a
+ *     bare bool; M9c-6 D5b added the 'unknown' half).
+ *
+ *     Its provenance is what makes it differ from tone/skip. The CAT
+ *     protocol DOES read this field where it exists, so a radio read and a
  *     migrated legacy file both leave it 'known', while a CHIRP import
- *     leaves it honestly 'unknown' and the send plan blocks that channel
- *     ("tag display unknown — set On or Off before sending"). An UNKNOWN
- *     cell this leaves uneditable is still settable by PASTING on/off
- *     into the column — the bulk route the design records as the
- *     mitigation. An UNAVAILABLE one is not: paste refuses it too (M9c-5
- *     review W2, see paste.js), because there is no flag in that radio's
- *     frame for any value to go into.
+ *     leaves it honestly 'unknown' — a QUESTION PUT TO THE USER, since the
+ *     send plan blocks that channel until it is answered ("tag display
+ *     unknown — set On or Off before sending"). Admitting 'unknown' here
+ *     is what lets the user answer it in the cell (the toggle's first
+ *     press means Display OFF — see ChannelGrid.svelte's toggleCell for
+ *     the invention rule); before M9c-6 the only route was PASTING on/off
+ *     into the column, which is still there and still the bulk route.
+ *
+ *     Tone and scan skip stay 'known'-only for the opposite reason: their
+ *     'unknown' is not a question the user may answer, because the
+ *     protocol cannot write them at all — answering it would only
+ *     manufacture a value that is never sent.
+ *
+ *     UNAVAILABLE is refused for both, and by paste too (M9c-5 review W2,
+ *     see paste.js): there is no flag in that radio's frame for any value
+ *     to go into, so there is no question outstanding either.
  * @param {Column} column
  * @param {ChannelData | null | undefined} data
  * @returns {boolean}
@@ -81,8 +93,10 @@ export function isCellEditable(column, data) {
 			return data?.ctcss_tone?.state === 'known'
 		case 'skip':
 			return data?.scan_skip?.state === 'known'
-		case 'tagDisplay':
-			return data?.tag_display?.state === 'known'
+		case 'tagDisplay': {
+			const state = data?.tag_display?.state
+			return state === 'known' || state === 'unknown'
+		}
 		default:
 			return data != null
 	}
