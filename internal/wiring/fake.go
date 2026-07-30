@@ -66,10 +66,11 @@ var FakeSessionOpts []fakeradio.Option
 // crossed application a COMPILE error, where one shared generically-typed
 // option channel would have made it a silent no-op at runtime.
 //
-// Its use today is a wiring test that opens an FTdx10 fake carrying a
+// Its users today are a wiring test that opens an FTdx10 fake carrying a
 // populated 5 MHz bank (fakedx10.With5xx) through the very code path a
-// real "--fake --model FTdx10" invocation uses, and asserts the discovered
-// banks reach the session's capabilities — the discovery-through-wiring
+// real "--fake --model FTdx10" invocation uses, and app/uispec_test.go's
+// D5c acceptance tests, which reach GetUISpec through the same path with
+// a discovered bank present — the discovery-through-wiring
 // property no default-image session can express, since the default FTdx10
 // image deliberately has no 5xx bank at all.
 //

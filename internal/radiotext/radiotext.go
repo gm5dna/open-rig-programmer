@@ -165,12 +165,16 @@ var ftdx10Text = Text{
 	FirmwareGuidance: "No minimum firmware version is established for the FTdx10: nothing this project holds states one, and no FTdx10 has been asked. There is no CAT query for the version either — read it off the radio's front panel and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established.",
 	// Tone/Scan Skip: this DRIVER does not read or write them over CAT
 	// (spec D-tone-skip — both fields carry a zero FieldSupport on every
-	// bank and read back Unknown). Deliberately NOT the FT-710's claim
-	// that the protocol does not carry them: the FTdx10's combined memory
-	// frame HAS those bytes, and what a radio does with them is simply
-	// unverified. The distinction is the difference between a protocol
-	// fact and this build's own scope.
-	ToneScanSkipNote: "Tone and Scan Skip are not read or written for the FTdx10 by this build — its memory frame carries the bytes, but no radio has been asked what it does with them — so set both on the radio.",
+	// bank and read back Unknown). The frame-level truth, per the
+	// driver's own register (core/driver/ftdx10/doc.go): the combined MT
+	// record carries a CTCSS STATE byte (off/enc-dec/enc, with P9
+	// documented fixed "00"), and NO tone-number byte and NO scan-skip
+	// flag exist anywhere in it — so a per-channel tone frequency or
+	// skip marking cannot travel over this frame at all, and whether the
+	// state byte means anything live is unverified. An earlier wording
+	// here claimed the frame "carries the bytes" for both fields; the
+	// M9c-6 milestone review caught it contradicting the register.
+	ToneScanSkipNote: "Tone and Scan Skip are not read or written for the FTdx10 by this build — its memory frame has no tone-number or scan-skip field (only a CTCSS on/off state byte, unverified on real hardware) — so set both on the radio.",
 	// DELIBERATELY EMPTY, and it is the one field that must stay empty for
 	// now. It states what IS and is NOT hardware-verified about
 	// preservation across a rewrite, and for a model pinned at
