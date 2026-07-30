@@ -177,13 +177,19 @@ func TestCurrentCaps_DisconnectedEmptyModelFallsBack(t *testing.T) {
 }
 
 // TestCurrentCaps_DisconnectedUnregisteredModelFallsBack: a working copy
-// naming a model internal/wiring does not (yet) register — e.g. a second
-// radio's dialect exists in core/cat but no driver/registry entry has
-// landed yet (see .superpowers/sdd/HANDOFF-m9c.md's still-open "FTdx10
-// slice"), or a hand-edited/corrupt file — must fall back to
-// wiring.DefaultModel rather than erroring: refuse-before-corrupt means
-// this falls back to a KNOWN-safe baseline, never propagates the lookup
-// failure into a zero/garbage Capabilities.
+// naming a model internal/wiring does not register — a radio whose dialect
+// exists in core/cat but whose driver has not landed, a file written by
+// another programme for a radio this build has never carried, or a
+// hand-edited/corrupt file — must fall back to wiring.DefaultModel rather
+// than erroring: refuse-before-corrupt means this falls back to a
+// KNOWN-safe baseline, never propagates the lookup failure into a
+// zero/garbage Capabilities.
+//
+// The fixture name is deliberately not any real radio's. It used to be
+// possible to describe this case as "the FTdx10, whose driver has not
+// landed yet"; since M9c-6 that model is REGISTERED and resolves happily,
+// so only a name no driver will ever answer to keeps this test about the
+// fallback rather than about a scheduling accident.
 func TestCurrentCaps_DisconnectedUnregisteredModelFallsBack(t *testing.T) {
 	working := &codeplug.Codeplug{Radio: codeplug.RadioInfo{Model: "NoSuchRadioModel"}}
 	got, advisory := currentCaps(nil, working)
@@ -198,11 +204,13 @@ func TestCurrentCaps_DisconnectedUnregisteredModelFallsBack(t *testing.T) {
 // TestCurrentCaps_DisconnectedUsesWorkingCopyModel is Fix B1's positive
 // case: given a model wiring.StaticCapabilities WOULD resolve, currentCaps
 // must use THAT model's own capabilities, not silently substitute the
-// FT-710's. internal/wiring registers only "FT-710" today (no second
-// driver exists yet — see HANDOFF-m9c.md), so this substitutes
-// capsForModel (see its own doc comment, app.go) to exercise the
-// resolution against a model name of the test's choosing, restoring the
-// real function via t.Cleanup.
+// FT-710's. It substitutes capsForModel (see its own doc comment, app.go)
+// to exercise the resolution against a model name of the test's choosing,
+// restoring the real function via t.Cleanup — a fixture model rather than
+// the really-registered FTdx10 because the fixture's capabilities are the
+// test's to choose (TagLen 42 here), so "these caps came from the
+// working-copy model" is observable without depending on any real radio's
+// values, which would change the day that radio's own facts changed.
 func TestCurrentCaps_DisconnectedUsesWorkingCopyModel(t *testing.T) {
 	fakeCaps := spec.Capabilities{Model: "TESTMODEL", CATID: "9999", TagLen: 42}
 	orig := capsForModel
@@ -252,9 +260,11 @@ const testModel = "TESTMODEL"
 
 // recogniseTestModel makes capsForModel (app.go's seam) recognise
 // testModel, returning caps of the test's own, and restores the real
-// function afterwards. internal/wiring registers exactly one model today
-// (see capsForModel's doc comment), so this is the only way to exercise
-// currentModel's "recognised working-copy model" branch at all.
+// function afterwards. internal/wiring registers two models since M9c-6,
+// but neither can serve here (see capsForModel's doc comment): these tests
+// need a model wiring itself REFUSES, so that "the resolved model reached
+// this call site" shows up as an outcome no default-model path could
+// produce.
 func recogniseTestModel(t *testing.T) spec.Capabilities {
 	t.Helper()
 	caps := spec.Capabilities{Model: testModel, CATID: "9999", TagLen: 42}

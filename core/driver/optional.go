@@ -17,12 +17,16 @@ import "github.com/gm5dna/open-rig-programmer/core/spec"
 // drv.(driver.StaticSettingsProvider) — against the concrete value a
 // driver's Open (or the driver value itself) returned.
 //
-// core/driver/ft710 is, to date, the only driver — and it implements
-// every capability named here. That is a fact about THIS task (37), not
-// a promise: a future second driver may implement none, some, or all of
-// them, and every caller consulting one of these interfaces must already
-// be written to tolerate "not implemented" (the two-result type
-// assertion), never to assume it.
+// core/driver/ft710 implements every capability named here. That was a
+// fact about THIS task (37) and never a promise, and M9c-6 proved the
+// point: core/driver/ftdx10 — the second driver, registered that milestone
+// — implements StaticSettingsProvider and DiscoveredBankSynthesizer but
+// deliberately NOT RegionReporter, because no honest FTdx10 region
+// vocabulary exists (that driver's doc.go says why at length). "Optional"
+// is therefore load-bearing rather than theoretical: every caller
+// consulting one of these interfaces must be written to tolerate "not
+// implemented" (the two-result type assertion), and at least one of them is
+// now genuinely absent at runtime.
 
 // RegionReporter is an OPTIONAL capability a driver.Session's CONCRETE
 // type may implement: report the regulatory region session discovery

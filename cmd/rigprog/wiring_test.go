@@ -22,6 +22,21 @@ func testCtx(t *testing.T) context.Context {
 	return ctx
 }
 
+// unknownModelSentinel is the model name every unknown-model test in this
+// package asks for — the shared sentinel for "a name internal/wiring can
+// never resolve", used by validateModel, the six --model-bearing commands'
+// rejection tests, the compiled-binary test and the radiotext-absence test.
+//
+// It is a NEVER-REGISTRABLE name on purpose (M9c-6 task 6). Until this
+// milestone these tests spelt the sentinel "FTdx10", which read naturally
+// while that radio had no driver — and INVERTED every one of them the
+// moment the FTdx10 registered: a registered model is ACCEPTED, so each
+// "exits 2 (usage)" assertion would have started failing, and the one
+// radiotext test would have found the erase procedure it asserts is absent.
+// A name no Yaesu radio will ever carry cannot be overtaken by the next
+// driver the way a real model name was.
+const unknownModelSentinel = "NO-SUCH-MODEL"
+
 // TestOpenFakeSession exercises cmd/rigprog's openFakeSession alias
 // end-to-end against the default (ImageUK) fakeradio image, confirming
 // it yields a working driver.Session and that closeAll releases both the
@@ -75,7 +90,7 @@ func TestOpenRealSession_BadPort(t *testing.T) {
 // never UnknownModelError, since validateModel already catches that case
 // earlier in every real caller — see probe.go/read.go/write.go/diff.go).
 func TestOpenRealSession_UnknownModel(t *testing.T) {
-	_, _, err := openRealSession(testCtx(t), "FTdx10", "/dev/nonexistent-rigprog-test-port")
+	_, _, err := openRealSession(testCtx(t), unknownModelSentinel, "/dev/nonexistent-rigprog-test-port")
 	if err == nil {
 		t.Fatal("openRealSession(unknown model): expected an error, got nil")
 	}
@@ -87,7 +102,7 @@ func TestOpenRealSession_UnknownModel(t *testing.T) {
 // TestOpenFakeSession_UnknownModel is TestOpenRealSession_UnknownModel's
 // fake-session counterpart.
 func TestOpenFakeSession_UnknownModel(t *testing.T) {
-	_, _, err := openFakeSession(testCtx(t), "FTdx10")
+	_, _, err := openFakeSession(testCtx(t), unknownModelSentinel)
 	if err == nil {
 		t.Fatal("openFakeSession(unknown model): expected an error, got nil")
 	}
@@ -121,21 +136,21 @@ func TestValidateModel(t *testing.T) {
 	t.Run("unsupported", func(t *testing.T) {
 		var stderr strings.Builder
 		usageCalled := false
-		ok := validateModel(&stderr, "probe", "FTdx10", func(w io.Writer) {
+		ok := validateModel(&stderr, "probe", unknownModelSentinel, func(w io.Writer) {
 			usageCalled = true
 		})
 		if ok {
-			t.Error("validateModel(FTdx10) = true, want false")
+			t.Errorf("validateModel(%s) = true, want false", unknownModelSentinel)
 		}
 		if !usageCalled {
-			t.Error("validateModel(FTdx10) did not call printUsage, want it to")
+			t.Errorf("validateModel(%s) did not call printUsage, want it to", unknownModelSentinel)
 		}
 		out := stderr.String()
 		if !strings.Contains(out, "rigprog probe: ") {
-			t.Errorf("validateModel(FTdx10) stderr = %q, want it prefixed \"rigprog probe: \"", out)
+			t.Errorf("validateModel(%s) stderr = %q, want it prefixed \"rigprog probe: \"", unknownModelSentinel, out)
 		}
-		if !strings.Contains(out, "FTdx10") || !strings.Contains(out, "FT-710") {
-			t.Errorf("validateModel(FTdx10) stderr = %q, want it to name both the rejected model and the supported one", out)
+		if !strings.Contains(out, unknownModelSentinel) || !strings.Contains(out, "FT-710") {
+			t.Errorf("validateModel(%s) stderr = %q, want it to name both the rejected model and the supported one", unknownModelSentinel, out)
 		}
 	})
 }

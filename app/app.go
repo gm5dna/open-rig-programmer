@@ -242,9 +242,11 @@ func (a *App) bumpWorkingRevLocked() {
 //     FT-710's.
 //  3. Otherwise wiring.DefaultModel (the FT-710) — when working is nil,
 //     its Radio.Model is "", or that model names no registered driver (a
-//     future dialect-only model with no driver yet — see
-//     .superpowers/sdd/HANDOFF-m9c.md's still-open "FTdx10 slice" — or a
-//     hand-edited/corrupt file). Refuse-before-corrupt: an unresolvable
+//     model this build does not carry a driver for: a future radio's
+//     dialect landing before its driver, an FTDX101D file written by
+//     someone else, or a hand-edited/corrupt file — the FTdx10 itself is
+//     REGISTERED since M9c-6 and resolves at step 2 like any other model).
+//     Refuse-before-corrupt: an unresolvable
 //     model degrades to a KNOWN-safe baseline rather than being handed on
 //     to lookups that would all fail on it at once. wiring.DefaultModel is
 //     a hardcoded, always-registered model name (internal/wiring's own
@@ -310,9 +312,10 @@ func currentCaps(conn *connectionState, working *codeplug.Codeplug) (spec.Capabi
 // currentModel (the recognition check) and currentCaps (the value it
 // returns) — so this package's own tests can exercise the working-copy-
 // model resolution above against a model name wiring itself does not
-// register (no second real driver exists yet: internal/wiring's
-// realDrivers table lists only "FT-710" today — see
-// .superpowers/sdd/HANDOFF-m9c.md). Reassigned ONLY by tests (e.g.
+// register. internal/wiring registers two models since M9c-6 ("FT-710" and
+// "FTdx10"), and this seam is still needed: what these tests need is an
+// UNREGISTRABLE name whose resolution is theirs to control, which no real
+// registered model can be. Reassigned ONLY by tests (e.g.
 // TestCurrentCaps_DisconnectedUsesWorkingCopyModel), restored via
 // t.Cleanup; production code must never reassign it. Mirrors
 // internal/wiring's own FakeSessionOpts seam (internal/wiring/fake.go)
@@ -322,12 +325,15 @@ var capsForModel = wiring.StaticCapabilities
 
 // supportedModels indirects wiring.SupportedModels — connectModel's
 // (connection.go) only caller — for exactly the same reason capsForModel
-// exists, and under exactly the same rules: internal/wiring registers one
-// model today, so the ONLY way to prove that Connect/ConnectDemo's
-// validated model parameter is genuinely THREADED into the three
-// model-keyed wiring calls the connect path makes — rather than each
-// still naming wiring.DefaultModel — is to let a test admit a second
-// model name at the validation gate and then observe where it arrives
-// (see TestConnect_ResolvedModelThreadsIntoWiring). Reassigned ONLY by
-// tests, restored via t.Cleanup; production code must never reassign it.
+// exists, and under exactly the same rules: the way to prove that
+// Connect/ConnectDemo's validated model parameter is genuinely THREADED
+// into the three model-keyed wiring calls the connect path makes — rather
+// than each still naming wiring.DefaultModel — is to admit a model name at
+// app/'s validation gate that wiring itself REFUSES, then observe wiring's
+// own typed refusal naming it at each site (see
+// TestConnect_ResolvedModelThreadsIntoWiring). A really-registered second
+// model (the FTdx10, since M9c-6) cannot serve for that: it succeeds
+// everywhere, so nothing distinguishes "the model arrived" from "the site
+// used the default". Reassigned ONLY by tests, restored via t.Cleanup;
+// production code must never reassign it.
 var supportedModels = wiring.SupportedModels

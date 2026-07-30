@@ -86,11 +86,11 @@ func TestBlackbox_ProbeFake_ModelFlagByteIdentical(t *testing.T) {
 // combined here with --fake to prove the rejection happens BEFORE any
 // session is opened, not as a wrong-radio failure from one.
 func TestBlackbox_ProbeUnknownModel(t *testing.T) {
-	r := runBinary(t, "", "probe", "--fake", "--model", "FTdx10")
+	r := runBinary(t, "", "probe", "--fake", "--model", unknownModelSentinel)
 	if r.exitCode != exitUsage {
 		t.Fatalf("exit code = %d, want exitUsage (%d); stdout=%q stderr=%q", r.exitCode, exitUsage, r.stdout, r.stderr)
 	}
-	if !strings.Contains(r.stderr, "FTdx10") || !strings.Contains(r.stderr, "FT-710") {
+	if !strings.Contains(r.stderr, unknownModelSentinel) || !strings.Contains(r.stderr, "FT-710") {
 		t.Errorf("stderr = %q, want it to name both the rejected model and the supported one", r.stderr)
 	}
 }

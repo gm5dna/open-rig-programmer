@@ -28,8 +28,9 @@ func (a *App) ListPorts() ([]PortEntry, error) {
 
 // GetSupportedModels returns every radio model name this build can open a
 // real session against (internal/wiring.SupportedModels' own sorted
-// output) — registry-driven, so a future second driver appears here with
-// no change to this method. It is the list Connect/ConnectDemo's own
+// output) — registry-driven, which M9c-6 confirmed rather than merely
+// promised: registering the FTdx10 made this method return two models with
+// no change to a line of it. It is the list Connect/ConnectDemo's own
 // model parameter is validated against (see connectModel), so a frontend
 // model picker built on this method can never offer a model the connect
 // path would then refuse.
@@ -69,6 +70,15 @@ func (a *App) ConnectDemo(model string) (ConnectionInfo, error) {
 // FTdx10's driver opened against FT-710 hardware. An empty model means
 // "the default", never "whatever the file says" — naming a model is the
 // caller's explicit act.
+//
+// That scenario stopped being hypothetical at M9c-6: BOTH models are
+// registered now, so an FTdx10 working copy and an FT-710 on the cable is a
+// combination a user can really produce. The wrong pairing would still be
+// caught one layer down — each driver's Open probes the CAT ID and refuses
+// a radio that is not its own (*driver.WrongRadioError) — but this rule is
+// what stops the mismatch being ATTEMPTED, and it is the reason the
+// protection does not depend on every future radio answering a
+// distinguishable ID.
 //
 // A non-empty model is validated against supportedModels() — the same
 // membership check, over the same list, that cmd/rigprog's validateModel

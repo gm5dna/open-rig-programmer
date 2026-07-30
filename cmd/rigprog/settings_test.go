@@ -55,12 +55,12 @@ func TestCmdSettings_TrailingFlagForm(t *testing.T) {
 // FILE is even loaded.
 func TestCmdSettings_UnknownModel(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	got := cmdSettings([]string{"--model", "FTdx10", "/nonexistent/rigprog-test.json"}, &stdout, &stderr)
+	got := cmdSettings([]string{"--model", unknownModelSentinel, "/nonexistent/rigprog-test.json"}, &stdout, &stderr)
 	if got != exitUsage {
-		t.Fatalf("cmdSettings(--model FTdx10) = %d, want exitUsage (%d); stderr=%q", got, exitUsage, stderr.String())
+		t.Fatalf("cmdSettings(--model %s) = %d, want exitUsage (%d); stderr=%q", unknownModelSentinel, got, exitUsage, stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "FTdx10") || !strings.Contains(stderr.String(), "FT-710") {
-		t.Errorf("cmdSettings(--model FTdx10) stderr = %q, want it to name both the rejected and supported model", stderr.String())
+	if !strings.Contains(stderr.String(), unknownModelSentinel) || !strings.Contains(stderr.String(), "FT-710") {
+		t.Errorf("cmdSettings(--model %s) stderr = %q, want it to name both the rejected and supported model", unknownModelSentinel, stderr.String())
 	}
 }
 

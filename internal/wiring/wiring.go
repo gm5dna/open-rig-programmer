@@ -11,13 +11,16 @@
 // two fully self-contained constructors — OpenRealSessionFor (this file)
 // and OpenFakeSessionFor (fake.go) — with no shared helper accepting a
 // profile alongside a port. That absence is the point: it keeps the
-// invalid RealHardware/fakeradio or Simulated/real-port pairings
+// invalid RealHardware/fake-rig or Simulated/real-port pairings
 // structurally unrepresentable in the code shape, not merely unreached.
-// ft710.Simulated is referenced in exactly ONE non-test .go file
-// repo-wide — fake.go — pinned by internal/guards'
+// EACH registered driver's simulated-profile selector — ft710.Simulated,
+// and ftdx10.Simulated since M9c-6 — is referenced in exactly ONE non-test
+// .go file repo-wide, fake.go, pinned per driver by internal/guards'
 // TestSimulatedProfileTokensConfinement (extended by task-15 to be
 // repo-wide rather than cmd/rigprog-local; folded from the single-driver
-// guard task-15 extended into this data-driven guard at Task 58).
+// guard task-15 extended into this data-driven guard at Task 58, which is
+// why registering a second driver added a table ROW there rather than a
+// second test).
 //
 // Task 39 (the M9a radio-neutral core refactor) generalised this package
 // to model-keyed dispatch: OpenRealSessionFor (this file) and
@@ -41,27 +44,53 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft710"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx10"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
 // DefaultModel names the driver.Registry key the model-keyed lookups below
-// use when a caller has not (or cannot yet) name a model explicitly —
-// every composition root (cmd/rigprog, app/) keys off this constant
-// explicitly today, since neither yet has a model-selection surface. It
-// stays exactly "FT-710" until a caller actually asks for a second model.
+// use when a caller has not (or cannot yet) name a model explicitly: the
+// FALLBACK model, not the only registrable one. cmd/rigprog resolves it
+// when --model is absent, and app/ when the frontend passes "" (it has no
+// model picker yet — M9c-6's ledgered exclusion).
+//
+// It stays exactly "FT-710" now that a SECOND model is registered (the
+// FTdx10, M9c-6): which radio a caller gets by DEFAULT is a compatibility
+// promise about every file, snapshot and journal written before any second
+// model existed (see ResolveSnapshotDir's own model rule), not a statement
+// about how many models this package supports. Changing it would silently
+// re-point every default-model caller at a different radio.
 const DefaultModel = "FT-710"
+
+// FTdx10Model names the FTdx10's realDrivers/fakeDrivers key, which must
+// equal ftdx10.New(...).Model() — that agreement is not assumed here but
+// pinned by TestDriverTableKeysMatchDriverModel, which walks both tables.
+// A named constant rather than a bare literal at each of its uses (the two
+// table keys) because the two MUST be the same string: a typo in one alone
+// would build a model openable for real but not simulated, which is the
+// very drift TestRealAndFakeDriverTablesAgree exists to catch — and this
+// way it cannot happen at all. DefaultModel is exported and this is too,
+// so a caller naming the model (a CLI --model default, a GUI picker) has
+// the same kind of handle for both.
+const FTdx10Model = "FTdx10"
 
 // realDrivers is the model-keyed table of real-hardware driver
 // constructors: model name -> a constructor building THAT model's
 // real-profile driver.Driver. It is the single source of truth
 // SupportedModels, OpenRealSessionFor, StaticCapabilities,
 // StaticSettingsDescriptor, and SynthesiseDiscoveredBanks all key off —
-// adding a second radio model to this package means adding one entry
-// here (plus fake.go's own table for the simulated/demo path), never
-// touching the functions themselves.
+// adding a radio model to this package means adding one entry here (plus
+// fake.go's own table for the simulated/demo path), never touching the
+// functions themselves.
+//
+// The FTdx10 (M9c-6 task 6) is the first model added that way, and it was
+// exactly that: this entry, one in fake.go, one radiotext entry, and not a
+// line of the functions below. Every all-registered-models test in this
+// package walks it by existing.
 var realDrivers = map[string]func() driver.Driver{
 	DefaultModel: NewRealDriver,
+	FTdx10Model:  NewFTdx10RealDriver,
 }
 
 // SupportedModels returns every model name this package can open a real
@@ -156,6 +185,26 @@ func NewRealDriver() driver.Driver {
 	return ft710.New(ft710.RealHardware)
 }
 
+// NewFTdx10RealDriver builds the ftdx10 driver for a real-hardware
+// session: profile ftdx10.RealHardware, the zero value — the FTdx10's
+// half of the realDrivers table, split out for the same reason
+// NewRealDriver is (a test can pin the capability set the real wiring path
+// implies without opening a port).
+//
+// What that capability set IS differs from the FT-710's in the one way
+// that matters, and it is the whole reason this entry is safe to register
+// against real hardware at all: ftdx10's writeTrialsComplete is FALSE, so
+// a RealHardware FTdx10 driver reports ftdx10.CapabilitiesUnverified —
+// every candidate field's Write spec.Unverified, nothing writable
+// anywhere. No FTdx10 has been written to by this project, and the
+// capability gate refuses before any frame is built. Registering the model
+// therefore adds a READ/probe path against real hardware and no write path
+// (see core/driver/ftdx10/doc.go's write guard, and its ASSUMED register
+// for what a Stage R session would lift).
+func NewFTdx10RealDriver() driver.Driver {
+	return ftdx10.New(ftdx10.RealHardware)
+}
+
 // openSerial is OpenRealSessionFor's test seam: production code always
 // leaves this at transport.OpenSerial, and OpenRealSessionFor calls it
 // instead of transport.OpenSerial directly. It exists for exactly one
@@ -184,11 +233,16 @@ var openSerial = transport.OpenSerial
 // unrepresentable in the code shape, not merely unreached.
 //
 // The port is opened at the DRIVER's own factory-default CAT baud
-// (Capabilities().DefaultBaud), not at transport's package default: the
-// two agree for the FT-710 (both 38400) and there is no behaviour change
-// today, but a second registered model whose radio ships at a different
-// rate would otherwise have been opened at the FT-710's — a
-// radio-specific fact read from the wrong radio's table.
+// (Capabilities().DefaultBaud), not at transport's package default: all
+// three values agree today (transport's default, the FT-710's 38400 and
+// the FTdx10's ASSUMED 38400 — core/driver/ftdx10's register entry, whose
+// lift is the rate a factory-configured radio's ID exchange answers at),
+// so there is no behaviour change, but a registered model whose radio
+// ships at a different rate would otherwise have been opened at the
+// FT-710's — a radio-specific fact read from the wrong radio's table.
+// TestOpenRealSessionFor_BaudFollowsADisagreeingDriver proves the
+// derivation with a fixture that actually disagrees, since no registered
+// model does.
 //
 // An unrecognised model fails with *UnknownModelError BEFORE any port is
 // touched. transport.OpenSerial (like driver.Driver.Open) owns the port
@@ -223,12 +277,15 @@ func OpenRealSessionFor(ctx context.Context, model, portPath string) (driver.Ses
 		// key they share).
 		Baud: d.Capabilities().DefaultBaud,
 		// The stop bits are NOT model-derived, BY RECORDED DECISION
-		// (M9c-5 E2): spec.Capabilities gains no framing field this
-		// milestone, so every model opens at transport's fixed default
-		// (8-N-2). The FTdx10 is ASSUMED to share it until its framing
-		// is verified against its own manual at M9c-6; if it does not,
-		// the field is added then, with hardware evidence, rather than
-		// guessed now.
+		// (M9c-5 E2, upheld at M9c-6): spec.Capabilities carries no
+		// framing field, so every model opens at transport's fixed
+		// default (8-N-2). The E2-owed FTdx10 verification is CLOSED,
+		// and closed as SILENCE: that radio's CAT manual makes no
+		// framing statement anywhere (M9c-6 spec D-framing), so 8-N-2
+		// for the FTdx10 is an ASSUMED entry in core/driver/ftdx10's
+		// own register with a named hardware lift — not a verified
+		// fact. The field is still added only with hardware evidence,
+		// never guessed.
 		StopBits: transport.DefaultStopBits,
 	})
 	if err != nil {

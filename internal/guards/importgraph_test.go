@@ -385,12 +385,17 @@ func TestWritePathReachableOnlyThroughDriver(t *testing.T) {
 		t.Error("never saw core/driver/** call Engine.Do — the walker or its filters are broken, and every check above passed vacuously")
 	}
 	// A DISJUNCTION over the fenced family, deliberately, and not a counter
-	// per name. core/driver/** builds SHORT-form MT Sets today (the FT-710
-	// is MTFormShort), so there is no BuildMTSetCombined call site for this
-	// walk to see; the combined driver work is M9c-4/5. Demanding each name
-	// separately would assert a schedule rather than the property this check
-	// is for, which is that the walk and its filters can see core/driver/**
-	// at all — any one of the three rules out the blind sweep.
+	// per name. When this check was written core/driver/** built SHORT-form
+	// MT Sets only (the FT-710 is MTFormShort) and there was no
+	// BuildMTSetCombined call site for the walk to see at all; since M9c-6
+	// task 2 there is one — core/driver/ftdx10's write path, whose whole
+	// choreography is a single combined MT Set. The disjunction stays
+	// anyway, and not because the schedule caught up: demanding each name
+	// separately would assert WHICH radios this build carries, where the
+	// property actually wanted is that the walk and its filters can see
+	// core/driver/** at all. Any one of the three rules out a blind sweep,
+	// and a future driver family using neither MW nor short MT must not fail
+	// a guard about the walker's own health.
 	if !sawDriverBuildMW {
 		t.Error("never saw core/driver/** reference any of BuildMWSet/BuildMTSet/BuildMTSetCombined — the walker or its filters are broken, and every check above passed vacuously")
 	}

@@ -224,8 +224,11 @@ func TestConnect_UnknownModelRefused(t *testing.T) {
 // radio than the session writing into it would mean.
 //
 // The evidence is arranged so that a model that did NOT arrive cannot
-// produce it. internal/wiring registers one model, so testModel is
-// admitted at app/'s validation gate ONLY (the supportedModels seam):
+// produce it, which is why testModel is an UNREGISTRABLE name and not the
+// really-registered FTdx10 (M9c-6): a model wiring accepts would succeed at
+// every site, leaving "the model arrived" indistinguishable from "the site
+// used the default". testModel is instead admitted at app/'s validation
+// gate ONLY (the supportedModels seam):
 // wiring itself still refuses it, and each of the two session
 // constructors reports that refusal as a *wiring.UnknownModelError
 // NAMING testModel — an error only reachable by having been handed

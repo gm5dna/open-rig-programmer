@@ -166,13 +166,13 @@ func TestWriteNothingSendableReport_UnknownModelOmitsProcedure(t *testing.T) {
 		Blocked: 1, Erased: 1,
 	}
 	var buf bytes.Buffer
-	writeNothingSendableReport(&buf, "FTdx10", diff)
+	writeNothingSendableReport(&buf, unknownModelSentinel, diff)
 	out := buf.String()
 	if !strings.Contains(out, "erase not supported on this radio") {
-		t.Errorf("writeNothingSendableReport(FTdx10) output = %q, want the BlockReason", out)
+		t.Errorf("writeNothingSendableReport(%s) output = %q, want the BlockReason", unknownModelSentinel, out)
 	}
 	if strings.Contains(out, "[V/M]") || strings.Contains(out, "[ERASE]") {
-		t.Errorf("writeNothingSendableReport(FTdx10) output = %q, want NO front-panel erase procedure (no radiotext entry for this model)", out)
+		t.Errorf("writeNothingSendableReport(%s) output = %q, want NO front-panel erase procedure (no radiotext entry for this model)", unknownModelSentinel, out)
 	}
 }
 
@@ -809,12 +809,12 @@ func TestCmdWrite_TooManyArguments(t *testing.T) {
 // rejection happens before any file I/O is attempted).
 func TestCmdWrite_UnknownModel(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	got := cmdWrite(testCtx(t), []string{"--fake", "--model", "FTdx10", "/nonexistent/rigprog-test.json"}, strings.NewReader(""), &stdout, &stderr)
+	got := cmdWrite(testCtx(t), []string{"--fake", "--model", unknownModelSentinel, "/nonexistent/rigprog-test.json"}, strings.NewReader(""), &stdout, &stderr)
 	if got != exitUsage {
-		t.Fatalf("cmdWrite(--model FTdx10) = %d, want exitUsage (%d); stderr=%q", got, exitUsage, stderr.String())
+		t.Fatalf("cmdWrite(--model %s) = %d, want exitUsage (%d); stderr=%q", unknownModelSentinel, got, exitUsage, stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "FTdx10") || !strings.Contains(stderr.String(), "FT-710") {
-		t.Errorf("cmdWrite(--model FTdx10) stderr = %q, want it to name both the rejected and supported model", stderr.String())
+	if !strings.Contains(stderr.String(), unknownModelSentinel) || !strings.Contains(stderr.String(), "FT-710") {
+		t.Errorf("cmdWrite(--model %s) stderr = %q, want it to name both the rejected and supported model", unknownModelSentinel, stderr.String())
 	}
 }
 
