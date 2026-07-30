@@ -120,7 +120,7 @@ const (
 //
 // Nothing on a wire path consults this: the read path renders through the
 // session's own dialect (s.dialect.ModeName, read.go) and the write path
-// will resolve through dialect.ModeByName.
+// resolves through dialect.ModeByName (write.go's buildWriteCommand).
 func modeNames() []string {
 	var names []string
 	for b := 0; b <= 0xFF; b++ {

@@ -309,12 +309,15 @@
 //     link.
 //
 //  9. A SINGLE COMBINED MT SET SUFFICES TO CREATE OR OVERWRITE A CHANNEL,
-//     INCLUDING AN EMPTY ONE. Task 2 implements that write path (this
-//     entry lands with the driver skeleton because it is the assumption
-//     the whole MT-only choreography rests on, and it must not arrive
-//     later than the design it justifies). The 41-byte Set carries the
-//     full field block and the tag, so MW would write the same fields
-//     redundantly; whether this radio accepts the combined Set as a
+//     INCLUDING AN EMPTY ONE (write.go's WriteChannel; the entry landed
+//     with the driver skeleton, one task ahead of the write path, because
+//     it is the assumption the whole MT-only choreography rests on and it
+//     must not arrive later than the design it justifies). The 41-byte
+//     Set carries the full field block and the tag, so MW would write the
+//     same fields redundantly — this driver sends no MW frame at all, and
+//     the NAMED INVERSION its write ladder carries in place of the
+//     FT-710's non-Known-TagDisplay refusal is documented at
+//     buildWriteCommand. Whether this radio accepts the combined Set as a
 //     complete channel definition — and whether it does so for a slot
 //     that does not yet exist — is unverified. The FT-710's own
 //     empty-slot create is HW-CONFIRMED for ITS two-frame MW+MT

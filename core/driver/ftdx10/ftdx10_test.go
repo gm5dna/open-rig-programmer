@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
@@ -411,45 +410,5 @@ func TestWithTransportLogger_NilIsIgnored(t *testing.T) {
 	}
 	if d.transportLogger != nil {
 		t.Error("WithTransportLogger(nil) installed a logger, want the engine's default kept")
-	}
-}
-
-// TestWriteChannel_RefusedUntilTask2 pins the PLACEHOLDER WriteChannel
-// (ftdx10.go) and is REPLACED, along with the placeholder, by task 2's
-// real MT-only choreography.
-//
-// It exists so that the gap is explicit rather than discovered: *Session
-// must satisfy driver.Session for Open to return one, so the method has to
-// exist in this commit, and the only honest thing an unimplemented write
-// path can do is refuse before building anything. The refusal is typed
-// (errors.Is against driver.ErrWriteRefused), names the slot, and reports
-// an empty non-nil Steps — the WriteResult shape core/driver documents for
-// a refusal that happens before any frame is built.
-func TestWriteChannel_RefusedUntilTask2(t *testing.T) {
-	_, sess := openSession(t, Simulated, slotImage{})
-
-	ch := codeplug.Channel{
-		Slot: "001",
-		Data: &codeplug.ChannelData{
-			FreqHz: 14_250_000, Mode: "USB", CTCSS: "OFF", Shift: "SIMPLEX",
-			CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
-			TagDisplay: codeplug.BoolField{State: codeplug.Unavailable},
-			ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
-		},
-	}
-
-	res, err := sess.WriteChannel(testCtx(t), ch)
-	if !errors.Is(err, driver.ErrWriteRefused) {
-		t.Fatalf("WriteChannel = %v, want errors.Is match against driver.ErrWriteRefused", err)
-	}
-	var wre *driver.WriteRefusedError
-	if !errors.As(err, &wre) {
-		t.Fatalf("WriteChannel error %v is not a *driver.WriteRefusedError", err)
-	}
-	if wre.Slot != "001" {
-		t.Errorf("WriteRefusedError.Slot = %q, want \"001\"", wre.Slot)
-	}
-	if res.Steps == nil || len(res.Steps) != 0 {
-		t.Errorf("WriteResult.Steps = %#v, want an empty non-nil slice (a refusal before any frame was built has no sequence to describe)", res.Steps)
 	}
 }

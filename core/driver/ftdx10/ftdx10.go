@@ -14,7 +14,6 @@ import (
 	// core/cat side of the FTdx10", which is exactly what it is, and it
 	// appears at ONE call site (catDialect, below).
 	catftdx10 "github.com/gm5dna/open-rig-programmer/core/cat/ftdx10"
-	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
@@ -385,7 +384,7 @@ func (d *ftdx10Driver) SynthesiseDiscoveredBanks(slots []string) []spec.Bank {
 // There is NO operation mutex, and that is a consequence of the MT-only
 // choreography rather than an omission: every logical operation this
 // session performs is exactly ONE wire exchange (ReadChannel's combined MT
-// read; the combined MT Set the write path will send), so there is no gap
+// read; WriteChannel's combined MT Set, write.go), so there is no gap
 // between two frames of the same operation for a concurrent operation to
 // land in. The FT-710's Session holds an opMu precisely because its
 // operations are two exchanges each (MR+MT, MW+MT) and a concurrent write
@@ -437,31 +436,6 @@ func (s *Session) Diagnostics() driver.SessionDiagnostics {
 // Close implements driver.Session. Idempotent: transport.Engine.Close
 // already guarantees repeat calls return the same result.
 func (s *Session) Close() error { return s.eng.Close() }
-
-// WriteChannel implements driver.Session — AND IS A PLACEHOLDER THAT TASK
-// 2 REPLACES WHOLE. It exists in this commit because driver.Session
-// requires the method and *Session must satisfy that interface for Open to
-// return one at all; it deliberately does NOT attempt a partial
-// choreography.
-//
-// Every call is refused with a typed *driver.WriteRefusedError before any
-// frame is built or any byte reaches the wire — which is the correct
-// behaviour for the RealHardware and fail-safe profiles regardless (their
-// capability gate would refuse anyway), and a temporary, visible gap for
-// the Simulated profile, whose six Supported writes have nothing behind
-// them until the MT-only Set lands.
-//
-// Task 2 replaces this with the real ladder (ParseSlot, bankFor, erase
-// refusal, Valid() checks, the capability gate over requestedFields, ONE
-// cat.Dialect.BuildMTSetCombined frame, steps declared after the frame
-// exists and before the wire). TestWriteChannel_RefusedUntilTask2 pins
-// this placeholder's behaviour and is replaced along with it.
-func (s *Session) WriteChannel(_ context.Context, ch codeplug.Channel) (driver.WriteResult, error) {
-	return driver.WriteResult{Steps: []driver.WriteStep{}}, &driver.WriteRefusedError{
-		Slot:   ch.Slot,
-		Reason: "the FTdx10 driver's write path is not implemented yet (M9c-6 task 2 lands the MT-only combined Set); no frame is built and nothing reaches the wire",
-	}
-}
 
 // ErrAnswerMismatch is the sentinel a caller should compare against (via
 // errors.Is) when a slot-addressed answer names a DIFFERENT slot than the
