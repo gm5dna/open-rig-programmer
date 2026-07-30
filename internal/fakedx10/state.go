@@ -105,6 +105,18 @@ func (r *Radio) SlotState(slot string) (MemState, bool) {
 	return s, ok
 }
 
+// EXState returns this fake's current stored raw P4 for a six-digit EX (MENU)
+// wire address and whether it holds any entry for it. A false second return is
+// exactly what makes an EX read of addr answer "?;" (ex.go's handleEX). Like
+// SlotState it is a test-inspection API: production code reaches the menu state
+// only through Port().
+func (r *Radio) EXState(addr string) (string, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	v, ok := r.exSettings[addr]
+	return v, ok
+}
+
 // CurrentChannel returns this fake's "selected channel" state, as last set by
 // an MC-set, or the answer-only none form ("000") if no MC-set has happened
 // yet. A Set never changes it — doc.go register entry 10.

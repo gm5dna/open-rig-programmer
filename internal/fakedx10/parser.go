@@ -736,23 +736,11 @@ func (r *Radio) handleAI(body []byte) []byte {
 	return rejection
 }
 
-// --- EX (MENU): NOT MODELLED YET ---
-
-// handleEX answers "?;" to every EX frame.
+// --- EX (MENU) ---
 //
-// TASK 5 REPLACES THIS ARM ENTIRELY: it adds this package's own copy of
-// transcription B, a stdlib-only generator under gen/ that projects it into a
-// compact inventory, and the read handler that answers from that inventory
-// with values invented by fakeradio's convention (doc.go register entry 4,
-// which lands with this task deliberately, ahead of the code it describes).
-//
-// Until then a settings read through this fake reports every item
-// unavailable — core/driver/ftdx10's ReadSetting maps "?;" to
-// driver.SettingUnavailable with no error — which is an honest answer for a
-// fake that has no inventory, and a visibly incomplete one.
-func (r *Radio) handleEX(body []byte) []byte {
-	return rejection
-}
+// handleEX lives in ex.go, beside the generated inventory it answers from and
+// the provenance note that explains where that inventory comes from. Only the
+// dispatch arm below is here, with every other command's.
 
 // --- Top-level dispatch ---
 

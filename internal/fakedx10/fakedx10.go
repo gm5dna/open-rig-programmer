@@ -25,7 +25,8 @@ type Radio struct {
 	mu             sync.Mutex
 	slots          map[string]MemState
 	currentChannel string
-	ai             byte // '0' or '1'; ASSUMED OFF at construction — doc.go register entry 14
+	ai             byte              // '0' or '1'; ASSUMED OFF at construction — doc.go register entry 14
+	exSettings     map[string]string // EX (MENU) six-digit address -> raw P4; see ex.go
 
 	// shutdown is closed (exactly once, by closePipes) when the radio goes
 	// away. WithLatency's wait selects against it (sleepInterruptible)
@@ -55,8 +56,15 @@ func New(opts ...Option) *Radio {
 		currentChannel: slotNoneWire,
 		// ASSUMED OFF — doc.go register entry 14: New models a
 		// freshly-powered radio.
-		ai:       '0',
-		shutdown: make(chan struct{}),
+		ai: '0',
+		// The generated projection of transcription B, expanded to
+		// address -> raw P4. The VALUES are invented (doc.go register
+		// entry 4); EXDefaults returns a fresh map per call, so this
+		// radio's menu state is its own. There is no runtime/manual
+		// split as fakeradio has — no FTdx10 has ever been asked
+		// anything, so there is nothing to overlay (see EXDefaults).
+		exSettings: EXDefaults(),
+		shutdown:   make(chan struct{}),
 	}
 	for _, opt := range opts {
 		opt(r)

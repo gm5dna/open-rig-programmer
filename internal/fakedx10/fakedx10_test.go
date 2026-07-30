@@ -265,12 +265,19 @@ func TestCommandNamesAreUpperCaseOnly(t *testing.T) {
 	}
 }
 
-func TestEXNotModelledYet(t *testing.T) {
+// TestEXIsDispatched checks only that the EX arm reaches its handler at all:
+// a known address answers and an out-of-inventory one is refused. EX's own
+// behaviour — the inventory, the widths, the invented values, the options — is
+// covered in ex_test.go, beside the handler and the generated table it answers
+// from.
+//
+// This test replaces task 4's TestEXNotModelledYet, whose whole content was
+// "every EX read is refused" while the arm was a stub.
+func TestEXIsDispatched(t *testing.T) {
 	_, conn := newTestRadio(t)
-	// Task 5 replaces handleEX entirely (doc.go register entry 4). Until then
-	// every EX read is refused, which core/driver/ftdx10's ReadSetting maps to
-	// driver.SettingUnavailable with no error.
-	assertRejected(t, conn, "EX010101;")
+	if got, want := exchange(t, conn, "EX010101;"), "EX010101000;"; got != want {
+		t.Errorf("EX010101; -> %q, want %q", got, want)
+	}
 	assertRejected(t, conn, "EX999999;")
 }
 

@@ -12,7 +12,9 @@
 // in this package: there is no short MT tag frame, no display flag anywhere,
 // and no way for a slot to hold a tag without holding channel data. MR
 // answers the shared 28-byte memory frame, MW sets it, MC recalls, ID
-// answers "ID0761;", AI is accepted and readable, and EX arrives in task 5.
+// answers "ID0761;", AI is accepted and readable, and EX (MENU) reads are
+// answered from a GENERATED PROJECTION of this package's own copy of
+// transcription B — see ex.go and PROVENANCE.md.
 //
 // # The hard rule: NOTHING project-internal
 //
@@ -38,8 +40,12 @@
 // TestNoCoreImports (imports_test.go) enforces it with a go/parser scan, and
 // that scan WALKS SUBDIRECTORIES — the one deliberate improvement on
 // fakeradio's copy of the same test, whose parser.ParseDir(".") is
-// non-recursive and would leave the generator package task 5 puts in gen/
-// outside the fence entirely.
+// non-recursive and would leave the EX inventory's generator in gen/ outside
+// the fence entirely. That generator is the piece the rule bites hardest for:
+// it must not reach for internal/extable, the machinery that generates the
+// DIALECT's inventory from transcription A, because one parser on both sides of
+// the cross-check would reproduce a shared parsing bug into both inventories
+// invisibly (ex.go states the mechanism in full).
 //
 // # A SIBLING of internal/fakeradio, not a refactor of it
 //
@@ -98,8 +104,9 @@
 // is the template to copy — and copying it is the right move, per the sibling
 // section above.
 //
-// EX SET. Reads arrive in task 5; the Set direction is not modelled, exactly
-// as fakeradio does not model it (its own register item 24).
+// EX SET. Reads are modelled (ex.go); the Set direction is not, exactly as
+// fakeradio does not model it (its own register item 24). A set-shaped EX body
+// draws "?;" — register entry 17.
 //
 // TIMING. Every reply is near-instant unless WithLatency says otherwise. No
 // FTdx10 timing has ever been observed by this project, so there is nothing
@@ -165,8 +172,8 @@
 //     that session's radio is a 5 MHz-bank-bearing variant.
 //     (image.go: With5xx, WithEMG; parser.go: handleMT)
 //
-//  4. EX ANSWER VALUES ARE INVENTED. Task 5 gives this fake its EX inventory,
-//     generated from its own copy of transcription B; the VALUES it answers
+//  4. EX ANSWER VALUES ARE INVENTED. This fake's EX inventory is GENERATED
+//     from its own copy of transcription B; the VALUES it answers
 //     with are this package's construction-time convenience by fakeradio's
 //     convention — every numeric item n × '0', every text item 12 spaces
 //     (fakeradio's buildEXDefaults rule) — and not a claim about any FTdx10's
@@ -175,12 +182,12 @@
 //     is nothing to source a real default from. This matters beyond the test
 //     suite: `rigprog read --settings --fake --model FTdx10` renders these
 //     values to a user, who must not read them as what an FTdx10 ships with.
-//     The register entry lands NOW, with the core, so the honesty is on
-//     record before the code that needs it exists.
+//     The register entry landed with the core, ahead of the code that needed
+//     it, so the honesty was on record first.
 //     STAGE R LIFTS IT WITH: a full EX sweep of an FTdx10 at factory
 //     defaults, values recorded per address. Nothing short of that supplies a
 //     default, and the manual never will.
-//     (task 5: ex.go)
+//     (ex.go: exDefaultDigit, exTextWidth, buildEXDefaults)
 //
 //  5. THE CLARIFIER IS STORED, AND ROUND-TRIPS BYTE-FAITHFULLY. A combined MT
 //     Set's P3 sign and magnitude and its P4/P5 flags are stored exactly as
@@ -359,4 +366,37 @@
 //     (its register item 1), recorded here so that a test relying on it
 //     knows what it is relying on.
 //     (parser.go: reassembler)
+//
+//  17. AN EX READ OF AN ADDRESS THIS FAKE HAS NO ENTRY FOR ANSWERS "?;", AND
+//     SO DOES A SET-SHAPED EX BODY. Two claims about the EX command's edges,
+//     recorded together because one line of code makes both.
+//
+//     The first is the menu-side twin of entry 1: a grammatically valid
+//     six-digit address the chart never enumerated — every 05xxxx, every P3
+//     past a subgroup's item count — draws the protocol's single unattributed
+//     NAK. fakeradio's equivalent is NOT an assumption (its register item 23:
+//     OBSERVED at M8c for six such addresses, including both probed P1=05
+//     ones), and that is an FT-710 fact about an FT-710 menu. The FTdx10's
+//     chart has its own P1 anomaly — the grammar block says "P1 : 01 - 05"
+//     while the chart populates 01-04 with no P1=05 group at all, recorded
+//     UNRESOLVED in core/cat/ftdx10/doc.go precisely because it cannot be put
+//     to hardware — so what a real FTdx10 answers to 050101 is doubly unknown.
+//     This fake answers "?;" because it holds no entry, which is the honest
+//     shape of "I have no such item" and is what core/driver/ftdx10's settings
+//     reader maps to driver.SettingUnavailable.
+//
+//     The second is a deliberate MODELLING GAP, KNOWN-DIVERGENT from the
+//     documented grammar rather than a hardware claim: the manual documents an
+//     EX Set form and this fake does not implement it, so a valid address
+//     followed by a P4 payload ("EX0101011;") is simply a too-long body to
+//     handleEX and falls through the same length check to the same NAK. The
+//     menu surface is READ-ONLY for v1.x by the M8d decision of 25/07/2026
+//     (docs/menu-write-decision.md), so nothing in this project sends one.
+//     STAGE R LIFTS THE FIRST WITH: one EX read of 050101 and one of a P3 past
+//     a subgroup's end, on a real FTdx10 — an answer rather than "?;" would
+//     mean the grammar block's range is real and the chart is incomplete,
+//     which is a finding for the dialect as much as for this fake. A STAGE W
+//     capture would be needed for the second, and none is planned while the
+//     menu surface stays read-only.
+//     (ex.go: handleEX)
 package fakedx10

@@ -19,14 +19,15 @@ import (
 // extended because fakeradio's version is NON-RECURSIVE: it uses
 // parser.ParseDir("."), which reads one directory and stops.
 //
-// That is a real hole here, not a stylistic one. Task 5 adds
-// internal/fakedx10/gen/, a stdlib-only generator that must be inside the
-// fence — it is the piece most likely to reach for internal/extable, the A-side
-// machinery whose Digits parsing was a known defect locus, which is exactly
-// the import this package must not have. The fence has to cover a
-// subdirectory BEFORE the subdirectory exists, so the walk lands with the
-// core, and TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory
-// proves it would bite when the directory arrives.
+// That is a real hole here, not a stylistic one. internal/fakedx10/gen/ is a
+// stdlib-only generator that must be inside the fence — it is the piece most
+// likely to reach for internal/extable, the A-side machinery whose Digits
+// parsing was a known defect locus, which is exactly the import this package
+// must not have (ex.go states why: one parser on both sides of the EX
+// cross-check would reproduce a shared parsing bug into both inventories
+// invisibly). The fence landed with the package core, BEFORE that subdirectory
+// existed, and TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory
+// proved it would bite when the directory arrived — which it now has.
 
 // modulePrefix is this project's module path (go.mod: "module
 // github.com/gm5dna/open-rig-programmer") — NOT the repository directory name
@@ -59,7 +60,7 @@ func TestIsForbiddenImport(t *testing.T) {
 		{"core/spec", "github.com/gm5dna/open-rig-programmer/core/spec", true},
 		{"core/driver/ftdx10 — the driver under test against this fake", "github.com/gm5dna/open-rig-programmer/core/driver/ftdx10", true},
 		{"internal/fakeradio — the sibling fake, deliberately not shared", "github.com/gm5dna/open-rig-programmer/internal/fakeradio", true},
-		{"internal/extable — task 5's generator must not reach for it", "github.com/gm5dna/open-rig-programmer/internal/extable", true},
+		{"internal/extable — gen/ must not reach for it", "github.com/gm5dna/open-rig-programmer/internal/extable", true},
 		{"fakedx10 itself", "github.com/gm5dna/open-rig-programmer/internal/fakedx10", true},
 		{"stdlib", "io", false},
 		{"stdlib nested", "go/parser", false},
@@ -193,9 +194,9 @@ func writeTree(t *testing.T, files map[string]string) string {
 }
 
 // fenceTestTree is the tree both self-tests below run against: one clean file
-// in the root, one VIOLATING file in a subdirectory (task 5's gen/, by name),
-// one violating _test.go beside it, and one violating file under testdata.
-// Only the subdirectory's non-test file may be reported.
+// in the root, one VIOLATING file in a subdirectory (gen/, by name — the real
+// one's shape), one violating _test.go beside it, and one violating file under
+// testdata. Only the subdirectory's non-test file may be reported.
 func fenceTestTree(t *testing.T) string {
 	t.Helper()
 	return writeTree(t, map[string]string{
@@ -208,9 +209,9 @@ func fenceTestTree(t *testing.T) string {
 
 // TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory is the
 // fence's own red proof, run green: it proves the scan WOULD bite a violation
-// placed where task 5's generator will live, and that it bites there and
-// nowhere else — the _test.go file beside it and the testdata fixture are both
-// skipped by design.
+// placed where the EX generator lives, and that it bites there and nowhere
+// else — the _test.go file beside it and the testdata fixture are both skipped
+// by design.
 func TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory(t *testing.T) {
 	root := fenceTestTree(t)
 
