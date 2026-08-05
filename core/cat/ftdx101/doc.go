@@ -34,12 +34,30 @@
 //     M9d-1 task 6 builds TWO Dialect instances over ONE inventory rather
 //     than one dialect for both.
 //
-//   - the P4 VALUE ranges of three MAX POWER rows in Table 2 — (03,04,01) HF
-//     MAX POWER and (03,04,02) 50M MAX POWER, each "5 ~ 100 ... FTDX101D /
-//     5 ~ 200 ... FTDX101MP", and (03,04,04) AM MAX POWER (layout 927, 928,
-//     931). P4 SEMANTICS are not stored: an EXItem models the address, the
-//     labels, the name, the Digits width and the text flag, and all five are
-//     printed identically for both models on all three rows. So there is one
+//   - the P4 VALUE ranges of three MAX POWER rows in Table 2, printed IN FULL
+//     here because a model-conditional figure abbreviated to one arm is how a
+//     model-conditional figure stops being read as one:
+//
+//     (03,04,01) HF MAX POWER (layout 927) —
+//     "5 ~ 100 (P4 = 005 ~ 100) FTDX101D / 5 ~ 200 (P4 = 005 ~ 200) FTDX101MP".
+//
+//     (03,04,02) 50M MAX POWER (layout 928) — identical wording,
+//     "5 ~ 100 (P4 = 005 ~ 100) FTDX101D / 5 ~ 200 (P4 = 005 ~ 200) FTDX101MP".
+//
+//     (03,04,04) AM MAX POWER (layout 931) —
+//     "5 ~ 25 (P4 = 005 ~ 025) FTDX101D / 5 ~ 500 (P4 = 005 ~ 050) FTDX101MP".
+//     BOTH arms are given: the D arm is internally consistent at 25 W, and it
+//     is what makes the MP arm's "5 ~ 500" against "(P4 = 005 ~ 050)" visibly
+//     a defect rather than merely a large number. See the chart printing
+//     defects below.
+//
+//     (03,04,03) 70M MAX POWER (layout 929) is NOT model-conditional —
+//     "5 ~ 50 (P4 = 005 ~ 050)" for both — which is why the count is three and
+//     not four.
+//
+//     P4 SEMANTICS are not stored: an EXItem models the address, the labels,
+//     the name, the Digits width and the text flag, and all five are printed
+//     identically for both models on all three rows. So there is one
 //     transcription and one generated inventory.
 //
 // Nothing else in the chart or in the frame tables distinguishes them.
@@ -71,12 +89,14 @@
 // verified against the rendered PDF. They are recorded here because an
 // undocumented defect is one somebody later silently "corrects":
 //
-//   - (03,04,04) AM MAX POWER is SELF-INCONSISTENT within one row: the
-//     FTDX101MP arm's human-readable range reads "5 ~ 500" while its own
-//     parenthesised P4 form reads "(P4 = 005 ~ 050)" (layout 931, printed
-//     page 12). Five hundred watts AM on a 200 W radio is not credible and
-//     050 matches the FTDX101D arm's shape, but the chart is recorded as
-//     printed, not resolved.
+//   - (03,04,04) AM MAX POWER is SELF-INCONSISTENT within one row. The row is
+//     printed "5 ~ 25 (P4 = 005 ~ 025) FTDX101D / 5 ~ 500 (P4 = 005 ~ 050)
+//     FTDX101MP" (layout 931, printed page 12): the FTDX101D arm agrees with
+//     itself, and the FTDX101MP arm's human-readable range reads "5 ~ 500"
+//     while its own parenthesised P4 form reads "(P4 = 005 ~ 050)". Five
+//     hundred watts AM on a 200 W radio is not credible, and 050 matches both
+//     the shape of the D arm and the two-to-one D:MP ratio the other two MAX
+//     POWER rows carry — but the chart is recorded as printed, not resolved.
 //
 //   - (02,01,12) CW BK-IN DELAY prints a TRUNCATED legend whose ninth entry
 //     repeats its sixth: "00:30 01:50 02:100 03:150 04:200 05:250 06:300
@@ -96,17 +116,49 @@
 //     (layout 795) — so the printed order of its indices is not the order of
 //     its values.
 //
+//   - (03,01,23) KEYBOARD LANGUAGE ends its list of languages with something
+//     that is not one. The legend runs "00: JAPANESE 01: ENGLISH(US) 02:
+//     ENGLISH(UK) 03: FRENCH 04: FRENCH(CA) 05: GERMAN 06: PORTUGUESE 07:
+//     PORTUGUESE(BR) 08: SPANISH 09: SPANISH(LATAM) 10: ITALIAN 11: LEVEL"
+//     (layout 879-883, printed page 12 / folio 11). "11: LEVEL" is the last
+//     entry of the row IMMEDIATELY ABOVE it — (03,01,22) CS DIAL, whose own
+//     legend ends "08: MEM CH 09: GROUP 10: R.FIL 11: LEVEL" (layout 876-878)
+//     — and the two rows are typeset interleaved on the page, CS DIAL's third
+//     legend line sitting directly above KEYBOARD LANGUAGE's first. A twelfth
+//     keyboard language called LEVEL does not exist; the entry has migrated
+//     from the row above. Recorded as printed, not repaired: whether KEYBOARD
+//     LANGUAGE really has eleven values (00-10) or twelve with a different
+//     twelfth cannot be settled from this manual.
+//
 //   - (02,01,16) QSK DELAY TIME misspells msec once, "2: 25 mesc" (layout
 //     832); and the TX AUDIO subgroup punctuates one legend two ways, "00 :
 //     OFF" at (03,03,03/09/12/18) against "00: OFF" at (03,03,06/15).
 //
+// ONE DEFECT LIES OUTSIDE TABLE 2, in a frame table's own legend, and is
+// recorded here with the rest because it is the same kind of fault and
+// because dialect.go's mode transcription had to decide what to do about it:
+//
+//   - OI's P6 MODE legend MISNUMBERS its last two members. It prints "D: AM-N
+//     E: PSK E: DATA-FM-N" (layout 1443-1446, PDF page 19) — a duplicated
+//     "E:" prefix where "F:" belongs. The FIVE other mode legends in this
+//     manual are identical to each other and clean, all running 1 to F: MD's
+//     P2 (layout 1240-1243), IF's P6 (1089-1091), MR's P6 (1286-1288), MT's
+//     P6 (1321-1323) and MW's P6 (1361-1363). The mode table in dialect.go is
+//     sourced from those five and OI's is EXCLUDED — not reconciled against
+//     them, and not "corrected" to F. Reading the defective legend as
+//     evidence would either lose DATA-FM-N or make 'E' ambiguous, and the
+//     five clean legends are sufficient without it.
+//
 // NONE of these affects M9d-1. The EX inventory models an item's NAME, its
 // DIGITS and its TEXT flag only — it neither models nor validates the value
-// legends every one of them lives in. They are recorded against the milestone
-// where menu VALUES are interpreted for read-only display, at which point each
-// becomes a question that display must answer: which index SHIFT FREQUENCY's
-// second "1" really is, what AM MAX POWER's MP ceiling actually is, and so on.
-// None can be settled from this manual alone.
+// legends every one of them lives in — and transcriptions A and B and the
+// ledger agree on every field it does model (crosscheck_test.go, which binds
+// all three artefacts to one another and is the evidence that they agree).
+// They are recorded against the milestone where menu VALUES are interpreted
+// for read-only display, at which point each becomes a question that display
+// must answer: which index SHIFT FREQUENCY's second "1" really is, what AM MAX
+// POWER's MP ceiling actually is, whether KEYBOARD LANGUAGE has eleven values
+// or twelve, and so on. None can be settled from this manual alone.
 //
 // One further chart property is a layout fact rather than a defect, and is
 // recorded in table2.csv's header: (04,01,07)'s Function name wraps across two
@@ -124,11 +176,110 @@
 // session does not retire the register wholesale, it retires the assumptions
 // its own frames actually speak to.
 //
-// THE REGISTER IS EMPTY AT THIS TASK AND IS NOT YET A COMPLETENESS CLAIM. This
-// package currently declares no dialect — only the inventory and its
-// generation. The entries land with dialect.go at M9d-1 task 6, which is where
-// the assumed values are first written down, and the register must be complete
-// before that task's dialect is reviewed.
+// SIX MEMBERS OF THIS DIALECT ARE NOT FTdx101-MANUAL FACTS. They are inherited
+// or structurally required, they are marked ASSUMED at the point of use, and
+// the identity-pin tests that compare these dialects with the FT-710's
+// therefore compare tables that embed them. Each is listed here so that the set
+// has one statement of record.
+//
+// EVERY CAPTURE BELOW IS PER MODEL. There are two radios and two dialect
+// instances, and a capture taken from an FTDX101D lifts the D's entry only:
+// the two models share a manual, not a serial port, and "the D answered 0005"
+// is not evidence about the MP. An entry stays here for whichever model has
+// not been asked. This is the register's one difference from the FTdx10's,
+// where there is a single radio and a single lifting.
+//
+//   - MTPolicy.TagFill = ' ' (dialect.go). The byte the FTdx101 pads a short
+//     memory tag with, in both directions: builds pad the outbound P12 field
+//     to 12 bytes with it, and parses trim it from the answer. Inherited from
+//     the FT-710, whose padding is spaces; neither FTdx101's has ever been
+//     observed. The manual's P12 legend says only "TAG Characters (up to 12
+//     characters) (ASCII)" (layout 1330) and names no fill.
+//     STAGE R LIFTS IT, PER MODEL, WITH: one MT Set of a tag SHORTER than 12
+//     characters to a memory channel, then an MT read of that channel — the
+//     bytes the radio returns after the written characters ARE the fill. If
+//     they are not spaces, this field changes for that model and the goldens'
+//     padding bytes change with it; if the field comes back short instead, the
+//     assumption that failed is the answer's exact width, not this byte (see
+//     the entry below and mtcombined.go).
+//
+//   - ClarifierPolicy.StepHz = 10 (dialect.go). The clarifier's offset
+//     granularity, which core/cat enforces as a multiple-of-step rule on every
+//     MW and combined-MT Set. NO step is stated anywhere in this manual. The
+//     0000-9990 Hz range that the IF, MR, MT and MW legends and the RD and RU
+//     command pages (layout 1602, 1700) all agree on SUPPORTS the inherited
+//     value without proving it: a 20 Hz radio could not reach its own stated
+//     9990, a 10 Hz one can, and a 1 Hz one would be free to stop at 9999 and
+//     does not.
+//     STAGE R LIFTS IT, PER MODEL, WITH: one MW Set carrying a clarifier
+//     offset that is NOT a multiple of 10 — 0005 Hz — followed by an MR read
+//     of the same channel. A radio answering 0005 has a finer step than this
+//     and the value drops for that model; a radio answering 0000 or 0010 has
+//     quantised, and 10 is confirmed for it at that resolution.
+//
+//   - SlotSpace.NoneWire = "000" (dialect.go). The wire form of "no slot" —
+//     the value an MR answer carries when the source is not a memory. It
+//     appears in NO FTdx101 slot legend: MC's gives 001-099, P1L-P9U, 5xx and
+//     EMG (layout 1225-1227), IF's the same (1082-1083), MR's the same
+//     (1278-1279), MT's the same (1312-1313), and MW's only 001-099 and
+//     P1L-P9U (1353). It is the FT-710's MR-answer fact, and cat.SlotSpace
+//     structurally requires a none form, so one is supplied.
+//     STAGE R LIFTS IT, PER MODEL, WITH: one MR read taken while the radio is
+//     on a VFO rather than a memory — the P1 field of the answer is that
+//     radio's own none form. Note the collision this field guards against: a
+//     radio numbering memories from 000 would make "000" ambiguous, which is
+//     why cat.NewDialect validates the two against each other rather than
+//     assuming.
+//
+//   - the cat.ModeUnset member of the mode table (dialect.go's modeNames).
+//     The '0' = "-" placeholder. EVERY FTdx101 mode legend runs 1-F with no
+//     '0' member: the five clean ones — MD's P2 at layout 1240-1243, IF's P6
+//     at 1089-1091, MR's P6 at 1286-1288, MT's P6 at 1321-1323, MW's P6 at
+//     1361-1363 — and the defective OI one at 1443-1446, whose fault is in its
+//     last two indices and not at its head. It is included because parsers must
+//     accept the placeholder — core/cat refuses to EMIT it in any Set frame, so
+//     its presence widens only what this dialect can read — not because the
+//     manual names it.
+//     STAGE R LIFTS IT, PER MODEL, WITH: one MR read of an EMPTY memory
+//     channel, one that radio has never had written to. The P6 byte of that
+//     answer is what it says for "no mode". If it is not '0', this member is
+//     wrong rather than merely unattested, and the real byte replaces it.
+//
+//   - SlotSpace.SixtyLo/SixtyHi = 501/599 (dialect.go). The 60 m bank's
+//     NUMBERING. Every FTdx101 slot legend that mentions the bank at all says
+//     only "5xx (5MHz BAND)" (layout 1082-1083, 1225-1227, 1278-1279,
+//     1312-1313): the start at 501 rather than 500, the ceiling at 599 and
+//     therefore the channel count are interpretation inherited from the FT-710
+//     by way of the FTdx10 — and the FT-710's own reference marks exactly this
+//     numbering unverified (core/cat/slot.go's 60 m note), so the FTdx10's
+//     agreement adds a second unverified user rather than evidence.
+//     STAGE R LIFTS IT, PER MODEL, WITH: an MR enumeration of the 5xx range
+//     INCLUDING 500 — which wire numbers answer as populated-or-empty channels
+//     and which answer "?;" fixes the real bounds. A radio accepting 500 moves
+//     SixtyLo; one refusing 599 moves SixtyHi.
+//
+//   - The combined MT answer's EXACT length (consumed here as
+//     MTAnswerBounds() = (41, 41)). Not a field of this dialect but an
+//     assumption it inherits from core/cat's combined form (mtcombined.go's own
+//     ASSUMED-until-Stage-R note): the manual's grid draws the MAXIMAL frame,
+//     and the FT-710 precedent — hardware accepting short MT Sets against a
+//     maximal grid — makes a variable-width ANSWER live. The grid itself is
+//     independently attested for this radio: testdata/geometry-witness.csv
+//     records the MT Set and Answer charts running to 41 as counted off 300 dpi
+//     raster renders, and geometry_test.go binds that count to this dialect.
+//     What neither establishes is that the RADIO answers at full width; a
+//     printed grid and a returned frame are different claims.
+//     STAGE R LIFTS IT, PER MODEL, WITH: one MT READ of a channel carrying a
+//     tag SHORTER than 12 characters, the raw answer captured whole. A 41-byte
+//     answer confirms exactness for that model; anything shorter converts the
+//     parser and the gate to the recorded 30..41 window contingency.
+//
+// THE REGISTER IS COMPLETE AS AT M9d-1 TASK 6 and is a completeness claim: no
+// other value in dialect.go is assumed. The four things this package states
+// that ARE manual facts, and so are deliberately absent from the register, are
+// the CAT IDs (layout 1070-1072), the 1-F mode table (five identical legends),
+// the memory/PMS slot bounds and the EMG wire (the slot legends above), and
+// MWWriteKind (MW's "P7 0: (Fixed)", layout 1364).
 //
 // # Reused-command verification
 //
