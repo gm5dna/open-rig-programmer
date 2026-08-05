@@ -120,15 +120,40 @@
 //     that is not one. The legend runs "00: JAPANESE 01: ENGLISH(US) 02:
 //     ENGLISH(UK) 03: FRENCH 04: FRENCH(CA) 05: GERMAN 06: PORTUGUESE 07:
 //     PORTUGUESE(BR) 08: SPANISH 09: SPANISH(LATAM) 10: ITALIAN 11: LEVEL"
-//     (layout 879-883, printed page 12 / folio 11). "11: LEVEL" is the last
-//     entry of the row IMMEDIATELY ABOVE it — (03,01,22) CS DIAL, whose own
-//     legend ends "08: MEM CH 09: GROUP 10: R.FIL 11: LEVEL" (layout 876-878)
-//     — and the two rows are typeset interleaved on the page, CS DIAL's third
-//     legend line sitting directly above KEYBOARD LANGUAGE's first. A twelfth
-//     keyboard language called LEVEL does not exist; the entry has migrated
-//     from the row above. Recorded as printed, not repaired: whether KEYBOARD
-//     LANGUAGE really has eleven values (00-10) or twelve with a different
-//     twelfth cannot be settled from this manual.
+//     (layout 879-880 and 882-883, printed page 12 / folio 11). There is no
+//     keyboard language called LEVEL. The identical string "11: LEVEL" also
+//     ends the legend of the row above, (03,01,22) CS DIAL — "08: MEM CH 09:
+//     GROUP 10: R.FIL 11: LEVEL" (layout 878) — where it is a perfectly
+//     sensible member.
+//
+//     THE OBSERVATION IS RECORDED; NO MECHANISM IS. It is tempting to say the
+//     entry migrated across the page from CS DIAL, and this record said so
+//     until the M9d-1 task 6 review. The layout does not support it: the stray
+//     sits on layout 883, KEYBOARD LANGUAGE's OWN fourth legend line, in the
+//     correct third-column slot of a legend set three-to-a-line (00/01/02,
+//     03/04/05, 06/07/08, 09/10/11) — with four lines (879, 880, the row's own
+//     label line at 881, and 882) between it and CS DIAL's last legend line at
+//     878, so the two are nowhere near adjacent. A stray crossing the
+//     interleave would
+//     land at the HEAD of the KEYBOARD LANGUAGE block, not at its tail in the
+//     one slot a twelfth entry would occupy. What is printed is a well-formed
+//     twelve-entry legend whose twelfth value is wrong.
+//
+//     AND THE DEFECT IS NOT THIS PAGE'S. The FTdx10's chart carries it too:
+//     core/cat/ftdx10/table2.csv:248, its (03,01,20) KEYBOARD LANGUAGE, ends
+//     with the same "10: ITALIAN 11: LEVEL". That manual is paginated
+//     differently, and it has NO CS DIAL row anywhere — "11: LEVEL" occurs
+//     exactly once in the whole of that chart, here — so there is nothing on
+//     that page for a stray to have migrated from. Two differently typeset
+//     manuals printing the same wrong twelfth entry points at Yaesu's source
+//     chart carrying the defect across the family, not at either page's
+//     typesetting.
+//
+//     Recorded as printed, not repaired: whether KEYBOARD LANGUAGE really has
+//     eleven values (00-10) or twelve with a different twelfth cannot be
+//     settled from this manual, and the FTdx10's agreement makes it no easier
+//     — two copies of one source are one piece of evidence about that source,
+//     not two about the radio.
 //
 //   - (02,01,16) QSK DELAY TIME misspells msec once, "2: 25 mesc" (layout
 //     832); and the TX AUDIO subgroup punctuates one legend two ways, "00 :
