@@ -346,21 +346,91 @@ func TestFTdx10Profile_Registered(t *testing.T) {
 	}
 }
 
-// TestRegistry_HoldsBothModels pins the registry's membership itself, not
+// TestFTdx101Profile_MatchesTodaysConstants pins the FTdx101D/MP's numeric
+// constants as LITERALS, the way the FTdx10's are pinned above. The four
+// values look identical to the FTdx10's and to the FT-710's, and that
+// resemblance is exactly why they are written out here rather than compared
+// against another profile: each was established from the FTdx101D/MP's OWN
+// Table 2 (core/cat/ftdx101/table2.csv's provenance header), and a pin that
+// read another model's field would turn a coincidence into a dependency.
+//
+// ExpectedRows is the one field that is NOT a chart reading by this package:
+// it is the group-boundary ledger's count, derived from the rendered PDF
+// before any transcription existed. Pinning it here means an edit to the
+// profile's copy fails a test rather than quietly re-baselining the gate that
+// RenderGo enforces.
+func TestFTdx101Profile_MatchesTodaysConstants(t *testing.T) {
+	p, ok := Lookup("ftdx101")
+	if !ok {
+		t.Fatal("Lookup(\"ftdx101\") failed; the FTdx101D/MP must be registered")
+	}
+	if p.Model != "FTdx101D/MP" {
+		t.Errorf("Model = %q, want \"FTdx101D/MP\"", p.Model)
+	}
+	if p.Package != "ftdx101" {
+		t.Errorf("Package = %q, want \"ftdx101\"", p.Package)
+	}
+	if p.Types != TypesImported {
+		t.Errorf("Types = %v, want TypesImported", p.Types)
+	}
+	if p.ImportPath != "github.com/gm5dna/open-rig-programmer/core/cat" {
+		t.Errorf("ImportPath = %q", p.ImportPath)
+	}
+	if p.ImportAlias != "cat" {
+		t.Errorf("ImportAlias = %q, want \"cat\"", p.ImportAlias)
+	}
+	if p.VarName != "exItems" {
+		t.Errorf("VarName = %q, want \"exItems\"", p.VarName)
+	}
+	if p.OutFile != "exinventory_gen.go" {
+		t.Errorf("OutFile = %q, want \"exinventory_gen.go\"", p.OutFile)
+	}
+	if p.ManualCSV != "table2.csv" {
+		t.Errorf("ManualCSV = %q, want \"table2.csv\"", p.ManualCSV)
+	}
+	if p.ObservedCSV != "" {
+		t.Errorf("ObservedCSV = %q, want empty under ObservationsAbsent", p.ObservedCSV)
+	}
+	if p.MinDigits != 1 {
+		t.Errorf("MinDigits = %d, want 1", p.MinDigits)
+	}
+	if p.MaxDigits != 4 {
+		t.Errorf("MaxDigits = %d, want 4", p.MaxDigits)
+	}
+	if p.TextWidth != 12 {
+		t.Errorf("TextWidth = %d, want 12", p.TextWidth)
+	}
+	if p.MaxObservedWidth != 12 {
+		t.Errorf("MaxObservedWidth = %d, want 12 (the inert sentinel)", p.MaxObservedWidth)
+	}
+	if p.ExpectedRows != 193 {
+		t.Errorf("ExpectedRows = %d, want 193 (the group-boundary ledger's count)", p.ExpectedRows)
+	}
+	if p.Observations != ObservationsAbsent {
+		t.Errorf("Observations = %v, want ObservationsAbsent", p.Observations)
+	}
+	if !strings.HasPrefix(p.DocLines[0], "exItems is the FTdx101D/MP's EX address inventory") {
+		t.Errorf("DocLines[0] = %q", p.DocLines[0])
+	}
+}
+
+// TestRegistry_HoldsEveryModel pins the registry's membership itself, not
 // just each entry in isolation. TestRegistry_LookupAndEnumeration checks
 // that RegisteredProfiles is sorted and non-empty, which one entry already
 // satisfied; this asserts the EXACT set, so silently dropping a registration
-// — or adding a third without updating this pin — is a failure rather than a
+// — or adding a fourth without updating this pin — is a failure rather than a
 // smaller happy enumeration. The sort order is asserted by value here, not
-// merely as "ascending": "ft710" < "ftdx10" is the ordering the CLI's
-// -profile listing and every registry-selected staleness test see.
-func TestRegistry_HoldsBothModels(t *testing.T) {
+// merely as "ascending": "ft710" < "ftdx10" < "ftdx101" is the ordering the
+// CLI's -profile listing and every registry-selected staleness test see.
+//
+// (Named for two models until M9d-1; the FTdx101D/MP made "both" wrong.)
+func TestRegistry_HoldsEveryModel(t *testing.T) {
 	got := RegisteredProfiles()
 	var names []string
 	for _, np := range got {
 		names = append(names, np.Name)
 	}
-	want := []string{"ft710", "ftdx10"}
+	want := []string{"ft710", "ftdx10", "ftdx101"}
 	if len(names) != len(want) {
 		t.Fatalf("RegisteredProfiles() names = %v, want %v", names, want)
 	}
@@ -369,13 +439,21 @@ func TestRegistry_HoldsBothModels(t *testing.T) {
 			t.Fatalf("RegisteredProfiles() names = %v, want %v", names, want)
 		}
 	}
-	if got[0].Profile.Model != "FT-710" || got[1].Profile.Model != "FTdx10" {
-		t.Errorf("models = %q, %q; want \"FT-710\", \"FTdx10\"", got[0].Profile.Model, got[1].Profile.Model)
+	wantModels := []string{"FT-710", "FTdx10", "FTdx101D/MP"}
+	for i := range wantModels {
+		if got[i].Profile.Model != wantModels[i] {
+			t.Errorf("models[%d] = %q, want %q", i, got[i].Profile.Model, wantModels[i])
+		}
 	}
-	// The two profiles must not share the datum that would let one
-	// `go generate` overwrite the other's artefact. validateRegistry already
-	// refuses a collision at init; this states the expected separation.
-	if got[0].Profile.Package == got[1].Profile.Package {
-		t.Errorf("both profiles emit into package %q", got[0].Profile.Package)
+	// No two profiles may share the datum that would let one `go generate`
+	// overwrite another's artefact. validateRegistry already refuses a
+	// collision at init; this states the expected separation, pairwise, so a
+	// third registration cannot slip past a check written for two.
+	for i := range got {
+		for j := i + 1; j < len(got); j++ {
+			if got[i].Profile.Package == got[j].Profile.Package {
+				t.Errorf("profiles %q and %q both emit into package %q", got[i].Name, got[j].Name, got[i].Profile.Package)
+			}
+		}
 	}
 }

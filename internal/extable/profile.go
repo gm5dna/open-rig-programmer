@@ -361,12 +361,56 @@ var ftdx10Profile = Profile{
 	},
 }
 
+// ftdx101Profile carries the FTdx101D/MP's Table 2 transcription facts —
+// ONE profile for BOTH models, because the spec-reviewed applicability
+// sweep (core/cat/ftdx101/testdata/group-ledger.md) attests that no
+// stored property is model-conditional; only P4 VALUE ranges differ, and
+// P4 semantics are not stored. Same TypesImported shape as ftdx10.
+var ftdx101Profile = Profile{
+	Model:       "FTdx101D/MP",
+	Package:     "ftdx101",
+	Types:       TypesImported,
+	ImportPath:  "github.com/gm5dna/open-rig-programmer/core/cat",
+	ImportAlias: "cat",
+	VarName:     "exItems",
+	OutFile:     "exinventory_gen.go",
+	ManualCSV:   "table2.csv",
+
+	MinDigits: 1,
+	MaxDigits: 4,
+	TextWidth: 12,
+	// MaxObservedWidth is an INERT API-REQUIRED SENTINEL here, exactly as
+	// on the ftdx10 profile: ObservationsAbsent means no observation CSV
+	// is ever parsed and this bound is never consulted. No hardware claim.
+	MaxObservedWidth: 12,
+	// ExpectedRows comes from the group-boundary ledger
+	// (core/cat/ftdx101/testdata/group-ledger.csv), derived from the
+	// rendered PDF before any transcription existed. If A and B agree on
+	// a number that is not this one, the answer is arbitration against
+	// the PDF, never an edit here.
+	ExpectedRows: 193,
+
+	Observations: ObservationsAbsent,
+	DocLines: []string{
+		"exItems is the FTdx101D/MP's EX address inventory, sorted by (P1,P2,P3),",
+		"built from ONE source: the manual transcription in table2.csv (the",
+		`FTDX101MP/FTDX101D CAT manual rev 2308-L's Table 2 "MENU Chart"). It`,
+		"serves BOTH models: the ledger's applicability attestation records that",
+		"no stored property is model-conditional. There are no hardware READ",
+		"observations to join — no FTdx101 has ever been asked anything — so",
+		"every item carries the absence sentinels ObservedReadWidth 0 and",
+		"ObservedReadShape \"\". Regenerate with `go generate ./core/cat/ftdx101`;",
+		"do not edit by hand.",
+	},
+}
+
 // registry maps a lookup name to its profile. It is validated at init, so an
 // inconsistent profile panics the build tooling rather than emitting a wrong
 // inventory.
 var registry = mustRegistry(map[string]Profile{
-	"ft710":  ft710Profile,
-	"ftdx10": ftdx10Profile,
+	"ft710":   ft710Profile,
+	"ftdx10":  ftdx10Profile,
+	"ftdx101": ftdx101Profile,
 })
 
 func mustRegistry(m map[string]Profile) map[string]Profile {
