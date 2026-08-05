@@ -1,0 +1,144 @@
+# ex-vectors.golden — EX (MENU), Read direction
+#
+# ============================ SOURCE ============================
+# Manual title as printed on cover:
+#   "FTDX101MP / FTDX101D  CAT Operation Reference Manual"
+#   (YAESU MUSEN CO., LTD.)
+# Revision code as printed: 2308-L  (foot of final printed page, PDF 26)
+# File consulted: docs/fixtures-private/manuals/ftdx101_cat_2308-L.pdf
+#
+# Position chart used:
+#   Section heading "EX   MENU"
+#   PRINTED page 9 (folio "9")  =  PDF page 10
+#   (the EX section is the last on that page, directly below
+#    "EU ENCODER UP" — heading confirmed in the rendered image)
+# Chart direction the layout was read from: the READ position chart
+#   (the row group labelled "Read").
+# Menu addresses verified against: "Table 2 (MENU Chart)",
+#   PRINTED pages 10, 11 and 12  =  PDF pages 11, 12 and 13.
+#
+# ---- DERIVATION METHOD -----------------------------------------
+# Hand-derived from 400 dpi pdftoppm renders of PDF pages 10-13, cropped
+# and enlarged 130-170% with ImageMagick and read as images. No text
+# extraction. Position-header rows sit ABOVE the token rows they number.
+#
+# ---- FIELD MAP: READ direction (1-based positions) --------------
+#   pos 1   : "E"   (literal, chart)
+#   pos 2   : "X"   (literal, chart)
+#   pos 3-4 : P1    (2 positions)  menu group   (legend: 01 - 05)
+#   pos 5-6 : P2    (2 positions)  menu subgroup(legend: 01 - 07)
+#   pos 7-8 : P3    (2 positions)  menu item    (legend: 01 - 23)
+#   pos 9   : ";"   (terminator, chart)
+#   => Read frame length 9 bytes including the ";".
+#   The Read row's header runs 1..9, 10, nn, ** ; positions 10 onwards
+#   are printed blank in the Read token row (P4 appears only in the Set
+#   and Answer rows, where it runs from position 9 through "nn" with a
+#   "~" continuation).
+#
+# ---- PARAMETER LEGEND as printed beside the EX charts -----------
+#   P1  : 01 - 05
+#   P2  : 01 - 07
+#   P3  : 01 - 23
+#   P4  : Parameter (See Table 2)
+#
+# ---- TABLE 2 ROWS CITED (each vector from a DIFFERENT menu group) --
+#   ROW A  PRINTED page 10 (= PDF page 11)
+#          P1 column : "01 (RADIO SETTING)"
+#          P2 column : "01 (MODE SSB)"
+#          P3 column : "10"
+#          Function  : "TX BPF SEL"
+#          P4 column : "0: 50 ~ 3050   1: 100 ~ 2900   2: 200 ~ 2800
+#                       3: 300 ~ 2700   4: 400 ~ 2600"
+#          Digits    : "1"
+#
+#   ROW B  PRINTED page 11 (= PDF page 12)
+#          P1 column : "02 (CW SETTING)"
+#          P2 column : "02 (KEYER)"
+#          P3 column : "05"
+#          Function  : "CW WEIGHT"
+#          P4 column : "2.5 ~ 4.5 (P4 = 25 ~ 45)"
+#          Digits    : "2"
+#
+#   ROW C  PRINTED page 12 (= PDF page 13)
+#          P1 column : "04 (DISPLAY SETTING)"
+#          P2 column : "02 (SCOPE)"
+#          P3 column : "02"
+#          Function  : "SCOPE CTR"
+#          P4 column : "0: FILTER   1: CAR POINT"
+#          Digits    : "1"
+#
+#   The three vectors therefore come from three different P1 menu groups
+#   (RADIO SETTING, CW SETTING, DISPLAY SETTING), as required.
+#
+# ---- BYTE-BY-BYTE PROVENANCE -----------------------------------
+# VECTOR 1  read_radio_ssb_tx_bpf_sel   "EX010110;"
+#   pos 1-2 "EX"  MANUAL-DOCUMENTED — Read grid positions 1, 2.
+#   pos 3-4 "01"  MANUAL-DOCUMENTED — Table 2 row A, P1 column "01
+#                 (RADIO SETTING)"; inside legend range P1 01-05.
+#   pos 5-6 "01"  MANUAL-DOCUMENTED — Table 2 row A, P2 column "01
+#                 (MODE SSB)"; inside legend range P2 01-07.
+#   pos 7-8 "10"  MANUAL-DOCUMENTED — Table 2 row A, P3 column "10"
+#                 (TX BPF SEL); inside legend range P3 01-23.
+#   pos 9   ";"   MANUAL-DOCUMENTED — Read grid terminator cell.
+#
+# VECTOR 2  read_cw_keyer_cw_weight     "EX020205;"
+#   pos 1-2 "EX"  MANUAL-DOCUMENTED — Read grid positions 1, 2.
+#   pos 3-4 "02"  MANUAL-DOCUMENTED — Table 2 row B, P1 "02 (CW SETTING)".
+#   pos 5-6 "02"  MANUAL-DOCUMENTED — Table 2 row B, P2 "02 (KEYER)".
+#   pos 7-8 "05"  MANUAL-DOCUMENTED — Table 2 row B, P3 "05" (CW WEIGHT).
+#   pos 9   ";"   MANUAL-DOCUMENTED — Read grid terminator cell.
+#
+# VECTOR 3  read_display_scope_ctr      "EX040202;"
+#   pos 1-2 "EX"  MANUAL-DOCUMENTED — Read grid positions 1, 2.
+#   pos 3-4 "04"  MANUAL-DOCUMENTED — Table 2 row C, P1 "04
+#                 (DISPLAY SETTING)".
+#   pos 5-6 "02"  MANUAL-DOCUMENTED — Table 2 row C, P2 "02 (SCOPE)".
+#   pos 7-8 "02"  MANUAL-DOCUMENTED — Table 2 row C, P3 "02" (SCOPE CTR).
+#   pos 9   ";"   MANUAL-DOCUMENTED — Read grid terminator cell.
+#
+# Every byte of all three frames is MANUAL-DOCUMENTED. The only free
+# choices were WHICH rows to address, and those are cited above.
+#
+# INHERITED ASSUMPTIONS
+#   A12 That P1/P2/P3 are written zero-padded to their two printed
+#       positions (e.g. "05" rather than "5"). The legend prints the
+#       ranges in two-digit form ("01 - 05" etc.) and the grid gives each
+#       field two positions, but no padding rule is stated in words.
+#       LIFTED BY: a real-radio EX Read whose Answer echoes P1/P2/P3 in
+#       positions 3-8 — the echo shows the padding directly.
+#   A13 That a Read request carries no P4 and terminates at position 9.
+#       This is read off the Read grid (positions 10+ blank), but the
+#       manual does not state it in prose.
+#       LIFTED BY: sending "EX010110;" to a real radio and confirming a
+#       well-formed Answer rather than a "?;" error reply.
+#   A14 That every Table 2 row is individually addressable by EX Read on
+#       both the FTDX101D and the FTDX101MP. Table 2 marks some P4 ranges
+#       as model-specific (e.g. HF MAX POWER, printed page 12) but does
+#       not say whether any row is absent on one model.
+#       LIFTED BY: issuing each of these three Reads on each model and
+#       comparing the replies.
+#
+# ---- ANOMALIES OBSERVED (recorded, not resolved) ---------------
+#   N5  The EX legend gives "P1 : 01 - 05", but Table 2 as printed
+#       contains only four P1 groups: 01 (RADIO SETTING), 02 (CW
+#       SETTING), 03 (OPERATION SETTING) and 04 (DISPLAY SETTING). No
+#       P1 = 05 group appears anywhere in Table 2 across printed pages
+#       10-12. Recorded, not resolved. None of the vectors here uses 05.
+#   N6  In the EX Set and Answer position charts the tenth header cell is
+#       printed BLANK (the header row reads 1..9, [blank], nn, **),
+#       whereas the Read chart's tenth header cell reads "10". The Set and
+#       Answer token rows put a "~" continuation under that blank cell, so
+#       the blank appears deliberate, but it is inconsistent with the
+#       Read row. It affects no byte of these Read-direction vectors.
+#
+# ---- HARDWARE STATUS -------------------------------------------
+#   UNVERIFIED. No frame here has been sent to, or captured from, a real
+#   FTDX101MP or FTDX101D.
+#
+# Derivation date: 06/08/2026
+# NO code, no generator, no other file and no other document or web
+# resource was consulted — only the single PDF named above.
+#
+read_radio_ssb_tx_bpf_sel	EX010110;
+read_cw_keyer_cw_weight	EX020205;
+read_display_scope_ctr	EX040202;
