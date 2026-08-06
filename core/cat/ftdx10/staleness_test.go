@@ -30,8 +30,13 @@ import (
 // Scope is deliberately package-local, not registry-wide. Profile carries no
 // package-directory datum and its paths are resolved relative to the working
 // directory, so no single test can verify every profile's files; core/cat's
-// own staleness test covers the FT-710 unchanged, and the two package-local
-// tests together cover both profiles.
+// own staleness test covers the FT-710 unchanged, and each remaining profile
+// is covered by a package-local test of this shape in its own package. The
+// registry holds three profiles as at M9d-1 — cat, ftdx10 and ftdx101 — so
+// this is one of three such tests, not one of two: M9d-1 added the ftdx101
+// profile and core/cat/ftdx101/staleness_test.go with it. The invariant the
+// wording is protecting is "every profile has exactly one test that owns it",
+// which a per-package test satisfies at any count.
 func TestEXInventoryGenerated_NotStale(t *testing.T) {
 	var matches []extable.NamedProfile
 	for _, np := range extable.RegisteredProfiles() {

@@ -148,6 +148,18 @@ func readWitness(t *testing.T) map[gridKey][]witnessToken {
 // TxClar is false. A transposition of two of those four would not be caught
 // by the assembled-frame comparison. It is caught in the read direction
 // instead, where P7 carries '1' against P5's '0' and P11's '0'.
+//
+// THE WITNESS SUPPLIES GEOMETRY, NOT BYTES. geometry-witness.csv records
+// POSITIONS — which token occupies which 1-based span of which grid — and
+// nothing about what any position's value is. So geomClarWire's leading '-'
+// is NOT witness-derived: the fact the witness carries is that P3's direction
+// occupies exactly ONE position, and the identity of the byte in it is the
+// ASSUMED ASCII hyphen-minus 0x2D, entry 7 of doc.go's ASSUMED register. The
+// manual prints that direction as a two-hyphen glyph ("--: Minus Shift") and
+// yields no single byte; core/cat's codec writes '-' by the FT-710/FTdx10
+// convention. If Stage R shows the byte is something else, this constant
+// changes and so do the frames assembled from it — the WIDTH the witness
+// pinned would be unaffected.
 const (
 	geomSlotWire = "037"
 	geomFreqHz   = 14195000

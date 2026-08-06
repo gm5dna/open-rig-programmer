@@ -62,10 +62,19 @@ import (
 // plus direction in every vector, so NO DELIVERED BYTE DEPENDS ON THE MINUS
 // READING. That is why the tables below carry '+' throughout and why no test
 // here "adds coverage" for the minus case: doing so would require inventing a
-// byte the manual did not yield. The minus direction IS exercised against this
-// dialect elsewhere — geometry_test.go assembles its frames with ClarHz -1230
-// from the independent witness — so the gap here is a gap in the QUARANTINED
-// evidence, not in the dialect's test coverage.
+// byte the manual did not yield.
+//
+// WHAT IS AND IS NOT COVERED ELSEWHERE. The codec's minus PATH is exercised
+// against this dialect — geometry_test.go assembles frames with ClarHz -1230
+// and drives the negative branch of encodeMemoryFields through them. The '-'
+// byte in those frames is NOT thereby attested: it is the ASSUMED
+// FT-710/FTdx10 convention, entry 7 of doc.go's ASSUMED register, and the
+// geometry witness supplies the position's WIDTH rather than its value. So
+// the state of the minus direction is: path exercised, SIGN BYTE UNATTESTED,
+// awaiting its Stage R capture (a captured MR or MT answer for a channel with
+// a negative clarifier offset, per model). The earlier wording of this comment
+// called the gap "a gap in the QUARANTINED evidence, not in the dialect's test
+// coverage"; that overstated, and the M9d-1 milestone review corrected it.
 //
 // # Hardware status
 //
@@ -925,8 +934,11 @@ func TestGoldenFramesIdenticalAcrossModels(t *testing.T) {
 						"  MP     %q (%d bytes)\n"+
 						"  %s\n"+
 						"The FTDX101D and the FTDX101MP share one CAT manual and one printed\n"+
-						"MENU Chart; the ledger's applicability attestation records that no\n"+
-						"documented property is model-conditional except the ID answer's value.\n"+
+						"MENU Chart. That manual distinguishes them in THREE places only: the\n"+
+						"ID answer's value, the P4 VALUE ranges of three MAX POWER rows, and\n"+
+						"the PC command's P1 range. The latter two are not modelled here — no\n"+
+						"EXItem stores P4 semantics, and M9d-1 models no PC command — so no\n"+
+						"property THIS FRAME CARRIES is model-conditional except the CAT ID.\n"+
 						"A per-model frame contradicts that evidence.",
 						f.what, gotD, len(gotD), gotMP, len(gotMP), firstDifference(gotMP, gotD))
 				}

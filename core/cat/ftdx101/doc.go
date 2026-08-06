@@ -27,7 +27,10 @@
 // # One manual, two radios
 //
 // Yaesu prints ONE CAT manual for the FTDX101MP and the FTDX101D, and the two
-// models are distinguished in exactly two places in it:
+// models are distinguished in exactly THREE places in it. Two lie on this
+// project's surface and one does not; all three are named, because a
+// difference left unnamed is one a later reader discovers and mistakes for a
+// transcription error:
 //
 //   - the ID answer's value — "0681: FTDX101D", "0682: FTDX101MP" (layout
 //     1070-1072). This is a dialect datum carried by CATID, and it is why
@@ -60,7 +63,20 @@
 //     identically for both models on all three rows. So there is one
 //     transcription and one generated inventory.
 //
-// Nothing else in the chart or in the frame tables distinguishes them.
+//   - the PC (POWER CONTROL) command's P1 range, which is OFF THIS PROJECT'S
+//     SURFACE. The command's own frame page prints "P1 005 - 100 (FTDX101D)"
+//     and "005 - 200 (FTDX101MP)" (layout 1496 and 1498, under the PC heading
+//     at 1495). M9d-1 models no PC command — core/cat has no PC builder, no PC
+//     parser and no PC entry in any gate — so this difference is recorded and
+//     not carried. It is named here because "the models differ in two places"
+//     was this package's own wording until the M9d-1 milestone review, and a
+//     count that excludes the differences a milestone happens not to model
+//     stops being true the moment the next milestone models one. Whichever
+//     milestone adds PC inherits a model-conditional range and must carry it
+//     per dialect, exactly as CATID is carried now.
+//
+// Nothing else in the chart or in the frame tables distinguishes them. The
+// count is three, of which this package's DIALECT DATA carries exactly one.
 //
 // # The header-vs-chart anomaly
 //
@@ -196,16 +212,18 @@
 // Members of this dialect that are NOT FTdx101-manual facts — inherited or
 // structurally required values, marked ASSUMED at the point of use — belong in
 // a register here, each with the field, the value it carries, the evidence gap,
-// and the ONE Stage R capture that lifts it, exactly as core/cat/ftdx10/doc.go
-// keeps its six. The captures are individual on purpose: a single FTdx101
-// session does not retire the register wholesale, it retires the assumptions
-// its own frames actually speak to.
+// and the ONE Stage R capture that lifts it, in the same form core/cat/ftdx10/doc.go
+// uses for the six it keeps. The captures are individual on purpose: a single
+// FTdx101 session does not retire the register wholesale, it retires the
+// assumptions its own frames actually speak to.
 //
-// SIX MEMBERS OF THIS DIALECT ARE NOT FTdx101-MANUAL FACTS. They are inherited
-// or structurally required, they are marked ASSUMED at the point of use, and
-// the identity-pin tests that compare these dialects with the FT-710's
+// SEVEN MEMBERS OF THIS DIALECT ARE NOT FTdx101-MANUAL FACTS. They are
+// inherited or structurally required, they are marked ASSUMED at the point of
+// use, and the identity-pin tests that compare these dialects with the FT-710's
 // therefore compare tables that embed them. Each is listed here so that the set
-// has one statement of record.
+// has one statement of record. The seventh — the clarifier's minus-direction
+// byte — was added by the M9d-1 milestone review, which found it travelling
+// unregistered exactly as the FTdx10's fifth entry once did.
 //
 // EVERY CAPTURE BELOW IS PER MODEL. There are two radios and two dialect
 // instances, and a capture taken from an FTDX101D lifts the D's entry only:
@@ -299,8 +317,39 @@
 //     answer confirms exactness for that model; anything shorter converts the
 //     parser and the gate to the recorded 30..41 window contingency.
 //
-// THE REGISTER IS COMPLETE AS AT M9d-1 TASK 6 and is a completeness claim: no
-// other value in dialect.go is assumed. The four things this package states
+//   - The CLARIFIER'S MINUS-DIRECTION BYTE, the ASCII HYPHEN-MINUS 0x2D
+//     ('-'). Like the entry above it, this is not a field of this dialect but
+//     an assumption it inherits from core/cat's memory codec, which writes
+//     '-' into the P3 sign position for a negative offset and accepts only
+//     '+' or '-' when reading one (memdata.go's encodeMemoryFields at :465
+//     and parseMemoryFields at :372-384). THIS MANUAL DOES NOT YIELD THE
+//     BYTE. Its P3 legend prints the direction as a TWO-HYPHEN glyph —
+//     "+: Plus Shift, --: Minus Shift" — identically in all five frame pages
+//     that carry it (layout 1085 for IF, 1281 for MR, 1316 for MT, 1355 for
+//     MW, 1439 for OI; provenance N2 names the three of those five its own
+//     vectors touch), and the quarantined golden deriver recorded that
+//     glyph as UNREADABLE rather than resolving it: provenance N2
+//     (testdata/provenance.md) reasons that P3 is five positions wide against
+//     a four-digit offset, so the direction can occupy only one position, and
+//     then declines to guess which byte that one position holds. The deriver
+//     avoided the question entirely by using the plus direction in every one
+//     of its ten vectors, so no golden byte in this package depends on the
+//     minus reading. The single 0x2D is INHERITED from the FT-710/FTdx10
+//     convention and has never been confirmed against this manual or against
+//     either radio. The plus direction is not in the same position: '+' is
+//     printed as one unambiguous glyph here.
+//     STAGE R LIFTS IT, PER MODEL, WITH: one MR or MT Answer captured from a
+//     channel carrying a NEGATIVE clarifier offset — or, failing a channel
+//     already so written, an MW or combined-MT Set of a negative offset that
+//     the radio ACCEPTS, followed by a read of that channel. The byte the
+//     radio puts in, or takes at, the P3 sign position IS the direction. If
+//     it is not 0x2D, core/cat's sign handling becomes dialect data for that
+//     model rather than a shared constant, and geometry_test.go's assembled
+//     frames change with it.
+//
+// THE REGISTER IS COMPLETE AS AT THE M9d-1 MILESTONE REVIEW and is a
+// completeness claim: no other value in dialect.go is assumed, and no other
+// core/cat value this dialect's frames depend on is unattested for this radio. The four things this package states
 // that ARE manual facts, and so are deliberately absent from the register, are
 // the CAT IDs (layout 1070-1072), the 1-F mode table (five identical legends),
 // the memory/PMS slot bounds and the EMG wire (the slot legends above), and

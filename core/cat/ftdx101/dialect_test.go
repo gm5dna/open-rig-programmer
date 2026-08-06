@@ -23,13 +23,17 @@ import (
 // bounds; versus the FTdx10, the EX inventory).
 //
 // TWO DIALECTS, ONE INVENTORY, ONE MANUAL. Yaesu prints one CAT manual for
-// the FTDX101D and the FTDX101MP and distinguishes them in exactly two
-// places: the ID answer's value, and the P4 VALUE ranges of three MAX POWER
-// rows. Only the first is a dialect datum — P4 semantics are not stored — so
-// the two instances differ in the CAT ID and in nothing else. That is a
-// claim about a constructor with one string parameter, and it is cheap to
-// make and easy to erode; the sibling pins below walk the whole public
-// Dialect surface rather than trusting the constructor's shape.
+// the FTDX101D and the FTDX101MP and distinguishes them in exactly THREE
+// places: the ID answer's value, the P4 VALUE ranges of three MAX POWER rows
+// in Table 2, and the PC (POWER CONTROL) command's P1 range — "005 - 100
+// (FTDX101D)" against "005 - 200 (FTDX101MP)", layout 1496 and 1498. Only the
+// FIRST is a dialect datum: P4 semantics are not stored, and PC is off this
+// project's surface entirely (M9d-1 models no PC command). So the two
+// instances differ in the CAT ID and in nothing else THIS PACKAGE MODELS.
+// That is a claim about a constructor with one string parameter, and it is
+// cheap to make and easy to erode; the sibling pins below enumerate the
+// dialect's data accessors rather than trusting the constructor's shape. See
+// doc.go's "One manual, two radios" for all three differences.
 //
 // The identity pins exist because this package's mode table and slot space
 // are FRESH TRANSCRIPTIONS. core/cat's are unexported, so there is nothing to
@@ -294,19 +298,46 @@ func compareConstructor(t *testing.T, who, what string, got cat.Slot, gotErr err
 // the FTDX101D and the FTDX101MP differ in the CAT ID AND IN NOTHING ELSE
 // that this dialect models.
 //
-// It is asserted ACCESSOR BY ACCESSOR over the whole public Dialect surface
-// rather than argued from newDialect's single parameter, because the
-// constructor's shape is not the claim — the claim is about what consumers
-// can observe, and a future field that legitimately differs per model (a
-// per-model EX inventory, say, if a firmware revision ever splits the chart)
-// must break this test rather than slip through a structural argument.
+// It is asserted ACCESSOR BY ACCESSOR rather than argued from newDialect's
+// single parameter, because the constructor's shape is not the claim — the
+// claim is about what consumers can observe, and a future field that
+// legitimately differs per model (a per-model EX inventory, say, if a firmware
+// revision ever splits the chart) must break this test rather than slip
+// through a structural argument.
+//
+// WHAT THESE PINS COVER, EXACTLY. They directly compare every dialect-DATA
+// accessor D-against-MP: CATID, Configured, the mode table over all 256 wire
+// bytes, ParseSlot and the four slot constructors over their full sweeps, the
+// EX inventory and its address projection, KnownEXAddress over the union AND
+// over the grammar block's whole declared range, MTForm, MWWriteKind,
+// Clarifier and MTAnswerBounds. They do NOT re-run behaviour — the builders,
+// the parsers, AllowedCommand, the error paths — through a second D-vs-MP
+// comparison here, and the earlier wording of this comment, which claimed the
+// "whole public Dialect surface", overstated that. BEHAVIOURAL equality is
+// carried by three other things, and this pin is narrow because they exist:
+//
+//   - dialecttest.Run passes identically on BOTH instances (TestConformance
+//     above runs the whole conformance suite over each), so every builder,
+//     parser and refusal path the suite exercises is exercised on both.
+//
+//   - golden_test.go's frame-level D-vs-MP legs build and parse every frozen
+//     vector on both instances and require byte equality, and they compare
+//     AllowedCommand admissibility on both for every built frame.
+//
+//   - structurally, catID is read by exactly TWO methods in the whole of
+//     core/cat — Configured() and CATID(), core/cat/dialect.go:266-269 — and
+//     it is the ONLY field newDialect varies between the two instances, so no
+//     other method CAN diverge. That is a fact about the field's readers, and
+//     it is what makes the data-accessor sweep above sufficient rather than
+//     merely reassuring.
 //
 // The evidence for the claim itself is task 1's applicability attestation
 // (testdata/group-ledger.md): every property an EXItem models — address,
 // labels, name, digits, text flag — is printed identically for both models on
 // every row of Table 2, and the only model-conditional printing in the whole
 // chart is the P4 VALUE range of three MAX POWER rows, which no EXItem
-// stores. doc.go records both.
+// stores. doc.go records both, and records the third per-model difference —
+// the PC command's P1 range — as off this project's surface.
 func TestSiblingPins(t *testing.T) {
 	dd, mp := ftdx101.DialectD(), ftdx101.DialectMP()
 
@@ -589,18 +620,42 @@ func TestDifferencePinMTAnswerBounds(t *testing.T) {
 //     "P3 : 01 - 23" is REACHED where the FTdx10's is not: that chart tops out
 //     at P3=21 (core/cat/ftdx10/doc.go's own anomaly note), so no (03,01,23)
 //     can exist there.
+//
 //   - (04,01,08) FREQ STYLE — core/cat/ftdx101/table2.csv, layout 956. The
 //     FTdx101's DISPLAY subgroup runs P3 01-08 because it carries TFT
 //     CONTRAST and DIMMER TFT, which the FTdx10 (a radio with no TFT) does
 //     not; that chart's DISPLAY subgroup ends at (04,01,05).
+//
 //   - (01,03,21) ENC/DEC — core/cat/ftdx10/table2.csv, layout 711. The
 //     FTdx10's MODE FM subgroup runs to P3=21; the FTdx101's ends at
 //     (01,03,16) RPT SHIFT(50MHz).
+//
 //   - (02,01,18) CW INDICATOR — core/cat/ftdx10/table2.csv, layout 787. Both
-//     charts carry a CW INDICATOR row, but the FTdx10's MODE CW subgroup has
-//     an extra member (02,01,15) CW FREQ DISPLAY that this one lacks, so the
-//     row sits at P3=18 there and at P3=17 here. The ADDRESS is what differs,
-//     which is exactly what an inventory models.
+//     charts carry a CW INDICATOR row, and it is the LAST row of the MODE CW
+//     subgroup in each; the two subgroups simply have different memberships
+//     ahead of it, so the same function lands on a different address. THE
+//     ARITHMETIC, against the two committed CSVs:
+//
+//     The FTdx10's MODE CW runs to EIGHTEEN rows and OPENS with three AF-tone
+//     rows the FTdx101's does not carry at all — (02,01,01) AF TREBLE GAIN,
+//     (02,01,02) AF MIDDLE TONE GAIN, (02,01,03) AF BASS GAIN
+//     (core/cat/ftdx10/table2.csv:199-201, layout 769-771). Every later member
+//     of that subgroup is therefore displaced by three.
+//
+//     The FTdx101's MODE CW runs to SEVENTEEN and carries two members the
+//     FTdx10's does not — (02,01,08) CW OUT SELECT
+//     (core/cat/ftdx101/table2.csv:219, layout 821) and (02,01,12) CW BK-IN
+//     DELAY (core/cat/ftdx101/table2.csv:223, layout 826). 18 - 3 + 2 = 17.
+//
+//     CW FREQ DISPLAY IS NOT THE MECHANISM, and this comment said it was
+//     until the M9d-1 milestone review. BOTH charts carry it: the FTdx101's at
+//     (02,01,14) (core/cat/ftdx101/table2.csv:225, layout 829) and the
+//     FTdx10's at (02,01,15) (core/cat/ftdx10/table2.csv:213, layout 783) —
+//     itself an instance of the same displacement: three positions earlier
+//     here for the AF rows this chart lacks, two later for the two extra rows
+//     that precede it, 15 - 3 + 2 = 14.
+//
+//     The ADDRESS is what differs, which is exactly what an inventory models.
 func TestDifferencePinEXDisjointnessWithFTdx10(t *testing.T) {
 	onlyHere := []struct {
 		addr cat.EXAddress
@@ -647,7 +702,9 @@ func TestDifferencePinEXDisjointnessWithFTdx10(t *testing.T) {
 // TestEXAnswerBound proves the EX answer's upper length bound is THIS
 // DIALECT'S OWN, derived from its own inventory.
 //
-// The maximum is recomputed here from Dialect().EXItems() rather than taken
+// The maximum is recomputed here from each model's own EXItems() — this
+// package exports DialectD() and DialectMP(), not a bare Dialect() — rather
+// than taken
 // from a constant, from the profile, or from core/cat: the bound and the
 // datum it is derived from must not come from the same place twice, which is
 // the "bound consulted from one place with its datum taken from another"

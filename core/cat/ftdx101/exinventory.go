@@ -12,10 +12,13 @@ package ftdx101
 // from table2.csv by the directive above. It is this package's ONLY access to
 // the inventory, and from M9d-1 task 6 it is consumed in exactly one place —
 // dialect.go's DialectConfig literal, which hands it to cat.MustNewDialect as
-// EXItems. Everything else reaches those items through the built Dialect
-// (Dialect().EXItems(), KnownEXAddress, ParseEXAnswer's width bound), never
-// through the variable, so the inventory has one owner rather than several
-// readers of a package-level slice.
+// EXItems. Everything else reaches those items through a built Dialect —
+// DialectD().EXItems() or DialectMP().EXItems(), KnownEXAddress,
+// ParseEXAnswer's width bound — never through the variable, so the inventory
+// has one owner rather than several readers of a package-level slice. This
+// package exports NO bare Dialect() accessor: there are two models, so there
+// are two of them. This comment named a nonexistent Dialect().EXItems() until
+// the M9d-1 milestone review corrected it.
 //
 // ONE inventory, TWO models. The FTDX101MP and the FTDX101D share one printed
 // MENU Chart, and every property this inventory stores is printed identically
