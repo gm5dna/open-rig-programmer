@@ -1,0 +1,159 @@
+# mt-vectors.golden — MT (MEMORY CHANNEL WRITE/TAG), Set direction
+#
+# ============================ SOURCE ============================
+# Manual title as printed on cover:
+#   "FTDX101MP / FTDX101D  CAT Operation Reference Manual"
+#   (cover reads "FTDX101MP" / "FTDX101D" on two lines, then
+#    "CAT Operation Reference Manual"; publisher "YAESU MUSEN CO., LTD.")
+# Revision code as printed: 2308-L  (bottom right of the final printed page,
+#   PDF page 26, alongside the Copyright 2023 notice)
+# File consulted: docs/fixtures-private/manuals/ftdx101_cat_2308-L.pdf
+#
+# Position chart used:
+#   Section heading "MT   MEMORY CHANNEL WRITE/TAG"
+#   PRINTED page 16 (folio "16" at foot of page)  =  PDF page 17
+# Chart direction the LAYOUT was read from: the ANSWER position chart
+#   (the cleanly printed grid at the foot of the MT section).
+# Chart direction the P7 VALUE was read from: the parameter legend line
+#   "P7  Set: 0: (Fixed) / Read: 0: VFO  1: Memory" — the Set-direction
+#   vocabulary was used because these are Set-direction vectors.
+#
+# ---- DERIVATION METHOD (as instructed, recorded verbatim) -------
+# Every byte below was hand-derived by rasterising the PDF page with
+#   pdftoppm -r 400 -png  and reading the rendered position charts as
+# images (crops enlarged 160-600% with ImageMagick). NO text extraction
+# was used (the PDF is in any case copy-protected: copy:no). The SET
+# frames' byte layout was derived from the ANSWER grid's layout, with the
+# SET direction's P7 value substituted from the legend, exactly as
+# instructed.
+#   CROSS-CHECK: the MT *Set* position chart on the same page was ALSO
+#   legible in the 400 dpi render (it did not in fact overprint its
+#   legend at that resolution) and its layout AGREES with the Answer grid
+#   position-for-position across all 41 positions:
+#     Set  row 1-10 : M  T  P1 P1 P1 P2 P2 P2 P2 P2
+#     Set  row 11-20: P2 P2 P2 P2 P3 P3 P3 P3 P3 P4
+#     Set  row 21-30: P5 P6 P7 P8 P9 P9 P10 P11 P12 P12
+#     Set  row 31-40: P12 x10
+#     Set  row 41-50: ";" at 41, remainder blank
+#   Answer rows 1-41 are identical token-for-token. The only documented
+#   difference between the two directions is the P7 vocabulary.
+#
+# ---- FIELD MAP read off the chart (positions are 1-based) -------
+#   pos  1      : "M"                 (literal, chart)
+#   pos  2      : "T"                 (literal, chart)
+#   pos  3- 5   : P1  (3 positions)   memory channel
+#   pos  6-14   : P2  (9 positions)   VFO-A Frequency (Hz)
+#   pos 15-19   : P3  (5 positions)   clarifier direction (1) + offset (4)
+#   pos 20      : P4  (1 position)    RX CLAR
+#   pos 21      : P5  (1 position)    TX CLAR
+#   pos 22      : P6  (1 position)    MODE
+#   pos 23      : P7  (1 position)    Set: (Fixed)
+#   pos 24      : P8  (1 position)    CTCSS
+#   pos 25-26   : P9  (2 positions)   (Fixed)
+#   pos 27      : P10 (1 position)    repeater shift
+#   pos 28      : P11 (1 position)    (Fixed)
+#   pos 29-40   : P12 (12 positions)  TAG characters
+#   pos 41      : ";"                 (terminator, chart)
+#   => total frame length 41 bytes including the ";".
+#
+# ---- PARAMETER LEGEND as printed beside the MT charts ----------
+#   P0/1  001-099 (Memory Channel), P1L -P9U (PMS), 5xx (5MHz BAND),
+#         EMG (EMERGENCY CH)
+#   P2    VFO-A Frequency (Hz)
+#   P3    Clarifier Direction +: Plus Shift, --: Minus Shift
+#         Clarifier Offset: 0000 - 9990 (Hz)
+#   P4    0: RX CLAR "OFF"    1: RX CLAR "ON"
+#   P5    0: TX CLAR "OFF"    1: TX CLAR "ON"
+#   P6    MODE 1: LSB  2: USB  3: CW-U  4: FM  5: AM  6: RTTY-L  7: CW-L
+#              8: DATA-L  9: RTTY-U  A: DATA-FM  B: FM-N  C: DATA-U
+#              D: AM-N  E: PSK  F: DATA-FM-N
+#   P7    Set: 0: (Fixed) / Read: 0: VFO   1: Memory
+#   P8    0: CTCSS "OFF"   1: CTCSS ENC/DEC   2: CTCSS ENC
+#   P9    00: (Fixed)
+#   P10   0: Simplex   1: Plus Shift   2: Minus Shift
+#   P11   0: (Fixed)
+#   P12   TAG Characters (up to 12 characters) (ASCII)
+#
+# ---- TAG PAYLOADS ----------------------------------------------
+# The tag strings below are SYNTHETIC strings invented for this fixture.
+# They are NOT real amateur callsigns and are not intended to resemble
+# any issued callsign.
+#
+# ---- BYTE-BY-BYTE PROVENANCE -----------------------------------
+# MANUAL-DOCUMENTED (chart or legend says so):
+#   pos 1-2  "MT"          : Set/Answer grid, positions 1 and 2.
+#   field WIDTHS of P1..P12 and the ";" at 41 : Answer grid (layout),
+#                            corroborated by the Set grid.
+#   pos 3-5  channel value : legend "P0/1 001-099 (Memory Channel)" —
+#                            007 / 012 / 023 are inside 001-099.
+#   pos 6-14 frequency     : legend "P2 VFO-A Frequency (Hz)"; the values
+#                            chosen are Hz counts of plausible amateur
+#                            frequencies (see assumption A2 re: padding).
+#   pos 15   "+"           : legend "P3 Clarifier Direction +: Plus Shift".
+#   pos 16-19 "0000"       : legend "Clarifier Offset: 0000 - 9990 (Hz)";
+#                            0000 is the documented lower bound.
+#   pos 20   "0"           : legend P4 0: RX CLAR "OFF".
+#   pos 21   "0"           : legend P5 0: TX CLAR "OFF".
+#   pos 22   "2"/"1"/"3"   : legend P6 2: USB / 1: LSB / 3: CW-U.
+#   pos 23   "0"           : legend P7 "Set: 0: (Fixed)" — SET direction.
+#   pos 24   "0"           : legend P8 0: CTCSS "OFF".
+#   pos 25-26 "00"         : legend P9 "00: (Fixed)".
+#   pos 27   "0"           : legend P10 0: Simplex.
+#   pos 28   "0"           : legend P11 "0: (Fixed)".
+#   pos 29-40 tag bytes    : legend P12 "TAG Characters (up to 12
+#                            characters) (ASCII)" — the field is 12
+#                            positions wide per the grid (29..40).
+#   pos 41   ";"           : Answer/Set grid terminator cell.
+#
+# INHERITED ASSUMPTIONS (the manual does NOT state these):
+#   A1  INHERITED-ASSUMED PAD BYTE. The pad character used to fill P12
+#       when the tag is shorter than 12 characters is 0x20 (ASCII space).
+#       The manual nowhere states what pads a short tag, nor whether the
+#       tag is left- or right-justified within the field. Space padding
+#       and left justification are my assumption.
+#       LIFTED BY: a real-radio capture of an MT/MR Answer for a channel
+#       whose stored tag is shorter than 12 characters — the bytes in
+#       positions 29-40 of that Answer reveal both the pad byte and the
+#       justification.
+#   A2  Zero-padding of P2 to the full 9 positions. The legend gives only
+#       "VFO-A Frequency (Hz)"; that a sub-100 MHz frequency is written
+#       with leading zeros to fill positions 6-14 is an inference from
+#       the fixed 9-position field, not a printed rule.
+#       LIFTED BY: a captured Answer for any HF channel — the leading
+#       characters of positions 6-14 show the padding directly.
+#   A3  Pairing of "+" with a zero offset. The legend documents "+" and
+#       "--" as directions but does not say which sign accompanies an
+#       offset of 0000. "+0000" is my choice.
+#       LIFTED BY: a captured Answer for a channel with the clarifier at
+#       zero offset.
+#   A4  Choice of channel numbers (007, 012, 023), frequencies
+#       (14.250000, 7.100000, 21.300000 MHz) and modes (USB, LSB, CW-U).
+#       These are free choices within the legend's documented ranges.
+#       LIFTED BY: not applicable — these are vector choices, not claims.
+#   A5  Tag content and character set. P12 is documented as "(ASCII)" but
+#       the manual does not enumerate which ASCII characters the radio
+#       accepts (e.g. whether an embedded space or a digit is legal in a
+#       tag). Use of A-Z, 0-9 and space is assumed acceptable.
+#       LIFTED BY: a real-radio round trip — MT Set a tag containing the
+#       questioned character, then MT/MR Read it back and compare.
+#   A6  That an unfilled P12 (vector 3) is legally expressed as 12 pad
+#       bytes rather than by some other "cleared" encoding. The manual
+#       does not describe clearing a tag.
+#       LIFTED BY: a capture of an Answer for a channel with no tag set.
+#
+# ---- HARDWARE STATUS -------------------------------------------
+#   UNVERIFIED. No frame in this file has been sent to, or captured from,
+#   a real FTDX101MP or FTDX101D. Every byte is paper-derived only.
+#
+# Derivation date: 06/08/2026
+# NO code, no generator, no other file in this or any repository, and no
+# other document or web resource was consulted in producing this file —
+# only the single PDF named above.
+#
+# NOTE ON TRAILING SPACES: vectors 2 and 3 contain significant trailing
+# space characters immediately before the ";". They are frame content.
+# Do not let an editor or formatter strip them.
+#
+tag_full_width_12	MT007014250000+0000002000000SYNTHTAG0001;
+tag_short_space_padded	MT012007100000+0000001000000TESTTAG     ;
+tag_cleared_all_pad	MT023021300000+0000003000000            ;

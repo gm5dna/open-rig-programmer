@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package ftdx10_test
+package ftdx101_test
 
 import (
 	"bytes"
@@ -16,36 +16,34 @@ import (
 // CI guard for the generator: CI runs plain `go test ./...` and never
 // `go generate`, so without this test an edit to table2.csv that was not
 // regenerated, or a hand-edit of the generated file, would ship silently. On
-// failure, run `go generate ./core/cat/ftdx10` and commit the result.
+// failure, run `go generate ./core/cat/ftdx101` and commit the result.
 //
 // The profile is selected FROM THE REGISTRY BY PACKAGE, not by the lookup
-// name "ftdx10" and not from a literal in this file. A test that hardcoded
+// name "ftdx101" and not from a literal in this file. A test that hardcoded
 // its own profile would be re-deriving from a second copy of the facts and
 // could agree with a generated file the real registration disagrees with —
 // the "bound consulted from one place with its datum taken from another"
 // shape that recurred four times across M9b. Selecting by Package also makes
-// the test refuse rather than guess if the registry ever gains a second
-// entry emitting into this package: exactly one registration may own it.
+// the test refuse rather than guess if the registry ever gains a second entry
+// emitting into this package: exactly one registration may own it, and that
+// matters more here than anywhere yet, because this package serves TWO radio
+// models from ONE inventory and a second profile is exactly the shape a
+// well-meaning "one file per model" change would take.
 //
 // Scope is deliberately package-local, not registry-wide. Profile carries no
 // package-directory datum and its paths are resolved relative to the working
 // directory, so no single test can verify every profile's files; core/cat's
-// own staleness test covers the FT-710 unchanged, and each remaining profile
-// is covered by a package-local test of this shape in its own package. The
-// registry holds three profiles as at M9d-1 — cat, ftdx10 and ftdx101 — so
-// this is one of three such tests, not one of two: M9d-1 added the ftdx101
-// profile and core/cat/ftdx101/staleness_test.go with it. The invariant the
-// wording is protecting is "every profile has exactly one test that owns it",
-// which a per-package test satisfies at any count.
+// and core/cat/ftdx10's own staleness tests cover the other two profiles
+// unchanged, and the three package-local tests together cover all three.
 func TestEXInventoryGenerated_NotStale(t *testing.T) {
 	var matches []extable.NamedProfile
 	for _, np := range extable.RegisteredProfiles() {
-		if np.Profile.Package == "ftdx10" {
+		if np.Profile.Package == "ftdx101" {
 			matches = append(matches, np)
 		}
 	}
 	if len(matches) != 1 {
-		t.Fatalf("registry holds %d profiles emitting into package ftdx10, want exactly 1: %v", len(matches), names(matches))
+		t.Fatalf("registry holds %d profiles emitting into package ftdx101, want exactly 1: %v", len(matches), names(matches))
 	}
 	p := matches[0].Profile
 
@@ -71,7 +69,7 @@ func TestEXInventoryGenerated_NotStale(t *testing.T) {
 	}
 
 	if !bytes.Equal(got, want) {
-		t.Errorf("%s is stale relative to %s; run `go generate ./core/cat/ftdx10` and commit the result (regenerated %d bytes, committed %d bytes)", p.OutFile, p.ManualCSV, len(want), len(got))
+		t.Errorf("%s is stale relative to %s; run `go generate ./core/cat/ftdx101` and commit the result (regenerated %d bytes, committed %d bytes)", p.OutFile, p.ManualCSV, len(want), len(got))
 	}
 }
 

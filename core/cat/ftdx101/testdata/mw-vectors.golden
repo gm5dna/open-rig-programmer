@@ -1,0 +1,164 @@
+# mw-vectors.golden — MW (MEMORY CHANNEL WRITE), Set direction
+#
+# ============================ SOURCE ============================
+# Manual title as printed on cover:
+#   "FTDX101MP / FTDX101D  CAT Operation Reference Manual"
+#   (YAESU MUSEN CO., LTD.)
+# Revision code as printed: 2308-L  (foot of final printed page, PDF 26)
+# File consulted: docs/fixtures-private/manuals/ftdx101_cat_2308-L.pdf
+#
+# Position chart used:
+#   Section heading "MW   MEMORY CHANNEL WRITE"
+#   PRINTED page 17 (folio "17")  =  PDF page 18
+#   (MW heads that page; "MX MOX SET" follows below it — heading confirmed
+#    in the rendered image. NOT to be confused with "MT MEMORY CHANNEL
+#    WRITE/TAG" on the preceding printed page 16.)
+# Chart direction the layout was read from: the SET position chart
+#   (the "Set" row group). MW's Read and Answer grids are printed EMPTY —
+#   see anomaly N3.
+#
+# ---- DERIVATION METHOD -----------------------------------------
+# Hand-derived from a 400 dpi pdftoppm render of PDF page 18, cropped and
+# enlarged 170% with ImageMagick and read as an image. No text extraction.
+# Position-header rows sit ABOVE the token rows they number.
+#
+# ---- FIELD MAP: SET direction (1-based positions) --------------
+#   pos  1     : "M"                 (literal, chart)
+#   pos  2     : "W"                 (literal, chart)
+#   pos  3- 5  : P1  (3 positions)   memory channel
+#   pos  6-14  : P2  (9 positions)   Frequency (Hz)
+#   pos 15-19  : P3  (5 positions)   clarifier direction (1) + offset (4)
+#   pos 20     : P4  (1 position)    RX CLAR
+#   pos 21     : P5  (1 position)    TX CLAR
+#   pos 22     : P6  (1 position)    MODE
+#   pos 23     : P7  (1 position)    (Fixed)
+#   pos 24     : P8  (1 position)    CTCSS
+#   pos 25-26  : P9  (2 positions)   (Fixed)
+#   pos 27     : P10 (1 position)    repeater shift
+#   pos 28     : ";"                 (terminator, chart)
+#   => Set frame length 28 bytes including the ";".
+#   Printed grid rows, verbatim:
+#     hdr  1  2  3  4  5  6  7  8  9 10 / M  W  P1 P1 P1 P2 P2 P2 P2 P2
+#     hdr 11 12 13 14 15 16 17 18 19 20 / P2 P2 P2 P2 P3 P3 P3 P3 P3 P4
+#     hdr 21 22 23 24 25 26 27 28 29 30 / P5 P6 P7 P8 P9 P9 P10 ";" _ _
+#
+# ---- PARAMETER LEGEND as printed beside the MW charts ----------
+#   P1   001-099 (Memory Channel), P1L -P9U (PMS)
+#   P2   Frequency (Hz)
+#   P3   Clarifier Direction +: Plus Shift, --: Minus Shift
+#        Clarifier Offset: 0000 - 9990 (Hz)
+#   P4   0: RX CLAR "OFF"    1: RX CLAR "ON"
+#   P5   0: TX CLAR "OFF"    1: TX CLAR "ON"
+#   P6   MODE 1: LSB  2: USB  3: CW-U  4: FM  5: AM  6: RTTY-L  7: CW-L
+#             8: DATA-L  9: RTTY-U  A: DATA-FM  B: FM-N  C: DATA-U
+#             D: AM-N  E: PSK  F: DATA-FM-N
+#   P7   0: (Fixed)
+#   P8   0: CTCSS "OFF"   1: CTCSS ENC/DEC   2: CTCSS ENC
+#   P9   00: (Fixed)
+#   P10  0: Simplex   1: Plus Shift   2: Minus Shift
+#   (Note: MW's P1 line omits the "5xx (5MHz BAND)" and "EMG" channel
+#    classes that MR's and MT's equivalent lines carry — see anomaly N4.)
+#
+# The two vectors deliberately differ in channel, frequency, mode,
+# RX/TX clarifier state, clarifier offset, CTCSS state and repeater shift,
+# so that more of the legend's vocabulary is exercised.
+#
+# ---- BYTE-BY-BYTE PROVENANCE -----------------------------------
+# VECTOR 1  write_ch003_datau_7m074_simplex
+#            "MW003007074000+000000C00000;"
+#   pos 1-2   "MW"        MANUAL-DOCUMENTED — Set grid positions 1, 2.
+#   pos 3-5   "003"       field MANUAL-DOCUMENTED (P1, 3 wide); value
+#                         inside legend range "001-099 (Memory Channel)".
+#   pos 6-14  "007074000" field MANUAL-DOCUMENTED (P2, 9 wide, "Hz");
+#                         7.074000 MHz. Padding is assumption A2.
+#   pos 15    "+"         MANUAL-DOCUMENTED — legend P3 "+: Plus Shift".
+#   pos 16-19 "0000"      MANUAL-DOCUMENTED — legend offset lower bound.
+#                         Pairing "+" with zero is assumption A3.
+#   pos 20    "0"         MANUAL-DOCUMENTED — legend P4 0: RX CLAR "OFF".
+#   pos 21    "0"         MANUAL-DOCUMENTED — legend P5 0: TX CLAR "OFF".
+#   pos 22    "C"         MANUAL-DOCUMENTED — legend P6 "C: DATA-U".
+#   pos 23    "0"         MANUAL-DOCUMENTED — legend P7 "0: (Fixed)".
+#   pos 24    "0"         MANUAL-DOCUMENTED — legend P8 0: CTCSS "OFF".
+#   pos 25-26 "00"        MANUAL-DOCUMENTED — legend P9 "00: (Fixed)".
+#   pos 27    "0"         MANUAL-DOCUMENTED — legend P10 0: Simplex.
+#   pos 28    ";"         MANUAL-DOCUMENTED — Set grid terminator cell.
+#
+# VECTOR 2  write_ch045_fm_51m000_minus_shift
+#            "MW045051000000+010011401002;"
+#   pos 1-2   "MW"        MANUAL-DOCUMENTED — Set grid positions 1, 2.
+#   pos 3-5   "045"       field MANUAL-DOCUMENTED; value inside 001-099.
+#   pos 6-14  "051000000" field MANUAL-DOCUMENTED (P2, 9 wide, "Hz");
+#                         51.000000 MHz (6 m). Padding is assumption A2.
+#   pos 15    "+"         MANUAL-DOCUMENTED — legend P3 "+: Plus Shift"
+#                         (this is the CLARIFIER direction, distinct from
+#                         the repeater shift at position 27).
+#   pos 16-19 "0100"      MANUAL-DOCUMENTED as in-range — legend
+#                         "Clarifier Offset: 0000 - 9990 (Hz)"; 0100 = 100
+#                         Hz. See assumption A9 on the step size.
+#   pos 20    "1"         MANUAL-DOCUMENTED — legend P4 1: RX CLAR "ON".
+#   pos 21    "1"         MANUAL-DOCUMENTED — legend P5 1: TX CLAR "ON".
+#   pos 22    "4"         MANUAL-DOCUMENTED — legend P6 "4: FM".
+#   pos 23    "0"         MANUAL-DOCUMENTED — legend P7 "0: (Fixed)".
+#   pos 24    "1"         MANUAL-DOCUMENTED — legend P8 1: CTCSS ENC/DEC.
+#   pos 25-26 "00"        MANUAL-DOCUMENTED — legend P9 "00: (Fixed)".
+#   pos 27    "2"         MANUAL-DOCUMENTED — legend P10 2: Minus Shift.
+#   pos 28    ";"         MANUAL-DOCUMENTED — Set grid terminator cell.
+#
+# INHERITED ASSUMPTIONS
+#   A2  Leading-zero padding of P2 to fill all 9 positions. Inferred from
+#       the fixed field width; not printed anywhere.
+#       LIFTED BY: a real-radio MR Answer (same 9-position frequency
+#       field) for an HF channel, read back after an MW write.
+#   A3  "+" chosen as the direction accompanying a zero clarifier offset.
+#       LIFTED BY: a captured MR Answer for a channel written with the
+#       clarifier at zero.
+#   A4  Choice of channels (003, 045), frequencies (7.074000 MHz,
+#       51.000000 MHz), modes (DATA-U, FM), clarifier states and shift.
+#       Free choices inside documented ranges.
+#       LIFTED BY: not applicable.
+#   A9  Clarifier-offset granularity. The legend prints the range
+#       "0000 - 9990 (Hz)", whose upper bound implies a 10 Hz step, but no
+#       step is stated. That 0100 is an accepted value rather than being
+#       silently rounded is an inference.
+#       LIFTED BY: MW Set 0100 on a real radio, then MR Read the channel
+#       and compare positions 16-19 of the Answer.
+#   A10 That MW's repeater shift (P10 = 2, Minus Shift) is accepted on
+#       51.000000 MHz without an accompanying shift-magnitude field. The
+#       MW frame carries no offset-size parameter; the manual does not say
+#       where the shift magnitude comes from.
+#       LIFTED BY: a real-radio MW write of an FM repeater channel
+#       followed by an MR read-back and an inspection of the radio's
+#       displayed transmit frequency.
+#   A11 That CTCSS ENC/DEC (P8 = 1) can be written by MW without the tone
+#       frequency itself, which MW's frame has no field for. The manual
+#       does not state which tone a channel written this way receives.
+#       LIFTED BY: an MW write with P8 = 1 followed by reading the
+#       channel's tone on the radio (or via the CN command).
+#
+# ---- ANOMALIES OBSERVED (recorded, not resolved) ---------------
+#   N2  "--: Minus Shift" is printed with two hyphen glyphs in the P3
+#       legend line of MW (and of MR and MT). P3 is 5 positions wide and
+#       the offset alone is documented as 4 digits, so the direction can
+#       occupy only one position. No vector here uses a minus clarifier
+#       direction, so no byte in this file depends on the reading.
+#   N3  MW's Read and Answer position charts are printed with their
+#       position-header rows populated (1..10) but their token rows
+#       entirely EMPTY — consistent with the command summary on printed
+#       page 5, which marks MW as Set "O" and Read/Ans./AI "X". The MW
+#       section therefore documents no Read or Answer frame at all.
+#   N4  MW's P1 legend line lists only "001-099 (Memory Channel),
+#       P1L -P9U (PMS)", whereas the equivalent lines for MR and MT also
+#       list "5xx (5MHz BAND)" and "EMG (EMERGENCY CH)". Whether MW
+#       genuinely cannot address those channel classes, or the line is
+#       merely abbreviated, is not stated.
+#
+# ---- HARDWARE STATUS -------------------------------------------
+#   UNVERIFIED. Neither frame has been sent to, or captured from, a real
+#   FTDX101MP or FTDX101D.
+#
+# Derivation date: 06/08/2026
+# NO code, no generator, no other file and no other document or web
+# resource was consulted — only the single PDF named above.
+#
+write_ch003_datau_7m074_simplex	MW003007074000+000000C00000;
+write_ch045_fm_51m000_minus_shift	MW045051000000+010011401002;

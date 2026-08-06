@@ -1,0 +1,143 @@
+# mr-vectors.golden — MR (MEMORY CHANNEL READ)
+#
+# ============================ SOURCE ============================
+# Manual title as printed on cover:
+#   "FTDX101MP / FTDX101D  CAT Operation Reference Manual"
+#   (YAESU MUSEN CO., LTD.)
+# Revision code as printed: 2308-L  (foot of final printed page, PDF 26)
+# File consulted: docs/fixtures-private/manuals/ftdx101_cat_2308-L.pdf
+#
+# Position chart used:
+#   Section heading "MR   MEMORY CHANNEL READ"
+#   PRINTED page 16 (folio "16")  =  PDF page 17
+#   (the MR section sits between "ML MONITOR LEVEL" above and
+#    "MS METER SW" below — heading confirmed in the rendered image)
+# Chart directions read:
+#   vector 1 : the READ position chart (row labelled "Read")
+#   vector 2 : the ANSWER position chart (row labelled "Answer")
+#
+# ---- DERIVATION METHOD -----------------------------------------
+# Hand-derived from 400 dpi pdftoppm renders of PDF page 17, cropped and
+# enlarged 160-170% with ImageMagick and read as images. No text
+# extraction of any kind. Position-header rows sit ABOVE the token rows
+# they number; this was respected throughout.
+#
+# ---- FIELD MAP: READ direction (1-based positions) -------------
+#   pos 1   : "M"    (literal, chart)
+#   pos 2   : "R"    (literal, chart)
+#   pos 3-5 : P0     (3 positions) memory channel
+#   pos 6   : ";"    (terminator, chart)
+#   => Read frame length 6 bytes including the ";".
+#   Positions 7-10 of the Read row are printed blank.
+#
+# ---- FIELD MAP: ANSWER direction (1-based positions) -----------
+#   pos  1     : "M"                 (literal, chart)
+#   pos  2     : "R"                 (literal, chart)
+#   pos  3- 5  : P1  (3 positions)   memory channel
+#   pos  6-14  : P2  (9 positions)   VFO-A Frequency (Hz)
+#   pos 15-19  : P3  (5 positions)   clarifier direction (1) + offset (4)
+#   pos 20     : P4  (1 position)    RX CLAR
+#   pos 21     : P5  (1 position)    TX CLAR
+#   pos 22     : P6  (1 position)    MODE
+#   pos 23     : P7  (1 position)    VFO / Memory
+#   pos 24     : P8  (1 position)    CTCSS
+#   pos 25-26  : P9  (2 positions)   (Fixed)
+#   pos 27     : P10 (1 position)    repeater shift
+#   pos 28     : ";"                 (terminator, chart)
+#   => Answer frame length 28 bytes including the ";".
+#   The Answer grid's third header row runs 21..30 with tokens
+#   P5 P6 P7 P8 P9 P9 P10 ";" and positions 29-30 blank.
+#
+# ---- PARAMETER LEGEND as printed beside the MR charts ----------
+#   P0   001-099 (Memory Channel), P1L -P9U (PMS), 5xx (5MHz BAND),
+#        EMG (EMERGENCY CH)
+#   P2   VFO-A Frequency (Hz)
+#   P3   Clarifier Direction +: Plus Shift, --: Minus Shift
+#        Clarifier Offset: 0000 - 9990 (Hz)
+#   P4   0: RX CLAR "OFF"    1: RX CLAR "ON"
+#   P5   0: TX CLAR "OFF"    1: TX CLAR "ON"
+#   P6   MODE 1: LSB  2: USB  3: CW-U  4: FM  5: AM  6: RTTY-L  7: CW-L
+#             8: DATA-L  9: RTTY-U  A: DATA-FM  B: FM-N  C: DATA-U
+#             D: AM-N  E: PSK  F: DATA-FM-N
+#   P7   0: VFO  1: Memory
+#   P8   0: CTCSS "OFF"   1: CTCSS ENC/DEC   2: CTCSS ENC
+#   P9   00: (Fixed)
+#   P10  0: Simplex   1: Plus Shift   2: Minus Shift
+#   (There is NO "P1" line in the MR legend — see anomaly N1 below.)
+#
+# ---- BYTE-BY-BYTE PROVENANCE -----------------------------------
+# VECTOR 1  read_request_ch007   "MR007;"
+#   pos 1-2  "MR"  MANUAL-DOCUMENTED — Read grid positions 1, 2.
+#   pos 3-5  "007" MANUAL-DOCUMENTED as a field — Read grid positions
+#            3-5 are P0; value 007 is documented-legal by legend line
+#            "P0 001-099 (Memory Channel)". Choice of 007: assumption A4.
+#   pos 6    ";"   MANUAL-DOCUMENTED — Read grid terminator cell.
+#
+# VECTOR 2  answer_ch007_usb_14m250
+#            "MR007014250000+000000210000;"
+#   pos 1-2   "MR"        MANUAL-DOCUMENTED (Answer grid).
+#   pos 3-5   "007"       field MANUAL-DOCUMENTED (P1, 3 wide);
+#                         VALUE vocabulary inherited — see anomaly N1.
+#   pos 6-14  "014250000" field MANUAL-DOCUMENTED (P2, 9 wide, "Hz");
+#                         leading-zero padding is assumption A2.
+#   pos 15    "+"         MANUAL-DOCUMENTED — legend P3 "+: Plus Shift".
+#   pos 16-19 "0000"      MANUAL-DOCUMENTED — legend "Clarifier Offset:
+#                         0000 - 9990 (Hz)", 0000 being the lower bound.
+#                         Pairing "+" with zero is assumption A3.
+#   pos 20    "0"         MANUAL-DOCUMENTED — legend P4 0: RX CLAR "OFF".
+#   pos 21    "0"         MANUAL-DOCUMENTED — legend P5 0: TX CLAR "OFF".
+#   pos 22    "2"         MANUAL-DOCUMENTED — legend P6 2: USB.
+#   pos 23    "1"         MANUAL-DOCUMENTED — legend P7 1: Memory
+#                         (READ/ANSWER direction vocabulary; the Set-only
+#                         "(Fixed)" wording of the sibling MT command does
+#                         not apply here).
+#   pos 24    "0"         MANUAL-DOCUMENTED — legend P8 0: CTCSS "OFF".
+#   pos 25-26 "00"        MANUAL-DOCUMENTED — legend P9 "00: (Fixed)".
+#   pos 27    "0"         MANUAL-DOCUMENTED — legend P10 0: Simplex.
+#   pos 28    ";"         MANUAL-DOCUMENTED — Answer grid terminator cell.
+#
+# INHERITED ASSUMPTIONS
+#   A2  Leading-zero padding of P2 to fill all 9 positions. Inferred from
+#       the fixed field width; not printed.
+#       LIFTED BY: any real-radio MR Answer for an HF channel.
+#   A3  "+" chosen as the direction accompanying a zero clarifier offset;
+#       the manual does not say which sign a zero offset carries.
+#       LIFTED BY: a captured MR Answer for a channel with clarifier off /
+#       zero offset.
+#   A4  Choice of channel 007, frequency 14.250000 MHz and mode USB.
+#       Free choices inside documented ranges; not claims about the radio.
+#       LIFTED BY: not applicable.
+#   A7  That the Answer's P1 uses the same channel-number vocabulary as
+#       the Read's P0. The MR legend prints only a P0 line (anomaly N1);
+#       the identity of P1's vocabulary is inherited from the sibling MT
+#       command, whose legend line is labelled "P0/1".
+#       LIFTED BY: a captured MR Answer for a known channel — positions
+#       3-5 of the reply confirm the vocabulary directly.
+#   A8  That a real Answer echoes the same channel number that was
+#       requested. Not stated by the manual.
+#       LIFTED BY: an MR Read/Answer round trip on a real radio.
+#
+# ---- ANOMALY OBSERVED (recorded, not resolved) -----------------
+#   N1  The MR parameter legend has no "P1" line. Its first line is
+#       labelled "P0" and covers 001-099 / PMS / 5xx / EMG, yet the
+#       Answer grid's positions 3-5 are labelled P1. The neighbouring MT
+#       command's equivalent line is labelled "P0/1", which suggests the
+#       MR line should read "P0/1" too. Recorded, not corrected.
+#   N2  The legend's minus-shift direction is printed as two hyphen
+#       glyphs, "--: Minus Shift", in every one of MR / MT / MW. Since P3
+#       is only 5 positions wide and the offset alone is documented as 4
+#       digits, the direction can occupy just one position; the printed
+#       "--" is therefore taken to be a typographic rendering, not two
+#       bytes. No vector in this file uses a minus direction, so no byte
+#       here depends on the reading. Recorded, not resolved.
+#
+# ---- HARDWARE STATUS -------------------------------------------
+#   UNVERIFIED. Neither frame has been sent to, or captured from, a real
+#   FTDX101MP or FTDX101D.
+#
+# Derivation date: 06/08/2026
+# NO code, no generator, no other file and no other document or web
+# resource was consulted — only the single PDF named above.
+#
+read_request_ch007	MR007;
+answer_ch007_usb_14m250	MR007014250000+000000210000;
