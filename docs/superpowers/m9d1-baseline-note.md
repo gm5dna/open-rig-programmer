@@ -18,10 +18,19 @@ The standing rule, inherited from the M9c-1/M9c-3/M9c-4/M9c-6
 manifests, applies unchanged: **a difference that is not a
 declared/sanctioned field is a defect, never a baseline to update.**
 This gate found no such difference. **Ninety-two recorded values
-compared — 52 full SHA-256 hashes and 40 further recorded values (exit
-codes, verbatim literals, line counts, one recorded hash prefix and one
-`cmp` equality) — ninety-two matches, zero mismatches, zero carve-outs
-invoked, and no sanctioned delta claimed or needed.**
+compared from the manifest's Part 1/2/3 recipe tables — 52 full SHA-256
+hashes and 40 further recorded values (exit codes, verbatim literals,
+line counts, one recorded hash prefix and one `cmp` equality) —
+ninety-two matches, zero mismatches, zero carve-outs invoked, and no
+sanctioned delta claimed or needed.** Three further hashes from the
+manifest's Part 5 regeneration table also match, for **95 of 95**.
+
+One process fact belongs in this summary rather than in a footnote: the
+mechanical comparator's FIRST pass reported 52/52 mismatch. That was a
+zsh `path`/`PATH` fault in the comparison harness which meant the 52
+comparisons never executed at all; it is diagnosed, fixed and its
+re-run transcript quoted under "Reproduction" below. No artefact, no
+recorded value and no recipe was altered in response to it.
 
 - **HEAD under test:** `fef25cbb4955f7b7c7b7e7b831cb487908f88f69`
   ("M9d-1 task 7b: the golden byte-compare tests and the D-vs-MP frame
@@ -83,9 +92,13 @@ realignment) and its test:
 
 ```
 core/cat/ftdx101/…            20 files (new package: dialect, tests, testdata)
-internal/extable/profile.go    +48/−4
-internal/extable/profile_test.go
+internal/extable/profile.go      46 insertions, 2 deletions
+internal/extable/profile_test.go 91 insertions, 13 deletions
 ```
+
+Those are `git diff --numstat bba69e2..fef25cb` figures. `--stat`'s
+combined per-file count for `profile.go` is 48, which is insertions plus
+deletions and not a pair of numbers; numstat's 46/2 is the honest split.
 
 Two structural corroborations, both measured rather than argued —
 and both **corroboration only**; the evidence is the hashes below:
@@ -202,6 +215,61 @@ being compared:
   `ftdx10-import-skip.json` reproduces its recorded normalised hash
   `db120d70…` exactly, which it could not do if the merge source had
   differed.
+
+### The first comparator pass reported 52/52 MISMATCH — and why that was the harness
+
+Recorded here, in the durable document rather than only in a working
+file, because **a mismatch verdict is a STOP condition under this
+milestone's own rule**, and it matters that this one was proved spurious
+rather than assumed to be.
+
+**What happened.** The first run of the mechanical comparator printed a
+`MISMATCH` line for every one of the 52 rows and this total:
+
+```
+hash rows compared : 52
+MATCH              : 0
+MISMATCH           : 52
+MISSING            : 0
+```
+
+**Why it was not a data difference.** Every `MISMATCH` line carried an
+EMPTY `got=` value, and each was preceded by two errors from the shell:
+
+```
+(eval):12: command not found: shasum
+(eval):12: command not found: cut
+MISMATCH P1-in-01 core/csvio/testdata/chirp_sample.csv  want=ee3f2664… got=
+```
+
+The comparator loop assigned each artefact's location to a shell
+variable it had named `path`. **In zsh, `path` is tied to `PATH`** (it
+is the array view of that parameter), so the first assignment destroyed
+the search path and every external command in the loop body — `shasum`
+and `cut` included — became unresolvable. The 52 comparisons were
+therefore **never executed**: the loop compared a recorded hash against
+the empty string, 52 times. This is a diagnosis from the shell's own
+error output, not an inference from the verdict.
+
+**The fix, and the actual re-run.** The variable was renamed (`path` →
+`fp`) and nothing else was changed — not the recorded-value table, not
+the artefacts, not the recipe. The comparator's output on re-run, quoted
+as it prints (a clean run emits no per-row line, so the summary is the
+whole of it):
+
+```
+=== comparator re-run, verbatim ===
+-----------------------------------------
+hash rows compared : 52
+MATCH              : 52
+MISMATCH           : 0
+MISSING            : 0
+```
+
+The distinction the STOP rule turns on is exactly this one: a harness
+that cannot run a comparison is not a comparison that failed. Had any
+`got=` carried a real hash differing from a recorded one, this note
+would report BLOCKED and no commit would have been made.
 
 The one declared noise field is normalised by the recipe's own `sed`,
 and that the normalisation changed **only** the timestamp is confirmed
@@ -447,7 +515,11 @@ stderr), 26 MATCH; 14 exit values compared, 14 MATCH.**
 
 Every comparison was made mechanically — a recorded-value table driven
 through `shasum -a 256` and string equality, not by reading numbers off
-a screen:
+a screen. The comparator's first pass reported a total 52/52 mismatch;
+that was a zsh `path`/`PATH` harness fault which meant the comparisons
+never ran at all, and the incident, its diagnosis and the re-run
+transcript are recorded in full above ("The first comparator pass
+reported 52/52 MISMATCH"). The figures below are the re-run's:
 
 | Group | Full-hash rows | Other recorded rows | Mismatches |
 |---|---|---|---|
@@ -600,6 +672,32 @@ git diff --exit-code -- core/cat/testdata/ core/cat/exinventory_gen.go \
 artefacts committed in tasks 1, 2, 3, 4 and 7a stand at their
 commit-time bytes, and the FTdx101 corpus joins the FT-710's and the
 FTdx10's under the same freeze.
+
+### The three generated inventories, against M9c-6's Part 5 table
+
+`git diff --exit-code` proves those files are unchanged **since HEAD**,
+which is a weaker statement than the manifest's. M9c-6's regeneration
+table published absolute SHA-256 values for the three generated EX
+inventories, so those are compared directly too — three more recorded
+values, and three more matches:
+
+| Generated file | M9c-6 recorded SHA-256 | This run | Result |
+|---|---|---|---|
+| `internal/fakedx10/exinventory_gen.go` | `0d44f04bef5ece957fc324c8350cef9af5a9d6899b83639a2ad3bdff803dad48` | identical | **MATCH** |
+| `core/cat/ftdx10/exinventory_gen.go` | `9311fc928b540110539d5dc40c921193b39890fbd6ef8c6f27c1e0db3c2171d4` | identical | **MATCH** |
+| `core/cat/exinventory_gen.go` | `fbf4f02e3e564357eecd020f612de58cd3d26ad58a8a6e8ee9cb1249815ada22` | identical | **MATCH** |
+
+The fakedx10 value is the one task 5 of M9c-6 recorded and the manifest
+re-recorded — the staleness property now holding across a further 19
+commits and a whole milestone. M9d-1's own generated inventory,
+`core/cat/ftdx101/exinventory_gen.go`, has no M9c-6 value to compare
+against (it did not exist); it is covered by the eight-path golden gate
+above and by `core/cat/ftdx101/staleness_test.go` in the full suite.
+
+**These three are additional to the 92 recorded values counted above**,
+which are the manifest's Part 1/2/3 recipe tables; Part 5 is a gate
+record rather than a recipe table. Counting them, the run compares **95
+recorded values with 95 matches.**
 
 ---
 
