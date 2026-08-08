@@ -190,10 +190,24 @@ type WrongRadioError struct {
 	// Got is the CAT ID the probe actually returned, e.g. "0761" (an
 	// FT-DX10).
 	Got string
+
+	// WantModel and GotModel are OPTIONAL display names, additive as of
+	// M9d-2 (spec A5): a driver that can NAME the models its IDs belong
+	// to may populate both, and Error() then spells the refusal out in
+	// model names as well as IDs. Drivers that cannot (the FT-710's and
+	// FTdx10's never do) leave them empty and Error()'s ID-only text is
+	// byte-identical to what it was before these fields existed — that
+	// text is pinned by test, because rendered refusals are recorded in
+	// baselines. Is/As semantics are unchanged either way.
+	WantModel string
+	GotModel  string
 }
 
 // Error implements the error interface.
 func (e *WrongRadioError) Error() string {
+	if e.WantModel != "" && e.GotModel != "" {
+		return fmt.Sprintf("driver: connected radio identifies as %s (CAT ID %q); you selected %s (CAT ID %q) — wrong radio model on this port", e.GotModel, e.Got, e.WantModel, e.Want)
+	}
 	return fmt.Sprintf("driver: connected radio identified as CAT ID %q, want %q — wrong radio model on this port", e.Got, e.Want)
 }
 

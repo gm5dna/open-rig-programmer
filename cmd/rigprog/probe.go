@@ -84,7 +84,17 @@ func cmdProbe(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 // "FT-710", since a caller who asked for a specific model should be told
 // what they asked for, not what this build's only current driver happens
 // to be.
+//
+// When the driver could NAME the model it found (M9d-2, spec A5: the
+// error carries a GotModel), the diagnostic names that radio instead of
+// leaving the operator to decode a bare CAT ID; the wanted side is still
+// the SELECTED model, never the error's own WantModel. Drivers that
+// cannot name what they found leave GotModel empty and get the original
+// ID-only wording, byte-for-byte.
 func wrongRadioMessage(model string, wr *driver.WrongRadioError) string {
+	if wr.GotModel != "" {
+		return fmt.Sprintf("rigprog probe: wrong radio: radio identifies as %s (CAT ID %q); you selected %s — this port's radio does not identify as %s\n", wr.GotModel, wr.Got, model, model)
+	}
 	return fmt.Sprintf("rigprog probe: wrong radio: got CAT ID %q, want %q — this port's radio does not identify as %s\n", wr.Got, wr.Want, model)
 }
 
