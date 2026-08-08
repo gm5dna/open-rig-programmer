@@ -110,9 +110,22 @@ matrix models capability values, not menu-value semantics.
 appear below, by name, in struct order. All fifteen will be populated
 EXPLICITLY in the driver (the zero-value class the spec names): a zero
 left in a capability field is not a neutral omission — a zero
-`MaxFreqHz` reads as "no ceiling" to every validator, a zero `TagLen`
-makes `core/csvio`'s CHIRP import silently erase every channel name,
-and an empty `Bauds` makes `core/transport` substitute a guessed baud.
+`MaxFreqHz` reads as "no ceiling" to every validator
+(`core/spec/validate.go:123-125`), a zero `TagLen` makes `core/csvio`'s
+CHIRP import truncate every imported name to `b[:caps.TagLen]` and so
+silently discard it, reported as an approximated loss rather than
+refused (`validate.go:178-184`), and a NON-POSITIVE entry in `Bauds`
+would reach `SerialConfig.Baud`, which `transport.OpenSerial` treats as
+"unset" and silently replaces with its own `DefaultBaud` of 38400
+(`validate.go:126-131`).
+
+`Bauds` and `DefaultBaud` are worth stating precisely, because the
+hazard is not the one it looks like: an EMPTY `Bauds` is not a silent
+guess — it fails `spec.Validate` loudly, on the "DefaultBaud must appear
+in Bauds" rule (`validate.go:249-251`), since a positive `DefaultBaud`
+cannot be a member of an empty list. It is the non-positive entry, not
+the empty list, that `Validate` exists to catch before the transport
+layer substitutes for it.
 
 ### 1.1 `Model string`
 
@@ -171,16 +184,29 @@ Plus, per session, up to two DISCOVERED read-only banks: 60M and EMG
 (§1.3.4 and §3.4). No 5xx or EMG bank is asserted statically.
 
 **One value serves both models because the memory-channel surface is
-printed once, unconditionally, for both.** The slot legends carry no
-model qualifier anywhere: MC's P1 (layout 1225-1227), IF's P0
-(1082-1083), MR's P0 (1278-1279), MT's P0/1 (1312-1313), MW's P1
-(1353). §4's sweep shows the manual's only three model-conditional
-places, and none of them is a slot legend.
+printed once, unconditionally, for both.** This manual prints **SIX**
+slot legends, and none carries a model qualifier: MC's P1 (layout
+1225-1227), IF's P0 (1082-1083), MR's P0 (1278-1279), MT's P0/1
+(1312-1313), MW's P1 (1353) and **OI's P1 (1436-1437)**. §4's sweep
+shows the manual's only three model-conditional places, and none of them
+is a slot legend.
+
+**Six, not five.** `core/cat/ftdx101/doc.go`'s `SlotSpace.NoneWire`
+entry enumerates the first five, because those are the five that entry
+needs; OI's is a sixth legend of the same kind — the same parameter
+class as IF's P0, which that enumeration does count — carrying the full
+"001-099 (Memory Channel), P1L -P9U (PMS), 5xx (5MHz BAND), EMG
+(EMERGENCY CH)" vocabulary. It is named here so that a later reader
+running the sweep finds six and does not conclude one of the two records
+is wrong. **No conclusion below changes:** OI's legend contains no QMB
+form (so §1.3.3's absence stands) and it includes 5xx and EMG (so
+§1.3.4's "MW alone excludes them" stands, and more strongly — MW is one
+legend out of six, not one out of five).
 
 #### 1.3.1 MEM bank
 
 - **Slots `001`..`099`: MANUAL-EVIDENCED.** "001-099 (Memory Channel)"
-  in all five slot legends above. The driver builds them through the
+  in all six slot legends above. The driver builds them through the
   dialect's own `MemorySlot`, walking until it refuses, so the advertised
   wire forms are exactly those the dialect's slot space accepts
   (`MemoryLo: 1, MemoryHi: 99`, `core/cat/ftdx101/dialect.go:95`), never
@@ -197,7 +223,7 @@ places, and none of them is a slot legend.
 #### 1.3.2 PMS bank
 
 - **Slots `P1L`..`P9U` (nine pairs, eighteen slots): MANUAL-EVIDENCED.**
-  "P1L -P9U (PMS)" in the same five legends (the chart sets the MC
+  "P1L -P9U (PMS)" in the same six legends (the chart sets the MC
   legend with letter tracking, which the extraction renders as
   spaced-out characters — `core/cat/ftdx101/doc.go` records that it was
   read from the rendered page instead). Built through the dialect's
@@ -223,8 +249,9 @@ oversight:
   menu item (03,01,14) `QMB CH` selects 5 or 10 channels (layout 867),
   and IF's and OI's P7 legends name it as a *source state*, "3: Quick
   Memory Bank (QMB)" (layout 1092-1093 and 1447-1448). It appears in
-  **no** slot legend: MC/IF/MR/MT/MW address only 001-099, P1L-P9U, 5xx
-  and EMG, and `QI`/`QR` take no slot parameter at all.
+  **no** slot legend: all six — MC, IF, MR, MT, MW and OI — address only
+  001-099, P1L-P9U and (MW excepted) 5xx and EMG, and `QI`/`QR` take no
+  slot parameter at all.
   **MANUAL-EVIDENCED absence:** there is no CAT slot form for a QMB
   channel, so there is nothing for a bank to enumerate, and no way to
   read or write one.
@@ -234,17 +261,26 @@ oversight:
 #### 1.3.4 The DISCOVERED banks (60M and EMG)
 
 - **Existence of a 5xx family and of EMG: MANUAL-EVIDENCED.** "5xx
-  (5MHz BAND), EMG (EMERGENCY CH)" appears in the MC, IF, MR and MT slot
-  legends (1225-1227, 1082-1083, 1278-1279, 1312-1313) and NOT in MW's
-  (1353) — the same MW restriction the FT-710 and the FTdx10 carry.
+  (5MHz BAND), EMG (EMERGENCY CH)" appears in **five of the six** slot
+  legends — MC (1225-1227), IF (1082-1083), MR (1278-1279), MT
+  (1312-1313) and OI (1436-1437) — and NOT in MW's (1353), which is the
+  same MW restriction the FT-710 and the FTdx10 carry.
 - **The numbering 501..599: ASSUMED.** The legends say only "5xx (5MHz
   BAND)"; the start at 501 rather than 500, the ceiling at 599 and
   therefore the channel count are interpretation.
   **Register home:** DIALECT register, entry *"SlotSpace.SixtyLo/SixtyHi
   = 501/599"* (`core/cat/ftdx101/doc.go`).
-  **Lift, per model:** an MR enumeration of the 5xx range INCLUDING 500
-  — which wire numbers answer as populated-or-empty channels and which
-  answer "?;" fixes the real bounds.
+  **Lift, per model:** an enumeration of the 5xx range INCLUDING 500 —
+  which wire numbers answer as populated-or-empty channels and which
+  answer "?;" fixes the real bounds. **The dialect register words this as
+  an MR enumeration**, because a dialect describes the radio's protocol
+  and MR is the natural read for it; **§3.8.1 words its own lift as an
+  MT enumeration**, because the driver's discovery walk sends MT and
+  never MR (§3.5). *Either command's enumeration retires this entry* —
+  what the capture must establish is which wire numbers in and around
+  5xx answer at all, and both commands ask that question. See §3.8.1 for
+  the relationship between the two register entries one such session can
+  retire together.
 - **The EMG wire form `EMG`: MANUAL-EVIDENCED** (the same legends).
 - **Both discovered banks `NoBlank: true`: CHOICE, and a statement about
   the PROTOCOL surface this project offers, not about the radio's
@@ -260,19 +296,53 @@ oversight:
 
 #### 1.3.5 A precision about 5xx/EMG writability
 
-`core/cat`'s combined-MT write policy refuses 5xx and EMG slots
-(`mtSlotValid`, `core/cat/mtcombined.go:84-86` and its error text at
-:106), and `cat.Slot.Writable` excludes them from MW. **That is a
-PROJECT POLICY — "5xx/EMG rejected by project policy pending hardware
-verification" in `core/cat`'s own words — and NOT a reading of this
-manual.** This manual's **MT** slot legend (layout 1312-1313)
-explicitly INCLUDES "5xx (5MHz BAND), EMG"; only **MW**'s legend (1353)
-excludes them. So:
+`core/cat`'s combined-MT write policy refuses 5xx and EMG slots — the
+predicate is `Dialect.mtSlotValid`, defined at `core/cat/mt.go:115`,
+reached by `validateCombinedMTFields` at `core/cat/mtcombined.go:105`
+— and `cat.Slot.Writable` (`core/cat/slot.go:159-162`) excludes them
+from MW. **The MT half is a PROJECT POLICY, and `core/cat` says so in
+terms.** `mtSlotValid`'s own doc comment runs `core/cat/mt.go:100-108`;
+its middle (`:103-106`) is the statement:
 
-- "MW cannot address 5xx/EMG" is MANUAL-EVIDENCED (layout 1353).
+> The manual's slot table marks 5xx and EMG as ✓ for MT — but reference
+> §MT states explicitly: "our policy: reject sets to 5xx/EMG until
+> hardware-verified" (a project decision, not a manual requirement,
+> repeated verbatim in the Task 3 brief).
+
+The rejection a caller actually sees says the same thing more tersely —
+"MT: slot must be memory (001-099) or PMS (P1L-P9U); 5xx/EMG rejected by
+project policy pending M5a, \"000\"/invalid rejected per reference"
+(`core/cat/mtcombined.go:106`) — and the comment above the validator
+calls it "5xx/EMG refused by project decision pending hardware
+verification" (`core/cat/mtcombined.go:85-86`).
+
+**Attribution matters in that quote:** the "manual" and the "reference
+§MT" `mt.go` speaks of are the **FT-710's**, because that is the radio
+`core/cat` was written for and the policy was adopted against. The
+FTdx101's manual is a second, independent document that happens to say
+the same thing about MT's slot vocabulary — which is what makes the
+policy's project-decision status carry across rather than needing to be
+re-established.
+
+**What the FTdx101's own manual says.** Its MT slot legend carries the
+full vocabulary, "001-099 (Memory Channel), P1L -P9U (PMS), 5xx (5MHz
+BAND), EMG (EMERGENCY CH)" (layout 1312-1313), against MW's restricted
+"001-099 (Memory Channel), P1L -P9U (PMS)" (layout 1353). **One degree
+of hedging is owed here:** that legend is headed **"P0/1"**, merging the
+Read direction's slot parameter (P0) with the Set direction's (P1) under
+one vocabulary, so the manual does not separately state that an MT
+**Set** may address 5xx or EMG — it states it of MT's slot parameter
+generally. That is weaker than "the manual permits MT Sets to 5xx", and
+it is deliberately all this matrix claims. `core/cat/mt.go:103` concedes
+the same reading for the FT-710 — "the manual's slot table marks 5xx and
+EMG as ✓ for MT", a slot-table fact, not a Set-direction one. So:
+
+- "MW cannot address 5xx/EMG" is MANUAL-EVIDENCED **for this radio**
+  (layout 1353, the FTdx101's own MW legend, unambiguously the Set
+  direction's P1).
 - "MT cannot address 5xx/EMG" is **not** a manual fact for this radio;
-  it is this project's conservative policy, which the manual would
-  permit relaxing.
+  it is this project's conservative policy, adopted for the FT-710 and
+  inherited here, and nothing in the FTdx101's manual requires it.
 
 The read-only discovered banks are therefore correct and conservative,
 but the *reason* must be stated as policy. The FTdx10 driver's
@@ -571,8 +641,9 @@ print it identically as "0: CTCSS \"OFF\" 1: CTCSS ENC/DEC 2: CTCSS
 ENC"; IF (1095) prints the same three values with its off state
 abbreviated, "0: OFF 1: CTCSS ENC/DEC 2: CTCSS ENC". The difference is
 typographic — same three values, same three indices — and is noted so a
-later reader diffing the legends does not take it for a sixth
-vocabulary. Three values, matching `spec.StandardCTCSSStates()`'s three;
+later reader diffing the five P8 legends against one another does not
+take IF's for a fourth state or a different vocabulary. Three values,
+matching `spec.StandardCTCSSStates()`'s three;
 the project's spellings ("ENC-DEC") and their order are the shared
 standard's, not the manual's punctuation.
 
@@ -605,7 +676,7 @@ is §2.5.
 |---|---|---|---|---|---|
 | `FieldFrequency` | `rw` | `rw` | read-only | read-only | MANUAL-EVIDENCED — MT P2, 9 digits at positions 6-14 |
 | `FieldMode` | `rw` | `rw` | read-only | read-only | MANUAL-EVIDENCED — MT P6 at 22 |
-| `FieldClarifier` | `clar` | `clar` | read-only | read-only | MANUAL-EVIDENCED — MT P3 sign+magnitude at 15-19, P4/P5 flags at 20-21 |
+| `FieldClarifier` | `clar` | `clar` | read-only | read-only | MANUAL-EVIDENCED (positions) — MT P3 sign+magnitude at 15-19, P4/P5 flags at 20-21. **The SIGN BYTE is not** — see the note below the table |
 | `FieldCTCSSState` | `rw` | `rw` | read-only | read-only | MANUAL-EVIDENCED — MT P8 at 24 |
 | `FieldCTCSSTone` | `{}` | `{}` | `{}` | `{}` | ASSUMED (driver register) — no tone-NUMBER byte in the record; P9 fixed |
 | `FieldShift` | `rw` | `rw` | read-only | read-only | MANUAL-EVIDENCED — MT P10 at 27 |
@@ -616,6 +687,37 @@ is §2.5.
 
 "read-only" means the discovered bank's map is derived from MEM's with
 every `Write` forced to `spec.Unsupported` (§1.3.5).
+
+**The clarifier's POSITIONS are manual-evidenced; its MINUS-DIRECTION
+BYTE is not** — the same split §1.5 draws between `TagLen`'s width and
+`TagFill`'s byte, and for the same reason. P3 is five positions wide
+(15-19) against a four-digit offset, so exactly one position carries the
+direction; the plus direction is printed as one unambiguous glyph. But
+the manual prints the MINUS direction as a **two-hyphen glyph** — "+:
+Plus Shift, --: Minus Shift" — identically in all five frame pages that
+carry it (layout 1085 IF, 1281 MR, **1316 MT**, 1355 MW, 1439 OI), and
+the quarantined golden deriver recorded that glyph as UNREADABLE rather
+than resolving it (`core/cat/ftdx101/testdata/provenance.md`, note N2,
+which reasons out the one-position width and then declines to guess
+which byte occupies it). The ASCII HYPHEN-MINUS 0x2D `core/cat` writes
+and accepts there is INHERITED from the FT-710/FTdx10 convention.
+
+- **Register home:** DIALECT register, entry *"The CLARIFIER'S
+  MINUS-DIRECTION BYTE, the ASCII HYPHEN-MINUS 0x2D ('-')"* — the
+  seventh, added at the M9d-1 milestone review.
+- **Lift, per model:** one MR or MT Answer captured from a channel
+  carrying a NEGATIVE clarifier offset — or, failing a channel already so
+  written, an MW or combined-MT Set of a negative offset that the radio
+  ACCEPTS, followed by a read of that channel. The byte the radio puts
+  in, or takes at, the P3 sign position IS the direction.
+
+**This does not change the `FieldClarifier` cell's value.** A
+`FieldSupport` pair says whether the field is readable and writable, not
+which byte encodes its sign, so no support level in this matrix depends
+on the assumption — which is exactly why the entry lives in the dialect
+register and is cited, not re-registered, here. The cell is annotated so
+that it does not read as certifying a byte the dialect records as
+unread.
 
 **Profile values (both models):**
 
@@ -993,9 +1095,20 @@ an out-of-inventory slot both answered "?;"). Neither FTdx101's is.
 - **Lift, per model:** an MT enumeration of the whole 5xx range on a
   radio of that model with a POPULATED 5xx bank, cross-checked against
   the channels the front panel shows. Which wire numbers answer and which
-  reject is then a fact, and it lifts this entry **and** the dialect's
-  501..599 numbering entry together for that model — they are separate
-  assumptions and one capture can retire both, so record both explicitly.
+  reject is then a fact.
+
+**TWO REGISTER ENTRIES, ONE POSSIBLE CAPTURE — record both explicitly.**
+A 5xx enumeration extended to include 500 speaks to this driver entry
+*and* to the dialect's 501..599 numbering entry (§1.3.4). **They are
+separate assumptions**: this one is about what a rejection MEANS, that
+one is about where the range STARTS AND STOPS. One session can retire
+both for one model, and the FTdx10 driver register's entry 7 is the
+precedent for saying so — but the capture note must name both, because a
+session that answers only one leaves the other open, and an entry
+retired by implication is an entry nobody can audit. The two entries'
+lifts are worded with different commands (MT here, MR in the dialect's)
+for the reason §1.3.4 gives; either command's enumeration serves, and a
+single MT walk extended to 500 serves both entries at once.
 
 #### 3.8.2 "?;" on a combined-MT read of a slot means EMPTY CHANNEL
 
@@ -1053,7 +1166,9 @@ inventory count**" — anticipates exactly this. The M9d-2 plan must use
   `exReadLen`/`exAnswerMinLen` exactly — the reused-command verification
   verdict in `core/cat/ftdx101/doc.go`.
 - **The header-vs-chart anomaly, UNRESOLVED.** EX's grammar block states
-  "P1 : 01 - 05" (layout 700-704) while Table 2 populates P1 01-04 only,
+  "P1 : 01 - 05" on layout **700** (its three range statements run
+  700-703, and the P4 line at 704 completes the block) while Table 2
+  populates P1 01-04 only,
   ending at (04,03,02) PIXEL (layout 962). The inventory follows the
   CHART. The FT-710's analogous anomaly could be put to hardware; this
   one cannot be, and `core/cat/ftdx101/doc.go` records it unresolved. It
@@ -1258,17 +1373,43 @@ be created at M9d-2 and tracked per model:
 9. A SINGLE COMBINED MT SET SUFFICES TO CREATE OR OVERWRITE A CHANNEL,
    INCLUDING AN EMPTY ONE (§3.6)
 
-**Five of the DIALECT register's seven entries are CITED and not
+**Six of the DIALECT register's seven entries are CITED and not
 re-registered** — they are `core/cat/ftdx101/doc.go`'s, and correcting
 one is a dialect change, not a driver change:
 `ClarifierPolicy.StepHz = 10` (§1.7), `SlotSpace.SixtyLo/SixtyHi =
 501/599` (§1.3.4, §3.4), the `cat.ModeUnset` mode-table member (§1.4),
-`MTPolicy.TagFill = ' '` (§1.5), and the combined MT answer's exact
-41-byte length (§3.5). The dialect's remaining two entries
-(`SlotSpace.NoneWire = "000"` and the clarifier's minus-direction byte
-0x2D) are dialect-level facts that no capability value in this matrix
-depends on, and are named here so the count of seven is visibly
-complete. **Neither register may absorb the other.**
+`MTPolicy.TagFill = ' '` (§1.5), the combined MT answer's exact 41-byte
+length (§3.5), and the clarifier's minus-direction byte 0x2D (§2.1).
+The seventh, `SlotSpace.NoneWire = "000"`, is a dialect-level fact that
+**no capability value and no `FieldSupport` cell in this matrix depends
+on**, and is named here so the count of seven is visibly complete.
+
+**THE PLAN MUST NOT READ THAT AS "the driver register cites six".** The
+count above is what the *matrix* reaches, and the matrix models
+capability values; the *driver* reaches further, and the seventh entry
+is exactly where it does. The FTdx10 driver's
+register cites **all six** of its dialect's six entries — "the DIALECT's
+six entries … are separate and are CITED below where **this driver
+depends on them** — MTPolicy.TagFill, ClarifierPolicy.StepHz,
+**SlotSpace.NoneWire**, the cat.ModeUnset table member, the 501..599
+numbering, and the combined answer's exact 41-byte width"
+(`core/driver/ftdx10/doc.go:156-162`) — and the `NoneWire` dependence is
+real and pinned: `BuildMTRead` refuses the answer-only none form, which
+that driver documents at the call site
+(`core/driver/ftdx10/read.go:117-120`, "the answer-only none form
+(\"000\" for this dialect — its own ASSUMED register entry 3):
+grammatical per ParseSlot, never a legal read target").
+
+**M9d-2's driver inherits the same read and write rejection ladders**,
+and so the same `NoneWire` dependence. So the M9d-2 driver register
+should expect to cite **all seven** dialect entries at its own
+dependence sites — the six this matrix reaches, plus `NoneWire` at the
+`BuildMTRead`/`BuildMTSetCombined` refusal sites — which is *more* than
+this matrix cites, not the same number. A driver register that cited six
+because this section says six would be under-citing against its own
+precedent.
+
+**Neither register may absorb the other.**
 
 **No contradiction with any committed evidence artefact was found.**
 Every value in this matrix was checked against `table2.csv`, the
