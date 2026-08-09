@@ -49,16 +49,28 @@ var shiftByName = map[string]cat.Shift{
 // then listen for a bounded window in case a "?;" rejection arrives, and
 // treat silence as acceptance.
 //
+// THAT SHAPE IS ASSUMED, NOT MANUAL-EVIDENCED — doc.go's register entry
+// "A SINGLE COMBINED MT SET SUFFICES", second half, where it was registered
+// at the M9d follow-up wave. This comment previously asserted the silence
+// flatly, with no ground stated at all. Silence-on-success, and exactly one
+// "?;" on rejection, are the FT-710's stated framing convention inherited
+// here; the FTdx10's manual states neither, and MT's availability row (Set
+// O, Read O, Answer O, AI X, manual lines 260-262) would not supply it if it
+// were cited, because that table's "Ans." column (header at manual line 192)
+// marks the existence of the command's ANSWER FORM — the frame a READ draws
+// — and says nothing about what a Set produces.
+//
 // Every part of that zero value is load-bearing, and it is why this is a
 // separate function from read.go's mtSpec rather than a reuse of it:
 //
 //   - NO ExpectPrefix, and therefore no derived ExpectLen. mtSpec pins the
 //     combined ANSWER's exact 41-byte geometry from the dialect, which is
-//     right for a read and would be a bug here: a CAT Set produces no
-//     answer at all, so a spec that waited for an "MT" reply would spend
-//     the whole read timeout and then report a timeout for a write that
-//     the radio had accepted perfectly. The absence of a prefix is what
-//     selects transport's fire-and-forget path (see transport.Engine.Do).
+//     right for a read and would be a bug here: on the assumed convention
+//     a Set produces no answer at all, so a spec that waited for an "MT"
+//     reply would spend the whole read timeout and then report a timeout
+//     for a write that the radio had accepted perfectly. The absence of a
+//     prefix is what selects transport's fire-and-forget path (see
+//     transport.Engine.Do).
 //
 //   - RetryReads 0, necessarily. A write is NEVER resent — transport
 //     safety obligation 2 enforces this structurally, and Do refuses a
@@ -154,7 +166,10 @@ func requestedFields(data codeplug.ChannelData) []spec.Field {
 }
 
 // WriteChannel implements driver.Session: ONE combined MT Set,
-// fire-and-forget with the transport's bounded "?;" listen.
+// fire-and-forget with the transport's bounded "?;" listen — a shape that is
+// ASSUMED on both counts, register entry "A SINGLE COMBINED MT SET
+// SUFFICES", whose second half is the acknowledgement convention this
+// sentence takes for granted.
 //
 // MT-ONLY, and MW is never sent — the mirror of the read path's decision
 // (doc.go, "MR is deliberately unused"). The 41-byte Set carries the whole

@@ -117,7 +117,8 @@ func TestBuildMWSet_RejectsKindPMSOnPMSSlot_HWConfirmed(t *testing.T) {
 }
 
 // TestBuildMWSet_RejectTable covers every rejection case the brief and
-// reference list for BuildMWSet: slot not Writable() (501, EMG, 000),
+// reference list for BuildMWSet: slot not writable under the receiving
+// dialect (501, EMG, 000; Dialect.writableSlot),
 // Kind/slot pairing mismatch, ModeUnset, ClarHz not a 10 Hz step or out of
 // range, FreqHz needing >9 digits or zero.
 func TestBuildMWSet_RejectTable(t *testing.T) {

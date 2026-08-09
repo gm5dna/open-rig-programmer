@@ -388,12 +388,13 @@ func TestUnknownCommandRejected(t *testing.T) {
 // either lower or upper case characters." (layout 204-205) — and pins that it
 // stops at the command NAME.
 //
-// It asserts the opposite of internal/fakedx10's
-// TestCommandNamesAreUpperCaseOnly, so a reviewer meeting the two together
-// should find this note rather than an unexplained contradiction: THIS test
-// rests on the sentence quoted above, in this radio's own manual, and on
-// nothing else. Why the sibling requires the opposite of its own fake is a
-// question about that package and is recorded for milestone review.
+// It asserted the opposite of internal/fakedx10's
+// TestCommandNamesAreUpperCaseOnly when it was written; that test pinned a
+// defect against the FTdx10's own manual and was replaced at the M9d follow-up
+// wave by TestCommandNamesAreAcceptedInEitherCase, so the two now agree. THIS
+// test rested and rests on the sentence quoted above, in this radio's own
+// manual, and on nothing else — the agreement is two manuals saying the same
+// thing, not one package borrowing from the other.
 func TestCommandNamesAreAcceptedInEitherCase(t *testing.T) {
 	_, conn := newTestRadio(t)
 

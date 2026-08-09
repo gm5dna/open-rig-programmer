@@ -187,7 +187,8 @@ func (d Dialect) validMRCommand(frame []byte) bool {
 // frame: it decodes cleanly via parseMemoryFrame (the same fixed-offset
 // 28-byte decoder ParseMRAnswer uses, reused here with prefix "MW") and
 // then passes validateMWFields — the exact write-direction policy
-// BuildMWSet applies (Writable() slot, Kind/slot pairing, ModeUnset
+// BuildMWSet applies (a slot writable under THIS dialect per
+// Dialect.writableSlot, Kind/slot pairing, ModeUnset
 // rejection, forged-byte re-validation, ClarHz/FreqHz bounds). A frame
 // that is shaped like a valid memory frame but targets an unwritable slot,
 // or pairs the wrong Kind with its slot, is rejected here exactly as

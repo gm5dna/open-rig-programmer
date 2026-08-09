@@ -108,15 +108,22 @@
 //
 //   - The ID answer is built from the Radio's configured CAT ID rather than
 //     from a literal. The section above states why.
-//   - COMMAND NAMES ARE ACCEPTED IN EITHER CASE (internal/fakedx10 refuses
-//     them). The reason here needs no comparison: this manual says so in
-//     terms — "A command consists of 2 alphabetical characters. You may use
-//     either lower or upper case characters." (layout 204-205), a statement
-//     about these radios in these radios' manual. (parser.go: handleFrame)
+//   - COMMAND NAMES ARE ACCEPTED IN EITHER CASE. The reason here needs no
+//     comparison: this manual says so in terms — "A command consists of 2
+//     alphabetical characters. You may use either lower or upper case
+//     characters." (layout 204-205), a statement about these radios in these
+//     radios' manual. NO LONGER A DIVERGENCE FROM internal/fakedx10, which
+//     refused lower case when this list was written and was corrected at the
+//     M9d follow-up wave on the identical sentence in its own manual; the
+//     bullet is kept because the reason above is what this package rests on
+//     either way. (parser.go: handleFrame)
 //   - AI's power-on state is a MANUAL FACT here rather than an assumption:
 //     "This parameter is set to '0' (OFF) automatically when the transceiver
 //     is turned 'OFF'" (layout 384). It is therefore absent from the register
-//     below — see "What is NOT in this register".
+//     below — see "What is NOT in this register". internal/fakedx10 registered
+//     the same behaviour as an assumption until the M9d follow-up wave, which
+//     found the same statement at its own manual's line 317; that is likewise
+//     no longer a divergence.
 //   - The EX projection is generated from a DIFFERENTLY SHAPED transcription B.
 //     internal/fakedx10's B lost its briefed header to a mid-task stall and
 //     arrived as six columns with wrapped group labels and no text flag, so its
@@ -127,11 +134,12 @@
 //     label cell outright. The reason is this artefact's own shape, not a
 //     judgement about that one. (gen/main.go; PROVENANCE.md)
 //
-// WHY internal/fakedx10 SETTLES THE MIDDLE TWO DIFFERENTLY IS A QUESTION ABOUT
-// THAT PACKAGE, and it is under milestone review rather than answered here.
-// Nothing in this package rests on the answer: the citations above are to this
-// manual, and they would stand unchanged whatever the sibling turns out to have
-// been reading.
+// WHY internal/fakedx10 SETTLED THE MIDDLE TWO DIFFERENTLY WAS A QUESTION
+// ABOUT THAT PACKAGE, and the M9d-2 milestone review answered it: that
+// package's own manual carried both statements and its register had missed
+// them, so both were corrected there at the M9d follow-up wave. Nothing in
+// this package rested on the answer or rests on it now: the citations above
+// are to this manual, and they stood unchanged while the sibling disagreed.
 //
 // Where this fake diverges from internal/fakeradio it does so for
 // internal/fakedx10's recorded reasons, which are reproduced here because they
@@ -625,9 +633,12 @@
 //     as an assumption is the narrower claim about FIELD values — entry 12
 //     above.
 //
-// internal/fakedx10's register settles both differently (its entries 14 and
-// 12). That is a question about that package, it is under milestone review, and
-// it is deliberately not argued here: these two absences rest on the two lines
+// internal/fakedx10's register held both as ASSUMED entries (its 14 and 12)
+// when this section was written, and the M9d follow-up wave withdrew both:
+// that manual states the case rule at its lines 160-161 and the AI power-off
+// rule at its line 317, so that package now carries a "What is NOT in this
+// register" section of its own. The two registers agree by each reading its
+// own manual, never by borrowing: these two absences rest on the two lines
 // cited above and on nothing else.
 //
 // The ID answers themselves are likewise absent, and for the strongest reason:

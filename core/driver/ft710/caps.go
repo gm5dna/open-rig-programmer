@@ -459,8 +459,8 @@ func CapabilitiesSimulated() spec.Capabilities {
 // The 60m/EMG discovered banks remain fully read-only regardless of
 // this profile: effectiveCapabilities forces every Write to Unsupported
 // for them (write was never probed — no such bank exists on the
-// characterised radio — and cat.Slot.Writable structurally excludes
-// their slots from MW anyway).
+// characterised radio — and cat.Dialect.writableSlot structurally
+// excludes their slots from MW anyway).
 func CapabilitiesRealHardware() spec.Capabilities {
 	rw := spec.FieldSupport{Read: spec.Unverified, Write: spec.Supported}
 	clar := spec.FieldSupport{Read: spec.Unverified, Write: spec.Inert}

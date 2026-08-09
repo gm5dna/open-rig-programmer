@@ -62,14 +62,31 @@ func (d Dialect) BuildMWSet(m MemoryData) (Command, error) {
 // reach the radio as an MW command live in exactly one place, not two.
 //
 // SEAM NOTE (Task 54): writability is decided by Dialect.writableSlot
-// (slot.go), not by Slot.Writable, and the mode by d.ParseMode, not the
-// package-level ParseMode. Both of those package-level forms answer for
-// the FT-710 whatever dialect this method was called on, which would make
-// the receiver here decorative — and, because this same validator is what
+// (slot.go) and the mode by d.ParseMode — both on the RECEIVER. The
+// MemoryData reaching here is caller-supplied and may be forged whole, so
+// its Slot may have been built under ANOTHER dialect; consulting anything
+// carried by the value rather than asking the receiver would make the
+// receiver here decorative — and, because this same validator is what
 // AllowedCommand's MW check runs, would let a frame legal only under
 // another radio's slot space through the outbound write gate.
+//
+// There is no longer a value-form Slot.Writable to reach for by mistake:
+// M9d removed it precisely because it sat one import from this gate
+// answering for a different dialect. The note is kept because the HAZARD
+// is not gone, only that one instance of it — the mode leg still has a
+// value-shaped temptation, and the next datum promoted into Dialect will
+// too.
 func (d Dialect) validateMWFields(m MemoryData) error {
 	if !d.writableSlot(m.Slot) {
+		// THE WORDING IS FROZEN, and still says "Writable()" although M9d
+		// removed that method. This exact string is baked into six lines of
+		// core/cat/testdata/frame-corpus.golden, one of the ten paths the
+		// milestone golden gate forbids moving; rewording it here would
+		// move that golden. Harmless in practice — the parenthetical spells
+		// the rule out in full, so the message stands alone without the
+		// symbol — but it is frozen deliberately, not by oversight. Reword
+		// it in a change that is ALLOWED to regenerate the frame corpus,
+		// never on its own.
 		return newParseError([]byte(m.Slot.Wire()), "MW: slot must be Writable() (memory 001-099 or PMS P1L-P9U; 5xx/EMG/\"000\" rejected)")
 	}
 

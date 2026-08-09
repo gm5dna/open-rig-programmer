@@ -122,7 +122,11 @@
 // one place, with the ONE Stage R or Stage W capture that lifts it, so that a
 // reviewer — or the first real FTdx10 session — has a single list to work
 // from rather than a source-wide comment hunt. Each entry also appears as an
-// inline comment beside the code that implements it.
+// inline comment beside the code that implements it. That completeness claim
+// is the register's whole value and it is made without exception: see also
+// "What is NOT in this register, and why" at the end, which holds the two
+// MANUAL FACTS that left this register at the M9d follow-up wave — an absence
+// with a manual line behind it is not a gap in the claim above.
 //
 // Assumptions that belong to the DIALECT (core/cat/ftdx10/doc.go's own
 // six-entry register: the tag fill byte, the clarifier's 10 Hz step, the
@@ -303,16 +307,32 @@
 //     watched for any reply at all before the next command is sent.
 //     (fakedx10.go: handleEvent; parser.go: every Set arm returning nil)
 //
-//  12. COMMAND NAMES ARE UPPER CASE ONLY. "mt001;" draws "?;" here.
-//     fakeradio accepts either case on the FT-710 manual's own explicit
-//     statement; no such statement about the FTdx10 is cited anywhere in
-//     this repository, so accepting lower case here would be an invented
-//     leniency rather than an inherited fact. Nothing is lost: every frame
-//     this project sends is built upper-case by core/cat.
-//     STAGE R LIFTS IT WITH: one lower-case read frame, "mt001;", put to a
-//     real FTdx10. An answer makes this radio case-insensitive and this
-//     entry becomes a fact rather than a strictness.
-//     (parser.go: handleFrame)
+//  12. FIELD VALUES ARE CASE-SENSITIVE, THOUGH COMMAND NAMES ARE NOT. The
+//     command-name half is a MANUAL FACT and is therefore not assumed
+//     (manual lines 160-161, quoted under "What is NOT in this register"
+//     below): "mt001;" is answered here. What is ASSUMED is that the
+//     leniency STOPS THERE — that the mode nibble's hex letters, the PMS
+//     L/U suffix and "EMG" must arrive upper-case. The manual's statement
+//     is about the two-character command name and says nothing about
+//     parameters, so extending it would be an invented leniency; refusing
+//     to extend it is the narrower claim and the one that cannot silently
+//     accept a frame the radio would reject. Nothing is lost either way:
+//     every frame this project sends is built upper-case by core/cat.
+//     THIS ENTRY IS THE CORRECTED FORM OF A WRONG ONE, recorded rather
+//     than quietly reworded. Until the M9d follow-up wave it read "COMMAND
+//     NAMES ARE UPPER CASE ONLY", and its stated reason was that "no such
+//     statement about the FTdx10 is cited anywhere in this repository".
+//     That was false when written: core/cat/ftdx10/testdata/provenance.md's
+//     note A4 has cited the sentence since 29/07/2026 (M9c-4 task 7a, one
+//     day before this entry was written), calling the upper-case opcode
+//     "strictly a choice, not an assumption". The register entry was
+//     therefore not a cautious strictness but a defect against this radio's
+//     own manual, and it was pinned by a test
+//     (TestCommandNamesAreUpperCaseOnly) that asserted the defect.
+//     STAGE R LIFTS THE SURVIVING HALF WITH: one read frame carrying a
+//     lower-case FIELD value — "MTp1l;" — put to a real FTdx10. An answer
+//     makes that radio's parameters case-insensitive too.
+//     (parser.go: handleFrame, parseSlotForm, validModeWireByte)
 //
 //  13. THE TAG IS STORED TRIMMED AND ANSWERED PADDED. The combined record's
 //     P12 is a fixed 12-byte field in both directions. This fake stores the
@@ -332,14 +352,25 @@
 //     it says.
 //     (state.go: MemState.Tag; parser.go: buildMTAnswer, handleMT's Set arm)
 //
-//  14. AI DEFAULTS TO OFF ('0') AT CONSTRUCTION. New models a
-//     freshly-powered radio, mirroring the FT-710 manual's "AI resets to OFF
-//     at radio power-off". Inherited: the FTdx10's manual is cited here for
-//     AI's frame shape (four bytes, manual lines 309-320) and not for its
-//     power-on state.
-//     STAGE R LIFTS IT WITH: "AI;" as the FIRST command of a session, before
-//     any AI Set — on a radio just switched on.
-//     (fakedx10.go: New)
+//  14. WITHDRAWN AT THE M9d FOLLOW-UP WAVE — NOT AN ASSUMPTION. This number
+//     held "AI DEFAULTS TO OFF ('0') AT CONSTRUCTION", registered as an
+//     inheritance from the FT-710 manual's power-off rule on the stated
+//     ground that "the FTdx10's manual is cited here for AI's frame shape
+//     ... and not for its power-on state". This manual states the power-on
+//     state itself, four lines below the frame shape that WAS cited: "This
+//     parameter is set to '0' (OFF) automatically when the transceiver is
+//     turned 'OFF'" (manual line 317). The behaviour is unchanged and it is
+//     now a MANUAL FACT — see "What is NOT in this register, and why"
+//     below, where it is listed with that line.
+//     THE NUMBER IS HELD RATHER THAN RECLAIMED because entries 15, 16 and
+//     17 are cited BY NUMBER from NINE files: image.go, image_test.go,
+//     options.go, parser.go, ex.go, ex_test.go and fakedx10_test.go inside
+//     this package, and — the part that settles it — TWO from outside,
+//     internal/fakedx101/doc.go and core/transport/ex_crosscheck_ftdx10_test.go
+//     (its :248 names entry 17). A number cited from another package is a
+//     number this package cannot renumber unilaterally, and renumbering
+//     would silently repoint every one of the nine. A tombstone that says
+//     what left and why is auditable; a shifted register is not.
 //
 //  15. THE DEFAULT IMAGE'S CONTENT IS INVENTED. M-01 at 7.000000 MHz LSB,
 //     the nine PMS pairs at plausible IARU Region 1 band edges, With5xx's
@@ -399,4 +430,116 @@
 //     capture would be needed for the second, and none is planned while the
 //     menu surface stays read-only.
 //     (ex.go: handleEX)
+//
+//  18. THE "?;" REJECTION CONVENTION ITSELF IS INHERITED, AND THIS MANUAL
+//     DOES NOT PRINT IT. Entries 1, 7, 11, 12, 16 and 17 all say what draws
+//     a rejection; this one records that the rejection's very EXISTENCE is
+//     an assumption on this radio. The layout-preserved extraction of rev
+//     2308-F contains NO '?' character anywhere, over all 1,927 lines: the
+//     manual describes Set, Read and Answer commands (manual lines 146-149,
+//     with the worked FA example at 150-157) and a terminator (183-185),
+//     and never says what the radio replies to a command it cannot honour.
+//     "?;" is core/cat's ErrRejected, adopted from the FT-710's reference
+//     (core/cat/errors.go:10-19), and every "?;" this fake sends is that
+//     convention applied to a radio that has never been observed using it.
+//     A radio that stayed SILENT instead would leave this fake's rejections
+//     indistinguishable from a dead link, and would turn every one of
+//     core/driver/ftdx10's rejection-based interpretations (its register
+//     entries "?;" ON A 5xx/EMG DISCOVERY PROBE and "?;" ON A COMBINED-MT
+//     READ OF AN EMPTY SLOT) into timeouts.
+//     REGISTERED AT THE M9d FOLLOW-UP WAVE, ON THE M9d-2 MILESTONE REVIEW'S
+//     FINDING: this package made the assumption on every refusal path while
+//     a register whose preamble claims to list every place this fake had to
+//     guess did not hold it. internal/fakedx101/doc.go's entry 16 is the same claim about
+//     those radios, and it is CITED here rather than shared: one capture on
+//     an FTdx10 settles this entry and says nothing about an FTdx101.
+//     STAGE R LIFTS IT WITH: one deliberately unknown command — "ZZ;" —
+//     put to a real FTdx10 with the port watched. Whatever comes back, or
+//     does not, is the convention.
+//     (parser.go: rejection, and every refusal in the file)
+//
+//  19. AUTOMATIC-INFORMATION SUPPRESSION: THIS FAKE NEVER PUSHES AN
+//     UNSOLICITED FRAME, WHATEVER AI IS SET TO. "AI1;" is accepted, stored
+//     and read back faithfully, and then nothing follows from it: this radio
+//     writes to the port only in reply to a frame that arrived on it, so an
+//     AI-on session and an AI-off session are byte-identical on the wire.
+//     The assumption is not that this radio is silent — it is that MODELLING
+//     IT AS SILENT IS THE HONEST DEFAULT, because NO FTdx10 HAS BEEN
+//     OBSERVED WITH AI ON. Which frames such a radio volunteers, on what
+//     triggers, in what order and with what interleaving against a command
+//     in flight are four unknowns, and inventing them would put fabricated
+//     wire behaviour underneath every test that ran against this fake — the
+//     borrowed-fact class this package refuses throughout, and worse than
+//     usual here, because an invented push is indistinguishable at the far
+//     end of a link from a transport defect.
+//     THE OMISSION WAS THIS PACKAGE'S, AND IT WAS FOUND TWICE. The
+//     identical finding against internal/fakedx101 was the M9d-2 milestone
+//     review's C1 (Codex), closed there by writing that package's entry 18;
+//     this package had the same decision implemented and commented at the
+//     code (parser.go's AI section) and absent from a register whose
+//     preamble claims to list every place this fake had to guess. The M9d
+//     follow-up wave first recorded it as a known gap and was corrected at
+//     its own review: a register that documents a hole in itself is still a
+//     register with a hole in it, and the C1 precedent is to write the
+//     entry.
+//     DISTINCT FROM THE MANUAL FACT NEXT DOOR: "AI defaults to off at
+//     construction" is manual line 317 and is deliberately NOT in this
+//     register (see "What is NOT in this register, and why" below). That
+//     line says what AI is set to at power-on; it says nothing about what a
+//     radio does once AI is ON, which is the whole of this entry. The two
+//     must not be read as one absence.
+//     WHAT RESTS ON IT: core/transport.Engine's drain-to-quiet discipline —
+//     Init's AI-off Set followed by Engine.DrainToQuiet — is exercised
+//     against internal/fakeradio, whose AI-flood behaviour is the FT-710's
+//     OWN observed one, and NOT against this fake. So no FTdx10 test in this
+//     repository exercises the engine against a talking radio, and none may
+//     claim to: every FTdx10 exchange in every suite is one frame in, at
+//     most one frame out. A future test that wants an FTdx10 flood needs
+//     this entry lifted first, not a plausible flood written into this
+//     package.
+//     STAGE R LIFTS IT WITH: one session on a real FTdx10 with AI set to 1
+//     and the port then watched — idle, and while the front panel is
+//     operated (VFO turned, mode changed, memory recalled). Whatever that
+//     radio pushes, and whatever provokes it, becomes this fake's model;
+//     NOTHING MAY BE INVENTED MEANWHILE, and an observation of nothing at
+//     all is a result to record rather than a failed capture. Record the
+//     port with it: this manual's AI note says the command "is available
+//     only when PC is connected with USB cable" (manual line 314), so a
+//     capture over RS-232C settles nothing here.
+//     (parser.go: handleAI and the AI section's note; fakedx10.go: serve
+//     and handleEvent, whose only write is a reply)
+//
+// # What is NOT in this register, and why
+//
+// Two behaviours a reader might expect to find registered as assumptions are
+// MANUAL FACTS for this radio. Both WERE registered here — as entries 12 and
+// 14 — until the M9d follow-up wave found the manual stating each in terms.
+// They are listed here, with the line that makes each one a fact, so that the
+// absences read as decisions rather than as oversights, and so that the two
+// corrections stay auditable rather than vanishing:
+//
+//   - COMMAND NAMES MAY ARRIVE IN EITHER CASE. "A command consists of 2
+//     alphabetical characters. You may use either lower or upper case
+//     characters." (manual lines 160-161, under the "Alphabetical Commands"
+//     heading at 159). This fake refused lower-case command names until the
+//     M9d follow-up wave — a defect against its own manual, not a cautious
+//     strictness, and one this repository had the evidence to catch from
+//     29/07/2026, the day before the entry that asserted otherwise was
+//     written (core/cat/ftdx10/testdata/provenance.md's note A4, M9c-4 task
+//     7a; the entry, M9c-6 task 4). What survives as
+//     an assumption is the narrower claim about FIELD values — entry 12
+//     above.
+//   - AI DEFAULTS TO OFF AT CONSTRUCTION. "This parameter is set to '0'
+//     (OFF) automatically when the transceiver is turned 'OFF'" (manual line
+//     317). New models a freshly-powered radio, and that is this manual's
+//     own statement rather than an inheritance from the FT-710's. Entry 14
+//     above is the tombstone it left.
+//
+// NOTE WHAT IS NOT COVERED BY THE SECOND ABSENCE: what this fake does once AI
+// is turned ON — answer "AI1;" faithfully and then push nothing, ever — rests
+// on no line of this manual and on no observation of any FTdx10. That claim IS
+// registered, as entry 19 above, and the two must not be read as one absence.
+// It was written at the M9d follow-up wave's own review round: the first pass
+// recorded it here as a known gap instead, which is not what the identical
+// finding against internal/fakedx101 (the M9d-2 review's C1) was closed with.
 package fakedx10

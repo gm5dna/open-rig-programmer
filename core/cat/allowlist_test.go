@@ -42,6 +42,20 @@ func TestAllowedCommand_RejectTable(t *testing.T) {
 		// not just field shape (Task 3 Fix 1: "share the field-validation
 		// logic ... rather than duplicating it") ---
 		{
+			// THE CASE NAME IS FROZEN, and still says "Writable()"
+			// although M9d removed that method (the rule is now
+			// Dialect.writableSlot). This string is pinned at
+			// allowlist_test.go ordinal 41 in
+			// core/cat/testdata/evidence-literals.golden; editing it
+			// shifts every later ordinal in this file and fails
+			// TestEvidenceLiterals_OrderedRecordsSurvive, whose own
+			// message says "Do NOT regenerate the golden file" — and
+			// core/cat/testdata/ is one of the ten paths the milestone
+			// golden gate forbids moving. Deliberate, not an oversight;
+			// reword it only in a change ALLOWED to regenerate the
+			// evidence-literal pin. The case itself is unaffected: what it
+			// asserts is that the frame is REFUSED, which is still exactly
+			// what the write-direction rule does to slot 501.
 			"MW to slot 501: shape valid but Writable() fails (same slot rejected by BuildMWSet)",
 			[]byte("MW501014250000+000000210000;"),
 		},

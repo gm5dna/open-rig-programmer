@@ -295,7 +295,7 @@ func TestDeriveRegion(t *testing.T) {
 // TestOpen_DiscoveredBanksReadOnly: whatever the profile — including
 // Simulated, whose MEM/PMS fields ARE writable — every field of a
 // discovered 60M/EMG bank must be read-only: MW cannot target 5xx/EMG
-// slots at all (cat.Slot.Writable), so no capability data may claim
+// slots at all (cat.Dialect.writableSlot), so no capability data may claim
 // otherwise.
 func TestOpen_DiscoveredBanksReadOnly(t *testing.T) {
 	_, sess := openSession(t, Simulated, fakeradio.WithFactoryImage(fakeradio.ImageUS))

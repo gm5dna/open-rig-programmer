@@ -25,7 +25,7 @@ type Radio struct {
 	mu             sync.Mutex
 	slots          map[string]MemState
 	currentChannel string
-	ai             byte              // '0' or '1'; ASSUMED OFF at construction — doc.go register entry 14
+	ai             byte              // '0' or '1'; OFF at construction, a MANUAL FACT (manual line 317)
 	exSettings     map[string]string // EX (MENU) six-digit address -> raw P4; see ex.go
 
 	// shutdown is closed (exactly once, by closePipes) when the radio goes
@@ -54,8 +54,13 @@ func New(opts ...Option) *Radio {
 		// NoneWire (core/cat/ftdx10's register entry 3), cited not
 		// re-derived — it appears in no FTdx10 slot legend.
 		currentChannel: slotNoneWire,
-		// ASSUMED OFF — doc.go register entry 14: New models a
-		// freshly-powered radio.
+		// OFF at construction: New models a freshly-powered radio, and
+		// this radio's own manual says what that state is — "This
+		// parameter is set to '0' (OFF) automatically when the
+		// transceiver is turned 'OFF'" (manual line 317). A MANUAL FACT,
+		// not an assumption; registered as one until the M9d follow-up
+		// wave, and now doc.go's "What is NOT in this register, and why"
+		// (with entry 14's tombstone).
 		ai: '0',
 		// The generated projection of transcription B, expanded to
 		// address -> raw P4. The VALUES are invented (doc.go register

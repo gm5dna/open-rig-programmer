@@ -55,11 +55,15 @@ type slotSpace struct {
 // datum above, and the window derives from this dialect's own tag width
 // (Dialect.mtShortAnswerMax, Dialect.MTAnswerBounds) rather than from a
 // package constant sized to the FT-710. Both reach the gate, which is why
-// they moved. Still deferred: memdata.go's field offsets, which the
-// evidence shows both families share byte for byte; Slot's own predicates;
-// and Mode.String. The dividing line is unchanged — a wrong assumption in
-// the gate can authorise bytes that reach a radio, whereas a wrong offset
-// merely fails to parse — and it is what decided which of these moved.
+// they moved. NOR ARE SLOT'S OWN PREDICATES DEFERRED ANY LONGER: M9d gave
+// Slot the dialect tag M9b ledgered, so IsMemory and friends read the kind
+// their constructing dialect stored instead of a package-level helper
+// forwarding to FT710 (see Slot in slot.go). Still deferred: memdata.go's
+// field offsets, which the evidence shows both families share byte for
+// byte; and Mode.String. The dividing line is unchanged — a wrong
+// assumption in the gate can authorise bytes that reach a radio, whereas a
+// wrong offset merely fails to parse — and it is what decided which of
+// these moved.
 //
 // The unqualified form of the rule above ("every method … must read this
 // struct rather than a package-level global", full stop)
