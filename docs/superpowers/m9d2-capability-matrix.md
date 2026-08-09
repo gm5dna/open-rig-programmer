@@ -30,20 +30,27 @@ it at erratum weight in place
 
 Because this document was consumed by an executed plan, **nothing here
 is silently rewritten**: every correction after rev 2 is recorded, at a
-weight set by what it does to a reader. A correction that SUPERSEDES A
-SHIPPED ASSERTION carries the full erratum apparatus — what stood, what
-now stands, and the record that adjudicated it — and every site it
-corrects carries a tag pointing back; rev 3's three are numbered in §6
-and tagged `(rev 3 erratum N)`, and rev 4's one is recorded at the site
-it corrects, inside erratum 3, for the reason given there. A correction
-that supersedes NO assertion — a pointer to unmoved code, a pure
-addition, a re-wrap — is recorded in this paragraph with a `(rev 4)`
-tag at the site, which carries the number or wording it replaced.
-**(rev 4: this rule read "every correction after rev 2 is an erratum in
-§6"; rev 4 grades it by whether a shipped assertion is superseded, and
-argues the grading where it applies it.)** The one untagged edit is the
-§3.6 re-wrap, which changed no word and so has nothing to point back
-at; it is named here instead.
+weight set by what it does to a reader. A correction that SUPERSEDES AN
+ASSERTION ALREADY CONSUMED OR SHIPPED carries the full erratum
+apparatus — what stood, what now stands, and the record that
+adjudicated it — and every site it corrects carries a tag pointing
+back; rev 3's three are numbered in §6 and tagged `(rev 3 erratum N)`,
+and rev 4's one is recorded at the site it corrects, inside erratum 3,
+for the reason given there. The two conditions are distinct and NEITHER
+ALONE COVERS BOTH CASES: rev 3 corrected rev-1/2 text that an executed
+plan had CONSUMED though nothing had yet shipped (rev 3, `36e1763`, is
+an ancestor of v1.0.0, `2d3b03a`), whilst rev 4 corrects rev-3 text
+that has SHIPPED though no plan consumed it. A correction that
+supersedes NO assertion — a pointer to unmoved code, a pure addition, a
+re-wrap — is recorded in this paragraph with a `(rev 4)` tag at the
+site, which carries the number or wording it replaced; so is a
+correction to a revision's own in-flight text, before it is either
+consumed or shipped, which is why rev 4's fix rounds amend rev 4's own
+tags freely. **(rev 4: this rule read "every correction after rev 2 is
+an erratum in §6"; rev 4 grades it by whether the superseded assertion
+had already been consumed or shipped, and argues the grading where it
+applies it.)** The one untagged edit is the §3.6 re-wrap, which changed
+no word and so has nothing to point back at; it is named here instead.
 
 ## What this is
 
@@ -1686,47 +1693,50 @@ one of them is a drift — see the correction immediately below.)**
 with the full apparatus, because unlike rev 4's other items this one
 supersedes an assertion that has SHIPPED.**
 
-**What stood:** that "the same paragraph's two other citations have
-drifted by a few lines", with `validateCombinedMTFields` "at
-`core/cat/mtcombined.go:104` (cited as 105)" offered as the second of
+**What stood (rev 3's disclosure):** that "the same paragraph's two other
+citations have drifted by a few lines", with `validateCombinedMTFields`
+"at `core/cat/mtcombined.go:104` (cited as 105)" offered as the second of
 the two drifts.
 
-**What now stands:** only ONE of the two drifted. Both facts in the
-parenthetical are true — the declaration is at `:104`, and §1.3.5 did
+**What now stands (rev 4):** only ONE of the two drifted. Both facts in
+the parenthetical are true — the declaration is at `:104`, and §1.3.5 did
 cite `:105` — but grouping them under "have drifted" implies `:105` was
 therefore stale, and it was not. §1.3.5 read "`Dialect.mtSlotValid`,
 **defined at** `core/cat/mt.go:115`, **reached by**
 `validateCombinedMTFields` **at** `core/cat/mtcombined.go:105`", and
-`mtcombined.go:105` is `if !d.mtSlotValid(m.Slot) {` — the line at
-which that function reaches the predicate. Read as the call-site
-citation its own sentence makes of it, `:105` was exact at rev 1 and is
-exact today. `mtSlotValid`'s 115 → 118 is a genuine drift and stands.
+`mtcombined.go:105` is `if !d.mtSlotValid(m.Slot) {` — the line at which
+that function reaches the predicate. Read as the call-site citation its
+own sentence makes of it, `:105` was exact at rev 1 and is exact today.
+`mtSlotValid`'s 115 → 118 is a genuine drift and stands.
 
 **The measurement.** `validateCombinedMTFields` has sat at
-`core/cat/mtcombined.go:104` since `344538c` (29/07/2026), ten days
-before this matrix was written; that file's last commit is `344538c`,
-and `:104`/`:105` are byte-identical at `432fd4e`, `2745e14`,
-`706f680` and today. There was no drift to disclose. Separately, and by
-the same measurement, the OTHER stale number in this paragraph's
-neighbourhood was not a drift in origin either: `:100-108` was six
-lines short when rev 1 wrote it, and follow-up 2 later widened the gap
-by three. See §1.3.5's span-bound tag.
+`core/cat/mtcombined.go:104` since `344538c` (29/07/2026), ten days before
+this matrix was written; that file's last commit is `344538c`, and
+`:104`/`:105` are byte-identical at `432fd4e`, `2745e14`, `706f680` and
+today. There was no drift to disclose. Separately, and by the same
+measurement, the OTHER stale number in this paragraph's neighbourhood was
+not a drift in origin either: `:100-108` was six lines short when rev 1
+wrote it, and follow-up 2 later widened the gap by three. See §1.3.5's
+span-bound tag.
 
 **The record.** Rev 4's fix-round review,
-`.superpowers/sdd/m9d-minors-task2-review.md` finding **F2** (F1 for
-the span bound), each re-measured independently by the orchestrator and
-by the implementer before this correction was written. This is erratum
-2's own process lesson applied to erratum 3: a disputed numeric
-citation is settled by running the measurement, never by inheriting a
-previous reader's reading.
+`.superpowers/sdd/m9d-minors-task2-review.md` findings **F1** (the span
+bound) and **F2** (this one), each re-measured against the repository
+before this correction was written; the runs on record are that review's
+own transcripts and the measurement tables in
+`.superpowers/sdd/m9d-minors-task2-report.md`. This is erratum 2's process
+lesson — "a disputed numeric citation is settled by running the
+measurement, never by counting verifiers" — in the form this case takes:
+never by inheriting a previous reader's reading, either.
 
 **Why recorded here and not as a numbered erratum 4.** §6's numbered
 entries are rev 3's set, and the section heading and intro — shipped
-text — say so; a fourth number would falsify both and would put the
-correction three screens from the sentence it corrects. The apparatus
-is what makes an erratum, not the numbering, so rev 4 gives the full
-apparatus at the site, names it in the header and the Revisions
-paragraph, and flags it in §6's heading.**)**
+text — say so, and still do under rev 4's annotation of the heading; a
+fourth number would falsify both and would put the correction three
+screens from the sentence it corrects. The apparatus is what makes an
+erratum, not the numbering, so rev 4 gives the full apparatus at the
+site, names it in the header and the Revisions paragraph, and flags it
+in §6's heading.**)**
 
 **Records.** The deletion's rationale is in `core/cat/slot.go`'s own
 "THERE IS NO `Slot.Writable`" note and in `validateMWFields`' SEAM NOTE
