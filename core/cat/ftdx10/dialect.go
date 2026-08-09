@@ -72,7 +72,8 @@ var dialect = cat.MustNewDialect(cat.DialectConfig{
 		// ASSUMED bounds — the FTdx10 legends say only "5xx (5MHz
 		// BAND)"; 501..599 (start, ceiling and count) is interpretation
 		// inherited from the FT-710, whose own reference marks exactly
-		// this numbering unverified. Register entry 5.
+		// this numbering unverified. The SlotSpace.SixtyLo/SixtyHi register
+		// entry.
 		SixtyLo: 501, SixtyHi: 599,
 		PMSPairs:      9,
 		EmergencyWire: "EMG",

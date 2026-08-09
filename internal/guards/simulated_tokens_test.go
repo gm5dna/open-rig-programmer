@@ -70,6 +70,18 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 	// pairing clause (the one file naming ftdx10.Simulated must also call
 	// fakedx10.New, so a Simulated driver can never be wired to another
 	// model's rig or to a real port). Each further driver is one more row.
+	//
+	// FOUR ROWS SINCE M9d-2 TASK 7, and the last two are NOT one per driver
+	// package: core/driver/ftdx101 drives BOTH FTDX101 siblings from one
+	// type, so there is ONE package and ONE Simulated token, but TWO fake
+	// constructors — fakedx101.NewD and fakedx101.NewMP — and internal/wiring
+	// must call both in its one fake-wiring file. A row is therefore
+	// (package, token, fake CONSTRUCTOR), and the FTdx101 contributes two
+	// rows differing only in fakeCtor. The confinement clauses (exactly one
+	// non-test file, and it lives in internal/wiring) are checked twice over
+	// the same token and agree trivially; the PAIRING clause is what earns
+	// the second row, because a registration that wired both models to
+	// fakedx101.NewD would satisfy the D row and fail the MP one.
 	simulatedProfiles := []struct {
 		pkg          string // base name of core/driver/<pkg>
 		token        string // the simulated-profile constant, e.g. "Simulated"
@@ -78,6 +90,8 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 	}{
 		{"ft710", "Simulated", "fakeradio.New", "internal/fakeradio"},
 		{"ftdx10", "Simulated", "fakedx10.New", "internal/fakedx10"},
+		{"ftdx101", "Simulated", "fakedx101.NewD", "internal/fakedx101"},
+		{"ftdx101", "Simulated", "fakedx101.NewMP", "internal/fakedx101"},
 	}
 
 	// Non-vacuity: an empty table would make the loop below a no-op and

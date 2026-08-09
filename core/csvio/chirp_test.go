@@ -93,8 +93,11 @@ func ft710LikeCapabilities() spec.Capabilities {
 				spec.FieldTagDisplay: rw,
 				// Tone and scan skip are the zero FieldSupport on the real
 				// FT-710 too (its CAT protocol reaches neither); erase is
-				// {Unsupported, Unverified} on MEM there, and neither shape
-				// is anything ImportCHIRP consults.
+				// {Unsupported, Unverified} on MEM there, and THAT shape is
+				// nothing ImportCHIRP consults. FieldScanSkip stopped being
+				// decoration at M9d-2 task 8: ImportCHIRP now derives the
+				// imported scan_skip from it, so this entry is load-bearing
+				// exactly as FieldTagDisplay's already was.
 				spec.FieldCTCSSTone: {},
 				spec.FieldScanSkip:  {},
 			}},
@@ -558,11 +561,20 @@ func TestImportCHIRP_UnavailableTagDisplayDoesNotBlockTheDiff(t *testing.T) {
 	// writableCapabilities' permissive table with ONLY tag_display zeroed,
 	// for the reason that fixture exists at all: every other field a
 	// CHIRP-imported channel transmits stays write-Supported, so the only
-	// thing that can block this entry is the tag_display gate. (Against a
-	// real FTdx10 — or a real FT-710 — a CHIRP import also meets the
-	// scan_skip gate, since neither radio can write that field and CHIRP's
-	// Skip column produces a Known one. That is E1-independent, predates
-	// this milestone, and is exactly the masking this fixture removes.)
+	// thing that can block this entry is the tag_display gate.
+	//
+	// scan_skip is still one of those fields, and its permissiveness is
+	// still load-bearing HERE: because this fixture declares scan_skip
+	// writable, ImportCHIRP takes chirpScanSkip's LITERAL branch against
+	// it and produces a Known one, which would meet the write gate and
+	// mask the entry under test if the support were not permissive.
+	//
+	// What HAS changed (M9d-2 task 8) is the real-radio half of that
+	// story. Against a real FT-710 or FTdx10 the masking no longer arises
+	// at all: scan-skip is Unreachable on both, so a CHIRP import now
+	// yields Unknown for it and the field never enters codeplug.Diff's
+	// requestedFields. Before that fold it did, and this fixture was the
+	// only thing keeping the tag_display gate visible.
 	caps := writableCapabilities()
 	banks := make([]spec.Bank, len(caps.Banks))
 	copy(banks, caps.Banks)
@@ -728,6 +740,255 @@ func TestImportCHIRP_UnknownTagDisplayBlocksTheDiff(t *testing.T) {
 	}
 }
 
+// ftdx101LikeCapabilities mirrors ONE thing about the FTdx101 faithfully:
+// its per-bank field-support map (core/driver/ftdx101/caps.go's
+// bankFields), which is the only part of that radio's capabilities these
+// scan-skip and tag-display tests read. Everything ELSE is inherited
+// unexamined from ft710LikeCapabilities and is NOT a claim about the real
+// radio — the mode/tone/shift/CTCSS vocabularies and TagLen below are the
+// FT-710's, and spec.FieldErase is omitted altogether. Nothing here asks
+// this fixture an FTdx101-specific question about any of them, and a test
+// that needed one would have to widen the fixture first rather than trust
+// it. It is hand-built rather than taken from the driver for the same
+// reason ft710LikeCapabilities and ftdx10LikeCapabilities are: core/csvio
+// sits below core/driver and must not import it, even in tests.
+//
+// model/catID pick the sibling: "FTdx101D"/"0681" or "FTdx101MP"/"0682"
+// (core/driver/ftdx101/ftdx101.go's modelD/modelMP). The two differ in
+// NOTHING this package can see — ftdx101/caps.go's bankFields is one
+// function serving both models, and its doc comment's matrix §2.5
+// citation is why (the manual prints the memory-channel surface once, with
+// no model qualifier) — so both fixtures are built from one constructor
+// rather than two, and the tests still name them separately because the
+// registry does.
+//
+// The field map is ftdx101/caps.go's bankFields shape: tag_display the
+// zero FieldSupport (a manual-evidenced absence — the combined MT record
+// has no display flag), and ctcss_tone/scan_skip the zero FieldSupport
+// too, there on the weaker ASSUMED footing of that driver's register
+// entry 6. This fixture's job is only to carry the scan_skip answer
+// faithfully; the bank geometry ("001".."099", ftdx101/caps.go's memSlots)
+// happens to match the other two radios' exactly, and no test here depends
+// on that.
+func ftdx101LikeCapabilities(model, catID string) spec.Capabilities {
+	caps := ft710LikeCapabilities()
+	caps.Model = model
+	caps.CATID = catID
+	rw := spec.FieldSupport{Read: spec.Supported, Write: spec.Supported}
+	banks := make([]spec.Bank, len(caps.Banks))
+	copy(banks, caps.Banks)
+	for i := range banks {
+		banks[i].Fields = map[spec.Field]spec.FieldSupport{
+			spec.FieldFrequency:  rw,
+			spec.FieldMode:       rw,
+			spec.FieldClarifier:  rw,
+			spec.FieldCTCSSState: rw,
+			spec.FieldShift:      rw,
+			spec.FieldTag:        rw,
+			// No display flag exists in this radio's combined MT record.
+			spec.FieldTagDisplay: {},
+			// ASSUMED unreachable — that driver's register entry 6.
+			spec.FieldCTCSSTone: {},
+			spec.FieldScanSkip:  {},
+		}
+	}
+	caps.Banks = banks
+	return caps
+}
+
+// registeredRadioCapabilities returns one fixture per model registered in
+// internal/wiring's driver tables, each mirroring that model's real
+// scan-skip support. It is a table of FIXTURES rather than a walk of the
+// registry for the layering reason ft710LikeCapabilities gives — core/csvio
+// must not import core/driver, and internal/wiring imports every driver —
+// so each entry cites the caps site it mirrors, and drift between the two
+// is caught end-to-end by the CLI byte-identity baseline, which does use
+// the real drivers.
+//
+// Every registered model's scan_skip is the zero FieldSupport today, which
+// is exactly why the caps-aware branch (M9d-2 task 8, spec decision 5) is
+// the one every real import takes: FT-710 (ft710/caps.go's bankFields —
+// the 28-byte MR/MW layout has no scan-skip position), FTdx10
+// (ftdx10/caps.go's bankFields), FTdx101D and FTdx101MP
+// (ftdx101/caps.go's bankFields, one map for both siblings). The
+// writable-radio branch has no registered radio at all and is pinned
+// separately against writableCapabilities.
+//
+// THE LIST IS HAND-WRITTEN AND THIS TEST CANNOT NOTICE A FIFTH MODEL.
+// Registering one adds no row here by itself, so this table would go on
+// claiming to cover "every registered radio" while silently skipping it.
+// The registry-walk pin lives where the registry does —
+// internal/wiring.SupportedModels and
+// TestSupportedModels_ContainsEveryRegisteredModel (internal/wiring/
+// wiring_test.go), which walks the real tables — and it does not know
+// about this file. Registering a model is therefore a two-place change:
+// its row goes here as well, mirroring that driver's own scan-skip
+// support, whichever branch it lands in. A model whose scan-skip is
+// genuinely writable belongs in the literal-branch test instead, and the
+// Unreachable precondition assertion below is what will say so.
+func registeredRadioCapabilities() []spec.Capabilities {
+	return []spec.Capabilities{
+		ft710LikeCapabilities(),
+		ftdx10LikeCapabilities(),
+		ftdx101LikeCapabilities("FTdx101D", "0681"),
+		ftdx101LikeCapabilities("FTdx101MP", "0682"),
+	}
+}
+
+// skipEntries returns every LossEntry the report holds for the Skip
+// column, in order. The scan-skip tests assert on this slice alone: a row
+// may legitimately produce OTHER columns' entries (an FTdx10/FTdx101
+// import drops nothing extra here, but the assertion should not depend on
+// that), and what is being pinned is the Skip rule.
+func skipEntries(r LossReport) []LossEntry {
+	var out []LossEntry
+	for _, e := range r.Entries {
+		if e.Column == "Skip" {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// TestImportCHIRP_ScanSkipIsCapabilityAware is M9d-2 task 8's headline
+// (spec decision 5), driven over EVERY registered radio's real
+// capabilities: where scan-skip is Unreachable — today, all four — a
+// CHIRP file's Skip column can no longer produce a Known scan_skip,
+// because a Known one is a CLAIM this radio's protocol cannot carry.
+//
+// The blank cell is the case that mattered: it used to import
+// {Known,false}, which put spec.FieldScanSkip into codeplug.Diff's
+// requestedFields for EVERY imported channel (diff.go's requestedFields),
+// and the all-or-nothing write gate then blocked every one of them — a
+// clean three-row import planned as "Blocked 3" (the M9c-6 manifest's A7
+// finding). Unknown says the truthful thing (the file has told us nothing
+// this radio can act on) and asks the user nothing, because there is
+// nothing for the user to answer.
+//
+// The "S" cell is a real intent that cannot be honoured, so it is DROPPED
+// with a non-blocking loss entry rather than silently discarded: the user
+// asked for a scan skip, this radio has no way to store one, and the
+// report says so per row. Blocking stays false — refusing to import a
+// channel over a flag the radio does not have would be the same
+// over-blocking A7 recorded, one layer up.
+//
+// The unrecognised-value arm is unchanged in both worlds and is pinned
+// here as well so that the shared arm cannot drift under one branch only.
+func TestImportCHIRP_ScanSkipIsCapabilityAware(t *testing.T) {
+	const csv = "Location,Name,Frequency,Duplex,Tone,rToneFreq,cToneFreq,Mode,Skip\n" +
+		"1,BLANK,145.500000,,,,,FM,\n" +
+		"2,SKIPPED,145.525000,,,,,FM,S\n" +
+		"3,ODD,145.550000,,,,,FM,P\n"
+
+	for _, caps := range registeredRadioCapabilities() {
+		t.Run(caps.Model, func(t *testing.T) {
+			fs := caps.FieldSupport(spec.BankMemory, spec.FieldScanSkip)
+			if !fs.Unreachable() {
+				t.Fatalf("fixture precondition: %s scan_skip = %+v, want Unreachable — this test is about the unreachable branch", caps.Model, fs)
+			}
+
+			channels, report, err := ImportCHIRP(strings.NewReader(csv), caps)
+			if err != nil {
+				t.Fatalf("ImportCHIRP() error = %v", err)
+			}
+			if len(channels) != 3 {
+				t.Fatalf("imported %d channels, want 3", len(channels))
+			}
+
+			// Blank Skip: Unknown, and NOTHING reported — the file simply
+			// said nothing, which is not a loss.
+			for i, ch := range channels {
+				if ch.Data == nil {
+					t.Fatalf("channels[%d].Data = nil", i)
+				}
+			}
+			if got := channels[0].Data.ScanSkip; got != (codeplug.BoolField{State: codeplug.Unknown}) {
+				t.Errorf("blank Skip -> ScanSkip = %+v, want {Unknown} on %s: a Known false is a claim this radio's protocol cannot carry, and it blocked every imported channel", got, caps.Model)
+			}
+			for _, e := range skipEntries(report) {
+				if e.Line == 2 {
+					t.Errorf("blank Skip produced a loss entry on %s: %+v — an absent cell is not a loss", caps.Model, e)
+				}
+			}
+
+			// "S": Unknown plus a NON-BLOCKING dropped entry naming the
+			// radio.
+			if got := channels[1].Data.ScanSkip; got != (codeplug.BoolField{State: codeplug.Unknown}) {
+				t.Errorf("Skip=S -> ScanSkip = %+v, want {Unknown} on %s", got, caps.Model)
+			}
+			wantS := LossEntry{
+				Line: 3, Column: "Skip", Value: "S", Action: ActionDropped, Blocking: false,
+				Detail: fmt.Sprintf("CHIRP Skip \"S\" dropped: scan-skip is not reachable over CAT on %s; scan-skip left unresolved", caps.Model),
+			}
+			var gotS []LossEntry
+			for _, e := range skipEntries(report) {
+				if e.Line == 3 {
+					gotS = append(gotS, e)
+				}
+			}
+			if len(gotS) != 1 || gotS[0] != wantS {
+				t.Errorf("Skip=S entries on %s = %+v, want exactly [%+v]", caps.Model, gotS, wantS)
+			}
+
+			// "P": today's unrecognised arm, byte-identical in both worlds.
+			if got := channels[2].Data.ScanSkip; got != (codeplug.BoolField{State: codeplug.Unknown}) {
+				t.Errorf("Skip=P -> ScanSkip = %+v, want {Unknown} on %s", got, caps.Model)
+			}
+			wantP := LossEntry{
+				Line: 4, Column: "Skip", Value: "P", Action: ActionDropped, Blocking: false,
+				Detail: fmt.Sprintf("CHIRP Skip value \"P\" has no %s equivalent; scan-skip left unresolved", caps.Model),
+			}
+			var gotP []LossEntry
+			for _, e := range skipEntries(report) {
+				if e.Line == 4 {
+					gotP = append(gotP, e)
+				}
+			}
+			if len(gotP) != 1 || gotP[0] != wantP {
+				t.Errorf("Skip=P entries on %s = %+v, want exactly [%+v]", caps.Model, gotP, wantP)
+			}
+		})
+	}
+}
+
+// TestImportCHIRP_ScanSkipLiteralOnAWritableRadio pins the OTHER branch —
+// the one no registered radio takes today. On a radio whose scan-skip is
+// genuinely reachable, the CHIRP file's Skip column means exactly what it
+// says and the reading is the literal, pre-M9d-2 one: blank is a real
+// "do not skip" ({Known,false}), "S" is a real "skip" ({Known,true}), and
+// neither loses anything worth reporting.
+//
+// Without this the caps-aware fold would be indistinguishable from simply
+// deleting the Known arm, and the first radio registered with a writable
+// scan-skip would silently import as if it had none.
+func TestImportCHIRP_ScanSkipLiteralOnAWritableRadio(t *testing.T) {
+	const csv = "Location,Name,Frequency,Duplex,Tone,rToneFreq,cToneFreq,Mode,Skip\n" +
+		"1,BLANK,145.500000,,,,,FM,\n" +
+		"2,SKIPPED,145.525000,,,,,FM,S\n"
+
+	caps := writableCapabilities()
+	if fs := caps.FieldSupport(spec.BankMemory, spec.FieldScanSkip); fs.Unreachable() {
+		t.Fatalf("fixture precondition: writableCapabilities scan_skip = %+v, want reachable", fs)
+	}
+
+	channels, report, err := ImportCHIRP(strings.NewReader(csv), caps)
+	if err != nil {
+		t.Fatalf("ImportCHIRP() error = %v", err)
+	}
+	if len(channels) != 2 {
+		t.Fatalf("imported %d channels, want 2", len(channels))
+	}
+	if got := channels[0].Data.ScanSkip; got != (codeplug.BoolField{State: codeplug.Known, Value: false}) {
+		t.Errorf("blank Skip -> ScanSkip = %+v, want {Known,false} on a radio that can store it", got)
+	}
+	if got := channels[1].Data.ScanSkip; got != (codeplug.BoolField{State: codeplug.Known, Value: true}) {
+		t.Errorf("Skip=S -> ScanSkip = %+v, want {Known,true} on a radio that can store it", got)
+	}
+	if got := skipEntries(report); len(got) != 0 {
+		t.Errorf("Skip entries = %+v, want none: nothing is lost when the radio can store the answer", got)
+	}
+}
+
 // TestImportCHIRP_Fixture drives testdata/chirp_sample.csv — one row per
 // mapping rule in the brief — against a table of expected channels and
 // expected LossEntries (line/column/action/blocking all asserted, per
@@ -771,8 +1032,13 @@ func TestImportCHIRP_Fixture(t *testing.T) {
 				if d.Tag != "CALLING" {
 					t.Errorf("Tag = %q, want CALLING", d.Tag)
 				}
-				if d.ScanSkip.State != codeplug.Known || d.ScanSkip.Value != false {
-					t.Errorf("ScanSkip = %+v, want Known/false", d.ScanSkip)
+				// Blank Skip on the FT-710 — whose scan-skip is
+				// Unreachable — is Unknown, not Known/false: M9d-2 task 8
+				// (spec decision 5). See
+				// TestImportCHIRP_ScanSkipIsCapabilityAware for the rule and
+				// the A7 over-blocking it fixes.
+				if d.ScanSkip.State != codeplug.Unknown {
+					t.Errorf("ScanSkip = %+v, want Unknown", d.ScanSkip)
 				}
 			},
 			want: nil,
@@ -788,11 +1054,13 @@ func TestImportCHIRP_Fixture(t *testing.T) {
 				if d.Mode != "FM-N" {
 					t.Errorf("Mode = %q, want FM-N", d.Mode)
 				}
-				if d.ScanSkip.State != codeplug.Known || d.ScanSkip.Value != true {
-					t.Errorf("ScanSkip = %+v, want Known/true", d.ScanSkip)
+				// Skip=S on a radio that cannot store one: Unknown plus the
+				// non-blocking dropped entry below (M9d-2 task 8).
+				if d.ScanSkip.State != codeplug.Unknown {
+					t.Errorf("ScanSkip = %+v, want Unknown", d.ScanSkip)
 				}
 			},
-			want: []wantEntry{{3, "Offset", "dropped", false}},
+			want: []wantEntry{{3, "Offset", "dropped", false}, {3, "Skip", "dropped", false}},
 		},
 		{
 			name:     "Location 3: Duplex -, Mode AM",

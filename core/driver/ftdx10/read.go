@@ -42,7 +42,7 @@ var shiftNames = map[cat.Shift]string{
 // all. Two reasons, both load-bearing: a literal would silently keep
 // answering 41 for a dialect whose tag field was a different width, and
 // the combined answer's exactness is itself an ASSUMPTION the dialect
-// carries (its register entry 6, "the combined MT answer's EXACT length"),
+// carries (its register entry "the combined MT answer's EXACT length"),
 // whose recorded Stage R contingency is a 30..41 WINDOW. If that
 // contingency is ever taken, the bounds move in core/cat and this spec
 // moves with them.
@@ -75,7 +75,8 @@ func mtSpec(d cat.Dialect) (transport.CommandSpec, error) {
 //
 // The empty-slot rule: a "?;" rejection is mapped to an EMPTY channel
 // (Data nil, the slot carried through), not an error. ASSUMED — register
-// entry 8: "?;" is the protocol's single unattributed NAK, so reading
+// "?;" ON A COMBINED-MT READ OF AN EMPTY SLOT entry: "?;" is the
+// protocol's single unattributed NAK, so reading
 // "empty" out of it is an interpretation, and this radio's combined-MT
 // read of an empty channel has never been observed. The FT-710's
 // equivalent was verified for ITS MR read, which is a different frame on a
@@ -91,7 +92,8 @@ func mtSpec(d cat.Dialect) (transport.CommandSpec, error) {
 // grid refuses to toggle it, csvio spells it.
 //
 // CTCSSTone and ScanSkip come back codeplug.Unknown, ALWAYS: register
-// entry 6. "Unknown" means "preserve whatever the radio has" to every
+// TONE AND SCAN-SKIP UNREACHABILITY entry. "Unknown" means "preserve
+// whatever the radio has" to every
 // write path downstream, which is the only honest instruction for a field
 // this driver cannot see.
 //
@@ -117,7 +119,8 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 	cmd, err := s.dialect.BuildMTRead(sl)
 	if err != nil {
 		// e.g. the answer-only none form ("000" for this dialect —
-		// its own ASSUMED register entry 3): grammatical per ParseSlot,
+		// its own ASSUMED register entry SlotSpace.NoneWire): grammatical
+		// per ParseSlot,
 		// never a legal read target.
 		return codeplug.Channel{}, fmt.Errorf("ftdx10: ReadChannel: %w", err)
 	}
@@ -129,7 +132,8 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 
 	frame, err := s.eng.Do(ctx, cmd, cmdSpec)
 	if errors.Is(err, cat.ErrRejected) {
-		// ASSUMED empty slot — register entry 8.
+		// ASSUMED empty slot — the "?;" ON A COMBINED-MT READ OF AN EMPTY
+		// SLOT register entry.
 		return codeplug.Channel{Slot: sl.Wire()}, nil
 	}
 	if err != nil {
@@ -167,20 +171,23 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 			// cat.ModeUnset renders "-" and is mapped through faithfully
 			// — codeplug.Validate flags it as not a selectable mode,
 			// which is the right outcome for a placeholder this radio's
-			// legends do not even list (the dialect's register entry 4).
+			// legends do not even list (the dialect's register entry for the
+			// cat.ModeUnset table member).
 			Mode:   s.dialect.ModeName(m.Mode),
 			ClarHz: int(m.ClarHz),
 			RxClar: m.RxClar,
 			TxClar: m.TxClar,
 			CTCSS:  ctcss,
-			// Register entry 6: no tone number is readable.
+			// The TONE AND SCAN-SKIP UNREACHABILITY entry: no tone number is
+			// readable.
 			CTCSSTone: codeplug.ToneField{State: codeplug.Unknown},
 			Shift:     shift,
 			Tag:       tag,
 			// UNAVAILABLE, not Unknown and never Known: this radio's
 			// combined record has no display flag. See the doc comment.
 			TagDisplay: codeplug.BoolField{State: codeplug.Unavailable},
-			// Register entry 6: no scan-skip flag is readable.
+			// The TONE AND SCAN-SKIP UNREACHABILITY entry: no scan-skip flag
+			// is readable.
 			ScanSkip: codeplug.BoolField{State: codeplug.Unknown},
 		},
 	}, nil

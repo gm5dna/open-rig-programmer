@@ -29,8 +29,10 @@ func (a *App) ListPorts() ([]PortEntry, error) {
 // GetSupportedModels returns every radio model name this build can open a
 // real session against (internal/wiring.SupportedModels' own sorted
 // output) — registry-driven, which M9c-6 confirmed rather than merely
-// promised: registering the FTdx10 made this method return two models with
-// no change to a line of it. It is the list Connect/ConnectDemo's own
+// promised (registering the FTdx10 made this method return two models with
+// no change to a line of it) and M9d-2 confirmed again (the FTdx101D and
+// FTdx101MP took it to four, still with no change to a line of it).
+// It is the list Connect/ConnectDemo's own
 // model parameter is validated against (see connectModel), so a frontend
 // model picker built on this method can never offer a model the connect
 // path would then refuse.
@@ -47,8 +49,12 @@ func (a *App) Connect(portPath, model string) (ConnectionInfo, error) {
 }
 
 // ConnectDemo opens a session against the in-process simulated radio for
-// model (internal/fakeradio, via internal/wiring.OpenFakeSessionFor) —
-// never real hardware. model follows Connect's rule exactly.
+// model — never real hardware. Which simulator that is is the WIRING's
+// business, not this method's: internal/wiring.OpenFakeSessionFor looks the
+// model up in its own table and builds that model's own fake rig
+// (internal/fakeradio for the FT-710, internal/fakedx10 for the FTdx10,
+// internal/fakedx101 for both FTDX101 siblings). model follows Connect's
+// rule exactly.
 func (a *App) ConnectDemo(model string) (ConnectionInfo, error) {
 	return a.connect(true, "", model)
 }
@@ -71,11 +77,16 @@ func (a *App) ConnectDemo(model string) (ConnectionInfo, error) {
 // "the default", never "whatever the file says" — naming a model is the
 // caller's explicit act.
 //
-// That scenario stopped being hypothetical at M9c-6: BOTH models are
-// registered now, so an FTdx10 working copy and an FT-710 on the cable is a
-// combination a user can really produce. The wrong pairing would still be
+// That scenario stopped being hypothetical at M9c-6: a second model was
+// registered, so an FTdx10 working copy and an FT-710 on the cable became a
+// combination a user can really produce. M9d-2 made it four models and
+// added a sharper case — an FTDX101D working copy with an FTDX101MP on the
+// cable, two radios that differ in one CAT ID and nothing else. The wrong
+// pairing would still be
 // caught one layer down — each driver's Open probes the CAT ID and refuses
-// a radio that is not its own (*driver.WrongRadioError) — but this rule is
+// a radio that is not its own (*driver.WrongRadioError, which since M9d-1
+// carries WantModel and GotModel so the refusal can NAME both siblings) —
+// but this rule is
 // what stops the mismatch being ATTEMPTED, and it is the reason the
 // protection does not depend on every future radio answering a
 // distinguishable ID.

@@ -96,3 +96,14 @@ type FieldSupport struct {
 func (f FieldSupport) CanWrite() bool {
 	return f.Write == Supported
 }
+
+// Unreachable reports whether this field is Unsupported in BOTH
+// directions — the radio's protocol is not believed to reach it at all,
+// as opposed to reaching it unverifiedly (Unverified) or inertly
+// (Inert). Callers use it to decide whether an externally supplied
+// value for the field can even be a claim about this radio: see
+// core/csvio's CHIRP skip/tag-display construction and app's
+// tag-display default.
+func (f FieldSupport) Unreachable() bool {
+	return f.Read == Unsupported && f.Write == Unsupported
+}

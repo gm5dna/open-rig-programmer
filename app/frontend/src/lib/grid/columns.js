@@ -72,9 +72,23 @@ export const COLUMNS = [
  *     into the column, which is still there and still the bulk route.
  *
  *     Tone and scan skip stay 'known'-only for the opposite reason: their
- *     'unknown' is not a question the user may answer, because the
- *     protocol cannot write them at all — answering it would only
- *     manufacture a value that is never sent.
+ *     'unknown' is not a question the user may answer, because on every
+ *     radio that can produce it the field is UNREACHABLE — Unsupported in
+ *     both directions, spec.FieldSupport.Unreachable — so answering it
+ *     would only manufacture a value that is never sent. The rule is
+ *     capability-derived, not a fact about all radios: a future radio
+ *     whose scan-skip is genuinely writable imports {known, …} directly
+ *     (core/csvio's chirpScanSkip) and is editable here by that route, so
+ *     nothing needs relaxing when one arrives.
+ *
+ *     This paragraph got MORE load-bearing at M9d-2 task 8, which is why
+ *     it now says which radios: a CHIRP import used to hand every channel
+ *     a {known, false} scan skip regardless of the radio, and that Known
+ *     was the state blocking the whole channel at plan time (the M9c-6
+ *     manifest's A7 finding). Such imports now arrive 'unknown', so this
+ *     column is non-editable for them — unchanged behaviour reached by a
+ *     different route, since a Known-but-unwritable cell was equally
+ *     pointless to edit.
  *
  *     UNAVAILABLE is refused for both, and by paste too (M9c-5 review W2,
  *     see paste.js): there is no flag in that radio's frame for any value

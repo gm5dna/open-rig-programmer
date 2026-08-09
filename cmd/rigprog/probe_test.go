@@ -172,6 +172,23 @@ func TestWrongRadioMessage_NamesSelectedModel(t *testing.T) {
 	if strings.Contains(got2, "FT-710") {
 		t.Errorf("wrongRadioMessage(%s, ...) = %q, want it NOT to mention FT-710", unknownModelSentinel, got2)
 	}
+
+	// M9d-2 (spec A5): when the driver could NAME the model it found —
+	// the FTdx101 pair, whose two IDs belong to two models one driver
+	// knows about — the diagnostic says which radio is on the port
+	// instead of leaving the operator to decode a bare CAT ID. The
+	// SELECTED --model is still what names the wanted side, exactly as
+	// above: wrongRadioMessage never substitutes the error's own
+	// WantModel for what the caller asked for.
+	named := &driver.WrongRadioError{
+		Got: "0682", Want: "0681",
+		GotModel: "FTdx101MP", WantModel: "FTdx101D",
+	}
+	got3 := wrongRadioMessage("FTdx101D", named)
+	want3 := `rigprog probe: wrong radio: radio identifies as FTdx101MP (CAT ID "0682"); you selected FTdx101D — this port's radio does not identify as FTdx101D` + "\n"
+	if got3 != want3 {
+		t.Errorf("wrongRadioMessage(FTdx101D, named) = %q, want %q", got3, want3)
+	}
 }
 
 // TestCmdProbe_BadPort_PreservesOriginalWiringWording pins Fix 7 (Codex

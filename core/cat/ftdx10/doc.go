@@ -77,12 +77,26 @@
 //
 // # The ASSUMED register
 //
-// Six members of this dialect are NOT FTdx10-manual facts. They are
+// SEVEN members of this dialect are NOT FTdx10-manual facts. They are
 // inherited or structurally required, they are marked ASSUMED at the point
 // of use, and the identity-pin tests that compare this dialect with the
 // FT-710's therefore compare tables that embed them. Each is listed here so
 // that the set has one statement of record, and each is lifted individually
 // by a named Stage R capture, never wholesale.
+//
+// The seventh — the clarifier's minus-direction byte — was added at M9d-2 by
+// the M9d-1 milestone adjudication, which found the same assumption
+// travelling unregistered in BOTH this dialect and the FTdx101's. The
+// FTdx101's entry landed at M9d-1 (core/cat/ftdx101/doc.go's seventh); this
+// is its counterpart, written from THIS manual's own evidence rather than
+// copied from that one, and the evidence differs — see the entry.
+//
+// CITE THESE ENTRIES BY NAME, NEVER BY POSITION. Every citation of this
+// register elsewhere in the repository names the entry's field. That
+// convention was adopted at M9d-2, for the reason this very insertion
+// demonstrates: a positional citation ("entry 6") is correct only until
+// somebody adds or reorders an entry, and it then silently points at the
+// wrong assumption rather than failing.
 //
 // Each entry below names the field, the value it carries, the evidence gap,
 // and the ONE Stage R capture that lifts it. The captures are individual on
@@ -169,6 +183,45 @@
 //     SHORTER than 12 characters, the raw answer captured whole. A 41-byte
 //     answer confirms exactness; anything shorter converts the parser and
 //     gate to the recorded 30..41 window contingency.
+//
+//   - The CLARIFIER'S MINUS-DIRECTION BYTE, the ASCII HYPHEN-MINUS 0x2D
+//     ('-'). Like the entry above it, this is not a field of this dialect
+//     but an assumption it inherits from core/cat's memory codec, which
+//     writes '-' into the P3 sign position for a negative offset and
+//     accepts only '+' or '-' when reading one (memdata.go's
+//     encodeMemoryFields at :463-465 and parseMemoryFields at :372-384).
+//     THIS MANUAL DOES NOT YIELD THE BYTE, and it is worse than silent: it
+//     is INTERNALLY INCONSISTENT about the glyph. Four of the five frame
+//     pages carrying the P3 direction legend print the minus direction as a
+//     TWO-HYPHEN glyph — "+: Plus Shift, --: Minus Shift" — at layout 1187
+//     (MR), 1222 (MT), 1261 (MW) and 1345 (OI); the fifth, IF at layout
+//     995, prints the SAME concept as a single "-". A two-character token
+//     cannot fit a field the charts draw one position wide, so the single
+//     0x2D is the only reading consistent with the position count — but
+//     that is a deduction from the geometry, not a byte the manual states,
+//     and a document that draws one glyph two ways cannot settle which of
+//     its two renderings is the typographic artefact. testdata/
+//     provenance.md's B1 records exactly this reasoning and classes it an
+//     INHERITED ASSUMPTION; this entry is that record's home in the
+//     dialect's own register, where every other inherited assumption lives.
+//     THIS PACKAGE'S GOLDENS DEPEND ON THE READING, unlike the FTdx101's:
+//     testdata/mw-vectors.golden's mw_ch021_29m600_fm_minusshift_rxclar_ctcss
+//     carries a literal 0x2D at position 15, so a different real byte
+//     changes a committed golden here rather than merely a comment. (The
+//     FTdx101's deriver avoided the question by using the plus direction in
+//     all ten of its vectors; this one did not.) The plus direction is not
+//     in the same doubt: '+' is printed as one unambiguous glyph on all
+//     five pages.
+//     STAGE R LIFTS IT WITH: one IF or MR Answer captured from a channel
+//     carrying a NEGATIVE clarifier offset — or, failing a channel already
+//     so written, an MW Set of a negative offset that the radio ACCEPTS,
+//     followed by a read of the same channel — with position 15 dumped as a
+//     RAW BYTE VALUE rather than rendered as text, since the rendering is
+//     precisely what is in question. It will read 0x2D or something else
+//     (an en-dash cannot appear in an ASCII stream, so the realistic
+//     alternatives are 0x2D or a digit-encoded sign). If it is not 0x2D,
+//     core/cat's sign handling becomes dialect data rather than a shared
+//     constant, and this package's MW golden changes with it.
 //
 // # Reused-command verification
 //

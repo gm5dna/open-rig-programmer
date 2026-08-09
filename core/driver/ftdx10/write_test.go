@@ -154,7 +154,7 @@ func (p *failableWritePort) Close() error { return p.inner.Close() }
 //	pos 27     "1"           P10 shift: "1: plus" = codeplug "PLUS"
 //	pos 28     "0"           P11, documented fixed
 //	pos 29-40  "CALLING     " P12 tag, 7 characters padded to 12 with the
-//	                          dialect's TagFill (ASSUMED — its register entry 1)
+//	                          dialect's TagFill (ASSUMED — its own register entry)
 //	pos 41     ";"           terminator
 //
 // 41 bytes, and the literal 41 belongs in this file for the same reason it
@@ -272,7 +272,8 @@ func TestWriteChannel_RefusalLadder(t *testing.T) {
 		},
 		{
 			// RUNG 2 — bankFor, ahead of the erase refusal. "000" is the
-			// dialect's ASSUMED NoneWire (its register entry 3): it PARSES,
+			// dialect's ASSUMED SlotSpace.NoneWire (its own register entry):
+			// it PARSES,
 			// so rung 1 passes, and it belongs to no bank.
 			name:      "2: a slot in no bank outranks erase",
 			ch:        codeplug.Channel{Slot: "000"},
@@ -843,7 +844,8 @@ func TestBuildWriteCommand_RefusesInexpressibleValues(t *testing.T) {
 		},
 		{
 			// Inside the range, but not a multiple of the dialect's ASSUMED
-			// 10 Hz step (its register entry 2): the BUILDER refuses this
+			// 10 Hz step (its register entry ClarifierPolicy.StepHz): the
+			// BUILDER refuses this
 			// one, which is why the bound check above does not duplicate the
 			// step rule.
 			name:      "a clarifier off this dialect's step",

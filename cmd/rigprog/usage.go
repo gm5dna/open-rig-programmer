@@ -13,9 +13,13 @@ import (
 // topUsageTextTemplate is rigprog's top-level usage text: printed for a
 // bare "rigprog" invocation, "rigprog help", and an unknown subcommand.
 // Its %s placeholder is filled at print time (printUsage) with
-// wiring.SupportedModels()'s own comma-joined, sorted list — today just
-// "FT-710" — so this line stays accurate without a hand edit whenever a
-// second driver is registered (task 40, M9a-4: the CLI neutralisation).
+// wiring.SupportedModels()'s own comma-joined, sorted list — WHATEVER that
+// list currently holds — so this line stays accurate without a hand edit
+// whenever a driver is registered or removed (task 40, M9a-4: the CLI
+// neutralisation). No model name and no model COUNT is written here on
+// purpose: an earlier version of this comment named the list's contents
+// ("today just \"FT-710\"") and was falsified twice over, at M9c-6 and
+// again at M9d-2, while the CODE it describes never needed touching.
 // Every OTHER command in the list below is already model-neutral prose
 // (no subcommand name here ever mentioned FT-710 directly).
 const topUsageTextTemplate = `rigprog is a command-line memory programmer for Yaesu radios (currently: %s).

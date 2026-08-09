@@ -382,9 +382,14 @@
 	 * SCAN SKIP flips only from Known. A non-Known one is not toggled: the
 	 * toggle would have to INVENT the state it flips from, and its
 	 * 'unknown' means "preserve whatever the radio has"
-	 * (core/codeplug/fieldstate.go) — a value this protocol cannot write
-	 * at all, so there is nothing for the user to decide and no honest
-	 * value to decide it to.
+	 * (core/codeplug/fieldstate.go) — which on every radio that can
+	 * currently produce an 'unknown' scan skip is a field the caps declare
+	 * UNREACHABLE (spec.FieldSupport.Unreachable: Unsupported in both
+	 * directions), so there is nothing for the user to decide and no
+	 * honest value to decide it to. The bar is the STATE, not a
+	 * hard-coded belief about scan skip: a radio that can genuinely store
+	 * one imports Known (core/csvio's chirpScanSkip, M9d-2 task 8) and
+	 * this toggle serves it unchanged.
 	 *
 	 * TAG DISPLAY flips from Known, and from UNKNOWN it ROUTES TO KNOWN
 	 * (M9c-6 D5b): the first press commits {known, false} — Display OFF —

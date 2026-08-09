@@ -5,8 +5,10 @@
 // guidance, firmware advisories, grid legends, tooltip text — keyed by
 // radio model, so that a second driver can supply its own strings without
 // any caller choosing between models by import or by protocol knowledge —
-// which is exactly what the FTdx10's entry did at M9c-6: a second key here,
-// and not one call site changed. None of this is a wire-protocol fact: it lives
+// which is exactly what the FTdx10's entry did at M9c-6 (a second key here,
+// and not one call site changed) and what the FTDX101D's and FTDX101MP's did
+// again at M9d-2 (two more keys, still not one call site).
+// None of this is a wire-protocol fact: it lives
 // here, not in core/driver or a driver subpackage, exactly because it is
 // prose a human reads, never data a protocol layer consults.
 //
@@ -26,11 +28,14 @@ package radiotext
 // field's own doc comment for its exact source.
 //
 // A model registered LATER has no such source to copy. The FTdx10's entry
-// (M9c-6) was written HERE first, for a radio this project has never
-// connected to anything, so the per-field doc comments below describe the
-// FT-710's provenance while ftdx10Text's own comments record what each of
-// its strings may and may not claim. The two entries share the struct, not
-// an evidence base.
+// (M9c-6) and the FTDX101D's and FTDX101MP's (M9d-2) were written HERE
+// first, for radios this project has never connected to anything, so the
+// per-field doc comments below describe the
+// FT-710's provenance while ftdx10Text's, ftdx101dText's and
+// ftdx101mpText's own comments record what each of
+// their strings may and may not claim. The four entries share the struct,
+// not an evidence base — and the two FTdx101 entries share an evidence base
+// with each other and with nothing else, since one manual covers both.
 type Text struct {
 	// EraseProcedure is the front-panel procedure for deleting a channel
 	// on the radio itself: no CAT erase command exists. Its original home
@@ -211,6 +216,153 @@ var ftdx10Text = Text{
 	ProbeFirmwareNote: "Firmware version has no CAT query — check the front panel. No minimum version is established for the FTdx10: this build knows of none to require.",
 }
 
+// ftdx101dText and ftdx101mpText are the FTDX101D's and FTDX101MP's entries
+// (M9d-2 task 7, landed with those models' wiring registration —
+// internal/wiring's TestEverySupportedModelHasRadiotext refuses a registered
+// model with no prose, which is what makes these entries part of
+// registration rather than a later nicety).
+//
+// THE HONESTY RULE APPLIES UNCHANGED, and doubly here. NOTHING BELOW IS
+// INVENTED. No FTDX101 of either model has ever been asked anything by this
+// project (core/driver/ftdx101/doc.go), no FTDX101 OPERATING manual is held
+// — only the CAT Operation Reference Manual, rev 2308-L, which Yaesu prints
+// ONCE for the pair — and no write trial has happened on either radio
+// (writeTrialsCompleteD and writeTrialsCompleteMP are both false). Every
+// string therefore says what is actually known, including where something
+// is NOT known, and borrows the wording of neither the FT-710 (whose
+// hedgeless sentences are ITS hardware evidence) nor the FTdx10 (whose
+// hedges are about a different radio and a different manual, and would
+// become claims about these two the moment they were copied).
+// assertFTdx101NotBorrowed (radiotext_test.go), called from BOTH verbatim
+// tests below, pins the non-borrowing mechanically and field by field: no
+// field may be byte-identical to the FT-710's or the FTdx10's, and none may
+// carry either radio's particulars.
+//
+// WHAT THESE ENTRIES CAN SAY THAT THE FTdx10's CANNOT is the point of
+// writing them fresh rather than adapting: this radio's CAT manual carries
+// a complete command availability table (layout 236-337), so the absence of
+// an erase command and the absence of a firmware-version query are
+// MANUAL-EVIDENCED here rather than merely unclaimed, and the same table's
+// connection section documents a two-port arrangement that changes what
+// silence on a port means.
+//
+// D AND MP PROSE ARE IDENTICAL EXCEPT WHERE THEY NAME THE MODEL (plan D8),
+// and that is a claim about the EVIDENCE, not a shortcut: the two radios
+// share one manual, one dialect config, one simulator and one driver
+// implementation, and differ on the wire in the ID answer alone. There is
+// no fact in any of these eight fields that is true of one and not the
+// other, so any divergence beyond the model's name would be an invention.
+// TestRadiotext_FTdx101DAndMPDifferOnlyInTheModelName pins it by
+// substitution — replacing "FTdx101MP" with "FTdx101D" throughout the MP's
+// entry must reproduce the D's exactly — so adding a genuinely
+// model-specific sentence later is a deliberate edit there, not a drift.
+//
+// TestRadiotext_FTdx101DVerbatim and TestRadiotext_FTdx101MPVerbatim pin
+// every string, so a well-meant later edit that firmed up a hedge fails
+// there rather than quietly telling a user something no one established.
+var ftdx101dText = Text{
+	// The erase absence is MANUAL-EVIDENCED for this radio, not merely
+	// unclaimed: the CAT manual's command availability table (layout
+	// 236-337) lists the whole command set and contains no erase command
+	// for a memory channel (matrix §2.3). What is NOT held is the
+	// OPERATING manual, so the front-panel procedure is unknown and the
+	// user is sent to the document that has it. The FT-710's [V/M]/[ERASE]
+	// sequence is an FT-710 operating-manual fact and is not transferable.
+	EraseProcedure: "The FTdx101D's CAT command set has no erase command — its CAT manual lists the whole set, and there is none — so a memory channel can only be cleared at the radio itself. This build does not say how: the FTdx101D's operating manual is not held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Use the memory-channel erase procedure in the radio's own operating manual.",
+	// Two separate absences, and both are stated because they answer
+	// different questions. There is no minimum-version THRESHOLD for this
+	// radio (nothing this project holds states one), and there is no CAT
+	// QUERY for the version either — the same command availability table
+	// carries no firmware-version command, and neither RI (RADIO
+	// INFORMATION) nor RS (RADIO STATUS) is one (their frame pages at
+	// layout 1637 and 1675 define P1 as Hi-SWR/REC/PLAY and
+	// NORMAL/MENU mode). core/clone's firmware gate enforces PRESENCE of a
+	// confirmed version only (ExecuteOptions.FirmwareConfirmed), never a
+	// threshold, so "recorded with the send" describes what actually
+	// happens to the value rather than promising a check.
+	FirmwareGuidance: "No minimum firmware version is established for the FTdx101D: nothing this project holds states one, and no FTdx101D has been asked. Its CAT command list carries no firmware-version query either, so read the version off the radio's own display and enter it here — it travels with the send as a record, and is not weighed against a threshold nobody has set.",
+	// The frame-level facts are the driver's own (core/driver/ftdx101 and
+	// matrix §2.2): the combined MT record accounts for all 41 of its
+	// positions, it carries a CTCSS STATE byte (P8) and a P9 documented
+	// fixed "00", and it has NO tone-number byte and NO scan-skip flag
+	// anywhere. So a per-channel tone frequency or skip marking cannot
+	// travel over this frame at all. What is ASSUMED, and therefore not
+	// claimed here, is that no OTHER command in this manual could reach
+	// them — the FT-710's finding that none can is that radio's, and the
+	// hedge "by this build" is what keeps this sentence true either way.
+	ToneScanSkipNote: "Tone and Scan Skip are neither read nor written for the FTdx101D by this build: its memory frame has no tone-number byte and no scan-skip flag, only a CTCSS on/off state byte that no FTdx101D has ever been asked to confirm. Set both at the radio.",
+	// DELIBERATELY EMPTY, exactly as the FTdx10's is and for the same
+	// reason: this field states what IS and is NOT hardware-verified about
+	// preservation across a rewrite, and with writeTrialsCompleteD false
+	// there is no verification of any kind to report. Any sentence here
+	// would be a hardware claim about a radio this project has never
+	// written to. internal/wiring's TestEverySupportedModelHasRadiotext
+	// requires EraseProcedure, FirmwareGuidance and ProbeFirmwareNote and
+	// deliberately excludes this field; the FTDX101D's own write trials are
+	// what fill it in, and the MP's will not fill it in for the D.
+	ToneScanSkipVerification: "",
+	// Byte-identical to EraseProcedure, as the FT-710's and the FTdx10's
+	// are: the delete dialog and the blocked-erase review answer the same
+	// question, and splitting the wording would only invite one copy to
+	// drift into a procedure the other refuses to state.
+	EraseDialogNote: "The FTdx101D's CAT command set has no erase command — its CAT manual lists the whole set, and there is none — so a memory channel can only be cleared at the radio itself. This build does not say how: the FTdx101D's operating manual is not held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Use the memory-channel erase procedure in the radio's own operating manual.",
+	// IDENTICAL to each other, because the evidence is identically absent —
+	// unlike the FT-710's pair, which differ precisely because its Tone
+	// finding is hardware-verified and its Scan Skip one is not. They must
+	// stop being identical the moment a trial on THIS model distinguishes
+	// them; the verbatim pin is what forces that edit to be deliberate.
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "outside this build's CAT surface — no trial has established whether a rewrite leaves it alone",
+		ScanSkip: "outside this build's CAT surface — no trial has established whether a rewrite leaves it alone",
+	},
+	// A placeholder LABEL, not an example. The FT-710's "e.g. V01-10" shows
+	// that radio's documented version format; no FTDX101 version string has
+	// been seen here and none is printed in the CAT manual, so there is no
+	// format to exemplify.
+	FirmwarePlaceholder: "whatever the radio displays",
+	// THE TWO-PORT CAVEAT IS THE POINT OF THIS FIELD FOR THIS RADIO (matrix
+	// §3.12; the passage is at layout 75-79, exactly as the matrix cites it —
+	// 75 is the two-ports sentence quoted below, 76 "These ports offer the
+	// following functions:", 77-78 the two function bullets, 79 the worked
+	// COM5/COM6 example. An earlier version of this comment cited a lower
+	// range and flagged a discrepancy with the matrix; the M9d-2 milestone
+	// review settled it by re-measuring the extraction directly, the matrix
+	// was right, and the flag is gone): the manual states that the radio
+	// "contains two virtual COM ports, an Enhanced COM Port and a Standard
+	// COM Port", the Enhanced one for CAT communications and the Standard
+	// one for TX control (PTT, CW keying, digital-mode operation). This
+	// project opens whichever port it is given and this manual gives no way
+	// to detect which one, so a user on the Standard port gets silence that
+	// looks exactly like a wrong baud rate or a framing mismatch — and probe
+	// is where that silence is first met. The firmware halves are the same two
+	// absences FirmwareGuidance states, kept here because probe's report is
+	// read by someone who may never open the send flow.
+	ProbeFirmwareNote: "Firmware version has no CAT query on the FTdx101D, and no minimum version is established for it — read it off the radio's display. If nothing answered on this port at all, check which port it is: this radio presents two virtual COM ports, and only the Enhanced COM Port carries CAT. The Standard COM Port is for TX control (PTT, CW keying, digital modes) and will answer nothing here, which looks exactly like a wrong baud rate.",
+}
+
+// ftdx101mpText is the FTDX101MP's entry. See ftdx101dText's doc comment
+// for the honesty rule, the evidence base and the D8 identical-prose rule
+// that governs both — every per-field justification there applies here
+// unchanged, with writeTrialsCompleteMP in place of writeTrialsCompleteD,
+// and is deliberately not restated field by field so the two cannot drift
+// into disagreeing about their own reasons.
+//
+// The ONE thing worth restating: a capture from an FTDX101D lifts nothing
+// here. The two radios share a manual, not a serial port.
+var ftdx101mpText = Text{
+	EraseProcedure:           "The FTdx101MP's CAT command set has no erase command — its CAT manual lists the whole set, and there is none — so a memory channel can only be cleared at the radio itself. This build does not say how: the FTdx101MP's operating manual is not held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Use the memory-channel erase procedure in the radio's own operating manual.",
+	FirmwareGuidance:         "No minimum firmware version is established for the FTdx101MP: nothing this project holds states one, and no FTdx101MP has been asked. Its CAT command list carries no firmware-version query either, so read the version off the radio's own display and enter it here — it travels with the send as a record, and is not weighed against a threshold nobody has set.",
+	ToneScanSkipNote:         "Tone and Scan Skip are neither read nor written for the FTdx101MP by this build: its memory frame has no tone-number byte and no scan-skip flag, only a CTCSS on/off state byte that no FTdx101MP has ever been asked to confirm. Set both at the radio.",
+	ToneScanSkipVerification: "",
+	EraseDialogNote:          "The FTdx101MP's CAT command set has no erase command — its CAT manual lists the whole set, and there is none — so a memory channel can only be cleared at the radio itself. This build does not say how: the FTdx101MP's operating manual is not held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Use the memory-channel erase procedure in the radio's own operating manual.",
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "outside this build's CAT surface — no trial has established whether a rewrite leaves it alone",
+		ScanSkip: "outside this build's CAT surface — no trial has established whether a rewrite leaves it alone",
+	},
+	FirmwarePlaceholder: "whatever the radio displays",
+	ProbeFirmwareNote:   "Firmware version has no CAT query on the FTdx101MP, and no minimum version is established for it — read it off the radio's display. If nothing answered on this port at all, check which port it is: this radio presents two virtual COM ports, and only the Enhanced COM Port carries CAT. The Standard COM Port is for TX control (PTT, CW keying, digital modes) and will answer nothing here, which looks exactly like a wrong baud rate.",
+}
+
 // texts is the registry For consults, keyed by the exact model string a
 // driver.Driver.Model() (or driver.Identity/spec.Capabilities.Model)
 // call returns, e.g. "FT-710".
@@ -220,16 +372,35 @@ var ftdx10Text = Text{
 // missing, because a caller with no entry serves BLANK advisories rather
 // than failing (cmd/rigprog's erase procedure, probe's firmware note,
 // app/uispec.go's grid legend all degrade to "").
+// The keys are BARE STRING LITERALS, deliberately, and not
+// internal/wiring's exported model constants: this package must not import
+// internal/wiring (the dependency runs the other way — wiring's
+// TestEverySupportedModelHasRadiotext consults radiotext.For, so importing
+// back would be a cycle), and it holds no model constants of its own to
+// share. The two spellings are kept in agreement by that test, which walks
+// every registered model and fails on a missing entry.
 var texts = map[string]Text{
-	"FT-710": ft710Text,
-	"FTdx10": ftdx10Text,
+	"FT-710":    ft710Text,
+	"FTdx10":    ftdx10Text,
+	"FTdx101D":  ftdx101dText,
+	"FTdx101MP": ftdx101mpText,
 }
 
-// For returns model's radio-specific prose. "FT-710" and "FTdx10" are
-// populated — the two models internal/wiring registers; any other model —
-// including "", a future driver not yet given an entry, or a near-miss typo
-// ("FT-DX10", say) — returns the zero Text and false.
+// For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D"
+// and "FTdx101MP" are populated — the four models internal/wiring registers
+// AS OF M9d-2, a count a fifth registration would falsify; any other model
+// — including "", a future driver not yet given an entry, or a near-miss
+// typo ("FT-DX10", say) — returns the zero Text and false.
 // Callers must never treat a zero Text as if it were real advisory copy.
+//
+// THE MATCH IS EXACT AND CASE-SENSITIVE, and for the FTDX101 pair that is
+// load-bearing rather than incidental: "FTDX101D" is the spelling the
+// radio's own CAT manual uses throughout, so it is the near-miss a person
+// is most likely to type, and it must return false. A silent fall-through
+// to the D's prose would serve MP users the D's model name; a silent
+// fall-through to a zero Text would serve blank advisories. Neither is
+// acceptable, so the only safe answer to a spelling this registry does not
+// hold is "no".
 func For(model string) (Text, bool) {
 	t, ok := texts[model]
 	return t, ok

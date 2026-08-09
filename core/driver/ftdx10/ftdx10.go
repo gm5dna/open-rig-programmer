@@ -229,8 +229,9 @@ func (d *ftdx10Driver) open(ctx context.Context, eng *transport.Engine, id drive
 // (sixtyHi - sixtyLo + 1), and refuses ordinal 1 outright for a dialect
 // with no 5xx space at all, which yields zero probes rather than a
 // spurious one. The 501..599 NUMBERING itself is the DIALECT's ASSUMED
-// register entry 5, cited not restated; what a rejection MEANS is this
-// driver's own register entry 7.
+// register's SlotSpace.SixtyLo/SixtyHi entry, cited not restated; what a
+// rejection MEANS is this driver's own "?;" ON A 5xx/EMG DISCOVERY PROBE
+// entry.
 func discoverInventory(ctx context.Context, dialect cat.Dialect, eng *transport.Engine) (slots60m []string, emg bool, err error) {
 	for n := 1; ; n++ {
 		slot, serr := dialect.SixtyMSlot(n)
@@ -264,7 +265,8 @@ func discoverInventory(ctx context.Context, dialect cat.Dialect, eng *transport.
 
 // probeSlot MT-reads one slot purely for existence: a well-formed answer
 // naming the probed slot reports populated, a "?;" rejection reports not
-// populated (ASSUMED — register entry 7), and anything else is an error.
+// populated (ASSUMED — the "?;" ON A 5xx/EMG DISCOVERY PROBE register
+// entry), and anything else is an error.
 //
 // It probes with the COMBINED MT READ, not MR: this driver never sends MR
 // at all (doc.go, "MR is deliberately unused"), and a discovery path that
@@ -287,7 +289,8 @@ func probeSlot(ctx context.Context, dialect cat.Dialect, eng *transport.Engine, 
 	}
 	frame, err := eng.Do(ctx, cmd, cmdSpec)
 	if errors.Is(err, cat.ErrRejected) {
-		// ASSUMED absent — see register entry 7.
+		// ASSUMED absent — see the "?;" ON A 5xx/EMG DISCOVERY PROBE
+		// register entry.
 		return false, nil
 	}
 	if err != nil {

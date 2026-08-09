@@ -135,10 +135,11 @@ func bankReadOnly(caps spec.Capabilities, id spec.BankID) bool {
 // bank identified by id must carry (BankView.TagDisplayDefault), from that
 // bank's own spec.FieldTagDisplay support and nothing else:
 //
-//   - Read AND Write both spec.Unsupported → codeplug.Unavailable. This
-//     radio's memory frame has no display flag at all, so there is no
-//     value to hold: Unavailable is what BoolField means by that (see
-//     core/codeplug/fieldstate.go), and it is never sent.
+//   - Read AND Write both spec.Unsupported (spec.FieldSupport.Unreachable)
+//     → codeplug.Unavailable. This radio's memory frame has no display
+//     flag at all, so there is no value to hold: Unavailable is what
+//     BoolField means by that (see core/codeplug/fieldstate.go), and it is
+//     never sent.
 //   - anything else → {codeplug.Known, false}. The flag exists in the
 //     frame, so a blank row states it, and states it OFF.
 //
@@ -172,9 +173,15 @@ func bankReadOnly(caps spec.Capabilities, id spec.BankID) bool {
 // (spec.Capabilities.FieldSupport returns the zero FieldSupport for
 // either), so both fall out as Unavailable with no special-casing: caps
 // that say nothing about a display flag are not evidence that one exists.
+//
+// The two-comparison predicate itself is spec.FieldSupport.Unreachable
+// since M9d-2 task 8, shared with core/csvio's chirpTagDisplay (which
+// M9c-6 deliberately duplicated, noting that a THIRD caller should force
+// the move) and its new chirpScanSkip, which was that third caller. Only
+// the QUESTION is shared: what each site answers still differs, and this
+// one's Known-false answer is justified above.
 func bankTagDisplayDefault(caps spec.Capabilities, id spec.BankID) codeplug.BoolField {
-	fs := caps.FieldSupport(id, spec.FieldTagDisplay)
-	if fs.Read == spec.Unsupported && fs.Write == spec.Unsupported {
+	if caps.FieldSupport(id, spec.FieldTagDisplay).Unreachable() {
 		return codeplug.BoolField{State: codeplug.Unavailable}
 	}
 	return codeplug.BoolField{State: codeplug.Known, Value: false}

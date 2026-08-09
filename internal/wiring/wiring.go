@@ -14,7 +14,9 @@
 // invalid RealHardware/fake-rig or Simulated/real-port pairings
 // structurally unrepresentable in the code shape, not merely unreached.
 // EACH registered driver's simulated-profile selector — ft710.Simulated,
-// and ftdx10.Simulated since M9c-6 — is referenced in exactly ONE non-test
+// ftdx10.Simulated since M9c-6, and ftdx101.Simulated since M9d-2 (ONE
+// token for two registered models, since one driver package drives both
+// FTDX101 siblings) — is referenced in exactly ONE non-test
 // .go file repo-wide, fake.go, pinned per driver by internal/guards'
 // TestSimulatedProfileTokensConfinement (extended by task-15 to be
 // repo-wide rather than cmd/rigprog-local; folded from the single-driver
@@ -45,6 +47,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft710"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx10"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx101"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -55,12 +58,14 @@ import (
 // when --model is absent, and app/ when the frontend passes "" (it has no
 // model picker yet — M9c-6's ledgered exclusion).
 //
-// It stays exactly "FT-710" now that a SECOND model is registered (the
-// FTdx10, M9c-6): which radio a caller gets by DEFAULT is a compatibility
+// It stays exactly "FT-710" however many other models are registered:
+// which radio a caller gets by DEFAULT is a compatibility
 // promise about every file, snapshot and journal written before any second
 // model existed (see ResolveSnapshotDir's own model rule), not a statement
 // about how many models this package supports. Changing it would silently
-// re-point every default-model caller at a different radio.
+// re-point every default-model caller at a different radio. That is why
+// this comment carries no registration COUNT: the count has changed twice
+// already (M9c-6, M9d-2) and the promise has not moved.
 const DefaultModel = "FT-710"
 
 // FTdx10Model names the FTdx10's realDrivers/fakeDrivers key, which must
@@ -75,6 +80,39 @@ const DefaultModel = "FT-710"
 // the same kind of handle for both.
 const FTdx10Model = "FTdx10"
 
+// FTdx101DModel names the FTDX101D's realDrivers/fakeDrivers key, which must
+// equal ftdx101.NewD(...).Model() — pinned, like FTdx10Model's, by
+// TestDriverTableKeysMatchDriverModel walking both tables. A named constant
+// rather than a bare literal at each of its uses for exactly the reason
+// FTdx10Model is one: the two table keys MUST be the same string, and a typo
+// in one alone would build a model openable for real but not simulated.
+//
+// THE SPELLING IS THE PROJECT'S, of a manual fact (matrix §1.1). The manual
+// prints "FTDX101D" in full capitals throughout; this project writes
+// "FTdx101D", matching how "FTdx10" and "FT-710" are already spelt here. The
+// two are NOT interchangeable: this constant is the driver-registry key and
+// the radiotext key, and internal/radiotext deliberately leaves "FTDX101D"
+// unknown so a caller that reached for the manual's spelling fails loudly
+// rather than serving blank advisories.
+//
+// NOT the same string as internal/extable's "FTdx101D/MP", which is the
+// JOINT inventory form: one EX profile serves both radios because the manual
+// prints Table 2 once for the pair. That is a statement about a shared
+// chart; this is a registry key for one radio.
+const FTdx101DModel = "FTdx101D"
+
+// FTdx101MPModel names the FTDX101MP's realDrivers/fakeDrivers key, which
+// must equal ftdx101.NewMP(...).Model(). See FTdx101DModel for the spelling
+// rule and the extable-form distinction, which apply here unchanged.
+//
+// TWO constants for two radios, and no shared "FTdx101" handle between them,
+// deliberately: core/driver/ftdx101 offers NewD and NewMP over one
+// implementation and no bare New, and core/cat/ftdx101 offers DialectD and
+// DialectMP over one config and no bare Dialect(), for the same reason —
+// there are two models, so neither is the other's fallback and neither is
+// reachable by a caller that failed to choose.
+const FTdx101MPModel = "FTdx101MP"
+
 // realDrivers is the model-keyed table of real-hardware driver
 // constructors: model name -> a constructor building THAT model's
 // real-profile driver.Driver. It is the single source of truth
@@ -88,9 +126,20 @@ const FTdx10Model = "FTdx10"
 // exactly that: this entry, one in fake.go, one radiotext entry, and not a
 // line of the functions below. Every all-registered-models test in this
 // package walks it by existing.
+//
+// The FTdx101D and FTdx101MP (M9d-2 task 7) are the second and third, and
+// they added the same three things EACH. They are SIBLINGS — one driver
+// package, one dialect config, one simulator, differing in a name and a CAT
+// ID — and they still get two rows here rather than one, because this table
+// is keyed by MODEL and a user selects a radio, not a family. Sharing a row
+// would mean choosing which sibling a "FTdx101" selection meant, which is
+// the choice core/driver/ftdx101 refuses to offer (no bare New) and
+// core/cat/ftdx101 refuses to offer (no bare Dialect()).
 var realDrivers = map[string]func() driver.Driver{
-	DefaultModel: NewRealDriver,
-	FTdx10Model:  NewFTdx10RealDriver,
+	DefaultModel:   NewRealDriver,
+	FTdx10Model:    NewFTdx10RealDriver,
+	FTdx101DModel:  NewFTdx101DRealDriver,
+	FTdx101MPModel: NewFTdx101MPRealDriver,
 }
 
 // SupportedModels returns every model name this package can open a real
@@ -205,6 +254,47 @@ func NewFTdx10RealDriver() driver.Driver {
 	return ftdx10.New(ftdx10.RealHardware)
 }
 
+// NewFTdx101DRealDriver builds the ftdx101 driver for a real-hardware
+// FTDX101D session: profile ftdx101.RealHardware, the zero value — the
+// FTdx101D's half of the realDrivers table, split out for the same reason
+// NewRealDriver and NewFTdx10RealDriver are (a test can pin the capability
+// set the real wiring path implies without opening a port).
+//
+// READ/PROBE ONLY, and by the same mechanism the FTdx10's entry is: this
+// driver's writeTrialsCompleteD is FALSE, so a RealHardware FTDX101D driver
+// reports the all-Unverified capability set — every candidate field's Write
+// spec.Unverified, nothing writable on any bank. No FTDX101D has been
+// written to by this project, and the capability gate refuses before any
+// frame is built. Registering the model therefore adds a READ/probe path
+// against real hardware and NO write path (see core/driver/ftdx101/doc.go's
+// write guard, and its ASSUMED register for what a Stage W session would
+// lift).
+//
+// The FAIL-SAFE DIRECTION is worth restating because it is what makes this
+// safe to register at all: an unrecognised Profile value selects the
+// all-Unverified set too, never the simulator's write-Supported one. There
+// is no value a caller can pass to this package that produces a
+// write-capable real-hardware FTDX101D driver.
+func NewFTdx101DRealDriver() driver.Driver {
+	return ftdx101.NewD(ftdx101.RealHardware)
+}
+
+// NewFTdx101MPRealDriver builds the ftdx101 driver for a real-hardware
+// FTDX101MP session: profile ftdx101.RealHardware, the zero value. Same
+// reasoning as NewFTdx101DRealDriver in every respect — the MP's own write
+// guard is writeTrialsCompleteMP, and it is false for the MP's own reasons
+// (no FTDX101MP has ever been written to by this project; the D's trials
+// would not lift it, since the two radios share a manual and not a serial
+// port).
+//
+// A SEPARATE CONSTRUCTOR rather than a model parameter, deliberately: the
+// driver package fixes its exported surface as two thin constructors so
+// that a registration-table closure cannot hold a forged model value, and
+// this table's two rows are exactly the callers that shape was chosen for.
+func NewFTdx101MPRealDriver() driver.Driver {
+	return ftdx101.NewMP(ftdx101.RealHardware)
+}
+
 // openSerial is OpenRealSessionFor's test seam: production code always
 // leaves this at transport.OpenSerial, and OpenRealSessionFor calls it
 // instead of transport.OpenSerial directly. It exists for exactly one
@@ -234,12 +324,14 @@ var openSerial = transport.OpenSerial
 //
 // The port is opened at the DRIVER's own factory-default CAT baud
 // (Capabilities().DefaultBaud), not at transport's package default: all
-// three values agree today (transport's default, the FT-710's 38400 and
+// FOUR registered values agree with transport's today (the FT-710's 38400,
 // the FTdx10's ASSUMED 38400 — core/driver/ftdx10's register entry, whose
-// lift is the rate a factory-configured radio's ID exchange answers at),
-// so there is no behaviour change, but a registered model whose radio
-// ships at a different rate would otherwise have been opened at the
-// FT-710's — a radio-specific fact read from the wrong radio's table.
+// lift is the rate a factory-configured radio's ID exchange answers at —
+// and the FTdx101D's and FTdx101MP's, ASSUMED 38400 on the same footing
+// and with the same per-model lift), so there is no behaviour change, but a
+// registered model whose radio ships at a different rate would otherwise
+// have been opened at the FT-710's — a radio-specific fact read from the
+// wrong radio's table.
 // TestOpenRealSessionFor_BaudFollowsADisagreeingDriver proves the
 // derivation with a fixture that actually disagrees, since no registered
 // model does.

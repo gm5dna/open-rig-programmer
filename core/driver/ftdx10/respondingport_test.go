@@ -54,8 +54,10 @@ type respondingPort struct {
 // it serves per address, and whether it rejects Sets.
 //
 // A slot ABSENT from mtAnswers is answered "?;" — which this driver reads
-// as "absent from this radio" during discovery (ASSUMED-register entry 7)
-// and as "empty channel" during a read (entry 8). The two share one
+// as "absent from this radio" during discovery (the ASSUMED register's
+// "?;" ON A 5xx/EMG DISCOVERY PROBE entry) and as "empty channel" during a
+// read (its "?;" ON A COMBINED-MT READ OF AN EMPTY SLOT entry). The two
+// share one
 // mechanism here for the same reason they share one on the wire: the
 // protocol gives the radio no way to distinguish them.
 type slotImage struct {
