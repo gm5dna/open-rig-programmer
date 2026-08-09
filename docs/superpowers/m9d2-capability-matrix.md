@@ -1,17 +1,32 @@
 # M9d-2 capability matrix — the FTdx101D and the FTdx101MP
 
-Originally dated 08/08/2026. **THIS IS REVISION 3 (09/08/2026)** —
-three errata, each recorded in full at **§6**. Status: pre-plan
-artefact, since CONSUMED by the executed M9d-2 plan. Milestone: M9d-2
-(`core/driver/ftdx101`, `internal/fakedx101`, registration).
+Originally dated 08/08/2026. **THIS IS REVISION 4 (09/08/2026)** — rev
+3's three errata stand at **§6**, none of them reopened; rev 4 adds no
+erratum, corrects citations and typography only, and asserts nothing
+new. Status: pre-plan artefact, since CONSUMED by the executed M9d-2
+plan. Milestone: M9d-2 (`core/driver/ftdx101`, `internal/fakedx101`,
+registration).
 
 **Revisions.** Rev 1, 08/08/2026 (`432fd4e`, as written). Rev 2,
 08/08/2026 (`2745e14`, review fix round 1 — the misquote, the citations,
-the sixth slot legend). Rev 3, 09/08/2026 (this one; §6). Because this
-document was consumed by an executed plan, **nothing here is silently
-rewritten**: every correction after rev 2 is an erratum in §6 stating
-what stood, what now stands, and the record that adjudicated it, and
-every corrected site carries a `(rev 3 erratum N)` tag pointing back.
+the sixth slot legend). Rev 3, 09/08/2026 (§6's three errata). Rev 4,
+09/08/2026 (this one): §1.3.5's neighbour citations re-pointed BY SYMBOL
+— the fold-in erratum 3 leaves to "a future revision" — the stale
+`mtSlotValid` doc-comment span bound corrected, erratum 3 given the
+grep-trap warning the frozen `core/cat/mw.go` literal needs, and one
+§3.6 paragraph re-wrapped. The four were fixed as the standing REV-4
+LIST at the follow-ups wave's closing dual review
+(`.superpowers/sdd/m9d-followups-ledger.md`, closing-review paragraph).
+Because this document was consumed by an executed plan, **nothing here
+is silently rewritten**: every correction after rev 2 is recorded. A
+correction to what this matrix CLAIMS is an erratum in §6 stating what
+stood, what now stands, and the record that adjudicated it, and every
+site it corrects carries a `(rev 3 erratum N)` tag pointing back. **No
+rev-4 item corrects a claim** — all four are citation drift, a stale
+span bound, a navigational warning and typography — so rev 4 takes no
+§6 erratum: it is recorded in this paragraph, and each site it edits
+carries a `(rev 4)` tag. The one exception is the §3.6 re-wrap, which
+changed no word and so has nothing to point back at.
 
 ## What this is
 
@@ -307,14 +322,19 @@ oversight:
 #### 1.3.5 A precision about 5xx/EMG writability
 
 `core/cat`'s combined-MT write policy refuses 5xx and EMG slots — the
-predicate is `Dialect.mtSlotValid`, defined at `core/cat/mt.go:115`,
-reached by `validateCombinedMTFields` at `core/cat/mtcombined.go:105`
-— and `cat.Dialect.writableSlot` (`core/cat/slot.go`, cited by symbol),
-consulted by `validateMWFields` (`core/cat/mw.go`), excludes them from
-MW **(rev 3 erratum 3: this read `cat.Slot.Writable`, a symbol since
-DELETED)**. **The MT half is a PROJECT POLICY, and `core/cat` says so in
-terms.** `mtSlotValid`'s own doc comment runs `core/cat/mt.go:100-108`;
-its middle (`:103-106`) is the statement:
+predicate is `Dialect.mtSlotValid` (`core/cat/mt.go`, cited by symbol),
+reached by `validateCombinedMTFields` (`core/cat/mtcombined.go`, cited
+by symbol) **(rev 4: both read as line numbers, 115 and 105, and both
+had drifted; erratum 3 disclosed the drift and left the fold-in to a
+future revision — this is it)** — and `cat.Dialect.writableSlot`
+(`core/cat/slot.go`, cited by symbol), consulted by `validateMWFields`
+(`core/cat/mw.go`), excludes them from MW **(rev 3 erratum 3: this read
+`cat.Slot.Writable`, a symbol since DELETED)**. **The MT half is a
+PROJECT POLICY, and `core/cat` says so in terms.** `mtSlotValid`'s own
+doc comment runs `core/cat/mt.go:100-117` **(rev 4: this read
+`:100-108` — M9d follow-up 2 grew the comment; the quote below is
+unmoved and re-verified byte-exact)**; its middle (`:103-106`) is the
+statement:
 
 > The manual's slot table marks 5xx and EMG as ✓ for MT — but reference
 > §MT states explicitly: "our policy: reject sets to 5xx/EMG until
@@ -324,9 +344,12 @@ its middle (`:103-106`) is the statement:
 The rejection a caller actually sees says the same thing more tersely —
 "MT: slot must be memory (001-099) or PMS (P1L-P9U); 5xx/EMG rejected by
 project policy pending M5a, \"000\"/invalid rejected per reference"
-(`core/cat/mtcombined.go:106`) — and the comment above the validator
-calls it "5xx/EMG refused by project decision pending hardware
-verification" (`core/cat/mtcombined.go:85-86`).
+(`validateCombinedMTFields`' own `newParseError`) — and the comment
+above the validator calls it "5xx/EMG refused by project decision
+pending hardware verification" (that function's doc comment, first
+bullet) **(rev 4: these read `core/cat/mtcombined.go:106` and
+`:85-86`; both numbers were still current when re-measured, and are
+re-pointed by symbol so that neither can drift)**.
 
 **Attribution matters in that quote:** the "manual" and the "reference
 §MT" `mt.go` speaks of are the **FT-710's**, because that is the radio
@@ -345,9 +368,12 @@ Read direction's slot parameter (P0) with the Set direction's (P1) under
 one vocabulary, so the manual does not separately state that an MT
 **Set** may address 5xx or EMG — it states it of MT's slot parameter
 generally. That is weaker than "the manual permits MT Sets to 5xx", and
-it is deliberately all this matrix claims. `core/cat/mt.go:103` concedes
-the same reading for the FT-710 — "the manual's slot table marks 5xx and
-EMG as ✓ for MT", a slot-table fact, not a Set-direction one. So:
+it is deliberately all this matrix claims. `mtSlotValid`'s doc comment
+concedes the same reading for the FT-710 — "the manual's slot table
+marks 5xx and EMG as ✓ for MT", the first line of the middle quoted
+above, a slot-table fact, not a Set-direction one **(rev 4: this cited
+`core/cat/mt.go:103`, still current when re-measured, and is now
+pointed by symbol)**. So:
 
 - "MW cannot address 5xx/EMG" is MANUAL-EVIDENCED **for this radio**
   (layout 1353, the FTdx101's own MW legend, unambiguously the Set
@@ -1032,12 +1058,11 @@ MR carries Answer O too (X O O X, layout 331). **(Rev 3 erratum 1.)**
 that the radio accepts it as a complete channel definition; ASSUMED, as
 an inherited convention with no line in this manual behind it, that an
 accepted Set is answered with silence and a rejected one with "?;"
-(rev 3 erratum 1).** The
-41-byte Set carries the full field block and the tag (layout 1311-1330;
-geometry witness rows `MT,set,*`), so MW would write the same fields
-redundantly with a strictly smaller frame (28 bytes, layout 1352-1367).
-MW's own restriction to "001-099, P1L-P9U" (layout 1353) is a second
-reason not to reach for it.
+(rev 3 erratum 1).** The 41-byte Set carries the full field block and
+the tag (layout 1311-1330; geometry witness rows `MT,set,*`), so MW
+would write the same fields redundantly with a strictly smaller frame
+(28 bytes, layout 1352-1367). MW's own restriction to "001-099, P1L-P9U"
+(layout 1353) is a second reason not to reach for it.
 
 Whether either radio accepts the combined Set as a complete channel
 definition — and whether it does so for a slot that does not yet exist —
@@ -1577,7 +1602,11 @@ same symbol without a line range):
 
 **What now stands:** "— and `cat.Dialect.writableSlot`
 (`core/cat/slot.go`, cited by symbol), consulted by `validateMWFields`
-(`core/cat/mw.go`), excludes them from MW."
+(`core/cat/mw.go`), excludes them from MW." **(Rev 4:** grepping
+`Writable()` to check this still hits `validateMWFields`' rejection
+message in `core/cat/mw.go` — and the golden lines and test names
+mirroring it — whose wording is FROZEN, not a survival of the method,
+as the comment directly above it says.**)**
 
 **Why.** `Slot.Writable` was **DELETED** at the M9d follow-up 2 wave's
 dialect-tagged-Slot task (`706f680..efd81d9`; the removal is `1bf00cd`,
@@ -1611,6 +1640,10 @@ as 115) and `validateCombinedMTFields` at `core/cat/mtcombined.go:104`
 says, and the drift is within a reader's eye-line, so it is left standing
 and disclosed here rather than being swept into an erratum that is about
 a deletion. A future revision that re-points them should do it by symbol.
+**(Rev 4: done — §1.3.5 now cites both by symbol, and every other
+line-number citation in that section with them. The measurements above
+were re-taken and stood: `mtSlotValid` at `mt.go:118`,
+`validateCombinedMTFields` at `mtcombined.go:104`.)**
 
 **Records.** The deletion's rationale is in `core/cat/slot.go`'s own
 "THERE IS NO `Slot.Writable`" note and in `validateMWFields`' SEAM NOTE
