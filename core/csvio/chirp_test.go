@@ -561,11 +561,20 @@ func TestImportCHIRP_UnavailableTagDisplayDoesNotBlockTheDiff(t *testing.T) {
 	// writableCapabilities' permissive table with ONLY tag_display zeroed,
 	// for the reason that fixture exists at all: every other field a
 	// CHIRP-imported channel transmits stays write-Supported, so the only
-	// thing that can block this entry is the tag_display gate. (Against a
-	// real FTdx10 — or a real FT-710 — a CHIRP import also meets the
-	// scan_skip gate, since neither radio can write that field and CHIRP's
-	// Skip column produces a Known one. That is E1-independent, predates
-	// this milestone, and is exactly the masking this fixture removes.)
+	// thing that can block this entry is the tag_display gate.
+	//
+	// scan_skip is still one of those fields, and its permissiveness is
+	// still load-bearing HERE: because this fixture declares scan_skip
+	// writable, ImportCHIRP takes chirpScanSkip's LITERAL branch against
+	// it and produces a Known one, which would meet the write gate and
+	// mask the entry under test if the support were not permissive.
+	//
+	// What HAS changed (M9d-2 task 8) is the real-radio half of that
+	// story. Against a real FT-710 or FTdx10 the masking no longer arises
+	// at all: scan-skip is Unreachable on both, so a CHIRP import now
+	// yields Unknown for it and the field never enters codeplug.Diff's
+	// requestedFields. Before that fold it did, and this fixture was the
+	// only thing keeping the tag_display gate visible.
 	caps := writableCapabilities()
 	banks := make([]spec.Bank, len(caps.Banks))
 	copy(banks, caps.Banks)
@@ -731,10 +740,18 @@ func TestImportCHIRP_UnknownTagDisplayBlocksTheDiff(t *testing.T) {
 	}
 }
 
-// ftdx101LikeCapabilities mirrors the FTdx101 fields ImportCHIRP consults
-// (core/driver/ftdx101/caps.go), hand-built for the same reason
-// ft710LikeCapabilities and ftdx10LikeCapabilities are: core/csvio sits
-// below core/driver and must not import it, even in tests.
+// ftdx101LikeCapabilities mirrors ONE thing about the FTdx101 faithfully:
+// its per-bank field-support map (core/driver/ftdx101/caps.go's
+// bankFields), which is the only part of that radio's capabilities these
+// scan-skip and tag-display tests read. Everything ELSE is inherited
+// unexamined from ft710LikeCapabilities and is NOT a claim about the real
+// radio — the mode/tone/shift/CTCSS vocabularies and TagLen below are the
+// FT-710's, and spec.FieldErase is omitted altogether. Nothing here asks
+// this fixture an FTdx101-specific question about any of them, and a test
+// that needed one would have to widen the fixture first rather than trust
+// it. It is hand-built rather than taken from the driver for the same
+// reason ft710LikeCapabilities and ftdx10LikeCapabilities are: core/csvio
+// sits below core/driver and must not import it, even in tests.
 //
 // model/catID pick the sibling: "FTdx101D"/"0681" or "FTdx101MP"/"0682"
 // (core/driver/ftdx101/ftdx101.go's modelD/modelMP). The two differ in
@@ -751,7 +768,8 @@ func TestImportCHIRP_UnknownTagDisplayBlocksTheDiff(t *testing.T) {
 // too, there on the weaker ASSUMED footing of that driver's register
 // entry 6. This fixture's job is only to carry the scan_skip answer
 // faithfully; the bank geometry ("001".."099", ftdx101/caps.go's memSlots)
-// happens to match the other two radios' exactly.
+// happens to match the other two radios' exactly, and no test here depends
+// on that.
 func ftdx101LikeCapabilities(model, catID string) spec.Capabilities {
 	caps := ft710LikeCapabilities()
 	caps.Model = model
@@ -795,6 +813,19 @@ func ftdx101LikeCapabilities(model, catID string) spec.Capabilities {
 // (ftdx101/caps.go's bankFields, one map for both siblings). The
 // writable-radio branch has no registered radio at all and is pinned
 // separately against writableCapabilities.
+//
+// THE LIST IS HAND-WRITTEN AND THIS TEST CANNOT NOTICE A FIFTH MODEL.
+// Registering one adds no row here by itself, so this table would go on
+// claiming to cover "every registered radio" while silently skipping it.
+// The registry-walk pin lives where the registry does —
+// internal/wiring.SupportedModels and
+// TestSupportedModels_ContainsEveryRegisteredModel (internal/wiring/
+// wiring_test.go), which walks the real tables — and it does not know
+// about this file. Registering a model is therefore a two-place change:
+// its row goes here as well, mirroring that driver's own scan-skip
+// support, whichever branch it lands in. A model whose scan-skip is
+// genuinely writable belongs in the literal-branch test instead, and the
+// Unreachable precondition assertion below is what will say so.
 func registeredRadioCapabilities() []spec.Capabilities {
 	return []spec.Capabilities{
 		ft710LikeCapabilities(),
