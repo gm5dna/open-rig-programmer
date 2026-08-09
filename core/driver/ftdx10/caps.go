@@ -401,7 +401,7 @@ func CapabilitiesSimulated() spec.Capabilities {
 // says about reading), every Write forced to spec.Unsupported.
 //
 // No profile — not even Simulated — may claim a discovered 5xx/EMG slot
-// writable: cat.Slot.Writable excludes those slots from MW, and
+// writable: cat.Dialect.writableSlot excludes those slots from MW, and
 // cat.Dialect's own combined-MT write policy (mtSlotValid) refuses them
 // too, so a Supported label would advertise a write the codec will not
 // build. Each call returns a fresh map.

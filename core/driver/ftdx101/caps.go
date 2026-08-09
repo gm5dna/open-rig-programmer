@@ -548,8 +548,10 @@ func capabilitiesSimulated(m modelParams) spec.Capabilities {
 //     -P9U (PMS)" (layout 1353) where MT's gives the full vocabulary
 //     including "5xx (5MHz BAND), EMG (EMERGENCY CH)" (1312-1313), and
 //     MW's legend is unambiguously the Set direction's P1.
-//     cat.Slot.Writable (core/cat/slot.go:159-162) excludes those slots
-//     from MW accordingly.
+//     cat.Dialect.writableSlot excludes those slots from MW accordingly.
+//     (Was "cat.Slot.Writable (core/cat/slot.go:159-162)" — the symbol was
+//     removed at M9d and the line numbers were already stale; the
+//     replacement is named without them on purpose.)
 //
 //   - MT cannot address 5xx or EMG: PROJECT POLICY, not a manual fact for
 //     this radio. core/cat's combined-MT write policy refuses them

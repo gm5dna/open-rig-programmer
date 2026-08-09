@@ -332,7 +332,8 @@ func buildWriteCommands(dialect cat.Dialect, ch codeplug.Channel) (mwCmd, mtCmd 
 	// cat.Dialect.BuildMWSet refuse another receiver's legitimate write.
 	// Discovered banks (5xx/EMG) can never reach here — their fields are
 	// read-only, so the capability gate refused them already;
-	// cat.Dialect.BuildMWSet would reject their slots too (not Writable()).
+	// cat.Dialect.BuildMWSet would reject their slots too (its own
+	// writableSlot rule).
 	mwCmd, err = dialect.BuildMWSet(cat.MemoryData{
 		Slot:   sl,
 		FreqHz: data.FreqHz,

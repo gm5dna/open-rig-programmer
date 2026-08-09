@@ -17,9 +17,13 @@ import "fmt"
 // ParseSlot stores what d.classifySlot said about the wire form it
 // accepted, and MemorySlot, PMSSlot, SixtyMSlot and EMGSlot each store the
 // one kind they build by definition. Slot's own predicates — IsMemory,
-// IsPMS, Is60m, IsEMG, IsNone and Writable — read that stored kind, so
-// they answer FOR THE DIALECT THAT BUILT THE SLOT, by construction, on
-// every dialect. There is no package-level classification left anywhere.
+// IsPMS, Is60m, IsEMG and IsNone — read that stored kind, so they answer
+// FOR THE DIALECT THAT BUILT THE SLOT, by construction, on every dialect.
+// There is no package-level classification left anywhere.
+//
+// The predicate list is deliberately CLASSIFICATION ONLY. The one
+// POLICY predicate that used to sit among them, Writable, was removed in
+// the same change — see the note where it used to live, below IsNone.
 //
 // THIS DISCHARGES THE M9b DEFERRAL (item 2 of the M9b plan's "Deferred,
 // and ledgered as such" list). Until M9d those predicates classified
@@ -183,17 +187,20 @@ func (s Slot) IsNone() bool {
 	return s.kind == slotKindNone
 }
 
-// Writable reports whether s is valid as the target of an MW (memory
-// write) command UNDER THE DIALECT THAT CONSTRUCTED IT: memory and PMS
-// slots only. Reference: "MW — ... P1 restricted to 001-099, P1L-P9U (no
-// 5xx, no EMG; 000 listed but semantics unknown — reject in builder)".
+// THERE IS NO Slot.Writable. It existed until M9d and was removed with the
+// dialect tag, in the same change that made it correct — which is the
+// point. While a Slot carried no tag the method answered for the FT-710 on
+// every dialect; giving Slot the tag made it answer for the dialect that
+// BUILT the slot; and neither of those is the question the MW path asks,
+// which is "will the dialect I am about to write through accept this". An
+// exported predicate that looks like a write-gate answer, sitting one
+// import away from the outbound write gate and reading the wrong receiver,
+// is the precise shape M9b exists to prevent — so the write-direction rule
+// is spelled in exactly one place, Dialect.writableSlot below.
 //
-// A Dialect method deciding whether IT will accept a write to s must use
-// Dialect.writableSlot instead: see that method for why the two are not
-// interchangeable on a Slot built elsewhere.
-func (s Slot) Writable() bool {
-	return s.kind == slotKindMemory || s.kind == slotKindPMS
-}
+// It had no caller anywhere in the repo except its own test, so nothing
+// was traded for the safety. Removing an exported symbol is free while the
+// project is private-until-v1; after v1 it would not be.
 
 // readableSlot reports whether s is a legal target for a bare slot-only
 // READ command (MR read, MT read) UNDER THIS DIALECT'S slot space: any
@@ -232,19 +239,23 @@ func (d Dialect) readableSlot(s Slot) bool {
 // only. Reference: "MW — ... P1 restricted to 001-099, P1L-P9U (no 5xx, no
 // EMG; 000 listed but semantics unknown — reject in builder)".
 //
-// This is the receiver-aware counterpart of Slot.Writable, and exists
-// because validateMWFields — reached from BuildMWSet AND from
+// THIS IS THE ONLY PLACE THE MW WRITE-DIRECTION SLOT RULE IS SPELLED.
+// It exists because validateMWFields — reached from BuildMWSet AND from
 // AllowedCommand's MW grammar check — must decide writability against the
 // dialect it was called on, for a MemoryData whose Slot the caller may
-// have built under a different one (or forged wholesale).
+// have built under a different one (or forged wholesale). It therefore
+// classifies the WIRE FORM under d, and never reads s's stored kind, which
+// is the verdict of whichever dialect built s (Slot's doc comment).
 //
-// SINCE M9d THE TWO AGREE ON A SLOT THIS DIALECT BUILT, and must still not
-// be confused. Slot.Writable now reads the kind its own constructing
-// dialect stored — the M9b deferral discharged, see Slot's doc comment —
-// rather than answering for the FT-710 as it did while a Slot carried no
-// dialect tag. On a FOREIGN slot the two diverge by design, and it is this
-// one, classifying the wire form under the receiver, that the outbound
-// write gate needs.
+// M9d removed the value-form predicate that used to shadow this one.
+// Slot.Writable answered for the FT-710 on every dialect before the
+// dialect tag and for the BUILDING dialect after it; neither is the
+// question the write gate asks, and an exported method that looks like the
+// answer is worse than no method. Its truth table lives on this function
+// now (slot_test.go), and the cross-dialect half of the rule is pinned by
+// seconddialect_test.go: a slot outside a dialect's own space must be
+// refused by that dialect's BuildMWSet (:442), and both the memory and PMS
+// branches must be accepted inside it (:480-488).
 func (d Dialect) writableSlot(s Slot) bool {
 	kind := d.classifySlot(s.wire)
 	return kind == slotKindMemory || kind == slotKindPMS

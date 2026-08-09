@@ -96,9 +96,16 @@ var shiftByName = map[string]cat.Shift{
 // bank alike: write NEVER re-emits a read kind — write.go's
 // buildWriteCommands always builds a fresh MW frame carrying the session
 // dialect's own declared write kind, KindMemory for the FT-710 (and
-// 60m/EMG slots can never reach a write at all: cat.Slot.Writable
-// structurally excludes them) — so accepting a wider read-side set on
+// 60m/EMG slots can never reach a write at all: cat.Dialect.writableSlot,
+// reached from cat's validateMWFields, structurally excludes them — and
+// it decides on the dialect being written THROUGH, which is what makes it
+// a gate rather than a hint) — so accepting a wider read-side set on
 // MEM/PMS cannot smuggle a stale or wrong kind back onto the wire.
+//
+// That citation named cat.Slot.Writable until M9d removed it. The
+// replacement is deliberately named without a line number: this comment
+// has now been invalidated once by a change in another package, and a bare
+// symbol name is the form that survives the next one.
 func acceptedKinds(slot cat.Slot) []byte {
 	switch {
 	case slot.IsPMS():

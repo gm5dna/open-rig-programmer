@@ -208,10 +208,32 @@ func TestParseSlot(t *testing.T) {
 	}
 }
 
-// --- Writable() truth table: reference restricts MW (write) to memory and
-// PMS slots only; 5xx, EMG and 000 are all excluded from MW. ---
-
-func TestSlot_Writable(t *testing.T) {
+// --- The MW write-direction truth table: the reference restricts MW
+// (write) to memory and PMS slots only; 5xx, EMG and 000 are all excluded
+// from MW. ---
+//
+// FOLDED ONTO Dialect.writableSlot IN M9d (fix round 1). These five cases
+// were Slot.Writable's; that value-form predicate was removed because it
+// answered for the dialect that BUILT the slot rather than the one about
+// to write, one import from the outbound write gate. The kind-level
+// assertions are unchanged and now run against the surviving surface, the
+// receiver-form Dialect.writableSlot. Its cross-dialect half — a foreign
+// slot refused, both own-space branches accepted — is pinned separately in
+// seconddialect_test.go (:442, :480-488), so nothing here needs to repeat
+// it.
+//
+// THE LITERALS IN THIS FUNCTION ARE BYTE-FROZEN, including the format
+// string below, which still spells ".Writable()" though no such method
+// exists. core/cat/testdata/evidence-literals.golden pins every literal in
+// this file BY ORDINAL: adding, removing or editing one here shifts every
+// later ordinal in the file and fails
+// TestEvidenceLiterals_OrderedRecordsSurvive, whose own message says "Do
+// NOT regenerate the golden file" — and core/cat/testdata/ is one of the
+// ten paths the milestone golden gate forbids moving. Measured: deleting
+// this block breaks 39 pinned literals. The call and the function name are
+// IDENTIFIERS, not literals, so re-pointing them costs nothing; the
+// message wording is the price of the pin, and is deliberate.
+func TestDialect_writableSlot(t *testing.T) {
 	memory, err := FT710.MemorySlot(1)
 	if err != nil {
 		t.Fatal(err)
@@ -242,7 +264,7 @@ func TestSlot_Writable(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.slot.Writable(); got != tc.want {
+			if got := FT710.writableSlot(tc.slot); got != tc.want {
 				t.Errorf("%q.Writable() = %v, want %v", tc.slot.Wire(), got, tc.want)
 			}
 		})

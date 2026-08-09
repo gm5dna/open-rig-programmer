@@ -380,8 +380,8 @@ func deriveRegion(count60m int, emg, overflow60m bool) string {
 // (60M when any 5xx slot answered, EMG when EMG did). The discovered
 // banks' field maps mirror the baseline MEM bank's READ supports with
 // every Write forced to Unsupported: MW cannot target 5xx/EMG slots at
-// all (cat.Slot.Writable), so no profile — not even Simulated — may
-// claim them writable.
+// all (cat.Dialect.writableSlot), so no profile — not even Simulated —
+// may claim them writable.
 func effectiveCapabilities(base spec.Capabilities, slots60m []string, emg bool) spec.Capabilities {
 	caps := cloneCapabilities(base)
 
