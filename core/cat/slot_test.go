@@ -219,8 +219,9 @@ func TestParseSlot(t *testing.T) {
 // assertions are unchanged and now run against the surviving surface, the
 // receiver-form Dialect.writableSlot. Its cross-dialect half — a foreign
 // slot refused, both own-space branches accepted — is pinned separately in
-// seconddialect_test.go (:442, :480-488), so nothing here needs to repeat
-// it.
+// seconddialect_test.go, by TestSecondDialect_BuildersHonourTheirReceiver
+// and TestSecondDialect_BuildersAcceptTheirOwnSlots respectively, so
+// nothing here needs to repeat it.
 //
 // THE LITERALS IN THIS FUNCTION ARE BYTE-FROZEN, including the format
 // string below, which still spells ".Writable()" though no such method

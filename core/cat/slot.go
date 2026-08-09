@@ -252,10 +252,12 @@ func (d Dialect) readableSlot(s Slot) bool {
 // dialect tag and for the BUILDING dialect after it; neither is the
 // question the write gate asks, and an exported method that looks like the
 // answer is worse than no method. Its truth table lives on this function
-// now (slot_test.go), and the cross-dialect half of the rule is pinned by
-// seconddialect_test.go: a slot outside a dialect's own space must be
-// refused by that dialect's BuildMWSet (:442), and both the memory and PMS
-// branches must be accepted inside it (:480-488).
+// now (TestDialect_writableSlot, slot_test.go), and the cross-dialect half
+// of the rule is pinned by seconddialect_test.go: a slot outside a
+// dialect's own space must be refused by that dialect's BuildMWSet
+// (TestSecondDialect_BuildersHonourTheirReceiver), and both the memory and
+// PMS branches must be accepted inside it
+// (TestSecondDialect_BuildersAcceptTheirOwnSlots).
 func (d Dialect) writableSlot(s Slot) bool {
 	kind := d.classifySlot(s.wire)
 	return kind == slotKindMemory || kind == slotKindPMS
