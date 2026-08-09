@@ -1,7 +1,17 @@
 # M9d-2 capability matrix — the FTdx101D and the FTdx101MP
 
-Date: 08/08/2026. Status: pre-plan artefact. Milestone: M9d-2
+Originally dated 08/08/2026. **THIS IS REVISION 3 (09/08/2026)** —
+three errata, each recorded in full at **§6**. Status: pre-plan
+artefact, since CONSUMED by the executed M9d-2 plan. Milestone: M9d-2
 (`core/driver/ftdx101`, `internal/fakedx101`, registration).
+
+**Revisions.** Rev 1, 08/08/2026 (`432fd4e`, as written). Rev 2,
+08/08/2026 (`2745e14`, review fix round 1 — the misquote, the citations,
+the sixth slot legend). Rev 3, 09/08/2026 (this one; §6). Because this
+document was consumed by an executed plan, **nothing here is silently
+rewritten**: every correction after rev 2 is an erratum in §6 stating
+what stood, what now stands, and the record that adjudicated it, and
+every corrected site carries a `(rev 3 erratum N)` tag pointing back.
 
 ## What this is
 
@@ -299,8 +309,10 @@ oversight:
 `core/cat`'s combined-MT write policy refuses 5xx and EMG slots — the
 predicate is `Dialect.mtSlotValid`, defined at `core/cat/mt.go:115`,
 reached by `validateCombinedMTFields` at `core/cat/mtcombined.go:105`
-— and `cat.Slot.Writable` (`core/cat/slot.go:159-162`) excludes them
-from MW. **The MT half is a PROJECT POLICY, and `core/cat` says so in
+— and `cat.Dialect.writableSlot` (`core/cat/slot.go`, cited by symbol),
+consulted by `validateMWFields` (`core/cat/mw.go`), excludes them from
+MW **(rev 3 erratum 3: this read `cat.Slot.Writable`, a symbol since
+DELETED)**. **The MT half is a PROJECT POLICY, and `core/cat` says so in
 terms.** `mtSlotValid`'s own doc comment runs `core/cat/mt.go:100-108`;
 its middle (`:103-106`) is the statement:
 
@@ -1006,12 +1018,21 @@ needs an `opMu` with it.
 ### 3.6 Write choreography — MT-only; one combined Set, including for an empty slot
 
 **Value (both models):** ONE combined MT Set per channel. MW is never
-sent. The Set is fire-and-forget: MT's availability row (layout 334)
-gives Set O, Read O, Answer O, AI X, and a Set produces no answer, so the
-transport spec waits for none.
+sent. The Set is sent fire-and-forget — the transport spec waits for no
+reply — because an ACCEPTED Set is assumed to draw no reply at all and a
+REJECTED one exactly one "?;". That is an INHERITED framing
+convention, not a reading of this manual, and its register home is
+`core/driver/ftdx101/doc.go`'s ASSUMED register entry 9, second half.
+MT's availability row (layout 334) gives Set O, Read O, Answer O, AI X
+and grounds NONE of it: the `Ans.` column marks the existence of the
+command's ANSWER FORM — the frame a READ draws — which is why read-only
+MR carries Answer O too (X O O X, layout 331). **(Rev 3 erratum 1.)**
 
 **Status: MANUAL-EVIDENCED that one frame carries everything; ASSUMED
-that the radio accepts it as a complete channel definition.** The
+that the radio accepts it as a complete channel definition; ASSUMED, as
+an inherited convention with no line in this manual behind it, that an
+accepted Set is answered with silence and a rejected one with "?;"
+(rev 3 erratum 1).** The
 41-byte Set carries the full field block and the tag (layout 1311-1330;
 geometry witness rows `MT,set,*`), so MW would write the same fields
 redundantly with a strictly smaller frame (28 bytes, layout 1352-1367).
@@ -1028,10 +1049,16 @@ two-frame MW+MT choreography, which is not this one.
   INCLUDING AN EMPTY ONE"**. It must land WITH the driver skeleton, one
   task ahead of the write path, because it is the assumption the whole
   MT-only choreography rests on and it must not arrive later than the
-  design it justifies.
+  design it justifies. **As built, that entry carries TWO ASSUMED
+  halves** — its title continues **"… — AND AN ACCEPTED SET DRAWS NO
+  REPLY WHILE A REJECTED ONE DRAWS \"?;\""** — because one design
+  decision (the zero `transport.CommandSpec` on the Set) rests on both
+  (rev 3 erratum 1).
 - **Lift, per model:** the FIRST write trial on that radio — one combined
   MT Set to a sacrificial EMPTY channel, then an MT read back, then the
-  same against an already-populated channel. Byte-faithful read-back on
+  same against an already-populated channel, **with the port watched
+  between the Set and the read-back**, which is what lifts the
+  acknowledgement half (rev 3 erratum 1). Byte-faithful read-back on
   both is the lift; anything else (rejection, partial field application,
   tag written without the field block) converts the write path to a
   two-frame choreography and this entry to a finding.
@@ -1260,7 +1287,9 @@ This radio offers two paths, and they are **not equivalent**.
 - The radio "contains two virtual COM ports, an Enhanced COM Port and a
   Standard COM Port"; the **Enhanced** port is for CAT communications
   and the **Standard** port for TX control (PTT, CW keying, digital
-  modes) — layout 75-79. A user pointing this project at the Standard
+  modes) — layout 75-79 (**rev 3 erratum 2**: this range was DISPUTED
+  during M9d-2's execution and CONFIRMED CORRECT by direct measurement;
+  it stands unchanged). A user pointing this project at the Standard
   port will get silence that looks exactly like a wrong baud or a
   framing mismatch.
 - **AI is USB-only.** AI's frame block carries the note "The AI command
@@ -1268,8 +1297,12 @@ This radio offers two paths, and they are **not equivalent**.
   and "This parameter is set to \"0\" (OFF) automatically when the
   transceiver is turned \"OFF\"" (layout **384**). The driver's `Open`
   choreography begins with an AI0 Set; over the rear RS-232C jack that
-  command is documented as unavailable. AI0 is fire-and-forget (its
-  availability row is O O O X, layout 244) so a session would not
+  command is documented as unavailable. AI0 is sent fire-and-forget on
+  the same INHERITED acknowledgement convention as the MT Set (driver
+  register entry 9's second half, §3.6) and **not** on the strength of
+  its availability row, whose O O O X at layout 244 says AI has Set,
+  Read and Answer FORMS and says nothing about what a Set draws
+  (**rev 3 erratum 1**) — so a session would not
   obviously fail — it would simply not have disarmed auto-information.
 - The RS-232C jack additionally cannot be used while the external
   antenna tuner is selected (layout 111-112, restated as a NOTE at 123),
@@ -1420,3 +1453,165 @@ matrix says something the FTdx10 driver's comments compress — the
 5xx/EMG write exclusion being project policy rather than a manual fact
 (§1.3.5) — it says the longer thing, and adds nothing to the FTdx101's
 committed record.
+
+That claim was true when it was written and is **qualified by §6**: rev 3
+found one inference in this matrix that did not hold (erratum 1) and one
+citation that had gone stale under a later deletion (erratum 3). Neither
+changes a capability value, a `FieldSupport` cell or a count.
+
+---
+
+## 6. Errata (revision 3, 09/08/2026)
+
+This document was the M9d-2 milestone's capability authority and was
+CONSUMED by an executed plan, so it is corrected under erratum
+discipline, not by rewriting: each entry below states **what stood**,
+**what now stands**, and **the record that adjudicated it**, and each
+corrected site in the body carries a `(rev 3 erratum N)` tag pointing
+here. Nothing in §1's values, §2's cells, §3's other behaviours, §4's
+three model distinctions or §5's counts — including the 193-item EX
+inventory — is touched by this revision.
+
+### Erratum 1 — §3.6 (and §3.12's AI0 aside): the acknowledgement convention is ASSUMED, not read off the availability row
+
+**What stood** (§3.6, value paragraph, rev 1-2):
+
+> *"The Set is fire-and-forget: MT's availability row (layout 334) gives
+> Set O, Read O, Answer O, AI X, and a Set produces no answer, so the
+> transport spec waits for none."*
+
+**What now stands.** The fire-and-forget SHAPE is unchanged — the
+transport spec still waits for no reply, and no code behaviour moves —
+but its ground is restated and given its own evidence grade. An accepted
+Set drawing no reply, and a rejected one drawing exactly one "?;", is
+an **INHERITED framing convention, ASSUMED**, registered as
+`core/driver/ftdx101/doc.go`'s ASSUMED register **entry 9, second half**,
+with a per-model Stage W lift (the first write trial's capture with the
+port watched between the Set and the read-back). §3.6's Status line now
+grades it explicitly, its register-home bullet records that entry 9
+carries two halves, and its lift bullet names the port watch. The
+availability row is cited for what it does say and disclaimed for what it
+does not.
+
+**What was wrong with the old ground.** The availability table's own
+header, at layout **236**, reads `Command Function Set Read Ans. AI` over
+each of its two command columns: the `Ans.` column marks the EXISTENCE OF
+THE COMMAND'S ANSWER FORM — the frame a READ draws — which is why MR, a
+read-only command, carries Answer O too (X O O X, layout 331). The column
+grounds nothing whatever about what a Set produces. The inference from
+Answer O to "a Set produces no answer" is a non sequitur. This manual
+(rev 2308-L) states neither half of the convention: it describes Set,
+Read and Answer commands and the terminator (layout 190-193, 227-229) and
+never says what a radio returns to a Set it honours or to one it cannot,
+and its layout-preserved extraction contains no `?` character anywhere.
+The convention came from the FT-710's manual, where it is stated as a
+general framing rule, and was adopted here without a register entry.
+
+**MANUAL-EVIDENCED and UNAFFECTED:** that ONE frame carries everything —
+the 41-byte Set carries the full field block and the tag (layout
+1311-1330; geometry-witness `MT,set,*` rows) against MW's 28 bytes
+(layout 1352-1367). That half of §3.6 stood and stands.
+
+**Second site, same defect.** §3.12's AI0 aside made the identical
+inference ("AI0 is fire-and-forget (its availability row is O O O X,
+layout 244)"). It is corrected the same way and tagged to this erratum:
+AI0 is sent fire-and-forget on the same inherited convention, not on the
+strength of layout 244. The driver's own `Open` doc comment already says
+so and cites this matrix section, so leaving the matrix's version
+standing would have put the two records in contradiction.
+
+**Records.** M9d-2 milestone review finding **F1**, adjudicated CONFIRMED
+in `.superpowers/sdd/m9d2-milestone-review-adjudication.md`; the durable
+record is `docs/superpowers/m9d2-baseline-manifest.md` **Note 6**
+("matrix §3.6 states the fire-and-forget shape without an evidence line
+(ERRATUM OWED)"), which held this defect precisely because the matrix is
+not edited mid-milestone. The code fixes landed at `80e0c30`
+(`core/driver/ftdx101/doc.go` entry 9, `write.go`'s `mtSetSpec`,
+`ftdx101.go`'s AI0-init note). The paired analyses on the fake's side —
+`internal/fakedx101/doc.go` register entries 11 and 16 — are CITED, not
+absorbed. **This erratum discharges the work Note 6 records as owed.**
+
+### Erratum 2 — §3.12's "layout 75-79": DISPUTED, then CONFIRMED CORRECT by measurement. No text change
+
+**What stood, and what now stands:** the same citation. The two-COM-ports
+passage is at **layout 75-79** — 75 the "contains two virtual COM ports"
+sentence, 76 "These ports offer the following functions:", 77-78 the two
+function bullets, 79 the worked COM5/COM6 example. Layout 73 is a
+device-manager string, not the passage.
+
+**Why an erratum with no correction.** During M9d-2's execution this
+citation was asserted to be wrong by **three** agents in succession (a
+task-7 fix implementer, its re-reviewer, and the Codex milestone
+reviewer), all naming 73; a "fix" was applied to
+`internal/radiotext/radiotext.go` moving it to 73-76 and raising a
+discrepancy warning against this matrix. Two parties measured the
+extraction directly and got 75 — the Fable milestone reviewer and the
+orchestrator — and it was the orchestrator's own read of layout 72-79
+that settled it: **the matrix was right all along**, the task-7
+"fix" was wrong, and its re-review's "re-confirmed line 73" was a false
+verification. The code was reverted to 75-79 and the discrepancy warning
+removed. This entry exists so that the next reader who greps, lands near
+73 and starts to "correct" the matrix has the adjudication in front of
+them before they do.
+
+**The process lesson, recorded because it generalises:** a disputed
+numeric citation is settled by running the measurement, never by counting
+verifiers. Three concurring agents were wrong and two measurements were
+right.
+
+**Records.** M9d-2 milestone review findings **F2 (CONFIRMED)** and **C3
+(REJECTED)**, and process lesson 1, in
+`.superpowers/sdd/m9d2-milestone-review-adjudication.md`; triage item (g)
+closes INVERTED from the ledger's framing there. The code side is
+`internal/radiotext/radiotext.go`'s `ProbeFirmwareNote` comment (cited by
+symbol), which now carries the measurement line by line, restored at
+`80e0c30`. `core/driver/ftdx101/doc.go` also cites 75-79 and always did.
+
+### Erratum 3 — §1.3.5's MW gate cited a symbol that has since been deleted
+
+**What stood** (§1.3.5, first paragraph, in rev 2's form; rev 1 named the
+same symbol without a line range):
+
+> *"— and `cat.Slot.Writable` (`core/cat/slot.go:159-162`) excludes them
+> from MW."*
+
+**What now stands:** "— and `cat.Dialect.writableSlot`
+(`core/cat/slot.go`, cited by symbol), consulted by `validateMWFields`
+(`core/cat/mw.go`), excludes them from MW."
+
+**Why.** `Slot.Writable` was **DELETED** at the M9d follow-up 2 wave's
+dialect-tagged-Slot task (`706f680..efd81d9`; the removal is `1bf00cd`,
+"Slot.Writable removed — the write rule spelled once"). The value-form
+method answered for the FT-710 on every dialect before the dialect tag
+and for the BUILDING dialect after it, and neither is the question the MW
+path asks — "will the dialect I am about to write through accept this" —
+so an exported predicate that looked like a write-gate answer, one import
+from the outbound write gate, was removed rather than kept correct-looking.
+The write-direction slot rule is now spelled in exactly one place,
+`Dialect.writableSlot`, reached from `validateMWFields`, which serves
+both `BuildMWSet` and `AllowedCommand`'s MW grammar check. The
+statement §1.3.5 was making — that MW cannot address 5xx/EMG, and that
+this half IS manual-evidenced for this radio (layout 1353) whilst the MT
+half is project policy — is **unchanged**; only the symbol it points at
+moved.
+
+**Cited by symbol, not by line**, per the standing lesson. The old
+citation's line range was in fact still exact the day the method was
+deleted (`func (s Slot) Writable()` sat at `slot.go:159` from rev 1
+through `706f680^`), which is the point: a line number can be perfectly
+accurate and still point at nothing, because what invalidated it was the
+disappearance of the thing, not a re-flow. A symbol name at least fails
+loudly — it greps to zero hits.
+
+**Noted, NOT corrected in this revision** (recorded here rather than
+silently fixed): the same paragraph's two other citations have drifted by
+a few lines — `Dialect.mtSlotValid` is now at `core/cat/mt.go:118` (cited
+as 115) and `validateCombinedMTFields` at `core/cat/mtcombined.go:104`
+(cited as 105). Both symbols exist, both still do exactly what §1.3.5
+says, and the drift is within a reader's eye-line, so it is left standing
+and disclosed here rather than being swept into an erratum that is about
+a deletion. A future revision that re-points them should do it by symbol.
+
+**Records.** The deletion's rationale is in `core/cat/slot.go`'s own
+"THERE IS NO `Slot.Writable`" note and in `validateMWFields`' SEAM NOTE
+(`core/cat/mw.go`); the wave is `706f680..efd81d9` on `m9d-followups`.
