@@ -355,9 +355,17 @@ func sanitizeCHIRPName(line int, name string, caps spec.Capabilities) (string, [
 // "absent from the frame in BOTH directions" is the one trigger for
 // Unavailable, and merely unwritable / merely unproven (spec.Unverified) /
 // transmitted-but-ignored (spec.Inert) all remain fields this radio's
-// frame carries. Restated here rather than shared because that one lives
-// in package main; if a third caller appears the rule should move to a
-// package both can import, not be copied again.
+// frame carries.
+//
+// The third caller M9c-6 said would force the move HAS appeared — M9d-2's
+// chirpScanSkip, below, asks the same question of spec.FieldScanSkip — so
+// the predicate itself now lives in the package both can import, as
+// spec.FieldSupport.Unreachable, and all three sites call it rather than
+// re-spelling the two comparisons. What is NOT shared, deliberately, is
+// what each site DOES with the answer: this one and bankTagDisplayDefault
+// answer Unavailable, chirpScanSkip answers Unknown-plus-loss, and those
+// differ because the two fields' unreachability means different things to
+// the user (see chirpScanSkip's own comment).
 //
 // The zero-value lookup covers "bank absent from caps entirely" and "bank
 // present but not listing the field" alike (spec.Capabilities.FieldSupport
@@ -365,11 +373,78 @@ func sanitizeCHIRPName(line int, name string, caps spec.Capabilities) (string, [
 // Unavailable with no special-casing: caps that say nothing about a
 // display flag are not evidence that one exists.
 func chirpTagDisplay(caps spec.Capabilities, bank spec.BankID) codeplug.BoolField {
-	fs := caps.FieldSupport(bank, spec.FieldTagDisplay)
-	if fs.Read == spec.Unsupported && fs.Write == spec.Unsupported {
+	if caps.FieldSupport(bank, spec.FieldTagDisplay).Unreachable() {
 		return codeplug.BoolField{State: codeplug.Unavailable}
 	}
 	return codeplug.BoolField{State: codeplug.Unknown}
+}
+
+// chirpScanSkip converts a CHIRP Skip cell to this project's ScanSkip
+// field state, CAPABILITY-AWARE (M9d-2, spec decision 5): on a radio
+// whose scan-skip is Unreachable — today, EVERY registered radio — a
+// blank cell yields Unknown (not Known-false: Known admits the field
+// into diff's requestedFields, which blocked every CHIRP-imported
+// channel on such radios — the M9c-6 manifest's A7 finding), and an "S"
+// cell yields Unknown plus a NON-BLOCKING loss entry recording the
+// dropped intent. A radio with genuine skip support keeps the literal
+// reading: blank means Known-false, "S" means Known-true. Unrecognised
+// values are unchanged in both worlds.
+//
+// The A7 finding is worth stating in full, because the old construction
+// looked harmless: a blank Skip column is what nearly every CHIRP file
+// has, {Known,false} is a true statement ABOUT THE FILE, and nothing in
+// this package could see the consequence. codeplug.Diff's requestedFields
+// (diff.go) admits a field on State == Known alone, and the all-or-nothing
+// per-field write gate then blocked the WHOLE channel because
+// spec.FieldScanSkip is not writable on an FT-710 — so a clean three-row
+// import planned as "Blocked 3", over a column the user had left empty.
+// The fix is to stop making the claim: on a radio that cannot reach the
+// field, an absent cell says nothing this radio can act on, and Unknown
+// is the state that means exactly that (core/codeplug/fieldstate.go —
+// "preserve whatever the radio has").
+//
+// Why Unknown rather than chirpTagDisplay's Unavailable, when the caps
+// question asked is the identical one: Unavailable would be defensible and
+// is what a READ of such a radio reports, but it is a stronger claim than
+// an IMPORT is entitled to make. Unknown here also keeps the imported
+// channel's scan_skip in the same state a native-CSV round-trip and a
+// blank row already produce, so a CHIRP import introduces no fourth
+// shape. Neither state reaches the wire and neither asks the user
+// anything (the grid cell edits scan_skip only from Known —
+// app/frontend/src/lib/grid/columns.js), so the difference is one of
+// honesty, not behaviour.
+//
+// The "S" loss entry is non-blocking on purpose. It records a real intent
+// the radio cannot store, so it must not be silent; but refusing the whole
+// channel over a flag this protocol does not carry would be the same
+// over-blocking A7 found, moved one layer up. bank is the TARGET bank —
+// the same per-bank lookup chirpTagDisplay justifies — and line is the
+// row's 1-based CSV line, for the entry.
+func chirpScanSkip(caps spec.Capabilities, bank spec.BankID, raw string, line int) (codeplug.BoolField, []LossEntry) {
+	unreachable := caps.FieldSupport(bank, spec.FieldScanSkip).Unreachable()
+	switch raw {
+	case "S":
+		if unreachable {
+			return codeplug.BoolField{State: codeplug.Unknown}, []LossEntry{{
+				Line: line, Column: "Skip", Value: raw, Action: ActionDropped, Blocking: false,
+				Detail: fmt.Sprintf("CHIRP Skip %q dropped: scan-skip is not reachable over CAT on %s; scan-skip left unresolved", raw, caps.Model),
+			}}
+		}
+		return codeplug.BoolField{State: codeplug.Known, Value: true}, nil
+	case "":
+		if unreachable {
+			return codeplug.BoolField{State: codeplug.Unknown}, nil
+		}
+		return codeplug.BoolField{State: codeplug.Known, Value: false}, nil
+	default:
+		// Unrecognised: the same answer on every radio, since the cell says
+		// something neither world can map. Byte-identical to the pre-M9d-2
+		// wording — this arm did not move and its Detail must not either.
+		return codeplug.BoolField{State: codeplug.Unknown}, []LossEntry{{
+			Line: line, Column: "Skip", Value: raw, Action: ActionDropped, Blocking: false,
+			Detail: fmt.Sprintf("CHIRP Skip value %q has no %s equivalent; scan-skip left unresolved", raw, caps.Model),
+		}}
+	}
 }
 
 // importCHIRPRow builds the Channel one CHIRP data row describes (nil if
@@ -606,19 +681,12 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string, caps spe
 		})
 	}
 
-	// Skip -> ScanSkip.
-	switch skipRaw := cell("Skip"); skipRaw {
-	case "S":
-		data.ScanSkip = codeplug.BoolField{State: codeplug.Known, Value: true}
-	case "":
-		data.ScanSkip = codeplug.BoolField{State: codeplug.Known, Value: false}
-	default:
-		data.ScanSkip = codeplug.BoolField{State: codeplug.Unknown}
-		entries = append(entries, LossEntry{
-			Line: line, Column: "Skip", Value: skipRaw, Action: ActionDropped, Blocking: false,
-			Detail: fmt.Sprintf("CHIRP Skip value %q has no %s equivalent; scan-skip left unresolved", skipRaw, caps.Model),
-		})
-	}
+	// Skip -> ScanSkip: from the TARGET BANK's own support, never the
+	// cell alone — see chirpScanSkip for the rule and why an unreachable
+	// radio may not be told the file's answer.
+	scanSkip, scanSkipEntries := chirpScanSkip(caps, memBank.ID, cell("Skip"), line)
+	data.ScanSkip = scanSkip
+	entries = append(entries, scanSkipEntries...)
 
 	// Recognised-but-unmapped columns: silent when at their default,
 	// non-blocking dropped when carrying real data (see
