@@ -95,8 +95,20 @@ func TestWrongRadioError_IsAs_BothShapes(t *testing.T) {
 	tests := []struct {
 		name string
 		err  *driver.WrongRadioError
+		// The model names the recovered error must carry, as LITERALS.
+		//
+		// They are literals rather than a read-back of tt.err's own fields
+		// because errors.As recovers THE VERY POINTER the table holds, so
+		// `wre.WantModel != tt.err.WantModel` compares a field with itself
+		// and can never fail — which is exactly what this pair did until
+		// the M9d ledgered-minors wave. The IDs at hand below were always
+		// written as literals; these now match that shape.
+		wantModel string
+		gotModel  string
 	}{
 		{
+			// wantModel/gotModel left at "": the additive names must stay
+			// ABSENT on the ID-only shape, and the zero value asserts it.
 			name: "ID only",
 			err:  &driver.WrongRadioError{Want: "0681", Got: "0682"},
 		},
@@ -106,6 +118,8 @@ func TestWrongRadioError_IsAs_BothShapes(t *testing.T) {
 				Want: "0681", Got: "0682",
 				WantModel: "FTdx101D", GotModel: "FTdx101MP",
 			},
+			wantModel: "FTdx101D",
+			gotModel:  "FTdx101MP",
 		},
 	}
 	for _, tt := range tests {
@@ -123,8 +137,8 @@ func TestWrongRadioError_IsAs_BothShapes(t *testing.T) {
 			if wre.Want != "0681" || wre.Got != "0682" {
 				t.Errorf("WrongRadioError IDs = %q/%q, want 0681/0682", wre.Want, wre.Got)
 			}
-			if wre.WantModel != tt.err.WantModel || wre.GotModel != tt.err.GotModel {
-				t.Errorf("WrongRadioError names = %q/%q, want %q/%q", wre.WantModel, wre.GotModel, tt.err.WantModel, tt.err.GotModel)
+			if wre.WantModel != tt.wantModel || wre.GotModel != tt.gotModel {
+				t.Errorf("WrongRadioError names = %q/%q, want %q/%q", wre.WantModel, wre.GotModel, tt.wantModel, tt.gotModel)
 			}
 		})
 	}

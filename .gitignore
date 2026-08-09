@@ -8,6 +8,10 @@
 *.out
 /bin/
 /dist/
+# A `go build ./internal/.../gen` run from the repo root drops its binary
+# here as plain `gen` — all three generators are package main in a directory
+# called gen. Root-anchored, so the internal/*/gen SOURCE trees stay tracked.
+/gen
 
 # Coverage
 *.cover

@@ -450,9 +450,10 @@
 //     REGISTERED AT THE M9d FOLLOW-UP WAVE, ON THE M9d-2 MILESTONE REVIEW'S
 //     FINDING: this package made the assumption on every refusal path while
 //     a register whose preamble claims to list every place this fake had to
-//     guess did not hold it. internal/fakedx101/doc.go's entry 16 is the same claim about
-//     those radios, and it is CITED here rather than shared: one capture on
-//     an FTdx10 settles this entry and says nothing about an FTdx101.
+//     guess did not hold it. internal/fakedx101/doc.go's entry 16 is the
+//     same claim about those radios, and it is CITED here rather than
+//     shared: one capture on an FTdx10 settles this entry and says nothing
+//     about an FTdx101.
 //     STAGE R LIFTS IT WITH: one deliberately unknown command — "ZZ;" —
 //     put to a real FTdx10 with the port watched. Whatever comes back, or
 //     does not, is the convention.

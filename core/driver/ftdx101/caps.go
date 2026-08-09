@@ -574,6 +574,27 @@ func capabilitiesSimulated(m modelParams) spec.Capabilities {
 // other half is the radio's documented restriction. Each call returns a
 // fresh map.
 func readOnlyFields(base spec.Capabilities) map[spec.Field]spec.FieldSupport {
+	// THE ok RESULT IS DISCARDED, AND HERE IS WHAT MAKES THAT SAFE: base is
+	// always a profile baseline from baseCapabilities, which builds the MEM
+	// bank unconditionally as Banks[0] for either model, and every caller
+	// passes exactly that. This function is called only from
+	// effectiveCapabilities, whose PRODUCTION callers are Open (ftdx101.go,
+	// with d.Capabilities()) and SynthesiseDiscoveredBanks (which re-passes
+	// d.Capabilities() on purpose, so live and offline synthesis cannot
+	// drift); it is also called directly by ftdx101_test.go's
+	// TestSynthesiseDiscoveredBanks_MatchesLiveDiscovery, which takes its
+	// base from drv.Capabilities() likewise. Every caller in the tree, test
+	// callers included, therefore passes a baseCapabilities product, and
+	// TestBaseline_Shape asserts Bank(spec.BankMemory) succeeds on both
+	// profiles of both models.
+	//
+	// IF IT EVER DID NOT: mem would be the zero Bank, its Fields nil, the
+	// loop below would run zero times, and the discovered 5xx/EMG bank
+	// would ship an EMPTY field map — every field Unsupported for read AND
+	// write, since that is spec.FieldSupport's zero. Fail-closed for the
+	// write gate, but silently wrong everywhere a field's Read support is
+	// consulted, which is why the guarantee is written down rather than
+	// trusted.
 	mem, _ := base.Bank(spec.BankMemory) // already a defensive copy
 	fields := make(map[spec.Field]spec.FieldSupport, len(mem.Fields))
 	for f, fs := range mem.Fields {
@@ -597,6 +618,28 @@ func cloneCapabilities(caps spec.Capabilities) spec.Capabilities {
 		// Capabilities.Bank returns a defensive copy (fresh Slots and
 		// Fields) — reuse that guarantee rather than restating per-field
 		// copying here.
+		//
+		// THE ok RESULT IS DISCARDED, AND HERE IS WHAT MAKES THAT SAFE:
+		// b came out of caps.Banks and Bank scans that same slice for
+		// b.ID, so the lookup cannot miss. The only way it could return
+		// the WRONG bank is a DUPLICATE BankID — the first match served
+		// twice, the second bank silently dropped from the clone — and
+		// spec.Capabilities.Validate refuses a duplicate BankID outright
+		// (core/spec/validate.go's bank loop), with TestProfiles_Validate
+		// running it over both profiles of both models.
+		//
+		// THAT VALIDATION COVERS THE BASELINES ONLY, and the load-bearing
+		// caller is Session.Capabilities (ftdx101.go), which passes s.caps
+		// — effectiveCapabilities' output, discovered banks and all, which
+		// no Validate run in this tree sees. What closes it there is
+		// CONSTRUCTION, not validation: effectiveCapabilities appends at
+		// most one spec.Bank60m and at most one spec.BankEMG to a baseline
+		// holding MEM and PMS, so four distinct IDs at most.
+		//
+		// A zero Bank reaching out would be quiet rather than loud: no
+		// Slots, no Fields, so a bank the app cannot show and,
+		// FieldSupport's zero being Unsupported, one nothing may be
+		// written to.
 		cp, _ := caps.Bank(b.ID)
 		out.Banks = append(out.Banks, cp)
 	}
