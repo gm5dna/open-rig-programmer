@@ -147,7 +147,9 @@ func TestID_MalformedBodyRejected(t *testing.T) {
 func TestAI_SetIsSilentAndReadReportsIt(t *testing.T) {
 	_, conn := newTestRadio(t)
 
-	// ASSUMED OFF at construction — doc.go register entry 14.
+	// OFF at construction, a MANUAL FACT — "This parameter is set to '0'
+	// (OFF) automatically when the transceiver is turned 'OFF'" (manual line
+	// 317). See doc.go's "What is NOT in this register, and why".
 	if got, want := exchange(t, conn, "AI;"), "AI0;"; got != want {
 		t.Errorf("AI; on a fresh radio -> %q, want %q", got, want)
 	}
@@ -248,20 +250,40 @@ func TestUnknownCommandRejected(t *testing.T) {
 	assertRejected(t, conn, ";")            // an empty frame
 }
 
-func TestCommandNamesAreUpperCaseOnly(t *testing.T) {
+// TestCommandNamesAreAcceptedInEitherCase pins the leniency this radio's own
+// manual states in terms — "A command consists of 2 alphabetical characters.
+// You may use either lower or upper case characters." (manual lines 160-161) —
+// and pins that it stops at the command NAME.
+//
+// It REPLACES TestCommandNamesAreUpperCaseOnly, which asserted the exact
+// opposite and pinned a defect: this package refused lower-case command names
+// against its own manual until the M9d follow-up wave. A reviewer meeting the
+// old test in the history should read doc.go's "What is NOT in this register,
+// and why" for the correction. The sibling test in internal/fakedx101 has
+// asserted this behaviour since that package landed.
+func TestCommandNamesAreAcceptedInEitherCase(t *testing.T) {
 	_, conn := newTestRadio(t)
 
-	// doc.go register entry 12: fakeradio accepts either case on the FT-710
-	// manual's explicit statement; no such statement about the FTdx10 is cited
-	// in this repository, so lower case is refused here rather than accepted
-	// on an invented leniency.
-	assertRejected(t, conn, "id;")
-	assertRejected(t, conn, "mt001;")
-	assertRejected(t, conn, "Mt001;")
-	// The upper-case form of the same read answers, so the rejection above is
-	// about the case and not about the slot.
-	if got := exchange(t, conn, "MT001;"); got == "?;" {
-		t.Errorf("MT001; -> %q, want an answer — the lower-case rejections above prove nothing if the upper-case form is refused too", got)
+	if got, want := exchange(t, conn, "id;"), "ID0761;"; got != want {
+		t.Errorf("id; -> %q, want %q", got, want)
+	}
+	lower := exchange(t, conn, "mt001;")
+	upper := exchange(t, conn, "MT001;")
+	if lower != upper {
+		t.Errorf("mt001; -> %q but MT001; -> %q — the command name's case must not matter", lower, upper)
+	}
+	if lower == "?;" {
+		t.Errorf("MT001; -> %q for both cases, so the equality above proves nothing", lower)
+	}
+	if got, want := exchange(t, conn, "Mt001;"), upper; got != want {
+		t.Errorf("Mt001; -> %q, want %q — mixed case is two alphabetical characters like any other", got, want)
+	}
+
+	// FIELD values are a different claim, and an ASSUMED one — doc.go register
+	// entry 12. The manual's statement is about the command name only.
+	assertRejected(t, conn, "MTp1l;")
+	if got := exchange(t, conn, "MTP1L;"); got == "?;" {
+		t.Error("MTP1L; -> \"?;\" — the lower-case field rejection above proves nothing if the upper-case form is refused too")
 	}
 }
 

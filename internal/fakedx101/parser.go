@@ -842,9 +842,10 @@ func (r *Radio) handleAI(body []byte) []byte {
 // COMMAND NAMES ARE MATCHED IN EITHER CASE, and that is a MANUAL FACT of these
 // radios rather than an inherited leniency: "A command consists of 2
 // alphabetical characters. You may use either lower or upper case characters."
-// (layout 204-205). internal/fakedx10 refuses lower case; why it does is a
-// question about that package, recorded for milestone review, and it changes
-// nothing about the line quoted here.
+// (layout 204-205). internal/fakedx10 refused lower case until the M9d
+// follow-up wave, which corrected it on the identical sentence in the FTdx10's
+// own manual; neither that disagreement nor its resolution changes anything
+// about the line quoted here.
 //
 // FIELD VALUES REMAIN CASE-SENSITIVE (the mode nibble's hex letters, the PMS
 // L/U suffix, EMG): the manual's statement is about the two-character command

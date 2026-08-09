@@ -146,12 +146,23 @@
 //
 // # The ASSUMED register
 //
-// Nine behaviours this driver encodes are NOT FTdx10-manual facts. Each is
-// listed here once, marked ASSUMED at the point of use, and paired with
-// the ONE Stage R or Stage W capture that lifts it. The captures are
-// individual on purpose: one FTdx10 session does not retire this register
-// wholesale, it retires the assumptions its own frames actually speak to,
-// and an entry whose capture was not taken stays here afterwards.
+// NINE ENTRIES, covering TEN behaviours this driver encodes that are NOT
+// FTdx10-manual facts. Each is listed here once, marked ASSUMED at the
+// point of use, and paired with the ONE Stage R or Stage W capture that
+// lifts it. The captures are individual on purpose: one FTdx10 session does
+// not retire this register wholesale, it retires the assumptions its own
+// frames actually speak to, and an entry whose capture was not taken stays
+// here afterwards.
+//
+// Entry 9 carries two behaviours rather than one — the combined Set's
+// sufficiency and the acknowledgement convention that governs what comes
+// back from it — because ONE capture, the first write trial, lifts both and
+// because one line of code (write.go's zero CommandSpec) asserts both. The
+// entry says so in its own words; the numbering is left alone, since a
+// renumbering would silently invalidate every citation into this register.
+// This mirrors core/driver/ftdx101/doc.go's entry 9, which took the same
+// second half at the M9d-2 milestone review; the two are SEPARATE claims
+// about separate radios and neither absorbs the other.
 //
 // This is the driver's register. The DIALECT's SEVEN entries
 // (core/cat/ftdx10/doc.go) are separate and are CITED below where this
@@ -319,24 +330,79 @@
 //     link.
 //
 //  9. A SINGLE COMBINED MT SET SUFFICES TO CREATE OR OVERWRITE A CHANNEL,
-//     INCLUDING AN EMPTY ONE (write.go's WriteChannel; the entry landed
-//     with the driver skeleton, one task ahead of the write path, because
-//     it is the assumption the whole MT-only choreography rests on and it
-//     must not arrive later than the design it justifies). The 41-byte
-//     Set carries the full field block and the tag, so MW would write the
-//     same fields redundantly — this driver sends no MW frame at all, and
-//     the NAMED INVERSION its write ladder carries in place of the
-//     FT-710's non-Known-TagDisplay refusal is documented at
-//     buildWriteCommand. Whether this radio accepts the combined Set as a
-//     complete channel definition — and whether it does so for a slot
-//     that does not yet exist — is unverified. The FT-710's own
-//     empty-slot create is HW-CONFIRMED for ITS two-frame MW+MT
+//     INCLUDING AN EMPTY ONE — AND AN ACCEPTED SET DRAWS NO REPLY WHILE A
+//     REJECTED ONE DRAWS "?;". TWO ASSUMPTIONS, ONE ENTRY, because one
+//     design decision rests on both: the write path sends the combined
+//     Set with the ZERO transport.CommandSpec, which is a claim about
+//     what the frame does AND a claim about what comes back. The entry
+//     landed with the driver skeleton, one task ahead of the write path,
+//     because it is the assumption the whole MT-only choreography rests
+//     on and it must not arrive later than the design it justifies.
+//
+//     WHAT IS MANUAL-EVIDENCED is that ONE frame carries everything: the
+//     41-byte Set carries the full field block and the tag, so MW would
+//     write the same fields redundantly — this driver sends no MW frame
+//     at all, and the NAMED INVERSION its write ladder carries in place
+//     of the FT-710's non-Known-TagDisplay refusal is documented at
+//     buildWriteCommand.
+//
+//     WHAT IS ASSUMED, FIRST HALF: whether this radio accepts the
+//     combined Set as a complete channel definition — and whether it does
+//     so for a slot that does not yet exist — is unverified. The FT-710's
+//     own empty-slot create is HW-CONFIRMED for ITS two-frame MW+MT
 //     choreography, which is not this one.
-//     STAGE W LIFTS IT WITH: the FIRST write trial — one combined MT Set
-//     to a sacrificial EMPTY channel, then an MT read back, then the same
-//     against an already-populated channel. Byte-faithful read-back on
-//     both is the lift; anything else (rejection, partial field
-//     application, tag written without the field block) converts the
-//     write path to a two-frame choreography and this entry to a
-//     finding.
+//
+//     WHAT IS ASSUMED, SECOND HALF — THE ACKNOWLEDGEMENT CONVENTION,
+//     added at the M9d follow-up wave, which found it travelling here
+//     unregistered: that an accepted combined Set produces NO REPLY AT
+//     ALL and that a rejected one produces exactly one "?;". THAT IS AN
+//     INHERITED FRAMING CONVENTION, NOT A READING OF THIS MANUAL. The
+//     FT-710's manual states silence-on-success as a general framing rule
+//     and this project adopted it there; THIS manual states neither half.
+//     It describes Set, Read and Answer commands (manual lines 146-149,
+//     with the worked FA example at 150-157) and the terminator (183-185)
+//     and never says what a radio returns to a Set it honours, or to one
+//     it cannot; its layout-preserved extraction of rev 2308-F contains
+//     no '?' character anywhere, over all 1,927 lines.
+//     AND MT'S AVAILABILITY ROW DOES NOT SUPPLY IT. That row gives Set O,
+//     Read O, Answer O, AI X (manual lines 260-262), and reading the
+//     Answer O as "so a Set produces no answer" is a non sequitur. The
+//     table's own header reads "Command Function Set Read Ans. AI" over
+//     each of its two command columns (manual line 192, spacing
+//     normalised here): the Ans. column marks the EXISTENCE OF THE
+//     COMMAND'S ANSWER FORM — the frame that comes back to a READ — which
+//     is why MR, a read-only command, carries an Answer O too (its row is
+//     X O O X, manual line 258). The column grounds nothing whatever
+//     about Sets. This driver never made that inference in writing, which
+//     is worse rather than better: write.go asserted the silence flatly,
+//     with no ground stated at all.
+//     THE PAIRED ANALYSIS IS THE FAKE'S, cited and NOT absorbed:
+//     internal/fakedx10/doc.go's register entry 11 (an accepted Set
+//     produces no reply, a rejected one exactly one "?;") and its entry 18
+//     (the "?;" convention ITSELF is inherited and unattested on this
+//     radio). Those are claims about the FAKE; this one is a claim about
+//     what the DRIVER expects of a real radio, and a capture retires them
+//     together or not at all. Neither register may absorb the other.
+//     THE SITES THAT DEPEND ON IT: write.go's mtSetSpec (the zero
+//     CommandSpec — no ExpectPrefix, so transport treats silence as
+//     acceptance and a bounded "?;" listen as the only failure signal)
+//     and write.go's WriteChannel through it. Unlike the FTdx101's
+//     driver, this one's Open states nothing about the AI0 init frame's
+//     acknowledgement, though it is sent the same way.
+//
+//     STAGE W LIFTS BOTH HALVES AT ONCE WITH: the FIRST write trial — one
+//     combined MT Set to a sacrificial EMPTY channel, then an MT read
+//     back, then the same against an already-populated channel, WITH THE
+//     PORT WATCHED FOR ANY REPLY AT ALL between the Set and the read.
+//     Byte-faithful read-back on both is the first half's lift; anything
+//     else (rejection, partial field application, tag written without the
+//     field block) converts the write path to a two-frame choreography
+//     and that half to a finding. Whatever the port carries in the gap —
+//     nothing, a "?;", or an acknowledgement this project has no handling
+//     for — is the second half's lift, and it must be recorded even when
+//     it is nothing, because "no bytes observed" is the whole content of
+//     the claim. A radio that acknowledged a Set would break this driver
+//     rather than merely surprise it: the spec waits for no prefix, so
+//     the acknowledgement would be left in the buffer for the next
+//     exchange to trip over.
 package ftdx10

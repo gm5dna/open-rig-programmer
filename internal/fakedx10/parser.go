@@ -26,6 +26,10 @@ import (
 // nothing else: an empty slot, an out-of-inventory slot, a malformed frame,
 // an unknown command and an overflowed accumulator are indistinguishable to
 // the host, which is the whole of the convention.
+//
+// THE CONVENTION ITSELF IS INHERITED AND IS NOT IN THIS MANUAL — doc.go
+// register entry 18. It is core/cat's ErrRejected, adopted from the FT-710's
+// reference; this manual never prints the character at all.
 var rejection = []byte("?;")
 
 // maxAccumulatorBytes is the reassembler's byte cap — this package's own
@@ -188,6 +192,15 @@ func mwSettableSlot(kind slotKind) bool {
 }
 
 func isDigit(b byte) bool { return b >= '0' && b <= '9' }
+
+// toUpperASCII folds one ASCII lower-case letter to upper case and leaves
+// every other byte alone. Used on COMMAND NAMES ONLY — see handleFrame.
+func toUpperASCII(b byte) byte {
+	if b >= 'a' && b <= 'z' {
+		return b - 'a' + 'A'
+	}
+	return b
+}
 
 // --- Field validators (wire level) ---
 //
@@ -749,12 +762,21 @@ func (r *Radio) handleAI(body []byte) []byte {
 // success, or a non-nil frame — a real answer, or rejection — otherwise.
 // Unknown and garbled commands fall through to rejection.
 //
-// COMMAND NAMES ARE MATCHED UPPER-CASE ONLY, unlike fakeradio, which accepts
-// either case on the FT-710 manual's explicit statement. No such statement
-// about the FTdx10 is cited anywhere in this repository, so accepting lower
-// case would be an invented leniency — doc.go register entry 12. Field values
-// are case-sensitive here as they are there (the mode nibble's hex letters,
-// the PMS L/U suffix, EMG).
+// COMMAND NAMES ARE MATCHED IN EITHER CASE, and that is a MANUAL FACT of this
+// radio rather than a leniency inherited from fakeradio: "A command consists
+// of 2 alphabetical characters. You may use either lower or upper case
+// characters." (manual lines 160-161, under the "Alphabetical Commands"
+// heading at 159). This arm matched upper case ONLY until the M9d follow-up
+// wave, on a register entry that asserted no such statement about the FTdx10
+// was cited anywhere in this repository; core/cat/ftdx10/testdata/
+// provenance.md's note A4 had cited it since 29/07/2026 (M9c-4 task 7a), the
+// day before that entry was written. See doc.go's "What is NOT in this
+// register, and why".
+//
+// FIELD VALUES REMAIN CASE-SENSITIVE (the mode nibble's hex letters, the PMS
+// L/U suffix, EMG): the manual's statement is about the two-character command
+// NAME and says nothing about parameters, so extending it would be an
+// invented leniency. That half is ASSUMED — doc.go register entry 12.
 func (r *Radio) handleFrame(frame []byte) []byte {
 	if len(frame) == 0 || frame[len(frame)-1] != ';' {
 		return rejection // defensive: the reassembler never hands us this
@@ -763,7 +785,7 @@ func (r *Radio) handleFrame(frame []byte) []byte {
 	if len(body) < 2 {
 		return rejection
 	}
-	cmd := [2]byte{body[0], body[1]}
+	cmd := [2]byte{toUpperASCII(body[0]), toUpperASCII(body[1])}
 	rest := body[2:]
 
 	switch cmd {

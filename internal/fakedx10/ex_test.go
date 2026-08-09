@@ -111,18 +111,27 @@ func TestEXRead_MalformedBody(t *testing.T) {
 	}
 }
 
-// TestEXRead_LowerCaseCommandRejected pins the DIVERGENCE from fakeradio, which
-// accepts either case on the FT-710 manual's explicit statement. No such
-// statement about the FTdx10 is cited anywhere in this repository, so accepting
-// lower case here would be an invented leniency — doc.go register entry 12, and
-// handleFrame's upper-case-only dispatch is what implements it. EX is checked
-// here because it is the newest command arm, and the one a later "helpful"
-// relaxation would most plausibly be added to.
-func TestEXRead_LowerCaseCommandRejected(t *testing.T) {
+// TestEXRead_LowerCaseCommandAccepted checks that the case leniency this
+// radio's manual states — "You may use either lower or upper case characters."
+// (manual lines 160-161) — reaches the EX arm too, and not merely the arms
+// fakedx10_test.go's TestCommandNamesAreAcceptedInEitherCase exercises.
+// EX is checked here because it is the newest command arm, and the one a later
+// re-tightening would most plausibly miss.
+//
+// It REPLACES TestEXRead_LowerCaseCommandRejected, which asserted the opposite
+// on the strength of the withdrawn register entry 12 — see doc.go's "What is
+// NOT in this register, and why".
+func TestEXRead_LowerCaseCommandAccepted(t *testing.T) {
 	_, conn := newTestRadio(t)
 	writeFrame(t, conn, "ex010101;")
-	if got, want := mustReadFrame(t, conn), "?;"; got != want {
-		t.Errorf("ex010101; (lower-case command) -> %q, want %q (register entry 12)", got, want)
+	lower := mustReadFrame(t, conn)
+	writeFrame(t, conn, "EX010101;")
+	upper := mustReadFrame(t, conn)
+	if lower != upper {
+		t.Errorf("ex010101; -> %q but EX010101; -> %q — the command name's case must not matter", lower, upper)
+	}
+	if lower == "?;" {
+		t.Errorf("EX010101; -> %q for both cases, so the equality above proves nothing", lower)
 	}
 }
 

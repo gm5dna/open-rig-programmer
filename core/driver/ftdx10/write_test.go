@@ -491,9 +491,12 @@ func TestWriteChannel_UnavailableTagDisplayIsNotRefused(t *testing.T) {
 // Confirmed:false} knows the frame went out and was refused.
 func TestWriteChannel_OutcomeTable(t *testing.T) {
 	t.Run("success: silence within the window is acceptance", func(t *testing.T) {
-		// Fire-and-forget: a CAT Set produces NO acknowledgement, so
-		// Confirmed means exactly "no rejection arrived in the window" and
-		// never "the radio said yes" (see driver.WriteStep).
+		// Fire-and-forget: on the ASSUMED acknowledgement convention (doc.go's
+		// register entry "A SINGLE COMBINED MT SET SUFFICES", second half) a
+		// CAT Set produces NO acknowledgement, so Confirmed means exactly "no
+		// rejection arrived in the window" and never "the radio said yes"
+		// (see driver.WriteStep). What this test pins is the FAKE's modelling
+		// of that convention, not any real FTdx10's behaviour.
 		_, sess := openSession(t, Simulated, slotImage{})
 
 		res, err := sess.WriteChannel(testCtx(t), writableChannel("010"))
