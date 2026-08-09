@@ -227,11 +227,12 @@
 //
 //   - "MTPolicy.TagFill = ' '" — the byte a short P12 tag is padded with
 //     and trimmed of, on every combined MT answer ReadChannel maps
-//     (read.go) and every Set the write path will build. TagLen 12 itself
-//     does not depend on it (that width is manual-evidenced, layout 1330).
+//     (read.go) and every Set write.go's buildWriteCommand builds. TagLen 12
+//     itself does not depend on it (that width is manual-evidenced, layout
+//     1330).
 //   - "ClarifierPolicy.StepHz = 10" — the capability value ClarStepHz
 //     (caps.go) and the multiple-of-step rule core/cat enforces on every
-//     combined-MT Set the write path will build.
+//     combined-MT Set write.go's buildWriteCommand builds.
 //   - "SlotSpace.NoneWire = \"000\"" — the read path's refusal of the
 //     answer-only none form: grammatical per ParseSlot, never a legal read
 //     target, refused by BuildMTRead and documented at that call site
@@ -249,10 +250,11 @@
 //     so that the recorded 30..41 window contingency would move it.
 //   - "The CLARIFIER'S MINUS-DIRECTION BYTE, the ASCII HYPHEN-MINUS 0x2D
 //     ('-')" — the byte a negative clarifier offset is read at (read.go's
-//     ClarHz mapping) and written with in the frames the write path will
-//     build. This manual prints that direction as a two-hyphen glyph and
-//     the quarantined golden deriver recorded it UNREADABLE rather than
-//     resolving it.
+//     ClarHz mapping) and written with in the frames write.go's
+//     buildWriteCommand builds — the two call sites a Stage W lift of this
+//     entry must look at. This manual prints that direction as a two-hyphen
+//     glyph and the quarantined golden deriver recorded it UNREADABLE rather
+//     than resolving it.
 //
 // Correcting one of those is a dialect change; correcting one of these is a
 // change here. Neither list may absorb the other.

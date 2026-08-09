@@ -15,7 +15,6 @@ import (
 	// appears at TWO call sites (modelD and modelMP, below) — one per
 	// model, because there are two models and therefore two dialects.
 	catftdx101 "github.com/gm5dna/open-rig-programmer/core/cat/ftdx101"
-	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
@@ -539,33 +538,10 @@ func (s *Session) Diagnostics() driver.SessionDiagnostics {
 // already guarantees repeat calls return the same result.
 func (s *Session) Close() error { return s.eng.Close() }
 
-// WriteChannel implements driver.Session — AND IS A PLACEHOLDER THAT TASK
-// 3 REPLACES WHOLE. It exists in this commit because driver.Session
-// requires the method and *Session must satisfy that interface for Open to
-// return one at all; it deliberately does NOT attempt a partial
-// choreography. The FTdx10 driver's own skeleton carried the identical
-// placeholder for the identical reason.
-//
-// Every call is refused with a typed *driver.WriteRefusedError before any
-// frame is built or any byte reaches the wire — which is the correct
-// behaviour for the RealHardware and fail-safe profiles regardless (their
-// capability gate would refuse anyway, both write guards being false), and
-// a temporary, visible gap for the Simulated profile, whose six Supported
-// writes have nothing behind them until the MT-only Set lands.
-//
-// Task 3 replaces this with the real ladder (ParseSlot, the bank lookup,
-// the erase refusal, Valid() checks, the capability gate over the requested
-// fields, ONE cat.Dialect.BuildMTSetCombined frame, steps declared after
-// the frame exists and before the wire), together with the NAMED INVERSION
-// this radio's absent display flag forces on it — see read.go's TagDisplay
-// note. TestWriteChannel_RefusedUntilTask3 pins this placeholder's
-// behaviour and is replaced along with it.
-func (s *Session) WriteChannel(_ context.Context, ch codeplug.Channel) (driver.WriteResult, error) {
-	return driver.WriteResult{Steps: []driver.WriteStep{}}, &driver.WriteRefusedError{
-		Slot:   ch.Slot,
-		Reason: "the FTdx101 driver's write path is not implemented yet (M9d-2 task 3 lands the MT-only combined Set); no frame is built and nothing reaches the wire",
-	}
-}
+// WriteChannel — the MT-only combined Set — lives in write.go, alongside the
+// refusal ladder and the frame builder it is made of. (The M9d-2 task-2
+// placeholder that stood here, and the TestWriteChannel_RefusedUntilTask3
+// that pinned it, were both replaced by that file at task 3.)
 
 // ErrAnswerMismatch is the sentinel a caller should compare against (via
 // errors.Is) when a slot-addressed answer names a DIFFERENT slot than the

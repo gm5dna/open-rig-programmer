@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
-	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
@@ -627,30 +626,10 @@ func TestSession_DoesNotReportRegion(t *testing.T) {
 	}
 }
 
-// TestWriteChannel_RefusedUntilTask3 pins the write PLACEHOLDER: until task
-// 3 lands the MT-only combined Set, every WriteChannel call is refused with
-// a typed *driver.WriteRefusedError before any frame is built.
-//
-// The method exists only because driver.Session requires it and *Session
-// must satisfy that interface for Open to return one. Refusing is the only
-// honest thing an unimplemented write path can do; attempting a partial
-// choreography would be worse than nothing. This test is replaced along
-// with the placeholder.
-func TestWriteChannel_RefusedUntilTask3(t *testing.T) {
-	_, sess := openSession(t, testModels[0], Simulated, slotImage{})
-
-	res, err := sess.WriteChannel(testCtx(t), codeplug.Channel{Slot: "001"})
-	var refused *driver.WriteRefusedError
-	if !errors.As(err, &refused) {
-		t.Fatalf("WriteChannel = %v (%T), want a *driver.WriteRefusedError while the write path is a placeholder", err, err)
-	}
-	if refused.Slot != "001" {
-		t.Errorf("WriteRefusedError.Slot = %q, want \"001\"", refused.Slot)
-	}
-	if len(res.Steps) != 0 {
-		t.Errorf("WriteResult.Steps = %v, want none — nothing may be declared for a write that was never attempted", res.Steps)
-	}
-}
+// The write path's tests are in write_test.go. (TestWriteChannel_RefusedUntilTask3
+// stood here while WriteChannel was a task-2 placeholder, and was deleted by
+// the same commit that replaced the placeholder — its own doc comment named
+// that handover.)
 
 // TestSynthesiseDiscoveredBanks_MatchesLiveDiscovery is the live-vs-offline
 // equivalence, table-driven over every input class the offline path can
