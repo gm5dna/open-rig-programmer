@@ -849,9 +849,10 @@ func (r *Radio) handleAI(body []byte) []byte {
 // NAME and says nothing about parameters, so extending it would be an invented
 // leniency. That half is ASSUMED — doc.go register entry 12.
 //
-// EX (MENU) is NOT dispatched here yet and therefore falls to the default arm:
-// every EX read draws "?;" until this package's generated projection of
-// transcription B lands beside it (ex.go, the next task of this milestone).
+// EX (MENU) is dispatched to handleEX (ex.go), which answers from this package's
+// generated projection of transcription B. It is READ ONLY: a set-shaped body
+// falls through the same length check as any other malformed one, to "?;" —
+// doc.go register entry 17.
 func (r *Radio) handleFrame(frame []byte) []byte {
 	if len(frame) == 0 || frame[len(frame)-1] != ';' {
 		return rejection // defensive: the reassembler never hands us this
@@ -876,6 +877,8 @@ func (r *Radio) handleFrame(frame []byte) []byte {
 		return r.handleMT(rest)
 	case [2]byte{'M', 'C'}:
 		return r.handleMC(rest)
+	case [2]byte{'E', 'X'}:
+		return r.handleEX(rest)
 	default:
 		return rejection
 	}

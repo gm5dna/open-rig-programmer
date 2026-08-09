@@ -66,3 +66,41 @@ func WithSlot(slot string, s MemState) Option {
 		r.slots[slot] = s
 	}
 }
+
+// WithEXSetting overlays one EX (MENU) address's raw P4 verbatim — the same
+// overlay semantics as WithSlot: it is applied to whatever exSettings already
+// holds (EXDefaults(), seeded in newRadio), with no shape or range validation,
+// so several WithEXSetting options may be given, including for an address the
+// generated inventory does not know about. Such an address becomes answerable
+// even though EXDefaults() never produced it, because the option does not
+// consult exGroups — which is deliberate: it is how a test reaches a wire
+// behaviour the transcription does not describe, without editing the projection
+// of transcription B that the cross-check depends on.
+//
+// It applies to a D and to an MP alike, since both hold the same seeded map
+// (ex.go's "one inventory, two radios"). An option cannot therefore be used to
+// manufacture a per-model EX difference by accident — only deliberately, by
+// giving different options to the two constructors.
+func WithEXSetting(addr, p4 string) Option {
+	return func(r *Radio) {
+		r.exSettings[addr] = p4
+	}
+}
+
+// WithEXUnavailable removes addr from the fake's EX (MENU) address map, applied
+// to whatever exSettings already holds (EXDefaults() by default, or a prior
+// WithEXSetting in the same Option list), so a subsequent EX read of addr
+// answers "?;" — indistinguishable from an address the chart never enumerated
+// (ex.go's handleEX, doc.go register entry 17).
+//
+// It introduces no NEW assumed behaviour: it only removes a map entry, which
+// triggers the fake's existing documented "?;". This is the test-only seam for
+// forcing a KNOWN, otherwise-valid address to answer as unavailable — what a
+// settings reader maps to driver.SettingUnavailable — so that such a test need
+// not depend on a genuinely out-of-inventory address that no SettingsDescriptor
+// would ever offer an ID for in the first place.
+func WithEXUnavailable(addr string) Option {
+	return func(r *Radio) {
+		delete(r.exSettings, addr)
+	}
+}

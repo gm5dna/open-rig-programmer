@@ -20,18 +20,20 @@ import (
 // NON-RECURSIVE, using parser.ParseDir("."), which reads one directory and
 // stops.
 //
-// That is a real hole here, not a stylistic one. internal/fakedx101/gen/ will
-// be a stdlib-only generator that must be inside the fence — it is the piece
-// most likely to reach for internal/extable, the A-side machinery whose Digits
+// That is a real hole here, not a stylistic one. internal/fakedx101/gen/ is a
+// stdlib-only generator that must be inside the fence — it is the piece most
+// likely to reach for internal/extable, the A-side machinery whose Digits
 // parsing was a known defect locus, which is exactly the import this package
 // must not have (one parser on both sides of the EX cross-check would reproduce
 // a shared parsing bug into both inventories invisibly).
 //
-// THE FENCE LANDS WITH THE PACKAGE CORE, BEFORE THAT SUBDIRECTORY EXISTS, so
-// that the generator arrives inside a fence rather than in front of one, and
-// TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory proves it
-// will bite when the directory does arrive — the same order internal/fakedx10
+// THE FENCE LANDED WITH THE PACKAGE CORE, BEFORE THAT SUBDIRECTORY EXISTED, so
+// that the generator arrived inside a fence rather than in front of one, and
+// TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory proved it
+// would bite before the directory was there — the same order internal/fakedx10
 // took, and the reason its own fence was already standing when its gen/ landed.
+// That subdirectory now exists, so TestNoCoreImports below scans it for real as
+// well.
 
 // modulePrefix is this project's module path (go.mod: "module
 // github.com/gm5dna/open-rig-programmer") — NOT the repository directory name

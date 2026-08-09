@@ -39,11 +39,13 @@
 // the shared 28-byte memory frame, MW sets it, MC recalls, ID answers this
 // radio's own CAT ID, and AI is accepted and readable.
 //
-// EX (MENU) is NOT ANSWERED YET. Every EX read draws "?;" from the dispatch's
-// default arm until this package's generated projection of transcription B
-// lands beside it (ex.go, the next task of this milestone).
-// TestEXNotModelledYet pins the interim behaviour so that the arm's arrival is
-// a visible change rather than a quiet one.
+// EX (MENU) is answered from a GENERATED PROJECTION of this package's own copy
+// of transcription B (ex.go, exinventory_gen.go, transcription-b.csv,
+// PROVENANCE.md) — 193 items across 18 (P1,P2) subgroups, read-only. ONE
+// projection serves both models: the manual prints Table 2 once for the pair,
+// and TestEXAnswersAreIdenticalOnBothModels plus the transport cross-check's
+// ID-divergence leg require the D and the MP to answer every address
+// identically.
 //
 // # The hard rule: NOTHING project-internal
 //
@@ -72,13 +74,13 @@
 // that scan WALKS SUBDIRECTORIES — internal/fakedx10's deliberate improvement
 // on fakeradio's copy of the same test, whose parser.ParseDir(".") is
 // non-recursive and would leave a generator in gen/ outside the fence entirely.
-// It is copied here IN THE SAME TASK THAT CREATES THE PACKAGE, before any
-// subdirectory exists, precisely so that the fence is already standing when the
-// EX inventory's generator arrives: that generator is the piece the rule bites
-// hardest for, because it must not reach for internal/extable, the machinery
-// that generates the DIALECT's inventory from transcription A — one parser on
-// both sides of the cross-check would reproduce a shared parsing bug into both
-// inventories invisibly.
+// It was copied here IN THE SAME TASK THAT CREATED THE PACKAGE, before any
+// subdirectory existed, precisely so that the fence was already standing when
+// the EX inventory's generator arrived one task later: that generator (gen/) is
+// the piece the rule bites hardest for, because it must not reach for
+// internal/extable, the machinery that generates the DIALECT's inventory from
+// transcription A — one parser on both sides of the cross-check would reproduce
+// a shared parsing bug into both inventories invisibly.
 //
 // # A SIBLING of internal/fakeradio and internal/fakedx10, not a refactor
 //
@@ -115,9 +117,15 @@
 //     "This parameter is set to '0' (OFF) automatically when the transceiver
 //     is turned 'OFF'" (layout 384). It is therefore absent from the register
 //     below — see "What is NOT in this register".
-//   - No EX handler yet, and so no EX options (WithEXSetting/WithEXUnavailable
-//     have nothing to configure until the projection lands). Both arrive with
-//     ex.go.
+//   - The EX projection is generated from a DIFFERENTLY SHAPED transcription B.
+//     internal/fakedx10's B lost its briefed header to a mid-task stall and
+//     arrived as six columns with wrapped group labels and no text flag, so its
+//     generator strips the wrapper and reconstructs the flag from a value
+//     legend. This B arrived on its brief — eight columns, bare labels, an
+//     explicit `text` column, and a '#'-commented provenance block — so this
+//     package's generator does neither of those things, and refuses a wrapped
+//     label cell outright. The reason is this artefact's own shape, not a
+//     judgement about that one. (gen/main.go; PROVENANCE.md)
 //
 // WHY internal/fakedx10 SETTLES THE MIDDLE TWO DIFFERENTLY IS A QUESTION ABOUT
 // THAT PACKAGE, and it is under milestone review rather than answered here.
@@ -165,11 +173,12 @@
 // case is ever genuinely needed, fakeradio's options.go is the template to copy
 // — and copying it is the right move, per the sibling section above.
 //
-// EX. Neither direction is modelled yet; the read side lands with ex.go, and
-// the SET side will not, exactly as fakeradio does not model it and
-// internal/fakedx10 does not either. The menu surface is READ-ONLY for v1.x by
-// the M8d decision of 25/07/2026 (docs/menu-write-decision.md), so nothing in
-// this project sends one.
+// EX SET. The read side is modelled (ex.go); the SET side is not, exactly as
+// fakeradio does not model it and internal/fakedx10 does not either. The manual
+// documents a Set form, so this is a KNOWN-DIVERGENT modelling gap rather than a
+// claim about the radio — register entry 17's second half. The menu surface is
+// READ-ONLY for v1.x by the M8d decision of 25/07/2026
+// (docs/menu-write-decision.md), so nothing in this project sends one.
 //
 // TIMING. Every reply is near-instant unless WithLatency says otherwise. No
 // FTdx101 timing has ever been observed by this project, so there is nothing to
@@ -255,24 +264,31 @@
 //     session unless that session's radio carries the banks.
 //     (image.go: With5xx, WithEMG; parser.go: handleMT)
 //
-//  4. EX ANSWER VALUES ARE INVENTED. This fake's EX inventory will be GENERATED
-//     from its own copy of transcription B; the VALUES it answers with are this
-//     package's construction-time convenience by fakeradio's convention — every
-//     numeric item n × '0', every text item 12 spaces (fakeradio's
-//     buildEXDefaults rule) — and not a claim about any FTDX101D's or
-//     FTDX101MP's factory or user MENU state. The manual's Table 2 documents
-//     each item's VALID RANGE and its option legends, never a shipped default,
-//     so there is nothing to source a real default from. This matters beyond
-//     the test suite: `rigprog read --settings --fake --model FTdx101D` will
-//     render these values to a user, who must not read them as what an FTdx101
-//     ships with.
-//     THIS ENTRY LANDS AHEAD OF THE CODE IT GOVERNS, with the package core and
+//  4. EX ANSWER VALUES ARE INVENTED. This fake's EX inventory IS GENERATED from
+//     its own copy of transcription B, and the ADDRESSES and WIDTHS in it are
+//     therefore transcribed evidence rather than invention. THE VALUES ARE NOT.
+//     What this fake answers with is its construction-time convenience by
+//     fakeradio's convention — every numeric item n × '0', every text item 12
+//     spaces (fakeradio's buildEXDefaults rule) — and not a claim about any
+//     FTDX101D's or FTDX101MP's factory or user MENU state. The manual's
+//     Table 2 documents each item's VALID RANGE and its option legends, never a
+//     shipped default, so there is nothing to source a real default from. This
+//     matters beyond the test suite: `rigprog read --settings --fake --model
+//     FTdx101D` renders these values to a user, who must not read them as what
+//     an FTdx101 ships with.
+//     BOTH MODELS ANSWER THE SAME INVENTED VALUES, because both are seeded from
+//     one EXDefaults() — which is a consequence of the chart being printed once
+//     for the pair (ex.go, "one inventory, two radios"), not a second
+//     assumption. The invention is one invention, made twice over.
+//     THIS ENTRY LANDED AHEAD OF THE CODE IT GOVERNS, with the package core and
 //     one task before ex.go, exactly as internal/fakedx10's entry 4 did, so
-//     that the honesty is on record before the first invented value exists.
+//     that the honesty was on record before the first invented value existed.
 //     STAGE R LIFTS IT, PER MODEL, WITH: a full EX sweep of a radio of that
 //     model at factory defaults, values recorded per address. Nothing short of
-//     that supplies a default, and the manual never will.
-//     (ex.go, when it lands: exDefaultDigit, exTextWidth, buildEXDefaults)
+//     that supplies a default, and the manual never will. A sweep of a D says
+//     nothing about an MP, so expect this entry to sit half-retired for a long
+//     time.
+//     (ex.go: exDefaultDigit, exTextWidth, buildEXDefaults, EXDefaults)
 //
 //  5. THE CLARIFIER IS STORED, AND ROUND-TRIPS BYTE-FAITHFULLY. A combined MT
 //     Set's P3 sign and magnitude and its P4/P5 flags are stored exactly as they
@@ -476,9 +492,9 @@
 //     (parser.go: reassembler)
 //
 //  16. THE "?;" REJECTION CONVENTION ITSELF IS INHERITED, AND THIS MANUAL DOES
-//     NOT PRINT IT. Entries 1, 7, 8, 9 and 12 all say what draws a rejection;
-//     this one records that the rejection's very existence is an assumption on
-//     these radios. The layout-preserved extraction of rev 2308-L contains NO
+//     NOT PRINT IT. Entries 1, 7, 8, 9, 12 and 17 all say what draws a
+//     rejection; this one records that the rejection's very existence is an
+//     assumption on these radios. The layout-preserved extraction of rev 2308-L contains NO
 //     '?' character anywhere, over all 2,051 lines: the manual describes Set,
 //     Read and Answer commands (layout 190-193) and a terminator, and never
 //     says what the radio replies to a command it cannot honour. "?;" is
@@ -492,6 +508,38 @@
 //     "ZZ;" — put to a radio of that model with the port watched. Whatever comes
 //     back, or does not, is the convention.
 //     (parser.go: rejection, and every refusal in the file)
+//
+//  17. AN EX READ OF AN ADDRESS THIS FAKE HAS NO ENTRY FOR ANSWERS "?;", AND SO
+//     DOES A SET-SHAPED EX BODY. Two claims about the EX command's edges,
+//     recorded together because one line of code makes both.
+//     The first is the menu-side twin of entry 1: a grammatically valid
+//     six-digit address the chart never enumerated — every 05xxxx, every P3 past
+//     a subgroup's item count — draws the protocol's single unattributed NAK.
+//     fakeradio's equivalent is NOT an assumption (its register item 23:
+//     OBSERVED at M8c for six such addresses), and that is an FT-710 fact about
+//     an FT-710 menu. Here it is assumed TWICE OVER: neither model has been
+//     asked, and entry 16 records that the "?;" convention itself is unattested
+//     for these radios. Note what makes it narrower than the FTdx10's version of
+//     this entry: that chart has a P1 anomaly to argue about (its grammar block
+//     says "P1 : 01 - 05" while the chart populates 01-04), and this one has
+//     none — this manual's EX page and its Table 2 agree that P1 runs 01-04, so
+//     05xxxx is out of inventory without any unresolved question behind it.
+//     Membership comes from the chart's own rows via the generated inventory,
+//     never from a range check, and it is what a settings reader maps to
+//     driver.SettingUnavailable.
+//     The second is a deliberate MODELLING GAP, KNOWN-DIVERGENT from the
+//     documented grammar rather than a hardware claim: the manual documents an
+//     EX Set form and this fake does not implement it, so a valid address
+//     followed by a P4 payload ("EX0101011;") is simply a too-long body to
+//     handleEX and falls through the same length check to the same NAK. The menu
+//     surface is READ-ONLY for v1.x by the M8d decision of 25/07/2026
+//     (docs/menu-write-decision.md), so nothing in this project sends one.
+//     STAGE R LIFTS THE FIRST, PER MODEL, WITH: one EX read of 050101 and one of
+//     a P3 past a subgroup's end, on a radio of that model — an answer rather
+//     than "?;" would mean the chart is incomplete, which is a finding for the
+//     dialect as much as for this fake. A STAGE W capture would be needed for
+//     the second, and none is planned while the menu surface stays read-only.
+//     (ex.go: handleEX)
 //
 // # What is NOT in this register, and why
 //

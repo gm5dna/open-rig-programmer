@@ -59,7 +59,8 @@ type Radio struct {
 	mu             sync.Mutex
 	slots          map[string]MemState
 	currentChannel string
-	ai             byte // '0' or '1'; OFF at construction — a manual fact, layout 384
+	ai             byte              // '0' or '1'; OFF at construction — a manual fact, layout 384
+	exSettings     map[string]string // EX (MENU) six-digit address -> raw P4; see ex.go
 
 	// shutdown is closed (exactly once, by closePipes) when the radio goes
 	// away. WithLatency's wait selects against it (sleepInterruptible) instead
@@ -127,8 +128,15 @@ func newRadio(catID string, opts ...Option) *Radio {
 		// is set to '0' (OFF) automatically when the transceiver is turned
 		// 'OFF'" (layout 384), which is why this behaviour is absent from the
 		// ASSUMED register — see doc.go's "What is NOT in this register".
-		ai:       '0',
-		shutdown: make(chan struct{}),
+		ai: '0',
+		// A FRESH COPY per radio, seeded from the generated projection of
+		// transcription B (ex.go). EXDefaults() returns an independent map by
+		// contract, which is what lets WithEXSetting and WithEXUnavailable
+		// overlay one radio's menu without reaching any other radio's — and it
+		// is the same map for a D and for an MP, because the chart is printed
+		// once for both models.
+		exSettings: EXDefaults(),
+		shutdown:   make(chan struct{}),
 	}
 	for _, opt := range opts {
 		opt(r)

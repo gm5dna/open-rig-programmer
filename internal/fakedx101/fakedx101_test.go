@@ -222,7 +222,10 @@ func TestTheTwoModelsDifferOnlyInTheIDAnswer(t *testing.T) {
 		"mt010;",    // lower case, accepted (layout 204-205)
 		"MTp1l;",    // lower-case FIELD, refused — register entry 12
 		"ZZ;",       // unknown command
-		"EX010101;", // not modelled yet — "?;"
+		"EX010101;", // a 4-digit menu item — the chart is printed once for both models
+		"EX040101;", // the chart's ONE text item (MY CALL.), 12 spaces
+		"EX050101;", // no P1=05 group in this chart — "?;"
+		"ex010101;", // lower-case command name, accepted (layout 204-205)
 	}
 	for _, send := range shared {
 		gotD := exchange(t, connD, send)
@@ -417,17 +420,26 @@ func TestCommandNamesAreAcceptedInEitherCase(t *testing.T) {
 	}
 }
 
-// TestEXNotModelledYet pins the interim behaviour of the EX (MENU) command:
-// this fake holds no menu inventory yet, so every EX read falls through
-// handleFrame's default arm to the same "?;" an unknown command draws.
+// TestEXIsDispatched replaces the TestEXNotModelledYet this file carried while
+// the package had no menu inventory: EX now reaches handleEX (ex.go) rather than
+// handleFrame's default arm, so a KNOWN address answers and only the unknown and
+// the malformed still draw "?;".
 //
-// It exists to make the projection's arrival VISIBLE: ex.go replaces this test
-// with one asserting that a known address answers and an out-of-inventory one
-// is refused, exactly as internal/fakedx10's TestEXIsDispatched replaced its
-// own predecessor of this name.
-func TestEXNotModelledYet(t *testing.T) {
+// It is deliberately the whole of what the dispatch change is worth asserting
+// HERE — every width class, every option, every refusal class and the two
+// models' agreement live in ex_test.go beside it. What this test pins is that
+// the arm exists at all, which is the thing the old test's disappearance would
+// otherwise leave unstated.
+func TestEXIsDispatched(t *testing.T) {
 	_, conn := newTestRadio(t)
-	for _, send := range []string{"EX010101;", "EX999999;", "EX;"} {
+
+	// 010101 is AGC FAST DELAY, digits 4 (transcription-b.csv line 44), so its
+	// invented default is four zeros — recomputed here from the CSV row, not
+	// from the generated table.
+	if got, want := exchange(t, conn, "EX010101;"), "EX0101010000;"; got != want {
+		t.Errorf("EX010101; -> %q, want %q — EX is no longer dispatched to handleEX", got, want)
+	}
+	for _, send := range []string{"EX999999;", "EX;"} {
 		assertRejected(t, conn, send)
 	}
 }
