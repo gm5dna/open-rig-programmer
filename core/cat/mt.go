@@ -107,11 +107,14 @@ func (d Dialect) Clarifier() ClarifierPolicy { return d.clar }
 // itself (semantics unknown, do not emit) and is rejected unconditionally
 // by d.classifySlot returning slotKindNone/slotKindInvalid here.
 //
-// It classifies through d.classifySlot, not the package-level
-// classifySlotWire: this helper is shared by BuildMTSet and
-// AllowedCommand's MT Set grammar check, both Dialect methods, and either
-// consulting a global would decide against the FT-710 whatever dialect it
-// was called on.
+// It classifies through d.classifySlot rather than reading the kind s
+// carries: this helper is shared by BuildMTSet and AllowedCommand's MT Set
+// grammar check, both Dialect methods reached with a caller-supplied Slot,
+// and the stored kind is the classification of whichever dialect BUILT
+// that slot (see Slot in slot.go), not of the one being asked. Before M9d
+// the same line guarded against a package-level classifySlotWire helper
+// that answered for the FT-710 whatever dialect it was called on; that
+// helper is gone, and the receiver is still the one that must decide.
 func (d Dialect) mtSlotValid(s Slot) bool {
 	switch d.classifySlot(s.Wire()) {
 	case slotKindMemory, slotKindPMS:
@@ -320,10 +323,19 @@ func (d Dialect) ParseMTAnswer(frame []byte) (Slot, bool, string, error) {
 	if err != nil {
 		return Slot{}, false, "", newParseError(frame, "MT answer: invalid slot field")
 	}
-	// d.classifySlot, not slot.IsNone(): the latter classifies through
+	// d.classifySlot, not slot.IsNone(). The two are now EQUIVALENT here
+	// and the code is kept as it stands deliberately.
+	//
+	// Before M9d, slot.IsNone() classified through the package-level
 	// classifySlotWire (i.e. the FT-710) whatever dialect this method was
 	// called on, and "which wire form means none" is dialect data
-	// (slotSpace.noneWire).
+	// (slotSpace.noneWire) — so it was a bug in waiting. Since the
+	// dialect-tagged Slot it reads the kind its constructing dialect
+	// stored, and the slot three lines above came from THIS dialect's own
+	// ParseSlot, so both spellings ask d. The direct d.classifySlot is
+	// retained because it says so locally: the "000" this check rejects is
+	// read out of d's slot space, visibly, without the reader having to
+	// trace the slot's provenance to know which dialect answered.
 	if d.classifySlot(slot.Wire()) == slotKindNone {
 		return Slot{}, false, "", newParseError(frame, "MT answer: slot must not be \"000\" (reference MT column: ✗)")
 	}

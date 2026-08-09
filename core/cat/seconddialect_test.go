@@ -84,11 +84,12 @@ var testDialect = mustFixtureDialect(DialectConfig{
 // noneWireDialect exists for ONE attribute: slotSpace.noneWire, the only
 // field of a slotSpace that testDialect above shares with the FT-710
 // ("000"). No assertion testDialect can make distinguishes a helper that
-// reads d.slots.noneWire from one that hardwires "000" or classifies
-// through classifySlotWire — and THREE separate helpers decide "is this
-// the none slot": Dialect.classifySlot, Dialect.readableSlot, and
-// ParseMTAnswer's own explicit check (mt.go), each of which the milestone
-// claims is seam-correct.
+// reads d.slots.noneWire from one that hardwires "000" or (as the
+// package-level classifySlotWire did until M9d deleted it) classifies
+// against the FT-710 — and THREE separate helpers decide "is this the none
+// slot": Dialect.classifySlot, Dialect.readableSlot, and ParseMTAnswer's
+// own explicit check (mt.go), each of which the milestone claims is
+// seam-correct.
 //
 // So the none form here is "900", and the memory range starts at 0 — which
 // makes "000" an ordinary MEMORY channel under this dialect and the

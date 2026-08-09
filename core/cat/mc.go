@@ -35,9 +35,13 @@ const mcReadFrame = "MC;"
 // but not direct evidence for MC's own answer shape. Still ASSUMED;
 // verify with a direct "MC;" query in VFO mode at a future session.
 //
-// It classifies through d.classifySlot, not the package-level
-// classifySlotWire: this helper is shared by BuildMCSet, ParseMCAnswer and
-// AllowedCommand's MC grammar check, all Dialect methods.
+// It classifies through d.classifySlot rather than reading the kind s
+// carries: this helper is shared by BuildMCSet, ParseMCAnswer and
+// AllowedCommand's MC grammar check, all Dialect methods, and a
+// caller-supplied Slot's stored kind is the verdict of whichever dialect
+// built it (see Slot in slot.go), not of this one. Before M9d the same
+// line guarded against a package-level classifySlotWire helper that
+// answered for the FT-710 on every dialect; that helper is gone.
 func (d Dialect) mcValid(s Slot) bool {
 	switch d.classifySlot(s.Wire()) {
 	case slotKindMemory, slotKindPMS, slotKind60m, slotKindEMG:

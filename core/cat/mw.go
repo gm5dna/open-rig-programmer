@@ -62,10 +62,13 @@ func (d Dialect) BuildMWSet(m MemoryData) (Command, error) {
 // reach the radio as an MW command live in exactly one place, not two.
 //
 // SEAM NOTE (Task 54): writability is decided by Dialect.writableSlot
-// (slot.go), not by Slot.Writable, and the mode by d.ParseMode, not the
-// package-level ParseMode. Both of those package-level forms answer for
-// the FT-710 whatever dialect this method was called on, which would make
-// the receiver here decorative — and, because this same validator is what
+// (slot.go), not by Slot.Writable, and the mode by d.ParseMode. The
+// MemoryData reaching here is caller-supplied and may be forged whole, so
+// its Slot may have been built under ANOTHER dialect — and since M9d a
+// Slot's own predicates answer for the dialect that built it (they
+// answered for the FT-710 on every dialect before that). Either way,
+// consulting the value rather than the receiver would make the receiver
+// here decorative — and, because this same validator is what
 // AllowedCommand's MW check runs, would let a frame legal only under
 // another radio's slot space through the outbound write gate.
 func (d Dialect) validateMWFields(m MemoryData) error {

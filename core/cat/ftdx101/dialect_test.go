@@ -197,12 +197,16 @@ func slotWires() []string {
 // the FT-710's BEHAVIOURALLY, over every wire form either can produce.
 //
 // Behaviour, not tables, and specifically NOT Slot.IsMemory/IsPMS/Is60m/
-// IsEMG/IsNone. Those predicates classify through the FT-710's dialect
-// whatever Slot they are given — an M9b deferral, ledgered and documented on
+// IsEMG/IsNone. Those predicates were FT-710-scoped when this test was
+// written — an M9b deferral, ledgered and documented on the package-level
 // classifySlotWire in core/cat/slot.go — so on an FTdx101 slot they would
-// answer for the wrong radio and this test would be pinning that mistake
-// rather than the slot space. Everything below goes through a DIALECT
-// receiver.
+// have answered for the wrong radio and this test would have pinned that
+// mistake rather than the slot space. M9d discharged the deferral (a Slot
+// now carries its constructing dialect's classification, cat.Slot's doc
+// comment), so they would answer correctly today; this test still goes
+// through a DIALECT receiver throughout, because what it is comparing is
+// two dialects' slot SPACES, and a receiver is what names the space under
+// test unambiguously.
 //
 // THE NONE WIRE "000" IS ONE OF THE FORMS COMPARED, and it is ASSUMED: no
 // FTdx101 slot legend names it. MC's gives "001-099 (Memory Channel), P1L
