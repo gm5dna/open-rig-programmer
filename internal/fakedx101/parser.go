@@ -576,8 +576,10 @@ func (r *Radio) handleMW(body []byte) []byte {
 //
 // Availability O O O X (layout 333-335): a Set, a Read, an Answer. Read frame
 // (6 bytes) "MT" + 3-byte slot + ';'. Set AND Answer are ONE 41-byte chart:
-// "MT" + the 28-position shared field block + P11 + a 12-byte P12 tag field +
-// ';', with P7 reading "Set: 0: (Fixed) / Read: 0: VFO 1: Memory".
+// "MT" + the 25-position shared field block (chart positions 3-27) + P11 + a
+// 12-byte P12 tag field + ';', with P7 reading "Set: 0: (Fixed) / Read: 0: VFO
+// 1: Memory". (25 is the BLOCK; 28 is the MR/MW FRAME length, which is the same
+// block under a two-byte prefix with its own terminator.)
 //
 // The two directions are disambiguated purely by length, as fakeradio's short
 // MT form also is: a Read body (after "MT", before ';') is exactly 3 bytes, a
@@ -835,12 +837,12 @@ func (r *Radio) handleAI(body []byte) []byte {
 // success, or a non-nil frame — a real answer, or rejection — otherwise.
 // Unknown and garbled commands fall through to rejection.
 //
-// COMMAND NAMES ARE MATCHED IN EITHER CASE, and that is a MANUAL FACT of this
-// radio rather than an inherited leniency: "A command consists of 2
+// COMMAND NAMES ARE MATCHED IN EITHER CASE, and that is a MANUAL FACT of these
+// radios rather than an inherited leniency: "A command consists of 2
 // alphabetical characters. You may use either lower or upper case characters."
-// (layout 204-205). It is the OPPOSITE of internal/fakedx10, which refuses
-// lower case because the FTdx10's manual carries no such statement — the
-// evidence differs, so the two fakes differ, which is the whole discipline.
+// (layout 204-205). internal/fakedx10 refuses lower case; why it does is a
+// question about that package, recorded for milestone review, and it changes
+// nothing about the line quoted here.
 //
 // FIELD VALUES REMAIN CASE-SENSITIVE (the mode nibble's hex letters, the PMS
 // L/U suffix, EMG): the manual's statement is about the two-character command

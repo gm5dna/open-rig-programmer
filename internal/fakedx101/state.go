@@ -12,8 +12,10 @@ package fakedx101
 // concatenation, with no numeric/text conversion anywhere, and no opportunity
 // for this fake to "fix up" a value a real radio would echo back as it stands.
 //
-// The fields are the 41-byte combined record's, which contains the 28-byte
-// MR/MW record as its first 27 positions, so one struct serves both answers.
+// The fields are the 41-byte combined record's, whose first 27 positions carry
+// the same 25-position field block (chart positions 3-27) that the 28-byte
+// MR/MW frame carries — that frame's own ';' sits at 28, where the combined
+// record continues with P11 — so one struct serves both answers.
 //
 // ONE STRUCT FOR BOTH MODELS. Nothing in it is model-conditional, because
 // nothing in the manual's memory-channel surface is: the MT, MR and MW blocks

@@ -99,25 +99,31 @@
 // a copy error, and this package's tests — which build every expectation
 // independently — are what catch one.
 //
-// Where this fake DIVERGES from internal/fakedx10, the divergence is a decision
-// with a reason, and each is stated at the code that implements it:
+// Where this fake's BEHAVIOUR differs from internal/fakedx10's, the difference
+// is a decision with a reason, and each is stated at the code that implements
+// it. EACH REASON IS THIS MANUAL'S OWN, and none of them is a claim about the
+// FTdx10's manual or about why that package does what it does:
 //
 //   - The ID answer is built from the Radio's configured CAT ID rather than
 //     from a literal. The section above states why.
-//   - COMMAND NAMES ARE ACCEPTED IN EITHER CASE. This manual says so in terms
-//     — "A command consists of 2 alphabetical characters. You may use either
-//     lower or upper case characters." (layout 204-205) — where the FTdx10's
-//     carries no such statement, which is why internal/fakedx10 refuses lower
-//     case (its register entry 12) and this package must not. The evidence
-//     differs, so the fakes differ. (parser.go: handleFrame)
-//   - AI's power-on state is a MANUAL FACT here, not an assumption: "This
-//     parameter is set to '0' (OFF) automatically when the transceiver is
-//     turned 'OFF'" (layout 384). internal/fakedx10 has to assume it (its
-//     register entry 14). It is therefore absent from the register below —
-//     see "What is NOT in this register".
+//   - COMMAND NAMES ARE ACCEPTED IN EITHER CASE (internal/fakedx10 refuses
+//     them). The reason here needs no comparison: this manual says so in
+//     terms — "A command consists of 2 alphabetical characters. You may use
+//     either lower or upper case characters." (layout 204-205), a statement
+//     about these radios in these radios' manual. (parser.go: handleFrame)
+//   - AI's power-on state is a MANUAL FACT here rather than an assumption:
+//     "This parameter is set to '0' (OFF) automatically when the transceiver
+//     is turned 'OFF'" (layout 384). It is therefore absent from the register
+//     below — see "What is NOT in this register".
 //   - No EX handler yet, and so no EX options (WithEXSetting/WithEXUnavailable
 //     have nothing to configure until the projection lands). Both arrive with
 //     ex.go.
+//
+// WHY internal/fakedx10 SETTLES THE MIDDLE TWO DIFFERENTLY IS A QUESTION ABOUT
+// THAT PACKAGE, and it is under milestone review rather than answered here.
+// Nothing in this package rests on the answer: the citations above are to this
+// manual, and they would stand unchanged whatever the sibling turns out to have
+// been reading.
 //
 // Where this fake diverges from internal/fakeradio it does so for
 // internal/fakedx10's recorded reasons, which are reproduced here because they
@@ -403,9 +409,9 @@
 //
 //  12. FIELD VALUES ARE CASE-SENSITIVE, THOUGH COMMAND NAMES ARE NOT. The
 //     command-name half is a MANUAL FACT and is therefore not assumed (layout
-//     204-206, quoted in the divergence list above): "mt001;" is answered here,
-//     where internal/fakedx10 refuses it. What is ASSUMED is that the leniency
-//     STOPS THERE — that the mode nibble's hex letters, the PMS L/U suffix and
+//     204-205, quoted in the divergence list above): "mt001;" is answered here.
+//     What is ASSUMED is that the leniency STOPS THERE — that the mode
+//     nibble's hex letters, the PMS L/U suffix and
 //     "EMG" must arrive upper-case. The manual's statement is about the
 //     two-character command name and says nothing about parameters, so extending
 //     it would be an invented leniency; refusing to extend it is the narrower
@@ -490,21 +496,25 @@
 //
 // # What is NOT in this register, and why
 //
-// Recorded so that a reviewer comparing this register with
-// internal/fakedx10's finds the two absences deliberate:
+// Two behaviours a reader might expect to find registered as assumptions are
+// MANUAL FACTS for these radios. They are listed here, with the line that makes
+// each one a fact, so that the absences read as decisions rather than as
+// oversights:
 //
-//   - AI DEFAULTS TO OFF AT CONSTRUCTION. internal/fakedx10's register entry 14
-//     assumes it, because the FTdx10's manual is cited there for AI's frame
-//     shape and not for its power-on state. THIS manual states it: "This
-//     parameter is set to '0' (OFF) automatically when the transceiver is turned
-//     'OFF'" (layout 384). New models a freshly-powered radio, and that is a
-//     manual fact for both models — the note carries no model qualifier, and §4
-//     of the matrix shows the manual's whole model-distinguishing surface is
-//     three places, none of them this one.
-//   - COMMAND NAMES ARE UPPER CASE ONLY. internal/fakedx10's register entry 12
-//     assumes strictness for want of a statement; this manual has the statement
-//     (layout 204-205) and this fake accepts either case. What survives as an
-//     assumption is the narrower claim about FIELD values — entry 12 above.
+//   - AI DEFAULTS TO OFF AT CONSTRUCTION. "This parameter is set to '0' (OFF)
+//     automatically when the transceiver is turned 'OFF'" (layout 384). New
+//     models a freshly-powered radio, and that is a manual fact for both
+//     models — the note carries no model qualifier, and §4 of the matrix shows
+//     the manual's whole model-distinguishing surface is three places, none of
+//     them this one.
+//   - COMMAND NAMES MAY ARRIVE IN EITHER CASE (layout 204-205). What survives
+//     as an assumption is the narrower claim about FIELD values — entry 12
+//     above.
+//
+// internal/fakedx10's register settles both differently (its entries 14 and
+// 12). That is a question about that package, it is under milestone review, and
+// it is deliberately not argued here: these two absences rest on the two lines
+// cited above and on nothing else.
 //
 // The ID answers themselves are likewise absent, and for the strongest reason:
 // "0681: FTDX101D" and "0682: FTDX101MP" are printed in ID's own P1 legend

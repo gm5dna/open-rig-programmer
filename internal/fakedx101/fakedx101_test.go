@@ -276,10 +276,10 @@ func TestNewRadio_RejectsAMalformedCATID(t *testing.T) {
 func TestAI_SetIsSilentAndReadReportsIt(t *testing.T) {
 	_, conn := newTestRadio(t)
 
-	// OFF at construction, and on this radio that is a MANUAL FACT rather than
-	// an assumption: "This parameter is set to '0' (OFF) automatically when the
-	// transceiver is turned 'OFF'" (layout 384). internal/fakedx10 has to
-	// assume the same behaviour — doc.go's "What is NOT in this register".
+	// OFF at construction, and on these radios that is a MANUAL FACT rather
+	// than an assumption: "This parameter is set to '0' (OFF) automatically
+	// when the transceiver is turned 'OFF'" (layout 384) — doc.go's "What is
+	// NOT in this register".
 	if got, want := exchange(t, conn, "AI;"), "AI0;"; got != want {
 		t.Errorf("AI; on a fresh radio -> %q, want %q", got, want)
 	}
@@ -385,12 +385,12 @@ func TestUnknownCommandRejected(t *testing.T) {
 // either lower or upper case characters." (layout 204-205) — and pins that it
 // stops at the command NAME.
 //
-// It is deliberately the INVERSE of internal/fakedx10's
-// TestCommandNamesAreUpperCaseOnly. That package refuses lower case because the
-// FTdx10's manual carries no such statement and accepting it would be an
-// invented leniency; this one accepts it because the statement is there. The
-// evidence differs, so the fakes differ — and a reviewer comparing the two
-// tests should find this comment rather than a contradiction.
+// It asserts the opposite of internal/fakedx10's
+// TestCommandNamesAreUpperCaseOnly, so a reviewer meeting the two together
+// should find this note rather than an unexplained contradiction: THIS test
+// rests on the sentence quoted above, in this radio's own manual, and on
+// nothing else. Why the sibling requires the opposite of its own fake is a
+// question about that package and is recorded for milestone review.
 func TestCommandNamesAreAcceptedInEitherCase(t *testing.T) {
 	_, conn := newTestRadio(t)
 

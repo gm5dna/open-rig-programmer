@@ -123,11 +123,10 @@ func newRadio(catID string, opts ...Option) *Radio {
 		// cited not re-derived — it appears in no FTdx101 slot legend.
 		currentChannel: slotNoneWire,
 		// OFF at construction, modelling a freshly-powered radio. NOT an
-		// assumption on this radio: its own AI page states "This parameter is
-		// set to '0' (OFF) automatically when the transceiver is turned 'OFF'"
-		// (layout 384). internal/fakedx10 has to assume the same behaviour
-		// (its register entry 14) because the FTdx10's manual says no such
-		// thing — see doc.go's "What is NOT in this register".
+		// assumption on these radios: their own AI page states "This parameter
+		// is set to '0' (OFF) automatically when the transceiver is turned
+		// 'OFF'" (layout 384), which is why this behaviour is absent from the
+		// ASSUMED register — see doc.go's "What is NOT in this register".
 		ai:       '0',
 		shutdown: make(chan struct{}),
 	}

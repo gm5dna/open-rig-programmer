@@ -36,10 +36,10 @@ type combinedFrame struct {
 }
 
 // frame assembles the 41-byte combined MT frame BY POSITION, from the CAT
-// manual's own MT chart (rev 2308-L, layout 1311-1330): "MT" + the 28-position
-// shared field block + P11 + a 12-byte tag field + ';'. The same 41 positions
-// were counted independently off 300 dpi raster renders in
-// core/cat/ftdx101/testdata/geometry-witness.csv.
+// manual's own MT chart (rev 2308-L, layout 1311-1330): "MT" + the 25-position
+// shared field block (chart positions 3-27) + P11 + a 12-byte tag field + ';'.
+// The same 41 positions were counted independently off 300 dpi raster renders
+// in core/cat/ftdx101/testdata/geometry-witness.csv.
 //
 // Unfilled positions are left as a visible '?' sentinel, so a position this
 // assembler forgets shows up as a rejection or a mismatch rather than as an
