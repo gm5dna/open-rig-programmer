@@ -19,7 +19,7 @@
 // Operation Reference Manual, edition 2308-F, through core/cat/ftdx10's
 // dialect — the ONE core/cat instance this package names (catDialect,
 // ftdx10.go). The dialect's own doc.go carries the manual's line
-// citations, its six-entry ASSUMED register, its
+// citations, its seven-entry ASSUMED register, its
 // reused-command verification verdict, and the chart anomalies; this
 // package CITES those entries where it depends on them and duplicates
 // none of them.
@@ -153,13 +153,21 @@
 // wholesale, it retires the assumptions its own frames actually speak to,
 // and an entry whose capture was not taken stays here afterwards.
 //
-// This is the driver's register. The DIALECT's six entries
+// This is the driver's register. The DIALECT's SEVEN entries
 // (core/cat/ftdx10/doc.go) are separate and are CITED below where this
 // driver depends on them — MTPolicy.TagFill, ClarifierPolicy.StepHz,
 // SlotSpace.NoneWire, the cat.ModeUnset table member, the 501..599
-// numbering, and the combined answer's exact 41-byte width. Correcting
+// numbering, the combined answer's exact 41-byte width, and (added at
+// M9d-2) the clarifier's minus-direction byte. Correcting
 // one of those is a dialect change; correcting one of these is a change
 // here. Neither list may absorb the other.
+//
+// CITE EITHER REGISTER BY NAME, NEVER BY POSITION. This driver's entries
+// are numbered for readability, but every citation of them — here, in this
+// package's other files, and in its tests — names the entry's subject as
+// well. A bare "entry 6" is correct only until an entry is inserted, and
+// the dialect register's M9d-2 seventh entry is exactly that insertion
+// happening; the naming convention was adopted in the same change.
 //
 //  1. FRAMING: 8 data bits, no parity, TWO stop bits (core/transport's
 //     DefaultStopBits, which every session this driver opens inherits —
@@ -173,7 +181,8 @@
 //     STAGE R LIFTS IT WITH: an ID exchange at the answering baud with
 //     the port opened 8-N-2 — a clean "ID0761;" confirms the framing is
 //     at least compatible. THE LIFT MUST DISTINGUISH FRAMING FROM THE
-//     CONTROL LINES (entry 2): silence at a known-correct baud is NOT
+//     CONTROL LINES (the CONTROL-LINE POLICY entry): silence at a
+//     known-correct baud is NOT
 //     evidence about stop bits until CAT RTS has been toggled at the
 //     radio and the exchange retried, because a handshake refusal and a
 //     framing mismatch present identically as nothing coming back. Try
@@ -195,7 +204,8 @@
 //     policy is safe on this radio and this entry closes; if it answers
 //     in only one, the transport needs a per-radio control-line policy
 //     and this becomes a spec'd capability rather than an assumption.
-//     Take this capture BEFORE concluding anything about entry 1.
+//     Take this capture BEFORE concluding anything about the FRAMING
+//     entry.
 //
 //  3. DefaultBaud 38400 (caps.go). The RATE MENU is manual-evidenced —
 //     CAT RATE, menu 3-01-08 (manual line 811), four rates

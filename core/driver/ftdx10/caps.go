@@ -114,7 +114,8 @@ const (
 //
 // cat.ModeUnset ('0', "-") is excluded explicitly. It is a
 // parse-accept-only placeholder that appears in NO FTdx10 mode legend (the
-// dialect's own ASSUMED register entry 4) and is present in the dialect's
+// dialect's own ASSUMED register, the cat.ModeUnset table member) and is
+// present in the dialect's
 // table only so that parsers may accept it; offering it as a selectable
 // mode would invite a user to write a value core/cat refuses to emit.
 //
@@ -205,7 +206,8 @@ func pmsSlots() []string {
 //
 //   - spec.FieldCTCSSTone and spec.FieldScanSkip are the zero
 //     FieldSupport for a weaker reason, recorded as ASSUMED-register
-//     entry 6: the record carries a CTCSS STATE byte but no tone number
+//     TONE AND SCAN-SKIP UNREACHABILITY entry: the record carries a CTCSS
+//     STATE byte but no tone number
 //     and no skip flag, and nothing has verified what the state byte does
 //     on this radio.
 //
@@ -230,7 +232,8 @@ func bankFields(rw, clar spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 		// No display flag exists in the combined MT record — a manual
 		// fact, not an assumption. See the doc comment above.
 		spec.FieldTagDisplay: {},
-		// Tone number and scan skip: ASSUMED-register entry 6.
+		// Tone number and scan skip: the ASSUMED register's TONE AND
+		// SCAN-SKIP UNREACHABILITY entry.
 		spec.FieldCTCSSTone: {},
 		spec.FieldScanSkip:  {},
 		// No CAT erase command exists in this radio's command set.
@@ -249,7 +252,8 @@ func bankFields(rw, clar spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 // silently erase every channel name, and an empty Bauds makes
 // core/transport substitute a guessed baud. Where the honest value is
 // unverified it is populated anyway and the ASSUMED register carries the
-// provenance (entries 3, 4 and 5).
+// provenance (the DefaultBaud 38400, MinFreqHz/MaxFreqHz and
+// RequiredSlots entries).
 //
 // Banks: MEM "001"-"099" and PMS "P1L"-"P9U", both with NoBlank stated
 // FALSE explicitly (see the per-bank comments). NO 5xx or EMG bank: that
@@ -270,7 +274,7 @@ func baseCapabilities(memFields, pmsFields map[spec.Field]spec.FieldSupport) spe
 				// NoBlank MEM bank would make codeplug.Validate refuse
 				// every candidate with a single blank channel. The one
 				// channel this driver claims must stay populated is
-				// RequiredSlots' "001" (ASSUMED-register entry 5), which
+				// RequiredSlots' "001" (its own ASSUMED-register entry), which
 				// is the per-slot mechanism, not the per-bank one.
 				NoBlank: false,
 				Fields:  memFields,
@@ -297,12 +301,13 @@ func baseCapabilities(memFields, pmsFields map[spec.Field]spec.FieldSupport) spe
 		// "TAG Characters (up to 12 characters) (ASCII)" — and the
 		// dialect's MTPolicy.TagMaxBytes is 12 to match. The byte the
 		// radio PADS a short tag with is the dialect's own ASSUMED
-		// TagFill (its register entry 1); the WIDTH is manual-evidenced.
+		// TagFill (its own register entry, MTPolicy.TagFill); the WIDTH is
+		// manual-evidenced.
 		TagLen: 12,
 		// Clarifier policy, from the dialect: the 0000-9990 Hz range is
 		// manual-evidenced (the MR/MT/MW legends and the RD/RU command
 		// pages all agree), the 10 Hz STEP is ASSUMED — in the DIALECT's
-		// register (entry 2), cited here and deliberately not
+		// register (ClarifierPolicy.StepHz), cited here and deliberately not
 		// re-registered as this driver's own.
 		ClarMaxHz:  9990,
 		ClarStepHz: 10,
@@ -314,15 +319,18 @@ func baseCapabilities(memFields, pmsFields map[spec.Field]spec.FieldSupport) spe
 		// CAT RATE, menu 3-01-08 (manual line 811): FOUR rates and no
 		// 115200 — the first real Bauds divergence from the FT-710, and
 		// manual-evidenced. DefaultBaud is the ASSUMED one (register
-		// entry 3): this manual has no factory-default column at all.
+		// DefaultBaud 38400 entry): this manual has no factory-default
+		// column at all.
 		Bauds:       []int{4800, 9600, 19200, 38400},
 		DefaultBaud: 38400,
-		// ASSUMED bounds (register entry 4): this manual states no range,
+		// ASSUMED bounds (the MinFreqHz/MaxFreqHz register entry): this
+		// manual states no range,
 		// only a 9-digit "Frequency (Hz)" field. MaxFreqHz must not be
 		// left zero — a zero ceiling reads as "unbounded".
 		MinFreqHz: 30_000,
 		MaxFreqHz: 75_000_000,
-		// ASSUMED (register entry 5): no FTdx10 statement requires
+		// ASSUMED (the RequiredSlots register entry): no FTdx10 statement
+		// requires
 		// channel 001 to stay populated.
 		RequiredSlots: []string{"001"},
 		// The shift and CTCSS-state vocabularies the wire protocol

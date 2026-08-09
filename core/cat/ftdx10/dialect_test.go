@@ -276,7 +276,8 @@ func TestDifferencePinMTForm(t *testing.T) {
 // 29-40, ';' at 41).
 //
 // EXACTNESS IS ASSUMED, NOT CHART-PROVEN (M9c-4 milestone review; register
-// entry 6 in doc.go): the grid draws the MAXIMAL frame, and the FT-710
+// entry "the combined MT answer's EXACT length" in doc.go): the grid draws
+// the MAXIMAL frame, and the FT-710
 // precedent makes a variable-width answer live. What this pin proves is
 // that the DIALECT declares the exact form core/cat's combined seam
 // currently implements; Stage R's short-tag answer capture decides whether

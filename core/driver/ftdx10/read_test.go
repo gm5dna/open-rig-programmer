@@ -86,7 +86,8 @@ func readTestImage() slotImage {
 // claim. The FTdx10 is this project's first radio to produce Unavailable
 // from a real read path.
 //
-// CTCSSTone and ScanSkip are Unknown: register entry 6, nothing readable.
+// CTCSSTone and ScanSkip are Unknown: the TONE AND SCAN-SKIP
+// UNREACHABILITY register entry, nothing readable.
 func TestReadChannel_MappingsFromThePositionChart(t *testing.T) {
 	_, sess := openSession(t, Simulated, readTestImage())
 
@@ -118,7 +119,8 @@ func TestReadChannel_MappingsFromThePositionChart(t *testing.T) {
 			// opposite sign and the TX flag, CTCSS off, MINUS shift, and a
 			// two-character tag whose 12-byte wire field is space-padded
 			// (the padding is the DIALECT's ASSUMED TagFill — its own
-			// register entry 1 — and it must be trimmed off before the
+			// register entry MTPolicy.TagFill — and it must be trimmed off
+			// before the
 			// value reaches a codeplug).
 			name: "30 kHz DATA-FM-N, clarifier +9990 Hz TX, off, MINUS, short tag",
 			slot: "010",
@@ -157,7 +159,8 @@ func TestReadChannel_MappingsFromThePositionChart(t *testing.T) {
 
 // TestReadChannel_EmptySlotIsNotAnError: a "?;" rejection maps to an EMPTY
 // channel — Data nil, the slot carried through — and no error. ASSUMED:
-// register entry 8. "?;" is the protocol's single unattributed NAK, so this
+// "?;" ON A COMBINED-MT READ OF AN EMPTY SLOT register entry. "?;" is the
+// protocol's single unattributed NAK, so this
 // mapping is an interpretation, and it is the interpretation the whole read
 // path rests on (a full-radio read hits it 98 times on a nearly-empty
 // radio).
@@ -229,7 +232,8 @@ func TestReadChannel_ErrorTyping(t *testing.T) {
 	})
 
 	t.Run("the none form is grammatical but never a read target", func(t *testing.T) {
-		// "000" parses (the dialect's ASSUMED NoneWire, its register entry
+		// "000" parses (the dialect's ASSUMED SlotSpace.NoneWire, its own
+		// register entry
 		// 3) but BuildMTRead refuses it: the manual's MT column marks it
 		// unavailable and its semantics are unknown.
 		_, err := sess.ReadChannel(testCtx(t), "000")
@@ -275,7 +279,8 @@ func TestReadChannel_SendsExactlyOneMTAndNeverMR(t *testing.T) {
 //
 // There is no 41 in the production code, deliberately: the combined
 // answer's exactness is itself an assumption the dialect carries (its
-// register entry 6), whose recorded Stage R contingency is a 30..41 WINDOW.
+// register entry "the combined MT answer's EXACT length"), whose recorded
+// Stage R contingency is a 30..41 WINDOW.
 // If that contingency is ever taken, the bounds move in core/cat and this
 // spec must move with them — which it does only while the length is
 // derived. The unconfigured-dialect case is the same guard from the other

@@ -162,7 +162,8 @@ func requestedFields(data codeplug.ChannelData) []spec.Field {
 // same five fields a second time; a second frame would add a torn-write
 // window and nothing else. That a single combined Set SUFFICES to create or
 // overwrite a channel — including one that does not yet exist — is ASSUMED,
-// register entry 9, and it is the assumption this whole choreography rests
+// register entry "A SINGLE COMBINED MT SET SUFFICES", and it is the
+// assumption this whole choreography rests
 // on. It is also why this Session needs no operation mutex: one logical
 // operation is one exchange, and transport.Engine already serialises each
 // exchange (see Session's own doc comment).
@@ -179,7 +180,8 @@ func requestedFields(data codeplug.ChannelData) []spec.Field {
 //
 //   - A Known CTCSS tone or scan skip is refused even on the Simulated
 //     profile: the combined record has no tone-number and no skip byte
-//     (ASSUMED-register entry 6 for what that does and does not establish),
+//     (the ASSUMED register's TONE AND SCAN-SKIP UNREACHABILITY entry for
+//     what that does and does not establish),
 //     so silently dropping a value the caller explicitly marked Known would
 //     be a lie.
 //
@@ -423,7 +425,8 @@ func buildWriteCommand(dialect cat.Dialect, ch codeplug.Channel) (cat.Command, e
 	// builder re-validates magnitude AND step on top. The bound is THIS
 	// DIALECT'S, in the comparison and in the message alike — the FTdx10's
 	// 9990 Hz range is manual-evidenced and its 10 Hz step is the dialect's
-	// own ASSUMED register entry 2, cited rather than restated here.
+	// own ASSUMED register entry ClarifierPolicy.StepHz, cited rather than
+	// restated here.
 	clar := dialect.Clarifier()
 	if data.ClarHz < -clar.MaxAbsHz || data.ClarHz > clar.MaxAbsHz {
 		return cat.Command{}, &driver.WriteRefusedError{
@@ -434,7 +437,8 @@ func buildWriteCommand(dialect cat.Dialect, ch codeplug.Channel) (cat.Command, e
 
 	// ONE frame: the whole channel and its tag. The tag is passed as the
 	// LOGICAL value — BuildMTSetCombined pads it to the full 12-byte field
-	// with the dialect's own TagFill (its ASSUMED register entry 1) and
+	// with the dialect's own TagFill (its ASSUMED register entry
+	// MTPolicy.TagFill) and
 	// refuses a tag that would not round-trip, so no padding happens here.
 	//
 	// KIND: the FORM's schema constant, cat.CombinedMTSetKind ("0:

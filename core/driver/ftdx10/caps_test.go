@@ -344,7 +344,7 @@ func TestBaseline_Shape(t *testing.T) {
 			}
 
 			if len(caps.RequiredSlots) != 1 || caps.RequiredSlots[0] != "001" {
-				t.Errorf("RequiredSlots = %v, want [\"001\"] (ASSUMED — register entry 5)", caps.RequiredSlots)
+				t.Errorf("RequiredSlots = %v, want [\"001\"] (ASSUMED — the RequiredSlots register entry)", caps.RequiredSlots)
 			}
 
 			if caps.TagLen != 12 {
@@ -354,24 +354,25 @@ func TestBaseline_Shape(t *testing.T) {
 				t.Errorf("ClarMaxHz = %d, want 9990 (manual-evidenced: the MR/MT/MW legends and the RD/RU pages agree)", caps.ClarMaxHz)
 			}
 			if caps.ClarStepHz != 10 {
-				t.Errorf("ClarStepHz = %d, want 10 (ASSUMED in the DIALECT's register, entry 2 — cited here, not re-registered)", caps.ClarStepHz)
+				t.Errorf("ClarStepHz = %d, want 10 (ASSUMED in the DIALECT's register, ClarifierPolicy.StepHz — cited here, not re-registered)", caps.ClarStepHz)
 			}
 
 			// FOUR rates and no 115200: the FTdx10's CAT RATE menu
 			// (3-01-08, manual line 811) is the first real Bauds
 			// divergence from the FT-710's five, and it is
 			// manual-evidenced. DefaultBaud is the ASSUMED half (register
-			// entry 3): this manual has no factory-default column at all.
+			// DefaultBaud 38400 entry): this manual has no factory-default
+			// column at all.
 			wantBauds := []int{4800, 9600, 19200, 38400}
 			if !reflect.DeepEqual(caps.Bauds, wantBauds) {
 				t.Errorf("Bauds = %v, want %v (four rates, NO 115200)", caps.Bauds, wantBauds)
 			}
 			if caps.DefaultBaud != 38400 {
-				t.Errorf("DefaultBaud = %d, want 38400 (ASSUMED — register entry 3; internal/wiring opens a real radio at exactly this rate)", caps.DefaultBaud)
+				t.Errorf("DefaultBaud = %d, want 38400 (ASSUMED — the DefaultBaud 38400 register entry; internal/wiring opens a real radio at exactly this rate)", caps.DefaultBaud)
 			}
 
 			if caps.MinFreqHz != 30_000 || caps.MaxFreqHz != 75_000_000 {
-				t.Errorf("freq range = %d..%d Hz, want 30000..75000000 (ASSUMED — register entry 4)", caps.MinFreqHz, caps.MaxFreqHz)
+				t.Errorf("freq range = %d..%d Hz, want 30000..75000000 (ASSUMED — the MinFreqHz/MaxFreqHz register entry)", caps.MinFreqHz, caps.MaxFreqHz)
 			}
 
 			if !reflect.DeepEqual(caps.ShiftOptions, spec.StandardShiftOptions()) {
@@ -416,7 +417,7 @@ func TestModes_MatchTheDialect(t *testing.T) {
 	wantWire := "123456789ABCDEF"
 	for i, name := range caps.Modes {
 		if name == "-" {
-			t.Error("Modes contains \"-\" (cat.ModeUnset) — the unset placeholder appears in no FTdx10 mode legend (the dialect's ASSUMED register entry 4) and is not a selectable mode")
+			t.Error("Modes contains \"-\" (cat.ModeUnset) — the unset placeholder appears in no FTdx10 mode legend (the dialect's ASSUMED register entry for the cat.ModeUnset table member) and is not a selectable mode")
 			continue
 		}
 		mode, ok := catDialect.ModeByName(name)
