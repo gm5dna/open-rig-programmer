@@ -43,14 +43,15 @@ an ancestor of v1.0.0, `2d3b03a`), whilst rev 4 corrects rev-3 text
 that has SHIPPED though no plan consumed it. A correction that
 supersedes NO assertion — a pointer to unmoved code, a pure addition, a
 re-wrap — is recorded in this paragraph with a `(rev 4)` tag at the
-site, which carries the number or wording it replaced; so is a
-correction to a revision's own in-flight text, before it is either
-consumed or shipped, which is why rev 4's fix rounds amend rev 4's own
-tags freely. **(rev 4: this rule read "every correction after rev 2 is
-an erratum in §6"; rev 4 grades it by whether the superseded assertion
-had already been consumed or shipped, and argues the grading where it
-applies it.)** The one untagged edit is the §3.6 re-wrap, which changed
-no word and so has nothing to point back at; it is named here instead.
+site, which carries the number or wording it replaced; a correction to
+a revision's OWN in-flight text, before it is either consumed or
+shipped, needs NEITHER — which is why rev 4's fix rounds amend rev 4's
+own tags freely. **(rev 4: this rule read "every correction after rev 2
+is an erratum in §6"; rev 4 grades it by whether the superseded
+assertion had already been consumed or shipped, and argues the grading
+where it applies it.)** The one untagged edit is the §3.6 re-wrap,
+which changed no word and so has nothing to point back at; it is named
+here instead.
 
 ## What this is
 
