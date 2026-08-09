@@ -253,9 +253,11 @@ $ diff base/import.stdout head/import.stdout
 >   line 3, column Skip, value "S": dropped — CHIRP Skip "S" dropped: scan-skip is not reachable over CAT on FT-710; scan-skip left unresolved
 ```
 
-The other nineteen loss lines — the offsets, the tone refusals, the
+The other **eighteen** loss lines — the offsets, the tone refusals, the
 duplex and mode rejections, the name truncations, the out-of-range
-Locations — are byte-identical. **`import.exit` is still "3"** (row 9)
+Locations — are byte-identical. The arithmetic closes: 18 unchanged + 1
+gained = **19 loss lines at head**, against 18 at base, both counted by
+`grep -c '^  line '` on the two captures. **`import.exit` is still "3"** (row 9)
 and `import.stderr` is unchanged (row 8): the new line is an added
 DROPPED entry, not a new blocking one, and the historical leg still
 exits 3 for exactly the reasons it always did.
@@ -578,12 +580,17 @@ sendable.
 
 ### The three artefacts, verbatim
 
-`ftdx10-import-chirp.json` and `ftdx10-import-skip.json` — by `jq` over
-the three imported slots, both files, both constructions:
+`ftdx10-import-chirp.json` — all three imported slots, both
+constructions, in full (`ftdx10-import-skip.json` is the same shape with
+its own `SKIPUSB`/`SKIPLSB`/`SKIPCW` tags):
 
 ```
 BEFORE: {"slot":"001","tag":"MINIMALUSB","tag_display":{"state":"unavailable"},"scan_skip":{"state":"known"}}
-AFTER : {"slot":"001","tag":"MINIMALUSB","tag_display":{"state":"unavailable"},"scan_skip":{"state":"unknown"}}
+BEFORE: {"slot":"002","tag":"MINIMALLSB","tag_display":{"state":"unavailable"},"scan_skip":{"state":"known"}}
+BEFORE: {"slot":"003","tag":"MINIMALCW","tag_display":{"state":"unavailable"},"scan_skip":{"state":"known"}}
+AFTER:  {"slot":"001","tag":"MINIMALUSB","tag_display":{"state":"unavailable"},"scan_skip":{"state":"unknown"}}
+AFTER:  {"slot":"002","tag":"MINIMALLSB","tag_display":{"state":"unavailable"},"scan_skip":{"state":"unknown"}}
+AFTER:  {"slot":"003","tag":"MINIMALCW","tag_display":{"state":"unavailable"},"scan_skip":{"state":"unknown"}}
 ```
 
 `tag_display` does not move. Across all 21 populated channels the
@@ -597,10 +604,25 @@ BEFORE: 001,M-01,14200000,USB,,,,OFF,,SIMPLEX,MINIMALUSB,n/a,no
 AFTER : 001,M-01,14200000,USB,,,,OFF,,SIMPLEX,MINIMALUSB,n/a,
 ```
 
-Column tallies over all 117 rows confirm the whole of the movement:
-`scan_skip` was 21 × `no` + 96 blank, and is now **117 blank**;
-`tag_display` is **21 × `n/a` + 96 blank on BOTH sides**, reproducing
-M9c-6's recorded A6a property exactly.
+Column tallies over all 117 rows confirm the whole of the movement, and
+the two columns have DIFFERENT shapes — which is the point, and the
+reason they are tallied separately rather than described together:
+
+| Column | BEFORE | AFTER |
+|---|---|---|
+| `scan_skip` | **3 × `no`** (slots 001-003) + 114 blank | **117 blank** |
+| `tag_display` | 21 × `n/a` + 96 blank | 21 × `n/a` + 96 blank — **unmoved** |
+
+`scan_skip`'s BEFORE count is **3, not 21**: only the three CHIRP-derived
+rows ever carried a Known value, because the other 18 populated channels
+are read-derived and were already Unknown (blank). `tag_display`'s 21 is
+the count of populated rows — 19 read + 2 added — and it reproduces
+M9c-6's recorded A6a property exactly, on both sides.
+
+Both tallies were measured on the artefact that reproduces M9c-6's
+recorded `819b4c4ff9e7f11029b6ea65e7f77ab68725ef1fa8413424c9718f3647fc80a5`
+byte-for-byte, so the BEFORE column is that manifest's own file and not a
+reconstruction.
 
 **Part 3 totals: 40 recorded values compared (26 hashes + 14 exits); 34
 MATCH, 6 DESIGNED DELTAS, 0 outside class.**
@@ -720,12 +742,29 @@ parent of `df8f44b`:
 
 ```
 $ git diff --stat 2c12227 -- internal/wiring/ internal/radiotext/ app/ internal/guards/
-(empty)
+ app/frontend/src/lib/ChannelGrid.svelte | 11 ++++++++---
+ app/frontend/src/lib/grid/columns.js    | 20 +++++++++++++++++---
+ app/uispec.go                           | 19 +++++++++++++------
+ 3 files changed, 38 insertions(+), 12 deletions(-)
 ```
 
-The residual diff under those roots is Task 8's frontend and `uispec.go`
-work, which is a different commit and a different class — correctly left
-in place, so the model-list class is isolated.
+**That output is NOT empty, and it should not be.** The three files it
+names are Task 8's frontend and `uispec.go` work — a different commit and
+a different class, deliberately left in place so that only the model-list
+cause is removed. Restricting the same command to the roots Task 7
+actually owns IS empty, which is the restoration check:
+
+```
+$ git diff --stat 2c12227 -- internal/wiring/ internal/radiotext/ internal/guards/
+$ echo $?
+0
+```
+
+`app/` is excluded from that second command precisely because Task 8 also
+edits it; including it would conflate the two classes. Task 7's own `app/`
+edits (`app/app.go`, `app/connection.go`, `app/app_test.go`,
+`app/uispec_test.go`) are covered by the first command's output above —
+they do not appear in it, which is what "reverted" means for them.
 
 One check was made before trusting the proof: `cmd/rigprog/usage.go` is
 also touched across the Task 7 trio, which would confound an
@@ -918,13 +957,16 @@ loss; the skip fixture reports its three drops honestly, naming the
 model; and BOTH diffs come out at `Blocked 0`:
 
 ```
-$ rigprog import --chirp docs/superpowers/m9c6-fixtures/chirp_skip.csv --model FTdx101D …
+$ rigprog import --chirp docs/superpowers/m9c6-fixtures/chirp_skip.csv \
+                 --model FTdx101D --into .capture/ftdx101d-into-skip.json \
+                 --out .capture/ftdx101d-import-skip.json
 CHIRP import loss:
   line 2, column Skip, value "S": dropped — CHIRP Skip "S" dropped: scan-skip is not reachable over CAT on FTdx101D; scan-skip left unresolved
-  line 3, column Skip, value "S": dropped — …
-  line 4, column Skip, value "S": dropped — …
+  line 3, column Skip, value "S": dropped — CHIRP Skip "S" dropped: scan-skip is not reachable over CAT on FTdx101D; scan-skip left unresolved
+  line 4, column Skip, value "S": dropped — CHIRP Skip "S" dropped: scan-skip is not reachable over CAT on FTdx101D; scan-skip left unresolved
 offline validation notes — authoritative validation happens at write time against the connected radio:
   none.
+Output: .capture/ftdx101d-import-skip.json
 
 $ rigprog diff --fake --model FTdx101D .capture/ftdx101d-import-skip.json      # exit 0
 Added:
@@ -1031,8 +1073,13 @@ re-run in two further mirror trees using an **identical** capture prefix,
 so every path string passed to the CLI is character-for-character the
 same on both sides.
 
-**Result: of 54 captured artefacts, 47 are byte-identical between the D
-and the MP.** The 7 that differ do so in exactly two tokens:
+**Result: of the 54 artefacts each side captures, 47 are byte-identical
+between the D and the MP and 7 differ (47 + 7 = 54).** The denominator is
+a PER-SIDE count — 54 files in the D's `.capture/` and the same 54 names
+in the MP's, compared pairwise by `cmp`, not 54 files in total. It
+exceeds the 14 legs because each leg contributes `.stdout`, `.stderr` and
+`.exit`, plus the CSV and normalised-JSON artefacts. The 7 that differ do
+so in exactly two tokens:
 
 | Artefact | Differing lines | What differs |
 |---|---|---|
@@ -1085,8 +1132,14 @@ on a deliberate violation, per the M9c-4/M9c-6 discipline. **Eleven
 mutations were run at THIS task**, in a throwaway worktree at `1564d31`,
 each reverted and each revert verified byte-exact by SHA-256 on all five
 touched files. **Nine further rows are CITED from the tasks that ran
-them**, with the commit that holds the transcript — this index is the
-map, and a re-run of an already-recorded proof would add nothing.
+them** — this index is the map, and a re-run of an already-recorded proof
+would add nothing.
+
+**Reading the Commit column.** For a CITED row it names the commit whose
+body holds that proof's transcript. For a row RUN HERE it names the
+commit the pin or table under test lives in — those transcripts are the
+"What fired" cell itself, quoted from this task's scrollback, and are
+recorded nowhere else but this manifest and its task-9 report.
 
 | # | Commit | Defect injected | What fired |
 |---|---|---|---|
