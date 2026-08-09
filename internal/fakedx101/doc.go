@@ -410,14 +410,13 @@
 //  12. FIELD VALUES ARE CASE-SENSITIVE, THOUGH COMMAND NAMES ARE NOT. The
 //     command-name half is a MANUAL FACT and is therefore not assumed (layout
 //     204-205, quoted in the divergence list above): "mt001;" is answered here.
-//     What is ASSUMED is that the leniency STOPS THERE — that the mode
-//     nibble's hex letters, the PMS L/U suffix and
-//     "EMG" must arrive upper-case. The manual's statement is about the
-//     two-character command name and says nothing about parameters, so extending
-//     it would be an invented leniency; refusing to extend it is the narrower
-//     claim and the one that cannot silently accept a frame the radio would
-//     reject. Nothing is lost either way: every frame this project sends is
-//     built upper-case by core/cat.
+//     What is ASSUMED is that the leniency STOPS THERE — that the mode nibble's
+//     hex letters, the PMS L/U suffix and "EMG" must arrive upper-case. The
+//     manual's statement is about the two-character command name and says
+//     nothing about parameters, so extending it would be an invented leniency;
+//     refusing to extend it is the narrower claim and the one that cannot
+//     silently accept a frame the radio would reject. Nothing is lost either
+//     way: every frame this project sends is built upper-case by core/cat.
 //     STAGE R LIFTS IT, PER MODEL, WITH: one read frame carrying a lower-case
 //     FIELD value — "MTp1l;" — put to a radio of that model. An answer makes
 //     that radio's parameters case-insensitive too.

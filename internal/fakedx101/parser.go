@@ -806,8 +806,8 @@ func (r *Radio) handleID(body []byte) []byte {
 // with USB cable" (layout 381 — matrix §3.12, the reason every hardware capture
 // must record its port), and "This parameter is set to '0' (OFF) automatically
 // when the transceiver is turned 'OFF'" (layout 384), which is what makes this
-// fake's AI-off-at-construction a MANUAL FACT here rather than the assumption
-// it has to be for the FTdx10 (doc.go's "What is NOT in this register").
+// fake's AI-off-at-construction a MANUAL FACT for these radios and so keeps it
+// out of the ASSUMED register (doc.go's "What is NOT in this register").
 
 func buildAIAnswer(ai byte) []byte { return []byte{'A', 'I', ai, ';'} }
 
