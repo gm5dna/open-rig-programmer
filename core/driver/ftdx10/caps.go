@@ -409,10 +409,14 @@ func readOnlyFields(base spec.Capabilities) map[spec.Field]spec.FieldSupport {
 	// THE ok RESULT IS DISCARDED, AND HERE IS WHAT MAKES THAT SAFE: base is
 	// always a profile baseline from baseCapabilities, which builds the MEM
 	// bank unconditionally as Banks[0], and every caller passes exactly
-	// that — this function is called only from effectiveCapabilities, which
-	// is reached only from Open (ftdx10.go, with d.Capabilities()) and from
+	// that. This function is called only from effectiveCapabilities, whose
+	// PRODUCTION callers are Open (ftdx10.go, with d.Capabilities()) and
 	// SynthesiseDiscoveredBanks (which re-passes d.Capabilities() on
-	// purpose, so live and offline synthesis cannot drift).
+	// purpose, so live and offline synthesis cannot drift); it is also
+	// called directly by optional_test.go's
+	// TestSynthesiseDiscoveredBanks_MatchesLiveDiscovery, which takes its
+	// base from drv.Capabilities() likewise. Every caller in the tree, test
+	// callers included, therefore passes a baseCapabilities product, and
 	// TestBaseline_Shape asserts Bank(spec.BankMemory) succeeds on both
 	// profiles.
 	//
@@ -454,10 +458,20 @@ func cloneCapabilities(caps spec.Capabilities) spec.Capabilities {
 		// twice, the second bank silently dropped from the clone — and
 		// spec.Capabilities.Validate refuses a duplicate BankID outright
 		// (core/spec/validate.go's bank loop), with TestProfiles_Validate
-		// running it over both profiles. A zero Bank reaching out would
-		// be quiet rather than loud: no Slots, no Fields, so a bank the
-		// app cannot show and, FieldSupport's zero being Unsupported, one
-		// nothing may be written to.
+		// running it over both profiles.
+		//
+		// THAT VALIDATION COVERS THE BASELINES ONLY, and the load-bearing
+		// caller is Session.Capabilities (ftdx10.go), which passes s.caps
+		// — effectiveCapabilities' output, discovered banks and all, which
+		// no Validate run in this tree sees. What closes it there is
+		// CONSTRUCTION, not validation: effectiveCapabilities appends at
+		// most one spec.Bank60m and at most one spec.BankEMG to a baseline
+		// holding MEM and PMS, so four distinct IDs at most.
+		//
+		// A zero Bank reaching out would be quiet rather than loud: no
+		// Slots, no Fields, so a bank the app cannot show and,
+		// FieldSupport's zero being Unsupported, one nothing may be
+		// written to.
 		cp, _ := caps.Bank(b.ID)
 		out.Banks = append(out.Banks, cp)
 	}

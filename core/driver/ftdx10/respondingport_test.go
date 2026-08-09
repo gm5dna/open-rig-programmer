@@ -39,16 +39,23 @@ import (
 // longer combined MT SET, and the 9-byte EX read. ANY OTHER frame is
 // answered "?;".
 //
-// THOSE ANSWERS ARE AN ASSUMED CONVENTION APPLIED, NOT AN OBSERVED RADIO
-// TRANSCRIBED — no real FTdx10 has ever been connected to this project, so
-// nothing here is evidence of what one does. Two register entries hold the
-// two halves. That an accepted Set draws NO reply at all while a rejected
-// one draws exactly one "?;" is doc.go's ASSUMED-register entry "A SINGLE
-// COMBINED MT SET SUFFICES", second half. That entry covers MT only, and
-// says so: it records that this driver's Open states nothing about its AI0
-// frame's acknowledgement, unlike the FTdx101's. The AI arm above is
-// therefore modelled on internal/fakedx10/doc.go's entry 11, which extends
-// the same convention to AI-set.
+// THE ACKNOWLEDGEMENT SEMANTICS OF THOSE ANSWERS ARE AN ASSUMED CONVENTION
+// APPLIED, NOT AN OBSERVED RADIO TRANSCRIBED — no real FTdx10 has ever been
+// connected to this project, so nothing here is evidence of what one does.
+// SEMANTICS, narrowly: silence-means-accepted and "?;"-means-rejected. The
+// answers' SHAPES are a different grade of claim, and where this file pins
+// one it cites the manual for it — the frame-length consts and frame()
+// below both quote rev 2308-F's own position charts by manual line.
+//
+// Two halves — and this package needs THREE register entries to hold them,
+// one more than its FTdx101 twin does, because this driver's own entry
+// reaches the MT arm only. That an accepted Set draws NO reply at all
+// while a rejected one draws exactly one "?;" is doc.go's ASSUMED-register
+// entry "A SINGLE COMBINED MT SET SUFFICES", second half. That entry covers
+// MT only, and says so: it records that this driver's Open states nothing
+// about its AI0 frame's acknowledgement, unlike the FTdx101's. The AI arm
+// above is therefore modelled on internal/fakedx10/doc.go's entry 11, which
+// extends the same convention to AI-set.
 //
 // That "?;" is a NAK on this radio AT ALL — that a refusal is a frame
 // rather than silence — is internal/fakedx10/doc.go's entry 18: the

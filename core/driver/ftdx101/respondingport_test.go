@@ -43,11 +43,18 @@ import (
 // longer combined MT SET, and the 9-byte EX read. ANY OTHER frame is
 // answered "?;".
 //
-// THOSE ANSWERS ARE AN ASSUMED CONVENTION APPLIED, NOT AN OBSERVED RADIO
-// TRANSCRIBED — no real FTdx101D or FTdx101MP has ever been connected to
-// this project, so nothing here is evidence of what either does. Two
-// register entries hold the two halves. That an accepted Set draws NO reply
-// at all while a rejected one draws exactly one "?;" is doc.go's
+// THE ACKNOWLEDGEMENT SEMANTICS OF THOSE ANSWERS ARE AN ASSUMED CONVENTION
+// APPLIED, NOT AN OBSERVED RADIO TRANSCRIBED — no real FTdx101D or
+// FTdx101MP has ever been connected to this project, so nothing here is
+// evidence of what either does. SEMANTICS, narrowly: silence-means-accepted
+// and "?;"-means-rejected. The answers' SHAPES are a different grade of
+// claim, and where this file pins one it cites the manual for it — the
+// frame-length consts and frame() below both quote rev 2308-L's own
+// position charts by layout line, frame() against the independently
+// counted geometry-witness.csv besides.
+//
+// Two register entries hold the two halves. That an accepted Set draws NO
+// reply at all while a rejected one draws exactly one "?;" is doc.go's
 // ASSUMED-register entry 9, second half — which names Open's AI0 init frame
 // as one of the three sites depending on it, so the AI arm above is covered
 // too (internal/fakedx101/doc.go's entry 11 is the fake's paired analysis,
