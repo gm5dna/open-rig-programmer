@@ -2,20 +2,29 @@
 <!--
   Template for .github/workflows/release.yml's "Write release notes"
   step. The version placeholder below is replaced with the pushed tag
-  (e.g. v1.0.0) by a sed pass before this becomes the draft release's
-  body — so do not write that placeholder token in this comment, or it
-  gets substituted here too and the sentence stops making sense. Keep
-  this file in sync with README.md's quick-start section and
-  docs/hardware-notes.md / docs/linux-setup.md /
-  docs/menu-write-decision.md, which it cites rather than restates.
+  by a sed pass before this becomes the release body — so do not write
+  that placeholder token in this comment, or it gets substituted here
+  too and the sentence stops making sense. Keep this file in sync with
+  README.md's quick-start section and docs/hardware-notes.md /
+  docs/linux-setup.md / docs/menu-write-decision.md, which it cites
+  rather than restates.
+
+  SYNCED WITH THE PUBLISHED v1.0.0 RELEASE (09/08/2026): the v1.0.0
+  Release body was authored from this template and this file was then
+  updated to match it — four registered models with the per-model
+  support table; the AppImage row removed (its build job is Linux-CI-
+  only and Actions is dormant; restore the row if that changes); the
+  old "Status of this draft" publish-gate section replaced by the
+  honest evidence-status section (the Linux real-radio session has
+  still not run and the notes say so plainly). If a future release
+  ships an AppImage or lands Linux hardware evidence, update both the
+  Downloads table and that section.
 -->
 
 Open Rig Programmer __VERSION__ — an open-source, cross-platform
 memory-channel programmer for the Yaesu FT-710, built as a free
-alternative to RT Systems' YPS-FT710.
-
-**This is a DRAFT release.** See "Status of this draft" at the bottom
-before publishing it.
+alternative to RT Systems' YPS-FT710, with three further Yaesu models
+registered read-only.
 
 ## What it does
 
@@ -24,16 +33,32 @@ before publishing it.
   into a codeplug file you can keep, diff and re-send.
 - **Edit channels** in a spreadsheet-style grid (GUI) with keyboard
   navigation, paste, per-column editors and drag copy/swap/move.
-- **Send changes back safely**: read-before-write, a snapshot of the
-  radio's existing contents taken before anything changes, a reviewed
-  diff you confirm against a digest, and per-channel verify after each
-  write. Anything that cannot be written is shown with the reason
-  rather than attempted.
+- **Send changes back safely** (FT-710): read-before-write, a snapshot
+  of the radio's existing contents taken before anything changes, a
+  reviewed diff you confirm against a digest, and per-channel verify
+  after each write. Anything that cannot be written is shown with the
+  reason rather than attempted.
 - **CSV and CHIRP import/export**, with a report of anything a CHIRP
   file cannot express.
 - **Read the radio's menu (EX) settings** into the same file and view
-  or export them — all 296 documented menu addresses.
+  or export them — every documented menu address for the connected
+  model (FT-710: 296; FTdx10: 197; FTdx101D/MP: 193).
 - Both a **desktop GUI** and a **`rigprog` CLI**, sharing one core.
+
+## Supported radios, and what "supported" means for each
+
+| Model | Read channels | Write channels | Read menu settings | Evidence |
+| --- | --- | --- | --- | --- |
+| FT-710 | Yes | Yes | Yes | Proven against real hardware (`docs/hardware-notes.md`) |
+| FTdx10 | Yes | **No — disarmed** | Yes | CAT manual + simulator only; no real radio has been connected |
+| FTdx101D | Yes | **No — disarmed** | Yes | CAT manual + simulator only; no real radio has been connected |
+| FTdx101MP | Yes | **No — disarmed** | Yes | CAT manual + simulator only; no real radio has been connected |
+
+Writes to the three manual-derived models are disarmed in the code
+itself (nothing is writable on a real-hardware session), not merely
+untested. Each of those drivers carries a register of every assumption
+it makes and the specific capture from a real radio that would verify
+it — if you own one of these radios and want to help, open an issue.
 
 ## What it deliberately does not do
 
@@ -44,10 +69,10 @@ before publishing it.
   establishes what the radio accepts in the write direction. The
   reasoning, and what would have to change to revisit it, is in
   `docs/menu-write-decision.md`.
-- **It cannot erase a channel over CAT.** The FT-710 has no CAT erase
-  command; the app says so, and tells you the front-panel procedure,
-  rather than silently doing nothing.
-- **It does not read per-channel CTCSS tone frequencies.** The radio
+- **It cannot erase a channel over CAT.** These radios have no CAT
+  erase command; the app says so, and tells you the front-panel
+  procedure, rather than silently doing nothing.
+- **It does not read per-channel CTCSS tone frequencies.** The FT-710
   does not report them over CAT (established against real hardware —
   `docs/hardware-notes.md`), so the app preserves whatever is on the
   radio instead of guessing.
@@ -58,9 +83,13 @@ before publishing it.
 | --- | --- | --- |
 | macOS (Intel + Apple Silicon, universal) | GUI (.app, zipped) | `open-rig-programmer-__VERSION__-darwin-universal.app.zip` |
 | macOS (Intel + Apple Silicon, universal) | CLI | `rigprog-__VERSION__-darwin-universal.tar.gz` |
-| Linux amd64 | GUI (AppImage) | `open-rig-programmer-__VERSION__-linux-amd64.AppImage` |
 | Linux amd64 | CLI | `rigprog-__VERSION__-linux-amd64.tar.gz` |
 | Linux arm64 | CLI | `rigprog-__VERSION__-linux-arm64.tar.gz` |
+
+There is **no Linux GUI AppImage in this release**: its build job runs
+only on Linux CI, which is not in use for this release. Linux users
+have the CLI, or can build the GUI from source (`wails build` in
+`app/`; see `docs/linux-setup.md` for the build dependencies).
 
 `SHA256SUMS` (attached below) covers every file above. Verify with:
 
@@ -72,14 +101,14 @@ sha256sum -c SHA256SUMS --ignore-missing
 
 `rigprog version` prints it; the GUI shows it at the right-hand end of
 the status bar. Quote that string in any bug report. A build that
-reports `dev (unreleased build)` did not come from this release
-pipeline — if you downloaded it from this page, please say so in the
-report, because that would be a packaging fault.
+reports `dev (unreleased build)` did not come from this release page —
+if you downloaded it here, please say so in the report, because that
+would be a packaging fault.
 
 ## Firmware requirement
 
-Memory CAT (read and write) requires FT-710 firmware **V01-10 or
-later**. There is no CAT query for the firmware version — check the
+Memory CAT (read and write) on the FT-710 requires firmware **V01-10
+or later**. There is no CAT query for the firmware version — check the
 radio's front panel or SD-card version screen before connecting.
 
 ## macOS: first launch
@@ -90,37 +119,39 @@ right-click (Control-click) the app and choose **Open**, then confirm
 in the dialogue that appears. This is only needed once; after that it
 opens normally.
 
-## Linux: serial port access and AppImage runtime
+## Linux: serial port access
 
 - Add yourself to the `dialout` group and log out/in (or `newgrp
-  dialout`) before the CLI or GUI can open the radio's serial port:
+  dialout`) before the CLI can open the radio's serial port:
   `sudo usermod -aG dialout "$USER"`.
 - ModemManager can probe a newly-plugged serial adapter and interfere
-  with it; excluding the FT-710's USB-serial bridge from ModemManager
+  with it; excluding the radio's USB-serial bridge from ModemManager
   via udev is recommended. See `docs/linux-setup.md` for the full
   instructions and a ready-to-use udev rule.
-- The AppImage needs the **webkit2gtk-4.1** runtime library installed
-  on the host (the build-time dependency is `libwebkit2gtk-4.1-dev`;
-  most current distributions ship the runtime package, commonly named
-  `libwebkit2gtk-4.1-0`, separately from the `-dev` headers).
 
-## What the hardware evidence covers
+## What the hardware evidence covers — read this
 
-Every "works on the radio" claim in this project comes from a recorded
-session against one physical UK FT-710 on macOS, and
+Every "works on the radio" claim in this project comes from recorded
+sessions against **one physical UK FT-710, on macOS**, and
 `docs/hardware-notes.md` is the record. Channel reads and writes were
-proven on real hardware; the menu-settings read was proven separately.
-One radio, one region, one firmware version. Behaviour on another
-radio, region or firmware is expected but not evidenced, and anything
-the project has not observed is labelled as such rather than assumed.
+proven on that radio; the menu-settings read was proven separately.
+One radio, one region, one firmware version.
 
-## Status of this draft
+What this release has **not** been exercised against:
 
-This release is built from a tag, but Linux artefacts have **not yet
-been exercised against real FT-710 hardware on Linux** — the project's
-plan requires a Linux real-radio session (confirming port mapping,
-`dialout` access, and an actual read/write) before Linux artefacts
-ship publicly. See `docs/hardware-notes.md` (macOS-only hardware
-findings so far) and `docs/linux-setup.md` ("pending" note) for the
-current state. Do not publish this draft until that session has run
-and this note has been updated to reflect it.
+- **Linux with a real radio.** The Linux CLI binaries are
+  cross-compiled and version-stamp-verified, and the serial stack is
+  the same code, but no real-radio session has been run on Linux yet.
+  `docs/linux-setup.md` carries the port-setup instructions; treat the
+  first Linux session as exploratory and read-only first.
+- **Any FTdx10, FTdx101D or FTdx101MP.** Everything about those three
+  models is derived from the manufacturer's CAT reference manuals
+  through a documented transcription-and-cross-check process, and
+  exercised against simulators built independently from the same
+  manuals. No real radio of any of the three has ever been connected.
+  That is why their writes are disarmed.
+
+Anything the project has not observed is labelled as such in the code
+and documentation rather than assumed. Reports from real hardware —
+especially the three read-only models, and the FT-710 on Linux — are
+the most valuable contribution this project can receive right now.
