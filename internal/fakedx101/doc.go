@@ -560,6 +560,51 @@
 //     while the menu surface stays read-only.
 //     (ex.go: handleEX)
 //
+//  18. AUTOMATIC-INFORMATION SUPPRESSION: THIS FAKE NEVER PUSHES AN
+//     UNSOLICITED FRAME, WHATEVER AI IS SET TO. "AI1;" is accepted, stored and
+//     read back faithfully, and then nothing follows from it: this radio
+//     writes to the port only in reply to a frame that arrived on it, so an
+//     AI-on session and an AI-off session are byte-identical on the wire. The
+//     assumption is not that these radios are silent — it is that MODELLING
+//     THEM AS SILENT IS THE HONEST DEFAULT, because NO FTdx101 OF EITHER MODEL
+//     HAS BEEN OBSERVED WITH AI ON. Which frames such a radio volunteers, on
+//     what triggers, in what order and with what interleaving against a
+//     command in flight are four unknowns, and inventing them would put
+//     fabricated wire behaviour underneath every test that ran against this
+//     fake — the borrowed-fact class this milestone refuses, and worse than
+//     usual here, because an invented push is indistinguishable at the far end
+//     of a link from a transport defect.
+//     THIS IS THE M9d-2 MILESTONE REVIEW'S OWN FINDING (Codex, C1): the
+//     decision was implemented and commented at the code but absent from this
+//     register, whose preamble claims to list every place this fake had to
+//     guess. That claim is what makes the omission a defect rather than a
+//     tidying job.
+//     DISTINCT FROM THE MANUAL FACT NEXT DOOR: "AI defaults to off at
+//     construction" is layout 384 and is deliberately NOT in this register
+//     (see "What is NOT in this register" below). That line says what AI is
+//     set to at power-on; it says nothing about what a radio does once AI is
+//     ON, which is the whole of this entry.
+//     WHAT RESTS ON IT: core/transport.Engine's drain-to-quiet discipline —
+//     Init's AI-off Set followed by Engine.DrainToQuiet — is
+//     exercised against internal/fakeradio, whose AI-flood behaviour is the
+//     FT-710's OWN observed one, and NOT against this fake. So no FTdx101 test
+//     in this repository exercises the engine against a talking radio, and
+//     none may claim to: every FTdx101 exchange in every suite is one frame
+//     in, at most one frame out. A future test that wants an FTdx101 flood
+//     needs this entry lifted first, not a plausible flood written into this
+//     package.
+//     STAGE R LIFTS IT, PER MODEL, WITH: one session on a radio of that model
+//     with AI set to 1 and the port then watched — idle, and while the front
+//     panel is operated (VFO turned, mode changed, memory recalled). Whatever
+//     that radio pushes, and whatever provokes it, becomes this fake's model
+//     for that model of radio; NOTHING MAY BE INVENTED MEANWHILE, and an
+//     observation of nothing at all is a result to record rather than a failed
+//     capture. Record the port with it: AI "is available only when PC is
+//     connected with USB cable" (layout 381), so a capture over RS-232C
+//     settles nothing here.
+//     (parser.go: handleAI and the AI section's note; fakedx101.go: serve and
+//     handleEvent, whose only write is a reply)
+//
 // # What is NOT in this register, and why
 //
 // Two behaviours a reader might expect to find registered as assumptions are
@@ -572,7 +617,10 @@
 //     models a freshly-powered radio, and that is a manual fact for both
 //     models — the note carries no model qualifier, and §4 of the matrix shows
 //     the manual's whole model-distinguishing surface is three places, none of
-//     them this one.
+//     them this one. THE ADJACENT AI CLAIM IS NOT A MANUAL FACT and IS
+//     registered, as entry 18: what this fake does once AI is turned ON — push
+//     nothing, ever — rests on no line of this manual and on no observation of
+//     either radio. The two must not be read as one absence.
 //   - COMMAND NAMES MAY ARRIVE IN EITHER CASE (layout 204-205). What survives
 //     as an assumption is the narrower claim about FIELD values — entry 12
 //     above.

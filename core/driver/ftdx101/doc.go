@@ -190,9 +190,16 @@
 //
 // # The ASSUMED register
 //
-// NINE behaviours this driver encodes are NOT FTdx101-manual facts. Each is
-// listed here once, marked ASSUMED at the point of use, and paired with the
-// ONE Stage R or Stage W capture that lifts it.
+// NINE ENTRIES, covering TEN behaviours this driver encodes that are NOT
+// FTdx101-manual facts. Each is listed here once, marked ASSUMED at the
+// point of use, and paired with the ONE Stage R or Stage W capture that
+// lifts it. Entry 9 carries two behaviours rather than one — the combined
+// Set's sufficiency and the acknowledgement convention that governs what
+// comes back from it — because ONE capture, the first write trial, lifts
+// both and because one line of code (write.go's zero CommandSpec) asserts
+// both. The entry says so in its own words; the numbering is left alone,
+// since a renumbering would silently invalidate every citation into this
+// register from the fake, the dialect and the matrix.
 //
 // EVERY ENTRY IS TRACKED PER MODEL, and this is the register's one
 // structural difference from the FTdx10's. There are two radios here, and
@@ -435,29 +442,84 @@
 //     settle the other.
 //
 //  9. A SINGLE COMBINED MT SET SUFFICES TO CREATE OR OVERWRITE A CHANNEL,
-//     INCLUDING AN EMPTY ONE. THE ENTRY LANDS HERE WITH THE DRIVER
-//     SKELETON, ONE TASK AHEAD OF THE WRITE PATH IT GOVERNS, because it is
-//     the assumption the whole MT-only choreography — including the read
-//     side's atomicity argument above — rests on, and it must not arrive
-//     later than the design it justifies. What is manual-evidenced is that
-//     ONE frame carries everything: the 41-byte Set carries the full field
-//     block and the tag (layout 1311-1330; geometry-witness.csv's MT set
-//     rows), so MW would write the same fields redundantly with a strictly
-//     smaller frame (28 bytes, layout 1352-1367), and MW's own restriction
-//     to "001-099 (Memory Channel), P1L -P9U (PMS)" (layout 1353) is a
-//     second reason not to reach for it. MT's availability row (layout 334)
-//     gives Set O, Read O, Answer O, AI X, so a Set produces no answer and
-//     is fire-and-forget. WHAT IS ASSUMED is that either radio accepts the
-//     combined Set as a COMPLETE CHANNEL DEFINITION, and that it does so
-//     for a slot that does not yet exist. The FT-710's own empty-slot
-//     create is HW-CONFIRMED for ITS two-frame MW+MT choreography, which is
-//     not this one.
-//     STAGE W LIFTS IT, PER MODEL, WITH: the FIRST write trial on that
-//     radio — one combined MT Set to a sacrificial EMPTY channel, then an
-//     MT read back, then the same against an already-populated channel.
-//     Byte-faithful read-back on both is the lift; anything else
-//     (rejection, partial field application, tag written without the field
-//     block) converts the write path to a two-frame choreography and this
-//     entry to a finding. NOTHING MAY BE WRITTEN AT M9d-2 REGARDLESS: both
-//     write guards are false and both stay false.
+//     INCLUDING AN EMPTY ONE — AND AN ACCEPTED SET DRAWS NO REPLY WHILE A
+//     REJECTED ONE DRAWS "?;". TWO ASSUMPTIONS, ONE ENTRY, because one
+//     design decision rests on both: the write path sends the combined Set
+//     with the ZERO transport.CommandSpec, which is a claim about what the
+//     frame does AND a claim about what comes back. THE ENTRY LANDS HERE
+//     WITH THE DRIVER SKELETON, ONE TASK AHEAD OF THE WRITE PATH IT
+//     GOVERNS, because it is the assumption the whole MT-only choreography
+//     — including the read side's atomicity argument above — rests on, and
+//     it must not arrive later than the design it justifies.
+//
+//     WHAT IS MANUAL-EVIDENCED is that ONE frame carries everything: the
+//     41-byte Set carries the full field block and the tag (layout
+//     1311-1330; geometry-witness.csv's MT set rows), so MW would write the
+//     same fields redundantly with a strictly smaller frame (28 bytes,
+//     layout 1352-1367), and MW's own restriction to "001-099 (Memory
+//     Channel), P1L -P9U (PMS)" (layout 1353) is a second reason not to
+//     reach for it.
+//
+//     WHAT IS ASSUMED, FIRST HALF: that either radio accepts the combined
+//     Set as a COMPLETE CHANNEL DEFINITION, and that it does so for a slot
+//     that does not yet exist. The FT-710's own empty-slot create is
+//     HW-CONFIRMED for ITS two-frame MW+MT choreography, which is not this
+//     one.
+//
+//     WHAT IS ASSUMED, SECOND HALF — THE ACKNOWLEDGEMENT CONVENTION, added
+//     at the M9d-2 milestone review, which found it travelling here
+//     unregistered: that an accepted combined Set produces NO REPLY AT ALL
+//     and that a rejected one produces exactly one "?;". THAT IS AN
+//     INHERITED FRAMING CONVENTION, NOT A READING OF THIS MANUAL. The
+//     FT-710's manual states silence-on-success as a general framing rule
+//     and this project adopted it there; THIS manual states neither half.
+//     It describes Set, Read and Answer commands and the terminator (layout
+//     190-193, 227-229) and never says what a radio returns to a Set it
+//     honours, or to one it cannot; its layout-preserved extraction of rev
+//     2308-L contains no '?' character anywhere.
+//     AND MT'S AVAILABILITY ROW DOES NOT SUPPLY IT. That row (layout 334)
+//     gives Set O, Read O, Answer O, AI X, and this entry read the Answer O
+//     as "so a Set produces no answer" until the milestone review. It is a
+//     non sequitur, and it is corrected rather than deleted because the
+//     wrong version was the stated reason for a live design decision. The
+//     table's own header reads "Set Read Ans. AI" over each of its two
+//     command columns (layout 236, spacing normalised here): the Ans.
+//     column marks the EXISTENCE OF THE COMMAND'S ANSWER FORM — the frame
+//     that comes back to a READ — which is why MR, a
+//     read-only command, carries an Answer O too (its row is X O O X,
+//     layout 331). The column grounds nothing whatever about Sets.
+//     THE PAIRED ANALYSES ARE THE FAKE'S, cited and NOT absorbed:
+//     internal/fakedx101/doc.go's register entry 11 (an accepted Set
+//     produces no reply, a rejected one exactly one "?;" — with the one
+//     piece of partial evidence there is, MW's O X X X row at layout 336)
+//     and its entry 16 (the "?;" convention ITSELF is inherited and
+//     unattested on these radios). Those are claims about the FAKE; this
+//     one is a claim about what the DRIVER expects of a real radio, and a
+//     capture retires them together or not at all. Neither register may
+//     absorb the other.
+//     THE SITES THAT DEPEND ON IT, all three: write.go's mtSetSpec (the
+//     zero CommandSpec — no ExpectPrefix, so transport treats silence as
+//     acceptance and a bounded "?;" listen as the only failure signal),
+//     write.go's WriteChannel through it, and ftdx101.go's Open, whose AI0
+//     init frame is sent the same way.
+//
+//     STAGE W LIFTS BOTH HALVES AT ONCE, PER MODEL, WITH: the FIRST write
+//     trial on that radio — one combined MT Set to a sacrificial EMPTY
+//     channel, then an MT read back, then the same against an
+//     already-populated channel, WITH THE PORT WATCHED FOR ANY REPLY AT ALL
+//     between the Set and the read. Byte-faithful read-back on both is the
+//     first half's lift; anything else (rejection, partial field
+//     application, tag written without the field block) converts the write
+//     path to a two-frame choreography and that half to a finding. Whatever
+//     the port carries in the gap — nothing, a "?;", or an acknowledgement
+//     this project has no handling for — is the second half's lift, and it
+//     must be recorded even when it is nothing, because "no bytes observed"
+//     is the whole content of the claim. A radio that acknowledged a Set
+//     would break this driver rather than merely surprise it: the spec
+//     waits for no prefix, so the acknowledgement would be left in the
+//     buffer for the next exchange to trip over.
+//     RECORD THE PORT WITH BOTH (see the register preamble): silence on the
+//     Standard COM Port looks exactly like silence-on-success.
+//     NOTHING MAY BE WRITTEN AT M9d-2 REGARDLESS: both write guards are
+//     false and both stay false.
 package ftdx101

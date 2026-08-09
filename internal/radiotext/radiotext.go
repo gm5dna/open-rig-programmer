@@ -321,17 +321,20 @@ var ftdx101dText = Text{
 	// format to exemplify.
 	FirmwarePlaceholder: "whatever the radio displays",
 	// THE TWO-PORT CAVEAT IS THE POINT OF THIS FIELD FOR THIS RADIO (matrix
-	// §3.12; the passage itself is at layout 73-76, which is where the
-	// sentences quoted below actually sit — the matrix cites 75-79, and the
-	// discrepancy is raised for the milestone review rather than resolved
-	// here): the manual states that the radio "contains two
-	// virtual COM ports, an Enhanced COM Port and a Standard COM Port", the
-	// Enhanced one for CAT communications and the Standard one for TX
-	// control (PTT, CW keying, digital-mode operation). This project opens
-	// whichever port it is given and this manual gives no way to detect
-	// which one, so a user on the Standard port gets silence that looks
-	// exactly like a wrong baud rate or a framing mismatch — and probe is
-	// where that silence is first met. The firmware halves are the same two
+	// §3.12; the passage is at layout 75-79, exactly as the matrix cites it —
+	// 75 is the two-ports sentence quoted below, 76 "These ports offer the
+	// following functions:", 77-78 the two function bullets, 79 the worked
+	// COM5/COM6 example. An earlier version of this comment cited a lower
+	// range and flagged a discrepancy with the matrix; the M9d-2 milestone
+	// review settled it by re-measuring the extraction directly, the matrix
+	// was right, and the flag is gone): the manual states that the radio
+	// "contains two virtual COM ports, an Enhanced COM Port and a Standard
+	// COM Port", the Enhanced one for CAT communications and the Standard
+	// one for TX control (PTT, CW keying, digital-mode operation). This
+	// project opens whichever port it is given and this manual gives no way
+	// to detect which one, so a user on the Standard port gets silence that
+	// looks exactly like a wrong baud rate or a framing mismatch — and probe
+	// is where that silence is first met. The firmware halves are the same two
 	// absences FirmwareGuidance states, kept here because probe's report is
 	// read by someone who may never open the send flow.
 	ProbeFirmwareNote: "Firmware version has no CAT query on the FTdx101D, and no minimum version is established for it — read it off the radio's display. If nothing answered on this port at all, check which port it is: this radio presents two virtual COM ports, and only the Enhanced COM Port carries CAT. The Standard COM Port is for TX control (PTT, CW keying, digital modes) and will answer nothing here, which looks exactly like a wrong baud rate.",
@@ -384,9 +387,10 @@ var texts = map[string]Text{
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D"
-// and "FTdx101MP" are populated — the four models internal/wiring registers;
-// any other model — including "", a future driver not yet given an entry, or
-// a near-miss typo ("FT-DX10", say) — returns the zero Text and false.
+// and "FTdx101MP" are populated — the four models internal/wiring registers
+// AS OF M9d-2, a count a fifth registration would falsify; any other model
+// — including "", a future driver not yet given an entry, or a near-miss
+// typo ("FT-DX10", say) — returns the zero Text and false.
 // Callers must never treat a zero Text as if it were real advisory copy.
 //
 // THE MATCH IS EXACT AND CASE-SENSITIVE, and for the FTDX101 pair that is

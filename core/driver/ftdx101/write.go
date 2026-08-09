@@ -51,20 +51,30 @@ var shiftByName = map[string]cat.Shift{
 // mtSetSpec is the transport spec for the combined MT Set: the ZERO
 // CommandSpec, which is transport's fire-and-forget mode — write the frame,
 // then listen for a bounded window in case a "?;" rejection arrives, and
-// treat silence as acceptance. MT's own availability row gives Set O, Read O,
-// Answer O, AI X (layout 334), and a Set produces no answer at all (matrix
-// §3.6).
+// treat silence as acceptance.
+//
+// THAT SHAPE IS ASSUMED, NOT MANUAL-EVIDENCED — doc.go's register entry 9,
+// second half, where it was registered at the M9d-2 milestone review. This
+// comment previously argued it from MT's availability row (Set O, Read O,
+// Answer O, AI X, layout 334); that is a non sequitur, because the table's
+// "Ans." column (header at layout 236) marks the existence of the command's
+// ANSWER FORM — the frame a READ draws — and says nothing about what a Set
+// produces. Silence-on-success, and exactly one "?;" on rejection, are the
+// FT-710's stated framing convention inherited here; this manual states
+// neither. The capability matrix's §3.6 makes the same inference in the same
+// words and an erratum is owed at its next revision (recorded in
+// docs/superpowers/m9d2-baseline-manifest.md, "Note 6").
 //
 // Every part of that zero value is load-bearing, and it is why this is a
 // separate function from read.go's mtSpec rather than a reuse of it:
 //
 //   - NO ExpectPrefix, and therefore no ExpectLen. read.go's mtSpec pins the
 //     combined ANSWER's exact 41-byte geometry from the dialect, which is
-//     right for a read and would be a bug here: a CAT Set produces no answer,
-//     so a spec that waited for an "MT" reply would spend the whole read
-//     timeout and then report a timeout for a write the radio had accepted
-//     perfectly. The absence of a prefix is what selects transport's
-//     fire-and-forget path (see transport.Engine.Do).
+//     right for a read and would be a bug here: on the assumed convention a
+//     Set produces no answer at all, so a spec that waited for an "MT" reply
+//     would spend the whole read timeout and then report a timeout for a
+//     write the radio had accepted perfectly. The absence of a prefix is what
+//     selects transport's fire-and-forget path (see transport.Engine.Do).
 //
 //   - Consequently this function needs no dialect argument and cannot fail,
 //     where read.go's mtSpec needs both: the answer geometry it derives is

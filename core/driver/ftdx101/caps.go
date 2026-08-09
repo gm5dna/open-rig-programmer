@@ -555,9 +555,12 @@ func capabilitiesSimulated(m modelParams) spec.Capabilities {
 //     this radio. core/cat's combined-MT write policy refuses them
 //     (Dialect.mtSlotValid, core/cat/mt.go:115, reached by
 //     validateCombinedMTFields at core/cat/mtcombined.go:105), and mt.go's
-//     own doc comment (core/cat/mt.go:100-108) says so in terms: "our
-//     policy: reject sets to 5xx/EMG until hardware-verified (a project
-//     decision, not a manual requirement)". That policy was adopted
+//     own doc comment (core/cat/mt.go:103-106) says so in terms: "our
+//     policy: reject sets to 5xx/EMG until hardware-verified". The gloss
+//     that follows there — a project decision, not a manual requirement —
+//     is mt.go's own, and sits OUTSIDE that quotation in mt.go, where the
+//     quoted words are the reference's and the parenthesis is the
+//     project's. That policy was adopted
 //     against the FT-710's manual; the FTdx101's own MT legend is headed
 //     "P0/1", merging the Read direction's slot parameter with the Set
 //     direction's under one vocabulary, so this manual does not separately

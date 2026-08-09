@@ -794,9 +794,11 @@ func (r *Radio) handleID(body []byte) []byte {
 //
 // Availability O O O X (layout 244). Set and Answer are 4 bytes, Read is "AI;".
 // AI-set is fire-and-forget. This fake never PUSHES anything unsolicited
-// whatever AI is set to: no FTdx101's AI behaviour has been observed, and the
-// engine's drain-to-quiet discipline is already exercised against fakeradio,
-// whose own AI-flood facts are the FT-710's.
+// whatever AI is set to — ASSUMED, doc.go register entry 18: no FTdx101's AI
+// behaviour has been observed, and the engine's drain-to-quiet discipline is
+// already exercised against fakeradio, whose own AI-flood facts are the
+// FT-710's. That entry carries the per-model Stage R lift and the rule that
+// nothing here may be invented before it is taken.
 //
 // core/transport.Engine.Init opens every session with an AI-off Set, so this
 // handler's silent-accept path is on the critical path of every fake session.

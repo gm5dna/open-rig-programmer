@@ -925,14 +925,25 @@ radio cannot store.
 `settings --model FTdx101{D,MP}` renders **218 lines: 4 menus, 18
 groups, 193 item lines, and NO "Unrecognised settings" section**, stdout
 `0f13e3203a6df9730faa6e920c8a5fc6bd6961bb353bafece3d4393ba6f42e7b` on
-BOTH siblings. First lines:
+BOTH siblings. First lines — reproduced with the captured TRAILING
+PADDING MADE VISIBLE as `·`, one `·` per trailing space:
 
 ```
 RADIO SETTING
   MODE SSB
-    01-01-01  AGC FAST DELAY  0000  
-    01-01-02  AGC MID DELAY   0000  
+    01-01-01  AGC FAST DELAY  0000··
+    01-01-02  AGC MID DELAY   0000··
 ```
+
+**The two `·` are evidence, not decoration.** Each item line ends with
+TWO literal spaces in the captured stdout — the renderer's value-column
+fill — and the hash above is over the UNMODIFIED bytes, trailing spaces
+included. They were reproduced literally here until the M9d-2 milestone
+review (C6) found that `git diff --check` flagged them as trailing
+whitespace on every commit touching this file; substituting a visible
+marker keeps the fact and clears the check, where silently trimming them
+would have destroyed the one detail this excerpt exists to show. To
+compare against the real output, read `·` as U+0020.
 
 `settings --csv` writes **194 lines** (header + 193), columns
 `id,menu,group,label,state,value`, the CSV
@@ -1406,10 +1417,13 @@ ff5c19b m9b: task 51 — mint three evidence corpora before anything moves
 
 ---
 
-## Part 8 — the ledger: five notes this milestone must carry forward
+## Part 8 — the ledger: six notes this milestone must carry forward
 
 Recorded here, in the durable tracked document, because each is a real
-limit or a real correction that a working file would lose.
+limit or a real correction that a working file would lose. Notes 1-5
+were written at the capture; **Note 6 was added by the M9d-2 milestone
+fix wave** (finding F1), which is why it records a matrix defect this
+manifest's own gate could not have found.
 
 ### Note 1 — the four-radio CHIRP fixture table is HAND-WRITTEN
 
@@ -1444,22 +1458,39 @@ Codeplugs saved under the OLD blank-`Skip` construction carry
 build does not rewrite them and does not reclassify them; it reads them
 faithfully, which means **an old saved codeplug still meets the write
 gate that a freshly imported one no longer meets.** Measured directly,
-head binary, same fixture, two files:
+head binary, same fixture, two files.
+
+**SCHEMATIC EXCERPT — NOT A VERBATIM TRANSCRIPT.** The two blocks below
+are abridged renderings of two `rigprog diff --fake --model FTdx10`
+runs: the file argument is described rather than quoted (the two inputs
+were an ephemeral scratch pair, not preserved), and `…` marks channel
+lines elided for length. The `$` prompts of the earlier draft are gone,
+because a prompt is what makes a sketch look like a paste. **The
+TALLY LINE of each block is the measured value, verbatim** — it is the
+only line this note's argument rests on:
+
+*Run 1 — a codeplug saved under the OLD blank-`Skip` construction:*
 
 ```
-$ rigprog diff --fake --model FTdx10 <codeplug saved under the OLD construction>
 Added:
   M-02: … tag "MINIMALLSB"
     BLOCKED: scan_skip not writable on this radio
   …
 Added 2, Modified 1, Erased 0, Blocked 3, Unchanged 114
+```
 
-$ rigprog diff --fake --model FTdx10 <the same CHIRP file imported under the NEW construction>
+*Run 2 — the same CHIRP file imported under the NEW construction:*
+
+```
 Added:
   M-02: … tag "MINIMALLSB"
   …
 Added 2, Modified 1, Erased 0, Blocked 0, Unchanged 114
 ```
+
+`Blocked 3` against `Blocked 0`, everything else equal, is the whole of
+the finding; the elided lines are the three blocked channels and the
+unchanged remainder, and no claim here depends on their text.
 
 **No migration is owed**, for a reason that is a fact about the radios
 rather than a convenience: **no registered radio can write `scan_skip`
@@ -1511,12 +1542,71 @@ This note is the ledger entry that says so, and it is the reason a
 reader should take `64519d9`'s and `91d3c6d`'s bodies as authoritative
 over `4a42e07`'s wherever the two touch the FTdx10's manual.
 
+### Note 6 — matrix §3.6 states the fire-and-forget shape without an evidence line (ERRATUM OWED)
+
+Recorded here by the M9d-2 milestone fix wave (finding F1), because the
+matrix is NOT edited mid-milestone and this manifest is where an
+outstanding matrix defect is held until its next revision — the same
+disposition triage item (g) got.
+
+`docs/superpowers/m9d2-capability-matrix.md` §3.6 ("Write choreography")
+says:
+
+> *"The Set is fire-and-forget: MT's availability row (layout 334) gives
+> Set O, Read O, Answer O, AI X, and a Set produces no answer, so the
+> transport spec waits for none."*
+
+**The inference does not hold.** The availability table's own header, at
+layout **236**, reads `Command  Function  Set Read Ans.  AI` over each of
+its two command columns (spacing normalised): the `Ans.`
+column marks the EXISTENCE OF THE COMMAND'S ANSWER FORM — the frame a
+READ draws — which is why MR, a read-only command, carries `Answer O`
+too (`X O O X`, layout 331). The column grounds nothing about what a Set
+produces. §3.6's own **Status** line grades the two halves it does name
+(one frame carries everything = MANUAL-EVIDENCED; the radio accepts it
+as a complete channel definition = ASSUMED) and gives the
+fire-and-forget shape **no evidence grade at all** — it reads as
+manual-evidenced by position.
+
+**What it actually is:** an INHERITED framing convention. The FT-710's
+manual states silence-on-success as a general rule and this project
+adopted it there; the FTDX101 manual states neither half — it describes
+Set, Read and Answer commands and the terminator (layout 190-193,
+227-229) and never says what a radio returns to a Set it honours or to
+one it cannot, and its layout-preserved extraction of rev 2308-L
+contains no `?` character anywhere.
+
+**Fixed in code at this wave, in three places:**
+`core/driver/ftdx101/doc.go`'s register **entry 9** now carries the
+convention as an explicit second ASSUMED half with a per-model Stage W
+lift (the first write trial's capture, port watched between the Set and
+the read-back); `core/driver/ftdx101/write.go`'s `mtSetSpec` and
+`core/driver/ftdx101/ftdx101.go`'s AI0-init note, both of which had
+restated the non sequitur, now cite that entry instead. The paired
+analyses on the fake's side — `internal/fakedx101/doc.go` entries 11 and
+16 — are cited, not absorbed.
+
+**Owed at the next matrix revision:** §3.6's value paragraph
+re-worded to drop the availability-row inference, and the
+fire-and-forget shape given its own status line (ASSUMED — inherited
+convention) with the driver register entry 9 named as its register home
+alongside the sufficiency claim already there. **The matrix is not
+edited by this wave.** No code behaviour depends on the wording: the
+zero `CommandSpec` was correct under the convention and stays correct;
+what changed is that it is now registered as an assumption rather than
+asserted as a manual fact.
+
 ### The digit sweep (review fold C1)
 
 Prose carrying a registered-model COUNT was swept at this task, since a
-count is the thing a registration falsifies. **Result: every
-count-bearing statement in the tree is DATED**, which is the discipline
-working — a dated claim becomes historical rather than wrong:
+count is the thing a registration falsifies. **Result at the capture:
+SEVEN count-bearing statements, SIX dated and ONE not** — which is the
+discipline mostly working, a dated claim becoming historical rather than
+wrong. The seventh was flagged here and left as it stood, and the M9d-2
+milestone fix wave then dated it (finding C5), so every count-bearing
+statement in the tree is dated as of that wave. The table records the
+state AT THE CAPTURE, which is what this manifest measures; the
+right-hand column says where each row now stands:
 
 | Site | Text | Verdict |
 |---|---|---|
@@ -1526,7 +1616,7 @@ working — a dated claim becomes historical rather than wrong:
 | `internal/wiring/wiring.go:327` | "FOUR registered values agree with transport's today" | carries "today" |
 | `internal/wiring/wiring_test.go:918` | "FOUR since M9d-2 task 7" | dated |
 | `internal/wiring/wiring_test.go:1011` | "THREE OF THE FOUR REGISTERED MODELS…" | dated to M9d-2 |
-| `internal/radiotext/radiotext.go:387` | "the four models internal/wiring registers" | **UNDATED — a fifth registration falsifies this line.** Flagged, not changed: it is accurate today, and the pin that enforces it (`TestEverySupportedModelHasRadiotext`, red-proved at 9.4) fires on the code rather than the comment. |
+| `internal/radiotext/radiotext.go:387` | "the four models internal/wiring registers" | **UNDATED AT THE CAPTURE — a fifth registration would falsify this line.** Flagged, not changed at Task 9: it was accurate then, and the pin that enforces it (`TestEverySupportedModelHasRadiotext`, red-proved at 9.4) fires on the code rather than the comment. **DATED by the M9d-2 milestone fix wave (C5)**, which added "AS OF M9d-2" to the line — Codex's reading that this row contradicted the section's own conclusion was accepted. |
 
 `cmd/rigprog/usage.go`'s doc comment is the worked example of the fix:
 Task 7 rewrote it to name no model and no count, recording that an
@@ -1552,24 +1642,77 @@ rather than any particular hash:
 (task 8 fix round 1). Every measurement in this manifest was taken at
 that commit, in that working tree, with a binary built from it.
 
-**This manifest's own commit is DOCUMENTATION-ONLY** in the invariant's
-sense. It tracks exactly one path:
+**The commits carrying this manifest are DOCUMENTATION-ONLY** in the
+invariant's sense. There are **TWO** of them, not one — the first draft
+and its fix round — and naming only one was the M9d-2 milestone review's
+finding C2:
+
+| Commit | Subject | Kind |
+|---|---|---|
+| `b175c6f` | *"M9d-2 task 9: byte identity, the designed deltas, per-sibling baselines, full gate"* | this manifest, first commit |
+| `9fa01d5` | *"M9d-2 task 9 fix round 1: the miscopied `scan_skip` tally and the Proof B block that showed another command's output"* | this manifest, fix round 1 |
+
+Taken as the RANGE `1564d31..9fa01d5` — the capture's commit to the last
+of the two — they touch exactly one path between them:
 
 | Path | Kind |
 |---|---|
 | `docs/superpowers/m9d2-baseline-manifest.md` | this manifest |
 
-No `.go` file, no frontend file, no generated binding and no golden is
-touched by it — `git show --stat` of this commit is the whole of its
-contents, and it is the check to run rather than to take on trust. The
-capture therefore speaks for the branch tip **as of this commit**.
+`git diff --stat 1564d31..9fa01d5` is the check to run rather than to
+take on trust: **1 file changed, 1615 insertions(+)**, and `--stat` on
+each commit individually shows the same single path. No `.go` file, no
+frontend file, no generated binding and no golden is touched by either.
+The capture therefore speaks for the branch tip **as of `9fa01d5`**.
 
 If a milestone-review wave lands after this one, this manifest does
 **not** retroactively cover it. That is not hypothetical: M9c-5's wave
 `bc3b6f1`/`8721a91` and M9c-6's wave `8baab59` both landed after their
 manifests' captures and were covered only by their own gate runs — until
 a later milestone's span happened to include them. **Any M9d-2 review
-wave must do the same: re-run, re-record, per commit.**
+wave must do the same: re-run, re-record, per commit.** One has: see
+below.
+
+### The M9d-2 milestone fix wave lands AFTER this capture
+
+**THE COMMIT CARRYING THIS SECTION** is the wave commit: *"M9d-2
+milestone fixes: the silence-on-success registration, the layout-75
+adjudication, and the manifest corrections"*, the single commit
+`9fa01d5..HEAD` carrying the eight adjudicated findings F1, F2, F3, C1,
+C2, C4, C5, C6. It does not record its own hash — writing one would
+change it — so it is identified by its subject and by being the commit
+that added these lines.
+
+It is **NOT documentation-only**: it touches **seven `.go` files**
+alongside this manifest (8 files, +356/−81). The byte-identity capture
+above does **not** extend to it, exactly as this section requires. What
+covers it is its own gate run, recorded here:
+
+- **The `.go` changes are COMMENT-ONLY**, mechanically checked rather
+  than asserted: every added and removed line in every `.go` file of
+  the wave commit begins with `//` (leading whitespace allowed).
+  Measured over `9fa01d5..HEAD`: of the added and removed `.go` lines,
+  those whose first non-blank content is NOT `//` number **0**. No
+  statement, no declaration, no literal and no test assertion moves.
+- **Files:** `core/driver/ftdx101/doc.go`, `core/driver/ftdx101/write.go`,
+  `core/driver/ftdx101/ftdx101.go`, `core/driver/ftdx101/caps.go`,
+  `internal/radiotext/radiotext.go`, `internal/fakedx101/doc.go`,
+  `internal/fakedx101/parser.go`, and this manifest.
+- **`gofmt -l .`** — silent.
+- **`go vet ./...`** — clean, exit 0.
+- **`go test ./core/driver/ftdx101/ ./internal/fakedx101/... ./internal/radiotext/ -count=1`**
+  — all packages `ok`, exit 0.
+- **`git diff --check`** repo-wide — clean, exit 0 (this is the check
+  C6's padding marker was introduced to satisfy; it failed on lines
+  933-934 before the wave and passes after).
+- **The TEN-path golden gate** — `git diff --exit-code` over all ten
+  golden paths, **exit 0, empty**.
+
+Because the change is comment-only, no recorded value in Parts 1-5 can
+have moved, and none was re-measured: a comment cannot change a hash of
+a binary's output, and the golden gate above is the standing proof that
+nothing generated moved either. **This wave's own verification is the
+list above and nothing broader is claimed for it.**
 
 The planning and handoff documents are deliberately not in this commit:
 `.superpowers/` is gitignored, as is `docs/fixtures-private/`, so the

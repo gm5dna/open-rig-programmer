@@ -210,11 +210,14 @@ func idSpec() transport.CommandSpec {
 // One note the AI0 init inherits (matrix §3.12, MANUAL-EVIDENCED): the AI
 // command "is available only when PC is connected with USB cable" (layout
 // 381). Over the rear RS-232C jack it is documented unavailable, and
-// because AI0 is fire-and-forget (availability row O O O X, layout 244) a
-// session opened on that path would not obviously fail — it would simply
-// not have disarmed auto-information. This project opens whatever port it
-// is given and this manual gives no way to detect which one, so there is no
-// code action here; it is why every Stage R capture must record its port.
+// because the AI0 Set is sent fire-and-forget — ASSUMED, doc.go's register
+// entry 9, second half, and NOT read off the availability row (that row's
+// O O O X at layout 244 says AI has Set, Read and Answer FORMS, not what a
+// Set draws) — a session opened on that path would not obviously fail: it
+// would simply not have disarmed auto-information. This project opens
+// whatever port it is given and this manual gives no way to detect which
+// one, so there is no code action here; it is why every Stage R capture
+// must record its port.
 func (d *ftdx101Driver) Open(ctx context.Context, port transport.Port, id driver.Identity) (driver.Session, error) {
 	var engOpts []transport.Option
 	if d.transportLogger != nil {
