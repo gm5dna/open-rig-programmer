@@ -1700,15 +1700,15 @@ citations have drifted by a few lines", with `validateCombinedMTFields`
 the two drifts.
 
 **What now stands (rev 4):** only ONE of the two drifted. Both facts in
-the parenthetical are true — the declaration is at `:104`, and §1.3.5 did
-cite `:105` — but grouping them under "have drifted" implies `:105` was
-therefore stale, and it was not. §1.3.5 read "`Dialect.mtSlotValid`,
-**defined at** `core/cat/mt.go:115`, **reached by**
-`validateCombinedMTFields` **at** `core/cat/mtcombined.go:105`", and
-`mtcombined.go:105` is `if !d.mtSlotValid(m.Slot) {` — the line at which
-that function reaches the predicate. Read as the call-site citation its
-own sentence makes of it, `:105` was exact at rev 1 and is exact today.
-`mtSlotValid`'s 115 → 118 is a genuine drift and stands.
+the parenthetical are true — the declaration is at `:104`, and §1.3.5
+did cite `:105` — but grouping them under "have drifted" implies `:105`
+was therefore stale, and it was not. §1.3.5 read
+"`Dialect.mtSlotValid`, defined at `core/cat/mt.go:115`, reached by
+`validateCombinedMTFields` at `core/cat/mtcombined.go:105`", and
+`mtcombined.go:105` is `if !d.mtSlotValid(m.Slot) {` — the line at
+which that function reaches the predicate. Read as the call-site
+citation its own sentence makes of it, `:105` was exact at rev 1 and is
+exact today. `mtSlotValid`'s 115 → 118 is a genuine drift and stands.
 
 **The measurement.** `validateCombinedMTFields` has sat at
 `core/cat/mtcombined.go:104` since `344538c` (29/07/2026), ten days before
