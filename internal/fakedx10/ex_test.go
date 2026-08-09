@@ -119,7 +119,10 @@ func TestEXRead_MalformedBody(t *testing.T) {
 // re-tightening would most plausibly miss.
 //
 // It REPLACES TestEXRead_LowerCaseCommandRejected, which asserted the opposite
-// on the strength of the withdrawn register entry 12 — see doc.go's "What is
+// on the strength of the WITHDRAWN COMMAND-NAME HALF of register entry 12. The
+// entry itself survives with its number and a live assumed claim — that the
+// leniency stops at the command name and FIELD values stay case-sensitive —
+// so this is a superseded half, not a withdrawn entry. See doc.go's "What is
 // NOT in this register, and why".
 func TestEXRead_LowerCaseCommandAccepted(t *testing.T) {
 	_, conn := newTestRadio(t)

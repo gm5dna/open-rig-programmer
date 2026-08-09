@@ -723,7 +723,9 @@ func (r *Radio) handleID(body []byte) []byte {
 // fire-and-forget. This fake never PUSHES anything unsolicited whatever AI is
 // set to: no FTdx10's AI behaviour has been observed, and the engine's
 // drain-to-quiet discipline is already exercised against fakeradio, whose own
-// AI-flood facts are the FT-710's.
+// AI-flood facts are the FT-710's. THAT SUPPRESSION IS AN ASSUMPTION AND IS
+// REGISTERED — doc.go register entry 19. It is modelling silence as the honest
+// default, not a claim that this radio is silent.
 //
 // core/transport.Engine.Init opens every session with an AI-off Set, so this
 // handler's silent-accept path is on the critical path of every fake session.

@@ -123,10 +123,10 @@
 // reviewer — or the first real FTdx10 session — has a single list to work
 // from rather than a source-wide comment hunt. Each entry also appears as an
 // inline comment beside the code that implements it. That completeness claim
-// is the register's whole value, and it carries ONE recorded exception at
-// present — see "What is NOT in this register, and why" at the end, which
-// holds the two manual facts that left this register at the M9d follow-up
-// wave and the one behaviour known to be unregistered.
+// is the register's whole value and it is made without exception: see also
+// "What is NOT in this register, and why" at the end, which holds the two
+// MANUAL FACTS that left this register at the M9d follow-up wave — an absence
+// with a manual line behind it is not a gap in the claim above.
 //
 // Assumptions that belong to the DIALECT (core/cat/ftdx10/doc.go's own
 // six-entry register: the tag fill byte, the clarifier's 10 Hz step, the
@@ -363,11 +363,14 @@
 //     now a MANUAL FACT — see "What is NOT in this register, and why"
 //     below, where it is listed with that line.
 //     THE NUMBER IS HELD RATHER THAN RECLAIMED because entries 15, 16 and
-//     17 are cited BY NUMBER from image.go, image_test.go, options.go,
-//     parser.go, ex.go, ex_test.go, fakedx10_test.go and from
-//     internal/fakedx101/doc.go, and renumbering would silently repoint
-//     every one of them. A tombstone that says what left and why is
-//     auditable; a shifted register is not.
+//     17 are cited BY NUMBER from NINE files: image.go, image_test.go,
+//     options.go, parser.go, ex.go, ex_test.go and fakedx10_test.go inside
+//     this package, and — the part that settles it — TWO from outside,
+//     internal/fakedx101/doc.go and core/transport/ex_crosscheck_ftdx10_test.go
+//     (its :248 names entry 17). A number cited from another package is a
+//     number this package cannot renumber unilaterally, and renumbering
+//     would silently repoint every one of the nine. A tombstone that says
+//     what left and why is auditable; a shifted register is not.
 //
 //  15. THE DEFAULT IMAGE'S CONTENT IS INVENTED. M-01 at 7.000000 MHz LSB,
 //     the nine PMS pairs at plausible IARU Region 1 band edges, With5xx's
@@ -444,16 +447,67 @@
 //     core/driver/ftdx10's rejection-based interpretations (its register
 //     entries "?;" ON A 5xx/EMG DISCOVERY PROBE and "?;" ON A COMBINED-MT
 //     READ OF AN EMPTY SLOT) into timeouts.
-//     REGISTERED AT THE M9d-2 MILESTONE REVIEW, which found this package
-//     making the assumption on every refusal path while a register whose
-//     preamble claims to list every place this fake had to guess did not
-//     hold it. internal/fakedx101/doc.go's entry 16 is the same claim about
+//     REGISTERED AT THE M9d FOLLOW-UP WAVE, ON THE M9d-2 MILESTONE REVIEW'S
+//     FINDING: this package made the assumption on every refusal path while
+//     a register whose preamble claims to list every place this fake had to
+//     guess did not hold it. internal/fakedx101/doc.go's entry 16 is the same claim about
 //     those radios, and it is CITED here rather than shared: one capture on
 //     an FTdx10 settles this entry and says nothing about an FTdx101.
 //     STAGE R LIFTS IT WITH: one deliberately unknown command — "ZZ;" —
 //     put to a real FTdx10 with the port watched. Whatever comes back, or
 //     does not, is the convention.
 //     (parser.go: rejection, and every refusal in the file)
+//
+//  19. AUTOMATIC-INFORMATION SUPPRESSION: THIS FAKE NEVER PUSHES AN
+//     UNSOLICITED FRAME, WHATEVER AI IS SET TO. "AI1;" is accepted, stored
+//     and read back faithfully, and then nothing follows from it: this radio
+//     writes to the port only in reply to a frame that arrived on it, so an
+//     AI-on session and an AI-off session are byte-identical on the wire.
+//     The assumption is not that this radio is silent — it is that MODELLING
+//     IT AS SILENT IS THE HONEST DEFAULT, because NO FTdx10 HAS BEEN
+//     OBSERVED WITH AI ON. Which frames such a radio volunteers, on what
+//     triggers, in what order and with what interleaving against a command
+//     in flight are four unknowns, and inventing them would put fabricated
+//     wire behaviour underneath every test that ran against this fake — the
+//     borrowed-fact class this package refuses throughout, and worse than
+//     usual here, because an invented push is indistinguishable at the far
+//     end of a link from a transport defect.
+//     THE OMISSION WAS THIS PACKAGE'S, AND IT WAS FOUND TWICE. The
+//     identical finding against internal/fakedx101 was the M9d-2 milestone
+//     review's C1 (Codex), closed there by writing that package's entry 18;
+//     this package had the same decision implemented and commented at the
+//     code (parser.go's AI section) and absent from a register whose
+//     preamble claims to list every place this fake had to guess. The M9d
+//     follow-up wave first recorded it as a known gap and was corrected at
+//     its own review: a register that documents a hole in itself is still a
+//     register with a hole in it, and the C1 precedent is to write the
+//     entry.
+//     DISTINCT FROM THE MANUAL FACT NEXT DOOR: "AI defaults to off at
+//     construction" is manual line 317 and is deliberately NOT in this
+//     register (see "What is NOT in this register, and why" below). That
+//     line says what AI is set to at power-on; it says nothing about what a
+//     radio does once AI is ON, which is the whole of this entry. The two
+//     must not be read as one absence.
+//     WHAT RESTS ON IT: core/transport.Engine's drain-to-quiet discipline —
+//     Init's AI-off Set followed by Engine.DrainToQuiet — is exercised
+//     against internal/fakeradio, whose AI-flood behaviour is the FT-710's
+//     OWN observed one, and NOT against this fake. So no FTdx10 test in this
+//     repository exercises the engine against a talking radio, and none may
+//     claim to: every FTdx10 exchange in every suite is one frame in, at
+//     most one frame out. A future test that wants an FTdx10 flood needs
+//     this entry lifted first, not a plausible flood written into this
+//     package.
+//     STAGE R LIFTS IT WITH: one session on a real FTdx10 with AI set to 1
+//     and the port then watched — idle, and while the front panel is
+//     operated (VFO turned, mode changed, memory recalled). Whatever that
+//     radio pushes, and whatever provokes it, becomes this fake's model;
+//     NOTHING MAY BE INVENTED MEANWHILE, and an observation of nothing at
+//     all is a result to record rather than a failed capture. Record the
+//     port with it: this manual's AI note says the command "is available
+//     only when PC is connected with USB cable" (manual line 314), so a
+//     capture over RS-232C settles nothing here.
+//     (parser.go: handleAI and the AI section's note; fakedx10.go: serve
+//     and handleEvent, whose only write is a reply)
 //
 // # What is NOT in this register, and why
 //
@@ -483,10 +537,9 @@
 //
 // NOTE WHAT IS NOT COVERED BY THE SECOND ABSENCE: what this fake does once AI
 // is turned ON — answer "AI1;" faithfully and then push nothing, ever — rests
-// on no line of this manual and on no observation of any FTdx10. That claim is
-// NOT registered above, where internal/fakedx101's register holds it as its
-// entry 18. It is recorded here as a KNOWN GAP rather than closed, because the
-// M9d follow-up wave that wrote this section was scoped to the four adjudicated
-// FTdx10 evidence corrections and adding an eighteenth-behaviour entry was not
-// among them; the entry is owed at this package's next review.
+// on no line of this manual and on no observation of any FTdx10. That claim IS
+// registered, as entry 19 above, and the two must not be read as one absence.
+// It was written at the M9d follow-up wave's own review round: the first pass
+// recorded it here as a known gap instead, which is not what the identical
+// finding against internal/fakedx101 (the M9d-2 review's C1) was closed with.
 package fakedx10
