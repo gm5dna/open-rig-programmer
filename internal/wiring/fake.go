@@ -43,6 +43,14 @@ import (
 // generic option plumbing was needed, and neither model's options can
 // reach the other's rig.
 //
+// THE DIFFERENT-ELEMENT-TYPE PART OF THAT IS NOT UNIVERSAL, and M9d-2 is
+// where it stopped being: FTdx101DFakeSessionOpts and
+// FTdx101MPFakeSessionOpts (two declarations below) are BOTH
+// []fakedx101.Option, because one simulator serves both FTDX101 siblings.
+// The separate-variable-per-model rule holds there; the compiler-enforced
+// half does not, and tests stand in for it. See FTdx101DFakeSessionOpts'
+// own doc comment.
+//
 // No production flag or GUI control populates this — it does not add a
 // second ft710.Simulated reference to any non-test file:
 // TestSimulatedProfileTokensConfinement (internal/guards) keeps passing

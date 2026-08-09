@@ -103,8 +103,10 @@ func TestDefaultImage_EachCallIsIndependent(t *testing.T) {
 // other. This is what a shared map would break in practice, and it is asserted
 // over the WIRE, through the write path a caller really uses.
 //
-// The two radios are deliberately a D and an MP, since that is the pairing a
-// test comparing the models will build — and a shared map would make one
+// The two radios are deliberately a D and an MP, since that is the pairing
+// the model-comparing tests actually build — fakedx101_test.go's and
+// ex_test.go's D-against-MP sweeps, and core/transport's EX cross-check —
+// and a shared map would make one
 // model's write appear in the other's inventory, which would look like a
 // per-model difference rather than the aliasing bug it is.
 func TestTwoRadiosFromOneImageDoNotAlias(t *testing.T) {

@@ -58,12 +58,14 @@ import (
 // when --model is absent, and app/ when the frontend passes "" (it has no
 // model picker yet — M9c-6's ledgered exclusion).
 //
-// It stays exactly "FT-710" now that a SECOND model is registered (the
-// FTdx10, M9c-6): which radio a caller gets by DEFAULT is a compatibility
+// It stays exactly "FT-710" however many other models are registered:
+// which radio a caller gets by DEFAULT is a compatibility
 // promise about every file, snapshot and journal written before any second
 // model existed (see ResolveSnapshotDir's own model rule), not a statement
 // about how many models this package supports. Changing it would silently
-// re-point every default-model caller at a different radio.
+// re-point every default-model caller at a different radio. That is why
+// this comment carries no registration COUNT: the count has changed twice
+// already (M9c-6, M9d-2) and the promise has not moved.
 const DefaultModel = "FT-710"
 
 // FTdx10Model names the FTdx10's realDrivers/fakeDrivers key, which must

@@ -233,8 +233,10 @@ var ftdx10Text = Text{
 // hedgeless sentences are ITS hardware evidence) nor the FTdx10 (whose
 // hedges are about a different radio and a different manual, and would
 // become claims about these two the moment they were copied).
-// TestRadiotext_DiffersFromFT710 and TestRadiotext_DiffersFromFTdx10 pin
-// the non-borrowing mechanically, field by field.
+// assertFTdx101NotBorrowed (radiotext_test.go), called from BOTH verbatim
+// tests below, pins the non-borrowing mechanically and field by field: no
+// field may be byte-identical to the FT-710's or the FTdx10's, and none may
+// carry either radio's particulars.
 //
 // WHAT THESE ENTRIES CAN SAY THAT THE FTdx10's CANNOT is the point of
 // writing them fresh rather than adapting: this radio's CAT manual carries
@@ -319,7 +321,10 @@ var ftdx101dText = Text{
 	// format to exemplify.
 	FirmwarePlaceholder: "whatever the radio displays",
 	// THE TWO-PORT CAVEAT IS THE POINT OF THIS FIELD FOR THIS RADIO (matrix
-	// §3.12, layout 75-79): the manual states that the radio "contains two
+	// §3.12; the passage itself is at layout 73-76, which is where the
+	// sentences quoted below actually sit — the matrix cites 75-79, and the
+	// discrepancy is raised for the milestone review rather than resolved
+	// here): the manual states that the radio "contains two
 	// virtual COM ports, an Enhanced COM Port and a Standard COM Port", the
 	// Enhanced one for CAT communications and the Standard one for TX
 	// control (PTT, CW keying, digital-mode operation). This project opens

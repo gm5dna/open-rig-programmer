@@ -222,8 +222,12 @@ func fenceTestTree(t *testing.T) string {
 // else — the _test.go file beside it and the testdata fixture are both skipped
 // by design.
 //
-// It is the whole reason this file lands a task before gen/ does: the fence is
-// provably effective against a subdirectory that does not exist yet.
+// It is the whole reason this file landed a task BEFORE gen/ did: the fence
+// was proven effective against a subdirectory that did not exist yet. gen/
+// exists now (M9d-2 task 6 built it), so the proof is no longer about an
+// absent directory — but the fixture tree below is still synthetic and still
+// independent of the real gen/, which is what keeps this test a check on the
+// SCAN rather than on whatever gen/ happens to import today.
 func TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory(t *testing.T) {
 	root := fenceTestTree(t)
 

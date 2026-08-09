@@ -20,10 +20,13 @@ import (
 // These tests drive both models against respondingPort — a scripted,
 // frame-parsing CAT peer (respondingport_test.go) — through the driver's
 // own real transport.Engine, constructed inside Open. There is no fake
-// radio here: internal/fakedx101 does not exist until task 5, and the error
+// radio here, and that is a CHOICE rather than a scheduling accident:
+// internal/fakedx101 exists (M9d-2 task 5) and both models are registered
+// against it (task 7), but the error
 // paths these tests need (a SIBLING's CAT ID, a foreign one, an answer
 // naming the wrong slot, an out-of-vocabulary kind byte) are answers a
-// self-consistent fake would never give.
+// self-consistent fake would never give. The fake's own end-to-end
+// counterparts live in internal/wiring, where the Simulated/fake pairing is.
 //
 // EVERY Open in this package costs about 2-3 s of wall clock: the AI0
 // init's error window and drain, then ~100 discovery probes at the engine's

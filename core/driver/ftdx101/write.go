@@ -243,11 +243,21 @@ func requestedFields(data codeplug.ChannelData) []spec.Field {
 // inside each.
 //
 // The END-TO-END write — Simulated profile, through the registered fake, on
-// the real wiring path — is NOT here and is not missing: internal/fakedx101
-// does not exist yet (M9d-2 task 5 builds it), and that test lands with the
-// registration in task 7. What this file's tests cover is the choreography
-// against a scripted, frame-parsing peer, which is where a wrong BYTE is
-// visible; what task 7 adds is a radio that remembers what it was told.
+// the real wiring path — is NOT here, and it is not missing: it LIVES
+// ELSEWHERE, in internal/wiring, as
+// TestOpenFakeSessionFor_FTdx101DSimulatedWriteRoundTrip and
+// TestOpenFakeSessionFor_FTdx101MPSimulatedWriteRoundTrip (M9d-2 task 7,
+// which registered both models). It can only live there: the choreography
+// needs a Simulated-profile driver paired with internal/fakedx101, and that
+// pairing exists in exactly one place repo-wide — internal/wiring/fake.go's
+// fakeDrivers table, pinned there by internal/guards'
+// TestSimulatedProfileTokensConfinement.
+//
+// The division of labour is the point. What THIS file's tests cover is the
+// choreography against a scripted, frame-parsing peer, which is where a
+// wrong BYTE is visible; what the wiring tests add is a radio that remembers
+// what it was told, so the two prove different things and neither
+// substitutes for the other.
 func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver.WriteResult, error) {
 	// Every refusal below this point returns res unchanged, i.e. an
 	// EXPLICITLY EMPTY step list — never nil. The distinction is not

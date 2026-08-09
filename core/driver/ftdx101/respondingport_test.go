@@ -27,7 +27,10 @@ import (
 // would encode the choreography into every fixture and make the discovery
 // test (which asserts the choreography) tautological.
 //
-// It is deliberately NOT internal/fakedx101 (which task 5 builds): a fake
+// It is deliberately NOT internal/fakedx101 (which exists since M9d-2 task
+// 5, and which both models are registered against since task 7 — so this
+// is a choice between two available tools, not a stand-in for a missing
+// one): a fake
 // radio models a radio's STATE and is the right tool for round-trip and
 // end-to-end tests, whereas this answers per-frame from a table and can
 // therefore serve deliberately WRONG answers — a SIBLING'S CAT ID, a

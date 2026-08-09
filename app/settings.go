@@ -19,9 +19,12 @@ import (
 // comment — the identical optional-interface reasoning
 // core/clone/memory_selector.go's MemorySelector already established),
 // Live true; otherwise (disconnected, or a connected session whose driver
-// does not implement driver.SettingsReader — every ft710.Session
-// implements it unconditionally today, so that branch is currently only
-// reachable offline) the static baseline of the model currentModel
+// does not implement driver.SettingsReader — EVERY registered model's
+// session implements it unconditionally today, the FT-710's, the FTdx10's
+// and both FTDX101s', so that branch is currently only
+// reachable offline; the claim is deliberately about the registered SET
+// rather than about the FT-710 alone, since it is the set that decides
+// whether a connected session can reach it) the static baseline of the model currentModel
 // resolves, Live false. Callers must hold a.mu (mirrors currentCaps' own
 // contract: this reads only its arguments, never a itself).
 //
