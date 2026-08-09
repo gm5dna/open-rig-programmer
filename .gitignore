@@ -42,3 +42,7 @@ app/frontend/node_modules/
 *.[Mm][Ee][Mm][Ll][Ii][Ss][Tt]
 [Mm][Ee][Mm][Oo][Rr][Yy]*.[Dd][Aa][Tt]
 *.private-capture
+
+# Internal process artefacts (specs, plans, baseline manifests, capability
+# matrices) — kept on disk for the evidence chain, not published.
+/docs/superpowers/
