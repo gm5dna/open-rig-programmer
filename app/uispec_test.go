@@ -3,11 +3,13 @@
 package main
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx10"
+	"github.com/gm5dna/open-rig-programmer/internal/fakedx101"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeradio"
 	"github.com/gm5dna/open-rig-programmer/internal/radiotext"
 	"github.com/gm5dna/open-rig-programmer/internal/wiring"
@@ -314,6 +316,27 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 	want := map[string][]spec.Field{
 		"FT-710": ft710CoreSeven,
 		"FTdx10": ftdx10CoreSix,
+		// The FTDX101D and FTDX101MP derive the SAME six fields as the
+		// FTdx10, and ftdx10CoreSix is reused rather than copied because
+		// the shape is the COMBINED MT RECORD's, which all three radios
+		// share by construction — not a coincidence between two lists that
+		// happen to match today.
+		//
+		// Capability matrix §2.1 is the statement of record: FieldFrequency,
+		// FieldMode, FieldClarifier, FieldCTCSSState, FieldShift and
+		// FieldTag carry support on every bank; FieldTagDisplay,
+		// FieldCTCSSTone, FieldScanSkip and FieldErase are the zero
+		// FieldSupport and drop out of the derived set. TagDisplay's absence
+		// is the MANUAL-EVIDENCED one (matrix §3.7: P11 is "0: (Fixed)" at
+		// layout 1329, and the 41-position geometry witness leaves nowhere
+		// to put a display flag).
+		//
+		// The matrix's §2 values are identical for D and MP throughout
+		// (§2.5), so one list serves both entries — but each model still
+		// gets its own row here, and the loop below still walks each
+		// model's own registered capability data.
+		"FTdx101D":  ftdx10CoreSix,
+		"FTdx101MP": ftdx10CoreSix,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {
@@ -400,6 +423,151 @@ func TestBankReadOnly_RegisteredFTdx10_RealHardwareProfile(t *testing.T) {
 	wantFields(t, "the discovered 60M bank", bankCoreFields(live, spec.Bank60m), ftdx10CoreSix)
 	if !bankReadOnly(live, spec.Bank60m) {
 		t.Error("bankReadOnly(60M) = false, want true — no profile may claim a discovered 5xx slot writable")
+	}
+}
+
+// TestBankReadOnly_RegisteredFTdx101D_RealHardwareProfile and its MP sibling
+// are the FTdx10 test above's counterparts for the two models M9d-2
+// registered, and they pin the same rule against the same premise: both
+// radios' RealHardware profile is the all-Unverified one
+// (writeTrialsCompleteD and writeTrialsCompleteMP are both false — no
+// FTDX101 of either model has ever been written to by this project), so
+// their derived fields are Write spec.Unverified on MEM and PMS, which is
+// NOT spec.Unsupported and therefore NOT read-only under bankReadOnly's
+// standing rule. Those two banks stay EDITABLE and every write is refused
+// later, at the capability gate.
+//
+// See TestBankReadOnly_RegisteredFTdx10_RealHardwareProfile's doc comment
+// for why that is the right verdict and for the milestone-spec sentence it
+// declines to implement; the reasoning is the rule's, not the FTdx10's, and
+// applies here unchanged.
+//
+// EACH MODEL INDEPENDENTLY, static AND discovered, is what spec A6 asks
+// for, and the independence is the point: these two radios share a dialect
+// config, so a single test parameterised over "the FTdx101" would pass
+// against a registration that had wired both keys to the same driver. Each
+// test opens its OWN model's registered fake through its OWN option var.
+// The D-vs-MP equality check lives separately, below, as a SUPPLEMENTAL
+// assertion — never as the primary one, since two models sharing one wrong
+// answer would satisfy an equality proof perfectly.
+func TestBankReadOnly_RegisteredFTdx101D_RealHardwareProfile(t *testing.T) {
+	assertFTdx101BankReadOnly(t, "FTdx101D")
+}
+
+// TestBankReadOnly_RegisteredFTdx101MP_RealHardwareProfile: see the D's doc
+// comment.
+func TestBankReadOnly_RegisteredFTdx101MP_RealHardwareProfile(t *testing.T) {
+	assertFTdx101BankReadOnly(t, "FTdx101MP")
+}
+
+// assertFTdx101BankReadOnly runs both halves of the bankReadOnly class for
+// one FTdx101 model and returns the verdicts it observed, keyed by bank, so
+// the supplemental D-vs-MP comparison below can be built from the very
+// values these tests asserted rather than from a second derivation.
+//
+// Half one, the STATIC baseline: every core field of every bank must be
+// Write Unverified (the premise), and no bank may be read-only.
+//
+// Half two, a DISCOVERED 5 MHz bank, whose Writes ARE forced Unsupported
+// (no profile may claim a 5xx slot writable): the same six fields derived,
+// and read-only TRUE. One capability set, two different verdicts, from one
+// rule — and the contrast is what keeps half one from passing because
+// bankReadOnly always answers false.
+func assertFTdx101BankReadOnly(t *testing.T, model string) map[spec.BankID]bool {
+	t.Helper()
+	verdicts := map[spec.BankID]bool{}
+
+	caps, err := wiring.StaticCapabilities(model)
+	if err != nil {
+		t.Fatalf("wiring.StaticCapabilities(%q): unexpected error: %v", model, err)
+	}
+	if len(caps.Banks) == 0 {
+		t.Fatalf("the registered %s's static baseline has no banks — nothing asserted", model)
+	}
+	for _, b := range caps.Banks {
+		fields := bankCoreFields(caps, b.ID)
+		if len(fields) == 0 {
+			t.Fatalf("%s bank %s derives no core fields — the Write check below would be vacuous", model, b.ID)
+		}
+		for _, f := range fields {
+			if got := caps.FieldSupport(b.ID, f).Write; got != spec.Unverified {
+				t.Errorf("%s bank %s field %s Write = %v, want Unverified (the premise: nothing on a real %s is proven writable)", model, b.ID, f, got, model)
+			}
+		}
+		verdicts[b.ID] = bankReadOnly(caps, b.ID)
+		if verdicts[b.ID] {
+			t.Errorf("%s bankReadOnly(%s) = true, want false — Unverified is not Unsupported, and locking it would break the offline clone workflow", model, b.ID)
+		}
+	}
+
+	// A discovered 5 MHz bank, whose Writes ARE Unsupported: read-only.
+	// Each model is steered through ITS OWN option variable — the pair that
+	// internal/wiring keeps separate by which closure reads which, since
+	// both are []fakedx101.Option and the compiler cannot tell them apart.
+	restore := setFTdx101FakeOpts(t, model, []fakedx101.Option{fakedx101.With5xx()})
+	defer restore()
+
+	sess, closeAll, err := wiring.OpenFakeSessionFor(testAppCtx(t), model)
+	if err != nil {
+		t.Fatalf("wiring.OpenFakeSessionFor(%q): unexpected error: %v", model, err)
+	}
+	t.Cleanup(func() { _ = closeAll() })
+	live := sess.Capabilities()
+	if _, ok := live.Bank(spec.Bank60m); !ok {
+		t.Fatalf("the 5xx-populated %s fake produced no 60M bank — the contrast half of this test would be vacuous (and its option var did not reach its rig)", model)
+	}
+	wantFields(t, model+"'s discovered 60M bank", bankCoreFields(live, spec.Bank60m), ftdx10CoreSix)
+	verdicts[spec.Bank60m] = bankReadOnly(live, spec.Bank60m)
+	if !verdicts[spec.Bank60m] {
+		t.Errorf("%s bankReadOnly(60M) = false, want true — no profile may claim a discovered 5xx slot writable", model)
+	}
+	return verdicts
+}
+
+// setFTdx101FakeOpts points the given model's OWN option variable at opts
+// and returns a function restoring the previous value. It exists so the
+// tests in this file cannot accidentally set the sibling's variable — the
+// one mistake the type system cannot catch here, since both variables are
+// []fakedx101.Option.
+func setFTdx101FakeOpts(t *testing.T, model string, opts []fakedx101.Option) func() {
+	t.Helper()
+	switch model {
+	case "FTdx101D":
+		prev := wiring.FTdx101DFakeSessionOpts
+		wiring.FTdx101DFakeSessionOpts = opts
+		return func() { wiring.FTdx101DFakeSessionOpts = prev }
+	case "FTdx101MP":
+		prev := wiring.FTdx101MPFakeSessionOpts
+		wiring.FTdx101MPFakeSessionOpts = opts
+		return func() { wiring.FTdx101MPFakeSessionOpts = prev }
+	default:
+		t.Fatalf("setFTdx101FakeOpts: %q is not an FTdx101 model", model)
+		return func() {}
+	}
+}
+
+// TestBankReadOnly_FTdx101DAndMPAgree is a SUPPLEMENTAL assertion and is
+// explicitly not the proof of anything on its own (spec A6): the two models
+// must each be checked against the RULE, which the two tests above do, and
+// this only adds that they reached the same verdicts.
+//
+// It is worth having because a divergence would be genuinely surprising —
+// the matrix says the two radios' §2 values are identical throughout (§2.5),
+// and they share a dialect config — so a difference here means either a
+// registration wired one model to something else's driver, or a capability
+// set acquired a model dimension that nothing in the evidence supports.
+//
+// It is worth NOT trusting alone because a shared wrong answer satisfies it
+// perfectly: two models both reporting every bank read-only, or neither,
+// would compare equal and be equally wrong.
+func TestBankReadOnly_FTdx101DAndMPAgree(t *testing.T) {
+	d := assertFTdx101BankReadOnly(t, "FTdx101D")
+	mp := assertFTdx101BankReadOnly(t, "FTdx101MP")
+	if len(d) == 0 {
+		t.Fatal("no bank verdicts collected — this comparison would hold vacuously")
+	}
+	if !reflect.DeepEqual(d, mp) {
+		t.Errorf("bankReadOnly verdicts differ between the siblings:\n  FTdx101D  = %v\n  FTdx101MP = %v\nthe two radios share one dialect config and one capability shape (matrix §2.5), so a difference means a registration or a capability set has acquired a model dimension nothing supports", d, mp)
 	}
 }
 
@@ -594,6 +762,124 @@ func TestGetUISpec_RegisteredFTdx10_EveryBankUnavailable(t *testing.T) {
 
 	// The contrast: the FT-710, through the same offline path, still
 	// answers Known-false on every bank.
+	a.mu.Lock()
+	a.working = &codeplug.Codeplug{
+		Schema:   codeplug.CurrentSchema,
+		Radio:    codeplug.RadioInfo{Model: wiring.DefaultModel},
+		Channels: []codeplug.Channel{{Slot: "001"}},
+	}
+	a.mu.Unlock()
+	ft710, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (offline, FT-710 working copy): unexpected error: %v", err)
+	}
+	if len(ft710.Banks) == 0 {
+		t.Fatal("offline FT-710 UISpec has no banks — the contrast would be vacuous")
+	}
+	knownOff := codeplug.BoolField{State: codeplug.Known, Value: false}
+	for _, b := range ft710.Banks {
+		if b.TagDisplayDefault != knownOff {
+			t.Errorf("offline FT-710 bank %s TagDisplayDefault = %+v, want %+v", b.ID, b.TagDisplayDefault, knownOff)
+		}
+	}
+}
+
+// TestGetUISpec_RegisteredFTdx101D_EveryBankUnavailable and its MP sibling
+// are the FTdx10 D5c test's counterparts for the two models M9d-2
+// registered: GetUISpec driven for each model through REAL registration,
+// twice, because the two paths reach bankTagDisplayDefault with different
+// capability values and the grid must get the same answer from both.
+//
+//   - CONNECTED to that model's registered fake (Live true, the Simulated
+//     profile plus discovery's own inventory — a populated 5 MHz bank here,
+//     so "every bank" spans a discovered one too). This is the
+//     `--fake --model FTdx101D` path a user actually walks.
+//   - DISCONNECTED with that model's working copy loaded (Live false, the
+//     static RealHardware baseline, resolved by currentModel from the file's
+//     own Radio.Model). This is the offline clone workflow's path.
+//
+// Every bank of both must serve {state: "unavailable"} (matrix §3.7): the
+// FTDX101's combined MT record has NO display flag — its P11 is "0: (Fixed)"
+// at layout 1329, and the independent 41-position geometry witness leaves
+// nowhere to put one — so a blank row added anywhere in that grid must not
+// carry a Known one. That is a MANUAL-EVIDENCED absence, not an assumption,
+// which is why it is safe to assert as a hard verdict rather than a hedge.
+//
+// The FT-710 contrast at the end of each is what stops the whole thing
+// passing because something returned a zero value: two registered radios,
+// two different answers, no seam and no fixture in either.
+func TestGetUISpec_RegisteredFTdx101D_EveryBankUnavailable(t *testing.T) {
+	assertFTdx101EveryBankUnavailable(t, "FTdx101D")
+}
+
+// TestGetUISpec_RegisteredFTdx101MP_EveryBankUnavailable: see the D's doc
+// comment. A separate test over a separate session, because the MP's
+// registration is a separate fact and a shared session would let a
+// half-crossed fakeDrivers pair pass.
+func TestGetUISpec_RegisteredFTdx101MP_EveryBankUnavailable(t *testing.T) {
+	assertFTdx101EveryBankUnavailable(t, "FTdx101MP")
+}
+
+// assertFTdx101EveryBankUnavailable is the shared body of the two tests
+// above, run wholly within one model's own registration.
+func assertFTdx101EveryBankUnavailable(t *testing.T, model string) {
+	t.Helper()
+	unavailable := codeplug.BoolField{State: codeplug.Unavailable}
+
+	restore := setFTdx101FakeOpts(t, model, []fakedx101.Option{fakedx101.With5xx()})
+	defer restore()
+	sess, closeAll, err := wiring.OpenFakeSessionFor(testAppCtx(t), model)
+	if err != nil {
+		t.Fatalf("wiring.OpenFakeSessionFor(%q): unexpected error: %v", model, err)
+	}
+	t.Cleanup(func() { _ = closeAll() })
+
+	a, _ := newTestApp(t)
+	connectDirect(t, a, sess, nil)
+	got, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (connected to the %s fake): unexpected error: %v", model, err)
+	}
+	if !got.Live {
+		t.Error("Live = false, want true (connected to the registered fake)")
+	}
+	if len(got.Banks) < 3 {
+		t.Fatalf("banks = %v, want MEM, PMS and the discovered 60M — 'every bank' must span a discovered one", bankIDs(got.Banks))
+	}
+	for _, b := range got.Banks {
+		if b.TagDisplayDefault != unavailable {
+			t.Errorf("connected %s bank %s TagDisplayDefault = %+v, want %+v — this radio's memory frame has no display flag (matrix §3.7)", model, b.ID, b.TagDisplayDefault, unavailable)
+		}
+	}
+
+	// Offline, from a working copy naming this model: the same answer, from
+	// the static RealHardware baseline this time.
+	a.mu.Lock()
+	a.conn = nil
+	a.working = &codeplug.Codeplug{
+		Schema:   codeplug.CurrentSchema,
+		Radio:    codeplug.RadioInfo{Model: model},
+		Channels: []codeplug.Channel{{Slot: "001"}},
+	}
+	a.mu.Unlock()
+	offline, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (offline, %s working copy): unexpected error: %v", model, err)
+	}
+	if offline.Live {
+		t.Error("Live = true, want false (disconnected)")
+	}
+	if len(offline.Banks) == 0 {
+		t.Fatalf("offline %s UISpec has no banks — nothing asserted", model)
+	}
+	for _, b := range offline.Banks {
+		if b.TagDisplayDefault != unavailable {
+			t.Errorf("offline %s bank %s TagDisplayDefault = %+v, want %+v", model, b.ID, b.TagDisplayDefault, unavailable)
+		}
+	}
+
+	// The contrast: the FT-710, through the same offline path, still answers
+	// Known-false on every bank.
 	a.mu.Lock()
 	a.working = &codeplug.Codeplug{
 		Schema:   codeplug.CurrentSchema,

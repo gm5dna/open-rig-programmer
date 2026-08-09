@@ -188,8 +188,11 @@ func TestCurrentCaps_DisconnectedEmptyModelFallsBack(t *testing.T) {
 // The fixture name is deliberately not any real radio's. It used to be
 // possible to describe this case as "the FTdx10, whose driver has not
 // landed yet"; since M9c-6 that model is REGISTERED and resolves happily,
-// so only a name no driver will ever answer to keeps this test about the
-// fallback rather than about a scheduling accident.
+// and since M9d-2 so do the FTdx101D and FTdx101MP — so only a name no
+// driver will ever answer to keeps this test about the fallback rather
+// than about a scheduling accident. That the description has now been
+// falsified by two successive milestones is the argument for the
+// unreal name, not an argument for picking a third real one.
 func TestCurrentCaps_DisconnectedUnregisteredModelFallsBack(t *testing.T) {
 	working := &codeplug.Codeplug{Radio: codeplug.RadioInfo{Model: "NoSuchRadioModel"}}
 	got, advisory := currentCaps(nil, working)
@@ -260,8 +263,8 @@ const testModel = "TESTMODEL"
 
 // recogniseTestModel makes capsForModel (app.go's seam) recognise
 // testModel, returning caps of the test's own, and restores the real
-// function afterwards. internal/wiring registers two models since M9c-6,
-// but neither can serve here (see capsForModel's doc comment): these tests
+// function afterwards. internal/wiring registers four models since M9d-2,
+// but none can serve here (see capsForModel's doc comment): these tests
 // need a model wiring itself REFUSES, so that "the resolved model reached
 // this call site" shows up as an outcome no default-model path could
 // produce.

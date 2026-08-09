@@ -18,6 +18,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx10"
+	"github.com/gm5dna/open-rig-programmer/internal/fakedx101"
 	"github.com/gm5dna/open-rig-programmer/internal/radiotext"
 )
 
@@ -103,13 +104,29 @@ func TestNewRealDriver_HWVerifiedWriteSet(t *testing.T) {
 // be well-formed — it must be THIS model's.
 //
 // Structure over content, deliberately — and M9c-6 task 6 cashed that
-// promise: SupportedModels() now returns TWO rows, and the FTdx10 got this
+// promise: SupportedModels() returned TWO rows, and the FTdx10 got this
 // whole check (its own subtest, its own crossed-pairing proof) by being
-// registered, with no new test written. The FTdx10 subtest is also the
-// slowest thing in this package by design: core/driver/ftdx10's Open probes
-// its entire declared 5xx range plus EMG (~100 exchanges) because that
-// radio has no verified discovery termination rule. Seconds per open are
-// budgeted (M9c-6 plan); nobody trims that walk to speed this up.
+// registered, with no new test written. M9d-2 task 7 cashed it twice more:
+// FOUR rows now, and the FTDX101D and FTDX101MP inherited the same subtest
+// the same way.
+//
+// THE CROSSED-PAIRING LEG NOW GUARDS THE SIBLING PAIRING TOO, and that is
+// the strongest thing this test does for M9d-2. The FTDX101D and FTDX101MP
+// differ on the wire in the ID answer ALONE — same dialect config, same
+// simulator type, same driver implementation — so a fakeDrivers row that
+// paired the D's driver with fakedx101.NewMP's rig would produce a session
+// that read, wrote and discovered flawlessly and was simply the wrong
+// radio. Every other test in this file would pass. The identity leg catches
+// it because caps.CATID comes from the DRIVER (0681 for the D) and
+// Identity().CATID comes from what the RIG answered (0682 from an MP rig),
+// and a swapped row makes those two disagree.
+//
+// The FTdx10 and FTdx101 subtests are the slowest things in this package by
+// design: those drivers' Open probes the entire declared 5xx range plus EMG
+// (~100 exchanges each) because neither radio has a verified discovery
+// termination rule. Seconds per open are budgeted (M9c-6 and M9d-2 plans),
+// and M9d-2 tripled the number of such opens here; nobody trims those walks
+// to speed this up.
 func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
 	models := SupportedModels()
 	if len(models) == 0 {
@@ -423,6 +440,317 @@ func TestOpenFakeSessionFor_FTdx10OptionSourceIsItsOwn(t *testing.T) {
 	}
 }
 
+// ftdx101WritableChannel is the channel the FTdx101 round-trip tests below
+// send. It is the FTdx10 fixture's shape for the same reason that radio's
+// is: the FTdx101's combined MT record carries no display flag either, so
+// TagDisplay must be Unavailable — a Known value would be REFUSED by the
+// driver's capability gate (FieldTagDisplay's Write is Unsupported on every
+// bank of every FTdx101 profile), and the test would exercise only the
+// refusal path.
+//
+// The three FieldState fields are what this radio's read path always
+// reports, whatever is sent: TagDisplay Unavailable (the frame has no such
+// field), tone and scan skip Unknown (the frame carries a CTCSS STATE byte
+// but no tone NUMBER and no skip flag).
+//
+// ONE FIXTURE FOR BOTH SIBLINGS, deliberately: the two radios share a
+// dialect config and differ on the wire in the ID answer alone, so a
+// per-model fixture would differ in nothing and imply a distinction that
+// does not exist. What is NOT shared is the assertion — each model gets its
+// own round trip, through its own registered pairing.
+func ftdx101WritableChannel(slot string) codeplug.Channel {
+	return codeplug.Channel{
+		Slot: slot,
+		Data: &codeplug.ChannelData{
+			FreqHz: 14_250_000,
+			Mode:   "USB",
+			// A non-zero clarifier with ASYMMETRIC Rx/Tx flags: the
+			// interesting case, and the one that catches a read path
+			// collapsing the two independent flags into one.
+			ClarHz:     -150,
+			RxClar:     true,
+			TxClar:     false,
+			CTCSS:      "ENC-DEC",
+			CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+			Shift:      "PLUS",
+			Tag:        "CALLING",
+			TagDisplay: codeplug.BoolField{State: codeplug.Unavailable},
+			ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
+		},
+	}
+}
+
+// TestOpenFakeSessionFor_FTdx101DSimulatedWriteRoundTrip is the end-to-end
+// write test M9d-2 task 3 DEFERRED to this task: the FTDX101D's MT-only
+// write choreography, driven through the REGISTERED fake path
+// (OpenFakeSessionFor) rather than a hand-built session, probe to read-back.
+//
+// It can only live here. The choreography needs a Simulated-profile driver
+// paired with internal/fakedx101, and that pairing exists in exactly one
+// place repo-wide — fake.go's fakeDrivers entry, pinned there by
+// internal/guards' TestSimulatedProfileTokensConfinement.
+// core/driver/ftdx101's own write tests drive a scripted responder port,
+// which proves the FRAMES; this proves the WIRING: that a registered model's
+// simulated profile, its fake rig and its write path actually compose.
+//
+// The write is against the FAKE, and nothing here is evidence about any
+// physical FTDX101D: that model's RealHardware profile reports every Write
+// Unverified while writeTrialsCompleteD is false, so the capability gate
+// refuses before a frame is built.
+func TestOpenFakeSessionFor_FTdx101DSimulatedWriteRoundTrip(t *testing.T) {
+	assertFTdx101WriteRoundTrip(t, FTdx101DModel, NewFTdx101DRealDriver())
+}
+
+// TestOpenFakeSessionFor_FTdx101MPSimulatedWriteRoundTrip is the same trip
+// for the MP, and it is a SEPARATE test over a SEPARATE session for the
+// reason the whole sibling pair keeps forcing: the two models are wired by
+// two independent fakeDrivers rows, and a row that paired the MP's driver
+// with the D's rig (or built the wrong constructor entirely) would leave
+// this test green if it shared the D's session. The identity assertion
+// inside is what catches that, and it needs its own open to make it.
+func TestOpenFakeSessionFor_FTdx101MPSimulatedWriteRoundTrip(t *testing.T) {
+	assertFTdx101WriteRoundTrip(t, FTdx101MPModel, NewFTdx101MPRealDriver())
+}
+
+// assertFTdx101WriteRoundTrip is the shared body of the two tests above.
+// Four properties, in order:
+//
+//  1. IDENTITY. The session was probed and the rig answered as THIS model
+//     ("0681" for the D, "0682" for the MP — the driver's own declared CAT
+//     ID, read from realDriver here rather than written as a literal so the
+//     assertion cannot drift from the driver). A crossed table entry answers
+//     the SIBLING's ID, which is the whole of the difference between these
+//     two radios on the wire, and fails here.
+//  2. READ of a POPULATED slot. Slot 001 is populated in fakedx101's default
+//     image, and the read must produce this driver's documented field shape
+//     — TagDisplay Unavailable, tone/skip Unknown — not merely a non-empty
+//     channel.
+//  3. WRITE into a slot the default image leaves EMPTY, so this is a CREATE
+//     and not an overwrite of something already shaped correctly. The result
+//     must be the ONE-step WriteResult this radio's choreography declares: a
+//     single MT frame, Sent AND Confirmed. Two steps would mean somebody
+//     added the MW frame the FT-710 needs and this radio's combined form
+//     makes redundant.
+//  4. READ-BACK, field by field, INCLUDING THE CLARIFIER. The clarifier is
+//     the field whose Simulated behaviour deliberately diverges from the
+//     FT-710's: over there Write is Inert on every profile — a HARDWARE
+//     finding, that radio ACCEPTS clarifier bytes and reads back zeros — and
+//     it is NOT borrowed here, because no FTDX101 has ever been asked. This
+//     profile's claim is about the FAKE, which stores the value and returns
+//     it byte-faithfully, and this assertion makes that claim checkable
+//     rather than merely written down.
+func assertFTdx101WriteRoundTrip(t *testing.T, model string, realDriver driver.Driver) {
+	t.Helper()
+	ctx := testCtx(t)
+
+	sess, closeAll, err := OpenFakeSessionFor(ctx, model)
+	if err != nil {
+		t.Fatalf("OpenFakeSessionFor(%q): unexpected error: %v", model, err)
+	}
+	t.Cleanup(func() {
+		if err := closeAll(); err != nil {
+			t.Errorf("closeAll: unexpected error: %v", err)
+		}
+	})
+
+	// 1. Identity: the rig answered as this model's own radio, not its
+	// sibling's.
+	wantCATID := realDriver.Capabilities().CATID
+	if wantCATID == "" {
+		t.Fatalf("the %s driver declares an empty CATID — the identity check below would pass vacuously", model)
+	}
+	if got := sess.Identity().CATID; got != wantCATID {
+		t.Errorf("Identity().CATID = %q, want %q — the fake rig answering this session is not %s's own", got, wantCATID, model)
+	}
+	if got := sess.Capabilities().Model; got != model {
+		t.Errorf("session Capabilities().Model = %q, want %q", got, model)
+	}
+
+	// 2. Read a slot the default image populates.
+	const populated = "001"
+	before, err := sess.ReadChannel(ctx, populated)
+	if err != nil {
+		t.Fatalf("ReadChannel(%q): unexpected error: %v", populated, err)
+	}
+	if before.Data == nil {
+		t.Fatalf("ReadChannel(%q): Data is nil, want a populated channel (fakedx101's default image populates M-01)", populated)
+	}
+	if got := before.Data.TagDisplay.State; got != codeplug.Unavailable {
+		t.Errorf("ReadChannel(%q): TagDisplay.State = %v, want Unavailable — this radio's combined memory record has no display flag", populated, got)
+	}
+	if got := before.Data.CTCSSTone.State; got != codeplug.Unknown {
+		t.Errorf("ReadChannel(%q): CTCSSTone.State = %v, want Unknown", populated, got)
+	}
+	if got := before.Data.ScanSkip.State; got != codeplug.Unknown {
+		t.Errorf("ReadChannel(%q): ScanSkip.State = %v, want Unknown", populated, got)
+	}
+
+	// 3. Write into a slot the default image leaves empty — a create.
+	const target = "002"
+	empty, err := sess.ReadChannel(ctx, target)
+	if err != nil {
+		t.Fatalf("ReadChannel(%q): unexpected error: %v", target, err)
+	}
+	if empty.Data != nil {
+		t.Fatalf("ReadChannel(%q): Data = %+v, want nil — this test needs an EMPTY target slot, so the write below is a create", target, empty.Data)
+	}
+
+	ch := ftdx101WritableChannel(target)
+	res, err := sess.WriteChannel(ctx, ch)
+	if err != nil {
+		t.Fatalf("WriteChannel(%q): unexpected error: %v (the Simulated profile must be write-capable against the fake)", target, err)
+	}
+	wantSteps := []driver.WriteStep{{Command: "MT", Sent: true, Confirmed: true}}
+	if !reflect.DeepEqual(res.Steps, wantSteps) {
+		t.Errorf("WriteResult.Steps = %+v, want %+v — this radio's whole write choreography is ONE combined MT frame", res.Steps, wantSteps)
+	}
+
+	// 4. Read it back, field by field, including the clarifier.
+	after, err := sess.ReadChannel(ctx, target)
+	if err != nil {
+		t.Fatalf("ReadChannel(%q) after write: unexpected error: %v", target, err)
+	}
+	if after.Data == nil {
+		t.Fatalf("ReadChannel(%q) after write: Data is nil, want the channel just written", target)
+	}
+	if after.Slot != target {
+		t.Errorf("read-back Slot = %q, want %q", after.Slot, target)
+	}
+	sent := ch.Data
+	got := after.Data
+	if got.FreqHz != sent.FreqHz {
+		t.Errorf("read-back FreqHz = %d, want %d", got.FreqHz, sent.FreqHz)
+	}
+	if got.Mode != sent.Mode {
+		t.Errorf("read-back Mode = %q, want %q", got.Mode, sent.Mode)
+	}
+	if got.ClarHz != sent.ClarHz {
+		t.Errorf("read-back ClarHz = %d, want %d — the FTdx101's Simulated clarifier is Supported, NOT the FT-710's Inert (that is an FT-710 hardware finding, deliberately not borrowed)", got.ClarHz, sent.ClarHz)
+	}
+	if got.RxClar != sent.RxClar || got.TxClar != sent.TxClar {
+		t.Errorf("read-back RxClar/TxClar = %v/%v, want %v/%v — the two flags are independent and must not be collapsed", got.RxClar, got.TxClar, sent.RxClar, sent.TxClar)
+	}
+	if got.CTCSS != sent.CTCSS {
+		t.Errorf("read-back CTCSS = %q, want %q", got.CTCSS, sent.CTCSS)
+	}
+	if got.Shift != sent.Shift {
+		t.Errorf("read-back Shift = %q, want %q", got.Shift, sent.Shift)
+	}
+	if got.Tag != sent.Tag {
+		t.Errorf("read-back Tag = %q, want %q (the combined form carries the tag in the SAME frame as the fields)", got.Tag, sent.Tag)
+	}
+	if got.TagDisplay.State != codeplug.Unavailable {
+		t.Errorf("read-back TagDisplay.State = %v, want Unavailable", got.TagDisplay.State)
+	}
+	if got.CTCSSTone.State != codeplug.Unknown {
+		t.Errorf("read-back CTCSSTone.State = %v, want Unknown", got.CTCSSTone.State)
+	}
+	if got.ScanSkip.State != codeplug.Unknown {
+		t.Errorf("read-back ScanSkip.State = %v, want Unknown", got.ScanSkip.State)
+	}
+}
+
+// TestOpenFakeSessionFor_FTdx101DOptionSourceIsItsOwn and its MP sibling pin
+// M9c-5 E5's design for the ONE registered pairing where the compiler cannot
+// pin it.
+//
+// For every other pair of models in this package the crossing is a BUILD
+// error: FakeSessionOpts is []fakeradio.Option and FTdx10FakeSessionOpts is
+// []fakedx10.Option, so neither can be applied to the other's rig even by
+// mistake, and the FTdx10 test above says so explicitly. The FTdx101 pair
+// breaks that: BOTH vars are []fakedx101.Option, because one simulator
+// serves both radios. A fake.go closure reading the wrong variable would
+// COMPILE and would silently steer the wrong model's session.
+//
+// So these two tests are the substitute for the type system, and they are
+// stated as NON-INTERFERENCE rather than as reachability: set an option in
+// ONE sibling's var, open the OTHER sibling, and assert the option did NOT
+// arrive. Reachability is asserted alongside it — the option must reach the
+// model whose var was set — because a "did not arrive" assertion alone would
+// pass just as well against a seam that reached nothing at all.
+//
+// The fixture is With5xx() plus WithEMG(), for the same reason the FTdx10's
+// is: fakedx101's default image has neither bank, so their PRESENCE is
+// unambiguous evidence that the option reached that rig and this driver's
+// discovery walk found what it added.
+func TestOpenFakeSessionFor_FTdx101DOptionSourceIsItsOwn(t *testing.T) {
+	prev := FTdx101DFakeSessionOpts
+	FTdx101DFakeSessionOpts = []fakedx101.Option{fakedx101.With5xx(), fakedx101.WithEMG()}
+	t.Cleanup(func() { FTdx101DFakeSessionOpts = prev })
+
+	// Reached the D, which is the var that was set.
+	assertFTdx101DiscoveredBanks(t, FTdx101DModel, true)
+	// Did NOT reach the MP, whose own var is untouched.
+	assertFTdx101DiscoveredBanks(t, FTdx101MPModel, false)
+}
+
+// TestOpenFakeSessionFor_FTdx101MPOptionSourceIsItsOwn is the mirror image,
+// and both directions are tested because a closure that read
+// FTdx101DFakeSessionOpts in BOTH rows would pass the D's test outright.
+func TestOpenFakeSessionFor_FTdx101MPOptionSourceIsItsOwn(t *testing.T) {
+	prev := FTdx101MPFakeSessionOpts
+	FTdx101MPFakeSessionOpts = []fakedx101.Option{fakedx101.With5xx(), fakedx101.WithEMG()}
+	t.Cleanup(func() { FTdx101MPFakeSessionOpts = prev })
+
+	assertFTdx101DiscoveredBanks(t, FTdx101MPModel, true)
+	assertFTdx101DiscoveredBanks(t, FTdx101DModel, false)
+}
+
+// assertFTdx101DiscoveredBanks opens model's registered fake session and
+// asserts whether discovery found the 60m and EMG banks the With5xx/WithEMG
+// options add.
+//
+// The static MEM bank is asserted present in BOTH directions: a discovered
+// bank ADDS, never replaces, and a session that had lost its static banks
+// would otherwise satisfy the want==false case for entirely the wrong
+// reason.
+//
+// When want is true the 60m slot LIST is checked exactly, not merely its
+// presence: fakedx101's With5xx populates a deliberately sparse,
+// non-contiguous set (501, 503, 599), which is the fixture that catches a
+// discovery walk that stopped at the first rejection or capped itself short
+// of the declared ceiling.
+func assertFTdx101DiscoveredBanks(t *testing.T, model string, want bool) {
+	t.Helper()
+
+	sess, closeAll, err := OpenFakeSessionFor(testCtx(t), model)
+	if err != nil {
+		t.Fatalf("OpenFakeSessionFor(%q): unexpected error: %v", model, err)
+	}
+	t.Cleanup(func() {
+		if err := closeAll(); err != nil {
+			t.Errorf("closeAll(%q): unexpected error: %v", model, err)
+		}
+	})
+
+	banks := map[spec.BankID][]string{}
+	for _, b := range sess.Capabilities().Banks {
+		banks[b.ID] = b.Slots
+	}
+	if _, ok := banks[spec.BankMemory]; !ok {
+		t.Errorf("%s: session banks = %v, want the static MEM bank present whatever discovery found", model, banks)
+	}
+
+	got60m, has60m := banks[spec.Bank60m]
+	_, hasEMG := banks[spec.BankEMG]
+	if !want {
+		if has60m || hasEMG {
+			t.Errorf("%s: session banks = %v, want NO discovered 60m or EMG bank — another model's option source reached this model's fake rig, which is exactly the leakage the two typed vars exist to prevent (spec A6)", model, banks)
+		}
+		return
+	}
+
+	if !has60m {
+		t.Fatalf("%s: session banks = %v, want a discovered 60m bank — this model's own option source did not reach its fake rig", model, banks)
+	}
+	if !slices.Equal(got60m, []string{"501", "503", "599"}) {
+		t.Errorf("%s: discovered 60m slots = %v, want [501 503 599] — fakedx101's sparse fixture, in probe order (a truncated list means discovery terminated early)", model, got60m)
+	}
+	if !hasEMG {
+		t.Errorf("%s: session banks = %v, want a discovered EMG bank — WithEMG did not reach this model's own fake rig", model, banks)
+	}
+}
+
 // TestOpenRealSessionFor_BadPort confirms the real wiring path surfaces a
 // port-open failure as a plain error (not a panic), for a path that
 // cannot possibly exist.
@@ -477,11 +805,12 @@ func (d baudFixtureDriver) Open(context.Context, transport.Port, driver.Identity
 // Capabilities().DefaultBaud, which for the FT-710 is 38400 — the same
 // value transport.DefaultBaud carries, so this is a no-change pin for that
 // model and the baseline the disagreeing-driver test below is measured
-// against. The FTdx10, registered at M9c-6, does not change that: its
-// DefaultBaud is 38400 too (an ASSUMED entry in its own register, not a
-// coincidence to rely on), so every registered model still agrees with
-// transport's default and only the fixture below can tell the two sources
-// apart. Stop bits are asserted too, because they are the
+// against. The FTdx10 (M9c-6) and the FTDX101D and FTDX101MP (M9d-2) do not
+// change that: every one of their DefaultBauds is 38400 too — an ASSUMED
+// entry in each driver's own register, with its own named per-model lift,
+// and NOT a coincidence to rely on — so all four registered models still
+// agree with transport's default and only the fixture below can tell the
+// two sources apart. Stop bits are asserted too, because they are the
 // half that deliberately did NOT become model-derived (see the call
 // site's recorded decision).
 func TestOpenRealSessionFor_BaudIsTheDriversDefault(t *testing.T) {
@@ -585,11 +914,12 @@ func TestSupportedModels_SortedNonEmpty(t *testing.T) {
 }
 
 // TestSupportedModels_ContainsEveryRegisteredModel is the PRESENCE PIN
-// (M9c-6 task 6): SupportedModels() must name BOTH registered models, by
-// literal string.
+// (M9c-6 task 6): SupportedModels() must name EVERY registered model, by
+// literal string. FOUR since M9d-2 task 7, which registered the FTdx101D
+// and the FTdx101MP.
 //
 // It exists because every other registration test in this file is
-// TWO-SIDED and therefore blind to symmetric deletion.
+// N-SIDED and therefore blind to symmetric deletion.
 // TestRealAndFakeDriverTablesAgree compares the two tables to each other;
 // TestDriverTableKeysMatchDriverModel checks each key against its own
 // driver; TestOpenFakeSessionFor_EveryRegisteredModel and
@@ -603,16 +933,25 @@ func TestSupportedModels_SortedNonEmpty(t *testing.T) {
 //
 // So the assertion is deliberately UNGENERALISED and by literal name: the
 // list of models this build supports is a promise to users, and losing an
-// entry must be a test failure, not a quiet reduction in scope. A third
-// model adds a line here (and inherits every structural test above for
-// free).
+// entry must be a test failure, not a quiet reduction in scope. Each
+// further model adds a line here (and inherits every structural test above
+// for free) — the FTdx101D and the FTdx101MP added theirs at M9d-2 task 7.
 //
-// FTdx10Model is spelt out as a literal rather than used as the constant it
-// is, precisely so that renaming or deleting the constant cannot make this
-// test agree with the change.
+// The SIBLING PAIR sharpens the point rather than merely lengthening the
+// list. core/driver/ftdx101 drives both radios from one type, differing in
+// a name and a CAT ID, so a registration that dropped ONE of the two — a
+// copy-paste that left both fakeDrivers rows building NewD, say — would
+// leave the surviving model working perfectly and every structural test
+// green. Both names are here for that reason, and the crossed-pairing leg
+// of TestOpenFakeSessionFor_EveryRegisteredModel is what catches the
+// half-crossed case this pin cannot see.
+//
+// FTdx10Model, FTdx101DModel and FTdx101MPModel are spelt out as literals
+// rather than used as the constants they are, precisely so that renaming or
+// deleting a constant cannot make this test agree with the change.
 func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	got := SupportedModels()
-	for _, want := range []string{"FT-710", "FTdx10"} {
+	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP"} {
 		found := false
 		for _, m := range got {
 			if m == want {
@@ -632,6 +971,12 @@ func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	}
 	if FTdx10Model != "FTdx10" {
 		t.Errorf("FTdx10Model = %q, want \"FTdx10\"", FTdx10Model)
+	}
+	if FTdx101DModel != "FTdx101D" {
+		t.Errorf("FTdx101DModel = %q, want \"FTdx101D\"", FTdx101DModel)
+	}
+	if FTdx101MPModel != "FTdx101MP" {
+		t.Errorf("FTdx101MPModel = %q, want \"FTdx101MP\"", FTdx101MPModel)
 	}
 }
 
@@ -662,6 +1007,16 @@ func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 // emptiness, so the two tests agree rather than contradict). The three
 // fields this test DOES require are populated for it, and none of them
 // borrows a word of the FT-710's wording.
+//
+// THREE OF THE FOUR REGISTERED MODELS ARE NOW IN THAT POSITION. M9d-2
+// registered the FTDX101D and FTDX101MP with writeTrialsCompleteD and
+// writeTrialsCompleteMP both false, and both entries leave
+// ToneScanSkipVerification empty on the same grounds
+// (TestRadiotext_FTdx101DVerbatim and its MP sibling assert it). The
+// exclusion is therefore the ordinary case for a newly registered radio and
+// the FT-710's populated field is the exception — which is the right way
+// round: a radio earns that sentence with write trials, it does not start
+// with it.
 func TestEverySupportedModelHasRadiotext(t *testing.T) {
 	for _, model := range SupportedModels() {
 		text, ok := radiotext.For(model)
@@ -855,6 +1210,58 @@ func TestSynthesiseDiscoveredBanks_FTdx10MatchesDriver(t *testing.T) {
 	}
 }
 
+// TestSynthesiseDiscoveredBanks_FTdx101DMatchesDriver and its MP sibling are
+// the FTdx10 test above's counterparts for the two models M9d-2 registered,
+// and they carry the same load-bearing assertion for the same reason: the
+// driver.DiscoveredBankSynthesizer capability is OPTIONAL, so a driver that
+// does not implement it fails SILENTLY here — ok=false, and app/ then
+// renders no discovered banks at all for an offline FTdx101 codeplug (data
+// loaded, rows invisible, no error anywhere).
+//
+// TWO TESTS, NOT ONE PARAMETERISED OVER BOTH MODELS, and not a D-vs-MP
+// equality proof either. The two radios really do classify identically —
+// they share a dialect config, so they share a slot space — but asserting
+// that they AGREE would be satisfied by both being wrong together, which is
+// precisely the failure a sibling pair invites. Each is compared to ITS OWN
+// driver's classification instead, which is the property that matters and
+// the one that would survive the models diverging.
+func TestSynthesiseDiscoveredBanks_FTdx101DMatchesDriver(t *testing.T) {
+	assertSynthesiseMatchesDriver(t, FTdx101DModel, NewFTdx101DRealDriver())
+}
+
+// TestSynthesiseDiscoveredBanks_FTdx101MPMatchesDriver: see the D's doc
+// comment. Separate because the MP's registration is a separate fact.
+func TestSynthesiseDiscoveredBanks_FTdx101MPMatchesDriver(t *testing.T) {
+	assertSynthesiseMatchesDriver(t, FTdx101MPModel, NewFTdx101MPRealDriver())
+}
+
+// assertSynthesiseMatchesDriver is the shared body of the two FTdx101
+// synthesis tests: SynthesiseDiscoveredBanks(model, ...) must report ok=true
+// and exactly what d's own DiscoveredBankSynthesizer returns for the same
+// slot list. The fixture is the FTdx10 test's shape with this dialect's own
+// slots: a 5xx pair, EMG, and one slot that classifies as neither.
+func assertSynthesiseMatchesDriver(t *testing.T, model string, d driver.Driver) {
+	t.Helper()
+	slots := []string{"501", "599", "EMG", "0X1"}
+
+	got, ok := SynthesiseDiscoveredBanks(model, slots)
+	if !ok {
+		t.Fatalf("SynthesiseDiscoveredBanks(%q, ...): ok = false, want true (the ftdx101 driver implements driver.DiscoveredBankSynthesizer — its absence would drop discovered banks from the GUI silently)", model)
+	}
+
+	synth, synthOK := d.(driver.DiscoveredBankSynthesizer)
+	if !synthOK {
+		t.Fatalf("the %s real driver does not implement driver.DiscoveredBankSynthesizer — sanity check failed", model)
+	}
+	want := synth.SynthesiseDiscoveredBanks(slots)
+	if len(want) == 0 {
+		t.Fatalf("the %s driver classified none of the fixture slots — this comparison would hold vacuously", model)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("SynthesiseDiscoveredBanks(%q, ...) = %#v,\nwant %#v (must equal the driver's own classification)", model, got, want)
+	}
+}
+
 // TestOpenFakeSessionFor_UnknownModel confirms OpenFakeSessionFor fails
 // with a typed *UnknownModelError, naming the supported list, when asked
 // for a model this package does not support — BEFORE any fake rig is
@@ -925,6 +1332,18 @@ func TestModelSlug(t *testing.T) {
 	for _, tc := range []struct{ model, want string }{
 		{"FT-710", "ft-710"},
 		{"FTdx10", "ftdx10"},
+		// The two REGISTERED FTdx101 models. Their slugs must differ from
+		// each other — each radio gets its own snapshot/journal directory,
+		// and two siblings sharing one would be exactly the collision D9's
+		// rule exists to prevent — and neither may collide with "ftdx10",
+		// which is a PREFIX of both.
+		{"FTdx101D", "ftdx101d"},
+		{"FTdx101MP", "ftdx101mp"},
+		// The JOINT inventory form internal/extable uses for the shared EX
+		// profile. It is not a registered model and never reaches
+		// ResolveSnapshotDir; it is here because it is the case that
+		// exercises the "/" collapse, and because keeping it beside the two
+		// real keys shows at a glance that the three are different strings.
 		{"FTDX101D/MP", "ftdx101d-mp"},
 		{"FTX-1", "ftx-1"},
 	} {

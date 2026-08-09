@@ -146,10 +146,221 @@ func TestRadiotext_FTdx10Verbatim(t *testing.T) {
 	}
 }
 
+// ftdx101Fields returns every Text field of t as a named map, so the
+// non-borrowing and cross-model loops below iterate one list rather than
+// four hand-maintained copies. ToneScanSkipVerification is included: it is
+// empty for the FTdx101s today, and a loop that skipped it would stop
+// noticing the day somebody populated it with a borrowed sentence.
+func ftdx101Fields(txt radiotext.Text) map[string]string {
+	return map[string]string{
+		"EraseProcedure":                txt.EraseProcedure,
+		"FirmwareGuidance":              txt.FirmwareGuidance,
+		"ToneScanSkipNote":              txt.ToneScanSkipNote,
+		"ToneScanSkipVerification":      txt.ToneScanSkipVerification,
+		"EraseDialogNote":               txt.EraseDialogNote,
+		"PreservationTooltips.Tone":     txt.PreservationTooltips.Tone,
+		"PreservationTooltips.ScanSkip": txt.PreservationTooltips.ScanSkip,
+		"FirmwarePlaceholder":           txt.FirmwarePlaceholder,
+		"ProbeFirmwareNote":             txt.ProbeFirmwareNote,
+	}
+}
+
+// wantFTdx101D is the FTDX101D's entry, pinned VERBATIM, and it is shared
+// by the verbatim test and by the D-vs-MP substitution test so that neither
+// can pass against a stale copy of the other's expectation.
+var wantFTdx101D = radiotext.Text{
+	EraseProcedure:   "The FTdx101D's CAT command set has no erase command — its CAT manual lists the whole set, and there is none — so a memory channel can only be cleared at the radio itself. This build does not say how: the FTdx101D's operating manual is not held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Use the memory-channel erase procedure in the radio's own operating manual.",
+	FirmwareGuidance: "No minimum firmware version is established for the FTdx101D: nothing this project holds states one, and no FTdx101D has been asked. Its CAT command list carries no firmware-version query either, so read the version off the radio's own display and enter it here — it travels with the send as a record, and is not weighed against a threshold nobody has set.",
+	ToneScanSkipNote: "Tone and Scan Skip are neither read nor written for the FTdx101D by this build: its memory frame has no tone-number byte and no scan-skip flag, only a CTCSS on/off state byte that no FTdx101D has ever been asked to confirm. Set both at the radio.",
+	// Deliberately empty — see TestRadiotext_FTdx101DVerbatim's doc comment.
+	ToneScanSkipVerification: "",
+	EraseDialogNote:          "The FTdx101D's CAT command set has no erase command — its CAT manual lists the whole set, and there is none — so a memory channel can only be cleared at the radio itself. This build does not say how: the FTdx101D's operating manual is not held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Use the memory-channel erase procedure in the radio's own operating manual.",
+	PreservationTooltips: radiotext.PreservationTooltips{
+		Tone:     "outside this build's CAT surface — no trial has established whether a rewrite leaves it alone",
+		ScanSkip: "outside this build's CAT surface — no trial has established whether a rewrite leaves it alone",
+	},
+	FirmwarePlaceholder: "whatever the radio displays",
+	ProbeFirmwareNote:   "Firmware version has no CAT query on the FTdx101D, and no minimum version is established for it — read it off the radio's display. If nothing answered on this port at all, check which port it is: this radio presents two virtual COM ports, and only the Enhanced COM Port carries CAT. The Standard COM Port is for TX control (PTT, CW keying, digital modes) and will answer nothing here, which looks exactly like a wrong baud rate.",
+}
+
+// wantFTdx101MP is the FTDX101MP's entry, pinned VERBATIM. It is written
+// out in full rather than derived from wantFTdx101D by substitution,
+// deliberately: deriving it would make the verbatim pin and the D8
+// substitution pin the SAME assertion, and the substitution test would then
+// prove only that strings.ReplaceAll works.
+var wantFTdx101MP = radiotext.Text{
+	EraseProcedure:           "The FTdx101MP's CAT command set has no erase command — its CAT manual lists the whole set, and there is none — so a memory channel can only be cleared at the radio itself. This build does not say how: the FTdx101MP's operating manual is not held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Use the memory-channel erase procedure in the radio's own operating manual.",
+	FirmwareGuidance:         "No minimum firmware version is established for the FTdx101MP: nothing this project holds states one, and no FTdx101MP has been asked. Its CAT command list carries no firmware-version query either, so read the version off the radio's own display and enter it here — it travels with the send as a record, and is not weighed against a threshold nobody has set.",
+	ToneScanSkipNote:         "Tone and Scan Skip are neither read nor written for the FTdx101MP by this build: its memory frame has no tone-number byte and no scan-skip flag, only a CTCSS on/off state byte that no FTdx101MP has ever been asked to confirm. Set both at the radio.",
+	ToneScanSkipVerification: "",
+	EraseDialogNote:          "The FTdx101MP's CAT command set has no erase command — its CAT manual lists the whole set, and there is none — so a memory channel can only be cleared at the radio itself. This build does not say how: the FTdx101MP's operating manual is not held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Use the memory-channel erase procedure in the radio's own operating manual.",
+	PreservationTooltips: radiotext.PreservationTooltips{
+		Tone:     "outside this build's CAT surface — no trial has established whether a rewrite leaves it alone",
+		ScanSkip: "outside this build's CAT surface — no trial has established whether a rewrite leaves it alone",
+	},
+	FirmwarePlaceholder: "whatever the radio displays",
+	ProbeFirmwareNote:   "Firmware version has no CAT query on the FTdx101MP, and no minimum version is established for it — read it off the radio's display. If nothing answered on this port at all, check which port it is: this radio presents two virtual COM ports, and only the Enhanced COM Port carries CAT. The Standard COM Port is for TX control (PTT, CW keying, digital modes) and will answer nothing here, which looks exactly like a wrong baud rate.",
+}
+
+// TestRadiotext_FTdx101DVerbatim is TestRadiotext_FTdx10Verbatim's sibling
+// for the first of the two models M9d-2 registered, and it guards the same
+// kind of fact: the HEDGES. This prose was written in radiotext.go itself,
+// for a radio this project has never connected to anything, under the
+// honesty rule recorded at ftdx101dText.
+//
+// "No minimum firmware version is established", "the FTdx101D's operating
+// manual is not held here", "no trial has established" are the load-bearing
+// words. An editor tidying them into confident advisory copy — or reaching
+// for the FT-710's V01-10 threshold and [V/M]/[ERASE] procedure because the
+// fields look thin — would attribute one radio's evidence to another. That
+// edit fails here.
+//
+// TWO SENTENCES ARE POSITIVE CLAIMS rather than hedges, and both are
+// manual-evidenced rather than assumed: that the CAT command set contains
+// no erase command, and that it contains no firmware-version query. Both
+// rest on the command availability table at layout 236-337 being this
+// radio's complete command set (matrix §2.3), which is the project's
+// recorded reading of that table. They are the two places this entry says
+// more than the FTdx10's can, and they are cited at ftdx101dText.
+//
+// ToneScanSkipVerification is asserted EMPTY, and that is not an omission:
+// it is the only field this model must not populate while
+// core/driver/ftdx101's writeTrialsCompleteD is false, since any sentence
+// in it would be a hardware-preservation claim. internal/wiring's
+// TestEverySupportedModelHasRadiotext deliberately excludes this field from
+// its non-blank requirement, so the two tests agree rather than contradict.
+func TestRadiotext_FTdx101DVerbatim(t *testing.T) {
+	got, ok := radiotext.For("FTdx101D")
+	if !ok {
+		t.Fatal(`For("FTdx101D") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != wantFTdx101D {
+		t.Errorf("For(\"FTdx101D\") = %#v,\nwant %#v", got, wantFTdx101D)
+	}
+	assertFTdx101NotBorrowed(t, "FTdx101D", got)
+}
+
+// TestRadiotext_FTdx101MPVerbatim is the same pin for the MP. It is a
+// SEPARATE test rather than a subtest of the D's because the two entries
+// are separate claims about separate radios: a capture from an FTDX101D
+// lifts nothing for the MP, and the day one of these entries changes it
+// must be visible which radio's prose moved.
+func TestRadiotext_FTdx101MPVerbatim(t *testing.T) {
+	got, ok := radiotext.For("FTdx101MP")
+	if !ok {
+		t.Fatal(`For("FTdx101MP") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != wantFTdx101MP {
+		t.Errorf("For(\"FTdx101MP\") = %#v,\nwant %#v", got, wantFTdx101MP)
+	}
+	assertFTdx101NotBorrowed(t, "FTdx101MP", got)
+}
+
+// assertFTdx101NotBorrowed runs both non-borrowing checks for one FTdx101
+// model: no field may be byte-identical to the FT-710's or the FTdx10's,
+// and no field may carry either of those radios' PARTICULARS.
+//
+// BOTH DIRECTIONS MATTER AND THEY CATCH DIFFERENT MISTAKES. The
+// byte-identity loop catches a wholesale copy — the edit that fills a field
+// by pasting a neighbouring model's. The particulars loop catches a partial
+// one, where a sentence was reworded but kept "V01-10" or "FTdx10" inside
+// it, which byte-identity would sail past.
+//
+// The FTdx10 is in the particulars list as a literal STRING, which needs a
+// word: "FTdx10" is a prefix of nothing here, since this package's own
+// model names are "FTdx101D" and "FTdx101MP" and neither of THOSE appears
+// in the FTdx10's prose — but "FTdx101D" does contain "FTdx10" as a
+// substring, so the check is applied to the FTdx10's own name only after
+// the FTdx101's model names are removed from the field. Without that step
+// every field naming this radio would fail against its own name.
+func assertFTdx101NotBorrowed(t *testing.T, model string, got radiotext.Text) {
+	t.Helper()
+
+	for _, other := range []string{"FT-710", "FTdx10"} {
+		otherText, ok := radiotext.For(other)
+		if !ok {
+			t.Fatalf("For(%q) ok = false, want true — sanity check failed", other)
+		}
+		otherFields := ftdx101Fields(otherText)
+		for field, val := range ftdx101Fields(got) {
+			if val == "" {
+				// ToneScanSkipVerification is empty on the FTdx10 too, and
+				// two deliberate emptinesses are not a copy.
+				continue
+			}
+			if val == otherFields[field] {
+				t.Errorf("%s %s is byte-identical to the %s's — one radio's prose must never be served as another's", model, field, other)
+			}
+		}
+	}
+
+	// Particulars. The FT-710's are its hardware evidence; the FTdx10's are
+	// its own name and its own manual's absence of one.
+	for field, val := range ftdx101Fields(got) {
+		bare := strings.ReplaceAll(val, model, "")
+		for _, particular := range []string{"V01-10", "[V/M]", "[ERASE]", "FT-710", "hardware-verified", "FTdx10"} {
+			if strings.Contains(bare, particular) {
+				t.Errorf("%s %s contains %q — another radio's particular in this one's prose is that radio's evidence claimed for this one", model, field, particular)
+			}
+		}
+	}
+}
+
+// TestRadiotext_FTdx101DAndMPDifferOnlyInTheModelName is plan D8, stated as
+// a SUBSTITUTION: replacing every occurrence of "FTdx101MP" with "FTdx101D"
+// throughout the MP's entry must reproduce the D's entry byte for byte.
+//
+// Why substitution rather than a field-by-field comparison of the fields
+// that happen not to name the model: the interesting failure is not "two
+// fields drifted apart", it is "somebody added a sentence to ONE model's
+// entry" — a claim about the MP that no evidence distinguishes from the D,
+// or vice versa. A comparison restricted to the model-naming fields cannot
+// see that; this can, because the added sentence survives the substitution
+// and breaks the equality.
+//
+// The direction is MP -> D and not the reverse, and that is forced:
+// "FTdx101D" is a substring of nothing, but substituting D's name INTO the
+// MP's would leave "FTdx101D" wherever the MP's name appeared and the two
+// would never meet. One direction is well-defined; the other is not.
+//
+// NON-VACUITY: at least one field must actually name the model, or the
+// substitution would be the identity function and this test would prove
+// that the two entries are equal — which they are not, and must not be.
+func TestRadiotext_FTdx101DAndMPDifferOnlyInTheModelName(t *testing.T) {
+	d, ok := radiotext.For("FTdx101D")
+	if !ok {
+		t.Fatal(`For("FTdx101D") ok = false, want true`)
+	}
+	mp, ok := radiotext.For("FTdx101MP")
+	if !ok {
+		t.Fatal(`For("FTdx101MP") ok = false, want true`)
+	}
+
+	dFields := ftdx101Fields(d)
+	naming := 0
+	for field, mpVal := range ftdx101Fields(mp) {
+		if strings.Contains(mpVal, "FTdx101MP") {
+			naming++
+		}
+		if got := strings.ReplaceAll(mpVal, "FTdx101MP", "FTdx101D"); got != dFields[field] {
+			t.Errorf("%s: the MP's text with its model name replaced by the D's is\n  %q\nbut the D's is\n  %q\n— D8: the two entries may differ ONLY where they name the model", field, got, dFields[field])
+		}
+	}
+	if naming == 0 {
+		t.Error("no MP field names the model — the substitution above is the identity function and this test asserted nothing")
+	}
+
+	// And the two entries are NOT equal: they name different radios, and a
+	// user reading the MP's advisories must see the MP's name.
+	if d == mp {
+		t.Error("the FTdx101D's and FTdx101MP's entries are byte-identical — each radio's prose must name its own model")
+	}
+}
+
 // TestFor_UnknownModel: any model that is not EXACTLY one of this
-// package's keys — "FT-710" and, since M9c-6, "FTdx10" — returns the zero
-// Text and false. Callers must never mistake a zero Text for real advisory
-// copy.
+// package's keys — "FT-710", "FTdx10" since M9c-6, and "FTdx101D"/
+// "FTdx101MP" since M9d-2 — returns the zero Text and false. Callers must
+// never mistake a zero Text for real advisory copy.
 //
 // The cases are near misses BY CONSTRUCTION, and the FTdx10's registration
 // is what made that worth restating: "FT-DX10" is a plausible mis-spelling
@@ -157,8 +368,23 @@ func TestRadiotext_FTdx10Verbatim(t *testing.T) {
 // key is the exact string core/driver/ftdx10's Capabilities().Model
 // returns. Case, punctuation and trailing whitespace are all significant —
 // a lookup is a map lookup, not a fuzzy match.
+//
+// "FTDX101D" AND "FTDX101MP" ARE LIVE COLLISIONS, not hypothetical typos,
+// and that is why they are here. Full capitals is how the radio's OWN CAT
+// manual spells both models throughout — it is the spelling on every page a
+// user would have open — so it is the single most likely thing for a person
+// or a config file to carry. It must still miss. The project's registry key
+// is "FTdx101D", and a fuzzy match that quietly resolved the manual's
+// spelling would be a lookup that sometimes guessed; better a caller that
+// fails loudly than one served the wrong radio's advisories. The same
+// reasoning covers "FTdx101" (the FAMILY, which is not a model this
+// project registers — there is no bare FTdx101 anywhere in this codebase,
+// by design) and "FT-DX101D" (the hyphenated form other software uses).
 func TestFor_UnknownModel(t *testing.T) {
-	for _, model := range []string{"", "FT-DX10", "ft-710", "FT-710 ", "FTDX10", "ftdx10", "FTdx10 "} {
+	for _, model := range []string{
+		"", "FT-DX10", "ft-710", "FT-710 ", "FTDX10", "ftdx10", "FTdx10 ",
+		"FTDX101D", "FTDX101MP", "ftdx101d", "FTdx101", "FTdx101D ", "FT-DX101D",
+	} {
 		got, ok := radiotext.For(model)
 		if ok {
 			t.Errorf("For(%q) ok = true, want false", model)

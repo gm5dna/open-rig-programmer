@@ -243,9 +243,13 @@ func (a *App) bumpWorkingRevLocked() {
 //  3. Otherwise wiring.DefaultModel (the FT-710) — when working is nil,
 //     its Radio.Model is "", or that model names no registered driver (a
 //     model this build does not carry a driver for: a future radio's
-//     dialect landing before its driver, an FTDX101D file written by
-//     someone else, or a hand-edited/corrupt file — the FTdx10 itself is
-//     REGISTERED since M9c-6 and resolves at step 2 like any other model).
+//     dialect landing before its driver, an FT-991A file written by
+//     someone else, or a hand-edited/corrupt file — the FTdx10 is
+//     REGISTERED since M9c-6, and the FTdx101D and FTdx101MP since M9d-2,
+//     so all three resolve at step 2 like any other model. This example
+//     has been re-picked TWICE for that reason, which is itself the
+//     warning: naming a real radio here dates the comment the moment that
+//     radio's driver lands, so the name chosen is one no milestone plans).
 //     Refuse-before-corrupt: an unresolvable
 //     model degrades to a KNOWN-safe baseline rather than being handed on
 //     to lookups that would all fail on it at once. wiring.DefaultModel is
@@ -312,8 +316,9 @@ func currentCaps(conn *connectionState, working *codeplug.Codeplug) (spec.Capabi
 // currentModel (the recognition check) and currentCaps (the value it
 // returns) — so this package's own tests can exercise the working-copy-
 // model resolution above against a model name wiring itself does not
-// register. internal/wiring registers two models since M9c-6 ("FT-710" and
-// "FTdx10"), and this seam is still needed: what these tests need is an
+// register. internal/wiring registers FOUR models since M9d-2 ("FT-710",
+// "FTdx10", "FTdx101D" and "FTdx101MP"), and this seam is still needed —
+// more so, not less: what these tests need is an
 // UNREGISTRABLE name whose resolution is theirs to control, which no real
 // registered model can be. Reassigned ONLY by tests (e.g.
 // TestCurrentCaps_DisconnectedUsesWorkingCopyModel), restored via
