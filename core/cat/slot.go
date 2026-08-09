@@ -28,6 +28,18 @@ import "fmt"
 // only the FT-710 existed, wrong for the FTdx10 and FTdx101 slots that now
 // do. The helper is deleted.
 //
+// IT RAN LATE BY ITS OWN TERMS, which is worth recording where the next
+// deferral gets written rather than only in a commit message. The M9b plan
+// scheduled it for M9c ("Giving Slot a dialect tag is M9c's, when a second
+// slot space exists", plan :1878), and the FTdx10 gave M9c-4 that second
+// slot space — but M9c-4, M9c-5, M9c-6, M9d-1 and M9d-2 all shipped
+// against the FT-710-scoped predicates first, each one working around them
+// (see the near-identical "specifically NOT Slot.IsMemory/…" headers in
+// core/cat/ftdx10/dialect_test.go and core/cat/ftdx101/dialect_test.go,
+// written two milestones apart). A deferral whose trigger condition fires
+// silently is one nobody is obliged to notice; the condition wants an
+// owner, not just a date.
+//
 // THE FOUR STATIC KINDS ARE NOT A SECOND OPINION. Each is exactly what the
 // constructing dialect's own classifySlot would return for the wire form
 // that constructor built, because DialectConfig validation rejects every
