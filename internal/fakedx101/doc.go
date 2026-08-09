@@ -494,16 +494,17 @@
 //  16. THE "?;" REJECTION CONVENTION ITSELF IS INHERITED, AND THIS MANUAL DOES
 //     NOT PRINT IT. Entries 1, 7, 8, 9, 12 and 17 all say what draws a
 //     rejection; this one records that the rejection's very existence is an
-//     assumption on these radios. The layout-preserved extraction of rev 2308-L contains NO
-//     '?' character anywhere, over all 2,051 lines: the manual describes Set,
-//     Read and Answer commands (layout 190-193) and a terminator, and never
-//     says what the radio replies to a command it cannot honour. "?;" is
-//     core/cat's ErrRejected, adopted from the FT-710's reference (core/cat's
-//     errors.go:11-19), and every "?;" this fake sends is that convention
-//     applied to a radio that has never been observed using it. A radio that
-//     stayed SILENT instead would leave this fake's rejections indistinguishable
-//     from a dead link, and would turn every one of the driver's rejection-based
-//     interpretations (its entries 7 and 8) into timeouts.
+//     assumption on these radios. The layout-preserved extraction of rev
+//     2308-L contains NO '?' character anywhere, over all 2,051 lines: the
+//     manual describes Set, Read and Answer commands (layout 190-193) and a
+//     terminator, and never says what the radio replies to a command it
+//     cannot honour. "?;" is core/cat's ErrRejected, adopted from the FT-710's
+//     reference (core/cat's errors.go:11-19), and every "?;" this fake sends is
+//     that convention applied to a radio that has never been observed using it.
+//     A radio that stayed SILENT instead would leave this fake's rejections
+//     indistinguishable from a dead link, and would turn every one of the
+//     driver's rejection-based interpretations (its entries 7 and 8) into
+//     timeouts.
 //     STAGE R LIFTS IT, PER MODEL, WITH: one deliberately unknown command —
 //     "ZZ;" — put to a radio of that model with the port watched. Whatever comes
 //     back, or does not, is the convention.
@@ -519,11 +520,25 @@
 //     OBSERVED at M8c for six such addresses), and that is an FT-710 fact about
 //     an FT-710 menu. Here it is assumed TWICE OVER: neither model has been
 //     asked, and entry 16 records that the "?;" convention itself is unattested
-//     for these radios. Note what makes it narrower than the FTdx10's version of
-//     this entry: that chart has a P1 anomaly to argue about (its grammar block
-//     says "P1 : 01 - 05" while the chart populates 01-04), and this one has
-//     none — this manual's EX page and its Table 2 agree that P1 runs 01-04, so
-//     05xxxx is out of inventory without any unresolved question behind it.
+//     for these radios. AND FOR 050101 IT IS UNKNOWN ON A THIRD COUNT, because
+//     THIS CHART CARRIES THE SAME P1 ANOMALY the FTdx10's does. This package
+//     does not escape it, and this entry as first committed (5dbfd7a) wrongly
+//     said it did — corrected here, and recorded rather than quietly reworded,
+//     because the false version claimed there was NO unresolved question and a
+//     reader who saw it might not think to look for one. The grammar block for
+//     the EX command, at layout 700, states
+//     "P1 : 01 - 05" while Table 2 populates 01-04 ONLY, ending at (04,03,02)
+//     PIXEL on layout 962. core/cat/ftdx101/doc.go's header-vs-chart anomaly
+//     records that UNRESOLVED, and unresolved is where it stays: the FT-710's
+//     analogous anomaly could be put to hardware (M8c, which rejected both
+//     probed P1=05 addresses — fakeradio's register item 23), and neither the
+//     FTdx10's nor this one can be. The capability matrix asks a Stage R
+//     session to probe a P1=05 address for exactly that reason.
+//     So what a real FTDX101D or FTDX101MP answers to 050101 is DOUBLY
+//     UNKNOWN, in internal/fakedx10 entry 17's own words: the chart never
+//     enumerated the address, AND the grammar block declares it in range. This
+//     fake answers "?;" because it holds no entry — the honest shape of "I have
+//     no such item", and not a claim that the range statement is wrong.
 //     Membership comes from the chart's own rows via the generated inventory,
 //     never from a range check, and it is what a settings reader maps to
 //     driver.SettingUnavailable.
@@ -536,9 +551,13 @@
 //     (docs/menu-write-decision.md), so nothing in this project sends one.
 //     STAGE R LIFTS THE FIRST, PER MODEL, WITH: one EX read of 050101 and one of
 //     a P3 past a subgroup's end, on a radio of that model — an answer rather
-//     than "?;" would mean the chart is incomplete, which is a finding for the
-//     dialect as much as for this fake. A STAGE W capture would be needed for
-//     the second, and none is planned while the menu surface stays read-only.
+//     than "?;" would mean the grammar block's range is real and the chart is
+//     incomplete, which is a finding for the DIALECT as much as for this fake,
+//     and is the same capture that would settle its own UNRESOLVED
+//     header-vs-chart anomaly. It is the probe the capability matrix already
+//     asks for; record the port with it (this radio offers two CAT paths).
+//     A STAGE W capture would be needed for the second, and none is planned
+//     while the menu surface stays read-only.
 //     (ex.go: handleEX)
 //
 // # What is NOT in this register, and why

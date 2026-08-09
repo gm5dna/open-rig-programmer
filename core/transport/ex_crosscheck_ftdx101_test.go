@@ -346,10 +346,15 @@ func TestEXFTdx101RoundTrip_TheTwoModelsAnswerIdentically(t *testing.T) {
 // refusal that held only on the D would be a per-model behaviour with no manual
 // behind it.
 //
-// The addresses below are the fake's own out-of-inventory cases: "050101" is the
-// brief's named case (this chart populates P1 01-04, and unlike the FTdx10's
-// there is no grammar/chart anomaly to argue about — this manual's EX page and
-// its Table 2 agree), and "010199" is a P3 far beyond any group's item count.
+// The addresses below are the fake's own out-of-inventory cases. "050101" is the
+// brief's named case, and it carries the FTdx101's own header-vs-chart anomaly
+// with it — the EX grammar block states "P1 : 01 - 05" (layout 700) while Table 2
+// populates 01-04 only, which core/cat/ftdx101/doc.go records UNRESOLVED because,
+// unlike the FT-710's, it cannot be put to hardware. Both this dialect and this
+// fake follow the CHART, so both agree 050101 is not a member; what a real
+// FTdx101 would answer is doubly unknown, and this test pins the two sides'
+// agreement rather than the radio's behaviour. "010199" is a P3 far beyond any
+// group's item count and carries no such question.
 // Both draw "?;" — ASSUMED, fakedx101 doc.go register entry 17, and assumed twice
 // over since these radios' manual never prints the rejection convention at all
 // (entry 16).

@@ -87,12 +87,17 @@ func TestEXRead_KnownAddressDefault(t *testing.T) {
 // the rejection convention ITSELF is unattested besides (register entry 16).
 //
 // Membership comes from the chart's own rows, via the generated inventory, so
-// 05xxxx answers "?;" because nothing was transcribed for it. Unlike the
-// FTdx10's, this chart carries no P1 anomaly to argue with: this manual's EX
-// page and its Table 2 agree that P1 runs 01-04.
+// 05xxxx answers "?;" because nothing was transcribed for it. LIKE the FTdx10's,
+// this chart carries a P1 anomaly: the EX grammar block states "P1 : 01 - 05"
+// (layout 700) while Table 2 populates 01-04 only, recorded UNRESOLVED in
+// core/cat/ftdx101/doc.go because — unlike the FT-710's — it cannot be put to
+// hardware. So the first case below is DOUBLY unknown: out of the chart's
+// inventory, and inside the grammar block's declared range. This test pins what
+// the FAKE does, which is answer "?;" because it holds no entry; it is not
+// evidence about either bound.
 func TestEXRead_UnknownAddress(t *testing.T) {
 	tests := []struct{ name, req string }{
-		{"no P1=05 group in the chart", "EX050101;"},
+		{"no P1=05 group in the chart, though the grammar block declares P1 to 05", "EX050101;"},
 		{"no P1=06 group either (the FT-710 has one; this chart does not)", "EX060101;"},
 		{"P3 beyond its group's item count (01/01 has 14)", "EX010115;"},
 		{"P3 beyond its group's item count (04/03 has 2)", "EX040303;"},

@@ -216,9 +216,14 @@ func buildEXAnswer(addr, p4 string) []byte {
 // The six-digit check does NOT consult any P1/P2/P3 range: membership comes from
 // the chart's own rows, via the generated inventory. An EX read of 05xxxx
 // answers "?;" because no such item was transcribed, not because a range was
-// enforced — the same construction internal/fakedx10 uses, and here it carries
-// no anomaly with it: this manual's EX page and this chart agree that P1 runs
-// 01-04.
+// enforced — the same construction internal/fakedx10 uses, and it carries the
+// same anomaly with it. THIS MANUAL'S EX GRAMMAR BLOCK AND ITS TABLE 2 DISAGREE:
+// the block states "P1 : 01 - 05" (layout 700) and the chart populates 01-04
+// only, ending at (04,03,02) PIXEL (layout 962). core/cat/ftdx101/doc.go's
+// "header-vs-chart anomaly" section records that UNRESOLVED — unlike the
+// FT-710's it cannot be put to hardware — so what a real FTdx101 answers to
+// 050101 is doubly unknown, and this fake's "?;" is "I hold no such item"
+// rather than an enforcement of either bound (doc.go register entry 17).
 //
 // It is deliberately a METHOD taking no model into account. Both radios hold the
 // same seeded exSettings map, so the D and the MP answer identically; the only

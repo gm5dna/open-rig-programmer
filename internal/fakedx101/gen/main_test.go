@@ -146,9 +146,13 @@ func TestRender_EmbedsOnlyTheBaseName(t *testing.T) {
 // this is the local pin.
 //
 // The FTdx101's chart, like the FTdx10's and unlike the FT-710's, populates P1
-// 01-04 only: there is no P1=05 group and no EXTENSION SETTING block. Here that
-// is NOT an anomaly — this manual's own EX page and its chart agree — which is
-// the difference from core/cat/ftdx10/doc.go's UNRESOLVED note.
+// 01-04 only: there is no P1=05 group and no EXTENSION SETTING block. That is
+// an ANOMALY here exactly as it is there, not a tidy agreement — this manual's
+// EX grammar block states "P1 : 01 - 05" (layout 700) while the chart stops at
+// 04, and core/cat/ftdx101/doc.go records the disagreement UNRESOLVED because,
+// unlike the FT-710's, it cannot be put to hardware. The literal below follows
+// the CHART, which is what the inventory is a projection of; it takes no
+// position on the grammar block's bound.
 func TestCommittedCSV_StructuralCounts(t *testing.T) {
 	data := readCommittedCSV(t)
 	rows, err := parseB(data)
@@ -360,7 +364,40 @@ func TestParseB_Refusals(t *testing.T) {
 		{
 			name:    "non-numeric digits",
 			csv:     header + "01,01,01,RADIO SETTING,MODE SSB,AGC FAST DELAY,four,false\n",
-			wantErr: "is not a number",
+			wantErr: "not one or two ASCII digits",
+		},
+		// The four cells strconv.Atoi would have accepted. B's digits column
+		// prints its widths bare and unsigned, so each of these is a change of
+		// convention to report, not a spelling to normalise (parseDigitsCell).
+		{
+			name:    "signed digits (+4) — strconv.Atoi accepts this",
+			csv:     header + "01,01,01,RADIO SETTING,MODE SSB,AGC FAST DELAY,+4,false\n",
+			wantErr: "not one or two ASCII digits",
+		},
+		{
+			name:    "negative digits (-4)",
+			csv:     header + "01,01,01,RADIO SETTING,MODE SSB,AGC FAST DELAY,-4,false\n",
+			wantErr: "not one or two ASCII digits",
+		},
+		{
+			name:    "space-padded digits ( 4) — a TrimSpace would have accepted this",
+			csv:     header + "01,01,01,RADIO SETTING,MODE SSB,AGC FAST DELAY, 4,false\n",
+			wantErr: "not one or two ASCII digits",
+		},
+		{
+			name:    "zero-padded digits (04)",
+			csv:     header + "01,01,01,RADIO SETTING,MODE SSB,AGC FAST DELAY,04,false\n",
+			wantErr: "zero-padded",
+		},
+		{
+			name:    "three-digit width (004)",
+			csv:     header + "01,01,01,RADIO SETTING,MODE SSB,AGC FAST DELAY,004,false\n",
+			wantErr: "not one or two ASCII digits",
+		},
+		{
+			name:    "empty digits cell",
+			csv:     header + "01,01,01,RADIO SETTING,MODE SSB,AGC FAST DELAY,,false\n",
+			wantErr: "not one or two ASCII digits",
 		},
 		{
 			name:    "digits 5 — no token for it",
@@ -428,6 +465,38 @@ func TestParseB_Refusals(t *testing.T) {
 	}
 	if len(textRows) != 1 || textRows[0].token != 'T' {
 		t.Fatalf("parseB(text row) = %+v, want one row with token 'T'", textRows)
+	}
+}
+
+// TestParseDigitsCell_AcceptsExactlyTheFileSpellings is the positive half of the
+// strictness above: the five spellings B's digits column actually prints must
+// parse, or the refusals could all be passing because the reader rejects
+// everything. "0" is included deliberately — it is a WELL-FORMED cell whose
+// VALUE has no token, so it must reach widthToken's refusal rather than be
+// caught here (a shape error and a value error are different findings).
+func TestParseDigitsCell_AcceptsExactlyTheFileSpellings(t *testing.T) {
+	for _, tt := range []struct {
+		cell string
+		want int
+	}{
+		{"1", 1}, {"2", 2}, {"3", 3}, {"4", 4}, {"12", 12}, {"0", 0},
+	} {
+		got, err := parseDigitsCell(tt.cell)
+		if err != nil {
+			t.Errorf("parseDigitsCell(%q) = %v, want %d", tt.cell, err, tt.want)
+			continue
+		}
+		if got != tt.want {
+			t.Errorf("parseDigitsCell(%q) = %d, want %d", tt.cell, got, tt.want)
+		}
+	}
+
+	// And "0" is refused one layer up, with the VALUE message rather than the
+	// shape one — the split this function's doc comment promises.
+	if _, err := widthToken("0", textFalse); err == nil {
+		t.Error("widthToken(\"0\", false) returned no error; want the no-token refusal")
+	} else if !strings.Contains(err.Error(), "no token for it") {
+		t.Errorf("widthToken(\"0\", false) error = %q, want it to contain %q", err, "no token for it")
 	}
 }
 

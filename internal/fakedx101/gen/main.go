@@ -293,9 +293,9 @@ func widthToken(digits, text string) (byte, error) {
 	if err != nil {
 		return 0, err
 	}
-	n, err := strconv.Atoi(strings.TrimSpace(digits))
+	n, err := parseDigitsCell(digits)
 	if err != nil {
-		return 0, fmt.Errorf("digits cell %q is not a number: %w", digits, err)
+		return 0, err
 	}
 	switch {
 	case n >= 1 && n <= 4:
@@ -311,6 +311,44 @@ func widthToken(digits, text string) (byte, error) {
 	default:
 		return 0, fmt.Errorf("digits %d is neither 1-4 (numeric) nor %d (text): the compact inventory has no token for it", n, textWidth)
 	}
+}
+
+// parseDigitsCell reads B's digits cell BYTE-EXACTLY: one or two ASCII digits,
+// with no leading zero on the two-digit form, and nothing else — no sign, no
+// padding, no surrounding whitespace. It is the same discipline parseTwoDigit
+// applies to the address components and parseTextFlag to the boolean, and for
+// the same reason, stated once here for all three:
+//
+// strconv.Atoi would accept "+4", "04" and (after a TrimSpace) " 4" as four.
+// None of those appears in this artefact — its digits column prints exactly
+// "1", "2", "3", "4" and "12" — so accepting them would not be tolerance of a
+// real input, it would be a WIDER VOCABULARY THAN THE FILE HAS, and a
+// re-transcription that quietly started zero-padding or aligning that column
+// would be normalised into agreement instead of being reported. The projection
+// refuses everywhere else rather than repairing; the width cell is the one
+// column the entire inventory is derived from, and it should be the strictest
+// read in the file, not the loosest.
+//
+// Note what it does NOT reject: "0". That is a well-formed cell carrying a
+// value the compact form has no token for, so it is widthToken's refusal to
+// make, with widthToken's message — a shape error and a value error are
+// different findings and are reported as such.
+func parseDigitsCell(cell string) (int, error) {
+	if len(cell) < 1 || len(cell) > 2 {
+		return 0, fmt.Errorf("digits cell %q is not one or two ASCII digits — B's digits column prints 1, 2, 3, 4 and 12, unpadded and unsigned", cell)
+	}
+	for i := 0; i < len(cell); i++ {
+		if !isDigit(cell[i]) {
+			return 0, fmt.Errorf("digits cell %q is not one or two ASCII digits — B's digits column prints 1, 2, 3, 4 and 12, unpadded and unsigned", cell)
+		}
+	}
+	if len(cell) == 2 && cell[0] == '0' {
+		return 0, fmt.Errorf("digits cell %q is zero-padded — B's digits column prints its widths bare, so a padded cell means the artefact's convention changed", cell)
+	}
+	if len(cell) == 2 {
+		return int(cell[0]-'0')*10 + int(cell[1]-'0'), nil
+	}
+	return int(cell[0] - '0'), nil
 }
 
 // parseTextFlag reads B's boolean text cell strictly. strconv.ParseBool is
