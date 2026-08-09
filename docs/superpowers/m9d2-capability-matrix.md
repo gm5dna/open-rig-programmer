@@ -1,32 +1,49 @@
 # M9d-2 capability matrix — the FTdx101D and the FTdx101MP
 
 Originally dated 08/08/2026. **THIS IS REVISION 4 (09/08/2026)** — rev
-3's three errata stand at **§6**, none of them reopened; rev 4 adds no
-erratum, corrects citations and typography only, and asserts nothing
-new. Status: pre-plan artefact, since CONSUMED by the executed M9d-2
-plan. Milestone: M9d-2 (`core/driver/ftdx101`, `internal/fakedx101`,
+3's three numbered errata stand at **§6**, none renumbered. Rev 4
+re-points §1.3.5's citations by symbol, corrects one span bound,
+re-wraps one paragraph, and appends THREE tagged notes inside erratum 3:
+a navigational grep warning, a discharge marker, and one
+**erratum-weight correction** to a rev-3 sentence that implied a
+citation drift which did not occur. No capability value, `FieldSupport`
+cell, evidence grade, layout citation or count moves anywhere in rev 4.
+Status: pre-plan artefact, since CONSUMED by the executed M9d-2 plan.
+Milestone: M9d-2 (`core/driver/ftdx101`, `internal/fakedx101`,
 registration).
 
 **Revisions.** Rev 1, 08/08/2026 (`432fd4e`, as written). Rev 2,
 08/08/2026 (`2745e14`, review fix round 1 — the misquote, the citations,
-the sixth slot legend). Rev 3, 09/08/2026 (§6's three errata). Rev 4,
+the sixth slot legend). Rev 3, 09/08/2026 (§6's three errata) **(rev 4:
+this entry read "(this one; §6)", which only rev 3 could say)**. Rev 4,
 09/08/2026 (this one): §1.3.5's neighbour citations re-pointed BY SYMBOL
 — the fold-in erratum 3 leaves to "a future revision" — the stale
 `mtSlotValid` doc-comment span bound corrected, erratum 3 given the
 grep-trap warning the frozen `core/cat/mw.go` literal needs, and one
-§3.6 paragraph re-wrapped. The four were fixed as the standing REV-4
+§3.6 paragraph re-wrapped. Those four were fixed as the standing REV-4
 LIST at the follow-ups wave's closing dual review
 (`.superpowers/sdd/m9d-followups-ledger.md`, closing-review paragraph).
+Rev 4's own fix round added a fifth item its review turned up — erratum
+3's disclosure of the neighbour drift is half wrong, and rev 4 corrects
+it at erratum weight in place
+(`.superpowers/sdd/m9d-minors-task2-review.md`, findings F1 and F2).
+
 Because this document was consumed by an executed plan, **nothing here
-is silently rewritten**: every correction after rev 2 is recorded. A
-correction to what this matrix CLAIMS is an erratum in §6 stating what
-stood, what now stands, and the record that adjudicated it, and every
-site it corrects carries a `(rev 3 erratum N)` tag pointing back. **No
-rev-4 item corrects a claim** — all four are citation drift, a stale
-span bound, a navigational warning and typography — so rev 4 takes no
-§6 erratum: it is recorded in this paragraph, and each site it edits
-carries a `(rev 4)` tag. The one exception is the §3.6 re-wrap, which
-changed no word and so has nothing to point back at.
+is silently rewritten**: every correction after rev 2 is recorded, at a
+weight set by what it does to a reader. A correction that SUPERSEDES A
+SHIPPED ASSERTION carries the full erratum apparatus — what stood, what
+now stands, and the record that adjudicated it — and every site it
+corrects carries a tag pointing back; rev 3's three are numbered in §6
+and tagged `(rev 3 erratum N)`, and rev 4's one is recorded at the site
+it corrects, inside erratum 3, for the reason given there. A correction
+that supersedes NO assertion — a pointer to unmoved code, a pure
+addition, a re-wrap — is recorded in this paragraph with a `(rev 4)`
+tag at the site, which carries the number or wording it replaced.
+**(rev 4: this rule read "every correction after rev 2 is an erratum in
+§6"; rev 4 grades it by whether a shipped assertion is superseded, and
+argues the grading where it applies it.)** The one untagged edit is the
+§3.6 re-wrap, which changed no word and so has nothing to point back
+at; it is named here instead.
 
 ## What this is
 
@@ -324,17 +341,28 @@ oversight:
 `core/cat`'s combined-MT write policy refuses 5xx and EMG slots — the
 predicate is `Dialect.mtSlotValid` (`core/cat/mt.go`, cited by symbol),
 reached by `validateCombinedMTFields` (`core/cat/mtcombined.go`, cited
-by symbol) **(rev 4: both read as line numbers, 115 and 105, and both
-had drifted; erratum 3 disclosed the drift and left the fold-in to a
-future revision — this is it)** — and `cat.Dialect.writableSlot`
+by symbol) **(rev 4: both read as line numbers, 115 and 105. Only
+`mtSlotValid` drifted, 115 → 118 at M9d follow-up 2 `706f680`.
+`core/cat/mtcombined.go:105` never moved: it is the
+`if !d.mtSlotValid(m.Slot) {` line at which that function REACHES the
+predicate, which is what the sentence cited it for, and it was exact at
+rev 1 and is exact today. Erratum 3's "cited as 105" measured it
+against the DECLARATION at `:104` and read a drift into it — corrected
+at erratum weight in §6. Both are by symbol now, so the question cannot
+arise again.)** — and `cat.Dialect.writableSlot`
 (`core/cat/slot.go`, cited by symbol), consulted by `validateMWFields`
 (`core/cat/mw.go`), excludes them from MW **(rev 3 erratum 3: this read
 `cat.Slot.Writable`, a symbol since DELETED)**. **The MT half is a
 PROJECT POLICY, and `core/cat` says so in terms.** `mtSlotValid`'s own
 doc comment runs `core/cat/mt.go:100-117` **(rev 4: this read
-`:100-108` — M9d follow-up 2 grew the comment; the quote below is
-unmoved and re-verified byte-exact)**; its middle (`:103-106`) is the
-statement:
+`:100-108`, which was already six lines short WHEN REV 1 WROTE IT — at
+`432fd4e` the comment ran `:100-114`, `:108` ending its second
+paragraph and `:110-114` being a third the bound excluded — and M9d
+follow-up 2 `706f680`, the only commit to touch this file since, then
+grew it to `:117`. A rev-1 mis-measurement, later widened; not a drift.
+The quoted `:103-106` opens that second paragraph (`:103-108`) and is
+unmoved throughout, re-verified byte-exact)**; its middle
+(`:103-106`) is the statement:
 
 > The manual's slot table marks 5xx and EMG as ✓ for MT — but reference
 > §MT states explicitly: "our policy: reject sets to 5xx/EMG until
@@ -370,7 +398,7 @@ one vocabulary, so the manual does not separately state that an MT
 generally. That is weaker than "the manual permits MT Sets to 5xx", and
 it is deliberately all this matrix claims. `mtSlotValid`'s doc comment
 concedes the same reading for the FT-710 — "the manual's slot table
-marks 5xx and EMG as ✓ for MT", the first line of the middle quoted
+marks 5xx and EMG as ✓ for MT", the first line of the paragraph quoted
 above, a slot-table fact, not a Set-direction one **(rev 4: this cited
 `core/cat/mt.go:103`, still current when re-measured, and is now
 pointed by symbol)**. So:
@@ -1486,7 +1514,7 @@ changes a capability value, a `FieldSupport` cell or a count.
 
 ---
 
-## 6. Errata (revision 3, 09/08/2026)
+## 6. Errata (revision 3, 09/08/2026 — three rev-4 notes appended inside erratum 3, one of them at erratum weight)
 
 This document was the M9d-2 milestone's capability authority and was
 CONSUMED by an executed plan, so it is corrected under erratum
@@ -1496,6 +1524,13 @@ corrected site in the body carries a `(rev 3 erratum N)` tag pointing
 here. Nothing in §1's values, §2's cells, §3's other behaviours, §4's
 three model distinctions or §5's counts — including the 193-item EX
 inventory — is touched by this revision.
+
+**(Rev 4: the numbered entries below are rev 3's, and rev 4 numbers
+none of its own. It appends three tagged notes inside erratum 3 — a
+grep warning, a discharge marker, and one erratum-weight correction to
+erratum 3's closing disclosure — each marked `(Rev 4: …)` at its site.
+Nothing in errata 1 and 2 is touched, and no numbered entry's text is
+altered.)**
 
 ### Erratum 1 — §3.6 (and §3.12's AI0 aside): the acknowledgement convention is ASSUMED, not read off the availability row
 
@@ -1604,9 +1639,9 @@ same symbol without a line range):
 (`core/cat/slot.go`, cited by symbol), consulted by `validateMWFields`
 (`core/cat/mw.go`), excludes them from MW." **(Rev 4:** grepping
 `Writable()` to check this still hits `validateMWFields`' rejection
-message in `core/cat/mw.go` — and the golden lines and test names
-mirroring it — whose wording is FROZEN, not a survival of the method,
-as the comment directly above it says.**)**
+message in `core/cat/mw.go` — and the golden lines and the frozen test
+literals mirroring it — whose wording is FROZEN, not a survival of the
+method, as the comment directly above it says.**)**
 
 **Why.** `Slot.Writable` was **DELETED** at the M9d follow-up 2 wave's
 dialect-tagged-Slot task (`706f680..efd81d9`; the removal is `1bf00cd`,
@@ -1640,10 +1675,58 @@ as 115) and `validateCombinedMTFields` at `core/cat/mtcombined.go:104`
 says, and the drift is within a reader's eye-line, so it is left standing
 and disclosed here rather than being swept into an erratum that is about
 a deletion. A future revision that re-points them should do it by symbol.
-**(Rev 4: done — §1.3.5 now cites both by symbol, and every other
-line-number citation in that section with them. The measurements above
-were re-taken and stood: `mtSlotValid` at `mt.go:118`,
-`validateCombinedMTFields` at `mtcombined.go:104`.)**
+**(Rev 4: done — §1.3.5 now cites both by symbol, and its three other
+code line-number citations with them, EXCEPT the doc-comment span
+`core/cat/mt.go:100-117` and its quoted `:103-106`, which the prose
+needs to say which part of a comment it is quoting and which are
+current. Both numbers stated above are true when re-measured, but only
+one of them is a drift — see the correction immediately below.)**
+
+**(Rev 4 — ERRATUM-WEIGHT CORRECTION to the paragraph above. Recorded
+with the full apparatus, because unlike rev 4's other items this one
+supersedes an assertion that has SHIPPED.**
+
+**What stood:** that "the same paragraph's two other citations have
+drifted by a few lines", with `validateCombinedMTFields` "at
+`core/cat/mtcombined.go:104` (cited as 105)" offered as the second of
+the two drifts.
+
+**What now stands:** only ONE of the two drifted. Both facts in the
+parenthetical are true — the declaration is at `:104`, and §1.3.5 did
+cite `:105` — but grouping them under "have drifted" implies `:105` was
+therefore stale, and it was not. §1.3.5 read "`Dialect.mtSlotValid`,
+**defined at** `core/cat/mt.go:115`, **reached by**
+`validateCombinedMTFields` **at** `core/cat/mtcombined.go:105`", and
+`mtcombined.go:105` is `if !d.mtSlotValid(m.Slot) {` — the line at
+which that function reaches the predicate. Read as the call-site
+citation its own sentence makes of it, `:105` was exact at rev 1 and is
+exact today. `mtSlotValid`'s 115 → 118 is a genuine drift and stands.
+
+**The measurement.** `validateCombinedMTFields` has sat at
+`core/cat/mtcombined.go:104` since `344538c` (29/07/2026), ten days
+before this matrix was written; that file's last commit is `344538c`,
+and `:104`/`:105` are byte-identical at `432fd4e`, `2745e14`,
+`706f680` and today. There was no drift to disclose. Separately, and by
+the same measurement, the OTHER stale number in this paragraph's
+neighbourhood was not a drift in origin either: `:100-108` was six
+lines short when rev 1 wrote it, and follow-up 2 later widened the gap
+by three. See §1.3.5's span-bound tag.
+
+**The record.** Rev 4's fix-round review,
+`.superpowers/sdd/m9d-minors-task2-review.md` finding **F2** (F1 for
+the span bound), each re-measured independently by the orchestrator and
+by the implementer before this correction was written. This is erratum
+2's own process lesson applied to erratum 3: a disputed numeric
+citation is settled by running the measurement, never by inheriting a
+previous reader's reading.
+
+**Why recorded here and not as a numbered erratum 4.** §6's numbered
+entries are rev 3's set, and the section heading and intro — shipped
+text — say so; a fourth number would falsify both and would put the
+correction three screens from the sentence it corrects. The apparatus
+is what makes an erratum, not the numbering, so rev 4 gives the full
+apparatus at the site, names it in the header and the Revisions
+paragraph, and flags it in §6's heading.**)**
 
 **Records.** The deletion's rationale is in `core/cat/slot.go`'s own
 "THERE IS NO `Slot.Writable`" note and in `validateMWFields`' SEAM NOTE
