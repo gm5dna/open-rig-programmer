@@ -38,13 +38,34 @@ import (
 // slot, a truncated frame — which is exactly what the error paths need and
 // what a self-consistent fake will never produce.
 //
-// WHAT IT KNOWS, and how to extend it: AI (any AI frame: silence, which IS
-// the fire-and-forget success signal), ID; (the image's catID), the 6-byte
-// combined MT READ, the longer combined MT SET, and the 9-byte EX read. ANY
-// OTHER frame is answered "?;" — a real radio's only NAK, and the
-// deliberate choice for the default: a task that adds a command class and
-// forgets to teach this helper about it sees its fire-and-forget Set
-// REJECTED, loudly and immediately, rather than silently succeeding.
+// WHAT IT KNOWS, and how to extend it: AI (any AI frame, answered with
+// silence), ID; (the image's catID), the 6-byte combined MT READ, the
+// longer combined MT SET, and the 9-byte EX read. ANY OTHER frame is
+// answered "?;".
+//
+// THOSE ANSWERS ARE AN ASSUMED CONVENTION APPLIED, NOT AN OBSERVED RADIO
+// TRANSCRIBED — no real FTdx101D or FTdx101MP has ever been connected to
+// this project, so nothing here is evidence of what either does. Two
+// register entries hold the two halves. That an accepted Set draws NO reply
+// at all while a rejected one draws exactly one "?;" is doc.go's
+// ASSUMED-register entry 9, second half — which names Open's AI0 init frame
+// as one of the three sites depending on it, so the AI arm above is covered
+// too (internal/fakedx101/doc.go's entry 11 is the fake's paired analysis,
+// with the one scrap of evidence there is: MW's O X X X availability row at
+// layout 336).
+//
+// That "?;" is a NAK on these radios AT ALL — that a refusal is a frame
+// rather than silence — is internal/fakedx101/doc.go's entry 16: the
+// convention is inherited from the FT-710's reference, and rev 2308-L of
+// these radios' manual prints no '?' character anywhere in its 2,051 lines.
+// Both halves are FT-710 conventions carried across, and a capture, not
+// this file, will settle them — PER MODEL: one taken on a D says nothing
+// about an MP.
+//
+// "?;" IS STILL THE RIGHT DEFAULT here, whatever a real radio turns out to
+// do: a task that adds a command class and forgets to teach this helper
+// about it sees its Set REJECTED, loudly and immediately, rather than
+// silently succeeding.
 type respondingPort struct {
 	host   net.Conn
 	remote net.Conn
@@ -60,8 +81,9 @@ type respondingPort struct {
 // A slot ABSENT from mtAnswers is answered "?;" — which this driver reads
 // as "absent from this radio" during discovery (ASSUMED-register entry 7)
 // and as "empty channel" during a read (entry 8). The two share one
-// mechanism here for the same reason they share one on the wire: the
-// protocol gives the radio no way to distinguish them.
+// mechanism here for the same reason they would share one on the wire IF
+// THE CONVENTION HOLDS: a radio whose only refusal is an unattributed "?;"
+// (internal/fakedx101/doc.go's entry 16) has no way to distinguish them.
 type slotImage struct {
 	// catID is the four-character identity "ID;" answers with, and it is
 	// REQUIRED — newRespondingPort refuses an empty one.
@@ -84,7 +106,8 @@ type slotImage struct {
 	// address.
 	exAnswers map[string]string
 	// rejectSets makes every combined MT Set answer "?;" instead of the
-	// silence that means accepted. Task 3's rejection path.
+	// silence the ASSUMED convention reads as accepted (doc.go's register
+	// entry 9, second half). Task 3's rejection path.
 	rejectSets bool
 }
 
@@ -161,8 +184,9 @@ func (p *respondingPort) record(frame string) {
 }
 
 // reply returns the bytes this image answers frame with, or "" for silence
-// (the fire-and-forget success signal). See respondingPort's doc comment
-// for the command classes and why the default is a NAK.
+// (the ASSUMED convention's fire-and-forget success signal). See
+// respondingPort's doc comment for the command classes, the register
+// entries that hold the convention, and why the default is a NAK.
 func (img slotImage) reply(frame string) string {
 	switch {
 	case frame == "ID;":
@@ -175,7 +199,8 @@ func (img slotImage) reply(frame string) string {
 		}
 		return "?;"
 	case strings.HasPrefix(frame, "MT"):
-		// A combined MT Set: fire-and-forget, so silence means accepted.
+		// A combined MT Set: fire-and-forget on the ASSUMED convention, so
+		// silence is what this image serves for accepted.
 		if img.rejectSets {
 			return "?;"
 		}
