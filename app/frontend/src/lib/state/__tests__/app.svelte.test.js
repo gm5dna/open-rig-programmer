@@ -16,6 +16,8 @@ function resetState() {
 	appState.setSettingsSpec(null)
 	appState.setSettings(null)
 	appState.setActiveView('channels')
+	appState.setSupportedModels([])
+	appState.setSelectedModel('')
 	appState.alerts = []
 }
 
@@ -228,6 +230,44 @@ describe('uiSpec (task 17)', () => {
 		expect(appState.uiSpec).toEqual(spec)
 		appState.setUISpec(null)
 		expect(appState.uiSpec).toBeNull()
+	})
+})
+
+describe('model picker state (task 13, M9d — the GUI can finally name a radio)', () => {
+	it('selectedModel defaults to "" — the empty string means wiring.DefaultModel, so an untouched picker connects exactly as the app did before it existed', () => {
+		expect(appState.selectedModel).toBe('')
+	})
+
+	it('setSelectedModel stores the user\'s choice, and "" puts it back to the default', () => {
+		appState.setSelectedModel('FTdx10')
+		expect(appState.selectedModel).toBe('FTdx10')
+		appState.setSelectedModel('')
+		expect(appState.selectedModel).toBe('')
+	})
+
+	it('setSelectedModel coerces a null choice to "" rather than storing it — the connect path takes a string', () => {
+		appState.setSelectedModel(null)
+		expect(appState.selectedModel).toBe('')
+	})
+
+	it('supportedModels starts empty and stores whatever GetSupportedModels returned, in that order', () => {
+		expect(appState.supportedModels).toEqual([])
+		appState.setSupportedModels(['FT-710', 'FTDX101D', 'FTDX101MP', 'FTdx10'])
+		expect(appState.supportedModels).toEqual(['FT-710', 'FTDX101D', 'FTDX101MP', 'FTdx10'])
+	})
+
+	it('setSupportedModels(null) leaves an empty list, never null — the picker always iterates an array', () => {
+		appState.setSupportedModels(['FT-710'])
+		appState.setSupportedModels(null)
+		expect(appState.supportedModels).toEqual([])
+	})
+
+	it('a chosen model survives clearConnection — it is the picker\'s own choice, not connection-scoped state', () => {
+		appState.setSelectedModel('FTdx10')
+		appState.setSupportedModels(['FT-710', 'FTdx10'])
+		appState.clearConnection()
+		expect(appState.selectedModel).toBe('FTdx10')
+		expect(appState.supportedModels).toEqual(['FT-710', 'FTdx10'])
 	})
 })
 

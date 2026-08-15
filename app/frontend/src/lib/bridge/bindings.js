@@ -163,18 +163,49 @@ export async function listPorts() {
 	}
 }
 
-/** M9c-5 (E4): App.Connect/App.ConnectDemo now take a model name, and the
+/** Fetches GetSupportedModels into appState.supportedModels — every radio
+ * model this build can open a session against (internal/wiring.
+ * SupportedModels' own sorted order, passed through untouched), which is
+ * the ONLY source the connection bar's model picker draws its options
+ * from. Task 13 (M9d). Called once from ConnectionBar's mount effect: the
+ * set of models a build supports cannot change while it runs, so nothing
+ * refreshes it (mirrors refreshAppVersion).
+ *
+ * Deliberately NEVER throws, like refreshUISpec/refreshAppVersion: failing
+ * to learn the list must not stop the app connecting — the picker then
+ * offers only its default entry, which still opens
+ * internal/wiring.DefaultModel. The alert strip still carries the message.
+ * @returns {Promise<string[] | null>} */
+export async function refreshSupportedModels() {
+	try {
+		const models = await App.GetSupportedModels()
+		appState.setSupportedModels(models)
+		return models
+	} catch (err) {
+		reportError(err, 'listing supported radios')
+		return null
+	}
+}
+
+/** M9c-5 (E4): App.Connect/App.ConnectDemo take a model name, and the
  * empty string means the default model (internal/wiring.DefaultModel) —
  * the exact behaviour these two call sites had before the parameter
- * existed. It is passed EXPLICITLY, with no compat wrapper on the Go
- * side, so the day a model picker lands the only change here is
- * forwarding the user's choice instead of ''. There is no model-selection
- * surface yet: appState carries no chosen model to forward.
+ * existed. It is passed EXPLICITLY, with no compat wrapper on the Go side.
+ *
+ * Task 13 (M9d): the model picker has landed, and — as that design
+ * predicted — the whole of the change here was forwarding the user's
+ * choice instead of a literal ''. `appState.selectedModel` IS that choice,
+ * and its own default is '', so an untouched picker still makes exactly
+ * the call these two sites made before.
+ * ConnectionBar never passes a model as an argument: reading it from
+ * appState keeps connect() and connectDemo() (which takes no arguments at
+ * all) forwarding the same one choice, with no call site able to disagree
+ * about which radio the user picked.
  * @param {string} portPath */
 export async function connect(portPath) {
 	appState.setConnecting(true)
 	try {
-		const info = await App.Connect(portPath, '')
+		const info = await App.Connect(portPath, appState.selectedModel)
 		appState.setConnection(info)
 		await refreshUISpec()
 		await refreshSettingsSpec() // task 36: Live flips true now connected
@@ -191,7 +222,11 @@ export async function connect(portPath) {
 export async function connectDemo() {
 	appState.setConnecting(true)
 	try {
-		const info = await App.ConnectDemo('') // see connect(): '' is the default model
+		// See connect(): the same picked model, and '' still means the
+		// default. The demo path opens THAT model's own simulator (Go's
+		// wiring.OpenFakeSessionFor looks it up), so a user can try any
+		// registered radio with no hardware on the cable.
+		const info = await App.ConnectDemo(appState.selectedModel)
 		appState.setConnection(info)
 		await refreshUISpec()
 		await refreshSettingsSpec() // task 36: Live flips true now connected

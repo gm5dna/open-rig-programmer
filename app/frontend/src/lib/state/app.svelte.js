@@ -150,6 +150,36 @@ class AppState {
 	/** True while a ListPorts call is in flight. */
 	portsLoading = $state(false)
 
+	/** Every radio model this build can open a session against, as last
+	 * returned by GetSupportedModels (internal/wiring.SupportedModels' own
+	 * sorted order — never re-sorted or filtered here). Task 13 (M9d): the
+	 * model picker's list. Empty until the first refreshSupportedModels()
+	 * resolves, and empty again if that call ever fails — the picker then
+	 * offers only its default entry, which still connects (see
+	 * `selectedModel`). Not connection-scoped: the set of models a build
+	 * supports cannot change while it runs, so neither clearConnection nor
+	 * disconnectConnection touches it.
+	 * @type {string[]} */
+	supportedModels = $state([])
+
+	/** Which radio the user picked in the connection bar, forwarded by
+	 * bindings.js's connect()/connectDemo() as their model argument. Task 13
+	 * (M9d). The empty-string default is load-bearing: '' means
+	 * internal/wiring.DefaultModel to Go's own Connect/ConnectDemo, so an
+	 * untouched picker connects EXACTLY as the app did before this field
+	 * existed. Any other value must be one of `supportedModels` — Go
+	 * refuses an unknown model before opening anything (app/connection.go's
+	 * connectModel), and the picker only ever offers what
+	 * GetSupportedModels listed, so it cannot produce one.
+	 *
+	 * The user's own choice, not connection state: deliberately survives
+	 * clearConnection/disconnectConnection, so reconnecting after a
+	 * disconnect keeps the radio they chose. Carries no capability meaning
+	 * whatsoever — the unverified-write consent decision is keyed on the
+	 * CONNECTED model, never on this pending choice.
+	 * @type {string} */
+	selectedModel = $state('')
+
 	/** Current codeplug view, or null before any ReadRadio/LoadFile/
 	 * GetCodeplug has succeeded.
 	 * @type {CodeplugView | null} */
@@ -351,6 +381,23 @@ class AppState {
 		this.connecting = connecting
 	}
 
+	/** Task 13 (M9d) — the model picker's list, exactly as
+	 * GetSupportedModels returned it. Null/undefined becomes an empty
+	 * array (mirrors setPorts): the picker always iterates an array.
+	 * @param {string[] | null} models */
+	setSupportedModels(models) {
+		this.supportedModels = models ?? []
+	}
+
+	/** Task 13 (M9d) — the user's chosen radio; '' means the default model
+	 * (see `selectedModel`'s own doc comment). A null/undefined choice
+	 * (a `<select>` with no value) becomes '' rather than being stored:
+	 * the connect path takes a string.
+	 * @param {string | null} model */
+	setSelectedModel(model) {
+		this.selectedModel = model ?? ''
+	}
+
 	/** @param {ConnectionInfo | null} info */
 	setConnection(info) {
 		this.connection = info
@@ -373,7 +420,13 @@ class AppState {
 	 * (see that field's doc comment) — test files that need it null call
 	 * setSettingsSpec(null) themselves, exactly as they already do for
 	 * uiSpec. `activeView` is untouched too: it is not connection- or
-	 * working-copy-scoped at all. */
+	 * working-copy-scoped at all.
+	 *
+	 * Task 13 (M9d): neither is the model picker's state —
+	 * `supportedModels` is a property of the BUILD, and `selectedModel` is
+	 * the user's own pending choice, which must survive so a reconnect
+	 * offers the radio they picked. Test files that want either reset call
+	 * its setter themselves, exactly as they already do for uiSpec. */
 	clearConnection() {
 		this.connection = null
 		this.codeplug = null

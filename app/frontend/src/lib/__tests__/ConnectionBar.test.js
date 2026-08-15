@@ -7,18 +7,21 @@ import ConnectionBar from '../ConnectionBar.svelte'
 
 vi.mock('../bridge/bindings.js', () => ({
 	listPorts: vi.fn().mockResolvedValue([]),
+	refreshSupportedModels: vi.fn().mockResolvedValue([]),
 	connect: vi.fn().mockResolvedValue(undefined),
 	connectDemo: vi.fn().mockResolvedValue(undefined),
 	disconnect: vi.fn().mockResolvedValue(undefined),
 }))
 
-import { listPorts, connect, connectDemo } from '../bridge/bindings.js'
+import { listPorts, refreshSupportedModels, connect, connectDemo } from '../bridge/bindings.js'
 
 function resetState() {
 	appState.clearConnection()
 	appState.setPorts([])
 	appState.setPortsLoading(false)
 	appState.setConnecting(false)
+	appState.setSupportedModels([])
+	appState.setSelectedModel('')
 	appState.alerts = []
 }
 
@@ -26,6 +29,7 @@ beforeEach(() => {
 	resetState()
 	vi.clearAllMocks()
 	listPorts.mockResolvedValue([])
+	refreshSupportedModels.mockResolvedValue([])
 	connect.mockResolvedValue(undefined)
 	connectDemo.mockResolvedValue(undefined)
 })
@@ -118,5 +122,72 @@ describe('ConnectionBar', () => {
 		render(ConnectionBar)
 
 		expect(screen.getByRole('button', { name: 'Disconnect' })).toBeDisabled()
+	})
+})
+
+describe('ConnectionBar model picker (task 13, M9d)', () => {
+	it('fetches the supported-model list once on mount — the list is Go\'s (GetSupportedModels), never a hard-coded one here', () => {
+		render(ConnectionBar)
+		expect(refreshSupportedModels).toHaveBeenCalledTimes(1)
+	})
+
+	it('renders one option per supported model, in the order Go gave them', () => {
+		appState.setSupportedModels(['FT-710', 'FTDX101D', 'FTdx10'])
+		render(ConnectionBar)
+
+		const options = screen.getAllByRole('option').map((o) => o.textContent?.trim())
+		expect(options).toEqual(expect.arrayContaining(['FT-710', 'FTDX101D', 'FTdx10']))
+	})
+
+	it('starts on the default option, whose value is "" — an untouched picker connects exactly as before it existed', () => {
+		appState.setSupportedModels(['FT-710', 'FTdx10'])
+		render(ConnectionBar)
+
+		const select = /** @type {HTMLSelectElement} */ (screen.getByLabelText('Radio'))
+		expect(select.value).toBe('')
+		expect(appState.selectedModel).toBe('')
+	})
+
+	it('choosing a radio stores it in appState.selectedModel, which is what the bridge forwards', async () => {
+		appState.setSupportedModels(['FT-710', 'FTdx10'])
+		appState.setPorts([{ Path: '/dev/tty.usbserial-A', Description: 'FTDI', Score: 5, Hints: [] }])
+		render(ConnectionBar)
+
+		await fireEvent.change(screen.getByLabelText('Radio'), { target: { value: 'FTdx10' } })
+		expect(appState.selectedModel).toBe('FTdx10')
+
+		await fireEvent.change(screen.getByLabelText('Port'), { target: { value: '/dev/tty.usbserial-A' } })
+		await fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
+
+		// connect() takes only the port: the chosen model rides in appState,
+		// so the demo path picks up the same choice with no second argument.
+		expect(connect).toHaveBeenCalledWith('/dev/tty.usbserial-A')
+	})
+
+	it('the choice also reaches the demo path — clicking Demo after picking a radio leaves the choice in place for connectDemo to forward', async () => {
+		appState.setSupportedModels(['FT-710', 'FTdx10'])
+		render(ConnectionBar)
+
+		await fireEvent.change(screen.getByLabelText('Radio'), { target: { value: 'FTdx10' } })
+		await fireEvent.click(screen.getByRole('button', { name: 'Demo (simulated radio)' }))
+
+		expect(connectDemo).toHaveBeenCalledTimes(1)
+		expect(appState.selectedModel).toBe('FTdx10')
+	})
+
+	it('the radio picker is disabled once connected — the model is fixed for the life of a session', () => {
+		appState.setSupportedModels(['FT-710', 'FTdx10'])
+		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usbserial-A', USBSerial: '', Region: '', Demo: false })
+		render(ConnectionBar)
+
+		expect(screen.getByLabelText('Radio')).toBeDisabled()
+	})
+
+	it('the radio picker is disabled while a connect attempt is in flight', () => {
+		appState.setSupportedModels(['FT-710', 'FTdx10'])
+		appState.setConnecting(true)
+		render(ConnectionBar)
+
+		expect(screen.getByLabelText('Radio')).toBeDisabled()
 	})
 })

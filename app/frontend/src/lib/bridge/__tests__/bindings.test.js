@@ -20,8 +20,15 @@ function resetState() {
 	appState.setSettings(null)
 	appState.setActiveView('channels')
 	appState.setAppVersion(null)
+	appState.setSupportedModels([])
+	appState.setSelectedModel('')
 	appState.alerts = []
 }
+
+/** What the GetSupportedModels stub returns — this build really does
+ * register four models (M9d-2), but these tests assert the list is passed
+ * through untouched, so the exact membership is the stub's business. */
+const SUPPORTED_MODELS = ['FT-710', 'FTDX101D', 'FTDX101MP', 'FTdx10']
 
 /** A minimal, synthetic UISpecView for the GetUISpec stub. */
 const UI_SPEC = {
@@ -94,6 +101,7 @@ beforeEach(() => {
 				// Go. Default clean; individual tests override.
 				IsDirty: vi.fn().mockResolvedValue(false),
 				GetAppVersion: vi.fn().mockResolvedValue(VERSION_VIEW),
+				GetSupportedModels: vi.fn().mockResolvedValue(SUPPORTED_MODELS),
 			},
 		},
 	}
@@ -190,6 +198,27 @@ describe('connect / connectDemo / disconnect', () => {
 
 		expect(window.go.main.App.ConnectDemo).toHaveBeenCalledWith('')
 		expect(appState.connection?.Demo).toBe(true)
+	})
+
+	// Task 13 (M9d): the model picker landed, so these two call sites now
+	// forward appState.selectedModel. An untouched picker is '' — pinned by
+	// the two tests above, which are exactly today's behaviour.
+	it('connect forwards the picked model from appState.selectedModel', async () => {
+		appState.setSelectedModel('FTdx10')
+		window.go.main.App.Connect.mockResolvedValue({ Model: 'FTdx10', CATID: '0761', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false })
+
+		await bindings.connect('/dev/tty.usb')
+
+		expect(window.go.main.App.Connect).toHaveBeenCalledWith('/dev/tty.usb', 'FTdx10')
+	})
+
+	it('connectDemo forwards the picked model too — the demo path opens that model\'s own simulator', async () => {
+		appState.setSelectedModel('FTDX101MP')
+		window.go.main.App.ConnectDemo.mockResolvedValue({ Model: 'FTDX101MP', CATID: '0681', Port: 'fake', USBSerial: 'SIM0001', Region: '', Demo: true })
+
+		await bindings.connectDemo()
+
+		expect(window.go.main.App.ConnectDemo).toHaveBeenCalledWith('FTDX101MP')
 	})
 
 	it('disconnect clears the connection on success', async () => {
@@ -354,6 +383,23 @@ describe('refreshAppVersion (v1.0.0 release tail)', () => {
 
 		expect(window.go.main.App.GetAppVersion).toHaveBeenCalledTimes(1)
 		expect(appState.appVersion).toEqual(VERSION_VIEW)
+	})
+})
+
+describe('refreshSupportedModels (task 13, M9d — the model picker\'s list)', () => {
+	it('stores GetSupportedModels\' list in appState and returns it, in Go\'s own order', async () => {
+		const models = await bindings.refreshSupportedModels()
+		expect(window.go.main.App.GetSupportedModels).toHaveBeenCalledTimes(1)
+		expect(models).toEqual(SUPPORTED_MODELS)
+		expect(appState.supportedModels).toEqual(SUPPORTED_MODELS)
+	})
+
+	it('alerts but does NOT throw on rejection — a picker with no list still connects as the default model', async () => {
+		window.go.main.App.GetSupportedModels.mockRejectedValue('boom')
+		const models = await bindings.refreshSupportedModels()
+		expect(models).toBeNull()
+		expect(appState.supportedModels).toEqual([])
+		expect(appState.alerts[0].message).toContain('listing supported radios')
 	})
 })
 

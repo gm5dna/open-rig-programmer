@@ -18,6 +18,7 @@ vi.mock('../lib/bridge/bindings.js', () => ({
 	refreshAppVersion: vi.fn().mockResolvedValue(null),
 	setWindowTitle: vi.fn(),
 	listPorts: vi.fn().mockResolvedValue([]),
+	refreshSupportedModels: vi.fn().mockResolvedValue([]),
 	connect: vi.fn(),
 	connectDemo: vi.fn(),
 	disconnect: vi.fn(),
