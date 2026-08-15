@@ -3,6 +3,8 @@
 package ftdx101
 
 import (
+	"fmt"
+	"math"
 	"reflect"
 	"testing"
 
@@ -595,5 +597,209 @@ func TestCapabilities_DVsMPIdentity(t *testing.T) {
 				t.Errorf("the D's and the MP's capabilities differ in something OTHER than Model and CATID:\n D  = %#v\n MP = %#v\nmatrix §4 says the manual distinguishes the models in three places and only the ID answer touches a capability value — a genuine per-model difference needs that model's own evidence and a rewrite of this test", normalise(tt.d), normalise(tt.mp))
 			}
 		})
+	}
+}
+
+// TestProfilesNeverEmitConsented: no capability PROFILE of either model
+// mints spec.ConsentedUnverified. The state is a session-time statement
+// about a user's recorded decision, so the only thing that may ever produce
+// it is the consent transform at the assembly point — never a label written
+// down in caps.go, where it would apply to every user of the model whether
+// they consented or not.
+func TestProfilesNeverEmitConsented(t *testing.T) {
+	for _, m := range testModels {
+		for _, tt := range []struct {
+			name string
+			caps spec.Capabilities
+		}{
+			{"Simulated", m.newDrv(Simulated).Capabilities()},
+			{"RealHardware", m.newDrv(RealHardware).Capabilities()},
+			{"unrecognised", m.newDrv(Profile(99)).Capabilities()},
+		} {
+			t.Run(m.name+"/"+tt.name, func(t *testing.T) {
+				if capsContains(tt.caps, spec.ConsentedUnverified) {
+					t.Error("a profile baseline carries ConsentedUnverified — consent belongs to a session, not to the radio's capability data")
+				}
+			})
+		}
+	}
+}
+
+// TestConsentOption_StaticCapabilitiesNeverConsented: the option changes
+// what a SESSION carries and nothing else. A driver built with it still
+// describes the radio exactly as one built without it does — for both
+// models, since each constructor threads its own options.
+//
+// That boundary is load-bearing above this package: internal/wiring's
+// registry publishes driver.Capabilities() and refuses a registered set
+// carrying ConsentedUnverified on either side (core/driver's registry
+// baseline guard), and the app's static surfaces — capability tables,
+// settings descriptors, offline bank synthesis — describe the model rather
+// than one user's decision.
+func TestConsentOption_StaticCapabilitiesNeverConsented(t *testing.T) {
+	for _, m := range testModels {
+		for _, tt := range []struct {
+			name string
+			p    Profile
+		}{
+			{"Simulated", Simulated},
+			{"RealHardware", RealHardware},
+			{"unrecognised", Profile(99)},
+		} {
+			t.Run(m.name+"/"+tt.name, func(t *testing.T) {
+				got := m.newDrv(tt.p, WithConsentedUnverifiedWrites()).Capabilities()
+				if capsContains(got, spec.ConsentedUnverified) {
+					t.Error("the consent option reached the STATIC capability set — it must apply only at session-capability assembly")
+				}
+				if !reflect.DeepEqual(got, m.newDrv(tt.p).Capabilities()) {
+					t.Error("a consented driver's static Capabilities() differ from an unconsented one's")
+				}
+			})
+		}
+	}
+}
+
+// TestProfileRecognised_MatchesTheDeclaredConstants is the consent gate's
+// DRIFT GUARD: profileRecognised must be true for exactly the Profile
+// constants this package declares, and false for everything else.
+//
+// The dangerous direction is the one this test exists for. A profile the
+// GATE recognised but Capabilities' switch did not would take the default
+// arm's fail-safe all-Unverified set and then have the consent transform
+// applied to it — fail-safe labels turned writable, which is the precise
+// opposite of what the fail-safe is for. (The other direction merely
+// withholds consent from a declared profile: unhelpful, not unsafe.)
+//
+// The two sides are restated in two places on purpose — profileRecognised's
+// switch and Capabilities' switch — because there is no way in Go to derive
+// one from the other for an open integer type, so a test is what holds them
+// together. The sweep below deliberately includes the values NEXT to the
+// declared ones (a constant added without a gate arm lands there), a
+// negative, and the extremes.
+func TestProfileRecognised_MatchesTheDeclaredConstants(t *testing.T) {
+	declared := []struct {
+		name string
+		p    Profile
+	}{
+		{"RealHardware", RealHardware},
+		{"Simulated", Simulated},
+	}
+	others := []Profile{
+		-1, -2, 2, 3, 4, 7, 42, 99, 1000,
+		Profile(math.MinInt), Profile(math.MaxInt),
+	}
+
+	for _, m := range testModels {
+		for _, tt := range declared {
+			t.Run(m.name+"/declared/"+tt.name, func(t *testing.T) {
+				d, ok := m.newDrv(tt.p).(*ftdx101Driver)
+				if !ok {
+					t.Fatal("the constructor did not return a *ftdx101Driver")
+				}
+				if !d.profileRecognised() {
+					t.Errorf("profileRecognised() = false for the declared constant %s — a declared profile must be able to receive consent", tt.name)
+				}
+			})
+		}
+		for _, p := range others {
+			t.Run(fmt.Sprintf("%s/other/%d", m.name, int(p)), func(t *testing.T) {
+				d, ok := m.newDrv(p).(*ftdx101Driver)
+				if !ok {
+					t.Fatal("the constructor did not return a *ftdx101Driver")
+				}
+				if d.profileRecognised() {
+					t.Errorf("profileRecognised() = true for Profile(%d), which this package does not declare — Capabilities' switch would hand that profile the fail-safe set and the gate would then let consent make it writable", int(p))
+				}
+			})
+		}
+	}
+}
+
+// TestConsentTransform_SimulatedIsANoOp records — and pins — WHY this
+// package's Simulated profile needs no consented-shape expectation of its
+// own: it carries NO write-side spec.Unverified label at all. Every field
+// the combined MT form can express is Write Supported against
+// internal/fakedx101, and the four it cannot are the zero FieldSupport, so
+// spec.ConsentUnverifiedWrites has nothing to convert and returns a
+// deep-equal set.
+//
+// The FTdx10's Simulated profile has exactly this shape, which is why its
+// task pinned only the RealHardware transformed shape too. Should a future
+// Stage W finding ever label some Simulated write Unverified, this test
+// fails — and the consented Simulated shape then needs pinning alongside
+// the RealHardware one in TestConsentOption_SessionCapsTransformed.
+//
+// It runs on the static baseline, so it costs no Open.
+func TestConsentTransform_SimulatedIsANoOp(t *testing.T) {
+	for _, m := range testModels {
+		t.Run(m.name, func(t *testing.T) {
+			caps := capabilitiesSimulated(m.params)
+			if capsContains(caps, spec.Unverified) {
+				t.Fatal("the Simulated profile now carries an Unverified label — check whether it is WRITE-side, and if so pin the consented Simulated shape as well as the RealHardware one")
+			}
+			if got := spec.ConsentUnverifiedWrites(caps); !reflect.DeepEqual(got, caps) {
+				t.Error("the consent transform CHANGED the Simulated baseline, which has no write-side Unverified to convert")
+			}
+		})
+	}
+}
+
+// TestEffectiveCapabilities_Validate: every capability set a session can
+// ever carry passes spec.Capabilities.Validate — both models × profiles ×
+// discovered inventories × consent, assembled through the one seam that
+// builds them (sessionCapabilities).
+//
+// TestProfiles_Validate covers the static baselines only, and the sets this
+// driver actually hands out are strictly larger: they carry the discovered
+// read-only banks, and now the consent transform's relabelling too. Validate
+// is meaningful for a consented set in particular because its read-side rule
+// refuses ConsentedUnverified outright, so a transform that leaked onto the
+// read side fails HERE rather than at whatever layer first tried to enforce
+// it.
+//
+// It calls sessionCapabilities DIRECTLY rather than opening sessions, and
+// that is what makes a sweep this wide affordable at all: an Open in this
+// package costs ~2-3 s and this table has 48 cells.
+func TestEffectiveCapabilities_Validate(t *testing.T) {
+	for _, m := range testModels {
+		for _, prof := range []struct {
+			name string
+			p    Profile
+		}{
+			{"RealHardware", RealHardware},
+			{"Simulated", Simulated},
+			{"unrecognised", Profile(99)},
+		} {
+			for _, disc := range []struct {
+				name     string
+				slots60m []string
+				emg      bool
+			}{
+				{"no discovery", nil, false},
+				{"60m only", []string{"503", "599"}, false},
+				{"EMG only", nil, true},
+				{"60m and EMG", []string{"501"}, true},
+			} {
+				for _, consent := range []bool{false, true} {
+					name := m.name + "/" + prof.name + "/" + disc.name
+					if consent {
+						name += "/consented"
+					}
+					t.Run(name, func(t *testing.T) {
+						var opts []Option
+						if consent {
+							opts = append(opts, WithConsentedUnverifiedWrites())
+						}
+						d, ok := m.newDrv(prof.p, opts...).(*ftdx101Driver)
+						if !ok {
+							t.Fatal("the constructor did not return a *ftdx101Driver")
+						}
+						if err := d.sessionCapabilities(disc.slots60m, disc.emg).Validate(); err != nil {
+							t.Errorf("Validate() = %v, want nil", err)
+						}
+					})
+				}
+			}
+		}
 	}
 }
