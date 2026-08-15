@@ -113,6 +113,148 @@ func TestExecute_HappyPath(t *testing.T) {
 	}
 }
 
+// TestExecute_ConsentedLabels_WriteVerifyPairRuns is THE PAIR under
+// consent: a full service pass — PrepareSend then Execute — over a
+// session whose MEM write labels are ConsentedUnverified rather than
+// Supported (consentedCapsSession, helpers_test.go). Nothing in this
+// package special-cases the label: CanWrite() is what every gate asks,
+// and consent makes it true. So the entries must NOT be Blocked at plan
+// time, the writes must reach the radio, each one's read-back must run
+// and match (VerifyOK in both the report and the journal's
+// verify_result lines), and the journal must carry the prepare line's
+// consent field alongside the ordinary completion events.
+//
+// This mirrors TestExecute_HappyPath's assertions deliberately: the whole
+// claim is that a consented send behaves EXACTLY as a Supported-label
+// send does, differing only in what the audit trail records about why it
+// was permitted.
+func TestExecute_ConsentedLabels_WriteVerifyPairRuns(t *testing.T) {
+	radio, sess, plainSess := openConsentedSimSession(t, fakeradio.WithFactoryImage(happyPathImage))
+	svc := NewService(sess, newStore(t), WithNow(stepClock(fixedNow)))
+
+	// The fixture's premise, asserted rather than assumed: the session
+	// under test offers consented MEM write labels where the driver's own
+	// (still enforced, below the service) say Supported.
+	caps := sess.Capabilities()
+	if got := caps.FieldSupport(spec.BankMemory, spec.FieldFrequency); got.Write != spec.ConsentedUnverified || !got.CanWrite() {
+		t.Fatalf("MEM FieldFrequency support = %+v, want Write=ConsentedUnverified and CanWrite() true", got)
+	}
+	if got := plainSess.Capabilities().FieldSupport(spec.BankMemory, spec.FieldFrequency); got.Write != spec.Supported {
+		t.Fatalf("underlying driver's MEM FieldFrequency Write = %v, want Supported (the driver must still enforce its own labels)", got.Write)
+	}
+
+	file := matchingCandidateFile(caps, happyPathPopulated(), map[string]*codeplug.ChannelData{
+		"001": writableChannel("001", 14_100_000, "CONSENT-1").Data,
+		"005": writableChannel("005", 14_200_000, "CONSENT-2").Data,
+	})
+
+	plan, err := svc.PrepareSend(testCtx(t), file)
+	if err != nil {
+		t.Fatalf("PrepareSend: unexpected error: %v", err)
+	}
+
+	// Obligation 6's gate, from the other side: consented labels satisfy
+	// CanWrite, so nothing is Blocked and both edits are real deltas.
+	diff := plan.Diff()
+	if diff.Blocked != 0 {
+		t.Errorf("diff.Blocked = %d, want 0 — consented labels must not block a delta", diff.Blocked)
+	}
+	if diff.Modified != 2 {
+		t.Errorf("diff.Modified = %d, want 2", diff.Modified)
+	}
+	for _, e := range diff.Entries {
+		if (e.Slot == "001" || e.Slot == "005") && e.Blocked {
+			t.Errorf("entry %q Blocked = true (%s), want writable under consented labels", e.Slot, e.BlockReason)
+		}
+	}
+
+	report, err := svc.Execute(testCtx(t), plan, plan.ConfirmationDigest(), ExecuteOptions{FirmwareConfirmed: "1.23"})
+	if err != nil {
+		t.Fatalf("Execute: unexpected error: %v", err)
+	}
+	if report.Written != 2 {
+		t.Errorf("Written = %d, want 2", report.Written)
+	}
+	if report.Verified != 2 {
+		t.Errorf("Verified = %d, want 2", report.Verified)
+	}
+	if report.SkippedBlocked != 0 {
+		t.Errorf("SkippedBlocked = %d, want 0", report.SkippedBlocked)
+	}
+	if report.Aborted {
+		t.Errorf("Aborted = true, want false (reason: %s)", report.AbortReason)
+	}
+
+	// Every acted-on slot: written AND verified clean (obligation 7).
+	written := map[string]bool{}
+	for _, sr := range report.Slots {
+		if sr.Action != actionWrite {
+			continue
+		}
+		if !sr.VerifyOK {
+			t.Errorf("report slot %q: VerifyOK = false (%s), want a clean write+verify", sr.Slot, sr.Detail)
+		}
+		written[sr.Slot] = true
+	}
+	if !written["001"] || !written["005"] {
+		t.Errorf("report.Slots recorded writes for %v, want both \"001\" and \"005\"", written)
+	}
+
+	// The write actually reached the radio — the fake's stored state, not
+	// merely this package's own bookkeeping.
+	for _, tt := range []struct {
+		slot   string
+		freqHz uint32
+		tag    string
+	}{
+		{"001", 14_100_000, "CONSENT-1"},
+		{"005", 14_200_000, "CONSENT-2"},
+	} {
+		st, ok := radio.SlotState(tt.slot)
+		if !ok {
+			t.Errorf("SlotState(%q): no state recorded — the consented write never reached the radio", tt.slot)
+			continue
+		}
+		if !st.Populated || st.Freq != freqDigits(tt.freqHz) || st.Tag != tt.tag {
+			t.Errorf("SlotState(%q) = %+v, want Freq=%s Tag=%q Populated=true", tt.slot, st, freqDigits(tt.freqHz), tt.tag)
+		}
+	}
+
+	// The journal: the prepare line's consent field, and the ordinary
+	// completion events either side of it.
+	records := readJournalRecords(t, report.JournalPath)
+	if len(records) == 0 {
+		t.Fatalf("journal %s is empty", report.JournalPath)
+	}
+	if got := records[0]["event"]; got != "prepare" {
+		t.Fatalf("journal's first event = %v, want \"prepare\"", got)
+	}
+	if got := records[0]["consented_unverified"]; got != true {
+		t.Errorf("prepare line's consented_unverified = %v, want true", got)
+	}
+	if got := records[len(records)-1]["event"]; got != "completion" {
+		t.Errorf("journal's last event = %v, want \"completion\"", got)
+	}
+	var writeAttempts, verifyResults int
+	for _, rec := range records {
+		switch rec["event"] {
+		case "write_attempt":
+			writeAttempts++
+		case "verify_result":
+			verifyResults++
+			if rec["ok"] != true {
+				t.Errorf("journal verify_result for slot %v: ok = %v, want true (%v)", rec["slot"], rec["ok"], rec["error"])
+			}
+		}
+	}
+	if writeAttempts != 2 {
+		t.Errorf("journal write_attempt count = %d, want 2", writeAttempts)
+	}
+	if verifyResults != 2 {
+		t.Errorf("journal verify_result count = %d, want 2", verifyResults)
+	}
+}
+
 // freqDigits mirrors fakeradio's 9-digit zero-padded ASCII frequency
 // encoding, for asserting against SlotState.Freq directly.
 func freqDigits(hz uint32) string {

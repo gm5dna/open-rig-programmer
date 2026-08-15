@@ -331,3 +331,69 @@ func TestSendPlan_ConfirmationDigest_PlanSpecific(t *testing.T) {
 		t.Errorf("reportA.Written = %d, want 1", reportA.Written)
 	}
 }
+
+// TestPrepareSend_JournalRecordsConsentedUnverified: the "prepare" journal
+// line states, for every plan, whether this session's write gate was
+// opened by a user's RECORDED CONSENT (a ConsentedUnverified write label)
+// rather than by hardware evidence alone. It is the audit trail's only
+// record of that fact — the journal carries no capability snapshot for a
+// reader to work it out from later (see capsConsented's doc comment) — so
+// the field must be present and correct on BOTH arms, not merely present
+// when true: an absent field and a false one are indistinguishable to a
+// reader who cannot tell whether the run predates the field.
+func TestPrepareSend_JournalRecordsConsentedUnverified(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		consented bool
+	}{
+		{name: "plain Simulated session", consented: false},
+		{name: "consented labels", consented: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, consentedSess, plainSess := openConsentedSimSession(t, fakeradio.WithFactoryImage(minimalFactoryImage))
+			sess := plainSess
+			if tt.consented {
+				sess = consentedSess
+			}
+			svc := NewService(sess, newStore(t), WithNow(stepClock(fixedNow)))
+
+			caps := sess.Capabilities()
+			file := matchingCandidateFile(caps, minimalFactoryPopulated(), map[string]*codeplug.ChannelData{
+				"001": writableChannel("001", 14_150_000, "MODIFIED").Data,
+			})
+			plan, err := svc.PrepareSend(testCtx(t), file)
+			if err != nil {
+				t.Fatalf("PrepareSend: unexpected error: %v", err)
+			}
+
+			rec := prepareRecord(t, journalPathFor(plan.SnapshotPath()))
+			got, ok := rec["consented_unverified"]
+			if !ok {
+				t.Fatalf("prepare journal line has no \"consented_unverified\" field: %v", rec)
+			}
+			if got != tt.consented {
+				t.Errorf("prepare line's consented_unverified = %v, want %v", got, tt.consented)
+			}
+		})
+	}
+}
+
+// prepareRecord returns the single "prepare" record from the journal at
+// path, failing the test if there is not exactly one.
+func prepareRecord(t *testing.T, path string) map[string]any {
+	t.Helper()
+	var found map[string]any
+	for _, rec := range readJournalRecords(t, path) {
+		if rec["event"] != "prepare" {
+			continue
+		}
+		if found != nil {
+			t.Fatalf("journal %s has more than one \"prepare\" record", path)
+		}
+		found = rec
+	}
+	if found == nil {
+		t.Fatalf("journal %s has no \"prepare\" record", path)
+	}
+	return found
+}

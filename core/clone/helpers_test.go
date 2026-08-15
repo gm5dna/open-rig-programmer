@@ -256,6 +256,74 @@ func openSimSession(t *testing.T, opts ...fakeradio.Option) (*fakeradio.Radio, d
 	return r, sess
 }
 
+// consentedCapsSession wraps a real fake-backed session, overriding ONLY
+// Capabilities() to relabel MEM's hardware-verified write fields as
+// ConsentedUnverified. The underlying driver still enforces its own
+// (Supported) labels, so writes flow — which is exactly the shape of a
+// consented sibling session (Diff consults the session caps; the driver
+// enforces the same set in production, and its acceptance here stands in
+// for that). A deliberate, documented exception to this package's
+// stubs-for-misbehaviour-only house rule (settings_test.go:90-95): no
+// registered driver can yet produce ConsentedUnverified against a fake
+// without the sibling drivers' full discovery walk, and this wrapper
+// keeps ReadChannel/WriteChannel REAL.
+//
+// One consequence of overriding ONLY Capabilities(), noted so no test
+// reads more into a journal than is there: the optional CONCRETE-type
+// interfaces this package reaches for by assertion — MemorySelector
+// (memory_selector.go), regioner (read.go), driver.SettingsReader
+// (settings.go) — are not promoted through an embedded interface, so a
+// Service over this wrapper skips the courtesy memory-selection
+// snapshot/restore (no "mc_snapshot"/"mc_restore" lines) and reads a
+// blank Region. Neither touches the write+verify pair itself, which is
+// what the consented-labels test exists to prove.
+type consentedCapsSession struct{ driver.Session }
+
+// Capabilities implements driver.Session, returning the underlying
+// session's effective capabilities with every MEM field whose Write is
+// spec.Supported relabelled spec.ConsentedUnverified. Only the write side
+// of the MEM bank is touched: the clarifier's Inert label, MEM's erase
+// (never consentable — spec.ConsentUnverifiedWrites exempts FieldErase
+// structurally), the PMS bank, and every Read label are passed through
+// exactly as the driver minted them, so the only behavioural difference
+// between this session and its underlying one is WHICH LABEL opened the
+// write gate. The Banks slice and the MEM Fields map are freshly
+// allocated here, so the relabelling can never reach back into anything
+// the driver holds (Capabilities() already hands out a defensive copy —
+// this is belt and braces, exactly as spec.copyBank is).
+func (s consentedCapsSession) Capabilities() spec.Capabilities {
+	caps := s.Session.Capabilities()
+	banks := make([]spec.Bank, len(caps.Banks))
+	copy(banks, caps.Banks)
+	for i, b := range banks {
+		if b.ID != spec.BankMemory {
+			continue
+		}
+		fields := make(map[spec.Field]spec.FieldSupport, len(b.Fields))
+		for f, fs := range b.Fields {
+			if fs.Write == spec.Supported {
+				fs.Write = spec.ConsentedUnverified
+			}
+			fields[f] = fs
+		}
+		b.Fields = fields
+		banks[i] = b
+	}
+	caps.Banks = banks
+	return caps
+}
+
+// openConsentedSimSession opens a Simulated fake-backed session exactly as
+// openSimSession does, then wraps it in consentedCapsSession — the
+// consented-labels session every test in this package uses. Both the
+// wrapper AND the underlying real session are returned: a test asserting
+// on the driver's own (untransformed) labels needs the latter.
+func openConsentedSimSession(t *testing.T, opts ...fakeradio.Option) (*fakeradio.Radio, driver.Session, driver.Session) {
+	t.Helper()
+	r, sess := openSimSession(t, opts...)
+	return r, consentedCapsSession{Session: sess}, sess
+}
+
 // tagPadWireInterceptor wraps a fakeradio port, rewriting exactly one
 // wire reply (wantFrame, matched byte-for-byte) to padFrame before the
 // bytes ever reach cat.Dialect.ParseMTAnswer. It exists SOLELY so
