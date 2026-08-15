@@ -7,12 +7,19 @@
 // than a second, independently-drifting copy.
 //
 // The deliberate structural-exclusivity shape that constrained
-// cmd/rigprog/wiring.go (task-11 brief §3) is preserved EXACTLY here:
-// two fully self-contained constructors — OpenRealSessionFor (this file)
-// and OpenFakeSessionFor (fake.go) — with no shared helper accepting a
-// profile alongside a port. That absence is the point: it keeps the
-// invalid RealHardware/fake-rig or Simulated/real-port pairings
-// structurally unrepresentable in the code shape, not merely unreached.
+// cmd/rigprog/wiring.go (task-11 brief §3) is preserved EXACTLY here: two
+// fully self-contained session paths — the REAL one (this file:
+// OpenRealSessionWith, the single implementation, plus OpenRealSessionFor,
+// its zero-option delegate — two exported names over one body) and the
+// SIMULATED one (fake.go's OpenFakeSessionFor) — with no shared helper
+// accepting a profile alongside a port. That absence is the point: it keeps
+// the invalid RealHardware/fake-rig or Simulated/real-port pairings
+// structurally unrepresentable in the code shape, not merely unreached. What
+// a caller may vary on the real path is bounded by SessionOptions, which
+// carries the user's consent and may never carry a profile or a port object
+// — the constraint is about what can be PAIRED, and it is untouched by the
+// second name.
+//
 // EACH registered driver's simulated-profile selector — ft710.Simulated,
 // ftdx10.Simulated since M9c-6, and ftdx101.Simulated since M9d-2 (ONE
 // token for two registered models, since one driver package drives both
@@ -25,9 +32,9 @@
 // second test).
 //
 // Task 39 (the M9a radio-neutral core refactor) generalised this package
-// to model-keyed dispatch: OpenRealSessionFor (this file) and
+// to model-keyed dispatch: the real path (this file) and
 // OpenFakeSessionFor (fake.go) are the two fully self-contained,
-// model-keyed constructors carrying the structural-exclusivity shape
+// model-keyed session paths carrying the structural-exclusivity shape
 // above. They were joined, briefly, by two DefaultModel-only compatibility
 // wrappers (OpenRealSession/OpenFakeSession) so every caller outside this
 // package could compile unchanged; Tasks 40 (cmd/rigprog) and 41 (app/)
@@ -116,7 +123,7 @@ const FTdx101MPModel = "FTdx101MP"
 // realDrivers is the model-keyed table of real-hardware driver
 // constructors: model name -> a constructor building THAT model's
 // real-profile driver.Driver. It is the single source of truth
-// SupportedModels, OpenRealSessionFor, StaticCapabilities,
+// SupportedModels, OpenRealSessionWith, StaticCapabilities,
 // StaticSettingsDescriptor, and SynthesiseDiscoveredBanks all key off —
 // adding a radio model to this package means adding one entry here (plus
 // fake.go's own table for the simulated/demo path), never touching the
@@ -135,11 +142,53 @@ const FTdx101MPModel = "FTdx101MP"
 // would mean choosing which sibling a "FTdx101" selection meant, which is
 // the choice core/driver/ftdx101 refuses to offer (no bare New) and
 // core/cat/ftdx101 refuses to offer (no bare Dialect()).
-var realDrivers = map[string]func() driver.Driver{
-	DefaultModel:   NewRealDriver,
-	FTdx10Model:    NewFTdx10RealDriver,
-	FTdx101DModel:  NewFTdx101DRealDriver,
-	FTdx101MPModel: NewFTdx101MPRealDriver,
+//
+// EACH ROW TAKES THE USER'S CONSENT (the unverified-write-consent
+// milestone, task 8) and all four spend it identically: consent false calls
+// that model's pinned zero-argument constructor unchanged — so the default
+// path is not merely "still working" but byte-identical to the one it
+// replaced, pinned by TestRealDriverFor_DefaultPathByteIdentical — and
+// consent true builds the SAME profile with that driver package's own
+// WithConsentedUnverifiedWrites().
+//
+// The FT-710's row carries the option too, though its real-hardware
+// capability set has no Unverified write left for the transform to touch:
+// the option is a proven no-op there (core/driver/ft710's own tests own that
+// proof, so this table need not restate it). A row that omitted it would be
+// a second shape to reason about for no gain — and one that would quietly
+// stop being a no-op the day that radio gained an unverified field.
+//
+// CONSENT REACHES A SESSION, NEVER A STATIC SURFACE. Every driver's
+// WithConsentedUnverifiedWrites leaves its static Capabilities untouched and
+// shows up only in the set Open assembles, which is why the three static
+// callers below pass false and mean it, and why the option's proof is a
+// session-level test (TestOpenRealSessionWith_ConsentedSessionCaps) rather
+// than a capability comparison here.
+var realDrivers = map[string]func(consent bool) driver.Driver{
+	DefaultModel: func(consent bool) driver.Driver {
+		if consent {
+			return ft710.New(ft710.RealHardware, ft710.WithConsentedUnverifiedWrites())
+		}
+		return NewRealDriver()
+	},
+	FTdx10Model: func(consent bool) driver.Driver {
+		if consent {
+			return ftdx10.New(ftdx10.RealHardware, ftdx10.WithConsentedUnverifiedWrites())
+		}
+		return NewFTdx10RealDriver()
+	},
+	FTdx101DModel: func(consent bool) driver.Driver {
+		if consent {
+			return ftdx101.NewD(ftdx101.RealHardware, ftdx101.WithConsentedUnverifiedWrites())
+		}
+		return NewFTdx101DRealDriver()
+	},
+	FTdx101MPModel: func(consent bool) driver.Driver {
+		if consent {
+			return ftdx101.NewMP(ftdx101.RealHardware, ftdx101.WithConsentedUnverifiedWrites())
+		}
+		return NewFTdx101MPRealDriver()
+	},
 }
 
 // SupportedModels returns every model name this package can open a real
@@ -174,18 +223,24 @@ func (e *UnknownModelError) Error() string {
 	return fmt.Sprintf("wiring: unknown model %q (supported: %s)", e.Model, strings.Join(e.Supported, ", "))
 }
 
-// realDriverFor looks model up in realDrivers and constructs its driver,
-// or fails with *UnknownModelError. It is the shared entry point every
-// model-keyed real-driver lookup in this file (OpenRealSessionFor,
-// StaticCapabilities, StaticSettingsDescriptor, SynthesiseDiscoveredBanks)
-// goes through, so "which models this package supports" has exactly one
-// answer.
-func realDriverFor(model string) (driver.Driver, error) {
+// realDriverFor looks model up in realDrivers and constructs its driver at
+// the caller's consent, or fails with *UnknownModelError. It is the shared
+// entry point every model-keyed real-driver lookup in this file
+// (OpenRealSessionWith, StaticCapabilities, StaticSettingsDescriptor,
+// SynthesiseDiscoveredBanks) goes through, so "which models this package
+// supports" has exactly one answer.
+//
+// consent is the USER's recorded acceptance of writing this radio's
+// unverified fields, threaded through to the driver package's own
+// WithConsentedUnverifiedWrites (see realDrivers). It is a plain bool and
+// this package reads no store to obtain it: whoever calls decides, and
+// nothing here can turn a caller's "no" into a "yes".
+func realDriverFor(model string, consent bool) (driver.Driver, error) {
 	ctor, ok := realDrivers[model]
 	if !ok {
 		return nil, &UnknownModelError{Model: model, Supported: SupportedModels()}
 	}
-	return ctor(), nil
+	return ctor(consent), nil
 }
 
 // RegisterDriverError is NewRegistry's typed failure when
@@ -250,6 +305,18 @@ func NewRealDriver() driver.Driver {
 // therefore adds a READ/probe path against real hardware and no write path
 // (see core/driver/ftdx10/doc.go's write guard, and its ASSUMED register
 // for what a Stage R session would lift).
+//
+// That is the whole truth for THIS constructor, and this constructor is
+// what realDrivers' FTdx10 row returns for every unconsented caller. The
+// CONSENTED row is a different construction — ftdx10.New(RealHardware,
+// WithConsentedUnverifiedWrites()), built only when the user's recorded
+// grant says so — and the session IT assembles re-labels those write-side
+// Unverified fields spec.ConsentedUnverified, which FieldSupport.CanWrite
+// opens. Even there the driver's STATIC Capabilities is untouched, which
+// is exactly what lets NeedsUnverifiedConsent read it to decide the radio
+// is consent-eligible at all. So "no write path" remains the answer for
+// every caller who has not asked for one, and the write path a consenting
+// user gets is one they were warned about and chose.
 func NewFTdx10RealDriver() driver.Driver {
 	return ftdx10.New(ftdx10.RealHardware)
 }
@@ -266,15 +333,26 @@ func NewFTdx10RealDriver() driver.Driver {
 // spec.Unverified, nothing writable on any bank. No FTDX101D has been
 // written to by this project, and the capability gate refuses before any
 // frame is built. Registering the model therefore adds a READ/probe path
-// against real hardware and NO write path (see core/driver/ftdx101/doc.go's
-// write guard, and its ASSUMED register for what a Stage W session would
-// lift).
+// against real hardware and, for an UNCONSENTED session (the consent
+// exception is named at the foot of this comment), NO write path (see
+// core/driver/ftdx101/doc.go's write guard, and its ASSUMED register for
+// what a Stage W session would lift).
 //
 // The FAIL-SAFE DIRECTION is worth restating because it is what makes this
 // safe to register at all: an unrecognised Profile value selects the
 // all-Unverified set too, never the simulator's write-Supported one. There
 // is no value a caller can pass to this package that produces a
-// write-capable real-hardware FTDX101D driver.
+// write-capable real-hardware FTDX101D driver — with ONE named exception,
+// which is not a value at all but a decision: SessionOptions'
+// ConsentUnverifiedWrites, spent from the user's own recorded grant, makes
+// realDrivers build the consented variant instead of this constructor's
+// product, and the SESSION that variant opens carries
+// spec.ConsentedUnverified in place of spec.Unverified and can therefore
+// write. The exception is deliberately narrow and deliberately loud: it is
+// unreachable without a stored grant, it never alters this driver's static
+// capability set, it never touches FieldErase, and it is skipped for an
+// unrecognised Profile — so the fail-safe direction above survives it
+// intact.
 func NewFTdx101DRealDriver() driver.Driver {
 	return ftdx101.NewD(ftdx101.RealHardware)
 }
@@ -295,8 +373,9 @@ func NewFTdx101MPRealDriver() driver.Driver {
 	return ftdx101.NewMP(ftdx101.RealHardware)
 }
 
-// openSerial is OpenRealSessionFor's test seam: production code always
-// leaves this at transport.OpenSerial, and OpenRealSessionFor calls it
+// openSerial is OpenRealSessionWith's test seam (and so OpenRealSessionFor's
+// too, that being its zero-option delegate): production code always leaves
+// this at transport.OpenSerial, and OpenRealSessionWith calls it
 // instead of transport.OpenSerial directly. It exists for exactly one
 // property — that the baud handed to the serial layer is the DRIVER's
 // own Capabilities().DefaultBaud rather than transport's package
@@ -307,20 +386,57 @@ func NewFTdx101MPRealDriver() driver.Driver {
 // here cannot reach it). A recording seam at THIS call site is therefore
 // the only place the disagreement between a driver's DefaultBaud and
 // transport.DefaultBaud can be observed at all. Deliberately a
-// package-level variable rather than a parameter on OpenRealSessionFor:
+// package-level variable rather than a parameter on either function (or a
+// SessionOptions field):
 // adding one would put a port-construction hook in the public signature
 // of a constructor whose whole shape (see this file's package comment)
 // exists to keep invalid profile/port pairings unrepresentable.
 var openSerial = transport.OpenSerial
 
-// OpenRealSessionFor opens a session against a real radio of model,
-// attached at portPath: a real serial port via transport.OpenSerial,
-// paired with model's own real-hardware driver constructor from
-// realDrivers. This is one of exactly two model-keyed wiring
-// constructors (see fake.go's OpenFakeSessionFor); there is deliberately
-// no shared helper taking a port alongside an ft710.Profile, so the
-// invalid RealHardware/fakeradio (or Simulated/real-port) pairing stays
-// unrepresentable in the code shape, not merely unreached.
+// SessionOptions carries what a caller may vary about a real-hardware
+// session beyond the model and the port. It is a struct rather than a
+// parameter so that a later option is an added field, not a fifth argument
+// at every call site — but it is deliberately NOT a general options bag: it
+// may never grow a driver profile or a port object, which would recreate
+// exactly the "profile + port" seam this file's structural-exclusivity shape
+// exists to rule out.
+type SessionOptions struct {
+	// ConsentUnverifiedWrites is the USER's recorded acceptance of writing
+	// this radio's unverified fields, passed to model's driver as that
+	// package's WithConsentedUnverifiedWrites (see realDrivers). FALSE is
+	// the zero value and the default, so OpenRealSessionFor's zero-option
+	// delegation is the pre-consent behaviour exactly.
+	//
+	// A BOOL, and this package reads no consent store to fill it: whose
+	// consent it is, where it was recorded and whether it is still current
+	// are questions for the composition root that owns the user (see
+	// internal/userconfig). Wiring's job is to spend the answer, not to
+	// find it — which is also why no userconfig import appears in this
+	// package.
+	ConsentUnverifiedWrites bool
+}
+
+// OpenRealSessionWith opens a session against a real radio of model,
+// attached at portPath, under opts: a real serial port via
+// transport.OpenSerial, paired with model's own real-hardware driver
+// constructor from realDrivers, built at opts.ConsentUnverifiedWrites.
+//
+// It is the ONE real implementation of this package's real-session path, and
+// OpenRealSessionFor below is its zero-option delegate — two exported names
+// over one body, not two constructors. The structural-exclusivity shape both
+// carry is unchanged and is what SessionOptions is bounded by: neither
+// function, and no helper either reaches, lets a caller supply a driver
+// profile or a port object, so the invalid RealHardware/fakeradio (or
+// Simulated/real-port) pairing stays unrepresentable in the code shape
+// rather than merely unreached. fake.go's OpenFakeSessionFor is the
+// simulated half of that shape and is wholly separate from this one.
+//
+// CONSENT REACHES THE SESSION ALONE. The option transforms the capability
+// set the driver's Open assembles (write-side spec.Unverified becomes
+// spec.ConsentedUnverified) and leaves that driver's static Capabilities
+// untouched — which is why this function is where the option is proved
+// (TestOpenRealSessionWith_ConsentedSessionCaps, over every consent-eligible
+// model) and why the static lookups below pass false.
 //
 // The port is opened at the DRIVER's own factory-default CAT baud
 // (Capabilities().DefaultBaud), not at transport's package default: all
@@ -341,8 +457,8 @@ var openSerial = transport.OpenSerial
 // it opens on both outcomes: on any error below, the port is already
 // closed by whichever call failed, and this function never closes it
 // itself.
-func OpenRealSessionFor(ctx context.Context, model, portPath string) (driver.Session, func() error, error) {
-	d, err := realDriverFor(model)
+func OpenRealSessionWith(ctx context.Context, model, portPath string, opts SessionOptions) (driver.Session, func() error, error) {
+	d, err := realDriverFor(model, opts.ConsentUnverifiedWrites)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -392,6 +508,22 @@ func OpenRealSessionFor(ctx context.Context, model, portPath string) (driver.Ses
 	return sess, sess.Close, nil
 }
 
+// OpenRealSessionFor opens a session against a real radio of model, attached
+// at portPath, with NO options: it is OpenRealSessionWith's zero-option
+// delegate and has no body of its own, so a caller that has no consent
+// decision to express — and every caller written before consent existed —
+// gets exactly the pre-consent behaviour, by construction rather than by
+// agreement between two implementations
+// (TestOpenRealSessionFor_DelegatesZeroOptions pins the sessions equal).
+//
+// Its signature is deliberately unchanged. The consent-bearing path is a new
+// NAME, not a new argument on this one: threading a bool through every
+// existing call site would have made every caller state a consent position,
+// including the many that have none.
+func OpenRealSessionFor(ctx context.Context, model, portPath string) (driver.Session, func() error, error) {
+	return OpenRealSessionWith(ctx, model, portPath, SessionOptions{})
+}
+
 // StaticCapabilities returns model's static baseline capability
 // description — the same value NewRealDriver().Capabilities() reports for
 // DefaultModel — via a registry lookup (mirroring OpenRealSessionFor's own
@@ -399,7 +531,8 @@ func OpenRealSessionFor(ctx context.Context, model, portPath string) (driver.Ses
 // here too) plus Driver.Capabilities(). Fails with *UnknownModelError for
 // an unrecognised model.
 func StaticCapabilities(model string) (spec.Capabilities, error) {
-	d, err := realDriverFor(model)
+	// consent false: a static surface describes the radio, never a user's consent.
+	d, err := realDriverFor(model, false)
 	if err != nil {
 		return spec.Capabilities{}, err
 	}
@@ -420,6 +553,65 @@ func StaticCapabilities(model string) (spec.Capabilities, error) {
 	return drv.Capabilities(), nil
 }
 
+// NeedsUnverifiedConsent reports whether model is CONSENT-ELIGIBLE: whether
+// its real-hardware baseline still carries a write-side spec.Unverified
+// anywhere, and so whether a user's recorded consent could open a write gate
+// on it at all. Fails with *UnknownModelError for an unrecognised model, and
+// returns false alongside it — a caller that ignored the error must not be
+// told an unnameable radio can be consented to.
+//
+// ONE implementation, exported, because two composition roots ask the same
+// question: the CLI's "settings unverified-writes" (which models it lists as
+// on/off, and which it refuses a grant for) and the GUI's own consent
+// surface. A private copy in either would let the two disagree about which
+// radios consent even applies to — an FT-710 owner asked to authorise an
+// unverified write that cannot exist, or an FTdx10 owner refused a grant that
+// would have unlocked one.
+//
+// STATIC capabilities, never a session's, and that is what makes the question
+// answerable before any port is opened: the consent transform leaves a
+// driver's static set untouched (see OpenRealSessionWith), so this predicate
+// describes the RADIO — "has this project written to one of these and proved
+// it?" — and never a particular user's decision. spec.ConsentedUnverified is
+// deliberately not counted: it is what a consented SESSION carries, and it
+// cannot appear in a static set at all. Nor is a write-side Unverified on
+// spec.FieldErase — see consentCouldUnlockAWrite.
+func NeedsUnverifiedConsent(model string) (bool, error) {
+	caps, err := StaticCapabilities(model)
+	if err != nil {
+		return false, err
+	}
+	return consentCouldUnlockAWrite(caps), nil
+}
+
+// consentCouldUnlockAWrite reports whether caps carries a write-side
+// spec.Unverified that a grant could actually turn into a permitted write.
+//
+// spec.FieldErase is SKIPPED, and that is the whole reason this is a named
+// predicate rather than an inline loop. spec.ConsentUnverifiedWrites
+// structurally exempts FieldErase — it converts every other Unverified
+// write label to ConsentedUnverified and leaves erase exactly as it found
+// it — so an Unverified erase is not something consent can unlock. Counting
+// it would make a radio whose ONLY write-side Unverified sat on erase
+// "consent-eligible": its owner would be shown the arming dialogue, asked
+// to authorise an unverified write, and (in the GUI) put through a
+// disconnect/reconnect to grant something that provably changes nothing.
+//
+// No registered model has that shape today, which is exactly why the rule
+// is written down here and pinned by a fixture
+// (TestConsentCouldUnlockAWrite_EraseOnlyIsNotEligible) rather than left to
+// be noticed when one arrives.
+func consentCouldUnlockAWrite(caps spec.Capabilities) bool {
+	for _, b := range caps.Banks {
+		for f, fs := range b.Fields {
+			if f != spec.FieldErase && fs.Write == spec.Unverified {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // StaticSettingsDescriptor returns model's driver-level settings tree —
 // the driver.StaticSettingsProvider capability (core/driver/optional.go)
 // — when model's driver implements it. The bool result reports whether
@@ -428,7 +620,8 @@ func StaticCapabilities(model string) (spec.Capabilities, error) {
 // at all, distinct from a non-nil error, which means model itself is
 // unrecognised.
 func StaticSettingsDescriptor(model string) (driver.SettingsDescriptor, bool, error) {
-	d, err := realDriverFor(model)
+	// consent false: a static surface describes the radio, never a user's consent.
+	d, err := realDriverFor(model, false)
 	if err != nil {
 		return driver.SettingsDescriptor{}, false, err
 	}
@@ -448,7 +641,8 @@ func StaticSettingsDescriptor(model string) (driver.SettingsDescriptor, bool, er
 // function's error-free signature (D6/F4): a caller that needs to tell
 // the two apart should check model against SupportedModels() itself.
 func SynthesiseDiscoveredBanks(model string, slots []string) ([]spec.Bank, bool) {
-	d, err := realDriverFor(model)
+	// consent false: a static surface describes the radio, never a user's consent.
+	d, err := realDriverFor(model, false)
 	if err != nil {
 		return nil, false
 	}

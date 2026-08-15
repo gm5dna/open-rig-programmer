@@ -81,10 +81,14 @@
 //     writes are attempted.
 //
 //  8. Append-only journal. Every step — prepare (including the snapshot
-//     path), each per-channel write attempt, each verify result, an
-//     abort, and completion — is appended as one JSON line, fsync'd,
-//     BEFORE the action's outcome is relied upon for the next decision.
-//     The journal file lives beside the snapshot (SnapshotStore).
+//     path, and "consented_unverified": whether this SESSION'S
+//     capabilities carry a consented-unverified write label anywhere,
+//     session-wide rather than scoped to the fields this plan writes —
+//     see capsConsented), each per-channel write attempt, each verify
+//     result, an abort, and completion — is appended as one JSON line,
+//     fsync'd, BEFORE the action's outcome is relied upon for the next
+//     decision. The journal file lives beside the snapshot
+//     (SnapshotStore).
 //
 //  9. Snapshot before anything. PrepareSend saves the fresh baseline
 //     read as a codeplug JSON snapshot (an atomic codeplug.Save) to a

@@ -514,6 +514,13 @@ func TestImportCHIRP_TagDisplayFollowsTheTargetBank(t *testing.T) {
 		{name: "readable, write Unsupported (the discovered 60M/EMG shape)", tagDisplay: spec.FieldSupport{Read: spec.Supported, Write: spec.Unsupported}, want: codeplug.BoolField{State: codeplug.Unknown}},
 		{name: "writable, read Unsupported", tagDisplay: spec.FieldSupport{Read: spec.Unsupported, Write: spec.Supported}, want: codeplug.BoolField{State: codeplug.Unknown}},
 		{name: "Inert write (transmitted-but-ignored is still a frame field)", tagDisplay: spec.FieldSupport{Read: spec.Supported, Write: spec.Inert}, want: codeplug.BoolField{State: codeplug.Unknown}},
+		// The consented shape a session carries once the user has granted
+		// unverified writes: Write ConsentedUnverified, Read left Unverified
+		// (spec.ConsentUnverifiedWrites transforms the write side only). It
+		// must read exactly as the plain-Unverified row above does — consent
+		// is about authorising a write, and this derivation asks a different
+		// question entirely, whether the frame HAS the flag.
+		{name: "ConsentedUnverified write (consent does not make a flag appear or vanish)", tagDisplay: spec.FieldSupport{Read: spec.Unverified, Write: spec.ConsentedUnverified}, want: codeplug.BoolField{State: codeplug.Unknown}},
 		{name: "both Unsupported (the FTdx10's own shape)", tagDisplay: spec.FieldSupport{}, want: codeplug.BoolField{State: codeplug.Unavailable}},
 		{name: "field absent from the bank's map entirely", absentField: true, want: codeplug.BoolField{State: codeplug.Unavailable}},
 	}
@@ -961,31 +968,64 @@ func TestImportCHIRP_ScanSkipIsCapabilityAware(t *testing.T) {
 // Without this the caps-aware fold would be indistinguishable from simply
 // deleting the Known arm, and the first radio registered with a writable
 // scan-skip would silently import as if it had none.
+//
+// TWO ROWS, because two different labels reach this branch and they are
+// different KINDS of claim. spec.Supported is hardware evidence.
+// spec.ConsentedUnverified is the label a session carries once the user has
+// granted unverified writes (spec.ConsentUnverifiedWrites), and it must
+// import IDENTICALLY: Unreachable asks whether both directions are
+// Unsupported, which a consented write label is not, so the literal reading
+// applies to a consented radio exactly as it does to a proven one. The row
+// fails the moment the predicate is narrowed to test Supported.
 func TestImportCHIRP_ScanSkipLiteralOnAWritableRadio(t *testing.T) {
 	const csv = "Location,Name,Frequency,Duplex,Tone,rToneFreq,cToneFreq,Mode,Skip\n" +
 		"1,BLANK,145.500000,,,,,FM,\n" +
 		"2,SKIPPED,145.525000,,,,,FM,S\n"
 
-	caps := writableCapabilities()
-	if fs := caps.FieldSupport(spec.BankMemory, spec.FieldScanSkip); fs.Unreachable() {
-		t.Fatalf("fixture precondition: writableCapabilities scan_skip = %+v, want reachable", fs)
+	tests := []struct {
+		name     string
+		scanSkip spec.FieldSupport
+	}{
+		{"hardware-proven scan skip", spec.FieldSupport{Read: spec.Supported, Write: spec.Supported}},
+		{"consented scan skip (the user's grant, not hardware evidence)", spec.FieldSupport{Read: spec.Unverified, Write: spec.ConsentedUnverified}},
 	}
 
-	channels, report, err := ImportCHIRP(strings.NewReader(csv), caps)
-	if err != nil {
-		t.Fatalf("ImportCHIRP() error = %v", err)
-	}
-	if len(channels) != 2 {
-		t.Fatalf("imported %d channels, want 2", len(channels))
-	}
-	if got := channels[0].Data.ScanSkip; got != (codeplug.BoolField{State: codeplug.Known, Value: false}) {
-		t.Errorf("blank Skip -> ScanSkip = %+v, want {Known,false} on a radio that can store it", got)
-	}
-	if got := channels[1].Data.ScanSkip; got != (codeplug.BoolField{State: codeplug.Known, Value: true}) {
-		t.Errorf("Skip=S -> ScanSkip = %+v, want {Known,true} on a radio that can store it", got)
-	}
-	if got := skipEntries(report); len(got) != 0 {
-		t.Errorf("Skip entries = %+v, want none: nothing is lost when the radio can store the answer", got)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			caps := writableCapabilities()
+			banks := make([]spec.Bank, len(caps.Banks))
+			copy(banks, caps.Banks)
+			for i := range banks {
+				fields := make(map[spec.Field]spec.FieldSupport, len(banks[i].Fields))
+				for f, fs := range banks[i].Fields {
+					fields[f] = fs
+				}
+				fields[spec.FieldScanSkip] = tc.scanSkip
+				banks[i].Fields = fields
+			}
+			caps.Banks = banks
+
+			if fs := caps.FieldSupport(spec.BankMemory, spec.FieldScanSkip); fs.Unreachable() {
+				t.Fatalf("fixture precondition: scan_skip = %+v, want reachable", fs)
+			}
+
+			channels, report, err := ImportCHIRP(strings.NewReader(csv), caps)
+			if err != nil {
+				t.Fatalf("ImportCHIRP() error = %v", err)
+			}
+			if len(channels) != 2 {
+				t.Fatalf("imported %d channels, want 2", len(channels))
+			}
+			if got := channels[0].Data.ScanSkip; got != (codeplug.BoolField{State: codeplug.Known, Value: false}) {
+				t.Errorf("blank Skip -> ScanSkip = %+v, want {Known,false} on a radio that can store it", got)
+			}
+			if got := channels[1].Data.ScanSkip; got != (codeplug.BoolField{State: codeplug.Known, Value: true}) {
+				t.Errorf("Skip=S -> ScanSkip = %+v, want {Known,true} on a radio that can store it", got)
+			}
+			if got := skipEntries(report); len(got) != 0 {
+				t.Errorf("Skip entries = %+v, want none: nothing is lost when the radio can store the answer", got)
+			}
+		})
 	}
 }
 

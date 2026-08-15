@@ -41,6 +41,27 @@
 	 * @type {{ format: 'CSV' | 'CHIRP', result: ImportResultView } | null} */
 	let importResult = $state(null)
 
+	// Task 14 (M9d): `sendPlan` is a LOCAL copy of a plan Go also holds, and
+	// Go drops its own whenever the session closes (app/connection.go's
+	// Disconnect). A consent change for the connected radio does exactly
+	// that — bridge-orchestrated disconnect → persist → reconnect — so the
+	// dialogue on screen would otherwise still offer a Confirm whose
+	// digest no longer matches anything. appState.preparedPlanEpoch is that
+	// announcement; reading it here (and nothing else) drops the local copy
+	// on each invalidation.
+	$effect(() => {
+		void appState.preparedPlanEpoch
+		sendPlan = null
+	})
+
+	// The consent surface refuses to change anything while this dialogue is
+	// open (appState.canChangeUnverifiedConsent), since a consent reconnect
+	// would invalidate the very plan being reviewed. Pure frontend UI state
+	// — see app.svelte.js's module comment on why a component sets it.
+	$effect(() => {
+		appState.setSendDialogOpen(sendPlan !== null)
+	})
+
 	// --- Read Radio / Open, with the dirty guard --------------------------
 
 	async function doReadRadio() {

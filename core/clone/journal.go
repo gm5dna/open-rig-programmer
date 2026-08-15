@@ -106,6 +106,16 @@ func (s SnapshotStore) OpenJournal(snapshotPath string) *Journal {
 // PrepareSend/Execute pair (obligation 8): "prepare", the snapshot path,
 // each per-channel write attempt and its result, each verify result, an
 // abort, and completion.
+//
+// The "prepare" line also carries "consented_unverified" (see
+// capsConsented, plan.go): true when this SESSION'S capability set
+// carries a ConsentedUnverified write label ANYWHERE — a user's recorded
+// consent to unverified writes for this radio model opened the write
+// gate — and false otherwise. It is deliberately session-wide, not
+// plan-scoped: it does not claim that any field THIS plan writes was
+// consented, only that this session was permitted to write on that
+// basis. Present on every prepare line, both values, so an absent field
+// and a false one are never confused in an append-only file.
 type Journal struct {
 	path string
 }

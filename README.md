@@ -15,17 +15,59 @@ CAT connection; no programming cable or card juggling needed.
 | Radio | Read | Write | Notes |
 | --- | --- | --- | --- |
 | **FT-710** | ✅ | ✅ | Fully supported. Read and write paths verified against a real UK FT-710 (see `docs/hardware-notes.md`). |
-| **FTdx10** | ✅ | 🚫 not yet | Read, probe and settings snapshot. Writing stays disabled until write trials run on a real radio. |
-| **FTdx101D** | ✅ | 🚫 not yet | As FTdx10. |
-| **FTdx101MP** | ✅ | 🚫 not yet | As FTdx10. |
+| **FTdx10** | ✅ | ⚠️ opt-in | Read, probe and settings snapshot. Writing is refused until you enable unverified writes for this radio — see below. |
+| **FTdx101D** | ✅ | ⚠️ opt-in | As FTdx10. |
+| **FTdx101MP** | ✅ | ⚠️ opt-in | As FTdx10. |
 
-The honest small print: the three FTdx models were built from Yaesu's
-published CAT manuals and tested against protocol simulators — no
-physical FTdx10 or FTdx101 has yet been connected to this project.
-Reading is safe by design (the tool only ever sends documented read
-commands to them), but the write path stays locked until someone with
-the hardware can run the same characterisation trials the FT-710 had.
-If you own one and want to help, please open an issue.
+The honest small print: the FT-710 is the only radio this project has
+ever had on the other end of a cable. The three FTdx models were built
+from Yaesu's published CAT manuals and tested against protocol
+simulators — no physical FTdx10 or FTdx101 has been connected to this
+project. Reading is safe by design (the tool only ever sends documented
+read commands to them), and the write path stays shut unless you
+deliberately open it, one radio at a time. If you own one and want to
+help run the same characterisation trials the FT-710 had, please open
+an issue.
+
+### Unverified writes
+
+Every memory-write command this tool would send to an FTdx10 or an
+FTdx101 is documented in the manufacturer's CAT reference and exercised
+against a simulator here — and none of it has been proven on a real
+radio. That is all *unverified* means: not a guess, and not proof
+either. So the tool will not send any of it until you say so, per
+radio:
+
+```sh
+rigprog settings unverified-writes                # list every model and its current state
+rigprog settings unverified-writes FTdx10 on      # allow unverified writes to the FTdx10
+rigprog settings unverified-writes FTdx10 off     # withhold consent again
+```
+
+The GUI asks the same question once, just after you first connect to
+one of these radios, and its *Unverified writes…* button opens the same
+list at any time — connected or not — to grant or revoke. Both faces
+read and write one file (`rigprog/settings.json` under your user
+configuration directory; the CLI listing prints the exact path), so a
+decision made in either holds for both. An "off" is stored rather than
+forgotten: withholding consent is a decision too, and keeping it is
+what stops anything asking you twice.
+
+The FT-710 has nothing to consent to — its writes are hardware-verified
+— so it is listed as `n/a (hardware-verified)`, and a grant for it is
+refused rather than recorded as a decision about nothing.
+
+Consent changes what the tool is allowed to send, not how it sends it.
+Everything under *Safety design* below still runs unchanged, and the
+per-channel write-then-verify is what limits how far a wrong command
+could get: every channel is read straight back after it is written and
+compared against what was sent, and the run stops at the first mismatch
+rather than carrying on down the list. Deleting a channel stays refused
+whatever you consent to, and menu settings stay read-only. Each send's
+journal records whether consent is what opened the write gate.
+
+Without a grant nothing is left half-done: `rigprog write` blocks every
+change and sends no write command.
 
 ## What it does
 
@@ -58,6 +100,12 @@ the same choreography, in the CLI and the GUI alike:
 4. a one-time **firmware version confirmation** on first use;
 5. **write-then-verify per channel**, with an append-only journal of
    exactly what happened.
+
+On a radio whose write commands have never been proven on hardware, the
+first two steps still run — the radio is read, and a snapshot is kept —
+but a further gate stands in front of the send itself: without a grant,
+every change is reported as blocked and no write command leaves the
+tool. See *Unverified writes* above.
 
 Some things the FT-710 simply cannot do over CAT, and the tool blocks
 them honestly rather than pretending: there is no erase command (so
@@ -128,15 +176,28 @@ needed. All radio-facing commands take `--model` to pick the driver
 and lists every model the build supports) and `--fake` to use the
 simulator instead of a port.
 
+`rigprog settings unverified-writes` is the one sub-mode with no
+codeplug file and no radio in it: it lists, grants and revokes per-radio
+consent to sending write commands that have never been proven on that
+model (see *Unverified writes* above).
+
 `rigprog version` (or `-v`) reports which build you are running —
 quote it in bug reports. The GUI shows the same string in its status
 bar. A build that says `dev (unreleased build)` did not come from the
 release pipeline.
 
-**The GUI** follows the same shape: connect (or *Demo*), read, edit
-in the grid, then *Send* — which walks the identical safety flow,
-showing the reviewed diff and any blocked entries with reasons before
-anything is transmitted.
+**The GUI** follows the same shape: pick the radio and the port,
+connect (or *Demo*), read, edit in the grid, then *Send* — which walks
+the identical safety flow, showing the reviewed diff and any blocked
+entries with reasons before anything is transmitted. The radio picker
+beside the port list offers every model this build supports, so the GUI
+reaches the same radios the CLI's `--model` does; it is fixed for as
+long as a session is open. Connect to a radio whose writes are
+unverified and the consent question appears once, stating plainly what
+has and has not been proven before either answer is recorded; the
+simulator is not a radio, so *Demo* never asks. While a session is
+running with unverified writes enabled, a standing amber marker sits in
+the connection bar and leads back to the grants list.
 
 ## Building from source
 
@@ -186,7 +247,7 @@ git config core.hooksPath scripts/git-hooks
 | `core/` | The library: CAT codec (`cat`, plus `cat/ftdx10`, `cat/ftdx101`), capability model (`spec`), codeplug model and diff (`codeplug`), CSV I/O (`csvio`), serial transport (`transport`), radio drivers (`driver/ft710`, `driver/ftdx10`, `driver/ftdx101`), and the safe send choreography (`clone`). |
 | `cmd/rigprog/` | The CLI. |
 | `app/` | Wails v2 + Svelte desktop GUI. |
-| `internal/` | The radio simulators (`fakeradio`, `fakedx10`, `fakedx101`), composition-root wiring, menu-table generator (`extable`), and the import-graph guard tests (`guards`). |
+| `internal/` | The radio simulators (`fakeradio`, `fakedx10`, `fakedx101`), composition-root wiring, the shared settings store the CLI and GUI both use for unverified-write consent (`userconfig`), menu-table generator (`extable`), and the import-graph guard tests (`guards`). |
 | `docs/` | Hardware findings, Linux setup, the menu-write decision, and the fixture redaction policy. |
 | `docs/fixtures-private/` | Git-ignored. Raw radio backups and serial captures — never committed. |
 

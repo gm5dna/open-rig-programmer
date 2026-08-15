@@ -59,19 +59,28 @@ func TestBankReadOnly_Table(t *testing.T) {
 	unverified := spec.FieldSupport{Read: spec.Unverified, Write: spec.Unverified}
 	unsupported := spec.FieldSupport{}
 
+	// The shape a CONSENTED session carries: spec.ConsentUnverifiedWrites
+	// rewrites the WRITE label only, so Read stays Unverified.
+	consented := spec.FieldSupport{Read: spec.Unverified, Write: spec.ConsentedUnverified}
+
 	allWritable := map[spec.Field]spec.FieldSupport{}
 	allUnverified := map[spec.Field]spec.FieldSupport{}
 	allUnsupported := map[spec.Field]spec.FieldSupport{}
 	mixedOneWritable := map[spec.Field]spec.FieldSupport{}
 	inertClarifier := map[spec.Field]spec.FieldSupport{}
+	allConsented := map[spec.Field]spec.FieldSupport{}
+	mixedOneConsented := map[spec.Field]spec.FieldSupport{}
 	for _, f := range bankCoreCandidates {
 		allWritable[f] = rw
 		allUnverified[f] = unverified
 		allUnsupported[f] = unsupported
 		mixedOneWritable[f] = unsupported
 		inertClarifier[f] = rw
+		allConsented[f] = consented
+		mixedOneConsented[f] = unsupported
 	}
 	mixedOneWritable[spec.FieldFrequency] = rw
+	mixedOneConsented[spec.FieldClarifier] = consented
 	// The M5b real shape: every core field writable except the clarifier,
 	// whose Write is Inert (HW-CONFIRMED transmitted-but-ignored). Inert
 	// is not Unsupported, so the bank — and with it the grid's clarifier
@@ -89,6 +98,15 @@ func TestBankReadOnly_Table(t *testing.T) {
 		{"all Unsupported -> read-only", allUnsupported, true},
 		{"one field writable among Unsupported rest -> not read-only", mixedOneWritable, false},
 		{"Inert clarifier among Supported rest -> not read-only (M5b real shape; clarifier column stays editable)", inertClarifier, false},
+		// The fifth state's two rows. A consented session is the shape a
+		// RealHardware FTdx10/FTdx101 gets once the user has granted
+		// unverified writes, and it must read exactly as the Unverified
+		// row above does — not read-only. The MIXED row is the one that
+		// bites: it fails the moment bankReadOnly is re-tested on
+		// "Write == spec.Supported" (the tempting narrowing), because
+		// consent is the only thing keeping that bank editable.
+		{"all ConsentedUnverified -> not read-only (a consented session is editable, as its Unverified original was)", allConsented, false},
+		{"one ConsentedUnverified field among Unsupported rest -> not read-only (a consented column stays editable)", mixedOneConsented, false},
 		{"absent bank entirely -> vacuously read-only (zero FieldSupport everywhere)", nil, true},
 	}
 
@@ -248,6 +266,11 @@ func TestBankCoreFields_ZeroValueDecidesMembership(t *testing.T) {
 		{"readable, write Unsupported (the discovered 60M/EMG shape)", spec.FieldSupport{Read: spec.Supported, Write: spec.Unsupported}, true},
 		{"writable, read Unsupported", spec.FieldSupport{Read: spec.Unsupported, Write: spec.Supported}, true},
 		{"Inert write (transmitted-but-ignored is still a frame field)", spec.FieldSupport{Read: spec.Unsupported, Write: spec.Inert}, true},
+		// The fifth state. A consented session's write label is non-zero,
+		// so the field is in the derived core set exactly as its Unverified
+		// original was: consent changes whose word the confidence rests on,
+		// never whether the radio's frame carries the field.
+		{"ConsentedUnverified write (the consented session's shape)", spec.FieldSupport{Read: spec.Unverified, Write: spec.ConsentedUnverified}, true},
 		{"the zero FieldSupport", spec.FieldSupport{}, false},
 	}
 	for _, tc := range tests {
@@ -600,6 +623,13 @@ func TestBankTagDisplayDefault_Table(t *testing.T) {
 		}, known},
 		{"Inert write -> Known-false (transmitted-but-ignored is still a frame field)", map[spec.Field]spec.FieldSupport{
 			spec.FieldTagDisplay: {Read: spec.Supported, Write: spec.Inert},
+		}, known},
+		// The fifth state, and the answer must be the plain-Unverified row's:
+		// Unavailable is triggered by "absent from the frame in BOTH
+		// directions", and a consented write label is not Unsupported, so a
+		// blank row on a consented session still states the flag.
+		{"ConsentedUnverified write -> Known-false (consent does not make a flag appear or vanish)", map[spec.Field]spec.FieldSupport{
+			spec.FieldTagDisplay: {Read: spec.Unverified, Write: spec.ConsentedUnverified},
 		}, known},
 		{"both Unsupported -> Unavailable", map[spec.Field]spec.FieldSupport{
 			spec.FieldTagDisplay: {},
@@ -1529,4 +1559,82 @@ func TestGetUISpec_UnrecognisedWorkingModelStillSynthesisesBanks(t *testing.T) {
 	if s := slotSet(emg.Slots); len(s) != 1 || s["EMG"] != "EMG" {
 		t.Errorf("synthesised EMG.Slots = %v, want exactly {EMG:EMG}", s)
 	}
+}
+
+// TestGetUISpec_UnverifiedWritesConsentedFollowsTheSession pins the
+// amber-state flag's derivation: it is read from the CONNECTED session's
+// own capability labels — a write-side spec.ConsentedUnverified anywhere —
+// and from nothing else. Not from the settings file, which a concurrent
+// CLI can change under a running session (userconfig's documented
+// last-writer-wins), and not from the model, which says only that consent
+// is possible. The interface therefore cannot show an armed state that the
+// session in front of the user does not actually have.
+//
+// The consented capability set is built by core/spec's OWN transform, the
+// same one a driver applies at session assembly (app/ may not import a
+// concrete driver package — the M9a neutral-core discipline).
+func TestGetUISpec_UnverifiedWritesConsentedFollowsTheSession(t *testing.T) {
+	caps, err := capsForModel(wiring.FTdx10Model)
+	if err != nil {
+		t.Fatalf("capsForModel(%q): unexpected error: %v", wiring.FTdx10Model, err)
+	}
+	consented := spec.ConsentUnverifiedWrites(caps)
+
+	t.Run("consented session", func(t *testing.T) {
+		a, _ := newTestApp(t)
+		connectDirect(t, a, fixedCapsSession{caps: consented}, nil)
+		got, err := a.GetUISpec()
+		if err != nil {
+			t.Fatalf("GetUISpec: unexpected error: %v", err)
+		}
+		if !got.UnverifiedWritesConsented {
+			t.Error("UnverifiedWritesConsented = false, want true — the session's own caps carry a consented write")
+		}
+	})
+
+	t.Run("unconsented session", func(t *testing.T) {
+		a, _ := newTestApp(t)
+		connectDirect(t, a, fixedCapsSession{caps: caps}, nil)
+		got, err := a.GetUISpec()
+		if err != nil {
+			t.Fatalf("GetUISpec: unexpected error: %v", err)
+		}
+		if got.UnverifiedWritesConsented {
+			t.Error("UnverifiedWritesConsented = true, want false — the same radio, with no consent spent on the session")
+		}
+	})
+
+	t.Run("offline", func(t *testing.T) {
+		a, _ := newTestApp(t)
+		a.mu.Lock()
+		a.conn = nil
+		a.working = &codeplug.Codeplug{
+			Schema:   codeplug.CurrentSchema,
+			Radio:    codeplug.RadioInfo{Model: wiring.FTdx10Model},
+			Channels: []codeplug.Channel{{Slot: "001"}},
+		}
+		a.mu.Unlock()
+		got, err := a.GetUISpec()
+		if err != nil {
+			t.Fatalf("GetUISpec: unexpected error: %v", err)
+		}
+		if got.UnverifiedWritesConsented {
+			t.Error("UnverifiedWritesConsented = true offline, want false — a static baseline describes the radio, never a session's consent")
+		}
+	})
+
+	t.Run("demo", func(t *testing.T) {
+		a, _ := newTestApp(t)
+		if _, err := a.ConnectDemo(wiring.FTdx10Model); err != nil {
+			t.Fatalf("ConnectDemo(%q): unexpected error: %v", wiring.FTdx10Model, err)
+		}
+		t.Cleanup(func() { _ = a.Disconnect() })
+		got, err := a.GetUISpec()
+		if err != nil {
+			t.Fatalf("GetUISpec: unexpected error: %v", err)
+		}
+		if got.UnverifiedWritesConsented {
+			t.Error("UnverifiedWritesConsented = true in demo, want false — a simulator session spends no consent")
+		}
+	})
 }

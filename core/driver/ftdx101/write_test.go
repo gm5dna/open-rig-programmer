@@ -1179,3 +1179,76 @@ func TestBuildWriteCommand_P7IsTheFormConstant(t *testing.T) {
 		t.Errorf("peer dialect P7 = %q, want %q — P7 is the FORM's constant and must not track MWWriteKind", got, cat.CombinedMTSetKind)
 	}
 }
+
+// TestWriteChannel_ConsentedSessionWrites: on a REAL-HARDWARE session built
+// with WithConsentedUnverifiedWrites, for EACH model, the ordinary channel
+// that TestWriteChannel_RealHardwareProfileRefusesEveryRequestedField sees
+// refused is written instead — one combined MT Set, sent and unrejected,
+// and byte-for-byte the same hand-derived frame the Simulated profile puts
+// on the wire (wantSetFrame).
+//
+// WHAT THIS PROVES, EXACTLY: the DRIVER-level capability gate opens
+// (spec.ConsentedUnverified makes FieldSupport.CanWrite true, so
+// WriteChannel's own gate passes the six requested fields), and the MT frame
+// round-trips against this package's scripted peer. That is CHOREOGRAPHY
+// ONLY.
+//
+// It is NOT the project's write-and-verify pair, and this test must not be
+// read as claiming one. Verification — write, read back, compare — lives in
+// core/clone/execute.go, one layer above every driver, and it is exercised
+// with consented capabilities there, in its own task. Nothing here reads the
+// slot back, and this driver's WriteChannel reports only sent/unrejected by
+// design (see its doc comment).
+//
+// PER MODEL, because consent lifts a PER-RADIO fail-safe: writeTrialsCompleteD
+// and writeTrialsCompleteMP are separate constants for separate radios, and a
+// one-model test would leave the other model's consented path unexercised.
+func TestWriteChannel_ConsentedSessionWrites(t *testing.T) {
+	for _, m := range testModels {
+		t.Run(m.name, func(t *testing.T) {
+			p, sess := openSession(t, m, RealHardware, slotImage{}, WithConsentedUnverifiedWrites())
+
+			before := len(p.Transcript())
+			res, err := sess.WriteChannel(testCtx(t), writableChannel("042"))
+			if err != nil {
+				t.Fatalf("WriteChannel = %v, want nil — the consented session's gate must open", err)
+			}
+			assertSteps(t, res, wantOneStep(true, true))
+
+			got := p.Transcript()[before:]
+			if len(got) != 1 {
+				t.Fatalf("the write sent %d frames (%q), want exactly 1 — this radio's whole write choreography is one combined MT Set", len(got), got)
+			}
+			if got[0] != wantSetFrame {
+				t.Errorf("Set frame =\n %q\nwant\n %q — consent changes WHETHER a write is permitted, never what it puts on the wire", got[0], wantSetFrame)
+			}
+		})
+	}
+}
+
+// TestWriteChannel_NoConsent_StillRefused is the other half of the pair
+// above, and the one that keeps consent a DECISION: the same RealHardware
+// profile, the same ordinary channel, no option — and the write is refused
+// before any wire traffic, naming every requested field, exactly as it was
+// before the option existed.
+//
+// It mirrors TestWriteChannel_RealHardwareProfileRefusesEveryRequestedField's
+// shape deliberately. That test states the fail-safe; this one states that
+// adding a way to lift it did not lift it by default.
+func TestWriteChannel_NoConsent_StillRefused(t *testing.T) {
+	for _, m := range testModels {
+		t.Run(m.name, func(t *testing.T) {
+			p, sess := openSession(t, m, RealHardware, slotImage{})
+
+			before := len(p.Transcript())
+			wre := refusedFields(t, sess, writableChannel("042"))
+
+			if want := writeGateSixFields(); !slices.Equal(wre.Fields, want) {
+				t.Errorf("WriteRefusedError.Fields = %v, want %v — every requested field, in requestedFields' order", wre.Fields, want)
+			}
+			if got := p.Transcript(); len(got) != before {
+				t.Errorf("an unconsented, refused WriteChannel sent %d frames, want 0", len(got)-before)
+			}
+		})
+	}
+}

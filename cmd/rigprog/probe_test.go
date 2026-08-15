@@ -203,6 +203,9 @@ func TestWrongRadioMessage_NamesSelectedModel(t *testing.T) {
 // still start with the pre-extraction "cmd/rigprog: open serial port "
 // wording, not "wiring: open serial port ".
 func TestCmdProbe_BadPort_PreservesOriginalWiringWording(t *testing.T) {
+	// See TestCmdRead_BadPort_PreservesOriginalWiringWording: openRealSession
+	// reads the consent store first, and no test may read the real user's.
+	tempUserConfig(t)
 	const port = "/dev/nonexistent-rigprog-test-port"
 	_, _, wiringErr := openRealSession(testCtx(t), wiring.DefaultModel, port)
 	if wiringErr == nil {

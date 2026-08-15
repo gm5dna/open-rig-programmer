@@ -11,6 +11,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
 // SendPlan is the immutable result of PrepareSend: a fresh baseline read,
@@ -166,6 +167,38 @@ func copyDiffResult(d codeplug.DiffResult) codeplug.DiffResult {
 	return out
 }
 
+// capsConsented reports whether any bank field in caps carries the
+// spec.ConsentedUnverified WRITE label — that is, whether this session's
+// write gate was opened anywhere by a user's recorded consent to an
+// unverified write, rather than by hardware evidence alone. The question
+// is SESSION-WIDE, deliberately: a true answer says this session was
+// permitted to write on the strength of a recorded consent, NOT that any
+// particular field the plan carrying it writes was itself consented.
+// (Read labels
+// cannot be ConsentedUnverified at all: spec.Capabilities.Validate
+// rejects one, and spec.ConsentUnverifiedWrites never mints one, so the
+// write-side check below is the whole question.)
+//
+// It exists for one caller: the "consented_unverified" field of
+// PrepareSend's prepare journal line. That field is this plan's DISCLOSED
+// DEVIATION from the consent design spec (docs/superpowers/plans/
+// 2026-08-14-unverified-write-consent.md, "Spec deviations", item 1): the
+// spec assumed the journal already held a capability snapshot a reader
+// could work the answer out of afterwards, and it does not — the prepare
+// event carries paths, digests and diff counts only. Rather than start
+// journaling a whole capability set, the one fact the audit trail needs
+// about consent is computed here and recorded as a single boolean.
+func capsConsented(caps spec.Capabilities) bool {
+	for _, b := range caps.Banks {
+		for _, fs := range b.Fields {
+			if fs.Write == spec.ConsentedUnverified {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // PrepareSend builds an immutable SendPlan for sending file to the radio.
 //
 // Order (fixed, and load-bearing — see doc.go's obligations 1 and 9): a
@@ -245,14 +278,18 @@ func (s *Service) PrepareSend(ctx context.Context, file *codeplug.Codeplug) (*Se
 	// it exists.
 	journal := s.openJournal(snapshotPath)
 	if err := journal.Append(s.now(), "prepare", map[string]any{
-		"snapshot_path":    snapshotPath,
-		"baseline_digest":  plan.baselineDigest,
-		"candidate_digest": plan.candidateDigest,
-		"added":            diff.Added,
-		"modified":         diff.Modified,
-		"erased":           diff.Erased,
-		"unchanged":        diff.Unchanged,
-		"blocked":          diff.Blocked,
+		"snapshot_path": snapshotPath,
+		// Recorded on EVERY prepare line, true or false (see capsConsented):
+		// an absent field and a false one would otherwise be
+		// indistinguishable to a reader of an append-only journal.
+		"consented_unverified": capsConsented(caps),
+		"baseline_digest":      plan.baselineDigest,
+		"candidate_digest":     plan.candidateDigest,
+		"added":                diff.Added,
+		"modified":             diff.Modified,
+		"erased":               diff.Erased,
+		"unchanged":            diff.Unchanged,
+		"blocked":              diff.Blocked,
 	}); err != nil {
 		s.logger.Printf("clone: journal %s: failed to append %q event: %v", journal.Path(), "prepare", err)
 		return nil, fmt.Errorf("clone: PrepareSend: %w", &JournalFailedError{Event: "prepare", Cause: err})

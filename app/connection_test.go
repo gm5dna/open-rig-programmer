@@ -239,7 +239,27 @@ func TestConnect_UnknownModelRefused(t *testing.T) {
 // validation admitted the model and that ResolveSnapshotDir received it
 // rather than wiring.DefaultModel (whose directory is the un-slugged base
 // one).
+//
+// THE REAL PATH'S EVIDENCE MOVED at the consent milestone, and this note
+// is here so nobody reads more into the assertion below than it now
+// proves. connect's real branch resolves the user's recorded consent
+// first (consent.go's consentFor), and that begins with the SAME shared
+// eligibility predicate — so testModel is refused there, by
+// wiring.NeedsUnverifiedConsent, before wiring.OpenRealSessionWith is
+// reached. The evidence CLASS is unchanged (internal/wiring's own typed
+// error, naming testModel, reachable only by having been handed it), but
+// the site that raises it is one step earlier. That the resolved model
+// reaches the session constructor ITSELF is now pinned directly, and more
+// strongly, by consent_test.go's
+// TestConnect_RecordedConsentReachesTheSession, which records the model,
+// the port and the options openRealSessionWith was called with.
 func TestConnect_ResolvedModelThreadsIntoWiring(t *testing.T) {
+	// The real branch consults the consent store. testModel is refused
+	// before it gets there (see above), but the seam is pointed at a
+	// temporary file regardless, so no future reordering of connect can
+	// make this test read the settings of whoever runs "go test".
+	tempUserConfig(t)
+
 	// connect() creates the snapshot directory for real, under
 	// os.UserConfigDir(); contain it in a temp HOME so this test writes
 	// nothing into the developer's own config directory.
@@ -337,5 +357,38 @@ func TestCancelTransfer_NothingRunning(t *testing.T) {
 	a, _ := newTestApp(t)
 	if err := a.CancelTransfer(); !errors.Is(err, ErrNoTransferRunning) {
 		t.Errorf("CancelTransfer while idle: err = %v, want ErrNoTransferRunning", err)
+	}
+}
+
+// TestConnectDemo_ConsentFieldsFalseAndStoreUnread pins that the demo
+// branch of connect is untouched by consent: ConnectDemo returns both
+// consent fields false, whatever radio it simulates, and never reads the
+// settings store at all — proved by pointing the store at a file this
+// build cannot parse and watching the connection succeed anyway.
+//
+// False is the honest value here rather than a copy of the real branch's:
+// wiring.OpenFakeSessionFor takes no SessionOptions, so a simulator
+// session spends no consent and needs none. A GUI that prompted for
+// consent on a demo connection would be asking a user to authorise a write
+// to a radio that does not exist.
+func TestConnectDemo_ConsentFieldsFalseAndStoreUnread(t *testing.T) {
+	for _, model := range []string{wiring.DefaultModel, wiring.FTdx10Model} {
+		t.Run(model, func(t *testing.T) {
+			a, _ := newTestApp(t)
+			path := tempUserConfig(t)
+			if err := os.WriteFile(path, []byte("{ this is not JSON"), 0o600); err != nil {
+				t.Fatalf("writing the corrupt fixture: %v", err)
+			}
+
+			info, err := a.ConnectDemo(model)
+			if err != nil {
+				t.Fatalf("ConnectDemo(%q) over an unreadable store: unexpected error: %v — the demo branch must not consult it", model, err)
+			}
+			t.Cleanup(func() { _ = a.Disconnect() })
+			if info.NeedsUnverifiedConsent || info.UnverifiedConsentRecorded {
+				t.Errorf("ConnectDemo(%q): NeedsUnverifiedConsent = %v, UnverifiedConsentRecorded = %v; want false, false",
+					model, info.NeedsUnverifiedConsent, info.UnverifiedConsentRecorded)
+			}
+		})
 	}
 }

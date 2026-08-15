@@ -35,12 +35,38 @@
 //
 // writeTrialsComplete is FALSE (caps.go) and pinned false by its own test.
 // A RealHardware session therefore gets CapabilitiesUnverified — every
-// candidate field's Write spec.Unverified, nothing writable anywhere — so
+// candidate field's Write spec.Unverified, nothing writable anywhere — so,
+// UNLESS THE USER HAS CONSENTED (next section),
 // codeplug.Diff blocks every change, the clone service refuses to execute
 // one, and Session.WriteChannel's own capability re-check refuses before
 // any frame is built. An unrecognised Profile value fails the same way
 // (see ftdx10Driver.Capabilities): the failure direction for a forged or
 // corrupted Profile is always "nothing writable".
+//
+// # The one route past the guard: the user's recorded consent
+//
+// A RealHardware session opened with WithConsentedUnverifiedWrites — the
+// option internal/wiring spends a user's stored grant through — carries
+// spec.ConsentedUnverified where the profile said spec.Unverified, and
+// FieldSupport.CanWrite is true for that state. Such a session CAN write
+// this radio, and the three gates above let it, by design: the user has
+// been shown the warning and accepted the risk for this model.
+//
+// What that does NOT change, and the distinction is the whole of the
+// design: the EVIDENCE. writeTrialsComplete stays false, this package's
+// static Capabilities() stays all-Unverified (which is what
+// internal/wiring.NeedsUnverifiedConsent reads to decide the radio is
+// consent-eligible at all), no hardware note is written, and every
+// unconsented session behaves exactly as the paragraph above describes.
+// Consent widens WHAT may be attempted and nothing about HOW carefully:
+// a consented write still runs the full clone-level write+verify pair,
+// and a read-back that does not match still fails it.
+//
+// The transform is applied ONCE, at session-capability assembly
+// (ftdx10Driver.sessionCapabilities), and only for a RECOGNISED Profile,
+// so the "forged or corrupted Profile" direction above survives consent
+// untouched — an unrecognised value still selects the fail-safe set and
+// still writes nothing.
 //
 // The Simulated profile is write-Supported, against internal/fakedx10
 // only — see the non-borrowing note below.

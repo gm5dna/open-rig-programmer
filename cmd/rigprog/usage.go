@@ -36,6 +36,8 @@ Commands:
   export     export a codeplug file to CSV (offline; no radio)
   import     import a CSV (native or CHIRP) into a codeplug file (offline; no radio)
   settings   show (or export to CSV) a codeplug file's menu/settings snapshot (offline; no radio)
+             "settings unverified-writes" grants, revokes or lists per-model consent to writing
+             fields never proved on that radio (a hardware-verified model has none, and is refused)
   version    report this build's version (also "rigprog -v")
   help       show this message
 
@@ -291,11 +293,31 @@ const settingsUsageText = `rigprog settings — show (or export to CSV) a codepl
 
 Usage:
   rigprog settings [--csv OUT] [--model NAME] [--force] FILE
+  rigprog settings unverified-writes
+  rigprog settings unverified-writes <model> on|off
 
 Flags:
   --csv OUT     also write the snapshot to this CSV file path (optional)
   --model NAME  radio model whose settings descriptor to group by (default: FT-710)
   --force       overwrite --csv if it already exists
+
+"unverified-writes" is a RESERVED first argument — it selects the consent
+sub-mode below, so it can never be read as a FILE to render. A codeplug
+file of that exact name must be given another (any extension will do).
+
+CONSENT SUB-MODE (no flags; nothing is read from or written to a radio):
+with no further arguments it lists every model this build supports, with
+its slug and its current state; with <model> on|off it records a decision
+and reports it. Consent applies ONLY to models with unverified write
+support — radios this project has never written to, whose write gate is
+closed until the owner opens it. A model whose writes are hardware-
+verified has nothing to consent to: it is listed as
+"n/a (hardware-verified)", and a grant or revoke for it is refused as a
+usage error rather than recorded as a decision about nothing. An "off" is
+STORED, not forgotten: withholding consent is a decision, and it is kept
+so nothing asks again. The decisions live in a settings file shared with
+the GUI, whose path the listing prints; a file this build cannot read is
+reported, naming it, and is never overwritten.
 
 OFFLINE: does not open a radio session — --port/--fake are not accepted.
 Loads FILE strictly, then renders its menu/settings snapshot (captured by
@@ -314,12 +336,17 @@ CSV/formula injection (core/csvio.EscapeCell), same rule as
 "rigprog export". Refuses to overwrite an existing --csv file unless
 --force is given.
 
-Exit codes: 0 the file was loaded and its snapshot rendered (an entry
-recorded as unavailable in a partial snapshot is a recorded fact, not an
-error — still 0); 1 FILE could not be loaded, or carries no renderable
-settings snapshot (re-read it with "rigprog read --settings"); 2 usage
-(missing FILE, an unrecognised flag, an unrecognised --model, or a flag
-placed after FILE — flags must precede FILE). Exit codes 3/4/5 are not
+Exit codes: 0 the file was loaded and its snapshot rendered, or the
+consent decision was listed/recorded (an entry recorded as unavailable in
+a partial snapshot is a recorded fact, not an error — still 0); 1 FILE
+could not be loaded, or carries no renderable settings snapshot (re-read
+it with "rigprog read --settings"), or the settings file could not be
+read or replaced (its own message names it); 2 usage (missing FILE, an
+unrecognised flag, an unrecognised --model, a flag placed after FILE —
+flags must precede FILE — or, in the consent sub-mode, a flag, a wrong
+number of arguments, an unrecognised model, a state word that is neither
+"on" nor "off", or a model whose writes are hardware-verified). Exit
+codes 3/4/5 are not
 used by this command: there is no radio session to block, refuse, or
 abort against.
 `

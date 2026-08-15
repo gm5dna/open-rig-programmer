@@ -29,6 +29,8 @@ export function GetSupportedModels():Promise<Array<string>>;
 
 export function GetUISpec():Promise<main.UISpecView>;
 
+export function GetUnverifiedWriteConsent(arg1:string):Promise<main.UnverifiedWriteConsentView>;
+
 export function ImportCHIRP():Promise<main.ImportResultView>;
 
 export function ImportCSV():Promise<main.ImportResultView>;
@@ -36,6 +38,8 @@ export function ImportCSV():Promise<main.ImportResultView>;
 export function IsDirty():Promise<boolean>;
 
 export function ListPorts():Promise<Array<main.PortEntry>>;
+
+export function ListUnverifiedWriteConsents():Promise<Array<main.UnverifiedWriteConsentView>>;
 
 export function LoadFile():Promise<main.CodeplugView>;
 
@@ -48,6 +52,8 @@ export function ReadSettingsRadio():Promise<main.SettingsView>;
 export function SaveFile(arg1:string):Promise<void>;
 
 export function SaveFileAs():Promise<string>;
+
+export function SetUnverifiedWriteConsent(arg1:string,arg2:boolean):Promise<void>;
 
 export function UpdateChannel(arg1:codeplug.Channel):Promise<main.EditResult>;
 

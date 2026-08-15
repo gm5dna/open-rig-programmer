@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+
+	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
 // Registry is an explicit collection of Drivers, keyed by model name.
@@ -35,7 +37,11 @@ func NewRegistry() *Registry {
 // spec.Capabilities.Validate — the registry is where the "every driver's
 // capability data is structurally valid" invariant is enforced centrally,
 // so generic code reading Capabilities from a registered driver never
-// needs to re-validate.
+// needs to re-validate. It also rejects a d whose Capabilities() carry
+// spec.ConsentedUnverified on any field, in either direction: that state
+// records one user's consent for one session, and a driver's static
+// capabilities are a baseline describing the radio, so a baseline must
+// never carry it (see the check below).
 func (r *Registry) Register(d Driver) error {
 	if d == nil {
 		return fmt.Errorf("driver: Register: driver must not be nil")
@@ -47,6 +53,21 @@ func (r *Registry) Register(d Driver) error {
 	}
 	if err := caps.Validate(); err != nil {
 		return fmt.Errorf("driver: Register %q: invalid capabilities: %w", model, err)
+	}
+
+	// ConsentedUnverified is a SESSION-ONLY state (spec.ConsentUnverifiedWrites'
+	// doc): a baseline that carries it would claim recorded user consent as
+	// a property of the radio. Validate cannot reject it wholesale — session
+	// capability sets legitimately carry it write-side — so the baseline
+	// boundary is enforced here, where only static driver capabilities pass.
+	// The read-side half of the test below is defence in depth: Validate
+	// already rejects Read == ConsentedUnverified outright, and runs first.
+	for _, b := range caps.Banks {
+		for f, fs := range b.Fields {
+			if fs.Read == spec.ConsentedUnverified || fs.Write == spec.ConsentedUnverified {
+				return fmt.Errorf("driver: Register %q: bank %v field %v carries ConsentedUnverified — a session-only state that must never appear in a baseline", model, b.ID, f)
+			}
+		}
 	}
 
 	r.mu.Lock()

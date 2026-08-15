@@ -3,6 +3,7 @@
 package radiotext_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -392,5 +393,54 @@ func TestFor_UnknownModel(t *testing.T) {
 		if got != (radiotext.Text{}) {
 			t.Errorf("For(%q) = %#v, want the zero Text", model, got)
 		}
+	}
+}
+
+// TestUnverifiedWriteWarningTemplate_CarriesItsFourElements pins the
+// arming dialogue's body against the four things the consent spec
+// requires it to say, and against its ONE substitution point.
+//
+// Substrings, not a verbatim whole-string copy, and deliberately so: this
+// string has no prior home to be a byte-for-byte regression pin of (unlike
+// every Text field above, which was copied from a live call site), and the
+// requirement it has to meet is a requirement about MEANING — that a user
+// reading it learns which radio is at stake, that this project has never
+// written to one, that every write is read back and compared, and that a
+// misinterpreted frame could still corrupt the targeted channel. Rewording
+// is allowed; dropping one of the four is not.
+//
+// The %s count is pinned exactly because the app layer substitutes ONE
+// value (the model name): a second verb would render as a stray
+// "%!s(MISSING)" in front of a user being asked to authorise a write.
+func TestUnverifiedWriteWarningTemplate_CarriesItsFourElements(t *testing.T) {
+	tmpl := radiotext.UnverifiedWriteWarningTemplate
+
+	if got := strings.Count(tmpl, "%"); got != 1 {
+		t.Errorf("the template contains %d %% characters, want exactly 1 (the model-name substitution): %q", got, tmpl)
+	}
+	if got := strings.Count(tmpl, "%s"); got != 1 {
+		t.Errorf("the template contains %d %%s verbs, want exactly 1: %q", got, tmpl)
+	}
+
+	// Element 1 (names the radio) is the substitution itself; the other
+	// three are pinned by the phrase each turns on.
+	for _, want := range []string{
+		"never written to a real %s", // element 2: no hardware has ever seen this write
+		"read back and compared",     // element 3: the one real mitigation
+		"corrupt",                    // element 4: what a misinterpreted frame could do
+	} {
+		if !strings.Contains(tmpl, want) {
+			t.Errorf("the template does not contain %q — a required element is missing:\n%q", want, tmpl)
+		}
+	}
+
+	// Element 1, proved by rendering: the model name has to land in the
+	// text a user actually reads.
+	rendered := fmt.Sprintf(tmpl, "FTdx10")
+	if !strings.Contains(rendered, "FTdx10") {
+		t.Errorf("rendered warning = %q, want it to name the model", rendered)
+	}
+	if strings.Contains(rendered, "%!") {
+		t.Errorf("rendered warning = %q, want no formatting fault", rendered)
 	}
 }

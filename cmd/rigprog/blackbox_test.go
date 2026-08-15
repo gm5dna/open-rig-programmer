@@ -926,3 +926,70 @@ func TestBlackbox_Write(t *testing.T) {
 		}
 	})
 }
+
+// TestBlackbox_SettingsUnverifiedWritesRefusals pins the consent
+// sub-mode's refusals at the compiled-binary level. EVERY case here is
+// refused BEFORE the settings store is consulted, which is what makes
+// them safe to run against the real binary at all: a black-box
+// invocation has no seam to point the store at a temporary file, so a
+// test that reached the store would read (and could write) the settings
+// file of whoever ran "go test".
+//
+// The near-miss model spelling (the manual's all-capitals form of the
+// FTdx10's name) is deliberately NOT pinned here but in-process, by
+// TestCmdSettings_UnverifiedWrites_NearMissModelRefused: that spelling
+// appears exactly once in this milestone's work, as the thing being
+// refused, so that a reader grepping for it finds the refusal and not a
+// second place the project appears to accept it.
+func TestBlackbox_SettingsUnverifiedWritesRefusals(t *testing.T) {
+	t.Run("hardware-verified model refused", func(t *testing.T) {
+		r := runBinary(t, "", "settings", "unverified-writes", "FT-710", "on")
+		if r.exitCode != exitUsage {
+			t.Fatalf("exit code = %d, want exitUsage (%d); stdout=%q stderr=%q", r.exitCode, exitUsage, r.stdout, r.stderr)
+		}
+		for _, want := range []string{"FT-710", "hardware-verified"} {
+			if !strings.Contains(r.stderr, want) {
+				t.Errorf("stderr = %q, want it to contain %q", r.stderr, want)
+			}
+		}
+	})
+
+	t.Run("bad state word", func(t *testing.T) {
+		r := runBinary(t, "", "settings", "unverified-writes", "FTdx10", "maybe")
+		if r.exitCode != exitUsage {
+			t.Errorf("exit code = %d, want exitUsage (%d); stdout=%q stderr=%q", r.exitCode, exitUsage, r.stdout, r.stderr)
+		}
+	})
+
+	t.Run("bad arity", func(t *testing.T) {
+		r := runBinary(t, "", "settings", "unverified-writes", "FTdx10")
+		if r.exitCode != exitUsage {
+			t.Errorf("exit code = %d, want exitUsage (%d); stdout=%q stderr=%q", r.exitCode, exitUsage, r.stdout, r.stderr)
+		}
+	})
+}
+
+// TestBlackbox_SettingsUnverifiedWritesDocumented pins that the sub-mode
+// is discoverable: "rigprog settings -h" describes it, and the top-level
+// help mentions it with its one-line caveat, so a user who has been
+// refused a write on an unverified radio can find the grant without
+// reading the source.
+func TestBlackbox_SettingsUnverifiedWritesDocumented(t *testing.T) {
+	settingsHelp := runBinary(t, "", "settings", "-h")
+	if settingsHelp.exitCode != exitSuccess {
+		t.Fatalf("settings -h: exit code = %d, want exitSuccess (%d); stderr=%q", settingsHelp.exitCode, exitSuccess, settingsHelp.stderr)
+	}
+	for _, want := range []string{"unverified-writes", "on|off"} {
+		if !strings.Contains(settingsHelp.stdout, want) {
+			t.Errorf("settings -h stdout = %q, want it to contain %q", settingsHelp.stdout, want)
+		}
+	}
+
+	topHelp := runBinary(t, "", "help")
+	if topHelp.exitCode != exitSuccess {
+		t.Fatalf("help: exit code = %d, want exitSuccess (%d); stderr=%q", topHelp.exitCode, exitSuccess, topHelp.stderr)
+	}
+	if !strings.Contains(topHelp.stdout, "unverified-writes") {
+		t.Errorf("help stdout = %q, want it to mention the unverified-writes sub-mode", topHelp.stdout)
+	}
+}

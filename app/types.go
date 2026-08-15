@@ -28,6 +28,66 @@ type ConnectionInfo struct {
 	USBSerial string
 	Region    string
 	Demo      bool
+	// NeedsUnverifiedConsent is true when this radio is CONSENT-ELIGIBLE:
+	// when its real-hardware baseline still carries a write-side unverified
+	// field, so a recorded consent could open a write gate on it at all
+	// (internal/wiring.NeedsUnverifiedConsent — the SAME predicate the CLI's
+	// "settings unverified-writes" uses, so the two surfaces cannot
+	// disagree about which radios consent even applies to). It describes
+	// the RADIO, never the user's answer, so it does not change when a
+	// decision is taken.
+	//
+	// FALSE on a demo connection, whatever the model: a simulated session
+	// takes no consent option and spends no consent, so there is nothing to
+	// ask about (see connect).
+	NeedsUnverifiedConsent bool
+	// UnverifiedConsentRecorded is true when the user has already ANSWERED
+	// the consent question for this radio — either way. It is the flag a
+	// prompt must be gated on: "never asked" and "asked and declined" are
+	// different states (internal/userconfig's first rule), and a user who
+	// has declined must not be asked again at every connection.
+	//
+	// Whether consent is IN FORCE is deliberately not here. That is read
+	// from the session's own capabilities (UISpecView's
+	// UnverifiedWritesConsented), which cannot drift from what the running
+	// session will actually let through; this pair says only what to ask,
+	// not what is armed. FALSE on a demo connection, which never reads the
+	// store.
+	UnverifiedConsentRecorded bool
+}
+
+// UnverifiedWriteConsentView is one radio's consent state, as
+// GetUnverifiedWriteConsent returns it and ListUnverifiedWriteConsents
+// lists it — the grants panel's row, and the arming dialogue's data.
+//
+// The three booleans are not redundant. NeedsConsent describes the RADIO
+// (is there an unverified write here at all?); Recorded says whether the
+// user has answered; Granted is their answer. Together they name every
+// state a surface has to render differently: nothing to ask (NeedsConsent
+// false), never asked (Recorded false), declined (Recorded true, Granted
+// false) and granted.
+type UnverifiedWriteConsentView struct {
+	// Model is the canonical model name — the same spelling
+	// GetSupportedModels lists and Connect accepts.
+	Model string
+	// NeedsConsent mirrors ConnectionInfo.NeedsUnverifiedConsent: this
+	// radio is consent-eligible. A model whose writes are hardware-verified
+	// reports false, and SetUnverifiedWriteConsent refuses it.
+	NeedsConsent bool
+	// Granted is the user's recorded answer. False both for a model never
+	// asked about and for one declined — the two are told apart by
+	// Recorded, not by this.
+	Granted bool
+	// Recorded is true once a decision has been taken and stored, so a
+	// caller can tell "never asked" from "asked and said no" and prompt
+	// only in the first case.
+	Recorded bool
+	// Warning is the arming dialogue's body for THIS radio:
+	// internal/radiotext.UnverifiedWriteWarningTemplate with the model name
+	// substituted. Empty when NeedsConsent is false — there is no
+	// unverified write to warn about, and inventing a caution for a
+	// hardware-verified radio would teach a user to dismiss the real one.
+	Warning string
 }
 
 // CodeplugView is a read view of the working codeplug — returned by
@@ -359,15 +419,29 @@ type UISpecView struct {
 	// session's own effective capabilities (authoritative — includes
 	// discovered 60m/EMG inventory); false when built from the static
 	// offline baseline.
-	Live              bool
-	Banks             []BankView
-	Modes             []string
-	ShiftOptions      []string
-	CTCSSStateOptions []string
-	Tones             []ToneView
-	TagMaxBytes       int
-	ClarMaxHz         int
-	ClarStepHz        int
+	Live bool
+	// UnverifiedWritesConsented is true when the CONNECTED session's own
+	// capabilities carry a write-side consented-unverified label anywhere —
+	// the amber state the frontend renders while a session is armed to
+	// write fields this project has never proved on hardware.
+	//
+	// Derived from the session's LABELS, never from the settings file and
+	// never from the model: consent is spent when a session is
+	// CONSTRUCTED, so a decision changed afterwards (by the CLI, mid-
+	// session — userconfig's documented last-writer-wins) does not change
+	// what the running session will let through, and the indicator must
+	// follow the session rather than the file. Always false offline and in
+	// demo: a static baseline describes the radio, not a decision, and a
+	// simulator session takes no consent option.
+	UnverifiedWritesConsented bool
+	Banks                     []BankView
+	Modes                     []string
+	ShiftOptions              []string
+	CTCSSStateOptions         []string
+	Tones                     []ToneView
+	TagMaxBytes               int
+	ClarMaxHz                 int
+	ClarStepHz                int
 	// ToneScanSkipNote is the channel grid's standing legend explaining
 	// why the Tone/Scan Skip columns exist but cannot be read back over
 	// CAT — served from internal/radiotext.Text.ToneScanSkipNote and

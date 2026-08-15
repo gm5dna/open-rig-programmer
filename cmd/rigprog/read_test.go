@@ -168,6 +168,11 @@ func TestCmdRead_FakeExplicitModel_ByteIdentical(t *testing.T) {
 // the full rationale. Only the "no --force needed" plumbing differs
 // here: a bad --port fails before any --out file is ever touched.
 func TestCmdRead_BadPort_PreservesOriginalWiringWording(t *testing.T) {
+	// openRealSession consults the consent store (sessionOptionsFor) before
+	// it opens anything, so this test is pointed at a temporary one: what it
+	// pins is the port-open wording, which must not depend on the settings
+	// file of whoever runs the tests.
+	tempUserConfig(t)
 	const port = "/dev/nonexistent-rigprog-test-port"
 	_, _, wiringErr := openRealSession(testCtx(t), wiring.DefaultModel, port)
 	if wiringErr == nil {

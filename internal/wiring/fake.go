@@ -239,9 +239,12 @@ type fakeDriverEntry struct {
 //
 // The FTdx101 pair's driver half is ftdx101.Simulated on exactly the same
 // terms, and the warning applies twice over: writeTrialsCompleteD and
-// writeTrialsCompleteMP are BOTH false, so neither radio has a write path
-// against real hardware, and the Supported writes these two rows reach are
-// a claim about internal/fakedx101 alone. This pairing is the only place
+// writeTrialsCompleteMP are BOTH false, so neither radio has a
+// HARDWARE-EVIDENCED write path (the user's own consent can open one
+// against a real radio — see OpenRealSessionWith — but that is a decision
+// about risk and not evidence, and it never reaches this fake table), and
+// the Supported writes these two rows reach are a claim about
+// internal/fakedx101 alone. This pairing is the only place
 // ftdx101.Simulated is legal.
 var fakeDrivers = map[string]fakeDriverEntry{
 	DefaultModel: {

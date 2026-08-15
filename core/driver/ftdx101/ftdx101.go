@@ -70,7 +70,8 @@ var siblingNames = map[string]string{
 }
 
 // Option configures the driver NewD or NewMP builds — and, through it,
-// every Session its Open call establishes. See WithTransportLogger.
+// every Session its Open call establishes. See WithTransportLogger and
+// WithConsentedUnverifiedWrites.
 type Option func(*ftdx101Driver)
 
 // WithTransportLogger sets the transport.Logger every Session this driver
@@ -88,13 +89,46 @@ func WithTransportLogger(l transport.Logger) Option {
 	}
 }
 
+// WithConsentedUnverifiedWrites records that the USER has consented to
+// writing this radio's Unverified fields, and builds a driver whose
+// SESSIONS carry the consent transform: at session-capability assembly
+// every write-side spec.Unverified label becomes spec.ConsentedUnverified,
+// which FieldSupport.CanWrite opens (see sessionCapabilities, and
+// spec.ConsentUnverifiedWrites for the one definition of what consent
+// means).
+//
+// Consent is a statement about a SESSION, never about the radio: this
+// driver's STATIC Capabilities — what internal/wiring's registry publishes,
+// what the app describes the model with, what offline synthesis classifies
+// against — is untouched by the option, and only the set Open assembles
+// carries the state.
+//
+// PER DRIVER, therefore per MODEL: an option passed to NewD reaches the D's
+// sessions and no MP's, which is the right granularity for a consent the
+// user gives about a radio in front of them. This package's two radios have
+// separate write guards (writeTrialsCompleteD, writeTrialsCompleteMP) for
+// the same reason.
+//
+// It is deliberately not sufficient on its own. An unrecognised Profile
+// stays on the untransformed fail-safe even WITH the option
+// (profileRecognised); spec.FieldErase is exempt inside the transform
+// itself, so no consent can mint an erase; and nothing here consults
+// writeTrialsCompleteD or writeTrialsCompleteMP, because consent is a user
+// accepting an unverified write, not evidence that the write has been
+// proven.
+func WithConsentedUnverifiedWrites() Option {
+	return func(d *ftdx101Driver) {
+		d.consentUnverifiedWrites = true
+	}
+}
+
 // NewD builds the FTDX101D driver for profile. RealHardware — the ZERO
 // VALUE — selects the all-Unverified capability set while
 // writeTrialsCompleteD is false (nothing writable; see that constant's doc
 // comment), and ANY unrecognised Profile value deliberately selects the
 // same fail-safe: the failure direction for a forged or corrupted Profile
 // is always "nothing writable", never a writable set. Options:
-// WithTransportLogger.
+// WithTransportLogger, WithConsentedUnverifiedWrites.
 func NewD(profile Profile, opts ...Option) driver.Driver {
 	return newDriver(modelD, profile, opts...)
 }
@@ -141,6 +175,12 @@ type ftdx101Driver struct {
 	// transportLogger, when non-nil, is threaded into every Session's
 	// transport.Engine at Open time — see WithTransportLogger.
 	transportLogger transport.Logger
+	// consentUnverifiedWrites records the user's consent to unverified
+	// writes — set only by WithConsentedUnverifiedWrites, read only by
+	// sessionCapabilities. FALSE is the zero value and the default, so a
+	// driver built without the option behaves exactly as it did before the
+	// option existed.
+	consentUnverifiedWrites bool
 }
 
 // Model implements driver.Driver.
@@ -159,7 +199,12 @@ func (d *ftdx101Driver) Capabilities() spec.Capabilities {
 		// both false, so there is no hardware-verified profile for this arm
 		// to select and a real-hardware session gets the all-Unverified
 		// fail-safe — nothing writable, every write refused before a frame
-		// is built. Neither constant is READ here, deliberately: see their
+		// is built UNLESS the user has consented, which is the one thing
+		// that reaches past these labels and does so downstream of this
+		// method (sessionCapabilities transforms what this arm returns; the
+		// set returned HERE is never transformed, and that is what
+		// internal/wiring.NeedsUnverifiedConsent reads).
+		// Neither constant is READ here, deliberately: see their
 		// doc comments for what a flip must change, and why a constant that
 		// was load-bearing on its own would let a one-character edit unlock
 		// a write.
@@ -295,8 +340,40 @@ func (d *ftdx101Driver) open(ctx context.Context, eng *transport.Engine, id driv
 		eng:     eng,
 		dialect: m.dialect,
 		id:      id,
-		caps:    effectiveCapabilities(m.dialect, d.Capabilities(), slots60m, emg),
+		caps:    d.sessionCapabilities(slots60m, emg),
 	}, nil
+}
+
+// sessionCapabilities is the ONE place a session's effective capability set
+// is assembled: effectiveCapabilities' product — built with THIS DRIVER'S
+// OWN MODEL'S dialect, which is what puts the right radio's EMG wire form in
+// the discovered bank — then, only when this driver was built with
+// WithConsentedUnverifiedWrites AND its profile is one of the declared
+// constants, the consent transform. An unrecognised profile stays
+// untransformed even with the option: the fail-safe direction ("no value a
+// caller can pass produces a writable session") survives consent. Applying
+// the transform here, before the Session exists, keeps the set WriteChannel
+// enforces (s.caps) and the set Capabilities() hands out the same value.
+func (d *ftdx101Driver) sessionCapabilities(slots60m []string, emg bool) spec.Capabilities {
+	caps := effectiveCapabilities(d.model.dialect, d.Capabilities(), slots60m, emg)
+	if d.consentUnverifiedWrites && d.profileRecognised() {
+		caps = spec.ConsentUnverifiedWrites(caps)
+	}
+	return caps
+}
+
+// profileRecognised reports whether this driver's profile is one of the
+// package's declared Profile constants — the same set Capabilities' switch
+// names explicitly, restated here so the consent gate cannot drift open for
+// a profile that switch would fail safe on. It carries no model dimension
+// because Profile carries none: which radio a driver is for is fixed by
+// which constructor built it (plan D1).
+func (d *ftdx101Driver) profileRecognised() bool {
+	switch d.profile {
+	case Simulated, RealHardware:
+		return true
+	}
+	return false
 }
 
 // discoverInventory probes this radio's 5xx and EMG channel inventory:
@@ -427,6 +504,13 @@ func probeSlot(ctx context.Context, dialect cat.Dialect, eng *transport.Engine, 
 // merely tested for. Slicing off the base banks — base.Banks' own length,
 // before any discovered bank is appended — yields exactly the newly
 // discovered ones, in effectiveCapabilities' fixed 60M-then-EMG order.
+//
+// It calls effectiveCapabilities RAW rather than going through
+// sessionCapabilities, and consent is why that changes nothing: every
+// discovered bank's Write support is forced to spec.Unsupported by
+// readOnlyFields (caps.go), so there is no Unverified write label in these
+// banks for the consent transform to convert — and an offline codeplug's
+// banks are not a session anyway.
 //
 // Classification: a slot already claimed by one of base's static banks
 // (MEM/PMS) is excluded first, because this method only ever adds banks

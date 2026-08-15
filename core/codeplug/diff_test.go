@@ -321,6 +321,132 @@ func TestDiffPerFieldGate_ToneOnlyChangeSupportedNotBlocked(t *testing.T) {
 	}
 }
 
+// TestDiffPerFieldGate_ToneOnlyChangeConsentedNotBlocked is the FIFTH
+// STATE's row in the pair above, and the one that proves this package's
+// per-field gate spends the user's consent at all: the same tone-only
+// change, against the same MEM bank, blocked while ctcss_tone's Write is
+// spec.Unverified and NOT blocked once the user has consented to writing
+// this radio's unverified fields.
+//
+// The gate itself is unchanged code — spec.FieldSupport.CanWrite is where
+// the fifth state is admitted, and Diff has always asked CanWrite — which
+// is exactly why it needs a test here: nothing in this package would fail
+// if the two keys silently became one again, and the Blocked verdict a
+// consenting user sees is the whole visible effect of their decision.
+//
+// The capability set comes from spec.ConsentUnverifiedWrites itself rather
+// than a hand-spelled ConsentedUnverified label. A hand-built fixture would
+// go on passing if the real transform stopped producing that shape, which
+// is the failure this row exists to catch.
+func TestDiffPerFieldGate_ToneOnlyChangeConsentedNotBlocked(t *testing.T) {
+	baseline, file := toneOnlyChangeCodeplugs()
+
+	caps := spec.ConsentUnverifiedWrites(testCapabilities())
+	if got := caps.FieldSupport(spec.BankMemory, spec.FieldCTCSSTone).Write; got != spec.ConsentedUnverified {
+		t.Fatalf("fixture precondition: consented MEM ctcss_tone Write = %v, want ConsentedUnverified — the transform is what this test spends", got)
+	}
+
+	result, err := Diff(baseline, file, caps)
+	if err != nil {
+		t.Fatalf("Diff() error = %v, want nil", err)
+	}
+	e := findDiffEntry(t, result, "002")
+	if e.Kind != DiffModified {
+		t.Fatalf("Kind = %v, want %v", e.Kind, DiffModified)
+	}
+	if e.Blocked {
+		t.Errorf("Blocked = true (reason %q), want false: the user consented to writing this radio's unverified fields, and ctcss_tone is one of them", e.BlockReason)
+	}
+}
+
+// TestDiffEraseGate_ConsentNeverUnblocksAnErase is the counterpart, and it
+// is the more important of the two: consent widens what may be attempted,
+// but NOT to an erase. spec.ConsentUnverifiedWrites exempts FieldErase from
+// the transform outright, so MEM's Write:Unverified erase label survives a
+// consented session unchanged and this package's gate 2 goes on refusing —
+// with the same wording an unconsented session gets.
+//
+// Without this row the exemption would be enforced in one package and
+// tested in another: a transform that dropped it would leave every test in
+// core/spec passing while quietly making populated-to-empty sendable, and
+// clone/execute's documented-unreachable DiffErased branch reachable.
+func TestDiffEraseGate_ConsentNeverUnblocksAnErase(t *testing.T) {
+	baseline := testBaselineCodeplug()
+	file := testBaselineCodeplug()
+	for i := range file.Channels {
+		if file.Channels[i].Slot == "002" {
+			file.Channels[i].Data = nil
+		}
+	}
+
+	caps := spec.ConsentUnverifiedWrites(testCapabilities())
+	if got := caps.FieldSupport(spec.BankMemory, spec.FieldErase).Write; got != spec.Unverified {
+		t.Fatalf("consented MEM erase Write = %v, want Unverified — consent must never mint a consented erase", got)
+	}
+
+	result, err := Diff(baseline, file, caps)
+	if err != nil {
+		t.Fatalf("Diff() error = %v, want nil", err)
+	}
+	e := findDiffEntry(t, result, "002")
+	if e.Kind != DiffErased {
+		t.Fatalf("Kind = %v, want %v", e.Kind, DiffErased)
+	}
+	if !e.Blocked {
+		t.Fatal("Blocked = false, want true: no consent makes an erase sendable")
+	}
+	if e.BlockReason != "erase not supported on this radio" {
+		t.Errorf("BlockReason = %q, want %q — a consented session gets the same refusal as any other", e.BlockReason, "erase not supported on this radio")
+	}
+}
+
+// TestDiffBankGate_ConsentDoesNotReachAnUnsupportedBank pins the other
+// half of consent's reach at gate 1: the transform converts Unverified and
+// nothing else, so a bank whose FieldFrequency.Write is spec.Unsupported
+// stays read-only however loudly the user consents.
+//
+// That matters because it is the PRODUCTION shape of the discovered 60M
+// and EMG banks: every driver's readOnlyFields forces their Write to
+// Unsupported (core/driver/ft710, ftdx10 and ftdx101 all do), and this is
+// what says that forcing is not merely a stronger label than Unverified
+// but a genuinely unconsentable one. The fixture's own 60M carries
+// Unverified instead, so it is overridden here rather than relied on.
+func TestDiffBankGate_ConsentDoesNotReachAnUnsupportedBank(t *testing.T) {
+	baseline := testBaselineCodeplug()
+	file := testBaselineCodeplug()
+	for i := range file.Channels {
+		if file.Channels[i].Slot == "501" {
+			file.Channels[i].Data.Mode = "LSB"
+		}
+	}
+
+	base := testCapabilities()
+	for i, b := range base.Banks {
+		if b.ID == spec.Bank60m {
+			base.Banks[i].Fields[spec.FieldFrequency] = spec.FieldSupport{Read: spec.Supported, Write: spec.Unsupported}
+		}
+	}
+	caps := spec.ConsentUnverifiedWrites(base)
+	if got := caps.FieldSupport(spec.Bank60m, spec.FieldFrequency).Write; got != spec.Unsupported {
+		t.Fatalf("consented 60M frequency Write = %v, want Unsupported — consent converts Unverified only", got)
+	}
+
+	result, err := Diff(baseline, file, caps)
+	if err != nil {
+		t.Fatalf("Diff() error = %v, want nil", err)
+	}
+	e := findDiffEntry(t, result, "501")
+	if e.Kind != DiffModified {
+		t.Fatalf("Kind = %v, want %v", e.Kind, DiffModified)
+	}
+	if !e.Blocked {
+		t.Fatal("Blocked = false, want true: a bank forced Unsupported is not consentable")
+	}
+	if e.BlockReason != "bank 60M is read-only" {
+		t.Errorf("BlockReason = %q, want %q", e.BlockReason, "bank 60M is read-only")
+	}
+}
+
 // TestDiffPerFieldGate_AddedChannelKnownToneBlocks covers an Added
 // channel (previously-empty slot) whose CTCSSTone is Known: that is a
 // requested write, so it must be gated the same as a Modified entry's
@@ -901,6 +1027,46 @@ func TestDiffTagDisplayGate_UnverifiedWriteStillBlocks(t *testing.T) {
 	}
 	if e.BlockReason != wantTagDisplayUnknownReason {
 		t.Errorf("BlockReason = %q, want %q (the gate tests Write != Unsupported, not CanWrite())", e.BlockReason, wantTagDisplayUnknownReason)
+	}
+}
+
+// TestDiffTagDisplayGate_ConsentedWriteStillBlocks proves the same
+// "Write != Unsupported, not CanWrite()" claim FROM THE OTHER SIDE, which
+// only the fifth state can do. The row above has CanWrite false and the
+// gate firing; this one has CanWrite TRUE — spec.ConsentedUnverified is
+// the second key to the write gate — and the gate must still fire.
+//
+// That is the honest answer and not an oversight. What gate 3 refuses is a
+// value the user has never chosen for a flag the frame must carry
+// regardless; consent authorises writing an unproven field, it does not
+// invent the operator's intent. So a consenting user gets exactly the same
+// instruction as anyone else — set the flag On or Off — rather than having
+// a value manufactured on their behalf because they ticked a box about
+// something else.
+func TestDiffTagDisplayGate_ConsentedWriteStillBlocks(t *testing.T) {
+	baseline := testBaselineCodeplug()
+	file := testBaselineCodeplug()
+	for i := range file.Channels {
+		if file.Channels[i].Slot == "002" {
+			file.Channels[i].Data.TagDisplay = BoolField{State: Unknown}
+		}
+	}
+
+	caps := tagDisplayCaps(spec.ConsentedUnverified)
+	if !caps.FieldSupport(spec.BankMemory, spec.FieldTagDisplay).CanWrite() {
+		t.Fatal("fixture precondition: a ConsentedUnverified tag_display must satisfy CanWrite — this test is about a gate that fires anyway")
+	}
+
+	result, err := Diff(baseline, file, caps)
+	if err != nil {
+		t.Fatalf("Diff() error = %v, want nil", err)
+	}
+	e := findDiffEntry(t, result, "002")
+	if !e.Blocked {
+		t.Fatal("Blocked = false, want true: consent does not answer the user's own unanswered question")
+	}
+	if e.BlockReason != wantTagDisplayUnknownReason {
+		t.Errorf("BlockReason = %q, want %q (the gate tests Write != Unsupported; CanWrite() is true here and must not matter)", e.BlockReason, wantTagDisplayUnknownReason)
 	}
 }
 

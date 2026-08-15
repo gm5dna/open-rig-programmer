@@ -16,6 +16,16 @@ function resetState() {
 	appState.setSettingsSpec(null)
 	appState.setSettings(null)
 	appState.setActiveView('channels')
+	appState.setSupportedModels([])
+	appState.setSelectedModel('')
+	// Task 14 (M9d): the consent surface's own state — deliberately NOT
+	// connection-scoped (see each field's doc comment), so, exactly like
+	// uiSpec and the model picker's fields, a test that wants it clean
+	// resets it here rather than relying on clearConnection.
+	appState.setUnverifiedConsentPrompt(null)
+	appState.setUnverifiedConsents([])
+	appState.closeUnverifiedGrants()
+	appState.setSendDialogOpen(false)
 	appState.alerts = []
 }
 
@@ -228,6 +238,54 @@ describe('uiSpec (task 17)', () => {
 		expect(appState.uiSpec).toEqual(spec)
 		appState.setUISpec(null)
 		expect(appState.uiSpec).toBeNull()
+	})
+})
+
+describe('model picker state (task 13, M9d — the GUI can finally name a radio)', () => {
+	it('selectedModel defaults to "" — the empty string means wiring.DefaultModel, so an untouched picker connects exactly as the app did before it existed', () => {
+		expect(appState.selectedModel).toBe('')
+	})
+
+	it('setSelectedModel stores the user\'s choice, and "" puts it back to the default', () => {
+		appState.setSelectedModel('FTdx10')
+		expect(appState.selectedModel).toBe('FTdx10')
+		appState.setSelectedModel('')
+		expect(appState.selectedModel).toBe('')
+	})
+
+	it('setSelectedModel coerces a null choice to "" rather than storing it — the connect path takes a string', () => {
+		appState.setSelectedModel(null)
+		expect(appState.selectedModel).toBe('')
+	})
+
+	it('supportedModels starts empty and stores whatever GetSupportedModels returned, in that order', () => {
+		expect(appState.supportedModels).toEqual([])
+		appState.setSupportedModels(['FT-710', 'FTDX101D', 'FTDX101MP', 'FTdx10'])
+		expect(appState.supportedModels).toEqual(['FT-710', 'FTDX101D', 'FTDX101MP', 'FTdx10'])
+	})
+
+	it('setSupportedModels(null) leaves an empty list, never null — the picker always iterates an array', () => {
+		appState.setSupportedModels(['FT-710'])
+		appState.setSupportedModels(null)
+		expect(appState.supportedModels).toEqual([])
+	})
+
+	it('a chosen model survives clearConnection — it is the picker\'s own choice, not connection-scoped state', () => {
+		appState.setSelectedModel('FTdx10')
+		appState.setSupportedModels(['FT-710', 'FTdx10'])
+		appState.clearConnection()
+		expect(appState.selectedModel).toBe('FTdx10')
+		expect(appState.supportedModels).toEqual(['FT-710', 'FTdx10'])
+	})
+
+	it('a chosen model survives disconnectConnection too — reconnecting must offer the radio the user picked', () => {
+		appState.setSelectedModel('FTdx10')
+		appState.setSupportedModels(['FT-710', 'FTdx10'])
+		appState.setConnection({ Model: 'FTdx10', CATID: '0761', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false })
+		appState.disconnectConnection()
+		expect(appState.connection).toBeNull()
+		expect(appState.selectedModel).toBe('FTdx10')
+		expect(appState.supportedModels).toEqual(['FT-710', 'FTdx10'])
 	})
 })
 
@@ -471,5 +529,138 @@ describe('applyTransferDone marks the baseline stale after a send (task 18)', ()
 		appState.beginTransfer('send')
 		expect(() => appState.applyTransferDone({ Kind: 'send', Outcome: 'ok', Report: { Written: 1 }, Message: '' })).not.toThrow()
 		expect(appState.codeplug).toBeNull()
+	})
+})
+
+// --- Task 14 (M9d): the unverified-write consent surface -----------------
+
+/** A real connection to a consent-eligible radio with no decision recorded
+ * — the one shape that must raise the arming dialogue. */
+const NEEDS_CONSENT = {
+	Model: 'FTdx10', CATID: '0761', Port: 'COM3', USBSerial: '', Region: '', Demo: false,
+	NeedsUnverifiedConsent: true, UnverifiedConsentRecorded: false,
+}
+
+/** A minimal UISpecView carrying only the field the amber badge derives
+ * from — the point of the badge's tests is that NOTHING else feeds it. */
+/** @param {boolean} consented */
+function specWithAmber(consented) {
+	return { Live: true, Banks: [], Modes: [], ShiftOptions: [], CTCSSStateOptions: [], Tones: [], TagMaxBytes: 12, ClarMaxHz: 9990, ClarStepHz: 10, UnverifiedWritesConsented: consented }
+}
+
+describe('unverifiedConsentDue — when the arming dialogue is owed (task 14)', () => {
+	it('is true after a real connect to a consent-eligible radio with no decision recorded', () => {
+		appState.setConnection(NEEDS_CONSENT)
+		expect(appState.unverifiedConsentDue).toBe(true)
+	})
+
+	it('is false once a decision is recorded — a DECLINE is a decision, so it is not re-asked', () => {
+		appState.setConnection({ ...NEEDS_CONSENT, UnverifiedConsentRecorded: true })
+		expect(appState.unverifiedConsentDue).toBe(false)
+	})
+
+	it('is false for a recorded GRANT too (the session is already armed — nothing to ask)', () => {
+		appState.setConnection({ ...NEEDS_CONSENT, UnverifiedConsentRecorded: true })
+		appState.setUISpec(specWithAmber(true))
+		expect(appState.unverifiedConsentDue).toBe(false)
+	})
+
+	it('is false for a demo session, even one whose model would need consent on real hardware', () => {
+		appState.setConnection({ ...NEEDS_CONSENT, Demo: true })
+		expect(appState.unverifiedConsentDue).toBe(false)
+	})
+
+	it('is false for a radio whose writes are hardware-verified', () => {
+		appState.setConnection({ ...NEEDS_CONSENT, Model: 'FT-710', NeedsUnverifiedConsent: false })
+		expect(appState.unverifiedConsentDue).toBe(false)
+	})
+
+	it('is false while disconnected', () => {
+		expect(appState.unverifiedConsentDue).toBe(false)
+	})
+})
+
+describe('unverifiedWritesArmed — the amber indicator (task 14)', () => {
+	it('derives from uiSpec.UnverifiedWritesConsented and nothing else', () => {
+		appState.setUISpec(specWithAmber(true))
+		expect(appState.unverifiedWritesArmed).toBe(true)
+		appState.setUISpec(specWithAmber(false))
+		expect(appState.unverifiedWritesArmed).toBe(false)
+	})
+
+	it('is false with no spec loaded at all', () => {
+		expect(appState.unverifiedWritesArmed).toBe(false)
+	})
+
+	it('does NOT follow the connection or a recorded grant — only the live capability label', () => {
+		// A recorded grant on a connected, consent-eligible radio, but a spec
+		// whose capabilities carry no ConsentedUnverified: the session is not
+		// armed, so the badge must stay dark.
+		appState.setConnection({ ...NEEDS_CONSENT, UnverifiedConsentRecorded: true })
+		appState.setUnverifiedConsents([{ Model: 'FTdx10', NeedsConsent: true, Granted: true, Recorded: true, Warning: 'w' }])
+		appState.setUISpec(specWithAmber(false))
+		expect(appState.unverifiedWritesArmed).toBe(false)
+	})
+})
+
+describe('canChangeUnverifiedConsent — the busy guards (task 14)', () => {
+	it('is true when idle', () => {
+		expect(appState.canChangeUnverifiedConsent).toBe(true)
+		expect(appState.consentChangeBlockedReason).toBe('')
+	})
+
+	it('is false while a transfer is running', () => {
+		appState.beginTransfer('read')
+		expect(appState.canChangeUnverifiedConsent).toBe(false)
+		expect(appState.consentChangeBlockedReason).toMatch(/transfer/i)
+	})
+
+	it('is false while a send dialogue is open', () => {
+		appState.setSendDialogOpen(true)
+		expect(appState.canChangeUnverifiedConsent).toBe(false)
+		expect(appState.consentChangeBlockedReason).toMatch(/send/i)
+	})
+
+	it('is false while a connect attempt is in flight', () => {
+		appState.setConnecting(true)
+		expect(appState.canChangeUnverifiedConsent).toBe(false)
+		expect(appState.consentChangeBlockedReason).toMatch(/connect/i)
+	})
+})
+
+describe('consent panel + prompt bookkeeping (task 14)', () => {
+	it('setUnverifiedConsentPrompt stores and clears the arming dialogue', () => {
+		const view = { Model: 'FTdx10', NeedsConsent: true, Granted: false, Recorded: false, Warning: 'w' }
+		appState.setUnverifiedConsentPrompt(view)
+		expect(appState.unverifiedConsentPrompt).toEqual(view)
+		appState.setUnverifiedConsentPrompt(null)
+		expect(appState.unverifiedConsentPrompt).toBeNull()
+	})
+
+	it('setUnverifiedConsents stores the rows verbatim; null/undefined becomes an empty list', () => {
+		const rows = [
+			{ Model: 'FT-710', NeedsConsent: false, Granted: false, Recorded: false, Warning: '' },
+			{ Model: 'FTdx10', NeedsConsent: true, Granted: true, Recorded: true, Warning: 'w' },
+		]
+		appState.setUnverifiedConsents(rows)
+		expect(appState.unverifiedConsents).toEqual(rows)
+		appState.setUnverifiedConsents(null)
+		expect(appState.unverifiedConsents).toEqual([])
+	})
+
+	it('open/closeUnverifiedGrants toggle the always-reachable panel', () => {
+		expect(appState.unverifiedGrantsOpen).toBe(false)
+		appState.openUnverifiedGrants()
+		expect(appState.unverifiedGrantsOpen).toBe(true)
+		appState.closeUnverifiedGrants()
+		expect(appState.unverifiedGrantsOpen).toBe(false)
+	})
+
+	it('invalidatePreparedPlan bumps preparedPlanEpoch — the signal a prepared plan is stale', () => {
+		const before = appState.preparedPlanEpoch
+		appState.invalidatePreparedPlan()
+		expect(appState.preparedPlanEpoch).toBe(before + 1)
+		appState.invalidatePreparedPlan()
+		expect(appState.preparedPlanEpoch).toBe(before + 2)
 	})
 })

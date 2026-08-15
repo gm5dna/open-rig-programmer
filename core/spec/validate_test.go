@@ -102,6 +102,26 @@ func TestCapabilitiesValidate(t *testing.T) {
 			},
 		},
 		{
+			// ConsentedUnverified is a DECLARED Support constant, minted by
+			// the consent transform on the WRITE side only: Validate must
+			// accept it there exactly like the other declared states.
+			name: "FieldSupport Write ConsentedUnverified is valid",
+			mutate: func(c *Capabilities) {
+				c.Banks[0].Fields[FieldShift] = FieldSupport{Read: Supported, Write: ConsentedUnverified}
+			},
+		},
+		{
+			// ...and must REFUSE it on the read side: consent is a
+			// write-side state, reads already flow and need no consent, so
+			// a read label carrying it is a construction mistake.
+			name: "FieldSupport Read ConsentedUnverified is rejected",
+			mutate: func(c *Capabilities) {
+				c.Banks[0].Fields[FieldShift] = FieldSupport{Read: ConsentedUnverified, Write: Supported}
+			},
+			wantErr: true,
+			wantSub: "Read support must never be ConsentedUnverified",
+		},
+		{
 			name: "FieldSupport Read out of range",
 			mutate: func(c *Capabilities) {
 				c.Banks[0].Fields[FieldShift] = FieldSupport{Read: Support(99), Write: Supported}

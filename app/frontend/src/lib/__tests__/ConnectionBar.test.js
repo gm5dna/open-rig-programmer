@@ -7,18 +7,30 @@ import ConnectionBar from '../ConnectionBar.svelte'
 
 vi.mock('../bridge/bindings.js', () => ({
 	listPorts: vi.fn().mockResolvedValue([]),
+	refreshSupportedModels: vi.fn().mockResolvedValue([]),
 	connect: vi.fn().mockResolvedValue(undefined),
 	connectDemo: vi.fn().mockResolvedValue(undefined),
 	disconnect: vi.fn().mockResolvedValue(undefined),
+	// Task 14 (M9d): the consent dialogue ConnectionBar now mounts imports
+	// these two from the same module.
+	applyUnverifiedWriteConsent: vi.fn().mockResolvedValue(undefined),
+	refreshUnverifiedConsents: vi.fn().mockResolvedValue([]),
 }))
 
-import { listPorts, connect, connectDemo } from '../bridge/bindings.js'
+import { listPorts, refreshSupportedModels, connect, connectDemo } from '../bridge/bindings.js'
 
 function resetState() {
 	appState.clearConnection()
 	appState.setPorts([])
 	appState.setPortsLoading(false)
 	appState.setConnecting(false)
+	appState.setSupportedModels([])
+	appState.setSelectedModel('')
+	appState.setUISpec(null)
+	appState.setUnverifiedConsentPrompt(null)
+	appState.setUnverifiedConsents([])
+	appState.closeUnverifiedGrants()
+	appState.setSendDialogOpen(false)
 	appState.alerts = []
 }
 
@@ -26,6 +38,7 @@ beforeEach(() => {
 	resetState()
 	vi.clearAllMocks()
 	listPorts.mockResolvedValue([])
+	refreshSupportedModels.mockResolvedValue([])
 	connect.mockResolvedValue(undefined)
 	connectDemo.mockResolvedValue(undefined)
 })
@@ -118,5 +131,129 @@ describe('ConnectionBar', () => {
 		render(ConnectionBar)
 
 		expect(screen.getByRole('button', { name: 'Disconnect' })).toBeDisabled()
+	})
+})
+
+describe('ConnectionBar model picker (task 13, M9d)', () => {
+	it('fetches the supported-model list once on mount — the list is Go\'s (GetSupportedModels), never a hard-coded one here', () => {
+		render(ConnectionBar)
+		expect(refreshSupportedModels).toHaveBeenCalledTimes(1)
+	})
+
+	it('renders the Radio select as exactly Default plus one option per supported model, in the order Go gave them', () => {
+		appState.setSupportedModels(['FT-710', 'FTDX101D', 'FTdx10'])
+		render(ConnectionBar)
+
+		// Scoped to the model select (the port picker has options of its
+		// own), and an exact ordered comparison rather than a containment
+		// one: count and order both matter, so a hard-coded list in the
+		// markup — the very thing this picker exists to remove — could not
+		// pass this.
+		const select = /** @type {HTMLSelectElement} */ (screen.getByLabelText('Radio'))
+		expect([...select.options].map((o) => o.textContent?.trim())).toEqual([
+			'Default',
+			'FT-710',
+			'FTDX101D',
+			'FTdx10',
+		])
+	})
+
+	it('starts on the default option, whose value is "" — an untouched picker connects exactly as before it existed', () => {
+		appState.setSupportedModels(['FT-710', 'FTdx10'])
+		render(ConnectionBar)
+
+		const select = /** @type {HTMLSelectElement} */ (screen.getByLabelText('Radio'))
+		expect(select.value).toBe('')
+		expect(appState.selectedModel).toBe('')
+	})
+
+	it('choosing a radio stores it in appState.selectedModel, which is what the bridge forwards', async () => {
+		appState.setSupportedModels(['FT-710', 'FTdx10'])
+		appState.setPorts([{ Path: '/dev/tty.usbserial-A', Description: 'FTDI', Score: 5, Hints: [] }])
+		render(ConnectionBar)
+
+		await fireEvent.change(screen.getByLabelText('Radio'), { target: { value: 'FTdx10' } })
+		expect(appState.selectedModel).toBe('FTdx10')
+
+		await fireEvent.change(screen.getByLabelText('Port'), { target: { value: '/dev/tty.usbserial-A' } })
+		await fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
+
+		// connect() takes only the port: the chosen model rides in appState,
+		// so the demo path picks up the same choice with no second argument.
+		expect(connect).toHaveBeenCalledWith('/dev/tty.usbserial-A')
+	})
+
+	it('the choice also reaches the demo path — clicking Demo after picking a radio leaves the choice in place for connectDemo to forward', async () => {
+		appState.setSupportedModels(['FT-710', 'FTdx10'])
+		render(ConnectionBar)
+
+		await fireEvent.change(screen.getByLabelText('Radio'), { target: { value: 'FTdx10' } })
+		await fireEvent.click(screen.getByRole('button', { name: 'Demo (simulated radio)' }))
+
+		expect(connectDemo).toHaveBeenCalledTimes(1)
+		expect(appState.selectedModel).toBe('FTdx10')
+	})
+
+	it('the radio picker is disabled once connected — the model is fixed for the life of a session', () => {
+		appState.setSupportedModels(['FT-710', 'FTdx10'])
+		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usbserial-A', USBSerial: '', Region: '', Demo: false })
+		render(ConnectionBar)
+
+		expect(screen.getByLabelText('Radio')).toBeDisabled()
+	})
+
+	it('the radio picker is disabled while a connect attempt is in flight', () => {
+		appState.setSupportedModels(['FT-710', 'FTdx10'])
+		appState.setConnecting(true)
+		render(ConnectionBar)
+
+		expect(screen.getByLabelText('Radio')).toBeDisabled()
+	})
+})
+
+// --- Task 14 (M9d): the consent affordances -----------------------------
+
+/** A UISpecView carrying only the field the amber indicator reads. The
+ * badge derives from the live session's capability label and NOTHING else
+ * — never from the connection, never from the settings store. */
+/** @param {boolean} consented */
+function specArmed(consented) {
+	return { Live: true, Banks: [], Modes: [], ShiftOptions: [], CTCSSStateOptions: [], Tones: [], TagMaxBytes: 12, ClarMaxHz: 9990, ClarStepHz: 10, UnverifiedWritesConsented: consented }
+}
+
+describe('ConnectionBar unverified-write consent affordances (task 14, M9d)', () => {
+	it('offers "Unverified writes…" even while disconnected — the grants panel is always reachable', async () => {
+		render(ConnectionBar)
+
+		const button = screen.getByRole('button', { name: 'Unverified writes…' })
+		expect(button).not.toBeDisabled()
+
+		await fireEvent.click(button)
+		expect(appState.unverifiedGrantsOpen).toBe(true)
+	})
+
+	it('shows no amber indicator when the live spec reports no consented writes', () => {
+		appState.setConnection({ Model: 'FTdx10', CATID: '0761', Port: 'COM3', USBSerial: '', Region: '', Demo: false, NeedsUnverifiedConsent: true, UnverifiedConsentRecorded: true })
+		appState.setUISpec(specArmed(false))
+		render(ConnectionBar)
+
+		expect(screen.queryByRole('button', { name: /unverified writes enabled/i })).not.toBeInTheDocument()
+	})
+
+	it('shows the amber indicator when the live spec DOES carry consented writes, and it opens the same panel', async () => {
+		appState.setUISpec(specArmed(true))
+		render(ConnectionBar)
+
+		const badge = screen.getByRole('button', { name: /unverified writes enabled/i })
+		await fireEvent.click(badge)
+		expect(appState.unverifiedGrantsOpen).toBe(true)
+	})
+
+	it('mounts the arming dialogue when one is due, and the grants panel when it is open', async () => {
+		appState.setUnverifiedConsentPrompt({ Model: 'FTdx10', NeedsConsent: true, Granted: false, Recorded: false, Warning: 'the backend warning' })
+		render(ConnectionBar)
+
+		expect(screen.getByText('the backend warning')).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Enable unverified writes' })).toBeInTheDocument()
 	})
 })

@@ -54,6 +54,10 @@ export function GetUISpec() {
   return window['go']['main']['App']['GetUISpec']();
 }
 
+export function GetUnverifiedWriteConsent(arg1) {
+  return window['go']['main']['App']['GetUnverifiedWriteConsent'](arg1);
+}
+
 export function ImportCHIRP() {
   return window['go']['main']['App']['ImportCHIRP']();
 }
@@ -68,6 +72,10 @@ export function IsDirty() {
 
 export function ListPorts() {
   return window['go']['main']['App']['ListPorts']();
+}
+
+export function ListUnverifiedWriteConsents() {
+  return window['go']['main']['App']['ListUnverifiedWriteConsents']();
 }
 
 export function LoadFile() {
@@ -92,6 +100,10 @@ export function SaveFile(arg1) {
 
 export function SaveFileAs() {
   return window['go']['main']['App']['SaveFileAs']();
+}
+
+export function SetUnverifiedWriteConsent(arg1, arg2) {
+  return window['go']['main']['App']['SetUnverifiedWriteConsent'](arg1, arg2);
 }
 
 export function UpdateChannel(arg1) {

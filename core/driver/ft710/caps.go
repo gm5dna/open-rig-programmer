@@ -354,14 +354,23 @@ func baseCapabilities(memFields, pmsFields map[spec.Field]spec.FieldSupport) spe
 // profile blocks every write project-wide (codeplug.Diff, the clone
 // service, and Session.WriteChannel's own re-check — an every-field-
 // Unverified entry blocks on the six rw fields regardless of the
-// clarifier). FieldErase on MEM stays Unverified here (Codex M5b fix
+// clarifier). AND CONSENT CANNOT LIFT IT: spec.ConsentedUnverified is
+// the one other state CanWrite() opens, and the transform that mints it
+// runs only for a RECOGNISED Profile (ft710Driver.sessionCapabilities),
+// which is precisely the set of profiles this fail-safe is NOT selected
+// for — so no combination of Profile and consent option produces a
+// writable session from these labels. FieldErase on MEM stays Unverified here (Codex M5b fix
 // wave, Fix 6 — this text used to call it "an open M5b question": M5b
 // has since settled it permanently, for every profile — no CAT erase
 // command exists at all, HW-CONFIRMED, see CapabilitiesRealHardware's
 // FieldErase evidence, which reflects the answer as Unsupported
 // outright. This fail-safe profile's label simply has not been
 // tightened to match: CanWrite() is already false for Unverified exactly
-// as it is for Unsupported, so nothing behaves differently either way).
+// as it is for Unsupported, so nothing behaves differently either way —
+// and consent does not disturb that equivalence, because
+// spec.ConsentUnverifiedWrites exempts FieldErase from the transform
+// outright, precisely so a fail-safe profile's untightened erase label
+// can never be converted into a consented erase).
 // PMS erase is Unsupported outright, independent of the (now removed —
 // Fix 3) NoBlank flag: the same no-CAT-erase finding applies to PMS too,
 // so a populated PMS slot going back to empty stays blocked here as

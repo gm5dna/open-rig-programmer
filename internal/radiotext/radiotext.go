@@ -23,6 +23,30 @@
 // consts that once held them have been deleted. Stdlib only.
 package radiotext
 
+// UnverifiedWriteWarningTemplate is the arming dialogue's body — the text
+// a user is shown at the moment they are asked to consent to writes this
+// project has never proved on a real radio. %s is the model name,
+// substituted by the app layer (the CLI states the same facts in its own
+// confirmation line, which is shaped by a terminal rather than a dialogue).
+//
+// Deliberately NOT a Text field, and this is the one string in this
+// package that is not: it is model-generic by construction — the model
+// name is the only per-model fact in it — and the per-model Text structs
+// are pinned by VERBATIM whole-struct tests plus a non-borrowing loop that
+// refuses two models sharing a string. An identical sentence in four
+// entries would fight both, and four hand-copied near-identical
+// paragraphs about hardware risk is exactly the drift that discipline
+// exists to prevent. A radio that one day needs its OWN wording here can
+// have a Text field then; nothing about this const forecloses it.
+//
+// All four elements the consent spec requires are present: it names the
+// radio (the substitution), states that this project has never written to
+// one, notes that every write is read back and compared, and warns that a
+// misinterpreted frame could corrupt the targeted memory channel. See
+// internal/radiotext's own
+// TestUnverifiedWriteWarningTemplate_CarriesItsFourElements.
+const UnverifiedWriteWarningTemplate = "This project has never written to a real %s. Enabling unverified writes sends memory-write commands that are documented in the manufacturer's CAT reference and exercised against a simulator, but have not been proven on real hardware. Every write is read back and compared, and stops on any mismatch — but a misinterpreted frame could corrupt the targeted memory channel. You can revoke this at any time."
+
 // Text holds one radio model's user-facing prose. Every FT-710 field
 // below is copied VERBATIM from where that string lives TODAY; see each
 // field's own doc comment for its exact source.

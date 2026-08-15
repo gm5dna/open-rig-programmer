@@ -163,22 +163,66 @@ export async function listPorts() {
 	}
 }
 
-/** M9c-5 (E4): App.Connect/App.ConnectDemo now take a model name, and the
+/** Fetches GetSupportedModels into appState.supportedModels — every radio
+ * model this build can open a session against (internal/wiring.
+ * SupportedModels' own sorted order, passed through untouched), which is
+ * the ONLY source the connection bar's model picker draws its options
+ * from. Task 13 (M9d). Called once from ConnectionBar's mount effect: the
+ * set of models a build supports cannot change while it runs, so nothing
+ * refreshes it (mirrors refreshAppVersion).
+ *
+ * Deliberately NEVER throws, like refreshUISpec/refreshAppVersion: failing
+ * to learn the list must not stop the app connecting — the picker then
+ * offers only its default entry, which still opens
+ * internal/wiring.DefaultModel. The alert strip still carries the message.
+ * @returns {Promise<string[] | null>} */
+export async function refreshSupportedModels() {
+	try {
+		const models = await App.GetSupportedModels()
+		appState.setSupportedModels(models)
+		return models
+	} catch (err) {
+		reportError(err, 'listing supported radios')
+		return null
+	}
+}
+
+/** M9c-5 (E4): App.Connect/App.ConnectDemo take a model name, and the
  * empty string means the default model (internal/wiring.DefaultModel) —
  * the exact behaviour these two call sites had before the parameter
- * existed. It is passed EXPLICITLY, with no compat wrapper on the Go
- * side, so the day a model picker lands the only change here is
- * forwarding the user's choice instead of ''. There is no model-selection
- * surface yet: appState carries no chosen model to forward.
- * @param {string} portPath */
-export async function connect(portPath) {
+ * existed. It is passed EXPLICITLY, with no compat wrapper on the Go side.
+ *
+ * Task 13 (M9d): the model picker has landed, and — as that design
+ * predicted — the whole of the change here was forwarding the user's
+ * choice instead of a literal ''. `appState.selectedModel` IS that choice,
+ * and its own default is '', so an untouched picker still makes exactly
+ * the call these two sites made before.
+ * ConnectionBar never passes a model as an argument: reading it from
+ * appState keeps connect() and connectDemo() (which takes no arguments at
+ * all) forwarding the same one choice, with no call site able to disagree
+ * about which radio the user picked.
+ *
+ * Task 14 (M9d) adds the optional `model` override, used by exactly one
+ * caller — applyUnverifiedWriteConsent's reconnect, which must re-open the
+ * session as the radio it just closed, not as whatever the picker holds.
+ * The two can genuinely differ: the picker's '' means "this build's default
+ * radio", which would silently open a DIFFERENT model than the one whose
+ * consent was just recorded. Defaulting to appState.selectedModel leaves
+ * every other call site (and its tests) exactly as it was.
+ * @param {string} portPath
+ * @param {string} [model] */
+export async function connect(portPath, model = appState.selectedModel) {
 	appState.setConnecting(true)
 	try {
-		const info = await App.Connect(portPath, '')
+		const info = await App.Connect(portPath, model)
 		appState.setConnection(info)
 		await refreshUISpec()
 		await refreshSettingsSpec() // task 36: Live flips true now connected
 		await revalidateQuiet() // Fix 5: caps just became authoritative
+		// Task 14 (M9d): the arming dialogue, asked once per radio — after
+		// the spec refresh, so the amber indicator is already truthful about
+		// the session behind the dialogue.
+		await raiseConsentPromptIfDue()
 		return info
 	} catch (err) {
 		reportError(err, 'connecting')
@@ -191,7 +235,11 @@ export async function connect(portPath) {
 export async function connectDemo() {
 	appState.setConnecting(true)
 	try {
-		const info = await App.ConnectDemo('') // see connect(): '' is the default model
+		// See connect(): the same picked model, and '' still means the
+		// default. The demo path opens THAT model's own simulator (Go's
+		// wiring.OpenFakeSessionFor looks it up), so a user can try any
+		// registered radio with no hardware on the cable.
+		const info = await App.ConnectDemo(appState.selectedModel)
 		appState.setConnection(info)
 		await refreshUISpec()
 		await refreshSettingsSpec() // task 36: Live flips true now connected
@@ -222,6 +270,164 @@ export async function disconnect() {
 	} catch (err) {
 		reportError(err, 'disconnecting')
 		throw err
+	}
+}
+
+// --- Task 14 (M9d): the unverified-write consent surface ----------------
+//
+// THE ORDERING IS THE POINT. A consent decision is spent when a session is
+// constructed (app/consent.go's sessionOptions), so changing it for the
+// radio currently connected only means anything if that session is
+// re-opened. This module owns that choreography — not a component, and not
+// app.svelte.js, which owns data only:
+//
+//   1. capture the port and model of the LIVE session;
+//   2. Disconnect FIRST. If Go refuses (a transfer in flight, anything
+//      holding the session), NOTHING is persisted and the caller's
+//      dialogue stays open with the refusal shown — the user is never left
+//      with a recorded decision the running session contradicts;
+//   3. only then persist the decision;
+//   4. re-open the same port as the same model.
+//
+// A change that CANNOT alter the live session — the app is disconnected,
+// the decision is about another radio, or the session is a demo (a demo
+// never spends consent) — persists directly, with no reconnect. Those three
+// are facts about the connection in hand, not guesses about what the
+// session was built with.
+//
+// There used to be a fourth clause: "or the answer already matches what the
+// session is doing", judged from the UI spec's UnverifiedWritesConsented.
+// It is GONE (final review, Codex BLOCKER). That field is a fetch away from
+// the truth, and a fetch that failed — or had not caught up — reads false;
+// a REVOCATION of an armed session then took the direct-persist path and
+// left an immutable live session still consented and still writable while
+// the store recorded a decline. Nothing the frontend holds can be trusted
+// to say what a live session was CONSTRUCTED with, so the rule no longer
+// asks: a toggle aimed at the connected model on a real session ALWAYS
+// re-opens it. The cost is the occasional unnecessary reconnect, which is
+// visible and recoverable; the cost of the old rule was a silent one.
+//
+// The arming dialogue's DECLINE keeps its no-reconnect path, but on
+// knowledge rather than on an oracle: that dialogue is raised only when
+// UnverifiedConsentRecorded is false, so its session was opened
+// unconsented BY CONSTRUCTION. The call site passes that fact in
+// (`sessionUnconsented`) rather than anything here inferring it.
+
+/** Raises the arming dialogue when the connection Go just handed back says
+ * one is owed (appState.unverifiedConsentDue). The dialogue's body is the
+ * backend-composed `Warning` from GetUnverifiedWriteConsent, rendered
+ * verbatim — the frontend states no hardware claim of its own.
+ *
+ * Deliberately NEVER throws, like refreshUISpec: failing to learn the
+ * warning text must not turn a succeeded connection into a rejection. No
+ * prompt is raised in that case (there is no honest text to show), and the
+ * alert strip carries the reason. */
+async function raiseConsentPromptIfDue() {
+	if (!appState.unverifiedConsentDue) return
+	const model = appState.connection?.Model ?? ''
+	try {
+		appState.setUnverifiedConsentPrompt(await App.GetUnverifiedWriteConsent(model))
+	} catch (err) {
+		reportError(err, 'reading the unverified-write consent state')
+	}
+}
+
+/** Fetches ListUnverifiedWriteConsents into appState.unverifiedConsents —
+ * the grants panel's rows: every model this build supports, in Go's own
+ * order, hardware-verified ones included (NeedsConsent false). Called
+ * whenever the panel opens and after every recorded decision, because the
+ * settings store is SHARED with the CLI and can change behind a running
+ * app.
+ *
+ * Deliberately NEVER throws, like refreshUISpec/refreshSupportedModels: a
+ * failed listing must not turn a succeeded consent change into a
+ * rejection. Returns null in that case, leaving the previous rows in
+ * place, with the alert strip carrying the message.
+ * @returns {Promise<import('../../../wailsjs/go/models').main.UnverifiedWriteConsentView[] | null>} */
+export async function refreshUnverifiedConsents() {
+	try {
+		const rows = await App.ListUnverifiedWriteConsents()
+		appState.setUnverifiedConsents(rows)
+		return rows
+	} catch (err) {
+		reportError(err, 'listing unverified-write consents')
+		return null
+	}
+}
+
+/** The store write on its own — reported AND rethrown, because every
+ * caller below needs to know whether the decision was actually recorded.
+ * userconfig's own corrupt-store wording (which names the file and says how
+ * to repair it) reaches the user unwrapped, per app/consent.go.
+ * @param {string} model
+ * @param {boolean} on */
+async function persistUnverifiedWriteConsent(model, on) {
+	try {
+		await App.SetUnverifiedWriteConsent(model, on)
+	} catch (err) {
+		reportError(err, 'recording the unverified-write decision')
+		throw err
+	}
+}
+
+/** Records a consent decision, re-opening the live session when — and only
+ * when — the decision changes what that session can do. See this section's
+ * doc comment for the ordering and why it is that way.
+ *
+ * REJECTS only when nothing was persisted: a refused Disconnect (step 2) or
+ * a failed store write (step 3). A caller's dialogue should therefore stay
+ * open on a rejection and close on a resolution. A failed RECONNECT
+ * (step 4) still resolves: the decision IS recorded, and re-opening the
+ * session is a separate action the user can retry from the connection bar
+ * — the alert strip carries that failure.
+ *
+ * Whether the live session is affected is judged from the CONNECTION alone
+ * — is there one, is it real, is it this model — and never from the UI
+ * spec's consent field, which can be stale or missing (see this section's
+ * doc comment). `sessionUnconsented` is the one exception, and it is
+ * knowledge passed IN by a caller that holds it by construction rather than
+ * anything inferred here: the arming dialogue's own session was opened with
+ * no decision recorded, so declining it changes nothing about that session
+ * and needs no reconnect. Every other caller omits it.
+ * @param {string} model
+ * @param {boolean} on
+ * @param {{ sessionUnconsented?: boolean }} [known] */
+export async function applyUnverifiedWriteConsent(model, on, known = {}) {
+	const connection = appState.connection
+	const targetsLiveSession =
+		connection !== null && connection.Demo !== true && connection.Model === model
+	// A decline aimed at a session the caller KNOWS was opened unconsented
+	// asks that session for nothing it is not already doing.
+	const alreadySettled = on === false && known.sessionUnconsented === true
+
+	if (!targetsLiveSession || alreadySettled) {
+		await persistUnverifiedWriteConsent(model, on)
+		await refreshUnverifiedConsents()
+		return
+	}
+
+	const port = connection.Port
+	// 1/2. Disconnect FIRST — a refusal must leave the store untouched.
+	// disconnect() already reports; rethrown so the caller keeps its
+	// dialogue open on a decision that was never recorded.
+	await disconnect()
+	// Go dropped its own prepared send plan with the session
+	// (app/connection.go); ActionBar's local copy of that plan must go
+	// too. Announced here, immediately after the disconnect that made it
+	// unspendable, rather than after the reconnect — it is stale from this
+	// moment whether or not the session comes back.
+	appState.invalidatePreparedPlan()
+	// 3. Persist.
+	await persistUnverifiedWriteConsent(model, on)
+	await refreshUnverifiedConsents()
+	// 4. Re-open the same port as the same model (never the picker's
+	// choice — see connect()'s `model` parameter).
+	try {
+		await connect(port, model)
+	} catch {
+		// Already reported by connect(). The decision is recorded, so this
+		// call resolves: the user's answer stands, and reconnecting is an
+		// ordinary retry from the connection bar.
 	}
 }
 
