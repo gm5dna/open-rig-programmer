@@ -187,7 +187,7 @@ describe('grants panel (manage mode)', () => {
 		expect(screen.getByLabelText('Unverified writes for FTdx10')).toBeDisabled()
 	})
 
-	it('a refused change is shown inline and leaves the panel open', async () => {
+	it('a refused change is shown inline and leaves the panel open, with the toggle back where the store says it belongs', async () => {
 		appState.setUnverifiedConsents(ROWS)
 		applyMock.mockRejectedValue('app: a transfer is running')
 		appState.openUnverifiedGrants()
@@ -197,6 +197,23 @@ describe('grants panel (manage mode)', () => {
 
 		expect(screen.getByText(/a transfer is running/)).toBeInTheDocument()
 		expect(appState.unverifiedGrantsOpen).toBe(true)
+		// The click moved the DOM property before the refusal came back, and
+		// nothing in the store changed — so the box must be put back rather
+		// than left claiming a grant that was never recorded, contradicting
+		// its own row's state text.
+		expect(screen.getByLabelText('Unverified writes for FTdx10')).not.toBeChecked()
+		expect(screen.getByTestId('consent-state-FTdx10').textContent).toBe('Never asked')
+	})
+
+	it('a refused REVOCATION likewise leaves the granted radio’s box still ticked', async () => {
+		appState.setUnverifiedConsents(ROWS)
+		applyMock.mockRejectedValue('userconfig: settings.json is corrupt')
+		render(UnverifiedWritesDialog, { mode: 'manage' })
+
+		await fireEvent.click(screen.getByLabelText('Unverified writes for FTDX101D'))
+
+		expect(screen.getByLabelText('Unverified writes for FTDX101D')).toBeChecked()
+		expect(screen.getByTestId('consent-state-FTDX101D').textContent).toBe('Enabled')
 	})
 
 	it('Close dismisses the panel', async () => {

@@ -23,7 +23,10 @@
 	// Nothing here re-words a hardware claim: which radios this project has
 	// written to, and what a read-back does and does not protect, is stated
 	// in exactly one place (internal/radiotext), so it can only ever be
-	// wrong in one place.
+	// wrong in one place. The ONE piece of frontend prose above it (the
+	// arming subtitle) is a pointer to that paragraph, deliberately making
+	// no claim the paragraph does not already make; if the warning's own
+	// wording ever changes, that subtitle is the line to re-read.
 	//
 	// The reconnect a change may require is NOT orchestrated here — see
 	// bindings.js's applyUnverifiedWriteConsent, which disconnects first and
@@ -44,6 +47,10 @@
 	 * a consent change can take a disconnect/reconnect round trip, so every
 	 * control is held while one is running. */
 	let pending = $state('')
+	/** WHICH answer is in flight, so only the button the user actually
+	 * pressed relabels itself: `pending` alone put "Enabling…" on the
+	 * primary button even when the user had pressed "Not now". */
+	let pendingOn = $state(false)
 	/** A refusal, shown INLINE: this modal's backdrop can sit above the
 	 * alert strip, so the strip alone cannot be relied on (the same reason
 	 * SendFlowDialog shows its pre-flight rejections inline). */
@@ -60,18 +67,33 @@
 		if (mode === 'manage') void refreshUnverifiedConsents()
 	})
 
-	/** @param {string} model @param {boolean} on */
-	async function record(model, on) {
+	/** Records one decision. `toggle` is the checkbox that triggered it, when
+	 * a checkbox did: the grants panel's boxes are rendered from state
+	 * (`checked={row.Granted}`) but are NOT bound to it, so a browser's own
+	 * click has already moved the DOM property by the time this runs. On a
+	 * REJECTION nothing was persisted, `row.Granted` is therefore unchanged,
+	 * and Svelte's update skips a DOM write it sees no reason for — leaving
+	 * a ticked "unverified writes" box for a radio with no recorded grant,
+	 * contradicting the state text beside it. So the property is restored by
+	 * hand. `!on` IS the pre-click value by construction (the caller passes
+	 * `!row.Granted`).
+	 * @param {string} model
+	 * @param {boolean} on
+	 * @param {HTMLInputElement} [toggle] */
+	async function record(model, on, toggle) {
 		if (locked) return
 		error = ''
 		pending = model
+		pendingOn = on
 		try {
 			await applyUnverifiedWriteConsent(model, on)
 			// Resolved => the decision IS recorded (see the bridge's contract).
 			if (mode === 'arm') appState.setUnverifiedConsentPrompt(null)
 		} catch (err) {
-			// Rejected => nothing was persisted; stay open and say why.
+			// Rejected => nothing was persisted; stay open, say why, and put
+			// the checkbox back where the store still says it belongs.
 			error = describeError(err)
+			if (toggle) toggle.checked = !on
 		} finally {
 			pending = ''
 		}
@@ -93,7 +115,10 @@
 	<!-- Not closable: the question has two answers, and BOTH record a
 	     decision. An Escape that recorded nothing would simply re-ask at
 	     the next connection, which is the nagging this dialogue exists to
-	     avoid. -->
+	     avoid. It cannot strand the user either: the modal backdrop covers
+	     the whole app, so no transfer and no send dialogue can start behind
+	     it — the guards that would hold both answers disabled are
+	     unreachable while it is open. -->
 	<Modal labelledBy="unverified-writes-title" closable={false}>
 		<div class="modal-header">
 			<h2 class="modal-title" id="unverified-writes-title">Unverified writes — {prompt.Model}</h2>
@@ -118,7 +143,7 @@
 				disabled={locked}
 				onclick={() => record(prompt.Model, true)}
 			>
-				{pending ? 'Enabling…' : 'Enable unverified writes'}
+				{pending && pendingOn ? 'Enabling…' : 'Enable unverified writes'}
 			</button>
 		</div>
 	</Modal>
@@ -153,7 +178,7 @@
 							title={!row.NeedsConsent
 								? 'This radio’s writes are hardware-verified — there is nothing to enable'
 								: blockedReason}
-							onchange={() => record(row.Model, !row.Granted)}
+							onchange={(e) => record(row.Model, !row.Granted, e.currentTarget)}
 						/>
 					</li>
 				{/each}
