@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"reflect"
 	"strings"
 	"sync"
@@ -591,5 +592,62 @@ func TestConsentOption_UnrecognisedProfileStaysFailSafe(t *testing.T) {
 				t.Errorf("bank %s field %s: CanWrite() = true on an unrecognised Profile with consent — the fail-safe must survive the option", b.ID, f)
 			}
 		}
+	}
+}
+
+// TestProfileRecognised_MatchesTheDeclaredConstants is the consent gate's
+// DRIFT GUARD, and the sibling of the tests of the same name in
+// core/driver/ft710 and core/driver/ftdx101: profileRecognised must be true
+// for exactly the two Profile constants this package declares (caps.go —
+// RealHardware, Simulated) and false for everything else.
+//
+// The dangerous direction is the one this test exists for. A profile the
+// GATE recognised but ftdx10Driver.Capabilities' switch did not would take
+// the default arm's all-Unverified fail-safe set and then have the consent
+// transform applied to it — fail-safe labels turned writable, which is the
+// precise opposite of what the fail-safe is for, and on this radio the
+// fail-safe set is the one with the most write-side Unverified labels to
+// turn. (The other direction merely withholds consent from a declared
+// profile: unhelpful, not unsafe.)
+//
+// TestConsentOption_UnrecognisedProfileStaysFailSafe above pins the same
+// property through a whole opened session, for one unrecognised value; this
+// pins the gate itself across a sweep, and costs no Open. The two sides are
+// restated in two switches on purpose — profileRecognised's and
+// Capabilities' — because Go offers no way to derive one from the other for
+// an open integer type, so a test is what holds them together. The sweep
+// deliberately includes the values NEXT to the declared ones (a constant
+// added without a gate arm lands there), a negative, and the extremes.
+func TestProfileRecognised_MatchesTheDeclaredConstants(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		p    Profile
+	}{
+		{"RealHardware", RealHardware},
+		{"Simulated", Simulated},
+	} {
+		t.Run("declared/"+tt.name, func(t *testing.T) {
+			d, ok := New(tt.p).(*ftdx10Driver)
+			if !ok {
+				t.Fatal("New did not return a *ftdx10Driver")
+			}
+			if !d.profileRecognised() {
+				t.Errorf("profileRecognised() = false for the declared constant %s — a declared profile must be able to receive consent", tt.name)
+			}
+		})
+	}
+	for _, p := range []Profile{
+		-1, -2, 2, 3, 4, 7, 42, 99, 1000,
+		Profile(math.MinInt), Profile(math.MaxInt),
+	} {
+		t.Run(fmt.Sprintf("other/%d", int(p)), func(t *testing.T) {
+			d, ok := New(p).(*ftdx10Driver)
+			if !ok {
+				t.Fatal("New did not return a *ftdx10Driver")
+			}
+			if d.profileRecognised() {
+				t.Errorf("profileRecognised() = true for Profile(%d), which this package does not declare — Capabilities' switch hands that profile the all-Unverified fail-safe set, and the gate would then let consent make it writable", int(p))
+			}
+		})
 	}
 }
