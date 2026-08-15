@@ -411,18 +411,24 @@ func (a *App) GetUISpec() (UISpecView, error) {
 	}
 
 	return UISpecView{
-		Live:                     live,
-		Banks:                    banks,
-		Modes:                    append([]string(nil), caps.Modes...),
-		ShiftOptions:             shiftOptions,
-		CTCSSStateOptions:        ctcssStateOptions,
-		Tones:                    tones,
-		TagMaxBytes:              caps.TagLen,
-		ClarMaxHz:                caps.ClarMaxHz,
-		ClarStepHz:               caps.ClarStepHz,
-		ToneScanSkipNote:         text.ToneScanSkipNote,
-		ToneScanSkipVerification: text.ToneScanSkipVerification,
-		EraseDialogNote:          text.EraseDialogNote,
+		Live: live,
+		// The amber state, read from the capability set in hand and nothing
+		// else — see UISpecView.UnverifiedWritesConsented and
+		// consentedUnverifiedWrites (consent.go). Offline and demo answer
+		// false through the same call: only a session a driver assembled
+		// under a spent consent carries the label.
+		UnverifiedWritesConsented: consentedUnverifiedWrites(caps),
+		Banks:                     banks,
+		Modes:                     append([]string(nil), caps.Modes...),
+		ShiftOptions:              shiftOptions,
+		CTCSSStateOptions:         ctcssStateOptions,
+		Tones:                     tones,
+		TagMaxBytes:               caps.TagLen,
+		ClarMaxHz:                 caps.ClarMaxHz,
+		ClarStepHz:                caps.ClarStepHz,
+		ToneScanSkipNote:          text.ToneScanSkipNote,
+		ToneScanSkipVerification:  text.ToneScanSkipVerification,
+		EraseDialogNote:           text.EraseDialogNote,
 		PreservationTooltips: PreservationTooltipsView{
 			Tone:     text.PreservationTooltips.Tone,
 			ScanSkip: text.PreservationTooltips.ScanSkip,

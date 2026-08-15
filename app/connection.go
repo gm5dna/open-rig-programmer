@@ -97,7 +97,7 @@ func (a *App) ConnectDemo(model string) (ConnectionInfo, error) {
 // *wiring.UnknownModelError shape, whose Error() names every supported
 // model. Validation runs BEFORE any side-effecting step (a directory
 // created, a session opened), matching the CLI, rather than relying on
-// the eventual OpenRealSessionFor/OpenFakeSessionFor lookup's own
+// the eventual OpenRealSessionWith/OpenFakeSessionFor lookup's own
 // identical error after the snapshot directory has already been made.
 func connectModel(requested string) (string, error) {
 	if requested == "" {
@@ -111,12 +111,26 @@ func connectModel(requested string) (string, error) {
 	return "", &wiring.UnknownModelError{Model: requested, Supported: supportedModels()}
 }
 
+// openRealSessionWith is the real-session constructor this package calls,
+// held in a variable for one reason: a test cannot otherwise observe what
+// consent does. Consent transforms the capability set a REAL-HARDWARE
+// driver's Open assembles, so seeing it means opening a real-profile
+// session, which means a serial port — and internal/wiring's own
+// openSerial seam, which exists for exactly that, is package-private
+// there. This package's call into wiring.OpenRealSessionWith is the
+// nearest point on the same path that it can name. The precedent, down to
+// the name, is cmd/rigprog's identical seam (cmd/rigprog/wiring.go).
+//
+// PRODUCTION ALWAYS LEAVES IT AT wiring.OpenRealSessionWith. Nothing in
+// this package writes to it, and no bound method or preference can: see
+// consent_test.go's realSessionRecorder for its one user, and for what
+// that test does and does not claim to prove.
+var openRealSessionWith = wiring.OpenRealSessionWith
+
 // connect is Connect/ConnectDemo's shared body. It deliberately calls
-// wiring.OpenRealSessionFor/wiring.OpenFakeSessionFor — internal/wiring's
-// own self-contained, model-keyed session paths (the real one is
-// wiring.OpenRealSessionWith, of which OpenRealSessionFor is the
-// zero-option delegate this function wants: it expresses no consent
-// position) — rather than re-deriving the profile/session pairing here,
+// wiring.OpenRealSessionWith/wiring.OpenFakeSessionFor — internal/wiring's
+// own self-contained, model-keyed session paths — rather than re-deriving
+// the profile/session pairing here,
 // preserving the structural-exclusivity shape those paths exist to
 // enforce: no caller of either can supply a driver profile or a port
 // object.
@@ -155,13 +169,29 @@ func (a *App) connect(demo bool, portPath, requestedModel string) (ConnectionInf
 	}
 
 	var (
-		sess   driver.Session
-		closer func() error
+		sess     driver.Session
+		closer   func() error
+		decision consentDecision
 	)
 	if demo {
+		// The demo branch consults NOTHING about consent: a simulated
+		// session takes no options and spends no decision, so the zero
+		// consentDecision above is what its ConnectionInfo reports — both
+		// flags false, whatever radio is being simulated and whatever the
+		// settings file happens to hold or whether it can be read at all.
 		sess, closer, err = wiring.OpenFakeSessionFor(a.ctx, model)
 	} else {
-		sess, closer, err = wiring.OpenRealSessionFor(a.ctx, model, portPath)
+		// The user's recorded decision for THIS model, read once and spent
+		// on the session — the same fact, from the same store, that the
+		// CLI's own real-session path reads (cmd/rigprog/wiring.go's
+		// sessionOptionsFor). A store this build cannot read fails the
+		// whole connect, in userconfig's own words and unwrapped (see
+		// consent.go): there is no honest default to open a session on.
+		decision, err = consentFor(model)
+		if err != nil {
+			return ConnectionInfo{}, err
+		}
+		sess, closer, err = openRealSessionWith(a.ctx, model, portPath, decision.sessionOptions())
 	}
 	if err != nil {
 		return ConnectionInfo{}, fmt.Errorf("app: connecting: %w", err)
@@ -196,6 +226,13 @@ func (a *App) connect(demo bool, portPath, requestedModel string) (ConnectionInf
 		USBSerial: id.USBSerial,
 		Region:    region,
 		Demo:      demo,
+		// Both from the decision resolved above — the zero one on the demo
+		// branch, so a simulated connection reports "nothing to ask, nothing
+		// recorded". See ConnectionInfo's own doc comments: this pair says
+		// what to ASK, never what is armed, which is read from the session's
+		// capabilities instead (GetUISpec).
+		NeedsUnverifiedConsent:    decision.Eligible,
+		UnverifiedConsentRecorded: decision.Recorded,
 	}, nil
 }
 

@@ -1530,3 +1530,81 @@ func TestGetUISpec_UnrecognisedWorkingModelStillSynthesisesBanks(t *testing.T) {
 		t.Errorf("synthesised EMG.Slots = %v, want exactly {EMG:EMG}", s)
 	}
 }
+
+// TestGetUISpec_UnverifiedWritesConsentedFollowsTheSession pins the
+// amber-state flag's derivation: it is read from the CONNECTED session's
+// own capability labels — a write-side spec.ConsentedUnverified anywhere —
+// and from nothing else. Not from the settings file, which a concurrent
+// CLI can change under a running session (userconfig's documented
+// last-writer-wins), and not from the model, which says only that consent
+// is possible. The interface therefore cannot show an armed state that the
+// session in front of the user does not actually have.
+//
+// The consented capability set is built by core/spec's OWN transform, the
+// same one a driver applies at session assembly (app/ may not import a
+// concrete driver package — the M9a neutral-core discipline).
+func TestGetUISpec_UnverifiedWritesConsentedFollowsTheSession(t *testing.T) {
+	caps, err := capsForModel(wiring.FTdx10Model)
+	if err != nil {
+		t.Fatalf("capsForModel(%q): unexpected error: %v", wiring.FTdx10Model, err)
+	}
+	consented := spec.ConsentUnverifiedWrites(caps)
+
+	t.Run("consented session", func(t *testing.T) {
+		a, _ := newTestApp(t)
+		connectDirect(t, a, fixedCapsSession{caps: consented}, nil)
+		got, err := a.GetUISpec()
+		if err != nil {
+			t.Fatalf("GetUISpec: unexpected error: %v", err)
+		}
+		if !got.UnverifiedWritesConsented {
+			t.Error("UnverifiedWritesConsented = false, want true — the session's own caps carry a consented write")
+		}
+	})
+
+	t.Run("unconsented session", func(t *testing.T) {
+		a, _ := newTestApp(t)
+		connectDirect(t, a, fixedCapsSession{caps: caps}, nil)
+		got, err := a.GetUISpec()
+		if err != nil {
+			t.Fatalf("GetUISpec: unexpected error: %v", err)
+		}
+		if got.UnverifiedWritesConsented {
+			t.Error("UnverifiedWritesConsented = true, want false — the same radio, with no consent spent on the session")
+		}
+	})
+
+	t.Run("offline", func(t *testing.T) {
+		a, _ := newTestApp(t)
+		a.mu.Lock()
+		a.conn = nil
+		a.working = &codeplug.Codeplug{
+			Schema:   codeplug.CurrentSchema,
+			Radio:    codeplug.RadioInfo{Model: wiring.FTdx10Model},
+			Channels: []codeplug.Channel{{Slot: "001"}},
+		}
+		a.mu.Unlock()
+		got, err := a.GetUISpec()
+		if err != nil {
+			t.Fatalf("GetUISpec: unexpected error: %v", err)
+		}
+		if got.UnverifiedWritesConsented {
+			t.Error("UnverifiedWritesConsented = true offline, want false — a static baseline describes the radio, never a session's consent")
+		}
+	})
+
+	t.Run("demo", func(t *testing.T) {
+		a, _ := newTestApp(t)
+		if _, err := a.ConnectDemo(wiring.FTdx10Model); err != nil {
+			t.Fatalf("ConnectDemo(%q): unexpected error: %v", wiring.FTdx10Model, err)
+		}
+		t.Cleanup(func() { _ = a.Disconnect() })
+		got, err := a.GetUISpec()
+		if err != nil {
+			t.Fatalf("GetUISpec: unexpected error: %v", err)
+		}
+		if got.UnverifiedWritesConsented {
+			t.Error("UnverifiedWritesConsented = true in demo, want false — a simulator session spends no consent")
+		}
+	})
+}
