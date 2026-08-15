@@ -1688,8 +1688,11 @@ func TestNeedsUnverifiedConsent_MatchesStaticCapabilities(t *testing.T) {
 		}
 		scanned := false
 		for _, b := range caps.Banks {
-			for _, fs := range b.Fields {
-				if fs.Write == spec.Unverified {
+			for f, fs := range b.Fields {
+				// The same erase exemption the predicate applies, restated
+				// here rather than borrowed, so the scan this test checks
+				// against stays an independent statement of the rule.
+				if f != spec.FieldErase && fs.Write == spec.Unverified {
 					scanned = true
 				}
 			}
@@ -1701,6 +1704,58 @@ func TestNeedsUnverifiedConsent_MatchesStaticCapabilities(t *testing.T) {
 		if got != scanned {
 			t.Errorf("NeedsUnverifiedConsent(%q) = %v, but a write-side Unverified scan of its static capabilities says %v", model, got, scanned)
 		}
+	}
+}
+
+// TestConsentCouldUnlockAWrite_EraseOnlyIsNotEligible pins the exemption
+// the predicate has to share with the transform (final review, Codex
+// MINOR): spec.ConsentUnverifiedWrites skips spec.FieldErase, so an
+// Unverified label THERE is not something any consent can turn into a
+// writable field. A radio whose only write-side Unverified sits on
+// FieldErase is therefore not consent-eligible: prompting its owner would
+// be asking them to authorise a write that the grant provably cannot
+// unlock, and — in the GUI — to sit through a disconnect/reconnect for it.
+//
+// It runs against a FIXTURE rather than a registered model deliberately.
+// No registered radio has that shape today (which is why nothing pinned
+// the old behaviour), so the only way to state the rule is to build the
+// capability set that exhibits it. The transform is invoked alongside, so
+// the test fails if the two ever stop agreeing about erase.
+func TestConsentCouldUnlockAWrite_EraseOnlyIsNotEligible(t *testing.T) {
+	eraseOnly := spec.Capabilities{
+		Banks: []spec.Bank{{
+			ID:    "MEM",
+			Slots: []string{"001"},
+			Fields: map[spec.Field]spec.FieldSupport{
+				spec.FieldFrequency: {Read: spec.Supported, Write: spec.Supported},
+				spec.FieldErase:     {Read: spec.Unsupported, Write: spec.Unverified},
+			},
+		}},
+	}
+
+	if consentCouldUnlockAWrite(eraseOnly) {
+		t.Error("consentCouldUnlockAWrite(erase-only Unverified) = true — consent would be asked for, and could unlock nothing: spec.ConsentUnverifiedWrites exempts FieldErase")
+	}
+	// The other half of the same fact, read off the transform itself: a
+	// grant applied to this set changes nothing at all.
+	if got := spec.ConsentUnverifiedWrites(eraseOnly); !reflect.DeepEqual(got, eraseOnly) {
+		t.Errorf("spec.ConsentUnverifiedWrites moved an erase-only Unverified set: got %+v, want it unchanged", got)
+	}
+
+	// The control: the SAME set with one non-erase Unverified is eligible,
+	// so the test cannot pass by the predicate answering false to everything.
+	withWritable := spec.Capabilities{
+		Banks: []spec.Bank{{
+			ID:    "MEM",
+			Slots: []string{"001"},
+			Fields: map[spec.Field]spec.FieldSupport{
+				spec.FieldFrequency: {Read: spec.Supported, Write: spec.Unverified},
+				spec.FieldErase:     {Read: spec.Unsupported, Write: spec.Unverified},
+			},
+		}},
+	}
+	if !consentCouldUnlockAWrite(withWritable) {
+		t.Error("consentCouldUnlockAWrite(a set with a non-erase Unverified write) = false, want true")
 	}
 }
 

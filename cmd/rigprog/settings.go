@@ -510,9 +510,19 @@ func consentStateWord(granted bool) string {
 // every write is read back and compared. A revocation states that the
 // decision is recorded, which is the part a user cannot see and would
 // otherwise expect to be asked about again.
+//
+// The revocation also states WHEN it binds, because the honest answer is
+// not "now" (final review, Codex MINOR). A consent decision is sampled
+// once, when a session is CONSTRUCTED (app/consent.go's sessionOptions and
+// the drivers' WithConsentedUnverifiedWrites), and a session's capability
+// set is immutable thereafter — so a GUI session left open across this
+// command keeps the grant it was opened with until it is re-opened, and
+// only the next connection sees the revocation. Saying "refused again"
+// without that clause invited a user to believe an open session had just
+// been disarmed by typing this.
 func consentConfirmation(model, slug string, on bool) string {
 	if on {
 		return fmt.Sprintf("unverified writes for %s (%s): on — this project has never written to a real %s; every write is read back and compared", model, slug, model)
 	}
-	return fmt.Sprintf("unverified writes for %s (%s): off — writes this project has not proved on a real %s are refused again; the decision is recorded, so nothing will ask you for it", model, slug, model)
+	return fmt.Sprintf("unverified writes for %s (%s): off — from the next connection onwards, writes this project has not proved on a real %s are refused; a session already open keeps what it was opened with until it is re-opened; the decision is recorded, so nothing will ask you for it", model, slug, model)
 }

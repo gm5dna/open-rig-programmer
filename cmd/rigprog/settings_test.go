@@ -500,8 +500,15 @@ func TestCmdSettings_UnverifiedWrites_GrantRevokeRoundTrip(t *testing.T) {
 	if got := cmdSettings([]string{"unverified-writes", "FTdx10", "off"}, &stdout, &stderr); got != exitSuccess {
 		t.Fatalf("settings unverified-writes FTdx10 off = %d, want exitSuccess (%d); stderr=%q", got, exitSuccess, stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "unverified writes for FTdx10 (ftdx10): off") {
-		t.Errorf("revoke stdout = %q, want it to state the new state plainly", stdout.String())
+	// The revocation copy is pinned in full, like the grant's, because its
+	// TIMING claim is the part a user cannot check: consent is spent when a
+	// session is CONSTRUCTED, so a revocation binds from the next connection
+	// and an already-open session (typically the GUI's) keeps what it was
+	// opened with. The old wording said writes "are refused again", full
+	// stop, which read as immediate and was not (final review, Codex MINOR).
+	const revokeCopy = "unverified writes for FTdx10 (ftdx10): off — from the next connection onwards, writes this project has not proved on a real FTdx10 are refused; a session already open keeps what it was opened with until it is re-opened; the decision is recorded, so nothing will ask you for it"
+	if !strings.Contains(stdout.String(), revokeCopy) {
+		t.Errorf("revoke stdout = %q, want it to contain %q", stdout.String(), revokeCopy)
 	}
 
 	// A DECLINE IS A DECISION: the revoked entry is an explicit false in

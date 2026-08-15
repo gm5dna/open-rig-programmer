@@ -574,20 +574,42 @@ func StaticCapabilities(model string) (spec.Capabilities, error) {
 // describes the RADIO — "has this project written to one of these and proved
 // it?" — and never a particular user's decision. spec.ConsentedUnverified is
 // deliberately not counted: it is what a consented SESSION carries, and it
-// cannot appear in a static set at all.
+// cannot appear in a static set at all. Nor is a write-side Unverified on
+// spec.FieldErase — see consentCouldUnlockAWrite.
 func NeedsUnverifiedConsent(model string) (bool, error) {
 	caps, err := StaticCapabilities(model)
 	if err != nil {
 		return false, err
 	}
+	return consentCouldUnlockAWrite(caps), nil
+}
+
+// consentCouldUnlockAWrite reports whether caps carries a write-side
+// spec.Unverified that a grant could actually turn into a permitted write.
+//
+// spec.FieldErase is SKIPPED, and that is the whole reason this is a named
+// predicate rather than an inline loop. spec.ConsentUnverifiedWrites
+// structurally exempts FieldErase — it converts every other Unverified
+// write label to ConsentedUnverified and leaves erase exactly as it found
+// it — so an Unverified erase is not something consent can unlock. Counting
+// it would make a radio whose ONLY write-side Unverified sat on erase
+// "consent-eligible": its owner would be shown the arming dialogue, asked
+// to authorise an unverified write, and (in the GUI) put through a
+// disconnect/reconnect to grant something that provably changes nothing.
+//
+// No registered model has that shape today, which is exactly why the rule
+// is written down here and pinned by a fixture
+// (TestConsentCouldUnlockAWrite_EraseOnlyIsNotEligible) rather than left to
+// be noticed when one arrives.
+func consentCouldUnlockAWrite(caps spec.Capabilities) bool {
 	for _, b := range caps.Banks {
-		for _, fs := range b.Fields {
-			if fs.Write == spec.Unverified {
-				return true, nil
+		for f, fs := range b.Fields {
+			if f != spec.FieldErase && fs.Write == spec.Unverified {
+				return true
 			}
 		}
 	}
-	return false, nil
+	return false
 }
 
 // StaticSettingsDescriptor returns model's driver-level settings tree —
