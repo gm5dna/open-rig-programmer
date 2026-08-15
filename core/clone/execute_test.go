@@ -181,6 +181,9 @@ func TestExecute_ConsentedLabels_WriteVerifyPairRuns(t *testing.T) {
 	if report.SkippedBlocked != 0 {
 		t.Errorf("SkippedBlocked = %d, want 0", report.SkippedBlocked)
 	}
+	if wantUnchanged := len(plan.diff.Entries) - 2; report.Unchanged != wantUnchanged {
+		t.Errorf("Unchanged = %d, want %d (every entry but the two deltas)", report.Unchanged, wantUnchanged)
+	}
 	if report.Aborted {
 		t.Errorf("Aborted = true, want false (reason: %s)", report.AbortReason)
 	}

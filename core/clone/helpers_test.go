@@ -268,6 +268,17 @@ func openSimSession(t *testing.T, opts ...fakeradio.Option) (*fakeradio.Radio, d
 // without the sibling drivers' full discovery walk, and this wrapper
 // keeps ReadChannel/WriteChannel REAL.
 //
+// The relabelling is ROUTED THROUGH THE PRODUCTION TRANSFORM rather than
+// writing ConsentedUnverified itself: this wrapper demotes MEM's
+// write-Supported fields to Unverified and hands the result to
+// spec.ConsentUnverifiedWrites, the one function a real consented
+// session's labels also come from. So the fixture cannot mint a
+// capability shape production can never produce — most pointedly a
+// consented ERASE, which that transform exempts structurally
+// (spec/consent.go) and which this fixture would otherwise have minted
+// the day some profile made MEM FieldErase write-Supported, silently
+// turning the pair test into a proof of something false.
+//
 // One consequence of overriding ONLY Capabilities(), noted so no test
 // reads more into a journal than is there: the optional CONCRETE-type
 // interfaces this package reaches for by assertion — MemorySelector
@@ -279,18 +290,30 @@ func openSimSession(t *testing.T, opts ...fakeradio.Option) (*fakeradio.Radio, d
 // what the consented-labels test exists to prove.
 type consentedCapsSession struct{ driver.Session }
 
-// Capabilities implements driver.Session, returning the underlying
-// session's effective capabilities with every MEM field whose Write is
-// spec.Supported relabelled spec.ConsentedUnverified. Only the write side
-// of the MEM bank is touched: the clarifier's Inert label, MEM's erase
-// (never consentable — spec.ConsentUnverifiedWrites exempts FieldErase
-// structurally), the PMS bank, and every Read label are passed through
-// exactly as the driver minted them, so the only behavioural difference
-// between this session and its underlying one is WHICH LABEL opened the
-// write gate. The Banks slice and the MEM Fields map are freshly
-// allocated here, so the relabelling can never reach back into anything
-// the driver holds (Capabilities() already hands out a defensive copy —
-// this is belt and braces, exactly as spec.copyBank is).
+// Capabilities implements driver.Session in two steps, neither of which
+// names ConsentedUnverified itself.
+//
+// Step 1 demotes the underlying session's MEM fields whose Write is
+// spec.Supported to spec.Unverified — the ONLY thing this fixture
+// invents, and it invents an honest label rather than a consented one:
+// "documented, unproven on hardware", which is precisely the state a
+// sibling radio's real profile is in before its user consents. Read
+// labels, the clarifier's Inert Write, and the PMS bank are passed
+// through exactly as the driver minted them.
+//
+// Step 2 hands that to spec.ConsentUnverifiedWrites — the project's ONE
+// consent transform, the same function a real consented session's labels
+// come from — which turns every write-side Unverified into
+// ConsentedUnverified, exempts FieldErase, and deep-copies. Routing
+// through it means this fixture's capability shape cannot drift from
+// what production can actually produce: it gets the erase exemption (and
+// any future structural exclusion) for free, by construction, instead of
+// by this wrapper remembering to reimplement it.
+//
+// The Banks slice and the MEM Fields map are freshly allocated in step 1
+// too, so even the pre-transform value can never reach back into
+// anything the driver holds (Capabilities() already hands out a
+// defensive copy — this is belt and braces, exactly as spec.copyBank is).
 func (s consentedCapsSession) Capabilities() spec.Capabilities {
 	caps := s.Session.Capabilities()
 	banks := make([]spec.Bank, len(caps.Banks))
@@ -302,7 +325,7 @@ func (s consentedCapsSession) Capabilities() spec.Capabilities {
 		fields := make(map[spec.Field]spec.FieldSupport, len(b.Fields))
 		for f, fs := range b.Fields {
 			if fs.Write == spec.Supported {
-				fs.Write = spec.ConsentedUnverified
+				fs.Write = spec.Unverified
 			}
 			fields[f] = fs
 		}
@@ -310,7 +333,7 @@ func (s consentedCapsSession) Capabilities() spec.Capabilities {
 		banks[i] = b
 	}
 	caps.Banks = banks
-	return caps
+	return spec.ConsentUnverifiedWrites(caps)
 }
 
 // openConsentedSimSession opens a Simulated fake-backed session exactly as

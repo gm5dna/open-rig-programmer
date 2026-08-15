@@ -170,7 +170,11 @@ func copyDiffResult(d codeplug.DiffResult) codeplug.DiffResult {
 // capsConsented reports whether any bank field in caps carries the
 // spec.ConsentedUnverified WRITE label — that is, whether this session's
 // write gate was opened anywhere by a user's recorded consent to an
-// unverified write, rather than by hardware evidence alone. (Read labels
+// unverified write, rather than by hardware evidence alone. The question
+// is SESSION-WIDE, deliberately: a true answer says this session was
+// permitted to write on the strength of a recorded consent, NOT that any
+// particular field the plan carrying it writes was itself consented.
+// (Read labels
 // cannot be ConsentedUnverified at all: spec.Capabilities.Validate
 // rejects one, and spec.ConsentUnverifiedWrites never mints one, so the
 // write-side check below is the whole question.)
