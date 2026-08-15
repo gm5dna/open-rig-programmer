@@ -15,6 +15,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/csvio"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeradio"
+	"github.com/gm5dna/open-rig-programmer/internal/userconfig"
 	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
 
@@ -397,6 +398,380 @@ func TestSettingsCSV_FormulaEscaping(t *testing.T) {
 		want := csvio.EscapeCell("@DANGEROUS LABEL")
 		if parsed[1][3] != want { // label column
 			t.Errorf("label column = %q, want %q (escaped)", parsed[1][3], want)
+		}
+	})
+}
+
+// tempUserConfig points this package's userConfigPath seam at a file
+// under a fresh t.TempDir(), restoring the previous value on cleanup,
+// and returns that path. Every test below that can reach the consent
+// store uses it: the store's production location is the REAL user's
+// settings file, and a test that grants consent must never be able to
+// write to the machine it runs on.
+//
+// The file itself is not created — an absent settings file is a valid,
+// meaningful state (userconfig.Load returns the zero Settings for it),
+// and it is the state a first-run user is in.
+func tempUserConfig(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "settings.json")
+	prev := userConfigPath
+	userConfigPath = func() (string, error) { return path, nil }
+	t.Cleanup(func() { userConfigPath = prev })
+	return path
+}
+
+// TestCmdSettings_UnverifiedWrites_List pins the listing: one row per
+// wiring.SupportedModels() entry, consent-eligible models showing off/on,
+// and the FT-710 — the one registered radio whose writes are
+// hardware-verified — showing "n/a (hardware-verified)" rather than a
+// state a user could be tempted to change.
+func TestCmdSettings_UnverifiedWrites_List(t *testing.T) {
+	tempUserConfig(t)
+
+	var stdout, stderr bytes.Buffer
+	got := cmdSettings([]string{"unverified-writes"}, &stdout, &stderr)
+	if got != exitSuccess {
+		t.Fatalf("settings unverified-writes = %d, want exitSuccess (%d); stderr=%q", got, exitSuccess, stderr.String())
+	}
+	out := stdout.String()
+	for _, model := range wiring.SupportedModels() {
+		row := consentRow(t, out, model)
+		want := "off"
+		if model == wiring.DefaultModel {
+			want = "n/a (hardware-verified)"
+		}
+		if !strings.HasSuffix(row, want) {
+			t.Errorf("listing row for %q = %q, want it to end %q", model, row, want)
+		}
+	}
+}
+
+// consentRow returns the one line of a "settings unverified-writes"
+// listing whose first whitespace-separated field is model, with its
+// trailing padding trimmed — so a test asserts on THAT model's state
+// rather than on a substring that any row (or a hint line) could satisfy.
+func consentRow(t *testing.T, listing, model string) string {
+	t.Helper()
+	for _, line := range strings.Split(listing, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) > 0 && fields[0] == model {
+			return strings.TrimRight(line, " \t")
+		}
+	}
+	t.Fatalf("listing = %q, want a row for model %q", listing, model)
+	return ""
+}
+
+// TestCmdSettings_UnverifiedWrites_GrantRevokeRoundTrip pins the whole
+// set/revoke round trip, including the two things a user could not
+// otherwise check: the confirmation copy is the honest one (it names what
+// the grant actually means), and a REVOKED grant is stored as an explicit
+// false rather than a deleted key — the recorded-decline semantics the
+// store was built for (a user who has said no is not asked again).
+func TestCmdSettings_UnverifiedWrites_GrantRevokeRoundTrip(t *testing.T) {
+	path := tempUserConfig(t)
+
+	var stdout, stderr bytes.Buffer
+	got := cmdSettings([]string{"unverified-writes", "FTdx10", "on"}, &stdout, &stderr)
+	if got != exitSuccess {
+		t.Fatalf("settings unverified-writes FTdx10 on = %d, want exitSuccess (%d); stderr=%q", got, exitSuccess, stderr.String())
+	}
+	const grantCopy = "unverified writes for FTdx10 (ftdx10): on — this project has never written to a real FTdx10; every write is read back and compared"
+	if !strings.Contains(stdout.String(), grantCopy) {
+		t.Errorf("grant stdout = %q, want it to contain %q", stdout.String(), grantCopy)
+	}
+
+	if granted := rawConsent(t, path)["ftdx10"]; granted != true {
+		t.Errorf("stored consent for \"ftdx10\" = %v, want true", granted)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if got := cmdSettings([]string{"unverified-writes"}, &stdout, &stderr); got != exitSuccess {
+		t.Fatalf("settings unverified-writes (after grant) = %d, want exitSuccess (%d); stderr=%q", got, exitSuccess, stderr.String())
+	}
+	if row := consentRow(t, stdout.String(), "FTdx10"); !strings.HasSuffix(row, "on") {
+		t.Errorf("listing after grant: FTdx10 row = %q, want it to end \"on\"", row)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if got := cmdSettings([]string{"unverified-writes", "FTdx10", "off"}, &stdout, &stderr); got != exitSuccess {
+		t.Fatalf("settings unverified-writes FTdx10 off = %d, want exitSuccess (%d); stderr=%q", got, exitSuccess, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "unverified writes for FTdx10 (ftdx10): off") {
+		t.Errorf("revoke stdout = %q, want it to state the new state plainly", stdout.String())
+	}
+
+	// A DECLINE IS A DECISION: the revoked entry is an explicit false in
+	// the file, not an absent key (which would mean "never asked").
+	stored := rawConsent(t, path)
+	granted, recorded := stored["ftdx10"]
+	if !recorded {
+		t.Fatalf("stored consent = %v, want the revoked model still recorded (an explicit false, not a deleted key)", stored)
+	}
+	if granted {
+		t.Errorf("stored consent for \"ftdx10\" = %v, want false", granted)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if got := cmdSettings([]string{"unverified-writes"}, &stdout, &stderr); got != exitSuccess {
+		t.Fatalf("settings unverified-writes (after revoke) = %d, want exitSuccess (%d); stderr=%q", got, exitSuccess, stderr.String())
+	}
+	if row := consentRow(t, stdout.String(), "FTdx10"); !strings.HasSuffix(row, "off") {
+		t.Errorf("listing after revoke: FTdx10 row = %q, want it to end \"off\"", row)
+	}
+}
+
+// rawConsent decodes the settings file at path and returns its
+// unverifiedWrites map, read as raw JSON rather than through
+// internal/userconfig — this is a pin on what is actually ON DISK, so it
+// must not be able to pass by agreeing with the same accessor the
+// command wrote through.
+func rawConsent(t *testing.T, path string) map[string]bool {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading the settings file %s: %v", path, err)
+	}
+	var file struct {
+		UnverifiedWrites map[string]bool `json:"unverifiedWrites"`
+	}
+	if err := json.Unmarshal(b, &file); err != nil {
+		t.Fatalf("decoding the settings file %s (%q): %v", path, string(b), err)
+	}
+	return file.UnverifiedWrites
+}
+
+// TestCmdSettings_UnverifiedWrites_HardwareVerifiedRefused pins the
+// refusal that keeps the command honest: the FT-710's writes are
+// hardware-verified, so there is no unverified write for a consent to
+// unlock, and BOTH "on" and "off" are refused as usage errors rather
+// than recorded as a decision about nothing. The store must not even be
+// created.
+func TestCmdSettings_UnverifiedWrites_HardwareVerifiedRefused(t *testing.T) {
+	for _, state := range []string{"on", "off"} {
+		t.Run(state, func(t *testing.T) {
+			path := tempUserConfig(t)
+
+			var stdout, stderr bytes.Buffer
+			got := cmdSettings([]string{"unverified-writes", "FT-710", state}, &stdout, &stderr)
+			if got != exitUsage {
+				t.Fatalf("settings unverified-writes FT-710 %s = %d, want exitUsage (%d); stderr=%q", state, got, exitUsage, stderr.String())
+			}
+			out := stderr.String()
+			for _, want := range []string{"FT-710", "unverified write", "hardware-verified"} {
+				if !strings.Contains(out, want) {
+					t.Errorf("refusal stderr = %q, want it to contain %q", out, want)
+				}
+			}
+			if _, err := os.Stat(path); !os.IsNotExist(err) {
+				t.Errorf("a refused grant created (or touched) the settings file %s, want it left absent", path)
+			}
+		})
+	}
+}
+
+// TestCmdSettings_UnverifiedWrites_NearMissModelRefused regression-pins
+// the near miss: "FTDX10" is the manual's spelling, NOT this project's
+// registry key, and it must keep failing validateModel's ordinary
+// unknown-model check — naming the models this build does support — the
+// way it does everywhere else in this command. The one place that
+// spelling appears in this repository's CLI tests is here, as the thing
+// being refused.
+func TestCmdSettings_UnverifiedWrites_NearMissModelRefused(t *testing.T) {
+	path := tempUserConfig(t)
+
+	var stdout, stderr bytes.Buffer
+	got := cmdSettings([]string{"unverified-writes", "FTDX10", "on"}, &stdout, &stderr)
+	if got != exitUsage {
+		t.Fatalf("settings unverified-writes FTDX10 on = %d, want exitUsage (%d); stderr=%q", got, exitUsage, stderr.String())
+	}
+	out := stderr.String()
+	if !strings.Contains(out, "FTDX10") || !strings.Contains(out, "FTdx10") {
+		t.Errorf("refusal stderr = %q, want it to name both the rejected spelling and the supported one", out)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("a refused grant created (or touched) the settings file %s, want it left absent", path)
+	}
+}
+
+// TestCmdSettings_UnverifiedWrites_BadStateWord pins the state word: it
+// is "on" or "off" and nothing else — never a silently-ignored third
+// value, and never a guess at which of the two a user meant.
+func TestCmdSettings_UnverifiedWrites_BadStateWord(t *testing.T) {
+	path := tempUserConfig(t)
+
+	var stdout, stderr bytes.Buffer
+	got := cmdSettings([]string{"unverified-writes", "FTdx10", "maybe"}, &stdout, &stderr)
+	if got != exitUsage {
+		t.Fatalf("settings unverified-writes FTdx10 maybe = %d, want exitUsage (%d); stderr=%q", got, exitUsage, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "on") || !strings.Contains(stderr.String(), "off") {
+		t.Errorf("refusal stderr = %q, want it to name the two accepted state words", stderr.String())
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("a refused set created (or touched) the settings file %s, want it left absent", path)
+	}
+}
+
+// TestCmdSettings_UnverifiedWrites_BadArity pins the sub-mode's arity: 0
+// further arguments lists, 2 set, and anything else is a usage error —
+// in particular a bare model name, which could otherwise be read as
+// either "show me this model" or "turn this model on".
+func TestCmdSettings_UnverifiedWrites_BadArity(t *testing.T) {
+	for _, args := range [][]string{
+		{"unverified-writes", "FTdx10"},
+		{"unverified-writes", "FTdx10", "on", "please"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			tempUserConfig(t)
+			var stdout, stderr bytes.Buffer
+			got := cmdSettings(args, &stdout, &stderr)
+			if got != exitUsage {
+				t.Errorf("cmdSettings(%v) = %d, want exitUsage (%d); stderr=%q", args, got, exitUsage, stderr.String())
+			}
+		})
+	}
+}
+
+// TestCmdSettings_UnverifiedWrites_FlagsRefused pins that the sub-mode
+// takes no flags: "settings --csv OUT unverified-writes" asks for a CSV
+// export of a consent listing, which this command does not do, and it is
+// refused rather than silently ignored.
+func TestCmdSettings_UnverifiedWrites_FlagsRefused(t *testing.T) {
+	tempUserConfig(t)
+	var stdout, stderr bytes.Buffer
+	got := cmdSettings([]string{"--csv", "out.csv", "unverified-writes"}, &stdout, &stderr)
+	if got != exitUsage {
+		t.Errorf("cmdSettings(--csv OUT unverified-writes) = %d, want exitUsage (%d); stderr=%q", got, exitUsage, stderr.String())
+	}
+}
+
+// corruptStore writes bytes that are not a settings file this build can
+// read to path, and returns it.
+func corruptStore(t *testing.T, path string) string {
+	t.Helper()
+	if err := os.WriteFile(path, []byte("{not json at all"), 0o600); err != nil {
+		t.Fatalf("seeding a corrupt settings file at %s: %v", path, err)
+	}
+	return path
+}
+
+// TestCmdSettings_UnverifiedWrites_CorruptStore pins the carried Task-7
+// review note: a settings file this build cannot read is surfaced with
+// internal/userconfig's OWN error text — which names the path and tells
+// the user to delete or repair it by hand — never a generic "could not
+// read settings". Both the listing and a set are affected, and neither
+// touches the file.
+func TestCmdSettings_UnverifiedWrites_CorruptStore(t *testing.T) {
+	for _, args := range [][]string{
+		{"unverified-writes"},
+		{"unverified-writes", "FTdx10", "on"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			path := corruptStore(t, tempUserConfig(t))
+			before, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("reading the seeded corrupt file: %v", err)
+			}
+
+			var stdout, stderr bytes.Buffer
+			got := cmdSettings(args, &stdout, &stderr)
+			if got == exitSuccess {
+				t.Fatalf("cmdSettings(%v) with a corrupt store = exitSuccess, want a failure; stdout=%q", args, stdout.String())
+			}
+			out := stderr.String()
+			for _, want := range []string{path, "repair the file by hand"} {
+				if !strings.Contains(out, want) {
+					t.Errorf("corrupt-store stderr = %q, want it to contain %q (userconfig's own wording, verbatim)", out, want)
+				}
+			}
+			after, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("reading the corrupt file back: %v", err)
+			}
+			if string(after) != string(before) {
+				t.Errorf("the corrupt settings file was modified: before=%q after=%q", before, after)
+			}
+		})
+	}
+}
+
+// TestSessionOptionsFor pins the one function every real-hardware
+// session in this command now goes through: what the store says becomes
+// what wiring is asked for, and a store this build cannot read is an
+// ERROR rather than either default — a corrupt file must never be
+// silently read as "unconsented" (which would refuse writes the user had
+// authorised) or as "consented" (which would authorise writes they had
+// not).
+func TestSessionOptionsFor(t *testing.T) {
+	t.Run("absent store is zero options", func(t *testing.T) {
+		tempUserConfig(t)
+		opts, err := sessionOptionsFor(wiring.FTdx10Model)
+		if err != nil {
+			t.Fatalf("sessionOptionsFor: unexpected error: %v", err)
+		}
+		if (opts != wiring.SessionOptions{}) {
+			t.Errorf("sessionOptionsFor(absent store) = %+v, want the zero SessionOptions", opts)
+		}
+	})
+
+	t.Run("granted", func(t *testing.T) {
+		path := tempUserConfig(t)
+		if err := userconfig.SetUnverifiedWrites(path, "ftdx10", true); err != nil {
+			t.Fatalf("seeding a grant: %v", err)
+		}
+		opts, err := sessionOptionsFor(wiring.FTdx10Model)
+		if err != nil {
+			t.Fatalf("sessionOptionsFor: unexpected error: %v", err)
+		}
+		if !opts.ConsentUnverifiedWrites {
+			t.Error("sessionOptionsFor(granted).ConsentUnverifiedWrites = false, want true")
+		}
+	})
+
+	t.Run("another model's grant does not carry", func(t *testing.T) {
+		path := tempUserConfig(t)
+		if err := userconfig.SetUnverifiedWrites(path, "ftdx10", true); err != nil {
+			t.Fatalf("seeding a grant: %v", err)
+		}
+		opts, err := sessionOptionsFor(wiring.FTdx101DModel)
+		if err != nil {
+			t.Fatalf("sessionOptionsFor: unexpected error: %v", err)
+		}
+		if opts.ConsentUnverifiedWrites {
+			t.Error("sessionOptionsFor(FTdx101D) = consented, want the FTdx10's grant to stay the FTdx10's")
+		}
+	})
+
+	t.Run("revoked", func(t *testing.T) {
+		path := tempUserConfig(t)
+		if err := userconfig.SetUnverifiedWrites(path, "ftdx10", false); err != nil {
+			t.Fatalf("seeding a decline: %v", err)
+		}
+		opts, err := sessionOptionsFor(wiring.FTdx10Model)
+		if err != nil {
+			t.Fatalf("sessionOptionsFor: unexpected error: %v", err)
+		}
+		if opts.ConsentUnverifiedWrites {
+			t.Error("sessionOptionsFor(declined).ConsentUnverifiedWrites = true, want false")
+		}
+	})
+
+	t.Run("corrupt store is an error", func(t *testing.T) {
+		path := corruptStore(t, tempUserConfig(t))
+		opts, err := sessionOptionsFor(wiring.FTdx10Model)
+		if err == nil {
+			t.Fatalf("sessionOptionsFor(corrupt store) = %+v, <nil error>, want an error", opts)
+		}
+		if !strings.Contains(err.Error(), path) {
+			t.Errorf("sessionOptionsFor(corrupt store) error = %q, want userconfig's own text naming %q", err, path)
+		}
+		if opts.ConsentUnverifiedWrites {
+			t.Error("sessionOptionsFor(corrupt store) returned consent alongside its error")
 		}
 	})
 }

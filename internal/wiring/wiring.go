@@ -530,6 +530,43 @@ func StaticCapabilities(model string) (spec.Capabilities, error) {
 	return drv.Capabilities(), nil
 }
 
+// NeedsUnverifiedConsent reports whether model is CONSENT-ELIGIBLE: whether
+// its real-hardware baseline still carries a write-side spec.Unverified
+// anywhere, and so whether a user's recorded consent could open a write gate
+// on it at all. Fails with *UnknownModelError for an unrecognised model, and
+// returns false alongside it — a caller that ignored the error must not be
+// told an unnameable radio can be consented to.
+//
+// ONE implementation, exported, because two composition roots ask the same
+// question: the CLI's "settings unverified-writes" (which models it lists as
+// on/off, and which it refuses a grant for) and the GUI's own consent
+// surface. A private copy in either would let the two disagree about which
+// radios consent even applies to — an FT-710 owner asked to authorise an
+// unverified write that cannot exist, or an FTdx10 owner refused a grant that
+// would have unlocked one.
+//
+// STATIC capabilities, never a session's, and that is what makes the question
+// answerable before any port is opened: the consent transform leaves a
+// driver's static set untouched (see OpenRealSessionWith), so this predicate
+// describes the RADIO — "has this project written to one of these and proved
+// it?" — and never a particular user's decision. spec.ConsentedUnverified is
+// deliberately not counted: it is what a consented SESSION carries, and it
+// cannot appear in a static set at all.
+func NeedsUnverifiedConsent(model string) (bool, error) {
+	caps, err := StaticCapabilities(model)
+	if err != nil {
+		return false, err
+	}
+	for _, b := range caps.Banks {
+		for _, fs := range b.Fields {
+			if fs.Write == spec.Unverified {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
 // StaticSettingsDescriptor returns model's driver-level settings tree —
 // the driver.StaticSettingsProvider capability (core/driver/optional.go)
 // — when model's driver implements it. The bool result reports whether

@@ -74,6 +74,7 @@ func TestOpenFakeSession(t *testing.T) {
 // alias surfaces a port-open failure as a plain error (not a panic), for
 // a path that cannot possibly exist.
 func TestOpenRealSession_BadPort(t *testing.T) {
+	tempUserConfig(t) // openRealSession reads the consent store first
 	sess, closeAll, err := openRealSession(testCtx(t), wiring.DefaultModel, "/dev/nonexistent-rigprog-test-port")
 	if err == nil {
 		t.Fatal("openRealSession: expected an error opening a nonexistent port, got nil")
@@ -90,6 +91,7 @@ func TestOpenRealSession_BadPort(t *testing.T) {
 // never UnknownModelError, since validateModel already catches that case
 // earlier in every real caller — see probe.go/read.go/write.go/diff.go).
 func TestOpenRealSession_UnknownModel(t *testing.T) {
+	tempUserConfig(t) // openRealSession reads the consent store first
 	_, _, err := openRealSession(testCtx(t), unknownModelSentinel, "/dev/nonexistent-rigprog-test-port")
 	if err == nil {
 		t.Fatal("openRealSession(unknown model): expected an error, got nil")

@@ -1631,3 +1631,93 @@ func TestModelSlugsUnique(t *testing.T) {
 		seen[slug] = model
 	}
 }
+
+// TestNeedsUnverifiedConsent_PerModel pins the shared eligibility
+// predicate, model by model, against the fact it is derived from: a
+// radio is consent-eligible exactly when its REAL-HARDWARE baseline
+// still carries a write-side spec.Unverified somewhere.
+//
+// The FT-710 is the one registered model that is not: its write trials
+// are complete, so its six writable fields are spec.Supported and
+// nothing in its set is Unverified — asking that user for consent would
+// be asking them to authorise a risk this project has already retired.
+// The other three have never been written to by this project at all.
+//
+// EVERY registered model, one row each, deliberately. This predicate is
+// what the CLI's "settings unverified-writes" listing and its refusal
+// both key off, and what the GUI will key off too; a model missing from
+// the table would let the two surfaces disagree about which radios can
+// be consented to at all.
+func TestNeedsUnverifiedConsent_PerModel(t *testing.T) {
+	want := map[string]bool{
+		DefaultModel:   false,
+		FTdx10Model:    true,
+		FTdx101DModel:  true,
+		FTdx101MPModel: true,
+	}
+	models := SupportedModels()
+	if len(models) != len(want) {
+		t.Fatalf("SupportedModels() = %v — this table has %d rows and must name every registered model", models, len(want))
+	}
+	for _, model := range models {
+		expected, ok := want[model]
+		if !ok {
+			t.Fatalf("registered model %q has no row in this table", model)
+		}
+		got, err := NeedsUnverifiedConsent(model)
+		if err != nil {
+			t.Fatalf("NeedsUnverifiedConsent(%q): unexpected error: %v", model, err)
+		}
+		if got != expected {
+			t.Errorf("NeedsUnverifiedConsent(%q) = %v, want %v", model, got, expected)
+		}
+	}
+}
+
+// TestNeedsUnverifiedConsent_MatchesStaticCapabilities pins the
+// derivation rather than the answer: for every registered model, the
+// predicate must agree with a write-side Unverified scan of that model's
+// own StaticCapabilities. It is what stops the answer becoming a
+// hand-maintained list of model names that a newly registered radio
+// would silently be absent from.
+func TestNeedsUnverifiedConsent_MatchesStaticCapabilities(t *testing.T) {
+	for _, model := range SupportedModels() {
+		caps, err := StaticCapabilities(model)
+		if err != nil {
+			t.Fatalf("StaticCapabilities(%q): unexpected error: %v", model, err)
+		}
+		scanned := false
+		for _, b := range caps.Banks {
+			for _, fs := range b.Fields {
+				if fs.Write == spec.Unverified {
+					scanned = true
+				}
+			}
+		}
+		got, err := NeedsUnverifiedConsent(model)
+		if err != nil {
+			t.Fatalf("NeedsUnverifiedConsent(%q): unexpected error: %v", model, err)
+		}
+		if got != scanned {
+			t.Errorf("NeedsUnverifiedConsent(%q) = %v, but a write-side Unverified scan of its static capabilities says %v", model, got, scanned)
+		}
+	}
+}
+
+// TestNeedsUnverifiedConsent_UnknownModel pins the error path: an
+// unrecognised model is *UnknownModelError, and the bool is false — a
+// caller that ignored the error must not be told a radio it cannot even
+// name is consent-eligible.
+func TestNeedsUnverifiedConsent_UnknownModel(t *testing.T) {
+	got, err := NeedsUnverifiedConsent("NO-SUCH-MODEL")
+	if err == nil {
+		t.Fatalf("NeedsUnverifiedConsent(unknown) = %v, <nil error>, want an error", got)
+	}
+	var unknown *UnknownModelError
+	if !errors.As(err, &unknown) {
+		t.Errorf("NeedsUnverifiedConsent(unknown) error = %v, want an *UnknownModelError", err)
+	}
+	if got {
+		t.Error("NeedsUnverifiedConsent(unknown) = true, want false alongside the error")
+	}
+}
