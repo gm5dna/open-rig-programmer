@@ -36,6 +36,53 @@ func WithTransportLogger(l transport.Logger) Option {
 	}
 }
 
+// WithConsentedUnverifiedWrites records that the USER has consented to
+// writing this radio's Unverified fields, and builds a driver whose
+// SESSIONS carry the consent transform: at session-capability assembly
+// every write-side spec.Unverified label becomes spec.ConsentedUnverified,
+// which FieldSupport.CanWrite opens (see sessionCapabilities, and
+// spec.ConsentUnverifiedWrites for the one definition of what consent
+// means).
+//
+// ON THE FT-710 THE TRANSFORM IS A PROVEN NO-OP for both declared
+// profiles, and that is worth stating plainly rather than leaving a reader
+// to infer it. M5b's hardware trials promoted this radio's write labels
+// past Unverified altogether — CapabilitiesRealHardware writes Supported
+// for the six verified fields, Inert for the clarifier (ignored by the
+// radio), Unsupported for erase and for the two fields CAT cannot express;
+// CapabilitiesSimulated likewise — so there is nothing here for consent to
+// convert. Only CapabilitiesUnverified, the fail-safe an UNRECOGNISED
+// Profile selects, still carries write-side Unverified labels, and the
+// profile gate below is exactly what keeps consent away from it.
+//
+// The option exists here anyway BY DESIGN: the wiring registry's table
+// passes it to every registered model uniformly, and the FT-710 must not
+// be the one row that reads differently. What makes that uniformity safe
+// is a test rather than this comment —
+// TestConsentOption_NoOpOnRealHardware proves the no-op on every build,
+// at transform level and at session level, so a future profile revision
+// that did introduce an Unverified write could not slip through unnoticed.
+//
+// Consent is a statement about a SESSION, never about the radio: this
+// driver's STATIC Capabilities — what the registry publishes, what the app
+// describes the model with, what SynthesiseDiscoveredBanks classifies
+// against — is untouched by the option, and only the set Open assembles
+// carries the state.
+//
+// It is deliberately not sufficient on its own. An unrecognised Profile
+// stays on the untransformed fail-safe even WITH the option
+// (profileRecognised); spec.FieldErase is exempt inside the transform
+// itself, so no consent can mint an erase — permanently right for this
+// radio, which has no CAT erase command at all (HW-CONFIRMED, see
+// CapabilitiesRealHardware); and nothing here consults
+// writeTrialsComplete, because consent is a user accepting an unverified
+// write, not evidence that the write has been proven.
+func WithConsentedUnverifiedWrites() Option {
+	return func(d *ft710Driver) {
+		d.consentUnverifiedWrites = true
+	}
+}
+
 // catDialect is the CAT dialect this driver speaks: the ONE place
 // core/driver/ft710 names an instance from core/cat. Everything else here
 // derives from it — ft710Driver.dialect (and through it every Session's),
@@ -58,7 +105,7 @@ var catDialect = cat.FT710
 // selects the all-Unverified fail-safe profile: the failure direction
 // for a forged or corrupted Profile is always "nothing writable", never
 // a writable set. See Profile and writeTrialsComplete. Options:
-// WithTransportLogger.
+// WithTransportLogger, WithConsentedUnverifiedWrites.
 func New(profile Profile, opts ...Option) driver.Driver {
 	d := &ft710Driver{profile: profile, dialect: catDialect}
 	for _, opt := range opts {
@@ -83,6 +130,12 @@ type ft710Driver struct {
 	// transportLogger, when non-nil, is threaded into every Session's
 	// transport.Engine at Open time — see WithTransportLogger.
 	transportLogger transport.Logger
+	// consentUnverifiedWrites records the user's consent to unverified
+	// writes — set only by WithConsentedUnverifiedWrites, read only by
+	// sessionCapabilities. FALSE is the zero value and the default, so a
+	// driver built without the option behaves exactly as it did before the
+	// option existed.
+	consentUnverifiedWrites bool
 }
 
 // Model implements driver.Driver.
@@ -240,9 +293,46 @@ func (d *ft710Driver) open(ctx context.Context, eng *transport.Engine, id driver
 		eng:     eng,
 		dialect: d.dialect,
 		id:      id,
-		caps:    effectiveCapabilities(d.Capabilities(), slots60m, emg),
+		caps:    d.sessionCapabilities(slots60m, emg),
 		region:  deriveRegion(len(slots60m), emg, overflow60m),
 	}, nil
+}
+
+// sessionCapabilities is the ONE place a session's effective capability
+// set is assembled: effectiveCapabilities' product, then — only when this
+// driver was built with WithConsentedUnverifiedWrites AND its profile is
+// one of the declared constants — the consent transform. An unrecognised
+// profile stays untransformed even with the option: the fail-safe
+// direction ("no value a caller can pass produces a writable session")
+// survives consent, and on THIS radio that gate is the load-bearing half
+// of the pair — the fail-safe CapabilitiesUnverified is the only profile
+// left carrying write-side Unverified labels, so an ungated transform
+// would turn precisely the profile meant to write nothing into a fully
+// writable one (TestConsentOption_UnrecognisedProfileStaysFailSafe).
+//
+// Applying the transform here, before the Session exists, keeps the set
+// WriteChannel enforces (s.caps) and the set Session.Capabilities hands
+// out the same value.
+func (d *ft710Driver) sessionCapabilities(slots60m []string, emg bool) spec.Capabilities {
+	caps := effectiveCapabilities(d.Capabilities(), slots60m, emg)
+	if d.consentUnverifiedWrites && d.profileRecognised() {
+		caps = spec.ConsentUnverifiedWrites(caps)
+	}
+	return caps
+}
+
+// profileRecognised reports whether this driver's profile is one of the
+// package's declared Profile constants — the same set the capability
+// switch names explicitly (Capabilities' Simulated and RealHardware arms),
+// restated here so the consent gate cannot drift open for a profile the
+// switch would fail safe on. TestProfileRecognised_MatchesTheDeclaredConstants
+// is what holds the two switches together.
+func (d *ft710Driver) profileRecognised() bool {
+	switch d.profile {
+	case Simulated, RealHardware:
+		return true
+	}
+	return false
 }
 
 // nopLogger is the fallback transport.Logger when no WithTransportLogger
@@ -426,6 +516,14 @@ func effectiveCapabilities(base spec.Capabilities, slots60m []string, emg bool) 
 // newly-discovered banks, in effectiveCapabilities' own fixed
 // 60M-then-EMG order.
 //
+// It calls effectiveCapabilities RAW rather than going through
+// sessionCapabilities, and consent changes nothing about that. Two
+// independent reasons: an offline codeplug is not a session, so no user's
+// consent applies to it at all; and every discovered bank's Write is
+// forced to spec.Unsupported by readOnlyFields anyway, so these banks
+// hold no Unverified write label for the transform to convert even if it
+// were applied.
+//
 // Classification: a slot already claimed by one of base's own static
 // banks (MEM/PMS) is excluded before classification — this method only
 // ever adds banks Open's discovery would ADD, never restates a static
@@ -501,6 +599,30 @@ func (d *ft710Driver) SynthesiseDiscoveredBanks(slots []string) []spec.Bank {
 // about reading), every Write forced to Unsupported. Each call returns a
 // fresh map.
 func readOnlyFields(base spec.Capabilities) map[spec.Field]spec.FieldSupport {
+	// THE ok RESULT IS DISCARDED, AND HERE IS WHAT MAKES THAT SAFE: base is
+	// always a profile baseline from baseCapabilities (caps.go), which
+	// builds the MEM bank unconditionally as Banks[0], and all THREE of
+	// this package's profile constructors return one —
+	// CapabilitiesUnverified, CapabilitiesSimulated and
+	// CapabilitiesRealHardware — with ft710Driver.Capabilities returning
+	// exactly one of the three for ANY Profile value, the unrecognised ones
+	// included (its default arm). This function is called only from
+	// effectiveCapabilities, whose callers all pass such a baseline: open
+	// (d.Capabilities()), SynthesiseDiscoveredBanks (base :=
+	// d.Capabilities(), re-passed on purpose so live and offline synthesis
+	// cannot drift), and optional_test.go's equivalence tests, which take
+	// theirs from drv.Capabilities() likewise. TestBaseline_Shape t.Fatals
+	// on a missing MEM bank across all three profiles, and
+	// TestProfiles_Validate validates all three.
+	//
+	// IF IT EVER DID NOT: mem would be the zero Bank, its Fields nil, the
+	// loop below would run zero times, and the discovered 60M/EMG bank
+	// would ship an EMPTY field map — every field the zero FieldSupport,
+	// Unsupported for read AND write. Fail-closed for the write gate, but
+	// silently wrong for reading: these labels are what the app consults to
+	// decide it may read and display a discovered 5xx/EMG channel at all,
+	// so the bank would appear and hold nothing. That is why the guarantee
+	// is written down here rather than trusted.
 	mem, _ := base.Bank(spec.BankMemory) // Bank() already returns a defensive copy
 	fields := make(map[spec.Field]spec.FieldSupport, len(mem.Fields))
 	for f, fs := range mem.Fields {
@@ -522,6 +644,37 @@ func cloneCapabilities(caps spec.Capabilities) spec.Capabilities {
 		// Capabilities.Bank returns a defensive copy of the bank (fresh
 		// Slots and Fields) — reuse that guarantee instead of restating
 		// the per-field copying here.
+		//
+		// THE ok RESULT IS DISCARDED, AND HERE IS WHAT MAKES THAT SAFE: b
+		// came out of caps.Banks and Bank scans that same slice for b.ID,
+		// so the lookup cannot miss. The only way it could return the WRONG
+		// bank is a DUPLICATE BankID — the first match served twice, the
+		// second bank silently dropped from the clone — and
+		// spec.Capabilities.Validate refuses a duplicate BankID outright
+		// (core/spec/validate.go's bank loop), with TestProfiles_Validate
+		// running it over all three of this package's profiles.
+		//
+		// THAT VALIDATION COVERS THE BASELINES, and the load-bearing caller
+		// is Session.Capabilities passing s.caps — effectiveCapabilities'
+		// output, discovered banks and all. Several session tests do
+		// Validate that set (TestOpen_DefaultImage_NoSixtyMetreBank,
+		// TestOpen_USImage), but what closes it in production is
+		// CONSTRUCTION, not validation: effectiveCapabilities appends at
+		// most one spec.Bank60m and at most one spec.BankEMG to a baseline
+		// holding MEM and PMS, so four distinct IDs at most.
+		//
+		// SynthesiseDiscoveredBanks is this driver's one caller that
+		// continues past effectiveCapabilities, and its extra step is
+		// harmless here: for duplicate offline EMG input it REPLACES the
+		// reused EMG bank's Slots (see its doc comment), touching a slot
+		// list rather than an ID, so it can neither mint the duplicate ID
+		// this discard would misbehave on nor write through to anything —
+		// the banks it mutates are the fresh copies this function has just
+		// allocated.
+		//
+		// A zero Bank reaching out would be quiet rather than loud: no
+		// Slots, no Fields, so a bank the app cannot show and, FieldSupport's
+		// zero being Unsupported, one nothing may be written to.
 		cp, _ := caps.Bank(b.ID)
 		out.Banks = append(out.Banks, cp)
 	}
