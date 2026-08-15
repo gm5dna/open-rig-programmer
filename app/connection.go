@@ -113,9 +113,13 @@ func connectModel(requested string) (string, error) {
 
 // connect is Connect/ConnectDemo's shared body. It deliberately calls
 // wiring.OpenRealSessionFor/wiring.OpenFakeSessionFor — internal/wiring's
-// own two self-contained, model-keyed constructors — rather than
-// re-deriving the profile/session pairing here, preserving the
-// structural-exclusivity shape those constructors exist to enforce.
+// own self-contained, model-keyed session paths (the real one is
+// wiring.OpenRealSessionWith, of which OpenRealSessionFor is the
+// zero-option delegate this function wants: it expresses no consent
+// position) — rather than re-deriving the profile/session pairing here,
+// preserving the structural-exclusivity shape those paths exist to
+// enforce: no caller of either can supply a driver profile or a port
+// object.
 // Both, and the snapshot directory alongside them, are called at the ONE
 // model connectModel resolved from requestedModel (M9c-5 E4) — never at
 // wiring.DefaultModel independently, so a session, its snapshot directory

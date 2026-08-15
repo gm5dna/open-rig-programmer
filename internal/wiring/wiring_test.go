@@ -58,7 +58,9 @@ func TestNewRealDriver_HWVerifiedWriteSet(t *testing.T) {
 		spec.FieldTagDisplay: true,
 	}
 
-	d := realDrivers[DefaultModel]()
+	// consent false — the default path: this pins what the real wiring path
+	// builds for a user who has consented to nothing.
+	d := realDrivers[DefaultModel](false)
 	caps := d.Capabilities()
 	if len(caps.Banks) == 0 {
 		t.Fatal("NewRealDriver().Capabilities() has zero banks — sanity check failed, the guard below would pass vacuously")
@@ -847,7 +849,9 @@ func TestOpenRealSessionFor_BaudFollowsADisagreeingDriver(t *testing.T) {
 		t.Fatalf("sanity check failed: the fixture baud %d equals transport.DefaultBaud, so this test could not distinguish the two sources", fixtureBaud)
 	}
 
-	realDrivers[fixtureModel] = func() driver.Driver {
+	// The fixture ignores consent: what it exists to disagree about is the
+	// baud, and a driver with no writable field has nothing to consent to.
+	realDrivers[fixtureModel] = func(bool) driver.Driver {
 		return baudFixtureDriver{caps: spec.Capabilities{
 			Model:        fixtureModel,
 			CATID:        "9999",
@@ -1057,7 +1061,9 @@ func TestRealAndFakeDriverTablesAgree(t *testing.T) {
 // disagreed the lookup would miss and the result would be nil.
 func TestDriverTableKeysMatchDriverModel(t *testing.T) {
 	for model, ctor := range realDrivers {
-		if got := ctor().Model(); got != model {
+		// consent false — a model's identity cannot depend on it, and the
+		// consented arm is covered by TestRealDriverFor_StaticNeverConsented.
+		if got := ctor(false).Model(); got != model {
 			t.Errorf("realDrivers[%q] builds a driver whose Model() = %q", model, got)
 		}
 	}
@@ -1070,7 +1076,7 @@ func TestDriverTableKeysMatchDriverModel(t *testing.T) {
 
 // TestStaticCapabilities_FT710EqualsDriver pins StaticCapabilities'
 // equivalence to the table's own constructor: for DefaultModel, it must
-// return exactly what realDrivers[DefaultModel]().Capabilities() (i.e.
+// return exactly what realDrivers[DefaultModel](false).Capabilities() (i.e.
 // NewRealDriver().Capabilities()) reports.
 func TestStaticCapabilities_FT710EqualsDriver(t *testing.T) {
 	got, err := StaticCapabilities(DefaultModel)
@@ -1394,5 +1400,210 @@ func TestResolveSnapshotDir_EmptySlugIsError(t *testing.T) {
 		if got, err := ResolveSnapshotDir("/tmp/snaps", model); err == nil {
 			t.Errorf("ResolveSnapshotDir(override, %q) = %q, <nil error>, want an error (empty slug must not silently collapse into DefaultModel's directory)", model, got)
 		}
+	}
+}
+
+// fakePortSeam points this package's openSerial seam at a live in-process
+// fake rig for model, restoring the seam (and closing the rig) on cleanup.
+//
+// It is what makes a SESSION-LEVEL consent assertion possible at all. Consent
+// is a statement about a session, never about a radio: the option leaves a
+// driver's STATIC capabilities untouched and shows up only in the set Open
+// assembles, so no static-capability assertion — however carefully written —
+// can tell an option-bearing driver from a plain one. Observing the option
+// therefore means actually opening a session, and opening one means answering
+// the real driver's ID probe and its whole discovery walk. That is precisely
+// what each model's simulator does.
+//
+// The rig is constructed EXACTLY as fake.go's fakeDrivers entry for that
+// model constructs it — same constructor, same per-model option source, read
+// at call time — so the port these tests serve is the port a "--fake --model
+// X" invocation would get, rather than a second, independently-drifting
+// fixture. The DRIVER on the other end is still the real-hardware one:
+// OpenRealSessionWith builds it, and that pairing is the point (a
+// RealHardware driver whose Unverified writes consent has opened).
+func fakePortSeam(t *testing.T, model string) {
+	t.Helper()
+	var r fakeRadio
+	switch model {
+	case FTdx10Model:
+		r = fakedx10.New(FTdx10FakeSessionOpts...)
+	case FTdx101DModel:
+		r = fakedx101.NewD(FTdx101DFakeSessionOpts...)
+	case FTdx101MPModel:
+		r = fakedx101.NewMP(FTdx101MPFakeSessionOpts...)
+	default:
+		t.Fatalf("fakePortSeam: no fake-rig construction recorded for model %q — mirror fake.go's fakeDrivers entry here", model)
+	}
+	t.Cleanup(func() { _ = r.Close() })
+
+	prev := openSerial
+	openSerial = func(string, transport.SerialConfig) (transport.Port, error) { return r.Port(), nil }
+	t.Cleanup(func() { openSerial = prev })
+}
+
+// assertNoReadSideConsent fails if ANY field of caps carries
+// spec.ConsentedUnverified on its READ side. Consent is a write-only state
+// (spec.Capabilities.Validate rejects a read-side one outright), so this is
+// the leg that catches a transform applied to the wrong half of a
+// FieldSupport — a mistake that would otherwise look like a consented
+// session working perfectly.
+func assertNoReadSideConsent(t *testing.T, what string, caps spec.Capabilities) {
+	t.Helper()
+	for _, b := range caps.Banks {
+		for f, fs := range b.Fields {
+			if fs.Read == spec.ConsentedUnverified {
+				t.Errorf("%s: bank %s field %s has Read = ConsentedUnverified — consent is a write-only state", what, b.ID, f)
+			}
+		}
+	}
+}
+
+// assertNoConsentAnywhere fails if any field of caps carries
+// spec.ConsentedUnverified on EITHER side.
+func assertNoConsentAnywhere(t *testing.T, what string, caps spec.Capabilities) {
+	t.Helper()
+	for _, b := range caps.Banks {
+		for f, fs := range b.Fields {
+			if fs.Read == spec.ConsentedUnverified || fs.Write == spec.ConsentedUnverified {
+				t.Errorf("%s: bank %s field %s = {Read: %s, Write: %s}, want no ConsentedUnverified anywhere", what, b.ID, f, fs.Read, fs.Write)
+			}
+		}
+	}
+}
+
+// TestOpenRealSessionWith_ConsentedSessionCaps is this task's heart, and it
+// runs at SESSION level for every consent-eligible model: with
+// SessionOptions{ConsentUnverifiedWrites: true}, the session the real wiring
+// path returns must carry the consent transform — MEM's frequency write,
+// spec.Unverified in each of these radios' real-hardware baselines (no
+// FTdx10, FTDX101D or FTDX101MP has been written to by this project), becomes
+// spec.ConsentedUnverified — and must carry it on the write side only.
+//
+// EVERY consent-eligible model, one subtest each, deliberately: the three
+// rows differ in which driver package they reach (ftdx10, and ftdx101 twice
+// over two constructors), and a table that threaded the option through one
+// row and dropped it in another would leave a user's recorded consent
+// silently inert for that radio. The FT-710 is not here because its row's
+// option is a proven no-op (its real-hardware set has no Unverified write to
+// transform); core/driver/ft710's own tests own that proof, and
+// TestRealDriverFor_DefaultPathByteIdentical below covers its default path.
+func TestOpenRealSessionWith_ConsentedSessionCaps(t *testing.T) {
+	for _, model := range []string{FTdx10Model, FTdx101DModel, FTdx101MPModel} {
+		t.Run(model, func(t *testing.T) {
+			fakePortSeam(t, model)
+
+			sess, closeAll, err := OpenRealSessionWith(testCtx(t), model, "test-port", SessionOptions{ConsentUnverifiedWrites: true})
+			if err != nil {
+				t.Fatalf("OpenRealSessionWith(%q, consent): unexpected error: %v", model, err)
+			}
+			t.Cleanup(func() { _ = closeAll() })
+
+			caps := sess.Capabilities()
+			if got := caps.FieldSupport(spec.BankMemory, spec.FieldFrequency).Write; got != spec.ConsentedUnverified {
+				t.Errorf("%s: session MEM FieldFrequency.Write = %s, want ConsentedUnverified — the consent option must reach the driver this table builds", model, got)
+			}
+			assertNoReadSideConsent(t, model+" consented session", caps)
+		})
+	}
+}
+
+// TestOpenRealSessionFor_DelegatesZeroOptions pins the delegation: the
+// session OpenRealSessionFor returns must be indistinguishable from the one
+// OpenRealSessionWith returns for zero options — same capability set, and no
+// consent anywhere in it. The FTdx10 alone is enough here, because what is
+// being pinned is the DELEGATION (one real implementation, one zero-option
+// caller of it), not any per-model behaviour; the per-model leg is the test
+// above.
+func TestOpenRealSessionFor_DelegatesZeroOptions(t *testing.T) {
+	fakePortSeam(t, FTdx10Model)
+	viaFor, closeFor, err := OpenRealSessionFor(testCtx(t), FTdx10Model, "test-port")
+	if err != nil {
+		t.Fatalf("OpenRealSessionFor(%q): unexpected error: %v", FTdx10Model, err)
+	}
+	forCaps := viaFor.Capabilities()
+	if err := closeFor(); err != nil {
+		t.Errorf("closing the OpenRealSessionFor session: %v", err)
+	}
+
+	fakePortSeam(t, FTdx10Model)
+	viaWith, closeWith, err := OpenRealSessionWith(testCtx(t), FTdx10Model, "test-port", SessionOptions{})
+	if err != nil {
+		t.Fatalf("OpenRealSessionWith(%q, zero options): unexpected error: %v", FTdx10Model, err)
+	}
+	withCaps := viaWith.Capabilities()
+	if err := closeWith(); err != nil {
+		t.Errorf("closing the OpenRealSessionWith session: %v", err)
+	}
+
+	if !reflect.DeepEqual(forCaps, withCaps) {
+		t.Errorf("OpenRealSessionFor's session capabilities differ from OpenRealSessionWith(zero options)':\n for  = %#v\n with = %#v", forCaps, withCaps)
+	}
+	assertNoConsentAnywhere(t, "OpenRealSessionFor session", forCaps)
+}
+
+// TestRealDriverFor_DefaultPathByteIdentical is the no-change pin: with
+// consent false — every existing caller's path, and OpenRealSessionFor's own
+// — realDriverFor must build exactly what the pinned zero-argument
+// constructors build, for all four registered models. It is what makes the
+// table's new closure parameter safe to add: the default path is not merely
+// "still working" but byte-identical to the one it replaced.
+func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
+	for _, tc := range []struct {
+		model string
+		want  func() driver.Driver
+	}{
+		{DefaultModel, NewRealDriver},
+		{FTdx10Model, NewFTdx10RealDriver},
+		{FTdx101DModel, NewFTdx101DRealDriver},
+		{FTdx101MPModel, NewFTdx101MPRealDriver},
+	} {
+		d, err := realDriverFor(tc.model, false)
+		if err != nil {
+			t.Fatalf("realDriverFor(%q, false): unexpected error: %v", tc.model, err)
+		}
+		if got, want := d.Capabilities(), tc.want().Capabilities(); !reflect.DeepEqual(got, want) {
+			t.Errorf("realDriverFor(%q, false).Capabilities() differs from the pinned constructor's — the default path must be byte-identical", tc.model)
+		}
+	}
+}
+
+// TestRealDriverFor_StaticNeverConsented is the REGISTRY-boundary companion
+// to the session test above, not a second proof of the option: even with
+// consent true, a driver's STATIC capabilities carry no ConsentedUnverified
+// anywhere. Static surfaces describe the radio — what the app names the model
+// with, what offline synthesis classifies against — and a consent transform
+// leaking into them would restate one user's decision as a fact about the
+// hardware.
+func TestRealDriverFor_StaticNeverConsented(t *testing.T) {
+	for _, model := range SupportedModels() {
+		d, err := realDriverFor(model, true)
+		if err != nil {
+			t.Fatalf("realDriverFor(%q, true): unexpected error: %v", model, err)
+		}
+		assertNoConsentAnywhere(t, "realDriverFor("+model+", true) static capabilities", d.Capabilities())
+	}
+}
+
+// TestModelSlugsUnique pins what ResolveSnapshotDir's per-model directory
+// rule silently assumes: every registered model slugs to a DISTINCT,
+// non-empty directory component. Two models sharing a slug would share a
+// snapshot/journal directory — one radio's saved codeplugs offered against
+// another's — and a model slugging to "" would collapse onto DefaultModel's
+// own base directory (ResolveSnapshotDir refuses that at call time; this
+// catches it at registration time, where the fix belongs).
+func TestModelSlugsUnique(t *testing.T) {
+	seen := make(map[string]string, len(realDrivers))
+	for _, model := range SupportedModels() {
+		slug := ModelSlug(model)
+		if slug == "" {
+			t.Errorf("ModelSlug(%q) = \"\" — a registered model must slug to a non-empty directory component", model)
+			continue
+		}
+		if other, dup := seen[slug]; dup {
+			t.Errorf("ModelSlug(%q) == ModelSlug(%q) == %q — two registered models would share one snapshot directory", model, other, slug)
+			continue
+		}
+		seen[slug] = model
 	}
 }
