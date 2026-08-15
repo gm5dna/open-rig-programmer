@@ -78,7 +78,11 @@ describe('arming mode', () => {
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Enable unverified writes' }))
 
-		expect(applyMock).toHaveBeenCalledWith('FTdx10', true)
+		// The third argument is what this dialogue KNOWS by construction: it
+		// is raised only for a connection with no decision recorded, so its
+		// session was opened unconsented. The bridge no longer infers that
+		// from the UI spec (final review, Codex BLOCKER).
+		expect(applyMock).toHaveBeenCalledWith('FTdx10', true, { sessionUnconsented: true })
 		expect(appState.unverifiedConsentPrompt).toBeNull()
 	})
 
@@ -88,7 +92,7 @@ describe('arming mode', () => {
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Not now' }))
 
-		expect(applyMock).toHaveBeenCalledWith('FTdx10', false)
+		expect(applyMock).toHaveBeenCalledWith('FTdx10', false, { sessionUnconsented: true })
 		expect(appState.unverifiedConsentPrompt).toBeNull()
 	})
 
@@ -158,16 +162,20 @@ describe('grants panel (manage mode)', () => {
 
 		await fireEvent.click(screen.getByLabelText('Unverified writes for FTdx10'))
 
-		expect(applyMock).toHaveBeenCalledWith('FTdx10', true)
+		expect(applyMock).toHaveBeenCalledWith('FTdx10', true, { sessionUnconsented: false })
 	})
 
-	it('revoking a granted radio calls the bridge with false', async () => {
+	it('revoking a granted radio calls the bridge with false, claiming NO knowledge of the live session', async () => {
 		appState.setUnverifiedConsents(ROWS)
 		render(UnverifiedWritesDialog, { mode: 'manage' })
 
 		await fireEvent.click(screen.getByLabelText('Unverified writes for FTDX101D'))
 
-		expect(applyMock).toHaveBeenCalledWith('FTDX101D', false)
+		// sessionUnconsented FALSE from the grants panel, always: this panel
+		// is reachable at any time, for any radio, and knows nothing about
+		// how the live session (if there is one) was constructed. A revocation
+		// from here therefore always re-opens a matching live session.
+		expect(applyMock).toHaveBeenCalledWith('FTDX101D', false, { sessionUnconsented: false })
 	})
 
 	it('every toggle is disabled while a transfer is running, and says why', () => {

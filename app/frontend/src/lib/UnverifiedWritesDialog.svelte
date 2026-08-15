@@ -86,7 +86,16 @@
 		pending = model
 		pendingOn = on
 		try {
-			await applyUnverifiedWriteConsent(model, on)
+			// `sessionUnconsented` in 'arm' mode is knowledge this call site
+			// holds BY CONSTRUCTION, not a guess: the arming dialogue is raised
+			// only for a connection whose UnverifiedConsentRecorded is false
+			// (bindings.js's raiseConsentPromptIfDue, via
+			// appState.unverifiedConsentDue), so the session behind it was
+			// opened with no consent to spend. The bridge uses it for one
+			// thing — letting a DECLINE persist without re-opening a session
+			// that is already declining every unverified write. The grants
+			// panel knows nothing of the kind and says nothing.
+			await applyUnverifiedWriteConsent(model, on, { sessionUnconsented: mode === 'arm' })
 			// Resolved => the decision IS recorded (see the bridge's contract).
 			if (mode === 'arm') appState.setUnverifiedConsentPrompt(null)
 		} catch (err) {

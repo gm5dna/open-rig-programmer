@@ -1042,15 +1042,25 @@ describe('applyUnverifiedWriteConsent — the bridge-owned reconnect (task 14)',
 		expect(appState.alerts.some((a) => a.message.includes('settings.json is corrupt'))).toBe(true)
 	})
 
-	it('DECLINING the connected model persists false and does NOT reconnect — the running session is already unconsented', async () => {
+	it('the ARMING dialogue’s DECLINE persists false and does NOT reconnect — its session was opened unconsented by construction', async () => {
 		connectedUnarmed()
 
-		await bindings.applyUnverifiedWriteConsent('FTdx10', false)
+		await bindings.applyUnverifiedWriteConsent('FTdx10', false, { sessionUnconsented: true })
 
 		expect(window.go.main.App.SetUnverifiedWriteConsent).toHaveBeenCalledWith('FTdx10', false)
 		expect(window.go.main.App.Disconnect).not.toHaveBeenCalled()
 		expect(window.go.main.App.Connect).not.toHaveBeenCalled()
 		expect(appState.connection).toEqual(NEEDS_CONSENT_INFO)
+	})
+
+	it('the ARMING dialogue’s GRANT still orchestrates — an unconsented session is exactly the one a grant has to re-open', async () => {
+		connectedUnarmed()
+		const order = recordCallOrder()
+
+		await bindings.applyUnverifiedWriteConsent('FTdx10', true, { sessionUnconsented: true })
+
+		expect(order).toEqual(['Disconnect', 'SetUnverifiedWriteConsent', 'Connect'])
+		expect(window.go.main.App.Connect).toHaveBeenCalledWith('/dev/tty.usb', 'FTdx10')
 	})
 
 	it('REVOKING an armed connected session runs the whole orchestration (disconnect → persist false → reconnect)', async () => {
@@ -1062,6 +1072,65 @@ describe('applyUnverifiedWriteConsent — the bridge-owned reconnect (task 14)',
 
 		expect(order).toEqual(['Disconnect', 'SetUnverifiedWriteConsent', 'Connect'])
 		expect(window.go.main.App.SetUnverifiedWriteConsent).toHaveBeenCalledWith('FTdx10', false)
+	})
+
+	// --- Final review, Codex BLOCKER: the uiSpec oracle is GONE from this
+	// decision. A toggle aimed at the CONNECTED model on a REAL session
+	// always orchestrates, because the frontend cannot know what the live
+	// session was constructed with — and the failure that mattered was
+	// silent: a spec fetch that failed (or had not caught up) read
+	// "unconsented", which sent a REVOCATION of an armed session down the
+	// direct-persist path, leaving an immutable live session still consented
+	// and still writable while the store said the grant was gone. The only
+	// price of the new rule is an occasional unnecessary reconnect, which is
+	// visible, recoverable, and was accepted at adjudication.
+
+	it('REVOKING the connected model with NO uiSpec at all (a failed spec fetch) still runs the whole orchestration', async () => {
+		appState.setConnection({ ...NEEDS_CONSENT_INFO, UnverifiedConsentRecorded: true })
+		// No setUISpec: this is exactly the state a failed GetUISpec leaves
+		// behind, and the state whose false-y read used to skip the reconnect.
+		expect(appState.uiSpec).toBeNull()
+		const order = recordCallOrder()
+
+		await bindings.applyUnverifiedWriteConsent('FTdx10', false)
+
+		expect(order).toEqual(['Disconnect', 'SetUnverifiedWriteConsent', 'Connect'])
+		expect(window.go.main.App.SetUnverifiedWriteConsent).toHaveBeenCalledWith('FTdx10', false)
+		expect(window.go.main.App.Connect).toHaveBeenCalledWith('/dev/tty.usb', 'FTdx10')
+	})
+
+	it('REVOKING a GRANTED session whose uiSpec is STALE-FALSE still runs the whole orchestration', async () => {
+		// The store says granted (Recorded, and the session was opened with
+		// the grant), but the spec in hand says otherwise. The old oracle
+		// believed the spec and persisted directly; the live session stayed
+		// writable.
+		appState.setConnection({ ...NEEDS_CONSENT_INFO, UnverifiedConsentRecorded: true })
+		appState.setUISpec(specArmed(false))
+		const order = recordCallOrder()
+
+		await bindings.applyUnverifiedWriteConsent('FTdx10', false)
+
+		expect(order).toEqual(['Disconnect', 'SetUnverifiedWriteConsent', 'Connect'])
+		expect(window.go.main.App.Connect).toHaveBeenCalledWith('/dev/tty.usb', 'FTdx10')
+	})
+
+	it('GRANTING a session whose uiSpec already reads consented reconnects anyway — the accepted cost of not trusting the spec', async () => {
+		appState.setConnection({ ...NEEDS_CONSENT_INFO, UnverifiedConsentRecorded: true })
+		appState.setUISpec(specArmed(true))
+		const order = recordCallOrder()
+
+		await bindings.applyUnverifiedWriteConsent('FTdx10', true)
+
+		expect(order).toEqual(['Disconnect', 'SetUnverifiedWriteConsent', 'Connect'])
+	})
+
+	it('a REVOCATION from the grants panel (no arming-dialogue knowledge) orchestrates even when the spec reads unconsented', async () => {
+		connectedUnarmed()
+		const order = recordCallOrder()
+
+		await bindings.applyUnverifiedWriteConsent('FTdx10', false)
+
+		expect(order).toEqual(['Disconnect', 'SetUnverifiedWriteConsent', 'Connect'])
 	})
 
 	it('persists directly, with no reconnect, while DISCONNECTED', async () => {

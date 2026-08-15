@@ -289,12 +289,29 @@ export async function disconnect() {
 //   3. only then persist the decision;
 //   4. re-open the same port as the same model.
 //
-// A change that does NOT alter the live session — the app is disconnected,
-// the decision is about another radio, the session is a demo (a demo never
-// spends consent), or the answer already matches what the session is doing
-// — persists directly, with no reconnect. That last clause is what makes a
-// DECLINE at the arming dialogue a plain write: the session raising that
-// question is unconsented already, so there is nothing to re-open.
+// A change that CANNOT alter the live session — the app is disconnected,
+// the decision is about another radio, or the session is a demo (a demo
+// never spends consent) — persists directly, with no reconnect. Those three
+// are facts about the connection in hand, not guesses about what the
+// session was built with.
+//
+// There used to be a fourth clause: "or the answer already matches what the
+// session is doing", judged from the UI spec's UnverifiedWritesConsented.
+// It is GONE (final review, Codex BLOCKER). That field is a fetch away from
+// the truth, and a fetch that failed — or had not caught up — reads false;
+// a REVOCATION of an armed session then took the direct-persist path and
+// left an immutable live session still consented and still writable while
+// the store recorded a decline. Nothing the frontend holds can be trusted
+// to say what a live session was CONSTRUCTED with, so the rule no longer
+// asks: a toggle aimed at the connected model on a real session ALWAYS
+// re-opens it. The cost is the occasional unnecessary reconnect, which is
+// visible and recoverable; the cost of the old rule was a silent one.
+//
+// The arming dialogue's DECLINE keeps its no-reconnect path, but on
+// knowledge rather than on an oracle: that dialogue is raised only when
+// UnverifiedConsentRecorded is false, so its session was opened
+// unconsented BY CONSTRUCTION. The call site passes that fact in
+// (`sessionUnconsented`) rather than anything here inferring it.
 
 /** Raises the arming dialogue when the connection Go just handed back says
  * one is owed (appState.unverifiedConsentDue). The dialogue's body is the
@@ -364,24 +381,26 @@ async function persistUnverifiedWriteConsent(model, on) {
  * session is a separate action the user can retry from the connection bar
  * — the alert strip carries that failure.
  *
- * Whether the live session is affected is judged against
- * appState.unverifiedWritesArmed — the session's own capability label, the
- * same source the amber indicator uses. If the spec fetch that populates it
- * ever failed, it reads false, so a revocation on a session the app cannot
- * see the capabilities of persists without re-opening; the grant remains
- * revoked from the next connection onwards, which is the same guarantee the
- * CLI gives.
+ * Whether the live session is affected is judged from the CONNECTION alone
+ * — is there one, is it real, is it this model — and never from the UI
+ * spec's consent field, which can be stale or missing (see this section's
+ * doc comment). `sessionUnconsented` is the one exception, and it is
+ * knowledge passed IN by a caller that holds it by construction rather than
+ * anything inferred here: the arming dialogue's own session was opened with
+ * no decision recorded, so declining it changes nothing about that session
+ * and needs no reconnect. Every other caller omits it.
  * @param {string} model
- * @param {boolean} on */
-export async function applyUnverifiedWriteConsent(model, on) {
+ * @param {boolean} on
+ * @param {{ sessionUnconsented?: boolean }} [known] */
+export async function applyUnverifiedWriteConsent(model, on, known = {}) {
 	const connection = appState.connection
-	const affectsLiveSession =
-		connection !== null &&
-		connection.Demo !== true &&
-		connection.Model === model &&
-		appState.unverifiedWritesArmed !== on
+	const targetsLiveSession =
+		connection !== null && connection.Demo !== true && connection.Model === model
+	// A decline aimed at a session the caller KNOWS was opened unconsented
+	// asks that session for nothing it is not already doing.
+	const alreadySettled = on === false && known.sessionUnconsented === true
 
-	if (!affectsLiveSession) {
+	if (!targetsLiveSession || alreadySettled) {
 		await persistUnverifiedWriteConsent(model, on)
 		await refreshUnverifiedConsents()
 		return
