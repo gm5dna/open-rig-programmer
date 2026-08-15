@@ -32,7 +32,8 @@
 //
 // This project hard-gates every write to real hardware behind hardware
 // verification trials (milestone M5b). The gate is data, not code paths:
-// spec.FieldSupport.CanWrite() is true only for Write == spec.Supported,
+// spec.FieldSupport.CanWrite() is true only for Write == spec.Supported
+// or Write == spec.ConsentedUnverified (the user's recorded consent),
 // and every write path — codeplug.Diff's Blocked marking, the clone
 // service's refusal to execute blocked entries, and each driver
 // Session's own WriteChannel re-check (defence in depth, below all of

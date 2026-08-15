@@ -26,8 +26,9 @@ const (
 	// a real radio.
 	Unverified
 	// Supported means this has been proven on hardware, or is beyond
-	// doubt from the manual (e.g. structural framing bytes). Only
-	// Supported unlocks writes; see FieldSupport.CanWrite.
+	// doubt from the manual (e.g. structural framing bytes). It is the
+	// HARDWARE-EVIDENCE key to the write gate — see FieldSupport.CanWrite,
+	// which ConsentedUnverified also opens.
 	Supported
 	// Inert means the protocol TRANSMITS this field's value on every
 	// write, but the radio silently ignores it — a CHANGED value cannot
