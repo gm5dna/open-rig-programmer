@@ -8,16 +8,17 @@ import (
 	"strings"
 )
 
-// validSupport reports whether s is one of the four declared Support
+// validSupport reports whether s is one of the five declared Support
 // constants (Inert included — HW-CONFIRMED at M5b as a real state a
-// field can be in; see its doc comment). A Support value constructed any
-// other way (e.g. Support(99) from a hand-built or corrupted
-// Capabilities) is out of range and must never reach
-// FieldSupport.CanWrite's == Supported comparison silently — Validate is
+// field can be in; ConsentedUnverified included too, though only a write
+// label may carry it — see the read-side check in Validate). A Support
+// value constructed any other way (e.g. Support(99) from a hand-built or
+// corrupted Capabilities) is out of range and must never reach
+// FieldSupport.CanWrite's write-state comparison silently — Validate is
 // what catches that before it does.
 func validSupport(s Support) bool {
 	switch s {
-	case Unsupported, Unverified, Supported, Inert:
+	case Unsupported, Unverified, Supported, Inert, ConsentedUnverified:
 		return true
 	default:
 		return false
@@ -117,9 +118,12 @@ func validToneSemantics(s ToneSemantics) bool {
 //     importer would otherwise build a Channel{Slot: ""} for it with no
 //     blocking loss entry to catch the mistake.
 //   - Every FieldSupport.Read and .Write across every Bank's Fields must
-//     be one of the four declared Support constants (see validSupport)
+//     be one of the five declared Support constants (see validSupport)
 //     — a value constructed any other way must never reach
 //     FieldSupport.CanWrite's comparison unnoticed.
+//   - No FieldSupport.Read may be ConsentedUnverified: consent is a
+//     write-side state, so a read label carrying it is a construction
+//     mistake, not a description of the radio.
 //   - MinFreqHz must not exceed MaxFreqHz, but ONLY when both are set
 //     (non-zero): either being the zero value means "no bound", not "zero
 //     Hz", so it is not compared.
@@ -221,6 +225,14 @@ func (c Capabilities) Validate() error {
 			fs := b.Fields[f]
 			if !validSupport(fs.Read) {
 				problems = append(problems, fmt.Sprintf("bank %s field %s: Read support %d is out of range", b.ID, f, fs.Read))
+			}
+			// ConsentedUnverified is declared, so validSupport accepts it —
+			// but only as a WRITE label. Reads already flow and need no
+			// consent, so a read label carrying it is a construction
+			// mistake (a transform applied to the wrong half of the pair),
+			// and this is where it is caught.
+			if fs.Read == ConsentedUnverified {
+				problems = append(problems, fmt.Sprintf("bank %s field %s: Read support must never be ConsentedUnverified — consent is a write-side state; reads already flow and need no consent", b.ID, f))
 			}
 			if !validSupport(fs.Write) {
 				problems = append(problems, fmt.Sprintf("bank %s field %s: Write support %d is out of range", b.ID, f, fs.Write))
