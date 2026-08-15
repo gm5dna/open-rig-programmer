@@ -352,12 +352,24 @@ func baseCapabilities(memFields, pmsFields map[spec.Field]spec.FieldSupport) spe
 // peers, but never proven against a radio — and every field the record does
 // not express stays the zero FieldSupport.
 //
-// Because Unverified makes FieldSupport.CanWrite false, this profile
-// blocks every write project-wide: codeplug.Diff refuses the change, the
-// clone service refuses to execute a plan containing it, and
+// Because Unverified makes FieldSupport.CanWrite false, this profile AS
+// LABELLED blocks every write project-wide: codeplug.Diff refuses the
+// change, the clone service refuses to execute a plan containing it, and
 // Session.WriteChannel re-checks and refuses before building a frame. It
 // is also what any UNRECOGNISED Profile value selects — the failure
 // direction is always "nothing writable".
+//
+// THE ONE ROUTE PAST THAT, and it is the user's own: a session opened
+// with WithConsentedUnverifiedWrites re-labels these write-side Unverified
+// fields spec.ConsentedUnverified at session-capability assembly
+// (sessionCapabilities, ftdx10.go), and CanWrite is true for that state —
+// so a CONSENTED RealHardware FTdx10 session can write, while this static
+// profile is untouched and every unconsented session still cannot. The
+// profile keeps saying the true thing either way: it describes the
+// EVIDENCE (none), and consent is a decision about risk, not evidence.
+// Two guards keep the route narrow: the transform never touches
+// FieldErase, and it is skipped entirely for an unrecognised Profile, so
+// the fail-safe direction survives consent.
 //
 // The READ labels are Unverified rather than Supported for the same
 // reason: this driver's read path has been exercised against a fake and a

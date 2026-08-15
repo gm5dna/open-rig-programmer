@@ -51,7 +51,8 @@
 // writeTrialsCompleteD and writeTrialsCompleteMP are BOTH FALSE (caps.go)
 // and pinned false by their own test, ROW BY ROW. A RealHardware session of
 // either model therefore gets the all-Unverified capability set — every
-// candidate field's Write spec.Unverified, nothing writable anywhere — so
+// candidate field's Write spec.Unverified, nothing writable anywhere — so,
+// UNLESS THE USER HAS CONSENTED (below),
 // codeplug.Diff blocks every change, the clone service refuses to execute
 // one, and the write path's own capability re-check refuses before any
 // frame is built. An unrecognised Profile value fails the same way (see
@@ -62,6 +63,23 @@
 // trial on a D lifts the D's guard and nothing else, and a single shared
 // constant could not express a one-model flip. Flipping either is an
 // explicit M9d non-goal.
+//
+// THE ONE ROUTE PAST THE GUARD IS THE USER'S RECORDED CONSENT. A
+// RealHardware session opened with WithConsentedUnverifiedWrites — the
+// option internal/wiring spends a user's stored grant through — carries
+// spec.ConsentedUnverified where the profile said spec.Unverified, and
+// FieldSupport.CanWrite is true for that state, so such a session CAN
+// write. That is the design, not a leak: the user has been shown the
+// warning and accepted the risk for this model. What it does not change is
+// the EVIDENCE — both constants stay false, this package's static
+// Capabilities() stays all-Unverified (which is what
+// internal/wiring.NeedsUnverifiedConsent reads to call either model
+// consent-eligible in the first place), and every unconsented session
+// behaves exactly as above. Consent is PER MODEL for the same reason the
+// constants are: a grant recorded against the D is stored under the D's
+// own slug and unlocks nothing on an MP. The transform is applied once, at
+// sessionCapabilities, and only for a RECOGNISED Profile, so the forged-
+// or-corrupted-Profile direction survives consent untouched.
 //
 // The Simulated profile is write-Supported, against internal/fakedx101
 // only — see the non-borrowing note below.

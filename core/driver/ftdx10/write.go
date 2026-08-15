@@ -284,8 +284,13 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	}
 
 	// THE write gate (defence in depth below the clone service): every
-	// requested field must be write-Supported for this slot's bank in THIS
-	// session's capabilities — OR spec.Inert, which is acceptable to
+	// requested field must pass spec.FieldSupport.CanWrite for this slot's
+	// bank in THIS session's capabilities — spec.Supported, or
+	// spec.ConsentedUnverified, which is the label EVERY writable field of
+	// a consented real-hardware FTdx10 session carries (this radio's write
+	// trials are outstanding, so consent is the only key that opens this
+	// gate on RealHardware today — see sessionCapabilities, ftdx10.go) —
+	// OR spec.Inert, which is acceptable to
 	// TRANSMIT. No field of this driver's is Inert today (doc.go's
 	// non-borrowing note: Inert is an FT-710 hardware finding about ITS
 	// clarifier, and no FTdx10 has been asked), so the Inert arm is

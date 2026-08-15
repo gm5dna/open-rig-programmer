@@ -136,9 +136,13 @@ func (d *ftdx10Driver) Capabilities() spec.Capabilities {
 		// writeTrialsComplete is false, so there is no hardware-verified
 		// profile for this arm to select and a real-hardware session gets
 		// the all-Unverified fail-safe — nothing writable, every write
-		// refused before a frame is built. See writeTrialsComplete's doc
-		// comment for what its flip must change, and why the constant is
-		// deliberately not load-bearing on its own.
+		// refused before a frame is built UNLESS the user has consented,
+		// which is the one thing that reaches past these labels and does so
+		// downstream of this method (sessionCapabilities transforms what
+		// this arm returns; the set returned HERE is never transformed, and
+		// that is what internal/wiring.NeedsUnverifiedConsent reads). See
+		// writeTrialsComplete's doc comment for what its flip must change,
+		// and why the constant is deliberately not load-bearing on its own.
 		return CapabilitiesUnverified()
 	default:
 		// Any unrecognised Profile value fails safe, through its own

@@ -59,19 +59,28 @@ func TestBankReadOnly_Table(t *testing.T) {
 	unverified := spec.FieldSupport{Read: spec.Unverified, Write: spec.Unverified}
 	unsupported := spec.FieldSupport{}
 
+	// The shape a CONSENTED session carries: spec.ConsentUnverifiedWrites
+	// rewrites the WRITE label only, so Read stays Unverified.
+	consented := spec.FieldSupport{Read: spec.Unverified, Write: spec.ConsentedUnverified}
+
 	allWritable := map[spec.Field]spec.FieldSupport{}
 	allUnverified := map[spec.Field]spec.FieldSupport{}
 	allUnsupported := map[spec.Field]spec.FieldSupport{}
 	mixedOneWritable := map[spec.Field]spec.FieldSupport{}
 	inertClarifier := map[spec.Field]spec.FieldSupport{}
+	allConsented := map[spec.Field]spec.FieldSupport{}
+	mixedOneConsented := map[spec.Field]spec.FieldSupport{}
 	for _, f := range bankCoreCandidates {
 		allWritable[f] = rw
 		allUnverified[f] = unverified
 		allUnsupported[f] = unsupported
 		mixedOneWritable[f] = unsupported
 		inertClarifier[f] = rw
+		allConsented[f] = consented
+		mixedOneConsented[f] = unsupported
 	}
 	mixedOneWritable[spec.FieldFrequency] = rw
+	mixedOneConsented[spec.FieldClarifier] = consented
 	// The M5b real shape: every core field writable except the clarifier,
 	// whose Write is Inert (HW-CONFIRMED transmitted-but-ignored). Inert
 	// is not Unsupported, so the bank — and with it the grid's clarifier
@@ -89,6 +98,15 @@ func TestBankReadOnly_Table(t *testing.T) {
 		{"all Unsupported -> read-only", allUnsupported, true},
 		{"one field writable among Unsupported rest -> not read-only", mixedOneWritable, false},
 		{"Inert clarifier among Supported rest -> not read-only (M5b real shape; clarifier column stays editable)", inertClarifier, false},
+		// The fifth state's two rows. A consented session is the shape a
+		// RealHardware FTdx10/FTdx101 gets once the user has granted
+		// unverified writes, and it must read exactly as the Unverified
+		// row above does — not read-only. The MIXED row is the one that
+		// bites: it fails the moment bankReadOnly is re-tested on
+		// "Write == spec.Supported" (the tempting narrowing), because
+		// consent is the only thing keeping that bank editable.
+		{"all ConsentedUnverified -> not read-only (a consented session is editable, as its Unverified original was)", allConsented, false},
+		{"one ConsentedUnverified field among Unsupported rest -> not read-only (a consented column stays editable)", mixedOneConsented, false},
 		{"absent bank entirely -> vacuously read-only (zero FieldSupport everywhere)", nil, true},
 	}
 
@@ -248,6 +266,11 @@ func TestBankCoreFields_ZeroValueDecidesMembership(t *testing.T) {
 		{"readable, write Unsupported (the discovered 60M/EMG shape)", spec.FieldSupport{Read: spec.Supported, Write: spec.Unsupported}, true},
 		{"writable, read Unsupported", spec.FieldSupport{Read: spec.Unsupported, Write: spec.Supported}, true},
 		{"Inert write (transmitted-but-ignored is still a frame field)", spec.FieldSupport{Read: spec.Unsupported, Write: spec.Inert}, true},
+		// The fifth state. A consented session's write label is non-zero,
+		// so the field is in the derived core set exactly as its Unverified
+		// original was: consent changes whose word the confidence rests on,
+		// never whether the radio's frame carries the field.
+		{"ConsentedUnverified write (the consented session's shape)", spec.FieldSupport{Read: spec.Unverified, Write: spec.ConsentedUnverified}, true},
 		{"the zero FieldSupport", spec.FieldSupport{}, false},
 	}
 	for _, tc := range tests {
@@ -600,6 +623,13 @@ func TestBankTagDisplayDefault_Table(t *testing.T) {
 		}, known},
 		{"Inert write -> Known-false (transmitted-but-ignored is still a frame field)", map[spec.Field]spec.FieldSupport{
 			spec.FieldTagDisplay: {Read: spec.Supported, Write: spec.Inert},
+		}, known},
+		// The fifth state, and the answer must be the plain-Unverified row's:
+		// Unavailable is triggered by "absent from the frame in BOTH
+		// directions", and a consented write label is not Unsupported, so a
+		// blank row on a consented session still states the flag.
+		{"ConsentedUnverified write -> Known-false (consent does not make a flag appear or vanish)", map[spec.Field]spec.FieldSupport{
+			spec.FieldTagDisplay: {Read: spec.Unverified, Write: spec.ConsentedUnverified},
 		}, known},
 		{"both Unsupported -> Unavailable", map[spec.Field]spec.FieldSupport{
 			spec.FieldTagDisplay: {},

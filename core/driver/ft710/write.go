@@ -175,9 +175,14 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	}
 
 	// THE write gate (defence in depth below the clone service): every
-	// requested field must be write-Supported for this slot's bank in
-	// THIS session's capabilities — OR spec.Inert, which is acceptable to
-	// TRANSMIT (M5b, HW-CONFIRMED 2026-07-13: the radio ignores the
+	// requested field must pass spec.FieldSupport.CanWrite for this slot's
+	// bank in THIS session's capabilities — spec.Supported, or
+	// spec.ConsentedUnverified, the label a session assembled under the
+	// user's recorded consent carries (sessionCapabilities, ft710.go; on
+	// THIS radio that transform is a proven no-op, so the consented arm is
+	// currently unreachable here and is kept because the gate states the
+	// neutral rule, not this radio's luck) — OR spec.Inert, which is
+	// acceptable to TRANSMIT (M5b, HW-CONFIRMED 2026-07-13: the radio ignores the
 	// clarifier's transmitted value entirely, so transmitting it cannot
 	// alter the radio's state). The Inert enforcement split, documented at
 	// both ends (see spec.Inert): blocking a CHANGED Inert value needs the

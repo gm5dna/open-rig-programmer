@@ -199,7 +199,12 @@ func (d *ftdx101Driver) Capabilities() spec.Capabilities {
 		// both false, so there is no hardware-verified profile for this arm
 		// to select and a real-hardware session gets the all-Unverified
 		// fail-safe — nothing writable, every write refused before a frame
-		// is built. Neither constant is READ here, deliberately: see their
+		// is built UNLESS the user has consented, which is the one thing
+		// that reaches past these labels and does so downstream of this
+		// method (sessionCapabilities transforms what this arm returns; the
+		// set returned HERE is never transformed, and that is what
+		// internal/wiring.NeedsUnverifiedConsent reads).
+		// Neither constant is READ here, deliberately: see their
 		// doc comments for what a flip must change, and why a constant that
 		// was load-bearing on its own would let a one-character edit unlock
 		// a write.

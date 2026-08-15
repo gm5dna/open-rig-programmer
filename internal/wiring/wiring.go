@@ -305,6 +305,18 @@ func NewRealDriver() driver.Driver {
 // therefore adds a READ/probe path against real hardware and no write path
 // (see core/driver/ftdx10/doc.go's write guard, and its ASSUMED register
 // for what a Stage R session would lift).
+//
+// That is the whole truth for THIS constructor, and this constructor is
+// what realDrivers' FTdx10 row returns for every unconsented caller. The
+// CONSENTED row is a different construction — ftdx10.New(RealHardware,
+// WithConsentedUnverifiedWrites()), built only when the user's recorded
+// grant says so — and the session IT assembles re-labels those write-side
+// Unverified fields spec.ConsentedUnverified, which FieldSupport.CanWrite
+// opens. Even there the driver's STATIC Capabilities is untouched, which
+// is exactly what lets NeedsUnverifiedConsent read it to decide the radio
+// is consent-eligible at all. So "no write path" remains the answer for
+// every caller who has not asked for one, and the write path a consenting
+// user gets is one they were warned about and chose.
 func NewFTdx10RealDriver() driver.Driver {
 	return ftdx10.New(ftdx10.RealHardware)
 }
@@ -321,15 +333,26 @@ func NewFTdx10RealDriver() driver.Driver {
 // spec.Unverified, nothing writable on any bank. No FTDX101D has been
 // written to by this project, and the capability gate refuses before any
 // frame is built. Registering the model therefore adds a READ/probe path
-// against real hardware and NO write path (see core/driver/ftdx101/doc.go's
-// write guard, and its ASSUMED register for what a Stage W session would
-// lift).
+// against real hardware and, for an UNCONSENTED session (the consent
+// exception is named at the foot of this comment), NO write path (see
+// core/driver/ftdx101/doc.go's write guard, and its ASSUMED register for
+// what a Stage W session would lift).
 //
 // The FAIL-SAFE DIRECTION is worth restating because it is what makes this
 // safe to register at all: an unrecognised Profile value selects the
 // all-Unverified set too, never the simulator's write-Supported one. There
 // is no value a caller can pass to this package that produces a
-// write-capable real-hardware FTDX101D driver.
+// write-capable real-hardware FTDX101D driver — with ONE named exception,
+// which is not a value at all but a decision: SessionOptions'
+// ConsentUnverifiedWrites, spent from the user's own recorded grant, makes
+// realDrivers build the consented variant instead of this constructor's
+// product, and the SESSION that variant opens carries
+// spec.ConsentedUnverified in place of spec.Unverified and can therefore
+// write. The exception is deliberately narrow and deliberately loud: it is
+// unreachable without a stored grant, it never alters this driver's static
+// capability set, it never touches FieldErase, and it is skipped for an
+// unrecognised Profile — so the fail-safe direction above survives it
+// intact.
 func NewFTdx101DRealDriver() driver.Driver {
 	return ftdx101.NewD(ftdx101.RealHardware)
 }

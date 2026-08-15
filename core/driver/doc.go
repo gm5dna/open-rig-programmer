@@ -53,7 +53,14 @@
 //     spec.Unverified. Because Unverified.CanWrite() == false, every
 //     change is blocked. This was every real-hardware session's profile
 //     before the flip; it remains the FAIL-SAFE any unrecognised
-//     Profile value selects.
+//     Profile value selects. The user's consent does NOT reach it ON
+//     THIS RADIO: an FT-710 selects it only for an UNRECOGNISED Profile
+//     value, and every driver applies the consent transform only for a
+//     recognised one — so the FT-710's fail-safe goes on writing nothing
+//     however the option is set. (Read that as a fact about the FT-710's
+//     profile arrangement, not a universal one: on the FTdx10 and the
+//     FTdx101 the all-Unverified set is what RealHardware itself
+//     selects, so there consent does reach it, by design.)
 //   - CapabilitiesSimulated: Write = Supported for the same six fields
 //     (aligned with CapabilitiesRealHardware, clarifier Inert included,
 //     so --fake behaviour matches real behaviour), used ONLY for

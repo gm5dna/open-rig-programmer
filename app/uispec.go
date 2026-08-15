@@ -41,8 +41,10 @@ var bankCoreCandidates = []spec.Field{
 //
 // Non-zero means "this radio's memory frame carries the field on this
 // bank", in either direction and to any degree of confidence — Unverified,
-// Inert and read-but-not-write all count, since each describes a field
-// that EXISTS. Only the zero FieldSupport (Unsupported both ways) says the
+// ConsentedUnverified, Inert and read-but-not-write all count, since each
+// describes a field that EXISTS (consent changes whose word the confidence
+// rests on, the user's rather than the hardware's, never whether the frame
+// has the field). Only the zero FieldSupport (Unsupported both ways) says the
 // frame has no such field, and spec.Capabilities.FieldSupport returns
 // exactly that for a bank absent from caps entirely or a field absent from
 // a present bank's map, so "says nothing" and "says no" answer alike with
@@ -93,7 +95,11 @@ func bankCoreFields(caps spec.Capabilities, id spec.BankID) []spec.Field {
 // or not); and so is spec.Inert (the M5b-added transmitted-but-ignored
 // state the clarifier now carries — an Inert column stays editable
 // too, with a CHANGED value caught at send time by codeplug.Diff, not
-// by locking the cell). Treating Unverified as ReadOnly would have
+// by locking the cell); and so, a fortiori, is spec.ConsentedUnverified
+// (a consented session's write label — a state the user has explicitly
+// asked to be able to write, which could hardly justify locking the
+// cell, and which this Write != Unsupported test admits for the same
+// reason it admits the other three). Treating Unverified as ReadOnly would have
 // locked MEM/PMS editing before the very M5b hardware trials that
 // unlocked it (13/07/2026: writeTrialsComplete flipped;
 // core/driver/ft710/caps.go) — breaking the offline clone workflow this
@@ -147,9 +153,10 @@ func bankReadOnly(caps spec.Capabilities, id spec.BankID) bool {
 // the frame in BOTH directions" justifies Unavailable. A field that is
 // merely unwritable (the discovered 60M/EMG banks, whose Write is forced
 // Unsupported while Read is inherited from MEM), merely unproven
-// (spec.Unverified), or transmitted-but-ignored (spec.Inert) is still a
-// field this radio's frame carries, and a blank row must state it rather
-// than claim the radio has no such flag.
+// (spec.Unverified), unproven-but-consented (spec.ConsentedUnverified),
+// or transmitted-but-ignored (spec.Inert) is still a field this radio's
+// frame carries, and a blank row must state it rather than claim the
+// radio has no such flag.
 //
 // Known-false, rather than the honest-provenance codeplug.Unknown, because
 // tag_display is a MANDATORY wire field wherever it exists: an Unknown one

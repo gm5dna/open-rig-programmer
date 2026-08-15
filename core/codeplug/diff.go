@@ -48,12 +48,15 @@ type DiffEntry struct {
 	After *ChannelData
 	// Blocked is true when this change cannot be sent to a radio: the bank
 	// does not support writing FieldFrequency at all (e.g. 60M/EMG); it
-	// is an erase and FieldErase is not yet write-Supported for this
+	// is an erase and FieldErase does not pass the write gate for this
 	// bank; (Modified/Added only) its TagDisplay is not Known while this
 	// bank does transmit the display flag; or (Modified/Added only) the
-	// change touches at least one field that is not write-Supported for
-	// this bank — see Diff's Blocked doc for the exact rule and
-	// precedence order.
+	// change touches at least one field that is not WRITABLE for this
+	// bank — writable meaning spec.FieldSupport.CanWrite, which since the
+	// consent milestone is true for spec.Supported AND for
+	// spec.ConsentedUnverified, so a field the user has consented to
+	// writing does not block here. See Diff's Blocked doc for the exact
+	// rule and precedence order.
 	Blocked bool
 	// BlockReason explains Blocked, e.g. "erase not supported on this
 	// radio", "bank 60M is read-only", "tag display unknown — set On or
@@ -242,8 +245,9 @@ func addedFields(data ChannelData) []spec.Field {
 const tagDisplayUnknownReason = "tag display unknown — set On or Off before sending"
 
 // fieldGateBlockReason builds a DiffEntry.BlockReason naming every field
-// in fields (assumed non-empty) that is not write-Supported for this
-// entry's bank.
+// in fields (assumed non-empty) that is not WRITABLE for this entry's
+// bank — spec.FieldSupport.CanWrite false, so neither spec.Supported nor
+// spec.ConsentedUnverified. A consented field never reaches this list.
 func fieldGateBlockReason(fields []spec.Field) string {
 	names := make([]string, len(fields))
 	for i, f := range fields {
@@ -318,16 +322,24 @@ func inertBlockReason(fields []spec.Field) string {
 // precedence over a later one):
 //
 //  1. Bank-level: does the slot's bank support writing FieldFrequency at
-//     all — Supported, OR spec.Inert (Fix 4, Codex M5b fix wave,
-//     adjudicated MEDIUM: transmissible, even if the radio may ignore it —
-//     mirrors point 4's per-field Inert exception, and Session.WriteChannel's
-//     own gate) — (an Unknown-bank slot counts as not supporting it)? If
-//     not, the WHOLE entry is Blocked with a "bank ... is read-only" (or
-//     unknown-bank) reason, regardless of Kind.
+//     all — CanWrite, which is Supported OR spec.ConsentedUnverified (the
+//     user's recorded consent to an unproven write), OR spec.Inert (Fix 4,
+//     Codex M5b fix wave, adjudicated MEDIUM: transmissible, even if the
+//     radio may ignore it — mirrors point 4's per-field Inert exception,
+//     and Session.WriteChannel's own gate) — (an Unknown-bank slot counts
+//     as not supporting it)? If not, the WHOLE entry is Blocked with a
+//     "bank ... is read-only" (or unknown-bank) reason, regardless of Kind.
 //
-//  2. Erase-specific: for a DiffErased entry only, is the bank's
-//     FieldErase write-Supported? If not, Blocked with an "erase not
+//  2. Erase-specific: for a DiffErased entry only, does the bank's
+//     FieldErase pass CanWrite? If not, Blocked with an "erase not
 //     supported..." reason.
+//
+//     CONSENT CANNOT OPEN THIS GATE, and the exclusion is structural
+//     rather than a promise made here: spec.ConsentUnverifiedWrites
+//     exempts FieldErase from the transform outright (see its doc
+//     comment), so no capability set reaching this gate can carry a
+//     consented erase, and populated-to-empty stays blocked on every
+//     radio whose erase is not genuinely Supported — consented or not.
 //
 //  3. TagDisplay knowledge (M9c-5, E1b): for a DiffModified OR a DiffAdded
 //     entry, is After's TagDisplay.State anything other than Known while
@@ -372,8 +384,11 @@ func inertBlockReason(fields []spec.Field) string {
 //     whether or not that field's value actually changed in this
 //     particular edit, so an unwritable field that happens to be
 //     unchanged would still be clobbered by the write and must still
-//     block. If ANY touched field is not write-Supported for this bank,
-//     the WHOLE entry is Blocked, naming every such field — for a
+//     block. If ANY touched field is not WRITABLE for this bank —
+//     spec.FieldSupport.CanWrite false, so neither spec.Supported nor
+//     spec.ConsentedUnverified; a field the user has consented to writing
+//     passes this gate exactly as a hardware-proven one does — the WHOLE
+//     entry is Blocked, naming every such field — for a
 //     Modified entry, additionally noting "(rewritten by MW even though
 //     unchanged)" against any named field that changedFields does NOT
 //     also report changed (see modifiedBlockReason), since that is the
@@ -533,7 +548,10 @@ func Diff(baseline, file *Codeplug, caps spec.Capabilities) (DiffResult, error) 
 					fs := caps.FieldSupport(bankID, f)
 					switch {
 					case fs.CanWrite():
-						// Genuinely writable: no gate.
+						// Writable: no gate. Either hardware-proven
+						// (spec.Supported) or opened by the user's recorded
+						// consent (spec.ConsentedUnverified) — CanWrite does
+						// not distinguish them, and neither does this gate.
 					case fs.Write == spec.Inert:
 						if inertChangedSet[f] {
 							inertChanged = append(inertChanged, f)

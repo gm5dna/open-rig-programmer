@@ -354,8 +354,14 @@ func sanitizeCHIRPName(line int, name string, caps spec.Capabilities) (string, [
 // app/uispec.go's bankTagDisplayDefault (the blank-row factory's default):
 // "absent from the frame in BOTH directions" is the one trigger for
 // Unavailable, and merely unwritable / merely unproven (spec.Unverified) /
+// unproven-but-consented (spec.ConsentedUnverified) /
 // transmitted-but-ignored (spec.Inert) all remain fields this radio's
-// frame carries.
+// frame carries. Consent in particular changes NOTHING here: Unreachable
+// asks about both directions being Unsupported, and a consented session's
+// write label is not Unsupported — so a CHIRP import behaves identically
+// whether or not the user has consented, which is the honest answer,
+// since consent is about authorising a write and this is about whether
+// the frame has the field at all.
 //
 // The third caller M9c-6 said would force the move HAS appeared — M9d-2's
 // chirpScanSkip, below, asks the same question of spec.FieldScanSkip — so
