@@ -45,11 +45,18 @@ var testIdentity = driver.Identity{Port: "scripted-pipe", USBSerial: "SIM0761"}
 // openSession starts a respondingPort serving img, opens a session over it
 // with the given profile, and registers cleanup for both. It returns the
 // port (for its transcript) and the concrete *Session.
-func openSession(t *testing.T, profile Profile, img slotImage) (*respondingPort, *Session) {
+//
+// opts are the DRIVER-construction Options New is given — the consent
+// option's tests need a session built with one, and the variadic slot is
+// free here because this helper's scripted peer is described by img rather
+// than by options of its own. (core/driver/ft710's namesake helper has its
+// variadic slot occupied by fakeradio options and cannot be extended this
+// way.)
+func openSession(t *testing.T, profile Profile, img slotImage, opts ...Option) (*respondingPort, *Session) {
 	t.Helper()
 	p := newRespondingPort(t, img)
 
-	sess, err := New(profile).Open(testCtx(t), p.Port(), testIdentity)
+	sess, err := New(profile, opts...).Open(testCtx(t), p.Port(), testIdentity)
 	if err != nil {
 		t.Fatalf("Open: unexpected error: %v", err)
 	}
@@ -410,5 +417,179 @@ func TestWithTransportLogger_NilIsIgnored(t *testing.T) {
 	}
 	if d.transportLogger != nil {
 		t.Error("WithTransportLogger(nil) installed a logger, want the engine's default kept")
+	}
+}
+
+// capsContains reports whether ANY bank field of caps carries s, on
+// EITHER side — Read or Write.
+//
+// Both sides on purpose, even though the consent transform is write-only:
+// the tests below use it to assert the ABSENCE of
+// spec.ConsentedUnverified, and a search that looked only where the
+// transform is meant to write would be blind to the one failure that
+// matters most, a consent label leaking onto the read side (which
+// spec.Capabilities.Validate refuses outright — see
+// TestEffectiveCapabilities_Validate).
+func capsContains(caps spec.Capabilities, s spec.Support) bool {
+	for _, b := range caps.Banks {
+		for _, fs := range b.Fields {
+			if fs.Read == s || fs.Write == s {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// reportCapsDifference logs the first per-field divergence between two
+// capability sets — bank IDs and order first, then each bank's field map.
+// Silent when the sets differ only OUTSIDE the bank field maps, which the
+// caller must report for itself.
+func reportCapsDifference(t *testing.T, got, want spec.Capabilities) {
+	t.Helper()
+	if len(got.Banks) != len(want.Banks) {
+		t.Errorf("bank count = %d, want %d", len(got.Banks), len(want.Banks))
+		return
+	}
+	for i, wb := range want.Banks {
+		gb := got.Banks[i]
+		if gb.ID != wb.ID {
+			t.Errorf("Banks[%d].ID = %s, want %s", i, gb.ID, wb.ID)
+			return
+		}
+		for f, wfs := range wb.Fields {
+			if gfs := gb.Fields[f]; gfs != wfs {
+				t.Errorf("bank %s field %s: FieldSupport = %+v, want %+v", wb.ID, f, gfs, wfs)
+				return
+			}
+		}
+	}
+}
+
+// consentTestImage is the scripted radio the consent tests share: one 5xx
+// slot and EMG answer, so every session they open carries DISCOVERED
+// read-only banks alongside the profile's static MEM and PMS. That is the
+// interesting shape for a transform that must leave read-only banks alone
+// — a discovered bank's Write is spec.Unsupported (caps.go's
+// readOnlyFields), never Unverified, so consent has nothing to convert
+// there and must not invent anything.
+func consentTestImage() slotImage {
+	return slotImage{mtAnswers: map[string]string{
+		"503": populatedAnswer("503"),
+		"EMG": populatedAnswer("EMG"),
+	}}
+}
+
+// TestConsentOption_SessionCapsTransformed is the option's whole point: a
+// RealHardware session built WITH WithConsentedUnverifiedWrites carries
+// exactly spec.ConsentUnverifiedWrites' product over the capability set
+// the same session would otherwise have had — the ONE transform, applied
+// at the ONE assembly point, with no driver-local reinterpretation of what
+// consent means.
+//
+// Deep equality against `spec.ConsentUnverifiedWrites(plain.Capabilities())`
+// is what makes that a proof rather than a spot check: any label this
+// driver converted differently, any bank it treated specially, and any
+// non-bank datum it disturbed would show up as an inequality.
+func TestConsentOption_SessionCapsTransformed(t *testing.T) {
+	img := consentTestImage()
+	_, plain := openSession(t, RealHardware, img)
+	_, consented := openSession(t, RealHardware, img, WithConsentedUnverifiedWrites())
+
+	if capsContains(plain.Capabilities(), spec.ConsentedUnverified) {
+		t.Fatal("an UNCONSENTED RealHardware session already carries ConsentedUnverified — the option is not what put it there, so this test can prove nothing")
+	}
+
+	want := spec.ConsentUnverifiedWrites(plain.Capabilities())
+	got := consented.Capabilities()
+	if !reflect.DeepEqual(got, want) {
+		// Report the divergence precisely rather than dumping two whole
+		// capability sets: a full diff of this structure is unreadable,
+		// and the first differing field is always the diagnosis. A
+		// difference OUTSIDE the bank field maps falls through to the
+		// generic message, which is the honest answer for it.
+		reportCapsDifference(t, got, want)
+		t.Error("consented session capabilities differ from spec.ConsentUnverifiedWrites' product (see above)")
+	}
+
+	// The consequences, stated separately from the equality so a failure
+	// says WHICH property broke.
+	if fs := got.FieldSupport(spec.BankMemory, spec.FieldFrequency); fs.Write != spec.ConsentedUnverified || !fs.CanWrite() {
+		t.Errorf("MEM frequency Write = %v (CanWrite %v), want ConsentedUnverified and writable", fs.Write, fs.CanWrite())
+	}
+	if fs := got.FieldSupport(spec.BankMemory, spec.FieldErase); fs.CanWrite() {
+		t.Error("MEM erase became writable under consent — FieldErase is exempt from the transform structurally (core/spec/consent.go), and a consented erase would unblock codeplug.Diff's erase gate")
+	}
+	if fs := got.FieldSupport(spec.Bank60m, spec.FieldFrequency); fs.Write != spec.Unsupported {
+		t.Errorf("discovered 60M frequency Write = %v, want Unsupported — consent must not reach a read-only discovered bank", fs.Write)
+	}
+	for _, b := range got.Banks {
+		for f, fs := range b.Fields {
+			if fs.Read == spec.ConsentedUnverified {
+				t.Errorf("bank %s field %s: Read = ConsentedUnverified — consent is a write-side state and Capabilities.Validate rejects it read-side", b.ID, f)
+			}
+		}
+	}
+}
+
+// TestConsentOption_DefaultByteIdentical: WITHOUT the option nothing moves
+// — neither the static baseline nor a session's assembled set.
+//
+// The session half is the one worth having. Introducing
+// sessionCapabilities put a new step between effectiveCapabilities and the
+// Session, and the default path must still produce precisely
+// effectiveCapabilities' own product, discovered banks and all; the
+// expectation is built here from the pinned profile constructor rather
+// than from anything the driver just computed.
+func TestConsentOption_DefaultByteIdentical(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		p    Profile
+		want spec.Capabilities
+	}{
+		{"RealHardware", RealHardware, CapabilitiesUnverified()},
+		{"Simulated", Simulated, CapabilitiesSimulated()},
+		{"unrecognised", Profile(99), CapabilitiesUnverified()},
+	} {
+		t.Run("static/"+tt.name, func(t *testing.T) {
+			if got := New(tt.p).Capabilities(); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("New(%v).Capabilities() is no longer the pinned profile constructor's product", tt.name)
+			}
+		})
+	}
+
+	_, sess := openSession(t, RealHardware, consentTestImage())
+	want := effectiveCapabilities(CapabilitiesUnverified(), []string{"503"}, true)
+	if got := sess.Capabilities(); !reflect.DeepEqual(got, want) {
+		reportCapsDifference(t, got, want)
+		t.Error("an unconsented session's capabilities are no longer effectiveCapabilities' own product (see above)")
+	}
+}
+
+// TestConsentOption_UnrecognisedProfileStaysFailSafe: the fail-safe
+// direction survives consent. A driver built with an unrecognised Profile
+// AND the consent option gets NO ConsentedUnverified anywhere, so its
+// sessions stay exactly as unwritable as an unconsented one's.
+//
+// This is the plan's spec amendment 4, and it is a driver-side gate by
+// design: spec.ConsentUnverifiedWrites is profile-agnostic (it transforms
+// whatever it is handed), so the only place that can refuse to apply it to
+// a profile nobody declared is the driver's own assembly point. The
+// guarantee it preserves is Profile's own: no value a caller can pass —
+// forged, corrupted, or from a future constant this build has never heard
+// of — produces a writable session.
+func TestConsentOption_UnrecognisedProfileStaysFailSafe(t *testing.T) {
+	_, sess := openSession(t, Profile(99), consentTestImage(), WithConsentedUnverifiedWrites())
+	caps := sess.Capabilities()
+
+	if capsContains(caps, spec.ConsentedUnverified) {
+		t.Error("an unrecognised Profile + the consent option produced ConsentedUnverified — the profile gate has drifted open")
+	}
+	for _, b := range caps.Banks {
+		for _, f := range allFields {
+			if caps.FieldSupport(b.ID, f).CanWrite() {
+				t.Errorf("bank %s field %s: CanWrite() = true on an unrecognised Profile with consent — the fail-safe must survive the option", b.ID, f)
+			}
+		}
 	}
 }

@@ -433,3 +433,111 @@ func TestModes_MatchTheDialect(t *testing.T) {
 		}
 	}
 }
+
+// TestProfilesNeverEmitConsented: no capability PROFILE mints
+// spec.ConsentedUnverified. The state is a session-time statement about a
+// user's recorded decision, so the only thing that may ever produce it is
+// the consent transform at the assembly point — never a label written down
+// in caps.go, where it would apply to every user of the model whether they
+// consented or not.
+func TestProfilesNeverEmitConsented(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		caps spec.Capabilities
+	}{
+		{"Simulated", New(Simulated).Capabilities()},
+		{"RealHardware", New(RealHardware).Capabilities()},
+		{"unrecognised", New(Profile(99)).Capabilities()},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if capsContains(tt.caps, spec.ConsentedUnverified) {
+				t.Error("a profile baseline carries ConsentedUnverified — consent belongs to a session, not to the radio's capability data")
+			}
+		})
+	}
+}
+
+// TestConsentOption_StaticCapabilitiesNeverConsented: the option changes
+// what a SESSION carries and nothing else. A driver built with it still
+// describes the radio exactly as one built without it does.
+//
+// That boundary is load-bearing above this package: internal/wiring's
+// registry publishes driver.Capabilities() and refuses a registered set
+// carrying ConsentedUnverified on either side (core/driver's registry
+// baseline guard), and the app's static surfaces — capability tables,
+// settings descriptors, offline bank synthesis — describe the model rather
+// than one user's decision.
+func TestConsentOption_StaticCapabilitiesNeverConsented(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		p    Profile
+	}{
+		{"Simulated", Simulated},
+		{"RealHardware", RealHardware},
+		{"unrecognised", Profile(99)},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got := New(tt.p, WithConsentedUnverifiedWrites()).Capabilities()
+			if capsContains(got, spec.ConsentedUnverified) {
+				t.Error("the consent option reached the STATIC capability set — it must apply only at session-capability assembly")
+			}
+			if !reflect.DeepEqual(got, New(tt.p).Capabilities()) {
+				t.Error("a consented driver's static Capabilities() differ from an unconsented one's")
+			}
+		})
+	}
+}
+
+// TestEffectiveCapabilities_Validate: every capability set a session can
+// ever carry passes spec.Capabilities.Validate — profiles × discovered
+// inventories × consent, assembled through the one seam that builds them
+// (sessionCapabilities).
+//
+// TestProfiles_Validate covers the static baselines only, and the sets
+// this driver actually hands out are strictly larger: they carry the
+// discovered read-only banks, and now the consent transform's relabelling
+// too. Validate is meaningful for a consented set in particular because
+// its read-side rule refuses ConsentedUnverified outright, so a transform
+// that leaked onto the read side fails HERE rather than at whatever layer
+// first tried to enforce it.
+func TestEffectiveCapabilities_Validate(t *testing.T) {
+	for _, prof := range []struct {
+		name string
+		p    Profile
+	}{
+		{"RealHardware", RealHardware},
+		{"Simulated", Simulated},
+		{"unrecognised", Profile(99)},
+	} {
+		for _, disc := range []struct {
+			name     string
+			slots60m []string
+			emg      bool
+		}{
+			{"no discovery", nil, false},
+			{"60m only", []string{"503", "599"}, false},
+			{"EMG only", nil, true},
+			{"60m and EMG", []string{"501"}, true},
+		} {
+			for _, consent := range []bool{false, true} {
+				name := prof.name + "/" + disc.name
+				if consent {
+					name += "/consented"
+				}
+				t.Run(name, func(t *testing.T) {
+					var opts []Option
+					if consent {
+						opts = append(opts, WithConsentedUnverifiedWrites())
+					}
+					d, ok := New(prof.p, opts...).(*ftdx10Driver)
+					if !ok {
+						t.Fatal("New did not return a *ftdx10Driver")
+					}
+					if err := d.sessionCapabilities(disc.slots60m, disc.emg).Validate(); err != nil {
+						t.Errorf("Validate() = %v, want nil", err)
+					}
+				})
+			}
+		}
+	}
+}
