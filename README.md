@@ -67,7 +67,7 @@ whatever you consent to, and menu settings stay read-only. Each send's
 journal records whether consent is what opened the write gate.
 
 Without a grant nothing is left half-done: `rigprog write` blocks every
-change and sends nothing.
+change and sends no write command.
 
 ## What it does
 
@@ -101,9 +101,11 @@ the same choreography, in the CLI and the GUI alike:
 5. **write-then-verify per channel**, with an append-only journal of
    exactly what happened.
 
-On a radio whose write commands have never been proven on hardware,
-there is a gate in front of all of that — see *Unverified writes*
-above.
+On a radio whose write commands have never been proven on hardware, the
+first two steps still run — the radio is read, and a snapshot is kept —
+but a further gate stands in front of the send itself: without a grant,
+every change is reported as blocked and no write command leaves the
+tool. See *Unverified writes* above.
 
 Some things the FT-710 simply cannot do over CAT, and the tool blocks
 them honestly rather than pretending: there is no erase command (so
