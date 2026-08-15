@@ -262,6 +262,8 @@ export namespace main {
 	    USBSerial: string;
 	    Region: string;
 	    Demo: boolean;
+	    NeedsUnverifiedConsent: boolean;
+	    UnverifiedConsentRecorded: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ConnectionInfo(source);
@@ -275,6 +277,8 @@ export namespace main {
 	        this.USBSerial = source["USBSerial"];
 	        this.Region = source["Region"];
 	        this.Demo = source["Demo"];
+	        this.NeedsUnverifiedConsent = source["NeedsUnverifiedConsent"];
+	        this.UnverifiedConsentRecorded = source["UnverifiedConsentRecorded"];
 	    }
 	}
 	export class DiffCounts {
@@ -791,6 +795,7 @@ export namespace main {
 	}
 	export class UISpecView {
 	    Live: boolean;
+	    UnverifiedWritesConsented: boolean;
 	    Banks: BankView[];
 	    Modes: string[];
 	    ShiftOptions: string[];
@@ -812,6 +817,7 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.Live = source["Live"];
+	        this.UnverifiedWritesConsented = source["UnverifiedWritesConsented"];
 	        this.Banks = this.convertValues(source["Banks"], BankView);
 	        this.Modes = source["Modes"];
 	        this.ShiftOptions = source["ShiftOptions"];
@@ -844,6 +850,26 @@ export namespace main {
 		    }
 		    return a;
 		}
+	}
+	export class UnverifiedWriteConsentView {
+	    Model: string;
+	    NeedsConsent: boolean;
+	    Granted: boolean;
+	    Recorded: boolean;
+	    Warning: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UnverifiedWriteConsentView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.Model = source["Model"];
+	        this.NeedsConsent = source["NeedsConsent"];
+	        this.Granted = source["Granted"];
+	        this.Recorded = source["Recorded"];
+	        this.Warning = source["Warning"];
+	    }
 	}
 	export class ValidationView {
 	    Issues: IssueView[];
