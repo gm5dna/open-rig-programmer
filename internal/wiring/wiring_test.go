@@ -1061,10 +1061,15 @@ func TestRealAndFakeDriverTablesAgree(t *testing.T) {
 // disagreed the lookup would miss and the result would be nil.
 func TestDriverTableKeysMatchDriverModel(t *testing.T) {
 	for model, ctor := range realDrivers {
-		// consent false — a model's identity cannot depend on it, and the
-		// consented arm is covered by TestRealDriverFor_StaticNeverConsented.
-		if got := ctor(false).Model(); got != model {
-			t.Errorf("realDrivers[%q] builds a driver whose Model() = %q", model, got)
+		// BOTH consent arms: a model's identity cannot depend on the user's
+		// consent, and each row has two arms that could disagree about it —
+		// a consented arm calling the sibling's constructor (NewD where NewMP
+		// belongs) would build a perfectly valid driver for the WRONG radio,
+		// and every capability assertion in this file would pass.
+		for _, consent := range []bool{false, true} {
+			if got := ctor(consent).Model(); got != model {
+				t.Errorf("realDrivers[%q](consent=%v) builds a driver whose Model() = %q", model, consent, got)
+			}
 		}
 	}
 	for model, entry := range fakeDrivers {
@@ -1415,26 +1420,25 @@ func TestResolveSnapshotDir_EmptySlugIsError(t *testing.T) {
 // the real driver's ID probe and its whole discovery walk. That is precisely
 // what each model's simulator does.
 //
-// The rig is constructed EXACTLY as fake.go's fakeDrivers entry for that
-// model constructs it — same constructor, same per-model option source, read
-// at call time — so the port these tests serve is the port a "--fake --model
-// X" invocation would get, rather than a second, independently-drifting
-// fixture. The DRIVER on the other end is still the real-hardware one:
-// OpenRealSessionWith builds it, and that pairing is the point (a
-// RealHardware driver whose Unverified writes consent has opened).
+// The rig is fake.go's OWN — entry.newRadio() from the very fakeDrivers
+// table OpenFakeSessionFor looks up, so it is the same constructor and the
+// same per-model option source, read at call time, BY SHARING rather than by
+// a restatement here that could drift. The port these tests serve is
+// therefore the port a "--fake --model X" invocation would get.
+//
+// newRadio ONLY, never entry.newDriver: the pairing under test is a
+// REAL-HARDWARE driver (the one OpenRealSessionWith builds from realDrivers,
+// carrying the consent option) against a fake RIG. Reaching for the fake
+// half's simulated-profile driver would test fake.go's pairing over again
+// and prove nothing about consent, whose whole subject is the real-hardware
+// path.
 func fakePortSeam(t *testing.T, model string) {
 	t.Helper()
-	var r fakeRadio
-	switch model {
-	case FTdx10Model:
-		r = fakedx10.New(FTdx10FakeSessionOpts...)
-	case FTdx101DModel:
-		r = fakedx101.NewD(FTdx101DFakeSessionOpts...)
-	case FTdx101MPModel:
-		r = fakedx101.NewMP(FTdx101MPFakeSessionOpts...)
-	default:
-		t.Fatalf("fakePortSeam: no fake-rig construction recorded for model %q — mirror fake.go's fakeDrivers entry here", model)
+	entry, ok := fakeDrivers[model]
+	if !ok {
+		t.Fatalf("fakePortSeam: model %q has no fakeDrivers entry, so no rig can answer a real driver's probe", model)
 	}
+	r := entry.newRadio()
 	t.Cleanup(func() { _ = r.Close() })
 
 	prev := openSerial
@@ -1548,6 +1552,18 @@ func TestOpenRealSessionFor_DelegatesZeroOptions(t *testing.T) {
 // constructors build, for all four registered models. It is what makes the
 // table's new closure parameter safe to add: the default path is not merely
 // "still working" but byte-identical to the one it replaced.
+//
+// IT COMPARES THE DRIVER VALUES, NOT THEIR Capabilities(), and that is the
+// whole strength of it. The consent option deliberately leaves static
+// capabilities untouched, so a capability comparison here would be BLIND in
+// exactly the direction that matters: a false arm that leaked
+// WithConsentedUnverifiedWrites() into a row would hand a user who consented
+// to nothing a consented SESSION, while every capability assertion in this
+// file stayed green. Each driver struct carries its consent flag as a plain
+// field (consentUnverifiedWrites, nil transportLogger on both sides, and a
+// cat.Dialect of pure data), so reflect.DeepEqual over the constructed values
+// sees the leak directly — and sees it for ALL FOUR models, where the
+// session-level delegation test can only afford one.
 func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 	for _, tc := range []struct {
 		model string
@@ -1558,12 +1574,20 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		{FTdx101DModel, NewFTdx101DRealDriver},
 		{FTdx101MPModel, NewFTdx101MPRealDriver},
 	} {
-		d, err := realDriverFor(tc.model, false)
+		got, err := realDriverFor(tc.model, false)
 		if err != nil {
 			t.Fatalf("realDriverFor(%q, false): unexpected error: %v", tc.model, err)
 		}
-		if got, want := d.Capabilities(), tc.want().Capabilities(); !reflect.DeepEqual(got, want) {
-			t.Errorf("realDriverFor(%q, false).Capabilities() differs from the pinned constructor's — the default path must be byte-identical", tc.model)
+		want := tc.want()
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("realDriverFor(%q, false) != the pinned constructor's driver:\n got  = %#v\n want = %#v\nthe default path must be byte-identical — an option leaked into a consent-false arm would consent on a user's behalf", tc.model, got, want)
+		}
+		// Belt and braces: the capability sets must agree too. A future
+		// driver whose fields DeepEqual cannot compare (a func-typed member,
+		// say) would make the check above vacuously strict or vacuously
+		// loose; this leg keeps the original assertion standing either way.
+		if !reflect.DeepEqual(got.Capabilities(), want.Capabilities()) {
+			t.Errorf("realDriverFor(%q, false).Capabilities() differs from the pinned constructor's", tc.model)
 		}
 	}
 }
