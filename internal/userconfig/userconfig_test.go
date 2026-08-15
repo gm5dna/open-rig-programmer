@@ -240,6 +240,20 @@ func TestSetUnverifiedWrites_SlugsAreIndependent(t *testing.T) {
 // pin: a settings file written by a NEWER build carries keys this build has
 // never heard of, and a consent decision taken here must not destroy them.
 // Hence the raw-map merge rather than a Settings round-trip.
+//
+// The fixture deliberately includes numeric literals that a
+// map[string]any merge — the OTHER natural implementation, and the one
+// the decoded-value assertions below cannot tell apart from the
+// json.RawMessage merge — would silently mangle, because decoding to
+// float64 and re-encoding is lossy:
+//
+//	12345678901234567890123 → 1.2345678901234568e+22 (precision gone)
+//	1.0                     → 1                      (a float becomes an int)
+//
+// Those two are asserted on the file's BYTES, not on decoded values, so
+// the RawMessage choice is load-bearing rather than incidental. Nothing
+// here parses those numbers: their whole point is that this build must
+// carry them through without understanding them.
 func TestSetUnverifiedWrites_PreservesUnknownKeys(t *testing.T) {
 	path := settingsPath(t)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -249,7 +263,9 @@ func TestSetUnverifiedWrites_PreservesUnknownKeys(t *testing.T) {
   "unverifiedWrites": {"ftdx10": true},
   "theme": "dark",
   "windowGeometry": {"w": 1280, "h": 800},
-  "recentFiles": ["a.json", "b.json"]
+  "recentFiles": ["a.json", "b.json"],
+  "bignum": 12345678901234567890123,
+  "float": 1.0
 }`)
 	if err := os.WriteFile(path, original, 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
@@ -267,6 +283,21 @@ func TestSetUnverifiedWrites_PreservesUnknownKeys(t *testing.T) {
 	} {
 		if !reflect.DeepEqual(got[key], want) {
 			t.Errorf("unknown key %q after a Set = %#v, want %#v — a newer build's settings were destroyed", key, got[key], want)
+		}
+	}
+
+	// The byte-level half: the literals must survive VERBATIM. A
+	// map[string]any merge passes every assertion above and fails these.
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	for _, literal := range []string{
+		`"bignum": 12345678901234567890123`,
+		`"float": 1.0`,
+	} {
+		if !strings.Contains(string(b), literal) {
+			t.Errorf("the file no longer contains the literal %s after a Set — an unknown value was decoded and re-encoded lossily rather than carried through verbatim.\nfile:\n%s", literal, b)
 		}
 	}
 

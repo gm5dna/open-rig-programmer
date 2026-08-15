@@ -207,11 +207,18 @@ func SetUnverifiedWrites(path, slug string, on bool) error {
 	if err != nil {
 		return fmt.Errorf("userconfig: encoding settings for %s: %w", path, err)
 	}
+	// Checked twice, deliberately. Here, on the buffer, so an encoding
+	// fault is caught before any file is created at all; and again inside
+	// replaceAtomically on the bytes READ BACK from the temporary file,
+	// which is the check that actually matters — it is the file, not the
+	// buffer, that is about to become the user's settings.
 	if err := verifyEncoded(out, slug, on); err != nil {
 		return fmt.Errorf("userconfig: refusing to replace %s: %w", path, err)
 	}
 
-	return replaceAtomically(path, out)
+	return replaceAtomically(path, out, func(b []byte) error {
+		return verifyEncoded(b, slug, on)
+	})
 }
 
 // loadRawObject reads path and decodes it as a generic JSON object,
@@ -279,8 +286,16 @@ func encodeJSON(v any, indent string) ([]byte, error) {
 
 // verifyEncoded is the pre-rename check: the bytes about to replace a
 // user's settings must be non-empty and must parse back into exactly the
-// decision just taken. It guards against an empty or truncated buffer
-// reaching os.Rename, where it would become the file.
+// decision just taken. It guards against an empty, truncated or
+// short-written file reaching os.Rename, where it would become the
+// settings.
+//
+// It decodes the consent map INLINE rather than calling
+// decodeUnverifiedWrites, even though the two do the same work. That
+// helper's failure text is corruptFileError's — it names a path on disk
+// and tells the user to delete or repair the file by hand — which would
+// be actively misleading here, where the subject is bytes this function
+// has just produced and no user file is at fault.
 func verifyEncoded(b []byte, slug string, on bool) error {
 	if len(b) == 0 {
 		return errors.New("the encoded settings were empty")
@@ -289,9 +304,11 @@ func verifyEncoded(b []byte, slug string, on bool) error {
 	if err := json.Unmarshal(b, &raw); err != nil {
 		return fmt.Errorf("the encoded settings did not parse back: %w", err)
 	}
-	consent, err := decodeUnverifiedWrites(raw, "the encoded settings")
-	if err != nil {
-		return err
+	var consent map[string]bool
+	if v, ok := raw[unverifiedWritesKey]; ok {
+		if err := json.Unmarshal(v, &consent); err != nil {
+			return fmt.Errorf("the encoded settings' %q did not parse back: %w", unverifiedWritesKey, err)
+		}
 	}
 	got, recorded := Settings{UnverifiedWrites: consent}.UnverifiedWritesFor(slug)
 	if !recorded || got != on {
@@ -303,7 +320,16 @@ func verifyEncoded(b []byte, slug string, on bool) error {
 // replaceAtomically writes b to path via a uniquely named temporary file
 // in the same directory, then renames it into place. Any failure before
 // the rename removes the temporary file and leaves path as it was.
-func replaceAtomically(path string, b []byte) error {
+//
+// verify is run on the bytes READ BACK from the completed temporary file,
+// immediately before the rename. Verifying the in-memory buffer would
+// only prove that this process encoded something sensible; verifying the
+// file proves that what is about to BECOME the user's settings is
+// sensible — which is the thing that matters, and the only check that can
+// catch a short write, a full disk, or a filesystem that returned success
+// without storing the bytes. A failure here refuses the rename, so the
+// previous settings file survives untouched.
+func replaceAtomically(path string, b []byte, verify func([]byte) error) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, configDirPerm); err != nil {
 		return fmt.Errorf("userconfig: creating %s: %w", dir, err)
@@ -339,6 +365,16 @@ func replaceAtomically(path string, b []byte) error {
 	// at path is owner-only whatever the umask was.
 	if err := os.Chmod(tmpName, settingsFilePerm); err != nil {
 		return fmt.Errorf("userconfig: setting the mode of %s: %w", path, err)
+	}
+
+	// Read the completed file back and check THAT, not the buffer, before
+	// it is allowed to replace anything. See the doc comment above.
+	written, err := os.ReadFile(tmpName)
+	if err != nil {
+		return fmt.Errorf("userconfig: reading back the new %s before installing it: %w", path, err)
+	}
+	if err := verify(written); err != nil {
+		return fmt.Errorf("userconfig: refusing to replace %s: the file just written did not verify: %w", path, err)
 	}
 
 	if err := os.Rename(tmpName, path); err != nil {
