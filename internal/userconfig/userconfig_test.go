@@ -313,12 +313,24 @@ func TestSetUnverifiedWrites_PreservesUnknownKeys(t *testing.T) {
 
 // corruptFiles are the shapes that must NEVER be silently reset: a
 // truncated file, a non-object top level, and a well-formed object whose
-// unverifiedWrites value is the wrong type.
+// unverifiedWrites value — or one entry of it — is the wrong type.
+//
+// The two NULL rows are the ones encoding/json would otherwise wave
+// through, and each is a silent LIE about a user's decisions rather than a
+// parse failure (final review, Codex MEDIUM). Decoding into
+// map[string]bool, `"unverifiedWrites": null` yields a nil map — read back
+// as "no decisions recorded at all", so every radio is asked again — and a
+// null ENTRY is a no-op into a bool, leaving the zero value, so a grant
+// that was corrupted to null reads back as a recorded DECLINE. Neither
+// shape can be written by this package; both are corruption, and this
+// package's contract for corruption is to refuse and say so.
 var corruptFiles = map[string]string{
 	"truncated":              `{"unverifiedWrites": {"ftdx10": tru`,
 	"not an object":          `["ftdx10"]`,
 	"wrong type for the map": `{"unverifiedWrites": "yes please"}`,
 	"wrong type for a value": `{"unverifiedWrites": {"ftdx10": "yes"}}`,
+	"null map":               `{"unverifiedWrites": null}`,
+	"null value":             `{"unverifiedWrites": {"ftdx10": null}}`,
 	"empty file":             ``,
 }
 

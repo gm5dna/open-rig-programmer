@@ -117,8 +117,9 @@ func DefaultPath() (string, error) {
 //
 // A file that does not exist is not an error: Load returns the zero
 // Settings, which records nothing. Any other failure — unreadable file,
-// malformed JSON, a value of the wrong type — IS an error, and Load
-// returns it rather than quietly substituting empty settings. That
+// malformed JSON, a value of the wrong type, a null where a decision
+// belongs (strictConsentMap) — IS an error, and Load returns it rather
+// than quietly substituting empty settings. That
 // distinction matters: silently treating a corrupt file as empty would
 // mean a user's recorded decisions vanish without anyone being told, and
 // the next write would replace the file they might still have repaired.
@@ -253,9 +254,60 @@ func decodeUnverifiedWrites(raw map[string]json.RawMessage, path string) (map[st
 	if !ok {
 		return nil, nil
 	}
-	var consent map[string]bool
-	if err := json.Unmarshal(v, &consent); err != nil {
+	consent, err := strictConsentMap(v)
+	if err != nil {
 		return nil, corruptFileError(path, fmt.Errorf("%q: %w", unverifiedWritesKey, err))
+	}
+	return consent, nil
+}
+
+// strictConsentMap decodes the unverifiedWrites value into a consent map,
+// accepting an object of true/false and NOTHING else.
+//
+// It is strict because encoding/json is not, and its laxity here is
+// silently wrong rather than merely permissive (final review, Codex
+// MEDIUM). Unmarshalling into a map[string]bool accepts a JSON `null` for
+// the whole value — leaving a nil map, indistinguishable from "the key was
+// never there", so every recorded decision vanishes and every radio is
+// asked again — and accepts a `null` ENTRY, which is a no-op into a bool
+// and therefore leaves the zero value: a grant corrupted to null would read
+// back as a recorded DECLINE, a decision the user never made. Both shapes
+// are impossible for this package to WRITE, so both mean the file has been
+// damaged, and this package's answer to a damaged file is to refuse and
+// name it rather than to guess.
+//
+// The per-entry check is on the RAW bytes, not on an Unmarshal result, for
+// exactly that reason: only the bytes can tell true from a null that
+// decoded to false. Any other wrong type is handed to encoding/json so the
+// user gets its own precise complaint about it.
+func strictConsentMap(v []byte) (map[string]bool, error) {
+	var entries map[string]json.RawMessage
+	if err := json.Unmarshal(v, &entries); err != nil {
+		return nil, err
+	}
+	if entries == nil {
+		return nil, errors.New("its value is null, which records nothing; want an object of per-radio true/false decisions")
+	}
+	consent := make(map[string]bool, len(entries))
+	for slug, entry := range entries {
+		switch string(bytes.TrimSpace(entry)) {
+		case "true":
+			consent[slug] = true
+		case "false":
+			consent[slug] = false
+		case "null":
+			return nil, fmt.Errorf("%q: null is not a decision; want true or false", slug)
+		default:
+			var on bool
+			if err := json.Unmarshal(entry, &on); err != nil {
+				return nil, fmt.Errorf("%q: %w", slug, err)
+			}
+			// Unreachable: every JSON value that unmarshals into a bool is
+			// literally "true" or "false" (null is caught above), both of
+			// which the cases above took. Kept so a future encoding/json
+			// that accepted more cannot slip past this switch unnoticed.
+			return nil, fmt.Errorf("%q: %s is not a decision; want true or false", slug, entry)
+		}
 	}
 	return consent, nil
 }
@@ -290,12 +342,12 @@ func encodeJSON(v any, indent string) ([]byte, error) {
 // short-written file reaching os.Rename, where it would become the
 // settings.
 //
-// It decodes the consent map INLINE rather than calling
-// decodeUnverifiedWrites, even though the two do the same work. That
-// helper's failure text is corruptFileError's — it names a path on disk
-// and tells the user to delete or repair the file by hand — which would
-// be actively misleading here, where the subject is bytes this function
-// has just produced and no user file is at fault.
+// It shares the STRICT decode (strictConsentMap — no null map, no null
+// entry) but not decodeUnverifiedWrites itself, even though the two do the
+// same work. That helper's failure text is corruptFileError's — it names a
+// path on disk and tells the user to delete or repair the file by hand —
+// which would be actively misleading here, where the subject is bytes this
+// function has just produced and no user file is at fault.
 func verifyEncoded(b []byte, slug string, on bool) error {
 	if len(b) == 0 {
 		return errors.New("the encoded settings were empty")
@@ -306,7 +358,8 @@ func verifyEncoded(b []byte, slug string, on bool) error {
 	}
 	var consent map[string]bool
 	if v, ok := raw[unverifiedWritesKey]; ok {
-		if err := json.Unmarshal(v, &consent); err != nil {
+		var err error
+		if consent, err = strictConsentMap(v); err != nil {
 			return fmt.Errorf("the encoded settings' %q did not parse back: %w", unverifiedWritesKey, err)
 		}
 	}
