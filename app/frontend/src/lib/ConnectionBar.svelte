@@ -10,8 +10,17 @@
 	// label/select idiom, fed entirely by Go's GetSupportedModels, and
 	// disabled on the same gate the port picker uses (a session's model is
 	// fixed once it is open).
+	//
+	// Task 14 (M9d) adds the unverified-write consent affordances, and this
+	// bar is where they live because this is where a session is opened and
+	// described: a PERSISTENT "Unverified writes…" control (the grants panel
+	// must be reachable whether or not anything is connected — a user has to
+	// be able to revoke a grant for a radio that is not on the cable), and
+	// the standing amber indicator, which is a SHORTCUT to that same panel
+	// rather than the only way in. Both dialogue modes are mounted here.
 	import { appState } from './state/app.svelte.js'
 	import { listPorts, refreshSupportedModels, connect, connectDemo, disconnect } from './bridge/bindings.js'
+	import UnverifiedWritesDialog from './UnverifiedWritesDialog.svelte'
 
 	let selectedPort = $state('')
 	/** Which button triggered the current connect attempt — appState.connecting
@@ -176,9 +185,37 @@
 		>
 			{pendingAction === 'demo' ? 'Starting demo…' : 'Demo (simulated radio)'}
 		</button>
+
+		<!-- Never disabled: the grants panel is a management surface, not an
+		     action on the session. Whether a change it offers can be MADE
+		     right now is the panel's own guard (appState.
+		     canChangeUnverifiedConsent), which explains itself in place. -->
+		<button
+			type="button"
+			class="btn btn-secondary"
+			title="Which radios may be written to with unverified commands"
+			onclick={() => appState.openUnverifiedGrants()}
+		>
+			Unverified writes…
+		</button>
 	</div>
 
 	<div class="badge-slot">
+		{#if appState.unverifiedWritesArmed}
+			<!-- Amber, and derived from the live session's capability label
+			     alone (appState.unverifiedWritesArmed — see its doc comment):
+			     never from the settings file, which would light for a grant
+			     the running session has not actually spent. -->
+			<button
+				type="button"
+				class="armed-badge"
+				title="This session may write commands that have never been proven on real hardware"
+				onclick={() => appState.openUnverifiedGrants()}
+			>
+				Unverified writes enabled
+			</button>
+		{/if}
+
 		{#if connection}
 			<div class="radio-badge" class:demo={connection.Demo}>
 				<span class="status-dot" aria-hidden="true"></span>
@@ -202,6 +239,15 @@
 		{/if}
 	</div>
 </div>
+
+<!-- The arming question takes precedence over the panel: it is asked once,
+     about the radio just connected, and answering it is what makes the
+     panel's row for that radio meaningful. -->
+{#if appState.unverifiedConsentPrompt}
+	<UnverifiedWritesDialog mode="arm" />
+{:else if appState.unverifiedGrantsOpen}
+	<UnverifiedWritesDialog mode="manage" />
+{/if}
 
 <style>
 	.connection-bar {
@@ -317,6 +363,31 @@
 
 	.badge-slot {
 		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	/* The standing amber state (spec: "a standing amber 'unverified writes
+	 * enabled' state"), in the same idiom every other caution in this app
+	 * uses — AlertStrip's tinted ground and left rule, sized to sit beside
+	 * the VFO readout rather than compete with it. */
+	.armed-badge {
+		padding: var(--space-2) var(--space-3);
+		background: var(--colour-warn-bg);
+		border: 1px solid var(--colour-warn);
+		border-left-width: 3px;
+		border-radius: var(--radius-sm);
+		color: var(--colour-warn);
+		font-size: 11.5px;
+		font-weight: 600;
+		letter-spacing: 0.02em;
+		white-space: nowrap;
+	}
+
+	.armed-badge:hover {
+		background: var(--colour-warn);
+		color: var(--colour-bg);
 	}
 
 	/* The signature element: a small VFO/LCD-style inset readout, the one

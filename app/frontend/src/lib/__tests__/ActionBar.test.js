@@ -309,3 +309,39 @@ describe('Export CSV', () => {
 		expect(appState.alerts).toHaveLength(0)
 	})
 })
+
+// --- Task 14 (M9d): the prepared plan vs a consent reconnect -------------
+
+describe('prepared plan and the consent surface', () => {
+	const PLAN = {
+		Diff: { Added: [], Modified: [], Erased: [], Counts: { Added: 0, Modified: 0, Erased: 0, Blocked: 0, Unchanged: 10 } },
+		SnapshotPath: '/tmp/snap.json', BaselineDigestShort: 'abc123', ConfirmationDigest: 'tok', NothingToSend: false, FirmwareRequired: false,
+	}
+
+	async function openSendDialogue() {
+		connectAndLoad()
+		prepareSendMock.mockResolvedValue(PLAN)
+		render(ActionBar)
+		await fireEvent.click(sendButton())
+		expect(await screen.findByText('Review before sending')).toBeInTheDocument()
+	}
+
+	it('tells the rest of the app while a send dialogue is open — the consent surface refuses to change anything meanwhile', async () => {
+		await openSendDialogue()
+		expect(appState.sendDialogOpen).toBe(true)
+		expect(appState.canChangeUnverifiedConsent).toBe(false)
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+		expect(appState.sendDialogOpen).toBe(false)
+	})
+
+	it('drops its prepared plan when one is invalidated — a consent reconnect took the backend’s own plan with it', async () => {
+		await openSendDialogue()
+
+		appState.invalidatePreparedPlan()
+		await screen.findByRole('button', { name: 'Send to Radio' })
+
+		expect(screen.queryByText('Review before sending')).not.toBeInTheDocument()
+		expect(appState.sendDialogOpen).toBe(false)
+	})
+})

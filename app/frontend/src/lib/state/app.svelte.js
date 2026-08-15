@@ -6,11 +6,18 @@
 // reactively and every mutation goes through the methods on this class.
 //
 // This module owns DATA only. It never imports wailsjs and never talks
-// to Go — src/lib/bridge/bindings.js is the only thing that calls these
-// mutators, in response to a bound-method result or a transfer:progress/
-// transfer:done event. Components should treat this file as read-mostly:
-// call bindings.js functions to make things happen, read `appState`'s
+// to Go — src/lib/bridge/bindings.js is what calls these mutators in
+// response to a bound-method result or a transfer:progress/transfer:done
+// event. Components should treat this file as read-mostly: call
+// bindings.js functions to make things happen, read `appState`'s
 // fields/getters to render.
+//
+// The exception is PURELY-frontend UI state Go knows nothing about, which
+// a component sets directly because there is no bound call to route it
+// through: `activeView` (task 36's Channels|Settings switch) and task 14's
+// consent-surface flags (`unverifiedConsentPrompt`, `unverifiedGrantsOpen`,
+// `sendDialogOpen`). Anything Go has an opinion about still goes through
+// the bridge.
 //
 // Task 17/18 contract notes:
 //   - `canSend` composes the brief's four pieces (connected, baseline
@@ -39,6 +46,7 @@
 /** @typedef {import('../../../wailsjs/go/models').main.SettingsSpecView} SettingsSpecView */
 /** @typedef {import('../../../wailsjs/go/models').main.SettingsView} SettingsView */
 /** @typedef {import('../../../wailsjs/go/models').main.VersionView} VersionView */
+/** @typedef {import('../../../wailsjs/go/models').main.UnverifiedWriteConsentView} UnverifiedWriteConsentView */
 /** @typedef {import('../../../wailsjs/go/models').codeplug.Channel} Channel */
 
 /**
@@ -250,6 +258,59 @@ class AppState {
 	/** Task 18 placeholder — see module doc comment above. */
 	dirtyTransferConflicts = $state(false)
 
+	// --- Task 14 (M9d): the unverified-write consent surface -------------
+	//
+	// Four pieces of UI state and one epoch counter, all deliberately NOT
+	// connection-scoped (neither clearConnection nor disconnectConnection
+	// touches them — see each field). That matters most for the arming
+	// prompt: granting consent for the CONNECTED radio is orchestrated in
+	// bindings.js as disconnect → persist → reconnect, so a prompt cleared
+	// by the disconnect step would unmount the very dialogue awaiting that
+	// call. Test files reset these explicitly, exactly as they already do
+	// for uiSpec and the model picker's own fields.
+
+	/** The arming dialogue's question, or null when none is owed: one
+	 * radio's consent state as GetUnverifiedWriteConsent returned it,
+	 * INCLUDING the backend-composed `Warning` the dialogue renders
+	 * verbatim. Raised by bindings.js's connect() when
+	 * `unverifiedConsentDue` says so, and cleared by the dialogue itself
+	 * once the user has answered (a refusal leaves it in place, because
+	 * nothing was recorded).
+	 * @type {UnverifiedWriteConsentView | null} */
+	unverifiedConsentPrompt = $state(null)
+
+	/** Whether the always-reachable grants panel is open. Reached from
+	 * ConnectionBar's persistent "Unverified writes…" control, and from the
+	 * amber indicator as a shortcut — never the sole route, so a user can
+	 * revoke a grant whose session is not running. */
+	unverifiedGrantsOpen = $state(false)
+
+	/** Every supported radio's consent state, as
+	 * ListUnverifiedWriteConsents returned it (wiring.SupportedModels'
+	 * order, hardware-verified models included with NeedsConsent false).
+	 * Refreshed whenever the panel opens and after every recorded decision:
+	 * the settings store is SHARED with the CLI, so it can change behind a
+	 * running app.
+	 * @type {UnverifiedWriteConsentView[]} */
+	unverifiedConsents = $state([])
+
+	/** True while ActionBar's send review/transfer dialogue is open. Set by
+	 * that component (like `activeView`, this is pure frontend UI state Go
+	 * knows nothing about) purely so the consent surface can refuse to
+	 * change anything mid-send: a consent change for the connected radio
+	 * re-opens the session, which would invalidate the plan the user is
+	 * looking at. */
+	sendDialogOpen = $state(false)
+
+	/** Bumped whenever something has invalidated an already-prepared send
+	 * plan — today, only a consent reconnect (bindings.js). Go clears its
+	 * OWN active plan on Disconnect (app/connection.go), but ActionBar
+	 * holds a local copy of the SendPlanView it opened its dialogue with,
+	 * and nothing else would tell it that copy is now unspendable. A
+	 * counter rather than a boolean so a consumer can react to each
+	 * invalidation, not just the first. */
+	preparedPlanEpoch = $state(0)
+
 	/** In-flight transfer state, spanning ReadRadio/DiffAgainstRadio/
 	 * PrepareSend/ConfirmSend/ReadSettingsRadio. `kind` is one of 'read'|
 	 * 'diff'|'prepare'|'send'|'settings'|null — 'prepare' is a
@@ -360,6 +421,59 @@ class AppState {
 		if (!this.connected) return 'Connect to a radio first'
 		if (this.transfer.active) return 'A transfer is already running'
 		if (this.codeplug === null) return 'Read the radio or open a codeplug first'
+		return ''
+	}
+
+	/** Whether the arming dialogue is owed for the CURRENT connection
+	 * (task 14, M9d): a REAL session (never demo — a demo never spends
+	 * consent, so there is nothing to authorise) whose radio has an
+	 * unverified write for a consent to unlock, and whose user has not
+	 * answered yet.
+	 *
+	 * Both facts come from Go's own ConnectionInfo, computed at connect
+	 * time from the shared eligibility predicate and the shared settings
+	 * store (app/connection.go) — nothing here re-derives either. Once a
+	 * decision is RECORDED, whichever way it went, this is false: a decline
+	 * is a decision, and must not be re-asked at every connection. */
+	get unverifiedConsentDue() {
+		const c = this.connection
+		if (c === null || c.Demo) return false
+		return c.NeedsUnverifiedConsent === true && c.UnverifiedConsentRecorded !== true
+	}
+
+	/** The standing amber indicator (task 14, M9d): whether the LIVE
+	 * session's capabilities carry a consented unverified write.
+	 *
+	 * Derived from UISpecView.UnverifiedWritesConsented and nothing else —
+	 * the spec's own field is computed from the capability set in hand
+	 * (app/consent.go's consentedUnverifiedWrites), so the badge reports
+	 * what the session can actually do, not what the settings file says it
+	 * may. That distinction is load-bearing: a grant recorded while
+	 * connected does NOT arm the running session (consent is spent when a
+	 * session is constructed), so a badge keyed on the store would show an
+	 * arming that has not happened. */
+	get unverifiedWritesArmed() {
+		return this.uiSpec?.UnverifiedWritesConsented === true
+	}
+
+	/** Whether a consent decision may be recorded right now (task 14).
+	 * Changing consent for the connected radio re-opens the session, so it
+	 * is refused while anything is depending on the current one: a transfer
+	 * in flight (Go's Disconnect refuses then anyway), an open send
+	 * dialogue (its prepared plan would be invalidated under the user), or
+	 * a connect attempt still settling. */
+	get canChangeUnverifiedConsent() {
+		return !this.transfer.active && !this.sendDialogOpen && !this.connecting
+	}
+
+	/** Plain-language reason canChangeUnverifiedConsent is false — mirrors
+	 * sendBlockedReason's single-reason style (see its doc comment): '' when
+	 * a change is allowed, checked in the order the pieces are listed
+	 * above. */
+	get consentChangeBlockedReason() {
+		if (this.transfer.active) return 'A transfer is already running'
+		if (this.sendDialogOpen) return 'Finish the send dialogue first'
+		if (this.connecting) return 'A connection attempt is in progress'
 		return ''
 	}
 
@@ -611,6 +725,44 @@ class AppState {
 		if (payload?.Kind === 'send' && payload.Report && this.codeplug !== null) {
 			this.codeplug.BaselineStale = true
 		}
+	}
+
+	/** Task 14 (M9d) — raises or clears the arming dialogue's question.
+	 * @param {UnverifiedWriteConsentView | null} view */
+	setUnverifiedConsentPrompt(view) {
+		this.unverifiedConsentPrompt = view
+	}
+
+	/** Task 14 (M9d) — the grants panel's rows, exactly as
+	 * ListUnverifiedWriteConsents returned them (never re-sorted or
+	 * filtered here: hardware-verified models are LISTED, so a user
+	 * looking for a radio finds it and is told there is nothing to
+	 * decide). Null/undefined becomes an empty array, mirroring setPorts.
+	 * @param {UnverifiedWriteConsentView[] | null} rows */
+	setUnverifiedConsents(rows) {
+		this.unverifiedConsents = rows ?? []
+	}
+
+	/** Task 14 (M9d) — opens the always-reachable grants panel. */
+	openUnverifiedGrants() {
+		this.unverifiedGrantsOpen = true
+	}
+
+	/** Task 14 (M9d) — closes the grants panel. */
+	closeUnverifiedGrants() {
+		this.unverifiedGrantsOpen = false
+	}
+
+	/** Task 14 (M9d) — see `sendDialogOpen`.
+	 * @param {boolean} open */
+	setSendDialogOpen(open) {
+		this.sendDialogOpen = open
+	}
+
+	/** Task 14 (M9d) — see `preparedPlanEpoch`: announces that any
+	 * already-prepared send plan is now unspendable. */
+	invalidatePreparedPlan() {
+		this.preparedPlanEpoch += 1
 	}
 
 	/** Pushes a dismissible alert (see AlertStrip.svelte) and returns its

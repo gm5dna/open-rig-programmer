@@ -22,6 +22,12 @@ function resetState() {
 	appState.setAppVersion(null)
 	appState.setSupportedModels([])
 	appState.setSelectedModel('')
+	// Task 14 (M9d): the consent surface's own state — not connection-scoped
+	// (see each field's doc comment in app.svelte.js), so reset explicitly.
+	appState.setUnverifiedConsentPrompt(null)
+	appState.setUnverifiedConsents([])
+	appState.closeUnverifiedGrants()
+	appState.setSendDialogOpen(false)
 	appState.alerts = []
 }
 
@@ -71,6 +77,32 @@ const SETTINGS_VIEW = {
 	Entries: [{ ID: '990101', Value: 'ON', State: 'known' }],
 }
 
+/** One consent-eligible radio's state, as GetUnverifiedWriteConsent
+ * returns it (task 14, M9d). The Warning is the BACKEND's text — these
+ * tests only ever pass it through, never re-word it. */
+const CONSENT_VIEW = {
+	Model: 'FTdx10',
+	NeedsConsent: true,
+	Granted: false,
+	Recorded: false,
+	Warning: 'This project has never written to a real FTdx10. …',
+}
+
+/** ListUnverifiedWriteConsents' shape: every supported model, including
+ * the hardware-verified ones (NeedsConsent false), which are LISTED rather
+ * than filtered out. */
+const CONSENT_ROWS = [
+	{ Model: 'FT-710', NeedsConsent: false, Granted: false, Recorded: false, Warning: '' },
+	CONSENT_VIEW,
+]
+
+/** A real connection to a consent-eligible radio with nothing recorded —
+ * the one shape that raises the arming dialogue. */
+const NEEDS_CONSENT_INFO = {
+	Model: 'FTdx10', CATID: '0761', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false,
+	NeedsUnverifiedConsent: true, UnverifiedConsentRecorded: false,
+}
+
 beforeEach(() => {
 	resetState()
 	// Fresh stub surface for every bound method used below.
@@ -102,6 +134,11 @@ beforeEach(() => {
 				IsDirty: vi.fn().mockResolvedValue(false),
 				GetAppVersion: vi.fn().mockResolvedValue(VERSION_VIEW),
 				GetSupportedModels: vi.fn().mockResolvedValue(SUPPORTED_MODELS),
+				// Task 14 (M9d): the consent surface (task 11's bound methods,
+				// bindings regenerated in ced078d).
+				GetUnverifiedWriteConsent: vi.fn().mockResolvedValue(CONSENT_VIEW),
+				SetUnverifiedWriteConsent: vi.fn().mockResolvedValue(undefined),
+				ListUnverifiedWriteConsents: vi.fn().mockResolvedValue(CONSENT_ROWS),
 			},
 		},
 	}
@@ -867,5 +904,267 @@ describe('save wrappers honour Go\'s true post-save dirty (Fix 4, Codex M8b #4)'
 		expect(path).toBe('/tmp/renamed.json')
 		expect(appState.codeplug.WorkingPath).toBe('/tmp/renamed.json')
 		expect(appState.dirty).toBe(true)
+	})
+})
+
+// --- Task 14 (M9d): the unverified-write consent surface -----------------
+//
+// The orchestration under test lives HERE, in the bridge, not in a
+// component and not in app.svelte.js (which owns data only): a consent
+// change that affects the CONNECTED model must Disconnect FIRST, persist
+// only once that succeeded, and re-open the session on the same port and
+// the same model. These tests pin that ORDER, and pin that a refused
+// disconnect persists nothing at all.
+
+/** The connection the reconnect produces: same radio, same port, and now a
+ * recorded decision (so no second arming dialogue is raised). */
+const RECONNECTED_INFO = { ...NEEDS_CONSENT_INFO, UnverifiedConsentRecorded: true }
+
+/** A UISpecView whose capabilities carry (or do not carry) the consented
+ * write label — the ONLY thing the amber indicator and the
+ * "does this change affect the live session?" decision read. */
+/** @param {boolean} consented */
+function specArmed(consented) {
+	return { ...UI_SPEC, UnverifiedWritesConsented: consented }
+}
+
+describe('connect — raising the arming dialogue (task 14)', () => {
+	it('raises the prompt after a real connect that needs consent with nothing recorded, with the BACKEND-served warning verbatim', async () => {
+		window.go.main.App.Connect.mockResolvedValue(NEEDS_CONSENT_INFO)
+
+		await bindings.connect('/dev/tty.usb')
+
+		expect(window.go.main.App.GetUnverifiedWriteConsent).toHaveBeenCalledWith('FTdx10')
+		expect(appState.unverifiedConsentPrompt).toEqual(CONSENT_VIEW)
+		expect(appState.unverifiedConsentPrompt?.Warning).toBe(CONSENT_VIEW.Warning)
+	})
+
+	it('raises nothing when a decision is already recorded — a decline is a decision', async () => {
+		window.go.main.App.Connect.mockResolvedValue({ ...NEEDS_CONSENT_INFO, UnverifiedConsentRecorded: true })
+
+		await bindings.connect('/dev/tty.usb')
+
+		expect(window.go.main.App.GetUnverifiedWriteConsent).not.toHaveBeenCalled()
+		expect(appState.unverifiedConsentPrompt).toBeNull()
+	})
+
+	it('raises nothing for a recorded grant either', async () => {
+		window.go.main.App.Connect.mockResolvedValue({ ...NEEDS_CONSENT_INFO, UnverifiedConsentRecorded: true })
+		window.go.main.App.GetUISpec.mockResolvedValue(specArmed(true))
+
+		await bindings.connect('/dev/tty.usb')
+
+		expect(appState.unverifiedConsentPrompt).toBeNull()
+	})
+
+	it('never raises it on the demo path, even for a model that would need consent on real hardware', async () => {
+		window.go.main.App.ConnectDemo.mockResolvedValue({ ...NEEDS_CONSENT_INFO, Demo: true })
+
+		await bindings.connectDemo()
+
+		expect(window.go.main.App.GetUnverifiedWriteConsent).not.toHaveBeenCalled()
+		expect(appState.unverifiedConsentPrompt).toBeNull()
+	})
+
+	it('a failed warning fetch alerts and leaves no prompt — the connection itself still succeeds', async () => {
+		window.go.main.App.Connect.mockResolvedValue(NEEDS_CONSENT_INFO)
+		window.go.main.App.GetUnverifiedWriteConsent.mockRejectedValue('settings file unreadable')
+
+		const info = await bindings.connect('/dev/tty.usb')
+
+		expect(info).toEqual(NEEDS_CONSENT_INFO)
+		expect(appState.connection).toEqual(NEEDS_CONSENT_INFO)
+		expect(appState.unverifiedConsentPrompt).toBeNull()
+		expect(appState.alerts.some((a) => a.message.includes('settings file unreadable'))).toBe(true)
+	})
+})
+
+describe('applyUnverifiedWriteConsent — the bridge-owned reconnect (task 14)', () => {
+	/** Records the ORDER the bound methods are called in. */
+	function recordCallOrder() {
+		/** @type {string[]} */
+		const order = []
+		const App = window.go.main.App
+		App.Disconnect.mockImplementation(async () => {
+			order.push('Disconnect')
+		})
+		App.SetUnverifiedWriteConsent.mockImplementation(async () => {
+			order.push('SetUnverifiedWriteConsent')
+		})
+		App.Connect.mockImplementation(async () => {
+			order.push('Connect')
+			return RECONNECTED_INFO
+		})
+		return order
+	}
+
+	function connectedUnarmed() {
+		appState.setConnection(NEEDS_CONSENT_INFO)
+		appState.setUISpec(specArmed(false))
+	}
+
+	it('accepting for the CONNECTED model disconnects FIRST, then persists, then re-opens the same port and model', async () => {
+		connectedUnarmed()
+		const order = recordCallOrder()
+
+		await bindings.applyUnverifiedWriteConsent('FTdx10', true)
+
+		expect(order).toEqual(['Disconnect', 'SetUnverifiedWriteConsent', 'Connect'])
+		expect(window.go.main.App.SetUnverifiedWriteConsent).toHaveBeenCalledWith('FTdx10', true)
+		// The SAME port and the SAME model — never appState.selectedModel,
+		// whose '' would re-open this build's default radio instead.
+		expect(appState.selectedModel).toBe('')
+		expect(window.go.main.App.Connect).toHaveBeenCalledWith('/dev/tty.usb', 'FTdx10')
+		expect(appState.connection).toEqual(RECONNECTED_INFO)
+	})
+
+	it('a REFUSED disconnect (busy / a transfer in flight) persists NOTHING and never reconnects — and surfaces the refusal', async () => {
+		connectedUnarmed()
+		window.go.main.App.Disconnect.mockRejectedValue('app: a transfer is running')
+
+		await expect(bindings.applyUnverifiedWriteConsent('FTdx10', true)).rejects.toBe('app: a transfer is running')
+
+		expect(window.go.main.App.SetUnverifiedWriteConsent).not.toHaveBeenCalled()
+		expect(window.go.main.App.Connect).not.toHaveBeenCalled()
+		// Still connected, still unarmed — nothing moved.
+		expect(appState.connection).toEqual(NEEDS_CONSENT_INFO)
+		expect(appState.alerts.some((a) => a.message.includes('a transfer is running'))).toBe(true)
+	})
+
+	it('a failed STORE write rejects too (nothing persisted) and does not re-open the session on a decision that was never recorded', async () => {
+		connectedUnarmed()
+		window.go.main.App.SetUnverifiedWriteConsent.mockRejectedValue('userconfig: settings.json is corrupt')
+
+		await expect(bindings.applyUnverifiedWriteConsent('FTdx10', true)).rejects.toBe('userconfig: settings.json is corrupt')
+
+		expect(window.go.main.App.Disconnect).toHaveBeenCalledTimes(1)
+		expect(window.go.main.App.Connect).not.toHaveBeenCalled()
+		expect(appState.alerts.some((a) => a.message.includes('settings.json is corrupt'))).toBe(true)
+	})
+
+	it('DECLINING the connected model persists false and does NOT reconnect — the running session is already unconsented', async () => {
+		connectedUnarmed()
+
+		await bindings.applyUnverifiedWriteConsent('FTdx10', false)
+
+		expect(window.go.main.App.SetUnverifiedWriteConsent).toHaveBeenCalledWith('FTdx10', false)
+		expect(window.go.main.App.Disconnect).not.toHaveBeenCalled()
+		expect(window.go.main.App.Connect).not.toHaveBeenCalled()
+		expect(appState.connection).toEqual(NEEDS_CONSENT_INFO)
+	})
+
+	it('REVOKING an armed connected session runs the whole orchestration (disconnect → persist false → reconnect)', async () => {
+		appState.setConnection({ ...NEEDS_CONSENT_INFO, UnverifiedConsentRecorded: true })
+		appState.setUISpec(specArmed(true))
+		const order = recordCallOrder()
+
+		await bindings.applyUnverifiedWriteConsent('FTdx10', false)
+
+		expect(order).toEqual(['Disconnect', 'SetUnverifiedWriteConsent', 'Connect'])
+		expect(window.go.main.App.SetUnverifiedWriteConsent).toHaveBeenCalledWith('FTdx10', false)
+	})
+
+	it('persists directly, with no reconnect, while DISCONNECTED', async () => {
+		await bindings.applyUnverifiedWriteConsent('FTdx10', true)
+
+		expect(window.go.main.App.SetUnverifiedWriteConsent).toHaveBeenCalledWith('FTdx10', true)
+		expect(window.go.main.App.Disconnect).not.toHaveBeenCalled()
+		expect(window.go.main.App.Connect).not.toHaveBeenCalled()
+	})
+
+	it('persists directly for a model OTHER than the connected one', async () => {
+		connectedUnarmed()
+
+		await bindings.applyUnverifiedWriteConsent('FTDX101MP', true)
+
+		expect(window.go.main.App.SetUnverifiedWriteConsent).toHaveBeenCalledWith('FTDX101MP', true)
+		expect(window.go.main.App.Disconnect).not.toHaveBeenCalled()
+		expect(window.go.main.App.Connect).not.toHaveBeenCalled()
+	})
+
+	it('persists directly for a DEMO session on the same model — a demo never spends consent, so there is nothing to re-open', async () => {
+		appState.setConnection({ ...NEEDS_CONSENT_INFO, Demo: true })
+		appState.setUISpec(specArmed(false))
+
+		await bindings.applyUnverifiedWriteConsent('FTdx10', true)
+
+		expect(window.go.main.App.SetUnverifiedWriteConsent).toHaveBeenCalledWith('FTdx10', true)
+		expect(window.go.main.App.Disconnect).not.toHaveBeenCalled()
+		expect(window.go.main.App.Connect).not.toHaveBeenCalled()
+	})
+
+	it('refreshes the grants list after every recorded decision', async () => {
+		await bindings.applyUnverifiedWriteConsent('FTdx10', true)
+
+		expect(window.go.main.App.ListUnverifiedWriteConsents).toHaveBeenCalled()
+		expect(appState.unverifiedConsents).toEqual(CONSENT_ROWS)
+	})
+
+	it('the working copy SURVIVES the consent reconnect, with the baseline marked stale — the existing disconnect contract', async () => {
+		connectedUnarmed()
+		appState.setCodeplug({
+			Schema: 1, Generator: 'x', Radio: {},
+			Channels: [{ slot: '001', data: { freq_hz: 7100000 } }],
+			WorkingPath: '/tmp/edited.json', Dirty: false, BaselineStale: false,
+		})
+		appState.setDirty(true)
+		recordCallOrder()
+
+		await bindings.applyUnverifiedWriteConsent('FTdx10', true)
+
+		expect(appState.codeplug).not.toBeNull()
+		expect(appState.codeplug.WorkingPath).toBe('/tmp/edited.json')
+		expect(appState.codeplug.Channels[0].data.freq_hz).toBe(7100000)
+		expect(appState.dirty).toBe(true)
+		expect(appState.codeplug.BaselineStale).toBe(true)
+	})
+
+	it('invalidates any prepared send plan — the backend cleared its own at Disconnect', async () => {
+		connectedUnarmed()
+		recordCallOrder()
+		const before = appState.preparedPlanEpoch
+
+		await bindings.applyUnverifiedWriteConsent('FTdx10', true)
+
+		expect(appState.preparedPlanEpoch).toBe(before + 1)
+	})
+
+	it('leaves a prepared plan alone when nothing was reconnected', async () => {
+		const before = appState.preparedPlanEpoch
+
+		await bindings.applyUnverifiedWriteConsent('FTdx10', true)
+
+		expect(appState.preparedPlanEpoch).toBe(before)
+	})
+
+	it('a failed RECONNECT still resolves — the decision was recorded, and the alert strip carries the failure', async () => {
+		connectedUnarmed()
+		window.go.main.App.Connect.mockRejectedValue('port busy')
+
+		await expect(bindings.applyUnverifiedWriteConsent('FTdx10', true)).resolves.toBeUndefined()
+
+		expect(window.go.main.App.SetUnverifiedWriteConsent).toHaveBeenCalledWith('FTdx10', true)
+		expect(appState.connection).toBeNull()
+		expect(appState.alerts.some((a) => a.message.includes('port busy'))).toBe(true)
+	})
+})
+
+describe('refreshUnverifiedConsents (task 14)', () => {
+	it('stores every row ListUnverifiedWriteConsents returned, hardware-verified models included', async () => {
+		const rows = await bindings.refreshUnverifiedConsents()
+
+		expect(rows).toEqual(CONSENT_ROWS)
+		expect(appState.unverifiedConsents).toEqual(CONSENT_ROWS)
+		expect(appState.unverifiedConsents.some((r) => r.Model === 'FT-710' && r.NeedsConsent === false)).toBe(true)
+	})
+
+	it('alerts but does NOT throw on rejection — a listing failure must not break its caller', async () => {
+		window.go.main.App.ListUnverifiedWriteConsents.mockRejectedValue('settings unreadable')
+
+		const rows = await bindings.refreshUnverifiedConsents()
+
+		expect(rows).toBeNull()
+		expect(appState.unverifiedConsents).toEqual([])
+		expect(appState.alerts.some((a) => a.message.includes('settings unreadable'))).toBe(true)
 	})
 })

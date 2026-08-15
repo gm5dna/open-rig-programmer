@@ -11,6 +11,10 @@ vi.mock('../bridge/bindings.js', () => ({
 	connect: vi.fn().mockResolvedValue(undefined),
 	connectDemo: vi.fn().mockResolvedValue(undefined),
 	disconnect: vi.fn().mockResolvedValue(undefined),
+	// Task 14 (M9d): the consent dialogue ConnectionBar now mounts imports
+	// these two from the same module.
+	applyUnverifiedWriteConsent: vi.fn().mockResolvedValue(undefined),
+	refreshUnverifiedConsents: vi.fn().mockResolvedValue([]),
 }))
 
 import { listPorts, refreshSupportedModels, connect, connectDemo } from '../bridge/bindings.js'
@@ -22,6 +26,11 @@ function resetState() {
 	appState.setConnecting(false)
 	appState.setSupportedModels([])
 	appState.setSelectedModel('')
+	appState.setUISpec(null)
+	appState.setUnverifiedConsentPrompt(null)
+	appState.setUnverifiedConsents([])
+	appState.closeUnverifiedGrants()
+	appState.setSendDialogOpen(false)
 	appState.alerts = []
 }
 
@@ -199,5 +208,52 @@ describe('ConnectionBar model picker (task 13, M9d)', () => {
 		render(ConnectionBar)
 
 		expect(screen.getByLabelText('Radio')).toBeDisabled()
+	})
+})
+
+// --- Task 14 (M9d): the consent affordances -----------------------------
+
+/** A UISpecView carrying only the field the amber indicator reads. The
+ * badge derives from the live session's capability label and NOTHING else
+ * — never from the connection, never from the settings store. */
+/** @param {boolean} consented */
+function specArmed(consented) {
+	return { Live: true, Banks: [], Modes: [], ShiftOptions: [], CTCSSStateOptions: [], Tones: [], TagMaxBytes: 12, ClarMaxHz: 9990, ClarStepHz: 10, UnverifiedWritesConsented: consented }
+}
+
+describe('ConnectionBar unverified-write consent affordances (task 14, M9d)', () => {
+	it('offers "Unverified writes…" even while disconnected — the grants panel is always reachable', async () => {
+		render(ConnectionBar)
+
+		const button = screen.getByRole('button', { name: 'Unverified writes…' })
+		expect(button).not.toBeDisabled()
+
+		await fireEvent.click(button)
+		expect(appState.unverifiedGrantsOpen).toBe(true)
+	})
+
+	it('shows no amber indicator when the live spec reports no consented writes', () => {
+		appState.setConnection({ Model: 'FTdx10', CATID: '0761', Port: 'COM3', USBSerial: '', Region: '', Demo: false, NeedsUnverifiedConsent: true, UnverifiedConsentRecorded: true })
+		appState.setUISpec(specArmed(false))
+		render(ConnectionBar)
+
+		expect(screen.queryByRole('button', { name: /unverified writes enabled/i })).not.toBeInTheDocument()
+	})
+
+	it('shows the amber indicator when the live spec DOES carry consented writes, and it opens the same panel', async () => {
+		appState.setUISpec(specArmed(true))
+		render(ConnectionBar)
+
+		const badge = screen.getByRole('button', { name: /unverified writes enabled/i })
+		await fireEvent.click(badge)
+		expect(appState.unverifiedGrantsOpen).toBe(true)
+	})
+
+	it('mounts the arming dialogue when one is due, and the grants panel when it is open', async () => {
+		appState.setUnverifiedConsentPrompt({ Model: 'FTdx10', NeedsConsent: true, Granted: false, Recorded: false, Warning: 'the backend warning' })
+		render(ConnectionBar)
+
+		expect(screen.getByText('the backend warning')).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Enable unverified writes' })).toBeInTheDocument()
 	})
 })
