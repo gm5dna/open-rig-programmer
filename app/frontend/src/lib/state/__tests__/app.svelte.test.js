@@ -269,6 +269,16 @@ describe('model picker state (task 13, M9d — the GUI can finally name a radio)
 		expect(appState.selectedModel).toBe('FTdx10')
 		expect(appState.supportedModels).toEqual(['FT-710', 'FTdx10'])
 	})
+
+	it('a chosen model survives disconnectConnection too — reconnecting must offer the radio the user picked', () => {
+		appState.setSelectedModel('FTdx10')
+		appState.setSupportedModels(['FT-710', 'FTdx10'])
+		appState.setConnection({ Model: 'FTdx10', CATID: '0761', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false })
+		appState.disconnectConnection()
+		expect(appState.connection).toBeNull()
+		expect(appState.selectedModel).toBe('FTdx10')
+		expect(appState.supportedModels).toEqual(['FT-710', 'FTdx10'])
+	})
 })
 
 describe('activeView / settingsSpec / settings (task 36, M8b-6)', () => {

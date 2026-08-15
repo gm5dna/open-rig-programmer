@@ -131,12 +131,22 @@ describe('ConnectionBar model picker (task 13, M9d)', () => {
 		expect(refreshSupportedModels).toHaveBeenCalledTimes(1)
 	})
 
-	it('renders one option per supported model, in the order Go gave them', () => {
+	it('renders the Radio select as exactly Default plus one option per supported model, in the order Go gave them', () => {
 		appState.setSupportedModels(['FT-710', 'FTDX101D', 'FTdx10'])
 		render(ConnectionBar)
 
-		const options = screen.getAllByRole('option').map((o) => o.textContent?.trim())
-		expect(options).toEqual(expect.arrayContaining(['FT-710', 'FTDX101D', 'FTdx10']))
+		// Scoped to the model select (the port picker has options of its
+		// own), and an exact ordered comparison rather than a containment
+		// one: count and order both matter, so a hard-coded list in the
+		// markup — the very thing this picker exists to remove — could not
+		// pass this.
+		const select = /** @type {HTMLSelectElement} */ (screen.getByLabelText('Radio'))
+		expect([...select.options].map((o) => o.textContent?.trim())).toEqual([
+			'Default',
+			'FT-710',
+			'FTDX101D',
+			'FTdx10',
+		])
 	})
 
 	it('starts on the default option, whose value is "" — an untouched picker connects exactly as before it existed', () => {
