@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Asserts a built open-rig-programmer .deb is exactly what the
+# packaging design promises: identity, dependencies, contents, and
+# maintainer scripts. Used by the release workflow after nfpm and
+# runnable anywhere dpkg-deb exists (Linux; macOS via `brew install
+# dpkg`). Usage: check-deb.sh <deb> <version-without-v> <arch>
+set -u
+
+deb="${1:?usage: check-deb.sh <deb> <version> <arch>}"
+version="${2:?usage: check-deb.sh <deb> <version> <arch>}"
+arch="${3:?usage: check-deb.sh <deb> <version> <arch>}"
+here="$(cd "$(dirname "$0")" && pwd)"
+fail=0
+err() { echo "FAIL: $*" >&2; fail=1; }
+
+command -v dpkg-deb >/dev/null 2>&1 || { echo "dpkg-deb not found" >&2; exit 2; }
+
+# Exact field comparisons (dpkg-deb -f prints the raw control value):
+# substring greps would accept extra dependencies or a malformed
+# version that happens to contain the expected text.
+[ "$(dpkg-deb -f "$deb" Package)" = "open-rig-programmer" ] || err "Package name"
+[ "$(dpkg-deb -f "$deb" Version)" = "$version" ] || err "Version (got '$(dpkg-deb -f "$deb" Version)', want '$version')"
+[ "$(dpkg-deb -f "$deb" Architecture)" = "$arch" ] || err "Architecture"
+[ "$(dpkg-deb -f "$deb" Depends)" = "libwebkit2gtk-4.1-0, libgtk-3-0t64 | libgtk-3-0" ] || err "Depends is not exactly the declared pair (got '$(dpkg-deb -f "$deb" Depends)')"
+
+contents="$(dpkg-deb --contents "$deb")"
+for path in \
+  ./usr/bin/open-rig-programmer \
+  ./usr/bin/rigprog \
+  ./usr/share/applications/open-rig-programmer.desktop \
+  ./usr/share/icons/hicolor/512x512/apps/open-rig-programmer.png \
+  ./usr/lib/udev/rules.d/99-open-rig-programmer.rules \
+  ./usr/share/doc/open-rig-programmer/copyright
+do
+  echo "$contents" | grep -qF " $path" || err "missing content: $path"
+done
+
+ctl="$(mktemp -d)"; data="$(mktemp -d)"
+dpkg-deb -e "$deb" "$ctl/DEBIAN" || err "control extraction"
+for script in postinst postrm; do
+  [ -f "$ctl/DEBIAN/$script" ] || { err "$script missing"; continue; }
+  grep -q 'command -v udevadm' "$ctl/DEBIAN/$script" || err "$script lacks udevadm guard"
+done
+dpkg-deb -x "$deb" "$data" || err "data extraction"
+diff -q "$here/open-rig-programmer.desktop" \
+  "$data/usr/share/applications/open-rig-programmer.desktop" || err "desktop file drifted from repo copy"
+diff -q "$here/99-open-rig-programmer.rules" \
+  "$data/usr/lib/udev/rules.d/99-open-rig-programmer.rules" || err "udev rule drifted from repo copy"
+diff -q "$here/copyright" \
+  "$data/usr/share/doc/open-rig-programmer/copyright" || err "copyright file drifted from repo copy"
+for s in postinstall postremove; do
+  ctlname="$( [ "$s" = postinstall ] && echo postinst || echo postrm )"
+  diff -q "$here/scripts/$s.sh" "$ctl/DEBIAN/$ctlname" || err "$ctlname drifted from repo $s.sh"
+done
+for bin in open-rig-programmer rigprog; do
+  [ -x "$data/usr/bin/$bin" ] || err "$bin not executable"
+done
+# ELF checks (CI and Linux only — readelf is absent on the macOS dev
+# box, and the stub-deb dry run uses shell scripts, not ELF binaries;
+# set CHECK_DEB_SKIP_ELF=1 there):
+if [ "${CHECK_DEB_SKIP_ELF:-0}" != "1" ] && command -v readelf >/dev/null 2>&1; then
+  case "$arch" in
+    amd64) want_machine='X86-64' ;;
+    arm64) want_machine='AArch64' ;;
+    *) want_machine='' ;;
+  esac
+  for bin in open-rig-programmer rigprog; do
+    readelf -h "$data/usr/bin/$bin" | grep -q "Machine:.*${want_machine}" \
+      || err "$bin is not a ${want_machine} ELF"
+  done
+  readelf -d "$data/usr/bin/open-rig-programmer" | grep -q 'NEEDED.*libwebkit2gtk-4\.1' \
+    || err "GUI does not link libwebkit2gtk-4.1"
+  readelf -d "$data/usr/bin/open-rig-programmer" | grep -q 'NEEDED.*libgtk-3' \
+    || err "GUI does not link libgtk-3"
+  if readelf -d "$data/usr/bin/rigprog" 2>/dev/null | grep -q 'NEEDED'; then
+    err "rigprog has dynamic dependencies (expected static CGO_ENABLED=0 build)"
+  fi
+fi
+if command -v file >/dev/null 2>&1; then
+  file "$data/usr/share/icons/hicolor/512x512/apps/open-rig-programmer.png" \
+    | grep -q 'PNG image data, 512 x 512' || err "icon is not a 512x512 PNG"
+fi
+if command -v desktop-file-validate >/dev/null 2>&1; then
+  desktop-file-validate "$data/usr/share/applications/open-rig-programmer.desktop" || err "desktop-file-validate"
+fi
+rm -rf "$ctl" "$data"
+
+[ "$fail" -eq 0 ] && echo "check-deb: all assertions passed"
+exit "$fail"
