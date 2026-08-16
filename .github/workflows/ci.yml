@@ -13,11 +13,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # macos-latest is dropped while the repo is private: macOS runners
-        # bill minutes at a 10x multiplier and duplicate the local macOS
-        # development gate. Restore it after the public flip, when Actions
-        # is free.
-        os: [ubuntu-latest]
+        # macOS restored 16/08/2026: the repo is public, Actions minutes are free.
+        os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
