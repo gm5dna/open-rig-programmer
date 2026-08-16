@@ -69,8 +69,18 @@ for bin in open-rig-programmer rigprog; do
 done
 # ELF checks (CI and Linux only — readelf is absent on the macOS dev
 # box, and the stub-deb dry run uses shell scripts, not ELF binaries;
-# set CHECK_DEB_SKIP_ELF=1 there):
-if [ "${CHECK_DEB_SKIP_ELF:-0}" != "1" ] && command -v readelf >/dev/null 2>&1; then
+# set CHECK_DEB_SKIP_ELF=1 there).
+#
+# Every optional group below announces whether it ran or was skipped,
+# and why. A silently-skipped group is indistinguishable from a passing
+# one in a log, which matters most on the one-shot release run: that is
+# exactly where a missing tool would quietly downgrade this script to a
+# weaker check than the reader believes they are getting.
+if [ "${CHECK_DEB_SKIP_ELF:-0}" = "1" ]; then
+  echo "check-deb: SKIPPED ELF checks (CHECK_DEB_SKIP_ELF=1)"
+elif ! command -v readelf >/dev/null 2>&1; then
+  echo "check-deb: SKIPPED ELF checks (readelf not found)"
+else
   case "$arch" in
     amd64) want_machine='X86-64' ;;
     arm64) want_machine='AArch64' ;;
@@ -89,13 +99,20 @@ if [ "${CHECK_DEB_SKIP_ELF:-0}" != "1" ] && command -v readelf >/dev/null 2>&1; 
   if readelf -d "$data/usr/bin/rigprog" 2>/dev/null | grep -q 'NEEDED'; then
     err "rigprog has dynamic dependencies (expected static CGO_ENABLED=0 build)"
   fi
+  echo "check-deb: ELF checks ran ($arch)"
 fi
 if command -v file >/dev/null 2>&1; then
   file "$data/usr/share/icons/hicolor/512x512/apps/open-rig-programmer.png" \
     | grep -q 'PNG image data, 512 x 512' || err "icon is not a 512x512 PNG"
+  echo "check-deb: icon dimension check ran"
+else
+  echo "check-deb: SKIPPED icon dimension check (file not found)"
 fi
 if command -v desktop-file-validate >/dev/null 2>&1; then
   desktop-file-validate "$data/usr/share/applications/open-rig-programmer.desktop" || err "desktop-file-validate"
+  echo "check-deb: desktop-file-validate ran"
+else
+  echo "check-deb: SKIPPED desktop-file-validate (desktop-file-utils not installed)"
 fi
 
 [ "$fail" -eq 0 ] && echo "check-deb: all assertions passed"
