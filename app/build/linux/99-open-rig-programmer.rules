@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Yaesu FT-710 (Silicon Labs CP2105 dual USB-UART bridge, 10c4:ea70):
+# tell ModemManager to leave this device alone. Installed by the
+# open-rig-programmer package; see docs/linux-setup.md in the source
+# repository for the manual version of this rule.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea70", ENV{ID_MM_DEVICE_IGNORE}="1"
