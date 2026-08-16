@@ -3,16 +3,18 @@
 # Release packaging for open-rig-programmer. Triggered by pushing a
 # `v*` tag. Builds the rigprog CLI (darwin-universal via `lipo`,
 # linux-amd64, linux-arm64) and the desktop GUI (darwin universal .app,
-# zipped; linux amd64, packaged as an AppImage), computes a SHA256SUMS
-# file over every artefact, and publishes everything to a DRAFT GitHub
+# zipped; linux amd64+arm64 .deb packages), computes a SHA256SUMS file
+# over every artefact, and publishes everything to a DRAFT GitHub
 # release for a human to review before publishing.
 #
 # The release stays a DRAFT: this workflow never runs
-# `gh release edit --draft=false`. Per docs/hardware-notes.md and
-# docs/linux-setup.md, Linux artefacts must not ship publicly until the
-# project's pre-release Linux real-radio session has run — building
-# them here (to prove the packaging pipeline works) is fine; publishing
-# the draft is a separate, human decision.
+# `gh release edit --draft=false`. Building the artefacts here proves
+# the packaging pipeline works; whether any of them ship is a separate,
+# human decision taken against the recorded evidence. The current
+# state of the project's Linux hardware verification is written down in
+# docs/linux-setup.md (with docs/hardware-notes.md as the wider
+# real-radio record) — read it before publishing a draft that carries
+# Linux artefacts.
 #
 # go.bug.st/serial (this project's only serial-port dependency) is pure
 # Go on Linux — its enumerator package's Linux implementation
@@ -252,8 +254,20 @@ jobs:
           path: open-rig-programmer-${{ env.VERSION }}-darwin-universal.app.zip
           if-no-files-found: error
 
-  gui-linux-amd64:
-    runs-on: ubuntu-latest
+  gui-linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+        # ubuntu-24.04 pinned (not ubuntu-latest): the deb's dependency
+        # names are verified against the noble archive, and the arm64
+        # leg is noble — the amd64 build should target the same ABI
+        # rather than float when ubuntu-latest moves on.
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -261,7 +275,7 @@ jobs:
       - name: Install Linux GUI dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev desktop-file-utils
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -279,54 +293,51 @@ jobs:
       - name: Install Wails CLI
         run: go install "github.com/wailsapp/wails/v2/cmd/wails@${WAILS_VERSION}"
 
-      - name: wails build (linux/amd64)
+      - name: wails build (linux/${{ matrix.arch }})
         working-directory: app
         run: wails build -tags webkit2_41 -ldflags "-X ${VERSION_PKG}.version=${VERSION}"
 
-      - name: Assemble AppDir
+      - name: Version stamp present in the GUI binary
+        run: |
+          if LC_ALL=C grep -qa -- "${VERSION}" app/build/bin/open-rig-programmer; then
+            echo "version string ${VERSION} present in the GUI binary"
+          else
+            echo "FAIL: version string not found in the GUI binary" >&2
+            exit 1
+          fi
+
+      - name: Build rigprog (linux/${{ matrix.arch }})
+        env:
+          CGO_ENABLED: '0'
+        run: go build -trimpath -ldflags="-s -w -X ${VERSION_PKG}.version=${VERSION}" -o app/dist/rigprog ./cmd/rigprog
+
+      - name: rigprog reports the tag as its version
         run: |
           set -eu
-          mkdir -p AppDir/usr/bin
-          install -m 0755 app/build/bin/open-rig-programmer AppDir/usr/bin/open-rig-programmer
-          cp app/build/appicon.png AppDir/open-rig-programmer.png
+          reported="$(app/dist/rigprog version | head -1 | cut -d' ' -f2)"
+          echo "rigprog reports: ${reported} (tag: ${VERSION})"
+          test "${reported}" = "${VERSION}"
+          ! app/dist/rigprog version | grep -q 'unreleased build'
 
-          cat > AppDir/AppRun <<'EOF'
-          #!/bin/sh
-          HERE="$(dirname "$(readlink -f "$0")")"
-          exec "$HERE/usr/bin/open-rig-programmer" "$@"
-          EOF
-          chmod +x AppDir/AppRun
+      - name: Install nfpm
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0
 
-          cat > AppDir/open-rig-programmer.desktop <<'EOF'
-          [Desktop Entry]
-          Type=Application
-          Name=Open Rig Programmer
-          Comment=Memory-channel programmer for the Yaesu FT-710
-          Exec=open-rig-programmer
-          Icon=open-rig-programmer
-          Categories=Utility;
-          Terminal=false
-          EOF
-
-      - name: Download appimagetool
-        run: |
-          curl -fL -o appimagetool \
-            https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
-          # Supply-chain pin: sha256 of the 1.9.1 x86_64 asset, computed and
-          # recorded 13/07/2026 (task-23 review finding).
-          echo "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  appimagetool" | sha256sum -c -
-          chmod +x appimagetool
-
-      - name: Build AppImage
+      - name: Package .deb
+        working-directory: app
         env:
-          APPIMAGE_EXTRACT_AND_RUN: '1'
-        run: ./appimagetool AppDir "open-rig-programmer-${VERSION}-linux-amd64.AppImage"
+          NFPM_ARCH: ${{ matrix.arch }}
+        run: |
+          NFPM_VERSION="${VERSION#v}" nfpm package -f build/linux/nfpm.yaml -p deb \
+            -t "../open-rig-programmer_${VERSION#v}_${NFPM_ARCH}.deb"
+
+      - name: Check the .deb
+        run: bash app/build/linux/check-deb.sh "open-rig-programmer_${VERSION#v}_${{ matrix.arch }}.deb" "${VERSION#v}" "${{ matrix.arch }}"
 
       - name: Upload artefact
         uses: actions/upload-artifact@v4
         with:
-          name: gui-linux-amd64
-          path: open-rig-programmer-${{ env.VERSION }}-linux-amd64.AppImage
+          name: gui-linux-${{ matrix.arch }}
+          path: open-rig-programmer_*.deb
           if-no-files-found: error
 
   release:
@@ -334,7 +345,7 @@ jobs:
       - cli-darwin-universal
       - cli-linux
       - gui-darwin-universal
-      - gui-linux-amd64
+      - gui-linux
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -354,7 +365,11 @@ jobs:
 
       - name: Write release notes
         run: |
-          sed "s/__VERSION__/${VERSION}/g" .github/release-notes-template.md > release-notes.md
+          # __VERSION_NO_V__ must be substituted FIRST: it contains
+          # __VERSION__ as a substring, so the other order mangles it.
+          # The deb filenames carry the version without the leading "v";
+          # every other artefact name carries the full tag.
+          sed -e "s/__VERSION_NO_V__/${VERSION#v}/g" -e "s/__VERSION__/${VERSION}/g" .github/release-notes-template.md > release-notes.md
 
       - name: Create draft release
         env:
