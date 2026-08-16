@@ -25,19 +25,27 @@ command -v dpkg-deb >/dev/null 2>&1 || { echo "dpkg-deb not found" >&2; exit 2; 
 [ "$(dpkg-deb -f "$deb" Architecture)" = "$arch" ] || err "Architecture"
 [ "$(dpkg-deb -f "$deb" Depends)" = "libwebkit2gtk-4.1-0, libgtk-3-0t64 | libgtk-3-0" ] || err "Depends is not exactly the declared pair (got '$(dpkg-deb -f "$deb" Depends)')"
 
-contents="$(dpkg-deb --contents "$deb")"
-for path in \
+# Exact set comparison, not a presence check: a per-path search passes a
+# package that ships everything expected PLUS something extra (a stray
+# /usr/bin/backdoor), and an unanchored match also accepts a renamed
+# neighbour (rigprogXYZ contains rigprog). The shipped file list must be
+# exactly these six paths — no more, no fewer. Directories are excluded;
+# nfpm synthesises the parent tree, which is not a packaging decision.
+actual="$(dpkg-deb --fsys-tarfile "$deb" | tar -t | grep -v '/$' | LC_ALL=C sort)"
+expected="$(printf '%s\n' \
   ./usr/bin/open-rig-programmer \
   ./usr/bin/rigprog \
   ./usr/share/applications/open-rig-programmer.desktop \
   ./usr/share/icons/hicolor/512x512/apps/open-rig-programmer.png \
   ./usr/lib/udev/rules.d/99-open-rig-programmer.rules \
-  ./usr/share/doc/open-rig-programmer/copyright
-do
-  echo "$contents" | grep -qF " $path" || err "missing content: $path"
-done
+  ./usr/share/doc/open-rig-programmer/copyright | LC_ALL=C sort)"
+[ "$actual" = "$expected" ] || err "package contents differ from the expected set
+(< expected, > actual):
+$(diff <(printf '%s\n' "$expected") <(printf '%s\n' "$actual"))"
 
-ctl="$(mktemp -d)"; data="$(mktemp -d)"
+ctl="$(mktemp -d)" || exit 2
+data="$(mktemp -d)" || exit 2
+trap 'rm -rf "$ctl" "$data"' EXIT
 dpkg-deb -e "$deb" "$ctl/DEBIAN" || err "control extraction"
 for script in postinst postrm; do
   [ -f "$ctl/DEBIAN/$script" ] || { err "$script missing"; continue; }
@@ -50,6 +58,8 @@ diff -q "$here/99-open-rig-programmer.rules" \
   "$data/usr/lib/udev/rules.d/99-open-rig-programmer.rules" || err "udev rule drifted from repo copy"
 diff -q "$here/copyright" \
   "$data/usr/share/doc/open-rig-programmer/copyright" || err "copyright file drifted from repo copy"
+diff -q "$here/open-rig-programmer-512.png" \
+  "$data/usr/share/icons/hicolor/512x512/apps/open-rig-programmer.png" || err "icon drifted from repo copy"
 for s in postinstall postremove; do
   ctlname="$( [ "$s" = postinstall ] && echo postinst || echo postrm )"
   diff -q "$here/scripts/$s.sh" "$ctl/DEBIAN/$ctlname" || err "$ctlname drifted from repo $s.sh"
@@ -64,7 +74,9 @@ if [ "${CHECK_DEB_SKIP_ELF:-0}" != "1" ] && command -v readelf >/dev/null 2>&1; 
   case "$arch" in
     amd64) want_machine='X86-64' ;;
     arm64) want_machine='AArch64' ;;
-    *) want_machine='' ;;
+    # A sentinel no readelf line can match: an unrecognised arch must
+    # fail loudly, never silently skip the machine assertion.
+    *) err "unrecognised arch '$arch'"; want_machine='NO-SUCH-MACHINE' ;;
   esac
   for bin in open-rig-programmer rigprog; do
     readelf -h "$data/usr/bin/$bin" | grep -q "Machine:.*${want_machine}" \
@@ -85,7 +97,6 @@ fi
 if command -v desktop-file-validate >/dev/null 2>&1; then
   desktop-file-validate "$data/usr/share/applications/open-rig-programmer.desktop" || err "desktop-file-validate"
 fi
-rm -rf "$ctl" "$data"
 
 [ "$fail" -eq 0 ] && echo "check-deb: all assertions passed"
 exit "$fail"
