@@ -295,6 +295,10 @@ jobs:
 
       - name: wails build (linux/${{ matrix.arch }})
         working-directory: app
+        env:
+          # The GUI links GTK and WebKit through cgo — do not rely on the
+          # runner's default, the same reason the darwin GUI job sets this.
+          CGO_ENABLED: '1'
         run: wails build -tags webkit2_41 -ldflags "-X ${VERSION_PKG}.version=${VERSION}"
 
       - name: Version stamp present in the GUI binary
@@ -365,10 +369,11 @@ jobs:
 
       - name: Write release notes
         run: |
-          # __VERSION_NO_V__ must be substituted FIRST: it contains
-          # __VERSION__ as a substring, so the other order mangles it.
-          # The deb filenames carry the version without the leading "v";
-          # every other artefact name carries the full tag.
+          # Two independent passes: neither placeholder is a substring of
+          # the other and neither replacement value contains a placeholder,
+          # so the order is not load-bearing. __VERSION_NO_V__ exists
+          # because deb filenames carry the version without the leading
+          # "v"; every other artefact name carries the full tag.
           sed -e "s/__VERSION_NO_V__/${VERSION#v}/g" -e "s/__VERSION__/${VERSION}/g" .github/release-notes-template.md > release-notes.md
 
       - name: Create draft release
