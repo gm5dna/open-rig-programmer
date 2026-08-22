@@ -12,19 +12,24 @@
   SYNCED WITH THE PUBLISHED v1.0.0 RELEASE (09/08/2026): the v1.0.0
   Release body was authored from this template and this file was then
   updated to match it — four registered models with the per-model
-  support table; the AppImage row removed (its build job is Linux-CI-
-  only and Actions is dormant; restore the row if that changes); the
-  old "Status of this draft" publish-gate section replaced by the
-  honest evidence-status section (the Linux real-radio session has
-  still not run and the notes say so plainly). If a future release
-  ships an AppImage or lands Linux hardware evidence, update both the
-  Downloads table and that section.
+  support table; the old "Status of this draft" publish-gate section
+  replaced by the honest evidence-status section (the Linux real-radio
+  session has still not run and the notes say so plainly).
+
+  SYNC 22/08/2026: the Linux GUI now ships as a Debian package, so the
+  Downloads table carries an amd64 and an arm64 deb row, built by
+  release.yml's gui-linux job. The consent prose was corrected — writes
+  to the three FTdx models are opt-in, not disarmed, and have been
+  since the unverified-writes consent work landed; the wording now
+  follows README.md's "Unverified writes" section. Linux hardware
+  evidence is still pending: the evidence-status section says so, and
+  must keep saying so until a real-radio Linux session has run.
 -->
 
 Open Rig Programmer __VERSION__ — an open-source, cross-platform
 memory-channel programmer for the Yaesu FT-710, built as a free
 alternative to RT Systems' YPS-FT710, with three further Yaesu models
-registered read-only.
+registered for reading and for opt-in writes.
 
 ## What it does
 
@@ -50,15 +55,27 @@ registered read-only.
 | Model | Read channels | Write channels | Read menu settings | Evidence |
 | --- | --- | --- | --- | --- |
 | FT-710 | Yes | Yes | Yes | Proven against real hardware (`docs/hardware-notes.md`) |
-| FTdx10 | Yes | **No — disarmed** | Yes | CAT manual + simulator only; no real radio has been connected |
-| FTdx101D | Yes | **No — disarmed** | Yes | CAT manual + simulator only; no real radio has been connected |
-| FTdx101MP | Yes | **No — disarmed** | Yes | CAT manual + simulator only; no real radio has been connected |
+| FTdx10 | Yes | **Opt-in** (unverified writes, off by default) | Yes | CAT manual + simulator only; no real radio has been connected |
+| FTdx101D | Yes | **Opt-in** (unverified writes, off by default) | Yes | CAT manual + simulator only; no real radio has been connected |
+| FTdx101MP | Yes | **Opt-in** (unverified writes, off by default) | Yes | CAT manual + simulator only; no real radio has been connected |
 
-Writes to the three manual-derived models are disarmed in the code
-itself (nothing is writable on a real-hardware session), not merely
-untested. Each of those drivers carries a register of every assumption
-it makes and the specific capture from a real radio that would verify
-it — if you own one of these radios and want to help, open an issue.
+Writes to the three manual-derived models are refused until you enable
+unverified writes for that radio, one radio at a time — `rigprog
+settings unverified-writes FTdx10 on`, or in the GUI the question it
+asks once just after you first connect to such a radio, or its
+*Unverified writes…* button at any time. Both faces read and write one
+settings file (`rigprog/settings.json` under your user configuration
+directory), so a decision made in either holds for both, and an "off"
+is stored rather than forgotten. "Unverified" means documented in the
+manufacturer's CAT reference and exercised against a simulator here,
+not proven on a real radio. The FT-710 is unaffected: its writes are
+hardware-verified, so it has nothing to consent to. Consent changes
+what the tool is allowed to send, not how it sends it — the
+read-before-write, the snapshot, the reviewed diff and the per-channel
+verify all still run. Each of the three drivers carries a register of
+every assumption it makes and the specific capture from a real radio
+that would verify it — if you own one of these radios and want to
+help, open an issue.
 
 ## What it deliberately does not do
 
@@ -85,11 +102,15 @@ it — if you own one of these radios and want to help, open an issue.
 | macOS (Intel + Apple Silicon, universal) | CLI | `rigprog-__VERSION__-darwin-universal.tar.gz` |
 | Linux amd64 | CLI | `rigprog-__VERSION__-linux-amd64.tar.gz` |
 | Linux arm64 | CLI | `rigprog-__VERSION__-linux-arm64.tar.gz` |
+| Linux amd64 (Debian/Ubuntu/Mint) | GUI + CLI (.deb) | `open-rig-programmer___VERSION_NO_V___amd64.deb` |
+| Linux arm64 (Debian/Ubuntu/Mint) | GUI + CLI (.deb) | `open-rig-programmer___VERSION_NO_V___arm64.deb` |
 
-There is **no Linux GUI AppImage in this release**: its build job runs
-only on Linux CI, which is not in use for this release. Linux users
-have the CLI, or can build the GUI from source (`wails build` in
-`app/`; see `docs/linux-setup.md` for the build dependencies).
+Either Debian package installs the GUI, the `rigprog` CLI, a desktop
+entry and the ModemManager udev rule; `sudo apt install ./<file>`
+pulls in `libwebkit2gtk-4.1` and GTK 3 for you. On other
+distributions, take the CLI tarball or build the GUI from source
+(`wails build -tags webkit2_41` in `app/`); either way,
+`docs/linux-setup.md` covers the serial-port setup.
 
 `SHA256SUMS` (attached below) covers every file above. Verify with:
 
@@ -140,18 +161,22 @@ One radio, one region, one firmware version.
 What this release has **not** been exercised against:
 
 - **Linux with a real radio.** The Linux CLI binaries are
-  cross-compiled and version-stamp-verified, and the serial stack is
-  the same code, but no real-radio session has been run on Linux yet.
-  `docs/linux-setup.md` carries the port-setup instructions; treat the
-  first Linux session as exploratory and read-only first.
+  cross-compiled and version-stamp-verified; the Linux GUI is built in
+  CI, launched there under Xvfb to prove it starts, and packaged into
+  the Debian packages above, whose contents CI then checks; and the
+  serial stack is the same code. But no real-radio session has been
+  run on Linux yet — a GUI that starts on a headless runner is not a
+  radio on the other end of a cable. `docs/linux-setup.md` carries the
+  port-setup instructions; treat the first Linux session as
+  exploratory and read-only first.
 - **Any FTdx10, FTdx101D or FTdx101MP.** Everything about those three
   models is derived from the manufacturer's CAT reference manuals
   through a documented transcription-and-cross-check process, and
   exercised against simulators built independently from the same
   manuals. No real radio of any of the three has ever been connected.
-  That is why their writes are disarmed.
+  That is why their writes are opt-in rather than on by default.
 
 Anything the project has not observed is labelled as such in the code
 and documentation rather than assumed. Reports from real hardware —
-especially the three read-only models, and the FT-710 on Linux — are
-the most valuable contribution this project can receive right now.
+especially the three manual-derived models, and the FT-710 on Linux —
+are the most valuable contribution this project can receive right now.

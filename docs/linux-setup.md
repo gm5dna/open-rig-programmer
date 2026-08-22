@@ -74,6 +74,14 @@ If your FT-710 enumerates under a different VID:PID (check with
 `lsusb` while it's plugged in), adjust `idVendor`/`idProduct`
 accordingly.
 
+If you installed the `.deb`, this section is already done for you. The
+package installs this exact rule at
+`/usr/lib/udev/rules.d/99-open-rig-programmer.rules`, from
+`app/build/linux/99-open-rig-programmer.rules` in this repository —
+its `SUBSYSTEM=="tty"` line is byte for byte the one above. Creating
+the rule by hand is therefore only needed for the static CLI tarball
+or a build from source.
+
 ## Identifying the CAT (Enhanced UART) port
 
 The CP2105 exposes two USB-serial interfaces from one physical
