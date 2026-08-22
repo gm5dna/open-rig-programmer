@@ -144,10 +144,11 @@ The Linux CLI binaries are static — download, untar, run. On Debian,
 Ubuntu and Mint the `.deb` is the whole install in one step: the GUI,
 the `rigprog` CLI, a desktop entry and the ModemManager udev rule.
 Install it with `sudo apt install ./<the downloaded .deb>`, which
-resolves the WebKitGTK and GTK libraries it needs. That means Ubuntu
-22.04 or later, Debian 12 or later, and the Mint releases built from
-those — the WebKitGTK 4.1 runtime the GUI links against first appeared
-in them. On other distributions, take the static CLI tarball or build
+resolves the WebKitGTK and GTK libraries it needs. Those libraries
+exist from Ubuntu 22.04 and Debian 12 onwards (and the Mint releases
+built from those); the package itself is built and checked on Ubuntu
+24.04, and installs on other releases have not yet been tried. On
+other distributions, take the static CLI tarball or build
 the GUI from source (see below).
 
 `SHA256SUMS` on the release page lets you verify any download.

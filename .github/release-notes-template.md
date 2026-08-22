@@ -165,10 +165,12 @@ One radio, one region, one firmware version.
 What this release has **not** been exercised against:
 
 - **Linux with a real radio.** The Linux CLI binaries are
-  cross-compiled and version-stamp-verified, and the serial stack is
-  the same code on every platform. The Linux GUI is built from the
-  same source on every push and launched under Xvfb on an amd64 CI
-  runner to prove it starts; the release build packages it into the
+  cross-compiled (the version stamp is asserted on the amd64 binary,
+  which the build runner can execute; arm64 takes the same ldflags),
+  and the serial stack is the same code on every platform. The Linux
+  GUI is built from the same source on every push to main and every
+  pull request, and launched under Xvfb on an amd64 CI runner to
+  prove it starts; the release build packages it into the
   Debian packages above, whose contents CI then checks. The packaged
   binaries themselves have not yet been launch-tested, on either
   architecture, and no real-radio session has been run on Linux at
