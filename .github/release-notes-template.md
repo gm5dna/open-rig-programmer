@@ -107,8 +107,10 @@ help, open an issue.
 
 Either Debian package installs the GUI, the `rigprog` CLI, a desktop
 entry and the ModemManager udev rule; `sudo apt install ./<file>`
-pulls in `libwebkit2gtk-4.1` and GTK 3 for you. On other
-distributions, take the CLI tarball or build the GUI from source
+pulls in `libwebkit2gtk-4.1-0` and GTK 3 for you. That WebKit runtime
+package exists on Ubuntu 22.04 and later, on Debian 12 and later, and
+on the Mint releases built from those — not on anything older. On
+other distributions, take the CLI tarball or build the GUI from source
 (`wails build -tags webkit2_41` in `app/`); either way,
 `docs/linux-setup.md` covers the serial-port setup.
 
@@ -143,12 +145,14 @@ opens normally.
 ## Linux: serial port access
 
 - Add yourself to the `dialout` group and log out/in (or `newgrp
-  dialout`) before the CLI can open the radio's serial port:
-  `sudo usermod -aG dialout "$USER"`.
+  dialout`) before either the GUI or the CLI can open the radio's
+  serial port: `sudo usermod -aG dialout "$USER"`.
 - ModemManager can probe a newly-plugged serial adapter and interfere
   with it; excluding the radio's USB-serial bridge from ModemManager
-  via udev is recommended. See `docs/linux-setup.md` for the full
-  instructions and a ready-to-use udev rule.
+  via udev is recommended. The Debian packages install that rule for
+  you; for the CLI tarball or a build from source, create it by hand —
+  `docs/linux-setup.md` has the full instructions and a ready-to-use
+  rule.
 
 ## What the hardware evidence covers — read this
 
@@ -161,14 +165,15 @@ One radio, one region, one firmware version.
 What this release has **not** been exercised against:
 
 - **Linux with a real radio.** The Linux CLI binaries are
-  cross-compiled and version-stamp-verified; the Linux GUI is built in
-  CI, launched there under Xvfb to prove it starts, and packaged into
-  the Debian packages above, whose contents CI then checks; and the
-  serial stack is the same code. But no real-radio session has been
-  run on Linux yet — a GUI that starts on a headless runner is not a
-  radio on the other end of a cable. `docs/linux-setup.md` carries the
-  port-setup instructions; treat the first Linux session as
-  exploratory and read-only first.
+  cross-compiled and version-stamp-verified, and the serial stack is
+  the same code on every platform. The Linux GUI is built from the
+  same source on every push and launched under Xvfb on an amd64 CI
+  runner to prove it starts; the release build packages it into the
+  Debian packages above, whose contents CI then checks. The packaged
+  binaries themselves have not yet been launch-tested, on either
+  architecture, and no real-radio session has been run on Linux at
+  all. `docs/linux-setup.md` carries the port-setup instructions;
+  treat the first Linux session as exploratory and read-only first.
 - **Any FTdx10, FTdx101D or FTdx101MP.** Everything about those three
   models is derived from the manufacturer's CAT reference manuals
   through a documented transcription-and-cross-check process, and

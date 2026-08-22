@@ -27,7 +27,7 @@ description: |
   Memory-channel programmer for Yaesu transceivers.
   Desktop GUI (open-rig-programmer) and command-line tool (rigprog)
   sharing one core. The FT-710 reads and writes; FTdx10 and
-  FTdx101D/MP are read-only by default.
+  FTdx101D/MP read, and write only after opt-in.
 depends:
   - libwebkit2gtk-4.1-0
   - libgtk-3-0t64 | libgtk-3-0
