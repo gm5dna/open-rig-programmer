@@ -215,9 +215,22 @@ func (a *FrameAccumulator) Push(chunk []byte) (frames [][]byte, err error) {
 		end := -1
 		resync := -1
 		for j := last + 1; j < len(buf); j++ {
-			// Candidate canonical length: two preamble bytes plus the body
-			// so far plus the terminator that would come next.
-			if 2+(j-last)+1 > a.max {
+			// Candidate canonical length: two preamble bytes plus the
+			// bytes from last+1 through j INCLUSIVE — that is, the frame
+			// this would be if buf[j] turned out to be the terminator,
+			// which is exactly the frame the branch below emits.
+			//
+			// THE `+1` THAT IS NOT HERE IS THE POINT. Counting the
+			// terminator a SECOND time would refuse a frame of length
+			// exactly max, while builders.go permits len(frame) ==
+			// p.maxFrame and V9 permits MaxFrame == need. A profile whose
+			// MaxFrame was computed exactly would then build a set its own
+			// gate admits and its own accumulator discards as
+			// contamination — the precise failure V9's message says it
+			// exists to prevent — and could never read back the answer it
+			// wrote. If buf[j] is NOT the terminator the frame is longer,
+			// and the next iteration bounds it.
+			if 2+(j-last) > a.max {
 				discarded := len(buf) - p
 				a.buf = nil
 				return frames, &FrameTooLongError{DiscardedLen: discarded}

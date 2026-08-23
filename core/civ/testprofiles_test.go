@@ -35,7 +35,7 @@ type namedProfile struct {
 //	name length      10            16               none
 //	name pad         ' '           '_'              n/a
 //	record lengths   {37}          {30, 31}         {8}
-//	max frame        64            128              32
+//	max frame        64            128              18 (== its own need)
 //
 // THE CONTROLLER ADDRESS ROW IS THE LOAD-BEARING ONE. 0xE0 is the CI-V
 // convention and appears as a package constant
@@ -170,6 +170,14 @@ var groupProfile = mustFixtureProfile(ProfileConfig{
 // record omits one looks like, and it is the fixture that catches a name
 // codec assuming there is always a name to write.
 //
+// ITS MaxFrame IS EXACTLY ITS OWN NEED, which is the third reason. V9
+// permits MaxFrame == 7 + addressBytes + longest record, and this fixture
+// takes that permission at its word: 7 + 3 + 8 = 18, so its memory set is
+// 18 bytes and its bound is 18. A model package that computes its ceiling
+// exactly ships that shape, and an accumulator off by one in its frame
+// bound would discard this profile's own set — and the answer to it —
+// as contamination while its own gate admitted the frame.
+//
 // ITS UNMAPPED BYTES ARE THE OTHER REASON IT EXISTS. Byte 6 is a Fixed
 // template constant and byte 7 is unmapped and zero, so this is the only
 // fixture that can show the gate refusing a record byte no builder would
@@ -179,7 +187,7 @@ var groupProfile = mustFixtureProfile(ProfileConfig{
 var bandProfile = mustFixtureProfile(ProfileConfig{
 	Model:         "TEST-BAND",
 	RadioAddress:  0xA2,
-	MaxFrame:      32,
+	MaxFrame:      18,
 	AddressForm:   AddressFormBandChannel,
 	Groups:        3,
 	ChannelLo:     1,

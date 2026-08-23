@@ -153,6 +153,89 @@ func TestAccumulator_EnforcesTheProfileSuppliedMaximum(t *testing.T) {
 	}
 }
 
+// TestAccumulator_AcceptsExactlyTheMaximumAndRefusesOneMore is the
+// BOUNDARY, and it is the case a test at 6 and 22 bytes against a bound of
+// 16 cannot see.
+//
+// The bound is a MAXIMUM, not an exclusive limit: builders.go admits
+// len(frame) == p.maxFrame and V9 admits MaxFrame == the profile's own
+// need, so a frame of exactly max is a frame this package builds. An
+// accumulator that refused it would make a correctly-tight MaxFrame into a
+// radio that cannot read back what it wrote.
+func TestAccumulator_AcceptsExactlyTheMaximumAndRefusesOneMore(t *testing.T) {
+	const ctrl = 0xE0
+	const max = 16
+
+	// FE FE to from + body + FD is 5 bytes of overhead.
+	atMax := frameFor(ctrl, 0x94, make([]byte, max-5)...)
+	if len(atMax) != max {
+		t.Fatalf("fixture frame is %d bytes, want exactly max (%d)", len(atMax), max)
+	}
+	overMax := frameFor(ctrl, 0x94, make([]byte, max-4)...)
+	if len(overMax) != max+1 {
+		t.Fatalf("fixture frame is %d bytes, want max+1 (%d)", len(overMax), max+1)
+	}
+
+	a := NewFrameAccumulator(max, ctrl)
+	got := pushAll(t, a, atMax)
+	if len(got) != 1 || string(got[0]) != string(atMax) {
+		t.Fatalf("a frame of EXACTLY the maximum (%d bytes) was not returned: got % 02x", max, got)
+	}
+
+	b := NewFrameAccumulator(max, ctrl)
+	frames, err := b.Push(overMax)
+	if len(frames) != 0 {
+		t.Fatalf("a frame of max+1 bytes returned % 02x", frames)
+	}
+	if !errors.Is(err, ErrFrameTooLong) {
+		t.Fatalf("a frame of max+1 (%d) bytes gave error %v, want ErrFrameTooLong", max+1, err)
+	}
+
+	// One byte either side, split across reads: the bound must not depend
+	// on how the chunks fell.
+	c := NewFrameAccumulator(max, ctrl)
+	got = pushAll(t, c, atMax[:3], atMax[3:])
+	if len(got) != 1 || string(got[0]) != string(atMax) {
+		t.Fatalf("a split frame of exactly the maximum was not returned: got % 02x", got)
+	}
+}
+
+// TestATightlyBoundedProfileReadsBackItsOwnSet closes the loop the
+// off-by-one opened. bandProfile's MaxFrame is exactly its own V9 need, so
+// its longest memory set is precisely its ceiling: its gate admits the
+// frame, and its OWN accumulator must assemble both that frame and the
+// answer to it rather than discarding the exchange as contamination.
+func TestATightlyBoundedProfileReadsBackItsOwnSet(t *testing.T) {
+	for _, np := range allTestProfiles() {
+		p := np.p
+		t.Run(np.name, func(t *testing.T) {
+			rec := sampleRecord(t, p, p.BuildRecordLength())
+			cmd, err := p.BuildMemorySet(rec)
+			if err != nil {
+				t.Fatalf("BuildMemorySet: %v", err)
+			}
+			frame := cmd.Bytes()
+			if !p.AllowedCommand(frame) {
+				t.Fatalf("its own gate refused its own set frame %s", hexFrame(frame))
+			}
+
+			// The answer form: the same length, addresses swapped.
+			answer := append([]byte{}, frame...)
+			answer[2], answer[3] = answer[3], answer[2]
+
+			a := p.NewAccumulator()
+			got := pushAll(t, a, answer)
+			if len(got) != 1 || string(got[0]) != string(answer) {
+				t.Fatalf("%s: MaxFrame=%d discarded the %d-byte answer to its own %d-byte set: got % 02x",
+					p.Model(), p.MaxFrame(), len(answer), len(frame), got)
+			}
+			if s := a.Stats(); s.NoiseBytes != 0 || s.Truncated != 0 {
+				t.Fatalf("%s: a clean answer was counted as noise=%d truncated=%d", p.Model(), s.NoiseBytes, s.Truncated)
+			}
+		})
+	}
+}
+
 func TestAccumulator_DropsTheFirstEchoOfANotedSentFrame(t *testing.T) {
 	const ctrl = 0xE0
 	const radio = 0x94
