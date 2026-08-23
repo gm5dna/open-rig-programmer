@@ -10,6 +10,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
 // readTestImage is the scripted radio the read tests share. Each slot is a
@@ -308,11 +309,28 @@ func TestMTSpec_DerivesItsLengthFromTheDialect(t *testing.T) {
 			if err != nil {
 				t.Fatalf("mtSpec(dialect) = %v, want nil", err)
 			}
-			if cmdSpec.ExpectPrefix != "MT" {
-				t.Errorf("ExpectPrefix = %q, want \"MT\"", cmdSpec.ExpectPrefix)
+			if cmdSpec.Class != transport.ClassRead {
+				t.Errorf("Class = %v, want transport.ClassRead", cmdSpec.Class)
 			}
-			if cmdSpec.ExpectLen != hi {
-				t.Errorf("ExpectLen = %d, want the dialect's own %d", cmdSpec.ExpectLen, hi)
+			// The prefix and the exact length, asserted THROUGH THE MATCHER
+			// rather than off the struct: D2 moved answer matching into an
+			// opaque transport.CommandSpec.Match built by the codec, so the
+			// fields this used to read (ExpectPrefix, ExpectLen) no longer
+			// exist. What they asserted still holds, and these three cases say
+			// so in the terms the engine now uses — a well-formed answer of the
+			// dialect's own length matches, one byte short does not, and another
+			// command's answer of the right length does not.
+			rightLength := "MT" + strings.Repeat("0", hi-3) + ";"
+			oneShort := "MT" + strings.Repeat("0", hi-4) + ";"
+			wrongCommand := "MR" + strings.Repeat("0", hi-3) + ";"
+			if !cmdSpec.Match([]byte(rightLength)) {
+				t.Errorf("Match(%q) = false, want true — that is the dialect's own %d-byte combined MT answer", rightLength, hi)
+			}
+			if cmdSpec.Match([]byte(oneShort)) {
+				t.Errorf("Match(%q) = true, want false — the length is pinned to the dialect's %d, not merely to the prefix", oneShort, hi)
+			}
+			if cmdSpec.Match([]byte(wrongCommand)) {
+				t.Errorf("Match(%q) = true, want false — the prefix must discriminate the command", wrongCommand)
 			}
 			if cmdSpec.RetryReads != 1 {
 				t.Errorf("RetryReads = %d, want 1 (a read is idempotent; a single swallowed reply must not fail an operation)", cmdSpec.RetryReads)
@@ -321,6 +339,6 @@ func TestMTSpec_DerivesItsLengthFromTheDialect(t *testing.T) {
 	}
 
 	if _, err := mtSpec(cat.Dialect{}); err == nil {
-		t.Error("mtSpec(zero dialect) = nil error, want a refusal — an unconfigured dialect has no MT geometry, and a zero ExpectLen would admit any answer")
+		t.Error("mtSpec(zero dialect) = nil error, want a refusal — an unconfigured dialect has no MT geometry, and a zero exact length would admit any MT answer")
 	}
 }

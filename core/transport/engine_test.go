@@ -51,10 +51,10 @@ func TestCommandSpec_Validate(t *testing.T) {
 		spec    CommandSpec
 		wantErr bool
 	}{
-		{"read with retries: ok", CommandSpec{ExpectPrefix: "MR", RetryReads: 2}, false},
-		{"read with zero retries: ok", CommandSpec{ExpectPrefix: "MR"}, false},
-		{"fire-and-forget, zero retries: ok", CommandSpec{}, false},
-		{"fire-and-forget WITH retries: invalid", CommandSpec{RetryReads: 1}, true},
+		{"read with retries: ok", CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("MR", 0), RetryReads: 2}, false},
+		{"read with zero retries: ok", CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("MR", 0)}, false},
+		{"fire-and-forget, zero retries: ok", CommandSpec{Class: ClassWrite}, false},
+		{"fire-and-forget WITH retries: invalid", CommandSpec{Class: ClassWrite, RetryReads: 1}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -70,7 +70,7 @@ func TestCommandSpec_Validate(t *testing.T) {
 }
 
 func TestCommandSpec_WithDefaults(t *testing.T) {
-	got := CommandSpec{}.withDefaults()
+	got := CommandSpec{Class: ClassWrite}.withDefaults()
 	if got.Timeout != DefaultTimeout {
 		t.Errorf("Timeout = %v, want %v", got.Timeout, DefaultTimeout)
 	}
@@ -81,7 +81,7 @@ func TestCommandSpec_WithDefaults(t *testing.T) {
 		t.Errorf("Settle = %v, want %v", got.Settle, DefaultSettle)
 	}
 
-	explicit := CommandSpec{Timeout: time.Second, ErrorWindow: time.Millisecond, Settle: time.Millisecond}.withDefaults()
+	explicit := CommandSpec{Class: ClassWrite, Timeout: time.Second, ErrorWindow: time.Millisecond, Settle: time.Millisecond}.withDefaults()
 	if explicit.Timeout != time.Second || explicit.ErrorWindow != time.Millisecond || explicit.Settle != time.Millisecond {
 		t.Errorf("withDefaults overrode explicit values: %+v", explicit)
 	}
@@ -94,11 +94,11 @@ func TestCommandSpec_Matches(t *testing.T) {
 		frame string
 		want  bool
 	}{
-		{"prefix match, variable len", CommandSpec{ExpectPrefix: "MT"}, "MT0011CALLING FREQ;", true},
-		{"prefix mismatch", CommandSpec{ExpectPrefix: "MR"}, "MT0011CALLING FREQ;", false},
-		{"prefix match, exact len ok", CommandSpec{ExpectPrefix: "ID", ExpectLen: 7}, "ID0800;", true},
-		{"prefix match, exact len mismatch", CommandSpec{ExpectPrefix: "ID", ExpectLen: 8}, "ID0800;", false},
-		{"frame shorter than prefix", CommandSpec{ExpectPrefix: "MR001"}, "MR;", false},
+		{"prefix match, variable len", CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("MT", 0)}, "MT0011CALLING FREQ;", true},
+		{"prefix mismatch", CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("MR", 0)}, "MT0011CALLING FREQ;", false},
+		{"prefix match, exact len ok", CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("ID", 7)}, "ID0800;", true},
+		{"prefix match, exact len mismatch", CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("ID", 8)}, "ID0800;", false},
+		{"frame shorter than prefix", CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("MR001", 0)}, "MR;", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -124,7 +124,7 @@ func TestEngine_MR_GoldenRoundTrip(t *testing.T) {
 		t.Fatalf("BuildMRRead: %v", err)
 	}
 
-	got, err := eng.Do(ctx, cmd, CommandSpec{ExpectPrefix: "MR", ExpectLen: 28})
+	got, err := eng.Do(ctx, cmd, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("MR", 28)})
 	if err != nil {
 		t.Fatalf("Do: unexpected error: %v", err)
 	}
@@ -167,7 +167,7 @@ func TestEngine_MW_FireAndForget_Success(t *testing.T) {
 		t.Fatalf("BuildMWSet: %v", err)
 	}
 
-	got, err := eng.Do(ctx, cmd, CommandSpec{ErrorWindow: 60 * time.Millisecond})
+	got, err := eng.Do(ctx, cmd, CommandSpec{Class: ClassWrite, ErrorWindow: 60 * time.Millisecond})
 	if err != nil {
 		t.Fatalf("Do (fire-and-forget MW): unexpected error: %v", err)
 	}
@@ -180,7 +180,7 @@ func TestEngine_MW_FireAndForget_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildMRRead: %v", err)
 	}
-	answer, err := eng.Do(ctx, readCmd, CommandSpec{ExpectPrefix: "MR", ExpectLen: 28})
+	answer, err := eng.Do(ctx, readCmd, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("MR", 28)})
 	if err != nil {
 		t.Fatalf("Do (MR verify): unexpected error: %v", err)
 	}
@@ -202,7 +202,7 @@ func TestEngine_MT_VariableLengthAnswer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildMTSet: %v", err)
 	}
-	if _, err := eng.Do(ctx, setCmd, CommandSpec{ErrorWindow: 60 * time.Millisecond}); err != nil {
+	if _, err := eng.Do(ctx, setCmd, CommandSpec{Class: ClassWrite, ErrorWindow: 60 * time.Millisecond}); err != nil {
 		t.Fatalf("Do (MT set): unexpected error: %v", err)
 	}
 
@@ -210,7 +210,7 @@ func TestEngine_MT_VariableLengthAnswer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildMTRead: %v", err)
 	}
-	got, err := eng.Do(ctx, readCmd, CommandSpec{ExpectPrefix: "MT"}) // ExpectLen 0: variable
+	got, err := eng.Do(ctx, readCmd, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("MT", 0)}) // ExpectLen 0: variable
 	if err != nil {
 		t.Fatalf("Do (MT read): unexpected error: %v", err)
 	}
@@ -233,7 +233,7 @@ func TestEngine_MR_EmptySlot_Rejected(t *testing.T) {
 		t.Fatalf("BuildMRRead: %v", err)
 	}
 
-	_, err = eng.Do(ctx, cmd, CommandSpec{ExpectPrefix: "MR", ExpectLen: 28})
+	_, err = eng.Do(ctx, cmd, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("MR", 28)})
 	if !errors.Is(err, cat.ErrRejected) {
 		t.Errorf("Do(empty slot) = %v, want errors.Is match against cat.ErrRejected", err)
 	}
@@ -259,13 +259,13 @@ func TestEngine_Do_PreCancelledCtx_NeverTransmits(t *testing.T) {
 	cancel() // already dead before Do is even called
 
 	idCmd := cat.FT710.BuildIDRead()
-	_, err := eng.Do(cancelledCtx, idCmd, CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Timeout: time.Second})
+	_, err := eng.Do(cancelledCtx, idCmd, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("ID", 7), Timeout: time.Second})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("Do (pre-cancelled ctx) = %v, want errors.Is match against context.Canceled", err)
 	}
 
 	ctx := testCtx(t)
-	_, err = eng.Do(ctx, idCmd, CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Timeout: 300 * time.Millisecond})
+	_, err = eng.Do(ctx, idCmd, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("ID", 7), Timeout: 300 * time.Millisecond})
 	if !errors.Is(err, ErrTimeout) {
 		t.Fatalf("Do(ID;) after a pre-cancelled Do = %v, want errors.Is match against ErrTimeout (proving the pre-cancelled Do transmitted NOTHING — this ID; is still exchange 1, hit by FaultGarbleReply(1))", err)
 	}
@@ -287,13 +287,13 @@ func TestEngine_Do_DisallowedCommandNeverWritten(t *testing.T) {
 	// it would be if the disallowed command had actually reached the
 	// fake radio as an exchange).
 	var zero cat.Command
-	_, err := eng.Do(ctx, zero, CommandSpec{ExpectPrefix: "X"})
+	_, err := eng.Do(ctx, zero, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("X", 0)})
 	if !errors.Is(err, ErrDisallowedCommand) {
 		t.Fatalf("Do(zero Command) = %v, want errors.Is match against ErrDisallowedCommand", err)
 	}
 
 	idCmd := cat.FT710.BuildIDRead()
-	_, err = eng.Do(ctx, idCmd, CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Timeout: 300 * time.Millisecond})
+	_, err = eng.Do(ctx, idCmd, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("ID", 7), Timeout: 300 * time.Millisecond})
 	if !errors.Is(err, ErrTimeout) {
 		t.Fatalf("Do(ID;) after a refused disallowed command = %v, want ErrTimeout (proving ID; was exchange 1, hit by FaultGarbleReply(1) — the disallowed command must not have consumed exchange 1)", err)
 	}
