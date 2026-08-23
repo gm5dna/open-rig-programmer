@@ -186,7 +186,7 @@ func TestExportImport_TierRoundTrip(t *testing.T) {
 // therefore says nothing — and a version-2 file imports with the states
 // its cells spell.
 func TestImport_AcceptsBothHeaderVersions(t *testing.T) {
-	t.Run("version 1 leaves the tier fields Absent", func(t *testing.T) {
+	t.Run("version 1 says the radio has no such field", func(t *testing.T) {
 		body := strings.Join(header, ",") + "\n" +
 			"001,M-01,14250000,USB,,,,OFF,,SIMPLEX,CALLING,yes,no\n"
 		got, err := Import(strings.NewReader(body))
@@ -204,8 +204,13 @@ func TestImport_AcceptsBothHeaderVersions(t *testing.T) {
 			"dtcs_code": d.DTCSCode.State, "dtcs_polarity": d.DTCSPolarity.State,
 			"filter": d.Filter.State, "data_mode": d.DataMode.State,
 		} {
-			if state != codeplug.Absent {
-				t.Errorf("%s = %q, want Absent: a version-1 file has no column for it", name, state)
+			// Unavailable, not the zero value: a version-1 file was
+			// written by a build that modelled none of these fields,
+			// for a radio that has none — which is what a READ of that
+			// radio reports too, so an imported channel still compares
+			// equal to the baseline it will be diffed against.
+			if state != codeplug.Unavailable {
+				t.Errorf("%s = %q, want Unavailable: a version-1 file says the radio has no such field", name, state)
 			}
 		}
 	})
@@ -451,10 +456,13 @@ func TestImportCHIRP_YaesuBranchUnchanged(t *testing.T) {
 		if !found {
 			t.Errorf("entries = %+v, want the unchanged dropped-Offset entry", report.Entries)
 		}
-		// And nothing tier-shaped was invented on the channel.
+		// And nothing tier-shaped was invented on the channel: every
+		// field this radio cannot reach comes back Unavailable — the
+		// same answer chirpTagDisplay has always given for the display
+		// flag, and the same one a read of this radio gives.
 		d := channels[0].Data
-		if d.Duplex.State != codeplug.Absent || d.OffsetHz.State != codeplug.Absent || d.TxFreqHz.State != codeplug.Absent {
-			t.Errorf("tier fields = %+v/%+v/%+v, want all Absent on a radio that has none of them", d.Duplex, d.OffsetHz, d.TxFreqHz)
+		if d.Duplex.State != codeplug.Unavailable || d.OffsetHz.State != codeplug.Unavailable || d.TxFreqHz.State != codeplug.Unavailable {
+			t.Errorf("tier fields = %+v/%+v/%+v, want all Unavailable on a radio that has none of them", d.Duplex, d.OffsetHz, d.TxFreqHz)
 		}
 		if d.Shift != "MINUS" {
 			t.Errorf("Shift = %q, want MINUS", d.Shift)

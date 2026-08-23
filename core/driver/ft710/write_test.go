@@ -841,3 +841,32 @@ func TestBuildWriteCommands_FT710ClarifierRefusalText(t *testing.T) {
 		})
 	}
 }
+
+// TestBuildWriteCommands_FrequencyTooWideForTheFrame exercises the ONE
+// checked conversion between the neutral model's uint64 frequency and
+// core/cat's uint32 (design D4, item 7).
+//
+// The path is UNREACHABLE in normal operation and that is the point of
+// testing it here rather than trusting it: codeplug.Validate refuses any
+// frequency above this radio's 75 MHz ceiling long before a write is
+// planned, so nothing but a direct call gets a value this wide as far as
+// the frame builder. What the test proves is that when one does arrive,
+// the driver REFUSES it — naming the frequency field — instead of
+// casting it to the plausible 14.25 MHz a bare uint32() would have
+// produced and sending that to a radio.
+func TestBuildWriteCommands_FrequencyTooWideForTheFrame(t *testing.T) {
+	ch := writableChannel("010")
+	ch.Data.FreqHz = uint64(1)<<32 | 14_250_000
+
+	_, _, err := buildWriteCommands(cat.FT710, ch)
+	var wre *driver.WriteRefusedError
+	if !errors.As(err, &wre) {
+		t.Fatalf("buildWriteCommands = %v, want a *driver.WriteRefusedError", err)
+	}
+	if len(wre.Fields) != 1 || wre.Fields[0] != spec.FieldFrequency {
+		t.Fatalf("WriteRefusedError.Fields = %v, want exactly [%s]", wre.Fields, spec.FieldFrequency)
+	}
+	if !strings.Contains(wre.Reason, "too large for this protocol's memory frame") {
+		t.Errorf("WriteRefusedError.Reason = %q, want it to say the frame cannot hold the value", wre.Reason)
+	}
+}

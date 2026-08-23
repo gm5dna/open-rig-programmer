@@ -587,6 +587,16 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string, caps spe
 	// see chirpTagDisplay for the rule and why the two answers differ.
 	data.TagDisplay = chirpTagDisplay(caps, memBank.ID)
 
+	// Every tier-added field this radio cannot reach: Unavailable, the
+	// same answer chirpTagDisplay gives for the same question, and the
+	// same one a READ of such a radio and a load of a pre-tier file both
+	// produce. The branches below then overwrite whichever ones this
+	// radio DOES reach. Leaving an unreachable field at its zero value
+	// would make a CHIRP-imported channel differ from the baseline it is
+	// about to be diffed against in ten fields the radio does not even
+	// have.
+	markUnreachableTierFields(data, caps, memBank.ID)
+
 	// Frequency -> FreqHz.
 	freqRaw := cell("Frequency")
 	freqHz, err := parseCHIRPFrequency(freqRaw)
@@ -1266,4 +1276,41 @@ func importCHIRPToneIcom(line int, cell func(string) string, data *codeplug.Chan
 		})
 	}
 	return entries
+}
+
+// markUnreachableTierFields sets each tier-added field this bank cannot
+// reach to Unavailable, and leaves the reachable ones alone for the
+// mapping branches to fill in. See its call site for why Unavailable and
+// not the zero value.
+func markUnreachableTierFields(data *codeplug.ChannelData, caps spec.Capabilities, bank spec.BankID) {
+	if !reaches(caps, bank, spec.FieldTxFrequency) {
+		data.TxFreqHz = codeplug.FreqField{State: codeplug.Unavailable}
+	}
+	if !reaches(caps, bank, spec.FieldDuplex) {
+		data.Duplex = codeplug.StringField{State: codeplug.Unavailable}
+	}
+	if !reaches(caps, bank, spec.FieldOffset) {
+		data.OffsetHz = codeplug.FreqField{State: codeplug.Unavailable}
+	}
+	if !reaches(caps, bank, spec.FieldToneMode) {
+		data.ToneMode = codeplug.StringField{State: codeplug.Unavailable}
+	}
+	if !reaches(caps, bank, spec.FieldToneTx) {
+		data.ToneTx = codeplug.ToneField{State: codeplug.Unavailable}
+	}
+	if !reaches(caps, bank, spec.FieldToneRx) {
+		data.ToneRx = codeplug.ToneField{State: codeplug.Unavailable}
+	}
+	if !reaches(caps, bank, spec.FieldDTCSCode) {
+		data.DTCSCode = codeplug.IntField{State: codeplug.Unavailable}
+	}
+	if !reaches(caps, bank, spec.FieldDTCSPolarity) {
+		data.DTCSPolarity = codeplug.StringField{State: codeplug.Unavailable}
+	}
+	if !reaches(caps, bank, spec.FieldFilter) {
+		data.Filter = codeplug.StringField{State: codeplug.Unavailable}
+	}
+	if !reaches(caps, bank, spec.FieldDataMode) {
+		data.DataMode = codeplug.BoolField{State: codeplug.Unavailable}
+	}
 }

@@ -487,6 +487,8 @@ func Import(r io.Reader) ([]codeplug.Channel, error) {
 			if err := parseTierCells(&data, cell); err != nil {
 				return nil, &ParseError{Line: line, Reason: err.Error()}
 			}
+		} else {
+			markTierFieldsUnavailable(&data)
 		}
 
 		channels = append(channels, codeplug.Channel{Slot: slot, Data: &data})
@@ -548,4 +550,37 @@ func parseTierCells(data *codeplug.ChannelData, cell func(string) string) error 
 	data.DataMode = dataMode
 
 	return nil
+}
+
+// markTierFieldsUnavailable sets every tier-added field of data to
+// Unavailable, for a VERSION-1 file — one with none of the tier columns
+// at all.
+//
+// It is the CSV importer's exact counterpart to core/codeplug's
+// migrateV3ChannelData, and it exists for the same reason, which is
+// worth stating because the zero value looks like the safer answer. A
+// version-1 CSV was written by a build that modelled none of these
+// fields, for a radio that has none of them, so "this radio has no such
+// field" is what the file says by having no column for it — and it is
+// what a read of such a radio reports. Leaving them at the zero value
+// (Absent) would make a CSV-imported channel differ, field for field,
+// from the very baseline it is about to be diffed against, and
+// codeplug.Diff compares ChannelData with ==: every channel of every
+// import would come back "modified".
+//
+// A version-2 file takes the other branch and gets what its cells
+// spell, including the explicit "absent" spelling — a file that DOES
+// have the column and says nothing in it is a different statement from
+// a file with no column at all.
+func markTierFieldsUnavailable(data *codeplug.ChannelData) {
+	data.TxFreqHz = codeplug.FreqField{State: codeplug.Unavailable}
+	data.Duplex = codeplug.StringField{State: codeplug.Unavailable}
+	data.OffsetHz = codeplug.FreqField{State: codeplug.Unavailable}
+	data.ToneMode = codeplug.StringField{State: codeplug.Unavailable}
+	data.ToneTx = codeplug.ToneField{State: codeplug.Unavailable}
+	data.ToneRx = codeplug.ToneField{State: codeplug.Unavailable}
+	data.DTCSCode = codeplug.IntField{State: codeplug.Unavailable}
+	data.DTCSPolarity = codeplug.StringField{State: codeplug.Unavailable}
+	data.Filter = codeplug.StringField{State: codeplug.Unavailable}
+	data.DataMode = codeplug.BoolField{State: codeplug.Unavailable}
 }

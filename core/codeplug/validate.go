@@ -112,8 +112,11 @@ func findChannel(channels []Channel, slot string) (Channel, bool) {
 // membership, then (if the slot is a duplicate of an earlier channel) the
 // duplicate-slot issue, then — for a populated channel — Frequency, Mode,
 // Clarifier, CTCSS state, CTCSSTone.Valid(), ScanSkip.Valid(),
-// TagDisplay.Valid(), the CTCSS-tone-pairing warning, Shift, and Tag, in
-// that fixed order.
+// TagDisplay.Valid(), the CTCSS-tone-pairing warning, Shift, Tag, and
+// then the tier-added fields in ChannelData declaration order (see
+// validateTierFields — nothing at all for a radio that reaches none of
+// them, which is every radio registered before the Icom tier), in that
+// fixed order.
 // Codeplug-level issues come last, in a fixed order: the completeness
 // check (see below; caps.Banks order, each bank's Slots in bank order),
 // then caps.RequiredSlots (in caps order) for the populated-ness check,
@@ -129,6 +132,25 @@ func findChannel(channels []Channel, slot string) (Channel, bool) {
 // (e.g. caps under test, or a hand-built Codeplug with RadioInfo left
 // zero) is not itself an error: this rule only fires on an actual
 // disagreement between two known values.
+//
+// Capability keying (the Icom tier, design D4, adjudications 10 and 16).
+// Three checks stopped being unconditional, and each keys on a
+// DIFFERENT thing, deliberately:
+//
+//   - the Yaesu CTCSS-state and shift vocabulary checks run only when
+//     caps SUPPLIES that vocabulary. The key is the vocabulary, not
+//     per-bank field support, because a bank may carry channels without
+//     listing the field (the FT-710's PMS and 60M banks list
+//     FieldFrequency alone) and keying on the bank would have silently
+//     stopped validating a field those channels really do carry. Every
+//     radio with a vocabulary is checked exactly as before.
+//   - the ten fields the tier ADDED are checked per bank, on
+//     reachability (see validateTierFields). There is no pre-tier
+//     behaviour to preserve there, and a bank that cannot reach a field
+//     has no business judging it.
+//   - the tag charset comes from caps (spec.Capabilities.TagByteOK), with
+//     the family default — printable ASCII 0x20-0x7E excluding ';' — for
+//     a radio that supplies none.
 //
 // Completeness: the full expected slot set is the union of every
 // caps.Bank's Slots (RequiredSlots and each NoBlank bank's Slots are

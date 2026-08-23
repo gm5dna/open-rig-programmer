@@ -7,12 +7,34 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
+
+// writeTooNewCodeplug writes a codeplug file whose "schema" is one past
+// codeplug.CurrentSchema, for the several tests that check this
+// program's "upgrade the app" refusal.
+//
+// It writes RAW JSON rather than going through codeplug.Save, and the
+// reason is a deliberate property of Save since the Icom tier (design
+// D4): Save emits the LOWEST schema that can REPRESENT the content, and
+// ignores the in-memory Codeplug.Schema entirely. Handing it a
+// too-new Schema therefore no longer produces a too-new FILE — and must
+// not, since Save may never write something this very build's Load would
+// refuse. The fixture belongs in the test, where it is honest about
+// being hand-authored.
+func writeTooNewCodeplug(t *testing.T, path string) {
+	t.Helper()
+	body := `{"schema":` + strconv.Itoa(codeplug.CurrentSchema+1) +
+		`,"generator":"a newer build","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z"},"channels":[]}` + "\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("writing too-new fixture %s: %v", path, err)
+	}
+}
 
 // TestCheckOverwrite_NoExistingFile pins checkOverwrite's baseline case:
 // a path that does not exist yet is never refused, --force or not.
@@ -99,10 +121,7 @@ func TestLoadCodeplugStrict_NonexistentFile(t *testing.T) {
 // message (task-12 brief §2, shared here by export/import).
 func TestLoadCodeplugStrict_SchemaTooNew(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "too-new.json")
-	tooNew := &codeplug.Codeplug{Schema: codeplug.CurrentSchema + 1}
-	if err := codeplug.Save(path, tooNew); err != nil {
-		t.Fatalf("Save fixture: %v", err)
-	}
+	writeTooNewCodeplug(t, path)
 
 	var stderr bytes.Buffer
 	cp, code := loadCodeplugStrict(&stderr, "import", "--into", path)

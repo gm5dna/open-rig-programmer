@@ -70,7 +70,9 @@ type DiffEntry struct {
 // anything is sent to a radio.
 type DiffResult struct {
 	// Entries holds one DiffEntry per slot present in either input, in
-	// baseline slot order (see Diff's Determinism doc).
+	// baseline slot order followed by any sparse-bank slot only the file
+	// materialised (see Diff's Determinism doc — the second group is
+	// always empty for a radio with no sparse bank).
 	Entries []DiffEntry
 	// Added is the count of Entries with Kind == DiffAdded.
 	Added int

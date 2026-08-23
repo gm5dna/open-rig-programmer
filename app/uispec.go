@@ -194,6 +194,44 @@ func bankTagDisplayDefault(caps spec.Capabilities, id spec.BankID) codeplug.Bool
 	return codeplug.BoolField{State: codeplug.Known, Value: false}
 }
 
+// tierFields is every spec.Field the Icom tier added (design D4), in
+// codeplug.ChannelData's own declaration order — which is the order the
+// grid renders their columns in.
+//
+// It is a list rather than a derivation because there is no way to ask
+// spec "which fields did the Icom tier add": the distinction is
+// historical, and the reason it matters here is that the pre-tier ten
+// have unconditional columns while these ten do not.
+var tierFields = []spec.Field{
+	spec.FieldTxFrequency, spec.FieldDuplex, spec.FieldOffset,
+	spec.FieldToneMode, spec.FieldToneTx, spec.FieldToneRx,
+	spec.FieldDTCSCode, spec.FieldDTCSPolarity, spec.FieldFilter,
+	spec.FieldDataMode,
+}
+
+// bankTierFields returns, in tierFields order, every tier-added field the
+// bank identified by id can REACH — spec.FieldSupport.Unreachable false,
+// so "the frame has this field" in either direction and to any degree of
+// confidence, exactly the test bankCoreFields and bankTagDisplayDefault
+// already use for their own questions.
+//
+// The zero-value lookup covers "bank absent from caps entirely" and
+// "bank present but not listing the field" alike, so both answer "not
+// reachable" with no special-casing — caps that say nothing about a
+// field are not evidence that the radio has one. Every bank of every
+// model registered today therefore returns nil, and the grid's column
+// set is unchanged.
+func bankTierFields(caps spec.Capabilities, id spec.BankID) []string {
+	var out []string
+	for _, f := range tierFields {
+		if caps.FieldSupport(id, f).Unreachable() {
+			continue
+		}
+		out = append(out, string(f))
+	}
+	return out
+}
+
 // slotViewsFor maps a bare slot-identifier list (a spec.Bank.Slots value)
 // into display-form SlotViews, preserving order.
 func slotViewsFor(slots []string) []SlotView {
@@ -302,6 +340,7 @@ func synthesiseDiscoveredBanks(model string, working *codeplug.Codeplug) []BankV
 			ReadOnly:          true,
 			Slots:             slotViewsFor(b.Slots),
 			TagDisplayDefault: bankTagDisplayDefault(discoveredCaps, b.ID),
+			Fields:            bankTierFields(discoveredCaps, b.ID),
 		})
 	}
 	return out
@@ -365,6 +404,7 @@ func (a *App) GetUISpec() (UISpecView, error) {
 			ReadOnly:          bankReadOnly(caps, b.ID),
 			Slots:             bankSlotViews(b, live, a.working),
 			TagDisplayDefault: bankTagDisplayDefault(caps, b.ID),
+			Fields:            bankTierFields(caps, b.ID),
 		})
 	}
 	if !live && a.working != nil {
