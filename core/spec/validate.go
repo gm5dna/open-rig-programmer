@@ -44,6 +44,17 @@ func validateVocab(fieldName string, values []string) []string {
 	if len(values) == 0 {
 		problems = append(problems, fmt.Sprintf("%s must not be empty", fieldName))
 	}
+	return append(problems, validateVocabEntries(fieldName, values)...)
+}
+
+// validateVocabEntries is validateVocab WITHOUT the non-empty rule: the
+// blank and duplicate checks alone. It exists for the Icom tier's paired
+// vocabularies (design D4), where an EMPTY list is a legitimate positive
+// statement — "this radio expresses no such vocabulary" — as long as the
+// other half of the pair is present. Validate applies the non-empty rule
+// to the pair, not to each member.
+func validateVocabEntries(fieldName string, values []string) []string {
+	var problems []string
 	seen := make(map[string]bool, len(values))
 	for _, v := range values {
 		if v == "" {
@@ -79,6 +90,50 @@ func shiftOptionValues(opts []ShiftOption) []string {
 func validShiftDirection(d ShiftDirection) bool {
 	switch d {
 	case ShiftNone, ShiftUp, ShiftDown:
+		return true
+	default:
+		return false
+	}
+}
+
+// duplexOptionValues returns the Value of every entry in opts, in order,
+// so validateVocabEntries can check a DuplexOption list with the same
+// blank and duplicate rules every other vocabulary gets.
+func duplexOptionValues(opts []DuplexOption) []string {
+	values := make([]string, len(opts))
+	for i, o := range opts {
+		values[i] = o.Value
+	}
+	return values
+}
+
+// toneModeValues returns the Value of every entry in modes, in order.
+func toneModeValues(modes []ToneMode) []string {
+	values := make([]string, len(modes))
+	for i, m := range modes {
+		values[i] = m.Value
+	}
+	return values
+}
+
+// validDuplexDirection reports whether d is one of the three declared,
+// meaningful DuplexDirection constants. DuplexUnspecified (the zero
+// value) is deliberately excluded, exactly as ShiftUnspecified is.
+func validDuplexDirection(d DuplexDirection) bool {
+	switch d {
+	case DuplexOff, DuplexUp, DuplexDown:
+		return true
+	default:
+		return false
+	}
+}
+
+// validToneModeSemantics reports whether s is one of the five declared,
+// meaningful ToneModeSemantics constants. ToneModeUnspecified (the zero
+// value) is deliberately excluded.
+func validToneModeSemantics(s ToneModeSemantics) bool {
+	switch s {
+	case ToneModeOff, ToneModeCTCSS, ToneModeCTCSSSquelch, ToneModeDTCS, ToneModeCross:
 		return true
 	default:
 		return false
@@ -157,6 +212,27 @@ func validToneSemantics(s ToneSemantics) bool {
 //   - No two ShiftOptions may express the same ShiftDirection.
 //   - No two CTCSSStates may express the same Semantics.
 //
+// The Icom tier (design D4) adds five rules, every one of which is
+// VACUOUS for a radio registered before it (all five fields are then
+// zero/empty), so none of them can change an existing profile's verdict:
+//
+//   - A Bank's sparse-space descriptor must be internally consistent:
+//     Sparse/Groups/PerGroup/Budget are legal only together, and all
+//     three numbers must be zero when Sparse is false (see
+//     Bank.sparseProblems).
+//   - The two vocabulary PAIRS — ShiftOptions/DuplexOptions and
+//     CTCSSStates/ToneModes — must each have at least one non-empty
+//     half. The non-empty rule moved from the Yaesu half alone to the
+//     pair, because the two vocabularies never coexist on one model;
+//     the problem string for "neither" is unchanged.
+//   - DuplexOptions and ToneModes get the blank/duplicate rules every
+//     vocabulary gets, must carry declared (never zero-value) semantics,
+//     and may express each semantic at most once — for the reason
+//     ShiftOptions' own uniqueness rule gives.
+//   - DTCSPolarities and Filters must contain no blank or duplicate
+//     value.
+//   - DTCSCodes, if non-empty, must be strictly ascending.
+//
 // There is no separate "RequiresTone must equal Encodes||Decodes"
 // invariant: that used to be checked because RequiresTone, Encodes and
 // Decodes were three independent stored bool fields that could disagree.
@@ -199,6 +275,13 @@ func (c Capabilities) Validate() error {
 			problems = append(problems, fmt.Sprintf("duplicate BankID %q", b.ID))
 		}
 		seenBank[b.ID] = true
+
+		// The sparse-space descriptor's own consistency (design D4,
+		// adjudication 7): Sparse/Groups/PerGroup/Budget are legal only
+		// together, and all zero without Sparse. Every bank registered
+		// before the Icom tier leaves all four at their zero values and
+		// so contributes nothing here.
+		problems = append(problems, b.sparseProblems()...)
 
 		for _, slot := range b.Slots {
 			if slot == "" {
@@ -269,6 +352,12 @@ func (c Capabilities) Validate() error {
 		}
 	}
 
+	for i := 1; i < len(c.DTCSCodes); i++ {
+		if c.DTCSCodes[i-1] >= c.DTCSCodes[i] {
+			problems = append(problems, fmt.Sprintf("DTCSCodes is not strictly ascending at index %d (%d >= %d)", i, c.DTCSCodes[i-1], c.DTCSCodes[i]))
+		}
+	}
+
 	for _, requiredSlot := range c.RequiredSlots {
 		found := false
 		for _, bank := range c.Banks {
@@ -287,7 +376,19 @@ func (c Capabilities) Validate() error {
 		}
 	}
 
-	problems = append(problems, validateVocab("ShiftOptions", shiftOptionValues(c.ShiftOptions))...)
+	// The repeater-shift PAIR (design D4): a radio expresses the Yaesu
+	// ShiftOptions vocabulary or the Icom DuplexOptions one, never both
+	// and never neither. The non-empty rule therefore applies to the
+	// pair, while the blank/duplicate rules apply to each list on its
+	// own. For every radio registered before the Icom tier
+	// DuplexOptions is empty, so this reduces to exactly the
+	// unconditional "ShiftOptions must not be empty" it replaces —
+	// same problem string, same position in the list, since an empty
+	// list contributes no blank/duplicate problems to reorder.
+	if len(c.ShiftOptions) == 0 && len(c.DuplexOptions) == 0 {
+		problems = append(problems, "ShiftOptions must not be empty")
+	}
+	problems = append(problems, validateVocabEntries("ShiftOptions", shiftOptionValues(c.ShiftOptions))...)
 
 	// Every ShiftOptions entry's Direction must be a declared, meaningful
 	// ShiftDirection — never ShiftUnspecified, its zero value: an option
@@ -313,11 +414,16 @@ func (c Capabilities) Validate() error {
 		seenDirection[o.Direction] = o.Value
 	}
 
+	// The tone PAIR, by the same rule and for the same reason as the
+	// shift pair above: CTCSSStates (Yaesu) or ToneModes (Icom).
 	ctcssValues := make([]string, len(c.CTCSSStates))
 	for i, ts := range c.CTCSSStates {
 		ctcssValues[i] = ts.Value
 	}
-	problems = append(problems, validateVocab("CTCSSStates", ctcssValues)...)
+	if len(c.CTCSSStates) == 0 && len(c.ToneModes) == 0 {
+		problems = append(problems, "CTCSSStates must not be empty")
+	}
+	problems = append(problems, validateVocabEntries("CTCSSStates", ctcssValues)...)
 
 	// Every CTCSSStates entry's Semantics must be a declared, meaningful
 	// ToneSemantics — never ToneSemanticsUnspecified, its zero value: a
@@ -339,6 +445,48 @@ func (c Capabilities) Validate() error {
 		}
 		seenSemantics[ts.Semantics] = ts.Value
 	}
+
+	// The Icom-tier vocabularies (design D4). Each is checked only for
+	// INTERNAL consistency when supplied — blank/duplicate values,
+	// declared semantics, one option per semantic — and contributes
+	// nothing at all when empty, which is every radio registered before
+	// that tier.
+	problems = append(problems, validateVocabEntries("DuplexOptions", duplexOptionValues(c.DuplexOptions))...)
+	for _, o := range c.DuplexOptions {
+		if !validDuplexDirection(o.Direction) {
+			problems = append(problems, fmt.Sprintf("DuplexOptions %q has invalid Direction %d", o.Value, o.Direction))
+		}
+	}
+	// One option per direction, for the reason ShiftOptions' own
+	// uniqueness rule gives: core/csvio maps CHIRP's "+"/"-" by asking
+	// for the option with a given Direction, and that question must have
+	// exactly one answer.
+	seenDuplex := make(map[DuplexDirection]string, len(c.DuplexOptions))
+	for _, o := range c.DuplexOptions {
+		if prev, dup := seenDuplex[o.Direction]; dup {
+			problems = append(problems, fmt.Sprintf("DuplexOptions %q and %q express the same direction", prev, o.Value))
+			continue
+		}
+		seenDuplex[o.Direction] = o.Value
+	}
+
+	problems = append(problems, validateVocabEntries("ToneModes", toneModeValues(c.ToneModes))...)
+	for _, m := range c.ToneModes {
+		if !validToneModeSemantics(m.Semantics) {
+			problems = append(problems, fmt.Sprintf("ToneModes %q has invalid Semantics %d", m.Value, m.Semantics))
+		}
+	}
+	seenToneMode := make(map[ToneModeSemantics]string, len(c.ToneModes))
+	for _, m := range c.ToneModes {
+		if prev, dup := seenToneMode[m.Semantics]; dup {
+			problems = append(problems, fmt.Sprintf("ToneModes %q and %q express the same semantics", prev, m.Value))
+			continue
+		}
+		seenToneMode[m.Semantics] = m.Value
+	}
+
+	problems = append(problems, validateVocabEntries("DTCSPolarities", c.DTCSPolarities)...)
+	problems = append(problems, validateVocabEntries("Filters", c.Filters)...)
 
 	if len(problems) == 0 {
 		return nil
