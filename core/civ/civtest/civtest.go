@@ -1031,8 +1031,12 @@ func RunZeroValue(t T) {
 	if _, err := zero.ParseTransceiverID([]byte{civ.PreambleByte, civ.PreambleByte, 0xE0, 0x94, civ.CmdTransceiverID, civ.SubTransceiverID, 0x94, civ.EndByte}); err == nil {
 		t.Errorf("zero profile: ParseTransceiverID accepted an answer — it has no address to attribute one to")
 	}
-	if _, err := zero.ParseMemoryAnswer([]byte{civ.PreambleByte, civ.PreambleByte, 0xE0, 0x94, civ.CmdMemory, civ.SubMemoryContents, 0x00, 0x01, 0x00, civ.EndByte}); err == nil {
+	memAnswer := []byte{civ.PreambleByte, civ.PreambleByte, 0xE0, 0x94, civ.CmdMemory, civ.SubMemoryContents, 0x00, 0x01, 0x00, civ.EndByte}
+	if _, err := zero.ParseMemoryAnswer(memAnswer); err == nil {
 		t.Errorf("zero profile: ParseMemoryAnswer accepted a memory answer — it has no layout to decode one with")
+	}
+	if _, record, err := zero.MemoryAnswerRecord(memAnswer); err == nil {
+		t.Errorf("zero profile: MemoryAnswerRecord split an answer into % 02x — it has no address geometry to split one with, and the raw-bytes hook must not be the way past an unconfigured profile", record)
 	}
 
 	offered := [][]byte{

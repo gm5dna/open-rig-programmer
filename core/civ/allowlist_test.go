@@ -381,6 +381,88 @@ func TestParseMemoryAnswer_WrongRecordLengthIsAnError(t *testing.T) {
 	}
 }
 
+// TestMemoryAnswerRecord is the raw-bytes hook: the split D5 entry 2b
+// needs and ParseMemoryAnswer cannot give, since an all-0xFF record dies
+// in the codec indistinguishably from a corrupt one.
+func TestMemoryAnswerRecord(t *testing.T) {
+	for _, np := range allTestProfiles() {
+		t.Run(np.name, func(t *testing.T) {
+			p := np.p
+			length := p.BuildRecordLength()
+			rec := sampleRecord(t, p, length)
+			answer := answerFor(mustCommand(p.BuildMemorySet(rec)).Bytes())
+
+			addr, record, err := p.MemoryAnswerRecord(answer)
+			if err != nil {
+				t.Fatalf("MemoryAnswerRecord refused the answer form of its own set: %v", err)
+			}
+			if addr != rec.Address {
+				t.Errorf("address = %+v, want %+v", addr, rec.Address)
+			}
+			if len(record) != length {
+				t.Fatalf("record is %d bytes, want %d", len(record), length)
+			}
+			// The bytes must be the record itself, not a re-encoding of
+			// something: compare against the frame's own tail.
+			want := answer[len(answer)-1-length : len(answer)-1]
+			if string(record) != string(want) {
+				t.Errorf("record = % 02x, want the frame's own bytes % 02x", record, want)
+			}
+			// And it must alias neither the caller's frame nor anything
+			// the profile holds: mutating it must change nothing.
+			record[0] ^= 0xFF
+			if _, again, err := p.MemoryAnswerRecord(answer); err != nil {
+				t.Fatalf("second MemoryAnswerRecord: %v", err)
+			} else if again[0] != want[0] {
+				t.Error("mutating the returned record changed what a later call returns — the slice aliases the frame")
+			}
+
+			// AN ALL-0xFF RECORD: the case that exists. It reaches the
+			// caller as bytes, and it does NOT reach ParseMemoryAnswer as
+			// a record — which is the whole gap this hook closes.
+			empty := copyBytes(answer)
+			for i := len(empty) - 1 - length; i < len(empty)-1; i++ {
+				empty[i] = 0xFF
+			}
+			gotAddr, raw, err := p.MemoryAnswerRecord(empty)
+			if err != nil {
+				t.Fatalf("MemoryAnswerRecord refused an all-0xFF record, so D5 entry 2b's reading cannot be reached at all: %v", err)
+			}
+			if gotAddr != rec.Address {
+				t.Errorf("all-0xFF answer: address = %+v, want %+v", gotAddr, rec.Address)
+			}
+			allFF := true
+			for _, b := range raw {
+				if b != 0xFF {
+					allFF = false
+				}
+			}
+			if !allFF {
+				t.Errorf("all-0xFF answer: record came back as % 02x", raw)
+			}
+			if _, err := p.ParseMemoryAnswer(empty); err == nil {
+				t.Error("ParseMemoryAnswer decoded an all-0xFF record — this package must not INVENT an empty-channel reading; the driver decides on its own model's evidence")
+			}
+
+			// It is not a way past the length fingerprint either: one byte
+			// under the SHORTEST length any layout declares.
+			shortest := p.RecordLengths()[0]
+			head := answer[:len(answer)-1-length]
+			short := append(copyBytes(head), answer[len(answer)-1-length:len(answer)-1-length+shortest-1]...)
+			short = append(short, EndByte)
+			if _, _, err := p.MemoryAnswerRecord(short); !errors.Is(err, ErrRecordLength) {
+				t.Errorf("MemoryAnswerRecord on an unaccepted length gave %v, want ErrRecordLength — a caller reaching for raw bytes must not be the one caller that skips the probe's fingerprint", err)
+			}
+
+			// And it is an ANSWER parser, not a command one: the outbound
+			// frame must be refused, whichever way round its addresses go.
+			if _, _, err := p.MemoryAnswerRecord(mustCommand(p.BuildMemorySet(rec)).Bytes()); err == nil {
+				t.Error("MemoryAnswerRecord read this program's OWN outbound set as an answer — on a bus that echoes it would do so constantly")
+			}
+		})
+	}
+}
+
 // TestBuildersRefuseAddressesOutsideTheirOwnSpace.
 func TestBuildersRefuseAddressesOutsideTheirOwnSpace(t *testing.T) {
 	for _, np := range allTestProfiles() {

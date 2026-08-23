@@ -66,6 +66,53 @@ func (p Profile) ParseTransceiverID(frame []byte) (string, error) {
 	return string(out), nil
 }
 
+// MemoryAnswerRecord splits a `1A 00 <address> <record>` answer into the
+// channel it speaks for and a COPY of its raw record bytes, WITHOUT
+// interpreting a single one of them.
+//
+// IT IS THE HOOK FOR THE EMPTY-CHANNEL QUESTION, and that is the whole
+// reason it is exported. Spec D5 entry 2 records two separate, unverified
+// possibilities for how a radio answers a read of an unused channel: it
+// sends FA, or it sends a record of 0xFF bytes. The first never reaches
+// any parser here (an FA frame carries no `1A 00`). The second reaches
+// ParseMemoryAnswer and dies on its first BCD nibble or its first unknown
+// enum value — a failure INDISTINGUISHABLE from a corrupted record, which
+// leaves a driver no way to tell "this channel is empty" from "this read
+// went wrong" without slicing the address field open itself, outside this
+// package, with this package's own address geometry copied by hand.
+//
+// So the split is offered here and the JUDGEMENT is not. This function
+// says which channel and which bytes; whether an all-0xFF record means
+// empty is the driver's decision on its own model's evidence, and this
+// tier has none yet. Deciding it here would bind six models to one
+// unverified reading of a manual.
+//
+// The length is still checked: a record at a length this profile does not
+// declare is *RecordLengthError, exactly as in ParseMemoryAnswer, because
+// that check is the probe's continuous length fingerprint (spec D3.2) and
+// a caller reaching for raw bytes must not be the one caller that skips
+// it. The returned slice aliases nothing — not the caller's frame, not
+// this profile.
+func (p Profile) MemoryAnswerRecord(frame []byte) (ChannelAddress, []byte, error) {
+	body, err := p.answerBody(frame, CmdMemory, SubMemoryContents)
+	if err != nil {
+		return ChannelAddress{}, nil, err
+	}
+	n := p.addressForm.addressBytes()
+	if len(body) < n {
+		return ChannelAddress{}, nil, newParseError(frame, "%s: memory answer carries %d bytes, too few for a %d-byte address under %v", p.model, len(body), n, p.addressForm)
+	}
+	addr, err := p.decodeAddress(body[:n])
+	if err != nil {
+		return ChannelAddress{}, nil, err
+	}
+	record := body[n:]
+	if !p.AcceptsRecordLength(len(record)) {
+		return ChannelAddress{}, nil, &RecordLengthError{Want: p.RecordLengths(), Got: len(record)}
+	}
+	return addr, copyBytes(record), nil
+}
+
 // ParseMemoryAnswer reads a `1A 00 <address> <record>` answer into a
 // neutral MemoryRecord.
 //
@@ -82,23 +129,13 @@ func (p Profile) ParseTransceiverID(frame []byte) (string, error) {
 // frame never reaches this parser (it carries no 1A 00), and an all-0xFF
 // record fails on its enum bytes with a parse error naming the offending
 // offset. Inventing an "empty channel" result from either would be a claim
-// this tier's evidence does not support.
+// this tier's evidence does not support. A driver that must inspect the
+// raw bytes to make that judgement on its own model's evidence calls
+// MemoryAnswerRecord, which this function is layered on.
 func (p Profile) ParseMemoryAnswer(frame []byte) (MemoryRecord, error) {
-	body, err := p.answerBody(frame, CmdMemory, SubMemoryContents)
+	addr, record, err := p.MemoryAnswerRecord(frame)
 	if err != nil {
 		return MemoryRecord{}, err
-	}
-	n := p.addressForm.addressBytes()
-	if len(body) < n {
-		return MemoryRecord{}, newParseError(frame, "%s: memory answer carries %d bytes, too few for a %d-byte address under %v", p.model, len(body), n, p.addressForm)
-	}
-	addr, err := p.decodeAddress(body[:n])
-	if err != nil {
-		return MemoryRecord{}, err
-	}
-	record := body[n:]
-	if !p.AcceptsRecordLength(len(record)) {
-		return MemoryRecord{}, &RecordLengthError{Want: p.RecordLengths(), Got: len(record)}
 	}
 	return p.decodeRecord(record, addr)
 }

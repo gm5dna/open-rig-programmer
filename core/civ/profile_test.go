@@ -69,6 +69,9 @@ func TestZeroProfileIsInert(t *testing.T) {
 	if _, err := zero.ParseMemoryAnswer([]byte{0xFE, 0xFE, 0xE0, 0x94, 0x1A, 0x00, 0x00, 0x01, 0x00, 0xFD}); err == nil {
 		t.Error("zero profile: ParseMemoryAnswer accepted a memory answer — it has no layout to decode one with")
 	}
+	if _, _, err := zero.MemoryAnswerRecord([]byte{0xFE, 0xFE, 0xE0, 0x94, 0x1A, 0x00, 0x00, 0x01, 0x00, 0xFD}); err == nil {
+		t.Error("zero profile: MemoryAnswerRecord split an answer — it has no address geometry to split one with")
+	}
 
 	// THE GATE. Every frame offered, including frames the CONFIGURED
 	// fixtures build and their own gates admit.
