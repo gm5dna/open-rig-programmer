@@ -34,8 +34,9 @@ import (
 // the same way.
 func exReadSpec(addr cat.EXAddress) CommandSpec {
 	return CommandSpec{
-		ExpectPrefix: "EX" + addr.Wire(),
-		RetryReads:   1,
+		Class:      ClassRead,
+		Match:      cat.PrefixLenMatcher("EX"+addr.Wire(), 0),
+		RetryReads: 1,
 	}
 }
 
@@ -219,7 +220,7 @@ func TestEngine_EXRead_PrefixOnlySpec_DemonstratesWrongAddressHazard(t *testing.
 
 	// The hazard: ExpectPrefix is the bare command name, not the full
 	// address.
-	got, err := eng.Do(ctx, cmd, CommandSpec{ExpectPrefix: "EX"})
+	got, err := eng.Do(ctx, cmd, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("EX", 0)})
 	if err != nil {
 		t.Fatalf("Do: unexpected error: %v", err)
 	}

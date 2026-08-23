@@ -14,6 +14,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
+	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
 // writableChannel returns the ORDINARY FTdx10 channel: a populated slot
@@ -754,23 +755,24 @@ func TestNameMaps_AreExactInverses(t *testing.T) {
 // TestMTSetSpec_IsFireAndForget pins the Set's transport spec, and each
 // half of it is a hazard rather than a preference.
 //
-// No ExpectPrefix: that is what selects transport's fire-and-forget path. A
+// ClassWrite, and no answer matcher: that is what selects transport's
+// fire-and-forget path (before D2 it was the ABSENCE of a prefix). A
 // spec pinning the ANSWER geometry read.go's mtSpec derives — the same "MT"
 // prefix, the same exact 41 — would wait the whole read timeout for a reply
 // a Set never produces, and then report a timeout for a write the radio had
 // accepted.
 //
 // RetryReads 0: a write is never resent (transport safety obligation 2),
-// and transport.Engine.Do refuses a fire-and-forget spec with a non-zero
+// and transport.Engine.Do refuses any write-class spec with a non-zero
 // RetryReads outright. The contrast with mtSpec's RetryReads 1 is the whole
 // point — a READ is idempotent and a WRITE is not.
 func TestMTSetSpec_IsFireAndForget(t *testing.T) {
 	got := mtSetSpec()
-	if got.ExpectPrefix != "" {
-		t.Errorf("ExpectPrefix = %q, want \"\" — a non-empty prefix makes transport wait for an answer a Set never sends", got.ExpectPrefix)
+	if got.Class != transport.ClassWrite {
+		t.Errorf("Class = %v, want transport.ClassWrite — that is what selects transport's fire-and-forget path since D2 made the class explicit", got.Class)
 	}
-	if got.ExpectLen != 0 {
-		t.Errorf("ExpectLen = %d, want 0", got.ExpectLen)
+	if got.Match != nil {
+		t.Error("Match is non-nil, want nil — an answer matcher makes transport wait for a reply a Set never sends, and transport.CommandSpec.validate refuses one on a ClassWrite outright")
 	}
 	if got.RetryReads != 0 {
 		t.Errorf("RetryReads = %d, want 0 — a write is NEVER resent (transport safety obligation 2)", got.RetryReads)

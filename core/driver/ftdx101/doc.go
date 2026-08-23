@@ -214,7 +214,7 @@
 // lifts it. Entry 9 carries two behaviours rather than one — the combined
 // Set's sufficiency and the acknowledgement convention that governs what
 // comes back from it — because ONE capture, the first write trial, lifts
-// both and because one line of code (write.go's zero CommandSpec) asserts
+// both and because one line of code (write.go's ClassWrite spec) asserts
 // both. The entry says so in its own words; the numbering is left alone,
 // since a renumbering would silently invalidate every citation into this
 // register from the fake, the dialect and the matrix.
@@ -270,7 +270,7 @@
 //     successive 5xx ordinals until it refuses rather than writing a bound
 //     down.
 //   - "The combined MT answer's EXACT length (consumed here as
-//     MTAnswerBounds() = (41, 41))" — the ExpectLen of every MT read this
+//     MTAnswerBounds() = (41, 41))" — the exact answer length every MT read this
 //     driver sends (read.go's mtSpec), derived from the dialect precisely
 //     so that the recorded 30..41 window contingency would move it.
 //   - "The CLARIFIER'S MINUS-DIRECTION BYTE, the ASCII HYPHEN-MINUS 0x2D
@@ -463,7 +463,7 @@
 //     INCLUDING AN EMPTY ONE — AND AN ACCEPTED SET DRAWS NO REPLY WHILE A
 //     REJECTED ONE DRAWS "?;". TWO ASSUMPTIONS, ONE ENTRY, because one
 //     design decision rests on both: the write path sends the combined Set
-//     with the ZERO transport.CommandSpec, which is a claim about what the
+//     with transport.CATWriteSpec() (ClassWrite), which is a claim about what the
 //     frame does AND a claim about what comes back. THE ENTRY LANDS HERE
 //     WITH THE DRIVER SKELETON, ONE TASK AHEAD OF THE WRITE PATH IT
 //     GOVERNS, because it is the assumption the whole MT-only choreography
@@ -516,7 +516,7 @@
 //     capture retires them together or not at all. Neither register may
 //     absorb the other.
 //     THE SITES THAT DEPEND ON IT, all three: write.go's mtSetSpec (the
-//     zero CommandSpec — no ExpectPrefix, so transport treats silence as
+//     ClassWrite spec — no answer matcher, so transport treats silence as
 //     acceptance and a bounded "?;" listen as the only failure signal),
 //     write.go's WriteChannel through it, and ftdx101.go's Open, whose AI0
 //     init frame is sent the same way.

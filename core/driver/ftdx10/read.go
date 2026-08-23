@@ -48,8 +48,8 @@ var shiftNames = map[cat.Shift]string{
 // moves with them.
 //
 // The equal-bounds check is what makes that safe rather than lucky:
-// transport.CommandSpec.ExpectLen is a single exact length, so a dialect
-// reporting a genuine window has no honest ExpectLen and gets an error
+// transport.CATReadSpec takes a single exact length, so a dialect
+// reporting a genuine window has no honest exact length and gets an error
 // instead of its window's top silently becoming a hard requirement (which
 // would reject every shorter answer as unmatched, i.e. as a timeout).
 func mtSpec(d cat.Dialect) (transport.CommandSpec, error) {
@@ -58,9 +58,9 @@ func mtSpec(d cat.Dialect) (transport.CommandSpec, error) {
 		return transport.CommandSpec{}, fmt.Errorf("ftdx10: MT answer geometry: %w", err)
 	}
 	if lo != hi {
-		return transport.CommandSpec{}, fmt.Errorf("ftdx10: MT answer geometry: this dialect reports a %d..%d length WINDOW, but transport.CommandSpec.ExpectLen is a single exact length — a windowed answer needs a spec that expresses the window, not its top", lo, hi)
+		return transport.CommandSpec{}, fmt.Errorf("ftdx10: MT answer geometry: this dialect reports a %d..%d length WINDOW, but transport.CATReadSpec takes a single exact length — a windowed answer needs a spec that expresses the window, not its top", lo, hi)
 	}
-	return transport.CommandSpec{ExpectPrefix: "MT", ExpectLen: hi, RetryReads: 1}, nil
+	return transport.CATReadSpec("MT", hi, 1), nil
 }
 
 // ReadChannel implements driver.Session: ONE combined MT read, mapped into

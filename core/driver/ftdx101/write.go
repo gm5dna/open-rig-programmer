@@ -68,7 +68,7 @@ var shiftByName = map[string]cat.Shift{
 // Every part of that zero value is load-bearing, and it is why this is a
 // separate function from read.go's mtSpec rather than a reuse of it:
 //
-//   - NO ExpectPrefix, and therefore no ExpectLen. read.go's mtSpec pins the
+//   - NO answer matcher, and therefore no answer length. read.go's mtSpec pins the
 //     combined ANSWER's exact 41-byte geometry from the dialect, which is
 //     right for a read and would be a bug here: on the assumed convention a
 //     Set produces no answer at all, so a spec that waited for an "MT" reply
@@ -90,7 +90,7 @@ var shiftByName = map[string]cat.Shift{
 // The FT-710's driver spells the same thing fnfSpec (core/driver/ft710) and
 // the FTdx10's mtSetSpec; the mechanics are the TRANSPORT's, not any radio's.
 func mtSetSpec() transport.CommandSpec {
-	return transport.CommandSpec{}
+	return transport.CATWriteSpec()
 }
 
 // bankFor reports which of this session's banks claims slot.
