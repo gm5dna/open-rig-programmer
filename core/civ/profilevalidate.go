@@ -400,7 +400,26 @@ func maxBCDValue(n int) uint64 {
 	return v - 1
 }
 
-// validateFixedTemplate is V8.
+// validateFixedTemplate is V8: the template speaks only for the nibbles no
+// span claims.
+//
+// THE RULE IS PER NIBBLE, NOT PER BYTE, and that is a deliberate widening
+// of the first cut. The original rule forced Fixed to zero under any byte a
+// span touched, INCLUDING a byte only one nibble of which was mapped — and
+// a model whose record carries a documented constant in the nibble beside
+// an enum was then inexpressible. That is not a harmless expressiveness
+// limit: a profile forced to omit the constant would have its own radio's
+// records refused by the gate's re-encode, because the encoder would write
+// a zero where the radio writes the constant.
+//
+// The encoder already does the right thing — NibbleHigh ORs into
+// out[off]&0x0F and NibbleLow into out[off]&0xF0, so whichever half the
+// span does not claim keeps its template value — so this was a validator
+// limit alone.
+//
+// WHAT STAYS FORBIDDEN is the case the rule exists for: a template byte
+// under a nibble a span DOES claim. There the span decides the value, and
+// a template also claiming it would make the precedence silent.
 func validateFixedTemplate(cfg ProfileConfig) error {
 	for li, l := range cfg.Layouts {
 		if len(l.Fixed) == 0 {
@@ -409,18 +428,38 @@ func validateFixedTemplate(cfg ProfileConfig) error {
 		if len(l.Fixed) != l.Length {
 			return invalidProfile("Layouts[%d].Fixed is %d bytes for a %d-byte record — the template describes the whole record or none of it", li, len(l.Fixed), l.Length)
 		}
-		mapped := make(map[int]bool, l.Length)
+		// The same high/low claim split V7 uses, so the two rules cannot
+		// disagree about what "mapped" means.
+		claimedHigh := make(map[int]bool, l.Length)
+		claimedLow := make(map[int]bool, l.Length)
 		for _, sp := range l.Fields {
 			for off := sp.Offset; off < sp.Offset+sp.Length; off++ {
-				mapped[off] = true
+				high, low := true, true
+				if sp.Encoding == EncodingEnum {
+					switch sp.Nibble {
+					case NibbleHigh:
+						low = false
+					case NibbleLow:
+						high = false
+					}
+				}
+				if high {
+					claimedHigh[off] = true
+				}
+				if low {
+					claimedLow[off] = true
+				}
 			}
 		}
 		for i, b := range l.Fixed {
 			if b == PreambleByte || b == EndByte {
 				return invalidProfile("Layouts[%d].Fixed[%d] is the framing byte %#02x — every record this profile builds would split on the wire", li, i, b)
 			}
-			if mapped[i] && b != 0 {
-				return invalidProfile("Layouts[%d].Fixed[%d] is %#02x under a mapped field span — the span decides that byte, and a template also claiming it would make the precedence silent", li, i, b)
+			if claimedHigh[i] && b&0xF0 != 0 {
+				return invalidProfile("Layouts[%d].Fixed[%d] is %#02x, whose HIGH nibble lies under a mapped field span — the span decides that nibble, and a template also claiming it would make the precedence silent", li, i, b)
+			}
+			if claimedLow[i] && b&0x0F != 0 {
+				return invalidProfile("Layouts[%d].Fixed[%d] is %#02x, whose LOW nibble lies under a mapped field span — the span decides that nibble, and a template also claiming it would make the precedence silent", li, i, b)
 			}
 		}
 	}

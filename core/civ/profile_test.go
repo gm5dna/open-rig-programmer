@@ -419,6 +419,86 @@ func TestScaleIsBoundedByItsFieldsOwnWidth(t *testing.T) {
 	}
 }
 
+// TestFixedTemplateMayCarryAConstantBesideANibbleEnum is V8's widened
+// rule, in both directions.
+//
+// A model whose record carries a documented constant in the nibble beside
+// an enum was inexpressible while V8 keyed on whole bytes — and worse than
+// inexpressible: a profile forced to omit the constant would have its own
+// radio's records refused by the gate's re-encode, because the encoder
+// writes a zero where the radio writes the constant.
+func TestFixedTemplateMayCarryAConstantBesideANibbleEnum(t *testing.T) {
+	cfg := func(fixed []byte) ProfileConfig {
+		return ProfileConfig{
+			Model:         "NIBBLE",
+			RadioAddress:  0x94,
+			AddressForm:   AddressFormFlat,
+			ChannelLo:     1,
+			ChannelHi:     99,
+			Discriminator: DiscriminatorSingleLength,
+			BuildLength:   3,
+			Layouts: []RecordLayout{{
+				Length: 3,
+				Fields: []FieldSpan{
+					{Field: FieldRXFrequency, Offset: 0, Length: 2, Encoding: EncodingBCDNumber, Order: OrderBigEndian, Scale: 1},
+					// The HIGH nibble of byte 2 only.
+					{Field: FieldMode, Offset: 2, Length: 1, Nibble: NibbleHigh, Encoding: EncodingEnum, Enum: map[byte]string{0x00: "LSB", 0x01: "USB"}},
+				},
+				Fixed: fixed,
+			}},
+		}
+	}
+
+	// THE UNMAPPED NIBBLE: a constant beside the enum is legal.
+	p, err := NewProfile(cfg([]byte{0, 0, 0x07}))
+	if err != nil {
+		t.Fatalf("NewProfile refused a constant in the nibble NO span claims: %v", err)
+	}
+
+	rec := MemoryRecord{Address: ChannelAddress{Channel: 1}, RXFreqHz: Available[uint64](1234), Mode: Available("USB")}
+	set, err := p.BuildMemorySet(rec)
+	if err != nil {
+		t.Fatalf("BuildMemorySet: %v", err)
+	}
+	frame := set.Bytes()
+	record := frame[len(frame)-1-3 : len(frame)-1]
+	if record[2] != 0x17 {
+		t.Fatalf("record byte 2 = %#02x, want 0x17 — the enum in the high nibble and the template's constant in the low", record[2])
+	}
+	if !p.AllowedCommand(frame) {
+		t.Fatal("its own gate refused the frame its own builder built")
+	}
+	back, err := p.ParseMemoryAnswer(answerFor(frame))
+	if err != nil {
+		t.Fatalf("ParseMemoryAnswer: %v", err)
+	}
+	if back != rec {
+		t.Fatalf("round trip: got %+v, want %+v", back, rec)
+	}
+
+	// And the constant is ENFORCED: altering it is a byte no builder would
+	// write, so the gate's re-encode refuses it.
+	mutated := copyBytes(frame)
+	mutated[len(mutated)-2] = 0x18
+	if p.AllowedCommand(mutated) {
+		t.Error("the gate admitted a record whose documented constant was altered — the template nibble is not being re-encoded")
+	}
+
+	// THE MAPPED NIBBLE: still forbidden, and the message says WHICH half.
+	if _, err := NewProfile(cfg([]byte{0, 0, 0x70})); err == nil {
+		t.Fatal("NewProfile accepted a template byte under the nibble a span DOES claim — the precedence would be silent")
+	} else if !errors.Is(err, ErrInvalidProfile) {
+		t.Fatalf("error %v does not wrap ErrInvalidProfile", err)
+	} else if !strings.Contains(err.Error(), "HIGH") {
+		t.Fatalf("error %q does not say which nibble is at fault", err)
+	}
+
+	// A whole-byte span is unchanged: both nibbles stay forbidden.
+	if _, err := NewProfile(cfg([]byte{0x01, 0, 0})); err == nil {
+		t.Fatal("NewProfile accepted a template byte under a whole-byte BCD span")
+	}
+}
+
 func TestNewProfile_DefaultsAndCopies(t *testing.T) {
 	cfg := ProfileConfig{
 		Model:         "DEFAULTS",
