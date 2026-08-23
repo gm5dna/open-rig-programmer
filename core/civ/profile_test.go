@@ -4,6 +4,7 @@ package civ
 
 import (
 	"errors"
+	"math"
 	"strings"
 	"testing"
 )
@@ -338,6 +339,9 @@ func TestNewProfile_Validation(t *testing.T) {
 			f[0] = 0x01
 			c.Layouts[0].Fixed = f
 		}, "Fixed"},
+		{"a scale that overflows the field's own width", func(c *ProfileConfig) {
+			c.Layouts[0].Fields[0].Scale = math.MaxUint64/maxBCDValue(5) + 1
+		}, "Scale"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := base()
@@ -353,6 +357,65 @@ func TestNewProfile_Validation(t *testing.T) {
 				t.Fatalf("error %q does not name %q — a validator returning a generic message from the wrong branch passes a test that only checks for non-nil", err, tc.wantSub)
 			}
 		})
+	}
+}
+
+// TestScaleIsBoundedByItsFieldsOwnWidth is the BOUNDARY of the one
+// arithmetic hole in the validator: the decoder computes raw * Scale, and
+// nothing bounded the product.
+//
+// The limit is MaxUint64 divided by the widest value the field can hold —
+// exactly at it is legal, one past it is refused, and a record read at the
+// legal maximum comes back as the value it should rather than a wrapped
+// one.
+func TestScaleIsBoundedByItsFieldsOwnWidth(t *testing.T) {
+	const width = 5
+	widest := maxBCDValue(width) // 10 packed digits: 9,999,999,999
+	limit := uint64(math.MaxUint64) / widest
+
+	cfg := func(scale uint64) ProfileConfig {
+		return ProfileConfig{
+			Model:         "SCALE",
+			RadioAddress:  0x94,
+			AddressForm:   AddressFormFlat,
+			ChannelLo:     1,
+			ChannelHi:     99,
+			Discriminator: DiscriminatorSingleLength,
+			BuildLength:   width,
+			Layouts: []RecordLayout{{
+				Length: width,
+				Fields: []FieldSpan{
+					{Field: FieldRXFrequency, Offset: 0, Length: width, Encoding: EncodingBCDNumber, Order: OrderBigEndian, Scale: scale},
+				},
+			}},
+		}
+	}
+
+	p, err := NewProfile(cfg(limit))
+	if err != nil {
+		t.Fatalf("NewProfile refused Scale exactly at the limit (%d): %v", limit, err)
+	}
+	if _, err := NewProfile(cfg(limit + 1)); err == nil {
+		t.Fatalf("NewProfile accepted Scale %d, one past the limit for a %d-byte field — the decoder's raw*Scale wraps silently there", limit+1, width)
+	} else if !errors.Is(err, ErrInvalidProfile) {
+		t.Fatalf("error %v does not wrap ErrInvalidProfile", err)
+	} else if !strings.Contains(err.Error(), "Scale") {
+		t.Fatalf("error %q does not name Scale", err)
+	}
+
+	// AND THE PRODUCT AT THE LIMIT IS THE RIGHT NUMBER. A profile at the
+	// boundary must still read its own widest record back exactly.
+	rec := MemoryRecord{Address: ChannelAddress{Channel: 1}, RXFreqHz: Available(widest * limit)}
+	set, err := p.BuildMemorySet(rec)
+	if err != nil {
+		t.Fatalf("BuildMemorySet at the widest value the field holds: %v", err)
+	}
+	back, err := p.ParseMemoryAnswer(answerFor(set.Bytes()))
+	if err != nil {
+		t.Fatalf("ParseMemoryAnswer at the boundary: %v", err)
+	}
+	if got, _ := back.RXFreqHz.Get(); got != widest*limit {
+		t.Fatalf("RXFreqHz = %d, want %d — the read path wrapped at the very value validation permits", got, widest*limit)
 	}
 }
 

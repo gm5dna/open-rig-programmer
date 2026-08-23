@@ -2,7 +2,10 @@
 
 package civ
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 // validateRecordFields reports whether rec is a record THIS profile can
 // write at length: every field the layout maps is present, no field it does
@@ -216,6 +219,14 @@ func (p Profile) decodeRecord(b []byte, addr ChannelAddress) (MemoryRecord, erro
 			raw, err := decodeBCDNumber(b[sp.Offset:sp.Offset+sp.Length], sp.Order)
 			if err != nil {
 				return MemoryRecord{}, newParseError(b, "%s: %v", sp.Field, err)
+			}
+			// ASSERTED, NOT ASSUMED. Profile validation bounds Scale
+			// against the field's own width so this cannot fire for a
+			// profile NewProfile built — but the cost of being wrong is a
+			// silently wrapped frequency handed to a caller as fact, so
+			// the read path checks rather than trusts.
+			if raw > math.MaxUint64/sp.Scale {
+				return MemoryRecord{}, newParseError(b, "%s: wire value %d times this field's scale %d overflows — the neutral value would wrap", sp.Field, raw, sp.Scale)
 			}
 			v := raw * sp.Scale
 			if prev, dup := seenNum[sp.Field]; dup && prev != v {

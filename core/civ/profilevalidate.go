@@ -2,7 +2,10 @@
 
 package civ
 
-import "sort"
+import (
+	"math"
+	"sort"
+)
 
 // maxChannelDecimal is the largest channel number a two-byte packed-BCD
 // field can express. DERIVED from the address encoding, not chosen.
@@ -259,6 +262,17 @@ func validateLayoutFields(cfg ProfileConfig) error {
 				if sp.Scale == 0 {
 					return invalidProfile("%s (%s) has Scale 0 — the decoder multiplies by it, so every value would read as zero", where(), sp.Field)
 				}
+				// THE READ PATH MULTIPLIES, so Scale and the field's own
+				// width together decide whether it can wrap. The decoder
+				// computes raw * Scale, and the widest raw a Length-byte
+				// packed-BCD field can hold is 10^(2*Length) - 1; a Scale
+				// past MaxUint64 divided by that would let a record the
+				// gate's re-encode WOULD refuse still come back from
+				// ParseMemoryAnswer as a silently wrapped value. Refused
+				// at construction, where there is no radio in the loop.
+				if limit := math.MaxUint64 / maxBCDValue(sp.Length); sp.Scale > limit {
+					return invalidProfile("%s (%s) has Scale %d with a %d-byte field, want Scale <= %d — the widest value the field holds is %d, and the decoder's raw*Scale would wrap past MaxUint64", where(), sp.Field, sp.Scale, sp.Length, limit, maxBCDValue(sp.Length))
+				}
 				if sp.Nibble != NibbleWhole {
 					return invalidProfile("%s (%s) selects %v under EncodingBCDNumber — nibble spans are enum-only", where(), sp.Field, sp.Nibble)
 				}
@@ -372,6 +386,18 @@ func validateLayoutOverlap(cfg ProfileConfig) error {
 		}
 	}
 	return nil
+}
+
+// maxBCDValue is the largest value an n-byte packed-BCD field can hold:
+// 10^(2n) - 1. n is at most maxBCDBytes (9), so 10^18 - 1 fits a uint64
+// with room to spare, which is why maxBCDBytes is derived rather than
+// chosen.
+func maxBCDValue(n int) uint64 {
+	v := uint64(1)
+	for i := 0; i < 2*n; i++ {
+		v *= 10
+	}
+	return v - 1
 }
 
 // validateFixedTemplate is V8.
