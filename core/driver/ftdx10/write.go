@@ -44,8 +44,8 @@ var shiftByName = map[string]cat.Shift{
 	"MINUS":   cat.ShiftMinus,
 }
 
-// mtSetSpec is the transport spec for the combined MT SET: the ZERO
-// CommandSpec, which is transport's fire-and-forget mode — write the frame,
+// mtSetSpec is the transport spec for the combined MT SET:
+// transport.CATWriteSpec(), which is transport's fire-and-forget mode — write the frame,
 // then listen for a bounded window in case a "?;" rejection arrives, and
 // treat silence as acceptance.
 //
@@ -63,18 +63,20 @@ var shiftByName = map[string]cat.Shift{
 // Every part of that zero value is load-bearing, and it is why this is a
 // separate function from read.go's mtSpec rather than a reuse of it:
 //
-//   - NO ExpectPrefix, and therefore no derived ExpectLen. mtSpec pins the
+//   - NO answer matcher, and therefore no derived answer length. mtSpec pins the
 //     combined ANSWER's exact 41-byte geometry from the dialect, which is
 //     right for a read and would be a bug here: on the assumed convention
 //     a Set produces no answer at all, so a spec that waited for an "MT"
 //     reply would spend the whole read timeout and then report a timeout
-//     for a write that the radio had accepted perfectly. The absence of a
-//     prefix is what selects transport's fire-and-forget path (see
-//     transport.Engine.Do).
+//     for a write that the radio had accepted perfectly. ClassWrite is
+//     what selects transport's fire-and-forget path (see
+//     transport.Engine.Do); before D2 it was the ABSENCE of a prefix, an
+//     inference from an empty field that this claim is far too heavy to
+//     rest on.
 //
 //   - RetryReads 0, necessarily. A write is NEVER resent — transport
-//     safety obligation 2 enforces this structurally, and Do refuses a
-//     fire-and-forget spec with a non-zero RetryReads outright (with
+//     safety obligation 2 enforces this structurally, and Do refuses any
+//     write-class spec with a non-zero RetryReads outright (with
 //     ErrInvalidSpec, before writing anything). Resending an accepted Set
 //     would write the channel twice; resending one whose fate is unknown
 //     would write it a second time on top of a first that may have landed.
@@ -83,7 +85,7 @@ var shiftByName = map[string]cat.Shift{
 // the mechanics are identical because they are the TRANSPORT's, not either
 // radio's, and this driver names it for the one command it uses it with.
 func mtSetSpec() transport.CommandSpec {
-	return transport.CommandSpec{}
+	return transport.CATWriteSpec()
 }
 
 // bankFor reports which of this session's banks claims slot.

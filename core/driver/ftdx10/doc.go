@@ -183,7 +183,7 @@
 // Entry 9 carries two behaviours rather than one — the combined Set's
 // sufficiency and the acknowledgement convention that governs what comes
 // back from it — because ONE capture, the first write trial, lifts both and
-// because one line of code (write.go's zero CommandSpec) asserts both. The
+// because one line of code (write.go's ClassWrite spec) asserts both. The
 // entry says so in its own words; the numbering is left alone, since a
 // renumbering would silently invalidate every citation into this register.
 // This mirrors core/driver/ftdx101/doc.go's entry 9, which took the same
@@ -359,7 +359,7 @@
 //     INCLUDING AN EMPTY ONE — AND AN ACCEPTED SET DRAWS NO REPLY WHILE A
 //     REJECTED ONE DRAWS "?;". TWO ASSUMPTIONS, ONE ENTRY, because one
 //     design decision rests on both: the write path sends the combined
-//     Set with the ZERO transport.CommandSpec, which is a claim about
+//     Set with transport.CATWriteSpec() (ClassWrite), which is a claim about
 //     what the frame does AND a claim about what comes back. The entry
 //     landed with the driver skeleton, one task ahead of the write path,
 //     because it is the assumption the whole MT-only choreography rests
@@ -409,8 +409,8 @@
 //     radio). Those are claims about the FAKE; this one is a claim about
 //     what the DRIVER expects of a real radio, and a capture retires them
 //     together or not at all. Neither register may absorb the other.
-//     THE SITES THAT DEPEND ON IT: write.go's mtSetSpec (the zero
-//     CommandSpec — no ExpectPrefix, so transport treats silence as
+//     THE SITES THAT DEPEND ON IT: write.go's mtSetSpec (the ClassWrite
+//     spec — no answer matcher, so transport treats silence as
 //     acceptance and a bounded "?;" listen as the only failure signal)
 //     and write.go's WriteChannel through it. Unlike the FTdx101's
 //     driver, this one's Open states nothing about the AI0 init frame's

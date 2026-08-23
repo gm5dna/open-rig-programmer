@@ -423,8 +423,8 @@
 //     framing rule and this fake inherits it; this manual is cited in this
 //     repository for frame SHAPES (its availability table and position charts),
 //     not for an acknowledgement convention. core/driver/ftdx101's write path
-//     already depends on the silence — its MT Set spec carries no ExpectPrefix,
-//     precisely because a Set has no answer — so a radio that acknowledged
+//     already depends on the silence — its MT Set spec is a ClassWrite carrying
+//     no answer matcher, precisely because a Set has no answer — so a radio that acknowledged
 //     would break the driver, not just this fake.
 //     STAGE W LIFTS IT, PER MODEL, WITH: one MT Set to a radio of that model
 //     with the port watched for any reply at all before the next command is

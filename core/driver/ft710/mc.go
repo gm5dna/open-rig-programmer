@@ -14,7 +14,7 @@ import (
 // ("MC" + 3-byte slot + ";", the same shape as an MC-set frame). One
 // retry — reads are idempotent.
 func mcReadSpec() transport.CommandSpec {
-	return transport.CommandSpec{ExpectPrefix: "MC", ExpectLen: 6, RetryReads: 1}
+	return transport.CATReadSpec("MC", 6, 1)
 }
 
 // ErrMCSnapshotUnavailable is the sentinel a caller should compare
