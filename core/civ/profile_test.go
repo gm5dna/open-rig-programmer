@@ -1,0 +1,468 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package civ
+
+import (
+	"errors"
+	"strings"
+	"testing"
+)
+
+// TestZeroProfileIsInert holds the zero Profile to its one property: it
+// describes no radio, so it builds nothing, parses nothing and — the
+// property that matters — ADMITS NOTHING.
+//
+// An exported struct always has a constructible zero value, so
+// `var p civ.Profile` compiles and p.AllowedCommand is a perfectly
+// non-nil method value: a gate that LOOKS installable while describing no
+// radio at all. This is the test that says what it does instead.
+func TestZeroProfileIsInert(t *testing.T) {
+	var zero Profile
+
+	if zero.Configured() {
+		t.Fatal("the zero Profile reports Configured() == true — every refusal below rests on it not being configured")
+	}
+	if zero.Model() != "" {
+		t.Errorf("zero profile: Model() = %q, want empty", zero.Model())
+	}
+	if n := len(zero.RecordLengths()); n != 0 {
+		t.Errorf("zero profile: RecordLengths() has %d entries, want none", n)
+	}
+	if n := len(zero.Layouts()); n != 0 {
+		t.Errorf("zero profile: Layouts() has %d entries, want none", n)
+	}
+
+	// Every builder refuses, returning the zero Command with its error.
+	builders := []struct {
+		what string
+		cmd  Command
+		err  error
+	}{}
+	add := func(what string, c Command, err error) {
+		builders = append(builders, struct {
+			what string
+			cmd  Command
+			err  error
+		}{what, c, err})
+	}
+	idCmd, idErr := zero.BuildTransceiverIDRead()
+	add("BuildTransceiverIDRead", idCmd, idErr)
+	rdCmd, rdErr := zero.BuildMemoryRead(ChannelAddress{Channel: 1})
+	add("BuildMemoryRead", rdCmd, rdErr)
+	stCmd, stErr := zero.BuildMemorySet(MemoryRecord{})
+	add("BuildMemorySet", stCmd, stErr)
+
+	for _, b := range builders {
+		if b.err == nil {
+			t.Errorf("zero profile: %s SUCCEEDED, emitting %s — an unconfigured profile must build nothing", b.what, b.cmd)
+			continue
+		}
+		if !b.cmd.IsZero() {
+			t.Errorf("zero profile: %s returned a non-zero Command alongside its error", b.what)
+		}
+	}
+
+	// Every parser refuses.
+	if _, err := zero.ParseTransceiverID([]byte{0xFE, 0xFE, 0xE0, 0x94, 0x19, 0x00, 0x94, 0xFD}); err == nil {
+		t.Error("zero profile: ParseTransceiverID accepted a well-formed answer — it has no address to attribute it to")
+	}
+	if _, err := zero.ParseMemoryAnswer([]byte{0xFE, 0xFE, 0xE0, 0x94, 0x1A, 0x00, 0x00, 0x01, 0x00, 0xFD}); err == nil {
+		t.Error("zero profile: ParseMemoryAnswer accepted a memory answer — it has no layout to decode one with")
+	}
+
+	// THE GATE. Every frame offered, including frames the CONFIGURED
+	// fixtures build and their own gates admit.
+	offered := [][]byte{
+		{0xFE, 0xFE, 0x94, 0xE0, 0x19, 0x00, 0xFD},
+		{0xFE, 0xFE, 0x94, 0xE0, 0x1A, 0x00, 0x00, 0x01, 0xFD},
+		{0xFE, 0xFE, 0xE0, 0x94, AckByte, 0xFD},
+	}
+	for _, np := range allTestProfiles() {
+		cmd, err := np.p.BuildTransceiverIDRead()
+		if err != nil {
+			t.Fatalf("%s: BuildTransceiverIDRead: %v", np.name, err)
+		}
+		offered = append(offered, cmd.Bytes())
+	}
+	refused := 0
+	for _, frame := range offered {
+		if zero.AllowedCommand(frame) {
+			t.Errorf("zero profile: its gate ADMITTED %s — an unconfigured profile must authorise nothing, or a program holding one could put bytes on a wire to a radio it cannot describe", hexFrame(frame))
+			continue
+		}
+		refused++
+	}
+	if refused != len(offered) {
+		t.Errorf("zero profile: %d of %d offered frames were refused", refused, len(offered))
+	}
+	if refused == 0 {
+		t.Error("zero profile: nothing was offered to the gate at all — this check would pass on a gate that admits everything")
+	}
+	t.Logf("zero profile: %d builders refused, %d frames refused at the gate", len(builders), refused)
+}
+
+// TestProfileAccessorsReportTheirOwnData walks every fixture and checks
+// each accessor reports THAT profile's datum. It is the cheap half of the
+// receiver-is-load-bearing property; the behavioural half is every
+// table-driven test in this package running over allTestProfiles.
+func TestProfileAccessorsReportTheirOwnData(t *testing.T) {
+	for _, np := range allTestProfiles() {
+		t.Run(np.name, func(t *testing.T) {
+			p := np.p
+			if !p.Configured() {
+				t.Fatal("fixture is not configured")
+			}
+			if p.Model() == "" {
+				t.Error("Model() is empty")
+			}
+			if p.RadioAddress() == 0 {
+				t.Error("RadioAddress() is 0")
+			}
+			if p.ControllerAddress() == 0 {
+				t.Error("ControllerAddress() is 0")
+			}
+			if p.MaxFrame() <= 0 {
+				t.Errorf("MaxFrame() = %d", p.MaxFrame())
+			}
+			if p.AddressForm() == AddressFormUnspecified {
+				t.Error("AddressForm() is unspecified")
+			}
+			lengths := p.RecordLengths()
+			if len(lengths) == 0 {
+				t.Fatal("RecordLengths() is empty")
+			}
+			for i := 1; i < len(lengths); i++ {
+				if lengths[i] <= lengths[i-1] {
+					t.Fatalf("RecordLengths() = %v, want strictly ascending", lengths)
+				}
+			}
+			found := false
+			for _, n := range lengths {
+				if n == p.BuildRecordLength() {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("BuildRecordLength() = %d is not in RecordLengths() %v", p.BuildRecordLength(), lengths)
+			}
+		})
+	}
+}
+
+// TestProfileAccessorsReturnCopies pins that a caller cannot edit a
+// constructed profile after the fact. A Profile is consulted by the
+// outbound gate on every write, and a gate whose data can be edited by
+// whoever holds it is not a gate.
+func TestProfileAccessorsReturnCopies(t *testing.T) {
+	p := flatProfile
+
+	lengths := p.RecordLengths()
+	lengths[0] = 999
+	if got := p.RecordLengths(); got[0] == 999 {
+		t.Error("RecordLengths() shares its slice with the profile")
+	}
+
+	layouts := p.Layouts()
+	if len(layouts) == 0 {
+		t.Fatal("Layouts() is empty")
+	}
+	layouts[0].Length = 999
+	layouts[0].Fields[0].Offset = 999
+	for k := range layouts[0].Fields[2].Enum {
+		layouts[0].Fields[2].Enum[k] = "MUTATED"
+	}
+	again := p.Layouts()
+	if again[0].Length == 999 || again[0].Fields[0].Offset == 999 {
+		t.Error("Layouts() shares its slices with the profile")
+	}
+	for _, name := range again[0].Fields[2].Enum {
+		if name == "MUTATED" {
+			t.Error("Layouts() shares its enum maps with the profile — one caller's mutation would become every radio's mode table")
+		}
+	}
+
+	cs := p.NameCharset()
+	if len(cs) == 0 {
+		t.Fatal("NameCharset() is empty for a profile with a name field")
+	}
+	cs[0] = 0xFF
+	if p.NameCharset()[0] == 0xFF {
+		t.Error("NameCharset() shares its slice with the profile")
+	}
+}
+
+// TestNewProfile_Validation walks every rule, asserting that the failure
+// names the FIELD and the OFFENDING VALUE and wraps ErrInvalidProfile.
+func TestNewProfile_Validation(t *testing.T) {
+	// base is a minimal VALID config; each case perturbs exactly one thing.
+	base := func() ProfileConfig {
+		return ProfileConfig{
+			Model:         "BASE",
+			RadioAddress:  0x94,
+			AddressForm:   AddressFormFlat,
+			ChannelLo:     1,
+			ChannelHi:     99,
+			NameLength:    4,
+			NameCharset:   "ABC ",
+			NamePad:       ' ',
+			Discriminator: DiscriminatorSingleLength,
+			BuildLength:   10,
+			Layouts: []RecordLayout{{
+				Length: 10,
+				Fields: []FieldSpan{
+					{Field: FieldRXFrequency, Offset: 0, Length: 5, Encoding: EncodingBCDNumber, Order: OrderLittleEndian, Scale: 1},
+					{Field: FieldMode, Offset: 5, Length: 1, Encoding: EncodingEnum, Enum: map[byte]string{0x00: "LSB"}},
+					{Field: FieldName, Offset: 6, Length: 4, Encoding: EncodingName},
+				},
+			}},
+		}
+	}
+	if _, err := NewProfile(base()); err != nil {
+		t.Fatalf("the base config must be valid, got %v", err)
+	}
+
+	for _, tc := range []struct {
+		name    string
+		mutate  func(*ProfileConfig)
+		wantSub string
+	}{
+		{"empty model", func(c *ProfileConfig) { c.Model = "" }, "Model"},
+		{"radio address 0", func(c *ProfileConfig) { c.RadioAddress = 0 }, "RadioAddress"},
+		{"radio address is the preamble byte", func(c *ProfileConfig) { c.RadioAddress = PreambleByte }, "RadioAddress"},
+		{"radio address is the terminator", func(c *ProfileConfig) { c.RadioAddress = EndByte }, "RadioAddress"},
+		{"controller address is the terminator", func(c *ProfileConfig) { c.ControllerAddress = EndByte }, "ControllerAddress"},
+		{"radio and controller share an address", func(c *ProfileConfig) { c.RadioAddress = ControllerAddressDefault }, "RadioAddress"},
+		{"max frame too small for the built frame", func(c *ProfileConfig) { c.MaxFrame = 12 }, "MaxFrame"},
+		{"unspecified address form", func(c *ProfileConfig) { c.AddressForm = AddressFormUnspecified }, "AddressForm"},
+		{"flat form with groups", func(c *ProfileConfig) { c.Groups = 4 }, "Groups"},
+		{"group form with no groups", func(c *ProfileConfig) {
+			c.AddressForm = AddressFormGroupChannel
+			c.Groups = 0
+		}, "Groups"},
+		{"group count past the BCD field", func(c *ProfileConfig) {
+			c.AddressForm = AddressFormGroupChannel
+			c.Groups = 101
+		}, "Groups"},
+		{"inverted channel range", func(c *ProfileConfig) { c.ChannelLo, c.ChannelHi = 99, 1 }, "ChannelLo"},
+		{"channel past the 4-digit field", func(c *ProfileConfig) { c.ChannelHi = 12345 }, "ChannelHi"},
+		{"negative name length", func(c *ProfileConfig) { c.NameLength = -1 }, "NameLength"},
+		{"name charset without a name field", func(c *ProfileConfig) {
+			c.NameLength = 0
+			c.Layouts[0].Fields = c.Layouts[0].Fields[:2]
+			c.Layouts[0].Length = 6
+			c.BuildLength = 6
+		}, "NameCharset"},
+		{"pad byte outside the charset", func(c *ProfileConfig) { c.NamePad = '!' }, "NamePad"},
+		{"charset carrying the terminator", func(c *ProfileConfig) { c.NameCharset = "AB\xfd " }, "NameCharset"},
+		{"charset carrying the preamble", func(c *ProfileConfig) { c.NameCharset = "AB\xfe " }, "NameCharset"},
+		{"duplicate charset byte", func(c *ProfileConfig) { c.NameCharset = "AABC " }, "NameCharset"},
+		{"no layouts", func(c *ProfileConfig) { c.Layouts = nil }, "Layouts"},
+		{"duplicate record length", func(c *ProfileConfig) {
+			c.Layouts = append(c.Layouts, c.Layouts[0])
+			c.Discriminator = DiscriminatorRecordLength
+		}, "Length"},
+		{"single-length discriminator with two layouts", func(c *ProfileConfig) {
+			second := RecordLayout{Length: 11, Fields: c.Layouts[0].Fields}
+			c.Layouts = append(c.Layouts, second)
+		}, "Discriminator"},
+		{"record-length discriminator with one layout", func(c *ProfileConfig) {
+			c.Discriminator = DiscriminatorRecordLength
+		}, "Discriminator"},
+		{"unspecified discriminator", func(c *ProfileConfig) { c.Discriminator = DiscriminatorUnspecified }, "Discriminator"},
+		{"build length outside the accepted set", func(c *ProfileConfig) { c.BuildLength = 11 }, "BuildLength"},
+		{"layout length 0", func(c *ProfileConfig) {
+			c.Layouts[0].Length = 0
+			c.BuildLength = 0
+		}, "Length"},
+		{"a layout with no fields", func(c *ProfileConfig) { c.Layouts[0].Fields = nil }, "Fields"},
+		{"a field running past the record", func(c *ProfileConfig) { c.Layouts[0].Fields[0].Offset = 8 }, "Offset"},
+		{"a negative offset", func(c *ProfileConfig) { c.Layouts[0].Fields[0].Offset = -1 }, "Offset"},
+		{"an unknown field id", func(c *ProfileConfig) { c.Layouts[0].Fields[1].Field = FieldID("nonsense") }, "Field"},
+		{"unspecified encoding", func(c *ProfileConfig) { c.Layouts[0].Fields[1].Encoding = EncodingUnspecified }, "Encoding"},
+		{"a numeric field encoded as an enum", func(c *ProfileConfig) {
+			c.Layouts[0].Fields[0].Encoding = EncodingEnum
+			c.Layouts[0].Fields[0].Length = 1
+			c.Layouts[0].Fields[0].Enum = map[byte]string{0: "X"}
+		}, "rx_frequency"},
+		{"a text field encoded as a number", func(c *ProfileConfig) {
+			c.Layouts[0].Fields[1].Encoding = EncodingBCDNumber
+			c.Layouts[0].Fields[1].Order = OrderLittleEndian
+			c.Layouts[0].Fields[1].Scale = 1
+			c.Layouts[0].Fields[1].Enum = nil
+		}, "mode"},
+		{"a BCD field with no byte order", func(c *ProfileConfig) { c.Layouts[0].Fields[0].Order = OrderUnspecified }, "Order"},
+		{"a BCD field with scale 0", func(c *ProfileConfig) { c.Layouts[0].Fields[0].Scale = 0 }, "Scale"},
+		{"a BCD field wider than the ceiling", func(c *ProfileConfig) {
+			c.Layouts[0].Fields[0].Length = maxBCDBytes + 1
+			c.Layouts[0].Length = 40
+			c.BuildLength = 40
+		}, "Length"},
+		{"an enum field wider than a byte", func(c *ProfileConfig) { c.Layouts[0].Fields[1].Length = 2 }, "Length"},
+		{"an empty enum", func(c *ProfileConfig) { c.Layouts[0].Fields[1].Enum = map[byte]string{} }, "Enum"},
+		{"an enum with a duplicate name", func(c *ProfileConfig) {
+			c.Layouts[0].Fields[1].Enum = map[byte]string{0x00: "LSB", 0x01: "LSB"}
+		}, "Enum"},
+		{"an enum with an empty name", func(c *ProfileConfig) {
+			c.Layouts[0].Fields[1].Enum = map[byte]string{0x00: ""}
+		}, "Enum"},
+		{"an enum value that is the terminator byte", func(c *ProfileConfig) {
+			c.Layouts[0].Fields[1].Enum = map[byte]string{EndByte: "BOOM"}
+		}, "Enum"},
+		{"an enum value that is the preamble byte", func(c *ProfileConfig) {
+			c.Layouts[0].Fields[1].Enum = map[byte]string{PreambleByte: "BOOM"}
+		}, "Enum"},
+		{"a nibble enum whose value overflows the nibble", func(c *ProfileConfig) {
+			c.Layouts[0].Fields[1].Nibble = NibbleHigh
+			c.Layouts[0].Fields[1].Enum = map[byte]string{0x10: "TOOWIDE"}
+		}, "Enum"},
+		{"a name field of the wrong width", func(c *ProfileConfig) { c.Layouts[0].Fields[2].Length = 3 }, "NameLength"},
+		{"a name field on a nibble", func(c *ProfileConfig) { c.Layouts[0].Fields[2].Nibble = NibbleLow }, "Nibble"},
+		{"two whole-byte fields overlapping", func(c *ProfileConfig) { c.Layouts[0].Fields[1].Offset = 4 }, "overlap"},
+		{"two fields on the same nibble", func(c *ProfileConfig) {
+			c.Layouts[0].Fields = append(c.Layouts[0].Fields, FieldSpan{
+				Field: FieldFilter, Offset: 5, Length: 1, Encoding: EncodingEnum,
+				Enum: map[byte]string{0x00: "FIL1"},
+			})
+		}, "overlap"},
+		{"a fixed template of the wrong length", func(c *ProfileConfig) { c.Layouts[0].Fixed = []byte{0x01} }, "Fixed"},
+		{"a fixed template carrying the terminator", func(c *ProfileConfig) {
+			f := make([]byte, 10)
+			f[9] = EndByte
+			c.Layouts[0].Fixed = f
+		}, "Fixed"},
+		{"a fixed template with a byte under a mapped field", func(c *ProfileConfig) {
+			f := make([]byte, 10)
+			f[0] = 0x01
+			c.Layouts[0].Fixed = f
+		}, "Fixed"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := base()
+			tc.mutate(&cfg)
+			_, err := NewProfile(cfg)
+			if err == nil {
+				t.Fatalf("NewProfile accepted a config with %s", tc.name)
+			}
+			if !errors.Is(err, ErrInvalidProfile) {
+				t.Fatalf("error %v does not wrap ErrInvalidProfile", err)
+			}
+			if !strings.Contains(err.Error(), tc.wantSub) {
+				t.Fatalf("error %q does not name %q — a validator returning a generic message from the wrong branch passes a test that only checks for non-nil", err, tc.wantSub)
+			}
+		})
+	}
+}
+
+func TestNewProfile_DefaultsAndCopies(t *testing.T) {
+	cfg := ProfileConfig{
+		Model:         "DEFAULTS",
+		RadioAddress:  0x94,
+		AddressForm:   AddressFormFlat,
+		ChannelLo:     1,
+		ChannelHi:     9,
+		Discriminator: DiscriminatorSingleLength,
+		BuildLength:   6,
+		Layouts: []RecordLayout{{
+			Length: 6,
+			Fields: []FieldSpan{
+				{Field: FieldRXFrequency, Offset: 0, Length: 5, Encoding: EncodingBCDNumber, Order: OrderLittleEndian, Scale: 1},
+				{Field: FieldMode, Offset: 5, Length: 1, Encoding: EncodingEnum, Enum: map[byte]string{0x00: "LSB"}},
+			},
+		}},
+	}
+	p, err := NewProfile(cfg)
+	if err != nil {
+		t.Fatalf("NewProfile: %v", err)
+	}
+	if p.ControllerAddress() != ControllerAddressDefault {
+		t.Errorf("ControllerAddress() = %#02x, want the %#02x default", p.ControllerAddress(), ControllerAddressDefault)
+	}
+	if p.MaxFrame() != DefaultMaxFrame {
+		t.Errorf("MaxFrame() = %d, want the %d default", p.MaxFrame(), DefaultMaxFrame)
+	}
+
+	// A caller mutating its input afterwards must not change the profile.
+	cfg.Layouts[0].Fields[0].Offset = 99
+	cfg.Layouts[0].Fields[1].Enum[0x00] = "MUTATED"
+	if got := p.Layouts()[0].Fields[0].Offset; got != 0 {
+		t.Errorf("mutating the config changed the profile's layout offset to %d", got)
+	}
+	if got := p.Layouts()[0].Fields[1].Enum[0x00]; got != "LSB" {
+		t.Errorf("mutating the config changed the profile's enum to %q", got)
+	}
+}
+
+func TestMustNewProfile_PanicsOnAMalformedTable(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("MustNewProfile returned normally for a malformed config")
+		}
+	}()
+	MustNewProfile(ProfileConfig{})
+}
+
+func TestMustNewProfile_ReturnsAValidProfile(t *testing.T) {
+	p := MustNewProfile(ProfileConfig{
+		Model:         "MUST",
+		RadioAddress:  0x94,
+		AddressForm:   AddressFormFlat,
+		ChannelLo:     1,
+		ChannelHi:     9,
+		Discriminator: DiscriminatorSingleLength,
+		BuildLength:   5,
+		Layouts: []RecordLayout{{
+			Length: 5,
+			Fields: []FieldSpan{
+				{Field: FieldRXFrequency, Offset: 0, Length: 5, Encoding: EncodingBCDNumber, Order: OrderLittleEndian, Scale: 1},
+			},
+		}},
+	})
+	if !p.Configured() {
+		t.Fatal("MustNewProfile returned an unconfigured profile")
+	}
+}
+
+// TestChannelAddressValidation walks each fixture's OWN address space and
+// checks that the addresses its neighbours accept are refused here. Every
+// fixture disagrees about the address form, so this is the property a
+// package-level address check could not have.
+func TestChannelAddressValidation(t *testing.T) {
+	for _, np := range allTestProfiles() {
+		t.Run(np.name, func(t *testing.T) {
+			p := np.p
+			lo, hi := p.ChannelRange()
+
+			if err := p.validAddress(ChannelAddress{Group: sampleAddress(p).Group, Channel: lo}); err != nil {
+				t.Errorf("the profile's own lowest channel was refused: %v", err)
+			}
+			if err := p.validAddress(ChannelAddress{Group: sampleAddress(p).Group, Channel: hi}); err != nil {
+				t.Errorf("the profile's own highest channel was refused: %v", err)
+			}
+			if err := p.validAddress(ChannelAddress{Group: sampleAddress(p).Group, Channel: hi + 1}); err == nil {
+				t.Errorf("channel %d, one past this profile's own ceiling, was accepted", hi+1)
+			}
+			if lo > 0 {
+				if err := p.validAddress(ChannelAddress{Group: sampleAddress(p).Group, Channel: lo - 1}); err == nil {
+					t.Errorf("channel %d, one below this profile's own floor, was accepted", lo-1)
+				}
+			}
+
+			switch p.AddressForm() {
+			case AddressFormFlat:
+				if err := p.validAddress(ChannelAddress{Group: 1, Channel: lo}); err == nil {
+					t.Error("a flat profile accepted an address carrying a group — a group index it cannot encode would be silently dropped")
+				}
+			default:
+				if err := p.validAddress(ChannelAddress{Group: 0, Channel: lo}); err != nil {
+					t.Errorf("a grouped profile refused group 0, which is its FIRST group: %v", err)
+				}
+				if err := p.validAddress(ChannelAddress{Group: -1, Channel: lo}); err == nil {
+					t.Error("a grouped profile accepted group -1")
+				}
+				if err := p.validAddress(ChannelAddress{Group: p.Groups(), Channel: lo}); err == nil {
+					t.Errorf("group %d, one past this profile's own count of %d, was accepted", p.Groups(), p.Groups())
+				}
+			}
+		})
+	}
+}
