@@ -396,13 +396,19 @@ func (r *run) checkEveryAcceptedLength() {
 // Without it this suite could not tell a gate that re-encodes from one
 // that checks each field in isolation: every other property here offers
 // the gate frames a builder DID produce. So this one takes a frame the
-// builder produced and alters a byte NO span maps — a reserved byte, a
+// builder produced and alters a NIBBLE no span maps — a reserved byte, a
 // documented constant from the layout's Fixed template — leaving every
 // field it decodes to untouched. Field-by-field validation admits that
 // frame; a re-encode refuses it, because the encoder would have written
-// the template's byte there.
+// the template's value there.
 //
-// A profile whose layout maps every byte has nothing to mutate and is
+// PER NIBBLE, NOT PER BYTE, because core/civ's V8 lets a layout map one
+// nibble of a byte while its Fixed template speaks for the other. A
+// whole-byte view counts such a byte as mapped and never mutates the
+// constant beside the enum — exactly the freedom a model package is most
+// likely to be the first to use.
+//
+// A profile whose layout maps every nibble has nothing to mutate and is
 // SKIPPED, loudly: the log line says so, and checkNonVacuity does not
 // require the counter, because "this model's record has no reserved
 // bytes" is a fact about the radio rather than a gap in the suite.
@@ -416,9 +422,9 @@ func (r *run) checkGateRefusesAMutatedRecordByte() {
 		r.t.Errorf("%s: LayoutFor(%d) is missing for its own BuildRecordLength", r.name(), length)
 		return
 	}
-	unmapped := unmappedBytes(layout)
+	unmapped := unmappedNibbles(layout)
 	if len(unmapped) == 0 {
-		r.t.Logf("%s: every byte of its %d-byte record is mapped, so the gate's re-encode rule has nothing to mutate here — skipped", r.name(), length)
+		r.t.Logf("%s: every nibble of its %d-byte record is mapped, so the gate's re-encode rule has nothing to mutate here — skipped", r.name(), length)
 		return
 	}
 
@@ -440,39 +446,102 @@ func (r *run) checkGateRefusesAMutatedRecordByte() {
 	// The record occupies the bytes before the terminator.
 	start := len(frame) - 1 - length
 
-	for _, off := range unmapped {
+	for _, tgt := range unmapped {
+		at := start + tgt.off
+		// THREE candidate flips, all INSIDE the unmapped nibble so no
+		// mapped field changes value. Only two bytes are framing bytes, so
+		// three distinct candidates cannot all be one: the mutation always
+		// happens, and a silently skipped offset — which would contribute
+		// nothing while looking like a pass — cannot arise.
+		alt, ok := mutateNibble(frame[at], tgt.high)
+		if !ok {
+			r.t.Errorf("%s: no in-nibble alteration of record byte %d (%#02x) avoided a framing byte — three candidates cannot all be 0xFE or 0xFD, so this suite's own mutation is broken", r.name(), tgt.off, frame[at])
+			continue
+		}
 		mutated := make([]byte, len(frame))
 		copy(mutated, frame)
-		at := start + off
-		alt := mutated[at] ^ 0x01
-		if alt == civ.PreambleByte || alt == civ.EndByte {
-			alt = mutated[at] ^ 0x02
-		}
 		mutated[at] = alt
 		if !civ.WellFormed(mutated) {
+			r.t.Errorf("%s: altering UNMAPPED record byte %d to %#02x made the frame malformed (%v) — one interior byte that is not a framing byte cannot do that, so this suite's own mutation is broken", r.name(), tgt.off, alt, mutated)
 			continue
 		}
 		if p.AllowedCommand(mutated) {
-			r.t.Errorf("%s: its gate ADMITTED a set whose UNMAPPED record byte %d was altered to %#02x (%v) — no builder would write that byte, so the gate's re-encode equality step is not doing its work and \"admits only builder-producible frames\" is false", r.name(), off, alt, mutated)
+			r.t.Errorf("%s: its gate ADMITTED a set whose UNMAPPED %s of record byte %d was altered to %#02x (%v) — no builder would write that byte, so the gate's re-encode equality step is not doing its work and \"admits only builder-producible frames\" is false", r.name(), tgt.half(), tgt.off, alt, mutated)
 			continue
 		}
 		r.refusals["a record byte no builder would write"]++
 	}
 }
 
-// unmappedBytes returns the offsets of layout's record that no field span
-// claims — the bytes a Fixed template speaks for, or that are zero.
-func unmappedBytes(layout civ.RecordLayout) []int {
-	mapped := make([]bool, layout.Length)
-	for _, sp := range layout.Fields {
-		for off := sp.Offset; off < sp.Offset+sp.Length && off < layout.Length; off++ {
-			mapped[off] = true
+// mutateNibble alters ONE nibble of b and reports the result, or false if
+// every candidate landed on a framing byte — which cannot happen, there
+// being three candidates and two framing bytes, and is reported rather
+// than skipped so that "cannot happen" is checked rather than assumed.
+func mutateNibble(b byte, high bool) (byte, bool) {
+	for _, bit := range []byte{0x01, 0x02, 0x04} {
+		if high {
+			bit <<= 4
+		}
+		alt := b ^ bit
+		if alt != civ.PreambleByte && alt != civ.EndByte {
+			return alt, true
 		}
 	}
-	var out []int
-	for i, m := range mapped {
-		if !m {
-			out = append(out, i)
+	return 0, false
+}
+
+// unmappedNibble names one HALF of one record byte that no field span
+// claims — the granularity core/civ's V8 works at, and so the granularity
+// the mutation check has to work at too.
+type unmappedNibble struct {
+	off  int
+	high bool
+}
+
+func (u unmappedNibble) half() string {
+	if u.high {
+		return "HIGH nibble"
+	}
+	return "LOW nibble"
+}
+
+// unmappedNibbles returns the nibbles of layout's record that no field
+// span claims — the halves a Fixed template speaks for, or that are zero.
+//
+// The claim split mirrors core/civ's own: only an EncodingEnum span
+// declared on NibbleHigh or NibbleLow claims half a byte; every other
+// encoding claims both halves. It is written out here rather than
+// imported because civtest reads the profile through the EXPORTED API
+// alone, as a model package does.
+func unmappedNibbles(layout civ.RecordLayout) []unmappedNibble {
+	mappedHigh := make([]bool, layout.Length)
+	mappedLow := make([]bool, layout.Length)
+	for _, sp := range layout.Fields {
+		for off := sp.Offset; off < sp.Offset+sp.Length && off < layout.Length; off++ {
+			high, low := true, true
+			if sp.Encoding == civ.EncodingEnum {
+				switch sp.Nibble {
+				case civ.NibbleHigh:
+					low = false
+				case civ.NibbleLow:
+					high = false
+				}
+			}
+			if high {
+				mappedHigh[off] = true
+			}
+			if low {
+				mappedLow[off] = true
+			}
+		}
+	}
+	var out []unmappedNibble
+	for i := 0; i < layout.Length; i++ {
+		if !mappedHigh[i] {
+			out = append(out, unmappedNibble{off: i, high: true})
+		}
+		if !mappedLow[i] {
+			out = append(out, unmappedNibble{off: i})
 		}
 	}
 	return out

@@ -80,7 +80,10 @@ func groupProfile() civ.Profile {
 	})
 }
 
-// bandProfile has NO name field and a band-addressed channel space.
+// bandProfile has NO name field, a band-addressed channel space, and a
+// documented constant in the nibble BESIDE an enum — core/civ's V8 lets a
+// layout say that, and this is the fixture that makes the mutation check
+// prove the gate re-encodes such a nibble.
 func bandProfile() civ.Profile {
 	return civ.MustNewProfile(civ.ProfileConfig{
 		Model:         "CIVTEST-BAND",
@@ -97,8 +100,11 @@ func bandProfile() civ.Profile {
 			Fields: []civ.FieldSpan{
 				{Field: civ.FieldRXFrequency, Offset: 0, Length: 5, Encoding: civ.EncodingBCDNumber, Order: civ.OrderLittleEndian, Scale: 1},
 				{Field: civ.FieldMode, Offset: 5, Length: 1, Encoding: civ.EncodingEnum, Enum: map[byte]string{0x00: "LSB", 0x05: "FM"}},
+				// Byte 6's HIGH nibble is this enum; its LOW nibble is the
+				// template's 0xA, and byte 7 is reserved and zero.
+				{Field: civ.FieldFilter, Offset: 6, Length: 1, Nibble: civ.NibbleHigh, Encoding: civ.EncodingEnum, Enum: map[byte]string{0x01: "FIL1", 0x03: "FIL3"}},
 			},
-			Fixed: []byte{0, 0, 0, 0, 0, 0, 0x5A, 0x00},
+			Fixed: []byte{0, 0, 0, 0, 0, 0, 0x0A, 0x00},
 		}},
 	})
 }
