@@ -286,12 +286,22 @@ func validateImportHeader(got []string) error {
 // callers must run it before treating an imported codeplug as
 // send-ready.
 //
-// Header: validated against Export's header (see header) — an unknown
-// column is an error naming it, a missing required column is an error
-// naming it, and "display" is optional and, when present, ignored
-// (Import never reads it; it is a convenience column for spreadsheet
-// viewing only). Column order in the file does not matter: columns are
-// looked up by name.
+// Header: validated against Export's header — an unknown column is an
+// error naming it, a missing required column is an error naming it, and
+// "display" is optional and, when present, ignored (Import never reads
+// it; it is a convenience column for spreadsheet viewing only). Column
+// order in the file does not matter: columns are looked up by name.
+//
+// BOTH HEADER VERSIONS are accepted (design D4). The schema is versioned
+// by its column set: version 1 is the thirteen columns this package has
+// always written (header), version 2 is those thirteen followed by one
+// per tier-added field (headerV2). Only version 1's columns are
+// REQUIRED, so a version-1 file — every file this program wrote before
+// the Icom tier — imports unchanged; the tier columns are optional and
+// recognised, so a version-2 file has them read. A version-1 file's ten
+// tier fields come back Unavailable, not at the zero value: see
+// markTierFieldsUnavailable for why that distinction is load-bearing
+// rather than cosmetic.
 //
 // Rows: every per-row problem is returned as a *ParseError carrying the
 // row's 1-based line number (the header is line 1). A leading apostrophe
@@ -302,7 +312,9 @@ func validateImportHeader(got []string) error {
 // dataColumns) are ALL empty decodes to an empty Channel (Data == nil);
 // otherwise every data column is parsed into ChannelData, with
 // ctcss_tone/scan_skip/tag_display's "" -> Unknown, "n/a" -> Unavailable,
-// value -> Known mapping applied exactly as Export produced it.
+// value -> Known mapping applied exactly as Export produced it. A tier
+// column adds one spelling to that mapping, "absent" -> Absent, for the
+// state those fields have that the pre-tier ones do not.
 //
 // tag_display joined that mapping at M9c-5 (E1d), and the change is not
 // backward-compatible in ONE direction, recorded here because a user can
