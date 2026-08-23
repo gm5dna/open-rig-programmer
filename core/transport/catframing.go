@@ -20,6 +20,18 @@ type catFraming struct {
 	d cat.Dialect
 }
 
+// The seam's three claims about core/cat, asserted by the compiler rather
+// than left to the one call site that happens to exercise each: cat's
+// Command satisfies the neutral Command interface, its FrameAccumulator
+// satisfies Accumulator, and catFraming is a complete Framing. A core/cat
+// change that broke any of them would otherwise surface as a confusing
+// failure somewhere downstream.
+var (
+	_ Command     = cat.Command{}
+	_ Accumulator = (*cat.FrameAccumulator)(nil)
+	_ Framing     = catFraming{}
+)
+
 // NewAccumulator returns a cat.FrameAccumulator: the ';'-terminated CAT
 // shape, shared by every Yaesu dialect. max <= 0 selects
 // cat.DefaultMaxFrame.
