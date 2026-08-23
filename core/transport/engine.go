@@ -965,7 +965,18 @@ type waitOutcome struct {
 // this was caught by. Checking e.events with a non-blocking select FIRST,
 // on every loop iteration, makes "drain everything already queued before
 // honouring closure" deterministic rather than a coin flip.
-func (e *Engine) nextEvent(ctx context.Context, timeout <-chan time.Time, deadline time.Time) waitOutcome {
+//
+// capC is the deadline's other half, and only drainToQuietLocked passes a
+// non-nil one. The clock comparison above bounds a caller whose events
+// channel is always ready — it never reaches the blocking select — but a
+// caller BLOCKED in that select is bounded only by whatever channels the
+// select names. For every other caller that is already covered, because
+// their timeout channel fires at the deadline; a drain's does not, since
+// its timer is the re-armable IDLE gap and is deliberately postponed by
+// every arriving frame. capC gives the drain a case that no arrival can
+// postpone. A nil channel blocks forever, which is exactly right for the
+// callers that do not need one.
+func (e *Engine) nextEvent(ctx context.Context, timeout <-chan time.Time, deadline time.Time, capC <-chan time.Time) waitOutcome {
 	if !deadline.IsZero() && !e.clk.Now().Before(deadline) {
 		return waitOutcome{deadlineHit: true}
 	}
@@ -986,6 +997,8 @@ func (e *Engine) nextEvent(ctx context.Context, timeout <-chan time.Time, deadli
 		return waitOutcome{ev: ev, hasEvent: true}
 	case <-timeout:
 		return waitOutcome{timedOut: true}
+	case <-capC:
+		return waitOutcome{deadlineHit: true}
 	case <-e.closeCh:
 		return waitOutcome{err: e.closedErr()}
 	case <-ctx.Done():
@@ -1005,7 +1018,7 @@ func (e *Engine) waitForAnswer(ctx context.Context, spec CommandSpec) ([]byte, e
 	timeout := e.clk.After(spec.Timeout)
 	deadline := e.clk.Now().Add(spec.Timeout)
 	for {
-		out := e.nextEvent(ctx, timeout, deadline)
+		out := e.nextEvent(ctx, timeout, deadline, nil)
 		if out.timedOut || out.deadlineHit {
 			return nil, ErrTimeout
 		}
@@ -1035,7 +1048,7 @@ func (e *Engine) waitFireAndForget(ctx context.Context, window time.Duration) ([
 	timeout := e.clk.After(window)
 	deadline := e.clk.Now().Add(window)
 	for {
-		out := e.nextEvent(ctx, timeout, deadline)
+		out := e.nextEvent(ctx, timeout, deadline, nil)
 		if out.timedOut || out.deadlineHit {
 			return nil, nil
 		}
@@ -1094,6 +1107,17 @@ func (e *Engine) DrainToQuiet(ctx context.Context) error {
 // reported as ErrDrainCapExceeded — distinct from "quiet achieved" (the
 // idle timer firing), because a flood must never be reported as a
 // successfully drained port.
+//
+// The cap is enforced in BOTH of nextEvent's waits, which are two
+// different failure shapes. A flood never reaches the blocking select, so
+// the clock comparison at nextEvent's entry is what stops it. A line quiet
+// enough to block there is stopped instead by capC, a channel firing at
+// the cap that no arrival can re-arm — without it, a single stale frame
+// arriving just under the cap would re-arm the idle timer and carry the
+// drain to Cap+IdleGap, which is not what "absolute ceiling" means and is
+// LATER than the pre-D2 internal quarantines (which hard-failed at
+// 2*QuietPeriod on their context). With both, the drain fails at Cap, full
+// stop — the doc's claim and the old timing, exactly.
 func (e *Engine) drainToQuietLocked(ctx context.Context) error {
 	if e.closed.Load() {
 		return e.closedErr()
@@ -1101,6 +1125,16 @@ func (e *Engine) drainToQuietLocked(ctx context.Context) error {
 
 	policy := e.drainPolicy
 	capAt := e.clk.Now().Add(policy.Cap)
+	// The cap as a CHANNEL as well as an instant. The loop-entry clock
+	// comparison in nextEvent is what holds the cap against a flood (a
+	// permanently non-empty e.events never reaches the blocking select at
+	// all); this channel is what holds it against the opposite case — a
+	// line quiet enough to block in that select, where without a
+	// cap-shaped case the wait is governed solely by the re-armable idle
+	// timer and a single stale frame arriving just under the cap could
+	// carry the drain past it. Both are needed for Cap to mean what
+	// DrainPolicy.Cap says it means.
+	capC := e.clk.After(policy.Cap)
 
 	// A single reusable timer (Reset pattern), rather than a fresh
 	// e.clk.After(IdleGap) allocated on every iteration: any activity
@@ -1108,7 +1142,7 @@ func (e *Engine) drainToQuietLocked(ctx context.Context) error {
 	timer := time.NewTimer(policy.IdleGap)
 	defer timer.Stop()
 	for {
-		out := e.nextEvent(ctx, timer.C, capAt)
+		out := e.nextEvent(ctx, timer.C, capAt, capC)
 		if out.deadlineHit {
 			return fmt.Errorf("%w: no %v gap in %v", ErrDrainCapExceeded, policy.IdleGap, policy.Cap)
 		}

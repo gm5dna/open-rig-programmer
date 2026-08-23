@@ -550,3 +550,106 @@ func (l *capturingLogger) contains(sub string) bool {
 	}
 	return false
 }
+
+// --- the cap as a real ceiling ------------------------------------------
+
+// lateFramePort is quiet, emits ONE frame at `at` after construction, and
+// is quiet again forever. It is the opposite provocation to floodPort: a
+// line calm enough that the drain reaches nextEvent's BLOCKING select,
+// where the loop-entry clock comparison never runs.
+type lateFramePort struct {
+	frame   []byte
+	fire    <-chan time.Time
+	done    bool
+	closeCh chan struct{}
+	mu      sync.Mutex
+	closed  bool
+}
+
+func newLateFramePort(frame string, at time.Duration) *lateFramePort {
+	return &lateFramePort{
+		frame:   []byte(frame),
+		fire:    time.After(at),
+		closeCh: make(chan struct{}),
+	}
+}
+
+func (p *lateFramePort) Read(b []byte) (int, error) {
+	if !p.done {
+		select {
+		case <-p.fire:
+			p.done = true
+			return copy(b, p.frame), nil
+		case <-p.closeCh:
+			return 0, errClosedStub
+		}
+	}
+	<-p.closeCh
+	return 0, errClosedStub
+}
+
+func (p *lateFramePort) Write(b []byte) (int, error) { return len(b), nil }
+
+func (p *lateFramePort) Close() error {
+	p.mu.Lock()
+	if !p.closed {
+		p.closed = true
+		close(p.closeCh)
+	}
+	p.mu.Unlock()
+	return nil
+}
+
+// TestDrainCap_IsACeilingNotAFloor pins DrainPolicy.Cap's documented
+// meaning against the case a flood does not reach.
+//
+// A flood keeps e.events permanently ready, so the drain never blocks and
+// nextEvent's loop-entry clock comparison holds the cap. A nearly-quiet
+// line is the other shape: the drain DOES block, and there the only
+// channels that can wake it are the ones the select names. The idle timer
+// is not a bound — every arrival re-arms it, by design — so with no
+// cap-shaped case a single stale frame arriving inside (Cap-IdleGap, Cap)
+// postpones "quiet" past the cap, and the drain SUCCEEDS at Cap+IdleGap.
+//
+// That is both a broken promise ("ABSOLUTE ceiling ... fails rather than
+// continuing") and later than the pre-D2 internal quarantines, which
+// hard-failed at 2*QuietPeriod on their own context. Here: idle gap
+// 250ms, cap 400ms, one frame at 180ms — early enough that the first idle
+// gap has not run out (so the frame is genuinely observed and the timer
+// genuinely re-armed) and late enough that the re-armed gap would declare
+// quiet at 430ms. The drain must fail at 400ms instead.
+func TestDrainCap_IsACeilingNotAFloor(t *testing.T) {
+	const (
+		idleGap = 250 * time.Millisecond
+		capAt   = 400 * time.Millisecond
+		frameAt = 180 * time.Millisecond
+	)
+
+	port := newLateFramePort("ZZ0000;", frameAt)
+	t.Cleanup(func() { _ = port.Close() })
+
+	f := &floodFraming{policy: DrainPolicy{IdleGap: idleGap, Cap: capAt}}
+	e, err := NewEngineWith(port, f)
+	if err != nil {
+		t.Fatalf("NewEngineWith: unexpected error: %v", err)
+	}
+	t.Cleanup(func() { _ = e.Close() })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	start := time.Now()
+	var drainErr error
+	withinBound(t, "DrainToQuiet (one late frame)", 5*time.Second, func() { drainErr = e.DrainToQuiet(ctx) })
+	elapsed := time.Since(start)
+
+	if !errors.Is(drainErr, ErrDrainCapExceeded) {
+		t.Fatalf("DrainToQuiet = %v after %v, want ErrDrainCapExceeded at the cap — a frame at %v re-armed the %v idle gap, so anything else means the drain ran past Cap (%v) to Cap+IdleGap (%v)",
+			drainErr, elapsed, frameAt, idleGap, capAt, capAt+idleGap)
+	}
+	// Sanity: it really waited out the cap rather than failing early for
+	// some unrelated reason, and it did not exceed the loose bound.
+	if elapsed < capAt*3/4 || elapsed > capAt+idleGap {
+		t.Errorf("DrainToQuiet took %v, want roughly %v — the cap, not an early exit and not Cap+IdleGap", elapsed, capAt)
+	}
+}

@@ -65,12 +65,14 @@ type DrainPolicy struct {
 	// activity re-arms it. <= 0 selects QuietPeriod.
 	IdleGap time.Duration
 	// Cap is the ABSOLUTE ceiling on one drain, measured from when that
-	// drain started and honoured ahead of any queued event, so no
-	// arrival rate can extend it. A drain that reaches it fails with
-	// ErrDrainCapExceeded rather than continuing. <= 0 selects
-	// 2*IdleGap — room for one genuine IdleGap of silence even if a
-	// single stale frame arrives partway through and postpones "quiet"
-	// once.
+	// drain started and honoured ahead of any queued event AND inside
+	// the wait itself, so neither an arrival rate nor a well-timed
+	// single frame can extend it. A drain still short of quiet when Cap
+	// elapses fails with ErrDrainCapExceeded rather than continuing;
+	// Cap is the LAST instant it can succeed at, not a floor it is
+	// measured from. <= 0 selects 2*IdleGap — room for one genuine
+	// IdleGap of silence even if a single stale frame arrives partway
+	// through and postpones "quiet" once.
 	Cap time.Duration
 }
 
