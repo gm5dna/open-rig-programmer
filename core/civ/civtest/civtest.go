@@ -115,6 +115,7 @@ func Run(t T, p civ.Profile) {
 	r.checkMemoryReads()
 	r.checkMemorySets()
 	r.checkEveryAcceptedLength()
+	r.checkNameLengthIsTheProfilesOwn()
 	r.checkGateRefusesTheUnacceptable()
 	r.checkGateRefusesAMutatedRecordByte()
 	r.checkNonVacuity()
@@ -644,6 +645,60 @@ func (r *run) checkMemorySets() {
 			}
 		}
 	}
+}
+
+// checkNameLengthIsTheProfilesOwn requires the builder to refuse a name
+// ONE BYTE past this profile's own field.
+//
+// It is here because of what the Wave-1b review demonstrated. Both halves
+// of the internal/guards rule-5 fence are shape-only tripwires keyed on
+// fixed name lists, and the review evaded both: it kept validName a
+// Profile method and replaced p.nameLength with a package constant. Every
+// guard passed, this whole suite passed, and the result was a
+// gate-approved set carrying a 14-character name that the encoder
+// silently truncated into a 10-byte field — a write the caller did not
+// ask for. Only core/civ's own disagreeing fixtures caught it, and a
+// per-model profile is not in reach of those.
+//
+// So the property is stated HERE too, where a Wave 3 model package runs
+// it: the name bound is the RECEIVER's, and a name past it is refused
+// rather than truncated. A profile with no name field has nothing to
+// check and is skipped, loudly.
+func (r *run) checkNameLengthIsTheProfilesOwn() {
+	r.t.Helper()
+	p := r.p
+
+	n := p.NameLength()
+	if n == 0 {
+		r.t.Logf("%s: this profile has no name field, so the name bound has nothing to check here — skipped", r.name())
+		return
+	}
+	charset := p.NameCharset()
+	fill := firstOtherThan(charset, p.NamePad())
+	if fill == 0 {
+		r.t.Errorf("%s: every byte of its name charset is the pad byte", r.name())
+		return
+	}
+
+	long := make([]byte, n+1)
+	for i := range long {
+		long[i] = fill
+	}
+
+	rec, ok := r.sampleRecord(r.addresses()[0], p.BuildRecordLength())
+	if !ok {
+		return
+	}
+	rec.Name = civ.Available(string(long))
+	cmd, err := p.BuildMemorySet(rec)
+	if err == nil {
+		r.t.Errorf("%s: BuildMemorySet ACCEPTED a %d-byte name for its own %d-byte field, emitting %v — the encoder truncates, so this is a write the caller did not ask for, and it is what a name bound taken from anywhere but this profile looks like", r.name(), len(long), n, cmd.Bytes())
+		return
+	}
+	if !cmd.IsZero() {
+		r.t.Errorf("%s: BuildMemorySet returned a non-zero Command alongside its refusal of an over-long name", r.name())
+	}
+	r.refusals["a name past the profile's own field"]++
 }
 
 // checkGateRefusesTheUnacceptable is what stops "its own gate admits every

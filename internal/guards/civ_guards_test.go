@@ -281,10 +281,28 @@ func TestCIVWritePathReachableOnlyThroughDriver(t *testing.T) {
 // attribute including the controller address. This file is a tripwire, on
 // dialectglobals_test.go's explicit terms; do not grow it into the
 // semantic check that file records abandoning after five review rounds.
+//
+// AND IT IS A LIST, WHICH IS ITS LIMIT. A name not on it passes, so the
+// list must actually name every method inside its own stated scope. The
+// Wave-1b review found two that were not: validateSpanValue, which
+// applies the per-span write policy (enum membership, scale multiple, BCD
+// fit), and encodeRecord, which performs the gate's re-encode — the step
+// that makes "admits only builder-producible frames" literal. Both were
+// demotable to package functions with every guard green. They are listed
+// now. That the list can be under-populated at all is why the DISAGREEING
+// FIXTURES, not this file, are the fence: the same review evaded both
+// halves of rule 5 with a package const inside a still-a-method
+// validName, and it was core/civ's own record_test.go that caught it,
+// while this file and the conformance suite both stayed green. The suite
+// no longer does — civtest's checkNameLengthIsTheProfilesOwn was added for
+// that evasion — but the general point stands, and this list is still a
+// tripwire rather than the defence.
 var civGateReachingValidators = []string{
 	"validAddress",
 	"validateRecordFields",
+	"validateSpanValue",
 	"validName",
+	"encodeRecord",
 }
 
 // civProfileOwnedNames must never appear as package-level declarations in
