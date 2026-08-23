@@ -126,35 +126,46 @@ func (f BoolField) Valid() error {
 }
 
 // Absent is the ZERO FieldState, and it is NOT one of the three states
-// above: it means the field is not present in this codeplug at all.
+// above: it is what a field holds when nobody has set one at all.
 //
 // It exists because the Icom tier (design D4) added ten Fields to a
-// model that already had ten, and every codeplug written before that
-// tier — every schema-3 file, every hand-built ChannelData in a test —
-// says nothing whatever about the new ones. "Says nothing" is a
-// different fact from Unavailable ("this radio has no such field"),
-// Unknown ("not read yet") and Known, and conflating it with any of them
-// would put a claim into data that never made one.
+// model that already had ten, so every hand-built ChannelData that
+// predates them — a test fixture, a value assembled by the GUI for a
+// radio with no such field — leaves the new ones at their zero value. A
+// FieldState the code has never assigned is not a claim about anything,
+// and Valid() REJECTS it on every field type, exactly as it always
+// rejected an unrecognised state. That is safe because the checks that
+// call Valid on a tier-added field are capability-keyed
+// (core/codeplug.Validate): a field this radio cannot reach is not
+// judged at all.
 //
-// The rules that follow from that, and they are what keep the pre-tier
-// behaviour byte-identical:
-//
-//   - It is the state a field has when nobody set one, so the ten
-//     pre-tier Fields can never carry it (they are always set) and the
-//     ten new ones carry it on every Yaesu channel.
-//   - Valid() REJECTS it, on every field type, exactly as it always
-//     rejected an unrecognised state — and that is safe because the
-//     neutral checks that call Valid on a tier-added field are
-//     capability-keyed (core/codeplug.Validate): a field this radio
-//     cannot reach is not judged at all.
-//   - An Absent field is never "touched" by a write (core/codeplug's
-//     touchedFields) and never present for the file writer
-//     (schemaFor), which is what lets a v3-representable codeplug keep
-//     emitting schema 3.
+// Absent is deliberately NOT the state a radio read or a file load
+// produces for a field the radio lacks — those produce Unavailable, the
+// positive statement "this radio/protocol has no such field". See
+// FieldState.Recorded for why the two nevertheless answer the file
+// writer's question identically.
 const Absent FieldState = ""
 
-// Present reports whether s says anything at all — i.e. is not Absent.
-func (s FieldState) Present() bool { return s != Absent }
+// Recorded reports whether s carries something a codeplug FILE has to
+// write down: Known (a value) or Unknown (an open question about a field
+// the radio does have).
+//
+// Absent and Unavailable both answer false, and that pairing is the
+// hinge of the Icom tier's byte-identity guarantee (design D4). Schema 3
+// has no key for any tier-added field, and the absence of a key says
+// exactly what Unavailable says — this codeplug has nothing to store
+// here. So a channel read from a Yaesu radio, whose ten tier fields all
+// come back Unavailable (the TagDisplay precedent), is fully
+// representable in schema 3 and is written there, byte for byte as it
+// was before the tier existed. A load of such a file reproduces
+// Unavailable, so the round trip is stable and, just as importantly, a
+// codeplug loaded from an old file still compares EQUAL to a fresh read
+// of the same radio — which is what keeps codeplug.Diff from reporting
+// every channel as modified.
+//
+// Only Known and Unknown force schema 4, because only they say something
+// no schema-3 file could hold.
+func (s FieldState) Recorded() bool { return s == Known || s == Unknown }
 
 // FreqField holds a frequency in hertz together with how confidently it
 // is known — the FieldTxFrequency and FieldOffset shape. See FieldState

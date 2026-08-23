@@ -207,7 +207,7 @@ func freqOfSlot(cp *codeplug.Codeplug, slot string) int64 {
 // matching syntheticWorking's channel shape.
 func editChannelFreq(slot string, freq int64) codeplug.Channel {
 	return codeplug.Channel{Slot: slot, Data: &codeplug.ChannelData{
-		FreqHz: uint32(freq), Mode: "USB", CTCSS: "OFF", Shift: "SIMPLEX",
+		FreqHz: uint64(freq), Mode: "USB", CTCSS: "OFF", Shift: "SIMPLEX",
 		CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
 		TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
 		ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},

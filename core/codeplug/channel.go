@@ -81,22 +81,25 @@ type ChannelData struct {
 	ScanSkip BoolField `json:"scan_skip"`
 
 	// The ten fields the Icom tier added to the neutral memory model
-	// (design D4). Every one is tri-state, and every one is ABSENT (the
-	// zero FieldState — see codeplug.Absent) on every channel this
-	// project has ever produced for a Yaesu NEWCAT radio, because those
-	// radios' banks do not list the corresponding spec.Fields at all.
+	// (design D4). Every one is tri-state, and on every channel this
+	// project produces for a Yaesu NEWCAT radio every one of them is
+	// UNAVAILABLE — a read says so directly (the TagDisplay precedent),
+	// a load of a schema-1/2/3 file migrates to it, and those radios'
+	// banks list none of the corresponding spec.Fields, so the
+	// capabilities agree.
 	//
-	// Absent is what keeps the pre-tier world byte-identical, and it does
-	// so in three places at once: the file writer emits schema 3 while
-	// every one of them is Absent (schemaFor), the send plan does not
-	// count an Absent field as touched (touchedFields), and Validate does
-	// not judge a field this radio cannot reach. None of the three needs
-	// a per-field exception list.
+	// That is what keeps the pre-tier world byte-identical, in three
+	// places at once: the file writer emits schema 3 while none of them
+	// is Recorded (schemaFor — Unavailable says the same thing schema
+	// 3 says by having no key), the send plan counts only a Known field
+	// as touched (touchedFields), and Validate does not judge a field
+	// this radio cannot reach. None of the three needs a per-field
+	// exception list.
 	//
 	// NO omitempty, deliberately, for the reason TagDisplay gives above:
 	// these are structs, so the key is always written — and in a schema-4
-	// file an Absent field must be VISIBLE as {"state":""} rather than
-	// elided into indistinguishability from a state somebody chose.
+	// file a state must be VISIBLE rather than elided into
+	// indistinguishability from one somebody chose.
 
 	// TxFreqHz is an independent transmit ("split") frequency stored on
 	// the channel itself, as opposed to a shift applied to FreqHz.
@@ -129,26 +132,26 @@ type ChannelData struct {
 	DataMode BoolField `json:"data_mode"`
 }
 
-// tierFieldsAbsent reports whether every one of the ten fields the Icom
-// tier added is Absent on this channel — i.e. this data says nothing
-// that a pre-tier schema could not hold.
+// tierFieldsUnrecorded reports whether NONE of the ten fields the Icom
+// tier added carries anything this channel needs a file to write down —
+// i.e. every one of them is Absent or Unavailable (see
+// FieldState.Recorded).
 //
 // It is the "no tier-added field is present" half of the file writer's
-// lowest-schema rule (design D4: "present" means the state differs from
-// the absent default), and it is deliberately a method on ChannelData
-// rather than a loop in file.go, so that a later field added to this
-// struct is one edit away from being accounted for here.
-func (d ChannelData) tierFieldsAbsent() bool {
-	return !d.TxFreqHz.State.Present() &&
-		!d.Duplex.State.Present() &&
-		!d.OffsetHz.State.Present() &&
-		!d.ToneMode.State.Present() &&
-		!d.ToneTx.State.Present() &&
-		!d.ToneRx.State.Present() &&
-		!d.DTCSCode.State.Present() &&
-		!d.DTCSPolarity.State.Present() &&
-		!d.Filter.State.Present() &&
-		!d.DataMode.State.Present()
+// lowest-schema rule (design D4), and it is deliberately a method on
+// ChannelData rather than a loop in file.go, so that a later field added
+// to this struct is one edit away from being accounted for here.
+func (d ChannelData) tierFieldsUnrecorded() bool {
+	return !d.TxFreqHz.State.Recorded() &&
+		!d.Duplex.State.Recorded() &&
+		!d.OffsetHz.State.Recorded() &&
+		!d.ToneMode.State.Recorded() &&
+		!d.ToneTx.State.Recorded() &&
+		!d.ToneRx.State.Recorded() &&
+		!d.DTCSCode.State.Recorded() &&
+		!d.DTCSPolarity.State.Recorded() &&
+		!d.Filter.State.Recorded() &&
+		!d.DataMode.State.Recorded()
 }
 
 // Empty reports whether c is an empty slot. Data == nil is the sole test:

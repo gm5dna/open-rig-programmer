@@ -139,14 +139,19 @@ func TestSchemaFor_NoV3RepresentableContentEverWritesV4(t *testing.T) {
 			CurrentSchema, "Unknown is a state somebody chose; Absent is not",
 		},
 		{
-			"an Unavailable tier field is still present",
-			v3able(func(d *ChannelData) { d.Filter = StringField{State: Unavailable} }),
-			CurrentSchema, "Unavailable is a claim about the radio",
-		},
-		{
-			"a tier field left Absent is not present",
+			"a tier field left Absent records nothing",
 			v3able(func(d *ChannelData) { d.Filter = StringField{} }),
 			lowestSchema, "the zero FieldState says nothing",
+		},
+		{
+			"an Unavailable tier field records nothing either",
+			v3able(func(d *ChannelData) { d.Filter = StringField{State: Unavailable} }),
+			lowestSchema, "schema 3 says the same thing by having no key",
+		},
+		{
+			"every tier field Unavailable, as a Yaesu read leaves them",
+			v3able(func(d *ChannelData) { withUnavailableTierFields(d) }),
+			lowestSchema, "this is the case the byte-identity guarantee rests on",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -267,12 +272,13 @@ func TestSave_TierContentRoundTripsThroughSchema4(t *testing.T) {
 	}
 }
 
-// TestLoadV3_MigratesTierFieldsToAbsent pins the decision
-// migrateV3ChannelData records: a schema-3 file predates the tier's
-// fields entirely, so it says NOTHING about them — Absent, not
-// Unavailable (a claim about the radio) and not Unknown (a claim that
-// the answer is merely not in hand).
-func TestLoadV3_MigratesTierFieldsToAbsent(t *testing.T) {
+// TestLoadV3_MigratesTierFieldsToUnavailable pins the decision
+// migrateV3ChannelData records, and its consequence: every tier field
+// comes back Unavailable — the same state a READ of one of those radios
+// produces, so a codeplug loaded from an old file still compares equal
+// to a fresh read — and none of them Records anything, so the file is
+// re-saved as schema 3.
+func TestLoadV3_MigratesTierFieldsToUnavailable(t *testing.T) {
 	cp, err := Load(filepath.Join("testdata", "canonical-v3-basic.json"))
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
@@ -281,11 +287,24 @@ func TestLoadV3_MigratesTierFieldsToAbsent(t *testing.T) {
 		if ch.Data == nil {
 			continue
 		}
-		if !ch.Data.tierFieldsAbsent() {
-			t.Errorf("slot %q: a schema-3 file produced a non-Absent tier field: %+v", ch.Slot, *ch.Data)
+		if !ch.Data.tierFieldsUnrecorded() {
+			t.Errorf("slot %q: a schema-3 file produced a Recorded tier field: %+v", ch.Slot, *ch.Data)
 		}
-		if ch.Data.Duplex.State != Absent || ch.Data.ToneMode.State != Absent {
-			t.Errorf("slot %q: duplex/tone_mode should be Absent, got %q/%q", ch.Slot, ch.Data.Duplex.State, ch.Data.ToneMode.State)
+		for name, state := range map[string]FieldState{
+			"tx_frequency":  ch.Data.TxFreqHz.State,
+			"duplex":        ch.Data.Duplex.State,
+			"offset":        ch.Data.OffsetHz.State,
+			"tone_mode":     ch.Data.ToneMode.State,
+			"tone_tx":       ch.Data.ToneTx.State,
+			"tone_rx":       ch.Data.ToneRx.State,
+			"dtcs_code":     ch.Data.DTCSCode.State,
+			"dtcs_polarity": ch.Data.DTCSPolarity.State,
+			"filter":        ch.Data.Filter.State,
+			"data_mode":     ch.Data.DataMode.State,
+		} {
+			if state != Unavailable {
+				t.Errorf("slot %q: %s = %q, want %q", ch.Slot, name, state, Unavailable)
+			}
 		}
 	}
 }

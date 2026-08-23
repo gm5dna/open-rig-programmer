@@ -28,7 +28,7 @@ import (
 // anything about the display flag for — are Unknown; see
 // TestCmdImport_CHIRP_Success, which asserts both sides of that contrast
 // in one merged output.
-func validChannelData(freqHz uint32, mode string) *codeplug.ChannelData {
+func validChannelData(freqHz uint64, mode string) *codeplug.ChannelData {
 	return &codeplug.ChannelData{
 		FreqHz:     freqHz,
 		Mode:       mode,

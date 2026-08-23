@@ -148,8 +148,9 @@ func TestReadChannel_MappingsFromThePositionChart(t *testing.T) {
 				if ch.Data == nil {
 					t.Fatal("Channel.Data = nil, want populated")
 				}
-				if !reflect.DeepEqual(*ch.Data, tt.want) {
-					t.Errorf("ChannelData =\n %+v\nwant\n %+v", *ch.Data, tt.want)
+				want := tierUnavailable(tt.want)
+				if !reflect.DeepEqual(*ch.Data, want) {
+					t.Errorf("ChannelData =\n %+v\nwant\n %+v", *ch.Data, want)
 				}
 			})
 		}
@@ -323,4 +324,29 @@ func TestMTSpec_DerivesItsLengthFromTheDialect(t *testing.T) {
 	if _, err := mtSpec(cat.Dialect{}); err == nil {
 		t.Error("mtSpec(zero dialect) = nil error, want a refusal — an unconfigured dialect has no MT geometry, and a zero ExpectLen would admit any answer")
 	}
+}
+
+// tierUnavailable returns d with every one of the ten fields the Icom
+// tier added to codeplug.ChannelData set to Unavailable — what this
+// radio's ReadChannel reports for all of them, because its memory frame
+// carries none of them (design D4; the TagDisplay precedent, applied ten
+// times).
+//
+// The read tests' `want` literals name the fields this radio actually
+// HAS and wrap the result in this, rather than spelling out ten
+// Unavailable lines each: the interesting content of every case stays
+// visible, and "and everything the Icom tier added is Unavailable" is
+// stated once, where it can be read as the single fact it is.
+func tierUnavailable(d codeplug.ChannelData) codeplug.ChannelData {
+	d.TxFreqHz = codeplug.FreqField{State: codeplug.Unavailable}
+	d.Duplex = codeplug.StringField{State: codeplug.Unavailable}
+	d.OffsetHz = codeplug.FreqField{State: codeplug.Unavailable}
+	d.ToneMode = codeplug.StringField{State: codeplug.Unavailable}
+	d.ToneTx = codeplug.ToneField{State: codeplug.Unavailable}
+	d.ToneRx = codeplug.ToneField{State: codeplug.Unavailable}
+	d.DTCSCode = codeplug.IntField{State: codeplug.Unavailable}
+	d.DTCSPolarity = codeplug.StringField{State: codeplug.Unavailable}
+	d.Filter = codeplug.StringField{State: codeplug.Unavailable}
+	d.DataMode = codeplug.BoolField{State: codeplug.Unavailable}
+	return d
 }

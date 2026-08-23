@@ -364,8 +364,9 @@ func (e *OversizeSaveError) Error() string {
 //     "tag_display" bool becomes a BoolField (see
 //     migrateLegacyTagDisplay for the rule and the reasoning);
 //   - schema 1, 2 and 3 alike: every populated channel's ten
-//     tier-added fields become Absent — the state that says the file
-//     never spoke about them (see migrateV3ChannelData).
+//     tier-added fields become Unavailable — what those files say, by
+//     having no key for a field their radios do not have, and what a
+//     read of those radios reports (see migrateV3ChannelData).
 //
 // Load never panics: a missing file, malformed JSON, or truncated/corrupted
 // JSON are all reported as an error.
@@ -575,18 +576,29 @@ func migrateV3Channels(v3 []channelV3) []Channel {
 // the current shape, or returns nil for an empty slot.
 //
 // The migration is EXPLICIT about the ten fields the Icom tier added,
-// even though every one of them is left at its zero value: that zero is
-// codeplug.Absent, and Absent is a DECISION here, not an oversight. A
-// schema-3 file predates the fields entirely, so it says nothing about
-// them — which is precisely what Absent means. Unavailable would have
-// been a claim about the radio the file came from, Unknown a claim that
-// the answer is merely not yet in hand; neither is a statement a v3 file
-// ever made. See codeplug.Absent for what follows from that choice.
+// and it sets every one of them to UNAVAILABLE rather than leaving the
+// zero value. That is the load-bearing decision of the whole migration,
+// so the alternative is recorded with it.
+//
+// Unavailable is TRUE of a schema-3 file: schema 3 existed only while
+// this program modelled Yaesu NEWCAT radios, whose memory frames carry
+// none of these fields, so "this radio has no such field" is exactly
+// what such a file says by having no key for it — and it is precisely
+// what a read of any of those radios reports (core/driver/*/read.go).
+//
+// The rejected alternative was the zero value, Absent ("this codeplug
+// never spoke about the field"), which reads as the more cautious
+// answer and is in fact the damaging one: a codeplug loaded from an old
+// file would then differ, field for field, from a FRESH READ of the very
+// same radio, and codeplug.Diff — which compares ChannelData with == —
+// would report every single channel as modified. Agreeing with the read
+// is not a convenience here; it is the difference between a working diff
+// and a useless one.
 func migrateV3ChannelData(d *channelDataV3) *ChannelData {
 	if d == nil {
 		return nil
 	}
-	return &ChannelData{
+	return withUnavailableTierFields(&ChannelData{
 		FreqHz:     d.FreqHz,
 		Mode:       d.Mode,
 		ClarHz:     d.ClarHz,
@@ -598,8 +610,25 @@ func migrateV3ChannelData(d *channelDataV3) *ChannelData {
 		Tag:        d.Tag,
 		TagDisplay: d.TagDisplay,
 		ScanSkip:   d.ScanSkip,
-		// The tier-added ten: Absent, deliberately — see above.
-	}
+	})
+}
+
+// withUnavailableTierFields sets every tier-added field of d to
+// Unavailable and returns d. It is shared by all three legacy
+// migrations, so a schema-1, schema-2 and schema-3 file cannot end up
+// disagreeing about what they say concerning fields none of them has.
+func withUnavailableTierFields(d *ChannelData) *ChannelData {
+	d.TxFreqHz = FreqField{State: Unavailable}
+	d.Duplex = StringField{State: Unavailable}
+	d.OffsetHz = FreqField{State: Unavailable}
+	d.ToneMode = StringField{State: Unavailable}
+	d.ToneTx = ToneField{State: Unavailable}
+	d.ToneRx = ToneField{State: Unavailable}
+	d.DTCSCode = IntField{State: Unavailable}
+	d.DTCSPolarity = StringField{State: Unavailable}
+	d.Filter = StringField{State: Unavailable}
+	d.DataMode = BoolField{State: Unavailable}
+	return d
 }
 
 // legacyChannel is the FROZEN schema-1/schema-2 on-disk shape of one
@@ -764,7 +793,7 @@ func migrateLegacyChannelData(d *legacyChannelData) *ChannelData {
 	if d == nil {
 		return nil
 	}
-	return &ChannelData{
+	return withUnavailableTierFields(&ChannelData{
 		// uint32 -> uint64 widening: legacyChannelData stays frozen at
 		// the type v1/v2 actually used, and the conversion cannot lose
 		// anything.
@@ -779,9 +808,9 @@ func migrateLegacyChannelData(d *legacyChannelData) *ChannelData {
 		Tag:        d.Tag,
 		TagDisplay: migrateLegacyTagDisplay(d.TagDisplay),
 		ScanSkip:   d.ScanSkip,
-		// The tier-added ten stay Absent, exactly as for a v3 file — see
-		// migrateV3ChannelData.
-	}
+		// The tier-added ten: Unavailable, exactly as for a v3 file —
+		// see migrateV3ChannelData for the decision and its alternative.
+	})
 }
 
 // migrateLegacyTagDisplay maps a schema-1/schema-2 "tag_display" onto the
@@ -896,8 +925,9 @@ type codeplugV4 struct {
 //
 // Schema 3 unless one of two things is true of some populated channel:
 //
-//   - a tier-added field is PRESENT (its state differs from the absent
-//     default — see ChannelData.tierFieldsAbsent and codeplug.Absent),
+//   - a tier-added field is PRESENT — its state RECORDS something, i.e.
+//     is Known or Unknown rather than Absent or Unavailable (see
+//     FieldState.Recorded and ChannelData.tierFieldsUnrecorded) —
 //     because schema 3 has no key to put it in; or
 //   - a value does not fit schema 3's ranges — today that means a
 //     freq_hz above MaxUint32, which the IC-905's 10 GHz reach makes
@@ -917,7 +947,7 @@ func schemaFor(cp *Codeplug) int {
 		if ch.Data == nil {
 			continue
 		}
-		if !ch.Data.tierFieldsAbsent() {
+		if !ch.Data.tierFieldsUnrecorded() {
 			return CurrentSchema
 		}
 		if ch.Data.FreqHz > math.MaxUint32 {

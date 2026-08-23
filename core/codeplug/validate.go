@@ -431,8 +431,13 @@ func validateTierFields(slot string, bank spec.BankID, d ChannelData, caps spec.
 	reachable := func(f spec.Field) bool {
 		return !caps.FieldSupport(bank, f).Unreachable()
 	}
+	// A field the radio HAS but the channel never spoke about (the zero
+	// FieldState, codeplug.Absent) is an error: a channel that cannot
+	// describe this radio is not a channel with a defensible blank.
+	// Unavailable is a different matter and is NOT caught here — it is a
+	// real state, checked by the field's own Valid.
 	absent := func(f spec.Field, state FieldState) bool {
-		if state.Present() {
+		if state != Absent {
 			return false
 		}
 		issues = append(issues, Issue{

@@ -131,8 +131,32 @@ func TestProfiles_Validate(t *testing.T) {
 // answered, and this project's write surface offers no way to blank them).
 // The discovered banks are taken from the OFFLINE synthesiser, which is
 // the same effectiveCapabilities call a live session's Open makes.
+//
+// The Icom tier (design D4) added six fields to spec.Capabilities —
+// DuplexOptions, ToneModes, DTCSPolarities, DTCSCodes, Filters and
+// TagCharset — and for THIS radio the explicit decision about every one
+// of them is that it must be EMPTY. That is not a zero slipping through:
+// empty is the positive statement "this radio expresses no such
+// vocabulary", which is what makes every capability-keyed check in
+// core/codeplug and core/csvio skip the Icom branch and leave this
+// radio's behaviour exactly as it was. Populating any of them would be
+// the mistake, so the rule for those six is inverted here rather than
+// waived, and the test still fails if one is ever filled in.
+
+// tierFieldsMustBeEmpty names the spec.Capabilities fields the Icom tier
+// added, for which this radio's explicit decision is EMPTY — see
+// TestCapabilities_EveryFieldExplicit's doc comment.
+var tierFieldsMustBeEmpty = map[string]bool{
+	"DuplexOptions":  true,
+	"ToneModes":      true,
+	"DTCSPolarities": true,
+	"DTCSCodes":      true,
+	"Filters":        true,
+	"TagCharset":     true,
+}
+
 func TestCapabilities_EveryFieldExplicit(t *testing.T) {
-	const wantFieldCount = 15
+	const wantFieldCount = 21
 
 	for _, m := range testModels {
 		for _, tt := range []struct {
@@ -151,6 +175,12 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 				for i := 0; i < typ.NumField(); i++ {
 					name := typ.Field(i).Name
 					f := v.Field(i)
+					if tierFieldsMustBeEmpty[name] {
+						if !f.IsZero() || (f.Kind() == reflect.Slice && f.Len() != 0) {
+							t.Errorf("field %s is populated — this radio expresses no Icom-family vocabulary, and an empty value is the decision, not an omission", name)
+						}
+						continue
+					}
 					if f.IsZero() {
 						t.Errorf("field %s is the zero value — every spec.Capabilities field must be populated explicitly (see this test's doc comment for why zero is never neutral)", name)
 						continue

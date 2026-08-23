@@ -101,7 +101,7 @@ func openTestSimSession(t *testing.T, opts ...fakeradio.Option) driver.Session {
 // writableChannel returns a codeplug.Channel for slot at freqHz, USB,
 // CTCSS off, simplex, ScanSkip/CTCSSTone left Unknown (the CAT-honest
 // state) — mirrors core/clone/helpers_test.go's writableChannel.
-func writableChannel(slot string, freqHz uint32, tag string) codeplug.Channel {
+func writableChannel(slot string, freqHz uint64, tag string) codeplug.Channel {
 	return codeplug.Channel{
 		Slot: slot,
 		Data: &codeplug.ChannelData{

@@ -19,8 +19,17 @@ import (
 
 // fullCodeplug builds a Codeplug with every field populated, for
 // round-trip testing.
+//
+// Its channels' ten tier-added fields are set to Unavailable
+// (withUnavailableTierFields) rather than left at their zero value,
+// because that is what every REAL producer of a Yaesu channel yields —
+// a driver read, and a load of any schema-1/2/3 file — and this fixture
+// is round-tripped through Save and Load, which normalise to exactly
+// that. Leaving them zero would have made the fixture the only
+// ChannelData in the project that says "nothing was ever said about
+// these fields" about an FT-710.
 func fullCodeplug() *Codeplug {
-	return &Codeplug{
+	cp := &Codeplug{
 		Schema:    CurrentSchema,
 		Generator: "open-rig-programmer v0.1.0",
 		Radio: RadioInfo{
@@ -57,6 +66,12 @@ func fullCodeplug() *Codeplug {
 			},
 		},
 	}
+	for i := range cp.Channels {
+		if cp.Channels[i].Data != nil {
+			withUnavailableTierFields(cp.Channels[i].Data)
+		}
+	}
+	return cp
 }
 
 // TestSaveLoad_V2RoundTrip checks a lossless round trip of a fully

@@ -339,9 +339,23 @@ func buildWriteCommands(dialect cat.Dialect, ch codeplug.Channel) (mwCmd, mtCmd 
 	// read-only, so the capability gate refused them already;
 	// cat.Dialect.BuildMWSet would reject their slots too (its own
 	// writableSlot rule).
+	// The ONE checked conversion between the neutral model's uint64
+	// frequency and this protocol's uint32 (design D4, item 7):
+	// core/cat stays uint32 because a NEWCAT memory frame carries nine
+	// digits and can express nothing wider, so a bare cast here would
+	// truncate an out-of-range value into a plausible small one and send
+	// it. The arm is unreachable for this radio — Validate has already
+	// refused anything above its 75 MHz ceiling — and it is a refusal,
+	// not a cast, so it stays unreachable by construction rather than by
+	// habit.
+	freqHz, err := cat.MemoryFreqHz(data.FreqHz)
+	if err != nil {
+		return cat.Command{}, cat.Command{}, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{spec.FieldFrequency}, Reason: err.Error()}
+	}
+
 	mwCmd, err = dialect.BuildMWSet(cat.MemoryData{
 		Slot:   sl,
-		FreqHz: data.FreqHz,
+		FreqHz: freqHz,
 		ClarHz: int16(data.ClarHz),
 		RxClar: data.RxClar,
 		TxClar: data.TxClar,

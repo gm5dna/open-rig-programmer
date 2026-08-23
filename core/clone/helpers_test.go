@@ -546,7 +546,7 @@ func stepClock(start time.Time) func() time.Time {
 // every FieldState-carrying field Unknown (nothing inexpressible
 // requested), everything else set to plain, codec-expressible values.
 // Mirrors core/driver/ft710's write_test.go helper of the same name/shape.
-func writableChannel(slot string, freqHz uint32, tag string) codeplug.Channel {
+func writableChannel(slot string, freqHz uint64, tag string) codeplug.Channel {
 	return codeplug.Channel{
 		Slot: slot,
 		Data: &codeplug.ChannelData{
