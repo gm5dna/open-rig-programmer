@@ -1,0 +1,737 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+// Package civtest is core/civ's conformance suite for a civ.Profile,
+// expressed entirely through the EXPORTED API.
+//
+// WHY IT EXISTS. core/civ holds in-package walks that are the real safety
+// property of this program — every frame a profile's builders emit is
+// well-formed, is admitted by that profile's OWN gate, and is refused by
+// every other profile's — and they drive allTestProfiles(), an in-package
+// fixture. A per-model package such as core/civ/ic7300 imports core/civ,
+// so it can never reach that fixture: the import would be a cycle. Without
+// this package a new Icom model would arrive with no way to run the
+// properties that matter, and "it compiles and its own unit tests pass"
+// would be the whole of its evidence.
+//
+// So the subset of those properties that can be stated through exported
+// identifiers lives here, as a function any package can call:
+//
+//	func TestConformance(t *testing.T) { civtest.Run(t, ic7300.Profile()) }
+//
+// It is a SUBSET, deliberately: several in-package checks read unexported
+// helpers and cannot be restated. What this package can state, it states
+// in full, and it COUNTS what it does so a profile that quietly
+// contributes nothing fails loudly rather than passing in silence.
+//
+// WHY A LIBRARY PACKAGE IMPORTS "testing". This is a non-test file
+// importing testing, which is normally a smell: it drags the testing flag
+// set into any binary that links it. It is the deliberate
+// net/http/httptest pattern, and it is the only shape that works here —
+// the suite must be importable by ANOTHER package's tests, and a _test.go
+// file is importable by nobody. Nothing in the production tree imports
+// this package, and nothing should: its only callers are _test.go files,
+// which is a guard rule (internal/guards) rather than a convention.
+//
+// WHY Run REFUSES THE ZERO PROFILE INSTEAD OF TESTING IT. "A zero Profile
+// refuses everything" is a property this suite owns, but it is NOT what
+// Run does when handed one. Run t.Fatal's, and RunZeroValue is a separate
+// exported entry point. The reason is the vacuity trap: a model package
+// whose exported profile was never initialised — a failed init, a typo
+// selecting the wrong var — would call Run and, if Run silently switched
+// to the refusal suite, receive a green conformance report for a radio it
+// cannot describe. That is precisely the class of silent pass every walk
+// in core/civ is written to prevent, so Run says what happened and names
+// the other entry point instead.
+package civtest
+
+import (
+	"sort"
+
+	"github.com/gm5dna/open-rig-programmer/core/civ"
+)
+
+// T is the subset of *testing.T this suite uses. A *testing.T satisfies it,
+// so callers write civtest.Run(t, p) exactly as they would against a
+// *testing.T parameter.
+//
+// IT IS AN INTERFACE FOR ONE REASON, and it is a deliberate difference
+// from core/cat/dialecttest, which takes a *testing.T. The vacuity trap
+// this suite exists to close — Run REFUSING an unconfigured profile rather
+// than quietly running the refusal suite over it — is the single most
+// important thing about Run's contract, and with a concrete *testing.T
+// there is no way to test it: testing.TB cannot be implemented outside the
+// testing package (it has an unexported method), and a real t.Fatal fails
+// the very test asserting the refusal. A four-method interface makes the
+// property provable, and costs callers nothing.
+type T interface {
+	Helper()
+	Errorf(format string, args ...any)
+	Fatal(args ...any)
+	Fatalf(format string, args ...any)
+	Logf(format string, args ...any)
+}
+
+// minConformanceFrames is the floor on the total frame count for one
+// profile. A radio this program can describe has a channel space and at
+// least one record layout, so it produces dozens; the floor is set well
+// below that because its job is to catch a walk that has stopped reaching
+// the builders at all, not to police how many channels a model has.
+const minConformanceFrames = 8
+
+// maxAddressSamples bounds how many channels Run reads per group. A
+// grouped model has 100 groups of 100 channels, and a suite that walked
+// every one of them would spend its time proving the same property ten
+// thousand times.
+const maxAddressSamples = 5
+
+// Run holds p to every conformance property this package can state through
+// core/civ's exported API, and fails t with a self-describing message for
+// each violation.
+//
+// Every helper here calls t.Helper(), so a failure is reported at the
+// caller's Run(t, p) line rather than inside this package: the message
+// carries the detail, and the line number that matters to a model
+// package's author is their own.
+//
+// It is an ERROR to call Run with an unconfigured profile — see the
+// package doc comment for why that is a fatal misuse rather than a silent
+// switch to RunZeroValue.
+func Run(t T, p civ.Profile) {
+	t.Helper()
+
+	if !p.Configured() {
+		t.Fatal("civtest.Run was given an UNCONFIGURED profile (Configured() == false). " +
+			"This is a misuse, not a conformance failure: an uninitialised package-level var reaches here " +
+			"looking exactly like a radio, and reporting PASS for it is the silent green this suite exists " +
+			"to prevent. If you meant to check the zero value's refusals, call civtest.RunZeroValue(t).")
+	}
+
+	r := &run{t: t, p: p, frames: map[string]int{}, refusals: map[string]int{}}
+
+	r.checkProfileSelfConsistency()
+	r.checkTransceiverIDRead()
+	r.checkMemoryReads()
+	r.checkMemorySets()
+	r.checkGateRefusesTheUnacceptable()
+	r.checkNonVacuity()
+}
+
+// run is one Run's state: the profile under test, plus the counters that
+// make every property non-vacuous.
+type run struct {
+	t T
+	p civ.Profile
+
+	// frames counts built-and-checked frames per builder; refusals counts
+	// refusals a check needed to SEE, per kind. A silent skip and an
+	// enforced rule are indistinguishable without the second map.
+	frames   map[string]int
+	refusals map[string]int
+	total    int
+
+	// roundTrips counts records that survived build -> parse intact.
+	roundTrips int
+}
+
+func (r *run) name() string { return r.p.Model() }
+
+// checkFrame is the property the whole suite is built around: this frame
+// is well-formed on the wire, fits this profile's own bound, and this
+// profile's own gate admits it.
+//
+// A builder and a gate that disagree are worse than either being wrong
+// alone: it means the program cannot send a command it believes is valid,
+// or the gate is not checking what the builder emits.
+func (r *run) checkFrame(what string, frame []byte) {
+	r.t.Helper()
+
+	r.frames[what]++
+	r.total++
+
+	if !civ.WellFormed(frame) {
+		r.t.Errorf("%s: %s produced a frame that is not well-formed: %v", r.name(), what, frame)
+		return
+	}
+	if to, _ := civ.FrameTo(frame); to != r.p.RadioAddress() {
+		r.t.Errorf("%s: %s addressed its frame to %#02x, not to this profile's radio (%#02x)", r.name(), what, to, r.p.RadioAddress())
+	}
+	if from, _ := civ.FrameFrom(frame); from != r.p.ControllerAddress() {
+		r.t.Errorf("%s: %s sent its frame from %#02x, not from this profile's controller (%#02x)", r.name(), what, from, r.p.ControllerAddress())
+	}
+	if len(frame) > r.p.MaxFrame() {
+		r.t.Errorf("%s: %s produced %d bytes, past this profile's own %d-byte frame bound — its own accumulator would discard the exchange as contamination", r.name(), what, len(frame), r.p.MaxFrame())
+	}
+	if !r.p.AllowedCommand(frame) {
+		r.t.Errorf("%s: its own gate REFUSED %s frame %v — a builder and a gate that disagree mean this profile cannot send a command it believes is valid", r.name(), what, frame)
+	}
+}
+
+// checkProfileSelfConsistency holds the profile's own accessors to the
+// invariants NewProfile promises, so a hand-built Profile (or a future
+// constructor bug) cannot reach the rest of this suite.
+func (r *run) checkProfileSelfConsistency() {
+	r.t.Helper()
+	p := r.p
+
+	if p.RadioAddress() == p.ControllerAddress() {
+		r.t.Errorf("%s: the radio and controller share address %#02x — echo removal and answer matching would both be undecidable", r.name(), p.RadioAddress())
+	}
+	lengths := p.RecordLengths()
+	if len(lengths) == 0 {
+		r.t.Fatalf("%s: RecordLengths() is empty — no record could be read or written", r.name())
+	}
+	found := false
+	for _, n := range lengths {
+		if n == p.BuildRecordLength() {
+			found = true
+		}
+		if !p.AcceptsRecordLength(n) {
+			r.t.Errorf("%s: AcceptsRecordLength(%d) is false for a length RecordLengths() reports", r.name(), n)
+		}
+	}
+	if !found {
+		r.t.Errorf("%s: BuildRecordLength() = %d is not among the accepted lengths %v — the builder would emit a record this profile's own parser refuses", r.name(), p.BuildRecordLength(), lengths)
+	}
+	// A length no layout claims must be refused, or the fingerprint the
+	// probe reads (spec D3.2) would accept anything.
+	unclaimed := lengths[len(lengths)-1] + 1
+	if p.AcceptsRecordLength(unclaimed) {
+		r.t.Errorf("%s: AcceptsRecordLength(%d) is true for a length no layout declares — the probe's length fingerprint would accept any record at all", r.name(), unclaimed)
+	} else {
+		r.refusals["unaccepted record length"]++
+	}
+
+	switch p.Discriminator() {
+	case civ.DiscriminatorSingleLength:
+		if len(lengths) != 1 {
+			r.t.Errorf("%s: Discriminator is %v with %d accepted lengths", r.name(), p.Discriminator(), len(lengths))
+		}
+	case civ.DiscriminatorRecordLength:
+		if len(lengths) < 2 {
+			r.t.Errorf("%s: Discriminator is %v with %d accepted length", r.name(), p.Discriminator(), len(lengths))
+		}
+	default:
+		r.t.Errorf("%s: Discriminator is %v — the zero value is not a rule", r.name(), p.Discriminator())
+	}
+
+	if p.AddressForm() == civ.AddressFormFlat && p.Groups() != 0 {
+		r.t.Errorf("%s: a flat address form reports %d groups", r.name(), p.Groups())
+	}
+	if p.AddressForm() != civ.AddressFormFlat && p.Groups() < 1 {
+		r.t.Errorf("%s: address form %v reports %d groups", r.name(), p.AddressForm(), p.Groups())
+	}
+	if p.NameLength() > 0 && len(p.NameCharset()) == 0 {
+		r.t.Errorf("%s: NameLength() is %d with an empty charset — no name would be expressible", r.name(), p.NameLength())
+	}
+}
+
+func (r *run) checkTransceiverIDRead() {
+	r.t.Helper()
+
+	cmd, err := r.p.BuildTransceiverIDRead()
+	if err != nil {
+		r.t.Errorf("%s: BuildTransceiverIDRead: %v", r.name(), err)
+		return
+	}
+	frame := cmd.Bytes()
+	r.checkFrame("transceiver ID read", frame)
+	if cmd.String() == "" {
+		r.t.Errorf("%s: the built Command's String() is empty — it is what a diagnostic line prints", r.name())
+	}
+
+	// Bytes() must hand out a fresh copy every call: the TOCTOU closure
+	// the type exists for.
+	a, b := cmd.Bytes(), cmd.Bytes()
+	if len(a) > 0 && &a[0] == &b[0] {
+		r.t.Errorf("%s: two Command.Bytes() calls returned the same backing array — a caller could mutate a frame after the gate approved it and before the port write", r.name())
+	}
+	a[len(a)-1] = 0x00
+	if c := cmd.Bytes(); c[len(c)-1] != 0xFD {
+		r.t.Errorf("%s: mutating a returned Command.Bytes() changed the Command", r.name())
+	}
+
+	// The ANSWER: the same frame with its addresses swapped and a data
+	// byte appended. Built here rather than by a builder because this
+	// package must not add a production builder no radio path needs.
+	answer := swapAddresses(frame)
+	answer = append(answer[:len(answer)-1], r.p.RadioAddress(), civ.EndByte)
+	token, err := r.p.ParseTransceiverID(answer)
+	if err != nil {
+		r.t.Errorf("%s: ParseTransceiverID rejected the answer to its own read (%v): %v", r.name(), answer, err)
+	} else if token == "" {
+		r.t.Errorf("%s: ParseTransceiverID returned an empty token — spec D3.2 records it as a diagnostic, so it must carry something to record", r.name())
+	}
+
+	// And the answer must NOT be admitted by the gate: an answer is never
+	// a legal outbound command.
+	if r.p.AllowedCommand(answer) {
+		r.t.Errorf("%s: its gate ADMITTED a transceiver-ID ANSWER %v — an answer is never a legal outbound command, and admitting one lets a captured reply be written back", r.name(), answer)
+	} else {
+		r.refusals["answer frame at the gate"]++
+	}
+}
+
+func (r *run) checkMemoryReads() {
+	r.t.Helper()
+
+	for _, addr := range r.addresses() {
+		cmd, err := r.p.BuildMemoryRead(addr)
+		if err != nil {
+			r.t.Errorf("%s: BuildMemoryRead(%v): %v", r.name(), addr, err)
+			continue
+		}
+		r.checkFrame("memory read", cmd.Bytes())
+	}
+
+	// Out-of-space addresses must be refused, with the zero Command.
+	_, hi := r.p.ChannelRange()
+	bad := []civ.ChannelAddress{{Group: r.firstGroup(), Channel: hi + 1}}
+	if lo, _ := r.p.ChannelRange(); lo > 0 {
+		bad = append(bad, civ.ChannelAddress{Group: r.firstGroup(), Channel: lo - 1})
+	}
+	if r.p.AddressForm() != civ.AddressFormFlat {
+		bad = append(bad, civ.ChannelAddress{Group: r.p.Groups(), Channel: hi})
+	} else {
+		bad = append(bad, civ.ChannelAddress{Group: 1, Channel: hi})
+	}
+	for _, addr := range bad {
+		cmd, err := r.p.BuildMemoryRead(addr)
+		if err == nil {
+			r.t.Errorf("%s: BuildMemoryRead(%v) built %v for an address outside this profile's own space", r.name(), addr, cmd.Bytes())
+			continue
+		}
+		if !cmd.IsZero() {
+			r.t.Errorf("%s: BuildMemoryRead(%v) returned a non-zero Command alongside its error", r.name(), addr)
+		}
+		r.refusals["address outside the profile's space"]++
+	}
+}
+
+func (r *run) checkMemorySets() {
+	r.t.Helper()
+
+	length := r.p.BuildRecordLength()
+	for _, addr := range r.addresses() {
+		rec, ok := r.sampleRecord(addr, length)
+		if !ok {
+			return
+		}
+		cmd, err := r.p.BuildMemorySet(rec)
+		if err != nil {
+			r.t.Errorf("%s: BuildMemorySet(%v): %v", r.name(), addr, err)
+			continue
+		}
+		frame := cmd.Bytes()
+		r.checkFrame("memory set", frame)
+
+		back, err := r.p.ParseMemoryAnswer(swapAddresses(frame))
+		if err != nil {
+			r.t.Errorf("%s: ParseMemoryAnswer rejected the answer form of its own set frame: %v", r.name(), err)
+			continue
+		}
+		if back != rec {
+			r.t.Errorf("%s: a record did not survive build -> parse:\n got %+v\nwant %+v", r.name(), back, rec)
+			continue
+		}
+		r.roundTrips++
+
+		if r.p.AllowedCommand(swapAddresses(frame)) {
+			r.t.Errorf("%s: its gate ADMITTED a memory ANSWER — an answer is never a legal outbound command", r.name())
+		} else {
+			r.refusals["answer frame at the gate"]++
+		}
+	}
+
+	// A NAME CONTAINING THE PAD BYTE, where the charset allows one: spec
+	// D5 entry 3's awkward case, and the vector the evidence legs are
+	// asked to capture.
+	if r.p.NameLength() >= 3 {
+		charset := r.p.NameCharset()
+		if contains(charset, r.p.NamePad()) {
+			other := firstOtherThan(charset, r.p.NamePad())
+			if other != 0 {
+				rec, ok := r.sampleRecord(r.addresses()[0], length)
+				if ok {
+					rec.Name = civ.Available(string([]byte{other, r.p.NamePad(), other}))
+					cmd, err := r.p.BuildMemorySet(rec)
+					if err != nil {
+						r.t.Errorf("%s: BuildMemorySet refused a name containing its own pad byte: %v", r.name(), err)
+					} else {
+						r.checkFrame("memory set (name with the pad byte)", cmd.Bytes())
+						back, err := r.p.ParseMemoryAnswer(swapAddresses(cmd.Bytes()))
+						if err != nil {
+							r.t.Errorf("%s: ParseMemoryAnswer: %v", r.name(), err)
+						} else if back != rec {
+							r.t.Errorf("%s: a name with an INTERIOR pad byte was lost in the round trip: got %v, want %v", r.name(), back.Name, rec.Name)
+						} else {
+							r.roundTrips++
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+// checkGateRefusesTheUnacceptable is what stops "its own gate admits every
+// frame it builds" from being satisfied by a gate that admits everything.
+func (r *run) checkGateRefusesTheUnacceptable() {
+	r.t.Helper()
+	p := r.p
+	radio, ctrl := p.RadioAddress(), p.ControllerAddress()
+
+	frames := [][]byte{
+		nil,
+		{},
+		{civ.PreambleByte},
+		{civ.PreambleByte, civ.PreambleByte, radio, ctrl, civ.EndByte},
+		{civ.PreambleByte, radio, ctrl, civ.CmdTransceiverID, civ.SubTransceiverID, civ.EndByte},
+		{civ.PreambleByte, civ.PreambleByte, radio, ctrl, civ.CmdTransceiverID, civ.SubTransceiverID},
+		{civ.PreambleByte, civ.PreambleByte, radio, ctrl, civ.AckByte, civ.EndByte},
+		{civ.PreambleByte, civ.PreambleByte, radio, ctrl, civ.NakByte, civ.EndByte},
+		// The surfaces this tier refuses outright (spec D1, non-goals):
+		// the menu, the memory keyer, transceive, and a clear-shaped form.
+		{civ.PreambleByte, civ.PreambleByte, radio, ctrl, 0x1A, 0x05, 0x00, 0x01, 0x00, civ.EndByte},
+		{civ.PreambleByte, civ.PreambleByte, radio, ctrl, 0x1A, 0x01, 0x00, 0x01, civ.EndByte},
+		{civ.PreambleByte, civ.PreambleByte, radio, ctrl, 0x1C, 0x00, 0x01, civ.EndByte},
+		{civ.PreambleByte, civ.PreambleByte, radio, ctrl, 0x0F, 0x01, civ.EndByte},
+		// A frame carrying a second one after an interior terminator.
+		{civ.PreambleByte, civ.PreambleByte, radio, ctrl, civ.CmdTransceiverID, civ.SubTransceiverID, civ.EndByte, civ.PreambleByte, civ.PreambleByte, radio, ctrl, civ.CmdTransceiverID, civ.SubTransceiverID, civ.EndByte},
+		// Addressed elsewhere.
+		{civ.PreambleByte, civ.PreambleByte, 0x00, ctrl, civ.CmdTransceiverID, civ.SubTransceiverID, civ.EndByte},
+		{civ.PreambleByte, civ.PreambleByte, radio ^ 0x01, ctrl, civ.CmdTransceiverID, civ.SubTransceiverID, civ.EndByte},
+		{civ.PreambleByte, civ.PreambleByte, ctrl, radio, civ.CmdTransceiverID, civ.SubTransceiverID, civ.EndByte},
+		{civ.PreambleByte, civ.PreambleByte, radio, ctrl ^ 0x01, civ.CmdTransceiverID, civ.SubTransceiverID, civ.EndByte},
+	}
+	for _, frame := range frames {
+		if p.AllowedCommand(frame) {
+			r.t.Errorf("%s: its gate ADMITTED %v — no profile may admit a malformed frame, an answer, a command it cannot build, or one addressed to another station", r.name(), frame)
+			continue
+		}
+		r.refusals["malformed or forbidden frame at the gate"]++
+	}
+}
+
+// checkNonVacuity is the half of this suite that fails when nothing
+// happened. Every property above is a loop over data the profile supplies,
+// and a profile supplying none would satisfy all of them in silence —
+// which is exactly how a builder dropped from the walk goes unnoticed.
+func (r *run) checkNonVacuity() {
+	r.t.Helper()
+
+	for _, what := range []string{"transceiver ID read", "memory read", "memory set"} {
+		if r.frames[what] == 0 {
+			r.t.Errorf("%s: builder %q contributed no frames — either this profile refuses it for every input this suite can offer, or the builder was dropped from the walk, and both are defects this property must not pass over", r.name(), what)
+		}
+	}
+	for _, what := range []string{
+		"malformed or forbidden frame at the gate",
+		"answer frame at the gate",
+		"address outside the profile's space",
+		"unaccepted record length",
+	} {
+		if r.refusals[what] == 0 {
+			r.t.Errorf("%s: no %q refusal was observed — the check either never ran or never had anything to refuse, and a rule that was never exercised is not evidence that it is enforced", r.name(), what)
+		}
+	}
+	if r.roundTrips == 0 {
+		r.t.Errorf("%s: not one record survived build -> parse — this profile's codec does not round-trip", r.name())
+	}
+	if r.total < minConformanceFrames {
+		r.t.Errorf("%s: only %d frames were built and checked in total — this walk is not reaching the builders", r.name(), r.total)
+	}
+
+	r.t.Logf("%s: %d frames checked; per builder: %v; refusals seen: %v; record round trips: %d",
+		r.name(), r.total, r.frames, r.refusals, r.roundTrips)
+}
+
+// addresses returns a sample of addresses valid under p's own address
+// form: the ends of the channel range and a few in between, over the first
+// and last group where the form is grouped.
+func (r *run) addresses() []civ.ChannelAddress {
+	p := r.p
+	lo, hi := p.ChannelRange()
+
+	channels := []int{lo, hi}
+	if hi > lo {
+		channels = append(channels, (lo+hi)/2)
+	}
+	for i := 1; len(channels) < maxAddressSamples && lo+i < hi; i++ {
+		channels = append(channels, lo+i)
+	}
+
+	groups := []int{0}
+	if p.AddressForm() != civ.AddressFormFlat {
+		groups = []int{0}
+		if p.Groups() > 1 {
+			groups = append(groups, p.Groups()-1)
+		}
+	}
+
+	var out []civ.ChannelAddress
+	for _, g := range groups {
+		for _, c := range channels {
+			out = append(out, civ.ChannelAddress{Group: g, Channel: c})
+		}
+	}
+	return out
+}
+
+// firstGroup is the lowest valid group index under p's form.
+func (r *run) firstGroup() int {
+	if r.p.AddressForm() == civ.AddressFormFlat {
+		return 0
+	}
+	return 0
+}
+
+// sampleRecord builds a record every field p's layout maps is present in
+// and no field it does not map is — the shape BuildMemorySet requires —
+// from p's OWN exported layout data.
+//
+// It is the whole reason Profile.Layouts returns deep copies of its enum
+// maps: this suite must be able to name a value each enum actually
+// defines, for a model it has never seen.
+func (r *run) sampleRecord(addr civ.ChannelAddress, length int) (civ.MemoryRecord, bool) {
+	r.t.Helper()
+
+	layout, ok := r.p.LayoutFor(length)
+	if !ok {
+		r.t.Errorf("%s: LayoutFor(%d) is missing for its own BuildRecordLength", r.name(), length)
+		return civ.MemoryRecord{}, false
+	}
+
+	rec := civ.MemoryRecord{Address: addr}
+	for _, sp := range layout.Fields {
+		switch sp.Encoding {
+		case civ.EncodingBCDNumber:
+			// A wire value using most of the field's own digit positions,
+			// scaled to the neutral unit — a multiple of the scale by
+			// construction, and always inside the field.
+			capacity := uint64(1)
+			for i := 0; i < 2*sp.Length; i++ {
+				capacity *= 10
+			}
+			setNumeric(&rec, sp.Field, ((capacity-1)/3)*sp.Scale)
+		case civ.EncodingEnum:
+			names := make([]string, 0, len(sp.Enum))
+			for _, n := range sp.Enum {
+				names = append(names, n)
+			}
+			if len(names) == 0 {
+				r.t.Errorf("%s: field %s has an empty enum", r.name(), sp.Field)
+				return civ.MemoryRecord{}, false
+			}
+			sort.Strings(names)
+			setText(&rec, sp.Field, names[0])
+		case civ.EncodingName:
+			setText(&rec, sp.Field, r.sampleName())
+		default:
+			r.t.Errorf("%s: field %s has encoding %v", r.name(), sp.Field, sp.Encoding)
+			return civ.MemoryRecord{}, false
+		}
+	}
+	return rec, true
+}
+
+// sampleName returns a name valid under p and NEVER ending in the pad
+// byte, which would come back trimmed and not round-trip exactly.
+func (r *run) sampleName() string {
+	n := r.p.NameLength()
+	if n == 0 {
+		return ""
+	}
+	var out []byte
+	for _, b := range r.p.NameCharset() {
+		if b == r.p.NamePad() {
+			continue
+		}
+		out = append(out, b)
+		if len(out) == n {
+			break
+		}
+	}
+	if len(out) == 0 {
+		r.t.Errorf("%s: every byte of its name charset is the pad byte — no name could round-trip", r.name())
+	}
+	return string(out)
+}
+
+// setNumeric and setText reach a MemoryRecord's fields by id from OUTSIDE
+// core/civ, where the package's own accessors are unexported.
+//
+// They are exhaustive switches, and a field id they do not handle is a
+// LOUD failure rather than a silent no-op: a new field the suite silently
+// skipped would make every record it builds incomplete, and
+// BuildMemorySet would then refuse them all with a message about the
+// profile rather than about this suite.
+func setNumeric(rec *civ.MemoryRecord, id civ.FieldID, v uint64) {
+	switch id {
+	case civ.FieldRXFrequency:
+		rec.RXFreqHz = civ.Available(v)
+	case civ.FieldTXFrequency:
+		rec.TXFreqHz = civ.Available(v)
+	case civ.FieldOffset:
+		rec.OffsetHz = civ.Available(v)
+	case civ.FieldToneTX:
+		rec.ToneTXDeciHz = civ.Available(v)
+	case civ.FieldToneRX:
+		rec.ToneRXDeciHz = civ.Available(v)
+	case civ.FieldDTCSCode:
+		rec.DTCSCode = civ.Available(v)
+	default:
+		panic("civtest: no numeric field for id " + string(id) + " — core/civ's vocabulary grew and this suite was not updated")
+	}
+}
+
+func setText(rec *civ.MemoryRecord, id civ.FieldID, v string) {
+	switch id {
+	case civ.FieldDuplex:
+		rec.Duplex = civ.Available(v)
+	case civ.FieldMode:
+		rec.Mode = civ.Available(v)
+	case civ.FieldFilter:
+		rec.Filter = civ.Available(v)
+	case civ.FieldDataMode:
+		rec.DataMode = civ.Available(v)
+	case civ.FieldToneMode:
+		rec.ToneMode = civ.Available(v)
+	case civ.FieldDTCSPolarity:
+		rec.DTCSPolarity = civ.Available(v)
+	case civ.FieldName:
+		rec.Name = civ.Available(v)
+	case civ.FieldSelect:
+		rec.Select = civ.Available(v)
+	default:
+		panic("civtest: no text field for id " + string(id) + " — core/civ's vocabulary grew and this suite was not updated")
+	}
+}
+
+// swapAddresses returns a copy of frame with its `to` and `from` bytes
+// exchanged: a command frame becomes the answer's shape, and vice versa.
+//
+// It is here rather than in core/civ deliberately. Turning a command into
+// an answer is something only a TEST wants, and a production helper that
+// did it would be a builder for frames no radio path ever sends.
+func swapAddresses(frame []byte) []byte {
+	out := make([]byte, len(frame))
+	copy(out, frame)
+	if len(out) >= 4 {
+		out[2], out[3] = out[3], out[2]
+	}
+	return out
+}
+
+func contains(bs []byte, b byte) bool {
+	for _, x := range bs {
+		if x == b {
+			return true
+		}
+	}
+	return false
+}
+
+func firstOtherThan(bs []byte, b byte) byte {
+	for _, x := range bs {
+		if x != b {
+			return x
+		}
+	}
+	return 0
+}
+
+// RunZeroValue holds the ZERO civ.Profile to the one property it has: it
+// refuses everything it is offered.
+//
+// A separate exported entry point rather than something Run detects — the
+// package doc comment gives the reason at length. The short version is
+// that an uninitialised profile reaching a conformance suite must be a
+// loud failure, not a different suite quietly passing.
+//
+// UNLIKE core/cat's equivalent, NOT ONE BUILDER EMITS. core/cat has three
+// builders whose frames are fixed literals and which therefore produce
+// bytes on any receiver at all; CI-V has none, because every frame's `to`
+// and `from` bytes are profile data. So the containment here is total
+// rather than resting on the gate alone — and the gate is still asserted,
+// because that is the property that matters.
+func RunZeroValue(t T) {
+	t.Helper()
+
+	var zero civ.Profile
+
+	if zero.Configured() {
+		t.Fatal("the zero civ.Profile reports Configured() == true — every refusal below rests on it not being configured")
+	}
+	if zero.Model() != "" {
+		t.Errorf("zero profile: Model() = %q, want empty", zero.Model())
+	}
+	if n := len(zero.RecordLengths()); n != 0 {
+		t.Errorf("zero profile: RecordLengths() has %d entries, want none", n)
+	}
+	if n := len(zero.Layouts()); n != 0 {
+		t.Errorf("zero profile: Layouts() has %d entries, want none", n)
+	}
+	if zero.AcceptsRecordLength(1) {
+		t.Errorf("zero profile: AcceptsRecordLength(1) is true — it declares no record geometry at all")
+	}
+
+	builders := []struct {
+		what string
+		cmd  civ.Command
+		err  error
+	}{}
+	add := func(what string, c civ.Command, err error) {
+		builders = append(builders, struct {
+			what string
+			cmd  civ.Command
+			err  error
+		}{what, c, err})
+	}
+	idCmd, idErr := zero.BuildTransceiverIDRead()
+	add("BuildTransceiverIDRead", idCmd, idErr)
+	rdCmd, rdErr := zero.BuildMemoryRead(civ.ChannelAddress{Channel: 1})
+	add("BuildMemoryRead", rdCmd, rdErr)
+	stCmd, stErr := zero.BuildMemorySet(civ.MemoryRecord{})
+	add("BuildMemorySet", stCmd, stErr)
+
+	for _, b := range builders {
+		if b.err == nil {
+			t.Errorf("zero profile: %s SUCCEEDED, emitting %s — an unconfigured profile must build nothing", b.what, b.cmd)
+			continue
+		}
+		if !b.cmd.IsZero() {
+			t.Errorf("zero profile: %s returned a non-zero Command alongside its error", b.what)
+		}
+	}
+
+	if _, err := zero.ParseTransceiverID([]byte{civ.PreambleByte, civ.PreambleByte, 0xE0, 0x94, civ.CmdTransceiverID, civ.SubTransceiverID, 0x94, civ.EndByte}); err == nil {
+		t.Errorf("zero profile: ParseTransceiverID accepted an answer — it has no address to attribute one to")
+	}
+	if _, err := zero.ParseMemoryAnswer([]byte{civ.PreambleByte, civ.PreambleByte, 0xE0, 0x94, civ.CmdMemory, civ.SubMemoryContents, 0x00, 0x01, 0x00, civ.EndByte}); err == nil {
+		t.Errorf("zero profile: ParseMemoryAnswer accepted a memory answer — it has no layout to decode one with")
+	}
+
+	offered := [][]byte{
+		{civ.PreambleByte, civ.PreambleByte, 0x94, 0xE0, civ.CmdTransceiverID, civ.SubTransceiverID, civ.EndByte},
+		{civ.PreambleByte, civ.PreambleByte, 0x94, 0xE0, civ.CmdMemory, civ.SubMemoryContents, 0x00, 0x01, civ.EndByte},
+		{civ.PreambleByte, civ.PreambleByte, 0x94, 0xE0, civ.CmdMemory, civ.SubMemoryContents, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, civ.EndByte},
+		{civ.PreambleByte, civ.PreambleByte, 0xE0, 0x94, civ.AckByte, civ.EndByte},
+		{civ.PreambleByte, civ.PreambleByte, 0x00, 0x94, civ.CmdTransceiverID, civ.SubTransceiverID, civ.EndByte},
+	}
+	refused := 0
+	for _, frame := range offered {
+		if zero.AllowedCommand(frame) {
+			t.Errorf("zero profile: its gate ADMITTED %v — an unconfigured profile must authorise nothing, or a program holding one could put bytes on a wire to a radio it cannot describe", frame)
+			continue
+		}
+		refused++
+	}
+	if refused != len(offered) {
+		t.Errorf("zero profile: %d of %d offered frames were refused", refused, len(offered))
+	}
+	if refused == 0 {
+		t.Errorf("zero profile: nothing was offered to the gate at all — this check would pass on a gate that admits everything")
+	}
+
+	t.Logf("zero profile: %d builders refused, %d frames refused at the gate", len(builders), refused)
+}
