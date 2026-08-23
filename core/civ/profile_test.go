@@ -499,6 +499,100 @@ func TestFixedTemplateMayCarryAConstantBesideANibbleEnum(t *testing.T) {
 	}
 }
 
+// TestV8RefusesNibblesThatCombineIntoAFramingByte is the corner the V8
+// widening opened, closed at construction.
+//
+// Neither half is a framing byte on its own — V6 bounds a nibble enum
+// value at 0x0F and V8 refuses a template BYTE of 0xFE or 0xFD — but the
+// byte the two halves finish as can be one, and 0xFE or 0xFD in a record
+// cannot traverse CI-V framing at all. Left to the encoder's
+// finished-bytes assert it would surface at BUILD time, per value, for a
+// transcription error plainly visible in the table; and that assert's
+// "cannot fire for a profile NewProfile built" would be false.
+func TestV8RefusesNibblesThatCombineIntoAFramingByte(t *testing.T) {
+	base := func(spans []FieldSpan, fixed []byte) ProfileConfig {
+		return ProfileConfig{
+			Model:         "COMBINE",
+			RadioAddress:  0x94,
+			AddressForm:   AddressFormFlat,
+			ChannelLo:     1,
+			ChannelHi:     99,
+			Discriminator: DiscriminatorSingleLength,
+			BuildLength:   3,
+			Layouts: []RecordLayout{{
+				Length: 3,
+				Fields: append([]FieldSpan{
+					{Field: FieldRXFrequency, Offset: 0, Length: 2, Encoding: EncodingBCDNumber, Order: OrderBigEndian, Scale: 1},
+				}, spans...),
+				Fixed: fixed,
+			}},
+		}
+	}
+	// TWO declared values, only the second of which combines badly: the
+	// rule has to scan every value, not the first or the largest.
+	modeNibble := func(nib NibbleSel, v byte) []FieldSpan {
+		return []FieldSpan{{Field: FieldMode, Offset: 2, Length: 1, Nibble: nib, Encoding: EncodingEnum, Enum: map[byte]string{0x00: "LSB", v: "FM"}}}
+	}
+
+	for _, tc := range []struct {
+		name   string
+		cfg    ProfileConfig
+		formed string
+	}{
+		{"enum 0x0f in the high nibble beside a template 0x0e", base(modeNibble(NibbleHigh, 0x0F), []byte{0, 0, 0x0E}), "0xfe"},
+		{"enum 0x0f in the high nibble beside a template 0x0d", base(modeNibble(NibbleHigh, 0x0F), []byte{0, 0, 0x0D}), "0xfd"},
+		{"enum 0x0e in the low nibble beside a template 0xf0", base(modeNibble(NibbleLow, 0x0E), []byte{0, 0, 0xF0}), "0xfe"},
+		{"two nibble enums and NO template at all", base([]FieldSpan{
+			{Field: FieldMode, Offset: 2, Length: 1, Nibble: NibbleHigh, Encoding: EncodingEnum, Enum: map[byte]string{0x0F: "FM"}},
+			{Field: FieldFilter, Offset: 2, Length: 1, Nibble: NibbleLow, Encoding: EncodingEnum, Enum: map[byte]string{0x0E: "FIL1"}},
+		}, nil), "0xfe"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := NewProfile(tc.cfg)
+			if err == nil {
+				t.Fatal("NewProfile accepted a profile whose byte 2 finishes as a framing byte — the encoder would refuse it per value at build time instead, with no radio the profile can describe")
+			}
+			if !errors.Is(err, ErrInvalidProfile) {
+				t.Fatalf("error %v does not wrap ErrInvalidProfile", err)
+			}
+			if !strings.Contains(err.Error(), tc.formed) {
+				t.Fatalf("error %q does not name %s, the byte the two nibbles form", err, tc.formed)
+			}
+			if !strings.Contains(err.Error(), string(FieldMode)) {
+				t.Fatalf("error %q does not name the field whose enum value is half of it", err)
+			}
+		})
+	}
+
+	// THE OTHER SIDE OF THE BOUNDARY. 0xFC is not a framing byte, so the
+	// same shape one value lower is accepted — and builds, which is the
+	// half of the boundary a rule written as "refuse anything near 0xFE"
+	// would get wrong.
+	p, err := NewProfile(base(modeNibble(NibbleHigh, 0x0F), []byte{0, 0, 0x0C}))
+	if err != nil {
+		t.Fatalf("NewProfile refused a combination of %#02x, which no framing byte is: %v", 0xFC, err)
+	}
+	rec := MemoryRecord{Address: ChannelAddress{Channel: 1}, RXFreqHz: Available[uint64](1234), Mode: Available("FM")}
+	set, err := p.BuildMemorySet(rec)
+	if err != nil {
+		t.Fatalf("BuildMemorySet: %v — the encoder's finished-bytes assert fired for a profile V8 accepted", err)
+	}
+	frame := set.Bytes()
+	if got := frame[len(frame)-2]; got != 0xFC {
+		t.Fatalf("record byte 2 = %#02x, want 0xfc — the enum's 0x0f in the high nibble and the template's 0x0c in the low", got)
+	}
+	if !p.AllowedCommand(frame) {
+		t.Fatal("its own gate refused the frame its own builder built")
+	}
+	back, err := p.ParseMemoryAnswer(answerFor(frame))
+	if err != nil {
+		t.Fatalf("ParseMemoryAnswer: %v", err)
+	}
+	if back != rec {
+		t.Fatalf("round trip: got %+v, want %+v", back, rec)
+	}
+}
+
 func TestNewProfile_DefaultsAndCopies(t *testing.T) {
 	cfg := ProfileConfig{
 		Model:         "DEFAULTS",

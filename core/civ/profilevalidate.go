@@ -401,7 +401,8 @@ func maxBCDValue(n int) uint64 {
 }
 
 // validateFixedTemplate is V8: the template speaks only for the nibbles no
-// span claims.
+// span claims, and no two nibbles of one byte may COMBINE into a framing
+// byte.
 //
 // THE RULE IS PER NIBBLE, NOT PER BYTE, and that is a deliberate widening
 // of the first cut. The original rule forced Fixed to zero under any byte a
@@ -420,50 +421,141 @@ func maxBCDValue(n int) uint64 {
 // WHAT STAYS FORBIDDEN is the case the rule exists for: a template byte
 // under a nibble a span DOES claim. There the span decides the value, and
 // a template also claiming it would make the precedence silent.
+//
+// AND THE WIDENING BROUGHT ITS OWN RULE WITH IT — the combination check.
+// A finished record byte is the OR of its two nibbles, so an enum on one
+// nibble beside a constant on the other, or beside a SECOND enum, can form
+// 0xFE or 0xFD (0x0F<<4 | 0x0E) while neither half is a framing byte on its
+// own. V6 refuses a framing enum VALUE and the loop above refuses a framing
+// Fixed BYTE; only this rule sees the pair. The case was unreachable while
+// Fixed had to be zero under any byte a span touched; widening to nibbles
+// created it, so widening pays for it here.
+//
+// It is refused AT CONSTRUCTION, with no radio in the loop, rather than
+// left to the encoder's finished-bytes assert — which would fire per VALUE,
+// at build time, for a transcription error visible in the table. A record
+// byte of 0xFE or 0xFD cannot traverse CI-V framing at all, so a profile
+// that can form one describes a radio no CI-V bus could reach, and V8 has
+// every fact it needs to say so.
 func validateFixedTemplate(cfg ProfileConfig) error {
 	for li, l := range cfg.Layouts {
-		if len(l.Fixed) == 0 {
-			continue
-		}
-		if len(l.Fixed) != l.Length {
+		if len(l.Fixed) != 0 && len(l.Fixed) != l.Length {
 			return invalidProfile("Layouts[%d].Fixed is %d bytes for a %d-byte record — the template describes the whole record or none of it", li, len(l.Fixed), l.Length)
 		}
-		// The same high/low claim split V7 uses, so the two rules cannot
-		// disagree about what "mapped" means.
-		claimedHigh := make(map[int]bool, l.Length)
-		claimedLow := make(map[int]bool, l.Length)
-		for _, sp := range l.Fields {
-			for off := sp.Offset; off < sp.Offset+sp.Length; off++ {
-				high, low := true, true
-				if sp.Encoding == EncodingEnum {
-					switch sp.Nibble {
-					case NibbleHigh:
-						low = false
-					case NibbleLow:
-						high = false
+		// The combination rule applies to a layout with NO template too:
+		// two nibble enums on one byte need no Fixed byte to form 0xFE.
+		hasFixed := len(l.Fixed) == l.Length
+		claimedHigh, claimedLow := nibbleClaims(l)
+
+		for i := 0; i < l.Length; i++ {
+			var b byte
+			if hasFixed {
+				b = l.Fixed[i]
+			}
+			if hasFixed {
+				if b == PreambleByte || b == EndByte {
+					return invalidProfile("Layouts[%d].Fixed[%d] is the framing byte %#02x — every record this profile builds would split on the wire", li, i, b)
+				}
+				if claimedHigh[i] >= 0 && b&0xF0 != 0 {
+					return invalidProfile("Layouts[%d].Fixed[%d] is %#02x, whose HIGH nibble lies under a mapped field span — the span decides that nibble, and a template also claiming it would make the precedence silent", li, i, b)
+				}
+				if claimedLow[i] >= 0 && b&0x0F != 0 {
+					return invalidProfile("Layouts[%d].Fixed[%d] is %#02x, whose LOW nibble lies under a mapped field span — the span decides that nibble, and a template also claiming it would make the precedence silent", li, i, b)
+				}
+			}
+			// A WHOLE-BYTE span decides both halves at once, and its
+			// domain is already refused a framing byte one rule at a time:
+			// V6 for an enum value, V4 for a charset byte, packed BCD for
+			// a digit pair (0x00..0x99). There is no pair to combine.
+			if claimedHigh[i] >= 0 && claimedHigh[i] == claimedLow[i] {
+				continue
+			}
+			// Past the checks above, a template nibble under a claimed
+			// nibble is zero, so each half's domain is either its enum's
+			// declared values or the template's own nibble.
+			for _, hv := range nibbleDomain(l, claimedHigh[i], b>>4) {
+				for _, lv := range nibbleDomain(l, claimedLow[i], b&0x0F) {
+					finished := hv<<4 | lv
+					if finished != PreambleByte && finished != EndByte {
+						continue
 					}
+					return invalidProfile("Layouts[%d]: byte %d can finish as the framing byte %#02x — its HIGH nibble is %#x from %s and its LOW nibble is %#x from %s. Neither half is a framing byte alone, but the byte they form could never traverse CI-V framing, so this profile describes a record no radio could send", li, i, finished, hv, nibbleSource(l, claimedHigh[i]), lv, nibbleSource(l, claimedLow[i]))
 				}
-				if high {
-					claimedHigh[off] = true
-				}
-				if low {
-					claimedLow[off] = true
-				}
-			}
-		}
-		for i, b := range l.Fixed {
-			if b == PreambleByte || b == EndByte {
-				return invalidProfile("Layouts[%d].Fixed[%d] is the framing byte %#02x — every record this profile builds would split on the wire", li, i, b)
-			}
-			if claimedHigh[i] && b&0xF0 != 0 {
-				return invalidProfile("Layouts[%d].Fixed[%d] is %#02x, whose HIGH nibble lies under a mapped field span — the span decides that nibble, and a template also claiming it would make the precedence silent", li, i, b)
-			}
-			if claimedLow[i] && b&0x0F != 0 {
-				return invalidProfile("Layouts[%d].Fixed[%d] is %#02x, whose LOW nibble lies under a mapped field span — the span decides that nibble, and a template also claiming it would make the precedence silent", li, i, b)
 			}
 		}
 	}
 	return nil
+}
+
+// nibbleClaims reports WHICH span claims each nibble of a layout's record:
+// claimedHigh[i] and claimedLow[i] hold the index into l.Fields of the span
+// owning that half of byte i, or -1 where no span does.
+//
+// The split is V7's: only an EncodingEnum span declared on NibbleHigh or
+// NibbleLow claims half a byte, and every other encoding claims both
+// halves. V7 keeps its own walk because it detects collisions as it goes
+// and names the colliding pair; this function exists so V8's two rules
+// cannot disagree with each other about what "mapped" means.
+func nibbleClaims(l RecordLayout) (claimedHigh, claimedLow []int) {
+	claimedHigh = make([]int, l.Length)
+	claimedLow = make([]int, l.Length)
+	for i := range claimedHigh {
+		claimedHigh[i], claimedLow[i] = -1, -1
+	}
+	for fi, sp := range l.Fields {
+		for off := sp.Offset; off < sp.Offset+sp.Length && off < l.Length; off++ {
+			high, low := true, true
+			if sp.Encoding == EncodingEnum {
+				switch sp.Nibble {
+				case NibbleHigh:
+					low = false
+				case NibbleLow:
+					high = false
+				}
+			}
+			if high {
+				claimedHigh[off] = fi
+			}
+			if low {
+				claimedLow[off] = fi
+			}
+		}
+	}
+	return claimedHigh, claimedLow
+}
+
+// nibbleDomain returns every value one nibble of a record byte can finish
+// as: the declared values of the enum span claiming it, or the template's
+// own nibble where no span does. Sorted, so a refusal names the same value
+// on every run.
+//
+// V6 has already refused a nibble enum value above 0x0F, so the mask is a
+// restatement of that rule rather than a second one.
+func nibbleDomain(l RecordLayout, spanIndex int, fixed byte) []byte {
+	if spanIndex < 0 {
+		return []byte{fixed & 0x0F}
+	}
+	enum := l.Fields[spanIndex].Enum
+	keys := make([]int, 0, len(enum))
+	for k := range enum {
+		keys = append(keys, int(k))
+	}
+	sort.Ints(keys)
+	out := make([]byte, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, byte(k)&0x0F)
+	}
+	return out
+}
+
+// nibbleSource names where a nibble's value comes from, for the
+// combination rule's message: the field whose enum decides it, or the
+// template.
+func nibbleSource(l RecordLayout, spanIndex int) string {
+	if spanIndex < 0 {
+		return "the Fixed template"
+	}
+	return "Fields[" + itoaSmall(spanIndex) + "] (" + string(l.Fields[spanIndex].Field) + ")'s Enum"
 }
 
 // validateFrameBound is V9: this profile's own frame ceiling must fit the

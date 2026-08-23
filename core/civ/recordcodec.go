@@ -175,11 +175,17 @@ func (p Profile) encodeRecord(rec MemoryRecord, length int) ([]byte, error) {
 	}
 
 	// DEFENCE IN DEPTH, not a redundant check. Profile validation refuses
-	// every enum value, charset byte and Fixed byte that could be a
-	// framing byte, so this cannot fire for a profile NewProfile built —
-	// but the cost of being wrong about that is a frame that splits on the
-	// wire and a gate that approved it, so the encoder asserts it on the
-	// finished bytes rather than trusting the argument.
+	// every enum value, charset byte and Fixed byte that could BE a framing
+	// byte (V4, V6, V8), and V8's combination rule refuses every pair of
+	// nibbles that could FORM one, so this cannot fire for a profile
+	// NewProfile built — but the cost of being wrong about that is a frame
+	// that splits on the wire and a gate that approved it, so the encoder
+	// asserts it on the finished bytes rather than trusting the argument.
+	//
+	// The claim is only as good as its weakest rule, and it has been false
+	// once already: between the V8 nibble widening and its combination
+	// rule, an enum nibble beside a template nibble could reach here as
+	// 0xFE. That is why the assert is on the BYTES.
 	for i, b := range out {
 		if b == PreambleByte || b == EndByte {
 			return nil, fmt.Errorf("civ: %s: encoded record byte %d is the framing byte %#02x — the frame would split on the wire", p.model, i, b)
