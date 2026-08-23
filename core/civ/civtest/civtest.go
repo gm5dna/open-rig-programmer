@@ -23,14 +23,16 @@
 // in full, and it COUNTS what it does so a profile that quietly
 // contributes nothing fails loudly rather than passing in silence.
 //
-// WHY A LIBRARY PACKAGE IMPORTS "testing". This is a non-test file
-// importing testing, which is normally a smell: it drags the testing flag
-// set into any binary that links it. It is the deliberate
-// net/http/httptest pattern, and it is the only shape that works here —
-// the suite must be importable by ANOTHER package's tests, and a _test.go
-// file is importable by nobody. Nothing in the production tree imports
-// this package, and nothing should: its only callers are _test.go files,
-// which is a guard rule (internal/guards) rather than a convention.
+// WHY IT IS A NON-TEST FILE, AND WHY IT DOES NOT IMPORT "testing". The
+// suite must be importable by ANOTHER package's tests, and a _test.go file
+// is importable by nobody — so this is the deliberate net/http/httptest
+// shape. Unlike httptest it imports only "sort" and core/civ: the T
+// interface below is what keeps "testing" out, and it earns its keep twice
+// over, because it is also the only way Run's refusal of an unconfigured
+// profile can itself be tested (see T's own doc comment). Nothing in the
+// production tree imports this package, and nothing should: its only
+// callers are _test.go files, which is a guard rule (internal/guards)
+// rather than a convention.
 //
 // WHY Run REFUSES THE ZERO PROFILE INSTEAD OF TESTING IT. "A zero Profile
 // refuses everything" is a property this suite owns, but it is NOT what
@@ -106,13 +108,15 @@ func Run(t T, p civ.Profile) {
 			"to prevent. If you meant to check the zero value's refusals, call civtest.RunZeroValue(t).")
 	}
 
-	r := &run{t: t, p: p, frames: map[string]int{}, refusals: map[string]int{}}
+	r := &run{t: t, p: p, frames: map[string]int{}, refusals: map[string]int{}, lengthsSeen: map[int]int{}}
 
 	r.checkProfileSelfConsistency()
 	r.checkTransceiverIDRead()
 	r.checkMemoryReads()
 	r.checkMemorySets()
+	r.checkEveryAcceptedLength()
 	r.checkGateRefusesTheUnacceptable()
+	r.checkGateRefusesAMutatedRecordByte()
 	r.checkNonVacuity()
 }
 
@@ -128,6 +132,11 @@ type run struct {
 	frames   map[string]int
 	refusals map[string]int
 	total    int
+
+	// lengthsSeen counts records packed and gated per accepted record
+	// length, so a profile whose second layout was never reached fails
+	// rather than passing on the strength of its first.
+	lengthsSeen map[int]int
 
 	// roundTrips counts records that survived build -> parse intact.
 	roundTrips int
@@ -307,6 +316,270 @@ func (r *run) checkMemoryReads() {
 	}
 }
 
+// checkEveryAcceptedLength holds EVERY layout the profile declares to the
+// round-trip and the gate, not just the one the builder emits.
+//
+// WHY IT IS SEPARATE FROM checkMemorySets. BuildMemorySet emits
+// BuildRecordLength and no other length (core/civ's AllowedCommand doc
+// comment argues that width at length), so a suite driven by the builder
+// alone can never reach a second layout. For the one model in this tier
+// with two record lengths — the IC-905, spec D6 — that meant civtest would
+// certify a profile whose second layout had never been decoded by anything.
+//
+// The record bytes are packed HERE, from the profile's own exported layout
+// data, rather than by core/civ. That is not a workaround for a missing
+// builder: it makes the round trip a genuine cross-check rather than the
+// codec agreeing with itself, because the gate's re-encode step compares
+// these bytes against core/civ's own encoding of the record they decode
+// to. A disagreement between the two encoders fails here loudly.
+//
+// The frame is assembled from the profile's OWN BuildMemoryRead output —
+// that frame is `FE FE <radio> <ctrl> 1A 00 <address> FD`, so dropping its
+// terminator and appending the record gives the set frame without this
+// package having to know how an address is encoded.
+func (r *run) checkEveryAcceptedLength() {
+	r.t.Helper()
+	p := r.p
+	addr := r.addresses()[0]
+
+	read, err := p.BuildMemoryRead(addr)
+	if err != nil {
+		r.t.Errorf("%s: BuildMemoryRead(%v): %v", r.name(), addr, err)
+		return
+	}
+	prefix := read.Bytes()
+	prefix = prefix[:len(prefix)-1]
+
+	for _, length := range p.RecordLengths() {
+		rec, ok := r.sampleRecord(addr, length)
+		if !ok {
+			continue
+		}
+		record, ok := r.packRecord(rec, length)
+		if !ok {
+			continue
+		}
+		frame := make([]byte, 0, len(prefix)+length+1)
+		frame = append(frame, prefix...)
+		frame = append(frame, record...)
+		frame = append(frame, civ.EndByte)
+
+		r.lengthsSeen[length]++
+
+		if !civ.WellFormed(frame) {
+			r.t.Errorf("%s: a %d-byte record packed from this profile's own layout is not a well-formed frame: %v", r.name(), length, frame)
+			continue
+		}
+		if !p.AllowedCommand(frame) {
+			r.t.Errorf("%s: its own gate REFUSED a set at accepted length %d, built from this profile's OWN layout data: %v — either the layout describes a record the profile cannot write, or its encoder and this suite's disagree about the bytes", r.name(), length, frame)
+			continue
+		}
+
+		back, err := p.ParseMemoryAnswer(swapAddresses(frame))
+		if err != nil {
+			r.t.Errorf("%s: ParseMemoryAnswer refused a %d-byte record its own layout describes: %v", r.name(), length, err)
+			continue
+		}
+		if back != rec {
+			r.t.Errorf("%s: a %d-byte record did not survive pack -> parse:\n got %+v\nwant %+v", r.name(), length, back, rec)
+			continue
+		}
+		r.roundTrips++
+	}
+}
+
+// checkGateRefusesAMutatedRecordByte exercises the RE-ENCODE EQUALITY
+// rule, the mechanism that makes "the gate admits only builder-producible
+// frames" literal rather than approximate.
+//
+// Without it this suite could not tell a gate that re-encodes from one
+// that checks each field in isolation: every other property here offers
+// the gate frames a builder DID produce. So this one takes a frame the
+// builder produced and alters a byte NO span maps — a reserved byte, a
+// documented constant from the layout's Fixed template — leaving every
+// field it decodes to untouched. Field-by-field validation admits that
+// frame; a re-encode refuses it, because the encoder would have written
+// the template's byte there.
+//
+// A profile whose layout maps every byte has nothing to mutate and is
+// SKIPPED, loudly: the log line says so, and checkNonVacuity does not
+// require the counter, because "this model's record has no reserved
+// bytes" is a fact about the radio rather than a gap in the suite.
+func (r *run) checkGateRefusesAMutatedRecordByte() {
+	r.t.Helper()
+	p := r.p
+	length := p.BuildRecordLength()
+
+	layout, ok := p.LayoutFor(length)
+	if !ok {
+		r.t.Errorf("%s: LayoutFor(%d) is missing for its own BuildRecordLength", r.name(), length)
+		return
+	}
+	unmapped := unmappedBytes(layout)
+	if len(unmapped) == 0 {
+		r.t.Logf("%s: every byte of its %d-byte record is mapped, so the gate's re-encode rule has nothing to mutate here — skipped", r.name(), length)
+		return
+	}
+
+	addr := r.addresses()[0]
+	rec, ok := r.sampleRecord(addr, length)
+	if !ok {
+		return
+	}
+	cmd, err := p.BuildMemorySet(rec)
+	if err != nil {
+		r.t.Errorf("%s: BuildMemorySet(%v): %v", r.name(), addr, err)
+		return
+	}
+	frame := cmd.Bytes()
+	if !p.AllowedCommand(frame) {
+		r.t.Errorf("%s: its own gate refused its own set frame before any mutation: %v", r.name(), frame)
+		return
+	}
+	// The record occupies the bytes before the terminator.
+	start := len(frame) - 1 - length
+
+	for _, off := range unmapped {
+		mutated := make([]byte, len(frame))
+		copy(mutated, frame)
+		at := start + off
+		alt := mutated[at] ^ 0x01
+		if alt == civ.PreambleByte || alt == civ.EndByte {
+			alt = mutated[at] ^ 0x02
+		}
+		mutated[at] = alt
+		if !civ.WellFormed(mutated) {
+			continue
+		}
+		if p.AllowedCommand(mutated) {
+			r.t.Errorf("%s: its gate ADMITTED a set whose UNMAPPED record byte %d was altered to %#02x (%v) — no builder would write that byte, so the gate's re-encode equality step is not doing its work and \"admits only builder-producible frames\" is false", r.name(), off, alt, mutated)
+			continue
+		}
+		r.refusals["a record byte no builder would write"]++
+	}
+}
+
+// unmappedBytes returns the offsets of layout's record that no field span
+// claims — the bytes a Fixed template speaks for, or that are zero.
+func unmappedBytes(layout civ.RecordLayout) []int {
+	mapped := make([]bool, layout.Length)
+	for _, sp := range layout.Fields {
+		for off := sp.Offset; off < sp.Offset+sp.Length && off < layout.Length; off++ {
+			mapped[off] = true
+		}
+	}
+	var out []int
+	for i, m := range mapped {
+		if !m {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// packRecord renders rec as a length-byte record using ONLY p's exported
+// layout data — the second encoder checkEveryAcceptedLength's cross-check
+// rests on. It mirrors core/civ's encodeRecord deliberately and states no
+// policy of its own: a value that will not fit is this suite's own bug in
+// sampleRecord, and says so.
+func (r *run) packRecord(rec civ.MemoryRecord, length int) ([]byte, bool) {
+	r.t.Helper()
+
+	layout, ok := r.p.LayoutFor(length)
+	if !ok {
+		r.t.Errorf("%s: LayoutFor(%d) is missing for a length RecordLengths() reports", r.name(), length)
+		return nil, false
+	}
+
+	out := make([]byte, length)
+	if len(layout.Fixed) == length {
+		copy(out, layout.Fixed)
+	}
+	for _, sp := range layout.Fields {
+		switch sp.Encoding {
+		case civ.EncodingBCDNumber:
+			v, ok := getNumeric(rec, sp.Field)
+			if !ok {
+				r.t.Errorf("%s: this suite built a record with no %s for a layout that maps it", r.name(), sp.Field)
+				return nil, false
+			}
+			b, ok := packBCD(v/sp.Scale, sp.Length, sp.Order)
+			if !ok {
+				r.t.Errorf("%s: %s = %d does not fit its %d-byte field at length %d — this suite's own sample is out of range", r.name(), sp.Field, v, sp.Length, length)
+				return nil, false
+			}
+			copy(out[sp.Offset:], b)
+		case civ.EncodingEnum:
+			name, ok := getText(rec, sp.Field)
+			if !ok {
+				r.t.Errorf("%s: this suite built a record with no %s for a layout that maps it", r.name(), sp.Field)
+				return nil, false
+			}
+			var wire byte
+			found := false
+			for v, n := range sp.Enum {
+				if n == name {
+					wire, found = v, true
+					break
+				}
+			}
+			if !found {
+				r.t.Errorf("%s: %s = %q is not a value this profile's own enum defines", r.name(), sp.Field, name)
+				return nil, false
+			}
+			switch sp.Nibble {
+			case civ.NibbleHigh:
+				out[sp.Offset] = out[sp.Offset]&0x0F | wire<<4
+			case civ.NibbleLow:
+				out[sp.Offset] = out[sp.Offset]&0xF0 | wire&0x0F
+			default:
+				out[sp.Offset] = wire
+			}
+		case civ.EncodingName:
+			name, _ := getText(rec, sp.Field)
+			for i := 0; i < sp.Length; i++ {
+				if i < len(name) {
+					out[sp.Offset+i] = name[i]
+				} else {
+					out[sp.Offset+i] = r.p.NamePad()
+				}
+			}
+		default:
+			r.t.Errorf("%s: field %s has encoding %v", r.name(), sp.Field, sp.Encoding)
+			return nil, false
+		}
+	}
+	return out, true
+}
+
+// packBCD is this package's own packed-BCD encoder, written from the wire
+// convention rather than borrowed from core/civ — which is the whole point
+// of it existing.
+func packBCD(v uint64, n int, order civ.ByteOrder) ([]byte, bool) {
+	if n < 1 {
+		return nil, false
+	}
+	out := make([]byte, n)
+	rest := v
+	for i := 0; i < n; i++ {
+		pair := rest % 100
+		rest /= 100
+		b := byte(pair/10)<<4 | byte(pair%10)
+		switch order {
+		case civ.OrderLittleEndian:
+			out[i] = b
+		case civ.OrderBigEndian:
+			out[n-1-i] = b
+		default:
+			return nil, false
+		}
+	}
+	if rest != 0 {
+		return nil, false
+	}
+	return out, true
+}
+
 func (r *run) checkMemorySets() {
 	r.t.Helper()
 
@@ -437,12 +710,21 @@ func (r *run) checkNonVacuity() {
 	if r.roundTrips == 0 {
 		r.t.Errorf("%s: not one record survived build -> parse — this profile's codec does not round-trip", r.name())
 	}
+	// EVERY declared layout must have been reached. A profile whose second
+	// record length was never packed, gated or parsed is a profile whose
+	// second layout has no evidence at all behind it, and the builder alone
+	// can never reach one.
+	for _, length := range r.p.RecordLengths() {
+		if r.lengthsSeen[length] == 0 {
+			r.t.Errorf("%s: accepted record length %d was never packed and gated — the builder emits only %d, so a layout this walk does not reach is a layout nothing has ever decoded", r.name(), length, r.p.BuildRecordLength())
+		}
+	}
 	if r.total < minConformanceFrames {
 		r.t.Errorf("%s: only %d frames were built and checked in total — this walk is not reaching the builders", r.name(), r.total)
 	}
 
-	r.t.Logf("%s: %d frames checked; per builder: %v; refusals seen: %v; record round trips: %d",
-		r.name(), r.total, r.frames, r.refusals, r.roundTrips)
+	r.t.Logf("%s: %d frames checked; per builder: %v; refusals seen: %v; record round trips: %d; records per accepted length: %v",
+		r.name(), r.total, r.frames, r.refusals, r.roundTrips, r.lengthsSeen)
 }
 
 // addresses returns a sample of addresses valid under p's own address
@@ -477,13 +759,10 @@ func (r *run) addresses() []civ.ChannelAddress {
 	return out
 }
 
-// firstGroup is the lowest valid group index under p's form.
-func (r *run) firstGroup() int {
-	if r.p.AddressForm() == civ.AddressFormFlat {
-		return 0
-	}
-	return 0
-}
+// firstGroup is the lowest valid group index under p's form. Both forms
+// number from 0 (core/civ's doc.go, GROUP AND BAND INDICES ARE NUMBERED
+// FROM 0), and a flat form has no group at all, so it is 0 either way.
+func (r *run) firstGroup() int { return 0 }
 
 // sampleRecord builds a record every field p's layout maps is present in
 // and no field it does not map is — the shape BuildMemorySet requires —
@@ -565,6 +844,51 @@ func (r *run) sampleName() string {
 // skipped would make every record it builds incomplete, and
 // BuildMemorySet would then refuse them all with a message about the
 // profile rather than about this suite.
+// getNumeric and getText are setNumeric and setText's readers: the same
+// exhaustive switch, and the same loud panic on a field id core/civ has
+// grown and this suite has not learned.
+func getNumeric(rec civ.MemoryRecord, id civ.FieldID) (uint64, bool) {
+	switch id {
+	case civ.FieldRXFrequency:
+		return rec.RXFreqHz.Get()
+	case civ.FieldTXFrequency:
+		return rec.TXFreqHz.Get()
+	case civ.FieldOffset:
+		return rec.OffsetHz.Get()
+	case civ.FieldToneTX:
+		return rec.ToneTXDeciHz.Get()
+	case civ.FieldToneRX:
+		return rec.ToneRXDeciHz.Get()
+	case civ.FieldDTCSCode:
+		return rec.DTCSCode.Get()
+	default:
+		panic("civtest: no numeric field for id " + string(id) + " — core/civ's vocabulary grew and this suite was not updated")
+	}
+}
+
+func getText(rec civ.MemoryRecord, id civ.FieldID) (string, bool) {
+	switch id {
+	case civ.FieldDuplex:
+		return rec.Duplex.Get()
+	case civ.FieldMode:
+		return rec.Mode.Get()
+	case civ.FieldFilter:
+		return rec.Filter.Get()
+	case civ.FieldDataMode:
+		return rec.DataMode.Get()
+	case civ.FieldToneMode:
+		return rec.ToneMode.Get()
+	case civ.FieldDTCSPolarity:
+		return rec.DTCSPolarity.Get()
+	case civ.FieldName:
+		return rec.Name.Get()
+	case civ.FieldSelect:
+		return rec.Select.Get()
+	default:
+		panic("civtest: no text field for id " + string(id) + " — core/civ's vocabulary grew and this suite was not updated")
+	}
+}
+
 func setNumeric(rec *civ.MemoryRecord, id civ.FieldID, v uint64) {
 	switch id {
 	case civ.FieldRXFrequency:
