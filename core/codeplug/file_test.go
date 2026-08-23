@@ -844,7 +844,10 @@ func TestSave_InvalidSnapshotRejected(t *testing.T) {
 // reported as ErrSchemaTooNew (upgrade the app), NOT as an
 // *UnknownFieldError from a premature strict decode.
 func TestLoad_SchemaTooNew_VersionFirst(t *testing.T) {
-	body := `{"schema":4,"generator":"x","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z"},"channels":[],"bogus_extra_field":true}`
+	// CurrentSchema+1, not a literal: this test is about the PASS ORDER,
+	// not about any particular version number, and a literal went stale
+	// the moment the Icom tier moved CurrentSchema from 3 to 4.
+	body := `{"schema":` + strconv.Itoa(CurrentSchema+1) + `,"generator":"x","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z"},"channels":[],"bogus_extra_field":true}`
 	_, err := writeAndLoad(t, body)
 	if err == nil {
 		t.Fatal("Load() error = nil, want ErrSchemaTooNew")

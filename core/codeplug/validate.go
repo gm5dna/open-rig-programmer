@@ -37,20 +37,6 @@ type Issue struct {
 	Msg string
 }
 
-// validTagByte reports whether b is a legal channel-tag byte: printable
-// ASCII 0x20-0x7E, EXCLUDING ';' (0x3B).
-//
-// This restates core/cat's validMTTagByte (core/cat/mt.go, used by
-// BuildMTSet) rather than importing core/cat: there, the same charset is a
-// wire rule (command-injection defence — a ';' would let a tag terminate
-// the MT frame early and smuggle a second command onto the wire); here it
-// is a model rule, catching the same problem before a tag ever reaches a
-// builder. codeplug imports spec + stdlib only, so the check is small
-// enough to duplicate rather than share.
-func validTagByte(b byte) bool {
-	return b >= 0x20 && b <= 0x7E && b != ';'
-}
-
 // containsString reports whether s appears in list.
 func containsString(list []string, s string) bool {
 	for _, x := range list {
@@ -173,7 +159,8 @@ func Validate(cp *Codeplug, caps spec.Capabilities) []Issue {
 
 	seen := make(map[string]bool, len(cp.Channels))
 	for _, ch := range cp.Channels {
-		if _, ok := bankForSlot(caps, ch.Slot); !ok {
+		bank, inBank := bankForSlot(caps, ch.Slot)
+		if !inBank {
 			issues = append(issues, Issue{
 				Slot:     ch.Slot,
 				Severity: SeverityError,
@@ -192,7 +179,7 @@ func Validate(cp *Codeplug, caps spec.Capabilities) []Issue {
 		if ch.Empty() {
 			continue
 		}
-		issues = append(issues, validateChannelData(ch.Slot, *ch.Data, caps)...)
+		issues = append(issues, validateChannelData(ch.Slot, bank, *ch.Data, caps)...)
 	}
 
 	// Completeness: every slot listed in ANY caps.Bank must appear (at
@@ -266,8 +253,10 @@ func Validate(cp *Codeplug, caps spec.Capabilities) []Issue {
 }
 
 // validateChannelData checks one populated channel's data and returns its
-// Issues in the fixed field order documented on Validate.
-func validateChannelData(slot string, d ChannelData, caps spec.Capabilities) []Issue {
+// Issues in the fixed field order documented on Validate. bank is the
+// bank this slot belongs to (the zero BankID if none does), needed by
+// the capability-keyed checks the Icom tier added.
+func validateChannelData(slot string, bank spec.BankID, d ChannelData, caps spec.Capabilities) []Issue {
 	var issues []Issue
 
 	if d.FreqHz == 0 {
@@ -314,8 +303,24 @@ func validateChannelData(slot string, d ChannelData, caps spec.Capabilities) []I
 		})
 	}
 
+	// The Yaesu CTCSS-state vocabulary check, CAPABILITY-KEYED since the
+	// Icom tier (design D4, adjudication 10): it runs when this radio
+	// EXPRESSES that vocabulary at all, and is skipped when caps supplies
+	// none. Empty CTCSSStates is not a gap to fill with a default; it is
+	// the positive statement that this radio has no such vocabulary
+	// (spec.Capabilities.Validate accepts it only when the radio supplies
+	// ToneModes instead), and an unconditional check would then report
+	// every channel's empty ctcss as an error and block every add.
+	//
+	// The key is caps' VOCABULARY, deliberately, not the per-bank
+	// FieldCTCSSState support. Keying on the bank would have changed the
+	// verdict for banks that carry channels without listing the field —
+	// the FT-710's PMS and 60M banks list FieldFrequency alone — and
+	// silently stopped validating a field those channels really do carry.
+	// Keying on the vocabulary changes nothing for any radio that has one.
 	ctcssState, ctcssKnown := findToneState(caps.CTCSSStates, d.CTCSS)
-	if !ctcssKnown {
+	checkCTCSS := len(caps.CTCSSStates) > 0
+	if checkCTCSS && !ctcssKnown {
 		issues = append(issues, Issue{
 			Slot: slot, Field: spec.FieldCTCSSState, Severity: SeverityError,
 			Msg: fmt.Sprintf("slot %q: ctcss %q must be one of %s", slot, d.CTCSS, quotedList(toneStateValues(caps.CTCSSStates))),
@@ -353,14 +358,16 @@ func validateChannelData(slot string, d ChannelData, caps spec.Capabilities) []I
 	// cannot make a positive claim about not needing one) but has no
 	// known CTCSSTone gets a Warning: CAT cannot set a per-channel tone,
 	// so the radio's own existing tone will apply as-is.
-	if (!ctcssKnown || ctcssState.RequiresTone()) && d.CTCSSTone.State != Known {
+	if checkCTCSS && (!ctcssKnown || ctcssState.RequiresTone()) && d.CTCSSTone.State != Known {
 		issues = append(issues, Issue{
 			Slot: slot, Field: spec.FieldCTCSSTone, Severity: SeverityWarning,
 			Msg: fmt.Sprintf("slot %q: tone cannot be set via CAT; the radio's current per-channel tone will apply", slot),
 		})
 	}
 
-	if !containsString(shiftOptionValues(caps.ShiftOptions), d.Shift) {
+	// The Yaesu shift vocabulary check, capability-keyed on caps' own
+	// ShiftOptions for exactly the reason the CTCSS check above gives.
+	if len(caps.ShiftOptions) > 0 && !containsString(shiftOptionValues(caps.ShiftOptions), d.Shift) {
 		issues = append(issues, Issue{
 			Slot: slot, Field: spec.FieldShift, Severity: SeverityError,
 			Msg: fmt.Sprintf("slot %q: shift %q must be one of %s", slot, d.Shift, quotedList(shiftOptionValues(caps.ShiftOptions))),
@@ -373,17 +380,119 @@ func validateChannelData(slot string, d ChannelData, caps spec.Capabilities) []I
 			Msg: fmt.Sprintf("slot %q: tag is %d bytes, exceeds this radio's maximum of %d", slot, len(d.Tag), caps.TagLen),
 		})
 	}
+	// CAPABILITY-SUPPLIED since the Icom tier (design D4): the charset is
+	// caps' answer (spec.Capabilities.TagByteOK), not a wire rule this
+	// package restates. A radio that supplies none gets the family
+	// default this function always applied — printable ASCII 0x20-0x7E
+	// excluding ';' — and the message is built from the same source that
+	// judged the byte, so the two can never describe different rules.
 	for i := 0; i < len(d.Tag); i++ {
-		if !validTagByte(d.Tag[i]) {
+		if !caps.TagByteOK(d.Tag[i]) {
 			issues = append(issues, Issue{
 				Slot: slot, Field: spec.FieldTag, Severity: SeverityError,
-				Msg: fmt.Sprintf("slot %q: tag contains an invalid byte (must be printable ASCII 0x20-0x7E, excluding ';')", slot),
+				Msg: fmt.Sprintf("slot %q: tag contains an invalid byte (must be %s)", slot, caps.TagCharsetDescription()),
 			})
 			break
 		}
 	}
 
+	issues = append(issues, validateTierFields(slot, bank, d, caps)...)
+
 	return issues
+}
+
+// validateTierFields checks the ten fields the Icom tier added, and it
+// checks each one ONLY when this bank can reach it
+// (spec.FieldSupport.Unreachable false — design D4, adjudication 16).
+//
+// The condition is the whole design. On every radio registered before
+// the tier all ten are Unreachable on every bank, so this function
+// contributes NOTHING and the pre-tier Issue list is unchanged, in
+// content and in order. On a radio that does reach a field, the field is
+// judged against that radio's own vocabulary — and a field the radio HAS
+// but the channel says nothing about (state Absent) is an error, because
+// an absent field is a channel that cannot describe this radio, not a
+// channel with a defensible blank.
+//
+// Order is fixed and is ChannelData's own declaration order, appended
+// after the pre-tier per-channel issues, so the determinism Validate
+// documents holds across the addition.
+func validateTierFields(slot string, bank spec.BankID, d ChannelData, caps spec.Capabilities) []Issue {
+	var issues []Issue
+	add := func(f spec.Field, err error) {
+		if err == nil {
+			return
+		}
+		issues = append(issues, Issue{
+			Slot: slot, Field: f, Severity: SeverityError,
+			Msg: fmt.Sprintf("slot %q: %v", slot, err),
+		})
+	}
+	reachable := func(f spec.Field) bool {
+		return !caps.FieldSupport(bank, f).Unreachable()
+	}
+	absent := func(f spec.Field, state FieldState) bool {
+		if state.Present() {
+			return false
+		}
+		issues = append(issues, Issue{
+			Slot: slot, Field: f, Severity: SeverityError,
+			Msg: fmt.Sprintf("slot %q: this radio has a %s field but this channel says nothing about it", slot, f),
+		})
+		return true
+	}
+
+	if reachable(spec.FieldTxFrequency) && !absent(spec.FieldTxFrequency, d.TxFreqHz.State) {
+		add(spec.FieldTxFrequency, d.TxFreqHz.Valid())
+	}
+	if reachable(spec.FieldDuplex) && !absent(spec.FieldDuplex, d.Duplex.State) {
+		add(spec.FieldDuplex, d.Duplex.Valid(duplexOptionValues(caps.DuplexOptions)))
+	}
+	if reachable(spec.FieldOffset) && !absent(spec.FieldOffset, d.OffsetHz.State) {
+		add(spec.FieldOffset, d.OffsetHz.Valid())
+	}
+	if reachable(spec.FieldToneMode) && !absent(spec.FieldToneMode, d.ToneMode.State) {
+		add(spec.FieldToneMode, d.ToneMode.Valid(toneModeValues(caps.ToneModes)))
+	}
+	if reachable(spec.FieldToneTx) && !absent(spec.FieldToneTx, d.ToneTx.State) {
+		add(spec.FieldToneTx, d.ToneTx.Valid(caps))
+	}
+	if reachable(spec.FieldToneRx) && !absent(spec.FieldToneRx, d.ToneRx.State) {
+		add(spec.FieldToneRx, d.ToneRx.Valid(caps))
+	}
+	if reachable(spec.FieldDTCSCode) && !absent(spec.FieldDTCSCode, d.DTCSCode.State) {
+		add(spec.FieldDTCSCode, d.DTCSCode.Valid(caps.DTCSCodes))
+	}
+	if reachable(spec.FieldDTCSPolarity) && !absent(spec.FieldDTCSPolarity, d.DTCSPolarity.State) {
+		add(spec.FieldDTCSPolarity, d.DTCSPolarity.Valid(caps.DTCSPolarities))
+	}
+	if reachable(spec.FieldFilter) && !absent(spec.FieldFilter, d.Filter.State) {
+		add(spec.FieldFilter, d.Filter.Valid(caps.Filters))
+	}
+	if reachable(spec.FieldDataMode) && !absent(spec.FieldDataMode, d.DataMode.State) {
+		add(spec.FieldDataMode, d.DataMode.Valid())
+	}
+	return issues
+}
+
+// duplexOptionValues returns the Value of every entry in opts, in order
+// — caps' own duplex vocabulary as the plain []string StringField.Valid
+// takes.
+func duplexOptionValues(opts []spec.DuplexOption) []string {
+	values := make([]string, len(opts))
+	for i, o := range opts {
+		values[i] = o.Value
+	}
+	return values
+}
+
+// toneModeValues returns the Value of every entry in modes, in order.
+func toneModeValues(modes []spec.ToneMode) []string {
+	values := make([]string, len(modes))
+	for i, m := range modes {
+		values[i] = m.Value
+	}
+	return values
 }
 
 // HasErrors reports whether issues contains at least one SeverityError
