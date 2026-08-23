@@ -25,7 +25,9 @@
 //     drain, purge, quarantine and answer wait is bounded by.
 //   - Framing.NoteSent — called BEFORE each port write, so an
 //     echo-removing accumulator (CI-V's bus and USB echo) has the frame
-//     recorded before its own echo can arrive.
+//     recorded before its own echo can arrive; and before the write
+//     GATE too, so that nothing foreign runs between the check and the
+//     write (safety obligation 1).
 //
 // Two things moved into CommandSpec alongside it. ANSWER MATCHING is now
 // an opaque Match the CODEC builds (cat.PrefixLenMatcher for CAT; to/from/
@@ -234,9 +236,14 @@
 //     Engine's own gate (AllowFunc — since D2, the framing's Allow; for
 //     CAT that is still the AllowedCommand of the cat.Dialect NewEngine
 //     was given) on THAT SAME slice, and writes THAT SAME slice — never a
-//     second, independently obtained copy. NoteSent's contract (copy what
-//     you need, retain nothing) is what keeps the echo hook from
-//     weakening this. The gate is fixed at construction and fail-closed at
+//     second, independently obtained copy. THE ORDER IS LOAD-BEARING:
+//     the framing's hook runs first and the gate second, so the gate
+//     judges the slice after the last foreign code has touched it and
+//     nothing at all runs between the check and the write. NoteSent's
+//     contract (copy what you need; retain nothing, mutate nothing) is
+//     what keeps the echo hook from weakening this, and the ordering is
+//     what makes a violation of it harmless rather than a way to divert
+//     the gated bytes. The gate is fixed at construction and fail-closed at
 //     both ends: NewEngine refuses an unconfigured dialect
 //     (ErrUnconfiguredDialect) and NewEngineWith refuses a nil framing
 //     (ErrNoFraming) before starting the reader goroutine, so neither can

@@ -143,9 +143,20 @@ type Framing interface {
 	// removes bus/USB echo (CI-V) has the frame recorded before its own
 	// echo can possibly arrive.
 	//
+	// It is called before Allow, too: the engine gives the framing the
+	// last touch of the slice and THEN gates it, so that what the gate
+	// approves is byte-for-byte what goes out (safety obligation 1).
+	// One consequence is visible here: a frame Allow then REFUSES has
+	// already been noted, though nothing was written. An implementation
+	// must therefore treat NoteSent as "the engine intends to send
+	// this", not "this reached the wire" — for echo removal that is the
+	// right reading anyway, since an echo that never arrives is
+	// superseded by the next NoteSent.
+	//
 	// CONTRACT: an implementation MUST copy whatever it needs and MUST
-	// NOT retain the passed slice. The slice is the very one safety
-	// obligation 1 then writes; it is live and writable, and a later
-	// attempt re-derives its own.
+	// NOT retain OR MUTATE the passed slice — the same obligation
+	// AllowFunc carries, and for the same reason. The slice is the very
+	// one safety obligation 1 then gates and writes; it is live and
+	// writable, and a later attempt re-derives its own.
 	NoteSent(frame []byte)
 }

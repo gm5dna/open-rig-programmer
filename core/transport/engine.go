@@ -561,9 +561,11 @@ func (e *Engine) Init(ctx context.Context) error {
 // Transmission (safety obligation 1): cmd.Bytes() is called EXACTLY ONCE
 // per transmission attempt, the resulting slice is reported to the framing
 // (NoteSent — BEFORE the write, so an echo-removing accumulator has it
-// recorded before the echo can arrive), then checked with the Engine's
-// injected gate (e.allow — see AllowFunc), and — only if that check passes
-// — the SAME slice is written to the Port. A command the gate rejects is
+// recorded before the echo can arrive, and before the GATE, so nothing
+// foreign runs between the check and the write), then checked with the
+// Engine's injected gate (e.allow — see AllowFunc), and — only if that
+// check passes — the SAME slice is written to the Port. A command the
+// gate rejects has been noted but is
 // refused with ErrDisallowedCommand and NEVER reaches the wire; an Engine
 // with no gate at all refuses with ErrNoAllowlist instead (unreachable via
 // either constructor — defence in depth). A nil cmd is refused with
@@ -705,16 +707,35 @@ func (e *Engine) Do(ctx context.Context, cmd Command, spec CommandSpec) ([]byte,
 			// bug, not a fault of this frame.
 			return nil, ErrNoAllowlist
 		}
+		// NoteSent BEFORE the write (Framing.NoteSent's contract): an
+		// echo-removing framing must have the frame recorded before its
+		// own echo can possibly come back.
+		//
+		// And before the GATE, not merely before the write. NoteSent is
+		// foreign code — a protocol adapter's callback — handed the very
+		// live slice safety obligation 1 is about. Running it after
+		// e.allow would put that callback INSIDE the check-to-write
+		// window, so an adapter that stamped or normalised the frame
+		// would make the bytes written differ from the bytes the gate
+		// approved, with nothing able to notice. Here the window is
+		// empty by construction: the framing touches the slice last,
+		// THEN the gate judges exactly what goes out, then it goes out.
+		// (The contract still forbids mutating or retaining it; this
+		// ordering is what makes a violation harmless rather than a
+		// safety hole. TestNoteSent_DoesNotRetainOrMutateTheEngineSlice
+		// pins both halves.)
+		//
+		// The cost is that a frame the gate then REFUSES has still been
+		// noted. That is sound: a refusal writes nothing, so no echo
+		// follows, and NoteSent records an expectation about a frame
+		// that simply never arrives — harmless, and superseded by the
+		// next NoteSent. A gate refusal is a driver bug that fails
+		// closed either way; letting foreign code between the check and
+		// the write would be a defect in the safety mechanism itself.
+		e.framing.NoteSent(frame)
 		if !e.allow(frame) {
 			return nil, fmt.Errorf("%w: %s", ErrDisallowedCommand, cmd.String())
 		}
-		// NoteSent BEFORE the write (Framing.NoteSent's contract): an
-		// echo-removing framing must have the frame recorded before its
-		// own echo can possibly come back. The framing copies what it
-		// needs and retains nothing — this is the very slice written
-		// below, and safety obligation 1 requires that what was gated is
-		// what goes out, unaltered.
-		e.framing.NoteSent(frame)
 		if _, err := e.port.Write(frame); err != nil {
 			e.closePort(err)
 			return nil, e.closedErr()

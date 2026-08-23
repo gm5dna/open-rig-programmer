@@ -57,10 +57,12 @@ func (f *lineFraming) InitSequence() []Command { return f.init }
 
 func (f *lineFraming) DrainPolicy() DrainPolicy { return f.policy }
 
-// NoteSent honours the contract: it COPIES what it needs and retains
-// nothing of the caller's slice. sentFrames' comparison against the port's
-// own record is what proves the copy was taken before the write, and
-// TestNoteSent_DoesNotRetainTheEngineSlice proves the copy is genuine.
+// NoteSent honours the contract: it COPIES what it needs and neither
+// retains nor mutates the caller's slice. sentFrames' comparison against
+// the port's own record is what proves the copy was taken before the
+// write; TestNoteSent_DoesNotRetainOrMutateTheEngineSlice takes the
+// opposite tack and breaks the contract deliberately, to show what the
+// engine guarantees even then.
 func (f *lineFraming) NoteSent(frame []byte) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -332,6 +334,123 @@ func (f *orderingFraming) NoteSent(frame []byte) {
 		f.onNote(frame)
 	}
 	f.lineFraming.NoteSent(frame)
+}
+
+// hostileFraming BREAKS Framing.NoteSent's contract on purpose: it retains
+// the engine's own slice instead of copying it, and mutates it in place.
+// It exists to show what Engine guarantees against an adapter that does
+// the forbidden thing — nothing here is a model for a real framing.
+type hostileFraming struct {
+	lineFraming
+
+	mu     sync.Mutex
+	kept   [][]byte // the engine's slices, RETAINED, never copied
+	allowd [][]byte // what the gate was actually handed, copied at the gate
+}
+
+func (f *hostileFraming) NoteSent(frame []byte) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.kept = append(f.kept, frame) // forbidden: retention
+	if len(frame) > 0 {
+		frame[0] = 'X' // forbidden: mutation
+	}
+}
+
+func (f *hostileFraming) Allow(frame []byte) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.allowd = append(f.allowd, append([]byte(nil), frame...))
+	return true
+}
+
+func (f *hostileFraming) snapshot() (kept, allowed [][]byte) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	kept = append([][]byte(nil), f.kept...)
+	allowed = append([][]byte(nil), f.allowd...)
+	return kept, allowed
+}
+
+// TestNoteSent_DoesNotRetainOrMutateTheEngineSlice pins the half of
+// Framing.NoteSent's contract that TestNoteSent_HappensBeforeTheWrite does
+// not: the slice must be neither retained nor mutated. It asserts from the
+// hostile side, since a framing that OBEYS the contract would prove
+// nothing — this one retains and mutates, and the engine's guarantees have
+// to survive it.
+//
+// Two properties, both consequences of NoteSent running BEFORE the gate
+// rather than between the gate and the write (see Do's transmission
+// comment, and safety obligation 1 in doc.go):
+//
+//   - Mutation cannot divert the gated bytes. Whatever the framing did to
+//     the slice, the gate judged THAT, and THAT is byte-for-byte what the
+//     port received. Were NoteSent to run after the gate, this framing
+//     would put bytes on the wire that the gate never approved — which is
+//     precisely the hole the ordering closes.
+//   - A retained slice is never rewritten underneath the framing. Every
+//     transmission re-derives its frame from Command.Bytes, whose
+//     contract is a fresh copy per call, so the slice this framing
+//     wrongly kept from the FIRST write still reads as that first write
+//     after a second, different command has gone out.
+func TestNoteSent_DoesNotRetainOrMutateTheEngineSlice(t *testing.T) {
+	port := newScriptedPort("RD ok\n", "WR ok\n")
+	t.Cleanup(func() { _ = port.Close() })
+
+	f := &hostileFraming{lineFraming: lineFraming{policy: fastPolicy}}
+	e, err := NewEngineWith(port, f)
+	if err != nil {
+		t.Fatalf("NewEngineWith: unexpected error: %v", err)
+	}
+	t.Cleanup(func() { _ = e.Close() })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if _, err := e.Do(ctx, lineCommand("RD?\n"), CommandSpec{Class: ClassRead, Match: lineMatch("RD "), Settle: time.Millisecond}); err != nil {
+		t.Fatalf("Do (first): unexpected error: %v", err)
+	}
+	if _, err := e.Do(ctx, lineCommand("WR?\n"), CommandSpec{Class: ClassRead, Match: lineMatch("WR "), Settle: time.Millisecond}); err != nil {
+		t.Fatalf("Do (second): unexpected error: %v", err)
+	}
+
+	kept, allowed := f.snapshot()
+	written := port.written()
+
+	// The framing mutated the first byte of each frame before the gate
+	// ran, so 'X' is what the gate saw and what went out. The literal
+	// values are stated rather than derived, so a change of ordering
+	// shows up here as a concrete mismatch.
+	wantOnWire := []string{"XD?\n", "XR?\n"}
+	if len(allowed) != len(wantOnWire) {
+		t.Fatalf("gate saw %d frames (%q), want %d", len(allowed), allowed, len(wantOnWire))
+	}
+	if len(written) != len(wantOnWire) {
+		t.Fatalf("port saw %d writes (%q), want %d", len(written), written, len(wantOnWire))
+	}
+	for i, want := range wantOnWire {
+		if string(allowed[i]) != want {
+			t.Errorf("gate saw %q at %d, want %q — NoteSent runs before the gate, so the gate must judge the MUTATED bytes", allowed[i], i, want)
+		}
+		if !bytes.Equal(allowed[i], written[i]) {
+			t.Errorf("write %d: gate approved %q but the port received %q — nothing may come between the check and the write (safety obligation 1)", i, allowed[i], written[i])
+		}
+	}
+
+	// Retention: the slice kept from the first transmission must still
+	// hold the first transmission's bytes.
+	if len(kept) != 2 {
+		t.Fatalf("NoteSent called %d times, want 2 — one per transmission attempt", len(kept))
+	}
+	if string(kept[0]) != "XD?\n" {
+		t.Errorf("the slice retained from write 0 now reads %q, want %q — a later attempt must re-derive its own frame, never reuse this one", kept[0], "XD?\n")
+	}
+	if string(kept[1]) != "XR?\n" {
+		t.Errorf("the slice retained from write 1 reads %q, want %q", kept[1], "XR?\n")
+	}
+	if &kept[0][0] == &kept[1][0] {
+		t.Error("both transmissions were handed the SAME backing array — Command.Bytes must return a fresh copy per call")
+	}
 }
 
 // TestEngineInit_EmptyInitSequenceWritesNothing is the CI-V property D2
