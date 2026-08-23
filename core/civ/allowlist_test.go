@@ -59,13 +59,11 @@ func TestEveryBuilderOutputIsAdmittedByItsOwnGate(t *testing.T) {
 				}
 			}
 
-			for _, length := range p.RecordLengths() {
-				if length != p.BuildRecordLength() {
-					continue // the builder emits one length; the gate accepts all
-				}
-				rec := sampleRecord(t, p, length)
-				check("memory set", mustCommand(p.BuildMemorySet(rec)).Bytes())
-			}
+			// The builder emits ONE length; the gate's deliberate width to
+			// every accepted length is the separate property below, in
+			// TestGateAdmitsEveryAcceptedLengthWhileTheBuilderEmitsOne.
+			rec := sampleRecord(t, p, p.BuildRecordLength())
+			check("memory set", mustCommand(p.BuildMemorySet(rec)).Bytes())
 
 			for _, what := range []string{"transceiver ID read", "memory read", "memory set"} {
 				if built[what] == 0 {
@@ -191,6 +189,90 @@ func TestGateRefusesTheUnacceptable(t *testing.T) {
 			}
 			t.Logf("%s: %d unacceptable frames refused", p.Model(), refused)
 		})
+	}
+}
+
+// TestGateAdmitsEveryAcceptedLengthWhileTheBuilderEmitsOne pins the ONE
+// place AllowedCommand is deliberately wider than the builders, in both
+// directions and on the shape that has it: a two-length profile, the
+// IC-905's (spec D6), here as groupProfile with lengths {30, 31} and
+// BuildLength 31.
+//
+// Undocumented and untested, this width was indistinguishable from a gate
+// that had simply stopped checking the length. Tested, it is a statement:
+// the admitted set is the builder set PLUS the profile's other declared
+// layouts, and nothing beyond them.
+func TestGateAdmitsEveryAcceptedLengthWhileTheBuilderEmitsOne(t *testing.T) {
+	p := groupProfile
+	lengths := p.RecordLengths()
+	if len(lengths) < 2 {
+		t.Fatalf("this test needs a multi-length profile; %s declares %v", p.Model(), lengths)
+	}
+	if p.Discriminator() != DiscriminatorRecordLength {
+		t.Fatalf("%s discriminates by %v, not by record length", p.Model(), p.Discriminator())
+	}
+
+	// THE BUILDER HALF. Whatever record it is handed, BuildMemorySet emits
+	// BuildRecordLength and no other length.
+	addr := sampleAddress(p)
+	built := mustCommand(p.BuildMemorySet(sampleRecord(t, p, p.BuildRecordLength()))).Bytes()
+	addrBytes := p.addressForm.addressBytes()
+	if got := len(built) - 7 - addrBytes; got != p.BuildRecordLength() {
+		t.Fatalf("BuildMemorySet emitted a %d-byte record, want BuildRecordLength (%d)", got, p.BuildRecordLength())
+	}
+
+	// THE GATE HALF. A set at EVERY accepted length is admitted, including
+	// the one no builder emits. Framed here rather than by a builder
+	// because there is no builder for it — which is the finding.
+	admitted := 0
+	for _, length := range lengths {
+		rec := sampleRecord(t, p, length)
+		record, err := p.encodeRecord(rec, length)
+		if err != nil {
+			t.Fatalf("encodeRecord at length %d: %v", length, err)
+		}
+		a, err := p.encodeAddress(addr)
+		if err != nil {
+			t.Fatalf("encodeAddress: %v", err)
+		}
+		body := append([]byte{CmdMemory, SubMemoryContents}, a...)
+		body = append(body, record...)
+		frame := p.frameFor(body)
+
+		if !p.AllowedCommand(frame) {
+			t.Errorf("the gate REFUSED a set at accepted length %d: %s", length, hexFrame(frame))
+			continue
+		}
+		admitted++
+
+		if length != p.BuildRecordLength() {
+			// And it round-trips through the parser too, so the admitted
+			// frame is one this profile can also READ back.
+			answer := copyBytes(frame)
+			answer[2], answer[3] = answer[3], answer[2]
+			back, err := p.ParseMemoryAnswer(answer)
+			if err != nil {
+				t.Errorf("ParseMemoryAnswer refused the answer form of an admitted %d-byte set: %v", length, err)
+			} else if back != rec {
+				t.Errorf("a %d-byte record did not survive encode -> parse:\n got %+v\nwant %+v", length, back, rec)
+			}
+		}
+	}
+	if admitted != len(lengths) {
+		t.Fatalf("%d of %d accepted lengths were admitted", admitted, len(lengths))
+	}
+
+	// AND NO FURTHER. A length no layout declares is refused, so the width
+	// is exactly the declared set rather than "any length at all".
+	undeclared := lengths[len(lengths)-1] + 1
+	a, err := p.encodeAddress(addr)
+	if err != nil {
+		t.Fatalf("encodeAddress: %v", err)
+	}
+	body := append([]byte{CmdMemory, SubMemoryContents}, a...)
+	body = append(body, make([]byte, undeclared)...)
+	if p.AllowedCommand(p.frameFor(body)) {
+		t.Errorf("the gate admitted a set at %d bytes, a length no layout declares", undeclared)
 	}
 }
 

@@ -3,10 +3,32 @@
 package civ
 
 // AllowedCommand reports whether frame is safe to write to the radio: it
-// is EXACTLY one of the three command grammars this package can build —
+// is one of the three command grammars this package can build —
 // `19 00`, `1A 00 <address>` read, `1A 00 <address> <record>` set — fully
 // re-validated field by field against the same rules the corresponding
 // builder enforces, not merely a command-number match.
+//
+// ONE DELIBERATE WIDTH, AND IT IS THE ONLY ONE. For a profile accepting
+// more than one record length (the IC-905, spec D6), the gate admits a set
+// at ANY length in RecordLengths(), while BuildMemorySet emits only
+// BuildRecordLength(). The admitted set is therefore strictly wider than
+// the builder set by exactly the other declared layouts, and nothing else.
+//
+// It is deliberate rather than an oversight. The accepted-length SET is
+// the profile's statement of what its radio's memory records are — it is
+// the probe's own length fingerprint (spec D3.2) — so a record at a length
+// this profile declares is a record that radio has, and refusing to
+// authorise writing one back would mean this package could read a record
+// it may not write. The narrowing is not free either: BuildLength is
+// DECLARED rather than derived precisely because which length to WRITE is
+// a choice the model's data makes, and a gate keyed on that choice would
+// refuse a frame built from the very bytes the radio answered with.
+//
+// Every OTHER length is refused, and both halves are exercised:
+// TestGateAdmitsEveryAcceptedLengthWhileTheBuilderEmitsOne walks a
+// two-length profile, builds a set at each declared length, and requires
+// the gate to admit both while asserting the builder produced exactly
+// BuildRecordLength.
 //
 // WHAT IT REFUSES IS THE INTERESTING HALF:
 //
@@ -112,6 +134,12 @@ func (p Profile) validMemoryCommand(body []byte) bool {
 	// the multi-length models is the same fingerprint the probe reads —
 	// and the record must survive decode, the builder's own validator, and
 	// a re-encode that reproduces it byte for byte.
+	//
+	// ANY accepted length, not just BuildRecordLength: the one deliberate
+	// place this gate is wider than the builders, argued at length in
+	// AllowedCommand's own doc comment above. A length this profile does
+	// NOT declare is refused here, which is what keeps the width to the
+	// declared layouts and no further.
 	if !p.AcceptsRecordLength(len(record)) {
 		return false
 	}
