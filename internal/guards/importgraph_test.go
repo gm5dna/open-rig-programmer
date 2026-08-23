@@ -178,6 +178,36 @@ func path_Base(p string) string {
 	return p
 }
 
+// namesEngineConstructor reports whether f mentions any transport engine
+// constructor by name, as a bare identifier or as a selector's Sel — the
+// same name-wherever-it-appears match TestNewEngineReachableOnlyFromDriver
+// uses, and drawing on the SAME name set (engineConstructorNames), so the
+// two guards cannot disagree about what a constructor is.
+//
+// It is the second half of the .Do pre-filter: a file that obtains an
+// *transport.Engine through a constructor named via an alias or a
+// re-export may not import core/transport itself.
+func namesEngineConstructor(f *ast.File) bool {
+	found := false
+	ast.Inspect(f, func(n ast.Node) bool {
+		if found {
+			return false
+		}
+		switch x := n.(type) {
+		case *ast.SelectorExpr:
+			if engineConstructorNames[x.Sel.Name] {
+				found = true
+			}
+		case *ast.Ident:
+			if engineConstructorNames[x.Name] {
+				found = true
+			}
+		}
+		return !found
+	})
+	return found
+}
+
 // looksLikeOnce reports whether expr (a selector's receiver) is
 // syntactically a sync.Once-ish value — an identifier or field selector
 // whose name ends in "Once" or "once". Filters the one known systematic
@@ -208,12 +238,34 @@ func looksLikeOnce(expr ast.Expr) bool {
 // APPROXIMATE, deliberately (and per the adjudication): this is a plain
 // AST walk over selector expressions, not a type-checked analysis.
 // Concretely:
+//
 //   - "Engine.Do" is detected as any method CALL `x.Do(...)` in a file
-//     that imports core/transport (excluding sync.Once-shaped receivers —
-//     see looksLikeOnce); a file that imports transport AND calls some
-//     unrelated type's .Do would false-positive, and a dot-import would
-//     false-negative. Neither exists in this repo, and a false positive
-//     merely prompts a human look at a genuinely unusual file.
+//     that imports core/transport OR NAMES AN ENGINE CONSTRUCTOR
+//     (excluding sync.Once-shaped receivers — see looksLikeOnce); a file
+//     that satisfies the pre-filter AND calls some unrelated type's .Do
+//     would false-positive, and a dot-import would false-negative.
+//     Neither exists in this repo, and a false positive merely prompts a
+//     human look at a genuinely unusual file.
+//
+//     THE CONSTRUCTOR HALF OF THE PRE-FILTER IS NEW (M9d-2, D2), and it
+//     is there because D2 gave the engine a SECOND way to be built.
+//     Before, an *transport.Engine could only be obtained from
+//     transport.NewEngine, which needs a cat.Dialect — so any file
+//     holding one imported core/transport, and "imports core/transport"
+//     was a sound pre-filter by construction. NewEngineWith takes a
+//     transport.Framing instead, and a framing comes from the CODEC
+//     package (core/civ supplies CI-V's), so a file can reach a
+//     constructor through an aliased or re-exported name whose own
+//     import list names the codec rather than the transport. Widening
+//     the pre-filter to "imports core/transport OR names a constructor"
+//     keeps the .Do rule applying to the new path. It does NOT close the
+//     re-export gap engine_construction_test.go records as e15 — a file
+//     that names neither is still invisible here, exactly as before, and
+//     closing that needs a call graph this walk does not build. The
+//     constructor names come from engineConstructorNames
+//     (engine_construction_test.go), so the two guards cannot drift
+//     apart on what counts as a constructor.
+//
 //   - The Set-frame builders are detected as ANY selector named
 //     BuildMWSet, BuildMTSet or BuildMTSetCombined OUTSIDE core/cat's
 //     own tree, matched by method name alone, whatever the receiver —
@@ -261,6 +313,7 @@ func looksLikeOnce(expr ast.Expr) bool {
 //     "BuildMTSet" comparison does not cover it. A new Set-frame builder
 //     must therefore be added here BY NAME; nothing about the shape of
 //     this check makes that automatic.
+//
 //   - "Session.WriteChannel" is detected as ANY selector named
 //     WriteChannel outside the allowed trees, whatever the receiver's
 //     type. A future unrelated type with a WriteChannel method elsewhere
@@ -285,8 +338,13 @@ func TestWritePathReachableOnlyThroughDriver(t *testing.T) {
 		inClone := inTree(pf.relDir, "core/clone")
 
 		// (a) transport.Engine.Do — approximate; see the test doc comment.
-		if transportName, ok := importsPath(pf.file, transportPath); ok && !inTree(pf.relDir, "core/transport") {
-			_ = transportName // the .Do check is receiver-typed, not package-selector-shaped
+		// The pre-filter is "imports core/transport OR names an engine
+		// constructor": D2 added a constructor whose parameter comes from
+		// the codec package rather than from core/transport, so the import
+		// alone no longer catches every file that can hold an Engine.
+		transportName, importsTransport := importsPath(pf.file, transportPath)
+		_ = transportName // the .Do check is receiver-typed, not package-selector-shaped
+		if (importsTransport || namesEngineConstructor(pf.file)) && !inTree(pf.relDir, "core/transport") {
 			ast.Inspect(pf.file, func(n ast.Node) bool {
 				call, isCall := n.(*ast.CallExpr)
 				if !isCall {
@@ -300,7 +358,7 @@ func TestWritePathReachableOnlyThroughDriver(t *testing.T) {
 					sawDriverEngineDo = true
 					return true
 				}
-				t.Errorf("%s: calls .Do on a value in a file importing core/transport — transport.Engine.Do may be reached outside core/transport only from core/driver/** (composition-root discipline; see this test's doc comment)", pf.relPath)
+				t.Errorf("%s: calls .Do on a value in a file that imports core/transport or names an engine constructor — transport.Engine.Do may be reached outside core/transport only from core/driver/** (composition-root discipline; see this test's doc comment)", pf.relPath)
 				return true
 			})
 		}
