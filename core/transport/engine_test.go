@@ -55,6 +55,21 @@ func TestCommandSpec_Validate(t *testing.T) {
 		{"read with zero retries: ok", CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("MR", 0)}, false},
 		{"fire-and-forget, zero retries: ok", CommandSpec{Class: ClassWrite}, false},
 		{"fire-and-forget WITH retries: invalid", CommandSpec{Class: ClassWrite, RetryReads: 1}, true},
+		{"acknowledged write: ok", CommandSpec{Class: ClassWriteWithAck, Match: cat.PrefixLenMatcher("MT", 0)}, false},
+		{"acknowledged write WITH retries: invalid", CommandSpec{Class: ClassWriteWithAck, Match: cat.PrefixLenMatcher("MT", 0), RetryReads: 1}, true},
+
+		// D2's fail-closed rules. Each of these was a spec the pre-D2
+		// engine would have accepted and acted on — a zero spec meant
+		// "fire and forget", which is the most dangerous default a
+		// field an author simply forgot to fill in could have.
+		{"ZERO spec: invalid", CommandSpec{}, true},
+		{"class left unset, everything else filled in: invalid", CommandSpec{Match: cat.PrefixLenMatcher("ID", 7), Timeout: time.Second}, true},
+		{"class out of range (above): invalid", CommandSpec{Class: Class(7), Match: cat.PrefixLenMatcher("ID", 7)}, true},
+		{"class out of range (negative): invalid", CommandSpec{Class: Class(-1), Match: cat.PrefixLenMatcher("ID", 7)}, true},
+		{"read with NIL Match: invalid", CommandSpec{Class: ClassRead}, true},
+		{"read with nil Match and retries: invalid", CommandSpec{Class: ClassRead, RetryReads: 2}, true},
+		{"acknowledged write with NIL Match: invalid", CommandSpec{Class: ClassWriteWithAck}, true},
+		{"fire-and-forget WITH a Match: invalid", CommandSpec{Class: ClassWrite, Match: cat.PrefixLenMatcher("ID", 7)}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -64,6 +79,59 @@ func TestCommandSpec_Validate(t *testing.T) {
 			}
 			if tt.wantErr && !errors.Is(err, ErrInvalidSpec) {
 				t.Errorf("validate() = %v, want errors.Is match against ErrInvalidSpec", err)
+			}
+		})
+	}
+}
+
+// TestDo_RefusesAnInvalidSpecWithoutWriting is the table above taken all
+// the way to the port. validate()'s rules are only worth having if Do
+// applies them BEFORE anything reaches the wire — "fails closed" is a
+// claim about the port, not about a return value — so every case here
+// asserts both halves: ErrInvalidSpec out, and ZERO bytes written.
+//
+// The nil-Command case belongs here rather than in the table because Do
+// refuses it on its own, ahead of validate.
+func TestDo_RefusesAnInvalidSpecWithoutWriting(t *testing.T) {
+	tests := []struct {
+		name string
+		cmd  Command
+		spec CommandSpec
+	}{
+		{"nil Command", nil, CommandSpec{Class: ClassRead, Match: lineMatch("RD ")}},
+		{"zero spec: Class unset", lineCommand("RD?\n"), CommandSpec{}},
+		{"Class unset, other fields filled in", lineCommand("RD?\n"), CommandSpec{Match: lineMatch("RD "), Timeout: time.Second}},
+		{"Class out of range", lineCommand("RD?\n"), CommandSpec{Class: Class(7), Match: lineMatch("RD ")}},
+		{"ClassRead without a Match", lineCommand("RD?\n"), CommandSpec{Class: ClassRead}},
+		{"ClassWriteWithAck without a Match", lineCommand("WR!\n"), CommandSpec{Class: ClassWriteWithAck}},
+		{"ClassWrite with a Match", lineCommand("WR!\n"), CommandSpec{Class: ClassWrite, Match: lineMatch("WR ")}},
+		{"ClassWrite with retries", lineCommand("WR!\n"), CommandSpec{Class: ClassWrite, RetryReads: 1}},
+		{"ClassWriteWithAck with retries", lineCommand("WR!\n"), CommandSpec{Class: ClassWriteWithAck, Match: lineMatch("WR "), RetryReads: 1}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			port := newScriptedPort("RD ok\n") // a reply is waiting, so a write WOULD get an answer
+			t.Cleanup(func() { _ = port.Close() })
+
+			f := &lineFraming{policy: fastPolicy}
+			e, err := NewEngineWith(port, f)
+			if err != nil {
+				t.Fatalf("NewEngineWith: unexpected error: %v", err)
+			}
+			t.Cleanup(func() { _ = e.Close() })
+
+			ctx, cancel := context.WithTimeout(context.Background(), testCtxTimeout)
+			defer cancel()
+
+			got, err := e.Do(ctx, tt.cmd, tt.spec)
+			if !errors.Is(err, ErrInvalidSpec) {
+				t.Fatalf("Do = (%q, %v), want an error matching ErrInvalidSpec", got, err)
+			}
+			if w := port.written(); len(w) != 0 {
+				t.Errorf("the port received %q, want NOTHING — an invalid spec must fail closed before any I/O", w)
+			}
+			if s := f.sentFrames(); len(s) != 0 {
+				t.Errorf("the framing was told about %d sent frames, want 0", len(s))
 			}
 		})
 	}
