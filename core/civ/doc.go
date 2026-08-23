@@ -69,20 +69,43 @@
 // space) are the Wave 3 model packages' own, and each carries its own
 // named lift on that model, in core/cat/ftdx10/doc.go's form.
 //
+// EIGHT members of this package are NOT manual facts. They are
+// conventions this package applies to every Icom model in the tier, they
+// are marked ASSUMED at the point of use, and every model package's own
+// register sits beneath them rather than restating them. Each is listed
+// here so the set has one statement of record, and each is lifted
+// individually by a named capture, never wholesale.
+//
+// CITE THESE ENTRIES BY NAME, NEVER BY POSITION. Every citation of this
+// register elsewhere in the repository names the entry's title. The
+// convention was adopted at M9d-2 (core/cat/ftdx10/doc.go carries the
+// reasoning): a positional citation — "entry 6" — is correct only until
+// somebody adds or reorders an entry, and it then silently points at the
+// wrong assumption rather than failing. The same rule governs how this
+// package cites the SPEC's register: D5 is a numbered list in the spec,
+// so the number is its address, but every citation here names the
+// subject beside it ("spec D5 entry 3, the name pad byte") so that a
+// renumbered spec produces a visible contradiction instead of a silent
+// misattribution.
+//
 // Each entry names the assumption, what depends on it, and the ONE
 // capture that would lift it. "LIFTED BY" describes a capture on ANY
-// model in the tier unless it says otherwise: these are conventions, so
-// one radio's bytes settle them for the package — which is exactly why
-// they are here rather than repeated six times.
+// model in the tier unless it says otherwise — these are conventions, so
+// one radio's bytes settle them for the package, which is exactly why
+// they are here rather than repeated six times. AN ENTRY THAT NAMES A
+// MODEL MEANS IT: its claim is no wider than the capture named, which is
+// the lift-mismatch rule applied to this register itself.
 //
-//   - THE CHANNEL-ADDRESS WIRE ENCODING (profile.go's encodeAddress;
-//     AddressForm.addressBytes). The channel number is TWO packed-BCD
-//     bytes, MOST significant pair first; a grouped or band-addressed
-//     model prefixes ONE packed-BCD group byte, so its address field is
-//     three bytes. Spec D5 entry 1 records the whole `1A 00 <addr>`
-//     request form as undocumented, and the documents that draw it do not
-//     print the address field's width or its digit order at all: the
-//     two-byte big-endian reading is the one consistent with a
+//   - THE CHANNEL NUMBER IS TWO PACKED-BCD BYTES, MOST SIGNIFICANT PAIR
+//     FIRST (profile.go's encodeAddress). This entry claims the CHANNEL
+//     FIELD and nothing else: the width of a grouped model's whole
+//     address field belongs to A GROUPED MODEL'S ADDRESS FIELD IS THREE
+//     BYTES below, because it is the group byte that makes the difference
+//     and only a grouped model's capture can speak to it. Spec D5 entry
+//     1, the `1A 00` read-request form, records the request as
+//     undocumented, and the documents that draw it do not print the
+//     address field's width or its digit order at all:
+//     the two-byte big-endian reading is the one consistent with a
 //     three-digit channel space (1..99 on the 7610, 0..99 per group on
 //     the 705) and with the frequency fields' opposite convention being
 //     remarked on where it appears. It is a deduction from the geometry,
@@ -91,23 +114,34 @@
 //     tier sends, and the gate that admits them.
 //     LIFTED BY: one `1A 00` read of a KNOWN channel — channel 12 rather
 //     than channel 1, so a digit-order error is visible — with the raw
-//     request and the raw answer captured as bytes. If the answer echoes
-//     an address this package would not have built, the encoding is
-//     wrong rather than merely unattested.
+//     request and the raw answer captured as bytes. Any model in the tier
+//     will do, the channel field being common to all of them. If the
+//     answer echoes an address this package would not have built, the
+//     encoding is wrong rather than merely unattested.
 //
-//   - GROUP AND BAND INDICES ARE NUMBERED FROM 0, and the group byte
-//     PRECEDES the channel bytes (record.go's ChannelAddress;
+//   - A GROUPED MODEL'S ADDRESS FIELD IS THREE BYTES: ONE PACKED-BCD
+//     GROUP BYTE BEFORE THE CHANNEL PAIR, AND GROUP AND BAND INDICES ARE
+//     NUMBERED FROM 0 (profile.go's encodeAddress and
+//     AddressForm.addressBytes; record.go's ChannelAddress;
 //     profilevalidate.go's maxGroupCount). Profile.Groups is a COUNT.
-//     Zero-based is forced by arithmetic — the index is one packed-BCD
-//     byte and the 705 and 905 have 100 groups each (spec D6), which
-//     leaves no hundredth value if counting starts at 1 — but "forced by
-//     arithmetic" is not the same as documented, and the ORDER of the two
-//     components is a free choice this package has made.
-//     WHAT DEPENDS ON IT: which channel a grouped model reads and writes.
-//     LIFTED BY: on the IC-705 or IC-905, one `1A 00` read of a channel
-//     in a group that is NOT the first — group 2, channel 3 — with the
-//     raw bytes captured. The group byte's value fixes the numbering
-//     base; its position fixes the order.
+//     The WIDTH is a deduction: a grouped space needs an index, one
+//     packed-BCD byte holds it, and no document in this tier prints the
+//     field. Zero-based is forced by arithmetic — the index is one
+//     packed-BCD byte and the 705 and 905 have 100 groups each (spec D6),
+//     which leaves no hundredth value if counting starts at 1 — but
+//     "forced by arithmetic" is not the same as documented, and the ORDER
+//     of the two components is a free choice this package has made.
+//     WHAT DEPENDS ON IT: which channel a grouped or band-addressed model
+//     reads and writes, and the frame length its own bound is checked
+//     against.
+//     LIFTED BY: ON THE IC-705 OR IC-905 — a FLAT model's capture cannot
+//     speak to any of this — one `1A 00` read of a channel in a group
+//     that is NOT the first, group 2 channel 3, with the raw bytes
+//     captured. The field's length fixes the width; the group byte's
+//     value fixes the numbering base; its position fixes the order. The
+//     IC-9700's band form needs its own capture: nothing here has been
+//     shown to carry from a group-addressed model to a band-addressed
+//     one beyond the shared arithmetic.
 //
 //   - NO FRAMING BYTE APPEARS INSIDE A FRAME'S BODY (frame.go's
 //     WellFormed; profilevalidate.go's refusal of 0xFE/0xFD in enum
@@ -180,10 +214,10 @@
 //     the way in and padded to the field width on the way out, so a name
 //     that genuinely ENDS in the pad byte does not round-trip. On most
 //     models the pad byte is the space, which is also a legal name
-//     character (spec D5 entry 3), so this is a real loss rather than a
-//     theoretical one — and it is stated here rather than hidden, because
-//     padding erases the data-versus-fill distinction on the wire and no
-//     decoder can recover it.
+//     character (spec D5 entry 3, the name pad byte), so this is a real
+//     loss rather than a theoretical one — and it is stated here rather
+//     than hidden, because padding erases the data-versus-fill
+//     distinction on the wire and no decoder can recover it.
 //     WHAT DEPENDS ON IT: what a channel called "CALL " comes back as.
 //     LIFTED BY: one capture of a channel whose name is set, through the
 //     radio's own front panel, to end in a space. If the field comes back

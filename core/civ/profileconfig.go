@@ -70,16 +70,17 @@ type ProfileConfig struct {
 	// duplicates are refused as a transcription error.
 	//
 	// It is PROFILE data rather than a package constant because the
-	// charsets differ per model and spec D5 entry 3 records that every
-	// model's printed charset table OMITS the space while the radios
-	// plainly accept one — so this is a transcription each model's
-	// evidence leg settles, and a shared table would impose one model's
-	// reading on all six.
+	// charsets differ per model, and spec D5 entry 3 — the name pad byte
+	// and space handling — records that every model's printed charset
+	// table OMITS the space while the radios plainly accept one. So this
+	// is a transcription each model's evidence leg settles, and a shared
+	// table would impose one model's reading on all six.
 	NameCharset string
 
 	// NamePad is the byte a short name is padded to NameLength with, and
 	// the byte trimmed from the end of a name read back. 0x20 is the
-	// ASSUMED value for every model in this tier (spec D5 entry 3).
+	// ASSUMED value for every model in this tier (spec D5 entry 3, the
+	// name pad byte and space handling).
 	//
 	// It may legitimately be a member of NameCharset — on most models the
 	// pad byte IS the space, which is also a legal name character. The

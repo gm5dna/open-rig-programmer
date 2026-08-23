@@ -617,8 +617,8 @@ func (r *run) checkMemorySets() {
 	}
 
 	// A NAME CONTAINING THE PAD BYTE, where the charset allows one: spec
-	// D5 entry 3's awkward case, and the vector the evidence legs are
-	// asked to capture.
+	// D5 entry 3's awkward case — the name pad byte and space handling —
+	// and the vector the evidence legs are asked to capture.
 	if r.p.NameLength() >= 3 {
 		charset := r.p.NameCharset()
 		if contains(charset, r.p.NamePad()) {

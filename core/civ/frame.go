@@ -48,8 +48,8 @@ const ControllerAddressDefault = 0xE0
 const (
 	// CmdTransceiverID (0x19) with SubTransceiverID (0x00) reads the
 	// radio's own CI-V address back. Its ANSWER VALUE is undocumented on
-	// every model in this tier (spec D5 entry 7): it is recorded as a
-	// diagnostic, never matched.
+	// every model in this tier (spec D5 entry 7, the `19 00` reply
+	// value): it is recorded as a diagnostic, never matched.
 	CmdTransceiverID = 0x19
 	SubTransceiverID = 0x00
 	// CmdMemory (0x1A) with SubMemoryContents (0x00) is the memory-record

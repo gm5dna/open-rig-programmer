@@ -185,10 +185,10 @@ func TestName_CharsetPadAndTrimming(t *testing.T) {
 	}
 }
 
-// TestName_PadByteInsideAName is spec D5 entry 3's awkward case: on a
-// profile whose pad byte is also a legitimate name character (the space),
-// an INTERIOR one must survive and a TRAILING one must not be
-// distinguishable from padding.
+// TestName_PadByteInsideAName is spec D5 entry 3's awkward case — the
+// name pad byte and space handling. On a profile whose pad byte is also a
+// legitimate name character (the space), an INTERIOR one must survive and
+// a TRAILING one must not be distinguishable from padding.
 func TestName_PadByteInsideAName(t *testing.T) {
 	p := flatProfile
 	if !p.nameByteValid(p.NamePad()) {

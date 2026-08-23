@@ -65,7 +65,8 @@ func mustFixtureProfile(cfg ProfileConfig) Profile {
 
 // flatCharset is the flat profile's name charset: upper case, digits,
 // space and two punctuation marks. Space is INCLUDED and is also the pad
-// byte, which is the case spec D5 entry 3 flags as the awkward one.
+// byte, which is the case spec D5 entry 3 — the name pad byte and space
+// handling — flags as the awkward one.
 const flatCharset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -/"
 
 // flatProfile is a fictional flat-addressed radio with a wide record: a

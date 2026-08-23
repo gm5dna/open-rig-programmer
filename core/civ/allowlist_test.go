@@ -381,9 +381,10 @@ func TestParseMemoryAnswer_WrongRecordLengthIsAnError(t *testing.T) {
 	}
 }
 
-// TestMemoryAnswerRecord is the raw-bytes hook: the split D5 entry 2b
-// needs and ParseMemoryAnswer cannot give, since an all-0xFF record dies
-// in the codec indistinguishably from a corrupt one.
+// TestMemoryAnswerRecord is the raw-bytes hook that spec D5 entry 2b —
+// an occupied-looking record of 0xFFs means empty — needs and
+// ParseMemoryAnswer cannot give, since an all-0xFF record dies in the
+// codec indistinguishably from a corrupt one.
 func TestMemoryAnswerRecord(t *testing.T) {
 	for _, np := range allTestProfiles() {
 		t.Run(np.name, func(t *testing.T) {
@@ -426,7 +427,7 @@ func TestMemoryAnswerRecord(t *testing.T) {
 			}
 			gotAddr, raw, err := p.MemoryAnswerRecord(empty)
 			if err != nil {
-				t.Fatalf("MemoryAnswerRecord refused an all-0xFF record, so D5 entry 2b's reading cannot be reached at all: %v", err)
+				t.Fatalf("MemoryAnswerRecord refused an all-0xFF record, so D5 entry 2b's all-0xFF reading cannot be reached at all: %v", err)
 			}
 			if gotAddr != rec.Address {
 				t.Errorf("all-0xFF answer: address = %+v, want %+v", gotAddr, rec.Address)
