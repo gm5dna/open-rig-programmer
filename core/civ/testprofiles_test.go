@@ -34,7 +34,7 @@ type namedProfile struct {
 //	channels         1..99         0..99            1..99
 //	name length      10            16               none
 //	name pad         ' '           '_'              n/a
-//	record lengths   {37}          {30, 31}         {6}
+//	record lengths   {37}          {30, 31}         {8}
 //	max frame        64            128              32
 //
 // THE CONTROLLER ADDRESS ROW IS THE LOAD-BEARING ONE. 0xE0 is the CI-V
@@ -165,10 +165,17 @@ var groupProfile = mustFixtureProfile(ProfileConfig{
 })
 
 // bandProfile is the minimal fixture: band x channel addressing, NO name
-// field at all, and a six-byte record. A profile with no name is not a
-// curiosity — it is what any model whose memory record omits one looks
-// like, and it is the fixture that catches a name codec assuming there is
-// always a name to write.
+// field at all, and a short record with bytes NO field maps. A profile
+// with no name is not a curiosity — it is what any model whose memory
+// record omits one looks like, and it is the fixture that catches a name
+// codec assuming there is always a name to write.
+//
+// ITS UNMAPPED BYTES ARE THE OTHER REASON IT EXISTS. Byte 6 is a Fixed
+// template constant and byte 7 is unmapped and zero, so this is the only
+// fixture that can show the gate refusing a record byte no builder would
+// have written. The other two map every byte of their records, which
+// makes the re-encode rule untestable on them — a gap the first cut of
+// the gate tests found by admitting a mutation it should have refused.
 var bandProfile = mustFixtureProfile(ProfileConfig{
 	Model:         "TEST-BAND",
 	RadioAddress:  0xA2,
@@ -178,15 +185,40 @@ var bandProfile = mustFixtureProfile(ProfileConfig{
 	ChannelLo:     1,
 	ChannelHi:     99,
 	Discriminator: DiscriminatorSingleLength,
-	BuildLength:   6,
+	BuildLength:   8,
 	Layouts: []RecordLayout{{
-		Length: 6,
+		Length: 8,
 		Fields: []FieldSpan{
 			{Field: FieldRXFrequency, Offset: 0, Length: 5, Encoding: EncodingBCDNumber, Order: OrderLittleEndian, Scale: 1},
 			{Field: FieldMode, Offset: 5, Length: 1, Encoding: EncodingEnum, Enum: map[byte]string{0x00: "LSB", 0x05: "FM"}},
 		},
+		// Byte 6 is a documented constant; byte 7 is reserved and zero.
+		Fixed: []byte{0, 0, 0, 0, 0, 0, 0x5A, 0x00},
 	}},
 })
+
+// unmappedRecordBytes returns the offsets of p's length-byte record that
+// no field span claims.
+func unmappedRecordBytes(t *testing.T, p Profile, length int) []int {
+	t.Helper()
+	layout, ok := p.LayoutFor(length)
+	if !ok {
+		t.Fatalf("%s has no layout for length %d", p.Model(), length)
+	}
+	mapped := make(map[int]bool, length)
+	for _, sp := range layout.Fields {
+		for off := sp.Offset; off < sp.Offset+sp.Length; off++ {
+			mapped[off] = true
+		}
+	}
+	var out []int
+	for i := 0; i < length; i++ {
+		if !mapped[i] {
+			out = append(out, i)
+		}
+	}
+	return out
+}
 
 // sampleRecord builds a record every one of p's mapped fields is present
 // in and no unmapped field is — the shape encodeRecord requires — using
