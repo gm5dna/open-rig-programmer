@@ -131,29 +131,40 @@
 //     answer echoes an address this package would not have built, the
 //     encoding is wrong rather than merely unattested.
 //
-//   - A GROUPED MODEL'S ADDRESS FIELD IS THREE BYTES: ONE PACKED-BCD
-//     GROUP BYTE BEFORE THE CHANNEL PAIR, AND GROUP AND BAND INDICES ARE
-//     NUMBERED FROM 0 (profile.go's encodeAddress and
-//     AddressForm.addressBytes; record.go's ChannelAddress;
-//     profilevalidate.go's maxGroupCount). Profile.Groups is a COUNT.
-//     The WIDTH is a deduction: a grouped space needs an index, one
-//     packed-BCD byte holds it, and no document in this tier prints the
-//     field. Zero-based is forced by arithmetic — the index is one
-//     packed-BCD byte and the 705 and 905 have 100 groups each (spec D6),
-//     which leaves no hundredth value if counting starts at 1 — but
-//     "forced by arithmetic" is not the same as documented, and the ORDER
-//     of the two components is a free choice this package has made.
+//   - A GROUPED MODEL'S GROUP INDEX PRECEDES THE CHANNEL PAIR, IN
+//     PACKED BCD, MOST SIGNIFICANT BYTE FIRST, AND IS THE INDEX THE RADIO
+//     ITSELF PRINTS (profile.go's encodeAddress and GroupBase;
+//     record.go's ChannelAddress, AddressForm.groupBytes and
+//     groupCapacity; profilevalidate.go's V3). Profile.Groups is a COUNT
+//     and Profile.GroupBase is where the radio starts counting; valid
+//     indices are GroupBase..GroupBase+Groups-1.
+//     The WIDTH is a deduction and it is PER FORM: a grouped space needs
+//     an index, packed BCD holds it, and no document in this tier prints
+//     the field. One byte serves a model with at most 100 groups
+//     (AddressFormGroupChannel, AddressFormBandChannel); the IC-705 and
+//     IC-905 have 101 — the last a CALL group the radio numbers 100 and
+//     sends as `01 00` — which needs two (AddressFormWideGroupChannel).
+//     The ORDER of the components, and of the two group bytes, is a free
+//     choice this package has made.
+//     THE ZERO-BASED CLAIM THIS ENTRY USED TO CARRY IS WITHDRAWN. It
+//     argued that a one-byte index leaves no hundredth value if counting
+//     starts at 1, therefore indices must run from 0 on every model. The
+//     premise was the thing at fault: one byte cannot carry the 705's and
+//     905's hundredth group at ANY base, and the IC-9700 numbers its
+//     three groups 1, 2 and 3, so a zero-based rule would have this
+//     program read and write a group its operator did not name.
 //     WHAT DEPENDS ON IT: which channel a grouped or band-addressed model
 //     reads and writes, and the frame length its own bound is checked
 //     against.
 //     LIFTED BY: ON THE IC-705 OR IC-905 — a FLAT model's capture cannot
 //     speak to any of this — one `1A 00` read of a channel in a group
 //     that is NOT the first, group 2 channel 3, with the raw bytes
-//     captured. The field's length fixes the width; the group byte's
-//     value fixes the numbering base; its position fixes the order. The
-//     IC-9700's band form needs its own capture: nothing here has been
-//     shown to carry from a group-addressed model to a band-addressed
-//     one beyond the shared arithmetic.
+//     captured, AND one read of the CALL group, whose bytes settle the
+//     width and the hundredth index together. The field's length fixes
+//     the width; the group bytes' value fixes the numbering base; their
+//     position fixes the order. The IC-9700's band form needs its own
+//     capture — its base is 1 on the printed evidence, which is exactly
+//     the kind of per-model fact nothing here carries across models.
 //
 //   - NO FRAMING BYTE APPEARS INSIDE A FRAME'S BODY (frame.go's
 //     WellFormed; profilevalidate.go's refusal of 0xFE/0xFD in enum

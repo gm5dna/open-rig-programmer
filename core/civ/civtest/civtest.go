@@ -227,8 +227,14 @@ func (r *run) checkProfileSelfConsistency() {
 	if p.AddressForm() == civ.AddressFormFlat && p.Groups() != 0 {
 		r.t.Errorf("%s: a flat address form reports %d groups", r.name(), p.Groups())
 	}
+	if p.AddressForm() == civ.AddressFormFlat && p.GroupBase() != 0 {
+		r.t.Errorf("%s: a flat address form reports a group base of %d — a form with no group index has nothing to number", r.name(), p.GroupBase())
+	}
 	if p.AddressForm() != civ.AddressFormFlat && p.Groups() < 1 {
 		r.t.Errorf("%s: address form %v reports %d groups", r.name(), p.AddressForm(), p.Groups())
+	}
+	if p.GroupBase() < 0 {
+		r.t.Errorf("%s: reports a group base of %d — it is the index the radio itself gives its first group, and no radio numbers one negatively", r.name(), p.GroupBase())
 	}
 	if p.NameLength() > 0 && len(p.NameCharset()) == 0 {
 		r.t.Errorf("%s: NameLength() is %d with an empty charset — no name would be expressible", r.name(), p.NameLength())
@@ -300,7 +306,16 @@ func (r *run) checkMemoryReads() {
 		bad = append(bad, civ.ChannelAddress{Group: r.firstGroup(), Channel: lo - 1})
 	}
 	if r.p.AddressForm() != civ.AddressFormFlat {
-		bad = append(bad, civ.ChannelAddress{Group: r.p.Groups(), Channel: hi})
+		// ONE PAST THE LAST, computed from the profile's own BASE. Groups
+		// is a COUNT, so the last valid index is base+Groups-1 and the
+		// first invalid one is base+Groups — which is NOT p.Groups()
+		// unless the base happens to be zero. On a base-1 profile the
+		// old expression named a group the radio really has, and the
+		// suite reported a correct builder as a conformance failure.
+		bad = append(bad, civ.ChannelAddress{Group: r.p.GroupBase() + r.p.Groups(), Channel: hi})
+		if base := r.p.GroupBase(); base > 0 {
+			bad = append(bad, civ.ChannelAddress{Group: base - 1, Channel: hi})
+		}
 	} else {
 		bad = append(bad, civ.ChannelAddress{Group: 1, Channel: hi})
 	}
@@ -866,11 +881,17 @@ func (r *run) addresses() []civ.ChannelAddress {
 		channels = append(channels, lo+i)
 	}
 
+	// THE GROUPS SAMPLED ARE THE PROFILE'S OWN, FIRST AND LAST. A flat
+	// form has none, so the single zero below is the "no group" placeholder
+	// ChannelAddress requires. A grouped form starts at its own BASE — not
+	// at zero, which is what this walk assumed until E4 and which every
+	// fixture written before then happened to satisfy.
 	groups := []int{0}
 	if p.AddressForm() != civ.AddressFormFlat {
-		groups = []int{0}
+		base := p.GroupBase()
+		groups = []int{base}
 		if p.Groups() > 1 {
-			groups = append(groups, p.Groups()-1)
+			groups = append(groups, base+p.Groups()-1)
 		}
 	}
 
@@ -883,10 +904,23 @@ func (r *run) addresses() []civ.ChannelAddress {
 	return out
 }
 
-// firstGroup is the lowest valid group index under p's form. Both forms
-// number from 0 (core/civ's doc.go, GROUP AND BAND INDICES ARE NUMBERED
-// FROM 0), and a flat form has no group at all, so it is 0 either way.
-func (r *run) firstGroup() int { return 0 }
+// firstGroup is the lowest valid group index under p's own numbering:
+// Profile.GroupBase for a grouped form, and 0 for a flat one, which has no
+// group index at all and whose ChannelAddress.Group must therefore be zero.
+//
+// IT USED TO RETURN A CONSTANT ZERO, on the strength of a claim in
+// core/civ's register — "GROUP AND BAND INDICES ARE NUMBERED FROM 0" —
+// that E4 withdrew. Group carries the WIRE index, what the radio itself
+// prints, and the IC-9700 numbers its three bands 1, 2 and 3. A suite that
+// asks a correct profile for group 0 and then reports the refusal as a
+// conformance failure is a suite that fails the models it exists to
+// certify.
+func (r *run) firstGroup() int {
+	if r.p.AddressForm() == civ.AddressFormFlat {
+		return 0
+	}
+	return r.p.GroupBase()
+}
 
 // sampleRecord builds a record every field p's layout maps is present in
 // and no field it does not map is — the shape BuildMemorySet requires —

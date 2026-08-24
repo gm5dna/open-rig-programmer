@@ -11,11 +11,6 @@ import (
 // field can express. DERIVED from the address encoding, not chosen.
 const maxChannelDecimal = 9999
 
-// maxGroupCount is the largest group or band COUNT a profile may declare.
-// DERIVED from the one-byte packed-BCD index: indices run 0..99, so 100
-// groups is the ceiling.
-const maxGroupCount = 100
-
 // maxNameLength is the widest name field a profile may declare.
 //
 // A RESOURCE bound rather than a protocol fact — no Icom document in this
@@ -110,12 +105,32 @@ func validateAddressSpace(cfg ProfileConfig) error {
 		if cfg.Groups != 0 {
 			return invalidProfile("Groups is %d under AddressFormFlat — a flat address has nowhere to encode a group, so an inapplicable field must be explicitly zero", cfg.Groups)
 		}
-	case AddressFormGroupChannel, AddressFormBandChannel:
+		if cfg.GroupBase != 0 {
+			return invalidProfile("GroupBase is %d under AddressFormFlat — a flat address has no group index to number, so an inapplicable field must be explicitly zero", cfg.GroupBase)
+		}
+	case AddressFormGroupChannel, AddressFormBandChannel, AddressFormWideGroupChannel:
 		if cfg.Groups < 1 {
 			return invalidProfile("Groups is %d under %v — a grouped address form needs at least one group", cfg.Groups, cfg.AddressForm)
 		}
-		if cfg.Groups > maxGroupCount {
-			return invalidProfile("Groups is %d, want <= %d — the group index is one packed-BCD byte, so indices run 0..99", cfg.Groups, maxGroupCount)
+		if cfg.GroupBase < 0 {
+			return invalidProfile("GroupBase is %d, want >= 0 — it is the index the radio itself gives its first group, and no radio numbers one negatively", cfg.GroupBase)
+		}
+		// THE RULE E4 ADDS, and the one place the form's half and the
+		// profile's half meet. The FORM declares how wide its index field
+		// is (groupCapacity); the PROFILE declares where its radio starts
+		// counting (GroupBase) and how many groups there are (Groups).
+		// The highest index this profile will ever ask for is
+		// GroupBase+Groups-1, and it must be one the field can carry —
+		// otherwise the profile is legal here and its own builders refuse
+		// it one frame at a time, at the far end of a read the user asked
+		// for.
+		//
+		// Checked as a SUM, not as two independent bounds, because either
+		// half alone can be innocent: a base of 1 is fine and a count of
+		// 100 is fine, and 1..100 does not fit one packed-BCD byte.
+		capacity := cfg.AddressForm.groupCapacity()
+		if highest := cfg.GroupBase + cfg.Groups - 1; highest >= capacity {
+			return invalidProfile("the highest group index this profile can ask for is %d (GroupBase %d + Groups %d - 1), but %v encodes a group index in %d packed-BCD byte(s), which reaches only %d", highest, cfg.GroupBase, cfg.Groups, cfg.AddressForm, cfg.AddressForm.groupBytes(), capacity-1)
 		}
 	default:
 		return invalidProfile("AddressForm %v must be set explicitly — the zero value is not a form, and a grouped radio addressed flat reads a different channel", cfg.AddressForm)

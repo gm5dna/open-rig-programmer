@@ -693,14 +693,28 @@ func TestChannelAddressValidation(t *testing.T) {
 					t.Error("a flat profile accepted an address carrying a group — a group index it cannot encode would be silently dropped")
 				}
 			default:
-				if err := p.validAddress(ChannelAddress{Group: 0, Channel: lo}); err != nil {
-					t.Errorf("a grouped profile refused group 0, which is its FIRST group: %v", err)
+				// THE BASE IS THE PROFILE'S, NOT ZERO (E4). Group carries
+				// the WIRE index — what the radio prints — so a model
+				// numbering its groups from 1 has no group 0, and the
+				// first and last valid indices are base and
+				// base+Groups-1.
+				base := p.GroupBase()
+				if err := p.validAddress(ChannelAddress{Group: base, Channel: lo}); err != nil {
+					t.Errorf("a grouped profile refused group %d, which is its FIRST group: %v", base, err)
+				}
+				if base > 0 {
+					if err := p.validAddress(ChannelAddress{Group: base - 1, Channel: lo}); err == nil {
+						t.Errorf("group %d, one below this profile's own base of %d, was accepted", base-1, base)
+					}
+				}
+				if err := p.validAddress(ChannelAddress{Group: base + p.Groups() - 1, Channel: lo}); err != nil {
+					t.Errorf("a grouped profile refused group %d, which is its LAST group: %v", base+p.Groups()-1, err)
 				}
 				if err := p.validAddress(ChannelAddress{Group: -1, Channel: lo}); err == nil {
 					t.Error("a grouped profile accepted group -1")
 				}
-				if err := p.validAddress(ChannelAddress{Group: p.Groups(), Channel: lo}); err == nil {
-					t.Errorf("group %d, one past this profile's own count of %d, was accepted", p.Groups(), p.Groups())
+				if err := p.validAddress(ChannelAddress{Group: base + p.Groups(), Channel: lo}); err == nil {
+					t.Errorf("group %d, one past this profile's own %d groups from base %d, was accepted", base+p.Groups(), p.Groups(), base)
 				}
 			}
 		})

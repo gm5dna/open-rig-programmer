@@ -26,16 +26,26 @@ type namedProfile struct {
 // every other, NO ordinary test can tell the two apart. So the three below
 // disagree at every attribute a Profile carries:
 //
-//	                 flatProfile   groupProfile     bandProfile
-//	radio address    0x94          0x70             0xa2
-//	CONTROLLER addr  0xe0          0xe1             0xe0
-//	address form     flat          group x channel  band x channel
-//	groups (count)   0             100              3
-//	channels         1..99         0..99            1..99
-//	name length      10            16               none
-//	name pad         ' '           '_'              n/a
-//	record lengths   {37}          {30, 31}         {8}
-//	max frame        64            128              18 (== its own need)
+//	                 flatProfile   groupProfile     bandProfile   wideProfile
+//	radio address    0x94          0x70             0xa2          0x88
+//	CONTROLLER addr  0xe0          0xe1             0xe0          0xe0
+//	address form     flat          group x channel  band x chan   WIDE group x chan
+//	address bytes    2             3                3             4
+//	groups (count)   0             100              3             100
+//	GROUP BASE       n/a           0                0             1
+//	channels         1..99         0..99            1..99         1..99
+//	name length      10            16               none          4
+//	name pad         ' '           '_'              n/a           ' '
+//	record lengths   {37}          {30, 31}         {8}           {12}
+//	max frame        64            128              18 (== need)  64
+//
+// THE WIDE FIXTURE CARRIES BOTH OF E4'S NEW FACTS AT ONCE, deliberately:
+// a two-byte group index AND a non-zero base. Its groups run 1..100, so
+// the last of them is the index one packed-BCD byte cannot hold — the
+// IC-705/IC-905 CALL group's shape — while its first is not zero, which
+// is the IC-9700's shape. A base-aware rule that had quietly kept a zero
+// base, or a wide encoder that had quietly kept one group byte, fails on
+// this fixture and on no other.
 //
 // THE CONTROLLER ADDRESS ROW IS THE LOAD-BEARING ONE. 0xE0 is the CI-V
 // convention and appears as a package constant
@@ -48,6 +58,7 @@ func allTestProfiles() []namedProfile {
 		{"flatProfile", flatProfile},
 		{"groupProfile", groupProfile},
 		{"bandProfile", bandProfile},
+		{"wideProfile", wideProfile},
 	}
 }
 
@@ -206,6 +217,41 @@ var bandProfile = mustFixtureProfile(ProfileConfig{
 	}},
 })
 
+// wideProfile is E4's fixture: a TWO-byte packed-BCD group index and a
+// base of 1, so its group space is 1..100 — the last index unreachable in
+// one BCD byte at any base, and the first index not zero.
+//
+// It is in allTestProfiles(), so every property this package states about
+// "any profile" is now stated about a wide, base-1 one too. That is the
+// fixture's real job: before it, both halves of the address code could
+// have kept a hardcoded 1-byte group and a hardcoded zero base and every
+// test in the package would still have passed.
+var wideProfile = mustFixtureProfile(ProfileConfig{
+	Model:         "TEST-WIDE",
+	RadioAddress:  0x88,
+	MaxFrame:      64,
+	AddressForm:   AddressFormWideGroupChannel,
+	Groups:        100,
+	GroupBase:     1,
+	ChannelLo:     1,
+	ChannelHi:     99,
+	NameLength:    4,
+	NameCharset:   "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ",
+	NamePad:       ' ',
+	Discriminator: DiscriminatorSingleLength,
+	BuildLength:   12,
+	Layouts: []RecordLayout{{
+		Length: 12,
+		Fields: []FieldSpan{
+			{Field: FieldRXFrequency, Offset: 0, Length: 5, Encoding: EncodingBCDNumber, Order: OrderLittleEndian, Scale: 1},
+			{Field: FieldMode, Offset: 5, Length: 1, Encoding: EncodingEnum, Enum: map[byte]string{0x00: "LSB", 0x01: "USB", 0x07: "DV"}},
+			{Field: FieldDuplex, Offset: 6, Length: 1, Encoding: EncodingEnum, Enum: map[byte]string{0x00: "OFF", 0x10: "DUP-", 0x20: "DUP+"}},
+			{Field: FieldSelect, Offset: 7, Length: 1, Encoding: EncodingEnum, Enum: map[byte]string{0x00: "OFF", 0x01: "ON"}},
+			{Field: FieldName, Offset: 8, Length: 4, Encoding: EncodingName},
+		},
+	}},
+})
+
 // unmappedRecordBytes returns the offsets of p's length-byte record that
 // no field span claims.
 func unmappedRecordBytes(t *testing.T, p Profile, length int) []int {
@@ -262,12 +308,15 @@ func sampleRecord(t *testing.T, p Profile, length int) MemoryRecord {
 	return rec
 }
 
-// sampleAddress returns an address valid under p's own address form.
+// sampleAddress returns an address valid under p's own address form —
+// including its own group BASE, which is not necessarily zero and not
+// necessarily one.
 func sampleAddress(p Profile) ChannelAddress {
 	lo, _ := p.ChannelRange()
 	a := ChannelAddress{Channel: lo}
 	if p.AddressForm() != AddressFormFlat {
-		a.Group = 1
+		// The base itself, so this works for a single-group profile too.
+		a.Group = p.GroupBase()
 	}
 	return a
 }

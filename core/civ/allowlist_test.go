@@ -44,17 +44,18 @@ func TestEveryBuilderOutputIsAdmittedByItsOwnGate(t *testing.T) {
 			check("transceiver ID read", mustCommand(p.BuildTransceiverIDRead()).Bytes())
 
 			lo, hi := p.ChannelRange()
-			groups := 1
+			// FROM THE PROFILE'S OWN BASE, not from zero: a model that
+			// numbers its groups 1..3 has no group 0, and walking from
+			// zero would ask its own builder for an address it must
+			// refuse (E4). The count is a COUNT; the base says where it
+			// starts.
+			first, groups := 0, 1
 			if p.AddressForm() != AddressFormFlat {
-				groups = p.Groups()
+				first, groups = p.GroupBase(), p.Groups()
 			}
-			for g := 0; g < groups; g++ {
-				grp := g
-				if p.AddressForm() == AddressFormFlat {
-					grp = 0
-				}
+			for g := first; g < first+groups; g++ {
 				for _, ch := range []int{lo, (lo + hi) / 2, hi} {
-					addr := ChannelAddress{Group: grp, Channel: ch}
+					addr := ChannelAddress{Group: g, Channel: ch}
 					check("memory read", mustCommand(p.BuildMemoryRead(addr)).Bytes())
 				}
 			}

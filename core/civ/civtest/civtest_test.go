@@ -109,6 +109,44 @@ func bandProfile() civ.Profile {
 	})
 }
 
+// wideProfile is the fixture E4 adds: a FOUR-byte address field (two
+// packed-BCD group bytes before the channel pair) and a group base of 1,
+// so its groups run 1..100.
+//
+// IT IS THE ONE THE SUITE ITSELF COULD NOT SEE. Until E4 the suite
+// hardcoded group ZERO in both of its address-sampling paths, which every
+// fixture before this one happened to have. A model numbering its groups
+// from 1 — the IC-9700 — would have had the conformance suite ask its
+// builder for group 0 and then report the refusal as a conformance
+// failure, on a profile that was correct.
+func wideProfile() civ.Profile {
+	return civ.MustNewProfile(civ.ProfileConfig{
+		Model:         "CIVTEST-WIDE",
+		RadioAddress:  0x88,
+		MaxFrame:      64,
+		AddressForm:   civ.AddressFormWideGroupChannel,
+		Groups:        100,
+		GroupBase:     1,
+		ChannelLo:     1,
+		ChannelHi:     99,
+		NameLength:    4,
+		NameCharset:   "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ",
+		NamePad:       ' ',
+		Discriminator: civ.DiscriminatorSingleLength,
+		BuildLength:   12,
+		Layouts: []civ.RecordLayout{{
+			Length: 12,
+			Fields: []civ.FieldSpan{
+				{Field: civ.FieldRXFrequency, Offset: 0, Length: 5, Encoding: civ.EncodingBCDNumber, Order: civ.OrderLittleEndian, Scale: 1},
+				{Field: civ.FieldMode, Offset: 5, Length: 1, Encoding: civ.EncodingEnum, Enum: map[byte]string{0x00: "LSB", 0x07: "DV"}},
+				{Field: civ.FieldDuplex, Offset: 6, Length: 1, Encoding: civ.EncodingEnum, Enum: map[byte]string{0x00: "OFF", 0x10: "DUP-", 0x20: "DUP+"}},
+				{Field: civ.FieldName, Offset: 7, Length: 4, Encoding: civ.EncodingName},
+				// Byte 11 is reserved and zero.
+			},
+		}},
+	})
+}
+
 func TestRun_OverDisagreeingProfiles(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -117,6 +155,7 @@ func TestRun_OverDisagreeingProfiles(t *testing.T) {
 		{"flat", flatProfile()},
 		{"group (controller 0xE1, two record lengths)", groupProfile()},
 		{"band (no name field)", bandProfile()},
+		{"wide (four-byte address, groups numbered from 1)", wideProfile()},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			civtest.Run(t, tc.p)

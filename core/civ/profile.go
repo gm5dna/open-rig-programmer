@@ -49,6 +49,7 @@ type Profile struct {
 	maxFrame           int
 	addressForm        AddressForm
 	groups             int
+	groupBase          int
 	channelLo          int
 	channelHi          int
 	nameLength         int
@@ -90,6 +91,7 @@ func NewProfile(cfg ProfileConfig) (Profile, error) {
 		maxFrame:       cfg.MaxFrame,
 		addressForm:    cfg.AddressForm,
 		groups:         cfg.Groups,
+		groupBase:      cfg.GroupBase,
 		channelLo:      cfg.ChannelLo,
 		channelHi:      cfg.ChannelHi,
 		nameLength:     cfg.NameLength,
@@ -173,8 +175,13 @@ func (p Profile) MaxFrame() int { return p.maxFrame }
 func (p Profile) AddressForm() AddressForm { return p.addressForm }
 
 // Groups is the COUNT of groups or bands, or 0 under a flat form. Valid
-// indices are 0..Groups-1 — see ChannelAddress.
+// indices are GroupBase()..GroupBase()+Groups()-1 — see ChannelAddress.
 func (p Profile) Groups() int { return p.groups }
+
+// GroupBase is the WIRE index of this model's first group or band: what
+// the radio itself calls it. 0 for every model that numbers from zero and
+// for every flat-addressed model, 1 for the IC-9700's A/B/C.
+func (p Profile) GroupBase() int { return p.groupBase }
 
 // ChannelRange is the inclusive channel range, per group where grouped.
 func (p Profile) ChannelRange() (lo, hi int) { return p.channelLo, p.channelHi }
@@ -259,8 +266,9 @@ func (p Profile) validAddress(a ChannelAddress) error {
 		return fmt.Errorf("civ: unconfigured profile has no channel space")
 	}
 	if p.addressForm.grouped() {
-		if a.Group < 0 || a.Group >= p.groups {
-			return fmt.Errorf("civ: %s: group %d is outside 0..%d (Groups is a COUNT of %d)", p.model, a.Group, p.groups-1, p.groups)
+		lo, hi := p.groupBase, p.groupBase+p.groups-1
+		if a.Group < lo || a.Group > hi {
+			return fmt.Errorf("civ: %s: group %d is outside %d..%d (Groups is a COUNT of %d from a base of %d)", p.model, a.Group, lo, hi, p.groups, p.groupBase)
 		}
 	} else if a.Group != 0 {
 		return fmt.Errorf("civ: %s: address form %v has nowhere to encode group %d", p.model, p.addressForm, a.Group)
@@ -274,19 +282,27 @@ func (p Profile) validAddress(a ChannelAddress) error {
 // encodeAddress renders a as this profile's own address field.
 //
 // THE ENCODING IS ASSUMED — see doc.go's register entry. Two packed-BCD
-// bytes for the channel, most significant pair first, preceded by one
-// packed-BCD group or band byte where the form is grouped.
+// bytes for the channel, most significant pair first, preceded by the
+// form's own group or band index field where the form is grouped: one
+// packed-BCD byte for the three-byte forms, TWO — most significant first —
+// for AddressFormWideGroupChannel.
+//
+// The group is encoded as the WIRE index outright, with no base
+// arithmetic: GroupBase says what the radio calls its first group, and
+// what the radio calls a group is what goes on the wire. That is also why
+// a zero-based profile's bytes are byte-identical to what this package
+// emitted before GroupBase existed.
 func (p Profile) encodeAddress(a ChannelAddress) ([]byte, error) {
 	if err := p.validAddress(a); err != nil {
 		return nil, err
 	}
 	out := make([]byte, 0, p.addressForm.addressBytes())
-	if p.addressForm.grouped() {
-		g, err := EncodeBCD2(a.Group)
+	if n := p.addressForm.groupBytes(); n > 0 {
+		g, err := encodeBCDNumber(uint64(a.Group), n, OrderBigEndian)
 		if err != nil {
 			return nil, fmt.Errorf("civ: %s: group %d: %w", p.model, a.Group, err)
 		}
-		out = append(out, g)
+		out = append(out, g...)
 	}
 	ch, err := encodeBCDNumber(uint64(a.Channel), 2, OrderBigEndian)
 	if err != nil {
@@ -304,13 +320,13 @@ func (p Profile) decodeAddress(b []byte) (ChannelAddress, error) {
 	}
 	var a ChannelAddress
 	rest := b
-	if p.addressForm.grouped() {
-		g, err := DecodeBCD2(b[0])
+	if n := p.addressForm.groupBytes(); n > 0 {
+		g, err := decodeBCDNumber(b[:n], OrderBigEndian)
 		if err != nil {
-			return ChannelAddress{}, newParseError(b, "group byte: %v", err)
+			return ChannelAddress{}, newParseError(b, "group field: %v", err)
 		}
-		a.Group = g
-		rest = b[1:]
+		a.Group = int(g)
+		rest = b[n:]
 	}
 	ch, err := decodeBCDNumber(rest, OrderBigEndian)
 	if err != nil {

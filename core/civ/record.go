@@ -135,6 +135,18 @@ const (
 	// would make a band-addressed radio indistinguishable from a
 	// group-addressed one in every diagnostic.
 	AddressFormBandChannel
+	// AddressFormWideGroupChannel is TWO packed-BCD group bytes, most
+	// significant first, then the two-byte channel: a four-byte address
+	// field.
+	//
+	// IT EXISTS BECAUSE A HUNDREDTH GROUP DOES NOT FIT IN ONE BYTE. The
+	// IC-705 and the IC-905 both number a CALL group at wire index 100,
+	// which the radio prints and sends as `01 00`; one packed-BCD byte
+	// stops at 99. A model with 101 groups is not an edge case to round
+	// off — it is two of the six radios in this tier — and the alternative
+	// (renumbering the CALL group to something that fits) would have this
+	// program address a channel by an index its radio has never heard of.
+	AddressFormWideGroupChannel
 )
 
 func (f AddressForm) String() string {
@@ -147,6 +159,8 @@ func (f AddressForm) String() string {
 		return "AddressFormGroupChannel"
 	case AddressFormBandChannel:
 		return "AddressFormBandChannel"
+	case AddressFormWideGroupChannel:
+		return "AddressFormWideGroupChannel"
 	default:
 		return "AddressForm(" + strconv.Itoa(int(f)) + ")"
 	}
@@ -155,11 +169,49 @@ func (f AddressForm) String() string {
 // addressBytes is the wire width of this form's address field. ASSUMED —
 // see doc.go's register entry for the address encoding.
 func (f AddressForm) addressBytes() int {
+	return f.groupBytes() + 2
+}
+
+// groupBytes is the wire width of this form's GROUP or BAND index, in
+// packed-BCD bytes: 0 for a flat form, 1 for the two three-byte forms, 2
+// for the wide one. addressBytes is this plus the two-byte channel every
+// form carries.
+//
+// A separate function because the group width is what VALIDATION needs —
+// "does base + count − 1 fit?" is a question about the index field alone —
+// and deriving it back out of addressBytes would be arithmetic standing in
+// for a fact.
+func (f AddressForm) groupBytes() int {
 	switch f {
-	case AddressFormFlat:
-		return 2
 	case AddressFormGroupChannel, AddressFormBandChannel:
-		return 3
+		return 1
+	case AddressFormWideGroupChannel:
+		return 2
+	default:
+		// Including AddressFormUnspecified, whose addressBytes is then 2.
+		// Nothing reaches either: NewProfile refuses the zero form (V3),
+		// and every path here runs on a constructed profile.
+		return 0
+	}
+}
+
+// groupCapacity is how many DISTINCT group indices this form can encode:
+// 100 for one packed-BCD byte, 10000 for two, 0 for a flat form which
+// encodes none. The highest encodable index is groupCapacity() - 1.
+//
+// It is the FORM's half of E4's rule. The form declares what its BCD width
+// can hold; the PROFILE declares the base its radio numbers from
+// (ProfileConfig.GroupBase), because one form serves radios that disagree
+// about that — the IC-9700 numbers its three groups 1..3 while the IC-705
+// and IC-905 number theirs 0..100 — and a base baked into the form could
+// not describe both. Validation joins the two halves: base + count − 1
+// must be an index this width can carry.
+func (f AddressForm) groupCapacity() int {
+	switch f.groupBytes() {
+	case 1:
+		return 100
+	case 2:
+		return 10000
 	default:
 		return 0
 	}
@@ -167,21 +219,35 @@ func (f AddressForm) addressBytes() int {
 
 // grouped reports whether this form carries a group or band index.
 func (f AddressForm) grouped() bool {
-	return f == AddressFormGroupChannel || f == AddressFormBandChannel
+	return f.groupBytes() > 0
 }
 
 // ChannelAddress is one memory channel's address under a profile's own
 // address form.
 //
-// Group carries the group or band INDEX, numbered FROM 0, and must be zero
-// under AddressFormFlat: a flat profile has nowhere to encode it, and
-// silently dropping it would read or write a channel the caller did not
-// name.
+// Group carries the group or band index AS THE RADIO NUMBERS IT — the WIRE
+// index, what the radio prints and what it sends — and must be zero under
+// AddressFormFlat: a flat profile has nowhere to encode it, and silently
+// dropping it would read or write a channel the caller did not name.
 //
-// FROM 0, not from 1, because the index is one packed-BCD byte and a model
-// with 100 groups — the IC-705 and IC-905 both, per spec D6 — has no
-// hundredth value to number if counting starts at 1. Profile.Groups is
-// therefore a COUNT, and the valid indices are 0..Groups-1.
+// THE EARLIER "NUMBERED FROM 0" CLAIM HERE WAS REFUTED, and by its own
+// argument. It read: the index is one packed-BCD byte, and a model with
+// 100 groups — the IC-705 and IC-905 — has no hundredth value to number if
+// counting starts at 1, therefore indices run 0..Groups-1 on every model.
+// Both halves turned out to be wrong about the radios. The 705 and 905
+// have ONE HUNDRED AND ONE groups, the last of them a CALL group the radio
+// itself numbers 100 and sends as `01 00` — which one packed-BCD byte
+// cannot hold at ANY base, so the premise "the index is one packed-BCD
+// byte" was the thing to fix (AddressFormWideGroupChannel), not the
+// numbering. And the IC-9700 numbers its three groups 1, 2 and 3: a
+// zero-based rule would have this program address group 1 as 0, reading
+// and writing a group the operator did not name while every diagnostic
+// printed the wrong number back at them.
+//
+// So the BASE is profile data (ProfileConfig.GroupBase, defaulting to 0,
+// which is what every profile written before this had), Profile.Groups
+// remains a COUNT, and the valid indices are
+// GroupBase..GroupBase+Groups-1.
 type ChannelAddress struct {
 	Group   int
 	Channel int
