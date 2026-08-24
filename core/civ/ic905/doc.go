@@ -68,6 +68,56 @@
 // the manual grade; it does not claim to have retired D5 entry 6's
 // framing. Condition B's 65 is ASSUMED — see the register.
 //
+// # The two record lengths, and which one this profile builds
+//
+// THE BUILD LENGTH IS 64.
+//
+// There is NO READ-PATH problem to solve. Every field but the frequency
+// is fixed width, so a 64-byte answer means five frequency bytes and a
+// 65-byte answer means six: the length IS the discriminator, and this
+// profile declares civ.DiscriminatorRecordLength over both layouts
+// (matrix Erratum 8 corrected an earlier framing that treated this as an
+// ambiguity).
+//
+// The real question is the WRITE path, where a width must be chosen
+// before there is a length to read. civ.ProfileConfig.BuildLength is a
+// single static int and BuildMemorySet emits it and nothing else, so a
+// profile cannot pick per record. The choice was between:
+//
+//   - 64 — the only record shape the memory-content diagram draws
+//     (MANUAL-EVIDENCED, matrix section 3.11 Condition A). A 10 GHz
+//     record then fails CLOSED inside the encoder: encoding
+//     10,250,000,000 into five packed-BCD bytes does not fit, so
+//     BuildMemorySet returns an error naming rx_frequency and its width.
+//     Nothing assumed reaches a radio.
+//   - 65 — which would send an ASSUMED shape on EVERY write, including
+//     the sub-10-GHz writes the diagram does draw at 64.
+//
+// 64 is what this profile declares. The tier writes only the shape its
+// document draws, and refuses the 10 GHz write honestly until
+// ic905-R-06 lands. SPEC ERRATUM 2'S DELIBERATE GATE WIDTH IS WHAT MAKES
+// THAT COHERENT: AllowedCommand admits a memory set at EITHER declared
+// length, so a 65-byte record the radio answered with can be validated
+// and — once the lift lands — written back with no gate change.
+//
+// # The band rule, and why the record needs no band field
+//
+// Ten packed-BCD digits reach at most 9,999,999,999 Hz. The 10G band
+// starts at 10,000,000,000 Hz (PDF p.20 folio 19, "Band stacking
+// register", "(1): Frequency band codes", row `06 | 10G |
+// 10000.000000 ~ 10500.000000`; printed again at PDF p.30 folio 29, per
+// matrix Erratum 9), and no band is documented between 5850 MHz and
+// 10 GHz. So over the documented storable set, "needs six bytes" and "is
+// in band 06" are the SAME predicate:
+//
+//	six bytes iff freqHz > 9,999,999,999
+//
+// That equivalence is why the record carrying no band field costs
+// nothing on the write path. NeedsWideFrequency and
+// RecordLengthForFrequency (length.go) pin it, so that the one-line
+// change ic905-R-06 would authorise is already written down and tested
+// even while BuildLength is 64.
+//
 // # The ASSUMED register
 //
 // NINETEEN members of this package are not IC-905-manual facts. Each is
