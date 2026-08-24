@@ -125,12 +125,27 @@ func validateAddressSpace(cfg ProfileConfig) error {
 		// it one frame at a time, at the far end of a read the user asked
 		// for.
 		//
-		// Checked as a SUM, not as two independent bounds, because either
-		// half alone can be innocent: a base of 1 is fine and a count of
-		// 100 is fine, and 1..100 does not fit one packed-BCD byte.
+		// It is the JOINT limit that matters, not two independent bounds:
+		// a base of 1 is innocent and a count of 100 is innocent, and
+		// 1..100 does not fit one packed-BCD byte.
+		//
+		// THE OPERANDS ARE CHECKED BEFORE THEY ARE ADDED, and that is not
+		// fastidiousness. Written as `GroupBase+Groups-1 >= capacity` the
+		// sum OVERFLOWS for MaxInt-scale values and comes back NEGATIVE,
+		// which passes the comparison — so the one rule written to refuse
+		// an impossible group space would have admitted the most
+		// impossible one there is. Nothing reached a radio (every
+		// downstream path refuses it in turn), but a validator that
+		// blesses what it exists to reject is a false statement about the
+		// profile, and the next reader believes it. Bounding the base
+		// first makes capacity-GroupBase a safe positive int, so the
+		// second comparison cannot wrap either.
 		capacity := cfg.AddressForm.groupCapacity()
-		if highest := cfg.GroupBase + cfg.Groups - 1; highest >= capacity {
-			return invalidProfile("the highest group index this profile can ask for is %d (GroupBase %d + Groups %d - 1), but %v encodes a group index in %d packed-BCD byte(s), which reaches only %d", highest, cfg.GroupBase, cfg.Groups, cfg.AddressForm, cfg.AddressForm.groupBytes(), capacity-1)
+		if cfg.GroupBase >= capacity {
+			return invalidProfile("GroupBase is %d, but %v encodes a group index in %d packed-BCD byte(s), which reaches only %d — the radio's own first group is already past what this form can address", cfg.GroupBase, cfg.AddressForm, cfg.AddressForm.groupBytes(), capacity-1)
+		}
+		if cfg.Groups > capacity-cfg.GroupBase {
+			return invalidProfile("the highest group index this profile can ask for is GroupBase %d + Groups %d - 1, but %v encodes a group index in %d packed-BCD byte(s), which reaches only %d", cfg.GroupBase, cfg.Groups, cfg.AddressForm, cfg.AddressForm.groupBytes(), capacity-1)
 		}
 	default:
 		return invalidProfile("AddressForm %v must be set explicitly — the zero value is not a form, and a grouped radio addressed flat reads a different channel", cfg.AddressForm)

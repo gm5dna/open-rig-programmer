@@ -88,12 +88,16 @@ const (
 type framing struct {
 	p Profile
 
-	// mu guards acc, and is the "adapter's own lock" transport's
-	// framing.go requires. It is held across the whole of Push, which is
-	// the only place a frame is assembled and the only place a note is
-	// consumed.
+	// mu guards acc and handedOut, and is the "adapter's own lock"
+	// transport's framing.go requires. It is held across the whole of
+	// Push, which is the only place a frame is assembled and the only
+	// place a note is consumed.
 	mu  sync.Mutex
 	acc *FrameAccumulator
+	// handedOut records that an Engine has already taken this adapter's
+	// accumulator. See NewAccumulator: a second Engine is refused, not
+	// served.
+	handedOut bool
 }
 
 // Compile-time proof that the adapter really is the seam it claims: a
@@ -144,6 +148,16 @@ type AccumulatorStatsReporter interface {
 // caller can tell a malformed model table from any other failure without
 // matching message text.
 //
+// ONE ENGINE PER NewFraming VALUE. transport.Framing's contract says
+// NewAccumulator is "called exactly once per Engine", and this adapter
+// takes that literally rather than defensively: it holds ONE accumulator,
+// built here (which is what closes the reader-goroutine init race), so a
+// value handed to two Engines would have them share a reassembly buffer,
+// share the noted-sent list echo removal depends on, and let a positive
+// WithMaxFrame on the second move the first's frame bound. A driver that
+// wants two Engines for one radio calls this twice. The second
+// NewAccumulator call on one value is refused loudly — see NewAccumulator.
+//
 // The returned value additionally satisfies AccumulatorStatsReporter.
 func NewFraming(p Profile) (transport.Framing, error) {
 	if !p.Configured() {
@@ -171,15 +185,54 @@ func NewFraming(p Profile) (transport.Framing, error) {
 //
 // max > 0 — the engine's WithMaxFrame — overrides it, and does so by
 // adjusting the bound on the accumulator already in hand rather than by
-// replacing it, so no note and no buffered byte is lost. The engine calls
-// this exactly once, before its reader goroutine starts.
+// replacing it, so no note and no buffered byte is lost.
+//
+// A SECOND CALL PANICS, and the loudness is the point. The engine calls
+// this exactly once, from its reader goroutine, before that goroutine
+// reads a byte — so a second call means one Framing value reached two
+// Engines, which is a composition mistake with no honest recovery. The
+// two would share a reassembly buffer (frames spliced across ports), share
+// the noted-sent list (one port's echo suppressing the other's answer),
+// and the later WithMaxFrame would silently re-bound the earlier Engine.
+// The adapter's mutex prevents none of that: it removes data races, not
+// cross-engine contamination.
+//
+// Panicking rather than returning a dead accumulator follows this
+// package's own precedent for a programming error baked into a binary
+// (MustNewProfile): the fault is deterministic, it surfaces the first time
+// the path runs, and a caller cannot sensibly continue. Returning a
+// permanently-failing accumulator instead would reach the engine as a raw
+// I/O error, which handleReaderErr reads as a dead port — the misuse would
+// be reported as a cable fault.
 func (f *framing) NewAccumulator(max int) transport.Accumulator {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.handedOut {
+		panic("civ: " + f.p.Model() + ": this Framing already gave its accumulator to an Engine — transport.Framing requires NewAccumulator be called exactly once per Engine, so build one civ.NewFraming value per Engine rather than sharing one")
+	}
+	f.handedOut = true
+	f.reboundLocked(max)
+	return lockedAccumulator{f: f}
+}
+
+// rebound adjusts this adapter's frame bound, taking the lock. It exists
+// for NewAccumulator's max>0 path and for the test that pins it; a
+// non-positive max leaves the profile's own bound in force.
+func (f *framing) rebound(max int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.reboundLocked(max)
+}
+
+// reboundLocked is rebound's body, for callers already holding f.mu.
+//
+// It sets the BOUND on the accumulator in hand and touches nothing else,
+// which is the whole contract: notes and buffered bytes survive, because
+// they belong to the same object.
+func (f *framing) reboundLocked(max int) {
 	if max > 0 {
 		f.acc.max = max
 	}
-	return lockedAccumulator{f: f}
 }
 
 // IsRejection reports whether frame is a rejection OF OUR TRANSACTION: the

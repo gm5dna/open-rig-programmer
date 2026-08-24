@@ -4,6 +4,7 @@ package civ
 
 import (
 	"errors"
+	"math"
 	"testing"
 )
 
@@ -212,6 +213,38 @@ func TestValidate_GroupSpaceMustFitTheFormsBCDWidth(t *testing.T) {
 				cfg.Groups = 2
 			},
 			wantSub: "group index",
+		},
+		{
+			// THE SUM MUST NOT WRAP. base+count-1 computed in int
+			// overflows for MaxInt-scale values and comes back NEGATIVE,
+			// which sails past a "highest >= capacity" comparison — so the
+			// absurd profile is ACCEPTED by the very rule written to
+			// refuse it. Every downstream path refuses it anyway, so
+			// nothing reaches a radio; but a validator that admits what it
+			// exists to reject has said something false about the profile
+			// it just blessed, and the next reader believes it.
+			name: "a base that overflows the sum",
+			mutate: func(cfg *ProfileConfig) {
+				cfg.GroupBase = math.MaxInt
+				cfg.Groups = 2
+			},
+			wantSub: "GroupBase",
+		},
+		{
+			name: "a count that overflows the sum",
+			mutate: func(cfg *ProfileConfig) {
+				cfg.GroupBase = 1
+				cfg.Groups = math.MaxInt
+			},
+			wantSub: "group index",
+		},
+		{
+			name: "both at the ceiling",
+			mutate: func(cfg *ProfileConfig) {
+				cfg.GroupBase = math.MaxInt
+				cfg.Groups = math.MaxInt
+			},
+			wantSub: "GroupBase",
 		},
 	}
 	for _, tc := range cases {
