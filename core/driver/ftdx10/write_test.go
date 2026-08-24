@@ -599,6 +599,95 @@ func TestWriteChannel_RealHardwareProfileRefusesEveryRequestedField(t *testing.T
 	}
 }
 
+// tierFieldsInOrder is the Icom tier's ten spec.Fields in ChannelData's
+// declaration order — the order codeplug's tierAddedFieldFor uses and the
+// order requestedFields must append them in.
+//
+// Spelt out rather than derived from requestedFields, so that the two are
+// COMPARED rather than one being the other's echo. (This package's OWN
+// copy, as the FT-710's and FTdx101's namesakes are theirs: unexported test
+// helpers do not cross package boundaries, and these drivers import one
+// another nowhere by the rule in doc.go.)
+func tierFieldsInOrder() []spec.Field {
+	return []spec.Field{
+		spec.FieldTxFrequency,
+		spec.FieldDuplex,
+		spec.FieldOffset,
+		spec.FieldToneMode,
+		spec.FieldToneTx,
+		spec.FieldToneRx,
+		spec.FieldDTCSCode,
+		spec.FieldDTCSPolarity,
+		spec.FieldFilter,
+		spec.FieldDataMode,
+	}
+}
+
+// withEveryTierFieldKnown marks all ten tier fields Known on data. The
+// values are arbitrary and never reach a wire — this driver's capability
+// map has no entry for any of the ten, so the gate refuses them all — but
+// the STATE is what requestedFields keys on, so it must be Known.
+func withEveryTierFieldKnown(data codeplug.ChannelData) codeplug.ChannelData {
+	data.TxFreqHz = codeplug.FreqField{State: codeplug.Known, Value: 14_255_000}
+	data.Duplex = codeplug.StringField{State: codeplug.Known, Value: "DUP+"}
+	data.OffsetHz = codeplug.FreqField{State: codeplug.Known, Value: 600_000}
+	data.ToneMode = codeplug.StringField{State: codeplug.Known, Value: "TSQL"}
+	data.ToneTx = codeplug.ToneField{State: codeplug.Known, Value: 670}
+	data.ToneRx = codeplug.ToneField{State: codeplug.Known, Value: 670}
+	data.DTCSCode = codeplug.IntField{State: codeplug.Known, Value: 23}
+	data.DTCSPolarity = codeplug.StringField{State: codeplug.Known, Value: "NN"}
+	data.Filter = codeplug.StringField{State: codeplug.Known, Value: "FIL1"}
+	data.DataMode = codeplug.BoolField{State: codeplug.Known, Value: true}
+	return data
+}
+
+// TestWriteChannel_KnownTierFieldRefusedBeforeWire is the tier half of the
+// gate's stated contract: a value the caller explicitly marked Known must be
+// REFUSED rather than silently dropped, for the ten fields the Icom tier
+// added as much as for the tone and skip this driver has always refused.
+//
+// The channel is otherwise the ORDINARY FTdx10 channel this profile accepts,
+// so the refusal is attributable to the one Known tier value and to nothing
+// else. TxFrequency is this driver's chosen representative — the FT-710 pins
+// ToneMode and the FTdx101 DTCSCode, so the three tests between them
+// exercise three of the ten.
+//
+// The MECHANISM is a lookup MISS: this radio's capability map (caps.go's
+// bankFields) has no entry for spec.FieldTxFrequency on any bank, so
+// FieldSupport answers the ZERO spec.FieldSupport, which is neither CanWrite
+// nor spec.Inert. Nothing had to be added to caps.go for the refusal to
+// happen, and the first assertion below is what keeps that true.
+func TestWriteChannel_KnownTierFieldRefusedBeforeWire(t *testing.T) {
+	p, sess := openSession(t, Simulated, slotImage{})
+
+	bank, ok := sess.bankFor("010")
+	if !ok {
+		t.Fatalf("bankFor(%q) found no bank — the fixture is wrong, not the gate", "010")
+	}
+	if fs := sess.caps.FieldSupport(bank, spec.FieldTxFrequency); fs.CanWrite() || fs.Write == spec.Inert {
+		t.Fatalf("FieldSupport(%q, %s) = %+v, want the zero FieldSupport (no tier field is in this radio's capability map)", bank, spec.FieldTxFrequency, fs)
+	}
+
+	ch := writableChannel("010")
+	ch.Data.TxFreqHz = codeplug.FreqField{State: codeplug.Known, Value: 14_255_000}
+
+	before := len(p.Transcript())
+	wre := refusedFields(t, sess, ch)
+
+	if !slices.Contains(wre.Fields, spec.FieldTxFrequency) {
+		t.Errorf("WriteRefusedError.Fields = %v, want %s named — a refusal that does not name the field is not the contract", wre.Fields, spec.FieldTxFrequency)
+	}
+	if !strings.Contains(wre.Reason, "not write-Supported for this session") {
+		t.Errorf("WriteRefusedError.Reason = %q, want the capability gate's own sentence", wre.Reason)
+	}
+	if wre.Slot != "010" {
+		t.Errorf("WriteRefusedError.Slot = %q, want %q", wre.Slot, "010")
+	}
+	if got := p.Transcript(); len(got) != before {
+		t.Errorf("a refused WriteChannel sent %d frames (%q), want 0 — the refusal must precede ALL wire traffic", len(got)-before, got[before:])
+	}
+}
+
 // TestRequestedFields_MembershipAndOrder pins the gate's field set, which
 // requestedFields' doc comment claims mirrors core/driver/ft710's — and
 // through it codeplug.Diff's addedFields — EXACTLY. A comment is not a
@@ -676,6 +765,40 @@ func TestRequestedFields_MembershipAndOrder(t *testing.T) {
 			name: "the zero ChannelData requests only the six",
 			data: codeplug.ChannelData{},
 			want: base,
+		},
+		{
+			// THE TIER EXTENSION, one field at a time: a Known TxFrequency is
+			// REQUESTED, so the capability gate gets to see it. Before the fix
+			// wave this row came back as the bare six and the value was
+			// silently dropped.
+			name: "a Known TxFrequency is requested, after the pre-tier set",
+			data: codeplug.ChannelData{
+				TagDisplay: codeplug.BoolField{State: codeplug.Unavailable},
+				CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+				ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
+				TxFreqHz:   codeplug.FreqField{State: codeplug.Known, Value: 14_255_000},
+			},
+			want: append(append([]spec.Field{}, base...), spec.FieldTxFrequency),
+		},
+		{
+			// The tier ten never displace the pre-tier three: tag_display is
+			// still seventh, tone eighth, skip ninth, and the ten follow.
+			name: "all three pre-tier conditionals and all ten tier fields, in order",
+			data: withEveryTierFieldKnown(codeplug.ChannelData{
+				TagDisplay: known(true),
+				CTCSSTone:  codeplug.ToneField{State: codeplug.Known, Value: 670},
+				ScanSkip:   known(true),
+			}),
+			want: append(append(append([]spec.Field{}, base...),
+				spec.FieldTagDisplay, spec.FieldCTCSSTone, spec.FieldScanSkip),
+				tierFieldsInOrder()...),
+		},
+		{
+			// The ten alone, with every pre-tier conditional absent: the
+			// declaration order is visible with nothing in front of it.
+			name: "the ten tier fields alone keep ChannelData's declaration order",
+			data: withEveryTierFieldKnown(codeplug.ChannelData{}),
+			want: append(append([]spec.Field{}, base...), tierFieldsInOrder()...),
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

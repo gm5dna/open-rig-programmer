@@ -33,9 +33,17 @@ func (s *Session) bankFor(slot string) (spec.BankID, bool) {
 // Known: per codeplug's write rule, Unknown/Unavailable mean "preserve
 // whatever the radio has", i.e. nothing is requested for that field.
 //
-// This mirrors codeplug.Diff's addedFields EXACTLY — same membership, the
-// same three conditionals, the same order — so the driver's
-// defence-in-depth gate and the diff layer's gate judge the same set.
+// This mirrors the DIFF LAYER'S REQUESTED-SET DERIVATION — same membership,
+// the same conditionals, the same order — so the driver's defence-in-depth
+// gate and the diff layer's gate judge the same set. That derivation is two
+// pieces on the codeplug side and both are mirrored here: addedFields' six
+// unconditional plus three conditional fields, and then the TEN Icom-tier
+// conditionals codeplug carries in tierAddedFieldFor and appends in
+// touchedFields. The ten come LAST, in ChannelData's declaration order,
+// exactly as they do there, so no BlockReason a user has ever read is
+// reordered by their arrival — and so a caller who marks a tier field Known
+// meets the capability gate below rather than having the value silently
+// omitted from the frame.
 // TagDisplay keeps the PLACE it held while it was unconditional: after
 // Tag, before the tone/skip conditionals, i.e. seventh whenever it appears
 // at all (TestRequestedFields_MembershipAndOrder pins this, as
@@ -69,7 +77,45 @@ func requestedFields(data codeplug.ChannelData) []spec.Field {
 	if data.ScanSkip.State == codeplug.Known {
 		fields = append(fields, spec.FieldScanSkip)
 	}
+	for _, t := range tierRequestedFields {
+		if t.present(data) {
+			fields = append(fields, t.field)
+		}
+	}
 	return fields
+}
+
+// tierRequestedFields pairs each spec.Field the Icom tier added with a
+// predicate reporting whether this channel's data actually REQUESTS it —
+// i.e. carries a Known value for it. It is the mirror of codeplug's
+// tierAddedFieldFor (diff.go), down to the order: ChannelData's own
+// declaration order, appended AFTER the pre-tier set.
+//
+// Every one of these predicates answers false for a channel this driver
+// produced: an FT-710 read leaves all ten UNAVAILABLE, and a load of a
+// schema-1/2/3 file migrates to the same. So the ordinary write is
+// unchanged by their presence, and what they add is the one case the gate
+// promised to cover and did not — a caller who hands WriteChannel a
+// ChannelData with a Known tier value, which this codec cannot express and
+// must therefore REFUSE rather than drop.
+//
+// Mirrored, NOT imported: tierAddedFieldFor is unexported, and the mirror is
+// held by both sides pinning the same shape
+// (TestRequestedFields_MembershipAndOrder here, codeplug's own tests there).
+var tierRequestedFields = []struct {
+	field   spec.Field
+	present func(codeplug.ChannelData) bool
+}{
+	{spec.FieldTxFrequency, func(d codeplug.ChannelData) bool { return d.TxFreqHz.State == codeplug.Known }},
+	{spec.FieldDuplex, func(d codeplug.ChannelData) bool { return d.Duplex.State == codeplug.Known }},
+	{spec.FieldOffset, func(d codeplug.ChannelData) bool { return d.OffsetHz.State == codeplug.Known }},
+	{spec.FieldToneMode, func(d codeplug.ChannelData) bool { return d.ToneMode.State == codeplug.Known }},
+	{spec.FieldToneTx, func(d codeplug.ChannelData) bool { return d.ToneTx.State == codeplug.Known }},
+	{spec.FieldToneRx, func(d codeplug.ChannelData) bool { return d.ToneRx.State == codeplug.Known }},
+	{spec.FieldDTCSCode, func(d codeplug.ChannelData) bool { return d.DTCSCode.State == codeplug.Known }},
+	{spec.FieldDTCSPolarity, func(d codeplug.ChannelData) bool { return d.DTCSPolarity.State == codeplug.Known }},
+	{spec.FieldFilter, func(d codeplug.ChannelData) bool { return d.Filter.State == codeplug.Known }},
+	{spec.FieldDataMode, func(d codeplug.ChannelData) bool { return d.DataMode.State == codeplug.Known }},
 }
 
 // WriteChannel implements driver.Session: MW (channel data) then MT
@@ -88,7 +134,12 @@ func requestedFields(data codeplug.ChannelData) []spec.Field {
 //   - A Known CTCSS tone or scan skip is refused even on the Simulated
 //     profile: the CAT codec cannot express either, and silently
 //     dropping a value the caller explicitly marked Known would be a
-//     lie.
+//     lie. The same holds for any of the TEN Icom-tier fields
+//     (requestedFields' tierRequestedFields): none appears in this
+//     radio's capability map at all, so FieldSupport answers the zero
+//     FieldSupport and the gate below refuses. That is not an accident of
+//     the map — it is what makes the sentence above true for the tier as
+//     well as for the tone and skip.
 //   - A TagDisplay that is not Known is refused, in buildWriteCommands and
 //     before ANY other field mapping: MT's display flag is mandatory, so
 //     there is no way to send the channel without inventing a value for it

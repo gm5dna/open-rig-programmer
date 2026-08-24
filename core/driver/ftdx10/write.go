@@ -113,10 +113,15 @@ func (s *Session) bankFor(slot string) (spec.BankID, bool) {
 // Unknown and Unavailable both mean "preserve whatever the radio has", i.e.
 // nothing is requested for that field.
 //
-// It mirrors core/driver/ft710's requestedFields, and through it
-// codeplug.Diff's addedFields, EXACTLY: same membership, the same three
+// It mirrors core/driver/ft710's requestedFields, and through it the DIFF
+// LAYER'S REQUESTED-SET DERIVATION, EXACTLY: same membership, the same
 // conditionals, the same order — so this driver's defence-in-depth gate and
-// the diff layer's gate judge the same set for the same channel.
+// the diff layer's gate judge the same set for the same channel. That
+// derivation is two pieces on the codeplug side and both are mirrored here:
+// addedFields' six unconditional plus three conditional fields, and then the
+// TEN Icom-tier conditionals codeplug carries in tierAddedFieldFor and
+// appends in touchedFields (see tierRequestedFields below). The ten come
+// LAST, in ChannelData's declaration order, exactly as they do there.
 // TestRequestedFields_MembershipAndOrder pins it here as the FT-710's own
 // test does there. (Mirrored, NOT imported: core/driver/ftdx10 imports
 // core/driver/ft710 nowhere, by the rule in doc.go.)
@@ -164,7 +169,44 @@ func requestedFields(data codeplug.ChannelData) []spec.Field {
 	if data.ScanSkip.State == codeplug.Known {
 		fields = append(fields, spec.FieldScanSkip)
 	}
+	for _, t := range tierRequestedFields {
+		if t.present(data) {
+			fields = append(fields, t.field)
+		}
+	}
 	return fields
+}
+
+// tierRequestedFields pairs each spec.Field the Icom tier added with a
+// predicate reporting whether this channel's data actually REQUESTS it —
+// i.e. carries a Known value for it. It is the mirror of codeplug's
+// tierAddedFieldFor (diff.go), down to the order: ChannelData's own
+// declaration order, appended AFTER the pre-tier set, so nothing a
+// WriteRefusedError has ever named is reordered by their arrival.
+//
+// Every one of these predicates answers false for a channel this driver
+// produced: an FTdx10 read leaves all ten UNAVAILABLE (read.go), and a load
+// of a schema-1/2/3 file migrates to the same. So the ordinary write is
+// unchanged by their presence, and what they add is the one case the gate
+// promised to cover and did not — a caller who hands WriteChannel a
+// ChannelData with a Known tier value, which the combined MT Set cannot
+// express and which must therefore be REFUSED rather than dropped.
+//
+// Mirrored, NOT imported, for the reason requestedFields gives.
+var tierRequestedFields = []struct {
+	field   spec.Field
+	present func(codeplug.ChannelData) bool
+}{
+	{spec.FieldTxFrequency, func(d codeplug.ChannelData) bool { return d.TxFreqHz.State == codeplug.Known }},
+	{spec.FieldDuplex, func(d codeplug.ChannelData) bool { return d.Duplex.State == codeplug.Known }},
+	{spec.FieldOffset, func(d codeplug.ChannelData) bool { return d.OffsetHz.State == codeplug.Known }},
+	{spec.FieldToneMode, func(d codeplug.ChannelData) bool { return d.ToneMode.State == codeplug.Known }},
+	{spec.FieldToneTx, func(d codeplug.ChannelData) bool { return d.ToneTx.State == codeplug.Known }},
+	{spec.FieldToneRx, func(d codeplug.ChannelData) bool { return d.ToneRx.State == codeplug.Known }},
+	{spec.FieldDTCSCode, func(d codeplug.ChannelData) bool { return d.DTCSCode.State == codeplug.Known }},
+	{spec.FieldDTCSPolarity, func(d codeplug.ChannelData) bool { return d.DTCSPolarity.State == codeplug.Known }},
+	{spec.FieldFilter, func(d codeplug.ChannelData) bool { return d.Filter.State == codeplug.Known }},
+	{spec.FieldDataMode, func(d codeplug.ChannelData) bool { return d.DataMode.State == codeplug.Known }},
 }
 
 // WriteChannel implements driver.Session: ONE combined MT Set,
@@ -200,7 +242,10 @@ func requestedFields(data codeplug.ChannelData) []spec.Field {
 //     (the ASSUMED register's TONE AND SCAN-SKIP UNREACHABILITY entry for
 //     what that does and does not establish),
 //     so silently dropping a value the caller explicitly marked Known would
-//     be a lie.
+//     be a lie. The same holds for any of the TEN Icom-tier fields
+//     (requestedFields' tierRequestedFields): none appears in this radio's
+//     capability map at all, so FieldSupport answers the zero FieldSupport
+//     and the gate refuses.
 //
 //   - A KNOWN TagDisplay is refused BY THE CAPABILITY GATE — see
 //     requestedFields, and buildWriteCommand's inversion comment. There is
