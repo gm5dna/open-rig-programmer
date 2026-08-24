@@ -388,4 +388,22 @@
 // a slot in no effective bank that arrives by hand. It is stated here as
 // a known consequence of the shared config's shape, NOT as a claim that
 // the radio has ninety-nine call channels.
+//
+// # The inventory walk's heuristic, stated where a reviewer will find it
+//
+// A COMPLETE WALK OF THIS ADDRESS SPACE IS 10,000 READS, minutes of
+// Open at CI-V rates, so core/driver/ic905's DEFAULT walk is bounded: it
+// reads group 0's hundred channels, then descends into a group in 1..99
+// ONLY WHEN THAT GROUP'S CHANNEL 00 ANSWERS WITH A RECORD, then the
+// twelve CALL slots. The heuristic's assumption is that an occupied
+// group is findable through its channel 00, and it can be wrong: an
+// occupied group whose channel 00 is empty is missed by default. Three
+// things keep that honest rather than dangerous — the session's
+// InventoryComplete is false whenever the walk was bounded or stopped
+// early, so a partial inventory is never read as an empty radio; the
+// driver's refusal ladder refuses a write to a slot the walk never saw;
+// and WithFullInventoryWalk() covers the whole 100 x 100 space for a
+// user who knows their channels are scattered. It is written down here,
+// beside the address space it walks, so that a Wave-4 reviewer reads the
+// assumption rather than inferring it from a loop.
 package ic905
