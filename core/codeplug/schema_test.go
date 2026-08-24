@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -330,4 +331,69 @@ func TestLoadV3_FrozenShapeRejectsTierKeys(t *testing.T) {
 	if !errors.As(err, &ufe) || ufe.Field != "duplex" {
 		t.Fatalf("Load() error = %v, want *UnknownFieldError naming \"duplex\"", err)
 	}
+}
+
+// v3FileWithFreqHz builds a minimal, well-formed schema-3 file whose one
+// channel carries freqHz, and returns its path.
+//
+// Built INLINE rather than by editing one of the frozen canonical goldens
+// in testdata: those files are evidence of what the pre-tier writer
+// emitted (see canonicalV3Goldens), and a test that edited one would
+// destroy the evidence to make its point. The shape is modelled on them —
+// every key schema 3 required, and nothing else.
+//
+// freqHz is a string, not a uint64, because the value under test is one
+// encoding/json can decode and the LOADER must refuse: a Go literal would
+// only prove that a number too big for uint64 is rejected, which was never
+// in doubt.
+func v3FileWithFreqHz(t *testing.T, freqHz string) string {
+	t.Helper()
+	body := `{"schema":3,"generator":"x","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z"},` +
+		`"channels":[{"slot":"001","data":{"freq_hz":` + freqHz + `,"mode":"USB","ctcss":"OFF",` +
+		`"ctcss_tone":{"state":"unknown"},"shift":"SIMPLEX","tag_display":{"state":"known"},` +
+		`"scan_skip":{"state":"unknown"}}}]}`
+	path := filepath.Join(t.TempDir(), "v3.json")
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("writing fixture: %v", err)
+	}
+	return path
+}
+
+// TestLoadV3_FreqHzOutsideSchema3RangeIsRefused pins the bound
+// channelDataV3's uint64 freq_hz does NOT enforce.
+//
+// The uint64 is a deliberate decision (see channelDataV3's doc comment) and
+// stays: it exists so that a bypass of the schema rule can never TRUNCATE
+// on encode. But it decodes WIDER than schema 3 could hold, and until this
+// check a hand-edited file carrying a freq_hz above uint32's range loaded
+// happily — an out-of-schema value laundered through a loader named for the
+// schema. Nothing downstream misbehaved (the live model is uint64
+// throughout); what was wrong is that the file was accepted as a schema-3
+// file while conforming to no schema at all.
+//
+// Both sides of the boundary are asserted, because a refusal alone cannot
+// tell a correct bound from one that is off by one — or from a check that
+// refuses every v3 file.
+func TestLoadV3_FreqHzOutsideSchema3RangeIsRefused(t *testing.T) {
+	t.Run("above the range is refused", func(t *testing.T) {
+		_, err := Load(v3FileWithFreqHz(t, "4294967296"))
+		if err == nil {
+			t.Fatal("Load() error = nil, want a refusal: freq_hz 4294967296 is outside schema 3's uint32 range")
+		}
+		for _, want := range []string{"codeplug: load ", "001", "4294967296", "4294967295"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("Load() error = %q, want it to contain %q (the message must name the file, the slot and schema 3's range)", err, want)
+			}
+		}
+	})
+
+	t.Run("the boundary value loads", func(t *testing.T) {
+		cp, err := Load(v3FileWithFreqHz(t, "4294967295"))
+		if err != nil {
+			t.Fatalf("Load() = %v, want success — 4294967295 is IN schema 3's range", err)
+		}
+		if got := cp.Channels[0].Data.FreqHz; got != math.MaxUint32 {
+			t.Errorf("FreqHz = %d, want %d", got, uint64(math.MaxUint32))
+		}
+	})
 }

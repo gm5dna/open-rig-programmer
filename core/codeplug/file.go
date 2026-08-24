@@ -495,9 +495,17 @@ func loadV4(b []byte, path string) (*Codeplug, error) {
 // decodes every value schema 3 could hold while encoding only values
 // schemaFor has already proved fit. A uint32 here would instead
 // TRUNCATE silently on encode if that rule were ever bypassed — exactly
-// the class of failure this package exists to refuse. The decode side is
-// protected by encoding/json itself: a freq_hz beyond the field's range
-// is a decode error, not a wrap.
+// the class of failure this package exists to refuse.
+//
+// The consequence, stated plainly because it is easy to mistake for an
+// oversight: this field decodes WIDER than schema 3 could hold. A
+// hand-edited file carrying a freq_hz above math.MaxUint32 is a valid
+// uint64 and encoding/json accepts it without complaint. What keeps such
+// a value out is loadV3's own EXPLICIT range check, not the type — see
+// loadV3, and TestLoadV3_FreqHzOutsideSchema3RangeIsRefused, which pins
+// both sides of the boundary. The encode side needs no such check: it is
+// protected by schemaFor, which forces schema 4 for any frequency past
+// v3's ceiling before this type is ever reached.
 type channelDataV3 struct {
 	FreqHz     uint64    `json:"freq_hz"`
 	Mode       string    `json:"mode"`
@@ -529,8 +537,17 @@ type codeplugV3 struct {
 
 // loadV3 strictly decodes a schema-3 file through the frozen v3 shape,
 // checks for trailing data and duplicate keys (exempting only
-// menus.legacy), validates the menu snapshot, and migrates the result to
-// the current schema.
+// menus.legacy), RANGE-CHECKS each channel's freq_hz against schema 3's
+// own uint32 ceiling, validates the menu snapshot, and migrates the
+// result to the current schema.
+//
+// The range check is this function's, not the decoder's, and it has to
+// be: channelDataV3.FreqHz is a uint64 for encode-side reasons of its
+// own (see its doc comment), so a hand-edited file carrying a frequency
+// no schema-3 file could ever have held decodes perfectly well. Without
+// this check such a file loaded successfully — an out-of-schema value
+// laundered through a loader named for the schema, and a claim the
+// version header does not support.
 func loadV3(b []byte, path string) (*Codeplug, error) {
 	var v3 codeplugV3
 	dec := json.NewDecoder(bytes.NewReader(b))
@@ -543,6 +560,12 @@ func loadV3(b []byte, path string) (*Codeplug, error) {
 	}
 	if err := checkDuplicateKeys(b, menusLegacyExempt); err != nil {
 		return nil, fmt.Errorf("codeplug: load %s: %w", path, err)
+	}
+	for _, c := range v3.Channels {
+		if c.Data != nil && c.Data.FreqHz > math.MaxUint32 {
+			return nil, fmt.Errorf("codeplug: load %s: slot %q: freq_hz %d is outside schema 3's range (0 to %d)",
+				path, c.Slot, c.Data.FreqHz, uint64(math.MaxUint32))
+		}
 	}
 	if err := v3.Menus.Validate(); err != nil {
 		return nil, fmt.Errorf("codeplug: load %s: %w", path, err)
