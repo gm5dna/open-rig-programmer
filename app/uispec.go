@@ -416,6 +416,17 @@ func (a *App) GetUISpec() (UISpecView, error) {
 		banks = append(banks, synthesiseDiscoveredBanks(model, a.working)...)
 	}
 
+	// THE TONE PICKER IS LIST-DRIVEN, AND ON A RANGE-DECLARING RADIO IT
+	// IS EMPTY. That is a RECORDED COST of the Icom tier's E3, not an
+	// oversight: spec.Capabilities gained an optional numeric
+	// CTCSSToneRange for models whose tone field is a number rather than
+	// an index into a chart, and this picker enumerates a chart. A
+	// range-declaring model's grid still SHOWS and ROUND-TRIPS whatever
+	// tones its channels carry — validation and CHIRP import both ask
+	// spec.Capabilities.AdmitsTone, which knows both shapes — but this
+	// list has nothing to offer, so the user cannot PICK one here. A
+	// numeric tone editor is the Wave-4 item that closes it; enumerating
+	// a range into a pick-list of hundreds of entries is not it.
 	tones := make([]ToneView, 0, len(caps.CTCSSTones))
 	for _, t := range caps.CTCSSTones {
 		tones = append(tones, ToneView{Decihertz: int(t), Display: t.String()})

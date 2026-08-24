@@ -64,6 +64,14 @@ func ConsentUnverifiedWrites(caps Capabilities) Capabilities {
 	// nil slice preserves a nil input as nil.
 	out.Modes = append([]string(nil), caps.Modes...)
 	out.CTCSSTones = append([]Tone(nil), caps.CTCSSTones...)
+	// The tone RANGE is a pointer, so `out := caps` aliased it. ToneRange
+	// has no reference-typed field, so one fresh copy of the struct is a
+	// complete deep copy — and it is what keeps the promise this function
+	// makes about sharing no storage with caps at all.
+	if caps.CTCSSToneRange != nil {
+		r := *caps.CTCSSToneRange
+		out.CTCSSToneRange = &r
+	}
 	out.Bauds = append([]int(nil), caps.Bauds...)
 	out.RequiredSlots = append([]string(nil), caps.RequiredSlots...)
 	out.ShiftOptions = append([]ShiftOption(nil), caps.ShiftOptions...)

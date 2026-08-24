@@ -193,6 +193,13 @@ func validToneSemantics(s ToneSemantics) bool {
 //     StandardCTCSSTones's own shape) — this is what lets a caller
 //     safely use CTCSSTones' slice index as the CAT tone number, the way
 //     StandardCTCSSTones' index doubles as one.
+//   - CTCSSToneRange, if declared, must not accompany a non-empty
+//     CTCSSTones, and must be internally coherent: positive bounds, a
+//     positive step, no inversion, and a maximum a whole number of steps
+//     reaches. See toneRangeProblems. A radio declaring NEITHER is not a
+//     problem here — Capabilities.AdmitsTone fails closed for it, which
+//     is the behaviour this project wants and the behaviour an empty
+//     CTCSSTones has always had.
 //   - Every entry in RequiredSlots must appear in at least one Bank's Slots
 //     (subset invariant): a RequiredSlot missing from all banks would
 //     silently evade completeness checking.
@@ -352,6 +359,8 @@ func (c Capabilities) Validate() error {
 		}
 	}
 
+	problems = append(problems, c.toneRangeProblems()...)
+
 	for i := 1; i < len(c.DTCSCodes); i++ {
 		if c.DTCSCodes[i-1] >= c.DTCSCodes[i] {
 			problems = append(problems, fmt.Sprintf("DTCSCodes is not strictly ascending at index %d (%d >= %d)", i, c.DTCSCodes[i-1], c.DTCSCodes[i]))
@@ -492,4 +501,55 @@ func (c Capabilities) Validate() error {
 		return nil
 	}
 	return fmt.Errorf("spec: Capabilities.Validate: %s", strings.Join(problems, "; "))
+}
+
+// toneRangeProblems checks the optional numeric tone domain
+// (Capabilities.CTCSSToneRange). It contributes NOTHING when the field is
+// nil, which is every radio registered before the Icom tier.
+//
+// BOTH-AT-ONCE IS THE RULE THAT MATTERS. A radio declaring a list AND a
+// range has stated its tone domain twice, and the two statements can
+// disagree; Capabilities.AdmitsTone would then consult one of them and
+// silently pick a winner, which is exactly the "answer depends on which
+// field the reader happened to look at" failure the vocabulary uniqueness
+// rules elsewhere in this function exist to prevent.
+//
+// THE OTHER THREE ARE COHERENCE. An inverted range admits nothing while
+// looking like a declaration; a non-positive bound is not a frequency; a
+// non-positive step describes no spacing and would divide by zero in
+// ToneRange.admits, which refuses rather than panics precisely because a
+// hand-built Capabilities can reach it without passing through here.
+//
+// THE MAXIMUM MUST BE REACHABLE, and that one is a judgement rather than
+// an arithmetic necessity. A range of 67.0 to 68.5 Hz in 1.0 Hz steps
+// does not admit 68.5, so the author has written down a bound their radio
+// does not have — harmless to the predicate, which simply never returns
+// true for it, and a sign the transcription is wrong. It is refused so
+// the mistake is found at construction rather than as a tone the UI
+// offers and the radio rejects.
+func (c Capabilities) toneRangeProblems() []string {
+	r := c.CTCSSToneRange
+	if r == nil {
+		return nil
+	}
+	var problems []string
+	if len(c.CTCSSTones) > 0 {
+		problems = append(problems, fmt.Sprintf("both CTCSSTones (%d entries) and CTCSSToneRange are declared; a radio's tone domain is a list OR a range, never both", len(c.CTCSSTones)))
+	}
+	if r.MinDeciHz <= 0 {
+		problems = append(problems, fmt.Sprintf("CTCSSToneRange.MinDeciHz %d must be greater than zero", int(r.MinDeciHz)))
+	}
+	if r.MaxDeciHz <= 0 {
+		problems = append(problems, fmt.Sprintf("CTCSSToneRange.MaxDeciHz %d must be greater than zero", int(r.MaxDeciHz)))
+	}
+	if r.StepDeciHz <= 0 {
+		problems = append(problems, fmt.Sprintf("CTCSSToneRange.StepDeciHz %d must be greater than zero", int(r.StepDeciHz)))
+	}
+	if r.MinDeciHz > r.MaxDeciHz {
+		problems = append(problems, fmt.Sprintf("CTCSSToneRange.MinDeciHz %v is greater than MaxDeciHz %v", r.MinDeciHz, r.MaxDeciHz))
+	}
+	if r.StepDeciHz > 0 && r.MinDeciHz <= r.MaxDeciHz && (r.MaxDeciHz-r.MinDeciHz)%r.StepDeciHz != 0 {
+		problems = append(problems, fmt.Sprintf("CTCSSToneRange.MaxDeciHz %v is not a whole number of StepDeciHz (%v) above MinDeciHz (%v), so the declared maximum is not itself an admissible tone", r.MaxDeciHz, r.StepDeciHz, r.MinDeciHz))
+	}
+	return problems
 }

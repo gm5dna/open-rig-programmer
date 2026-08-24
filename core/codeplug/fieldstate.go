@@ -56,24 +56,33 @@ type ToneField struct {
 
 // Valid reports whether f is internally consistent against caps: State
 // must be one of the three FieldState constants; Value must be the zero
-// Tone unless State == Known; and a Known Value must appear in
-// caps.CTCSSTones — THIS radio's own CTCSS chart, and the only tones its
-// CAT protocol can express, so a Known tone outside that chart can never
-// have come from (or be sendable to) it. caps.CTCSSTones is authoritative
-// here, not spec.StandardCTCSSTones: two radios in this project's family
-// can have different charts (see spec.Capabilities.CTCSSTones), and a
-// codeplug is only ever sendable to the one radio caps describes. An
-// empty caps.CTCSSTones is deliberately NOT "anything goes" — it fails
-// closed, rejecting every Known tone, consistent with this project's
-// refuse-never-corrupt posture: "no chart known" must never be treated as
-// "no chart needed".
+// Tone unless State == Known; and a Known Value must be one THIS radio can
+// express, which is spec.Capabilities.AdmitsTone's question.
+//
+// caps IS AUTHORITATIVE, not spec.StandardCTCSSTones: radios in this
+// project's families have different tone domains, and a codeplug is only
+// ever sendable to the one radio caps describes.
+//
+// THE PREDICATE IS SHARED, and since the Icom tier (E3) that is the point
+// of it. This method used to carry its own list-only loop over
+// caps.CTCSSTones, and core/csvio's CHIRP import carried an identical
+// second copy — so a radio whose tone domain is a numeric RANGE rather
+// than a chart (every CI-V model in the Icom tier) would have had every
+// one of its perfectly expressible tones refused by two independently
+// written checks. Both now ask caps.AdmitsTone, which knows about both
+// shapes.
+//
+// FAIL-CLOSED IS UNCHANGED. A radio declaring NEITHER a list nor a range
+// admits nothing, exactly as an empty caps.CTCSSTones always has:
+// "no chart known" must never be treated as "no chart needed", consistent
+// with this project's refuse-never-corrupt posture.
 func (f ToneField) Valid(caps spec.Capabilities) error {
 	switch f.State {
 	case Known:
-		if toneInChart(f.Value, caps.CTCSSTones) {
+		if caps.AdmitsTone(f.Value) {
 			return nil
 		}
-		return fmt.Errorf("codeplug: ToneField: Known value %v is not in this radio's CTCSS chart", f.Value)
+		return fmt.Errorf("codeplug: ToneField: Known value %v is not a tone this radio can express", f.Value)
 	case Unknown, Unavailable:
 		if f.Value != 0 {
 			return fmt.Errorf("codeplug: ToneField: State %q must have zero Value, got %v", f.State, f.Value)
@@ -82,18 +91,6 @@ func (f ToneField) Valid(caps spec.Capabilities) error {
 	default:
 		return fmt.Errorf("codeplug: ToneField: invalid State %q", f.State)
 	}
-}
-
-// toneInChart reports whether t appears in chart (a radio's
-// caps.CTCSSTones). An empty chart matches nothing — see Valid's doc
-// comment on why that is a deliberate fail-closed choice, not a bug.
-func toneInChart(t spec.Tone, chart []spec.Tone) bool {
-	for _, x := range chart {
-		if x == t {
-			return true
-		}
-	}
-	return false
 }
 
 // BoolField holds a boolean value together with how confidently it is

@@ -227,18 +227,26 @@ func parseCHIRPFrequency(s string) (uint64, error) {
 // e.g. "88.5") EXACTLY (see parseExactToneDeciHz — no floating point, and
 // no more than one decimal place of precision; "88.54" is rejected
 // outright rather than rounded) and reports whether the result appears in
-// this radio's own CTCSS chart (caps.CTCSSTones). A cell that fails to
-// parse, carries more precision than one decimal place, or parses but
-// matches no tone in caps' chart, returns (0, false): all three are
+// this radio can express — spec.Capabilities.AdmitsTone, the ONE shared
+// predicate core/codeplug's ToneField.Valid also asks (E3). A cell that
+// fails to parse, carries more precision than one decimal place, or parses
+// but names a tone caps does not admit, returns (0, false): all three are
 // equally unusable and the caller reports a single Blocking LossEntry
 // either way.
+//
+// THE PREDICATE IS SHARED BECAUSE IT WAS DUPLICATED. This function used to
+// call a local capsHasTone, a list-only loop identical to the one
+// core/codeplug carried, so a radio whose tone domain is a numeric RANGE
+// rather than a chart — every CI-V model in the Icom tier — would have had
+// every tone in a CHIRP file refused here as unusable while core/codeplug
+// refused the same tones for the same reason a package away.
 func parseCHIRPTone(s string, caps spec.Capabilities) (spec.Tone, bool) {
 	deciHz, err := parseExactToneDeciHz(strings.TrimSpace(s))
 	if err != nil {
 		return 0, false
 	}
 	t := spec.Tone(deciHz)
-	if !capsHasTone(caps, t) {
+	if !caps.AdmitsTone(t) {
 		return 0, false
 	}
 	return t, true
@@ -324,16 +332,6 @@ func toneStateFor(caps spec.Capabilities, semantics spec.ToneSemantics) (string,
 		}
 	}
 	return "", false
-}
-
-// capsHasTone reports whether t is in this radio's CTCSS chart.
-func capsHasTone(caps spec.Capabilities, t spec.Tone) bool {
-	for _, x := range caps.CTCSSTones {
-		if x == t {
-			return true
-		}
-	}
-	return false
 }
 
 // containsMode reports whether caps lists the given display-name mode.

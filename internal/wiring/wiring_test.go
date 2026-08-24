@@ -1910,3 +1910,47 @@ func TestOpenRealSessionFor_EveryYaesuModelOpensAtEightNTwo(t *testing.T) {
 		})
 	}
 }
+
+// TestEveryYaesuModelDeclaresAToneListAndNoRange is E3's Yaesu pin, taken
+// at the composition root because it is the one place that can see all
+// four registered models at once.
+//
+// The tier added an OPTIONAL numeric tone domain (spec.Capabilities.
+// CTCSSToneRange) for CI-V models whose tone field is a number rather than
+// an index into a chart. No Yaesu model declares one, and every one of
+// them must still admit exactly the fifty tones its own CTCSSTones lists
+// and nothing else — which is what makes the shared predicate's arrival a
+// no-change event on this side of the tier.
+func TestEveryYaesuModelDeclaresAToneListAndNoRange(t *testing.T) {
+	models := SupportedModels()
+	if len(models) != 4 {
+		t.Fatalf("SupportedModels() = %v (%d models), want the four registered Yaesu models — update this pin deliberately", models, len(models))
+	}
+	for _, model := range models {
+		t.Run(model, func(t *testing.T) {
+			caps, err := StaticCapabilities(model)
+			if err != nil {
+				t.Fatalf("StaticCapabilities(%q): %v", model, err)
+			}
+			if caps.CTCSSToneRange != nil {
+				t.Fatalf("%s declares a CTCSSToneRange (%+v) — the Yaesu models name their tones by chart index, and a range would be a claim about hardware nobody has made", model, *caps.CTCSSToneRange)
+			}
+			if len(caps.CTCSSTones) == 0 {
+				t.Fatalf("%s declares no CTCSSTones at all", model)
+			}
+			// AdmitsTone must answer exactly what the list says, for every
+			// tone in the standard chart and for a value outside it.
+			for _, tone := range caps.CTCSSTones {
+				if !caps.AdmitsTone(tone) {
+					t.Errorf("AdmitsTone(%v) = false for a tone %s's own chart lists", tone, model)
+				}
+			}
+			if caps.AdmitsTone(spec.Tone(1)) {
+				t.Errorf("AdmitsTone(0.1 Hz) = true for %s — the list is the whole domain, and a range predicate leaking in would admit the gaps between entries", model)
+			}
+			if caps.AdmitsTone(spec.Tone(700)) {
+				t.Errorf("AdmitsTone(70.0 Hz) = true for %s — 70.0 is between two chart entries and is not a tone this radio can express", model)
+			}
+		})
+	}
+}
