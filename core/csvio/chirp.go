@@ -263,28 +263,27 @@ func reaches(caps spec.Capabilities, bank spec.BankID, field spec.Field) bool {
 }
 
 // duplexFor returns the wire-form duplex value caps uses for direction,
-// and true, or ("", false) when this radio expresses no such option. The
-// FieldDuplex analogue of shiftFor, and unambiguous for the same reason:
-// spec.Capabilities.Validate rejects two options sharing a direction.
+// and true, or ("", false) when this radio expresses no such option.
+//
+// IT ASKS THE CANONICAL ENTRY (E5), and no longer takes the first slice
+// match. A model may genuinely express one direction with two wire codes;
+// spec.Capabilities.Validate used to refuse that outright, which refused
+// the radio rather than the mistake, and this function's answer therefore
+// used to depend on the order a driver author happened to write the table
+// in — a difference no test in this package could see and no reader would
+// suspect. spec.Capabilities.CanonicalDuplexOption resolves it by
+// declaration, and returns not-found rather than guessing between two
+// unmarked entries.
 func duplexFor(caps spec.Capabilities, d spec.DuplexDirection) (string, bool) {
-	for _, o := range caps.DuplexOptions {
-		if o.Direction == d {
-			return o.Value, true
-		}
-	}
-	return "", false
+	return caps.CanonicalDuplexOption(d)
 }
 
 // toneModeFor returns the wire-form tone-mode value caps uses for the
 // given semantics, and true, or ("", false) when this radio expresses no
-// such mode. The FieldToneMode analogue of toneStateFor.
+// such mode. The FieldToneMode analogue of toneStateFor, resolved through
+// the CANONICAL entry for duplexFor's reason and on identical terms.
 func toneModeFor(caps spec.Capabilities, semantics spec.ToneModeSemantics) (string, bool) {
-	for _, m := range caps.ToneModes {
-		if m.Semantics == semantics {
-			return m.Value, true
-		}
-	}
-	return "", false
+	return caps.CanonicalToneMode(semantics)
 }
 
 // capsHasDTCSCode reports whether code is in this radio's DTCS table.

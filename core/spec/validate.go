@@ -229,13 +229,25 @@ func validToneSemantics(s ToneSemantics) bool {
 //     Bank.sparseProblems).
 //   - The two vocabulary PAIRS — ShiftOptions/DuplexOptions and
 //     CTCSSStates/ToneModes — must each have at least one non-empty
-//     half. The non-empty rule moved from the Yaesu half alone to the
-//     pair, because the two vocabularies never coexist on one model;
-//     the problem string for "neither" is unchanged.
+//     half WHENEVER ANY BANK REACHES THE CORRESPONDING FIELD. The
+//     non-empty rule moved from the Yaesu half alone to the pair,
+//     because the two vocabularies never coexist on one model; the
+//     problem string for "neither" is unchanged. The bank condition is
+//     E5b: a model whose bank legitimately carries no shift or duplex
+//     field at all — an HF-only Icom memory bank — used to be refused by
+//     a rule written when every registered radio had one. Fail-closed is
+//     preserved through the FIELD's own support grades: a bank that
+//     reaches the field must still name the values it can hold, so every
+//     Yaesu model (all four declare FieldShift and FieldCTCSSState) is
+//     judged exactly as before.
 //   - DuplexOptions and ToneModes get the blank/duplicate rules every
-//     vocabulary gets, must carry declared (never zero-value) semantics,
-//     and may express each semantic at most once — for the reason
-//     ShiftOptions' own uniqueness rule gives.
+//     vocabulary gets and must carry declared (never zero-value)
+//     semantics. A semantic value expressed by MORE THAN ONE entry must
+//     have EXACTLY ONE of them marked Canonical (E5) — see
+//     canonicalProblems. This replaces the at-most-one rule those two
+//     lists used to share with ShiftOptions: multiplicity is real, and
+//     what the reverse mapping needs is a single ANSWER, not a single
+//     entry.
 //   - DTCSPolarities and Filters must contain no blank or duplicate
 //     value.
 //   - DTCSCodes, if non-empty, must be strictly ascending.
@@ -394,7 +406,7 @@ func (c Capabilities) Validate() error {
 	// unconditional "ShiftOptions must not be empty" it replaces —
 	// same problem string, same position in the list, since an empty
 	// list contributes no blank/duplicate problems to reorder.
-	if len(c.ShiftOptions) == 0 && len(c.DuplexOptions) == 0 {
+	if len(c.ShiftOptions) == 0 && len(c.DuplexOptions) == 0 && c.anyBankReaches(FieldShift, FieldDuplex) {
 		problems = append(problems, "ShiftOptions must not be empty")
 	}
 	problems = append(problems, validateVocabEntries("ShiftOptions", shiftOptionValues(c.ShiftOptions))...)
@@ -429,7 +441,7 @@ func (c Capabilities) Validate() error {
 	for i, ts := range c.CTCSSStates {
 		ctcssValues[i] = ts.Value
 	}
-	if len(c.CTCSSStates) == 0 && len(c.ToneModes) == 0 {
+	if len(c.CTCSSStates) == 0 && len(c.ToneModes) == 0 && c.anyBankReaches(FieldCTCSSState, FieldToneMode) {
 		problems = append(problems, "CTCSSStates must not be empty")
 	}
 	problems = append(problems, validateVocabEntries("CTCSSStates", ctcssValues)...)
@@ -466,18 +478,15 @@ func (c Capabilities) Validate() error {
 			problems = append(problems, fmt.Sprintf("DuplexOptions %q has invalid Direction %d", o.Value, o.Direction))
 		}
 	}
-	// One option per direction, for the reason ShiftOptions' own
-	// uniqueness rule gives: core/csvio maps CHIRP's "+"/"-" by asking
-	// for the option with a given Direction, and that question must have
-	// exactly one answer.
-	seenDuplex := make(map[DuplexDirection]string, len(c.DuplexOptions))
-	for _, o := range c.DuplexOptions {
-		if prev, dup := seenDuplex[o.Direction]; dup {
-			problems = append(problems, fmt.Sprintf("DuplexOptions %q and %q express the same direction", prev, o.Value))
-			continue
-		}
-		seenDuplex[o.Direction] = o.Value
-	}
+	// THE CANONICAL RULE (E5) replaces "one option per direction" here.
+	// core/csvio still asks for THE option with a given Direction and
+	// still needs exactly one answer — but a model may genuinely express
+	// one direction with two wire codes, and refusing that shape refused
+	// the radio rather than the mistake. So multiplicity is admitted and
+	// the ambiguity is resolved by declaration: where a direction is
+	// expressed more than once, exactly one of those options carries
+	// Canonical.
+	problems = append(problems, canonicalProblems("DuplexOptions", "direction", duplexCanonicalGroups(c.DuplexOptions))...)
 
 	problems = append(problems, validateVocabEntries("ToneModes", toneModeValues(c.ToneModes))...)
 	for _, m := range c.ToneModes {
@@ -485,14 +494,8 @@ func (c Capabilities) Validate() error {
 			problems = append(problems, fmt.Sprintf("ToneModes %q has invalid Semantics %d", m.Value, m.Semantics))
 		}
 	}
-	seenToneMode := make(map[ToneModeSemantics]string, len(c.ToneModes))
-	for _, m := range c.ToneModes {
-		if prev, dup := seenToneMode[m.Semantics]; dup {
-			problems = append(problems, fmt.Sprintf("ToneModes %q and %q express the same semantics", prev, m.Value))
-			continue
-		}
-		seenToneMode[m.Semantics] = m.Value
-	}
+	// The canonical rule again, on the other Icom vocabulary.
+	problems = append(problems, canonicalProblems("ToneModes", "semantics", toneModeCanonicalGroups(c.ToneModes))...)
 
 	problems = append(problems, validateVocabEntries("DTCSPolarities", c.DTCSPolarities)...)
 	problems = append(problems, validateVocabEntries("Filters", c.Filters)...)
@@ -552,4 +555,167 @@ func (c Capabilities) toneRangeProblems() []string {
 		problems = append(problems, fmt.Sprintf("CTCSSToneRange.MaxDeciHz %v is not a whole number of StepDeciHz (%v) above MinDeciHz (%v), so the declared maximum is not itself an admissible tone", r.MaxDeciHz, r.StepDeciHz, r.MinDeciHz))
 	}
 	return problems
+}
+
+// anyBankReaches reports whether ANY bank in c can reach at least one of
+// the given fields — that is, declares it with a support grade other than
+// Unsupported in both directions.
+//
+// IT IS E5b's WHOLE MECHANISM. "This model has no repeater shift" and
+// "this model's author forgot to declare its shift vocabulary" used to be
+// the same Capabilities value, and Validate refused both to be safe. They
+// are distinguishable after all, and the distinguishing fact is the one a
+// driver already states: whether a bank reaches the FIELD. A bank that
+// reaches FieldShift or FieldDuplex must name the values that field can
+// hold; a bank that reaches neither has nothing to name, and demanding a
+// vocabulary for it would force an author to invent one.
+//
+// FAIL-CLOSED IS PRESERVED BY THE GRADES THEMSELVES. A field left out of a
+// bank's map, or present as the zero FieldSupport, answers Unreachable —
+// and an Unreachable field is never read into a codeplug and never written
+// to a radio (FieldSupport.CanWrite is false either way), so there is no
+// path by which a missing vocabulary could be consulted.
+func (c Capabilities) anyBankReaches(fields ...Field) bool {
+	for _, b := range c.Banks {
+		for _, f := range fields {
+			if !b.Fields[f].Unreachable() {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// canonicalGroup is one semantic value's entries, for the canonical rule:
+// the wire codes expressing it, and how many of them are marked canonical.
+type canonicalGroup struct {
+	// semantic renders the shared semantic value for a diagnostic.
+	semantic string
+	// values are the wire codes expressing it, in declaration order.
+	values []string
+	// canonical counts how many of them carry Canonical.
+	canonical int
+}
+
+// canonicalProblems applies E5's rule to one vocabulary's grouped entries:
+// where a semantic value is expressed MORE THAN ONCE, exactly one of those
+// entries must be marked Canonical.
+//
+// A LONE ENTRY IS EXEMPT, deliberately. There is nothing to choose between
+// when a semantic has one wire code, and requiring the flag anyway would
+// put a mandatory `Canonical: true` on every line of every model's table —
+// ceremony that carries no information and that an author would soon apply
+// without reading. The reverse mapping is written to match: it prefers a
+// canonical entry and falls back to a lone one, and refuses to guess
+// between two unmarked ones, which after this rule is unreachable.
+//
+// THE TWO FAILURES ARE NAMED SEPARATELY because they are different
+// mistakes. "No canonical" is an author who did not notice the
+// multiplicity; "more than one canonical" is an author who did and then
+// answered the question twice.
+func canonicalProblems(list, what string, groups []canonicalGroup) []string {
+	var problems []string
+	for _, g := range groups {
+		if len(g.values) < 2 {
+			continue
+		}
+		switch {
+		case g.canonical == 0:
+			problems = append(problems, fmt.Sprintf("%s entries %v share the %s %s and no canonical one is marked — the reverse mapping would otherwise depend on the order they were declared in", list, g.values, what, g.semantic))
+		case g.canonical > 1:
+			problems = append(problems, fmt.Sprintf("%s entries %v share the %s %s and more than one canonical one is marked — exactly one entry answers \"which wire code means this?\"", list, g.values, what, g.semantic))
+		}
+	}
+	return problems
+}
+
+// duplexCanonicalGroups groups options by Direction, preserving both
+// declaration order within a group and first-appearance order between
+// groups, so a Validate message never depends on map iteration.
+func duplexCanonicalGroups(options []DuplexOption) []canonicalGroup {
+	index := make(map[DuplexDirection]int, len(options))
+	var groups []canonicalGroup
+	for _, o := range options {
+		i, seen := index[o.Direction]
+		if !seen {
+			i = len(groups)
+			index[o.Direction] = i
+			groups = append(groups, canonicalGroup{semantic: fmt.Sprintf("%d", o.Direction)})
+		}
+		groups[i].values = append(groups[i].values, o.Value)
+		if o.Canonical {
+			groups[i].canonical++
+		}
+	}
+	return groups
+}
+
+// toneModeCanonicalGroups is duplexCanonicalGroups for ToneModes.
+func toneModeCanonicalGroups(modes []ToneMode) []canonicalGroup {
+	index := make(map[ToneModeSemantics]int, len(modes))
+	var groups []canonicalGroup
+	for _, m := range modes {
+		i, seen := index[m.Semantics]
+		if !seen {
+			i = len(groups)
+			index[m.Semantics] = i
+			groups = append(groups, canonicalGroup{semantic: fmt.Sprintf("%d", m.Semantics)})
+		}
+		groups[i].values = append(groups[i].values, m.Value)
+		if m.Canonical {
+			groups[i].canonical++
+		}
+	}
+	return groups
+}
+
+// CanonicalDuplexOption returns the wire-form duplex value this radio uses
+// for direction d, and true, or ("", false) when it expresses none.
+//
+// THE ANSWER IS SINGLE BY CONSTRUCTION. Where a direction is expressed
+// more than once, Validate requires exactly one entry marked Canonical and
+// this returns that one. Where it is expressed once, that entry is the
+// answer and needs no marking. Where two entries share a direction and
+// NEITHER is canonical — a shape Validate refuses, reachable only from a
+// hand-built Capabilities that never passed it — this returns false rather
+// than picking by slice order, which is the exact failure the canonical
+// rule exists to remove.
+func (c Capabilities) CanonicalDuplexOption(d DuplexDirection) (string, bool) {
+	var sole string
+	var count int
+	for _, o := range c.DuplexOptions {
+		if o.Direction != d {
+			continue
+		}
+		if o.Canonical {
+			return o.Value, true
+		}
+		sole = o.Value
+		count++
+	}
+	if count == 1 {
+		return sole, true
+	}
+	return "", false
+}
+
+// CanonicalToneMode is CanonicalDuplexOption for the tone-mode
+// vocabulary, on identical terms.
+func (c Capabilities) CanonicalToneMode(s ToneModeSemantics) (string, bool) {
+	var sole string
+	var count int
+	for _, m := range c.ToneModes {
+		if m.Semantics != s {
+			continue
+		}
+		if m.Canonical {
+			return m.Value, true
+		}
+		sole = m.Value
+		count++
+	}
+	if count == 1 {
+		return sole, true
+	}
+	return "", false
 }

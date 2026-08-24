@@ -182,6 +182,24 @@ type DuplexOption struct {
 	// The zero value, DuplexUnspecified, is not valid — every
 	// DuplexOption must set this explicitly.
 	Direction DuplexDirection
+	// Canonical marks this option as THE answer to "which wire code does
+	// this radio use for that direction?" — the question core/csvio's
+	// CHIRP import asks when it maps a foreign dialect's "+"/"-" onto
+	// this radio's vocabulary.
+	//
+	// REQUIRED ONLY WHERE A DIRECTION IS EXPRESSED MORE THAN ONCE, and
+	// then EXACTLY ONE of those options must carry it (Validate). A
+	// direction expressed by a single option needs no marking: there is
+	// nothing to choose between, and demanding a flag on every entry of
+	// every model's table would be ceremony rather than information.
+	//
+	// IT EXISTS BECAUSE MULTIPLICITY IS REAL AND SLICE ORDER IS NOT AN
+	// ANSWER. A model can genuinely express one direction with two wire
+	// codes; the reverse mapping used to return the FIRST match, so which
+	// code an imported file produced depended on the order a driver
+	// author happened to write the table in — a difference no test could
+	// see and no reader would suspect.
+	Canonical bool
 }
 
 // ToneModeSemantics is the semantic content of an Icom-family tone mode:
@@ -224,6 +242,12 @@ type ToneMode struct {
 	// ToneModeUnspecified, is not valid — every ToneMode must set this
 	// explicitly.
 	Semantics ToneModeSemantics
+	// Canonical marks this mode as THE answer to "which wire code does
+	// this radio use for that squelch mechanism?" — see
+	// DuplexOption.Canonical, which carries the full argument. Required
+	// only where a Semantics value is expressed more than once, and then
+	// on exactly one of them.
+	Canonical bool
 }
 
 // NeedsTxTone reports whether a channel in this tone mode must carry a

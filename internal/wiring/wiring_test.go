@@ -1954,3 +1954,68 @@ func TestEveryYaesuModelDeclaresAToneListAndNoRange(t *testing.T) {
 		})
 	}
 }
+
+// TestEveryYaesuModelStillValidatesUnchanged is E5's pin, and it is
+// deliberately taken on the two rules E5 rewrote rather than on Validate's
+// verdict alone.
+//
+// E5b made the "ShiftOptions must not be empty" pair rule CONDITIONAL on
+// some bank reaching the field, so that a model whose bank legitimately
+// carries no shift or duplex vocabulary is admitted. That condition must
+// still HOLD for every Yaesu model — each declares FieldShift and
+// FieldCTCSSState — or the rule would have been quietly switched off for
+// the radios it was written for rather than relaxed for the ones it was
+// not.
+//
+// E5a replaced the "at most one option per direction" rule on the Icom
+// vocabularies with the canonical-entry rule. No Yaesu model declares
+// either vocabulary, so that change must be invisible here, which the
+// empty-slice assertions say.
+func TestEveryYaesuModelStillValidatesUnchanged(t *testing.T) {
+	models := SupportedModels()
+	if len(models) != 4 {
+		t.Fatalf("SupportedModels() = %v (%d models), want the four registered Yaesu models — update this pin deliberately", models, len(models))
+	}
+	for _, model := range models {
+		t.Run(model, func(t *testing.T) {
+			caps, err := StaticCapabilities(model)
+			if err != nil {
+				t.Fatalf("StaticCapabilities(%q): %v", model, err)
+			}
+			if err := caps.Validate(); err != nil {
+				t.Fatalf("Validate() = %v, want nil", err)
+			}
+
+			var reachesShift, reachesTone bool
+			for _, b := range caps.Banks {
+				if !caps.FieldSupport(b.ID, spec.FieldShift).Unreachable() {
+					reachesShift = true
+				}
+				if !caps.FieldSupport(b.ID, spec.FieldCTCSSState).Unreachable() {
+					reachesTone = true
+				}
+			}
+			if !reachesShift {
+				t.Errorf("no bank reaches FieldShift — E5b's condition would switch the empty-ShiftOptions refusal OFF for this model, which is not what E5b relaxed")
+			}
+			if !reachesTone {
+				t.Errorf("no bank reaches FieldCTCSSState — same reasoning, on the tone pair")
+			}
+			if len(caps.DuplexOptions) != 0 {
+				t.Errorf("DuplexOptions = %v, want empty for a Yaesu model", caps.DuplexOptions)
+			}
+			if len(caps.ToneModes) != 0 {
+				t.Errorf("ToneModes = %v, want empty for a Yaesu model", caps.ToneModes)
+			}
+
+			// And the E5b condition really does bite: strip the
+			// vocabulary this model DOES declare and Validate must still
+			// refuse, because its banks reach the field.
+			stripped := caps
+			stripped.ShiftOptions = nil
+			if err := stripped.Validate(); err == nil {
+				t.Error("Validate() accepted this model with no ShiftOptions — a bank reaching FieldShift must still name the values it can hold")
+			}
+		})
+	}
+}

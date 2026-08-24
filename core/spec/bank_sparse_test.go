@@ -218,7 +218,10 @@ func TestValidate_TierVocabularyConsistency(t *testing.T) {
 			mutin: func(c *Capabilities) {
 				c.DuplexOptions = []DuplexOption{{Value: "OFF", Direction: DuplexOff}, {Value: "SIMPLEX", Direction: DuplexOff}}
 			},
-			want: "express the same direction",
+			// SINCE E5 this is the canonical rule's failure, not a
+			// flat refusal of multiplicity: two codes for one direction
+			// are allowed, but one of them must say it is the answer.
+			want: "no canonical one is marked",
 		},
 		{
 			name:  "unspecified tone-mode semantics",
@@ -230,7 +233,7 @@ func TestValidate_TierVocabularyConsistency(t *testing.T) {
 			mutin: func(c *Capabilities) {
 				c.ToneModes = []ToneMode{{Value: "OFF", Semantics: ToneModeOff}, {Value: "NONE", Semantics: ToneModeOff}}
 			},
-			want: "express the same semantics",
+			want: "no canonical one is marked",
 		},
 		{
 			name:  "blank DTCS polarity",
@@ -307,7 +310,17 @@ func minimalCaps() Capabilities {
 		ShiftOptions: StandardShiftOptions(),
 		CTCSSStates:  StandardCTCSSStates(),
 		Banks: []Bank{
-			{ID: BankMemory, Slots: []string{"001"}},
+			// THE BANK REACHES BOTH VOCABULARY FIELDS, which is what
+			// keeps the empty-vocabulary refusals below meaningful. Since
+			// E5b the pair rule fires only when some bank can reach the
+			// corresponding field: a model whose banks carry no shift or
+			// tone field at all is entitled to declare no vocabulary for
+			// one. Every Yaesu model declares both, so this fixture is the
+			// shape those refusals are actually about.
+			{ID: BankMemory, Slots: []string{"001"}, Fields: map[Field]FieldSupport{
+				FieldShift:      {Read: Supported, Write: Unverified},
+				FieldCTCSSState: {Read: Supported, Write: Unverified},
+			}},
 		},
 	}
 }
