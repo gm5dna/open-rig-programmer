@@ -116,9 +116,10 @@ func TestFixedTemplateIsTheGoldensUnmappedState(t *testing.T) {
 // this task's template check must agree byte for byte about what the file
 // says, and two readers could not be made to.
 //
-// It SKIPS when testdata/ is absent, which is the state between Task 2
-// (this file) and Task 4 (the freeze). Task 4 Step 4a removes nothing but
-// the absence.
+// A MISSING testdata/ IS A FAILURE, NOT A SKIP. The frozen evidence is
+// tracked beside this file and freeze_test.go hashes every byte of it, so
+// there is no legitimate state in which it is absent — and a reader who
+// has deleted it should be told, not quietly told nothing.
 type goldenVector struct {
 	name  string
 	frame []byte
@@ -129,9 +130,6 @@ func goldenVectors(t *testing.T) []goldenVector {
 	path := filepath.Join("testdata", "ic9700-vectors.golden")
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			t.Skipf("%s is not present yet — the evidence freeze is Task 4", path)
-		}
 		t.Fatalf("read %s: %v", path, err)
 	}
 	var out []goldenVector
