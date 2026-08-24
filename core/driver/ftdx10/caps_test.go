@@ -82,6 +82,14 @@ var tierFieldsMustBeEmpty = map[string]bool{
 	"DTCSCodes":      true,
 	"Filters":        true,
 	"TagCharset":     true,
+	// CTCSSToneRange (Wave 2.5, E3) is the OPTIONAL numeric tone domain a
+	// radio whose tone field is a number declares INSTEAD of a chart.
+	// This radio's explicit decision is NIL, and it is a decision rather
+	// than an omission twice over: this radio names a tone by its INDEX
+	// into CTCSSTones, so a range would describe a domain it does not
+	// have — and spec.Validate refuses a list and a range together, so
+	// declaring one here would make these capabilities invalid outright.
+	"CTCSSToneRange": true,
 }
 
 // TestCapabilities_EveryFieldExplicit is the D-caps-explicit decision's
@@ -107,10 +115,11 @@ var tierFieldsMustBeEmpty = map[string]bool{
 // and record why, never to leave a zero that reads as a decision nobody
 // took.
 //
-// The Icom tier (design D4) added six fields to spec.Capabilities —
+// The Icom tier added SEVEN fields to spec.Capabilities — design D4's
 // DuplexOptions, ToneModes, DTCSPolarities, DTCSCodes, Filters and
-// TagCharset — and for THIS radio the explicit decision about every one
-// of them is that it must be EMPTY. That is not a zero slipping through:
+// TagCharset, and Wave 2.5's CTCSSToneRange — and for THIS radio the
+// explicit decision about every one of them is that it must be EMPTY (nil,
+// for the pointer-declared range). That is not a zero slipping through:
 // empty is the positive statement "this radio expresses no such
 // vocabulary", which is what makes every capability-keyed check in
 // core/codeplug and core/csvio skip the Icom branch and leave this
@@ -118,7 +127,8 @@ var tierFieldsMustBeEmpty = map[string]bool{
 // the mistake, so the rule for those six is inverted here rather than
 // waived, and the test still fails if one is ever filled in.
 func TestCapabilities_EveryFieldExplicit(t *testing.T) {
-	const wantFieldCount = 21
+	// 22 since Wave 2.5's E3 added CTCSSToneRange.
+	const wantFieldCount = 22
 
 	for _, tt := range []struct {
 		name string
