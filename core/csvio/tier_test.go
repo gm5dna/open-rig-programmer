@@ -548,3 +548,61 @@ func TestHeaderVersions_V1IsAPrefixOfV2(t *testing.T) {
 		t.Errorf("headerV2's tail = %v, want %v", headerV2[len(header):], tierColumns)
 	}
 }
+
+// TestImportCHIRP_FilterAndDataModeDefaultToUnknown pins the two tier
+// fields NO CHIRP column speaks to (Wave-1c review 1, finding 4). Every
+// other tier field is filled in by the duplex or tone branch where the
+// radio reaches it; Filter and DataMode have no branch, so the defaulting
+// step has to give them their answer or they stay Absent — the one state
+// that means "this channel says nothing at all", which codeplug.Validate
+// reports as an error on EVERY imported channel and codeplug.Diff counts
+// as a modification in a field the file never mentioned.
+//
+// Unknown is the honest answer where the radio has the field: "this radio
+// has it and this file did not say". It is what importCHIRPDuplexIcom's
+// own doc comment promises for any field a row does not speak to.
+func TestImportCHIRP_FilterAndDataModeDefaultToUnknown(t *testing.T) {
+	head := "Location,Name,Frequency,Duplex,Offset,Tone,rToneFreq,cToneFreq,DtcsCode,DtcsPolarity,Mode,Skip\n"
+	body := head + "1,GB3TEST,145.700000,-,0.600000,Tone,88.5,88.5,023,NN,FM,\n"
+
+	t.Run("a bank that reaches both", func(t *testing.T) {
+		caps := icomCHIRPCapabilities()
+		fields := caps.Banks[0].Fields
+		fields[spec.FieldDataMode] = spec.FieldSupport{Read: spec.Supported, Write: spec.Unverified}
+		for _, f := range []spec.Field{spec.FieldFilter, spec.FieldDataMode} {
+			if caps.FieldSupport(spec.BankMemory, f).Unreachable() {
+				t.Fatalf("%s is Unreachable: this subtest's premise is a bank that HAS it", f)
+			}
+		}
+
+		channels, report, err := ImportCHIRP(strings.NewReader(body), caps)
+		if err != nil {
+			t.Fatalf("ImportCHIRP() error = %v", err)
+		}
+		if report.HasBlocking() {
+			t.Fatalf("report has blocking entries: %+v", report.Entries)
+		}
+		d := channels[0].Data
+		if d.Filter != (codeplug.StringField{State: codeplug.Unknown}) {
+			t.Errorf("Filter = %+v, want Unknown: this radio has a filter and no CHIRP column names one", d.Filter)
+		}
+		if d.DataMode != (codeplug.BoolField{State: codeplug.Unknown}) {
+			t.Errorf("DataMode = %+v, want Unknown: this radio has a data-mode flag and no CHIRP column names one", d.DataMode)
+		}
+	})
+
+	t.Run("a bank that reaches neither", func(t *testing.T) {
+		caps := ft710LikeCapabilities()
+		channels, _, err := ImportCHIRP(strings.NewReader(body), caps)
+		if err != nil {
+			t.Fatalf("ImportCHIRP() error = %v", err)
+		}
+		d := channels[0].Data
+		if d.Filter != (codeplug.StringField{State: codeplug.Unavailable}) {
+			t.Errorf("Filter = %+v, want Unavailable on a radio with no such field", d.Filter)
+		}
+		if d.DataMode != (codeplug.BoolField{State: codeplug.Unavailable}) {
+			t.Errorf("DataMode = %+v, want Unavailable on a radio with no such field", d.DataMode)
+		}
+	})
+}

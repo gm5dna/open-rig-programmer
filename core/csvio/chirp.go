@@ -1282,6 +1282,10 @@ func importCHIRPToneIcom(line int, cell func(string) string, data *codeplug.Chan
 // reach to Unavailable, and leaves the reachable ones alone for the
 // mapping branches to fill in. See its call site for why Unavailable and
 // not the zero value.
+//
+// The two exceptions are Filter and DataMode, which it defaults in BOTH
+// directions because no CHIRP column and therefore no mapping branch
+// speaks to them — see the comment at those two below.
 func markUnreachableTierFields(data *codeplug.ChannelData, caps spec.Capabilities, bank spec.BankID) {
 	if !reaches(caps, bank, spec.FieldTxFrequency) {
 		data.TxFreqHz = codeplug.FreqField{State: codeplug.Unavailable}
@@ -1307,10 +1311,24 @@ func markUnreachableTierFields(data *codeplug.ChannelData, caps spec.Capabilitie
 	if !reaches(caps, bank, spec.FieldDTCSPolarity) {
 		data.DTCSPolarity = codeplug.StringField{State: codeplug.Unavailable}
 	}
-	if !reaches(caps, bank, spec.FieldFilter) {
+	// Filter and DataMode get BOTH answers here, unlike the eight above:
+	// no CHIRP column speaks to either, so no mapping branch below ever
+	// revisits them, and leaving a reachable one at its zero value would
+	// leave it ABSENT — "this channel says nothing at all", which
+	// codeplug.Validate reports as an error on every imported channel and
+	// codeplug.Diff counts as a modification in a field the file never
+	// mentioned (Wave-1c review 1, finding 4). Where the radio HAS the
+	// field the honest answer is Unknown, exactly as
+	// importCHIRPDuplexIcom's doc promises for any field a row does not
+	// speak to: this radio has it, and this file did not say.
+	if reaches(caps, bank, spec.FieldFilter) {
+		data.Filter = codeplug.StringField{State: codeplug.Unknown}
+	} else {
 		data.Filter = codeplug.StringField{State: codeplug.Unavailable}
 	}
-	if !reaches(caps, bank, spec.FieldDataMode) {
+	if reaches(caps, bank, spec.FieldDataMode) {
+		data.DataMode = codeplug.BoolField{State: codeplug.Unknown}
+	} else {
 		data.DataMode = codeplug.BoolField{State: codeplug.Unavailable}
 	}
 }
