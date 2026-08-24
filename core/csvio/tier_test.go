@@ -606,3 +606,130 @@ func TestImportCHIRP_FilterAndDataModeDefaultToUnknown(t *testing.T) {
 		}
 	})
 }
+
+// TestImportCHIRP_IcomToneBranchDefaultsCTCSSTone pins the PRE-tier
+// CTCSSTone on the Icom tone branch (Wave-1c review 2, finding N1).
+//
+// markUnreachableTierFields answers for the tier's ten fields only, and
+// the only other place a CHIRP import writes CTCSSTone is
+// importCHIRPToneCTCSS — the branch a bank reaching spec.FieldToneMode
+// does NOT take. So before the fix every channel imported for such a bank
+// carried the zero ToneField, Absent, and codeplug.Validate reported
+// `codeplug: ToneField: invalid State ""` as an error on every one of
+// them.
+//
+// The answer is chirpTagDisplay's, asked of spec.FieldCTCSSTone:
+// Unavailable where the bank cannot reach it — the normal Icom shape,
+// since this tier expresses tones through tone_mode/tone_tx/tone_rx —
+// and Unknown where it can. The Yaesu branch is untouched and its
+// per-row answers are re-pinned here so the fix cannot have moved them.
+func TestImportCHIRP_IcomToneBranchDefaultsCTCSSTone(t *testing.T) {
+	head := "Location,Name,Frequency,Duplex,Offset,Tone,rToneFreq,cToneFreq,DtcsCode,DtcsPolarity,Mode,Skip\n"
+	rows := []string{
+		"1,GB3TEST,145.700000,-,0.600000,Tone,88.5,88.5,023,NN,FM,\n",
+		"2,GB3TSQL,145.725000,-,0.600000,TSQL,88.5,88.5,023,NN,FM,\n",
+		"3,GB3DTCS,145.750000,,0.000000,DTCS,88.5,88.5,023,NN,FM,\n",
+	}
+	body := head + strings.Join(rows, "")
+
+	t.Run("an Icom bank that cannot reach ctcss_tone", func(t *testing.T) {
+		caps := icomCHIRPCapabilities()
+		if caps.FieldSupport(spec.BankMemory, spec.FieldToneMode).Unreachable() {
+			t.Fatalf("tone_mode is Unreachable: this subtest's premise is a bank that takes the Icom branch")
+		}
+		if !caps.FieldSupport(spec.BankMemory, spec.FieldCTCSSTone).Unreachable() {
+			t.Fatalf("ctcss_tone is reachable: this subtest's premise is the normal Icom shape, a bank that lists no ctcss_tone at all")
+		}
+
+		channels, report, err := ImportCHIRP(strings.NewReader(body), caps)
+		if err != nil {
+			t.Fatalf("ImportCHIRP() error = %v", err)
+		}
+		if report.HasBlocking() {
+			t.Fatalf("report has blocking entries: %+v", report.Entries)
+		}
+		for _, ch := range channels {
+			if ch.Data.CTCSSTone != (codeplug.ToneField{State: codeplug.Unavailable}) {
+				t.Errorf("slot %s: CTCSSTone = %+v, want Unavailable on a bank with no such field", ch.Slot, ch.Data.CTCSSTone)
+			}
+		}
+
+		// The consequence the state exists to prevent: Validate must
+		// report NOTHING about ctcss_tone on any imported channel.
+		for _, issue := range validateImported(t, channels, caps) {
+			if issue.Field == spec.FieldCTCSSTone {
+				t.Errorf("Validate reported a ctcss_tone issue on an imported channel: %+v", issue)
+			}
+		}
+	})
+
+	t.Run("an Icom bank that does reach ctcss_tone", func(t *testing.T) {
+		caps := icomCHIRPCapabilities()
+		caps.Banks[0].Fields[spec.FieldCTCSSTone] = spec.FieldSupport{Read: spec.Supported, Write: spec.Unverified}
+
+		channels, report, err := ImportCHIRP(strings.NewReader(body), caps)
+		if err != nil {
+			t.Fatalf("ImportCHIRP() error = %v", err)
+		}
+		if report.HasBlocking() {
+			t.Fatalf("report has blocking entries: %+v", report.Entries)
+		}
+		for _, ch := range channels {
+			if ch.Data.CTCSSTone != (codeplug.ToneField{State: codeplug.Unknown}) {
+				t.Errorf("slot %s: CTCSSTone = %+v, want Unknown: this radio HAS the field and no CHIRP column speaks to it", ch.Slot, ch.Data.CTCSSTone)
+			}
+		}
+		for _, issue := range validateImported(t, channels, caps) {
+			if issue.Field == spec.FieldCTCSSTone {
+				t.Errorf("Validate reported a ctcss_tone issue on an imported channel: %+v", issue)
+			}
+		}
+	})
+
+	t.Run("a Yaesu bank is unchanged", func(t *testing.T) {
+		caps := ft710LikeCapabilities()
+		if !caps.FieldSupport(spec.BankMemory, spec.FieldToneMode).Unreachable() {
+			t.Fatalf("premise: this bank must NOT reach tone_mode, so the import takes the CTCSS branch")
+		}
+
+		channels, report, err := ImportCHIRP(strings.NewReader(head+rows[0]+rows[1]), caps)
+		if err != nil {
+			t.Fatalf("ImportCHIRP() error = %v", err)
+		}
+		if report.HasBlocking() {
+			t.Fatalf("report has blocking entries: %+v", report.Entries)
+		}
+		want := codeplug.ToneField{State: codeplug.Known, Value: spec.Tone(885)}
+		for _, ch := range channels {
+			if ch.Data.CTCSSTone != want {
+				t.Errorf("slot %s: CTCSSTone = %+v, want %+v from the Yaesu branch's own rToneFreq/cToneFreq mapping", ch.Slot, ch.Data.CTCSSTone, want)
+			}
+		}
+	})
+}
+
+// validateImported runs codeplug.Validate over the imported channels,
+// padding the slots the file did not name with empty ones so the only
+// issues that can come back are about the channels themselves.
+func validateImported(t *testing.T, channels []codeplug.Channel, caps spec.Capabilities) []codeplug.Issue {
+	t.Helper()
+	have := make(map[string]bool, len(channels))
+	for _, ch := range channels {
+		have[ch.Slot] = true
+	}
+	all := append([]codeplug.Channel(nil), channels...)
+	for _, b := range caps.Banks {
+		for _, slot := range b.Slots {
+			if !have[slot] {
+				all = append(all, codeplug.Channel{Slot: slot})
+			}
+		}
+	}
+	cp := &codeplug.Codeplug{
+		Schema:    codeplug.CurrentSchema,
+		Generator: "csvio test",
+		Radio:     codeplug.RadioInfo{Model: caps.Model, CATID: caps.CATID},
+		Channels:  all,
+	}
+	return codeplug.Validate(cp, caps)
+}

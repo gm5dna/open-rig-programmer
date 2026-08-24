@@ -1181,6 +1181,30 @@ func importCHIRPToneIcom(line int, cell func(string) string, data *codeplug.Chan
 	if hasDTCSPol {
 		data.DTCSPolarity = codeplug.StringField{State: codeplug.Unknown}
 	}
+	// CTCSSTone is PRE-tier, so markUnreachableTierFields — which covers
+	// the tier's ten fields only — never touches it, and this branch is
+	// the one path that reaches a channel without going through
+	// importCHIRPToneCTCSS, the only other place that writes it. Left
+	// alone it would stay ABSENT on every channel imported for a bank
+	// that reaches spec.FieldToneMode: "this channel says nothing at
+	// all", which codeplug.Validate reports as `ToneField: invalid State
+	// ""` on every one of them and codeplug.Diff counts as a
+	// modification in a field the file never mentioned (Wave-1c review 2,
+	// finding N1 — finding 4's defect, one field over).
+	//
+	// The answer is chirpTagDisplay's, for the same reason and by the
+	// same question: a bank that cannot reach spec.FieldCTCSSTone has no
+	// such field for the imported channel to hold — Unavailable, which is
+	// also what a READ of such a radio reports — and a bank that CAN
+	// reach it has the field with the file silent about it, which is
+	// Unknown. The normal Icom shape is the first: this tier's radios
+	// express tones through tone_mode/tone_tx/tone_rx above, and never
+	// list FieldCTCSSTone at all.
+	if reaches(caps, bank, spec.FieldCTCSSTone) {
+		data.CTCSSTone = codeplug.ToneField{State: codeplug.Unknown}
+	} else {
+		data.CTCSSTone = codeplug.ToneField{State: codeplug.Unavailable}
+	}
 
 	toneRaw := cell("Tone")
 	setMode := func(sem spec.ToneModeSemantics, label string) bool {
