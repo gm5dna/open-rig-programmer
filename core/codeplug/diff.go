@@ -433,19 +433,32 @@ func inventoryMismatch() error {
 //     some sparse bank's addressable space contains it
 //     (spec.Bank.WithinSpace). A sparse bank's Slots lists what a read
 //     found, not what the radio can hold, so an add at an unlisted
-//     address is exactly the case the sparse model exists for.
+//     address is exactly the case the sparse model exists for;
+//   - NO SLOT MAY APPEAR TWICE, in either list. This clause is explicit
+//     only because the rule is now stated over sets: the sorted-list
+//     comparison this function replaced refused a repeat for free (the
+//     repeating list was simply longer), and dropping it silently let a
+//     file naming one slot twice through, with the LAST occurrence
+//     winning and the diff computed against that one (Wave-1c review 1,
+//     finding 3). `rigprog diff` calls Diff with no Validate pass in
+//     front of it, so nothing else was left to catch a hand-edited file
+//     that repeats a slot.
 //
 // With no sparse bank in caps — every radio registered before this tier
-// — the second clause can never fire, so the pair reduces to the exact
-// set equality this function replaced, reporting the identical error.
+// — the second clause can never fire, so the rule reduces to the exact
+// set equality this function replaced, reporting the identical error for
+// every input that ever reached it.
 func checkInventory(baseline, file *Codeplug, caps spec.Capabilities) ([]string, error) {
 	inFile := make(map[string]bool, len(file.Channels))
 	for _, ch := range file.Channels {
+		if inFile[ch.Slot] {
+			return nil, inventoryMismatch()
+		}
 		inFile[ch.Slot] = true
 	}
 	inBaseline := make(map[string]bool, len(baseline.Channels))
 	for _, ch := range baseline.Channels {
-		if !inFile[ch.Slot] {
+		if !inFile[ch.Slot] || inBaseline[ch.Slot] {
 			return nil, inventoryMismatch()
 		}
 		inBaseline[ch.Slot] = true

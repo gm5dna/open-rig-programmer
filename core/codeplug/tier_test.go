@@ -687,3 +687,61 @@ func TestUnconditionallyAdded_IsExactlyTheAlwaysTransmittedSix(t *testing.T) {
 		}
 	}
 }
+
+// TestDiff_DuplicateSlotRefused restores and pins a refusal the tier's
+// rewrite of checkInventory lost (Wave-1c review 1, finding 3): the rule
+// used to compare two SORTED SLOT LISTS, so a file that repeated a slot
+// was longer than the baseline and was refused; the set-based rewrite
+// could not see the repeat, and fileBySlot then silently kept the LAST
+// occurrence and diffed against that one.
+//
+// It matters because `rigprog diff` calls codeplug.Diff directly, with no
+// Validate pass in front of it (the send path has one, and Validate does
+// report a duplicate slot as an error). Without this, a hand-edited file
+// with a repeated slot quietly reported one of the two duplicates'
+// changes instead of telling the user the file was malformed.
+func TestDiff_DuplicateSlotRefused(t *testing.T) {
+	caps := testCapabilities()
+	const want = "codeplug: Diff: baseline and file slot inventories differ; the file must descend from a read of this radio's current layout — re-read the radio and try again"
+
+	t.Run("a slot repeated in the file", func(t *testing.T) {
+		baseline := testBaselineCodeplug()
+		file := testBaselineCodeplug()
+		dup := file.Channels[0]
+		dup.Data = copyChannelData(file.Channels[0].Data)
+		dup.Data.FreqHz = 51_000_000
+		file.Channels = append([]Channel{file.Channels[0], dup}, file.Channels[1:]...)
+
+		_, err := Diff(baseline, file, caps)
+		if err == nil {
+			t.Fatal("Diff() error = nil, want a refusal: the file names one slot twice")
+		}
+		if err.Error() != want {
+			t.Errorf("Diff() error = %q, want %q", err, want)
+		}
+	})
+
+	t.Run("a slot repeated in the baseline", func(t *testing.T) {
+		baseline := testBaselineCodeplug()
+		baseline.Channels = append([]Channel{baseline.Channels[0]}, baseline.Channels...)
+		file := testBaselineCodeplug()
+
+		if _, err := Diff(baseline, file, caps); err == nil {
+			t.Fatal("Diff() error = nil, want a refusal: a baseline naming one slot twice is not a read of any radio")
+		}
+	})
+
+	t.Run("a slot merely missing is still refused", func(t *testing.T) {
+		baseline := testBaselineCodeplug()
+		file := testBaselineCodeplug()
+		file.Channels = file.Channels[:len(file.Channels)-1]
+
+		_, err := Diff(baseline, file, caps)
+		if err == nil {
+			t.Fatal("Diff() error = nil, want an inventory mismatch")
+		}
+		if err.Error() != want {
+			t.Errorf("Diff() error = %q, want %q", err, want)
+		}
+	})
+}
