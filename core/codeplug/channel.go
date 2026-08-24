@@ -64,7 +64,15 @@ type ChannelData struct {
 	// nothing to manufacture and nothing to send: every channel legitimately
 	// reads back Unavailable, that radio's capabilities report the field
 	// Unsupported both ways, and a Known value arriving from a file written
-	// for a DIFFERENT radio is refused by the capability gate instead.
+	// for a DIFFERENT radio is refused by the capability gate instead —
+	// "tag_display not writable on this radio", pinned against the real
+	// profile by core/driver/ftdx10's
+	// TestDiff_KnownTagDisplayRefusedOnRealProfile. That sentence was
+	// briefly false: the Icom tier's first cut of touchedFields filtered
+	// the Known value out of the touched set instead, so the write went
+	// out with the request silently missing (Wave-1c review 1, finding 1).
+	// A Known value is a REQUEST, and this project refuses a request it
+	// cannot honour rather than dropping it; see touchedFields.
 	//
 	// Both radios reach the same place — a non-Known value is never
 	// transmitted — by different routes, and neither route is a property of

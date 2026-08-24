@@ -252,7 +252,9 @@ func addedFields(data ChannelData) []spec.Field {
 //
 // Every one of these predicates answers false for a channel produced by
 // or for a Yaesu NEWCAT radio: those channels leave all ten fields
-// Absent (see codeplug.Absent).
+// UNAVAILABLE — a read says so directly, a load of a schema-1/2/3 file
+// migrates to it (design D4, decision 1), and Absent is neither Known
+// either — which is why the pre-tier world's Diff output is unchanged.
 var tierAddedFieldFor = []struct {
 	field   spec.Field
 	present func(ChannelData) bool
@@ -269,23 +271,58 @@ var tierAddedFieldFor = []struct {
 	{spec.FieldDataMode, func(d ChannelData) bool { return d.DataMode.State == Known }},
 }
 
+// unconditionallyAdded is the set of fields addedFields emits for EVERY
+// channel, whatever it contains — the always-transmitted six (frequency,
+// mode, clarifier, ctcss_state, shift, tag). It is DERIVED from
+// addedFields rather than restated, by asking it about the zero
+// ChannelData: on that value every FieldState-carrying field is Absent,
+// so exactly the unconditional fields come back. A conditional added to
+// addedFields therefore cannot silently join this set, and an
+// unconditional one cannot silently leave it
+// (TestUnconditionallyAdded_IsAddedFieldsOfTheZeroChannel pins the
+// membership all the same).
+var unconditionallyAdded = func() map[spec.Field]bool {
+	m := make(map[spec.Field]bool)
+	for _, f := range addedFields(ChannelData{}) {
+		m[f] = true
+	}
+	return m
+}()
+
 // touchedFields returns every spec.Field a write of data to bank would
-// actually TRANSMIT — the set Diff's per-field gate walks. It is
-// addedFields' capability-keyed successor (design D4, adjudication 10):
+// TRANSMIT or REQUEST — the set Diff's per-field gate walks. It is
+// addedFields' capability-keyed successor (design D4, adjudication 10),
+// and the capability key applies to exactly one of the two kinds of
+// field in that set:
 //
-//   - the pre-tier set is addedFields(data), FILTERED to the fields this
-//     bank can reach. "A field the capabilities mark Unreachable in that
-//     bank is not touched by an add": there is no key in that radio's
-//     frame for the value to go into, so no write request exists to
-//     gate, and counting one would block the whole channel over a field
-//     nobody asked to write. For the four Yaesu models registered before
-//     the tier this filter removes NOTHING — every field addedFields can
-//     produce is reachable on the banks their profiles declare — which
-//     is why their Diff output is unchanged;
-//   - then the tier's ten, each admitted only when this channel carries
-//     a Known value for it AND the bank can reach it. Absent and
-//     Unreachable are separate tests on purpose: the first asks what the
-//     file requests, the second what the radio has.
+//   - the UNCONDITIONAL six (unconditionallyAdded — frequency, mode,
+//     clarifier, ctcss_state, shift, tag) are filtered to the fields
+//     this bank can reach. "A field the capabilities mark Unreachable in
+//     that bank is not touched by an add": these fields are in the set
+//     because the FRAME always carries them, not because anybody asked
+//     for them, so on a bank whose frame has no room for one there is no
+//     request to gate — and counting one would block every channel on
+//     that bank over a field nobody named. This is the Icom case the
+//     filter was written for: a bank that expresses only some of the six.
+//   - the CONDITIONAL fields — ctcss_tone, tag_display and scan_skip
+//     from addedFields, and the tier's ten from tierAddedFieldFor — are
+//     in the set ONLY because this channel carries a Known value for
+//     them, and a Known value IS the user's explicit request (per
+//     FieldState's write rule, nothing else is ever sent). Such a field
+//     is NEVER filtered out: if the bank cannot reach it, the request is
+//     one the radio cannot honour, and this project's posture on that is
+//     to REFUSE the channel at plan time — the per-field gate's existing
+//     "not writable on this radio" BlockReason, reached because an
+//     unreachable field's zero FieldSupport is not CanWrite — never to
+//     drop the value and write the rest. Dropping it is what Wave-1c
+//     review 1 (finding 1, HIGH) caught this filter doing to the FT-710's
+//     ctcss_tone/scan_skip and the FTdx10/FTdx101's tag_display, on the
+//     ordinary CSV-import-then-write route; findings 1 and 5 are one
+//     rule, and this is it.
+//
+// For a channel produced by or for a Yaesu NEWCAT radio nothing here
+// changes anything: the ten tier fields are Unavailable, and the three
+// pre-tier conditionals are whatever the radio itself reported.
 //
 // addedFields itself is left exactly as it was, still pinned by
 // TestAddedFields_MembershipAndOrder: it states which fields a write
@@ -296,16 +333,13 @@ func touchedFields(caps spec.Capabilities, bank spec.BankID, data ChannelData) [
 	base := addedFields(data)
 	out := make([]spec.Field, 0, len(base)+len(tierAddedFieldFor))
 	for _, f := range base {
-		if caps.FieldSupport(bank, f).Unreachable() {
+		if unconditionallyAdded[f] && caps.FieldSupport(bank, f).Unreachable() {
 			continue
 		}
 		out = append(out, f)
 	}
 	for _, tf := range tierAddedFieldFor {
 		if !tf.present(data) {
-			continue
-		}
-		if caps.FieldSupport(bank, tf.field).Unreachable() {
 			continue
 		}
 		out = append(out, tf.field)
@@ -567,11 +601,13 @@ func checkSparseBudget(file *Codeplug, caps spec.Capabilities) error {
 //
 //  4. Per-field (v1, all-or-nothing per channel): for a DiffModified OR a
 //     DiffAdded entry, Diff computes "touched" as
-//     touchedFields(caps, bank, after) — addedFields(after) keyed by what
-//     this bank can actually reach, plus the Icom tier's own fields where
-//     the channel carries a Known value for one (see touchedFields; for
-//     every radio registered before that tier the two answers are
-//     identical) —
+//     touchedFields(caps, bank, after) — addedFields(after) with its
+//     ALWAYS-TRANSMITTED six keyed by what this bank can actually reach,
+//     plus the Icom tier's own fields where the channel carries a Known
+//     value for one. A Known-conditional field is never keyed away: its
+//     presence is a request, and an unreachable one is refused right
+//     here rather than dropped (see touchedFields; for every radio
+//     registered before that tier the two answers are identical) —
 //     the SAME field set for both Kinds (M3 Codex-review fix wave, Fix
 //     4): every field the write would actually TRANSMIT (the six
 //     always-sent fields, frequency/mode/clarifier/ctcss_state/shift/

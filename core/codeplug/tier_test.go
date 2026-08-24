@@ -85,13 +85,37 @@ func icomChannelData(freqHz uint64) *ChannelData {
 	}
 }
 
-// TestTouchedFields_YaesuUnchanged: on a radio whose banks declare the
-// pre-tier fields — which is every radio registered before this tier —
-// the capability-keyed touched set is EXACTLY addedFields' answer, in
-// exactly its order. This is the pin that says the tier's Diff work
+// TestTouchedFields_YaesuUnchanged: on a radio registered before this
+// tier the capability-keyed touched set is EXACTLY addedFields' answer,
+// in exactly its order. This is the pin that says the tier's Diff work
 // cannot have moved a Yaesu BlockReason.
+//
+// It runs against TWO capability fixtures, and the second is the one
+// that does the work (Wave-1c review 1, finding 2):
+// yaesuProfileShapedCapabilities() reproduces the registered profiles'
+// ZERO FieldSupport entries for ctcss_tone, scan_skip and tag_display,
+// so on it a Known value for any of the three is a request the radio
+// cannot reach — and must STILL be in the touched set, so the per-field
+// gate refuses the channel by name exactly as it did before the tier.
+// The earlier version of this test used only testCapabilities(), which
+// declares all three Supported, and therefore passed while the real
+// FT-710 and FTdx refusals had been deleted.
 func TestTouchedFields_YaesuUnchanged(t *testing.T) {
-	caps := testCapabilities()
+	for _, caps := range []struct {
+		name string
+		caps spec.Capabilities
+	}{
+		{"a bank declaring all three", testCapabilities()},
+		{"the registered profiles' zero entries", yaesuProfileShapedCapabilities()},
+	} {
+		t.Run(caps.name, func(t *testing.T) {
+			touchedFieldsUnchanged(t, caps.caps)
+		})
+	}
+}
+
+func touchedFieldsUnchanged(t *testing.T, caps spec.Capabilities) {
+	t.Helper()
 	for _, tt := range []struct {
 		name string
 		data ChannelData
@@ -123,9 +147,17 @@ func TestTouchedFields_YaesuUnchanged(t *testing.T) {
 }
 
 // TestTouchedFields_UnreachableFieldIsNotTouched pins the rule design D4
-// states in those words: a field the capabilities mark Unreachable in
-// that bank is not touched by an add. The FTdx10's missing display flag
-// is the real case; here it is exercised directly.
+// states in those words, in the scope Wave-1c review 1 (finding 1)
+// settled it to: a field the capabilities mark Unreachable in that bank
+// is not touched by an add — for the UNCONDITIONAL six, which are in the
+// set because the frame always carries them rather than because anyone
+// asked. A bank that expresses only some of the six is the Icom case the
+// filter exists for; here it is exercised directly on tag.
+//
+// The three Known-conditional fields keep their places in the same
+// answer, unfiltered, which is the other half of the rule: their
+// presence IS a request, so an unreachable one must reach the gate and
+// be refused, not quietly leave the set.
 func TestTouchedFields_UnreachableFieldIsNotTouched(t *testing.T) {
 	caps := testCapabilities()
 	// Make tag Unreachable on MEM and check it drops out — and ONLY it.
@@ -158,11 +190,16 @@ func TestTouchedFields_UnreachableFieldIsNotTouched(t *testing.T) {
 	}
 }
 
-// TestTouchedFields_TierFieldsNeedKnownAndReachable: the tier's fields
-// join the touched set only when the channel carries a Known value AND
-// the bank can reach the field — two separate questions, one about the
-// file and one about the radio.
-func TestTouchedFields_TierFieldsNeedKnownAndReachable(t *testing.T) {
+// TestTouchedFields_TierFieldsAdmittedByKnownAlone: the tier's fields
+// join the touched set on ONE question — does this channel carry a Known
+// value for the field, i.e. did the user ask for it? — and the radio's
+// capabilities are deliberately not consulted at the door. A Known value
+// the bank cannot reach still enters the set, so the per-field gate can
+// REFUSE the channel with the reason that names the field, which is what
+// this project does with a request it cannot honour (Wave-1c review 1,
+// findings 1 and 5). Whether the field is writable is the gate's
+// question, asked below in TestDiff_KnownTierFieldOnUnreachableBankIsRefused.
+func TestTouchedFields_TierFieldsAdmittedByKnownAlone(t *testing.T) {
 	caps := icomTestCapabilities()
 	data := *icomChannelData(145_500_000)
 
@@ -179,18 +216,69 @@ func TestTouchedFields_TierFieldsNeedKnownAndReachable(t *testing.T) {
 		t.Errorf("touchedFields() = %v, want %v", got, want)
 	}
 
-	// Unreachable wins over Known: drop duplex from the bank and the
-	// Known value stops being touched.
+	// Known SURVIVES unreachability: drop duplex from the bank and the
+	// Known value stays touched, so the gate refuses it by name instead
+	// of the write going out with the duplex request evaporated.
 	fields := make(map[spec.Field]spec.FieldSupport, len(caps.Banks[0].Fields))
 	for f, fs := range caps.Banks[0].Fields {
 		fields[f] = fs
 	}
 	delete(fields, spec.FieldDuplex)
 	caps.Banks[0].Fields = fields
+	var sawDuplex bool
 	for _, f := range touchedFields(caps, spec.BankMemory, data) {
 		if f == spec.FieldDuplex {
-			t.Error("touchedFields() still reports duplex after the bank stopped declaring it")
+			sawDuplex = true
 		}
+	}
+	if !sawDuplex {
+		t.Error("touchedFields() dropped a Known duplex once the bank stopped declaring it; the request must reach the gate to be refused")
+	}
+}
+
+// TestDiff_KnownTierFieldOnUnreachableBankIsRefused is finding 5's pin at
+// the level a user meets it: a version-2 CSV written for one radio,
+// imported into a codeplug for a radio whose bank has no room for the
+// field (csvio.Import accepts both header versions and carries no radio
+// identity, so nothing upstream catches it), must be REFUSED at plan
+// time and told which field is the problem — not written with the
+// request silently missing.
+func TestDiff_KnownTierFieldOnUnreachableBankIsRefused(t *testing.T) {
+	caps := icomTestCapabilities()
+	caps.Banks[0].Fields[spec.FieldToneRx] = spec.FieldSupport{Read: spec.Supported, Write: spec.Supported}
+	// This radio has no filter at all — the bank stops declaring it.
+	fields := make(map[spec.Field]spec.FieldSupport, len(caps.Banks[0].Fields))
+	for f, fs := range caps.Banks[0].Fields {
+		fields[f] = fs
+	}
+	delete(fields, spec.FieldFilter)
+	caps.Banks[0].Fields = fields
+	if fs := caps.FieldSupport(spec.BankMemory, spec.FieldFilter); !fs.Unreachable() {
+		t.Fatalf("FieldFilter support = %+v, want Unreachable", fs)
+	}
+
+	baseline := &Codeplug{
+		Schema: CurrentSchema, Radio: RadioInfo{Model: "TEST-ICOM", CATID: "A4"},
+		Channels: []Channel{{Slot: "G01-001"}, {Slot: "G01-002"}},
+	}
+	file := &Codeplug{
+		Schema: CurrentSchema, Radio: RadioInfo{Model: "TEST-ICOM", CATID: "A4"},
+		Channels: []Channel{
+			{Slot: "G01-001", Data: icomChannelData(145_500_000)}, // Filter is Known here
+			{Slot: "G01-002"},
+		},
+	}
+
+	res, err := Diff(baseline, file, caps)
+	if err != nil {
+		t.Fatalf("Diff() error = %v", err)
+	}
+	e := res.Entries[0]
+	if !e.Blocked {
+		t.Fatal("Blocked = false, want true: the file asks for a filter this radio has no room for")
+	}
+	if !strings.Contains(e.BlockReason, "filter not writable on this radio") {
+		t.Errorf("BlockReason = %q, want it to name filter", e.BlockReason)
 	}
 }
 
@@ -567,5 +655,35 @@ func TestValidate_FrequencyBoundsReachPastUint32(t *testing.T) {
 	}
 	if !found {
 		t.Error("Validate() accepted a 12 GHz channel on a 10.5 GHz radio")
+	}
+}
+
+// TestUnconditionallyAdded_IsExactlyTheAlwaysTransmittedSix pins the set
+// touchedFields applies the Unreachable filter to. It is derived from
+// addedFields rather than restated, so this test is a statement of WHICH
+// SIX, not a duplicate of the derivation: the six fields a write frame
+// carries whatever the channel says, and therefore the only six a bank
+// may legitimately be missing without anybody having asked for them.
+//
+// Membership matters in both directions. A field wrongly IN this set is
+// one whose Known value can be dropped instead of refused (Wave-1c
+// review 1, finding 1); a field wrongly OUT of it blocks every channel
+// on a bank that cannot express it, over a value nobody chose.
+func TestUnconditionallyAdded_IsExactlyTheAlwaysTransmittedSix(t *testing.T) {
+	want := map[spec.Field]bool{
+		spec.FieldFrequency:  true,
+		spec.FieldMode:       true,
+		spec.FieldClarifier:  true,
+		spec.FieldCTCSSState: true,
+		spec.FieldShift:      true,
+		spec.FieldTag:        true,
+	}
+	if !reflect.DeepEqual(unconditionallyAdded, want) {
+		t.Errorf("unconditionallyAdded = %v, want %v", unconditionallyAdded, want)
+	}
+	for _, f := range []spec.Field{spec.FieldCTCSSTone, spec.FieldTagDisplay, spec.FieldScanSkip} {
+		if unconditionallyAdded[f] {
+			t.Errorf("%s is in unconditionallyAdded: it is Known-conditional, so its presence IS a request and must never be filtered away", f)
+		}
 	}
 }

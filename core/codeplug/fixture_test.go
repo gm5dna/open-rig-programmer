@@ -67,6 +67,36 @@ func testCapabilities() spec.Capabilities {
 	}
 }
 
+// yaesuProfileShapedCapabilities is testCapabilities() with its MEM bank
+// re-keyed onto what the REGISTERED Yaesu profiles actually declare for
+// the three FieldState-carrying pre-tier fields: the ZERO FieldSupport,
+// Unreachable in both directions.
+//
+//   - core/driver/ft710's bankFields: FieldCTCSSTone and FieldScanSkip
+//     are {} — no MW/MT frame byte carries either;
+//   - core/driver/ftdx10's and ftdx101's: FieldTagDisplay is {} as well
+//     — their combined MT form takes no display flag.
+//
+// testCapabilities() declares all three SUPPORTED, which is the opposite
+// of every registered radio, and Wave-1c review 1 (finding 2, HIGH)
+// showed why that matters: a pin keyed on a fixture that AGREES with the
+// happy path cannot see a regression that only bites where the radio
+// disagrees. This fixture is the disagreeing one, and the union of the
+// two profile shapes — every zero entry any registered profile has, on
+// one bank — so a single test covers both.
+func yaesuProfileShapedCapabilities() spec.Capabilities {
+	caps := testCapabilities()
+	fields := make(map[spec.Field]spec.FieldSupport, len(caps.Banks[0].Fields))
+	for f, fs := range caps.Banks[0].Fields {
+		fields[f] = fs
+	}
+	fields[spec.FieldCTCSSTone] = spec.FieldSupport{}
+	fields[spec.FieldScanSkip] = spec.FieldSupport{}
+	fields[spec.FieldTagDisplay] = spec.FieldSupport{}
+	caps.Banks[0].Fields = fields
+	return caps
+}
+
 // testBaselineCodeplug builds a fresh, valid *Codeplug matching
 // testCapabilities(): "001" (required) and "002" are populated MEM
 // channels, "003" is an empty MEM channel, both PMS slots (NoBlank) are
