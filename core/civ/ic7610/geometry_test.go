@@ -4,6 +4,7 @@ package ic7610_test
 
 import (
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
@@ -317,28 +318,46 @@ func TestGeometry_WitnessBindsTheRecord(t *testing.T) {
 
 	// --- 7. The unmapped regions, both directions -------------------------
 	t.Run("the_encoder_always_writes_the_template", func(t *testing.T) {
+		cmd, err := p.BuildMemorySet(goldenRecord())
+		if err != nil {
+			t.Fatalf("BuildMemorySet(goldenRecord()): %v", err)
+		}
+		built := cmd.Bytes()[prefix : len(cmd.Bytes())-1]
+		if built[ic7610.SelectNibbleOffset] != 0x00 {
+			t.Errorf("BuildMemorySet emitted %#02x at record offset %d, want 0x00 - the encoder writes the Fixed template at every unmapped region",
+				built[ic7610.SelectNibbleOffset], ic7610.SelectNibbleOffset)
+		}
+		if built[ic7610.DataModeNibbleOffset]&0xF0 != 0x00 {
+			t.Errorf("BuildMemorySet emitted %#02x at record offset %d, want a ZERO high nibble",
+				built[ic7610.DataModeNibbleOffset], ic7610.DataModeNibbleOffset)
+		}
+	})
+
+	// A neutral record that CLAIMS one of the two unmapped fields is not
+	// encoded with the template silently: it is REFUSED, and the refusal is
+	// asserted here rather than swallowed. E6 forbids rewriting an unmapped
+	// region, and dropping a value the caller supplied would be exactly the
+	// silent rewrite the ruling exists to prevent - so core/civ names the
+	// field and stops. Two arms, because the two regions are independent
+	// evidence and neither capture speaks for the other.
+	t.Run("the_encoder_refuses_a_record_claiming_an_unmapped_field", func(t *testing.T) {
 		for _, tc := range []struct {
-			name string
-			rec  civ.MemoryRecord
+			name  string
+			rec   civ.MemoryRecord
+			field string
 		}{
-			{"the golden record", goldenRecord()},
-			{"a record claiming a SELECT group", withSelect(goldenRecord(), "★2")},
-			{"a record claiming a data mode", withDataMode(goldenRecord(), "DATA 2")},
+			{"a record claiming a SELECT group", withSelect(goldenRecord(), "★2"), "select"},
+			{"a record claiming a data mode", withDataMode(goldenRecord(), "DATA 2"), "data_mode"},
 		} {
 			cmd, err := p.BuildMemorySet(tc.rec)
-			if err != nil {
-				// A neutral value the layout maps nowhere may be refused
-				// outright, which is E6's write-side consequence too.
+			if err == nil {
+				t.Errorf("%s: BuildMemorySet SUCCEEDED, producing % X.\nRuling E6 says an unmapped region is never rewritten, so a record carrying a value the 25-byte layout has nowhere to put must be refused with the field named - dropping it would write a record the caller did not ask for.",
+					tc.name, cmd.Bytes())
 				continue
 			}
-			built := cmd.Bytes()[prefix : len(cmd.Bytes())-1]
-			if built[ic7610.SelectNibbleOffset] != 0x00 {
-				t.Errorf("%s: BuildMemorySet emitted %#02x at record offset %d, want 0x00 - the encoder writes the Fixed template at every unmapped region",
-					tc.name, built[ic7610.SelectNibbleOffset], ic7610.SelectNibbleOffset)
-			}
-			if built[ic7610.DataModeNibbleOffset]&0xF0 != 0x00 {
-				t.Errorf("%s: BuildMemorySet emitted %#02x at record offset %d, want a ZERO high nibble",
-					tc.name, built[ic7610.DataModeNibbleOffset], ic7610.DataModeNibbleOffset)
+			if !strings.Contains(err.Error(), tc.field) {
+				t.Errorf("%s: BuildMemorySet refused, but the error does not name %q, so a caller cannot tell WHICH field it may not send:\n  %v",
+					tc.name, tc.field, err)
 			}
 		}
 	})

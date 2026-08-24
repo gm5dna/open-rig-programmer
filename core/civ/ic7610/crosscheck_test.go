@@ -414,6 +414,38 @@ func TestCrosscheck_LedgerAndTranscriptionAndProfile(t *testing.T) {
 		bD1[row.key] = row
 	}
 
+	// --- Leg 0: the row census -------------------------------------------
+	//
+	// EVERY ROW CONSUMED is a claim about the WHOLE file, and the per-leg
+	// counts below cannot make it: a leg that counts only the diagram it
+	// expects leaves a fabricated row in any OTHER diagram unremarked, and a
+	// deleted row unremarked in a diagram no leg looks at. So the census is
+	// taken once, here, over the totals, and each diagram's own leg then
+	// consumes what the census counted.
+	t.Run("leg0_every_row_is_accounted_for", func(t *testing.T) {
+		for name, c := range map[string]struct {
+			got  int
+			want int
+			what string
+		}{
+			"ledger D1":        {len(ledgerD1), 8, "the memory-content strip's eight bracket groups"},
+			"ledger D2":        {len(ledgerOther["D2"]), 1, "the enlarged (3) sub-diagram"},
+			"ledger D3":        {len(ledgerOther["D3"]), 1, "the enlarged (11) sub-diagram - L's OWN witness to the leader routing erratum 5 exists for"},
+			"ledger D4":        {len(ledgerOther["D4"]), 3, "the clear list's three printed lines"},
+			"ledger total":     {len(ledger), 13, "eight D1 rows, two sub-diagrams and three clear-list lines"},
+			"transcription D1": {len(bD1), 8, "the same eight bracket groups"},
+			"transcription D2": {len(bOther["D2"]), 1, "the enlarged (3) sub-diagram"},
+			"transcription D3": {len(bOther["D3"]), 1, "the enlarged (11) sub-diagram"},
+			"transcription total": {len(transcription), 10,
+				"eight D1 rows and two sub-diagrams; B transcribed no clear list"},
+		} {
+			if c.got != c.want {
+				t.Errorf("%s has %d rows, want %d (%s). A row that appears is evidence nobody derived; a row that vanishes is evidence that stopped being evidence.",
+					name, c.got, c.want, c.what)
+			}
+		}
+	})
+
 	// --- Leg 1: D1 rows - L is congruent with B on label and index --------
 	t.Run("leg1_ledger_equals_transcription", func(t *testing.T) {
 		if len(ledgerD1) != 8 {
@@ -493,14 +525,24 @@ func TestCrosscheck_LedgerAndTranscriptionAndProfile(t *testing.T) {
 				if key.width() != ic7610.AddressBytes {
 					t.Errorf("the address row %s spans %d printed indices, want %d (ic7610.AddressBytes)", key, key.width(), ic7610.AddressBytes)
 				}
-				for _, sp := range layout.Fields {
-					if sp.Offset < 0 {
-						t.Errorf("%s sits at a negative offset", sp.Field)
-					}
+				// THE PLAN ASKS FOR "no span sits at any offset for it", AND
+				// THAT CHECK CANNOT LIVE HERE. Printed indices 1 and 2 map to
+				// record offsets -2 and -1, and core/civ refuses a negative
+				// offset at MustNewProfile (profilevalidate.go's span rule),
+				// i.e. at package init - so a span claiming the address
+				// would have panicked before this test's binary reached main
+				// and no assertion in this function could observe it. A loop
+				// looking for one is dead code that reads like cover.
+				//
+				// What IS checkable here is that the binding table makes no
+				// claim on the record for this row, and it is checked
+				// because the table is hand-written: a member or an unmapped
+				// offset added here would silently steal a span from the
+				// exactly-once census below.
+				if len(bind.fields) != 0 || len(bind.unmapped) != 0 {
+					t.Errorf("the address row %s declares %v and unmapped %v; it must declare NEITHER - it is not record content at all (spec Erratum 1)",
+						key, bind.fields, bind.unmapped)
 				}
-				// The address lies outside the record entirely, so there is
-				// no record offset it could occupy: printed 1 and 2 map to
-				// record offsets -2 and -1.
 				continue
 			}
 
@@ -550,10 +592,106 @@ func TestCrosscheck_LedgerAndTranscriptionAndProfile(t *testing.T) {
 			switch reached[sp.Field] {
 			case 1:
 			case 0:
-				t.Errorf("the layout's %s span at offset %d is reached by NO printed row's union - a span nothing in the evidence binds is a span nobody checked",
+				t.Fatalf("the layout's %s span at offset %d is reached by NO printed row's union - a span nothing in the evidence binds is a span nobody checked",
 					sp.Field, sp.Offset)
 			default:
 				t.Errorf("the layout's %s span is reached by %d unions, want exactly 1", sp.Field, reached[sp.Field])
+			}
+		}
+	})
+
+	// --- Leg 3b: B's printed VALUE LISTS pin the enums, and the radix ------
+	//
+	// Leg 3 binds B's `encoding` column to each span's Encoding. That leaves
+	// the values themselves unbound, and three things then rest on prose
+	// alone: RULING OQ1's radix, and the completeness of each printed list.
+	// This leg decomposes the D1 (9),(10) cell - the one printed row that
+	// carries two fields' vocabularies - and requires the profile's two enums
+	// to EQUAL what the page prints, read at the ruling's radix.
+	t.Run("leg3b_the_printed_value_lists_pin_the_enums_and_RULING_OQ1", func(t *testing.T) {
+		row, ok := bD1[indexKey{9, 10}]
+		if !ok {
+			t.Fatal("the transcription has no D1 row for printed indices 9,10; the mode and filter vocabularies are that row's content")
+		}
+
+		// The cell prints the two table columns in printed order: the
+		// (9) Receiving mode column first, then the (10) Filter setting
+		// column INCLUDING its two printed em-dash cells (B's own note 7).
+		// The boundary between them is where the printed code sequence
+		// RESTARTS - a column's codes ascend, and the filter column reopens
+		// at 01 below the mode column's last code. That is a rule read off
+		// the page's own shape rather than a count copied into the test.
+		type column struct {
+			values   map[byte]string
+			emDashes int
+		}
+		columns := []column{{values: map[byte]string{}}}
+		last := -1
+		for _, item := range strings.Split(row.values, " | ") {
+			if item == "—" {
+				columns[len(columns)-1].emDashes++
+				continue
+			}
+			code, name, ok := strings.Cut(item, ":")
+			if !ok {
+				t.Fatalf("printed value %q is neither a <code>:<name> pair nor the printed em-dash", item)
+			}
+			b := printedCodeToWireByte(t, code)
+			if int(b) <= last {
+				columns = append(columns, column{values: map[byte]string{}})
+			}
+			last = int(b)
+			cur := columns[len(columns)-1].values
+			if prev, dup := cur[b]; dup {
+				t.Fatalf("printed code %q appears twice in one column (%q then %q)", code, prev, name)
+			}
+			cur[b] = name
+		}
+		if len(columns) != 2 {
+			t.Fatalf("the (9),(10) cell decomposes into %d printed columns, want 2 - one per field of this two-field printed row", len(columns))
+		}
+		modes, filters := columns[0], columns[1]
+		if modes.emDashes != 0 {
+			t.Errorf("the Receiving mode column carries %d printed em-dashes, want 0", modes.emDashes)
+		}
+		if filters.emDashes != 2 {
+			t.Errorf("the Filter setting column carries %d printed em-dashes, want 2 - its fourth and fifth rows are printed \"-\", opposite PSK and PSK-R (matrix Errata (rev 1) erratum 6)",
+				filters.emDashes)
+		}
+
+		// THE PROFILE'S OWN ENUMS MUST EQUAL THE PRINTED LISTS, EXACTLY.
+		// Equality in both directions is the point: a dropped code and an
+		// invented one are the same kind of error, and before this leg
+		// existed neither was caught.
+		for _, c := range []struct {
+			field   civ.FieldID
+			printed map[byte]string
+			what    string
+		}{
+			{civ.FieldMode, modes.values, "the (1)Receiving mode column of PDF p.11's two-column table"},
+			{civ.FieldFilter, filters.values, "the (2)Filter setting column of the same table"},
+		} {
+			got := spansByField[c.field].Enum
+			if !sameEnum(got, c.printed) {
+				t.Errorf("%s's enum does not equal %s.\n  profile: %v\n  printed: %v\n"+
+					"A code the page prints and the profile drops fails to decode a real record; a code the profile invents is a radio claim this document does not make.",
+					c.field, c.what, got, c.printed)
+			}
+		}
+
+		// RULING OQ1, made mechanical. The other eight printed codes are
+		// identical under either reading; only these two differ, so they are
+		// named here so that the failure says WHICH decision was reversed.
+		for code, name := range map[string]string{"12": "PSK", "13": "PSK-R"} {
+			wire := printedCodeToWireByte(t, code)
+			if got := spansByField[civ.FieldMode].Enum[wire]; got != name {
+				t.Errorf("printed mode code %q does not map to %q at wire byte %#02x (it maps to %q).\n"+
+					"RULING OQ1 (24/08/2026, orchestrator) is HEXADECIMAL: the printed %s IS the wire byte %#02x, not decimal %s (%#02x). Reversing that ruling is the orchestrator's to do, not an editor's.",
+					code, name, wire, got, code, wire, code, decimalReadingOf(t, code))
+			}
+			if _, taken := spansByField[civ.FieldMode].Enum[decimalReadingOf(t, code)]; taken {
+				t.Errorf("wire byte %#02x carries a mode name; that is the DECIMAL reading of the printed %q, which RULING OQ1 rejected",
+					decimalReadingOf(t, code), code)
 			}
 		}
 	})
@@ -602,6 +740,39 @@ func TestCrosscheck_LedgerAndTranscriptionAndProfile(t *testing.T) {
 
 	// --- Leg 5: D2 and D3 sub-diagram rows are NIBBLE evidence -------------
 	t.Run("leg5_subdiagram_rows_are_nibble_evidence", func(t *testing.T) {
+		// L'S OWN SUB-DIAGRAM ROWS ARE CONSUMED FIRST. They carry no label -
+		// nothing is printed against either circled index - so their evidence
+		// is in the leader routing their notes record, and L's D3 row is the
+		// INDEPENDENT witness to the one hazard on this record that matrix
+		// erratum 5 exists for. Reading B's D3 row and dropping L's would
+		// leave that hazard attested by one leg where the tree holds two.
+		lD2 := ledgerOther["D2"]
+		if len(lD2) != 1 || lD2[0].key != (indexKey{3, 3}) {
+			t.Fatalf("the ledger carries %d D2 rows (%v); want exactly one, for printed index 3", len(lD2), lD2)
+		}
+		lD3 := ledgerOther["D3"]
+		if len(lD3) != 1 || lD3[0].key != (indexKey{11, 11}) {
+			t.Fatalf("the ledger carries %d D3 rows (%v); want exactly one, for printed index 11", len(lD3), lD3)
+		}
+		for _, row := range append(append([]ledgerRow{}, lD2...), lD3...) {
+			if row.label != "" {
+				t.Errorf("the ledger's %s row carries label_verbatim %q; nothing is printed against either sub-diagram's index, and a label here would be a reading rather than a transcription",
+					row.diagram, row.label)
+			}
+		}
+		// L's D3 notes route the two leaders, and this is where its routing
+		// is bound to the profile rather than merely stored. The cell is
+		// decomposed, not searched: the clause naming the UPPER label's
+		// target cell must be exactly the one the profile acts on.
+		upper, lower := ledgerLeaderTargets(t, lD3[0].notes)
+		if upper != "RIGHT" {
+			t.Errorf("the ledger's D3 row routes the UPPER printed label to the %s cell; the profile puts that label on the LOW (right) nibble.\n"+
+				"This is matrix Errata (rev 1) erratum 5's hazard, and a disagreement here is a STOP for arbitration against PDF p.12, never a flip of the enum.", upper)
+		}
+		if lower != "LEFT" {
+			t.Errorf("the ledger's D3 row routes the LOWER printed label to the %s cell; ruling E6 leaves that (the HIGH nibble's four-valued data mode) unmapped", lower)
+		}
+
 		d2 := bOther["D2"]
 		if len(d2) != 1 || d2[0].key != (indexKey{3, 3}) {
 			t.Fatalf("B carries %d D2 rows (%v); want exactly one, for printed index 3", len(d2), d2)
@@ -699,11 +870,30 @@ func TestCrosscheck_LedgerAndTranscriptionAndProfile(t *testing.T) {
 		if got := byKey[indexKey{3, 3}].label; got != "“FF”" {
 			t.Errorf("the ledger's D4 (3) row reads %q, want the printed “FF” - this is one half of the recorded contradiction", got)
 		}
-		if d2 := ledgerOther["D2"]; len(d2) != 1 || !strings.Contains(d2[0].notes, "Fixed") {
-			t.Errorf("the ledger's D2 row does not record the printed \"Fixed\" leader on (3)'s left nibble - this is the other half of the contradiction, and both must survive in the evidence")
+		// The other half is L's D2 row, and it is DECOMPOSED rather than
+		// searched: this file's discipline is no substring matching, and a
+		// bare `Contains(notes, "Fixed")` would pass on a notes cell that no
+		// longer said what leg 6 claims it says. The plan names two things -
+		// D2's `Fixed` leader AND its printed `0` - so both are extracted
+		// from their own clause and compared exactly.
+		lD2 := ledgerOther["D2"]
+		if len(lD2) != 1 {
+			t.Fatalf("the ledger carries %d D2 rows, want 1", len(lD2))
 		}
-		if b, ok := bD1[indexKey{3, 3}]; !ok || !strings.Contains(b.values, "“FF”") {
-			t.Errorf("B's D1 (3) row does not carry the clear list's “FF”; the two legs must both record it")
+		if got := ledgerLeftLeaderLabel(t, lD2[0].notes); got != "Fixed (to the left cell)" {
+			t.Errorf("the ledger's D2 row routes its first printed leader as %q, want %q - the left nibble's leader is what admits no value but 0", got, "Fixed (to the left cell)")
+		}
+		if got := ledgerPrintedBoxCells(t, lD2[0].anchor); got != "0 (left) and X (right)" {
+			t.Errorf("the ledger's D2 row records the box as printing %q, want %q - the printed 0 is the half of the contradiction that the \"FF\" below contradicts", got, "0 (left) and X (right)")
+		}
+		b, ok := bD1[indexKey{3, 3}]
+		if !ok {
+			t.Fatal("B has no D1 row for printed index 3")
+		}
+		printed := strings.Split(b.values, " | ")
+		if got := printed[len(printed)-1]; got != "③: “FF”" {
+			t.Errorf("B's D1 (3) row closes with %q, want %q - both legs must carry the clear list's FF, and this plan reconciles it with the Fixed 0 above by refusing to build either form",
+				got, "③: “FF”")
 		}
 
 		// No builder makes the clear frame, and the gate refuses it for
@@ -781,6 +971,118 @@ func checkEncoding(t *testing.T, key indexKey, encoding string, bind rowBinding,
 	default:
 		t.Errorf("printed index %s carries encoding %q, which this crosscheck does not understand - an unrecognised encoding is a failure, never a skip", key, encoding)
 	}
+}
+
+// printedCodeToWireByte turns one printed two-digit code from the (1)Receiving
+// mode or (2)Filter setting column into the wire byte it denotes.
+//
+// THE BASE BELOW IS RULING OQ1 (24/08/2026, orchestrator), and this function
+// IS that ruling, mechanically: the printed codes are HEXADECIMAL, so the
+// printed 12 and 13 are the wire bytes 0x12 and 0x13 and not decimal 12 and
+// 13 (0x0C and 0x0D). Change the base and TestCrosscheck goes red - which is
+// the whole point of it living here. Until this leg existed the ruling lived
+// only in prose (progress.md, doc.go's ic7610-mode-code-radix entry and
+// profile.go's comment), and a later editor could have reversed the
+// orchestrator's decision without a single test noticing.
+//
+// The grade is unchanged: ASSUMED, lifted by the Stage R capture
+// ic7610-mode-code-radix. What is pinned here is the DECISION, not the fact.
+func printedCodeToWireByte(t *testing.T, code string) byte {
+	t.Helper()
+	if len(code) != 2 {
+		t.Fatalf("printed code %q is not two digits; the page prints every code as a two-digit pair", code)
+	}
+	n, err := strconv.ParseUint(code, 16, 8) // 16: RULING OQ1
+	if err != nil {
+		t.Fatalf("printed code %q is not a two-digit hexadecimal pair: %v", code, err)
+	}
+	return byte(n)
+}
+
+// decimalReadingOf returns the byte the same printed code would denote under
+// the DECIMAL reading RULING OQ1 rejected. It exists so the failure messages
+// can name both candidates, and so the rejected reading can be asserted
+// ABSENT rather than merely not-chosen.
+func decimalReadingOf(t *testing.T, code string) byte {
+	t.Helper()
+	n, err := strconv.ParseUint(code, 10, 8)
+	if err != nil {
+		t.Fatalf("printed code %q has no decimal reading: %v", code, err)
+	}
+	return byte(n)
+}
+
+// ledgerLeaderTargets decomposes L's D3 notes into the cell each printed
+// leader lands on. STRICT: the clause is cut out of its own sentence and its
+// parts compared exactly, never searched for, because the ORDER of the two
+// printed labels and the cell each lands on is precisely the evidence matrix
+// Errata (rev 1) erratum 5 exists to protect.
+func ledgerLeaderTargets(t *testing.T, notes string) (upper, lower string) {
+	t.Helper()
+	const marker = "Leader labels to the right of the box: "
+	_, after, ok := strings.Cut(notes, marker)
+	if !ok {
+		t.Fatalf("the ledger's D3 notes carry no clause opening %q; routing the two leaders is what this row is FOR:\n  %s", marker, notes)
+	}
+	parts := strings.Split(after, " | ")
+	if len(parts) != 2 {
+		t.Fatalf("the ledger's D3 notes route %d leaders, want 2 - one per nibble of printed (11):\n  %s", len(parts), notes)
+	}
+	target := func(part, wantLine string) string {
+		_, clause, ok := strings.Cut(part, " (")
+		if !ok {
+			t.Fatalf("the ledger's D3 leader %q carries no parenthesised routing clause", part)
+		}
+		clause, _, ok = strings.Cut(clause, ")")
+		if !ok {
+			t.Fatalf("the ledger's D3 routing clause in %q is never closed", part)
+		}
+		line, rest, ok := strings.Cut(clause, ", ")
+		if !ok {
+			t.Fatalf("the ledger's D3 routing clause %q is not \"<line>, leader lands on the <cell> cell\"", clause)
+		}
+		if line != wantLine {
+			t.Fatalf("the ledger's D3 leaders are transcribed in the order %q; %q must come first, because which label is printed ABOVE the other is the evidence erratum 5 turns on", line, wantLine)
+		}
+		const lead, tail = "leader lands on the ", " cell"
+		if !strings.HasPrefix(rest, lead) || !strings.HasSuffix(rest, tail) {
+			t.Fatalf("the ledger's D3 routing clause %q names no target cell", rest)
+		}
+		return rest[len(lead) : len(rest)-len(tail)]
+	}
+	return target(parts[0], "upper line"), target(parts[1], "lower line")
+}
+
+// ledgerLeftLeaderLabel decomposes L's D2 notes and returns the FIRST printed
+// leader label verbatim - the one that lands on (3)'s left nibble.
+func ledgerLeftLeaderLabel(t *testing.T, notes string) string {
+	t.Helper()
+	const marker = "Leader labels below the box: "
+	_, after, ok := strings.Cut(notes, marker)
+	if !ok {
+		t.Fatalf("the ledger's D2 notes carry no clause opening %q:\n  %s", marker, notes)
+	}
+	parts := strings.Split(after, " | ")
+	if len(parts) != 2 {
+		t.Fatalf("the ledger's D2 notes route %d leaders, want 2 - one per nibble of printed (3):\n  %s", len(parts), notes)
+	}
+	return parts[0]
+}
+
+// ledgerPrintedBoxCells decomposes L's D2 visual_anchor and returns what the
+// two box cells are recorded as printing.
+func ledgerPrintedBoxCells(t *testing.T, anchor string) string {
+	t.Helper()
+	const marker = "the box cells print "
+	_, after, ok := strings.Cut(anchor, marker)
+	if !ok {
+		t.Fatalf("the ledger's D2 anchor carries no clause opening %q; the printed 0 is half the recorded contradiction:\n  %s", marker, anchor)
+	}
+	cells, _, ok := strings.Cut(after, ".")
+	if !ok {
+		t.Fatalf("the ledger's D2 anchor clause %q is not closed by a full stop", after)
+	}
+	return cells
 }
 
 // splitPrintedList splits a values_verbatim cell on its printed separator and

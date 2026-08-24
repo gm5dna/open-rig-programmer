@@ -283,7 +283,14 @@
 //     AND UNRESOLVED EITHER WAY. The only FF this document attaches to the
 //     memory record is on the WRITE side, in the clear list above; that is a
 //     clear COMMAND whose byte (3) is FF, not a statement about what a read
-//     returns. THIS PACKAGE MAKES NO SUCH CLAIM: golden_test.go's
+//     returns. WHAT DEPENDS ON IT: whether the driver has a SECOND way to
+//     recognise an empty slot besides D5 entry 2(a)'s FA. Nothing in this
+//     tier rests on it today - empty-slot recognition keys on
+//     errors.Is(err, transport.ErrRejected) alone (tier ruling T4) - so what
+//     the entry protects is the future: a driver that later read an all-FF
+//     record as "empty" on this reading would be treating a corrupted record
+//     as a blank channel, and could report a slot erased that is merely
+//     unreadable. THIS PACKAGE MAKES NO SUCH CLAIM: golden_test.go's
 //     TestGolden_AllFFRecordFailsToParse pins that an all-FF record fails to
 //     decode with a parse error naming an offset, because 0xF is in none of
 //     the three mapped enums, and records the question rather than answering
