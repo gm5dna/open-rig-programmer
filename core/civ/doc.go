@@ -15,22 +15,31 @@
 // restates it rather than importing it, because the first shared helper
 // is how a sibling becomes a dependency.
 //
-// # What this package does NOT do yet
+// # The transport seam
 //
-// IT DOES NOT IMPORT core/transport, and that is deliberate. Spec D2
-// generalises transport.Engine over a Framing seam, and the CI-V adapter
-// for that seam belongs in this package — NewAccumulator, IsRejection,
-// Allow, InitSequence, DrainPolicy, NoteSent. It is a SEPARATE FOLLOW-UP
-// TASK, landing after the transport seam itself merges; every piece it
-// needs is already here and exported:
+// IT IMPORTS core/transport, and only in that direction. Spec D2
+// generalises transport.Engine over a Framing seam and puts the CI-V
+// adapter for it in THIS package: "the CAT framing adapter lives in
+// core/transport … the CI-V adapter lives in core/civ, which imports
+// core/transport and not the other way". framing.go is that adapter — the
+// "SEPARATE FOLLOW-UP TASK" earlier revisions of this comment deferred to
+// — and each of the seam's six methods is one of this package's pieces
+// behind the adapter's own lock:
 //
 //	Framing method     this package's piece
 //	-----------------  -------------------------------------------
-//	NewAccumulator     Profile.NewAccumulator / NewFrameAccumulator
-//	IsRejection        IsRejection
+//	NewAccumulator     Profile.NewAccumulator, built in NewFraming
+//	IsRejection        Profile.IsRejection (address-checked)
 //	Allow              Profile.AllowedCommand
 //	InitSequence       EMPTY — see below
+//	DrainPolicy        DrainIdleGap / DrainCap
 //	NoteSent           FrameAccumulator.NoteSent
+//
+// framing.go also carries the three answer MATCHERS a CI-V driver builds
+// its CommandSpecs from (Profile.TransceiverIDAnswerMatcher,
+// MemoryAnswerMatcher, AcknowledgementMatcher), the two spec helpers that
+// keep the command class explicit (CIVReadSpec, CIVWriteWithAckSpec), and
+// the tier's central Init-under-flood rule.
 //
 // InitSequence is empty for CI-V, and that is a safety property rather
 // than an omission (spec D2, adjudication 3): the CAT framing sends AI0;
@@ -45,7 +54,10 @@
 // errors.go: a rejection is a wire condition this package RECOGNISES, and
 // which error value a rejected command surfaces as belongs to the engine
 // that issued it — spec D2 puts that in core/transport. The framing
-// adapter task reconciles the rest onto the transport's re-exported names.
+// adapter reconciles the rest at the seam: lockedAccumulator.Push
+// translates this package's *FrameTooLongError onto transport's, which is
+// what makes an oversize CI-V frame mark the stream CONTAMINATED instead
+// of closing the port as a generic I/O failure.
 //
 // # Non-goals, and why they are absent rather than refused
 //

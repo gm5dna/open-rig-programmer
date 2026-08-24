@@ -446,9 +446,9 @@ func NewEngine(p Port, d cat.Dialect, opts ...Option) (*Engine, error) {
 // not — accumulator, rejection detection, gate, init sequence, drain
 // policy, echo notification. NewEngine is the thin CAT wrapper over it
 // (catFraming), preserved unchanged for every Yaesu driver; the CI-V
-// Framing is designed to be supplied by a CI-V adapter over core/civ,
-// which is a follow-up task and does not exist yet (core/civ/doc.go's
-// "What this package does NOT do yet" names every piece it will need).
+// Framing is supplied by civ.NewFraming, the adapter over core/civ, which
+// imports THIS package and not the other way round (spec D2, and
+// core/civ/framing.go's own header).
 //
 // EVERYTHING NewEngine'S DOC COMMENT SAYS ABOUT WHO CHOOSES THE GATE
 // APPLIES HERE, AND MORE SO. The caller supplies the framing, and the

@@ -12,11 +12,13 @@ import (
 //
 // Spec D2 settles the cycle-free direction for the transport seam:
 // core/transport RE-EXPORTS core/cat's ErrRejected and ErrFrameTooLong, and
-// neutral callers use only the transport names. core/civ cannot follow that
-// yet — this task deliberately does not import core/transport (the CI-V
-// Framing adapter is a separate follow-up, see doc.go), and it must NEVER
-// import core/cat. So the values below are local, and the adapter task will
-// map them onto the transport names at the seam.
+// neutral callers use only the transport names. core/civ cannot USE those
+// values as its own, because transport's canonical ones live in core/cat —
+// a package this one must NEVER import, guarded both ways. So the values
+// below are local and the ADAPTER maps them onto the transport names at
+// the seam: lockedAccumulator.Push (framing.go) translates
+// *FrameTooLongError into transport's, which is what makes Engine's
+// handleReaderErr mark the stream CONTAMINATED rather than close the port.
 //
 // THERE IS NO ErrRejected HERE, and that is not an omission. A rejection is
 // a WIRE CONDITION this package recognises (IsRejection, frame.go), not an

@@ -22,8 +22,9 @@ package civ
 // transport always writes bytes nobody else can reach.
 //
 // Command satisfies the neutral transport.Command interface (Bytes and
-// String) BY SHAPE. It does not name it: this package deliberately does
-// not import core/transport in this task — see doc.go.
+// String), and since framing.go that is asserted by the COMPILER rather
+// than left to shape: `var _ transport.Command = Command{}` sits beside
+// the adapter's own Framing assertion.
 type Command struct {
 	frame []byte
 }
