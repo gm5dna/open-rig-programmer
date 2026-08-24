@@ -445,8 +445,10 @@ func NewEngine(p Port, d cat.Dialect, opts ...Option) (*Engine, error) {
 // neutral between wire protocols, and f supplies the six things that are
 // not — accumulator, rejection detection, gate, init sequence, drain
 // policy, echo notification. NewEngine is the thin CAT wrapper over it
-// (catFraming), preserved unchanged for every Yaesu driver; core/civ
-// supplies its own Framing for CI-V.
+// (catFraming), preserved unchanged for every Yaesu driver; the CI-V
+// Framing is designed to be supplied by a CI-V adapter over core/civ,
+// which is a follow-up task and does not exist yet (core/civ/doc.go's
+// "What this package does NOT do yet" names every piece it will need).
 //
 // EVERYTHING NewEngine'S DOC COMMENT SAYS ABOUT WHO CHOOSES THE GATE
 // APPLIES HERE, AND MORE SO. The caller supplies the framing, and the
@@ -1071,6 +1073,12 @@ func (e *Engine) waitFireAndForget(ctx context.Context, window time.Duration) ([
 // passes with no activity at all — no frame, no accumulator error. On
 // success it clears the CONTAMINATED state, if set (see doc.go). Serialised
 // against Do by e.mu, exactly like any other exchange.
+//
+// It can FAIL, and the failure has its own error: a stream that keeps
+// talking never yields a full QuietPeriod of silence, so the drain gives up
+// with ErrDrainCapExceeded once DrainPolicy.Cap has elapsed. Cap is an
+// ABSOLUTE bound on the whole drain, not a per-frame one, which is what
+// stops a chattering radio holding the engine mutex indefinitely.
 func (e *Engine) DrainToQuiet(ctx context.Context) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()

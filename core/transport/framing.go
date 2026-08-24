@@ -160,5 +160,12 @@ type Framing interface {
 	// AllowFunc carries, and for the same reason. The slice is the very
 	// one safety obligation 1 then gates and writes; it is live and
 	// writable, and a later attempt re-derives its own.
+	//
+	// CONTRACT, echo suppression: an implementation that suppresses echo
+	// MUST match the RECORDED BYTES — byte identity against what NoteSent
+	// was given — and MUST NOT suppress by position or by count. A
+	// position- or count-based rule discards whatever arrives first,
+	// which on a shared CI-V bus is as likely to be another controller's
+	// traffic, or the radio's real answer, as the echo it meant to drop.
 	NoteSent(frame []byte)
 }

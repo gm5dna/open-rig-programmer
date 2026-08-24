@@ -21,7 +21,7 @@ import "fmt"
 // deliberate difference from core/cat, three of whose builders emit fixed
 // literals on any receiver — CI-V has no frame at all without an address.
 
-// frameFrom builds FE FE <radio> <controller> body… FD for THIS profile.
+// frameFor builds FE FE <radio> <controller> body… FD for THIS profile.
 //
 // It allocates a fresh slice, which is what lets newCommand skip a copy:
 // every builder here constructs into a local buffer, never a

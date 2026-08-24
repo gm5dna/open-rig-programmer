@@ -48,10 +48,10 @@ var shiftByName = map[string]cat.Shift{
 	"MINUS":   cat.ShiftMinus,
 }
 
-// mtSetSpec is the transport spec for the combined MT Set: the ZERO
-// CommandSpec, which is transport's fire-and-forget mode — write the frame,
-// then listen for a bounded window in case a "?;" rejection arrives, and
-// treat silence as acceptance.
+// mtSetSpec is the transport spec for the combined MT Set:
+// transport.CATWriteSpec(), which is transport's fire-and-forget mode —
+// write the frame, then listen for a bounded window in case a "?;"
+// rejection arrives, and treat silence as acceptance.
 //
 // THAT SHAPE IS ASSUMED, NOT MANUAL-EVIDENCED — doc.go's register entry 9,
 // second half, where it was registered at the M9d-2 milestone review. This
@@ -65,7 +65,7 @@ var shiftByName = map[string]cat.Shift{
 // words and an erratum is owed at its next revision (recorded in
 // docs/superpowers/m9d2-baseline-manifest.md, "Note 6").
 //
-// Every part of that zero value is load-bearing, and it is why this is a
+// Every part of that spec is load-bearing, and it is why this is a
 // separate function from read.go's mtSpec rather than a reuse of it:
 //
 //   - NO answer matcher, and therefore no answer length. read.go's mtSpec pins the
@@ -73,16 +73,19 @@ var shiftByName = map[string]cat.Shift{
 //     right for a read and would be a bug here: on the assumed convention a
 //     Set produces no answer at all, so a spec that waited for an "MT" reply
 //     would spend the whole read timeout and then report a timeout for a
-//     write the radio had accepted perfectly. The absence of a prefix is what
-//     selects transport's fire-and-forget path (see transport.Engine.Do).
+//     write the radio had accepted perfectly. ClassWrite is what selects
+//     transport's fire-and-forget path (see transport.Engine.Do); before D2
+//     it was the ABSENCE of a prefix, an inference from an empty field that
+//     this claim is far too heavy to rest on — and the zero CommandSpec that
+//     keying implied is now REFUSED outright.
 //
 //   - Consequently this function needs no dialect argument and cannot fail,
 //     where read.go's mtSpec needs both: the answer geometry it derives is
 //     exactly what is absent here.
 //
 //   - RetryReads 0, necessarily. A write is NEVER resent — transport safety
-//     obligation 2 enforces this structurally, and Do refuses a
-//     fire-and-forget spec with a non-zero RetryReads outright (with
+//     obligation 2 enforces this structurally, and Do refuses any
+//     write-class spec with a non-zero RetryReads outright (with
 //     ErrInvalidSpec, before writing anything). Resending an accepted Set
 //     would write the channel twice; resending one whose fate is unknown
 //     would write it a second time on top of a first that may have landed.

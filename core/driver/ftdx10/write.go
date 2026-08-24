@@ -60,7 +60,7 @@ var shiftByName = map[string]cat.Shift{
 // marks the existence of the command's ANSWER FORM — the frame a READ draws
 // — and says nothing about what a Set produces.
 //
-// Every part of that zero value is load-bearing, and it is why this is a
+// Every part of that spec is load-bearing, and it is why this is a
 // separate function from read.go's mtSpec rather than a reuse of it:
 //
 //   - NO answer matcher, and therefore no derived answer length. mtSpec pins the
