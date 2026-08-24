@@ -490,11 +490,15 @@ func Import(r io.Reader) ([]codeplug.Channel, error) {
 
 		// The tier columns. In a VERSION-1 file none of them is in the
 		// header, so every cell() below reads "" — and "" would parse as
-		// Unknown, which is the wrong answer for a file that has no such
-		// column at all. hasTier is what keeps the two apart: without the
-		// columns the fields stay at their zero value, Absent, which says
-		// exactly what a version-1 file says about them, which is
-		// nothing.
+		// Unknown, "this radio has the field and we have not read it",
+		// which is the wrong answer for a file that has no such column at
+		// all. hasTier is what keeps the two apart: without the columns
+		// the ten are set to UNAVAILABLE (markTierFieldsUnavailable —
+		// design D4, decision 1, documented at that function), the state
+		// every producer in this project gives a field the radio does not
+		// have, and the one that leaves an imported channel comparing
+		// equal to a read of the same radio instead of modified in ten
+		// fields the file never mentioned.
 		if hasTier {
 			if err := parseTierCells(&data, cell); err != nil {
 				return nil, &ParseError{Line: line, Reason: err.Error()}

@@ -72,6 +72,18 @@ func TestProfiles_Validate(t *testing.T) {
 	}
 }
 
+// tierFieldsMustBeEmpty names the spec.Capabilities fields the Icom tier
+// added, for which this radio's explicit decision is EMPTY — see
+// TestCapabilities_EveryFieldExplicit's doc comment.
+var tierFieldsMustBeEmpty = map[string]bool{
+	"DuplexOptions":  true,
+	"ToneModes":      true,
+	"DTCSPolarities": true,
+	"DTCSCodes":      true,
+	"Filters":        true,
+	"TagCharset":     true,
+}
+
 // TestCapabilities_EveryFieldExplicit is the D-caps-explicit decision's
 // enforcement: EVERY field of spec.Capabilities is populated, in every
 // profile, with nothing left at its zero value.
@@ -93,7 +105,8 @@ func TestProfiles_Validate(t *testing.T) {
 // bounds, RequiredSlots) and doc.go's register carries each one's
 // provenance — the honest response to an unverified value is to populate it
 // and record why, never to leave a zero that reads as a decision nobody
-// took.//
+// took.
+//
 // The Icom tier (design D4) added six fields to spec.Capabilities —
 // DuplexOptions, ToneModes, DTCSPolarities, DTCSCodes, Filters and
 // TagCharset — and for THIS radio the explicit decision about every one
@@ -104,19 +117,6 @@ func TestProfiles_Validate(t *testing.T) {
 // radio's behaviour exactly as it was. Populating any of them would be
 // the mistake, so the rule for those six is inverted here rather than
 // waived, and the test still fails if one is ever filled in.
-
-// tierFieldsMustBeEmpty names the spec.Capabilities fields the Icom tier
-// added, for which this radio's explicit decision is EMPTY — see
-// TestCapabilities_EveryFieldExplicit's doc comment.
-var tierFieldsMustBeEmpty = map[string]bool{
-	"DuplexOptions":  true,
-	"ToneModes":      true,
-	"DTCSPolarities": true,
-	"DTCSCodes":      true,
-	"Filters":        true,
-	"TagCharset":     true,
-}
-
 func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 	const wantFieldCount = 21
 

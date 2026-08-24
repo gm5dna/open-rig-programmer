@@ -320,9 +320,14 @@ func exportRow(ch codeplug.Channel, tier bool) []string {
 //
 // WHICH header depends on the content, by the same lowest-that-can-
 // represent-it rule core/codeplug's file writer uses (design D4): the
-// version-1 header (see header) while no channel carries a tier-added
-// field in any state but Absent, and the version-2 header (headerV2)
-// as soon as one does. An export of any radio registered before the
+// version-1 header (see header) while no channel RECORDS a tier-added
+// field — i.e. every one of them is Absent or Unavailable
+// (FieldState.Recorded, via needsTierColumns) — and the version-2 header
+// (headerV2) as soon as one is Known or Unknown. UNAVAILABLE is the case
+// that actually decides this for the radios registered today: every read
+// of a Yaesu leaves all ten Unavailable, and it is precisely because
+// Unavailable is not Recorded that such an export stays version 1. An
+// export of any radio registered before the
 // Icom tier is therefore byte-identical to what this program produced
 // before it, and losslessness holds in both versions — a version-1 file
 // is only ever written for content version 1 can hold.

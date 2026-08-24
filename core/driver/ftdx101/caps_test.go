@@ -95,6 +95,18 @@ func TestProfiles_Validate(t *testing.T) {
 	}
 }
 
+// tierFieldsMustBeEmpty names the spec.Capabilities fields the Icom tier
+// added, for which this radio's explicit decision is EMPTY — see
+// TestCapabilities_EveryFieldExplicit's doc comment.
+var tierFieldsMustBeEmpty = map[string]bool{
+	"DuplexOptions":  true,
+	"ToneModes":      true,
+	"DTCSPolarities": true,
+	"DTCSCodes":      true,
+	"Filters":        true,
+	"TagCharset":     true,
+}
+
 // TestCapabilities_EveryFieldExplicit is the D-caps-explicit decision's
 // enforcement, for BOTH models: EVERY field of spec.Capabilities is
 // populated, in every profile, with nothing left at its zero value — and
@@ -142,19 +154,6 @@ func TestProfiles_Validate(t *testing.T) {
 // radio's behaviour exactly as it was. Populating any of them would be
 // the mistake, so the rule for those six is inverted here rather than
 // waived, and the test still fails if one is ever filled in.
-
-// tierFieldsMustBeEmpty names the spec.Capabilities fields the Icom tier
-// added, for which this radio's explicit decision is EMPTY — see
-// TestCapabilities_EveryFieldExplicit's doc comment.
-var tierFieldsMustBeEmpty = map[string]bool{
-	"DuplexOptions":  true,
-	"ToneModes":      true,
-	"DTCSPolarities": true,
-	"DTCSCodes":      true,
-	"Filters":        true,
-	"TagCharset":     true,
-}
-
 func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 	const wantFieldCount = 21
 
