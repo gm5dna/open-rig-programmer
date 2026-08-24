@@ -4,7 +4,6 @@ package codeplug
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/gm5dna/open-rig-programmer/core/spec"
@@ -71,7 +70,9 @@ type DiffEntry struct {
 // anything is sent to a radio.
 type DiffResult struct {
 	// Entries holds one DiffEntry per slot present in either input, in
-	// baseline slot order (see Diff's Determinism doc).
+	// baseline slot order followed by any sparse-bank slot only the file
+	// materialised (see Diff's Determinism doc — the second group is
+	// always empty for a radio with no sparse bank).
 	Entries []DiffEntry
 	// Added is the count of Entries with Kind == DiffAdded.
 	Added int
@@ -107,32 +108,6 @@ type DiffResult struct {
 	// generation) — is the clone service's job, not this package's; this
 	// field only supplies the content half of that check.
 	CandidateDigest string
-}
-
-// sortedSlots returns the Slot of every channel in channels, sorted. Used
-// only to compare two channel lists' slot inventories irrespective of
-// input order.
-func sortedSlots(channels []Channel) []string {
-	slots := make([]string, len(channels))
-	for i, ch := range channels {
-		slots[i] = ch.Slot
-	}
-	sort.Strings(slots)
-	return slots
-}
-
-// equalStrings reports whether a and b hold the same strings in the same
-// order.
-func equalStrings(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
 
 // copyChannelData returns a defensive copy of d, or nil if d is nil.
@@ -183,6 +158,42 @@ func changedFields(before, after ChannelData) []spec.Field {
 	if before.ScanSkip != after.ScanSkip {
 		out = append(out, spec.FieldScanSkip)
 	}
+	// The Icom tier's ten (design D4), appended after the pre-tier nine
+	// so no existing BlockReason's field list is reordered. Each is
+	// compared as a WHOLE STRUCT, exactly as CTCSSTone and ScanSkip are,
+	// so a state transition counts as a change like a value change —
+	// including a transition out of Absent, which is a channel gaining a
+	// field it did not previously speak about.
+	if before.TxFreqHz != after.TxFreqHz {
+		out = append(out, spec.FieldTxFrequency)
+	}
+	if before.Duplex != after.Duplex {
+		out = append(out, spec.FieldDuplex)
+	}
+	if before.OffsetHz != after.OffsetHz {
+		out = append(out, spec.FieldOffset)
+	}
+	if before.ToneMode != after.ToneMode {
+		out = append(out, spec.FieldToneMode)
+	}
+	if before.ToneTx != after.ToneTx {
+		out = append(out, spec.FieldToneTx)
+	}
+	if before.ToneRx != after.ToneRx {
+		out = append(out, spec.FieldToneRx)
+	}
+	if before.DTCSCode != after.DTCSCode {
+		out = append(out, spec.FieldDTCSCode)
+	}
+	if before.DTCSPolarity != after.DTCSPolarity {
+		out = append(out, spec.FieldDTCSPolarity)
+	}
+	if before.Filter != after.Filter {
+		out = append(out, spec.FieldFilter)
+	}
+	if before.DataMode != after.DataMode {
+		out = append(out, spec.FieldDataMode)
+	}
 	return out
 }
 
@@ -229,6 +240,109 @@ func addedFields(data ChannelData) []spec.Field {
 	}
 	if data.ScanSkip.State == Known {
 		out = append(out, spec.FieldScanSkip)
+	}
+	return out
+}
+
+// tierAddedFieldFor pairs each spec.Field the Icom tier added with a
+// predicate reporting whether this channel's data actually REQUESTS it —
+// i.e. carries a Known value for it. The order is ChannelData's own
+// declaration order, and it is appended after the pre-tier set in
+// touchedFields, so no BlockReason a user has ever read is reordered.
+//
+// Every one of these predicates answers false for a channel produced by
+// or for a Yaesu NEWCAT radio: those channels leave all ten fields
+// UNAVAILABLE — a read says so directly, a load of a schema-1/2/3 file
+// migrates to it (design D4, decision 1), and Absent is neither Known
+// either — which is why the pre-tier world's Diff output is unchanged.
+var tierAddedFieldFor = []struct {
+	field   spec.Field
+	present func(ChannelData) bool
+}{
+	{spec.FieldTxFrequency, func(d ChannelData) bool { return d.TxFreqHz.State == Known }},
+	{spec.FieldDuplex, func(d ChannelData) bool { return d.Duplex.State == Known }},
+	{spec.FieldOffset, func(d ChannelData) bool { return d.OffsetHz.State == Known }},
+	{spec.FieldToneMode, func(d ChannelData) bool { return d.ToneMode.State == Known }},
+	{spec.FieldToneTx, func(d ChannelData) bool { return d.ToneTx.State == Known }},
+	{spec.FieldToneRx, func(d ChannelData) bool { return d.ToneRx.State == Known }},
+	{spec.FieldDTCSCode, func(d ChannelData) bool { return d.DTCSCode.State == Known }},
+	{spec.FieldDTCSPolarity, func(d ChannelData) bool { return d.DTCSPolarity.State == Known }},
+	{spec.FieldFilter, func(d ChannelData) bool { return d.Filter.State == Known }},
+	{spec.FieldDataMode, func(d ChannelData) bool { return d.DataMode.State == Known }},
+}
+
+// unconditionallyAdded is the set of fields addedFields emits for EVERY
+// channel, whatever it contains — the always-transmitted six (frequency,
+// mode, clarifier, ctcss_state, shift, tag). It is DERIVED from
+// addedFields rather than restated, by asking it about the zero
+// ChannelData: on that value every FieldState-carrying field is Absent,
+// so exactly the unconditional fields come back. A conditional added to
+// addedFields therefore cannot silently join this set, and an
+// unconditional one cannot silently leave it
+// (TestUnconditionallyAdded_IsAddedFieldsOfTheZeroChannel pins the
+// membership all the same).
+var unconditionallyAdded = func() map[spec.Field]bool {
+	m := make(map[spec.Field]bool)
+	for _, f := range addedFields(ChannelData{}) {
+		m[f] = true
+	}
+	return m
+}()
+
+// touchedFields returns every spec.Field a write of data to bank would
+// TRANSMIT or REQUEST — the set Diff's per-field gate walks. It is
+// addedFields' capability-keyed successor (design D4, adjudication 10),
+// and the capability key applies to exactly one of the two kinds of
+// field in that set:
+//
+//   - the UNCONDITIONAL six (unconditionallyAdded — frequency, mode,
+//     clarifier, ctcss_state, shift, tag) are filtered to the fields
+//     this bank can reach. "A field the capabilities mark Unreachable in
+//     that bank is not touched by an add": these fields are in the set
+//     because the FRAME always carries them, not because anybody asked
+//     for them, so on a bank whose frame has no room for one there is no
+//     request to gate — and counting one would block every channel on
+//     that bank over a field nobody named. This is the Icom case the
+//     filter was written for: a bank that expresses only some of the six.
+//   - the CONDITIONAL fields — ctcss_tone, tag_display and scan_skip
+//     from addedFields, and the tier's ten from tierAddedFieldFor — are
+//     in the set ONLY because this channel carries a Known value for
+//     them, and a Known value IS the user's explicit request (per
+//     FieldState's write rule, nothing else is ever sent). Such a field
+//     is NEVER filtered out: if the bank cannot reach it, the request is
+//     one the radio cannot honour, and this project's posture on that is
+//     to REFUSE the channel at plan time — the per-field gate's existing
+//     "not writable on this radio" BlockReason, reached because an
+//     unreachable field's zero FieldSupport is not CanWrite — never to
+//     drop the value and write the rest. Dropping it is what Wave-1c
+//     review 1 (finding 1, HIGH) caught this filter doing to the FT-710's
+//     ctcss_tone/scan_skip and the FTdx10/FTdx101's tag_display, on the
+//     ordinary CSV-import-then-write route; findings 1 and 5 are one
+//     rule, and this is it.
+//
+// For a channel produced by or for a Yaesu NEWCAT radio nothing here
+// changes anything: the ten tier fields are Unavailable, and the three
+// pre-tier conditionals are whatever the radio itself reported.
+//
+// addedFields itself is left exactly as it was, still pinned by
+// TestAddedFields_MembershipAndOrder: it states which fields a write
+// TRANSMITS given the data alone, which is a fact about the write frame,
+// and layering the capability question on top keeps the two questions
+// separable.
+func touchedFields(caps spec.Capabilities, bank spec.BankID, data ChannelData) []spec.Field {
+	base := addedFields(data)
+	out := make([]spec.Field, 0, len(base)+len(tierAddedFieldFor))
+	for _, f := range base {
+		if unconditionallyAdded[f] && caps.FieldSupport(bank, f).Unreachable() {
+			continue
+		}
+		out = append(out, f)
+	}
+	for _, tf := range tierAddedFieldFor {
+		if !tf.present(data) {
+			continue
+		}
+		out = append(out, tf.field)
 	}
 	return out
 }
@@ -295,16 +409,145 @@ func inertBlockReason(fields []spec.Field) string {
 	return fmt.Sprintf("%s changes are ignored by the radio and cannot be sent", strings.Join(names, ", "))
 }
 
+// inventoryMismatch is the error Diff returns when baseline and file do
+// not describe the same slots. One message, unchanged since before the
+// Icom tier: what "the same slots" MEANS is what the tier widened (see
+// checkInventory), not what the user is told when it fails.
+func inventoryMismatch() error {
+	return fmt.Errorf("codeplug: Diff: baseline and file slot inventories differ; the file must descend from a read of this radio's current layout — re-read the radio and try again")
+}
+
+// checkInventory enforces Diff's slot-inventory rule and returns, in
+// FILE order, every slot the file materialised inside a SPARSE bank that
+// the baseline did not hold — the adds a sparse bank legitimately
+// permits (design D4, adjudication 7).
+//
+// The rule, stated so the two worlds are visibly one rule:
+//
+//   - every slot the baseline holds must appear in the file. A
+//     materialised slot cannot simply vanish from a candidate: on a
+//     dense bank that would be an inventory mismatch, and on a sparse
+//     bank it would be an erase expressed by omission rather than by an
+//     empty channel, which this project will not infer;
+//   - a slot the file holds and the baseline does not is legal ONLY when
+//     some sparse bank's addressable space contains it
+//     (spec.Bank.WithinSpace). A sparse bank's Slots lists what a read
+//     found, not what the radio can hold, so an add at an unlisted
+//     address is exactly the case the sparse model exists for;
+//   - NO SLOT MAY APPEAR TWICE, in either list. This clause is explicit
+//     only because the rule is now stated over sets: the sorted-list
+//     comparison this function replaced refused a repeat for free (the
+//     repeating list was simply longer), and dropping it silently let a
+//     file naming one slot twice through, with the LAST occurrence
+//     winning and the diff computed against that one (Wave-1c review 1,
+//     finding 3). `rigprog diff` calls Diff with no Validate pass in
+//     front of it, so nothing else was left to catch a hand-edited file
+//     that repeats a slot.
+//
+// With no sparse bank in caps — every radio registered before this tier
+// — the second clause can never fire, so the rule reduces to the exact
+// set equality this function replaced, reporting the identical error for
+// every input that ever reached it.
+func checkInventory(baseline, file *Codeplug, caps spec.Capabilities) ([]string, error) {
+	inFile := make(map[string]bool, len(file.Channels))
+	for _, ch := range file.Channels {
+		if inFile[ch.Slot] {
+			return nil, inventoryMismatch()
+		}
+		inFile[ch.Slot] = true
+	}
+	inBaseline := make(map[string]bool, len(baseline.Channels))
+	for _, ch := range baseline.Channels {
+		if !inFile[ch.Slot] || inBaseline[ch.Slot] {
+			return nil, inventoryMismatch()
+		}
+		inBaseline[ch.Slot] = true
+	}
+
+	var adds []string
+	for _, ch := range file.Channels {
+		if inBaseline[ch.Slot] {
+			continue
+		}
+		if !withinAnySparseBank(caps, ch.Slot) {
+			return nil, inventoryMismatch()
+		}
+		adds = append(adds, ch.Slot)
+	}
+	return adds, nil
+}
+
+// withinAnySparseBank reports whether slot lies in the addressable space
+// of some SPARSE bank of caps. A dense bank never answers yes here, even
+// for a slot it lists: a slot the baseline did not hold but a dense bank
+// does list is still an inventory mismatch — the baseline is a read of
+// the whole dense bank, so its absence there means the read and the file
+// disagree about the radio.
+func withinAnySparseBank(caps spec.Capabilities, slot string) bool {
+	for _, b := range caps.Banks {
+		if b.Sparse && b.WithinSpace(slot) {
+			return true
+		}
+	}
+	return false
+}
+
+// checkSparseBudget refuses a candidate that would leave a sparse bank
+// holding more POPULATED channels than the radio can (spec.Bank.Budget).
+//
+// It is enforced HERE, at plan time, and never on the wire, because what
+// an over-budget radio actually does is undocumented on every model this
+// tier registers (design D4: an ASSUMED register entry per model). A
+// refusal the user can act on is the only honest answer; discovering the
+// limit by sending is not.
+//
+// Empty channels do not count: the budget is on stored channels, and an
+// empty slot stores nothing. A bank with no Budget cannot reach here —
+// spec.Capabilities.Validate requires a positive Budget on every Sparse
+// bank and forbids one on every dense bank.
+func checkSparseBudget(file *Codeplug, caps spec.Capabilities) error {
+	for _, b := range caps.Banks {
+		if !b.Sparse {
+			continue
+		}
+		populated := 0
+		for _, ch := range file.Channels {
+			if ch.Data == nil {
+				continue
+			}
+			if b.WithinSpace(ch.Slot) {
+				populated++
+			}
+		}
+		if populated > b.Budget {
+			return fmt.Errorf("codeplug: Diff: bank %s would hold %d populated channels, exceeding this radio's limit of %d — remove %d before sending", b.ID, populated, b.Budget, populated-b.Budget)
+		}
+	}
+	return nil
+}
+
 // Diff compares a baseline Codeplug (read from a radio) against a
 // candidate file Codeplug and reports, per slot, what would change if
 // file were sent — and which of those changes this project cannot safely
 // perform yet.
 //
-// Slot inventory: baseline and file must describe the exact same set of
-// slots (their Slot values, sorted, must match exactly) — this is how
-// Diff enforces that file descends from a read of the same radio layout.
-// A mismatch is reported as an error (not a panic); every other finding is
-// an Entry, never an error.
+// Slot inventory: baseline and file must describe the same set of slots —
+// this is how Diff enforces that file descends from a read of the same
+// radio layout. A mismatch is reported as an error (not a panic).
+//
+// On a radio with only DENSE banks — every radio registered before the
+// Icom tier — "the same set" means exactly that: set equality, reported
+// with the same message it always was. On a SPARSE bank (design D4,
+// adjudication 7) the file may additionally materialise a slot the
+// baseline never held, anywhere inside that bank's addressable space,
+// which is how a channel is ADDED to a bank whose Slots lists only what
+// a read found. A baseline slot may never simply vanish from the file in
+// either world: an erase is an empty channel, never an omission. See
+// checkInventory.
+//
+// Sparse BUDGET: a candidate that would leave a sparse bank holding more
+// populated channels than the radio can is refused here, at plan time,
+// with an error — never sent (see checkSparseBudget).
 //
 // Equality: two populated slots are equal (DiffUnchanged) only when their
 // ChannelData values are == , which compares every field including
@@ -370,7 +613,14 @@ func inertBlockReason(fields []spec.Field) string {
 //     not).
 //
 //  4. Per-field (v1, all-or-nothing per channel): for a DiffModified OR a
-//     DiffAdded entry, Diff computes "touched" as addedFields(after) —
+//     DiffAdded entry, Diff computes "touched" as
+//     touchedFields(caps, bank, after) — addedFields(after) with its
+//     ALWAYS-TRANSMITTED six keyed by what this bank can actually reach,
+//     plus the Icom tier's own fields where the channel carries a Known
+//     value for one. A Known-conditional field is never keyed away: its
+//     presence is a request, and an unreachable one is refused right
+//     here rather than dropped (see touchedFields; for every radio
+//     registered before that tier the two answers are identical) —
 //     the SAME field set for both Kinds (M3 Codex-review fix wave, Fix
 //     4): every field the write would actually TRANSMIT (the six
 //     always-sent fields, frequency/mode/clarifier/ctcss_state/shift/
@@ -414,15 +664,19 @@ func inertBlockReason(fields []spec.Field) string {
 // Before/After are always defensive copies (see copyChannelData): mutating
 // a DiffResult's entries never mutates baseline or file.
 //
-// Determinism: Entries appear in baseline.Channels slice order (every slot
-// in file is guaranteed present in baseline by the inventory check above),
-// so the same two inputs always produce the same Entries in the same
-// order.
+// Determinism: Entries appear in baseline.Channels slice order, followed
+// by any sparse-bank slot the file materialised and the baseline did not,
+// in file.Channels slice order. On a radio with no sparse bank the second
+// group is always empty and this is exactly the pre-tier rule (every slot
+// in file was then guaranteed present in baseline). Either way the same
+// two inputs always produce the same Entries in the same order.
 func Diff(baseline, file *Codeplug, caps spec.Capabilities) (DiffResult, error) {
-	baseSlots := sortedSlots(baseline.Channels)
-	fileSlots := sortedSlots(file.Channels)
-	if !equalStrings(baseSlots, fileSlots) {
-		return DiffResult{}, fmt.Errorf("codeplug: Diff: baseline and file slot inventories differ; the file must descend from a read of this radio's current layout — re-read the radio and try again")
+	sparseAdds, err := checkInventory(baseline, file, caps)
+	if err != nil {
+		return DiffResult{}, err
+	}
+	if err := checkSparseBudget(file, caps); err != nil {
+		return DiffResult{}, err
 	}
 
 	fileBySlot := make(map[string]Channel, len(file.Channels))
@@ -430,10 +684,19 @@ func Diff(baseline, file *Codeplug, caps spec.Capabilities) (DiffResult, error) 
 		fileBySlot[ch.Slot] = ch
 	}
 
-	entries := make([]DiffEntry, 0, len(baseline.Channels))
+	entries := make([]DiffEntry, 0, len(baseline.Channels)+len(sparseAdds))
 	var added, modified, erased, unchanged, blocked int
 
-	for _, baseCh := range baseline.Channels {
+	// Baseline order first, then any sparse-bank slot the file
+	// materialised that the baseline never held, in FILE order — see
+	// this function's Determinism paragraph.
+	order := make([]Channel, 0, len(baseline.Channels)+len(sparseAdds))
+	order = append(order, baseline.Channels...)
+	for _, slot := range sparseAdds {
+		order = append(order, Channel{Slot: slot})
+	}
+
+	for _, baseCh := range order {
 		fileCh := fileBySlot[baseCh.Slot]
 
 		before := baseCh.Data
@@ -534,7 +797,7 @@ func Diff(baseline, file *Codeplug, caps spec.Capabilities) (DiffResult, error) 
 				// reads back zero clarifier (HW-CONFIRMED: the live
 				// empty-slot MW create read back "+0000"/flags 0), so any
 				// non-zero Inert value on an Added entry is unhonourable.
-				touched := addedFields(*after)
+				touched := touchedFields(caps, bankID, *after)
 				inertBase := ChannelData{}
 				if kind == DiffModified {
 					inertBase = *before

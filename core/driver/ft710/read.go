@@ -229,7 +229,12 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 	return codeplug.Channel{
 		Slot: sl.Wire(),
 		Data: &codeplug.ChannelData{
-			FreqHz: m.FreqHz,
+			// uint64 since the Icom tier widened the neutral model
+			// (design D4): a widening conversion from this protocol's
+			// uint32, which can never lose anything. The narrowing
+			// direction — the write path — is the checked one
+			// (cat.MemoryFreqHz).
+			FreqHz: uint64(m.FreqHz),
 			// Rendered through THIS session's dialect, not cat.Mode.String:
 			// this string is user-visible (it lands in the codeplug, the
 			// CLI's channel listing and the GUI's grid), so it must be the
@@ -252,6 +257,33 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 			// genuinely read from the radio rather than assumed.
 			TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: display},
 			ScanSkip:   codeplug.BoolField{State: codeplug.Unknown}, // unreadable via CAT — see doc comment
+			// The ten fields the Icom tier added to the neutral memory
+			// model (design D4). UNAVAILABLE on this radio, and the
+			// TagDisplay precedent above is exactly the right one: this
+			// family's memory frame carries none of them, so there is no
+			// value to read and no question for the user — Unavailable is
+			// what codeplug.BoolField and its siblings mean by that, and
+			// it is never sent. The matching half is in caps.go: this
+			// radio's banks list none of these spec.Fields, so
+			// spec.Capabilities.FieldSupport answers the zero
+			// FieldSupport — Unsupported both ways — for every one of
+			// them.
+			//
+			// Not Absent (the zero FieldState), deliberately. Absent
+			// means "this codeplug never spoke about the field", which is
+			// true of a schema-3 FILE and false of a RADIO READ: a read
+			// of this radio is a positive statement that the frame has no
+			// such field, and Unavailable is the state that says so.
+			TxFreqHz:     codeplug.FreqField{State: codeplug.Unavailable},
+			Duplex:       codeplug.StringField{State: codeplug.Unavailable},
+			OffsetHz:     codeplug.FreqField{State: codeplug.Unavailable},
+			ToneMode:     codeplug.StringField{State: codeplug.Unavailable},
+			ToneTx:       codeplug.ToneField{State: codeplug.Unavailable},
+			ToneRx:       codeplug.ToneField{State: codeplug.Unavailable},
+			DTCSCode:     codeplug.IntField{State: codeplug.Unavailable},
+			DTCSPolarity: codeplug.StringField{State: codeplug.Unavailable},
+			Filter:       codeplug.StringField{State: codeplug.Unavailable},
+			DataMode:     codeplug.BoolField{State: codeplug.Unavailable},
 		},
 	}, nil
 }

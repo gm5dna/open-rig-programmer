@@ -68,5 +68,19 @@ func ConsentUnverifiedWrites(caps Capabilities) Capabilities {
 	out.RequiredSlots = append([]string(nil), caps.RequiredSlots...)
 	out.ShiftOptions = append([]ShiftOption(nil), caps.ShiftOptions...)
 	out.CTCSSStates = append([]ToneState(nil), caps.CTCSSStates...)
+	// The Icom-tier vocabularies (design D4). They carry no Support
+	// labels either, and are copied for the same reason: the result must
+	// share no storage with caps AT ALL, so that a consented session can
+	// never reach back into a driver's long-lived baseline. The FIELD
+	// maps above need no per-field enumeration for the tier's new
+	// Fields: the loop walks whatever Fields a bank declares, so a new
+	// Field is covered by construction — which TestConsentUnverifiedWrites
+	// _CoversTierAddedFields verifies rather than assuming (design D4,
+	// round 2 F9).
+	out.DuplexOptions = append([]DuplexOption(nil), caps.DuplexOptions...)
+	out.ToneModes = append([]ToneMode(nil), caps.ToneModes...)
+	out.DTCSPolarities = append([]string(nil), caps.DTCSPolarities...)
+	out.DTCSCodes = append([]int(nil), caps.DTCSCodes...)
+	out.Filters = append([]string(nil), caps.Filters...)
 	return out
 }

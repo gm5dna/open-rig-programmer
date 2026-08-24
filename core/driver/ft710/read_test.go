@@ -121,8 +121,9 @@ func TestReadChannel_GoldenMappings(t *testing.T) {
 			if got.Empty() {
 				t.Fatalf("ReadChannel(%q) = empty, want populated", tt.slot)
 			}
-			if *got.Data != tt.want {
-				t.Errorf("ReadChannel(%q) data =\n%+v\nwant\n%+v", tt.slot, *got.Data, tt.want)
+			want := tierUnavailable(tt.want)
+			if *got.Data != want {
+				t.Errorf("ReadChannel(%q) data =\n%+v\nwant\n%+v", tt.slot, *got.Data, want)
 			}
 		})
 	}
@@ -280,7 +281,7 @@ func TestReadChannel_HWDerived_M5b_PMSKindLeniency(t *testing.T) {
 	if got.Empty() {
 		t.Fatal("ReadChannel(P1L) = empty, want populated")
 	}
-	want := codeplug.ChannelData{
+	want := tierUnavailable(codeplug.ChannelData{
 		FreqHz:     7_100_000,
 		Mode:       "LSB",
 		CTCSS:      "OFF",
@@ -288,7 +289,7 @@ func TestReadChannel_HWDerived_M5b_PMSKindLeniency(t *testing.T) {
 		Shift:      "SIMPLEX",
 		TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
 		ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
-	}
+	})
 	if *got.Data != want {
 		t.Errorf("ReadChannel(P1L) data =\n%+v\nwant\n%+v", *got.Data, want)
 	}
@@ -373,4 +374,29 @@ func TestReadChannel_InvalidSlot(t *testing.T) {
 	if got := cp.writes.Load(); got != baseline {
 		t.Errorf("invalid-slot reads produced %d wire writes, want 0", got-baseline)
 	}
+}
+
+// tierUnavailable returns d with every one of the ten fields the Icom
+// tier added to codeplug.ChannelData set to Unavailable — what this
+// radio's ReadChannel reports for all of them, because its memory frame
+// carries none of them (design D4; the TagDisplay precedent, applied ten
+// times).
+//
+// The read tests' `want` literals name the fields this radio actually
+// HAS and wrap the result in this, rather than spelling out ten
+// Unavailable lines each: the interesting content of every case stays
+// visible, and "and everything the Icom tier added is Unavailable" is
+// stated once, where it can be read as the single fact it is.
+func tierUnavailable(d codeplug.ChannelData) codeplug.ChannelData {
+	d.TxFreqHz = codeplug.FreqField{State: codeplug.Unavailable}
+	d.Duplex = codeplug.StringField{State: codeplug.Unavailable}
+	d.OffsetHz = codeplug.FreqField{State: codeplug.Unavailable}
+	d.ToneMode = codeplug.StringField{State: codeplug.Unavailable}
+	d.ToneTx = codeplug.ToneField{State: codeplug.Unavailable}
+	d.ToneRx = codeplug.ToneField{State: codeplug.Unavailable}
+	d.DTCSCode = codeplug.IntField{State: codeplug.Unavailable}
+	d.DTCSPolarity = codeplug.StringField{State: codeplug.Unavailable}
+	d.Filter = codeplug.StringField{State: codeplug.Unavailable}
+	d.DataMode = codeplug.BoolField{State: codeplug.Unavailable}
+	return d
 }

@@ -121,6 +121,10 @@ const (
 // protocol has no command to read either), so comparing them would
 // manufacture a false mismatch on every single write.
 //
+// The ten fields the Icom tier added are excluded CONDITIONALLY too, by
+// the same mutual-knowledge rule TagDisplay uses — see
+// tierFieldsMismatch, which holds them and the reasoning.
+//
 // TagDisplay is excluded CONDITIONALLY (M9c-5, E1b), by mutual knowledge:
 // it is compared only when BOTH sides are Known. Unlike the two above it
 // IS readable — a radio whose frame carries a display flag reads it back
@@ -159,6 +163,67 @@ func writableFieldsMismatch(want, got codeplug.ChannelData) []spec.Field {
 	if want.TagDisplay.State == codeplug.Known && got.TagDisplay.State == codeplug.Known &&
 		want.TagDisplay.Value != got.TagDisplay.Value {
 		bad = append(bad, spec.FieldTagDisplay)
+	}
+	bad = append(bad, tierFieldsMismatch(want, got)...)
+	return bad
+}
+
+// tierFieldsMismatch is writableFieldsMismatch's half for the ten fields
+// the Icom tier added to the neutral memory model (design D4: "clone's
+// readback verification extends to the new fields").
+//
+// Every one of them uses TagDisplay's MUTUAL-KNOWLEDGE rule, not the
+// unconditional comparison the six plain fields get, and the reason is
+// the one TagDisplay's own comment gives — applied to ten fields at once
+// rather than to one. A radio whose frame carries the field reads it
+// back Known and the comparison bites, exactly as it must: a value that
+// did not land is a write that did not do what it said. A radio whose
+// frame has no such field reads back Unavailable on every channel (see
+// core/driver/*/read.go), and comparing that against anything would
+// abort a write that in fact landed perfectly.
+//
+// For the four Yaesu models registered today the rule means this
+// function never contributes a field at all: both sides are Unavailable,
+// so no comparison is even attempted, and their verify behaviour is
+// unchanged.
+//
+// It is ORDERED, in ChannelData's own declaration order, and appended
+// after the pre-tier fields, so a VerifyMismatchError's field list reads
+// the same way it always did for the fields that were always in it.
+func tierFieldsMismatch(want, got codeplug.ChannelData) []spec.Field {
+	var bad []spec.Field
+	bothKnown := func(a, b codeplug.FieldState) bool {
+		return a == codeplug.Known && b == codeplug.Known
+	}
+	if bothKnown(want.TxFreqHz.State, got.TxFreqHz.State) && want.TxFreqHz.Value != got.TxFreqHz.Value {
+		bad = append(bad, spec.FieldTxFrequency)
+	}
+	if bothKnown(want.Duplex.State, got.Duplex.State) && want.Duplex.Value != got.Duplex.Value {
+		bad = append(bad, spec.FieldDuplex)
+	}
+	if bothKnown(want.OffsetHz.State, got.OffsetHz.State) && want.OffsetHz.Value != got.OffsetHz.Value {
+		bad = append(bad, spec.FieldOffset)
+	}
+	if bothKnown(want.ToneMode.State, got.ToneMode.State) && want.ToneMode.Value != got.ToneMode.Value {
+		bad = append(bad, spec.FieldToneMode)
+	}
+	if bothKnown(want.ToneTx.State, got.ToneTx.State) && want.ToneTx.Value != got.ToneTx.Value {
+		bad = append(bad, spec.FieldToneTx)
+	}
+	if bothKnown(want.ToneRx.State, got.ToneRx.State) && want.ToneRx.Value != got.ToneRx.Value {
+		bad = append(bad, spec.FieldToneRx)
+	}
+	if bothKnown(want.DTCSCode.State, got.DTCSCode.State) && want.DTCSCode.Value != got.DTCSCode.Value {
+		bad = append(bad, spec.FieldDTCSCode)
+	}
+	if bothKnown(want.DTCSPolarity.State, got.DTCSPolarity.State) && want.DTCSPolarity.Value != got.DTCSPolarity.Value {
+		bad = append(bad, spec.FieldDTCSPolarity)
+	}
+	if bothKnown(want.Filter.State, got.Filter.State) && want.Filter.Value != got.Filter.Value {
+		bad = append(bad, spec.FieldFilter)
+	}
+	if bothKnown(want.DataMode.State, got.DataMode.State) && want.DataMode.Value != got.DataMode.Value {
+		bad = append(bad, spec.FieldDataMode)
 	}
 	return bad
 }

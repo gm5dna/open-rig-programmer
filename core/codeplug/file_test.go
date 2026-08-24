@@ -19,8 +19,17 @@ import (
 
 // fullCodeplug builds a Codeplug with every field populated, for
 // round-trip testing.
+//
+// Its channels' ten tier-added fields are set to Unavailable
+// (withUnavailableTierFields) rather than left at their zero value,
+// because that is what every REAL producer of a Yaesu channel yields —
+// a driver read, and a load of any schema-1/2/3 file — and this fixture
+// is round-tripped through Save and Load, which normalise to exactly
+// that. Leaving them zero would have made the fixture the only
+// ChannelData in the project that says "nothing was ever said about
+// these fields" about an FT-710.
 func fullCodeplug() *Codeplug {
-	return &Codeplug{
+	cp := &Codeplug{
 		Schema:    CurrentSchema,
 		Generator: "open-rig-programmer v0.1.0",
 		Radio: RadioInfo{
@@ -57,6 +66,12 @@ func fullCodeplug() *Codeplug {
 			},
 		},
 	}
+	for i := range cp.Channels {
+		if cp.Channels[i].Data != nil {
+			withUnavailableTierFields(cp.Channels[i].Data)
+		}
+	}
+	return cp
 }
 
 // TestSaveLoad_V2RoundTrip checks a lossless round trip of a fully
@@ -844,7 +859,10 @@ func TestSave_InvalidSnapshotRejected(t *testing.T) {
 // reported as ErrSchemaTooNew (upgrade the app), NOT as an
 // *UnknownFieldError from a premature strict decode.
 func TestLoad_SchemaTooNew_VersionFirst(t *testing.T) {
-	body := `{"schema":4,"generator":"x","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z"},"channels":[],"bogus_extra_field":true}`
+	// CurrentSchema+1, not a literal: this test is about the PASS ORDER,
+	// not about any particular version number, and a literal went stale
+	// the moment the Icom tier moved CurrentSchema from 3 to 4.
+	body := `{"schema":` + strconv.Itoa(CurrentSchema+1) + `,"generator":"x","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z"},"channels":[],"bogus_extra_field":true}`
 	_, err := writeAndLoad(t, body)
 	if err == nil {
 		t.Fatal("Load() error = nil, want ErrSchemaTooNew")

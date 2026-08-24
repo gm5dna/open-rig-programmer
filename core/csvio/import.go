@@ -37,14 +37,27 @@ func (e *ParseError) Error() string {
 // every column except "slot" and "display". A row whose cells are ALL
 // empty across exactly these columns decodes to an empty Channel (see
 // Import).
-var dataColumns = []string{
-	"freq_hz", "mode", "clar_hz", "rx_clar", "tx_clar",
-	"ctcss", "ctcss_tone", "shift", "tag", "tag_display", "scan_skip",
-}
+//
+// The tier columns join the list, and an ABSENT column reads as "" (see
+// Import's cell lookup), so a version-1 file answers this question
+// exactly as it always did — and a version-2 file's empty slot, whose
+// tier cells this package writes empty too, answers it the same way.
+var dataColumns = func() []string {
+	cols := []string{
+		"freq_hz", "mode", "clar_hz", "rx_clar", "tx_clar",
+		"ctcss", "ctcss_tone", "shift", "tag", "tag_display", "scan_skip",
+	}
+	return append(cols, tierColumns...)
+}()
 
 // requiredColumns lists every column Import requires to be present in
-// the header. It is every column in header except "display", which is
+// the header. It is every VERSION-1 column except "display", which is
 // optional and ignored (see Import).
+//
+// The tier columns are deliberately NOT required: that is exactly what
+// makes Import accept both header versions (design D4). A version-1 file
+// is missing all ten and is perfectly valid; a version-2 file has them
+// and they are read.
 var requiredColumns = func() []string {
 	cols := make([]string, 0, len(header)-1)
 	for _, c := range header {
@@ -55,15 +68,101 @@ var requiredColumns = func() []string {
 	return cols
 }()
 
-// knownColumnSet is the set of every column name Import recognises
-// (header, including "display").
+// knownColumnSet is the set of every column name Import recognises: both
+// header versions, "display" included.
 var knownColumnSet = func() map[string]bool {
-	set := make(map[string]bool, len(header))
-	for _, c := range header {
+	set := make(map[string]bool, len(headerV2))
+	for _, c := range headerV2 {
 		set[c] = true
 	}
 	return set
 }()
+
+// parseTierState maps a tier column's reserved spellings onto their
+// FieldStates, reporting whether it recognised one. A cell it does not
+// recognise is a Known value, which only the caller can parse.
+//
+// See export.go's cellUnavailable/cellAbsent for the spellings and the
+// vocabulary reservation they imply.
+func parseTierState(s string) (codeplug.FieldState, bool) {
+	switch s {
+	case "":
+		return codeplug.Unknown, true
+	case cellUnavailable:
+		return codeplug.Unavailable, true
+	case cellAbsent:
+		return codeplug.Absent, true
+	default:
+		return "", false
+	}
+}
+
+// parseFreqFieldCell parses a tier frequency column (tx_frequency,
+// offset): the reserved spellings, or a plain decimal hertz value.
+func parseFreqFieldCell(s, column string) (codeplug.FreqField, error) {
+	if state, ok := parseTierState(s); ok {
+		return codeplug.FreqField{State: state}, nil
+	}
+	v, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		return codeplug.FreqField{}, fmt.Errorf("%s must be \"\", %q, %q or a whole number of hertz, got %q", column, cellUnavailable, cellAbsent, s)
+	}
+	return codeplug.FreqField{State: codeplug.Known, Value: v}, nil
+}
+
+// parseStringFieldCell parses a tier vocabulary column (duplex,
+// tone_mode, dtcs_polarity, filter). It is SYNTACTIC only, like every
+// other cell parser here: whether the value is in this radio's
+// vocabulary is codeplug.Validate's question.
+func parseStringFieldCell(s string) codeplug.StringField {
+	if state, ok := parseTierState(s); ok {
+		return codeplug.StringField{State: state}
+	}
+	return codeplug.StringField{State: codeplug.Known, Value: s}
+}
+
+// parseIntFieldCell parses a tier integer column (dtcs_code).
+func parseIntFieldCell(s, column string) (codeplug.IntField, error) {
+	if state, ok := parseTierState(s); ok {
+		return codeplug.IntField{State: state}, nil
+	}
+	v, err := strconv.Atoi(s)
+	if err != nil {
+		return codeplug.IntField{}, fmt.Errorf("%s must be \"\", %q, %q or a whole number, got %q", column, cellUnavailable, cellAbsent, s)
+	}
+	return codeplug.IntField{State: codeplug.Known, Value: v}, nil
+}
+
+// parseTierToneFieldCell parses a tier tone column (tone_tx, tone_rx).
+// It differs from parseToneFieldCell (the ctcss_tone column) in one way
+// only: it also recognises the Absent spelling, which the pre-tier
+// column has no state for.
+func parseTierToneFieldCell(s, column string) (codeplug.ToneField, error) {
+	if state, ok := parseTierState(s); ok {
+		return codeplug.ToneField{State: state}, nil
+	}
+	deciHz, err := parseExactToneDeciHz(s)
+	if err != nil {
+		return codeplug.ToneField{}, fmt.Errorf("%s must be \"\", %q, %q or a decimal Hz value with at most one decimal place, got %q", column, cellUnavailable, cellAbsent, s)
+	}
+	return codeplug.ToneField{State: codeplug.Known, Value: spec.Tone(deciHz)}, nil
+}
+
+// parseTierBoolFieldCell parses a tier boolean column (data_mode), with
+// the same one difference from parseBoolFieldCell.
+func parseTierBoolFieldCell(s, column string) (codeplug.BoolField, error) {
+	if state, ok := parseTierState(s); ok {
+		return codeplug.BoolField{State: state}, nil
+	}
+	switch s {
+	case "yes":
+		return codeplug.BoolField{State: codeplug.Known, Value: true}, nil
+	case "no":
+		return codeplug.BoolField{State: codeplug.Known, Value: false}, nil
+	default:
+		return codeplug.BoolField{}, fmt.Errorf("%s must be \"\", %q, %q, \"yes\" or \"no\", got %q", column, cellUnavailable, cellAbsent, s)
+	}
+}
 
 // unescapeFormulaCell undoes EscapeCell: a single leading apostrophe, if
 // present, is stripped.
@@ -187,12 +286,22 @@ func validateImportHeader(got []string) error {
 // callers must run it before treating an imported codeplug as
 // send-ready.
 //
-// Header: validated against Export's header (see header) — an unknown
-// column is an error naming it, a missing required column is an error
-// naming it, and "display" is optional and, when present, ignored
-// (Import never reads it; it is a convenience column for spreadsheet
-// viewing only). Column order in the file does not matter: columns are
-// looked up by name.
+// Header: validated against Export's header — an unknown column is an
+// error naming it, a missing required column is an error naming it, and
+// "display" is optional and, when present, ignored (Import never reads
+// it; it is a convenience column for spreadsheet viewing only). Column
+// order in the file does not matter: columns are looked up by name.
+//
+// BOTH HEADER VERSIONS are accepted (design D4). The schema is versioned
+// by its column set: version 1 is the thirteen columns this package has
+// always written (header), version 2 is those thirteen followed by one
+// per tier-added field (headerV2). Only version 1's columns are
+// REQUIRED, so a version-1 file — every file this program wrote before
+// the Icom tier — imports unchanged; the tier columns are optional and
+// recognised, so a version-2 file has them read. A version-1 file's ten
+// tier fields come back Unavailable, not at the zero value: see
+// markTierFieldsUnavailable for why that distinction is load-bearing
+// rather than cosmetic.
 //
 // Rows: every per-row problem is returned as a *ParseError carrying the
 // row's 1-based line number (the header is line 1). A leading apostrophe
@@ -203,7 +312,9 @@ func validateImportHeader(got []string) error {
 // dataColumns) are ALL empty decodes to an empty Channel (Data == nil);
 // otherwise every data column is parsed into ChannelData, with
 // ctcss_tone/scan_skip/tag_display's "" -> Unknown, "n/a" -> Unavailable,
-// value -> Known mapping applied exactly as Export produced it.
+// value -> Known mapping applied exactly as Export produced it. A tier
+// column adds one spelling to that mapping, "absent" -> Absent, for the
+// state those fields have that the pre-tier ones do not.
 //
 // tag_display joined that mapping at M9c-5 (E1d), and the change is not
 // backward-compatible in ONE direction, recorded here because a user can
@@ -230,6 +341,19 @@ func Import(r io.Reader) ([]codeplug.Channel, error) {
 	colIndex := make(map[string]int, len(gotHeader))
 	for i, c := range gotHeader {
 		colIndex[c] = i
+	}
+	// Which header version this file is: version 2 iff it carries any of
+	// the tier columns. Partial adoption (some tier columns, not all) is
+	// accepted for the same reason column ORDER is: columns are looked up
+	// by name, an absent one reads as "", and a hand-edited file that
+	// carries only the column its author cared about is more useful
+	// accepted than refused.
+	hasTier := false
+	for _, c := range tierColumns {
+		if _, ok := colIndex[c]; ok {
+			hasTier = true
+			break
+		}
 	}
 
 	var channels []codeplug.Channel
@@ -259,12 +383,20 @@ func Import(r io.Reader) ([]codeplug.Channel, error) {
 			return nil, &ParseError{Line: line, Reason: fmt.Sprintf("row has %d fields, header has %d", len(record), len(gotHeader))}
 		}
 
-		// cell must only be called with a name in requiredColumns:
-		// validateImportHeader already guarantees every such name is a
-		// key in colIndex, and the length check above guarantees every
-		// value in colIndex is a valid index into record.
+		// A column absent from this file's header reads as "" — which is
+		// what makes ONE row parser serve both header versions (design
+		// D4). The ok test is load-bearing rather than defensive: a bare
+		// map lookup yields index 0 for a missing name, so an absent
+		// column would silently read back the SLOT cell of every row.
+		// For a name in requiredColumns the lookup always succeeds
+		// (validateImportHeader guarantees it), and the length check
+		// above guarantees every index colIndex does hold is in range.
 		cell := func(name string) string {
-			return unescapeFormulaCell(record[colIndex[name]])
+			i, ok := colIndex[name]
+			if !ok {
+				return ""
+			}
+			return unescapeFormulaCell(record[i])
 		}
 
 		slot := cell("slot")
@@ -290,11 +422,17 @@ func Import(r io.Reader) ([]codeplug.Channel, error) {
 
 		data := codeplug.ChannelData{}
 
-		freqHz, err := strconv.ParseUint(cell("freq_hz"), 10, 32)
+		// 64, not 32 (design D4, round 2 C8/F11): this was a hard
+		// 32-bit parse, which would have refused every frequency above
+		// 4.29 GHz — a range the neutral model now reaches. The bound
+		// here is the REPRESENTABLE one; whether a frequency is one the
+		// target radio can store is codeplug.Validate's question, asked
+		// against that radio's own MinFreqHz/MaxFreqHz.
+		freqHz, err := strconv.ParseUint(cell("freq_hz"), 10, 64)
 		if err != nil {
 			return nil, &ParseError{Line: line, Reason: fmt.Sprintf("freq_hz: %v", err)}
 		}
-		data.FreqHz = uint32(freqHz)
+		data.FreqHz = freqHz
 
 		data.Mode = cell("mode")
 
@@ -350,8 +488,115 @@ func Import(r io.Reader) ([]codeplug.Channel, error) {
 		}
 		data.ScanSkip = scanSkip
 
+		// The tier columns. In a VERSION-1 file none of them is in the
+		// header, so every cell() below reads "" — and "" would parse as
+		// Unknown, "this radio has the field and we have not read it",
+		// which is the wrong answer for a file that has no such column at
+		// all. hasTier is what keeps the two apart: without the columns
+		// the ten are set to UNAVAILABLE (markTierFieldsUnavailable —
+		// design D4, decision 1, documented at that function), the state
+		// every producer in this project gives a field the radio does not
+		// have, and the one that leaves an imported channel comparing
+		// equal to a read of the same radio instead of modified in ten
+		// fields the file never mentioned.
+		if hasTier {
+			if err := parseTierCells(&data, cell); err != nil {
+				return nil, &ParseError{Line: line, Reason: err.Error()}
+			}
+		} else {
+			markTierFieldsUnavailable(&data)
+		}
+
 		channels = append(channels, codeplug.Channel{Slot: slot, Data: &data})
 	}
 
 	return channels, nil
+}
+
+// parseTierCells fills the ten tier-added fields of data from a
+// version-2 row, using cell to look each column up by name. A tier
+// column absent from a partially-adopted version-2 header reads as "",
+// i.e. Unknown — which is the right answer there, since the file DOES
+// declare itself version 2 and simply leaves that field unstated.
+//
+// The first error stops the row: as everywhere in this importer, a cell
+// that cannot be understood is refused, never guessed at.
+func parseTierCells(data *codeplug.ChannelData, cell func(string) string) error {
+	txFreq, err := parseFreqFieldCell(cell("tx_frequency"), "tx_frequency")
+	if err != nil {
+		return err
+	}
+	data.TxFreqHz = txFreq
+
+	data.Duplex = parseStringFieldCell(cell("duplex"))
+
+	offset, err := parseFreqFieldCell(cell("offset"), "offset")
+	if err != nil {
+		return err
+	}
+	data.OffsetHz = offset
+
+	data.ToneMode = parseStringFieldCell(cell("tone_mode"))
+
+	toneTx, err := parseTierToneFieldCell(cell("tone_tx"), "tone_tx")
+	if err != nil {
+		return err
+	}
+	data.ToneTx = toneTx
+
+	toneRx, err := parseTierToneFieldCell(cell("tone_rx"), "tone_rx")
+	if err != nil {
+		return err
+	}
+	data.ToneRx = toneRx
+
+	dtcsCode, err := parseIntFieldCell(cell("dtcs_code"), "dtcs_code")
+	if err != nil {
+		return err
+	}
+	data.DTCSCode = dtcsCode
+
+	data.DTCSPolarity = parseStringFieldCell(cell("dtcs_polarity"))
+	data.Filter = parseStringFieldCell(cell("filter"))
+
+	dataMode, err := parseTierBoolFieldCell(cell("data_mode"), "data_mode")
+	if err != nil {
+		return err
+	}
+	data.DataMode = dataMode
+
+	return nil
+}
+
+// markTierFieldsUnavailable sets every tier-added field of data to
+// Unavailable, for a VERSION-1 file — one with none of the tier columns
+// at all.
+//
+// It is the CSV importer's exact counterpart to core/codeplug's
+// migrateV3ChannelData, and it exists for the same reason, which is
+// worth stating because the zero value looks like the safer answer. A
+// version-1 CSV was written by a build that modelled none of these
+// fields, for a radio that has none of them, so "this radio has no such
+// field" is what the file says by having no column for it — and it is
+// what a read of such a radio reports. Leaving them at the zero value
+// (Absent) would make a CSV-imported channel differ, field for field,
+// from the very baseline it is about to be diffed against, and
+// codeplug.Diff compares ChannelData with ==: every channel of every
+// import would come back "modified".
+//
+// A version-2 file takes the other branch and gets what its cells
+// spell, including the explicit "absent" spelling — a file that DOES
+// have the column and says nothing in it is a different statement from
+// a file with no column at all.
+func markTierFieldsUnavailable(data *codeplug.ChannelData) {
+	data.TxFreqHz = codeplug.FreqField{State: codeplug.Unavailable}
+	data.Duplex = codeplug.StringField{State: codeplug.Unavailable}
+	data.OffsetHz = codeplug.FreqField{State: codeplug.Unavailable}
+	data.ToneMode = codeplug.StringField{State: codeplug.Unavailable}
+	data.ToneTx = codeplug.ToneField{State: codeplug.Unavailable}
+	data.ToneRx = codeplug.ToneField{State: codeplug.Unavailable}
+	data.DTCSCode = codeplug.IntField{State: codeplug.Unavailable}
+	data.DTCSPolarity = codeplug.StringField{State: codeplug.Unavailable}
+	data.Filter = codeplug.StringField{State: codeplug.Unavailable}
+	data.DataMode = codeplug.BoolField{State: codeplug.Unavailable}
 }
