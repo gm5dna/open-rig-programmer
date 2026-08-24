@@ -118,6 +118,53 @@
 // change ic905-R-06 would authorise is already written down and tested
 // even while BuildLength is 64.
 //
+// # Encodings, and the units they carry
+//
+// The neutral record's units are core/civ's, and this profile's Scale
+// values are what reach them. Stated once, because a unit inferred from
+// a test's expectations is a unit nobody has actually decided:
+//
+//   - FREQUENCIES ARE HERTZ. (6)~(10) is packed BCD, LEAST significant
+//     pair first, Scale 1: the PDF p.17 (folio 16) diagram's rotated
+//     nibble labels run "10 Hz digit", "1 Hz digit", "1 kHz", "100 Hz",
+//     "100 kHz", "10 kHz", "10 MHz", "1 MHz", "1 GHz", "100 MHz", so the
+//     wire value IS the frequency in hertz. 144.500000 MHz is
+//     `00 00 50 44 01`.
+//
+//   - THE OFFSET IS HERTZ TOO, AT A 100 Hz FLOOR. (26)~(28) is packed
+//     BCD, least significant pair first, Scale 100: PDF p.18 (folio 17),
+//     "Duplex Offset frequency setting", prints its lowest nibble as the
+//     "100 Hz digit", so the field's raw value counts hundreds of hertz
+//     and the scale converts it. The floor is the FIELD's, not the
+//     radio's: an offset this profile cannot express is one it refuses,
+//     not one it rounds.
+//
+//   - TONES ARE TENTHS OF A HERTZ. (16)~(18) and (19)~(21) are packed
+//     BCD, MOST significant pair first, Scale 1, and the unit is the
+//     wire's: PDF p.24 (folio 23) prints byte (1) as two fixed zeros,
+//     byte (2) as "100 Hz digit : 10 Hz digit" and byte (3) as "1 Hz
+//     digit : 0.1 Hz digit". 88.5 Hz is `00 08 85`, which is 885. Hertz
+//     would lose the .5, which is why core/civ's MemoryRecord carries
+//     deci-hertz rather than rounding at the codec.
+//
+//   - THE DTCS CODE IS THE PRINTED THREE-DIGIT CODE, READ AS A DECIMAL
+//     INTEGER. (23),(24) is packed BCD, most significant pair first,
+//     Scale 1, so code 023 is `00 23` on the wire and 23 in the neutral
+//     record. It is a CODE and not a number: 023 and 23 are the same
+//     code, and the leading zero is the printed table's, not a value.
+//
+//   - THE ENUMS CARRY THE DOCUMENT'S OWN SPELLINGS, not this program's.
+//     "FIL1", "DUP-", "TSQL", "TONE(T)/DTCS(R)", "RPS" and the rest are
+//     transcribed as printed, including the four-value duplex list and
+//     the eight-value tone-mode list that no core/spec vocabulary can
+//     hold (matrix section 1 rows 14 and 15).
+//
+//   - THE NAME IS SIXTEEN BYTES FIXED, padded with NamePad. A name
+//     ENDING in a space does not round-trip, because padding erases the
+//     data-versus-fill distinction on the wire; that is core/civ's
+//     stated consequence of a pad byte that is also a legal character,
+//     and this model's pad byte is.
+//
 // # The ASSUMED register
 //
 // NINETEEN members of this package are not IC-905-manual facts. Each is
