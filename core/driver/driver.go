@@ -169,6 +169,20 @@ type Session interface {
 	// returned WriteResult reports which of the write's steps were sent
 	// and unrejected; WriteChannel performs NO read-back verification —
 	// that is the clone service's job.
+	//
+	// THE ONE RECORDED EXCEPTION TO "BEFORE ANY WIRE TRAFFIC" (Icom
+	// tier, ruling T5). Refusals derived from CAPABILITIES and from the
+	// CHANNEL'S OWN CONTENT — field validity, vocabularies, cross-field
+	// constraints, mandatory-Known rules — are locally decidable, and
+	// every one of them precedes ALL wire traffic, as above. A refusal
+	// that requires the SLOT'S CURRENT STATE cannot be: the Icom tier's
+	// E6 rule refuses a write whose unmapped record regions differ from
+	// the profile's Fixed template, and a driver cannot know those
+	// regions without reading the slot. Such a refusal therefore
+	// NECESSARILY FOLLOWS the single read that obtains that state, and
+	// is the one recorded exception. A driver orders its ladder
+	// accordingly: every locally decidable refusal first, then ONE read,
+	// then the read-dependent refusals, then the write.
 	WriteChannel(ctx context.Context, ch codeplug.Channel) (WriteResult, error)
 
 	// Close releases the session and its underlying port. Idempotent.

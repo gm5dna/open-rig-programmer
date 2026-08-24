@@ -236,3 +236,61 @@ func TestValidate_ABankWithNoToneVocabularyIsAdmitted(t *testing.T) {
 		}
 	})
 }
+
+// TestCanonicalLookup_RefusesADuplicateCanonical is the exactly-one rule's
+// other half, at the LOOKUP rather than at Validate.
+//
+// Validate refuses two entries marked canonical for one semantic value,
+// and that is the primary defence — but it is not the only way these
+// capabilities are reached. core/csvio's ImportCHIRP takes a
+// spec.Capabilities and does not re-run Validate, so a hand-built or
+// test-built value carrying two canonicals arrives at the lookup intact.
+// Returning the FIRST canonical there restores exactly the order
+// dependence the canonical rule was introduced to remove: which wire code
+// an imported file produces would again depend on the order a table was
+// written in.
+//
+// So the lookup scans the whole group and answers only when the answer is
+// unambiguous: exactly one canonical, or exactly one entry.
+func TestCanonicalLookup_RefusesADuplicateCanonical(t *testing.T) {
+	t.Run("duplex: two canonicals answer nothing", func(t *testing.T) {
+		c := Capabilities{DuplexOptions: []DuplexOption{
+			{Value: "DUP-A", Direction: DuplexDown, Canonical: true},
+			{Value: "DUP-B", Direction: DuplexDown, Canonical: true},
+		}}
+		if got, ok := c.CanonicalDuplexOption(DuplexDown); ok {
+			t.Errorf("CanonicalDuplexOption = %q, true; want the not-found answer — two canonicals is not an answer, it is a table that says two things", got)
+		}
+		// And the OTHER directions in the same table are unaffected: an
+		// ambiguity in one group must not poison its neighbours.
+		c.DuplexOptions = append(c.DuplexOptions, DuplexOption{Value: "DUP+", Direction: DuplexUp})
+		if got, ok := c.CanonicalDuplexOption(DuplexUp); !ok || got != "DUP+" {
+			t.Errorf("CanonicalDuplexOption(DuplexUp) = %q, %v; want %q, true", got, ok, "DUP+")
+		}
+	})
+
+	t.Run("tone mode: two canonicals answer nothing", func(t *testing.T) {
+		c := Capabilities{ToneModes: []ToneMode{
+			{Value: "TONE-A", Semantics: ToneModeCTCSS, Canonical: true},
+			{Value: "TONE-B", Semantics: ToneModeCTCSS, Canonical: true},
+		}}
+		if got, ok := c.CanonicalToneMode(ToneModeCTCSS); ok {
+			t.Errorf("CanonicalToneMode = %q, true; want the not-found answer", got)
+		}
+		c.ToneModes = append(c.ToneModes, ToneMode{Value: "TSQL", Semantics: ToneModeCTCSSSquelch})
+		if got, ok := c.CanonicalToneMode(ToneModeCTCSSSquelch); !ok || got != "TSQL" {
+			t.Errorf("CanonicalToneMode(TSQL) = %q, %v; want %q, true", got, ok, "TSQL")
+		}
+	})
+
+	t.Run("one canonical among several is still the answer", func(t *testing.T) {
+		c := Capabilities{DuplexOptions: []DuplexOption{
+			{Value: "DUP-AUTO", Direction: DuplexDown},
+			{Value: "DUP-", Direction: DuplexDown, Canonical: true},
+			{Value: "DUP-ALT", Direction: DuplexDown},
+		}}
+		if got, ok := c.CanonicalDuplexOption(DuplexDown); !ok || got != "DUP-" {
+			t.Errorf("CanonicalDuplexOption = %q, %v; want %q, true", got, ok, "DUP-")
+		}
+	})
+}

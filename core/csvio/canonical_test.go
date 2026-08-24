@@ -66,6 +66,30 @@ func TestReverseMappingConsultsTheCanonicalEntry(t *testing.T) {
 		}
 	})
 
+	t.Run("duplex: two CANONICAL entries are refused too", func(t *testing.T) {
+		// Validate refuses this table, but ImportCHIRP does not re-run
+		// Validate — so a hand-built Capabilities carrying two canonicals
+		// arrives here as written. Answering with the first would restore
+		// exactly the slice-order dependence the canonical rule removed.
+		caps := spec.Capabilities{DuplexOptions: []spec.DuplexOption{
+			{Value: "DUP-A", Direction: spec.DuplexDown, Canonical: true},
+			{Value: "DUP-B", Direction: spec.DuplexDown, Canonical: true},
+		}}
+		if got, ok := duplexFor(caps, spec.DuplexDown); ok {
+			t.Errorf("duplexFor = %q, true; want the not-found answer for a table that marks two answers", got)
+		}
+	})
+
+	t.Run("tone mode: two CANONICAL entries are refused too", func(t *testing.T) {
+		caps := spec.Capabilities{ToneModes: []spec.ToneMode{
+			{Value: "TONE-A", Semantics: spec.ToneModeCTCSS, Canonical: true},
+			{Value: "TONE-B", Semantics: spec.ToneModeCTCSS, Canonical: true},
+		}}
+		if got, ok := toneModeFor(caps, spec.ToneModeCTCSS); ok {
+			t.Errorf("toneModeFor = %q, true; want the not-found answer", got)
+		}
+	})
+
 	t.Run("tone mode: the canonical entry wins over the first", func(t *testing.T) {
 		caps := spec.Capabilities{ToneModes: []spec.ToneMode{
 			{Value: "TONE-ALT", Semantics: spec.ToneModeCTCSS},

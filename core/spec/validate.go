@@ -670,52 +670,76 @@ func toneModeCanonicalGroups(modes []ToneMode) []canonicalGroup {
 }
 
 // CanonicalDuplexOption returns the wire-form duplex value this radio uses
-// for direction d, and true, or ("", false) when it expresses none.
+// for direction d, and true, or ("", false) when the table gives no single
+// answer for it.
 //
-// THE ANSWER IS SINGLE BY CONSTRUCTION. Where a direction is expressed
-// more than once, Validate requires exactly one entry marked Canonical and
-// this returns that one. Where it is expressed once, that entry is the
-// answer and needs no marking. Where two entries share a direction and
-// NEITHER is canonical — a shape Validate refuses, reachable only from a
-// hand-built Capabilities that never passed it — this returns false rather
-// than picking by slice order, which is the exact failure the canonical
-// rule exists to remove.
+// IT SCANS THE WHOLE GROUP BEFORE ANSWERING, and that is the point rather
+// than an inefficiency. Returning on the FIRST canonical entry would be
+// correct for every Capabilities that passed Validate — which refuses two
+// canonicals for one value — and would quietly reintroduce order
+// dependence for every Capabilities that did not. That is not a
+// theoretical set: core/csvio's ImportCHIRP accepts a spec.Capabilities
+// and does not re-run Validate, so a hand-built or test-built table
+// reaches this lookup exactly as written. "Which wire code means DOWN?"
+// would once again be answered by whichever line the author happened to
+// type first — the precise failure the canonical rule was introduced to
+// remove.
+//
+// So the answer is given only when it is unambiguous:
+//
+//   - exactly one entry marked Canonical among those sharing d — the
+//     normal multi-code case;
+//   - or exactly one entry with d at all, canonical or not — a lone entry
+//     needs no marking, there being nothing to choose between.
+//
+// Everything else — no entry, several with no canonical, several with
+// more than one canonical — is not an answer this function will invent.
 func (c Capabilities) CanonicalDuplexOption(d DuplexDirection) (string, bool) {
-	var sole string
-	var count int
+	var canonical, sole string
+	var canonicals, total int
 	for _, o := range c.DuplexOptions {
 		if o.Direction != d {
 			continue
 		}
-		if o.Canonical {
-			return o.Value, true
-		}
+		total++
 		sole = o.Value
-		count++
+		if o.Canonical {
+			canonicals++
+			canonical = o.Value
+		}
 	}
-	if count == 1 {
+	switch {
+	case canonicals == 1:
+		return canonical, true
+	case canonicals == 0 && total == 1:
 		return sole, true
+	default:
+		return "", false
 	}
-	return "", false
 }
 
 // CanonicalToneMode is CanonicalDuplexOption for the tone-mode
-// vocabulary, on identical terms.
+// vocabulary, on identical terms and for identical reasons.
 func (c Capabilities) CanonicalToneMode(s ToneModeSemantics) (string, bool) {
-	var sole string
-	var count int
+	var canonical, sole string
+	var canonicals, total int
 	for _, m := range c.ToneModes {
 		if m.Semantics != s {
 			continue
 		}
-		if m.Canonical {
-			return m.Value, true
-		}
+		total++
 		sole = m.Value
-		count++
+		if m.Canonical {
+			canonicals++
+			canonical = m.Value
+		}
 	}
-	if count == 1 {
+	switch {
+	case canonicals == 1:
+		return canonical, true
+	case canonicals == 0 && total == 1:
 		return sole, true
+	default:
+		return "", false
 	}
-	return "", false
 }
