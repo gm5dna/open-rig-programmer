@@ -478,23 +478,21 @@ func OpenRealSessionWith(ctx context.Context, model, portPath string, opts Sessi
 		return nil, nil, &UnknownModelError{Model: model, Supported: SupportedModels()}
 	}
 
+	stopBits, err := stopBitsFor(d)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	port, err := openSerial(portPath, transport.SerialConfig{
 		// The baud is the radio's, read from the driver in hand (d is
 		// the very value NewRegistry registered and reg.Get returned
 		// above as drv — TestDriverTableKeysMatchDriverModel pins the
 		// key they share).
 		Baud: d.Capabilities().DefaultBaud,
-		// The stop bits are NOT model-derived, BY RECORDED DECISION
-		// (M9c-5 E2, upheld at M9c-6): spec.Capabilities carries no
-		// framing field, so every model opens at transport's fixed
-		// default (8-N-2). The E2-owed FTdx10 verification is CLOSED,
-		// and closed as SILENCE: that radio's CAT manual makes no
-		// framing statement anywhere (M9c-6 spec D-framing), so 8-N-2
-		// for the FTdx10 is an ASSUMED entry in core/driver/ftdx10's
-		// own register with a named hardware lift — not a verified
-		// fact. The field is still added only with hardware evidence,
-		// never guessed.
-		StopBits: transport.DefaultStopBits,
+		// The stop bits are the DRIVER's where the driver has something
+		// honest to say, and transport's fixed default (8-N-2) where it
+		// has not — see stopBitsFor.
+		StopBits: stopBits,
 	})
 	if err != nil {
 		return nil, nil, &OpenSerialError{Port: portPath, Cause: err}
@@ -651,6 +649,62 @@ func SynthesiseDiscoveredBanks(model string, slots []string) ([]spec.Bank, bool)
 		return nil, false
 	}
 	return synth.SynthesiseDiscoveredBanks(slots), true
+}
+
+// stopBitsFor is spec D3.1's serial-framing rule in one place: consult
+// the driver's OPTIONAL driver.SerialFramingReporter, and refuse anything
+// it reports other than 1 or 2.
+//
+// STILL NOT A spec.Capabilities FIELD. The M9c-5 (E2) rule — a framing
+// field only with hardware evidence — is untouched, and the four
+// registered Yaesu models still reach the serial layer at
+// transport.DefaultStopBits, because none of them implements the
+// interface. What D3.1 adds is somewhere for a driver that DOES have a
+// framing fact to put it, and the Icom tier's six models are that case.
+//
+// ZERO IS REFUSED WITH THE REST, and that is the rule's whole substance.
+// The obvious implementation — "if the report is <= 0, use the default" —
+// is exactly what must not happen: a driver whose StopBits() returns the
+// zero value has not asked for 8-N-2, it has failed to answer, and
+// substituting a guess there would put transport's default on the wire
+// under a driver's authority and with no diagnostic. A driver with
+// nothing to say implements NOTHING; a driver that implements this
+// interface must mean what it returns.
+//
+// The refusal happens BEFORE the port is opened, so a misconfigured
+// driver never gets as far as touching hardware.
+func stopBitsFor(d driver.Driver) (int, error) {
+	r, ok := d.(driver.SerialFramingReporter)
+	if !ok {
+		// The E2-owed FTdx10 verification is CLOSED, and closed as
+		// SILENCE: that radio's CAT manual makes no framing statement
+		// anywhere (M9c-6 spec D-framing), so 8-N-2 for the FTdx10 is an
+		// ASSUMED entry in core/driver/ftdx10's own register with a named
+		// hardware lift — not a verified fact. Same for the other three.
+		return transport.DefaultStopBits, nil
+	}
+	got := r.StopBits()
+	if got != 1 && got != 2 {
+		return 0, &UnsupportedStopBitsError{Model: d.Model(), StopBits: got}
+	}
+	return got, nil
+}
+
+// UnsupportedStopBitsError is OpenRealSessionWith's typed refusal when a
+// driver's driver.SerialFramingReporter reports a stop-bit count that is
+// not 1 or 2. Returned BEFORE any port is opened.
+//
+// It names the MODEL as well as the number, because the fault is in a
+// driver's registration table and the message has to say which driver's.
+type UnsupportedStopBitsError struct {
+	// Model is the driver that reported StopBits.
+	Model string
+	// StopBits is what it reported.
+	StopBits int
+}
+
+func (e *UnsupportedStopBitsError) Error() string {
+	return fmt.Sprintf("wiring: driver %s reports %d stop bits; only 1 or 2 are supported (a driver with no framing evidence must not implement driver.SerialFramingReporter at all — zero is not a request for the default)", e.Model, e.StopBits)
 }
 
 // OpenSerialError is OpenRealSessionFor's typed failure when

@@ -5,6 +5,7 @@ package wiring
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -1774,5 +1775,138 @@ func TestNeedsUnverifiedConsent_UnknownModel(t *testing.T) {
 	}
 	if got {
 		t.Error("NeedsUnverifiedConsent(unknown) = true, want false alongside the error")
+	}
+}
+
+// --- E2: driver-reported serial framing (spec D3.1) ---------------------
+
+// framingFixtureDriver is baudFixtureDriver plus a StopBits report: the
+// shape spec D3.1 gives every Icom driver, and the only way this package
+// can be shown to consult one, since no registered Yaesu model reports.
+//
+// THE REPORTER IS ON THE DRIVER, not the session, and that placement is
+// the whole point of the fixture: wiring holds the driver BEFORE the port
+// opens and the session does not exist yet, so a Session-side reporter
+// could never be consulted at the moment the port's framing is chosen.
+type framingFixtureDriver struct {
+	baudFixtureDriver
+	stopBits int
+}
+
+func (d framingFixtureDriver) StopBits() int { return d.stopBits }
+
+var _ driver.SerialFramingReporter = framingFixtureDriver{}
+
+// registerFramingFixture registers a driver reporting stopBits under a
+// throwaway model name, removing it again on cleanup.
+func registerFramingFixture(t *testing.T, model string, stopBits int) {
+	t.Helper()
+	realDrivers[model] = func(bool) driver.Driver {
+		return framingFixtureDriver{
+			baudFixtureDriver: baudFixtureDriver{caps: spec.Capabilities{
+				Model:        model,
+				CATID:        "9999",
+				Bauds:        []int{transport.DefaultBaud},
+				DefaultBaud:  transport.DefaultBaud,
+				TagLen:       12,
+				ShiftOptions: spec.StandardShiftOptions(),
+				CTCSSStates:  spec.StandardCTCSSStates(),
+			}},
+			stopBits: stopBits,
+		}
+	}
+	t.Cleanup(func() { delete(realDrivers, model) })
+}
+
+// TestOpenRealSessionFor_StopBitsFollowAReportingDriver is spec D3.1's
+// half that the four registered Yaesu models cannot prove: a driver
+// implementing driver.SerialFramingReporter has its answer carried into
+// the port's own configuration, so an Icom radio's 8-N-1 line is opened
+// 8-N-1 rather than at transport's fixed 8-N-2.
+func TestOpenRealSessionFor_StopBitsFollowAReportingDriver(t *testing.T) {
+	const fixtureModel = "TEST-FRAMING-FIXTURE"
+	if transport.DefaultStopBits == 1 {
+		t.Fatal("sanity check failed: transport.DefaultStopBits is already 1, so this test could not distinguish the two sources")
+	}
+	registerFramingFixture(t, fixtureModel, 1)
+
+	got := recordSerialConfig(t)
+
+	_, _, err := OpenRealSessionFor(testCtx(t), fixtureModel, "/dev/nonexistent-rigprog-test-port")
+	if !errors.Is(err, errSeamRefused) {
+		t.Fatalf("OpenRealSessionFor: err = %v, want it to wrap the seam's own error", err)
+	}
+	if got.StopBits != 1 {
+		t.Errorf("SerialConfig.StopBits = %d, want 1 — the driver's own report must reach the port, not transport.DefaultStopBits (%d)", got.StopBits, transport.DefaultStopBits)
+	}
+}
+
+// TestOpenRealSessionFor_StopBitsRefuseAnImpossibleReport is the rule's
+// fail-closed half. A reported value other than 1 or 2 is REFUSED, and
+// zero is refused with the rest: a driver whose StopBits() returns the
+// zero value has not said "use the default", it has failed to say
+// anything, and silently selecting 8-N-2 for it would put a guess on the
+// wire under the appearance of a driver's own statement.
+//
+// The refusal happens BEFORE the port is opened, which the recording seam
+// proves by never being reached.
+func TestOpenRealSessionFor_StopBitsRefuseAnImpossibleReport(t *testing.T) {
+	for _, stopBits := range []int{0, -1, 3, 8} {
+		t.Run(fmt.Sprintf("reports %d", stopBits), func(t *testing.T) {
+			const fixtureModel = "TEST-FRAMING-REFUSED"
+			registerFramingFixture(t, fixtureModel, stopBits)
+
+			got := recordSerialConfig(t)
+
+			sess, closeAll, err := OpenRealSessionFor(testCtx(t), fixtureModel, "/dev/nonexistent-rigprog-test-port")
+			if errors.Is(err, errSeamRefused) {
+				t.Fatalf("the port was opened at StopBits %d — an unsupported report must be refused before any port is touched", got.StopBits)
+			}
+			var bad *UnsupportedStopBitsError
+			if !errors.As(err, &bad) {
+				t.Fatalf("err = %v, want an *UnsupportedStopBitsError", err)
+			}
+			if bad.StopBits != stopBits {
+				t.Errorf("error reports StopBits %d, want %d", bad.StopBits, stopBits)
+			}
+			if bad.Model != fixtureModel {
+				t.Errorf("error names model %q, want %q", bad.Model, fixtureModel)
+			}
+			if sess != nil || closeAll != nil {
+				t.Errorf("expected nil session/closeAll on refusal, got sess=%v closeAllIsNil=%v", sess, closeAll == nil)
+			}
+		})
+	}
+}
+
+// TestOpenRealSessionFor_EveryYaesuModelOpensAtEightNTwo is the pin the
+// adjudication asks for, on the honest observable: the PORT CONFIGURATION
+// each of the four registered models is opened with. None of them
+// implements SerialFramingReporter, so each must still reach the serial
+// layer at transport.DefaultStopBits — before and after E2, unchanged.
+func TestOpenRealSessionFor_EveryYaesuModelOpensAtEightNTwo(t *testing.T) {
+	models := SupportedModels()
+	if len(models) != 4 {
+		t.Fatalf("SupportedModels() = %v (%d models), want the four registered Yaesu models — update this pin deliberately", models, len(models))
+	}
+	for _, model := range models {
+		t.Run(model, func(t *testing.T) {
+			d, err := realDriverFor(model, false)
+			if err != nil {
+				t.Fatalf("realDriverFor(%q): %v", model, err)
+			}
+			if r, ok := d.(driver.SerialFramingReporter); ok {
+				t.Fatalf("%s implements SerialFramingReporter (reporting %d) — the four Yaesu models must not, so that 8-N-2 stays their port configuration by default rather than by a driver's statement", model, r.StopBits())
+			}
+
+			got := recordSerialConfig(t)
+			_, _, err = OpenRealSessionFor(testCtx(t), model, "/dev/nonexistent-rigprog-test-port")
+			if !errors.Is(err, errSeamRefused) {
+				t.Fatalf("OpenRealSessionFor(%q): err = %v, want it to wrap the seam's own error", model, err)
+			}
+			if got.StopBits != 2 {
+				t.Errorf("SerialConfig.StopBits = %d, want 2 (transport.DefaultStopBits) for %s", got.StopBits, model)
+			}
+		})
 	}
 }
