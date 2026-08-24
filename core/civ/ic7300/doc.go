@@ -32,8 +32,8 @@
 // | Data-area length (record + address) | 41 |
 // | Whole 1A 00 set frame on the wire   | 48 |
 //
-// civ.ProfileConfig.Layouts[i].Length and BuildMemorySet's <record>
-// argument denote the RECORD-ONLY figure, per spec Erratum 1. The
+// civ.ProfileConfig.Layouts[i].Length and the memory-set builder's
+// <record> argument denote the RECORD-ONLY figure, per spec Erratum 1. The
 // data-area figure — 41 — is what a reader counting printed indices from
 // ① gets, and the tier spec's D6 row quotes it; the two agree exactly once
 // the boundary is named. A FINGERPRINT BUILT ON 41 IS A DIFFERENT TEST,
