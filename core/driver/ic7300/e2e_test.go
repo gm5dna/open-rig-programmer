@@ -47,8 +47,8 @@ import (
 // file exists to catch.
 //
 // Every value is inside the fake's own derived vocabularies — it validates ③'s
-// two nibbles, ⑪'s two nibbles and the sixteen... ten name bytes on every set
-// — so a record this function builds is one the fake will store.
+// two nibbles, ⑪'s two nibbles and the ten name bytes on every set — so a
+// record this function builds is one the fake will store.
 func e2eRecordBytes(sel byte, hz uint64, tag string) []byte {
 	rec := make([]byte, 39)
 	rec[0] = sel                    // ③ — Split OFF (high), SELECT group (low)

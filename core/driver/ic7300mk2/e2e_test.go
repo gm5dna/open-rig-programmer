@@ -5,6 +5,7 @@ package ic7300mk2_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -525,24 +526,127 @@ func TestE2E_ScanEdgesAreNeverCleared(t *testing.T) {
 
 	// Nothing aimed at either scan edge is a clear, in any of the printed
 	// forms, across the whole transcript.
-	for i, f := range radio.Received() {
+	for _, why := range scanEdgeClears(radio.Received()) {
+		t.Error(why)
+	}
+}
+
+// The two legitimate 1A 00 frame lengths at any address on this model: the
+// nine-byte READ (preamble, the two addresses, 1A 00, the two channel bytes,
+// FD) and the 54-byte SET that carries a whole 45-byte record.
+const (
+	readFrameLen = 9
+	setFrameLen  = 54
+)
+
+// scanEdgeClears returns one message per frame in frames that is a CLEAR aimed
+// at a scan edge, and nothing for a transcript that carries none.
+//
+// IT IS A FUNCTION RATHER THAN A LOOP INSIDE THE TEST, and that is the whole
+// point of this shape: an assertion written inline can go VACUOUS without
+// anything noticing — go vet does not report an empty loop body, and a test
+// that cannot fail passes exactly as loudly as one that can. Lifted out, the
+// detector is itself testable, and
+// TestScanEdgeClearDetectorReportsAPlantedClear feeds it planted clears and
+// requires it to find them. That test is what keeps this one honest.
+//
+// THE RULE IS A WHITELIST, not a hunt for the one printed recipe. A 1A 00
+// frame aimed at a scan edge is legitimate in exactly two shapes — a read and
+// a full set — so ANY OTHER LENGTH is a truncated data area, which is what
+// every printed clear form is: the single-FF recipe FE FE B6 E0 1A 00 01 00 FF
+// FD is one instance of it, and a form this document does not print would be
+// caught by the same rule rather than slipping past a check written for the
+// one shape somebody thought of.
+func scanEdgeClears(frames [][]byte) []string {
+	var out []string
+	for i, f := range frames {
 		cn, sc, ok := civ.FrameCommand(f)
 		if !ok {
 			continue
 		}
 		if cn == 0x0B {
-			t.Errorf("frame %d = % X is a 0B memory clear", i, f)
+			out = append(out, fmt.Sprintf("frame %d = % X is a 0B memory clear — this document's own 0B row prints \"P1 and P2 cannot be cleared\", and this tier ships no erase path at any address", i, f))
 			continue
 		}
-		if cn != 0x1A || sc != 0x00 || len(f) < 9 {
+		if cn != 0x1A || sc != 0x00 || len(f) < readFrameLen {
 			continue
 		}
-		if f[6] != 0x01 {
-			continue // not a scan-edge address
+		if f[6] != bankScanEdgeWire {
+			continue // a memory channel, not a scan edge
 		}
-		if len(f) != 9 {
-			continue // a full set, which is not a clear
+		if len(f) == readFrameLen || len(f) == setFrameLen {
+			continue // a read, or a full set: both legitimate
 		}
+		if len(f) == readFrameLen+1 && f[8] == 0xFF {
+			out = append(out, fmt.Sprintf("frame %d = % X is the printed single-FF clear recipe aimed at scan edge %02X %02X", i, f, f[6], f[7]))
+			continue
+		}
+		out = append(out, fmt.Sprintf("frame %d = % X is a 1A 00 frame with a TRUNCATED data area aimed at scan edge %02X %02X — neither a read nor a full set, which is the shape every printed clear form takes", i, f, f[6], f[7]))
+	}
+	return out
+}
+
+// bankScanEdgeWire is the first channel-address byte of the two scan-edge
+// forms, 01 00 (P1) and 01 01 (P2). Written out here rather than derived from
+// parseSlot, for the reason every fixture in these files is: a test that asked
+// the code under test which addresses to watch would watch whichever ones that
+// code had decided on.
+const bankScanEdgeWire = 0x01
+
+// TestScanEdgeClearDetectorReportsAPlantedClear is the detector's own witness.
+//
+// The assertion above lived for one commit as a loop whose every path was a
+// no-op — it skipped the ten-byte single-FF clear under a comment calling it "a
+// full set", and asserted nothing on any other path. Nothing caught it: the
+// suite was green, go vet was clean, and the progress record claimed the
+// property as delivered. This test is what makes that failure mode impossible
+// to repeat, because a detector that cannot see a clear now fails HERE, loudly,
+// with a count.
+func TestScanEdgeClearDetectorReportsAPlantedClear(t *testing.T) {
+	// Two planted clears, one at each scan edge, in the form this document
+	// prints — and, around them, every legitimate frame the driver really does
+	// emit, so the detector is shown to discriminate rather than merely to
+	// complain.
+	planted := [][]byte{
+		{0xFE, 0xFE, 0xB6, 0xE0, 0x19, 0x00, 0xFD},                   // the identity read
+		{0xFE, 0xFE, 0xB6, 0xE0, 0x1A, 0x00, 0x00, 0x01, 0xFD},       // a MEMORY read
+		{0xFE, 0xFE, 0xB6, 0xE0, 0x1A, 0x00, 0x01, 0x00, 0xFD},       // a P1 read — legitimate
+		{0xFE, 0xFE, 0xB6, 0xE0, 0x1A, 0x00, 0x01, 0x00, 0xFF, 0xFD}, // PLANTED: single-FF clear at P1
+		{0xFE, 0xFE, 0xB6, 0xE0, 0x1A, 0x00, 0x01, 0x01, 0xFF, 0xFD}, // PLANTED: single-FF clear at P2
+	}
+	// A full, legitimate SET at P1: 54 bytes, which must NOT be reported.
+	set := append([]byte{0xFE, 0xFE, 0xB6, 0xE0, 0x1A, 0x00, 0x01, 0x00}, e2eRecordBytes(0x00, 14_000_000, "EDGE LOW")...)
+	planted = append(planted, append(set, 0xFD))
+
+	got := scanEdgeClears(planted)
+	if len(got) != 2 {
+		t.Fatalf("the detector reported %d of 2 planted scan-edge clears:\n  %s\n— a detector that cannot see a planted clear cannot see a real one, and the test it serves would pass while asserting nothing", len(got), strings.Join(got, "\n  "))
+	}
+	for _, want := range []string{"01 00", "01 01"} {
+		found := false
+		for _, g := range got {
+			if strings.Contains(g, want) {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("no report names scan edge %s — both edges must be watched, not just the first", want)
+		}
+	}
+	for _, g := range got {
+		if !strings.Contains(g, "single-FF clear recipe") {
+			t.Errorf("report %q does not identify the printed form it caught", g)
+		}
+	}
+
+	// AND THE NEGATIVE HALF: a transcript of nothing but legitimate traffic
+	// reports nothing. Without this, a detector that reported every frame
+	// would satisfy the count above and be equally useless.
+	if got := scanEdgeClears(planted[:3]); len(got) != 0 {
+		t.Errorf("the detector reported %v over a transcript of an identity read, a memory read and a scan-edge read — all three are legitimate", got)
+	}
+	if got := scanEdgeClears(planted[5:]); len(got) != 0 {
+		t.Errorf("the detector reported %v over a full 54-byte set at P1 — a set is a write, not a clear", got)
 	}
 }
 
