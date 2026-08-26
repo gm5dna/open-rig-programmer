@@ -240,13 +240,23 @@ func (d *Driver) open(ctx context.Context, eng *transport.Engine, stats civ.Accu
 	// opened once and then trusted.
 	info.Fingerprinted = fingerprinted
 
-	return &Session{
+	s := &Session{
 		eng:   eng,
 		stats: stats,
 		id:    id,
 		caps:  d.sessionCapabilities(),
 		info:  info,
-	}, nil
+	}
+	// The inventory walk is the LAST thing Open does, and deliberately:
+	// it is far the most expensive step (a thousand exchanges by default,
+	// ten thousand with WithFullInventoryWalk), so it runs only after the
+	// probe has established that the radio on this port answers to this
+	// address and holds records of this length. Walking first would spend
+	// minutes proving something the first answered frame already showed.
+	if err := s.materialiseInventory(ctx, d.fullInventoryWalk); err != nil {
+		return nil, err
+	}
+	return s, nil
 }
 
 // probeTransceiverID performs the `19 00` exchange and returns the

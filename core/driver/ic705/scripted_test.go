@@ -44,6 +44,11 @@ type scriptedRadio struct {
 	silentID   bool
 	answerNext *civ.ChannelAddress
 	closed     bool
+	// silentAfterReads, when positive, makes the radio stop answering
+	// memory reads once it has answered that many — a radio that goes
+	// away mid-walk, deterministically and without a spinning test.
+	silentAfterReads int
+	memoryReads      int
 
 	floodStop chan struct{}
 	floodWG   sync.WaitGroup
@@ -66,19 +71,23 @@ type radioImage struct {
 	silentID bool
 	// silent makes the radio ignore EVERY frame.
 	silent bool
+	// silentAfterReads, when positive, makes the radio answer that many
+	// memory reads and then fall silent.
+	silentAfterReads int
 }
 
 func newScriptedRadio(t *testing.T, img radioImage) *scriptedRadio {
 	t.Helper()
 	host, remote := net.Pipe()
 	r := &scriptedRadio{
-		host:      host,
-		remote:    remote,
-		records:   map[civ.ChannelAddress][]byte{},
-		idPayload: img.idPayload,
-		silent:    img.silent,
-		silentID:  img.silentID,
-		floodStop: make(chan struct{}),
+		host:             host,
+		remote:           remote,
+		records:          map[civ.ChannelAddress][]byte{},
+		idPayload:        img.idPayload,
+		silent:           img.silent,
+		silentID:         img.silentID,
+		silentAfterReads: img.silentAfterReads,
+		floodStop:        make(chan struct{}),
 	}
 	if r.idPayload == nil {
 		// An arbitrary token. The probe records it and matches it against
@@ -310,6 +319,10 @@ func (r *scriptedRadio) reply(frame []byte) []byte {
 		out = append(out, r.idPayload...)
 		return append(out, 0xFD)
 	case cn == 0x1A && sc == 0x00 && len(body) == 4:
+		r.memoryReads++
+		if r.silentAfterReads > 0 && r.memoryReads > r.silentAfterReads {
+			return nil
+		}
 		addr, err := decodeWireAddress(body)
 		if err != nil {
 			return nak()
