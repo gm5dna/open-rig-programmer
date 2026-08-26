@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	civic7610 "github.com/gm5dna/open-rig-programmer/core/civ/ic7610"
@@ -423,7 +424,14 @@ type Session struct {
 	report OpenReport
 	// answerMismatches counts memory answers whose decoded channel address
 	// was not the one requested (tier ruling T2).
-	answerMismatches uint64
+	//
+	// ATOMIC because it is the one piece of MUTABLE state on a Session,
+	// and driver.Session's contract says implementations must be safe for
+	// concurrent use. Every other field here is written once by Open and
+	// only read afterwards; the transport engine serialises the exchanges
+	// themselves, but nothing serialises a caller reading the diagnostic
+	// while another goroutine drives a read.
+	answerMismatches atomic.Uint64
 }
 
 // Identity implements driver.Session.

@@ -248,6 +248,31 @@
 //
 // ON ICOM, scan_skip IS SELECT-GROUP MEMBERSHIP, NEVER A SKIP.
 //
+// # 5b. THE ONE APPROXIMATION IN THE WRITE GATE'S FIELD SET
+//
+// write.go's conditionalRequestedFields appends every state-bearing field
+// OUTSIDE the base set when it is Known, so the capability gate can REFUSE
+// a request rather than drop it. Ten of the twelve predicates are exact
+// tri-state tests. Two of the remaining three plain fields — CTCSS and
+// Shift — are exact too, because an empty string is a vocabulary member of
+// no radio.
+//
+// THE CLARIFIER IS THE APPROXIMATION. codeplug.ChannelData carries it as
+// ClarHz plus two bools, with no state, so a channel asking for an
+// explicitly-ZERO clarifier is indistinguishable from one that never
+// carried a clarifier at all: FieldClarifier is not appended, and the gate
+// never sees the request.
+//
+// ON THIS MODEL IT COSTS NOTHING, and the reason is worth writing down
+// rather than assuming: the 1A 00 record has no clarifier span, so there
+// is nothing to write even if the gate saw it; and core/codeplug's own
+// touchedFields treats clarifier as one of the UNCONDITIONAL six and
+// FILTERS IT OUT on a bank that cannot reach the field, so the clone
+// service never requests it either. The gap is therefore unreachable
+// through the model layer, exactly like §6's. It is recorded here as an
+// honesty row, and it would need re-examining for any Icom model whose
+// record DOES carry a clarifier.
+//
 // # 6. THE DEFERRED GATE-DOMAIN GAP, RECORDED AND NOT PAPERED OVER
 //
 // civ.FieldSpan HAS NO NUMERIC DOMAIN. civ's validateSpanValue
@@ -390,8 +415,11 @@
 //     "100 MHz digit: 0 (Fixed)", and cell 4's high nibble as "10 MHz
 //     digit: 0-6". The radio's TUNING ceiling is ASSUMED.
 //     spec.Capabilities.MaxFreqHz carries the ENCODABLE figure, because it
-//     is the only number the document yields (matrix erratum 11), and
-//     caps.go's deliberatelyZero audit records the distinction.
+//     is the only number the document yields (matrix erratum 11). The
+//     distinction is recorded in the comment beside MaxEncodableFreqHz in
+//     caps.go — NOT in deliberatelyZero, which is the R11 audit's arm for
+//     a field left ZERO, and this one is populated; it discharges R11
+//     through the audit's populated arm instead.
 //     STAGE W LIFTS IT WITH: capture ic7610-storable-ceiling-ch03 - on one
 //     IC-7610, write memory channel 03 with 1A 00 at successively higher
 //     frequencies - 60.000000, 69.999999 MHz - reading each back with
@@ -406,8 +434,9 @@
 //     GRADE: the ENCODING bound (0 Hz) is MANUAL-EVIDENCED — the same
 //     strip's eight variable nibbles are labelled 0-9, so 0 is encodable
 //     in every one. The radio's TUNING floor is ASSUMED.
-//     spec.Capabilities.MinFreqHz carries 0 and caps.go's
-//     deliberatelyZero audit says why.
+//     spec.Capabilities.MinFreqHz carries 0, and THAT one IS in caps.go's
+//     deliberatelyZero table, because zero is this radio's declared floor
+//     rather than an omission.
 //     STAGE W LIFTS IT WITH: capture ic7610-storable-floor-ch04 - on the
 //     same radio, write memory channel 04 with 1A 00 at successively lower
 //     frequencies - 0.030000, 0.010000, 0.000000 MHz - reading each back,

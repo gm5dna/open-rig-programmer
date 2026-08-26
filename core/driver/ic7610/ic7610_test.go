@@ -5,6 +5,7 @@ package ic7610
 import (
 	"errors"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	civic7610 "github.com/gm5dna/open-rig-programmer/core/civ/ic7610"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
@@ -254,8 +256,24 @@ func TestOpen_WrongLengthRefusesWithoutAttribution(t *testing.T) {
 			if errors.As(err, &wrong) && wrong.GotModel != "" {
 				t.Errorf("the refusal names a found model (%q) - cross-model attribution is a Wave-4 tier check and this model has no registered sibling", wrong.GotModel)
 			}
+			// THE TYPED ERROR, not a substring sweep: a Got field wired
+			// to the wrong value would slip past a message check that
+			// only looked for "25".
+			var mismatch *RecordLengthMismatchError
+			if !errors.As(err, &mismatch) {
+				t.Fatalf("err = %v, want a *RecordLengthMismatchError", err)
+			}
+			if mismatch.Got != n {
+				t.Errorf("*RecordLengthMismatchError.Got = %d, want %d - the FOUND length is half of what the plan requires the refusal to give", mismatch.Got, n)
+			}
+			if mismatch.Want != civic7610.RecordOnlyLength {
+				t.Errorf("*RecordLengthMismatchError.Want = %d, want %d", mismatch.Want, civic7610.RecordOnlyLength)
+			}
+			// And the message carries all three things the plan names:
+			// the length found, the length expected, and that the
+			// expectation is itself an ASSUMED derivation.
 			msg := err.Error()
-			for _, want := range []string{"25", "ASSUMED"} {
+			for _, want := range []string{strconv.Itoa(n), "25", "ASSUMED"} {
 				if !strings.Contains(msg, want) {
 					t.Errorf("the refusal %q does not mention %q", msg, want)
 				}
@@ -571,5 +589,117 @@ func TestSessionCapabilities_ConsentAppliesOnlyToRecognisedProfiles(t *testing.T
 	defer func() { _ = usess.Close() }()
 	if usess.Capabilities().FieldSupport(bothBanks[0], mappedFields[0]).CanWrite() {
 		t.Error("an unrecognised Profile produced a writable session under consent - the fail-safe direction must survive consent")
+	}
+}
+
+// TestOpen_ProbeAnswerForAnotherChannelIsRefused pins tier ruling T2 in the
+// OPEN path.
+//
+// T2 says the driver compares the decoded address of EVERY memory answer
+// before ANY use of it. During the probe, "use" means TAKING THE ANSWER'S
+// LENGTH AS THIS RADIO'S FINGERPRINT — so a bus neighbour (or a confused
+// radio) answering for a different channel with a 25-byte record would
+// fingerprint the session on evidence that was never about the slot asked
+// for, and every later read would be trusted on that basis.
+//
+// probeSlot carries its own copy of the check because no Session exists
+// yet; without this test, deleting that copy leaves the whole suite green.
+// The diagnostic COUNT is deliberately not kept here — there is no Session
+// to keep it on — and the typed error is what carries the event instead.
+func TestOpen_ProbeAnswerForAnotherChannelIsRefused(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		answers func(asked int) int
+		wantGot int
+	}{
+		{"the first probed slot answers for another channel", func(int) int { return 7 }, 7},
+		{"the answer is off by one", func(asked int) int { return asked + 1 }, 2},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			p := newScriptedPort(t, radioImage{
+				idToken:       []byte{0x98},
+				records:       map[int][]byte{1: goldenRecord},
+				answerAddress: tt.answers,
+			})
+			d := New(RealHardware)
+			sess, err := d.Open(t.Context(), p.Port(), driver.Identity{})
+			if err == nil {
+				_ = sess.Close()
+				t.Fatal("Open fingerprinted the session on a record that was never about the channel it asked for")
+			}
+			var mismatch *AnswerMismatchError
+			if !errors.As(err, &mismatch) {
+				t.Fatalf("err = %v, want an *AnswerMismatchError (tier ruling T2 applies to the probe's answers too)", err)
+			}
+			if mismatch.Want.Channel != 1 || mismatch.Got.Channel != tt.wantGot {
+				t.Errorf("*AnswerMismatchError = {Want: %s, Got: %s}, want {ch1, ch%d}", mismatch.Want, mismatch.Got, tt.wantGot)
+			}
+			// Driver.Open takes ownership of the port on BOTH outcomes.
+			if _, rerr := p.Port().Read(make([]byte, 1)); rerr == nil {
+				t.Error("the port is still open after a failed Open")
+			}
+		})
+	}
+}
+
+// TestSessionCapabilities_IsADefensiveDeepCopy pins the claim
+// cloneCapabilities' doc comment makes: THE COPY IS LOAD-BEARING.
+//
+// WriteChannel's capability gate re-checks against s.caps, the session's
+// own value. A caller who could reach into what Capabilities() handed out
+// and flip a FieldSupport — or move the tone range, which is a POINTER and
+// would have been aliased by a plain struct copy — would be editing the
+// write gate from outside it. So the test does not merely compare two
+// returned values: it MUTATES one and then asks the gate.
+func TestSessionCapabilities_IsADefensiveDeepCopy(t *testing.T) {
+	p := newScriptedPort(t, occupiedRadio())
+	s := openWith(t, p) // Simulated: the seven mapped fields are writable
+
+	handed := s.Capabilities()
+
+	// (a) Flip a bank's FieldSupport to Unsupported through the copy.
+	mem, ok := handed.Bank(spec.BankMemory)
+	if !ok {
+		t.Fatal("no MEM bank")
+	}
+	mem.Fields[spec.FieldFrequency] = spec.FieldSupport{}
+	for i := range handed.Banks {
+		if handed.Banks[i].ID == spec.BankMemory {
+			handed.Banks[i].Fields[spec.FieldFrequency] = spec.FieldSupport{}
+			handed.Banks[i].Slots[0] = "XXX"
+		}
+	}
+	// (b) Move the tone domain through the copy's POINTER.
+	if handed.CTCSSToneRange == nil {
+		t.Fatal("CTCSSToneRange is nil")
+	}
+	handed.CTCSSToneRange.MinDeciHz = 9000
+	handed.CTCSSToneRange.MaxDeciHz = 9000
+	// (c) Rewrite a top-level vocabulary through the copy.
+	handed.Modes[0] = "MANGLED"
+	handed.Filters[0] = "MANGLED"
+
+	// A second call must be untouched by any of that.
+	fresh := s.Capabilities()
+	if got := fresh.FieldSupport(spec.BankMemory, spec.FieldFrequency); !got.CanWrite() {
+		t.Error("mutating the handed-out Capabilities disarmed the session's frequency write support")
+	}
+	if b, _ := fresh.Bank(spec.BankMemory); b.Slots[0] != "001" {
+		t.Errorf("the handed-out bank's Slots alias the session's: first slot is now %q", b.Slots[0])
+	}
+	if r := fresh.CTCSSToneRange; r == nil || r.MinDeciHz != 1 || r.MaxDeciHz != 2999 {
+		t.Errorf("CTCSSToneRange = %+v, want {1, 2999, 1} - the pointer was aliased rather than copied", r)
+	}
+	if fresh.Modes[0] != "LSB" || fresh.Filters[0] != "FIL1" {
+		t.Errorf("a top-level vocabulary was aliased: Modes[0] = %q, Filters[0] = %q", fresh.Modes[0], fresh.Filters[0])
+	}
+
+	// AND THE GATE ITSELF, which is the point: the write still goes
+	// through, so nothing a caller did to the copy reached s.caps.
+	if !s.caps.FieldSupport(spec.BankMemory, spec.FieldFrequency).CanWrite() {
+		t.Fatal("the session's OWN capabilities were mutated through the handed-out copy")
+	}
+	if r := s.caps.CTCSSToneRange; r.MinDeciHz != 1 || r.MaxDeciHz != 2999 {
+		t.Errorf("the session's OWN tone domain was moved through the handed-out copy: %+v", r)
 	}
 }

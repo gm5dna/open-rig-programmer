@@ -162,7 +162,7 @@ func (s *Session) readRaw(ctx context.Context, a civ.ChannelAddress) (civ.Memory
 		return civ.MemoryRecord{}, nil, false, err
 	}
 	if got != a { // T2, BEFORE any use of raw
-		s.answerMismatches++
+		s.answerMismatches.Add(1)
 		return civ.MemoryRecord{}, nil, false, &AnswerMismatchError{Want: a, Got: got}
 	}
 	if recordIsAbsent(raw) {
@@ -180,7 +180,7 @@ func (s *Session) readRaw(ctx context.Context, a civ.ChannelAddress) (civ.Memory
 // T2). A diagnostic count beside the typed error, so a bus that
 // occasionally mis-attributes is visible even when each individual read
 // was refused correctly.
-func (s *Session) AnswerMismatches() uint64 { return s.answerMismatches }
+func (s *Session) AnswerMismatches() uint64 { return s.answerMismatches.Load() }
 
 // ReadChannel implements driver.Session: ONE 1A 00 read, mapped into one
 // codeplug.Channel.

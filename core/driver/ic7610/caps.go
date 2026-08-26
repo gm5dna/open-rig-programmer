@@ -84,8 +84,17 @@ const (
 	//
 	// The STORABLE ceiling — what an IC-7610 will actually keep in a
 	// memory — is NOT established by this document (matrix lift R17a).
-	// This is the encodable figure, which is the only number the document
-	// yields; see deliberatelyZero's note and §Proposed matrix errata.
+	// This is the ENCODABLE figure, which is the only number the document
+	// yields, and matrix erratum 11 exists to record that a driver puts
+	// that number in spec.Capabilities.MaxFreqHz.
+	//
+	// IT IS NOT IN deliberatelyZero AND CANNOT BE: that table is the R11
+	// audit's arm for a field left at its ZERO value, and MaxFreqHz is
+	// POPULATED. TestDeliberatelyZeroAudit enforces the partition in both
+	// directions — a populated field appearing in the table fails its
+	// "the table has gone stale" arm — so this bound discharges R11
+	// through the OTHER arm: populated, with its matrix section cited at
+	// the field itself in baseCapabilities.
 	MaxEncodableFreqHz = 69_999_999
 	// MaxToneDeciHz is the largest tone the record's three-byte
 	// big-endian BCD tone spans can carry, in tenths of a hertz. Matrix
