@@ -226,6 +226,16 @@ func TestProbeIsBounded(t *testing.T) {
 	// performs the inventory walk (inventory.go) and a count taken at that
 	// level would measure the two together and stop meaning anything about
 	// the probe's own bound.
+	// PINNED ABSOLUTELY, AND THE LITERAL IS THE POINT. Every other
+	// assertion in this file compares a frame count against probeSlots
+	// itself, so the constant could be changed to 32 — or to 10 000 — and
+	// the whole suite would stay green while the probe quietly stopped
+	// being bounded. The plan asked for "sixteen frames, never ten
+	// thousand"; this is the line that says sixteen. defaultWalkGroups is
+	// pinned the same way, by the G11-001 fixture in inventory_test.go.
+	if probeSlots != 16 {
+		t.Fatalf("probeSlots = %d, want 16: the open-time fingerprint probe is bounded at sixteen addresses inside display group G01 — a bounded, argued number, not one a later edit may widen unnoticed", probeSlots)
+	}
 	r := newScriptedRadio(t, radioImage{})
 	eng, _, err := newEngine(r.Port(), transport.WithClock(noSettleClock{}))
 	if err != nil {
@@ -239,8 +249,8 @@ func TestProbeIsBounded(t *testing.T) {
 	if fingerprinted {
 		t.Error("an empty radio fingerprinted")
 	}
-	if got := r.Reads(); got != probeSlots {
-		t.Errorf("the probe read %d memories, want exactly %d", got, probeSlots)
+	if got := r.Reads(); got != 16 {
+		t.Errorf("the probe read %d memories, want exactly 16", got)
 	}
 	// And every one of them inside group 1's display space.
 	for _, f := range r.Transcript() {

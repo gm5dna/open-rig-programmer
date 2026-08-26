@@ -18,8 +18,9 @@
 // every page citation gives the PDF page first with the folio in brackets.
 // The capability grid's evidence of record is
 // docs/superpowers/icom-matrices/ic705-capability-matrix.md (rev 1 +
-// errata 1–15); where its body and an erratum disagree, the erratum
-// stands.
+// errata 1–20 — errata 16–20 were adjudicated by the orchestrator on
+// 24/08/2026, and they are the five this plan itself proposed); where its
+// body and an erratum disagree, THE ERRATUM STANDS.
 //
 // NO IC-705 HAS EVER BEEN ASKED ANYTHING BY THIS PROJECT — not a byte
 // sent, not a byte received. Every statement here is a reading of a
@@ -39,13 +40,20 @@
 // renders rather than off extracted text:
 //
 //   - CI-V Transceive — Default: ON. PDF p.69, printed folio 8-16,
-//     §8 SET MODE, "MENU » SET > Connectors > USB SEND/Keying", heading
-//     "CI-V Transceive (Default: ON)". This RE-GRADES
+//     §8 SET MODE, "MENU » SET > Connectors > CI-V", heading
+//     "CI-V Transceive (Default: ON)". THE BREADCRUMB IS THE CI-V ONE, not
+//     the USB SEND/Keying one at the head of the same page: that box
+//     governs the three USB SEND/Keying items in the left column, while the
+//     CI-V box at the foot of the left column opens the group that runs
+//     CI-V Address → CI-V Transceive → CI-V USB Echo Back, continuing at
+//     the head of the right column. It is the component a capture would
+//     navigate by, so it is stated exactly. This RE-GRADES
 //     ic705-transceive-factory-default from ASSUMED to MANUAL-EVIDENCED,
 //     and it is the reason this driver treats a line that never goes quiet
 //     at Init as a normal operating state.
-//   - CI-V USB Echo Back — Default: OFF. Same page and folio, heading
-//     "CI-V USB Echo Back (Default: OFF)". This re-grades
+//   - CI-V USB Echo Back — Default: OFF. Same page, folio and CI-V
+//     breadcrumb, heading "CI-V USB Echo Back (Default: OFF)". This
+//     re-grades
 //     ic705-usb-echo-back-default. The adapter's echo suppression is
 //     unaffected either way: it matches recorded bytes, so an echo that
 //     never arrives costs nothing.
@@ -58,8 +66,9 @@
 //     stay ASSUMED with lifts L-BAUD and L-BAUDLIST. Admission is
 //     permission to look, not permission to assume.
 //
-// The same page settles, in passing, what the CI-V guide already says:
-// "CI-V Address (Default: A4)".
+// The same CI-V group settles, in passing, what the CI-V guide already
+// says: "CI-V Address (Default: A4)", with the note "'A4' is the default
+// address of the IC-705".
 //
 // # The write guard
 //
@@ -157,9 +166,14 @@
 //   - slotToAddress REFUSES those addresses FIRST, before any builder is
 //     reached, and TestCallChannelsAboveFourAreRefusedBeforeAnyBuilder
 //     SWEEPS the whole range rather than sampling it;
-//   - WriteChannel's rung 2 bank check protects every write, and
-//     TestEveryLocalRefusalPrecedesTheRead pins that it precedes all wire
-//     traffic;
+//   - WriteChannel's rung 2 bank check protects every write, pinned by
+//     TestEveryLocalRefusalPrecedesTheRead's "rung 2 bank check" case,
+//     which sends zero frames. That case has to take the CALL bank away
+//     from a session to reach the rung at all — in the shipped
+//     configuration rungs 1 and 2 agree by construction, because
+//     slotToAddress's space IS the two banks — and it is worth having
+//     because the CAPABILITY SET, not slots.go, is what every other layer
+//     of this project enforces against;
 //   - this paragraph records the width.
 //
 // Narrowing the profile's ChannelHi to 3 instead would make 96 of every
@@ -206,6 +220,27 @@
 // number back out verbatim (write.go rung 10), which is preservation of
 // the radio's value rather than synthesis of a new one. A create has no
 // prior record and is refused — see cost 5.
+//
+// # The two printed ceilings, and why they are the driver's business
+//
+// Two of this record's fields are bounded more tightly by the manual's own
+// printed DIGIT LEADERS than by the byte width core/civ can check, so the
+// refusals live in this driver's write ladder (rung 7) and nowhere else:
+//
+//   - FREQUENCY: "1 GHz digit: (fixed)" and "100 MHz digit: 0 ~ 4" (PDF
+//     p.18, folio 17; matrix ERRATUM 7). A frequency at or above 500 MHz is
+//     refused, on FreqHz and TxFreqHz alike. core/civ cannot catch it —
+//     500,000,000 fits five packed-BCD bytes perfectly well — so without
+//     this rung a consented write would put a 5 in a digit the manual
+//     bounds at 4.
+//   - OFFSET: the three-byte field has a FIXED 10 MHz digit (same page;
+//     matrix ERRATUM 8 — the ceiling is 9.9999 MHz, not 9.99). An offset
+//     above 9,999,900 Hz is refused.
+//
+// Both are locally decidable, so both precede all wire traffic, and both
+// are tested AT THE BOUNDARY (499,999,999 and 9,999,900 accepted;
+// 500,000,000 and 10,000,000 refused) rather than at a comfortable
+// distance from it.
 //
 // # The ELEVEN D5 family register entries
 //
@@ -269,12 +304,15 @@
 //   - ic705-select-memory-mapping — that the ★n nibble at record offset 0
 //     is SELECT-SCAN GROUP MEMBERSHIP rather than a skip flag. Lift
 //     L-SELECT-SCAN: mark a channel ★1 from the front panel and record the
-//     byte. THIS DRIVER DIVERGES FROM MATRIX §2, which grades scan_skip
-//     Supported: §2's own A2 calls the mapping "a live question for the
-//     plan", the plan answered it (O-6), and a matrix erratum is proposed.
-//     spec.FieldScanSkip is Unsupported on both banks and ReadChannel
-//     reports ScanSkip Unavailable; a ★-marked channel is REFUSED on
-//     write, never demoted.
+//     byte. THIS DRIVER AGREES WITH THE MATRIX, and it took an erratum to
+//     get there: §2 originally graded scan_skip Supported, its own A2
+//     called the mapping "a live question for the plan", the plan answered
+//     it (O-6), and MATRIX ERRATUM 17 (adjudicated 24/08/2026) re-graded
+//     the row Unsupported on both banks with the ★n nibble recorded as an
+//     unmapped record area. So spec.FieldScanSkip is Unsupported on both
+//     banks here, ReadChannel reports ScanSkip Unavailable, and a
+//     ★-marked channel is REFUSED on write, never demoted — which is now
+//     the matrix's own position rather than a divergence from it.
 //   - ic705-transceive-factory-default (L-TRANSCEIVE-DEFAULT) and
 //     ic705-usb-echo-back-default (L-ECHO) — RE-GRADED to MANUAL-EVIDENCED
 //     by the Basic Manual's admission above; the lifts remain named so a

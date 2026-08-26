@@ -378,8 +378,21 @@ func TestAnAddToASlotTheInventoryNeverSawIsRefusedIfOccupied(t *testing.T) {
 	if !errors.Is(err, driver.ErrWriteRefused) {
 		t.Fatalf("WriteChannel returned %v, want an occupied-surprise refusal", err)
 	}
-	if !strings.Contains(err.Error(), "WithFullInventoryWalk") {
-		t.Errorf("the refusal %q does not name the remedy", err)
+	// THE MESSAGE IS PINNED VERBATIM, because a refusal that names a
+	// remedy is only as good as the remedy: an earlier wording offered
+	// "or read this slot first", which cannot work — ReadChannel never
+	// adds a slot to the inventory, so a user who did that met this
+	// refusal again. Both remedies named here change the answer.
+	var refused *driver.WriteRefusedError
+	if !errors.As(err, &refused) {
+		t.Fatalf("%v is not a *driver.WriteRefusedError", err)
+	}
+	want := "slot G11-001 holds a record this session's inventory never saw, and writing here would overwrite a channel nobody has looked at: this session's walk covered display groups G01-G10, so re-open the session to run discovery again — with WithFullInventoryWalk() if the slot is outside that range. Reading the slot does not help: ReadChannel never adds one to the inventory"
+	if refused.Reason != want {
+		t.Errorf("the refusal reads\n  %q\nwant\n  %q", refused.Reason, want)
+	}
+	if strings.Contains(refused.Reason, "read this slot first") {
+		t.Error("the refusal still offers a remedy that cannot work")
 	}
 	if len(res.Steps) != 0 || r.Sets() != setsBefore {
 		t.Error("the occupied-surprise refusal sent something")
@@ -651,6 +664,45 @@ func TestEveryLocalRefusalPrecedesTheRead(t *testing.T) {
 			}
 		})
 	}
+
+	// RUNG 2, the bank check, which needs a doctored session to reach at
+	// all. In the shipped configuration rungs 1 and 2 agree by
+	// construction — slotToAddress's space IS the two banks — so rung 2 is
+	// defence in depth, and the only way to exercise it is to take a bank
+	// away from a session that would otherwise carry it. It is worth
+	// exercising because the CAPABILITY SET, not slots.go, is what every
+	// other layer of this project enforces against, and doc.go's O-9
+	// section names this check as one of the two compensating controls for
+	// the residual gate width.
+	t.Run("rung 2 bank check", func(t *testing.T) {
+		sess, r, base := writableSession(t, "G01-001")
+		var banks []spec.Bank
+		for _, b := range sess.caps.Banks {
+			if b.ID != spec.BankCall {
+				banks = append(banks, b)
+			}
+		}
+		caps := sess.caps
+		caps.Banks = banks
+		sess.caps = caps
+
+		ch := base
+		ch.Slot = "G101-001" // parses at rung 1, in no bank this session now has
+		if _, _, err := slotToAddress(ch.Slot); err != nil {
+			t.Fatalf("the fixture slot must PASS rung 1: %v", err)
+		}
+		before := len(r.Transcript())
+		_, err := sess.WriteChannel(context.Background(), ch)
+		if !errors.Is(err, driver.ErrWriteRefused) {
+			t.Fatalf("WriteChannel returned %v, want a refusal from the bank check", err)
+		}
+		if !strings.Contains(err.Error(), "not in any bank this session supports") {
+			t.Errorf("the refusal %q is not rung 2's", err)
+		}
+		if got := len(r.Transcript()) - before; got != 0 {
+			t.Errorf("rung 2 put %d frames on the wire", got)
+		}
+	})
 
 	// Rung 11, the E6 template check: EXACTLY ONE frame, the read.
 	t.Run("rung 11 template", func(t *testing.T) {

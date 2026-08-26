@@ -282,7 +282,7 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	// silently destructive, and it is the rung that pays for dropping the
 	// early-stop an earlier draft had.
 	if !s.inventoryKnows(ch.Slot) && !raw.empty {
-		return refuse(nil, fmt.Sprintf("slot %s holds a record this session's inventory never saw: the default walk covers display groups G01-G%02d, and writing here would overwrite a channel nobody has looked at — re-open with WithFullInventoryWalk(), or read this slot first", ch.Slot, defaultWalkGroups))
+		return refuse(nil, occupiedSurpriseReason(ch.Slot))
 	}
 
 	// RUNG 13: the frame is built, still before any write traffic.
@@ -308,6 +308,22 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	}
 	steps[0].Sent, steps[0].Confirmed = true, true
 	return driver.WriteResult{Steps: steps}, nil
+}
+
+// occupiedSurpriseReason is rung 12's refusal text, in one place because a
+// test pins it verbatim.
+//
+// THE REMEDIES IT NAMES MUST ACTUALLY WORK, which is why an earlier
+// wording — "or read this slot first" — is gone: ReadChannel never adds a
+// slot to s.inventory, so a user who followed that advice met the
+// identical refusal a second time. The inventory is materialised ONCE, by
+// the walk Open performs, so the only things that change this answer are
+// re-opening the session (which re-runs discovery, and is enough when the
+// slot is inside the bounded walk's range and was merely empty when the
+// session opened) and re-opening it with WithFullInventoryWalk() (which is
+// what reaches a slot above the bounded range at all).
+func occupiedSurpriseReason(slot string) string {
+	return fmt.Sprintf("slot %s holds a record this session's inventory never saw, and writing here would overwrite a channel nobody has looked at: this session's walk covered display groups G01-G%02d, so re-open the session to run discovery again — with WithFullInventoryWalk() if the slot is outside that range. Reading the slot does not help: ReadChannel never adds one to the inventory", slot, defaultWalkGroups)
 }
 
 // requestedFields names every field this channel ASKS this radio to store,
