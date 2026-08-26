@@ -371,3 +371,9 @@ func TestOpen_TakesOwnershipOfThePortOnFailure(t *testing.T) {
 		t.Error("the port is still open after a failed Open — Open must close what it holds before returning an error")
 	}
 }
+
+// The optional SerialFramingReporter capability, asserted by the COMPILER
+// on the CONCRETE DRIVER — E2 is explicit that internal/wiring holds the
+// driver value before it opens anything, and that is the one moment the
+// stop-bit question can be asked at.
+var _ driver.SerialFramingReporter = (*ic905Driver)(nil)

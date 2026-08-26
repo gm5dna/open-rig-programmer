@@ -3,6 +3,7 @@
 package ic905
 
 import (
+	"context"
 	"reflect"
 	"slices"
 	"strings"
@@ -10,7 +11,9 @@ import (
 
 	civic905 "github.com/gm5dna/open-rig-programmer/core/civ/ic905"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
+	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
 // writeTrialsComplete is FALSE for the IC-905, on the IC-905's own
@@ -379,5 +382,134 @@ func TestModel_IsTheProfilesOwn(t *testing.T) {
 	}
 	if got := New(RealHardware).Capabilities().Model; got != civic905.Model {
 		t.Errorf("Capabilities().Model = %q, want %q — Driver.Model must equal Capabilities().Model", got, civic905.Model)
+	}
+}
+
+// TestConsent_TransformsOnlyTheSessionSet.
+//
+// Consent transforms the SESSION's capabilities, once, at assembly —
+// never the static Capabilities(), which is what internal/wiring reads to
+// decide whether consent is needed at all. If the option reached the
+// static set, the app would stop asking.
+func TestConsent_TransformsOnlyTheSessionSet(t *testing.T) {
+	t.Parallel()
+	p := newRespondingPort(t, occupiedAt(wireAddr{0, 0}))
+	drv := New(RealHardware, WithConsentedUnverifiedWrites())
+
+	// The STATIC set is untouched: nothing writable, nothing consented.
+	static := drv.Capabilities()
+	for _, b := range static.Banks {
+		for f, fs := range b.Fields {
+			if fs.Write == spec.ConsentedUnverified {
+				t.Errorf("static bank %s field %s is ConsentedUnverified — the option must not reach the registry's own view", b.ID, f)
+			}
+			if fs.CanWrite() {
+				t.Errorf("static bank %s field %s is writable", b.ID, f)
+			}
+		}
+	}
+
+	sess, err := drv.Open(context.Background(), p.Port(), driver.Identity{})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	t.Cleanup(func() { _ = sess.Close() })
+
+	// The SESSION's set carries the consent, and only on the write side.
+	caps := sess.Capabilities()
+	if !caps.FieldSupport(spec.BankMemory, spec.FieldFrequency).CanWrite() {
+		t.Error("a consented session cannot write frequency — the transform did not reach the session's set")
+	}
+	for _, b := range caps.Banks {
+		for f, fs := range b.Fields {
+			if fs.Read == spec.ConsentedUnverified {
+				t.Errorf("bank %s field %s carries ConsentedUnverified on the READ side, which is a write-only state", b.ID, f)
+			}
+		}
+	}
+
+	// And an UNCONSENTED session of the same profile still cannot write.
+	p2 := newRespondingPort(t, occupiedAt(wireAddr{0, 0}))
+	plain, err := New(RealHardware).Open(context.Background(), p2.Port(), driver.Identity{})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	t.Cleanup(func() { _ = plain.Close() })
+	if plain.Capabilities().FieldSupport(spec.BankMemory, spec.FieldFrequency).CanWrite() {
+		t.Error("an UNCONSENTED real-hardware session can write — consent must be the only route past the fail-safe")
+	}
+}
+
+// TestConsent_NeverConsentsErase proves the structural exclusion on THIS
+// driver's own profile rather than trusting the transform's own test.
+// spec.ConsentUnverifiedWrites never touches spec.FieldErase, so
+// populated-to-empty stays blocked whatever a profile's labels say — and
+// this tier ships no erase path in any case.
+func TestConsent_NeverConsentsErase(t *testing.T) {
+	t.Parallel()
+	consented := spec.ConsentUnverifiedWrites(capabilitiesUnverified())
+	for _, bank := range []spec.BankID{spec.BankMemory, spec.BankCall} {
+		fs := consented.FieldSupport(bank, spec.FieldErase)
+		if fs.CanWrite() {
+			t.Errorf("bank %s FieldErase is writable after consent: %+v", bank, fs)
+		}
+		if fs != (spec.FieldSupport{}) {
+			t.Errorf("bank %s FieldErase = %+v after consent, want the zero FieldSupport it started as", bank, fs)
+		}
+	}
+}
+
+// TestConsent_RefusesAnUnrecognisedProfile: a profile the Capabilities
+// switch would fail safe on must not have consent drift open on it.
+// profileRecognised restates the declared set for exactly that reason.
+func TestConsent_RefusesAnUnrecognisedProfile(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name       string
+		profile    Profile
+		recognised bool
+	}{
+		{"RealHardware", RealHardware, true},
+		{"Simulated", Simulated, true},
+		{"an unrecognised value", Profile(99), false},
+		{"a negative value", Profile(-1), false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			d, ok := New(tt.profile, WithConsentedUnverifiedWrites()).(*ic905Driver)
+			if !ok {
+				t.Fatal("New did not return an *ic905Driver")
+			}
+			if got := d.profileRecognised(); got != tt.recognised {
+				t.Errorf("profileRecognised() = %v, want %v", got, tt.recognised)
+			}
+			caps := d.sessionCapabilities(nil, "AC:94")
+			writable := caps.FieldSupport(spec.BankMemory, spec.FieldFrequency).CanWrite()
+			if writable != tt.recognised {
+				t.Errorf("a consented %s session is writable = %v, want %v — an unrecognised profile stays on the untransformed fail-safe even WITH the option", tt.name, writable, tt.recognised)
+			}
+		})
+	}
+}
+
+// TestDriver_ReportsOneStopBit (E2, ruling R2).
+//
+// Every Icom driver in the tier reports 1, as its own ASSUMED register
+// entry with its own named per-model lift (spec D3.1). The consequence of
+// NOT implementing the reporter is concrete and testable: internal/wiring
+// would fall back to transport.DefaultStopBits, which is 2 — the Yaesu
+// value, on a radio this tier assumes speaks 8-N-1.
+func TestDriver_ReportsOneStopBit(t *testing.T) {
+	t.Parallel()
+	for _, profile := range []Profile{RealHardware, Simulated, Profile(99)} {
+		r, ok := New(profile).(driver.SerialFramingReporter)
+		if !ok {
+			t.Fatalf("the driver for profile %d does not implement driver.SerialFramingReporter — internal/wiring would open the port at transport.DefaultStopBits, which is %d", profile, transport.DefaultStopBits)
+		}
+		if got := r.StopBits(); got != 1 {
+			t.Errorf("StopBits() = %d, want 1 — ASSUMED, D5 entry 8, lift ic905-R-10", got)
+		}
+	}
+	if transport.DefaultStopBits == 1 {
+		t.Error("transport.DefaultStopBits is 1, so this reporter no longer changes anything — the test's own premise has moved and the register entry needs re-reading")
 	}
 }

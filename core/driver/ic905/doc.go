@@ -117,5 +117,74 @@
 // gate admit CALL-group channels 12–99, which this document does not
 // define. Nothing reaches them: the CALL bank is twelve named slots, bank
 // walks never produce such an address, and a write to one arriving by
-// hand is refused as a slot in no effective bank.
+// hand is refused before it can reach a bank at all — slotAddress bounds
+// the CALL namespace to twelve.
+//
+// # The control lines, and a radio that can key itself from one
+//
+// PDF p.9 (folio 8)'s 1A 05 items 01 36, 01 37 and 01 38 each offer
+// "01=USB (A) DTR, 02=USB (A) RTS, 03=USB (B) DTR, 04=USB (B) RTS" for
+// USB SEND and for CW/RTTY keying. So A DRIVER THAT RAISED OR LOWERED DTR
+// OR RTS AT OPEN ON THIS RADIO COULD KEY ITS TRANSMITTER (matrix §3.2).
+// The conservative policy is to assert neither line.
+//
+// core/transport's OpenSerial drives BOTH LOW before returning the port —
+// SetRTS(false) and SetDTR(false), core/transport/port.go — and this
+// worktree may not change core/transport. The finding is recorded here
+// and handed upward rather than acted on.
+//
+// Register: ic905.control_lines_at_open. Lift: Stage W capture
+// ic905-W-01 — with the transceiver's SEND and keying assignments at
+// their factory values, open the CI-V port and record whether the radio
+// keys.
+//
+// # The ASSUMED register — FIVE entries, and they are this DRIVER's
+//
+// core/civ/ic905/doc.go carries NINETEEN, which are the PROFILE's. These
+// five are the ones this package's own code acts on, and NO ENTRY IS
+// COUNTED TWICE: nineteen there plus five here is TWENTY-FOUR distinct
+// entries. Every capture named below is on an IC-905, and no capture from
+// any other model lifts any entry here.
+//
+//  1. ic905.control_lines_at_open — whether asserting or releasing DTR or
+//     RTS at open keys this radio's transmitter. The 1A 05 assignments
+//     above are printed; what a driver's port-open does to a radio
+//     carrying them is not. Lift: ic905-W-01, above.
+//
+//  2. ic905.write_full_record_required — that a 1A 00 set must carry the
+//     WHOLE record. The document draws one complete layout and never
+//     authorises a short write except in the clear form (matrix §3.10),
+//     and every rung of the write ladder rests on it. Lift: Stage W
+//     capture ic905-W-02 — send one complete 1A 00 set to a scratch
+//     channel and record whether the answer is FB or FA.
+//
+//  3. Serial framing 8-N-1 (spec D5 entry 8) — see the Driver's StopBits
+//     method for the full argument. It is transcribed HERE and NOT into
+//     core/civ/ic905/doc.go, because StopBits() lives on the concrete
+//     Driver; recording the move is what keeps the two registers from
+//     double-counting it. Lift: Stage R capture ic905-R-10.
+//
+//  4. ic905.create_default_tone — what tone value the radio itself writes
+//     into a channel created with tone mode OFF. MANUAL-EVIDENCED
+//     ABSENCE: this document prints the tone field's digit ranges (PDF
+//     p.24, folio 23) and NO DEFAULT VALUE ANYWHERE, unlike the models
+//     whose manuals print "Default: 88.5 Hz", swept across the tone
+//     sections and the command table. The decision to REFUSE an
+//     empty-slot create that carries no explicit tone follows from that
+//     absence. Lift: Stage R capture ic905-R-18 — create a channel from
+//     the front panel with tone mode OFF, read it with 1A 00, and record
+//     bytes ⑯~⑱ and ⑲~㉑. Scope: what that one radio stores in those
+//     spans for that one channel.
+//
+//  5. ic905.mode_band_constraint — that the MEMORY RECORD enforces what
+//     the command table's footnotes state: DD and ATV only on the
+//     1200 MHz band or higher (PDF p.17, folio 16, mode table footnote),
+//     RPS only with DD, and DUP± only with a mode other than DD (PDF
+//     p.19, folio 18, the ⑭ breakout's note). The footnotes are printed
+//     against the standalone commands, not against 1A 00, so applying
+//     them to the record is the assumption. This driver REFUSES the
+//     forbidden combinations, which is the conservative direction either
+//     way. Lift: Stage R capture ic905-R-19 — store a DD channel below
+//     1200 MHz from the front panel, read it back, and record whether the
+//     radio accepted it.
 package ic905

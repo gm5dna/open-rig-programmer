@@ -80,6 +80,31 @@ func WithFullInventoryWalk() Option {
 	return func(d *ic905Driver) { d.fullInventoryWalk = true }
 }
 
+// WithConsentedUnverifiedWrites records that the USER has consented to
+// writing this radio's Unverified fields, and builds a driver whose
+// SESSIONS carry the consent transform: at session-capability assembly
+// every write-side spec.Unverified label becomes
+// spec.ConsentedUnverified, which FieldSupport.CanWrite opens.
+//
+// CONSENT IS A STATEMENT ABOUT A SESSION, NEVER ABOUT THE RADIO. This
+// driver's STATIC Capabilities — what internal/wiring's registry
+// publishes, what the app describes the model with, what offline
+// synthesis classifies against — is untouched by the option, and only the
+// set Open assembles carries the state. The profile keeps saying the true
+// thing either way: it describes the EVIDENCE (none — no IC-905 has ever
+// been asked anything), and consent is a decision about risk, not
+// evidence.
+//
+// It is deliberately not sufficient on its own. An unrecognised Profile
+// stays on the untransformed fail-safe even WITH the option
+// (profileRecognised); spec.ConsentUnverifiedWrites never touches
+// spec.FieldErase, so no consent can mint an erase; and nothing here
+// consults writeTrialsComplete, because consent is a user accepting an
+// unverified write, not evidence that the write has been proven.
+func WithConsentedUnverifiedWrites() Option {
+	return func(d *ic905Driver) { d.consentUnverifiedWrites = true }
+}
+
 // New builds the IC-905 driver for profile. RealHardware — the ZERO
 // VALUE — selects the all-Unverified capability set while
 // writeTrialsComplete is false (nothing writable; see that constant's doc
@@ -189,8 +214,43 @@ func (d *ic905Driver) profileRecognised() bool {
 func (d *ic905Driver) sessionCapabilities(discovered []string, catID string) spec.Capabilities {
 	caps := effectiveCapabilities(d.Capabilities(), discovered)
 	caps.CATID = catID
+	// THE CONSENT TRANSFORM, applied HERE and nowhere else: before the
+	// Session exists, so the set WriteChannel enforces (s.caps) and the
+	// set Capabilities() hands out are one value. An unrecognised profile
+	// stays untransformed even with the option — the fail-safe direction
+	// ("no value a caller can pass produces a writable session") survives
+	// consent.
+	if d.consentUnverifiedWrites && d.profileRecognised() {
+		caps = spec.ConsentUnverifiedWrites(caps)
+	}
 	return caps
 }
+
+// StopBits reports the CI-V link's stop-bit count, 8-N-1, per spec D3.1.
+// internal/wiring consults it when opening the port; WITHOUT IT THE PORT
+// WOULD OPEN AT transport.DefaultStopBits, WHICH IS 2 — the Yaesu value,
+// on a radio this tier assumes speaks 8-N-1.
+//
+// It is on the concrete DRIVER, not the Session, and that is forced: the
+// stop bits are a property of the port, chosen when the port is opened,
+// and the session is what Open returns once the port already exists.
+//
+// ASSUMED, AND THE ASSUMPTION IS THE WHOLE ENTRY. THIS DOCUMENT EVIDENCES
+// NOTHING ABOUT SERIAL FRAMING, FOR ANY PORT: no data-bit count, no
+// stop-bit count, no parity statement and no rate figure anywhere (matrix
+// §3.1's sweep, re-run at run-report §5.1). The tier-wide hazard — an
+// Icom manual's "8 bit / 1 stop" line about the DATA/RTTY application
+// port being mistaken for CI-V framing — does not even arise here,
+// because no such line exists in this document to be misread. The value
+// is the TIER's, not this manual's.
+//
+// Register: D5 entry 8 (serial framing 8-N-1, per model), carried in this
+// package's own register — see doc.go — because StopBits() lives here.
+// Lift: Stage R capture ic905-R-10 — open the IC-905's Serial Port A
+// (CI-V) at 8-N-1, send FE FE AC E0 19 00 FD, and record whether an
+// address-matched reply is framed cleanly. Scope: this one radio's CI-V
+// port at that one rate; it says nothing about any other Icom.
+func (d *ic905Driver) StopBits() int { return 1 }
 
 // Open implements driver.Driver: it builds a transport.Engine over port
 // through core/civ's framing adapter, establishes the session (Init:
