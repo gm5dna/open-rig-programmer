@@ -3,6 +3,9 @@
 package ic7300mk2_test
 
 import (
+	"bytes"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
@@ -120,5 +123,233 @@ func TestSplitNibbleIsUnmapped(t *testing.T) {
 		if sp.Offset == 0 && sp.Nibble != civ.NibbleLow {
 			t.Errorf("a span at offset 0 has Nibble %v — byte ③'s HIGH nibble is the split flag and must stay UNMAPPED under the Fixed template (enablers E6; plan D14)", sp.Nibble)
 		}
+	}
+}
+
+// charsetFromB parses the code table THIS MODEL'S B LEG TRANSCRIBED, out
+// of the frozen artefact, and returns the byte set it declares.
+//
+// THE MK2'S EVIDENCE IS DIFFERENT IN KIND FROM ITS SIBLING'S, and that is
+// why this test parses where the IC-7300's writes a table out. PDF p.18
+// prints an ASCII code against every glyph and the B leg carried all
+// thirty-two across, so nothing here is derived: `ic7300mk2-transcription-b.csv`'s
+// `⑱ ~ ㉝` row IS the charset's provenance, and a membership pin that
+// restated the bytes in Go would be checking the profile against a second
+// copy of itself rather than against the evidence.
+//
+// The row's values_verbatim reads, in printed order, three RANGES
+// (`A ~ Z: 41 ~ 5A`, `a ~ z: 61 ~ 7A`, `0 ~ 9: 30 ~ 39`), then thirty-two
+// single `<glyph>: <code>` pairs, then the usable-characters ⓘ note, all
+// joined by " | ". The GLYPHS are deliberately not read: two of them are
+// the same shape (D13 — `27` and `60` are drawn alike), so only the codes
+// are transcribable without a capture.
+func charsetFromB(t *testing.T) (set map[byte]string, ranges, singles int) {
+	t.Helper()
+	var values string
+	for _, r := range onlyD1(readCSV(t, "ic7300mk2-transcription-b.csv")) {
+		if normaliseKey(r["field_index"]) == "18-33" {
+			values = r["values_verbatim"]
+		}
+	}
+	if values == "" {
+		t.Fatal("B has no ⑱ ~ ㉝ row, or its values_verbatim is empty — that row is this charset's whole provenance")
+	}
+
+	hexByte := func(s string) byte {
+		t.Helper()
+		v, err := strconv.ParseUint(strings.TrimSpace(s), 16, 8)
+		if err != nil {
+			t.Fatalf("B's ⑱ ~ ㉝ row carries the code %q, which is not a hex byte: %v", s, err)
+		}
+		return byte(v)
+	}
+
+	set = map[byte]string{}
+	add := func(b byte, why string) {
+		t.Helper()
+		if prev, dup := set[b]; dup {
+			t.Errorf("B's ⑱ ~ ㉝ row declares %#02x twice (%s, then %s)", b, prev, why)
+		}
+		set[b] = why
+	}
+
+	// The trailing usable-characters note is PROSE about the same field and
+	// carries no codes. It is cut off WHOLESALE at its own ⓘ marker rather
+	// than skipped part by part, because the note itself prints the glyphs
+	// `{ | } ~` — so it contains the very separator this row is joined by,
+	// and splitting first would shatter it into fragments that look like
+	// malformed pairs.
+	if i := strings.Index(values, "ⓘ"); i >= 0 {
+		values = values[:i]
+	}
+
+	for _, part := range strings.Split(values, " | ") {
+		if part = strings.TrimSpace(part); part == "" {
+			continue
+		}
+		i := strings.LastIndex(part, ": ")
+		if i < 0 {
+			t.Fatalf("B's ⑱ ~ ㉝ row has the fragment %q, which is neither a range nor a <glyph>: <code> pair", part)
+		}
+		spec := part[i+2:]
+		if lo, hi, ok := strings.Cut(spec, " ~ "); ok {
+			ranges++
+			l, h := hexByte(lo), hexByte(hi)
+			if l > h {
+				t.Fatalf("B's ⑱ ~ ㉝ row has the range %q, whose low byte is above its high one", spec)
+			}
+			for b := int(l); b <= int(h); b++ {
+				add(byte(b), "printed range "+spec)
+			}
+			continue
+		}
+		singles++
+		add(hexByte(spec), "printed symbol code "+spec)
+	}
+	return set, ranges, singles
+}
+
+// TestNameCharsetMembership pins the charset's CONTENTS against the B leg,
+// not merely its size.
+//
+// A cardinality pin (len == 95) is satisfied by any ninety-five bytes: a
+// reviewer swapped 0x60 — the exact byte D13 exists to flag — for 0x7F and
+// this package stayed green. Every byte is now bound to the artefact that
+// declares it, and every byte the artefact does not declare is refused.
+func TestNameCharsetMembership(t *testing.T) {
+	p := ic7300mk2.Profile()
+
+	want, ranges, singles := charsetFromB(t)
+	if ranges != 3 {
+		t.Errorf("B's ⑱ ~ ㉝ row declares %d code ranges, want 3 (A ~ Z, a ~ z, 0 ~ 9)", ranges)
+	}
+	if singles != 32 {
+		t.Errorf("B's ⑱ ~ ㉝ row declares %d single symbol codes, want 32 — matrix Erratum 4 corrects §3.9's \"34 individually coded punctuation marks\" to thirty-two", singles)
+	}
+	if len(want) != 94 {
+		t.Fatalf("B's ⑱ ~ ㉝ row declares %d distinct bytes, want 94 (10 digits + 52 letters + 32 symbols) — the SPACE is not among them and is added below", len(want))
+	}
+
+	// The SPACE is the one member the printed tables do NOT carry: p.18's
+	// usable-characters note names "(space)" in terms while neither table
+	// prints a row for it, and the byte 20 is printed twice in this
+	// document for OTHER commands (17 and 1A 02) with their own charset
+	// tables. ASSUMED — D5 entry 3's space half, lift MK2-R9.
+	if _, printed := want[0x20]; printed {
+		t.Error("B's ⑱ ~ ㉝ row declares 0x20 — if the document does print a space code for the memory name after all, D5 entry 3's space half is no longer ASSUMED on this model and the register entry must change")
+	}
+	want[0x20] = "space, ASSUMED (D5 entry 3, lift MK2-R9)"
+	if len(want) != 95 {
+		t.Fatalf("the expected charset has %d bytes, want 95", len(want))
+	}
+
+	got := map[byte]bool{}
+	for _, b := range p.NameCharset() {
+		if got[b] {
+			t.Errorf("NameCharset() repeats %#02x", b)
+		}
+		got[b] = true
+	}
+	for b, why := range want {
+		if !got[b] {
+			t.Errorf("NameCharset() is MISSING %#02x (%s)", b, why)
+		}
+	}
+	for b := range got {
+		if _, ok := want[b]; !ok {
+			t.Errorf("NameCharset() carries %#02x, which B's ⑱ ~ ㉝ row does not declare — every member is a printed range, a printed symbol code, or the ASSUMED space, and nothing else", b)
+		}
+	}
+
+	// D13's byte, named so the intent survives a later edit.
+	if !got[0x60] {
+		t.Error("0x60 is not in NameCharset() — PDF p.18's Symbols table prints it as a usable code, and D13 is that its GLYPH is unknown (the same shape is drawn against 27), NOT that the byte is inadmissible. Dropping it would silently narrow what a name may carry")
+	}
+	if got[0x7F] {
+		t.Error("0x7F is in NameCharset() — DEL appears in no printed table and could only have arrived by an edit nothing was checking")
+	}
+
+	if !got[p.NamePad()] {
+		t.Errorf("NamePad() = %#02x is not in NameCharset()", p.NamePad())
+	}
+}
+
+// TestToneSpansCarryTheirOwnByteOrder binds each tone span's BYTE ORDER at
+// the codec layer, with values that cannot hide a reversal.
+//
+// THIS TEST EXISTS BECAUSE THE GOLDEN VECTOR CANNOT DO THE JOB. This
+// model's set vector holds a tone squelch of 1000 deciHz, whose packed BCD
+// is 00 10 00 — a PALINDROME — so flipping ⑮ ~ ⑰ to little-endian encodes
+// identically and every golden assertion stays green. That is a property
+// of the G leg's chosen sample value, not a defect in the vector, and the
+// fix belongs here rather than in a frozen artefact: no artefact is
+// touched, and the probe uses two DIFFERENT values, each ASYMMETRIC under
+// reversal.
+//
+// The ⑫ ~ ⑭ span carries a second reason to be bound: its heading is
+// printed with nothing beneath it (§3.16 A6), so its encoding is ASSUMED
+// from p.23 (ic7300mk2-tone-tx-encoding, lift MK2-R17). An assumption
+// nothing pins is one a later edit can change without a test noticing.
+func TestToneSpansCarryTheirOwnByteOrder(t *testing.T) {
+	p := ic7300mk2.Profile()
+
+	// 885 packs as 00 08 85 and reverses to 85 08 00; 1234 packs as
+	// 00 12 34 and reverses to 34 12 00.
+	const toneTX, toneRX = 885, 1234
+	rec := civ.MemoryRecord{
+		Address:      civ.ChannelAddress{Channel: 1},
+		RXFreqHz:     civ.Available[uint64](14_100_000),
+		TXFreqHz:     civ.Available[uint64](14_100_000),
+		ToneTXDeciHz: civ.Available[uint64](toneTX),
+		ToneRXDeciHz: civ.Available[uint64](toneRX),
+		Mode:         civ.Available("USB"),
+		Filter:       civ.Available("FIL1"),
+		DataMode:     civ.Available("OFF"),
+		ToneMode:     civ.Available("OFF"),
+		Name:         civ.Available("PROBE"),
+		Select:       civ.Available("OFF"),
+	}
+
+	cmd, err := p.BuildMemorySet(rec)
+	if err != nil {
+		t.Fatalf("BuildMemorySet: %v", err)
+	}
+	frame := cmd.Bytes()
+	record := frame[8 : len(frame)-1]
+	if len(record) != 45 {
+		t.Fatalf("the probe's record is %d bytes, want 45", len(record))
+	}
+
+	for _, span := range []struct {
+		what string
+		off  int
+		want []byte
+	}{
+		{"⑫ ~ ⑭ (tone_tx)", 9, []byte{0x00, 0x08, 0x85}},
+		{"⑮ ~ ⑰ (tone_rx)", 12, []byte{0x00, 0x12, 0x34}},
+		{"⓬ ~ ⓮ (tone_tx, TX block)", 23, []byte{0x00, 0x08, 0x85}},
+		{"⓯ ~ ⓱ (tone_rx, TX block)", 26, []byte{0x00, 0x12, 0x34}},
+	} {
+		got := record[span.off : span.off+3]
+		if !bytes.Equal(got, span.want) {
+			rev := []byte{span.want[2], span.want[1], span.want[0]}
+			t.Errorf("%s at record offset %d is % X, want % X — packed BCD, MOST significant pair first (PDF p.23's per-nibble weights). % X would be the same value with the span's byte order reversed",
+				span.what, span.off, got, span.want, rev)
+		}
+	}
+
+	answer := make([]byte, 0, len(frame))
+	answer = append(answer, 0xFE, 0xFE, 0xE0, 0xB6, 0x1A, 0x00, frame[6], frame[7])
+	answer = append(answer, record...)
+	answer = append(answer, 0xFD)
+	back, err := p.ParseMemoryAnswer(answer)
+	if err != nil {
+		t.Fatalf("ParseMemoryAnswer over the probe: %v", err)
+	}
+	if back != rec {
+		t.Errorf("the probe did not round-trip:\n got %+v\nwant %+v", back, rec)
+	}
+	if toneTX == toneRX {
+		t.Error("the probe's two tone values are equal — it would then not distinguish the two spans from each other")
 	}
 }
