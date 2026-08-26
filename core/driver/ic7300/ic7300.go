@@ -21,12 +21,10 @@ import (
 // holds the driver value BEFORE the port exists, which is the one moment
 // "how many stop bits?" can be asked at; a session-side reporter could only
 // ever be consulted after the framing had been guessed.
-//
-// The two MANDATORY seam assertions — driver.Driver and driver.Session —
-// land with write.go, which is where the last of Session's own methods
-// arrives. Until then the constructors here carry their concrete types.
 var (
+	_ driver.Driver                = (*ic7300Driver)(nil)
 	_ driver.SerialFramingReporter = (*ic7300Driver)(nil)
+	_ driver.Session               = (*Session)(nil)
 	_ driver.DiagnosticsReporter   = (*Session)(nil)
 )
 
@@ -80,7 +78,7 @@ func (d *ic7300Driver) StopBits() int { return 1 }
 // TWO FUNCTIONS, on core/driver/ftdx101's shape: Open owns the resources and
 // the cleanup, open is the body and may return an error from anywhere
 // without leaking a port. Open takes ownership of port on BOTH outcomes.
-func (d *ic7300Driver) Open(ctx context.Context, port transport.Port, id driver.Identity) (*Session, error) {
+func (d *ic7300Driver) Open(ctx context.Context, port transport.Port, id driver.Identity) (driver.Session, error) {
 	p := ic7300civ.Profile()
 
 	// E1's constructor. It REFUSES an unconfigured profile, which a plain

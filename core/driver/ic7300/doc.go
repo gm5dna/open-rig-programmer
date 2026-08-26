@@ -84,21 +84,28 @@
 //  5. the CanWrite() gate over the requested-field set below;
 //  6. the mandatory-Known rules (a non-Known value for a field the record
 //     cannot omit is REFUSED, never synthesised);
-//  7. the SCAN bank's printed ③-must-be-zero constraint;
 //
 // — every rung above is locally decidable and precedes ALL wire traffic,
 // and each of their tests asserts a TRANSCRIPT DELTA OF ZERO —
 //
-//  8. ONE read: the preservation read of the slot;
-//  9. the answer's channel-address check, then the two READ-DEPENDENT
-//     refusals — E6's unmapped-region (split-flag) mismatch, and the create
-//     rungs;
-//  10. the set.
+//  7. ONE read: the preservation read of the slot;
+//  8. the answer's channel-address check, then the THREE READ-DEPENDENT
+//     refusals — the CREATE (an empty slot has no SELECT value to preserve),
+//     E6's unmapped-region (split-flag) mismatch, and the SCAN bank's
+//     printed ③-must-be-zero constraint;
+//  9. the set.
 //
-// RUNG 9 IS THE SINGLE RECORDED EXCEPTION to "before any wire traffic", and
+// RUNG 8 IS THE SINGLE RECORDED EXCEPTION to "before any wire traffic", and
 // core/driver/driver.go's Session contract names it: a refusal that depends
 // on the SLOT'S CURRENT STATE cannot precede the read that obtains that
 // state. Nothing else in this driver refuses after a byte has moved.
+//
+// THE SCAN CONSTRAINT IS READ-DEPENDENT, and that is why it sits at rung 8
+// rather than among the locally decidable ones. It judges record byte ③,
+// whose SELECT nibble NO spec.Field carries at all (plan decision D4) — so
+// the only place its value exists is the record the radio just handed back,
+// exactly as for E6's own check. Checking it earlier would mean judging a
+// datum before the read that produces it.
 //
 // # The requested-field set: this driver's write-gate contract
 //
