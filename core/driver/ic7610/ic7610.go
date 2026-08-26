@@ -10,7 +10,6 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	civic7610 "github.com/gm5dna/open-rig-programmer/core/civ/ic7610"
-	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
@@ -515,10 +514,8 @@ func (s *Session) Diagnostics() driver.SessionDiagnostics {
 // ReadChannel implements driver.Session; its body is in read.go, beside
 // the slot map and the one read primitive it is made of.
 
-// WriteChannel implements driver.Session. Its body arrives at Task 12.
-func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver.WriteResult, error) {
-	return driver.WriteResult{Steps: []driver.WriteStep{}}, errors.New("ic7610: WriteChannel is not implemented in this build")
-}
+// WriteChannel implements driver.Session; its body is in write.go,
+// alongside the T5-ordered refusal ladder it is made of.
 
 // Compile-time proof that this package really does implement the two
 // neutral seams it claims.
