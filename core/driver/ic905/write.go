@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
@@ -263,21 +264,25 @@ func (s *Session) occupiedSurprise(slot string, readReturnedRecord bool) error {
 // obtains it. So every locally decidable check comes first, then ONE
 // read, then the two read-dependent refusals, then the write:
 //
-//  1. the slot parses (both namespaces)
-//  2. the slot is in an effective bank
-//  3. the channel is not empty — this tier has NO ERASE PATH
-//  4. every mapped field but the tones is Known (R6)
-//  5. the frequency fits the record shape this document draws (OQ-1)
-//  6. the DTCS code's digits are 0–7 (OQ-6, defence in depth)
-//  7. the capability gate (defence in depth below the clone service)
-//  8. the cross-field combination rules the page prints
-//     --- everything above precedes ALL wire traffic ---
-//  9. THE ONE READ
-//  10. the E6 template mismatch (OQ-4): 27 unmodelled bytes
-//  11. the T3 occupied surprise
-//  12. build the frame
-//  13. declare the steps
-//  14. the acknowledged set
+//	R1   the slot parses (both namespaces)
+//	R2   the slot is in an effective bank
+//	R3   the channel is not empty — this tier has NO ERASE PATH
+//	R4   every mapped field but the tones is Known (R6)
+//	R5   the frequency fits the record shape this document draws (OQ-1)
+//	     AND lies inside the declared storable range
+//	R6   the DTCS code's digits are 0–7 (OQ-6, defence in depth)
+//	R6b  the tones lie inside the declared tone domain
+//	R6c  the vocabularies, the tag and the offset — everything else
+//	     this radio cannot SAY
+//	R7   the capability gate (defence in depth below the clone service)
+//	R8   the cross-field combination rules the page prints
+//	---- everything above precedes ALL wire traffic ----
+//	R9   THE ONE READ
+//	R10  the E6 template mismatch (OQ-4): 27 unmodelled bytes
+//	R11  the T3 occupied surprise
+//	R12  build the frame
+//	R13  declare the steps
+//	R14  the acknowledged set
 //
 // The order also decides the order WriteRefusedError.Fields names fields,
 // which is why it is written down rather than left to whatever reads
@@ -381,6 +386,32 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 		}
 	}
 
+	// AND THE DECLARED BOUNDS, which is the half no encoder can catch.
+	// The check above is about the RECORD'S SHAPE; this one is about the
+	// RADIO'S RANGE, and they are different questions on different
+	// evidence. 143.999999 MHz encodes into five bytes perfectly happily,
+	// so nothing below here would have refused it: civ validates the
+	// ENCODING, and codeplug.Validate — which does check this — sits
+	// UPSTREAM, on the very apply path this seam is the defence in depth
+	// for.
+	//
+	// Both ends are ASSUMED as memory-record limits, read off the band
+	// table (PDF p.20, folio 19, "Band stacking register"): registers
+	// ic905.min_storable_hz (lift ic905-R-05) and ic905.max_storable_hz
+	// (lift ic905-R-06).
+	//
+	// THE CEILING IS UNREACHABLE TODAY — the wide-form refusal above
+	// bites at 9,999,999,999 Hz, below the declared 10.5 GHz — and it is
+	// checked anyway, so that lifting ic905-R-06 cannot silently remove a
+	// bound while it removes the shape restriction.
+	if data.FreqHz < s.caps.MinFreqHz || (s.caps.MaxFreqHz != 0 && data.FreqHz > s.caps.MaxFreqHz) {
+		return res, &driver.WriteRefusedError{
+			Slot:   ch.Slot,
+			Fields: []spec.Field{spec.FieldFrequency},
+			Reason: fmt.Sprintf("%d Hz is outside what this radio is declared to store, %d ~ %d Hz (ASSUMED as memory-record limits: ic905.min_storable_hz, lift ic905-R-05; ic905.max_storable_hz, lift ic905-R-06)", data.FreqHz, s.caps.MinFreqHz, s.caps.MaxFreqHz),
+		}
+	}
+
 	// RUNG 6. The DTCS code's digits are 0–7 (OQ-6).
 	//
 	// The PRIMARY gate is the explicit 512-code table this driver
@@ -393,6 +424,56 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 			Fields: []spec.Field{spec.FieldDTCSCode},
 			Reason: fmt.Sprintf("DTCS code %03d has a digit above 7: the printed ranges are 0 ~ 7 for all three digits (PDF p.24, folio 23), and civ's BCD encoder would accept it", data.DTCSCode.Value),
 		}
+	}
+
+	// RUNG 6b. THE TONE DOMAIN — the sibling re-check, on the sibling
+	// field, from the same printed page.
+	//
+	// A Known tone outside the declared CTCSSToneRange puts BYTES ON THE
+	// WIRE THAT THE PRINTED DIGIT RANGES FORBID. PDF p.24 (folio 23)
+	// prints byte 1 as "0 : 0", BOTH halves "Fixed digit: 0*", and byte
+	// 2's 100 Hz digit as "0 ~ 2" — so 99999 deciHz encodes 09 99 99 and
+	// violates both. civ's BCD encoder accepts it exactly as it accepts a
+	// DTCS digit above 7, which is the whole reason rung 6 exists; this
+	// is that same obligation, on the field printed beside it.
+	//
+	// IT IS ALSO THE WRITE-SIDE MIRROR OF read.go's toneField. That
+	// function is scrupulous under T1(3) — a READ never constructs a
+	// Known value codeplug.Validate would refuse, and maps a zero or an
+	// out-of-domain tone to Unknown — and until this rung the write path
+	// had no equivalent care: it encoded whatever Known value it was
+	// handed.
+	//
+	// AdmitsTone is asked rather than the range's fields: it is the ONE
+	// predicate that knows about both declaration shapes and fails closed
+	// when a radio declares neither.
+	//
+	// A NON-KNOWN tone is not a domain question at all — it is
+	// preservation (T1(4)) on an occupied slot, and the create rule on an
+	// empty one — so it is not judged here.
+	var badTones []spec.Field
+	if data.ToneTx.State == codeplug.Known && !s.caps.AdmitsTone(data.ToneTx.Value) {
+		badTones = append(badTones, spec.FieldToneTx)
+	}
+	if data.ToneRx.State == codeplug.Known && !s.caps.AdmitsTone(data.ToneRx.Value) {
+		badTones = append(badTones, spec.FieldToneRx)
+	}
+	if len(badTones) > 0 {
+		return res, &driver.WriteRefusedError{
+			Slot:   ch.Slot,
+			Fields: badTones,
+			Reason: fmt.Sprintf("the tone is outside this radio's declared domain of %d ~ %d tenths of a hertz in steps of %d (the printed digit ranges, PDF p.24, folio 23): zero is not a tone, and a value above the ceiling encodes digits the page says the field cannot hold",
+				int(s.caps.CTCSSToneRange.MinDeciHz), int(s.caps.CTCSSToneRange.MaxDeciHz), int(s.caps.CTCSSToneRange.StepDeciHz)),
+		}
+	}
+
+	// RUNG 6c. THE VOCABULARIES, THE TAG AND THE OFFSET — everything else
+	// this radio cannot SAY. See unsayable for the argument: every one of
+	// these was refused before this rung existed, but by the ENCODER at
+	// rung 12, after the preservation read had already put a frame on the
+	// wire, and as an error the neutral refusal sentinel could not see.
+	if f, why := unsayable(data, s.caps); f != "" {
+		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{f}, Reason: why}
 	}
 
 	// RUNG 7. THE CAPABILITY GATE — defence in depth below the clone
@@ -688,3 +769,161 @@ func (s *Session) recordFor(addr civ.ChannelAddress, d codeplug.ChannelData, pri
 // dataModeOff is byte ⑬'s printed OFF spelling — the other half of the
 // pair read.go's dataModeOn names.
 const dataModeOff = "OFF"
+
+// offsetBounds derives the duplex-offset field's own limits from the
+// PROFILE'S LAYOUT rather than restating them: the largest value its BCD
+// digits can carry at its declared scale, and the scale itself, which is
+// also its step.
+//
+// DERIVED, NOT WRITTEN DOWN, and that is the point. The span at ㉖~㉘ is
+// three bytes — six BCD digits — at Scale 100, so the field reaches
+// 999999 × 100 = 99,999,900 Hz in 100 Hz steps. A literal here would be a
+// second copy of the layout's own arithmetic, free to drift from it; this
+// way a layout change moves the check with it.
+//
+// ok is false only for a profile with no offset span at all, which is
+// unreachable for this model and is refused rather than guessed at.
+func offsetBounds(p civ.Profile) (maxHz, stepHz uint64, ok bool) {
+	layout, found := p.LayoutFor(civic905.RecordLengthShort)
+	if !found {
+		return 0, 0, false
+	}
+	for _, span := range layout.Fields {
+		if span.Field != civ.FieldOffset {
+			continue
+		}
+		max := uint64(1)
+		for i := 0; i < 2*span.Length; i++ {
+			max *= 10
+		}
+		return (max - 1) * span.Scale, span.Scale, true
+	}
+	return 0, 0, false
+}
+
+// unsayable reports the first field carrying a Known value THIS RADIO
+// CANNOT SAY, and why — the five vocabularies, the tag and the offset.
+//
+// RULING T5 NAMES VOCABULARIES AND FIELD VALIDITY among the refusals that
+// precede ALL wire traffic, and every question here is locally decidable:
+// the vocabularies, the tag's length and charset, and the offset field's
+// own arithmetic are all on the session's own capabilities and the
+// profile's own layout, with nothing to look up on the radio.
+//
+// LEFT TO THE BUILDER, THE FAILURE IS WRONG IN TWO WAYS AT ONCE.
+// civ.BuildMemorySet does refuse every one of these values — but by then
+// rung 9's preservation read has already put a frame on the wire, and the
+// error comes back as a wrapped CODEC error rather than something
+// errors.Is(err, driver.ErrWriteRefused) can see, which is the neutral
+// contract's own refusal sentinel and what every other rung returns.
+//
+// THE VOCABULARIES ARE THE CAPABILITIES', NOT THE CODEC'S, deliberately:
+// asking caps here means the value the UI offered, the value
+// codeplug.Validate judged and the value this rung admits are ONE list.
+// Membership is EXACT — not case-folded, not trimmed — because a
+// vocabulary value is a wire code's agreed spelling, and quietly
+// accepting "usb" for "USB" would be this driver deciding what a user
+// meant.
+//
+// FREQUENCY AND THE TONES ARE NOT HERE: their domains are RANGES rather
+// than vocabularies, and they are rungs 5 and 6b. The DTCS code is
+// rung 6, for the same reason.
+//
+// A NON-KNOWN optional field asks nothing of the radio and is not judged:
+// Unknown and Unavailable both mean "preserve whatever the radio has".
+func unsayable(d codeplug.ChannelData, caps spec.Capabilities) (spec.Field, string) {
+	duplexes := make([]string, len(caps.DuplexOptions))
+	for i, o := range caps.DuplexOptions {
+		duplexes[i] = o.Value
+	}
+	toneModes := make([]string, len(caps.ToneModes))
+	for i, m := range caps.ToneModes {
+		toneModes[i] = m.Value
+	}
+
+	for _, v := range []struct {
+		field spec.Field
+		known bool
+		value string
+		vocab []string
+		where string
+	}{
+		{spec.FieldMode, true, d.Mode, caps.Modes,
+			`the record's ⑪ is a mode enum, and PDF p.17 (folio 16)'s "①Operating mode" column prints these codes and no more`},
+		{spec.FieldFilter, d.Filter.State == codeplug.Known, d.Filter.Value, caps.Filters,
+			`the record's ⑫ is a filter enum, and the same table's "②Filter setting" column prints these three`},
+		{spec.FieldDuplex, d.Duplex.State == codeplug.Known, d.Duplex.Value, duplexes,
+			"the record's ⑭ HIGH nibble is a duplex enum, and PDF p.19 (folio 18)'s ⑭ breakout prints these four"},
+		{spec.FieldToneMode, d.ToneMode.State == codeplug.Known, d.ToneMode.Value, toneModes,
+			"the record's ⑭ LOW nibble is a tone-mode enum, and the same breakout prints these eight"},
+		{spec.FieldDTCSPolarity, d.DTCSPolarity.State == codeplug.Known, d.DTCSPolarity.Value, caps.DTCSPolarities,
+			"the record's ㉒ is a polarity enum, and PDF p.24 (folio 23) prints one nibble per direction"},
+	} {
+		if !v.known || containsVocab(v.vocab, v.value) {
+			continue
+		}
+		return v.field, fmt.Sprintf(
+			"%q is not a value this radio can express (%s: %s). A Known value the wire cannot say faithfully is REFUSED, never dropped and never mapped to a neighbour",
+			v.value, v.where, quotedVocab(v.vocab))
+	}
+
+	// The tag: sixteen characters fixed (PDF p.19, folio 18, "53~68:
+	// Memory name setting (16 characters, fixed)"), over the charset PDF
+	// p.20 (folio 19) prints plus the ASSUMED space. Truncating an
+	// over-long name would write a name the caller did not choose, and
+	// substituting an off-charset byte would write a character they never
+	// typed.
+	if len(d.Tag) > caps.TagLen {
+		return spec.FieldTag, fmt.Sprintf(
+			"the name field is %d characters fixed and %q is %d bytes: truncating it would write a name the caller did not choose",
+			caps.TagLen, d.Tag, len(d.Tag))
+	}
+	for i := 0; i < len(d.Tag); i++ {
+		if !caps.TagByteOK(d.Tag[i]) {
+			return spec.FieldTag, fmt.Sprintf(
+				"%q has byte %#02x at offset %d, which is not one this radio's name field can hold (%s)",
+				d.Tag, d.Tag[i], i, caps.TagCharsetDescription())
+		}
+	}
+
+	// The offset: three BCD bytes at 100 Hz resolution (PDF p.18, folio
+	// 17, "Duplex Offset frequency setting"). Both halves matter — a
+	// value past the field's digits cannot be encoded at all, and one off
+	// its 100 Hz scale would be silently rounded by any encoder that
+	// tried.
+	if d.OffsetHz.State == codeplug.Known {
+		maxHz, stepHz, ok := offsetBounds(civic905.Profile())
+		switch {
+		case !ok:
+			return spec.FieldOffset, "this profile declares no duplex-offset span, so no offset can be encoded"
+		case d.OffsetHz.Value > maxHz:
+			return spec.FieldOffset, fmt.Sprintf(
+				"%d Hz is past the ㉖~㉘ field's own ceiling of %d Hz (three packed-BCD bytes at %d Hz resolution)",
+				d.OffsetHz.Value, maxHz, stepHz)
+		case d.OffsetHz.Value%stepHz != 0:
+			return spec.FieldOffset, fmt.Sprintf(
+				"%d Hz is not a multiple of the ㉖~㉘ field's %d Hz resolution, and rounding it would write an offset the caller did not choose",
+				d.OffsetHz.Value, stepHz)
+		}
+	}
+	return "", ""
+}
+
+// containsVocab is EXACT string membership — see unsayable.
+func containsVocab(vocab []string, value string) bool {
+	for _, v := range vocab {
+		if v == value {
+			return true
+		}
+	}
+	return false
+}
+
+// quotedVocab renders a vocabulary for a refusal message.
+func quotedVocab(vocab []string) string {
+	out := make([]string, len(vocab))
+	for i, v := range vocab {
+		out[i] = strconv.Quote(v)
+	}
+	return strings.Join(out, ", ")
+}

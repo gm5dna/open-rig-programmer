@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -833,3 +834,251 @@ func TestWrite_ARejectedSetIsSentAndAttributable(t *testing.T) {
 // civProfile is the CI-V dialect this driver is built on, reached without
 // a session so the structural tests above need no wire at all.
 func civProfile() civ.Profile { return civic905.Profile() }
+
+// writeRefusedBeforeAnyWire calls WriteChannel and asserts the refusal
+// arrived with NO WIRE TRAFFIC AT ALL — not one memory read, not one set.
+//
+// It is the strongest form of "above the line", and it is what
+// distinguishes a rung from a refusal the ENCODER happens to make: an
+// encoder-side refusal fires at rung 12, by which time rung 9's
+// preservation read has already put a frame on the wire, and it comes
+// back as a wrapped codec error rather than something
+// errors.Is(err, driver.ErrWriteRefused) can see.
+func writeRefusedBeforeAnyWire(t *testing.T, p *respondingPort, s *Session, ch codeplug.Channel, wantFields ...spec.Field) *driver.WriteRefusedError {
+	t.Helper()
+	readsBefore := countMemoryReads(p)
+	res, err := s.WriteChannel(context.Background(), ch)
+	wre := requireRefused(t, p, res, err, wantFields...)
+	if got := countMemoryReads(p); got != readsBefore {
+		t.Errorf("the refusal cost %d memory reads — a locally decidable check must precede ALL wire traffic, and this one ran the preservation read first", got-readsBefore)
+	}
+	return wre
+}
+
+// TestWrite_RungFive_RefusesAFrequencyOutsideTheDeclaredBounds is the
+// FLOOR half of the frequency rung, and it was missing.
+//
+// Rung 5 checked only the ceiling — the six-byte form OQ-1 refuses — so a
+// Known FreqHz BELOW the declared MinFreqHz of 144 MHz reached the wire
+// Sent and Confirmed. codeplug.Validate catches it upstream, but the
+// driver seam's contract is that it re-checks for itself, and this is the
+// last thing between a value and a radio on a consented or Simulated
+// session.
+func TestWrite_RungFive_RefusesAFrequencyOutsideTheDeclaredBounds(t *testing.T) {
+	t.Parallel()
+	p, s := openWritable(t, occupiedAt(wireAddr{0, 0}))
+	caps := s.Capabilities()
+
+	for _, hz := range []uint64{0, 1_000_000, 143_999_999} {
+		t.Run(strconv.FormatUint(hz, 10), func(t *testing.T) {
+			ch := writableChannel("G01-001")
+			ch.Data.FreqHz = hz
+			wre := writeRefusedBeforeAnyWire(t, p, s, ch, spec.FieldFrequency)
+			if !strings.Contains(wre.Reason, "144000000") {
+				t.Errorf("reason = %q, want it to name this radio's declared floor", wre.Reason)
+			}
+		})
+	}
+
+	// AND THE BOUNDARY IS ADMITTED, so the rung is a bound rather than a
+	// ban: the declared floor itself is a storable frequency.
+	ch := writableChannel("G01-001")
+	ch.Data.FreqHz = caps.MinFreqHz
+	if _, err := s.WriteChannel(context.Background(), ch); err != nil {
+		t.Errorf("the declared floor of %d Hz was refused: %v", caps.MinFreqHz, err)
+	}
+}
+
+// TestWrite_RungSixB_RefusesAToneOutsideTheDeclaredDomain is the sibling
+// re-check that was missing beside rung 6's DTCS one, and it is the
+// graver of the two halves MAJOR 1 named: an out-of-domain tone puts
+// BYTES ON THE WIRE THAT THE PRINTED DIGIT RANGES FORBID.
+//
+// PDF p.24 (folio 23) prints byte ① as "0 : 0", BOTH halves "Fixed digit:
+// 0*", and byte ②'s 100 Hz digit as "0 ~ 2". A tone of 99999 deciHz
+// encodes as 09 99 99, which violates both — and civ's BCD encoder
+// accepts it, exactly as it accepts a DTCS digit above 7.
+//
+// It is also the write-side mirror of read.go's toneField. That function
+// is scrupulous under T1(3) — a READ never constructs a Known value
+// codeplug.Validate would refuse — and the write path had no equivalent
+// care: it encoded whatever Known value it was handed.
+func TestWrite_RungSixB_RefusesAToneOutsideTheDeclaredDomain(t *testing.T) {
+	t.Parallel()
+	p, s := openWritable(t, occupiedAt(wireAddr{0, 0}))
+
+	for _, deciHz := range []spec.Tone{0, 3000, 99999} {
+		for _, side := range []struct {
+			name  string
+			field spec.Field
+			set   func(*codeplug.ChannelData, codeplug.ToneField)
+		}{
+			{"tone_tx", spec.FieldToneTx, func(d *codeplug.ChannelData, f codeplug.ToneField) { d.ToneTx = f }},
+			{"tone_rx", spec.FieldToneRx, func(d *codeplug.ChannelData, f codeplug.ToneField) { d.ToneRx = f }},
+		} {
+			t.Run(side.name+"/"+strconv.Itoa(int(deciHz)), func(t *testing.T) {
+				ch := writableChannel("G01-001")
+				side.set(ch.Data, codeplug.ToneField{State: codeplug.Known, Value: deciHz})
+				wre := writeRefusedBeforeAnyWire(t, p, s, ch, side.field)
+				if !strings.Contains(wre.Reason, "2999") {
+					t.Errorf("reason = %q, want it to name the printed domain's ceiling", wre.Reason)
+				}
+			})
+		}
+	}
+
+	// THE WHOLE DECLARED DOMAIN IS ADMITTED, ends included, so the rung
+	// refuses only what the radio cannot say.
+	for _, deciHz := range []spec.Tone{1, 885, 2999} {
+		ch := writableChannel("G01-001")
+		ch.Data.ToneTx = codeplug.ToneField{State: codeplug.Known, Value: deciHz}
+		ch.Data.ToneRx = codeplug.ToneField{State: codeplug.Known, Value: deciHz}
+		if _, err := s.WriteChannel(context.Background(), ch); err != nil {
+			t.Errorf("a tone of %d deciHz, inside the declared domain, was refused: %v", int(deciHz), err)
+		}
+	}
+
+	// A NON-KNOWN tone is NOT a domain question: it is preservation
+	// (T1(4)) on an occupied slot, and the create rule on an empty one.
+	// The rung must not intercept either.
+	ch := writableChannel("G01-001")
+	ch.Data.ToneTx = codeplug.ToneField{State: codeplug.Unknown}
+	if _, err := s.WriteChannel(context.Background(), ch); err != nil {
+		t.Errorf("a non-Known tone was caught by the DOMAIN rung: %v — preservation is rung 12's business", err)
+	}
+}
+
+// TestWrite_RungSixC_RefusesWhatTheRadioCannotSay is MINOR 2: the
+// vocabulary, tag and offset checks, lifted out of the ENCODER and into
+// the ladder above the line.
+//
+// Every value below WAS refused before this rung existed — but by
+// civ.BuildMemorySet at rung 12, which is wrong in two ways at once. The
+// refusal arrived AFTER rung 9's preservation read had already put a
+// frame on the wire, and it came back as a wrapped codec error that
+// errors.Is(err, driver.ErrWriteRefused) — the neutral contract's own
+// refusal sentinel, and what every other rung returns — could not see.
+func TestWrite_RungSixC_RefusesWhatTheRadioCannotSay(t *testing.T) {
+	t.Parallel()
+	p, s := openWritable(t, occupiedAt(wireAddr{0, 0}))
+
+	for _, tt := range []struct {
+		name  string
+		mutin func(*codeplug.ChannelData)
+		want  spec.Field
+	}{
+		{"mode outside the printed table", func(d *codeplug.ChannelData) { d.Mode = "WFM" }, spec.FieldMode},
+		{"filter outside the printed three", func(d *codeplug.ChannelData) {
+			d.Filter = codeplug.StringField{State: codeplug.Known, Value: "FIL9"}
+		}, spec.FieldFilter},
+		{"duplex outside the ⑭ breakout", func(d *codeplug.ChannelData) {
+			d.Duplex = codeplug.StringField{State: codeplug.Known, Value: "SPLIT"}
+		}, spec.FieldDuplex},
+		{"tone mode outside the ⑭ breakout", func(d *codeplug.ChannelData) {
+			d.ToneMode = codeplug.StringField{State: codeplug.Known, Value: "CROSS"}
+		}, spec.FieldToneMode},
+		{"DTCS polarity outside the four", func(d *codeplug.ChannelData) {
+			d.DTCSPolarity = codeplug.StringField{State: codeplug.Known, Value: "XX"}
+		}, spec.FieldDTCSPolarity},
+		{"a tag one byte too long", func(d *codeplug.ChannelData) { d.Tag = "ABCDEFGHIJKLMNOPQ" }, spec.FieldTag},
+		{"a tag byte outside the charset", func(d *codeplug.ChannelData) { d.Tag = "HIGHLANDÂ" }, spec.FieldTag},
+		{"an offset past the three-byte field", func(d *codeplug.ChannelData) {
+			d.OffsetHz = codeplug.FreqField{State: codeplug.Known, Value: 999_999_900}
+		}, spec.FieldOffset},
+		{"an offset off the field's 100 Hz scale", func(d *codeplug.ChannelData) {
+			d.OffsetHz = codeplug.FreqField{State: codeplug.Known, Value: 1_000_050}
+		}, spec.FieldOffset},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ch := writableChannel("G01-001")
+			tt.mutin(ch.Data)
+			writeRefusedBeforeAnyWire(t, p, s, ch, tt.want)
+		})
+	}
+}
+
+// TestWrite_RungSixC_AdmitsEverythingTheRadioCanSay is the other half,
+// and it is what stops the rung above becoming a list of things somebody
+// happened to think of: EVERY value in every declared vocabulary, every
+// tag length up to the declared maximum, every byte of the declared
+// charset, and the offset field's own ends are all ADMITTED.
+//
+// It exercises the rung's own function rather than the whole ladder,
+// because some perfectly sayable combinations — RPS with FM, say — are
+// refused further down by the cross-field rung, and that is a different
+// question with its own test.
+func TestWrite_RungSixC_AdmitsEverythingTheRadioCanSay(t *testing.T) {
+	t.Parallel()
+	caps := capabilitiesUnverified()
+
+	admit := func(t *testing.T, d codeplug.ChannelData) {
+		t.Helper()
+		if f, why := unsayable(d, caps); f != "" {
+			t.Errorf("%s refused as unsayable: %s", f, why)
+		}
+	}
+
+	base := *writableChannel("G01-001").Data
+	for _, m := range caps.Modes {
+		d := base
+		d.Mode = m
+		admit(t, d)
+	}
+	for _, f := range caps.Filters {
+		d := base
+		d.Filter = codeplug.StringField{State: codeplug.Known, Value: f}
+		admit(t, d)
+	}
+	for _, o := range caps.DuplexOptions {
+		d := base
+		d.Duplex = codeplug.StringField{State: codeplug.Known, Value: o.Value}
+		admit(t, d)
+	}
+	for _, m := range caps.ToneModes {
+		d := base
+		d.ToneMode = codeplug.StringField{State: codeplug.Known, Value: m.Value}
+		admit(t, d)
+	}
+	for _, pol := range caps.DTCSPolarities {
+		d := base
+		d.DTCSPolarity = codeplug.StringField{State: codeplug.Known, Value: pol}
+		admit(t, d)
+	}
+	// Every tag length the radio declares, and every byte of its charset.
+	for n := 0; n <= caps.TagLen; n++ {
+		d := base
+		d.Tag = strings.Repeat("A", n)
+		admit(t, d)
+	}
+	for i := 0; i < len(caps.TagCharset); i++ {
+		d := base
+		d.Tag = string(caps.TagCharset[i])
+		admit(t, d)
+	}
+	// The offset field's own ends, derived from the layout rather than
+	// restated: zero, one step, and the largest value six BCD digits at
+	// this field's scale can carry.
+	maxOffset, step, ok := offsetBounds(civProfile())
+	if !ok {
+		t.Fatal("the profile declares no offset span — offsetBounds cannot derive the field's limits")
+	}
+	for _, hz := range []uint64{0, step, maxOffset - step, maxOffset} {
+		d := base
+		d.OffsetHz = codeplug.FreqField{State: codeplug.Known, Value: hz}
+		admit(t, d)
+	}
+	if maxOffset != 99_999_900 || step != 100 {
+		t.Errorf("offsetBounds = (%d, %d), want (99999900, 100) — six BCD digits at the ㉖~㉘ field's scale of 100", maxOffset, step)
+	}
+
+	// A NON-KNOWN optional field asks nothing of the radio and must not
+	// be judged: Unknown and Unavailable both mean "preserve".
+	for _, mutin := range []func(*codeplug.ChannelData){
+		func(d *codeplug.ChannelData) { d.Filter = codeplug.StringField{State: codeplug.Unknown} },
+		func(d *codeplug.ChannelData) { d.OffsetHz = codeplug.FreqField{State: codeplug.Unavailable} },
+	} {
+		d := base
+		mutin(&d)
+		admit(t, d)
+	}
+}
