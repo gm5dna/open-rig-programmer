@@ -14,7 +14,6 @@ import (
 	// of the IC-9700", which is exactly what it is, and it keeps the bare
 	// spelling meaning this package throughout.
 	civic9700 "github.com/gm5dna/open-rig-programmer/core/civ/ic9700"
-	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
@@ -528,27 +527,3 @@ func (s *Session) rememberRaw(slot string, record []byte) {
 // Close implements driver.Session. Idempotent, because
 // transport.Engine.Close is.
 func (s *Session) Close() error { return s.eng.Close() }
-
-// WriteChannel completes driver.Session, and its choreography is the
-// largest thing in this package: a nine-rung refusal ladder (write.go).
-//
-// IT IS DECLARED HERE, IN THE COMMIT THAT CREATES THE Session TYPE, FOR A
-// COMPILATION REASON AND NO OTHER. driver.Driver.Open returns a
-// driver.Session, so the moment this file exists the type must satisfy
-// the whole interface — the same ordering constraint that moved
-// StopBits() out of the capabilities commit and into this one. Each body
-// below is REPLACED, not extended, by the file that owns it, and the
-// replacement is what its own task's tests prove.
-//
-// The placeholder REFUSES rather than returning a zero value: a session
-// that answered an empty channel here would report every slot on the
-// radio as unwritten, which is the one wrong answer a caller cannot
-// detect.
-
-// errNotImplementedYet is the placeholder refusal above. It exists in
-// exactly one commit and is removed by the two that follow it.
-var errNotImplementedYet = errors.New("ic9700: this session method is not implemented in this build")
-
-func (s *Session) WriteChannel(_ context.Context, _ codeplug.Channel) (driver.WriteResult, error) {
-	return driver.WriteResult{Steps: []driver.WriteStep{}}, errNotImplementedYet
-}

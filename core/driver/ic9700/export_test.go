@@ -15,3 +15,12 @@ var (
 	SlotAddress = slotAddress
 	AddressSlot = addressSlot
 )
+
+// RequestedFieldsForTest is the write path's requested-set derivation.
+//
+// It could not have been added when this file was created: requestedFields
+// did not exist until write.go did, and a line naming it would not have
+// compiled. Its membership and order are what the driver's own
+// defence-in-depth gate and the diff layer above it must agree on, so the
+// test that pins them reaches the real function rather than a copy.
+var RequestedFieldsForTest = requestedFields

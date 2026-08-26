@@ -70,25 +70,30 @@ func (e *AnswerMismatchError) Unwrap() error { return ErrAnswerMismatch }
 // failure would turn the ordinary case — a radio with some channels used —
 // into a walk that never finishes.
 func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channel, error) {
-	ch, _, err := s.readChannelRaw(ctx, slot)
+	ch, _, _, err := s.readChannelRaw(ctx, slot)
 	return ch, err
 }
 
 // readChannelRaw is ReadChannel plus the RAW record bytes the answer
-// carried, which the write path's E6 template guard needs.
+// carried AND the decoded civ.MemoryRecord behind them, both of which the
+// write path needs: the bytes for the E6 template guard, the record for
+// the value-level preservation of a field the caller left non-Known.
 //
-// The raw bytes are returned rather than fetched from the session's cache
-// afterwards, so the guard is provably looking at THIS read's answer.
-// Preservation-by-cache is what R6 forbids; a value that outlived its read
-// is exactly what it forbids reaching for.
-func (s *Session) readChannelRaw(ctx context.Context, slot string) (codeplug.Channel, []byte, error) {
+// BOTH ARE RETURNED RATHER THAN FETCHED AFTERWARDS, so the write path is
+// provably looking at THIS read's answer. Preservation-by-cache is what R6
+// forbids, and a value that outlived its read is exactly what it forbids
+// reaching for.
+//
+// An empty slot returns the zero record: there is nothing to preserve, and
+// the write path's CREATE branch is what handles that case.
+func (s *Session) readChannelRaw(ctx context.Context, slot string) (codeplug.Channel, []byte, civ.MemoryRecord, error) {
 	addr, _, err := slotAddress(slot)
 	if err != nil {
-		return codeplug.Channel{}, nil, err
+		return codeplug.Channel{}, nil, civ.MemoryRecord{}, err
 	}
 	cmd, err := s.profile.BuildMemoryRead(addr)
 	if err != nil {
-		return codeplug.Channel{}, nil, fmt.Errorf("ic9700: ReadChannel %s: %w", slot, err)
+		return codeplug.Channel{}, nil, civ.MemoryRecord{}, fmt.Errorf("ic9700: ReadChannel %s: %w", slot, err)
 	}
 
 	answer, err := s.eng.Do(ctx, cmd, civ.CIVReadSpec(s.profile.MemoryAnswerMatcher(), retryReads))
@@ -97,10 +102,10 @@ func (s *Session) readChannelRaw(ctx context.Context, slot string) (codeplug.Cha
 		// returned no frame, so there is no rejection frame to inspect
 		// and no branch here that could inspect one.
 		s.rememberRaw(slot, nil)
-		return codeplug.Channel{Slot: slot}, nil, nil
+		return codeplug.Channel{Slot: slot}, nil, civ.MemoryRecord{}, nil
 	}
 	if err != nil {
-		return codeplug.Channel{}, nil, fmt.Errorf("ic9700: ReadChannel %s: %w", slot, err)
+		return codeplug.Channel{}, nil, civ.MemoryRecord{}, fmt.Errorf("ic9700: ReadChannel %s: %w", slot, err)
 	}
 
 	// The pre-parse hook: address and RAW record, with no field decoded.
@@ -109,14 +114,14 @@ func (s *Session) readChannelRaw(ctx context.Context, slot string) (codeplug.Cha
 	// one should abort the walk.
 	got, record, err := s.profile.MemoryAnswerRecord(answer)
 	if err != nil {
-		return codeplug.Channel{}, nil, err
+		return codeplug.Channel{}, nil, civ.MemoryRecord{}, err
 	}
 
 	// T2, BEFORE ANY USE. Nothing below this line runs for a mismatched
 	// answer, and nothing above it used the record for anything.
 	if got != addr {
 		s.noteAnswerMismatch()
-		return codeplug.Channel{}, nil, &AnswerMismatchError{Requested: addr, Answered: got}
+		return codeplug.Channel{}, nil, civ.MemoryRecord{}, &AnswerMismatchError{Requested: addr, Answered: got}
 	}
 
 	if allFF(record) {
@@ -126,17 +131,17 @@ func (s *Session) readChannelRaw(ctx context.Context, slot string) (codeplug.Cha
 		// indistinguishable from a corrupted record, which is not what
 		// an empty slot is.
 		s.rememberRaw(slot, nil)
-		return codeplug.Channel{Slot: slot}, nil, nil
+		return codeplug.Channel{Slot: slot}, nil, civ.MemoryRecord{}, nil
 	}
 
 	rec, err := s.profile.ParseMemoryAnswer(answer)
 	if err != nil {
-		return codeplug.Channel{}, nil, err
+		return codeplug.Channel{}, nil, civ.MemoryRecord{}, err
 	}
 	s.rememberRaw(slot, record)
 
 	data := s.channelData(rec)
-	return codeplug.Channel{Slot: slot, Data: &data}, record, nil
+	return codeplug.Channel{Slot: slot, Data: &data}, record, rec, nil
 }
 
 // allFF reports whether every byte of record is 0xFF — this radio's
