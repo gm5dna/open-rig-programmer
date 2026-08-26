@@ -458,3 +458,17 @@ func TestSessionCloseIsIdempotent(t *testing.T) {
 		t.Errorf("Close() returned %v then %v — it must be idempotent", first, second)
 	}
 }
+
+func TestDriverReportsOneStopBit(t *testing.T) {
+	// E2's reporter, consumed. The value, the interface satisfaction, and
+	// — just as load-bearing — that the SESSION does not carry the method,
+	// so a future refactor cannot quietly move it where internal/wiring
+	// (which holds the DRIVER, before the port opens) cannot see it.
+	var reporter driver.SerialFramingReporter = New(RealHardware).(*Driver)
+	if got := reporter.StopBits(); got != 1 {
+		t.Errorf("StopBits() = %d, want 1 (ASSUMED — D5 entry 8, lift L-FRAMING)", got)
+	}
+	if _, ok := any((*Session)(nil)).(interface{ StopBits() int }); ok {
+		t.Error("*Session carries StopBits — it must live on the Driver, because internal/wiring must ask BEFORE the port is opened and no session exists at that moment")
+	}
+}

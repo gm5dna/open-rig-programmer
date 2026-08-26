@@ -101,12 +101,37 @@ type Driver struct {
 	engineOptions           []transport.Option
 }
 
-// Compile-time proof of the seams this driver satisfies.
+// Compile-time proof of the seams this driver satisfies. StopBits is the
+// OPTIONAL one internal/wiring consults BEFORE the port is opened, which
+// is why it is on the DRIVER and not on the session.
 var (
-	_ driver.Driver              = (*Driver)(nil)
-	_ driver.Session             = (*Session)(nil)
-	_ driver.DiagnosticsReporter = (*Session)(nil)
+	_ driver.Driver                = (*Driver)(nil)
+	_ driver.SerialFramingReporter = (*Driver)(nil)
+	_ driver.Session               = (*Session)(nil)
+	_ driver.DiagnosticsReporter   = (*Session)(nil)
 )
+
+// StopBits reports the CI-V link's stop-bit count, satisfying
+// driver.SerialFramingReporter (spec D3.1; enabler E2).
+//
+// IT IS ON THE DRIVER BECAUSE internal/wiring MUST CONSULT IT BEFORE
+// OPENING THE PORT — at which point no session exists. A session-side
+// reporter could only ever be asked after the framing had already been
+// guessed, which is to say never usefully.
+//
+// THE VALUE IS ASSUMED. This radio's CI-V Reference Guide prints no
+// framing line about the CI-V port, and none about the DATA or RTTY port
+// either (matrix §3.1, whole-document sweep). The tier's hazard sentence
+// goes with it: an "8 bit / 1 stop" line about a DATA port is NOT evidence
+// about CI-V. D5 entry 8, lift L-FRAMING.
+//
+// It is also, on this radio, unlikely to matter: the CI-V port is a
+// microUSB CDC interface, and the Basic Manual states outright that "You
+// can communicate regardless of the PC software's baud rate setting"
+// (rev 9, PDF p.92, printed folio 13-2). A CDC endpoint that ignores the
+// line rate ignores the framing with it. That is a reason the assumption
+// is cheap, NOT a reason it is evidenced — hence the lift.
+func (d *Driver) StopBits() int { return 1 }
 
 // Model implements driver.Driver.
 func (d *Driver) Model() string { return capabilitiesUnverified().Model }
