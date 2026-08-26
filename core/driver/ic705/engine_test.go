@@ -76,8 +76,8 @@ func (p *silentPort) Written() [][]byte {
 // answer geometry as readily as with a right one.
 func memoryAnswer(to, from byte, group, channel int, fill byte) []byte {
 	f := []byte{0xFE, 0xFE, to, from, 0x1A, 0x00}
-	f = append(f, byte(group/100)&0x0F<<4|byte(group/10%10), byte(group%10))
-	f = append(f, byte(channel/100)&0x0F<<4|byte(channel/10%10), byte(channel%10))
+	f = append(f, bcd2(group)...)
+	f = append(f, bcd2(channel)...)
 	rec := make([]byte, 111)
 	for i := range rec {
 		rec[i] = fill
