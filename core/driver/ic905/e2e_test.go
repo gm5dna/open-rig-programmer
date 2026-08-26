@@ -48,12 +48,56 @@ import (
 // test below therefore starts from an EMPTY radio and seeds exactly what
 // it means to assert.
 func e2eImage(opts ...fakeic905.Option) []fakeic905.Option {
-	const defaultImageChannels = 10
-	out := make([]fakeic905.Option, 0, defaultImageChannels+len(opts))
-	for ch := 0; ch < defaultImageChannels; ch++ {
-		out = append(out, fakeic905.WithEmpty(0, ch))
+	out := make([]fakeic905.Option, 0, fakeDefaultImageChannels+len(opts))
+	for ch := 0; ch < fakeDefaultImageChannels; ch++ {
+		out = append(out, fakeic905.WithEmpty(fakeDefaultImageGroup, ch))
 	}
 	return append(out, opts...)
+}
+
+// fakeDefaultImageGroup and fakeDefaultImageChannels are what e2eImage
+// clears. The fake's own constants are unexported, so these are a COPY —
+// and a copy of somebody else's number is only safe if something checks
+// it, which is TestE2E_TheFakesDefaultImageIsExactlyWhatWeClear below.
+// Without that check a default image that GREW would be under-cleared,
+// and every test here would quietly run against a stray undecodable
+// channel it never meant to seed.
+const (
+	fakeDefaultImageGroup    = 0
+	fakeDefaultImageChannels = 10
+)
+
+// TestE2E_TheFakesDefaultImageIsExactlyWhatWeClear sweeps a FRESH fake's
+// whole addressable space and requires the occupied set to be exactly the
+// channels e2eImage clears — no more, no fewer, nowhere else.
+//
+// It costs nothing: Record() is a map lookup, so the whole 100 x 100 MEM
+// space plus the CALL group is ten thousand-odd lookups and no wire at
+// all.
+func TestE2E_TheFakesDefaultImageIsExactlyWhatWeClear(t *testing.T) {
+	t.Parallel()
+	fresh := fakeic905.New()
+	t.Cleanup(func() { _ = fresh.Close() })
+
+	var held []wireAddr
+	for group := 0; group <= callWireGroup; group++ {
+		for ch := 0; ch < memChannelsPerGroup; ch++ {
+			if rec, ok := fresh.Record(group, ch); ok {
+				held = append(held, wireAddr{group: group, channel: ch})
+				if len(rec) != 64 {
+					t.Errorf("the default image holds %d bytes at group %d channel %d, want 64", len(rec), group, ch)
+				}
+			}
+		}
+	}
+
+	var want []wireAddr
+	for ch := 0; ch < fakeDefaultImageChannels; ch++ {
+		want = append(want, wireAddr{group: fakeDefaultImageGroup, channel: ch})
+	}
+	if !slices.Equal(held, want) {
+		t.Fatalf("a fresh fake holds %v\nbut e2eImage clears %v — the default image has moved or grown, and every test in this file would be running against a channel it never seeded", held, want)
+	}
 }
 
 // openFake Opens a session of the given profile against a fresh fake.
@@ -908,7 +952,17 @@ func (l *misaddressingLine) Read(p []byte) (int, error) {
 // Caller holds l.mu.
 func (l *misaddressingLine) rewrite(frame []byte) []byte {
 	const answerAddressAt = 6
-	if !l.armed || len(frame) <= memoryReadFrameLen || frame[4] != 0x1A || frame[5] != 0x00 {
+	// THE ENVELOPE IS PART OF THE GATE, not just of the fixtures this
+	// file happens to use. A memory ANSWER runs radio -> controller, so
+	// the frame must be addressed to E0 and come from AC; without those
+	// two bytes the gate would rewrite a broadcast that merely happened
+	// to carry 1A 00, and "broadcasts pass untouched" would be a property
+	// of the test data rather than of this shim.
+	answer := l.armed &&
+		len(frame) > memoryReadFrameLen &&
+		frame[2] == civController && frame[3] == civRadio &&
+		frame[4] == 0x1A && frame[5] == 0x00
+	if !answer {
 		return frame
 	}
 	out := bytes.Clone(frame)
