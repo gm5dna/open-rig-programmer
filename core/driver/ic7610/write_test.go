@@ -993,3 +993,133 @@ func containsField(fields []spec.Field, f spec.Field) bool {
 	}
 	return false
 }
+
+// TestWriteChannel_RefusesAValueOutsideThisRadiosVocabulary — ruling T5
+// lists VOCABULARIES among the refusals that must precede ALL wire
+// traffic: "capabilities, field validity, vocabularies, cross-field
+// constraints, numeric domains".
+//
+// A Known Mode, Filter or ToneMode this radio cannot express is LOCALLY
+// DECIDABLE — the vocabularies are on the session's own capabilities, and
+// TestModes_MatchTheCodec and TestFilters_MatchTheCodec already pin them
+// equal to the codec's own enum tables. So the driver must be the first
+// detector, exactly as it is for the tag charset.
+//
+// LEFT TO THE BUILDER, THE FAILURE IS WRONG IN THREE WAYS AT ONCE: the
+// preservation read has already put a frame on the wire (the very thing
+// rung 3 exists to prevent), the error is a wrapped codec error rather
+// than a *driver.WriteRefusedError, and a caller keying on
+// driver.ErrWriteRefused sees nothing at all.
+func TestWriteChannel_RefusesAValueOutsideThisRadiosVocabulary(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		field spec.Field
+		set   func(*codeplug.ChannelData)
+	}{
+		{"mode FM-N is a Yaesu spelling this radio has no code for", spec.FieldMode, func(d *codeplug.ChannelData) { d.Mode = "FM-N" }},
+		{"mode DV belongs to another Icom, not this one", spec.FieldMode, func(d *codeplug.ChannelData) { d.Mode = "DV" }},
+		{"mode differs only in case", spec.FieldMode, func(d *codeplug.ChannelData) { d.Mode = "usb" }},
+		{"filter FIL9 is outside the three printed values", spec.FieldFilter, func(d *codeplug.ChannelData) {
+			d.Filter = codeplug.StringField{State: codeplug.Known, Value: "FIL9"}
+		}},
+		{"filter is Known but empty", spec.FieldFilter, func(d *codeplug.ChannelData) {
+			d.Filter = codeplug.StringField{State: codeplug.Known, Value: ""}
+		}},
+		{"tone_mode DTCS is printed nowhere in this document", spec.FieldToneMode, func(d *codeplug.ChannelData) {
+			d.ToneMode = codeplug.StringField{State: codeplug.Known, Value: "DTCS"}
+		}},
+		{"tone_mode TSQL-R is a vocabulary this radio does not carry", spec.FieldToneMode, func(d *codeplug.ChannelData) {
+			d.ToneMode = codeplug.StringField{State: codeplug.Known, Value: "TSQL-R"}
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s, p := writeSession(t, ackingRadio())
+			openFrames := len(p.Transcript())
+			ch := goodChannel("042")
+			tt.set(ch.Data)
+
+			res, err := s.WriteChannel(t.Context(), ch)
+			if !errors.Is(err, driver.ErrWriteRefused) {
+				t.Fatalf("err = %v, want ErrWriteRefused - a value this radio cannot express is a REFUSAL, and a locally decidable one", err)
+			}
+			var refusal *driver.WriteRefusedError
+			if !errors.As(err, &refusal) || !containsField(refusal.Fields, tt.field) {
+				t.Fatalf("err = %v, want a *driver.WriteRefusedError naming %s", err, tt.field)
+			}
+			if len(res.Steps) != 0 {
+				t.Errorf("Steps = %+v, want empty", res.Steps)
+			}
+			if frames := framesAfterOpen(t, p, openFrames); len(frames) != 0 {
+				t.Errorf("%d frames reached the port:\n  %s\nwant ZERO - T5 names vocabularies among the refusals that precede ALL wire traffic, so the builder must never be the first detector", len(frames), hexFrames(frames))
+			}
+		})
+	}
+
+	// Every value this radio DOES express is admitted, so the rung refuses
+	// what the radio cannot say and nothing else.
+	t.Run("every printed value is admitted", func(t *testing.T) {
+		caps := capabilitiesUnverified()
+		for _, mode := range caps.Modes {
+			for _, filter := range caps.Filters {
+				for _, tm := range caps.ToneModes {
+					d := *goodChannel("042").Data
+					d.Mode = mode
+					d.Filter = codeplug.StringField{State: codeplug.Known, Value: filter}
+					d.ToneMode = codeplug.StringField{State: codeplug.Known, Value: tm.Value}
+					if f, _ := outsideVocabulary(d, caps); f != "" {
+						t.Errorf("mode %q / filter %q / tone_mode %q was refused on field %s, and all three are printed", mode, filter, tm.Value, f)
+					}
+				}
+			}
+		}
+	})
+}
+
+// TestUnreachableRefusalsTellTheTruth pins the two arms the review found
+// saying something false about a situation they can only reach if an
+// invariant has already broken.
+//
+// AN UNREACHABLE BRANCH THAT WOULD LIE IF REACHED IS WORSE THAN ONE THAT
+// SAYS SO. Both are called directly here, because there is no way to drive
+// either through WriteChannel — which is the point.
+func TestUnreachableRefusalsTellTheTruth(t *testing.T) {
+	t.Run("the E6 comparison, handed a short record", func(t *testing.T) {
+		// civ.Profile.MemoryAnswerRecord refuses any length but 25 before
+		// readRaw can return, so this can only happen if the length
+		// fingerprint has been broken upstream.
+		err := unmappedRegionsDiffer(make([]byte, 3))
+		if err == nil {
+			t.Fatal("a 3-byte record passed the E6 comparison")
+		}
+		var e *UnmappedRegionError
+		if errors.As(err, &e) {
+			t.Errorf("err = %+v, an *UnmappedRegionError naming a nibble it never measured; the old form printed \"byte 0 carries 0x0 where the template carries 0x0\", which is a lie about a record that was never read", e)
+		}
+		for _, want := range []string{"3-byte", "25", "length fingerprint"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("the refusal %q does not mention %q", err, want)
+			}
+		}
+		// And a full-length record with matching regions still passes.
+		if err := unmappedRegionsDiffer(goldenRecord); err != nil {
+			t.Errorf("the golden record was refused: %v", err)
+		}
+	})
+
+	t.Run("the tone refusal names the situation it is in", func(t *testing.T) {
+		create := toneRefusalReason(true)
+		update := toneRefusalReason(false)
+		if create == update {
+			t.Fatal("the CREATE and UPDATE arms share one sentence; they are different facts")
+		}
+		if !strings.Contains(create, "no prior record") || !strings.Contains(create, "ic7610-default-tone-undocumented") {
+			t.Errorf("the CREATE reason does not carry T1(5)'s fact and its register entry: %q", create)
+		}
+		if strings.Contains(update, "no prior record") {
+			t.Errorf("the UPDATE reason claims there is no prior record; on an UPDATE there IS one: %q", update)
+		}
+		if !strings.Contains(update, "impossible") {
+			t.Errorf("the UPDATE reason does not say the arm is unreachable on this single-layout profile: %q", update)
+		}
+	})
+}

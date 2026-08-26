@@ -6,6 +6,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	civic7610 "github.com/gm5dna/open-rig-programmer/core/civ/ic7610"
@@ -150,6 +152,19 @@ func requestedFields(d codeplug.ChannelData) []spec.Field {
 //
 // A FIELD MISSING FROM THIS TABLE IS A FIELD THE GATE WOULD NEVER SEE, and
 // therefore a Known value that would be silently dropped.
+//
+// TWO PREDICATES ARE EXACT AND ONE IS AN APPROXIMATION, and the difference
+// is worth naming. FieldCTCSSState and FieldShift are plain strings whose
+// empty value is not a vocabulary member of any radio, so "non-empty" and
+// "the caller asked for something" are the same test. THE CLARIFIER IS
+// NOT: ClarHz 0 with both flags false is indistinguishable from a channel
+// that never carried a clarifier at all, so a caller asking for an
+// explicitly-zero clarifier is not appended and the gate never sees it.
+// On THIS model that costs nothing — the 1A 00 record has no clarifier
+// span, and core/codeplug's own touchedFields treats clarifier as one of
+// the unconditional six and FILTERS IT OUT on a bank that cannot reach it,
+// so the clone service would not request it either. Recorded as the known
+// bound of this table rather than papered over; it is doc.go's honesty row.
 var conditionalRequestedFields = []struct {
 	field   spec.Field
 	present func(codeplug.ChannelData) bool
@@ -185,6 +200,7 @@ func refused(slot string, fields []spec.Field, reason string) (driver.WriteResul
 //	  1. erase?                Channel.Data == nil            -> ErrWriteRefused
 //	  2. capability gate       requestedFields x FieldSupport -> ErrWriteRefused
 //	  3. field-state shape     non-Known mandatory field      -> ErrWriteRefused
+//	  3b. vocabularies         mode/filter/tone_mode not expressible -> ErrWriteRefused
 //	  4. numeric domains       freq > 69_999_999, tone > 2999 -> *OutOfDomainError
 //	  -----------------------------------------------------------------------
 //	  5. ONE read              readRaw (T2 address check, T4 rejection branch)
@@ -195,7 +211,7 @@ func refused(slot string, fields []spec.Field, reason string) (driver.WriteResul
 //	  -----------------------------------------------------------------------
 //	  8. BuildMemorySet -> the outbound gate -> the acknowledged exchange
 //
-// RUNGS 1-4 ARE THE REASON A REFUSED WRITE PUTS **ZERO** BYTES ON THE
+// RUNGS 1-4 (3b INCLUDED) ARE THE REASON A REFUSED WRITE PUTS **ZERO** BYTES ON THE
 // WIRE; rungs 6-7 are the reason an E6 refusal costs exactly ONE READ'S
 // WORTH and no set frame. Both facts are asserted on the scripted port's
 // byte log, which is what actually proves them.
@@ -258,6 +274,13 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 		return refused(ch.Slot, []spec.Field{missing}, reason)
 	}
 
+	// RUNG 3b — VOCABULARIES. Ruling T5 names them among the refusals
+	// that precede ALL wire traffic, and they are locally decidable: the
+	// three enum vocabularies are on this session's own capabilities.
+	if field, reason := outsideVocabulary(d, s.caps); field != "" {
+		return refused(ch.Slot, []spec.Field{field}, reason)
+	}
+
 	// RUNG 4 — NUMERIC DOMAINS. Defence in depth and NOT the gate; see
 	// OutOfDomainError and doc.go §6.
 	if d.FreqHz > MaxEncodableFreqHz {
@@ -299,11 +322,11 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	// RUNG 7 — THE TONE SOURCE (tier ruling T1(4) and T1(5)).
 	toneTx, ok := toneSource(d.ToneTx, prior.ToneTXDeciHz, empty)
 	if !ok {
-		return refused(ch.Slot, []spec.Field{spec.FieldToneTx}, noDefaultToneReason)
+		return refused(ch.Slot, []spec.Field{spec.FieldToneTx}, toneRefusalReason(empty))
 	}
 	toneRx, ok := toneSource(d.ToneRx, prior.ToneRXDeciHz, empty)
 	if !ok {
-		return refused(ch.Slot, []spec.Field{spec.FieldToneRx}, noDefaultToneReason)
+		return refused(ch.Slot, []spec.Field{spec.FieldToneRx}, toneRefusalReason(empty))
 	}
 
 	// RUNG 8 — BUILD, GATE, EXCHANGE. BuildMemorySet writes the profile's
@@ -415,11 +438,18 @@ func missingMandatory(d codeplug.ChannelData) (spec.Field, string) {
 // compared against a literal zero, because E6's ruling is stated in terms
 // of "the profile's Fixed template" and a driver that hard-coded the
 // zeroes would keep passing if the template ever changed.
-func unmappedRegionsDiffer(raw []byte) *UnmappedRegionError {
+func unmappedRegionsDiffer(raw []byte) error {
 	tmpl := civic7610.FixedTemplate()
 	if len(raw) < len(tmpl) {
-		// Unreachable: the length fingerprint has already run.
-		return &UnmappedRegionError{Offset: 0, Nibble: "low", Want: 0, Got: 0}
+		// UNREACHABLE, and it says so rather than inventing a nibble.
+		// civ.Profile.MemoryAnswerRecord has already refused any length
+		// but this profile's own — that check is the probe's CONTINUOUS
+		// length fingerprint and readRaw cannot return past it — so a
+		// short record here means the fingerprint invariant has been
+		// broken upstream. A refusal that named a nibble would print
+		// "byte 0 carries 0x0 where the template carries 0x0", which is
+		// a lie about a record that was never measured.
+		return fmt.Errorf("ic7610: internal: the E6 comparison was handed a %d-byte record where the profile declares %d — the length fingerprint should have refused this answer before it reached here", len(raw), len(tmpl))
 	}
 	for _, chk := range []struct {
 		offset int
@@ -436,6 +466,21 @@ func unmappedRegionsDiffer(raw []byte) *UnmappedRegionError {
 		}
 	}
 	return nil
+}
+
+// toneRefusalReason picks the reason that is TRUE of the write in hand.
+//
+// The two arms are different facts and must not share a sentence. On a
+// CREATE there is genuinely no prior record to preserve from; on an UPDATE
+// there IS one and it carried no tone span, which on this single-layout
+// profile cannot happen — so saying "no prior record" there would be a
+// lie told to a user in the one situation where the code is already
+// somewhere it should not be.
+func toneRefusalReason(create bool) string {
+	if create {
+		return noDefaultToneReason
+	}
+	return "this slot's record carried no tone span to preserve, which this profile's single 25-byte layout makes impossible: it maps ⑫~⑭ and ⑮~⑰ unconditionally, so a successfully parsed record always carries both. Reaching this refusal means the record layout and this driver's mapping have gone out of step — report it rather than working around it"
 }
 
 // noDefaultToneReason is T1(5)'s refuse arm, in words, and it is this
@@ -467,4 +512,86 @@ func toneSource(want codeplug.ToneField, prior civ.Optional[uint64], create bool
 	// than defaulted to zero, which would be synthesis.
 	v, ok := prior.Get()
 	return v, ok
+}
+
+// outsideVocabulary reports the first mapped enum field carrying a Known
+// value this radio cannot express, and why.
+//
+// RULING T5 NAMES VOCABULARIES among the refusals that precede ALL wire
+// traffic — "capabilities, field validity, vocabularies, cross-field
+// constraints, mandatory-Known rules" — and this check is locally
+// decidable: the three vocabularies are on the session's own capabilities,
+// with nothing to look up on the radio.
+//
+// LEFT TO THE BUILDER, THE FAILURE IS WRONG IN THREE WAYS AT ONCE.
+// civ's encodeRecord does refuse an out-of-vocabulary enum value, but by
+// then the T5 preservation read has already put a frame on the wire; the
+// error is a wrapped CODEC error rather than a *driver.WriteRefusedError;
+// and a caller keying on driver.ErrWriteRefused — the neutral contract's
+// refusal sentinel, and what every other rung returns — sees nothing. It
+// is the same argument that put the tag's charset check in
+// missingMandatory, applied to the three fields whose builder-side failure
+// is identical in kind.
+//
+// THE VOCABULARIES ARE THE CAPABILITIES', NOT THE CODEC'S, and that is
+// deliberate: caps.go writes the ten mode names and three filter names out
+// because core/civ/ic7610's enum tables are unexported, and
+// TestModes_MatchTheCodec and TestFilters_MatchTheCodec pin the two equal.
+// Asking the capabilities here means the value the UI offered, the value
+// codeplug.Validate judged and the value this rung admits are one list.
+//
+// FREQUENCY IS NOT HERE because it is not a vocabulary: its domain is a
+// RANGE, checked at rung 4 against MaxEncodableFreqHz (MinFreqHz is zero
+// and FreqHz is unsigned, so there is no floor to check). The other
+// FreqField-shaped members — TxFreqHz and OffsetHz — have no span in this
+// record at all, so a Known value for either is refused one rung earlier,
+// by the capability gate, and never reaches a domain question.
+func outsideVocabulary(d codeplug.ChannelData, caps spec.Capabilities) (spec.Field, string) {
+	toneModes := make([]string, len(caps.ToneModes))
+	for i, m := range caps.ToneModes {
+		toneModes[i] = m.Value
+	}
+	for _, v := range []struct {
+		field spec.Field
+		value string
+		vocab []string
+		where string
+	}{
+		{spec.FieldMode, d.Mode, caps.Modes,
+			"the record's ⑨ is a mode enum, and PDF p.11's \"①Receiving mode\" column prints these ten codes and no more"},
+		{spec.FieldFilter, d.Filter.Value, caps.Filters,
+			"the record's ⑩ is a filter enum, and PDF p.11's \"Filter setting\" column prints these three values and no default"},
+		{spec.FieldToneMode, d.ToneMode.Value, toneModes,
+			"the record's ⑪ low nibble is a tone-mode enum, and PDF p.12's ⑪ sub-diagram prints these three values"},
+	} {
+		if containsVocab(v.vocab, v.value) {
+			continue
+		}
+		return v.field, fmt.Sprintf(
+			"%q is not a value this radio can express (%s: %s). A Known value the wire cannot say faithfully is REFUSED, never dropped and never mapped to a neighbour",
+			v.value, v.where, quoted(v.vocab))
+	}
+	return "", ""
+}
+
+// containsVocab is exact string membership. NOT case-folded and not
+// trimmed: a vocabulary value is a wire code's agreed spelling, and
+// quietly accepting "usb" for "USB" would be this driver deciding what a
+// user meant.
+func containsVocab(vocab []string, value string) bool {
+	for _, v := range vocab {
+		if v == value {
+			return true
+		}
+	}
+	return false
+}
+
+// quoted renders a vocabulary for a refusal message.
+func quoted(vocab []string) string {
+	out := make([]string, len(vocab))
+	for i, v := range vocab {
+		out[i] = strconv.Quote(v)
+	}
+	return strings.Join(out, ", ")
 }
