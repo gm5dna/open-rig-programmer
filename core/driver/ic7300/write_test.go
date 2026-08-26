@@ -621,6 +621,51 @@ func TestWriteChannel_EmptyChannelIsRefusedAsErase(t *testing.T) {
 	}
 }
 
+// D20 ON THE WRITE PATH. The preservation read's answer must have its channel
+// address checked BEFORE any other use of it, exactly as ReadChannel's is —
+// D20 says the order applies "in ReadChannel and in the write path's
+// preservation read alike", and calls a per-driver mismatch regression test
+// mandatory. The read path had both witnesses and this one had neither.
+//
+// THE SECOND SUB-CASE IS THE ONE THAT PINS THE ORDER. With the all-FF branch
+// ahead of the address check, an all-FF answer for the WRONG channel reports
+// "this slot is empty", and the write becomes a CREATE refusal naming the
+// SELECT nibble — a plausible-looking refusal about the wrong thing, on a
+// slot that may well be populated. Asserting ErrAnswerMismatch rather than
+// merely "some error" is what makes the sub-case discriminate.
+func TestWriteChannel_PreservationReadAddressMismatchIsRefused(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		rec  []byte
+	}{
+		{"a populated record for the wrong channel", populatedRecord},
+		{"an all-FF record for the wrong channel", allFFRecord()},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Channel 9 is past the open probe's bound, so the misdirection
+			// is met for the first time HERE, on the write path.
+			peer := newRespondingPort(t,
+				withRecord(9, tc.rec),
+				withAnswerAddressedElsewhere(9, 10),
+			)
+			sess := openSession(t, peer, WithConsentedUnverifiedWrites())
+			_, err := sess.WriteChannel(context.Background(), channelFor("009"))
+			if !errors.Is(err, ErrAnswerMismatch) {
+				t.Fatalf("WriteChannel error = %v, want ErrAnswerMismatch — civ's MemoryAnswerMatcher is ENVELOPE-ONLY by design, so the channel address is the driver's to check, on this path as much as on the read path (T2, D20)", err)
+			}
+			if errors.Is(err, driver.ErrWriteRefused) {
+				t.Errorf("the refusal is a *driver.WriteRefusedError (%v) — a misaddressed answer is not a fact about the requested slot, and reporting it as a create refusal would name the wrong problem on a slot that may be populated", err)
+			}
+			if n := len(setFrames(peer)); n != 0 {
+				t.Errorf("%d set frames reached the wire after a mismatched preservation read", n)
+			}
+			if n := civDiagnostics(t, sess).AnswerMismatches; n != 1 {
+				t.Errorf("AnswerMismatches = %d, want 1 — the refusal carries a diagnostic count beside it, on this path too", n)
+			}
+		})
+	}
+}
+
 // A LATER quarantine drain failure is fail-closed on the write path too: the
 // flood starts once the preservation read has gone out, so Do's post-write
 // quarantine and the next exchange meet a line that never goes quiet.

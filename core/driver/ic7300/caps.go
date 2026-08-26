@@ -115,23 +115,38 @@ func scanSlots() []string {
 //   - clarifier, ctcss_state, ctcss_tone, shift — the Yaesu vocabulary,
 //     which this record does not carry at all (matrix §1 rows 6, 7, 14, 15;
 //     spec D4 puts ctcss_state's job on tone_mode for Icom models).
+//
 //   - duplex, offset — MANUAL-EVIDENCED absences (matrix §1b). Spec D6 puts
 //     per-channel duplex and offset OUT OF SCOPE for this pair, and this is
 //     the honest empty shape enabler E5b exists to admit: a bank that
 //     reaches neither shift nor duplex is not required to name a
 //     vocabulary for either.
+//
 //   - dtcs_code, dtcs_polarity — the record carries no DTCS field
 //     (matrix §1b). Vacuous rather than skipped.
+//
 //   - scan_skip — the tier's hard constraint: ③'s SELECT nibble is group
 //     MEMBERSHIP, the inverse of a skip flag, and mapping it as skip is
 //     forbidden (plan decision D4). The value is not discarded — it lives
 //     inside the civ record on civ.FieldSelect and round-trips there.
+//
 //   - tag_display — this record carries NO display flag, so a read reports
 //     Unavailable and the grading says the same thing rather than
 //     declaring a readable field whose every read is Unavailable. The
 //     in-tree precedent is core/driver/ftdx10/caps.go:194 and
 //     core/driver/ftdx101/caps.go:225 on their own flagless records
 //     (plan decision D5, R13).
+//
+//     IT IS A NARROWING, AND IT IS RECORDED AS ONE. This model's matrix §2
+//     row 8 grades the field read-✓ on both banks, as a CHOICE rather than
+//     manual evidence; the ZERO FieldSupport here is narrower than that row,
+//     so it IS a deviation and is recorded as IC-7300 matrix ERRATUM 13 on
+//     the flagless-record precedent above. Plan D5's "no deviation from
+//     either matrix remains on this field" was true of the MK2 only, whose
+//     §2 row 8 already grades it — — — — and whose rev-1 proposed erratum is
+//     recorded WITHDRAWN. The two models agree; only one of them had to move
+//     to get there.
+//
 //   - erase — this tier ships no erase path (spec D4). The document prints
 //     TWO clear forms and neither is implemented; doc.go says what a future
 //     write-trial milestone would need.
@@ -226,7 +241,10 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 		// but those are the PANEL-selectable set, and the record stores a
 		// BCD FREQUENCY indexing no table, as that row says in terms. A
 		// fifty-entry list here would fail closed on every encodable value
-		// outside it. The fifty stay in doc.go. Proposed matrix erratum 3.
+		// outside it. The fifty stay in doc.go. The deviation is RECORDED,
+		// and it landed as IC-7300 matrix ERRATUM 12 (REV 3's change log
+		// called it "proposed erratum 3", which is the number it was asked
+		// for under, not the number it was given).
 		CTCSSTones: nil,
 		// THE TONE DOMAIN, declared as the numeric range E3 added for
 		// exactly this shape (D16, ruling T1). The printed per-digit legend
@@ -257,8 +275,10 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 		// The 74 800 000 figure on PDF p.150 is TUNING COVERAGE, and
 		// publishing it would let a codeplug carry a value this encoder must
 		// afterwards refuse. In each direction the tighter of the two
-		// printed bounds governs (plan decision D6; matrix Erratum 4(a),
-		// which this decision closes).
+		// printed bounds governs (plan decision D6). Matrix Erratum 4(a)
+		// marked §1 row 12 PENDING this plan's explicit decision; the
+		// decision landed as matrix ERRATUM 10, which discharges that
+		// PENDING marker — so 4(a) is closed rather than outstanding.
 		MaxFreqHz: 69_999_999,
 		// DELIBERATELY EMPTY: nothing in this document is declared
 		// never-empty (matrix §1 row 13; plan decision D8).

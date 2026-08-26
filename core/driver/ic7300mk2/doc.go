@@ -298,6 +298,24 @@
 // concluding anything about the radio. The README row carrying that to users
 // belongs to registration and is not written here.
 //
+// # The rate this driver opens at, and the table it does NOT come from
+//
+// THIS DOCUMENT PRINTS NO RATE LIST AND NO FACTORY DEFAULT (matrix §1 #9,
+// #10, §3.3). The only rates it names anywhere are the three rows of the
+// `18 01` FE-count table — and that is A WAKE-UP-COMMAND TABLE, NOT A
+// SUPPORTED-RATE LIST. It says how many FE preamble bytes a sleeping radio
+// needs at a given rate; it does not say which rates the CI-V port accepts,
+// and nothing in it is a statement that a rate outside it is refused.
+//
+// Publishing the three rates it names, and opening at the highest of them,
+// is therefore a CONSERVATIVE DERIVATION rather than a printed fact:
+// `Bauds = [4800, 9600, 19200]`, `DefaultBaud = 19200` (caps.go). Register
+// entries `ic7300mk2-baud-list` (lift MK2-R21) and `ic7300mk2-default-baud`
+// (lift MK2-R6), beside `ic7300mk2-auto-baud-absent` — this document prints
+// no `Auto` setting at all, where the IC-7300 ships both of its baud items
+// on one. The IC-7300's six-rate `[USB]` list is that radio's own and is not
+// borrowed here, in either direction.
+//
 // # Serial framing
 //
 // StopBits() returns 1 (ic7300mk2.go), on the CONCRETE DRIVER rather than
@@ -345,6 +363,15 @@
 // CI-V are all DRIVER facts, not profile facts, and the IC-7300's matrix
 // homes its equivalents in a driver register. Nothing about any entry's
 // grading, lift or scope changes.
+//
+// ONE FURTHER ENTRY APPEARS BELOW WITHOUT BEING RE-HOMED, and the difference
+// matters. `ic7300mk2-min-frequency` / `-max-frequency` KEEPS its home in the
+// civ PROFILE register, where MK2 matrix §5 puts it and where
+// core/civ/ic7300mk2/doc.go carries it; the row below is a CROSS-REFERENCE,
+// not a ninth re-homing. It is repeated here because MinFreqHz is a value
+// THIS package publishes — a capability a validator consults — and a reader
+// asking why it is zero must find the answer beside the zero. Where the two
+// copies could drift, the profile's is authoritative.
 //
 // Every entry below is scoped to the IC-7300MK2 ALONE and names ONE capture
 // ON AN IC-7300MK2. Nothing here covers the IC-7300. The rows whose home is
@@ -474,8 +501,10 @@
 //     LIFT: MK2-R23 — move the address from the panel and record what this
 //     driver's open does.
 //
-//   - `ic7300mk2-min-frequency` — that this model has NO documented tuning
-//     floor. MinFreqHz is published as 0, which DISABLES the lower-bound
+//   - `ic7300mk2-min-frequency` — HOMED IN THE civ PROFILE REGISTER
+//     (core/civ/ic7300mk2/doc.go); repeated here as a cross-reference, per
+//     the note above, because MinFreqHz is a capability this package
+//     publishes. That this model has NO documented tuning floor. MinFreqHz is published as 0, which DISABLES the lower-bound
 //     check rather than asserting a 0 Hz floor, because borrowing the
 //     IC-7300's 30 000 Hz would be exactly the cross-model contamination
 //     both matrices' §4 forbid. Its companion `ic7300mk2-max-frequency` is

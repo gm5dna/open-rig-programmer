@@ -61,8 +61,8 @@ func TestReadChannel_PopulatedMemorySlot(t *testing.T) {
 	if d.ToneTx != (codeplug.ToneField{State: codeplug.Known, Value: spec.Tone(885)}) {
 		t.Errorf("ToneTx = %+v, want Known 88.5 Hz — ⑫–⑭, BCD TENTHS of a hertz", d.ToneTx)
 	}
-	if d.ToneRx != (codeplug.ToneField{State: codeplug.Known, Value: spec.Tone(885)}) {
-		t.Errorf("ToneRx = %+v, want Known 88.5 Hz — ⑮–⑰", d.ToneRx)
+	if d.ToneRx != (codeplug.ToneField{State: codeplug.Known, Value: spec.Tone(1230)}) {
+		t.Errorf("ToneRx = %+v, want Known 123.0 Hz — ⑮–⑰, a DIFFERENT value from the repeater tone, so a driver that swapped the two spans cannot pass this by carrying one value twice", d.ToneRx)
 	}
 	// A Known tone this driver produced must be one the capabilities admit,
 	// or the very next thing to touch this channel refuses it.

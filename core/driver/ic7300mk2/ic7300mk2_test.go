@@ -242,12 +242,6 @@ func civDiagnostics(t *testing.T, sess any) CIVDiagnostics {
 	return session(t, sess).CIVDiagnostics()
 }
 
-// The reporter is asserted on the CONCRETE DRIVER, unconditionally:
-// internal/wiring holds the driver value before any port exists, so a
-// Session-side reporter could only ever be consulted after the framing had
-// already been guessed.
-var _ driver.SerialFramingReporter = (*ic7300mk2Driver)(nil)
-
 // The probe is BOUNDED and confined to MEM. A P1/P2 record's shape is
 // itself ASSUMED — this document never states whether a scan-edge record
 // carries the same 45 bytes (§3.16 A5) — so the probe must not learn the

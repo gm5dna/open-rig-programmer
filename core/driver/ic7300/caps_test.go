@@ -174,6 +174,16 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 	if ty.NumField() == 0 {
 		t.Fatal("spec.Capabilities has no fields — this test would pass vacuously")
 	}
+	// THE COUNT ITSELF, pinned rather than left to prose. The audit below
+	// only asks that each field be non-zero OR named in deliberatelyZero, so
+	// a NEW capability field arriving with a plausible zero value and no
+	// entry would be caught — but a field REMOVED, or the struct reshaped,
+	// would not, and both doc.go and caps.go argue from "all twenty-two".
+	// E3's follow-up commit is what made it twenty-two by adding
+	// CTCSSToneRange; a twenty-third arrives with a decision to make here.
+	if ty.NumField() != 22 {
+		t.Errorf("spec.Capabilities has %d fields, want 22 — every one of them is written down explicitly in baseCapabilities, and the count is stated in caps.go and doc.go; if the struct has genuinely changed, set the new value HERE and account for the new field in the literal and in deliberatelyZero", ty.NumField())
+	}
 	for i := 0; i < ty.NumField(); i++ {
 		name := ty.Field(i).Name
 		if v.Field(i).IsZero() {

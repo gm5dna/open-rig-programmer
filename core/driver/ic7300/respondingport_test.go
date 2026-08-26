@@ -86,15 +86,32 @@ const (
 	peerControllerAddr = 0xE0
 )
 
-// populatedRecord is the 39 record bytes of this model's golden set vector
-// (core/civ/ic7300/testdata/ic7300-vectors.golden, line
-// "set-record-name-with-space"): SELECT OFF and Split OFF in ③, 14.250 MHz,
-// USB, FIL1, data mode OFF, tone mode OFF, 88.5 Hz on both tone spans, the
-// same frequency in the transmit block, and the name "TEST CHAN1".
+// populatedRecord is this model's golden set-vector record — 39 bytes —
+// WITH ONE DELIBERATE DEPARTURE, named below: SELECT OFF and Split OFF in ③,
+// 14.250 MHz, USB, FIL1, data mode OFF, tone mode OFF, 88.5 Hz on the
+// repeater tone and 123.0 Hz on the tone squelch, the same frequency in the
+// transmit block, and the name "TEST CHAN1".
 //
-// TAKEN FROM THE FROZEN VECTOR, not built by the codec under test: a
-// fixture a builder produced would pin the parser against the builder, and
-// the two would agree about a wrong offset just as happily as a right one.
+// TAKEN FROM THE FROZEN VECTOR, not built by the codec under test: a fixture
+// a builder produced would pin the parser against the builder, and the two
+// would agree about a wrong offset just as happily as a right one.
+//
+// THE DEPARTURE IS THE TONE-SQUELCH SPAN, AND IT IS THE POINT.
+// core/civ/ic7300/testdata/ic7300-vectors.golden's set vector carries 88.5 Hz
+// in BOTH tone spans, and two equal values cannot tell the two spans apart: a
+// driver that swapped ⑫–⑭ with ⑮–⑰ — on the read mapping or on the write's
+// preservation — would emit and report byte-identical results, and every
+// assertion in this package would stay green. 123.0 Hz here makes the swap
+// visible. It is the same principle as the geometry witness's
+// order-discriminating values (Stage-1 findings F2/N4), applied to span
+// IDENTITY rather than byte ORDER; and both values still discriminate byte
+// order on their own (`00 08 85` and `00 12 30` are neither palindromic).
+// The MK2's vector needs no such departure — it already carries two
+// different tone values — and a pair whose hardening differs is one where
+// the next reader has to work out why.
+//
+// Everything else IS the vector, byte for byte. The vector itself is frozen
+// evidence and is not touched; this is a test fixture.
 var populatedRecord = []byte{
 	0x00,                         // ③ — SELECT OFF (low nibble), Split OFF (high nibble)
 	0x00, 0x00, 0x25, 0x14, 0x00, // ④–⑧ — 14 250 000 Hz, least significant pair first
@@ -102,13 +119,13 @@ var populatedRecord = []byte{
 	0x01,             // ⑩ — FIL1
 	0x00,             // ⑪ — data mode OFF (high), tone mode OFF (low)
 	0x00, 0x08, 0x85, // ⑫–⑭ — 88.5 Hz
-	0x00, 0x08, 0x85, // ⑮–⑰ — 88.5 Hz
+	0x00, 0x12, 0x30, // ⑮–⑰ — 123.0 Hz, DIFFERENT from ⑫–⑭ on purpose
 	0x00, 0x00, 0x25, 0x14, 0x00, // ❹–⑧ — the transmit frequency
 	0x01,             // ❾
 	0x01,             // ❿
 	0x00,             // ⓫
 	0x00, 0x08, 0x85, // ⓬–⓮
-	0x00, 0x08, 0x85, // ⓯–⓱
+	0x00, 0x12, 0x30, // ⓯–⓱
 	'T', 'E', 'S', 'T', ' ', 'C', 'H', 'A', 'N', '1', // ⑱–㉗
 }
 
@@ -436,7 +453,7 @@ func channelFor(slot string) codeplug.Channel {
 			OffsetHz:     codeplug.FreqField{State: codeplug.Unavailable},
 			ToneMode:     codeplug.StringField{State: codeplug.Known, Value: "OFF"},
 			ToneTx:       codeplug.ToneField{State: codeplug.Known, Value: spec.Tone(885)},
-			ToneRx:       codeplug.ToneField{State: codeplug.Known, Value: spec.Tone(885)},
+			ToneRx:       codeplug.ToneField{State: codeplug.Known, Value: spec.Tone(1230)},
 			DTCSCode:     codeplug.IntField{State: codeplug.Unavailable},
 			DTCSPolarity: codeplug.StringField{State: codeplug.Unavailable},
 			Filter:       codeplug.StringField{State: codeplug.Known, Value: "FIL1"},

@@ -90,12 +90,20 @@ func requestedFields(data codeplug.ChannelData) []spec.Field {
 // WriteChannel implements driver.Session: ONE acknowledged 1A 00 set,
 // preceded by exactly one read.
 //
-// THE LADDER IS ORDERED, and doc.go states it in full. Rungs 1–7 are LOCALLY
-// DECIDABLE and precede ALL wire traffic; rung 8 is the single read; rung 9
-// holds the READ-DEPENDENT refusals, which are the one recorded exception to
-// driver.Session's "refusal before any wire traffic" sentence — a refusal
-// that depends on the SLOT'S CURRENT STATE cannot precede the read that
-// obtains that state.
+// THE LADDER IS ORDERED, and doc.go states it in full. Rungs 1–6 are LOCALLY
+// DECIDABLE and precede ALL wire traffic; rung 7 is the single read; rung 8
+// is the answer's address check and the three READ-DEPENDENT refusals, which
+// are the one recorded exception to driver.Session's "refusal before any wire
+// traffic" sentence — a refusal that depends on the SLOT'S CURRENT STATE
+// cannot precede the read that obtains that state; rung 9 is the set.
+//
+// THE NUMBERING IS D21'S AS RECLASSIFIED, not as first written. D21 listed the
+// SCAN bank's ③-must-be-zero constraint seventh, among the locally decidable
+// rungs, and it is not locally decidable: the value it judges is record byte
+// ③'s SELECT nibble, which no spec.Field carries, so it exists nowhere but the
+// record the radio has just handed back. It moved down beside E6's own check,
+// and every rung after it moved up by one. doc.go carries the reasoning; this
+// comment carries the numbers, and the two must not drift.
 //
 // NO READ-BACK VERIFICATION. Reading the slot back and comparing is the
 // clone service's job, exactly as for every other driver here: verification
@@ -171,7 +179,7 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 		return res, err
 	}
 
-	// RUNGS 8-10 — one read, the read-dependent refusals, and the set, all
+	// RUNGS 7-9 — one read, the read-dependent refusals, and the set, all
 	// inside ONE critical section (D15). transport.Engine.Do locks a single
 	// exchange, not a read-modify-write SEQUENCE, and driver.Session does not
 	// promise single-threaded use, so this mutex is what makes "the record I
@@ -357,7 +365,7 @@ func (s *Session) frequencyInRange(hz uint64) error {
 	return nil
 }
 
-// preservationRead is rung 8 and the first half of rung 9: ONE read of the
+// preservationRead is rung 7 and the first half of rung 8: ONE read of the
 // slot about to be written, its answer's channel address checked before any
 // use of it (D20/T2).
 //
@@ -397,7 +405,7 @@ func (s *Session) preservationRead(ctx context.Context, want civ.ChannelAddress)
 	return rec, raw, true, nil
 }
 
-// buildRecord is the second half of rung 9 and the mapping of D18's table.
+// buildRecord is the second half of rung 8 and the mapping of D18's table.
 //
 // THE THREE READ-DEPENDENT REFUSALS LIVE HERE, and they are the one recorded
 // exception to "refusal before any wire traffic":
@@ -448,6 +456,13 @@ func (s *Session) buildRecord(slot string, bank spec.BankID, addr civ.ChannelAdd
 	if !ok {
 		return civ.MemoryRecord{}, fmt.Errorf("ic7300: WriteChannel %s: the record just read carries no SELECT value, which this profile's layout maps", slot)
 	}
+	// THE WHOLE BYTE, and that is only correct because E6's check ran two
+	// statements above. ③'s HIGH nibble is the split flag, and the compare
+	// above has already refused every record whose high nibble is not the
+	// template's zero — so by here `raw[0] != 0x00` can only be the LOW
+	// nibble, the SELECT group. Were the E6 rung ever moved or removed, this
+	// line would silently start refusing Split-ON scan edges with the wrong
+	// reason named, so the two must stay in this order.
 	if bank == spec.BankScan && raw[0] != 0x00 {
 		return civ.MemoryRecord{}, &driver.WriteRefusedError{
 			Slot:   slot,

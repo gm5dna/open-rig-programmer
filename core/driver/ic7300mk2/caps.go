@@ -183,8 +183,21 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 		// The CI-V ADDRESS HEX, not a CAT ID: CI-V has no ID string, and
 		// spec D3.2 fixes the address as this field's content. The 19 00
 		// token this driver observes at Open is APPENDED to the session's
-		// Identity.CATID ("94:<token>") and compared against nothing — the
-		// reply value is undocumented on every model in this tier.
+		// Identity.CATID ("b6:<token>", ic7300mk2.go's
+		// fmt.Sprintf("%02x:%s", p.RadioAddress(), token)) and compared
+		// against nothing — the reply value is undocumented on every model
+		// in this tier.
+		//
+		// THAT LINE READ "94:<token>" UNTIL THE STAGE-2 REVIEW: the sibling's
+		// address, copied verbatim from core/driver/ic7300/caps.go with the
+		// rest of the comment. Prose only — the code two lines below was
+		// always B6 and the session identity was always "b6:" — but it is
+		// exactly the cross-sibling borrowing both matrices' §4 forbid, in
+		// the package whose whole reason for existing (D2) is that the two
+		// documents never lend each other anything. Recorded rather than
+		// quietly corrected, because a comment carrying another radio's
+		// address is how a real value gets copied next.
+		//
 		// Matrix §3.4: CI-V Address (Default: B6h). The IC-7300 answers at
 		// 94h, which is why the two cannot confuse each other in the field.
 		CATID: "B6",

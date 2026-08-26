@@ -388,6 +388,21 @@
 //     LIFT: Stage W capture `ic7300-scan-edge-select-write` — set a channel
 //     into SEL1 from the panel, read the record, and record ③.
 //
+//   - `tag_display` GETS THE ZERO FieldSupport, AND THAT IS A RECORDED
+//     DEVIATION rather than an assumption — so it carries an erratum, not a
+//     lift. This model's matrix §2 row 8 grades the field read-`✓` on both
+//     banks, as a CHOICE rather than manual evidence. The record carries NO
+//     display flag, so a readable grading would declare a field whose every
+//     read is Unavailable — read-supported-with-no-readable-value, which is
+//     internally inconsistent — and the in-tree precedent for a flagless
+//     record is the ZERO grading (`core/driver/ftdx10/caps.go:194`,
+//     `core/driver/ftdx101/caps.go:225`). Ruling R13 and plan decision D5
+//     settle it, and the narrowing is recorded as **IC-7300 matrix
+//     Erratum 13**. The MK2 needs no such erratum: its own §2 row 8 already
+//     grades the field `— — — —`, and its rev-1 proposal is recorded
+//     WITHDRAWN. The two models agree; only this one had to move to get
+//     there, which is why only this one has an erratum.
+//
 //   - `ic7300-control-lines-at-open` — that CI-V works with RTS and DTR
 //     both deasserted, on a radio whose three USB keying items are at their
 //     printed factory OFF. See "Control lines at open" above.
