@@ -529,13 +529,11 @@ func (s *Session) rememberRaw(slot string, record []byte) {
 // transport.Engine.Close is.
 func (s *Session) Close() error { return s.eng.Close() }
 
-// ReadChannel and WriteChannel complete driver.Session, and their
-// choreography is the largest thing in this package: the read path's two
-// empty-slot recognisers and T2 address check (read.go), and the write
-// path's nine-rung refusal ladder (write.go).
+// WriteChannel completes driver.Session, and its choreography is the
+// largest thing in this package: a nine-rung refusal ladder (write.go).
 //
-// THEY ARE DECLARED HERE, IN THE COMMIT THAT CREATES THE Session TYPE,
-// FOR A COMPILATION REASON AND NO OTHER. driver.Driver.Open returns a
+// IT IS DECLARED HERE, IN THE COMMIT THAT CREATES THE Session TYPE, FOR A
+// COMPILATION REASON AND NO OTHER. driver.Driver.Open returns a
 // driver.Session, so the moment this file exists the type must satisfy
 // the whole interface — the same ordering constraint that moved
 // StopBits() out of the capabilities commit and into this one. Each body
@@ -550,10 +548,6 @@ func (s *Session) Close() error { return s.eng.Close() }
 // errNotImplementedYet is the placeholder refusal above. It exists in
 // exactly one commit and is removed by the two that follow it.
 var errNotImplementedYet = errors.New("ic9700: this session method is not implemented in this build")
-
-func (s *Session) ReadChannel(_ context.Context, _ string) (codeplug.Channel, error) {
-	return codeplug.Channel{}, errNotImplementedYet
-}
 
 func (s *Session) WriteChannel(_ context.Context, _ codeplug.Channel) (driver.WriteResult, error) {
 	return driver.WriteResult{Steps: []driver.WriteStep{}}, errNotImplementedYet

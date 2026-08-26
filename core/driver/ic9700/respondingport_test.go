@@ -82,6 +82,11 @@ type radioImage struct {
 	idData []byte
 	// silentID makes the radio ignore the `19 00` probe entirely.
 	silentID bool
+	// silentReads makes the radio ignore every `1A 00` read. It is NOT
+	// the same as an absent record: an absent record answers FA, which is
+	// a definitive "this channel is empty", whereas silence is the
+	// ambiguous case a read's timeout and quarantine exist for.
+	silentReads bool
 	// records maps an address to the RAW 111-byte record served for a
 	// read of it. An address ABSENT from the map answers FA — which is
 	// this radio's assumed empty-slot answer, and the same mechanism the
@@ -341,11 +346,29 @@ func (p *recordingPort) startFlooding(to byte) {
 // needs it AFTER a session is open — the fail-closed half of R9-SPLIT.
 func (p *recordingPort) startAddressedFlooding() {
 	p.mu.Lock()
+	// The radio goes SILENT as well as noisy. A flood alone would not
+	// reach a quarantine drain at all: an FA answer is a definitive
+	// result and the read would simply return an empty channel. What
+	// this test is about is a read that times out and whose quarantine
+	// drain then cannot find quiet.
 	p.img.silentID = true
+	p.img.silentReads = true
 	p.img.records = map[civ.ChannelAddress][]byte{}
 	p.img.dataArea = 0
 	p.mu.Unlock()
 	p.startFlooding(civ.ControllerAddressDefault)
+}
+
+// setDataArea overrides every read from now on to answer with a data area
+// of exactly n bytes.
+//
+// It is applied AFTER an open, deliberately: a PROBE answered at a length
+// this profile does not accept fails the open, which is a different test
+// from "a read of a malformed record aborts honestly".
+func (p *recordingPort) setDataArea(n int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.img.dataArea = n
 }
 
 func (p *recordingPort) stop() {
@@ -462,6 +485,9 @@ func (p *recordingPort) reply(frame []byte) []byte {
 		return answerFrame(from, []byte{0x19, 0x00}, data)
 
 	case cn == 0x1A && sc == 0x00 && len(frame) == 10:
+		if img.silentReads {
+			return nil
+		}
 		return p.readReply(img, armed, frame, from)
 
 	case cn == 0x1A && sc == 0x00 && len(frame) > 10:
