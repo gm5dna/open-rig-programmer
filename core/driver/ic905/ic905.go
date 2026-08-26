@@ -12,7 +12,6 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	civic905 "github.com/gm5dna/open-rig-programmer/core/civ/ic905"
-	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
@@ -715,10 +714,5 @@ func (s *Session) Close() error { return s.eng.Close() }
 // ReadChannel lives in read.go, alongside the slot namespaces and the
 // neutral mapping it is made of.
 
-// WriteChannel is the next task's and will live in write.go. Until it
-// lands this placeholder refuses honestly — a Session must satisfy
-// driver.Session for Open to return one at all, and a placeholder that
-// refuses is better than one that pretends.
-func (s *Session) WriteChannel(_ context.Context, ch codeplug.Channel) (driver.WriteResult, error) {
-	return driver.WriteResult{Steps: []driver.WriteStep{}}, fmt.Errorf("ic905: WriteChannel %s: not implemented yet", ch.Slot)
-}
+// WriteChannel lives in write.go, alongside the refusal ladder and the
+// one preservation read it is made of.
