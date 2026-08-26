@@ -15,7 +15,7 @@ process `docs/fixtures.md` mandates — no real callsign, no personal
 frequency list, no other operator-identifying data appears here.
 
 Sections up to and including "Consequences applied" record M5a (plus
-later annotations, each dated in its heading); the "M5b write-trial
+later annotations, each dated where it appears); the "M5b write-trial
 protocol" section and everything after it record M5b.
 
 **Code symbols named in this log are historical, not a current API

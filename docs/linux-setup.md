@@ -103,8 +103,8 @@ authoritative check, not the device node's number.
 **What has been verified.** On 23/08/2026 the rehearsal Debian
 packages built by `.github/workflows/release.yml` at the v1.1.0-rc.1
 tag were installed on clean Ubuntu 24.04.4 LTS desktop virtual
-machines — one arm64, one amd64, stock images with no development
-toolchain beyond an SSH server — and exercised there:
+machines — one arm64, one amd64, stock images carrying no development
+toolchain, with only an SSH server added — and exercised there:
 
 - `sudo apt install ./<the .deb>` succeeds on both architectures and
   installs every packaged path. On the arm64 VM the removal cycle was
