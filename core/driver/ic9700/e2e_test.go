@@ -124,18 +124,54 @@ func TestEndToEnd_ProbeFingerprint(t *testing.T) {
 		t.Error("no identity token was recorded")
 	}
 
-	// NOTHING BUT THE TWO READ GRAMMARS REACHED THE RADIO, checked on the
-	// fake's own transcript rather than on this package's recording port
-	// — a second witness to the claim that the tier writes nothing to a
-	// radio outside the consented memory-set path.
+	// OPEN PUT NOTHING BUT THE TWO READ GRAMMARS ON THE WIRE, checked on
+	// the fake's own transcript rather than on this package's recording
+	// port — a second witness, and an independently authored one.
+	//
+	// THIS AUDIT IS ABOUT Open AND SAYS SO. The wider claim — that the
+	// tier writes nothing to a radio outside the consented memory-set
+	// path — covers a whole session including its writes, and is proved
+	// by TestEndToEnd_TheWholeSessionSendsOnlyTheGrammarsItCanBuild
+	// below. Stating it here would have been prose wider than its scope.
+	assertOnlyTheBuildableGrammars(t, radio, 0)
+}
+
+// assertOnlyTheBuildableGrammars requires that every frame the fake
+// received is one of the THREE this tier can build, and that exactly
+// wantSets of them are memory sets.
+//
+// EVERY LENGTH IS EXACT, and that is what makes the audit an audit rather
+// than a command-number check:
+//
+//	 7 = FE FE A2 E0 19 00 FD                            the identity read
+//	10 = FE FE A2 E0 1A 00 <3 address bytes> FD          a memory read
+//	121 = the same, plus the 111-byte record             a memory set
+//
+// A `19 00` carrying data, a `1A 00` read with a record stapled to it, and
+// a set at any other width are all refused here. The clear form is
+// `1A 00 <3 address bytes> FF`, eleven bytes, and matches none of the
+// three — which is the structural half of "erase is unshipped".
+func assertOnlyTheBuildableGrammars(t *testing.T, radio *fakeic9700.Radio, wantSets int) {
+	t.Helper()
+	const (
+		identityRead = 7
+		memoryRead   = 10
+		memorySet    = 4 + 2 + civic9700.AddressBytes + civic9700.RecordLength + 1
+	)
+	sets := 0
 	for _, f := range radio.Transcript() {
-		cn, sc, _ := civ.FrameCommand(f)
+		cn, sc, ok := civ.FrameCommand(f)
 		switch {
-		case cn == 0x19 && sc == 0x00:
-		case cn == 0x1A && sc == 0x00 && len(f) == 10:
+		case ok && cn == 0x19 && sc == 0x00 && len(f) == identityRead:
+		case ok && cn == 0x1A && sc == 0x00 && len(f) == memoryRead:
+		case ok && cn == 0x1A && sc == 0x00 && len(f) == memorySet:
+			sets++
 		default:
-			t.Errorf("Open put % X on the wire", f)
+			t.Errorf("the session put % X on the wire — no builder in this tier names that frame", f)
 		}
+	}
+	if sets != wantSets {
+		t.Errorf("the radio received %d memory sets, want %d", sets, wantSets)
 	}
 }
 
@@ -446,4 +482,40 @@ func TestEndToEnd_EraseIsRefused(t *testing.T) {
 			t.Errorf("a clear frame reached the radio: % X", f)
 		}
 	}
+}
+
+func TestEndToEnd_TheWholeSessionSendsOnlyTheGrammarsItCanBuild(t *testing.T) {
+	// THE TIER-WIDE CLAIM, audited over a WHOLE SESSION rather than over
+	// its opening: probe, write, re-read. TestEndToEnd_ProbeFingerprint
+	// checks the same property over Open alone, which is a narrower thing
+	// than "the tier writes nothing to a radio outside the consented
+	// memory-set path" — and the erase test cannot close the gap either,
+	// because both of its write attempts are refused BEFORE the wire, so
+	// its transcript is an Open transcript too.
+	//
+	// This session actually writes. Exactly one memory set is expected,
+	// at exactly 121 bytes, and every other frame must be one of the two
+	// read grammars at their exact widths.
+	radio := fakeic9700.New(fakeic9700.WithSlot(1, 1, occupiedRecord(t)))
+	defer radio.Close()
+	sess := mustOpen(t, radio)
+
+	if _, err := sess.WriteChannel(context.Background(), fullyKnownChannelAt("144-002")); err != nil {
+		t.Fatalf("WriteChannel: %v", err)
+	}
+	back, err := sess.ReadChannel(context.Background(), "144-002")
+	if err != nil {
+		t.Fatalf("ReadChannel after write: %v", err)
+	}
+	if back.Data == nil {
+		t.Fatal("the slot read back empty after an acknowledged write")
+	}
+
+	// One set — the write's own — and nothing else that is not a read.
+	// The write path also performs its mandatory preservation read of the
+	// target slot before building anything (T5's single read), so the
+	// read count is not asserted: what matters is that no frame outside
+	// the three buildable grammars appeared, and that the session wrote
+	// ONCE.
+	assertOnlyTheBuildableGrammars(t, radio, 1)
 }
