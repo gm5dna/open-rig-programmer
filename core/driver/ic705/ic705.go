@@ -6,11 +6,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	civic705 "github.com/gm5dna/open-rig-programmer/core/civ/ic705"
-	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
@@ -467,6 +467,11 @@ type Session struct {
 	// occupied-surprise refusal asks a question no capability set can
 	// answer: "did the walk actually visit this slot?"
 	inventory map[string]bool
+	// opMu serialises WriteChannel, which is the one operation here made
+	// of TWO exchanges — the E6 preservation read and the memory set. A
+	// concurrent write landing between them would decide against one
+	// radio state and write against another.
+	opMu sync.Mutex
 	// mismatches counts T2's refusals. Atomic because a Session is safe
 	// for concurrent use and ReadChannel is where it is incremented.
 	mismatches atomic.Uint64
@@ -549,10 +554,3 @@ func (e *AnswerMismatchError) Error() string {
 
 // Unwrap lets errors.Is(err, ErrAnswerMismatch) match.
 func (e *AnswerMismatchError) Unwrap() error { return ErrAnswerMismatch }
-
-// WriteChannel is Task 11's; this placeholder exists for ReadChannel's
-// reason and is REPLACED by write.go. It refuses, which is also the only
-// safe thing an unimplemented write can do.
-func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver.WriteResult, error) {
-	return driver.WriteResult{Steps: []driver.WriteStep{}}, fmt.Errorf("ic705: WriteChannel is not implemented yet")
-}

@@ -49,6 +49,15 @@ type scriptedRadio struct {
 	// away mid-walk, deterministically and without a spinning test.
 	silentAfterReads int
 	memoryReads      int
+	// rejectSets makes every memory SET answer FA — the NG message the
+	// manual prints (PDF p.3, folio 2), which is what a radio refusing a
+	// write actually sends.
+	rejectSets bool
+	// ignoreSets makes every memory SET go unanswered while reads are
+	// still served: the write-timeout path, which a wholly silent radio
+	// cannot test because the write ladder's own preservation read would
+	// time out first.
+	ignoreSets bool
 
 	floodStop chan struct{}
 	floodWG   sync.WaitGroup
@@ -176,6 +185,20 @@ func (r *scriptedRadio) SlotState(a civ.ChannelAddress) ([]byte, bool) {
 	defer r.mu.Unlock()
 	rec, ok := r.records[a]
 	return append([]byte(nil), rec...), ok
+}
+
+// RejectSets makes every memory set answer FA instead of FB.
+func (r *scriptedRadio) RejectSets(on bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.rejectSets = on
+}
+
+// IgnoreSets makes memory sets go unanswered while reads still work.
+func (r *scriptedRadio) IgnoreSets(on bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.ignoreSets = on
 }
 
 // GoSilent stops the radio answering anything — the read-timeout path.
@@ -347,6 +370,12 @@ func (r *scriptedRadio) reply(frame []byte) []byte {
 			return nak()
 		}
 		rec := body[4:]
+		if r.ignoreSets {
+			return nil
+		}
+		if r.rejectSets {
+			return nak()
+		}
 		if len(rec) != 111 {
 			// A record at a length this radio does not use is refused —
 			// never accepted, never truncated.
