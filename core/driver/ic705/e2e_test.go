@@ -3,6 +3,7 @@
 package ic705_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -480,12 +481,37 @@ func TestFakeSession_ToneOffRoundTripsThroughTheFake(t *testing.T) {
 	if _, err := sess.WriteChannel(context.Background(), ch); err != nil {
 		t.Fatalf("a tone-OFF channel was not writable: %v", err)
 	}
+	// BYTE-IDENTICAL MEANS ALL 111 BYTES, and the claim is checked over
+	// all of them rather than over the six the preservation is about. The
+	// two tone spans at 11-16 are the point of the test; their copies in
+	// the duplicated TX block at 58-63 are where this fixture's own first
+	// draft went wrong, and a check that looked only at the first set
+	// would have passed that draft. The ONLY bytes exempted are the name
+	// field, which this write deliberately changed.
 	g, c := wireOf(t, "G01-001")
-	stored, _ := radio.SlotState(g, c)
-	for i := 11; i <= 16; i++ {
-		if stored[i] != 0x00 {
-			t.Errorf("record offset %d went out as %#02x, want 0x00 — byte-identical to what the radio held", i, stored[i])
+	stored, occupied := radio.SlotState(g, c)
+	if !occupied {
+		t.Fatal("the slot is no longer occupied after the write")
+	}
+	if len(stored) != len(record) {
+		t.Fatalf("the radio now holds %d bytes, want %d", len(stored), len(record))
+	}
+	const nameLo, nameHi = 95, 110
+	changed := 0
+	for i := range record {
+		if i >= nameLo && i <= nameHi {
+			changed++
+			continue
 		}
+		if stored[i] != record[i] {
+			t.Errorf("record offset %d went out as %#02x, want %#02x — byte-identical to what the radio held", i, stored[i], record[i])
+		}
+	}
+	if changed != nameHi-nameLo+1 {
+		t.Fatalf("exempted %d bytes, want the sixteen of the name field — the exemption must not silently widen", changed)
+	}
+	if got := strings.TrimRight(string(stored[nameLo:nameHi+1]), " "); got != "TONE OFF" {
+		t.Errorf("the name went out as %q, want \"TONE OFF\" — the one field this write meant to change", got)
 	}
 }
 
@@ -564,28 +590,55 @@ func TestFakeSession_WrongChannelAnswerIsCaught(t *testing.T) {
 	radio := fakeic705.New(fakeic705.WithFactoryImage(img))
 	sess := openFake(t, radio, ic705.Simulated)
 
-	before := sess.SessionInfo().AnswerMismatches
-	radio.AnswerNextReadWithAddress(0, 99) // display G01-100
-	ch, err := sess.ReadChannel(context.Background(), "G01-012")
-	if !errors.Is(err, ic705.ErrAnswerMismatch) {
-		t.Fatalf("ReadChannel returned (%+v, %v), want ErrAnswerMismatch", ch, err)
+	// THREE SHAPES OF MISMATCH, because a PARTIAL check passes a whole
+	// class of them. A driver comparing only the group would accept every
+	// same-group answer, and one comparing only the channel would accept
+	// every same-channel answer — so one fixture cannot prove the check is
+	// whole. Requested is wire group 0 channel 11 (display G01-012)
+	// throughout; the answers differ from it in the channel, in the group,
+	// and in both.
+	for _, tc := range []struct {
+		name           string
+		group, channel int
+	}{
+		{"same group, different channel", 0, 99},
+		{"different group, same channel", 6, 11},
+		{"different group and channel", 6, 12},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			before := sess.SessionInfo().AnswerMismatches
+			radio.AnswerNextReadWithAddress(tc.group, tc.channel)
+			ch, err := sess.ReadChannel(context.Background(), "G01-012")
+			if !errors.Is(err, ic705.ErrAnswerMismatch) {
+				t.Fatalf("ReadChannel returned (%+v, %v), want ErrAnswerMismatch", ch, err)
+			}
+			var mismatch *ic705.AnswerMismatchError
+			if !errors.As(err, &mismatch) {
+				t.Fatalf("%v is not an *ic705.AnswerMismatchError", err)
+			}
+			if mismatch.Requested.Group != 0 || mismatch.Requested.Channel != 11 {
+				t.Errorf("the error names requested %v, want wire group 0 channel 11", mismatch.Requested)
+			}
+			if mismatch.Answered.Group != tc.group || mismatch.Answered.Channel != tc.channel {
+				t.Errorf("the error names answered %v, want wire group %d channel %d", mismatch.Answered, tc.group, tc.channel)
+			}
+			if ch.Data != nil || ch.Slot != "" {
+				t.Errorf("a channel came back alongside the mismatch: %+v", ch)
+			}
+			if got := sess.SessionInfo().AnswerMismatches; got != before+1 {
+				t.Errorf("AnswerMismatches = %d, want %d", got, before+1)
+			}
+		})
 	}
-	var mismatch *ic705.AnswerMismatchError
-	if !errors.As(err, &mismatch) {
-		t.Fatalf("%v is not an *ic705.AnswerMismatchError", err)
+}
+
+// firstBytes renders the head of a record for a diagnostic, so a byte-level
+// failure names what it saw without printing 111 bytes twice.
+func firstBytes(rec []byte) []byte {
+	if len(rec) > 12 {
+		return rec[:12]
 	}
-	if mismatch.Requested.Group != 0 || mismatch.Requested.Channel != 11 {
-		t.Errorf("the error names requested %v, want wire group 0 channel 11", mismatch.Requested)
-	}
-	if mismatch.Answered.Group != 0 || mismatch.Answered.Channel != 99 {
-		t.Errorf("the error names answered %v, want wire group 0 channel 99", mismatch.Answered)
-	}
-	if ch.Data != nil || ch.Slot != "" {
-		t.Errorf("a channel came back alongside the mismatch: %+v", ch)
-	}
-	if got := sess.SessionInfo().AnswerMismatches; got != before+1 {
-		t.Errorf("AnswerMismatches = %d, want %d", got, before+1)
-	}
+	return rec
 }
 
 func TestFakeSession_OccupiedSurpriseAddIsRefused(t *testing.T) {
@@ -623,10 +676,18 @@ func TestFakeSession_OccupiedSurpriseAddIsRefused(t *testing.T) {
 	if len(res.Steps) != 0 || bounded.SetsSeen() != setsBefore {
 		t.Error("the refusal sent something")
 	}
+	// THE SEEDED RECORD IS STILL THERE, proven as two separate facts with
+	// two separate messages — the slot did not vanish, and its bytes did
+	// not change. The second is asserted POSITIVELY, against the record
+	// that was seeded: "it is not called OVERWRITE" would also pass if the
+	// refusal had replaced it with something else entirely.
 	g, c := wireOf(t, "G11-001")
 	stored, occupied := bounded.SlotState(g, c)
-	if !occupied || strings.TrimRight(string(stored[95:111]), " ") == "OVERWRITE" {
-		t.Error("the seeded record at G11-001 was overwritten")
+	if !occupied {
+		t.Fatal("the refused write emptied G11-001 — the slot the driver would not touch is gone")
+	}
+	if !bytes.Equal(stored, record) {
+		t.Errorf("G11-001 now holds % X…, want the seeded record % X… byte for byte", firstBytes(stored), firstBytes(record))
 	}
 
 	// THE REMEDY WORKS. With WithFullInventoryWalk() the same image
