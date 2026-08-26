@@ -5,9 +5,9 @@
   by a sed pass before this becomes the release body — so do not write
   that placeholder token in this comment, or it gets substituted here
   too and the sentence stops making sense. Keep this file in sync with
-  README.md's quick-start section and docs/hardware-notes.md /
-  docs/linux-setup.md / docs/menu-write-decision.md, which it cites
-  rather than restates.
+  README.md's "Install" and "Getting started" sections and
+  docs/hardware-notes.md / docs/linux-setup.md /
+  docs/menu-write-decision.md, which it cites rather than restates.
 
   SYNCED WITH THE PUBLISHED v1.0.0 RELEASE (09/08/2026): the v1.0.0
   Release body was authored from this template and this file was then
@@ -28,10 +28,11 @@
   SYNC 26/08/2026: the packaged binaries HAVE now been launch-tested.
   Rehearsal debs built by release.yml were installed on clean Ubuntu
   24.04.4 desktop VMs on both architectures (arm64 23/08/2026, amd64
-  the same day) — desktop entry, Demo workflow, version stamp checked
-  at runtime on each — so the evidence-status section no longer says
-  they are untested. No radio was attached: real-radio Linux evidence
-  is still pending, and that half of the bullet must keep saying so.
+  the same day) — desktop entry, Demo connection and version stamp on
+  each; the full Demo edit/Send workflow on arm64 — so the
+  evidence-status section no longer says they are untested. No radio
+  was attached: real-radio Linux evidence is still pending, and that
+  half of the bullet must keep saying so.
   The install-time dependency sentence in the Downloads section was
   also softened, because both GUI libraries were already present on
   the stock desktop image and the VMs never made apt fetch them.
@@ -186,11 +187,12 @@ What this release has **not** been exercised against:
   pull request, and launched under Xvfb on an amd64 CI runner to
   prove it starts; the release build packages it into the
   Debian packages above, whose contents CI then checks. The packaged
-  GUI and CLI have since been installed from the Debian packages onto
-  clean Ubuntu 24.04 desktop virtual machines on **both**
-  architectures and launched there — GUI started from its installed
-  desktop entry, connected to the built-in Demo radio, and the version
-  stamp read back from the running binaries on each. What none of that
+  GUI and CLI have since been installed from Debian packages this same
+  workflow built at the preceding rehearsal tag, onto clean Ubuntu
+  24.04 desktop virtual machines on **both** architectures, and
+  launched there — GUI started from its installed desktop entry,
+  connected to the built-in Demo radio, and the version stamp read
+  back from the running binaries on each. What none of that
   involved is a radio: **no real-radio session has been run on Linux**,
   so which serial node is the CAT port, and whether the packaged udev
   rule keeps ModemManager off it, are both unconfirmed.
