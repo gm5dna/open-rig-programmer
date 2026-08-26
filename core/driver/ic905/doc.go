@@ -138,6 +138,42 @@
 // their factory values, open the CI-V port and record whether the radio
 // keys.
 //
+// # The serial rates: a CHOICE over an ASSUMED default
+//
+// THIS DOCUMENT PRINTS NO RATE, ANYWHERE. PDF p.3 (folio 2)'s
+// "◇ Preparing" defers the address, the data communication speed and the
+// transceive function to the IC-905 Basic manual, and a sweep of every
+// command-table page finds no rate figure at all (matrix §1 rows 9–10,
+// §3.3).
+//
+// So the two capability fields are DIFFERENT KINDS OF CLAIM and are
+// graded separately:
+//
+//   - Bauds is a CHOICE — which rates this programme OFFERS in its UI.
+//     The list is the CI-V family's conventional set, not a statement
+//     about what an IC-905 accepts. Register: ic905.bauds. Lift: Stage R
+//     capture ic905-R-04 — a rate sweep on one IC-905: open at each
+//     offered rate in turn, send FE FE AC E0 19 00 FD at each, and record
+//     which rates return an address-matched reply.
+//   - DefaultBaud is ASSUMED, and it is the operational one: internal/wiring
+//     opens a real radio at exactly this rate. Register:
+//     ic905.default_baud — DISTINCT from ic905.bauds, and distinct from
+//     any AUTO setting, which this document does not mention either.
+//     Lift: Stage R capture ic905-R-03 — on an IC-905 whose CI-V menu is
+//     at factory defaults, open at the assumed default rate and record
+//     whether FE FE AC E0 19 00 FD is answered.
+//
+// Both must be non-empty whatever the evidence, because
+// spec.Capabilities.Validate requires DefaultBaud greater than zero and
+// present in Bauds — and because transport.OpenSerial treats a
+// non-positive rate as "unset" and silently substitutes its own default,
+// which is exactly the sort of quiet substitution a written-down value
+// prevents.
+//
+// The two entries live in the PROFILE's register (core/civ/ic905/doc.go),
+// not this package's five: they describe the radio's serial surface
+// rather than anything this driver's code decides.
+//
 // # The ASSUMED register — FIVE entries, and they are this DRIVER's
 //
 // core/civ/ic905/doc.go carries NINETEEN, which are the PROFILE's. These

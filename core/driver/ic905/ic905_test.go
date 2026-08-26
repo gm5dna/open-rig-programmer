@@ -6,6 +6,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -59,57 +62,86 @@ func openFor(t *testing.T, img radioImage) (*respondingPort, *Session) {
 // It is the first test in this file on purpose. Every read, write and
 // probe test below is driven from that fixture, so a fixture that had
 // drifted from the vectors would make every one of them assert the wrong
-// thing in agreement. The expected bytes are transcribed by hand from
-// core/civ/ic905/testdata/ic905-vectors.golden's two set vectors, with
-// the seven-byte envelope and the four address bytes removed (spec
-// Erratum 1's record-only convention).
+// thing in agreement.
+//
+// IT READS THE FROZEN FILE rather than a transcription of it. A
+// transcription can be byte-exact on the day it is written and still let
+// the artefact drift underneath it afterwards; only opening the file
+// makes the pin mechanical. core/civ/ic905's own tests read the same
+// file the same way, and its TestEvidenceFrozen holds the file itself
+// down by SHA-256 — so this test asks "does the fixture match the
+// evidence?" while that one asks "is the evidence still the evidence?",
+// and neither answers for the other.
 func TestRecordFixture_MatchesTheGoldenVectors(t *testing.T) {
-	// PARALLEL because this package's tests are wire-paced, not
-	// CPU-bound: transport.Engine applies a 20 ms settle after every
-	// exchange, so an Open spends seconds asleep and several can overlap
-	// at no cost. See TestOpen_FullWalkIsOptInAndReportsComplete for the
-	// one that makes it worth doing.
 	t.Parallel()
-	spaces := bytes.Repeat([]byte{0x20}, 24)
-	name := []byte("HIGHLAND BASE905")
-
-	// set-record-name-with-space-68, record bytes only: 64 of them.
-	want64 := concat(
-		[]byte{0x00},                                     // ⑤
-		[]byte{0x00, 0x00, 0x50, 0x44, 0x01},             // ⑥~⑩ 144.500000 MHz
-		[]byte{0x05, 0x01, 0x00, 0x00, 0x00},             // ⑪ ⑫ ⑬ ⑭ ⑮
-		[]byte{0x00, 0x08, 0x85, 0x00, 0x08, 0x85},       // ⑯~⑱, ⑲~㉑
-		[]byte{0x00, 0x00, 0x23, 0x00, 0x00, 0x00, 0x00}, // ㉒ ㉓㉔ ㉕ ㉖~㉘
-		spaces, name,
-	)
-	// set-record-name-with-space-69: the same record with a SIX-byte
-	// frequency at 10.25 GHz. 65 bytes.
-	want65 := concat(
-		[]byte{0x00},
-		[]byte{0x00, 0x00, 0x00, 0x50, 0x02, 0x01}, // 10 250.000000 MHz
-		[]byte{0x05, 0x01, 0x00, 0x00, 0x00},
-		[]byte{0x00, 0x08, 0x85, 0x00, 0x08, 0x85},
-		[]byte{0x00, 0x00, 0x23, 0x00, 0x00, 0x00, 0x00},
-		spaces, name,
-	)
+	vectors := loadFrozenVectors(t)
 
 	for _, tt := range []struct {
-		name string
-		got  []byte
-		want []byte
+		vector    string
+		freqHz    uint64
+		freqBytes int
+		record    int
 	}{
-		{"64-byte record", goldenRecord(144_500_000, 5).build(), want64},
-		{"65-byte record", goldenRecord(10_250_000_000, 6).build(), want65},
+		{"set-record-name-with-space-68", 144_500_000, 5, 64},
+		{"set-record-name-with-space-69", 10_250_000_000, 6, 65},
 	} {
-		t.Run(tt.name, func(t *testing.T) {
-			if len(tt.got) != len(tt.want) {
-				t.Fatalf("fixture is %d bytes, the golden vector's record is %d", len(tt.got), len(tt.want))
+		t.Run(tt.vector, func(t *testing.T) {
+			frame, ok := vectors[tt.vector]
+			if !ok {
+				t.Fatalf("the frozen vector file has no %q", tt.vector)
 			}
-			if !bytes.Equal(tt.got, tt.want) {
-				t.Fatalf("the fixture does not reproduce the golden vector:\n  fixture % X\n  golden  % X", tt.got, tt.want)
+			// The record is the frame less its seven-byte envelope's
+			// first six bytes, the four address bytes and the FD
+			// terminator — spec Erratum 1's record-only convention.
+			if len(frame) != 6+4+tt.record+1 {
+				t.Fatalf("%s is %d bytes, want %d (6 + 4 address + %d record + FD)", tt.vector, len(frame), 6+4+tt.record+1, tt.record)
+			}
+			want := frame[10 : len(frame)-1]
+			got := goldenRecord(tt.freqHz, tt.freqBytes).build()
+			if len(got) != len(want) {
+				t.Fatalf("the fixture is %d bytes, the frozen vector's record is %d", len(got), len(want))
+			}
+			if !bytes.Equal(got, want) {
+				t.Fatalf("the fixture does not reproduce the frozen vector:\n  fixture % X\n  frozen  % X", got, want)
 			}
 		})
 	}
+}
+
+// frozenVectorsPath is core/civ/ic905's quarantined vector file, reached
+// from THIS package's directory (go test's working directory).
+//
+// READ, NEVER WRITTEN, and never copied into this package: one owner, one
+// file. Stage 1 froze it by SHA-256 and the whole tier's rule is that a
+// mismatch is a STOP for arbitration against the PDF, never an edit to
+// make a test pass.
+const frozenVectorsPath = "../../civ/ic905/testdata/ic905-vectors.golden"
+
+// loadFrozenVectors parses the frozen name<TAB>hex-frame file, in the
+// shape core/civ/ic905's own tests parse it.
+func loadFrozenVectors(t *testing.T) map[string][]byte {
+	t.Helper()
+	data, err := os.ReadFile(frozenVectorsPath)
+	if err != nil {
+		t.Fatalf("reading the frozen vectors: %v", err)
+	}
+	out := make(map[string][]byte)
+	for i, line := range strings.Split(strings.TrimSuffix(string(data), "\n"), "\n") {
+		name, hexBytes, ok := strings.Cut(line, "\t")
+		if !ok {
+			t.Fatalf("%s line %d: no tab separator in %q", frozenVectorsPath, i+1, line)
+		}
+		var frame []byte
+		for _, tok := range strings.Split(hexBytes, " ") {
+			b, err := strconv.ParseUint(tok, 16, 8)
+			if err != nil || len(tok) != 2 {
+				t.Fatalf("%s line %d: %q is not a two-digit hex byte", frozenVectorsPath, i+1, tok)
+			}
+			frame = append(frame, byte(b))
+		}
+		out[name] = frame
+	}
+	return out
 }
 
 func concat(parts ...[]byte) []byte {

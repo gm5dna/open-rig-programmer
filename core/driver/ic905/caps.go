@@ -354,22 +354,14 @@ func baseCapabilities(rw spec.FieldSupport) spec.Capabilities {
 		// every channel this driver reads with a tone would fail
 		// validation. Both golden vectors carry 88.5 Hz.
 		CTCSSToneRange: &spec.ToneRange{MinDeciHz: 1, MaxDeciHz: 2999, StepDeciHz: 1},
-		// §1 row 9 — a CHOICE of which rates the UI offers, over an
-		// ASSUMED radio-facing claim: THIS DOCUMENT PRINTS NO RATE,
-		// ANYWHERE. PDF p.3 (folio 2), "◇ Preparing", defers address,
-		// speed and transceive to the IC-905 Basic manual, and a sweep of
-		// every command-table page finds no rate figure. Register:
-		// ic905.bauds. Lift: ic905-R-04.
+		// §1 rows 9-10 — a CHOICE of which rates the UI offers, over an
+		// ASSUMED default. THIS DOCUMENT PRINTS NO RATE, ANYWHERE.
 		//
-		// spec.Validate requires DefaultBaud > 0 and present in Bauds, so
-		// both must be non-empty; the list is the CI-V family's
-		// conventional set.
-		Bauds: []int{4800, 9600, 19200, 38400, 115200},
-		// §1 row 10 — ASSUMED, and a SEPARATE entry from the list above:
-		// the factory default is not in this document at all. It matters
-		// operationally because internal/wiring opens a real radio at
-		// exactly this rate. Register: ic905.default_baud. Lift:
-		// ic905-R-03.
+		// The full argument, both register entries and both lifts are in
+		// this package's doc.go, "The serial rates: a CHOICE over an
+		// ASSUMED default", where the plan puts them; they are cited here
+		// rather than restated so the two cannot drift.
+		Bauds:       []int{4800, 9600, 19200, 38400, 115200},
 		DefaultBaud: 19200,
 		// §1 rows 11-12 — the VALUES are MANUAL-EVIDENCED (PDF p.20,
 		// folio 19, "• Band stacking register", table "①: Frequency band

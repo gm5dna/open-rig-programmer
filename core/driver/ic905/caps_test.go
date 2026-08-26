@@ -4,6 +4,9 @@ package ic905
 
 import (
 	"context"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"reflect"
 	"slices"
 	"strings"
@@ -511,5 +514,122 @@ func TestDriver_ReportsOneStopBit(t *testing.T) {
 	}
 	if transport.DefaultStopBits == 1 {
 		t.Error("transport.DefaultStopBits is 1, so this reporter no longer changes anything — the test's own premise has moved and the register entry needs re-reading")
+	}
+}
+
+// TestFieldGrid_TheZerosAreWRITTEN_DOWN.
+//
+// spec.Capabilities.FieldSupport returns b.Fields[f], and a Go map yields
+// the zero value for an ABSENT key — so TestFieldGrid_MatchesTheMatrix
+// cannot tell a deliberate `spec.FieldErase: {}` from a field somebody
+// forgot. Deleting all eight explicit zeros from caps.go would leave that
+// test green.
+//
+// "A field left out of the map is indistinguishable from one deliberately
+// zeroed; only a written-down zero is legible as a decision" is matrix §2's
+// own preamble and caps.go's own stated rationale, so it is worth a test
+// rather than a comment. This one looks in the MAP ITSELF, where the
+// difference is visible.
+func TestFieldGrid_TheZerosAreWrittenDown(t *testing.T) {
+	t.Parallel()
+	for _, prof := range []struct {
+		name string
+		caps spec.Capabilities
+	}{
+		{"Unverified", capabilitiesUnverified()},
+		{"Simulated", capabilitiesSimulated()},
+	} {
+		for _, bank := range []spec.BankID{spec.BankMemory, spec.BankCall} {
+			b, ok := prof.caps.Bank(bank)
+			if !ok {
+				t.Fatalf("%s: no bank %s", prof.name, bank)
+			}
+			if len(b.Fields) != len(fieldGrid) {
+				t.Errorf("%s/%s lists %d fields, want all %d — every spec.Field this project models appears explicitly, zeros included", prof.name, bank, len(b.Fields), len(fieldGrid))
+			}
+			for _, row := range fieldGrid {
+				fs, present := b.Fields[row.field]
+				if !present {
+					t.Errorf("%s/%s has no entry for %s — an ABSENT key reads identically to a written-down zero, and only a written-down zero is legible as a decision (matrix §2 %s)", prof.name, bank, row.field, row.row)
+					continue
+				}
+				if !row.expressed && fs != (spec.FieldSupport{}) {
+					t.Errorf("%s/%s field %s = %+v, want the zero FieldSupport (matrix §2 %s)", prof.name, bank, row.field, fs, row.row)
+				}
+			}
+		}
+	}
+}
+
+// TestFieldGrid_GradesEverySpecFieldThereIs is the tripwire for a field
+// added by a LATER WAVE.
+//
+// core/spec has no enumeration of its Field constants — nothing to range
+// over — so this parses the declarations out of core/spec/field.go the
+// way internal/guards parses the tree, and requires every one of them to
+// appear in fieldGrid. Without it a twenty-first spec.Field would be
+// silently ungraded by this driver: absent from both banks' maps, absent
+// from the grid, and reported Unsupported by a lookup that cannot tell
+// "decided against" from "never considered".
+//
+// It is the counterpart to TestCapabilities_EveryFieldExplicit, which
+// pins spec.Capabilities' 22 STRUCT fields for the same reason.
+func TestFieldGrid_GradesEverySpecFieldThereIs(t *testing.T) {
+	t.Parallel()
+	const fieldSourcePath = "../../spec/field.go"
+
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, fieldSourcePath, nil, 0)
+	if err != nil {
+		t.Fatalf("parsing %s: %v", fieldSourcePath, err)
+	}
+
+	declared := map[string]bool{}
+	for _, decl := range file.Decls {
+		gen, ok := decl.(*ast.GenDecl)
+		if !ok || gen.Tok != token.CONST {
+			continue
+		}
+		for _, spc := range gen.Specs {
+			vs, ok := spc.(*ast.ValueSpec)
+			if !ok {
+				continue
+			}
+			// Only constants whose declared type is Field itself; a
+			// const of any other type in this file is not a member of
+			// the vocabulary this driver must grade.
+			ident, ok := vs.Type.(*ast.Ident)
+			if !ok || ident.Name != "Field" {
+				continue
+			}
+			for _, v := range vs.Values {
+				lit, ok := v.(*ast.BasicLit)
+				if !ok || lit.Kind != token.STRING {
+					continue
+				}
+				declared[strings.Trim(lit.Value, `"`)] = true
+			}
+		}
+	}
+	if len(declared) == 0 {
+		t.Fatalf("parsed no Field constants out of %s — this guard would pass vacuously", fieldSourcePath)
+	}
+
+	graded := map[string]bool{}
+	for _, row := range fieldGrid {
+		graded[string(row.field)] = true
+	}
+	for name := range declared {
+		if !graded[name] {
+			t.Errorf("core/spec declares Field %q and this driver's grid does not grade it — a field added by a later wave must be DECIDED about, not inherited as an absent key", name)
+		}
+	}
+	for name := range graded {
+		if !declared[name] {
+			t.Errorf("this driver's grid grades %q, which core/spec no longer declares", name)
+		}
+	}
+	if len(declared) != len(fieldGrid) {
+		t.Errorf("core/spec declares %d Field constants and the grid has %d rows", len(declared), len(fieldGrid))
 	}
 }
