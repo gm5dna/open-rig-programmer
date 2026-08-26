@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync/atomic"
 
@@ -32,6 +33,31 @@ func WithTransportLogger(l transport.Logger) Option {
 	return func(d *ic905Driver) {
 		if l != nil {
 			d.transportLogger = l
+		}
+	}
+}
+
+// SiblingLengths maps a record length to the model that accepts it: the
+// seam through which a Wave-4 tier check can teach this driver to
+// ATTRIBUTE a foreign record length to the radio that produced it.
+//
+// EMPTY IN WAVE 3, and TestProbe_TheSiblingTableIsEmptyInWaveThree pins
+// it so. This worktree does not know any other model's accepted set —
+// cross-model record-length distinctness is a tier-level check, and this
+// driver claims none — so with no table EVERY unrecognised length takes
+// the unattributed branch, which is the honest one for a driver that
+// cannot name what it found.
+type SiblingLengths map[int]string
+
+// WithSiblingRecordLengths supplies the table above. Wave 4 populates it
+// from the registry in the same commit that registers the tier's models
+// and runs the distinctness check; until then the branch exists, is
+// reachable, and is proven by test with a synthetic table.
+func WithSiblingRecordLengths(l SiblingLengths) Option {
+	return func(d *ic905Driver) {
+		d.siblingLengths = make(SiblingLengths, len(l))
+		for n, model := range l {
+			d.siblingLengths[n] = model
 		}
 	}
 }
@@ -64,6 +90,9 @@ type ic905Driver struct {
 	// writes — set only by WithConsentedUnverifiedWrites, read only by
 	// sessionCapabilities. FALSE is the zero value and the default.
 	consentUnverifiedWrites bool
+	// siblingLengths is the Wave-4 attribution table — see
+	// SiblingLengths. Nil is the Wave-3 default.
+	siblingLengths SiblingLengths
 }
 
 // Model implements driver.Driver: the registry key and display name,
@@ -261,11 +290,221 @@ func (d *ic905Driver) open(ctx context.Context, eng *transport.Engine, profile c
 		return nil, fmt.Errorf("ic905: Open: 19 00 identity probe: %w", err)
 	}
 
+	if err := s.fingerprint(ctx, d.siblingLengths); err != nil {
+		return nil, err
+	}
+
 	catID := identityCATID(token)
 	id.CATID = catID
 	s.id = id
 	s.caps = d.sessionCapabilities(nil, catID)
 	return s, nil
+}
+
+// The probe's bounded record-length search, and its bound.
+//
+// BOUNDED SO AN EMPTY RADIO'S OPEN CANNOT TAKE TEN THOUSAND READS. The
+// addressable space is 100 × 100, and a search that walked it would spend
+// minutes on a radio with nothing in it — before this driver had even
+// decided the radio was an IC-905. Sixteen channels of group 0 is enough
+// to find the first channel of any radio somebody has actually used, and
+// the twelve CALL slots are added because they are the twelve addresses
+// this document says a radio always has.
+//
+// The FULL inventory walk is a DIFFERENT question and is discovery's
+// (read.go): this search stops at the first record it sees, because one
+// record is all a fingerprint needs.
+const (
+	probeSlotsInGroupZero = 16
+	callSlotsProbed       = civic905.CallChannels
+	callWireGroup         = civic905.CallGroup
+)
+
+// fingerprint is the probe's second half (spec D3.2): read memory
+// channels until one answers with a record, and decide what its LENGTH
+// says about which radio this is.
+//
+// THE ACCEPTED SET IS THE FINGERPRINT, and this model's set has two
+// members — 64 and 65 — because its frequency field is documented at two
+// widths. Either confirms; the observed one is recorded for diagnostics.
+//
+// The three other outcomes:
+//
+//   - A length in the SIBLING TABLE is a wrong radio WITH provisional
+//     attribution. The word "provisional" is this driver's own, added by
+//     the wrapper below, because driver.WrongRadioError's two rendered
+//     formats are fixed in core/driver and the ID-only one is
+//     baseline-pinned.
+//   - Any OTHER length is a wrong radio WITHOUT attribution: both model
+//     fields empty, which is the honest value for a driver that cannot
+//     name what it found.
+//   - ALL FA is an EMPTY RADIO, not a wrong one. The session opens on
+//     ADDRESS EVIDENCE ALONE with Fingerprinted false, and that flag is
+//     what stops an unfingerprinted open being mistaken for a confirmed
+//     one. That FA means "empty" is ASSUMED: D5 entry 2(a), lift
+//     ic905-R-14.
+func (s *Session) fingerprint(ctx context.Context, siblings SiblingLengths) error {
+	for _, addr := range probeCandidates() {
+		record, present, err := s.recordAt(ctx, addr)
+		if err != nil {
+			var rle *civ.RecordLengthError
+			if errors.As(err, &rle) {
+				return s.wrongRecordLength(rle, siblings)
+			}
+			return fmt.Errorf("ic905: Open: record-length fingerprint: %w", err)
+		}
+		if !present {
+			continue
+		}
+		s.fingerprinted, s.observedLen = true, len(record)
+		return nil
+	}
+	// Every probed slot answered FA. Nothing is wrong; there is simply
+	// nothing stored.
+	return nil
+}
+
+// probeCandidates is the bounded search's address list, in probe order.
+func probeCandidates() []civ.ChannelAddress {
+	addrs := make([]civ.ChannelAddress, 0, probeSlotsInGroupZero+callSlotsProbed)
+	for ch := 0; ch < probeSlotsInGroupZero; ch++ {
+		addrs = append(addrs, civ.ChannelAddress{Group: 0, Channel: ch})
+	}
+	for ch := 0; ch < callSlotsProbed; ch++ {
+		addrs = append(addrs, civ.ChannelAddress{Group: callWireGroup, Channel: ch})
+	}
+	return addrs
+}
+
+// wrongRecordLength turns an observed, undeclared record length into the
+// refusal spec D3.2 calls for.
+//
+// THE ATTRIBUTION IS PROVISIONAL AND SAYS SO, IN THIS DRIVER'S OWN WORDS.
+// driver.WrongRadioError.Error() has two fixed formats and the ID-only
+// one is baseline-pinned, so neither may be edited to carry the
+// qualification; the wrapper is where it goes, and the test asserts both
+// the wrapped chain and the word.
+//
+// Want and Got carry the LENGTHS rather than CAT IDs, because on this
+// tier the accepted record-length set IS the identity evidence — there is
+// no four-character ID to compare (spec D3.2). They are spelled "record
+// N" so the rendered "CAT ID" wording cannot be read as a number this
+// radio ever printed.
+func (s *Session) wrongRecordLength(rle *civ.RecordLengthError, siblings SiblingLengths) error {
+	want := make([]string, 0, len(rle.Want))
+	for _, n := range rle.Want {
+		want = append(want, strconv.Itoa(n))
+	}
+	wre := &driver.WrongRadioError{
+		Want: "record " + strings.Join(want, "/"),
+		Got:  "record " + strconv.Itoa(rle.Got),
+	}
+	model, known := siblings[rle.Got]
+	if !known {
+		// Branch (b): no attribution. BOTH model fields stay empty, so
+		// Error() renders its ID-only text and cmd/rigprog's probe
+		// formatter — which keys on GotModel alone — agrees with it.
+		return fmt.Errorf("ic905: Open: record-length fingerprint: %w", wre)
+	}
+	// Branch (a): the length belongs to a model the caller taught this
+	// driver about. BOTH fields are populated, because Error() renders
+	// its named form only when both are.
+	wre.WantModel = civic905.Model
+	wre.GotModel = model
+	return fmt.Errorf("ic905: Open: record-length fingerprint: %w — attribution is PROVISIONAL: the record lengths this tier compares are themselves ASSUMED derivations, never captured from a radio", wre)
+}
+
+// memoryReadSpec is the transport spec for a 1A 00 memory read, assembled
+// from E1's helper over the CODEC's own memory-answer matcher. One retry,
+// for the reason idSpec gives: a read is idempotent, and a single
+// swallowed reply should not fail an operation.
+//
+// THE MATCHER IS ENVELOPE-ONLY BY DESIGN, and recordAt is what closes the
+// gap — see ruling T2 there.
+func (s *Session) memoryReadSpec() transport.CommandSpec {
+	return civ.CIVReadSpec(s.profile.MemoryAnswerMatcher(), 1)
+}
+
+// ErrAnswerMismatch is the sentinel a caller should compare against (via
+// errors.Is) when a memory answer's decoded channel address is not the
+// address that was requested.
+//
+// IT EXISTS BECAUSE THE CODEC'S MATCHER DELIBERATELY DOES NOT CHECK IT
+// (ruling T2; civ.MemoryAnswerMatcher's own doc comment): the matcher
+// checks to/from/cn/sc and NOT the requested channel, so an answer for
+// group 5 channel 7 satisfies the matcher for a read of group 5 channel
+// 6. civ decodes the address and hands it back; comparing it is the
+// driver's job, and storing a channel under the wrong slot would corrupt
+// a codeplug silently.
+var ErrAnswerMismatch = errors.New("ic905: the memory answer names a different channel than was requested")
+
+// AnswerMismatchError reports the requested and the answered address. It
+// is this PACKAGE's own typed error in this package's own namespace: the
+// other drivers have same-shaped ones and none imports another, because a
+// caller distinguishing which radio's read went wrong needs distinct
+// types.
+type AnswerMismatchError struct {
+	// Requested is the address the read asked for.
+	Requested civ.ChannelAddress
+	// Answered is the address the reply actually decoded to.
+	Answered civ.ChannelAddress
+}
+
+// Error implements the error interface.
+func (e *AnswerMismatchError) Error() string {
+	return fmt.Sprintf("ic905: requested channel %s but the answer names %s — refusing to map a reply onto the wrong channel", e.Requested, e.Answered)
+}
+
+// Unwrap lets errors.Is(err, ErrAnswerMismatch) match.
+func (e *AnswerMismatchError) Unwrap() error { return ErrAnswerMismatch }
+
+// recordAt performs ONE 1A 00 read of addr and returns its RAW record
+// bytes, undecoded.
+//
+// IT IS THE ONE PLACE A MEMORY RECORD ENTERS THIS DRIVER, and that is
+// what makes three separate guarantees hold everywhere rather than
+// per-caller:
+//
+//   - THE LENGTH FINGERPRINT IS CONTINUOUS. civ.MemoryAnswerRecord checks
+//     the record's length against the profile's accepted set on EVERY
+//     call, so a wrong-model session cannot be confirmed once and then
+//     trusted; a record at an undeclared length comes back as
+//     *civ.RecordLengthError however late it arrives.
+//   - THE ANSWER'S ADDRESS IS CHECKED BEFORE ANY USE (ruling T2), because
+//     the codec's matcher is envelope-only. The check is here, ahead of
+//     empty recognition, field decoding, the E6 template comparison and
+//     any write merge.
+//   - AN FA IS AN EMPTY CHANNEL, NOT AN ERROR, and the branch keys on
+//     errors.Is(err, transport.ErrRejected) — NEVER on "receiving an FA
+//     frame" (ruling T4). Engine.Do CONSUMES the FA and returns
+//     ErrRejected with NO frame, so a driver that expected a frame back
+//     and then asked civ.IsRejection about it could never fire at all.
+//     civ.IsRejection stays the framing's internal concern.
+//
+// present is false for the FA case. The returned slice aliases nothing.
+func (s *Session) recordAt(ctx context.Context, addr civ.ChannelAddress) (record []byte, present bool, err error) {
+	cmd, err := s.profile.BuildMemoryRead(addr)
+	if err != nil {
+		return nil, false, fmt.Errorf("ic905: read %s: %w", addr, err)
+	}
+	frame, err := s.eng.Do(ctx, cmd, s.memoryReadSpec())
+	if errors.Is(err, transport.ErrRejected) {
+		// The ASSUMED empty-channel answer: D5 entry 2(a), lift
+		// ic905-R-14.
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, fmt.Errorf("ic905: read %s: %w", addr, err)
+	}
+	got, rec, err := s.profile.MemoryAnswerRecord(frame)
+	if err != nil {
+		return nil, false, err
+	}
+	if got != addr {
+		s.answerMismatches.Add(1)
+		return nil, false, &AnswerMismatchError{Requested: addr, Answered: got}
+	}
+	return rec, true, nil
 }
 
 // identityCATID joins this radio's address with the observed 19 00 token
