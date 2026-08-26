@@ -291,10 +291,42 @@ func (s *Session) validateKnownValues(slot string, data codeplug.ChannelData) er
 			"a memory set always carries the mode, and this channel names none")
 	}
 
-	if data.FreqHz < s.caps.MinFreqHz || data.FreqHz > s.caps.MaxFreqHz {
-		return refuse(slot, []spec.Field{spec.FieldFrequency},
-			"frequency %d Hz is outside this radio's %d..%d Hz band plan", data.FreqHz, s.caps.MinFreqHz, s.caps.MaxFreqHz)
+	// BOTH FREQUENCIES, AND THE SYMMETRY IS THE POINT. codeplug's
+	// FreqField.Valid takes no capabilities — the seam offers no domain
+	// check to call — so if this driver does not make the comparison
+	// nothing does: five packed-BCD bytes hold ten digits, so the codec
+	// accepts any frequency it is handed and the gate re-encodes it
+	// happily. Checking the RECEIVE frequency and not the TRANSMIT one
+	// was an asymmetry this driver created for itself, and its
+	// consequence was a 2 GHz transmit frequency reaching the wire from a
+	// driver whose own capabilities declare 144–1300 MHz. Register entry
+	// `ic9700-storable-frequency-bounds` (lift R19) is about exactly
+	// these bounds.
+	//
+	// FreqHz is a plain uint64 rather than a tri-state field, so it is
+	// always a request and is always checked; TxFreqHz is checked when
+	// Known, because Unknown and Unavailable mean "preserve whatever the
+	// radio has".
+	if err := s.frequencyInBand(slot, spec.FieldFrequency, data.FreqHz); err != nil {
+		return err
 	}
+	if data.TxFreqHz.State == codeplug.Known {
+		if err := s.frequencyInBand(slot, spec.FieldTxFrequency, data.TxFreqHz.Value); err != nil {
+			return err
+		}
+	}
+
+	// OffsetHz IS NOT CHECKED HERE, and that is recorded rather than
+	// overlooked. An offset is not a band-plan frequency, so
+	// MinFreqHz/MaxFreqHz would refuse every legitimate value, and this
+	// radio's capabilities declare no offset bound of their own to check
+	// against. An absurd offset is refused by the CODEC instead —
+	// civ.encodeRecord reports "offset is 999999900, which does not fit
+	// its 3-byte field" — before any frame is built, so nothing reaches
+	// the wire. The cost is only that the caller receives a plain error
+	// rather than a *driver.WriteRefusedError and so cannot classify it
+	// as a refusal; inventing a bound here to change that would state a
+	// claim about the radio no document makes.
 
 	if len(data.Tag) > s.caps.TagLen {
 		return refuse(slot, []spec.Field{spec.FieldTag},
@@ -604,6 +636,20 @@ func dataModeWire(on bool) string {
 		return "ON"
 	}
 	return "OFF"
+}
+
+// frequencyInBand refuses a frequency outside this radio's declared band
+// plan, naming the field the caller supplied it in.
+//
+// The bounds are the BAND TABLE's edges (matrix §1 #11/#12) rather than
+// the frequency field's arithmetic capacity: what the radio will STORE is
+// the narrower claim, and it is the one a caller needs.
+func (s *Session) frequencyInBand(slot string, field spec.Field, hz uint64) error {
+	if hz >= s.caps.MinFreqHz && hz <= s.caps.MaxFreqHz {
+		return nil
+	}
+	return refuse(slot, []spec.Field{field},
+		"%s %d Hz is outside this radio's %d..%d Hz band plan", field, hz, s.caps.MinFreqHz, s.caps.MaxFreqHz)
 }
 
 // contains reports whether list holds v.

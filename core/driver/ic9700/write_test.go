@@ -455,19 +455,80 @@ func TestWriteChannelRefusesAStoredRPSChannel(t *testing.T) {
 }
 
 func TestWriteChannelRefusesAnIncomingRPSBeforeAnyWireTraffic(t *testing.T) {
-	// The LOCAL half: a Known Duplex of "RPS" is not in
-	// caps.DuplexOptions, so StringField.Valid refuses it — over a stored
-	// OFF slot, and before the read.
-	sess, port := consentedSession(t, withTemplateStateAt("144-001"))
-	_, err := sess.WriteChannel(context.Background(),
-		channelWith("144-001", withModeAndDuplex(t, "DD", "RPS")))
-	var refused *driver.WriteRefusedError
-	if !errors.As(err, &refused) {
-		t.Fatalf("err = %v, want *driver.WriteRefusedError", err)
+	// THE LOCAL HALF of OQ-6, and the rung REV 3 added to close Codex
+	// re-review finding 5: a Known Duplex of "RPS" is not in
+	// caps.DuplexOptions, so StringField.Valid refuses it — before the
+	// read, whatever the slot and whatever the mode.
+	//
+	// THE FIXTURE HAS TO BE BAND 3, and that is the whole finding. This
+	// test's original fixture wrote mode DD to 144-001, where the
+	// CROSS-FIELD rung has its own reason to refuse — "mode DD can be
+	// selected only in the 1200 MHz band". Rung 3 does run first, so the
+	// duplex refusal was the one observed; but with rung 3's duplex check
+	// DELETED the cross-field rung caught the very same channel and
+	// produced the very same *driver.WriteRefusedError, so an assertion
+	// that "some refusal occurred before any wire traffic" passed either
+	// way. The rung REV 3 added to close Codex re-review finding 5 was
+	// deletable with the whole suite green.
+	//
+	// At 1200-001 with mode DD every cross-field constraint is satisfied
+	// — DD is in band 3, RPS is permitted WITH DD, and no DUP± is present
+	// — so the duplex vocabulary is the ONLY thing left that can refuse,
+	// and deleting it puts an RPS record on the wire.
+	//
+	// The companion case pins the band constraint beside it, with a
+	// duplex the vocabulary CAN name so that rung 3 has nothing to say
+	// and the two refusals stay distinguishable by the field they name.
+	for _, tc := range []struct {
+		name, slot string
+		freqHz     uint64
+		duplex     string
+		wantField  spec.Field
+		wantText   string
+	}{
+		{
+			name: "RPS in band 3, where only the duplex vocabulary can refuse",
+			slot: "1200-001", freqHz: 1_240_000_000, duplex: "RPS",
+			wantField: spec.FieldDuplex, wantText: "RPS",
+		},
+		{
+			name: "a nameable duplex in band 1, where the DD band constraint refuses",
+			slot: "144-001", freqHz: 145_500_000, duplex: "DUP+",
+			wantField: spec.FieldMode, wantText: "DD",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sess, port := consentedSession(t, withTemplateStateAt(tc.slot))
+			data := withModeAndDuplex(t, "DD", tc.duplex)
+			data.FreqHz = tc.freqHz
+			_, err := sess.WriteChannel(context.Background(), channelWith(tc.slot, data))
+
+			var refused *driver.WriteRefusedError
+			if !errors.As(err, &refused) {
+				t.Fatalf("err = %v, want *driver.WriteRefusedError", err)
+			}
+			if !strings.Contains(refused.Error(), tc.wantText) {
+				t.Errorf("refusal %q does not name %q", refused.Error(), tc.wantText)
+			}
+			if !refusalNames(refused, tc.wantField) {
+				t.Errorf("refusal names fields %v, want %s among them", refused.Fields, tc.wantField)
+			}
+			if port.countReads() != 0 || port.countSets() != 0 {
+				t.Errorf("a locally decidable refusal sent wire traffic: %d reads, %d sets",
+					port.countReads(), port.countSets())
+			}
+		})
 	}
-	if port.countReads() != 0 || port.countSets() != 0 {
-		t.Error("a locally decidable refusal sent wire traffic (T5)")
+}
+
+// refusalNames reports whether a refusal names field among its Fields.
+func refusalNames(refused *driver.WriteRefusedError, field spec.Field) bool {
+	for _, f := range refused.Fields {
+		if f == field {
+			return true
+		}
 	}
+	return false
 }
 
 func TestWriteChannelRefusesOutOfDomainToneAndDTCSValues(t *testing.T) {
@@ -743,4 +804,75 @@ func TestAnAnswerMismatchDuringTheWritesReadAbortsTheWrite(t *testing.T) {
 	if port.countSets() != 0 {
 		t.Error("the driver sent a set frame after a mismatched read")
 	}
+}
+
+func TestWriteChannelRefusesAnOutOfBandFrequencyInEitherDirection(t *testing.T) {
+	// THE ASYMMETRY THIS CLOSES. Rung 3 domain-checks every Known value
+	// against this radio's own capabilities, and it once checked the
+	// RECEIVE frequency while leaving the TRANSMIT one unchecked — so a
+	// consented modify carrying TxFreqHz = 2 GHz put a set frame on the
+	// wire from a driver whose capabilities declare 144–1300 MHz, while
+	// the identical value in FreqHz was refused. Five packed-BCD bytes
+	// hold ten digits, so the codec had no reason to object either, and
+	// the register entry `ic9700-storable-frequency-bounds` is precisely
+	// about the bounds that were not being enforced.
+	//
+	// Both directions, both in and out of band, so neither check can be
+	// deleted without a failure and neither can be tightened into
+	// refusing an ordinary write.
+	const inBand = 145_500_000
+	const outOfBand = 2_000_000_000
+
+	for _, tc := range []struct {
+		name  string
+		field spec.Field
+		data  codeplug.ChannelData
+		want  bool // want a refusal
+	}{
+		{"receive frequency in band", spec.FieldFrequency, dataWithFreq(inBand), false},
+		{"receive frequency above the band plan", spec.FieldFrequency, dataWithFreq(outOfBand), true},
+		{"transmit frequency in band", spec.FieldTxFrequency, dataWithTxFreq(inBand), false},
+		{"transmit frequency above the band plan", spec.FieldTxFrequency, dataWithTxFreq(outOfBand), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sess, port := consentedSession(t, withTemplateStateAt("144-001"))
+			_, err := sess.WriteChannel(context.Background(), channelWith("144-001", tc.data))
+			if !tc.want {
+				if err != nil {
+					t.Fatalf("WriteChannel: %v — this value is inside the declared band plan", err)
+				}
+				if port.countSets() != 1 {
+					t.Errorf("sent %d set frames, want 1", port.countSets())
+				}
+				return
+			}
+			var refused *driver.WriteRefusedError
+			if !errors.As(err, &refused) {
+				t.Fatalf("err = %v, want *driver.WriteRefusedError", err)
+			}
+			if !strings.Contains(refused.Error(), string(tc.field)) {
+				t.Errorf("refusal %q does not name %s", refused.Error(), tc.field)
+			}
+			// Locally decidable: the bounds are in this driver's own
+			// capabilities, so nothing needs to be asked of the radio.
+			if port.countReads() != 0 || port.countSets() != 0 {
+				t.Errorf("a locally decidable refusal sent wire traffic: %d reads, %d sets",
+					port.countReads(), port.countSets())
+			}
+		})
+	}
+}
+
+// dataWithFreq is a MODIFY carrying a receive frequency.
+func dataWithFreq(hz uint64) codeplug.ChannelData {
+	d := *channelAt("144-001").Data
+	d.FreqHz = hz
+	return d
+}
+
+// dataWithTxFreq is a MODIFY carrying a Known transmit frequency.
+func dataWithTxFreq(hz uint64) codeplug.ChannelData {
+	d := *channelAt("144-001").Data
+	d.TxFreqHz = codeplug.FreqField{State: codeplug.Known, Value: hz}
+	return d
 }
