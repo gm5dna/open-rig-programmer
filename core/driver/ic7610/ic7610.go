@@ -512,10 +512,8 @@ func (s *Session) Diagnostics() driver.SessionDiagnostics {
 	}
 }
 
-// ReadChannel implements driver.Session. Its body arrives at Task 11.
-func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channel, error) {
-	return codeplug.Channel{}, errors.New("ic7610: ReadChannel is not implemented in this build")
-}
+// ReadChannel implements driver.Session; its body is in read.go, beside
+// the slot map and the one read primitive it is made of.
 
 // WriteChannel implements driver.Session. Its body arrives at Task 12.
 func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver.WriteResult, error) {
