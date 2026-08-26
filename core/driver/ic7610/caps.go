@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Package ic7610 is the Icom IC-7610's driver: the capability profiles,
-// the session probe, the acknowledged write, and the serial-framing
-// report. The wire codec lives next door in core/civ/ic7610 and is
-// imported here as civic7610.
 package ic7610
 
 import (
