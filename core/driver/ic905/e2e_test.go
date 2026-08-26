@@ -6,11 +6,14 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/gm5dna/open-rig-programmer/core/civ"
 	"github.com/gm5dna/open-rig-programmer/core/clone"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
@@ -798,34 +801,228 @@ func TestE2E_TheEngineIsClosedWithTheSession(t *testing.T) {
 	}
 }
 
-// THE ONE TEST THIS FILE DOES NOT HAVE, AND WHY — a STOP, recorded here
-// rather than worked around.
+// misaddressingLine is a TEST-LOCAL shim spliced into the wire between
+// the fake and the driver: once ARMED, it rewrites the four
+// channel-address bytes of the next 1A 00 answer to pass, and then
+// disarms itself.
 //
-// The plan's Task 17 names an eighth end-to-end case: the answer-address
-// check of ruling T2, driven by "the fake … configured to answer one read
-// with a record addressed to a different channel". THE LANDED FAKE HAS NO
-// SUCH OPTION. Its whole exported surface is New/Port/Close/Record/Frames
-// plus WithLatency, WithIdentityToken, WithRecord, WithEmpty,
-// WithTransceiveBroadcasts and WithAddressedFlood; nothing misaddresses an
-// answer, and the fake is frozen.
+// WHY A SHIM AND NOT A FAKE OPTION (orchestrator ruling, 26/08/2026,
+// following the ic7610's SUSTAINED ruling on the identical situation).
+// A fake answers consistently from its own state; teaching it to
+// misaddress an answer would be teaching it to LIE, and an honest radio
+// is the whole value of internal/fakeic905 — the same division of labour
+// respondingport_test.go's doc comment draws. The shim instead models
+// WHERE THIS CORRUPTION ACTUALLY HAPPENS: not inside a radio, but ON THE
+// LINE, between one and the host. Both packages stay honest and the
+// hazard still gets exercised end to end.
 //
-// It is arguably right that it has none. A fake models a radio's STATE and
-// answers consistently from it, so a misaddressed answer is a thing it
-// cannot produce without being taught to lie — which is precisely the
-// division of labour respondingport_test.go's own doc comment draws: the
-// scripted port "can therefore serve deliberately WRONG answers … which is
-// exactly what the error paths need and what a self-consistent fake will
-// never produce".
+// IT IS INERT UNTIL ARMED, so Open — the identity probe, the bounded
+// fingerprint search and two hundred discovery reads — runs against an
+// unmodified wire. Only the exchange a test arms it for is touched.
+type misaddressingLine struct {
+	inner io.ReadWriteCloser
+
+	mu    sync.Mutex
+	armed bool
+	to    wireAddr
+	// pending holds bytes already processed and not yet handed to the
+	// driver; partial holds a frame still arriving.
+	pending []byte
+	partial []byte
+}
+
+// spliceMisaddressingLine puts a shim between radio and whatever Opens
+// it.
+func spliceMisaddressingLine(radio *fakeic905.Radio) *misaddressingLine {
+	return &misaddressingLine{inner: radio.Port()}
+}
+
+// misaddressNext arms the shim: the NEXT 1A 00 answer to come back from
+// the radio will claim to be about addr instead of the channel it is
+// really about.
+func (l *misaddressingLine) misaddressNext(addr wireAddr) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.armed, l.to = true, addr
+}
+
+// Write passes the driver's frames straight through: this shim corrupts
+// only the RETURN path, which is the direction a stale or crossed reply
+// travels.
+func (l *misaddressingLine) Write(p []byte) (int, error) { return l.inner.Write(p) }
+
+// Close releases the underlying port.
+func (l *misaddressingLine) Close() error { return l.inner.Close() }
+
+// Read hands the driver the radio's bytes, rewriting one answer's address
+// field if the shim is armed.
 //
-// THE BEHAVIOUR IS NOT UNCOVERED. It is pinned driver-side, against the
-// scripted port, in two places:
+// It buffers to FRAME boundaries because it has to: an address field
+// cannot be rewritten in a stream that might deliver it across two reads.
+// Whole frames are released as soon as they are complete, so nothing is
+// delayed beyond the frame it belongs to.
+func (l *misaddressingLine) Read(p []byte) (int, error) {
+	l.mu.Lock()
+	if len(l.pending) > 0 {
+		n := copy(p, l.pending)
+		l.pending = l.pending[n:]
+		l.mu.Unlock()
+		return n, nil
+	}
+	l.mu.Unlock()
+
+	buf := make([]byte, 512)
+	for {
+		n, err := l.inner.Read(buf)
+		if n > 0 {
+			l.mu.Lock()
+			l.partial = append(l.partial, buf[:n]...)
+			for {
+				frame, rest, ok := cutCIVFrame(l.partial)
+				if !ok {
+					break
+				}
+				l.partial = rest
+				l.pending = append(l.pending, l.rewrite(frame)...)
+			}
+			if len(l.pending) > 0 {
+				k := copy(p, l.pending)
+				l.pending = l.pending[k:]
+				l.mu.Unlock()
+				return k, nil
+			}
+			l.mu.Unlock()
+		}
+		if err != nil {
+			return 0, err
+		}
+	}
+}
+
+// rewrite returns frame with its channel-address bytes replaced, when the
+// shim is armed and the frame is a memory ANSWER long enough to carry a
+// record. Anything else — the 19 00 reply, an FA, an FB, a broadcast — is
+// passed through untouched, so arming cannot accidentally corrupt a
+// different exchange.
 //
-//   - TestReadChannel_AnAnswerForAnotherChannelIsAnErrorNotAStore — the
-//     read fails with ErrAnswerMismatch, no channel is returned, and
-//     Diagnostics905().AnswerMismatches counts it.
-//   - TestProbe_ARecordForAnotherChannelIsFatalToTheOpen — the same check
-//     during the probe, where it fails the open.
+// Caller holds l.mu.
+func (l *misaddressingLine) rewrite(frame []byte) []byte {
+	const answerAddressAt = 6
+	if !l.armed || len(frame) <= memoryReadFrameLen || frame[4] != 0x1A || frame[5] != 0x00 {
+		return frame
+	}
+	out := bytes.Clone(frame)
+	copy(out[answerAddressAt:answerAddressAt+4], encodeWireAddr(l.to))
+	l.armed = false
+	return out
+}
+
+// TestE2E_AMisaddressedAnswerIsRefusedNotStored is the plan's case 7,
+// written with the shim above per the orchestrator's ruling of
+// 26/08/2026 (ic7610 precedent).
 //
-// What is missing is the end-to-end TWIN, and it stays missing until
-// either the fake gains a misaddressing option or the tier decides it
-// should not have one. Reported upward rather than improvised around.
+// civ.MemoryAnswerMatcher is DELIBERATELY ENVELOPE-ONLY (ruling T2): it
+// matches to/from/cn/sc and NOT the requested channel address, so an
+// answer about another channel satisfies it and reaches the driver. The
+// driver is the only thing that can catch it, and storing a channel under
+// the wrong slot would corrupt a codeplug SILENTLY — which is why this
+// hazard is worth exercising on a real wire rather than only against a
+// scripted table.
+//
+// The three assertions are the plan's own: ErrAnswerMismatch, nothing
+// stored, and the mismatch counted in diagnostics.
+func TestE2E_AMisaddressedAnswerIsRefusedNotStored(t *testing.T) {
+	t.Parallel()
+	rec := goldenRecord(144_500_000, 5).build()
+	radio := fakeic905.New(e2eImage(
+		fakeic905.WithRecord(0, 0, rec),
+		fakeic905.WithRecord(0, 1, rec),
+	)...)
+	t.Cleanup(func() { _ = radio.Close() })
+
+	// The shim is spliced in BEFORE Open and stays inert throughout it:
+	// the probe, the fingerprint search and the whole discovery walk run
+	// against an unmodified wire.
+	line := spliceMisaddressingLine(radio)
+	sess, err := New(RealHardware).Open(context.Background(), line, driver.Identity{Port: "/dev/fake"})
+	if err != nil {
+		t.Fatalf("Open through the shim: %v", err)
+	}
+	t.Cleanup(func() { _ = sess.Close() })
+	s := sess.(*Session)
+
+	// An honest read first, so the test proves the shim is inert until
+	// armed rather than merely assuming it.
+	if ch, err := s.ReadChannel(context.Background(), "G01-002"); err != nil {
+		t.Fatalf("an unarmed read failed: %v", err)
+	} else if ch.Empty() || ch.Data.FreqHz != 144_500_000 {
+		t.Fatalf("an unarmed read returned %+v", ch)
+	}
+	before := s.Diagnostics905().AnswerMismatches
+
+	// Now the line corrupts one answer: a read of G01-002 (wire group 0,
+	// channel 1) comes back claiming to be about group 0, channel 5.
+	line.misaddressNext(wireAddr{group: 0, channel: 5})
+
+	ch, err := s.ReadChannel(context.Background(), "G01-002")
+	if err == nil {
+		t.Fatalf("ReadChannel returned %+v for an answer about another channel — it must refuse rather than store it under the requested slot", ch)
+	}
+	if !errors.Is(err, ErrAnswerMismatch) {
+		t.Fatalf("error = %v, want an ErrAnswerMismatch", err)
+	}
+	// NOTHING STORED: the returned channel is the zero value, not a
+	// channel carrying somebody else's record under this slot's name.
+	if ch.Slot != "" || ch.Data != nil {
+		t.Errorf("ReadChannel returned %+v alongside its error — a refused read must return NO channel", ch)
+	}
+	var ame *AnswerMismatchError
+	if errors.As(err, &ame) {
+		if ame.Requested != (civ.ChannelAddress{Group: 0, Channel: 1}) || ame.Answered != (civ.ChannelAddress{Group: 0, Channel: 5}) {
+			t.Errorf("mismatch = %+v, want requested {0 1} answered {0 5}", ame)
+		}
+	} else {
+		t.Errorf("error = %v, want a *AnswerMismatchError carrying BOTH addresses", err)
+	}
+	if got := s.Diagnostics905().AnswerMismatches; got != before+1 {
+		t.Errorf("AnswerMismatches = %d, want %d — the mismatch must be COUNTED, not merely refused", got, before+1)
+	}
+
+	// AND THE SESSION SURVIVES IT. The shim disarmed after the one frame,
+	// so the next read is honest again: a crossed reply is an incident,
+	// not a poisoned session.
+	if ch, err := s.ReadChannel(context.Background(), "G01-001"); err != nil {
+		t.Errorf("the session did not recover from a single crossed reply: %v", err)
+	} else if ch.Empty() {
+		t.Error("the read after the mismatch returned an empty channel")
+	}
+}
+
+// THE CASE THIS FILE ONCE DID NOT HAVE — the record, kept because the
+// reasoning is now the tier's and not just this worktree's.
+//
+// The plan's Task 17 names an end-to-end twin for the answer-address
+// check of ruling T2: "the fake … configured to answer one read with a
+// record addressed to a different channel". THE LANDED FAKE HAS NO SUCH
+// OPTION, and it is frozen — its whole exported surface is
+// New/Port/Close/Record/Frames plus WithLatency, WithIdentityToken,
+// WithRecord, WithEmpty, WithTransceiveBroadcasts and WithAddressedFlood.
+// That was raised as a STOP rather than worked around.
+//
+// ORCHESTRATOR RULING, 26/08/2026, following the ic7610's SUSTAINED
+// ruling on the identical situation: NEITHER strike the case NOR give the
+// fake the option. The twin is written with a TEST-LOCAL MISADDRESSING
+// SHIM spliced into the wire — see misaddressingLine and
+// TestE2E_AMisaddressedAnswerIsRefusedNotStored above.
+//
+// The ruling endorsed the division-of-labour argument this package's
+// respondingport_test.go already makes, and added the part that settles
+// it: a fake should stay an HONEST radio, and the shim models WHERE THIS
+// CORRUPTION HAPPENS IN LIFE — on the line, between a radio and a host,
+// not inside the radio. So both packages stay honest and the hazard is
+// still exercised end to end.
+//
+// The same behaviour is additionally pinned driver-side, against the
+// scripted port, by TestReadChannel_AnAnswerForAnotherChannelIsAnError-
+// NotAStore and TestProbe_ARecordForAnotherChannelIsFatalToTheOpen.
+// Three vantage points, one hazard.
