@@ -7,6 +7,7 @@ import (
 
 	ic7300civ "github.com/gm5dna/open-rig-programmer/core/civ/ic7300"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
+	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
 // The bank labels this driver publishes. Two banks, and only two: MEM and
@@ -357,6 +358,12 @@ func cloneCapabilities(caps spec.Capabilities) spec.Capabilities {
 type ic7300Driver struct {
 	profile Profile
 
+	// transportLogger, when set, is handed to the engine so a session's
+	// wire traffic can be traced. Nil by default: a driver that logged
+	// unasked would write a user's memory contents somewhere they did not
+	// choose.
+	transportLogger transport.Logger
+
 	// consentUnverifiedWrites records that the user explicitly accepted
 	// writing fields no IC-7300 has ever confirmed. It is applied at
 	// SESSION capability assembly, never here: Driver.Capabilities is the
@@ -369,6 +376,14 @@ type ic7300Driver struct {
 //
 // The zero Profile is RealHardware, the fail-safe one, so a caller that
 // passes nothing at all gets the description that writes nothing.
+//
+// IT WILL RETURN THE NEUTRAL driver.Driver once the Session is complete
+// (write.go), and everything above this package holds the seam rather than
+// this type. The two optional capabilities this driver additionally
+// implements — driver.SerialFramingReporter on the DRIVER,
+// driver.DiagnosticsReporter on the SESSION — are reached by the house's
+// two-result type assertion, never by a concrete type a caller would have to
+// import this package to name.
 func New(p Profile, opts ...Option) *ic7300Driver {
 	d := &ic7300Driver{profile: p}
 	for _, opt := range opts {
