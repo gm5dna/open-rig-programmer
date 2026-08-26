@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	civic705 "github.com/gm5dna/open-rig-programmer/core/civ/ic705"
@@ -422,6 +423,13 @@ type SessionInfo struct {
 	InventoryWalk string
 	// InventorySlots is how many occupied memories that walk materialised.
 	InventorySlots int
+	// AnswerMismatches counts memory answers whose channel address was
+	// not the one requested (ruling T2). driver.SessionDiagnostics has
+	// one counter and it means something else — frames that reached the
+	// engine and matched no spec — so this fact has nowhere else to live,
+	// and it is worth surfacing: a non-zero value means the radio, the
+	// bus or the cable answered about a channel nobody asked about.
+	AnswerMismatches uint64
 }
 
 // Session is an IC-705's driver.Session: one open, address-probed,
@@ -449,6 +457,9 @@ type Session struct {
 	// occupied-surprise refusal asks a question no capability set can
 	// answer: "did the walk actually visit this slot?"
 	inventory map[string]bool
+	// mismatches counts T2's refusals. Atomic because a Session is safe
+	// for concurrent use and ReadChannel is where it is incremented.
+	mismatches atomic.Uint64
 }
 
 // Identity implements driver.Session.
@@ -459,9 +470,14 @@ func (s *Session) Identity() driver.Identity { return s.id }
 // consent if the user gave it — as a deep copy per call.
 func (s *Session) Capabilities() spec.Capabilities { return cloneCapabilities(s.caps) }
 
-// SessionInfo reports what the probe and the inventory walk learned. See
-// SessionInfo for why this is a model method rather than seam data.
-func (s *Session) SessionInfo() SessionInfo { return s.info }
+// SessionInfo reports what the probe and the inventory walk learned, plus
+// the counters this session accrues as it runs. See SessionInfo for why
+// this is a model method rather than seam data.
+func (s *Session) SessionInfo() SessionInfo {
+	info := s.info
+	info.AnswerMismatches = s.mismatches.Load()
+	return info
+}
 
 // Diagnostics reports this session's transport-level health counters,
 // satisfying the optional driver.DiagnosticsReporter capability.
@@ -523,15 +539,6 @@ func (e *AnswerMismatchError) Error() string {
 
 // Unwrap lets errors.Is(err, ErrAnswerMismatch) match.
 func (e *AnswerMismatchError) Unwrap() error { return ErrAnswerMismatch }
-
-// ReadChannel is Task 10's; this placeholder exists only so that Open can
-// return a driver.Session at all, and it is REPLACED (not extended) by
-// read.go. It refuses rather than returning an empty channel: a
-// not-yet-implemented read that answered "this slot is empty" would be
-// indistinguishable from a real empty slot.
-func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channel, error) {
-	return codeplug.Channel{}, fmt.Errorf("ic705: ReadChannel is not implemented yet")
-}
 
 // WriteChannel is Task 11's; this placeholder exists for ReadChannel's
 // reason and is REPLACED by write.go. It refuses, which is also the only
