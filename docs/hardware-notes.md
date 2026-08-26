@@ -14,8 +14,9 @@ never committed); everything below has been through the redaction
 process `docs/fixtures.md` mandates — no real callsign, no personal
 frequency list, no other operator-identifying data appears here.
 
-Sections up to and including "Consequences applied" record M5a; the
-"M5b write-trial protocol" section and everything after it record M5b.
+Sections up to and including "Consequences applied" record M5a (plus
+later annotations, each dated in its heading); the "M5b write-trial
+protocol" section and everything after it record M5b.
 
 **Code symbols named in this log are historical, not a current API
 reference.** Function and type names from `core/` are recorded as they
@@ -409,9 +410,10 @@ M7 deferrals above remain open: the port-mapping recheck, which
 udev rule keeps ModemManager away from the radio.
 
 What *has* been checked on Linux is the packaging, not the radio: the
-release build's Debian packages were installed and launched on clean
-Ubuntu 24.04.4 desktop virtual machines on both architectures on
-23/08/2026, with no radio attached. That evidence — what it covers and
+rehearsal Debian packages built by `.github/workflows/release.yml` at
+the v1.1.0-rc.1 tag were installed and launched on clean Ubuntu
+24.04.4 desktop virtual machines on both architectures on 23/08/2026,
+with no radio attached. That evidence — what it covers and
 what it does not — is written up in `docs/linux-setup.md`'s Status
 section, deliberately kept out of this file, which records real-radio
 sessions only.

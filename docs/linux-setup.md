@@ -5,8 +5,8 @@
 This document covers the two things a Linux user needs to do before
 `rigprog` (CLI or GUI) can open a real FT-710's serial port: join the
 `dialout` group, and stop ModemManager from probing the radio's
-USB-serial adapter. See `README.md`'s quick-start section for where
-this fits into the overall install/connect flow, and
+USB-serial adapter. See `README.md`'s "Install" and "Getting started"
+sections for where this fits into the overall install/connect flow, and
 `docs/hardware-notes.md` for the hardware facts this project has
 actually confirmed (macOS only, so far — see "Status" below).
 
@@ -100,21 +100,22 @@ authoritative check, not the device node's number.
 
 ## Status: the package is verified, the radio is still pending
 
-**What has been verified.** On 23/08/2026 the Debian packages built by
-`.github/workflows/release.yml` were installed on clean Ubuntu 24.04.4
-LTS desktop virtual machines — one arm64, one amd64, both stock
-images carrying no development tools — and exercised there:
+**What has been verified.** On 23/08/2026 the rehearsal Debian
+packages built by `.github/workflows/release.yml` at the v1.1.0-rc.1
+tag were installed on clean Ubuntu 24.04.4 LTS desktop virtual
+machines — one arm64, one amd64, stock images with no development
+toolchain beyond an SSH server — and exercised there:
 
 - `sudo apt install ./<the .deb>` succeeds on both architectures and
   installs every packaged path. On the arm64 VM the removal cycle was
   exercised too: `apt remove` took the binaries, the udev rule, the
   desktop entry, the icon and the doc directory away again, and
   reinstalling restored all of them.
-- The rule the package installs at
-  `/usr/lib/udev/rules.d/99-open-rig-programmer.rules` is byte for byte
-  the one this repository ships in
-  `app/build/linux/99-open-rig-programmer.rules`, and `udevadm verify`
-  accepts it (1 success, 0 failures) on both architectures.
+- `udevadm verify` accepts the rule the package installs at
+  `/usr/lib/udev/rules.d/99-open-rig-programmer.rules` on both
+  architectures (1 success, 0 failures on arm64, where the installed
+  file was also confirmed byte for byte the one this repository ships
+  in `app/build/linux/99-open-rig-programmer.rules`).
 - ModemManager is installed, enabled and running on the stock arm64
   Ubuntu 24.04 desktop image — so section 2 addresses something really
   there, not a hypothetical.
@@ -123,9 +124,8 @@ images carrying no development tools — and exercised there:
   whole Demo workflow was driven through, edit and Send included.
 - `rigprog --version` prints the packaged version on both
   architectures, and `rigprog ports` exits cleanly: on the arm64 VM it
-  listed that machine's own console UART (`/dev/ttyAMA0`, score 0, "no
-  ranking signal matched"); on the amd64 VM it found no serial ports
-  at all.
+  listed the VM's own `/dev/ttyAMA0` (score 0, "no ranking signal
+  matched"); on the amd64 VM it found no serial ports at all.
 
 **What has not.** None of the above involved a radio. No FT-710 has
 ever been connected to a Linux machine by this project, so **every
@@ -133,7 +133,7 @@ instruction on this page that depends on the device is still
 unconfirmed**: whether the `dialout` step is sufficient in practice,
 which `/dev/ttyUSB*` node is the CAT-capable Enhanced UART, and
 whether the udev rule actually keeps ModemManager off the radio — the
-VM sessions observed that ModemManager is running, not how it behaves
+arm64 VM observed that ModemManager is running, not how it behaves
 towards an FT-710. Everything in sections 1 and 2 still follows from
 general Linux/udev/ModemManager practice and the CP2105's known macOS
 behaviour, nothing more.
