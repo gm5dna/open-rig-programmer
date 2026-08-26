@@ -64,6 +64,12 @@ func openFor(t *testing.T, img radioImage) (*respondingPort, *Session) {
 // the seven-byte envelope and the four address bytes removed (spec
 // Erratum 1's record-only convention).
 func TestRecordFixture_MatchesTheGoldenVectors(t *testing.T) {
+	// PARALLEL because this package's tests are wire-paced, not
+	// CPU-bound: transport.Engine applies a 20 ms settle after every
+	// exchange, so an Open spends seconds asleep and several can overlap
+	// at no cost. See TestOpen_FullWalkIsOptInAndReportsComplete for the
+	// one that makes it worth doing.
+	t.Parallel()
 	spaces := bytes.Repeat([]byte{0x20}, 24)
 	name := []byte("HIGHLAND BASE905")
 
@@ -123,6 +129,7 @@ func concat(parts ...[]byte) []byte {
 // description and an EMPTY Data cell and nothing more). So the probe
 // cannot compare a token. Register: D5 entry 7. Lift: ic905-R-02.
 func TestOpen_RequiresAnAddressMatchedIdentityReply(t *testing.T) {
+	t.Parallel()
 	p, s := openFor(t, radioImage{idToken: []byte{0x94}})
 
 	if got, want := s.Identity().CATID, "AC:94"; got != want {
@@ -157,6 +164,7 @@ func TestOpen_RequiresAnAddressMatchedIdentityReply(t *testing.T) {
 // checked the value would refuse every real radio this tier has never
 // seen, which is all of them.
 func TestOpen_TheIdentityTokenIsRecordedNotMatched(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		token []byte
 		want  string
@@ -187,6 +195,7 @@ func TestOpen_TheIdentityTokenIsRecordedNotMatched(t *testing.T) {
 // protection: a radio that is not at AC is a radio this driver never
 // hears from.
 func TestOpen_ATimeoutIsATimeoutAndNotAWrongRadio(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		name string
 		img  radioImage
@@ -219,6 +228,7 @@ func TestOpen_ATimeoutIsATimeoutAndNotAWrongRadio(t *testing.T) {
 // appear only in AccumulatorStats().Unexpected. InitDrainCapExceeded is
 // FALSE here, and that is the whole distinction REV 2 collapsed.
 func TestOpen_ABroadcastFloodDoesNotReachTheEngineAndInitSucceeds(t *testing.T) {
+	t.Parallel()
 	_, s := openFor(t, radioImage{idToken: testToken, floodOnOpen: true, floodTo: 0x00})
 
 	d := s.Diagnostics905()
@@ -239,6 +249,7 @@ func TestOpen_ABroadcastFloodDoesNotReachTheEngineAndInitSucceeds(t *testing.T) 
 // NONFATAL-WITH-DIAGNOSTIC, because the spec's bounded initial drain
 // "cannot fail the open" — the line is noisy, not wrong.
 func TestOpen_AControllerAddressedFloodMakesInitDrainCapExceededNonfatal(t *testing.T) {
+	t.Parallel()
 	_, s := openFor(t, radioImage{idToken: testToken, floodOnOpen: true, floodTo: 0xE0})
 
 	d := s.Diagnostics905()
@@ -262,6 +273,7 @@ func TestOpen_AControllerAddressedFloodMakesInitDrainCapExceededNonfatal(t *test
 // times out, its retry's quarantine drain meets the flood, and the
 // failure comes back rather than being swallowed.
 func TestSession_ALaterQuarantineDrainFailureFailsClosed(t *testing.T) {
+	t.Parallel()
 	p, s := openFor(t, radioImage{idToken: testToken, idOnce: true})
 
 	p.silence()
@@ -292,7 +304,8 @@ func TestSession_ALaterQuarantineDrainFailureFailsClosed(t *testing.T) {
 // Engine.UnexpectedFrames would report a healthy zero on a line saturated
 // with transceive.
 func TestSession_BroadcastCountsComeFromTheAdapterNotTheEngine(t *testing.T) {
-	_, s := openFor(t, radioImage{idToken: testToken, floodOnOpen: true, floodTo: 0x00})
+	t.Parallel()
+	p, s := openFor(t, radioImage{idToken: testToken, floodOnOpen: true, floodTo: 0x00})
 
 	if got := s.Diagnostics().UnexpectedFrames; got != 0 {
 		t.Errorf("Diagnostics().UnexpectedFrames = %d, want 0 — a broadcast never becomes an engine event", got)
@@ -300,17 +313,28 @@ func TestSession_BroadcastCountsComeFromTheAdapterNotTheEngine(t *testing.T) {
 	if got := s.Diagnostics905().Accumulator.Unexpected; got == 0 {
 		t.Error("Diagnostics905().Accumulator.Unexpected = 0 — the broadcasts must be counted on the ADAPTER's side of the address filter")
 	}
-	// LIVE, not cached: a second call after more traffic must not return
-	// the first call's numbers.
+	// LIVE, not cached: a snapshot taken now, against traffic that
+	// arrives AFTER the open, must exceed one taken before it. A stored
+	// value would leave the broadcast counts frozen at whatever the open
+	// happened to see — which is the one number this carrier exists to
+	// report.
+	//
+	// A FRESH FLOOD, because the open's own one is long over: discovery
+	// walks two hundred addresses at the transport's pacing, so several
+	// seconds pass between the flood the Init assertions above need and
+	// this one.
 	first := s.Diagnostics905().Accumulator.Unexpected
-	deadline := time.Now().Add(500 * time.Millisecond)
+	p.startFlood(0x00, 3*time.Second)
+	defer p.stopFlood()
+
+	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
 		if s.Diagnostics905().Accumulator.Unexpected > first {
 			return
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	t.Error("Diagnostics905().Accumulator.Unexpected never advanced while the flood ran — the snapshot must be SUMMED LIVE, not stored at Open")
+	t.Error("Diagnostics905().Accumulator.Unexpected never advanced while a flood ran — the snapshot must be SUMMED LIVE, not stored at Open")
 }
 
 // TestIDSpec_IsAReadWithOneRetry pins the probe's spec as E1's helper
@@ -319,6 +343,7 @@ func TestSession_BroadcastCountsComeFromTheAdapterNotTheEngine(t *testing.T) {
 // retrying anything else on this driver is not, and no other spec here
 // carries a non-zero count.
 func TestIDSpec_IsAReadWithOneRetry(t *testing.T) {
+	t.Parallel()
 	_, s := openFor(t, radioImage{idToken: testToken})
 	sp := s.idSpec()
 	if sp.Class != transport.ClassRead {
@@ -336,6 +361,7 @@ func TestIDSpec_IsAReadWithOneRetry(t *testing.T) {
 // that Open owns port on BOTH outcomes, so a failed open must leave
 // nothing for the caller to close and nothing running.
 func TestOpen_TakesOwnershipOfThePortOnFailure(t *testing.T) {
+	t.Parallel()
 	p := newRespondingPort(t, radioImage{}) // answers no 19 00 at all
 	_, err := New(RealHardware).Open(context.Background(), p.Port(), driver.Identity{})
 	if err == nil {

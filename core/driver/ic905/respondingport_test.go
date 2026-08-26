@@ -244,6 +244,18 @@ func (p *respondingPort) stopFlood() {
 	}
 }
 
+// misdirect makes the radio answer a read of requested with a record
+// addressed to answered — the stale-reply shape the codec's ENVELOPE-ONLY
+// matcher cannot see (ruling T2), and which the driver must catch.
+func (p *respondingPort) misdirect(requested, answered wireAddr) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.image.answerAddr == nil {
+		p.image.answerAddr = map[wireAddr]wireAddr{}
+	}
+	p.image.answerAddr[requested] = answered
+}
+
 // silence makes the radio stop answering 19 00, so a later read can be
 // driven into its retry-and-quarantine path.
 func (p *respondingPort) silence() {

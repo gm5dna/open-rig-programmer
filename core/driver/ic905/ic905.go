@@ -62,6 +62,25 @@ func WithSiblingRecordLengths(l SiblingLengths) Option {
 	}
 }
 
+// WithFullInventoryWalk makes Open discover the WHOLE 100 × 100 memory
+// space instead of the bounded default walk.
+//
+// IT IS OPT-IN, AND THE DEFAULT IS BOUNDED FOR AN OPERATIONAL REASON
+// (ruling R12). A complete walk is 10,000 reads — minutes of Open at CI-V
+// rates on a sparse or empty radio — and a multi-minute default Open
+// trains users to interrupt it, an interrupted discovery being exactly
+// the "codeplug full of deletions" hazard discovery exists to guard
+// against. The bounded walk reads group 0 in full, then one channel per
+// group, descending only where that channel answered.
+//
+// USE IT WHEN CHANNELS ARE SCATTERED — and note that it is also the
+// remedy the write ladder's occupied-surprise refusal NAMES: a slot the
+// bounded walk missed cannot be written until the inventory knows about
+// it (ruling T3).
+func WithFullInventoryWalk() Option {
+	return func(d *ic905Driver) { d.fullInventoryWalk = true }
+}
+
 // New builds the IC-905 driver for profile. RealHardware — the ZERO
 // VALUE — selects the all-Unverified capability set while
 // writeTrialsComplete is false (nothing writable; see that constant's doc
@@ -93,6 +112,9 @@ type ic905Driver struct {
 	// siblingLengths is the Wave-4 attribution table — see
 	// SiblingLengths. Nil is the Wave-3 default.
 	siblingLengths SiblingLengths
+	// fullInventoryWalk opts out of the bounded default discovery walk —
+	// see WithFullInventoryWalk. FALSE is the zero value and the default.
+	fullInventoryWalk bool
 }
 
 // Model implements driver.Driver: the registry key and display name,
@@ -234,7 +256,7 @@ func (d *ic905Driver) Open(ctx context.Context, port transport.Port, id driver.I
 // open is Open's body, factored so the error path can close eng in
 // exactly one place.
 func (d *ic905Driver) open(ctx context.Context, eng *transport.Engine, profile civ.Profile, stats civ.AccumulatorStatsReporter, id driver.Identity) (*Session, error) {
-	s := &Session{eng: eng, profile: profile, stats: stats}
+	s := &Session{eng: eng, profile: profile, stats: stats, inventory: map[string]bool{}}
 
 	if err := eng.Init(ctx); err != nil {
 		// THE INIT DRAIN'S TWO HALVES (ruling R9-SPLIT), and the
@@ -294,10 +316,25 @@ func (d *ic905Driver) open(ctx context.Context, eng *transport.Engine, profile c
 		return nil, err
 	}
 
+	// Sparse-bank discovery, and it is not optional: core/clone's ReadAll
+	// walks Capabilities().Banks[].Slots, so a sparse bank whose Slots
+	// stayed empty would report a radio with no memories at all (ruling
+	// R12). See discoverInventory for the bound and for why
+	// InventoryComplete is the load-bearing half of it.
+	budget := memBudget(d.Capabilities())
+	if budget <= 0 {
+		return nil, fmt.Errorf("ic905: Open: %w", errNoMemoryBank)
+	}
+	discovered, complete, err := s.discoverInventory(ctx, d.fullInventoryWalk, budget)
+	if err != nil {
+		return nil, fmt.Errorf("ic905: Open: memory inventory discovery: %w", err)
+	}
+	s.inventoryComplete = complete
+
 	catID := identityCATID(token)
 	id.CATID = catID
 	s.id = id
-	s.caps = d.sessionCapabilities(nil, catID)
+	s.caps = d.sessionCapabilities(discovered, catID)
 	return s, nil
 }
 
@@ -675,16 +712,13 @@ func (s *Session) Diagnostics905() Diagnostics {
 // already guarantees repeat calls return the same result.
 func (s *Session) Close() error { return s.eng.Close() }
 
-// ReadChannel is Task 13's and lives in read.go; WriteChannel is Task
-// 14's and lives in write.go. Until those land, both are placeholders
-// that refuse honestly — a Session must satisfy driver.Session for Open
-// to return one at all, and a placeholder that refuses is better than one
-// that pretends.
-func (s *Session) ReadChannel(_ context.Context, slot string) (codeplug.Channel, error) {
-	return codeplug.Channel{}, fmt.Errorf("ic905: ReadChannel %s: not implemented yet", slot)
-}
+// ReadChannel lives in read.go, alongside the slot namespaces and the
+// neutral mapping it is made of.
 
-// WriteChannel — see ReadChannel.
+// WriteChannel is the next task's and will live in write.go. Until it
+// lands this placeholder refuses honestly — a Session must satisfy
+// driver.Session for Open to return one at all, and a placeholder that
+// refuses is better than one that pretends.
 func (s *Session) WriteChannel(_ context.Context, ch codeplug.Channel) (driver.WriteResult, error) {
 	return driver.WriteResult{Steps: []driver.WriteStep{}}, fmt.Errorf("ic905: WriteChannel %s: not implemented yet", ch.Slot)
 }

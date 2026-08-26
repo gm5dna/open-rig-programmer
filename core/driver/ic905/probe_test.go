@@ -30,6 +30,12 @@ func oneRecord(addr wireAddr, freqHz uint64, freqBytes int) radioImage {
 // Condition B, ASSUMED, lift ic905-R-06). The probe is TOLERANT OF EITHER
 // until hardware settles it.
 func TestProbe_BothDeclaredLengthsConfirm(t *testing.T) {
+	// PARALLEL because this package's tests are wire-paced, not
+	// CPU-bound: transport.Engine applies a 20 ms settle after every
+	// exchange, so an Open spends seconds asleep and several can overlap
+	// at no cost. See TestOpen_FullWalkIsOptInAndReportsComplete for the
+	// one that makes it worth doing.
+	t.Parallel()
 	for _, tt := range []struct {
 		name      string
 		freqHz    uint64
@@ -74,6 +80,7 @@ func TestProbe_BothDeclaredLengthsConfirm(t *testing.T) {
 // The test asserts errors.As on the wrapped chain AND the word in the
 // outer message, so a future unwrapping breaks it.
 func TestProbe_AKnownSiblingLengthIsAWrongRadioWithProvisionalAttribution(t *testing.T) {
+	t.Parallel()
 	img := radioImage{
 		idToken: testToken,
 		// A 39-byte record: not this model's, and declared here as some
@@ -112,6 +119,7 @@ func TestProbe_AKnownSiblingLengthIsAWrongRadioWithProvisionalAttribution(t *tes
 // WrongRadioError's model fields are OPTIONAL, and empty is the honest
 // value for a driver that cannot name what it found.
 func TestProbe_AnUnknownLengthIsRefusedWithoutAttribution(t *testing.T) {
+	t.Parallel()
 	img := radioImage{
 		idToken: testToken,
 		records: map[wireAddr][]byte{{0, 0}: make([]byte, 63)},
@@ -137,6 +145,7 @@ func TestProbe_AnUnknownLengthIsRefusedWithoutAttribution(t *testing.T) {
 // TestProbe_TheSiblingTableIsEmptyInWaveThree, so nobody ships a table by
 // accident. With no table, EVERY unrecognised length takes branch (b).
 func TestProbe_TheSiblingTableIsEmptyInWaveThree(t *testing.T) {
+	t.Parallel()
 	d, ok := New(RealHardware).(*ic905Driver)
 	if !ok {
 		t.Fatalf("New returned %T", New(RealHardware))
@@ -153,6 +162,7 @@ func TestProbe_TheSiblingTableIsEmptyInWaveThree(t *testing.T) {
 // records an UNFINGERPRINTED diagnostic. That the FA answer itself means
 // "empty" is ASSUMED — D5 entry 2(a), lift ic905-R-14.
 func TestProbe_AnEmptyRadioOpensUnfingerprinted(t *testing.T) {
+	t.Parallel()
 	_, s := openFor(t, radioImage{idToken: testToken})
 
 	d := s.Diagnostics905()
@@ -171,18 +181,46 @@ func TestProbe_AnEmptyRadioOpensUnfingerprinted(t *testing.T) {
 //
 // The bound is stated so an EMPTY radio's open cannot take ten thousand
 // reads: group 0's first sixteen channels, then the twelve CALL slots.
-// The FULL inventory walk is a different question and is Task 13's.
+// The FULL inventory walk is a DIFFERENT question and is discovery's.
+//
+// IT IS ASSERTED ON THE ADDRESSES, NOT ON A COUNT, because discovery runs
+// straight after the probe in the same Open and its reads land in the
+// same transcript. What identifies the probe's reads is that they come
+// FIRST and that discovery always restarts at group 0 channel 0 — so
+// where the probe stopped is exactly where that restart appears.
 func TestProbe_IsBoundedAndStopsAtTheFirstRecord(t *testing.T) {
-	t.Run("an empty radio is probed exactly probeBound times", func(t *testing.T) {
+	t.Parallel()
+	t.Run("an empty radio is probed exactly the bounded search's addresses", func(t *testing.T) {
 		p, _ := openFor(t, radioImage{idToken: testToken})
-		if got, want := countMemoryReads(p), probeSlotsInGroupZero+callSlotsProbed; got != want {
-			t.Errorf("the probe made %d memory reads, want exactly %d (%d in group 0, then the %d CALL slots)", got, want, probeSlotsInGroupZero, callSlotsProbed)
+		addrs := memoryReadAddrs(p)
+		want := probeCandidates()
+		if len(addrs) <= len(want) {
+			t.Fatalf("the radio received %d memory reads, too few to hold the probe AND the discovery walk", len(addrs))
+		}
+		for i, a := range want {
+			if got := addrs[i]; got != (wireAddr{a.Group, a.Channel}) {
+				t.Fatalf("probe read %d was %v, want %v", i, got, a)
+			}
+		}
+		// The read after the last probed CALL slot is discovery's own
+		// first: the probe stopped exactly there.
+		if got := addrs[len(want)]; got != (wireAddr{0, 0}) {
+			t.Errorf("the read after the bounded search was %v, want the discovery walk's own first read {0 0} — the probe must stop after %d addresses", got, len(want))
 		}
 	})
 	t.Run("the first record stops the search", func(t *testing.T) {
 		p, _ := openFor(t, oneRecord(wireAddr{0, 0}, 144_500_000, 5))
-		if got := countMemoryReads(p); got != 1 {
-			t.Errorf("the probe made %d memory reads, want 1 — the search stops at the FIRST record", got)
+		addrs := memoryReadAddrs(p)
+		if len(addrs) < 2 {
+			t.Fatalf("the radio received %d memory reads", len(addrs))
+		}
+		if addrs[0] != (wireAddr{0, 0}) {
+			t.Errorf("the probe's first read was %v, want {0 0}", addrs[0])
+		}
+		// ONE probe read, then discovery restarting at the same address.
+		// A probe that kept going would have asked {0 1} next.
+		if addrs[1] != (wireAddr{0, 0}) {
+			t.Errorf("the second read was %v, want {0 0} — the search must stop at the FIRST record, so the next read is discovery's own first", addrs[1])
 		}
 	})
 	t.Run("a CALL channel confirms too", func(t *testing.T) {
@@ -193,15 +231,21 @@ func TestProbe_IsBoundedAndStopsAtTheFirstRecord(t *testing.T) {
 	})
 }
 
-// countMemoryReads counts the 1A 00 READ frames in a transcript.
-func countMemoryReads(p *respondingPort) int {
-	n := 0
+// memoryReadAddrs returns the wire address of every 1A 00 READ in a
+// transcript, in order.
+func memoryReadAddrs(p *respondingPort) []wireAddr {
+	var out []wireAddr
 	for _, f := range p.Transcript() {
 		if len(f) == memoryReadFrameLen && f[4] == 0x1A && f[5] == 0x00 {
-			n++
+			out = append(out, decodeWireAddr(f[6:10]))
 		}
 	}
-	return n
+	return out
+}
+
+// countMemoryReads counts the 1A 00 READ frames in a transcript.
+func countMemoryReads(p *respondingPort) int {
+	return len(memoryReadAddrs(p))
 }
 
 // TestProbe_TheFingerprintIsContinuous.
@@ -213,17 +257,24 @@ func countMemoryReads(p *respondingPort) int {
 // *RecordLengthError, rather than being decoded against a layout it does
 // not fit.
 func TestProbe_TheFingerprintIsContinuous(t *testing.T) {
+	t.Parallel()
 	img := oneRecord(wireAddr{0, 0}, 144_500_000, 5)
 	// A SECOND channel, whose record is a length this profile never
-	// declared. The probe stops at channel 0 and never sees it.
-	img.records[wireAddr{0, 1}] = make([]byte, 63)
+	// declared, at an address NEITHER the probe NOR the bounded discovery
+	// walk visits: the probe stops at group 0 channel 0, and the walk
+	// probes group 5's channel 00, finds it empty, and skips the rest of
+	// the group. So the session opens cleanly and the bad record is met
+	// only by the read below — which is the whole point, since a
+	// fingerprint that were one-shot would have nothing left to check by
+	// then.
+	img.records[wireAddr{5, 37}] = make([]byte, 63)
 
 	_, s := openFor(t, img)
 	if !s.Diagnostics905().Fingerprinted {
 		t.Fatal("the open did not fingerprint on channel 0's good record")
 	}
 
-	_, _, err := s.recordAt(context.Background(), civ.ChannelAddress{Group: 0, Channel: 1})
+	_, _, err := s.recordAt(context.Background(), civ.ChannelAddress{Group: 5, Channel: 37})
 	if err == nil {
 		t.Fatal("a 63-byte record was accepted after a clean open — the fingerprint must be CONTINUOUS")
 	}
@@ -246,6 +297,7 @@ func TestProbe_TheFingerprintIsContinuous(t *testing.T) {
 // decision core/driver/ftdx101 makes when discovery meets a wrong-slot
 // echo.
 func TestProbe_ARecordForAnotherChannelIsFatalToTheOpen(t *testing.T) {
+	t.Parallel()
 	img := oneRecord(wireAddr{0, 0}, 144_500_000, 5)
 	img.answerAddr = map[wireAddr]wireAddr{{0, 0}: {0, 5}}
 
