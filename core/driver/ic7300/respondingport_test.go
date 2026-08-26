@@ -56,6 +56,12 @@ type respondingPort struct {
 	// from the map is answered FA — the empty-channel convention.
 	records map[int][]byte
 
+	// misaddress maps a REQUESTED channel to the channel the answer's
+	// address field names instead. Per-channel rather than global, so a
+	// test can leave the open probe's own slots answering honestly and
+	// misdirect one read.
+	misaddress map[int]int
+
 	misaddressedID bool
 	silentReads    bool
 	noAnswerToSets bool
@@ -112,10 +118,11 @@ func newRespondingPort(t *testing.T, opts ...peerOption) *respondingPort {
 	t.Helper()
 	host, remote := net.Pipe()
 	p := &respondingPort{
-		host:    host,
-		remote:  remote,
-		idToken: []byte{0x00},
-		records: map[int][]byte{},
+		host:       host,
+		remote:     remote,
+		idToken:    []byte{0x00},
+		records:    map[int][]byte{},
+		misaddress: map[int]int{},
 	}
 	for _, opt := range opts {
 		opt(p)
@@ -173,6 +180,14 @@ func withRecord(channel int, rec []byte) peerOption {
 // 0xFF, so a length test cannot be confused with the empty-record question.
 func withRecordOfLength(channel int, n int) peerOption {
 	return func(p *respondingPort) { p.records[channel] = make([]byte, n) }
+}
+
+// withAnswerAddressedElsewhere answers a read of channel with a record
+// whose ADDRESS FIELD names answerChannel: the wrong-slot reply the
+// driver's own address check exists to catch, since civ's memory-answer
+// matcher is envelope-only and deliberately does not look at the channel.
+func withAnswerAddressedElsewhere(channel, answerChannel int) peerOption {
+	return func(p *respondingPort) { p.misaddress[channel] = answerChannel }
 }
 
 // withMisaddressedIDAnswer answers the 19 00 read with a frame addressed to
@@ -332,7 +347,11 @@ func (p *respondingPort) reply(frame []byte) []byte {
 		if !ok {
 			return answerFrame(0xFA)
 		}
-		body := []byte{0x1A, 0x00, frame[6], frame[7]}
+		hi, lo := frame[6], frame[7]
+		if other, misdirect := p.misaddress[ch]; misdirect {
+			hi, lo = bcdBytes(other)
+		}
+		body := []byte{0x1A, 0x00, hi, lo}
 		body = append(body, rec...)
 		return answerFrame(body...)
 
@@ -357,6 +376,12 @@ func (p *respondingPort) reply(frame []byte) []byte {
 // from the code it is testing.
 func bcdChannel(hi, lo byte) int {
 	return int(hi>>4)*1000 + int(hi&0x0F)*100 + int(lo>>4)*10 + int(lo&0x0F)
+}
+
+// bcdBytes is bcdChannel's inverse, for the answers this radio addresses
+// deliberately wrongly.
+func bcdBytes(n int) (hi, lo byte) {
+	return byte((n/1000)%10<<4 | (n/100)%10), byte((n/10)%10<<4 | n%10)
 }
 
 // openSession opens a session against p and registers its cleanup.
