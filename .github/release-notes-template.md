@@ -24,6 +24,17 @@
   follows README.md's "Unverified writes" section. Linux hardware
   evidence is still pending: the evidence-status section says so, and
   must keep saying so until a real-radio Linux session has run.
+
+  SYNC 26/08/2026: the packaged binaries HAVE now been launch-tested.
+  Rehearsal debs built by release.yml were installed on clean Ubuntu
+  24.04.4 desktop VMs on both architectures (arm64 23/08/2026, amd64
+  the same day) — desktop entry, Demo workflow, version stamp checked
+  at runtime on each — so the evidence-status section no longer says
+  they are untested. No radio was attached: real-radio Linux evidence
+  is still pending, and that half of the bullet must keep saying so.
+  The install-time dependency sentence in the Downloads section was
+  also softened, because both GUI libraries were already present on
+  the stock desktop image and the VMs never made apt fetch them.
 -->
 
 Open Rig Programmer __VERSION__ — an open-source, cross-platform
@@ -107,7 +118,10 @@ help, open an issue.
 
 Either Debian package installs the GUI, the `rigprog` CLI, a desktop
 entry and the ModemManager udev rule; `sudo apt install ./<file>`
-pulls in `libwebkit2gtk-4.1-0` and GTK 3 for you. That WebKit runtime
+resolves `libwebkit2gtk-4.1-0` and GTK 3 if they are missing. On a
+stock Ubuntu 24.04 desktop both were already installed, so the install
+fetched nothing extra; a minimal or server image, which would have to
+pull the WebKit runtime in, has not been tried. That WebKit runtime
 package exists on Ubuntu 22.04 and later, on Debian 12 and later, and
 on the Mint releases built from those — not on anything older. On
 other distributions, take the CLI tarball or build the GUI from source
@@ -172,10 +186,17 @@ What this release has **not** been exercised against:
   pull request, and launched under Xvfb on an amd64 CI runner to
   prove it starts; the release build packages it into the
   Debian packages above, whose contents CI then checks. The packaged
-  binaries themselves have not yet been launch-tested, on either
-  architecture, and no real-radio session has been run on Linux at
-  all. `docs/linux-setup.md` carries the port-setup instructions;
-  treat the first Linux session as exploratory and read-only first.
+  GUI and CLI have since been installed from the Debian packages onto
+  clean Ubuntu 24.04 desktop virtual machines on **both**
+  architectures and launched there — GUI started from its installed
+  desktop entry, connected to the built-in Demo radio, and the version
+  stamp read back from the running binaries on each. What none of that
+  involved is a radio: **no real-radio session has been run on Linux**,
+  so which serial node is the CAT port, and whether the packaged udev
+  rule keeps ModemManager off it, are both unconfirmed.
+  `docs/linux-setup.md` carries the port-setup instructions and the
+  full status; treat the first Linux session as exploratory and
+  read-only first.
 - **Any FTdx10, FTdx101D or FTdx101MP.** Everything about those three
   models is derived from the manufacturer's CAT reference manuals
   through a documented transcription-and-cross-check process, and
