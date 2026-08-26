@@ -5,8 +5,8 @@
 This document covers the two things a Linux user needs to do before
 `rigprog` (CLI or GUI) can open a real FT-710's serial port: join the
 `dialout` group, and stop ModemManager from probing the radio's
-USB-serial adapter. See `README.md`'s quick-start section for where
-this fits into the overall install/connect flow, and
+USB-serial adapter. See `README.md`'s "Install" and "Getting started"
+sections for where this fits into the overall install/connect flow, and
 `docs/hardware-notes.md` for the hardware facts this project has
 actually confirmed (macOS only, so far — see "Status" below).
 
@@ -74,6 +74,14 @@ If your FT-710 enumerates under a different VID:PID (check with
 `lsusb` while it's plugged in), adjust `idVendor`/`idProduct`
 accordingly.
 
+If you installed the `.deb`, this section is already done for you. The
+package installs this exact rule at
+`/usr/lib/udev/rules.d/99-open-rig-programmer.rules`, from
+`app/build/linux/99-open-rig-programmer.rules` in this repository —
+its `SUBSYSTEM=="tty"` line is byte for byte the one above. Creating
+the rule by hand is therefore only needed for the static CLI tarball
+or a build from source.
+
 ## Identifying the CAT (Enhanced UART) port
 
 The CP2105 exposes two USB-serial interfaces from one physical
@@ -90,16 +98,55 @@ ports, and `rigprog probe --port <path>` to positively confirm which
 node answers the FT-710's CAT identity query — that is the
 authoritative check, not the device node's number.
 
-## Status: pending real-hardware verification on Linux
+## Status: the package is verified, the radio is still pending
 
-Everything above follows from general Linux/udev/ModemManager
-practice and the CP2105's known macOS behaviour; **none of it has yet
-been verified against a real FT-710 on Linux**. The project's plan
-requires a Linux real-radio session — confirming the `dialout`/udev
-steps above actually work, and identifying which `/dev/ttyUSB*` node
-is the CAT-capable Enhanced UART — before Linux release artefacts
-ship publicly (see `docs/hardware-notes.md`'s "Explicitly not probed"
-sections — "Linux everything"). Until that session has run and this
-document has been updated with its findings, treat this page as a
-best-effort starting point, and the project's release stays a DRAFT
-(see `.github/workflows/release.yml`) because of it.
+**What has been verified.** On 23/08/2026 the rehearsal Debian
+packages built by `.github/workflows/release.yml` at the v1.1.0-rc.1
+tag were installed on clean Ubuntu 24.04.4 LTS desktop virtual
+machines — one arm64, one amd64, stock images carrying no development
+toolchain, with only an SSH server added before the observations
+below were taken (lintian was installed on the arm64 VM afterwards,
+for an informational run) — and exercised there:
+
+- `sudo apt install ./<the .deb>` succeeds on both architectures and
+  installs every packaged path. On the arm64 VM the removal cycle was
+  exercised too: `apt remove` took the binaries, the udev rule, the
+  desktop entry, the icon and the doc directory away again, and
+  reinstalling restored all of them.
+- `udevadm verify` accepts the rule the package installs at
+  `/usr/lib/udev/rules.d/99-open-rig-programmer.rules` on both
+  architectures (1 success, 0 failures on arm64, where the installed
+  file was also confirmed byte for byte the one this repository ships
+  in `app/build/linux/99-open-rig-programmer.rules`).
+- ModemManager is installed, enabled and running on the stock arm64
+  Ubuntu 24.04 desktop image — so section 2 addresses something really
+  there, not a hypothetical.
+- The GUI starts from its installed desktop entry on both
+  architectures and connects to the built-in Demo radio; on arm64 the
+  whole Demo workflow was driven through, edit and Send included.
+- `rigprog --version` prints the packaged version on both
+  architectures, and `rigprog ports` exits cleanly: on the arm64 VM it
+  listed the VM's own `/dev/ttyAMA0` (score 0, "no ranking signal
+  matched"); on the amd64 VM it found no serial ports at all.
+
+**What has not.** None of the above involved a radio. No FT-710 has
+ever been connected to a Linux machine by this project, so **every
+instruction on this page that depends on the device is still
+unconfirmed**: whether the `dialout` step is sufficient in practice,
+which `/dev/ttyUSB*` node is the CAT-capable Enhanced UART, and
+whether the udev rule actually keeps ModemManager off the radio — the
+arm64 VM observed that ModemManager is running, not how it behaves
+towards an FT-710. Everything in sections 1 and 2 still follows from
+general Linux/udev/ModemManager practice and the CP2105's known macOS
+behaviour, nothing more.
+
+The project's plan therefore still requires a Linux real-radio session
+(see `docs/hardware-notes.md`'s "Explicitly not probed" section —
+"Linux port-mapping recheck"). Until it has run and this document has
+been updated with its findings, treat the serial-port instructions
+above as a best-effort starting point.
+
+Every GitHub release this project makes starts as a DRAFT:
+`.github/workflows/release.yml` never clears that flag, so whether any
+artefact ships is a separate human decision. This pending Linux
+hardware evidence is one of the things that decision has to weigh.
