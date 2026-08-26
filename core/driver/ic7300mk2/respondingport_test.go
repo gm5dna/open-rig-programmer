@@ -400,7 +400,7 @@ func bcdBytes(n int) (hi, lo byte) {
 // user's own grant, and a test that does not is exercising the guard. A
 // Simulated-profile session would make both cases pass for the wrong
 // reason.
-func openSession(t *testing.T, p transport.Port, opts ...Option) *Session {
+func openSession(t *testing.T, p transport.Port, opts ...Option) driver.Session {
 	t.Helper()
 	sess, err := New(RealHardware, opts...).Open(context.Background(), p, driver.Identity{Port: "test"})
 	if err != nil {

@@ -114,7 +114,8 @@
 //
 // THE SCAN CONSTRAINT IS READ-DEPENDENT, and that is why it sits at rung 8
 // rather than among the locally decidable ones. It judges record byte ③,
-// whose SELECT nibble NO spec.Field carries at all (plan decision D4) — so
+// whose SELECT nibble NO spec.Field carries at all (§3.16 A10 reads it as
+// group membership, the opposite sense to a skip flag) — so
 // the only place its value exists is the record the radio just handed back,
 // exactly as for E6's own check. Checking it earlier would mean judging a
 // datum before the read that produces it.

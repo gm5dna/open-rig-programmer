@@ -21,10 +21,10 @@ import (
 // holds the driver value BEFORE the port exists, which is the one moment
 // "how many stop bits?" can be asked at; a session-side reporter could only
 // ever be consulted after the framing had been guessed.
-// The two MANDATORY seam assertions — driver.Driver and driver.Session —
-// land with write.go, where the last of Session's own methods arrives.
 var (
+	_ driver.Driver                = (*ic7300mk2Driver)(nil)
 	_ driver.SerialFramingReporter = (*ic7300mk2Driver)(nil)
+	_ driver.Session               = (*Session)(nil)
 	_ driver.DiagnosticsReporter   = (*Session)(nil)
 )
 
@@ -80,7 +80,7 @@ func (d *ic7300mk2Driver) StopBits() int { return 1 }
 // TWO FUNCTIONS, on core/driver/ftdx101's shape: Open owns the resources and
 // the cleanup, open is the body and may return an error from anywhere
 // without leaking a port. Open takes ownership of port on BOTH outcomes.
-func (d *ic7300mk2Driver) Open(ctx context.Context, port transport.Port, id driver.Identity) (*Session, error) {
+func (d *ic7300mk2Driver) Open(ctx context.Context, port transport.Port, id driver.Identity) (driver.Session, error) {
 	p := ic7300mk2civ.Profile()
 
 	// E1's constructor. It REFUSES an unconfigured profile, which a plain
@@ -177,7 +177,7 @@ func (d *ic7300mk2Driver) open(ctx context.Context, eng *transport.Engine, fr tr
 		return nil, fmt.Errorf("ic7300mk2: Open: 19 00 identity read: %w", err)
 	}
 	// THE TOKEN IS RECORDED AND NEVER MATCHED (D5 entry 7,
-	// `ic7300-id-token`). The reply value is undocumented on every model in
+	// `ic7300mk2-identity-token`, lift MK2-R4). The reply value is undocumented on every model in
 	// this tier, so what identifies the radio at this step is that an
 	// ADDRESS-MATCHED reply arrived at all — a property of the frame's `to`
 	// and `from` bytes, which the matcher and the parser both check.
@@ -222,7 +222,7 @@ func (d *ic7300mk2Driver) probeForFingerprint(ctx context.Context, eng *transpor
 		probe.ProbeSlotsRead = n
 
 		// AN FA IS NOT AN ERROR: it is an empty channel (D5 entry 2(a),
-		// ASSUMED, lift `ic7300-empty-read`). Engine.Do CONSUMES the FA and
+		// ASSUMED, lift MK2-R2). Engine.Do CONSUMES the FA and
 		// returns ErrRejected with no frame, so this branch keys on the
 		// ERROR and never on "an FA frame arrived" (ruling T4).
 		if errors.Is(err, transport.ErrRejected) {

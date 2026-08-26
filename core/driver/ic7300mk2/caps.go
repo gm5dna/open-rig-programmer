@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	ic7300mk2civ "github.com/gm5dna/open-rig-programmer/core/civ/ic7300mk2"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -409,14 +410,13 @@ type ic7300mk2Driver struct {
 // The zero Profile is RealHardware, the fail-safe one, so a caller that
 // passes nothing at all gets the description that writes nothing.
 //
-// IT WILL RETURN THE NEUTRAL driver.Driver once the Session is complete
-// (write.go), and everything above this package holds the seam rather than
-// this type. The two optional capabilities this driver additionally
-// implements — driver.SerialFramingReporter on the DRIVER,
+// It returns the NEUTRAL driver.Driver: everything above this package holds
+// the seam rather than this type. The two optional capabilities this driver
+// additionally implements — driver.SerialFramingReporter on the DRIVER,
 // driver.DiagnosticsReporter on the SESSION — are reached by the house's
 // two-result type assertion, never by a concrete type a caller would have to
 // import this package to name.
-func New(p Profile, opts ...Option) *ic7300mk2Driver {
+func New(p Profile, opts ...Option) driver.Driver {
 	d := &ic7300mk2Driver{profile: p}
 	for _, opt := range opts {
 		opt(d)

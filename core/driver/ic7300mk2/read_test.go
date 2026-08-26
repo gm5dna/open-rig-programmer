@@ -96,7 +96,7 @@ func TestReadChannel_AllFFRecordIsAnEmptyChannel(t *testing.T) {
 	sess := openSession(t, peer)
 	ch, err := sess.ReadChannel(context.Background(), "001")
 	if err != nil {
-		t.Fatalf("ReadChannel: %v — an all-FF record is D5 entry 2(b)'s empty channel (ic7300-ff-record), never an error that aborts ReadAll", err)
+		t.Fatalf("ReadChannel: %v — an all-FF record is D5 entry 2(b)'s empty channel (D5 entry 2(b), lift MK2-R3), never an error that aborts ReadAll", err)
 	}
 	if !ch.Empty() {
 		t.Error("channel is populated after an all-FF record")
@@ -177,7 +177,7 @@ func TestReadChannel_DisagreeingTXBlockFailsTheRead(t *testing.T) {
 }
 
 // P1 and P2 read through the same record shape (ASSUMED —
-// ic7300-scan-edge-record-shape).
+// ic7300mk2-scan-edge-record-layout, lift MK2-R10).
 func TestReadChannel_ScanEdges(t *testing.T) {
 	peer := newRespondingPort(t,
 		withRecord(100, populatedRecord),
