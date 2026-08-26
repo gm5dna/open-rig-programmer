@@ -186,7 +186,8 @@ What this release has **not** been exercised against:
   GUI is built from the same source on every push to main and every
   pull request, and launched under Xvfb on an amd64 CI runner to
   prove it starts; the release build packages it into the
-  Debian packages above, whose contents CI then checks. The packaged
+  Debian packages above, whose contents the same release build then
+  checks. The packaged
   GUI and CLI have since been installed from the Debian packages this
   project's release workflow built at the v1.1.0-rc.1 rehearsal tag,
   onto clean Ubuntu 24.04 desktop virtual machines (23/08/2026) on
