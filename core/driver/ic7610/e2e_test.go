@@ -4,9 +4,13 @@ package ic7610
 
 import (
 	"bytes"
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"net"
+	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -224,12 +228,38 @@ func newFake(t *testing.T, opts ...fakeic7610.Option) *fakeic7610.Radio {
 // what identifies the radio is that an ADDRESS-MATCHED reply arrived at
 // all.
 func TestE2E_ProbeFingerprints(t *testing.T) {
-	t.Run("the fake's own derived length confirms this driver's", func(t *testing.T) {
-		if fakeic7610.RecordLen != civic7610.RecordOnlyLength {
-			t.Fatalf("STOP — the fake derives a %d-byte record and this driver's ONE TABLE says %d. "+
-				"Two independent readings of PDF p.12 disagree; this is orchestrator arbitration AGAINST THE PDF, "+
-				"and is never fixed by editing either side to match the other",
-				fakeic7610.RecordLen, civic7610.RecordOnlyLength)
+	t.Run("both record lengths are re-derived from the frozen artefact", func(t *testing.T) {
+		record, dataArea, selector := recordLengthFromTranscription(t)
+
+		// THE ARTEFACT IS THE AUTHORITY, and neither constant may agree
+		// with the other while both disagree with it. Comparing the two
+		// constants ALONE would leave a corrected transcription with two
+		// green-and-wrong packages — which is the class Stage 1's own
+		// 584bb02 ("the evidence that was merely stored is now consumed")
+		// closed on the civ side, and it applies here for the same reason.
+		if fakeic7610.RecordLen != record {
+			t.Errorf("STOP — the fake's RecordLen is %d and the transcription's D1 widths derive %d. "+
+				"The fake's author derived theirs from this same CSV without ever seeing this driver; "+
+				"a disagreement is orchestrator arbitration AGAINST THE PDF, never an edit to either side",
+				fakeic7610.RecordLen, record)
+		}
+		if civic7610.RecordOnlyLength != record {
+			t.Errorf("STOP — this driver's RecordOnlyLength is %d and the transcription's D1 widths derive %d. "+
+				"The plan's ONE TABLE and the B leg's own widths must agree; a disagreement is arbitration "+
+				"against PDF p.12, never a constant moved to match",
+				civic7610.RecordOnlyLength, record)
+		}
+		// The other two figures spec Erratum 1 requires stated TOGETHER,
+		// with the address width named — pinned to the same artefact, so
+		// the whole accounting stands or falls on one reading.
+		if civic7610.DataAreaLength != dataArea {
+			t.Errorf("DataAreaLength = %d, and the D1 widths sum to %d", civic7610.DataAreaLength, dataArea)
+		}
+		if civic7610.AddressBytes != selector {
+			t.Errorf("AddressBytes = %d, and the transcription's selector row is %d bytes wide", civic7610.AddressBytes, selector)
+		}
+		if record != dataArea-selector {
+			t.Errorf("the derivation is incoherent: %d != %d - %d", record, dataArea, selector)
 		}
 	})
 
@@ -897,4 +927,85 @@ func TestE2E_TheDriverNeverMutatesTheRadiosSettings(t *testing.T) {
 			t.Error("a 1A 00 <ch> FF clear frame reached the radio")
 		}
 	}
+}
+
+// transcriptionPath is the B leg's committed transcription, reached from
+// this package's own directory (go test's working directory).
+//
+// IT IS FROZEN EVIDENCE. core/civ/ic7610's TestEvidenceFrozen holds its
+// SHA-256, so a change to it is a deliberate, reviewable act — and this
+// test is what makes that act reach the two RECORD-LENGTH CONSTANTS
+// instead of leaving them behind.
+const transcriptionPath = "../../civ/ic7610/testdata/ic7610-transcription-b.csv"
+
+// recordLengthFromTranscription re-derives this radio's three length
+// figures FROM THE ARTEFACT, by the arithmetic both packages claim to
+// have done:
+//
+//	dataArea = the sum of every D1 row's width_bytes          (27)
+//	selector = the width of the ①, ② channel-selector row     (2)
+//	record   = dataArea - selector                            (25)
+//
+// READ, NOT TRANSCRIBED. A Go literal holding 2, 1, 5, 2, 1, 3, 3, 10
+// would be a SECOND COPY of the CSV, and a correction to the CSV would
+// leave the copy and the constants agreeing with each other and with
+// nothing else. Reading the cells means a corrected artefact turns this
+// test red, which is the only way the correction reaches the code.
+func recordLengthFromTranscription(t *testing.T) (record, dataArea, selector int) {
+	t.Helper()
+	f, err := os.Open(transcriptionPath)
+	if err != nil {
+		t.Fatalf("opening the frozen transcription: %v", err)
+	}
+	defer func() { _ = f.Close() }()
+
+	rows, err := csv.NewReader(f).ReadAll()
+	if err != nil {
+		t.Fatalf("parsing %s: %v", transcriptionPath, err)
+	}
+	if len(rows) == 0 {
+		t.Fatalf("%s is empty", transcriptionPath)
+	}
+	col := map[string]int{}
+	for i, name := range rows[0] {
+		col[name] = i
+	}
+	for _, want := range []string{"diagram_id", "field_index", "label_verbatim", "width_bytes"} {
+		if _, ok := col[want]; !ok {
+			t.Fatalf("%s has no %q column; its header is %v", transcriptionPath, want, rows[0])
+		}
+	}
+
+	var d1 int
+	for _, row := range rows[1:] {
+		if row[col["diagram_id"]] != "D1" {
+			continue
+		}
+		d1++
+		w, err := strconv.Atoi(strings.TrimSpace(row[col["width_bytes"]]))
+		if err != nil {
+			t.Fatalf("D1 row %q has an unreadable width_bytes %q: %v",
+				row[col["field_index"]], row[col["width_bytes"]], err)
+		}
+		dataArea += w
+		// The selector row is identified by BOTH its printed index and
+		// its label, so a renumbered or relabelled artefact fails loudly
+		// here rather than silently subtracting the wrong field.
+		if row[col["field_index"]] == "①, ②" && row[col["label_verbatim"]] == "Memory channel numbers" {
+			if selector != 0 {
+				t.Fatalf("the transcription carries more than one channel-selector row")
+			}
+			selector = w
+		}
+	}
+	// Eight D1 rows is the band the page draws; a ninth or a seventh
+	// means the transcription has been re-cut and every figure below it
+	// needs re-reading rather than re-summing.
+	if d1 != 8 {
+		t.Fatalf("the transcription has %d D1 rows, want 8 — the memory-content band was re-cut and this derivation no longer describes it", d1)
+	}
+	if selector == 0 {
+		t.Fatalf("the transcription has no D1 row for the ①, ② channel selector; the derivation has nothing to subtract")
+	}
+	return dataArea - selector, dataArea, selector
 }
