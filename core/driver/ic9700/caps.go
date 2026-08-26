@@ -347,3 +347,48 @@ func CapabilitiesUnverified() spec.Capabilities {
 func CapabilitiesSimulated() spec.Capabilities {
 	return capabilities(spec.Supported)
 }
+
+// cloneCapabilities returns a deep copy of caps: Banks (with their Slots
+// and Fields) and every other slice or pointer freshly allocated.
+//
+// THE COPY IS LOAD-BEARING, not hygiene. What Session.Capabilities hands
+// out is this project's hardware-write gate data
+// (spec.FieldSupport.CanWrite), and the session's own WriteChannel
+// re-checks against the value it KEEPS. An aliasing copy would let a
+// caller who tweaked a returned FieldSupport — to experiment, or by
+// accident — silently redefine the gate every other caller enforces.
+//
+// It mirrors core/driver/ftdx101's function of the same name and extends
+// it by the Icom tier's own fields: the two duplex/tone vocabularies, the
+// DTCS table and polarity list, the filter list, and the tone RANGE, which
+// is a POINTER and would otherwise be shared outright.
+func cloneCapabilities(caps spec.Capabilities) spec.Capabilities {
+	out := caps
+	out.Banks = make([]spec.Bank, 0, len(caps.Banks))
+	for _, b := range caps.Banks {
+		// Capabilities.Bank returns a defensive copy (fresh Slots and
+		// Fields); reuse that guarantee rather than restating per-field
+		// copying here. The ok result cannot be false: b came out of
+		// caps.Banks and Bank scans that same slice for b.ID, and
+		// Validate refuses a duplicate BankID, which is the only way the
+		// lookup could serve the wrong one.
+		cp, _ := caps.Bank(b.ID)
+		out.Banks = append(out.Banks, cp)
+	}
+	out.Modes = append([]string(nil), caps.Modes...)
+	out.CTCSSTones = append([]spec.Tone(nil), caps.CTCSSTones...)
+	if caps.CTCSSToneRange != nil {
+		r := *caps.CTCSSToneRange
+		out.CTCSSToneRange = &r
+	}
+	out.Bauds = append([]int(nil), caps.Bauds...)
+	out.RequiredSlots = append([]string(nil), caps.RequiredSlots...)
+	out.ShiftOptions = append([]spec.ShiftOption(nil), caps.ShiftOptions...)
+	out.CTCSSStates = append([]spec.ToneState(nil), caps.CTCSSStates...)
+	out.DuplexOptions = append([]spec.DuplexOption(nil), caps.DuplexOptions...)
+	out.ToneModes = append([]spec.ToneMode(nil), caps.ToneModes...)
+	out.DTCSPolarities = append([]string(nil), caps.DTCSPolarities...)
+	out.DTCSCodes = append([]int(nil), caps.DTCSCodes...)
+	out.Filters = append([]string(nil), caps.Filters...)
+	return out
+}
