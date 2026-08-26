@@ -74,7 +74,7 @@ func TestEveryCircledGlyphClassIsDecoded(t *testing.T) {
 	}{
 		{"①", 1, false}, {"⑳", 20, false}, // U+2460..U+2473
 		{"㉑", 21, false}, {"㉟", 35, false}, // U+3251..U+325F
-		{"㊱", 36, false}, {"㊾", 49, false}, // U+32B1..U+32BF
+		{"㊱", 36, false}, {"㊾", 49, false}, {"㊿", 50, false}, // U+32B1..U+32BF
 		{"❶", 1, true}, {"❿", 10, true}, // U+2776..U+277F
 		{"⓫", 11, true}, {"⓴", 20, true}, // U+24EB..U+24F4
 	} {
