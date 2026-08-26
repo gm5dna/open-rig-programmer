@@ -188,8 +188,8 @@ What this release has **not** been exercised against:
   prove it starts; the release build packages it into the
   Debian packages above, whose contents CI then checks. The packaged
   GUI and CLI have since been installed from the Debian packages this
-  project's release workflow built at the v1.1.0-rc.1 rehearsal tag
-  (23/08/2026), onto clean Ubuntu 24.04 desktop virtual machines on
+  project's release workflow built at the v1.1.0-rc.1 rehearsal tag,
+  onto clean Ubuntu 24.04 desktop virtual machines (23/08/2026) on
   **both** architectures, and
   launched there — GUI started from its installed desktop entry,
   connected to the built-in Demo radio, and the version stamp read
