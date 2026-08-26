@@ -327,20 +327,41 @@ func duplexValues() []string {
 func TestReadChannelRefusesAnAnswerNamingAnotherSlot(t *testing.T) {
 	// T2, and the reason it cannot be left to the matcher: the landed
 	// MemoryAnswerMatcher is envelope-only.
-	sess, _ := sessionAnsweringSlot(t, "144-001", withAnswerForAddress(civ.ChannelAddress{Group: 1, Channel: 7}))
-	_, err := sess.ReadChannel(context.Background(), "144-001")
-	if !errors.Is(err, ic9700.ErrAnswerMismatch) {
-		t.Fatalf("err = %v, want errors.Is match against ErrAnswerMismatch", err)
-	}
-	var mm *ic9700.AnswerMismatchError
-	if !errors.As(err, &mm) {
-		t.Fatalf("err = %v, want *ic9700.AnswerMismatchError", err)
-	}
-	if mm.Requested.Channel != 1 || mm.Answered.Channel != 7 {
-		t.Errorf("mismatch = requested %v answered %v", mm.Requested, mm.Answered)
-	}
-	if sess.CIVDiagnostics().AnswerMismatches != 1 {
-		t.Error("the mismatch was not counted in diagnostics")
+	//
+	// BOTH HALVES OF THE ADDRESS ARE COMPARED, and the cross-band case is
+	// the one worth the fixture. On this model the same channel NUMBER
+	// exists in all three bands — which is the entire reason the slot
+	// spelling carries a band — so an answer for 430-001 to a read of
+	// 144-001 is a DIFFERENT MEMORY with an identical channel number, and
+	// a comparison that looked only at the channel would map one band's
+	// record onto another's slot without a murmur.
+	for _, tc := range []struct {
+		name      string
+		answering civ.ChannelAddress
+	}{
+		{"another channel in the same band", civ.ChannelAddress{Group: 1, Channel: 7}},
+		{"the same channel in another band", civ.ChannelAddress{Group: 2, Channel: 1}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sess, _ := sessionAnsweringSlot(t, "144-001", withAnswerForAddress(tc.answering))
+			_, err := sess.ReadChannel(context.Background(), "144-001")
+			if !errors.Is(err, ic9700.ErrAnswerMismatch) {
+				t.Fatalf("err = %v, want errors.Is match against ErrAnswerMismatch", err)
+			}
+			var mm *ic9700.AnswerMismatchError
+			if !errors.As(err, &mm) {
+				t.Fatalf("err = %v, want *ic9700.AnswerMismatchError", err)
+			}
+			if mm.Requested != (civ.ChannelAddress{Group: 1, Channel: 1}) {
+				t.Errorf("Requested = %v, want g1/ch1", mm.Requested)
+			}
+			if mm.Answered != tc.answering {
+				t.Errorf("Answered = %v, want %v", mm.Answered, tc.answering)
+			}
+			if sess.CIVDiagnostics().AnswerMismatches != 1 {
+				t.Error("the mismatch was not counted in diagnostics")
+			}
+		})
 	}
 }
 

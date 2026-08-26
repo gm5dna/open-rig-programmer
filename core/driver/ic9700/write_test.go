@@ -440,17 +440,49 @@ func TestWriteChannelRefusesAStoredRPSChannel(t *testing.T) {
 	// OQ-6 under R6/E6, the READ-dependent half: the stored value cannot
 	// be named by caps.DuplexOptions, so the channel is refused rather
 	// than rewritten as OFF.
-	sess, port := consentedSession(t, withStoredDuplexNibble("144-001", 3))
-	_, err := sess.WriteChannel(context.Background(), channelAt("144-001"))
-	var refused *driver.WriteRefusedError
-	if !errors.As(err, &refused) {
-		t.Fatalf("err = %v, want a refusal naming RPS", err)
-	}
-	if !strings.Contains(refused.Error(), "RPS") {
-		t.Errorf("refusal %q does not name RPS", refused.Error())
-	}
-	if port.countSets() != 0 {
-		t.Error("the driver sent a set frame before refusing")
+	//
+	// THE BAND-3 CASE IS WHAT MAKES THE E6 CLAUSE CARRY ITS OWN WEIGHT.
+	// Over 144-001 with an incoming mode of FM the stored RPS is
+	// preserved onto that mode and the POST-MERGE cross-field check
+	// refuses it instead — "RPS can be set only when DD mode is
+	// selected" — which contains the same "RPS" a laxer assertion greps
+	// for, so disabling the template guard's clause left the suite green.
+	// At 1200-001 with mode DD the cross-field rule is satisfied, so the
+	// guard's own clause is the only thing that can refuse, and its
+	// wording is asserted rather than the bare substring.
+	for _, tc := range []struct {
+		name, slot string
+		freqHz     uint64
+		mode       string
+		wantText   string
+	}{
+		{
+			name: "in band 3 with DD, where only the template guard can refuse",
+			slot: "1200-001", freqHz: 1_240_000_000, mode: "DD",
+			wantText: "the stored channel is set to RPS",
+		},
+		{
+			name: "in band 1, where the merged record also violates the manual",
+			slot: "144-001", freqHz: 145_500_000, mode: "FM",
+			wantText: "RPS",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sess, port := consentedSession(t, withStoredDuplexNibble(tc.slot, 3))
+			data := withMode(t, tc.mode)
+			data.FreqHz = tc.freqHz
+			_, err := sess.WriteChannel(context.Background(), channelWith(tc.slot, data))
+			var refused *driver.WriteRefusedError
+			if !errors.As(err, &refused) {
+				t.Fatalf("err = %v, want a refusal naming RPS", err)
+			}
+			if !strings.Contains(refused.Error(), tc.wantText) {
+				t.Errorf("refusal %q does not contain %q", refused.Error(), tc.wantText)
+			}
+			if port.countSets() != 0 {
+				t.Error("the driver sent a set frame before refusing")
+			}
+		})
 	}
 }
 
@@ -713,9 +745,49 @@ func TestWriteIsNeverRetransmitted(t *testing.T) {
 
 func TestRejectionBecomesErrRejected(t *testing.T) {
 	sess, _ := consentedSession(t, withTemplateStateAt("144-001"), withRejection())
-	_, err := sess.WriteChannel(context.Background(), channelAt("144-001"))
+	res, err := sess.WriteChannel(context.Background(), channelAt("144-001"))
 	if !errors.Is(err, transport.ErrRejected) {
 		t.Fatalf("err = %v, want transport.ErrRejected", err)
+	}
+	// The sentinel's own text is NEWCAT's "?;". The FA this driver
+	// actually saw is named in the message this package builds around it.
+	if !strings.Contains(err.Error(), "FA") {
+		t.Errorf("err = %q, and an IC-9700 user's rejection message never names the FA the radio sent", err)
+	}
+	// SENT IS ABOUT ATTRIBUTION, NOT SUCCESS. driver.WriteStep defines it
+	// as "transmitted with an attributable outcome — success or an
+	// explicit rejection", and a radio that answered FA received the
+	// frame and refused it. Reporting that identically to a silent radio
+	// throws away the distinction the seam exists to make.
+	if len(res.Steps) != 1 {
+		t.Fatalf("%d steps, want 1", len(res.Steps))
+	}
+	if !res.Steps[0].Sent {
+		t.Error("Sent = false after an EXPLICIT rejection; the frame reached the radio and the radio refused it")
+	}
+	if res.Steps[0].Confirmed {
+		t.Error("Confirmed = true on a refused write")
+	}
+}
+
+func TestATimedOutWriteIsNotReportedAsAttributablySent(t *testing.T) {
+	// The other side of MINOR-4's split, so the fix cannot be widened
+	// into "Sent means transmitted". A radio that answers nothing may
+	// never have received the frame at all: the outcome is genuinely
+	// unknown, and Sent stays false.
+	sess, port := consentedSession(t, withTemplateStateAt("144-001"), withNoAcknowledgement())
+	res, err := sess.WriteChannel(context.Background(), channelAt("144-001"))
+	if err == nil {
+		t.Fatal("a write that drew no FB must fail")
+	}
+	if errors.Is(err, transport.ErrRejected) {
+		t.Fatal("silence was reported as a rejection")
+	}
+	if len(res.Steps) != 1 || res.Steps[0].Sent || res.Steps[0].Confirmed {
+		t.Errorf("steps = %+v, want one step neither sent nor confirmed", res.Steps)
+	}
+	if port.countSets() != 1 {
+		t.Errorf("the set frame was sent %d times; ClassWriteWithAck never retransmits", port.countSets())
 	}
 }
 

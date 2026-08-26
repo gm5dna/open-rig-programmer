@@ -4,6 +4,7 @@ package ic9700
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
+	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
 // requestedFields lists every spec.Field a write of data actually
@@ -231,6 +233,23 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	// timeout leaves the write's outcome genuinely unknown, and the one
 	// thing that must not happen is sending it again to find out.
 	if _, err := s.eng.Do(ctx, cmd, civ.CIVWriteWithAckSpec(s.profile.AcknowledgementMatcher())); err != nil {
+		// SENT IS ABOUT ATTRIBUTION, NOT ABOUT SUCCESS. The seam defines
+		// it as "the frame was transmitted with an attributable outcome —
+		// success or an EXPLICIT REJECTION" (driver.WriteStep), and the
+		// two failures are not the same event: a radio that answered FA
+		// received the frame and refused it, while a radio that answered
+		// nothing may never have received it at all. Reporting both as
+		// Sent false is safe but blind, and the seam exists precisely to
+		// tell them apart — core/driver/ftdx101 makes the same split.
+		// Confirmed stays false either way: nothing was accepted.
+		if errors.Is(err, transport.ErrRejected) {
+			result.Steps[0].Sent = true
+			// THE SENTINEL'S OWN TEXT SAYS "?;", WHICH IS NEWCAT. It is
+			// frozen transport and not this package's to rename, so the
+			// CI-V form is named HERE, where an IC-9700 user's error
+			// message is actually built. errors.Is still matches.
+			return result, fmt.Errorf("ic9700: WriteChannel %s: the radio refused the memory set with FA: %w", ch.Slot, err)
+		}
 		return result, fmt.Errorf("ic9700: WriteChannel %s: %w", ch.Slot, err)
 	}
 	result.Steps[0].Sent = true
@@ -400,6 +419,14 @@ func (s *Session) validateKnownValues(slot string, data codeplug.ChannelData) er
 // A duplex of "RPS" reaching here at all means it came from a STORED
 // record rather than from a Known incoming value: rung 3 refuses an
 // incoming one unconditionally, because caps.DuplexOptions cannot name it.
+//
+// FREQUENCY AND BAND ARE NOT CHECKED AGAINST ONE ANOTHER, deliberately.
+// 145 MHz can be written into a `1200-…` slot: the capabilities declare
+// one global MinFreqHz/MaxFreqHz pair, and the slot's band constrains only
+// the mode and the duplex. Matrix §3.16 A2 lists exactly three cross-field
+// constraints and this is not one of them, so a fourth would be this
+// driver inventing a rule the document does not state. It belongs with
+// `ic9700-band-mode-duplex-constraints` if a capture ever lifts R21.
 func (s *Session) crossFieldRefusal(slot string, addr civ.ChannelAddress, mode, duplex string) error {
 	const ddBand = 3 // the 1.2 GHz band, wire code 03
 
@@ -551,6 +578,17 @@ func mappedOffsets(layout civ.RecordLayout) []bool {
 // digit RANGES and nothing else, and leg G's 88.5 Hz is recorded in its
 // own provenance as a CHOICE — so the refusal stands. Register entry
 // `ic9700-no-documented-default-tone`, lift R24.
+//
+// THREE FIELDS CANNOT BE PRESERVED, AND THE MAPPING TABLE'S "preserved"
+// DOES NOT REACH THEM. Mode, Tag and FreqHz are plain values on
+// ChannelData rather than tri-state fields, so "not Known" has no
+// representation for them and they are always a request. In practice an
+// empty Mode is REFUSED at rung 3 and an out-of-range FreqHz likewise —
+// both the safe direction — while an empty Tag BLANKS the stored name
+// rather than preserving it. All three are unconditionally requested, so
+// treating them as always-a-request is what the requested set already
+// says; recorded here so no later reader takes the plan's "preserved" for
+// an unimplemented requirement.
 //
 // ④ IS ALWAYS WRITTEN AS OFF. It has no neutral home at all, so there is
 // nothing to take a value from; the template state is OFF, the guard above

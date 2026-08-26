@@ -108,6 +108,16 @@ type radioImage struct {
 	// record of 0xFF — the second empty-slot form (D5 entry 2(b)) at the
 	// WRONG slot, which is the ordering trap T2 exists to close.
 	misdirectAllFF bool
+	// misdirectAlways is misdirect in force from the FIRST BYTE, arming
+	// or no arming.
+	//
+	// IT EXISTS FOR THE PROBE'S OWN T2 CHECK, which nothing else can
+	// reach. Every other deliberate fault is armed after Open precisely
+	// so it cannot corrupt the diagnostics a test is about — but plan
+	// Task 10 step 3b puts a T2 comparison on every SEARCH read too, and
+	// a fault that only ever arms afterwards leaves that comparison
+	// deletable with the suite green.
+	misdirectAlways *civ.ChannelAddress
 	// rejectSets answers every memory set with FA instead of FB.
 	rejectSets bool
 	// silentSets answers a memory set with nothing at all, which
@@ -516,6 +526,10 @@ func (p *recordingPort) readReply(img radioImage, armed bool, frame []byte, from
 		}
 		body := append(addrBytes, make([]byte, img.dataArea-len(addrBytes))...)
 		return answerFrame(from, []byte{0x1A, 0x00}, body)
+	}
+	if misdirect := img.misdirectAlways; misdirect != nil {
+		other := encodeTestAddress(*misdirect)
+		return answerFrame(from, []byte{0x1A, 0x00}, append(other, templateRecord(*misdirect)...))
 	}
 	if armed && img.misdirect != nil {
 		other := encodeTestAddress(*img.misdirect)

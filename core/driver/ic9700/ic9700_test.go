@@ -150,6 +150,41 @@ func TestTheProbeSearchIsBoundedAndStopsAtTheFirstRecord(t *testing.T) {
 	}
 }
 
+func TestTheProbeRefusesToFingerprintFromAnotherSlotsRecord(t *testing.T) {
+	// T2 ON THE SEARCH READS (plan Task 10 step 3b). The bounded
+	// occupied-slot search asks about band 1 channels 1..8; a radio that
+	// answers every one of them with a well-formed record naming a
+	// DIFFERENT channel has told the driver nothing about the channel it
+	// asked about, so no fingerprint may be taken from it.
+	//
+	// The misdirection is in force from the first byte, which is what
+	// makes this reachable: every other deliberate fault in this package
+	// is armed after Open so it cannot corrupt the diagnostics a test is
+	// about, and under that arrangement the probe's own comparison was
+	// deletable with the suite green.
+	img := baseImage()
+	elsewhere := civ.ChannelAddress{Group: 1, Channel: 42}
+	img.misdirectAlways = &elsewhere
+	port := newRecordingPort(t, img)
+
+	sess, err := ic9700.New(ic9700.RealHardware).Open(context.Background(), port.Port(), driver.Identity{})
+	if err != nil {
+		t.Fatalf("Open: %v — a misdirecting radio is not a reason to refuse the open", err)
+	}
+	defer sess.Close()
+
+	d := sess.(*ic9700.Session).CIVDiagnostics()
+	if d.Fingerprinted {
+		t.Error("the probe fingerprinted this profile from a record belonging to another slot")
+	}
+	if d.AnswerMismatches != 8 {
+		t.Errorf("AnswerMismatches = %d, want 8 — one per search read, counted rather than swallowed", d.AnswerMismatches)
+	}
+	if got := port.countReads(); got != 8 {
+		t.Errorf("the search made %d reads, want the bounded 8 — a mismatch skips the slot, it does not stop the search", got)
+	}
+}
+
 func TestTheIdentityTokenIsRecordedAndNeverMatched(t *testing.T) {
 	// D5 entry 7, lift R6: the `19 00` reply VALUE is undocumented on all
 	// six models in this tier. What the probe requires is that an
