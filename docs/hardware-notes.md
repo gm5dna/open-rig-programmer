@@ -14,8 +14,9 @@ never committed); everything below has been through the redaction
 process `docs/fixtures.md` mandates — no real callsign, no personal
 frequency list, no other operator-identifying data appears here.
 
-Sections up to and including "Consequences applied" record M5a; the
-"M5b write-trial protocol" section and everything after it record M5b.
+Sections up to and including "Consequences applied" record M5a (plus
+later annotations, each dated where it appears); the "M5b write-trial
+protocol" section and everything after it record M5b.
 
 **Code symbols named in this log are historical, not a current API
 reference.** Function and type names from `core/` are recorded as they
@@ -93,7 +94,9 @@ frame. This is a genuinely useful safety property: on macOS, opening the
 *wrong* port and accidentally keying the radio via a CAT session pointed
 at the Standard UART is structurally impossible, because that port
 cannot be opened at all. This has not been re-checked on Linux; that
-recheck is deferred to M7 (the pre-release Linux hardware session).
+recheck was deferred to M7 (the pre-release Linux hardware session)
+and is **still outstanding as of 26/08/2026** — see "Linux hardware:
+still pending" under "Explicitly not probed" below.
 
 USB serial number was **empty** in the CAT identity probe on macOS,
 under both driver stacks — session identity binding currently falls back
@@ -394,7 +397,26 @@ Recorded here, honestly, rather than silently assumed:
   issued this session.
 - **Linux port-mapping recheck** — the "wrong-port TX-key structurally
   impossible" finding is macOS-only; deferred to M7's pre-release Linux
-  hardware session.
+  hardware session, which as of 26/08/2026 has still not run (see the
+  next subsection).
+
+### Linux hardware: still pending (annotation added 26/08/2026)
+
+Every session recorded in this document was run on macOS. **No FT-710
+has ever been connected to a Linux machine by this project**, so the
+M7 deferrals above remain open: the port-mapping recheck, which
+`/dev/ttyUSB*` node is the CAT-capable Enhanced UART, whether the
+`dialout` group step suffices in practice, and whether the packaged
+udev rule keeps ModemManager away from the radio.
+
+What *has* been checked on Linux is the packaging, not the radio: the
+rehearsal Debian packages built by `.github/workflows/release.yml` at
+the v1.1.0-rc.1 tag were installed and launched on clean Ubuntu
+24.04.4 desktop virtual machines on both architectures on 23/08/2026,
+with no radio attached. That evidence — what it covers and
+what it does not — is written up in `docs/linux-setup.md`'s Status
+section, deliberately kept out of this file, which records real-radio
+sessions only.
 
 ## Consequences applied
 

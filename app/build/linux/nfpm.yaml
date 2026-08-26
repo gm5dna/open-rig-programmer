@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# nfpm configuration for the Linux .deb. Run from the app/ directory:
+#   NFPM_ARCH=<amd64|arm64> NFPM_VERSION=<version-without-v> \
+#     nfpm package -f build/linux/nfpm.yaml -p deb -t <output.deb>
+# Expects binaries at build/bin/open-rig-programmer (wails build) and
+# dist/rigprog (go build) relative to that working directory.
+name: open-rig-programmer
+arch: ${NFPM_ARCH}
+platform: linux
+version: ${NFPM_VERSION}
+# Verbatim version fidelity: nfpm's default semver schema rewrites a
+# prerelease (1.1.0-rc.1) to the deb form 1.1.0~rc.1, which would make
+# the control-file Version disagree with the artefact filename and
+# fail check-deb at the rehearsal tag (verified empirically with nfpm
+# v2.47.0, 16/08/2026). Accepted caveat: in deb ordering 1.1.0-rc.1
+# sorts AFTER 1.1.0 — irrelevant here because rc debs are never
+# published and only ever installed in disposable rehearsal VMs;
+# published versions (1.1.0) carry no prerelease and are unaffected.
+version_schema: none
+section: hamradio
+priority: optional
+maintainer: Stuart Henderson GM5DNA <stuart@craggiemore.com>
+vendor: Open Rig Programmer
+homepage: https://github.com/gm5dna/open-rig-programmer
+license: GPL-3.0-or-later
+description: |
+  Memory-channel programmer for Yaesu transceivers.
+  Desktop GUI (open-rig-programmer) and command-line tool (rigprog)
+  sharing one core. The FT-710 reads and writes; FTdx10 and
+  FTdx101D/MP read, and write only after opt-in.
+depends:
+  - libwebkit2gtk-4.1-0
+  - libgtk-3-0t64 | libgtk-3-0
+contents:
+  - src: build/bin/open-rig-programmer
+    dst: /usr/bin/open-rig-programmer
+  - src: dist/rigprog
+    dst: /usr/bin/rigprog
+  - src: build/linux/open-rig-programmer.desktop
+    dst: /usr/share/applications/open-rig-programmer.desktop
+  - src: build/linux/open-rig-programmer-512.png
+    dst: /usr/share/icons/hicolor/512x512/apps/open-rig-programmer.png
+  - src: build/linux/99-open-rig-programmer.rules
+    dst: /usr/lib/udev/rules.d/99-open-rig-programmer.rules
+  - src: build/linux/copyright
+    dst: /usr/share/doc/open-rig-programmer/copyright
+scripts:
+  postinstall: build/linux/scripts/postinstall.sh
+  postremove: build/linux/scripts/postremove.sh
+deb:
+  compression: gzip
