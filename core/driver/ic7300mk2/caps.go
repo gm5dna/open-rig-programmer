@@ -200,7 +200,17 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 		//
 		// Matrix §3.4: CI-V Address (Default: B6h). The IC-7300 answers at
 		// 94h, which is why the two cannot confuse each other in the field.
-		CATID: "B6",
+		//
+		// LOWERCASE, matching the runtime form Go's "%02x" verb always
+		// produces (ic7300mk2.go's Identity.CATID, "b6:<token>", stated two
+		// paragraphs above) — this static field and that runtime one MUST
+		// agree byte-for-byte, since core/clone/read.go persists this exact
+		// value into a codeplug file's RadioInfo.CATID and downstream
+		// comparisons are case-sensitive. "B6h" (the manual's own printed
+		// form, in prose) and the wire byte 0xB6 are untouched by this: only
+		// THIS field's string content is the tier's lowercase-hex
+		// convention, not a restatement of the manual's typography.
+		CATID: "b6",
 		Banks: []spec.Bank{
 			{
 				ID:    spec.BankMemory,

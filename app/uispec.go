@@ -218,11 +218,19 @@ var tierFields = []spec.Field{
 // The zero-value lookup covers "bank absent from caps entirely" and
 // "bank present but not listing the field" alike, so both answer "not
 // reachable" with no special-casing — caps that say nothing about a
-// field are not evidence that the radio has one. Every bank of all four
-// Yaesu models therefore returns nil and their grids' column sets are
-// unchanged; the IC-7610's MEM and SCAN banks each return that radio's
-// own four (tone_mode, tone_tx, tone_rx, filter), pinned by
-// TestGetUISpec_RegisteredIC7610_EveryBankFieldsAndTagDisplay.
+// field are not evidence that the radio has one.
+//
+// AN OPEN LIST, NOT A SNAPSHOT: every bank of all four registered Yaesu
+// models reaches none of the ten tier fields, so their grids' column sets
+// stay empty; every registered Icom model returns its OWN bank's own
+// reachable set, independently derived from that model's own record —
+// four for the IC-7610 (tone_mode, tone_tx, tone_rx, filter, pinned by
+// TestGetUISpec_RegisteredIC7610_EveryBankFieldsAndTagDisplay), and six
+// each for the IC-7300 and IC-7300MK2 (the IC-7610's four plus
+// tx_frequency and data_mode, pinned by
+// TestGetUISpec_RegisteredIC7300_EveryBankFieldsAndTagDisplay and its
+// MK2 mirror). A future Icom registration extends this same list with
+// its own model-specific set; nothing here needs to change for it to.
 func bankTierFields(caps spec.Capabilities, id spec.BankID) []string {
 	var out []string
 	for _, f := range tierFields {

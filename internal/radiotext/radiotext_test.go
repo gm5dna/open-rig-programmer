@@ -385,13 +385,13 @@ func TestRadiotext_IC7610Verbatim(t *testing.T) {
 	want := radiotext.Text{
 		EraseProcedure:   "The IC-7610's CI-V protocol has an erase command form, but this build never sends it: no IC-7610 has ever confirmed what it does, and sending an unconfirmed erase command risks clearing the wrong channel. This build does not describe a front-panel procedure either — no IC-7610 operating manual is held here — so follow the memory-channel clear procedure in the radio's own operating manual.",
 		FirmwareGuidance: "No minimum firmware version is established for the IC-7610: nothing this project holds states one, and no IC-7610 has been asked. There is no CI-V query for the version either — read it off the radio's own display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established.",
-		ToneScanSkipNote: "Tone is read and written for the IC-7610 over CI-V by this build, but unverified against real hardware — no IC-7610 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V byte is a select-group marker, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
+		ToneScanSkipNote: "Tone is read and written for the IC-7610 over CI-V by this build, but unverified against real hardware — no IC-7610 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble is a select-group marker, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
 		// Deliberately empty — see this test's doc comment.
 		ToneScanSkipVerification: "",
 		EraseDialogNote:          "The IC-7610's CI-V protocol has an erase command form, but this build never sends it: no IC-7610 has ever confirmed what it does, and sending an unconfirmed erase command risks clearing the wrong channel. This build does not describe a front-panel procedure either — no IC-7610 operating manual is held here — so follow the memory-channel clear procedure in the radio's own operating manual.",
 		PreservationTooltips: radiotext.PreservationTooltips{
 			Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7610 has ever answered a frame",
-			ScanSkip: "not read or written over CI-V by this build — this radio's nearest wire byte is a select-group marker, not a skip flag",
+			ScanSkip: "not read or written over CI-V by this build — this radio's nearest wire nibble is a select-group marker, not a skip flag",
 		},
 		FirmwarePlaceholder: "as shown on the radio's display",
 		ProbeFirmwareNote:   "Firmware version has no CI-V query — check the radio's display. No minimum version is established for the IC-7610: this build knows of none to require. This driver talks only to CI-V address 98h, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200 is itself ASSUMED, not read off the radio, since the reference guide names six rates and marks no default. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
@@ -447,25 +447,28 @@ func TestRadiotext_IC7610Verbatim(t *testing.T) {
 // particulars lists for the IC-7300 pair — extending the six shared with
 // TestRadiotext_IC7610Verbatim (the Yaesu vocabulary tokens and the bare
 // "CAT" token, since this pair is CI-V throughout too) with EACH MODEL'S
-// OWN address hex and the OTHER model's possessive name form.
+// OWN address hex and a check for the sibling.
 //
-// THE POSSESSIVE FORM, NOT THE BARE MODEL NAME, is what each list checks
-// for the sibling, and that is load-bearing rather than a style choice:
-// "IC-7300" is a byte-for-byte PREFIX of "IC-7300MK2", so checking the
-// IC-7300MK2's own prose for the bare substring "IC-7300" would fault on
-// every one of its own self-references (its own entry says "The
-// IC-7300MK2's..." throughout, which itself contains "IC-7300"). "IC-7300's"
-// (with the apostrophe-s) is NOT a substring of "IC-7300MK2's" — after
-// "IC-7300" the MK2's own text always continues "MK2's", never "'s" — so
-// the possessive form distinguishes a genuine borrowing of the sibling's
-// own sentences from an innocent self-reference. The IC-7300's own list
-// checks the mirror image, "IC-7300MK2's", which cannot appear in ITS
-// prose at all since the IC-7300 entry never mentions its sibling.
+// THE PREFIX HAZARD RUNS ONLY ONE DIRECTION, and the two lists differ
+// because of it: "IC-7300" is a byte-for-byte PREFIX of "IC-7300MK2", so
+// checking the IC-7300MK2's OWN prose for the bare substring "IC-7300"
+// would fault on every one of its own self-references (its own entry says
+// "The IC-7300MK2's..." throughout, which itself contains "IC-7300") —
+// ic7300mk2Particulars therefore checks the POSSESSIVE form, "IC-7300's",
+// which is NOT a substring of "IC-7300MK2's" (after "IC-7300" the MK2's
+// own text always continues "MK2's", never "'s" directly), so it catches
+// a genuine borrowing of the sibling's sentences without faulting on the
+// MK2's own self-reference. The IC-7300's OWN prose never mentions its
+// sibling at all, so ic7300Particulars has no such self-reference to
+// avoid and checks the bare model name, "IC-7300MK2" — strictly STRONGER
+// than the possessive form, since it also matches a possessive
+// occurrence, and safe here because the hazard the possessive form exists
+// to dodge does not run in this direction.
 var ic7300Particulars = []string{
 	"V01-10", "[V/M]", "[ERASE]", "FT-710", "hardware-verified",
 	"FTdx10", "FTdx101D", "FTdx101MP", "CAT manual", "CAT command", "CAT query", "CAT",
 	"IC-7610", "98h",
-	"IC-7300MK2's", "B6h",
+	"IC-7300MK2", "B6h",
 }
 
 var ic7300mk2Particulars = []string{
@@ -500,13 +503,13 @@ func TestRadiotext_IC7300Verbatim(t *testing.T) {
 	want := radiotext.Text{
 		EraseProcedure:   "The IC-7300's CI-V protocol prints two erase command forms — a 1A 00 set with a SELECT byte of FF, and a separate command 0B — but this build sends neither: no IC-7300 has ever confirmed what either does, and sending an unconfirmed erase command risks clearing the wrong channel rather than the intended one. Follow the memory-channel clear procedure printed in the IC-7300's own full operating manual.",
 		FirmwareGuidance: "No minimum firmware version is established for the IC-7300: nothing this project holds states one, and no IC-7300 has been asked. The IC-7300's own full manual names no CI-V query for the version either — read it off the radio's own display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established.",
-		ToneScanSkipNote: "Tone is read and written for the IC-7300 over CI-V by this build, but unverified against real hardware — no IC-7300 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V byte is a select-group marker, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
+		ToneScanSkipNote: "Tone is read and written for the IC-7300 over CI-V by this build, but unverified against real hardware — no IC-7300 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble is a select-group marker, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
 		// Deliberately empty — see this test's doc comment.
 		ToneScanSkipVerification: "",
 		EraseDialogNote:          "The IC-7300's CI-V protocol prints two erase command forms — a 1A 00 set with a SELECT byte of FF, and a separate command 0B — but this build sends neither: no IC-7300 has ever confirmed what either does, and sending an unconfirmed erase command risks clearing the wrong channel rather than the intended one. Follow the memory-channel clear procedure printed in the IC-7300's own full operating manual.",
 		PreservationTooltips: radiotext.PreservationTooltips{
 			Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7300 has ever answered a frame",
-			ScanSkip: "not read or written over CI-V by this build — the IC-7300's nearest wire byte is a select-group marker, not a skip flag",
+			ScanSkip: "not read or written over CI-V by this build — the IC-7300's nearest wire nibble is a select-group marker, not a skip flag",
 		},
 		FirmwarePlaceholder: "as shown on the IC-7300's own display",
 		ProbeFirmwareNote:   "Firmware version has no CI-V query — check the radio's display. No minimum version is established for the IC-7300: this build knows of none to require. This driver talks only to CI-V address 94h, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200 is a CHOICE — the highest rate this radio's document lists on both its [USB] and [REMOTE] ports — not a value read off the radio. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
@@ -558,15 +561,15 @@ func TestRadiotext_IC7300Verbatim(t *testing.T) {
 func TestRadiotext_IC7300MK2Verbatim(t *testing.T) {
 	want := radiotext.Text{
 		EraseProcedure:   "The IC-7300MK2's CI-V protocol prints two erase command forms — a 1A 00 set with a truncated data area, and a separate command 0B, whose own printed row states that P1 and P2 cannot be cleared — but this build sends neither: no IC-7300MK2 has ever confirmed what either does, and sending an unconfirmed erase command risks clearing the wrong channel rather than the intended one. This build does not describe a front-panel procedure either — this document is a CI-V reference guide, not a full operating manual — so follow the memory-channel clear procedure in the radio's own operating manual.",
-		FirmwareGuidance: "No minimum firmware version is established for the IC-7300MK2: nothing this project holds states one, and no IC-7300MK2 has been asked. There is no CI-V query for the version either — read it off the radio's own display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established.",
-		ToneScanSkipNote: "Tone is read and written for the IC-7300MK2 over CI-V by this build, but unverified against real hardware — no IC-7300MK2 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V byte is a select-group marker, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
+		FirmwareGuidance: "No minimum firmware version is established for the IC-7300MK2: nothing this project holds states one, and no IC-7300MK2 has been asked. The IC-7300MK2's CI-V reference guide names no CI-V query for the version either — read it off the radio's own display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established.",
+		ToneScanSkipNote: "Tone is read and written for the IC-7300MK2 over CI-V by this build, but unverified against real hardware — no IC-7300MK2 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble is a select-group marker, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
 		// Deliberately empty — see TestRadiotext_IC7300Verbatim's doc
 		// comment; the same reasoning applies to this model.
 		ToneScanSkipVerification: "",
 		EraseDialogNote:          "The IC-7300MK2's CI-V protocol prints two erase command forms — a 1A 00 set with a truncated data area, and a separate command 0B, whose own printed row states that P1 and P2 cannot be cleared — but this build sends neither: no IC-7300MK2 has ever confirmed what either does, and sending an unconfirmed erase command risks clearing the wrong channel rather than the intended one. This build does not describe a front-panel procedure either — this document is a CI-V reference guide, not a full operating manual — so follow the memory-channel clear procedure in the radio's own operating manual.",
 		PreservationTooltips: radiotext.PreservationTooltips{
 			Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7300MK2 has ever answered a frame",
-			ScanSkip: "not read or written over CI-V by this build — the IC-7300MK2's nearest wire byte is a select-group marker, not a skip flag",
+			ScanSkip: "not read or written over CI-V by this build — the IC-7300MK2's nearest wire nibble is a select-group marker, not a skip flag",
 		},
 		FirmwarePlaceholder: "as shown on the IC-7300MK2's own display",
 		ProbeFirmwareNote:   "Firmware version has no CI-V query — check the radio's display. No minimum version is established for the IC-7300MK2: this build knows of none to require. This driver talks only to CI-V address B6h, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200 is a conservative derivation from a wake-up-command table this document prints for an unrelated purpose — this reference guide names no baud list and no factory default at all. If nothing answers, check the radio's address and speed before assuming the port is wrong.",

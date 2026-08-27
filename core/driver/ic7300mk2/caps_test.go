@@ -90,8 +90,8 @@ func TestCapabilities_TheNumbersFromTheMatrix(t *testing.T) {
 	if caps.Model != "IC-7300MK2" {
 		t.Errorf("Model = %q, want %q", caps.Model, "IC-7300MK2")
 	}
-	if caps.CATID != "B6" {
-		t.Errorf("CATID = %q, want %q (spec D3.2: the address hex, plus the observed 19 00 token, which is recorded at Open and never matched)", caps.CATID, "B6")
+	if caps.CATID != "b6" {
+		t.Errorf("CATID = %q, want %q (spec D3.2: the address hex, plus the observed 19 00 token, which is recorded at Open and never matched; lowercase to match the runtime Identity.CATID form Go's \"%%02x\" verb always produces, and what core/clone persists into a codeplug file)", caps.CATID, "b6")
 	}
 	if caps.TagLen != 16 {
 		t.Errorf("TagLen = %d, want 16 — ⑱ ~ ㉝ is sixteen bytes on this model, against the IC-7300's ten", caps.TagLen)

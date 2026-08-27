@@ -200,13 +200,14 @@ var ic7610CoreThree = []spec.Field{
 // which are all the zero FieldSupport on this radio too (the same
 // deliberatelyZero table ic7610CoreThree's doc comment cites).
 //
-// THE IC-7610 IS THE FIRST REGISTERED MODEL WHOSE BankView.Fields IS EVER
-// NON-EMPTY. bankTierFields' own doc comment states "every bank of every
-// model registered today therefore returns nil" — true of all four Yaesu
-// rows, and false of this one from the moment it registers; that comment
-// is now stale prose rather than a stale test (a doc-generalisation item,
-// not fixed by this task, since app/uispec.go is a shared file this
-// registration otherwise makes no code change to).
+// THE IC-7610 WAS THE FIRST REGISTERED MODEL WHOSE BankView.Fields WAS EVER
+// NON-EMPTY, at this model's own registration (Wave 4 task R1).
+// bankTierFields' own doc comment (app/uispec.go) has since been rewritten
+// as an open statement covering every registered Icom model by name,
+// rather than the stale "every bank of every model registered today
+// therefore returns nil" it originally carried — corrected as part of the
+// IC-7300 pair's own registration (Wave 4 task R3 fix round 1), which is
+// what first made that sentence false for a SECOND family.
 var ic7610TierFields = []string{"tone_mode", "tone_tx", "tone_rx", "filter"}
 
 // ic7300CoreThree is the core set every IC-7300 bank derives, on every

@@ -155,25 +155,6 @@ func TestNewRealDriver_HWVerifiedWriteSet(t *testing.T) {
 // merely happened to share a leading substring cannot slip through. This
 // test does NOT pin the fake's own token value (e.g. "98a5") anywhere —
 // only that a value beginning with the address arrived at all.
-//
-// THE PREFIX COMPARISON IS CASE-INSENSITIVE (Wave 4 task R3, the IC-7300
-// pair's own tightening, the same kind fix round 1 applied to the IC-7610's
-// first cut): the IC-7300MK2 is this tier's first registered model whose
-// CI-V address hex contains a letter — static caps.CATID is "B6"
-// (core/driver/ic7300mk2/caps.go, printed-case), while the session's
-// Identity().CATID is built from Go's "%02x" verb
-// (core/driver/ic7300mk2.go), which is always LOWERCASE — "b6:<token>".
-// Neither value is wrong: caps.go states the manual's own printed hex
-// digits, and %02x's lowercase is Go's own formatting choice, and the two
-// were never exercised against each other before this pair registered,
-// since every prior CI-V address ("98", "94") has no letter for case to
-// differ on. A case-SENSITIVE prefix match would therefore fail this
-// radio's own honest session for a reason that has nothing to do with a
-// crossed fakeDrivers pairing — exactly the failure mode this exception
-// exists to avoid — so the comparison folds case for the address-half
-// exception only; the exact-equality arm above (every Yaesu model's) is
-// untouched, since none of those static CATIDs contains a letter whose
-// case could legitimately vary.
 func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
 	models := SupportedModels()
 	if len(models) == 0 {
@@ -202,11 +183,8 @@ func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
 			got := sess.Identity().CATID
 			// CI-V address half only: a two-character static CATID is an
 			// address alone (spec D3.2), and its session CATID is that
-			// address plus a probe token this test never pins. The
-			// prefix check folds case — see this test's own doc comment
-			// for why (the IC-7300MK2's "B6" vs. "%02x"'s lowercase
-			// "b6").
-			ok := got == caps.CATID || (len(caps.CATID) == 2 && strings.HasPrefix(strings.ToLower(got), strings.ToLower(caps.CATID)))
+			// address plus a probe token this test never pins.
+			ok := got == caps.CATID || (len(caps.CATID) == 2 && strings.HasPrefix(got, caps.CATID))
 			if !ok {
 				t.Errorf("Identity().CATID = %q, want %q — the fake rig answering this session is not %s's own", got, caps.CATID, model)
 			}
@@ -1543,19 +1521,21 @@ func assertNoConsentAnywhere(t *testing.T, what string, caps spec.Capabilities) 
 // SessionOptions{ConsentUnverifiedWrites: true}, the session the real wiring
 // path returns must carry the consent transform — MEM's frequency write,
 // spec.Unverified in each of these radios' real-hardware baselines (no
-// FTdx10, FTDX101D or FTDX101MP has been written to by this project), becomes
-// spec.ConsentedUnverified — and must carry it on the write side only.
+// FTdx10, FTDX101D, FTDX101MP, IC-7610, IC-7300 or IC-7300MK2 has been
+// written to by this project), becomes spec.ConsentedUnverified — and must
+// carry it on the write side only.
 //
-// EVERY consent-eligible model, one subtest each, deliberately: the three
-// rows differ in which driver package they reach (ftdx10, and ftdx101 twice
-// over two constructors), and a table that threaded the option through one
-// row and dropped it in another would leave a user's recorded consent
+// EVERY consent-eligible model, one subtest each, deliberately: the rows
+// differ in which driver package they reach (ftdx10; ftdx101 twice over two
+// constructors; and, since Wave 4, ic7610, ic7300 and ic7300mk2, three
+// separate driver packages), and a table that threaded the option through
+// one row and dropped it in another would leave a user's recorded consent
 // silently inert for that radio. The FT-710 is not here because its row's
 // option is a proven no-op (its real-hardware set has no Unverified write to
 // transform); core/driver/ft710's own tests own that proof, and
 // TestRealDriverFor_DefaultPathByteIdentical below covers its default path.
 func TestOpenRealSessionWith_ConsentedSessionCaps(t *testing.T) {
-	for _, model := range []string{FTdx10Model, FTdx101DModel, FTdx101MPModel} {
+	for _, model := range []string{FTdx10Model, FTdx101DModel, FTdx101MPModel, IC7610Model, IC7300Model, IC7300MK2Model} {
 		t.Run(model, func(t *testing.T) {
 			fakePortSeam(t, model)
 
@@ -1611,7 +1591,7 @@ func TestOpenRealSessionFor_DelegatesZeroOptions(t *testing.T) {
 // TestRealDriverFor_DefaultPathByteIdentical is the no-change pin: with
 // consent false — every existing caller's path, and OpenRealSessionFor's own
 // — realDriverFor must build exactly what the pinned zero-argument
-// constructors build, for all four registered models. It is what makes the
+// constructors build, for EVERY registered model. It is what makes the
 // table's new closure parameter safe to add: the default path is not merely
 // "still working" but byte-identical to the one it replaced.
 //
@@ -1623,8 +1603,9 @@ func TestOpenRealSessionFor_DelegatesZeroOptions(t *testing.T) {
 // to nothing a consented SESSION, while every capability assertion in this
 // file stayed green. Each driver struct carries its consent flag as a plain
 // field (consentUnverifiedWrites, nil transportLogger on both sides, and a
-// cat.Dialect of pure data), so reflect.DeepEqual over the constructed values
-// sees the leak directly — and sees it for ALL FOUR models, where the
+// cat.Dialect of pure data, or a civ.Profile of pure data for the Icom
+// rows), so reflect.DeepEqual over the constructed values sees the leak
+// directly — and sees it for EVERY registered model, where the
 // session-level delegation test can only afford one.
 func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 	for _, tc := range []struct {
@@ -1635,6 +1616,9 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		{FTdx10Model, NewFTdx10RealDriver},
 		{FTdx101DModel, NewFTdx101DRealDriver},
 		{FTdx101MPModel, NewFTdx101MPRealDriver},
+		{IC7610Model, NewIC7610RealDriver},
+		{IC7300Model, NewIC7300RealDriver},
+		{IC7300MK2Model, NewIC7300MK2RealDriver},
 	} {
 		got, err := realDriverFor(tc.model, false)
 		if err != nil {

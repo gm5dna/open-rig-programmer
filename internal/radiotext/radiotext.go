@@ -434,7 +434,7 @@ var ftdx101mpText = Text{
 //     unlike every Yaesu radio registered so far, where tone_mode/tone_tx/
 //     tone_rx are outside the CAT frame entirely — so this radio's tone
 //     note says the opposite of theirs. Scan Skip is NOT mapped: the
-//     nearest wire byte on this radio is a four-valued SELECT-group
+//     nearest wire nibble on this radio is a four-valued SELECT-group
 //     marker (matrix §3.16 ADDED-1), not a skip flag, so a Scan Skip value
 //     is refused before anything reaches the radio rather than being
 //     written as something it is not (adjudication R6, ruling E6).
@@ -460,9 +460,9 @@ var ic7610Text = Text{
 	// Tone IS read and written for this radio (unlike every Yaesu radio
 	// registered so far) — over CI-V, unverified against real hardware,
 	// since no IC-7610 has ever answered a frame. Scan Skip is not: this
-	// radio's nearest wire byte is a select-group marker, not a skip flag,
+	// radio's nearest wire nibble is a select-group marker, not a skip flag,
 	// and setting one is refused before anything reaches the radio.
-	ToneScanSkipNote: "Tone is read and written for the IC-7610 over CI-V by this build, but unverified against real hardware — no IC-7610 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V byte is a select-group marker, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
+	ToneScanSkipNote: "Tone is read and written for the IC-7610 over CI-V by this build, but unverified against real hardware — no IC-7610 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble is a select-group marker, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
 	// DELIBERATELY EMPTY, exactly as every Yaesu entry's is and for the
 	// same reason: this field states what IS and is NOT hardware-verified
 	// about preservation across a rewrite, and with writeTrialsComplete
@@ -484,7 +484,7 @@ var ic7610Text = Text{
 	// mapped field at all, so there is nothing to preserve or fail to).
 	PreservationTooltips: PreservationTooltips{
 		Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7610 has ever answered a frame",
-		ScanSkip: "not read or written over CI-V by this build — this radio's nearest wire byte is a select-group marker, not a skip flag",
+		ScanSkip: "not read or written over CI-V by this build — this radio's nearest wire nibble is a select-group marker, not a skip flag",
 	},
 	// A placeholder LABEL, not an example, on the same footing as the
 	// FTdx10's and FTdx101 pair's: no IC-7610 version string has been seen
@@ -513,13 +513,20 @@ var ic7610Text = Text{
 // capability matrix, none from a hardware finding — and no write trial has
 // happened (writeTrialsComplete, core/driver/ic7300/caps.go, is false).
 //
-// THIS ENTRY BORROWS NOTHING FROM ANY OTHER MODEL'S PROSE, ic7610Text and
-// the IC-7300MK2's own ic7300mk2Text included: core/driver/ic7300/doc.go's
-// own package comment states that the IC-7300's and IC-7300MK2's manuals
-// are MUTUALLY SILENT about each other and that "no lift in one lifts
-// anything for the sibling", which is exactly why this pair registers as
-// two driver packages, two fakes and, here, two independently written Text
-// values rather than one shared with a model-name substitution.
+// THIS ENTRY CARRIES NO OTHER RADIO'S EVIDENCE OR PARTICULARS, ic7610Text
+// and the IC-7300MK2's own ic7300mk2Text included: core/driver/ic7300/
+// doc.go's own package comment states that the IC-7300's and IC-7300MK2's
+// manuals are MUTUALLY SILENT about each other and that "no lift in one
+// lifts anything for the sibling", which is exactly why this pair
+// registers as two driver packages, two fakes and, here, two independently
+// written Text values rather than one shared with a model-name
+// substitution. The sentence SKELETONS below (an erase-form paragraph, a
+// tone/scan-skip paragraph, a firmware paragraph) are shared house style
+// across every entry in this file, ic7610Text's included, and that is
+// deliberate and not a borrowing this doc comment or its test disputes —
+// what must never cross a model boundary is the EVIDENCE inside those
+// skeletons: an address, a baud fact, a hedge, a claim about what has or
+// has not been confirmed.
 // TestRadiotext_IC7300Verbatim pins every string, and its own non-borrowing
 // check refuses any field that is byte-identical to, or carries a
 // particular of, any of the six other registered models — the four Yaesu
@@ -573,10 +580,10 @@ var ic7300Text = Text{
 	FirmwareGuidance: "No minimum firmware version is established for the IC-7300: nothing this project holds states one, and no IC-7300 has been asked. The IC-7300's own full manual names no CI-V query for the version either — read it off the radio's own display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established.",
 	// Tone IS read and written for this radio — over CI-V, unverified
 	// against real hardware, since no IC-7300 has ever answered a frame.
-	// Scan Skip is not: this radio's nearest wire byte is a SELECT-group
+	// Scan Skip is not: this radio's nearest wire nibble is a SELECT-group
 	// marker, not a skip flag, and setting one is refused before anything
 	// reaches the radio (core/driver/ic7300/caps.go's bankFields).
-	ToneScanSkipNote: "Tone is read and written for the IC-7300 over CI-V by this build, but unverified against real hardware — no IC-7300 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V byte is a select-group marker, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
+	ToneScanSkipNote: "Tone is read and written for the IC-7300 over CI-V by this build, but unverified against real hardware — no IC-7300 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble is a select-group marker, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
 	// DELIBERATELY EMPTY, exactly as every other registered model's is and
 	// for the same reason: writeTrialsComplete is false, so there is no
 	// hardware-preservation verification of any kind to report.
@@ -589,7 +596,7 @@ var ic7300Text = Text{
 	// unverified) and Scan Skip (structurally not mapped at all).
 	PreservationTooltips: PreservationTooltips{
 		Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7300 has ever answered a frame",
-		ScanSkip: "not read or written over CI-V by this build — the IC-7300's nearest wire byte is a select-group marker, not a skip flag",
+		ScanSkip: "not read or written over CI-V by this build — the IC-7300's nearest wire nibble is a select-group marker, not a skip flag",
 	},
 	// A placeholder LABEL, not an example: no IC-7300 version string has
 	// been seen here. Names the model rather than the ic7610Text/generic
@@ -616,14 +623,17 @@ var ic7300Text = Text{
 // constant, false for its OWN reasons: that package's own comment states
 // "The registered sibling's FALSE is not stated here").
 //
-// THIS ENTRY BORROWS NOTHING FROM ic7300Text, and that is the one fact
-// this doc comment exists to say loudest: the two Icom documents this pair
-// is built from are MUTUALLY SILENT about each other
-// (core/driver/ic7300mk2/doc.go's own package comment), so an entry that
-// read like ic7300Text with the model name substituted would misattribute
-// one radio's evidence to the other — exactly the failure mode the
-// FTdx101D/MP pair is EXEMPT from (their SHARED manual makes a
-// substitution proof correct for them) and this pair is NOT.
+// THIS ENTRY CARRIES NO OTHER RADIO'S EVIDENCE OR PARTICULARS FROM
+// ic7300Text, and that is the one fact this doc comment exists to say
+// loudest: the two Icom documents this pair is built from are MUTUALLY
+// SILENT about each other (core/driver/ic7300mk2/doc.go's own package
+// comment), so an entry that read like ic7300Text with the model name
+// substituted would misattribute one radio's evidence to the other —
+// exactly the failure mode the FTdx101D/MP pair is EXEMPT from (their
+// SHARED manual makes a substitution proof correct for them) and this
+// pair is NOT. The shared sentence SKELETON both entries use (house
+// style, see ic7300Text's own doc comment) is not itself a borrowing;
+// what must never cross is the evidence each skeleton carries.
 // TestRadiotext_IC7300MK2Verbatim's own non-borrowing check covers the
 // pair against each other, the same way the FTdx101 pair's
 // TestRadiotext_FTdx101DAndMPDifferOnlyInTheModelName test structure pairs
@@ -674,13 +684,13 @@ var ic7300mk2Text = Text{
 	// No minimum-firmware fact is established for this radio: this CI-V
 	// reference guide names no firmware-version command anywhere, so there
 	// is no CI-V query either.
-	FirmwareGuidance: "No minimum firmware version is established for the IC-7300MK2: nothing this project holds states one, and no IC-7300MK2 has been asked. There is no CI-V query for the version either — read it off the radio's own display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established.",
+	FirmwareGuidance: "No minimum firmware version is established for the IC-7300MK2: nothing this project holds states one, and no IC-7300MK2 has been asked. The IC-7300MK2's CI-V reference guide names no CI-V query for the version either — read it off the radio's own display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established.",
 	// Tone IS read and written for this radio — over CI-V, unverified
 	// against real hardware, since no IC-7300MK2 has ever answered a
-	// frame. Scan Skip is not: this radio's nearest wire byte is a
+	// frame. Scan Skip is not: this radio's nearest wire nibble is a
 	// SELECT-group marker, not a skip flag, and setting one is refused
 	// before anything reaches the radio.
-	ToneScanSkipNote: "Tone is read and written for the IC-7300MK2 over CI-V by this build, but unverified against real hardware — no IC-7300MK2 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V byte is a select-group marker, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
+	ToneScanSkipNote: "Tone is read and written for the IC-7300MK2 over CI-V by this build, but unverified against real hardware — no IC-7300MK2 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble is a select-group marker, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
 	// DELIBERATELY EMPTY, on the same footing as every other registered
 	// model's: writeTrialsComplete is false, so there is no
 	// hardware-preservation verification of any kind to report.
@@ -692,7 +702,7 @@ var ic7300mk2Text = Text{
 	// structurally is not (no mapped field at all).
 	PreservationTooltips: PreservationTooltips{
 		Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7300MK2 has ever answered a frame",
-		ScanSkip: "not read or written over CI-V by this build — the IC-7300MK2's nearest wire byte is a select-group marker, not a skip flag",
+		ScanSkip: "not read or written over CI-V by this build — the IC-7300MK2's nearest wire nibble is a select-group marker, not a skip flag",
 	},
 	// A placeholder LABEL, not an example: no IC-7300MK2 version string
 	// has been seen here. Names the model rather than the ic7610Text/
