@@ -128,6 +128,20 @@ func TestListPorts_NoError(t *testing.T) {
 // M9a-5) bound method: registry-driven (internal/wiring.SupportedModels),
 // so it must at least contain wiring.DefaultModel, sorted (matching
 // SupportedModels' own guarantee).
+//
+// THE DeepEqual CHECK ALONE IS TAUTOLOGICAL FOR MEMBERSHIP (R1 review, fix
+// round 1): a.GetSupportedModels() is a.supportedModels() is
+// wiring.SupportedModels under the hood (app/connection.go), so comparing
+// it against wiring.SupportedModels() again proves only that the bound
+// method forwards without mutating its result — it says nothing about
+// whether any PARTICULAR model, IC-7610 included, is actually in the
+// list, since a registry that dropped every model would still satisfy
+// DeepEqual against itself. The explicit found-loops below are what
+// assert membership for real, one model each — DefaultModel because it
+// was here first, and IC7610Model (Wave 4 task R1) as this project's
+// first non-Yaesu, non-default row, so a registration that built but
+// never wired the picker path would be caught here rather than only in
+// internal/wiring's own tests.
 func TestGetSupportedModels_ContainsDefaultModel(t *testing.T) {
 	a, _ := newTestApp(t)
 	got := a.GetSupportedModels()
@@ -142,6 +156,15 @@ func TestGetSupportedModels_ContainsDefaultModel(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("GetSupportedModels() = %v, want it to contain wiring.DefaultModel %q", got, wiring.DefaultModel)
+	}
+	foundIC7610 := false
+	for _, m := range got {
+		if m == wiring.IC7610Model {
+			foundIC7610 = true
+		}
+	}
+	if !foundIC7610 {
+		t.Errorf("GetSupportedModels() = %v, want it to contain wiring.IC7610Model %q", got, wiring.IC7610Model)
 	}
 }
 

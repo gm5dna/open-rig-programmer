@@ -428,6 +428,13 @@ func TestRadiotext_IC7610Verbatim(t *testing.T) {
 		for _, particular := range []string{
 			"V01-10", "[V/M]", "[ERASE]", "FT-710", "hardware-verified",
 			"FTdx10", "FTdx101D", "FTdx101MP", "CAT manual", "CAT command", "CAT query",
+			// The bare token too (R1 review, fix round 1): this radio's
+			// protocol is CI-V, not CAT, and the entry says so throughout
+			// rather than borrowing the Yaesu radios' "CAT" vocabulary —
+			// reviewer-confirmed that nothing legitimate in ic7610Text
+			// contains this substring, so it is safe to check standalone
+			// rather than only in the two-word forms above.
+			"CAT",
 		} {
 			if strings.Contains(val, particular) {
 				t.Errorf("IC-7610 %s contains %q — another radio's particular in this one's prose is that radio's evidence claimed for this one", field, particular)

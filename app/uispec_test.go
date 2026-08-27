@@ -185,7 +185,8 @@ var ftdx10CoreSix = []spec.Field{
 // all of which ARE mapped — are outside bankCoreCandidates entirely and
 // never contribute to this set; they surface instead through
 // bankTierFields (BankView.Fields), which
-// TestGetUISpec_RegisteredIC7610_EveryBankUnavailable checks directly.
+// TestGetUISpec_RegisteredIC7610_EveryBankFieldsAndTagDisplay checks
+// directly.
 var ic7610CoreThree = []spec.Field{
 	spec.FieldFrequency, spec.FieldMode, spec.FieldTag,
 }

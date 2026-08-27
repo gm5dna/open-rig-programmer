@@ -132,25 +132,29 @@ func TestNewRealDriver_HWVerifiedWriteSet(t *testing.T) {
 // and M9d-2 tripled the number of such opens here; nobody trims those walks
 // to speed this up.
 //
-// THE IDENTITY CHECK IS A PREFIX MATCH, not exact equality, since Wave 4's
-// IC-7610 registration — the loosening the Wave-4 ledger anticipated
-// ("ic705 note: wiring's per-model identity test compares the ADDRESS HALF
-// of CATID only — token is recorded, never matched"). Every Yaesu model's
-// static caps.CATID and session Identity().CATID are the SAME string
-// (there is no separate address/token split for CAT-ASCII radios), so
-// prefix match is equality for them and this loosening changes nothing
-// they were already asserting. A CI-V model's static caps.CATID is the
-// address alone (spec D3.2 — "98" for the IC-7610), and its session
+// THE IDENTITY CHECK IS EXACT EQUALITY, WITH ONE NARROWLY SCOPED EXCEPTION,
+// since Wave 4's IC-7610 registration — the loosening the Wave-4 ledger
+// anticipated ("ic705 note: wiring's per-model identity test compares the
+// ADDRESS HALF of CATID only — token is recorded, never matched"), fix
+// round 1 having narrowed the first cut (a bare prefix match) down to
+// exactly the shape that note describes. Every Yaesu model's static
+// caps.CATID and session Identity().CATID are the SAME string (there is no
+// separate address/token split for CAT-ASCII radios), so those four rows
+// stay on EXACT equality, unchanged. A CI-V model whose static caps.CATID
+// is the address alone — TWO HEX CHARACTERS, spec D3.2's own shape, "98"
+// for the IC-7610 — gets the prefix exception instead, because its session
 // Identity().CATID is that address followed by whatever the 19 00 probe's
 // reply token happened to be (core/driver/ic7610.go's `id.CATID =
 // fmt.Sprintf("%02x%s", p.RadioAddress(), token)`) — recorded, per that
 // driver's own doc comment, and NEVER matched, because no IC-7610 has ever
-// answered one for real. Exact equality would therefore fail every CI-V
-// model's own honest session, for a reason that has nothing to do with a
-// crossed fakeDrivers pairing; a prefix match still catches a crossed
-// pairing (the wrong model's address prefix would not match at all) while
-// admitting an address-plus-token CATID whose token half was never a claim
-// this test could check.
+// answered one for real. The len(caps.CATID) == 2 guard is what keeps this
+// an address-half exception and not a general "prefix is good enough"
+// rule: a longer static CATID (every Yaesu model's, and any future CI-V
+// model whose static form already carries more than an address) still
+// requires exact equality, so a crossed fakeDrivers pairing whose CATID
+// merely happened to share a leading substring cannot slip through. This
+// test does NOT pin the fake's own token value (e.g. "98a5") anywhere —
+// only that a value beginning with the address arrived at all.
 func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
 	models := SupportedModels()
 	if len(models) == 0 {
@@ -163,7 +167,7 @@ func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
 				t.Fatalf("StaticCapabilities(%q): unexpected error: %v", model, err)
 			}
 			if caps.CATID == "" {
-				t.Fatalf("StaticCapabilities(%q).CATID is empty — the identity check below would pass vacuously", model)
+				t.Fatal("static CATID is empty — this check would pass vacuously")
 			}
 
 			sess, closeAll, err := OpenFakeSessionFor(testCtx(t), model)
@@ -176,8 +180,13 @@ func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
 			if got := sess.Capabilities().Model; got != model {
 				t.Errorf("session Capabilities().Model = %q, want %q", got, model)
 			}
-			if got := sess.Identity().CATID; !strings.HasPrefix(got, caps.CATID) {
-				t.Errorf("Identity().CATID = %q, want it to begin with %q (the address half) — the fake rig answering this session is not %s's own", got, caps.CATID, model)
+			got := sess.Identity().CATID
+			// CI-V address half only: a two-character static CATID is an
+			// address alone (spec D3.2), and its session CATID is that
+			// address plus a probe token this test never pins.
+			ok := got == caps.CATID || (len(caps.CATID) == 2 && strings.HasPrefix(got, caps.CATID))
+			if !ok {
+				t.Errorf("Identity().CATID = %q, want %q — the fake rig answering this session is not %s's own", got, caps.CATID, model)
 			}
 			if err := closeAll(); err != nil {
 				t.Errorf("closeAll: unexpected error: %v", err)
@@ -1916,15 +1925,43 @@ func TestOpenRealSessionFor_StopBitsRefuseAnImpossibleReport(t *testing.T) {
 // len(models) != 4 pin caught any drift in either direction. The IC-7610 is
 // registered but is NOT a Yaesu model — it implements
 // driver.SerialFramingReporter (the opposite of what the first test below
-// asserts), and its CTCSSToneRange/DuplexOptions/ToneModes are exactly the
-// Icom vocabularies the other two assert are empty for every Yaesu radio —
-// so folding it into these three tests by raising the pin to 5 would
-// silently apply Yaesu-only assertions to an Icom radio, which is precisely
-// wrong. Naming the four here, rather than deriving them from
-// SupportedModels() minus a filter, keeps the SET this file's own
-// Yaesu-specific tests describe explicit and independent of whatever else
-// gets registered later.
+// asserts), and its CTCSSToneRange/ToneModes are exactly the Icom
+// vocabularies the other two assert are empty for every Yaesu radio (its
+// DuplexOptions stays EMPTY too, deliberately — core/driver/ic7610/caps.go's
+// deliberatelyZero table: this radio's memory record has no duplex span at
+// all — so that field is not part of the contrast) — so folding it into
+// these three tests by raising the pin to 5 would silently apply
+// Yaesu-only assertions to an Icom radio, which is precisely wrong. Naming
+// the four here, rather than deriving them from SupportedModels() minus a
+// filter, keeps the SET this file's own Yaesu-specific tests describe
+// explicit and independent of whatever else gets registered later.
 var yaesuModels = []string{DefaultModel, FTdx10Model, FTdx101DModel, FTdx101MPModel}
+
+// icomModels names every registered Icom model, on the same by-name
+// footing as yaesuModels — one row today (the IC-7610), growing by one
+// per Wave-4 family registration.
+var icomModels = []string{IC7610Model}
+
+// TestYaesuAndIcomModelsPartitionSupportedModels restores the two-way
+// drift alarm the old len(models) != 4 pins gave for free and fix round 1
+// of the R1 review flagged as lost when those three pins were rescoped to
+// yaesuModels: with a hardcoded count, ANY registration change — a fifth
+// Yaesu model as much as an Icom one — tripped a Fatalf somewhere in this
+// file. Scoping the three tests below to yaesuModels by name fixed the
+// wrong-manufacturer failure mode (§ this file's own history) but, taken
+// alone, would let a future YAESU registration add a model to
+// SupportedModels() that is named in neither yaesuModels nor icomModels —
+// silently escaping every one of the three Yaesu-only tests below, which
+// only ever iterate yaesuModels, and never being flagged as the omission
+// it is. This test is the alarm for exactly that: the two lists together
+// must account for every currently-registered model, or something did not
+// get added to the list its manufacturer belongs to.
+func TestYaesuAndIcomModelsPartitionSupportedModels(t *testing.T) {
+	models := SupportedModels()
+	if len(yaesuModels)+len(icomModels) != len(models) {
+		t.Fatalf("len(yaesuModels)=%d + len(icomModels)=%d = %d, want %d (len(SupportedModels())) — a registered model is missing from one of these two lists, and the three Yaesu-only tests below would silently stop covering it", len(yaesuModels), len(icomModels), len(yaesuModels)+len(icomModels), len(models))
+	}
+}
 
 // TestOpenRealSessionFor_EveryYaesuModelOpensAtEightNTwo is the pin the
 // adjudication asks for, on the honest observable: the PORT CONFIGURATION
