@@ -3,6 +3,7 @@
 package codeplug
 
 import (
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -744,4 +745,306 @@ func TestDiff_DuplicateSlotRefused(t *testing.T) {
 			t.Errorf("Diff() error = %q, want %q", err, want)
 		}
 	})
+}
+
+// v4YaesuBodyNoTierKeys is a schema-4 file for a Yaesu-shaped radio whose
+// ten tier-added keys are simply ABSENT from the JSON — the file shape
+// deviation (c) is about. It is deliberately hand-written rather than
+// produced by Save: Save emits schema 3 for any content schema 3 can
+// represent (schemaFor), and a channel saying nothing about those ten is
+// exactly such content — the case that was never in doubt, since the
+// schema-3 loader migrates all ten to Unavailable unconditionally.
+const v4YaesuBodyNoTierKeys = `{"schema":4,"generator":"test","radio":{"model":"TEST-710","cat_id":"0000","read_at":"2026-08-27T09:00:00Z"},"channels":[` +
+	`{"slot":"001","data":{"freq_hz":14250000,"mode":"USB","ctcss":"OFF","ctcss_tone":{"state":"unknown"},"shift":"SIMPLEX","tag":"CALLING","tag_display":{"state":"known"},"scan_skip":{"state":"known"}}},` +
+	`{"slot":"003"}]}`
+
+// tierFieldStates returns d's ten tier-added field states in
+// ChannelData's declaration order, for asserting on the set as a whole
+// rather than field by field.
+func tierFieldStates(d *ChannelData) []FieldState {
+	return []FieldState{
+		d.TxFreqHz.State, d.Duplex.State, d.OffsetHz.State, d.ToneMode.State,
+		d.ToneTx.State, d.ToneRx.State, d.DTCSCode.State, d.DTCSPolarity.State,
+		d.Filter.State, d.DataMode.State,
+	}
+}
+
+// allTierStates returns the ten-state slice tierFieldStates would return
+// for a channel every one of whose tier fields is in state s.
+func allTierStates(s FieldState) []FieldState {
+	out := make([]FieldState, len(tierFieldNormalisers))
+	for i := range out {
+		out[i] = s
+	}
+	return out
+}
+
+// TestTierFieldNormalisers_AgreeWithTheLegacyMigration pins
+// NormaliseTierFields' table against withUnavailableTierFields, the
+// legacy migrations' own list: apply every row's "make it Unavailable" to
+// a zero ChannelData and the result must be EXACTLY what a schema-1/2/3
+// channel migrates to. A row left out, or one wired to the wrong struct
+// field, fails here — where the cause is obvious — rather than as a
+// single silently un-normalised field in some later test.
+//
+// The Absent half is pinned in the same breath: on the zero ChannelData
+// every row must report Absent, since the zero FieldState IS Absent.
+func TestTierFieldNormalisers_AgreeWithTheLegacyMigration(t *testing.T) {
+	if len(tierFieldNormalisers) != 10 {
+		t.Fatalf("tierFieldNormalisers has %d rows, want 10 — the tier added exactly ten fields", len(tierFieldNormalisers))
+	}
+
+	zero := &ChannelData{}
+	for _, n := range tierFieldNormalisers {
+		if !n.absent(zero) {
+			t.Errorf("%s: absent(zero ChannelData) = false, want true — the zero FieldState is Absent", n.field)
+		}
+	}
+
+	got := &ChannelData{}
+	for _, n := range tierFieldNormalisers {
+		n.unavailable(got)
+	}
+	want := withUnavailableTierFields(&ChannelData{})
+	if *got != *want {
+		t.Errorf("applying every normaliser to a zero ChannelData gave\n %+v\nwant (withUnavailableTierFields)\n %+v", *got, *want)
+	}
+
+	seen := make(map[spec.Field]bool, len(tierFieldNormalisers))
+	for _, n := range tierFieldNormalisers {
+		if seen[n.field] {
+			t.Errorf("field %s appears twice in tierFieldNormalisers", n.field)
+		}
+		seen[n.field] = true
+	}
+}
+
+// TestNormaliseTierFields_V4YaesuFileWithNoTierKeys is deviation (c)'s
+// headline case: a schema-4 file from a radio that has none of the ten
+// fields, with no key for any of them, loads Absent — Load alone cannot
+// know better — and the composition roots' capability-keyed pass resolves
+// every one of them to Unavailable, the same answer the schema-1/2/3
+// loaders reach unconditionally and the same answer a read of that radio
+// gives.
+func TestNormaliseTierFields_V4YaesuFileWithNoTierKeys(t *testing.T) {
+	cp, err := writeAndLoad(t, v4YaesuBodyNoTierKeys)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cp.Schema != CurrentSchema {
+		t.Fatalf("Schema = %d, want %d", cp.Schema, CurrentSchema)
+	}
+	if len(cp.Channels) != 2 || cp.Channels[0].Data == nil {
+		t.Fatalf("channels = %+v, want a populated 001 and an empty 003", cp.Channels)
+	}
+
+	if got, want := tierFieldStates(cp.Channels[0].Data), allTierStates(Absent); !reflect.DeepEqual(got, want) {
+		t.Fatalf("straight off Load, tier states = %v, want all Absent — this test's premise is that loadV4 does NOT normalise", got)
+	}
+
+	NormaliseTierFields(cp, testCapabilities())
+
+	if got, want := tierFieldStates(cp.Channels[0].Data), allTierStates(Unavailable); !reflect.DeepEqual(got, want) {
+		t.Errorf("after NormaliseTierFields, tier states = %v, want all Unavailable", got)
+	}
+	if cp.Channels[1].Data != nil {
+		t.Errorf("channel 003 = %+v, want still empty — an empty slot has no fields to normalise", cp.Channels[1])
+	}
+
+	// The point of the exercise: such a channel now compares EQUAL, field
+	// for field, to the same channel arriving from a legacy file, which is
+	// what keeps Diff from reporting it as modified.
+	legacy := withUnavailableTierFields(&ChannelData{})
+	if got := tierFieldStates(cp.Channels[0].Data); !reflect.DeepEqual(got, tierFieldStates(legacy)) {
+		t.Errorf("normalised v4 tier states = %v, legacy-migrated = %v — the two must agree", got, tierFieldStates(legacy))
+	}
+}
+
+// TestNormaliseTierFields_ReachableAbsentIsLeftAlone: on a radio that DOES
+// have a field, Absent means "nobody has said anything about this yet"
+// and is NOT rewritten — not to Unavailable (a claim about the radio that
+// would be false), and not to any value at all.
+//
+// It also PINS what the rest of the system then does with such a channel,
+// which is the reason leaving it alone is safe (Wave 4 task R2's ruling):
+// Validate REFUSES it with an error naming the field, and a write never
+// transmits it — touchedFields counts a tier field only when it is Known,
+// so there is no request to send and nothing to invent.
+func TestNormaliseTierFields_ReachableAbsentIsLeftAlone(t *testing.T) {
+	caps := icomTestCapabilities()
+	cp := &Codeplug{
+		Schema: CurrentSchema, Radio: RadioInfo{Model: "TEST-ICOM", CATID: "A4"},
+		Channels: []Channel{
+			{Slot: "G01-001", Data: icomChannelData(145_500_000)},
+			{Slot: "G01-002", Data: icomChannelData(145_600_000)},
+		},
+	}
+	// Every tier field of this bank is reachable, so an Absent one is the
+	// GUI's bankless-add shape on a radio that really has the field.
+	cp.Channels[0].Data.ToneMode = StringField{}
+	cp.Channels[0].Data.Filter = StringField{}
+
+	NormaliseTierFields(cp, caps)
+
+	if got := cp.Channels[0].Data.ToneMode.State; got != Absent {
+		t.Errorf("tone_mode state = %q, want Absent — this radio HAS the field, so silence is not a statement that it lacks one", got)
+	}
+	if got := cp.Channels[0].Data.Filter.State; got != Absent {
+		t.Errorf("filter state = %q, want Absent", got)
+	}
+	if !reflect.DeepEqual(cp.Channels[1].Data, icomChannelData(145_600_000)) {
+		t.Errorf("the untouched channel changed: %+v", cp.Channels[1].Data)
+	}
+
+	t.Run("Validate refuses it", func(t *testing.T) {
+		var sawToneMode, sawFilter bool
+		for _, i := range Validate(cp, caps) {
+			if i.Severity != SeverityError || !strings.Contains(i.Msg, "says nothing about it") {
+				continue
+			}
+			switch i.Field {
+			case spec.FieldToneMode:
+				sawToneMode = true
+			case spec.FieldFilter:
+				sawFilter = true
+			}
+		}
+		if !sawToneMode || !sawFilter {
+			t.Errorf("Validate(): tone_mode issue = %v, filter issue = %v, want both as errors", sawToneMode, sawFilter)
+		}
+	})
+
+	t.Run("a write neither transmits nor invents it", func(t *testing.T) {
+		touched := touchedFields(caps, spec.BankMemory, *cp.Channels[0].Data)
+		for _, f := range touched {
+			if f == spec.FieldToneMode || f == spec.FieldFilter {
+				t.Errorf("touchedFields includes %s for an Absent field: %v", f, touched)
+			}
+		}
+	})
+}
+
+// TestNormaliseTierFields_MixedReachability walks the rule field by field
+// on ONE bank that reaches some of the ten and not others — the shape a
+// real Icom bank has (the registered IC-7610 reaches four of the ten) —
+// and pins that no state other than Absent is ever touched.
+func TestNormaliseTierFields_MixedReachability(t *testing.T) {
+	caps := icomTestCapabilities()
+	fields := make(map[spec.Field]spec.FieldSupport, len(caps.Banks[0].Fields))
+	for f, fs := range caps.Banks[0].Fields {
+		fields[f] = fs
+	}
+	// The six this bank cannot reach at all, in the shape a driver
+	// declares: no entry rather than a zero one, since caps that say
+	// nothing about a field are not evidence that the radio has one.
+	for _, f := range []spec.Field{
+		spec.FieldTxFrequency, spec.FieldDuplex, spec.FieldOffset,
+		spec.FieldDTCSCode, spec.FieldDTCSPolarity, spec.FieldDataMode,
+	} {
+		delete(fields, f)
+	}
+	caps.Banks[0].Fields = fields
+
+	d := &ChannelData{
+		FreqHz: 145_500_000, Mode: "FM",
+		// Reachable, and each in a state the pass must not touch.
+		ToneMode: StringField{State: Known, Value: "TSQL"},
+		ToneTx:   ToneField{State: Unknown},
+		ToneRx:   ToneField{State: Unavailable},
+		// Reachable and Absent: stays Absent.
+		Filter: StringField{},
+		// The six unreachable ones are all Absent (the zero value).
+	}
+	cp := &Codeplug{
+		Schema: CurrentSchema, Radio: RadioInfo{Model: "TEST-ICOM", CATID: "A4"},
+		Channels: []Channel{{Slot: "G01-001", Data: d}},
+	}
+
+	NormaliseTierFields(cp, caps)
+
+	want := []FieldState{
+		Unavailable, Unavailable, Unavailable, // tx_frequency, duplex, offset
+		Known, Unknown, Unavailable, // tone_mode, tone_tx, tone_rx
+		Unavailable, Unavailable, // dtcs_code, dtcs_polarity
+		Absent,      // filter — reachable, so silence stays silence
+		Unavailable, // data_mode
+	}
+	if got := tierFieldStates(d); !reflect.DeepEqual(got, want) {
+		t.Errorf("tier states = %v, want %v", got, want)
+	}
+	if d.ToneMode.Value != "TSQL" {
+		t.Errorf("tone_mode value = %q, want TSQL untouched", d.ToneMode.Value)
+	}
+
+	t.Run("idempotent", func(t *testing.T) {
+		again := *d
+		NormaliseTierFields(cp, caps)
+		if *d != again {
+			t.Errorf("a second pass changed the channel:\n got %+v\nwant %+v", *d, again)
+		}
+	})
+}
+
+// TestNormaliseTierFields_SlotInNoBankAtAll: a slot no bank claims is
+// judged by the same answer Validate gives it — the zero BankID, which
+// reaches nothing — so its tier fields normalise to Unavailable. One
+// rule, not two: bankForSlot is asked once and its verdict is used
+// exactly as validateTierFields uses it.
+func TestNormaliseTierFields_SlotInNoBankAtAll(t *testing.T) {
+	cp := &Codeplug{
+		Schema: CurrentSchema, Radio: RadioInfo{Model: "TEST-ICOM", CATID: "A4"},
+		Channels: []Channel{{Slot: "NO-SUCH-SLOT", Data: &ChannelData{FreqHz: 145_500_000, Mode: "FM"}}},
+	}
+	NormaliseTierFields(cp, icomTestCapabilities())
+	if got, want := tierFieldStates(cp.Channels[0].Data), allTierStates(Unavailable); !reflect.DeepEqual(got, want) {
+		t.Errorf("tier states = %v, want all Unavailable", got)
+	}
+}
+
+// TestNormaliseTierFields_LegacyLoadIsUntouched: the pass is a NO-OP on
+// anything loadV1/loadV2/loadV3 produced, because those loaders leave no
+// Absent tier field for it to resolve. This is what makes it safe to run
+// on every load whatever the file's schema was — and it is asserted
+// against the most capable capabilities in this package's fixtures, the
+// one that reaches all ten fields, since a pass that DID touch a legacy
+// channel would touch it hardest there.
+func TestNormaliseTierFields_LegacyLoadIsUntouched(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "legacy.json")
+	if err := Save(path, testBaselineCodeplug()); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	cp, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	before := make([]ChannelData, 0, len(cp.Channels))
+	for _, ch := range cp.Channels {
+		if ch.Data != nil {
+			before = append(before, *ch.Data)
+		}
+	}
+	if len(before) == 0 {
+		t.Fatal("the legacy fixture loaded no populated channel — nothing asserted")
+	}
+
+	NormaliseTierFields(cp, icomTestCapabilities())
+
+	i := 0
+	for _, ch := range cp.Channels {
+		if ch.Data == nil {
+			continue
+		}
+		if *ch.Data != before[i] {
+			t.Errorf("slot %s changed:\n got %+v\nwant %+v", ch.Slot, *ch.Data, before[i])
+		}
+		i++
+	}
+}
+
+// TestNormaliseTierFields_NilCodeplug: a nil *Codeplug is a no-op, not a
+// panic — the pass sits on a load path whose error handling belongs to
+// its callers.
+func TestNormaliseTierFields_NilCodeplug(t *testing.T) {
+	NormaliseTierFields(nil, icomTestCapabilities())
 }

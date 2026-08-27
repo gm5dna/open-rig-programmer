@@ -12,6 +12,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
 // CurrentSchema is the HIGHEST schema version this package writes, and
@@ -368,6 +370,14 @@ func (e *OversizeSaveError) Error() string {
 //     having no key for a field their radios do not have, and what a
 //     read of those radios reports (see migrateV3ChannelData).
 //
+// A schema-4 file gets NO such blanket rule, and must not: it can hold a
+// tier field honestly (Known, Unknown or Unavailable), and a key it does
+// NOT hold means one of two different things depending on whether the
+// radio has the field at all. Deciding that needs the model's own
+// capabilities, which this function does not have — see
+// NormaliseTierFields, the capability-keyed pass the composition roots
+// run on what Load returns.
+//
 // Load never panics: a missing file, malformed JSON, or truncated/corrupted
 // JSON are all reported as an error.
 func Load(path string) (*Codeplug, error) {
@@ -442,6 +452,13 @@ func Load(path string) (*Codeplug, error) {
 // IS the current schema, so the live structs are the right ones — the
 // frozen shapes below exist precisely so that stays true as the live
 // structs move on.
+//
+// A tier-added field with no key in the file therefore decodes to the
+// zero FieldState, Absent, and stays Absent here. Whether that Absent is
+// the truth about the channel or is really Unavailable ("this radio has
+// no such field") is a question about the RADIO, answerable only with
+// that model's capabilities in hand: see NormaliseTierFields, which the
+// composition roots run over Load's result.
 func loadV4(b []byte, path string) (*Codeplug, error) {
 	var cp Codeplug
 	dec := json.NewDecoder(bytes.NewReader(b))
@@ -652,6 +669,120 @@ func withUnavailableTierFields(d *ChannelData) *ChannelData {
 	d.Filter = StringField{State: Unavailable}
 	d.DataMode = BoolField{State: Unavailable}
 	return d
+}
+
+// tierFieldNormalisers is the ten fields the Icom tier added, each paired
+// with the two things NormaliseTierFields needs of it: is this channel's
+// copy Absent, and make it Unavailable.
+//
+// A table rather than ten hand-written if-statements, for the reason
+// diff.go's tierAddedFieldFor is one: an eleventh tier field is then a
+// single row here, and the row states its spec.Field alongside the struct
+// field it reads, where the two cannot drift apart unnoticed.
+//
+// The assignment REPLACES the whole field value rather than setting
+// State alone — exactly as withUnavailableTierFields does, and for the
+// same reason: a non-Known state must carry a zero Value (see
+// FieldState), so a file that somehow carried a value with no state
+// cannot be turned into an Unavailable field still holding one.
+//
+// TestTierFieldNormalisers_AgreeWithTheLegacyMigration pins this table
+// against withUnavailableTierFields: applying every row to a zero
+// ChannelData must produce exactly what the legacy migration produces, so
+// a missing or misdirected row fails there rather than silently leaving
+// one field un-normalised.
+var tierFieldNormalisers = []struct {
+	field       spec.Field
+	absent      func(*ChannelData) bool
+	unavailable func(*ChannelData)
+}{
+	{spec.FieldTxFrequency, func(d *ChannelData) bool { return d.TxFreqHz.State == Absent }, func(d *ChannelData) { d.TxFreqHz = FreqField{State: Unavailable} }},
+	{spec.FieldDuplex, func(d *ChannelData) bool { return d.Duplex.State == Absent }, func(d *ChannelData) { d.Duplex = StringField{State: Unavailable} }},
+	{spec.FieldOffset, func(d *ChannelData) bool { return d.OffsetHz.State == Absent }, func(d *ChannelData) { d.OffsetHz = FreqField{State: Unavailable} }},
+	{spec.FieldToneMode, func(d *ChannelData) bool { return d.ToneMode.State == Absent }, func(d *ChannelData) { d.ToneMode = StringField{State: Unavailable} }},
+	{spec.FieldToneTx, func(d *ChannelData) bool { return d.ToneTx.State == Absent }, func(d *ChannelData) { d.ToneTx = ToneField{State: Unavailable} }},
+	{spec.FieldToneRx, func(d *ChannelData) bool { return d.ToneRx.State == Absent }, func(d *ChannelData) { d.ToneRx = ToneField{State: Unavailable} }},
+	{spec.FieldDTCSCode, func(d *ChannelData) bool { return d.DTCSCode.State == Absent }, func(d *ChannelData) { d.DTCSCode = IntField{State: Unavailable} }},
+	{spec.FieldDTCSPolarity, func(d *ChannelData) bool { return d.DTCSPolarity.State == Absent }, func(d *ChannelData) { d.DTCSPolarity = StringField{State: Unavailable} }},
+	{spec.FieldFilter, func(d *ChannelData) bool { return d.Filter.State == Absent }, func(d *ChannelData) { d.Filter = StringField{State: Unavailable} }},
+	{spec.FieldDataMode, func(d *ChannelData) bool { return d.DataMode.State == Absent }, func(d *ChannelData) { d.DataMode = BoolField{State: Unavailable} }},
+}
+
+// NormaliseTierFields resolves, on every populated channel of cp, each of
+// the ten fields the Icom tier added from ABSENT to UNAVAILABLE wherever
+// caps says the bank holding that channel's slot cannot REACH the field
+// (spec.FieldSupport.Unreachable). It changes nothing else: a Known,
+// Unknown or already-Unavailable field is left exactly as it was, and so
+// is an Absent field the radio CAN reach. It never invents a value, and
+// an empty channel (Data == nil) is never touched.
+//
+// It is the schema-4 half of what loadV1/loadV2/loadV3 do unconditionally
+// (withUnavailableTierFields), and it exists because a schema-4 file can
+// legitimately have no key for a tier field for either of two reasons a
+// legacy file could not tell apart:
+//
+//   - "this radio has no such field" — the reason every schema-1/2/3 file
+//     has no key, which is what Unavailable states positively, and what a
+//     READ of that radio reports. A file left Absent here would compare
+//     unequal, field for field, to a fresh read of the very same radio,
+//     and codeplug.Diff — which compares ChannelData with == — would
+//     report every channel as modified. That is the whole reason the
+//     legacy migrations set Unavailable rather than leaving the zero
+//     value, and it is no less true of a schema-4 file.
+//   - "nobody has said anything about this field yet" — a row the GUI
+//     added with no bank in hand (app/frontend/src/lib/grid/columns.js's
+//     newChannelData omits every tier key when it has no BankView), or
+//     any other file written without the answer. On a field the radio
+//     really has, that is NOT a claim that the radio lacks it, and this
+//     function leaves it Absent, deliberately.
+//
+// WHAT THEN HAPPENS to an Absent field the radio CAN reach is already
+// decided elsewhere, and this function is written to preserve both
+// answers rather than pre-empt them (Wave 4 task R2's ruling):
+//
+//   - Validate REFUSES it: validateTierFields reports SeverityError
+//     "this radio has a <field> field but this channel says nothing about
+//     it" for exactly this case, so such a channel cannot pass the send
+//     gate.
+//   - a write never transmits it: touchedFields counts a tier field only
+//     when it is Known (diff.go's tierAddedFieldFor), so an Absent one is
+//     no request, no transmission and no invented value.
+//
+// WHY THIS IS NOT INSIDE Load. The rule is keyed on the loaded model's
+// own capabilities, and Load has none: it takes a path, and resolving
+// cp.Radio.Model to a spec.Capabilities means the driver registry, which
+// lives in internal/wiring — a package this one must never import (wiring
+// imports core/driver, which imports this package). So the pass is
+// exported and called from the two composition roots that hold BOTH the
+// loaded file and the registry: the GUI's app/fileio.go (loadFilePath)
+// and the CLI's cmd/rigprog/fileio.go (loadCodeplugStrict). The RULE
+// lives here, next to the legacy migration it completes; only the
+// model-to-capabilities lookup lives out there.
+//
+// It is idempotent, and a no-op on anything a legacy loader produced —
+// those channels have no Absent tier field left to resolve — so calling
+// it on every load, whatever schema the file was, is safe.
+func NormaliseTierFields(cp *Codeplug, caps spec.Capabilities) {
+	if cp == nil {
+		return
+	}
+	for i := range cp.Channels {
+		d := cp.Channels[i].Data
+		if d == nil {
+			continue
+		}
+		// The zero BankID when no bank claims the slot, which is the same
+		// value — and the same answer, "this bank reaches nothing" — that
+		// Validate hands validateTierFields for such a slot. Keeping the
+		// two identical is deliberate: a slot this radio has no bank for
+		// is judged by one rule, not two.
+		bank, _ := bankForSlot(caps, cp.Channels[i].Slot)
+		for _, n := range tierFieldNormalisers {
+			if n.absent(d) && caps.FieldSupport(bank, n.field).Unreachable() {
+				n.unavailable(d)
+			}
+		}
+	}
 }
 
 // legacyChannel is the FROZEN schema-1/schema-2 on-disk shape of one
