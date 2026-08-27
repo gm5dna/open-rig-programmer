@@ -92,6 +92,18 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		{"ftdx10", "Simulated", "fakedx10.New", "internal/fakedx10"},
 		{"ftdx101", "Simulated", "fakedx101.NewD", "internal/fakedx101"},
 		{"ftdx101", "Simulated", "fakedx101.NewMP", "internal/fakedx101"},
+		// The IC-7610 (Wave 4 task R1), this project's first non-Yaesu
+		// row: one package, one Simulated token and one fake constructor —
+		// the ftdx10 shape, not the ftdx101 shared-driver/two-siblings
+		// one, since core/driver/ic7610 has no registered sibling (matrix
+		// §4). The AST walk this guard runs is name-based, not
+		// import-path-based, so it does not care that internal/fakeic7610's
+		// New is wrapped in an ic7610FakeAdapter{...} composite literal at
+		// its one call site in internal/wiring/fake.go — the call
+		// expression fakeic7610.New(...) is still there, nested inside it,
+		// and fileHasCall's ast.Inspect walk finds it regardless of what
+		// encloses it.
+		{"ic7610", "Simulated", "fakeic7610.New", "internal/fakeic7610"},
 	}
 
 	// Non-vacuity: an empty table would make the loop below a no-op and

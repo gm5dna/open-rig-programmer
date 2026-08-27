@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"slices"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -130,6 +131,26 @@ func TestNewRealDriver_HWVerifiedWriteSet(t *testing.T) {
 // termination rule. Seconds per open are budgeted (M9c-6 and M9d-2 plans),
 // and M9d-2 tripled the number of such opens here; nobody trims those walks
 // to speed this up.
+//
+// THE IDENTITY CHECK IS A PREFIX MATCH, not exact equality, since Wave 4's
+// IC-7610 registration — the loosening the Wave-4 ledger anticipated
+// ("ic705 note: wiring's per-model identity test compares the ADDRESS HALF
+// of CATID only — token is recorded, never matched"). Every Yaesu model's
+// static caps.CATID and session Identity().CATID are the SAME string
+// (there is no separate address/token split for CAT-ASCII radios), so
+// prefix match is equality for them and this loosening changes nothing
+// they were already asserting. A CI-V model's static caps.CATID is the
+// address alone (spec D3.2 — "98" for the IC-7610), and its session
+// Identity().CATID is that address followed by whatever the 19 00 probe's
+// reply token happened to be (core/driver/ic7610.go's `id.CATID =
+// fmt.Sprintf("%02x%s", p.RadioAddress(), token)`) — recorded, per that
+// driver's own doc comment, and NEVER matched, because no IC-7610 has ever
+// answered one for real. Exact equality would therefore fail every CI-V
+// model's own honest session, for a reason that has nothing to do with a
+// crossed fakeDrivers pairing; a prefix match still catches a crossed
+// pairing (the wrong model's address prefix would not match at all) while
+// admitting an address-plus-token CATID whose token half was never a claim
+// this test could check.
 func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
 	models := SupportedModels()
 	if len(models) == 0 {
@@ -155,8 +176,8 @@ func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
 			if got := sess.Capabilities().Model; got != model {
 				t.Errorf("session Capabilities().Model = %q, want %q", got, model)
 			}
-			if got := sess.Identity().CATID; got != caps.CATID {
-				t.Errorf("Identity().CATID = %q, want %q — the fake rig answering this session is not %s's own", got, caps.CATID, model)
+			if got := sess.Identity().CATID; !strings.HasPrefix(got, caps.CATID) {
+				t.Errorf("Identity().CATID = %q, want it to begin with %q (the address half) — the fake rig answering this session is not %s's own", got, caps.CATID, model)
 			}
 			if err := closeAll(); err != nil {
 				t.Errorf("closeAll: unexpected error: %v", err)
@@ -956,7 +977,7 @@ func TestSupportedModels_SortedNonEmpty(t *testing.T) {
 // deleting a constant cannot make this test agree with the change.
 func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	got := SupportedModels()
-	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP"} {
+	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610"} {
 		found := false
 		for _, m := range got {
 			if m == want {
@@ -982,6 +1003,9 @@ func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	}
 	if FTdx101MPModel != "FTdx101MP" {
 		t.Errorf("FTdx101MPModel = %q, want \"FTdx101MP\"", FTdx101MPModel)
+	}
+	if IC7610Model != "IC-7610" {
+		t.Errorf("IC7610Model = %q, want \"IC-7610\"", IC7610Model)
 	}
 }
 
@@ -1655,6 +1679,12 @@ func TestNeedsUnverifiedConsent_PerModel(t *testing.T) {
 		FTdx10Model:    true,
 		FTdx101DModel:  true,
 		FTdx101MPModel: true,
+		// The IC-7610's writeTrialsComplete (core/driver/ic7610/caps.go)
+		// is FALSE, on the same footing as the three Yaesu radios above:
+		// no IC-7610 has ever been written to by this project, so its
+		// RealHardware profile carries a write-side Unverified field this
+		// predicate must find.
+		IC7610Model: true,
 	}
 	models := SupportedModels()
 	if len(models) != len(want) {
@@ -1879,16 +1909,36 @@ func TestOpenRealSessionFor_StopBitsRefuseAnImpossibleReport(t *testing.T) {
 	}
 }
 
+// yaesuModels names the four registered Yaesu models, BY NAME rather than
+// by "every registered model" — the scoping Wave 4's IC-7610 registration
+// (task R1) forced on the three tests below. Before Wave 4, SupportedModels()
+// and "every registered model" were the same set and a hardcoded
+// len(models) != 4 pin caught any drift in either direction. The IC-7610 is
+// registered but is NOT a Yaesu model — it implements
+// driver.SerialFramingReporter (the opposite of what the first test below
+// asserts), and its CTCSSToneRange/DuplexOptions/ToneModes are exactly the
+// Icom vocabularies the other two assert are empty for every Yaesu radio —
+// so folding it into these three tests by raising the pin to 5 would
+// silently apply Yaesu-only assertions to an Icom radio, which is precisely
+// wrong. Naming the four here, rather than deriving them from
+// SupportedModels() minus a filter, keeps the SET this file's own
+// Yaesu-specific tests describe explicit and independent of whatever else
+// gets registered later.
+var yaesuModels = []string{DefaultModel, FTdx10Model, FTdx101DModel, FTdx101MPModel}
+
 // TestOpenRealSessionFor_EveryYaesuModelOpensAtEightNTwo is the pin the
 // adjudication asks for, on the honest observable: the PORT CONFIGURATION
-// each of the four registered models is opened with. None of them
+// each of the four registered Yaesu models is opened with. None of them
 // implements SerialFramingReporter, so each must still reach the serial
 // layer at transport.DefaultStopBits — before and after E2, unchanged.
+//
+// SCOPED TO yaesuModels, not SupportedModels(), since Wave 4's IC-7610
+// registration (task R1): that driver DOES implement
+// SerialFramingReporter (StopBits() == 1), which is exactly what this test
+// asserts NO model does — its own coverage is
+// TestOpenRealSessionFor_IC7610OpensAtEightNOne, this test's mirror image.
 func TestOpenRealSessionFor_EveryYaesuModelOpensAtEightNTwo(t *testing.T) {
-	models := SupportedModels()
-	if len(models) != 4 {
-		t.Fatalf("SupportedModels() = %v (%d models), want the four registered Yaesu models — update this pin deliberately", models, len(models))
-	}
+	models := yaesuModels
 	for _, model := range models {
 		t.Run(model, func(t *testing.T) {
 			d, err := realDriverFor(model, false)
@@ -1921,11 +1971,14 @@ func TestOpenRealSessionFor_EveryYaesuModelOpensAtEightNTwo(t *testing.T) {
 // them must still admit exactly the fifty tones its own CTCSSTones lists
 // and nothing else — which is what makes the shared predicate's arrival a
 // no-change event on this side of the tier.
+//
+// SCOPED TO yaesuModels, not SupportedModels(), since Wave 4's IC-7610
+// registration: that model is exactly the "CI-V model whose tone field is
+// a number" case this doc comment anticipates, and it DOES declare a
+// CTCSSToneRange (core/driver/ic7610/caps.go's baseCapabilities) — the
+// opposite of what this test asserts for every Yaesu radio.
 func TestEveryYaesuModelDeclaresAToneListAndNoRange(t *testing.T) {
-	models := SupportedModels()
-	if len(models) != 4 {
-		t.Fatalf("SupportedModels() = %v (%d models), want the four registered Yaesu models — update this pin deliberately", models, len(models))
-	}
+	models := yaesuModels
 	for _, model := range models {
 		t.Run(model, func(t *testing.T) {
 			caps, err := StaticCapabilities(model)
@@ -1971,11 +2024,13 @@ func TestEveryYaesuModelDeclaresAToneListAndNoRange(t *testing.T) {
 // vocabularies with the canonical-entry rule. No Yaesu model declares
 // either vocabulary, so that change must be invisible here, which the
 // empty-slice assertions say.
+//
+// SCOPED TO yaesuModels, not SupportedModels(), since Wave 4's IC-7610
+// registration: that model DOES declare ToneModes (matrix §1 row 8), which
+// is exactly the Icom vocabulary E5a's canonical-entry rule exists for and
+// that this test asserts is empty for every Yaesu radio.
 func TestEveryYaesuModelStillValidatesUnchanged(t *testing.T) {
-	models := SupportedModels()
-	if len(models) != 4 {
-		t.Fatalf("SupportedModels() = %v (%d models), want the four registered Yaesu models — update this pin deliberately", models, len(models))
-	}
+	models := yaesuModels
 	for _, model := range models {
 		t.Run(model, func(t *testing.T) {
 			caps, err := StaticCapabilities(model)
@@ -2017,5 +2072,41 @@ func TestEveryYaesuModelStillValidatesUnchanged(t *testing.T) {
 				t.Error("Validate() accepted this model with no ShiftOptions — a bank reaching FieldShift must still name the values it can hold")
 			}
 		})
+	}
+}
+
+// TestOpenRealSessionFor_IC7610OpensAtEightNOne is
+// TestOpenRealSessionFor_EveryYaesuModelOpensAtEightNTwo's mirror image,
+// and the E2 consultation's first proof against a REAL registered driver
+// rather than a throwaway fixture (TestOpenRealSessionFor_
+// StopBitsFollowAReportingDriver, above, proves the same mechanism with
+// framingFixtureDriver). The wiring-side consultation itself
+// (stopBitsFor) needed no code change for this registration — its whole
+// point, per its own doc comment, is that it already has "somewhere for a
+// driver that DOES have a framing fact to put it, and the Icom tier's six
+// models are that case" — so this test is what confirms the IC-7610's own
+// framing.go (StopBits() == 1) actually reaches OpenRealSessionFor's port
+// configuration through that seam, rather than merely compiling against
+// driver.SerialFramingReporter.
+func TestOpenRealSessionFor_IC7610OpensAtEightNOne(t *testing.T) {
+	d, err := realDriverFor(IC7610Model, false)
+	if err != nil {
+		t.Fatalf("realDriverFor(%q): %v", IC7610Model, err)
+	}
+	r, ok := d.(driver.SerialFramingReporter)
+	if !ok {
+		t.Fatalf("%s does not implement driver.SerialFramingReporter — every registered Icom driver is expected to (spec D3.1)", IC7610Model)
+	}
+	if got := r.StopBits(); got != 1 {
+		t.Fatalf("%s.StopBits() = %d, want 1 (8-N-1, an ASSUMED tier convention per core/driver/ic7610/doc.go, not a reading of this radio's own document)", IC7610Model, got)
+	}
+
+	got := recordSerialConfig(t)
+	_, _, err = OpenRealSessionFor(testCtx(t), IC7610Model, "/dev/nonexistent-rigprog-test-port")
+	if !errors.Is(err, errSeamRefused) {
+		t.Fatalf("OpenRealSessionFor(%q): err = %v, want it to wrap the seam's own error", IC7610Model, err)
+	}
+	if got.StopBits != 1 {
+		t.Errorf("SerialConfig.StopBits = %d, want 1 — the IC-7610's own StopBits() report must reach the port, not transport.DefaultStopBits (%d)", got.StopBits, transport.DefaultStopBits)
 	}
 }

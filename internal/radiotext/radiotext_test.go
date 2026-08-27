@@ -358,6 +358,84 @@ func TestRadiotext_FTdx101DAndMPDifferOnlyInTheModelName(t *testing.T) {
 	}
 }
 
+// TestRadiotext_IC7610Verbatim is TestRadiotext_FTdx10Verbatim's sibling
+// for Wave 4 task R1's registration — this project's FIRST non-Yaesu
+// model — and it guards the same kind of fact: the HEDGES. This prose was
+// written in radiotext.go itself, for a radio this project has never
+// connected to anything, under the honesty rule recorded at ic7610Text.
+//
+// "No minimum firmware version is established", "no IC-7610 operating
+// manual is held here", "unverified against real hardware" are the
+// load-bearing words. An editor tidying them into confident advisory
+// copy — or reaching for any Yaesu radio's wording because the fields look
+// thin, or because CI-V "looks like" CAT — would attribute one radio's
+// (or one MANUFACTURER's) evidence to another. That edit fails here.
+//
+// ToneScanSkipVerification is asserted EMPTY for the same reason every
+// other model's is: core/driver/ic7610's writeTrialsComplete is false, so
+// there is no hardware-preservation verification of any kind to report.
+//
+// THE NON-BORROWING CHECK RUNS AGAINST ALL FOUR YAESU ENTRIES, not just
+// the FT-710 and the FTdx10 the way the FTdx101 pair's does: this is the
+// first model with no Yaesu sibling to be careful about specifically, so
+// every prior entry is a borrowing risk, not just the two nearest ones.
+// ftdx101Fields (above) is reused unchanged — it is generic over any
+// radiotext.Text value, not FTdx101-specific despite its name.
+func TestRadiotext_IC7610Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure:   "The IC-7610's CI-V protocol has an erase command form, but this build never sends it: no IC-7610 has ever confirmed what it does, and sending an unconfirmed erase command risks clearing the wrong channel. This build does not describe a front-panel procedure either — no IC-7610 operating manual is held here — so follow the memory-channel clear procedure in the radio's own operating manual.",
+		FirmwareGuidance: "No minimum firmware version is established for the IC-7610: nothing this project holds states one, and no IC-7610 has been asked. There is no CI-V query for the version either — read it off the radio's own display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established.",
+		ToneScanSkipNote: "Tone is read and written for the IC-7610 over CI-V by this build, but unverified against real hardware — no IC-7610 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V byte is a select-group marker, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
+		// Deliberately empty — see this test's doc comment.
+		ToneScanSkipVerification: "",
+		EraseDialogNote:          "The IC-7610's CI-V protocol has an erase command form, but this build never sends it: no IC-7610 has ever confirmed what it does, and sending an unconfirmed erase command risks clearing the wrong channel. This build does not describe a front-panel procedure either — no IC-7610 operating manual is held here — so follow the memory-channel clear procedure in the radio's own operating manual.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7610 has ever answered a frame",
+			ScanSkip: "not read or written over CI-V by this build — this radio's nearest wire byte is a select-group marker, not a skip flag",
+		},
+		FirmwarePlaceholder: "as shown on the radio's display",
+		ProbeFirmwareNote:   "Firmware version has no CI-V query — check the radio's display. No minimum version is established for the IC-7610: this build knows of none to require. This driver talks only to CI-V address 98h, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200 is itself ASSUMED, not read off the radio, since the reference guide names six rates and marks no default. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+	}
+
+	got, ok := radiotext.For("IC-7610")
+	if !ok {
+		t.Fatal(`For("IC-7610") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"IC-7610\") = %#v,\nwant %#v", got, want)
+	}
+
+	// Non-borrowing, against all four Yaesu entries: no field may be
+	// byte-identical to, or carry a particular of, any of them.
+	for _, other := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP"} {
+		otherText, ok := radiotext.For(other)
+		if !ok {
+			t.Fatalf("For(%q) ok = false, want true — sanity check failed", other)
+		}
+		otherFields := ftdx101Fields(otherText)
+		for field, val := range ftdx101Fields(got) {
+			if val == "" {
+				// ToneScanSkipVerification is empty on every Yaesu entry
+				// too, and shared emptiness is not a copy.
+				continue
+			}
+			if val == otherFields[field] {
+				t.Errorf("IC-7610 %s is byte-identical to the %s's — one radio's prose must never be served as another's", field, other)
+			}
+		}
+	}
+	for field, val := range ftdx101Fields(got) {
+		for _, particular := range []string{
+			"V01-10", "[V/M]", "[ERASE]", "FT-710", "hardware-verified",
+			"FTdx10", "FTdx101D", "FTdx101MP", "CAT manual", "CAT command", "CAT query",
+		} {
+			if strings.Contains(val, particular) {
+				t.Errorf("IC-7610 %s contains %q — another radio's particular in this one's prose is that radio's evidence claimed for this one", field, particular)
+			}
+		}
+	}
+}
+
 // TestFor_UnknownModel: any model that is not EXACTLY one of this
 // package's keys — "FT-710", "FTdx10" since M9c-6, and "FTdx101D"/
 // "FTdx101MP" since M9d-2 — returns the zero Text and false. Callers must
@@ -385,6 +463,11 @@ func TestFor_UnknownModel(t *testing.T) {
 	for _, model := range []string{
 		"", "FT-DX10", "ft-710", "FT-710 ", "FTDX10", "ftdx10", "FTdx10 ",
 		"FTDX101D", "FTDX101MP", "ftdx101d", "FTdx101", "FTdx101D ", "FT-DX101D",
+		// IC-7610 near misses (Wave 4 task R1): "IC7610" (no hyphen, the
+		// spelling other CI-V software commonly uses), "ic-7610"
+		// (lowercase), a trailing- and a leading-space variant, and the
+		// bare model number, which names nothing this registry keys on.
+		"IC7610", "ic-7610", "IC-7610 ", " IC-7610", "7610",
 	} {
 		got, ok := radiotext.For(model)
 		if ok {

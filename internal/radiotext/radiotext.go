@@ -387,6 +387,119 @@ var ftdx101mpText = Text{
 	ProbeFirmwareNote:   "Firmware version has no CAT query on the FTdx101MP, and no minimum version is established for it — read it off the radio's display. If nothing answered on this port at all, check which port it is: this radio presents two virtual COM ports, and only the Enhanced COM Port carries CAT. The Standard COM Port is for TX control (PTT, CW keying, digital modes) and will answer nothing here, which looks exactly like a wrong baud rate.",
 }
 
+// ic7610Text is the IC-7610's entry (Wave 4 task R1, this project's first
+// non-Yaesu registration), landed with that model's wiring registration —
+// internal/wiring's TestEverySupportedModelHasRadiotext refuses a
+// registered model with no prose, which is what makes this entry part of
+// registration rather than a later nicety, exactly as it was for the
+// three Yaesu registrations above.
+//
+// THE HONESTY RULE APPLIES UNCHANGED, and doubly here: NOTHING BELOW IS
+// INVENTED, and every field says what is actually known, including where
+// something is not known. No IC-7610 has ever been asked anything by this
+// project (core/driver/ic7610/doc.go) — every value in that driver comes
+// from the IC-7610 CI-V Reference Guide rev 4 and the project's own
+// capability matrix, none from a hardware finding — and no write trial has
+// happened (writeTrialsComplete, core/driver/ic7610/caps.go, is false).
+// This entry borrows nothing from ft710Text, ftdx10Text, ftdx101dText or
+// ftdx101mpText: those are Yaesu radios' CAT evidence, and this is a
+// different manufacturer on a different wire protocol (CI-V, not CAT) —
+// copying a Yaesu hedge or claim across would misattribute one radio's
+// evidence to a radio in an entirely different family.
+// TestRadiotext_IC7610Verbatim pins every string, and its own
+// non-borrowing check refuses any field that is byte-identical to, or
+// carries a particular of, any of the four Yaesu entries.
+//
+// WHAT IS DIFFERENT ABOUT THIS RADIO, AND WHY IT SHOWS IN THE PROSE:
+//
+//   - The protocol is CI-V, not CAT, and every field below says so rather
+//     than reusing the Yaesu radios' "CAT" wording — a small word, but the
+//     kind of borrowed vocabulary that would misdescribe this radio's own
+//     transport to a reader who never opens core/driver/ic7610/doc.go.
+//   - This driver's CI-V address is fixed at 98h, built into every frame
+//     it sends, with no --civ-address option to change it and no way to
+//     detect a radio set to a different address (core/driver/ic7610/
+//     doc.go, "THE TWO LIMITATIONS, STATED PLAINLY"). A radio at any other
+//     address — including a DIFFERENT Icom model at ITS factory address —
+//     times out identically to no radio being there at all, which
+//     ProbeFirmwareNote states because probe is where a user meets that
+//     silence first.
+//   - The default baud, 19200, is an ASSUMED choice among six the document
+//     names and defaults none of (core/driver/ic7610/doc.go, "THE DEFAULT
+//     BAUD (OQ2)") — recorded as assumed here for the same reason the
+//     driver's own doc.go records it, and because a user meeting silence
+//     at Open needs to know the guess could be the reason.
+//   - Tone IS mapped on the wire (the 1A 00 record's tone-mode nibble and
+//     two tone-frequency spans, core/driver/ic7610/caps.go's bankFields) —
+//     unlike every Yaesu radio registered so far, where tone_mode/tone_tx/
+//     tone_rx are outside the CAT frame entirely — so this radio's tone
+//     note says the opposite of theirs. Scan Skip is NOT mapped: the
+//     nearest wire byte on this radio is a four-valued SELECT-group
+//     marker (matrix §3.16 ADDED-1), not a skip flag, so a Scan Skip value
+//     is refused before anything reaches the radio rather than being
+//     written as something it is not (adjudication R6, ruling E6).
+var ic7610Text = Text{
+	// The CI-V protocol has an erase command SHAPE (1A 00 <ch> FF, and a
+	// separate command 0B) — unlike every Yaesu radio registered so far,
+	// which has none at all — but this build sends neither: no IC-7610 has
+	// ever confirmed what either does, and sending an unconfirmed erase
+	// command risks clearing the wrong channel rather than the intended
+	// one. FieldErase carries the zero FieldSupport here on both banks
+	// (core/driver/ic7610/caps.go's bankFields, ruling E6's third
+	// unmapped-region citation), which is what makes core/clone's
+	// DiffErased branch unreachable for this model. No IC-7610 operating
+	// manual is held here either, so the front-panel procedure is unknown
+	// and the user is sent to the document that has it.
+	EraseProcedure: "The IC-7610's CI-V protocol has an erase command form, but this build never sends it: no IC-7610 has ever confirmed what it does, and sending an unconfirmed erase command risks clearing the wrong channel. This build does not describe a front-panel procedure either — no IC-7610 operating manual is held here — so follow the memory-channel clear procedure in the radio's own operating manual.",
+	// No minimum-firmware fact is established for this radio: the IC-7610
+	// CI-V Reference Guide names no firmware-version command anywhere
+	// (searched: "firmware" appears nowhere in it), so there is no CI-V
+	// query either, on the same footing as every Yaesu radio's own
+	// firmware note.
+	FirmwareGuidance: "No minimum firmware version is established for the IC-7610: nothing this project holds states one, and no IC-7610 has been asked. There is no CI-V query for the version either — read it off the radio's own display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established.",
+	// Tone IS read and written for this radio (unlike every Yaesu radio
+	// registered so far) — over CI-V, unverified against real hardware,
+	// since no IC-7610 has ever answered a frame. Scan Skip is not: this
+	// radio's nearest wire byte is a select-group marker, not a skip flag,
+	// and setting one is refused before anything reaches the radio.
+	ToneScanSkipNote: "Tone is read and written for the IC-7610 over CI-V by this build, but unverified against real hardware — no IC-7610 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V byte is a select-group marker, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
+	// DELIBERATELY EMPTY, exactly as every Yaesu entry's is and for the
+	// same reason: this field states what IS and is NOT hardware-verified
+	// about preservation across a rewrite, and with writeTrialsComplete
+	// false there is no verification of any kind to report. Any sentence
+	// here would be a hardware claim about a radio this project has never
+	// written to. internal/wiring's TestEverySupportedModelHasRadiotext
+	// requires EraseProcedure, FirmwareGuidance and ProbeFirmwareNote and
+	// deliberately excludes this field; the IC-7610's own write trials are
+	// what fill it in.
+	ToneScanSkipVerification: "",
+	// Byte-identical to EraseProcedure, as every other model's is: the
+	// delete dialog and the blocked-erase review answer the same question,
+	// and splitting the wording would only invite one copy to drift into a
+	// procedure the other refuses to state.
+	EraseDialogNote: "The IC-7610's CI-V protocol has an erase command form, but this build never sends it: no IC-7610 has ever confirmed what it does, and sending an unconfirmed erase command risks clearing the wrong channel. This build does not describe a front-panel procedure either — no IC-7610 operating manual is held here — so follow the memory-channel clear procedure in the radio's own operating manual.",
+	// The two tooltips DIFFER, unlike every Yaesu entry's identical pair —
+	// because the evidence differs between them on this radio: Tone is on
+	// the CI-V surface (unverified) and Scan Skip structurally is not (no
+	// mapped field at all, so there is nothing to preserve or fail to).
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7610 has ever answered a frame",
+		ScanSkip: "not read or written over CI-V by this build — this radio's nearest wire byte is a select-group marker, not a skip flag",
+	},
+	// A placeholder LABEL, not an example, on the same footing as the
+	// FTdx10's and FTdx101 pair's: no IC-7610 version string has been seen
+	// here and none is printed in the CI-V reference.
+	FirmwarePlaceholder: "as shown on the radio's display",
+	// Restates the no-CI-V-query and no-minimum-version facts (probe's
+	// report is read by someone who may never open the send flow), and
+	// adds the two facts this radio's probe failure mode turns on: the
+	// fixed 98h address with no --civ-address option, and the ASSUMED
+	// 19200 default baud — both from core/driver/ic7610/doc.go, both
+	// reasons a probe could meet silence that have nothing to do with a
+	// wrong port.
+	ProbeFirmwareNote: "Firmware version has no CI-V query — check the radio's display. No minimum version is established for the IC-7610: this build knows of none to require. This driver talks only to CI-V address 98h, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200 is itself ASSUMED, not read off the radio, since the reference guide names six rates and marks no default. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+}
+
 // texts is the registry For consults, keyed by the exact model string a
 // driver.Driver.Model() (or driver.Identity/spec.Capabilities.Model)
 // call returns, e.g. "FT-710".
@@ -408,13 +521,15 @@ var texts = map[string]Text{
 	"FTdx10":    ftdx10Text,
 	"FTdx101D":  ftdx101dText,
 	"FTdx101MP": ftdx101mpText,
+	"IC-7610":   ic7610Text,
 }
 
-// For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D"
-// and "FTdx101MP" are populated — the four models internal/wiring registers
-// AS OF M9d-2, a count a fifth registration would falsify; any other model
-// — including "", a future driver not yet given an entry, or a near-miss
-// typo ("FT-DX10", say) — returns the zero Text and false.
+// For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",
+// "FTdx101MP" and "IC-7610" are populated — the five models internal/wiring
+// registers AS OF Wave 4 task R1, a count a sixth registration would
+// falsify; any other model — including "", a future driver not yet given
+// an entry, or a near-miss typo ("FT-DX10" or "IC7610", say) — returns the
+// zero Text and false.
 // Callers must never treat a zero Text as if it were real advisory copy.
 //
 // THE MATCH IS EXACT AND CASE-SENSITIVE, and for the FTDX101 pair that is

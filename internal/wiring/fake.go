@@ -11,8 +11,10 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft710"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx10"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx101"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7610"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx10"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx101"
+	"github.com/gm5dna/open-rig-programmer/internal/fakeic7610"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeradio"
 )
 
@@ -137,6 +139,26 @@ var FTdx101DFakeSessionOpts []fakedx101.Option
 // answering from the wrong rig's inventory.
 var FTdx101MPFakeSessionOpts []fakedx101.Option
 
+// IC7610FakeSessionOpts is the IC-7610's own option source: extra
+// fakeic7610.Option values applied, on top of the always-empty production
+// default, to the IC-7610's fake rig on every OpenFakeSessionFor call in
+// this process. It is FakeSessionOpts' IC-7610 counterpart, on the same
+// terms as FTdx10FakeSessionOpts (a separate variable, of a different
+// element type, read at CALL time inside the IC7610 entry's own newRadio
+// closure below) — the first Icom row in this file, and the shape carries
+// over unchanged: internal/fakeic7610 simulates the IC-7610 specifically,
+// its Option is a func(*fakeic7610.config) and cannot configure any other
+// model's fake rig, so a crossed application is a compile error here too.
+//
+// No production flag or GUI control populates this — it adds no second
+// ic7610.Simulated reference to any non-test file, so
+// TestSimulatedProfileTokensConfinement's new ic7610 row keeps passing.
+//
+// A test that sets it MUST restore the previous value (e.g. via
+// t.Cleanup) — this is shared, unsynchronised package state, acceptable
+// only because no test using it calls t.Parallel().
+var IC7610FakeSessionOpts []fakeic7610.Option
+
 // fakeRadio is everything OpenFakeSessionFor needs from a model's fake
 // rig: a port to hand the driver, and a way to shut the rig down
 // afterwards. Interface-typed rather than *fakeradio.Radio (M9c-5 E5)
@@ -171,7 +193,34 @@ var (
 	// fakedx101.NewMP both return *fakedx101.Radio, so there is one type
 	// to prove and two table rows that depend on the proof.
 	_ fakeRadio = (*fakedx101.Radio)(nil)
+	// The IC-7610's, the first Icom simulator this table holds — via
+	// ic7610FakeAdapter, not *fakeic7610.Radio directly. See that
+	// adapter's own doc comment for why.
+	_ fakeRadio = ic7610FakeAdapter{}
 )
+
+// ic7610FakeAdapter narrows *fakeic7610.Radio's Port() — which returns
+// net.Conn, since internal/fakeic7610 is written against the net package
+// directly rather than against this package's fakeRadio seam — to the
+// io.ReadWriteCloser fakeRadio itself requires.
+//
+// A TYPE-IDENTITY GAP, NOT A BEHAVIOUR ONE, and that distinction is why
+// this adapter lives here rather than as an edit to internal/fakeic7610
+// (out of scope for this registration — "never edit ... fake behaviour").
+// Go's interface satisfaction requires each method's result type to match
+// EXACTLY: net.Conn already satisfies io.ReadWriteCloser structurally (it
+// has Read, Write and Close, and more), but a method declared to return
+// net.Conn does not, by itself, implement a method an interface declares
+// to return io.ReadWriteCloser. This adapter closes that gap at the
+// wiring boundary alone, by re-exposing the SAME net.Conn value through a
+// method whose declared result is the interface fakeRadio needs — no
+// byte on the wire, no frame, no state transition changes. Close is
+// promoted unchanged from the embedded *fakeic7610.Radio.
+type ic7610FakeAdapter struct{ *fakeic7610.Radio }
+
+// Port implements fakeRadio, narrowing the embedded Radio's net.Conn to
+// io.ReadWriteCloser. See ic7610FakeAdapter's own doc comment.
+func (a ic7610FakeAdapter) Port() io.ReadWriteCloser { return a.Radio.Port() }
 
 // fakeDriverEntry pairs one model's simulated-profile driver constructor
 // with the fake-rig constructor OpenFakeSessionFor uses to build a live
@@ -262,6 +311,10 @@ var fakeDrivers = map[string]fakeDriverEntry{
 	FTdx101MPModel: {
 		newDriver: func() driver.Driver { return ftdx101.NewMP(ftdx101.Simulated) },
 		newRadio:  func() fakeRadio { return fakedx101.NewMP(FTdx101MPFakeSessionOpts...) },
+	},
+	IC7610Model: {
+		newDriver: func() driver.Driver { return ic7610.New(ic7610.Simulated) },
+		newRadio:  func() fakeRadio { return ic7610FakeAdapter{fakeic7610.New(IC7610FakeSessionOpts...)} },
 	},
 }
 

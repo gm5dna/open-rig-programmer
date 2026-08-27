@@ -169,6 +169,44 @@ var ftdx10CoreSix = []spec.Field{
 	spec.FieldShift, spec.FieldCTCSSState, spec.FieldTag,
 }
 
+// ic7610CoreThree is the core set every IC-7610 bank derives, on every
+// profile — MEM and SCAN alike, since core/driver/ic7610/caps.go's
+// bankFields applies the same support to both.
+//
+// It is a THIRD, DISTINCT shape from ft710CoreSeven and ftdx10CoreSix, not
+// a subset of either: bankCoreCandidates (app/uispec.go) is the Yaesu
+// grid's own nine-field candidate list, and the IC-7610's memory record
+// maps only three of them — FieldFrequency, FieldMode and FieldTag.
+// FieldClarifier, FieldShift, FieldCTCSSState, FieldCTCSSTone,
+// FieldScanSkip and FieldTagDisplay are ALL the zero FieldSupport on this
+// radio (core/driver/ic7610/caps.go's deliberatelyZero table and its E6
+// ruling), so none of them survives bankCoreFields' zero-value test. This
+// radio's OWN tier-added fields — tone_mode, tone_tx, tone_rx and filter,
+// all of which ARE mapped — are outside bankCoreCandidates entirely and
+// never contribute to this set; they surface instead through
+// bankTierFields (BankView.Fields), which
+// TestGetUISpec_RegisteredIC7610_EveryBankUnavailable checks directly.
+var ic7610CoreThree = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldTag,
+}
+
+// ic7610TierFields is what bankTierFields (app/uispec.go) derives for
+// every IC-7610 bank, on every profile: the four tier-added fields this
+// radio's 1A 00 record maps (tone_mode, tone_tx, tone_rx, filter — in
+// tierFields' own declaration order), and none of the other six
+// (tx_frequency, duplex, offset, dtcs_code, dtcs_polarity, data_mode),
+// which are all the zero FieldSupport on this radio too (the same
+// deliberatelyZero table ic7610CoreThree's doc comment cites).
+//
+// THE IC-7610 IS THE FIRST REGISTERED MODEL WHOSE BankView.Fields IS EVER
+// NON-EMPTY. bankTierFields' own doc comment states "every bank of every
+// model registered today therefore returns nil" — true of all four Yaesu
+// rows, and false of this one from the moment it registers; that comment
+// is now stale prose rather than a stale test (a doc-generalisation item,
+// not fixed by this task, since app/uispec.go is a shared file this
+// registration otherwise makes no code change to).
+var ic7610TierFields = []string{"tone_mode", "tone_tx", "tone_rx", "filter"}
+
 // TestBankCoreFields_ExcludesEraseStructurally is M9c-6 D5a's structural
 // exclusion, and the case that shows why the zero-value test alone could
 // not carry it: spec.FieldErase is NON-zero on the FT-710's own fail-safe
@@ -360,6 +398,11 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		// model's own registered capability data.
 		"FTdx101D":  ftdx10CoreSix,
 		"FTdx101MP": ftdx10CoreSix,
+		// The IC-7610 (Wave 4 task R1): a genuinely DIFFERENT three-field
+		// set, not a coincidence of the derivation — see ic7610CoreThree's
+		// own doc comment for which candidates this radio's memory record
+		// maps and which it does not.
+		"IC-7610": ic7610CoreThree,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {
@@ -591,6 +634,163 @@ func TestBankReadOnly_FTdx101DAndMPAgree(t *testing.T) {
 	}
 	if !reflect.DeepEqual(d, mp) {
 		t.Errorf("bankReadOnly verdicts differ between the siblings:\n  FTdx101D  = %v\n  FTdx101MP = %v\nthe two radios share one dialect config and one capability shape (matrix §2.5), so a difference means a registration or a capability set has acquired a model dimension nothing supports", d, mp)
+	}
+}
+
+// TestBankReadOnly_RegisteredIC7610_RealHardwareProfile pins what a REAL
+// IC-7610's grid does today, bank by bank, through real registration —
+// Wave 4 task R1's mirror of
+// TestBankReadOnly_RegisteredFTdx10_RealHardwareProfile.
+//
+// The IC-7610's RealHardware profile is its all-Unverified one
+// (writeTrialsComplete is false: no IC-7610 has ever been written to by
+// this project), so its three derived core fields are Write
+// spec.Unverified on both banks — which is NOT spec.Unsupported, and
+// therefore NOT read-only under bankReadOnly's standing rule, on the same
+// footing as every Yaesu row.
+//
+// NO DISCOVERED-BANK CONTRAST, unlike the FTdx10/FTdx101 exemplars: this
+// radio has no 60M/EMG-style discovery mechanism at all. Its Banks are
+// fixed at construction — spec.BankMemory and spec.BankScan,
+// core/driver/ic7610/caps.go's baseCapabilities — so there is no
+// discovered bank whose Writes are forced Unsupported to contrast
+// against; the static baseline is the whole of what this radio's
+// bankReadOnly verdict can be.
+func TestBankReadOnly_RegisteredIC7610_RealHardwareProfile(t *testing.T) {
+	caps, err := wiring.StaticCapabilities(wiring.IC7610Model)
+	if err != nil {
+		t.Fatalf("wiring.StaticCapabilities(%q): unexpected error: %v", wiring.IC7610Model, err)
+	}
+	if len(caps.Banks) == 0 {
+		t.Fatal("the registered IC-7610's static baseline has no banks — nothing asserted")
+	}
+	for _, b := range caps.Banks {
+		fields := bankCoreFields(caps, b.ID)
+		wantFields(t, "IC-7610 bank "+string(b.ID), fields, ic7610CoreThree)
+		for _, f := range fields {
+			if got := caps.FieldSupport(b.ID, f).Write; got != spec.Unverified {
+				t.Errorf("bank %s field %s Write = %v, want Unverified (the premise: nothing on a real IC-7610 is proven writable)", b.ID, f, got)
+			}
+		}
+		if bankReadOnly(caps, b.ID) {
+			t.Errorf("bankReadOnly(%s) = true, want false — Unverified is not Unsupported, and locking it would break the offline clone workflow", b.ID)
+		}
+	}
+}
+
+// TestGetUISpec_RegisteredIC7610_EveryBankFieldsAndTagDisplay is Wave 4
+// task R1's mirror of TestGetUISpec_RegisteredFTdx10_EveryBankUnavailable
+// (M9c-6 D5c): GetUISpec driven for the IC-7610 through real registration,
+// connected and offline, and the first time this project's BankView.Fields
+// is populated by a REAL registered model's real capability data rather
+// than being nil, as bankTierFields' own doc comment says every model
+// registered before this one leaves it.
+//
+//   - CONNECTED to the registered fake (Live true, the Simulated profile —
+//     the `--fake --model IC-7610` path a user actually walks). Unlike the
+//     FTdx10/FTdx101 exemplars this radio discovers no extra bank, so
+//     "every bank" here is just MEM and SCAN.
+//   - DISCONNECTED with an IC-7610 working copy loaded (Live false, the
+//     static RealHardware baseline, resolved by currentModel from the
+//     file's own Radio.Model) — the offline clone workflow's path.
+//
+// TagDisplayDefault must be {state: "unavailable"} on both banks of both
+// paths: the IC-7610's 1A 00 record has no display flag at all
+// (FieldTagDisplay carries the zero FieldSupport on both banks,
+// core/driver/ic7610/caps.go's bankFields), so a blank row added anywhere
+// in either bank must not carry a Known one. The FT-710 assertion at the
+// end is the contrast that stops the whole thing passing because
+// something returned a zero value.
+//
+// Fields must equal ic7610TierFields on both banks of both paths: this
+// radio's memory record maps tone_mode, tone_tx, tone_rx and filter (and
+// none of the other six tier-added fields), and bankTierFields must derive
+// that same four-field list from whichever capability source GetUISpec
+// used — the connected session's effective set, or the static baseline —
+// exactly as it must for TagDisplayDefault.
+func TestGetUISpec_RegisteredIC7610_EveryBankFieldsAndTagDisplay(t *testing.T) {
+	unavailable := codeplug.BoolField{State: codeplug.Unavailable}
+
+	sess, closeAll, err := wiring.OpenFakeSessionFor(testAppCtx(t), wiring.IC7610Model)
+	if err != nil {
+		t.Fatalf("wiring.OpenFakeSessionFor(%q): unexpected error: %v", wiring.IC7610Model, err)
+	}
+	t.Cleanup(func() { _ = closeAll() })
+
+	a, _ := newTestApp(t)
+	connectDirect(t, a, sess, nil)
+	got, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (connected to the IC-7610 fake): unexpected error: %v", err)
+	}
+	if !got.Live {
+		t.Error("Live = false, want true (connected to the registered fake)")
+	}
+	if len(got.Banks) != 2 {
+		t.Fatalf("banks = %v, want exactly MEM and SCAN — this radio discovers no extra bank", bankIDs(got.Banks))
+	}
+	for _, b := range got.Banks {
+		if b.TagDisplayDefault != unavailable {
+			t.Errorf("connected IC-7610 bank %s TagDisplayDefault = %+v, want %+v — this radio's memory frame has no display flag", b.ID, b.TagDisplayDefault, unavailable)
+		}
+		if !reflect.DeepEqual(b.Fields, ic7610TierFields) {
+			t.Errorf("connected IC-7610 bank %s Fields = %v, want %v", b.ID, b.Fields, ic7610TierFields)
+		}
+	}
+
+	// Offline, from an IC-7610 file: the same answers, from the static
+	// RealHardware baseline this time.
+	a.mu.Lock()
+	a.conn = nil
+	a.working = &codeplug.Codeplug{
+		Schema:   codeplug.CurrentSchema,
+		Radio:    codeplug.RadioInfo{Model: wiring.IC7610Model},
+		Channels: []codeplug.Channel{{Slot: "001"}},
+	}
+	a.mu.Unlock()
+	offline, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (offline, IC-7610 working copy): unexpected error: %v", err)
+	}
+	if offline.Live {
+		t.Error("Live = true, want false (disconnected)")
+	}
+	if len(offline.Banks) == 0 {
+		t.Fatal("offline IC-7610 UISpec has no banks — nothing asserted")
+	}
+	for _, b := range offline.Banks {
+		if b.TagDisplayDefault != unavailable {
+			t.Errorf("offline IC-7610 bank %s TagDisplayDefault = %+v, want %+v", b.ID, b.TagDisplayDefault, unavailable)
+		}
+		if !reflect.DeepEqual(b.Fields, ic7610TierFields) {
+			t.Errorf("offline IC-7610 bank %s Fields = %v, want %v", b.ID, b.Fields, ic7610TierFields)
+		}
+	}
+
+	// The contrast: the FT-710, through the same offline path, still
+	// answers Known-false and an empty Fields on every bank.
+	a.mu.Lock()
+	a.working = &codeplug.Codeplug{
+		Schema:   codeplug.CurrentSchema,
+		Radio:    codeplug.RadioInfo{Model: wiring.DefaultModel},
+		Channels: []codeplug.Channel{{Slot: "001"}},
+	}
+	a.mu.Unlock()
+	ft710, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (offline, FT-710 working copy): unexpected error: %v", err)
+	}
+	if len(ft710.Banks) == 0 {
+		t.Fatal("offline FT-710 UISpec has no banks — the contrast would be vacuous")
+	}
+	knownOff := codeplug.BoolField{State: codeplug.Known, Value: false}
+	for _, b := range ft710.Banks {
+		if b.TagDisplayDefault != knownOff {
+			t.Errorf("offline FT-710 bank %s TagDisplayDefault = %+v, want %+v", b.ID, b.TagDisplayDefault, knownOff)
+		}
+		if len(b.Fields) != 0 {
+			t.Errorf("offline FT-710 bank %s Fields = %v, want empty — the FT-710 maps none of the Icom tier's fields", b.ID, b.Fields)
+		}
 	}
 }
 

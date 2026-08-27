@@ -55,6 +55,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft710"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx10"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx101"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7610"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -119,6 +120,22 @@ const FTdx101DModel = "FTdx101D"
 // there are two models, so neither is the other's fallback and neither is
 // reachable by a caller that failed to choose.
 const FTdx101MPModel = "FTdx101MP"
+
+// IC7610Model names the IC-7610's realDrivers/fakeDrivers key, which must
+// equal ic7610.New(...).Model() — pinned, like the three Yaesu constants
+// above, by TestDriverTableKeysMatchDriverModel walking both tables. A
+// named constant rather than a bare literal at each of its uses for the
+// same reason those three are: the two table keys MUST be the same
+// string, and a typo in one alone would build a model openable for real
+// but not simulated.
+//
+// THIS IS THE FIRST NON-YAESU REGISTRATION (Wave 4, task R1). The spelling
+// is the manufacturer's own, and it carries the hyphen ic7610.go's own
+// Model() method and Capabilities().Model both declare ("IC-7610", not
+// "IC7610" or "ic7610") — the two agreements TestDriverTableKeysMatchDriverModel
+// and internal/guards' simulated-token guard both depend on, exactly as
+// they do for every Yaesu row.
+const IC7610Model = "IC-7610"
 
 // realDrivers is the model-keyed table of real-hardware driver
 // constructors: model name -> a constructor building THAT model's
@@ -188,6 +205,12 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ftdx101.NewMP(ftdx101.RealHardware, ftdx101.WithConsentedUnverifiedWrites())
 		}
 		return NewFTdx101MPRealDriver()
+	},
+	IC7610Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic7610.New(ic7610.RealHardware, ic7610.WithConsentedUnverifiedWrites())
+		}
+		return NewIC7610RealDriver()
 	},
 }
 
@@ -371,6 +394,30 @@ func NewFTdx101DRealDriver() driver.Driver {
 // this table's two rows are exactly the callers that shape was chosen for.
 func NewFTdx101MPRealDriver() driver.Driver {
 	return ftdx101.NewMP(ftdx101.RealHardware)
+}
+
+// NewIC7610RealDriver builds the ic7610 driver for a real-hardware
+// session: profile ic7610.RealHardware, the zero value — the IC-7610's
+// half of the realDrivers table, split out for the same reason the four
+// Yaesu constructors above are (a test can pin the capability set the
+// real wiring path implies without opening a port).
+//
+// READ/PROBE ONLY, and by the same mechanism as every Yaesu row: this
+// driver's writeTrialsComplete (core/driver/ic7610/caps.go) is FALSE, so a
+// RealHardware IC-7610 driver reports the all-Unverified capability set —
+// every mapped field's Write spec.Unverified, nothing writable on either
+// bank. No IC-7610 has been written to by this project, and the
+// capability gate refuses before any frame is built.
+//
+// THE FAIL-SAFE DIRECTION IS UNCHANGED BY THIS BEING A CI-V DRIVER RATHER
+// THAN A CAT ONE: an unrecognised Profile value selects the all-Unverified
+// set too (ic7610.go's Capabilities switch), never the simulator's
+// write-Supported one, and the one named exception — SessionOptions'
+// ConsentUnverifiedWrites, spent from the user's own recorded grant — is
+// exactly the mechanism the Yaesu rows use, reaching realDrivers'
+// IC7610Model row above and never this constructor.
+func NewIC7610RealDriver() driver.Driver {
+	return ic7610.New(ic7610.RealHardware)
 }
 
 // openSerial is OpenRealSessionWith's test seam (and so OpenRealSessionFor's
