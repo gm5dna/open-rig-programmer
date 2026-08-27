@@ -550,7 +550,7 @@ var ic7610Text = Text{
 //   - Tone IS mapped on the wire (the 1A 00 record's tone-mode nibble and
 //     two tone-frequency spans, core/driver/ic7300/caps.go's bankFields),
 //     on the same footing as the IC-7610. Scan Skip is NOT: the nearest
-//     wire byte is a SELECT-group marker, group membership rather than a
+//     wire nibble is a SELECT-group marker, group membership rather than a
 //     skip flag, and mapping it as skip is forbidden (matrix erratum 9 /
 //     plan decision D4).
 //   - This radio's own operating manual IS held by this project (the IC-7300
