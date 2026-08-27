@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -505,6 +506,60 @@ func TestReadChannel_AZeroToneMapsToUnknownNotKnown(t *testing.T) {
 		if tt.field.Value != 0 {
 			t.Errorf("%s carries a value alongside a non-Known state: %+v", tt.name, tt.field)
 		}
+	}
+}
+
+// A DTCS code's three digits are OCTAL (PDF p.24, folio 23, "• DTCS code
+// and polarity setting"), but ㉓,㉔ is a plain BCD span and the civ layer
+// decodes it without judgement — so 080 and 778 both come back as
+// perfectly good numbers that are not codes. The READ MAPPING is what
+// handles it, exactly as it does for a zero tone, and validDTCSCode is
+// the same printed range the write direction's rung 6a already asks: a
+// read that constructed Known 080 would build a codeplug this very driver
+// then refused to write back.
+func TestReadChannel_ANonOctalDTCSCodeMapsToUnknownNotKnown(t *testing.T) {
+	t.Parallel()
+	for _, code := range []uint64{80, 778} {
+		t.Run(fmt.Sprintf("%03d", code), func(t *testing.T) {
+			t.Parallel()
+			var img radioImage
+			img.idToken = testToken
+			rec := goldenRecord(144_500_000, 5)
+			rec.dtcsCode = code
+			img.records = map[wireAddr][]byte{{0, 0}: rec.build()}
+
+			_, s := openFor(t, img)
+			ch, err := s.ReadChannel(context.Background(), "G01-001")
+			if err != nil {
+				t.Fatalf("ReadChannel: %v", err)
+			}
+			got := ch.Data.DTCSCode
+			if got.State != codeplug.Unknown {
+				t.Fatalf("dtcs_code = %+v, want Unknown — %03d has a digit above 7 and is not a DTCS code (T1(3))", got, code)
+			}
+			if got.Value != 0 {
+				t.Errorf("dtcs_code carries a value alongside a non-Known state: %+v", got)
+			}
+		})
+	}
+}
+
+// The other direction: the goldens' 023 is octal throughout and comes
+// back Known, so the check above narrows the field's domain rather than
+// emptying it.
+func TestReadChannel_TheGoldensDTCSCodeMapsToKnown023(t *testing.T) {
+	t.Parallel()
+	var img radioImage
+	img.idToken = testToken
+	populate(&img, wireAddr{0, 0})
+
+	_, s := openFor(t, img)
+	ch, err := s.ReadChannel(context.Background(), "G01-001")
+	if err != nil {
+		t.Fatalf("ReadChannel: %v", err)
+	}
+	if got := ch.Data.DTCSCode; got.State != codeplug.Known || got.Value != 23 {
+		t.Errorf("dtcs_code = %+v, want Known 23 — the code both golden vectors carry", got)
 	}
 }
 

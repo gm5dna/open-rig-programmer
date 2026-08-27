@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	civic905 "github.com/gm5dna/open-rig-programmer/core/civ/ic905"
@@ -185,14 +186,41 @@ func toneField(caps spec.Capabilities, deciHz uint64) codeplug.ToneField {
 	return codeplug.ToneField{State: codeplug.Unknown}
 }
 
+// dtcsCodeField maps a civ-layer DTCS code to a neutral field, and it is
+// THE TONE PRECEDENT APPLIED TO THE OTHER OCTAL FIELD: a code every one
+// of whose digits is 7 or less is Known; anything else is Unknown.
+//
+// RULING T1(3) AGAIN. ㉓,㉔ is a plain two-byte big-endian BCD span, and
+// the civ layer decodes it losslessly and without judgement — so a radio
+// (or a bus fault, or a channel this tier has never seen) can put 080 or
+// 778 in it, both perfectly good BCD and neither a DTCS code: the printed
+// range is OCTAL in all three digits (PDF p.24, folio 23, "• DTCS code
+// and polarity setting"). validDTCSCode is that printed range, already
+// written down for the write direction; the read direction now asks the
+// same question rather than a different one, so no read can produce a
+// value this driver's own rung 6a would refuse to write back.
+//
+// Unknown, not Unavailable, and not a clamp: the radio HAS the field,
+// this read learned nothing usable from it, and Unknown means "preserve
+// whatever the radio has" to every write path downstream — which is the
+// only honest instruction when the bytes are not a code.
+func dtcsCodeField(code uint64) codeplug.IntField {
+	if code <= math.MaxInt && validDTCSCode(int(code)) {
+		return codeplug.IntField{State: codeplug.Known, Value: int(code)}
+	}
+	return codeplug.IntField{State: codeplug.Unknown}
+}
+
 // neutralChannel maps a decoded record into codeplug's neutral terms.
 //
 // THE TWELVE FIELDS THIS RECORD EXPRESSES come back Known; the eight it
 // does not come back Unavailable — "this radio has no such field", which
 // is a different statement from Unknown ("it has one and this read did
-// not learn it"). The one place the two are distinguished on purpose is
-// the tone pair, which uses Unknown for a value outside the declared
-// domain: the field exists, the number was read, and it is not a tone.
+// not learn it"). THREE OF THE TWELVE ARE DOMAIN-CHECKED FIRST and come
+// back Unknown when the bytes are outside their printed domain: the tone
+// pair, and the DTCS code, whose three digits are octal. In all three the
+// field exists and the number was read — it simply is not a tone, or is
+// not a code.
 //
 // FreqHz takes rec.RXFreqHz WITHOUT NARROWING. CI-V BCD is uint64 end to
 // end since D4's widening, and there is no checked conversion to make —
@@ -252,7 +280,7 @@ func neutralChannel(rec civ.MemoryRecord, slot string, caps spec.Capabilities) c
 			ToneMode:     codeplug.StringField{State: codeplug.Known, Value: toneMode},
 			ToneTx:       toneField(caps, toneTX),
 			ToneRx:       toneField(caps, toneRX),
-			DTCSCode:     codeplug.IntField{State: codeplug.Known, Value: int(dtcsCode)},
+			DTCSCode:     dtcsCodeField(dtcsCode),
 			DTCSPolarity: codeplug.StringField{State: codeplug.Known, Value: dtcsPol},
 			Filter:       codeplug.StringField{State: codeplug.Known, Value: filter},
 			// The record's ⑬ is an enum of two printed values, "00: Data
