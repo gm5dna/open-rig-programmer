@@ -86,9 +86,18 @@ address field          positions 1-2 memory group, 3-4 memory channel
 record                 115 - 4 = 111
 ```
 
-`TestRecordLenIsTheDiagramsOwnArithmetic` pins the subtraction. **This package
-knows nothing else about the 111 bytes** — no field, no offset, no vocabulary,
-no encoding. It stores them, serves them and compares them.
+`TestRecordLenIsTheDiagramsOwnArithmetic` pins the subtraction.
+
+One further specific offset is cited by this package, and it belongs on this
+list rather than only inside the argument it supports: **diagram byte 15's
+second nibble prints the literal `Fixed`** — both `transcription-b.csv` and
+`geometry-witness.csv` record it (the latter as `D4`). It is the source for
+the zero-fill justification below (invention 2): the one printed literal in
+the whole diagram, and the reason zero is the fill that asserts nothing.
+
+**Beyond RecordLen and this one printed literal, this package knows nothing
+else about the 111 bytes** — no field, no other offset, no vocabulary, no
+encoding. It stores them, serves them and compares them.
 
 ## The STOPs, carried and not resolved
 

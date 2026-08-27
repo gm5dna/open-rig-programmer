@@ -63,14 +63,19 @@
 // # The STOPs this package inherits and does not resolve
 //
 // Both transcripts record, independently, that the printed diagram contradicts
-// its own measured geometry in two places: the eighteenth field prints the
-// indices 6 to 52 in black-filled circles where the running count gives byte
-// positions 53-99, and the nineteenth prints 53 to 68 where the running count
+// its own measured geometry in FOUR places (PROVENANCE.md's numbering, not
+// three — an earlier version of this comment omitted the geometry-extent one):
+// the eighteenth field prints the indices 6 to 52 in black-filled circles
+// where the running count gives byte positions 53-99; that same band's extent
+// cannot be counted from cells at all, because it draws none, so its 47
+// positions rest on its own printed end numerals rather than on anything
+// measured; and the nineteenth field prints 53 to 68 where the running count
 // gives 100-115. Both readings record printed index and measured position side
-// by side and reconcile neither. A third STOP is transcription B's: two adjacent
-// fields carry the identical printed label over different byte ranges.
+// by side and reconcile neither. A fourth STOP is transcription B's own: two
+// adjacent fields carry the identical printed label over different byte
+// ranges.
 //
-// NONE OF THE THREE IS WORKED AROUND HERE, and none of the three has to be,
+// NONE OF THE FOUR IS WORKED AROUND HERE, and none of the four has to be,
 // because the section above is the reason: a fake that knows no field cannot be
 // wrong about where a field starts. It is recorded because it decides one thing
 // that would otherwise look arbitrary — why BlankRecord and DefaultImage put
@@ -156,10 +161,13 @@
 // PROTOCOL-SPECIFIC lie about which channel an answer is about, and nothing
 // else in this repository can produce one.
 //
-// EVERY OTHER COMMAND. 1A 01 (band stacking register), 1A 05 (set mode), the
-// clear forms, the transceive sets: all refused with FA. The design's own gate
-// admits none of them, so nothing in this project sends one, and implementing
-// them would be inventing wire behaviour that no test could check.
+// EVERY OTHER COMMAND. 1A 01 (band stacking register), 1A 05 (the settings
+// menu the manual itself calls "Set mode" — PDF p.3 folio 2, "◇ Preparing":
+// "These settings are set in the Set mode", cited at matrix-ic705.md §3.3/3.4
+// — NOT this project's spec.FieldMode), the clear forms, the transceive sets:
+// all refused with FA. The design's own gate admits none of them, so nothing
+// in this project sends one, and implementing them would be inventing wire
+// behaviour that no test could check.
 //
 // TIMING. Every reply is near-instant unless WithLatency says otherwise. No
 // IC-705 timing has ever been observed by this project, so there is nothing to

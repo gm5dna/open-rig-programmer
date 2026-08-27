@@ -35,6 +35,17 @@ func WithLatency(d time.Duration) Option {
 // read can ever reach it: the wire refuses the address before it consults the
 // state, which is itself worth being able to demonstrate.
 //
+// TWO WIRE-SIDE LIMITS BOUND HOW FAR "ANY LENGTH, VERBATIM" REACHES, and
+// both are the reassembler's, not this option's: parser.go's
+// maxAccumulatorBytes caps the whole answered frame — preamble, addresses,
+// command bytes, this record and the terminator — at 512 bytes, so a
+// record long enough to push the frame past that cap is never delivered
+// whole; and an embedded FD inside the record, served verbatim as
+// promised above, terminates the frame at the READER'S end rather than
+// this fake's, truncating what the caller sees to everything before it.
+// Neither is repaired here, for the same reason the record itself is
+// never repaired.
+//
 // The record is copied.
 func WithRecord(group, channel int, record []byte) Option {
 	mustBeAddressable(group, channel)
