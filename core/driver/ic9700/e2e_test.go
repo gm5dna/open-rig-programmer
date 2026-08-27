@@ -136,6 +136,39 @@ func TestEndToEnd_ProbeFingerprint(t *testing.T) {
 	assertOnlyTheBuildableGrammars(t, radio, 0)
 }
 
+// buildableReadFrames precomputes every frame this profile's OWN builders
+// can produce for a plain read, so assertOnlyTheBuildableGrammars can
+// require EXACT byte equality rather than a cn/sc/length match.
+//
+// The identity read takes no parameter, so there is exactly one legal
+// frame. A memory read is parameterised by the channel address, so every
+// address this profile's own ChannelRange/Groups declare is built once and
+// kept as a set — 3 bands × 107 channels here — and a wire frame is
+// accepted only if it is byte-identical to ONE of them.
+func buildableReadFrames(t *testing.T) (identityRead []byte, memoryReads map[string]bool) {
+	t.Helper()
+	p := civic9700.Profile()
+
+	idCmd, err := p.BuildTransceiverIDRead()
+	if err != nil {
+		t.Fatalf("BuildTransceiverIDRead: %v", err)
+	}
+
+	memoryReads = map[string]bool{}
+	groups, base := p.Groups(), p.GroupBase()
+	lo, hi := p.ChannelRange()
+	for g := base; g < base+groups; g++ {
+		for c := lo; c <= hi; c++ {
+			cmd, err := p.BuildMemoryRead(civ.ChannelAddress{Group: g, Channel: c})
+			if err != nil {
+				continue // an address this profile itself refuses builds nothing to compare against
+			}
+			memoryReads[string(cmd.Bytes())] = true
+		}
+	}
+	return idCmd.Bytes(), memoryReads
+}
+
 // assertOnlyTheBuildableGrammars requires that every frame the fake
 // received is one of the THREE this tier can build, and that exactly
 // wantSets of them are memory sets.
@@ -151,6 +184,17 @@ func TestEndToEnd_ProbeFingerprint(t *testing.T) {
 // a set at any other width are all refused here. The clear form is
 // `1A 00 <3 address bytes> FF`, eleven bytes, and matches none of the
 // three — which is the structural half of "erase is unshipped".
+//
+// LENGTH AND COMMAND NUMBER ARE NOT THE WHOLE AUDIT, and a same-width frame
+// can satisfy both while still being no frame this tier's own machinery
+// would produce — a corrupted address, a byte a builder never writes at an
+// unmapped offset, an addressed-but-otherwise-malformed record. So each
+// grammar is checked against the ACTUAL MACHINERY: the two reads against
+// buildableReadFrames' exact byte sets (there is no "close enough" for a
+// frame carrying no data to validate), and every SET against
+// civ.Profile.AllowedCommand — the same gate core/civ's Framing.Allow calls
+// before a real write reaches the wire, which decodes, re-validates and
+// re-encodes the record and only admits an exact match.
 func assertOnlyTheBuildableGrammars(t *testing.T, radio *fakeic9700.Radio, wantSets int) {
 	t.Helper()
 	const (
@@ -158,14 +202,26 @@ func assertOnlyTheBuildableGrammars(t *testing.T, radio *fakeic9700.Radio, wantS
 		memoryRead   = 10
 		memorySet    = 4 + 2 + civic9700.AddressBytes + civic9700.RecordLength + 1
 	)
+	p := civic9700.Profile()
+	idFrame, memReadFrames := buildableReadFrames(t)
+
 	sets := 0
 	for _, f := range radio.Transcript() {
 		cn, sc, ok := civ.FrameCommand(f)
 		switch {
 		case ok && cn == 0x19 && sc == 0x00 && len(f) == identityRead:
+			if !bytes.Equal(f, idFrame) {
+				t.Errorf("identity read % X is not byte-identical to BuildTransceiverIDRead's own % X", f, idFrame)
+			}
 		case ok && cn == 0x1A && sc == 0x00 && len(f) == memoryRead:
+			if !memReadFrames[string(f)] {
+				t.Errorf("memory read % X matches no address BuildMemoryRead builds for this profile", f)
+			}
 		case ok && cn == 0x1A && sc == 0x00 && len(f) == memorySet:
 			sets++
+			if !p.AllowedCommand(f) {
+				t.Errorf("memory set % X is refused by this profile's own AllowedCommand gate — it is not a frame the builder could have produced", f)
+			}
 		default:
 			t.Errorf("the session put % X on the wire — no builder in this tier names that frame", f)
 		}

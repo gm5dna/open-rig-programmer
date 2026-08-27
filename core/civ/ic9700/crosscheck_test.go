@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
@@ -639,5 +640,95 @@ func TestSourceIndexDefectIsPinnedNotRepaired(t *testing.T) {
 	}
 	if row.label != "" {
 		t.Errorf("the ledger's D2 row has acquired the label %q; the page prints none against that numeral", row.label)
+	}
+}
+
+// fieldLabelFragment binds each civ.FieldID that profileRowSpans maps in
+// D1 to a substring of leg B's OWN label_verbatim for the printed row it
+// comes from — copied out of testdata/ic9700-transcription-b.csv, never
+// invented. This is what turns "the FieldID per row is hand-written" from
+// an unchecked fact into a checked one: a FieldID copied into the WRONG
+// row's rowSpec now has to also match that row's PRINTED words.
+//
+// TWO ROWS SPLIT INTO A FieldID PAIR THE PAGE DOES NOT ITSELF NAME
+// SEPARATELY: ⑩,⑪ prints only "Operating mode setting" for both
+// civ.FieldMode and civ.FieldFilter, and ㉑~㉓ prints only "DTCS code
+// setting" for both civ.FieldDTCSPolarity and civ.FieldDTCSCode. Both
+// FieldIDs of each pair therefore share the one fragment the page
+// actually prints. That is a real limit on what this test can catch
+// inside those two rows — it cannot tell Mode from Filter, or Polarity
+// from Code, by text alone — but it still catches either FieldID being
+// copied into a DIFFERENT row, which is the failure mode profileRowSpans
+// is hand-written enough to invite.
+var fieldLabelFragment = map[civ.FieldID]string{
+	civ.FieldSelect:       "Select memory",
+	civ.FieldRXFrequency:  "Operating frequency",
+	civ.FieldMode:         "Operating mode",
+	civ.FieldFilter:       "Operating mode",
+	civ.FieldDataMode:     "Data mode",
+	civ.FieldDuplex:       "Duplex and Tone",
+	civ.FieldToneMode:     "Duplex and Tone",
+	civ.FieldToneTX:       "Repeater tone frequency",
+	civ.FieldToneRX:       "Tone squelch frequency",
+	civ.FieldDTCSPolarity: "DTCS code",
+	civ.FieldDTCSCode:     "DTCS code",
+	civ.FieldOffset:       "Duplex offset frequency",
+	civ.FieldName:         "Memory name",
+	// civ.FieldTXFrequency carries NO entry, deliberately. It appears only
+	// in the outlined primary block (key {5,51}, not a leg-B CSV row — B
+	// prints thirteen constituent rows instead, see profileRowSpans) and
+	// the filled duplicate (key {5,51,filled:true}, a real CSV row whose
+	// label_verbatim the page prints as NOTHING — STOP 2, see the block
+	// comment above blockRow). Neither row offers text to bind against, so
+	// the loop below skips both before any FieldID lookup is attempted.
+}
+
+// TestProfileRowSpansFieldIDsMatchTheirPrintedLabel walks every key in
+// profileRowSpans and, where leg B's transcription has a printed label
+// for that row, requires each mapped FieldID's fragment to appear inside
+// it. A FieldID hand-copied into the wrong row's rowSpec — for example
+// civ.FieldToneRX written where civ.FieldToneTX belongs, two same-length
+// same-shape spans a byte-arithmetic check alone cannot tell apart —
+// fails here because "Repeater tone frequency" is not a substring of
+// "Tone squelch frequency setting".
+func TestProfileRowSpansFieldIDsMatchTheirPrintedLabel(t *testing.T) {
+	trans := readTranscription(t)
+
+	var keys []indexKey
+	for k := range profileRowSpans {
+		keys = append(keys, k)
+	}
+	keys = sortKeys(keys)
+
+	for _, key := range keys {
+		spec := profileRowSpans[key]
+		if len(spec.spans) == 0 {
+			continue // an unmapped-only row (e.g. the call-sign groups) names no FieldID to bind
+		}
+		row, ok := trans.at("D1", key)
+		if !ok {
+			// The synthetic {5,51} (unfilled) key names the outlined
+			// primary block as a unit for the duplicate test; B prints
+			// its thirteen constituent rows instead of this one, so
+			// there is no B row here to bind against.
+			continue
+		}
+		if row.label == "" {
+			// The filled ❺~[51] row: the page prints nothing as its
+			// label (STOP 2), only the grey NOTE box's prose, which is
+			// not the label_verbatim column.
+			continue
+		}
+		for _, ref := range spec.spans {
+			frag, ok := fieldLabelFragment[ref.field]
+			if !ok {
+				t.Errorf("%v: %s has no entry in fieldLabelFragment", key, ref.field)
+				continue
+			}
+			if !strings.Contains(row.label, frag) {
+				t.Errorf("%v: %s's expected fragment %q is not in B's printed label %q",
+					key, ref.field, frag, row.label)
+			}
+		}
 	}
 }
