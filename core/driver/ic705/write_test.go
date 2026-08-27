@@ -489,6 +489,28 @@ func TestOffsetAboveTheManualsCeilingIsRefused(t *testing.T) {
 	}
 }
 
+func TestANonEmptyInvalidModeIsRefusedBeforeAnyWireTraffic(t *testing.T) {
+	// F3: a non-empty mode outside this radio's vocabulary used to be
+	// refused only by civ's own encoder (BuildMemorySet), which is AFTER
+	// rung 9's preservation read has already put a frame on the wire.
+	// Mode membership is decidable locally, from the channel and s.caps
+	// alone, so T5 requires it to precede ALL wire traffic — zero frames,
+	// not one.
+	sess, r, ch := writableSession(t, "G01-001")
+	before := len(r.Transcript())
+	ch.Data.Mode = "INVALID"
+	_, err := sess.WriteChannel(context.Background(), ch)
+	if !errors.Is(err, driver.ErrWriteRefused) {
+		t.Fatalf("WriteChannel(mode=INVALID) = %v, want a refusal", err)
+	}
+	if !refusalNames(err, spec.FieldMode) {
+		t.Errorf("the refusal %q does not name the mode field", err)
+	}
+	if got := len(r.Transcript()) - before; got != 0 {
+		t.Errorf("the invalid-mode refusal put %d frames on the wire, want 0 — it must precede the preservation read", got)
+	}
+}
+
 func TestAStarMarkedChannelIsRefusedNotDemoted(t *testing.T) {
 	// O-6 + E6. The radio's record holds 0x01 at offset 0 — a ★1 Select
 	// marking, in the nibble this profile deliberately leaves UNMAPPED.
@@ -635,6 +657,12 @@ func TestEveryLocalRefusalPrecedesTheRead(t *testing.T) {
 		{6, "mandatory-Known", func(t *testing.T, base codeplug.Channel) codeplug.Channel {
 			d := *base.Data
 			d.Filter = codeplug.StringField{State: codeplug.Unknown}
+			base.Data = &d
+			return base
+		}},
+		{6, "invalid mode", func(t *testing.T, base codeplug.Channel) codeplug.Channel {
+			d := *base.Data
+			d.Mode = "INVALID"
 			base.Data = &d
 			return base
 		}},

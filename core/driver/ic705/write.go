@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
@@ -155,6 +156,15 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	var unknown []spec.Field
 	if data.Mode == "" {
 		unknown = append(unknown, spec.FieldMode)
+	} else if !slices.Contains(s.caps.Modes, data.Mode) {
+		// F3: a non-empty mode outside this radio's vocabulary used to be
+		// refused only by civ's own encoder (BuildMemorySet, well after
+		// the preservation read at rung 9 has already put a frame on the
+		// wire). T5 requires every locally decidable refusal — and mode
+		// membership is decidable from the channel and s.caps alone — to
+		// precede ALL wire traffic, so it is checked here, at the same
+		// rung as mode's own emptiness.
+		return refuse([]spec.Field{spec.FieldMode}, fmt.Sprintf("mode %q is not one of this radio's %d modes", data.Mode, len(s.caps.Modes)))
 	}
 	for _, c := range []struct {
 		field spec.Field
