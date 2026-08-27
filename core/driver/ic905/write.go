@@ -40,14 +40,40 @@ var unconditionalFields = []spec.Field{
 // codeplug's touchedFields uses, so this driver's defence-in-depth gate
 // and the diff layer's gate name fields in the same order.
 //
-// tx_frequency is ABSENT: this record has no TX frequency field and no
-// duplicated TX block (matrix §2 row 11, a MANUAL-EVIDENCED zero). So are
-// clarifier, ctcss_state, shift, tag_display, scan_skip and erase — the
-// seven this matrix grades zero on both banks.
+// A FIELD MISSING FROM THIS TABLE IS A FIELD THE GATE NEVER SEES, and
+// therefore a Known value SILENTLY DROPPED — which is exactly what
+// core/driver's contract forbids: "A field carrying FieldState Known that
+// the protocol cannot express is likewise refused, never silently
+// dropped."
+//
+// THAT IS WHY THREE OF THIS MATRIX'S ZEROS ARE IN THIS TABLE.
+// tag_display, scan_skip and tx_frequency (matrix §2 rows 9, 10 and 11)
+// are fields this record cannot express AND fields a codeplug.ChannelData
+// can nonetheless speak Known about, so they are requested when Known
+// PRECISELY SO rung 7's capability gate meets them: caps.go's bankFields
+// grades all three the zero FieldSupport on BOTH banks, and
+// spec.ConsentUnverifiedWrites re-labels only Unverified, never
+// Unsupported — so a Known value for any of the three is REFUSED, with
+// the field named and nothing on the wire, on every session this driver
+// can open. Before they were listed here such a value was dropped
+// between the gate and the encoder, and the 1A 00 set went out as though
+// the caller had never asked.
+//
+// FOUR ZEROS REMAIN ABSENT, and each for a reason rather than by
+// omission. clarifier, ctcss_state and shift carry NO FieldState at all —
+// there is no Known for this table to test, and their neutral zero values
+// (ClarHz 0 with both flags false, the empty string) are indistinguishable
+// from a channel that never spoke about them; that is this table's known
+// bound, recorded rather than papered over. erase is not something a
+// populated channel can request: rung 3 refuses the empty channel that
+// would mean it, above this table entirely.
 var tierRequestedFields = []struct {
 	field   spec.Field
 	present func(codeplug.ChannelData) bool
 }{
+	{spec.FieldTagDisplay, func(d codeplug.ChannelData) bool { return d.TagDisplay.State == codeplug.Known }},
+	{spec.FieldScanSkip, func(d codeplug.ChannelData) bool { return d.ScanSkip.State == codeplug.Known }},
+	{spec.FieldTxFrequency, func(d codeplug.ChannelData) bool { return d.TxFreqHz.State == codeplug.Known }},
 	{spec.FieldDuplex, func(d codeplug.ChannelData) bool { return d.Duplex.State == codeplug.Known }},
 	{spec.FieldOffset, func(d codeplug.ChannelData) bool { return d.OffsetHz.State == codeplug.Known }},
 	{spec.FieldToneMode, func(d codeplug.ChannelData) bool { return d.ToneMode.State == codeplug.Known }},

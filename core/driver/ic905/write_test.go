@@ -117,6 +117,7 @@ func TestRequestedFields_MembershipAndOrder(t *testing.T) {
 	}
 
 	wantTier := []spec.Field{
+		spec.FieldTagDisplay, spec.FieldScanSkip, spec.FieldTxFrequency,
 		spec.FieldDuplex, spec.FieldOffset, spec.FieldToneMode,
 		spec.FieldToneTx, spec.FieldToneRx, spec.FieldDTCSCode,
 		spec.FieldDTCSPolarity, spec.FieldFilter, spec.FieldDataMode,
@@ -126,12 +127,16 @@ func TestRequestedFields_MembershipAndOrder(t *testing.T) {
 		gotTier = append(gotTier, tr.field)
 	}
 	if !slices.Equal(gotTier, wantTier) {
-		t.Errorf("tierRequestedFields = %v, want %v — ChannelData's own declaration order, and NO tx_frequency (matrix section 2 row 11)", gotTier, wantTier)
+		t.Errorf("tierRequestedFields = %v, want %v — ChannelData's own declaration order, and the first three ARE this matrix's zeros: they are requested when Known so the capability gate refuses them instead of dropping them", gotTier, wantTier)
 	}
 
-	// A fully specified channel requests all twelve, in order.
+	// A channel in the states a read of THIS radio produces requests the
+	// twelve the record expresses, in order: the three zeros above are
+	// Unavailable on such a channel, so they are not requested.
 	got := requestedFields(*writableChannel("G01-001").Data)
-	if want := append(append([]spec.Field{}, wantUnconditional...), wantTier...); !slices.Equal(got, want) {
+	want := append([]spec.Field{}, wantUnconditional...)
+	want = append(want, wantTier[3:]...)
+	if !slices.Equal(got, want) {
 		t.Errorf("requestedFields = %v, want %v", got, want)
 	}
 
@@ -150,6 +155,14 @@ func TestRequestedFields_MembershipAndOrder(t *testing.T) {
 // the matrix rows that zero them: clarifier (§2 row 3), ctcss_state (row
 // 4) and shift (row 6). R6-COMPLETION is explicit that the trio "must not
 // survive anywhere".
+//
+// tag_display, scan_skip and tx_frequency are asserted here too, and the
+// reason differs: they are zeros this table DOES carry, conditionally, so
+// that a Known value meets the capability gate. The channel under test
+// carries all three Unavailable — the states a read of this radio
+// produces — so an ordinary write must not request them either. What
+// happens when one IS Known is
+// TestWrite_AKnownUnexpressibleFieldIsRefusedNeverDropped's subject.
 func TestRequestedFields_ExcludesTheYaesuTrio(t *testing.T) {
 	t.Parallel()
 	got := requestedFields(*writableChannel("G01-001").Data)
@@ -160,6 +173,55 @@ func TestRequestedFields_ExcludesTheYaesuTrio(t *testing.T) {
 		if slices.Contains(got, f) {
 			t.Errorf("requestedFields includes %s, which this matrix grades zero on BOTH banks", f)
 		}
+	}
+}
+
+// TestWrite_AKnownUnexpressibleFieldIsRefusedNeverDropped is F2's proof,
+// one subtest per field: a channel carrying a KNOWN tag_display,
+// scan_skip or tx_frequency — three fields the 1A 00 record cannot
+// express — is REFUSED by name, with NOTHING on the wire.
+//
+// core/driver's Session contract is the authority: "A field carrying
+// FieldState Known that the protocol cannot express (e.g. CTCSS tone,
+// scan skip) is likewise refused, never silently dropped." A dropped
+// field is the worse failure of the two, because the write SUCCEEDS and
+// the operator is told the channel now holds what they asked for.
+//
+// The SIMULATED profile is used deliberately: it is the one on which
+// everything the record CAN express is writable, so a refusal here can
+// only be about the field under test. The transcript is compared before
+// and after, which is stronger than counting set frames — rung 7 precedes
+// the preservation read, so a correct refusal costs not one frame.
+func TestWrite_AKnownUnexpressibleFieldIsRefusedNeverDropped(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		field spec.Field
+		known func(*codeplug.ChannelData)
+	}{
+		{spec.FieldTagDisplay, func(d *codeplug.ChannelData) {
+			d.TagDisplay = codeplug.BoolField{State: codeplug.Known, Value: true}
+		}},
+		{spec.FieldScanSkip, func(d *codeplug.ChannelData) {
+			d.ScanSkip = codeplug.BoolField{State: codeplug.Known, Value: true}
+		}},
+		{spec.FieldTxFrequency, func(d *codeplug.ChannelData) {
+			d.TxFreqHz = codeplug.FreqField{State: codeplug.Known, Value: 145_100_000}
+		}},
+	} {
+		t.Run(string(tc.field), func(t *testing.T) {
+			t.Parallel()
+			p, s := openWritable(t, occupiedAt(wireAddr{0, 0}))
+			before := len(p.Transcript())
+
+			ch := writableChannel("G01-001")
+			tc.known(ch.Data)
+			res, err := s.WriteChannel(context.Background(), ch)
+
+			requireRefused(t, p, res, err, tc.field)
+			if after := len(p.Transcript()); after != before {
+				t.Errorf("%d frames reached the radio during a refused write, want 0 — the capability gate precedes ALL wire traffic:\n  % X", after-before, p.Transcript()[before:])
+			}
+		})
 	}
 }
 
