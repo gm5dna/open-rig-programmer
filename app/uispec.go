@@ -218,9 +218,11 @@ var tierFields = []spec.Field{
 // The zero-value lookup covers "bank absent from caps entirely" and
 // "bank present but not listing the field" alike, so both answer "not
 // reachable" with no special-casing — caps that say nothing about a
-// field are not evidence that the radio has one. Every bank of every
-// model registered today therefore returns nil, and the grid's column
-// set is unchanged.
+// field are not evidence that the radio has one. Every bank of all four
+// Yaesu models therefore returns nil and their grids' column sets are
+// unchanged; the IC-7610's MEM and SCAN banks each return that radio's
+// own four (tone_mode, tone_tx, tone_rx, filter), pinned by
+// TestGetUISpec_RegisteredIC7610_EveryBankFieldsAndTagDisplay.
 func bankTierFields(caps spec.Capabilities, id spec.BankID) []string {
 	var out []string
 	for _, f := range tierFields {

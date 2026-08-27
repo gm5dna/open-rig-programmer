@@ -3,6 +3,7 @@
 package main
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 
@@ -1838,4 +1839,64 @@ func TestGetUISpec_UnverifiedWritesConsentedFollowsTheSession(t *testing.T) {
 			t.Error("UnverifiedWritesConsented = true in demo, want false — a simulator session spends no consent")
 		}
 	})
+}
+
+// ic7610MEMBankJSON is the IC-7610's MEM BankView, EXACTLY as GetUISpec
+// serves it to the frontend, for an offline working copy holding the
+// single slot "001".
+//
+// It is the source of the `ic7610MemBank` fixture in
+// app/frontend/src/lib/grid/__tests__/tierColumns.test.js, which is a
+// verbatim copy of this literal (JSON being a subset of the JS object
+// syntax it is written in). That test used to build a HYPOTHETICAL Icom
+// bank instead — "no such driver exists", as its own comment said — and
+// the IC-7610's registration (Wave 4 task R1) ended the need for one: the
+// grid's conditional-column rules are now pinned against a bank a user
+// can really be served.
+//
+// Slots is the only field trimmed by that copy, and it is trimmed by the
+// working copy this test builds rather than by hand: a real IC-7610 MEM
+// bank lists "001".."099" (core/driver/ic7610/caps.go's memSlots), and
+// what the grid fixture needs is one row, not an inventory. Every other
+// value here is the radio's own answer.
+const ic7610MEMBankJSON = `{"ID":"MEM","Label":"Memories","ReadOnly":false,` +
+	`"Slots":[{"Slot":"001","Display":"M-01"}],` +
+	`"TagDisplayDefault":{"state":"unavailable"},` +
+	`"Fields":["tone_mode","tone_tx","tone_rx","filter"]}`
+
+// TestGetUISpec_IC7610MEMBank_IsTheJSGridFixture pins the JSON the
+// frontend actually receives for the IC-7610's MEM bank, so the JS
+// fixture copied from it cannot drift away from the Go side unnoticed:
+// change this radio's capabilities, or bankTierFields, or BankView's
+// shape, and this test fails naming the difference — at which point the
+// JS fixture named in ic7610MEMBankJSON's comment must be updated with
+// the new literal.
+//
+// It asserts the SERIALISED form deliberately, rather than the Go struct:
+// what the frontend consumes is the JSON, key names and all, and a
+// renamed field would leave a struct-level assertion passing while the
+// grid silently stopped finding the value.
+func TestGetUISpec_IC7610MEMBank_IsTheJSGridFixture(t *testing.T) {
+	a, _ := newTestApp(t)
+	a.mu.Lock()
+	a.working = &codeplug.Codeplug{
+		Schema:   codeplug.CurrentSchema,
+		Radio:    codeplug.RadioInfo{Model: wiring.IC7610Model},
+		Channels: []codeplug.Channel{{Slot: "001"}},
+	}
+	a.mu.Unlock()
+
+	got, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (offline, IC-7610 working copy): unexpected error: %v", err)
+	}
+	mem := findBank(t, got.Banks, "MEM")
+	raw, err := json.Marshal(mem)
+	if err != nil {
+		t.Fatalf("marshalling the MEM BankView: %v", err)
+	}
+	if string(raw) != ic7610MEMBankJSON {
+		t.Errorf("the IC-7610's MEM BankView is now\n  %s\nbut the JS grid fixture was copied from\n  %s\n(update app/frontend/src/lib/grid/__tests__/tierColumns.test.js's ic7610MemBank with the new value)", raw, ic7610MEMBankJSON)
+	}
+	t.Logf("IC-7610 MEM BankView as the frontend receives it: %s", raw)
 }

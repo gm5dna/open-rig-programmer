@@ -13,8 +13,9 @@ import {
 } from '../columns.js'
 
 /** The FT-710's MEM bank as GetUISpec serves it today: no tier field is
- * reachable, so BankView.Fields is empty. This is the shape every one of
- * the four registered models produces, on every bank. */
+ * reachable, so BankView.Fields is empty. This is the shape all four
+ * Yaesu models produce, on every bank — and the contrast the IC-7610
+ * fixture below is measured against. */
 const ft710MemBank = {
 	ID: 'MEM',
 	Label: 'Memories',
@@ -24,16 +25,26 @@ const ft710MemBank = {
 	Fields: [],
 }
 
-/** A hypothetical bank on a radio that DOES have some of the tier's
- * fields. No such driver exists; this is a fixture for the conditional
- * rendering rule, not a claim about any radio. */
-const icomMemBank = {
+/** The REGISTERED IC-7610's MEM bank, exactly as GetUISpec serves it —
+ * copied verbatim from the Go literal that Go test
+ * TestGetUISpec_IC7610MEMBank_IsTheJSGridFixture (app/uispec_test.go)
+ * pins against the real registered radio, so this fixture cannot drift
+ * away from what the frontend is really handed. Update it from that
+ * test's failure message, never by hand.
+ *
+ * This is the first fixture here that is a claim about a real radio: the
+ * IC-7610's 1A 00 memory record maps four of the ten tier-added fields
+ * (tone_mode, tone_tx, tone_rx, filter) and none of the other six, and
+ * its record carries no display flag at all — hence the 'unavailable'
+ * tag-display default. It replaces a HYPOTHETICAL bank this file used
+ * while no Icom driver existed. */
+const ic7610MemBank = {
 	ID: 'MEM',
 	Label: 'Memories',
 	ReadOnly: false,
-	Slots: [{ Slot: 'G01-001', Display: 'G01-001' }],
+	Slots: [{ Slot: '001', Display: 'M-01' }],
 	TagDisplayDefault: { state: 'unavailable' },
-	Fields: ['duplex', 'offset', 'tone_mode', 'tone_tx', 'data_mode'],
+	Fields: ['tone_mode', 'tone_tx', 'tone_rx', 'filter'],
 }
 
 const uiSpec = {
@@ -44,10 +55,11 @@ const uiSpec = {
 }
 
 describe('columnsFor', () => {
-	// THE pin the Icom tier's frontend work exists to satisfy: with
-	// today's four models the grid's column set is the ten it has always
-	// had, in the order it has always had them. If a tier column ever
-	// leaks into a Yaesu grid, this fails with the offending id named.
+	// THE pin the Icom tier's frontend work exists to satisfy: on a Yaesu
+	// model the grid's column set is the ten it has always had, in the
+	// order it has always had them — unchanged by the arrival of a radio
+	// that does have tier fields. If a tier column ever leaks into a
+	// Yaesu grid, this fails with the offending id named.
 	it('serves the unchanged ten columns for an FT-710 bank', () => {
 		expect(columnsFor(ft710MemBank)).toEqual(COLUMNS)
 		expect(columnsFor(ft710MemBank).map((c) => c.id)).toEqual([
@@ -71,22 +83,19 @@ describe('columnsFor', () => {
 	})
 
 	it('appends only the tier columns the bank actually reaches, in TIER_COLUMNS order', () => {
-		const ids = columnsFor(icomMemBank).map((c) => c.id)
+		const ids = columnsFor(ic7610MemBank).map((c) => c.id)
 		expect(ids.slice(0, COLUMNS.length)).toEqual(COLUMNS.map((c) => c.id))
-		expect(ids.slice(COLUMNS.length)).toEqual([
-			'duplex',
-			'offset',
-			'toneMode',
-			'toneTx',
-			'dataMode',
-		])
+		// TIER_COLUMNS order, not the order Fields happens to list: the
+		// IC-7610's four are positions 4, 5, 6 and 9 of the ten, so this
+		// pins both the filtering and the ordering.
+		expect(ids.slice(COLUMNS.length)).toEqual(['toneMode', 'toneTx', 'toneRx', 'filter'])
 	})
 
 	it('never invents a column for a field the bank did not name', () => {
-		const ids = columnsFor(icomMemBank).map((c) => c.id)
-		expect(ids).not.toContain('txFreq')
-		expect(ids).not.toContain('dtcsCode')
-		expect(ids).not.toContain('filter')
+		const ids = columnsFor(ic7610MemBank).map((c) => c.id)
+		for (const id of ['txFreq', 'duplex', 'offset', 'dtcsCode', 'dtcsPolarity', 'dataMode']) {
+			expect(ids, id).not.toContain(id)
+		}
 	})
 
 	it('pairs every tier column with the spec.Field of the same name', () => {
@@ -210,13 +219,49 @@ describe('cloneData and newChannelData', () => {
 	})
 
 	it('starts a new row unknown for every tier field the bank reaches', () => {
-		const data = newChannelData(uiSpec, icomMemBank, 145500000)
-		expect(data.duplex).toEqual({ state: 'unknown' })
-		expect(data.offset).toEqual({ state: 'unknown' })
-		expect(data.tone_mode).toEqual({ state: 'unknown' })
-		expect(data.data_mode).toEqual({ state: 'unknown' })
-		// And nothing for a field this bank does not reach.
-		expect(data).not.toHaveProperty('filter')
-		expect(data).not.toHaveProperty('dtcs_code')
+		const data = newChannelData(uiSpec, ic7610MemBank, 145500000)
+		for (const key of ic7610MemBank.Fields) {
+			expect(data[key], key).toEqual({ state: 'unknown' })
+		}
+		// And no key at all for a field this bank does not reach: absent,
+		// never invented, which is what the Go side then resolves against
+		// the radio's own capabilities (codeplug.NormaliseTierFields).
+		for (const column of TIER_COLUMNS) {
+			if (ic7610MemBank.Fields.includes(column.key)) continue
+			expect(data, column.key).not.toHaveProperty(column.key)
+		}
+	})
+
+	// The BANKLESS add, and the Go-side half it hands the work to (Wave 4
+	// task R2, deviation (c)). A row added with no bank object at all —
+	// there is nothing to ask about reachability — must omit every one of
+	// the ten tier keys rather than default them: an omitted key decodes
+	// in Go to the zero FieldState, Absent, which says "nobody has spoken
+	// about this field", and codeplug.NormaliseTierFields resolves that to
+	// Unavailable for a field the loaded radio does not have while leaving
+	// it Absent for one it does. Manufacturing an 'unknown' here would
+	// destroy the distinction before Go ever sees it.
+	it('omits every tier key for a bankless add, whatever shape the missing bank takes', () => {
+		for (const bank of [undefined, null, {}, { ID: 'MEM', Label: 'Memories', ReadOnly: false, Slots: [] }]) {
+			const data = newChannelData(uiSpec, bank, 145500000)
+			for (const column of TIER_COLUMNS) {
+				expect(data, `${column.key} for bank ${JSON.stringify(bank)}`).not.toHaveProperty(column.key)
+			}
+			// The pre-tier keys are all still there: a bankless add is a
+			// full channel, missing only what nobody can answer.
+			expect(Object.keys(data)).toEqual([
+				'freq_hz',
+				'mode',
+				'clar_hz',
+				'rx_clar',
+				'tx_clar',
+				'ctcss',
+				'ctcss_tone',
+				'shift',
+				'tag',
+				'tag_display',
+				'scan_skip',
+			])
+		}
 	})
 })

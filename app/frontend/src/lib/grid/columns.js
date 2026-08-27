@@ -51,9 +51,11 @@ export const COLUMNS = [
  * ChannelData key the column edits; `field` is the spec.Field it
  * decorates IssueViews from, and the two agree by construction here.
  *
- * For all four models registered today every bank's Fields list is
- * empty, so none of these ever renders and the grid is exactly the
- * ten-column grid it has always been.
+ * On the four Yaesu models every bank's Fields list is empty, so none of
+ * these renders and the grid is exactly the ten-column grid it has
+ * always been. The registered IC-7610 is the first radio for which any
+ * of them renders: its memory record maps tone_mode, tone_tx, tone_rx
+ * and filter, and nothing else here.
 
  * @typedef {Object} TierColumn
  * @property {string} id
@@ -90,9 +92,10 @@ const TIER_BY_ID = new Map(TIER_COLUMNS.map((c) => [c.id, c]))
  * rules are state-based (isCellEditable), and re-deriving their
  * VISIBILITY from capabilities is a separate decision nobody has taken —
  * while a tier column has no such history and would be meaningless on a
- * radio with no such field. With today's four models Fields is empty on
- * every bank, so this returns exactly COLUMNS, and the grid does not
- * change by so much as a column.
+ * radio with no such field. On the four Yaesu models Fields is empty on
+ * every bank, so this returns exactly COLUMNS and their grid does not
+ * change by so much as a column; on the IC-7610 it appends that radio's
+ * own four.
  *
  * A missing or hand-built bank (no Fields) answers the same way an empty
  * one does: no tier columns. Refusing to invent a column for a radio
@@ -332,8 +335,9 @@ export function newChannelData(uiSpec, bank, freqHz) {
 		// that says the answer is not yet in hand, which is the true
 		// thing about a row that has just been created. No value is
 		// invented, and a field the bank does not reach gets no key at
-		// all, leaving it absent. With today's four models Fields is
-		// empty on every bank, so this adds nothing.
+		// all, leaving it absent. On the four Yaesu models Fields is
+		// empty on every bank, so this adds nothing; on the IC-7610 it
+		// adds that radio's own four.
 		...tierDefaults(bank),
 	})
 }
