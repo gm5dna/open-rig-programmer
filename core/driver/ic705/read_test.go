@@ -237,6 +237,101 @@ func TestToneInsideTheDomainDecodesToKnown(t *testing.T) {
 	}
 }
 
+func TestRXFrequencyAtOrAbove500MHzFailsTheRead(t *testing.T) {
+	// F1: RXFreqHz carries no FieldState, so it cannot fall back to
+	// Unknown the way TxFreqHz/OffsetHz can — a read must never construct
+	// a Known value write.go's rung 7 would refuse, so this is a decode
+	// error naming the field and the value.
+	rec := fullRecord(addrOf(t, "G01-001"))
+	rec.RXFreqHz = civ.Available[uint64](500000000)
+	r := radioHolding(t, "G01-001", encodedRecord(t, rec))
+	sess := openSession(t, r)
+	ch, err := sess.ReadChannel(context.Background(), "G01-001")
+	if err == nil {
+		t.Fatalf("ReadChannel accepted a 500 000 000 Hz rx frequency: %+v", ch)
+	}
+	if !strings.Contains(err.Error(), "rx frequency") || !strings.Contains(err.Error(), "500000000") {
+		t.Errorf("the error %q does not name the field and value", err)
+	}
+	if ch.Data != nil {
+		t.Error("channel data came back alongside the decode failure")
+	}
+}
+
+func TestTXFrequencyAtOrAbove500MHzDecodesToUnknown(t *testing.T) {
+	// F1's mirror for TxFreqHz, which DOES carry a FieldState: a read
+	// never constructs a Known value write.go's rung 7 would refuse, so
+	// this decodes to Unknown rather than failing the whole read.
+	rec := fullRecord(addrOf(t, "G01-001"))
+	rec.TXFreqHz = civ.Available[uint64](500000000)
+	r := radioHolding(t, "G01-001", encodedRecord(t, rec))
+	sess := openSession(t, r)
+	ch, err := sess.ReadChannel(context.Background(), "G01-001")
+	if err != nil {
+		t.Fatalf("ReadChannel: %v", err)
+	}
+	if ch.Data.TxFreqHz != (codeplug.FreqField{State: codeplug.Unknown}) {
+		t.Errorf("TxFreqHz = %+v, want Unknown with a zero value", ch.Data.TxFreqHz)
+	}
+}
+
+func TestOffsetAboveTheManualsCeilingDecodesToUnknown(t *testing.T) {
+	// F1's mirror for OffsetHz: the field's three BCD bytes would happily
+	// carry a sixth digit past the fixed 10 MHz leader write.go's rung 7
+	// enforces, so this decodes to Unknown rather than a Known value the
+	// write path could never accept back.
+	rec := fullRecord(addrOf(t, "G01-001"))
+	rec.OffsetHz = civ.Available[uint64](10000000)
+	r := radioHolding(t, "G01-001", encodedRecord(t, rec))
+	sess := openSession(t, r)
+	ch, err := sess.ReadChannel(context.Background(), "G01-001")
+	if err != nil {
+		t.Fatalf("ReadChannel: %v", err)
+	}
+	if ch.Data.OffsetHz != (codeplug.FreqField{State: codeplug.Unknown}) {
+		t.Errorf("OffsetHz = %+v, want Unknown with a zero value", ch.Data.OffsetHz)
+	}
+}
+
+func TestADTCSCodeOutsideTheOctalTableDecodesToUnknown(t *testing.T) {
+	// F2: the 512-code table (caps.go's dtcsCodes) is built from three
+	// OCTAL digits, 0-7 each. This field's two packed-BCD bytes decode any
+	// digit 0-9 without complaint — the comment this fixes claimed the
+	// table "covers this field's whole printed domain", which is false: a
+	// record whose packed digits are 8s decodes to 888, a real value civ
+	// happily builds and decodes (fed here through BuildMemorySet/the
+	// scripted port, not hand-poked bytes) that the octal table never
+	// held.
+	rec := fullRecord(addrOf(t, "G01-001"))
+	rec.DTCSCode = civ.Available[uint64](888)
+	r := radioHolding(t, "G01-001", encodedRecord(t, rec))
+	sess := openSession(t, r)
+	ch, err := sess.ReadChannel(context.Background(), "G01-001")
+	if err != nil {
+		t.Fatalf("ReadChannel: %v", err)
+	}
+	if ch.Data.DTCSCode != (codeplug.IntField{State: codeplug.Unknown}) {
+		t.Errorf("DTCSCode = %+v, want Unknown with a zero value", ch.Data.DTCSCode)
+	}
+}
+
+func TestADTCSCodeInsideTheOctalTableStillDecodesToKnown(t *testing.T) {
+	// The boundary case for F2's fix: a genuinely octal-digit code (023,
+	// the golden vector's own value) must still decode to Known — the
+	// membership check must not fail closed on the whole table.
+	rec := fullRecord(addrOf(t, "G01-001"))
+	rec.DTCSCode = civ.Available[uint64](23)
+	r := radioHolding(t, "G01-001", encodedRecord(t, rec))
+	sess := openSession(t, r)
+	ch, err := sess.ReadChannel(context.Background(), "G01-001")
+	if err != nil {
+		t.Fatalf("ReadChannel: %v", err)
+	}
+	if ch.Data.DTCSCode != (codeplug.IntField{State: codeplug.Known, Value: 23}) {
+		t.Errorf("DTCSCode = %+v, want Known 23", ch.Data.DTCSCode)
+	}
+}
+
 func TestAnswerForTheWrongChannelIsRefusedBeforeAnyUse(t *testing.T) {
 	// T2, at the seam where it belongs. The landed MemoryAnswerMatcher is
 	// envelope-only BY DESIGN, so it ACCEPTS this answer; the driver is

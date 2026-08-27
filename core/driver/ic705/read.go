@@ -144,16 +144,33 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 
 // channelDataFrom maps one decoded record onto the neutral channel model.
 //
-// EVERY MAPPED FIELD DECODES TO Known EXCEPT A TONE OUTSIDE THE DECLARED
-// DOMAIN (ruling T1(3)). That single exception is the wire zero a
-// tone-mode-OFF channel carries: spec.Capabilities.AdmitsTone(0) is false
-// under any legal CTCSSToneRange, because spec.Validate refuses a
-// MinDeciHz of zero outright, so a Known zero would be a value the
-// codeplug layer itself refuses. The read therefore reports Unknown — and
-// the write path does NOT then refuse the channel: it copies the
-// just-read record's own tone number back out verbatim (T1(4), write.go),
-// which is preservation of the radio's value rather than synthesis of a
-// new one.
+// A READ NEVER CONSTRUCTS A Known VALUE Valid WOULD REFUSE. Every mapped
+// field decodes to Known except four cases where the wire value sits
+// outside the domain the write path (and codeplug.Valid) enforces:
+//
+//   - a TONE outside the declared domain (ruling T1(3)). That is the wire
+//     zero a tone-mode-OFF channel carries: spec.Capabilities.AdmitsTone(0)
+//     is false under any legal CTCSSToneRange, because spec.Validate
+//     refuses a MinDeciHz of zero outright, so a Known zero would be a
+//     value the codeplug layer itself refuses. The read therefore reports
+//     Unknown — and the write path does NOT then refuse the channel: it
+//     copies the just-read record's own tone number back out verbatim
+//     (T1(4), write.go), which is preservation of the radio's value rather
+//     than synthesis of a new one.
+//   - a DTCS CODE the 512-entry octal-digit table (spec.Capabilities.
+//     DTCSCodes) does not hold. A packed-BCD nibble decodes any digit
+//     0-9, but the table is built from octal digits 0-7 only (caps.go's
+//     dtcsCodes), so a decoded value such as 888 — a real nibble pattern,
+//     not a corrupt one — is outside the vocabulary the table holds. The
+//     read reports Unknown rather than a Known value Valid would refuse.
+//   - TxFreqHz / OffsetHz at or beyond the printed digit-leader ceilings
+//     write.go's rung 7 enforces (maxStorableFreqHz, maxOffsetHz): decoded
+//     to Unknown, mirroring the tone precedent, because both carry a
+//     FieldState to fall back to.
+//   - plain FreqHz (the RX frequency) at or beyond maxStorableFreqHz: it
+//     carries no FieldState to fall back to, so an out-of-domain value is
+//     reported as a decode error naming the field and the value, not a
+//     Known frequency the write path could never accept back.
 func channelDataFrom(rec civ.MemoryRecord, caps spec.Capabilities) (codeplug.ChannelData, error) {
 	var d codeplug.ChannelData
 
@@ -182,6 +199,13 @@ func channelDataFrom(rec civ.MemoryRecord, caps spec.Capabilities) (codeplug.Cha
 	if err != nil {
 		return d, err
 	}
+	if rx >= maxStorableFreqHz {
+		// FreqHz carries no FieldState, so there is no Unknown to fall
+		// back to (write.go's rung 7 mirror): a read never constructs a
+		// Known value Valid would refuse, and here the only honest report
+		// is a decode error naming the field and the value.
+		return d, fmt.Errorf("ic705: decoded rx frequency %d Hz is at or above %d Hz, which this radio's printed digit leaders cannot express", rx, maxStorableFreqHz)
+	}
 	d.FreqHz = rx
 
 	if d.Mode, err = text("mode", rec.Mode); err != nil {
@@ -196,13 +220,24 @@ func channelDataFrom(rec civ.MemoryRecord, caps spec.Capabilities) (codeplug.Cha
 	if err != nil {
 		return d, err
 	}
-	d.TxFreqHz = codeplug.FreqField{State: codeplug.Known, Value: tx}
+	if tx >= maxStorableFreqHz {
+		// write.go's rung 7 ceiling, mirrored on read: a read never
+		// constructs a Known value Valid would refuse.
+		d.TxFreqHz = codeplug.FreqField{State: codeplug.Unknown}
+	} else {
+		d.TxFreqHz = codeplug.FreqField{State: codeplug.Known, Value: tx}
+	}
 
 	offset, err := num("offset", rec.OffsetHz)
 	if err != nil {
 		return d, err
 	}
-	d.OffsetHz = codeplug.FreqField{State: codeplug.Known, Value: offset}
+	if offset > maxOffsetHz {
+		// write.go's rung 7 ceiling, mirrored on read.
+		d.OffsetHz = codeplug.FreqField{State: codeplug.Unknown}
+	} else {
+		d.OffsetHz = codeplug.FreqField{State: codeplug.Known, Value: offset}
+	}
 
 	for _, m := range []struct {
 		name string
@@ -247,9 +282,27 @@ func channelDataFrom(rec civ.MemoryRecord, caps spec.Capabilities) (codeplug.Cha
 	if err != nil {
 		return d, err
 	}
-	// The 512-code table covers this field's whole printed domain (E3,
-	// plan O-10), so a decoded code is always one the vocabulary holds.
-	d.DTCSCode = codeplug.IntField{State: codeplug.Known, Value: int(code)}
+	// FALSE UNTIL FIXED HERE: the 512-code table (E3, plan O-10) is built
+	// from three OCTAL digits (0-7 each), but this field's two packed-BCD
+	// bytes decode any digit 0-9 without complaint (civ's BCD decoder only
+	// refuses a nibble above 9). A record whose packed digits are 8 or 9 —
+	// not a corrupt frame, just a value outside this field's printed
+	// domain — decodes to a number such as 888 that dtcsCodes() never
+	// generated. Membership must therefore be checked, not assumed.
+	known := false
+	for _, c := range caps.DTCSCodes {
+		if c == int(code) {
+			known = true
+			break
+		}
+	}
+	if known {
+		d.DTCSCode = codeplug.IntField{State: codeplug.Known, Value: int(code)}
+	} else {
+		// T1(3)'s tone precedent, mirrored: a read never constructs a
+		// Known value Valid would refuse.
+		d.DTCSCode = codeplug.IntField{State: codeplug.Unknown}
+	}
 
 	dataMode, err := text("data mode", rec.DataMode)
 	if err != nil {
