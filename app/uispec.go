@@ -225,12 +225,16 @@ var tierFields = []spec.Field{
 // stay empty; every registered Icom model returns its OWN bank's own
 // reachable set, independently derived from that model's own record —
 // four for the IC-7610 (tone_mode, tone_tx, tone_rx, filter, pinned by
-// TestGetUISpec_RegisteredIC7610_EveryBankFieldsAndTagDisplay), and six
-// each for the IC-7300 and IC-7300MK2 (the IC-7610's four plus
-// tx_frequency and data_mode, pinned by
+// TestGetUISpec_RegisteredIC7610_EveryBankFieldsAndTagDisplay), six each
+// for the IC-7300 and IC-7300MK2 (the IC-7610's four plus tx_frequency
+// and data_mode, pinned by
 // TestGetUISpec_RegisteredIC7300_EveryBankFieldsAndTagDisplay and its
-// MK2 mirror). A future Icom registration extends this same list with
-// its own model-specific set; nothing here needs to change for it to.
+// MK2 mirror), and ALL TEN for the IC-705 (this radio's 111-byte record
+// additionally maps duplex, offset, dtcs_code and dtcs_polarity — none of
+// which any other registered Icom model's record carries — pinned by
+// TestGetUISpec_RegisteredIC705_EveryBankFieldsAndTagDisplay). A future
+// Icom registration extends this same list with its own model-specific
+// set; nothing here needs to change for it to.
 func bankTierFields(caps spec.Capabilities, id spec.BankID) []string {
 	var out []string
 	for _, f := range tierFields {

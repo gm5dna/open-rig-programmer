@@ -55,6 +55,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft710"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx10"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx101"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300mk2"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7610"
@@ -165,6 +166,17 @@ const IC7300Model = "IC-7300"
 // lift in one is a lift for the sibling.
 const IC7300MK2Model = "IC-7300MK2"
 
+// IC705Model names the IC-705's realDrivers/fakeDrivers key, which must
+// equal ic705.New(...).Model() — pinned, like every other Icom constant
+// above, by TestDriverTableKeysMatchDriverModel walking both tables.
+//
+// THIS IS THE THIRD ICOM REGISTRATION (Wave 4, task R4), and the FIRST
+// SINGLE-MODEL one since the IC-7610: a lone driver package
+// (core/driver/ic705) and a lone fake (internal/fakeic705), on the same
+// one-row footing as IC7610Model above — no sibling, no pairing rationale
+// to restate.
+const IC705Model = "IC-705"
+
 // realDrivers is the model-keyed table of real-hardware driver
 // constructors: model name -> a constructor building THAT model's
 // real-profile driver.Driver. It is the single source of truth
@@ -251,6 +263,12 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ic7300mk2.New(ic7300mk2.RealHardware, ic7300mk2.WithConsentedUnverifiedWrites())
 		}
 		return NewIC7300MK2RealDriver()
+	},
+	IC705Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic705.New(ic705.RealHardware, ic705.WithConsentedUnverifiedWrites())
+		}
+		return NewIC705RealDriver()
 	},
 }
 
@@ -500,6 +518,29 @@ func NewIC7300RealDriver() driver.Driver {
 // hold a forged model value.
 func NewIC7300MK2RealDriver() driver.Driver {
 	return ic7300mk2.New(ic7300mk2.RealHardware)
+}
+
+// NewIC705RealDriver builds the ic705 driver for a real-hardware session:
+// profile ic705.RealHardware, the zero value — the IC-705's half of the
+// realDrivers table, split out for the same reason every other model
+// constructor above is (a test can pin the capability set the real
+// wiring path implies without opening a port).
+//
+// READ/PROBE ONLY, by the same mechanism as every other row: this
+// driver's writeTrialsComplete (core/driver/ic705/caps.go) is FALSE, so a
+// RealHardware IC-705 driver reports the all-Unverified capability set —
+// every mapped field's Write spec.Unverified, nothing writable on either
+// bank. No IC-705 has been written to by this project, and the
+// capability gate refuses before any frame is built.
+//
+// THE FAIL-SAFE DIRECTION IS UNCHANGED: an unrecognised Profile value
+// selects the all-Unverified set too (ic705.go's Capabilities switch),
+// never the simulator's write-Supported one, and the one named exception
+// — SessionOptions' ConsentUnverifiedWrites, spent from the user's own
+// recorded grant — is exactly the mechanism every other row uses, reaching
+// realDrivers' IC705Model row above and never this constructor.
+func NewIC705RealDriver() driver.Driver {
+	return ic705.New(ic705.RealHardware)
 }
 
 // openSerial is OpenRealSessionWith's test seam (and so OpenRealSessionFor's

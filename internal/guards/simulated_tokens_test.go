@@ -119,6 +119,13 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// would even if one had been wrapped.
 		{"ic7300", "Simulated", "fakeic7300.New", "internal/fakeic7300"},
 		{"ic7300mk2", "Simulated", "fakeic7300mk2.New", "internal/fakeic7300mk2"},
+		// The IC-705 (Wave 4 task R4), this project's third Icom
+		// registration and second lone-model one: one package, one
+		// Simulated token and one fake constructor, on the same ic7610
+		// shape as above (no adapter wraps fakeic705.New — its Port()
+		// already returns io.ReadWriteCloser — so the row's shape is the
+		// simpler of the two this table already carries).
+		{"ic705", "Simulated", "fakeic705.New", "internal/fakeic705"},
 	}
 
 	// Non-vacuity: an empty table would make the loop below a no-op and

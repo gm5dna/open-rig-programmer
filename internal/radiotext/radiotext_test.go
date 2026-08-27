@@ -607,6 +607,90 @@ func TestRadiotext_IC7300MK2Verbatim(t *testing.T) {
 	}
 }
 
+// ic705Particulars is the non-borrowing particulars list for the IC-705
+// (Wave 4 task R4) — extending the Yaesu-vocabulary-plus-bare-"CAT" set
+// TestRadiotext_IC7610Verbatim's own list carries with the address hex and
+// bare model name of EVERY OTHER registered Icom entry: the IC-705 has no
+// sibling of its own to worry a prefix hazard over (unlike the IC-7300
+// pair), and none of "IC-7610", "IC-7300" or "IC-7300MK2" is a substring of
+// this radio's own self-references ("The IC-705's..."), so the bare forms
+// are safe to check directly.
+var ic705Particulars = []string{
+	"V01-10", "[V/M]", "[ERASE]", "FT-710", "hardware-verified",
+	"FTdx10", "FTdx101D", "FTdx101MP", "CAT manual", "CAT command", "CAT query", "CAT",
+	"IC-7610", "98h",
+	"IC-7300", "94h",
+	"IC-7300MK2", "B6h",
+}
+
+// TestRadiotext_IC705Verbatim is TestRadiotext_IC7610Verbatim's sibling for
+// Wave 4 task R4's registration — this project's THIRD Icom registration,
+// and its second LONE model since the IC-7610 — and it guards the same
+// kind of fact: the HEDGES. This prose was written in radiotext.go itself,
+// for a radio this project has never connected to anything, under the
+// honesty rule recorded at ic705Text.
+//
+// "No minimum firmware version is established", "unverified against real
+// hardware" are the load-bearing words, on the same footing as every
+// other Icom entry's own test. ToneScanSkipVerification is asserted EMPTY
+// for the same reason every other model's is: core/driver/ic705's
+// writeTrialsComplete is false, so there is no hardware-preservation
+// verification of any kind to report.
+//
+// THE NON-BORROWING CHECK RUNS AGAINST SEVEN OTHER MODELS: the four Yaesu
+// entries, and all three other registered Icom ones (IC-7610, IC-7300,
+// IC-7300MK2) — this radio has no sibling of its own, so every other
+// registered model is exactly as much a borrowing risk as any other.
+// ftdx101Fields is reused unchanged — it is generic over any
+// radiotext.Text value.
+func TestRadiotext_IC705Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure:   "The IC-705's CI-V protocol prints two erase command forms — a 1A 00 set carrying FF at the fifth data position, and a separate command 0B — but this build sends neither: no IC-705 has ever confirmed what either does, and sending an unconfirmed erase command risks clearing the wrong channel rather than the intended one. This project's own copy of the IC-705 Basic Manual is admitted for three unrelated values only, so it names no front-panel clear procedure — follow the memory-channel clear procedure in the radio's own full operating manual.",
+		FirmwareGuidance: "No minimum firmware version is established for the IC-705: nothing this project holds states one, and no IC-705 has been asked. This driver's CI-V Reference Guide names no CI-V query for the version either — read it off the radio's own display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established.",
+		ToneScanSkipNote: "Tone is read and written for the IC-705 over CI-V by this build, but unverified against real hardware — no IC-705 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble marks a channel into one of three select-scan groups, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
+		// Deliberately empty — see this test's doc comment.
+		ToneScanSkipVerification: "",
+		EraseDialogNote:          "The IC-705's CI-V protocol prints two erase command forms — a 1A 00 set carrying FF at the fifth data position, and a separate command 0B — but this build sends neither: no IC-705 has ever confirmed what either does, and sending an unconfirmed erase command risks clearing the wrong channel rather than the intended one. This project's own copy of the IC-705 Basic Manual is admitted for three unrelated values only, so it names no front-panel clear procedure — follow the memory-channel clear procedure in the radio's own full operating manual.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-705 has ever answered a frame",
+			ScanSkip: "not read or written over CI-V by this build — the IC-705's nearest wire nibble marks select-scan group membership, not a skip flag",
+		},
+		FirmwarePlaceholder: "as shown on the IC-705's own display",
+		ProbeFirmwareNote:   "Firmware version has no CI-V query — check the radio's display. No minimum version is established for the IC-705: this build knows of none to require. This driver talks only to CI-V address A4h, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200, along with the whole six-rate list it is chosen from, is ASSUMED — this radio's CI-V Reference Guide prints no baud information for the CI-V port at all, and the one related fact admitted from the Basic Manual is a negative: the microUSB CI-V port is baud-agnostic, which lowers the cost of a wrong guess without being evidence of one. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+	}
+
+	got, ok := radiotext.For("IC-705")
+	if !ok {
+		t.Fatal(`For("IC-705") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"IC-705\") = %#v,\nwant %#v", got, want)
+	}
+
+	for _, other := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2"} {
+		otherText, ok := radiotext.For(other)
+		if !ok {
+			t.Fatalf("For(%q) ok = false, want true — sanity check failed", other)
+		}
+		otherFields := ftdx101Fields(otherText)
+		for field, val := range ftdx101Fields(got) {
+			if val == "" {
+				continue
+			}
+			if val == otherFields[field] {
+				t.Errorf("IC-705 %s is byte-identical to the %s's — one radio's prose must never be served as another's", field, other)
+			}
+		}
+	}
+	for field, val := range ftdx101Fields(got) {
+		for _, particular := range ic705Particulars {
+			if strings.Contains(val, particular) {
+				t.Errorf("IC-705 %s contains %q — another radio's particular in this one's prose is that radio's evidence claimed for this one", field, particular)
+			}
+		}
+	}
+}
+
 // TestFor_UnknownModel: any model that is not EXACTLY one of this
 // package's keys — "FT-710", "FTdx10" since M9c-6, and "FTdx101D"/
 // "FTdx101MP" since M9d-2 — returns the zero Text and false. Callers must
@@ -648,6 +732,11 @@ func TestFor_UnknownModel(t *testing.T) {
 		// listed explicitly rather than assumed distinct by construction.
 		"IC7300", "ic-7300", "IC-7300 ", " IC-7300", "7300",
 		"IC7300MK2", "ic-7300mk2", "IC-7300MK2 ", " IC-7300MK2", "IC-7300 MK2", "IC-7300-MK2",
+		// IC-705 near misses (Wave 4 task R4): the same five-shape set as
+		// the IC-7610's and IC-7300's own near misses above — no-hyphen
+		// spelling, a lowercase variant, a trailing- and leading-space
+		// variant, and the bare model number.
+		"IC705", "ic-705", "IC-705 ", " IC-705", "705",
 	} {
 		got, ok := radiotext.For(model)
 		if ok {
