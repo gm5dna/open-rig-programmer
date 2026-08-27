@@ -21,9 +21,13 @@
 //
 // Everything else — 0B, 18 00, 18 01, 1A 05, a 1A 00 set whose data area is a
 // single FF byte, a 19 with any other sub-command, a 1A 00 set of the wrong
-// length, a set carrying a value the manual does not print, a read of a
-// channel that has never been written, a channel address outside the three
-// printed forms — answers the six-byte FAIL frame.
+// length, a set carrying a value the manual does not print outside the
+// repeater-tone bytes (⑫ ~ ⑭, record.go:226-241), a read of a channel that
+// has never been written, a channel address outside the three printed forms
+// — answers the six-byte FAIL frame. The repeater-tone bytes are the one
+// exception: the manual states no vocabulary for that span at all, so this
+// fake accepts any byte value there rather than invent one, and
+// fakeic7300mk2.go:354-359 stores such a record instead of failing it.
 //
 // # The radio's address is not a literal
 //

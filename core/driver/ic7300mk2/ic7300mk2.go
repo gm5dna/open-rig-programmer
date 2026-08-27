@@ -298,7 +298,7 @@ func (d *ic7300mk2Driver) sessionCapabilities() spec.Capabilities {
 	return caps
 }
 
-// Session is one open, probed connection to an IC-7300.
+// Session is one open, probed connection to an IC-7300MK2.
 type Session struct {
 	eng *transport.Engine
 	p   civ.Profile

@@ -98,6 +98,12 @@ func WithAddressedFlood(period time.Duration) Option {
 // Every byte of every answer that names the radio follows this: the identity
 // answer, the record answer, the OK frame and the NG frame alike carry addr as
 // their `from`, and the radio answers only frames whose `to` byte is addr.
+//
+// addr is not checked against the reserved framing bytes 0xFE (preamble) and
+// 0xFD (end-of-message): pass one and this radio emits it verbatim as the
+// `from` byte of every frame it sends (civ.go:164), producing malformed
+// frames on the wire. This is a test seam, deliberately unvalidated, not a
+// guarantee that a real IC-7300MK2 would accept or produce such an address.
 func WithRadioAddress(addr byte) Option {
 	return func(r *Radio) { r.addr = addr }
 }
