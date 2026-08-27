@@ -395,10 +395,13 @@ func decodeHexToken(token string) []byte {
 // CONSUMES the `FA` and returns no frame — so no branch here inspects "an
 // FA frame".
 //
-// T2: the decoded address of each answer is compared with the address
-// requested BEFORE the record is measured. A fingerprint taken from
-// another slot's record would be a length this radio never claimed for the
-// channel we asked about.
+// T2: the record's LENGTH is measured FIRST. p.MemoryAnswerRecord
+// (core/civ/parse.go:110) checks AcceptsRecordLength and returns
+// *civ.RecordLengthError as `err` above before this function ever reaches
+// `got != want` below; only once that gate passes is the decoded address
+// compared with the address requested. A wrong-channel answer that is
+// ALSO the wrong length therefore reports as a length error, never as a
+// mismatch counted toward `mismatches`.
 func probeFingerprint(ctx context.Context, p civ.Profile, eng *transport.Engine) (bool, int, error) {
 	mismatches := 0
 	for ch := 1; ch <= probeSearchChannels; ch++ {

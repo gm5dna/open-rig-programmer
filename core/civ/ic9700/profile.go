@@ -24,12 +24,17 @@ const (
 // nameCharset is every printable ASCII byte, 0x20..0x7E.
 //
 // The page prints two "Codes for character entries" tables — letters and
-// numbers, then symbols — and then says of the memory name outright:
-// "1A 00 / Memory name All characters are usable." (leg B's
-// `(52) ~ (67)` row). Between them the tables name every printable ASCII
-// byte, INCLUDING the space (0x20), which the call-sign table prints as
-// "(Space) = 20". Spec D5 entry 3 records that most Icom charset tables
-// omit the space while the radios plainly accept one; here it is printed.
+// numbers, then symbols — for the memory name, and NEITHER table prints a
+// space row. A third table maps commands to set items and prints,
+// verbatim, for `1A 00`: "Memory name / All characters are usable." (leg
+// B's `(52) ~ (67)` row). The document DOES print "(Space) / 20" twice,
+// but both times for a DIFFERENT field — PDF p.21's call-sign (`1F 01`)
+// and DV TX message (`1F 02`) tables, and PDF p.16's memory-KEYER table
+// (`1A 02`) — never the memory name. Spec D5 entry 3 records that most
+// Icom charset tables omit the space while the radios plainly accept one;
+// this model's memory-name tables fit that family pattern rather than
+// being an exception, so ACCEPTING 0x20 in a written name is ASSUMED, not
+// printed (matrix §3.9, this model's own row, space half).
 const nameCharset = " !\"#$%&'()*+,-./0123456789:;<=>?@" +
 	"ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`" +
 	"abcdefghijklmnopqrstuvwxyz{|}~"
@@ -272,9 +277,19 @@ func recordFields() []civ.FieldSpan {
 
 		// ㉔ (offset 20) is unmapped.
 
-		// ㉕~㉗ duplex offset. THE LOWEST PRINTED DIGIT PLACE IS 100 Hz,
-		// so the wire value is a count of 100 Hz units and the scale is
-		// 100: leg G's `00 60 00` is wire 6000, i.e. 600 000 Hz.
+		// ㉕~㉗ duplex offset. THIS FIELD IMPLEMENTS LEG G'S READING, NOT
+		// THE PRINTED §1b ROW, and the two disagree about the page. Leg
+		// G's provenance gives the printed half-labels as "1 kHz /
+		// 100 Hz, 100 kHz / 10 kHz, 10 MHz / 1 MHz" and derives 600 kHz
+		// from `00 60 00`; the wire value is a count of 100 Hz units and
+		// the scale is 100. §1b's own `offset` row instead prints "digit
+		// places 1 kHz … 10 MHz" — five places for a six-nibble field —
+		// under which the same bytes would read 6 MHz. ONE OF THE TWO IS
+		// WRONG ABOUT THE PAGE, and the disagreement is UNRESOLVED (matrix
+		// Erratum 14). STATUS: ASSUMED — register entry
+		// `ic9700-offset-scale-100hz`, doc.go. A wrong choice is a factor
+		// of ten on every offset. LIFTED BY: a hardware capture of one
+		// known offset, read back and compared.
 		bcdSpan(civ.FieldOffset, 21, 3, civ.OrderLittleEndian, 100),
 
 		// ㉘~㉟, ㊱~㊸, ㊹~51 (offsets 24..47) are unmapped.

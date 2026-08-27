@@ -117,8 +117,13 @@ func (s *Session) readChannelRaw(ctx context.Context, slot string) (codeplug.Cha
 		return codeplug.Channel{}, nil, civ.MemoryRecord{}, err
 	}
 
-	// T2, BEFORE ANY USE. Nothing below this line runs for a mismatched
-	// answer, and nothing above it used the record for anything.
+	// T2, AFTER THE LENGTH GATE ABOVE. MemoryAnswerRecord already checked
+	// the record's LENGTH (AcceptsRecordLength, core/civ/parse.go:110) and
+	// would have returned above via the *civ.RecordLengthError branch;
+	// only the DECODED ADDRESS is compared here. A wrong-channel answer
+	// that is ALSO the wrong length therefore reports as a length error,
+	// never reaching this comparison or AnswerMismatchError. Nothing
+	// below this line runs for a mismatched answer.
 	if got != addr {
 		s.noteAnswerMismatch()
 		return codeplug.Channel{}, nil, civ.MemoryRecord{}, &AnswerMismatchError{Requested: addr, Answered: got}

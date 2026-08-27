@@ -32,9 +32,9 @@
 //
 // # The register
 //
-// Thirty-four entries: ELEVEN inherited FAMILY assumptions (spec D5), each
+// Thirty-five entries: ELEVEN inherited FAMILY assumptions (spec D5), each
 // as THIS MODEL'S OWN ROW; EIGHTEEN `ic9700` DRIVER entries from the
-// capability matrix's §5; and FIVE this driver ADDS, proposed back to the
+// capability matrix's §5; and SIX this driver ADDS, proposed back to the
 // matrix as errata.
 //
 // CITE ENTRIES BY NAME, NEVER BY POSITION. A positional citation — "entry
@@ -243,7 +243,7 @@
 // IT: every write column in both capability profiles. LIFTED BY: W7 — the
 // whole Stage-W programme above, reviewed.
 //
-// # The FIVE entries this driver ADDS
+// # The SIX entries this driver ADDS
 //
 // ic9700-mode-codes-are-hexadecimal — core/civ/ic9700's modeNames and
 // caps.go's Modes. Matrix §1 #4 gives the mode set as wire 00, 01, 02, 03,
@@ -304,6 +304,19 @@
 // unspecified tones can proceed at all — under T1(5) it is REFUSED naming
 // the field. LIFTED BY: R24 — read a factory-default channel whose tone
 // has never been set and record its tone spans verbatim.
+//
+// ic9700-offset-scale-100hz — core/civ/ic9700's FieldOffset bcdSpan, scale
+// 100. §1b's `offset` row prints digit places "1 kHz … 10 MHz" — five
+// places for a six-nibble field — under which the golden's `00 60 00`
+// would read 6 MHz. Leg G's provenance instead gives the printed
+// half-labels as "1 kHz / 100 Hz, 100 kHz / 10 kHz, 10 MHz / 1 MHz" and
+// derives 600 kHz, the reading this profile implements. ONE OF THE TWO IS
+// WRONG ABOUT THE PAGE, and matrix Erratum 14 records the disagreement as
+// UNRESOLVED by any of the fourteen existing errata. WHAT DEPENDS ON IT:
+// every duplex offset this driver reads or writes; a wrong choice is a
+// factor of ten on every offset. LIFTED BY: a hardware capture of one
+// known offset, read back and compared against the value §1b's reading
+// would give.
 //
 // # The write guard
 //

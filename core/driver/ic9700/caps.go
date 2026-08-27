@@ -59,13 +59,22 @@ const (
 // tagCharset is every printable ASCII byte, 0x20..0x7E — the same 95 the
 // dialect's own name charset carries.
 //
-// IT IS SUPPLIED RATHER THAN DEFAULTED, and the difference is one
-// character. core/spec's default tag rule excludes ';' because a
-// semicolon terminates a NEWCAT frame and a tag containing one could
-// smuggle a second command onto the wire. CI-V is binary framing with no
-// such terminator, and this radio's own "Codes for character entries"
-// tables print the character, so the Yaesu-shaped default would refuse a
-// name the radio accepts.
+// IT IS SUPPLIED RATHER THAN DEFAULTED, and the difference from
+// core/spec's default tag rule is one character, ';'. The default
+// excludes it because a semicolon terminates a NEWCAT frame and a tag
+// containing one could smuggle a second command onto the wire; CI-V is
+// binary framing with no such terminator, and this radio's own "Codes for
+// character entries" tables print ';' among the 32 symbol rows, so the
+// Yaesu-shaped exclusion would refuse a byte this radio's own document
+// shows.
+//
+// THE SPACE IS A SEPARATE, WEAKER CLAIM. Those same tables print every
+// OTHER character in this set but OMIT a space row; the document instead
+// prints, against `1A 00`, "Memory name / All characters are usable."
+// core/spec's default already permits 0x20, so this charset does not add
+// it — but accepting 0x20 is ASSUMED, not manual-evidenced, exactly as
+// the dialect's own nameCharset is graded: spec D5 entry 3's family
+// hazard, matrix §3.9, this model's own row.
 const tagCharset = " !\"#$%&'()*+,-./0123456789:;<=>?@" +
 	"ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`" +
 	"abcdefghijklmnopqrstuvwxyz{|}~"
@@ -173,10 +182,17 @@ func toneRange() *spec.ToneRange {
 	return &spec.ToneRange{MinDeciHz: 1, MaxDeciHz: 2999, StepDeciHz: 1}
 }
 
-// bankFields is the per-field support grid, identical on all three banks
-// because the RECORD is identical on all three: a scan-edge memory and a
-// call channel are the same 111 bytes at a different address, so there is
-// nothing for a per-bank difference to describe.
+// bankFields is the per-field support grid, identical on all three banks.
+//
+// THE COMMAND IS MANUAL-EVIDENCED: all three banks are addressed by the
+// same `1A 00` form (matrix §2 preamble) — the document draws the record
+// once and the channel-number legend covers all three ranges. THAT SCAN
+// AND CALL ANSWER WITH A RECORD OF THE SAME SHAPE AS MEM IS A SEPARATE
+// CLAIM, and it is ASSUMED, not printed: register entry
+// `ic9700-scan-call-addressable`, doc.go, lift R15. This grid is built as
+// if a scan-edge memory and a call channel were the same 111 bytes at a
+// different address; if that assumption is wrong, there is a per-bank
+// difference this grid does not describe.
 //
 // WHAT IS ABSENT IS THE INTERESTING HALF. A Field this map does not list
 // answers the zero FieldSupport — Unsupported both ways — and six Fields
@@ -224,12 +240,14 @@ func bankFields(write spec.Support) map[spec.Field]spec.FieldSupport {
 
 // banks builds the three banks with the given write grade.
 //
-// NoBlank ON SCAN AND CALL, and not on MEM: the printed clear form
-// (matrix §3.13) admits only 0001~0099, so the radio itself offers no way
-// to empty a scan edge or a call channel. Recording that as NoBlank is
-// what stops a generic layer planning an erase the radio has no frame for
-// — and it is a separate statement from FieldErase's absence, which says
-// this driver ships no erase at all.
+// NoBlank ON SCAN AND CALL, and not on MEM. The printed clear form
+// (matrix §3.13) admits only 0001~0099 — MANUAL-EVIDENCED. That the radio
+// ACTUALLY REFUSES to clear a scan edge or a call channel is a separate,
+// narrower claim, and it is ASSUMED, not printed: register entry
+// `ic9700-scan-call-not-clearable`, doc.go, lift W6. Recording that
+// assumption as NoBlank is what stops a generic layer planning an erase
+// the printed form has no range for — and it is a separate statement from
+// FieldErase's absence, which says this driver ships no erase at all.
 //
 // DENSE, not sparse. Sparse/Groups/PerGroup/Budget describe the Icom
 // tier's group-addressed models (the 705, the 905), where a read
