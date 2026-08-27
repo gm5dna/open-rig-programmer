@@ -360,9 +360,14 @@ func (d *ic7610Driver) open(ctx context.Context, eng *transport.Engine, stats ci
 //
 // T2 — ANSWER-ADDRESS EQUALITY. The landed MemoryAnswerMatcher is
 // deliberately envelope-only (to/from/cn/sc), so the DRIVER compares the
-// decoded ChannelAddress against the one it asked for before making any
-// use of the answer. During the probe that means before the length is
-// taken as this radio's fingerprint.
+// decoded ChannelAddress against the one it asked for. That comparison is
+// NOT the first check: MemoryAnswerRecord rejects a record of the wrong
+// length (*civ.RecordLengthError, turned into RecordLengthMismatchError
+// below) before this function ever sees a ChannelAddress to compare. Only
+// once the length is accepted does the address get checked. The upshot: a
+// wrong-channel answer that also happens to be the wrong length is
+// reported as a length mismatch, not an address mismatch — the caller
+// never learns the address was wrong too. Both outcomes fail closed.
 func probeSlot(ctx context.Context, eng *transport.Engine, p civ.Profile, a civ.ChannelAddress) ([]byte, bool, error) {
 	cmd, err := p.BuildMemoryRead(a)
 	if err != nil {

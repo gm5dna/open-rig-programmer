@@ -69,13 +69,19 @@
 // two or more begins a frame and the whole run is skipped. Bytes before the
 // first such run are line noise and are discarded silently.
 //
-// DATA BYTES ARE NOT ESCAPED, exactly as the printed framing implies: the first
-// 0xFD after the address pair ends the frame, and a 0xFE 0xFE pair inside a
-// payload is indistinguishable from a preamble. A consumer that seeds a slot
-// (SetSlot) or an ID token (WithIDToken) with 0xFD or 0xFE in it will see the
-// frame carrying those bytes truncate or resynchronise on the wire. That is a
-// property of the protocol as printed, not a defect of this package, and this
-// package deliberately does not paper over it.
+// DATA BYTES ARE NOT ESCAPED, exactly as the printed framing implies: the
+// scan for a frame's terminator looks only for the first 0xFD after the
+// address pair, so an interior 0xFD ends — TRUNCATES — the frame there,
+// regardless of what was meant to follow it. The bytes after that point are
+// not lost; they stay on the stream and are RE-SCANNED from the next 0xFE
+// 0xFE run, exactly like any other bytes between frames. An interior 0xFE
+// 0xFE pair, by contrast, is not treated specially at all: the terminator
+// scan does not look for preamble, so 0xFE 0xFE before the first 0xFD is
+// just data and passes through untouched. A consumer that seeds a slot
+// (SetSlot) or an ID token (WithIDToken) with 0xFD in it will see the frame
+// carrying it truncate on the wire. That is a property of the protocol as
+// printed, not a defect of this package, and this package deliberately does
+// not paper over it.
 //
 // # What this radio answers, and what it refuses
 //
