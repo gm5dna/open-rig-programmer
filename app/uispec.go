@@ -261,6 +261,32 @@ func slotViewsFor(slots []string) []SlotView {
 // therefore bank) came from a connected session's own effective
 // capabilities (authoritative — reflects discovered inventory), and
 // working is the App's current working copy (nil if none loaded).
+//
+// ONE CLASSIFICATION RULE, DENSE AND SPARSE ALIKE: spec.Bank.WithinSpace,
+// the same question core/codeplug's bankForSlot asks. On a dense bank it
+// IS literal membership of Slots — WithinSpace scans Slots and then
+// answers false for anything else unless the bank is Sparse — so every
+// Yaesu grid's rows are byte-identical to what the old membership map
+// produced (pinned by
+// TestGetUISpec_SlotClassification_DenseBanksUnchangedByWithinSpace,
+// which recomputes the old rule and demands the same answer).
+//
+// On a SPARSE bank the two questions differ, and the difference was a
+// bug: a sparse bank's Slots lists what a READ MATERIALISED, and the
+// static offline baseline has read nothing — core/driver/ic705/caps.go
+// declares MEM's Slots nil BY CONTRACT. Asking membership there put every
+// MEM channel of an offline IC-705 working copy into NO bank at all, so
+// a loaded file's memories rendered nowhere in the grid, against this
+// function's own caller's promise that every loaded slot appears in
+// exactly one bank. WithinSpace admits the bank's whole declared address
+// space — which is also the right answer for a slot the user is ADDING,
+// legitimately in the space without being in any list.
+//
+// It is no wider than that: a slot outside every bank's space (say
+// G101-005, past the IC-705 CALL bank's four fixed channels and past
+// MEM's hundred groups) is still claimed by nothing here, and reaches
+// the grid only if the model's driver synthesises a bank for it — see
+// synthesiseDiscoveredBanks.
 func bankSlotViews(bank spec.Bank, live bool, working *codeplug.Codeplug) []SlotView {
 	if live || working == nil {
 		// Connected: caps' own slot list is authoritative, regardless of
@@ -270,18 +296,14 @@ func bankSlotViews(bank spec.Bank, live bool, working *codeplug.Codeplug) []Slot
 		return slotViewsFor(bank.Slots)
 	}
 	// Disconnected with a working copy loaded: classify the working
-	// copy's OWN slots against the static bank's membership, so the
+	// copy's OWN slots against the static bank's address space, so the
 	// grid's rows agree exactly with what ReadRadio/LoadFile produced —
 	// not the static list wholesale (which could include a slot the
 	// working copy does not actually carry, though in practice it always
 	// will for MEM/PMS).
-	member := make(map[string]bool, len(bank.Slots))
-	for _, s := range bank.Slots {
-		member[s] = true
-	}
 	var out []SlotView
 	for _, ch := range working.Channels {
-		if member[ch.Slot] {
+		if bank.WithinSpace(ch.Slot) {
 			out = append(out, SlotView{Slot: ch.Slot, Display: codeplug.DisplaySlot(ch.Slot)})
 		}
 	}
@@ -387,14 +409,20 @@ func synthesiseDiscoveredBanks(model string, working *codeplug.Codeplug) []BankV
 //     it already reflects the session's own discovered inventory — used
 //     as-is regardless of whether a working copy is loaded.
 //   - Disconnected with a working copy loaded: the working copy's own
-//     slots, filtered to membership in the STATIC baseline's bank slot
-//     list; PLUS synthesised read-only 60M/EMG banks for any 60m/EMG
+//     slots, filtered to the STATIC baseline bank's own addressable SPACE
+//     (spec.Bank.WithinSpace — literal membership of that bank's slot
+//     list on a dense bank, the declared group space on a sparse one; see
+//     bankSlotViews); PLUS synthesised read-only 60M/EMG banks for any 60m/EMG
 //     slots the working copy holds (e.g. loaded from an earlier read of
 //     a US-region radio) — the static baseline defines no 60M/EMG bank,
 //     and loaded channels must never be invisible in the grid. See
-//     synthesiseDiscoveredBanks. Every working-copy slot therefore
-//     appears in exactly one BankView, so the grid's rows agree with
-//     what ReadRadio/LoadFile actually produced.
+//     synthesiseDiscoveredBanks. Every working-copy slot a bank's space
+//     or a synthesised bank claims therefore appears in EXACTLY ONE
+//     BankView, so the grid's rows agree with what ReadRadio/LoadFile
+//     actually produced. A slot outside every bank's space that no
+//     synthesiser claims either — a hand-edited or legacy file's
+//     unaddressable string — appears in none, which is stated here
+//     rather than papered over by inventing a bank for it.
 //   - Disconnected with no working copy: the static baseline's bank slot
 //     list, as-is (no 60M/EMG banks — there is nothing loaded that could
 //     need them, and no discovered inventory to assert).

@@ -11,6 +11,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx10"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx101"
+	"github.com/gm5dna/open-rig-programmer/internal/fakeic705"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeradio"
 	"github.com/gm5dna/open-rig-programmer/internal/radiotext"
 	"github.com/gm5dna/open-rig-programmer/internal/wiring"
@@ -40,6 +41,19 @@ func slotSet(slots []SlotView) map[string]string {
 	out := make(map[string]string, len(slots))
 	for _, s := range slots {
 		out[s.Slot] = s.Display
+	}
+	return out
+}
+
+// ic705SlotViews builds the SlotViews a list of this radio's canonical
+// group-addressed slots must produce. Display equals Slot for every one of
+// them: codeplug.DisplaySlot's rewrite applies only to three-character
+// slot strings, so a "Gnn-nnn" address passes through unchanged (the
+// identity fallback spec.SparseSlot's doc comment relies on).
+func ic705SlotViews(slots ...string) []SlotView {
+	out := make([]SlotView, 0, len(slots))
+	for _, s := range slots {
+		out = append(out, SlotView{Slot: s, Display: s})
 	}
 	return out
 }
@@ -1202,11 +1216,36 @@ func TestGetUISpec_RegisteredIC7300MK2_EveryBankFieldsAndTagDisplay(t *testing.T
 // driven for the IC-705 through real registration, connected and offline.
 //
 //   - CONNECTED to the registered fake (Live true, the Simulated profile —
-//     the `--fake --model IC-705` path a user actually walks). This radio
-//     discovers no extra bank, so "every bank" here is just MEM and CALL.
+//     the `--fake --model IC-705` path a user actually walks), seeded with
+//     fakeic705.DefaultImage through the registered IC705FakeSessionOpts
+//     seam so that the open-time inventory walk has something to
+//     materialise: an unseeded fake answers an EMPTY MEM bank, and the
+//     connected half of this test would then assert nothing about the one
+//     field fix round 1 is about. This radio discovers no extra bank, so
+//     "every bank" here is exactly MEM and CALL — pinned BY ID, not by
+//     count (fix round 1, F3).
 //   - DISCONNECTED with an IC-705 working copy loaded (Live false, the
 //     static RealHardware baseline, resolved by currentModel from the
 //     file's own Radio.Model) — the offline clone workflow's path.
+//
+// BankView.Slots is asserted on BOTH banks of BOTH paths, and that is what
+// fix round 1 (F1/F2) turns on. The working copy carries THIS radio's own
+// slot strings ("G01-001" in MEM, "G101-001" in CALL), not the FT-710's
+// "001" this test was first written with, and the MEM bank's static Slots
+// is nil BY CONTRACT (core/driver/ic705/caps.go: a sparse bank's Slots
+// lists what a READ MATERIALISED, and the static baseline has read
+// nothing). Under the old literal-membership rule every MEM channel of an
+// offline IC-705 working copy therefore classified into NO bank at all and
+// vanished from the grid; under spec.Bank.WithinSpace they land in MEM —
+// "G02-050" included, an address no read has ever materialised and that
+// the user is perfectly entitled to add.
+//
+// "G101-005" is the control. It is outside CALL's four fixed slots and
+// outside MEM's hundred-group space alike, so it must stay an ORPHAN: no
+// bank may claim it, and no synthesised bank rescues it either (that
+// rescue is driver.DiscoveredBankSynthesizer's, which this driver does not
+// implement — see synthesiseDiscoveredBanks). The new rule must widen the
+// sparse bank's answer to its declared space and not one address further.
 //
 // TagDisplayDefault must be {state: "unavailable"} on both banks of both
 // paths: the IC-705's 1A 00 record has no display flag at all
@@ -1219,6 +1258,11 @@ func TestGetUISpec_RegisteredIC7300MK2_EveryBankFieldsAndTagDisplay(t *testing.T
 // more of the tier than any other registered Icom model.
 func TestGetUISpec_RegisteredIC705_EveryBankFieldsAndTagDisplay(t *testing.T) {
 	unavailable := codeplug.BoolField{State: codeplug.Unavailable}
+	wantBanks := []string{"MEM", "CALL"}
+
+	prevOpts := wiring.IC705FakeSessionOpts
+	wiring.IC705FakeSessionOpts = []fakeic705.Option{fakeic705.WithFactoryImage(fakeic705.DefaultImage())}
+	t.Cleanup(func() { wiring.IC705FakeSessionOpts = prevOpts })
 
 	sess, closeAll, err := wiring.OpenFakeSessionFor(testAppCtx(t), wiring.IC705Model)
 	if err != nil {
@@ -1235,8 +1279,22 @@ func TestGetUISpec_RegisteredIC705_EveryBankFieldsAndTagDisplay(t *testing.T) {
 	if !got.Live {
 		t.Error("Live = false, want true (connected to the registered fake)")
 	}
-	if len(got.Banks) != 2 {
-		t.Fatalf("banks = %v, want exactly MEM and CALL — this radio discovers no extra bank", bankIDs(got.Banks))
+	if !reflect.DeepEqual(bankIDs(got.Banks), wantBanks) {
+		t.Fatalf("connected banks = %v, want exactly %v — this radio discovers no extra bank", bankIDs(got.Banks), wantBanks)
+	}
+	// Connected, caps' own list is authoritative: the four slots
+	// fakeic705.DefaultImage seeds within the bounded walk's reach, in the
+	// walk's own ascending order, under slots.go's one wire = display − 1
+	// rule (wire 0/0, 0/1, 0/7 and 1/0).
+	wantLiveMem := ic705SlotViews("G01-001", "G01-002", "G01-008", "G02-001")
+	if liveMem := findBank(t, got.Banks, "MEM").Slots; !reflect.DeepEqual(liveMem, wantLiveMem) {
+		t.Errorf("connected IC-705 MEM.Slots = %v, want %v (the seeded inventory the open-time walk materialised)", liveMem, wantLiveMem)
+	}
+	// CALL is DENSE and fixed: its four slots come from the static bank
+	// itself, seeded or not.
+	wantCall := ic705SlotViews("G101-001", "G101-002", "G101-003", "G101-004")
+	if liveCall := findBank(t, got.Banks, "CALL").Slots; !reflect.DeepEqual(liveCall, wantCall) {
+		t.Errorf("connected IC-705 CALL.Slots = %v, want %v (four fixed call channels)", liveCall, wantCall)
 	}
 	for _, b := range got.Banks {
 		if b.TagDisplayDefault != unavailable {
@@ -1248,13 +1306,19 @@ func TestGetUISpec_RegisteredIC705_EveryBankFieldsAndTagDisplay(t *testing.T) {
 	}
 
 	// Offline, from an IC-705 file: the same answers, from the static
-	// RealHardware baseline this time.
+	// RealHardware baseline this time — and the working copy's own slots,
+	// classified by each bank's SPACE.
 	a.mu.Lock()
 	a.conn = nil
 	a.working = &codeplug.Codeplug{
-		Schema:   codeplug.CurrentSchema,
-		Radio:    codeplug.RadioInfo{Model: wiring.IC705Model},
-		Channels: []codeplug.Channel{{Slot: "001"}},
+		Schema: codeplug.CurrentSchema,
+		Radio:  codeplug.RadioInfo{Model: wiring.IC705Model},
+		Channels: []codeplug.Channel{
+			{Slot: "G01-001"},  // MEM, and one the fake's walk did materialise
+			{Slot: "G101-001"}, // CALL, a listed slot of a dense bank
+			{Slot: "G02-050"},  // MEM by SPACE alone: in no Slots list, anywhere
+			{Slot: "G101-005"}, // in neither bank's space: an orphan, by design
+		},
 	}
 	a.mu.Unlock()
 	offline, err := a.GetUISpec()
@@ -1264,10 +1328,23 @@ func TestGetUISpec_RegisteredIC705_EveryBankFieldsAndTagDisplay(t *testing.T) {
 	if offline.Live {
 		t.Error("Live = true, want false (disconnected)")
 	}
-	if len(offline.Banks) == 0 {
-		t.Fatal("offline IC-705 UISpec has no banks — nothing asserted")
+	if !reflect.DeepEqual(bankIDs(offline.Banks), wantBanks) {
+		t.Fatalf("offline banks = %v, want exactly %v — this driver synthesises no discovered bank", bankIDs(offline.Banks), wantBanks)
+	}
+	wantOfflineMem := ic705SlotViews("G01-001", "G02-050")
+	if offMem := findBank(t, offline.Banks, "MEM").Slots; !reflect.DeepEqual(offMem, wantOfflineMem) {
+		t.Errorf("offline IC-705 MEM.Slots = %v, want %v — a SPARSE bank's working-copy slots are classified by its declared space (spec.Bank.WithinSpace), not by the Slots list it deliberately does not carry", offMem, wantOfflineMem)
+	}
+	wantOfflineCall := ic705SlotViews("G101-001")
+	if offCall := findBank(t, offline.Banks, "CALL").Slots; !reflect.DeepEqual(offCall, wantOfflineCall) {
+		t.Errorf("offline IC-705 CALL.Slots = %v, want %v — CALL is dense, so only its four listed slots may appear", offCall, wantOfflineCall)
 	}
 	for _, b := range offline.Banks {
+		for _, s := range b.Slots {
+			if s.Slot == "G101-005" {
+				t.Errorf("offline IC-705 bank %s claims slot G101-005, which lies outside CALL's four fixed channels and outside MEM's hundred-group space alike — it must stay an orphan", b.ID)
+			}
+		}
 		if b.TagDisplayDefault != unavailable {
 			t.Errorf("offline IC-705 bank %s TagDisplayDefault = %+v, want %+v", b.ID, b.TagDisplayDefault, unavailable)
 		}
@@ -1861,6 +1938,96 @@ func TestGetUISpec_SlotClassification_OfflineWorkingCopy(t *testing.T) {
 	sixtySlots := slotSet(sixty.Slots)
 	if len(sixtySlots) != 1 || sixtySlots["501"] != "5-01" {
 		t.Errorf("60M.Slots = %v, want exactly {501:5-01}", sixtySlots)
+	}
+}
+
+// TestGetUISpec_SlotClassification_DenseBanksUnchangedByWithinSpace is fix
+// round 1's regression pin for F1. bankSlotViews now classifies an offline
+// working copy's slots with spec.Bank.WithinSpace instead of literal
+// membership of the static bank's Slots, and on a DENSE bank those are the
+// same question by construction: WithinSpace scans Slots and then answers
+// false unless the bank is Sparse (core/spec/bank.go). Every registered
+// Yaesu model is dense on every static bank, so nothing about their grids
+// may move by so much as a slot.
+//
+// The test does not restate the expected lists — it RECOMPUTES them with
+// the OLD rule (literal membership of each static bank's own Slots, in
+// working-copy order) and demands byte-identical output. Any future change
+// to the classification rule that moves a dense model's answer fails here,
+// whatever the new rule happens to be.
+//
+// The working copy holds every slot each static bank lists, plus two the
+// static banks do not: "501", a 60m slot these drivers' own
+// DiscoveredBankSynthesizer rescues into a read-only synthesised bank, and
+// "ZZZ", which nothing claims — GetUISpec's orphan case, and the pin that
+// the widened rule admits nothing it should not.
+func TestGetUISpec_SlotClassification_DenseBanksUnchangedByWithinSpace(t *testing.T) {
+	for _, model := range []string{wiring.DefaultModel, "FTdx10", "FTdx101D", "FTdx101MP"} {
+		t.Run(model, func(t *testing.T) {
+			caps, err := wiring.StaticCapabilities(model)
+			if err != nil {
+				t.Fatalf("wiring.StaticCapabilities(%q): unexpected error: %v", model, err)
+			}
+			if len(caps.Banks) == 0 {
+				t.Fatalf("%s: static baseline has no banks — nothing asserted", model)
+			}
+			var channels []codeplug.Channel
+			for _, b := range caps.Banks {
+				if b.Sparse {
+					t.Fatalf("%s bank %s is Sparse — this test is the DENSE pin and its premise no longer holds; give the model its own assertion rather than deleting this failure", model, b.ID)
+				}
+				if len(b.Slots) == 0 {
+					t.Fatalf("%s bank %s lists no slots — the comparison would be vacuous", model, b.ID)
+				}
+				for _, s := range b.Slots {
+					channels = append(channels, codeplug.Channel{Slot: s})
+				}
+			}
+			channels = append(channels,
+				codeplug.Channel{Slot: "501"},
+				codeplug.Channel{Slot: "ZZZ"},
+			)
+
+			a, _ := newTestApp(t)
+			a.mu.Lock()
+			a.working = &codeplug.Codeplug{
+				Schema:   codeplug.CurrentSchema,
+				Radio:    codeplug.RadioInfo{Model: model},
+				Channels: channels,
+			}
+			a.mu.Unlock()
+			got, err := a.GetUISpec()
+			if err != nil {
+				t.Fatalf("GetUISpec (offline, %s working copy): unexpected error: %v", model, err)
+			}
+			if got.Live {
+				t.Fatal("Live = true while disconnected, want false")
+			}
+
+			for _, b := range caps.Banks {
+				member := make(map[string]bool, len(b.Slots))
+				for _, s := range b.Slots {
+					member[s] = true
+				}
+				var want []SlotView
+				for _, ch := range channels {
+					if member[ch.Slot] {
+						want = append(want, SlotView{Slot: ch.Slot, Display: codeplug.DisplaySlot(ch.Slot)})
+					}
+				}
+				view := findBank(t, got.Banks, string(b.ID))
+				if !reflect.DeepEqual(view.Slots, want) {
+					t.Errorf("%s bank %s Slots = %v, want %v — the WithinSpace rule must be byte-identical to literal Slots membership on a dense bank", model, b.ID, view.Slots, want)
+				}
+			}
+			for _, b := range got.Banks {
+				for _, s := range b.Slots {
+					if s.Slot == "ZZZ" {
+						t.Errorf("%s bank %s claims the orphan slot ZZZ, which no bank's space contains", model, b.ID)
+					}
+				}
+			}
+		})
 	}
 }
 
