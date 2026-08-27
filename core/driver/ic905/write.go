@@ -636,14 +636,23 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 			res.Steps[setStep].Sent = true
 			return res, fmt.Errorf("ic905: WriteChannel %s: the radio rejected the set: %w", ch.Slot, err)
 		case errors.Is(err, transport.ErrTimeout):
-			// THE ACKNOWLEDGEMENT NEVER ARRIVED, and the frame provably
-			// left the port — Engine.Do writes before it waits. Sent
-			// TRUE, Confirmed FALSE: the slot's on-radio state is now
-			// UNKNOWN, which is the report an operator must act on, and
-			// the one thing that must NOT happen is a second attempt.
-			// RetryReads is zero on this class and Do refuses a non-zero
-			// value outright, so no retransmission is even representable.
-			res.Steps[setStep].Sent = true
+			// THE ACKNOWLEDGEMENT NEVER ARRIVED. The frame provably left
+			// the port — Engine.Do writes before it waits — and BOTH
+			// FLAGS ARE FALSE ANYWAY, because driver.WriteStep.Sent is
+			// not "bytes went out": it "reports that the frame was
+			// transmitted with an ATTRIBUTABLE outcome — success or an
+			// explicit rejection", and a silent radio attributed none.
+			// A false Sent is that neutral type's word for precisely
+			// this — "a transport-level failure left its outcome
+			// unknowable" — and the error below carries the half the
+			// flags cannot, that this frame DID go out and the slot's
+			// on-radio state is therefore UNVERIFIED rather than
+			// untouched.
+			//
+			// NOTHING HERE DEPENDS ON THE FLAG TO PREVENT A SECOND
+			// ATTEMPT, and it must not: RetryReads is zero on this class
+			// and Do refuses a non-zero value outright, so no
+			// retransmission is representable whatever this step says.
 			return res, fmt.Errorf("ic905: WriteChannel %s: the set was transmitted and never acknowledged, so its outcome is UNATTRIBUTABLE and it will not be resent: %w", ch.Slot, err)
 		default:
 			// A transport-level failure before or around the write: the

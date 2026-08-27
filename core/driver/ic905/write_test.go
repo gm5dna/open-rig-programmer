@@ -835,15 +835,24 @@ func TestMemorySetSpec_IsNeverRetried(t *testing.T) {
 	}
 }
 
-// TestWrite_AnUnacknowledgedSetIsSentNotConfirmedAndIsNeverResent.
+// TestWrite_AnUnacknowledgedSetIsNotSentAndIsNeverResent.
 //
-// The set goes out; the radio says nothing. RetryReads is zero on this
-// class, so no second frame is even representable — and the report says
-// SENT (the frame provably left the port, so the slot's on-radio state
-// must now be treated as unverified) and NOT CONFIRMED (the outcome is
-// UNATTRIBUTABLE). Reporting it as un-sent would invite the one action
-// that must never be taken: sending it again.
-func TestWrite_AnUnacknowledgedSetIsSentNotConfirmedAndIsNeverResent(t *testing.T) {
+// The set goes out; the radio says nothing. Both flags are FALSE, and
+// that is core/driver's own vocabulary rather than a judgement call:
+// WriteStep.Sent "reports that the frame was transmitted with an
+// ATTRIBUTABLE outcome — success or an explicit rejection", and a false
+// Sent means the outcome "is NOT known-clean: it may never have been
+// transmitted at all … or a transport-level failure left its outcome
+// unknowable". A silent radio is the second of those exactly.
+//
+// SENT FALSE IS NOT AN INVITATION TO RESEND, and nothing here relies on
+// the flag to prevent one: RetryReads is zero on this class and Do
+// refuses a non-zero value outright, so no retransmission is even
+// representable, and this test pins the single frame on the wire. What
+// the flag decides is what the OPERATOR is told, and telling them an
+// unacknowledged frame had an attributable outcome is the one thing it
+// must not say.
+func TestWrite_AnUnacknowledgedSetIsNotSentAndIsNeverResent(t *testing.T) {
 	t.Parallel()
 	img := occupiedAt(wireAddr{0, 1})
 	img.setOutcome = setIgnored
@@ -859,11 +868,18 @@ func TestWrite_AnUnacknowledgedSetIsSentNotConfirmedAndIsNeverResent(t *testing.
 	if len(res.Steps) != 1 {
 		t.Fatalf("Steps = %+v, want one step", res.Steps)
 	}
-	if !res.Steps[0].Sent {
-		t.Error("Steps[0].Sent is false — the frame provably left the port, and an operator must treat the slot as unverified rather than un-written")
+	if res.Steps[0].Sent {
+		t.Error("Steps[0].Sent is true — nothing attributed an outcome to this frame, and Sent means the frame was transmitted with an ATTRIBUTABLE outcome")
 	}
 	if res.Steps[0].Confirmed {
 		t.Error("Steps[0].Confirmed is true — nothing acknowledged it")
+	}
+	// The error is what carries the distinction the flags cannot: this
+	// frame DID leave the port, unlike the other Sent-false case.
+	for _, want := range []string{"UNATTRIBUTABLE", "will not be resent"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error = %q, want it to contain %q — the operator must be told the slot is unverified, not that the write never happened", err, want)
+		}
 	}
 	if n := len(p.sets()); n != 1 {
 		t.Errorf("the radio received %d set frames, want exactly 1 — a write is NEVER resent", n)
