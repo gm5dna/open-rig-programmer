@@ -237,10 +237,14 @@ describe('cloneData and newChannelData', () => {
 	// there is nothing to ask about reachability — must omit every one of
 	// the ten tier keys rather than default them: an omitted key decodes
 	// in Go to the zero FieldState, Absent, which says "nobody has spoken
-	// about this field", and codeplug.NormaliseTierFields resolves that to
-	// Unavailable for a field the loaded radio does not have while leaving
-	// it Absent for one it does. Manufacturing an 'unknown' here would
-	// destroy the distinction before Go ever sees it.
+	// about this field", and ON THE NEXT LOAD of the saved file
+	// codeplug.NormaliseTierFields resolves that to Unavailable for a
+	// field the radio does not have while leaving it Absent for one it
+	// does. Not before then: the in-memory add goes through
+	// applyEditsLocked, which runs no such pass — the row stays exactly as
+	// this factory built it until the file is saved and loaded again.
+	// Manufacturing an 'unknown' here would destroy the distinction before
+	// Go ever gets the chance.
 	it('omits every tier key for a bankless add, whatever shape the missing bank takes', () => {
 		for (const bank of [undefined, null, {}, { ID: 'MEM', Label: 'Memories', ReadOnly: false, Slots: [] }]) {
 			const data = newChannelData(uiSpec, bank, 145500000)

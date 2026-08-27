@@ -817,6 +817,86 @@ func TestTierFieldNormalisers_AgreeWithTheLegacyMigration(t *testing.T) {
 		}
 		seen[n.field] = true
 	}
+
+	// And the same ten fields, in the same order, as diff.go's
+	// tierAddedFieldFor — the OTHER table in this package that walks the
+	// tier's ten. Both are ChannelData's declaration order because that is
+	// the order Validate documents and the grid renders; two tables that
+	// silently disagreed about which field is in which position would put
+	// this pass and the send plan on different footing.
+	wantOrder := make([]spec.Field, 0, len(tierAddedFieldFor))
+	for _, f := range tierAddedFieldFor {
+		wantOrder = append(wantOrder, f.field)
+	}
+	gotOrder := make([]spec.Field, 0, len(tierFieldNormalisers))
+	for _, n := range tierFieldNormalisers {
+		gotOrder = append(gotOrder, n.field)
+	}
+	if !reflect.DeepEqual(gotOrder, wantOrder) {
+		t.Errorf("tierFieldNormalisers names\n %v\nbut diff.go's tierAddedFieldFor names\n %v\n(the two must be the same ten fields in the same order)", gotOrder, wantOrder)
+	}
+}
+
+// tierFieldToAbsent makes exactly ONE tier field Absent, in
+// tierFieldNormalisers' own order — the inverse of that table's
+// "unavailable" column, written out by hand precisely so it is
+// INDEPENDENT of the table under test. A per-row check built from the
+// table's own accessors could not catch a row wired to the wrong struct
+// field, since both halves would be wrong together.
+var tierFieldToAbsent = []func(*ChannelData){
+	func(d *ChannelData) { d.TxFreqHz = FreqField{} },
+	func(d *ChannelData) { d.Duplex = StringField{} },
+	func(d *ChannelData) { d.OffsetHz = FreqField{} },
+	func(d *ChannelData) { d.ToneMode = StringField{} },
+	func(d *ChannelData) { d.ToneTx = ToneField{} },
+	func(d *ChannelData) { d.ToneRx = ToneField{} },
+	func(d *ChannelData) { d.DTCSCode = IntField{} },
+	func(d *ChannelData) { d.DTCSPolarity = StringField{} },
+	func(d *ChannelData) { d.Filter = StringField{} },
+	func(d *ChannelData) { d.DataMode = BoolField{} },
+}
+
+// TestTierFieldNormalisers_EachRowIsWiredToItsOwnField pins every row of
+// the table to its OWN struct field, both halves separately — which is
+// what catches a SWAPPED PAIR, the one mistake the two checks above
+// cannot see between them. A row that reads and writes some other tier
+// field consistently still satisfies
+// TestTierFieldNormalisers_AgreeWithTheLegacyMigration (all ten fields
+// still end Unavailable) and still satisfies the order check (the
+// spec.Field labels are untouched) — and would normalise the wrong field
+// on any bank that reaches one and not the other, which is every real
+// Icom bank.
+//
+// Row i, applied to a zero ChannelData, must make position i and no
+// other Unavailable; and row i's Absent test, on a channel where only
+// position i is Absent, must be the only one that fires.
+func TestTierFieldNormalisers_EachRowIsWiredToItsOwnField(t *testing.T) {
+	if len(tierFieldToAbsent) != len(tierFieldNormalisers) {
+		t.Fatalf("tierFieldToAbsent has %d entries, tierFieldNormalisers %d — the two walk the same ten fields in the same order", len(tierFieldToAbsent), len(tierFieldNormalisers))
+	}
+
+	for i, n := range tierFieldNormalisers {
+		t.Run(string(n.field), func(t *testing.T) {
+			// The assignment half: exactly position i changes.
+			d := &ChannelData{}
+			n.unavailable(d)
+			want := allTierStates(Absent)
+			want[i] = Unavailable
+			if got := tierFieldStates(d); !reflect.DeepEqual(got, want) {
+				t.Errorf("row %d (%s) sets\n %v\nwant\n %v — this row is wired to the wrong struct field", i, n.field, got, want)
+			}
+
+			// The Absent half: on a channel where only position i is
+			// Absent, only row i reports Absent.
+			base := withUnavailableTierFields(&ChannelData{})
+			tierFieldToAbsent[i](base)
+			for j, other := range tierFieldNormalisers {
+				if got := other.absent(base); got != (i == j) {
+					t.Errorf("with only %s Absent, row %d (%s) reports absent = %v, want %v", n.field, j, other.field, got, i == j)
+				}
+			}
+		})
+	}
 }
 
 // TestNormaliseTierFields_V4YaesuFileWithNoTierKeys is deviation (c)'s
@@ -981,6 +1061,56 @@ func TestNormaliseTierFields_MixedReachability(t *testing.T) {
 		NormaliseTierFields(cp, caps)
 		if *d != again {
 			t.Errorf("a second pass changed the channel:\n got %+v\nwant %+v", *d, again)
+		}
+	})
+
+	// A KNOWN value on a field this bank cannot reach: the pass is keyed
+	// on Absent, not on reachability, so it must leave such a field
+	// exactly where it found it — value and all.
+	//
+	// Erasing it would be the Wave-1c review's finding 1 all over again,
+	// one layer earlier: a Known value is the user's REQUEST, and this
+	// project refuses a request it cannot honour rather than dropping it.
+	// The refusal is the send gate's — touchedFields keeps an unreachable
+	// Known field in the touched set precisely so the per-field gate
+	// blocks the channel by name ("not writable on this radio") — and a
+	// loader that had quietly rewritten the value to Unavailable would
+	// have destroyed the request before the gate ever saw it, turning a
+	// named refusal into a silent no-op.
+	t.Run("a Known value on an unreachable field is left for the gates to refuse", func(t *testing.T) {
+		unreachable := &ChannelData{
+			FreqHz: 145_500_000, Mode: "FM",
+			Duplex:   StringField{State: Known, Value: "DUP-"}, // unreachable on this bank
+			DTCSCode: IntField{State: Known, Value: 23},        // unreachable too
+			DataMode: BoolField{State: Known, Value: true},     // and this one
+		}
+		local := &Codeplug{
+			Schema: CurrentSchema, Radio: RadioInfo{Model: "TEST-ICOM", CATID: "A4"},
+			Channels: []Channel{{Slot: "G01-001", Data: unreachable}},
+		}
+		NormaliseTierFields(local, caps)
+
+		// The three Known fields specifically: the channel's OTHER seven
+		// tier fields are Absent and are expected to move, so comparing
+		// the whole struct would assert the opposite of this test's point.
+		if got := unreachable.Duplex; got != (StringField{State: Known, Value: "DUP-"}) {
+			t.Errorf("duplex = %+v, want the Known DUP- it arrived with", got)
+		}
+		if got := unreachable.DTCSCode; got != (IntField{State: Known, Value: 23}) {
+			t.Errorf("dtcs_code = %+v, want the Known 23 it arrived with", got)
+		}
+		if got := unreachable.DataMode; got != (BoolField{State: Known, Value: true}) {
+			t.Errorf("data_mode = %+v, want the Known true it arrived with", got)
+		}
+
+		touched := make(map[spec.Field]bool)
+		for _, f := range touchedFields(caps, spec.BankMemory, *unreachable) {
+			touched[f] = true
+		}
+		for _, f := range []spec.Field{spec.FieldDuplex, spec.FieldDTCSCode, spec.FieldDataMode} {
+			if !touched[f] {
+				t.Errorf("touchedFields omits the unreachable Known %s — the send gate can only refuse a request it is shown", f)
+			}
 		}
 	})
 }
