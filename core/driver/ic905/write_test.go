@@ -909,6 +909,47 @@ func TestWrite_ARejectedSetIsSentAndAttributable(t *testing.T) {
 	}
 }
 
+// TestWrite_OnlyAConfirmedWriteEntersTheInventory is the other half of
+// the rule the e2e second-write test pins: the slot is recorded because
+// the radio ACKNOWLEDGED the set, not because a set was attempted.
+//
+// A rejected write says the slot does not hold what was sent, and an
+// unacknowledged one says nothing at all. Recording either would put a
+// PRESUMED channel in the inventory and disarm rung 11 for a slot nothing
+// has read — the precise failure that rung exists to prevent — so both
+// leave it untouched.
+//
+// The slot is one discovery never materialised and the read answers FA,
+// so rung 11 lets the write through and the set is what fails.
+func TestWrite_OnlyAConfirmedWriteEntersTheInventory(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name    string
+		outcome setOutcome
+	}{
+		{"rejected", setRejected},
+		{"unacknowledged", setIgnored},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			img := occupiedAt(wireAddr{0, 0})
+			img.setOutcome = tc.outcome
+			_, s := openWritable(t, img)
+
+			const slot = "G01-051"
+			if s.knownOccupied(slot) {
+				t.Fatalf("%s is in the inventory before any write — this test's premise is gone", slot)
+			}
+			if _, err := s.WriteChannel(context.Background(), writableChannel(slot)); err == nil {
+				t.Fatal("the write reported success")
+			}
+			if s.knownOccupied(slot) {
+				t.Errorf("a %s write put %s in the inventory — only the radio's OK message says the slot holds a channel", tc.name, slot)
+			}
+		})
+	}
+}
+
 // civProfile is the CI-V dialect this driver is built on, reached without
 // a session so the structural tests above need no wire at all.
 func civProfile() civ.Profile { return civic905.Profile() }

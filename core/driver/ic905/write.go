@@ -262,15 +262,24 @@ func (s *Session) bankFor(slot string) (spec.BankID, bool) {
 // not enough: a radio-held record whose unmapped region happens to match
 // the template would have sailed through.
 //
-// IT FIRES ONLY WHEN BOTH ARE TRUE: the slot is absent from the inventory
-// this session materialised, AND the pre-write read returned a record.
-// Either alone is ordinary — an inventory-absent slot that reads empty is
-// a genuine add, and an inventory-PRESENT slot that reads occupied is a
+// IT FIRES ONLY WHEN BOTH ARE TRUE: the slot is absent from this
+// session's inventory, AND the pre-write read returned a record. Either
+// alone is ordinary — an inventory-absent slot that reads empty is a
+// genuine add, and an inventory-PRESENT slot that reads occupied is a
 // modify.
+//
+// THE INVENTORY IS NOT ONLY DISCOVERY'S, and it must not be: a slot this
+// same session created presents the surprise's exact shape — nothing
+// walked it, and it now answers with a record — so a second write to it
+// would have been refused, telling the user to re-discover the radio for
+// a channel this program had just put there. A confirmed write adds the
+// slot (Session.markOccupied), which is what makes this rung's question
+// "has anything read or written this slot?" rather than "did the walk see
+// it?".
 //
 // The remedy is NAMED, because the user can act on it.
 func (s *Session) occupiedSurprise(slot string, readReturnedRecord bool) error {
-	if !readReturnedRecord || s.inventory[slot] {
+	if !readReturnedRecord || s.knownOccupied(slot) {
 		return nil
 	}
 	return &driver.WriteRefusedError{
@@ -664,6 +673,10 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	// Confirmed means the radio sent its OK message, which — unlike a CAT
 	// Set's silence — is a positive acknowledgement.
 	res.Steps[setStep].Sent, res.Steps[setStep].Confirmed = true, true
+	// AND THE SLOT NOW HOLDS A CHANNEL. Recording it here, on the
+	// acknowledged path alone, is what stops rung 11 from meeting this
+	// session's own creation as an occupied surprise on the next write.
+	s.markOccupied(ch.Slot)
 	return res, nil
 }
 

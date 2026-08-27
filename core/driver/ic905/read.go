@@ -366,7 +366,7 @@ func (s *Session) discoverInventory(ctx context.Context, full bool, budget int) 
 		if !present || isEmptyRecord(record) {
 			return false, nil
 		}
-		s.inventory[slot] = true
+		s.markOccupied(slot)
 		if counts {
 			slots = append(slots, slot)
 			occupied++

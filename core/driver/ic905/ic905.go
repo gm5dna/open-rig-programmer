@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
@@ -619,8 +620,9 @@ func identityCATID(token string) string {
 
 // Session is an IC-905's driver.Session: one open, identity-probed
 // connection. Safe for concurrent use — transport.Engine serialises every
-// individual exchange, the capability set is immutable after Open, and
-// the one mutable counter is atomic.
+// individual exchange, the capability set is immutable after Open, the
+// one mutable counter is atomic, and the one mutable MAP is behind invMu
+// (see markOccupied).
 //
 // There is NO operation mutex, and that is a consequence of the choreography
 // rather than an omission: a read is ONE exchange, and a write is a read
@@ -648,8 +650,17 @@ type Session struct {
 	// inventoryComplete records whether the discovery walk covered the
 	// whole space (Task 13).
 	inventoryComplete bool
-	// inventory is the set of slots discovery MATERIALISED, which rung 11
-	// of the write ladder consults (ruling T3).
+	// invMu guards inventory. Discovery fills it before the session is
+	// handed out, but a CONFIRMED write adds to it afterwards, so the map
+	// is live for the session's whole life and every access goes through
+	// here — including discovery's, which needs no lock and takes it
+	// anyway rather than leaving one access to be reasoned about
+	// separately.
+	invMu sync.Mutex
+	// inventory is the set of slots this session KNOWS hold a channel:
+	// what discovery materialised, plus every slot a confirmed write has
+	// since put one in. Rung 11 of the write ladder consults it (ruling
+	// T3).
 	inventory map[string]bool
 	// initDrainCapExceeded records R9-SPLIT branch (b).
 	initDrainCapExceeded bool
@@ -657,6 +668,33 @@ type Session struct {
 	// not the address requested (ruling T2). Atomic because reads may run
 	// concurrently.
 	answerMismatches atomic.Int64
+}
+
+// markOccupied records that slot now holds a channel.
+//
+// IT IS CALLED ONLY AFTER A CONFIRMED WRITE — the radio's own OK message,
+// the one outcome that is a positive acknowledgement rather than an
+// absence of complaint — and on no other path. A rejection or an
+// unacknowledged set leaves the inventory alone, deliberately: neither
+// says the slot holds anything, and an inventory that recorded a
+// PRESUMED channel would disarm rung 11 for a slot nothing has read.
+//
+// The direction is one-way. Nothing removes a slot, because this tier
+// ships no erase path at all, and a future one would have to remove here
+// rather than leave a stale entry claiming the channel is still there.
+func (s *Session) markOccupied(slot string) {
+	s.invMu.Lock()
+	defer s.invMu.Unlock()
+	s.inventory[slot] = true
+}
+
+// knownOccupied reports whether this session knows slot holds a channel:
+// discovery materialised it, or a confirmed write of this session put one
+// there.
+func (s *Session) knownOccupied(slot string) bool {
+	s.invMu.Lock()
+	defer s.invMu.Unlock()
+	return s.inventory[slot]
 }
 
 // idSpec is the transport spec for the 19 00 identity read, assembled

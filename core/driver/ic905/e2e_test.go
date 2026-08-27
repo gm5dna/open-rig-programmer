@@ -599,6 +599,56 @@ func TestE2E_CreateIntoAnEmptySlotSucceedsAndAToneLessCreateIsRefused(t *testing
 	}
 }
 
+// TestE2E_ASecondWriteToACreatedSlotIsNotAnOccupiedSurprise.
+//
+// A create makes the slot OCCUPIED, and the session must know it. Rung 11
+// refuses a slot that is absent from this session's inventory AND answers
+// the pre-write read with a record — which is exactly the shape a slot
+// this same session just created presents, so a second write to it was
+// refused with a message telling the user to re-discover the radio for a
+// channel THIS SESSION had put there.
+//
+// Two writes, one previously-empty slot, both landing, and the SECOND
+// carries a different frequency so the assertion is that the write
+// happened rather than that the first one had already left the right
+// bytes. End to end against the fake, because the point is the session's
+// own memory of what it did, and the fake is what makes the slot answer
+// with a record the second time.
+func TestE2E_ASecondWriteToACreatedSlotIsNotAnOccupiedSurprise(t *testing.T) {
+	t.Parallel()
+	radio, s := openFake(t, RealHardware, []Option{WithConsentedUnverifiedWrites()}, e2eImage(
+		fakeic905.WithRecord(0, 0, goldenRecord(144_500_000, 5).build()),
+	)...)
+
+	if _, ok := radio.Record(0, 50); ok {
+		t.Fatal("the fake already holds group 0 channel 50 — this test's premise is gone")
+	}
+	if slices.Contains(memBankSlots(t, s), "G01-051") {
+		t.Fatal("discovery materialised G01-051 — this test needs a slot the session has never seen")
+	}
+
+	if _, err := s.WriteChannel(context.Background(), writableChannel("G01-051")); err != nil {
+		t.Fatalf("the create was refused: %v", err)
+	}
+
+	second := writableChannel("G01-051")
+	second.Data.FreqHz = 430_000_000
+	res, err := s.WriteChannel(context.Background(), second)
+	if err != nil {
+		t.Fatalf("the SECOND write to the slot this session just created was refused: %v", err)
+	}
+	if len(res.Steps) != 1 || !res.Steps[0].Sent || !res.Steps[0].Confirmed {
+		t.Fatalf("Steps = %+v, want one Sent and Confirmed step", res.Steps)
+	}
+	got, ok := radio.Record(0, 50)
+	if !ok {
+		t.Fatal("the fake holds no record for the slot after two writes")
+	}
+	if want := goldenRecord(430_000_000, 5).build(); !bytes.Equal(got, want) {
+		t.Errorf("the second write did not land:\n  kept % X\n  want % X", got, want)
+	}
+}
+
 // TestE2E_TenGigahertzReadsAndIsRefusedOnWrite is the asymmetry OQ-1
 // settles, end to end: this model READS both declared lengths and WRITES
 // only the shape its document draws.
