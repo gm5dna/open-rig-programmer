@@ -155,6 +155,25 @@ func TestNewRealDriver_HWVerifiedWriteSet(t *testing.T) {
 // merely happened to share a leading substring cannot slip through. This
 // test does NOT pin the fake's own token value (e.g. "98a5") anywhere —
 // only that a value beginning with the address arrived at all.
+//
+// THE PREFIX COMPARISON IS CASE-INSENSITIVE (Wave 4 task R3, the IC-7300
+// pair's own tightening, the same kind fix round 1 applied to the IC-7610's
+// first cut): the IC-7300MK2 is this tier's first registered model whose
+// CI-V address hex contains a letter — static caps.CATID is "B6"
+// (core/driver/ic7300mk2/caps.go, printed-case), while the session's
+// Identity().CATID is built from Go's "%02x" verb
+// (core/driver/ic7300mk2.go), which is always LOWERCASE — "b6:<token>".
+// Neither value is wrong: caps.go states the manual's own printed hex
+// digits, and %02x's lowercase is Go's own formatting choice, and the two
+// were never exercised against each other before this pair registered,
+// since every prior CI-V address ("98", "94") has no letter for case to
+// differ on. A case-SENSITIVE prefix match would therefore fail this
+// radio's own honest session for a reason that has nothing to do with a
+// crossed fakeDrivers pairing — exactly the failure mode this exception
+// exists to avoid — so the comparison folds case for the address-half
+// exception only; the exact-equality arm above (every Yaesu model's) is
+// untouched, since none of those static CATIDs contains a letter whose
+// case could legitimately vary.
 func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
 	models := SupportedModels()
 	if len(models) == 0 {
@@ -183,8 +202,11 @@ func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
 			got := sess.Identity().CATID
 			// CI-V address half only: a two-character static CATID is an
 			// address alone (spec D3.2), and its session CATID is that
-			// address plus a probe token this test never pins.
-			ok := got == caps.CATID || (len(caps.CATID) == 2 && strings.HasPrefix(got, caps.CATID))
+			// address plus a probe token this test never pins. The
+			// prefix check folds case — see this test's own doc comment
+			// for why (the IC-7300MK2's "B6" vs. "%02x"'s lowercase
+			// "b6").
+			ok := got == caps.CATID || (len(caps.CATID) == 2 && strings.HasPrefix(strings.ToLower(got), strings.ToLower(caps.CATID)))
 			if !ok {
 				t.Errorf("Identity().CATID = %q, want %q — the fake rig answering this session is not %s's own", got, caps.CATID, model)
 			}
@@ -986,7 +1008,7 @@ func TestSupportedModels_SortedNonEmpty(t *testing.T) {
 // deleting a constant cannot make this test agree with the change.
 func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	got := SupportedModels()
-	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610"} {
+	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2"} {
 		found := false
 		for _, m := range got {
 			if m == want {
@@ -1015,6 +1037,12 @@ func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	}
 	if IC7610Model != "IC-7610" {
 		t.Errorf("IC7610Model = %q, want \"IC-7610\"", IC7610Model)
+	}
+	if IC7300Model != "IC-7300" {
+		t.Errorf("IC7300Model = %q, want \"IC-7300\"", IC7300Model)
+	}
+	if IC7300MK2Model != "IC-7300MK2" {
+		t.Errorf("IC7300MK2Model = %q, want \"IC-7300MK2\"", IC7300MK2Model)
 	}
 }
 
@@ -1694,6 +1722,13 @@ func TestNeedsUnverifiedConsent_PerModel(t *testing.T) {
 		// RealHardware profile carries a write-side Unverified field this
 		// predicate must find.
 		IC7610Model: true,
+		// The IC-7300's and IC-7300MK2's writeTrialsComplete (each
+		// model's OWN caps.go constant) are both FALSE, on the same
+		// footing: no IC-7300 and no IC-7300MK2 has ever been written to
+		// by this project, so each RealHardware profile carries a
+		// write-side Unverified field this predicate must find.
+		IC7300Model:    true,
+		IC7300MK2Model: true,
 	}
 	models := SupportedModels()
 	if len(models) != len(want) {
@@ -1938,9 +1973,10 @@ func TestOpenRealSessionFor_StopBitsRefuseAnImpossibleReport(t *testing.T) {
 var yaesuModels = []string{DefaultModel, FTdx10Model, FTdx101DModel, FTdx101MPModel}
 
 // icomModels names every registered Icom model, on the same by-name
-// footing as yaesuModels — one row today (the IC-7610), growing by one
-// per Wave-4 family registration.
-var icomModels = []string{IC7610Model}
+// footing as yaesuModels — three rows now (the IC-7610, and the IC-7300
+// pair added by Wave 4 task R3), growing by one or two per Wave-4 family
+// registration.
+var icomModels = []string{IC7610Model, IC7300Model, IC7300MK2Model}
 
 // TestYaesuAndIcomModelsPartitionSupportedModels restores the two-way
 // drift alarm the old len(models) != 4 pins gave for free and fix round 1
@@ -2145,5 +2181,65 @@ func TestOpenRealSessionFor_IC7610OpensAtEightNOne(t *testing.T) {
 	}
 	if got.StopBits != 1 {
 		t.Errorf("SerialConfig.StopBits = %d, want 1 — the IC-7610's own StopBits() report must reach the port, not transport.DefaultStopBits (%d)", got.StopBits, transport.DefaultStopBits)
+	}
+}
+
+// TestOpenRealSessionFor_IC7300OpensAtEightNOne is
+// TestOpenRealSessionFor_IC7610OpensAtEightNOne's mirror for the IC-7300
+// (Wave 4 task R3): the same proof, against the SECOND registered Icom
+// driver, that core/driver/ic7300's own StopBits() == 1 report actually
+// reaches OpenRealSessionFor's port configuration through the wiring-side
+// stopBitsFor consultation, which needed no code change for this
+// registration either.
+func TestOpenRealSessionFor_IC7300OpensAtEightNOne(t *testing.T) {
+	d, err := realDriverFor(IC7300Model, false)
+	if err != nil {
+		t.Fatalf("realDriverFor(%q): %v", IC7300Model, err)
+	}
+	r, ok := d.(driver.SerialFramingReporter)
+	if !ok {
+		t.Fatalf("%s does not implement driver.SerialFramingReporter — every registered Icom driver is expected to (spec D3.1)", IC7300Model)
+	}
+	if got := r.StopBits(); got != 1 {
+		t.Fatalf("%s.StopBits() = %d, want 1 (8-N-1, an ASSUMED tier convention per core/driver/ic7300/doc.go, not a reading of this radio's own document)", IC7300Model, got)
+	}
+
+	got := recordSerialConfig(t)
+	_, _, err = OpenRealSessionFor(testCtx(t), IC7300Model, "/dev/nonexistent-rigprog-test-port")
+	if !errors.Is(err, errSeamRefused) {
+		t.Fatalf("OpenRealSessionFor(%q): err = %v, want it to wrap the seam's own error", IC7300Model, err)
+	}
+	if got.StopBits != 1 {
+		t.Errorf("SerialConfig.StopBits = %d, want 1 — the IC-7300's own StopBits() report must reach the port, not transport.DefaultStopBits (%d)", got.StopBits, transport.DefaultStopBits)
+	}
+}
+
+// TestOpenRealSessionFor_IC7300MK2OpensAtEightNOne is the IC-7300MK2's own
+// mirror of TestOpenRealSessionFor_IC7300OpensAtEightNOne — a SEPARATE
+// proof against a SEPARATE driver package, not a loop over the pair, on
+// the same footing as every other model-specific test in this file: the
+// IC-7300MK2's StopBits() (core/driver/ic7300mk2's own doc.go) is its OWN
+// ASSUMED tier convention, and no lift on the sibling proves anything
+// about it.
+func TestOpenRealSessionFor_IC7300MK2OpensAtEightNOne(t *testing.T) {
+	d, err := realDriverFor(IC7300MK2Model, false)
+	if err != nil {
+		t.Fatalf("realDriverFor(%q): %v", IC7300MK2Model, err)
+	}
+	r, ok := d.(driver.SerialFramingReporter)
+	if !ok {
+		t.Fatalf("%s does not implement driver.SerialFramingReporter — every registered Icom driver is expected to (spec D3.1)", IC7300MK2Model)
+	}
+	if got := r.StopBits(); got != 1 {
+		t.Fatalf("%s.StopBits() = %d, want 1 (8-N-1, an ASSUMED tier convention per core/driver/ic7300mk2/doc.go, not a reading of this radio's own document)", IC7300MK2Model, got)
+	}
+
+	got := recordSerialConfig(t)
+	_, _, err = OpenRealSessionFor(testCtx(t), IC7300MK2Model, "/dev/nonexistent-rigprog-test-port")
+	if !errors.Is(err, errSeamRefused) {
+		t.Fatalf("OpenRealSessionFor(%q): err = %v, want it to wrap the seam's own error", IC7300MK2Model, err)
+	}
+	if got.StopBits != 1 {
+		t.Errorf("SerialConfig.StopBits = %d, want 1 — the IC-7300MK2's own StopBits() report must reach the port, not transport.DefaultStopBits (%d)", got.StopBits, transport.DefaultStopBits)
 	}
 }

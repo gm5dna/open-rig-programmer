@@ -104,6 +104,21 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// and fileHasCall's ast.Inspect walk finds it regardless of what
 		// encloses it.
 		{"ic7610", "Simulated", "fakeic7610.New", "internal/fakeic7610"},
+		// The IC-7300 and IC-7300MK2 (Wave 4 task R3), this project's
+		// second Icom family and first Icom PAIR: two rows, not one,
+		// because — unlike the IC-7610 — this pair has SEPARATE driver
+		// packages and SEPARATE fakes (core/driver/ic7300 /
+		// core/driver/ic7300mk2, internal/fakeic7300 /
+		// internal/fakeic7300mk2), so each contributes its own pkg, its
+		// own Simulated token and its own fake constructor. Both fakes'
+		// New calls appear directly in internal/wiring/fake.go's
+		// fakeDrivers table (no adapter wraps either — both Port()
+		// methods already return io.ReadWriteCloser), so the AST walk
+		// finds each fakeic7300.New(...) / fakeic7300mk2.New(...) call
+		// expression exactly where the ic7610 row's comment says it
+		// would even if one had been wrapped.
+		{"ic7300", "Simulated", "fakeic7300.New", "internal/fakeic7300"},
+		{"ic7300mk2", "Simulated", "fakeic7300mk2.New", "internal/fakeic7300mk2"},
 	}
 
 	// Non-vacuity: an empty table would make the loop below a no-op and

@@ -166,6 +166,28 @@ func TestGetSupportedModels_ContainsDefaultModel(t *testing.T) {
 	if !foundIC7610 {
 		t.Errorf("GetSupportedModels() = %v, want it to contain wiring.IC7610Model %q", got, wiring.IC7610Model)
 	}
+	// The IC-7300 and IC-7300MK2 (Wave 4 task R3), on the same explicit
+	// membership footing as IC7610Model above — this pair's own driver
+	// packages and fakes are separate from the IC-7610's, so a
+	// registration that wired one but not the other would be caught here.
+	foundIC7300 := false
+	for _, m := range got {
+		if m == wiring.IC7300Model {
+			foundIC7300 = true
+		}
+	}
+	if !foundIC7300 {
+		t.Errorf("GetSupportedModels() = %v, want it to contain wiring.IC7300Model %q", got, wiring.IC7300Model)
+	}
+	foundIC7300MK2 := false
+	for _, m := range got {
+		if m == wiring.IC7300MK2Model {
+			foundIC7300MK2 = true
+		}
+	}
+	if !foundIC7300MK2 {
+		t.Errorf("GetSupportedModels() = %v, want it to contain wiring.IC7300MK2Model %q", got, wiring.IC7300MK2Model)
+	}
 }
 
 // TestConnect_EmptyModelIsTheDefaultModel pins Connect/ConnectDemo's new

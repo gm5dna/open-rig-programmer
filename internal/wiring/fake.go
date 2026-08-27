@@ -11,9 +11,13 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft710"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx10"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx101"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300mk2"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7610"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx10"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx101"
+	"github.com/gm5dna/open-rig-programmer/internal/fakeic7300"
+	"github.com/gm5dna/open-rig-programmer/internal/fakeic7300mk2"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7610"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeradio"
 )
@@ -159,6 +163,37 @@ var FTdx101MPFakeSessionOpts []fakedx101.Option
 // only because no test using it calls t.Parallel().
 var IC7610FakeSessionOpts []fakeic7610.Option
 
+// IC7300FakeSessionOpts is the IC-7300's own option source: extra
+// fakeic7300.Option values applied, on top of the always-empty production
+// default, to the IC-7300's fake rig on every OpenFakeSessionFor call in
+// this process. It is IC7610FakeSessionOpts' IC-7300 counterpart, on the
+// same terms (a separate variable, of a different element type, read at
+// CALL time inside the IC7300 entry's own newRadio closure below):
+// internal/fakeic7300 simulates the IC-7300 specifically, its Option is a
+// func(*fakeic7300.Radio) and cannot configure any other model's fake rig,
+// so a crossed application is a compile error here too.
+//
+// No production flag or GUI control populates this — it adds no second
+// ic7300.Simulated reference to any non-test file, so
+// TestSimulatedProfileTokensConfinement's new ic7300 row keeps passing.
+//
+// A test that sets it MUST restore the previous value (e.g. via
+// t.Cleanup) — this is shared, unsynchronised package state, acceptable
+// only because no test using it calls t.Parallel().
+var IC7300FakeSessionOpts []fakeic7300.Option
+
+// IC7300MK2FakeSessionOpts is the IC-7300MK2's own option source, on
+// exactly the same terms as IC7300FakeSessionOpts — see that variable's
+// doc comment. internal/fakeic7300mk2 is a SEPARATE simulator package
+// from internal/fakeic7300 (the two documents this pair is built from are
+// mutually silent about each other), so this is a separate variable of a
+// separate element type, not a second row sharing fakeic7300's.
+//
+// A test that sets it MUST restore the previous value (e.g. via
+// t.Cleanup) — this is shared, unsynchronised package state, acceptable
+// only because no test using it calls t.Parallel().
+var IC7300MK2FakeSessionOpts []fakeic7300mk2.Option
+
 // fakeRadio is everything OpenFakeSessionFor needs from a model's fake
 // rig: a port to hand the driver, and a way to shut the rig down
 // afterwards. Interface-typed rather than *fakeradio.Radio (M9c-5 E5)
@@ -197,6 +232,16 @@ var (
 	// ic7610FakeAdapter, not *fakeic7610.Radio directly. See that
 	// adapter's own doc comment for why.
 	_ fakeRadio = ic7610FakeAdapter{}
+	// The IC-7300's and IC-7300MK2's, the second Icom pair (Wave 4 task
+	// R3) — DIRECTLY, unlike the IC-7610's, and NO ADAPTER IS NEEDED FOR
+	// EITHER: internal/fakeic7300's and internal/fakeic7300mk2's own
+	// Port() methods are both already declared to return
+	// io.ReadWriteCloser (checked against each package's source before
+	// this registration, per the task brief), so *fakeic7300.Radio and
+	// *fakeic7300mk2.Radio satisfy fakeRadio as written, exactly as
+	// *fakeradio.Radio, *fakedx10.Radio and *fakedx101.Radio do above.
+	_ fakeRadio = (*fakeic7300.Radio)(nil)
+	_ fakeRadio = (*fakeic7300mk2.Radio)(nil)
 )
 
 // ic7610FakeAdapter narrows *fakeic7610.Radio's Port() — which returns
@@ -315,6 +360,14 @@ var fakeDrivers = map[string]fakeDriverEntry{
 	IC7610Model: {
 		newDriver: func() driver.Driver { return ic7610.New(ic7610.Simulated) },
 		newRadio:  func() fakeRadio { return ic7610FakeAdapter{fakeic7610.New(IC7610FakeSessionOpts...)} },
+	},
+	IC7300Model: {
+		newDriver: func() driver.Driver { return ic7300.New(ic7300.Simulated) },
+		newRadio:  func() fakeRadio { return fakeic7300.New(IC7300FakeSessionOpts...) },
+	},
+	IC7300MK2Model: {
+		newDriver: func() driver.Driver { return ic7300mk2.New(ic7300mk2.Simulated) },
+		newRadio:  func() fakeRadio { return fakeic7300mk2.New(IC7300MK2FakeSessionOpts...) },
 	},
 }
 

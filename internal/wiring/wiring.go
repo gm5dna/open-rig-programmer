@@ -55,6 +55,8 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft710"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx10"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx101"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300mk2"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7610"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
@@ -137,6 +139,32 @@ const FTdx101MPModel = "FTdx101MP"
 // they do for every Yaesu row.
 const IC7610Model = "IC-7610"
 
+// IC7300Model names the IC-7300's realDrivers/fakeDrivers key, which must
+// equal ic7300.New(...).Model() — pinned, like IC7610Model, by
+// TestDriverTableKeysMatchDriverModel walking both tables. A named
+// constant rather than a bare literal at each of its uses for the same
+// reason every other model constant is: the two table keys MUST be the
+// same string, and a typo in one alone would build a model openable for
+// real but not simulated.
+//
+// THIS IS THE SECOND ICOM REGISTRATION (Wave 4, task R3), and the FIRST
+// PAIR — the IC-7300 and IC-7300MK2 register together, in the same
+// commit, over separate driver packages and separate fakes
+// (core/driver/ic7300 / core/driver/ic7300mk2, internal/fakeic7300 /
+// internal/fakeic7300mk2), because the two documents are mutually silent
+// about each other (core/driver/ic7300/doc.go's package comment) and one
+// driver package would have carried that separation as a table rather
+// than as two packages that cannot borrow from each other by construction.
+const IC7300Model = "IC-7300"
+
+// IC7300MK2Model names the IC-7300MK2's realDrivers/fakeDrivers key, which
+// must equal ic7300mk2.New(...).Model(). See IC7300Model for the pairing
+// rationale, which applies here unchanged: a SEPARATE constant, a
+// SEPARATE driver package, a SEPARATE fake, because the two Icom
+// documents this pair is built from never reference each other and no
+// lift in one is a lift for the sibling.
+const IC7300MK2Model = "IC-7300MK2"
+
 // realDrivers is the model-keyed table of real-hardware driver
 // constructors: model name -> a constructor building THAT model's
 // real-profile driver.Driver. It is the single source of truth
@@ -211,6 +239,18 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ic7610.New(ic7610.RealHardware, ic7610.WithConsentedUnverifiedWrites())
 		}
 		return NewIC7610RealDriver()
+	},
+	IC7300Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic7300.New(ic7300.RealHardware, ic7300.WithConsentedUnverifiedWrites())
+		}
+		return NewIC7300RealDriver()
+	},
+	IC7300MK2Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic7300mk2.New(ic7300mk2.RealHardware, ic7300mk2.WithConsentedUnverifiedWrites())
+		}
+		return NewIC7300MK2RealDriver()
 	},
 }
 
@@ -418,6 +458,48 @@ func NewFTdx101MPRealDriver() driver.Driver {
 // IC7610Model row above and never this constructor.
 func NewIC7610RealDriver() driver.Driver {
 	return ic7610.New(ic7610.RealHardware)
+}
+
+// NewIC7300RealDriver builds the ic7300 driver for a real-hardware
+// session: profile ic7300.RealHardware, the zero value — the IC-7300's
+// half of the realDrivers table, split out for the same reason every
+// other model constructor above is (a test can pin the capability set the
+// real wiring path implies without opening a port).
+//
+// READ/PROBE ONLY, by the same mechanism as every other row: this
+// driver's writeTrialsComplete (core/driver/ic7300/caps.go) is FALSE, so a
+// RealHardware IC-7300 driver reports the all-Unverified capability set —
+// every mapped field's Write spec.Unverified, nothing writable on either
+// bank. No IC-7300 has been written to by this project, and the
+// capability gate refuses before any frame is built.
+//
+// THE FAIL-SAFE DIRECTION IS UNCHANGED: an unrecognised Profile value
+// selects the all-Unverified set too (ic7300.go's Capabilities switch),
+// never the simulator's write-Supported one, and the one named exception
+// — SessionOptions' ConsentUnverifiedWrites, spent from the user's own
+// recorded grant — is exactly the mechanism every other row uses, reaching
+// realDrivers' IC7300Model row above and never this constructor.
+func NewIC7300RealDriver() driver.Driver {
+	return ic7300.New(ic7300.RealHardware)
+}
+
+// NewIC7300MK2RealDriver builds the ic7300mk2 driver for a real-hardware
+// session: profile ic7300mk2.RealHardware, the zero value. Same reasoning
+// as NewIC7300RealDriver in every respect — the MK2's own write guard is
+// its OWN writeTrialsComplete constant (core/driver/ic7300mk2/caps.go),
+// false for the MK2's own reasons: "The registered sibling's FALSE is not
+// stated here" (that package's own comment) — no write trial on either
+// radio lifts anything for the other, since the two documents never
+// reference each other.
+//
+// A SEPARATE CONSTRUCTOR rather than a model parameter, deliberately, and
+// for the same reason NewFTdx101MPRealDriver is one rather than a
+// parameter on NewFTdx101DRealDriver: the driver package fixes its
+// exported surface as two thin constructors (ic7300.New / ic7300mk2.New,
+// each over its OWN package) so that a registration-table closure cannot
+// hold a forged model value.
+func NewIC7300MK2RealDriver() driver.Driver {
+	return ic7300mk2.New(ic7300mk2.RealHardware)
 }
 
 // openSerial is OpenRealSessionWith's test seam (and so OpenRealSessionFor's

@@ -209,6 +209,63 @@ var ic7610CoreThree = []spec.Field{
 // registration otherwise makes no code change to).
 var ic7610TierFields = []string{"tone_mode", "tone_tx", "tone_rx", "filter"}
 
+// ic7300CoreThree is the core set every IC-7300 bank derives, on every
+// profile — MEM and SCAN alike, since core/driver/ic7300/caps.go's
+// bankFields applies the same support to both.
+//
+// SAME MEMBERS AS ic7610CoreThree, and that is a COINCIDENCE OF INDEPENDENT
+// EVIDENCE, not a shared derivation: core/driver/ic7300 does not import
+// core/driver/ic7610, and its own bankFields was written from the IC-7300
+// FULL MANUAL alone (core/driver/ic7300/doc.go's Provenance section), which
+// happens to grade bankCoreCandidates' nine fields the same way the
+// IC-7610's CI-V Reference Guide does — FieldFrequency, FieldMode and
+// FieldTag rw, and FieldClarifier, FieldShift, FieldCTCSSState,
+// FieldCTCSSTone, FieldScanSkip and FieldTagDisplay all the zero
+// FieldSupport (core/driver/ic7300/caps.go's bankFields). A SEPARATE
+// variable, not a reuse of ic7610CoreThree, so this test's own map
+// (TestBankCoreFields_EveryRegisteredModel_Membership) states each model's
+// expectation independently rather than implying one radio's evidence
+// proves another's.
+var ic7300CoreThree = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldTag,
+}
+
+// ic7300mk2CoreThree is the IC-7300MK2's own core set, on the same
+// independent-evidence footing as ic7300CoreThree: core/driver/ic7300mk2's
+// bankFields was written from the IC-7300MK2 CI-V Reference Guide alone
+// (that document is mutually silent with the IC-7300's, per
+// core/driver/ic7300mk2/doc.go's package comment) and happens to grade the
+// same three candidates non-zero.
+var ic7300mk2CoreThree = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldTag,
+}
+
+// ic7300TierFields is what bankTierFields (app/uispec.go) derives for
+// every IC-7300 bank, on every profile: SIX of the tier's ten fields —
+// tx_frequency, tone_mode, tone_tx, tone_rx, filter and data_mode, in
+// tierFields' own declaration order — because this radio's 1A 00 record
+// maps its OWN transmit-frequency and filter/data-mode bytes, unlike the
+// IC-7610's record, which does not (core/driver/ic7300/caps.go's
+// bankFields: FieldTxFrequency, FieldFilter and FieldDataMode are all rw
+// here, all the zero FieldSupport there). The other four
+// (duplex, offset, dtcs_code, dtcs_polarity) are the zero FieldSupport on
+// this radio too, on the same footing as the IC-7610's.
+//
+// A GENUINELY DIFFERENT SHAPE from ic7610TierFields, not a lengthening of
+// it: this is the evidence this task's brief asks for — each model's own
+// tier-field set, derived from its own record, stated here rather than
+// assumed to match the tier's first Icom registration.
+var ic7300TierFields = []string{"tx_frequency", "tone_mode", "tone_tx", "tone_rx", "filter", "data_mode"}
+
+// ic7300mk2TierFields is the IC-7300MK2's own tier-field set. Its 1A 00
+// record maps the SAME nine wire-carried fields as the IC-7300's, in the
+// same shape (core/driver/ic7300mk2/caps.go's bankFields is structurally
+// identical to the IC-7300's, independently written from a different
+// document), so this list has the same MEMBERS as ic7300TierFields — a
+// separate variable for the same independent-evidence reason
+// ic7300mk2CoreThree is one rather than a reuse of ic7300CoreThree.
+var ic7300mk2TierFields = []string{"tx_frequency", "tone_mode", "tone_tx", "tone_rx", "filter", "data_mode"}
+
 // TestBankCoreFields_ExcludesEraseStructurally is M9c-6 D5a's structural
 // exclusion, and the case that shows why the zero-value test alone could
 // not carry it: spec.FieldErase is NON-zero on the FT-710's own fail-safe
@@ -405,6 +462,12 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		// own doc comment for which candidates this radio's memory record
 		// maps and which it does not.
 		"IC-7610": ic7610CoreThree,
+		// The IC-7300 and IC-7300MK2 (Wave 4 task R3): the same three
+		// candidate fields as the IC-7610's, independently derived — see
+		// ic7300CoreThree's own doc comment for why each model gets its
+		// own variable rather than a reuse of ic7610CoreThree's.
+		"IC-7300":    ic7300CoreThree,
+		"IC-7300MK2": ic7300mk2CoreThree,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {
@@ -766,6 +829,268 @@ func TestGetUISpec_RegisteredIC7610_EveryBankFieldsAndTagDisplay(t *testing.T) {
 		}
 		if !reflect.DeepEqual(b.Fields, ic7610TierFields) {
 			t.Errorf("offline IC-7610 bank %s Fields = %v, want %v", b.ID, b.Fields, ic7610TierFields)
+		}
+	}
+
+	// The contrast: the FT-710, through the same offline path, still
+	// answers Known-false and an empty Fields on every bank.
+	a.mu.Lock()
+	a.working = &codeplug.Codeplug{
+		Schema:   codeplug.CurrentSchema,
+		Radio:    codeplug.RadioInfo{Model: wiring.DefaultModel},
+		Channels: []codeplug.Channel{{Slot: "001"}},
+	}
+	a.mu.Unlock()
+	ft710, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (offline, FT-710 working copy): unexpected error: %v", err)
+	}
+	if len(ft710.Banks) == 0 {
+		t.Fatal("offline FT-710 UISpec has no banks — the contrast would be vacuous")
+	}
+	knownOff := codeplug.BoolField{State: codeplug.Known, Value: false}
+	for _, b := range ft710.Banks {
+		if b.TagDisplayDefault != knownOff {
+			t.Errorf("offline FT-710 bank %s TagDisplayDefault = %+v, want %+v", b.ID, b.TagDisplayDefault, knownOff)
+		}
+		if len(b.Fields) != 0 {
+			t.Errorf("offline FT-710 bank %s Fields = %v, want empty — the FT-710 maps none of the Icom tier's fields", b.ID, b.Fields)
+		}
+	}
+}
+
+// TestBankReadOnly_RegisteredIC7300_RealHardwareProfile is Wave 4 task R3's
+// mirror of TestBankReadOnly_RegisteredIC7610_RealHardwareProfile, for the
+// FIRST of this task's registered pair.
+//
+// The IC-7300's RealHardware profile is its all-Unverified one
+// (writeTrialsComplete is false: no IC-7300 has ever been written to by
+// this project), so its three derived core fields are Write
+// spec.Unverified on both banks — NOT spec.Unsupported, and therefore NOT
+// read-only under bankReadOnly's standing rule, on the same footing as
+// every other registered row.
+//
+// NO DISCOVERED-BANK CONTRAST, on the same footing as the IC-7610: this
+// radio has no 60M/EMG-style discovery mechanism at all. Its Banks are
+// fixed at construction — spec.BankMemory and spec.BankScan,
+// core/driver/ic7300/caps.go's baseCapabilities.
+func TestBankReadOnly_RegisteredIC7300_RealHardwareProfile(t *testing.T) {
+	caps, err := wiring.StaticCapabilities(wiring.IC7300Model)
+	if err != nil {
+		t.Fatalf("wiring.StaticCapabilities(%q): unexpected error: %v", wiring.IC7300Model, err)
+	}
+	if len(caps.Banks) == 0 {
+		t.Fatal("the registered IC-7300's static baseline has no banks — nothing asserted")
+	}
+	for _, b := range caps.Banks {
+		fields := bankCoreFields(caps, b.ID)
+		wantFields(t, "IC-7300 bank "+string(b.ID), fields, ic7300CoreThree)
+		for _, f := range fields {
+			if got := caps.FieldSupport(b.ID, f).Write; got != spec.Unverified {
+				t.Errorf("bank %s field %s Write = %v, want Unverified (the premise: nothing on a real IC-7300 is proven writable)", b.ID, f, got)
+			}
+		}
+		if bankReadOnly(caps, b.ID) {
+			t.Errorf("bankReadOnly(%s) = true, want false — Unverified is not Unsupported, and locking it would break the offline clone workflow", b.ID)
+		}
+	}
+}
+
+// TestBankReadOnly_RegisteredIC7300MK2_RealHardwareProfile is the
+// IC-7300MK2's own mirror, registered in the same commit — a SEPARATE test
+// against a SEPARATE driver package's own StaticCapabilities lookup, on
+// the same footing as every other model-specific test in this file: no
+// loop over the pair, since the pair's evidence is independent.
+func TestBankReadOnly_RegisteredIC7300MK2_RealHardwareProfile(t *testing.T) {
+	caps, err := wiring.StaticCapabilities(wiring.IC7300MK2Model)
+	if err != nil {
+		t.Fatalf("wiring.StaticCapabilities(%q): unexpected error: %v", wiring.IC7300MK2Model, err)
+	}
+	if len(caps.Banks) == 0 {
+		t.Fatal("the registered IC-7300MK2's static baseline has no banks — nothing asserted")
+	}
+	for _, b := range caps.Banks {
+		fields := bankCoreFields(caps, b.ID)
+		wantFields(t, "IC-7300MK2 bank "+string(b.ID), fields, ic7300mk2CoreThree)
+		for _, f := range fields {
+			if got := caps.FieldSupport(b.ID, f).Write; got != spec.Unverified {
+				t.Errorf("bank %s field %s Write = %v, want Unverified (the premise: nothing on a real IC-7300MK2 is proven writable)", b.ID, f, got)
+			}
+		}
+		if bankReadOnly(caps, b.ID) {
+			t.Errorf("bankReadOnly(%s) = true, want false — Unverified is not Unsupported, and locking it would break the offline clone workflow", b.ID)
+		}
+	}
+}
+
+// TestGetUISpec_RegisteredIC7300_EveryBankFieldsAndTagDisplay is Wave 4
+// task R3's mirror of
+// TestGetUISpec_RegisteredIC7610_EveryBankFieldsAndTagDisplay: GetUISpec
+// driven for the IC-7300 through real registration, connected and offline.
+//
+//   - CONNECTED to the registered fake (Live true, the Simulated profile —
+//     the `--fake --model IC-7300` path a user actually walks). This radio
+//     discovers no extra bank, so "every bank" here is just MEM and SCAN.
+//   - DISCONNECTED with an IC-7300 working copy loaded (Live false, the
+//     static RealHardware baseline, resolved by currentModel from the
+//     file's own Radio.Model) — the offline clone workflow's path.
+//
+// TagDisplayDefault must be {state: "unavailable"} on both banks of both
+// paths: the IC-7300's 1A 00 record has no display flag at all
+// (FieldTagDisplay carries the zero FieldSupport on both banks,
+// core/driver/ic7300/caps.go's bankFields).
+//
+// Fields must equal ic7300TierFields on both banks of both paths: SIX
+// tier-added fields, not the IC-7610's four — see ic7300TierFields' own
+// doc comment for which of this radio's record maps and which it does
+// not.
+func TestGetUISpec_RegisteredIC7300_EveryBankFieldsAndTagDisplay(t *testing.T) {
+	unavailable := codeplug.BoolField{State: codeplug.Unavailable}
+
+	sess, closeAll, err := wiring.OpenFakeSessionFor(testAppCtx(t), wiring.IC7300Model)
+	if err != nil {
+		t.Fatalf("wiring.OpenFakeSessionFor(%q): unexpected error: %v", wiring.IC7300Model, err)
+	}
+	t.Cleanup(func() { _ = closeAll() })
+
+	a, _ := newTestApp(t)
+	connectDirect(t, a, sess, nil)
+	got, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (connected to the IC-7300 fake): unexpected error: %v", err)
+	}
+	if !got.Live {
+		t.Error("Live = false, want true (connected to the registered fake)")
+	}
+	if len(got.Banks) != 2 {
+		t.Fatalf("banks = %v, want exactly MEM and SCAN — this radio discovers no extra bank", bankIDs(got.Banks))
+	}
+	for _, b := range got.Banks {
+		if b.TagDisplayDefault != unavailable {
+			t.Errorf("connected IC-7300 bank %s TagDisplayDefault = %+v, want %+v — this radio's memory frame has no display flag", b.ID, b.TagDisplayDefault, unavailable)
+		}
+		if !reflect.DeepEqual(b.Fields, ic7300TierFields) {
+			t.Errorf("connected IC-7300 bank %s Fields = %v, want %v", b.ID, b.Fields, ic7300TierFields)
+		}
+	}
+
+	// Offline, from an IC-7300 file: the same answers, from the static
+	// RealHardware baseline this time.
+	a.mu.Lock()
+	a.conn = nil
+	a.working = &codeplug.Codeplug{
+		Schema:   codeplug.CurrentSchema,
+		Radio:    codeplug.RadioInfo{Model: wiring.IC7300Model},
+		Channels: []codeplug.Channel{{Slot: "001"}},
+	}
+	a.mu.Unlock()
+	offline, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (offline, IC-7300 working copy): unexpected error: %v", err)
+	}
+	if offline.Live {
+		t.Error("Live = true, want false (disconnected)")
+	}
+	if len(offline.Banks) == 0 {
+		t.Fatal("offline IC-7300 UISpec has no banks — nothing asserted")
+	}
+	for _, b := range offline.Banks {
+		if b.TagDisplayDefault != unavailable {
+			t.Errorf("offline IC-7300 bank %s TagDisplayDefault = %+v, want %+v", b.ID, b.TagDisplayDefault, unavailable)
+		}
+		if !reflect.DeepEqual(b.Fields, ic7300TierFields) {
+			t.Errorf("offline IC-7300 bank %s Fields = %v, want %v", b.ID, b.Fields, ic7300TierFields)
+		}
+	}
+
+	// The contrast: the FT-710, through the same offline path, still
+	// answers Known-false and an empty Fields on every bank.
+	a.mu.Lock()
+	a.working = &codeplug.Codeplug{
+		Schema:   codeplug.CurrentSchema,
+		Radio:    codeplug.RadioInfo{Model: wiring.DefaultModel},
+		Channels: []codeplug.Channel{{Slot: "001"}},
+	}
+	a.mu.Unlock()
+	ft710, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (offline, FT-710 working copy): unexpected error: %v", err)
+	}
+	if len(ft710.Banks) == 0 {
+		t.Fatal("offline FT-710 UISpec has no banks — the contrast would be vacuous")
+	}
+	knownOff := codeplug.BoolField{State: codeplug.Known, Value: false}
+	for _, b := range ft710.Banks {
+		if b.TagDisplayDefault != knownOff {
+			t.Errorf("offline FT-710 bank %s TagDisplayDefault = %+v, want %+v", b.ID, b.TagDisplayDefault, knownOff)
+		}
+		if len(b.Fields) != 0 {
+			t.Errorf("offline FT-710 bank %s Fields = %v, want empty — the FT-710 maps none of the Icom tier's fields", b.ID, b.Fields)
+		}
+	}
+}
+
+// TestGetUISpec_RegisteredIC7300MK2_EveryBankFieldsAndTagDisplay is the
+// IC-7300MK2's own mirror, registered in the same commit — a SEPARATE test
+// against a SEPARATE driver package and a SEPARATE fake
+// (internal/fakeic7300mk2), on the same footing as every other
+// model-specific acceptance test in this file.
+func TestGetUISpec_RegisteredIC7300MK2_EveryBankFieldsAndTagDisplay(t *testing.T) {
+	unavailable := codeplug.BoolField{State: codeplug.Unavailable}
+
+	sess, closeAll, err := wiring.OpenFakeSessionFor(testAppCtx(t), wiring.IC7300MK2Model)
+	if err != nil {
+		t.Fatalf("wiring.OpenFakeSessionFor(%q): unexpected error: %v", wiring.IC7300MK2Model, err)
+	}
+	t.Cleanup(func() { _ = closeAll() })
+
+	a, _ := newTestApp(t)
+	connectDirect(t, a, sess, nil)
+	got, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (connected to the IC-7300MK2 fake): unexpected error: %v", err)
+	}
+	if !got.Live {
+		t.Error("Live = false, want true (connected to the registered fake)")
+	}
+	if len(got.Banks) != 2 {
+		t.Fatalf("banks = %v, want exactly MEM and SCAN — this radio discovers no extra bank", bankIDs(got.Banks))
+	}
+	for _, b := range got.Banks {
+		if b.TagDisplayDefault != unavailable {
+			t.Errorf("connected IC-7300MK2 bank %s TagDisplayDefault = %+v, want %+v — this radio's memory frame has no display flag", b.ID, b.TagDisplayDefault, unavailable)
+		}
+		if !reflect.DeepEqual(b.Fields, ic7300mk2TierFields) {
+			t.Errorf("connected IC-7300MK2 bank %s Fields = %v, want %v", b.ID, b.Fields, ic7300mk2TierFields)
+		}
+	}
+
+	// Offline, from an IC-7300MK2 file: the same answers, from the static
+	// RealHardware baseline this time.
+	a.mu.Lock()
+	a.conn = nil
+	a.working = &codeplug.Codeplug{
+		Schema:   codeplug.CurrentSchema,
+		Radio:    codeplug.RadioInfo{Model: wiring.IC7300MK2Model},
+		Channels: []codeplug.Channel{{Slot: "001"}},
+	}
+	a.mu.Unlock()
+	offline, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (offline, IC-7300MK2 working copy): unexpected error: %v", err)
+	}
+	if offline.Live {
+		t.Error("Live = true, want false (disconnected)")
+	}
+	if len(offline.Banks) == 0 {
+		t.Fatal("offline IC-7300MK2 UISpec has no banks — nothing asserted")
+	}
+	for _, b := range offline.Banks {
+		if b.TagDisplayDefault != unavailable {
+			t.Errorf("offline IC-7300MK2 bank %s TagDisplayDefault = %+v, want %+v", b.ID, b.TagDisplayDefault, unavailable)
+		}
+		if !reflect.DeepEqual(b.Fields, ic7300mk2TierFields) {
+			t.Errorf("offline IC-7300MK2 bank %s Fields = %v, want %v", b.ID, b.Fields, ic7300mk2TierFields)
 		}
 	}
 
