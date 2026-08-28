@@ -367,7 +367,10 @@
 //
 // ALL THREE FILES ARE OUTSIDE THIS WORKTREE'S OWNERSHIP. They are recorded
 // here, by name, as contradicting spec D3.2, and left for the Wave-4 doc
-// pass.
+// pass. DONE at tier close: all three now read "a CAT ID (four hex digits
+// on Yaesu; the CI-V address, optionally with a recorded token, on
+// Icom)", and driver.go's Identity.CATID comment additionally records the
+// tier's observed (non-uniform) casing convention.
 //
 // # 9. RULING OQ1 - THE RADIX OF THE PRINTED MODE CODES
 //

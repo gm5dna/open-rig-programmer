@@ -12,7 +12,10 @@ import "fmt"
 type Capabilities struct {
 	// Model is the radio's display name, e.g. "FT-710".
 	Model string
-	// CATID is the radio's 4-character CAT ID answer, e.g. "0800".
+	// CATID is a CAT ID (four hex digits on Yaesu; the CI-V address,
+	// optionally with a recorded token, on Icom), e.g. "0800" for an
+	// FT-710 or "98" for an IC-7610's static value. See
+	// core/driver.Identity.CATID for the tier's casing convention.
 	CATID string
 	// Banks lists every memory-slot family this radio supports.
 	Banks []Bank

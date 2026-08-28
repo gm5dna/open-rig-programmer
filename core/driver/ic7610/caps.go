@@ -252,11 +252,12 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 		// Identity carries "98" followed by the observed token; this
 		// pre-probe field carries the half that is known statically.
 		//
-		// The stale "4-character CAT ID" comments in
-		// core/spec/capabilities.go, core/driver/driver.go and
-		// core/codeplug/radioinfo.go contradict spec D3.2. Those are files
-		// this worktree does not own; doc.go records them for the Wave-4
-		// doc pass.
+		// The "4-character CAT ID" comments in core/spec/capabilities.go,
+		// core/driver/driver.go and core/codeplug/radioinfo.go, which
+		// once contradicted spec D3.2, were generalised at Wave-4 tier
+		// close (doc.go recorded them for that pass); driver.go's own
+		// Identity.CATID comment now also carries the tier's observed
+		// casing convention.
 		CATID: "98",
 		Banks: []spec.Bank{
 			{
