@@ -59,6 +59,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300mk2"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7610"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -177,6 +178,24 @@ const IC7300MK2Model = "IC-7300MK2"
 // to restate.
 const IC705Model = "IC-705"
 
+// IC9700Model names the IC-9700's realDrivers/fakeDrivers key, which must
+// equal ic9700.New(...).Model() — pinned, like every other Icom constant
+// above, by TestDriverTableKeysMatchDriverModel walking both tables.
+//
+// THIS IS THE FOURTH ICOM REGISTRATION (Wave 4, task R5), and the SECOND
+// SINGLE-MODEL one since the IC-705: a lone driver package
+// (core/driver/ic9700) and a lone fake (internal/fakeic9700), on the same
+// one-row footing as IC705Model above — no sibling, no pairing rationale
+// to restate.
+//
+// UNLIKE EVERY OTHER REGISTERED ICOM MODEL, this radio's static Banks is
+// THREE, not two: MEM, SCAN and CALL (core/driver/ic9700/caps.go's banks),
+// all DENSE (321 addressable slots total, completely enumerable — no
+// group-addressed sparse space of the kind the IC-705 declares). Nothing
+// about registration itself changes for a third bank; it is app/uispec.go's
+// own bank-shape tests that have to say so, not this table.
+const IC9700Model = "IC-9700"
+
 // realDrivers is the model-keyed table of real-hardware driver
 // constructors: model name -> a constructor building THAT model's
 // real-profile driver.Driver. It is the single source of truth
@@ -269,6 +288,12 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ic705.New(ic705.RealHardware, ic705.WithConsentedUnverifiedWrites())
 		}
 		return NewIC705RealDriver()
+	},
+	IC9700Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic9700.New(ic9700.RealHardware, ic9700.WithConsentedUnverifiedWrites())
+		}
+		return NewIC9700RealDriver()
 	},
 }
 
@@ -541,6 +566,29 @@ func NewIC7300MK2RealDriver() driver.Driver {
 // realDrivers' IC705Model row above and never this constructor.
 func NewIC705RealDriver() driver.Driver {
 	return ic705.New(ic705.RealHardware)
+}
+
+// NewIC9700RealDriver builds the ic9700 driver for a real-hardware
+// session: profile ic9700.RealHardware, the zero value — the IC-9700's
+// half of the realDrivers table, split out for the same reason every
+// other model constructor above is (a test can pin the capability set
+// the real wiring path implies without opening a port).
+//
+// READ/PROBE ONLY, by the same mechanism as every other row: this
+// driver's writeTrialsComplete (core/driver/ic9700/caps.go) is FALSE, so a
+// RealHardware IC-9700 driver reports the all-Unverified capability set —
+// every mapped field's Write spec.Unverified, nothing writable on any of
+// its three banks. No IC-9700 has been written to by this project, and
+// the capability gate refuses before any frame is built.
+//
+// THE FAIL-SAFE DIRECTION IS UNCHANGED: an unrecognised Profile value
+// selects the all-Unverified set too (ic9700.go's Capabilities switch),
+// never the simulator's write-Supported one, and the one named exception
+// — SessionOptions' ConsentUnverifiedWrites, spent from the user's own
+// recorded grant — is exactly the mechanism every other row uses, reaching
+// realDrivers' IC9700Model row above and never this constructor.
+func NewIC9700RealDriver() driver.Driver {
+	return ic9700.New(ic9700.RealHardware)
 }
 
 // openSerial is OpenRealSessionWith's test seam (and so OpenRealSessionFor's

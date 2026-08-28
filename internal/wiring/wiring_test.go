@@ -986,7 +986,7 @@ func TestSupportedModels_SortedNonEmpty(t *testing.T) {
 // deleting a constant cannot make this test agree with the change.
 func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	got := SupportedModels()
-	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705"} {
+	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700"} {
 		found := false
 		for _, m := range got {
 			if m == want {
@@ -1024,6 +1024,9 @@ func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	}
 	if IC705Model != "IC-705" {
 		t.Errorf("IC705Model = %q, want \"IC-705\"", IC705Model)
+	}
+	if IC9700Model != "IC-9700" {
+		t.Errorf("IC9700Model = %q, want \"IC-9700\"", IC9700Model)
 	}
 }
 
@@ -1538,7 +1541,7 @@ func assertNoConsentAnywhere(t *testing.T, what string, caps spec.Capabilities) 
 // transform); core/driver/ft710's own tests own that proof, and
 // TestRealDriverFor_DefaultPathByteIdentical below covers its default path.
 func TestOpenRealSessionWith_ConsentedSessionCaps(t *testing.T) {
-	for _, model := range []string{FTdx10Model, FTdx101DModel, FTdx101MPModel, IC7610Model, IC7300Model, IC7300MK2Model, IC705Model} {
+	for _, model := range []string{FTdx10Model, FTdx101DModel, FTdx101MPModel, IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model} {
 		t.Run(model, func(t *testing.T) {
 			fakePortSeam(t, model)
 
@@ -1623,6 +1626,7 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		{IC7300Model, NewIC7300RealDriver},
 		{IC7300MK2Model, NewIC7300MK2RealDriver},
 		{IC705Model, NewIC705RealDriver},
+		{IC9700Model, NewIC9700RealDriver},
 	} {
 		got, err := realDriverFor(tc.model, false)
 		if err != nil {
@@ -1723,6 +1727,12 @@ func TestNeedsUnverifiedConsent_PerModel(t *testing.T) {
 		// its RealHardware profile carries a write-side Unverified field
 		// this predicate must find.
 		IC705Model: true,
+		// The IC-9700's writeTrialsComplete (core/driver/ic9700/caps.go)
+		// is FALSE, on the same footing as every other registered Icom
+		// model: no IC-9700 has ever been written to by this project, so
+		// its RealHardware profile carries a write-side Unverified field
+		// this predicate must find, on all three of its banks.
+		IC9700Model: true,
 	}
 	models := SupportedModels()
 	if len(models) != len(want) {
@@ -1967,10 +1977,11 @@ func TestOpenRealSessionFor_StopBitsRefuseAnImpossibleReport(t *testing.T) {
 var yaesuModels = []string{DefaultModel, FTdx10Model, FTdx101DModel, FTdx101MPModel}
 
 // icomModels names every registered Icom model, on the same by-name
-// footing as yaesuModels — four rows now (the IC-7610, the IC-7300 pair
-// added by Wave 4 task R3, and the IC-705 added by Wave 4 task R4),
-// growing by one or two per Wave-4 family registration.
-var icomModels = []string{IC7610Model, IC7300Model, IC7300MK2Model, IC705Model}
+// footing as yaesuModels — five rows now (the IC-7610, the IC-7300 pair
+// added by Wave 4 task R3, the IC-705 added by Wave 4 task R4, and the
+// IC-9700 added by Wave 4 task R5), growing by one or two per Wave-4
+// family registration.
+var icomModels = []string{IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model}
 
 // TestYaesuAndIcomModelsPartitionSupportedModels restores the two-way
 // drift alarm the old len(models) != 4 pins gave for free and fix round 1
@@ -2265,5 +2276,36 @@ func TestOpenRealSessionFor_IC705OpensAtEightNOne(t *testing.T) {
 	}
 	if got.StopBits != 1 {
 		t.Errorf("SerialConfig.StopBits = %d, want 1 — the IC-705's own StopBits() report must reach the port, not transport.DefaultStopBits (%d)", got.StopBits, transport.DefaultStopBits)
+	}
+}
+
+// TestOpenRealSessionFor_IC9700OpensAtEightNOne is
+// TestOpenRealSessionFor_IC7610OpensAtEightNOne's mirror for the IC-9700
+// (Wave 4 task R5): the same proof, against the FIFTH registered Icom
+// driver, that core/driver/ic9700's own StopBits() == 1 report actually
+// reaches OpenRealSessionFor's port configuration through the wiring-side
+// stopBitsFor consultation, which needed no code change for this
+// registration either — the THREE-BANK shape of this driver's caps has no
+// bearing on framing, which is a serial-link property, not a bank one.
+func TestOpenRealSessionFor_IC9700OpensAtEightNOne(t *testing.T) {
+	d, err := realDriverFor(IC9700Model, false)
+	if err != nil {
+		t.Fatalf("realDriverFor(%q): %v", IC9700Model, err)
+	}
+	r, ok := d.(driver.SerialFramingReporter)
+	if !ok {
+		t.Fatalf("%s does not implement driver.SerialFramingReporter — every registered Icom driver is expected to (spec D3.1)", IC9700Model)
+	}
+	if got := r.StopBits(); got != 1 {
+		t.Fatalf("%s.StopBits() = %d, want 1 (an ASSUMED value per core/driver/ic9700's own StopBits doc comment — this radio's CI-V Reference Guide prints no bit count, parity or stop-bit count for any port)", IC9700Model, got)
+	}
+
+	got := recordSerialConfig(t)
+	_, _, err = OpenRealSessionFor(testCtx(t), IC9700Model, "/dev/nonexistent-rigprog-test-port")
+	if !errors.Is(err, errSeamRefused) {
+		t.Fatalf("OpenRealSessionFor(%q): err = %v, want it to wrap the seam's own error", IC9700Model, err)
+	}
+	if got.StopBits != 1 {
+		t.Errorf("SerialConfig.StopBits = %d, want 1 — the IC-9700's own StopBits() report must reach the port, not transport.DefaultStopBits (%d)", got.StopBits, transport.DefaultStopBits)
 	}
 }

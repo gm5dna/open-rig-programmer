@@ -229,12 +229,17 @@ var tierFields = []spec.Field{
 // for the IC-7300 and IC-7300MK2 (the IC-7610's four plus tx_frequency
 // and data_mode, pinned by
 // TestGetUISpec_RegisteredIC7300_EveryBankFieldsAndTagDisplay and its
-// MK2 mirror), and ALL TEN for the IC-705 (this radio's 111-byte record
-// additionally maps duplex, offset, dtcs_code and dtcs_polarity — none of
-// which any other registered Icom model's record carries — pinned by
-// TestGetUISpec_RegisteredIC705_EveryBankFieldsAndTagDisplay). A future
-// Icom registration extends this same list with its own model-specific
-// set; nothing here needs to change for it to.
+// MK2 mirror), and ALL TEN for the IC-705 and the IC-9700 (each radio's
+// own 111-byte record additionally maps duplex, offset, dtcs_code and
+// dtcs_polarity — none of which the IC-7610 or the IC-7300 pair's record
+// carries — pinned by
+// TestGetUISpec_RegisteredIC705_EveryBankFieldsAndTagDisplay and
+// TestGetUISpec_RegisteredIC9700_EveryBankFieldsAndTagDisplay). The
+// IC-9700's own three banks (MEM, SCAN, CALL, core/driver/ic9700/caps.go)
+// each reach the same ten — bankFields grades all three identically — so
+// a third bank changed no field COUNT, only how many BankViews carry it.
+// A future Icom registration extends this same list with its own
+// model-specific set; nothing here needs to change for it to.
 func bankTierFields(caps spec.Capabilities, id spec.BankID) []string {
 	var out []string
 	for _, f := range tierFields {

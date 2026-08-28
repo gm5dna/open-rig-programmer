@@ -199,6 +199,17 @@ func TestGetSupportedModels_ContainsDefaultModel(t *testing.T) {
 	if !foundIC705 {
 		t.Errorf("GetSupportedModels() = %v, want it to contain wiring.IC705Model %q", got, wiring.IC705Model)
 	}
+	// The IC-9700 (Wave 4 task R5), on the same explicit membership
+	// footing as every other Icom model above.
+	foundIC9700 := false
+	for _, m := range got {
+		if m == wiring.IC9700Model {
+			foundIC9700 = true
+		}
+	}
+	if !foundIC9700 {
+		t.Errorf("GetSupportedModels() = %v, want it to contain wiring.IC9700Model %q", got, wiring.IC9700Model)
+	}
 }
 
 // TestConnect_EmptyModelIsTheDefaultModel pins Connect/ConnectDemo's new

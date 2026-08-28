@@ -58,6 +58,21 @@ func ic705SlotViews(slots ...string) []SlotView {
 	return out
 }
 
+// ic9700SlotViews builds the SlotViews a list of this radio's canonical
+// <band>-<channel> slots must produce. Display equals Slot for every one
+// of them, on the same footing as ic705SlotViews above: every IC-9700
+// slot string (144-001, 144-P1A, 144-C1, and their longer siblings) is
+// longer than three characters, so codeplug.DisplaySlot's rewrite — which
+// applies only to three-character slot strings — never touches any of
+// them.
+func ic9700SlotViews(slots ...string) []SlotView {
+	out := make([]SlotView, 0, len(slots))
+	for _, s := range slots {
+		out = append(out, SlotView{Slot: s, Display: s})
+	}
+	return out
+}
+
 // TestBankReadOnly_Table is a pure unit test of bankReadOnly against
 // hand-built spec.Capabilities, independent of App/session plumbing —
 // table-driven per the task's TDD requirement.
@@ -310,6 +325,35 @@ var ic705CoreThree = []spec.Field{
 // assumed to match any prior registration.
 var ic705TierFields = []string{"tx_frequency", "duplex", "offset", "tone_mode", "tone_tx", "tone_rx", "dtcs_code", "dtcs_polarity", "filter", "data_mode"}
 
+// ic9700CoreThree is the core set every IC-9700 bank derives, on every
+// profile — MEM, SCAN and CALL alike, since core/driver/ic9700/caps.go's
+// bankFields (identical on all three banks) applies the same support to
+// each.
+//
+// SAME MEMBERS AS ic7610CoreThree, ic7300CoreThree AND ic705CoreThree, and
+// that is a COINCIDENCE OF INDEPENDENT EVIDENCE, not a shared derivation,
+// on the same footing as ic705CoreThree's own doc comment:
+// core/driver/ic9700 does not import any sibling package, and its own
+// bankFields was written from the IC-9700 CI-V Reference Guide alone.
+var ic9700CoreThree = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldTag,
+}
+
+// ic9700TierFields is what bankTierFields (app/uispec.go) derives for
+// every IC-9700 bank, on every profile: ALL TEN of the tier's fields, in
+// tierFields' own declaration order — because this radio's 111-byte
+// record maps all thirteen of matrix §2's rw-graded rows
+// (core/driver/ic9700/caps.go's bankFields), including duplex, offset,
+// dtcs_code and dtcs_polarity, none of which the IC-7610 or the IC-7300
+// pair's record carries.
+//
+// SAME SHAPE AS ic705TierFields, and — exactly as ic9700CoreThree's own
+// doc comment says of the core set — that is independent evidence, not a
+// shared derivation: the IC-705 CI-V Reference Guide and the IC-9700 CI-V
+// Reference Guide are two unrelated documents, and neither this driver
+// nor core/driver/ic705 imports the other.
+var ic9700TierFields = []string{"tx_frequency", "duplex", "offset", "tone_mode", "tone_tx", "tone_rx", "dtcs_code", "dtcs_polarity", "filter", "data_mode"}
+
 // TestBankCoreFields_ExcludesEraseStructurally is M9c-6 D5a's structural
 // exclusion, and the case that shows why the zero-value test alone could
 // not carry it: spec.FieldErase is NON-zero on the FT-710's own fail-safe
@@ -516,6 +560,11 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		// again, independently derived — see ic705CoreThree's own doc
 		// comment for why this model gets its own variable too.
 		"IC-705": ic705CoreThree,
+		// The IC-9700 (Wave 4 task R5): the same three candidate fields
+		// again, independently derived across all three of this radio's
+		// banks — see ic9700CoreThree's own doc comment for why this
+		// model gets its own variable too.
+		"IC-9700": ic9700CoreThree,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {
@@ -1012,6 +1061,52 @@ func TestBankReadOnly_RegisteredIC705_RealHardwareProfile(t *testing.T) {
 	}
 }
 
+// TestBankReadOnly_RegisteredIC9700_RealHardwareProfile is Wave 4 task
+// R5's mirror of TestBankReadOnly_RegisteredIC705_RealHardwareProfile,
+// for this task's registered lone model.
+//
+// The IC-9700's RealHardware profile is its all-Unverified one
+// (writeTrialsComplete is false: no IC-9700 has ever been written to by
+// this project), so its three derived core fields are Write
+// spec.Unverified on EVERY bank — NOT spec.Unsupported, and therefore NOT
+// read-only under bankReadOnly's standing rule, on the same footing as
+// every other registered row.
+//
+// THREE BANKS, not two: MEM, SCAN and CALL (core/driver/ic9700/caps.go's
+// banks), all DENSE and all graded identically by bankFields — the loop
+// below walks all three and the len(caps.Banks) assertion pins the count
+// so a future change that silently dropped one of them would fail here
+// rather than in a test that only ever iterates what caps.Banks happens
+// to return.
+//
+// NO DISCOVERED-BANK CONTRAST, on the same footing as every other
+// registered Icom model: this radio has no 60M/EMG-style discovery
+// mechanism at all. Its three Banks are fixed at construction, and their
+// DENSE shape (321 addressable slots total, completely enumerable) does
+// not change what StaticCapabilities' write-side grading is, which is
+// the one thing this test asserts.
+func TestBankReadOnly_RegisteredIC9700_RealHardwareProfile(t *testing.T) {
+	caps, err := wiring.StaticCapabilities(wiring.IC9700Model)
+	if err != nil {
+		t.Fatalf("wiring.StaticCapabilities(%q): unexpected error: %v", wiring.IC9700Model, err)
+	}
+	if len(caps.Banks) != 3 {
+		t.Fatalf("the registered IC-9700's static baseline has %d banks, want exactly 3 (MEM, SCAN, CALL)", len(caps.Banks))
+	}
+	for _, b := range caps.Banks {
+		fields := bankCoreFields(caps, b.ID)
+		wantFields(t, "IC-9700 bank "+string(b.ID), fields, ic9700CoreThree)
+		for _, f := range fields {
+			if got := caps.FieldSupport(b.ID, f).Write; got != spec.Unverified {
+				t.Errorf("bank %s field %s Write = %v, want Unverified (the premise: nothing on a real IC-9700 is proven writable)", b.ID, f, got)
+			}
+		}
+		if bankReadOnly(caps, b.ID) {
+			t.Errorf("bankReadOnly(%s) = true, want false — Unverified is not Unsupported, and locking it would break the offline clone workflow", b.ID)
+		}
+	}
+}
+
 // TestGetUISpec_RegisteredIC7300_EveryBankFieldsAndTagDisplay is Wave 4
 // task R3's mirror of
 // TestGetUISpec_RegisteredIC7610_EveryBankFieldsAndTagDisplay: GetUISpec
@@ -1350,6 +1445,212 @@ func TestGetUISpec_RegisteredIC705_EveryBankFieldsAndTagDisplay(t *testing.T) {
 		}
 		if !reflect.DeepEqual(b.Fields, ic705TierFields) {
 			t.Errorf("offline IC-705 bank %s Fields = %v, want %v", b.ID, b.Fields, ic705TierFields)
+		}
+	}
+
+	// The contrast: the FT-710, through the same offline path, still
+	// answers Known-false and an empty Fields on every bank.
+	a.mu.Lock()
+	a.working = &codeplug.Codeplug{
+		Schema:   codeplug.CurrentSchema,
+		Radio:    codeplug.RadioInfo{Model: wiring.DefaultModel},
+		Channels: []codeplug.Channel{{Slot: "001"}},
+	}
+	a.mu.Unlock()
+	ft710, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (offline, FT-710 working copy): unexpected error: %v", err)
+	}
+	if len(ft710.Banks) == 0 {
+		t.Fatal("offline FT-710 UISpec has no banks — the contrast would be vacuous")
+	}
+	knownOff := codeplug.BoolField{State: codeplug.Known, Value: false}
+	for _, b := range ft710.Banks {
+		if b.TagDisplayDefault != knownOff {
+			t.Errorf("offline FT-710 bank %s TagDisplayDefault = %+v, want %+v", b.ID, b.TagDisplayDefault, knownOff)
+		}
+		if len(b.Fields) != 0 {
+			t.Errorf("offline FT-710 bank %s Fields = %v, want empty — the FT-710 maps none of the Icom tier's fields", b.ID, b.Fields)
+		}
+	}
+}
+
+// TestGetUISpec_RegisteredIC9700_EveryBankFieldsAndTagDisplay is Wave 4
+// task R5's mirror of
+// TestGetUISpec_RegisteredIC705_EveryBankFieldsAndTagDisplay: GetUISpec
+// driven for the IC-9700 through real registration, connected and
+// offline — for a THREE-BANK, ALL-DENSE model, the first this file's
+// exemplar tests have covered.
+//
+//   - CONNECTED to the registered fake (Live true, the Simulated profile
+//     — the `--fake --model IC-9700` path a user actually walks). "Every
+//     bank" here is MEM, SCAN and CALL: this radio discovers no extra
+//     bank, and its Banks are fixed at construction
+//     (core/driver/ic9700/caps.go's banks).
+//   - DISCONNECTED with an IC-9700 working copy loaded (Live false, the
+//     static RealHardware baseline, resolved by currentModel from the
+//     file's own Radio.Model) — the offline clone workflow's path.
+//
+// BankView.Slots is asserted on ALL THREE banks of BOTH paths, with this
+// radio's OWN slot spelling (core/driver/ic9700/slots.go's
+// <band>-<channel> forms — "144-001", "144-P1A", "144-C1" and their
+// siblings), never a borrowed placeholder like "001".
+//
+// CONNECTED: this radio is DENSE, not sparse (unlike the IC-705's MEM
+// bank) — every bank's Slots is the SAME completely-enumerable canonical
+// list whether or not anything is connected (core/driver/ic9700/caps.go's
+// banks calls bankSlots(id) unconditionally, with no runtime discovery
+// step), so the fake needs no seeding at all for this assertion to mean
+// something: the expected lists here are RECOMPUTED from
+// wiring.StaticCapabilities' own bank.Slots (the ground truth this
+// driver's own slots.go builds), not hand-typed — the same
+// recompute-rather-than-hardcode discipline
+// TestGetUISpec_SlotClassification_DenseBanksUnchangedByWithinSpace uses
+// for the four Yaesu models — because hand-typing 321 slot strings is 321
+// chances to mistype one, exactly the risk core/driver/ic9700/slots.go's
+// own bankSlots doc comment names. The sanity-check loop below confirms
+// three REAL addresses are actually present in that recomputed list, so
+// the comparison is not merely the derivation checked against itself.
+//
+// OFFLINE: the working copy carries a small, deliberately chosen set of
+// this radio's OWN slot strings, one per bank plus an orphan
+// ("999-001" — band 999 does not exist on this radio; matrix §1 #11's
+// printed band codes are 01, 02 and 03 only), and the assertion is exact
+// membership: on a DENSE bank spec.Bank.WithinSpace IS literal Slots
+// membership (app/uispec.go's bankSlotViews doc comment), so only the
+// three seeded real slots may appear, each in its own bank, and the
+// orphan must appear in none.
+//
+// TagDisplayDefault must be {state: "unavailable"} on all three banks of
+// both paths: the IC-9700's 1A 00 record has no display flag at all
+// (FieldTagDisplay carries the zero FieldSupport on every bank,
+// core/driver/ic9700/caps.go's bankFields).
+//
+// Fields must equal ic9700TierFields on all three banks of both paths:
+// ALL TEN tier-added fields, on the same footing as the IC-705 — see
+// ic9700TierFields' own doc comment.
+func TestGetUISpec_RegisteredIC9700_EveryBankFieldsAndTagDisplay(t *testing.T) {
+	unavailable := codeplug.BoolField{State: codeplug.Unavailable}
+	wantBanks := []string{"MEM", "SCAN", "CALL"}
+
+	staticCaps, err := wiring.StaticCapabilities(wiring.IC9700Model)
+	if err != nil {
+		t.Fatalf("wiring.StaticCapabilities(%q): unexpected error: %v", wiring.IC9700Model, err)
+	}
+	staticBankIDs := make([]string, len(staticCaps.Banks))
+	for i, b := range staticCaps.Banks {
+		staticBankIDs[i] = string(b.ID)
+	}
+	if !reflect.DeepEqual(staticBankIDs, wantBanks) {
+		t.Fatalf("static banks = %v, want exactly %v", staticBankIDs, wantBanks)
+	}
+	wantSlotsFor := make(map[string][]SlotView, 3)
+	for _, b := range staticCaps.Banks {
+		if b.Sparse {
+			t.Fatalf("static bank %s is Sparse — the IC-9700 is DENSE by design (core/driver/ic9700/caps.go); this test's whole premise no longer holds", b.ID)
+		}
+		if len(b.Slots) == 0 {
+			t.Fatalf("static bank %s lists no slots — nothing to compare against", b.ID)
+		}
+		wantSlotsFor[string(b.ID)] = slotViewsFor(b.Slots)
+	}
+	// Spot-check: these are this radio's own canonical slot strings
+	// (core/driver/ic9700/slots.go), not fabricated placeholders, and
+	// their presence here is what makes the comparison below meaningful
+	// rather than the derivation checked against itself.
+	for bankID, want := range map[string]string{"MEM": "144-001", "SCAN": "144-P1A", "CALL": "144-C1"} {
+		found := false
+		for _, sv := range wantSlotsFor[bankID] {
+			if sv.Slot == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("wantSlotsFor[%q] does not contain %q — this test's own fixture is wrong", bankID, want)
+		}
+	}
+
+	sess, closeAll, err := wiring.OpenFakeSessionFor(testAppCtx(t), wiring.IC9700Model)
+	if err != nil {
+		t.Fatalf("wiring.OpenFakeSessionFor(%q): unexpected error: %v", wiring.IC9700Model, err)
+	}
+	t.Cleanup(func() { _ = closeAll() })
+
+	a, _ := newTestApp(t)
+	connectDirect(t, a, sess, nil)
+	got, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (connected to the IC-9700 fake): unexpected error: %v", err)
+	}
+	if !got.Live {
+		t.Error("Live = false, want true (connected to the registered fake)")
+	}
+	if !reflect.DeepEqual(bankIDs(got.Banks), wantBanks) {
+		t.Fatalf("connected banks = %v, want exactly %v — this radio discovers no extra bank", bankIDs(got.Banks), wantBanks)
+	}
+	for _, b := range got.Banks {
+		if !reflect.DeepEqual(b.Slots, wantSlotsFor[b.ID]) {
+			t.Errorf("connected IC-9700 bank %s Slots has %d entries, want %d matching the static baseline's own canonical list — a DENSE bank discovers nothing at open time", b.ID, len(b.Slots), len(wantSlotsFor[b.ID]))
+		}
+		if b.TagDisplayDefault != unavailable {
+			t.Errorf("connected IC-9700 bank %s TagDisplayDefault = %+v, want %+v — this radio's memory frame has no display flag", b.ID, b.TagDisplayDefault, unavailable)
+		}
+		if !reflect.DeepEqual(b.Fields, ic9700TierFields) {
+			t.Errorf("connected IC-9700 bank %s Fields = %v, want %v", b.ID, b.Fields, ic9700TierFields)
+		}
+	}
+
+	// Offline, from an IC-9700 file: the same answers, from the static
+	// RealHardware baseline this time — and the working copy's own
+	// slots, classified by each bank's SPACE (which on a DENSE bank is
+	// literal Slots membership).
+	a.mu.Lock()
+	a.conn = nil
+	a.working = &codeplug.Codeplug{
+		Schema: codeplug.CurrentSchema,
+		Radio:  codeplug.RadioInfo{Model: wiring.IC9700Model},
+		Channels: []codeplug.Channel{
+			{Slot: "144-001"}, // MEM, band 144 channel 1
+			{Slot: "430-P2B"}, // SCAN, band 430, pair 2, half B
+			{Slot: "1200-C2"}, // CALL, band 1200, call channel 2
+			{Slot: "999-001"}, // no such band on this radio: an orphan
+		},
+	}
+	a.mu.Unlock()
+	offline, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (offline, IC-9700 working copy): unexpected error: %v", err)
+	}
+	if offline.Live {
+		t.Error("Live = true, want false (disconnected)")
+	}
+	if !reflect.DeepEqual(bankIDs(offline.Banks), wantBanks) {
+		t.Fatalf("offline banks = %v, want exactly %v — this driver synthesises no discovered bank", bankIDs(offline.Banks), wantBanks)
+	}
+	wantOfflineMem := ic9700SlotViews("144-001")
+	if offMem := findBank(t, offline.Banks, "MEM").Slots; !reflect.DeepEqual(offMem, wantOfflineMem) {
+		t.Errorf("offline IC-9700 MEM.Slots = %v, want %v", offMem, wantOfflineMem)
+	}
+	wantOfflineScan := ic9700SlotViews("430-P2B")
+	if offScan := findBank(t, offline.Banks, "SCAN").Slots; !reflect.DeepEqual(offScan, wantOfflineScan) {
+		t.Errorf("offline IC-9700 SCAN.Slots = %v, want %v", offScan, wantOfflineScan)
+	}
+	wantOfflineCall := ic9700SlotViews("1200-C2")
+	if offCall := findBank(t, offline.Banks, "CALL").Slots; !reflect.DeepEqual(offCall, wantOfflineCall) {
+		t.Errorf("offline IC-9700 CALL.Slots = %v, want %v", offCall, wantOfflineCall)
+	}
+	for _, b := range offline.Banks {
+		for _, s := range b.Slots {
+			if s.Slot == "999-001" {
+				t.Errorf("offline IC-9700 bank %s claims slot 999-001, which names a band this radio does not have — it must stay an orphan", b.ID)
+			}
+		}
+		if b.TagDisplayDefault != unavailable {
+			t.Errorf("offline IC-9700 bank %s TagDisplayDefault = %+v, want %+v", b.ID, b.TagDisplayDefault, unavailable)
+		}
+		if !reflect.DeepEqual(b.Fields, ic9700TierFields) {
+			t.Errorf("offline IC-9700 bank %s Fields = %v, want %v", b.ID, b.Fields, ic9700TierFields)
 		}
 	}
 

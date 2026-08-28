@@ -312,7 +312,7 @@
 // half-labels as "1 kHz / 100 Hz, 100 kHz / 10 kHz, 10 MHz / 1 MHz" and
 // derives 600 kHz, the reading this profile implements. ONE OF THE TWO IS
 // WRONG ABOUT THE PAGE, and matrix Erratum 14 records the disagreement as
-// UNRESOLVED by any of the fourteen existing errata. WHAT DEPENDS ON IT:
+// UNRESOLVED by any of the seventeen existing errata. WHAT DEPENDS ON IT:
 // every duplex offset this driver reads or writes; a wrong choice is a
 // factor of ten on every offset. LIFTED BY: a hardware capture of one
 // known offset, read back and compared against the value §1b's reading
