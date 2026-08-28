@@ -78,10 +78,14 @@ func (a *App) ImportCSV() (ImportResultView, error) {
 	if err := csvmerge.MergeCSV(a.working, imported); err != nil {
 		return ImportResultView{Path: path, RefusalReason: err.Error()}, nil
 	}
+	// CSV import preserves an explicit v2 "absent" cell; resolve it here
+	// against the active model so unreachable fields match a radio read (see
+	// TestImportCSV_NormalisesExplicitAbsentTierField).
+	caps, _ := currentCaps(a.conn, a.working)
+	codeplug.NormaliseTierFields(a.working, caps)
 	a.bumpWorkingRevLocked() // Fix 4: working-copy channels merged
 	a.dirty = true
 
-	caps, _ := currentCaps(a.conn, a.working)
 	issues := codeplug.Validate(a.working, caps)
 	return ImportResultView{Path: path, Merged: true, Issues: issuesToView(issues), Dirty: true}, nil
 }

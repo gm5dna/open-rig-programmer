@@ -1064,7 +1064,7 @@
 		</div>
 
 		<p class="grid-legend" title="See docs/hardware-notes.md § M5b write trials">
-			{appState.uiSpec.ToneScanSkipNote}
+			{appState.uiSpec.GridLegendNote}
 			{appState.uiSpec.ToneScanSkipVerification}
 		</p>
 	{/if}

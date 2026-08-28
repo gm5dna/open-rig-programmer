@@ -123,6 +123,28 @@ func TestEngine_Close_UnblocksInFlightDo(t *testing.T) {
 	}
 }
 
+// TestEngine_NextEventAfterClose_PrefersQueuedReply pins the ordering where
+// nextEvent's blocking select wakes for a closed port after the reader has
+// already queued a complete reply. The reply belongs to the completed
+// exchange and must be delivered before ErrPortClosed is surfaced.
+func TestEngine_NextEventAfterClose_PrefersQueuedReply(t *testing.T) {
+	reply := readerEvent{frame: []byte("ID0800;")}
+	eng := &Engine{
+		events:  make(chan readerEvent, 1),
+		closeCh: make(chan struct{}),
+	}
+	eng.events <- reply
+	close(eng.closeCh)
+
+	out := eng.nextEventAfterClose()
+	if !out.hasEvent {
+		t.Fatalf("nextEventAfterClose = %+v, want the reply queued before closure", out)
+	}
+	if got, want := string(out.ev.frame), string(reply.frame); got != want {
+		t.Errorf("nextEventAfterClose frame = %q, want %q", got, want)
+	}
+}
+
 // --- Goroutine-leak check ---
 
 func TestEngine_Close_NoGoroutineLeak(t *testing.T) {

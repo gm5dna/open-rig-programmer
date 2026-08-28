@@ -74,13 +74,13 @@ type Text struct {
 	// that reads this field via radiotext.For.
 	FirmwareGuidance string
 
-	// ToneScanSkipNote is the channel grid's standing legend explaining
+	// GridLegendNote is the channel grid's standing legend explaining
 	// why the Tone/Scan Skip columns exist but cannot be read back over
 	// CAT. Verbatim: the first sentence of
 	// app/frontend/src/lib/ChannelGrid.svelte's grid-legend paragraph
 	// (the one containing "aren't carried by the FT-710's CAT
 	// protocol").
-	ToneScanSkipNote string
+	GridLegendNote string
 
 	// ToneScanSkipVerification states what is and is not hardware-verified
 	// about Tone/Scan Skip preservation across a rewrite for this radio.
@@ -145,7 +145,7 @@ type PreservationTooltips struct {
 var ft710Text = Text{
 	EraseProcedure:           "The FT-710 has no CAT erase command. To delete a channel on the radio: press and hold [V/M] to open the memory channel list, select the channel, then touch [ERASE].",
 	FirmwareGuidance:         "Memory CAT (read/write) requires firmware V01-10 or later. There is no CAT query for the firmware version — check the radio's front panel (or SD-card version screen) and enter it here before sending.",
-	ToneScanSkipNote:         "Tone and Scan Skip aren't carried by the FT-710's CAT protocol — set them on the radio.",
+	GridLegendNote:           "Tone and Scan Skip aren't carried by the FT-710's CAT protocol — set them on the radio.",
 	ToneScanSkipVerification: "Preservation across a rewrite is hardware-verified for Tone; Scan Skip preservation is not yet verified (see each cell's tooltip).",
 	EraseDialogNote:          "The FT-710 has no CAT erase command. To delete a channel on the radio: press and hold [V/M] to open the memory channel list, select the channel, then touch [ERASE].",
 	PreservationTooltips: PreservationTooltips{
@@ -203,7 +203,7 @@ var ftdx10Text = Text{
 	// state byte means anything live is unverified. An earlier wording
 	// here claimed the frame "carries the bytes" for both fields; the
 	// M9c-6 milestone review caught it contradicting the register.
-	ToneScanSkipNote: "Tone and Scan Skip are not read or written for the FTdx10 by this build — its memory frame has no tone-number or scan-skip field (only a CTCSS on/off state byte, unverified on real hardware) — so set both on the radio.",
+	GridLegendNote: "Tone and Scan Skip are not read or written for the FTdx10 by this build — its memory frame has no tone-number or scan-skip field (only a CTCSS on/off state byte, unverified on real hardware) — so set both on the radio.",
 	// DELIBERATELY EMPTY, and it is the one field that must stay empty for
 	// now. It states what IS and is NOT hardware-verified about
 	// preservation across a rewrite, and for a model pinned at
@@ -314,7 +314,7 @@ var ftdx101dText = Text{
 	// claimed here, is that no OTHER command in this manual could reach
 	// them — the FT-710's finding that none can is that radio's, and the
 	// hedge "by this build" is what keeps this sentence true either way.
-	ToneScanSkipNote: "Tone and Scan Skip are neither read nor written for the FTdx101D by this build: its memory frame has no tone-number byte and no scan-skip flag, only a CTCSS on/off state byte that no FTdx101D has ever been asked to confirm. Set both at the radio.",
+	GridLegendNote: "Tone and Scan Skip are neither read nor written for the FTdx101D by this build: its memory frame has no tone-number byte and no scan-skip flag, only a CTCSS on/off state byte that no FTdx101D has ever been asked to confirm. Set both at the radio.",
 	// DELIBERATELY EMPTY, exactly as the FTdx10's is and for the same
 	// reason: this field states what IS and is NOT hardware-verified about
 	// preservation across a rewrite, and with writeTrialsCompleteD false
@@ -376,7 +376,7 @@ var ftdx101dText = Text{
 var ftdx101mpText = Text{
 	EraseProcedure:           "The FTdx101MP's CAT command set has no erase command — its CAT manual lists the whole set, and there is none — so a memory channel can only be cleared at the radio itself. This build does not say how: the FTdx101MP's operating manual is not held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Use the memory-channel erase procedure in the radio's own operating manual.",
 	FirmwareGuidance:         "No minimum firmware version is established for the FTdx101MP: nothing this project holds states one, and no FTdx101MP has been asked. Its CAT command list carries no firmware-version query either, so read the version off the radio's own display and enter it here — it travels with the send as a record, and is not weighed against a threshold nobody has set.",
-	ToneScanSkipNote:         "Tone and Scan Skip are neither read nor written for the FTdx101MP by this build: its memory frame has no tone-number byte and no scan-skip flag, only a CTCSS on/off state byte that no FTdx101MP has ever been asked to confirm. Set both at the radio.",
+	GridLegendNote:           "Tone and Scan Skip are neither read nor written for the FTdx101MP by this build: its memory frame has no tone-number byte and no scan-skip flag, only a CTCSS on/off state byte that no FTdx101MP has ever been asked to confirm. Set both at the radio.",
 	ToneScanSkipVerification: "",
 	EraseDialogNote:          "The FTdx101MP's CAT command set has no erase command — its CAT manual lists the whole set, and there is none — so a memory channel can only be cleared at the radio itself. This build does not say how: the FTdx101MP's operating manual is not held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Use the memory-channel erase procedure in the radio's own operating manual.",
 	PreservationTooltips: PreservationTooltips{
@@ -462,7 +462,7 @@ var ic7610Text = Text{
 	// since no IC-7610 has ever answered a frame. Scan Skip is not: this
 	// radio's nearest wire nibble is a select-group marker, not a skip flag,
 	// and setting one is refused before anything reaches the radio.
-	ToneScanSkipNote: "Tone is read and written for the IC-7610 over CI-V by this build, but unverified against real hardware — no IC-7610 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble is a select-group marker, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
+	GridLegendNote: "Tone is read and written for the IC-7610 over CI-V by this build, but unverified against real hardware — no IC-7610 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble is a select-group marker, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
 	// DELIBERATELY EMPTY, exactly as every Yaesu entry's is and for the
 	// same reason: this field states what IS and is NOT hardware-verified
 	// about preservation across a rewrite, and with writeTrialsComplete
@@ -583,7 +583,7 @@ var ic7300Text = Text{
 	// Scan Skip is not: this radio's nearest wire nibble is a SELECT-group
 	// marker, not a skip flag, and setting one is refused before anything
 	// reaches the radio (core/driver/ic7300/caps.go's bankFields).
-	ToneScanSkipNote: "Tone is read and written for the IC-7300 over CI-V by this build, but unverified against real hardware — no IC-7300 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble is a select-group marker, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
+	GridLegendNote: "Tone is read and written for the IC-7300 over CI-V by this build, but unverified against real hardware — no IC-7300 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble is a select-group marker, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
 	// DELIBERATELY EMPTY, exactly as every other registered model's is and
 	// for the same reason: writeTrialsComplete is false, so there is no
 	// hardware-preservation verification of any kind to report.
@@ -690,7 +690,7 @@ var ic7300mk2Text = Text{
 	// frame. Scan Skip is not: this radio's nearest wire nibble is a
 	// SELECT-group marker, not a skip flag, and setting one is refused
 	// before anything reaches the radio.
-	ToneScanSkipNote: "Tone is read and written for the IC-7300MK2 over CI-V by this build, but unverified against real hardware — no IC-7300MK2 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble is a select-group marker, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
+	GridLegendNote: "Tone is read and written for the IC-7300MK2 over CI-V by this build, but unverified against real hardware — no IC-7300MK2 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble is a select-group marker, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
 	// DELIBERATELY EMPTY, on the same footing as every other registered
 	// model's: writeTrialsComplete is false, so there is no
 	// hardware-preservation verification of any kind to report.
@@ -802,7 +802,7 @@ var ic705Text = Text{
 	// Scan Skip is not: this radio's nearest wire nibble marks a channel
 	// into one of three select-scan groups, not a skip flag, and setting
 	// one is refused before anything reaches the radio.
-	ToneScanSkipNote: "Tone is read and written for the IC-705 over CI-V by this build, but unverified against real hardware — no IC-705 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble marks a channel into one of three select-scan groups, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
+	GridLegendNote: "Tone is read and written for the IC-705 over CI-V by this build, but unverified against real hardware — no IC-705 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble marks a channel into one of three select-scan groups, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
 	// DELIBERATELY EMPTY, exactly as every other registered model's is
 	// and for the same reason: writeTrialsComplete is false, so there is
 	// no hardware-preservation verification of any kind to report.
@@ -934,7 +934,7 @@ var ic9700Text = Text{
 	// against real hardware, since no IC-9700 has ever answered a frame.
 	// Scan Skip is not: this radio's nearest wire nibble marks a channel
 	// into one of three SELECT-memory scan groups, not a skip flag.
-	ToneScanSkipNote: "Tone is read and written for the IC-9700 over CI-V by this build, but unverified against real hardware — no IC-9700 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble marks a channel into one of three SELECT-memory scan groups (★1/★2/★3), not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
+	GridLegendNote: "Tone is read and written for the IC-9700 over CI-V by this build, but unverified against real hardware — no IC-9700 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble marks a channel into one of three SELECT-memory scan groups (★1/★2/★3), not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
 	// DELIBERATELY EMPTY, exactly as every other registered model's is
 	// and for the same reason: writeTrialsComplete is false, so there is
 	// no hardware-preservation verification of any kind to report.
@@ -1068,7 +1068,7 @@ var ic905Text = Text{
 	// Unknown, and — because this codec cannot synthesise a value it
 	// never read — a channel in that state cannot be written at all until
 	// the code is corrected.
-	ToneScanSkipNote: "Tone is read and written for the IC-905 over CI-V by this build, but unverified against real hardware — no IC-905 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble marks a channel into one of three SELECT-memory scan groups, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not. DTCS is mapped too, but its three digits are OCTAL: a code this build cannot read as three octal digits comes back Unknown rather than a number, and — because this codec has no preserve-by-cache — a channel whose DTCS code is Unknown cannot be written at all until it is corrected to a valid octal value.",
+	GridLegendNote: "Tone is read and written for the IC-905 over CI-V by this build, but unverified against real hardware — no IC-905 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble marks a channel into one of three SELECT-memory scan groups, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not. DTCS is mapped too, but its three digits are OCTAL: a code this build cannot read as three octal digits comes back Unknown rather than a number, and — because this codec has no preserve-by-cache — a channel whose DTCS code is Unknown cannot be written at all until it is corrected to a valid octal value.",
 	// DELIBERATELY EMPTY, exactly as every other registered model's is
 	// and for the same reason: writeTrialsComplete is false, so there is
 	// no hardware-preservation verification of any kind to report.

@@ -104,13 +104,17 @@ func (a *App) applyEditsLocked(chs []codeplug.Channel) (EditResult, error) {
 			return EditResult{}, &UnknownSlotError{Slot: ch.Slot}
 		}
 	}
+	caps, _ := currentCaps(a.conn, a.working)
 	for _, ch := range chs {
 		a.working.Channels[index[ch.Slot]] = ch
 	}
+	// An edit may carry bare Absent from a v2 import or frontend state; key
+	// unreachable fields before Diff can mistake them for a radio change (see
+	// TestUpdateChannel_NormalisesUnreachableAbsentTierField).
+	codeplug.NormaliseTierFields(a.working, caps)
 	a.bumpWorkingRevLocked() // Fix 4: working-copy channels mutated
 	a.dirty = true
 
-	caps, _ := currentCaps(a.conn, a.working)
 	issues := codeplug.Validate(a.working, caps)
 	return EditResult{Issues: issuesToView(issues), Dirty: a.dirty}, nil
 }
