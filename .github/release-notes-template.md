@@ -23,8 +23,9 @@
 
 Open Rig Programmer __VERSION__ — an open-source, cross-platform
 memory-channel programmer for the Yaesu FT-710, built as a free
-alternative to RT Systems' YPS-FT710, with three further Yaesu models
-registered read-only.
+alternative to RT Systems' YPS-FT710, with nine further Yaesu and Icom
+models registered, their writes gated behind opt-in consent (see
+below).
 
 ## What it does
 
@@ -50,15 +51,24 @@ registered read-only.
 | Model | Read channels | Write channels | Read menu settings | Evidence |
 | --- | --- | --- | --- | --- |
 | FT-710 | Yes | Yes | Yes | Proven against real hardware (`docs/hardware-notes.md`) |
-| FTdx10 | Yes | **No — disarmed** | Yes | CAT manual + simulator only; no real radio has been connected |
-| FTdx101D | Yes | **No — disarmed** | Yes | CAT manual + simulator only; no real radio has been connected |
-| FTdx101MP | Yes | **No — disarmed** | Yes | CAT manual + simulator only; no real radio has been connected |
+| FTdx10 | Yes | ⚠️ opt-in | Yes | CAT manual + simulator only; no real radio has been connected |
+| FTdx101D | Yes | ⚠️ opt-in | Yes | CAT manual + simulator only; no real radio has been connected |
+| FTdx101MP | Yes | ⚠️ opt-in | Yes | CAT manual + simulator only; no real radio has been connected |
+| IC-7610 | Yes | ⚠️ opt-in | No | CI-V guide + simulator only; no real radio has been connected |
+| IC-7300 | Yes | ⚠️ opt-in | No | CI-V guide + simulator only; no real radio has been connected |
+| IC-7300MK2 | Yes | ⚠️ opt-in | No | CI-V guide + simulator only; no real radio has been connected |
+| IC-705 | Yes | ⚠️ opt-in | No | CI-V guide + simulator only; no real radio has been connected |
+| IC-9700 | Yes | ⚠️ opt-in | No | CI-V guide + simulator only; no real radio has been connected |
+| IC-905 | Yes | ⚠️ opt-in | No | CI-V guide + simulator only; no real radio has been connected |
 
-Writes to the three manual-derived models are disarmed in the code
-itself (nothing is writable on a real-hardware session), not merely
-untested. Each of those drivers carries a register of every assumption
-it makes and the specific capture from a real radio that would verify
-it — if you own one of these radios and want to help, open an issue.
+Writes to the nine manual-derived models are held behind an *opt-in*
+consent gate: unless you deliberately grant unverified-write consent
+for a specific model (`rigprog settings unverified-writes <model>
+on` — see README.md's *Unverified writes* section for the full
+mechanism), nothing is writable on a real-hardware session for it.
+Each of those drivers carries a register of every assumption it makes
+and the specific capture from a real radio that would verify it — if
+you own one of these radios and want to help, open an issue.
 
 ## What it deliberately does not do
 
@@ -149,9 +159,16 @@ What this release has **not** been exercised against:
   through a documented transcription-and-cross-check process, and
   exercised against simulators built independently from the same
   manuals. No real radio of any of the three has ever been connected.
-  That is why their writes are disarmed.
+  That is why their writes need your explicit opt-in consent.
+- **Any IC-7610, IC-7300, IC-7300MK2, IC-705, IC-9700 or IC-905.**
+  Everything about these six models is derived from Icom's published
+  CI-V Reference Guides through the same kind of documented process,
+  and exercised against simulators built independently from those
+  guides. No real radio of any of the six has ever been connected.
+  That is why their writes need your explicit opt-in consent too.
 
 Anything the project has not observed is labelled as such in the code
 and documentation rather than assumed. Reports from real hardware —
-especially the three read-only models, and the FT-710 on Linux — are
-the most valuable contribution this project can receive right now.
+especially the nine opt-in-write models, and the FT-710 on Linux —
+are the most valuable contribution this project can receive right
+now.
