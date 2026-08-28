@@ -205,6 +205,18 @@ func bankFields(rw spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 		spec.FieldScanSkip:    {},
 		spec.FieldErase:       {},
 		spec.FieldTxFrequency: {},
+
+		// The seven receiver per-channel fields the additions design (D8)
+		// minted for the IC-R8600: this transceiver's 64/65-byte record
+		// carries none of them, so each is a written-down zero, pinned by
+		// TestFieldGrid_GradesEverySpecFieldThereIs.
+		spec.FieldTuningStepEnabled: {},
+		spec.FieldTuningStep:        {},
+		spec.FieldProgramTuningStep: {},
+		spec.FieldAttenuator:        {},
+		spec.FieldPreamp:            {},
+		spec.FieldAntenna:           {},
+		spec.FieldIPPlus:            {},
 	}
 }
 
