@@ -33,7 +33,7 @@ func channelsEqual(t *testing.T, a, b []codeplug.Channel) bool {
 	return true
 }
 
-// yaesuTier sets every one of the ten fields the Icom tier added to
+// yaesuTier sets all seventeen fields the Icom model extensions added to
 // Unavailable and returns d — what a read of any registered radio
 // reports, what a load of a pre-tier codeplug migrates to, and what a
 // VERSION-1 CSV import produces (markTierFieldsUnavailable). The
@@ -52,6 +52,13 @@ func yaesuTier(d *codeplug.ChannelData) *codeplug.ChannelData {
 	d.DTCSPolarity = codeplug.StringField{State: codeplug.Unavailable}
 	d.Filter = codeplug.StringField{State: codeplug.Unavailable}
 	d.DataMode = codeplug.BoolField{State: codeplug.Unavailable}
+	d.TuningStepEnabled = codeplug.BoolField{State: codeplug.Unavailable}
+	d.TuningStep = codeplug.StringField{State: codeplug.Unavailable}
+	d.ProgramTuningStepHz = codeplug.FreqField{State: codeplug.Unavailable}
+	d.AttenuatorDB = codeplug.IntField{State: codeplug.Unavailable}
+	d.Preamp = codeplug.StringField{State: codeplug.Unavailable}
+	d.Antenna = codeplug.StringField{State: codeplug.Unavailable}
+	d.IPPlus = codeplug.BoolField{State: codeplug.Unavailable}
 	return d
 }
 
