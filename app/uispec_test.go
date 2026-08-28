@@ -3007,8 +3007,8 @@ func TestGetUISpec_ServesProse(t *testing.T) {
 
 	assertProse := func(t *testing.T, got UISpecView) {
 		t.Helper()
-		if got.ToneScanSkipNote != want.ToneScanSkipNote {
-			t.Errorf("ToneScanSkipNote = %q, want %q", got.ToneScanSkipNote, want.ToneScanSkipNote)
+		if got.GridLegendNote != want.GridLegendNote {
+			t.Errorf("GridLegendNote = %q, want %q", got.GridLegendNote, want.GridLegendNote)
 		}
 		if got.ToneScanSkipVerification != want.ToneScanSkipVerification {
 			t.Errorf("ToneScanSkipVerification = %q, want %q", got.ToneScanSkipVerification, want.ToneScanSkipVerification)
@@ -3061,7 +3061,7 @@ func TestGetUISpec_ServesProse(t *testing.T) {
 // FT-710's (pinned non-empty first, so this cannot pass vacuously).
 func TestGetUISpec_ProseFollowsResolvedModel(t *testing.T) {
 	ft710Text, ok := radiotext.For(wiring.DefaultModel)
-	if !ok || ft710Text.ToneScanSkipNote == "" || ft710Text.EraseDialogNote == "" {
+	if !ok || ft710Text.GridLegendNote == "" || ft710Text.EraseDialogNote == "" {
 		t.Fatalf("test setup: radiotext.For(%q) ok=%v with empty prose — the contrast below would be vacuous", wiring.DefaultModel, ok)
 	}
 	recogniseTestModel(t)
@@ -3083,7 +3083,7 @@ func TestGetUISpec_ProseFollowsResolvedModel(t *testing.T) {
 		name string
 		got  string
 	}{
-		{"ToneScanSkipNote", got.ToneScanSkipNote},
+		{"GridLegendNote", got.GridLegendNote},
 		{"ToneScanSkipVerification", got.ToneScanSkipVerification},
 		{"EraseDialogNote", got.EraseDialogNote},
 		{"PreservationTooltips.Tone", got.PreservationTooltips.Tone},
