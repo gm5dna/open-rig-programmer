@@ -323,17 +323,24 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 // occupiedSurpriseReason is rung 12's refusal text, in one place because a
 // test pins it verbatim.
 //
-// THE REMEDIES IT NAMES MUST ACTUALLY WORK, which is why an earlier
-// wording — "or read this slot first" — is gone: ReadChannel never adds a
-// slot to s.inventory, so a user who followed that advice met the
-// identical refusal a second time. The inventory is materialised ONCE, by
-// the walk Open performs, so the only things that change this answer are
-// re-opening the session (which re-runs discovery, and is enough when the
-// slot is inside the bounded walk's range and was merely empty when the
-// session opened) and re-opening it with WithFullInventoryWalk() (which is
-// what reaches a slot above the bounded range at all).
+// THE REMEDIES IT NAMES MUST ACTUALLY WORK, AND MUST BE REACHABLE. Two
+// wordings have been removed on that rule. "Or read this slot first" went
+// because ReadChannel never adds a slot to s.inventory, so a user who
+// followed it met the identical refusal a second time. "With
+// WithFullInventoryWalk() if the slot is outside that range" went for the
+// second half of the rule (registration review, deferred minor): the
+// advice was true of the Go API and useless to a user, since
+// internal/wiring's registry row does not pass that option and no CLI
+// flag and no GUI control exposes it — prose naming an unreachable option
+// reads as a setting the reader has failed to find. The inventory is
+// materialised ONCE, by the walk Open performs, so the one thing that
+// changes this answer from where the user stands is re-opening the
+// session, which re-runs discovery and is enough whenever the slot is
+// inside the bounded walk's range and was merely empty when the session
+// opened. For a slot ABOVE that range the honest answer is the BOUND
+// itself, which is what the text now gives.
 func occupiedSurpriseReason(slot string) string {
-	return fmt.Sprintf("slot %s holds a record this session's inventory never saw, and writing here would overwrite a channel nobody has looked at: this session's walk covered display groups G01-G%02d, so re-open the session to run discovery again — with WithFullInventoryWalk() if the slot is outside that range. Reading the slot does not help: ReadChannel never adds one to the inventory", slot, defaultWalkGroups)
+	return fmt.Sprintf("slot %s holds a record this session's inventory never saw, and writing here would overwrite a channel nobody has looked at: this session's walk covered display groups G01-G%02d, so re-open the session to run discovery again — a slot outside that range stays unlisted, and this build offers no setting that widens the walk. Reading the slot does not help: ReadChannel never adds one to the inventory", slot, defaultWalkGroups)
 }
 
 // requestedFields names every field this channel ASKS this radio to store,

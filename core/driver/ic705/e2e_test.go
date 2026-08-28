@@ -670,8 +670,11 @@ func TestFakeSession_OccupiedSurpriseAddIsRefused(t *testing.T) {
 	if !errors.Is(err, driver.ErrWriteRefused) {
 		t.Fatalf("WriteChannel returned %v, want an occupied-surprise refusal", err)
 	}
-	if !strings.Contains(err.Error(), "WithFullInventoryWalk") {
+	if !strings.Contains(err.Error(), "re-open the session to run discovery again") {
 		t.Errorf("the refusal %q does not name the remedy", err)
+	}
+	if strings.Contains(err.Error(), "WithFullInventoryWalk") {
+		t.Errorf("the refusal %q names a Go option no CLI flag and no GUI control reaches", err)
 	}
 	if len(res.Steps) != 0 || bounded.SetsSeen() != setsBefore {
 		t.Error("the refusal sent something")

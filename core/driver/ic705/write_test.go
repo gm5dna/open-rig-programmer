@@ -382,17 +382,24 @@ func TestAnAddToASlotTheInventoryNeverSawIsRefusedIfOccupied(t *testing.T) {
 	// remedy is only as good as the remedy: an earlier wording offered
 	// "or read this slot first", which cannot work — ReadChannel never
 	// adds a slot to the inventory, so a user who did that met this
-	// refusal again. Both remedies named here change the answer.
+	// refusal again. A later wording offered WithFullInventoryWalk(),
+	// which works in Go and not from any surface a user has: no CLI flag
+	// and no GUI control reaches it (registration review, deferred
+	// minor). The one remedy named here changes the answer, and the
+	// sentence after it states the bound rather than a second remedy.
 	var refused *driver.WriteRefusedError
 	if !errors.As(err, &refused) {
 		t.Fatalf("%v is not a *driver.WriteRefusedError", err)
 	}
-	want := "slot G11-001 holds a record this session's inventory never saw, and writing here would overwrite a channel nobody has looked at: this session's walk covered display groups G01-G10, so re-open the session to run discovery again — with WithFullInventoryWalk() if the slot is outside that range. Reading the slot does not help: ReadChannel never adds one to the inventory"
+	want := "slot G11-001 holds a record this session's inventory never saw, and writing here would overwrite a channel nobody has looked at: this session's walk covered display groups G01-G10, so re-open the session to run discovery again — a slot outside that range stays unlisted, and this build offers no setting that widens the walk. Reading the slot does not help: ReadChannel never adds one to the inventory"
 	if refused.Reason != want {
 		t.Errorf("the refusal reads\n  %q\nwant\n  %q", refused.Reason, want)
 	}
 	if strings.Contains(refused.Reason, "read this slot first") {
 		t.Error("the refusal still offers a remedy that cannot work")
+	}
+	if strings.Contains(refused.Reason, "WithFullInventoryWalk") {
+		t.Error("the refusal still names a Go option no CLI flag and no GUI control reaches")
 	}
 	if len(res.Steps) != 0 || r.Sets() != setsBefore {
 		t.Error("the occupied-surprise refusal sent something")

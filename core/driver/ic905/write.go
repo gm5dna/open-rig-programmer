@@ -277,14 +277,22 @@ func (s *Session) bankFor(slot string) (spec.BankID, bool) {
 // "has anything read or written this slot?" rather than "did the walk see
 // it?".
 //
-// The remedy is NAMED, because the user can act on it.
+// NO REMEDY IS NAMED THAT THE USER CANNOT REACH (registration review,
+// deferred minor). An earlier wording ended "or reopen the session with
+// WithFullInventoryWalk()" — a Go option internal/wiring's registry row
+// does not pass and which no CLI flag and no GUI control exposes, so a
+// user reading it could not act on it and would go looking for a setting
+// that is not there. What stays is the remedy that DOES work from where
+// the user stands (re-discover the radio, which re-runs the walk and is
+// enough whenever the slot is inside its reach), followed by the honest
+// bound for when it does not.
 func (s *Session) occupiedSurprise(slot string, readReturnedRecord bool) error {
 	if !readReturnedRecord || s.knownOccupied(slot) {
 		return nil
 	}
 	return &driver.WriteRefusedError{
 		Slot:   slot,
-		Reason: "this session's inventory does not list this slot, but the radio answered the pre-write read with a record: the discovery walk never saw it, so writing would overwrite a channel nothing has read. Re-discover the radio, or reopen the session with WithFullInventoryWalk()",
+		Reason: "this session's inventory does not list this slot, but the radio answered the pre-write read with a record: the discovery walk never saw it, so writing would overwrite a channel nothing has read. Re-discover the radio; if the slot is still not listed it lies outside the bounded walk — group 0 in full, then channel 00 of every other group and the rest of a group whose 00 answered — and this build offers no setting that widens it",
 	}
 }
 

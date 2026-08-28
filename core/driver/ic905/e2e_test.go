@@ -511,8 +511,11 @@ func TestE2E_AnAddOverAnUndiscoveredOccupiedSlotIsRefused(t *testing.T) {
 		if !errors.As(err, &wre) {
 			t.Fatalf("error = %v, want a *driver.WriteRefusedError", err)
 		}
-		if !strings.Contains(wre.Reason, "WithFullInventoryWalk") {
+		if !strings.Contains(wre.Reason, "Re-discover the radio") {
 			t.Errorf("reason = %q, want it to NAME the remedy the user can act on", wre.Reason)
+		}
+		if strings.Contains(wre.Reason, "WithFullInventoryWalk") {
+			t.Errorf("reason = %q, still names a Go option no user surface exposes", wre.Reason)
 		}
 		if n := len(setFrames(radio)); n != before {
 			t.Errorf("%d set frames reached the fake", n-before)

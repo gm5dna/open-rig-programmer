@@ -395,13 +395,27 @@ func decodeHexToken(token string) []byte {
 // CONSUMES the `FA` and returns no frame — so no branch here inspects "an
 // FA frame".
 //
-// T2: the record's LENGTH is measured FIRST. p.MemoryAnswerRecord
-// (core/civ/parse.go:110) checks AcceptsRecordLength and returns
-// *civ.RecordLengthError as `err` above before this function ever reaches
-// `got != want` below; only once that gate passes is the decoded address
-// compared with the address requested. A wrong-channel answer that is
-// ALSO the wrong length therefore reports as a length error, never as a
-// mismatch counted toward `mismatches`.
+// T2: the length gate precedes THIS FUNCTION'S address comparison — and
+// it is the second gate inside MemoryAnswerRecord, not the first.
+// p.MemoryAnswerRecord decodes the three address bytes and validates them
+// against this profile's band and channel ranges (core/civ/parse.go:105 →
+// core/civ/profile.go:316) BEFORE it checks AcceptsRecordLength
+// (core/civ/parse.go:110), so an answer whose address bytes this radio
+// could never have sent comes back as a *civ.ParseError and never reaches
+// the length check at all. What T2 pins is the ordering that matters
+// here: both of those gates return as `err` above, before this function
+// reaches `got != want` below, so a wrong-channel answer that is ALSO the
+// wrong length reports as a length error rather than as a mismatch
+// counted toward `mismatches` — and one that is also un-decodable as an
+// address reports as a parse error. `got != want` sees only answers whose
+// address decoded cleanly AND whose record length this profile accepts.
+//
+// THE ADDRESS GATE IS WHY THE IC-705 IS NOT DISTINGUISHED HERE BY LENGTH.
+// That radio shares this one's {111} record-only set and differs in
+// address width, and core/civ/tier_test.go sweeps every address either
+// radio has, in both directions: the refusal is a *civ.ParseError every
+// time and a *civ.RecordLengthError never. The open still fails, which is
+// the safety property; it simply fails unattributed.
 func probeFingerprint(ctx context.Context, p civ.Profile, eng *transport.Engine) (bool, int, error) {
 	mismatches := 0
 	for ch := 1; ch <= probeSearchChannels; ch++ {

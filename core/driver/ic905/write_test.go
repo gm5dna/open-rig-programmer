@@ -686,8 +686,18 @@ func TestWrite_AnAddToASlotTheBoundedWalkMissedIsRefused(t *testing.T) {
 	}
 	res, err := s.WriteChannel(context.Background(), writableChannel("G06-038"))
 	wre := requireRefused(t, p, res, err)
-	if !strings.Contains(wre.Reason, "WithFullInventoryWalk") {
+	// The refusal must name the remedy the user CAN act on, and must not
+	// name the one they cannot: ic905.WithFullInventoryWalk() is a Go
+	// option no CLI flag and no GUI control reaches, so the text states
+	// the bound instead (registration review, deferred minor).
+	if !strings.Contains(wre.Reason, "Re-discover the radio") {
 		t.Errorf("reason = %q, want it to NAME the remedy the user can act on", wre.Reason)
+	}
+	if !strings.Contains(wre.Reason, "no setting that widens it") {
+		t.Errorf("reason = %q, want it to state the bound for a slot the walk cannot reach", wre.Reason)
+	}
+	if strings.Contains(wre.Reason, "WithFullInventoryWalk") {
+		t.Errorf("reason = %q, still names a Go option no user surface exposes", wre.Reason)
 	}
 	if !strings.Contains(wre.Reason, "G06-038") && wre.Slot != "G06-038" {
 		t.Errorf("the refusal does not name the slot: %+v", wre)

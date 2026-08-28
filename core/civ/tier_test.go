@@ -37,13 +37,43 @@
 // TWO OF THE SIX SHARE A RECORD-ONLY LENGTH. The IC-705 and the IC-9700
 // both accept exactly {111}, so a fingerprint that compared record-only
 // lengths ALONE could not tell those two apart. What separates them is
-// the ADDRESS WIDTH — four bytes against three — and the separation is
-// real on the wire rather than notional: civ.Profile.MemoryAnswerRecord
-// strips the profile's OWN address field before AcceptsRecordLength is
-// asked, so an IC-9700's 114-byte `1A 00` data area presented to an
-// IC-705 profile is stripped by four and fingerprints as a 110-byte
-// record, which that profile refuses. TestTierRecordShapes_705And9700
-// pins that pair specifically.
+// the ADDRESS WIDTH — four bytes against three — and it does so in TWO
+// independent places, of which only the first ever fires.
+//
+// THE FIRST REFUSAL IS THE ADDRESS, NOT THE LENGTH, and the ORDER inside
+// civ.Profile.MemoryAnswerRecord (core/civ/parse.go:96) is what decides
+// that: it takes the profile's OWN address width off the front of the
+// data area, runs decodeAddress — and so validAddress
+// (core/civ/profile.go:316) — at parse.go:105, and only reaches
+// AcceptsRecordLength at parse.go:110 if that succeeded. THE TWO ADDRESS
+// GEOMETRIES ARE MUTUALLY UNDECODABLE: read four bytes off a
+// (band, channel) address and the leading `01`/`02`/`03` band byte lands
+// in the wide form's two-byte group field, giving a group of 100, 200 or
+// 300 and a channel of 100 or more; read three bytes off a
+// (group, channel) address and the wide form's leading `00` becomes a
+// band of 0, which the IC-9700 numbers from 1. Neither is in range, in
+// either direction, for ANY address either radio has —
+// TestTierRecordShapes_705And9700 sweeps all 321 of the IC-9700's and
+// all 10,100 of the IC-705's and gets a *civ.ParseError every time, and
+// a *civ.RecordLengthError never.
+//
+// THE LENGTH ARITHMETIC IS THE SECOND REFUSAL, and it is genuinely
+// independent — a 114-byte data area stripped by four is a 110-byte
+// record and a 115-byte one stripped by three is 112, neither of which
+// the other profile accepts — but the address check pre-empts it in
+// practice, so nothing observable ever reaches it. The test pins that
+// arithmetic separately, as arithmetic, rather than claiming it is what
+// fires.
+//
+// THE CONSEQUENCE IS IN THE DRIVERS, and it is worth stating plainly:
+// core/driver/ic705/ic705.go:360-367 and core/driver/ic9700/ic9700.go's
+// probeFingerprint both branch on errors.As(&lenErr) to mint a
+// driver.WrongRadioError, and FOR THIS PAIR THAT BRANCH CAN NEVER FIRE.
+// An IC-9700 moved onto A4h fails an IC-705 open with an unattributed
+// address parse error, not with "wrong radio" — the open still fails,
+// which is the safety property, but the diagnosis a user sees names no
+// model. That is a reporting limitation, recorded here rather than
+// papered over, and NOT a hole in the refusal.
 //
 // AND EVERY NUMBER HERE IS AN ASSUMED DERIVATION. No document in this
 // tier prints a record total; each per-model package derives its length
@@ -54,6 +84,7 @@
 package civ_test
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
@@ -273,16 +304,172 @@ func TestTierRecordShapes_705And9700(t *testing.T) {
 	}
 	t.Logf("IC-705 and IC-9700 share record-only %v; address widths %d and %d separate them", p705.recordLengths, p705.addressBytes, p9700.addressBytes)
 
-	// And the separation reaches the wire. civ.Profile.MemoryAnswerRecord
-	// strips the profile's OWN address field before AcceptsRecordLength
-	// is asked, so the figure that actually differs between these two
-	// radios' answers is the `1A 00` data area — and if those agreed,
-	// each profile would strip its own width off the other's answer and
-	// fingerprint it as its own record.
+	// And the separation reaches the wire: the figure that actually
+	// differs between these two radios' answers is the `1A 00` data area.
 	if !disjointLengths(p705.frameLengths, p9700.frameLengths) {
 		t.Errorf("IC-705 wire data areas %v and IC-9700's %v are not disjoint — with the record-only lengths equal, an answer from one radio would fingerprint as the other's", p705.frameLengths, p9700.frameLengths)
 	}
 	t.Logf("wire data areas: IC-705 %v, IC-9700 %v — disjoint, so an answer from one is refused by the other's profile", p705.frameLengths, p9700.frameLengths)
+
+	// THE SECOND REFUSAL, PINNED AS ARITHMETIC. Strip each profile's own
+	// address width off the OTHER's data area and the remainder is not a
+	// record either profile accepts. This is a real and independent
+	// property — but it is not the one that fires, and the sweep below is
+	// what establishes which does.
+	for _, tc := range []struct {
+		reader   civ.Profile
+		dataArea int
+		width    int
+	}{
+		{ic705.Profile(), p9700.frameLengths[0], p705.addressBytes},
+		{ic9700.Profile(), p705.frameLengths[0], p9700.addressBytes},
+	} {
+		remainder := tc.dataArea - tc.width
+		if tc.reader.AcceptsRecordLength(remainder) {
+			t.Errorf("%s accepts a record of %d bytes (%d-byte data area less its own %d-byte address) — the length arithmetic no longer separates this pair either", tc.reader.Model(), remainder, tc.dataArea, tc.width)
+		}
+		// AND THE GATE IS REACHABLE, which is what stops the sweep below
+		// passing for the wrong reason. Give this profile its OWN address
+		// geometry — so answerBody and decodeAddress both succeed — with
+		// the foreign remainder as the record, and the length check is
+		// what refuses it. Without this leg a crossAnswer frame that had
+		// been rejected by answerBody's `from` check would also count as
+		// a *civ.ParseError, and the sweep would report the wrong gate.
+		selfAddr := civ.ChannelAddress{Group: tc.reader.GroupBase(), Channel: firstChannel(tc.reader)}
+		_, _, err := tc.reader.MemoryAnswerRecord(answerFrame(t, tc.reader, tc.reader, selfAddr, remainder))
+		var lenErr *civ.RecordLengthError
+		if !errors.As(err, &lenErr) {
+			t.Errorf("%s reading a well-addressed answer carrying a %d-byte record: err = %v (%T), want a *civ.RecordLengthError — the length gate is unreachable, so the sweep below cannot say which gate refused", tc.reader.Model(), remainder, err, err)
+			continue
+		}
+		if lenErr.Got != remainder {
+			t.Errorf("%s: RecordLengthError.Got = %d, want %d", tc.reader.Model(), lenErr.Got, remainder)
+		}
+		t.Logf("%s refuses a well-addressed %d-byte record with %v — the second gate is real and reachable", tc.reader.Model(), remainder, lenErr)
+	}
+
+	// THE FIRST REFUSAL, MEASURED RATHER THAN DESCRIBED. Every address
+	// either radio has, in both directions, exhaustively: 321 for the
+	// IC-9700 (3 bands x channels 1..107) and 10,100 for the IC-705 (101
+	// groups x channels 0..99). Each one becomes the `1A 00` answer that
+	// radio would put on the wire IF IT HAD BEEN MOVED ONTO THE OTHER'S
+	// CI-V ADDRESS — the same-address confusion spec D3.2's fingerprint
+	// exists for, and the only circumstance in which these two can meet
+	// at all, since each answers at its own distinct address and a wrong
+	// one does not answer.
+	//
+	// The verdict is uniform and it is the ADDRESS: *civ.ParseError from
+	// decodeAddress every time, *civ.RecordLengthError not once.
+	sweep := func(t *testing.T, src, dst civ.Profile, addrs []civ.ChannelAddress) {
+		t.Helper()
+		if len(addrs) == 0 {
+			t.Fatalf("%s -> %s: no addresses swept — this leg would pass vacuously", src.Model(), dst.Model())
+		}
+		parseErrs, lenErrs, accepted := 0, 0, 0
+		for _, a := range addrs {
+			_, _, err := dst.MemoryAnswerRecord(crossAnswer(t, src, dst, a))
+			var lenErr *civ.RecordLengthError
+			var parseErr *civ.ParseError
+			switch {
+			case err == nil:
+				accepted++
+				if accepted == 1 {
+					t.Errorf("%s's answer for %+v is ACCEPTED by the %s profile — one radio's memory answer read as the other's, which is the whole failure this pair's separation exists to prevent", src.Model(), a, dst.Model())
+				}
+			case errors.As(err, &lenErr):
+				lenErrs++
+			case errors.As(err, &parseErr):
+				parseErrs++
+			default:
+				t.Errorf("%s's answer for %+v refused by the %s profile with an unexpected error type %T: %v", src.Model(), a, dst.Model(), err, err)
+			}
+		}
+		if accepted != 0 {
+			t.Errorf("%s -> %s: %d of %d answers accepted, want 0", src.Model(), dst.Model(), accepted, len(addrs))
+		}
+		if parseErrs != len(addrs) {
+			t.Errorf("%s -> %s: %d of %d refusals were address parse errors, want all of them", src.Model(), dst.Model(), parseErrs, len(addrs))
+		}
+		if lenErrs != 0 {
+			t.Errorf("%s -> %s: %d refusals were *civ.RecordLengthError — the doc block and the drivers' WrongRadioError branches both say this pair never reaches the length check, and that is no longer true", src.Model(), dst.Model(), lenErrs)
+		}
+		t.Logf("%s answers read by the %s profile: %d addresses, %d address parse errors, %d length errors, %d accepted", src.Model(), dst.Model(), len(addrs), parseErrs, lenErrs, accepted)
+	}
+
+	var ic9700Addrs []civ.ChannelAddress
+	lo9700, hi9700 := ic9700.Profile().ChannelRange()
+	for band := ic9700.Profile().GroupBase(); band < ic9700.Profile().GroupBase()+ic9700.Profile().Groups(); band++ {
+		for ch := lo9700; ch <= hi9700; ch++ {
+			ic9700Addrs = append(ic9700Addrs, civ.ChannelAddress{Group: band, Channel: ch})
+		}
+	}
+	var ic705Addrs []civ.ChannelAddress
+	lo705, hi705 := ic705.Profile().ChannelRange()
+	for g := ic705.Profile().GroupBase(); g < ic705.Profile().GroupBase()+ic705.Profile().Groups(); g++ {
+		for ch := lo705; ch <= hi705; ch++ {
+			ic705Addrs = append(ic705Addrs, civ.ChannelAddress{Group: g, Channel: ch})
+		}
+	}
+	if len(ic9700Addrs) != 321 {
+		t.Fatalf("swept %d IC-9700 addresses, want 321 (3 bands x 107 channels)", len(ic9700Addrs))
+	}
+	if len(ic705Addrs) != 10100 {
+		t.Fatalf("swept %d IC-705 addresses, want 10,100 (101 groups x 100 channels)", len(ic705Addrs))
+	}
+	sweep(t, ic9700.Profile(), ic705.Profile(), ic9700Addrs)
+	sweep(t, ic705.Profile(), ic9700.Profile(), ic705Addrs)
+}
+
+// crossAnswer builds the `1A 00` memory answer a radio with src's address
+// geometry and record length would put on the wire IF IT HAD BEEN MOVED
+// ONTO dst's CI-V address.
+//
+// THE MOVED ADDRESS IS THE POINT, and it is why this cannot just hand
+// dst's parser a frame src built. The six CI-V addresses are distinct, so
+// a frame carrying src's own `from` byte is refused by answerBody
+// (core/civ/parse.go:31) before any geometry is looked at — a THIRD and
+// even earlier refusal, and the one that operates in the field. What spec
+// D3.2's length fingerprint is FOR is the case that gets past it: a radio
+// moved onto this address, or a bus mis-set. So the address bytes and the
+// record width are src's, and only the two frame address bytes are dst's.
+//
+// It delegates the framing to answerFrame, which every leg of this file
+// shares.
+func crossAnswer(t *testing.T, src, dst civ.Profile, addr civ.ChannelAddress) []byte {
+	t.Helper()
+	return answerFrame(t, src, dst, addr, src.BuildRecordLength())
+}
+
+// answerFrame builds a `1A 00` answer carrying SRC's address bytes for
+// addr and a zeroed record of recordLen bytes, framed as arriving from
+// DST's radio to DST's controller.
+//
+// A zeroed record because every test here asks WHICH GATE REFUSES, and
+// under both refusals the record's contents reach no field decoder at
+// all. The address field is taken from src's OWN read frame rather than
+// re-encoded here: `1A 00 <address>` has a fixed seven-byte overhead, so
+// the bytes between the sub-command and the terminator are exactly what
+// src's encoder produced, and this helper invents no BCD of its own.
+func answerFrame(t *testing.T, src, dst civ.Profile, addr civ.ChannelAddress, recordLen int) []byte {
+	t.Helper()
+	read, err := src.BuildMemoryRead(addr)
+	if err != nil {
+		t.Fatalf("%s: BuildMemoryRead(%+v): %v", src.Model(), addr, err)
+	}
+	body := read.Bytes()
+	addrBytes := body[6 : len(body)-1]
+
+	frame := make([]byte, 0, 7+len(addrBytes)+recordLen)
+	frame = append(frame, civ.PreambleByte, civ.PreambleByte, dst.ControllerAddress(), dst.RadioAddress(), civ.CmdMemory, civ.SubMemoryContents)
+	frame = append(frame, addrBytes...)
+	frame = append(frame, make([]byte, recordLen)...)
+	return append(frame, civ.EndByte)
+}
+
+// firstChannel is the lowest channel number a profile addresses.
+func firstChannel(p civ.Profile) int {
+	lo, _ := p.ChannelRange()
+	return lo
 }
 
 // TestTierRecordShapes_CheckIsNotVacuous is the permanent red proof:
