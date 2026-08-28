@@ -958,15 +958,16 @@ type waitOutcome struct {
 // After that, anything ALREADY buffered in e.events takes priority over
 // every other case — including e.closeCh. This matters: Go's select picks
 // pseudo-randomly among simultaneously ready cases, not in the order they
-// became ready. Without this priority check, a reply that arrived (and was
-// already sitting in the buffered e.events channel) an instant before
-// Close/a disconnect fires could occasionally lose that race against
-// <-e.closeCh becoming ready, and be discarded in favour of ErrPortClosed
-// even though the real, correct answer was right there waiting to be read
-// — exactly the FaultDisconnect-right-after-a-successful-reply scenario
-// this was caught by. Checking e.events with a non-blocking select FIRST,
-// on every loop iteration, makes "drain everything already queued before
-// honouring closure" deterministic rather than a coin flip.
+// became ready. The first non-blocking check covers events queued before
+// nextEvent begins its blocking select; nextEventAfterClose covers the
+// narrower window where that select is already blocked when the reader
+// queues a complete reply and then reports EOF. Both checks are required
+// to make "hand every already-queued event to the caller before honouring
+// closure" deterministic rather than a coin flip. A queued event is only a
+// CANDIDATE: it goes through the caller's normal matching, rejection and
+// error handling like any other, since the reader may enqueue its own
+// terminal error after closing closeCh, and a stale or unsolicited frame
+// can sit in the queue too.
 //
 // capC is the deadline's other half, and only drainToQuietLocked passes a
 // non-nil one. The clock comparison above bounds a caller whose events
@@ -1002,9 +1003,25 @@ func (e *Engine) nextEvent(ctx context.Context, timeout <-chan time.Time, deadli
 	case <-capC:
 		return waitOutcome{deadlineHit: true}
 	case <-e.closeCh:
-		return waitOutcome{err: e.closedErr()}
+		return e.nextEventAfterClose()
 	case <-ctx.Done():
 		return waitOutcome{err: ctx.Err()}
+	}
+}
+
+// nextEventAfterClose resolves the blocked-select race described by
+// nextEvent: the reader queues a complete reply before it reports the port
+// closed, so an event visible now was queued no later than the closure and
+// must reach the caller's normal processing before ErrPortClosed is
+// surfaced — once the queue is empty, closure is reported.
+// TestEngine_NextEventAfterClose_PrefersQueuedReply pins this ordering
+// without scheduler timing.
+func (e *Engine) nextEventAfterClose() waitOutcome {
+	select {
+	case ev := <-e.events:
+		return waitOutcome{ev: ev, hasEvent: true}
+	default:
+		return waitOutcome{err: e.closedErr()}
 	}
 }
 

@@ -230,6 +230,10 @@ func cmdImport(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stderr, "rigprog import: %v\n", err)
 			return exitError
 		}
+		// csvio preserves an explicit v2 "absent" cell; resolve it against
+		// the selected model before validating and saving (see
+		// TestCmdImport_CSVNormalisesExplicitAbsentTierField).
+		codeplug.NormaliseTierFields(base, caps)
 	} else {
 		f, err := os.Open(*chirpIn)
 		if err != nil {

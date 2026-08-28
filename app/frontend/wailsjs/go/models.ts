@@ -868,7 +868,7 @@ export namespace main {
 	    TagMaxBytes: number;
 	    ClarMaxHz: number;
 	    ClarStepHz: number;
-	    ToneScanSkipNote: string;
+	    GridLegendNote: string;
 	    ToneScanSkipVerification: string;
 	    EraseDialogNote: string;
 	    PreservationTooltips: PreservationTooltipsView;
@@ -890,7 +890,7 @@ export namespace main {
 	        this.TagMaxBytes = source["TagMaxBytes"];
 	        this.ClarMaxHz = source["ClarMaxHz"];
 	        this.ClarStepHz = source["ClarStepHz"];
-	        this.ToneScanSkipNote = source["ToneScanSkipNote"];
+	        this.GridLegendNote = source["GridLegendNote"];
 	        this.ToneScanSkipVerification = source["ToneScanSkipVerification"];
 	        this.EraseDialogNote = source["EraseDialogNote"];
 	        this.PreservationTooltips = this.convertValues(source["PreservationTooltips"], PreservationTooltipsView);
