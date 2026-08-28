@@ -74,10 +74,10 @@
 	const bankLocked = $derived(activeBank?.ReadOnly === true)
 	const slots = $derived(activeBank?.Slots ?? [])
 	// The columns THIS bank renders: always the ten in COLUMNS, plus any
-	// field the Icom tier added that this bank's capabilities say the
+	// field the Icom model extensions added that this bank's capabilities say the
 	// radio actually has (columnsFor / BankView.Fields). For every model
-	// registered today that is exactly COLUMNS — the grid's shape does
-	// not change until a radio with those fields arrives.
+	// registered today, D8's seven remain hidden because their bank field
+	// lists do not name them.
 	const columns = $derived(columnsFor(activeBank))
 
 	/** @type {Map<string, Channel>} */
