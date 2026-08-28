@@ -71,9 +71,9 @@ const UI_SPEC = {
 	// to internal/radiotext.go's ft710Text, so the component tests below
 	// keep asserting the real, end-to-end FT-710 wording even though the
 	// component itself no longer hardcodes any of it.
-	ToneScanSkipNote: "Tone and Scan Skip aren't carried by the FT-710's CAT protocol — set them on the radio.",
+	GridLegendNote: "Tone and Scan Skip aren't carried by the FT-710's CAT protocol — set them on the radio.",
 	// m42a: the grid-legend's second sentence, previously hardcoded in
-	// ChannelGrid.svelte itself — now served the same way ToneScanSkipNote
+	// ChannelGrid.svelte itself — now served the same way GridLegendNote
 	// is, so this fixture is the only place either sentence is written out.
 	ToneScanSkipVerification:
 		"Preservation across a rewrite is hardware-verified for Tone; Scan Skip preservation is not yet verified (see each cell's tooltip).",
@@ -1080,14 +1080,14 @@ describe('legend (task 22 §3: Tone/Scan-skip discoverability)', () => {
 		)
 	})
 
-	it('task 42: an empty served ToneScanSkipNote leaves ToneScanSkipVerification rendering alone, with no hardcoded fallback for either sentence', () => {
-		appState.setUISpec({ ...UI_SPEC, ToneScanSkipNote: '' })
+	it('task 42: an empty served GridLegendNote leaves ToneScanSkipVerification rendering alone, with no hardcoded fallback for either sentence', () => {
+		appState.setUISpec({ ...UI_SPEC, GridLegendNote: '' })
 		render(ChannelGrid)
 		expect(screen.queryByText(/aren't carried by the FT-710's CAT protocol/)).not.toBeInTheDocument()
 		expect(screen.getByText(/hardware-verified for Tone/)).toBeInTheDocument()
 	})
 
-	it('m42a: an empty served ToneScanSkipVerification leaves ToneScanSkipNote rendering alone, with no hardcoded fallback for either sentence', () => {
+	it('m42a: an empty served ToneScanSkipVerification leaves GridLegendNote rendering alone, with no hardcoded fallback for either sentence', () => {
 		appState.setUISpec({ ...UI_SPEC, ToneScanSkipVerification: '' })
 		render(ChannelGrid)
 		expect(screen.getByText(/aren't carried by the FT-710's CAT protocol/)).toBeInTheDocument()
