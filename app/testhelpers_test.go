@@ -101,13 +101,13 @@ func openTestSimSession(t *testing.T, opts ...fakeradio.Option) driver.Session {
 // writableChannel returns a codeplug.Channel for slot at freqHz, USB,
 // CTCSS off, simplex, ScanSkip/CTCSSTone left Unknown (the CAT-honest
 // state) — mirrors core/clone/helpers_test.go's writableChannel.
-// yaesuTierUnavailable sets every one of the ten fields the Icom tier
+// yaesuTierUnavailable sets all seventeen fields the Icom extensions
 // added to Unavailable and returns d.
 //
-// It is what a READ of any radio registered today reports for all ten
+// It is what a READ of a Yaesu radio registered today reports for all seventeen
 // (core/driver/*/read.go), what a load of a pre-tier codeplug migrates
 // to, and what a version-1 CSV import produces. A test fixture that left
-// them at the zero value would differ from a real read in ten fields,
+// them at the zero value would differ from a real read in seventeen fields,
 // and codeplug.Diff compares ChannelData with ==, so an otherwise
 // identical channel would plan as MODIFIED.
 func yaesuTierUnavailable(d *codeplug.ChannelData) *codeplug.ChannelData {
@@ -121,6 +121,13 @@ func yaesuTierUnavailable(d *codeplug.ChannelData) *codeplug.ChannelData {
 	d.DTCSPolarity = codeplug.StringField{State: codeplug.Unavailable}
 	d.Filter = codeplug.StringField{State: codeplug.Unavailable}
 	d.DataMode = codeplug.BoolField{State: codeplug.Unavailable}
+	d.TuningStepEnabled = codeplug.BoolField{State: codeplug.Unavailable}
+	d.TuningStep = codeplug.StringField{State: codeplug.Unavailable}
+	d.ProgramTuningStepHz = codeplug.FreqField{State: codeplug.Unavailable}
+	d.AttenuatorDB = codeplug.IntField{State: codeplug.Unavailable}
+	d.Preamp = codeplug.StringField{State: codeplug.Unavailable}
+	d.Antenna = codeplug.StringField{State: codeplug.Unavailable}
+	d.IPPlus = codeplug.BoolField{State: codeplug.Unavailable}
 	return d
 }
 

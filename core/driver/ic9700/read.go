@@ -208,8 +208,15 @@ func (s *Session) channelData(rec civ.MemoryRecord) codeplug.ChannelData {
 		ToneTx: s.toneField(rec.ToneTXDeciHz),
 		ToneRx: s.toneField(rec.ToneRXDeciHz),
 
-		DTCSCode: s.dtcsField(rec.DTCSCode),
-		DataMode: codeplug.BoolField{State: codeplug.Known, Value: stringOf(rec.DataMode) == "ON"},
+		DTCSCode:            s.dtcsField(rec.DTCSCode),
+		DataMode:            codeplug.BoolField{State: codeplug.Known, Value: stringOf(rec.DataMode) == "ON"},
+		TuningStepEnabled:   codeplug.BoolField{State: codeplug.Unavailable},
+		TuningStep:          codeplug.StringField{State: codeplug.Unavailable},
+		ProgramTuningStepHz: codeplug.FreqField{State: codeplug.Unavailable},
+		AttenuatorDB:        codeplug.IntField{State: codeplug.Unavailable},
+		Preamp:              codeplug.StringField{State: codeplug.Unavailable},
+		Antenna:             codeplug.StringField{State: codeplug.Unavailable},
+		IPPlus:              codeplug.BoolField{State: codeplug.Unavailable},
 	}
 	return data
 }
