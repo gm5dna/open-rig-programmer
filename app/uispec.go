@@ -540,7 +540,7 @@ func (a *App) GetUISpec() (UISpecView, error) {
 		TagMaxBytes:               caps.TagLen,
 		ClarMaxHz:                 caps.ClarMaxHz,
 		ClarStepHz:                caps.ClarStepHz,
-		ToneScanSkipNote:          text.ToneScanSkipNote,
+		GridLegendNote:            text.GridLegendNote,
 		ToneScanSkipVerification:  text.ToneScanSkipVerification,
 		EraseDialogNote:           text.EraseDialogNote,
 		PreservationTooltips: PreservationTooltipsView{

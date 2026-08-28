@@ -460,18 +460,19 @@ type UISpecView struct {
 	TagMaxBytes               int
 	ClarMaxHz                 int
 	ClarStepHz                int
-	// ToneScanSkipNote is the channel grid's standing legend explaining
-	// why the Tone/Scan Skip columns exist but cannot be read back over
-	// CAT — served from internal/radiotext.Text.ToneScanSkipNote and
-	// rendered by the frontend from this field.
-	ToneScanSkipNote string
+	// GridLegendNote (formerly ToneScanSkipNote) is the channel grid's
+	// standing legend explaining why the Tone/Scan Skip columns exist but
+	// cannot be read back over CAT — served from
+	// internal/radiotext.Text.GridLegendNote and rendered by the frontend
+	// from this field.
+	GridLegendNote string
 	// ToneScanSkipVerification is the grid legend's second sentence,
 	// stating what is and is not hardware-verified about Tone/Scan Skip
 	// preservation across a rewrite for this radio — served from
 	// internal/radiotext.Text.ToneScanSkipVerification. Left in the
-	// frontend by task 41 when it migrated ToneScanSkipNote; moved here
-	// to close ledger minor m42a, since it is a claim about THIS radio's
-	// write trials that a future model pinned at
+	// frontend by task 41 when it migrated the first grid legend
+	// sentence; moved here to close ledger minor m42a, since it is a
+	// claim about THIS radio's write trials that a future model pinned at
 	// writeTrialsComplete=false could not truthfully make.
 	ToneScanSkipVerification string
 	// EraseDialogNote is the "no CAT erase command" explanation shown when
