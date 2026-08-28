@@ -8,7 +8,8 @@ step.
 
 It ships as two faces of one core: **`rigprog`**, a command-line tool,
 and a desktop **GUI**. Both talk to the radio over the ordinary USB
-CAT connection; no programming cable or card juggling needed.
+connection — CAT (Yaesu) or CI-V (Icom); no programming cable or card
+juggling needed.
 
 ## Supported radios
 
@@ -252,10 +253,12 @@ What is specific to one or two models:
   per-column editors — or export/import **CSV** and edit anywhere.
 - **CHIRP CSV import**, so an existing channel list can come across
   in one step.
-- A **menu settings snapshot**: `rigprog read --settings` captures
-  the radio's menu configuration alongside the channels, and
-  `rigprog settings` (or the GUI's settings view) displays it.
-  Settings are read-only by design — see below.
+- A **menu settings snapshot**, on the Yaesu models: `rigprog
+  read --settings` captures the radio's menu configuration
+  alongside the channels, and `rigprog settings` (or the GUI's
+  settings view) displays it. Settings are read-only by design —
+  see below. None of the six Icom drivers expose a settings
+  surface, so `--settings` is refused on those models.
 - A **built-in simulated radio**: every command accepts `--fake` (the
   GUI has a *Demo* button), so you can try the whole workflow with no
   radio attached.
@@ -284,7 +287,14 @@ Some things the FT-710 simply cannot do over CAT, and the tool blocks
 them honestly rather than pretending: there is no erase command (so
 deletions are refused with a reason), per-channel CTCSS tone and
 scan-skip have no CAT write, and clarifier changes are refused
-because the radio silently ignores them.
+because the radio silently ignores them. None of the Yaesu models —
+FT-710, FTdx10, FTdx101D, FTdx101MP — has a CAT erase command at all;
+deleting a channel is a front-panel-only operation on every one of
+them. The six Icom models are different: their CI-V references print
+a clear form for a memory channel, but this project deliberately
+ships no erase builder for any of them — spec D1 admits exactly three
+builders per driver (ID read, memory read, memory set) and a
+clear/erase frame is not one of them (`core/civ/doc.go:64`).
 
 Menu settings **writing** is deliberately not implemented — not
 unfinished, declined. No code path in this repository can send a

@@ -161,6 +161,31 @@ func TestNewRealDriver_HWVerifiedWriteSet(t *testing.T) {
 // merely happened to share a leading substring cannot slip through. This
 // test does NOT pin the fake's own token value (e.g. "98a5") anywhere —
 // only that a value beginning with the address arrived at all.
+// fakePackageForModel is the per-model companion to
+// internal/guards/simulated_tokens_test.go's simulatedProfiles table
+// (fakeCtorPath column): the internal/fake* package each registered
+// model's fakeDrivers row is supposed to construct its rig from. Kept as
+// its own table, not derived from simulatedProfiles, because that table
+// is keyed by driver PACKAGE (ftdx101 contributes two rows, one per
+// sibling fake constructor) while this one is keyed by MODEL STRING —
+// the FTDX101D and FTDX101MP share a package row there but need distinct
+// entries here to resolve which of fakedx101's two constructors a given
+// model's fakeDrivers entry must have used. Both tables agree on every
+// package name; this one exists to answer "which model" where that one
+// answers "which package".
+var fakePackageForModel = map[string]string{
+	DefaultModel:   "internal/fakeradio",
+	FTdx10Model:    "internal/fakedx10",
+	FTdx101DModel:  "internal/fakedx101",
+	FTdx101MPModel: "internal/fakedx101",
+	IC7610Model:    "internal/fakeic7610",
+	IC7300Model:    "internal/fakeic7300",
+	IC7300MK2Model: "internal/fakeic7300mk2",
+	IC705Model:     "internal/fakeic705",
+	IC9700Model:    "internal/fakeic9700",
+	IC905Model:     "internal/fakeic905",
+}
+
 func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
 	models := SupportedModels()
 	if len(models) == 0 {
@@ -174,6 +199,37 @@ func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
 			}
 			if caps.CATID == "" {
 				t.Fatal("static CATID is empty — this check would pass vacuously")
+			}
+
+			// Fake-package attestation: the CATID check above catches a
+			// crossed pairing whose fake answers the WRONG address, but a
+			// fake that happens to answer the RIGHT address from the WRONG
+			// package would slip past it (e.g. an IC-7300MK2 fake
+			// constructed with the IC-7300's own address). Resolve the
+			// concrete type fakeDrivers[model].newRadio() actually returns
+			// — unwrapping ic7610FakeAdapter, the one wrapper in this
+			// table (internal/wiring/fake.go) — and require its package to
+			// be the one fakePackageForModel names for this model, mirroring
+			// internal/guards/simulated_tokens_test.go's simulatedProfiles
+			// pairing check from the driver side.
+			entry, ok := fakeDrivers[model]
+			if !ok {
+				t.Fatalf("fakeDrivers has no row for %q", model)
+			}
+			wantPkg, ok := fakePackageForModel[model]
+			if !ok {
+				t.Fatalf("fakePackageForModel has no row for %q — add one alongside the fakeDrivers entry", model)
+			}
+			radio := entry.newRadio()
+			concrete := reflect.ValueOf(radio)
+			if a, isAdapter := radio.(ic7610FakeAdapter); isAdapter {
+				concrete = reflect.ValueOf(a.Radio)
+			}
+			if concrete.Kind() == reflect.Ptr {
+				concrete = concrete.Elem()
+			}
+			if gotPkg := concrete.Type().PkgPath(); !strings.HasSuffix(gotPkg, wantPkg) {
+				t.Errorf("fakeDrivers[%q].newRadio() concrete type is %s.%s, want a type from a package ending in %q", model, gotPkg, concrete.Type().Name(), wantPkg)
 			}
 
 			sess, closeAll, err := OpenFakeSessionFor(testCtx(t), model)
@@ -190,8 +246,8 @@ func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
 			// CI-V address half only: a two-character static CATID is an
 			// address alone (spec D3.2), and its session CATID is that
 			// address plus a probe token this test never pins.
-			ok := got == caps.CATID || (len(caps.CATID) == 2 && strings.HasPrefix(got, caps.CATID))
-			if !ok {
+			ok2 := got == caps.CATID || (len(caps.CATID) == 2 && strings.HasPrefix(got, caps.CATID))
+			if !ok2 {
 				t.Errorf("Identity().CATID = %q, want %q — the fake rig answering this session is not %s's own", got, caps.CATID, model)
 			}
 			if err := closeAll(); err != nil {
