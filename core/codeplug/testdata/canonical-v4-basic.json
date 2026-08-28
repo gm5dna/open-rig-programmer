@@ -1,0 +1,62 @@
+{
+  "schema": 4,
+  "generator": "open-rig-programmer v0.1.0",
+  "radio": {
+    "model": "IC-7610",
+    "cat_id": "98",
+    "read_at": "2026-08-28T00:00:00Z"
+  },
+  "channels": [
+    {
+      "slot": "001",
+      "data": {
+        "freq_hz": 145500000,
+        "mode": "FM",
+        "ctcss": "OFF",
+        "ctcss_tone": {
+          "state": "unavailable"
+        },
+        "shift": "SIMPLEX",
+        "tag_display": {
+          "state": "unavailable"
+        },
+        "scan_skip": {
+          "state": "unavailable"
+        },
+        "tx_frequency": {
+          "state": "unavailable"
+        },
+        "duplex": {
+          "state": "known",
+          "value": "OFF"
+        },
+        "offset": {
+          "state": "unavailable"
+        },
+        "tone_mode": {
+          "state": "known",
+          "value": "OFF"
+        },
+        "tone_tx": {
+          "state": "unavailable"
+        },
+        "tone_rx": {
+          "state": "unavailable"
+        },
+        "dtcs_code": {
+          "state": "unavailable"
+        },
+        "dtcs_polarity": {
+          "state": "unavailable"
+        },
+        "filter": {
+          "state": "known",
+          "value": "FIL1"
+        },
+        "data_mode": {
+          "state": "unavailable"
+        }
+      }
+    }
+  ]
+}
