@@ -16,6 +16,8 @@ var tierAddedFields = []Field{
 	FieldTxFrequency, FieldDuplex, FieldOffset, FieldToneMode,
 	FieldToneTx, FieldToneRx, FieldDTCSCode, FieldDTCSPolarity,
 	FieldFilter, FieldDataMode,
+	FieldTuningStepEnabled, FieldTuningStep, FieldProgramTuningStep,
+	FieldAttenuator, FieldPreamp, FieldAntenna, FieldIPPlus,
 }
 
 // TestConsentUnverifiedWrites_CoversTierAddedFields is the deliverable
@@ -103,6 +105,34 @@ func TestConsentUnverifiedWrites_CopiesTierVocabularies(t *testing.T) {
 	}
 	if sameBacking(unsafe.SliceData(in.Filters), unsafe.SliceData(out.Filters)) {
 		t.Error("Filters shares backing storage with the input")
+	}
+}
+
+func TestConsentUnverifiedWrites_CopiesReceiverVocabularies(t *testing.T) {
+	in := Capabilities{
+		TuningSteps:            []string{"1 kHz"},
+		ProgramTuningStepRange: &StepRange{MinHz: 100, MaxHz: 100000, ResolutionHz: 100},
+		AttenuatorDB:           []int{0, 10},
+		PreampOptions:          []string{"OFF", "ON"},
+		AntennaOptions:         []string{"ANT1", "ANT2"},
+	}
+	out := ConsentUnverifiedWrites(in)
+
+	if !reflect.DeepEqual(in.TuningSteps, out.TuningSteps) ||
+		!reflect.DeepEqual(in.ProgramTuningStepRange, out.ProgramTuningStepRange) ||
+		!reflect.DeepEqual(in.AttenuatorDB, out.AttenuatorDB) ||
+		!reflect.DeepEqual(in.PreampOptions, out.PreampOptions) ||
+		!reflect.DeepEqual(in.AntennaOptions, out.AntennaOptions) {
+		t.Fatal("receiver vocabularies changed content during consent copy")
+	}
+	if sameBacking(unsafe.SliceData(in.TuningSteps), unsafe.SliceData(out.TuningSteps)) ||
+		sameBacking(unsafe.SliceData(in.AttenuatorDB), unsafe.SliceData(out.AttenuatorDB)) ||
+		sameBacking(unsafe.SliceData(in.PreampOptions), unsafe.SliceData(out.PreampOptions)) ||
+		sameBacking(unsafe.SliceData(in.AntennaOptions), unsafe.SliceData(out.AntennaOptions)) {
+		t.Error("a receiver vocabulary slice shares backing storage with the input")
+	}
+	if in.ProgramTuningStepRange == out.ProgramTuningStepRange {
+		t.Error("ProgramTuningStepRange pointer shares storage with the input")
 	}
 }
 

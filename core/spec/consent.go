@@ -90,5 +90,15 @@ func ConsentUnverifiedWrites(caps Capabilities) Capabilities {
 	out.DTCSPolarities = append([]string(nil), caps.DTCSPolarities...)
 	out.DTCSCodes = append([]int(nil), caps.DTCSCodes...)
 	out.Filters = append([]string(nil), caps.Filters...)
+	// The D8 receiver vocabularies are copied explicitly because the
+	// top-level slices and pointer are not covered by the bank-map walk.
+	out.TuningSteps = append([]string(nil), caps.TuningSteps...)
+	if caps.ProgramTuningStepRange != nil {
+		r := *caps.ProgramTuningStepRange
+		out.ProgramTuningStepRange = &r
+	}
+	out.AttenuatorDB = append([]int(nil), caps.AttenuatorDB...)
+	out.PreampOptions = append([]string(nil), caps.PreampOptions...)
+	out.AntennaOptions = append([]string(nil), caps.AntennaOptions...)
 	return out
 }

@@ -114,16 +114,21 @@ const (
 // new spec.Capabilities field arriving in a shared enabler a decision this
 // driver has to take, not a default it silently inherits.
 var deliberatelyZero = map[string]string{
-	"ClarMaxHz":      "the 1A 00 record has no clarifier field, so there is no offset bound to state (matrix §2, clarifier row)",
-	"ClarStepHz":     "the same: no clarifier field, no step",
-	"CTCSSTones":     "this radio's tone spans are BCD FREQUENCIES, not indices into a chart. There is no tone number to index, and spec.Capabilities.Validate refuses a model declaring both a chart and a range. CTCSSToneRange is the declaration (tier ruling T1(2), enabler E3)",
-	"RequiredSlots":  "nothing in this document says any IC-7610 memory or scan edge must stay populated. RequiredSlots is the per-SLOT mechanism and this radio uses none of it",
-	"ShiftOptions":   "the Yaesu repeater-shift vocabulary. The 1A 00 record has no shift field at all, and FieldShift carries the zero FieldSupport on both banks, so enabler E5b's anyBankReaches guard makes the empty list lawful",
-	"CTCSSStates":    "the Yaesu tone-state vocabulary. This radio expresses tone through ToneModes, the Icom one; a model declares one or the other",
-	"DuplexOptions":  "the Icom repeater vocabulary. The 1A 00 record has no duplex field, FieldDuplex carries the zero FieldSupport on both banks, and E5b's guard makes the empty list lawful",
-	"DTCSPolarities": "DTCS is printed NOWHERE in this document's 17 pages — swept for the matrix. An empty list is the positive statement that this radio expresses no DTCS polarity",
-	"DTCSCodes":      "the same sweep: no DTCS code table is printed anywhere in this document",
-	"MinFreqHz":      "zero IS this radio's declared floor rather than an omission: the record's frequency span is unsigned BCD and its smallest encodable value is 0 Hz. The STORABLE floor is not established by this document (matrix lift R17a), and declaring a non-zero guess would be a radio claim",
+	"ClarMaxHz":              "the 1A 00 record has no clarifier field, so there is no offset bound to state (matrix §2, clarifier row)",
+	"ClarStepHz":             "the same: no clarifier field, no step",
+	"CTCSSTones":             "this radio's tone spans are BCD FREQUENCIES, not indices into a chart. There is no tone number to index, and spec.Capabilities.Validate refuses a model declaring both a chart and a range. CTCSSToneRange is the declaration (tier ruling T1(2), enabler E3)",
+	"RequiredSlots":          "nothing in this document says any IC-7610 memory or scan edge must stay populated. RequiredSlots is the per-SLOT mechanism and this radio uses none of it",
+	"ShiftOptions":           "the Yaesu repeater-shift vocabulary. The 1A 00 record has no shift field at all, and FieldShift carries the zero FieldSupport on both banks, so enabler E5b's anyBankReaches guard makes the empty list lawful",
+	"CTCSSStates":            "the Yaesu tone-state vocabulary. This radio expresses tone through ToneModes, the Icom one; a model declares one or the other",
+	"TuningSteps":            "additions design D8 — the IC-7610 record carries no receiver tuning-step field",
+	"ProgramTuningStepRange": "additions design D8 — the IC-7610 record carries no programmable tuning-step field",
+	"AttenuatorDB":           "additions design D8 — the IC-7610 record carries no attenuator field",
+	"PreampOptions":          "additions design D8 — the IC-7610 record carries no preamp field",
+	"AntennaOptions":         "additions design D8 — the IC-7610 record carries no antenna field",
+	"DuplexOptions":          "the Icom repeater vocabulary. The 1A 00 record has no duplex field, FieldDuplex carries the zero FieldSupport on both banks, and E5b's guard makes the empty list lawful",
+	"DTCSPolarities":         "DTCS is printed NOWHERE in this document's 17 pages — swept for the matrix. An empty list is the positive statement that this radio expresses no DTCS polarity",
+	"DTCSCodes":              "the same sweep: no DTCS code table is printed anywhere in this document",
+	"MinFreqHz":              "zero IS this radio's declared floor rather than an omission: the record's frequency span is unsigned BCD and its smallest encodable value is 0 Hz. The STORABLE floor is not established by this document (matrix lift R17a), and declaring a non-zero guess would be a radio claim",
 }
 
 // memSlots is the MEM bank's inventory: "001".."099".

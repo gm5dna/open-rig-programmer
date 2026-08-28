@@ -76,12 +76,17 @@ func TestProfiles_Validate(t *testing.T) {
 // added, for which this radio's explicit decision is EMPTY — see
 // TestCapabilities_EveryFieldExplicit's doc comment.
 var tierFieldsMustBeEmpty = map[string]bool{
-	"DuplexOptions":  true,
-	"ToneModes":      true,
-	"DTCSPolarities": true,
-	"DTCSCodes":      true,
-	"Filters":        true,
-	"TagCharset":     true,
+	"DuplexOptions":          true,
+	"ToneModes":              true,
+	"DTCSPolarities":         true,
+	"DTCSCodes":              true,
+	"Filters":                true,
+	"TuningSteps":            true,
+	"ProgramTuningStepRange": true,
+	"AttenuatorDB":           true,
+	"PreampOptions":          true,
+	"AntennaOptions":         true,
+	"TagCharset":             true,
 	// CTCSSToneRange (Wave 2.5, E3) is the OPTIONAL numeric tone domain a
 	// radio whose tone field is a number declares INSTEAD of a chart.
 	// This radio's explicit decision is NIL, and it is a decision rather
@@ -127,8 +132,8 @@ var tierFieldsMustBeEmpty = map[string]bool{
 // the mistake, so the rule for those six is inverted here rather than
 // waived, and the test still fails if one is ever filled in.
 func TestCapabilities_EveryFieldExplicit(t *testing.T) {
-	// 22 since Wave 2.5's E3 added CTCSSToneRange.
-	const wantFieldCount = 22
+	// 27 since additions design D8 added the five receiver vocabularies.
+	const wantFieldCount = 27
 
 	for _, tt := range []struct {
 		name string

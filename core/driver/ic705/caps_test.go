@@ -3,6 +3,7 @@
 package ic705
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
@@ -202,9 +203,27 @@ var deliberatelyZero = []struct {
 		"as ShiftOptions: this radio expresses tone_mode instead"},
 	{"len(RequiredSlots)", func(c spec.Capabilities) int { return len(c.RequiredSlots) },
 		"no individual slot on this radio is documented as never-empty; the CALL BANK's NoBlank carries what is claimed, and claims nothing per-slot"},
+	{"len(TuningSteps)", func(c spec.Capabilities) int { return len(c.TuningSteps) },
+		"additions design D8 — this record carries no receiver tuning-step field"},
+	{"ProgramTuningStepRange", func(c spec.Capabilities) int {
+		if c.ProgramTuningStepRange == nil {
+			return 0
+		}
+		return 1
+	},
+		"additions design D8 — this record carries no programmable tuning-step field"},
+	{"len(AttenuatorDB)", func(c spec.Capabilities) int { return len(c.AttenuatorDB) },
+		"additions design D8 — this record carries no attenuator field"},
+	{"len(PreampOptions)", func(c spec.Capabilities) int { return len(c.PreampOptions) },
+		"additions design D8 — this record carries no preamp field"},
+	{"len(AntennaOptions)", func(c spec.Capabilities) int { return len(c.AntennaOptions) },
+		"additions design D8 — this record carries no antenna field"},
 }
 
 func TestDeliberateZerosAreAudited(t *testing.T) {
+	if got := reflect.TypeOf(spec.Capabilities{}).NumField(); got != 27 {
+		t.Fatalf("spec.Capabilities has %d fields, this audit knows 27", got)
+	}
 	for name, caps := range bothProfiles() {
 		for _, z := range deliberatelyZero {
 			if got := z.value(caps); got != 0 {
