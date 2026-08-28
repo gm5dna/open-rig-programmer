@@ -70,6 +70,48 @@ func TestImportCSV_MergeSuccess(t *testing.T) {
 	}
 }
 
+// TestImportCSV_NormalisesExplicitAbsentTierField pins the CSV-import root's
+// capability pass: csvio correctly preserves an explicit "absent" cell, but
+// an FT-710 cannot reach tx_frequency, so the merged working copy must carry
+// the same Unavailable state as a loaded file (the regression for task R2's
+// deferred CSV-import gap).
+func TestImportCSV_NormalisesExplicitAbsentTierField(t *testing.T) {
+	a, _ := newTestApp(t)
+	a.mu.Lock()
+	a.working = buildImportBase()
+	a.mu.Unlock()
+
+	importSource := buildImportBase()
+	importSource.Channels[0].Data.TxFreqHz = codeplug.FreqField{State: codeplug.Absent}
+	importSource.Channels[0].Data.Duplex = codeplug.StringField{State: codeplug.Unknown}
+	csvPath := filepath.Join(t.TempDir(), "explicit-absent.csv")
+	f, err := os.Create(csvPath)
+	if err != nil {
+		t.Fatalf("creating CSV fixture: %v", err)
+	}
+	if err := csvio.Export(f, importSource.Channels); err != nil {
+		t.Fatalf("csvio.Export fixture: %v", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatalf("closing CSV fixture: %v", err)
+	}
+	a.dialogs.(*fakeDialogs).openFilePath = csvPath
+
+	result, err := a.ImportCSV()
+	if err != nil {
+		t.Fatalf("ImportCSV: unexpected error: %v", err)
+	}
+	if !result.Merged {
+		t.Fatalf("ImportCSV(explicit absent) = %+v, want Merged=true", result)
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if got := a.working.Channels[0].Data.TxFreqHz.State; got != codeplug.Unavailable {
+		t.Errorf("merged tx_frequency state = %q, want Unavailable", got)
+	}
+}
+
 func TestImportCSV_InventoryMismatchRefuses(t *testing.T) {
 	a, _ := newTestApp(t)
 	a.mu.Lock()
