@@ -5,7 +5,7 @@
   by a sed pass before this becomes the release body — so do not write
   that placeholder token in this comment, or it gets substituted here
   too and the sentence stops making sense. Keep this file in sync with
-  README.md's "Install" and "Getting started" sections and
+  README.md's "Install" and "First use" sections and
   docs/hardware-notes.md / docs/linux-setup.md /
   docs/menu-write-decision.md, which it cites rather than restates.
 
@@ -21,7 +21,7 @@
   release.yml's gui-linux job. The consent prose was corrected — writes
   to the three FTdx models are opt-in, not disarmed, and have been
   since the unverified-writes consent work landed; the wording now
-  follows README.md's "Unverified writes" section. Linux hardware
+  follows README.md's "Switching on writes for an unverified radio" section. Linux hardware
   evidence is still pending: the evidence-status section says so, and
   must keep saying so until a real-radio Linux session has run.
 
@@ -64,7 +64,7 @@ models registered for reading and for opt-in writes (see below).
   memories plus the 9 PMS (Programmable Memory Scan) pairs, over CAT;
   each Icom model has its own CI-V memory-slot shape instead (a
   group-addressed space, or CALL channels alongside it, per model —
-  see the per-model honesty rows in README.md).
+  see the per-model honesty rows in docs/icom-models.md).
 - **Edit channels** in a spreadsheet-style grid (GUI) with keyboard
   navigation, paste, per-column editors and drag copy/swap/move.
 - **Send changes back safely** (FT-710): read-before-write, a snapshot
@@ -100,7 +100,7 @@ models registered for reading and for opt-in writes (see below).
 default walk rather than a read of the whole address space (a
 100x100-slot, group-addressed space on both). A channel stored outside
 that walk's range is simply not read; its absence is not evidence the
-channel is empty. See README.md's *Icom models* section for each
+channel is empty. See docs/icom-models.md for each
 model's exact bound.
 
 Writes to the nine manual-derived models are refused until you enable
@@ -118,7 +118,7 @@ simulator here, not proven on a real radio. The FT-710 is unaffected:
 its writes are hardware-verified, so it has nothing to consent to.
 Consent changes what the tool is allowed to send, not how it sends it
 — the read-before-write, the snapshot, the reviewed diff and the
-per-channel verify all still run; README.md's *Unverified writes*
+per-channel verify all still run; README.md's *Switching on writes for an unverified radio*
 section has the full mechanism. Each of the nine drivers carries a
 register of every assumption it makes and the specific capture from a
 real radio that would verify it — if you own one of these radios and
