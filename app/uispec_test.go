@@ -1838,18 +1838,21 @@ func TestGetUISpec_RegisteredIC9700_EveryBankFieldsAndTagDisplay(t *testing.T) {
 // this project's FIFTH Icom registration, and the tier's LAST.
 //
 //   - CONNECTED to the registered fake (Live true, the Simulated profile —
-//     the `--fake --model IC-905` path a user actually walks), left at
-//     internal/fakeic905's own DEFAULT image (ten occupied channels in
-//     group 0, image.go's defaultImage): UNLIKE internal/fakeic705, which
-//     starts EMPTY without an explicit factory-image option,
-//     internal/fakeic905's New seeds this automatically, so the open-time
-//     bounded discovery walk (which always reads group 0 in full,
-//     core/driver/ic905/read.go's discoverInventory) has something to
-//     materialise with no IC905FakeSessionOpts override at all — set here
-//     to nil explicitly anyway, so the seam this test relies on is stated
-//     rather than merely inherited from whatever ran before it. This
-//     radio discovers no extra bank, so "every bank" here is exactly MEM
-//     and CALL — pinned BY ID, not by count.
+//     the `--fake --model IC-905` path a user actually walks): LIKE
+//     internal/fakeic705, the demo IC-905 opens EMPTY, not at
+//     internal/fakeic905's own frozen default image (ten occupied
+//     channels in group 0, image.go's defaultImage, all-zero content).
+//     internal/wiring/fake.go's IC905Model row explains why: that default
+//     image's records are UNDECODABLE by core/civ/ic905/profile.go's own
+//     filter (it refuses byte 0x00), so the row issues ten
+//     fakeic905.WithEmpty(0, ch) calls ahead of any IC905FakeSessionOpts
+//     override, deleting every one of them before the open-time bounded
+//     discovery walk runs — set to nil explicitly here anyway, so the
+//     seam this test relies on is stated rather than merely inherited
+//     from whatever ran before it. The walk therefore has nothing to
+//     materialise in MEM; this radio discovers no extra bank either, so
+//     "every bank" here is exactly MEM and CALL — pinned BY ID, not by
+//     count.
 //   - DISCONNECTED with an IC-905 working copy loaded (Live false, the
 //     static RealHardware baseline, resolved by currentModel from the
 //     file's own Radio.Model) — the offline clone workflow's path.
@@ -1955,17 +1958,27 @@ func TestGetUISpec_RegisteredIC905_EveryBankFieldsAndTagDisplay(t *testing.T) {
 	if !reflect.DeepEqual(bankIDs(got.Banks), wantBanks) {
 		t.Fatalf("connected banks = %v, want exactly %v — this radio discovers no extra bank", bankIDs(got.Banks), wantBanks)
 	}
-	// Connected, the fake's own DEFAULT image is ten channels in group 0
-	// (internal/fakeic905/image.go's defaultImage), and the bounded
-	// default walk reads group 0 in full, so it materialises all ten, in
-	// ascending channel order, under read.go's memSlot's one
-	// wire = display − 1 rule.
-	wantLiveMem := ic905SlotViews(
-		"G01-001", "G01-002", "G01-003", "G01-004", "G01-005",
-		"G01-006", "G01-007", "G01-008", "G01-009", "G01-010",
-	)
+	// Connected, MEM discovers NOTHING: internal/wiring/fake.go's
+	// IC905Model row deletes all ten of internal/fakeic905's default
+	// image's channels (fakeic905.WithEmpty(0, ch) for ch in 0-9) before
+	// the bounded discovery walk runs, precisely because those channels'
+	// all-zero invented content is UNDECODABLE by
+	// core/civ/ic905/profile.go's own filter — this is the ruled EMPTY
+	// demo IC-905, not a stale expectation of the frozen fake's raw
+	// default. That MEM's connected classification is otherwise
+	// EMPTY-and-decodable (rather than merely absent) is covered at
+	// wiring level, not here: internal/wiring's
+	// TestOpenFakeSessionFor_EveryRegisteredModel_ReadsEveryDefaultSlot
+	// walks every registered model's session Capabilities(), and its
+	// IC-905 case is the one that proves this bank's discovered Slots is
+	// empty by design rather than by an undecodable read failing
+	// silently. Seeding one MEM channel here to assert the opposite case
+	// would need a record core/civ/ic905/profile.go's filter accepts, and
+	// fakeic905's only seeding option (WithRecord) takes raw bytes with
+	// no such helper — inventing one is out of scope for this test.
+	wantLiveMem := ic905SlotViews()
 	if liveMem := findBank(t, got.Banks, "MEM").Slots; !reflect.DeepEqual(liveMem, wantLiveMem) {
-		t.Errorf("connected IC-905 MEM.Slots = %v, want %v (the fake's own default image, materialised by the bounded discovery walk)", liveMem, wantLiveMem)
+		t.Errorf("connected IC-905 MEM.Slots = %v, want %v (the demo IC-905 opens empty — see this block's comment)", liveMem, wantLiveMem)
 	}
 	// CALL is DENSE and fixed: its twelve slots come from the static bank
 	// itself, seeded or not.
