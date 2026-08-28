@@ -59,6 +59,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300mk2"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7610"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic905"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
@@ -196,6 +197,26 @@ const IC705Model = "IC-705"
 // own bank-shape tests that have to say so, not this table.
 const IC9700Model = "IC-9700"
 
+// IC905Model names the IC-905's realDrivers/fakeDrivers key, which must
+// equal ic905.New(...).Model() — pinned, like every other Icom constant
+// above, by TestDriverTableKeysMatchDriverModel walking both tables.
+//
+// THIS IS THE FIFTH ICOM REGISTRATION (Wave 4, task R6) AND THE LAST OF
+// THE TIER: a lone driver package (core/driver/ic905) and a lone fake
+// (internal/fakeic905), on the same one-row footing as IC705Model and
+// IC9700Model above — no sibling, no pairing rationale to restate.
+//
+// BACK TO TWO BANKS, but not back to the IC-705's shape either: MEM
+// (core/driver/ic905/caps.go's baseCapabilities) is SPARSE over a
+// 100 x 100 group-addressed space — the same spec.Bank.Sparse/Groups/
+// PerGroup/Budget descriptor the IC-705's own MEM bank carries — and its
+// materialised set is DISCOVERED at Open, never enumerated statically.
+// CALL is a DENSE bank of twelve named slots, "C01".."C12", in a namespace
+// spec.ParseSparseSlot structurally refuses to parse — disjoint from MEM's
+// "G%02d-%03d" addresses by construction, not by an arithmetic accident of
+// where the two group ranges happen to sit (ruling R4).
+const IC905Model = "IC-905"
+
 // realDrivers is the model-keyed table of real-hardware driver
 // constructors: model name -> a constructor building THAT model's
 // real-profile driver.Driver. It is the single source of truth
@@ -294,6 +315,12 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ic9700.New(ic9700.RealHardware, ic9700.WithConsentedUnverifiedWrites())
 		}
 		return NewIC9700RealDriver()
+	},
+	IC905Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic905.New(ic905.RealHardware, ic905.WithConsentedUnverifiedWrites())
+		}
+		return NewIC905RealDriver()
 	},
 }
 
@@ -589,6 +616,42 @@ func NewIC705RealDriver() driver.Driver {
 // realDrivers' IC9700Model row above and never this constructor.
 func NewIC9700RealDriver() driver.Driver {
 	return ic9700.New(ic9700.RealHardware)
+}
+
+// NewIC905RealDriver builds the ic905 driver for a real-hardware session:
+// profile ic905.RealHardware, the zero value — the IC-905's half of the
+// realDrivers table, split out for the same reason every other model
+// constructor above is (a test can pin the capability set the real
+// wiring path implies without opening a port).
+//
+// READ/PROBE ONLY, by the same mechanism as every other row: this
+// driver's writeTrialsComplete (core/driver/ic905/caps.go) is FALSE, so a
+// RealHardware IC-905 driver reports the all-Unverified capability set —
+// every mapped field's Write spec.Unverified, nothing writable on either
+// bank. No IC-905 has been written to by this project, and the
+// capability gate refuses before any frame is built.
+//
+// NO ic905.WithFullInventoryWalk() HERE, DELIBERATELY. That option opts a
+// session INTO the whole 100 x 100 walk instead of the bounded default
+// (group 0 in full, then one channel per group elsewhere —
+// core/driver/ic905's own discoverInventory doc comment); the registry's
+// job is to build the driver every plain `--model IC-905` session gets,
+// and that is the bounded default, on the same operational grounds the
+// driver package itself states — a complete walk is minutes of Open on a
+// sparse or empty radio, and training a user to interrupt it is exactly
+// the "codeplug full of deletions" hazard the bound exists to avoid. A
+// caller who needs the whole space still reaches the option directly
+// through core/driver/ic905, unchanged by this constructor's omission of
+// it.
+//
+// THE FAIL-SAFE DIRECTION IS UNCHANGED: an unrecognised Profile value
+// selects the all-Unverified set too (ic905.go's Capabilities switch),
+// never the simulator's write-Supported one, and the one named exception
+// — SessionOptions' ConsentUnverifiedWrites, spent from the user's own
+// recorded grant — is exactly the mechanism every other row uses, reaching
+// realDrivers' IC905Model row above and never this constructor.
+func NewIC905RealDriver() driver.Driver {
+	return ic905.New(ic905.RealHardware)
 }
 
 // openSerial is OpenRealSessionWith's test seam (and so OpenRealSessionFor's

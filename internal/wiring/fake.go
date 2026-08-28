@@ -15,6 +15,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300mk2"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7610"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic905"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx10"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx101"
@@ -22,6 +23,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7300"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7300mk2"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7610"
+	"github.com/gm5dna/open-rig-programmer/internal/fakeic905"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic9700"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeradio"
 )
@@ -232,6 +234,30 @@ var IC705FakeSessionOpts []fakeic705.Option
 // only because no test using it calls t.Parallel().
 var IC9700FakeSessionOpts []fakeic9700.Option
 
+// IC905FakeSessionOpts is the IC-905's own option source, on the same
+// terms as every other model's own variable above — see
+// IC7300FakeSessionOpts' doc comment for the shape this restates:
+// internal/fakeic905 simulates the IC-905 specifically, its Option is a
+// func(*fakeic905.Radio) (options.go's WithRecord, WithEmpty and the
+// rest), read at CALL time inside the IC905Model entry's own newRadio
+// closure below, and never captured at package init.
+//
+// LEFT AT ITS NIL ZERO VALUE IS NOT "unseeded": internal/fakeic905's own
+// New builds ten occupied channels in group 0 by default (image.go's
+// defaultImage) whenever no option overrides it, unlike some of this
+// table's other simulators. A test that wants a DIFFERENT image still
+// reaches it through this variable, exactly as every other model's own
+// seam works.
+//
+// No production flag or GUI control populates this — it adds no second
+// ic905.Simulated reference to any non-test file, so
+// TestSimulatedProfileTokensConfinement's new ic905 row keeps passing.
+//
+// A test that sets it MUST restore the previous value (e.g. via
+// t.Cleanup) — this is shared, unsynchronised package state, acceptable
+// only because no test using it calls t.Parallel().
+var IC905FakeSessionOpts []fakeic905.Option
+
 // fakeRadio is everything OpenFakeSessionFor needs from a model's fake
 // rig: a port to hand the driver, and a way to shut the rig down
 // afterwards. Interface-typed rather than *fakeradio.Radio (M9c-5 E5)
@@ -294,6 +320,13 @@ var (
 	// registration), so *fakeic9700.Radio satisfies fakeRadio as written,
 	// with no adapter needed.
 	_ fakeRadio = (*fakeic9700.Radio)(nil)
+	// The IC-905's, the fifth and LAST Icom simulator this table holds
+	// (Wave 4 task R6) — DIRECTLY, on the same footing as the IC-705's
+	// and IC-9700's above: internal/fakeic905's own Port() method is
+	// already declared to return io.ReadWriteCloser (checked against
+	// source before this registration), so *fakeic905.Radio satisfies
+	// fakeRadio as written, with no adapter needed.
+	_ fakeRadio = (*fakeic905.Radio)(nil)
 )
 
 // ic7610FakeAdapter narrows *fakeic7610.Radio's Port() — which returns
@@ -428,6 +461,10 @@ var fakeDrivers = map[string]fakeDriverEntry{
 	IC9700Model: {
 		newDriver: func() driver.Driver { return ic9700.New(ic9700.Simulated) },
 		newRadio:  func() fakeRadio { return fakeic9700.New(IC9700FakeSessionOpts...) },
+	},
+	IC905Model: {
+		newDriver: func() driver.Driver { return ic905.New(ic905.Simulated) },
+		newRadio:  func() fakeRadio { return fakeic905.New(IC905FakeSessionOpts...) },
 	},
 }
 

@@ -405,6 +405,14 @@ func tierStatesOf(t *testing.T, a *App) []codeplug.FieldState {
 //     ic7610TierFields), so silence about them is NOT a claim that the
 //     radio lacks them and they stay Absent. The other six become
 //     Unavailable.
+//   - IC-905 (Wave 4 task R6): a SPARSE-bank slot the file names but no
+//     read has ever materialised — "G01-051", a discovered-style address
+//     no real session's inventory walk has touched. THIS IS THE TASK'S
+//     SPECIAL CHECK (from the R2 review, verdict (b)): whether a model
+//     whose discovered bank holds slots the static baseline has no Slots
+//     entry for hits the "absent reachable field wrongly normalised to
+//     Unavailable" hazard the review named. It does NOT, for this radio,
+//     and the pin below is why — see its own subtest doc comment.
 //
 // The IC-7610 half also pins what the rest of the App then does with a
 // reachable-but-Absent field, which is the reason leaving it alone is
@@ -460,6 +468,86 @@ func TestLoadFilePath_TierFieldsNormalisedAgainstTheFileSOwnModel(t *testing.T) 
 			if !refused[f] {
 				t.Errorf("Validate did not refuse the Absent %s on a radio that has the field; issues = %+v", f, view.Issues)
 			}
+		}
+	})
+
+	// TestLoadFilePath_TierFieldsNormalisedAgainstTheFileSOwnModel's IC-905
+	// subtest IS THE TASK-R6 SPECIAL CHECK (from the R2 review, verdict
+	// (b)), run end to end through the real registry rather than against
+	// hand-built spec.Capabilities the way
+	// core/codeplug/tier_test.go's TestNormaliseTierFields_ReachableAbsentIsLeftAlone
+	// already does generically for a sparse bank.
+	//
+	// THE QUESTION: core/codeplug.NormaliseTierFields resolves each
+	// channel's bank via bankForSlot(caps, slot), which asks
+	// spec.Bank.WithinSpace — and for a SPARSE bank that is membership of
+	// Slots OR a well-formed address inside 1..Groups x 1..PerGroup (see
+	// core/spec/bank.go's WithinSpace). The STATIC baseline's MEM bank
+	// carries Slots = nil (nothing has been read) but DOES carry
+	// Sparse=true, Groups=100, PerGroup=100 (core/driver/ic905/caps.go's
+	// baseCapabilities) — a full geometry descriptor, not merely an empty
+	// list. So the question is: does a discovered-style slot like
+	// "G01-051", which no read has ever materialised into Slots, still
+	// resolve to MEM against the STATIC baseline alone?
+	//
+	// THE ANSWER, PINNED HERE: YES. WithinSpace's sparse arm needs no
+	// Slots entry at all — only the numeric bounds, which the static
+	// baseline already declares — so bankForSlot finds MEM for "G01-051"
+	// even though nothing has been read, and NormaliseTierFields leaves
+	// every REACHABLE Absent field on that slot alone (Absent, not
+	// forced to Unavailable). Only tx_frequency — the one tier field this
+	// radio's record does NOT map (ic905TierFields' own doc comment) —
+	// becomes Unavailable, on the same footing as any other unreachable
+	// field on any other model.
+	//
+	// NO DEFECT: the hazard the R2 review named — "an ABSENT tier field
+	// on such a slot would normalise to Unavailable although the
+	// discovered bank reaches it" — does NOT occur for the IC-905,
+	// because its sparse bank's static baseline carries its OWN geometry
+	// (Groups/PerGroup), independent of what any particular session's
+	// discovery walk happened to materialise. A model whose sparse (or
+	// otherwise partial) bank declared NO such geometry — Slots alone,
+	// with nothing to fall back on — would be a different question; this
+	// radio is not that question.
+	t.Run("IC-905: a discovered-style MEM slot resolves via WithinSpace against the STATIC baseline alone, so the nine reachable fields stay Absent (the SPECIAL CHECK)", func(t *testing.T) {
+		a, _ := newTestApp(t)
+		path := writeV4Fixture(t, v4BodyNoTierKeys(wiring.IC905Model, "AC", "G01-051", "FM"))
+		if _, err := a.loadFilePath(path); err != nil {
+			t.Fatalf("loadFilePath: unexpected error: %v", err)
+		}
+		want := []codeplug.FieldState{
+			codeplug.Unavailable,                              // tx_frequency: this radio's record maps no such field
+			codeplug.Absent, codeplug.Absent, codeplug.Absent, // duplex, offset, tone_mode
+			codeplug.Absent, codeplug.Absent, // tone_tx, tone_rx
+			codeplug.Absent, codeplug.Absent, // dtcs_code, dtcs_polarity
+			codeplug.Absent, // filter
+			codeplug.Absent, // data_mode
+		}
+		if got := tierStatesOf(t, a); !reflect.DeepEqual(got, want) {
+			t.Errorf("tier states = %v, want %v (the nine reachable ones — %v — stay Absent on a slot no read has ever materialised)", got, want, ic905TierFields)
+		}
+
+		// The pinned consequence, on the same footing as the IC-7610's
+		// own subtest above: Validate refuses such a channel, field by
+		// field, for the nine reachable fields — never for tx_frequency,
+		// which this radio's record does not carry at all.
+		view, err := a.Validate()
+		if err != nil {
+			t.Fatalf("Validate: unexpected error: %v", err)
+		}
+		refused := make(map[string]bool)
+		for _, i := range view.Issues {
+			if i.Slot == "G01-051" && i.Severity == string(codeplug.SeverityError) && strings.Contains(i.Msg, "says nothing about it") {
+				refused[i.Field] = true
+			}
+		}
+		for _, f := range ic905TierFields {
+			if !refused[f] {
+				t.Errorf("Validate did not refuse the Absent %s on a radio that has the field; issues = %+v", f, view.Issues)
+			}
+		}
+		if refused["tx_frequency"] {
+			t.Error("Validate refused tx_frequency, which this radio's record does not map at all — it should be Unavailable, and Unavailable fields are never refused this way")
 		}
 	})
 

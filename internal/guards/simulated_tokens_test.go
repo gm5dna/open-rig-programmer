@@ -135,6 +135,13 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// static banks notwithstanding: this table asks nothing about
 		// bank shape).
 		{"ic9700", "Simulated", "fakeic9700.New", "internal/fakeic9700"},
+		// The IC-905 (Wave 4 task R6, the tier's LAST registration), this
+		// project's fifth Icom registration and third lone-model one
+		// since the IC-705: one package, one Simulated token and one
+		// fake constructor, on the same ic705/ic9700 shape as above (no
+		// adapter wraps fakeic905.New — its Port() already returns
+		// io.ReadWriteCloser).
+		{"ic905", "Simulated", "fakeic905.New", "internal/fakeic905"},
 	}
 
 	// Non-vacuity: an empty table would make the loop below a no-op and

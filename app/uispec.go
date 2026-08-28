@@ -238,8 +238,17 @@ var tierFields = []spec.Field{
 // IC-9700's own three banks (MEM, SCAN, CALL, core/driver/ic9700/caps.go)
 // each reach the same ten — bankFields grades all three identically — so
 // a third bank changed no field COUNT, only how many BankViews carry it.
-// A future Icom registration extends this same list with its own
-// model-specific set; nothing here needs to change for it to.
+// NINE of the ten for the IC-905 (Wave 4 task R6, the tier's LAST
+// registration): every one of the IC-705's and IC-9700's ten EXCEPT
+// tx_frequency, which core/driver/ic905/caps.go's bankFields zeroes —
+// this radio's 64/65-byte record carries exactly one frequency field, no
+// duplicated TX block, unlike the IC-705's and the IC-9700's own records
+// — pinned by TestGetUISpec_RegisteredIC905_EveryBankFieldsAndTagDisplay.
+// Its two banks, MEM (SPARSE, discovered at Open) and CALL (dense, a
+// distinct namespace), reach the same nine identically, on the same
+// footing as the IC-9700's three. A future Icom registration would extend
+// this same list with its own model-specific set; there is none to
+// register, this being the tier's last.
 func bankTierFields(caps spec.Capabilities, id spec.BankID) []string {
 	var out []string
 	for _, f := range tierFields {
