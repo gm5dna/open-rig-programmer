@@ -2,11 +2,17 @@
 
 package spec
 
+import (
+	"fmt"
+	"strconv"
+	"strings"
+)
+
 // BankID identifies a family of memory slots that share the same shape and
 // rules (e.g. all ordinary memory channels, or all scan-limit pairs).
 type BankID string
 
-// The four bank families this project currently models.
+// The bank families this project currently models.
 const (
 	// BankMemory is the ordinary memory-channel bank ("MEM").
 	BankMemory BankID = "MEM"
@@ -17,6 +23,15 @@ const (
 	Bank60m BankID = "60M"
 	// BankEMG is the emergency/quick-recall memory bank ("EMG").
 	BankEMG BankID = "EMG"
+	// BankCall is the call-channel bank ("CALL") the Icom tier adds
+	// (design D4). It is its own family rather than a corner of MEM
+	// because a call channel is separately addressed on the wire.
+	BankCall BankID = "CALL"
+	// BankScan is the scan-edge bank ("SCAN") the Icom tier adds (design
+	// D4). It is deliberately NOT mapped onto BankPMS: PMS carries the
+	// Yaesu pair invariants (a lower/upper pair per index, NoBlank), and
+	// a scan edge on another family is not obliged to honour them.
+	BankScan BankID = "SCAN"
 )
 
 // Bank describes one family of memory slots: what they are called for
@@ -45,4 +60,133 @@ type Bank struct {
 	// and write; see Capabilities.FieldSupport for the zero-value lookup
 	// helper.
 	Fields map[Field]FieldSupport
+
+	// Sparse is true when Slots lists only the slots a read actually
+	// MATERIALISED (the occupied ones, plus any the user has since
+	// added) out of a much larger addressable space — the Icom tier's
+	// group-addressed banks (design D4, adjudication 7). A dense bank
+	// (every Yaesu bank registered before that tier) leaves this false,
+	// and Slots is then the complete, fixed inventory it has always
+	// been.
+	//
+	// The three fields below describe that addressable space, and they
+	// exist so "is this slot within the space?" is decidable from the
+	// Bank ALONE — no model table, no driver call — which is what lets
+	// codeplug.Diff admit an add at a slot no read has ever returned.
+	// They are legal ONLY together with Sparse, and must all be zero
+	// when Sparse is false; Capabilities.Validate enforces both halves.
+	Sparse bool
+	// Groups is how many addressable groups the sparse space has, e.g.
+	// 100. Group numbers are 1-based.
+	Groups int
+	// PerGroup is how many addressable channels each group holds, e.g.
+	// 100. Channel numbers are 1-based.
+	PerGroup int
+	// Budget is the maximum number of POPULATED slots the radio will
+	// hold across this sparse bank at once, e.g. 500 — far fewer than
+	// Groups*PerGroup. It is enforced at codeplug.Diff time and never
+	// sent: an over-budget candidate is refused before anything reaches
+	// a radio, because what an over-budget radio actually does is
+	// undocumented.
+	Budget int
+}
+
+// SparseSlot renders the canonical wire-form slot identifier for group
+// and channel in a sparse bank's addressable space: "G05-012" for group
+// 5, channel 12. Both are 1-based. The group is zero-padded to two
+// digits and the channel to three, which is exactly wide enough for the
+// 100x100 spaces this tier registers and simply grows for a wider one
+// (group 100 renders "G100").
+//
+// This form is the ONE place the group-addressed slot string is built.
+// codeplug.DisplaySlot's identity fallback already passes it through
+// unchanged, so no per-model display table is needed for it (design D4,
+// adjudication 14).
+func SparseSlot(group, channel int) string {
+	return fmt.Sprintf("G%02d-%03d", group, channel)
+}
+
+// ParseSparseSlot decodes a canonical group-addressed slot string built
+// by SparseSlot, returning the 1-based group and channel and true. It is
+// STRICT: a string is accepted only when re-rendering the decoded pair
+// through SparseSlot reproduces it byte for byte, so an alternative
+// spelling of the same address ("G5-12", "G005-0012") is refused rather
+// than silently accepted as a second name for one slot.
+func ParseSparseSlot(slot string) (group, channel int, ok bool) {
+	if len(slot) < 2 || slot[0] != 'G' {
+		return 0, 0, false
+	}
+	gs, cs, found := strings.Cut(slot[1:], "-")
+	if !found || gs == "" || cs == "" {
+		return 0, 0, false
+	}
+	g, err := strconv.Atoi(gs)
+	if err != nil {
+		return 0, 0, false
+	}
+	c, err := strconv.Atoi(cs)
+	if err != nil {
+		return 0, 0, false
+	}
+	if SparseSlot(g, c) != slot {
+		return 0, 0, false
+	}
+	return g, c, true
+}
+
+// WithinSpace reports whether slot is an address this bank can hold.
+//
+// For a dense bank that is exactly membership of Slots — the only
+// question there has ever been. For a Sparse bank it is membership of
+// Slots OR a well-formed group address (see ParseSparseSlot) inside
+// 1..Groups x 1..PerGroup: a sparse bank's Slots lists what a read
+// materialised, and an address outside that list is a perfectly legal
+// place for the user to ADD a channel.
+func (b Bank) WithinSpace(slot string) bool {
+	for _, s := range b.Slots {
+		if s == slot {
+			return true
+		}
+	}
+	if !b.Sparse {
+		return false
+	}
+	g, c, ok := ParseSparseSlot(slot)
+	if !ok {
+		return false
+	}
+	return g >= 1 && g <= b.Groups && c >= 1 && c <= b.PerGroup
+}
+
+// sparseProblems returns every way this Bank's sparse-space description
+// is internally inconsistent, phrased for Capabilities.Validate's
+// problem list. The rule is symmetric on purpose: the three descriptor
+// fields are legal only TOGETHER WITH Sparse, and must all be zero
+// without it — a Groups value on a dense bank is a mistake that would
+// otherwise sit there meaning nothing, and a Sparse bank missing one of
+// them cannot answer WithinSpace.
+func (b Bank) sparseProblems() []string {
+	var problems []string
+	if b.Sparse {
+		if b.Groups <= 0 {
+			problems = append(problems, fmt.Sprintf("bank %s: Sparse bank must have Groups greater than zero, got %d", b.ID, b.Groups))
+		}
+		if b.PerGroup <= 0 {
+			problems = append(problems, fmt.Sprintf("bank %s: Sparse bank must have PerGroup greater than zero, got %d", b.ID, b.PerGroup))
+		}
+		if b.Budget <= 0 {
+			problems = append(problems, fmt.Sprintf("bank %s: Sparse bank must have Budget greater than zero, got %d", b.ID, b.Budget))
+		}
+		return problems
+	}
+	if b.Groups != 0 {
+		problems = append(problems, fmt.Sprintf("bank %s: Groups %d is set on a bank that is not Sparse", b.ID, b.Groups))
+	}
+	if b.PerGroup != 0 {
+		problems = append(problems, fmt.Sprintf("bank %s: PerGroup %d is set on a bank that is not Sparse", b.ID, b.PerGroup))
+	}
+	if b.Budget != 0 {
+		problems = append(problems, fmt.Sprintf("bank %s: Budget %d is set on a bank that is not Sparse", b.ID, b.Budget))
+	}
+	return problems
 }

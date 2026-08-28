@@ -163,7 +163,7 @@ func (d *ftdx10Driver) Capabilities() spec.Capabilities {
 // package's doc.go. One retry: an identity read is idempotent and Open
 // should survive a single swallowed reply.
 func idSpec() transport.CommandSpec {
-	return transport.CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, RetryReads: 1}
+	return transport.CATReadSpec("ID", 7, 1)
 }
 
 // Open implements driver.Driver: it builds a transport.Engine over port,

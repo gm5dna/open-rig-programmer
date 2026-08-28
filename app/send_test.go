@@ -140,7 +140,7 @@ func TestPrepareSend_ConfirmSend_HappyPath(t *testing.T) {
 	// is available here any more — see connectDirect's doc comment).
 	for _, tt := range []struct {
 		slot   string
-		wantHz uint32
+		wantHz uint64
 	}{
 		{"001", 7_100_000},
 		{"P1L", 14_050_000},
@@ -298,12 +298,12 @@ func TestConfirmSend_CancelMidTransfer_AndBusyExclusion(t *testing.T) {
 	// comment); the untouched one must still show its ORIGINAL (pre-edit)
 	// value.
 	completedCh, err := sess.ReadChannel(a.ctx, completedSlot)
-	wantHz := map[string]uint32{"001": 7_100_000, "P1L": 14_050_000}[completedSlot]
+	wantHz := map[string]uint64{"001": 7_100_000, "P1L": 14_050_000}[completedSlot]
 	if err != nil || completedCh.Data == nil || completedCh.Data.FreqHz != wantHz {
 		t.Errorf("ReadChannel(%s) (the completed slot) = %+v (err=%v), want FreqHz=%d", completedSlot, completedCh.Data, err, wantHz)
 	}
 	otherCh, err := sess.ReadChannel(a.ctx, otherSlot)
-	origHz := map[string]uint32{"001": 7_000_000, "P1L": 14_000_000}[otherSlot]
+	origHz := map[string]uint64{"001": 7_000_000, "P1L": 14_000_000}[otherSlot]
 	if err != nil || otherCh.Data == nil || otherCh.Data.FreqHz != origHz {
 		t.Errorf("ReadChannel(%s) (untouched — never attempted before the cancel) = %+v (err=%v), want FreqHz=%d", otherSlot, otherCh.Data, err, origHz)
 	}

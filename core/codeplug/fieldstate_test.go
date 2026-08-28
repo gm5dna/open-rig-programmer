@@ -86,3 +86,50 @@ func TestBoolFieldValid(t *testing.T) {
 		})
 	}
 }
+
+// TestToneField_ValidConsultsTheSharedPredicate is E3's consumer half in
+// core/codeplug: a Known tone on a radio that declares a RANGE rather than
+// a chart must be accepted, and the fail-closed behaviour for a radio
+// declaring NEITHER must be exactly what it always was.
+//
+// Before E3 this method carried its own list-only loop, so the first case
+// below was refused for every CI-V radio in the Icom tier — a tone the
+// radio can plainly express, rejected because the only shape the check
+// understood was a Yaesu chart.
+func TestToneField_ValidConsultsTheSharedPredicate(t *testing.T) {
+	rangeCaps := spec.Capabilities{
+		CTCSSToneRange: &spec.ToneRange{MinDeciHz: 670, MaxDeciHz: 2541, StepDeciHz: 1},
+	}
+	listCaps := spec.Capabilities{CTCSSTones: []spec.Tone{670, 693, 719}}
+
+	cases := []struct {
+		name    string
+		caps    spec.Capabilities
+		field   ToneField
+		wantErr bool
+	}{
+		{"range: a tone inside it", rangeCaps, ToneField{State: Known, Value: 1000}, false},
+		{"range: a tone above it", rangeCaps, ToneField{State: Known, Value: 2542}, true},
+		{"list: a listed tone", listCaps, ToneField{State: Known, Value: 693}, false},
+		{"list: an unlisted tone", listCaps, ToneField{State: Known, Value: 700}, true},
+
+		// PINNED, unchanged: a radio declaring neither refuses every
+		// Known tone. "No chart known" is not "no chart needed".
+		{"neither declared: fail-closed", spec.Capabilities{}, ToneField{State: Known, Value: 670}, true},
+
+		// And the non-Known states are untouched by any of this.
+		{"unavailable", rangeCaps, ToneField{State: Unavailable}, false},
+		{"unknown", spec.Capabilities{}, ToneField{State: Unknown}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.field.Valid(tc.caps)
+			if tc.wantErr && err == nil {
+				t.Errorf("Valid() = nil, want an error")
+			}
+			if !tc.wantErr && err != nil {
+				t.Errorf("Valid() = %v, want nil", err)
+			}
+		})
+	}
+}

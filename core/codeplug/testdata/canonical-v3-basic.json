@@ -1,0 +1,80 @@
+{
+  "schema": 3,
+  "generator": "open-rig-programmer v0.1.0",
+  "radio": {
+    "model": "FT-710",
+    "cat_id": "0800",
+    "read_at": "2026-07-10T12:00:00Z",
+    "port": "/dev/cu.usbserial-A5069RR4",
+    "usb_serial": "A5069RR4",
+    "region": "UK",
+    "baseline_digest": "c0ffee"
+  },
+  "channels": [
+    {
+      "slot": "001",
+      "data": {
+        "freq_hz": 14250000,
+        "mode": "USB",
+        "ctcss": "OFF",
+        "ctcss_tone": {
+          "state": "unknown"
+        },
+        "shift": "SIMPLEX",
+        "tag": "CALLING",
+        "tag_display": {
+          "state": "known",
+          "value": true
+        },
+        "scan_skip": {
+          "state": "unknown"
+        }
+      }
+    },
+    {
+      "slot": "002",
+      "data": {
+        "freq_hz": 145500000,
+        "mode": "FM",
+        "clar_hz": -120,
+        "rx_clar": true,
+        "tx_clar": true,
+        "ctcss": "ENC-DEC",
+        "ctcss_tone": {
+          "state": "known",
+          "value": 885
+        },
+        "shift": "MINUS",
+        "tag": "GB3 <&>",
+        "tag_display": {
+          "state": "known"
+        },
+        "scan_skip": {
+          "state": "known",
+          "value": true
+        }
+      }
+    },
+    {
+      "slot": "003"
+    },
+    {
+      "slot": "P1L",
+      "data": {
+        "freq_hz": 4294967295,
+        "mode": "CW-U",
+        "ctcss": "OFF",
+        "ctcss_tone": {
+          "state": "unavailable"
+        },
+        "shift": "PLUS",
+        "tag_display": {
+          "state": "unavailable"
+        },
+        "scan_skip": {
+          "state": "unavailable"
+        }
+      }
+    }
+  ]
+}

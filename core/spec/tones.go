@@ -20,6 +20,104 @@ func (t Tone) String() string {
 	return fmt.Sprintf("%.1f Hz", t.Hz())
 }
 
+// ToneRange is a CONTIGUOUS, evenly-stepped CTCSS tone domain: every tone
+// from MinDeciHz to MaxDeciHz inclusive that MinDeciHz reaches in a whole
+// number of StepDeciHz.
+//
+// IT IS THE SHAPE A RADIO WHOSE TONE FIELD IS A NUMBER NEEDS, and the
+// Icom tier is full of them. A Yaesu CAT radio names a tone by its INDEX
+// into a fifty-entry chart, so the chart is the domain and a list is the
+// only honest way to write it down. A CI-V memory record carries the tone
+// as packed BCD tenths of a hertz — a NUMBER — and a model whose manual
+// says "67.0 to 254.1 Hz" is describing a range, not a table. Forcing
+// such a model to enumerate 1,872 entries would be a transcription
+// exercise with 1,872 chances to mistype, describing a domain its own
+// document states in one line.
+//
+// IT IS DECLARED BY POINTER on Capabilities, so PRESENCE is the
+// declaration. A zero ToneRange embedded by value would be
+// indistinguishable from an author who never filled one in, and this is
+// precisely a field where "not stated" and "stated as zero" must not be
+// the same value: Capabilities.AdmitsTone fails CLOSED when neither a
+// list nor a range is declared, and a value-typed zero range would have
+// turned that into "admits nothing, for a radio that meant to admit
+// everything in its chart" — or, worse under a laxer predicate, the
+// reverse.
+//
+// A radio declares ONE or the OTHER, never both: see Validate.
+type ToneRange struct {
+	// MinDeciHz is the lowest admissible tone, in tenths of a hertz, and
+	// is itself admissible. Must be greater than zero.
+	MinDeciHz Tone
+	// MaxDeciHz is the highest admissible tone, inclusive. Must be
+	// greater than zero, at least MinDeciHz, and reachable from
+	// MinDeciHz in a whole number of StepDeciHz — a maximum the step can
+	// never land on is an author stating a bound their radio does not
+	// have.
+	MaxDeciHz Tone
+	// StepDeciHz is the spacing between admissible tones, in tenths of a
+	// hertz. Must be greater than zero. A radio accepting any tenth of a
+	// hertz declares 1.
+	//
+	// IT IS REQUIRED RATHER THAN DEFAULTED, for ToneRange's own
+	// pointer-presence reason: a zero step would have to mean either
+	// "every tenth of a hertz" or "the author forgot", and the two are
+	// not the same claim about a radio.
+	StepDeciHz Tone
+}
+
+// admits reports whether t falls in this range: within both bounds, and
+// on a step boundary measured FROM MinDeciHz.
+//
+// FROM MinDeciHz, not from zero. A radio whose chart starts at 67.0 Hz in
+// 0.5 Hz steps admits 67.5 and not 67.2; measuring the step from zero
+// would admit 67.0 and 67.5 alike only by coincidence of where the
+// minimum happened to fall.
+//
+// It is unexported: the question callers ask is Capabilities.AdmitsTone,
+// which knows about the list shape too, and a second exported predicate
+// answering half the question is how the two consumers drifted apart in
+// the first place.
+func (r ToneRange) admits(t Tone) bool {
+	if r.StepDeciHz <= 0 {
+		// Unreachable for a Validate-d Capabilities, and refused rather
+		// than divided by: a zero step describes no domain, so it admits
+		// nothing.
+		return false
+	}
+	if t < r.MinDeciHz || t > r.MaxDeciHz {
+		return false
+	}
+	return (t-r.MinDeciHz)%r.StepDeciHz == 0
+}
+
+// AdmitsTone reports whether t is a tone THIS radio can express — the ONE
+// predicate every consumer of a radio's tone domain asks, whichever shape
+// that domain is declared in.
+//
+// IT IS ONE PREDICATE BECAUSE IT USED TO BE TWO. codeplug.ToneField.Valid
+// and core/csvio's CHIRP import each carried their own "is t in
+// caps.CTCSSTones" loop — identical, independent, and both list-only — so
+// adding a range shape in one place would have left the other refusing
+// every tone a range-declaring radio has. Both now call this.
+//
+// FAIL-CLOSED WHEN NEITHER IS DECLARED, and that is deliberate and
+// unchanged. A radio that declares no list and no range admits NO tone.
+// "No chart known" must never be treated as "no chart needed": this
+// project refuses rather than corrupts, and a tone this program cannot
+// prove the radio can express is a tone it must not send.
+func (c Capabilities) AdmitsTone(t Tone) bool {
+	if c.CTCSSToneRange != nil {
+		return c.CTCSSToneRange.admits(t)
+	}
+	for _, x := range c.CTCSSTones {
+		if x == t {
+			return true
+		}
+	}
+	return false
+}
+
 // standardCTCSSTones is the 50-tone CTCSS chart shared across the radio
 // family this project targets. It is verified against the FT-710 CAT
 // manual 2306-C, CN command, "Table 1 (CTCSS Tone Chart)": the array

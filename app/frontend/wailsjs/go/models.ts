@@ -28,6 +28,48 @@ export namespace codeplug {
 	        this.value = source["value"];
 	    }
 	}
+	export class FreqField {
+	    state: string;
+	    value?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new FreqField(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.state = source["state"];
+	        this.value = source["value"];
+	    }
+	}
+	export class IntField {
+	    state: string;
+	    value?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new IntField(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.state = source["state"];
+	        this.value = source["value"];
+	    }
+	}
+	export class StringField {
+	    state: string;
+	    value?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new StringField(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.state = source["state"];
+	        this.value = source["value"];
+	    }
+	}
 	export class ChannelData {
 	    freq_hz: number;
 	    mode: string;
@@ -40,6 +82,16 @@ export namespace codeplug {
 	    tag?: string;
 	    tag_display: BoolField;
 	    scan_skip: BoolField;
+	    tx_frequency: FreqField;
+	    duplex: StringField;
+	    offset: FreqField;
+	    tone_mode: StringField;
+	    tone_tx: ToneField;
+	    tone_rx: ToneField;
+	    dtcs_code: IntField;
+	    dtcs_polarity: StringField;
+	    filter: StringField;
+	    data_mode: BoolField;
 	
 	    static createFrom(source: any = {}) {
 	        return new ChannelData(source);
@@ -58,6 +110,16 @@ export namespace codeplug {
 	        this.tag = source["tag"];
 	        this.tag_display = this.convertValues(source["tag_display"], BoolField);
 	        this.scan_skip = this.convertValues(source["scan_skip"], BoolField);
+	        this.tx_frequency = this.convertValues(source["tx_frequency"], FreqField);
+	        this.duplex = this.convertValues(source["duplex"], StringField);
+	        this.offset = this.convertValues(source["offset"], FreqField);
+	        this.tone_mode = this.convertValues(source["tone_mode"], StringField);
+	        this.tone_tx = this.convertValues(source["tone_tx"], ToneField);
+	        this.tone_rx = this.convertValues(source["tone_rx"], ToneField);
+	        this.dtcs_code = this.convertValues(source["dtcs_code"], IntField);
+	        this.dtcs_polarity = this.convertValues(source["dtcs_polarity"], StringField);
+	        this.filter = this.convertValues(source["filter"], StringField);
+	        this.data_mode = this.convertValues(source["data_mode"], BoolField);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -181,6 +243,7 @@ export namespace main {
 	    ReadOnly: boolean;
 	    Slots: SlotView[];
 	    TagDisplayDefault: codeplug.BoolField;
+	    Fields: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new BankView(source);
@@ -193,6 +256,7 @@ export namespace main {
 	        this.ReadOnly = source["ReadOnly"];
 	        this.Slots = this.convertValues(source["Slots"], SlotView);
 	        this.TagDisplayDefault = this.convertValues(source["TagDisplayDefault"], codeplug.BoolField);
+	        this.Fields = source["Fields"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

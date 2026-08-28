@@ -31,7 +31,7 @@
 //     with Go (a pasted mode of "XYZ" maps fine here and comes back as
 //     a validation issue).
 
-import { COLUMNS, cloneData, isCellEditable, newChannelData, parsePasteCell } from './columns.js'
+import { columnsFor, cloneData, isCellEditable, newChannelData, parsePasteCell } from './columns.js'
 
 /** @typedef {import('../../../wailsjs/go/models').codeplug.Channel} Channel */
 /** @typedef {import('../../../wailsjs/go/models').main.BankView} BankView */
@@ -110,7 +110,7 @@ export function parseBlock(text) {
 /**
  * @typedef {Object} PasteContext
  * @property {number} startRow   focused cell's row within the bank
- * @property {number} startCol   focused cell's column index (COLUMNS order)
+ * @property {number} startCol   focused cell's column index (columnsFor(bank) order)
  * @property {BankView} bank     the active bank (ReadOnly + Slots)
  * @property {Map<string, Channel>} channelBySlot   working-copy channels keyed by slot
  * @property {UISpecView} uiSpec
@@ -128,6 +128,11 @@ export function mapPasteToChannels(rows, { startRow, startCol, bank, channelBySl
 		return { ok: false, reason: `the ${bank.Label} bank is read-only over CAT — nothing was pasted` }
 	}
 	const slots = bank.Slots ?? []
+	// The SAME column list the grid renders for this bank (columnsFor):
+	// a paste is addressed by column index, so it has to agree with what
+	// the user is looking at. For every model registered today this is
+	// exactly COLUMNS, as it always was.
+	const columns = columnsFor(bank)
 	/** @type {Channel[]} */
 	const channels = []
 
@@ -144,15 +149,15 @@ export function mapPasteToChannels(rows, { startRow, startCol, bank, channelBySl
 			? existingData.tag_display?.state
 			: bank.TagDisplayDefault?.state
 
-		/** @type {{column: typeof COLUMNS[number], patch: object}[]} */
+		/** @type {{column: (typeof columns)[number], patch: object}[]} */
 		const patches = []
 		/** @type {number | null} */
 		let pastedFreqHz = null
 
-		for (let c = 0; c < rows[r].length && startCol + c < COLUMNS.length; c++) {
+		for (let c = 0; c < rows[r].length && startCol + c < columns.length; c++) {
 			const text = rows[r][c]
 			if (text === '') continue // empty cell: leave this field unchanged
-			const column = COLUMNS[startCol + c]
+			const column = columns[startCol + c]
 			if (column.id === 'slot') {
 				return { ok: false, reason: 'the Slot column cannot be pasted into' }
 			}

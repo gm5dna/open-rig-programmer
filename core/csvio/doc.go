@@ -12,6 +12,17 @@
 //     loop between this package's own two functions; it makes no claim
 //     about any other CSV dialect.
 //
+//     The schema has TWO VERSIONS since the Icom tier (design D4), and
+//     it is versioned BY ITS COLUMN SET rather than by a marker cell:
+//     version 1 is the thirteen columns this package has always written,
+//     version 2 is those thirteen followed by one per tier-added field.
+//     Export picks the version from the CONTENT — version 1 while no
+//     channel records a tier field, which is every channel of every
+//     radio registered before that tier — so an export of any such radio
+//     is byte-identical to what this program produced before the tier
+//     existed, which a marker column could not have been. Import accepts
+//     both, looking columns up by name.
+//
 //   - ImportCHIRP is a best-effort MIGRATION path from CHIRP-next's CSV
 //     export format, which models a materially different (and in places
 //     incompatible) radio: fields the target radio has no equivalent for
@@ -29,8 +40,9 @@
 // codeplug.Channel/ChannelData values without judging whether those values
 // make sense for any particular radio. ImportCHIRP additionally consults a
 // spec.Capabilities, but only for VOCABULARY AND SHAPE — slot space, tag
-// length, shift/CTCSS vocabulary, mode and tone tables — never for
-// semantic validity. Neither import runs codeplug.Validate, and
+// length, the shift/CTCSS or duplex/tone-mode vocabulary (whichever the
+// radio expresses), mode, tone, DTCS and filter tables, and which fields
+// the target bank can reach at all — never for semantic validity. Neither import runs codeplug.Validate, and
 // successfully imported data is not thereby guaranteed valid:
 // codeplug.Validate remains the one semantic gate a caller must run before
 // treating any codeplug (regardless of its origin) as ready to send. This

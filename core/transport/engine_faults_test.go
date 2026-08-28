@@ -38,7 +38,7 @@ func TestEngine_MW_FireAndForget_DelayedRejection(t *testing.T) {
 	}
 
 	start := time.Now()
-	_, err = eng.Do(ctx, cmd, CommandSpec{ErrorWindow: 200 * time.Millisecond})
+	_, err = eng.Do(ctx, cmd, CommandSpec{Class: ClassWrite, ErrorWindow: 200 * time.Millisecond})
 	elapsed := time.Since(start)
 
 	if !errors.Is(err, cat.ErrRejected) {
@@ -85,10 +85,10 @@ func TestEngine_ReadTimeout_DrainThenRetry_Succeeds(t *testing.T) {
 	}
 
 	got, err := eng.Do(ctx, cmd, CommandSpec{
-		ExpectPrefix: "MR",
-		ExpectLen:    28,
-		Timeout:      150 * time.Millisecond,
-		RetryReads:   1,
+		Class:      ClassRead,
+		Match:      cat.PrefixLenMatcher("MR", 28),
+		Timeout:    150 * time.Millisecond,
+		RetryReads: 1,
 	})
 	if err != nil {
 		t.Fatalf("Do: unexpected error (retry should have recovered): %v", err)
@@ -123,10 +123,10 @@ func TestEngine_ReadTimeout_ExhaustsRetries_ReturnsErrTimeout(t *testing.T) {
 	}
 
 	_, err = eng.Do(ctx, cmd, CommandSpec{
-		ExpectPrefix: "MR",
-		ExpectLen:    28,
-		Timeout:      150 * time.Millisecond,
-		RetryReads:   0,
+		Class:      ClassRead,
+		Match:      cat.PrefixLenMatcher("MR", 28),
+		Timeout:    150 * time.Millisecond,
+		RetryReads: 0,
 	})
 	if !errors.Is(err, ErrTimeout) {
 		t.Fatalf("Do (no retries permitted) = %v, want errors.Is match against ErrTimeout", err)
@@ -168,12 +168,12 @@ func TestEngine_WriteFireAndForget_NeverRetries_ExactlyOneExchange(t *testing.T)
 	// here we confirm the RUNTIME behaviour with a legal spec: silence
 	// within the window is success, and that is the ONLY write attempt
 	// physically possible in this call.
-	if _, err := eng.Do(ctx, mwCmd, CommandSpec{ErrorWindow: 60 * time.Millisecond}); err != nil {
+	if _, err := eng.Do(ctx, mwCmd, CommandSpec{Class: ClassWrite, ErrorWindow: 60 * time.Millisecond}); err != nil {
 		t.Fatalf("Do (fire-and-forget MW): unexpected error: %v", err)
 	}
 
 	idCmd := cat.FT710.BuildIDRead()
-	_, err = eng.Do(ctx, idCmd, CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Timeout: 200 * time.Millisecond})
+	_, err = eng.Do(ctx, idCmd, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("ID", 7), Timeout: 200 * time.Millisecond})
 	if !errors.Is(err, ErrTimeout) {
 		t.Fatalf("Do(ID;) = %v, want ErrTimeout (proving the MW write was exchange 1 only — no resend occurred)", err)
 	}
@@ -201,13 +201,13 @@ func TestEngine_Do_FireAndForgetWithRetryReads_Invalid(t *testing.T) {
 		t.Fatalf("BuildMWSet: %v", err)
 	}
 
-	_, err = eng.Do(ctx, mwCmd, CommandSpec{RetryReads: 3})
+	_, err = eng.Do(ctx, mwCmd, CommandSpec{Class: ClassWrite, RetryReads: 3})
 	if !errors.Is(err, ErrInvalidSpec) {
 		t.Fatalf("Do(fire-and-forget, RetryReads=3) = %v, want errors.Is match against ErrInvalidSpec", err)
 	}
 
 	idCmd := cat.FT710.BuildIDRead()
-	_, err = eng.Do(ctx, idCmd, CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Timeout: 200 * time.Millisecond})
+	_, err = eng.Do(ctx, idCmd, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("ID", 7), Timeout: 200 * time.Millisecond})
 	if !errors.Is(err, ErrTimeout) {
 		t.Fatalf("Do(ID;) = %v, want ErrTimeout (proving the invalid MW call wrote NOTHING — ID; is still exchange 1, hit by FaultGarbleReply(1))", err)
 	}
@@ -225,7 +225,7 @@ func TestEngine_UnexpectedFrame_LoggedAndCounted_NotFatal(t *testing.T) {
 	ctx := testCtx(t)
 
 	idCmd := cat.FT710.BuildIDRead()
-	got, err := eng.Do(ctx, idCmd, CommandSpec{ExpectPrefix: "ID", ExpectLen: 7})
+	got, err := eng.Do(ctx, idCmd, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("ID", 7)})
 	if err != nil {
 		t.Fatalf("Do: unexpected error: %v", err)
 	}
@@ -283,14 +283,14 @@ func TestEngine_Contamination_DrainToQuiet_Recovers(t *testing.T) {
 	ctx := testCtx(t)
 
 	idCmd := cat.FT710.BuildIDRead()
-	_, err := eng.Do(ctx, idCmd, CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Timeout: 300 * time.Millisecond})
+	_, err := eng.Do(ctx, idCmd, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("ID", 7), Timeout: 300 * time.Millisecond})
 	if !errors.Is(err, ErrContaminated) {
 		t.Fatalf("Do = %v, want errors.Is match against ErrContaminated", err)
 	}
 
 	// A second Do call must ALSO fail fast with ErrContaminated, without
 	// even attempting a write, until DrainToQuiet succeeds.
-	_, err = eng.Do(ctx, idCmd, CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Timeout: 300 * time.Millisecond})
+	_, err = eng.Do(ctx, idCmd, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("ID", 7), Timeout: 300 * time.Millisecond})
 	if !errors.Is(err, ErrContaminated) {
 		t.Fatalf("Do (while still contaminated) = %v, want ErrContaminated", err)
 	}
@@ -300,7 +300,7 @@ func TestEngine_Contamination_DrainToQuiet_Recovers(t *testing.T) {
 	}
 
 	// Recovered: a fresh ID; now succeeds normally.
-	got, err := eng.Do(ctx, idCmd, CommandSpec{ExpectPrefix: "ID", ExpectLen: 7})
+	got, err := eng.Do(ctx, idCmd, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("ID", 7)})
 	if err != nil {
 		t.Fatalf("Do (after recovery): unexpected error: %v", err)
 	}
@@ -318,7 +318,7 @@ func TestEngine_Disconnect_ReturnsErrPortClosed(t *testing.T) {
 	ctx := testCtx(t)
 
 	idCmd := cat.FT710.BuildIDRead()
-	_, err := eng.Do(ctx, idCmd, CommandSpec{ExpectPrefix: "ID", ExpectLen: 7})
+	_, err := eng.Do(ctx, idCmd, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("ID", 7)})
 	if err != nil {
 		t.Fatalf("Do (exchange 1, before disconnect): unexpected error: %v", err)
 	}
@@ -328,7 +328,7 @@ func TestEngine_Disconnect_ReturnsErrPortClosed(t *testing.T) {
 	deadline := time.Now().Add(2 * time.Second)
 	var lastErr error
 	for time.Now().Before(deadline) {
-		_, lastErr = eng.Do(ctx, idCmd, CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Timeout: 100 * time.Millisecond})
+		_, lastErr = eng.Do(ctx, idCmd, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("ID", 7), Timeout: 100 * time.Millisecond})
 		if errors.Is(lastErr, ErrPortClosed) {
 			break
 		}

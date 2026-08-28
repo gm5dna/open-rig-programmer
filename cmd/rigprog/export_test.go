@@ -108,10 +108,7 @@ func TestCmdExport_LoadNonexistentFile(t *testing.T) {
 func TestCmdExport_SchemaTooNew(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "too-new.json")
-	tooNew := &codeplug.Codeplug{Schema: codeplug.CurrentSchema + 1}
-	if err := codeplug.Save(path, tooNew); err != nil {
-		t.Fatalf("Save fixture: %v", err)
-	}
+	writeTooNewCodeplug(t, path)
 	csvOut := filepath.Join(dir, "out.csv")
 
 	var stdout, stderr bytes.Buffer

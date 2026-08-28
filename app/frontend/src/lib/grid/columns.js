@@ -44,6 +44,74 @@ export const COLUMNS = [
 ]
 
 /**
+ * The columns the Icom tier added, in ChannelData's own declaration
+ * order. Unlike COLUMNS these are CONDITIONAL: one renders only where
+ * the bank's own capabilities say the radio has that field
+ * (BankView.Fields, from app/uispec.go's bankTierFields). `key` is the
+ * ChannelData key the column edits; `field` is the spec.Field it
+ * decorates IssueViews from, and the two agree by construction here.
+ *
+ * On the four Yaesu models every bank's Fields list is empty, so none of
+ * these renders and the grid is exactly the ten-column grid it has
+ * always been. The registered IC-7610 is the first radio for which any
+ * of them renders: its memory record maps tone_mode, tone_tx, tone_rx
+ * and filter, and nothing else here.
+
+ * @typedef {Object} TierColumn
+ * @property {string} id
+ * @property {string} label   column header (British English)
+ * @property {string} field   the spec.Field this column is, and decorates from
+ * @property {string} key     the ChannelData key it edits
+ * @property {'freq'|'tone'|'int'|'bool'|'text'} kind   how its value is rendered and parsed
+ */
+
+/** @type {TierColumn[]} */
+export const TIER_COLUMNS = [
+	{ id: 'txFreq', label: 'TX frequency (MHz)', field: 'tx_frequency', key: 'tx_frequency', kind: 'freq' },
+	{ id: 'duplex', label: 'Duplex', field: 'duplex', key: 'duplex', kind: 'text' },
+	{ id: 'offset', label: 'Offset (MHz)', field: 'offset', key: 'offset', kind: 'freq' },
+	{ id: 'toneMode', label: 'Tone mode', field: 'tone_mode', key: 'tone_mode', kind: 'text' },
+	{ id: 'toneTx', label: 'TX tone', field: 'tone_tx', key: 'tone_tx', kind: 'tone' },
+	{ id: 'toneRx', label: 'RX tone', field: 'tone_rx', key: 'tone_rx', kind: 'tone' },
+	{ id: 'dtcsCode', label: 'DTCS code', field: 'dtcs_code', key: 'dtcs_code', kind: 'int' },
+	{ id: 'dtcsPolarity', label: 'DTCS polarity', field: 'dtcs_polarity', key: 'dtcs_polarity', kind: 'text' },
+	{ id: 'filter', label: 'Filter', field: 'filter', key: 'filter', kind: 'text' },
+	{ id: 'dataMode', label: 'Data mode', field: 'data_mode', key: 'data_mode', kind: 'bool' },
+]
+
+/** TIER_COLUMNS keyed by column id, for the per-column helpers below. */
+const TIER_BY_ID = new Map(TIER_COLUMNS.map((c) => [c.id, c]))
+
+/**
+ * The columns to render for one bank: always the ten in COLUMNS, then
+ * every TIER_COLUMNS entry that bank's capabilities say the radio
+ * actually has (BankView.Fields).
+ *
+ * The asymmetry is deliberate and is the tier's whole frontend
+ * contract. The ten pre-tier columns stay UNCONDITIONAL — their per-CELL
+ * rules are state-based (isCellEditable), and re-deriving their
+ * VISIBILITY from capabilities is a separate decision nobody has taken —
+ * while a tier column has no such history and would be meaningless on a
+ * radio with no such field. On the four Yaesu models Fields is empty on
+ * every bank, so this returns exactly COLUMNS and their grid does not
+ * change by so much as a column; on the IC-7610 it appends that radio's
+ * own four.
+ *
+ * A missing or hand-built bank (no Fields) answers the same way an empty
+ * one does: no tier columns. Refusing to invent a column for a radio
+ * that has not said it has the field is the same posture as the rest of
+ * this module.
+ * @param {BankView | null | undefined} bank
+ * @returns {Column[]}
+ */
+export function columnsFor(bank) {
+	const fields = bank?.Fields
+	if (!fields || fields.length === 0) return COLUMNS
+	const present = new Set(fields)
+	return [...COLUMNS, ...TIER_COLUMNS.filter((c) => present.has(c.field))]
+}
+
+/**
  * Whether this cell can open an editor. Bank-level read-only locking is
  * the component's job (BankView.ReadOnly gates the whole row before
  * this is consulted); this answers the per-cell question only:
@@ -98,6 +166,19 @@ export const COLUMNS = [
  * @returns {boolean}
  */
 export function isCellEditable(column, data) {
+	const tier = TIER_BY_ID.get(column.id)
+	if (tier) {
+		// A tier column's cell follows tag_display's rule, not
+		// tone/scan-skip's: 'known' and 'unknown' are both editable, and
+		// 'unavailable' never is. The column only renders where the radio
+		// HAS the field (columnsFor), so an unresolved value there is a
+		// question the user may legitimately answer — while 'unavailable'
+		// says the frame has no room for one, and 'absent' (the zero
+		// state, from a file that predates the field) says the codeplug
+		// never spoke about it, which is not an answer to offer either.
+		const state = /** @type {Record<string, any>} */ (data ?? {})[tier.key]?.state
+		return state === 'known' || state === 'unknown'
+	}
 	switch (column.id) {
 		case 'slot':
 			return false
@@ -144,6 +225,28 @@ function toneDisplay(decihertz, uiSpec) {
  */
 export function displayValue(column, data, uiSpec) {
 	if (data == null) return ''
+	const tier = TIER_BY_ID.get(column.id)
+	if (tier) {
+		const f = /** @type {Record<string, any>} */ (data)[tier.key]
+		// Anything but a Known value renders the em dash the grid already
+		// uses for "this cell makes no claim" — unavailable, unknown and
+		// the absent zero state alike. On/Off, a tone in Hz or a
+		// frequency in MHz are claims about the radio, and this grid does
+		// not make claims it cannot support.
+		if (f?.state !== 'known') return '—'
+		switch (tier.kind) {
+			case 'freq':
+				return typeof f.value === 'number' ? hzToMHz(f.value) : '—'
+			case 'tone':
+				return typeof f.value === 'number' ? toneDisplay(f.value, uiSpec) : '—'
+			case 'int':
+				return typeof f.value === 'number' ? String(f.value) : '—'
+			case 'bool':
+				return f.value ? 'On' : 'Off'
+			default:
+				return f.value ?? ''
+		}
+	}
 	switch (column.id) {
 		case 'freq':
 			return hzToMHz(data.freq_hz)
@@ -228,7 +331,33 @@ export function newChannelData(uiSpec, bank, freqHz) {
 		// refuses to invent a value, exactly as cloneData does.
 		tag_display: cloneFieldState(bank?.TagDisplayDefault),
 		scan_skip: { state: 'unknown' },
+		// Every tier field this bank REACHES starts 'unknown' — the state
+		// that says the answer is not yet in hand, which is the true
+		// thing about a row that has just been created. No value is
+		// invented, and a field the bank does not reach gets no key at
+		// all, leaving it absent. On the four Yaesu models Fields is
+		// empty on every bank, so this adds nothing; on the IC-7610 it
+		// adds that radio's own four.
+		...tierDefaults(bank),
 	})
+}
+
+/**
+ * The {state:'unknown'} starting value for every tier-added field the
+ * bank reaches, keyed by ChannelData key.
+ * @param {BankView | null | undefined} bank
+ * @returns {Record<string, {state: string}>}
+ */
+function tierDefaults(bank) {
+	const fields = bank?.Fields
+	if (!fields || fields.length === 0) return {}
+	const present = new Set(fields)
+	/** @type {Record<string, {state: string}>} */
+	const out = {}
+	for (const column of TIER_COLUMNS) {
+		if (present.has(column.field)) out[column.key] = { state: 'unknown' }
+	}
+	return out
 }
 
 /**
@@ -268,7 +397,35 @@ export function cloneData(data) {
 		// invent a value, exactly as tone/scan skip do.
 		tag_display: cloneFieldState(data.tag_display),
 		scan_skip: cloneFieldState(data.scan_skip),
+		// The tier's ten are carried through VERBATIM, with no fallback
+		// state: whatever Go sent is what goes back. That matters even on
+		// a radio with none of them, where every one arrives
+		// 'unavailable' — inventing an 'unknown' fallback here would turn
+		// an untouched channel into a modified one the moment any cell
+		// was edited, because codeplug.Diff compares ChannelData whole.
+		// cloneTierFields spreads them in so an absent key stays absent.
+		...cloneTierFields(data),
 	})
+}
+
+/**
+ * A copy of the tier-added fields present on data, key by key. A field
+ * the incoming data does not carry is OMITTED rather than defaulted:
+ * absent is a real state (core/codeplug's codeplug.Absent — "this
+ * codeplug never spoke about the field"), and an absent JSON key
+ * unmarshals to exactly it.
+ * @param {ChannelData} data
+ * @returns {Record<string, {state?: string, value?: unknown}>}
+ */
+function cloneTierFields(data) {
+	/** @type {Record<string, {state?: string, value?: unknown}>} */
+	const out = {}
+	for (const column of TIER_COLUMNS) {
+		const f = /** @type {Record<string, any>} */ (data)[column.key]
+		if (f === undefined) continue
+		out[column.key] = cloneFieldState(f)
+	}
+	return out
 }
 
 /** Accepted boolean spellings for pasted Scan skip / Tag display cells. */
@@ -288,6 +445,12 @@ const BOOL_WORDS = new Map([
  * @returns {{ok: true, patch: Partial<ChannelData>} | {ok: false, reason: string}}
  */
 export function parsePasteCell(column, text, uiSpec) {
+	const tier = TIER_BY_ID.get(column.id)
+	if (tier) {
+		const parsed = parseTierCell(tier, text)
+		if (!parsed.ok) return parsed
+		return { ok: true, patch: /** @type {Partial<ChannelData>} */ ({ [tier.key]: parsed.value }) }
+	}
 	switch (column.id) {
 		case 'freq': {
 			const hz = mhzToHz(text)
@@ -329,5 +492,50 @@ export function parsePasteCell(column, text, uiSpec) {
 		}
 		default:
 			return { ok: false, reason: `the ${column.label} column cannot be pasted into` }
+	}
+}
+
+/**
+ * Parses one pasted cell for a tier column into the {state, value}
+ * shape its ChannelData field takes. PARSING only, exactly as
+ * parsePasteCell is: whether the value is in this radio's vocabulary is
+ * Go's question (codeplug.Validate), so a text cell passes through
+ * trimmed and unjudged.
+ *
+ * Every result is state 'known'. A paste is somebody typing a value; the
+ * non-Known states are not things a cell can be pasted INTO, and the
+ * grid refuses those cells before reaching here (isCellEditable).
+ * @param {TierColumn} column
+ * @param {string} text   non-empty (paste.js skips empty cells)
+ * @returns {{ok: true, value: {state: string, value: unknown}} | {ok: false, reason: string}}
+ */
+function parseTierCell(column, text) {
+	const trimmed = text.trim()
+	switch (column.kind) {
+		case 'freq': {
+			const hz = mhzToHz(trimmed)
+			if (hz === null) return { ok: false, reason: `"${trimmed}" is not a frequency in MHz` }
+			return { ok: true, value: { state: 'known', value: hz } }
+		}
+		case 'tone': {
+			const hz = trimmed.replace(/\s*Hz$/i, '')
+			if (!/^\d+(\.\d+)?$/.test(hz)) {
+				return { ok: false, reason: `"${trimmed}" is not a tone in Hz` }
+			}
+			return { ok: true, value: { state: 'known', value: Math.round(Number(hz) * 10) } }
+		}
+		case 'int': {
+			if (!/^\d+$/.test(trimmed)) {
+				return { ok: false, reason: `"${trimmed}" is not a whole number for ${column.label}` }
+			}
+			return { ok: true, value: { state: 'known', value: Number(trimmed) } }
+		}
+		case 'bool': {
+			const value = BOOL_WORDS.get(trimmed.toLowerCase())
+			if (value === undefined) return { ok: false, reason: `"${trimmed}" is not on/off for ${column.label}` }
+			return { ok: true, value: { state: 'known', value } }
+		}
+		default:
+			return { ok: true, value: { state: 'known', value: trimmed } }
 	}
 }

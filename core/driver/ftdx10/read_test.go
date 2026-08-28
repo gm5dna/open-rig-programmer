@@ -10,6 +10,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
 // readTestImage is the scripted radio the read tests share. Each slot is a
@@ -150,8 +151,9 @@ func TestReadChannel_MappingsFromThePositionChart(t *testing.T) {
 			if ch.Data == nil {
 				t.Fatal("Channel.Data = nil, want populated")
 			}
-			if !reflect.DeepEqual(*ch.Data, tt.want) {
-				t.Errorf("ChannelData =\n %+v\nwant\n %+v", *ch.Data, tt.want)
+			want := tierUnavailable(tt.want)
+			if !reflect.DeepEqual(*ch.Data, want) {
+				t.Errorf("ChannelData =\n %+v\nwant\n %+v", *ch.Data, want)
 			}
 		})
 	}
@@ -305,17 +307,59 @@ func TestMTSpec_DerivesItsLengthFromTheDialect(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mtSpec(catDialect) = %v, want nil", err)
 	}
-	if spec.ExpectPrefix != "MT" {
-		t.Errorf("ExpectPrefix = %q, want \"MT\"", spec.ExpectPrefix)
+	if spec.Class != transport.ClassRead {
+		t.Errorf("Class = %v, want transport.ClassRead", spec.Class)
 	}
-	if spec.ExpectLen != hi {
-		t.Errorf("ExpectLen = %d, want the dialect's own %d", spec.ExpectLen, hi)
+	// The prefix and the exact length, asserted THROUGH THE MATCHER
+	// rather than off the struct: D2 moved answer matching into an
+	// opaque transport.CommandSpec.Match built by the codec, so the
+	// fields this used to read (ExpectPrefix, ExpectLen) no longer
+	// exist. What they asserted still holds, and these three cases say
+	// so in the terms the engine now uses — a well-formed answer of the
+	// dialect's own length matches, one byte short does not, and another
+	// command's answer of the right length does not.
+	rightLength := "MT" + strings.Repeat("0", hi-3) + ";"
+	oneShort := "MT" + strings.Repeat("0", hi-4) + ";"
+	wrongCommand := "MR" + strings.Repeat("0", hi-3) + ";"
+	if !spec.Match([]byte(rightLength)) {
+		t.Errorf("Match(%q) = false, want true — that is the dialect's own %d-byte combined MT answer", rightLength, hi)
+	}
+	if spec.Match([]byte(oneShort)) {
+		t.Errorf("Match(%q) = true, want false — the length is pinned to the dialect's %d, not merely to the prefix", oneShort, hi)
+	}
+	if spec.Match([]byte(wrongCommand)) {
+		t.Errorf("Match(%q) = true, want false — the prefix must discriminate the command", wrongCommand)
 	}
 	if spec.RetryReads != 1 {
 		t.Errorf("RetryReads = %d, want 1 (a read is idempotent; a single swallowed reply must not fail an operation)", spec.RetryReads)
 	}
 
 	if _, err := mtSpec(cat.Dialect{}); err == nil {
-		t.Error("mtSpec(zero dialect) = nil error, want a refusal — an unconfigured dialect has no MT geometry, and a zero ExpectLen would admit any answer")
+		t.Error("mtSpec(zero dialect) = nil error, want a refusal — an unconfigured dialect has no MT geometry, and a zero exact length would admit any MT answer")
 	}
+}
+
+// tierUnavailable returns d with every one of the ten fields the Icom
+// tier added to codeplug.ChannelData set to Unavailable — what this
+// radio's ReadChannel reports for all of them, because its memory frame
+// carries none of them (design D4; the TagDisplay precedent, applied ten
+// times).
+//
+// The read tests' `want` literals name the fields this radio actually
+// HAS and wrap the result in this, rather than spelling out ten
+// Unavailable lines each: the interesting content of every case stays
+// visible, and "and everything the Icom tier added is Unavailable" is
+// stated once, where it can be read as the single fact it is.
+func tierUnavailable(d codeplug.ChannelData) codeplug.ChannelData {
+	d.TxFreqHz = codeplug.FreqField{State: codeplug.Unavailable}
+	d.Duplex = codeplug.StringField{State: codeplug.Unavailable}
+	d.OffsetHz = codeplug.FreqField{State: codeplug.Unavailable}
+	d.ToneMode = codeplug.StringField{State: codeplug.Unavailable}
+	d.ToneTx = codeplug.ToneField{State: codeplug.Unavailable}
+	d.ToneRx = codeplug.ToneField{State: codeplug.Unavailable}
+	d.DTCSCode = codeplug.IntField{State: codeplug.Unavailable}
+	d.DTCSPolarity = codeplug.StringField{State: codeplug.Unavailable}
+	d.Filter = codeplug.StringField{State: codeplug.Unavailable}
+	d.DataMode = codeplug.BoolField{State: codeplug.Unavailable}
+	return d
 }

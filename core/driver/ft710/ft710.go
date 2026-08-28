@@ -186,28 +186,37 @@ func (d *ft710Driver) StaticSettingsDescriptor() driver.SettingsDescriptor {
 // ("ID0800;"). One retry: an identity read is idempotent and Open should
 // survive a single swallowed reply.
 func idSpec() transport.CommandSpec {
-	return transport.CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, RetryReads: 1}
+	return transport.CATReadSpec("ID", 7, 1)
 }
 
 // mrSpec is the transport spec for an MR read: fixed 28-byte answer. One
 // retry — reads are idempotent.
 func mrSpec() transport.CommandSpec {
-	return transport.CommandSpec{ExpectPrefix: "MR", ExpectLen: 28, RetryReads: 1}
+	return transport.CATReadSpec("MR", 28, 1)
 }
 
 // mtSpec is the transport spec for an MT read: variable-length answer
 // ("MT" + slot + display + 0-12 byte tag + ";"), so only the prefix is
-// pinned. One retry — reads are idempotent.
+// pinned (exact length 0 — see transport.CATReadSpec). One retry — reads
+// are idempotent.
 func mtSpec() transport.CommandSpec {
-	return transport.CommandSpec{ExpectPrefix: "MT", RetryReads: 1}
+	return transport.CATReadSpec("MT", 0, 1)
 }
 
 // fnfSpec is the transport spec for a fire-and-forget Set (MW, MT set):
 // no answer expected, only the bounded listen for a delayed "?;"
-// rejection. All defaults; RetryReads MUST stay 0 — a write is never
-// resent (transport safety obligation 2 enforces this structurally).
+// rejection.
+//
+// transport.CATWriteSpec() states the class EXPLICITLY (D2). It used to be
+// the zero transport.CommandSpec, under which "this command mutates the
+// radio, gets no acknowledgement, and must never be resent" was inferred
+// from an empty struct — indistinguishable from an author who filled
+// nothing in. RetryReads stays 0 by construction: a write is never resent
+// (transport safety obligation 2 enforces this structurally, and
+// CommandSpec.validate now refuses a nonzero RetryReads on any write
+// class).
 func fnfSpec() transport.CommandSpec {
-	return transport.CommandSpec{}
+	return transport.CATWriteSpec()
 }
 
 // max60mProbe bounds 60 m discovery: the largest known regional 60 m

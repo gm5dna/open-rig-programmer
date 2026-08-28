@@ -36,18 +36,35 @@
   The install-time dependency sentence in the Downloads section was
   also softened, because both GUI libraries were already present on
   the stock desktop image and the VMs never made apt fetch them.
+
+  UPDATED AT THE ICOM TIER'S CLOSE (28/08/2026): the per-model support
+  table now carries ten registered models (the four from v1.0.0 plus
+  IC-7610/IC-7300/IC-7300MK2/IC-705/IC-9700/IC-905), and the
+  Yaesu-specific "99 regular memories plus the 9 PMS pairs" description
+  and per-model menu-address counts in "What it does" are scoped to the
+  Yaesu models only — the Icom tier has no menu-settings feature and a
+  different, per-model memory-slot shape. The consent prose the
+  22/08/2026 sync corrected now covers all nine manual-derived models
+  rather than the three FTdx ones alone, and the two Icom models that
+  discover their memories by a bounded walk carry a footnote under the
+  table. The AppImage notes the v1.0.0 sync above used to carry are
+  gone with that sync's rewrite: the Debian packages took the Linux
+  GUI row, so there is no AppImage decision left to restore.
 -->
 
 Open Rig Programmer __VERSION__ — an open-source, cross-platform
 memory-channel programmer for the Yaesu FT-710, built as a free
-alternative to RT Systems' YPS-FT710, with three further Yaesu models
-registered for reading and for opt-in writes.
+alternative to RT Systems' YPS-FT710, with nine further Yaesu and Icom
+models registered for reading and for opt-in writes (see below).
 
 ## What it does
 
-- **Read every memory channel** from the radio over CAT — the 99
-  regular memories plus the 9 PMS (Programmable Memory Scan) pairs —
-  into a codeplug file you can keep, diff and re-send.
+- **Read every memory channel** into a codeplug file you can keep,
+  diff and re-send. On the Yaesu models this is the 99 regular
+  memories plus the 9 PMS (Programmable Memory Scan) pairs, over CAT;
+  each Icom model has its own CI-V memory-slot shape instead (a
+  group-addressed space, or CALL channels alongside it, per model —
+  see the per-model honesty rows in README.md).
 - **Edit channels** in a spreadsheet-style grid (GUI) with keyboard
   navigation, paste, per-column editors and drag copy/swap/move.
 - **Send changes back safely** (FT-710): read-before-write, a snapshot
@@ -57,9 +74,11 @@ registered for reading and for opt-in writes.
   reason rather than attempted.
 - **CSV and CHIRP import/export**, with a report of anything a CHIRP
   file cannot express.
-- **Read the radio's menu (EX) settings** into the same file and view
-  or export them — every documented menu address for the connected
-  model (FT-710: 296; FTdx10: 197; FTdx101D/MP: 193).
+- **Read the radio's menu (EX) settings**, on the Yaesu models, into
+  the same file and view or export them — every documented menu
+  address for the connected model (FT-710: 296; FTdx10: 197;
+  FTdx101D/MP: 193). None of the six Icom drivers expose a settings
+  surface.
 - Both a **desktop GUI** and a **`rigprog` CLI**, sharing one core.
 
 ## Supported radios, and what "supported" means for each
@@ -67,27 +86,43 @@ registered for reading and for opt-in writes.
 | Model | Read channels | Write channels | Read menu settings | Evidence |
 | --- | --- | --- | --- | --- |
 | FT-710 | Yes | Yes | Yes | Proven against real hardware (`docs/hardware-notes.md`) |
-| FTdx10 | Yes | **Opt-in** (unverified writes, off by default) | Yes | CAT manual + simulator only; no real radio has been connected |
-| FTdx101D | Yes | **Opt-in** (unverified writes, off by default) | Yes | CAT manual + simulator only; no real radio has been connected |
-| FTdx101MP | Yes | **Opt-in** (unverified writes, off by default) | Yes | CAT manual + simulator only; no real radio has been connected |
+| FTdx10 | Yes | ⚠️ **Opt-in** (unverified writes, off by default) | Yes | CAT manual + simulator only; no real radio has been connected |
+| FTdx101D | Yes | ⚠️ **Opt-in** (unverified writes, off by default) | Yes | CAT manual + simulator only; no real radio has been connected |
+| FTdx101MP | Yes | ⚠️ **Opt-in** (unverified writes, off by default) | Yes | CAT manual + simulator only; no real radio has been connected |
+| IC-7610 | Yes | ⚠️ **Opt-in** (unverified writes, off by default) | No | CI-V guide + simulator only; no real radio has been connected |
+| IC-7300 | Yes | ⚠️ **Opt-in** (unverified writes, off by default) | No | CI-V guide + simulator only; no real radio has been connected |
+| IC-7300MK2 | Yes | ⚠️ **Opt-in** (unverified writes, off by default) | No | CI-V guide + simulator only; no real radio has been connected |
+| IC-705 | Yes\* | ⚠️ **Opt-in** (unverified writes, off by default) | No | CI-V guide + simulator only; no real radio has been connected |
+| IC-9700 | Yes | ⚠️ **Opt-in** (unverified writes, off by default) | No | CI-V guide + simulator only; no real radio has been connected |
+| IC-905 | Yes\* | ⚠️ **Opt-in** (unverified writes, off by default) | No | CI-V guide + simulator only; no real radio has been connected |
 
-Writes to the three manual-derived models are refused until you enable
+\* IC-705 and IC-905 each discover their memory channels by a BOUNDED
+default walk rather than a read of the whole address space (a
+100x100-slot, group-addressed space on both). A channel stored outside
+that walk's range is simply not read; its absence is not evidence the
+channel is empty. See README.md's *Icom models* section for each
+model's exact bound.
+
+Writes to the nine manual-derived models are refused until you enable
 unverified writes for that radio, one radio at a time — `rigprog
-settings unverified-writes FTdx10 on`, or in the GUI the question it
-asks once just after you first connect to such a radio, or its
-*Unverified writes…* button at any time. Both faces read and write one
-settings file (`rigprog/settings.json` under your user configuration
-directory), so a decision made in either holds for both, and an "off"
-is stored rather than forgotten. "Unverified" means documented in the
-manufacturer's CAT reference and exercised against a simulator here,
-not proven on a real radio. The FT-710 is unaffected: its writes are
-hardware-verified, so it has nothing to consent to. Consent changes
-what the tool is allowed to send, not how it sends it — the
-read-before-write, the snapshot, the reviewed diff and the per-channel
-verify all still run. Each of the three drivers carries a register of
-every assumption it makes and the specific capture from a real radio
-that would verify it — if you own one of these radios and want to
-help, open an issue.
+settings unverified-writes <model> on` (say `rigprog settings
+unverified-writes FTdx10 on`, or `rigprog settings unverified-writes
+IC-7610 on`), or in the GUI the question it asks once just after you
+first connect to such a radio, or its *Unverified writes…* button at
+any time. Both faces read and write one settings file
+(`rigprog/settings.json` under your user configuration directory), so
+a decision made in either holds for both, and an "off" is stored
+rather than forgotten. "Unverified" means documented in the
+manufacturer's own CAT or CI-V reference and exercised against a
+simulator here, not proven on a real radio. The FT-710 is unaffected:
+its writes are hardware-verified, so it has nothing to consent to.
+Consent changes what the tool is allowed to send, not how it sends it
+— the read-before-write, the snapshot, the reviewed diff and the
+per-channel verify all still run; README.md's *Unverified writes*
+section has the full mechanism. Each of the nine drivers carries a
+register of every assumption it makes and the specific capture from a
+real radio that would verify it — if you own one of these radios and
+want to help, open an issue.
 
 ## What it deliberately does not do
 
@@ -98,9 +133,14 @@ help, open an issue.
   establishes what the radio accepts in the write direction. The
   reasoning, and what would have to change to revisit it, is in
   `docs/menu-write-decision.md`.
-- **It cannot erase a channel over CAT.** These radios have no CAT
-  erase command; the app says so, and tells you the front-panel
-  procedure, rather than silently doing nothing.
+- **It cannot erase a channel over CAT.** The four Yaesu models have
+  no CAT erase command at all; the app says so, and tells you the
+  front-panel procedure, rather than silently doing nothing. The six
+  Icom models are different: their CI-V references print a clear form
+  for a memory channel, but this project deliberately ships no erase
+  builder for any of them — spec D1 admits exactly three builders per
+  driver (ID read, memory read, memory set), and a clear/erase frame
+  is not one of them (`core/civ/doc.go:64`).
 - **It does not read per-channel CTCSS tone frequencies.** The FT-710
   does not report them over CAT (established against real hardware —
   `docs/hardware-notes.md`), so the app preserves whatever is on the
@@ -205,9 +245,17 @@ What this release has **not** been exercised against:
   through a documented transcription-and-cross-check process, and
   exercised against simulators built independently from the same
   manuals. No real radio of any of the three has ever been connected.
-  That is why their writes are opt-in rather than on by default.
+  That is why their writes are opt-in rather than on by default,
+  needing your explicit consent.
+- **Any IC-7610, IC-7300, IC-7300MK2, IC-705, IC-9700 or IC-905.**
+  Everything about these six models is derived from Icom's published
+  CI-V Reference Guides through the same kind of documented process,
+  and exercised against simulators built independently from those
+  guides. No real radio of any of the six has ever been connected.
+  That is why their writes need your explicit opt-in consent too.
 
 Anything the project has not observed is labelled as such in the code
 and documentation rather than assumed. Reports from real hardware —
-especially the three manual-derived models, and the FT-710 on Linux —
-are the most valuable contribution this project can receive right now.
+especially the nine manual-derived, opt-in-write models, and the
+FT-710 on Linux — are the most valuable contribution this project can
+receive right now.

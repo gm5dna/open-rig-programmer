@@ -92,6 +92,56 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		{"ftdx10", "Simulated", "fakedx10.New", "internal/fakedx10"},
 		{"ftdx101", "Simulated", "fakedx101.NewD", "internal/fakedx101"},
 		{"ftdx101", "Simulated", "fakedx101.NewMP", "internal/fakedx101"},
+		// The IC-7610 (Wave 4 task R1), this project's first non-Yaesu
+		// row: one package, one Simulated token and one fake constructor —
+		// the ftdx10 shape, not the ftdx101 shared-driver/two-siblings
+		// one, since core/driver/ic7610 has no registered sibling (matrix
+		// §4). The AST walk this guard runs is name-based, not
+		// import-path-based, so it does not care that internal/fakeic7610's
+		// New is wrapped in an ic7610FakeAdapter{...} composite literal at
+		// its one call site in internal/wiring/fake.go — the call
+		// expression fakeic7610.New(...) is still there, nested inside it,
+		// and fileHasCall's ast.Inspect walk finds it regardless of what
+		// encloses it.
+		{"ic7610", "Simulated", "fakeic7610.New", "internal/fakeic7610"},
+		// The IC-7300 and IC-7300MK2 (Wave 4 task R3), this project's
+		// second Icom family and first Icom PAIR: two rows, not one,
+		// because — unlike the IC-7610 — this pair has SEPARATE driver
+		// packages and SEPARATE fakes (core/driver/ic7300 /
+		// core/driver/ic7300mk2, internal/fakeic7300 /
+		// internal/fakeic7300mk2), so each contributes its own pkg, its
+		// own Simulated token and its own fake constructor. Both fakes'
+		// New calls appear directly in internal/wiring/fake.go's
+		// fakeDrivers table (no adapter wraps either — both Port()
+		// methods already return io.ReadWriteCloser), so the AST walk
+		// finds each fakeic7300.New(...) / fakeic7300mk2.New(...) call
+		// expression exactly where the ic7610 row's comment says it
+		// would even if one had been wrapped.
+		{"ic7300", "Simulated", "fakeic7300.New", "internal/fakeic7300"},
+		{"ic7300mk2", "Simulated", "fakeic7300mk2.New", "internal/fakeic7300mk2"},
+		// The IC-705 (Wave 4 task R4), this project's third Icom
+		// registration and second lone-model one: one package, one
+		// Simulated token and one fake constructor, on the same ic7610
+		// shape as above (no adapter wraps fakeic705.New — its Port()
+		// already returns io.ReadWriteCloser — so the row's shape is the
+		// simpler of the two this table already carries).
+		{"ic705", "Simulated", "fakeic705.New", "internal/fakeic705"},
+		// The IC-9700 (Wave 4 task R5), this project's fourth Icom
+		// registration and second lone-model one since the IC-705: one
+		// package, one Simulated token and one fake constructor, on the
+		// same ic705 shape as above (no adapter wraps fakeic9700.New —
+		// its Port() already returns io.ReadWriteCloser — so the row's
+		// shape is the simpler of the two this table carries, three
+		// static banks notwithstanding: this table asks nothing about
+		// bank shape).
+		{"ic9700", "Simulated", "fakeic9700.New", "internal/fakeic9700"},
+		// The IC-905 (Wave 4 task R6, the tier's LAST registration), this
+		// project's fifth Icom registration and third lone-model one
+		// since the IC-705: one package, one Simulated token and one
+		// fake constructor, on the same ic705/ic9700 shape as above (no
+		// adapter wraps fakeic905.New — its Port() already returns
+		// io.ReadWriteCloser).
+		{"ic905", "Simulated", "fakeic905.New", "internal/fakeic905"},
 	}
 
 	// Non-vacuity: an empty table would make the loop below a no-op and

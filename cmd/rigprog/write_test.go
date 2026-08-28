@@ -829,10 +829,7 @@ func TestCmdWrite_LoadNonexistentFile(t *testing.T) {
 func TestCmdWrite_SchemaTooNew(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "too-new.json")
-	tooNew := &codeplug.Codeplug{Schema: codeplug.CurrentSchema + 1}
-	if err := codeplug.Save(path, tooNew); err != nil {
-		t.Fatalf("Save fixture: %v", err)
-	}
+	writeTooNewCodeplug(t, path)
 
 	var stdout, stderr bytes.Buffer
 	got := cmdWrite(testCtx(t), []string{"--fake", path}, strings.NewReader(""), &stdout, &stderr)

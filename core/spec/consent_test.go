@@ -141,23 +141,75 @@ func TestConsentUnverifiedWrites_InputUntouched(t *testing.T) {
 		t.Error("mutating the transformed Capabilities reached the input, want independent storage")
 	}
 
-	// Every top-level slice must be freshly allocated, enumerated from the
-	// Capabilities struct itself so a slice field added later cannot be
-	// silently left aliasing the input.
+	assertNoSharedStorage(t, in)
+
+	// The RANGE-DECLARING shape too. A radio declares a tone LIST or a
+	// tone RANGE, never both, so the fixture above can never exercise the
+	// pointer field at all — and a sweep that only ever sees a nil
+	// pointer proves nothing about copying one.
+	assertNoSharedStorage(t, consentRangeFixture())
+
+	// And the pointer's own indirection, stated directly rather than left
+	// to the reflective sweep: mutating the result's range must not reach
+	// the input's.
+	rangeIn := consentRangeFixture()
+	rangeBefore := consentRangeFixture()
+	rangeOut := ConsentUnverifiedWrites(rangeIn)
+	rangeOut.CTCSSToneRange.MinDeciHz = 9999
+	if !reflect.DeepEqual(rangeIn, rangeBefore) {
+		t.Error("mutating the transformed CTCSSToneRange reached the input — the pointer was copied, not the struct behind it")
+	}
+}
+
+// assertNoSharedStorage is the aliasing sweep, enumerated from the
+// Capabilities struct itself so a REFERENCE-TYPED field added later cannot
+// be silently left aliasing the input.
+//
+// IT COVERS POINTERS AS WELL AS SLICES, and the Icom tier is why. The
+// sweep was slice-only when every reference-typed field on Capabilities
+// was a slice; E3 added CTCSSToneRange, a POINTER, and a slice-only sweep
+// reopened for pointer fields exactly the trap it was written to close —
+// deleting the copy in ConsentUnverifiedWrites would have failed no test.
+// A map field added later would want the same treatment.
+func assertNoSharedStorage(t *testing.T, in Capabilities) {
+	t.Helper()
 	inV, outV := reflect.ValueOf(in), reflect.ValueOf(ConsentUnverifiedWrites(in))
 	for i := 0; i < inV.NumField(); i++ {
-		if inV.Type().Field(i).Type.Kind() != reflect.Slice {
-			continue
-		}
 		name := inV.Type().Field(i).Name
 		inF, outF := inV.Field(i), outV.Field(i)
-		if inF.Len() == 0 {
-			continue
-		}
-		if inF.Pointer() == outF.Pointer() {
-			t.Errorf("%s shares its backing array with the input, want a fresh slice", name)
+		switch inV.Type().Field(i).Type.Kind() {
+		case reflect.Slice:
+			if inF.Len() == 0 {
+				continue
+			}
+			if inF.Pointer() == outF.Pointer() {
+				t.Errorf("%s shares its backing array with the input, want a fresh slice", name)
+			}
+		case reflect.Ptr:
+			if inF.IsNil() {
+				continue
+			}
+			if outF.IsNil() {
+				t.Errorf("%s came back nil for a non-nil input, want an independent copy", name)
+				continue
+			}
+			if inF.Pointer() == outF.Pointer() {
+				t.Errorf("%s points at the input's own value, want an independent copy", name)
+			}
 		}
 	}
+}
+
+// consentRangeFixture is consentFixture with its tone domain declared as a
+// RANGE rather than a list — the shape every CI-V model in the Icom tier
+// has, and the only shape that puts a non-nil pointer through the
+// transform. The two are mutually exclusive (spec.Validate refuses both at
+// once), so this cannot simply be folded into the fixture above.
+func consentRangeFixture() Capabilities {
+	c := consentFixture()
+	c.CTCSSTones = nil
+	c.CTCSSToneRange = &ToneRange{MinDeciHz: 670, MaxDeciHz: 2541, StepDeciHz: 1}
+	return c
 }
 
 // TestConsentUnverifiedWrites_Idempotent checks that applying the

@@ -1625,8 +1625,17 @@ func TestImportCHIRP_ToneExcessPrecisionBlocks(t *testing.T) {
 // LossEntry detail path through ImportCHIRP itself (parseCHIRPFrequency
 // is covered directly by TestParseCHIRPFrequency; this confirms
 // importCHIRPRow selects the right Detail message for that error).
+//
+// The fixture moved from 5000 MHz to a value that overflows the
+// multiplication itself, because the Icom tier widened this parser
+// (design D4, adjudication 5) and 5 GHz is now perfectly representable
+// — the case this test is about is an UNREPRESENTABLE frequency, which
+// is a different thing from one this radio cannot store. That second
+// question has not gone unanswered: codeplug.Validate refuses a 5 GHz
+// channel against the FT-710's own MaxFreqHz, which is where a per-radio
+// bound belongs.
 func TestImportCHIRP_FrequencyOutOfRange(t *testing.T) {
-	body := "Location,Name,Frequency,Mode\n1,TESTCH,5000.000000,FM\n"
+	body := "Location,Name,Frequency,Mode\n1,TESTCH,18446744073710.500000,FM\n"
 	channels, report, err := ImportCHIRP(strings.NewReader(body), ft710LikeCapabilities())
 	if err != nil {
 		t.Fatalf("ImportCHIRP() error = %v", err)
@@ -1644,13 +1653,22 @@ func TestImportCHIRP_FrequencyOutOfRange(t *testing.T) {
 // TestParseCHIRPFrequency covers parseCHIRPFrequency directly: exact
 // whole-Hz conversion, short/absent fractional parts needing zero
 // padding, format errors, the fractional-Hz-remainder rejection, and the
-// two overflow paths (intPart too large for uint64; total exceeding
-// uint32).
+// two overflow paths (intPart too large for uint64; the total exceeding
+// what a uint64 of hertz can hold).
+//
+// The RANGE cases moved with the Icom tier's widening of this parser
+// (design D4, adjudication 5), and the move is the point rather than an
+// incidental fixup: the ceiling here is what is REPRESENTABLE, and a
+// 5 GHz cell — refused before, when the representable ceiling happened
+// to be MaxUint32 — is now parsed, leaving "can THIS radio store it" to
+// codeplug.Validate and that radio's own MaxFreqHz. The wrap-around case
+// keeps its place unchanged: an unrepresentable value must still be
+// refused rather than silently folded into a plausible small one.
 func TestParseCHIRPFrequency(t *testing.T) {
 	cases := []struct {
 		name    string
 		in      string
-		want    uint32
+		want    uint64
 		wantErr error
 	}{
 		{"whole MHz, no dot", "146", 146000000, nil},
@@ -1663,9 +1681,10 @@ func TestParseCHIRPFrequency(t *testing.T) {
 		{"empty string", "", 0, errCHIRPFreqFormat},
 		{"fractional Hz remainder", "145.1234567", 0, errCHIRPFreqFractionalHz},
 		{"integer part too large for uint64", "99999999999999999999.000000", 0, errCHIRPFreqFormat},
-		{"total exceeds uint32 range", "5000.000000", 0, errCHIRPFreqRange},
-		{"exactly MaxUint32 Hz accepted (boundary)", "4294.967295", math.MaxUint32, nil},
-		{"one Hz over MaxUint32 rejected (boundary)", "4294.967296", 0, errCHIRPFreqRange},
+		{"5 GHz is representable now, and is the radio's question", "5000.000000", 5_000_000_000, nil},
+		{"the old MaxUint32 boundary is no longer a boundary", "4294.967295", math.MaxUint32, nil},
+		{"one Hz past the old boundary is accepted", "4294.967296", math.MaxUint32 + 1, nil},
+		{"10 GHz, the IC-905's reach", "10000.000000", 10_000_000_000, nil},
 		{"uint64 multiplication overflow must not wrap into range", "18446744073710.500000", 0, errCHIRPFreqRange},
 	}
 	for _, tc := range cases {

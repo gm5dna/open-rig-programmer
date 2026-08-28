@@ -4,6 +4,7 @@ package guards
 
 import (
 	"go/ast"
+	"go/token"
 	"testing"
 )
 
@@ -24,21 +25,41 @@ import (
 // a nil-check could not see. Neither moves the choice of radio out of the
 // caller's hands, which is the whole of what this guard is for.
 //
-// Matches the name "NewEngine" WHEREVER it appears — as a
-// *ast.SelectorExpr.Sel or a bare *ast.Ident — not only inside a
-// *ast.CallExpr.Fun (task-58 fix wave, Codex Critical 1): a local alias,
-// a package-level var, a struct field holding the constructor, a
-// higher-order argument, generic instantiation, or an init()-time
-// indirect call are all a *ast.SelectorExpr or *ast.Ident naming
-// NewEngine even though no CallExpr.Fun ever names it directly.
+// TWO CONSTRUCTORS NOW, AND BOTH ARE NAMED HERE (M9d-2, D2). The Icom
+// tier generalises the engine over a transport.Framing seam:
+// NewEngineWith(p, Framing, opts...) is the general constructor and
+// NewEngine is a thin CAT wrapper over it. The choice this guard exists to
+// keep in the driver layer is, if anything, WIDER through the new one — a
+// Framing supplies the write gate AND the frame boundaries AND the init
+// sequence, where a cat.Dialect supplied the first and the last. So
+// engineConstructorNames holds both, and every rule below applies to each
+// identically; a future third constructor must be ADDED HERE BY NAME,
+// exactly as the write-path guard's builder list must be.
 //
-// core/transport is SCANNED, not skipped: only NewEngine's own top-level,
-// non-method declaration is exempt — its Name identifier specifically
-// (task-58 fix wave, Codex Critical 2), and (from fix round 3) its whole
-// signature and body by POSITION, so a legitimate Engine-typed parameter,
-// result, or local construction inside NewEngine itself is never
-// mistaken for a violation. A same-named method borrows none of this: its
-// own Name and body are walked exactly like any other code.
+// Matches those names WHEREVER they appear — as a *ast.SelectorExpr.Sel or
+// a bare *ast.Ident — not only inside a *ast.CallExpr.Fun (task-58 fix
+// wave, Codex Critical 1): a local alias, a package-level var, a struct
+// field holding the constructor, a higher-order argument, generic
+// instantiation, or an init()-time indirect call are all a
+// *ast.SelectorExpr or *ast.Ident naming a constructor even though no
+// CallExpr.Fun ever names it directly.
+//
+// core/transport is SCANNED, not skipped: only the constructors' own
+// top-level, non-method declarations are exempt — their Name identifiers
+// specifically (task-58 fix wave, Codex Critical 2), and (from fix round
+// 3) their whole signatures and bodies by POSITION, so a legitimate
+// Engine-typed parameter, result, or local construction inside one of
+// them is never mistaken for a violation. A same-named method borrows
+// none of this: its own Name and body are walked exactly like any other
+// code.
+//
+// THE EXEMPTION IS PER-DECLARATION, and that is what makes it hold as the
+// count grows: NewEngine's declaration excuses NewEngine's own span and
+// nothing else, so the fact that the sole Engine composite literal now
+// lives inside NewEngineWith is a property this guard CHECKS rather than
+// one it assumes — sawExemptEngineLiteral fires from whichever exempt
+// declaration actually contains it, and a literal appearing in neither
+// still fails.
 //
 // A composite literal never mentions "NewEngine" at all, so no
 // name-based matcher can see it (task-58 fix wave, Codex Important 1).
@@ -143,16 +164,17 @@ import (
 //     core/transport itself.
 //
 //   - The FuncDecl exemption is name-AND-shape-narrow: only fd.Recv ==
-//     nil, fd.Name.Name == "NewEngine", declared directly in
+//     nil, fd.Name.Name in engineConstructorNames, declared directly in
 //     core/transport (relDir == "core/transport" exactly — Engine's
 //     fields are unexported, so nothing outside that exact package could
 //     compile a composite literal of it regardless; a hypothetical
 //     core/transport subpackage is a DIFFERENT package under Go's rules
 //     and gets no exemption). The exempt POSITION RANGE is the whole
 //     declaration (fd.Pos() to fd.End() — signature and body), not only
-//     the body: NewEngine's own return type names *Engine, and a future
-//     signature change naming Engine directly (e.g. a named result)
-//     must not be mistaken for a violation of its own declaration.
+//     the body: each constructor's own return type names *Engine, and a
+//     future signature change naming Engine directly (e.g. a named
+//     result) must not be mistaken for a violation of its own
+//     declaration.
 //
 //   - CONFIRMED FALSE POSITIVE, accepted, precisely stated (Codex
 //     fix-round-4 corrected an earlier over-broad version of this
@@ -160,11 +182,12 @@ import (
 //     it cannot: the type-use rule is core/transport-scoped, and Go
 //     forbids two same-package types sharing a name, so no unrelated
 //     "Engine" type can exist there to be confused with the real one).
-//     The genuine false positive is the "NewEngine" bare-identifier/
+//     The genuine false positive is the constructor-name bare-identifier/
 //     selector match, which IS repo-wide by design: an entirely
-//     unrelated function or var named "NewEngine" anywhere in the
-//     repository, with no relationship to transport's own symbol, is
-//     flagged (demonstrated directly by this task's own probes). A
+//     unrelated function or var named "NewEngine" or "NewEngineWith"
+//     anywhere in the repository, with no relationship to transport's own
+//     symbols, is flagged (demonstrated directly by this task's own
+//     probes). A
 //     SEPARATE, smaller false positive comes from engineTypeNames
 //     itself: because the package-wide alias fixed point resolves
 //     through typeBaseName's FULL unwrap, a pointer or collection alias
@@ -180,12 +203,13 @@ import (
 //     matches.
 //
 //   - GAP, not closed — a driver-tree re-export (Codex e15). A package
-//     under core/driver/** that does nothing but forward NewEngine's
+//     under core/driver/** that does nothing but forward a constructor's
 //     own parameters straight through — e.g.
 //     func Open(p transport.Port, d cat.Dialect)
 //     (*transport.Engine, error) { return transport.NewEngine(p, d) }
 //     (the signature E3 gave it; the shape was identical when the
-//     forwarded parameter was a transport.AllowFunc)
+//     forwarded parameter was a transport.AllowFunc, and is identical
+//     again for a forwarded transport.Framing)
 //     — satisfies inTree(pf.relDir, "core/driver") and is treated as a
 //     legitimate driver-tree construction, yet the re-export's own
 //     caller chooses the gate. This guard pins WHERE the identifier
@@ -396,45 +420,72 @@ func TestNewEngineReachableOnlyFromDriver(t *testing.T) {
 	sawDriverConstruction := false
 	sawExemptEngineLiteral := false
 	scanned := 0
+	sawDelegation := false
+	sawExemptDecl := map[string]bool{}
 
 	for _, pf := range files {
 		scanned++
 		inDriver := inTree(pf.relDir, "core/driver")
 		inTransportPkg := pf.relDir == "core/transport"
 
-		// The exempt declaration: NewEngine's own top-level (non-method)
-		// FuncDecl, declared directly in core/transport. exemptName
-		// excuses only that one Name identifier from the bare-identifier
-		// check below; inExemptDecl excuses the declaration's WHOLE
-		// span — signature (so NewEngine's own *Engine result and any
-		// Engine-typed parameter are never mistaken for a violation of
-		// themselves) and body (so the one legitimate Engine construction
-		// inside it is excused) — by position, not by pruning: nothing
-		// about this stops the walk from continuing, it only excuses
-		// nodes that fall within the range.
-		var exemptName *ast.Ident
-		inExemptDecl := func(ast.Node) bool { return false }
+		// The exempt declarations: each constructor's own top-level
+		// (non-method) FuncDecl, declared directly in core/transport.
+		// exemptNames excuses only those Name identifiers from the
+		// bare-identifier check below; inExemptDecl excuses each
+		// declaration's WHOLE span — signature (so a constructor's own
+		// *Engine result and any Engine-typed parameter are never
+		// mistaken for a violation of themselves) and body (so the one
+		// legitimate Engine construction inside NewEngineWith is
+		// excused) — by position, not by pruning: nothing about this
+		// stops the walk from continuing, it only excuses nodes that
+		// fall within a range.
+		//
+		// A SET of ranges, not one, because there are two constructors
+		// (D2). Both are collected rather than the first one found:
+		// stopping at the first — which the single-constructor version
+		// did — would leave whichever declaration happened to come
+		// second in the file unexempted, and the composite literal now
+		// lives in exactly one of them.
+		exemptNames := map[*ast.Ident]bool{}
+		var exemptRanges [][2]token.Pos
 		if inTransportPkg {
 			for _, decl := range pf.file.Decls {
 				fd, ok := decl.(*ast.FuncDecl)
-				if !ok || fd.Recv != nil || fd.Name.Name != "NewEngine" {
+				if !ok || fd.Recv != nil || !engineConstructorNames[fd.Name.Name] {
 					continue
 				}
-				exemptName = fd.Name
-				start, end := fd.Pos(), fd.End()
-				inExemptDecl = func(n ast.Node) bool {
-					return n.Pos() >= start && n.End() <= end
-				}
-				break
+				exemptNames[fd.Name] = true
+				exemptRanges = append(exemptRanges, [2]token.Pos{fd.Pos(), fd.End()})
+				sawExemptDecl[fd.Name.Name] = true
 			}
 		}
+		inExemptDecl := func(n ast.Node) bool {
+			for _, r := range exemptRanges {
+				if n.Pos() >= r[0] && n.End() <= r[1] {
+					return true
+				}
+			}
+			return false
+		}
 
-		reportReference := func(shape string) {
+		reportReference := func(node ast.Node, name, shape string) {
 			if inDriver {
 				sawDriverConstruction = true
 				return
 			}
-			t.Errorf("%s: references NewEngine as a %s — an Engine's allowlist is chosen at construction, so only core/driver/** may reference NewEngine", pf.relPath, shape)
+			// A constructor named INSIDE another constructor's own
+			// declaration: NewEngine's body calls NewEngineWith, which
+			// is the whole of what "thin CAT wrapper" means. The
+			// delegation is excused by the same POSITION range that
+			// excuses the declaration's Engine literal, and for the same
+			// reason — this is the sanctioned construction site, not a
+			// caller of it. sawDelegation pins that it actually happens,
+			// so the exemption cannot go quietly unused.
+			if inTransportPkg && inExemptDecl(node) {
+				sawDelegation = true
+				return
+			}
+			t.Errorf("%s: references %s as a %s — an Engine's allowlist is chosen at construction, so only core/driver/** may reference an engine constructor", pf.relPath, name, shape)
 		}
 
 		reportTypeUse := func(node ast.Node, kind, name string) {
@@ -442,7 +493,7 @@ func TestNewEngineReachableOnlyFromDriver(t *testing.T) {
 				sawExemptEngineLiteral = true
 				return
 			}
-			t.Errorf("%s: %s %s outside NewEngine's own declaration — an Engine's allowlist is chosen at construction, so of the construction shapes this guard checks, only NewEngine's own declaration may use one (this is not a proof that nothing else builds an Engine: see the APPROXIMATE section)", pf.relPath, kind, name)
+			t.Errorf("%s: %s %s outside an engine constructor's own declaration — an Engine's allowlist is chosen at construction, so of the construction shapes this guard checks, only NewEngine's or NewEngineWith's own declaration may use one (this is not a proof that nothing else builds an Engine: see the APPROXIMATE section)", pf.relPath, kind, name)
 		}
 
 		// visit is a hand-rolled walk, not a bare ast.Inspect callback,
@@ -458,14 +509,14 @@ func TestNewEngineReachableOnlyFromDriver(t *testing.T) {
 		visit = func(n ast.Node) bool {
 			switch x := n.(type) {
 			case *ast.SelectorExpr:
-				if x.Sel.Name == "NewEngine" {
-					reportReference("qualified selector")
+				if engineConstructorNames[x.Sel.Name] {
+					reportReference(x, x.Sel.Name, "qualified selector")
 				}
 				ast.Inspect(x.X, visit)
 				return false
 			case *ast.Ident:
-				if x.Name == "NewEngine" && x != exemptName {
-					reportReference("bare identifier")
+				if engineConstructorNames[x.Name] && !exemptNames[x] {
+					reportReference(x, x.Name, "bare identifier")
 				}
 			case *ast.CompositeLit:
 				// Any composite literal whose type resolves — through
@@ -556,11 +607,49 @@ func TestNewEngineReachableOnlyFromDriver(t *testing.T) {
 		t.Fatal("scanned no files — the walker or its filters are broken, and this check passed vacuously")
 	}
 	if !sawDriverConstruction {
-		t.Error("never saw core/driver/** reference NewEngine — the walker or its filters are broken, and this check passed vacuously")
+		t.Error("never saw core/driver/** reference an engine constructor — the walker or its filters are broken, and this check passed vacuously")
+	}
+	if !sawDelegation {
+		t.Error("never saw one engine constructor delegate to another — NewEngine is documented as a thin wrapper over NewEngineWith, and if it no longer is, the two doors are separate and this guard's reasoning about them needs revisiting")
 	}
 	if !sawExemptEngineLiteral {
-		t.Error("never saw NewEngine's own declaration construct an Engine value — the type-use matcher or its exemption bounds are broken, and that half of this check passed vacuously")
+		t.Error("never saw an engine constructor's own declaration construct an Engine value — the type-use matcher or its exemption bounds are broken, and that half of this check passed vacuously")
 	}
+	// Every name in the set must actually resolve to a declaration in
+	// core/transport. Without this, deleting or renaming a constructor
+	// would leave a dead entry here that silently guards nothing —
+	// exactly the "nothing about this check is automatic" failure the
+	// write-path guard's builder list warns about.
+	for name := range engineConstructorNames {
+		if !sawExemptDecl[name] {
+			t.Errorf("engineConstructorNames lists %q, but no top-level %s declaration was found in core/transport — the name is stale and guards nothing", name, name)
+		}
+	}
+}
+
+// engineConstructorNames is the EXACT SET of transport constructors that
+// choose an Engine's write gate, and therefore the set this guard keeps
+// inside core/driver/**. Both entries are deliberate:
+//
+//   - NewEngine(p, cat.Dialect, opts...) — the CAT wrapper. The caller
+//     picks the dialect, and the gate (d.AllowedCommand) comes from it.
+//   - NewEngineWith(p, Framing, opts...) — the general constructor D2
+//     introduced. The caller picks the framing, and the gate (f.Allow)
+//     comes from it, along with the frame boundaries and the init
+//     sequence. NewEngine delegates here, so a rule that named only
+//     NewEngine would leave the wider of the two doors unguarded.
+//
+// Adding a constructor means adding it HERE, by name, with its reason;
+// nothing about the shape of this check makes that automatic, and the
+// staleness assertion above is what makes the omission of a REMOVED one
+// noisy rather than silent.
+//
+// TestWritePathReachableOnlyThroughDriver (importgraph_test.go) reads the
+// SAME set for its Engine.Do pre-filter, so the two guards cannot drift
+// apart on what counts as a constructor.
+var engineConstructorNames = map[string]bool{
+	"NewEngine":     true,
+	"NewEngineWith": true,
 }
 
 // typeBaseName recurses through a type expression's pointer, array,

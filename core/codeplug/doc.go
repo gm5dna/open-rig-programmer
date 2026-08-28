@@ -26,7 +26,10 @@
 //
 //   - Files are written atomically and durably (Save), and carry both a
 //     schema version (Codeplug.Schema, checked against CurrentSchema by
-//     Load) and a baseline digest (RadioInfo.BaselineDigest, computed by
+//     Load — and, since the Icom tier, CHOSEN by Save as the lowest
+//     schema that can represent the content, so a file gains a version
+//     only when its content needs one; see CurrentSchema and schemaFor)
+//     and a baseline digest (RadioInfo.BaselineDigest, computed by
 //     Digest) so a send confirmation can be bound to the exact radio
 //     image it was computed from. Any reconnect, re-read, or edit that
 //     changes so much as one field produces a different digest, which

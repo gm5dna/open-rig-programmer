@@ -300,8 +300,9 @@
 //     this fake inherits it; the FTdx10's manual is cited in this repository
 //     for frame SHAPES (its availability table and position charts), not for
 //     an acknowledgement convention. core/driver/ftdx10's write path already
-//     depends on the silence — mtSetSpec() is the ZERO transport.CommandSpec,
-//     with no ExpectPrefix, precisely because a Set has no answer — so a
+//     depends on the silence — mtSetSpec() is transport.CATWriteSpec(),
+//     a ClassWrite with no answer matcher, precisely because a Set has no
+//     answer — so a
 //     radio that acknowledged would break the driver, not just this fake.
 //     STAGE W LIFTS IT WITH: one MT Set to a real FTdx10 with the port
 //     watched for any reply at all before the next command is sent.

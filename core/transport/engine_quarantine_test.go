@@ -50,7 +50,7 @@ func TestEngine_LateRejectionAfterFireAndForgetWindow_QuarantinedByPostWriteDrai
 	}
 
 	start := time.Now()
-	_, err = eng.Do(ctx, mwCmd, CommandSpec{ErrorWindow: errorWindow, Settle: time.Millisecond})
+	_, err = eng.Do(ctx, mwCmd, CommandSpec{Class: ClassWrite, ErrorWindow: errorWindow, Settle: time.Millisecond})
 	elapsed := time.Since(start)
 	if err != nil {
 		t.Fatalf("Do (fire-and-forget MW): unexpected error: %v (the late \"?;\" must be quarantined, not surfaced as a rejection of THIS write)", err)
@@ -67,7 +67,7 @@ func TestEngine_LateRejectionAfterFireAndForgetWindow_QuarantinedByPostWriteDrai
 	// correct answer, and must NOT be spuriously rejected by the stale
 	// "?;" that belonged to the abandoned MW exchange.
 	idCmd := cat.FT710.BuildIDRead()
-	got, err := eng.Do(ctx, idCmd, CommandSpec{ExpectPrefix: "ID", ExpectLen: 7})
+	got, err := eng.Do(ctx, idCmd, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("ID", 7)})
 	if err != nil {
 		t.Fatalf("Do (ID; after quarantine): unexpected error: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestEngine_SlowAnswerAfterFinalTimeout_NeverContaminatesDifferentSlotRead(t
 		t.Fatalf("BuildMRRead: %v", err)
 	}
 
-	_, err = eng.Do(ctx, cmd1, CommandSpec{ExpectPrefix: "MR", ExpectLen: 28, Timeout: timeout})
+	_, err = eng.Do(ctx, cmd1, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("MR", 28), Timeout: timeout})
 	if !errors.Is(err, ErrTimeout) {
 		t.Fatalf("Do (slot 1, delayed reply): %v, want errors.Is match against ErrTimeout", err)
 	}
@@ -115,7 +115,7 @@ func TestEngine_SlowAnswerAfterFinalTimeout_NeverContaminatesDifferentSlotRead(t
 	}
 
 	start := time.Now()
-	got, err := eng.Do(ctx, cmd2, CommandSpec{ExpectPrefix: "MR", ExpectLen: 28, Timeout: time.Second})
+	got, err := eng.Do(ctx, cmd2, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("MR", 28), Timeout: time.Second})
 	elapsed := time.Since(start)
 	if err != nil {
 		t.Fatalf("Do (slot P1L, after suspect drain): unexpected error: %v", err)
@@ -163,7 +163,7 @@ func TestEngine_CtxCancelAfterWrite_NextDoRunsSuspectDrainAndSucceeds(t *testing
 
 	ctx1, cancel1 := context.WithTimeout(context.Background(), ctx1Timeout)
 	defer cancel1()
-	_, err = eng.Do(ctx1, cmd1, CommandSpec{ExpectPrefix: "MR", ExpectLen: 28, Timeout: 2 * time.Second})
+	_, err = eng.Do(ctx1, cmd1, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("MR", 28), Timeout: 2 * time.Second})
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("Do (slot 1, ctx cancelled mid-wait) = %v, want errors.Is match against context.DeadlineExceeded", err)
 	}
@@ -179,7 +179,7 @@ func TestEngine_CtxCancelAfterWrite_NextDoRunsSuspectDrainAndSucceeds(t *testing
 
 	ctx2 := testCtx(t)
 	start := time.Now()
-	got, err := eng.Do(ctx2, cmd2, CommandSpec{ExpectPrefix: "MR", ExpectLen: 28, Timeout: time.Second})
+	got, err := eng.Do(ctx2, cmd2, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("MR", 28), Timeout: time.Second})
 	elapsed := time.Since(start)
 	if err != nil {
 		t.Fatalf("Do (slot P1L, after ctx-cancel suspect drain): unexpected error: %v", err)
@@ -245,7 +245,7 @@ func TestEngine_EntryPurge_BufferedStaleFrame_NextDoStillGetsOwnAnswer(t *testin
 	// time to finish delivering exchange 1's OWN real reply into
 	// e.events before Do1 actually returns — a generous default is
 	// plenty (the real work here takes microseconds).
-	got1, err := eng.Do(ctx, cmd1, CommandSpec{ExpectPrefix: "MR", ExpectLen: 28, Settle: 20 * time.Millisecond})
+	got1, err := eng.Do(ctx, cmd1, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("MR", 28), Settle: 20 * time.Millisecond})
 	if err != nil {
 		t.Fatalf("Do (exchange 1): unexpected error: %v", err)
 	}
@@ -265,7 +265,7 @@ func TestEngine_EntryPurge_BufferedStaleFrame_NextDoStillGetsOwnAnswer(t *testin
 	}
 
 	start := time.Now()
-	got2, err := eng.Do(ctx, cmd2, CommandSpec{ExpectPrefix: "MR", ExpectLen: 28, Timeout: time.Second})
+	got2, err := eng.Do(ctx, cmd2, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("MR", 28), Timeout: time.Second})
 	elapsed := time.Since(start)
 	if err != nil {
 		t.Fatalf("Do (exchange 2, after entry purge): unexpected error: %v", err)
@@ -333,7 +333,7 @@ func TestEngine_PostWriteQuarantineDrainExceedsBudget_MarksSuspectForNextDo(t *t
 	// (gap=80ms) — the write's own outcome must not be affected by any of
 	// this; only the POST-write quarantine drain is under test here.
 	start := time.Now()
-	_, err = eng.Do(ctx, mwCmd, CommandSpec{ErrorWindow: 50 * time.Millisecond, Settle: time.Millisecond})
+	_, err = eng.Do(ctx, mwCmd, CommandSpec{Class: ClassWrite, ErrorWindow: 50 * time.Millisecond, Settle: time.Millisecond})
 	elapsed := time.Since(start)
 	if err != nil {
 		t.Fatalf("Do (fire-and-forget MW): unexpected error: %v (a failed BEST-EFFORT post-write drain must never change the write's own outcome)", err)
@@ -357,7 +357,7 @@ func TestEngine_PostWriteQuarantineDrainExceedsBudget_MarksSuspectForNextDo(t *t
 	// its own elapsed time, not just by it eventually succeeding.
 	idCmd := cat.FT710.BuildIDRead()
 	start2 := time.Now()
-	got, err := eng.Do(ctx, idCmd, CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Timeout: time.Second})
+	got, err := eng.Do(ctx, idCmd, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("ID", 7), Timeout: time.Second})
 	elapsed2 := time.Since(start2)
 	if err != nil {
 		t.Fatalf("Do (ID; after the failed post-write drain): unexpected error: %v", err)
@@ -394,13 +394,13 @@ func TestEngine_EntrySuspectDrainFailure_ReturnsTypedQuarantineError(t *testing.
 		t.Fatalf("BuildMRRead: %v", err)
 	}
 
-	_, err = eng.Do(ctx, cmd1, CommandSpec{ExpectPrefix: "MR", ExpectLen: 28, Timeout: timeout})
+	_, err = eng.Do(ctx, cmd1, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("MR", 28), Timeout: timeout})
 	if !errors.Is(err, ErrTimeout) {
 		t.Fatalf("Do (slot 1): %v, want errors.Is match against ErrTimeout", err)
 	}
 
 	idCmd := cat.FT710.BuildIDRead()
-	_, err = eng.Do(ctx, idCmd, CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Timeout: time.Second})
+	_, err = eng.Do(ctx, idCmd, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("ID", 7), Timeout: time.Second})
 	if !errors.Is(err, ErrQuarantineFailed) {
 		t.Fatalf("Do (entry suspect drain, port closes mid-drain) = %v, want errors.Is match against ErrQuarantineFailed", err)
 	}

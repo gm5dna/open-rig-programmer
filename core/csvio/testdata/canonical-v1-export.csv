@@ -1,0 +1,5 @@
+slot,display,freq_hz,mode,clar_hz,rx_clar,tx_clar,ctcss,ctcss_tone,shift,tag,tag_display,scan_skip
+001,M-01,14250000,USB,,,,OFF,,SIMPLEX,CALLING,yes,
+002,M-02,145500000,FM,-120,yes,yes,ENC-DEC,88.5,MINUS,'=SUM(A1),no,yes
+003,M-03,,,,,,,,,,,
+P1L,P1L,4294967295,CW-U,,,,OFF,n/a,PLUS,''quoted,n/a,n/a

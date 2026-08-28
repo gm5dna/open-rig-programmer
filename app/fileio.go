@@ -150,6 +150,7 @@ func (a *App) loadFilePath(path string) (CodeplugView, error) {
 	if err != nil {
 		return CodeplugView{}, fmt.Errorf("app: loading %s: %w", path, err)
 	}
+	normaliseLoadedTierFields(cp)
 
 	a.mu.Lock()
 	if err := a.checkNotBusyLocked(); err != nil {
@@ -163,6 +164,53 @@ func (a *App) loadFilePath(path string) (CodeplugView, error) {
 	view := a.codeplugViewLocked()
 	a.mu.Unlock()
 	return view, nil
+}
+
+// normaliseLoadedTierFields runs codeplug.NormaliseTierFields over a
+// just-loaded file against the capabilities of the model the FILE names —
+// the GUI half of the composition-root pass that function's doc comment
+// describes (Wave 4 task R2, deviation (c)). A schema-1/2/3 file has
+// nothing left for it to do; a schema-4 file whose tier keys are simply
+// missing is where it bites.
+//
+// THE FILE's own model, resolved through capsForModel, and nothing else:
+//
+//   - not the connected session's model, which may be a different radio
+//     entirely: loading a file is independent of whatever is plugged in
+//     (loadFilePath replaces the working copy wholesale and never touches
+//     the baseline), and rewriting a file's fields against a radio it did
+//     not come from is Fix B1's own failure — "an offline import
+//     transforms data against the WRONG model's capabilities, and the
+//     result can later pass the send gate". Reporting that mismatch is
+//     Validate's radio-identity check's job, not this pass's;
+//   - not wiring.DefaultModel as a fallback, which is why an unrecognised
+//     or empty Radio.Model is left ALONE rather than degraded the way
+//     currentModel degrades it. currentModel's fallback picks a safe
+//     baseline for a QUESTION about the working copy; this pass CHANGES
+//     the working copy, and "the FT-710 has no such field" is not
+//     something to write into a file from a radio nobody here can name.
+//     Left Absent, those fields are judged by nothing: currentCaps
+//     resolves the same unrecognised model to the FT-710's baseline,
+//     where every tier field is unreachable and Validate does not judge
+//     it.
+//
+// The STATIC baseline, not a connected session's effective capabilities,
+// even when the two models do match: what a tier field's reachability
+// describes is the radio's memory record, which inventory discovery does
+// not change. For the one registered model that reaches any of these
+// fields the two agree by test —
+// TestGetUISpec_RegisteredIC7610_EveryBankFieldsAndTagDisplay derives the
+// same four-field list from the static baseline and from the registered
+// fake's live session — and this radio discovers no bank at all.
+func normaliseLoadedTierFields(cp *codeplug.Codeplug) {
+	if cp == nil || cp.Radio.Model == "" {
+		return
+	}
+	caps, err := capsForModel(cp.Radio.Model)
+	if err != nil {
+		return
+	}
+	codeplug.NormaliseTierFields(cp, caps)
 }
 
 // defaultFilenameFor returns the base name of path, or fallback if path

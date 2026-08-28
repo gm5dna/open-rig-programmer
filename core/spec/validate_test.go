@@ -24,6 +24,14 @@ func validTestCapabilities() Capabilities {
 				Fields: map[Field]FieldSupport{
 					FieldFrequency: {Read: Supported, Write: Supported},
 					FieldMode:      {Read: Supported, Write: Unverified},
+					// The two VOCABULARY fields, declared because this
+					// fixture supplies both vocabularies. Since E5b the
+					// "must not be empty" rules fire only for a model
+					// whose banks reach the field, so a fixture that
+					// omitted them would make those refusals untestable —
+					// and every registered Yaesu model declares both.
+					FieldShift:      {Read: Supported, Write: Unverified},
+					FieldCTCSSState: {Read: Supported, Write: Unverified},
 				},
 			},
 			{

@@ -93,6 +93,44 @@ type SessionDiagnostics struct {
 	UnexpectedFrames uint64
 }
 
+// SerialFramingReporter is an OPTIONAL capability a driver.Driver's
+// CONCRETE type may implement: state how many STOP BITS this radio's
+// control port expects, so the composition root can open the port the way
+// the radio's protocol actually frames a byte.
+//
+// IT IS ON THE DRIVER, NOT THE SESSION, AND THAT IS FORCED. The stop bits
+// are a property of the port, chosen when the port is opened; the session
+// is what a driver's Open returns once the port already exists. A
+// Session-side reporter could only ever be consulted after the framing had
+// already been guessed, which is to say never usefully. internal/wiring
+// holds the driver value before it opens anything, and that is the one
+// moment this question can be asked at.
+//
+// Deliberately NOT added to driver.Driver itself, and deliberately NOT a
+// spec.Capabilities field. The M9c-5 (E2) rule stands, upheld at M9c-6
+// and restated by spec D3.1: a Capabilities framing field is added only
+// with HARDWARE EVIDENCE, and none of the four Yaesu models has any — the
+// FTdx10's CAT manual makes no framing statement anywhere, so 8-N-2 for it
+// is an ASSUMED register entry with a named lift rather than a fact. A
+// driver that has nothing honest to say implements nothing, and
+// internal/wiring opens its port at transport.DefaultStopBits exactly as
+// before. All four registered Yaesu drivers are in that position today.
+//
+// THE ICOM SIDE IS WHY IT EXISTS (spec D3.1): every Icom driver in the
+// tier reports 1, as its own ASSUMED register entry with its own named
+// per-model lift. The warning spec D3.1 carries goes with it — Icom
+// manuals print "8 bit / 1 stop" lines about the DATA/RTTY port, which is
+// NOT the CI-V port and is NOT evidence for CI-V framing.
+type SerialFramingReporter interface {
+	// StopBits is how many stop bits this radio's control port expects:
+	// 1 or 2, and nothing else. There is NO "unset" value — a driver
+	// that implements this interface is making a statement, and
+	// internal/wiring REFUSES any other number rather than substituting
+	// a default, because a zero silently becoming 8-N-2 would put a
+	// guess on the wire wearing a driver's authority.
+	StopBits() int
+}
+
 // StaticSettingsProvider is an OPTIONAL capability a driver.Driver's
 // CONCRETE type may implement: expose the settings/menu surface's STATIC
 // baseline shape — the same two-level SettingsDescriptor tree

@@ -194,6 +194,72 @@ func bankTagDisplayDefault(caps spec.Capabilities, id spec.BankID) codeplug.Bool
 	return codeplug.BoolField{State: codeplug.Known, Value: false}
 }
 
+// tierFields is every spec.Field the Icom tier added (design D4), in
+// codeplug.ChannelData's own declaration order — which is the order the
+// grid renders their columns in.
+//
+// It is a list rather than a derivation because there is no way to ask
+// spec "which fields did the Icom tier add": the distinction is
+// historical, and the reason it matters here is that the pre-tier ten
+// have unconditional columns while these ten do not.
+var tierFields = []spec.Field{
+	spec.FieldTxFrequency, spec.FieldDuplex, spec.FieldOffset,
+	spec.FieldToneMode, spec.FieldToneTx, spec.FieldToneRx,
+	spec.FieldDTCSCode, spec.FieldDTCSPolarity, spec.FieldFilter,
+	spec.FieldDataMode,
+}
+
+// bankTierFields returns, in tierFields order, every tier-added field the
+// bank identified by id can REACH — spec.FieldSupport.Unreachable false,
+// so "the frame has this field" in either direction and to any degree of
+// confidence, exactly the test bankCoreFields and bankTagDisplayDefault
+// already use for their own questions.
+//
+// The zero-value lookup covers "bank absent from caps entirely" and
+// "bank present but not listing the field" alike, so both answer "not
+// reachable" with no special-casing — caps that say nothing about a
+// field are not evidence that the radio has one.
+//
+// AN OPEN LIST, NOT A SNAPSHOT: every bank of all four registered Yaesu
+// models reaches none of the ten tier fields, so their grids' column sets
+// stay empty; every registered Icom model returns its OWN bank's own
+// reachable set, independently derived from that model's own record —
+// four for the IC-7610 (tone_mode, tone_tx, tone_rx, filter, pinned by
+// TestGetUISpec_RegisteredIC7610_EveryBankFieldsAndTagDisplay), six each
+// for the IC-7300 and IC-7300MK2 (the IC-7610's four plus tx_frequency
+// and data_mode, pinned by
+// TestGetUISpec_RegisteredIC7300_EveryBankFieldsAndTagDisplay and its
+// MK2 mirror), and ALL TEN for the IC-705 and the IC-9700 (each radio's
+// own 111-byte record additionally maps duplex, offset, dtcs_code and
+// dtcs_polarity — none of which the IC-7610 or the IC-7300 pair's record
+// carries — pinned by
+// TestGetUISpec_RegisteredIC705_EveryBankFieldsAndTagDisplay and
+// TestGetUISpec_RegisteredIC9700_EveryBankFieldsAndTagDisplay). The
+// IC-9700's own three banks (MEM, SCAN, CALL, core/driver/ic9700/caps.go)
+// each reach the same ten — bankFields grades all three identically — so
+// a third bank changed no field COUNT, only how many BankViews carry it.
+// NINE of the ten for the IC-905 (Wave 4 task R6, the tier's LAST
+// registration): every one of the IC-705's and IC-9700's ten EXCEPT
+// tx_frequency, which core/driver/ic905/caps.go's bankFields zeroes —
+// this radio's 64/65-byte record carries exactly one frequency field, no
+// duplicated TX block, unlike the IC-705's and the IC-9700's own records
+// — pinned by TestGetUISpec_RegisteredIC905_EveryBankFieldsAndTagDisplay.
+// Its two banks, MEM (SPARSE, discovered at Open) and CALL (dense, a
+// distinct namespace), reach the same nine identically, on the same
+// footing as the IC-9700's three. A future Icom registration would extend
+// this same list with its own model-specific set; there is none to
+// register, this being the tier's last.
+func bankTierFields(caps spec.Capabilities, id spec.BankID) []string {
+	var out []string
+	for _, f := range tierFields {
+		if caps.FieldSupport(id, f).Unreachable() {
+			continue
+		}
+		out = append(out, string(f))
+	}
+	return out
+}
+
 // slotViewsFor maps a bare slot-identifier list (a spec.Bank.Slots value)
 // into display-form SlotViews, preserving order.
 func slotViewsFor(slots []string) []SlotView {
@@ -209,6 +275,32 @@ func slotViewsFor(slots []string) []SlotView {
 // therefore bank) came from a connected session's own effective
 // capabilities (authoritative — reflects discovered inventory), and
 // working is the App's current working copy (nil if none loaded).
+//
+// ONE CLASSIFICATION RULE, DENSE AND SPARSE ALIKE: spec.Bank.WithinSpace,
+// the same question core/codeplug's bankForSlot asks. On a dense bank it
+// IS literal membership of Slots — WithinSpace scans Slots and then
+// answers false for anything else unless the bank is Sparse — so every
+// Yaesu grid's rows are byte-identical to what the old membership map
+// produced (pinned by
+// TestGetUISpec_SlotClassification_DenseBanksUnchangedByWithinSpace,
+// which recomputes the old rule and demands the same answer).
+//
+// On a SPARSE bank the two questions differ, and the difference was a
+// bug: a sparse bank's Slots lists what a READ MATERIALISED, and the
+// static offline baseline has read nothing — core/driver/ic705/caps.go
+// declares MEM's Slots nil BY CONTRACT. Asking membership there put every
+// MEM channel of an offline IC-705 working copy into NO bank at all, so
+// a loaded file's memories rendered nowhere in the grid, against this
+// function's own caller's promise that every loaded slot appears in
+// exactly one bank. WithinSpace admits the bank's whole declared address
+// space — which is also the right answer for a slot the user is ADDING,
+// legitimately in the space without being in any list.
+//
+// It is no wider than that: a slot outside every bank's space (say
+// G101-005, past the IC-705 CALL bank's four fixed channels and past
+// MEM's hundred groups) is still claimed by nothing here, and reaches
+// the grid only if the model's driver synthesises a bank for it — see
+// synthesiseDiscoveredBanks.
 func bankSlotViews(bank spec.Bank, live bool, working *codeplug.Codeplug) []SlotView {
 	if live || working == nil {
 		// Connected: caps' own slot list is authoritative, regardless of
@@ -218,18 +310,14 @@ func bankSlotViews(bank spec.Bank, live bool, working *codeplug.Codeplug) []Slot
 		return slotViewsFor(bank.Slots)
 	}
 	// Disconnected with a working copy loaded: classify the working
-	// copy's OWN slots against the static bank's membership, so the
+	// copy's OWN slots against the static bank's address space, so the
 	// grid's rows agree exactly with what ReadRadio/LoadFile produced —
 	// not the static list wholesale (which could include a slot the
 	// working copy does not actually carry, though in practice it always
 	// will for MEM/PMS).
-	member := make(map[string]bool, len(bank.Slots))
-	for _, s := range bank.Slots {
-		member[s] = true
-	}
 	var out []SlotView
 	for _, ch := range working.Channels {
-		if member[ch.Slot] {
+		if bank.WithinSpace(ch.Slot) {
 			out = append(out, SlotView{Slot: ch.Slot, Display: codeplug.DisplaySlot(ch.Slot)})
 		}
 	}
@@ -302,6 +390,7 @@ func synthesiseDiscoveredBanks(model string, working *codeplug.Codeplug) []BankV
 			ReadOnly:          true,
 			Slots:             slotViewsFor(b.Slots),
 			TagDisplayDefault: bankTagDisplayDefault(discoveredCaps, b.ID),
+			Fields:            bankTierFields(discoveredCaps, b.ID),
 		})
 	}
 	return out
@@ -334,14 +423,20 @@ func synthesiseDiscoveredBanks(model string, working *codeplug.Codeplug) []BankV
 //     it already reflects the session's own discovered inventory — used
 //     as-is regardless of whether a working copy is loaded.
 //   - Disconnected with a working copy loaded: the working copy's own
-//     slots, filtered to membership in the STATIC baseline's bank slot
-//     list; PLUS synthesised read-only 60M/EMG banks for any 60m/EMG
+//     slots, filtered to the STATIC baseline bank's own addressable SPACE
+//     (spec.Bank.WithinSpace — literal membership of that bank's slot
+//     list on a dense bank, the declared group space on a sparse one; see
+//     bankSlotViews); PLUS synthesised read-only 60M/EMG banks for any 60m/EMG
 //     slots the working copy holds (e.g. loaded from an earlier read of
 //     a US-region radio) — the static baseline defines no 60M/EMG bank,
 //     and loaded channels must never be invisible in the grid. See
-//     synthesiseDiscoveredBanks. Every working-copy slot therefore
-//     appears in exactly one BankView, so the grid's rows agree with
-//     what ReadRadio/LoadFile actually produced.
+//     synthesiseDiscoveredBanks. Every working-copy slot a bank's space
+//     or a synthesised bank claims therefore appears in EXACTLY ONE
+//     BankView, so the grid's rows agree with what ReadRadio/LoadFile
+//     actually produced. A slot outside every bank's space that no
+//     synthesiser claims either — a hand-edited or legacy file's
+//     unaddressable string — appears in none, which is stated here
+//     rather than papered over by inventing a bank for it.
 //   - Disconnected with no working copy: the static baseline's bank slot
 //     list, as-is (no 60M/EMG banks — there is nothing loaded that could
 //     need them, and no discovered inventory to assert).
@@ -365,6 +460,7 @@ func (a *App) GetUISpec() (UISpecView, error) {
 			ReadOnly:          bankReadOnly(caps, b.ID),
 			Slots:             bankSlotViews(b, live, a.working),
 			TagDisplayDefault: bankTagDisplayDefault(caps, b.ID),
+			Fields:            bankTierFields(caps, b.ID),
 		})
 	}
 	if !live && a.working != nil {
@@ -376,6 +472,17 @@ func (a *App) GetUISpec() (UISpecView, error) {
 		banks = append(banks, synthesiseDiscoveredBanks(model, a.working)...)
 	}
 
+	// THE TONE PICKER IS LIST-DRIVEN, AND ON A RANGE-DECLARING RADIO IT
+	// IS EMPTY. That is a RECORDED COST of the Icom tier's E3, not an
+	// oversight: spec.Capabilities gained an optional numeric
+	// CTCSSToneRange for models whose tone field is a number rather than
+	// an index into a chart, and this picker enumerates a chart. A
+	// range-declaring model's grid still SHOWS and ROUND-TRIPS whatever
+	// tones its channels carry — validation and CHIRP import both ask
+	// spec.Capabilities.AdmitsTone, which knows both shapes — but this
+	// list has nothing to offer, so the user cannot PICK one here. A
+	// numeric tone editor is the Wave-4 item that closes it; enumerating
+	// a range into a pick-list of hundreds of entries is not it.
 	tones := make([]ToneView, 0, len(caps.CTCSSTones))
 	for _, t := range caps.CTCSSTones {
 		tones = append(tones, ToneView{Decihertz: int(t), Display: t.String()})

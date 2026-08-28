@@ -601,7 +601,13 @@ func TestValidate_CTCSSToneChartFromCaps(t *testing.T) {
 		cp.Channels[0].Data.CTCSS = "ENC"
 		cp.Channels[0].Data.CTCSSTone = ToneField{State: Known, Value: spec.Tone(2541)} // last standard-chart tone; not in the narrow chart
 		issues := Validate(cp, narrowToneChartCapabilities())
-		if !hasIssue(issues, SeverityError, spec.FieldCTCSSTone, "001", "CTCSS chart") {
+		// The substring tracks ToneField.Valid's wording, which the Icom
+		// tier (E3) generalised from "not in this radio's CTCSS chart" to
+		// "not a tone this radio can express": a chart is now one of two
+		// shapes a radio's tone domain can take. The BEHAVIOUR asserted
+		// here — a tone outside this radio's own domain is an error — is
+		// unchanged.
+		if !hasIssue(issues, SeverityError, spec.FieldCTCSSTone, "001", "this radio can express") {
 			t.Errorf("Validate() = %+v, want a CTCSSTone error for a tone outside this radio's own chart", issues)
 		}
 	})
@@ -613,7 +619,7 @@ func TestValidate_CTCSSToneChartFromCaps(t *testing.T) {
 		caps := testCapabilities()
 		caps.CTCSSTones = nil
 		issues := Validate(cp, caps)
-		if !hasIssue(issues, SeverityError, spec.FieldCTCSSTone, "001", "CTCSS chart") {
+		if !hasIssue(issues, SeverityError, spec.FieldCTCSSTone, "001", "this radio can express") {
 			t.Errorf("Validate() = %+v, want a CTCSSTone error when caps.CTCSSTones is empty (fail closed, not fail open)", issues)
 		}
 	})

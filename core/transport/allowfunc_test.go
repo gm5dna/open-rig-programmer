@@ -47,7 +47,7 @@ func TestNewEngine_GateAndInitComeFromOneDialect(t *testing.T) {
 	if err := e.Init(ctx); err != nil {
 		t.Fatalf("Init: unexpected error: %v", err)
 	}
-	_, err = e.Do(ctx, cat.FT710.BuildIDRead(), CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Timeout: 100 * time.Millisecond})
+	_, err = e.Do(ctx, cat.FT710.BuildIDRead(), CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("ID", 7), Timeout: 100 * time.Millisecond})
 	if !errors.Is(err, ErrTimeout) {
 		t.Fatalf("Do = %v, want ErrTimeout (the stub answers nothing); an ErrDisallowedCommand here would mean the gate did not come from the dialect that built the frame", err)
 	}
@@ -156,7 +156,7 @@ func TestEngineDo_RefusesWithNoAllowlist(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	_, err = e.Do(ctx, cat.FT710.BuildIDRead(), CommandSpec{ExpectPrefix: "ID", ExpectLen: 7})
+	_, err = e.Do(ctx, cat.FT710.BuildIDRead(), CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("ID", 7)})
 	if !errors.Is(err, ErrNoAllowlist) {
 		t.Errorf("Do with a nil allowlist returned %v, want ErrNoAllowlist", err)
 	}
@@ -214,7 +214,7 @@ func TestEngineDo_RejectedFrameIsNeverWritten(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	_, err = e.Do(ctx, cmd, CommandSpec{})
+	_, err = e.Do(ctx, cmd, CommandSpec{Class: ClassWrite})
 	if !errors.Is(err, ErrDisallowedCommand) {
 		t.Fatalf("Do = %v, want errors.Is match against ErrDisallowedCommand — the FTdx10's dialect must refuse an FT-710 short-form MT Set", err)
 	}

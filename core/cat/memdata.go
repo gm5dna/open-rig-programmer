@@ -476,3 +476,48 @@ func encodeMemoryFields(frame []byte, m MemoryData) {
 	copy(frame[memP9Offset:], "00")
 	frame[memShiftOffset] = m.Shift.Wire()
 }
+
+// FreqTooWideError reports that a frequency taken from the neutral
+// memory model does not fit this package's internal uint32 frequency
+// representation, so no MR/MW/MT frame could carry it.
+//
+// It exists because the Icom tier widened
+// codeplug.ChannelData.FreqHz to uint64 (design D4, adjudication 5 — the
+// IC-905 reaches 10 GHz) while core/cat deliberately KEPT its uint32:
+// this package encodes a 9-digit NEWCAT frequency field whose ceiling is
+// 999,999,999, so a wider internal type would express nothing this
+// protocol can send. The conversion between the two therefore happens at
+// the driver seam, and it is CHECKED — see MemoryFreqHz.
+type FreqTooWideError struct {
+	// FreqHz is the offending value, in hertz.
+	FreqHz uint64
+}
+
+// Error implements the error interface.
+func (e *FreqTooWideError) Error() string {
+	return fmt.Sprintf("cat: frequency %d Hz is too large for this protocol's memory frame (maximum %d Hz)", e.FreqHz, memFreqMax)
+}
+
+// MemoryFreqHz converts a neutral-model frequency into the uint32
+// MemoryData.FreqHz carries, refusing anything this protocol's 9-digit
+// frequency field could not hold.
+//
+// It is the ONE conversion point between the widened neutral model and
+// this package, and it is a function rather than a cast on purpose: a
+// bare uint32(v) would TRUNCATE a 10 GHz frequency into a plausible-
+// looking small one and send it to a radio, which is precisely the class
+// of silent corruption this project refuses. Every driver that builds a
+// MemoryData from a codeplug.ChannelData calls this and propagates the
+// error.
+//
+// For the four Yaesu NEWCAT models registered today the error arm is
+// UNREACHABLE in practice — codeplug.Validate has already rejected any
+// frequency above those radios' 75 MHz ceiling, and the write path
+// refuses a channel Validate rejected — so this is defence in depth at a
+// type boundary, tested directly rather than left to be discovered.
+func MemoryFreqHz(v uint64) (uint32, error) {
+	if v > memFreqMax {
+		return 0, &FreqTooWideError{FreqHz: v}
+	}
+	return uint32(v), nil
+}

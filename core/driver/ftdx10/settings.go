@@ -202,21 +202,21 @@ func (e *SettingAnswerMismatchError) Error() string {
 
 // exSpec is the transport spec for an EX read of addr.
 //
-// ExpectPrefix carries the FULL SIX-DIGIT ADDRESS, never the bare "EX"
+// THE MATCH PREFIX carries the FULL SIX-DIGIT ADDRESS, never the bare "EX"
 // command name — the shared-prefix-family rule, and
-// transport.CommandSpec.ExpectPrefix's own doc comment states it: EX shares
+// cat.PrefixLenMatcher's own doc comment states it: EX shares
 // its two-byte command prefix across every one of this dialect's 197
 // inventory addresses, so a bare "EX" would let Engine.Do correlate a
 // DIFFERENT address's still-in-flight answer (or an unsolicited push) as
 // this read's own, and hand back one setting's value labelled as another's.
 //
-// ExpectLen is left at its zero value — VARIABLE LENGTH, and the deliberate
+// The exact length is left 0 — VARIABLE LENGTH, and the deliberate
 // contrast with mtSpec (read.go), which pins an exact length derived from
 // the dialect's MT geometry. There is no single EX answer length to derive:
 // the P4 body's width runs 1 to 12 bytes across this inventory (96 items at
 // one digit, one Text item at twelve — cat.EXItem.Digits/Text), so only the
 // prefix is checked and cat.Dialect.ParseEXAnswer applies the dialect's own
-// derived 1..12 bound afterwards. Deriving a per-item ExpectLen from Digits
+// derived 1..12 bound afterwards. Deriving a per-item exact length from Digits
 // would be worse than useless: the FT-710's M8c sweep found the manual's
 // Digits column WRONG for one of its own addresses (core/cat/ex.go's
 // ParseEXAnswer notes it), no FTdx10 address has ever answered anything at
@@ -225,7 +225,7 @@ func (e *SettingAnswerMismatchError) Error() string {
 //
 // One retry: an EX read is idempotent, exactly mtSpec's rationale.
 func exSpec(addr cat.EXAddress) transport.CommandSpec {
-	return transport.CommandSpec{ExpectPrefix: "EX" + addr.Wire(), RetryReads: 1}
+	return transport.CATReadSpec("EX"+addr.Wire(), 0, 1)
 }
 
 // parseEXResponse interprets the outcome of one EX exchange for requested:
@@ -249,7 +249,7 @@ func exSpec(addr cat.EXAddress) transport.CommandSpec {
 // A PURE function — no ctx, no *Session, no wire I/O — deliberately
 // separated from ReadSetting's exchange so it can be unit-tested directly
 // with hand-built frame values. That separation matters most for the
-// WRONG-ADDRESS branch: exSpec's ExpectPrefix carries the complete
+// WRONG-ADDRESS branch: exSpec's match prefix carries the complete
 // six-digit address, so transport.Engine.Do can only ever return a frame
 // that ALREADY matches that address as a successful answer — a genuinely
 // differently-addressed reply fails Do's own matching and is counted as an
