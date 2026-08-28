@@ -28,8 +28,12 @@ import (
 // anything about the display flag for — are Unknown; see
 // TestCmdImport_CHIRP_Success, which asserts both sides of that contrast
 // in one merged output.
-func validChannelData(freqHz uint32, mode string) *codeplug.ChannelData {
-	return &codeplug.ChannelData{
+func validChannelData(freqHz uint64, mode string) *codeplug.ChannelData {
+	// yaesuTierUnavailable (write_inprocess_test.go) puts the ten
+	// tier-added fields where a real read, a file load and a version-1
+	// CSV import all put them — see its doc comment for why a zero value
+	// here would make an unchanged channel plan as modified.
+	return yaesuTierUnavailable(&codeplug.ChannelData{
 		FreqHz:     freqHz,
 		Mode:       mode,
 		CTCSS:      "OFF",
@@ -37,7 +41,7 @@ func validChannelData(freqHz uint32, mode string) *codeplug.ChannelData {
 		Shift:      "SIMPLEX",
 		TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
 		ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
-	}
+	})
 }
 
 // buildValidBase returns a synthetic Codeplug matching the ft710 driver's
@@ -194,8 +198,8 @@ func TestCmdImport_LoadIntoNonexistent(t *testing.T) {
 // TestCmdImport_LoadIntoSchemaTooNew pins the distinct schema-too-new
 // message for --into.
 func TestCmdImport_LoadIntoSchemaTooNew(t *testing.T) {
-	tooNew := &codeplug.Codeplug{Schema: codeplug.CurrentSchema + 1}
-	base := saveFixture(t, tooNew, "too-new.json")
+	base := filepath.Join(t.TempDir(), "too-new.json")
+	writeTooNewCodeplug(t, base)
 	out := filepath.Join(t.TempDir(), "out.json")
 
 	var stdout, stderr bytes.Buffer

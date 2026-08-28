@@ -22,7 +22,16 @@ type Channel struct {
 // ChannelData is the contents of a populated memory channel.
 type ChannelData struct {
 	// FreqHz is the receive frequency in hertz.
-	FreqHz uint32 `json:"freq_hz"`
+	//
+	// uint64 since the Icom tier (design D4, adjudication 5): the IC-905
+	// reaches 10 GHz and a uint32 caps at 4.29 GHz. The JSON
+	// representation is unchanged (a plain number), and the on-disk
+	// schema is unchanged for any value that still fits a uint32 — the
+	// file writer emits the lowest schema that can represent the content
+	// (see schemaFor), so a >4.29 GHz frequency is exactly one of the two
+	// things that forces schema 4, and the frozen uint32 schema-3 loader
+	// therefore never meets one.
+	FreqHz uint64 `json:"freq_hz"`
 	// Mode is the display-name mode, e.g. "USB", "DATA-FM-N".
 	Mode string `json:"mode"`
 	// ClarHz is the clarifier offset in hertz.
@@ -55,7 +64,15 @@ type ChannelData struct {
 	// nothing to manufacture and nothing to send: every channel legitimately
 	// reads back Unavailable, that radio's capabilities report the field
 	// Unsupported both ways, and a Known value arriving from a file written
-	// for a DIFFERENT radio is refused by the capability gate instead.
+	// for a DIFFERENT radio is refused by the capability gate instead —
+	// "tag_display not writable on this radio", pinned against the real
+	// profile by core/driver/ftdx10's
+	// TestDiff_KnownTagDisplayRefusedOnRealProfile. That sentence was
+	// briefly false: the Icom tier's first cut of touchedFields filtered
+	// the Known value out of the touched set instead, so the write went
+	// out with the request silently missing (Wave-1c review 1, finding 1).
+	// A Known value is a REQUEST, and this project refuses a request it
+	// cannot honour rather than dropping it; see touchedFields.
 	//
 	// Both radios reach the same place — a non-Known value is never
 	// transmitted — by different routes, and neither route is a property of
@@ -70,6 +87,79 @@ type ChannelData struct {
 	TagDisplay BoolField `json:"tag_display"`
 	// ScanSkip is whether this channel is skipped during scanning.
 	ScanSkip BoolField `json:"scan_skip"`
+
+	// The ten fields the Icom tier added to the neutral memory model
+	// (design D4). Every one is tri-state, and on every channel this
+	// project produces for a Yaesu NEWCAT radio every one of them is
+	// UNAVAILABLE — a read says so directly (the TagDisplay precedent),
+	// a load of a schema-1/2/3 file migrates to it, and those radios'
+	// banks list none of the corresponding spec.Fields, so the
+	// capabilities agree.
+	//
+	// That is what keeps the pre-tier world byte-identical, in three
+	// places at once: the file writer emits schema 3 while none of them
+	// is Recorded (schemaFor — Unavailable says the same thing schema
+	// 3 says by having no key), the send plan counts only a Known field
+	// as touched (touchedFields), and Validate does not judge a field
+	// this radio cannot reach. None of the three needs a per-field
+	// exception list.
+	//
+	// NO omitempty, deliberately, for the reason TagDisplay gives above:
+	// these are structs, so the key is always written — and in a schema-4
+	// file a state must be VISIBLE rather than elided into
+	// indistinguishability from one somebody chose.
+
+	// TxFreqHz is an independent transmit ("split") frequency stored on
+	// the channel itself, as opposed to a shift applied to FreqHz.
+	TxFreqHz FreqField `json:"tx_frequency"`
+	// Duplex is the Icom-family repeater duplex selector, drawn from
+	// spec.Capabilities.DuplexOptions (e.g. "OFF", "DUP+", "DUP-"). It
+	// and the Yaesu Shift field above never both apply to one radio.
+	Duplex StringField `json:"duplex"`
+	// OffsetHz is the per-channel repeater offset magnitude in hertz.
+	OffsetHz FreqField `json:"offset"`
+	// ToneMode is the Icom-family tone-squelch mode, drawn from
+	// spec.Capabilities.ToneModes. It and the Yaesu CTCSS field above
+	// never both apply to one radio.
+	ToneMode StringField `json:"tone_mode"`
+	// ToneTx is the transmitted CTCSS tone.
+	ToneTx ToneField `json:"tone_tx"`
+	// ToneRx is the CTCSS tone required to open squelch on receive.
+	ToneRx ToneField `json:"tone_rx"`
+	// DTCSCode is the DTCS/DCS code NUMBER (23 for "023"), drawn from
+	// spec.Capabilities.DTCSCodes.
+	DTCSCode IntField `json:"dtcs_code"`
+	// DTCSPolarity is the DTCS polarity pair, drawn from
+	// spec.Capabilities.DTCSPolarities (e.g. "NN", "NR", "RN", "RR").
+	DTCSPolarity StringField `json:"dtcs_polarity"`
+	// Filter is the per-channel IF filter selection, drawn from
+	// spec.Capabilities.Filters (e.g. "FIL1").
+	Filter StringField `json:"filter"`
+	// DataMode is the per-channel data-mode flag, stored alongside — not
+	// inside — the mode name.
+	DataMode BoolField `json:"data_mode"`
+}
+
+// tierFieldsUnrecorded reports whether NONE of the ten fields the Icom
+// tier added carries anything this channel needs a file to write down —
+// i.e. every one of them is Absent or Unavailable (see
+// FieldState.Recorded).
+//
+// It is the "no tier-added field is present" half of the file writer's
+// lowest-schema rule (design D4), and it is deliberately a method on
+// ChannelData rather than a loop in file.go, so that a later field added
+// to this struct is one edit away from being accounted for here.
+func (d ChannelData) tierFieldsUnrecorded() bool {
+	return !d.TxFreqHz.State.Recorded() &&
+		!d.Duplex.State.Recorded() &&
+		!d.OffsetHz.State.Recorded() &&
+		!d.ToneMode.State.Recorded() &&
+		!d.ToneTx.State.Recorded() &&
+		!d.ToneRx.State.Recorded() &&
+		!d.DTCSCode.State.Recorded() &&
+		!d.DTCSPolarity.State.Recorded() &&
+		!d.Filter.State.Recorded() &&
+		!d.DataMode.State.Recorded()
 }
 
 // Empty reports whether c is an empty slot. Data == nil is the sole test:
@@ -111,18 +201,23 @@ func DisplaySlot(slot string) string {
 	}
 }
 
-// bankForSlot reports which Bank in caps lists slot among its Slots, by
-// linear scan. It returns the zero BankID and false if no bank in caps
-// claims slot.
+// bankForSlot reports which Bank in caps can hold slot, by linear scan.
+// It returns the zero BankID and false if no bank in caps claims it.
+//
+// The question is spec.Bank.WithinSpace's, not bare membership of Slots:
+// on a dense bank those are the same question, and on one of the Icom
+// tier's SPARSE banks (design D4, adjudication 7) they are not — Slots
+// there lists only what a read materialised, while the addressable space
+// is Groups x PerGroup, and a slot the user is ADDING is legitimately in
+// the space without being in the list. Asking membership alone would
+// have made every such add "not part of any bank this radio supports".
 //
 // Unexported for now: exported later if a caller outside this package
 // needs it.
 func bankForSlot(caps spec.Capabilities, slot string) (spec.BankID, bool) {
 	for _, b := range caps.Banks {
-		for _, s := range b.Slots {
-			if s == slot {
-				return b.ID, true
-			}
+		if b.WithinSpace(slot) {
+			return b.ID, true
 		}
 	}
 	return "", false

@@ -18,7 +18,7 @@
 	import { tick } from 'svelte'
 	import { appState } from './state/app.svelte.js'
 	import { updateChannel, updateChannels } from './bridge/bindings.js'
-	import { COLUMNS, isCellEditable, displayValue, newChannelData, cloneData } from './grid/columns.js'
+	import { columnsFor, isCellEditable, displayValue, newChannelData, cloneData } from './grid/columns.js'
 	import { hzToMHz, mhzToHz } from './grid/freq.js'
 	import { initialFocus, moveFocus, clampFocus } from './grid/nav.js'
 	import { parseBlock, mapPasteToChannels } from './grid/paste.js'
@@ -73,6 +73,12 @@
 	const activeBank = $derived(banks.find((b) => b.ID === activeBankId) ?? banks[0] ?? null)
 	const bankLocked = $derived(activeBank?.ReadOnly === true)
 	const slots = $derived(activeBank?.Slots ?? [])
+	// The columns THIS bank renders: always the ten in COLUMNS, plus any
+	// field the Icom tier added that this bank's capabilities say the
+	// radio actually has (columnsFor / BankView.Fields). For every model
+	// registered today that is exactly COLUMNS — the grid's shape does
+	// not change until a radio with those fields arrives.
+	const columns = $derived(columnsFor(activeBank))
 
 	/** @type {Map<string, Channel>} */
 	const channelBySlot = $derived(
@@ -115,7 +121,7 @@
 	}
 
 	/** Issues decorating one cell (slot + the column's field key).
-	 * @param {string} slot @param {typeof COLUMNS[number]} column */
+	 * @param {string} slot @param {ReturnType<typeof columnsFor>[number]} column */
 	function cellIssues(slot, column) {
 		if (!column.field) return []
 		return (issuesBySlot.get(slot) ?? []).filter((i) => i.Field === column.field)
@@ -140,7 +146,7 @@
 	// --- focus ------------------------------------------------------------
 
 	let focus = $state(initialFocus())
-	const dims = $derived({ rows: slots.length, cols: COLUMNS.length })
+	const dims = $derived({ rows: slots.length, cols: columns.length })
 
 	// Keep the remembered position renderable when the active bank or the
 	// loaded data shrinks. Settles immediately: once in range, the clamp
@@ -230,7 +236,7 @@
 	/** @param {number} rowIdx @param {number} colIdx @param {string | null} seed */
 	function openEditor(rowIdx, colIdx, seed = null) {
 		if (bankLocked || !appState.uiSpec) return
-		const column = COLUMNS[colIdx]
+		const column = columns[colIdx]
 		const data = dataAt(rowIdx)
 		if (!isCellEditable(column, data)) return
 		if (column.id === 'tagDisplay' || column.id === 'skip') {
@@ -292,7 +298,7 @@
 	/** Commit the text editor (Frequency or Tag). @param {number} rowIdx @param {number} colIdx */
 	function commitTextEditor(rowIdx, colIdx) {
 		if (!editing) return
-		const column = COLUMNS[colIdx]
+		const column = columns[colIdx]
 		const sv = slots[rowIdx]
 		const data = dataAt(rowIdx)
 		const spec = appState.uiSpec
@@ -325,7 +331,7 @@
 	 * @param {number} rowIdx @param {number} colIdx @param {string} value */
 	function commitSelectEditor(rowIdx, colIdx, value) {
 		if (!editing) return
-		const column = COLUMNS[colIdx]
+		const column = columns[colIdx]
 		const sv = slots[rowIdx]
 		const data = dataAt(rowIdx)
 		if (!sv || !data) return cancelEditor()
@@ -408,7 +414,7 @@
 	 * such flag, so there is no question outstanding and any value would
 	 * be a fiction. isCellEditable refuses it before openEditor reaches
 	 * here; these guards are the second line of that defence.
-	 * @param {number} rowIdx @param {typeof COLUMNS[number]} column */
+	 * @param {number} rowIdx @param {ReturnType<typeof columnsFor>[number]} column */
 	function toggleCell(rowIdx, column) {
 		const sv = slots[rowIdx]
 		const data = dataAt(rowIdx)
@@ -720,7 +726,7 @@
 			openMoveCopyForRow(rowIdx)
 			return
 		}
-		const column = COLUMNS[colIdx]
+		const column = columns[colIdx]
 		if (e.key === 'Enter' || (e.key === ' ' && (column.id === 'tagDisplay' || column.id === 'skip'))) {
 			e.preventDefault()
 			openEditor(rowIdx, colIdx)
@@ -798,7 +804,7 @@
 		return dot < 0 ? [mhz, ''] : [mhz.slice(0, dot), mhz.slice(dot)]
 	}
 
-	/** @param {typeof COLUMNS[number]} column @param {ChannelData | null} data */
+	/** @param {ReturnType<typeof columnsFor>[number]} column @param {ChannelData | null} data */
 	function cellPreserved(column, data) {
 		if (data == null) return false
 		if (column.id === 'tone') return data.ctcss_tone?.state !== 'known'
@@ -859,14 +865,14 @@
 			<table class="grid" role="grid" aria-label={`${activeBank.Label} channels`} aria-readonly={bankLocked || undefined} bind:this={tableEl}>
 				<thead>
 					<tr>
-						{#each COLUMNS as column (column.id)}
+						{#each columns as column (column.id)}
 							<th scope="col" class={`col-${column.id}`}>{column.label}</th>
 						{/each}
 						<!-- Trailing per-row actions column (task-22 layout fix): a
 						     dedicated slim column so the action icons never overlap
-						     the slot label or any data cell. NOT part of COLUMNS —
+						     the slot label or any data cell. NOT part of the column list —
 						     nav.js's dims, paste's column mapping and the roving
-						     tabindex all stay COLUMNS-sized; this column carries no
+						     tabindex all stay column-list-sized; this column carries no
 						     data-row/data-col and takes no part in cell focus. -->
 						<th scope="col" class="col-actions"><span class="visually-hidden">Row actions</span></th>
 					</tr>
@@ -891,7 +897,7 @@
 							ondrop={(e) => onRowDrop(e, sv.Slot)}
 							ondragend={onRowDragEnd}
 						>
-							{#each COLUMNS as column, c (column.id)}
+							{#each columns as column, c (column.id)}
 								{@const issues = cellIssues(sv.Slot, column)}
 								{@const cellSeverity = severityClass(issues)}
 								{@const preserved = cellPreserved(column, data)}

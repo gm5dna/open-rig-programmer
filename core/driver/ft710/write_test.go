@@ -456,6 +456,61 @@ func TestWriteChannel_NonKnownTagDisplayRefusedBeforeWire(t *testing.T) {
 	}
 }
 
+// TestWriteChannel_KnownTierFieldRefusedBeforeWire is the tier half of the
+// gate's stated contract: "silently dropping a value the caller explicitly
+// marked Known would be a lie" must hold for the ten fields the Icom tier
+// added, not only for the three this driver's CAT codec has always known
+// about.
+//
+// The channel is otherwise the ordinary writable one this profile ACCEPTS
+// (see TestWriteChannel_HappyPath), so the refusal is attributable to the
+// one Known tier value and to nothing else. ToneMode is this driver's
+// chosen representative; the FTdx10 and FTdx101 pin a different field each,
+// so the three tests between them exercise three of the ten.
+//
+// The MECHANISM is a lookup MISS, and the test says so directly: this
+// radio's capability map has no entry for spec.FieldToneMode on any bank,
+// FieldSupport therefore answers the ZERO spec.FieldSupport, and the zero
+// Support is neither CanWrite nor spec.Inert — so the gate refuses. Nothing
+// had to be added to caps.go for the refusal to happen, and the assertion
+// below is what keeps that true.
+func TestWriteChannel_KnownTierFieldRefusedBeforeWire(t *testing.T) {
+	cp, sess := openCountingSession(t, Simulated)
+
+	bank, ok := sess.bankFor("010")
+	if !ok {
+		t.Fatalf("bankFor(%q) found no bank — the fixture is wrong, not the gate", "010")
+	}
+	if fs := sess.caps.FieldSupport(bank, spec.FieldToneMode); fs.CanWrite() || fs.Write == spec.Inert {
+		t.Fatalf("FieldSupport(%q, %s) = %+v, want the zero FieldSupport (no tier field is in this radio's capability map)", bank, spec.FieldToneMode, fs)
+	}
+
+	ch := writableChannel("010")
+	ch.Data.ToneMode = codeplug.StringField{State: codeplug.Known, Value: "TSQL"}
+
+	baseline := cp.writes.Load()
+	_, err := sess.WriteChannel(testCtx(t), ch)
+	if !errors.Is(err, driver.ErrWriteRefused) {
+		t.Fatalf("WriteChannel = %v, want errors.Is match against driver.ErrWriteRefused", err)
+	}
+	if got := cp.writes.Load(); got != baseline {
+		t.Errorf("refused WriteChannel produced %d wire writes, want 0 (refusal must precede ALL wire traffic)", got-baseline)
+	}
+	var wre *driver.WriteRefusedError
+	if !errors.As(err, &wre) {
+		t.Fatalf("WriteChannel = %v, want a *driver.WriteRefusedError", err)
+	}
+	if !slices.Contains(wre.Fields, spec.FieldToneMode) {
+		t.Errorf("WriteRefusedError.Fields = %v, want %s named — a refusal that does not name the field is not the contract", wre.Fields, spec.FieldToneMode)
+	}
+	if !strings.Contains(wre.Reason, "not write-Supported for this session") {
+		t.Errorf("WriteRefusedError.Reason = %q, want the capability gate's own sentence", wre.Reason)
+	}
+	if wre.Slot != "010" {
+		t.Errorf("WriteRefusedError.Slot = %q, want %q", wre.Slot, "010")
+	}
+}
+
 // TestBuildWriteCommands_NonKnownTagDisplayRefusedFirst pins the REFUSAL'S
 // PLACEMENT, not merely its existence: buildWriteCommands must reject a
 // non-Known TagDisplay before it maps any other field, so a channel that is
@@ -585,6 +640,47 @@ func TestBuildWriteCommands_TagDisplayWireIdentity(t *testing.T) {
 	}
 }
 
+// tierFieldsInOrder is the Icom tier's ten spec.Fields in ChannelData's
+// declaration order — the order codeplug's tierAddedFieldFor uses and the
+// order requestedFields must append them in.
+//
+// Spelt out rather than derived from either side, so that the two are
+// COMPARED rather than one being the other's echo: a reordering made in
+// requestedFields alone would agree with a list built from requestedFields
+// and disagree with this one.
+func tierFieldsInOrder() []spec.Field {
+	return []spec.Field{
+		spec.FieldTxFrequency,
+		spec.FieldDuplex,
+		spec.FieldOffset,
+		spec.FieldToneMode,
+		spec.FieldToneTx,
+		spec.FieldToneRx,
+		spec.FieldDTCSCode,
+		spec.FieldDTCSPolarity,
+		spec.FieldFilter,
+		spec.FieldDataMode,
+	}
+}
+
+// withEveryTierFieldKnown marks all ten tier fields Known on data. The
+// values are arbitrary and never reach a wire — this driver's capability
+// map has no entry for any of the ten, so the gate refuses them all — but
+// the STATE is what requestedFields keys on, so it must be Known.
+func withEveryTierFieldKnown(data codeplug.ChannelData) codeplug.ChannelData {
+	data.TxFreqHz = codeplug.FreqField{State: codeplug.Known, Value: 14_255_000}
+	data.Duplex = codeplug.StringField{State: codeplug.Known, Value: "DUP+"}
+	data.OffsetHz = codeplug.FreqField{State: codeplug.Known, Value: 600_000}
+	data.ToneMode = codeplug.StringField{State: codeplug.Known, Value: "TSQL"}
+	data.ToneTx = codeplug.ToneField{State: codeplug.Known, Value: 670}
+	data.ToneRx = codeplug.ToneField{State: codeplug.Known, Value: 670}
+	data.DTCSCode = codeplug.IntField{State: codeplug.Known, Value: 23}
+	data.DTCSPolarity = codeplug.StringField{State: codeplug.Known, Value: "NN"}
+	data.Filter = codeplug.StringField{State: codeplug.Known, Value: "FIL1"}
+	data.DataMode = codeplug.BoolField{State: codeplug.Known, Value: true}
+	return data
+}
+
 // TestRequestedFields_MembershipAndOrder pins the driver gate's field set,
 // which requestedFields' doc comment claims mirrors codeplug.Diff's
 // addedFields EXACTLY. That claim was momentarily untrue mid-branch — Task 2
@@ -601,7 +697,9 @@ func TestBuildWriteCommands_TagDisplayWireIdentity(t *testing.T) {
 // WriteChannel's gate walks, and therefore the order in which a
 // WriteRefusedError names fields. TagDisplay sits seventh whenever it
 // appears at all — after Tag, before the tone/skip conditionals — exactly
-// where it sat when it was unconditional.
+// where it sat when it was unconditional. The TIER TEN follow all three,
+// in ChannelData's declaration order, so no BlockReason a user has ever
+// read is reordered by their arrival.
 func TestRequestedFields_MembershipAndOrder(t *testing.T) {
 	base := []spec.Field{
 		spec.FieldFrequency,
@@ -686,6 +784,40 @@ func TestRequestedFields_MembershipAndOrder(t *testing.T) {
 				ScanSkip:   known(true),
 			},
 			want: append(append([]spec.Field{}, base...), spec.FieldCTCSSTone, spec.FieldScanSkip),
+		},
+		{
+			// THE TIER EXTENSION, one field at a time: a Known ToneMode is
+			// REQUESTED, so the capability gate gets to see it. Before the
+			// fix wave this row came back as the bare six and the field was
+			// silently omitted from the frame.
+			name: "a Known ToneMode is requested, after the pre-tier set",
+			data: codeplug.ChannelData{
+				TagDisplay: codeplug.BoolField{State: codeplug.Unknown},
+				CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+				ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
+				ToneMode:   codeplug.StringField{State: codeplug.Known, Value: "TSQL"},
+			},
+			want: append(append([]spec.Field{}, base...), spec.FieldToneMode),
+		},
+		{
+			// The tier ten never displace the pre-tier three: TagDisplay is
+			// still seventh, tone eighth, skip ninth, and the ten follow.
+			name: "all three pre-tier conditionals and all ten tier fields, in order",
+			data: withEveryTierFieldKnown(codeplug.ChannelData{
+				TagDisplay: known(true),
+				CTCSSTone:  codeplug.ToneField{State: codeplug.Known, Value: 670},
+				ScanSkip:   known(true),
+			}),
+			want: append(append(append([]spec.Field{}, base...),
+				spec.FieldTagDisplay, spec.FieldCTCSSTone, spec.FieldScanSkip),
+				tierFieldsInOrder()...),
+		},
+		{
+			// The ten alone, with every pre-tier conditional absent: the
+			// declaration order is visible with nothing in front of it.
+			name: "the ten tier fields alone keep ChannelData's declaration order",
+			data: withEveryTierFieldKnown(codeplug.ChannelData{}),
+			want: append(append([]spec.Field{}, base...), tierFieldsInOrder()...),
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -839,5 +971,34 @@ func TestBuildWriteCommands_FT710ClarifierRefusalText(t *testing.T) {
 				t.Errorf("WriteRefusedError.Reason = %q, want %q", wre.Reason, tt.want)
 			}
 		})
+	}
+}
+
+// TestBuildWriteCommands_FrequencyTooWideForTheFrame exercises the ONE
+// checked conversion between the neutral model's uint64 frequency and
+// core/cat's uint32 (design D4, item 7).
+//
+// The path is UNREACHABLE in normal operation and that is the point of
+// testing it here rather than trusting it: codeplug.Validate refuses any
+// frequency above this radio's 75 MHz ceiling long before a write is
+// planned, so nothing but a direct call gets a value this wide as far as
+// the frame builder. What the test proves is that when one does arrive,
+// the driver REFUSES it — naming the frequency field — instead of
+// casting it to the plausible 14.25 MHz a bare uint32() would have
+// produced and sending that to a radio.
+func TestBuildWriteCommands_FrequencyTooWideForTheFrame(t *testing.T) {
+	ch := writableChannel("010")
+	ch.Data.FreqHz = uint64(1)<<32 | 14_250_000
+
+	_, _, err := buildWriteCommands(cat.FT710, ch)
+	var wre *driver.WriteRefusedError
+	if !errors.As(err, &wre) {
+		t.Fatalf("buildWriteCommands = %v, want a *driver.WriteRefusedError", err)
+	}
+	if len(wre.Fields) != 1 || wre.Fields[0] != spec.FieldFrequency {
+		t.Fatalf("WriteRefusedError.Fields = %v, want exactly [%s]", wre.Fields, spec.FieldFrequency)
+	}
+	if !strings.Contains(wre.Reason, "too large for this protocol's memory frame") {
+		t.Errorf("WriteRefusedError.Reason = %q, want it to say the frame cannot hold the value", wre.Reason)
 	}
 }

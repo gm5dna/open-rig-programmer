@@ -12,6 +12,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
 // Compile-time proof of the two settings seams this task adds. Any signature
@@ -560,8 +561,8 @@ func TestStaticSettingsDescriptor_MatchesPackageFuncAndSession(t *testing.T) {
 // proves the prefixes of two different addresses actually differ, which a
 // bare-"EX" spec would fail.
 //
-// The LENGTH is variable (ExpectLen zero), the deliberate opposite of mtSpec's
-// exact derived length: this inventory's P4 widths run 1 to 12 bytes, so there
+// The LENGTH is variable (the matcher pins no exact length), the deliberate
+// opposite of mtSpec's exact derived length: this inventory's P4 widths run 1 to 12 bytes, so there
 // is no single length to pin, and pinning a per-item width from the
 // transcribed Digits column would make a spec out of a number NO FTdx101 HAS
 // EVER CONFIRMED — every row carries ObservedReadWidth 0.
@@ -570,17 +571,32 @@ func TestExSpec_FullAddressPrefixAndVariableLength(t *testing.T) {
 	b := exItemByAddr(t, modelD.dialect, textSettingAddr).Addr
 
 	specA := exSpec(a)
-	if want := "EX" + a.Wire(); specA.ExpectPrefix != want {
-		t.Errorf("exSpec(%s).ExpectPrefix = %q, want %q (the FULL address, never a bare \"EX\")", a.Wire(), specA.ExpectPrefix, want)
-	}
-	if specA.ExpectLen != 0 {
-		t.Errorf("exSpec.ExpectLen = %d, want 0 (variable: this inventory's P4 widths run 1..12 bytes)", specA.ExpectLen)
+	if specA.Class != transport.ClassRead {
+		t.Errorf("exSpec(%s).Class = %v, want transport.ClassRead", a.Wire(), specA.Class)
 	}
 	if specA.RetryReads != 1 {
 		t.Errorf("exSpec.RetryReads = %d, want 1 (an EX read is idempotent)", specA.RetryReads)
 	}
-	if specB := exSpec(b); specB.ExpectPrefix == specA.ExpectPrefix {
-		t.Errorf("exSpec(%s) and exSpec(%s) share the prefix %q — a shared prefix is exactly what lets one address's answer be correlated as another's", a.Wire(), b.Wire(), specA.ExpectPrefix)
+	// The full-address prefix and the variable length, asserted THROUGH
+	// THE MATCHER rather than off the struct: D2 moved answer matching
+	// into an opaque transport.CommandSpec.Match built by the codec, so
+	// ExpectPrefix and ExpectLen no longer exist as fields. The property
+	// they pinned is the one that matters and is stronger stated this way
+	// — a's spec accepts a's own answer and REFUSES b's, which is exactly
+	// the wrong-address correlation a bare "EX" prefix would permit.
+	ownAnswer := "EX" + a.Wire() + "1;"
+	othersAnswer := "EX" + b.Wire() + "1;"
+	if !specA.Match([]byte(ownAnswer)) {
+		t.Errorf("exSpec(%s).Match(%q) = false, want true — that is this address's own answer", a.Wire(), ownAnswer)
+	}
+	if specA.Match([]byte(othersAnswer)) {
+		t.Errorf("exSpec(%s).Match(%q) = true, want false — a shared prefix is exactly what lets one address's answer be correlated as another's", a.Wire(), othersAnswer)
+	}
+	// Variable length: two answers of different widths, both this
+	// address's, both matched.
+	wide := "EX" + a.Wire() + "123456789012;"
+	if !specA.Match([]byte(wide)) {
+		t.Errorf("exSpec(%s).Match(%q) = false, want true — the length must stay variable: this inventory's P4 widths run 1..12 bytes", a.Wire(), wide)
 	}
 
 	// The width claim the variable length exists for, taken from the

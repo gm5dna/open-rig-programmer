@@ -96,7 +96,7 @@ func TestEngine_Close_UnblocksInFlightDo(t *testing.T) {
 	idCmd := cat.FT710.BuildIDRead()
 	done := make(chan error, 1)
 	go func() {
-		_, err := eng.Do(ctx, idCmd, CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Timeout: 30 * time.Second})
+		_, err := eng.Do(ctx, idCmd, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("ID", 7), Timeout: 30 * time.Second})
 		done <- err
 	}()
 
@@ -137,7 +137,7 @@ func TestEngine_Close_NoGoroutineLeak(t *testing.T) {
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		_, _ = eng.Do(ctx, cat.FT710.BuildIDRead(), CommandSpec{ExpectPrefix: "ID", ExpectLen: 7})
+		_, _ = eng.Do(ctx, cat.FT710.BuildIDRead(), CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("ID", 7)})
 		cancel()
 
 		if err := eng.Close(); err != nil {
@@ -201,7 +201,7 @@ func TestEngine_ConcurrentDo_Serialises(t *testing.T) {
 					cancel()
 					continue
 				}
-				if _, err := eng.Do(ctx, writeCmd, CommandSpec{ErrorWindow: 10 * time.Millisecond, Settle: time.Millisecond}); err != nil {
+				if _, err := eng.Do(ctx, writeCmd, CommandSpec{Class: ClassWrite, ErrorWindow: 10 * time.Millisecond, Settle: time.Millisecond}); err != nil {
 					errCh <- fmt.Errorf("goroutine %d op %d: MW Do: %w", g, i, err)
 					cancel()
 					continue
@@ -213,7 +213,7 @@ func TestEngine_ConcurrentDo_Serialises(t *testing.T) {
 					cancel()
 					continue
 				}
-				got, err := eng.Do(ctx, readCmd, CommandSpec{ExpectPrefix: "MR", ExpectLen: 28, Timeout: time.Second, Settle: time.Millisecond})
+				got, err := eng.Do(ctx, readCmd, CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("MR", 28), Timeout: time.Second, Settle: time.Millisecond})
 				cancel()
 				if err != nil {
 					errCh <- fmt.Errorf("goroutine %d op %d: MR Do: %w", g, i, err)
@@ -383,7 +383,7 @@ func TestEngine_WithClock_SettleUsesInjectedClock(t *testing.T) {
 	defer cancel()
 
 	settle := 37 * time.Millisecond
-	_, err = eng.Do(ctx, cat.FT710.BuildIDRead(), CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Settle: settle})
+	_, err = eng.Do(ctx, cat.FT710.BuildIDRead(), CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("ID", 7), Settle: settle})
 	if err != nil {
 		t.Fatalf("Do: unexpected error: %v", err)
 	}
@@ -421,7 +421,7 @@ func TestEngine_Settle_AppliesAfterRejectionToo(t *testing.T) {
 	defer cancel()
 
 	settle := 41 * time.Millisecond
-	_, err = eng.Do(ctx, cat.FT710.BuildIDRead(), CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Settle: settle})
+	_, err = eng.Do(ctx, cat.FT710.BuildIDRead(), CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("ID", 7), Settle: settle})
 	if !errors.Is(err, cat.ErrRejected) {
 		t.Fatalf("Do = %v, want errors.Is match against cat.ErrRejected", err)
 	}
@@ -463,7 +463,7 @@ func TestEngine_WithMaxFrame_TriggersContaminationSooner(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	_, err = eng.Do(ctx, cat.FT710.BuildIDRead(), CommandSpec{ExpectPrefix: "ID", ExpectLen: 7, Timeout: time.Second})
+	_, err = eng.Do(ctx, cat.FT710.BuildIDRead(), CommandSpec{Class: ClassRead, Match: cat.PrefixLenMatcher("ID", 7), Timeout: time.Second})
 	if !errors.Is(err, ErrContaminated) {
 		t.Fatalf("Do = %v, want errors.Is match against ErrContaminated (WithMaxFrame(8) should have made a 20-byte unterminated reply overflow)", err)
 	}

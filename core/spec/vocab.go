@@ -144,3 +144,129 @@ func StandardCTCSSStates() []ToneState {
 	copy(out, standardCTCSSStates)
 	return out
 }
+
+// DuplexDirection is the semantic content of an Icom-family duplex
+// option: which way the transmit frequency moves relative to receive, if
+// at all. It is the FieldDuplex analogue of ShiftDirection, and exists
+// for the same reason — generic code (a CSV importer mapping CHIRP's
+// "+"/"-", the UI) needs the fact without re-deriving it from a
+// wire-form string.
+//
+// It is a SEPARATE type from ShiftDirection rather than a reuse of it,
+// because the two vocabularies never coexist on one model (design D4)
+// and a shared type would invite a shared lookup that silently answered
+// for the wrong one.
+type DuplexDirection int
+
+const (
+	// DuplexUnspecified is the zero value: not a real duplex semantic,
+	// and rejected by Validate wherever it appears.
+	DuplexUnspecified DuplexDirection = iota
+	// DuplexOff is simplex: transmit and receive on one frequency.
+	DuplexOff
+	// DuplexUp transmits above the receive frequency, by the channel's
+	// FieldOffset.
+	DuplexUp
+	// DuplexDown transmits below the receive frequency, by the
+	// channel's FieldOffset.
+	DuplexDown
+)
+
+// DuplexOption is one duplex value this radio's wire protocol expresses,
+// paired with the semantic fact generic code needs about it — the same
+// Value-plus-semantics shape ShiftOption and ToneState use.
+type DuplexOption struct {
+	// Value is the wire-form duplex string, e.g. "OFF", "DUP+", "DUP-".
+	Value string
+	// Direction is which way this option moves the transmit frequency.
+	// The zero value, DuplexUnspecified, is not valid — every
+	// DuplexOption must set this explicitly.
+	Direction DuplexDirection
+	// Canonical marks this option as THE answer to "which wire code does
+	// this radio use for that direction?" — the question core/csvio's
+	// CHIRP import asks when it maps a foreign dialect's "+"/"-" onto
+	// this radio's vocabulary.
+	//
+	// REQUIRED ONLY WHERE A DIRECTION IS EXPRESSED MORE THAN ONCE, and
+	// then EXACTLY ONE of those options must carry it (Validate). A
+	// direction expressed by a single option needs no marking: there is
+	// nothing to choose between, and demanding a flag on every entry of
+	// every model's table would be ceremony rather than information.
+	//
+	// IT EXISTS BECAUSE MULTIPLICITY IS REAL AND SLICE ORDER IS NOT AN
+	// ANSWER. A model can genuinely express one direction with two wire
+	// codes; the reverse mapping used to return the FIRST match, so which
+	// code an imported file produced depended on the order a driver
+	// author happened to write the table in — a difference no test could
+	// see and no reader would suspect.
+	Canonical bool
+}
+
+// ToneModeSemantics is the semantic content of an Icom-family tone mode:
+// which squelch mechanism a channel in that mode uses. Unlike
+// ToneSemantics (the Yaesu CTCSS-state three), it spans DTCS and the
+// cross combinations, which is exactly why FieldToneMode is a separate
+// Field from FieldCTCSSState rather than a widening of it.
+type ToneModeSemantics int
+
+const (
+	// ToneModeUnspecified is the zero value: not a real tone mode, and
+	// rejected by Validate wherever it appears.
+	ToneModeUnspecified ToneModeSemantics = iota
+	// ToneModeOff means no tone or code squelch at all.
+	ToneModeOff
+	// ToneModeCTCSS TRANSMITS a CTCSS tone (FieldToneTx) and requires
+	// none on receive — CHIRP's "Tone".
+	ToneModeCTCSS
+	// ToneModeCTCSSSquelch transmits a CTCSS tone and requires a
+	// matching received tone (FieldToneRx) — CHIRP's "TSQL".
+	ToneModeCTCSSSquelch
+	// ToneModeDTCS uses a DTCS/DCS code (FieldDTCSCode,
+	// FieldDTCSPolarity) in both directions — CHIRP's "DTCS".
+	ToneModeDTCS
+	// ToneModeCross combines two different mechanisms across the
+	// transmit and receive directions — CHIRP's "Cross". A radio that
+	// expresses it must also express the fields the chosen combination
+	// needs; this project does not model the cross MODE string itself
+	// beyond the vocabulary entry.
+	ToneModeCross
+)
+
+// ToneMode is one tone-squelch mode a memory channel's FieldToneMode may
+// hold, together with the semantic fact generic code needs about it.
+type ToneMode struct {
+	// Value is the wire-form tone-mode string, e.g. "OFF", "TONE",
+	// "TSQL", "DTCS".
+	Value string
+	// Semantics is what this mode means. The zero value,
+	// ToneModeUnspecified, is not valid — every ToneMode must set this
+	// explicitly.
+	Semantics ToneModeSemantics
+	// Canonical marks this mode as THE answer to "which wire code does
+	// this radio use for that squelch mechanism?" — see
+	// DuplexOption.Canonical, which carries the full argument. Required
+	// only where a Semantics value is expressed more than once, and then
+	// on exactly one of them.
+	Canonical bool
+}
+
+// NeedsTxTone reports whether a channel in this tone mode must carry a
+// known FieldToneTx value for the mode to make sense. Like
+// ToneState.RequiresTone it is a method, not a stored field, because it
+// is fully derivable from Semantics.
+func (t ToneMode) NeedsTxTone() bool {
+	return t.Semantics == ToneModeCTCSS || t.Semantics == ToneModeCTCSSSquelch
+}
+
+// NeedsRxTone reports whether a channel in this tone mode must carry a
+// known FieldToneRx value for the mode to make sense.
+func (t ToneMode) NeedsRxTone() bool {
+	return t.Semantics == ToneModeCTCSSSquelch
+}
+
+// NeedsDTCS reports whether a channel in this tone mode must carry a
+// known FieldDTCSCode (and FieldDTCSPolarity) for the mode to make
+// sense.
+func (t ToneMode) NeedsDTCS() bool {
+	return t.Semantics == ToneModeDTCS
+}

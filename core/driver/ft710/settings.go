@@ -128,18 +128,18 @@ func (e *SettingAnswerMismatchError) Error() string {
 	return fmt.Sprintf("ft710: ReadSetting: requested EX address %q but the answer names address %q — refusing to map a reply onto the wrong setting", e.Requested, e.Answered)
 }
 
-// exSpec is the transport spec for an EX read of addr. ExpectPrefix MUST
-// carry the FULL six-digit wire address, never the bare "EX" command name
-// — see transport.CommandSpec.ExpectPrefix's own doc comment: EX shares
-// its two-byte command prefix across all 296 Table 2 addresses, so a bare
-// "EX" would let Engine.Do correlate a DIFFERENT address's still-in-flight
-// answer (or an unsolicited push) as this read's own. ExpectLen is left
-// at its zero value (variable length): the P4 body's width varies 1-12
-// bytes across items (cat.EXItem.Digits/Text), so only the prefix is
-// checked — mirroring mtSpec's own variable-length answer, ft710.go. One
-// retry — reads are idempotent, exactly mrSpec/mtSpec's rationale.
+// exSpec is the transport spec for an EX read of addr. The match prefix
+// MUST carry the FULL six-digit wire address, never the bare "EX" command
+// name — see cat.PrefixLenMatcher's own doc comment: EX shares its
+// two-byte command prefix across all 296 Table 2 addresses, so a bare "EX"
+// would let Engine.Do correlate a DIFFERENT address's still-in-flight
+// answer (or an unsolicited push) as this read's own. The exact length is
+// left 0 (variable length): the P4 body's width varies 1-12 bytes across
+// items (cat.EXItem.Digits/Text), so only the prefix is checked —
+// mirroring mtSpec's own variable-length answer, ft710.go. One retry —
+// reads are idempotent, exactly mrSpec/mtSpec's rationale.
 func exSpec(addr cat.EXAddress) transport.CommandSpec {
-	return transport.CommandSpec{ExpectPrefix: "EX" + addr.Wire(), RetryReads: 1}
+	return transport.CATReadSpec("EX"+addr.Wire(), 0, 1)
 }
 
 // parseEXResponse interprets the outcome of one EX exchange for requested:
@@ -161,7 +161,7 @@ func exSpec(addr cat.EXAddress) transport.CommandSpec {
 // unit-tested directly with hand-built frame values, rather than only
 // through a session-level fault injection. That separation matters most
 // for the wrong-address branch: transport.Engine.Do's own full-address
-// correlation (exSpec's ExpectPrefix carries the complete six-digit
+// correlation (exSpec's match prefix carries the complete six-digit
 // address, not just "EX") means Do can only ever return a frame that
 // ALREADY matches that prefix as a successful answer — any genuinely
 // differently-addressed reply fails Do's own matching and is counted as

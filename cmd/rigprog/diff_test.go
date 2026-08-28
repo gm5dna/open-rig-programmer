@@ -133,10 +133,7 @@ func TestCmdDiff_LoadNonexistentFile(t *testing.T) {
 func TestCmdDiff_SchemaTooNew(t *testing.T) {
 	dir := t.TempDir()
 	path := dir + "/too-new.json"
-	tooNew := &codeplug.Codeplug{Schema: codeplug.CurrentSchema + 1}
-	if err := codeplug.Save(path, tooNew); err != nil {
-		t.Fatalf("Save fixture: %v", err)
-	}
+	writeTooNewCodeplug(t, path)
 
 	var stdout, stderr bytes.Buffer
 	got := cmdDiff(testCtx(t), []string{"--fake", path}, &stdout, &stderr)

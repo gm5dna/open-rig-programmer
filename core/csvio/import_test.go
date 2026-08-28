@@ -33,6 +33,28 @@ func channelsEqual(t *testing.T, a, b []codeplug.Channel) bool {
 	return true
 }
 
+// yaesuTier sets every one of the ten fields the Icom tier added to
+// Unavailable and returns d — what a read of any registered radio
+// reports, what a load of a pre-tier codeplug migrates to, and what a
+// VERSION-1 CSV import produces (markTierFieldsUnavailable). The
+// round-trip fixtures below wrap their channel data in it so they state
+// the same thing every real producer does; the zero value would make
+// them the only ChannelData in the project claiming that nobody ever
+// spoke about these fields for an FT-710.
+func yaesuTier(d *codeplug.ChannelData) *codeplug.ChannelData {
+	d.TxFreqHz = codeplug.FreqField{State: codeplug.Unavailable}
+	d.Duplex = codeplug.StringField{State: codeplug.Unavailable}
+	d.OffsetHz = codeplug.FreqField{State: codeplug.Unavailable}
+	d.ToneMode = codeplug.StringField{State: codeplug.Unavailable}
+	d.ToneTx = codeplug.ToneField{State: codeplug.Unavailable}
+	d.ToneRx = codeplug.ToneField{State: codeplug.Unavailable}
+	d.DTCSCode = codeplug.IntField{State: codeplug.Unavailable}
+	d.DTCSPolarity = codeplug.StringField{State: codeplug.Unavailable}
+	d.Filter = codeplug.StringField{State: codeplug.Unavailable}
+	d.DataMode = codeplug.BoolField{State: codeplug.Unavailable}
+	return d
+}
+
 // fullImage is a mixed radio image exercising every field-state
 // combination this schema supports, plus an interleaved empty slot, used
 // by the round-trip tests below. Since M9c-5 task 4 (E1d) that includes
@@ -43,7 +65,7 @@ func fullImage() []codeplug.Channel {
 	return []codeplug.Channel{
 		{
 			Slot: "001",
-			Data: &codeplug.ChannelData{
+			Data: yaesuTier(&codeplug.ChannelData{
 				FreqHz:     14250000,
 				Mode:       "USB",
 				ClarHz:     -120,
@@ -55,12 +77,12 @@ func fullImage() []codeplug.Channel {
 				Tag:        "MB9XYZ",
 				TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: true},
 				ScanSkip:   codeplug.BoolField{State: codeplug.Known, Value: true},
-			},
+			}),
 		},
 		{Slot: "002"}, // empty slot, interleaved
 		{
 			Slot: "003",
-			Data: &codeplug.ChannelData{
+			Data: yaesuTier(&codeplug.ChannelData{
 				FreqHz:     14300000,
 				Mode:       "LSB",
 				CTCSS:      "OFF",
@@ -69,11 +91,11 @@ func fullImage() []codeplug.Channel {
 				Tag:        "NET",
 				TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
 				ScanSkip:   codeplug.BoolField{State: codeplug.Known, Value: false},
-			},
+			}),
 		},
 		{
 			Slot: "007",
-			Data: &codeplug.ChannelData{
+			Data: yaesuTier(&codeplug.ChannelData{
 				FreqHz:     10118000,
 				Mode:       "CW-U",
 				CTCSS:      "OFF",
@@ -82,11 +104,11 @@ func fullImage() []codeplug.Channel {
 				Tag:        "WSPR",
 				TagDisplay: codeplug.BoolField{State: codeplug.Unknown},
 				ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
-			},
+			}),
 		},
 		{
 			Slot: "501",
-			Data: &codeplug.ChannelData{
+			Data: yaesuTier(&codeplug.ChannelData{
 				FreqHz:     5330500,
 				Mode:       "AM",
 				ClarHz:     370,
@@ -95,7 +117,7 @@ func fullImage() []codeplug.Channel {
 				Shift:      "SIMPLEX",
 				TagDisplay: codeplug.BoolField{State: codeplug.Unavailable},
 				ScanSkip:   codeplug.BoolField{State: codeplug.Unavailable},
-			},
+			}),
 		},
 		{Slot: "099"}, // empty slot, trailing
 	}
@@ -136,7 +158,7 @@ func TestExportImport_ApostropheTagRoundTrip(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			d := codeplug.ChannelData{
+			d := *yaesuTier(&codeplug.ChannelData{
 				FreqHz:     14250000,
 				Mode:       "USB",
 				CTCSS:      "OFF",
@@ -145,7 +167,7 @@ func TestExportImport_ApostropheTagRoundTrip(t *testing.T) {
 				Tag:        tc.tag,
 				TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
 				ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
-			}
+			})
 			want := []codeplug.Channel{{Slot: "001", Data: &d}}
 
 			var buf bytes.Buffer

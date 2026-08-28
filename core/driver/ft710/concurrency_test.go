@@ -152,7 +152,7 @@ func TestSession_ReadWriteChannel_ConcurrentHammer_Coherent(t *testing.T) {
 		go func(w int) {
 			defer wg.Done()
 			for i := 0; i < iterations; i++ {
-				freq := uint32(14_000_000 + w*1_000 + i)
+				freq := uint64(14_000_000 + w*1_000 + i)
 				tag := fmt.Sprintf("F%d", freq)
 				ch := codeplug.Channel{
 					Slot: "001",

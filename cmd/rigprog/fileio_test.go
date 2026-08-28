@@ -7,12 +7,34 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
+
+// writeTooNewCodeplug writes a codeplug file whose "schema" is one past
+// codeplug.CurrentSchema, for the several tests that check this
+// program's "upgrade the app" refusal.
+//
+// It writes RAW JSON rather than going through codeplug.Save, and the
+// reason is a deliberate property of Save since the Icom tier (design
+// D4): Save emits the LOWEST schema that can REPRESENT the content, and
+// ignores the in-memory Codeplug.Schema entirely. Handing it a
+// too-new Schema therefore no longer produces a too-new FILE — and must
+// not, since Save may never write something this very build's Load would
+// refuse. The fixture belongs in the test, where it is honest about
+// being hand-authored.
+func writeTooNewCodeplug(t *testing.T, path string) {
+	t.Helper()
+	body := `{"schema":` + strconv.Itoa(codeplug.CurrentSchema+1) +
+		`,"generator":"a newer build","radio":{"model":"FT-710","cat_id":"0800","read_at":"2026-07-10T12:00:00Z"},"channels":[]}` + "\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("writing too-new fixture %s: %v", path, err)
+	}
+}
 
 // TestCheckOverwrite_NoExistingFile pins checkOverwrite's baseline case:
 // a path that does not exist yet is never refused, --force or not.
@@ -99,10 +121,7 @@ func TestLoadCodeplugStrict_NonexistentFile(t *testing.T) {
 // message (task-12 brief §2, shared here by export/import).
 func TestLoadCodeplugStrict_SchemaTooNew(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "too-new.json")
-	tooNew := &codeplug.Codeplug{Schema: codeplug.CurrentSchema + 1}
-	if err := codeplug.Save(path, tooNew); err != nil {
-		t.Fatalf("Save fixture: %v", err)
-	}
+	writeTooNewCodeplug(t, path)
 
 	var stderr bytes.Buffer
 	cp, code := loadCodeplugStrict(&stderr, "import", "--into", path)
@@ -365,5 +384,82 @@ func TestOpenCSVCommit_ForceTruncates(t *testing.T) {
 	}
 	if string(got) != "new\n" {
 		t.Errorf("openCSVCommit(force=true): file contents = %q, want %q (old content truncated away)", got, "new\n")
+	}
+}
+
+// TestLoadCodeplugStrict_NormalisesTierFieldsAgainstTheFileSOwnModel is
+// deviation (c)'s CLI half (Wave 4 task R2): every subcommand that
+// strictly loads a file goes through this one helper, so every one of
+// them sees the same capability-keyed Absent-to-Unavailable resolution
+// the GUI's loadFilePath applies — see codeplug.NormaliseTierFields.
+//
+// A schema-4 file with no key for any of the ten tier-added fields is
+// hand-written here for the reason writeTooNewCodeplug is: codeplug.Save
+// emits the LOWEST schema that can represent the content, so a channel
+// saying nothing about those ten is written as schema 3, whose loader has
+// migrated them unconditionally since the tier landed. The schema-4 file
+// is the one nothing normalised before this task.
+func TestLoadCodeplugStrict_NormalisesTierFieldsAgainstTheFileSOwnModel(t *testing.T) {
+	body := func(model, catID string) string {
+		return `{"schema":4,"generator":"test","radio":{"model":"` + model + `","cat_id":"` + catID +
+			`","read_at":"2026-08-27T09:00:00Z"},"channels":[{"slot":"001","data":{"freq_hz":145500000,` +
+			`"mode":"FM","ctcss":"OFF","ctcss_tone":{"state":"unavailable"},"shift":"SIMPLEX","tag":"",` +
+			`"tag_display":{"state":"unavailable"},"scan_skip":{"state":"unavailable"}}}]}` + "\n"
+	}
+
+	tests := []struct {
+		name         string
+		model, catID string
+		wantToneMode codeplug.FieldState
+		wantDataMode codeplug.FieldState
+	}{
+		{
+			name: "FT-710: a field this radio does not have becomes Unavailable",
+			// Every one of the ten is unreachable on every FT-710 bank, so
+			// the file's silence means exactly what a schema-3 file's
+			// silence means, and reaches the same state.
+			model: wiring.DefaultModel, catID: "0800",
+			wantToneMode: codeplug.Unavailable, wantDataMode: codeplug.Unavailable,
+		},
+		{
+			name: "IC-7610: a field this radio HAS stays Absent",
+			// tone_mode is one of the four this radio's memory record maps
+			// (app/uispec_test.go's ic7610TierFields); data_mode is not.
+			model: wiring.IC7610Model, catID: "98",
+			wantToneMode: codeplug.Absent, wantDataMode: codeplug.Unavailable,
+		},
+		{
+			name: "an unrecognised model is left exactly as the file wrote it",
+			// No capabilities to key on, so nothing is claimed either way.
+			model: "NO-SUCH-RADIO", catID: "ZZZZ",
+			wantToneMode: codeplug.Absent, wantDataMode: codeplug.Absent,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "v4.json")
+			if err := os.WriteFile(path, []byte(body(tt.model, tt.catID)), 0o600); err != nil {
+				t.Fatalf("writing fixture: %v", err)
+			}
+			var stderr bytes.Buffer
+			cp, code := loadCodeplugStrict(&stderr, "diff", "", path)
+			if cp == nil || code != exitSuccess {
+				t.Fatalf("loadCodeplugStrict: code = %d, stderr = %q", code, stderr.String())
+			}
+			d := cp.Channels[0].Data
+			if d == nil {
+				t.Fatal("channel 001 loaded empty")
+			}
+			if got := d.ToneMode.State; got != tt.wantToneMode {
+				t.Errorf("tone_mode state = %q, want %q", got, tt.wantToneMode)
+			}
+			if got := d.DataMode.State; got != tt.wantDataMode {
+				t.Errorf("data_mode state = %q, want %q", got, tt.wantDataMode)
+			}
+			if d.ToneMode.Value != "" || d.DataMode.Value {
+				t.Errorf("a normalised field carries a value: tone_mode = %+v, data_mode = %+v — nothing may invent one", d.ToneMode, d.DataMode)
+			}
+		})
 	}
 }

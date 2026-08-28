@@ -387,6 +387,730 @@ var ftdx101mpText = Text{
 	ProbeFirmwareNote:   "Firmware version has no CAT query on the FTdx101MP, and no minimum version is established for it — read it off the radio's display. If nothing answered on this port at all, check which port it is: this radio presents two virtual COM ports, and only the Enhanced COM Port carries CAT. The Standard COM Port is for TX control (PTT, CW keying, digital modes) and will answer nothing here, which looks exactly like a wrong baud rate.",
 }
 
+// ic7610Text is the IC-7610's entry (Wave 4 task R1, this project's first
+// non-Yaesu registration), landed with that model's wiring registration —
+// internal/wiring's TestEverySupportedModelHasRadiotext refuses a
+// registered model with no prose, which is what makes this entry part of
+// registration rather than a later nicety, exactly as it was for the
+// three Yaesu registrations above.
+//
+// THE HONESTY RULE APPLIES UNCHANGED, and doubly here: NOTHING BELOW IS
+// INVENTED, and every field says what is actually known, including where
+// something is not known. No IC-7610 has ever been asked anything by this
+// project (core/driver/ic7610/doc.go) — every value in that driver comes
+// from the IC-7610 CI-V Reference Guide rev 4 and the project's own
+// capability matrix, none from a hardware finding — and no write trial has
+// happened (writeTrialsComplete, core/driver/ic7610/caps.go, is false).
+// This entry borrows nothing from ft710Text, ftdx10Text, ftdx101dText or
+// ftdx101mpText: those are Yaesu radios' CAT evidence, and this is a
+// different manufacturer on a different wire protocol (CI-V, not CAT) —
+// copying a Yaesu hedge or claim across would misattribute one radio's
+// evidence to a radio in an entirely different family.
+// TestRadiotext_IC7610Verbatim pins every string, and its own
+// non-borrowing check refuses any field that is byte-identical to, or
+// carries a particular of, any of the four Yaesu entries.
+//
+// WHAT IS DIFFERENT ABOUT THIS RADIO, AND WHY IT SHOWS IN THE PROSE:
+//
+//   - The protocol is CI-V, not CAT, and every field below says so rather
+//     than reusing the Yaesu radios' "CAT" wording — a small word, but the
+//     kind of borrowed vocabulary that would misdescribe this radio's own
+//     transport to a reader who never opens core/driver/ic7610/doc.go.
+//   - This driver's CI-V address is fixed at 98h, built into every frame
+//     it sends, with no --civ-address option to change it and no way to
+//     detect a radio set to a different address (core/driver/ic7610/
+//     doc.go, "THE TWO LIMITATIONS, STATED PLAINLY"). A radio at any other
+//     address — including a DIFFERENT Icom model at ITS factory address —
+//     times out identically to no radio being there at all, which
+//     ProbeFirmwareNote states because probe is where a user meets that
+//     silence first.
+//   - The default baud, 19200, is an ASSUMED choice among six the document
+//     names and defaults none of (core/driver/ic7610/doc.go, "THE DEFAULT
+//     BAUD (OQ2)") — recorded as assumed here for the same reason the
+//     driver's own doc.go records it, and because a user meeting silence
+//     at Open needs to know the guess could be the reason.
+//   - Tone IS mapped on the wire (the 1A 00 record's tone-mode nibble and
+//     two tone-frequency spans, core/driver/ic7610/caps.go's bankFields) —
+//     unlike every Yaesu radio registered so far, where tone_mode/tone_tx/
+//     tone_rx are outside the CAT frame entirely — so this radio's tone
+//     note says the opposite of theirs. Scan Skip is NOT mapped: the
+//     nearest wire nibble on this radio is a four-valued SELECT-group
+//     marker (matrix §3.16 ADDED-1), not a skip flag, so a Scan Skip value
+//     is refused before anything reaches the radio rather than being
+//     written as something it is not (adjudication R6, ruling E6).
+var ic7610Text = Text{
+	// The CI-V protocol has an erase command SHAPE (1A 00 <ch> FF, and a
+	// separate command 0B) — unlike every Yaesu radio registered so far,
+	// which has none at all — but this build sends neither: no IC-7610 has
+	// ever confirmed what either does, and sending an unconfirmed erase
+	// command risks clearing the wrong channel rather than the intended
+	// one. FieldErase carries the zero FieldSupport here on both banks
+	// (core/driver/ic7610/caps.go's bankFields, ruling E6's third
+	// unmapped-region citation), which is what makes core/clone's
+	// DiffErased branch unreachable for this model. No IC-7610 operating
+	// manual is held here either, so the front-panel procedure is unknown
+	// and the user is sent to the document that has it.
+	EraseProcedure: "The IC-7610's CI-V protocol has an erase command form, but this build never sends it: no IC-7610 has ever confirmed what it does, and sending an unconfirmed erase command risks clearing the wrong channel. This build does not describe a front-panel procedure either — no IC-7610 operating manual is held here — so follow the memory-channel clear procedure in the radio's own operating manual.",
+	// No minimum-firmware fact is established for this radio: the IC-7610
+	// CI-V Reference Guide names no firmware-version command anywhere
+	// (searched: "firmware" appears nowhere in it), so there is no CI-V
+	// query either, on the same footing as every Yaesu radio's own
+	// firmware note.
+	FirmwareGuidance: "No minimum firmware version is established for the IC-7610: nothing this project holds states one, and no IC-7610 has been asked. There is no CI-V query for the version either — read it off the radio's own display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established.",
+	// Tone IS read and written for this radio (unlike every Yaesu radio
+	// registered so far) — over CI-V, unverified against real hardware,
+	// since no IC-7610 has ever answered a frame. Scan Skip is not: this
+	// radio's nearest wire nibble is a select-group marker, not a skip flag,
+	// and setting one is refused before anything reaches the radio.
+	ToneScanSkipNote: "Tone is read and written for the IC-7610 over CI-V by this build, but unverified against real hardware — no IC-7610 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble is a select-group marker, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
+	// DELIBERATELY EMPTY, exactly as every Yaesu entry's is and for the
+	// same reason: this field states what IS and is NOT hardware-verified
+	// about preservation across a rewrite, and with writeTrialsComplete
+	// false there is no verification of any kind to report. Any sentence
+	// here would be a hardware claim about a radio this project has never
+	// written to. internal/wiring's TestEverySupportedModelHasRadiotext
+	// requires EraseProcedure, FirmwareGuidance and ProbeFirmwareNote and
+	// deliberately excludes this field; the IC-7610's own write trials are
+	// what fill it in.
+	ToneScanSkipVerification: "",
+	// Byte-identical to EraseProcedure, as every other model's is: the
+	// delete dialog and the blocked-erase review answer the same question,
+	// and splitting the wording would only invite one copy to drift into a
+	// procedure the other refuses to state.
+	EraseDialogNote: "The IC-7610's CI-V protocol has an erase command form, but this build never sends it: no IC-7610 has ever confirmed what it does, and sending an unconfirmed erase command risks clearing the wrong channel. This build does not describe a front-panel procedure either — no IC-7610 operating manual is held here — so follow the memory-channel clear procedure in the radio's own operating manual.",
+	// The two tooltips DIFFER, unlike every Yaesu entry's identical pair —
+	// because the evidence differs between them on this radio: Tone is on
+	// the CI-V surface (unverified) and Scan Skip structurally is not (no
+	// mapped field at all, so there is nothing to preserve or fail to).
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7610 has ever answered a frame",
+		ScanSkip: "not read or written over CI-V by this build — this radio's nearest wire nibble is a select-group marker, not a skip flag",
+	},
+	// A placeholder LABEL, not an example, on the same footing as the
+	// FTdx10's and FTdx101 pair's: no IC-7610 version string has been seen
+	// here and none is printed in the CI-V reference.
+	FirmwarePlaceholder: "as shown on the radio's display",
+	// Restates the no-CI-V-query and no-minimum-version facts (probe's
+	// report is read by someone who may never open the send flow), and
+	// adds the two facts this radio's probe failure mode turns on: the
+	// fixed 98h address with no --civ-address option, and the ASSUMED
+	// 19200 default baud — both from core/driver/ic7610/doc.go, both
+	// reasons a probe could meet silence that have nothing to do with a
+	// wrong port.
+	ProbeFirmwareNote: "Firmware version has no CI-V query — check the radio's display. No minimum version is established for the IC-7610: this build knows of none to require. This driver talks only to CI-V address 98h, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200 is itself ASSUMED, not read off the radio, since the reference guide names six rates and marks no default. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+}
+
+// ic7300Text is the IC-7300's entry (Wave 4 task R3, this project's
+// second Icom registration and first Icom PAIR), landed with that model's
+// wiring registration for the same reason ic7610Text was: internal/wiring's
+// TestEverySupportedModelHasRadiotext refuses a registered model with no
+// prose.
+//
+// THE HONESTY RULE APPLIES UNCHANGED. NOTHING BELOW IS INVENTED: no
+// IC-7300 has ever been asked anything by this project
+// (core/driver/ic7300/doc.go) — every value comes from the IC-7300 FULL
+// MANUAL, through core/civ/ic7300's profile and this project's own
+// capability matrix, none from a hardware finding — and no write trial has
+// happened (writeTrialsComplete, core/driver/ic7300/caps.go, is false).
+//
+// THIS ENTRY CARRIES NO OTHER RADIO'S EVIDENCE OR PARTICULARS, ic7610Text
+// and the IC-7300MK2's own ic7300mk2Text included: core/driver/ic7300/
+// doc.go's own package comment states that the IC-7300's and IC-7300MK2's
+// manuals are MUTUALLY SILENT about each other and that "no lift in one
+// lifts anything for the sibling", which is exactly why this pair
+// registers as two driver packages, two fakes and, here, two independently
+// written Text values rather than one shared with a model-name
+// substitution. The sentence SKELETONS below (an erase-form paragraph, a
+// tone/scan-skip paragraph, a firmware paragraph) are shared house style
+// across every entry in this file, ic7610Text's included, and that is
+// deliberate and not a borrowing this doc comment or its test disputes —
+// what must never cross a model boundary is the EVIDENCE inside those
+// skeletons: an address, a baud fact, a hedge, a claim about what has or
+// has not been confirmed.
+// TestRadiotext_IC7300Verbatim pins every string, and its own non-borrowing
+// check refuses any field that is byte-identical to, or carries a
+// particular of, any of the six other registered models — the four Yaesu
+// entries, IC-7610, AND its own IC-7300MK2 sibling.
+//
+// WHAT IS DIFFERENT ABOUT THIS RADIO, AND WHY IT SHOWS IN THE PROSE:
+//
+//   - The protocol is CI-V, not CAT, on the same footing as ic7610Text.
+//   - This driver's CI-V address is fixed at 94h (core/civ/ic7300/
+//     profile.go), with no --civ-address option to change it and no way to
+//     detect a radio set to a different address — the same limitation
+//     ic7610Text's ProbeFirmwareNote states, restated here for THIS
+//     radio's own address.
+//   - The default baud, 19200, is a CHOICE among the six [USB] rates this
+//     document prints (core/driver/ic7300/caps.go), none of them marked
+//     default: the highest rate present in BOTH the [USB] list and the
+//     [REMOTE] list, so CI-V still works when the port is linked to
+//     [REMOTE]. That is a narrower derivation than the IC-7610's bare
+//     ASSUMED six-rate list, and the prose says so rather than reusing the
+//     IC-7610's wording.
+//   - Tone IS mapped on the wire (the 1A 00 record's tone-mode nibble and
+//     two tone-frequency spans, core/driver/ic7300/caps.go's bankFields),
+//     on the same footing as the IC-7610. Scan Skip is NOT: the nearest
+//     wire nibble is a SELECT-group marker, group membership rather than a
+//     skip flag, and mapping it as skip is forbidden (matrix erratum 9 /
+//     plan decision D4).
+//   - This radio's own operating manual IS held by this project (the IC-7300
+//     FULL MANUAL, core/driver/ic7300/doc.go's Provenance section) — unlike
+//     the IC-7610, whose entry says "no IC-7610 operating manual is held
+//     here". The erase note below cites that manual by name rather than
+//     saying no manual exists, which is the one place this entry's wording
+//     could not simply follow ic7610Text's shape without becoming false.
+var ic7300Text = Text{
+	// The CI-V protocol prints two erase command forms — a 1A 00 set whose
+	// SELECT byte is FF, and a separate command 0B (core/driver/ic7300/
+	// doc.go's "Erase: two printed forms, neither shipped") — but this
+	// build sends neither: no IC-7300 has ever confirmed what either does,
+	// and sending an unconfirmed erase command risks clearing the wrong
+	// channel rather than the intended one. FieldErase carries the zero
+	// FieldSupport on both banks, which is what makes core/clone's
+	// DiffErased branch unreachable for this model. Unlike the IC-7610,
+	// this project DOES hold the IC-7300's own full operating manual, so
+	// the user is pointed at ITS clear procedure rather than told none is
+	// held here.
+	EraseProcedure: "The IC-7300's CI-V protocol prints two erase command forms — a 1A 00 set with a SELECT byte of FF, and a separate command 0B — but this build sends neither: no IC-7300 has ever confirmed what either does, and sending an unconfirmed erase command risks clearing the wrong channel rather than the intended one. Follow the memory-channel clear procedure printed in the IC-7300's own full operating manual.",
+	// No minimum-firmware fact is established for this radio: the IC-7300
+	// full manual names no firmware-version CI-V command anywhere
+	// (core/driver/ic7300/doc.go's own register carries no such entry), so
+	// there is no CI-V query either, on the same footing as ic7610Text's
+	// own firmware note.
+	FirmwareGuidance: "No minimum firmware version is established for the IC-7300: nothing this project holds states one, and no IC-7300 has been asked. The IC-7300's own full manual names no CI-V query for the version either — read it off the radio's own display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established.",
+	// Tone IS read and written for this radio — over CI-V, unverified
+	// against real hardware, since no IC-7300 has ever answered a frame.
+	// Scan Skip is not: this radio's nearest wire nibble is a SELECT-group
+	// marker, not a skip flag, and setting one is refused before anything
+	// reaches the radio (core/driver/ic7300/caps.go's bankFields).
+	ToneScanSkipNote: "Tone is read and written for the IC-7300 over CI-V by this build, but unverified against real hardware — no IC-7300 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble is a select-group marker, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
+	// DELIBERATELY EMPTY, exactly as every other registered model's is and
+	// for the same reason: writeTrialsComplete is false, so there is no
+	// hardware-preservation verification of any kind to report.
+	ToneScanSkipVerification: "",
+	// Byte-identical to EraseProcedure, as every other model's is: the
+	// delete dialog and the blocked-erase review answer the same question.
+	EraseDialogNote: "The IC-7300's CI-V protocol prints two erase command forms — a 1A 00 set with a SELECT byte of FF, and a separate command 0B — but this build sends neither: no IC-7300 has ever confirmed what either does, and sending an unconfirmed erase command risks clearing the wrong channel rather than the intended one. Follow the memory-channel clear procedure printed in the IC-7300's own full operating manual.",
+	// The two tooltips DIFFER, exactly as ic7610Text's do and for the same
+	// reason: the evidence differs between Tone (on the CI-V surface,
+	// unverified) and Scan Skip (structurally not mapped at all).
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7300 has ever answered a frame",
+		ScanSkip: "not read or written over CI-V by this build — the IC-7300's nearest wire nibble is a select-group marker, not a skip flag",
+	},
+	// A placeholder LABEL, not an example: no IC-7300 version string has
+	// been seen here. Names the model rather than the ic7610Text/generic
+	// "the radio's display" wording, so this field is not byte-identical
+	// to either the IC-7610's or the IC-7300MK2's own placeholder.
+	FirmwarePlaceholder: "as shown on the IC-7300's own display",
+	// Restates the no-CI-V-query and no-minimum-version facts, and adds the
+	// two facts this radio's probe failure mode turns on: the fixed 94h
+	// address with no --civ-address option, and the CHOSEN 19200 default
+	// baud — both from core/driver/ic7300/caps.go and doc.go.
+	ProbeFirmwareNote: "Firmware version has no CI-V query — check the radio's display. No minimum version is established for the IC-7300: this build knows of none to require. This driver talks only to CI-V address 94h, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200 is a CHOICE — the highest rate this radio's document lists on both its [USB] and [REMOTE] ports — not a value read off the radio. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+}
+
+// ic7300mk2Text is the IC-7300MK2's entry, landed alongside ic7300Text in
+// the same Wave 4 task R3 registration commit — the second half of this
+// project's first Icom PAIR.
+//
+// THE HONESTY RULE APPLIES UNCHANGED, and the pairing sharpens it rather
+// than loosening it: no IC-7300MK2 has ever been asked anything by this
+// project (core/driver/ic7300mk2/doc.go) — every value comes from the
+// IC-7300MK2 CI-V REFERENCE GUIDE, through core/civ/ic7300mk2's profile,
+// none from a hardware finding — and no write trial has happened
+// (writeTrialsComplete, core/driver/ic7300mk2/caps.go, is its OWN
+// constant, false for its OWN reasons: that package's own comment states
+// "The registered sibling's FALSE is not stated here").
+//
+// THIS ENTRY CARRIES NO OTHER RADIO'S EVIDENCE OR PARTICULARS FROM
+// ic7300Text, and that is the one fact this doc comment exists to say
+// loudest: the two Icom documents this pair is built from are MUTUALLY
+// SILENT about each other (core/driver/ic7300mk2/doc.go's own package
+// comment), so an entry that read like ic7300Text with the model name
+// substituted would misattribute one radio's evidence to the other —
+// exactly the failure mode the FTdx101D/MP pair is EXEMPT from (their
+// SHARED manual makes a substitution proof correct for them) and this
+// pair is NOT. The shared sentence SKELETON both entries use (house
+// style, see ic7300Text's own doc comment) is not itself a borrowing;
+// what must never cross is the evidence each skeleton carries.
+// TestRadiotext_IC7300MK2Verbatim's own non-borrowing check covers the
+// pair against each other, the same way the FTdx101 pair's
+// TestRadiotext_FTdx101DAndMPDifferOnlyInTheModelName test structure pairs
+// its two Verbatim tests — except where THAT test proves near-identity,
+// THIS pair's non-borrowing check proves the opposite: distinctness.
+//
+// WHAT IS DIFFERENT ABOUT THIS RADIO, AND WHY IT SHOWS IN THE PROSE:
+//
+//   - The protocol is CI-V, not CAT, on the same footing as every other
+//     Icom entry.
+//   - This driver's CI-V address is fixed at B6h (core/civ/ic7300mk2/
+//     profile.go) — the sibling answers at 94h, and IN THE FIELD THE TWO
+//     CANNOT CONFUSE EACH OTHER (core/driver/ic7300mk2/doc.go's "The
+//     wrong-sibling fingerprint" section) — with no --civ-address option
+//     to change it and no way to detect a radio set to a different
+//     address.
+//   - The default baud, 19200, is a CONSERVATIVE DERIVATION from a table
+//     this document prints for an ENTIRELY DIFFERENT PURPOSE — the `18 01`
+//     wake-up-command FE-count table, NOT a supported-rate list
+//     (core/driver/ic7300mk2/doc.go's own emphatic section on this). This
+//     document — a CI-V REFERENCE GUIDE, not a full operating manual —
+//     prints NO rate list and NO factory default at all, which is a
+//     WEAKER evidential footing than the IC-7300's own six-rate [USB]
+//     list, and the prose says so rather than borrowing the sibling's
+//     stronger "a CHOICE among six printed rates" wording.
+//   - Tone IS mapped on the wire, on the same footing as the sibling. Scan
+//     Skip is NOT: this radio's own §3.16 A10 reaches the SAME conclusion
+//     as the IC-7300's matrix erratum, independently, on its own reading —
+//     the SELECT nibble is group membership, not a skip flag.
+//   - This document is a CI-V REFERENCE GUIDE, not a full operating
+//     manual, and prints no front-panel procedure for anything — a
+//     narrower source than the IC-7300's own full manual, which this
+//     entry's erase note says plainly rather than pointing at a manual
+//     this project does not hold.
+var ic7300mk2Text = Text{
+	// The CI-V protocol prints two erase command forms — a 1A 00 set with
+	// a truncated data area, and a separate command 0B, whose own printed
+	// row states plainly that P1 and P2 cannot be cleared
+	// (core/driver/ic7300mk2/doc.go's "Erase: two printed forms, neither
+	// shipped") — but this build sends neither: no IC-7300MK2 has ever
+	// confirmed what either does, and sending an unconfirmed erase command
+	// risks clearing the wrong channel rather than the intended one. This
+	// build does not describe a front-panel procedure either — this
+	// document is a CI-V reference guide, not a full operating manual — so
+	// the user is sent to the radio's own operating manual, which this
+	// project does not hold.
+	EraseProcedure: "The IC-7300MK2's CI-V protocol prints two erase command forms — a 1A 00 set with a truncated data area, and a separate command 0B, whose own printed row states that P1 and P2 cannot be cleared — but this build sends neither: no IC-7300MK2 has ever confirmed what either does, and sending an unconfirmed erase command risks clearing the wrong channel rather than the intended one. This build does not describe a front-panel procedure either — this document is a CI-V reference guide, not a full operating manual — so follow the memory-channel clear procedure in the radio's own operating manual.",
+	// No minimum-firmware fact is established for this radio: this CI-V
+	// reference guide names no firmware-version command anywhere, so there
+	// is no CI-V query either.
+	FirmwareGuidance: "No minimum firmware version is established for the IC-7300MK2: nothing this project holds states one, and no IC-7300MK2 has been asked. The IC-7300MK2's CI-V reference guide names no CI-V query for the version either — read it off the radio's own display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established.",
+	// Tone IS read and written for this radio — over CI-V, unverified
+	// against real hardware, since no IC-7300MK2 has ever answered a
+	// frame. Scan Skip is not: this radio's nearest wire nibble is a
+	// SELECT-group marker, not a skip flag, and setting one is refused
+	// before anything reaches the radio.
+	ToneScanSkipNote: "Tone is read and written for the IC-7300MK2 over CI-V by this build, but unverified against real hardware — no IC-7300MK2 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble is a select-group marker, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
+	// DELIBERATELY EMPTY, on the same footing as every other registered
+	// model's: writeTrialsComplete is false, so there is no
+	// hardware-preservation verification of any kind to report.
+	ToneScanSkipVerification: "",
+	// Byte-identical to EraseProcedure, as every other model's is.
+	EraseDialogNote: "The IC-7300MK2's CI-V protocol prints two erase command forms — a 1A 00 set with a truncated data area, and a separate command 0B, whose own printed row states that P1 and P2 cannot be cleared — but this build sends neither: no IC-7300MK2 has ever confirmed what either does, and sending an unconfirmed erase command risks clearing the wrong channel rather than the intended one. This build does not describe a front-panel procedure either — this document is a CI-V reference guide, not a full operating manual — so follow the memory-channel clear procedure in the radio's own operating manual.",
+	// The two tooltips DIFFER, on the same footing as every other Icom
+	// entry's: Tone is on the CI-V surface (unverified) and Scan Skip
+	// structurally is not (no mapped field at all).
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7300MK2 has ever answered a frame",
+		ScanSkip: "not read or written over CI-V by this build — the IC-7300MK2's nearest wire nibble is a select-group marker, not a skip flag",
+	},
+	// A placeholder LABEL, not an example: no IC-7300MK2 version string
+	// has been seen here. Names the model rather than the ic7610Text/
+	// generic "the radio's display" wording, so this field is not
+	// byte-identical to either the IC-7610's or the IC-7300's own
+	// placeholder.
+	FirmwarePlaceholder: "as shown on the IC-7300MK2's own display",
+	// Restates the no-CI-V-query and no-minimum-version facts, and adds
+	// the two facts this radio's probe failure mode turns on: the fixed
+	// B6h address with no --civ-address option, and the default baud of
+	// 19200, itself a conservative derivation from a wake-up-command table
+	// this document prints for a different purpose — this reference guide
+	// names no rate list and no factory default at all.
+	ProbeFirmwareNote: "Firmware version has no CI-V query — check the radio's display. No minimum version is established for the IC-7300MK2: this build knows of none to require. This driver talks only to CI-V address B6h, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200 is a conservative derivation from a wake-up-command table this document prints for an unrelated purpose — this reference guide names no baud list and no factory default at all. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+}
+
+// ic705Text is the IC-705's entry (Wave 4 task R4, this project's third
+// Icom registration, and its second LONE model since the IC-7610 — no
+// sibling, no pairing rationale to restate).
+//
+// THE HONESTY RULE APPLIES UNCHANGED. NOTHING BELOW IS INVENTED: no
+// IC-705 has ever been asked anything by this project
+// (core/driver/ic705/doc.go) — every value comes from the IC-705 CI-V
+// REFERENCE GUIDE (the sole layout authority) and, for three narrow
+// values that document does not carry, the IC-705 BASIC MANUAL, admitted
+// for those three values only and for nothing else — never from a
+// hardware finding — and no write trial has happened
+// (writeTrialsComplete, core/driver/ic705/caps.go, is false).
+//
+// THIS ENTRY CARRIES NO OTHER RADIO'S EVIDENCE OR PARTICULARS: it is a
+// fourth manufacturer-and-model combination in this file, and
+// TestRadiotext_IC705Verbatim's own non-borrowing check refuses any field
+// that is byte-identical to, or carries a particular of, any of the
+// SEVEN other registered models — the four Yaesu entries and all three
+// other registered Icom ones (IC-7610, IC-7300, IC-7300MK2). The shared
+// sentence SKELETON several entries use (house style, see ic7300Text's
+// own doc comment) is not itself a borrowing; what must never cross is
+// the evidence each skeleton carries.
+//
+// WHAT IS DIFFERENT ABOUT THIS RADIO, AND WHY IT SHOWS IN THE PROSE:
+//
+//   - The protocol is CI-V, not CAT, on the same footing as every other
+//     Icom entry.
+//   - This driver's CI-V address is fixed at A4h (core/civ/ic705/
+//     profile.go's RadioAddress), with no --civ-address option to change
+//     it and no way to detect a radio set to a different address.
+//   - THE BAUD GRADE IS WEAKER THAN EVERY OTHER ICOM ENTRY'S. The
+//     IC-7610's six-rate list is manual-evidenced and only its default is
+//     assumed; the IC-7300's default is a CHOICE among six printed rates;
+//     the IC-7300MK2's is a conservative derivation from an unrelated
+//     table. The IC-705's CI-V Reference Guide prints NO baud information
+//     for the CI-V port at all — not a rate list, not a default — so BOTH
+//     the six-value list and the 19200 default are ASSUMED PLACEHOLDERS
+//     (core/driver/ic705/caps.go's own comment), and the prose says so
+//     rather than borrowing any sibling's stronger wording. The one
+//     related fact admitted from the IC-705 BASIC MANUAL is a NEGATIVE:
+//     the microUSB CI-V port is baud-agnostic ("You can communicate
+//     regardless of the PC software's baud rate setting"), which lowers
+//     the cost of a wrong guess without being evidence of a default.
+//   - Tone IS mapped on the wire (the 1A 00 record's tone-mode nibble and
+//     two tone-frequency spans, core/driver/ic705/caps.go's bankFields),
+//     on the same footing as every other registered Icom model. Scan Skip
+//     is NOT: the nearest wire nibble marks a channel into one of three
+//     select-scan groups, not a skip flag, and mapping it as skip is
+//     forbidden (matrix erratum 17 / plan decision O-6).
+//   - THIS RECORD MAPS MORE OF THE TIER THAN ANY OTHER REGISTERED ICOM
+//     MODEL: unlike the IC-7610 and the IC-7300 pair, none of which maps
+//     duplex, offset or DTCS, the IC-705's 111-byte record carries all
+//     thirteen of matrix §2's rw-graded rows, including duplex, offset,
+//     tx_frequency, dtcs_code and dtcs_polarity — so this radio's grid
+//     reaches every one of the tier's ten added fields, not four or six.
+//   - This project holds no full IC-705 operating manual, only the CI-V
+//     Reference Guide and a Basic Manual admitted for three unrelated
+//     values — so, like the IC-7300MK2, this entry's erase note points at
+//     the radio's own operating manual rather than naming one this
+//     project holds.
+var ic705Text = Text{
+	// The CI-V protocol prints two erase command forms — a 1A 00 set
+	// carrying FF at the fifth data position, and a separate command 0B
+	// (core/driver/ic705/doc.go's "Erase: the wire forms exist here, and
+	// are shipped nowhere") — but this build sends neither: no IC-705 has
+	// ever confirmed what either does, and sending an unconfirmed erase
+	// command risks clearing the wrong channel rather than the intended
+	// one. FieldErase carries the zero FieldSupport on both banks, which
+	// is what makes core/clone's DiffErased branch unreachable for this
+	// model. This project's own copy of the IC-705 Basic Manual is
+	// admitted for three values unrelated to erasing a channel, so it
+	// names no front-panel procedure here either.
+	EraseProcedure: "The IC-705's CI-V protocol prints two erase command forms — a 1A 00 set carrying FF at the fifth data position, and a separate command 0B — but this build sends neither: no IC-705 has ever confirmed what either does, and sending an unconfirmed erase command risks clearing the wrong channel rather than the intended one. This project's own copy of the IC-705 Basic Manual is admitted for three unrelated values only, so it names no front-panel clear procedure — follow the memory-channel clear procedure in the radio's own full operating manual.",
+	// No minimum-firmware fact is established for this radio: the IC-705
+	// CI-V Reference Guide names no firmware-version command anywhere, so
+	// there is no CI-V query either, on the same footing as every other
+	// registered Icom entry's own firmware note.
+	FirmwareGuidance: "No minimum firmware version is established for the IC-705: nothing this project holds states one, and no IC-705 has been asked. This driver's CI-V Reference Guide names no CI-V query for the version either — read it off the radio's own display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established.",
+	// Tone IS read and written for this radio — over CI-V, unverified
+	// against real hardware, since no IC-705 has ever answered a frame.
+	// Scan Skip is not: this radio's nearest wire nibble marks a channel
+	// into one of three select-scan groups, not a skip flag, and setting
+	// one is refused before anything reaches the radio.
+	ToneScanSkipNote: "Tone is read and written for the IC-705 over CI-V by this build, but unverified against real hardware — no IC-705 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble marks a channel into one of three select-scan groups, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
+	// DELIBERATELY EMPTY, exactly as every other registered model's is
+	// and for the same reason: writeTrialsComplete is false, so there is
+	// no hardware-preservation verification of any kind to report.
+	ToneScanSkipVerification: "",
+	// Byte-identical to EraseProcedure, as every other model's is: the
+	// delete dialog and the blocked-erase review answer the same question.
+	EraseDialogNote: "The IC-705's CI-V protocol prints two erase command forms — a 1A 00 set carrying FF at the fifth data position, and a separate command 0B — but this build sends neither: no IC-705 has ever confirmed what either does, and sending an unconfirmed erase command risks clearing the wrong channel rather than the intended one. This project's own copy of the IC-705 Basic Manual is admitted for three unrelated values only, so it names no front-panel clear procedure — follow the memory-channel clear procedure in the radio's own full operating manual.",
+	// The two tooltips DIFFER, exactly as every other Icom entry's do and
+	// for the same reason: the evidence differs between Tone (on the
+	// CI-V surface, unverified) and Scan Skip (structurally not mapped at
+	// all).
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-705 has ever answered a frame",
+		ScanSkip: "not read or written over CI-V by this build — the IC-705's nearest wire nibble marks select-scan group membership, not a skip flag",
+	},
+	// A placeholder LABEL, not an example: no IC-705 version string has
+	// been seen here. Names the model rather than a generic "the radio's
+	// display" wording, so this field is not byte-identical to any other
+	// registered model's own placeholder.
+	FirmwarePlaceholder: "as shown on the IC-705's own display",
+	// Restates the no-CI-V-query and no-minimum-version facts, and adds
+	// the two facts this radio's probe failure mode turns on: the fixed
+	// A4h address with no --civ-address option, and the fact that BOTH
+	// the baud list and the default are ASSUMED — see this var's own doc
+	// comment for why that is a weaker grade than every other registered
+	// Icom entry's baud claim.
+	ProbeFirmwareNote: "Firmware version has no CI-V query — check the radio's display. No minimum version is established for the IC-705: this build knows of none to require. This driver talks only to CI-V address A4h, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200, along with the whole six-rate list it is chosen from, is ASSUMED — this radio's CI-V Reference Guide prints no baud information for the CI-V port at all, and the one related fact admitted from the Basic Manual is a negative: the microUSB CI-V port is baud-agnostic, which lowers the cost of a wrong guess without being evidence of one. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+}
+
+// ic9700Text is the IC-9700's entry (Wave 4 task R5, this project's
+// fourth Icom registration, and its second LONE model since the IC-705 —
+// no sibling, no pairing rationale to restate).
+//
+// THE HONESTY RULE APPLIES UNCHANGED. NOTHING BELOW IS INVENTED: no
+// IC-9700 has ever been asked anything by this project
+// (core/driver/ic9700/doc.go) — every value comes from the IC-9700 CI-V
+// REFERENCE GUIDE (the sole layout authority; this project holds no full
+// IC-9700 operating manual), never from a hardware finding — and no write
+// trial has happened (writeTrialsComplete, core/driver/ic9700/caps.go, is
+// false).
+//
+// THIS ENTRY CARRIES NO OTHER RADIO'S EVIDENCE OR PARTICULARS: it is a
+// fifth manufacturer-and-model combination in this file, and
+// TestRadiotext_IC9700Verbatim's own non-borrowing check refuses any field
+// that is byte-identical to, or carries a particular of, any of the EIGHT
+// other registered models — the four Yaesu entries and all four other
+// registered Icom ones (IC-7610, IC-7300, IC-7300MK2, IC-705). The shared
+// sentence SKELETON several entries use (house style, see ic7300Text's
+// own doc comment) is not itself a borrowing; what must never cross is
+// the evidence each skeleton carries.
+//
+// WHAT IS DIFFERENT ABOUT THIS RADIO, AND WHY IT SHOWS IN THE PROSE:
+//
+//   - The protocol is CI-V, not CAT, on the same footing as every other
+//     Icom entry.
+//   - This driver's CI-V address is fixed at A2h (caps.go's CATID, echoed
+//     by ic9700.go's runtime Identity().CATID), with no --civ-address
+//     option to change it and no way to detect a radio set to a different
+//     address.
+//   - THE BAUD GRADE IS ITS OWN SHAPE, neither the IC-7610's plain silence
+//     nor the IC-705's total absence. The IC-9700's CI-V Reference Guide
+//     DOES print the six-rate list (PDF p.13 footnote *4, caps.go's
+//     baudRates) — as manual-evidenced as the IC-7610's own list — but it
+//     ACTIVELY DEFERS the factory default to a SEPARATE document, the
+//     radio's instruction manual (PDF p.4 "Preparing" names a speed and
+//     points elsewhere), which this project does not hold. That is a
+//     document POINTING AWAY, not a document simply silent about a
+//     default the way the IC-7610's is, and caps.go's own defaultBaud
+//     comment marks 19200 ASSUMED on that basis: the middle of the printed
+//     six, and the rate Icom most commonly ships — a guess about the
+//     radio, not a reading of this document. LIFTED BY: register entry
+//     `ic9700-factory-default-baud`, lift R2 — `19 00` attempted at each
+//     printed rate on a factory radio.
+//   - Tone IS mapped on the wire (the 1A 00 record's ⑬ duplex/tone-mode
+//     nibbles and two tone-frequency spans, caps.go's bankFields), on the
+//     same footing as every other registered Icom model. Scan Skip is
+//     NOT: field ④'s LOW nibble (core/civ/ic9700/profile.go's
+//     selectNames) marks a channel into one of three SELECT-memory scan
+//     groups — OFF, ★1, ★2, ★3 — not a skip flag, and mapping it as skip
+//     is forbidden (matrix erratum 13 / OQ-4).
+//   - THIS RECORD MAPS ALL TEN OF THE TIER'S ADDED FIELDS, on the same
+//     footing as the IC-705 — an independent fact about THIS radio's own
+//     111-byte record (caps.go's bankFields carries all thirteen of
+//     matrix §2's rw-graded rows, including duplex, offset, tx_frequency,
+//     dtcs_code and dtcs_polarity), not a repetition of the IC-705's own
+//     claim: the two documents are unrelated and neither lifts anything
+//     for the other.
+//   - THE OFFSET SCALE IS AN OPEN QUESTION, not a settled one. Matrix
+//     Erratum 14 records an unresolved disagreement between §1b's printed
+//     digit places (which would read the golden's duplex offset bytes as
+//     6 MHz) and this driver's own reading of 600 kHz — a factor of ten
+//     apart, and unresolved by any of the matrix's seventeen errata
+//     (core/driver/ic9700/doc.go's `ic9700-offset-scale-100hz` register
+//     entry). The 100 Hz-scale reading this driver implements is ASSUMED,
+//     not settled, and no advisory here claims otherwise.
+//   - The printed clear form is a SINGLE form here — `1A 00 <addr> FF`
+//     (matrix §3.13) — unlike the IC-705's and IC-7300's own two forms
+//     (a set plus a separate command 0B): this document names no separate
+//     erase command at all. It is still deliberately unshipped: no
+//     builder exists, the gate has no branch that could admit one, and
+//     the consent transform exempts erase structurally.
+//   - This project holds no full IC-9700 operating manual, only the CI-V
+//     Reference Guide — so, like the IC-7610 and the IC-7300MK2, this
+//     entry's erase note points at the radio's own operating manual
+//     rather than naming one this project holds.
+//   - THREE BANKS, not one or two: MEM, SCAN and CALL, all DENSE and
+//     addressed by the same `1A 00` form (caps.go's banks). Nothing below
+//     is bank-specific — bankFields grades all three identically — so
+//     this entry needed no third variant of any field; the bank COUNT is
+//     app/uispec.go's own fact to state, not this package's.
+var ic9700Text = Text{
+	// The CI-V protocol prints one memory clear form — `1A 00 <addr> FF`
+	// (matrix §3.13) — but this build sends it to no channel: no builder
+	// exists in this driver, and sending an unconfirmed erase command
+	// risks clearing the wrong channel rather than the intended one.
+	// FieldErase carries the zero FieldSupport on all three banks, which
+	// is what makes core/clone's DiffErased branch unreachable for this
+	// model. This document is a CI-V reference guide, not a full
+	// operating manual, and prints no front-panel clear procedure either,
+	// so the user is sent to the radio's own operating manual, which this
+	// project does not hold.
+	EraseProcedure: "The IC-9700's CI-V protocol prints one memory clear form — a 1A 00 set carrying FF at the address's data position — but this build sends it to no channel: no builder exists in this driver, and sending an unconfirmed erase command risks clearing the wrong channel rather than the intended one. This document is a CI-V reference guide, not a full operating manual, and prints no front-panel clear procedure either, so follow the memory-channel clear procedure in the radio's own operating manual.",
+	// No minimum-firmware fact is established for this radio: the IC-9700
+	// CI-V Reference Guide names no firmware-version command anywhere, so
+	// there is no CI-V query either, on the same footing as every other
+	// registered Icom entry's own firmware note.
+	FirmwareGuidance: "No minimum firmware version is established for the IC-9700: nothing this project holds states one, and no IC-9700 has been asked. This driver's CI-V Reference Guide names no CI-V query for the version either — read it off the radio's own display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established.",
+	// Tone IS read and written for this radio — over CI-V, unverified
+	// against real hardware, since no IC-9700 has ever answered a frame.
+	// Scan Skip is not: this radio's nearest wire nibble marks a channel
+	// into one of three SELECT-memory scan groups, not a skip flag.
+	ToneScanSkipNote: "Tone is read and written for the IC-9700 over CI-V by this build, but unverified against real hardware — no IC-9700 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble marks a channel into one of three SELECT-memory scan groups (★1/★2/★3), not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not.",
+	// DELIBERATELY EMPTY, exactly as every other registered model's is
+	// and for the same reason: writeTrialsComplete is false, so there is
+	// no hardware-preservation verification of any kind to report.
+	ToneScanSkipVerification: "",
+	// Byte-identical to EraseProcedure, as every other model's is: the
+	// delete dialog and the blocked-erase review answer the same question.
+	EraseDialogNote: "The IC-9700's CI-V protocol prints one memory clear form — a 1A 00 set carrying FF at the address's data position — but this build sends it to no channel: no builder exists in this driver, and sending an unconfirmed erase command risks clearing the wrong channel rather than the intended one. This document is a CI-V reference guide, not a full operating manual, and prints no front-panel clear procedure either, so follow the memory-channel clear procedure in the radio's own operating manual.",
+	// The two tooltips DIFFER, exactly as every other Icom entry's do and
+	// for the same reason: the evidence differs between Tone (on the
+	// CI-V surface, unverified) and Scan Skip (structurally not mapped at
+	// all).
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-9700 has ever answered a frame",
+		ScanSkip: "not read or written over CI-V by this build — the IC-9700's nearest wire nibble marks one of three SELECT-memory scan groups, not a skip flag",
+	},
+	// A placeholder LABEL, not an example: no IC-9700 version string has
+	// been seen here. Names the model rather than a generic "the radio's
+	// display" wording, so this field is not byte-identical to any other
+	// registered model's own placeholder.
+	FirmwarePlaceholder: "as shown on the IC-9700's own display",
+	// Restates the no-CI-V-query and no-minimum-version facts, and adds
+	// the two facts this radio's probe failure mode turns on: the fixed
+	// A2h address with no --civ-address option, and the ASSUMED default
+	// baud — see this var's own doc comment for why the IC-9700's grade
+	// differs from every other registered Icom entry's baud claim.
+	ProbeFirmwareNote: "Firmware version has no CI-V query — check the radio's display. No minimum version is established for the IC-9700: this build knows of none to require. This driver talks only to CI-V address A2h, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200 is ASSUMED — the middle of the six rates this document prints, and the rate Icom most commonly ships, not a value this document itself names as the default: it defers the factory setting to the radio's own instruction manual, which this project does not hold. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+}
+
+// ic905Text is the IC-905's entry (Wave 4 task R6, this project's FIFTH
+// Icom registration, and the tier's LAST — see internal/wiring's
+// IC905Model doc comment). It is the third LONE model since the IC-705 —
+// no sibling, no pairing rationale to restate.
+//
+// THE HONESTY RULE APPLIES UNCHANGED. NOTHING BELOW IS INVENTED: no
+// IC-905 has ever been asked anything by this project
+// (core/driver/ic905/doc.go) — every value comes from the IC-905 CI-V
+// REFERENCE GUIDE (the sole layout authority; this project holds no full
+// IC-905 operating manual), never from a hardware finding — and no write
+// trial has happened (writeTrialsComplete, core/driver/ic905/caps.go, is
+// false).
+//
+// THIS ENTRY CARRIES NO OTHER RADIO'S EVIDENCE OR PARTICULARS: it is a
+// tenth manufacturer-and-model combination in this file, and
+// TestRadiotext_IC905Verbatim's own non-borrowing check refuses any field
+// that is byte-identical to, or carries a particular of, any of the NINE
+// other registered models — the four Yaesu entries and all five other
+// registered Icom ones (IC-7610, IC-7300, IC-7300MK2, IC-705, IC-9700).
+// The shared sentence SKELETON several entries use (house style, see
+// ic7300Text's own doc comment) is not itself a borrowing; what must
+// never cross is the evidence each skeleton carries.
+//
+// WHAT IS DIFFERENT ABOUT THIS RADIO, AND WHY IT SHOWS IN THE PROSE:
+//
+//   - The protocol is CI-V, not CAT, on the same footing as every other
+//     Icom entry.
+//   - This driver's CI-V address is fixed at ACh (caps.go's CATID, echoed
+//     by ic905.go's runtime Identity().CATID, "AC:" plus the observed 19
+//     00 token), with no --civ-address option to change it and no way to
+//     detect a radio set to a different address.
+//   - THE BAUD GRADE IS THE IC-705's SHAPE, not the IC-9700's: this
+//     document prints no rate figure ANYWHERE — no data-bit count, no
+//     stop-bit count, no parity, and no rate on any command-table page
+//     (core/driver/ic905/doc.go's own sweep) — so both the five-rate list
+//     (one fewer than every other registered Icom entry's own list, all
+//     of which offer six) and the 19200 default are ASSUMED PLACEHOLDERS,
+//     not a choice among printed rates. Registers: ic905.bauds (lift
+//     ic905-R-04) and ic905.default_baud (lift ic905-R-03).
+//   - Tone IS mapped on the wire (the 1A 00 record's ⑭ duplex/tone-mode
+//     nibbles and two tone-frequency spans, caps.go's bankFields), on the
+//     same footing as every other registered Icom model. Scan Skip is
+//     NOT: byte ⑤'s LOW nibble enumerates one of three SELECT-memory scan
+//     groups — OFF, ★1, ★2, ★3 — not a skip flag, and mapping it as skip
+//     is forbidden (caps.go's own bankFields doc comment).
+//   - DTCS HAS ITS OWN CONSEQUENCE, unique among this tier's registered
+//     entries: its three digits are OCTAL (PDF p.24, folio 23), and a
+//     code this build cannot read as three octal digits comes back
+//     Unknown rather than a number (core/driver/ic905/read.go's
+//     dtcsCodeField). Because this codec has no preserve-by-cache for a
+//     mapped field it cannot read as Known, a channel whose DTCS code is
+//     Unknown cannot be written AT ALL — not merely that one field —
+//     until it is corrected to a valid octal value (write.go's rung 4,
+//     mandatoryKnownFields).
+//   - THIS RECORD MAPS NINE OF THE TIER'S TEN ADDED FIELDS, not all ten
+//     like the IC-705's and the IC-9700's: caps.go's bankFields zeroes
+//     tx_frequency (MANUAL-EVIDENCED ABSENCE — exactly one frequency
+//     field, no duplicated TX block), so this radio's grid reaches
+//     duplex, offset, tone_mode, tone_tx, tone_rx, dtcs_code,
+//     dtcs_polarity, filter and data_mode, and no more.
+//   - THE DEFAULT OPEN DISCOVERS A BOUNDED WALK, not the whole 100 x 100
+//     space: group 0 in full, then CHANNEL 00 of every other group,
+//     descending into that group's remaining channels only where its
+//     channel 00 answered with a record
+//     (core/driver/ic905/read.go's discoverInventory) — a scattered
+//     channel outside that walk needs a session opened with this
+//     driver's own ic905.WithFullInventoryWalk() option, which
+//     internal/wiring's registry row deliberately does not pass (see
+//     NewIC905RealDriver's own doc comment).
+//   - The printed clear form admits memory groups 00 00 ~ 00 99 but
+//     explicitly excludes the CALL group (PDF p.19, folio 18: "You cannot
+//     specify group '01 00'"), and it is still deliberately unshipped: no
+//     builder exists, the gate has no branch that could admit one, and
+//     the consent transform exempts erase structurally.
+//   - This project holds no full IC-905 operating manual, only the CI-V
+//     Reference Guide — so, like the IC-7610, the IC-7300MK2 and the
+//     IC-9700, this entry's erase note points at the radio's own
+//     operating manual rather than naming one this project holds.
+var ic905Text = Text{
+	// The CI-V protocol prints one memory clear form — a 1A 00 set
+	// carrying FF after the group and channel bytes, for memory groups
+	// 00 00 ~ 00 99 only, the CALL group excluded by the document's own
+	// words — but this build sends it to no channel: no builder exists in
+	// this driver, and sending an unconfirmed erase command risks
+	// clearing the wrong channel rather than the intended one.
+	// FieldErase carries the zero FieldSupport on both banks, which is
+	// what makes core/clone's DiffErased branch unreachable for this
+	// model. This document is a CI-V reference guide, not a full
+	// operating manual, and prints no front-panel clear procedure either,
+	// so the user is sent to the radio's own operating manual, which this
+	// project does not hold.
+	EraseProcedure: "The IC-905's CI-V protocol prints one memory clear form — a 1A 00 set carrying FF after the group and channel bytes, for memory groups 00 00 ~ 00 99 only, the CALL group being excluded by the document's own words — but this build sends it to no channel: no builder exists in this driver, and sending an unconfirmed erase command risks clearing the wrong channel rather than the intended one. This document is a CI-V reference guide, not a full operating manual, and prints no front-panel clear procedure either, so follow the memory-channel clear procedure in the radio's own operating manual.",
+	// No minimum-firmware fact is established for this radio: the IC-905
+	// CI-V Reference Guide names no firmware-version command anywhere, so
+	// there is no CI-V query either, on the same footing as every other
+	// registered Icom entry's own firmware note.
+	FirmwareGuidance: "No minimum firmware version is established for the IC-905: nothing this project holds states one, and no IC-905 has been asked. This driver's CI-V Reference Guide names no CI-V query for the version either — read it off the radio's own display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established.",
+	// Tone IS read and written for this radio — over CI-V, unverified
+	// against real hardware, since no IC-905 has ever answered a frame.
+	// Scan Skip is not: this radio's nearest wire nibble marks a channel
+	// into one of three SELECT-memory scan groups, not a skip flag. DTCS
+	// carries its own consequence: an out-of-range code reads back
+	// Unknown, and — because this codec cannot synthesise a value it
+	// never read — a channel in that state cannot be written at all until
+	// the code is corrected.
+	ToneScanSkipNote: "Tone is read and written for the IC-905 over CI-V by this build, but unverified against real hardware — no IC-905 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble marks a channel into one of three SELECT-memory scan groups, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not. DTCS is mapped too, but its three digits are OCTAL: a code this build cannot read as three octal digits comes back Unknown rather than a number, and — because this codec has no preserve-by-cache — a channel whose DTCS code is Unknown cannot be written at all until it is corrected to a valid octal value.",
+	// DELIBERATELY EMPTY, exactly as every other registered model's is
+	// and for the same reason: writeTrialsComplete is false, so there is
+	// no hardware-preservation verification of any kind to report.
+	ToneScanSkipVerification: "",
+	// Byte-identical to EraseProcedure, as every other model's is: the
+	// delete dialog and the blocked-erase review answer the same question.
+	EraseDialogNote: "The IC-905's CI-V protocol prints one memory clear form — a 1A 00 set carrying FF after the group and channel bytes, for memory groups 00 00 ~ 00 99 only, the CALL group being excluded by the document's own words — but this build sends it to no channel: no builder exists in this driver, and sending an unconfirmed erase command risks clearing the wrong channel rather than the intended one. This document is a CI-V reference guide, not a full operating manual, and prints no front-panel clear procedure either, so follow the memory-channel clear procedure in the radio's own operating manual.",
+	// The two tooltips DIFFER, exactly as every other Icom entry's do and
+	// for the same reason: the evidence differs between Tone (on the
+	// CI-V surface, unverified) and Scan Skip (structurally not mapped at
+	// all).
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-905 has ever answered a frame",
+		ScanSkip: "not read or written over CI-V by this build — the IC-905's nearest wire nibble marks one of three SELECT-memory scan groups, not a skip flag",
+	},
+	// A placeholder LABEL, not an example: no IC-905 version string has
+	// been seen here. Names the model rather than a generic "the radio's
+	// display" wording, so this field is not byte-identical to any other
+	// registered model's own placeholder.
+	FirmwarePlaceholder: "as shown on the IC-905's own display",
+	// Restates the no-CI-V-query and no-minimum-version facts, adds the
+	// fixed ACh address with no --civ-address option, this radio's own
+	// five-rate ASSUMED baud grade (see this var's own doc comment for
+	// why it is the IC-705's shape, not the IC-9700's), and the default
+	// open's BOUNDED discovery walk — the one fact no other registered
+	// Icom entry's own ProbeFirmwareNote states, because no other
+	// registered model's default open leaves part of its memory space
+	// unwalked.
+	//
+	// IT NAMES NO REMEDY, DELIBERATELY (registration review, deferred
+	// minor). The walk widens only under ic905.WithFullInventoryWalk() —
+	// a Go option internal/wiring's registry row does not pass and which
+	// no CLI flag and no GUI control reaches — so a user reading this
+	// text could not act on it, and prose naming an unreachable option
+	// reads as a setting the reader has failed to find. What it states
+	// instead is the BOUND and its consequence, which IS actionable: a
+	// channel missing from this build's list is not evidence that the
+	// radio's channel is empty, so check the radio before concluding
+	// anything from an absence.
+	ProbeFirmwareNote: "Firmware version has no CI-V query — check the radio's display. No minimum version is established for the IC-905: this build knows of none to require. This driver talks only to CI-V address ACh, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200, along with the whole five-rate list it is chosen from, is ASSUMED — this radio's CI-V Reference Guide prints no rate figure anywhere, on any port's command-table page. Opening this radio also discovers its MEM bank's occupied slots by a BOUNDED walk — group 0 in full, then channel 00 of every other group, descending into the rest of a group only where its channel 00 answered — not the whole 100x100 space, and this build offers no setting that widens it: a channel stored outside that walk is simply not listed here, so its absence from the grid is not evidence that the radio's channel is empty. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+}
+
 // texts is the registry For consults, keyed by the exact model string a
 // driver.Driver.Model() (or driver.Identity/spec.Capabilities.Model)
 // call returns, e.g. "FT-710".
@@ -404,17 +1128,26 @@ var ftdx101mpText = Text{
 // share. The two spellings are kept in agreement by that test, which walks
 // every registered model and fails on a missing entry.
 var texts = map[string]Text{
-	"FT-710":    ft710Text,
-	"FTdx10":    ftdx10Text,
-	"FTdx101D":  ftdx101dText,
-	"FTdx101MP": ftdx101mpText,
+	"FT-710":     ft710Text,
+	"FTdx10":     ftdx10Text,
+	"FTdx101D":   ftdx101dText,
+	"FTdx101MP":  ftdx101mpText,
+	"IC-7610":    ic7610Text,
+	"IC-7300":    ic7300Text,
+	"IC-7300MK2": ic7300mk2Text,
+	"IC-705":     ic705Text,
+	"IC-9700":    ic9700Text,
+	"IC-905":     ic905Text,
 }
 
-// For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D"
-// and "FTdx101MP" are populated — the four models internal/wiring registers
-// AS OF M9d-2, a count a fifth registration would falsify; any other model
-// — including "", a future driver not yet given an entry, or a near-miss
-// typo ("FT-DX10", say) — returns the zero Text and false.
+// For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",
+// "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700"
+// and "IC-905" are populated — the TEN models internal/wiring registers
+// AS OF Wave 4 task R6, the tier's LAST registration, a count an eleventh
+// registration would falsify; any other model —
+// including "", a future driver not yet given an entry, or a near-miss
+// typo ("FT-DX10", "IC7610", "IC7300", "IC705", "IC9700" or "IC905", say) —
+// returns the zero Text and false.
 // Callers must never treat a zero Text as if it were real advisory copy.
 //
 // THE MATCH IS EXACT AND CASE-SENSITIVE, and for the FTDX101 pair that is

@@ -55,6 +55,12 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft710"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx10"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx101"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300mk2"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7610"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic905"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -119,6 +125,97 @@ const FTdx101DModel = "FTdx101D"
 // there are two models, so neither is the other's fallback and neither is
 // reachable by a caller that failed to choose.
 const FTdx101MPModel = "FTdx101MP"
+
+// IC7610Model names the IC-7610's realDrivers/fakeDrivers key, which must
+// equal ic7610.New(...).Model() — pinned, like the three Yaesu constants
+// above, by TestDriverTableKeysMatchDriverModel walking both tables. A
+// named constant rather than a bare literal at each of its uses for the
+// same reason those three are: the two table keys MUST be the same
+// string, and a typo in one alone would build a model openable for real
+// but not simulated.
+//
+// THIS IS THE FIRST NON-YAESU REGISTRATION (Wave 4, task R1). The spelling
+// is the manufacturer's own, and it carries the hyphen ic7610.go's own
+// Model() method and Capabilities().Model both declare ("IC-7610", not
+// "IC7610" or "ic7610") — the two agreements TestDriverTableKeysMatchDriverModel
+// and internal/guards' simulated-token guard both depend on, exactly as
+// they do for every Yaesu row.
+const IC7610Model = "IC-7610"
+
+// IC7300Model names the IC-7300's realDrivers/fakeDrivers key, which must
+// equal ic7300.New(...).Model() — pinned, like IC7610Model, by
+// TestDriverTableKeysMatchDriverModel walking both tables. A named
+// constant rather than a bare literal at each of its uses for the same
+// reason every other model constant is: the two table keys MUST be the
+// same string, and a typo in one alone would build a model openable for
+// real but not simulated.
+//
+// THIS IS THE SECOND ICOM REGISTRATION (Wave 4, task R3), and the FIRST
+// PAIR — the IC-7300 and IC-7300MK2 register together, in the same
+// commit, over separate driver packages and separate fakes
+// (core/driver/ic7300 / core/driver/ic7300mk2, internal/fakeic7300 /
+// internal/fakeic7300mk2), because the two documents are mutually silent
+// about each other (core/driver/ic7300/doc.go's package comment) and one
+// driver package would have carried that separation as a table rather
+// than as two packages that cannot borrow from each other by construction.
+const IC7300Model = "IC-7300"
+
+// IC7300MK2Model names the IC-7300MK2's realDrivers/fakeDrivers key, which
+// must equal ic7300mk2.New(...).Model(). See IC7300Model for the pairing
+// rationale, which applies here unchanged: a SEPARATE constant, a
+// SEPARATE driver package, a SEPARATE fake, because the two Icom
+// documents this pair is built from never reference each other and no
+// lift in one is a lift for the sibling.
+const IC7300MK2Model = "IC-7300MK2"
+
+// IC705Model names the IC-705's realDrivers/fakeDrivers key, which must
+// equal ic705.New(...).Model() — pinned, like every other Icom constant
+// above, by TestDriverTableKeysMatchDriverModel walking both tables.
+//
+// THIS IS THE THIRD ICOM REGISTRATION (Wave 4, task R4), and the FIRST
+// SINGLE-MODEL one since the IC-7610: a lone driver package
+// (core/driver/ic705) and a lone fake (internal/fakeic705), on the same
+// one-row footing as IC7610Model above — no sibling, no pairing rationale
+// to restate.
+const IC705Model = "IC-705"
+
+// IC9700Model names the IC-9700's realDrivers/fakeDrivers key, which must
+// equal ic9700.New(...).Model() — pinned, like every other Icom constant
+// above, by TestDriverTableKeysMatchDriverModel walking both tables.
+//
+// THIS IS THE FOURTH ICOM REGISTRATION (Wave 4, task R5), and the SECOND
+// SINGLE-MODEL one since the IC-705: a lone driver package
+// (core/driver/ic9700) and a lone fake (internal/fakeic9700), on the same
+// one-row footing as IC705Model above — no sibling, no pairing rationale
+// to restate.
+//
+// UNLIKE EVERY OTHER REGISTERED ICOM MODEL, this radio's static Banks is
+// THREE, not two: MEM, SCAN and CALL (core/driver/ic9700/caps.go's banks),
+// all DENSE (321 addressable slots total, completely enumerable — no
+// group-addressed sparse space of the kind the IC-705 declares). Nothing
+// about registration itself changes for a third bank; it is app/uispec.go's
+// own bank-shape tests that have to say so, not this table.
+const IC9700Model = "IC-9700"
+
+// IC905Model names the IC-905's realDrivers/fakeDrivers key, which must
+// equal ic905.New(...).Model() — pinned, like every other Icom constant
+// above, by TestDriverTableKeysMatchDriverModel walking both tables.
+//
+// THIS IS THE FIFTH ICOM REGISTRATION (Wave 4, task R6) AND THE LAST OF
+// THE TIER: a lone driver package (core/driver/ic905) and a lone fake
+// (internal/fakeic905), on the same one-row footing as IC705Model and
+// IC9700Model above — no sibling, no pairing rationale to restate.
+//
+// BACK TO TWO BANKS, but not back to the IC-705's shape either: MEM
+// (core/driver/ic905/caps.go's baseCapabilities) is SPARSE over a
+// 100 x 100 group-addressed space — the same spec.Bank.Sparse/Groups/
+// PerGroup/Budget descriptor the IC-705's own MEM bank carries — and its
+// materialised set is DISCOVERED at Open, never enumerated statically.
+// CALL is a DENSE bank of twelve named slots, "C01".."C12", in a namespace
+// spec.ParseSparseSlot structurally refuses to parse — disjoint from MEM's
+// "G%02d-%03d" addresses by construction, not by an arithmetic accident of
+// where the two group ranges happen to sit (ruling R4).
+const IC905Model = "IC-905"
 
 // realDrivers is the model-keyed table of real-hardware driver
 // constructors: model name -> a constructor building THAT model's
@@ -188,6 +285,42 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ftdx101.NewMP(ftdx101.RealHardware, ftdx101.WithConsentedUnverifiedWrites())
 		}
 		return NewFTdx101MPRealDriver()
+	},
+	IC7610Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic7610.New(ic7610.RealHardware, ic7610.WithConsentedUnverifiedWrites())
+		}
+		return NewIC7610RealDriver()
+	},
+	IC7300Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic7300.New(ic7300.RealHardware, ic7300.WithConsentedUnverifiedWrites())
+		}
+		return NewIC7300RealDriver()
+	},
+	IC7300MK2Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic7300mk2.New(ic7300mk2.RealHardware, ic7300mk2.WithConsentedUnverifiedWrites())
+		}
+		return NewIC7300MK2RealDriver()
+	},
+	IC705Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic705.New(ic705.RealHardware, ic705.WithConsentedUnverifiedWrites())
+		}
+		return NewIC705RealDriver()
+	},
+	IC9700Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic9700.New(ic9700.RealHardware, ic9700.WithConsentedUnverifiedWrites())
+		}
+		return NewIC9700RealDriver()
+	},
+	IC905Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic905.New(ic905.RealHardware, ic905.WithConsentedUnverifiedWrites())
+		}
+		return NewIC905RealDriver()
 	},
 }
 
@@ -373,6 +506,154 @@ func NewFTdx101MPRealDriver() driver.Driver {
 	return ftdx101.NewMP(ftdx101.RealHardware)
 }
 
+// NewIC7610RealDriver builds the ic7610 driver for a real-hardware
+// session: profile ic7610.RealHardware, the zero value — the IC-7610's
+// half of the realDrivers table, split out for the same reason the four
+// Yaesu constructors above are (a test can pin the capability set the
+// real wiring path implies without opening a port).
+//
+// READ/PROBE ONLY, and by the same mechanism as every Yaesu row: this
+// driver's writeTrialsComplete (core/driver/ic7610/caps.go) is FALSE, so a
+// RealHardware IC-7610 driver reports the all-Unverified capability set —
+// every mapped field's Write spec.Unverified, nothing writable on either
+// bank. No IC-7610 has been written to by this project, and the
+// capability gate refuses before any frame is built.
+//
+// THE FAIL-SAFE DIRECTION IS UNCHANGED BY THIS BEING A CI-V DRIVER RATHER
+// THAN A CAT ONE: an unrecognised Profile value selects the all-Unverified
+// set too (ic7610.go's Capabilities switch), never the simulator's
+// write-Supported one, and the one named exception — SessionOptions'
+// ConsentUnverifiedWrites, spent from the user's own recorded grant — is
+// exactly the mechanism the Yaesu rows use, reaching realDrivers'
+// IC7610Model row above and never this constructor.
+func NewIC7610RealDriver() driver.Driver {
+	return ic7610.New(ic7610.RealHardware)
+}
+
+// NewIC7300RealDriver builds the ic7300 driver for a real-hardware
+// session: profile ic7300.RealHardware, the zero value — the IC-7300's
+// half of the realDrivers table, split out for the same reason every
+// other model constructor above is (a test can pin the capability set the
+// real wiring path implies without opening a port).
+//
+// READ/PROBE ONLY, by the same mechanism as every other row: this
+// driver's writeTrialsComplete (core/driver/ic7300/caps.go) is FALSE, so a
+// RealHardware IC-7300 driver reports the all-Unverified capability set —
+// every mapped field's Write spec.Unverified, nothing writable on either
+// bank. No IC-7300 has been written to by this project, and the
+// capability gate refuses before any frame is built.
+//
+// THE FAIL-SAFE DIRECTION IS UNCHANGED: an unrecognised Profile value
+// selects the all-Unverified set too (ic7300.go's Capabilities switch),
+// never the simulator's write-Supported one, and the one named exception
+// — SessionOptions' ConsentUnverifiedWrites, spent from the user's own
+// recorded grant — is exactly the mechanism every other row uses, reaching
+// realDrivers' IC7300Model row above and never this constructor.
+func NewIC7300RealDriver() driver.Driver {
+	return ic7300.New(ic7300.RealHardware)
+}
+
+// NewIC7300MK2RealDriver builds the ic7300mk2 driver for a real-hardware
+// session: profile ic7300mk2.RealHardware, the zero value. Same reasoning
+// as NewIC7300RealDriver in every respect — the MK2's own write guard is
+// its OWN writeTrialsComplete constant (core/driver/ic7300mk2/caps.go),
+// false for the MK2's own reasons: "The registered sibling's FALSE is not
+// stated here" (that package's own comment) — no write trial on either
+// radio lifts anything for the other, since the two documents never
+// reference each other.
+//
+// A SEPARATE CONSTRUCTOR rather than a model parameter, deliberately, and
+// for the same reason NewFTdx101MPRealDriver is one rather than a
+// parameter on NewFTdx101DRealDriver: the driver package fixes its
+// exported surface as two thin constructors (ic7300.New / ic7300mk2.New,
+// each over its OWN package) so that a registration-table closure cannot
+// hold a forged model value.
+func NewIC7300MK2RealDriver() driver.Driver {
+	return ic7300mk2.New(ic7300mk2.RealHardware)
+}
+
+// NewIC705RealDriver builds the ic705 driver for a real-hardware session:
+// profile ic705.RealHardware, the zero value — the IC-705's half of the
+// realDrivers table, split out for the same reason every other model
+// constructor above is (a test can pin the capability set the real
+// wiring path implies without opening a port).
+//
+// READ/PROBE ONLY, by the same mechanism as every other row: this
+// driver's writeTrialsComplete (core/driver/ic705/caps.go) is FALSE, so a
+// RealHardware IC-705 driver reports the all-Unverified capability set —
+// every mapped field's Write spec.Unverified, nothing writable on either
+// bank. No IC-705 has been written to by this project, and the
+// capability gate refuses before any frame is built.
+//
+// THE FAIL-SAFE DIRECTION IS UNCHANGED: an unrecognised Profile value
+// selects the all-Unverified set too (ic705.go's Capabilities switch),
+// never the simulator's write-Supported one, and the one named exception
+// — SessionOptions' ConsentUnverifiedWrites, spent from the user's own
+// recorded grant — is exactly the mechanism every other row uses, reaching
+// realDrivers' IC705Model row above and never this constructor.
+func NewIC705RealDriver() driver.Driver {
+	return ic705.New(ic705.RealHardware)
+}
+
+// NewIC9700RealDriver builds the ic9700 driver for a real-hardware
+// session: profile ic9700.RealHardware, the zero value — the IC-9700's
+// half of the realDrivers table, split out for the same reason every
+// other model constructor above is (a test can pin the capability set
+// the real wiring path implies without opening a port).
+//
+// READ/PROBE ONLY, by the same mechanism as every other row: this
+// driver's writeTrialsComplete (core/driver/ic9700/caps.go) is FALSE, so a
+// RealHardware IC-9700 driver reports the all-Unverified capability set —
+// every mapped field's Write spec.Unverified, nothing writable on any of
+// its three banks. No IC-9700 has been written to by this project, and
+// the capability gate refuses before any frame is built.
+//
+// THE FAIL-SAFE DIRECTION IS UNCHANGED: an unrecognised Profile value
+// selects the all-Unverified set too (ic9700.go's Capabilities switch),
+// never the simulator's write-Supported one, and the one named exception
+// — SessionOptions' ConsentUnverifiedWrites, spent from the user's own
+// recorded grant — is exactly the mechanism every other row uses, reaching
+// realDrivers' IC9700Model row above and never this constructor.
+func NewIC9700RealDriver() driver.Driver {
+	return ic9700.New(ic9700.RealHardware)
+}
+
+// NewIC905RealDriver builds the ic905 driver for a real-hardware session:
+// profile ic905.RealHardware, the zero value — the IC-905's half of the
+// realDrivers table, split out for the same reason every other model
+// constructor above is (a test can pin the capability set the real
+// wiring path implies without opening a port).
+//
+// READ/PROBE ONLY, by the same mechanism as every other row: this
+// driver's writeTrialsComplete (core/driver/ic905/caps.go) is FALSE, so a
+// RealHardware IC-905 driver reports the all-Unverified capability set —
+// every mapped field's Write spec.Unverified, nothing writable on either
+// bank. No IC-905 has been written to by this project, and the
+// capability gate refuses before any frame is built.
+//
+// NO ic905.WithFullInventoryWalk() HERE, DELIBERATELY. That option opts a
+// session INTO the whole 100 x 100 walk instead of the bounded default
+// (group 0 in full, then one channel per group elsewhere —
+// core/driver/ic905's own discoverInventory doc comment); the registry's
+// job is to build the driver every plain `--model IC-905` session gets,
+// and that is the bounded default, on the same operational grounds the
+// driver package itself states — a complete walk is minutes of Open on a
+// sparse or empty radio, and training a user to interrupt it is exactly
+// the "codeplug full of deletions" hazard the bound exists to avoid. A
+// caller who needs the whole space still reaches the option directly
+// through core/driver/ic905, unchanged by this constructor's omission of
+// it.
+//
+// THE FAIL-SAFE DIRECTION IS UNCHANGED: an unrecognised Profile value
+// selects the all-Unverified set too (ic905.go's Capabilities switch),
+// never the simulator's write-Supported one, and the one named exception
+// — SessionOptions' ConsentUnverifiedWrites, spent from the user's own
+// recorded grant — is exactly the mechanism every other row uses, reaching
+// realDrivers' IC905Model row above and never this constructor.
+func NewIC905RealDriver() driver.Driver {
+	return ic905.New(ic905.RealHardware)
+}
+
 // openSerial is OpenRealSessionWith's test seam (and so OpenRealSessionFor's
 // too, that being its zero-option delegate): production code always leaves
 // this at transport.OpenSerial, and OpenRealSessionWith calls it
@@ -478,23 +759,21 @@ func OpenRealSessionWith(ctx context.Context, model, portPath string, opts Sessi
 		return nil, nil, &UnknownModelError{Model: model, Supported: SupportedModels()}
 	}
 
+	stopBits, err := stopBitsFor(d)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	port, err := openSerial(portPath, transport.SerialConfig{
 		// The baud is the radio's, read from the driver in hand (d is
 		// the very value NewRegistry registered and reg.Get returned
 		// above as drv — TestDriverTableKeysMatchDriverModel pins the
 		// key they share).
 		Baud: d.Capabilities().DefaultBaud,
-		// The stop bits are NOT model-derived, BY RECORDED DECISION
-		// (M9c-5 E2, upheld at M9c-6): spec.Capabilities carries no
-		// framing field, so every model opens at transport's fixed
-		// default (8-N-2). The E2-owed FTdx10 verification is CLOSED,
-		// and closed as SILENCE: that radio's CAT manual makes no
-		// framing statement anywhere (M9c-6 spec D-framing), so 8-N-2
-		// for the FTdx10 is an ASSUMED entry in core/driver/ftdx10's
-		// own register with a named hardware lift — not a verified
-		// fact. The field is still added only with hardware evidence,
-		// never guessed.
-		StopBits: transport.DefaultStopBits,
+		// The stop bits are the DRIVER's where the driver has something
+		// honest to say, and transport's fixed default (8-N-2) where it
+		// has not — see stopBitsFor.
+		StopBits: stopBits,
 	})
 	if err != nil {
 		return nil, nil, &OpenSerialError{Port: portPath, Cause: err}
@@ -651,6 +930,62 @@ func SynthesiseDiscoveredBanks(model string, slots []string) ([]spec.Bank, bool)
 		return nil, false
 	}
 	return synth.SynthesiseDiscoveredBanks(slots), true
+}
+
+// stopBitsFor is spec D3.1's serial-framing rule in one place: consult
+// the driver's OPTIONAL driver.SerialFramingReporter, and refuse anything
+// it reports other than 1 or 2.
+//
+// STILL NOT A spec.Capabilities FIELD. The M9c-5 (E2) rule — a framing
+// field only with hardware evidence — is untouched, and the four
+// registered Yaesu models still reach the serial layer at
+// transport.DefaultStopBits, because none of them implements the
+// interface. What D3.1 adds is somewhere for a driver that DOES have a
+// framing fact to put it, and the Icom tier's six models are that case.
+//
+// ZERO IS REFUSED WITH THE REST, and that is the rule's whole substance.
+// The obvious implementation — "if the report is <= 0, use the default" —
+// is exactly what must not happen: a driver whose StopBits() returns the
+// zero value has not asked for 8-N-2, it has failed to answer, and
+// substituting a guess there would put transport's default on the wire
+// under a driver's authority and with no diagnostic. A driver with
+// nothing to say implements NOTHING; a driver that implements this
+// interface must mean what it returns.
+//
+// The refusal happens BEFORE the port is opened, so a misconfigured
+// driver never gets as far as touching hardware.
+func stopBitsFor(d driver.Driver) (int, error) {
+	r, ok := d.(driver.SerialFramingReporter)
+	if !ok {
+		// The E2-owed FTdx10 verification is CLOSED, and closed as
+		// SILENCE: that radio's CAT manual makes no framing statement
+		// anywhere (M9c-6 spec D-framing), so 8-N-2 for the FTdx10 is an
+		// ASSUMED entry in core/driver/ftdx10's own register with a named
+		// hardware lift — not a verified fact. Same for the other three.
+		return transport.DefaultStopBits, nil
+	}
+	got := r.StopBits()
+	if got != 1 && got != 2 {
+		return 0, &UnsupportedStopBitsError{Model: d.Model(), StopBits: got}
+	}
+	return got, nil
+}
+
+// UnsupportedStopBitsError is OpenRealSessionWith's typed refusal when a
+// driver's driver.SerialFramingReporter reports a stop-bit count that is
+// not 1 or 2. Returned BEFORE any port is opened.
+//
+// It names the MODEL as well as the number, because the fault is in a
+// driver's registration table and the message has to say which driver's.
+type UnsupportedStopBitsError struct {
+	// Model is the driver that reported StopBits.
+	Model string
+	// StopBits is what it reported.
+	StopBits int
+}
+
+func (e *UnsupportedStopBitsError) Error() string {
+	return fmt.Sprintf("wiring: driver %s reports %d stop bits; only 1 or 2 are supported (a driver with no framing evidence must not implement driver.SerialFramingReporter at all — zero is not a request for the default)", e.Model, e.StopBits)
 }
 
 // OpenSerialError is OpenRealSessionFor's typed failure when

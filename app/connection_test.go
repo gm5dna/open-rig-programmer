@@ -128,6 +128,20 @@ func TestListPorts_NoError(t *testing.T) {
 // M9a-5) bound method: registry-driven (internal/wiring.SupportedModels),
 // so it must at least contain wiring.DefaultModel, sorted (matching
 // SupportedModels' own guarantee).
+//
+// THE DeepEqual CHECK ALONE IS TAUTOLOGICAL FOR MEMBERSHIP (R1 review, fix
+// round 1): a.GetSupportedModels() is a.supportedModels() is
+// wiring.SupportedModels under the hood (app/connection.go), so comparing
+// it against wiring.SupportedModels() again proves only that the bound
+// method forwards without mutating its result — it says nothing about
+// whether any PARTICULAR model, IC-7610 included, is actually in the
+// list, since a registry that dropped every model would still satisfy
+// DeepEqual against itself. The explicit found-loops below are what
+// assert membership for real, one model each — DefaultModel because it
+// was here first, and IC7610Model (Wave 4 task R1) as this project's
+// first non-Yaesu, non-default row, so a registration that built but
+// never wired the picker path would be caught here rather than only in
+// internal/wiring's own tests.
 func TestGetSupportedModels_ContainsDefaultModel(t *testing.T) {
 	a, _ := newTestApp(t)
 	got := a.GetSupportedModels()
@@ -142,6 +156,70 @@ func TestGetSupportedModels_ContainsDefaultModel(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("GetSupportedModels() = %v, want it to contain wiring.DefaultModel %q", got, wiring.DefaultModel)
+	}
+	foundIC7610 := false
+	for _, m := range got {
+		if m == wiring.IC7610Model {
+			foundIC7610 = true
+		}
+	}
+	if !foundIC7610 {
+		t.Errorf("GetSupportedModels() = %v, want it to contain wiring.IC7610Model %q", got, wiring.IC7610Model)
+	}
+	// The IC-7300 and IC-7300MK2 (Wave 4 task R3), on the same explicit
+	// membership footing as IC7610Model above — this pair's own driver
+	// packages and fakes are separate from the IC-7610's, so a
+	// registration that wired one but not the other would be caught here.
+	foundIC7300 := false
+	for _, m := range got {
+		if m == wiring.IC7300Model {
+			foundIC7300 = true
+		}
+	}
+	if !foundIC7300 {
+		t.Errorf("GetSupportedModels() = %v, want it to contain wiring.IC7300Model %q", got, wiring.IC7300Model)
+	}
+	foundIC7300MK2 := false
+	for _, m := range got {
+		if m == wiring.IC7300MK2Model {
+			foundIC7300MK2 = true
+		}
+	}
+	if !foundIC7300MK2 {
+		t.Errorf("GetSupportedModels() = %v, want it to contain wiring.IC7300MK2Model %q", got, wiring.IC7300MK2Model)
+	}
+	// The IC-705 (Wave 4 task R4), on the same explicit membership
+	// footing as every other Icom model above.
+	foundIC705 := false
+	for _, m := range got {
+		if m == wiring.IC705Model {
+			foundIC705 = true
+		}
+	}
+	if !foundIC705 {
+		t.Errorf("GetSupportedModels() = %v, want it to contain wiring.IC705Model %q", got, wiring.IC705Model)
+	}
+	// The IC-9700 (Wave 4 task R5), on the same explicit membership
+	// footing as every other Icom model above.
+	foundIC9700 := false
+	for _, m := range got {
+		if m == wiring.IC9700Model {
+			foundIC9700 = true
+		}
+	}
+	if !foundIC9700 {
+		t.Errorf("GetSupportedModels() = %v, want it to contain wiring.IC9700Model %q", got, wiring.IC9700Model)
+	}
+	// The IC-905 (Wave 4 task R6, the tier's LAST registration), on the
+	// same explicit membership footing as every other Icom model above.
+	foundIC905 := false
+	for _, m := range got {
+		if m == wiring.IC905Model {
+			foundIC905 = true
+		}
+	}
+	if !foundIC905 {
+		t.Errorf("GetSupportedModels() = %v, want it to contain wiring.IC905Model %q", got, wiring.IC905Model)
 	}
 }
 

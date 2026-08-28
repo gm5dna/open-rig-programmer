@@ -142,6 +142,18 @@ func saveCodeplugNoClobber(path string, cp *codeplug.Codeplug, force bool) error
 func loadCodeplugStrict(stderr io.Writer, cmdName, label, path string) (*codeplug.Codeplug, int) {
 	cp, err := codeplug.Load(path)
 	if err == nil {
+		// Deviation (c)'s CLI composition root (Wave 4 task R2): the
+		// capability-keyed Absent-to-Unavailable pass codeplug.Load cannot
+		// run itself, against the capabilities of the model the FILE
+		// names. See codeplug.NormaliseTierFields for the rule and why it
+		// lives there rather than in Load, and app/fileio.go's
+		// normaliseLoadedTierFields — the GUI's identical half — for why
+		// an unrecognised model is left alone rather than degraded to a
+		// default one. A schema-1/2/3 file arrives here with nothing left
+		// to normalise.
+		if caps, capsErr := wiring.StaticCapabilities(cp.Radio.Model); capsErr == nil {
+			codeplug.NormaliseTierFields(cp, caps)
+		}
 		return cp, exitSuccess
 	}
 

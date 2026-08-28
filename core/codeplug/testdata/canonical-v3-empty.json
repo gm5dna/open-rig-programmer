@@ -1,0 +1,10 @@
+{
+  "schema": 3,
+  "generator": "open-rig-programmer v0.1.0",
+  "radio": {
+    "model": "FTDX101MP",
+    "cat_id": "0681",
+    "read_at": "2026-07-10T12:00:00Z"
+  },
+  "channels": null
+}

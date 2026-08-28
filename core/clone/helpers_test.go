@@ -546,10 +546,33 @@ func stepClock(start time.Time) func() time.Time {
 // every FieldState-carrying field Unknown (nothing inexpressible
 // requested), everything else set to plain, codec-expressible values.
 // Mirrors core/driver/ft710's write_test.go helper of the same name/shape.
-func writableChannel(slot string, freqHz uint32, tag string) codeplug.Channel {
+// yaesuTierUnavailable sets every one of the ten fields the Icom tier
+// added to Unavailable and returns d.
+//
+// It is what a READ of any radio registered today reports for all ten
+// (core/driver/*/read.go), what a load of a pre-tier codeplug migrates
+// to, and what a version-1 CSV import produces. A test fixture that left
+// them at the zero value would differ from a real read in ten fields,
+// and codeplug.Diff compares ChannelData with ==, so an otherwise
+// identical channel would plan as MODIFIED.
+func yaesuTierUnavailable(d *codeplug.ChannelData) *codeplug.ChannelData {
+	d.TxFreqHz = codeplug.FreqField{State: codeplug.Unavailable}
+	d.Duplex = codeplug.StringField{State: codeplug.Unavailable}
+	d.OffsetHz = codeplug.FreqField{State: codeplug.Unavailable}
+	d.ToneMode = codeplug.StringField{State: codeplug.Unavailable}
+	d.ToneTx = codeplug.ToneField{State: codeplug.Unavailable}
+	d.ToneRx = codeplug.ToneField{State: codeplug.Unavailable}
+	d.DTCSCode = codeplug.IntField{State: codeplug.Unavailable}
+	d.DTCSPolarity = codeplug.StringField{State: codeplug.Unavailable}
+	d.Filter = codeplug.StringField{State: codeplug.Unavailable}
+	d.DataMode = codeplug.BoolField{State: codeplug.Unavailable}
+	return d
+}
+
+func writableChannel(slot string, freqHz uint64, tag string) codeplug.Channel {
 	return codeplug.Channel{
 		Slot: slot,
-		Data: &codeplug.ChannelData{
+		Data: yaesuTierUnavailable(&codeplug.ChannelData{
 			FreqHz:     freqHz,
 			Mode:       "USB",
 			CTCSS:      "OFF",
@@ -558,7 +581,7 @@ func writableChannel(slot string, freqHz uint32, tag string) codeplug.Channel {
 			Tag:        tag,
 			TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: tag != ""},
 			ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
-		},
+		}),
 	}
 }
 

@@ -95,13 +95,20 @@ func TestUsageText_DiffExport_AlreadyFlagsFirst(t *testing.T) {
 // so it names every currently-supported model, in wiring.SupportedModels'
 // own sorted order, and says "radios" (plural, model-neutral) rather than
 // naming one radio outright.
+//
+// "Yaesu and Icom radios", not "Yaesu radios", since Wave 4 task R1
+// registered the IC-7610: the manufacturer word itself is a hand-written
+// literal too, exactly like the "FT-710" this doc comment already
+// describes replacing, and it was rewritten deliberately rather than left
+// to quietly misdescribe a mixed registry. This pin is what makes that
+// rewrite a visible, intentional edit rather than a drift.
 func TestPrintUsage_RegistryDriven(t *testing.T) {
 	var buf bytes.Buffer
 	printUsage(&buf)
 	out := buf.String()
 
-	if !strings.Contains(out, "Yaesu radios") {
-		t.Errorf("printUsage output = %q, want it to say \"Yaesu radios\" (model-neutral)", out)
+	if !strings.Contains(out, "Yaesu and Icom radios") {
+		t.Errorf("printUsage output = %q, want it to say \"Yaesu and Icom radios\" (manufacturer-neutral across both registered families)", out)
 	}
 	for _, model := range wiring.SupportedModels() {
 		if !strings.Contains(out, model) {

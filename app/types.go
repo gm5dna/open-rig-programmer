@@ -389,6 +389,24 @@ type BankView struct {
 	// A parallel view type would be one rename away from a default the
 	// grid could no longer use.
 	TagDisplayDefault codeplug.BoolField
+	// Fields lists, as plain spec.Field strings, every field the Icom
+	// tier added (design D4) that THIS BANK can reach —
+	// spec.FieldSupport.Unreachable false. It is what lets the channel
+	// grid render a column for a field only where the radio has one
+	// (app/frontend/src/lib/grid/columns.js's columnsFor).
+	//
+	// It is EMPTY on every bank of all four Yaesu models, whose grids are
+	// therefore exactly the ten columns they have always had — which was
+	// the point: the tier added no visible change until a radio that has
+	// the fields arrived. The IC-7610 (registered in Wave 4) is that
+	// radio, and the first whose banks list anything here: tone_mode,
+	// tone_tx, tone_rx and filter, on MEM and SCAN alike.
+	//
+	// Only the tier's fields are listed, deliberately. The ten fields
+	// that predate it have unconditional columns whose per-CELL rules
+	// are state-based (columns.js's isCellEditable), and re-deriving
+	// those from capabilities is a separate decision this does not take.
+	Fields []string
 }
 
 // ToneView is one CTCSS tone option: Decihertz is the raw value

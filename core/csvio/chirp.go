@@ -161,7 +161,17 @@ func isCHIRPDigits(s string) bool {
 // digits beyond the 6th decimal place (whole-Hz precision at MHz scale)
 // must all be zero, or the value has a sub-Hz remainder the radio
 // cannot store (errCHIRPFreqFractionalHz).
-func parseCHIRPFrequency(s string) (uint32, error) {
+//
+// uint64 since the Icom tier (design D4, adjudication 5: "CHIRP parsing
+// widens"), matching codeplug.ChannelData.FreqHz. The ceiling this
+// function enforces is the REPRESENTABLE one — what a uint64 of hertz
+// can hold — and nothing narrower: whether a given frequency is one THIS
+// radio can store is caps' question, answered by codeplug.Validate
+// against MinFreqHz/MaxFreqHz, and answering it twice in two places with
+// two different bounds is how the two drift apart. Before the tier the
+// representable ceiling happened to be MaxUint32, which is the only
+// reason a 5 GHz cell used to be refused here.
+func parseCHIRPFrequency(s string) (uint64, error) {
 	s = strings.TrimSpace(s)
 	intPart, fracPart, hasDot := strings.Cut(s, ".")
 	if intPart == "" || !isCHIRPDigits(intPart) {
@@ -195,38 +205,106 @@ func parseCHIRPFrequency(s string) (uint32, error) {
 	// arbitrarily many digits), so an absurdly large-but-uint64-legal mhz
 	// (e.g. from "18446744073710.500000") multiplied by 1_000_000
 	// silently wraps around uint64's own range. That wrapped value can
-	// land back inside uint32 range and be accepted as if it were a
-	// small, legitimate frequency — exactly the kind of miscomputed value
-	// this project must never send to a radio. Rearranging the bound
-	// (mhz > (max-hzFrac)/1_000_000) answers the same question without
-	// ever performing the multiplication that could overflow.
-	max := uint64(math.MaxUint32)
-	if hzFrac > max || mhz > (max-hzFrac)/1_000_000 {
+	// land back inside a plausible frequency range and be accepted as if
+	// it were a small, legitimate one — exactly the kind of miscomputed
+	// value this project must never send to a radio. Rearranging the
+	// bound (mhz > (max-hzFrac)/1_000_000) answers the same question
+	// without ever performing the multiplication that could overflow.
+	//
+	// hzFrac needs no bound of its own: it is exactly six digits, so it
+	// is at most 999,999. It appeared in this condition while max was
+	// MaxUint32, where a six-digit value could genuinely exceed nothing
+	// but did no harm; against MaxUint64 the comparison would be plainly
+	// dead, so it is gone rather than left to read as a live check.
+	const max = uint64(math.MaxUint64)
+	if mhz > (max-hzFrac)/1_000_000 {
 		return 0, errCHIRPFreqRange
 	}
-	total := mhz*1_000_000 + hzFrac
-	return uint32(total), nil
+	return mhz*1_000_000 + hzFrac, nil
 }
 
 // parseCHIRPTone parses a CHIRP rToneFreq/cToneFreq cell (decimal Hz,
 // e.g. "88.5") EXACTLY (see parseExactToneDeciHz — no floating point, and
 // no more than one decimal place of precision; "88.54" is rejected
 // outright rather than rounded) and reports whether the result appears in
-// this radio's own CTCSS chart (caps.CTCSSTones). A cell that fails to
-// parse, carries more precision than one decimal place, or parses but
-// matches no tone in caps' chart, returns (0, false): all three are
+// this radio can express — spec.Capabilities.AdmitsTone, the ONE shared
+// predicate core/codeplug's ToneField.Valid also asks (E3). A cell that
+// fails to parse, carries more precision than one decimal place, or parses
+// but names a tone caps does not admit, returns (0, false): all three are
 // equally unusable and the caller reports a single Blocking LossEntry
 // either way.
+//
+// THE PREDICATE IS SHARED BECAUSE IT WAS DUPLICATED. This function used to
+// call a local capsHasTone, a list-only loop identical to the one
+// core/codeplug carried, so a radio whose tone domain is a numeric RANGE
+// rather than a chart — every CI-V model in the Icom tier — would have had
+// every tone in a CHIRP file refused here as unusable while core/codeplug
+// refused the same tones for the same reason a package away.
 func parseCHIRPTone(s string, caps spec.Capabilities) (spec.Tone, bool) {
 	deciHz, err := parseExactToneDeciHz(strings.TrimSpace(s))
 	if err != nil {
 		return 0, false
 	}
 	t := spec.Tone(deciHz)
-	if !capsHasTone(caps, t) {
+	if !caps.AdmitsTone(t) {
 		return 0, false
 	}
 	return t, true
+}
+
+// reaches reports whether bank can reach field on this radio — the ONE
+// question every capability-aware branch of the CHIRP importer asks
+// (design D4, adjudication 16). It is spec.FieldSupport.Unreachable
+// inverted, which means "says nothing" and "says no" answer alike: a
+// bank absent from caps, or present without the field, is not a bank
+// that reaches it.
+func reaches(caps spec.Capabilities, bank spec.BankID, field spec.Field) bool {
+	return !caps.FieldSupport(bank, field).Unreachable()
+}
+
+// duplexFor returns the wire-form duplex value caps uses for direction,
+// and true, or ("", false) when this radio expresses no such option.
+//
+// IT ASKS THE CANONICAL ENTRY (E5), and no longer takes the first slice
+// match. A model may genuinely express one direction with two wire codes;
+// spec.Capabilities.Validate used to refuse that outright, which refused
+// the radio rather than the mistake, and this function's answer therefore
+// used to depend on the order a driver author happened to write the table
+// in — a difference no test in this package could see and no reader would
+// suspect. spec.Capabilities.CanonicalDuplexOption resolves it by
+// declaration, and returns not-found rather than guessing between two
+// unmarked entries.
+func duplexFor(caps spec.Capabilities, d spec.DuplexDirection) (string, bool) {
+	return caps.CanonicalDuplexOption(d)
+}
+
+// toneModeFor returns the wire-form tone-mode value caps uses for the
+// given semantics, and true, or ("", false) when this radio expresses no
+// such mode. The FieldToneMode analogue of toneStateFor, resolved through
+// the CANONICAL entry for duplexFor's reason and on identical terms.
+func toneModeFor(caps spec.Capabilities, semantics spec.ToneModeSemantics) (string, bool) {
+	return caps.CanonicalToneMode(semantics)
+}
+
+// capsHasDTCSCode reports whether code is in this radio's DTCS table.
+func capsHasDTCSCode(caps spec.Capabilities, code int) bool {
+	for _, c := range caps.DTCSCodes {
+		if c == code {
+			return true
+		}
+	}
+	return false
+}
+
+// capsHasDTCSPolarity reports whether p is in this radio's DTCS polarity
+// vocabulary.
+func capsHasDTCSPolarity(caps spec.Capabilities, p string) bool {
+	for _, v := range caps.DTCSPolarities {
+		if v == p {
+			return true
+		}
+	}
+	return false
 }
 
 // shiftFor returns the wire-form shift value caps uses for direction, and
@@ -253,16 +331,6 @@ func toneStateFor(caps spec.Capabilities, semantics spec.ToneSemantics) (string,
 		}
 	}
 	return "", false
-}
-
-// capsHasTone reports whether t is in this radio's CTCSS chart.
-func capsHasTone(caps spec.Capabilities, t spec.Tone) bool {
-	for _, x := range caps.CTCSSTones {
-		if x == t {
-			return true
-		}
-	}
-	return false
 }
 
 // containsMode reports whether caps lists the given display-name mode.
@@ -516,6 +584,16 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string, caps spe
 	// see chirpTagDisplay for the rule and why the two answers differ.
 	data.TagDisplay = chirpTagDisplay(caps, memBank.ID)
 
+	// Every tier-added field this radio cannot reach: Unavailable, the
+	// same answer chirpTagDisplay gives for the same question, and the
+	// same one a READ of such a radio and a load of a pre-tier file both
+	// produce. The branches below then overwrite whichever ones this
+	// radio DOES reach. Leaving an unreachable field at its zero value
+	// would make a CHIRP-imported channel differ from the baseline it is
+	// about to be diffed against in ten fields the radio does not even
+	// have.
+	markUnreachableTierFields(data, caps, memBank.ID)
+
 	// Frequency -> FreqHz.
 	freqRaw := cell("Frequency")
 	freqHz, err := parseCHIRPFrequency(freqRaw)
@@ -553,9 +631,83 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string, caps spe
 		data.Mode = mapped
 	}
 
-	// Duplex -> Shift. Which wire value means "up", "down" or "none" is
-	// this radio's own vocabulary, so it is asked for by DIRECTION rather
-	// than named here.
+	// Duplex, Offset and the split TX frequency, CAPABILITY-AWARE since
+	// the Icom tier (design D4, adjudication 16). A radio whose bank
+	// reaches spec.FieldDuplex takes the Icom branch below — which can
+	// carry a per-channel offset, and can express CHIRP's "split" as a
+	// stored transmit frequency instead of refusing it. Every radio
+	// registered before that tier reaches neither field, takes the
+	// original shift branch, and behaves exactly as it did.
+	if reaches(caps, memBank.ID, spec.FieldDuplex) {
+		entries = append(entries, importCHIRPDuplexIcom(line, cell, data, caps, memBank.ID)...)
+	} else {
+		entries = append(entries, importCHIRPDuplexShift(line, cell, data, caps)...)
+	}
+
+	// Tone/rToneFreq/cToneFreq (and, on a radio that has them,
+	// DtcsCode/DtcsPolarity), likewise capability-aware: a radio whose
+	// bank reaches spec.FieldToneMode gets the tone-mode vocabulary,
+	// including the DTCS and cross modes the Yaesu branch has no field
+	// for and correctly refuses.
+	if reaches(caps, memBank.ID, spec.FieldToneMode) {
+		entries = append(entries, importCHIRPToneIcom(line, cell, data, caps, memBank.ID)...)
+	} else {
+		entries = append(entries, importCHIRPToneCTCSS(line, cell, data, caps)...)
+	}
+
+	// Skip -> ScanSkip: from the TARGET BANK's own support, never the
+	// cell alone — see chirpScanSkip for the rule and why an unreachable
+	// radio may not be told the file's answer.
+	scanSkip, scanSkipEntries := chirpScanSkip(caps, memBank.ID, cell("Skip"), line)
+	data.ScanSkip = scanSkip
+	entries = append(entries, scanSkipEntries...)
+
+	// Recognised-but-unmapped columns: silent when at their default,
+	// non-blocking dropped when carrying real data (see
+	// chirpExtraColumns). A column this radio DOES have a field for is
+	// not unmapped at all and is skipped here — otherwise a successfully
+	// imported DTCS code would be reported as discarded in the same
+	// breath as it was stored.
+	for _, col := range chirpExtraColumns {
+		if consumedByThisRadio(caps, memBank.ID, col) {
+			continue
+		}
+		v := cell(col)
+		if v == "" || v == chirpExtraColumnDefaults[col] {
+			continue
+		}
+		entries = append(entries, LossEntry{
+			Line: line, Column: col, Value: v, Action: ActionDropped, Blocking: false,
+			Detail: fmt.Sprintf("%s has no equivalent field for CHIRP %s; value discarded", caps.Model, col),
+		})
+	}
+
+	return &codeplug.Channel{Slot: slot, Data: data}, entries
+}
+
+// consumedByThisRadio reports whether a chirpExtraColumns column is
+// actually mapped onto a field of THIS radio, and so must not also be
+// reported as dropped. Only the two DTCS columns can be: TStep and
+// Comment have no neutral field on any radio this project models.
+func consumedByThisRadio(caps spec.Capabilities, bank spec.BankID, column string) bool {
+	switch column {
+	case "DtcsCode":
+		return reaches(caps, bank, spec.FieldDTCSCode)
+	case "DtcsPolarity":
+		return reaches(caps, bank, spec.FieldDTCSPolarity)
+	default:
+		return false
+	}
+}
+
+// importCHIRPDuplexShift is the pre-Icom-tier Duplex mapping, unchanged
+// and still the one every registered radio takes: CHIRP's Duplex becomes
+// a repeater SHIFT, asked for by direction rather than named here,
+// "split" is refused because a Yaesu memory channel has no independent
+// transmit frequency, and a non-zero Offset is dropped because the shift
+// magnitude is a global menu setting.
+func importCHIRPDuplexShift(line int, cell func(string) string, data *codeplug.ChannelData, caps spec.Capabilities) []LossEntry {
+	var entries []LossEntry
 	switch duplexRaw := cell("Duplex"); duplexRaw {
 	case "", "off":
 		v, ok := shiftFor(caps, spec.ShiftNone)
@@ -606,12 +758,19 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string, caps spe
 			Detail: fmt.Sprintf("%s stores no per-channel repeater offset; shift magnitude is a global menu setting", caps.Model),
 		})
 	}
+	return entries
+}
 
-	// Tone/rToneFreq/cToneFreq -> CTCSS/CTCSSTone. rToneFreq/cToneFreq
-	// are read ONLY when the Tone column selects them: CHIRP populates
-	// both on essentially every row regardless of which (if either) is
-	// active, so treating the inactive one as "lost data" would swamp
-	// the report with noise on every ordinary row.
+// importCHIRPToneCTCSS is the pre-Icom-tier Tone mapping, unchanged:
+// CHIRP's Tone column becomes a CTCSS STATE from this radio's own
+// vocabulary, DTCS and Cross are refused because there is no field for
+// them, and rToneFreq/cToneFreq are read ONLY when the Tone column
+// selects them — CHIRP populates both on essentially every row
+// regardless of which (if either) is active, so treating the inactive
+// one as lost data would swamp the report with noise on every ordinary
+// row.
+func importCHIRPToneCTCSS(line int, cell func(string) string, data *codeplug.ChannelData, caps spec.Capabilities) []LossEntry {
+	var entries []LossEntry
 	switch toneRaw := cell("Tone"); toneRaw {
 	case "":
 		data.CTCSSTone = codeplug.ToneField{State: codeplug.Unknown}
@@ -686,29 +845,7 @@ func importCHIRPRow(line int, colIndex map[string]int, record []string, caps spe
 			Detail: fmt.Sprintf("unrecognised Tone value %q", toneRaw),
 		})
 	}
-
-	// Skip -> ScanSkip: from the TARGET BANK's own support, never the
-	// cell alone — see chirpScanSkip for the rule and why an unreachable
-	// radio may not be told the file's answer.
-	scanSkip, scanSkipEntries := chirpScanSkip(caps, memBank.ID, cell("Skip"), line)
-	data.ScanSkip = scanSkip
-	entries = append(entries, scanSkipEntries...)
-
-	// Recognised-but-unmapped columns: silent when at their default,
-	// non-blocking dropped when carrying real data (see
-	// chirpExtraColumns).
-	for _, col := range chirpExtraColumns {
-		v := cell(col)
-		if v == "" || v == chirpExtraColumnDefaults[col] {
-			continue
-		}
-		entries = append(entries, LossEntry{
-			Line: line, Column: col, Value: v, Action: ActionDropped, Blocking: false,
-			Detail: fmt.Sprintf("%s has no equivalent field for CHIRP %s; value discarded", caps.Model, col),
-		})
-	}
-
-	return &codeplug.Channel{Slot: slot, Data: data}, entries
+	return entries
 }
 
 // isNonZeroCHIRPOffset reports whether a CHIRP Offset cell represents a
@@ -873,4 +1010,346 @@ func ImportCHIRP(rd io.Reader, caps spec.Capabilities) ([]codeplug.Channel, Loss
 	}
 
 	return channels, report, nil
+}
+
+// parseCHIRPOffsetHz parses a CHIRP Offset cell — decimal MHz, exactly
+// as the Frequency column is — into whole hertz. It reuses
+// parseCHIRPFrequency rather than ParseFloat because an offset that ends
+// up on a radio deserves the same exactness a frequency does: no
+// floating point, and a sub-Hz remainder refused rather than rounded.
+// (isNonZeroCHIRPOffset's ParseFloat stays where it is: that one only
+// ever decides whether to WRITE A LOSS ENTRY, never what to store.)
+func parseCHIRPOffsetHz(s string) (uint64, error) {
+	return parseCHIRPFrequency(strings.TrimSpace(s))
+}
+
+// importCHIRPDuplexIcom is the Duplex/Offset mapping for a radio whose
+// bank reaches spec.FieldDuplex — the Icom tier's branch (design D4).
+//
+// What it does that the shift branch cannot:
+//
+//   - stores a per-channel OFFSET (spec.FieldOffset) for a "+"/"-" row,
+//     instead of dropping it as a global menu setting;
+//   - accepts CHIRP's "split" where the radio has a stored transmit
+//     frequency (spec.FieldTxFrequency). CHIRP puts the absolute TX
+//     frequency in the Offset column for a split row, so that is where
+//     it is read from, and the channel's duplex is set to the radio's
+//     own OFF value: a split channel has no repeater shift, it has two
+//     frequencies. Where the radio has no such field the row is refused
+//     exactly as before.
+//
+// Every field this radio reaches but this row does not speak to is left
+// UNKNOWN, never invented: an import is a statement about a file, and
+// the file did not say.
+func importCHIRPDuplexIcom(line int, cell func(string) string, data *codeplug.ChannelData, caps spec.Capabilities, bank spec.BankID) []LossEntry {
+	var entries []LossEntry
+	hasOffset := reaches(caps, bank, spec.FieldOffset)
+	hasTxFreq := reaches(caps, bank, spec.FieldTxFrequency)
+
+	// Defaults for a row that turns out to say nothing about them.
+	data.Duplex = codeplug.StringField{State: codeplug.Unknown}
+	if hasOffset {
+		data.OffsetHz = codeplug.FreqField{State: codeplug.Unknown}
+	}
+	if hasTxFreq {
+		data.TxFreqHz = codeplug.FreqField{State: codeplug.Unknown}
+	}
+
+	duplexRaw := cell("Duplex")
+	offsetRaw := cell("Offset")
+
+	setDuplex := func(dir spec.DuplexDirection, label string) bool {
+		v, ok := duplexFor(caps, dir)
+		if !ok {
+			entries = append(entries, LossEntry{
+				Line: line, Column: "Duplex", Value: duplexRaw, Action: ActionUnsupported, Blocking: true,
+				Detail: fmt.Sprintf("%s expresses no %s duplex option", caps.Model, label),
+			})
+			return false
+		}
+		data.Duplex = codeplug.StringField{State: codeplug.Known, Value: v}
+		return true
+	}
+
+	switch duplexRaw {
+	case "", "off":
+		if !setDuplex(spec.DuplexOff, "simplex") {
+			break
+		}
+		if hasOffset {
+			// A simplex channel's offset is not "unknown": it is nothing.
+			data.OffsetHz = codeplug.FreqField{State: codeplug.Known, Value: 0}
+		}
+	case "+", "-":
+		dir, label := spec.DuplexUp, "up-shift"
+		if duplexRaw == "-" {
+			dir, label = spec.DuplexDown, "down-shift"
+		}
+		if !setDuplex(dir, label) {
+			break
+		}
+		if !hasOffset {
+			if isNonZeroCHIRPOffset(offsetRaw) {
+				entries = append(entries, LossEntry{
+					Line: line, Column: "Offset", Value: offsetRaw, Action: ActionDropped, Blocking: false,
+					Detail: fmt.Sprintf("%s stores no per-channel repeater offset; the shift direction was kept and the magnitude discarded", caps.Model),
+				})
+			}
+			break
+		}
+		hz, err := parseCHIRPOffsetHz(offsetRaw)
+		if err != nil {
+			entries = append(entries, LossEntry{
+				Line: line, Column: "Offset", Value: offsetRaw, Action: ActionUnsupported, Blocking: true,
+				Detail: fmt.Sprintf("a %s repeater shift needs an offset, and %q is not a decimal MHz value the %s can store", duplexRaw, offsetRaw, caps.Model),
+			})
+			break
+		}
+		data.OffsetHz = codeplug.FreqField{State: codeplug.Known, Value: hz}
+	case "split":
+		if !hasTxFreq {
+			entries = append(entries, LossEntry{
+				Line: line, Column: "Duplex", Value: duplexRaw, Action: ActionUnsupported, Blocking: true,
+				Detail: fmt.Sprintf("split-frequency duplex (independent TX/RX frequencies) has no %s equivalent", caps.Model),
+			})
+			break
+		}
+		// CHIRP carries the absolute TX frequency in the Offset column
+		// for a split row.
+		hz, err := parseCHIRPOffsetHz(offsetRaw)
+		if err != nil {
+			entries = append(entries, LossEntry{
+				Line: line, Column: "Offset", Value: offsetRaw, Action: ActionUnsupported, Blocking: true,
+				Detail: fmt.Sprintf("a split row's Offset column carries the transmit frequency, and %q is not a decimal MHz value the %s can store", offsetRaw, caps.Model),
+			})
+			break
+		}
+		data.TxFreqHz = codeplug.FreqField{State: codeplug.Known, Value: hz}
+		if v, ok := duplexFor(caps, spec.DuplexOff); ok {
+			// A split channel has two frequencies, not a shift.
+			data.Duplex = codeplug.StringField{State: codeplug.Known, Value: v}
+		}
+		if hasOffset {
+			data.OffsetHz = codeplug.FreqField{State: codeplug.Known, Value: 0}
+		}
+	default:
+		entries = append(entries, LossEntry{
+			Line: line, Column: "Duplex", Value: duplexRaw, Action: ActionUnsupported, Blocking: true,
+			Detail: fmt.Sprintf("unrecognised Duplex value %q", duplexRaw),
+		})
+	}
+	return entries
+}
+
+// importCHIRPToneIcom is the Tone mapping for a radio whose bank reaches
+// spec.FieldToneMode — the Icom tier's branch (design D4).
+//
+// What it does that the CTCSS branch cannot: carry the TRANSMIT and
+// RECEIVE tones independently (spec.FieldToneTx / spec.FieldToneRx), and
+// map CHIRP's DTCS row onto a real code and polarity instead of refusing
+// it. CHIRP's "Cross" is mapped only if this radio declares a cross
+// mode, and is otherwise refused with the same blocking entry as before:
+// this tier models the cross MODE, not the combination behind it.
+//
+// A TSQL row sets BOTH tones from cToneFreq, and that is a mapping
+// decision worth stating: tone squelch means transmitting a tone and
+// requiring the same one back, so one CHIRP column genuinely describes
+// both directions. It is not an invention — CHIRP's own semantics say
+// so.
+func importCHIRPToneIcom(line int, cell func(string) string, data *codeplug.ChannelData, caps spec.Capabilities, bank spec.BankID) []LossEntry {
+	var entries []LossEntry
+	hasTxTone := reaches(caps, bank, spec.FieldToneTx)
+	hasRxTone := reaches(caps, bank, spec.FieldToneRx)
+	hasDTCSCode := reaches(caps, bank, spec.FieldDTCSCode)
+	hasDTCSPol := reaches(caps, bank, spec.FieldDTCSPolarity)
+
+	// Unknown everywhere this radio has a field and the row has not yet
+	// spoken.
+	data.ToneMode = codeplug.StringField{State: codeplug.Unknown}
+	if hasTxTone {
+		data.ToneTx = codeplug.ToneField{State: codeplug.Unknown}
+	}
+	if hasRxTone {
+		data.ToneRx = codeplug.ToneField{State: codeplug.Unknown}
+	}
+	if hasDTCSCode {
+		data.DTCSCode = codeplug.IntField{State: codeplug.Unknown}
+	}
+	if hasDTCSPol {
+		data.DTCSPolarity = codeplug.StringField{State: codeplug.Unknown}
+	}
+	// CTCSSTone is PRE-tier, so markUnreachableTierFields — which covers
+	// the tier's ten fields only — never touches it, and this branch is
+	// the one path that reaches a channel without going through
+	// importCHIRPToneCTCSS, the only other place that writes it. Left
+	// alone it would stay ABSENT on every channel imported for a bank
+	// that reaches spec.FieldToneMode: "this channel says nothing at
+	// all", which codeplug.Validate reports as `ToneField: invalid State
+	// ""` on every one of them and codeplug.Diff counts as a
+	// modification in a field the file never mentioned (Wave-1c review 2,
+	// finding N1 — finding 4's defect, one field over).
+	//
+	// The answer is chirpTagDisplay's, for the same reason and by the
+	// same question: a bank that cannot reach spec.FieldCTCSSTone has no
+	// such field for the imported channel to hold — Unavailable, which is
+	// also what a READ of such a radio reports — and a bank that CAN
+	// reach it has the field with the file silent about it, which is
+	// Unknown. The normal Icom shape is the first: this tier's radios
+	// express tones through tone_mode/tone_tx/tone_rx above, and never
+	// list FieldCTCSSTone at all.
+	if reaches(caps, bank, spec.FieldCTCSSTone) {
+		data.CTCSSTone = codeplug.ToneField{State: codeplug.Unknown}
+	} else {
+		data.CTCSSTone = codeplug.ToneField{State: codeplug.Unavailable}
+	}
+
+	toneRaw := cell("Tone")
+	setMode := func(sem spec.ToneModeSemantics, label string) bool {
+		v, ok := toneModeFor(caps, sem)
+		if !ok {
+			entries = append(entries, LossEntry{
+				Line: line, Column: "Tone", Value: toneRaw, Action: ActionUnsupported, Blocking: true,
+				Detail: fmt.Sprintf("%s expresses no %s tone mode", caps.Model, label),
+			})
+			return false
+		}
+		data.ToneMode = codeplug.StringField{State: codeplug.Known, Value: v}
+		return true
+	}
+	// setTone parses one CHIRP tone cell into the named field, reporting
+	// a blocking entry when the value is not in this radio's chart —
+	// the same rule and the same wording the CTCSS branch uses.
+	setTone := func(column, raw string, into *codeplug.ToneField) {
+		if tone, ok := parseCHIRPTone(raw, caps); ok {
+			*into = codeplug.ToneField{State: codeplug.Known, Value: tone}
+			return
+		}
+		entries = append(entries, LossEntry{
+			Line: line, Column: column, Value: raw, Action: ActionUnsupported, Blocking: true,
+			Detail: fmt.Sprintf("tone frequency is not in the %s's CTCSS chart", caps.Model),
+		})
+	}
+
+	switch toneRaw {
+	case "":
+		setMode(spec.ToneModeOff, "off")
+	case "Tone":
+		if !setMode(spec.ToneModeCTCSS, "encode-only") {
+			break
+		}
+		if hasTxTone {
+			setTone("rToneFreq", cell("rToneFreq"), &data.ToneTx)
+		}
+	case "TSQL":
+		if !setMode(spec.ToneModeCTCSSSquelch, "encode+decode") {
+			break
+		}
+		cTone := cell("cToneFreq")
+		if hasRxTone {
+			setTone("cToneFreq", cTone, &data.ToneRx)
+		}
+		if hasTxTone {
+			// Both directions from one column — see this function's doc
+			// comment for why that is CHIRP's own semantics, not a guess.
+			setTone("cToneFreq", cTone, &data.ToneTx)
+		}
+	case "DTCS":
+		if !setMode(spec.ToneModeDTCS, "DTCS") {
+			break
+		}
+		if hasDTCSCode {
+			raw := cell("DtcsCode")
+			code, err := strconv.Atoi(strings.TrimSpace(raw))
+			switch {
+			case err != nil:
+				entries = append(entries, LossEntry{
+					Line: line, Column: "DtcsCode", Value: raw, Action: ActionUnsupported, Blocking: true,
+					Detail: fmt.Sprintf("DtcsCode %q is not a valid code number", raw),
+				})
+			case !capsHasDTCSCode(caps, code):
+				entries = append(entries, LossEntry{
+					Line: line, Column: "DtcsCode", Value: raw, Action: ActionUnsupported, Blocking: true,
+					Detail: fmt.Sprintf("DTCS code %q is not in the %s's code table", raw, caps.Model),
+				})
+			default:
+				data.DTCSCode = codeplug.IntField{State: codeplug.Known, Value: code}
+			}
+		}
+		if hasDTCSPol {
+			raw := strings.TrimSpace(cell("DtcsPolarity"))
+			if capsHasDTCSPolarity(caps, raw) {
+				data.DTCSPolarity = codeplug.StringField{State: codeplug.Known, Value: raw}
+			} else {
+				entries = append(entries, LossEntry{
+					Line: line, Column: "DtcsPolarity", Value: raw, Action: ActionUnsupported, Blocking: true,
+					Detail: fmt.Sprintf("DTCS polarity %q is not one the %s expresses", raw, caps.Model),
+				})
+			}
+		}
+	case "Cross":
+		if !setMode(spec.ToneModeCross, "cross") {
+			break
+		}
+	default:
+		entries = append(entries, LossEntry{
+			Line: line, Column: "Tone", Value: toneRaw, Action: ActionUnsupported, Blocking: true,
+			Detail: fmt.Sprintf("unrecognised Tone value %q", toneRaw),
+		})
+	}
+	return entries
+}
+
+// markUnreachableTierFields sets each tier-added field this bank cannot
+// reach to Unavailable, and leaves the reachable ones alone for the
+// mapping branches to fill in. See its call site for why Unavailable and
+// not the zero value.
+//
+// The two exceptions are Filter and DataMode, which it defaults in BOTH
+// directions because no CHIRP column and therefore no mapping branch
+// speaks to them — see the comment at those two below.
+func markUnreachableTierFields(data *codeplug.ChannelData, caps spec.Capabilities, bank spec.BankID) {
+	if !reaches(caps, bank, spec.FieldTxFrequency) {
+		data.TxFreqHz = codeplug.FreqField{State: codeplug.Unavailable}
+	}
+	if !reaches(caps, bank, spec.FieldDuplex) {
+		data.Duplex = codeplug.StringField{State: codeplug.Unavailable}
+	}
+	if !reaches(caps, bank, spec.FieldOffset) {
+		data.OffsetHz = codeplug.FreqField{State: codeplug.Unavailable}
+	}
+	if !reaches(caps, bank, spec.FieldToneMode) {
+		data.ToneMode = codeplug.StringField{State: codeplug.Unavailable}
+	}
+	if !reaches(caps, bank, spec.FieldToneTx) {
+		data.ToneTx = codeplug.ToneField{State: codeplug.Unavailable}
+	}
+	if !reaches(caps, bank, spec.FieldToneRx) {
+		data.ToneRx = codeplug.ToneField{State: codeplug.Unavailable}
+	}
+	if !reaches(caps, bank, spec.FieldDTCSCode) {
+		data.DTCSCode = codeplug.IntField{State: codeplug.Unavailable}
+	}
+	if !reaches(caps, bank, spec.FieldDTCSPolarity) {
+		data.DTCSPolarity = codeplug.StringField{State: codeplug.Unavailable}
+	}
+	// Filter and DataMode get BOTH answers here, unlike the eight above:
+	// no CHIRP column speaks to either, so no mapping branch below ever
+	// revisits them, and leaving a reachable one at its zero value would
+	// leave it ABSENT — "this channel says nothing at all", which
+	// codeplug.Validate reports as an error on every imported channel and
+	// codeplug.Diff counts as a modification in a field the file never
+	// mentioned (Wave-1c review 1, finding 4). Where the radio HAS the
+	// field the honest answer is Unknown, exactly as
+	// importCHIRPDuplexIcom's doc promises for any field a row does not
+	// speak to: this radio has it, and this file did not say.
+	if reaches(caps, bank, spec.FieldFilter) {
+		data.Filter = codeplug.StringField{State: codeplug.Unknown}
+	} else {
+		data.Filter = codeplug.StringField{State: codeplug.Unavailable}
+	}
+	if reaches(caps, bank, spec.FieldDataMode) {
+		data.DataMode = codeplug.BoolField{State: codeplug.Unknown}
+	} else {
+		data.DataMode = codeplug.BoolField{State: codeplug.Unavailable}
+	}
 }
