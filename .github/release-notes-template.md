@@ -5,20 +5,37 @@
   by a sed pass before this becomes the release body — so do not write
   that placeholder token in this comment, or it gets substituted here
   too and the sentence stops making sense. Keep this file in sync with
-  README.md's quick-start section and docs/hardware-notes.md /
-  docs/linux-setup.md / docs/menu-write-decision.md, which it cites
-  rather than restates.
+  README.md's "Install" and "Getting started" sections and
+  docs/hardware-notes.md / docs/linux-setup.md /
+  docs/menu-write-decision.md, which it cites rather than restates.
 
   SYNCED WITH THE PUBLISHED v1.0.0 RELEASE (09/08/2026): the v1.0.0
   Release body was authored from this template and this file was then
   updated to match it — four registered models with the per-model
-  support table; the AppImage row removed (its build job is Linux-CI-
-  only and Actions is dormant; restore the row if that changes); the
-  old "Status of this draft" publish-gate section replaced by the
-  honest evidence-status section (the Linux real-radio session has
-  still not run and the notes say so plainly). If a future release
-  ships an AppImage or lands Linux hardware evidence, update both the
-  Downloads table and that section.
+  support table; the old "Status of this draft" publish-gate section
+  replaced by the honest evidence-status section (the Linux real-radio
+  session has still not run and the notes say so plainly).
+
+  SYNC 22/08/2026: the Linux GUI now ships as a Debian package, so the
+  Downloads table carries an amd64 and an arm64 deb row, built by
+  release.yml's gui-linux job. The consent prose was corrected — writes
+  to the three FTdx models are opt-in, not disarmed, and have been
+  since the unverified-writes consent work landed; the wording now
+  follows README.md's "Unverified writes" section. Linux hardware
+  evidence is still pending: the evidence-status section says so, and
+  must keep saying so until a real-radio Linux session has run.
+
+  SYNC 26/08/2026: the packaged binaries HAVE now been launch-tested.
+  Rehearsal debs built by release.yml were installed on clean Ubuntu
+  24.04.4 desktop VMs on both architectures (arm64 23/08/2026, amd64
+  the same day) — desktop entry, Demo connection and version stamp on
+  each; the full Demo edit/Send workflow on arm64 — so the
+  evidence-status section no longer says they are untested. No radio
+  was attached: real-radio Linux evidence is still pending, and that
+  half of the bullet must keep saying so.
+  The install-time dependency sentence in the Downloads section was
+  also softened, because both GUI libraries were already present on
+  the stock desktop image and the VMs never made apt fetch them.
 
   UPDATED AT THE ICOM TIER'S CLOSE (28/08/2026): the per-model support
   table now carries ten registered models (the four from v1.0.0 plus
@@ -26,14 +43,19 @@
   Yaesu-specific "99 regular memories plus the 9 PMS pairs" description
   and per-model menu-address counts in "What it does" are scoped to the
   Yaesu models only — the Icom tier has no menu-settings feature and a
-  different, per-model memory-slot shape.
+  different, per-model memory-slot shape. The consent prose the
+  22/08/2026 sync corrected now covers all nine manual-derived models
+  rather than the three FTdx ones alone, and the two Icom models that
+  discover their memories by a bounded walk carry a footnote under the
+  table. The AppImage notes the v1.0.0 sync above used to carry are
+  gone with that sync's rewrite: the Debian packages took the Linux
+  GUI row, so there is no AppImage decision left to restore.
 -->
 
 Open Rig Programmer __VERSION__ — an open-source, cross-platform
 memory-channel programmer for the Yaesu FT-710, built as a free
 alternative to RT Systems' YPS-FT710, with nine further Yaesu and Icom
-models registered, their writes gated behind opt-in consent (see
-below).
+models registered for reading and for opt-in writes (see below).
 
 ## What it does
 
@@ -62,15 +84,15 @@ below).
 | Model | Read channels | Write channels | Read menu settings | Evidence |
 | --- | --- | --- | --- | --- |
 | FT-710 | Yes | Yes | Yes | Proven against real hardware (`docs/hardware-notes.md`) |
-| FTdx10 | Yes | ⚠️ opt-in | Yes | CAT manual + simulator only; no real radio has been connected |
-| FTdx101D | Yes | ⚠️ opt-in | Yes | CAT manual + simulator only; no real radio has been connected |
-| FTdx101MP | Yes | ⚠️ opt-in | Yes | CAT manual + simulator only; no real radio has been connected |
-| IC-7610 | Yes | ⚠️ opt-in | No | CI-V guide + simulator only; no real radio has been connected |
-| IC-7300 | Yes | ⚠️ opt-in | No | CI-V guide + simulator only; no real radio has been connected |
-| IC-7300MK2 | Yes | ⚠️ opt-in | No | CI-V guide + simulator only; no real radio has been connected |
-| IC-705 | Yes\* | ⚠️ opt-in | No | CI-V guide + simulator only; no real radio has been connected |
-| IC-9700 | Yes | ⚠️ opt-in | No | CI-V guide + simulator only; no real radio has been connected |
-| IC-905 | Yes\* | ⚠️ opt-in | No | CI-V guide + simulator only; no real radio has been connected |
+| FTdx10 | Yes | ⚠️ **Opt-in** (unverified writes, off by default) | Yes | CAT manual + simulator only; no real radio has been connected |
+| FTdx101D | Yes | ⚠️ **Opt-in** (unverified writes, off by default) | Yes | CAT manual + simulator only; no real radio has been connected |
+| FTdx101MP | Yes | ⚠️ **Opt-in** (unverified writes, off by default) | Yes | CAT manual + simulator only; no real radio has been connected |
+| IC-7610 | Yes | ⚠️ **Opt-in** (unverified writes, off by default) | No | CI-V guide + simulator only; no real radio has been connected |
+| IC-7300 | Yes | ⚠️ **Opt-in** (unverified writes, off by default) | No | CI-V guide + simulator only; no real radio has been connected |
+| IC-7300MK2 | Yes | ⚠️ **Opt-in** (unverified writes, off by default) | No | CI-V guide + simulator only; no real radio has been connected |
+| IC-705 | Yes\* | ⚠️ **Opt-in** (unverified writes, off by default) | No | CI-V guide + simulator only; no real radio has been connected |
+| IC-9700 | Yes | ⚠️ **Opt-in** (unverified writes, off by default) | No | CI-V guide + simulator only; no real radio has been connected |
+| IC-905 | Yes\* | ⚠️ **Opt-in** (unverified writes, off by default) | No | CI-V guide + simulator only; no real radio has been connected |
 
 \* IC-705 and IC-905 each discover their memory channels by a BOUNDED
 default walk rather than a read of the whole address space (a
@@ -79,14 +101,26 @@ that walk's range is simply not read; its absence is not evidence the
 channel is empty. See README.md's *Icom models* section for each
 model's exact bound.
 
-Writes to the nine manual-derived models are held behind an *opt-in*
-consent gate: unless you deliberately grant unverified-write consent
-for a specific model (`rigprog settings unverified-writes <model>
-on` — see README.md's *Unverified writes* section for the full
-mechanism), nothing is writable on a real-hardware session for it.
-Each of those drivers carries a register of every assumption it makes
-and the specific capture from a real radio that would verify it — if
-you own one of these radios and want to help, open an issue.
+Writes to the nine manual-derived models are refused until you enable
+unverified writes for that radio, one radio at a time — `rigprog
+settings unverified-writes <model> on` (say `rigprog settings
+unverified-writes FTdx10 on`, or `rigprog settings unverified-writes
+IC-7610 on`), or in the GUI the question it asks once just after you
+first connect to such a radio, or its *Unverified writes…* button at
+any time. Both faces read and write one settings file
+(`rigprog/settings.json` under your user configuration directory), so
+a decision made in either holds for both, and an "off" is stored
+rather than forgotten. "Unverified" means documented in the
+manufacturer's own CAT or CI-V reference and exercised against a
+simulator here, not proven on a real radio. The FT-710 is unaffected:
+its writes are hardware-verified, so it has nothing to consent to.
+Consent changes what the tool is allowed to send, not how it sends it
+— the read-before-write, the snapshot, the reviewed diff and the
+per-channel verify all still run; README.md's *Unverified writes*
+section has the full mechanism. Each of the nine drivers carries a
+register of every assumption it makes and the specific capture from a
+real radio that would verify it — if you own one of these radios and
+want to help, open an issue.
 
 ## What it deliberately does not do
 
@@ -113,11 +147,20 @@ you own one of these radios and want to help, open an issue.
 | macOS (Intel + Apple Silicon, universal) | CLI | `rigprog-__VERSION__-darwin-universal.tar.gz` |
 | Linux amd64 | CLI | `rigprog-__VERSION__-linux-amd64.tar.gz` |
 | Linux arm64 | CLI | `rigprog-__VERSION__-linux-arm64.tar.gz` |
+| Linux amd64 (Debian/Ubuntu/Mint) | GUI + CLI (.deb) | `open-rig-programmer___VERSION_NO_V___amd64.deb` |
+| Linux arm64 (Debian/Ubuntu/Mint) | GUI + CLI (.deb) | `open-rig-programmer___VERSION_NO_V___arm64.deb` |
 
-There is **no Linux GUI AppImage in this release**: its build job runs
-only on Linux CI, which is not in use for this release. Linux users
-have the CLI, or can build the GUI from source (`wails build` in
-`app/`; see `docs/linux-setup.md` for the build dependencies).
+Either Debian package installs the GUI, the `rigprog` CLI, a desktop
+entry and the ModemManager udev rule; `sudo apt install ./<file>`
+resolves `libwebkit2gtk-4.1-0` and GTK 3 if they are missing. On a
+stock Ubuntu 24.04 desktop both were already installed, so the install
+fetched nothing extra; a minimal or server image, which would have to
+pull the WebKit runtime in, has not been tried. That WebKit runtime
+package exists on Ubuntu 22.04 and later, on Debian 12 and later, and
+on the Mint releases built from those — not on anything older. On
+other distributions, take the CLI tarball or build the GUI from source
+(`wails build -tags webkit2_41` in `app/`); either way,
+`docs/linux-setup.md` covers the serial-port setup.
 
 `SHA256SUMS` (attached below) covers every file above. Verify with:
 
@@ -150,12 +193,14 @@ opens normally.
 ## Linux: serial port access
 
 - Add yourself to the `dialout` group and log out/in (or `newgrp
-  dialout`) before the CLI can open the radio's serial port:
-  `sudo usermod -aG dialout "$USER"`.
+  dialout`) before either the GUI or the CLI can open the radio's
+  serial port: `sudo usermod -aG dialout "$USER"`.
 - ModemManager can probe a newly-plugged serial adapter and interfere
   with it; excluding the radio's USB-serial bridge from ModemManager
-  via udev is recommended. See `docs/linux-setup.md` for the full
-  instructions and a ready-to-use udev rule.
+  via udev is recommended. The Debian packages install that rule for
+  you; for the CLI tarball or a build from source, create it by hand —
+  `docs/linux-setup.md` has the full instructions and a ready-to-use
+  rule.
 
 ## What the hardware evidence covers — read this
 
@@ -168,16 +213,33 @@ One radio, one region, one firmware version.
 What this release has **not** been exercised against:
 
 - **Linux with a real radio.** The Linux CLI binaries are
-  cross-compiled and version-stamp-verified, and the serial stack is
-  the same code, but no real-radio session has been run on Linux yet.
-  `docs/linux-setup.md` carries the port-setup instructions; treat the
-  first Linux session as exploratory and read-only first.
+  cross-compiled (the version stamp is asserted on the amd64 binary,
+  which the build runner can execute; arm64 takes the same ldflags),
+  and the serial stack is the same code on every platform. The Linux
+  GUI is built from the same source on every push to main and every
+  pull request, and launched under Xvfb on an amd64 CI runner to
+  prove it starts; the release build packages it into the
+  Debian packages above, whose contents the same release build then
+  checks. The packaged GUI and CLI have since been installed from the
+  Debian packages this project's release workflow built at the
+  v1.1.0-rc.1 rehearsal tag, onto clean Ubuntu 24.04 desktop virtual
+  machines (23/08/2026) on **both** architectures, and
+  launched there — GUI started from its installed desktop entry,
+  connected to the built-in Demo radio, and the version stamp read
+  back from the running binaries on each. What none of that
+  involved is a radio: **no real-radio session has been run on Linux**,
+  so which serial node is the CAT port, and whether the packaged udev
+  rule keeps ModemManager off it, are both unconfirmed.
+  `docs/linux-setup.md` carries the port-setup instructions and the
+  full status; treat the first Linux session as exploratory and
+  read-only first.
 - **Any FTdx10, FTdx101D or FTdx101MP.** Everything about those three
   models is derived from the manufacturer's CAT reference manuals
   through a documented transcription-and-cross-check process, and
   exercised against simulators built independently from the same
   manuals. No real radio of any of the three has ever been connected.
-  That is why their writes need your explicit opt-in consent.
+  That is why their writes are opt-in rather than on by default,
+  needing your explicit consent.
 - **Any IC-7610, IC-7300, IC-7300MK2, IC-705, IC-9700 or IC-905.**
   Everything about these six models is derived from Icom's published
   CI-V Reference Guides through the same kind of documented process,
@@ -187,6 +249,6 @@ What this release has **not** been exercised against:
 
 Anything the project has not observed is labelled as such in the code
 and documentation rather than assumed. Reports from real hardware —
-especially the nine opt-in-write models, and the FT-710 on Linux —
-are the most valuable contribution this project can receive right
-now.
+especially the nine manual-derived, opt-in-write models, and the
+FT-710 on Linux — are the most valuable contribution this project can
+receive right now.
