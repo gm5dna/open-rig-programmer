@@ -65,15 +65,31 @@
 // arithmetic separately, as arithmetic, rather than claiming it is what
 // fires.
 //
-// THE CONSEQUENCE IS IN THE DRIVERS, and it is worth stating plainly:
-// core/driver/ic705/ic705.go:360-367 and core/driver/ic9700/ic9700.go's
-// probeFingerprint both branch on errors.As(&lenErr) to mint a
-// driver.WrongRadioError, and FOR THIS PAIR THAT BRANCH CAN NEVER FIRE.
-// An IC-9700 moved onto A4h fails an IC-705 open with an unattributed
-// address parse error, not with "wrong radio" — the open still fails,
-// which is the safety property, but the diagnosis a user sees names no
-// model. That is a reporting limitation, recorded here rather than
+// THE CONSEQUENCE IS IN ONE DRIVER, and only one. Of this pair, only
+// core/driver/ic705/ic705.go:360-367 branches on errors.As(&lenErr) to
+// mint a driver.WrongRadioError, and FOR THIS PAIR THAT BRANCH CAN NEVER
+// FIRE: an IC-9700 moved onto A4h fails an IC-705 open with an
+// unattributed address parse error, not with "wrong radio". The open
+// still fails, which is the safety property, but the diagnosis a user
+// sees names no model — a reporting limitation, recorded rather than
 // papered over, and NOT a hole in the refusal.
+//
+// THE IC-9700 MINTS NO driver.WrongRadioError AT ALL, for any pair, BY
+// DESIGN — not merely because this pair pre-empts it.
+// core/driver/ic9700/ic9700.go's probeFingerprint wraps every error from
+// MemoryAnswerRecord generically, its doc.go says so in as many words
+// ("No driver.WrongRadioError is ever minted here"), and that package's
+// TestUnexpectedLengthIsRefusedWithoutAttribution pins it: naming a model
+// from {111} would be the cross-model claim no per-model worktree may
+// make, which is the reason this file exists. Nothing here changes that,
+// and this file mints nothing of its own.
+//
+// The three drivers that DO mint one on a length mismatch are the IC-7300
+// and IC-7300MK2 (each with a one-entry sibling hint for the other,
+// rendered *provisional*) and the IC-905 (whose attribution comes from a
+// caller-supplied WithSiblingRecordLengths table — which no registered
+// composition passes, so its refusal today populates neither model field
+// and renders as the ID-only form).
 //
 // AND EVERY NUMBER HERE IS AN ASSUMED DERIVATION. No document in this
 // tier prints a record total; each per-model package derives its length

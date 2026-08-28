@@ -415,7 +415,9 @@ func decodeHexToken(token string) []byte {
 // address width, and core/civ/tier_test.go sweeps every address either
 // radio has, in both directions: the refusal is a *civ.ParseError every
 // time and a *civ.RecordLengthError never. The open still fails, which is
-// the safety property; it simply fails unattributed.
+// the safety property. Nothing is lost in attribution either way — this
+// driver names no model on ANY refusal, by design (doc.go, "What this
+// package does NOT claim").
 func probeFingerprint(ctx context.Context, p civ.Profile, eng *transport.Engine) (bool, int, error) {
 	mismatches := 0
 	for ch := 1; ch <= probeSearchChannels; ch++ {
