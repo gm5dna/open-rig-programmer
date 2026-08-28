@@ -962,8 +962,12 @@ type waitOutcome struct {
 // nextEvent begins its blocking select; nextEventAfterClose covers the
 // narrower window where that select is already blocked when the reader
 // queues a complete reply and then reports EOF. Both checks are required
-// to make "deliver every older queued event before honouring closure"
-// deterministic rather than a coin flip.
+// to make "hand every already-queued event to the caller before honouring
+// closure" deterministic rather than a coin flip. A queued event is only a
+// CANDIDATE: it goes through the caller's normal matching, rejection and
+// error handling like any other, since the reader may enqueue its own
+// terminal error after closing closeCh, and a stale or unsolicited frame
+// can sit in the queue too.
 //
 // capC is the deadline's other half, and only drainToQuietLocked passes a
 // non-nil one. The clock comparison above bounds a caller whose events
@@ -1006,10 +1010,12 @@ func (e *Engine) nextEvent(ctx context.Context, timeout <-chan time.Time, deadli
 }
 
 // nextEventAfterClose resolves the blocked-select race described by
-// nextEvent: the reader queues complete frames before it closes the port,
-// so an event visible now is older than the closure and still belongs to
-// the current exchange. TestEngine_NextEventAfterClose_PrefersQueuedReply
-// pins this ordering without scheduler timing.
+// nextEvent: the reader queues a complete reply before it reports the port
+// closed, so an event visible now was queued no later than the closure and
+// must reach the caller's normal processing before ErrPortClosed is
+// surfaced — once the queue is empty, closure is reported.
+// TestEngine_NextEventAfterClose_PrefersQueuedReply pins this ordering
+// without scheduler timing.
 func (e *Engine) nextEventAfterClose() waitOutcome {
 	select {
 	case ev := <-e.events:
