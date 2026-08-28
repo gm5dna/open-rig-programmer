@@ -125,6 +125,41 @@ func TestCmdImport_MissingOut(t *testing.T) {
 	}
 }
 
+// TestCmdImport_CSVNormalisesExplicitAbsentTierField pins the CLI CSV-import
+// root's capability pass: csvio preserves the explicit "absent" marker, but
+// the selected FT-710 cannot reach tx_frequency, so the saved merge must key
+// it Unavailable (the regression for task R2's deferred CLI-import gap).
+func TestCmdImport_CSVNormalisesExplicitAbsentTierField(t *testing.T) {
+	base := buildValidBase()
+	source := buildValidBase()
+	source.Channels[0].Data.TxFreqHz = codeplug.FreqField{State: codeplug.Absent}
+	source.Channels[0].Data.Duplex = codeplug.StringField{State: codeplug.Unknown}
+	csvPath := filepath.Join(t.TempDir(), "explicit-absent.csv")
+	f, err := os.Create(csvPath)
+	if err != nil {
+		t.Fatalf("creating CSV fixture: %v", err)
+	}
+	if err := csvio.Export(f, source.Channels); err != nil {
+		t.Fatalf("csvio.Export fixture: %v", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatalf("closing CSV fixture: %v", err)
+	}
+	basePath := saveFixture(t, base, "base.json")
+	outPath := filepath.Join(t.TempDir(), "out.json")
+	var stdout, stderr bytes.Buffer
+	if got := cmdImport([]string{"--csv", csvPath, "--into", basePath, "--out", outPath}, &stdout, &stderr); got != exitSuccess {
+		t.Fatalf("cmdImport(explicit absent) = %d, want exitSuccess (%d); stdout=%q stderr=%q", got, exitSuccess, stdout.String(), stderr.String())
+	}
+	got, err := codeplug.Load(outPath)
+	if err != nil {
+		t.Fatalf("codeplug.Load(output): %v", err)
+	}
+	if got.Channels[0].Data.TxFreqHz.State != codeplug.Unavailable {
+		t.Errorf("saved tx_frequency state = %q, want Unavailable", got.Channels[0].Data.TxFreqHz.State)
+	}
+}
+
 func TestCmdImport_UnexpectedArgument(t *testing.T) {
 	base := saveFixture(t, buildValidBase(), "base.json")
 	out := filepath.Join(t.TempDir(), "out.json")
