@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Open Rig Programmer
+Comment=Memory-channel programmer for Yaesu and Icom transceivers
+Exec=open-rig-programmer
+Icon=open-rig-programmer
+Terminal=false
+Categories=Utility;HamRadio;
+StartupWMClass=open-rig-programmer

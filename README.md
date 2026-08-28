@@ -302,13 +302,30 @@ Download from the [Releases page](../../releases):
 | macOS CLI | `rigprog-<version>-darwin-universal.tar.gz` |
 | Linux CLI (x86-64) | `rigprog-<version>-linux-amd64.tar.gz` |
 | Linux CLI (ARM64) | `rigprog-<version>-linux-arm64.tar.gz` |
+| Linux GUI+CLI .deb (x86-64) | `open-rig-programmer_<version-without-v>_amd64.deb` |
+| Linux GUI+CLI .deb (ARM64) | `open-rig-programmer_<version-without-v>_arm64.deb` |
+
+`<version>` is the release tag exactly as it appears (`v1.1.0`);
+`<version-without-v>` is that same string with the leading `v` dropped
+(`1.1.0`), because Debian package filenames carry no `v`.
 
 macOS GUI first run: the app is ad-hoc signed, so Gatekeeper refuses
 a plain double-click. **Right-click the app and choose Open** the
 first time; after that it opens normally.
 
-The Linux CLI binaries are static — download, untar, run. There is no
-packaged Linux GUI yet; it can be built from source (see below).
+The Linux CLI binaries are static — download, untar, run. On Debian,
+Ubuntu and Mint the `.deb` is the whole install in one step: the GUI,
+the `rigprog` CLI, a desktop entry and the ModemManager udev rule.
+Install it with `sudo apt install ./<the downloaded .deb>`, which
+resolves the WebKitGTK and GTK libraries it needs if they are missing
+— on a stock Ubuntu 24.04 desktop both were already there, so the
+install pulled nothing extra; a minimal or server image, where apt
+would have to fetch them, has not been tried. Those libraries exist
+from Ubuntu 22.04 and Debian 12 onwards (and the Mint releases built
+from those); the package itself is built and checked on Ubuntu 24.04,
+and installs on other releases have not yet been tried. On other
+distributions, take the static CLI tarball or build the GUI from
+source (see below).
 
 `SHA256SUMS` on the release page lets you verify any download.
 
@@ -323,13 +340,16 @@ shows up with two serial ports; the *Enhanced* one is the CAT port,
 and conveniently it is the only one that opens on macOS, so you
 cannot land on the wrong one.
 
-**Serial, Linux**: add yourself to the `dialout` group
-(`sudo usermod -aG dialout "$USER"`, then log out and in) and keep
-ModemManager away from the radio with a udev rule — full
-instructions, including a ready-made rule for the CP2105, in
+**Serial, Linux**: joining the `dialout` group
+(`sudo usermod -aG dialout "$USER"`, then log out and in) is the one
+manual step. Keeping ModemManager away from the radio needs a udev
+rule, and the `.deb` installs that rule for you; tarball and
+from-source users still create it by hand. That rule, and the rest of
+the port setup, is in
 [docs/linux-setup.md](docs/linux-setup.md). (Fair warning: the Linux
-instructions have not yet been verified against real hardware — see
-that document's Status section.)
+instructions have not yet been verified against real hardware, though
+the packaged install itself has been exercised on Ubuntu 24.04 virtual
+machines — see that document's Status section.)
 
 **A CLI session** looks like this:
 
