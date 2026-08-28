@@ -74,9 +74,11 @@ models registered for reading and for opt-in writes (see below).
   reason rather than attempted.
 - **CSV and CHIRP import/export**, with a report of anything a CHIRP
   file cannot express.
-- **Read the radio's menu (EX) settings** into the same file and view
-  or export them — every documented menu address for the connected
-  model (FT-710: 296; FTdx10: 197; FTdx101D/MP: 193).
+- **Read the radio's menu (EX) settings**, on the Yaesu models, into
+  the same file and view or export them — every documented menu
+  address for the connected model (FT-710: 296; FTdx10: 197;
+  FTdx101D/MP: 193). None of the six Icom drivers expose a settings
+  surface.
 - Both a **desktop GUI** and a **`rigprog` CLI**, sharing one core.
 
 ## Supported radios, and what "supported" means for each
@@ -131,9 +133,14 @@ want to help, open an issue.
   establishes what the radio accepts in the write direction. The
   reasoning, and what would have to change to revisit it, is in
   `docs/menu-write-decision.md`.
-- **It cannot erase a channel over CAT.** These radios have no CAT
-  erase command; the app says so, and tells you the front-panel
-  procedure, rather than silently doing nothing.
+- **It cannot erase a channel over CAT.** The four Yaesu models have
+  no CAT erase command at all; the app says so, and tells you the
+  front-panel procedure, rather than silently doing nothing. The six
+  Icom models are different: their CI-V references print a clear form
+  for a memory channel, but this project deliberately ships no erase
+  builder for any of them — spec D1 admits exactly three builders per
+  driver (ID read, memory read, memory set), and a clear/erase frame
+  is not one of them (`core/civ/doc.go:64`).
 - **It does not read per-channel CTCSS tone frequencies.** The FT-710
   does not report them over CAT (established against real hardware —
   `docs/hardware-notes.md`), so the app preserves whatever is on the
