@@ -21,20 +21,23 @@ import (
 type Identity struct {
 	// CATID is a CAT ID (four hex digits on Yaesu; the CI-V address,
 	// optionally with a recorded token, on Icom), e.g. "0800" for an
-	// FT-710 from its ID; probe, or "98:<token>" for an IC-7610 from its
+	// FT-710 from its ID; probe, or "98<token>" for an IC-7610 from its
 	// 19 00 probe.
 	//
 	// The tier's CATID casing is NOT uniform, and each model's own
 	// convention is fixed rather than chosen per session: the IC-7610,
 	// IC-7300 and IC-7300MK2 render their CI-V address in lower case
-	// ("98", "94:<token>", "b6:<token>"), while the IC-705, IC-9700 and
-	// IC-905 render theirs in upper case ("A4:<token>", "A2" or
-	// "A2/<TOKEN>", "AC:<TOKEN>"). Comparisons against CATID are exact
+	// ("98<token>", "94:<token>", "b6:<token>"), while the IC-705,
+	// IC-9700 and IC-905 render theirs in upper case ("A4:<token>", "A2"
+	// or "A2/<TOKEN>", "AC:<TOKEN>"). Comparisons against CATID are exact
 	// case per model — internal/wiring's per-model identity test
-	// (TestOpenFakeSessionFor_EveryRegisteredModel) does a plain string
-	// equality against each model's own declared Capabilities().CATID,
-	// so a driver that rendered its own address in the wrong case would
-	// fail that check against itself, never against another model.
+	// (TestOpenFakeSessionFor_EveryRegisteredModel) accepts either an
+	// EXACT match against Capabilities().CATID or, when that static
+	// value is exactly the two-character address alone (every CI-V
+	// model's is), a session CATID with that address as an exact-case
+	// PREFIX — so a driver that rendered its own address in the wrong
+	// case would fail this check against itself, never against another
+	// model.
 	CATID string
 	// USBSerial is the USB device serial number from port discovery
 	// (transport.PortInfo.USBSerial); "" when the port is not USB or the

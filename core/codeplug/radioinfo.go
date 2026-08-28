@@ -11,7 +11,7 @@ type RadioInfo struct {
 	Model string `json:"model"`
 	// CATID is a CAT ID (four hex digits on Yaesu; the CI-V address,
 	// optionally with a recorded token, on Icom), e.g. "0800" for an
-	// FT-710 or "98:<token>" for an IC-7610 session. See
+	// FT-710 or "98<token>" for an IC-7610 session. See
 	// core/driver.Identity.CATID for the tier's casing convention.
 	CATID string `json:"cat_id"`
 	// ReadAt is when this data was read from the radio.

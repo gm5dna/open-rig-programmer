@@ -31,10 +31,14 @@ from Yaesu's published CAT manuals and tested against protocol
 simulators — no physical FTdx10 or FTdx101 has been connected to this
 project. The same is true of every Icom model: IC-7610, IC-7300,
 IC-7300MK2, IC-705, IC-9700 and IC-905 were all built from Icom's
-published CI-V Reference Guides and tested against simulators built
-independently from the same documents — no physical example of any of
-the six has been connected to this project either (see *Icom models*
-below for what that costs each of them specifically). Reading is safe
+published documentation and tested against simulators built
+independently from it — a standalone CI-V Reference Guide for five of
+the six, and the IC-7300's own CI-V chapter (§19) inside its Full
+Manual, since Icom prints no standalone CI-V guide for that model (see
+*Protocol references* below for each model's exact citation) — no
+physical example of any of the six has been connected to this project
+either (see *Icom models* below for what that costs each of them
+specifically). Reading is safe
 by design (the tool only ever sends documented read commands to them),
 and the write path stays shut unless you deliberately open it, one
 radio at a time. If you own one and want to help run the same
@@ -94,11 +98,18 @@ Three costs are shared by all six:
 - **No `--civ-address` option.** Each driver talks only to its one
   factory CI-V address (98h IC-7610, 94h IC-7300, B6h IC-7300MK2, A4h
   IC-705, A2h IC-9700, ACh IC-905) and there is no setting to change
-  it. A radio moved to a different address — or a different Icom model
-  sharing this one's address — simply does not answer, and the open
-  times out rather than misidentifying it
-  (`internal/radiotext/radiotext.go:500,610,719,832,963,1111`;
-  `core/driver/ic7610/doc.go:187-193`; `core/civ/ic905/consts.go:15`).
+  it. Two different things can happen when this driver meets a radio
+  it did not expect. A different Icom model at ITS OWN factory address
+  simply does not answer — nothing was heard from, so nothing can be
+  attributed, and Open reports a plain timeout. A radio (of any model)
+  actually sitting ON this driver's one address IS caught: the probe's
+  address-geometry and record-length fingerprint refuses it as a wrong
+  radio — though that refusal can itself be unattributed, naming no
+  model, when the two records' address widths differ (an IC-9700 moved
+  onto A4h fails an IC-705 open as an unattributed address parse
+  error, not as a named wrong-radio refusal)
+  (`core/driver/ic7610/doc.go:188-192`; `core/driver/ic7300/doc.go:229-234`;
+  `core/civ/tier_test.go:27-33,68-75`).
 - **The tone picker stays list-driven while every model's tone range
   is numeric (enabler E3).** All six declare a numeric
   `CTCSSToneRange` rather than a fixed tone chart, because their tone
@@ -109,16 +120,33 @@ Three costs are shared by all six:
   same declaration in each of the other four models' own `caps.go`).
 - **A channel outside the write gate's template is refused, never
   silently changed (ruling E6).** Every one of the six records carries
-  at least one region no `codeplug` field maps — most often the
-  SELECT-scan-group nibble. A slot may be written only when those
-  unmapped regions already match the profile's template; a channel
-  already in a Select group (or, on the IC-7300/IC-7300MK2, a
-  Split-ON channel, whose split flag shares the SELECT nibble's byte)
-  cannot be written by this program at all — the write is refused,
-  naming the reason, never downgraded or cleared
-  (`core/driver/ic7610/doc.go:220-249`; `core/driver/ic7300/doc.go:160-182`;
-  `core/driver/ic7300mk2/doc.go:173-197`; `core/driver/ic705/write.go:265-280`;
-  `core/driver/ic9700/write.go:477-486`; `core/driver/ic905/write.go:578-590`).
+  at least one region no `codeplug` field maps, and a slot may be
+  written only when those unmapped regions already match the
+  profile's template. What that costs differs by model:
+  - **IC-7610, IC-705, IC-9700, IC-905**: a channel already in a
+    Select scan group (★1/★2/★3) cannot be written by this program at
+    all — the SELECT nibble is unmapped and there is no honest value
+    to preserve, so the write is refused, naming the reason
+    (`core/driver/ic7610/doc.go:220-249`; `core/driver/ic705/write.go:265-280`;
+    `core/driver/ic9700/write.go:529-531`; `core/driver/ic905/write.go:578-590`).
+    The IC-7610 additionally refuses a channel whose data mode is
+    DATA 1/2/3, for the same unmapped-nibble reason
+    (`core/driver/ic7610/doc.go:235-238`).
+  - **IC-7300 and IC-7300MK2**: a Select-group channel writes
+    normally — the SELECT nibble round-trips, carried through
+    unchanged from the record the radio holds
+    (`core/driver/ic7300/write.go:455-477`;
+    `core/driver/ic7300mk2/write.go:463-485`). What is refused instead
+    is a Split-ON channel: it reads normally but cannot be written
+    back, because the split flag shares record byte ③ with the SELECT
+    nibble and the profile leaves the whole byte's high nibble
+    unmapped (`core/driver/ic7300/doc.go:174-178`;
+    `core/driver/ic7300mk2/doc.go:187-195`). Both also refuse a CREATE
+    into an empty slot, since the SELECT nibble has no honest default
+    to write (`core/driver/ic7300/write.go:433`;
+    `core/driver/ic7300mk2/write.go:441`).
+  In every case the write is refused, naming the reason, never
+  downgraded or cleared.
 
 All six open at 19200 baud by default, but what grades that default
 differs, and none of it is a reading of a printed factory value:
@@ -135,7 +163,7 @@ differs, and none of it is a reading of a printed factory value:
   (`core/driver/ic7300mk2/doc.go:301-317`).
 - **IC-705** — ASSUMED, and so is the whole baud list: this radio's
   CI-V Reference Guide prints no baud information for the CI-V port at
-  all (`core/driver/ic705/doc.go:60-67`).
+  all (`core/driver/ic705/caps.go:197-205`; matrix §1 #9).
 - **IC-9700** — ASSUMED, the middle of the six rates this guide
   prints; the guide itself defers the factory setting to the
   instruction manual, which this project does not hold
@@ -159,7 +187,7 @@ What is specific to one or two models:
   exchanges); `WithFullInventoryWalk()` widens it to the whole space
   (10,000 exchanges), but that option has no `rigprog` flag and no GUI
   control — it can only be reached by code that imports the driver
-  package directly (`internal/fakeic705/inventory.go:12-16`;
+  package directly (`core/driver/ic705/inventory.go:12-16`;
   `core/driver/ic705/ic705.go:52-65`).
 - **IC-705's CALL-group channel cap is narrower in practice than in
   the protocol layer.** This radio only documents CALL-group channels
@@ -201,10 +229,13 @@ What is specific to one or two models:
 
 ## What it does
 
-- Reads the whole memory surface — the 99 regular memories, the 9
-  PMS (programmable memory scan) pairs, and on radios that have them
-  the fixed 60 m and emergency channels — into a **codeplug file**
-  you can keep, diff, and edit.
+- Reads the whole memory surface into a **codeplug file** you can
+  keep, diff, and edit. On the Yaesu models this is the 99 regular
+  memories, the 9 PMS (programmable memory scan) pairs, and on radios
+  that have them the fixed 60 m and emergency channels, all over CAT.
+  Each Icom model has its own CI-V memory-slot shape instead (see the
+  *Icom models* section above for what "the whole memory surface"
+  means, and what it costs to discover, on each one).
 - A channel grid in the GUI with keyboard navigation, paste, and
   per-column editors — or export/import **CSV** and edit anywhere.
 - **CHIRP CSV import**, so an existing channel list can come across
@@ -374,10 +405,10 @@ git config core.hooksPath scripts/git-hooks
 
 | Path | Contents |
 | --- | --- |
-| `core/` | The library: CAT codec (`cat`, plus `cat/ftdx10`, `cat/ftdx101`), capability model (`spec`), codeplug model and diff (`codeplug`), CSV I/O (`csvio`), serial transport (`transport`), radio drivers (`driver/ft710`, `driver/ftdx10`, `driver/ftdx101`), and the safe send choreography (`clone`). |
+| `core/` | The library: CAT codec (`cat`, plus `cat/ftdx10`, `cat/ftdx101`) for the Yaesu models, CI-V codec (`civ`, plus `civ/ic7610`, `civ/ic7300`, `civ/ic7300mk2`, `civ/ic705`, `civ/ic9700`, `civ/ic905`) for the Icom models, capability model (`spec`), codeplug model and diff (`codeplug`), CSV I/O (`csvio`), serial transport (`transport`), radio drivers (`driver/ft710`, `driver/ftdx10`, `driver/ftdx101` for Yaesu; `driver/ic7610`, `driver/ic7300`, `driver/ic7300mk2`, `driver/ic705`, `driver/ic9700`, `driver/ic905` for Icom), and the safe send choreography (`clone`). |
 | `cmd/rigprog/` | The CLI. |
 | `app/` | Wails v2 + Svelte desktop GUI. |
-| `internal/` | The radio simulators (`fakeradio`, `fakedx10`, `fakedx101`), composition-root wiring, the shared settings store the CLI and GUI both use for unverified-write consent (`userconfig`), menu-table generator (`extable`), and the import-graph guard tests (`guards`). |
+| `internal/` | The radio simulators — `fakeradio`, `fakedx10`, `fakedx101` for Yaesu; `fakeic7610`, `fakeic7300`, `fakeic7300mk2`, `fakeic705`, `fakeic9700`, `fakeic905` for Icom — composition-root wiring, the shared settings store the CLI and GUI both use for unverified-write consent (`userconfig`), menu-table generator (`extable`), and the import-graph guard tests (`guards`). |
 | `docs/` | Hardware findings, Linux setup, the menu-write decision, and the fixture redaction policy. |
 | `docs/fixtures-private/` | Git-ignored. Raw radio backups and serial captures — never committed. |
 

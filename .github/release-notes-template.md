@@ -19,6 +19,14 @@
   still not run and the notes say so plainly). If a future release
   ships an AppImage or lands Linux hardware evidence, update both the
   Downloads table and that section.
+
+  UPDATED AT THE ICOM TIER'S CLOSE (28/08/2026): the per-model support
+  table now carries ten registered models (the four from v1.0.0 plus
+  IC-7610/IC-7300/IC-7300MK2/IC-705/IC-9700/IC-905), and the
+  Yaesu-specific "99 regular memories plus the 9 PMS pairs" description
+  and per-model menu-address counts in "What it does" are scoped to the
+  Yaesu models only — the Icom tier has no menu-settings feature and a
+  different, per-model memory-slot shape.
 -->
 
 Open Rig Programmer __VERSION__ — an open-source, cross-platform
@@ -29,9 +37,12 @@ below).
 
 ## What it does
 
-- **Read every memory channel** from the radio over CAT — the 99
-  regular memories plus the 9 PMS (Programmable Memory Scan) pairs —
-  into a codeplug file you can keep, diff and re-send.
+- **Read every memory channel** into a codeplug file you can keep,
+  diff and re-send. On the Yaesu models this is the 99 regular
+  memories plus the 9 PMS (Programmable Memory Scan) pairs, over CAT;
+  each Icom model has its own CI-V memory-slot shape instead (a
+  group-addressed space, or CALL channels alongside it, per model —
+  see the per-model honesty rows in README.md).
 - **Edit channels** in a spreadsheet-style grid (GUI) with keyboard
   navigation, paste, per-column editors and drag copy/swap/move.
 - **Send changes back safely** (FT-710): read-before-write, a snapshot
@@ -57,9 +68,16 @@ below).
 | IC-7610 | Yes | ⚠️ opt-in | No | CI-V guide + simulator only; no real radio has been connected |
 | IC-7300 | Yes | ⚠️ opt-in | No | CI-V guide + simulator only; no real radio has been connected |
 | IC-7300MK2 | Yes | ⚠️ opt-in | No | CI-V guide + simulator only; no real radio has been connected |
-| IC-705 | Yes | ⚠️ opt-in | No | CI-V guide + simulator only; no real radio has been connected |
+| IC-705 | Yes\* | ⚠️ opt-in | No | CI-V guide + simulator only; no real radio has been connected |
 | IC-9700 | Yes | ⚠️ opt-in | No | CI-V guide + simulator only; no real radio has been connected |
-| IC-905 | Yes | ⚠️ opt-in | No | CI-V guide + simulator only; no real radio has been connected |
+| IC-905 | Yes\* | ⚠️ opt-in | No | CI-V guide + simulator only; no real radio has been connected |
+
+\* IC-705 and IC-905 each discover their memory channels by a BOUNDED
+default walk rather than a read of the whole address space (a
+100x100-slot, group-addressed space on both). A channel stored outside
+that walk's range is simply not read; its absence is not evidence the
+channel is empty. See README.md's *Icom models* section for each
+model's exact bound.
 
 Writes to the nine manual-derived models are held behind an *opt-in*
 consent gate: unless you deliberately grant unverified-write consent
