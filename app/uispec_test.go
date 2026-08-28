@@ -73,6 +73,33 @@ func ic9700SlotViews(slots ...string) []SlotView {
 	return out
 }
 
+// firstSlotViewDiff returns the index of the first position at which two
+// SlotView lists differ, with each side's value there — the zero SlotView
+// standing in where one list has run out — or -1 when the two are equal.
+//
+// A DENSE IC-9700 bank is 297 entries, and printing two of those whole
+// tells a reader only that something moved. The index is what names the
+// slot, and the pair at it is what says how it changed (R5 deferred
+// minor).
+func firstSlotViewDiff(got, want []SlotView) (int, SlotView, SlotView) {
+	at := func(s []SlotView, i int) SlotView {
+		if i < len(s) {
+			return s[i]
+		}
+		return SlotView{}
+	}
+	n := len(got)
+	if len(want) > n {
+		n = len(want)
+	}
+	for i := 0; i < n; i++ {
+		if at(got, i) != at(want, i) {
+			return i, at(got, i), at(want, i)
+		}
+	}
+	return -1, SlotView{}, SlotView{}
+}
+
 // ic905SlotViews builds the SlotViews a list of this radio's canonical
 // slots must produce — MEM's group-addressed "Gnn-nnn" form and CALL's
 // own "Cnn" form alike. Display equals Slot for every one of them, on
@@ -1638,6 +1665,16 @@ func TestGetUISpec_RegisteredIC9700_EveryBankFieldsAndTagDisplay(t *testing.T) {
 	if !reflect.DeepEqual(staticBankIDs, wantBanks) {
 		t.Fatalf("static banks = %v, want exactly %v", staticBankIDs, wantBanks)
 	}
+	// The want lists are built with THIS FILE'S OWN ic9700SlotViews, not
+	// with app's slotViewsFor (R5 deferred minor). slotViewsFor is the
+	// production helper GetUISpec itself calls, so building the
+	// expectation with it made the comparison below a derivation checked
+	// against itself: a bug in slotViewsFor would appear identically on
+	// both sides and the test would stay green. ic9700SlotViews states
+	// the mapping this radio's slots must satisfy — Display equals Slot,
+	// because every IC-9700 slot string is longer than the three
+	// characters codeplug.DisplaySlot's rewrite applies to — as an
+	// independent claim.
 	wantSlotsFor := make(map[string][]SlotView, 3)
 	for _, b := range staticCaps.Banks {
 		if b.Sparse {
@@ -1646,7 +1683,21 @@ func TestGetUISpec_RegisteredIC9700_EveryBankFieldsAndTagDisplay(t *testing.T) {
 		if len(b.Slots) == 0 {
 			t.Fatalf("static bank %s lists no slots — nothing to compare against", b.ID)
 		}
-		wantSlotsFor[string(b.ID)] = slotViewsFor(b.Slots)
+		wantSlotsFor[string(b.ID)] = ic9700SlotViews(b.Slots...)
+	}
+	// The per-bank COUNTS, pinned rather than taken on trust: three bands
+	// times 99 memory channels, 6 program-scan edges and 2 call channels
+	// (core/driver/ic9700/slots.go), 321 slots in all. Without these the
+	// loop above would happily build its expectation from a truncated
+	// static list and then confirm the same truncation on both paths.
+	for _, want := range []struct {
+		bank    string
+		n       int
+		perBand int
+	}{{"MEM", 297, 99}, {"SCAN", 18, 6}, {"CALL", 6, 2}} {
+		if got := len(wantSlotsFor[want.bank]); got != want.n {
+			t.Fatalf("static bank %s lists %d slots, want %d (3 bands x %d) — this radio's canonical slot list has changed shape, and every comparison below would be against the new one rather than the one this test was written for", want.bank, got, want.n, want.perBand)
+		}
 	}
 	// Spot-check: these are this radio's own canonical slot strings
 	// (core/driver/ic9700/slots.go), not fabricated placeholders, and
@@ -1684,8 +1735,13 @@ func TestGetUISpec_RegisteredIC9700_EveryBankFieldsAndTagDisplay(t *testing.T) {
 		t.Fatalf("connected banks = %v, want exactly %v — this radio discovers no extra bank", bankIDs(got.Banks), wantBanks)
 	}
 	for _, b := range got.Banks {
-		if !reflect.DeepEqual(b.Slots, wantSlotsFor[b.ID]) {
-			t.Errorf("connected IC-9700 bank %s Slots has %d entries, want %d matching the static baseline's own canonical list — a DENSE bank discovers nothing at open time", b.ID, len(b.Slots), len(wantSlotsFor[b.ID]))
+		if want := wantSlotsFor[b.ID]; !reflect.DeepEqual(b.Slots, want) {
+			// The INDEX of the first difference, and the pair at it: a
+			// 297-entry list printed whole says only that something
+			// moved, and the position is what identifies which slot
+			// (R5 deferred minor).
+			at, gotAt, wantAt := firstSlotViewDiff(b.Slots, want)
+			t.Errorf("connected IC-9700 bank %s Slots has %d entries, want %d matching the static baseline's own canonical list — a DENSE bank discovers nothing at open time; first difference at index %d: got %+v, want %+v", b.ID, len(b.Slots), len(want), at, gotAt, wantAt)
 		}
 		if b.TagDisplayDefault != unavailable {
 			t.Errorf("connected IC-9700 bank %s TagDisplayDefault = %+v, want %+v — this radio's memory frame has no display flag", b.ID, b.TagDisplayDefault, unavailable)
@@ -1835,6 +1891,47 @@ func TestGetUISpec_RegisteredIC9700_EveryBankFieldsAndTagDisplay(t *testing.T) {
 func TestGetUISpec_RegisteredIC905_EveryBankFieldsAndTagDisplay(t *testing.T) {
 	unavailable := codeplug.BoolField{State: codeplug.Unavailable}
 	wantBanks := []string{"MEM", "CALL"}
+
+	// THE PREMISE, GUARDED — the IC-9700 exemplar's opening move
+	// (TestGetUISpec_RegisteredIC9700_EveryBankFieldsAndTagDisplay), which
+	// fails fast rather than comparing against a shape that has silently
+	// changed under it. This radio's is the MIRROR IMAGE of the 9700's:
+	// MEM is SPARSE and carries NO static Slots by contract
+	// (core/driver/ic905/caps.go — a sparse bank's Slots lists what a READ
+	// found, not what the radio has), so every MEM expectation below is a
+	// statement about the DISCOVERY WALK. A MEM bank that stopped being
+	// sparse, or that grew a static Slots list, would make those
+	// expectations mean something else entirely while still comparing
+	// equal for the wrong reason.
+	staticCaps, err := wiring.StaticCapabilities(wiring.IC905Model)
+	if err != nil {
+		t.Fatalf("wiring.StaticCapabilities(%q): unexpected error: %v", wiring.IC905Model, err)
+	}
+	staticBankIDs := make([]string, len(staticCaps.Banks))
+	for i, b := range staticCaps.Banks {
+		staticBankIDs[i] = string(b.ID)
+	}
+	if !reflect.DeepEqual(staticBankIDs, wantBanks) {
+		t.Fatalf("static banks = %v, want exactly %v", staticBankIDs, wantBanks)
+	}
+	for _, b := range staticCaps.Banks {
+		switch string(b.ID) {
+		case "MEM":
+			if !b.Sparse {
+				t.Fatalf("static bank MEM is not Sparse — the IC-905's MEM is a group-addressed SPARSE space by design (core/driver/ic905/caps.go); this test's whole premise no longer holds")
+			}
+			if len(b.Slots) != 0 {
+				t.Fatalf("static bank MEM lists %d slots — a sparse bank's Slots is nil BY CONTRACT, and a MEM expectation below would then be comparing against a static list rather than the discovery walk it is written about", len(b.Slots))
+			}
+		case "CALL":
+			if b.Sparse {
+				t.Fatalf("static bank CALL is Sparse — this radio's CALL is a fixed DENSE bank, seeded or not")
+			}
+			if len(b.Slots) == 0 {
+				t.Fatalf("static bank CALL lists no slots — a dense bank's twelve call channels come from the static bank itself, and there is nothing to compare against")
+			}
+		}
+	}
 
 	prevOpts := wiring.IC905FakeSessionOpts
 	wiring.IC905FakeSessionOpts = nil // this radio's fake seeds its own default image with no options at all

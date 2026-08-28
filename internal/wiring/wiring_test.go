@@ -17,6 +17,12 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300mk2"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7610"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic905"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx10"
@@ -1616,21 +1622,50 @@ func TestOpenRealSessionFor_DelegatesZeroOptions(t *testing.T) {
 // rows), so reflect.DeepEqual over the constructed values sees the leak
 // directly — and sees it for EVERY registered model, where the
 // session-level delegation test can only afford one.
+//
+// THE CONSENT ARM IS PINNED TOO, for every Icom row (Wave 4 registration
+// reviews' deferred minor). The false arm above only proves that consent
+// did not leak IN; it says nothing about what the TRUE arm builds, and the
+// true arm is the one that reaches a radio's write path. Two of these six
+// drivers carry a second option — ic705.WithFullInventoryWalk() and
+// ic905.WithFullInventoryWalk() — whose whole point is that
+// internal/wiring's rows deliberately do NOT pass it (NewIC905RealDriver's
+// own doc comment says so), and an extra option added to a consent arm by
+// a later edit would widen a discovery walk for every consenting user
+// while every capability assertion in this file stayed green. Comparing
+// realDriverFor(model, true) against the constructor call the row is
+// supposed to make sees exactly that.
+//
+// wantConsent is nil on the four Yaesu rows, which no review deferred and
+// which the table above already covers on the false arm.
 func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 	for _, tc := range []struct {
-		model string
-		want  func() driver.Driver
+		model       string
+		want        func() driver.Driver
+		wantConsent func() driver.Driver
 	}{
-		{DefaultModel, NewRealDriver},
-		{FTdx10Model, NewFTdx10RealDriver},
-		{FTdx101DModel, NewFTdx101DRealDriver},
-		{FTdx101MPModel, NewFTdx101MPRealDriver},
-		{IC7610Model, NewIC7610RealDriver},
-		{IC7300Model, NewIC7300RealDriver},
-		{IC7300MK2Model, NewIC7300MK2RealDriver},
-		{IC705Model, NewIC705RealDriver},
-		{IC9700Model, NewIC9700RealDriver},
-		{IC905Model, NewIC905RealDriver},
+		{model: DefaultModel, want: NewRealDriver},
+		{model: FTdx10Model, want: NewFTdx10RealDriver},
+		{model: FTdx101DModel, want: NewFTdx101DRealDriver},
+		{model: FTdx101MPModel, want: NewFTdx101MPRealDriver},
+		{model: IC7610Model, want: NewIC7610RealDriver, wantConsent: func() driver.Driver {
+			return ic7610.New(ic7610.RealHardware, ic7610.WithConsentedUnverifiedWrites())
+		}},
+		{model: IC7300Model, want: NewIC7300RealDriver, wantConsent: func() driver.Driver {
+			return ic7300.New(ic7300.RealHardware, ic7300.WithConsentedUnverifiedWrites())
+		}},
+		{model: IC7300MK2Model, want: NewIC7300MK2RealDriver, wantConsent: func() driver.Driver {
+			return ic7300mk2.New(ic7300mk2.RealHardware, ic7300mk2.WithConsentedUnverifiedWrites())
+		}},
+		{model: IC705Model, want: NewIC705RealDriver, wantConsent: func() driver.Driver {
+			return ic705.New(ic705.RealHardware, ic705.WithConsentedUnverifiedWrites())
+		}},
+		{model: IC9700Model, want: NewIC9700RealDriver, wantConsent: func() driver.Driver {
+			return ic9700.New(ic9700.RealHardware, ic9700.WithConsentedUnverifiedWrites())
+		}},
+		{model: IC905Model, want: NewIC905RealDriver, wantConsent: func() driver.Driver {
+			return ic905.New(ic905.RealHardware, ic905.WithConsentedUnverifiedWrites())
+		}},
 	} {
 		got, err := realDriverFor(tc.model, false)
 		if err != nil {
@@ -1646,6 +1681,23 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		// loose; this leg keeps the original assertion standing either way.
 		if !reflect.DeepEqual(got.Capabilities(), want.Capabilities()) {
 			t.Errorf("realDriverFor(%q, false).Capabilities() differs from the pinned constructor's", tc.model)
+		}
+
+		if tc.wantConsent == nil {
+			continue
+		}
+		gotConsent, err := realDriverFor(tc.model, true)
+		if err != nil {
+			t.Fatalf("realDriverFor(%q, true): unexpected error: %v", tc.model, err)
+		}
+		wantConsent := tc.wantConsent()
+		if !reflect.DeepEqual(gotConsent, wantConsent) {
+			t.Errorf("realDriverFor(%q, true) != the pinned consent constructor's driver:\n got  = %#v\n want = %#v\nthe consent arm must carry WithConsentedUnverifiedWrites() and NOTHING ELSE — an extra option here (a full inventory walk, say) is a behaviour change nobody asked for", tc.model, gotConsent, wantConsent)
+		}
+		// And the two arms must DIFFER, or the comparison above would pass
+		// on a row whose consent arm forgot the option altogether.
+		if reflect.DeepEqual(gotConsent, got) {
+			t.Errorf("realDriverFor(%q, true) equals realDriverFor(%q, false) — the consent arm carries no option at all, and a user who consented got a driver that cannot write", tc.model, tc.model)
 		}
 	}
 }

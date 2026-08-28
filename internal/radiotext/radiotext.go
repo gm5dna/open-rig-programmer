@@ -1094,9 +1094,20 @@ var ic905Text = Text{
 	// why it is the IC-705's shape, not the IC-9700's), and the default
 	// open's BOUNDED discovery walk — the one fact no other registered
 	// Icom entry's own ProbeFirmwareNote states, because no other
-	// registered model's Open takes this driver's own
-	// WithFullInventoryWalk() opt-out.
-	ProbeFirmwareNote: "Firmware version has no CI-V query — check the radio's display. No minimum version is established for the IC-905: this build knows of none to require. This driver talks only to CI-V address ACh, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200, along with the whole five-rate list it is chosen from, is ASSUMED — this radio's CI-V Reference Guide prints no rate figure anywhere, on any port's command-table page. Opening this radio also discovers its MEM bank's occupied slots by a BOUNDED walk — group 0 in full, then one channel per group beyond it — not the whole 100x100 space, so a channel scattered outside that walk needs a session opened with this driver's own WithFullInventoryWalk() option to be seen at all. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+	// registered model's default open leaves part of its memory space
+	// unwalked.
+	//
+	// IT NAMES NO REMEDY, DELIBERATELY (registration review, deferred
+	// minor). The walk widens only under ic905.WithFullInventoryWalk() —
+	// a Go option internal/wiring's registry row does not pass and which
+	// no CLI flag and no GUI control reaches — so a user reading this
+	// text could not act on it, and prose naming an unreachable option
+	// reads as a setting the reader has failed to find. What it states
+	// instead is the BOUND and its consequence, which IS actionable: a
+	// channel missing from this build's list is not evidence that the
+	// radio's channel is empty, so check the radio before concluding
+	// anything from an absence.
+	ProbeFirmwareNote: "Firmware version has no CI-V query — check the radio's display. No minimum version is established for the IC-905: this build knows of none to require. This driver talks only to CI-V address ACh, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200, along with the whole five-rate list it is chosen from, is ASSUMED — this radio's CI-V Reference Guide prints no rate figure anywhere, on any port's command-table page. Opening this radio also discovers its MEM bank's occupied slots by a BOUNDED walk — group 0 in full, then one channel per group beyond it — not the whole 100x100 space, and this build offers no setting that widens it: a channel stored outside that walk is simply not listed here, so its absence from the grid is not evidence that the radio's channel is empty. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
 }
 
 // texts is the registry For consults, keyed by the exact model string a
