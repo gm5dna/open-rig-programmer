@@ -201,6 +201,105 @@ func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
 	}
 }
 
+// TestOpenFakeSessionFor_EveryRegisteredModel_ReadsEveryDefaultSlot is the
+// wiring-level guard T3's ruling exists to add: for EVERY registered
+// model, open a fake session and ReadChannel every slot its own driver
+// publishes for its default image, and require every one of those reads
+// to succeed. "Succeed" includes an empty slot — ReadChannel maps an
+// empty answer to a Channel with nil Data, never an error (driver.go's
+// own doc comment on the method) — so this test is not asserting that
+// every default image is populated; it is asserting that every default
+// image is DECODABLE by the very driver that is supposed to read it.
+//
+// That is exactly the class of defect T3 fixes: the IC-905's frozen fake
+// (internal/fakeic905) built ten occupied channels of all-zero invented
+// content by default, and core/civ/ic905/profile.go's filter refuses
+// 0x00, so "read --fake --model IC-905" failed with a parse error before
+// any user-visible read ever ran. Nothing here is IC-905-specific —
+// walking every model's session Capabilities().Banks[].Slots is the
+// generic form, so a future model whose fake seeds undecodable content
+// fails HERE, at wiring level, rather than at a CLI invocation nobody
+// happened to try.
+//
+// sess.Capabilities() — the SESSION's, not a driver's static
+// Capabilities() — is deliberately what this test walks: for the two
+// Sparse banks in this table (IC-705's and IC-905's MEM banks,
+// core/spec/bank.go's Sparse field), the static baseline publishes an
+// EMPTY Slots by design (core/driver/ic905/ic905.go's own doc comment:
+// "MEM's Slots is EMPTY here and that is the point"), and it is the
+// SESSION's Capabilities() that carries what Open actually discovered
+// (effectiveCapabilities, materialised into Banks[].Slots at Open time).
+// That is "walk what the session discovered" for a sparse bank whose
+// driver exposes discovery this way — which every Sparse bank in this
+// table's models currently does, so the fallback below (log and move on)
+// is reachable only if a bank's discovered set is itself empty, e.g. this
+// test's own proof that the IC-905's demo radio now starts with no
+// occupied MEM slot at all.
+//
+// RED PROOF (recorded, not re-run by CI): temporarily delete the ten
+// fakeic905.WithEmpty(0, ch) calls from fakeDrivers' IC905Model row
+// (internal/wiring/fake.go) and this test's IC-905 subtest fails on the
+// very first MEM slot ReadChannel reaches, with "civ: parse error:
+// filter: byte 0x00 at offset 7 is not a value this profile defines" —
+// the same error the CLI reproduction in the task brief hit. Restoring
+// the row makes it pass again.
+func TestOpenFakeSessionFor_EveryRegisteredModel_ReadsEveryDefaultSlot(t *testing.T) {
+	models := SupportedModels()
+	if len(models) == 0 {
+		t.Fatal("SupportedModels() is empty — this table would run zero cases and pass vacuously")
+	}
+
+	for _, model := range models {
+		t.Run(model, func(t *testing.T) {
+			ctx := testCtx(t)
+			sess, closeAll, err := OpenFakeSessionFor(ctx, model)
+			if err != nil {
+				t.Fatalf("OpenFakeSessionFor(%q): unexpected error: %v", model, err)
+			}
+			t.Cleanup(func() {
+				if err := closeAll(); err != nil {
+					t.Errorf("closeAll: unexpected error: %v", err)
+				}
+			})
+
+			caps := sess.Capabilities()
+			if len(caps.Banks) == 0 {
+				t.Fatalf("session Capabilities().Banks is empty for %q — this test would exercise no driver at all", model)
+			}
+
+			reads := 0
+			for _, bank := range caps.Banks {
+				if len(bank.Slots) == 0 {
+					if !bank.Sparse {
+						t.Errorf("bank %s (%s) is DENSE and has no Slots for %q — a dense bank's inventory is supposed to be the fixed, complete one, so an empty list here is itself a defect this test would otherwise miss", bank.ID, bank.Label, model)
+						continue
+					}
+					// A Sparse bank whose SESSION Capabilities() still
+					// lists no Slots discovered nothing occupied — for
+					// the IC-905's MEM bank that is this task's own fix
+					// working as intended, not a gap this test is
+					// silently skipping. Say so rather than reading
+					// nothing and staying quiet about it.
+					t.Logf("bank %s (%s) is sparse and %q's session discovered no occupied slot — nothing to read here", bank.ID, bank.Label, model)
+					continue
+				}
+				for _, slot := range bank.Slots {
+					ch, err := sess.ReadChannel(ctx, slot)
+					if err != nil {
+						t.Errorf("ReadChannel(%q) in bank %s: unexpected error: %v", slot, bank.ID, err)
+						continue
+					}
+					if ch.Slot != slot {
+						t.Errorf("ReadChannel(%q) in bank %s: Channel.Slot = %q, want %q", slot, bank.ID, ch.Slot, slot)
+					}
+					reads++
+				}
+			}
+			t.Logf("%q: %d slot(s) read across %d bank(s)", model, reads, len(caps.Banks))
+		})
+	}
+}
+
 // TestOpenFakeSessionFor_DefaultModelDefaultImage keeps the one assertion
 // the table above cannot carry: the DEFAULT fakeradio image is ImageUK,
 // HW-CONFIRMED 2026-07-13 to have no 5xx bank, so an FT-710 fake session

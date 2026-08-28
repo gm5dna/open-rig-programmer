@@ -242,12 +242,18 @@ var IC9700FakeSessionOpts []fakeic9700.Option
 // rest), read at CALL time inside the IC905Model entry's own newRadio
 // closure below, and never captured at package init.
 //
-// LEFT AT ITS NIL ZERO VALUE IS NOT "unseeded": internal/fakeic905's own
-// New builds ten occupied channels in group 0 by default (image.go's
-// defaultImage) whenever no option overrides it, unlike some of this
-// table's other simulators. A test that wants a DIFFERENT image still
-// reaches it through this variable, exactly as every other model's own
-// seam works.
+// LEFT AT ITS NIL ZERO VALUE, THE SESSION STARTS EMPTY. internal/fakeic905's
+// own New builds ten occupied channels in group 0 by default (image.go's
+// defaultImage), but every one of them holds an ALL-ZERO invented record
+// that core/civ/ic905/profile.go's filter refuses to decode (byte 0x00 at
+// offset 7 is not a value that filter defines) — so the IC905Model row
+// below empties all ten with WithEmpty BEFORE appending this variable's
+// options, and an unset IC905FakeSessionOpts therefore leaves NO occupied
+// channel, not the ten-channel default this comment used to describe. A
+// test that wants a populated channel reaches it through this variable
+// exactly as every other model's own seam works — WithRecord after the
+// row's own WithEmpty calls still wins, per options.go's "later one wins"
+// rule.
 //
 // No production flag or GUI control populates this — it adds no second
 // ic905.Simulated reference to any non-test file, so
@@ -464,7 +470,38 @@ var fakeDrivers = map[string]fakeDriverEntry{
 	},
 	IC905Model: {
 		newDriver: func() driver.Driver { return ic905.New(ic905.Simulated) },
-		newRadio:  func() fakeRadio { return fakeic905.New(IC905FakeSessionOpts...) },
+		// The demo IC-905 starts EMPTY, and that takes explicit work here
+		// because fakeic905.New's own default (image.go's defaultImage)
+		// is ten occupied channels in group 0, every one holding an
+		// ALL-ZERO invented record — the least-invention placeholder
+		// image.go's own doc comment explains, chosen with no reference
+		// to core/civ/ic905/profile.go's filter. That filter refuses
+		// 0x00 (filterNames = {01,02,03}), so those ten records are
+		// UNDECODABLE by the IC-905's own driver: "read --fake --model
+		// IC-905" failed with "civ: parse error: filter: byte 0x00 at
+		// offset 7 is not a value this profile defines" until this row
+		// stopped seeding them. fakeic905 is frozen (no behaviour edit),
+		// so the fix is at the call site: WithEmpty(0, ch) for every
+		// channel the default image occupies (group 0, channels 0-9 —
+		// image.go's defaultImageGroup/defaultImageChannels, unexported
+		// so restated here as literals) deletes each one before
+		// IC905FakeSessionOpts is appended, leaving no occupied channel
+		// by default. This mirrors the IC-9700's fake, which seeds
+		// nothing at all (IC9700FakeSessionOpts' doc comment) — an empty
+		// demo radio is the honest choice for a model whose only
+		// alternative default is content nobody could source from either
+		// artefact. IC905FakeSessionOpts is appended AFTER the ten
+		// WithEmpty calls, so a test that wants a populated channel still
+		// reaches it through the normal seam (options.go: "a later one
+		// wins").
+		newRadio: func() fakeRadio {
+			opts := make([]fakeic905.Option, 0, 10+len(IC905FakeSessionOpts))
+			for ch := 0; ch < 10; ch++ {
+				opts = append(opts, fakeic905.WithEmpty(0, ch))
+			}
+			opts = append(opts, IC905FakeSessionOpts...)
+			return fakeic905.New(opts...)
+		},
 	},
 }
 
