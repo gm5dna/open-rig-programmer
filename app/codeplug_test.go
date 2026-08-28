@@ -119,6 +119,39 @@ func TestUpdateChannels_UnknownSlotRefusesWholeBatch(t *testing.T) {
 	}
 }
 
+// TestUpdateChannel_NormalisesUnreachableAbsentTierField pins the edit path's
+// representation rule: a caller may supply bare Absent, but an FT-710 cannot
+// reach tx_frequency, so the working copy must remain Diff-equal to the
+// radio-shaped baseline after the edit.
+func TestUpdateChannel_NormalisesUnreachableAbsentTierField(t *testing.T) {
+	a, _ := newTestApp(t)
+	base := buildImportBase()
+	a.mu.Lock()
+	a.baseline = deepCopyCodeplug(base)
+	a.working = deepCopyCodeplug(base)
+	edit := a.working.Channels[0]
+	edit.Data.TxFreqHz = codeplug.FreqField{State: codeplug.Absent}
+	a.mu.Unlock()
+
+	if _, err := a.UpdateChannel(edit); err != nil {
+		t.Fatalf("UpdateChannel: %v", err)
+	}
+
+	caps, err := capsForModel("FT-710")
+	if err != nil {
+		t.Fatalf("capsForModel: %v", err)
+	}
+	a.mu.Lock()
+	result, err := codeplug.Diff(a.baseline, a.working, caps)
+	a.mu.Unlock()
+	if err != nil {
+		t.Fatalf("Diff: %v", err)
+	}
+	if result.Modified != 0 || result.Added != 0 || result.Erased != 0 {
+		t.Errorf("Diff after no-op tier edit = %+v, want no channel changes", result)
+	}
+}
+
 // TestUpdateChannel_NothingLoaded pins the ErrNothingLoaded guard.
 func TestUpdateChannel_NothingLoaded(t *testing.T) {
 	a, _ := newTestApp(t)
