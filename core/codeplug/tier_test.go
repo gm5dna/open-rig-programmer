@@ -919,7 +919,7 @@ func TestNormaliseTierFields_V4YaesuFileWithNoTierKeys(t *testing.T) {
 	}
 
 	if got, want := tierFieldStates(cp.Channels[0].Data), allTierStates(Absent); !reflect.DeepEqual(got, want) {
-		t.Fatalf("straight off Load, tier states = %v, want all Absent — this test's premise is that loadV4 does NOT normalise", got)
+		t.Fatalf("straight off Load, tier states = %v, want all Absent — core/codeplug.Load remains capability-free; composition roots normalise loaded/imported data", got)
 	}
 
 	NormaliseTierFields(cp, testCapabilities())
