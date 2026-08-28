@@ -101,15 +101,27 @@ Three costs are shared by all six:
   it. Two different things can happen when this driver meets a radio
   it did not expect. A different Icom model at ITS OWN factory address
   simply does not answer — nothing was heard from, so nothing can be
-  attributed, and Open reports a plain timeout. A radio (of any model)
-  actually sitting ON this driver's one address IS caught: the probe's
-  address-geometry and record-length fingerprint refuses it as a wrong
-  radio — though that refusal can itself be unattributed, naming no
-  model, when the two records' address widths differ (an IC-9700 moved
-  onto A4h fails an IC-705 open as an unattributed address parse
-  error, not as a named wrong-radio refusal)
+  attributed, and Open reports a plain timeout
   (`core/driver/ic7610/doc.go:188-192`; `core/driver/ic7300/doc.go:229-234`;
-  `core/civ/tier_test.go:27-33,68-75`).
+  `core/civ/tier_test.go:27-33`). A radio actually sitting ON this
+  driver's one address is instead caught by the probe's
+  address-geometry and record-length fingerprint — but whether that
+  refusal NAMES a wrong radio depends on the model, and attribution is
+  not the default: IC-7300, IC-7300MK2, IC-705 and IC-905 each mint a
+  `driver.WrongRadioError` naming what they found
+  (`core/driver/ic7300/ic7300.go:270`; `core/driver/ic7300mk2/ic7300mk2.go:272`;
+  `core/driver/ic705/ic705.go:364`; `core/driver/ic905/ic905.go:495`),
+  while IC-7610 and IC-9700 NEVER mint one for any same-address
+  collision, by design — they hold no cross-model table and refuse to
+  guess an identity they cannot support
+  (`core/driver/ic7610/ic7610.go:142-145`;
+  `core/driver/ic9700/ic9700.go:325-329`; `core/driver/ic9700/doc.go:391`).
+  Even where a driver CAN attribute, one pair defeats it in practice:
+  an IC-9700 moved onto the IC-705's A4h address fails the IC-705's
+  open as an unattributed address parse error, not as a named
+  wrong-radio refusal, because the address-geometry check pre-empts
+  the length check that would otherwise have named it
+  (`core/civ/tier_test.go:68-80`).
 - **The tone picker stays list-driven while every model's tone range
   is numeric (enabler E3).** All six declare a numeric
   `CTCSSToneRange` rather than a fixed tone chart, because their tone
