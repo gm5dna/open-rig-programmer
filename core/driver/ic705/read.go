@@ -322,5 +322,12 @@ func channelDataFrom(rec civ.MemoryRecord, caps spec.Capabilities) (codeplug.Cha
 	d.CTCSSTone = codeplug.ToneField{State: codeplug.Unavailable}
 	d.TagDisplay = codeplug.BoolField{State: codeplug.Unavailable}
 	d.ScanSkip = codeplug.BoolField{State: codeplug.Unavailable}
+	d.TuningStepEnabled = codeplug.BoolField{State: codeplug.Unavailable}
+	d.TuningStep = codeplug.StringField{State: codeplug.Unavailable}
+	d.ProgramTuningStepHz = codeplug.FreqField{State: codeplug.Unavailable}
+	d.AttenuatorDB = codeplug.IntField{State: codeplug.Unavailable}
+	d.Preamp = codeplug.StringField{State: codeplug.Unavailable}
+	d.Antenna = codeplug.StringField{State: codeplug.Unavailable}
+	d.IPPlus = codeplug.BoolField{State: codeplug.Unavailable}
 	return d, nil
 }
