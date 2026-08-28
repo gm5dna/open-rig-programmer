@@ -5,7 +5,7 @@
 This document covers the two things a Linux user needs to do before
 `rigprog` (CLI or GUI) can open a real FT-710's serial port: join the
 `dialout` group, and stop ModemManager from probing the radio's
-USB-serial adapter. See `README.md`'s "Install" and "Getting started"
+USB-serial adapter. See `README.md`'s "Install" and "First use"
 sections for where this fits into the overall install/connect flow, and
 `docs/hardware-notes.md` for the hardware facts this project has
 actually confirmed (macOS only, so far — see "Status" below).
