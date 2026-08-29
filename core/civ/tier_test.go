@@ -102,6 +102,7 @@ package civ_test
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
@@ -111,6 +112,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7610"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic905"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic9700"
+	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
 
 // tierShape is one model's measured record geometry: the two properties
@@ -134,22 +136,66 @@ type tierShape struct {
 	frameLengths []int
 }
 
-// tierProfiles is every Icom profile this project registers, in
-// registration order (internal/wiring's realDrivers table).
-//
-// SIX ROWS, and TestTierRecordShapes_PairwiseDistinguishable insists on
-// six: a seventh model registered without a row here would be compared
-// against nothing, which is the one way this check could pass while
-// meaning less than it says.
-func tierProfiles() []civ.Profile {
-	return []civ.Profile{
-		ic7610.Profile(),
-		ic7300.Profile(),
-		ic7300mk2.Profile(),
-		ic705.Profile(),
-		ic9700.Profile(),
-		ic905.Profile(),
+// tierProfilePopulation is every Icom profile family in the tier, in
+// registration order. Wave 4 extends this package-level list when it imports
+// each new profile package; that one-line registration makes the complete
+// pair walk below rule on every pairing involving the new family.
+var tierProfilePopulation = []civ.Profile{
+	ic7610.Profile(),
+	ic7300.Profile(),
+	ic7300mk2.Profile(),
+	ic705.Profile(),
+	ic9700.Profile(),
+	ic905.Profile(),
+}
+
+// tierRegistrationCoverage ties the real driver registry to the profile
+// family population above. Wave 4 adds each registered Icom model here and
+// adds each new profile family to tierProfilePopulation; two model keys may
+// deliberately name one family (IC-7850/IC-7851), but neither side may be
+// omitted. The guard in TestTierRecordShapes_DistinctOrDeclared compares
+// this table with internal/wiring.SupportedModels, so registration alone
+// cannot silently bypass the pairwise ruling.
+var tierRegistrationCoverage = map[string]string{
+	"IC-7610":    "IC-7610",
+	"IC-7300":    "IC-7300",
+	"IC-7300MK2": "IC-7300MK2",
+	"IC-705":     "IC-705",
+	"IC-9700":    "IC-9700",
+	"IC-905":     "IC-905",
+}
+
+func registrationCoverageProblems(registered, population []string, coverage map[string]string) []string {
+	var problems []string
+	registeredSet := make(map[string]bool, len(registered))
+	populationSet := make(map[string]bool, len(population))
+	coveredFamilies := make(map[string]bool, len(population))
+	for _, model := range registered {
+		registeredSet[model] = true
+		family, ok := coverage[model]
+		if !ok {
+			problems = append(problems, fmt.Sprintf("registered Icom model %q has no tierRegistrationCoverage ruling", model))
+			continue
+		}
+		coveredFamilies[family] = true
 	}
+	for _, family := range population {
+		populationSet[family] = true
+	}
+	for model, family := range coverage {
+		if !registeredSet[model] {
+			problems = append(problems, fmt.Sprintf("tierRegistrationCoverage model %q is not registered", model))
+		}
+		if !populationSet[family] {
+			problems = append(problems, fmt.Sprintf("tierRegistrationCoverage[%q] names absent profile family %q", model, family))
+		}
+	}
+	for _, family := range population {
+		if !coveredFamilies[family] {
+			problems = append(problems, fmt.Sprintf("profile family %q covers no registered Icom model", family))
+		}
+	}
+	return problems
 }
 
 // measureShape reads one profile's shape through the EXPORTED API alone,
@@ -231,9 +277,10 @@ func disjointLengths(x, y []int) bool {
 	return true
 }
 
-// recordedLimitations names pairs this project has ADJUDICATED as
+// indistinguishable names pairs this project has ADJUDICATED as
 // indistinguishable and accepted, keyed "MODEL-A|MODEL-B" in
-// tierProfiles order.
+// tierProfilePopulation order. Each value must cite the documentation that
+// records the limitation; an empty value is not a ruling.
 //
 // IT IS EMPTY, and that is a measurement rather than an aspiration: as of
 // the tier close no registered pair collides. It exists so that a
@@ -243,24 +290,65 @@ func disjointLengths(x, y []int) bool {
 // the pair is still logged on every run. A NEW collision, from a model
 // registered after this file was written, fails: that is a regression in
 // the tier's shape, not a fact about a radio.
-var recordedLimitations = map[string]string{}
+var indistinguishable = map[string]string{}
 
-// TestTierRecordShapes_PairwiseDistinguishable is the tier-close check:
-// the six registered Icom profiles' (address width, accepted record-only
-// length set) tuples are pairwise distinguishable.
+// TestTierRecordShapes_DistinctOrDeclared is the tier-close check: every
+// pair in tierProfilePopulation is either separated by today's exact
+// length/geometry proof or named in indistinguishable with a citation.
 //
 // It prints the measured table on every run, pass or fail. The table is
 // the deliverable as much as the verdict is — six models' record
 // geometry in one place is exactly what no per-model worktree could
 // write down.
-func TestTierRecordShapes_PairwiseDistinguishable(t *testing.T) {
-	profiles := tierProfiles()
-	if len(profiles) != 6 {
-		t.Fatalf("tierProfiles() has %d rows, want the 6 registered Icom models — a model missing here is compared against nothing", len(profiles))
+func TestTierRecordShapes_DistinctOrDeclared(t *testing.T) {
+	profiles := tierProfilePopulation
+	if len(profiles) == 0 {
+		t.Fatal("tierProfilePopulation is empty — the pairwise proof would pass vacuously")
 	}
 	shapes := make([]tierShape, len(profiles))
+	models := make(map[string]bool, len(profiles))
 	for i, p := range profiles {
 		shapes[i] = measureShape(t, p)
+		if models[shapes[i].model] {
+			t.Fatalf("tierProfilePopulation contains %q twice", shapes[i].model)
+		}
+		models[shapes[i].model] = true
+	}
+	var registered, population []string
+	for _, model := range wiring.SupportedModels() {
+		if strings.HasPrefix(model, "IC-") {
+			registered = append(registered, model)
+		}
+	}
+	for _, shape := range shapes {
+		population = append(population, shape.model)
+	}
+	for _, problem := range registrationCoverageProblems(registered, population, tierRegistrationCoverage) {
+		t.Error(problem)
+	}
+
+	// A declaration must name a real population pair in canonical order and
+	// must remain an actual collision. This stops stale or misspelt entries
+	// from becoming blanket exemptions.
+	for key, citation := range indistinguishable {
+		if citation == "" {
+			t.Errorf("indistinguishable[%q] has no documentation citation", key)
+		}
+		found := false
+		for i := 0; i < len(shapes); i++ {
+			for j := i + 1; j < len(shapes); j++ {
+				if key != shapes[i].model+"|"+shapes[j].model {
+					continue
+				}
+				found = true
+				if ok, why := distinguishable(shapes[i], shapes[j]); ok {
+					t.Errorf("indistinguishable[%q] is stale: %s", key, why)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("indistinguishable[%q] does not name a canonical population pair", key)
+		}
 	}
 
 	t.Log("measured record shapes (every figure read off the profile, none hard-coded here):")
@@ -284,15 +372,25 @@ func TestTierRecordShapes_PairwiseDistinguishable(t *testing.T) {
 				continue
 			}
 			key := a.model + "|" + b.model
-			if note, recorded := recordedLimitations[key]; recorded {
+			if note, recorded := indistinguishable[key]; recorded {
 				t.Logf("LIMITATION (recorded, not a regression) %s vs %s: %s — %s", a.model, b.model, why, note)
 				continue
 			}
-			t.Errorf("%s vs %s: %s — a pair the probe cannot separate is a radio this program could open as the wrong model; if this is a fact about the radios rather than a mistake in a profile, record it in recordedLimitations with the adjudication that accepted it", a.model, b.model, why)
+			t.Errorf("%s vs %s: %s — a pair the probe cannot separate is a radio this program could open as the wrong model; if this is a documented fact rather than a profile mistake, record it in indistinguishable with the adjudication citation", a.model, b.model, why)
 		}
 	}
-	if want := 15; seen != want {
+	if want := len(shapes) * (len(shapes) - 1) / 2; seen != want {
 		t.Errorf("compared %d pairs, want %d — the pairwise walk is broken and this test passed vacuously", seen, want)
+	}
+}
+
+func TestTierRecordShapes_RegistrationCoverageGuardIsNotVacuous(t *testing.T) {
+	registered := []string{"IC-ONE", "IC-FUTURE"}
+	population := []string{"IC-ONE"}
+	coverage := map[string]string{"IC-ONE": "IC-ONE"}
+	problems := registrationCoverageProblems(registered, population, coverage)
+	if len(problems) != 1 || !strings.Contains(problems[0], "IC-FUTURE") {
+		t.Fatalf("registrationCoverageProblems = %v, want one missing-ruling problem for IC-FUTURE", problems)
 	}
 }
 
