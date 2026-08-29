@@ -365,13 +365,19 @@ func (e *OversizeSaveError) Error() string {
 //   - schema 1 and schema 2 alike: every populated channel's legacy
 //     "tag_display" bool becomes a BoolField (see
 //     migrateLegacyTagDisplay for the rule and the reasoning);
-//   - schema 1, 2 and 3 alike: every populated channel's ten
-//     tier-added fields become Unavailable — what those files say, by
-//     having no key for a field their radios do not have, and what a
-//     read of those radios reports (see migrateV3ChannelData).
+//   - schema 1, 2 and 3 alike: every populated channel's SEVENTEEN
+//     added fields — the Icom tier's ten (design D4) and the additions
+//     design's seven receiver fields (D8) — become Unavailable — what
+//     those files say, by having no key for a field their radios do not
+//     have, and what a read of those radios reports (see
+//     migrateV3ChannelData);
+//   - schema 4 (frozen since D8): the ten tier fields are preserved as
+//     written, and ONLY the seven D8 receiver fields are blanket-set
+//     Unavailable (see migrateV4ChannelData) — a schema-4 file predates
+//     them exactly as a schema-3 file predates the ten.
 //
-// A schema-4 file gets NO such blanket rule, and must not: it can hold a
-// tier field honestly (Known, Unknown or Unavailable), and a key it does
+// A schema-5 file gets NO blanket rule, and must not: it can hold any
+// added field honestly (Known, Unknown or Unavailable), and a key it does
 // NOT hold means one of two different things depending on whether the
 // radio has the field at all. Deciding that needs the model's own
 // capabilities, which this function does not have — see
@@ -636,9 +642,10 @@ func migrateV3Channels(v3 []channelV3) []Channel {
 // migrateV3ChannelData converts one decoded schema-3 channel's data into
 // the current shape, or returns nil for an empty slot.
 //
-// The migration is EXPLICIT about the ten fields the Icom tier added,
-// and it sets every one of them to UNAVAILABLE rather than leaving the
-// zero value. That is the load-bearing decision of the whole migration,
+// The migration is EXPLICIT about the seventeen added fields — the ten
+// the Icom tier added (D4) and the seven receiver fields the additions
+// design added (D8) — and it sets every one of them to UNAVAILABLE
+// rather than leaving the zero value. That is the load-bearing decision of the whole migration,
 // so the alternative is recorded with it.
 //
 // Unavailable is TRUE of a schema-3 file: schema 3 existed only while
