@@ -112,7 +112,9 @@ type ProfileConfig struct {
 	// data-versus-fill distinction on the wire.
 	NamePad byte
 
-	// Layouts is one entry per accepted record length. See RecordLayout.
+	// Layouts is one entry per accepted record SHAPE: per length for the
+	// two length-keyed kinds, per ModeClass for DiscriminatorModeByte
+	// (where two layouts may share a length). See RecordLayout.
 	Layouts []RecordLayout
 
 	// Discriminator names the rule picking among the accepted lengths.

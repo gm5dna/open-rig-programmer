@@ -519,10 +519,13 @@ func (s FieldSpan) clone() FieldSpan {
 	return out
 }
 
-// RecordLayout is one accepted record LENGTH and the field spans that
+// RecordLayout is one accepted record SHAPE and the field spans that
 // decode it.
 //
-// A profile carries one layout per accepted length, which is what makes
+// Under the two length-keyed discriminator kinds a profile carries one
+// layout per accepted length; under DiscriminatorModeByte (additions
+// design D3.3) layouts are keyed by ModeClass and two may share a length
+// — the IC-R8600's FM and DCR tails. The length-keyed reading is what makes
 // the "accepted record lengths as a SET with a discriminator rule" of spec
 // D1 decidable: the length IS the discriminator, and each length brings
 // its own geometry. The IC-905's documented five- and six-byte frequency
