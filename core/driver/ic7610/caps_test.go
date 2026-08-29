@@ -549,8 +549,8 @@ func TestSimulated_IsAClaimAboutTheFakeOnly(t *testing.T) {
 // this test refuses to let a new spec.Capabilities field arrive and
 // inherit a zero without this driver deciding about it.
 func TestDeliberatelyZeroAudit(t *testing.T) {
-	// 22 since Wave 2.5's E3 added CTCSSToneRange.
-	const wantFieldCount = 22
+	// 27 since additions design D8 added the five receiver vocabularies.
+	const wantFieldCount = 27
 
 	for name, caps := range bothProfiles() {
 		t.Run(name, func(t *testing.T) {

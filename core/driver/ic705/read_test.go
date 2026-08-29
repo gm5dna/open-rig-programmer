@@ -12,6 +12,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -130,6 +131,7 @@ func TestReadChannelDecodesTheGoldenRecord(t *testing.T) {
 			t.Errorf("%s.State = %q, want Unavailable — this record has no such field (ScanSkip per O-6)", tc.name, tc.state)
 		}
 	}
+	drivertest.AssertFreshReadSaveLoad(t, ch, codeplug.Load)
 }
 
 func TestReadChannelOfARejectedSlotIsAnEmptyChannel(t *testing.T) {

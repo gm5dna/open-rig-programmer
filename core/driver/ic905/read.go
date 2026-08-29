@@ -286,7 +286,14 @@ func neutralChannel(rec civ.MemoryRecord, slot string, caps spec.Capabilities) c
 			// The record's ⑬ is an enum of two printed values, "00: Data
 			// mode OFF" and "01: Data mode ON"; the neutral model's is a
 			// BoolField. The mapping is the only place the two meet.
-			DataMode: codeplug.BoolField{State: codeplug.Known, Value: dataMode == dataModeOn},
+			DataMode:            codeplug.BoolField{State: codeplug.Known, Value: dataMode == dataModeOn},
+			TuningStepEnabled:   codeplug.BoolField{State: codeplug.Unavailable},
+			TuningStep:          codeplug.StringField{State: codeplug.Unavailable},
+			ProgramTuningStepHz: codeplug.FreqField{State: codeplug.Unavailable},
+			AttenuatorDB:        codeplug.IntField{State: codeplug.Unavailable},
+			Preamp:              codeplug.StringField{State: codeplug.Unavailable},
+			Antenna:             codeplug.StringField{State: codeplug.Unavailable},
+			IPPlus:              codeplug.BoolField{State: codeplug.Unavailable},
 		},
 	}
 }

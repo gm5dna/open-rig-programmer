@@ -1352,4 +1352,21 @@ func markUnreachableTierFields(data *codeplug.ChannelData, caps spec.Capabilitie
 	} else {
 		data.DataMode = codeplug.BoolField{State: codeplug.Unavailable}
 	}
+
+	// CHIRP has no columns for D8's receiver settings. A reachable field
+	// is therefore Unknown (the radio has it; this file did not say), while
+	// an unreachable one is positively Unavailable.
+	receiverState := func(field spec.Field) codeplug.FieldState {
+		if reaches(caps, bank, field) {
+			return codeplug.Unknown
+		}
+		return codeplug.Unavailable
+	}
+	data.TuningStepEnabled = codeplug.BoolField{State: receiverState(spec.FieldTuningStepEnabled)}
+	data.TuningStep = codeplug.StringField{State: receiverState(spec.FieldTuningStep)}
+	data.ProgramTuningStepHz = codeplug.FreqField{State: receiverState(spec.FieldProgramTuningStep)}
+	data.AttenuatorDB = codeplug.IntField{State: receiverState(spec.FieldAttenuator)}
+	data.Preamp = codeplug.StringField{State: receiverState(spec.FieldPreamp)}
+	data.Antenna = codeplug.StringField{State: receiverState(spec.FieldAntenna)}
+	data.IPPlus = codeplug.BoolField{State: receiverState(spec.FieldIPPlus)}
 }

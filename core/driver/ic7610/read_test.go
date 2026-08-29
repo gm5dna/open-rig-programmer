@@ -10,6 +10,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -178,6 +179,7 @@ func TestReadChannel_MapsEveryField(t *testing.T) {
 	if d.CTCSS != "" || d.Shift != "" {
 		t.Errorf("a Yaesu vocabulary value was invented: CTCSS %q, Shift %q", d.CTCSS, d.Shift)
 	}
+	drivertest.AssertFreshReadSaveLoad(t, ch, codeplug.Load)
 }
 
 // TestReadChannel_EmptySlotIsAnEmptyChannel — adjudication R10 and tier

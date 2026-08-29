@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -29,6 +30,10 @@ var canonicalV3Goldens = []string{
 	"canonical-v3-basic.json",
 	"canonical-v3-menus.json",
 	"canonical-v3-empty.json",
+}
+
+var canonicalV4Goldens = []string{
+	"canonical-v4-basic.json",
 }
 
 // TestSaveLoad_CanonicalV3ByteIdentical is the FIRST of design D4's two
@@ -82,6 +87,33 @@ func TestSaveLoad_CanonicalV3ByteIdentical(t *testing.T) {
 	}
 }
 
+func TestSaveLoad_CanonicalV4ByteIdentical(t *testing.T) {
+	for _, name := range canonicalV4Goldens {
+		t.Run(name, func(t *testing.T) {
+			src := filepath.Join("testdata", name)
+			want, err := os.ReadFile(src)
+			if err != nil {
+				t.Fatalf("reading golden: %v", err)
+			}
+			cp, err := Load(src)
+			if err != nil {
+				t.Fatalf("Load(%s) error = %v", src, err)
+			}
+			dst := filepath.Join(t.TempDir(), name)
+			if err := Save(dst, cp); err != nil {
+				t.Fatalf("Save() error = %v", err)
+			}
+			got, err := os.ReadFile(dst)
+			if err != nil {
+				t.Fatalf("reading re-saved file: %v", err)
+			}
+			if string(got) != string(want) {
+				t.Errorf("save(load(%s)) is not byte-identical.\n--- want ---\n%s\n--- got ---\n%s", name, want, got)
+			}
+		})
+	}
+}
+
 // TestSchemaFor_NoV3RepresentableContentEverWritesV4 is the SECOND of
 // design D4's two pinned tests: no schema-3-representable content ever
 // produces a schema-4 file.
@@ -122,22 +154,22 @@ func TestSchemaFor_NoV3RepresentableContentEverWritesV4(t *testing.T) {
 		{
 			"one hertz past schema 3's ceiling",
 			v3able(func(d *ChannelData) { d.FreqHz = math.MaxUint32 + 1 }),
-			CurrentSchema, "a value v3 cannot represent forces v4 even with no tier field",
+			4, "a value v3 cannot represent forces v4 even with no tier field",
 		},
 		{
 			"a 10 GHz frequency",
 			v3able(func(d *ChannelData) { d.FreqHz = 10_000_000_000 }),
-			CurrentSchema, "the IC-905's reach",
+			4, "the IC-905's reach",
 		},
 		{
 			"a Known tier field",
 			v3able(func(d *ChannelData) { d.Duplex = StringField{State: Known, Value: "DUP+"} }),
-			CurrentSchema, "present means the state differs from absent",
+			4, "a recorded D4 field requires schema 4",
 		},
 		{
 			"an Unknown tier field is still present",
 			v3able(func(d *ChannelData) { d.ToneMode = StringField{State: Unknown} }),
-			CurrentSchema, "Unknown is a state somebody chose; Absent is not",
+			4, "Unknown is a state somebody chose; Absent is not",
 		},
 		{
 			"a tier field left Absent records nothing",
@@ -163,6 +195,125 @@ func TestSchemaFor_NoV3RepresentableContentEverWritesV4(t *testing.T) {
 	}
 }
 
+func TestSchemaFor_ReceiverFieldsForceV5OnlyWhenRecorded(t *testing.T) {
+	setters := map[string]func(*ChannelData, FieldState){
+		"tuning_step_enabled": func(d *ChannelData, s FieldState) { d.TuningStepEnabled = BoolField{State: s} },
+		"tuning_step":         func(d *ChannelData, s FieldState) { d.TuningStep = StringField{State: s} },
+		"program_tuning_step": func(d *ChannelData, s FieldState) { d.ProgramTuningStepHz = FreqField{State: s} },
+		"attenuator":          func(d *ChannelData, s FieldState) { d.AttenuatorDB = IntField{State: s} },
+		"preamp":              func(d *ChannelData, s FieldState) { d.Preamp = StringField{State: s} },
+		"antenna":             func(d *ChannelData, s FieldState) { d.Antenna = StringField{State: s} },
+		"ip_plus":             func(d *ChannelData, s FieldState) { d.IPPlus = BoolField{State: s} },
+	}
+	for name, set := range setters {
+		for _, state := range []FieldState{Known, Unknown} {
+			t.Run(name+"/"+string(state), func(t *testing.T) {
+				d := &ChannelData{FreqHz: 145_500_000, Duplex: StringField{State: Known, Value: "OFF"}}
+				set(d, state)
+				cp := &Codeplug{Channels: []Channel{{Slot: "001", Data: d}}}
+				if got := schemaFor(cp); got != 5 {
+					t.Errorf("schemaFor() = %d, want 5", got)
+				}
+			})
+		}
+		t.Run(name+"/unavailable", func(t *testing.T) {
+			d := &ChannelData{FreqHz: 145_500_000, Duplex: StringField{State: Known, Value: "OFF"}}
+			set(d, Unavailable)
+			cp := &Codeplug{Channels: []Channel{{Slot: "001", Data: d}}}
+			if got := schemaFor(cp); got != 4 {
+				t.Errorf("schemaFor() = %d, want 4: Unavailable is not recorded", got)
+			}
+		})
+	}
+
+	t.Run("a later D8 channel wins over an earlier schema-4 channel", func(t *testing.T) {
+		cp := &Codeplug{Channels: []Channel{
+			{Slot: "001", Data: &ChannelData{FreqHz: math.MaxUint32 + 1}},
+			{Slot: "002", Data: &ChannelData{
+				FreqHz:  145_500_000,
+				Antenna: StringField{State: Known, Value: "ANT2"},
+			}},
+		}}
+		if got := schemaFor(cp); got != 5 {
+			t.Errorf("schemaFor() = %d, want 5: a schema-4 channel must not hide later D8 content", got)
+		}
+	})
+}
+
+func TestLoadV4_FrozenShapeMigratesReceiverFields(t *testing.T) {
+	body := `{"schema":4,"generator":"test","radio":{"model":"IC-7610","cat_id":"98","read_at":"2026-08-28T00:00:00Z"},` +
+		`"channels":[{"slot":"001","data":{"freq_hz":145500000,"mode":"FM","ctcss":"","ctcss_tone":{"state":"unavailable"},` +
+		`"shift":"","tag_display":{"state":"unavailable"},"scan_skip":{"state":"unavailable"},` +
+		`"tx_frequency":{"state":"unavailable"},"duplex":{"state":"known","value":"OFF"},"offset":{"state":"unavailable"},` +
+		`"tone_mode":{"state":"known","value":"OFF"},"tone_tx":{"state":"unavailable"},"tone_rx":{"state":"unavailable"},` +
+		`"dtcs_code":{"state":"unavailable"},"dtcs_polarity":{"state":"unavailable"},"filter":{"state":"known","value":"FIL1"},` +
+		`"data_mode":{"state":"unavailable"}}}]} `
+	path := filepath.Join(t.TempDir(), "v4.json")
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cp, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	d := cp.Channels[0].Data
+	if d.Duplex != (StringField{State: Known, Value: "OFF"}) || d.Filter != (StringField{State: Known, Value: "FIL1"}) {
+		t.Errorf("v4 fields were not preserved: %+v", *d)
+	}
+	for name, state := range map[string]FieldState{
+		"tuning_step_enabled": d.TuningStepEnabled.State,
+		"tuning_step":         d.TuningStep.State,
+		"program_tuning_step": d.ProgramTuningStepHz.State,
+		"attenuator":          d.AttenuatorDB.State,
+		"preamp":              d.Preamp.State,
+		"antenna":             d.Antenna.State,
+		"ip_plus":             d.IPPlus.State,
+	} {
+		if state != Unavailable {
+			t.Errorf("%s state = %q, want Unavailable", name, state)
+		}
+	}
+
+	bad := strings.Replace(body, `"data_mode":{"state":"unavailable"}`, `"data_mode":{"state":"unavailable"},"ip_plus":{"state":"known"}`, 1)
+	badPath := filepath.Join(t.TempDir(), "v4-with-v5-key.json")
+	if err := os.WriteFile(badPath, []byte(bad), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(badPath); err == nil || !strings.Contains(err.Error(), `unknown field "ip_plus"`) {
+		t.Fatalf("Load(v4 with v5 key) error = %v, want unknown ip_plus", err)
+	}
+}
+
+func TestSave_ReceiverContentRoundTripsThroughSchema5(t *testing.T) {
+	d := withUnavailableTierFields(&ChannelData{FreqHz: 145_500_000, Mode: "FM"})
+	d.TuningStepEnabled = BoolField{State: Known, Value: true}
+	d.TuningStep = StringField{State: Known, Value: "5 kHz"}
+	d.ProgramTuningStepHz = FreqField{State: Known, Value: 500}
+	d.AttenuatorDB = IntField{State: Known, Value: 10}
+	d.Preamp = StringField{State: Known, Value: "ON"}
+	d.Antenna = StringField{State: Known, Value: "ANT2"}
+	d.IPPlus = BoolField{State: Known, Value: true}
+	cp := &Codeplug{Schema: CurrentSchema, Generator: "test", Channels: []Channel{{Slot: "001", Data: d}}}
+	path := filepath.Join(t.TempDir(), "v5.json")
+	if err := Save(path, cp); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"schema": 5`) {
+		t.Fatalf("saved file is not schema 5:\n%s", raw)
+	}
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !reflect.DeepEqual(got.Channels, cp.Channels) {
+		t.Errorf("schema 5 round trip differs:\n got %+v\nwant %+v", got.Channels, cp.Channels)
+	}
+}
+
 // TestSchemaFor_EveryTierFieldForcesV4 walks all ten tier-added fields
 // so that a field added to ChannelData without being accounted for in
 // ChannelData.tierFieldsAbsent fails here, rather than silently being
@@ -184,8 +335,8 @@ func TestSchemaFor_EveryTierFieldForcesV4(t *testing.T) {
 			d := &ChannelData{FreqHz: 14250000, Mode: "USB"}
 			mutate(d)
 			cp := &Codeplug{Schema: CurrentSchema, Channels: []Channel{{Slot: "001", Data: d}}}
-			if got := schemaFor(cp); got != CurrentSchema {
-				t.Errorf("schemaFor() = %d with %s present, want %d", got, name, CurrentSchema)
+			if got := schemaFor(cp); got != 4 {
+				t.Errorf("schemaFor() = %d with %s present, want 4", got, name)
 			}
 		})
 	}
@@ -226,6 +377,11 @@ func TestSave_TierContentRoundTripsThroughSchema4(t *testing.T) {
 			}},
 		},
 	}
+	for i := range cp.Channels {
+		if cp.Channels[i].Data != nil {
+			withUnavailableReceiverFields(cp.Channels[i].Data)
+		}
+	}
 
 	path := filepath.Join(t.TempDir(), "v4.json")
 	if err := Save(path, cp); err != nil {
@@ -241,8 +397,8 @@ func TestSave_TierContentRoundTripsThroughSchema4(t *testing.T) {
 	if err := json.Unmarshal(raw, &probe); err != nil {
 		t.Fatalf("probing saved file: %v", err)
 	}
-	if probe.Schema != CurrentSchema {
-		t.Fatalf("saved schema = %d, want %d", probe.Schema, CurrentSchema)
+	if probe.Schema != 4 {
+		t.Fatalf("saved schema = %d, want 4", probe.Schema)
 	}
 
 	got, err := Load(path)
@@ -292,16 +448,23 @@ func TestLoadV3_MigratesTierFieldsToUnavailable(t *testing.T) {
 			t.Errorf("slot %q: a schema-3 file produced a Recorded tier field: %+v", ch.Slot, *ch.Data)
 		}
 		for name, state := range map[string]FieldState{
-			"tx_frequency":  ch.Data.TxFreqHz.State,
-			"duplex":        ch.Data.Duplex.State,
-			"offset":        ch.Data.OffsetHz.State,
-			"tone_mode":     ch.Data.ToneMode.State,
-			"tone_tx":       ch.Data.ToneTx.State,
-			"tone_rx":       ch.Data.ToneRx.State,
-			"dtcs_code":     ch.Data.DTCSCode.State,
-			"dtcs_polarity": ch.Data.DTCSPolarity.State,
-			"filter":        ch.Data.Filter.State,
-			"data_mode":     ch.Data.DataMode.State,
+			"tx_frequency":        ch.Data.TxFreqHz.State,
+			"duplex":              ch.Data.Duplex.State,
+			"offset":              ch.Data.OffsetHz.State,
+			"tone_mode":           ch.Data.ToneMode.State,
+			"tone_tx":             ch.Data.ToneTx.State,
+			"tone_rx":             ch.Data.ToneRx.State,
+			"dtcs_code":           ch.Data.DTCSCode.State,
+			"dtcs_polarity":       ch.Data.DTCSPolarity.State,
+			"filter":              ch.Data.Filter.State,
+			"data_mode":           ch.Data.DataMode.State,
+			"tuning_step_enabled": ch.Data.TuningStepEnabled.State,
+			"tuning_step":         ch.Data.TuningStep.State,
+			"program_tuning_step": ch.Data.ProgramTuningStepHz.State,
+			"attenuator":          ch.Data.AttenuatorDB.State,
+			"preamp":              ch.Data.Preamp.State,
+			"antenna":             ch.Data.Antenna.State,
+			"ip_plus":             ch.Data.IPPlus.State,
 		} {
 			if state != Unavailable {
 				t.Errorf("slot %q: %s = %q, want %q", ch.Slot, name, state, Unavailable)

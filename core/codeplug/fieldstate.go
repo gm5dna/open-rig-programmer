@@ -160,8 +160,10 @@ const Absent FieldState = ""
 // of the same radio — which is what keeps codeplug.Diff from reporting
 // every channel as modified.
 //
-// Only Known and Unknown force schema 4, because only they say something
-// no schema-3 file could hold.
+// Only Known and Unknown are recorded: a recorded Icom-tier field forces
+// schema 4 and a recorded receiver field (additions D8) forces schema 5,
+// because only they say something the lower schema could not hold;
+// Absent and Unavailable never promote a file.
 func (s FieldState) Recorded() bool { return s == Known || s == Unknown }
 
 // FreqField holds a frequency in hertz together with how confidently it

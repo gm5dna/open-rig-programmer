@@ -378,6 +378,12 @@ func (c Capabilities) Validate() error {
 			problems = append(problems, fmt.Sprintf("DTCSCodes is not strictly ascending at index %d (%d >= %d)", i, c.DTCSCodes[i-1], c.DTCSCodes[i]))
 		}
 	}
+	for i := 1; i < len(c.AttenuatorDB); i++ {
+		if c.AttenuatorDB[i-1] >= c.AttenuatorDB[i] {
+			problems = append(problems, fmt.Sprintf("AttenuatorDB is not strictly ascending at index %d (%d >= %d)", i, c.AttenuatorDB[i-1], c.AttenuatorDB[i]))
+		}
+	}
+	problems = append(problems, c.programTuningStepRangeProblems()...)
 
 	for _, requiredSlot := range c.RequiredSlots {
 		found := false
@@ -499,11 +505,39 @@ func (c Capabilities) Validate() error {
 
 	problems = append(problems, validateVocabEntries("DTCSPolarities", c.DTCSPolarities)...)
 	problems = append(problems, validateVocabEntries("Filters", c.Filters)...)
+	problems = append(problems, validateVocabEntries("TuningSteps", c.TuningSteps)...)
+	problems = append(problems, validateVocabEntries("PreampOptions", c.PreampOptions)...)
+	problems = append(problems, validateVocabEntries("AntennaOptions", c.AntennaOptions)...)
 
 	if len(problems) == 0 {
 		return nil
 	}
 	return fmt.Errorf("spec: Capabilities.Validate: %s", strings.Join(problems, "; "))
+}
+
+// programTuningStepRangeProblems checks the optional D8 programmable-step
+// domain. Both bounds are aligned to zero, not merely to each other: they
+// are complete step values in hertz, and the radio's resolution describes
+// which absolute values it can encode.
+func (c Capabilities) programTuningStepRangeProblems() []string {
+	r := c.ProgramTuningStepRange
+	if r == nil {
+		return nil
+	}
+	var problems []string
+	if r.ResolutionHz == 0 {
+		problems = append(problems, "ProgramTuningStepRange.ResolutionHz 0 must be greater than zero")
+	}
+	if r.MinHz > r.MaxHz {
+		problems = append(problems, fmt.Sprintf("ProgramTuningStepRange.MinHz %d is greater than MaxHz %d", r.MinHz, r.MaxHz))
+	}
+	if r.ResolutionHz > 0 && r.MinHz%r.ResolutionHz != 0 {
+		problems = append(problems, fmt.Sprintf("ProgramTuningStepRange.MinHz %d is not aligned to ResolutionHz %d", r.MinHz, r.ResolutionHz))
+	}
+	if r.ResolutionHz > 0 && r.MaxHz%r.ResolutionHz != 0 {
+		problems = append(problems, fmt.Sprintf("ProgramTuningStepRange.MaxHz %d is not aligned to ResolutionHz %d", r.MaxHz, r.ResolutionHz))
+	}
+	return problems
 }
 
 // toneRangeProblems checks the optional numeric tone domain

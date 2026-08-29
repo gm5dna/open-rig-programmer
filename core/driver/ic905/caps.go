@@ -205,6 +205,18 @@ func bankFields(rw spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 		spec.FieldScanSkip:    {},
 		spec.FieldErase:       {},
 		spec.FieldTxFrequency: {},
+
+		// The seven receiver per-channel fields the additions design (D8)
+		// minted for the IC-R8600: this transceiver's 64/65-byte record
+		// carries none of them, so each is a written-down zero, pinned by
+		// TestFieldGrid_GradesEverySpecFieldThereIs.
+		spec.FieldTuningStepEnabled: {},
+		spec.FieldTuningStep:        {},
+		spec.FieldProgramTuningStep: {},
+		spec.FieldAttenuator:        {},
+		spec.FieldPreamp:            {},
+		spec.FieldAntenna:           {},
+		spec.FieldIPPlus:            {},
 	}
 }
 
@@ -216,7 +228,9 @@ func bankFields(rw spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 // spec.Capabilities.Bank hands out defensive copies, but the baseline
 // itself is walked directly by cloneCapabilities and by the tests.
 //
-// ALL TWENTY-TWO spec.Capabilities fields are populated explicitly, each
+// ALL TWENTY-SEVEN spec.Capabilities fields (twenty-two after the Icom
+// tier, plus the additions design's five D8 receiver vocabularies, which
+// this transceiver leaves deliberately empty) are populated explicitly, each
 // from the IC-905 capability matrix's own §1 or §1b entry (cited per
 // field below), and TestCapabilities_EveryFieldExplicit reflects over the
 // struct to enforce it. A zero left in a capability field is not a

@@ -423,7 +423,8 @@ func validateChannelData(slot string, bank spec.BankID, d ChannelData, caps spec
 	return issues
 }
 
-// validateTierFields checks the ten fields the Icom tier added, and it
+// validateTierFields checks the seventeen fields the two Icom model
+// extensions added, and it
 // checks each one ONLY when this bank can reach it
 // (spec.FieldSupport.Unreachable false — design D4, adjudication 16).
 //
@@ -498,6 +499,35 @@ func validateTierFields(slot string, bank spec.BankID, d ChannelData, caps spec.
 	}
 	if reachable(spec.FieldDataMode) && !absent(spec.FieldDataMode, d.DataMode.State) {
 		add(spec.FieldDataMode, d.DataMode.Valid())
+	}
+	if reachable(spec.FieldTuningStepEnabled) && !absent(spec.FieldTuningStepEnabled, d.TuningStepEnabled.State) {
+		add(spec.FieldTuningStepEnabled, d.TuningStepEnabled.Valid())
+	}
+	if reachable(spec.FieldTuningStep) && !absent(spec.FieldTuningStep, d.TuningStep.State) {
+		add(spec.FieldTuningStep, d.TuningStep.Valid(caps.TuningSteps))
+	}
+	if reachable(spec.FieldProgramTuningStep) && !absent(spec.FieldProgramTuningStep, d.ProgramTuningStepHz.State) {
+		if err := d.ProgramTuningStepHz.Valid(); err != nil {
+			add(spec.FieldProgramTuningStep, err)
+		} else if d.ProgramTuningStepHz.State == Known {
+			r := caps.ProgramTuningStepRange
+			v := d.ProgramTuningStepHz.Value
+			if r == nil || r.ResolutionHz == 0 || v < r.MinHz || v > r.MaxHz || v%r.ResolutionHz != 0 {
+				add(spec.FieldProgramTuningStep, fmt.Errorf("codeplug: FreqField: Known value %d Hz is not admitted by this radio's range", v))
+			}
+		}
+	}
+	if reachable(spec.FieldAttenuator) && !absent(spec.FieldAttenuator, d.AttenuatorDB.State) {
+		add(spec.FieldAttenuator, d.AttenuatorDB.Valid(caps.AttenuatorDB))
+	}
+	if reachable(spec.FieldPreamp) && !absent(spec.FieldPreamp, d.Preamp.State) {
+		add(spec.FieldPreamp, d.Preamp.Valid(caps.PreampOptions))
+	}
+	if reachable(spec.FieldAntenna) && !absent(spec.FieldAntenna, d.Antenna.State) {
+		add(spec.FieldAntenna, d.Antenna.Valid(caps.AntennaOptions))
+	}
+	if reachable(spec.FieldIPPlus) && !absent(spec.FieldIPPlus, d.IPPlus.State) {
+		add(spec.FieldIPPlus, d.IPPlus.Valid())
 	}
 	return issues
 }

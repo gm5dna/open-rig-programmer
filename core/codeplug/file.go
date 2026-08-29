@@ -30,7 +30,7 @@ import (
 // as it was before the tier existed. That is what makes every existing
 // Yaesu codeplug and manifest artefact byte-identical BY CONSTRUCTION
 // rather than by a promise nobody can check.
-const CurrentSchema = 4
+const CurrentSchema = 5
 
 // lowestSchema is the oldest version Save will emit — the floor of
 // schemaFor's search. Older schemas are readable (loadV2, loadV1) but
@@ -365,13 +365,19 @@ func (e *OversizeSaveError) Error() string {
 //   - schema 1 and schema 2 alike: every populated channel's legacy
 //     "tag_display" bool becomes a BoolField (see
 //     migrateLegacyTagDisplay for the rule and the reasoning);
-//   - schema 1, 2 and 3 alike: every populated channel's ten
-//     tier-added fields become Unavailable — what those files say, by
-//     having no key for a field their radios do not have, and what a
-//     read of those radios reports (see migrateV3ChannelData).
+//   - schema 1, 2 and 3 alike: every populated channel's SEVENTEEN
+//     added fields — the Icom tier's ten (design D4) and the additions
+//     design's seven receiver fields (D8) — become Unavailable — what
+//     those files say, by having no key for a field their radios do not
+//     have, and what a read of those radios reports (see
+//     migrateV3ChannelData);
+//   - schema 4 (frozen since D8): the ten tier fields are preserved as
+//     written, and ONLY the seven D8 receiver fields are blanket-set
+//     Unavailable (see migrateV4ChannelData) — a schema-4 file predates
+//     them exactly as a schema-3 file predates the ten.
 //
-// A schema-4 file gets NO such blanket rule, and must not: it can hold a
-// tier field honestly (Known, Unknown or Unavailable), and a key it does
+// A schema-5 file gets NO blanket rule, and must not: it can hold any
+// added field honestly (Known, Unknown or Unavailable), and a key it does
 // NOT hold means one of two different things depending on whether the
 // radio has the field at all. Deciding that needs the model's own
 // capabilities, which this function does not have — see
@@ -424,6 +430,8 @@ func Load(path string) (*Codeplug, error) {
 	// Pass 2: version-appropriate strict decode.
 	var cp *Codeplug
 	switch probe.Schema {
+	case 5:
+		cp, err = loadV5(b, path)
 	case 4:
 		cp, err = loadV4(b, path)
 	case 3:
@@ -446,20 +454,10 @@ func Load(path string) (*Codeplug, error) {
 	return cp, nil
 }
 
-// loadV4 strictly decodes a schema-4 (current) file into the live
-// Codeplug shape, checks for trailing data and duplicate keys (exempting
-// only menus.legacy), and validates the menu snapshot. No migration: this
-// IS the current schema, so the live structs are the right ones — the
-// frozen shapes below exist precisely so that stays true as the live
-// structs move on.
-//
-// A tier-added field with no key in the file therefore decodes to the
-// zero FieldState, Absent, and stays Absent here. Whether that Absent is
-// the truth about the channel or is really Unavailable ("this radio has
-// no such field") is a question about the RADIO, answerable only with
-// that model's capabilities in hand: see NormaliseTierFields, which the
-// composition roots run over Load's result.
-func loadV4(b []byte, path string) (*Codeplug, error) {
+// loadV5 strictly decodes the current schema through the live shape.
+// Schema 5 introduced the seven receiver fields, so the live shape is
+// exactly the versioned shape until the next schema change freezes it.
+func loadV5(b []byte, path string) (*Codeplug, error) {
 	var cp Codeplug
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields()
@@ -476,6 +474,35 @@ func loadV4(b []byte, path string) (*Codeplug, error) {
 		return nil, fmt.Errorf("codeplug: load %s: %w", path, err)
 	}
 	return &cp, nil
+}
+
+// loadV4 strictly decodes through the frozen schema-4 shape. The ten D4
+// fields are preserved exactly as recorded; the seven fields schema 5
+// added migrate to Unavailable, matching a fresh read from a radio whose
+// older file format could not express them.
+func loadV4(b []byte, path string) (*Codeplug, error) {
+	var v4 codeplugV4
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&v4); err != nil {
+		return nil, fmt.Errorf("codeplug: load %s: %w", path, wrapDecodeError(err))
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return nil, fmt.Errorf("codeplug: load %s: trailing data after the top-level JSON value", path)
+	}
+	if err := checkDuplicateKeys(b, menusLegacyExempt); err != nil {
+		return nil, fmt.Errorf("codeplug: load %s: %w", path, err)
+	}
+	if err := v4.Menus.Validate(); err != nil {
+		return nil, fmt.Errorf("codeplug: load %s: %w", path, err)
+	}
+	return &Codeplug{
+		Schema:    CurrentSchema,
+		Generator: v4.Generator,
+		Radio:     v4.Radio,
+		Channels:  migrateV4Channels(v4.Channels),
+		Menus:     v4.Menus,
+	}, nil
 }
 
 // channelDataV3 is the FROZEN schema-3 on-disk shape of a populated
@@ -615,9 +642,10 @@ func migrateV3Channels(v3 []channelV3) []Channel {
 // migrateV3ChannelData converts one decoded schema-3 channel's data into
 // the current shape, or returns nil for an empty slot.
 //
-// The migration is EXPLICIT about the ten fields the Icom tier added,
-// and it sets every one of them to UNAVAILABLE rather than leaving the
-// zero value. That is the load-bearing decision of the whole migration,
+// The migration is EXPLICIT about the seventeen added fields — the ten
+// the Icom tier added (D4) and the seven receiver fields the additions
+// design added (D8) — and it sets every one of them to UNAVAILABLE
+// rather than leaving the zero value. That is the load-bearing decision of the whole migration,
 // so the alternative is recorded with it.
 //
 // Unavailable is TRUE of a schema-3 file: schema 3 existed only while
@@ -668,15 +696,29 @@ func withUnavailableTierFields(d *ChannelData) *ChannelData {
 	d.DTCSPolarity = StringField{State: Unavailable}
 	d.Filter = StringField{State: Unavailable}
 	d.DataMode = BoolField{State: Unavailable}
+	return withUnavailableReceiverFields(d)
+}
+
+// withUnavailableReceiverFields is the schema-4-to-5 migration shared
+// with tests that construct an explicitly schema-4-representable value.
+func withUnavailableReceiverFields(d *ChannelData) *ChannelData {
+	d.TuningStepEnabled = BoolField{State: Unavailable}
+	d.TuningStep = StringField{State: Unavailable}
+	d.ProgramTuningStepHz = FreqField{State: Unavailable}
+	d.AttenuatorDB = IntField{State: Unavailable}
+	d.Preamp = StringField{State: Unavailable}
+	d.Antenna = StringField{State: Unavailable}
+	d.IPPlus = BoolField{State: Unavailable}
 	return d
 }
 
-// tierFieldNormalisers is the ten fields the Icom tier added, each paired
+// tierFieldNormalisers is all seventeen fields the two Icom model
+// extensions added, each paired
 // with the two things NormaliseTierFields needs of it: is this channel's
 // copy Absent, and make it Unavailable.
 //
-// A table rather than ten hand-written if-statements, for the reason
-// diff.go's tierAddedFieldFor is one: an eleventh tier field is then a
+// A table rather than seventeen hand-written if-statements, for the reason
+// diff.go's tierAddedFieldFor is one: another tier field is then a
 // single row here, and the row states its spec.Field alongside the struct
 // field it reads, where the two cannot drift apart unnoticed.
 //
@@ -706,10 +748,18 @@ var tierFieldNormalisers = []struct {
 	{spec.FieldDTCSPolarity, func(d *ChannelData) bool { return d.DTCSPolarity.State == Absent }, func(d *ChannelData) { d.DTCSPolarity = StringField{State: Unavailable} }},
 	{spec.FieldFilter, func(d *ChannelData) bool { return d.Filter.State == Absent }, func(d *ChannelData) { d.Filter = StringField{State: Unavailable} }},
 	{spec.FieldDataMode, func(d *ChannelData) bool { return d.DataMode.State == Absent }, func(d *ChannelData) { d.DataMode = BoolField{State: Unavailable} }},
+	{spec.FieldTuningStepEnabled, func(d *ChannelData) bool { return d.TuningStepEnabled.State == Absent }, func(d *ChannelData) { d.TuningStepEnabled = BoolField{State: Unavailable} }},
+	{spec.FieldTuningStep, func(d *ChannelData) bool { return d.TuningStep.State == Absent }, func(d *ChannelData) { d.TuningStep = StringField{State: Unavailable} }},
+	{spec.FieldProgramTuningStep, func(d *ChannelData) bool { return d.ProgramTuningStepHz.State == Absent }, func(d *ChannelData) { d.ProgramTuningStepHz = FreqField{State: Unavailable} }},
+	{spec.FieldAttenuator, func(d *ChannelData) bool { return d.AttenuatorDB.State == Absent }, func(d *ChannelData) { d.AttenuatorDB = IntField{State: Unavailable} }},
+	{spec.FieldPreamp, func(d *ChannelData) bool { return d.Preamp.State == Absent }, func(d *ChannelData) { d.Preamp = StringField{State: Unavailable} }},
+	{spec.FieldAntenna, func(d *ChannelData) bool { return d.Antenna.State == Absent }, func(d *ChannelData) { d.Antenna = StringField{State: Unavailable} }},
+	{spec.FieldIPPlus, func(d *ChannelData) bool { return d.IPPlus.State == Absent }, func(d *ChannelData) { d.IPPlus = BoolField{State: Unavailable} }},
 }
 
 // NormaliseTierFields resolves, on every populated channel of cp, each of
-// the ten fields the Icom tier added from ABSENT to UNAVAILABLE wherever
+// the seventeen fields the two Icom model extensions added from ABSENT to
+// UNAVAILABLE wherever
 // caps says the bank holding that channel's slot cannot REACH the field
 // (spec.FieldSupport.Unreachable). It changes nothing else: a Known,
 // Unknown or already-Unavailable field is left exactly as it was, and so
@@ -1073,11 +1123,54 @@ type codeplugV4 struct {
 	Menus     *MenuSnapshot `json:"menus,omitempty"`
 }
 
+// migrateV4Channels preserves schema 4's channel shape and supplies the
+// seven receiver fields that did not exist until schema 5.
+func migrateV4Channels(v4 []channelV4) []Channel {
+	if v4 == nil {
+		return nil
+	}
+	out := make([]Channel, len(v4))
+	for i, c := range v4 {
+		out[i] = Channel{Slot: c.Slot, Data: migrateV4ChannelData(c.Data)}
+	}
+	return out
+}
+
+func migrateV4ChannelData(d *channelDataV4) *ChannelData {
+	if d == nil {
+		return nil
+	}
+	return withUnavailableReceiverFields(&ChannelData{
+		FreqHz:       d.FreqHz,
+		Mode:         d.Mode,
+		ClarHz:       d.ClarHz,
+		RxClar:       d.RxClar,
+		TxClar:       d.TxClar,
+		CTCSS:        d.CTCSS,
+		CTCSSTone:    d.CTCSSTone,
+		Shift:        d.Shift,
+		Tag:          d.Tag,
+		TagDisplay:   d.TagDisplay,
+		ScanSkip:     d.ScanSkip,
+		TxFreqHz:     d.TxFreqHz,
+		Duplex:       d.Duplex,
+		OffsetHz:     d.OffsetHz,
+		ToneMode:     d.ToneMode,
+		ToneTx:       d.ToneTx,
+		ToneRx:       d.ToneRx,
+		DTCSCode:     d.DTCSCode,
+		DTCSPolarity: d.DTCSPolarity,
+		Filter:       d.Filter,
+		DataMode:     d.DataMode,
+	})
+}
+
 // schemaFor returns the LOWEST schema version that can represent cp —
 // the rule design D4 (adjudication 4; round 2 F6+C7) settled on, and the
 // reason every pre-tier file stays byte-identical.
 //
-// Schema 3 unless one of two things is true of some populated channel:
+// Schema 3 unless D4 content or a wide frequency needs schema 4; schema
+// 5 only when one of D8's seven receiver fields is Recorded.
 //
 //   - a tier-added field is PRESENT — its state RECORDS something, i.e.
 //     is Known or Unknown rather than Absent or Unavailable (see
@@ -1097,29 +1190,35 @@ type codeplugV4 struct {
 // load), so honouring it would make every re-save a schema-4 file and
 // destroy the byte identity this function exists for.
 func schemaFor(cp *Codeplug) int {
+	needsSchema4 := false
 	for _, ch := range cp.Channels {
 		if ch.Data == nil {
 			continue
 		}
-		if !ch.Data.tierFieldsUnrecorded() {
-			return CurrentSchema
+		if !ch.Data.receiverFieldsUnrecorded() {
+			return 5
 		}
-		if ch.Data.FreqHz > math.MaxUint32 {
-			return CurrentSchema
+		if !ch.Data.icomTierFieldsUnrecorded() || ch.Data.FreqHz > math.MaxUint32 {
+			needsSchema4 = true
 		}
+	}
+	if needsSchema4 {
+		return 4
 	}
 	return lowestSchema
 }
 
 // saveValue returns the versioned marshal value Save should encode for
-// cp: a codeplugV3 or a codeplugV4, per schemaFor. cp is never modified.
+// cp: a codeplugV3, codeplugV4, or shallow schema-5 copy, per schemaFor.
+// cp is never modified.
 //
 // A nil Channels marshals to a nil slice (JSON null), not an empty
 // array, in both versions — preserving exactly what the live struct
 // produced before this tier.
 func saveValue(cp *Codeplug) any {
 	schema := schemaFor(cp)
-	if schema == lowestSchema {
+	switch schema {
+	case lowestSchema:
 		return codeplugV3{
 			Schema:    schema,
 			Generator: cp.Generator,
@@ -1127,13 +1226,18 @@ func saveValue(cp *Codeplug) any {
 			Channels:  saveChannelsV3(cp.Channels),
 			Menus:     cp.Menus,
 		}
-	}
-	return codeplugV4{
-		Schema:    schema,
-		Generator: cp.Generator,
-		Radio:     cp.Radio,
-		Channels:  saveChannelsV4(cp.Channels),
-		Menus:     cp.Menus,
+	case 4:
+		return codeplugV4{
+			Schema:    schema,
+			Generator: cp.Generator,
+			Radio:     cp.Radio,
+			Channels:  saveChannelsV4(cp.Channels),
+			Menus:     cp.Menus,
+		}
+	default:
+		v5 := *cp
+		v5.Schema = schema
+		return &v5
 	}
 }
 
