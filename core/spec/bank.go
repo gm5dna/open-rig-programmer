@@ -69,7 +69,9 @@ type Bank struct {
 	// and Slots is then the complete, fixed inventory it has always
 	// been.
 	//
-	// The three fields below describe that addressable space, and they
+	// The fields below (Groups, PerGroup, Budget or BudgetUnstated, and
+	// the GroupBase/ChannelBase numbering — additions design D3.4 and
+	// Erratum 2) describe that addressable space, and they
 	// exist so "is this slot within the space?" is decidable from the
 	// Bank ALONE — no model table, no driver call — which is what lets
 	// codeplug.Diff admit an add at a slot no read has ever returned.

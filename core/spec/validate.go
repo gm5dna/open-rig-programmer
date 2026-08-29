@@ -299,10 +299,11 @@ func (c Capabilities) Validate() error {
 		seenBank[b.ID] = true
 
 		// The sparse-space descriptor's own consistency (design D4,
-		// adjudication 7): Sparse/Groups/PerGroup/Budget are legal only
-		// together, and all zero without Sparse. Every bank registered
-		// before the Icom tier leaves all four at their zero values and
-		// so contributes nothing here.
+		// adjudication 7; additions D3.4 and Erratum 2): Sparse, Groups,
+		// PerGroup, exactly one of Budget/BudgetUnstated, and the
+		// GroupBase/ChannelBase pair are legal only together, and all zero
+		// without Sparse. Every bank registered before the Icom tier
+		// leaves them at their zero values and so contributes nothing here.
 		problems = append(problems, b.sparseProblems()...)
 		if c.Transmit == ReceiveOnly {
 			for _, field := range []Field{FieldTxFrequency, FieldToneTx} {

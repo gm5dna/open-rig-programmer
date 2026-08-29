@@ -8,11 +8,16 @@ package civ
 // re-validated field by field against the same rules the corresponding
 // builder enforces, not merely a command-number match.
 //
-// ONE DELIBERATE WIDTH, AND IT IS THE ONLY ONE. For a profile accepting
-// more than one record length (the IC-905, spec D6), the gate admits a set
-// at ANY length in RecordLengths(), while BuildMemorySet emits only
-// BuildRecordLength(). The admitted set is therefore strictly wider than
-// the builder set by exactly the other declared layouts, and nothing else.
+// ONE DELIBERATE WIDTH, AND IT IS THE ONLY ONE. For a LENGTH-KEYED profile
+// accepting more than one record length (the IC-905, spec D6), the gate
+// admits a set at ANY length in RecordLengths(), while BuildMemorySet
+// emits only BuildRecordLength(). The admitted set is therefore strictly
+// wider than the builder set by exactly the other declared layouts, and
+// nothing else. Under DiscriminatorModeByte (additions design D3.3) there
+// is no such width: BuildLength is zero, the builder emits whichever
+// layout the record's mode selects, and the gate admits exactly the
+// declared layouts' validating records — builder set and admitted set
+// coincide.
 //
 // It is deliberate rather than an oversight. The accepted-length SET is
 // the profile's statement of what its radio's memory records are — it is
