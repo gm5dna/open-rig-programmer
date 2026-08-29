@@ -96,6 +96,9 @@ func TestMemBankIsSparseWithTheRecordedSpace(t *testing.T) {
 		if b.Groups != 100 || b.PerGroup != 100 {
 			t.Errorf("%s profile: MEM space is %dx%d, want 100x100 (matrix §1b)", name, b.Groups, b.PerGroup)
 		}
+		if b.GroupBase != 1 || b.ChannelBase != 1 {
+			t.Errorf("%s profile: MEM bases = %d/%d, want 1/1 so G01-001 remains the first radio slot", name, b.GroupBase, b.ChannelBase)
+		}
 		if b.Budget != 500 {
 			t.Errorf("%s profile: MEM Budget = %d, want 500 (spec D4/D6; ASSUMED — ic705-group-budget, lift L-BUDGET-CEILING)", name, b.Budget)
 		}
@@ -126,9 +129,9 @@ func TestCallBankIsDenseWithFourSlots(t *testing.T) {
 		if !b.NoBlank {
 			t.Errorf("%s profile: CALL bank does not set NoBlank — a call channel can never be empty (ASSUMED, ic705-call-channel-emptiness, lift L-CALL-EMPTY)", name)
 		}
-		// Sparse false and the three descriptor numbers zero, or
+		// Sparse false and every sparse descriptor zero, or
 		// spec.Validate refuses the bank outright.
-		if b.Sparse || b.Groups != 0 || b.PerGroup != 0 || b.Budget != 0 {
+		if b.Sparse || b.Groups != 0 || b.GroupBase != 0 || b.PerGroup != 0 || b.ChannelBase != 0 || b.Budget != 0 || b.BudgetUnstated {
 			t.Errorf("%s profile: CALL bank carries a sparse descriptor (%v/%d/%d/%d) — it is dense", name, b.Sparse, b.Groups, b.PerGroup, b.Budget)
 		}
 	}
@@ -221,8 +224,10 @@ var deliberatelyZero = []struct {
 }
 
 func TestDeliberateZerosAreAudited(t *testing.T) {
-	if got := reflect.TypeOf(spec.Capabilities{}).NumField(); got != 27 {
-		t.Fatalf("spec.Capabilities has %d fields, this audit knows 27", got)
+	// The audit covers all 28 top-level capabilities plus the two sparse
+	// numbering bases pinned by TestMemBankIsSparseWithTheRecordedSpace.
+	if got := reflect.TypeOf(spec.Capabilities{}).NumField() + 2; got != 30 {
+		t.Fatalf("capability/base audit has %d fields, this audit knows 30", got)
 	}
 	for name, caps := range bothProfiles() {
 		for _, z := range deliberatelyZero {
