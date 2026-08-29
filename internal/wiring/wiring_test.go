@@ -1027,6 +1027,18 @@ func TestOpenRealSessionFor_BaudIsTheDriversDefault(t *testing.T) {
 	}
 }
 
+func TestEveryRegisteredModelDeclaresHasTransmitter(t *testing.T) {
+	for _, model := range SupportedModels() {
+		caps, err := StaticCapabilities(model)
+		if err != nil {
+			t.Fatalf("StaticCapabilities(%q): %v", model, err)
+		}
+		if caps.Transmit != spec.HasTransmitter {
+			t.Errorf("%s Transmit = %v, want HasTransmitter; Wave 4 must give a receive-only registration its own explicit ruling", model, caps.Transmit)
+		}
+	}
+}
+
 // TestOpenRealSessionFor_BaudFollowsADisagreeingDriver is E2's actual
 // proof, and the one the FT-710 alone cannot give: with a registered
 // model whose DefaultBaud DISAGREES with transport.DefaultBaud, the port
@@ -1047,6 +1059,7 @@ func TestOpenRealSessionFor_BaudFollowsADisagreeingDriver(t *testing.T) {
 		return baudFixtureDriver{caps: spec.Capabilities{
 			Model:        fixtureModel,
 			CATID:        "9999",
+			Transmit:     spec.HasTransmitter,
 			Bauds:        []int{fixtureBaud},
 			DefaultBaud:  fixtureBaud,
 			TagLen:       12,
@@ -2101,6 +2114,7 @@ func registerFramingFixture(t *testing.T, model string, stopBits int) {
 			baudFixtureDriver: baudFixtureDriver{caps: spec.Capabilities{
 				Model:        model,
 				CATID:        "9999",
+				Transmit:     spec.HasTransmitter,
 				Bauds:        []int{transport.DefaultBaud},
 				DefaultBaud:  transport.DefaultBaud,
 				TagLen:       12,
