@@ -60,7 +60,7 @@ func icomTestCapabilities() spec.Capabilities {
 		Banks: []spec.Bank{{
 			ID: spec.BankMemory, Label: "Memories",
 			Slots:  []string{"G01-001", "G01-002"},
-			Sparse: true, Groups: 100, PerGroup: 100, Budget: 3,
+			Sparse: true, Groups: 100, GroupBase: 1, PerGroup: 100, ChannelBase: 1, Budget: 3,
 			Fields: fields,
 		}},
 	}
@@ -444,6 +444,26 @@ func TestDiff_SparseBudgetEnforcedAtPlanTime(t *testing.T) {
 	}}
 	if _, err := Diff(baseline, manyEmpty, caps); err != nil {
 		t.Fatalf("Diff() with five empty slots error = %v, want nil", err)
+	}
+}
+
+func TestDiff_SparseBudgetUnstatedSkipsOnlyBudgetRefusal(t *testing.T) {
+	caps := icomTestCapabilities()
+	caps.Banks[0].Budget = 0
+	caps.Banks[0].BudgetUnstated = true
+	baseline := &Codeplug{Schema: CurrentSchema, Channels: []Channel{{Slot: "G01-001"}}}
+	file := &Codeplug{Schema: CurrentSchema, Channels: []Channel{
+		{Slot: "G01-001", Data: icomChannelData(145_500_000)},
+		{Slot: "G01-002", Data: icomChannelData(145_600_000)},
+		{Slot: "G02-001", Data: icomChannelData(145_700_000)},
+		{Slot: "G02-002", Data: icomChannelData(145_800_000)},
+	}}
+	if _, err := Diff(baseline, file, caps); err != nil {
+		t.Fatalf("Diff() with an unstated budget refused occupancy: %v", err)
+	}
+	file.Channels = append(file.Channels, Channel{Slot: "G101-001", Data: icomChannelData(430_000_000)})
+	if _, err := Diff(baseline, file, caps); err == nil {
+		t.Fatal("Diff() admitted an out-of-space slot merely because the occupancy budget was unstated")
 	}
 }
 

@@ -135,6 +135,11 @@ const (
 	// would make a band-addressed radio indistinguishable from a
 	// group-addressed one in every diagnostic.
 	AddressFormBandChannel
+	// AddressFormBankChannel is one packed-BCD bank byte then the two-byte
+	// channel. It deliberately remains distinct from BandChannel: equal
+	// wire widths do not make a bank and a band the same address identity
+	// (TestAddressFormBankChannelIsDistinctAndThreeBytesWide).
+	AddressFormBankChannel
 	// AddressFormWideGroupChannel is TWO packed-BCD group bytes, most
 	// significant first, then the two-byte channel: a four-byte address
 	// field.
@@ -159,6 +164,8 @@ func (f AddressForm) String() string {
 		return "AddressFormGroupChannel"
 	case AddressFormBandChannel:
 		return "AddressFormBandChannel"
+	case AddressFormBankChannel:
+		return "AddressFormBankChannel"
 	case AddressFormWideGroupChannel:
 		return "AddressFormWideGroupChannel"
 	default:
@@ -183,7 +190,7 @@ func (f AddressForm) addressBytes() int {
 // for a fact.
 func (f AddressForm) groupBytes() int {
 	switch f {
-	case AddressFormGroupChannel, AddressFormBandChannel:
+	case AddressFormGroupChannel, AddressFormBandChannel, AddressFormBankChannel:
 		return 1
 	case AddressFormWideGroupChannel:
 		return 2
@@ -220,6 +227,20 @@ func (f AddressForm) groupCapacity() int {
 // grouped reports whether this form carries a group or band index.
 func (f AddressForm) grouped() bool {
 	return f.groupBytes() > 0
+}
+
+// AddressRange is one inclusive rectangle in a profile's address space.
+// Extra ranges stay as separate rectangles so validAddress cannot silently
+// admit the holes in their rectangular closure; the builder, parser and
+// gate refusal is pinned by TestExtraRangesAreAUnionNotARectangularClosure.
+type AddressRange struct {
+	GroupLo, GroupHi     int
+	ChannelLo, ChannelHi int
+}
+
+func (r AddressRange) contains(a ChannelAddress) bool {
+	return a.Group >= r.GroupLo && a.Group <= r.GroupHi &&
+		a.Channel >= r.ChannelLo && a.Channel <= r.ChannelHi
 }
 
 // ChannelAddress is one memory channel's address under a profile's own
@@ -498,10 +519,13 @@ func (s FieldSpan) clone() FieldSpan {
 	return out
 }
 
-// RecordLayout is one accepted record LENGTH and the field spans that
+// RecordLayout is one accepted record SHAPE and the field spans that
 // decode it.
 //
-// A profile carries one layout per accepted length, which is what makes
+// Under the two length-keyed discriminator kinds a profile carries one
+// layout per accepted length; under DiscriminatorModeByte (additions
+// design D3.3) layouts are keyed by ModeClass and two may share a length
+// — the IC-R8600's FM and DCR tails. The length-keyed reading is what makes
 // the "accepted record lengths as a SET with a discriminator rule" of spec
 // D1 decidable: the length IS the discriminator, and each length brings
 // its own geometry. The IC-905's documented five- and six-byte frequency
@@ -511,6 +535,13 @@ func (s FieldSpan) clone() FieldSpan {
 type RecordLayout struct {
 	// Length is the record's exact width in bytes.
 	Length int
+	// ModeClass is the neutral discriminator class for a mode-keyed
+	// layout. Empty for the two length discriminators.
+	ModeClass string
+	// ModeValues are the wire values that select this layout. Keeping the
+	// declaration beside the layout prevents a tail from being paired with
+	// a mode table elsewhere by position.
+	ModeValues []byte
 	// Fields maps neutral fields onto this record's bytes. A field may
 	// appear MORE THAN ONCE: spec D5 entry 4 records a duplicated TX
 	// block that three models require on write, and two spans naming the
@@ -529,7 +560,7 @@ type RecordLayout struct {
 
 // clone returns a deep copy.
 func (l RecordLayout) clone() RecordLayout {
-	out := RecordLayout{Length: l.Length}
+	out := RecordLayout{Length: l.Length, ModeClass: l.ModeClass, ModeValues: copyBytes(l.ModeValues)}
 	if l.Fields != nil {
 		out.Fields = make([]FieldSpan, len(l.Fields))
 		for i, f := range l.Fields {
@@ -562,6 +593,10 @@ const (
 	// its own layout, told apart by the record's own length. The IC-905's
 	// documented five- and six-byte frequency forms.
 	DiscriminatorRecordLength
+	// DiscriminatorModeByte selects a layout from ProfileConfig.ModeKey.
+	// Length remains an accepted-set fingerprint but never identifies a
+	// layout, because two modes may intentionally share it.
+	DiscriminatorModeByte
 )
 
 func (d RecordDiscriminator) String() string {
@@ -572,6 +607,8 @@ func (d RecordDiscriminator) String() string {
 		return "DiscriminatorSingleLength"
 	case DiscriminatorRecordLength:
 		return "DiscriminatorRecordLength"
+	case DiscriminatorModeByte:
+		return "DiscriminatorModeByte"
 	default:
 		return "RecordDiscriminator(" + strconv.Itoa(int(d)) + ")"
 	}

@@ -18,6 +18,7 @@ func TestSparseSlot_RoundTrip(t *testing.T) {
 		{5, 12, "G05-012"},
 		{100, 100, "G100-100"},
 		{99, 999, "G99-999"},
+		{0, 0, "G00-000"},
 	} {
 		got := SparseSlot(tt.group, tt.channel)
 		if got != tt.want {
@@ -36,7 +37,7 @@ func TestSparseSlot_RoundTrip(t *testing.T) {
 func TestParseSparseSlot_RefusesNonCanonical(t *testing.T) {
 	for _, s := range []string{
 		"", "G", "G05", "05-012", "G5-12", "G005-0012", "G05-12", "Gxx-012",
-		"G05-abc", "g05-012", "G05-012-3", "G-012", "G05-",
+		"G05-abc", "g05-012", "G05-012-3", "G-012", "G05-", "G00--01",
 	} {
 		if _, _, ok := ParseSparseSlot(s); ok {
 			t.Errorf("ParseSparseSlot(%q) accepted a non-canonical form", s)
@@ -66,7 +67,7 @@ func TestBankWithinSpace_DenseIsMembershipOnly(t *testing.T) {
 func TestBankWithinSpace_Sparse(t *testing.T) {
 	b := Bank{
 		ID: BankMemory, Slots: []string{"G01-001"},
-		Sparse: true, Groups: 100, PerGroup: 100, Budget: 500,
+		Sparse: true, Groups: 100, GroupBase: 1, PerGroup: 100, ChannelBase: 1, Budget: 500,
 	}
 	for _, in := range []string{"G01-001", "G01-002", "G100-100", "G50-050"} {
 		if !b.WithinSpace(in) {
@@ -76,6 +77,20 @@ func TestBankWithinSpace_Sparse(t *testing.T) {
 	for _, out := range []string{"G00-001", "G01-000", "G101-001", "G01-101", "001", "P1L"} {
 		if b.WithinSpace(out) {
 			t.Errorf("WithinSpace(%q) = true, want false", out)
+		}
+	}
+}
+
+func TestBankWithinSpace_ZeroBasedSparse(t *testing.T) {
+	b := Bank{ID: BankMemory, Sparse: true, Groups: 100, GroupBase: 0, PerGroup: 100, ChannelBase: 0, BudgetUnstated: true}
+	for _, in := range []string{"G00-000", "G99-099"} {
+		if !b.WithinSpace(in) {
+			t.Errorf("WithinSpace(%q) = false for zero-based space", in)
+		}
+	}
+	for _, out := range []string{"G100-000", "G00-100"} {
+		if b.WithinSpace(out) {
+			t.Errorf("WithinSpace(%q) = true outside zero-based space", out)
 		}
 	}
 }
@@ -96,7 +111,16 @@ func TestValidate_SparseDescriptorRules(t *testing.T) {
 	}{
 		{
 			name: "sparse with a complete descriptor is valid",
-			bank: Bank{ID: BankMemory, Slots: []string{"G01-001"}, Sparse: true, Groups: 100, PerGroup: 100, Budget: 500},
+			bank: Bank{ID: BankMemory, Slots: []string{"G01-001"}, Sparse: true, Groups: 100, GroupBase: 1, PerGroup: 100, ChannelBase: 1, Budget: 500},
+		},
+		{
+			name: "sparse with unstated budget is valid",
+			bank: Bank{ID: BankMemory, Sparse: true, Groups: 100, PerGroup: 100, BudgetUnstated: true},
+		},
+		{
+			name: "sparse with budget and unstated is ambiguous",
+			bank: Bank{ID: BankMemory, Sparse: true, Groups: 100, PerGroup: 100, Budget: 500, BudgetUnstated: true},
+			want: "exactly one of Budget greater than zero or BudgetUnstated",
 		},
 		{
 			name: "sparse without Groups",
@@ -123,6 +147,11 @@ func TestValidate_SparseDescriptorRules(t *testing.T) {
 			bank: Bank{ID: BankMemory, Slots: []string{"001"}, Budget: 500},
 			want: "Budget 500 is set on a bank that is not Sparse",
 		},
+		{name: "BudgetUnstated on dense", bank: Bank{ID: BankMemory, Slots: []string{"001"}, BudgetUnstated: true}, want: "BudgetUnstated is set on a bank that is not Sparse"},
+		{name: "GroupBase outside domain", bank: Bank{ID: BankMemory, Sparse: true, Groups: 100, GroupBase: 2, PerGroup: 100, Budget: 500}, want: "GroupBase 2 must be 0 or 1"},
+		{name: "ChannelBase outside domain", bank: Bank{ID: BankMemory, Sparse: true, Groups: 100, PerGroup: 100, ChannelBase: -1, Budget: 500}, want: "ChannelBase -1 must be 0 or 1"},
+		{name: "GroupBase on dense", bank: Bank{ID: BankMemory, Slots: []string{"001"}, GroupBase: 1}, want: "GroupBase 1 is set on a bank that is not Sparse"},
+		{name: "ChannelBase on dense", bank: Bank{ID: BankMemory, Slots: []string{"001"}, ChannelBase: 1}, want: "ChannelBase 1 is set on a bank that is not Sparse"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			err := base(tt.bank).Validate()
@@ -304,6 +333,7 @@ func minimalCaps() Capabilities {
 	return Capabilities{
 		Model:        "TEST",
 		CATID:        "0000",
+		Transmit:     HasTransmitter,
 		TagLen:       8,
 		Bauds:        []int{38400},
 		DefaultBaud:  38400,

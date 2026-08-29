@@ -258,7 +258,8 @@ func baseCapabilities(rw spec.FieldSupport) spec.Capabilities {
 		// as "AC:"+token on the SESSION's capabilities copy AND on
 		// Identity, because core/clone's ReadAll records the SESSION
 		// capabilities' CATID into the codeplug — see ic905.go.
-		CATID: "AC",
+		CATID:    "AC",
+		Transmit: spec.HasTransmitter,
 		Banks: []spec.Bank{
 			{
 				ID: spec.BankMemory,
@@ -290,10 +291,12 @@ func baseCapabilities(rw spec.FieldSupport) spec.Capabilities {
 				// materialised — and which is exactly why write.go's
 				// rung 11 (ruling T3) has to refuse an add the bounded
 				// walk never saw.
-				Sparse:   true,
-				Groups:   100,
-				PerGroup: 100,
-				Budget:   500,
+				Sparse:      true,
+				Groups:      100,
+				GroupBase:   1,
+				PerGroup:    100,
+				ChannelBase: 1,
+				Budget:      500,
 			},
 			{
 				ID: spec.BankCall,

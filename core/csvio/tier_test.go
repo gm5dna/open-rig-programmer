@@ -302,7 +302,7 @@ func TestImport_FreqHzReachesPastUint32(t *testing.T) {
 func icomCHIRPCapabilities() spec.Capabilities {
 	tones := spec.StandardCTCSSTones()
 	return spec.Capabilities{
-		Model: "TEST-ICOM", CATID: "A4",
+		Model: "TEST-ICOM", CATID: "A4", Transmit: spec.HasTransmitter,
 		Modes: []string{"USB", "FM"}, TagLen: 10,
 		CTCSSTones:  tones[:],
 		Bauds:       []int{19200},
@@ -340,6 +340,75 @@ func icomCHIRPCapabilities() spec.Capabilities {
 			},
 		}},
 	}
+}
+
+func receiverCHIRPCapabilities() spec.Capabilities {
+	caps := icomCHIRPCapabilities()
+	caps.Model = "TEST-RECEIVER"
+	caps.Transmit = spec.ReceiveOnly
+	caps.Banks[0].Fields[spec.FieldTxFrequency] = spec.FieldSupport{}
+	caps.Banks[0].Fields[spec.FieldToneTx] = spec.FieldSupport{}
+	modes := caps.ToneModes[:0]
+	for _, mode := range caps.ToneModes {
+		switch mode.Semantics {
+		case spec.ToneModeCTCSS:
+			continue
+		case spec.ToneModeCTCSSSquelch:
+			mode.Semantics = spec.ToneModeCTCSSRxSquelch
+		}
+		modes = append(modes, mode)
+	}
+	caps.ToneModes = modes
+	return caps
+}
+
+func TestImportCHIRP_ReceiveOnlyDuplexAndTone(t *testing.T) {
+	caps := receiverCHIRPCapabilities()
+	if err := caps.Validate(); err != nil {
+		t.Fatalf("receiver fixture does not validate: %v", err)
+	}
+	head := "Location,Name,Frequency,Duplex,Offset,Tone,rToneFreq,cToneFreq,DtcsCode,DtcsPolarity,Mode,Skip\n"
+
+	t.Run("split is refused as anatomically impossible", func(t *testing.T) {
+		body := head + "1,SPLIT,145.700000,split,433.500000,,88.5,88.5,023,NN,FM,\n"
+		_, report, err := ImportCHIRP(strings.NewReader(body), caps)
+		if err != nil {
+			t.Fatalf("ImportCHIRP: %v", err)
+		}
+		if len(report.Entries) == 0 || !report.HasBlocking() {
+			t.Fatalf("report = %+v, want a blocking transmitter refusal", report.Entries)
+		}
+		found := false
+		for _, entry := range report.Entries {
+			if entry.Column == "Duplex" && strings.Contains(entry.Detail, "this radio has no transmitter") {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("report = %+v, want Duplex wording %q", report.Entries, "this radio has no transmitter")
+		}
+	})
+
+	t.Run("TSQL selects receive-only tone squelch", func(t *testing.T) {
+		body := head + "1,RXTSQL,145.700000,,0.000000,TSQL,67.0,88.5,023,NN,FM,\n"
+		channels, report, err := ImportCHIRP(strings.NewReader(body), caps)
+		if err != nil {
+			t.Fatalf("ImportCHIRP: %v", err)
+		}
+		if report.HasBlocking() {
+			t.Fatalf("report has blocking entries: %+v", report.Entries)
+		}
+		d := channels[0].Data
+		if d.ToneMode != (codeplug.StringField{State: codeplug.Known, Value: "TSQL"}) {
+			t.Errorf("ToneMode = %+v, want Known TSQL", d.ToneMode)
+		}
+		if d.ToneRx != (codeplug.ToneField{State: codeplug.Known, Value: 885}) {
+			t.Errorf("ToneRx = %+v, want Known 88.5", d.ToneRx)
+		}
+		if d.ToneTx.State != codeplug.Unavailable {
+			t.Errorf("ToneTx = %+v, want Unavailable on a receiver", d.ToneTx)
+		}
+	})
 }
 
 // TestImportCHIRP_CapabilityAwareDuplexAndTone walks the mappings the

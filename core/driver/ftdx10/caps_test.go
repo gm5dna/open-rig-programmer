@@ -134,8 +134,8 @@ var tierFieldsMustBeEmpty = map[string]bool{
 // the mistake, so the rule for those six is inverted here rather than
 // waived, and the test still fails if one is ever filled in.
 func TestCapabilities_EveryFieldExplicit(t *testing.T) {
-	// 27 since additions design D8 added the five receiver vocabularies.
-	const wantFieldCount = 27
+	// 28 since additions design D4.2 added the transmit declaration.
+	const wantFieldCount = 28
 
 	for _, tt := range []struct {
 		name string

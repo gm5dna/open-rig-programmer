@@ -375,7 +375,10 @@ type BankView struct {
 	// bankReadOnly's doc comment. Never true merely because a field is
 	// spec.Unverified.
 	ReadOnly bool
-	Slots    []SlotView
+	// BudgetUnstated tells the UI the sparse capacity is undocumented; it
+	// does not relax the bank's declared address-space boundary.
+	BudgetUnstated bool `json:",omitempty"`
+	Slots          []SlotView
 	// TagDisplayDefault is the codeplug.BoolField a row ADDED in this bank
 	// must carry for tag_display, derived from this bank's own
 	// FieldTagDisplay support — see bankTagDisplayDefault's doc comment
@@ -452,14 +455,18 @@ type UISpecView struct {
 	// demo: a static baseline describes the radio, not a decision, and a
 	// simulator session takes no consent option.
 	UnverifiedWritesConsented bool
-	Banks                     []BankView
-	Modes                     []string
-	ShiftOptions              []string
-	CTCSSStateOptions         []string
-	Tones                     []ToneView
-	TagMaxBytes               int
-	ClarMaxHz                 int
-	ClarStepHz                int
+	// Transmit is radio-level anatomy, not a per-bank write grade. It lets
+	// the UI explain why transmit fields do not exist on a receiver without
+	// inventing a new field state.
+	Transmit          string
+	Banks             []BankView
+	Modes             []string
+	ShiftOptions      []string
+	CTCSSStateOptions []string
+	Tones             []ToneView
+	TagMaxBytes       int
+	ClarMaxHz         int
+	ClarStepHz        int
 	// GridLegendNote (formerly ToneScanSkipNote) is the channel grid's
 	// standing legend explaining why the Tone/Scan Skip columns exist but
 	// cannot be read back over CAT — served from

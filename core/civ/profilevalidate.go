@@ -42,6 +42,7 @@ func validateProfileConfig(cfg ProfileConfig) error {
 		validateLayoutSet,     // V5
 		validateLayoutFields,  // V6
 		validateLayoutOverlap, // V7
+		validateModeLayouts,   // V8a
 		validateFixedTemplate, // V8
 		validateFrameBound,    // V9
 	} {
@@ -108,7 +109,7 @@ func validateAddressSpace(cfg ProfileConfig) error {
 		if cfg.GroupBase != 0 {
 			return invalidProfile("GroupBase is %d under AddressFormFlat — a flat address has no group index to number, so an inapplicable field must be explicitly zero", cfg.GroupBase)
 		}
-	case AddressFormGroupChannel, AddressFormBandChannel, AddressFormWideGroupChannel:
+	case AddressFormGroupChannel, AddressFormBandChannel, AddressFormBankChannel, AddressFormWideGroupChannel:
 		if cfg.Groups < 1 {
 			return invalidProfile("Groups is %d under %v — a grouped address form needs at least one group", cfg.Groups, cfg.AddressForm)
 		}
@@ -158,6 +159,33 @@ func validateAddressSpace(cfg ProfileConfig) error {
 	}
 	if cfg.ChannelHi > maxChannelDecimal {
 		return invalidProfile("ChannelHi is %d, want <= %d — the channel number is two packed-BCD bytes", cfg.ChannelHi, maxChannelDecimal)
+	}
+	for i, r := range cfg.ExtraRanges {
+		if r.GroupLo < 0 {
+			return invalidProfile("ExtraRanges[%d].GroupLo is %d, want >= 0", i, r.GroupLo)
+		}
+		if r.GroupHi < r.GroupLo {
+			return invalidProfile("ExtraRanges[%d].GroupLo..GroupHi is %d..%d, want Lo <= Hi", i, r.GroupLo, r.GroupHi)
+		}
+		if cfg.AddressForm == AddressFormFlat {
+			if r.GroupLo != 0 {
+				return invalidProfile("ExtraRanges[%d].GroupLo is %d under AddressFormFlat, want 0 — a flat address has no group field", i, r.GroupLo)
+			}
+			if r.GroupHi != 0 {
+				return invalidProfile("ExtraRanges[%d].GroupHi is %d under AddressFormFlat, want 0 — a flat address has no group field", i, r.GroupHi)
+			}
+		} else if r.GroupHi >= cfg.AddressForm.groupCapacity() {
+			return invalidProfile("ExtraRanges[%d].GroupHi is %d, want <= %d under %v", i, r.GroupHi, cfg.AddressForm.groupCapacity()-1, cfg.AddressForm)
+		}
+		if r.ChannelLo < 0 {
+			return invalidProfile("ExtraRanges[%d].ChannelLo is %d, want >= 0", i, r.ChannelLo)
+		}
+		if r.ChannelHi < r.ChannelLo {
+			return invalidProfile("ExtraRanges[%d].ChannelLo..ChannelHi is %d..%d, want Lo <= Hi", i, r.ChannelLo, r.ChannelHi)
+		}
+		if r.ChannelHi > maxChannelDecimal {
+			return invalidProfile("ExtraRanges[%d].ChannelHi is %d, want <= %d — the channel number is two packed-BCD bytes", i, r.ChannelHi, maxChannelDecimal)
+		}
 	}
 	return nil
 }
@@ -215,7 +243,7 @@ func validateLayoutSet(cfg ProfileConfig) error {
 		if l.Length < 1 || l.Length > maxRecordLength {
 			return invalidProfile("Layouts[%d].Length is %d, want 1..%d", i, l.Length, maxRecordLength)
 		}
-		if prev, dup := seen[l.Length]; dup {
+		if prev, dup := seen[l.Length]; dup && cfg.Discriminator != DiscriminatorModeByte {
 			return invalidProfile("Layouts[%d].Length %d repeats Layouts[%d] — the record length IS the discriminator, so two layouts sharing one are undecidable", i, l.Length, prev)
 		}
 		seen[l.Length] = i
@@ -233,10 +261,23 @@ func validateLayoutSet(cfg ProfileConfig) error {
 		if len(cfg.Layouts) < 2 {
 			return invalidProfile("Discriminator is %v with %d layout — the rule tells lengths apart, so a single-length profile must say DiscriminatorSingleLength", cfg.Discriminator, len(cfg.Layouts))
 		}
+	case DiscriminatorModeByte:
+		if len(cfg.Layouts) < 2 {
+			return invalidProfile("Discriminator is %v with %d layout — a mode byte needs at least 2 layouts to discriminate", cfg.Discriminator, len(cfg.Layouts))
+		}
 	default:
 		return invalidProfile("Discriminator %v must be set explicitly — spec D1 asks for the accepted lengths as a SET WITH A RULE, and an inferred rule would hide a two-layout profile that meant to have one", cfg.Discriminator)
 	}
 
+	if cfg.Discriminator == DiscriminatorModeByte {
+		if cfg.BuildLength != 0 {
+			return invalidProfile("BuildLength is %d, want 0 under %v — the record length is selected from MemoryRecord.Mode", cfg.BuildLength, cfg.Discriminator)
+		}
+		return nil
+	}
+	if cfg.BuildLength == 0 {
+		return invalidProfile("BuildLength is 0 under %v, want one of the declared record lengths", cfg.Discriminator)
+	}
 	if _, ok := seen[cfg.BuildLength]; !ok {
 		lengths := make([]int, 0, len(seen))
 		for n := range seen {
@@ -246,6 +287,122 @@ func validateLayoutSet(cfg ProfileConfig) error {
 		return invalidProfile("BuildLength is %d, which is not one of the accepted lengths %v — the builder would emit a record this profile's own parser refuses", cfg.BuildLength, lengths)
 	}
 	return nil
+}
+
+// validateModeLayouts proves that mode selection is a total, unambiguous
+// index over the declared layouts. The same-length FM/DCR regression is
+// pinned by TestModeByteLayoutSelectionAndLengths.
+func validateModeLayouts(cfg ProfileConfig) error {
+	if cfg.Discriminator != DiscriminatorModeByte {
+		return nil
+	}
+	if cfg.ModeKey.Field != FieldMode || cfg.ModeKey.Length != 1 || cfg.ModeKey.Encoding != EncodingEnum {
+		return invalidProfile("ModeKey must name the one-byte or one-nibble mode enum, got %+v", cfg.ModeKey)
+	}
+	classes := map[string]int{}
+	wires := map[byte]int{}
+	names := map[string]int{}
+	for i, l := range cfg.Layouts {
+		if l.ModeClass == "" {
+			return invalidProfile("Layouts[%d].ModeClass is empty under %v", i, cfg.Discriminator)
+		}
+		if prev, ok := classes[l.ModeClass]; ok {
+			return invalidProfile("Layouts[%d].ModeClass %q repeats Layouts[%d]", i, l.ModeClass, prev)
+		}
+		classes[l.ModeClass] = i
+		if len(l.ModeValues) == 0 {
+			return invalidProfile("Layouts[%d].ModeValues is empty under %v", i, cfg.Discriminator)
+		}
+		sp, ok := modeSpanInLayout(l, cfg.ModeKey)
+		if !ok {
+			return invalidProfile("Layouts[%d] does not map ModeKey %+v", i, cfg.ModeKey)
+		}
+		domain := make(map[byte]bool, len(l.ModeValues))
+		for _, value := range l.ModeValues {
+			if prev, ok := wires[value]; ok {
+				return invalidProfile("Layouts[%d] mode wire value %#02x repeats Layouts[%d]", i, value, prev)
+			}
+			wires[value] = i
+			domain[value] = true
+		}
+		if len(domain) != len(sp.Enum) {
+			return invalidProfile("Layouts[%d] ModeKey enum domain does not equal ModeValues %v", i, l.ModeValues)
+		}
+		for value, name := range sp.Enum {
+			if !domain[value] {
+				return invalidProfile("Layouts[%d] ModeKey enum domain does not equal ModeValues %v", i, l.ModeValues)
+			}
+			if prev, ok := names[name]; ok {
+				return invalidProfile("Layouts[%d] neutral mode %q repeats Layouts[%d]", i, name, prev)
+			}
+			names[name] = i
+		}
+	}
+
+	headLen := cfg.Layouts[0].Length
+	for _, l := range cfg.Layouts[1:] {
+		if l.Length < headLen {
+			headLen = l.Length
+		}
+	}
+	wantHead := modeHeadFields(cfg.Layouts[0], cfg.ModeKey, headLen)
+	wantFixed := fixedPrefix(cfg.Layouts[0], headLen)
+	for i := 1; i < len(cfg.Layouts); i++ {
+		if !equalFieldSpans(wantHead, modeHeadFields(cfg.Layouts[i], cfg.ModeKey, headLen)) {
+			return invalidProfile("Layouts[%d] head field spans differ before byte %d (only the ModeKey enum domain may differ)", i, headLen)
+		}
+		if string(wantFixed) != string(fixedPrefix(cfg.Layouts[i], headLen)) {
+			return invalidProfile("Layouts[%d] head Fixed bytes differ before byte %d", i, headLen)
+		}
+	}
+	return nil
+}
+
+func modeHeadFields(l RecordLayout, key FieldSpan, headLen int) []FieldSpan {
+	var out []FieldSpan
+	for _, sp := range l.Fields {
+		if sp.Offset >= headLen {
+			continue
+		}
+		sp = sp.clone()
+		if sameSpanPosition(sp, key) {
+			sp.Enum = nil
+		}
+		out = append(out, sp)
+	}
+	return out
+}
+
+func fixedPrefix(l RecordLayout, n int) []byte {
+	out := make([]byte, n)
+	copy(out, l.Fixed)
+	return out
+}
+
+func equalFieldSpans(a, b []FieldSpan) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Field != b[i].Field || a[i].Offset != b[i].Offset || a[i].Length != b[i].Length ||
+			a[i].Nibble != b[i].Nibble || a[i].Encoding != b[i].Encoding || a[i].Order != b[i].Order ||
+			a[i].Scale != b[i].Scale || !equalEnum(a[i].Enum, b[i].Enum) {
+			return false
+		}
+	}
+	return true
+}
+
+func equalEnum(a, b map[byte]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for key, value := range a {
+		if b[key] != value {
+			return false
+		}
+	}
+	return true
 }
 
 // validateLayoutFields is V6: every span, on its own terms.

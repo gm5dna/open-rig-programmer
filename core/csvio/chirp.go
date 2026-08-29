@@ -1107,6 +1107,16 @@ func importCHIRPDuplexIcom(line int, cell func(string) string, data *codeplug.Ch
 		}
 		data.OffsetHz = codeplug.FreqField{State: codeplug.Known, Value: hz}
 	case "split":
+		if caps.Transmit == spec.ReceiveOnly {
+			// The field-state answer remains Unavailable; Transmit exists only
+			// to explain the anatomical reason at this format boundary. Pinned
+			// by TestImportCHIRP_ReceiveOnlyDuplexAndTone.
+			entries = append(entries, LossEntry{
+				Line: line, Column: "Duplex", Value: duplexRaw, Action: ActionUnsupported, Blocking: true,
+				Detail: "this radio has no transmitter",
+			})
+			break
+		}
 		if !hasTxFreq {
 			entries = append(entries, LossEntry{
 				Line: line, Column: "Duplex", Value: duplexRaw, Action: ActionUnsupported, Blocking: true,
@@ -1241,7 +1251,14 @@ func importCHIRPToneIcom(line int, cell func(string) string, data *codeplug.Chan
 			setTone("rToneFreq", cell("rToneFreq"), &data.ToneTx)
 		}
 	case "TSQL":
-		if !setMode(spec.ToneModeCTCSSSquelch, "encode+decode") {
+		semantics, label := spec.ToneModeCTCSSSquelch, "encode+decode"
+		if caps.Transmit == spec.ReceiveOnly {
+			// CHIRP has one TSQL spelling for both transceiver tone squelch
+			// and receiver-only tone squelch. Radio anatomy chooses the neutral
+			// semantic; the wire vocabulary still comes from capabilities.
+			semantics, label = spec.ToneModeCTCSSRxSquelch, "receive-only"
+		}
+		if !setMode(semantics, label) {
 			break
 		}
 		cTone := cell("cToneFreq")
