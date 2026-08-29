@@ -537,7 +537,7 @@ func withinAnySparseBank(caps spec.Capabilities, slot string) bool {
 // bank and forbids one on every dense bank.
 func checkSparseBudget(file *Codeplug, caps spec.Capabilities) error {
 	for _, b := range caps.Banks {
-		if !b.Sparse {
+		if !b.Sparse || b.BudgetUnstated {
 			continue
 		}
 		populated := 0

@@ -74,8 +74,9 @@ var tierFieldsMustBeEmpty = map[string]string{
 // than waived: they must be EMPTY, and the test fails if one is ever filled
 // in.
 func TestCapabilities_EveryFieldExplicit(t *testing.T) {
-	// 27 since additions design D8 added the five receiver vocabularies.
-	const wantFieldCount = 27
+	// Twenty-eight top-level fields plus GroupBase and ChannelBase, which
+	// TestBanks_ShapeAndSparseDescriptors audits on the nested sparse bank.
+	const wantFieldCount = 30
 
 	for _, tt := range []struct {
 		name string
@@ -87,8 +88,8 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			v := reflect.ValueOf(tt.caps)
 			typ := v.Type()
-			if typ.NumField() != wantFieldCount {
-				t.Fatalf("spec.Capabilities has %d fields, this test knows %d — a field was added or removed and this driver must decide about it explicitly, not inherit a zero", typ.NumField(), wantFieldCount)
+			if got := typ.NumField() + 2; got != wantFieldCount {
+				t.Fatalf("capability/base audit has %d fields, this test knows %d — a field was added or removed and this driver must decide about it explicitly, not inherit a zero", got, wantFieldCount)
 			}
 			for i := 0; i < typ.NumField(); i++ {
 				name := typ.Field(i).Name
@@ -252,6 +253,9 @@ func TestBanks_ShapeAndSparseDescriptors(t *testing.T) {
 		t.Errorf("MEM = {Sparse:%v Groups:%d PerGroup:%d Budget:%d}, want {true 100 100 500} (matrix section 1b; the budget is ASSUMED, ic905.group_budget, lift ic905-R-09)",
 			mem.Sparse, mem.Groups, mem.PerGroup, mem.Budget)
 	}
+	if mem.GroupBase != 1 || mem.ChannelBase != 1 {
+		t.Errorf("MEM bases = %d/%d, want 1/1 so G01-001 remains the first radio slot", mem.GroupBase, mem.ChannelBase)
+	}
 	if mem.NoBlank {
 		t.Error("MEM NoBlank is true — the clear form explicitly admits memory groups 00 00 ~ 00 99 (PDF p.19, folio 18)")
 	}
@@ -263,7 +267,7 @@ func TestBanks_ShapeAndSparseDescriptors(t *testing.T) {
 	if !ok {
 		t.Fatal("no CALL bank")
 	}
-	if call.Sparse || call.Groups != 0 || call.PerGroup != 0 || call.Budget != 0 {
+	if call.Sparse || call.Groups != 0 || call.GroupBase != 0 || call.PerGroup != 0 || call.ChannelBase != 0 || call.Budget != 0 || call.BudgetUnstated {
 		t.Errorf("CALL = {Sparse:%v Groups:%d PerGroup:%d Budget:%d}, want a dense bank with all three descriptors zero", call.Sparse, call.Groups, call.PerGroup, call.Budget)
 	}
 	if !call.NoBlank {
