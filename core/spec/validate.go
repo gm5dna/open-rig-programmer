@@ -133,7 +133,7 @@ func validDuplexDirection(d DuplexDirection) bool {
 // value) is deliberately excluded.
 func validToneModeSemantics(s ToneModeSemantics) bool {
 	switch s {
-	case ToneModeOff, ToneModeCTCSS, ToneModeCTCSSSquelch, ToneModeDTCS, ToneModeCross:
+	case ToneModeOff, ToneModeCTCSS, ToneModeCTCSSSquelch, ToneModeCTCSSRxSquelch, ToneModeDTCS, ToneModeCross:
 		return true
 	default:
 		return false
@@ -276,6 +276,9 @@ func (c Capabilities) Validate() error {
 	if c.CATID == "" {
 		problems = append(problems, "CATID must not be empty")
 	}
+	if c.Transmit != HasTransmitter && c.Transmit != ReceiveOnly {
+		problems = append(problems, "Transmit must be declared as HasTransmitter or ReceiveOnly")
+	}
 	// A TagLen of zero (or less) is not "no tag support" — core/csvio's
 	// CHIRP import truncates every imported name to b[:caps.TagLen], so a
 	// zero TagLen silently discards every channel name to "" and reports
@@ -296,11 +299,19 @@ func (c Capabilities) Validate() error {
 		seenBank[b.ID] = true
 
 		// The sparse-space descriptor's own consistency (design D4,
-		// adjudication 7): Sparse/Groups/PerGroup/Budget are legal only
-		// together, and all zero without Sparse. Every bank registered
-		// before the Icom tier leaves all four at their zero values and
-		// so contributes nothing here.
+		// adjudication 7; additions D3.4 and Erratum 2): Sparse, Groups,
+		// PerGroup, exactly one of Budget/BudgetUnstated, and the
+		// GroupBase/ChannelBase pair are legal only together, and all zero
+		// without Sparse. Every bank registered before the Icom tier
+		// leaves them at their zero values and so contributes nothing here.
 		problems = append(problems, b.sparseProblems()...)
+		if c.Transmit == ReceiveOnly {
+			for _, field := range []Field{FieldTxFrequency, FieldToneTx} {
+				if b.Fields[field] != (FieldSupport{}) {
+					problems = append(problems, fmt.Sprintf("bank %s field %s must have zero FieldSupport on a ReceiveOnly radio", b.ID, field))
+				}
+			}
+		}
 
 		for _, slot := range b.Slots {
 			if slot == "" {
@@ -498,6 +509,9 @@ func (c Capabilities) Validate() error {
 	for _, m := range c.ToneModes {
 		if !validToneModeSemantics(m.Semantics) {
 			problems = append(problems, fmt.Sprintf("ToneModes %q has invalid Semantics %d", m.Value, m.Semantics))
+		}
+		if c.Transmit == ReceiveOnly && m.NeedsTxTone() {
+			problems = append(problems, fmt.Sprintf("ToneModes %q has NeedsTxTone semantics on a ReceiveOnly radio", m.Value))
 		}
 	}
 	// The canonical rule again, on the other Icom vocabulary.

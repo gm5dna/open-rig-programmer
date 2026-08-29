@@ -80,6 +80,11 @@ type ProfileConfig struct {
 	// where the form is grouped.
 	ChannelLo, ChannelHi int
 
+	// ExtraRanges extends the base rectangle as an exact UNION. Keeping
+	// each range separate prevents admission of holes in their closure;
+	// TestExtraRangesAreAUnionNotARectangularClosure pins all three callers.
+	ExtraRanges []AddressRange
+
 	// NameLength is the width of this model's channel-name field in
 	// bytes, or 0 for a model with no name field.
 	NameLength int
@@ -107,11 +112,17 @@ type ProfileConfig struct {
 	// data-versus-fill distinction on the wire.
 	NamePad byte
 
-	// Layouts is one entry per accepted record length. See RecordLayout.
+	// Layouts is one entry per accepted record SHAPE: per length for the
+	// two length-keyed kinds, per ModeClass for DiscriminatorModeByte
+	// (where two layouts may share a length). See RecordLayout.
 	Layouts []RecordLayout
 
 	// Discriminator names the rule picking among the accepted lengths.
 	Discriminator RecordDiscriminator
+
+	// ModeKey names the record byte or nibble which selects a layout under
+	// DiscriminatorModeByte. It is zero for the two length discriminators.
+	ModeKey FieldSpan
 
 	// BuildLength is the accepted length BuildMemorySet EMITS. It must be
 	// one of the layouts' lengths.

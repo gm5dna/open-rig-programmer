@@ -140,7 +140,8 @@ func baseCapabilities(rw spec.FieldSupport) spec.Capabilities {
 		// is undocumented on all six models in this tier, so a session
 		// records the observed token beside this address and matches it
 		// against nothing (spec D3.2, D5 entry 7, lift L-IDTOKEN).
-		CATID: "A4",
+		CATID:    "A4",
+		Transmit: spec.HasTransmitter,
 
 		// The ten operating modes in the manual's own printed order (PDF
 		// p.18, folio 17, `• Operating mode`). The DV code's reading as
@@ -251,11 +252,13 @@ func baseCapabilities(rw spec.FieldSupport) spec.Capabilities {
 				// Session.Capabilities is where this radio's actual
 				// occupied slots appear, put there by Open's inventory
 				// walk (inventory.go).
-				Slots:    nil,
-				NoBlank:  false,
-				Sparse:   true,
-				Groups:   memGroups,
-				PerGroup: memPerGroup,
+				Slots:       nil,
+				NoBlank:     false,
+				Sparse:      true,
+				Groups:      memGroups,
+				GroupBase:   1,
+				PerGroup:    memPerGroup,
+				ChannelBase: 1,
 				// Budget is the number of POPULATED channels this radio
 				// holds across the whole sparse space at once — 500
 				// against 10 000 addresses, which is what makes the space

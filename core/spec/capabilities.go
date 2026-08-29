@@ -4,6 +4,27 @@ package spec
 
 import "fmt"
 
+// Transmit describes whether the radio has transmit hardware. It is a
+// radio-level fact: FieldSupport still describes each protocol field.
+type Transmit int
+
+const (
+	TransmitUnspecified Transmit = iota
+	HasTransmitter
+	ReceiveOnly
+)
+
+func (t Transmit) String() string {
+	switch t {
+	case HasTransmitter:
+		return "has_transmitter"
+	case ReceiveOnly:
+		return "receive_only"
+	default:
+		return "unspecified"
+	}
+}
+
 // StepRange is a contiguous, evenly spaced range of tuning-step values in
 // hertz. It is used through a pointer on Capabilities so nil means that a
 // radio declares no programmable tuning-step domain, mirroring ToneRange's
@@ -30,6 +51,9 @@ type Capabilities struct {
 	// FT-710 or "98" for an IC-7610's static value. See
 	// core/driver.Identity.CATID for the tier's casing convention.
 	CATID string
+	// Transmit states whether this radio has a transmitter. The zero value
+	// is refused so every driver must make the anatomy explicit.
+	Transmit Transmit
 	// Banks lists every memory-slot family this radio supports.
 	Banks []Bank
 	// Modes lists display-name modes in the UI's preferred order, e.g.

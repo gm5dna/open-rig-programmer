@@ -532,12 +532,15 @@ func withinAnySparseBank(caps spec.Capabilities, slot string) bool {
 // limit by sending is not.
 //
 // Empty channels do not count: the budget is on stored channels, and an
-// empty slot stores nothing. A bank with no Budget cannot reach here —
-// spec.Capabilities.Validate requires a positive Budget on every Sparse
-// bank and forbids one on every dense bank.
+// empty slot stores nothing. A sparse bank declares EITHER a positive
+// Budget OR BudgetUnstated (spec.Capabilities.Validate requires exactly
+// one, and forbids both on a dense bank); an unstated budget skips this
+// refusal only — out-of-space adds are still refused — because what an
+// over-full radio does is undocumented and this program never finds out
+// by sending (additions design D3.4).
 func checkSparseBudget(file *Codeplug, caps spec.Capabilities) error {
 	for _, b := range caps.Banks {
-		if !b.Sparse {
+		if !b.Sparse || b.BudgetUnstated {
 			continue
 		}
 		populated := 0

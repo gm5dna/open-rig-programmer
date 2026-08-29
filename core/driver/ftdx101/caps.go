@@ -333,7 +333,8 @@ func baseCapabilities(m modelParams, memFields, pmsFields map[spec.Field]spec.Fi
 		// frame block at 1069-1078). Sourced from the DIALECT rather than
 		// restated, so the string the ID probe compares against is the
 		// string the capability data advertises — ONE source per model.
-		CATID: m.dialect.CATID(),
+		CATID:    m.dialect.CATID(),
+		Transmit: spec.HasTransmitter,
 		Banks: []spec.Bank{
 			{
 				ID: spec.BankMemory,

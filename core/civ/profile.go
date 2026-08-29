@@ -52,14 +52,19 @@ type Profile struct {
 	groupBase          int
 	channelLo          int
 	channelHi          int
+	extraRanges        []AddressRange
 	nameLength         int
 	nameCharset        []byte
 	nameByteOK         map[byte]bool
 	namePad            byte
 	discriminator      RecordDiscriminator
+	modeKey            FieldSpan
 	buildLength        int
 	layouts            []RecordLayout
-	layoutByLength     map[int]RecordLayout
+	layoutByLength     map[int]int
+	layoutByMode       map[string]int
+	modeValueToClass   map[byte]string
+	neutralModeLayout  map[string]int
 	acceptedLengths    []int
 	fieldsByIDByLayout map[int]map[FieldID][]FieldSpan
 }
@@ -94,10 +99,12 @@ func NewProfile(cfg ProfileConfig) (Profile, error) {
 		groupBase:      cfg.GroupBase,
 		channelLo:      cfg.ChannelLo,
 		channelHi:      cfg.ChannelHi,
+		extraRanges:    append([]AddressRange(nil), cfg.ExtraRanges...),
 		nameLength:     cfg.NameLength,
 		nameCharset:    []byte(cfg.NameCharset),
 		namePad:        cfg.NamePad,
 		discriminator:  cfg.Discriminator,
+		modeKey:        cfg.ModeKey.clone(),
 		buildLength:    cfg.BuildLength,
 	}
 	if p.controllerAddr == 0 {
@@ -113,19 +120,37 @@ func NewProfile(cfg ProfileConfig) (Profile, error) {
 	}
 
 	p.layouts = make([]RecordLayout, len(cfg.Layouts))
-	p.layoutByLength = make(map[int]RecordLayout, len(cfg.Layouts))
+	p.layoutByLength = make(map[int]int, len(cfg.Layouts))
+	p.layoutByMode = make(map[string]int, len(cfg.Layouts))
+	p.modeValueToClass = make(map[byte]string, len(cfg.Layouts))
+	p.neutralModeLayout = make(map[string]int, len(cfg.Layouts))
 	p.fieldsByIDByLayout = make(map[int]map[FieldID][]FieldSpan, len(cfg.Layouts))
-	p.acceptedLengths = make([]int, 0, len(cfg.Layouts))
+	lengthSet := make(map[int]bool, len(cfg.Layouts))
 	for i, l := range cfg.Layouts {
 		cl := l.clone()
 		p.layouts[i] = cl
-		p.layoutByLength[cl.Length] = cl
-		p.acceptedLengths = append(p.acceptedLengths, cl.Length)
+		if p.discriminator != DiscriminatorModeByte {
+			p.layoutByLength[cl.Length] = i
+		}
+		p.layoutByMode[cl.ModeClass] = i
+		for _, value := range cl.ModeValues {
+			p.modeValueToClass[value] = cl.ModeClass
+		}
+		if sp, ok := modeSpanInLayout(cl, p.modeKey); ok {
+			for _, name := range sp.Enum {
+				p.neutralModeLayout[name] = i
+			}
+		}
+		lengthSet[cl.Length] = true
 		byID := make(map[FieldID][]FieldSpan, len(cl.Fields))
 		for _, sp := range cl.Fields {
 			byID[sp.Field] = append(byID[sp.Field], sp)
 		}
-		p.fieldsByIDByLayout[cl.Length] = byID
+		p.fieldsByIDByLayout[i] = byID
+	}
+	p.acceptedLengths = make([]int, 0, len(lengthSet))
+	for length := range lengthSet {
+		p.acceptedLengths = append(p.acceptedLengths, length)
 	}
 	sort.Ints(p.acceptedLengths)
 
@@ -203,6 +228,19 @@ func (p Profile) Discriminator() RecordDiscriminator { return p.discriminator }
 // BuildRecordLength is the accepted length BuildMemorySet emits.
 func (p Profile) BuildRecordLength() int { return p.buildLength }
 
+// BuildRecordLengthFor returns the layout length selected by neutral mode,
+// or zero when the profile is not mode-keyed or the mode is undeclared.
+func (p Profile) BuildRecordLengthFor(mode string) int {
+	if p.discriminator != DiscriminatorModeByte {
+		return 0
+	}
+	i, ok := p.neutralModeLayout[mode]
+	if !ok {
+		return 0
+	}
+	return p.layouts[i].Length
+}
+
 // RecordLengths returns this profile's accepted record lengths — the SET
 // of spec D1 — in ascending order, as a fresh slice.
 func (p Profile) RecordLengths() []int {
@@ -216,8 +254,8 @@ func (p Profile) RecordLengths() []int {
 // re-asked on every record read, so the fingerprint is continuous rather
 // than one-shot.
 func (p Profile) AcceptsRecordLength(n int) bool {
-	_, ok := p.layoutByLength[n]
-	return ok
+	i := sort.SearchInts(p.acceptedLengths, n)
+	return i < len(p.acceptedLengths) && p.acceptedLengths[i] == n
 }
 
 // Layouts returns deep copies of this profile's record layouts, in
@@ -233,11 +271,74 @@ func (p Profile) Layouts() []RecordLayout {
 
 // LayoutFor returns a deep copy of the layout for record length n.
 func (p Profile) LayoutFor(n int) (RecordLayout, bool) {
-	l, ok := p.layoutByLength[n]
+	if p.discriminator == DiscriminatorModeByte {
+		return RecordLayout{}, false
+	}
+	i, ok := p.layoutByLength[n]
 	if !ok {
 		return RecordLayout{}, false
 	}
-	return l.clone(), true
+	return p.layouts[i].clone(), true
+}
+
+// LayoutForRecord selects the one layout which can interpret rec. Length
+// chooses under the two established discriminators; mode value chooses
+// first under DiscriminatorModeByte and that layout then enforces length.
+func (p Profile) LayoutForRecord(rec []byte) (RecordLayout, error) {
+	i, err := p.layoutIndexForRecord(rec)
+	if err != nil {
+		return RecordLayout{}, err
+	}
+	return p.layouts[i].clone(), nil
+}
+
+func (p Profile) layoutIndexForRecord(rec []byte) (int, error) {
+	if p.discriminator != DiscriminatorModeByte {
+		i, ok := p.layoutByLength[len(rec)]
+		if !ok {
+			return 0, &RecordLengthError{Want: p.RecordLengths(), Got: len(rec)}
+		}
+		return i, nil
+	}
+	if p.modeKey.Offset < 0 || p.modeKey.Offset >= len(rec) {
+		return 0, newParseError(rec, "%s: record is too short to contain mode key at offset %d", p.model, p.modeKey.Offset)
+	}
+	v := fieldSpanWireValue(rec[p.modeKey.Offset], p.modeKey.Nibble)
+	class, ok := p.modeValueToClass[v]
+	if !ok {
+		return 0, newParseError(rec, "%s: undeclared mode value %#02x", p.model, v)
+	}
+	i := p.layoutByMode[class]
+	want := p.layouts[i].Length
+	if len(rec) != want {
+		return 0, &RecordLengthError{Want: []int{want}, Got: len(rec), Mode: class}
+	}
+	return i, nil
+}
+
+func fieldSpanWireValue(b byte, nibble NibbleSel) byte {
+	switch nibble {
+	case NibbleHigh:
+		return b >> 4
+	case NibbleLow:
+		return b & 0x0f
+	default:
+		return b
+	}
+}
+
+func modeSpanInLayout(layout RecordLayout, key FieldSpan) (FieldSpan, bool) {
+	for _, sp := range layout.Fields {
+		if sameSpanPosition(sp, key) {
+			return sp, true
+		}
+	}
+	return FieldSpan{}, false
+}
+
+func sameSpanPosition(a, b FieldSpan) bool {
+	return a.Field == b.Field && a.Offset == b.Offset && a.Length == b.Length &&
+		a.Nibble == b.Nibble && a.Encoding == b.Encoding
 }
 
 // NewAccumulator returns a frame accumulator configured for THIS profile:
@@ -265,18 +366,20 @@ func (p Profile) validAddress(a ChannelAddress) error {
 	if !p.Configured() {
 		return fmt.Errorf("civ: unconfigured profile has no channel space")
 	}
+	groupLo, groupHi := 0, 0
 	if p.addressForm.grouped() {
-		lo, hi := p.groupBase, p.groupBase+p.groups-1
-		if a.Group < lo || a.Group > hi {
-			return fmt.Errorf("civ: %s: group %d is outside %d..%d (Groups is a COUNT of %d from a base of %d)", p.model, a.Group, lo, hi, p.groups, p.groupBase)
+		groupLo, groupHi = p.groupBase, p.groupBase+p.groups-1
+	}
+	base := AddressRange{GroupLo: groupLo, GroupHi: groupHi, ChannelLo: p.channelLo, ChannelHi: p.channelHi}
+	if base.contains(a) {
+		return nil
+	}
+	for _, r := range p.extraRanges {
+		if r.contains(a) {
+			return nil
 		}
-	} else if a.Group != 0 {
-		return fmt.Errorf("civ: %s: address form %v has nowhere to encode group %d", p.model, p.addressForm, a.Group)
 	}
-	if a.Channel < p.channelLo || a.Channel > p.channelHi {
-		return fmt.Errorf("civ: %s: channel %d is outside %d..%d", p.model, a.Channel, p.channelLo, p.channelHi)
-	}
-	return nil
+	return fmt.Errorf("civ: %s: address %s is outside base g%d..%d/ch%d..%d and extra ranges %v", p.model, a, base.GroupLo, base.GroupHi, base.ChannelLo, base.ChannelHi, p.extraRanges)
 }
 
 // encodeAddress renders a as this profile's own address field.

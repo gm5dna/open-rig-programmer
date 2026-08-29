@@ -263,7 +263,8 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 		// close (doc.go recorded them for that pass); driver.go's own
 		// Identity.CATID comment now also carries the tier's observed
 		// casing convention.
-		CATID: "98",
+		CATID:    "98",
+		Transmit: spec.HasTransmitter,
 		Banks: []spec.Bank{
 			{
 				ID: spec.BankMemory,

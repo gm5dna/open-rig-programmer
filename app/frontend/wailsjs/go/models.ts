@@ -255,6 +255,7 @@ export namespace main {
 	    ID: string;
 	    Label: string;
 	    ReadOnly: boolean;
+	    BudgetUnstated: boolean;
 	    Slots: SlotView[];
 	    TagDisplayDefault: codeplug.BoolField;
 	    Fields: string[];
@@ -268,6 +269,7 @@ export namespace main {
 	        this.ID = source["ID"];
 	        this.Label = source["Label"];
 	        this.ReadOnly = source["ReadOnly"];
+	        this.BudgetUnstated = source["BudgetUnstated"];
 	        this.Slots = this.convertValues(source["Slots"], SlotView);
 	        this.TagDisplayDefault = this.convertValues(source["TagDisplayDefault"], codeplug.BoolField);
 	        this.Fields = source["Fields"];
@@ -874,6 +876,7 @@ export namespace main {
 	export class UISpecView {
 	    Live: boolean;
 	    UnverifiedWritesConsented: boolean;
+	    Transmit: string;
 	    Banks: BankView[];
 	    Modes: string[];
 	    ShiftOptions: string[];
@@ -896,6 +899,7 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.Live = source["Live"];
 	        this.UnverifiedWritesConsented = source["UnverifiedWritesConsented"];
+	        this.Transmit = source["Transmit"];
 	        this.Banks = this.convertValues(source["Banks"], BankView);
 	        this.Modes = source["Modes"];
 	        this.ShiftOptions = source["ShiftOptions"];

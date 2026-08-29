@@ -83,8 +83,8 @@ var receiverCapabilitiesDeliberatelyZero = map[string]string{
 }
 
 func TestDeliberatelyZeroAudit_ReceiverCapabilities(t *testing.T) {
-	if got := reflect.TypeOf(spec.Capabilities{}).NumField(); got != 27 {
-		t.Fatalf("spec.Capabilities has %d fields, this audit knows 27", got)
+	if got := reflect.TypeOf(spec.Capabilities{}).NumField(); got != 28 {
+		t.Fatalf("spec.Capabilities has %d fields, this audit knows 28", got)
 	}
 	for _, caps := range []spec.Capabilities{CapabilitiesUnverified(), CapabilitiesSimulated(), CapabilitiesRealHardware()} {
 		value := reflect.ValueOf(caps)

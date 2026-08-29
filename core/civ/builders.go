@@ -88,11 +88,30 @@ func (p Profile) BuildMemorySet(rec MemoryRecord) (Command, error) {
 	if err != nil {
 		return Command{}, err
 	}
-	body := make([]byte, 0, 2+len(a)+p.buildLength)
+	layoutIndex := -1
+	length := p.buildLength
+	if p.discriminator == DiscriminatorModeByte {
+		mode, present := rec.Mode.Get()
+		if !present {
+			return Command{}, fmt.Errorf("civ: %s: mode-keyed record has no mode", p.model)
+		}
+		var ok bool
+		layoutIndex, ok = p.neutralModeLayout[mode]
+		if !ok {
+			return Command{}, fmt.Errorf("civ: %s: mode %q is undeclared", p.model, mode)
+		}
+		length = p.layouts[layoutIndex].Length
+	}
+	body := make([]byte, 0, 2+len(a)+length)
 	body = append(body, CmdMemory, SubMemoryContents)
 	body = append(body, a...)
 
-	record, err := p.encodeRecord(rec, p.buildLength)
+	var record []byte
+	if layoutIndex >= 0 {
+		record, err = p.encodeRecordAt(rec, layoutIndex)
+	} else {
+		record, err = p.encodeRecord(rec, length)
+	}
 	if err != nil {
 		return Command{}, err
 	}
