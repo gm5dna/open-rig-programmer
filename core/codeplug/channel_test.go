@@ -132,7 +132,7 @@ func TestDisplaySlot(t *testing.T) {
 // unopinionated no-op for a radio-neutral wire form it was never told
 // how to display, rather than a partial/incorrect transformation.
 func TestDisplaySlot_IdentityForNonThreeDigit(t *testing.T) {
-	cases := []string{"00001", "00999", "12345", "0"}
+	cases := []string{"00001", "00999", "12345", "0", "A-012"}
 	for _, slot := range cases {
 		t.Run(slot, func(t *testing.T) {
 			if got := DisplaySlot(slot); got != slot {

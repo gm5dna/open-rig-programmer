@@ -143,14 +143,18 @@ func (p Profile) validMemoryCommand(body []byte) bool {
 	if !p.AcceptsRecordLength(len(record)) {
 		return false
 	}
-	rec, err := p.decodeRecord(record, addr)
+	layoutIndex, err := p.layoutIndexForRecord(record)
 	if err != nil {
 		return false
 	}
-	if err := p.validateRecordFields(rec, len(record)); err != nil {
+	rec, err := p.decodeRecordAt(record, addr, layoutIndex)
+	if err != nil {
 		return false
 	}
-	again, err := p.encodeRecord(rec, len(record))
+	if err := p.validateRecordFieldsAt(rec, layoutIndex); err != nil {
+		return false
+	}
+	again, err := p.encodeRecordAt(rec, layoutIndex)
 	if err != nil {
 		return false
 	}
