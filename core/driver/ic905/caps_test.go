@@ -42,8 +42,9 @@ func TestWriteTrialsComplete_PinnedFalse(t *testing.T) {
 	}
 }
 
-// tierFieldsMustBeEmpty names the SIX spec.Capabilities fields this
-// matrix grades as a WRITTEN-DOWN ZERO for this radio, each with the row
+// tierFieldsMustBeEmpty names the ELEVEN spec.Capabilities fields this
+// matrix (six, from the Icom tier) and the additions design's D8 (five
+// receiver vocabularies) grade as a WRITTEN-DOWN ZERO for this radio, each with the row
 // that grades it. Empty is the decision; populating one would be the
 // mistake, so the rule is inverted for these rather than waived.
 //
@@ -69,8 +70,8 @@ var tierFieldsMustBeEmpty = map[string]string{
 // truncate every name to nothing, and a non-positive baud reaches
 // transport.OpenSerial's silent substitution.
 //
-// The six fields tierFieldsMustBeEmpty names are inverted rather than
-// waived: they must be EMPTY, and the test fails if one is ever filled
+// The eleven fields tierFieldsMustBeEmpty names are inverted rather
+// than waived: they must be EMPTY, and the test fails if one is ever filled
 // in.
 func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 	// 27 since additions design D8 added the five receiver vocabularies.

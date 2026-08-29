@@ -122,7 +122,9 @@ var tierFieldsMustBeEmpty = map[string]bool{
 //
 // The Icom tier added SEVEN fields to spec.Capabilities — design D4's
 // DuplexOptions, ToneModes, DTCSPolarities, DTCSCodes, Filters and
-// TagCharset, and Wave 2.5's CTCSSToneRange — and for THIS radio the
+// TagCharset, and Wave 2.5's CTCSSToneRange — and the additions design's
+// D8 added FIVE more (TuningSteps, ProgramTuningStepRange, AttenuatorDB,
+// PreampOptions, AntennaOptions); for THIS radio the
 // explicit decision about every one of them is that it must be EMPTY (nil,
 // for the pointer-declared range). That is not a zero slipping through:
 // empty is the positive statement "this radio expresses no such
