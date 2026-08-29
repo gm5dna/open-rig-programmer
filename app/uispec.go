@@ -392,6 +392,7 @@ func synthesiseDiscoveredBanks(model string, working *codeplug.Codeplug) []BankV
 			ID:                string(b.ID),
 			Label:             b.Label,
 			ReadOnly:          true,
+			BudgetUnstated:    b.BudgetUnstated,
 			Slots:             slotViewsFor(b.Slots),
 			TagDisplayDefault: bankTagDisplayDefault(discoveredCaps, b.ID),
 			Fields:            bankTierFields(discoveredCaps, b.ID),
@@ -462,6 +463,7 @@ func (a *App) GetUISpec() (UISpecView, error) {
 			ID:                string(b.ID),
 			Label:             b.Label,
 			ReadOnly:          bankReadOnly(caps, b.ID),
+			BudgetUnstated:    b.BudgetUnstated,
 			Slots:             bankSlotViews(b, live, a.working),
 			TagDisplayDefault: bankTagDisplayDefault(caps, b.ID),
 			Fields:            bankTierFields(caps, b.ID),
@@ -536,6 +538,7 @@ func (a *App) GetUISpec() (UISpecView, error) {
 		// false through the same call: only a session a driver assembled
 		// under a spent consent carries the label.
 		UnverifiedWritesConsented: consentedUnverifiedWrites(caps),
+		Transmit:                  caps.Transmit.String(),
 		Banks:                     banks,
 		Modes:                     append([]string(nil), caps.Modes...),
 		ShiftOptions:              shiftOptions,

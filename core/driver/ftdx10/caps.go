@@ -262,8 +262,9 @@ func bankFields(rw, clar spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 func baseCapabilities(memFields, pmsFields map[spec.Field]spec.FieldSupport) spec.Capabilities {
 	tones := spec.StandardCTCSSTones()
 	return spec.Capabilities{
-		Model: modelName,
-		CATID: catID,
+		Model:    modelName,
+		CATID:    catID,
+		Transmit: spec.HasTransmitter,
 		Banks: []spec.Bank{
 			{
 				ID:    spec.BankMemory,

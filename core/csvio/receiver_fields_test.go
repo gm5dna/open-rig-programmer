@@ -4,11 +4,13 @@ package csvio
 
 import (
 	"bytes"
+	"encoding/csv"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
 func TestHeaderVersions_V2IsAPrefixOfV3(t *testing.T) {
@@ -20,6 +22,48 @@ func TestHeaderVersions_V2IsAPrefixOfV3(t *testing.T) {
 	}
 	if !reflect.DeepEqual(headerV3[len(headerV2):], receiverColumns) {
 		t.Errorf("headerV3 tail = %v, want %v", headerV3[len(headerV2):], receiverColumns)
+	}
+}
+
+func TestExport_ReceiveOnlyTxFrequencyUsesExistingUnavailableCell(t *testing.T) {
+	caps := receiverCHIRPCapabilities()
+	if got := caps.FieldSupport(spec.BankMemory, spec.FieldTxFrequency); !got.Unreachable() {
+		t.Fatalf("receiver tx_frequency support = %+v, want Unreachable", got)
+	}
+
+	for _, version3 := range []bool{false, true} {
+		name := "v2"
+		if version3 {
+			name = "v3"
+		}
+		t.Run(name, func(t *testing.T) {
+			d := &codeplug.ChannelData{FreqHz: 145_500_000, Mode: "FM"}
+			markTierFieldsUnavailable(d)
+			d.Duplex = codeplug.StringField{State: codeplug.Known, Value: "OFF"}
+			if version3 {
+				d.TuningStep = codeplug.StringField{State: codeplug.Unknown}
+			}
+			var buf bytes.Buffer
+			if err := Export(&buf, []codeplug.Channel{{Slot: "G00-000", Data: d}}); err != nil {
+				t.Fatalf("Export: %v", err)
+			}
+			rows, err := csv.NewReader(bytes.NewReader(buf.Bytes())).ReadAll()
+			if err != nil {
+				t.Fatalf("reading export: %v", err)
+			}
+			idx := -1
+			for i, name := range rows[0] {
+				if name == "tx_frequency" {
+					idx = i
+				}
+			}
+			if idx < 0 {
+				t.Fatal("export has no tx_frequency column")
+			}
+			if rows[1][idx] != cellUnavailable {
+				t.Errorf("tx_frequency cell = %q, want %q; CSV gains no receiver-specific spelling", rows[1][idx], cellUnavailable)
+			}
+		})
 	}
 }
 

@@ -291,11 +291,12 @@ func banks(write spec.Support) []spec.Bank {
 // see ic9700.go, where Identity.CATID is assembled.
 func capabilities(write spec.Support) spec.Capabilities {
 	return spec.Capabilities{
-		Model:  "IC-9700",
-		CATID:  "A2",
-		Banks:  banks(write),
-		Modes:  append([]string(nil), modeNames...),
-		TagLen: 16,
+		Model:    "IC-9700",
+		CATID:    "A2",
+		Transmit: spec.HasTransmitter,
+		Banks:    banks(write),
+		Modes:    append([]string(nil), modeNames...),
+		TagLen:   16,
 
 		// The record carries no clarifier at all (matrix §1 #6/#7), so
 		// both numbers are zero and FieldClarifier is unreachable on

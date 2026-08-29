@@ -2216,6 +2216,57 @@ func TestGetUISpec_TagDisplayDefaultFollowsCapabilities(t *testing.T) {
 	}
 }
 
+func TestGetUISpec_TransmitFollowsRadioCapabilities(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		transmit spec.Transmit
+		want     string
+	}{
+		{"transceiver", spec.HasTransmitter, "has_transmitter"},
+		{"receiver", spec.ReceiveOnly, "receive_only"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			recogniseModelCaps(t, spec.Capabilities{
+				Model: testModel, CATID: "9999", Transmit: tc.transmit,
+			})
+			a, _ := newTestApp(t)
+			a.mu.Lock()
+			a.working = &codeplug.Codeplug{Schema: codeplug.CurrentSchema, Radio: codeplug.RadioInfo{Model: testModel}}
+			a.mu.Unlock()
+
+			got, err := a.GetUISpec()
+			if err != nil {
+				t.Fatalf("GetUISpec: %v", err)
+			}
+			if got.Transmit != tc.want {
+				t.Errorf("Transmit = %q, want %q", got.Transmit, tc.want)
+			}
+		})
+	}
+}
+
+func TestGetUISpec_BudgetUnstatedFollowsBankCapabilities(t *testing.T) {
+	recogniseModelCaps(t, spec.Capabilities{
+		Model: testModel, CATID: "9999", Transmit: spec.ReceiveOnly,
+		Banks: []spec.Bank{{
+			ID: spec.BankMemory, Sparse: true, Groups: 1, PerGroup: 1,
+			BudgetUnstated: true,
+		}},
+	})
+	a, _ := newTestApp(t)
+	a.mu.Lock()
+	a.working = &codeplug.Codeplug{Schema: codeplug.CurrentSchema, Radio: codeplug.RadioInfo{Model: testModel}}
+	a.mu.Unlock()
+
+	got, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec: %v", err)
+	}
+	if len(got.Banks) != 1 || !got.Banks[0].BudgetUnstated {
+		t.Errorf("Banks = %+v, want one bank with BudgetUnstated", got.Banks)
+	}
+}
+
 // TestGetUISpec_RegisteredFTdx10_EveryBankUnavailable is M9c-6 D5c — the
 // end-to-end acceptance test for the whole E1 chain, and the first time
 // this project's Unavailable state is produced by a REAL radio's real

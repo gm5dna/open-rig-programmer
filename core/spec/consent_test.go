@@ -16,6 +16,7 @@ func consentFixture() Capabilities {
 	return Capabilities{
 		Model:         "TEST-CONSENT",
 		CATID:         "0000",
+		Transmit:      HasTransmitter,
 		Modes:         []string{"LSB", "USB"},
 		TagLen:        12,
 		ClarMaxHz:     9990,
