@@ -194,19 +194,23 @@ func bankTagDisplayDefault(caps spec.Capabilities, id spec.BankID) codeplug.Bool
 	return codeplug.BoolField{State: codeplug.Known, Value: false}
 }
 
-// tierFields is every spec.Field the Icom tier added (design D4), in
+// tierFields is every spec.Field the two Icom model extensions added
+// (design D4/D8), in
 // codeplug.ChannelData's own declaration order — which is the order the
 // grid renders their columns in.
 //
 // It is a list rather than a derivation because there is no way to ask
 // spec "which fields did the Icom tier add": the distinction is
-// historical, and the reason it matters here is that the pre-tier ten
-// have unconditional columns while these ten do not.
+// historical, and the reason it matters here is that the original grid
+// fields have unconditional columns while these added fields do not.
 var tierFields = []spec.Field{
 	spec.FieldTxFrequency, spec.FieldDuplex, spec.FieldOffset,
 	spec.FieldToneMode, spec.FieldToneTx, spec.FieldToneRx,
 	spec.FieldDTCSCode, spec.FieldDTCSPolarity, spec.FieldFilter,
 	spec.FieldDataMode,
+	spec.FieldTuningStepEnabled, spec.FieldTuningStep,
+	spec.FieldProgramTuningStep, spec.FieldAttenuator,
+	spec.FieldPreamp, spec.FieldAntenna, spec.FieldIPPlus,
 }
 
 // bankTierFields returns, in tierFields order, every tier-added field the

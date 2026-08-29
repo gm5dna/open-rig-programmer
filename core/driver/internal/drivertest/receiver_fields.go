@@ -1,0 +1,48 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+// Package drivertest contains assertions shared by driver package tests.
+package drivertest
+
+import (
+	"path/filepath"
+	"reflect"
+	"testing"
+
+	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+)
+
+// AssertFreshReadSaveLoad pins the D8 fresh-read rule: every existing
+// driver reports the seven receiver fields Unavailable, and that exact
+// populated channel survives the lowest-schema save/load migration.
+func AssertFreshReadSaveLoad(t testing.TB, ch codeplug.Channel, load func(string) (*codeplug.Codeplug, error)) {
+	t.Helper()
+	if ch.Data == nil {
+		t.Fatal("fresh-read channel is empty")
+	}
+	for name, state := range map[string]codeplug.FieldState{
+		"tuning_step_enabled": ch.Data.TuningStepEnabled.State,
+		"tuning_step":         ch.Data.TuningStep.State,
+		"program_tuning_step": ch.Data.ProgramTuningStepHz.State,
+		"attenuator":          ch.Data.AttenuatorDB.State,
+		"preamp":              ch.Data.Preamp.State,
+		"antenna":             ch.Data.Antenna.State,
+		"ip_plus":             ch.Data.IPPlus.State,
+	} {
+		if state != codeplug.Unavailable {
+			t.Errorf("fresh-read %s state = %q, want Unavailable", name, state)
+		}
+	}
+
+	cp := &codeplug.Codeplug{Generator: "driver fresh-read test", Channels: []codeplug.Channel{ch}}
+	path := filepath.Join(t.TempDir(), "fresh-read.json")
+	if err := codeplug.Save(path, cp); err != nil {
+		t.Fatalf("Save(fresh read): %v", err)
+	}
+	got, err := load(path)
+	if err != nil {
+		t.Fatalf("Load(saved fresh read): %v", err)
+	}
+	if len(got.Channels) != 1 || !reflect.DeepEqual(got.Channels[0], ch) {
+		t.Errorf("fresh read differs after save/load:\n got %+v\nwant %+v", got.Channels, ch)
+	}
+}

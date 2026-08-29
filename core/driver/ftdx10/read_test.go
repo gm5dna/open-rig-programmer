@@ -10,6 +10,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
@@ -155,6 +156,7 @@ func TestReadChannel_MappingsFromThePositionChart(t *testing.T) {
 			if !reflect.DeepEqual(*ch.Data, want) {
 				t.Errorf("ChannelData =\n %+v\nwant\n %+v", *ch.Data, want)
 			}
+			drivertest.AssertFreshReadSaveLoad(t, ch, codeplug.Load)
 		})
 	}
 }
@@ -339,14 +341,13 @@ func TestMTSpec_DerivesItsLengthFromTheDialect(t *testing.T) {
 	}
 }
 
-// tierUnavailable returns d with every one of the ten fields the Icom
-// tier added to codeplug.ChannelData set to Unavailable — what this
+// tierUnavailable returns d with all seventeen fields the Icom model
+// extensions added to codeplug.ChannelData set to Unavailable — what this
 // radio's ReadChannel reports for all of them, because its memory frame
-// carries none of them (design D4; the TagDisplay precedent, applied ten
-// times).
+// carries none of them (design D4/D8; the TagDisplay precedent).
 //
 // The read tests' `want` literals name the fields this radio actually
-// HAS and wrap the result in this, rather than spelling out ten
+// HAS and wrap the result in this, rather than spelling out seventeen
 // Unavailable lines each: the interesting content of every case stays
 // visible, and "and everything the Icom tier added is Unavailable" is
 // stated once, where it can be read as the single fact it is.
@@ -361,5 +362,12 @@ func tierUnavailable(d codeplug.ChannelData) codeplug.ChannelData {
 	d.DTCSPolarity = codeplug.StringField{State: codeplug.Unavailable}
 	d.Filter = codeplug.StringField{State: codeplug.Unavailable}
 	d.DataMode = codeplug.BoolField{State: codeplug.Unavailable}
+	d.TuningStepEnabled = codeplug.BoolField{State: codeplug.Unavailable}
+	d.TuningStep = codeplug.StringField{State: codeplug.Unavailable}
+	d.ProgramTuningStepHz = codeplug.FreqField{State: codeplug.Unavailable}
+	d.AttenuatorDB = codeplug.IntField{State: codeplug.Unavailable}
+	d.Preamp = codeplug.StringField{State: codeplug.Unavailable}
+	d.Antenna = codeplug.StringField{State: codeplug.Unavailable}
+	d.IPPlus = codeplug.BoolField{State: codeplug.Unavailable}
 	return d
 }

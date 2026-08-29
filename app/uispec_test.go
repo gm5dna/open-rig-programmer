@@ -426,6 +426,32 @@ var ic905CoreThree = []spec.Field{
 // duplex.
 var ic905TierFields = []string{"duplex", "offset", "tone_mode", "tone_tx", "tone_rx", "dtcs_code", "dtcs_polarity", "filter", "data_mode"}
 
+func TestBankTierFields_ReceiverFieldsFollowBankReachability(t *testing.T) {
+	rw := spec.FieldSupport{Read: spec.Supported, Write: spec.Unverified}
+	caps := spec.Capabilities{Banks: []spec.Bank{{
+		ID: spec.BankMemory,
+		Fields: map[spec.Field]spec.FieldSupport{
+			spec.FieldTuningStepEnabled: rw,
+			spec.FieldTuningStep:        rw,
+			spec.FieldProgramTuningStep: rw,
+			spec.FieldAttenuator:        rw,
+			spec.FieldPreamp:            rw,
+			spec.FieldAntenna:           rw,
+			spec.FieldIPPlus:            rw,
+		},
+	}}}
+	want := []string{
+		"tuning_step_enabled", "tuning_step", "program_tuning_step",
+		"attenuator", "preamp", "antenna", "ip_plus",
+	}
+	if got := bankTierFields(caps, spec.BankMemory); !reflect.DeepEqual(got, want) {
+		t.Errorf("bankTierFields = %v, want %v", got, want)
+	}
+	if got := bankTierFields(caps, spec.BankScan); len(got) != 0 {
+		t.Errorf("unregistered bank fields = %v, want none", got)
+	}
+}
+
 // TestBankCoreFields_ExcludesEraseStructurally is M9c-6 D5a's structural
 // exclusion, and the case that shows why the zero-value test alone could
 // not carry it: spec.FieldErase is NON-zero on the FT-710's own fail-safe

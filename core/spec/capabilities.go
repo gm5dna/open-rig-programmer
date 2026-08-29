@@ -4,6 +4,19 @@ package spec
 
 import "fmt"
 
+// StepRange is a contiguous, evenly spaced range of tuning-step values in
+// hertz. It is used through a pointer on Capabilities so nil means that a
+// radio declares no programmable tuning-step domain, mirroring ToneRange's
+// presence-by-pointer idiom.
+type StepRange struct {
+	// MinHz is the lowest admitted step in hertz.
+	MinHz uint64
+	// MaxHz is the highest admitted step in hertz.
+	MaxHz uint64
+	// ResolutionHz is the spacing between admitted steps in hertz.
+	ResolutionHz uint64
+}
+
 // Capabilities describes everything generic code (UI, validation, clone
 // service) needs to know about what a specific radio can do, in neutral
 // terms. A driver package (e.g. the FT-710 driver) constructs the one
@@ -118,6 +131,26 @@ type Capabilities struct {
 	// Filters lists the FieldFilter vocabulary this radio expresses,
 	// e.g. {"FIL1", "FIL2", "FIL3"}.
 	Filters []string
+
+	// The receiver-field vocabularies added by the Tier 4b Icom extension
+	// (additions design D8). Empty/nil is a positive declaration that this
+	// model has no such vocabulary; the corresponding bank FieldSupport is
+	// the capability key deciding whether generic code consults it.
+
+	// TuningSteps lists FieldTuningStep labels in UI order. It contains no
+	// synthetic "OFF" entry because FieldTuningStepEnabled carries that
+	// state independently.
+	TuningSteps []string
+	// ProgramTuningStepRange is the numeric domain for
+	// FieldProgramTuningStep. Nil means the model declares no such range.
+	ProgramTuningStepRange *StepRange
+	// AttenuatorDB lists FieldAttenuator values in strictly ascending dB
+	// order; zero, when present, means off.
+	AttenuatorDB []int
+	// PreampOptions lists FieldPreamp labels in UI order.
+	PreampOptions []string
+	// AntennaOptions lists FieldAntenna labels in UI order.
+	AntennaOptions []string
 
 	// TagCharset is the exact set of bytes this radio accepts in a
 	// channel tag/name, as a string whose every byte is one legal

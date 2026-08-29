@@ -121,7 +121,7 @@ const (
 // protocol has no command to read either), so comparing them would
 // manufacture a false mismatch on every single write.
 //
-// The ten fields the Icom tier added are excluded CONDITIONALLY too, by
+// The seventeen fields the Icom model extensions added are excluded CONDITIONALLY too, by
 // the same mutual-knowledge rule TagDisplay uses — see
 // tierFieldsMismatch, which holds them and the reasoning.
 //
@@ -168,13 +168,13 @@ func writableFieldsMismatch(want, got codeplug.ChannelData) []spec.Field {
 	return bad
 }
 
-// tierFieldsMismatch is writableFieldsMismatch's half for the ten fields
-// the Icom tier added to the neutral memory model (design D4: "clone's
+// tierFieldsMismatch is writableFieldsMismatch's half for the seventeen fields
+// the Icom model extensions added to the neutral memory model (design D4/D8: "clone's
 // readback verification extends to the new fields").
 //
 // Every one of them uses TagDisplay's MUTUAL-KNOWLEDGE rule, not the
 // unconditional comparison the six plain fields get, and the reason is
-// the one TagDisplay's own comment gives — applied to ten fields at once
+// the one TagDisplay's own comment gives — applied to all added fields
 // rather than to one. A radio whose frame carries the field reads it
 // back Known and the comparison bites, exactly as it must: a value that
 // did not land is a write that did not do what it said. A radio whose
@@ -224,6 +224,27 @@ func tierFieldsMismatch(want, got codeplug.ChannelData) []spec.Field {
 	}
 	if bothKnown(want.DataMode.State, got.DataMode.State) && want.DataMode.Value != got.DataMode.Value {
 		bad = append(bad, spec.FieldDataMode)
+	}
+	if bothKnown(want.TuningStepEnabled.State, got.TuningStepEnabled.State) && want.TuningStepEnabled.Value != got.TuningStepEnabled.Value {
+		bad = append(bad, spec.FieldTuningStepEnabled)
+	}
+	if bothKnown(want.TuningStep.State, got.TuningStep.State) && want.TuningStep.Value != got.TuningStep.Value {
+		bad = append(bad, spec.FieldTuningStep)
+	}
+	if bothKnown(want.ProgramTuningStepHz.State, got.ProgramTuningStepHz.State) && want.ProgramTuningStepHz.Value != got.ProgramTuningStepHz.Value {
+		bad = append(bad, spec.FieldProgramTuningStep)
+	}
+	if bothKnown(want.AttenuatorDB.State, got.AttenuatorDB.State) && want.AttenuatorDB.Value != got.AttenuatorDB.Value {
+		bad = append(bad, spec.FieldAttenuator)
+	}
+	if bothKnown(want.Preamp.State, got.Preamp.State) && want.Preamp.Value != got.Preamp.Value {
+		bad = append(bad, spec.FieldPreamp)
+	}
+	if bothKnown(want.Antenna.State, got.Antenna.State) && want.Antenna.Value != got.Antenna.Value {
+		bad = append(bad, spec.FieldAntenna)
+	}
+	if bothKnown(want.IPPlus.State, got.IPPlus.State) && want.IPPlus.Value != got.IPPlus.Value {
+		bad = append(bad, spec.FieldIPPlus)
 	}
 	return bad
 }

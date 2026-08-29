@@ -38,26 +38,23 @@ func (e *ParseError) Error() string {
 // empty across exactly these columns decodes to an empty Channel (see
 // Import).
 //
-// The tier columns join the list, and an ABSENT column reads as "" (see
-// Import's cell lookup), so a version-1 file answers this question
-// exactly as it always did — and a version-2 file's empty slot, whose
-// tier cells this package writes empty too, answers it the same way.
+// Both appended column groups join the list. An absent column reads as
+// "", so older versions and newer empty rows retain the same rule.
 var dataColumns = func() []string {
 	cols := []string{
 		"freq_hz", "mode", "clar_hz", "rx_clar", "tx_clar",
 		"ctcss", "ctcss_tone", "shift", "tag", "tag_display", "scan_skip",
 	}
-	return append(cols, tierColumns...)
+	cols = append(cols, tierColumns...)
+	return append(cols, receiverColumns...)
 }()
 
 // requiredColumns lists every column Import requires to be present in
 // the header. It is every VERSION-1 column except "display", which is
 // optional and ignored (see Import).
 //
-// The tier columns are deliberately NOT required: that is exactly what
-// makes Import accept both header versions (design D4). A version-1 file
-// is missing all ten and is perfectly valid; a version-2 file has them
-// and they are read.
+// Added columns are deliberately NOT required: that is exactly what
+// makes Import accept all three versions (design D4/D8).
 var requiredColumns = func() []string {
 	cols := make([]string, 0, len(header)-1)
 	for _, c := range header {
@@ -68,11 +65,11 @@ var requiredColumns = func() []string {
 	return cols
 }()
 
-// knownColumnSet is the set of every column name Import recognises: both
+// knownColumnSet is every column Import recognises across all three
 // header versions, "display" included.
 var knownColumnSet = func() map[string]bool {
-	set := make(map[string]bool, len(headerV2))
-	for _, c := range headerV2 {
+	set := make(map[string]bool, len(headerV3))
+	for _, c := range headerV3 {
 		set[c] = true
 	}
 	return set
@@ -292,14 +289,14 @@ func validateImportHeader(got []string) error {
 // it; it is a convenience column for spreadsheet viewing only). Column
 // order in the file does not matter: columns are looked up by name.
 //
-// BOTH HEADER VERSIONS are accepted (design D4). The schema is versioned
+// ALL THREE HEADER VERSIONS are accepted (design D4/D8). The schema is versioned
 // by its column set: version 1 is the thirteen columns this package has
-// always written (header), version 2 is those thirteen followed by one
-// per tier-added field (headerV2). Only version 1's columns are
+// always written (header), version 2 appends D4's ten fields, and version
+// 3 appends D8's seven. Only version 1's columns are
 // REQUIRED, so a version-1 file — every file this program wrote before
 // the Icom tier — imports unchanged; the tier columns are optional and
-// recognised, so a version-2 file has them read. A version-1 file's ten
-// tier fields come back Unavailable, not at the zero value: see
+// recognised, so later files have them read. A version-1 file's seventeen
+// added fields come back Unavailable, not at the zero value: see
 // markTierFieldsUnavailable for why that distinction is load-bearing
 // rather than cosmetic.
 //
@@ -352,6 +349,13 @@ func Import(r io.Reader) ([]codeplug.Channel, error) {
 	for _, c := range tierColumns {
 		if _, ok := colIndex[c]; ok {
 			hasTier = true
+			break
+		}
+	}
+	hasReceiver := false
+	for _, c := range receiverColumns {
+		if _, ok := colIndex[c]; ok {
+			hasReceiver = true
 			break
 		}
 	}
@@ -499,10 +503,18 @@ func Import(r io.Reader) ([]codeplug.Channel, error) {
 		// have, and the one that leaves an imported channel comparing
 		// equal to a read of the same radio instead of modified in ten
 		// fields the file never mentioned.
-		if hasTier {
+		if hasReceiver {
 			if err := parseTierCells(&data, cell); err != nil {
 				return nil, &ParseError{Line: line, Reason: err.Error()}
 			}
+			if err := parseReceiverCells(&data, cell); err != nil {
+				return nil, &ParseError{Line: line, Reason: err.Error()}
+			}
+		} else if hasTier {
+			if err := parseTierCells(&data, cell); err != nil {
+				return nil, &ParseError{Line: line, Reason: err.Error()}
+			}
+			markReceiverFieldsUnavailable(&data)
 		} else {
 			markTierFieldsUnavailable(&data)
 		}
@@ -568,9 +580,29 @@ func parseTierCells(data *codeplug.ChannelData, cell func(string) string) error 
 	return nil
 }
 
-// markTierFieldsUnavailable sets every tier-added field of data to
-// Unavailable, for a VERSION-1 file — one with none of the tier columns
-// at all.
+func parseReceiverCells(data *codeplug.ChannelData, cell func(string) string) error {
+	var err error
+	data.TuningStepEnabled, err = parseTierBoolFieldCell(cell("tuning_step_enabled"), "tuning_step_enabled")
+	if err != nil {
+		return err
+	}
+	data.TuningStep = parseStringFieldCell(cell("tuning_step"))
+	data.ProgramTuningStepHz, err = parseFreqFieldCell(cell("program_tuning_step"), "program_tuning_step")
+	if err != nil {
+		return err
+	}
+	data.AttenuatorDB, err = parseIntFieldCell(cell("attenuator"), "attenuator")
+	if err != nil {
+		return err
+	}
+	data.Preamp = parseStringFieldCell(cell("preamp"))
+	data.Antenna = parseStringFieldCell(cell("antenna"))
+	data.IPPlus, err = parseTierBoolFieldCell(cell("ip_plus"), "ip_plus")
+	return err
+}
+
+// markTierFieldsUnavailable sets all seventeen added fields Unavailable
+// for a VERSION-1 file, which has neither appended column group.
 //
 // It is the CSV importer's exact counterpart to core/codeplug's
 // migrateV3ChannelData, and it exists for the same reason, which is
@@ -599,4 +631,15 @@ func markTierFieldsUnavailable(data *codeplug.ChannelData) {
 	data.DTCSPolarity = codeplug.StringField{State: codeplug.Unavailable}
 	data.Filter = codeplug.StringField{State: codeplug.Unavailable}
 	data.DataMode = codeplug.BoolField{State: codeplug.Unavailable}
+	markReceiverFieldsUnavailable(data)
+}
+
+func markReceiverFieldsUnavailable(data *codeplug.ChannelData) {
+	data.TuningStepEnabled = codeplug.BoolField{State: codeplug.Unavailable}
+	data.TuningStep = codeplug.StringField{State: codeplug.Unavailable}
+	data.ProgramTuningStepHz = codeplug.FreqField{State: codeplug.Unavailable}
+	data.AttenuatorDB = codeplug.IntField{State: codeplug.Unavailable}
+	data.Preamp = codeplug.StringField{State: codeplug.Unavailable}
+	data.Antenna = codeplug.StringField{State: codeplug.Unavailable}
+	data.IPPlus = codeplug.BoolField{State: codeplug.Unavailable}
 }

@@ -14,12 +14,26 @@ export namespace codeplug {
 	        this.value = source["value"];
 	    }
 	}
-	export class ToneField {
+	export class IntField {
 	    state: string;
 	    value?: number;
 	
 	    static createFrom(source: any = {}) {
-	        return new ToneField(source);
+	        return new IntField(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.state = source["state"];
+	        this.value = source["value"];
+	    }
+	}
+	export class StringField {
+	    state: string;
+	    value?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new StringField(source);
 	    }
 	
 	    constructor(source: any = {}) {
@@ -42,26 +56,12 @@ export namespace codeplug {
 	        this.value = source["value"];
 	    }
 	}
-	export class IntField {
+	export class ToneField {
 	    state: string;
 	    value?: number;
 	
 	    static createFrom(source: any = {}) {
-	        return new IntField(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.state = source["state"];
-	        this.value = source["value"];
-	    }
-	}
-	export class StringField {
-	    state: string;
-	    value?: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new StringField(source);
+	        return new ToneField(source);
 	    }
 	
 	    constructor(source: any = {}) {
@@ -92,6 +92,13 @@ export namespace codeplug {
 	    dtcs_polarity: StringField;
 	    filter: StringField;
 	    data_mode: BoolField;
+	    tuning_step_enabled: BoolField;
+	    tuning_step: StringField;
+	    program_tuning_step: FreqField;
+	    attenuator: IntField;
+	    preamp: StringField;
+	    antenna: StringField;
+	    ip_plus: BoolField;
 	
 	    static createFrom(source: any = {}) {
 	        return new ChannelData(source);
@@ -120,6 +127,13 @@ export namespace codeplug {
 	        this.dtcs_polarity = this.convertValues(source["dtcs_polarity"], StringField);
 	        this.filter = this.convertValues(source["filter"], StringField);
 	        this.data_mode = this.convertValues(source["data_mode"], BoolField);
+	        this.tuning_step_enabled = this.convertValues(source["tuning_step_enabled"], BoolField);
+	        this.tuning_step = this.convertValues(source["tuning_step"], StringField);
+	        this.program_tuning_step = this.convertValues(source["program_tuning_step"], FreqField);
+	        this.attenuator = this.convertValues(source["attenuator"], IntField);
+	        this.preamp = this.convertValues(source["preamp"], StringField);
+	        this.antenna = this.convertValues(source["antenna"], StringField);
+	        this.ip_plus = this.convertValues(source["ip_plus"], BoolField);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -985,4 +999,3 @@ export namespace main {
 	}
 
 }
-

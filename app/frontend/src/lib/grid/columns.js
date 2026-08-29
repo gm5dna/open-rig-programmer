@@ -77,6 +77,13 @@ export const TIER_COLUMNS = [
 	{ id: 'dtcsPolarity', label: 'DTCS polarity', field: 'dtcs_polarity', key: 'dtcs_polarity', kind: 'text' },
 	{ id: 'filter', label: 'Filter', field: 'filter', key: 'filter', kind: 'text' },
 	{ id: 'dataMode', label: 'Data mode', field: 'data_mode', key: 'data_mode', kind: 'bool' },
+	{ id: 'tuningStepEnabled', label: 'Tuning step enabled', field: 'tuning_step_enabled', key: 'tuning_step_enabled', kind: 'bool' },
+	{ id: 'tuningStep', label: 'Tuning step', field: 'tuning_step', key: 'tuning_step', kind: 'text' },
+	{ id: 'programTuningStep', label: 'Program tuning step (Hz)', field: 'program_tuning_step', key: 'program_tuning_step', kind: 'int' },
+	{ id: 'attenuator', label: 'Attenuator (dB)', field: 'attenuator', key: 'attenuator', kind: 'int' },
+	{ id: 'preamp', label: 'Preamp', field: 'preamp', key: 'preamp', kind: 'text' },
+	{ id: 'antenna', label: 'Antenna', field: 'antenna', key: 'antenna', kind: 'text' },
+	{ id: 'ipPlus', label: 'IP+', field: 'ip_plus', key: 'ip_plus', kind: 'bool' },
 ]
 
 /** TIER_COLUMNS keyed by column id, for the per-column helpers below. */
