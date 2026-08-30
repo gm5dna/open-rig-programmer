@@ -41,7 +41,13 @@ func layout() civ.RecordLayout {
 
 var profile = civ.MustNewProfile(civ.ProfileConfig{
 	Model: "IC-7760", RadioAddress: 0xB2, AddressForm: civ.AddressFormFlat,
-	ChannelLo: 1, ChannelHi: 101, NameLength: 10, NameCharset: NameCharset,
+	ChannelLo: 1, ChannelHi: 99,
+	// P1/P2 are MANUAL-EVIDENCED selectors 100/101, but are not MEM
+	// channels. Keeping them in one exact extra range prevents the base
+	// inventory from silently expanding; TestProfileAdmitsP1P2AsOneExtraFlatRange
+	// pins both admitted endpoints and the adjacent refusals.
+	ExtraRanges: []civ.AddressRange{{GroupLo: 0, GroupHi: 0, ChannelLo: 100, ChannelHi: 101}},
+	NameLength:  10, NameCharset: NameCharset,
 	NamePad: 0x20, Layouts: []civ.RecordLayout{layout()},
 	Discriminator: civ.DiscriminatorSingleLength, BuildLength: RecordOnlyLength,
 })

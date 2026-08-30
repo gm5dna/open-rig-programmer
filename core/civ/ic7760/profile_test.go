@@ -26,8 +26,8 @@ func TestProfileShape(t *testing.T) {
 	if got := p.AddressForm(); got != civ.AddressFormFlat {
 		t.Errorf("AddressForm() = %v, want flat", got)
 	}
-	if lo, hi := p.ChannelRange(); lo != 1 || hi != 101 {
-		t.Errorf("ChannelRange() = %d..%d, want 1..101", lo, hi)
+	if lo, hi := p.ChannelRange(); lo != 1 || hi != 99 {
+		t.Errorf("ChannelRange() = %d..%d, want base MEM range 1..99", lo, hi)
 	}
 	if got := p.Discriminator(); got != civ.DiscriminatorSingleLength {
 		t.Errorf("Discriminator() = %v, want single length", got)
@@ -43,6 +43,20 @@ func TestProfileShape(t *testing.T) {
 	}
 	if got := p.NameLength(); got != 10 {
 		t.Errorf("NameLength() = %d, want 10", got)
+	}
+}
+
+func TestProfileAdmitsP1P2AsOneExtraFlatRange(t *testing.T) {
+	p := ic7760.Profile()
+	for _, channel := range []int{1, 99, 100, 101} {
+		if _, err := p.BuildMemoryRead(civ.ChannelAddress{Channel: channel}); err != nil {
+			t.Errorf("BuildMemoryRead(channel %d): %v", channel, err)
+		}
+	}
+	for _, channel := range []int{0, 102} {
+		if _, err := p.BuildMemoryRead(civ.ChannelAddress{Channel: channel}); err == nil {
+			t.Errorf("BuildMemoryRead(channel %d) admitted an address outside MEM plus P1/P2", channel)
+		}
 	}
 }
 
