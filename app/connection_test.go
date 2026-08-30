@@ -260,6 +260,20 @@ func TestGetSupportedModels_ContainsDefaultModel(t *testing.T) {
 	if !foundIC7760 {
 		t.Errorf("GetSupportedModels() = %v, want it to contain wiring.IC7760Model %q", got, wiring.IC7760Model)
 	}
+	// The IC-7100 (Tier 4b's third registration), on the same explicit
+	// membership footing and for the same reason: a registration that
+	// added the constant, the driver and the fake but left the row out of
+	// the registry would build, would pass every other test in this file,
+	// and would leave the radio unselectable.
+	foundIC7100 := false
+	for _, m := range got {
+		if m == wiring.IC7100Model {
+			foundIC7100 = true
+		}
+	}
+	if !foundIC7100 {
+		t.Errorf("GetSupportedModels() = %v, want it to contain wiring.IC7100Model %q", got, wiring.IC7100Model)
+	}
 }
 
 // TestConnect_EmptyModelIsTheDefaultModel pins Connect/ConnectDemo's new

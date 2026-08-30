@@ -14,20 +14,20 @@ shuffling.
 | --- | --- | --- |
 | **FT-710** | ✅ | ✅ verified on a real radio |
 | **FTdx10**, **FTdx101D**, **FTdx101MP** | ✅ | ⚠️ opt-in |
-| **IC-7610**, **IC-7300**, **IC-7300MK2**, **IC-705**, **IC-9700**, **IC-905**, **IC-7851**, **IC-7850**, **IC-7760** | ✅ | ⚠️ opt-in |
+| **IC-7610**, **IC-7300**, **IC-7300MK2**, **IC-705**, **IC-9700**, **IC-905**, **IC-7851**, **IC-7850**, **IC-7760**, **IC-7100** | ✅ | ⚠️ opt-in |
 
 Only the FT-710 has ever been connected to this program. The other
-twelve were built from the manufacturers' published protocol manuals
+thirteen were built from the manufacturers' published protocol manuals
 and tested against simulators. Reading them is safe: the program sends
 only documented read commands. Writing to them is switched off until
 you switch it on, one radio at a time.
 
-If you own one of these twelve radios and would like to help test it,
+If you own one of these thirteen radios and would like to help test it,
 please open an issue.
 
 ### Switching on writes for an unverified radio
 
-Every write command for these twelve radios is taken from the maker's
+Every write command for these thirteen radios is taken from the maker's
 own manual, but none has been proven on a real radio. So the program
 refuses to send any of them until you say so:
 
@@ -125,8 +125,9 @@ Some things are refused on purpose, with the reason shown:
   edits to them are refused rather than silently dropped.
 - **Icom radios**: each talks only to its factory CI-V address; a few
   channel states (a channel in a Select scan group on most models, a
-  split channel on the IC-7300s, DATA modes on the IC-7610, the
-  IC-7851/IC-7850 and the IC-7760) cannot be written back; the IC-705
+  split channel on the IC-7300s and the IC-7100, DATA modes on the
+  IC-7610, the IC-7851/IC-7850 and the IC-7760, D-STAR call signs on the
+  IC-7100) cannot be written back; the IC-705
   and IC-905 only
   list the memories their start-up scan finds; and the IC-9700's
   repeater-offset scale is an unresolved question in the manual — a
@@ -145,6 +146,15 @@ Some things are refused on purpose, with the reason shown:
   is not supported. Its speed is a guess as well: the manual gives no
   CI-V speed anywhere, so the program opens at 19200 and a wrong guess
   simply times out.
+- **IC-7100**: the program lists this radio's 495 ordinary memories —
+  banks A to E, 99 channels each — and NOTHING ELSE. The six programmed
+  scan edges and four call channels are real channels on the radio, but
+  the manual never says what bank number addresses them, so the program
+  does not read them rather than guess an address and read the wrong
+  thing. Their absence from the list is not evidence the radio has none.
+  This is also the only Icom model here that the program opens with two
+  stop bits rather than one, because its manual states no serial format
+  for the CI-V link at all.
 
   The full list of Icom limitations, with the evidence for each, is in
   [docs/icom-models.md](docs/icom-models.md).
@@ -157,8 +167,8 @@ Operation Reference Manuals (FT-710 2306-C, FTdx10 2308-F, FTdx101D/MP
 2308-L), Icom's CI-V Reference Guides (IC-7610 rev 4, IC-7300 Full
 Manual §19 rev 12b, IC-7300MK2 rev 0, IC-705 rev 6, IC-9700 rev 4,
 IC-905 rev 2, IC-7760 rev 2) and, where no separate CI-V guide is
-published, the radio's own instruction manual (IC-7850/IC-7851 rev 3,
-section 18).
+published, the radio's own manual (IC-7850/IC-7851 rev 3, section 18;
+IC-7100 A7085-2EX-5, section 20).
 
 ## Licence
 

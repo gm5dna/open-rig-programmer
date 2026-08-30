@@ -275,6 +275,17 @@ var tierFields = []spec.Field{
 // measures how far that prediction actually holds at the layout level.
 // Pinned here by
 // TestGetUISpec_RegisteredIC7760_EveryBankFieldsAndTagDisplay.
+// ALL TEN for the IC-7100, the additions tier's third registration
+// (Tier 4b) — a THIRD independent derivation of the full set, after the
+// IC-705's and the IC-9700's: this radio's own 111-byte record maps all
+// thirteen of its matrix §2 rw-graded rows (core/driver/ic7100/caps.go's
+// fieldGrid), data_mode among them, which is what separates it from the
+// four-field 25-byte records above. ONE BANK, not two or three — its
+// dense 495-slot MEM space is the whole of what this build addresses, the
+// scan-edge and call channels being refused until register entry
+// ic7100-special-bank-byte is lifted — so this row changed no field COUNT
+// and fewer BankViews carry it than any other Icom row. Pinned here by
+// TestGetUISpec_RegisteredIC7100_EveryBankFieldsAndTagDisplay.
 // A future Icom registration would extend this same list with its own
 // model-specific set.
 func bankTierFields(caps spec.Capabilities, id spec.BankID) []string {
