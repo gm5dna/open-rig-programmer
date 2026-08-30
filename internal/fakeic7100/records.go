@@ -94,6 +94,9 @@ const (
 	// recordLength is the record proper, the data area less the address. It is
 	// what a set frame's payload carries after the three address bytes, and
 	// what a read answer's payload carries after them.
+	//
+	// Both totals are DERIVED, not printed: the manual states no byte count for
+	// this record anywhere. See doc.go, entry 8 (ic7100-record-length).
 	recordLength = dataAreaLength - addressLength
 )
 
@@ -135,7 +138,7 @@ const (
 // prints "0001–0099: Memory channel 1 to 99" and then ten further codes —
 // 0100–0105 programmed scan edges, 0106–0109 call channels. Those ten are
 // REFUSED rather than served, because the document never says what bank byte
-// (1) carries for them and this fake will not invent one. See doc.go, entry 3.
+// (1) carries for them and this fake will not invent one. See doc.go, entry 10.
 const (
 	firstChannel = 1
 	lastChannel  = 99
@@ -247,7 +250,7 @@ func txBlockMatchesRX(record []byte) bool {
 // PDF p.375's "About clearing operation" block prints "(2), (3): Memory channel
 // 0 to 99 / (4) : FF / (5) or later: None", and OMITS field (1) — so the
 // document does not say whether a clear frame carries a bank byte. Both
-// readings are recognised, and both are refused; see doc.go, entry 8.
+// readings are recognised, and both are refused; see doc.go, entry 12.
 func isClearForm(payload []byte) bool {
 	switch len(payload) {
 	case addressLength + 1:
