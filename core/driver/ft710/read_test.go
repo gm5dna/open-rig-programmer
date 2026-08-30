@@ -297,6 +297,56 @@ func TestReadChannel_HWDerived_M5b_PMSKindLeniency(t *testing.T) {
 	}
 }
 
+// TestReadChannel_HWObserved_PMSKindVFO reproduces the 30/08/2026 field
+// failure (docs/hardware-notes.md §P7 kind drift): P1L — CAT-written by
+// the M5b trials on 13/07/2026 with kind '1' and read back '1' then —
+// answered `MRP1L007100000+000000100000;` (kind '0', KindVFO) under
+// v1.2.0 with NO intervening CAT write and no front-panel edit. The
+// radio changed the byte itself. Before this fix ReadChannel raised
+// *KindMismatchError ("carries kind '0', want one of {'1','5'}") and
+// ReadAll aborted the whole read. It must now succeed and map normally.
+func TestReadChannel_HWObserved_PMSKindVFO(t *testing.T) {
+	liveP1L := fakeradio.MemState{
+		Freq: "007100000", ClarSign: '+', ClarMag: "0000",
+		RXClar: false, TXClar: false,
+		Mode: '1', Kind: '0', CTCSS: '0', Shift: '0',
+		Populated: true,
+	}
+	_, sess := openSession(t, Simulated, fakeradio.WithSlot("P1L", liveP1L))
+
+	got, err := sess.ReadChannel(testCtx(t), "P1L")
+	if err != nil {
+		t.Fatalf("ReadChannel(P1L, live HW-observed kind '0'): unexpected error: %v", err)
+	}
+	if got.Empty() {
+		t.Fatal("ReadChannel(P1L) = empty, want populated")
+	}
+	if got.Data.FreqHz != 7_100_000 || got.Data.Mode != "LSB" {
+		t.Errorf("ReadChannel(P1L) = %d Hz %s, want 7100000 Hz LSB", got.Data.FreqHz, got.Data.Mode)
+	}
+}
+
+// TestAcceptedKinds_PMSMirrorsMEMForVFO pins the read-side rule the
+// 30/08/2026 observation forces: '0' is a legitimate read kind on PMS
+// exactly as on MEM; the 60m/EMG banks stay strict (never observed).
+func TestAcceptedKinds_PMSMirrorsMEMForVFO(t *testing.T) {
+	d := cat.FT710
+	pms, err := d.ParseSlot("P1L")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []byte{cat.KindVFO, cat.KindMemory, cat.KindPMS} {
+		if !kindAccepted(pms, k) {
+			t.Errorf("PMS slot must accept read kind %q", k)
+		}
+	}
+	for _, k := range []byte{'2', '3', '6'} {
+		if kindAccepted(pms, k) {
+			t.Errorf("PMS slot must still refuse the undocumented kind %q", k)
+		}
+	}
+}
+
 // TestReadChannel_60mEMG_AcceptsKindMemory is Codex M5b fix wave, Fix 5
 // (adjudicated MEDIUM): a discovered 60m/EMG slot's MR answer carrying
 // kind '1' (KindMemory — the only value ever actually observed for these
