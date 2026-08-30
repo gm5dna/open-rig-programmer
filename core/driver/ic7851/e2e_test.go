@@ -141,7 +141,7 @@ func codeFor(t *testing.T, kind, name string) byte {
 
 // e2eSeed varies every mapped field across the slot inventory so no two
 // channels share a value by accident. Both tones stay inside the declared
-// 670..2541 chart, so both come back Known.
+// 000.0..299.9 Hz tone domain, so both come back Known.
 func e2eSeed(i int) e2eFields {
 	m := e2eModes[i%len(e2eModes)]
 	fl := e2eFilters[i%len(e2eFilters)]

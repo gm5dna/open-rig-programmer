@@ -87,11 +87,23 @@ func TestCapabilityValuesArePinnedToTheMatrix(t *testing.T) {
 		if caps.MaxFreqHz != 60_000_000 {
 			t.Errorf("MaxFreqHz = %d, want 60_000_000 (matrix §1 row 13: the RADIO ceiling is the declared one, not the 69_999_999 the field could encode)", caps.MaxFreqHz)
 		}
-		// §1 row 9 — the 50 selectable tones run 67.0 to 254.1 Hz; the
-		// step is the row's one ASSUMED half.
-		want := spec.ToneRange{MinDeciHz: 670, MaxDeciHz: 2541, StepDeciHz: 1}
+		// §1 row 9 — the tone span's own BCD CAPACITY, 000.0–299.9 Hz at
+		// 0.1 Hz with the floor raised off zero, NOT the 50-tone chart
+		// PDF p.115 prints. The record stores a BCD frequency indexing no
+		// table, which is IC-7300 matrix erratum 12's recorded doctrine;
+		// the chart is doc.go §6c's prose about the panel.
+		want := spec.ToneRange{MinDeciHz: 1, MaxDeciHz: 2999, StepDeciHz: 1}
 		if caps.CTCSSToneRange == nil || *caps.CTCSSToneRange != want {
-			t.Errorf("CTCSSToneRange = %+v, want %+v (matrix §1 row 9, PDF p.115's \"Selectable tone frequencies\")", caps.CTCSSToneRange, want)
+			t.Errorf("CTCSSToneRange = %+v, want %+v (matrix §1 row 9 read as the wire's digit domain, PDF p.262's per-digit leaders; IC-7300 matrix erratum 12)", caps.CTCSSToneRange, want)
+		}
+		// AND EVERY PRINTED CHART TONE IS STILL ADMITTED — trivially now,
+		// as a subset of the capacity, which is exactly the claim: the
+		// chart moved to doc.go, it did not stop being what the panel
+		// offers.
+		for i, tone := range spec.StandardCTCSSTones() {
+			if !caps.AdmitsTone(tone) {
+				t.Errorf("AdmitsTone(%v) = false, want true — chart tone %d of the 50 printed on PDF p.115", tone, i)
+			}
 		}
 		// §1b.3 — PDF p.181's capability table gives the scan-edge row
 		// CLEAR = "No" and the regular row CLEAR = "Yes".
@@ -137,14 +149,11 @@ func TestPreBuildRefusalEnforcesTheCapabilityBounds(t *testing.T) {
 	}{
 		{"a frequency above the radio's 60 MHz ceiling", func(d *codeplug.ChannelData) { d.FreqHz = 60_000_001 }, spec.FieldFrequency},
 		{"a frequency below the radio's 30 kHz floor", func(d *codeplug.ChannelData) { d.FreqHz = 29_999 }, spec.FieldFrequency},
-		{"a repeater tone above the printed chart", func(d *codeplug.ChannelData) {
-			d.ToneTx = codeplug.ToneField{State: codeplug.Known, Value: spec.Tone(2542)}
+		{"a repeater tone above the record's BCD capacity", func(d *codeplug.ChannelData) {
+			d.ToneTx = codeplug.ToneField{State: codeplug.Known, Value: spec.Tone(3000)}
 		}, spec.FieldToneTx},
-		{"a repeater tone below the printed chart", func(d *codeplug.ChannelData) {
-			d.ToneTx = codeplug.ToneField{State: codeplug.Known, Value: spec.Tone(669)}
-		}, spec.FieldToneTx},
-		{"a tone squelch above the printed chart", func(d *codeplug.ChannelData) {
-			d.ToneRx = codeplug.ToneField{State: codeplug.Known, Value: spec.Tone(2542)}
+		{"a tone squelch above the record's BCD capacity", func(d *codeplug.ChannelData) {
+			d.ToneRx = codeplug.ToneField{State: codeplug.Known, Value: spec.Tone(3000)}
 		}, spec.FieldToneRx},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -175,11 +184,17 @@ func TestPreBuildRefusalEnforcesTheCapabilityBounds(t *testing.T) {
 	}{
 		{"the floor itself", func(d *codeplug.ChannelData) { d.FreqHz = 30_000 }},
 		{"the ceiling itself", func(d *codeplug.ChannelData) { d.FreqHz = 60_000_000 }},
-		{"the lowest chart tone", func(d *codeplug.ChannelData) {
-			d.ToneTx = codeplug.ToneField{State: codeplug.Known, Value: spec.Tone(670)}
+		{"the lowest encodable tone", func(d *codeplug.ChannelData) {
+			d.ToneTx = codeplug.ToneField{State: codeplug.Known, Value: spec.Tone(1)}
 		}},
-		{"the highest chart tone", func(d *codeplug.ChannelData) {
-			d.ToneRx = codeplug.ToneField{State: codeplug.Known, Value: spec.Tone(2541)}
+		{"the highest encodable tone", func(d *codeplug.ChannelData) {
+			d.ToneRx = codeplug.ToneField{State: codeplug.Known, Value: spec.Tone(2999)}
+		}},
+		// The band the printed chart excludes and the record carries. It
+		// was refused here until the tier review's M2, whilst the IC-7760
+		// — the same 25-byte record — accepted it.
+		{"a tone above the printed chart but inside the capacity", func(d *codeplug.ChannelData) {
+			d.ToneRx = codeplug.ToneField{State: codeplug.Known, Value: spec.Tone(2542)}
 		}},
 	} {
 		t.Run(tc.name+" is admitted", func(t *testing.T) {

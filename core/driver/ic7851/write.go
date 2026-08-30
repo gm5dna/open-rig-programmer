@@ -83,11 +83,14 @@ var ErrOutOfDomain = errors.New("ic7851: a Known value lies outside what this ra
 // SESSION'S CAPABILITIES declare.
 //
 // THE BOUNDS ARE THE CAPABILITIES', NOT THE FIELD WIDTH'S, and that is the
-// whole point of the type. The record's BCD digits are wider than the
-// radio: they would carry 69.999999 MHz and a 299.9 Hz tone, while the
-// specification page prints a receiver running 0.030000–60.000000 MHz and
-// the tone chart runs 67.0–254.1 Hz. Bounding by the field width would
-// authorise, after consent, a frequency this radio cannot receive.
+// whole point of the type. On the FREQUENCY the two differ: the record's
+// BCD digits would carry 69.999999 MHz while the specification page prints
+// a receiver running 0.030000–60.000000 MHz, and bounding by the field
+// width would authorise, after consent, a frequency this radio cannot
+// receive. On the TONE they coincide, deliberately — caps.go declares the
+// span's own 000.0–299.9 Hz capacity rather than the printed 50-tone
+// chart, per IC-7300 matrix erratum 12 — so this refusal adds nothing
+// there beyond a second door on the same domain.
 //
 // DEFENCE IN DEPTH, AND NOT THE GATE — see doc.go. civ.FieldSpan has no
 // numeric domain, so civ.Profile.AllowedCommand would ADMIT a set carrying

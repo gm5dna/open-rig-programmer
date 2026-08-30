@@ -11,6 +11,31 @@
 // is PDF p.174's DV low-speed data application, not the CI-V/REMOTE link;
 // TestNewProfilesFailSafeAndDoNotExposeSerialFraming pins that distinction.
 //
+// # The printed 50-tone chart, and why it is not the declared domain
+//
+// PDF p.91 (folio 4-26) prints "• Selectable tone frequencies (Unit: Hz)",
+// a 50-value table running 67.0 to 254.1 — the family-standard CTCSS set,
+// and what this radio's PANEL offers. It is recorded here, as prose, and
+// not in spec.Capabilities.
+//
+// The record does not index that table. The three-byte tone spans hold a
+// BCD FREQUENCY, whose printed per-digit legend admits 000.0-299.9 Hz, so
+// caps.go declares that capacity ({1, 2999, 1}, the floor raised off zero
+// because 0 Hz is not a tone) rather than the chart's bounds. Declaring
+// the chart would fail closed on every encodable value outside it: a tone
+// between 254.2 and 299.9 Hz would read Unknown and become unwritable,
+// whilst the same wire bytes round-trip on every sibling driver.
+//
+// This is the tier's recorded doctrine and not a decision taken here. The
+// IC-7300 met the identical artefact and settled it the same way
+// (core/driver/ic7300/caps.go:242-251), which landed as IC-7300 matrix
+// erratum 12; core/driver/ic7760 and the other eight declare the same
+// shape. TestCTCSSToneDomainAdmitsEveryChartTone still pins that every one
+// of the 50 printed tones is admitted — now trivially, by capacity, which
+// is the point: the chart is a subset of what the record can carry, and
+// what the RADIO accepts off-chart remains register entry
+// ic7100-tone-range-step's open question.
+//
 // # Wave-4 hand-off: the 111-byte record-length set
 //
 // THIS MODEL IS NOT SEPARABLE FROM THE IC-9700 BY RECORD GEOMETRY ALONE, and

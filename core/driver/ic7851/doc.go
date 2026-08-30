@@ -327,6 +327,30 @@
 // branch and before the parse. TestFixedDigitBytesAreRefusedOnRead and
 // TestE2E_FixedDigitRecordIsRefusedOnTheWire cover both halves.
 //
+// # 6c. THE PRINTED 50-TONE CHART, AND WHY IT IS NOT THE DECLARED DOMAIN
+//
+// PDF p.115 (folio 5-38) prints "• Selectable tone frequencies (unit:
+// Hz)", a seven-column table running 67.0 to 254.1 — 50 values, the
+// family-standard CTCSS set, and what this radio's PANEL offers. It is
+// recorded here, as prose, and not in spec.Capabilities.
+//
+// The record does not index that table. The two three-byte tone spans hold
+// a BCD FREQUENCY, whose rotated per-digit leaders (PDF p.262, folio
+// 18-13) print 100 Hz: 0–2 and 10/1/0.1 Hz: 0–9 and so admit 000.0–299.9
+// Hz. caps.go declares that CAPACITY — {1, 2999, 1}, the floor raised off
+// zero because 0 Hz is not a tone — rather than the chart's bounds.
+// Declaring the chart would fail closed on every encodable value outside
+// it: a tone between 254.2 and 299.9 Hz would read Unknown and become
+// unwritable on this model whilst the same 25-byte record round-trips it
+// on the IC-7760, its own clone-family sibling.
+//
+// This is the tier's recorded doctrine and not a decision taken here. The
+// IC-7300 met the identical artefact — a printed 50-tone chart over a BCD
+// frequency field — and declared the capacity anyway
+// (core/driver/ic7300/caps.go:242-251), which landed as IC-7300 matrix
+// erratum 12. Register entry ic7851-tone-step-domain still asks what the
+// RADIO accepts off-chart; it no longer decides the declaration.
+//
 // # 7. THE ONE APPROXIMATION IN THE WRITE GATE'S FIELD SET
 //
 // write.go's conditionalRequestedFields appends every state-bearing field
