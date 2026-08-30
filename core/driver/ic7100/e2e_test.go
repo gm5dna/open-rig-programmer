@@ -453,40 +453,108 @@ func TestE2E_TheRadiosFARefusalOfASetIsReportedAndNeverRetransmitted(t *testing.
 }
 
 func TestE2E_AWriteTimeoutIsQuarantinedAndTheSetIsNeverRetransmitted(t *testing.T) {
-	// SKIPPED, AND THE REASON IS A FINDING ABOUT THE FAKE, NOT A WEAKENED
-	// EXPECTATION. This case needs a radio that HEARS one set frame and
-	// then says nothing, so that the driver's timeout branch — write fate
-	// unattributable, the set never retransmitted, Steps[0].Sent false —
-	// can be reached from the far end.
+	// A LOST ACKNOWLEDGEMENT, PUT THROUGH THE FAKE'S OWN SERIAL PORT. The
+	// radio HEARS one set frame, STORES it exactly as it always does, and
+	// then says nothing at all — no FB, and no FA either, because nothing
+	// was refused (fakeic7100.WithNoSetAnswer, and internal/fakeic7100/
+	// doc.go is explicit that this is the package's one TEST LEVER rather
+	// than a reading of an open page: no capture from a radio could settle
+	// a lost acknowledgement, so it carries no register entry).
 	//
-	// The committed fake answers EVERY frame addressed to it. A 1A 00 set
-	// is acknowledged at internal/fakeic7100/fake.go:309 or refused at
-	// fake.go:305 (an unacceptable record) or fake.go:261/:265/:270 (the
-	// clearing form, a short payload, an address out of scope), and there is
-	// no option anywhere in internal/fakeic7100/options.go that withholds an
-	// answer — WithAcceptedRecordLength moves which sets are refused, never
-	// whether one is answered. Its ONLY
-	// silent path is internal/fakeic7100/fake.go:213, a frame addressed to
-	// somebody else — unreachable here, because core/civ/ic7100 addresses
-	// every frame it builds to 88, and a fake at another address never
-	// answers 19 00 either, so Open fails before a write is possible. The
-	// accumulator's other drop, an over-long run at
-	// internal/fakeic7100/parser.go:81, caps at 4096 bytes, far above the
-	// 121-byte set.
+	// That is the only far-end condition that reaches the tier's write
+	// rule (core/transport, "Command classes are stated, not inferred"):
+	// a memory set is an ACKNOWLEDGED write, transmitted EXACTLY ONCE,
+	// never retransmitted when the acknowledgement fails to arrive, with
+	// the outcome reported as UNATTRIBUTABLE and a quarantine afterwards
+	// whatever happened. A radio that always answers cannot take a driver
+	// down that branch at all.
 	//
-	// The property itself is NOT unpinned: TestWriteChannelTimeoutNever
-	// Retransmits (write_test.go:88) pins it deterministically through
-	// respondingport_test.go's withNoSetAnswer, and the wire-count half —
-	// exactly one set frame, never a second — is pinned end to end against
-	// this fake by TestE2E_OneConsentedWriteIsAcknowledgedAndReadsBack and
-	// TestE2E_TheRadiosFARefusalOfASetIsReportedAndNeverRetransmitted
-	// above. What is missing is only the timeout LEVER on the fake's side.
+	// Nothing here is timed against a deadline that might expire while the
+	// fake is mid-answer: the context is Background, the wait that ends is
+	// the ENGINE's own answer timeout, and the fake sends not one byte in
+	// reply to the set, so there is no race between the two goroutines to
+	// lose. TestWriteChannelTimeoutNeverRetransmits (write_test.go:88) pins
+	// the same shape through the scripted port; this is the second witness
+	// reaching it from the far end.
+	radio, s := e2eOpen(t, Simulated, nil,
+		fakeic7100.WithSlot(1, 1, occupiedRecord(t)),
+		fakeic7100.WithNoSetAnswer(),
+	)
+	ch := writableChannel(t, s)
+	beforeSets := countSets(radio.Transcript())
+
+	result, err := s.WriteChannel(context.Background(), ch)
+	if err == nil {
+		t.Fatal("the driver reported success for a set the radio never acknowledged")
+	}
+	// A TIMEOUT, NOT A REFUSAL, and the distinction is the whole point:
+	// FA is the radio saying no, and silence is the radio saying nothing.
+	// The driver may not collapse the second onto the first.
+	if !errors.Is(err, transport.ErrTimeout) {
+		t.Fatalf("err = %v, want transport.ErrTimeout — the acknowledgement never came", err)
+	}
+	if errors.Is(err, transport.ErrRejected) {
+		t.Fatalf("err = %v reads as an FA refusal; the radio refused nothing, it answered nothing", err)
+	}
+	if !strings.Contains(err.Error(), "unattributable") || !strings.Contains(err.Error(), "not retransmitted") {
+		t.Errorf("err = %v, want it to say the fate is unattributable and the set was not retransmitted", err)
+	}
+	// BOTH FLAGS FALSE. One step, because one set frame was built and put
+	// on the wire; Sent false because "sent" here means an outcome the
+	// radio attributed, and Confirmed false because no FB arrived. This is
+	// the shape write_test.go:88 pins through the scripted port.
+	if len(result.Steps) != 1 || result.Steps[0].Sent || result.Steps[0].Confirmed {
+		t.Errorf("result = %+v, want exactly one step with Sent and Confirmed both false — the write's fate is unattributable", result)
+	}
+	if got := countSets(radio.Transcript()) - beforeSets; got != 1 {
+		t.Errorf("the radio received %d sets, want exactly 1 — an unacknowledged set is NEVER resent, because resending an accepted one writes the channel twice", got)
+	}
+
+	// THE RADIO KEPT IT. Asked of the radio rather than of the answer it
+	// never gave, which is how a test tells a lost ACKNOWLEDGEMENT from a
+	// write that never landed: the driver could not know this, and rightly
+	// reported the fate as unattributable, but the record is there.
+	stored, occupied := radio.Slot(1, 1)
+	if !occupied {
+		t.Fatal("the radio holds nothing at A-001; the set was lost, not merely unacknowledged")
+	}
+	if len(stored) != civic7100.RecordLength {
+		t.Fatalf("stored record is %d bytes, want %d", len(stored), civic7100.RecordLength)
+	}
+
+	// THE QUARANTINE DRAINS AND THE SESSION SURVIVES. A write whose
+	// outcome is unknown leaves the stream suspect, so the next exchange
+	// drains it to quiet before trusting anything as its own answer. The
+	// property that matters to a caller is that this ENDS: the drain
+	// reaches quiet against a radio that has gone silent, and the very
+	// next read on the SAME session is answered normally rather than
+	// coming back ErrQuarantineFailed with the engine wedged shut.
 	//
-	// A deadline-based approximation was considered and rejected: a context
-	// that expires while the fake is answering is a race between two
-	// goroutines, and a test that passes because a pipe was slow enough is
-	// not a regression test.
-	t.Skip("internal/fakeic7100 has no option that leaves an addressed frame unanswered (fake.go:309 acknowledges a set, fake.go:305 refuses one, options.go offers no silence), so a write-path timeout cannot be reached through its serial port; TestWriteChannelTimeoutNeverRetransmits pins the branch through the scripted port instead")
+	// WHAT THIS DOES AND DOES NOT PIN, stated rather than implied. From
+	// the far end it pins that the drain SUCCEEDS: a quarantine that
+	// cannot reach quiet fails this read outright. It cannot pin that the
+	// drain was ATTEMPTED, because a radio that has genuinely gone silent
+	// leaves nothing for a drain to find, so skipping one would look
+	// identical here. That half is transport's own to pin, against a
+	// stream that keeps talking — see TestFlood_NextDoRefusesToTransmit
+	// AfterAFailedQuarantine in core/transport/flood_test.go.
+	back, err := s.ReadChannel(context.Background(), "A-001")
+	if err != nil {
+		t.Fatalf("ReadChannel after the timed-out write: %v — the post-write quarantine did not drain and the session is wedged", err)
+	}
+	if back.Data == nil {
+		t.Fatal("A-001 read back empty after a stored set")
+	}
+	if back.Data.Tag != "WRITE TEST" || back.Data.FreqHz != ch.Data.FreqHz {
+		t.Errorf("read back %q/%d, want %q/%d — the stored record is what the radio should serve", back.Data.Tag, back.Data.FreqHz, "WRITE TEST", ch.Data.FreqHz)
+	}
+	// And the quarantine put nothing of its own on the wire: still one set
+	// across the whole session, and every frame the radio heard is one
+	// this profile's own builders could have produced.
+	if got := countSets(radio.Transcript()) - beforeSets; got != 1 {
+		t.Errorf("after the quarantine and the following read the radio had received %d sets, want still exactly 1", got)
+	}
+	e2eAuditGrammars(t, radio, 1)
 }
 
 func TestE2E_AWrongRecordLengthIsRefusedAndCanBeAttributed(t *testing.T) {
