@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	civicr8600 "github.com/gm5dna/open-rig-programmer/core/civ/icr8600"
@@ -164,6 +165,25 @@ func (s *Session) bankFor(slot string) (spec.BankID, bool) {
 	return "", false
 }
 
+// occupiedSurprise refuses a write when the preservation read finds a channel
+// that the session's discovery walk never materialised. The bounded walk can
+// miss such a channel whenever a later group's channel 00 is empty; allowing
+// the write would overwrite a channel absent from the codeplug. Pinned by
+// TestEndToEnd_WriteToAnOccupiedSlotTheBoundedWalkMissedIsRefused.
+func (s *Session) occupiedSurprise(slot string, readReturnedRecord bool) error {
+	if !readReturnedRecord {
+		return nil
+	}
+	mem, ok := s.caps.Bank(spec.BankMemory)
+	if ok && slices.Contains(mem.Slots, slot) {
+		return nil
+	}
+	return &driver.WriteRefusedError{
+		Slot:   slot,
+		Reason: "this session's inventory does not list this slot, but the receiver answered the pre-write read with a record: the discovery walk never saw it, so writing would overwrite a channel nothing has read. Re-discover the receiver; if the slot is still not listed it lies outside the bounded walk — group 0 in full, then channel 00 of every other group and the rest of a group whose 00 answered — and this build offers no setting that widens it",
+	}
+}
+
 // WriteChannel performs one read-modify-write transaction and one
 // address-matched acknowledged 1A 00 set. All locally decidable refusals
 // precede the preservation read; E6 is necessarily read-dependent.
@@ -275,6 +295,9 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 		if len(layout.Fixed) != len(stored) || !bytes.Equal(stored[37:], layout.Fixed[37:]) {
 			return res, &driver.WriteRefusedError{Slot: ch.Slot, Reason: civicr8600.DigitalTailRefusalReason}
 		}
+	}
+	if err := s.occupiedSurprise(ch.Slot, occupied); err != nil {
+		return res, err
 	}
 
 	prior, err := s.parseRecord(addr, stored)
