@@ -36,6 +36,7 @@ type config struct {
 	unequalTXOK    bool
 	shortSetsOK    bool
 	echoBack       bool
+	noSetAnswer    bool
 	broadcasts     time.Duration
 	addressedFlood time.Duration
 }
@@ -182,6 +183,34 @@ func WithUnequalTransmitBlockAccepted() Option {
 // a fake that stored a one-byte "record" for it would be modelling nothing.
 func WithShortSetsAccepted() Option {
 	return func(c *config) { c.shortSetsOK = true }
+}
+
+// WithNoSetAnswer makes the radio store an acceptable set and then say nothing
+// at all about it: no FB, and no FA either, since nothing was refused.
+//
+// IT IS A TEST LEVER, NOT AN ASSUMPTION ABOUT AN IC-7100. Every other option
+// above is the other admissible reading of an open page, with a register entry
+// and a capture that would retire it. This one models a LOST ACKNOWLEDGEMENT ON
+// THE LINK — the radio heard the frame, acted on it, and the reply did not
+// arrive — so no capture from a radio could ever settle it and it has no
+// register entry. See doc.go, WHAT IS NOT IN THAT REGISTER.
+//
+// It exists for the transport engine's write rule: a memory set is an
+// acknowledged write, sent EXACTLY ONCE and never retransmitted when the
+// acknowledgement fails to come back, with a post-write quarantine drain
+// afterwards whatever the outcome (core/transport, "Command classes are stated,
+// not inferred"). No radio that always answers can take a driver down that
+// branch. This is the radio that hears one set frame and then says nothing —
+// entry 11's silence is the read-path counterpart, and strands a read the same
+// way.
+//
+// The set is STORED, so Slot and Transcript report it exactly as they always
+// do, which is how a test tells "the write was lost" from "the write never
+// happened". Everything else the radio does is unchanged: reads, 19 00 and
+// every refusal are answered as before.
+
+func WithNoSetAnswer() Option {
+	return func(c *config) { c.noSetAnswer = true }
 }
 
 // WithEcho echoes every received frame back before answering it.
