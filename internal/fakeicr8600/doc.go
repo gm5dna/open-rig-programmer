@@ -29,6 +29,21 @@
 // imported the other, agreement would be a tautology, and the evidence would be
 // worth nothing.
 //
+// # THE EVIDENCE BASE IS B, W AND G — WIDER THAN THE PLAN SAID
+//
+// Task 9 of the plan gives this package's implementer "only the manual-derived
+// B/W artefacts": the semantic transcription and the geometry witness. Three
+// were read, not two. The third is IC-R8600-golden-provenance.md, named above,
+// and this is a deliberate WIDENING of that line — recorded here in as many
+// words rather than left as a silent difference between plan and package.
+//
+// It is a widening of what EVIDENCE was read, never of what CODE was read. G is
+// quarantined manual-derived evidence of exactly the same kind as B and W: it
+// records which printed page each golden vector's bytes were read from, and
+// nothing else. It is not Stage 1 or Stage 2 code, and NOTHING IN THIS PACKAGE
+// DEPENDS ON STAGE 1/2 CODE. The hard rule above is unweakened by the widening,
+// and TestNoCoreImports still proves that mechanically rather than on trust.
+//
 // The reasoning is internal/fakeradio's, and it is worth restating because it
 // is the entire point of the rule: if this fake reused the production codec, a
 // systematic bug in that codec — an off-by-one in a field offset, a mode code

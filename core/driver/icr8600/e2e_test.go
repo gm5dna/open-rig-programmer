@@ -7,6 +7,8 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -403,6 +405,50 @@ func TestEndToEnd_DigitalSquelchTailRefusesWithTheExactE6Reason(t *testing.T) {
 	}
 	if stored, _ := radio.Record(0, 2); !bytes.Equal(stored, p25) {
 		t.Error("the refused write changed what the fake holds")
+	}
+}
+
+// TestEndToEnd_TheFakesDeclaredEvidenceBaseIsBWAndG guards the premise this
+// whole file rests on. Every "the two witnesses agree" claim below is worth
+// something only because of what the fake's implementer read: the
+// quarantined manual-derived artefacts, and no source file of
+// core/civ/icr8600 or core/driver/icr8600. That premise lives in the fake's
+// own prose, so this side pins it rather than trusting it.
+//
+// The plan's Task 9 said "only the manual-derived B/W artefacts". The fake
+// in fact read three — B, W AND the golden vectors' provenance — which is a
+// WIDENING, and the packages must say so in as many words rather than leave
+// a silent difference between plan and package.
+func TestEndToEnd_TheFakesDeclaredEvidenceBaseIsBWAndG(t *testing.T) {
+	for _, name := range []string{"doc.go", "image.go"} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join("..", "..", "..", "internal", "fakeicr8600", name)
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read %s: %v", path, err)
+			}
+			source := string(data)
+			for _, want := range []string{
+				"IC-R8600-transcription-b",
+				"IC-R8600-geometry-witness",
+				"IC-R8600-golden-provenance.md",
+				"Task 9",
+			} {
+				if !strings.Contains(source, want) {
+					t.Errorf("%s does not name %q; the evidence base must be stated as B, W AND G, and the widening of the plan's Task 9 recorded", name, want)
+				}
+			}
+		})
+	}
+
+	// The widening is about EVIDENCE, never about code. Nothing in the
+	// fake may depend on Stage 1/2, and its doc.go must keep saying so.
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "internal", "fakeicr8600", "doc.go"))
+	if err != nil {
+		t.Fatalf("read the fake's doc.go: %v", err)
+	}
+	if !strings.Contains(string(data), "NO SOURCE FILE OF core/civ/icr8600 OR") {
+		t.Error("the fake's doc.go no longer states that it read no Stage 1/2 source file")
 	}
 }
 
