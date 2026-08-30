@@ -100,8 +100,10 @@ func TestCrosscheckProfileAgainstLegs(t *testing.T) {
 		field       civ.FieldID
 		off, length int
 	}{
-		{civ.FieldRXFrequency, 1, 5}, {civ.FieldMode, 6, 1}, {civ.FieldFilter, 7, 1},
-		{civ.FieldToneMode, 8, 1}, {civ.FieldToneTX, 9, 3}, {civ.FieldToneRX, 12, 3}, {civ.FieldName, 15, 10},
+		// The three numeric spans stop short of the printed-fixed byte
+		// each group ends or begins with: ⑧, ⑫ and ⑮ carry no digit.
+		{civ.FieldRXFrequency, 1, 4}, {civ.FieldMode, 6, 1}, {civ.FieldFilter, 7, 1},
+		{civ.FieldToneMode, 8, 1}, {civ.FieldToneTX, 10, 2}, {civ.FieldToneRX, 13, 2}, {civ.FieldName, 15, 10},
 	}
 	if len(spans) != len(want) {
 		t.Fatalf("profile spans = %d, want %d; E6-unmapped select/data nibbles must have no span", len(spans), len(want))
