@@ -14,10 +14,10 @@ import (
 
 // This file is D2's starvation-deadline proof (round 2, F3≈C4). Address
 // filtering prevents FALSE MATCHES; it does nothing about STARVATION. A
-// transceive flood — factory-ON on at least four of the six Icom models
-// this tier registers, with no off-switch shipped — is a stream that never
-// goes quiet, and every loop in this package whose exit condition is
-// "silence" would wait for it forever.
+// transceive flood — factory-ON on at least four of the eleven Icom
+// models this tier registers, with no off-switch shipped — is a stream
+// that never goes quiet, and every loop in this package whose exit
+// condition is "silence" would wait for it forever.
 //
 // The tests below all use a port that NEVER goes quiet, not merely one
 // that interleaves noise with answers. Each asserts the same shape of

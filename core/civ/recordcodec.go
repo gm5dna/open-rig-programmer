@@ -33,10 +33,16 @@ func (p Profile) validateRecordFields(rec MemoryRecord, length int) error {
 	if !p.Configured() {
 		return fmt.Errorf("civ: unconfigured profile validates no record")
 	}
-	byID, ok := p.fieldsByIDByLayout[length]
+	i, ok := p.layoutByLength[length]
 	if !ok {
 		return &RecordLengthError{Want: p.RecordLengths(), Got: length}
 	}
+	return p.validateRecordFieldsAt(rec, i)
+}
+
+func (p Profile) validateRecordFieldsAt(rec MemoryRecord, layoutIndex int) error {
+	layout := p.layouts[layoutIndex]
+	byID := p.fieldsByIDByLayout[layoutIndex]
 
 	for _, id := range AllFieldIDs() {
 		spans := byID[id]
@@ -54,12 +60,12 @@ func (p Profile) validateRecordFields(rec MemoryRecord, length int) error {
 
 		if len(spans) == 0 {
 			if present {
-				return fmt.Errorf("civ: %s: record carries %s, which this profile's %d-byte layout has nowhere to put — silently dropping it would write a record the caller did not ask for", p.model, id, length)
+				return fmt.Errorf("civ: %s: record carries %s, which this profile's %d-byte layout has nowhere to put — silently dropping it would write a record the caller did not ask for", p.model, id, layout.Length)
 			}
 			continue
 		}
 		if !present {
-			return fmt.Errorf("civ: %s: record has no %s, which this profile's %d-byte layout maps — the byte would go out as zero, which for an enum is a value the layout may not even define", p.model, id, length)
+			return fmt.Errorf("civ: %s: record has no %s, which this profile's %d-byte layout maps — the byte would go out as zero, which for an enum is a value the layout may not even define", p.model, id, layout.Length)
 		}
 		for _, sp := range spans {
 			if err := p.validateSpanValue(rec, sp); err != nil {
@@ -123,13 +129,19 @@ func (p Profile) validName(s string) error {
 // or zero where it has none. The result is a fresh slice; nothing in it
 // aliases the profile or the caller's record.
 func (p Profile) encodeRecord(rec MemoryRecord, length int) ([]byte, error) {
-	if err := p.validateRecordFields(rec, length); err != nil {
-		return nil, err
-	}
-	layout, ok := p.layoutByLength[length]
+	i, ok := p.layoutByLength[length]
 	if !ok {
 		return nil, &RecordLengthError{Want: p.RecordLengths(), Got: length}
 	}
+	return p.encodeRecordAt(rec, i)
+}
+
+func (p Profile) encodeRecordAt(rec MemoryRecord, layoutIndex int) ([]byte, error) {
+	if err := p.validateRecordFieldsAt(rec, layoutIndex); err != nil {
+		return nil, err
+	}
+	layout := p.layouts[layoutIndex]
+	length := layout.Length
 
 	out := make([]byte, length)
 	if len(layout.Fixed) == length {
@@ -207,10 +219,15 @@ func (p Profile) decodeRecord(b []byte, addr ChannelAddress) (MemoryRecord, erro
 	if !p.Configured() {
 		return MemoryRecord{}, fmt.Errorf("civ: unconfigured profile decodes no record")
 	}
-	layout, ok := p.layoutByLength[len(b)]
-	if !ok {
-		return MemoryRecord{}, &RecordLengthError{Want: p.RecordLengths(), Got: len(b)}
+	i, err := p.layoutIndexForRecord(b)
+	if err != nil {
+		return MemoryRecord{}, err
 	}
+	return p.decodeRecordAt(b, addr, i)
+}
+
+func (p Profile) decodeRecordAt(b []byte, addr ChannelAddress, layoutIndex int) (MemoryRecord, error) {
+	layout := p.layouts[layoutIndex]
 
 	rec := MemoryRecord{Address: addr}
 	// seen records which fields a span has already filled, so a DUPLICATED

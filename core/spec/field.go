@@ -79,3 +79,29 @@ const (
 	// modifier), stored alongside — not inside — the mode name.
 	FieldDataMode Field = "data_mode"
 )
+
+// The receiver fields added by the Tier 4b Icom extension (additions
+// design D8). They are neutral memory-channel concepts rather than Icom
+// wire names: a scanner or receiver with the same setting grades the same
+// Field, and a radio without it simply leaves the Field unsupported.
+const (
+	// FieldTuningStepEnabled is the per-channel on/off state of the tuning
+	// step function, kept separate from the selected step so both values
+	// round-trip independently.
+	FieldTuningStepEnabled Field = "tuning_step_enabled"
+	// FieldTuningStep is the selected tuning-step label, drawn from
+	// Capabilities.TuningSteps.
+	FieldTuningStep Field = "tuning_step"
+	// FieldProgramTuningStep is the programmable tuning step in hertz.
+	FieldProgramTuningStep Field = "program_tuning_step"
+	// FieldAttenuator is the selected input attenuation in decibels.
+	FieldAttenuator Field = "attenuator"
+	// FieldPreamp is the selected preamplifier option, drawn from
+	// Capabilities.PreampOptions.
+	FieldPreamp Field = "preamp"
+	// FieldAntenna is the selected antenna input, drawn from
+	// Capabilities.AntennaOptions.
+	FieldAntenna Field = "antenna"
+	// FieldIPPlus is the per-channel IP+ signal-processing flag.
+	FieldIPPlus Field = "ip_plus"
+)

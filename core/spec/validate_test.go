@@ -14,8 +14,9 @@ import (
 // result freely.
 func validTestCapabilities() Capabilities {
 	return Capabilities{
-		Model: "TEST-710",
-		CATID: "0000",
+		Model:    "TEST-710",
+		CATID:    "0000",
+		Transmit: HasTransmitter,
 		Banks: []Bank{
 			{
 				ID:    BankMemory,

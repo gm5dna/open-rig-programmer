@@ -194,6 +194,27 @@ func changedFields(before, after ChannelData) []spec.Field {
 	if before.DataMode != after.DataMode {
 		out = append(out, spec.FieldDataMode)
 	}
+	if before.TuningStepEnabled != after.TuningStepEnabled {
+		out = append(out, spec.FieldTuningStepEnabled)
+	}
+	if before.TuningStep != after.TuningStep {
+		out = append(out, spec.FieldTuningStep)
+	}
+	if before.ProgramTuningStepHz != after.ProgramTuningStepHz {
+		out = append(out, spec.FieldProgramTuningStep)
+	}
+	if before.AttenuatorDB != after.AttenuatorDB {
+		out = append(out, spec.FieldAttenuator)
+	}
+	if before.Preamp != after.Preamp {
+		out = append(out, spec.FieldPreamp)
+	}
+	if before.Antenna != after.Antenna {
+		out = append(out, spec.FieldAntenna)
+	}
+	if before.IPPlus != after.IPPlus {
+		out = append(out, spec.FieldIPPlus)
+	}
 	return out
 }
 
@@ -244,14 +265,15 @@ func addedFields(data ChannelData) []spec.Field {
 	return out
 }
 
-// tierAddedFieldFor pairs each spec.Field the Icom tier added with a
+// tierAddedFieldFor pairs each spec.Field the two Icom model extensions
+// added with a
 // predicate reporting whether this channel's data actually REQUESTS it —
 // i.e. carries a Known value for it. The order is ChannelData's own
 // declaration order, and it is appended after the pre-tier set in
 // touchedFields, so no BlockReason a user has ever read is reordered.
 //
 // Every one of these predicates answers false for a channel produced by
-// or for a Yaesu NEWCAT radio: those channels leave all ten fields
+// or for a Yaesu NEWCAT radio: those channels leave all seventeen fields
 // UNAVAILABLE — a read says so directly, a load of a schema-1/2/3 file
 // migrates to it (design D4, decision 1), and Absent is neither Known
 // either — which is why the pre-tier world's Diff output is unchanged.
@@ -269,6 +291,13 @@ var tierAddedFieldFor = []struct {
 	{spec.FieldDTCSPolarity, func(d ChannelData) bool { return d.DTCSPolarity.State == Known }},
 	{spec.FieldFilter, func(d ChannelData) bool { return d.Filter.State == Known }},
 	{spec.FieldDataMode, func(d ChannelData) bool { return d.DataMode.State == Known }},
+	{spec.FieldTuningStepEnabled, func(d ChannelData) bool { return d.TuningStepEnabled.State == Known }},
+	{spec.FieldTuningStep, func(d ChannelData) bool { return d.TuningStep.State == Known }},
+	{spec.FieldProgramTuningStep, func(d ChannelData) bool { return d.ProgramTuningStepHz.State == Known }},
+	{spec.FieldAttenuator, func(d ChannelData) bool { return d.AttenuatorDB.State == Known }},
+	{spec.FieldPreamp, func(d ChannelData) bool { return d.Preamp.State == Known }},
+	{spec.FieldAntenna, func(d ChannelData) bool { return d.Antenna.State == Known }},
+	{spec.FieldIPPlus, func(d ChannelData) bool { return d.IPPlus.State == Known }},
 }
 
 // unconditionallyAdded is the set of fields addedFields emits for EVERY
@@ -305,7 +334,8 @@ var unconditionallyAdded = func() map[spec.Field]bool {
 //     that bank over a field nobody named. This is the Icom case the
 //     filter was written for: a bank that expresses only some of the six.
 //   - the CONDITIONAL fields — ctcss_tone, tag_display and scan_skip
-//     from addedFields, and the tier's ten from tierAddedFieldFor — are
+//     from addedFields, and the extensions' seventeen from
+//     tierAddedFieldFor — are
 //     in the set ONLY because this channel carries a Known value for
 //     them, and a Known value IS the user's explicit request (per
 //     FieldState's write rule, nothing else is ever sent). Such a field
@@ -502,12 +532,15 @@ func withinAnySparseBank(caps spec.Capabilities, slot string) bool {
 // limit by sending is not.
 //
 // Empty channels do not count: the budget is on stored channels, and an
-// empty slot stores nothing. A bank with no Budget cannot reach here —
-// spec.Capabilities.Validate requires a positive Budget on every Sparse
-// bank and forbids one on every dense bank.
+// empty slot stores nothing. A sparse bank declares EITHER a positive
+// Budget OR BudgetUnstated (spec.Capabilities.Validate requires exactly
+// one, and forbids both on a dense bank); an unstated budget skips this
+// refusal only — out-of-space adds are still refused — because what an
+// over-full radio does is undocumented and this program never finds out
+// by sending (additions design D3.4).
 func checkSparseBudget(file *Codeplug, caps spec.Capabilities) error {
 	for _, b := range caps.Banks {
-		if !b.Sparse {
+		if !b.Sparse || b.BudgetUnstated {
 			continue
 		}
 		populated := 0

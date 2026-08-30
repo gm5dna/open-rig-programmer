@@ -108,7 +108,7 @@ func Run(t T, p civ.Profile) {
 			"to prevent. If you meant to check the zero value's refusals, call civtest.RunZeroValue(t).")
 	}
 
-	r := &run{t: t, p: p, frames: map[string]int{}, refusals: map[string]int{}, lengthsSeen: map[int]int{}}
+	r := &run{t: t, p: p, frames: map[string]int{}, refusals: map[string]int{}, lengthsSeen: map[int]int{}, layoutsSeen: map[int]int{}}
 
 	r.checkProfileSelfConsistency()
 	r.checkTransceiverIDRead()
@@ -138,6 +138,7 @@ type run struct {
 	// length, so a profile whose second layout was never reached fails
 	// rather than passing on the strength of its first.
 	lengthsSeen map[int]int
+	layoutsSeen map[int]int
 
 	// roundTrips counts records that survived build -> parse intact.
 	roundTrips int
@@ -190,7 +191,7 @@ func (r *run) checkProfileSelfConsistency() {
 	if len(lengths) == 0 {
 		r.t.Fatalf("%s: RecordLengths() is empty — no record could be read or written", r.name())
 	}
-	found := false
+	found := p.Discriminator() == civ.DiscriminatorModeByte && p.BuildRecordLength() == 0
 	for _, n := range lengths {
 		if n == p.BuildRecordLength() {
 			found = true
@@ -219,6 +220,10 @@ func (r *run) checkProfileSelfConsistency() {
 	case civ.DiscriminatorRecordLength:
 		if len(lengths) < 2 {
 			r.t.Errorf("%s: Discriminator is %v with %d accepted length", r.name(), p.Discriminator(), len(lengths))
+		}
+	case civ.DiscriminatorModeByte:
+		if len(p.Layouts()) < 2 || p.BuildRecordLength() != 0 {
+			r.t.Errorf("%s: Discriminator is %v with %d layouts and BuildRecordLength %d, want at least two and zero", r.name(), p.Discriminator(), len(p.Layouts()), p.BuildRecordLength())
 		}
 	default:
 		r.t.Errorf("%s: Discriminator is %v — the zero value is not a rule", r.name(), p.Discriminator())
@@ -366,12 +371,22 @@ func (r *run) checkEveryAcceptedLength() {
 	prefix := read.Bytes()
 	prefix = prefix[:len(prefix)-1]
 
-	for _, length := range p.RecordLengths() {
-		rec, ok := r.sampleRecord(addr, length)
+	layouts := p.Layouts()
+	for layoutIndex, layout := range layouts {
+		length := layout.Length
+		if p.Discriminator() != civ.DiscriminatorModeByte {
+			var ok bool
+			layout, ok = p.LayoutFor(length)
+			if !ok {
+				r.t.Errorf("%s: LayoutFor(%d) is missing for a length RecordLengths() reports", r.name(), length)
+				continue
+			}
+		}
+		rec, ok := r.sampleRecordForLayout(addr, layout)
 		if !ok {
 			continue
 		}
-		record, ok := r.packRecord(rec, length)
+		record, ok := r.packRecordForLayout(rec, layout)
 		if !ok {
 			continue
 		}
@@ -381,6 +396,7 @@ func (r *run) checkEveryAcceptedLength() {
 		frame = append(frame, civ.EndByte)
 
 		r.lengthsSeen[length]++
+		r.layoutsSeen[layoutIndex]++
 
 		if !civ.WellFormed(frame) {
 			r.t.Errorf("%s: a %d-byte record packed from this profile's own layout is not a well-formed frame: %v", r.name(), length, frame)
@@ -432,10 +448,17 @@ func (r *run) checkGateRefusesAMutatedRecordByte() {
 	p := r.p
 	length := p.BuildRecordLength()
 
-	layout, ok := p.LayoutFor(length)
-	if !ok {
-		r.t.Errorf("%s: LayoutFor(%d) is missing for its own BuildRecordLength", r.name(), length)
-		return
+	var layout civ.RecordLayout
+	var ok bool
+	if p.Discriminator() == civ.DiscriminatorModeByte {
+		layout = p.Layouts()[0]
+		length = layout.Length
+	} else {
+		layout, ok = p.LayoutFor(length)
+		if !ok {
+			r.t.Errorf("%s: LayoutFor(%d) is missing for its own BuildRecordLength", r.name(), length)
+			return
+		}
 	}
 	unmapped := unmappedNibbles(layout)
 	if len(unmapped) == 0 {
@@ -444,7 +467,7 @@ func (r *run) checkGateRefusesAMutatedRecordByte() {
 	}
 
 	addr := r.addresses()[0]
-	rec, ok := r.sampleRecord(addr, length)
+	rec, ok := r.sampleRecordForLayout(addr, layout)
 	if !ok {
 		return
 	}
@@ -576,6 +599,12 @@ func (r *run) packRecord(rec civ.MemoryRecord, length int) ([]byte, bool) {
 		return nil, false
 	}
 
+	return r.packRecordForLayout(rec, layout)
+}
+
+func (r *run) packRecordForLayout(rec civ.MemoryRecord, layout civ.RecordLayout) ([]byte, bool) {
+	r.t.Helper()
+	length := layout.Length
 	out := make([]byte, length)
 	if len(layout.Fixed) == length {
 		copy(out, layout.Fixed)
@@ -668,36 +697,25 @@ func packBCD(v uint64, n int, order civ.ByteOrder) ([]byte, bool) {
 func (r *run) checkMemorySets() {
 	r.t.Helper()
 
+	if r.p.Discriminator() == civ.DiscriminatorModeByte {
+		addr := r.addresses()[0]
+		for _, layout := range r.p.Layouts() {
+			rec, ok := r.sampleRecordForLayout(addr, layout)
+			if !ok {
+				continue
+			}
+			r.checkMemorySetRecord(rec)
+		}
+		return
+	}
+
 	length := r.p.BuildRecordLength()
 	for _, addr := range r.addresses() {
 		rec, ok := r.sampleRecord(addr, length)
 		if !ok {
 			return
 		}
-		cmd, err := r.p.BuildMemorySet(rec)
-		if err != nil {
-			r.t.Errorf("%s: BuildMemorySet(%v): %v", r.name(), addr, err)
-			continue
-		}
-		frame := cmd.Bytes()
-		r.checkFrame("memory set", frame)
-
-		back, err := r.p.ParseMemoryAnswer(swapAddresses(frame))
-		if err != nil {
-			r.t.Errorf("%s: ParseMemoryAnswer rejected the answer form of its own set frame: %v", r.name(), err)
-			continue
-		}
-		if back != rec {
-			r.t.Errorf("%s: a record did not survive build -> parse:\n got %+v\nwant %+v", r.name(), back, rec)
-			continue
-		}
-		r.roundTrips++
-
-		if r.p.AllowedCommand(swapAddresses(frame)) {
-			r.t.Errorf("%s: its gate ADMITTED a memory ANSWER — an answer is never a legal outbound command", r.name())
-		} else {
-			r.refusals["answer frame at the gate"]++
-		}
+		r.checkMemorySetRecord(rec)
 	}
 
 	// A NAME CONTAINING THE PAD BYTE, where the charset allows one: spec
@@ -728,6 +746,32 @@ func (r *run) checkMemorySets() {
 				}
 			}
 		}
+	}
+}
+
+func (r *run) checkMemorySetRecord(rec civ.MemoryRecord) {
+	r.t.Helper()
+	cmd, err := r.p.BuildMemorySet(rec)
+	if err != nil {
+		r.t.Errorf("%s: BuildMemorySet(%v): %v", r.name(), rec.Address, err)
+		return
+	}
+	frame := cmd.Bytes()
+	r.checkFrame("memory set", frame)
+	back, err := r.p.ParseMemoryAnswer(swapAddresses(frame))
+	if err != nil {
+		r.t.Errorf("%s: ParseMemoryAnswer rejected the answer form of its own set frame: %v", r.name(), err)
+		return
+	}
+	if back != rec {
+		r.t.Errorf("%s: a record did not survive build -> parse:\n got %+v\nwant %+v", r.name(), back, rec)
+		return
+	}
+	r.roundTrips++
+	if r.p.AllowedCommand(swapAddresses(frame)) {
+		r.t.Errorf("%s: its gate ADMITTED a memory ANSWER — an answer is never a legal outbound command", r.name())
+	} else {
+		r.refusals["answer frame at the gate"]++
 	}
 }
 
@@ -769,7 +813,13 @@ func (r *run) checkNameLengthIsTheProfilesOwn() {
 		long[i] = fill
 	}
 
-	rec, ok := r.sampleRecord(r.addresses()[0], p.BuildRecordLength())
+	var rec civ.MemoryRecord
+	var ok bool
+	if p.Discriminator() == civ.DiscriminatorModeByte {
+		rec, ok = r.sampleRecordForLayout(r.addresses()[0], p.Layouts()[0])
+	} else {
+		rec, ok = r.sampleRecord(r.addresses()[0], p.BuildRecordLength())
+	}
 	if !ok {
 		return
 	}
@@ -858,12 +908,17 @@ func (r *run) checkNonVacuity() {
 			r.t.Errorf("%s: accepted record length %d was never packed and gated — the builder emits only %d, so a layout this walk does not reach is a layout nothing has ever decoded", r.name(), length, r.p.BuildRecordLength())
 		}
 	}
+	for i, layout := range r.p.Layouts() {
+		if r.layoutsSeen[i] == 0 {
+			r.t.Errorf("%s: layout %d (mode class %q, length %d) was never packed, gated and parsed", r.name(), i, layout.ModeClass, layout.Length)
+		}
+	}
 	if r.total < minConformanceFrames {
 		r.t.Errorf("%s: only %d frames were built and checked in total — this walk is not reaching the builders", r.name(), r.total)
 	}
 
-	r.t.Logf("%s: %d frames checked; per builder: %v; refusals seen: %v; record round trips: %d; records per accepted length: %v",
-		r.name(), r.total, r.frames, r.refusals, r.roundTrips, r.lengthsSeen)
+	r.t.Logf("%s: %d frames checked; per builder: %v; refusals seen: %v; record round trips: %d; records per accepted length: %v; layouts: %v",
+		r.name(), r.total, r.frames, r.refusals, r.roundTrips, r.lengthsSeen, r.layoutsSeen)
 }
 
 // addresses returns a sample of addresses valid under p's own address
@@ -937,6 +992,11 @@ func (r *run) sampleRecord(addr civ.ChannelAddress, length int) (civ.MemoryRecor
 		r.t.Errorf("%s: LayoutFor(%d) is missing for its own BuildRecordLength", r.name(), length)
 		return civ.MemoryRecord{}, false
 	}
+	return r.sampleRecordForLayout(addr, layout)
+}
+
+func (r *run) sampleRecordForLayout(addr civ.ChannelAddress, layout civ.RecordLayout) (civ.MemoryRecord, bool) {
+	r.t.Helper()
 
 	rec := civ.MemoryRecord{Address: addr}
 	for _, sp := range layout.Fields {
@@ -1019,6 +1079,10 @@ func getNumeric(rec civ.MemoryRecord, id civ.FieldID) (uint64, bool) {
 		return rec.ToneRXDeciHz.Get()
 	case civ.FieldDTCSCode:
 		return rec.DTCSCode.Get()
+	case civ.FieldProgramTuningStep:
+		return rec.ProgramTuningStepHz.Get()
+	case civ.FieldAttenuator:
+		return rec.AttenuatorDB.Get()
 	default:
 		panic("civtest: no numeric field for id " + string(id) + " — core/civ's vocabulary grew and this suite was not updated")
 	}
@@ -1042,6 +1106,16 @@ func getText(rec civ.MemoryRecord, id civ.FieldID) (string, bool) {
 		return rec.Name.Get()
 	case civ.FieldSelect:
 		return rec.Select.Get()
+	case civ.FieldTuningStepEnabled:
+		return rec.TuningStepEnabled.Get()
+	case civ.FieldTuningStep:
+		return rec.TuningStep.Get()
+	case civ.FieldPreamp:
+		return rec.Preamp.Get()
+	case civ.FieldAntenna:
+		return rec.Antenna.Get()
+	case civ.FieldIPPlus:
+		return rec.IPPlus.Get()
 	default:
 		panic("civtest: no text field for id " + string(id) + " — core/civ's vocabulary grew and this suite was not updated")
 	}
@@ -1061,6 +1135,10 @@ func setNumeric(rec *civ.MemoryRecord, id civ.FieldID, v uint64) {
 		rec.ToneRXDeciHz = civ.Available(v)
 	case civ.FieldDTCSCode:
 		rec.DTCSCode = civ.Available(v)
+	case civ.FieldProgramTuningStep:
+		rec.ProgramTuningStepHz = civ.Available(v)
+	case civ.FieldAttenuator:
+		rec.AttenuatorDB = civ.Available(v)
 	default:
 		panic("civtest: no numeric field for id " + string(id) + " — core/civ's vocabulary grew and this suite was not updated")
 	}
@@ -1084,6 +1162,16 @@ func setText(rec *civ.MemoryRecord, id civ.FieldID, v string) {
 		rec.Name = civ.Available(v)
 	case civ.FieldSelect:
 		rec.Select = civ.Available(v)
+	case civ.FieldTuningStepEnabled:
+		rec.TuningStepEnabled = civ.Available(v)
+	case civ.FieldTuningStep:
+		rec.TuningStep = civ.Available(v)
+	case civ.FieldPreamp:
+		rec.Preamp = civ.Available(v)
+	case civ.FieldAntenna:
+		rec.Antenna = civ.Available(v)
+	case civ.FieldIPPlus:
+		rec.IPPlus = civ.Available(v)
 	default:
 		panic("civtest: no text field for id " + string(id) + " — core/civ's vocabulary grew and this suite was not updated")
 	}

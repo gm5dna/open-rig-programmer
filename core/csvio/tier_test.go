@@ -36,6 +36,13 @@ func yaesuLikeChannels() []codeplug.Channel {
 		d.DTCSPolarity = codeplug.StringField{State: codeplug.Unavailable}
 		d.Filter = codeplug.StringField{State: codeplug.Unavailable}
 		d.DataMode = codeplug.BoolField{State: codeplug.Unavailable}
+		d.TuningStepEnabled = codeplug.BoolField{State: codeplug.Unavailable}
+		d.TuningStep = codeplug.StringField{State: codeplug.Unavailable}
+		d.ProgramTuningStepHz = codeplug.FreqField{State: codeplug.Unavailable}
+		d.AttenuatorDB = codeplug.IntField{State: codeplug.Unavailable}
+		d.Preamp = codeplug.StringField{State: codeplug.Unavailable}
+		d.Antenna = codeplug.StringField{State: codeplug.Unavailable}
+		d.IPPlus = codeplug.BoolField{State: codeplug.Unavailable}
 		return d
 	}
 	return []codeplug.Channel{
@@ -155,6 +162,11 @@ func TestExportImport_TierRoundTrip(t *testing.T) {
 		}},
 		{Slot: "G01-003"},
 	}
+	for i := range want {
+		if want[i].Data != nil {
+			markReceiverFieldsUnavailable(want[i].Data)
+		}
+	}
 
 	var buf bytes.Buffer
 	if err := Export(&buf, want); err != nil {
@@ -203,6 +215,12 @@ func TestImport_AcceptsBothHeaderVersions(t *testing.T) {
 			"tone_tx": d.ToneTx.State, "tone_rx": d.ToneRx.State,
 			"dtcs_code": d.DTCSCode.State, "dtcs_polarity": d.DTCSPolarity.State,
 			"filter": d.Filter.State, "data_mode": d.DataMode.State,
+			"tuning_step_enabled": d.TuningStepEnabled.State,
+			"tuning_step":         d.TuningStep.State,
+			"program_tuning_step": d.ProgramTuningStepHz.State,
+			"attenuator":          d.AttenuatorDB.State,
+			"preamp":              d.Preamp.State, "antenna": d.Antenna.State,
+			"ip_plus": d.IPPlus.State,
 		} {
 			// Unavailable, not the zero value: a version-1 file was
 			// written by a build that modelled none of these fields,
@@ -242,6 +260,7 @@ func TestImport_AcceptsBothHeaderVersions(t *testing.T) {
 			Filter:       codeplug.StringField{State: codeplug.Known, Value: "FIL1"},
 			DataMode:     codeplug.BoolField{State: codeplug.Known, Value: true},
 		}
+		markReceiverFieldsUnavailable(&want)
 		if *d != want {
 			t.Errorf("Import() =\n %+v\nwant\n %+v", *d, want)
 		}
@@ -283,7 +302,7 @@ func TestImport_FreqHzReachesPastUint32(t *testing.T) {
 func icomCHIRPCapabilities() spec.Capabilities {
 	tones := spec.StandardCTCSSTones()
 	return spec.Capabilities{
-		Model: "TEST-ICOM", CATID: "A4",
+		Model: "TEST-ICOM", CATID: "A4", Transmit: spec.HasTransmitter,
 		Modes: []string{"USB", "FM"}, TagLen: 10,
 		CTCSSTones:  tones[:],
 		Bauds:       []int{19200},
@@ -321,6 +340,75 @@ func icomCHIRPCapabilities() spec.Capabilities {
 			},
 		}},
 	}
+}
+
+func receiverCHIRPCapabilities() spec.Capabilities {
+	caps := icomCHIRPCapabilities()
+	caps.Model = "TEST-RECEIVER"
+	caps.Transmit = spec.ReceiveOnly
+	caps.Banks[0].Fields[spec.FieldTxFrequency] = spec.FieldSupport{}
+	caps.Banks[0].Fields[spec.FieldToneTx] = spec.FieldSupport{}
+	modes := caps.ToneModes[:0]
+	for _, mode := range caps.ToneModes {
+		switch mode.Semantics {
+		case spec.ToneModeCTCSS:
+			continue
+		case spec.ToneModeCTCSSSquelch:
+			mode.Semantics = spec.ToneModeCTCSSRxSquelch
+		}
+		modes = append(modes, mode)
+	}
+	caps.ToneModes = modes
+	return caps
+}
+
+func TestImportCHIRP_ReceiveOnlyDuplexAndTone(t *testing.T) {
+	caps := receiverCHIRPCapabilities()
+	if err := caps.Validate(); err != nil {
+		t.Fatalf("receiver fixture does not validate: %v", err)
+	}
+	head := "Location,Name,Frequency,Duplex,Offset,Tone,rToneFreq,cToneFreq,DtcsCode,DtcsPolarity,Mode,Skip\n"
+
+	t.Run("split is refused as anatomically impossible", func(t *testing.T) {
+		body := head + "1,SPLIT,145.700000,split,433.500000,,88.5,88.5,023,NN,FM,\n"
+		_, report, err := ImportCHIRP(strings.NewReader(body), caps)
+		if err != nil {
+			t.Fatalf("ImportCHIRP: %v", err)
+		}
+		if len(report.Entries) == 0 || !report.HasBlocking() {
+			t.Fatalf("report = %+v, want a blocking transmitter refusal", report.Entries)
+		}
+		found := false
+		for _, entry := range report.Entries {
+			if entry.Column == "Duplex" && strings.Contains(entry.Detail, "this radio has no transmitter") {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("report = %+v, want Duplex wording %q", report.Entries, "this radio has no transmitter")
+		}
+	})
+
+	t.Run("TSQL selects receive-only tone squelch", func(t *testing.T) {
+		body := head + "1,RXTSQL,145.700000,,0.000000,TSQL,67.0,88.5,023,NN,FM,\n"
+		channels, report, err := ImportCHIRP(strings.NewReader(body), caps)
+		if err != nil {
+			t.Fatalf("ImportCHIRP: %v", err)
+		}
+		if report.HasBlocking() {
+			t.Fatalf("report has blocking entries: %+v", report.Entries)
+		}
+		d := channels[0].Data
+		if d.ToneMode != (codeplug.StringField{State: codeplug.Known, Value: "TSQL"}) {
+			t.Errorf("ToneMode = %+v, want Known TSQL", d.ToneMode)
+		}
+		if d.ToneRx != (codeplug.ToneField{State: codeplug.Known, Value: 885}) {
+			t.Errorf("ToneRx = %+v, want Known 88.5", d.ToneRx)
+		}
+		if d.ToneTx.State != codeplug.Unavailable {
+			t.Errorf("ToneTx = %+v, want Unavailable on a receiver", d.ToneTx)
+		}
+	})
 }
 
 // TestImportCHIRP_CapabilityAwareDuplexAndTone walks the mappings the
@@ -605,6 +693,48 @@ func TestImportCHIRP_FilterAndDataModeDefaultToUnknown(t *testing.T) {
 			t.Errorf("DataMode = %+v, want Unavailable on a radio with no such field", d.DataMode)
 		}
 	})
+}
+
+func TestImportCHIRP_ReceiverFieldsFollowReachability(t *testing.T) {
+	const body = "Location,Name,Frequency,Duplex,Offset,Tone,rToneFreq,cToneFreq,DtcsCode,DtcsPolarity,Mode,Skip\n" +
+		"1,GB3TEST,145.700000,-,0.600000,Tone,88.5,88.5,023,NN,FM,\n"
+	receiverFields := []spec.Field{
+		spec.FieldTuningStepEnabled, spec.FieldTuningStep, spec.FieldProgramTuningStep,
+		spec.FieldAttenuator, spec.FieldPreamp, spec.FieldAntenna, spec.FieldIPPlus,
+	}
+	states := func(d *codeplug.ChannelData) []codeplug.FieldState {
+		return []codeplug.FieldState{
+			d.TuningStepEnabled.State, d.TuningStep.State, d.ProgramTuningStepHz.State,
+			d.AttenuatorDB.State, d.Preamp.State, d.Antenna.State, d.IPPlus.State,
+		}
+	}
+
+	for _, tt := range []struct {
+		name string
+		caps spec.Capabilities
+		want codeplug.FieldState
+	}{
+		{"reachable", func() spec.Capabilities {
+			caps := icomCHIRPCapabilities()
+			for _, f := range receiverFields {
+				caps.Banks[0].Fields[f] = spec.FieldSupport{Read: spec.Supported, Write: spec.Unverified}
+			}
+			return caps
+		}(), codeplug.Unknown},
+		{"unreachable", ft710LikeCapabilities(), codeplug.Unavailable},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			channels, _, err := ImportCHIRP(strings.NewReader(body), tt.caps)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i, got := range states(channels[0].Data) {
+				if got != tt.want {
+					t.Errorf("receiver field %s state = %q, want %q", receiverFields[i], got, tt.want)
+				}
+			}
+		})
+	}
 }
 
 // TestImportCHIRP_IcomToneBranchDefaultsCTCSSTone pins the PRE-tier

@@ -213,8 +213,8 @@
 // is a safe assumption, and the earlier note argued exactly that (the
 // accumulator's length cap would trip on endless noise; 38400 baud cannot
 // deliver constant traffic). Icom's transceive mode BROADCASTS
-// unprompted, is factory-ON on at least four of the six models this tier
-// registers, and this tier ships no off-switch. A well-formed frame every
+// unprompted, is factory-ON on at least four of the eleven Icom models
+// this tier registers, and this tier ships no off-switch. A well-formed frame every
 // few milliseconds, forever, is that radio's normal operating condition —
 // and every one of those frames re-arms a drain's idle timer without ever
 // tripping the length cap.

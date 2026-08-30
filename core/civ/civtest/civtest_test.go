@@ -109,6 +109,57 @@ func bandProfile() civ.Profile {
 	})
 }
 
+// bankProfile pins that the conformance suite treats a bank index as a
+// grouped, one-byte address without collapsing its semantic identity into
+// the existing band form.
+func bankProfile() civ.Profile {
+	return civ.MustNewProfile(civ.ProfileConfig{
+		Model:         "CIVTEST-BANK",
+		RadioAddress:  0x89,
+		MaxFrame:      32,
+		AddressForm:   civ.AddressFormBankChannel,
+		Groups:        5,
+		GroupBase:     1,
+		ChannelLo:     1,
+		ChannelHi:     99,
+		Discriminator: civ.DiscriminatorSingleLength,
+		BuildLength:   6,
+		Layouts: []civ.RecordLayout{{
+			Length: 6,
+			Fields: []civ.FieldSpan{
+				{Field: civ.FieldRXFrequency, Offset: 0, Length: 5, Encoding: civ.EncodingBCDNumber, Order: civ.OrderLittleEndian, Scale: 1},
+				{Field: civ.FieldMode, Offset: 5, Length: 1, Encoding: civ.EncodingEnum, Enum: map[byte]string{0: "FM"}},
+			},
+		}},
+	})
+}
+
+// modeProfile has a six-byte common head and two eight-byte layouts with
+// disagreeing tails. Length therefore cannot select FM from DCR.
+func modeProfile() civ.Profile {
+	head := func(values map[byte]string) []civ.FieldSpan {
+		return []civ.FieldSpan{
+			{Field: civ.FieldRXFrequency, Offset: 0, Length: 5, Encoding: civ.EncodingBCDNumber, Order: civ.OrderLittleEndian, Scale: 1},
+			{Field: civ.FieldMode, Offset: 5, Length: 1, Encoding: civ.EncodingEnum, Enum: values},
+		}
+	}
+	return civ.MustNewProfile(civ.ProfileConfig{
+		Model:         "CIVTEST-MODE",
+		RadioAddress:  0x96,
+		MaxFrame:      32,
+		AddressForm:   civ.AddressFormFlat,
+		ChannelLo:     0,
+		ChannelHi:     9,
+		Discriminator: civ.DiscriminatorModeByte,
+		ModeKey:       civ.FieldSpan{Field: civ.FieldMode, Offset: 5, Length: 1, Encoding: civ.EncodingEnum},
+		Layouts: []civ.RecordLayout{
+			{Length: 6, ModeClass: "NONE", ModeValues: []byte{0}, Fields: head(map[byte]string{0: "AM"})},
+			{Length: 8, ModeClass: "FM", ModeValues: []byte{1}, Fields: append(head(map[byte]string{1: "FM"}), civ.FieldSpan{Field: civ.FieldFilter, Offset: 6, Length: 1, Encoding: civ.EncodingEnum, Enum: map[byte]string{0: "W"}})},
+			{Length: 8, ModeClass: "DCR", ModeValues: []byte{2}, Fields: append(head(map[byte]string{2: "DCR"}), civ.FieldSpan{Field: civ.FieldDataMode, Offset: 7, Length: 1, Encoding: civ.EncodingEnum, Enum: map[byte]string{0: "OFF"}})},
+		},
+	})
+}
+
 // wideProfile is the fixture E4 adds: a FOUR-byte address field (two
 // packed-BCD group bytes before the channel pair) and a group base of 1,
 // so its groups run 1..100.
@@ -155,6 +206,8 @@ func TestRun_OverDisagreeingProfiles(t *testing.T) {
 		{"flat", flatProfile()},
 		{"group (controller 0xE1, two record lengths)", groupProfile()},
 		{"band (no name field)", bandProfile()},
+		{"bank (distinct three-byte bank/channel form)", bankProfile()},
+		{"mode byte (same length, disagreeing tails)", modeProfile()},
 		{"wide (four-byte address, groups numbered from 1)", wideProfile()},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

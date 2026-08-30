@@ -32,6 +32,7 @@ func validStubCaps(model string) spec.Capabilities {
 	return spec.Capabilities{
 		Model:        model,
 		CATID:        "9999",
+		Transmit:     spec.HasTransmitter,
 		Bauds:        []int{38400},
 		DefaultBaud:  38400,
 		TagLen:       12,

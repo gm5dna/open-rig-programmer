@@ -162,16 +162,21 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 	// matrix reading that says so. Adding a name here is a decision; leaving
 	// a field out of the struct is not.
 	deliberatelyZero := map[string]string{
-		"ClarMaxHz":      "no clarifier/RIT field in the 1A 00 record (matrix §1 #6, poor fit, graded)",
-		"ClarStepHz":     "as ClarMaxHz (matrix §1 #7)",
-		"ShiftOptions":   "no shift or duplex field exists on this model (matrix §1 #14)",
-		"CTCSSStates":    "displaced by ToneModes on Icom models (spec D4; matrix §1 #15)",
-		"DuplexOptions":  "MANUAL-EVIDENCED absence (matrix §1b, duplex)",
-		"DTCSCodes":      "the record carries no DTCS field at all; MANUAL-EVIDENCED absence (matrix §1b, dtcs_code)",
-		"DTCSPolarities": "the record carries no DTCS field at all; MANUAL-EVIDENCED absence (matrix §1b, dtcs_polarity)",
-		"RequiredSlots":  "NoBlank is the whole-bank form and the SCAN bank is exactly P1 and P2, so saying it twice would create two places to keep in step (plan decision D8)",
-		"CTCSSTones":     "the tone domain is CTCSSToneRange {1, 2999, 1} deciHz, not a list — matrix §1 #8 grades this model's list empty in terms, so no deviation arises here (D16)",
-		"MinFreqHz":      "no tuning floor is printed in this document; a zero DISABLES the lower-bound check rather than asserting a 0 Hz floor (core/spec/capabilities.go) — entry ic7300mk2-min-frequency, lift MK2-R15",
+		"ClarMaxHz":              "no clarifier/RIT field in the 1A 00 record (matrix §1 #6, poor fit, graded)",
+		"ClarStepHz":             "as ClarMaxHz (matrix §1 #7)",
+		"ShiftOptions":           "no shift or duplex field exists on this model (matrix §1 #14)",
+		"CTCSSStates":            "displaced by ToneModes on Icom models (spec D4; matrix §1 #15)",
+		"DuplexOptions":          "MANUAL-EVIDENCED absence (matrix §1b, duplex)",
+		"DTCSCodes":              "the record carries no DTCS field at all; MANUAL-EVIDENCED absence (matrix §1b, dtcs_code)",
+		"TuningSteps":            "additions design D8 — this record carries no receiver tuning-step field",
+		"ProgramTuningStepRange": "additions design D8 — this record carries no programmable tuning-step field",
+		"AttenuatorDB":           "additions design D8 — this record carries no attenuator field",
+		"PreampOptions":          "additions design D8 — this record carries no preamp field",
+		"AntennaOptions":         "additions design D8 — this record carries no antenna field",
+		"DTCSPolarities":         "the record carries no DTCS field at all; MANUAL-EVIDENCED absence (matrix §1b, dtcs_polarity)",
+		"RequiredSlots":          "NoBlank is the whole-bank form and the SCAN bank is exactly P1 and P2, so saying it twice would create two places to keep in step (plan decision D8)",
+		"CTCSSTones":             "the tone domain is CTCSSToneRange {1, 2999, 1} deciHz, not a list — matrix §1 #8 grades this model's list empty in terms, so no deviation arises here (D16)",
+		"MinFreqHz":              "no tuning floor is printed in this document; a zero DISABLES the lower-bound check rather than asserting a 0 Hz floor (core/spec/capabilities.go) — entry ic7300mk2-min-frequency, lift MK2-R15",
 	}
 	caps := New(RealHardware).Capabilities()
 	v := reflect.ValueOf(caps)
@@ -183,11 +188,9 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 	// only asks that each field be non-zero OR named in deliberatelyZero, so
 	// a NEW capability field arriving with a plausible zero value and no
 	// entry would be caught — but a field REMOVED, or the struct reshaped,
-	// would not, and both doc.go and caps.go argue from "all twenty-two".
-	// E3's follow-up commit is what made it twenty-two by adding
-	// CTCSSToneRange; a twenty-third arrives with a decision to make here.
-	if ty.NumField() != 22 {
-		t.Errorf("spec.Capabilities has %d fields, want 22 — every one of them is written down explicitly in baseCapabilities, and the count is stated in caps.go and doc.go; if the struct has genuinely changed, set the new value HERE and account for the new field in the literal and in deliberatelyZero", ty.NumField())
+	// would not, so the exact shape remains pinned alongside the table.
+	if ty.NumField() != 28 {
+		t.Errorf("spec.Capabilities has %d fields, want 28 — every one of them is written down explicitly in baseCapabilities, and the count is stated in caps.go and doc.go; if the struct has genuinely changed, set the new value HERE and account for the new field in the literal and in deliberatelyZero", ty.NumField())
 	}
 	for i := 0; i < ty.NumField(); i++ {
 		name := ty.Field(i).Name

@@ -138,10 +138,34 @@ type ChannelData struct {
 	// DataMode is the per-channel data-mode flag, stored alongside — not
 	// inside — the mode name.
 	DataMode BoolField `json:"data_mode"`
+
+	// The seven receiver fields added by the Tier 4b Icom extension
+	// (additions design D8). They follow the ten D4 fields so schema 4 can
+	// remain a frozen prefix and schema 5 can append this generation.
+	// TuningStepEnabled is the per-channel tuning-step on/off state.
+	TuningStepEnabled BoolField `json:"tuning_step_enabled"`
+	// TuningStep is the selected tuning-step label.
+	TuningStep StringField `json:"tuning_step"`
+	// ProgramTuningStepHz is the programmable tuning step in hertz.
+	ProgramTuningStepHz FreqField `json:"program_tuning_step"`
+	// AttenuatorDB is the selected attenuation in decibels.
+	AttenuatorDB IntField `json:"attenuator"`
+	// Preamp is the selected preamplifier option.
+	Preamp StringField `json:"preamp"`
+	// Antenna is the selected antenna input.
+	Antenna StringField `json:"antenna"`
+	// IPPlus is the per-channel IP+ signal-processing flag.
+	IPPlus BoolField `json:"ip_plus"`
 }
 
-// tierFieldsUnrecorded reports whether NONE of the ten fields the Icom
-// tier added carries anything this channel needs a file to write down —
+// tierFieldsUnrecorded reports whether NONE of the seventeen fields the
+// two Icom model extensions added carries anything a file must record.
+func (d ChannelData) tierFieldsUnrecorded() bool {
+	return d.icomTierFieldsUnrecorded() && d.receiverFieldsUnrecorded()
+}
+
+// icomTierFieldsUnrecorded reports whether NONE of D4's ten fields
+// carries anything this channel needs a file to write down —
 // i.e. every one of them is Absent or Unavailable (see
 // FieldState.Recorded).
 //
@@ -149,7 +173,7 @@ type ChannelData struct {
 // lowest-schema rule (design D4), and it is deliberately a method on
 // ChannelData rather than a loop in file.go, so that a later field added
 // to this struct is one edit away from being accounted for here.
-func (d ChannelData) tierFieldsUnrecorded() bool {
+func (d ChannelData) icomTierFieldsUnrecorded() bool {
 	return !d.TxFreqHz.State.Recorded() &&
 		!d.Duplex.State.Recorded() &&
 		!d.OffsetHz.State.Recorded() &&
@@ -160,6 +184,19 @@ func (d ChannelData) tierFieldsUnrecorded() bool {
 		!d.DTCSPolarity.State.Recorded() &&
 		!d.Filter.State.Recorded() &&
 		!d.DataMode.State.Recorded()
+}
+
+// receiverFieldsUnrecorded is the D8 half of the lowest-schema rule.
+// Unavailable remains unrecorded: an FT-710 read must not become schema 5
+// merely because it positively says these seven fields do not exist.
+func (d ChannelData) receiverFieldsUnrecorded() bool {
+	return !d.TuningStepEnabled.State.Recorded() &&
+		!d.TuningStep.State.Recorded() &&
+		!d.ProgramTuningStepHz.State.Recorded() &&
+		!d.AttenuatorDB.State.Recorded() &&
+		!d.Preamp.State.Recorded() &&
+		!d.Antenna.State.Recorded() &&
+		!d.IPPlus.State.Recorded()
 }
 
 // Empty reports whether c is an empty slot. Data == nil is the sole test:

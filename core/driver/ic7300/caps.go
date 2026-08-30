@@ -179,14 +179,16 @@ func bankFields(rw spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 }
 
 // baseCapabilities builds the whole capability description, with EVERY ONE
-// of spec.Capabilities' twenty-two fields set explicitly — the nine that
+// of spec.Capabilities' twenty-eight fields set explicitly — every zero
+// value named by caps_test.go's deliberatelyZero audit, including D8's
+// five receiver vocabularies,
 // are deliberately zero are set to their zero value in the literal below,
 // beside the reading that says why, and caps_test.go's reflection pin
 // refuses a field that is neither non-zero nor named in its
 // deliberatelyZero map.
 //
-// E3's follow-up commit added CTCSSToneRange, which is what makes the count
-// twenty-two rather than twenty-one.
+// Additions design D4.2 moved the pinned count from twenty-seven to
+// twenty-eight by requiring this driver's transmitter anatomy explicitly.
 func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) spec.Capabilities {
 	return spec.Capabilities{
 		// Matrix §1 row 1.
@@ -197,7 +199,8 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 		// Identity.CATID ("94:<token>") and compared against nothing — the
 		// reply value is undocumented on every model in this tier.
 		// Matrix §3.4, PDF p.126: CI-V Address (Default: 94h).
-		CATID: "94",
+		CATID:    "94",
+		Transmit: spec.HasTransmitter,
 		Banks: []spec.Bank{
 			{
 				ID:    spec.BankMemory,

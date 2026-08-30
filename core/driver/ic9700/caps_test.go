@@ -11,10 +11,35 @@
 package ic9700
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
+
+var receiverCapabilitiesDeliberatelyZero = map[string]string{
+	"TuningSteps":            "additions design D8 — the IC-9700 record carries no receiver tuning-step field",
+	"ProgramTuningStepRange": "additions design D8 — the IC-9700 record carries no programmable tuning-step field",
+	"AttenuatorDB":           "additions design D8 — the IC-9700 record carries no attenuator field",
+	"PreampOptions":          "additions design D8 — the IC-9700 record carries no preamp field",
+	"AntennaOptions":         "additions design D8 — the IC-9700 record carries no antenna field",
+}
+
+func TestDeliberatelyZeroAudit_ReceiverCapabilities(t *testing.T) {
+	if got := reflect.TypeOf(spec.Capabilities{}).NumField(); got != 28 {
+		t.Fatalf("spec.Capabilities has %d fields, this audit knows 28", got)
+	}
+	for _, caps := range []spec.Capabilities{CapabilitiesUnverified(), CapabilitiesSimulated()} {
+		value := reflect.ValueOf(caps)
+		for name, reason := range receiverCapabilitiesDeliberatelyZero {
+			if field := value.FieldByName(name); !field.IsValid() {
+				t.Errorf("Capabilities.%s no longer exists (%s)", name, reason)
+			} else if !field.IsZero() {
+				t.Errorf("Capabilities.%s is non-zero but deliberatelyZero says %q", name, reason)
+			}
+		}
+	}
+}
 
 func TestWriteTrialsComplete_PinnedFalse(t *testing.T) {
 	if writeTrialsComplete {

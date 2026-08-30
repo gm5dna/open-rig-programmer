@@ -237,7 +237,14 @@ func (s *Session) channelData(rec civ.MemoryRecord) (*codeplug.ChannelData, erro
 		// ⑩.
 		Filter: codeplug.StringField{State: codeplug.Known, Value: filter},
 		// ⑪'s HIGH nibble.
-		DataMode: codeplug.BoolField{State: codeplug.Known, Value: dataMode == "ON"},
+		DataMode:            codeplug.BoolField{State: codeplug.Known, Value: dataMode == "ON"},
+		TuningStepEnabled:   codeplug.BoolField{State: codeplug.Unavailable},
+		TuningStep:          codeplug.StringField{State: codeplug.Unavailable},
+		ProgramTuningStepHz: codeplug.FreqField{State: codeplug.Unavailable},
+		AttenuatorDB:        codeplug.IntField{State: codeplug.Unavailable},
+		Preamp:              codeplug.StringField{State: codeplug.Unavailable},
+		Antenna:             codeplug.StringField{State: codeplug.Unavailable},
+		IPPlus:              codeplug.BoolField{State: codeplug.Unavailable},
 	}, nil
 }
 

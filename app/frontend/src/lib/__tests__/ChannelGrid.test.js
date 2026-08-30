@@ -201,6 +201,17 @@ describe('bank tabs', () => {
 })
 
 describe('rows and cells', () => {
+	it('renders only receiver columns named by the active bank', () => {
+		appState.setUISpec({
+			...UI_SPEC,
+			Banks: UI_SPEC.Banks.map((bank, i) => ({ ...bank, Fields: i === 0 ? ['antenna'] : [] })),
+		})
+		render(ChannelGrid)
+		expect(screen.getByRole('columnheader', { name: 'Antenna' })).toBeInTheDocument()
+		expect(screen.queryByRole('columnheader', { name: 'Tuning step' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('columnheader', { name: 'IP+' })).not.toBeInTheDocument()
+	})
+
 	it('renders one row per slot of the active bank, with display slots and formatted frequency', () => {
 		const { container } = render(ChannelGrid)
 		expect(screen.getByText('M-01')).toBeInTheDocument()

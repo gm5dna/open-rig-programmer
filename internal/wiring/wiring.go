@@ -56,11 +56,15 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx10"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx101"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300mk2"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7610"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7760"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7851"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic905"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
+	"github.com/gm5dna/open-rig-programmer/core/driver/icr8600"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -217,6 +221,194 @@ const IC9700Model = "IC-9700"
 // where the two group ranges happen to sit (ruling R4).
 const IC905Model = "IC-905"
 
+// IC7851Model and IC7850Model name the IC-7851's and the IC-7850's
+// realDrivers/fakeDrivers keys, which must equal
+// ic7851.New7851(...).Model() and ic7851.New7850(...).Model() — pinned,
+// like every other Icom constant above, by
+// TestDriverTableKeysMatchDriverModel walking both tables.
+//
+// THIS IS THE ADDITIONS TIER'S FIRST REGISTRATION (Tier 4b, Wave 4), and
+// the first Icom PAIR SHARING ONE DRIVER PACKAGE: core/driver/ic7851
+// offers New7851 and New7850 over ONE implementation, ONE civ.Profile
+// (core/civ/ic7851) and ONE fake (internal/fakeic7851), with no bare New.
+// That is the FTdx101D/FTdx101MP shape (FTdx101DModel above), not the
+// IC-7300/IC-7300MK2 one — that pair has separate driver packages and
+// separate fakes; these two rows differ in Model(), in Identity and in
+// nothing else the wire can see.
+//
+// THE USER PICKS THE ROW, AND THE PROBE CANNOT NARROW IT (spec D1.2).
+// The two models share one manual, one CI-V address (8Eh, printed as "the
+// default address of IC-7850/IC-7851") and one frame shape, and the 19 00
+// reply value is undocumented for both — so they are INDISTINGUISHABLE by
+// this programme's admitted evidence and probe, at factory defaults and
+// not merely under a moved address. core/driver/ic7851/doc.go §1 states
+// it; core/civ/tier_test.go's `indistinguishable` table records it at
+// tier level with its citation; and neither row may ever be inferred
+// from the other, so a session opened as an IC-7851 reports an IC-7851
+// because that is what the user chose, never because anything confirmed
+// it.
+//
+// TWO BANKS, BOTH DENSE, the IC-7610's shape: MEM ("001".."099") and SCAN
+// (the two programmed scan edges "P1" and "P2"), which the wire addresses
+// as two further values of the SAME flat two-byte selector
+// (core/driver/ic7851/caps.go's memSlots and scanSlots). There is no
+// sparse space to discover here, so a plain `--model IC-7851` session
+// enumerates its whole inventory statically and Open walks a bounded run
+// of channels for the record-length fingerprint alone.
+const (
+	IC7851Model = "IC-7851"
+	IC7850Model = "IC-7850"
+)
+
+// IC7760Model names the IC-7760's realDrivers/fakeDrivers key, which must
+// equal ic7760.New(...).Model() — pinned, like every other Icom constant
+// above, by TestDriverTableKeysMatchDriverModel walking both tables.
+//
+// THE ADDITIONS TIER'S SECOND REGISTRATION (Tier 4b, Wave 4), and a
+// SINGLE-ROW one: core/driver/ic7760 has ONE member (its caps.go says so
+// in as many words — "this family has one member"), so there is one
+// constant, one driver package, one civ.Profile and one fake, on the same
+// footing as IC7610Model above and NOT on the IC-7851 pair's. It takes
+// its profile as an ARGUMENT (ic7760.New(profile, opts...)), which is the
+// IC-7610's constructor shape rather than the IC-7851's option shape, and
+// that is what decides both NewIC7760RealDriver's body below and the
+// TOKEN internal/guards confines for this package (ic7760.Simulated, a
+// Profile constant, not an option).
+//
+// TWO BANKS, BOTH DENSE, the IC-7610's shape: MEM ("001".."099") and SCAN
+// (the two programmed scan edges "P1" and "P2"), which the wire addresses
+// as two further values of the SAME flat two-byte selector — the profile
+// declares the memories as its base range 1..99 and P1/P2 as ONE extra
+// flat range 100..101 (core/civ/ic7760/profile.go), so the base inventory
+// cannot silently absorb them. There is no sparse space to discover, so a
+// plain `--model IC-7760` session enumerates its whole inventory
+// statically and Open walks a bounded run of channels — ten early
+// memories, then P1 and P2 — for the record-length fingerprint alone.
+//
+// ITS 99 + P1/P2 INVENTORY IS MANUAL-EVIDENCED (additions spec Erratum
+// 5), not assumed: PDF p.20 (folio 19) and PDF p.4 (folio 3) of the
+// IC-7760 CI-V Reference Guide revision 2 both print the addresses, so
+// the count carries no assumption-register entry of its own.
+//
+// INDISTINGUISHABLE FROM THE IC-7610 AND THE IC-7851/IC-7850 BY THE
+// LENGTH FINGERPRINT ALONE (spec D5's 25 B / Flat row): this radio
+// completes that declared set of three, and core/civ/tier_test.go's
+// `indistinguishable` table now carries both of its pairings with their
+// citations. It is a fingerprint limitation and not a field one — the
+// three factory addresses B2h, 98h and 8Eh differ, so a wrong radio at
+// its own address does not answer at all.
+const IC7760Model = "IC-7760"
+
+// IC7100Model names the IC-7100's realDrivers/fakeDrivers key, which must
+// equal ic7100.New(...).Model() — pinned, like every other Icom constant
+// above, by TestDriverTableKeysMatchDriverModel walking both tables.
+//
+// THE ADDITIONS TIER'S THIRD REGISTRATION (Tier 4b, Wave 4), and a
+// single-row one again: core/driver/ic7100 has one member, one civ.Profile
+// and one fake, on the IC-7610's and IC-7760's footing rather than the
+// IC-7851 pair's. It takes its profile as an ARGUMENT
+// (ic7100.New(profile, opts...)), which decides both NewIC7100RealDriver's
+// body below and the TOKEN internal/guards confines for this package
+// (ic7100.Simulated, a Profile constant, not an option) — checked against
+// core/driver/ic7100/ic7100.go, not assumed from the nearest precedent.
+//
+// A BANK-ADDRESSED CHANNEL SPACE, the first this registry holds: the wire
+// address is a packed-BCD bank byte followed by a two-byte channel
+// (civ.AddressFormBankChannel, three address bytes), and the profile's base
+// rectangle is banks 01–05 × channels 0001–0099 — 495 DENSE slots, rendered
+// "A-001".."E-099" (core/civ/ic7100/profile.go; additions spec D2.2). ONE
+// bank, spec.BankMemory. There is no sparse space to discover, so a plain
+// `--model IC-7100` session enumerates its whole inventory statically and
+// Open walks a bounded run of channels for the record-length fingerprint
+// alone.
+//
+// THE SCAN-EDGE AND CALL CHANNELS ARE REFUSED, AND THAT IS THE POINT. The
+// field legend names ten further channel codes — programmed scan edges
+// 0100–0105 and call channels 0106–0109 — but section 20 never says what
+// the BANK byte carries for any of them, and the clearing block omits that
+// field entirely. Inventing a bank byte would put an assumed address on the
+// wire, so the profile declares NO ExtraRanges and core/driver/ic7100's
+// parseSlot refuses every channel outside 1..99 (read.go, pinned by
+// TestReadChannelRefusesSpecialsBeforeTraffic). Register entry
+// ic7100-special-bank-byte carries the lift, and README.md and
+// docs/icom-models.md say so to the user rather than quietly listing 495
+// slots as if that were the whole radio.
+//
+// NO SerialFramingReporter, WHICH MAKES IT THE FIRST REGISTERED ICOM ROW TO
+// OPEN AT 8-N-2. Every Icom driver before it reports one stop bit; this one
+// deliberately implements nothing, because the manual's only 8-N-1 sentence
+// (PDF p.174) is the DV low-speed DATA application and not the CI-V link
+// (core/civ/ic7100/doc.go, register entry ic7100-serial-framing). So
+// stopBitsFor finds no report and the port opens at transport.DefaultStopBits,
+// the Yaesu rows' path — pinned by
+// TestOpenRealSessionFor_IC7100OpensAtEightNTwo, which exists because the
+// absence is a claim, not an oversight.
+//
+// INDISTINGUISHABLE FROM THE IC-9700 BY THE LENGTH FINGERPRINT ALONE (spec
+// D5's 111 B row): both accept a 111-byte record over a THREE-byte address
+// whose leading byte is a small 01-upwards index, so neither property the
+// probe holds can separate them, and core/civ/tier_test.go's
+// `indistinguishable` table carries that pairing with its citation. The
+// IC-705 shares the same 111 bytes and IS separable, by address width alone
+// (four bytes against three). As everywhere else in this tier it is a
+// fingerprint limitation and not a field one — the factory addresses 88h and
+// A2h differ, so a wrong radio at its own address does not answer at all.
+const IC7100Model = "IC-7100"
+
+// ICR8600Model names the IC-R8600's realDrivers/fakeDrivers key, which
+// must equal icr8600.New(...).Model() — pinned, like every other Icom
+// constant above, by TestDriverTableKeysMatchDriverModel walking both
+// tables.
+//
+// THE ADDITIONS TIER'S FOURTH AND LAST REGISTRATION (Tier 4b, Wave 4),
+// and a single-row one: core/driver/icr8600 has one member, one
+// civ.Profile and one fake. It takes its profile as an ARGUMENT
+// (icr8600.New(profile, opts...)), which decides both
+// NewICR8600RealDriver's body below and the TOKEN internal/guards
+// confines for this package (icr8600.Simulated, a Profile constant, not
+// an option) — checked against core/driver/icr8600/icr8600.go:41, not
+// assumed from the nearest precedent.
+//
+// THE FIRST RECEIVER THIS REGISTRY HOLDS, and the first row whose
+// capabilities declare spec.ReceiveOnly (core/driver/icr8600/caps.go;
+// additions spec D4.2). Everything downstream of that is already
+// capability-keyed and needed no code here: spec.Validate refuses a
+// ReceiveOnly model that grades tx_frequency or tone_tx above
+// Unsupported, app.GetUISpec carries the radio-level Transmit string, and
+// internal/radiotext's icr8600Text supplies the "receiver — no transmit
+// fields" grid legend D4.2 asks for by name. What this row adds is the
+// first model that exercises any of it.
+//
+// A ZERO-BASED, SPARSE, WIDE-GROUP ADDRESS SPACE, the first of each in
+// this registry: two packed-BCD group bytes then two channel bytes
+// (civ.AddressFormWideGroupChannel, FOUR address bytes), over groups
+// 0000–0099 × channels 00–99 with BOTH bases 0 (additions spec Erratum 2;
+// core/civ/icr8600/profile.go), rendered "G00-000".."G99-099". The bank is
+// SPARSE and its CAPACITY IS UNDOCUMENTED — spec.Bank.BudgetUnstated is
+// the positive declaration of that silence (additions spec D3.4, register
+// entry icr8600-budget), so codeplug.Diff skips its over-budget refusal
+// and the honesty documents say the radio's behaviour when full is
+// unknown rather than inventing a number.
+//
+// A MODE-KEYED RECORD, the first civ.DiscriminatorModeByte profile:
+// record-only lengths {37, 39, 41, 43, 44, 45}, one per declared tail,
+// with FM and DCR BOTH at 44 and told apart by the mode byte rather than
+// by length (core/civ/icr8600/profile.go's recordLayouts).
+//
+// SEPARABLE FROM EVERY OTHER REGISTERED PROFILE, so it adds NO entry to
+// core/civ/tier_test.go's `indistinguishable` table — the first additions
+// row of which that is true. Its set is disjoint from every other Icom
+// family's EXCEPT the IC-7300's {39} and the IC-7300MK2's {45}, both of
+// which it contains; those two pairings are separated by ADDRESS WIDTH
+// (four bytes against two), measured rather than declared by
+// TestTierRecordShapes_DistinctOrDeclared.
+//
+// NO --civ-address OPTION, as everywhere else in this tier: this driver
+// talks only to 96h (core/civ/icr8600/profile.go's RadioAddress), and a
+// receiver moved off it simply times out (register entry
+// icr8600-address-move).
+const ICR8600Model = "IC-R8600"
+
 // realDrivers is the model-keyed table of real-hardware driver
 // constructors: model name -> a constructor building THAT model's
 // real-profile driver.Driver. It is the single source of truth
@@ -321,6 +513,63 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ic905.New(ic905.RealHardware, ic905.WithConsentedUnverifiedWrites())
 		}
 		return NewIC905RealDriver()
+	},
+	// TWO ROWS OVER ONE CONSTRUCTOR PAIR, and each row calls its OWN
+	// constructor: core/driver/ic7851 offers no bare New, so a
+	// registration cannot accidentally wire both models to one row's
+	// driver the way a package with a default constructor could.
+	// core/driver/ic7851's profile is the RealHardware zero value inside
+	// New7851/New7850, so consent is the only option either row passes.
+	IC7851Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic7851.New7851(ic7851.WithConsentedUnverifiedWrites())
+		}
+		return NewIC7851RealDriver()
+	},
+	IC7850Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic7851.New7850(ic7851.WithConsentedUnverifiedWrites())
+		}
+		return NewIC7850RealDriver()
+	},
+	// ONE ROW, and it names its profile explicitly: core/driver/ic7760
+	// takes the profile as New's first ARGUMENT, so this row reads like
+	// the IC-7610's and IC-905's rather than the IC-7851 pair's. The
+	// consent arm passes ic7760.RealHardware for the same reason every
+	// other profile-argument row does — the option changes the SESSION's
+	// effective capabilities and never the profile it was built from.
+	IC7760Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic7760.New(ic7760.RealHardware, ic7760.WithConsentedUnverifiedWrites())
+		}
+		return NewIC7760RealDriver()
+	},
+	// ONE ROW, naming its profile explicitly for the IC-7760 row's reason:
+	// core/driver/ic7100's New takes the profile as its first ARGUMENT
+	// (ic7100.go), so the consent arm passes ic7100.RealHardware rather
+	// than leaving the profile to an option's absence. The option changes
+	// the SESSION's effective capabilities and never the profile it was
+	// built from — TestRealDriverFor_DefaultPathByteIdentical is what
+	// would catch a consent arm that had quietly passed ic7100.Simulated.
+	IC7100Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic7100.New(ic7100.RealHardware, ic7100.WithConsentedUnverifiedWrites())
+		}
+		return NewIC7100RealDriver()
+	},
+	// ONE ROW, naming its profile explicitly for the IC-7760's and the
+	// IC-7100's reason: core/driver/icr8600's New takes the profile as
+	// its first ARGUMENT (icr8600.go:41), so the consent arm passes
+	// icr8600.RealHardware rather than leaving the profile to an option's
+	// absence. The option changes the SESSION's effective capabilities
+	// and never the profile it was built from —
+	// TestRealDriverFor_DefaultPathByteIdentical is what would catch a
+	// consent arm that had quietly passed icr8600.Simulated.
+	ICR8600Model: func(consent bool) driver.Driver {
+		if consent {
+			return icr8600.New(icr8600.RealHardware, icr8600.WithConsentedUnverifiedWrites())
+		}
+		return NewICR8600RealDriver()
 	},
 }
 
@@ -654,6 +903,161 @@ func NewIC905RealDriver() driver.Driver {
 	return ic905.New(ic905.RealHardware)
 }
 
+// NewIC7851RealDriver builds the ic7851 driver for a real-hardware
+// IC-7851 session — the IC-7851's half of the realDrivers table, split
+// out for the same reason every other model constructor above is (a test
+// can pin the capability set the real wiring path implies without opening
+// a port).
+//
+// NO PROFILE ARGUMENT, unlike every Icom constructor above it, and that
+// is core/driver/ic7851's own shape rather than an omission here: that
+// package takes its profile through an OPTION (WithSimulatedProfile) and
+// leaves the RealHardware arm as the struct's zero value inside New7851,
+// so a real-hardware driver is what New7851 with no options builds.
+//
+// READ/PROBE ONLY, by the same mechanism as every other row: this
+// driver's writeTrialsComplete7851 (core/driver/ic7851/caps.go) is FALSE,
+// so a RealHardware IC-7851 driver reports the all-Unverified capability
+// set — every mapped field's Write spec.Unverified, nothing writable on
+// either bank. No IC-7851 has been written to by this project, and the
+// capability gate refuses before any frame is built.
+//
+// THE FAIL-SAFE DIRECTION IS UNCHANGED: an unrecognised Profile value
+// selects the all-Unverified set too (ic7851.go's Capabilities switch,
+// through its own explicit default arm), never the simulator's
+// write-Supported one, and the one named exception — SessionOptions'
+// ConsentUnverifiedWrites, spent from the user's own recorded grant — is
+// exactly the mechanism every other row uses, reaching realDrivers'
+// IC7851Model row above and never this constructor.
+func NewIC7851RealDriver() driver.Driver {
+	return ic7851.New7851()
+}
+
+// NewIC7850RealDriver builds the ic7851 driver for a real-hardware
+// IC-7850 session. Same reasoning as NewIC7851RealDriver in every
+// respect, over the SIBLING constructor and the SIBLING write guard
+// (writeTrialsComplete7850, which core/driver/ic7851/caps.go keeps
+// deliberately separate from the IC-7851's: evidence for one model is
+// never evidence for the other, matrix §4).
+//
+// IT IS A SECOND FUNCTION RATHER THAN A PARAMETER ON THE FIRST, for the
+// same reason NewFTdx101MPRealDriver is one: the driver package fixes its
+// model at the constructor and offers no bare New, so the choice of row
+// belongs at the call site the registry provides, where a test can pin
+// each row's capability set on its own.
+func NewIC7850RealDriver() driver.Driver {
+	return ic7851.New7850()
+}
+
+// NewIC7760RealDriver builds the ic7760 driver for a real-hardware
+// session: profile ic7760.RealHardware, the zero value — the IC-7760's
+// half of the realDrivers table, split out for the same reason every
+// other model constructor above is (a test can pin the capability set the
+// real wiring path implies without opening a port).
+//
+// A PROFILE ARGUMENT, unlike the IC-7851 pair's two constructors directly
+// above and like every Icom constructor before them: core/driver/ic7760
+// declares Profile as New's first parameter, so the real-hardware arm is
+// NAMED here rather than left to an option's absence. Its zero value is
+// RealHardware too, which is belt and braces rather than a second way of
+// saying the same thing — a caller that forgot the argument entirely
+// would still not reach the simulator's capability set.
+//
+// READ/PROBE ONLY, by the same mechanism as every other row: this
+// driver's writeTrialsComplete (core/driver/ic7760/caps.go) is FALSE, so
+// a RealHardware IC-7760 driver reports the all-Unverified capability set
+// — every mapped field's Write spec.Unverified, nothing writable on
+// either bank. No IC-7760 has been written to by this project, and the
+// capability gate refuses before any frame is built.
+//
+// THE FAIL-SAFE DIRECTION IS UNCHANGED: an unrecognised Profile value
+// selects the all-Unverified set too, through ic7760.go's Capabilities
+// switch and its OWN explicit default arm rather than by sharing
+// RealHardware's, never the simulator's write-Supported one. The one
+// named exception — SessionOptions' ConsentUnverifiedWrites, spent from
+// the user's own recorded grant — is exactly the mechanism every other
+// row uses, reaching realDrivers' IC7760Model row above and never this
+// constructor.
+func NewIC7760RealDriver() driver.Driver {
+	return ic7760.New(ic7760.RealHardware)
+}
+
+// NewIC7100RealDriver builds the ic7100 driver for a real-hardware
+// session: profile ic7100.RealHardware, the zero value — the IC-7100's
+// half of the realDrivers table, split out for the same reason every
+// other model constructor above is (a test can pin the capability set the
+// real wiring path implies without opening a port).
+//
+// A PROFILE ARGUMENT, like the IC-7610's, the IC-905's and the IC-7760's
+// and unlike the IC-7851 pair's two constructors: core/driver/ic7100
+// declares Profile as New's first parameter, so the real-hardware arm is
+// NAMED here rather than left to an option's absence. Its zero value is
+// RealHardware too (that package's caps.go says so in as many words —
+// "RealHardware is the zero value so an uninitialised profile fails
+// safe"), which is belt and braces rather than a second way of saying the
+// same thing.
+//
+// READ/PROBE ONLY, by the same mechanism as every other row: this
+// driver's writeTrialsComplete (core/driver/ic7100/caps.go) is FALSE, so
+// a RealHardware IC-7100 driver reports the all-Unverified capability set
+// — every one of the thirteen mapped fields Read Unverified and Write
+// Unverified, nothing writable. No IC-7100 has been written to by this
+// project, and the capability gate refuses before any frame is built.
+//
+// THE FAIL-SAFE DIRECTION IS UNCHANGED: an unrecognised Profile value
+// selects the all-Unverified set too, through ic7100.go's Capabilities
+// check (it asks for Simulated by name and falls through to Unverified
+// for everything else), never the simulator's write-Supported one, and
+// recognised() refuses to spend consent on a profile it does not know.
+// The one named exception — SessionOptions' ConsentUnverifiedWrites,
+// spent from the user's own recorded grant — reaches realDrivers'
+// IC7100Model row above and never this constructor.
+func NewIC7100RealDriver() driver.Driver {
+	return ic7100.New(ic7100.RealHardware)
+}
+
+// NewICR8600RealDriver builds the icr8600 driver for a real-hardware
+// session: profile icr8600.RealHardware, the zero value — the IC-R8600's
+// half of the realDrivers table, split out for the same reason every
+// other model constructor above is (a test can pin the capability set the
+// real wiring path implies without opening a port).
+//
+// A PROFILE ARGUMENT, like the IC-7610's, the IC-905's, the IC-7760's and
+// the IC-7100's and unlike the IC-7851 pair's two constructors:
+// core/driver/icr8600 declares Profile as New's first parameter
+// (icr8600.go:41), so the real-hardware arm is NAMED here rather than
+// left to an option's absence. Its zero value is RealHardware too
+// (caps.go: "The zero value is the fail-safe physical-radio profile"),
+// which is belt and braces rather than a second way of saying the same
+// thing.
+//
+// READ/PROBE ONLY, by the same mechanism as every other row: this
+// driver's writeTrialsComplete (core/driver/icr8600/caps.go) is FALSE, so
+// a RealHardware IC-R8600 driver reports the all-Unverified capability
+// set — every one of the seventeen mapped fields Read Unverified and
+// Write Unverified, nothing writable. No IC-R8600 has been written to by
+// this project, and the capability gate refuses before any frame is
+// built.
+//
+// AND IT IS A RECEIVER, which narrows the set further and does so
+// STRUCTURALLY rather than by grading: caps.Transmit is spec.ReceiveOnly,
+// so spec.Validate refuses this capability value outright if
+// tx_frequency or tone_tx is ever graded above Unsupported on any bank
+// (additions spec D4.2's invariant). Both are written-down zeros in
+// caps.go's bankFields today.
+//
+// THE FAIL-SAFE DIRECTION IS UNCHANGED: an unrecognised Profile value
+// selects the all-Unverified set too, through icr8600.go's Capabilities
+// switch (its default arm returns CapabilitiesUnverified), never the
+// simulator's write-Supported one, and profileRecognised() refuses to
+// spend consent on a profile it does not know. The one named exception —
+// SessionOptions' ConsentUnverifiedWrites, spent from the user's own
+// recorded grant — reaches realDrivers' ICR8600Model row above and never
+// this constructor.
+func NewICR8600RealDriver() driver.Driver {
+	return icr8600.New(icr8600.RealHardware)
+}
+
 // openSerial is OpenRealSessionWith's test seam (and so OpenRealSessionFor's
 // too, that being its zero-option delegate): production code always leaves
 // this at transport.OpenSerial, and OpenRealSessionWith calls it
@@ -941,7 +1345,11 @@ func SynthesiseDiscoveredBanks(model string, slots []string) ([]spec.Bank, bool)
 // registered Yaesu models still reach the serial layer at
 // transport.DefaultStopBits, because none of them implements the
 // interface. What D3.1 adds is somewhere for a driver that DOES have a
-// framing fact to put it, and the Icom tier's six models are that case.
+// framing fact to put it, and the Icom models are that case — all of them
+// but the IC-7100, whose manual states no serial format for the CI-V link
+// at all and which therefore implements NOTHING here and reaches the
+// serial layer at transport.DefaultStopBits like the Yaesu four
+// (core/driver/ic7100/doc.go's framing paragraph).
 //
 // ZERO IS REFUSED WITH THE REST, and that is the rule's whole substance.
 // The obvious implementation — "if the report is <= 0, use the default" —

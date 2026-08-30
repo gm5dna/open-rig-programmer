@@ -16,6 +16,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -401,6 +402,7 @@ func TestReadChannel_TenGigahertzSurvivesTheCodeplugRoundTrip(t *testing.T) {
 	if got := ch.Data.FreqHz; got != 10_250_000_000 {
 		t.Fatalf("FreqHz = %d, want 10250000000 — about 2.4 times uint32's ceiling, which is what forced D4's widening", got)
 	}
+	drivertest.AssertFreshReadSaveLoad(t, ch, codeplug.Load)
 
 	cp := &codeplug.Codeplug{
 		Generator: "ic905 test",

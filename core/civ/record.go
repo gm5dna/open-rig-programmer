@@ -51,9 +51,11 @@ func (o Optional[T]) String() string {
 // numbering into this package.
 type FieldID string
 
-// The field vocabulary. It is spec D1's MemoryRecord list exactly: RX
-// frequency, TX frequency or duplex+offset, mode+filter, data mode, tone
-// mode, TX tone, RX tone, DTCS code+polarity, name, select/skip.
+// The field vocabulary. It is spec D1's MemoryRecord list plus Erratum 6's
+// D8 receiver settings: RX frequency, TX frequency or duplex+offset,
+// mode+filter, data mode, tone mode, TX tone, RX tone, DTCS code+polarity,
+// name, select/skip, tuning-step enable/code, programmable step, attenuator,
+// preamp, antenna and IP+.
 //
 // Adding one is a DELIBERATE act: MemoryRecord must gain a matching field,
 // the accessors below must reach it, and AllFieldIDs must list it —
@@ -73,6 +75,19 @@ const (
 	FieldDTCSPolarity FieldID = "dtcs_polarity"
 	FieldName         FieldID = "name"
 	FieldSelect       FieldID = "select"
+
+	// The receiver fields mirror the neutral D8 vocabulary. They live in
+	// MemoryRecord because TestRecordCommonHeadEncodesAndDecodesEveryMappedField
+	// pins that the CI-V gate must decode and re-encode them byte-identically;
+	// leaving them only in codeplug.ChannelData would make safe writes
+	// impossible to express at the codec boundary.
+	FieldTuningStepEnabled FieldID = "tuning_step_enabled"
+	FieldTuningStep        FieldID = "tuning_step"
+	FieldProgramTuningStep FieldID = "program_tuning_step"
+	FieldAttenuator        FieldID = "attenuator"
+	FieldPreamp            FieldID = "preamp"
+	FieldAntenna           FieldID = "antenna"
+	FieldIPPlus            FieldID = "ip_plus"
 )
 
 // AllFieldIDs returns the whole vocabulary, in a stable order.
@@ -82,6 +97,8 @@ func AllFieldIDs() []FieldID {
 		FieldToneTX, FieldToneRX, FieldDTCSCode,
 		FieldDuplex, FieldMode, FieldFilter, FieldDataMode,
 		FieldToneMode, FieldDTCSPolarity, FieldName, FieldSelect,
+		FieldTuningStepEnabled, FieldTuningStep, FieldProgramTuningStep,
+		FieldAttenuator, FieldPreamp, FieldAntenna, FieldIPPlus,
 	}
 }
 
@@ -101,10 +118,13 @@ const (
 func (f FieldID) kind() (fieldKind, bool) {
 	switch f {
 	case FieldRXFrequency, FieldTXFrequency, FieldOffset,
-		FieldToneTX, FieldToneRX, FieldDTCSCode:
+		FieldToneTX, FieldToneRX, FieldDTCSCode,
+		FieldProgramTuningStep, FieldAttenuator:
 		return fieldNumeric, true
 	case FieldDuplex, FieldMode, FieldFilter, FieldDataMode,
-		FieldToneMode, FieldDTCSPolarity, FieldName, FieldSelect:
+		FieldToneMode, FieldDTCSPolarity, FieldName, FieldSelect,
+		FieldTuningStepEnabled, FieldTuningStep, FieldPreamp,
+		FieldAntenna, FieldIPPlus:
 		return fieldText, true
 	default:
 		return 0, false
@@ -135,6 +155,11 @@ const (
 	// would make a band-addressed radio indistinguishable from a
 	// group-addressed one in every diagnostic.
 	AddressFormBandChannel
+	// AddressFormBankChannel is one packed-BCD bank byte then the two-byte
+	// channel. It deliberately remains distinct from BandChannel: equal
+	// wire widths do not make a bank and a band the same address identity
+	// (TestAddressFormBankChannelIsDistinctAndThreeBytesWide).
+	AddressFormBankChannel
 	// AddressFormWideGroupChannel is TWO packed-BCD group bytes, most
 	// significant first, then the two-byte channel: a four-byte address
 	// field.
@@ -143,7 +168,7 @@ const (
 	// IC-705 and the IC-905 both number a CALL group at wire index 100,
 	// which the radio prints and sends as `01 00`; one packed-BCD byte
 	// stops at 99. A model with 101 groups is not an edge case to round
-	// off — it is two of the six radios in this tier — and the alternative
+	// off — the IC-705, IC-905 and IC-R8600 all address a hundred-odd groups — and the alternative
 	// (renumbering the CALL group to something that fits) would have this
 	// program address a channel by an index its radio has never heard of.
 	AddressFormWideGroupChannel
@@ -159,6 +184,8 @@ func (f AddressForm) String() string {
 		return "AddressFormGroupChannel"
 	case AddressFormBandChannel:
 		return "AddressFormBandChannel"
+	case AddressFormBankChannel:
+		return "AddressFormBankChannel"
 	case AddressFormWideGroupChannel:
 		return "AddressFormWideGroupChannel"
 	default:
@@ -183,7 +210,7 @@ func (f AddressForm) addressBytes() int {
 // for a fact.
 func (f AddressForm) groupBytes() int {
 	switch f {
-	case AddressFormGroupChannel, AddressFormBandChannel:
+	case AddressFormGroupChannel, AddressFormBandChannel, AddressFormBankChannel:
 		return 1
 	case AddressFormWideGroupChannel:
 		return 2
@@ -220,6 +247,20 @@ func (f AddressForm) groupCapacity() int {
 // grouped reports whether this form carries a group or band index.
 func (f AddressForm) grouped() bool {
 	return f.groupBytes() > 0
+}
+
+// AddressRange is one inclusive rectangle in a profile's address space.
+// Extra ranges stay as separate rectangles so validAddress cannot silently
+// admit the holes in their rectangular closure; the builder, parser and
+// gate refusal is pinned by TestExtraRangesAreAUnionNotARectangularClosure.
+type AddressRange struct {
+	GroupLo, GroupHi     int
+	ChannelLo, ChannelHi int
+}
+
+func (r AddressRange) contains(a ChannelAddress) bool {
+	return a.Group >= r.GroupLo && a.Group <= r.GroupHi &&
+		a.Channel >= r.ChannelLo && a.Channel <= r.ChannelHi
 }
 
 // ChannelAddress is one memory channel's address under a profile's own
@@ -292,6 +333,14 @@ type MemoryRecord struct {
 	DTCSPolarity Optional[string]
 	Name         Optional[string]
 	Select       Optional[string]
+
+	TuningStepEnabled   Optional[string]
+	TuningStep          Optional[string]
+	ProgramTuningStepHz Optional[uint64]
+	AttenuatorDB        Optional[uint64]
+	Preamp              Optional[string]
+	Antenna             Optional[string]
+	IPPlus              Optional[string]
 }
 
 // numeric returns the numeric field id names, and whether id is a numeric
@@ -310,6 +359,10 @@ func (r MemoryRecord) numeric(id FieldID) (Optional[uint64], bool) {
 		return r.ToneRXDeciHz, true
 	case FieldDTCSCode:
 		return r.DTCSCode, true
+	case FieldProgramTuningStep:
+		return r.ProgramTuningStepHz, true
+	case FieldAttenuator:
+		return r.AttenuatorDB, true
 	default:
 		return Optional[uint64]{}, false
 	}
@@ -331,6 +384,10 @@ func (r *MemoryRecord) setNumeric(id FieldID, v uint64) {
 		r.ToneRXDeciHz = Available(v)
 	case FieldDTCSCode:
 		r.DTCSCode = Available(v)
+	case FieldProgramTuningStep:
+		r.ProgramTuningStepHz = Available(v)
+	case FieldAttenuator:
+		r.AttenuatorDB = Available(v)
 	}
 }
 
@@ -353,6 +410,16 @@ func (r MemoryRecord) text(id FieldID) (Optional[string], bool) {
 		return r.Name, true
 	case FieldSelect:
 		return r.Select, true
+	case FieldTuningStepEnabled:
+		return r.TuningStepEnabled, true
+	case FieldTuningStep:
+		return r.TuningStep, true
+	case FieldPreamp:
+		return r.Preamp, true
+	case FieldAntenna:
+		return r.Antenna, true
+	case FieldIPPlus:
+		return r.IPPlus, true
 	default:
 		return Optional[string]{}, false
 	}
@@ -377,6 +444,16 @@ func (r *MemoryRecord) setText(id FieldID, v string) {
 		r.Name = Available(v)
 	case FieldSelect:
 		r.Select = Available(v)
+	case FieldTuningStepEnabled:
+		r.TuningStepEnabled = Available(v)
+	case FieldTuningStep:
+		r.TuningStep = Available(v)
+	case FieldPreamp:
+		r.Preamp = Available(v)
+	case FieldAntenna:
+		r.Antenna = Available(v)
+	case FieldIPPlus:
+		r.IPPlus = Available(v)
 	}
 }
 
@@ -498,10 +575,13 @@ func (s FieldSpan) clone() FieldSpan {
 	return out
 }
 
-// RecordLayout is one accepted record LENGTH and the field spans that
+// RecordLayout is one accepted record SHAPE and the field spans that
 // decode it.
 //
-// A profile carries one layout per accepted length, which is what makes
+// Under the two length-keyed discriminator kinds a profile carries one
+// layout per accepted length; under DiscriminatorModeByte (additions
+// design D3.3) layouts are keyed by ModeClass and two may share a length
+// — the IC-R8600's FM and DCR tails. The length-keyed reading is what makes
 // the "accepted record lengths as a SET with a discriminator rule" of spec
 // D1 decidable: the length IS the discriminator, and each length brings
 // its own geometry. The IC-905's documented five- and six-byte frequency
@@ -511,6 +591,13 @@ func (s FieldSpan) clone() FieldSpan {
 type RecordLayout struct {
 	// Length is the record's exact width in bytes.
 	Length int
+	// ModeClass is the neutral discriminator class for a mode-keyed
+	// layout. Empty for the two length discriminators.
+	ModeClass string
+	// ModeValues are the wire values that select this layout. Keeping the
+	// declaration beside the layout prevents a tail from being paired with
+	// a mode table elsewhere by position.
+	ModeValues []byte
 	// Fields maps neutral fields onto this record's bytes. A field may
 	// appear MORE THAN ONCE: spec D5 entry 4 records a duplicated TX
 	// block that three models require on write, and two spans naming the
@@ -529,7 +616,7 @@ type RecordLayout struct {
 
 // clone returns a deep copy.
 func (l RecordLayout) clone() RecordLayout {
-	out := RecordLayout{Length: l.Length}
+	out := RecordLayout{Length: l.Length, ModeClass: l.ModeClass, ModeValues: copyBytes(l.ModeValues)}
 	if l.Fields != nil {
 		out.Fields = make([]FieldSpan, len(l.Fields))
 		for i, f := range l.Fields {
@@ -562,6 +649,10 @@ const (
 	// its own layout, told apart by the record's own length. The IC-905's
 	// documented five- and six-byte frequency forms.
 	DiscriminatorRecordLength
+	// DiscriminatorModeByte selects a layout from ProfileConfig.ModeKey.
+	// Length remains an accepted-set fingerprint but never identifies a
+	// layout, because two modes may intentionally share it.
+	DiscriminatorModeByte
 )
 
 func (d RecordDiscriminator) String() string {
@@ -572,6 +663,8 @@ func (d RecordDiscriminator) String() string {
 		return "DiscriminatorSingleLength"
 	case DiscriminatorRecordLength:
 		return "DiscriminatorRecordLength"
+	case DiscriminatorModeByte:
+		return "DiscriminatorModeByte"
 	default:
 		return "RecordDiscriminator(" + strconv.Itoa(int(d)) + ")"
 	}

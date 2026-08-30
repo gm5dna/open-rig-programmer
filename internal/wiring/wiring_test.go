@@ -18,15 +18,20 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300mk2"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7610"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7760"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7851"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic905"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
+	"github.com/gm5dna/open-rig-programmer/core/driver/icr8600"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx10"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx101"
+	"github.com/gm5dna/open-rig-programmer/internal/fakeic7851"
 	"github.com/gm5dna/open-rig-programmer/internal/radiotext"
 )
 
@@ -184,6 +189,24 @@ var fakePackageForModel = map[string]string{
 	IC705Model:     "internal/fakeic705",
 	IC9700Model:    "internal/fakeic9700",
 	IC905Model:     "internal/fakeic905",
+	// The IC-7851 pair share ONE simulator package, exactly as the
+	// FTdx101D/FTdx101MP rows above share internal/fakedx101 — this
+	// table answers "which package", and for these two the answer is the
+	// same one. Which CONSTRUCTOR each row called is not a question this
+	// table can ask (there is only one, fakeic7851.New); which MODEL NAME
+	// each row handed it is settled by the CATID check in the test below
+	// and by TestOpenFakeSessionFor_IC7851OptionSourceIsItsOwn.
+	IC7851Model: "internal/fakeic7851",
+	IC7850Model: "internal/fakeic7851",
+	// The IC-7760 has a simulator package to itself, on the same footing
+	// as the six single-row Icom entries above the pair.
+	IC7760Model: "internal/fakeic7760",
+	// The IC-7100 has a simulator package to itself too, on the same
+	// footing as every other single-row Icom entry above.
+	IC7100Model: "internal/fakeic7100",
+	// And the IC-R8600 likewise: one simulator package to itself, the
+	// tier's fourth and last.
+	ICR8600Model: "internal/fakeicr8600",
 }
 
 func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
@@ -222,7 +245,17 @@ func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
 			}
 			radio := entry.newRadio()
 			concrete := reflect.ValueOf(radio)
-			if a, isAdapter := radio.(ic7610FakeAdapter); isAdapter {
+			// Unwrap the two adapters this table holds
+			// (internal/wiring/fake.go): each re-exposes its embedded
+			// simulator's net.Conn port as an io.ReadWriteCloser and
+			// changes nothing else, so the type this check must resolve
+			// is the EMBEDDED one, not the wrapper's.
+			switch a := radio.(type) {
+			case ic7610FakeAdapter:
+				concrete = reflect.ValueOf(a.Radio)
+			case ic7851FakeAdapter:
+				concrete = reflect.ValueOf(a.Radio)
+			case ic7760FakeAdapter:
 				concrete = reflect.ValueOf(a.Radio)
 			}
 			if concrete.Kind() == reflect.Ptr {
@@ -1027,6 +1060,69 @@ func TestOpenRealSessionFor_BaudIsTheDriversDefault(t *testing.T) {
 	}
 }
 
+// TestEveryRegisteredModelDeclaresItsTransmitAnatomy is the RULING the
+// placeholder it replaces asked for BY NAME.
+//
+// Wave 1b landed TestEveryRegisteredModelDeclaresHasTransmitter (355333b,
+// additions spec D4.2) with no doc comment and one deliberately
+// short-lived expectation — every registered model declares
+// spec.HasTransmitter — and a failure message that named its own
+// successor: "Wave 4 must give a receive-only registration its own
+// explicit ruling". Every row registered up to Tier 4b's THIRD
+// registration was a transceiver, so it held. The IC-R8600 is a
+// RECEIVER (core/driver/icr8600/caps.go declares spec.ReceiveOnly;
+// matrix §1 row 23 — "the guide calls the product a receiver"), so at
+// this registration the placeholder's expectation became false, exactly
+// as it said it would. This is that ruling, written in its place rather
+// than beside it, so no reader has to work out which of two tests about
+// the same property is the live one.
+//
+// IT IS A PARTITION, NOT A SPOT CHECK, and that is what makes it a
+// stronger pin than the one it replaces. EXACTLY ONE registered row is
+// spec.ReceiveOnly and it is the IC-R8600; every other row is
+// spec.HasTransmitter; and NO row is left at the zero
+// spec.TransmitUnspecified. So a later registration that forgot to
+// populate Transmit fails here as an unspecified row rather than passing
+// unnoticed, a later edit that quietly gave this receiver a transmitter
+// fails as a wrong value, and a second receiver would have to say so here
+// before it could register.
+//
+// THE INVARIANT ITSELF LIVES IN spec, NOT HERE. spec.Validate refuses
+// TransmitUnspecified outright and refuses a ReceiveOnly model that
+// grades tx_frequency or tone_tx above Unsupported on any bank (additions
+// spec D4.2's derived rules). What this test adds is the REGISTRY's own
+// answer — which row is which — asserted once, in the package that owns
+// the model list.
+func TestEveryRegisteredModelDeclaresItsTransmitAnatomy(t *testing.T) {
+	models := SupportedModels()
+	if len(models) < 2 {
+		t.Fatalf("SupportedModels() = %v — a partition over fewer than two rows proves nothing", models)
+	}
+	receivers := 0
+	for _, model := range models {
+		caps, err := StaticCapabilities(model)
+		if err != nil {
+			t.Fatalf("StaticCapabilities(%q): %v", model, err)
+		}
+		switch caps.Transmit {
+		case spec.ReceiveOnly:
+			receivers++
+			if model != ICR8600Model {
+				t.Errorf("%s declares spec.ReceiveOnly — the IC-R8600 is the only receiver this registry holds; a second one needs its own ruling here", model)
+			}
+		case spec.HasTransmitter:
+			if model == ICR8600Model {
+				t.Errorf("%s declares spec.HasTransmitter — its own guide calls it a communications receiver (core/driver/icr8600/caps.go, matrix section 1 row 23)", model)
+			}
+		default:
+			t.Errorf("%s declares Transmit = %v — additions spec D4.2 requires every driver to say, and spec.Validate refuses the zero value", model, caps.Transmit)
+		}
+	}
+	if receivers != 1 {
+		t.Errorf("found %d receive-only models, want exactly 1 (the IC-R8600)", receivers)
+	}
+}
+
 // TestOpenRealSessionFor_BaudFollowsADisagreeingDriver is E2's actual
 // proof, and the one the FT-710 alone cannot give: with a registered
 // model whose DefaultBaud DISAGREES with transport.DefaultBaud, the port
@@ -1047,6 +1143,7 @@ func TestOpenRealSessionFor_BaudFollowsADisagreeingDriver(t *testing.T) {
 		return baudFixtureDriver{caps: spec.Capabilities{
 			Model:        fixtureModel,
 			CATID:        "9999",
+			Transmit:     spec.HasTransmitter,
 			Bauds:        []int{fixtureBaud},
 			DefaultBaud:  fixtureBaud,
 			TagLen:       12,
@@ -1147,7 +1244,7 @@ func TestSupportedModels_SortedNonEmpty(t *testing.T) {
 // deleting a constant cannot make this test agree with the change.
 func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	got := SupportedModels()
-	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905"} {
+	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600"} {
 		found := false
 		for _, m := range got {
 			if m == want {
@@ -1191,6 +1288,32 @@ func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	}
 	if IC905Model != "IC-905" {
 		t.Errorf("IC905Model = %q, want \"IC-905\"", IC905Model)
+	}
+	// The additions tier's pair (Tier 4b). Both constants are pinned,
+	// not just one: they are declared in a single const block over one
+	// driver package, which is exactly the shape in which a copy-paste
+	// slip leaves two names bound to one string.
+	if IC7851Model != "IC-7851" {
+		t.Errorf("IC7851Model = %q, want \"IC-7851\"", IC7851Model)
+	}
+	if IC7850Model != "IC-7850" {
+		t.Errorf("IC7850Model = %q, want \"IC-7850\"", IC7850Model)
+	}
+	if IC7851Model == IC7850Model {
+		t.Errorf("IC7851Model and IC7850Model are both %q — the two rows must key the registry separately, or one model's session would be served as the other's", IC7851Model)
+	}
+	// The additions tier's second registration, a single row again.
+	if IC7760Model != "IC-7760" {
+		t.Errorf("IC7760Model = %q, want \"IC-7760\"", IC7760Model)
+	}
+	// The additions tier's third registration, a single row again.
+	if IC7100Model != "IC-7100" {
+		t.Errorf("IC7100Model = %q, want \"IC-7100\"", IC7100Model)
+	}
+	// The additions tier's fourth and last, and the registry's first
+	// RECEIVER.
+	if ICR8600Model != "IC-R8600" {
+		t.Errorf("ICR8600Model = %q, want \"IC-R8600\"", ICR8600Model)
 	}
 }
 
@@ -1705,7 +1828,7 @@ func assertNoConsentAnywhere(t *testing.T, what string, caps spec.Capabilities) 
 // transform); core/driver/ft710's own tests own that proof, and
 // TestRealDriverFor_DefaultPathByteIdentical below covers its default path.
 func TestOpenRealSessionWith_ConsentedSessionCaps(t *testing.T) {
-	for _, model := range []string{FTdx10Model, FTdx101DModel, FTdx101MPModel, IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model} {
+	for _, model := range []string{FTdx10Model, FTdx101DModel, FTdx101MPModel, IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model, IC7851Model, IC7850Model, IC7760Model, IC7100Model, ICR8600Model} {
 		t.Run(model, func(t *testing.T) {
 			fakePortSeam(t, model)
 
@@ -1820,6 +1943,45 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		}},
 		{model: IC905Model, want: NewIC905RealDriver, wantConsent: func() driver.Driver {
 			return ic905.New(ic905.RealHardware, ic905.WithConsentedUnverifiedWrites())
+		}},
+		// The IC-7851 pair. Both rows are listed, and for this family
+		// that is what the table is FOR: one driver package, two
+		// constructors and no bare New, so a row wired to the sibling's
+		// constructor would still compile, still build a working driver
+		// and still report a plausible model — and would be caught only
+		// here, where each row's default and consent arms are compared
+		// against the constructor that row is supposed to call.
+		{model: IC7851Model, want: NewIC7851RealDriver, wantConsent: func() driver.Driver {
+			return ic7851.New7851(ic7851.WithConsentedUnverifiedWrites())
+		}},
+		{model: IC7850Model, want: NewIC7850RealDriver, wantConsent: func() driver.Driver {
+			return ic7851.New7850(ic7851.WithConsentedUnverifiedWrites())
+		}},
+		// The IC-7760. Its consent arm NAMES ic7760.RealHardware, because
+		// this package's New takes the profile as an argument — so this
+		// row is also where a consent arm that had quietly passed
+		// ic7760.Simulated (the one edit that would hand a real radio the
+		// simulator's write-Supported capability set) would be caught.
+		{model: IC7760Model, want: NewIC7760RealDriver, wantConsent: func() driver.Driver {
+			return ic7760.New(ic7760.RealHardware, ic7760.WithConsentedUnverifiedWrites())
+		}},
+		// The IC-7100, on exactly the same terms: its consent arm NAMES
+		// ic7100.RealHardware because this package's New takes the
+		// profile as an argument, so this row is also where a consent arm
+		// that had quietly passed ic7100.Simulated — the one edit that
+		// would hand a real radio the simulator's write-Supported
+		// capability set — would be caught.
+		{model: IC7100Model, want: NewIC7100RealDriver, wantConsent: func() driver.Driver {
+			return ic7100.New(ic7100.RealHardware, ic7100.WithConsentedUnverifiedWrites())
+		}},
+		// The IC-R8600, on exactly the same terms: its consent arm NAMES
+		// icr8600.RealHardware because this package's New takes the
+		// profile as an argument, so this row is also where a consent arm
+		// that had quietly passed icr8600.Simulated — the one edit that
+		// would hand a real receiver the simulator's write-Supported
+		// capability set — would be caught.
+		{model: ICR8600Model, want: NewICR8600RealDriver, wantConsent: func() driver.Driver {
+			return icr8600.New(icr8600.RealHardware, icr8600.WithConsentedUnverifiedWrites())
 		}},
 	} {
 		got, err := realDriverFor(tc.model, false)
@@ -1950,6 +2112,32 @@ func TestNeedsUnverifiedConsent_PerModel(t *testing.T) {
 		// its RealHardware profile carries a write-side Unverified field
 		// this predicate must find.
 		IC905Model: true,
+		// The IC-7851 and IC-7850 (Tier 4b). BOTH write-trial guards —
+		// writeTrialsComplete7851 and writeTrialsComplete7850, kept
+		// deliberately separate in core/driver/ic7851/caps.go because
+		// evidence for one model is never evidence for its sibling — are
+		// FALSE, so each row's RealHardware profile carries a write-side
+		// Unverified field this predicate must find, on both of its banks.
+		IC7851Model: true,
+		IC7850Model: true,
+		// The IC-7760 (Tier 4b). Its writeTrialsComplete
+		// (core/driver/ic7760/caps.go) is FALSE, so its RealHardware
+		// profile carries a write-side Unverified field this predicate
+		// must find, on both of its banks.
+		IC7760Model: true,
+		// The IC-7100 (Tier 4b). Its writeTrialsComplete
+		// (core/driver/ic7100/caps.go) is FALSE, so its RealHardware
+		// profile carries a write-side Unverified field this predicate
+		// must find, on its one dense MEM bank.
+		IC7100Model: true,
+		// The IC-R8600 (Tier 4b). Its writeTrialsComplete
+		// (core/driver/icr8600/caps.go) is FALSE, so its RealHardware
+		// profile carries a write-side Unverified field this predicate
+		// must find, on its one sparse MEM bank. Being a RECEIVER changes
+		// nothing here: spec.ReceiveOnly removes tx_frequency and tone_tx
+		// from the graded set, and the remaining seventeen fields are
+		// Unverified in both directions.
+		ICR8600Model: true,
 	}
 	models := SupportedModels()
 	if len(models) != len(want) {
@@ -2101,6 +2289,7 @@ func registerFramingFixture(t *testing.T, model string, stopBits int) {
 			baudFixtureDriver: baudFixtureDriver{caps: spec.Capabilities{
 				Model:        model,
 				CATID:        "9999",
+				Transmit:     spec.HasTransmitter,
 				Bauds:        []int{transport.DefaultBaud},
 				DefaultBaud:  transport.DefaultBaud,
 				TagLen:       12,
@@ -2194,12 +2383,29 @@ func TestOpenRealSessionFor_StopBitsRefuseAnImpossibleReport(t *testing.T) {
 var yaesuModels = []string{DefaultModel, FTdx10Model, FTdx101DModel, FTdx101MPModel}
 
 // icomModels names every registered Icom model, on the same by-name
-// footing as yaesuModels — six rows now (the IC-7610, the IC-7300 pair
+// footing as yaesuModels — ELEVEN rows now (the IC-7610, the IC-7300 pair
 // added by Wave 4 task R3, the IC-705 added by Wave 4 task R4, the
-// IC-9700 added by Wave 4 task R5, and the IC-905 added by Wave 4 task
-// R6, the tier's LAST registration), grown by one or two per Wave-4
-// family registration.
-var icomModels = []string{IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model}
+// IC-9700 added by Wave 4 task R5, the IC-905 added by Wave 4 task R6,
+// which closed the Icom tier; then the ADDITIONS tier, Tier 4b: the
+// IC-7851/IC-7850 pair, the IC-7760, the IC-7100, and the IC-R8600),
+// grown by one or two per family registration.
+//
+// MEMBERSHIP HERE IS ABOUT THE MAKER, NOT ABOUT SERIAL FRAMING, and the
+// IC-7100 is why that distinction now has to be stated: it is the first
+// Icom row that implements NO driver.SerialFramingReporter, so it opens
+// at 8-N-2 like the four Yaesu rows. It still belongs in this list —
+// TestYaesuAndIcomModelsPartitionSupportedModels partitions
+// SupportedModels() by maker — and its framing coverage is
+// TestOpenRealSessionFor_IC7100OpensAtEightNTwo rather than an
+// OpensAtEightNOne mirror.
+//
+// NOR IS IT ABOUT BEING A TRANSCEIVER. The IC-R8600 is a RECEIVER
+// (core/driver/icr8600/caps.go grades it spec.ReceiveOnly, additions spec
+// D4.2), and it belongs here for the same reason: this list partitions
+// SupportedModels() by MAKER, and Icom made it. It reports one stop bit
+// like the other nine, so its framing coverage is the ordinary
+// TestOpenRealSessionFor_ICR8600OpensAtEightNOne below.
+var icomModels = []string{IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model, IC7851Model, IC7850Model, IC7760Model, IC7100Model, ICR8600Model}
 
 // TestYaesuAndIcomModelsPartitionSupportedModels restores the two-way
 // drift alarm the old len(models) != 4 pins gave for free and fix round 1
@@ -2560,5 +2766,247 @@ func TestOpenRealSessionFor_IC905OpensAtEightNOne(t *testing.T) {
 	}
 	if got.StopBits != 1 {
 		t.Errorf("SerialConfig.StopBits = %d, want 1 — the IC-905's own StopBits() report must reach the port, not transport.DefaultStopBits (%d)", got.StopBits, transport.DefaultStopBits)
+	}
+}
+
+// TestOpenRealSessionFor_IC7851AndIC7850OpenAtEightNOne is
+// TestOpenRealSessionFor_IC7610OpensAtEightNOne's mirror for the
+// additions tier's pair (Tier 4b): the same proof, against BOTH new
+// registered rows, that core/driver/ic7851's own StopBits() == 1 report
+// actually reaches OpenRealSessionFor's port configuration through the
+// wiring-side stopBitsFor consultation, which needed no code change for
+// this registration either.
+//
+// BOTH ROWS, not one, even though they share an implementation: the
+// framing report is taken from the driver realDriverFor BUILT, so a row
+// wired to the wrong constructor — or a future model dimension added to
+// the framing report — is only visible if each row is asked for itself.
+// core/driver/ic7851's TestStopBits pins the value on both rows and on
+// both capability arms; this pins that the value travels.
+func TestOpenRealSessionFor_IC7851AndIC7850OpenAtEightNOne(t *testing.T) {
+	for _, model := range []string{IC7851Model, IC7850Model} {
+		t.Run(model, func(t *testing.T) {
+			d, err := realDriverFor(model, false)
+			if err != nil {
+				t.Fatalf("realDriverFor(%q): %v", model, err)
+			}
+			r, ok := d.(driver.SerialFramingReporter)
+			if !ok {
+				t.Fatalf("%s does not implement driver.SerialFramingReporter — every registered Icom driver is expected to (spec D3.1)", model)
+			}
+			if got := r.StopBits(); got != 1 {
+				t.Fatalf("%s.StopBits() = %d, want 1 (an ASSUMED value per core/driver/ic7851/framing.go's own doc comment — all 283 pages of this radio's instruction manual name no bit count, parity or stop-bit count for any CI-V path)", model, got)
+			}
+
+			got := recordSerialConfig(t)
+			_, _, err = OpenRealSessionFor(testCtx(t), model, "/dev/nonexistent-rigprog-test-port")
+			if !errors.Is(err, errSeamRefused) {
+				t.Fatalf("OpenRealSessionFor(%q): err = %v, want it to wrap the seam's own error", model, err)
+			}
+			if got.StopBits != 1 {
+				t.Errorf("SerialConfig.StopBits = %d, want 1 — the %s's own StopBits() report must reach the port, not transport.DefaultStopBits (%d)", got.StopBits, model, transport.DefaultStopBits)
+			}
+		})
+	}
+}
+
+// TestOpenFakeSessionFor_IC7851OptionSourceIsItsOwn and its IC-7850
+// sibling are the IC-7851 pair's copy of the FTdx101 pair's
+// non-interference proof (see
+// TestOpenFakeSessionFor_FTdx101DOptionSourceIsItsOwn for the full
+// reasoning), and they exist for exactly the same reason: this is the
+// SECOND registered pairing whose two option sources share a type.
+// IC7851FakeSessionOpts and IC7850FakeSessionOpts are both
+// []fakeic7851.Option, because one simulator serves both rows, so a
+// fake.go closure reading the wrong variable would COMPILE and would
+// silently steer the wrong model's session.
+//
+// THE FIXTURE IS A MOVED CI-V ADDRESS, and its observable is the OPEN
+// ITSELF rather than a discovered bank: this radio discovers nothing (two
+// dense banks, fixed at construction), so there is no bank-shaped
+// evidence of the kind the FTdx101 pair's proof uses. A simulator moved
+// off 8Eh answers nothing this driver's codec will accept, so its Open
+// fails — core/driver/ic7851's TestE2E_MovedAddressTimesOutCleanly is
+// where that behaviour is pinned as behaviour; here it is used only as an
+// unambiguous marker that the option arrived.
+//
+// BOTH DIRECTIONS ARE ASSERTED, in both tests: the option must reach the
+// row whose var was set (that row's Open now fails) AND must not reach
+// the sibling (whose Open still succeeds). A "did not arrive" assertion
+// alone would pass against a seam that reached nothing at all.
+func TestOpenFakeSessionFor_IC7851OptionSourceIsItsOwn(t *testing.T) {
+	prev := IC7851FakeSessionOpts
+	IC7851FakeSessionOpts = []fakeic7851.Option{fakeic7851.WithRadioAddress(0x8f)}
+	t.Cleanup(func() { IC7851FakeSessionOpts = prev })
+
+	assertIC7851FakeOpens(t, IC7851Model, false)
+	assertIC7851FakeOpens(t, IC7850Model, true)
+}
+
+// TestOpenFakeSessionFor_IC7850OptionSourceIsItsOwn is the mirror image,
+// and both directions are tested because a closure that read
+// IC7851FakeSessionOpts in BOTH rows would pass the IC-7851's test
+// outright.
+func TestOpenFakeSessionFor_IC7850OptionSourceIsItsOwn(t *testing.T) {
+	prev := IC7850FakeSessionOpts
+	IC7850FakeSessionOpts = []fakeic7851.Option{fakeic7851.WithRadioAddress(0x8f)}
+	t.Cleanup(func() { IC7850FakeSessionOpts = prev })
+
+	assertIC7851FakeOpens(t, IC7850Model, false)
+	assertIC7851FakeOpens(t, IC7851Model, true)
+}
+
+// assertIC7851FakeOpens opens model's registered fake session and asserts
+// whether the open succeeded, closing the session when it did.
+//
+// The success case asserts the model name too, so a "still opens" leg
+// cannot be satisfied by a session against the sibling's rig.
+func assertIC7851FakeOpens(t *testing.T, model string, want bool) {
+	t.Helper()
+	sess, closeAll, err := OpenFakeSessionFor(testCtx(t), model)
+	if !want {
+		if err == nil {
+			_ = closeAll()
+			t.Errorf("OpenFakeSessionFor(%q) succeeded, want failure — the moved-address option set on this row's own var did not reach its rig", model)
+		}
+		return
+	}
+	if err != nil {
+		t.Fatalf("OpenFakeSessionFor(%q): unexpected error: %v — the sibling row's option reached this rig, which is the crossing these two tests exist to catch", model, err)
+	}
+	t.Cleanup(func() {
+		if err := closeAll(); err != nil {
+			t.Errorf("closeAll: unexpected error: %v", err)
+		}
+	})
+	if got := sess.Capabilities().Model; got != model {
+		t.Errorf("session Capabilities().Model = %q, want %q", got, model)
+	}
+}
+
+// TestOpenRealSessionFor_IC7760OpensAtEightNOne is
+// TestOpenRealSessionFor_IC7610OpensAtEightNOne's mirror for the
+// additions tier's second registration (Tier 4b): the same proof that
+// core/driver/ic7760's own StopBits() == 1 report actually reaches
+// OpenRealSessionFor's port configuration through the wiring-side
+// stopBitsFor consultation, which needed no code change for this
+// registration either.
+//
+// THE ASSUMPTION BEHIND THE 1 IS THIS RADIO'S OWN, and it is an absence
+// rather than a misread line: core/driver/ic7760/framing.go records that
+// "stop bit", "data bit", "parity" and "8 bit" appear on none of the
+// IC-7760 CI-V Reference Guide's 28 pages, about any port. That package's
+// TestStopBits pins the value; this pins that the value TRAVELS, which is
+// what matters here, because transport.DefaultStopBits is 2 and a report
+// that never reached the port would open the radio at 8-N-2.
+func TestOpenRealSessionFor_IC7760OpensAtEightNOne(t *testing.T) {
+	d, err := realDriverFor(IC7760Model, false)
+	if err != nil {
+		t.Fatalf("realDriverFor(%q): %v", IC7760Model, err)
+	}
+	r, ok := d.(driver.SerialFramingReporter)
+	if !ok {
+		t.Fatalf("%s does not implement driver.SerialFramingReporter — every registered Icom driver is expected to (spec D3.1)", IC7760Model)
+	}
+	if got := r.StopBits(); got != 1 {
+		t.Fatalf("%s.StopBits() = %d, want 1 (an ASSUMED value per core/driver/ic7760/framing.go's own doc comment)", IC7760Model, got)
+	}
+
+	got := recordSerialConfig(t)
+	_, _, err = OpenRealSessionFor(testCtx(t), IC7760Model, "/dev/nonexistent-rigprog-test-port")
+	if !errors.Is(err, errSeamRefused) {
+		t.Fatalf("OpenRealSessionFor(%q): err = %v, want it to wrap the seam's own error", IC7760Model, err)
+	}
+	if got.StopBits != 1 {
+		t.Errorf("SerialConfig.StopBits = %d, want 1 — the IC-7760's own StopBits() report must reach the port, not transport.DefaultStopBits (%d)", got.StopBits, transport.DefaultStopBits)
+	}
+}
+
+// TestOpenRealSessionFor_IC7100OpensAtEightNTwo is the additions tier's
+// THIRD registration's framing coverage, and it is the MIRROR IMAGE of
+// every Icom framing test before it: this row opens at 8-N-2, not 8-N-1.
+//
+// THE ABSENCE IS THE CLAIM. core/driver/ic7100 deliberately implements no
+// driver.SerialFramingReporter, and core/civ/ic7100/doc.go records why in
+// as many words: the sole 8-N-1 sentence anywhere in the IC-7100's full
+// manual is PDF p.174's DV LOW-SPEED DATA application, which is not the
+// CI-V/REMOTE link, so this project holds no framing evidence for this
+// radio at all (register entry ic7100-serial-framing). That package's
+// TestNewProfilesFailSafeAndDoNotExposeSerialFraming pins the absence at
+// the driver; this pins what the absence COSTS at the wiring seam.
+//
+// WHICH IS THE POINT OF ASSERTING IT AT ALL. stopBitsFor's rule is that a
+// driver with no framing evidence must not implement the interface, and
+// that zero is refused rather than treated as a request for the default
+// — so a well-meaning later edit adding a StopBits() that returned 0
+// would fail the open, and one returning 1 would put a framing claim on
+// the wire that no page of this radio's manual supports. Both are caught
+// here.
+func TestOpenRealSessionFor_IC7100OpensAtEightNTwo(t *testing.T) {
+	d, err := realDriverFor(IC7100Model, false)
+	if err != nil {
+		t.Fatalf("realDriverFor(%q): %v", IC7100Model, err)
+	}
+	if r, ok := d.(driver.SerialFramingReporter); ok {
+		t.Fatalf("%s implements SerialFramingReporter (reporting %d) — it must not: PDF p.174's 8-N-1 line is the DV low-speed data application, not CI-V evidence (core/civ/ic7100/doc.go, register entry ic7100-serial-framing)", IC7100Model, r.StopBits())
+	}
+
+	got := recordSerialConfig(t)
+	_, _, err = OpenRealSessionFor(testCtx(t), IC7100Model, "/dev/nonexistent-rigprog-test-port")
+	if !errors.Is(err, errSeamRefused) {
+		t.Fatalf("OpenRealSessionFor(%q): err = %v, want it to wrap the seam's own error", IC7100Model, err)
+	}
+	if got.StopBits != transport.DefaultStopBits {
+		t.Errorf("SerialConfig.StopBits = %d, want %d (transport.DefaultStopBits) — with no framing report there is nothing for stopBitsFor to carry, and inventing one would be a claim this radio's manual does not make", got.StopBits, transport.DefaultStopBits)
+	}
+}
+
+// TestOpenRealSessionFor_ICR8600OpensAtEightNOne is
+// TestOpenRealSessionFor_IC7610OpensAtEightNOne's mirror for the
+// additions tier's FOURTH and last registration (Tier 4b): the same proof
+// that core/driver/icr8600's own StopBits() == 1 report actually reaches
+// OpenRealSessionFor's port configuration through the wiring-side
+// stopBitsFor consultation, which needed no code change for this
+// registration either.
+//
+// SO THE IC-7100 REMAINS THE ONE EXCEPTION, and this test is what says
+// so for the tier's last row. THE ASSUMPTION BEHIND THE 1 IS THIS
+// RECEIVER'S OWN, and it is an absence rather than a misread line:
+// core/driver/icr8600/framing.go records that the IC-R8600 CI-V Reference
+// Guide "contains no CI-V framing statement" at all, so the 1 is an
+// ASSUMED value carried by register entry icr8600-serial-framing, whose
+// lift is to try 8-N-1 and 8-N-2 on a real receiver and record which
+// answers cleanly. That package's own tests pin the value; this pins that
+// the value TRAVELS, which is what matters here, because
+// transport.DefaultStopBits is 2 and a report that never reached the port
+// would open the receiver at 8-N-2.
+//
+// BEING A RECEIVER CHANGES NOTHING AT THIS SEAM, deliberately.
+// spec.ReceiveOnly is a statement about the radio's anatomy consulted for
+// WORDING and for a capability invariant (additions spec D4.2's E2
+// reconciliation says in as many words that it "configures nothing"), and
+// stopBitsFor never looks at it — this row's port is configured from its
+// driver's framing report and its DefaultBaud exactly as the ten
+// transceiver rows' are.
+func TestOpenRealSessionFor_ICR8600OpensAtEightNOne(t *testing.T) {
+	d, err := realDriverFor(ICR8600Model, false)
+	if err != nil {
+		t.Fatalf("realDriverFor(%q): %v", ICR8600Model, err)
+	}
+	r, ok := d.(driver.SerialFramingReporter)
+	if !ok {
+		t.Fatalf("%s does not implement driver.SerialFramingReporter — every registered Icom driver but the IC-7100 is expected to (spec D3.1)", ICR8600Model)
+	}
+	if got := r.StopBits(); got != 1 {
+		t.Fatalf("%s.StopBits() = %d, want 1 (an ASSUMED value per core/driver/icr8600/framing.go's own doc comment, register entry icr8600-serial-framing)", ICR8600Model, got)
+	}
+
+	got := recordSerialConfig(t)
+	_, _, err = OpenRealSessionFor(testCtx(t), ICR8600Model, "/dev/nonexistent-rigprog-test-port")
+	if !errors.Is(err, errSeamRefused) {
+		t.Fatalf("OpenRealSessionFor(%q): err = %v, want it to wrap the seam's own error", ICR8600Model, err)
+	}
+	if got.StopBits != 1 {
+		t.Errorf("SerialConfig.StopBits = %d, want 1 — the IC-R8600's own StopBits() report must reach the port, not transport.DefaultStopBits (%d)", got.StopBits, transport.DefaultStopBits)
 	}
 }

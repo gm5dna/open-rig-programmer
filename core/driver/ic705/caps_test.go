@@ -3,6 +3,7 @@
 package ic705
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
@@ -95,6 +96,9 @@ func TestMemBankIsSparseWithTheRecordedSpace(t *testing.T) {
 		if b.Groups != 100 || b.PerGroup != 100 {
 			t.Errorf("%s profile: MEM space is %dx%d, want 100x100 (matrix §1b)", name, b.Groups, b.PerGroup)
 		}
+		if b.GroupBase != 1 || b.ChannelBase != 1 {
+			t.Errorf("%s profile: MEM bases = %d/%d, want 1/1 so G01-001 remains the first radio slot", name, b.GroupBase, b.ChannelBase)
+		}
 		if b.Budget != 500 {
 			t.Errorf("%s profile: MEM Budget = %d, want 500 (spec D4/D6; ASSUMED — ic705-group-budget, lift L-BUDGET-CEILING)", name, b.Budget)
 		}
@@ -125,9 +129,9 @@ func TestCallBankIsDenseWithFourSlots(t *testing.T) {
 		if !b.NoBlank {
 			t.Errorf("%s profile: CALL bank does not set NoBlank — a call channel can never be empty (ASSUMED, ic705-call-channel-emptiness, lift L-CALL-EMPTY)", name)
 		}
-		// Sparse false and the three descriptor numbers zero, or
+		// Sparse false and every sparse descriptor zero, or
 		// spec.Validate refuses the bank outright.
-		if b.Sparse || b.Groups != 0 || b.PerGroup != 0 || b.Budget != 0 {
+		if b.Sparse || b.Groups != 0 || b.GroupBase != 0 || b.PerGroup != 0 || b.ChannelBase != 0 || b.Budget != 0 || b.BudgetUnstated {
 			t.Errorf("%s profile: CALL bank carries a sparse descriptor (%v/%d/%d/%d) — it is dense", name, b.Sparse, b.Groups, b.PerGroup, b.Budget)
 		}
 	}
@@ -202,9 +206,29 @@ var deliberatelyZero = []struct {
 		"as ShiftOptions: this radio expresses tone_mode instead"},
 	{"len(RequiredSlots)", func(c spec.Capabilities) int { return len(c.RequiredSlots) },
 		"no individual slot on this radio is documented as never-empty; the CALL BANK's NoBlank carries what is claimed, and claims nothing per-slot"},
+	{"len(TuningSteps)", func(c spec.Capabilities) int { return len(c.TuningSteps) },
+		"additions design D8 — this record carries no receiver tuning-step field"},
+	{"ProgramTuningStepRange", func(c spec.Capabilities) int {
+		if c.ProgramTuningStepRange == nil {
+			return 0
+		}
+		return 1
+	},
+		"additions design D8 — this record carries no programmable tuning-step field"},
+	{"len(AttenuatorDB)", func(c spec.Capabilities) int { return len(c.AttenuatorDB) },
+		"additions design D8 — this record carries no attenuator field"},
+	{"len(PreampOptions)", func(c spec.Capabilities) int { return len(c.PreampOptions) },
+		"additions design D8 — this record carries no preamp field"},
+	{"len(AntennaOptions)", func(c spec.Capabilities) int { return len(c.AntennaOptions) },
+		"additions design D8 — this record carries no antenna field"},
 }
 
 func TestDeliberateZerosAreAudited(t *testing.T) {
+	// The audit covers all 28 top-level capabilities plus the two sparse
+	// numbering bases pinned by TestMemBankIsSparseWithTheRecordedSpace.
+	if got := reflect.TypeOf(spec.Capabilities{}).NumField() + 2; got != 30 {
+		t.Fatalf("capability/base audit has %d fields, this audit knows 30", got)
+	}
 	for name, caps := range bothProfiles() {
 		for _, z := range deliberatelyZero {
 			if got := z.value(caps); got != 0 {

@@ -5,8 +5,10 @@ package ic905
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -686,12 +688,28 @@ func TestE2E_TenGigahertzReadsAndIsRefusedOnWrite(t *testing.T) {
 	if err := codeplug.Save(dir+"/cp.json", cp); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
+	// Probe the bytes before Load migrates Schema to CurrentSchema. This
+	// pins the lowest-schema rule: Unavailable D8 fields remain unrecorded,
+	// while the 10 GHz frequency still requires the frozen schema 4 shape.
+	raw, err := os.ReadFile(dir + "/cp.json")
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	var probe struct {
+		Schema int `json:"schema"`
+	}
+	if err := json.Unmarshal(raw, &probe); err != nil {
+		t.Fatalf("probing saved schema: %v", err)
+	}
+	if probe.Schema != 4 {
+		t.Errorf("the saved file is schema %d, want 4 — a frequency past uint32 forces it (D4)", probe.Schema)
+	}
 	back, err := codeplug.Load(dir + "/cp.json")
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if back.Schema != 4 {
-		t.Errorf("the saved file is schema %d, want 4 — a frequency past uint32 forces it (D4)", back.Schema)
+	if back.Schema != codeplug.CurrentSchema {
+		t.Errorf("the loaded codeplug schema is %d, want migrated schema %d", back.Schema, codeplug.CurrentSchema)
 	}
 	if back.Channels[0].Data.FreqHz != 10_250_000_000 {
 		t.Errorf("after a round trip FreqHz = %d", back.Channels[0].Data.FreqHz)
