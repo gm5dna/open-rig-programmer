@@ -325,6 +325,34 @@ func TestE2E_ReadAllWalksEveryDeclaredSlot(t *testing.T) {
 		if ch.Data.Mode != "FM" || ch.Data.Filter.Value != "FIL1" {
 			t.Errorf("%s = mode %q filter %+v, want FM/FIL1 — the tier fields survive the round trip too", ch.Slot, ch.Data.Mode, ch.Data.Filter)
 		}
+		// EVERY TIER FIELD THE SEED CARRIES, not a sample of them. The
+		// seeded record holds 88.5 Hz on both tones, DTCS 023 NN, duplex
+		// OFF, tone mode OFF and data mode OFF; a read that quietly turned
+		// any of them Unknown — which is exactly what a tone domain too
+		// narrow for the radio's own chart does, since Session.toneField
+		// downgrades a tone the capabilities will not admit — would have
+		// passed a mode-and-filter check unnoticed.
+		if ch.Data.ToneTx.State != codeplug.Known || ch.Data.ToneTx.Value != 885 {
+			t.Errorf("%s: ToneTx = %+v, want Known 885 — the seed's 88.5 Hz", ch.Slot, ch.Data.ToneTx)
+		}
+		if ch.Data.ToneRx.State != codeplug.Known || ch.Data.ToneRx.Value != 885 {
+			t.Errorf("%s: ToneRx = %+v, want Known 885 — the seed's 88.5 Hz", ch.Slot, ch.Data.ToneRx)
+		}
+		if ch.Data.DTCSCode.State != codeplug.Known || ch.Data.DTCSCode.Value != 23 {
+			t.Errorf("%s: DTCSCode = %+v, want Known 23 — the seed's 023", ch.Slot, ch.Data.DTCSCode)
+		}
+		if ch.Data.DTCSPolarity.State != codeplug.Known || ch.Data.DTCSPolarity.Value != "NN" {
+			t.Errorf("%s: DTCSPolarity = %+v, want Known NN", ch.Slot, ch.Data.DTCSPolarity)
+		}
+		if ch.Data.Duplex.State != codeplug.Known || ch.Data.Duplex.Value != "OFF" {
+			t.Errorf("%s: Duplex = %+v, want Known OFF", ch.Slot, ch.Data.Duplex)
+		}
+		if ch.Data.ToneMode.State != codeplug.Known || ch.Data.ToneMode.Value != "OFF" {
+			t.Errorf("%s: ToneMode = %+v, want Known OFF", ch.Slot, ch.Data.ToneMode)
+		}
+		if ch.Data.DataMode.State != codeplug.Known || ch.Data.DataMode.Value {
+			t.Errorf("%s: DataMode = %+v, want Known false", ch.Slot, ch.Data.DataMode)
+		}
 		if ch.Data.OffsetHz.State != codeplug.Known || ch.Data.OffsetHz.Value != 600_000 {
 			t.Errorf("%s: OffsetHz = %+v, want Known 600000", ch.Slot, ch.Data.OffsetHz)
 		}

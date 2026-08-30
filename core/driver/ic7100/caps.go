@@ -118,10 +118,15 @@ func capabilities(write spec.Support) spec.Capabilities {
 		ClarMaxHz:  0,   // Matrix §1 row 6: no per-channel clarifier field.
 		ClarStepHz: 0,   // Matrix §1 row 7: no per-channel clarifier field.
 		CTCSSTones: nil, // Matrix §1 row 8: the wire carries a number, not a table index.
-		// Matrix §1 row 9: the exact Stage-1 endpoint-only ASSUMED policy,
-		// pinned to register entry ic7100-tone-range-step; this is not a
-		// claim that the irregular 50-tone chart is arithmetic.
-		CTCSSToneRange: &spec.ToneRange{MinDeciHz: 670, MaxDeciHz: 2541, StepDeciHz: civic7100.CTCSSStepDeciHz},
+		// Matrix §1 row 9 / §3.16.2, first candidate: the chart's evidenced
+		// bounds — 67.0 to 254.1 Hz, PDF p.91 — at the WIRE FIELD'S OWN
+		// 0.1 Hz resolution, which is what this range describes. It is not
+		// a claim that the printed 50-tone chart is arithmetic; the chart's
+		// tones all fall inside it, and TestCTCSSToneDomainAdmitsEveryChartTone
+		// pins that every one of them is admitted. Whether the radio also
+		// accepts an off-chart tenth of a hertz between the bounds is the
+		// open question, register entry ic7100-tone-range-step.
+		CTCSSToneRange: &spec.ToneRange{MinDeciHz: 670, MaxDeciHz: 2541, StepDeciHz: 1},
 
 		Bauds: append([]int(nil), baudRates...), // Matrix §1 row 10.
 		// Matrix §1 row 11: 19200 is the highest documented numeric rate;

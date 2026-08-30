@@ -129,21 +129,42 @@ func TestRecordFixedTemplate(t *testing.T) {
 }
 
 func TestRecordToneRangeDecision(t *testing.T) {
-	// ASSUMED/open decision: ic7100-tone-range-step. ToneRange cannot
-	// describe the irregular 50-tone chart exactly, so this policy admits
-	// only its two evidenced endpoints and deliberately rejects even an
-	// intermediate chart tone until the named all-tones hardware lift.
-	caps := spec.Capabilities{CTCSSToneRange: &spec.ToneRange{
-		MinDeciHz: 670, MaxDeciHz: 2541, StepDeciHz: CTCSSStepDeciHz,
-	}}
-	for _, tc := range []struct {
-		tone spec.Tone
-		want bool
-	}{
-		{670, true}, {2541, true}, {693, false}, {884, false}, {885, false},
-	} {
-		if got := caps.AdmitsTone(tc.tone); got != tc.want {
-			t.Errorf("AdmitsTone(%v) = %t, want %t", tc.tone, got, tc.want)
+	// THE WIRE FIELD IS A NUMBER, and this is the dialect's own evidence
+	// for saying so: spans ⑮–⑰ and ⑱–⑳ are three-byte packed BCD in
+	// TENTHS OF A HERTZ, so every one of the 50 tones printed on PDF p.91
+	// — 67.0 to 254.1 Hz, the family-standard chart — is expressible here,
+	// byte for byte, and comes back unchanged. Nothing about the chart's
+	// irregular spacing is encoded in the record.
+	//
+	// The capability declaration that rests on this evidence belongs to
+	// the driver, not to this package: core/driver/ic7100's
+	// TestCTCSSToneDomainAdmitsEveryChartTone pins the domain, and
+	// register entry ic7100-tone-range-step remains the open question of
+	// whether the radio also accepts an OFF-CHART tenth of a hertz
+	// between those bounds.
+	for i, tone := range spec.StandardCTCSSTones() {
+		rec := knownRecord()
+		rec.ToneTXDeciHz = civ.Available(uint64(tone))
+		rec.ToneRXDeciHz = civ.Available(uint64(tone))
+		cmd, err := Profile().BuildMemorySet(rec)
+		if err != nil {
+			t.Fatalf("BuildMemorySet(tone %v): %v", tone, err)
+		}
+		frame := cmd.Bytes()
+		record := frame[6+AddressBytes : len(frame)-1]
+		want := []byte{0x00, byte(tone/1000)<<4 | byte(tone/100%10), byte(tone/10%10)<<4 | byte(tone%10)}
+		if got := record[11:14]; !bytes.Equal(got, want) {
+			t.Errorf("chart tone %d (%v) TX bytes = % X, want % X", i, tone, got, want)
+		}
+		if got := record[14:17]; !bytes.Equal(got, want) {
+			t.Errorf("chart tone %d (%v) RX bytes = % X, want % X", i, tone, got, want)
+		}
+		back, err := Profile().ParseMemoryAnswer(answerFrameFromSet(t, frame))
+		if err != nil {
+			t.Fatalf("ParseMemoryAnswer(tone %v): %v", tone, err)
+		}
+		if back != rec {
+			t.Errorf("chart tone %d (%v) did not survive the round trip:\n got %+v\nwant %+v", i, tone, back, rec)
 		}
 	}
 }
