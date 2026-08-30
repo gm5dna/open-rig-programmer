@@ -221,6 +221,72 @@ func TestGetSupportedModels_ContainsDefaultModel(t *testing.T) {
 	if !foundIC905 {
 		t.Errorf("GetSupportedModels() = %v, want it to contain wiring.IC905Model %q", got, wiring.IC905Model)
 	}
+	// The IC-7851 and IC-7850 (Tier 4b), on the same explicit membership
+	// footing as every other Icom model above — and BOTH are asserted,
+	// because these two rows are served by ONE driver package: a
+	// registration that added the constant and the driver but only ONE
+	// registry row would build, would pass every per-model test the other
+	// row has, and would leave the second radio unselectable in the
+	// picker. That is precisely the failure this loop exists to catch.
+	foundIC7851 := false
+	for _, m := range got {
+		if m == wiring.IC7851Model {
+			foundIC7851 = true
+		}
+	}
+	if !foundIC7851 {
+		t.Errorf("GetSupportedModels() = %v, want it to contain wiring.IC7851Model %q", got, wiring.IC7851Model)
+	}
+	foundIC7850 := false
+	for _, m := range got {
+		if m == wiring.IC7850Model {
+			foundIC7850 = true
+		}
+	}
+	if !foundIC7850 {
+		t.Errorf("GetSupportedModels() = %v, want it to contain wiring.IC7850Model %q", got, wiring.IC7850Model)
+	}
+	// The IC-7760 (Tier 4b's second registration), on the same explicit
+	// membership footing: the picker is fed entirely by this list, so a
+	// registration that added the constant, the driver and the fake but
+	// left the row out of the registry would build, would pass every
+	// other test in this file, and would leave the radio unselectable.
+	foundIC7760 := false
+	for _, m := range got {
+		if m == wiring.IC7760Model {
+			foundIC7760 = true
+		}
+	}
+	if !foundIC7760 {
+		t.Errorf("GetSupportedModels() = %v, want it to contain wiring.IC7760Model %q", got, wiring.IC7760Model)
+	}
+	// The IC-7100 (Tier 4b's third registration), on the same explicit
+	// membership footing and for the same reason: a registration that
+	// added the constant, the driver and the fake but left the row out of
+	// the registry would build, would pass every other test in this file,
+	// and would leave the radio unselectable.
+	foundIC7100 := false
+	for _, m := range got {
+		if m == wiring.IC7100Model {
+			foundIC7100 = true
+		}
+	}
+	if !foundIC7100 {
+		t.Errorf("GetSupportedModels() = %v, want it to contain wiring.IC7100Model %q", got, wiring.IC7100Model)
+	}
+	// The IC-R8600 (Tier 4b's fourth and last registration), on the same
+	// explicit membership footing and for the same reason — with one
+	// extra: it is the only RECEIVER this program offers, so a picker
+	// missing it hides the whole class rather than one more transceiver.
+	foundICR8600 := false
+	for _, m := range got {
+		if m == wiring.ICR8600Model {
+			foundICR8600 = true
+		}
+	}
+	if !foundICR8600 {
+		t.Errorf("GetSupportedModels() = %v, want it to contain wiring.ICR8600Model %q", got, wiring.ICR8600Model)
+	}
 }
 
 // TestConnect_EmptyModelIsTheDefaultModel pins Connect/ConnectDemo's new

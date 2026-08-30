@@ -42,19 +42,25 @@ func TestWriteTrialsComplete_PinnedFalse(t *testing.T) {
 	}
 }
 
-// tierFieldsMustBeEmpty names the SIX spec.Capabilities fields this
-// matrix grades as a WRITTEN-DOWN ZERO for this radio, each with the row
+// tierFieldsMustBeEmpty names the ELEVEN spec.Capabilities fields this
+// matrix (six, from the Icom tier) and the additions design's D8 (five
+// receiver vocabularies) grade as a WRITTEN-DOWN ZERO for this radio, each with the row
 // that grades it. Empty is the decision; populating one would be the
 // mistake, so the rule is inverted for these rather than waived.
 //
 // REV 1 said "five" over a list of six (Fable F11(a)); there are six.
 var tierFieldsMustBeEmpty = map[string]string{
-	"ClarMaxHz":     "matrix section 1 row 6 — the 1A 00 record carries no clarifier/RIT field",
-	"ClarStepHz":    "matrix section 1 row 7 — the same absence, graded separately because they are separate struct fields",
-	"CTCSSTones":    "matrix section 1 row 8 — the tone is a BCD frequency, not an index into a chart; the numeric CTCSSToneRange carries it instead",
-	"RequiredSlots": "matrix section 1 row 13 — this radio's non-clearable set is a whole bank (Bank.NoBlank on CALL), not an individual-slot list",
-	"ShiftOptions":  "matrix section 1 row 14 — superseded by DuplexOptions; the two vocabularies never coexist on one model (D4)",
-	"CTCSSStates":   "matrix section 1 row 15 — superseded by ToneModes, whose vocabulary has eight values, not three",
+	"ClarMaxHz":              "matrix section 1 row 6 — the 1A 00 record carries no clarifier/RIT field",
+	"ClarStepHz":             "matrix section 1 row 7 — the same absence, graded separately because they are separate struct fields",
+	"CTCSSTones":             "matrix section 1 row 8 — the tone is a BCD frequency, not an index into a chart; the numeric CTCSSToneRange carries it instead",
+	"RequiredSlots":          "matrix section 1 row 13 — this radio's non-clearable set is a whole bank (Bank.NoBlank on CALL), not an individual-slot list",
+	"ShiftOptions":           "matrix section 1 row 14 — superseded by DuplexOptions; the two vocabularies never coexist on one model (D4)",
+	"CTCSSStates":            "matrix section 1 row 15 — superseded by ToneModes, whose vocabulary has eight values, not three",
+	"TuningSteps":            "additions design D8 — this record predates the receiver extension and carries no tuning-step field",
+	"ProgramTuningStepRange": "additions design D8 — this record carries no programmable tuning-step field",
+	"AttenuatorDB":           "additions design D8 — this record carries no attenuator field",
+	"PreampOptions":          "additions design D8 — this record carries no preamp field",
+	"AntennaOptions":         "additions design D8 — this record carries no antenna field",
 }
 
 // TestCapabilities_EveryFieldExplicit reflects over spec.Capabilities and
@@ -64,12 +70,13 @@ var tierFieldsMustBeEmpty = map[string]string{
 // truncate every name to nothing, and a non-positive baud reaches
 // transport.OpenSerial's silent substitution.
 //
-// The six fields tierFieldsMustBeEmpty names are inverted rather than
-// waived: they must be EMPTY, and the test fails if one is ever filled
+// The eleven fields tierFieldsMustBeEmpty names are inverted rather
+// than waived: they must be EMPTY, and the test fails if one is ever filled
 // in.
 func TestCapabilities_EveryFieldExplicit(t *testing.T) {
-	// 22 since Wave 2.5's E3 added CTCSSToneRange.
-	const wantFieldCount = 22
+	// Twenty-eight top-level fields plus GroupBase and ChannelBase, which
+	// TestBanks_ShapeAndSparseDescriptors audits on the nested sparse bank.
+	const wantFieldCount = 30
 
 	for _, tt := range []struct {
 		name string
@@ -81,8 +88,8 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			v := reflect.ValueOf(tt.caps)
 			typ := v.Type()
-			if typ.NumField() != wantFieldCount {
-				t.Fatalf("spec.Capabilities has %d fields, this test knows %d — a field was added or removed and this driver must decide about it explicitly, not inherit a zero", typ.NumField(), wantFieldCount)
+			if got := typ.NumField() + 2; got != wantFieldCount {
+				t.Fatalf("capability/base audit has %d fields, this test knows %d — a field was added or removed and this driver must decide about it explicitly, not inherit a zero", got, wantFieldCount)
 			}
 			for i := 0; i < typ.NumField(); i++ {
 				name := typ.Field(i).Name
@@ -246,6 +253,9 @@ func TestBanks_ShapeAndSparseDescriptors(t *testing.T) {
 		t.Errorf("MEM = {Sparse:%v Groups:%d PerGroup:%d Budget:%d}, want {true 100 100 500} (matrix section 1b; the budget is ASSUMED, ic905.group_budget, lift ic905-R-09)",
 			mem.Sparse, mem.Groups, mem.PerGroup, mem.Budget)
 	}
+	if mem.GroupBase != 1 || mem.ChannelBase != 1 {
+		t.Errorf("MEM bases = %d/%d, want 1/1 so G01-001 remains the first radio slot", mem.GroupBase, mem.ChannelBase)
+	}
 	if mem.NoBlank {
 		t.Error("MEM NoBlank is true — the clear form explicitly admits memory groups 00 00 ~ 00 99 (PDF p.19, folio 18)")
 	}
@@ -257,7 +267,7 @@ func TestBanks_ShapeAndSparseDescriptors(t *testing.T) {
 	if !ok {
 		t.Fatal("no CALL bank")
 	}
-	if call.Sparse || call.Groups != 0 || call.PerGroup != 0 || call.Budget != 0 {
+	if call.Sparse || call.Groups != 0 || call.GroupBase != 0 || call.PerGroup != 0 || call.ChannelBase != 0 || call.Budget != 0 || call.BudgetUnstated {
 		t.Errorf("CALL = {Sparse:%v Groups:%d PerGroup:%d Budget:%d}, want a dense bank with all three descriptors zero", call.Sparse, call.Groups, call.PerGroup, call.Budget)
 	}
 	if !call.NoBlank {
@@ -291,6 +301,15 @@ var fieldGrid = []struct {
 	{spec.FieldScanSkip, false, "row 9 — CHOICE zero: byte (5)'s star nibble is SELECT-group membership and is NEVER mapped as skip on an Icom"},
 	{spec.FieldErase, false, "row 10 — CHOICE zero, tier-wide: no clear builder, no clear frame, and ConsentUnverifiedWrites structurally never consents erase"},
 	{spec.FieldTxFrequency, false, "row 11 — MANUAL-EVIDENCED zero: no TX frequency field and no duplicated TX block"},
+	// The seven receiver per-channel fields the additions design (D8)
+	// minted for the IC-R8600 — none has a byte in this record.
+	{spec.FieldTuningStepEnabled, false, "additions design D8 — no tuning-step function byte in this record"},
+	{spec.FieldTuningStep, false, "additions design D8 — no tuning-step code byte in this record"},
+	{spec.FieldProgramTuningStep, false, "additions design D8 — no programmable tuning-step field in this record"},
+	{spec.FieldAttenuator, false, "additions design D8 — no attenuator byte in this record"},
+	{spec.FieldPreamp, false, "additions design D8 — no preamp byte in this record"},
+	{spec.FieldAntenna, false, "additions design D8 — no antenna byte in this record"},
+	{spec.FieldIPPlus, false, "additions design D8 — no IP+ byte in this record"},
 	{spec.FieldDuplex, true, "row 12 — byte (14) high nibble"},
 	{spec.FieldOffset, true, "row 13 — bytes (26)~(28)"},
 	{spec.FieldToneMode, true, "row 14 — byte (14) low nibble"},
@@ -309,8 +328,11 @@ var fieldGrid = []struct {
 // ctcss_state, ctcss_tone, clarifier, tag_display and tx_frequency —
 // eight written-down zeros, each named in fieldGrid with its row.
 func TestFieldGrid_MatchesTheMatrix(t *testing.T) {
-	if len(fieldGrid) != 20 {
-		t.Fatalf("fieldGrid has %d rows, want the twenty spec.Fields this project models", len(fieldGrid))
+	// Twenty until the additions design's D8 minted seven receiver
+	// fields (28/08/2026); every one of those is a written-down zero on
+	// this transceiver, graded above.
+	if len(fieldGrid) != 27 {
+		t.Fatalf("fieldGrid has %d rows, want the twenty-seven spec.Fields this project models", len(fieldGrid))
 	}
 
 	for _, prof := range []struct {

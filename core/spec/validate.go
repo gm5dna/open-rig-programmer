@@ -133,7 +133,7 @@ func validDuplexDirection(d DuplexDirection) bool {
 // value) is deliberately excluded.
 func validToneModeSemantics(s ToneModeSemantics) bool {
 	switch s {
-	case ToneModeOff, ToneModeCTCSS, ToneModeCTCSSSquelch, ToneModeDTCS, ToneModeCross:
+	case ToneModeOff, ToneModeCTCSS, ToneModeCTCSSSquelch, ToneModeCTCSSRxSquelch, ToneModeDTCS, ToneModeCross:
 		return true
 	default:
 		return false
@@ -276,6 +276,9 @@ func (c Capabilities) Validate() error {
 	if c.CATID == "" {
 		problems = append(problems, "CATID must not be empty")
 	}
+	if c.Transmit != HasTransmitter && c.Transmit != ReceiveOnly {
+		problems = append(problems, "Transmit must be declared as HasTransmitter or ReceiveOnly")
+	}
 	// A TagLen of zero (or less) is not "no tag support" — core/csvio's
 	// CHIRP import truncates every imported name to b[:caps.TagLen], so a
 	// zero TagLen silently discards every channel name to "" and reports
@@ -296,11 +299,19 @@ func (c Capabilities) Validate() error {
 		seenBank[b.ID] = true
 
 		// The sparse-space descriptor's own consistency (design D4,
-		// adjudication 7): Sparse/Groups/PerGroup/Budget are legal only
-		// together, and all zero without Sparse. Every bank registered
-		// before the Icom tier leaves all four at their zero values and
-		// so contributes nothing here.
+		// adjudication 7; additions D3.4 and Erratum 2): Sparse, Groups,
+		// PerGroup, exactly one of Budget/BudgetUnstated, and the
+		// GroupBase/ChannelBase pair are legal only together, and all zero
+		// without Sparse. Every bank registered before the Icom tier
+		// leaves them at their zero values and so contributes nothing here.
 		problems = append(problems, b.sparseProblems()...)
+		if c.Transmit == ReceiveOnly {
+			for _, field := range []Field{FieldTxFrequency, FieldToneTx} {
+				if b.Fields[field] != (FieldSupport{}) {
+					problems = append(problems, fmt.Sprintf("bank %s field %s must have zero FieldSupport on a ReceiveOnly radio", b.ID, field))
+				}
+			}
+		}
 
 		for _, slot := range b.Slots {
 			if slot == "" {
@@ -378,6 +389,12 @@ func (c Capabilities) Validate() error {
 			problems = append(problems, fmt.Sprintf("DTCSCodes is not strictly ascending at index %d (%d >= %d)", i, c.DTCSCodes[i-1], c.DTCSCodes[i]))
 		}
 	}
+	for i := 1; i < len(c.AttenuatorDB); i++ {
+		if c.AttenuatorDB[i-1] >= c.AttenuatorDB[i] {
+			problems = append(problems, fmt.Sprintf("AttenuatorDB is not strictly ascending at index %d (%d >= %d)", i, c.AttenuatorDB[i-1], c.AttenuatorDB[i]))
+		}
+	}
+	problems = append(problems, c.programTuningStepRangeProblems()...)
 
 	for _, requiredSlot := range c.RequiredSlots {
 		found := false
@@ -493,17 +510,48 @@ func (c Capabilities) Validate() error {
 		if !validToneModeSemantics(m.Semantics) {
 			problems = append(problems, fmt.Sprintf("ToneModes %q has invalid Semantics %d", m.Value, m.Semantics))
 		}
+		if c.Transmit == ReceiveOnly && m.NeedsTxTone() {
+			problems = append(problems, fmt.Sprintf("ToneModes %q has NeedsTxTone semantics on a ReceiveOnly radio", m.Value))
+		}
 	}
 	// The canonical rule again, on the other Icom vocabulary.
 	problems = append(problems, canonicalProblems("ToneModes", "semantics", toneModeCanonicalGroups(c.ToneModes))...)
 
 	problems = append(problems, validateVocabEntries("DTCSPolarities", c.DTCSPolarities)...)
 	problems = append(problems, validateVocabEntries("Filters", c.Filters)...)
+	problems = append(problems, validateVocabEntries("TuningSteps", c.TuningSteps)...)
+	problems = append(problems, validateVocabEntries("PreampOptions", c.PreampOptions)...)
+	problems = append(problems, validateVocabEntries("AntennaOptions", c.AntennaOptions)...)
 
 	if len(problems) == 0 {
 		return nil
 	}
 	return fmt.Errorf("spec: Capabilities.Validate: %s", strings.Join(problems, "; "))
+}
+
+// programTuningStepRangeProblems checks the optional D8 programmable-step
+// domain. Both bounds are aligned to zero, not merely to each other: they
+// are complete step values in hertz, and the radio's resolution describes
+// which absolute values it can encode.
+func (c Capabilities) programTuningStepRangeProblems() []string {
+	r := c.ProgramTuningStepRange
+	if r == nil {
+		return nil
+	}
+	var problems []string
+	if r.ResolutionHz == 0 {
+		problems = append(problems, "ProgramTuningStepRange.ResolutionHz 0 must be greater than zero")
+	}
+	if r.MinHz > r.MaxHz {
+		problems = append(problems, fmt.Sprintf("ProgramTuningStepRange.MinHz %d is greater than MaxHz %d", r.MinHz, r.MaxHz))
+	}
+	if r.ResolutionHz > 0 && r.MinHz%r.ResolutionHz != 0 {
+		problems = append(problems, fmt.Sprintf("ProgramTuningStepRange.MinHz %d is not aligned to ResolutionHz %d", r.MinHz, r.ResolutionHz))
+	}
+	if r.ResolutionHz > 0 && r.MaxHz%r.ResolutionHz != 0 {
+		problems = append(problems, fmt.Sprintf("ProgramTuningStepRange.MaxHz %d is not aligned to ResolutionHz %d", r.MaxHz, r.ResolutionHz))
+	}
+	return problems
 }
 
 // toneRangeProblems checks the optional numeric tone domain

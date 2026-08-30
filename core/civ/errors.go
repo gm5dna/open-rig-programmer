@@ -73,9 +73,15 @@ type RecordLengthError struct {
 	Want []int
 	// Got is the length that arrived.
 	Got int
+	// Mode is the selected mode class when a mode-keyed layout required a
+	// different length. Empty for the two length discriminators.
+	Mode string
 }
 
 func (e *RecordLengthError) Error() string {
+	if e.Mode != "" {
+		return fmt.Sprintf("civ: memory record for mode %s is %d bytes, want one of %v", e.Mode, e.Got, e.Want)
+	}
 	return fmt.Sprintf("civ: memory record is %d bytes, want one of %v", e.Got, e.Want)
 }
 

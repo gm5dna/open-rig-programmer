@@ -423,7 +423,8 @@ func validateChannelData(slot string, bank spec.BankID, d ChannelData, caps spec
 	return issues
 }
 
-// validateTierFields checks the ten fields the Icom tier added, and it
+// validateTierFields checks the seventeen fields the two Icom model
+// extensions added, and it
 // checks each one ONLY when this bank can reach it
 // (spec.FieldSupport.Unreachable false — design D4, adjudication 16).
 //
@@ -468,36 +469,137 @@ func validateTierFields(slot string, bank spec.BankID, d ChannelData, caps spec.
 		})
 		return true
 	}
+	// A field this bank CANNOT reach may not RECORD anything. Known and
+	// Unknown are both claims about anatomy the radio does not possess,
+	// and until the tier review's M1 this function ignored such a field
+	// entirely — so a channel built anywhere but by a read could carry one
+	// past the send gate. The native CSV importer is the reachable route:
+	// it parses tx_frequency and tone_tx capability-blind, by design (it
+	// holds no caps), and NormaliseTierFields only ever resolves ABSENT,
+	// so a hand-edited spreadsheet cell survives to here.
+	//
+	// ABSENT IS DELIBERATELY NOT CAUGHT, and the asymmetry with the
+	// reachable case above is the point. Absent says nothing, and on an
+	// unreachable field saying nothing is the state every pre-tier radio's
+	// hand-built channel is in before NormaliseTierFields resolves it to
+	// Unavailable — the state this function is documented to contribute
+	// NOTHING for. Refusing it would change the pre-tier Issue list, which
+	// this function may not do. Recorded (FieldState.Recorded) is
+	// therefore the test: a claim, not a silence.
+	//
+	// The receive-only wording is the anatomical one and is the string
+	// core/csvio/chirp.go already gives a receiver asked for CHIRP's split
+	// duplex, so the two format boundaries cannot come to describe the
+	// same missing transmitter in two different ways.
+	//
+	// Pinned by TestValidateTierFields_UnreachableFieldMayOnlySayUnavailable
+	// and, at the format boundary,
+	// core/csvio.TestImport_ReceiveOnlyTxFrequencyIsRefusedOnValidation.
+	unreachableClaim := func(f spec.Field, state FieldState) {
+		if !state.Recorded() {
+			return
+		}
+		msg := fmt.Sprintf("slot %q: this radio has no %s field, but this channel records one", slot, f)
+		if caps.Transmit == spec.ReceiveOnly && (f == spec.FieldTxFrequency || f == spec.FieldToneTx) {
+			msg = fmt.Sprintf("slot %q: this radio has no transmitter", slot)
+		}
+		issues = append(issues, Issue{
+			Slot: slot, Field: f, Severity: SeverityError, Msg: msg,
+		})
+	}
 
-	if reachable(spec.FieldTxFrequency) && !absent(spec.FieldTxFrequency, d.TxFreqHz.State) {
+	if !reachable(spec.FieldTxFrequency) {
+		unreachableClaim(spec.FieldTxFrequency, d.TxFreqHz.State)
+	} else if !absent(spec.FieldTxFrequency, d.TxFreqHz.State) {
 		add(spec.FieldTxFrequency, d.TxFreqHz.Valid())
 	}
-	if reachable(spec.FieldDuplex) && !absent(spec.FieldDuplex, d.Duplex.State) {
+	if !reachable(spec.FieldDuplex) {
+		unreachableClaim(spec.FieldDuplex, d.Duplex.State)
+	} else if !absent(spec.FieldDuplex, d.Duplex.State) {
 		add(spec.FieldDuplex, d.Duplex.Valid(duplexOptionValues(caps.DuplexOptions)))
 	}
-	if reachable(spec.FieldOffset) && !absent(spec.FieldOffset, d.OffsetHz.State) {
+	if !reachable(spec.FieldOffset) {
+		unreachableClaim(spec.FieldOffset, d.OffsetHz.State)
+	} else if !absent(spec.FieldOffset, d.OffsetHz.State) {
 		add(spec.FieldOffset, d.OffsetHz.Valid())
 	}
-	if reachable(spec.FieldToneMode) && !absent(spec.FieldToneMode, d.ToneMode.State) {
+	if !reachable(spec.FieldToneMode) {
+		unreachableClaim(spec.FieldToneMode, d.ToneMode.State)
+	} else if !absent(spec.FieldToneMode, d.ToneMode.State) {
 		add(spec.FieldToneMode, d.ToneMode.Valid(toneModeValues(caps.ToneModes)))
 	}
-	if reachable(spec.FieldToneTx) && !absent(spec.FieldToneTx, d.ToneTx.State) {
+	if !reachable(spec.FieldToneTx) {
+		unreachableClaim(spec.FieldToneTx, d.ToneTx.State)
+	} else if !absent(spec.FieldToneTx, d.ToneTx.State) {
 		add(spec.FieldToneTx, d.ToneTx.Valid(caps))
 	}
-	if reachable(spec.FieldToneRx) && !absent(spec.FieldToneRx, d.ToneRx.State) {
+	if !reachable(spec.FieldToneRx) {
+		unreachableClaim(spec.FieldToneRx, d.ToneRx.State)
+	} else if !absent(spec.FieldToneRx, d.ToneRx.State) {
 		add(spec.FieldToneRx, d.ToneRx.Valid(caps))
 	}
-	if reachable(spec.FieldDTCSCode) && !absent(spec.FieldDTCSCode, d.DTCSCode.State) {
+	if !reachable(spec.FieldDTCSCode) {
+		unreachableClaim(spec.FieldDTCSCode, d.DTCSCode.State)
+	} else if !absent(spec.FieldDTCSCode, d.DTCSCode.State) {
 		add(spec.FieldDTCSCode, d.DTCSCode.Valid(caps.DTCSCodes))
 	}
-	if reachable(spec.FieldDTCSPolarity) && !absent(spec.FieldDTCSPolarity, d.DTCSPolarity.State) {
+	if !reachable(spec.FieldDTCSPolarity) {
+		unreachableClaim(spec.FieldDTCSPolarity, d.DTCSPolarity.State)
+	} else if !absent(spec.FieldDTCSPolarity, d.DTCSPolarity.State) {
 		add(spec.FieldDTCSPolarity, d.DTCSPolarity.Valid(caps.DTCSPolarities))
 	}
-	if reachable(spec.FieldFilter) && !absent(spec.FieldFilter, d.Filter.State) {
+	if !reachable(spec.FieldFilter) {
+		unreachableClaim(spec.FieldFilter, d.Filter.State)
+	} else if !absent(spec.FieldFilter, d.Filter.State) {
 		add(spec.FieldFilter, d.Filter.Valid(caps.Filters))
 	}
-	if reachable(spec.FieldDataMode) && !absent(spec.FieldDataMode, d.DataMode.State) {
+	if !reachable(spec.FieldDataMode) {
+		unreachableClaim(spec.FieldDataMode, d.DataMode.State)
+	} else if !absent(spec.FieldDataMode, d.DataMode.State) {
 		add(spec.FieldDataMode, d.DataMode.Valid())
+	}
+	if !reachable(spec.FieldTuningStepEnabled) {
+		unreachableClaim(spec.FieldTuningStepEnabled, d.TuningStepEnabled.State)
+	} else if !absent(spec.FieldTuningStepEnabled, d.TuningStepEnabled.State) {
+		add(spec.FieldTuningStepEnabled, d.TuningStepEnabled.Valid())
+	}
+	if !reachable(spec.FieldTuningStep) {
+		unreachableClaim(spec.FieldTuningStep, d.TuningStep.State)
+	} else if !absent(spec.FieldTuningStep, d.TuningStep.State) {
+		add(spec.FieldTuningStep, d.TuningStep.Valid(caps.TuningSteps))
+	}
+	if !reachable(spec.FieldProgramTuningStep) {
+		unreachableClaim(spec.FieldProgramTuningStep, d.ProgramTuningStepHz.State)
+	} else if !absent(spec.FieldProgramTuningStep, d.ProgramTuningStepHz.State) {
+		if err := d.ProgramTuningStepHz.Valid(); err != nil {
+			add(spec.FieldProgramTuningStep, err)
+		} else if d.ProgramTuningStepHz.State == Known {
+			r := caps.ProgramTuningStepRange
+			v := d.ProgramTuningStepHz.Value
+			if r == nil || r.ResolutionHz == 0 || v < r.MinHz || v > r.MaxHz || v%r.ResolutionHz != 0 {
+				add(spec.FieldProgramTuningStep, fmt.Errorf("codeplug: FreqField: Known value %d Hz is not admitted by this radio's range", v))
+			}
+		}
+	}
+	if !reachable(spec.FieldAttenuator) {
+		unreachableClaim(spec.FieldAttenuator, d.AttenuatorDB.State)
+	} else if !absent(spec.FieldAttenuator, d.AttenuatorDB.State) {
+		add(spec.FieldAttenuator, d.AttenuatorDB.Valid(caps.AttenuatorDB))
+	}
+	if !reachable(spec.FieldPreamp) {
+		unreachableClaim(spec.FieldPreamp, d.Preamp.State)
+	} else if !absent(spec.FieldPreamp, d.Preamp.State) {
+		add(spec.FieldPreamp, d.Preamp.Valid(caps.PreampOptions))
+	}
+	if !reachable(spec.FieldAntenna) {
+		unreachableClaim(spec.FieldAntenna, d.Antenna.State)
+	} else if !absent(spec.FieldAntenna, d.Antenna.State) {
+		add(spec.FieldAntenna, d.Antenna.Valid(caps.AntennaOptions))
+	}
+	if !reachable(spec.FieldIPPlus) {
+		unreachableClaim(spec.FieldIPPlus, d.IPPlus.State)
+	} else if !absent(spec.FieldIPPlus, d.IPPlus.State) {
+		add(spec.FieldIPPlus, d.IPPlus.Valid())
 	}
 	return issues
 }

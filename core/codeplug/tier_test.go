@@ -60,7 +60,7 @@ func icomTestCapabilities() spec.Capabilities {
 		Banks: []spec.Bank{{
 			ID: spec.BankMemory, Label: "Memories",
 			Slots:  []string{"G01-001", "G01-002"},
-			Sparse: true, Groups: 100, PerGroup: 100, Budget: 3,
+			Sparse: true, Groups: 100, GroupBase: 1, PerGroup: 100, ChannelBase: 1, Budget: 3,
 			Fields: fields,
 		}},
 	}
@@ -70,19 +70,26 @@ func icomTestCapabilities() spec.Capabilities {
 func icomChannelData(freqHz uint64) *ChannelData {
 	return &ChannelData{
 		FreqHz: freqHz, Mode: "FM", Tag: "REPEATER",
-		CTCSSTone:    ToneField{State: Unavailable},
-		TagDisplay:   BoolField{State: Unavailable},
-		ScanSkip:     BoolField{State: Unavailable},
-		TxFreqHz:     FreqField{State: Unknown},
-		Duplex:       StringField{State: Known, Value: "DUP-"},
-		OffsetHz:     FreqField{State: Known, Value: 600_000},
-		ToneMode:     StringField{State: Known, Value: "TSQL"},
-		ToneTx:       ToneField{State: Known, Value: 885},
-		ToneRx:       ToneField{State: Known, Value: 885},
-		DTCSCode:     IntField{State: Unavailable},
-		DTCSPolarity: StringField{State: Unavailable},
-		Filter:       StringField{State: Known, Value: "FIL2"},
-		DataMode:     BoolField{State: Known, Value: false},
+		CTCSSTone:           ToneField{State: Unavailable},
+		TagDisplay:          BoolField{State: Unavailable},
+		ScanSkip:            BoolField{State: Unavailable},
+		TxFreqHz:            FreqField{State: Unknown},
+		Duplex:              StringField{State: Known, Value: "DUP-"},
+		OffsetHz:            FreqField{State: Known, Value: 600_000},
+		ToneMode:            StringField{State: Known, Value: "TSQL"},
+		ToneTx:              ToneField{State: Known, Value: 885},
+		ToneRx:              ToneField{State: Known, Value: 885},
+		DTCSCode:            IntField{State: Unavailable},
+		DTCSPolarity:        StringField{State: Unavailable},
+		Filter:              StringField{State: Known, Value: "FIL2"},
+		DataMode:            BoolField{State: Known, Value: false},
+		TuningStepEnabled:   BoolField{State: Unavailable},
+		TuningStep:          StringField{State: Unavailable},
+		ProgramTuningStepHz: FreqField{State: Unavailable},
+		AttenuatorDB:        IntField{State: Unavailable},
+		Preamp:              StringField{State: Unavailable},
+		Antenna:             StringField{State: Unavailable},
+		IPPlus:              BoolField{State: Unavailable},
 	}
 }
 
@@ -440,6 +447,26 @@ func TestDiff_SparseBudgetEnforcedAtPlanTime(t *testing.T) {
 	}
 }
 
+func TestDiff_SparseBudgetUnstatedSkipsOnlyBudgetRefusal(t *testing.T) {
+	caps := icomTestCapabilities()
+	caps.Banks[0].Budget = 0
+	caps.Banks[0].BudgetUnstated = true
+	baseline := &Codeplug{Schema: CurrentSchema, Channels: []Channel{{Slot: "G01-001"}}}
+	file := &Codeplug{Schema: CurrentSchema, Channels: []Channel{
+		{Slot: "G01-001", Data: icomChannelData(145_500_000)},
+		{Slot: "G01-002", Data: icomChannelData(145_600_000)},
+		{Slot: "G02-001", Data: icomChannelData(145_700_000)},
+		{Slot: "G02-002", Data: icomChannelData(145_800_000)},
+	}}
+	if _, err := Diff(baseline, file, caps); err != nil {
+		t.Fatalf("Diff() with an unstated budget refused occupancy: %v", err)
+	}
+	file.Channels = append(file.Channels, Channel{Slot: "G101-001", Data: icomChannelData(430_000_000)})
+	if _, err := Diff(baseline, file, caps); err == nil {
+		t.Fatal("Diff() admitted an out-of-space slot merely because the occupancy budget was unstated")
+	}
+}
+
 // TestDiff_DenseInventoryMessageUnchanged: with no sparse bank in caps
 // the widened inventory rule reduces to the exact set equality it
 // replaced, and reports the identical error a user may already have
@@ -758,7 +785,7 @@ const v4YaesuBodyNoTierKeys = `{"schema":4,"generator":"test","radio":{"model":"
 	`{"slot":"001","data":{"freq_hz":14250000,"mode":"USB","ctcss":"OFF","ctcss_tone":{"state":"unknown"},"shift":"SIMPLEX","tag":"CALLING","tag_display":{"state":"known"},"scan_skip":{"state":"known"}}},` +
 	`{"slot":"003"}]}`
 
-// tierFieldStates returns d's ten tier-added field states in
+// tierFieldStates returns d's seventeen tier-added field states in
 // ChannelData's declaration order, for asserting on the set as a whole
 // rather than field by field.
 func tierFieldStates(d *ChannelData) []FieldState {
@@ -766,10 +793,13 @@ func tierFieldStates(d *ChannelData) []FieldState {
 		d.TxFreqHz.State, d.Duplex.State, d.OffsetHz.State, d.ToneMode.State,
 		d.ToneTx.State, d.ToneRx.State, d.DTCSCode.State, d.DTCSPolarity.State,
 		d.Filter.State, d.DataMode.State,
+		d.TuningStepEnabled.State, d.TuningStep.State,
+		d.ProgramTuningStepHz.State, d.AttenuatorDB.State,
+		d.Preamp.State, d.Antenna.State, d.IPPlus.State,
 	}
 }
 
-// allTierStates returns the ten-state slice tierFieldStates would return
+// allTierStates returns the seventeen-state slice tierFieldStates returns
 // for a channel every one of whose tier fields is in state s.
 func allTierStates(s FieldState) []FieldState {
 	out := make([]FieldState, len(tierFieldNormalisers))
@@ -790,8 +820,8 @@ func allTierStates(s FieldState) []FieldState {
 // The Absent half is pinned in the same breath: on the zero ChannelData
 // every row must report Absent, since the zero FieldState IS Absent.
 func TestTierFieldNormalisers_AgreeWithTheLegacyMigration(t *testing.T) {
-	if len(tierFieldNormalisers) != 10 {
-		t.Fatalf("tierFieldNormalisers has %d rows, want 10 — the tier added exactly ten fields", len(tierFieldNormalisers))
+	if len(tierFieldNormalisers) != 17 {
+		t.Fatalf("tierFieldNormalisers has %d rows, want 17 — D4 added ten fields and D8 added seven", len(tierFieldNormalisers))
 	}
 
 	zero := &ChannelData{}
@@ -818,9 +848,9 @@ func TestTierFieldNormalisers_AgreeWithTheLegacyMigration(t *testing.T) {
 		seen[n.field] = true
 	}
 
-	// And the same ten fields, in the same order, as diff.go's
+	// And the same seventeen fields, in the same order, as diff.go's
 	// tierAddedFieldFor — the OTHER table in this package that walks the
-	// tier's ten. Both are ChannelData's declaration order because that is
+	// two generations. Both are ChannelData's declaration order because that is
 	// the order Validate documents and the grid renders; two tables that
 	// silently disagreed about which field is in which position would put
 	// this pass and the send plan on different footing.
@@ -833,7 +863,7 @@ func TestTierFieldNormalisers_AgreeWithTheLegacyMigration(t *testing.T) {
 		gotOrder = append(gotOrder, n.field)
 	}
 	if !reflect.DeepEqual(gotOrder, wantOrder) {
-		t.Errorf("tierFieldNormalisers names\n %v\nbut diff.go's tierAddedFieldFor names\n %v\n(the two must be the same ten fields in the same order)", gotOrder, wantOrder)
+		t.Errorf("tierFieldNormalisers names\n %v\nbut diff.go's tierAddedFieldFor names\n %v\n(the two must be the same seventeen fields in the same order)", gotOrder, wantOrder)
 	}
 }
 
@@ -854,6 +884,13 @@ var tierFieldToAbsent = []func(*ChannelData){
 	func(d *ChannelData) { d.DTCSPolarity = StringField{} },
 	func(d *ChannelData) { d.Filter = StringField{} },
 	func(d *ChannelData) { d.DataMode = BoolField{} },
+	func(d *ChannelData) { d.TuningStepEnabled = BoolField{} },
+	func(d *ChannelData) { d.TuningStep = StringField{} },
+	func(d *ChannelData) { d.ProgramTuningStepHz = FreqField{} },
+	func(d *ChannelData) { d.AttenuatorDB = IntField{} },
+	func(d *ChannelData) { d.Preamp = StringField{} },
+	func(d *ChannelData) { d.Antenna = StringField{} },
+	func(d *ChannelData) { d.IPPlus = BoolField{} },
 }
 
 // TestTierFieldNormalisers_EachRowIsWiredToItsOwnField pins every row of
@@ -861,7 +898,7 @@ var tierFieldToAbsent = []func(*ChannelData){
 // what catches a SWAPPED PAIR, the one mistake the two checks above
 // cannot see between them. A row that reads and writes some other tier
 // field consistently still satisfies
-// TestTierFieldNormalisers_AgreeWithTheLegacyMigration (all ten fields
+// TestTierFieldNormalisers_AgreeWithTheLegacyMigration (all seventeen fields
 // still end Unavailable) and still satisfies the order check (the
 // spec.Field labels are untouched) — and would normalise the wrong field
 // on any bank that reaches one and not the other, which is every real
@@ -872,7 +909,7 @@ var tierFieldToAbsent = []func(*ChannelData){
 // position i is Absent, must be the only one that fires.
 func TestTierFieldNormalisers_EachRowIsWiredToItsOwnField(t *testing.T) {
 	if len(tierFieldToAbsent) != len(tierFieldNormalisers) {
-		t.Fatalf("tierFieldToAbsent has %d entries, tierFieldNormalisers %d — the two walk the same ten fields in the same order", len(tierFieldToAbsent), len(tierFieldNormalisers))
+		t.Fatalf("tierFieldToAbsent has %d entries, tierFieldNormalisers %d — the two walk the same seventeen fields in the same order", len(tierFieldToAbsent), len(tierFieldNormalisers))
 	}
 
 	for i, n := range tierFieldNormalisers {
@@ -900,12 +937,12 @@ func TestTierFieldNormalisers_EachRowIsWiredToItsOwnField(t *testing.T) {
 }
 
 // TestNormaliseTierFields_V4YaesuFileWithNoTierKeys is deviation (c)'s
-// headline case: a schema-4 file from a radio that has none of the ten
-// fields, with no key for any of them, loads Absent — Load alone cannot
-// know better — and the composition roots' capability-keyed pass resolves
-// every one of them to Unavailable, the same answer the schema-1/2/3
-// loaders reach unconditionally and the same answer a read of that radio
-// gives.
+// headline case: a schema-4 file from a radio that has none of D4's ten
+// fields loads those fields Absent — Load alone cannot know better — while
+// D8's seven fields migrate to Unavailable because schema 4 could not
+// express them. The composition roots' capability-keyed pass resolves the
+// remaining ten to Unavailable, the same answer the schema-1/2/3 loaders
+// reach unconditionally and the same answer a read of that radio gives.
 func TestNormaliseTierFields_V4YaesuFileWithNoTierKeys(t *testing.T) {
 	cp, err := writeAndLoad(t, v4YaesuBodyNoTierKeys)
 	if err != nil {
@@ -918,8 +955,12 @@ func TestNormaliseTierFields_V4YaesuFileWithNoTierKeys(t *testing.T) {
 		t.Fatalf("channels = %+v, want a populated 001 and an empty 003", cp.Channels)
 	}
 
-	if got, want := tierFieldStates(cp.Channels[0].Data), allTierStates(Absent); !reflect.DeepEqual(got, want) {
-		t.Fatalf("straight off Load, tier states = %v, want all Absent — core/codeplug.Load remains capability-free; composition roots normalise loaded/imported data", got)
+	wantLoaded := allTierStates(Absent)
+	for i := 10; i < len(wantLoaded); i++ {
+		wantLoaded[i] = Unavailable
+	}
+	if got := tierFieldStates(cp.Channels[0].Data); !reflect.DeepEqual(got, wantLoaded) {
+		t.Fatalf("straight off Load, tier states = %v, want D4 Absent and D8 Unavailable", got)
 	}
 
 	NormaliseTierFields(cp, testCapabilities())
@@ -1048,6 +1089,8 @@ func TestNormaliseTierFields_MixedReachability(t *testing.T) {
 		Unavailable, Unavailable, // dtcs_code, dtcs_polarity
 		Absent,      // filter — reachable, so silence stays silence
 		Unavailable, // data_mode
+		Unavailable, Unavailable, Unavailable, Unavailable,
+		Unavailable, Unavailable, Unavailable, // the seven D8 fields
 	}
 	if got := tierFieldStates(d); !reflect.DeepEqual(got, want) {
 		t.Errorf("tier states = %v, want %v", got, want)

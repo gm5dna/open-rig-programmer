@@ -194,19 +194,23 @@ func bankTagDisplayDefault(caps spec.Capabilities, id spec.BankID) codeplug.Bool
 	return codeplug.BoolField{State: codeplug.Known, Value: false}
 }
 
-// tierFields is every spec.Field the Icom tier added (design D4), in
+// tierFields is every spec.Field the two Icom model extensions added
+// (design D4/D8), in
 // codeplug.ChannelData's own declaration order — which is the order the
 // grid renders their columns in.
 //
 // It is a list rather than a derivation because there is no way to ask
 // spec "which fields did the Icom tier add": the distinction is
-// historical, and the reason it matters here is that the pre-tier ten
-// have unconditional columns while these ten do not.
+// historical, and the reason it matters here is that the original grid
+// fields have unconditional columns while these added fields do not.
 var tierFields = []spec.Field{
 	spec.FieldTxFrequency, spec.FieldDuplex, spec.FieldOffset,
 	spec.FieldToneMode, spec.FieldToneTx, spec.FieldToneRx,
 	spec.FieldDTCSCode, spec.FieldDTCSPolarity, spec.FieldFilter,
 	spec.FieldDataMode,
+	spec.FieldTuningStepEnabled, spec.FieldTuningStep,
+	spec.FieldProgramTuningStep, spec.FieldAttenuator,
+	spec.FieldPreamp, spec.FieldAntenna, spec.FieldIPPlus,
 }
 
 // bankTierFields returns, in tierFields order, every tier-added field the
@@ -246,9 +250,79 @@ var tierFields = []spec.Field{
 // — pinned by TestGetUISpec_RegisteredIC905_EveryBankFieldsAndTagDisplay.
 // Its two banks, MEM (SPARSE, discovered at Open) and CALL (dense, a
 // distinct namespace), reach the same nine identically, on the same
-// footing as the IC-9700's three. A future Icom registration would extend
-// this same list with its own model-specific set; there is none to
-// register, this being the tier's last.
+// footing as the IC-9700's three.
+// FOUR — the IC-7610's own four, tone_mode, tone_tx, tone_rx and filter —
+// for the IC-7851 AND the IC-7850, the additions tier's first
+// registration (Tier 4b). TWO ROWS, ONE ANSWER, and that is structural
+// rather than a coincidence between two readings: both rows are served by
+// ONE core/driver/ic7851, whose bankFields grades MEM and SCAN
+// identically and maps exactly the seven fields its 1A 00 record carries
+// (frequency, mode, filter, tone_mode, tone_tx, tone_rx and the name).
+// That the SET matches the IC-7610's IS a coincidence of independent
+// evidence — the two packages share no code and no values — and additions
+// spec D1.1 predicted it from the two documents drawing the same 27-byte
+// data area. Pinned by
+// TestGetUISpec_RegisteredIC7851Pair_EveryBankFieldsAndTagDisplay, which
+// drives both rows.
+// FOUR AGAIN — the same tone_mode, tone_tx, tone_rx and filter — for the
+// IC-7760, the additions tier's second registration (Tier 4b), and this
+// is now the THIRD independent derivation of that set rather than a
+// convention: core/driver/ic7760's bankFields grades MEM and SCAN
+// identically and maps exactly the seven fields its own 1A 00 record
+// carries, and its package imports no sibling driver. Additions spec
+// D1.1 predicted it from three documents drawing the same 27-byte data
+// area, and core/civ/tier_test.go's TestTierRecordShapes_7610CloneFamily
+// measures how far that prediction actually holds at the layout level.
+// Pinned here by
+// TestGetUISpec_RegisteredIC7760_EveryBankFieldsAndTagDisplay.
+// ALL TEN for the IC-7100, the additions tier's third registration
+// (Tier 4b) — a THIRD independent derivation of the full set, after the
+// IC-705's and the IC-9700's: this radio's own 111-byte record maps all
+// thirteen of its matrix §2 rw-graded rows (core/driver/ic7100/caps.go's
+// fieldGrid), data_mode among them, which is what separates it from the
+// four-field 25-byte records above. ONE BANK, not two or three — its
+// dense 495-slot MEM space is the whole of what this build addresses, the
+// scan-edge and call channels being refused until register entry
+// ic7100-special-bank-byte is lifted — so this row changed no field COUNT
+// and fewer BankViews carry it than any other Icom row. Pinned here by
+// TestGetUISpec_RegisteredIC7100_EveryBankFieldsAndTagDisplay.
+// FOURTEEN OF THE SEVENTEEN for the IC-R8600, the additions tier's FOURTH
+// and last registration (Tier 4b) — and this is the row that makes the
+// list's SHAPE matter rather than only its members, because it is the
+// first that reaches any of the seven D8 receiver fields and the first
+// that reaches FEWER than all the tier's original ten.
+//
+// WHAT IT REACHES: duplex, offset, tone_mode, tone_rx, dtcs_code,
+// dtcs_polarity and filter of the original ten, plus ALL SEVEN of the D8
+// receiver fields — tuning_step_enabled, tuning_step, program_tuning_step,
+// attenuator, preamp, antenna and ip_plus — which
+// core/driver/icr8600/caps.go's bankFields maps from the record's common
+// head (additions spec D8.2's table; core/civ/icr8600/profile.go's
+// commonFields). Every other registered model grades all seven the zero
+// FieldSupport, so until this row landed the seven were columns no bank
+// could reach.
+//
+// WHAT IT DOES NOT, AND WHY THE REASON IS DIFFERENT IN EACH CASE.
+// tx_frequency and tone_tx are absent by ANATOMY: this radio is a
+// receiver (spec.ReceiveOnly, additions spec D4.2), and that spec's
+// invariant makes grading either of them above Unsupported a
+// spec.Validate FAILURE rather than a choice. data_mode is absent for the
+// ordinary reason the 25-byte records' own is — this record carries no
+// such byte at all.
+//
+// NO CODE CHANGED HERE FOR ANY OF IT, and that is the point worth
+// recording: tierFields above has carried the seven D8 entries since the
+// additions core landed them (`app: expose receiver columns by bank
+// capability`), the body below asks each bank the same
+// FieldSupport.Unreachable question it always has, and the frontend's
+// column table is keyed the same way. So the first receiver's fourteen
+// columns fall out of its capabilities exactly as every transceiver's
+// four, six or ten did. Pinned here by
+// TestGetUISpec_RegisteredICR8600_EveryBankFieldsAndTagDisplay, and its
+// receiver half by TestGetUISpec_RegisteredICR8600_IsAReceiver.
+//
+// A future Icom registration would extend this same list with its own
+// model-specific set.
 func bankTierFields(caps spec.Capabilities, id spec.BankID) []string {
 	var out []string
 	for _, f := range tierFields {
@@ -388,6 +462,7 @@ func synthesiseDiscoveredBanks(model string, working *codeplug.Codeplug) []BankV
 			ID:                string(b.ID),
 			Label:             b.Label,
 			ReadOnly:          true,
+			BudgetUnstated:    b.BudgetUnstated,
 			Slots:             slotViewsFor(b.Slots),
 			TagDisplayDefault: bankTagDisplayDefault(discoveredCaps, b.ID),
 			Fields:            bankTierFields(discoveredCaps, b.ID),
@@ -458,6 +533,7 @@ func (a *App) GetUISpec() (UISpecView, error) {
 			ID:                string(b.ID),
 			Label:             b.Label,
 			ReadOnly:          bankReadOnly(caps, b.ID),
+			BudgetUnstated:    b.BudgetUnstated,
 			Slots:             bankSlotViews(b, live, a.working),
 			TagDisplayDefault: bankTagDisplayDefault(caps, b.ID),
 			Fields:            bankTierFields(caps, b.ID),
@@ -532,6 +608,7 @@ func (a *App) GetUISpec() (UISpecView, error) {
 		// false through the same call: only a session a driver assembled
 		// under a spent consent carries the label.
 		UnverifiedWritesConsented: consentedUnverifiedWrites(caps),
+		Transmit:                  caps.Transmit.String(),
 		Banks:                     banks,
 		Modes:                     append([]string(nil), caps.Modes...),
 		ShiftOptions:              shiftOptions,

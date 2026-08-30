@@ -142,6 +142,80 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// adapter wraps fakeic905.New — its Port() already returns
 		// io.ReadWriteCloser).
 		{"ic905", "Simulated", "fakeic905.New", "internal/fakeic905"},
+		// The IC-7851 and IC-7850 (Tier 4b, the additions tier's first
+		// registration): ONE row for TWO registered models, and the
+		// reason is the column definition rather than a relaxation. A row
+		// is (package, token, fake CONSTRUCTOR); core/driver/ic7851 is
+		// one package with one simulated-profile selector, and
+		// internal/fakeic7851 offers ONE constructor which both
+		// fakeDrivers rows call. The FTdx101's two rows are earned by its
+		// two constructors (fakedx101.NewD and fakedx101.NewMP); there is
+		// no second constructor here to earn a second row, and a
+		// duplicate row would assert the identical fact twice.
+		//
+		// THE TOKEN IS AN OPTION, NOT A Profile CONSTANT, and it is the
+		// first row here of which that is true: core/driver/ic7851 takes
+		// its profile through WithSimulatedProfile() (its Profile type's
+		// Simulated value is never named from outside the package), so
+		// the selector a stray non-test reference would have to smuggle
+		// in is that option. Naming ic7851.Simulated here instead would
+		// check a token no non-test file mentions, and this guard's own
+		// non-vacuity clause would fail the row rather than confine
+		// anything.
+		//
+		// The fakeic7851.New call sits inside an ic7851FakeAdapter{...}
+		// composite literal at both call sites, exactly as the IC-7610's
+		// does; fileHasCall's ast.Inspect walk finds the call regardless
+		// of what encloses it (see the ic7610 row's own note).
+		{"ic7851", "WithSimulatedProfile", "fakeic7851.New", "internal/fakeic7851"},
+		// The IC-7760 (Tier 4b's second registration): ONE row for ONE
+		// registered model, and its token is a Profile CONSTANT again —
+		// core/driver/ic7760 takes its profile as New's first ARGUMENT,
+		// so ic7760.Simulated is the selector a stray non-test reference
+		// would have to smuggle in, exactly as for the six rows above the
+		// IC-7851's. The pair's WithSimulatedProfile row remains the one
+		// option-shaped exception in this table, and it is an exception
+		// about THAT package's constructor shape, not a new convention.
+		//
+		// The fakeic7760.New call sits inside an ic7760FakeAdapter{...}
+		// composite literal at its one call site, exactly as the
+		// IC-7610's and the IC-7851 pair's do; fileHasCall's ast.Inspect
+		// walk finds the call regardless of what encloses it (see the
+		// ic7610 row's own note).
+		{"ic7760", "Simulated", "fakeic7760.New", "internal/fakeic7760"},
+		// The IC-7100 (Tier 4b's third registration): ONE row for ONE
+		// registered model, and its token is a Profile CONSTANT again —
+		// core/driver/ic7100 takes its profile as New's first ARGUMENT
+		// (ic7100.go: `func New(profile Profile, opts ...Option)`), so
+		// ic7100.Simulated is the selector a stray non-test reference
+		// would have to smuggle in. The IC-7851 pair's
+		// WithSimulatedProfile row remains the one option-shaped
+		// exception in this table.
+		//
+		// The fakeic7100.New call sits BARE at its one call site — not
+		// inside a composite literal, because internal/fakeic7100's
+		// Port() already returns io.ReadWriteCloser and this row needs no
+		// adapter. fileHasCall's ast.Inspect walk finds the call either
+		// way (see the ic7610 row's own note); the difference is recorded
+		// here only so a reader is not surprised to find no
+		// ic7100FakeAdapter beside the ic7610's and the ic7760's.
+		{"ic7100", "Simulated", "fakeic7100.New", "internal/fakeic7100"},
+		// The IC-R8600 (Tier 4b's fourth and last registration): ONE row
+		// for ONE registered model, and its token is a Profile CONSTANT
+		// again — core/driver/icr8600 takes its profile as New's first
+		// ARGUMENT (icr8600.go:41, `func New(profile Profile, opts
+		// ...Option)`), so icr8600.Simulated is the selector a stray
+		// non-test reference would have to smuggle in. The IC-7851 pair's
+		// WithSimulatedProfile row remains the one option-shaped exception
+		// in this table.
+		//
+		// The fakeicr8600.New call sits BARE at its one call site, as the
+		// IC-7100's does and for the same reason: internal/fakeicr8600's
+		// Port() already returns io.ReadWriteCloser, so this row needs no
+		// adapter and there is no icr8600FakeAdapter to find beside the
+		// ic7610's and the ic7760's. fileHasCall's ast.Inspect walk finds
+		// the call either way (see the ic7610 row's own note).
+		{"icr8600", "Simulated", "fakeicr8600.New", "internal/fakeicr8600"},
 	}
 
 	// Non-vacuity: an empty table would make the loop below a no-op and

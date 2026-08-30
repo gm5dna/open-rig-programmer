@@ -12,6 +12,7 @@ import (
 	civic9700 "github.com/gm5dna/open-rig-programmer/core/civ/ic9700"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -312,6 +313,7 @@ func TestReadChannelMapsEveryFieldTheRecordCarries(t *testing.T) {
 	if err := d.Duplex.Valid(duplexValues()); err != nil {
 		t.Errorf("Duplex.Valid: %v", err)
 	}
+	drivertest.AssertFreshReadSaveLoad(t, ch, codeplug.Load)
 }
 
 // duplexValues is caps.DuplexOptions as the plain vocabulary

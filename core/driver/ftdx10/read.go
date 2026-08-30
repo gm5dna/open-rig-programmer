@@ -194,8 +194,8 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 			// The TONE AND SCAN-SKIP UNREACHABILITY entry: no scan-skip flag
 			// is readable.
 			ScanSkip: codeplug.BoolField{State: codeplug.Unknown},
-			// The ten fields the Icom tier added to the neutral memory
-			// model (design D4). UNAVAILABLE on this radio, and the
+			// The fields the Icom model extensions added to the neutral
+			// memory model (design D4/D8). UNAVAILABLE on this radio, and the
 			// TagDisplay precedent above is exactly the right one: this
 			// family's memory frame carries none of them, so there is no
 			// value to read and no question for the user — Unavailable is
@@ -211,16 +211,23 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 			// true of a schema-3 FILE and false of a RADIO READ: a read
 			// of this radio is a positive statement that the frame has no
 			// such field, and Unavailable is the state that says so.
-			TxFreqHz:     codeplug.FreqField{State: codeplug.Unavailable},
-			Duplex:       codeplug.StringField{State: codeplug.Unavailable},
-			OffsetHz:     codeplug.FreqField{State: codeplug.Unavailable},
-			ToneMode:     codeplug.StringField{State: codeplug.Unavailable},
-			ToneTx:       codeplug.ToneField{State: codeplug.Unavailable},
-			ToneRx:       codeplug.ToneField{State: codeplug.Unavailable},
-			DTCSCode:     codeplug.IntField{State: codeplug.Unavailable},
-			DTCSPolarity: codeplug.StringField{State: codeplug.Unavailable},
-			Filter:       codeplug.StringField{State: codeplug.Unavailable},
-			DataMode:     codeplug.BoolField{State: codeplug.Unavailable},
+			TxFreqHz:            codeplug.FreqField{State: codeplug.Unavailable},
+			Duplex:              codeplug.StringField{State: codeplug.Unavailable},
+			OffsetHz:            codeplug.FreqField{State: codeplug.Unavailable},
+			ToneMode:            codeplug.StringField{State: codeplug.Unavailable},
+			ToneTx:              codeplug.ToneField{State: codeplug.Unavailable},
+			ToneRx:              codeplug.ToneField{State: codeplug.Unavailable},
+			DTCSCode:            codeplug.IntField{State: codeplug.Unavailable},
+			DTCSPolarity:        codeplug.StringField{State: codeplug.Unavailable},
+			Filter:              codeplug.StringField{State: codeplug.Unavailable},
+			DataMode:            codeplug.BoolField{State: codeplug.Unavailable},
+			TuningStepEnabled:   codeplug.BoolField{State: codeplug.Unavailable},
+			TuningStep:          codeplug.StringField{State: codeplug.Unavailable},
+			ProgramTuningStepHz: codeplug.FreqField{State: codeplug.Unavailable},
+			AttenuatorDB:        codeplug.IntField{State: codeplug.Unavailable},
+			Preamp:              codeplug.StringField{State: codeplug.Unavailable},
+			Antenna:             codeplug.StringField{State: codeplug.Unavailable},
+			IPPlus:              codeplug.BoolField{State: codeplug.Unavailable},
 		},
 	}, nil
 }

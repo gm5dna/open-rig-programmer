@@ -221,6 +221,9 @@ const (
 	// ToneModeCTCSSSquelch transmits a CTCSS tone and requires a
 	// matching received tone (FieldToneRx) — CHIRP's "TSQL".
 	ToneModeCTCSSSquelch
+	// ToneModeCTCSSRxSquelch requires a matching received CTCSS tone and
+	// transmits none. This is the receive-only TSQL semantic.
+	ToneModeCTCSSRxSquelch
 	// ToneModeDTCS uses a DTCS/DCS code (FieldDTCSCode,
 	// FieldDTCSPolarity) in both directions — CHIRP's "DTCS".
 	ToneModeDTCS
@@ -261,7 +264,7 @@ func (t ToneMode) NeedsTxTone() bool {
 // NeedsRxTone reports whether a channel in this tone mode must carry a
 // known FieldToneRx value for the mode to make sense.
 func (t ToneMode) NeedsRxTone() bool {
-	return t.Semantics == ToneModeCTCSSSquelch
+	return t.Semantics == ToneModeCTCSSSquelch || t.Semantics == ToneModeCTCSSRxSquelch
 }
 
 // NeedsDTCS reports whether a channel in this tone mode must carry a

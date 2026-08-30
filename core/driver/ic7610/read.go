@@ -266,8 +266,15 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 		// both neutral homes are BoolField. E6 unmaps them; it does NOT
 		// make the channel unreadable — WriteChannel is where such a
 		// channel becomes unwritable.
-		ScanSkip: codeplug.BoolField{State: codeplug.Unavailable},
-		DataMode: codeplug.BoolField{State: codeplug.Unavailable},
+		ScanSkip:            codeplug.BoolField{State: codeplug.Unavailable},
+		DataMode:            codeplug.BoolField{State: codeplug.Unavailable},
+		TuningStepEnabled:   codeplug.BoolField{State: codeplug.Unavailable},
+		TuningStep:          codeplug.StringField{State: codeplug.Unavailable},
+		ProgramTuningStepHz: codeplug.FreqField{State: codeplug.Unavailable},
+		AttenuatorDB:        codeplug.IntField{State: codeplug.Unavailable},
+		Preamp:              codeplug.StringField{State: codeplug.Unavailable},
+		Antenna:             codeplug.StringField{State: codeplug.Unavailable},
+		IPPlus:              codeplug.BoolField{State: codeplug.Unavailable},
 	}
 
 	// The Yaesu-shaped plain fields (ClarHz/RxClar/TxClar, CTCSS, Shift)

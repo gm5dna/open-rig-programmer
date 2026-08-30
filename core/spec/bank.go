@@ -69,7 +69,9 @@ type Bank struct {
 	// and Slots is then the complete, fixed inventory it has always
 	// been.
 	//
-	// The three fields below describe that addressable space, and they
+	// The fields below (Groups, PerGroup, Budget or BudgetUnstated, and
+	// the GroupBase/ChannelBase numbering — additions design D3.4 and
+	// Erratum 2) describe that addressable space, and they
 	// exist so "is this slot within the space?" is decidable from the
 	// Bank ALONE — no model table, no driver call — which is what lets
 	// codeplug.Diff admit an add at a slot no read has ever returned.
@@ -77,11 +79,15 @@ type Bank struct {
 	// when Sparse is false; Capabilities.Validate enforces both halves.
 	Sparse bool
 	// Groups is how many addressable groups the sparse space has, e.g.
-	// 100. Group numbers are 1-based.
+	// 100. GroupBase says whether numbering starts at 0 or 1.
 	Groups int
+	// GroupBase is the radio's first group number, 0 or 1.
+	GroupBase int
 	// PerGroup is how many addressable channels each group holds, e.g.
-	// 100. Channel numbers are 1-based.
+	// 100. ChannelBase says whether numbering starts at 0 or 1.
 	PerGroup int
+	// ChannelBase is the radio's first channel number, 0 or 1.
+	ChannelBase int
 	// Budget is the maximum number of POPULATED slots the radio will
 	// hold across this sparse bank at once, e.g. 500 — far fewer than
 	// Groups*PerGroup. It is enforced at codeplug.Diff time and never
@@ -89,11 +95,15 @@ type Bank struct {
 	// a radio, because what an over-budget radio actually does is
 	// undocumented.
 	Budget int
+	// BudgetUnstated records that the address space is known but the radio's
+	// populated-channel capacity is not documented. It suppresses only the
+	// occupancy refusal; WithinSpace remains authoritative.
+	BudgetUnstated bool
 }
 
 // SparseSlot renders the canonical wire-form slot identifier for group
 // and channel in a sparse bank's addressable space: "G05-012" for group
-// 5, channel 12. Both are 1-based. The group is zero-padded to two
+// 5, channel 12. Zero is valid for a zero-based bank. The group is zero-padded to two
 // digits and the channel to three, which is exactly wide enough for the
 // 100x100 spaces this tier registers and simply grows for a wider one
 // (group 100 renders "G100").
@@ -107,7 +117,7 @@ func SparseSlot(group, channel int) string {
 }
 
 // ParseSparseSlot decodes a canonical group-addressed slot string built
-// by SparseSlot, returning the 1-based group and channel and true. It is
+// by SparseSlot, returning the radio's group and channel numbers and true. It is
 // STRICT: a string is accepted only when re-rendering the decoded pair
 // through SparseSlot reproduces it byte for byte, so an alternative
 // spelling of the same address ("G5-12", "G005-0012") is refused rather
@@ -128,6 +138,9 @@ func ParseSparseSlot(slot string) (group, channel int, ok bool) {
 	if err != nil {
 		return 0, 0, false
 	}
+	if g < 0 || c < 0 {
+		return 0, 0, false
+	}
 	if SparseSlot(g, c) != slot {
 		return 0, 0, false
 	}
@@ -138,8 +151,8 @@ func ParseSparseSlot(slot string) (group, channel int, ok bool) {
 //
 // For a dense bank that is exactly membership of Slots — the only
 // question there has ever been. For a Sparse bank it is membership of
-// Slots OR a well-formed group address (see ParseSparseSlot) inside
-// 1..Groups x 1..PerGroup: a sparse bank's Slots lists what a read
+// Slots OR a well-formed group address (see ParseSparseSlot) inside the
+// two base-aware declared ranges: a sparse bank's Slots lists what a read
 // materialised, and an address outside that list is a perfectly legal
 // place for the user to ADD a channel.
 func (b Bank) WithinSpace(slot string) bool {
@@ -155,7 +168,8 @@ func (b Bank) WithinSpace(slot string) bool {
 	if !ok {
 		return false
 	}
-	return g >= 1 && g <= b.Groups && c >= 1 && c <= b.PerGroup
+	return g >= b.GroupBase && g < b.GroupBase+b.Groups &&
+		c >= b.ChannelBase && c < b.ChannelBase+b.PerGroup
 }
 
 // sparseProblems returns every way this Bank's sparse-space description
@@ -174,8 +188,22 @@ func (b Bank) sparseProblems() []string {
 		if b.PerGroup <= 0 {
 			problems = append(problems, fmt.Sprintf("bank %s: Sparse bank must have PerGroup greater than zero, got %d", b.ID, b.PerGroup))
 		}
-		if b.Budget <= 0 {
-			problems = append(problems, fmt.Sprintf("bank %s: Sparse bank must have Budget greater than zero, got %d", b.ID, b.Budget))
+		if b.GroupBase != 0 && b.GroupBase != 1 {
+			problems = append(problems, fmt.Sprintf("bank %s: GroupBase %d must be 0 or 1", b.ID, b.GroupBase))
+		}
+		if b.ChannelBase != 0 && b.ChannelBase != 1 {
+			problems = append(problems, fmt.Sprintf("bank %s: ChannelBase %d must be 0 or 1", b.ID, b.ChannelBase))
+		}
+		if b.Budget < 0 {
+			problems = append(problems, fmt.Sprintf("bank %s: Budget must not be negative, got %d", b.ID, b.Budget))
+		} else if b.Budget > 0 == b.BudgetUnstated {
+			if b.Budget == 0 {
+				// Keep the established phrase so callers and the landed pin see
+				// the same failure while naming the newly valid alternative.
+				problems = append(problems, fmt.Sprintf("bank %s: Sparse bank must have Budget greater than zero or set BudgetUnstated (exactly one), got %d/false", b.ID, b.Budget))
+			} else {
+				problems = append(problems, fmt.Sprintf("bank %s: Sparse bank must declare exactly one of Budget greater than zero or BudgetUnstated, got %d/true", b.ID, b.Budget))
+			}
 		}
 		return problems
 	}
@@ -185,8 +213,17 @@ func (b Bank) sparseProblems() []string {
 	if b.PerGroup != 0 {
 		problems = append(problems, fmt.Sprintf("bank %s: PerGroup %d is set on a bank that is not Sparse", b.ID, b.PerGroup))
 	}
+	if b.GroupBase != 0 {
+		problems = append(problems, fmt.Sprintf("bank %s: GroupBase %d is set on a bank that is not Sparse", b.ID, b.GroupBase))
+	}
+	if b.ChannelBase != 0 {
+		problems = append(problems, fmt.Sprintf("bank %s: ChannelBase %d is set on a bank that is not Sparse", b.ID, b.ChannelBase))
+	}
 	if b.Budget != 0 {
 		problems = append(problems, fmt.Sprintf("bank %s: Budget %d is set on a bank that is not Sparse", b.ID, b.Budget))
+	}
+	if b.BudgetUnstated {
+		problems = append(problems, fmt.Sprintf("bank %s: BudgetUnstated is set on a bank that is not Sparse", b.ID))
 	}
 	return problems
 }

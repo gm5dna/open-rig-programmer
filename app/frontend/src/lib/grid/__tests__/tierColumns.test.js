@@ -47,6 +47,19 @@ const ic7610MemBank = {
 	Fields: ['tone_mode', 'tone_tx', 'tone_rx', 'filter'],
 }
 
+const receiverBank = {
+	...ic7610MemBank,
+	Fields: [
+		'tuning_step_enabled',
+		'tuning_step',
+		'program_tuning_step',
+		'attenuator',
+		'preamp',
+		'antenna',
+		'ip_plus',
+	],
+}
+
 const uiSpec = {
 	Modes: ['USB', 'FM'],
 	ShiftOptions: ['SIMPLEX', 'PLUS', 'MINUS'],
@@ -101,6 +114,21 @@ describe('columnsFor', () => {
 	it('pairs every tier column with the spec.Field of the same name', () => {
 		for (const column of TIER_COLUMNS) {
 			expect(column.field).toBe(column.key)
+		}
+	})
+
+	it('shows each receiver column only when the bank lists its field', () => {
+		expect(columnsFor(receiverBank).slice(COLUMNS.length).map((c) => c.id)).toEqual([
+			'tuningStepEnabled',
+			'tuningStep',
+			'programTuningStep',
+			'attenuator',
+			'preamp',
+			'antenna',
+			'ipPlus',
+		])
+		for (const id of ['tuningStepEnabled', 'tuningStep', 'programTuningStep', 'attenuator', 'preamp', 'antenna', 'ipPlus']) {
+			expect(columnsFor(ic7610MemBank).map((c) => c.id)).not.toContain(id)
 		}
 	})
 })

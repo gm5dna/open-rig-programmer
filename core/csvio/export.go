@@ -44,6 +44,16 @@ var tierColumns = []string{
 // looking columns up by name.
 var headerV2 = append(append([]string(nil), header...), tierColumns...)
 
+// receiverColumns are version 3's seven D8 columns, appended after the
+// version-2 prefix in ChannelData declaration order.
+var receiverColumns = []string{
+	"tuning_step_enabled", "tuning_step", "program_tuning_step",
+	"attenuator", "preamp", "antenna", "ip_plus",
+}
+
+// headerV3 preserves the complete version-2 header as a prefix.
+var headerV3 = append(append([]string(nil), headerV2...), receiverColumns...)
+
 // The reserved cell spellings for a tier column. A tier field is
 // TRI-STATE PLUS ABSENT (see codeplug.Absent), so three of the four
 // states need a spelling that no value can take:
@@ -128,7 +138,7 @@ func exportTierBoolField(f codeplug.BoolField) string {
 	return "no"
 }
 
-// tierCells renders one channel's ten tier columns, in tierColumns
+// tierCells renders one channel's ten version-2 columns, in tierColumns
 // order. An EMPTY slot gets ten empty cells, exactly as it gets an empty
 // cell for every other data column — so the "all data cells empty means
 // an empty channel" rule Import applies is unchanged.
@@ -151,7 +161,23 @@ func tierCells(ch codeplug.Channel) []string {
 	}
 }
 
-// needsTierColumns reports whether any channel carries a tier-added
+func receiverCells(ch codeplug.Channel) []string {
+	if ch.Empty() {
+		return make([]string, len(receiverColumns))
+	}
+	d := ch.Data
+	return []string{
+		exportTierBoolField(d.TuningStepEnabled),
+		exportStringField(d.TuningStep),
+		exportFreqField(d.ProgramTuningStepHz),
+		exportIntField(d.AttenuatorDB),
+		exportStringField(d.Preamp),
+		exportStringField(d.Antenna),
+		exportTierBoolField(d.IPPlus),
+	}
+}
+
+// needsTierColumns reports whether any channel carries a D4 field
 // field whose state RECORDS something (Known or Unknown — see
 // codeplug.FieldState.Recorded). It is the CSV exporter's exact analogue
 // of core/codeplug's schemaFor, down to treating Unavailable as nothing
@@ -169,6 +195,23 @@ func needsTierColumns(channels []codeplug.Channel) bool {
 			d.ToneTx.State.Recorded() || d.ToneRx.State.Recorded() ||
 			d.DTCSCode.State.Recorded() || d.DTCSPolarity.State.Recorded() ||
 			d.Filter.State.Recorded() || d.DataMode.State.Recorded() {
+			return true
+		}
+	}
+	return false
+}
+
+// needsReceiverColumns is the D8 version-selection predicate. As with
+// the native schema rule, only Known and Unknown are Recorded.
+func needsReceiverColumns(channels []codeplug.Channel) bool {
+	for _, ch := range channels {
+		if ch.Empty() {
+			continue
+		}
+		d := ch.Data
+		if d.TuningStepEnabled.State.Recorded() || d.TuningStep.State.Recorded() ||
+			d.ProgramTuningStepHz.State.Recorded() || d.AttenuatorDB.State.Recorded() ||
+			d.Preamp.State.Recorded() || d.Antenna.State.Recorded() || d.IPPlus.State.Recorded() {
 			return true
 		}
 	}
@@ -272,10 +315,9 @@ func exportBoolField(f codeplug.BoolField) string {
 // every data column is "" — this is what lets a full radio image
 // (including its empty slots) round-trip through Export/Import.
 //
-// tier says whether this export is version 2 (see needsTierColumns); a
-// version-1 row is built and escaped exactly as it was before the tier
-// existed.
-func exportRow(ch codeplug.Channel, tier bool) []string {
+// tier and receiver select the appended version-2 and version-3 tails.
+// receiver always implies tier, preserving version 2 as a prefix.
+func exportRow(ch codeplug.Channel, tier, receiver bool) []string {
 	row := make([]string, len(header))
 	row[0] = ch.Slot
 	row[1] = codeplug.DisplaySlot(ch.Slot)
@@ -306,6 +348,9 @@ func exportRow(ch codeplug.Channel, tier bool) []string {
 	if tier {
 		row = append(row, tierCells(ch)...)
 	}
+	if receiver {
+		row = append(row, receiverCells(ch)...)
+	}
 
 	for i, cell := range row {
 		row[i] = EscapeCell(cell)
@@ -320,12 +365,11 @@ func exportRow(ch codeplug.Channel, tier bool) []string {
 //
 // WHICH header depends on the content, by the same lowest-that-can-
 // represent-it rule core/codeplug's file writer uses (design D4): the
-// version-1 header (see header) while no channel RECORDS a tier-added
-// field — i.e. every one of them is Absent or Unavailable
-// (FieldState.Recorded, via needsTierColumns) — and the version-2 header
-// (headerV2) as soon as one is Known or Unknown. UNAVAILABLE is the case
+// version-1 header while no channel records an added field, version 2
+// when only D4 records content, and version 3 when any D8 field is Known
+// or Unknown. UNAVAILABLE is the case
 // that actually decides this for the radios registered today: every read
-// of a Yaesu leaves all ten Unavailable, and it is precisely because
+// of a Yaesu leaves all seventeen Unavailable, and it is precisely because
 // Unavailable is not Recorded that such an export stays version 1. An
 // export of any radio registered before the
 // Icom tier is therefore byte-identical to what this program produced
@@ -333,16 +377,19 @@ func exportRow(ch codeplug.Channel, tier bool) []string {
 // is only ever written for content version 1 can hold.
 func Export(w io.Writer, channels []codeplug.Channel) error {
 	cw := csv.NewWriter(w)
-	tier := needsTierColumns(channels)
+	receiver := needsReceiverColumns(channels)
+	tier := receiver || needsTierColumns(channels)
 	head := header
-	if tier {
+	if receiver {
+		head = headerV3
+	} else if tier {
 		head = headerV2
 	}
 	if err := cw.Write(head); err != nil {
 		return fmt.Errorf("csvio: export: writing header: %w", err)
 	}
 	for _, ch := range channels {
-		if err := cw.Write(exportRow(ch, tier)); err != nil {
+		if err := cw.Write(exportRow(ch, tier, receiver)); err != nil {
 			return fmt.Errorf("csvio: export: writing slot %q: %w", ch.Slot, err)
 		}
 	}
