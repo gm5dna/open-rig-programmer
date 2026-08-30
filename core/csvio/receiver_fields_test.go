@@ -161,3 +161,57 @@ func TestImport_ThreeHeaderBranches(t *testing.T) {
 		})
 	}
 }
+
+// TestImport_ReceiveOnlyTxFrequencyIsRefusedOnValidation is the IMPORT
+// direction of TestExport_ReceiveOnlyTxFrequencyUsesExistingUnavailableCell
+// above, and the format-boundary half of tier review M1.
+//
+// The importer is capability-blind by design — it has no caps and parses
+// tx_frequency wherever the header declares the column — so the refusal
+// has to come from the gate that does hold caps. A hand-edited native CSV
+// that gives an IC-R8600-shaped radio a transmit frequency must therefore
+// fail codeplug.Validate, in the same words core/csvio/chirp.go gives a
+// receiver asked for CHIRP's split duplex.
+func TestImport_ReceiveOnlyTxFrequencyIsRefusedOnValidation(t *testing.T) {
+	caps := receiverCHIRPCapabilities()
+	if got := caps.FieldSupport(spec.BankMemory, spec.FieldTxFrequency); !got.Unreachable() {
+		t.Fatalf("receiver tx_frequency support = %+v, want Unreachable", got)
+	}
+
+	// Every tier column the receiver cannot reach spells "n/a"; only
+	// tx_frequency carries the value a spreadsheet round trip could have
+	// typed in.
+	row := func(slot, txFreq string) string {
+		return slot + ",M-01,145500000,FM,0,,,,n/a,,,n/a,n/a," +
+			txFreq + ",OFF,0,OFF,n/a,,23,NN,FIL1,n/a"
+	}
+	body := strings.Join(headerV2, ",") + "\n" +
+		row("G01-001", "433500000") + "\n" +
+		row("G01-002", "n/a") + "\n" +
+		row("G01-003", "n/a") + "\n"
+
+	channels, err := Import(strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+	if got := channels[0].Data.TxFreqHz; got != (codeplug.FreqField{State: codeplug.Known, Value: 433_500_000}) {
+		t.Fatalf("imported tx_frequency = %+v, want Known 433500000; the importer is capability-blind on purpose", got)
+	}
+
+	cp := &codeplug.Codeplug{
+		Radio:    codeplug.RadioInfo{Model: caps.Model, CATID: caps.CATID},
+		Channels: channels,
+	}
+	issues := codeplug.Validate(cp, caps)
+	var found bool
+	for _, issue := range issues {
+		if issue.Slot == "G01-001" && issue.Field == spec.FieldTxFrequency &&
+			issue.Severity == codeplug.SeverityError &&
+			strings.Contains(issue.Msg, "this radio has no transmitter") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("Validate issues = %+v, want a tx_frequency error saying %q", issues, "this radio has no transmitter")
+	}
+}
