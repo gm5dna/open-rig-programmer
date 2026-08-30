@@ -457,7 +457,7 @@ func capabilitiesUnverified() spec.Capabilities {
 //
 // Against the fake, hardware risk is moot and the write choreography
 // itself is what is being exercised end to end, so claiming Supported here
-// is a claim about internal/fakeic7851and about nothing else.
+// is a claim about internal/fakeic7851 and about nothing else.
 //
 // EVERY WRITTEN-DOWN ZERO STAYS ZERO, simulator or not — INCLUDING
 // scan_skip and data_mode. E6's unmapped regions are unmapped against the

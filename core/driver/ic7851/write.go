@@ -593,8 +593,9 @@ func toneSource(want codeplug.ToneField, prior civ.Optional[uint64], create bool
 // codeplug.Validate judged and the value this rung admits are one list.
 //
 // FREQUENCY IS NOT HERE because it is not a vocabulary: its domain is a
-// RANGE, checked at rung 4 against MaxEncodableFreqHz (MinFreqHz is zero
-// and FreqHz is unsigned, so there is no floor to check). The other
+// RANGE, checked at rung 4 (domainRefusal) against caps.MinFreqHz AND
+// caps.MaxFreqHz — both ends, because this radio declares a 30 kHz floor
+// as well as a 60 MHz ceiling (matrix §1 rows 12-13). The other
 // FreqField-shaped members — TxFreqHz and OffsetHz — have no span in this
 // record at all, so a Known value for either is refused one rung earlier,
 // by the capability gate, and never reaches a domain question.
