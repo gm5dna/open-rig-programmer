@@ -1079,6 +1079,10 @@ func getNumeric(rec civ.MemoryRecord, id civ.FieldID) (uint64, bool) {
 		return rec.ToneRXDeciHz.Get()
 	case civ.FieldDTCSCode:
 		return rec.DTCSCode.Get()
+	case civ.FieldProgramTuningStep:
+		return rec.ProgramTuningStepHz.Get()
+	case civ.FieldAttenuator:
+		return rec.AttenuatorDB.Get()
 	default:
 		panic("civtest: no numeric field for id " + string(id) + " — core/civ's vocabulary grew and this suite was not updated")
 	}
@@ -1102,6 +1106,16 @@ func getText(rec civ.MemoryRecord, id civ.FieldID) (string, bool) {
 		return rec.Name.Get()
 	case civ.FieldSelect:
 		return rec.Select.Get()
+	case civ.FieldTuningStepEnabled:
+		return rec.TuningStepEnabled.Get()
+	case civ.FieldTuningStep:
+		return rec.TuningStep.Get()
+	case civ.FieldPreamp:
+		return rec.Preamp.Get()
+	case civ.FieldAntenna:
+		return rec.Antenna.Get()
+	case civ.FieldIPPlus:
+		return rec.IPPlus.Get()
 	default:
 		panic("civtest: no text field for id " + string(id) + " — core/civ's vocabulary grew and this suite was not updated")
 	}
@@ -1121,6 +1135,10 @@ func setNumeric(rec *civ.MemoryRecord, id civ.FieldID, v uint64) {
 		rec.ToneRXDeciHz = civ.Available(v)
 	case civ.FieldDTCSCode:
 		rec.DTCSCode = civ.Available(v)
+	case civ.FieldProgramTuningStep:
+		rec.ProgramTuningStepHz = civ.Available(v)
+	case civ.FieldAttenuator:
+		rec.AttenuatorDB = civ.Available(v)
 	default:
 		panic("civtest: no numeric field for id " + string(id) + " — core/civ's vocabulary grew and this suite was not updated")
 	}
@@ -1144,6 +1162,16 @@ func setText(rec *civ.MemoryRecord, id civ.FieldID, v string) {
 		rec.Name = civ.Available(v)
 	case civ.FieldSelect:
 		rec.Select = civ.Available(v)
+	case civ.FieldTuningStepEnabled:
+		rec.TuningStepEnabled = civ.Available(v)
+	case civ.FieldTuningStep:
+		rec.TuningStep = civ.Available(v)
+	case civ.FieldPreamp:
+		rec.Preamp = civ.Available(v)
+	case civ.FieldAntenna:
+		rec.Antenna = civ.Available(v)
+	case civ.FieldIPPlus:
+		rec.IPPlus = civ.Available(v)
 	default:
 		panic("civtest: no text field for id " + string(id) + " — core/civ's vocabulary grew and this suite was not updated")
 	}
