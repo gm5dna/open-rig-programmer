@@ -186,19 +186,21 @@ differs, and none of it is a reading of a printed factory value:
   the register entry asks a lift to record the radio's version alongside
   the speed it confirms (`core/driver/ic7100/caps.go:33,38,131-135`;
   `core/driver/ic7100/register.go`, entry `ic7100-default-baud-auto`).
-- **IC-R8600** — ASSUMED, and the WEAKEST-EVIDENCED of the eleven, which
-  is worth stating plainly rather than letting it sit in a list of
-  near-identical hedges. This receiver's CI-V Reference Guide prints no
-  factory default speed, mentions no `Auto` setting anywhere in a baud
-  context, and — unlike every other model above — never prints the list
-  of speeds its own menu offers either. So both the 19200 opening rate
-  AND the six-rate list it was picked from are assumed here, under two
+- **IC-R8600** — ASSUMED on BOTH halves, which is worth stating plainly
+  rather than letting it sit in a list of near-identical hedges. This
+  receiver's CI-V Reference Guide prints no factory default speed,
+  mentions no `Auto` setting anywhere in a baud context, and never prints
+  the list of speeds its own menu offers either. So both the 19200 opening
+  rate AND the six-rate list it was picked from are assumed here, under two
   separate register entries rather than one
   (`core/driver/icr8600/caps.go`'s `Bauds`/`DefaultBaud`;
   `core/driver/icr8600/doc.go`, entries `icr8600-baud-set` and
   `icr8600-default-baud`; matrix §3.3). A wrong pick costs a clean
   timeout at connect and never a wrong byte, because the identity probe
-  requires an address-matched reply and silence is silence.
+  requires an address-matched reply and silence is silence. It TIES with
+  the IC-7760 for the least-evidenced of the eleven, and does not stand
+  alone: that radio's guide prints no baud figure anywhere either, so its
+  rate and its list are both assumed too (see its entry above).
 
 What is specific to one or two models:
 

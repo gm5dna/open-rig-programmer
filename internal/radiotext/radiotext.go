@@ -1547,19 +1547,23 @@ var icr8600Text = Text{
 	FirmwarePlaceholder: "as shown on the IC-R8600's own display",
 	// Restates the no-query and no-minimum-version facts, then the four
 	// things this receiver's probe failure modes turn on. The fixed 96h
-	// address with no --civ-address option. THE SPEED, which is a weaker
-	// guess than any other registered model's and the note says exactly
-	// how: this guide prints no factory default, mentions no automatic
-	// setting AND never lists the rates the menu offers, so the opening
-	// 19200 and the six-rate list it was picked from are BOTH assumed
-	// (additions spec Erratum 3). THE FOUR CONTROL TERMINALS — the remote
+	// address with no --civ-address option. THE SPEED, assumed on BOTH
+	// halves and the note says exactly how: this guide prints no factory
+	// default, mentions no automatic setting AND never lists the rates the
+	// menu offers, so the opening 19200 and the six-rate list it was picked
+	// from are BOTH assumed (additions spec Erratum 3). The note RANKS
+	// nothing: the superlative that stood here was false — the IC-7760's
+	// rate and list are both assumed too — and the naming guard in
+	// TestRadiotext_ICR8600Verbatim forbids putting that sibling's name in
+	// this receiver's prose, so the clause states this radio's own evidence
+	// and stops. THE FOUR CONTROL TERMINALS — the remote
 	// jack, two USB ports and the network — of which this build talks to a
 	// USB port, a choice no other registered model has to make. And the
 	// TWO UNPRINTED DEFAULTS, transceive and per-port echo, which together
 	// mean this build cannot say whether unsolicited frames should be
 	// expected on this receiver at all; either way they are counted and
 	// ignored.
-	ProbeFirmwareNote: "Firmware version has no query in this build — check the receiver's display. No minimum version is established for the IC-R8600: this build knows of none to require. This driver talks only to CI-V address 96h, with no --civ-address option to change it and no way to detect a receiver set to a different address; and its opening speed of 19200 is a weaker guess here than on any other radio this build supports — this receiver's CI-V Reference Guide prints no factory default speed, mentions no automatic setting, and never lists the rates its menu offers, so the rate AND the list it was chosen from are both assumed. The guide's own advice is to set the address, the speed and the transceive function in the receiver's Set mode before controlling it, which is the first thing to check. Two more things about this receiver are worth knowing before blaming the port. It has FOUR possible control terminals — a remote jack, a front and a rear USB port, and a network connection — and this build talks over USB, so if one port is silent, check which terminal the receiver has been told to use before concluding the cable is wrong. And neither the transceive setting nor the echo-back setting of either USB port has a printed default, so this build cannot tell you whether unsolicited frames should be expected of the receiver's own accord; any that arrive are counted and ignored, never acted on. If nothing answers, check the receiver's address and speed before assuming the port is wrong.",
+	ProbeFirmwareNote: "Firmware version has no query in this build — check the receiver's display. No minimum version is established for the IC-R8600: this build knows of none to require. This driver talks only to CI-V address 96h, with no --civ-address option to change it and no way to detect a receiver set to a different address; and its opening speed of 19200 is assumed on both halves — this receiver's CI-V Reference Guide prints no factory default speed, mentions no automatic setting, and never lists the rates its menu offers, so the rate AND the list it was chosen from are both assumed. The guide's own advice is to set the address, the speed and the transceive function in the receiver's Set mode before controlling it, which is the first thing to check. Two more things about this receiver are worth knowing before blaming the port. It has FOUR possible control terminals — a remote jack, a front and a rear USB port, and a network connection — and this build talks over USB, so if one port is silent, check which terminal the receiver has been told to use before concluding the cable is wrong. And neither the transceive setting nor the echo-back setting of either USB port has a printed default, so this build cannot tell you whether unsolicited frames should be expected of the receiver's own accord; any that arrive are counted and ignored, never acted on. If nothing answers, check the receiver's address and speed before assuming the port is wrong.",
 }
 
 // texts is the registry For consults, keyed by the exact model string a

@@ -134,7 +134,7 @@ reading and for opt-in writes (see below).
 | IC-7850 | Yes | ⚠️ **Opt-in** (unverified writes, off by default) | No | Instruction manual §18 + simulator only; no real radio has been connected. Shares the IC-7851's manual, address and memory format; this program cannot tell the two apart, so the model shown is the one you picked |
 | IC-7760 | Yes | ⚠️ **Opt-in** (unverified writes, off by default) | No | CI-V guide + simulator only; no real radio has been connected. Control head's USB socket only — it presents two serial ports and the guide does not say which one answers |
 | IC-7100 | Yes | ⚠️ **Opt-in** (unverified writes, off by default) | No | Full manual §20 + simulator only; no real radio has been connected. The 495 ordinary memories (banks A–E) only — the six programmed scan edges and four call channels are not read, the manual never printing the bank number that addresses them |
-| IC-R8600 | Yes\* | ⚠️ **Opt-in** (unverified writes, off by default) | No | CI-V guide + simulator only; no real receiver has been connected. A RECEIVER: the grid has no transmit columns at all. Its capacity is not documented, so there is no total to show and no warning before it is full; its speed is a guess of a weaker kind than the others', the guide printing neither a default nor the list of speeds the menu offers |
+| IC-R8600 | Yes\* | ⚠️ **Opt-in** (unverified writes, off by default) | No | CI-V guide + simulator only; no real receiver has been connected. A RECEIVER: the grid has no transmit columns at all. Its capacity is not documented, so there is no total to show and no warning before it is full; its speed is assumed on both halves, the guide printing neither a default nor the list of speeds the menu offers (as with the IC-7760) |
 
 \* IC-705, IC-905 and IC-R8600 each discover their memory channels by a
 BOUNDED default walk rather than a read of the whole address space (a
@@ -326,10 +326,10 @@ What this release has **not** been exercised against:
   its facts are absences in the guide rather than readings of it. Its
   capacity is never stated, so there is no total to show and this build
   cannot warn you before the receiver is full — what it does when full is
-  unknown. Its speed is a guess of a weaker kind than any other model's:
-  the guide prints no factory default, mentions no automatic setting, and
-  never lists the speeds the menu offers, so both the 19200 opening rate
-  and the list it came from are assumed. And neither the transceive
+  unknown. Its speed is assumed on both halves, which it ties with the
+  IC-7760 for: the guide prints no factory default, mentions no automatic
+  setting, and never lists the speeds the menu offers, so both the 19200
+  opening rate and the list it came from are assumed. And neither the transceive
   setting nor the echo-back setting of either USB port has a printed
   default, so this build cannot say whether unsolicited frames should be
   expected; any that arrive are counted and ignored. Tone squelch is read
