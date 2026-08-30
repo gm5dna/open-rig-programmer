@@ -140,3 +140,88 @@ func TestReceiverFields_DiffTablesCoverAllSeven(t *testing.T) {
 		})
 	}
 }
+
+// TestValidateTierFields_UnreachableFieldMayOnlySayUnavailable is the
+// codeplug half of tier review M1. A bank that cannot REACH a field used
+// to have its state ignored entirely, so a channel built anywhere but by
+// a read — a native-CSV import parses tx_frequency capability-blind —
+// could assert a field the radio does not have and pass the send gate.
+// Known and Unknown are each a claim about anatomy the radio does not
+// possess. Absent is a silence, not a claim, and stays silent — that is
+// the state every pre-tier radio's hand-built channel is in before
+// NormaliseTierFields resolves it, and refusing it would change the
+// pre-tier Issue list this function is documented not to touch.
+//
+// The receive-only wording is the anatomical one, and is the same string
+// core/csvio/chirp.go gives a receiver asked for split duplex.
+func TestValidateTierFields_UnreachableFieldMayOnlySayUnavailable(t *testing.T) {
+	receiver := func() spec.Capabilities {
+		caps := receiverCapabilities()
+		caps.Transmit = spec.ReceiveOnly
+		return caps
+	}
+	transmitter := func() spec.Capabilities {
+		caps := receiverCapabilities()
+		caps.Transmit = spec.HasTransmitter
+		return caps
+	}
+
+	for _, tc := range []struct {
+		name   string
+		caps   spec.Capabilities
+		field  spec.Field
+		mutate func(*ChannelData)
+		want   string
+	}{
+		{"known tx frequency on a receiver", receiver(), spec.FieldTxFrequency,
+			func(d *ChannelData) { d.TxFreqHz = FreqField{State: Known, Value: 433_500_000} },
+			"this radio has no transmitter"},
+		{"unknown tx frequency on a receiver", receiver(), spec.FieldTxFrequency,
+			func(d *ChannelData) { d.TxFreqHz = FreqField{State: Unknown} },
+			"this radio has no transmitter"},
+		{"known tx tone on a receiver", receiver(), spec.FieldToneTx,
+			func(d *ChannelData) { d.ToneTx = ToneField{State: Known, Value: 885} },
+			"this radio has no transmitter"},
+		{"known tx frequency on a transmitter", transmitter(), spec.FieldTxFrequency,
+			func(d *ChannelData) { d.TxFreqHz = FreqField{State: Known, Value: 433_500_000} },
+			"this radio has no tx_frequency field"},
+		{"known filter on a transmitter", transmitter(), spec.FieldFilter,
+			func(d *ChannelData) { d.Filter = StringField{State: Known, Value: "FIL1"} },
+			"this radio has no filter field"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data := validReceiverData()
+			withUnavailableTierFields(&data)
+			tc.mutate(&data)
+			issues := validateTierFields("001", spec.BankMemory, data, tc.caps)
+			var found bool
+			for _, issue := range issues {
+				if issue.Field == tc.field && issue.Severity == SeverityError && strings.Contains(issue.Msg, tc.want) {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("issues = %+v, want a %s error containing %q", issues, tc.field, tc.want)
+			}
+		})
+	}
+
+	// Unavailable AND Absent are both silent everywhere unreachable, on
+	// both anatomies: the first says "no such field", the second says
+	// nothing at all, and neither claims the radio has a transmitter.
+	for name, caps := range map[string]spec.Capabilities{"receiver": receiver(), "transmitter": transmitter()} {
+		t.Run("silent when unavailable/"+name, func(t *testing.T) {
+			data := validReceiverData()
+			withUnavailableTierFields(&data)
+			if issues := validateTierFields("001", spec.BankMemory, data, caps); len(issues) != 0 {
+				t.Fatalf("issues = %+v, want none", issues)
+			}
+		})
+		t.Run("silent when absent/"+name, func(t *testing.T) {
+			data := validReceiverData()
+			if issues := validateTierFields("001", spec.BankMemory, data, caps); len(issues) != 0 {
+				t.Fatalf("issues = %+v, want none", issues)
+			}
+		})
+	}
+}
