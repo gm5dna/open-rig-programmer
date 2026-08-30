@@ -118,15 +118,33 @@ func capabilities(write spec.Support) spec.Capabilities {
 		ClarMaxHz:  0,   // Matrix §1 row 6: no per-channel clarifier field.
 		ClarStepHz: 0,   // Matrix §1 row 7: no per-channel clarifier field.
 		CTCSSTones: nil, // Matrix §1 row 8: the wire carries a number, not a table index.
-		// Matrix §1 row 9 / §3.16.2, first candidate: the chart's evidenced
-		// bounds — 67.0 to 254.1 Hz, PDF p.91 — at the WIRE FIELD'S OWN
-		// 0.1 Hz resolution, which is what this range describes. It is not
-		// a claim that the printed 50-tone chart is arithmetic; the chart's
-		// tones all fall inside it, and TestCTCSSToneDomainAdmitsEveryChartTone
-		// pins that every one of them is admitted. Whether the radio also
-		// accepts an off-chart tenth of a hertz between the bounds is the
-		// open question, register entry ic7100-tone-range-step.
-		CTCSSToneRange: &spec.ToneRange{MinDeciHz: 670, MaxDeciHz: 2541, StepDeciHz: 1},
+		// Matrix §1 row 9 / §3.16.2: THE WIRE FIELD'S OWN CAPACITY, at its
+		// own 0.1 Hz resolution. The three-byte tone span is a BCD
+		// FREQUENCY indexing no table, and its printed per-digit legend
+		// admits 000.0–299.9 Hz, so the declared domain is that capacity
+		// intersected with the capability floor of 1 — because 0 Hz is not
+		// a tone and spec.ToneRange requires MinDeciHz > 0.
+		//
+		// THE TIER'S RECORDED DOCTRINE, followed here rather than argued
+		// again. The IC-7300 met the identical artefact — a printed 50-tone
+		// chart over a BCD frequency field — and declared the capacity
+		// anyway (core/driver/ic7300/caps.go:242-251: "the record stores a
+		// BCD FREQUENCY indexing no table… A fifty-entry list here would
+		// fail closed on every encodable value outside it"), and that
+		// landed as IC-7300 matrix ERRATUM 12. Declaring the chart's
+		// 67.0–254.1 Hz bounds instead made a 254.2–299.9 Hz tone read
+		// Unknown and unwritable on this model whilst the same wire value
+		// round-trips on every sibling; the tier review refused the split.
+		//
+		// THE 50-TONE CHART IS NOT LOST — it is prose, in doc.go. It
+		// remains what the PANEL offers, which is a different claim from
+		// what the record can carry. Register entry ic7100-tone-range-step
+		// still asks whether the radio ACCEPTS an off-chart tenth of a
+		// hertz; it no longer decides this declaration.
+		//
+		// Pinned by TestCapabilityValuesFromMatrix and
+		// TestCTCSSToneDomainAdmitsEveryChartTone.
+		CTCSSToneRange: &spec.ToneRange{MinDeciHz: 1, MaxDeciHz: 2999, StepDeciHz: 1},
 
 		Bauds: append([]int(nil), baudRates...), // Matrix §1 row 10.
 		// Matrix §1 row 11: 19200 is the highest documented numeric rate;

@@ -18,11 +18,12 @@ package ic7100
 //   - ic7100-dtcs-code-clamp: write off-list DTCS 000 to a scratch channel
 //     and read it back. Until then the matrix's 104-code CHOICE is enforced.
 //   - ic7100-tone-range-step: set all 50 chart tones and read ⑮–⑰, then try
-//     an off-chart tenth of a hertz. The declared domain is the chart's
-//     bounds at the wire field's 0.1 Hz resolution — pinned by
-//     TestCapabilityValuesFromMatrix and TestCTCSSToneDomainAdmitsEveryChartTone
-//     — so what the lift settles is only whether a tenth of a hertz BETWEEN
-//     the charted tones is accepted, not whether the chart's own are.
+//     an off-chart tenth of a hertz. The declared domain is the wire
+//     field's own BCD capacity, 000.0–299.9 Hz at 0.1 Hz with the floor
+//     raised off zero — pinned by TestCapabilityValuesFromMatrix and
+//     TestCTCSSToneDomainAdmitsEveryChartTone, and following IC-7300 matrix
+//     erratum 12 — so what the lift settles is what the RADIO accepts off
+//     the printed chart, not what this driver declares.
 //   - ic7100-out-of-coverage-write: write 300.000000 MHz to a scratch channel
 //     and record whether it is preserved, clamped, or refused with FA.
 const driverRegister = "ic7100 Stage-2 driver register: seven open hardware lifts"

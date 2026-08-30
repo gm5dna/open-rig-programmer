@@ -102,23 +102,31 @@ const (
 	// 0–6 over a fixed "0 : 0" fifth cell — and that declaring the
 	// narrower radio figure is the CHOICE. Same register entry.
 	MaxRadioFreqHz = 60_000_000
-	// MinToneDeciHz and MaxToneDeciHz are the printed selectable CTCSS
-	// bounds: matrix §1 row 9, PDF p.115 (folio 5-38), "• Selectable tone
-	// frequencies (unit: Hz)", a 50-tone table running 67.0 to 254.1.
-	// MANUAL-EVIDENCED.
+	// MinToneDeciHz and MaxToneDeciHz are the CTCSS tone span's own BCD
+	// CAPACITY, in tenths of a hertz: matrix §1 row 9 / PDF p.262 (folio
+	// 18-13), whose rotated leaders print 100 Hz digit: 0–2 and 10/1/0.1 Hz
+	// digits: 0–9, i.e. 000.0–299.9 Hz. The floor is the capability floor
+	// of 1 rather than the printed 0, because 0 Hz is not a tone and
+	// spec.ToneRange requires MinDeciHz > 0.
 	//
-	// The record's digits reach 299.9 Hz, which is wider; the chart is
-	// what the radio offers.
-	MinToneDeciHz = 670
-	MaxToneDeciHz = 2541
-	// ToneStepDeciHz is the row's one ASSUMED half, register entry
-	// ic7851-tone-step-domain: the WIRE resolves to 0.1 Hz (the "0.1 Hz
-	// digit: 0–9" leader), but the radio's own set is 50 DISCRETE tones
-	// and the document never says whether an off-chart value is accepted.
-	// A step of 1 therefore declares a range MORE permissive than the
-	// printed chart, which is the conservative direction for a READ (no
-	// captured tone becomes Unknown for being between chart entries) and
-	// is bounded on both sides for a WRITE.
+	// NOT THE PRINTED CHART, and the difference is the tier's recorded
+	// doctrine. PDF p.115 (folio 5-38), "• Selectable tone frequencies
+	// (unit: Hz)", prints a 50-tone table running 67.0 to 254.1 — the
+	// PANEL-selectable set. The record indexes no table: it stores a BCD
+	// frequency, so a fifty-entry domain would fail closed on every
+	// encodable value outside it. The IC-7300 settled exactly this
+	// (core/driver/ic7300/caps.go:242-251), and it landed as IC-7300 matrix
+	// ERRATUM 12. The chart stays in doc.go §6c, as prose about the panel.
+	//
+	// Pinned by TestCapabilityValuesArePinnedToTheMatrix.
+	MinToneDeciHz = 1
+	MaxToneDeciHz = 2999
+	// ToneStepDeciHz is the wire's own resolution: the "0.1 Hz digit: 0–9"
+	// leader gives every tenth of a hertz a distinct encoding. Register
+	// entry ic7851-tone-step-domain still asks whether the radio ACCEPTS an
+	// off-chart value; it no longer decides this declaration, because the
+	// declaration is now what the RECORD can carry rather than what the
+	// panel offers.
 	ToneStepDeciHz = 1
 )
 
@@ -367,10 +375,14 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 			{Value: "TONE", Semantics: spec.ToneModeCTCSS},
 			{Value: "TSQL", Semantics: spec.ToneModeCTCSSSquelch},
 		},
-		// §1 row 9 — the RADIO'S OWN SELECTABLE CHART, and tier ruling
-		// T1(2). See MinToneDeciHz/MaxToneDeciHz for the reading and for
-		// why the printed chart is declared rather than the wider digit
-		// domain the wire could carry.
+		// §1 row 9 — the TONE SPAN'S OWN BCD CAPACITY, and tier ruling
+		// T1(2). See MinToneDeciHz/MaxToneDeciHz for the reading, and for
+		// why the wire's digit domain is declared rather than the printed
+		// 50-tone chart: the record stores a BCD frequency indexing no
+		// table, which is IC-7300 matrix erratum 12's recorded doctrine
+		// (core/driver/ic7300/caps.go:242-251). Its clone-family sibling
+		// the IC-7760 already declares the same {1, 2999, 1}, so a
+		// 254.2–299.9 Hz tone now round-trips on both rather than on one.
 		//
 		// THE WIRE'S 0 IS NOT LOST BY THAT. A tone-OFF channel's bytes are
 		// 00 00 00 and the codec hands the number 0 up unharmed; it is

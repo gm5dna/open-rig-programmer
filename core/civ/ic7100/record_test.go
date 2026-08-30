@@ -140,8 +140,9 @@ func TestRecordToneRangeDecision(t *testing.T) {
 	// the driver, not to this package: core/driver/ic7100's
 	// TestCTCSSToneDomainAdmitsEveryChartTone pins the domain, and
 	// register entry ic7100-tone-range-step remains the open question of
-	// whether the radio also accepts an OFF-CHART tenth of a hertz
-	// between those bounds.
+	// whether the RADIO also accepts a tenth of a hertz off the printed
+	// chart. The driver declares the span's whole BCD capacity, so the
+	// answer no longer changes the declaration.
 	for i, tone := range spec.StandardCTCSSTones() {
 		rec := knownRecord()
 		rec.ToneTXDeciHz = civ.Available(uint64(tone))
