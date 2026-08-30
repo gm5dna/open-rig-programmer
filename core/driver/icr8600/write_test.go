@@ -250,6 +250,42 @@ func TestE6_EveryFMOnlyUnmappedHighNibbleIsRefused(t *testing.T) {
 	}
 }
 
+func TestWrite_OffsetOutsideThePrintedDomainIsRefusedBeforeTheWire(t *testing.T) {
+	// Matrix section 3.15.7 draws the four offset bytes as eight labelled
+	// nibble leaders: [1 kHz | 100 Hz (0 Fixed)], [100 kHz | 10 kHz],
+	// [10 MHz | 1 MHz], [1 GHz (0 Fixed) | 100 MHz (0~2)]. The effective
+	// resolution is therefore 1 kHz and the ceiling 299,999,000 Hz.
+	//
+	// Every OTHER printed "0 (Fixed)" nibble in this record is refused by
+	// the E6 gate on the stored bytes. These two are reachable only here,
+	// because the codec packs all eight nibbles as ONE BCD number: a
+	// caller's offset is the only thing that can drive a non-zero digit
+	// into them, and the raw four-byte bound alone lets it.
+	addr := testWireAddress{0, 0}
+	for name, offset := range map[string]uint64{
+		"above the printed 299,999,000 Hz ceiling": 300_000_000,
+		"a non-zero 1 GHz (0 Fixed) nibble":        5_000_000_000,
+		"a non-zero 100 Hz (0 Fixed) nibble":       123_456_100,
+	} {
+		t.Run(name, func(t *testing.T) {
+			p, s := openConsentedWriteSession(t, testRadioImage{idToken: []byte{0x01}, acknowledge: true, records: map[testWireAddress][]byte{addr: testRecord(t, addr, "AM")}})
+			ch := writableChannel("G00-000", "AM")
+			ch.Data.OffsetHz = codeplug.FreqField{State: codeplug.Known, Value: offset}
+			before := len(p.Transcript())
+			res, err := s.WriteChannel(context.Background(), ch)
+			refused := requireWriteRefused(t, res, err, spec.FieldOffset)
+			if !strings.Contains(refused.Reason, "3.15.7") {
+				t.Errorf("reason = %q, want it to cite matrix section 3.15.7", refused.Reason)
+			}
+			// The refusal is locally decidable, so it must precede the
+			// preservation read as every other field check does.
+			if got := len(p.Transcript()) - before; got != 0 {
+				t.Errorf("an offset refusal put %d frames on the wire, want none", got)
+			}
+		})
+	}
+}
+
 func TestWrite_PreservesSupportedFMToneAndDTCSBytes(t *testing.T) {
 	addr := testWireAddress{0, 0}
 	stored := testRecord(t, addr, "FM")
