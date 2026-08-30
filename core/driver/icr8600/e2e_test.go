@@ -406,6 +406,42 @@ func TestEndToEnd_DigitalSquelchTailRefusesWithTheExactE6Reason(t *testing.T) {
 	}
 }
 
+func TestEndToEnd_AModeChangeIntoADigitalClassIsRefusedRatherThanInventTheTail(t *testing.T) {
+	// The fake's G00-000 is AM: a 37-byte record with NO tail at all. A
+	// DCR write would build a 44-byte record whose seven tail bytes come
+	// entirely from the profile's ASSUMED icr8600-tail-templates entry —
+	// D.SQL UC, UC code 123, encryption off — values G chose and no
+	// evidence supplies, which the stored record cannot preserve because
+	// it never had them.
+	//
+	// The FM path already refuses the mirror case ("the stored non-FM
+	// record has no FM tail to preserve") and the empty-slot path refuses
+	// "rather than inventing OFF". A digital target must refuse for the
+	// same reason instead of putting invented bytes on a real receiver.
+	radio, s := openFake(t, RealHardware, true)
+	stored, ok := radio.Record(0, 0)
+	if !ok || len(stored) != 37 {
+		t.Fatalf("the fake holds a %d-byte record at G00-000 (present %v), want the 37-byte AM record", len(stored), ok)
+	}
+
+	before := len(setFrames(radio.Frames()))
+	res, err := s.WriteChannel(context.Background(), writableChannel("G00-000", "DCR"))
+	refused := requireWriteRefused(t, res, err)
+	// The reason must NAME the bytes that would be invented, so an
+	// operator reads which state the radio must be put into by hand.
+	for _, want := range []string{"NONE", "DCR", "bytes 37-43", "icr8600-tail-templates", "01 01 23 00 00 00 00"} {
+		if !strings.Contains(refused.Reason, want) {
+			t.Errorf("refusal reason = %q, want it to name %q", refused.Reason, want)
+		}
+	}
+	if got := len(setFrames(radio.Frames())) - before; got != 0 {
+		t.Errorf("the refusal put %d set frames on the wire", got)
+	}
+	if now, _ := radio.Record(0, 0); !bytes.Equal(now, stored) {
+		t.Error("the refused write changed what the fake holds")
+	}
+}
+
 func TestEndToEnd_ReceiveOnlyTransmitFieldsAreRefusedBeforeTheWire(t *testing.T) {
 	radio, s := openFake(t, RealHardware, true)
 
