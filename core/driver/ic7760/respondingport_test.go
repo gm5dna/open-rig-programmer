@@ -95,6 +95,17 @@ type radioImage struct {
 	// test can serve a rejection from a foreign station (E1's
 	// source-address check). Zero means 0xB2.
 	setFrom byte
+	// lateSetAck makes a 1A 00 SET's FB arrive this long after the set was
+	// received, INSTEAD of immediately - long enough that the write's own
+	// answer wait has already expired when it lands.
+	//
+	// IT IS THE ONLY WAY TO REACH THE POST-WRITE QUARANTINE from a driver
+	// test. Silence proves the never-retransmit rule; it proves nothing
+	// about what happens to an acknowledgement that turns up after the
+	// caller has been told the outcome is unknown. That frame belongs to a
+	// transaction that is over, and the next exchange must not be allowed
+	// to read it as its own answer.
+	lateSetAck time.Duration
 }
 
 // newScriptedPort starts a scripted radio serving img and registers its
@@ -207,6 +218,21 @@ func (p *scriptedPort) stopFloodAfter(d time.Duration) {
 	}()
 }
 
+// writeAfter puts one frame on the wire d from now, or not at all if the
+// port is torn down first. The waiter is tracked by floodDone so the
+// cleanup does not race it.
+func (p *scriptedPort) writeAfter(d time.Duration, frame []byte) {
+	p.floodDone.Add(1)
+	go func() {
+		defer p.floodDone.Done()
+		select {
+		case <-p.floodStop:
+		case <-time.After(d):
+			p.write(frame)
+		}
+	}()
+}
+
 // write puts one frame on the wire under writeMu, reporting whether the
 // pipe is still alive.
 func (p *scriptedPort) write(frame []byte) bool {
@@ -239,6 +265,11 @@ func (p *scriptedPort) serve(img radioImage) {
 				frame := append([]byte(nil), acc[:i+1]...)
 				acc = acc[i+1:]
 				p.record(frame)
+				if img.lateSetAck > 0 && len(frame) >= memSetFrameLen &&
+					frame[4] == civ.CmdMemory && frame[5] == civ.SubMemoryContents {
+					p.writeAfter(img.lateSetAck, ackFrame(0xB2))
+					continue
+				}
 				for _, reply := range img.reply(frame) {
 					if !p.write(reply) {
 						return
