@@ -58,4 +58,12 @@ func buildFrame(to, from byte, p ...byte) []byte {
 	b := append([]byte{0xfe, 0xfe, to, from}, p...)
 	return append(b, 0xfd)
 }
-func buildAnswer(p ...byte) []byte { return buildFrame(0xe0, 0x8e, p...) }
+
+// answer frames a reply to the controller that sent f from the radio address
+// this Radio was configured with, which the dispatch filter has already proved
+// equal to f's destination byte. There is no literal source address here:
+// TestMovedRadioAddressFramesEveryReply moves the radio to 0x1C and pins that
+// every reply — model, read and refusal — carries the moved byte.
+func (r *Radio) answer(f wireFrame, p ...byte) []byte {
+	return buildFrame(f.from, r.addr, p...)
+}
