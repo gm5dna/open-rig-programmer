@@ -439,7 +439,8 @@ func TestE6UnmappedFieldsAreUnsupportedBothWays(t *testing.T) {
 // register entry ic7760-scan-edge-record-shape.
 //
 // REV 1 pinned scan_skip write-Unsupported here on the strength of PDF
-// p.12's "(i) Set 0 for P1 and P2." Under E6 the field is Unsupported on
+// p.20 (folio 19)'s "(i) Set 0 for P1 and P2." Under E6 the field is
+// Unsupported on
 // BOTH banks, so that note now CORROBORATES the grade rather than
 // carrying it.
 func TestScanBank_MatchesTheMatrixPerCell(t *testing.T) {

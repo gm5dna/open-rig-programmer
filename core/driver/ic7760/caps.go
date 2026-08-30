@@ -149,7 +149,8 @@ func memSlots() []string {
 // edges. P1 and P2 are NOT a separate bank in the wire
 // protocol. They are two more values of the same two-byte selector (BCD
 // "01 00" and "01 01", channel numbers 100 and 101, which is exactly what
-// civ.ProfileConfig.ChannelHi = 101 encodes). This project models them as
+// the profile's one ExtraRange 100..101 encodes, base MEM stopping at 99).
+// This project models them as
 // a SCAN bank only because the neutral memory model needs the distinction
 // between a memory and a scan edge; the codec knows one contiguous space.
 func scanSlots() []string { return []string{"P1", "P2"} }

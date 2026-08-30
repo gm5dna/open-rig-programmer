@@ -282,8 +282,9 @@ func (d *ic7760Driver) open(ctx context.Context, eng *transport.Engine, stats ci
 
 	// THE IDENTITY PROBE (spec D3.2). What identifies the radio is that an
 	// ADDRESS-MATCHED 19 00 reply arrived at all: the reply VALUE is
-	// undocumented on every model in this tier (D5 entry 7, matrix lift
-	// R7), so it is recorded as a diagnostic and compared against nothing.
+	// undocumented on every model in this tier (D5 entry 7, register entry
+	// ic7760-id-reply), so it is recorded as a diagnostic and compared
+	// against nothing.
 	//
 	// The address check belongs to the CODEC — the matcher comes from
 	// Profile.TransceiverIDAnswerMatcher and checks both the `to` and the
