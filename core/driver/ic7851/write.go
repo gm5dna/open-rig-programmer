@@ -79,33 +79,93 @@ func (e *UnmappedRegionError) Unwrap() error { return ErrUnmappedRegion }
 // radio's record can encode.
 var ErrOutOfDomain = errors.New("ic7851: a Known value lies outside what this radio's record can encode")
 
-// OutOfDomainError reports a Known numeric value the wire cannot express.
+// OutOfDomainError reports a Known numeric value outside the domain THIS
+// SESSION'S CAPABILITIES declare.
 //
-// DEFENCE IN DEPTH, AND NOT THE GATE — see doc.go §6. civ.FieldSpan has no
+// THE BOUNDS ARE THE CAPABILITIES', NOT THE FIELD WIDTH'S, and that is the
+// whole point of the type. The record's BCD digits are wider than the
+// radio: they would carry 69.999999 MHz and a 299.9 Hz tone, while the
+// specification page prints a receiver running 0.030000–60.000000 MHz and
+// the tone chart runs 67.0–254.1 Hz. Bounding by the field width would
+// authorise, after consent, a frequency this radio cannot receive.
+//
+// DEFENCE IN DEPTH, AND NOT THE GATE — see doc.go. civ.FieldSpan has no
 // numeric domain, so civ.Profile.AllowedCommand would ADMIT a set carrying
-// 70 MHz. codeplug.Validate already bounds the primary frequency and
-// enabler E3 bounds tones, so every path through the model layer is
-// covered; these refusals close the driver's own door as well, and
-// TestNumericRefusalIsDefenceInDepthNotTheGate asserts the gap that
-// remains so that closing it later is a visible test change.
+// 65 MHz. codeplug.Validate already bounds the primary frequency against
+// the same capability numbers and enabler E3 bounds tones, so every path
+// through the model layer is covered; this refusal closes the driver's own
+// door as well.
 type OutOfDomainError struct {
 	// Field is the neutral field whose value was refused.
 	Field spec.Field
 	// Value is what was asked for, in the field's own neutral unit (hertz
 	// for a frequency, tenths of a hertz for a tone).
 	Value uint64
-	// Max is the largest value this radio's record can encode for it.
-	Max uint64
+	// Min and Max are this session's declared bounds for the field, in
+	// the same unit.
+	Min, Max uint64
+	// Where names the capability the bounds came from, for the message.
+	Where string
 }
 
 func (e *OutOfDomainError) Error() string {
 	return fmt.Sprintf(
-		"ic7851: %s = %d is outside what this radio's record can encode (maximum %d) — refused before any frame was built. This is a DRIVER-level refusal and NOT the outbound gate: civ.FieldSpan carries no numeric domain, so the gate would admit this frame (see doc.go, the deferred gate-domain gap)",
-		e.Field, e.Value, e.Max)
+		"ic7851: %s = %d is outside this radio's declared domain %d..%d (%s) — refused before any frame was built. This is a DRIVER-level refusal and NOT the outbound gate: civ.FieldSpan carries no numeric domain, so the gate would admit this frame (see doc.go, the deferred gate-domain gap)",
+		e.Field, e.Value, e.Min, e.Max, e.Where)
 }
 
 // Unwrap lets errors.Is(err, ErrOutOfDomain) match.
 func (e *OutOfDomainError) Unwrap() error { return ErrOutOfDomain }
+
+// domainRefusal applies WriteChannel's rung 4 to one channel, against one
+// capability set.
+//
+// SPLIT OUT OF THE LADDER so that a test can ask "is this value inside the
+// declared domain?" without needing a session and an engine, and so that
+// the answer a test gets is the same code path a write takes.
+//
+// The frequency arm reads caps.MinFreqHz/MaxFreqHz and the tone arms
+// caps.CTCSSToneRange, so the numbers a UI offers, the numbers
+// codeplug.Validate judges against and the numbers this rung enforces are
+// ONE declaration. A missing tone range refuses every Known tone rather
+// than admitting one: a radio that declares no domain has authorised
+// nothing.
+func domainRefusal(d codeplug.ChannelData, caps spec.Capabilities) error {
+	if d.FreqHz < caps.MinFreqHz || d.FreqHz > caps.MaxFreqHz {
+		return &OutOfDomainError{
+			Field: spec.FieldFrequency, Value: d.FreqHz,
+			Min: caps.MinFreqHz, Max: caps.MaxFreqHz,
+			Where: "spec.Capabilities.MinFreqHz/MaxFreqHz, the receiver coverage printed in the specifications",
+		}
+	}
+	r := caps.CTCSSToneRange
+	for _, tt := range []struct {
+		field spec.Field
+		tone  codeplug.ToneField
+	}{
+		{spec.FieldToneTx, d.ToneTx},
+		{spec.FieldToneRx, d.ToneRx},
+	} {
+		if tt.tone.State != codeplug.Known {
+			continue
+		}
+		v := uint64(tt.tone.Value)
+		if r == nil {
+			return &OutOfDomainError{
+				Field: tt.field, Value: v,
+				Where: "this session declares no CTCSSToneRange at all, so no tone is authorised",
+			}
+		}
+		if v < uint64(r.MinDeciHz) || v > uint64(r.MaxDeciHz) {
+			return &OutOfDomainError{
+				Field: tt.field, Value: v,
+				Min: uint64(r.MinDeciHz), Max: uint64(r.MaxDeciHz),
+				Where: "spec.Capabilities.CTCSSToneRange, the selectable tone chart",
+			}
+		}
+	}
+	return nil
+}
 
 // requestedFields is every spec.Field a write of d would TRANSMIT or
 // REQUEST, in ChannelData declaration order.
@@ -283,21 +343,8 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 
 	// RUNG 4 — NUMERIC DOMAINS. Defence in depth and NOT the gate; see
 	// OutOfDomainError and doc.go §6.
-	if d.FreqHz > MaxEncodableFreqHz {
-		return driver.WriteResult{Steps: []driver.WriteStep{}},
-			&OutOfDomainError{Field: spec.FieldFrequency, Value: d.FreqHz, Max: MaxEncodableFreqHz}
-	}
-	for _, tt := range []struct {
-		field spec.Field
-		tone  codeplug.ToneField
-	}{
-		{spec.FieldToneTx, d.ToneTx},
-		{spec.FieldToneRx, d.ToneRx},
-	} {
-		if tt.tone.State == codeplug.Known && uint64(tt.tone.Value) > MaxToneDeciHz {
-			return driver.WriteResult{Steps: []driver.WriteStep{}},
-				&OutOfDomainError{Field: tt.field, Value: uint64(tt.tone.Value), Max: MaxToneDeciHz}
-		}
+	if err := domainRefusal(d, s.caps); err != nil {
+		return driver.WriteResult{Steps: []driver.WriteStep{}}, err
 	}
 
 	// RUNG 5 — THE ONE READ. E6 needs the slot's RAW unmapped regions and
