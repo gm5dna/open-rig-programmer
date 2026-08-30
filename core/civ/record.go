@@ -51,9 +51,11 @@ func (o Optional[T]) String() string {
 // numbering into this package.
 type FieldID string
 
-// The field vocabulary. It is spec D1's MemoryRecord list exactly: RX
-// frequency, TX frequency or duplex+offset, mode+filter, data mode, tone
-// mode, TX tone, RX tone, DTCS code+polarity, name, select/skip.
+// The field vocabulary. It is spec D1's MemoryRecord list plus Erratum 6's
+// D8 receiver settings: RX frequency, TX frequency or duplex+offset,
+// mode+filter, data mode, tone mode, TX tone, RX tone, DTCS code+polarity,
+// name, select/skip, tuning-step enable/code, programmable step, attenuator,
+// preamp, antenna and IP+.
 //
 // Adding one is a DELIBERATE act: MemoryRecord must gain a matching field,
 // the accessors below must reach it, and AllFieldIDs must list it —
@@ -73,6 +75,19 @@ const (
 	FieldDTCSPolarity FieldID = "dtcs_polarity"
 	FieldName         FieldID = "name"
 	FieldSelect       FieldID = "select"
+
+	// The receiver fields mirror the neutral D8 vocabulary. They live in
+	// MemoryRecord because TestRecordCommonHeadEncodesAndDecodesEveryMappedField
+	// pins that the CI-V gate must decode and re-encode them byte-identically;
+	// leaving them only in codeplug.ChannelData would make safe writes
+	// impossible to express at the codec boundary.
+	FieldTuningStepEnabled FieldID = "tuning_step_enabled"
+	FieldTuningStep        FieldID = "tuning_step"
+	FieldProgramTuningStep FieldID = "program_tuning_step"
+	FieldAttenuator        FieldID = "attenuator"
+	FieldPreamp            FieldID = "preamp"
+	FieldAntenna           FieldID = "antenna"
+	FieldIPPlus            FieldID = "ip_plus"
 )
 
 // AllFieldIDs returns the whole vocabulary, in a stable order.
@@ -82,6 +97,8 @@ func AllFieldIDs() []FieldID {
 		FieldToneTX, FieldToneRX, FieldDTCSCode,
 		FieldDuplex, FieldMode, FieldFilter, FieldDataMode,
 		FieldToneMode, FieldDTCSPolarity, FieldName, FieldSelect,
+		FieldTuningStepEnabled, FieldTuningStep, FieldProgramTuningStep,
+		FieldAttenuator, FieldPreamp, FieldAntenna, FieldIPPlus,
 	}
 }
 
@@ -101,10 +118,13 @@ const (
 func (f FieldID) kind() (fieldKind, bool) {
 	switch f {
 	case FieldRXFrequency, FieldTXFrequency, FieldOffset,
-		FieldToneTX, FieldToneRX, FieldDTCSCode:
+		FieldToneTX, FieldToneRX, FieldDTCSCode,
+		FieldProgramTuningStep, FieldAttenuator:
 		return fieldNumeric, true
 	case FieldDuplex, FieldMode, FieldFilter, FieldDataMode,
-		FieldToneMode, FieldDTCSPolarity, FieldName, FieldSelect:
+		FieldToneMode, FieldDTCSPolarity, FieldName, FieldSelect,
+		FieldTuningStepEnabled, FieldTuningStep, FieldPreamp,
+		FieldAntenna, FieldIPPlus:
 		return fieldText, true
 	default:
 		return 0, false
@@ -313,6 +333,14 @@ type MemoryRecord struct {
 	DTCSPolarity Optional[string]
 	Name         Optional[string]
 	Select       Optional[string]
+
+	TuningStepEnabled   Optional[string]
+	TuningStep          Optional[string]
+	ProgramTuningStepHz Optional[uint64]
+	AttenuatorDB        Optional[uint64]
+	Preamp              Optional[string]
+	Antenna             Optional[string]
+	IPPlus              Optional[string]
 }
 
 // numeric returns the numeric field id names, and whether id is a numeric
@@ -331,6 +359,10 @@ func (r MemoryRecord) numeric(id FieldID) (Optional[uint64], bool) {
 		return r.ToneRXDeciHz, true
 	case FieldDTCSCode:
 		return r.DTCSCode, true
+	case FieldProgramTuningStep:
+		return r.ProgramTuningStepHz, true
+	case FieldAttenuator:
+		return r.AttenuatorDB, true
 	default:
 		return Optional[uint64]{}, false
 	}
@@ -352,6 +384,10 @@ func (r *MemoryRecord) setNumeric(id FieldID, v uint64) {
 		r.ToneRXDeciHz = Available(v)
 	case FieldDTCSCode:
 		r.DTCSCode = Available(v)
+	case FieldProgramTuningStep:
+		r.ProgramTuningStepHz = Available(v)
+	case FieldAttenuator:
+		r.AttenuatorDB = Available(v)
 	}
 }
 
@@ -374,6 +410,16 @@ func (r MemoryRecord) text(id FieldID) (Optional[string], bool) {
 		return r.Name, true
 	case FieldSelect:
 		return r.Select, true
+	case FieldTuningStepEnabled:
+		return r.TuningStepEnabled, true
+	case FieldTuningStep:
+		return r.TuningStep, true
+	case FieldPreamp:
+		return r.Preamp, true
+	case FieldAntenna:
+		return r.Antenna, true
+	case FieldIPPlus:
+		return r.IPPlus, true
 	default:
 		return Optional[string]{}, false
 	}
@@ -398,6 +444,16 @@ func (r *MemoryRecord) setText(id FieldID, v string) {
 		r.Name = Available(v)
 	case FieldSelect:
 		r.Select = Available(v)
+	case FieldTuningStepEnabled:
+		r.TuningStepEnabled = Available(v)
+	case FieldTuningStep:
+		r.TuningStep = Available(v)
+	case FieldPreamp:
+		r.Preamp = Available(v)
+	case FieldAntenna:
+		r.Antenna = Available(v)
+	case FieldIPPlus:
+		r.IPPlus = Available(v)
 	}
 }
 
