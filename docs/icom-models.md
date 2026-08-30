@@ -118,14 +118,18 @@ Three costs are shared by all eleven:
     into an empty slot, since the SELECT nibble has no honest default
     to write (`core/driver/ic7300/write.go:433`;
     `core/driver/ic7300mk2/write.go:441`).
-  - **IC-R8600**: two costs, and neither is the Select-group one the
-    other models pay — this receiver's record carries the Select group in
+  - **IC-R8600**: three costs. The first is the IC-7300s' own, and it
+    applies here for the same reason: a CREATE into an empty slot is
+    refused, since the record's SELECT group has no honest default to
+    write (`core/driver/icr8600/write.go:247-252`). The other two are
+    this receiver's own, and neither is the Select-group one the other
+    models pay — this receiver's record carries the Select group in
     the LOW half of its first byte and a printed scan-skip setting
     (SKIP OFF / SKIP / PSKIP) in the HIGH half, and it is the HIGH half
     that E6 guards, so a channel the operator has marked as skipped is
     refused rather than rewritten as unskipped
     (`core/driver/icr8600/write.go`'s `commonUnmappedHighNibbles`, and
-    matrix §2 row 9 for the printed enum). The second is this radio's
+    matrix §2 row 9 for the printed enum). The third is this radio's
     own: its five digital classes — D-STAR, P25, NXDN, DCR and dPMR —
     each carry a squelch tail no `codeplug` field maps, so a stored
     channel whose tail differs from this build's assumed template cannot
