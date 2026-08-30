@@ -1046,6 +1046,12 @@ func NewIC7100RealDriver() driver.Driver {
 // (additions spec D4.2's invariant). Both are written-down zeros in
 // caps.go's bankFields today.
 //
+// NO icr8600.WithFullInventoryWalk() HERE, DELIBERATELY. Like the IC-905
+// option, it is a Go-only opt-in for callers using core/driver/icr8600
+// directly; no CLI flag or GUI control exposes it. The registry therefore
+// keeps the bounded default. TestRealDriverFor_DefaultPathByteIdentical pins
+// both its ordinary and consented rows without the option.
+//
 // THE FAIL-SAFE DIRECTION IS UNCHANGED: an unrecognised Profile value
 // selects the all-Unverified set too, through icr8600.go's Capabilities
 // switch (its default arm returns CapabilitiesUnverified), never the

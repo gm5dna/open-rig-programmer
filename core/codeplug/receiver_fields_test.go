@@ -108,6 +108,43 @@ func TestValidateTierFields_ReceiverTypedShapesAndDomains(t *testing.T) {
 	}
 }
 
+// TestAdmitsProgramTuningStep_MatchesValidationAtDomainEdges pins one shared
+// predicate for codeplug validation and the IC-R8600 read mapper. The edges are
+// where duplicated range logic is most likely to drift.
+func TestAdmitsProgramTuningStep_MatchesValidationAtDomainEdges(t *testing.T) {
+	cases := []struct {
+		name       string
+		rangeValue *spec.StepRange
+		value      uint64
+		want       bool
+	}{
+		{"nil range", nil, 100, false},
+		{"zero resolution", &spec.StepRange{MinHz: 100, MaxHz: 1000}, 100, false},
+		{"below minimum", &spec.StepRange{MinHz: 100, MaxHz: 1000, ResolutionHz: 100}, 99, false},
+		{"minimum", &spec.StepRange{MinHz: 100, MaxHz: 1000, ResolutionHz: 100}, 100, true},
+		{"misaligned interior", &spec.StepRange{MinHz: 100, MaxHz: 1000, ResolutionHz: 100}, 550, false},
+		{"maximum", &spec.StepRange{MinHz: 100, MaxHz: 1000, ResolutionHz: 100}, 1000, true},
+		{"above maximum", &spec.StepRange{MinHz: 100, MaxHz: 1000, ResolutionHz: 100}, 1001, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			caps := receiverCapabilities()
+			caps.ProgramTuningStepRange = tc.rangeValue
+			data := validReceiverData()
+			data.ProgramTuningStepHz.Value = tc.value
+			validatorAdmits := true
+			for _, issue := range validateTierFields("001", spec.BankMemory, data, caps) {
+				if issue.Field == spec.FieldProgramTuningStep {
+					validatorAdmits = false
+				}
+			}
+			if got := AdmitsProgramTuningStep(caps, tc.value); got != tc.want || got != validatorAdmits {
+				t.Errorf("AdmitsProgramTuningStep = %v, validator admits = %v, want %v", got, validatorAdmits, tc.want)
+			}
+		})
+	}
+}
+
 func TestReceiverFields_DiffTablesCoverAllSeven(t *testing.T) {
 	tests := []struct {
 		field spec.Field
