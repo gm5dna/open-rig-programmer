@@ -74,7 +74,7 @@ const bodyPrefixLen = 2
 
 // maxFrameBody caps how many body bytes the accumulator will hold for one frame
 // before deciding the end-of-message byte is never coming. It is NOT a protocol
-// limit — the manual states none (doc.go, register entry 9) — it is a guard so
+// limit — the manual states none (doc.go, register entry 14) — it is a guard so
 // that a stream of garbage cannot grow the buffer without bound. It is set far
 // above the longest frame this radio can be asked for, the 121-byte complete
 // record set.

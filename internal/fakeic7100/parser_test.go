@@ -160,7 +160,7 @@ func TestAccumulator(t *testing.T) {
 func TestAccumulator_DropsARunTooLongToBeAFrame(t *testing.T) {
 	// The document states no frame-length limit. The cap is a property of a
 	// reader that must not grow without bound on a line that has come up
-	// mid-frame; see doc.go, register entry 9.
+	// mid-frame; see doc.go, register entry 14.
 	a := newAccumulator()
 	a.feed([]byte{0xFE, 0xFE})
 	if got := a.feed(bytes.Repeat([]byte{0x00}, maxFrameBody+16)); len(got) != 0 {
