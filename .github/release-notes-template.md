@@ -25,6 +25,12 @@
   evidence is still pending: the evidence-status section says so, and
   must keep saying so until a real-radio Linux session has run.
 
+  SYNC 30/08/2026 (v1.2.1): a "What changed in this version" section
+  now opens the body — the FT-710 PMS kind-byte read fix (field report
+  against v1.2.0) and the five Icom-additions rows. Rewrite that section
+  for each release; the rest of the file describes the product as it
+  stands.
+
   SYNC 26/08/2026: the packaged binaries HAVE now been launch-tested.
   Rehearsal debs built by release.yml were installed on clean Ubuntu
   24.04.4 desktop VMs on both architectures (arm64 23/08/2026, amd64
@@ -91,6 +97,26 @@ memory-channel programmer for the Yaesu FT-710, built as a free
 alternative to RT Systems' YPS-FT710, with fourteen further Yaesu and
 Icom models — thirteen transceivers and one receiver — registered for
 reading and for opt-in writes (see below).
+
+## What changed in this version
+
+- **FT-710 read fix (field report, 30/08/2026).** v1.2.0 aborted a whole
+  read — `rigprog read`, the GUI's Read Radio and clone preparation — on
+  a radio whose PMS pair answered the `MR` read with kind byte `0`
+  (`ft710: MR answer for slot "P1L" carries kind '0', want one of
+  {'1','5'}`). The radio sets that byte itself, on a channel this
+  program had written months earlier and nobody had touched since; it is
+  not a statement about the slot, so the read no longer refuses it. PMS
+  slots now accept the same kind bytes the regular memories always did.
+  Recorded in `docs/hardware-notes.md` (§P7 kind drift). If you hit that
+  error on v1.2.0, this release is the fix.
+- **Five more Icom models registered** (the Icom additions tier):
+  IC-7851 and IC-7850, IC-7760, IC-7100, and the IC-R8600 receiver — the
+  first receive-only model, with its per-channel receiver settings
+  (tuning step, attenuator, preamp, antenna, IP+) carried in a new
+  codeplug schema (5). All five are document-derived and unverified on
+  hardware, exactly like the six Icom models of v1.2.0; the support
+  table below says what each can and cannot do.
 
 ## What it does
 

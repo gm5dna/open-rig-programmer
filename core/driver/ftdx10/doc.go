@@ -118,7 +118,7 @@
 //
 // The FT-710's driver keeps its own P7 kind vocabulary per bank
 // (acceptedKinds, read.go there) because its leniencies — {'0','1','4'}
-// on MEM, {'1','5'} on PMS, {'1'} on discovered banks — are ITS live
+// on MEM, {'0','1','5'} on PMS, {'1'} on discovered banks — are ITS live
 // observations. This driver has none, so it adds no check of its own:
 // cat.Dialect.ParseMTAnswerCombined already narrows P7 to the combined
 // record's OWN documented read pair {'0' VFO, '1' Memory}
