@@ -286,6 +286,41 @@ var tierFields = []spec.Field{
 // ic7100-special-bank-byte is lifted — so this row changed no field COUNT
 // and fewer BankViews carry it than any other Icom row. Pinned here by
 // TestGetUISpec_RegisteredIC7100_EveryBankFieldsAndTagDisplay.
+// FOURTEEN OF THE SEVENTEEN for the IC-R8600, the additions tier's FOURTH
+// and last registration (Tier 4b) — and this is the row that makes the
+// list's SHAPE matter rather than only its members, because it is the
+// first that reaches any of the seven D8 receiver fields and the first
+// that reaches FEWER than all the tier's original ten.
+//
+// WHAT IT REACHES: duplex, offset, tone_mode, tone_rx, dtcs_code,
+// dtcs_polarity and filter of the original ten, plus ALL SEVEN of the D8
+// receiver fields — tuning_step_enabled, tuning_step, program_tuning_step,
+// attenuator, preamp, antenna and ip_plus — which
+// core/driver/icr8600/caps.go's bankFields maps from the record's common
+// head (additions spec D8.2's table; core/civ/icr8600/profile.go's
+// commonFields). Every other registered model grades all seven the zero
+// FieldSupport, so until this row landed the seven were columns no bank
+// could reach.
+//
+// WHAT IT DOES NOT, AND WHY THE REASON IS DIFFERENT IN EACH CASE.
+// tx_frequency and tone_tx are absent by ANATOMY: this radio is a
+// receiver (spec.ReceiveOnly, additions spec D4.2), and that spec's
+// invariant makes grading either of them above Unsupported a
+// spec.Validate FAILURE rather than a choice. data_mode is absent for the
+// ordinary reason the 25-byte records' own is — this record carries no
+// such byte at all.
+//
+// NO CODE CHANGED HERE FOR ANY OF IT, and that is the point worth
+// recording: tierFields above has carried the seven D8 entries since the
+// additions core landed them (`app: expose receiver columns by bank
+// capability`), the body below asks each bank the same
+// FieldSupport.Unreachable question it always has, and the frontend's
+// column table is keyed the same way. So the first receiver's fourteen
+// columns fall out of its capabilities exactly as every transceiver's
+// four, six or ten did. Pinned here by
+// TestGetUISpec_RegisteredICR8600_EveryBankFieldsAndTagDisplay, and its
+// receiver half by TestGetUISpec_RegisteredICR8600_IsAReceiver.
+//
 // A future Icom registration would extend this same list with its own
 // model-specific set.
 func bankTierFields(caps spec.Capabilities, id spec.BankID) []string {

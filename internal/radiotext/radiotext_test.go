@@ -936,6 +936,11 @@ func TestFor_UnknownModel(t *testing.T) {
 		// IC-7100 near misses (Tier 4b's third registration): the same
 		// five-shape set once more.
 		"IC7100", "ic-7100", "IC-7100 ", " IC-7100", "7100",
+		// IC-R8600 near misses (Tier 4b's fourth and last registration):
+		// the same five shapes, plus the one this model name invites that
+		// no other does — dropping the R, which is the letter that says
+		// "receiver".
+		"ICR8600", "ic-r8600", "IC-R8600 ", " IC-R8600", "R8600", "IC-8600",
 	} {
 		got, ok := radiotext.For(model)
 		if ok {
@@ -1390,6 +1395,109 @@ func TestRadiotext_IC7100Verbatim(t *testing.T) {
 		for _, particular := range ic7100Particulars {
 			if strings.Contains(val, particular) {
 				t.Errorf("IC-7100 %s contains %q — another radio's particular in this one's prose is that radio's evidence claimed for this one", field, particular)
+			}
+		}
+	}
+}
+
+// icr8600Particulars is the non-borrowing particulars list for the
+// IC-R8600 (Tier 4b's FOURTH and last registration) — the same shape as
+// ic7100Particulars and every Icom entry's before it: the
+// Yaesu-vocabulary-plus-bare-"CAT" set plus the address hex and bare
+// model name of EVERY OTHER registered Icom entry, the IC-7851/IC-7850
+// pair's shared 8Eh included.
+//
+// THE IC-R8600 HAS NO SIBLING, so like the IC-7760's and the IC-7100's
+// lists this one carries every other name without exception, and its own
+// 96h is deliberately absent (it is this receiver's own). No prefix hazard
+// runs either way: none of the names below is a substring of "IC-R8600",
+// and "IC-R8600" is a substring of none of them.
+var icr8600Particulars = []string{
+	"V01-10", "[V/M]", "[ERASE]", "FT-710", "hardware-verified",
+	"FTdx10", "FTdx101D", "FTdx101MP", "CAT manual", "CAT command", "CAT query", "CAT",
+	"IC-7610", "98h",
+	"IC-7300", "94h",
+	"IC-7300MK2", "B6h",
+	"IC-705", "A4h",
+	"IC-9700", "A2h",
+	"IC-905", "ACh",
+	"IC-7851", "IC-7850", "8Eh",
+	"IC-7760", "B2h",
+	"IC-7100", "88h",
+}
+
+// TestRadiotext_ICR8600Verbatim is TestRadiotext_IC7100Verbatim's sibling
+// for the additions tier's FOURTH and last registration, and it guards
+// the same kind of fact: the HEDGES. This prose was written in
+// radiotext.go itself, for a receiver this project has never connected to
+// anything, under the honesty rule recorded at icr8600Text.
+//
+// "no IC-R8600 has ever answered a frame", "No minimum version is
+// established", "a weaker guess here than on any other radio this build
+// supports" and "this build cannot tell you" are the load-bearing words.
+// An editor tidying them into confident advisory copy would attribute
+// evidence to this receiver that nobody holds. That edit fails here.
+//
+// AND ONE PHRASE IS LOAD-BEARING IN A SECOND WAY. GridLegendNote opens
+// with "receiver — no transmit fields", which additions spec D4.2 asks
+// for IN THOSE WORDS: it is the sentence that explains an absent column
+// as anatomy rather than as an unwritable field, and it is served to the
+// grid unchanged through app/uispec.go. A rewrite that dropped it would
+// leave the first receiver's grid explaining nothing, so the verbatim
+// comparison below is what holds the spec's wording in place.
+//
+// ToneScanSkipVerification is asserted EMPTY for the same reason every
+// other model's is: core/driver/icr8600's writeTrialsComplete is false, so
+// there is no hardware-preservation verification of any kind to report.
+//
+// THE NON-BORROWING CHECK RUNS AGAINST ALL FOURTEEN OTHER ENTRIES. None of
+// them describes a receiver, so wholesale borrowing here would be more
+// visible than usual — which is exactly why the partial kind, a clause
+// lifted from a transceiver's entry, is the one the particulars list
+// catches.
+func TestRadiotext_ICR8600Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure:   "The IC-R8600's CI-V Reference Guide DOES print a memory clear form — a memory-set frame carrying FF where the record would go — and this build does not send it: no builder exists for it, the outbound gate admits only the identity read, a memory read and a re-validated memory set, and no IC-R8600 has ever confirmed what the printed form does, so sending one risks clearing the wrong channel rather than the intended one. The printed form also excludes group 0102, the programmed scan edges, from what it may clear, which is a scope this build could not honour in any case: it does not address that group at all. Clear a memory from the receiver's own front panel instead, following the procedure in its instruction manual.",
+		FirmwareGuidance: "No minimum firmware version is established for the IC-R8600: nothing this project holds states one, and no IC-R8600 has been asked. Its CI-V Reference Guide names no version query either, and this build's whole admitted command set is the identity read and the memory record — so read the version off the receiver's own display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established. Note what that guide does open with: it tells you to set the receiver's address, its data communication speed and its transceive function in Set mode before controlling it at all, so a receiver that answers nothing may simply not have been set up yet.",
+		GridLegendNote:   "This radio is a receiver — no transmit fields: an IC-R8600 has no transmitter, and its memory record carries no transmit frequency and no transmitted tone, so those columns are absent by anatomy rather than merely unwritable. Tone squelch IS read and written over CI-V by this build, but unverified against real hardware — no IC-R8600 has ever answered a frame — and only on an FM channel, the tone mode, received tone, DTCS code and DTCS polarity all living in the FM tail alone. Scan Skip is neither read nor written, and on this receiver that refuses TWO printed settings rather than one: the first record byte carries a three-valued scan-skip choice in one half and a ten-valued select-scan group in the other, and this build maps neither, so a channel holding anything but zero in the scan-skip half is refused rather than rewritten as zero. The five digital classes cost more again — a D-STAR, P25, NXDN, DCR or dPMR channel whose squelch bytes differ from the assumed template cannot be written back at all, and neither can a change of mode INTO one of those classes, because there is no honest value to put in a tail this build does not map.",
+		// Deliberately empty — see this test's doc comment.
+		ToneScanSkipVerification: "",
+		EraseDialogNote:          "The IC-R8600's CI-V Reference Guide DOES print a memory clear form — a memory-set frame carrying FF where the record would go — and this build does not send it: no builder exists for it, the outbound gate admits only the identity read, a memory read and a re-validated memory set, and no IC-R8600 has ever confirmed what the printed form does, so sending one risks clearing the wrong channel rather than the intended one. The printed form also excludes group 0102, the programmed scan edges, from what it may clear, which is a scope this build could not honour in any case: it does not address that group at all. Clear a memory from the receiver's own front panel instead, following the procedure in its instruction manual.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "read and written over CI-V by this build on FM channels only — unverified against real hardware, since no IC-R8600 has ever answered a frame",
+			ScanSkip: "not read or written over CI-V by this build — this receiver's first record byte holds a printed scan-skip choice and a select-scan group, and neither half is mapped",
+		},
+		FirmwarePlaceholder: "as shown on the IC-R8600's own display",
+		ProbeFirmwareNote:   "Firmware version has no query in this build — check the receiver's display. No minimum version is established for the IC-R8600: this build knows of none to require. This driver talks only to CI-V address 96h, with no --civ-address option to change it and no way to detect a receiver set to a different address; and its opening speed of 19200 is a weaker guess here than on any other radio this build supports — this receiver's CI-V Reference Guide prints no factory default speed, mentions no automatic setting, and never lists the rates its menu offers, so the rate AND the list it was chosen from are both assumed. The guide's own advice is to set the address, the speed and the transceive function in the receiver's Set mode before controlling it, which is the first thing to check. Two more things about this receiver are worth knowing before blaming the port. It has FOUR possible control terminals — a remote jack, a front and a rear USB port, and a network connection — and this build talks over USB, so if one port is silent, check which terminal the receiver has been told to use before concluding the cable is wrong. And neither the transceive setting nor the echo-back setting of either USB port has a printed default, so this build cannot tell you whether unsolicited frames should be expected of the receiver's own accord; any that arrive are counted and ignored, never acted on. If nothing answers, check the receiver's address and speed before assuming the port is wrong.",
+	}
+
+	got, ok := radiotext.For("IC-R8600")
+	if !ok {
+		t.Fatal(`For("IC-R8600") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"IC-R8600\") = %#v,\nwant %#v", got, want)
+	}
+
+	for _, other := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100"} {
+		otherText, ok := radiotext.For(other)
+		if !ok {
+			t.Fatalf("For(%q) ok = false, want true — sanity check failed", other)
+		}
+		otherFields := ftdx101Fields(otherText)
+		for field, val := range ftdx101Fields(got) {
+			if val == "" {
+				continue
+			}
+			if val == otherFields[field] {
+				t.Errorf("IC-R8600 %s is byte-identical to the %s's — one radio's prose must never be served as another's", field, other)
+			}
+		}
+	}
+	for field, val := range ftdx101Fields(got) {
+		for _, particular := range icr8600Particulars {
+			if strings.Contains(val, particular) {
+				t.Errorf("IC-R8600 %s contains %q — another radio's particular in this one's prose is that radio's evidence claimed for this one", field, particular)
 			}
 		}
 	}
