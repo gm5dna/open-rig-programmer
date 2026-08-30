@@ -15,6 +15,12 @@ import (
 
 const testTimeout = 2 * time.Second
 
+// silenceWindow is how long readFrames(t, r, 0) leaves the wire open before it
+// closes the radio and looks: long enough for an answer to a frame written just
+// before the call to have been served and queued, short enough that a file full
+// of silence assertions still runs quickly.
+const silenceWindow = 100 * time.Millisecond
+
 // exchange writes one frame to the radio and returns the frames it said back,
 // stopping when want frames have arrived or the timeout expires.
 func exchange(t *testing.T, r *Radio, want int, request []byte) [][]byte {
@@ -26,11 +32,16 @@ func exchange(t *testing.T, r *Radio, want int, request []byte) [][]byte {
 }
 
 // readFrames reads until want whole frames have arrived, or the timeout.
+//
+// want == 0 is not "read nothing": it is the assertion that the radio says
+// NOTHING AT ALL, and it is served by readSilence, which reads the port for a
+// bounded window and fails on any byte. A want == 0 path that skipped the read
+// would pass whatever the radio did, and every silence assertion built on it
+// would prove nothing.
 func readFrames(t *testing.T, r *Radio, want int) [][]byte {
 	t.Helper()
 	if want == 0 {
-		// Nothing is expected. Give the radio a moment to be wrong, then look.
-		time.Sleep(50 * time.Millisecond)
+		return readSilence(t, r)
 	}
 
 	type result struct{ frames [][]byte }
@@ -51,17 +62,89 @@ func readFrames(t *testing.T, r *Radio, want int) [][]byte {
 		done <- result{got}
 	}()
 
-	if want == 0 {
-		// Closing the radio wakes the reader with io.EOF, so the goroutine
-		// above returns whatever had already arrived — which must be nothing.
-		r.Close()
-	}
 	select {
 	case res := <-done:
 		return res.frames
 	case <-time.After(testTimeout):
 		t.Fatalf("timed out waiting for %d frames from the radio", want)
 		return nil
+	}
+}
+
+// readSilence proves the radio said nothing, rather than assuming it.
+//
+// The reader goroutine is on the port BEFORE the window opens, so anything the
+// radio puts on the wire during it is read rather than missed. Closing the
+// radio is what ends the read: Close leaves bytes already queued readable and
+// reports io.EOF only once the queue is drained, so an answer that arrived
+// during the window is still seen here — a single stray byte fails the test.
+//
+// What comes back is every whole frame that arrived, which must be none; a
+// caller's own assertFrames(..., nil) then fails a second time, naming the
+// frames. RAW bytes are checked too, because a fragment too short to be a frame
+// is still the radio breaking silence.
+func readSilence(t *testing.T, r *Radio) [][]byte {
+	t.Helper()
+
+	res, ok := collectSilenceWindow(r)
+	if !ok {
+		t.Fatalf("timed out proving the radio said nothing")
+		return nil
+	}
+	if len(res.raw) > 0 {
+		t.Errorf("the radio put %s on the wire during a %v window — nothing at all was expected", hexBytes(res.raw), silenceWindow)
+	}
+	if res.err != io.EOF {
+		t.Errorf("reading the wire to its end gave %v, want io.EOF — the silence window did not actually reach the end of the port", res.err)
+	}
+	return res.frames
+}
+
+// windowResult is everything one silence window observed on the wire.
+type windowResult struct {
+	frames [][]byte
+	raw    []byte
+	err    error
+}
+
+// collectSilenceWindow opens the window and reports what arrived, ASSERTING
+// NOTHING. It takes no *testing.T precisely so that the test below can drive it
+// against a radio that answers and check it saw the answer — the vacuity guard
+// this helper needs, since a want == 0 path that quietly stopped reading would
+// otherwise turn every silence assertion in this file green again.
+//
+// ok is false only if the reader never came back at all.
+func collectSilenceWindow(r *Radio) (windowResult, bool) {
+	done := make(chan windowResult, 1)
+	go func() {
+		acc := newAccumulator()
+		var res windowResult
+		buf := make([]byte, 512)
+		for {
+			n, err := r.Port().Read(buf)
+			res.raw = append(res.raw, buf[:n]...)
+			for _, body := range acc.feed(buf[:n]) {
+				res.frames = append(res.frames, canonicalFrame(body))
+			}
+			if err != nil {
+				res.err = err
+				done <- res
+				return
+			}
+		}
+	}()
+
+	time.Sleep(silenceWindow)
+	// Close is what ends the read. It cannot fail — Radio.Close always returns
+	// nil — and its error is deliberately not consulted here, so that this
+	// function stays free of anything but observation.
+	_ = r.Close()
+
+	select {
+	case res := <-done:
+		return res, true
+	case <-time.After(testTimeout):
+		return windowResult{}, false
 	}
 }
 
@@ -418,8 +501,11 @@ func TestWithNoSetAnswerStoresTheSetAndSaysNothing(t *testing.T) {
 	// directly. Close leaves any queued bytes readable and reports io.EOF only
 	// once the queue is drained, so a single byte of answer would show up here.
 	//
-	// This is spelt out rather than handed to readFrames(t, r, 0), whose want=0
-	// path returns before its reader has looked at the pipe at all.
+	// This stays spelt out rather than handed to readFrames(t, r, 0) — not
+	// because that helper is untrustworthy (it reads the port for a bounded
+	// window and fails on any byte), but so that the ONE test asserting a lost
+	// acknowledgement leaves no byte behind rests on the port directly and not
+	// on a shared helper it would go quiet with.
 	time.Sleep(50 * time.Millisecond)
 	if err := r.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
@@ -656,4 +742,37 @@ func TestOptionPanicsNameTheirMistake(t *testing.T) {
 			tt.call()
 		})
 	}
+}
+
+// TestTheSilenceWindowActuallyReadsThePort is the silence helper's own red
+// proof, run green — the same shape as imports_test.go's fence proof, and here
+// for the same reason.
+//
+// Every "the radio says nothing" assertion in this file rests on readFrames(t,
+// r, 0). If that path ever stops reading the port — as it once did, looping
+// `for len(got) < want` with want 0 and returning before its reader had looked
+// at the pipe at all — those assertions all go green against a radio that
+// answers, and nothing announces it.
+//
+// So this drives the window against a radio that WILL answer, and requires it
+// to see the answer. Under the vacuous helper the window saw nothing, and this
+// test fails.
+func TestTheSilenceWindowActuallyReadsThePort(t *testing.T) {
+	r := New()
+	defer r.Close()
+
+	if _, err := r.Port().Write([]byte{0xFE, 0xFE, 0x88, 0xE0, 0x19, 0x00, 0xFD}); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	res, ok := collectSilenceWindow(r)
+	if !ok {
+		t.Fatal("the silence window never returned")
+	}
+	if len(res.raw) == 0 {
+		t.Fatal("the silence window saw no bytes from a radio that answers — it is not reading the port, and every silence assertion in this file is vacuous")
+	}
+	assertFrames(t, res.frames, [][]byte{
+		{0xFE, 0xFE, 0xE0, 0x88, 0x19, 0x00, 0xDE, 0xAD, 0xFD},
+	})
 }
