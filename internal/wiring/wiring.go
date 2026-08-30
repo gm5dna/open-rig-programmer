@@ -1345,7 +1345,11 @@ func SynthesiseDiscoveredBanks(model string, slots []string) ([]spec.Bank, bool)
 // registered Yaesu models still reach the serial layer at
 // transport.DefaultStopBits, because none of them implements the
 // interface. What D3.1 adds is somewhere for a driver that DOES have a
-// framing fact to put it, and the Icom tier's six models are that case.
+// framing fact to put it, and the Icom models are that case — all of them
+// but the IC-7100, whose manual states no serial format for the CI-V link
+// at all and which therefore implements NOTHING here and reaches the
+// serial layer at transport.DefaultStopBits like the Yaesu four
+// (core/driver/ic7100/doc.go's framing paragraph).
 //
 // ZERO IS REFUSED WITH THE REST, and that is the rule's whole substance.
 // The obvious implementation — "if the report is <= 0, use the default" —

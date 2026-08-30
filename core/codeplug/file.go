@@ -933,7 +933,7 @@ func loadV2(b []byte, path string) (*Codeplug, error) {
 	}
 
 	return &Codeplug{
-		Schema:    CurrentSchema, // migrate-on-load: Save always emits the current schema.
+		Schema:    CurrentSchema, // migrate-on-load; Save then emits the LOWEST schema the content needs (schemaFor).
 		Generator: v2.Generator,
 		Radio:     v2.Radio,
 		Channels:  migrateLegacyChannels(v2.Channels),
@@ -945,8 +945,9 @@ func loadV2(b []byte, path string) (*Codeplug, error) {
 // (whole-"menus" duplicate-key exemption, matching how v1 was written),
 // then migrates it to the current schema: the opaque menus payload is
 // preserved verbatim as MenuSnapshot.Legacy, the channels are migrated
-// like v2's, and Schema is set to CurrentSchema so Save re-emits the
-// current version.
+// like v2's, and Schema is set to CurrentSchema — which Save does not
+// consult: it emits the LOWEST schema the migrated content needs
+// (schemaFor), which for a schema-1 file is schema 3 again.
 func loadV1(b []byte, path string) (*Codeplug, error) {
 	var v1 codeplugV1
 	dec := json.NewDecoder(bytes.NewReader(b))
@@ -962,7 +963,7 @@ func loadV1(b []byte, path string) (*Codeplug, error) {
 	}
 
 	cp := &Codeplug{
-		Schema:    CurrentSchema, // migrate-on-load: Save always emits the current schema.
+		Schema:    CurrentSchema, // migrate-on-load; Save then emits the LOWEST schema the content needs (schemaFor).
 		Generator: v1.Generator,
 		Radio:     v1.Radio,
 		Channels:  migrateLegacyChannels(v1.Channels),
@@ -1187,8 +1188,8 @@ func migrateV4ChannelData(d *channelDataV4) *ChannelData {
 //
 // Nothing else participates. In particular the in-memory cp.Schema is
 // NOT consulted: it is always CurrentSchema after a Load (migrate-on-
-// load), so honouring it would make every re-save a schema-4 file and
-// destroy the byte identity this function exists for.
+// load), so honouring it would make every re-save a CurrentSchema file —
+// schema 5 today — and destroy the byte identity this function exists for.
 func schemaFor(cp *Codeplug) int {
 	needsSchema4 := false
 	for _, ch := range cp.Channels {
