@@ -328,8 +328,8 @@ What this release has **not** been exercised against:
   its facts are absences in the guide rather than readings of it. Its
   capacity is never stated, so there is no total to show and this build
   cannot warn you before the receiver is full — what it does when full is
-  unknown. Its speed is assumed on both halves, which it ties with the
-  IC-7760 for: the guide prints no factory default, mentions no automatic
+  unknown. Its speed is assumed on both halves, as it is for the IC-7760, IC-705
+  and IC-905: the guide prints no factory default, mentions no automatic
   setting, and never lists the speeds the menu offers, so both the 19200
   opening rate and the list it came from are assumed. And neither the transceive
   setting nor the echo-back setting of either USB port has a printed

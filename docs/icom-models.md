@@ -201,10 +201,10 @@ differs, and none of it is a reading of a printed factory value:
   `core/driver/icr8600/doc.go`, entries `icr8600-baud-set` and
   `icr8600-default-baud`; matrix §3.3). A wrong pick costs a clean
   timeout at connect and never a wrong byte, because the identity probe
-  requires an address-matched reply and silence is silence. It TIES with
-  the IC-7760 for the least-evidenced of the eleven, and does not stand
-  alone: that radio's guide prints no baud figure anywhere either, so its
-  rate and its list are both assumed too (see its entry above).
+  requires an address-matched reply and silence is silence. It is not
+  alone in this: the IC-7760, IC-705 and IC-905 entries above record the
+  same condition — a guide that prints no baud figure, so rate and list
+  both assumed — and no ranking among them is claimed.
 
 What is specific to one or two models:
 
