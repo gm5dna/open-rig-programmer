@@ -930,6 +930,9 @@ func TestFor_UnknownModel(t *testing.T) {
 		// other row's typo.
 		"IC7851", "ic-7851", "IC-7851 ", " IC-7851", "7851",
 		"IC7850", "ic-7850", "IC-7850 ", " IC-7850", "7850",
+		// IC-7760 near misses (Tier 4b's second registration): the same
+		// five-shape set again.
+		"IC7760", "ic-7760", "IC-7760 ", " IC-7760", "7760",
 	} {
 		got, ok := radiotext.For(model)
 		if ok {
@@ -1198,5 +1201,98 @@ func TestRadiotext_IC7851AndIC7850DifferOnlyInTheModelName(t *testing.T) {
 	// a user reading the IC-7850's advisories must see the IC-7850's name.
 	if a == b {
 		t.Error("the IC-7851's and IC-7850's entries are byte-identical — each row's prose must name its own model")
+	}
+}
+
+// ic7760Particulars is the non-borrowing particulars list for the IC-7760
+// (Tier 4b's second registration) — the same shape as ic905Particulars
+// and the IC-7851 pair's: the Yaesu-vocabulary-plus-bare-"CAT" set plus
+// the address hex and bare model name of EVERY OTHER registered Icom
+// entry, the pair's shared 8Eh included.
+//
+// THE IC-7760 HAS NO SIBLING, so unlike the pair's two lists this one
+// carries every other name without exception, and its own B2h is
+// deliberately absent (it is this radio's own). No prefix hazard runs
+// either way: none of the names below is a substring of "IC-7760", and
+// "IC-7760" is a substring of none of them.
+var ic7760Particulars = []string{
+	"V01-10", "[V/M]", "[ERASE]", "FT-710", "hardware-verified",
+	"FTdx10", "FTdx101D", "FTdx101MP", "CAT manual", "CAT command", "CAT query", "CAT",
+	"IC-7610", "98h",
+	"IC-7300", "94h",
+	"IC-7300MK2", "B6h",
+	"IC-705", "A4h",
+	"IC-9700", "A2h",
+	"IC-905", "ACh",
+	"IC-7851", "IC-7850", "8Eh",
+}
+
+// TestRadiotext_IC7760Verbatim is TestRadiotext_IC905Verbatim's sibling
+// for the additions tier's SECOND registration, and it guards the same
+// kind of fact: the HEDGES. This prose was written in radiotext.go
+// itself, for a radio this project has never connected to anything, under
+// the honesty rule recorded at ic7760Text.
+//
+// "no IC-7760 has ever answered a frame", "No minimum firmware version is
+// established", "is ASSUMED" and "not printed anywhere" are the
+// load-bearing words. An editor tidying them into confident advisory copy
+// — or reaching for the IC-7610's or the IC-7851's wording, which this
+// radio's own document happens to support almost sentence for sentence —
+// would attribute one radio's evidence to another. That edit fails here.
+//
+// ToneScanSkipVerification is asserted EMPTY for the same reason every
+// other model's is: core/driver/ic7760's writeTrialsComplete is false, so
+// there is no hardware-preservation verification of any kind to report.
+//
+// THE NON-BORROWING CHECK RUNS AGAINST ALL TWELVE OTHER ENTRIES,
+// including the two whose radios draw the SAME 27-byte data area as this
+// one (additions spec D1.1). Those two are the borrowing risk this
+// registration actually carries, and byte-identity is what catches a
+// wholesale copy while the particulars catch a partial one.
+func TestRadiotext_IC7760Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure:   "The IC-7760's CI-V protocol prints two memory clear forms — a 1A 00 set carrying FF in place of the record, and a separate top-level memory-clear command — but this build sends neither: no builder exists for either, and no IC-7760 has ever confirmed what either does, so sending one risks clearing the wrong channel rather than the intended one. This document is a CI-V reference guide, not a full operating manual, and prints no front-panel clear procedure either, so follow the memory-channel clear procedure in the radio's own manual. Whether the two programmed scan edges can be cleared at all is not printed anywhere: the clear block names the 99 memory channels and says nothing about P1 or P2.",
+		FirmwareGuidance: "No minimum firmware version is established for the IC-7760: nothing this project holds states one, and no IC-7760 has been asked. Its CI-V Reference Guide names no version query either, and this build's whole admitted command set is the identity read and the memory record — so read the version off the controller's own display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established.",
+		GridLegendNote:   "Tone is read and written for the IC-7760 over CI-V by this build, but unverified against real hardware — no IC-7760 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble marks a channel into one of three SELECT memory groups, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not. The same holds for its data mode, and the consequence there is wider than one column: a channel already set to DATA 1, DATA 2 or DATA 3 — or already in a SELECT group — cannot be written back by this build at all, because there is no honest value to preserve in a region it does not map.",
+		// Deliberately empty — see this test's doc comment.
+		ToneScanSkipVerification: "",
+		EraseDialogNote:          "The IC-7760's CI-V protocol prints two memory clear forms — a 1A 00 set carrying FF in place of the record, and a separate top-level memory-clear command — but this build sends neither: no builder exists for either, and no IC-7760 has ever confirmed what either does, so sending one risks clearing the wrong channel rather than the intended one. This document is a CI-V reference guide, not a full operating manual, and prints no front-panel clear procedure either, so follow the memory-channel clear procedure in the radio's own manual. Whether the two programmed scan edges can be cleared at all is not printed anywhere: the clear block names the 99 memory channels and says nothing about P1 or P2.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7760 has ever answered a frame",
+			ScanSkip: "not read or written over CI-V by this build — the IC-7760's nearest wire nibble marks one of three SELECT memory groups, not a skip flag",
+		},
+		FirmwarePlaceholder: "as shown on the IC-7760's own display",
+		ProbeFirmwareNote:   "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7760: this build knows of none to require. This driver talks only to CI-V address B2h, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200, along with the whole six-rate list it is chosen from, is ASSUMED — this radio's CI-V Reference Guide prints no rate figure anywhere, about any port, and its own CI-V settings block carries no speed item at all. This radio is also two boxes, and which socket you use matters: the link this build supports is the controller's rear-panel USB B connection, which enumerates as TWO virtual COM ports, and which of the two answers is a radio setting the guide prints no default for — if one port is silent, try the other before concluding the radio is wrong. The RF deck's remote jack is a second path this build does not address. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+	}
+
+	got, ok := radiotext.For("IC-7760")
+	if !ok {
+		t.Fatal(`For("IC-7760") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"IC-7760\") = %#v,\nwant %#v", got, want)
+	}
+
+	for _, other := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850"} {
+		otherText, ok := radiotext.For(other)
+		if !ok {
+			t.Fatalf("For(%q) ok = false, want true — sanity check failed", other)
+		}
+		otherFields := ftdx101Fields(otherText)
+		for field, val := range ftdx101Fields(got) {
+			if val == "" {
+				continue
+			}
+			if val == otherFields[field] {
+				t.Errorf("IC-7760 %s is byte-identical to the %s's — one radio's prose must never be served as another's", field, other)
+			}
+		}
+	}
+	for field, val := range ftdx101Fields(got) {
+		for _, particular := range ic7760Particulars {
+			if strings.Contains(val, particular) {
+				t.Errorf("IC-7760 %s contains %q — another radio's particular in this one's prose is that radio's evidence claimed for this one", field, particular)
+			}
+		}
 	}
 }

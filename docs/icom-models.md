@@ -1,25 +1,26 @@
 # Icom models — per-model limitations and evidence
 
 Moved verbatim from the README on 28/08/2026 so the README can stay short. Every claim below cites the code that makes it true; the citations are for reviewers and contributors.
-## The eight Icom models
+## The nine Icom models
 
-IC-7610, IC-7300, IC-7300MK2, IC-705, IC-9700, IC-905, IC-7851 and
-IC-7850 talk a different wire protocol from the Yaesu models (Icom's
-CI-V, rather than Yaesu's CAT), and each carries its own honesty rows
-beyond the README's shared "no radio has ever been connected" small
+IC-7610, IC-7300, IC-7300MK2, IC-705, IC-9700, IC-905, IC-7851,
+IC-7850 and IC-7760 talk a different wire protocol from the Yaesu models
+(Icom's CI-V, rather than Yaesu's CAT), and each carries its own honesty
+rows beyond the README's shared "no radio has ever been connected" small
 print.
 
-Eight models, SEVEN memory formats: the IC-7851 and the IC-7850 are two
+Nine models, EIGHT memory formats: the IC-7851 and the IC-7850 are two
 entries in the model list over one manual, one address and one record
-format, because this program cannot tell them apart (see the last
-section below).
+format, because this program cannot tell them apart (see the sections
+below).
 
-Three costs are shared by all eight:
+Three costs are shared by all nine:
 
 - **No `--civ-address` option.** Each driver talks only to its one
   factory CI-V address (98h IC-7610, 94h IC-7300, B6h IC-7300MK2, A4h
-  IC-705, A2h IC-9700, ACh IC-905, 8Eh IC-7851 AND IC-7850 — that last
-  address is printed in the manual as the default for both radios) and
+  IC-705, A2h IC-9700, ACh IC-905, B2h IC-7760, 8Eh IC-7851 AND
+  IC-7850 — that last address is printed in the manual as the default
+  for both radios) and
   there is no setting to change it. Two different things can happen when this driver meets a radio
   it did not expect. A different Icom model at ITS OWN factory address
   simply does not answer — nothing was heard from, so nothing can be
@@ -33,12 +34,13 @@ Three costs are shared by all eight:
   `driver.WrongRadioError` naming what they found
   (`core/driver/ic7300/ic7300.go:270`; `core/driver/ic7300mk2/ic7300mk2.go:272`;
   `core/driver/ic705/ic705.go:364`; `core/driver/ic905/ic905.go:495`),
-  while IC-7610, IC-9700, IC-7851 and IC-7850 NEVER mint one for any
-  same-address collision, by design — they hold no cross-model table and
-  refuse to guess an identity they cannot support
+  while IC-7610, IC-9700, IC-7851, IC-7850 and IC-7760 NEVER mint one
+  for any same-address collision, by design — they hold no cross-model
+  table and refuse to guess an identity they cannot support
   (`core/driver/ic7610/ic7610.go:142-145`;
   `core/driver/ic9700/ic9700.go:325-329`; `core/driver/ic9700/doc.go:391`;
-  `core/driver/ic7851/ic7851.go:168-185`).
+  `core/driver/ic7851/ic7851.go:168-185`;
+  `core/driver/ic7760/ic7760.go:141-151`).
   Even where a driver CAN attribute, one pair defeats it in practice:
   an IC-9700 moved onto the IC-705's A4h address fails the IC-705's
   open as an unattributed address parse error, not as a named
@@ -46,7 +48,7 @@ Three costs are shared by all eight:
   the length check that would otherwise have named it
   (`core/civ/tier_test.go:68-80`).
 - **The tone picker stays list-driven while every model's tone range
-  is numeric (enabler E3).** All eight declare a numeric
+  is numeric (enabler E3).** All nine declare a numeric
   `CTCSSToneRange` rather than a fixed tone chart, because their tone
   spans are BCD frequencies, not indices — but the picker widget
   itself was built for a list. The channel grid still shows and
@@ -58,17 +60,21 @@ Three costs are shared by all eight:
   at least one region no `codeplug` field maps, and a slot may be
   written only when those unmapped regions already match the
   profile's template. What that costs differs by model:
-  - **IC-7610, IC-705, IC-9700, IC-905, IC-7851, IC-7850**: a channel
-    already in a Select scan group (★1/★2/★3) cannot be written by this
-    program at all — the SELECT nibble is unmapped and there is no
-    honest value to preserve, so the write is refused, naming the reason
+  - **IC-7610, IC-705, IC-9700, IC-905, IC-7851, IC-7850, IC-7760**: a
+    channel already in a Select scan group (★1/★2/★3) cannot be written
+    by this program at all — the SELECT nibble is unmapped and there is
+    no honest value to preserve, so the write is refused, naming the
+    reason
     (`core/driver/ic7610/doc.go:220-249`; `core/driver/ic705/write.go:265-280`;
     `core/driver/ic9700/write.go:529-531`; `core/driver/ic905/write.go:578-590`;
-    `core/driver/ic7851/doc.go:274-306`).
-    The IC-7610 and the IC-7851/IC-7850 additionally refuse a channel
-    whose data mode is DATA 1/2/3, for the same unmapped-nibble reason
+    `core/driver/ic7851/doc.go:274-306`;
+    `core/driver/ic7760/write.go:36-42,54-60`).
+    The IC-7610, the IC-7851/IC-7850 and the IC-7760 additionally refuse
+    a channel whose data mode is DATA 1/2/3, for the same
+    unmapped-nibble reason
     (`core/driver/ic7610/doc.go:235-238`;
-    `core/driver/ic7851/caps.go:202-224`).
+    `core/driver/ic7851/caps.go:202-224`;
+    `core/driver/ic7760/caps.go:186-207`).
   - **IC-7300 and IC-7300MK2**: a Select-group channel writes
     normally — the SELECT nibble round-trips, carried through
     unchanged from the record the radio holds
@@ -85,7 +91,7 @@ Three costs are shared by all eight:
   In every case the write is refused, naming the reason, never
   downgraded or cleared.
 
-All eight open at 19200 baud by default, but what grades that default
+All nine open at 19200 baud by default, but what grades that default
 differs, and none of it is a reading of a printed factory value:
 
 - **IC-7610** — ASSUMED, an arbitrary pick among the six rates the
@@ -117,6 +123,14 @@ differs, and none of it is a reading of a printed factory value:
   never a wrong byte, because the identity probe requires an
   address-matched reply and silence is silence
   (`core/driver/ic7851/doc.go:245-265`).
+- **IC-7760** — ASSUMED, and so is the whole six-rate list it is picked
+  from: this radio's CI-V Reference Guide prints no baud figure anywhere,
+  about any port, and its own CI-V settings block carries no speed item
+  at all. The only adjacent printed line says a "data communication
+  speed" needs setting when the cable goes to the RF deck's remote jack,
+  which is not the path this build supports
+  (`core/driver/ic7760/caps.go:361-374`; `core/driver/ic7760/doc.go:77-81`;
+  matrix §1 row 10, §3.3).
 
 What is specific to one or two models:
 
@@ -199,3 +213,56 @@ What is specific to one or two models:
   read as a frequency a hundred times too small and written back with
   the byte quietly zeroed; instead the read fails, naming the byte
   (`core/driver/ic7851/doc.go:307-329`).
+- **The IC-7760 is two boxes, and only one of its connections is
+  supported.** The CI-V link this build talks to is the USB socket on
+  the back of the controller, which enumerates as TWO virtual COM ports
+  (called USB (A) and USB (B)); which of them carries CI-V is a
+  front-panel setting and the guide prints no default for it, so if one
+  port is silent the other is worth trying before the radio is blamed.
+  The RF deck's own remote jack is a second, unsupported path, the
+  bridge address at `1A 05 01 51` is not the radio's own address, and
+  the LAN CI-V path has no documented framing at all
+  (`core/driver/ic7760/doc.go:22-24,114-116`; matrix §3.15.4).
+- **Whether the IC-7760's two scan edges can be cleared at all is not
+  known.** This radio prints two clear forms — a `1A 00` set carrying
+  `FF` in place of the record, and a top-level memory-clear command —
+  and this build sends neither, exactly as for every other Icom model
+  here. What is specific to this radio is the silence: the clear block
+  names "Memory channel (00 01~00 99)" and says nothing whatever about
+  P1 or P2, so the program tells the user that nobody knows rather than
+  that the radio refuses (register entry `ic7760-clear-scope`;
+  `core/driver/ic7760/doc.go:107-110`; matrix §3.13).
+- **The IC-7760's memory inventory is the one part of it that is NOT
+  assumed.** Its 99 memories plus the two programmed scan edges are
+  printed with their own addresses on two separate pages of the guide,
+  so the count carries no assumption of its own (additions-spec
+  Erratum 5; `core/driver/ic7760/caps.go:135-156`;
+  `core/driver/ic7760/doc.go:118-121`). Almost everything else about the
+  radio's link — its framing, its baud, its control-line behaviour, its
+  identity reply and whether an empty slot answers at all — is an entry
+  in that driver's assumption register, each with the one capture that
+  would settle it.
+- **The IC-7610, the IC-7851/IC-7850 and the IC-7760 cannot be told
+  apart by the length check that guards against a mis-set bus.** All
+  three read and write a 25-byte record at a two-byte channel address,
+  because all three manuals draw the same 27-byte block — which is what
+  the design predicted, and which three independently derived profiles
+  then produced. It costs nothing in normal use: the three factory
+  addresses (98h, 8Eh, B2h) are all different, so a wrong radio at its
+  own address never answers. It costs the fallback: a radio MOVED onto
+  another of those addresses would answer a record of exactly the length
+  expected, and none of the three drivers would name it
+  (`core/civ/tier_test.go`'s `indistinguishable` table, which carries all
+  three pairings with their citations).
+- **Two of those three records are byte-identical inside, and the third
+  is not — deliberately.** The IC-7610's and the IC-7760's field layouts
+  agree exactly, span for span. The IC-7851/IC-7850's differs in three
+  places: where the other two map a printed always-zero pad cell inside
+  the frequency and tone fields and bound the value further up, that
+  profile leaves the pad cells out of the fields altogether, so a radio
+  answering a digit in one of them fails the READ rather than being
+  re-encoded with the byte quietly zeroed. Both readings are defensible
+  and each is the one its own document supports; the difference is
+  measured and recorded rather than smoothed over
+  (`core/civ/tier_test.go`'s `TestTierRecordShapes_7610CloneFamily` and
+  its `declaredCloneDivergences` table).

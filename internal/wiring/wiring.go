@@ -59,6 +59,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300mk2"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7610"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7760"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7851"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic905"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
@@ -257,6 +258,45 @@ const (
 	IC7850Model = "IC-7850"
 )
 
+// IC7760Model names the IC-7760's realDrivers/fakeDrivers key, which must
+// equal ic7760.New(...).Model() — pinned, like every other Icom constant
+// above, by TestDriverTableKeysMatchDriverModel walking both tables.
+//
+// THE ADDITIONS TIER'S SECOND REGISTRATION (Tier 4b, Wave 4), and a
+// SINGLE-ROW one: core/driver/ic7760 has ONE member (its caps.go says so
+// in as many words — "this family has one member"), so there is one
+// constant, one driver package, one civ.Profile and one fake, on the same
+// footing as IC7610Model above and NOT on the IC-7851 pair's. It takes
+// its profile as an ARGUMENT (ic7760.New(profile, opts...)), which is the
+// IC-7610's constructor shape rather than the IC-7851's option shape, and
+// that is what decides both NewIC7760RealDriver's body below and the
+// TOKEN internal/guards confines for this package (ic7760.Simulated, a
+// Profile constant, not an option).
+//
+// TWO BANKS, BOTH DENSE, the IC-7610's shape: MEM ("001".."099") and SCAN
+// (the two programmed scan edges "P1" and "P2"), which the wire addresses
+// as two further values of the SAME flat two-byte selector — the profile
+// declares the memories as its base range 1..99 and P1/P2 as ONE extra
+// flat range 100..101 (core/civ/ic7760/profile.go), so the base inventory
+// cannot silently absorb them. There is no sparse space to discover, so a
+// plain `--model IC-7760` session enumerates its whole inventory
+// statically and Open walks a bounded run of channels — ten early
+// memories, then P1 and P2 — for the record-length fingerprint alone.
+//
+// ITS 99 + P1/P2 INVENTORY IS MANUAL-EVIDENCED (additions spec Erratum
+// 5), not assumed: PDF p.20 (folio 19) and PDF p.4 (folio 3) of the
+// IC-7760 CI-V Reference Guide revision 2 both print the addresses, so
+// the count carries no assumption-register entry of its own.
+//
+// INDISTINGUISHABLE FROM THE IC-7610 AND THE IC-7851/IC-7850 BY THE
+// LENGTH FINGERPRINT ALONE (spec D5's 25 B / Flat row): this radio
+// completes that declared set of three, and core/civ/tier_test.go's
+// `indistinguishable` table now carries both of its pairings with their
+// citations. It is a fingerprint limitation and not a field one — the
+// three factory addresses B2h, 98h and 8Eh differ, so a wrong radio at
+// its own address does not answer at all.
+const IC7760Model = "IC-7760"
+
 // realDrivers is the model-keyed table of real-hardware driver
 // constructors: model name -> a constructor building THAT model's
 // real-profile driver.Driver. It is the single source of truth
@@ -379,6 +419,18 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ic7851.New7850(ic7851.WithConsentedUnverifiedWrites())
 		}
 		return NewIC7850RealDriver()
+	},
+	// ONE ROW, and it names its profile explicitly: core/driver/ic7760
+	// takes the profile as New's first ARGUMENT, so this row reads like
+	// the IC-7610's and IC-905's rather than the IC-7851 pair's. The
+	// consent arm passes ic7760.RealHardware for the same reason every
+	// other profile-argument row does — the option changes the SESSION's
+	// effective capabilities and never the profile it was built from.
+	IC7760Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic7760.New(ic7760.RealHardware, ic7760.WithConsentedUnverifiedWrites())
+		}
+		return NewIC7760RealDriver()
 	},
 }
 
@@ -756,6 +808,39 @@ func NewIC7851RealDriver() driver.Driver {
 // each row's capability set on its own.
 func NewIC7850RealDriver() driver.Driver {
 	return ic7851.New7850()
+}
+
+// NewIC7760RealDriver builds the ic7760 driver for a real-hardware
+// session: profile ic7760.RealHardware, the zero value — the IC-7760's
+// half of the realDrivers table, split out for the same reason every
+// other model constructor above is (a test can pin the capability set the
+// real wiring path implies without opening a port).
+//
+// A PROFILE ARGUMENT, unlike the IC-7851 pair's two constructors directly
+// above and like every Icom constructor before them: core/driver/ic7760
+// declares Profile as New's first parameter, so the real-hardware arm is
+// NAMED here rather than left to an option's absence. Its zero value is
+// RealHardware too, which is belt and braces rather than a second way of
+// saying the same thing — a caller that forgot the argument entirely
+// would still not reach the simulator's capability set.
+//
+// READ/PROBE ONLY, by the same mechanism as every other row: this
+// driver's writeTrialsComplete (core/driver/ic7760/caps.go) is FALSE, so
+// a RealHardware IC-7760 driver reports the all-Unverified capability set
+// — every mapped field's Write spec.Unverified, nothing writable on
+// either bank. No IC-7760 has been written to by this project, and the
+// capability gate refuses before any frame is built.
+//
+// THE FAIL-SAFE DIRECTION IS UNCHANGED: an unrecognised Profile value
+// selects the all-Unverified set too, through ic7760.go's Capabilities
+// switch and its OWN explicit default arm rather than by sharing
+// RealHardware's, never the simulator's write-Supported one. The one
+// named exception — SessionOptions' ConsentUnverifiedWrites, spent from
+// the user's own recorded grant — is exactly the mechanism every other
+// row uses, reaching realDrivers' IC7760Model row above and never this
+// constructor.
+func NewIC7760RealDriver() driver.Driver {
+	return ic7760.New(ic7760.RealHardware)
 }
 
 // openSerial is OpenRealSessionWith's test seam (and so OpenRealSessionFor's
