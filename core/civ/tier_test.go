@@ -11,12 +11,22 @@
 // fingerprint" section: "Cross-model record-length distinctness is a
 // TIER-level check belonging to registration"). This file is that check.
 //
-// NINE FAMILIES AND TEN REGISTERED ROWS as of the additions tier's
-// THIRD registration (Tier 4b): the Icom tier's six families, plus
-// core/civ/ic7851, which serves the IC-7851 and IC-7850 rows ALIKE, plus
-// core/civ/ic7760 and core/civ/ic7100. A family is a PROFILE; a row is a
-// registry key; tierRegistrationCoverage below is the map between them,
-// and it is the reason the two counts may legitimately differ.
+// TEN FAMILIES AND ELEVEN REGISTERED ROWS as of the additions tier's
+// FOURTH and LAST registration (Tier 4b): the Icom tier's six families,
+// plus core/civ/ic7851, which serves the IC-7851 and IC-7850 rows ALIKE,
+// plus core/civ/ic7760, core/civ/ic7100 and core/civ/icr8600. A family is
+// a PROFILE; a row is a registry key; tierRegistrationCoverage below is
+// the map between them, and it is the reason the two counts may
+// legitimately differ.
+//
+// THE TENTH FAMILY IS A RECEIVER, and it is the first family here whose
+// profile is MODE-KEYED: core/civ/icr8600 accepts six record-only lengths
+// {37, 39, 41, 43, 44, 45} rather than one or two, with FM and DCR BOTH
+// at 44 and told apart by the mode byte (civ.DiscriminatorModeByte)
+// rather than by length. NOTHING IN THIS FILE NEEDED WIDENING FOR THAT:
+// measureShape has read civ.Profile.RecordLengths as a SET since the
+// tier's close, and disjointLengths compares sets, so a six-member set
+// arrives here as an ordinary value.
 //
 // It lives in core/civ as an EXTERNAL test package. core/civ can never
 // import core/civ/ic7610 and its siblings — they import core/civ,
@@ -31,8 +41,8 @@
 // undocumented on every one of these documents, spec D5 entry 7, so it is
 // recorded and never compared), and only then walks a bounded run of
 // memory channels for a record whose length confirms the profile. The
-// NINE FAMILIES' CI-V addresses are already distinct — 98h, 94h, B6h,
-// A4h, A2h, ACh, 8Eh, B2h, 88h — so IN THE FIELD a wrong radio on the port does not
+// TEN FAMILIES' CI-V addresses are already distinct — 98h, 94h, B6h,
+// A4h, A2h, ACh, 8Eh, B2h, 88h, 96h — so IN THE FIELD a wrong radio on the port does not
 // answer at all and the open times out. THE LENGTH FINGERPRINT IS
 // THEREFORE DEFENCE IN DEPTH, NOT THE PRIMARY DISCRIMINATOR: it protects
 // against SAME-ADDRESS confusion only — a radio moved onto this address,
@@ -51,7 +61,11 @@
 //
 // # The limitation this file records honestly
 //
-// TWO SETS OF THREE SHARE A RECORD-ONLY LENGTH, and they fail differently.
+// TWO SETS OF THREE SHARE A RECORD-ONLY LENGTH, and they fail
+// differently — and the tenth family, the IC-R8600, shares lengths with
+// two more families and is SEPARABLE from both, which is worth stating
+// before the declarations because it is the case this file would rather
+// report.
 //
 // The IC-7610, the IC-7851 and the IC-7760 share BOTH properties — 25
 // bytes record-only and a two-byte flat address — so all THREE of that
@@ -71,6 +85,30 @@
 // pairing is DECLARED in the table below, citing spec D5's 111 B row and
 // spec D2.1, and it is the only reason the walk below does not fail on
 // this set. What follows describes the SEPARABLE half.
+//
+// THE IC-R8600 OVERLAPS THE IC-7300 PAIR AND IS PROVEN APART. Its
+// accepted set {37, 39, 41, 43, 44, 45} CONTAINS both 39 (the IC-7300's
+// only length) and 45 (the IC-7300MK2's), so a fingerprint comparing
+// lengths alone could not separate either pair — the same failure the two
+// declared sets have. What rescues it is the ADDRESS WIDTH, and by a
+// wider margin than the 111 B row's: the IC-R8600 addresses a channel in
+// FOUR bytes (civ.AddressFormWideGroupChannel, two group bytes then two
+// channel bytes) where both IC-7300s use a two-byte FLAT address, so the
+// pairwise walk below separates both pairings and prints its reason. The
+// remaining seven pairings are separated by LENGTH alone, the strong
+// form: the set is disjoint from {25} (three profiles), from {111}
+// (three) and from {64, 65} (one), which is what additions spec D5's own
+// IC-R8600 row claims ("yes (set disjoint from {64, 65}; geometry from
+// the 2/3 B profiles)"). The spec's clause is slightly generous to
+// itself, and this file MEASURES rather than repeats it: the two 3 B
+// profiles are separated by LENGTH here and not by geometry, the three
+// 25 B profiles likewise, and the IC-7300 pair alone needs the address
+// width.
+//
+// SO THE IC-R8600 DECLARES NOTHING, and it is the first additions family
+// of which that is true. `indistinguishable` below is unchanged by its
+// arrival, and TestTierRecordShapes_DistinctOrDeclared's table shows it
+// distinct from all nine.
 //
 // The IC-705 and the IC-9700
 // both accept exactly {111}, so a fingerprint that compared record-only
@@ -164,6 +202,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7851"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic905"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic9700"
+	"github.com/gm5dna/open-rig-programmer/core/civ/icr8600"
 	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
 
@@ -220,6 +259,17 @@ var tierProfilePopulation = []civ.Profile{
 	// Until it was, this line alone failed the pairwise walk, which is the
 	// mechanism working.
 	ic7100.Profile(),
+	// The additions tier's FOURTH and LAST family (Tier 4b), and the only
+	// row of spec D5's {37, 39, 41, 43, 44, 45} line. Its branch is
+	// merged, so it enters as a ROW with no PLACE stage — and unlike the
+	// three families above it, it DECLARES NOTHING: all nine of its
+	// pairings are proven apart below, seven by disjoint lengths and the
+	// two against the IC-7300 pair by address width (four bytes against
+	// two), their length sets overlapping at 39 and at 45. It is also the
+	// first MODE-KEYED profile in this list, which this file needed no
+	// change to accept: RecordLengths is a set here as it is everywhere
+	// else.
+	icr8600.Profile(),
 }
 
 // tierRegistrationCoverage ties the real driver registry to the profile
@@ -250,6 +300,12 @@ var tierRegistrationCoverage = map[string]string{
 	"IC-7760": "IC-7760",
 	// And its third: ONE key, ONE family.
 	"IC-7100": "IC-7100",
+	// And its fourth and last, the tier's only RECEIVER: ONE key, ONE
+	// family. Being receive-only is a spec.Capabilities property
+	// (additions spec D4.2) and nothing this file measures — a receiver's
+	// record has a length and an address geometry like any other radio's,
+	// and those are the two properties ruled on here.
+	"IC-R8600": "IC-R8600",
 }
 
 func registrationCoverageProblems(registered, population []string, coverage map[string]string) []string {
@@ -453,9 +509,17 @@ var indistinguishable = map[string]string{
 // length/geometry proof or named in indistinguishable with a citation.
 //
 // It prints the measured table on every run, pass or fail. The table is
-// the deliverable as much as the verdict is — NINE families' record
+// the deliverable as much as the verdict is — TEN families' record
 // geometry in one place is exactly what no per-model worktree could
 // write down.
+//
+// AND THE TABLE IS WHERE THE IC-R8600'S DISTINCTNESS IS SHOWN. That row
+// declares nothing in `indistinguishable`, so the only record of its
+// separation is the walk's own printed reasons: seven pairings by
+// disjoint lengths, and its two against the IC-7300 pair by address
+// width, {37, 39, 41, 43, 44, 45} containing both of those profiles'
+// single lengths. A regression that widened its address form to two bytes
+// would turn both of those into failures here rather than into silence.
 func TestTierRecordShapes_DistinctOrDeclared(t *testing.T) {
 	profiles := tierProfilePopulation
 	if len(profiles) == 0 {
@@ -515,7 +579,7 @@ func TestTierRecordShapes_DistinctOrDeclared(t *testing.T) {
 		// column meant to line up into "[25                ]".
 		t.Logf("  %-12s %-14d %-18s %s", s.model, s.addressBytes, fmt.Sprint(s.recordLengths), fmt.Sprint(s.frameLengths))
 	}
-	t.Log("HONESTLY RECORDED: every length above is an ASSUMED derivation from printed field widths — no document in this tier prints a record total and no radio has confirmed one — and the length fingerprint is DEFENCE IN DEPTH behind the `19 00` address probe every one of the NINE families' drivers runs first, since the nine CI-V addresses are already distinct and a wrong radio simply does not answer. The ONE exception is the IC-7851/IC-7850 pair, which shares 8Eh at factory defaults; see this file's header.")
+	t.Log("HONESTLY RECORDED: every length above is an ASSUMED derivation from printed field widths — no document in this tier prints a record total and no radio has confirmed one — and the length fingerprint is DEFENCE IN DEPTH behind the `19 00` address probe every one of the TEN families' drivers runs first, since the ten CI-V addresses are already distinct and a wrong radio simply does not answer. The ONE exception is the IC-7851/IC-7850 pair, which shares 8Eh at factory defaults; see this file's header.")
 
 	seen := 0
 	for i := 0; i < len(shapes); i++ {
@@ -743,7 +807,7 @@ func firstChannel(p civ.Profile) int {
 }
 
 // TestTierRecordShapes_CheckIsNotVacuous is the permanent red proof:
-// distinguishable must REFUSE a pair the nine real profiles never
+// distinguishable must REFUSE a pair the ten real profiles never
 // produce.
 //
 // Two shapes that agree on both properties are what the check is for, and

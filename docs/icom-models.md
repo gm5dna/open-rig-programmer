@@ -1,26 +1,37 @@
 # Icom models — per-model limitations and evidence
 
 Moved verbatim from the README on 28/08/2026 so the README can stay short. Every claim below cites the code that makes it true; the citations are for reviewers and contributors.
-## The ten Icom models
+## The eleven Icom models
 
 IC-7610, IC-7300, IC-7300MK2, IC-705, IC-9700, IC-905, IC-7851,
-IC-7850, IC-7760 and IC-7100 talk a different wire protocol from the
-Yaesu models (Icom's CI-V, rather than Yaesu's CAT), and each carries its
-own honesty rows beyond the README's shared "no radio has ever been
-connected" small print.
+IC-7850, IC-7760, IC-7100 and IC-R8600 talk a different wire protocol
+from the Yaesu models (Icom's CI-V, rather than Yaesu's CAT), and each
+carries its own honesty rows beyond the README's shared "no radio has
+ever been connected" small print.
 
-Ten models, NINE memory formats: the IC-7851 and the IC-7850 are two
+Eleven models, TEN memory formats: the IC-7851 and the IC-7850 are two
 entries in the model list over one manual, one address and one record
 format, because this program cannot tell them apart (see the sections
 below).
 
-Three costs are shared by all ten:
+TEN TRANSCEIVERS AND ONE RECEIVER. The IC-R8600 is a communications
+receiver, and this program says so rather than treating its missing
+transmit fields as fields it declines to write: its capabilities declare
+`spec.ReceiveOnly`, which removes the transmit-frequency and
+transmitted-tone columns from the grid by anatomy and makes grading
+either of them above "unsupported" a validation FAILURE rather than a
+choice (`core/driver/icr8600/caps.go`'s `Transmit`; additions spec D4.2's
+invariant, pinned by `internal/wiring`'s
+`TestEveryRegisteredModelDeclaresItsTransmitAnatomy`, which also refuses
+a future row that forgot to say either way).
+
+Three costs are shared by all eleven:
 
 - **No `--civ-address` option.** Each driver talks only to its one
   factory CI-V address (98h IC-7610, 94h IC-7300, B6h IC-7300MK2, A4h
-  IC-705, A2h IC-9700, ACh IC-905, B2h IC-7760, 88h IC-7100, 8Eh
-  IC-7851 AND IC-7850 — that last address is printed in the manual as the
-  default for both radios) and
+  IC-705, A2h IC-9700, ACh IC-905, B2h IC-7760, 88h IC-7100, 96h
+  IC-R8600, 8Eh IC-7851 AND IC-7850 — that last address is printed in the
+  manual as the default for both radios) and
   there is no setting to change it. Two different things can happen when this driver meets a radio
   it did not expect. A different Icom model at ITS OWN factory address
   simply does not answer — nothing was heard from, so nothing can be
@@ -39,6 +50,12 @@ Three costs are shared by all ten:
   supplies an attribution table, and no registered composition supplies
   one, so today its refusal always renders as the lengths-only form
   (`core/driver/ic7100/ic7100.go:211-221`; `core/driver/ic7100/doc.go:35-39`).
+  The IC-R8600 is in the same position and for the same reason: its walk
+  turns a record-length mismatch into a `driver.WrongRadioError` carrying
+  its own six accepted lengths and the one it got, and NO model name —
+  which is the only honest thing it could carry, since no other registered
+  profile accepts any of those six over a four-byte address
+  (`core/driver/icr8600/read.go:65-72`).
   Meanwhile IC-7610, IC-9700, IC-7851, IC-7850 and IC-7760 NEVER mint one
   for any same-address collision, by design — they hold no cross-model
   table and refuse to guess an identity they cannot support
@@ -53,7 +70,7 @@ Three costs are shared by all ten:
   the length check that would otherwise have named it
   (`core/civ/tier_test.go:68-80`).
 - **The tone picker stays list-driven while every model's tone range
-  is numeric (enabler E3).** All ten declare a numeric
+  is numeric (enabler E3).** All eleven declare a numeric
   `CTCSSToneRange` rather than a fixed tone chart, because their tone
   spans are BCD frequencies, not indices — but the picker widget
   itself was built for a list. The channel grid still shows and
@@ -101,10 +118,27 @@ Three costs are shared by all ten:
     into an empty slot, since the SELECT nibble has no honest default
     to write (`core/driver/ic7300/write.go:433`;
     `core/driver/ic7300mk2/write.go:441`).
+  - **IC-R8600**: two costs, and neither is the Select-group one the
+    other models pay — this receiver's record carries the Select group in
+    the LOW half of its first byte and a printed scan-skip setting
+    (SKIP OFF / SKIP / PSKIP) in the HIGH half, and it is the HIGH half
+    that E6 guards, so a channel the operator has marked as skipped is
+    refused rather than rewritten as unskipped
+    (`core/driver/icr8600/write.go`'s `commonUnmappedHighNibbles`, and
+    matrix §2 row 9 for the printed enum). The second is this radio's
+    own: its five digital classes — D-STAR, P25, NXDN, DCR and dPMR —
+    each carry a squelch tail no `codeplug` field maps, so a stored
+    channel whose tail differs from this build's assumed template cannot
+    be written back, and a change of mode INTO one of those classes is
+    refused too, its whole tail having to be invented
+    (`core/civ/icr8600/profile.go`'s `DigitalTailRefusalReason` and
+    `digitalTailTemplate`, register entry `icr8600-tail-templates`;
+    `core/driver/icr8600/write.go`'s target-class arm). Its DATA mode is
+    not a cost at all: this record has no data-mode byte to refuse.
   In every case the write is refused, naming the reason, never
   downgraded or cleared.
 
-All ten open at 19200 baud by default, but what grades that default
+All eleven open at 19200 baud by default, but what grades that default
 differs, and none of it is a reading of a printed factory value:
 
 - **IC-7610** — ASSUMED, an arbitrary pick among the six rates the
@@ -152,6 +186,19 @@ differs, and none of it is a reading of a printed factory value:
   the register entry asks a lift to record the radio's version alongside
   the speed it confirms (`core/driver/ic7100/caps.go:33,38,131-135`;
   `core/driver/ic7100/register.go`, entry `ic7100-default-baud-auto`).
+- **IC-R8600** — ASSUMED, and the WEAKEST-EVIDENCED of the eleven, which
+  is worth stating plainly rather than letting it sit in a list of
+  near-identical hedges. This receiver's CI-V Reference Guide prints no
+  factory default speed, mentions no `Auto` setting anywhere in a baud
+  context, and — unlike every other model above — never prints the list
+  of speeds its own menu offers either. So both the 19200 opening rate
+  AND the six-rate list it was picked from are assumed here, under two
+  separate register entries rather than one
+  (`core/driver/icr8600/caps.go`'s `Bauds`/`DefaultBaud`;
+  `core/driver/icr8600/doc.go`, entries `icr8600-baud-set` and
+  `icr8600-default-baud`; matrix §3.3). A wrong pick costs a clean
+  timeout at connect and never a wrong byte, because the identity probe
+  requires an address-matched reply and silence is silence.
 
 What is specific to one or two models:
 
@@ -329,3 +376,93 @@ What is specific to one or two models:
   — and it costs the fallback, a radio MOVED onto the other's address
   (`core/civ/tier_test.go`'s `indistinguishable` table, entry
   `IC-9700|IC-7100`; `core/driver/ic7100/doc.go:14-45`).
+- **The IC-R8600's memory capacity is not documented, and the program
+  says so rather than showing a total it invented.** Every other model
+  here has a printed number of memories; this receiver's CI-V guide has
+  none, in either of the two places one would be printed, and the words
+  never appear anywhere in the document. So the bank declares
+  `BudgetUnstated` — a positive statement of the silence rather than a
+  zero that could be mistaken for "none" — and `codeplug.Diff` skips the
+  over-budget refusal it applies to every other sparse bank
+  (`core/codeplug/diff.go:536-543`). The flag is carried through to the
+  UI layer on the bank itself (`app/types.go`'s `BankView`), so nothing
+  downstream has to infer the silence from a zero. What the receiver does
+  when its memory is full is unknown to this program, and it cannot warn
+  you beforehand
+  (`core/civ/icr8600/profile.go`'s `MemoryBank`;
+  `core/driver/icr8600/caps.go`'s `BudgetUnstated`; additions spec D3.4,
+  register entry `icr8600-budget`, whose lift is to fill ordinary
+  memories on a real receiver until another write is refused).
+- **The IC-R8600's memory space is zero-based in both dimensions, which
+  no other model here is.** Its slots run `G00-000` to `G99-099`: groups
+  0000–0099 by channels 00–99, with BOTH counting from zero, where the
+  other group-addressed models count their groups or their channels from
+  one (`core/civ/icr8600/profile.go`'s `MemoryGroupBase` and
+  `MemoryChannelBase`, additions spec Erratum 2). The program discovers
+  what is actually stored by the same kind of BOUNDED walk the IC-705 and
+  IC-905 use — group 0 in full, then each later group's channel 00 as a
+  sample, reading the rest of a group only when that sample is occupied
+  — so between 199 and 10,000 reads, never outside the declared space.
+  A channel stored in a group whose channel 00 is empty is therefore not
+  read, and its absence is not evidence the receiver has none
+  (`core/driver/icr8600/read.go`'s `discover`). Two further groups the
+  guide names — 0100 Auto-Write and 0101 Scan Skip — are radio-managed
+  lists this program deliberately does not address, and group 0102, the
+  programmed scan edges, stays out until its A/B-suffixed channel
+  numbering is established (register entry
+  `icr8600-scan-edge-encoding`).
+- **The IC-R8600 is the only model here whose record length depends on
+  the MODE, and the only one this program can still tell apart from
+  every other radio.** Its memory record is a fixed 37-byte head followed
+  by a tail chosen by the mode byte, so it accepts six record-only
+  lengths — 37, 39, 41, 43, 44 and 45 — where every other model accepts
+  one or two. FM and DCR both land on 44 and are separated by the mode
+  byte rather than by length, which is what `civ.DiscriminatorModeByte`
+  exists for (`core/civ/icr8600/profile.go`'s `recordLayouts`; additions
+  spec D3.3). Two of those lengths, 39 and 45, are exactly the IC-7300's
+  and the IC-7300MK2's, so the length fingerprint alone cannot separate
+  those two pairs — but the address width does, this receiver using four
+  address bytes where both IC-7300s use two, and the program MEASURES
+  that separation rather than declaring it. It is the first model in
+  this tier to add no entry at all to the declared-indistinguishable
+  table (`core/civ/tier_test.go`'s
+  `TestTierRecordShapes_DistinctOrDeclared`, whose printed table shows
+  this row separated from all nine others).
+- **The IC-R8600 is the only model here that shows the seven receiver
+  columns.** Tuning step and its on/off flag, the programmable tuning
+  step, the attenuator, the preamplifier, the antenna and IP+ are neutral
+  channel fields this cycle added for it (additions spec D8), and every
+  other registered radio grades all seven as absent, because their memory
+  records carry no such bytes. Nothing in the grid was special-cased to
+  achieve that: the column list is derived per bank from each radio's own
+  capabilities, so those seven appear on this receiver and on nothing
+  else purely because `core/driver/icr8600/caps.go` maps them
+  (`app/uispec.go`'s `bankTierFields`, pinned by
+  `TestGetUISpec_RegisteredICR8600_EveryBankFieldsAndTagDisplay`). The
+  same derivation is why its transmit-frequency and transmitted-tone
+  columns are absent — see the receiver note at the top of this file.
+- **The IC-R8600 has four possible CI-V terminals and this program uses
+  one.** The guide names a `[REMOTE]` jack, a rear `[USB]` port, a front
+  `[USB]` port and a `[LAN]` connection, and which of them is live is a
+  receiver setting; this program speaks over USB and ships no network
+  path (additions spec D3.5 rules LAN CI-V out of scope for this cycle).
+  Two further settings have no printed default at all — the transceive
+  function, and echo-back, which is set separately for each of the two
+  USB ports — so this program cannot tell you whether unsolicited frames
+  should be expected from the receiver of its own accord. Any that arrive
+  are counted and ignored, never acted on, which is how every model here
+  handles them (`core/driver/icr8600/doc.go`, entries
+  `icr8600-transceive-default` and `icr8600-echo-default`; matrix §3.5,
+  §3.6).
+- **The IC-R8600's clear form is printed, and this program still will not
+  send it.** Unlike the Yaesu models, this receiver's guide DOES document
+  how to clear a memory — a memory-set frame carrying `FF` where the
+  record would go — and it even names a limit on it, group 0102 being
+  excluded. That changes nothing here: this tier ships no erase builder,
+  the outbound gate admits only the identity read, a memory read and a
+  re-validated memory set, and the erase field is graded as absent on
+  every Icom driver, so the consent transform structurally cannot enable
+  it. What the printed form actually does has never been confirmed on a
+  receiver, and clearing the wrong channel is not a mistake worth risking
+  for a convenience the front panel already offers (matrix §3.13;
+  `internal/radiotext`'s `icr8600Text` says the same thing to the user).

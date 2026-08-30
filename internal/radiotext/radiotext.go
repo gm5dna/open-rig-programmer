@@ -1435,6 +1435,133 @@ var ic7100Text = Text{
 	ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7100: this build knows of none to require. This driver talks only to CI-V address 88h, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200 is ASSUMED — it is the highest of the five speeds the manual prints, chosen because the radio's own CI-V speed item ships on Auto and names no number to prefer, and the manual warns that defaults differ between transceiver versions in any case. Two more things about this radio are worth knowing before blaming the port. Its memory list here holds the 495 ordinary channels, banks A to E, and NOTHING ELSE: the six programmed scan edges and four call channels are real channels on the radio, but the manual never says what bank number addresses them, so this build does not read them rather than guess an address. And CI-V Transceive ships ON, so the radio may be putting unsolicited frames on the bus of its own accord; they are counted and ignored, never acted on. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
 }
 
+// icr8600Text is the IC-R8600's entry (Tier 4b, the additions tier's
+// FOURTH and LAST registration), landed with that model's wiring
+// registration for the same reason every Icom entry above was:
+// internal/wiring's TestEverySupportedModelHasRadiotext fails a
+// registration whose prose is missing.
+//
+// A SINGLE-MODEL ENTRY, like the IC-7760's and the IC-7100's above:
+// core/driver/icr8600 has one member, so there is one entry here, no
+// sibling to keep in step and no substitution test.
+//
+// THE FIRST RECEIVER'S PROSE, and that is why this entry exists in the
+// shape it does. Additions spec D4.2 asks for the grid legend to say
+// "receiver — no transmit fields" IN THOSE WORDS rather than listing a
+// transmit column as unwritable, and names internal/radiotext as where
+// that sentence lives; GridLegendNote below carries it verbatim, and
+// app/uispec.go serves it to the grid unchanged, so the receiver wording
+// reaches the user through the same seam every other model's legend does
+// and no frontend code learned what a receiver is.
+//
+// WRITTEN FROM THIS RECEIVER'S OWN DOCUMENT — the IC-R8600 CI-V REFERENCE
+// GUIDE, revision 3a, printed document code A7375-2EX-3a, 28 pages.
+// TestRadiotext_ICR8600Verbatim's non-borrowing legs refuse a field
+// byte-identical to any other entry's and refuse another radio's address
+// hex or bare name anywhere in this one's text.
+//
+// EVERY FACT RESTATED HERE IS TRUE TODAY. writeTrialsComplete is FALSE
+// (core/driver/icr8600/caps.go); the CI-V address is 96h
+// (core/civ/icr8600/profile.go's RadioAddress, matrix §3.4); ONE clear
+// form is printed and it has no builder, and the printed form itself
+// excludes group 0102 (matrix §3.13); the tone fields live in the FM tail
+// alone (core/civ/icr8600/profile.go's fmTailFields), so the tone columns
+// have nowhere to go on any other class; the scan-skip half of record
+// byte 0 and the ten-valued select-scan half are BOTH unmapped and E6
+// refuses a channel carrying anything but zero in the first
+// (core/driver/icr8600/write.go's commonUnmappedHighNibbles); the five
+// digital tails are unmapped under E6 and a mode change into one of those
+// classes is refused rather than invented (that file's
+// DigitalTailRefusalReason arm and the target-class arm below it); the
+// speed is ASSUMED and SO IS THE LIST IT WAS CHOSEN FROM, this guide
+// printing no factory default, no automatic setting and no menu of rates
+// (matrix §3.3, additions spec Erratum 3, register entries
+// icr8600-default-baud and icr8600-baud-set); four control terminals are
+// printed and this build talks to a USB port (matrix §3.6's 1A 11 row);
+// and NEITHER the transceive default NOR the per-port echo default is
+// printed at all (matrix §3.5, §3.6, register entries
+// icr8600-transceive-default and icr8600-echo-default).
+var icr8600Text = Text{
+	// ONE printed clear form, where every other Icom entry above names two
+	// or none, and this build sends it not: there is no builder for it, and
+	// core/civ's AllowedCommand admits only 19 00, a valid 1A 00 read and a
+	// re-validated 1A 00 set. FieldErase carries the zero FieldSupport,
+	// which is what makes core/clone's DiffErased branch unreachable for
+	// this model.
+	//
+	// THE SECOND SENTENCE IS THIS RECEIVER'S OWN, and it is neither a
+	// silence nor a contradiction but a printed EXCLUSION: the clearing
+	// note itself says group 0102 — the programmed scan edges — cannot be
+	// specified. That is a scope this build could not honour in any case,
+	// because it does not address that group at all (register entry
+	// icr8600-scan-edge-encoding), and saying so is more honest than
+	// implying the exclusion is what stops us.
+	EraseProcedure: "The IC-R8600's CI-V Reference Guide DOES print a memory clear form — a memory-set frame carrying FF where the record would go — and this build does not send it: no builder exists for it, the outbound gate admits only the identity read, a memory read and a re-validated memory set, and no IC-R8600 has ever confirmed what the printed form does, so sending one risks clearing the wrong channel rather than the intended one. The printed form also excludes group 0102, the programmed scan edges, from what it may clear, which is a scope this build could not honour in any case: it does not address that group at all. Clear a memory from the receiver's own front panel instead, following the procedure in its instruction manual.",
+	// No minimum-firmware fact is established, and the hedge is about what
+	// THIS BUILD implements as much as about the document: this driver's
+	// admitted command set is 19 00 and 1A 00, so there is no firmware
+	// query to run whatever any manual may hold. THE THIRD SENTENCE IS
+	// THIS RECEIVER'S OWN — its guide's "Preparing" section tells the user
+	// to set the address, the speed and the transceive function in Set
+	// mode before controlling it at all, which is a setting-up step no
+	// other registered model's document opens with.
+	FirmwareGuidance: "No minimum firmware version is established for the IC-R8600: nothing this project holds states one, and no IC-R8600 has been asked. Its CI-V Reference Guide names no version query either, and this build's whole admitted command set is the identity read and the memory record — so read the version off the receiver's own display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established. Note what that guide does open with: it tells you to set the receiver's address, its data communication speed and its transceive function in Set mode before controlling it at all, so a receiver that answers nothing may simply not have been set up yet.",
+	// THE RECEIVER SENTENCE COMES FIRST AND IS VERBATIM FROM ADDITIONS
+	// SPEC D4.2 ("receiver — no transmit fields"), which asks for those
+	// words rather than a per-column "unwritable" label: on this radio
+	// tx_frequency and tone_tx are absent by ANATOMY, and the spec's own
+	// invariant refuses any grading of them above Unsupported here.
+	//
+	// THE REST IS THIS RECEIVER'S OWN SHAPE, and every clause of it
+	// surprises in a different way from the transceiver entries above.
+	// Tone IS read and written, but ONLY inside the FM tail, so the same
+	// columns on an AM or a digital channel have nowhere to go. Scan Skip
+	// is refused for a reason no other registered model has: this record
+	// PRINTS a three-valued scan-skip setting, in the high half of the
+	// byte whose low half is the ten-valued select-scan group, and this
+	// build maps NEITHER — so E6 refuses a channel carrying anything but
+	// zero there rather than flattening a printed setting to zero on a
+	// write-back. And the five digital classes cost a write outright in
+	// two directions: a stored digital channel whose squelch bytes differ
+	// from the assumed template, and any change of mode INTO a digital
+	// class, whose tail would have to be invented wholesale.
+	GridLegendNote: "This radio is a receiver — no transmit fields: an IC-R8600 has no transmitter, and its memory record carries no transmit frequency and no transmitted tone, so those columns are absent by anatomy rather than merely unwritable. Tone squelch IS read and written over CI-V by this build, but unverified against real hardware — no IC-R8600 has ever answered a frame — and only on an FM channel, the tone mode, received tone, DTCS code and DTCS polarity all living in the FM tail alone. Scan Skip is neither read nor written, and on this receiver that refuses TWO printed settings rather than one: the first record byte carries a three-valued scan-skip choice in one half and a ten-valued select-scan group in the other, and this build maps neither, so a channel holding anything but zero in the scan-skip half is refused rather than rewritten as zero. The five digital classes cost more again — a D-STAR, P25, NXDN, DCR or dPMR channel whose squelch bytes differ from the assumed template cannot be written back at all, and neither can a change of mode INTO one of those classes, because there is no honest value to put in a tail this build does not map.",
+	// DELIBERATELY EMPTY, exactly as every other registered model's is and
+	// for the same reason: writeTrialsComplete is false, so there is no
+	// hardware-preservation verification of any kind to report.
+	ToneScanSkipVerification: "",
+	// Byte-identical to EraseProcedure, as every other model's is: the
+	// delete dialog and the blocked-erase review answer the same question.
+	EraseDialogNote: "The IC-R8600's CI-V Reference Guide DOES print a memory clear form — a memory-set frame carrying FF where the record would go — and this build does not send it: no builder exists for it, the outbound gate admits only the identity read, a memory read and a re-validated memory set, and no IC-R8600 has ever confirmed what the printed form does, so sending one risks clearing the wrong channel rather than the intended one. The printed form also excludes group 0102, the programmed scan edges, from what it may clear, which is a scope this build could not honour in any case: it does not address that group at all. Clear a memory from the receiver's own front panel instead, following the procedure in its instruction manual.",
+	// The two tooltips DIFFER, exactly as every other Icom entry's do and
+	// for the same reason: the evidence differs between Tone (on the CI-V
+	// surface, unverified, and FM-only here) and Scan Skip (two printed
+	// settings in one byte, neither of which this build maps).
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over CI-V by this build on FM channels only — unverified against real hardware, since no IC-R8600 has ever answered a frame",
+		ScanSkip: "not read or written over CI-V by this build — this receiver's first record byte holds a printed scan-skip choice and a select-scan group, and neither half is mapped",
+	},
+	// A placeholder LABEL, not an example: no IC-R8600 version string has
+	// been seen here. It names the model, which is also what keeps it
+	// distinct from every other registered model's own placeholder.
+	FirmwarePlaceholder: "as shown on the IC-R8600's own display",
+	// Restates the no-query and no-minimum-version facts, then the four
+	// things this receiver's probe failure modes turn on. The fixed 96h
+	// address with no --civ-address option. THE SPEED, which is a weaker
+	// guess than any other registered model's and the note says exactly
+	// how: this guide prints no factory default, mentions no automatic
+	// setting AND never lists the rates the menu offers, so the opening
+	// 19200 and the six-rate list it was picked from are BOTH assumed
+	// (additions spec Erratum 3). THE FOUR CONTROL TERMINALS — the remote
+	// jack, two USB ports and the network — of which this build talks to a
+	// USB port, a choice no other registered model has to make. And the
+	// TWO UNPRINTED DEFAULTS, transceive and per-port echo, which together
+	// mean this build cannot say whether unsolicited frames should be
+	// expected on this receiver at all; either way they are counted and
+	// ignored.
+	ProbeFirmwareNote: "Firmware version has no query in this build — check the receiver's display. No minimum version is established for the IC-R8600: this build knows of none to require. This driver talks only to CI-V address 96h, with no --civ-address option to change it and no way to detect a receiver set to a different address; and its opening speed of 19200 is a weaker guess here than on any other radio this build supports — this receiver's CI-V Reference Guide prints no factory default speed, mentions no automatic setting, and never lists the rates its menu offers, so the rate AND the list it was chosen from are both assumed. The guide's own advice is to set the address, the speed and the transceive function in the receiver's Set mode before controlling it, which is the first thing to check. Two more things about this receiver are worth knowing before blaming the port. It has FOUR possible control terminals — a remote jack, a front and a rear USB port, and a network connection — and this build talks over USB, so if one port is silent, check which terminal the receiver has been told to use before concluding the cable is wrong. And neither the transceive setting nor the echo-back setting of either USB port has a printed default, so this build cannot tell you whether unsolicited frames should be expected of the receiver's own accord; any that arrive are counted and ignored, never acted on. If nothing answers, check the receiver's address and speed before assuming the port is wrong.",
+}
+
 // texts is the registry For consults, keyed by the exact model string a
 // driver.Driver.Model() (or driver.Identity/spec.Capabilities.Model)
 // call returns, e.g. "FT-710".
@@ -1466,17 +1593,18 @@ var texts = map[string]Text{
 	"IC-7850":    ic7850Text,
 	"IC-7760":    ic7760Text,
 	"IC-7100":    ic7100Text,
+	"IC-R8600":   icr8600Text,
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",
 // "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700",
-// "IC-905", "IC-7851", "IC-7850", "IC-7760" and "IC-7100" are populated —
-// the FOURTEEN models internal/wiring registers AS OF the additions
-// tier's THIRD registration (Tier 4b), a count a fifteenth registration
-// would falsify; any other model — including "", a future driver not yet
-// given an entry, or a near-miss typo ("FT-DX10", "IC7610", "IC7300",
-// "IC705", "IC9700", "IC905", "IC7851", "IC7760" or "IC7100", say) —
-// returns the zero Text and false.
+// "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100" and "IC-R8600" are
+// populated — the FIFTEEN models internal/wiring registers AS OF the
+// additions tier's FOURTH and last registration (Tier 4b), a count a
+// sixteenth registration would falsify; any other model — including "", a
+// future driver not yet given an entry, or a near-miss typo ("FT-DX10",
+// "IC7610", "IC7300", "IC705", "IC9700", "IC905", "IC7851", "IC7760",
+// "IC7100" or "ICR8600", say) — returns the zero Text and false.
 // Callers must never treat a zero Text as if it were real advisory copy.
 //
 // THE MATCH IS EXACT AND CASE-SENSITIVE, and for the FTDX101 pair that is

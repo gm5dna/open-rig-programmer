@@ -274,6 +274,19 @@ func TestGetSupportedModels_ContainsDefaultModel(t *testing.T) {
 	if !foundIC7100 {
 		t.Errorf("GetSupportedModels() = %v, want it to contain wiring.IC7100Model %q", got, wiring.IC7100Model)
 	}
+	// The IC-R8600 (Tier 4b's fourth and last registration), on the same
+	// explicit membership footing and for the same reason — with one
+	// extra: it is the only RECEIVER this program offers, so a picker
+	// missing it hides the whole class rather than one more transceiver.
+	foundICR8600 := false
+	for _, m := range got {
+		if m == wiring.ICR8600Model {
+			foundICR8600 = true
+		}
+	}
+	if !foundICR8600 {
+		t.Errorf("GetSupportedModels() = %v, want it to contain wiring.ICR8600Model %q", got, wiring.ICR8600Model)
+	}
 }
 
 // TestConnect_EmptyModelIsTheDefaultModel pins Connect/ConnectDemo's new

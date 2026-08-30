@@ -5,6 +5,7 @@ package main
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
@@ -554,6 +555,56 @@ var ic7100CoreThree = []spec.Field{
 // list is ten long and the IC-7610's, IC-7851's and IC-7760's are four.
 var ic7100TierFields = []string{"tx_frequency", "duplex", "offset", "tone_mode", "tone_tx", "tone_rx", "dtcs_code", "dtcs_polarity", "filter", "data_mode"}
 
+// icr8600CoreThree is the core set the IC-R8600's ONE bank derives, on
+// every profile: frequency, mode and tag, in bankCoreCandidates order.
+//
+// SAME MEMBERS AS EVERY OTHER ICOM ENTRY'S, and a coincidence of
+// independent evidence rather than a shared derivation once more:
+// core/driver/icr8600 imports no sibling driver package, and its
+// bankFields was written from this receiver's own CI-V Reference Guide
+// (revision 3a) alone. FieldClarifier, FieldShift, FieldCTCSSState,
+// FieldCTCSSTone, FieldScanSkip and FieldTagDisplay are all the zero
+// FieldSupport here (that file's deliberately-zero audit), so none of
+// them survives bankCoreFields' zero-value test.
+//
+// AND BEING A RECEIVER COSTS NOTHING IN THIS SET, which is worth stating
+// because it is the surprising half: spec.ReceiveOnly removes
+// tx_frequency and tone_tx, and NEITHER is a bankCoreCandidates member.
+// The core three a receiver's grid renders are the transceivers' three.
+var icr8600CoreThree = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldTag,
+}
+
+// icr8600TierFields is what bankTierFields (app/uispec.go) derives for
+// the IC-R8600's one bank, on every profile: FOURTEEN of the seventeen
+// tier-added fields, in tierFields' own declaration order.
+//
+// THE FIRST LIST HERE THAT REACHES THE SEVEN D8 RECEIVER FIELDS. No
+// registered model before this one grades tuning_step_enabled,
+// tuning_step, program_tuning_step, attenuator, preamp, antenna or ip_plus
+// anything but the zero FieldSupport, so those seven columns have been
+// unreachable on every bank of every row since the additions core minted
+// them (additions spec D8.2). core/driver/icr8600/caps.go's bankFields
+// maps all seven from the record's common head, so they appear here — and
+// the ORDER is tierFields', which puts them after the tier's original ten
+// because that is codeplug.ChannelData's own declaration order.
+//
+// AND THE FIRST THAT IS SHORT OF THE ORIGINAL TEN FOR TWO DIFFERENT
+// REASONS. tx_frequency and tone_tx are missing by ANATOMY — this radio
+// has no transmitter, and additions spec D4.2's invariant makes grading
+// either above Unsupported a spec.Validate failure rather than a choice,
+// so their absence here is structural and could not be edited away.
+// data_mode is missing for the ordinary reason the 25-byte records' own
+// is: this record carries no such byte.
+//
+// A SEPARATE VARIABLE for the reason every other model's is: a future
+// divergence must show up as a diff here rather than being absorbed by a
+// shared name.
+var icr8600TierFields = []string{
+	"duplex", "offset", "tone_mode", "tone_rx", "dtcs_code", "dtcs_polarity", "filter",
+	"tuning_step_enabled", "tuning_step", "program_tuning_step", "attenuator", "preamp", "antenna", "ip_plus",
+}
+
 func TestBankTierFields_ReceiverFieldsFollowBankReachability(t *testing.T) {
 	rw := spec.FieldSupport{Read: spec.Supported, Write: spec.Unverified}
 	caps := spec.Capabilities{Banks: []spec.Bank{{
@@ -813,6 +864,13 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		// see ic7100CoreThree's doc comment for why it is a separate
 		// variable rather than a reuse of any set above.
 		"IC-7100": ic7100CoreThree,
+		// The IC-R8600 (Tier 4b's fourth and last registration, and the
+		// registry's only RECEIVER): the same three candidate fields once
+		// more, from its own driver's own table — see icr8600CoreThree's
+		// doc comment for why being receive-only costs nothing in THIS
+		// set, none of the two fields spec.ReceiveOnly removes being a
+		// bankCoreCandidates member.
+		"IC-R8600": icr8600CoreThree,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {
@@ -3905,5 +3963,228 @@ func TestGetUISpec_RegisteredIC7100_EveryBankFieldsAndTagDisplay(t *testing.T) {
 		if !reflect.DeepEqual(b.Fields, ic7100TierFields) {
 			t.Errorf("offline bank %s Fields = %v, want %v", b.ID, b.Fields, ic7100TierFields)
 		}
+	}
+}
+
+// TestBankReadOnly_RegisteredICR8600_RealHardwareProfile pins what a REAL
+// IC-R8600's grid does through real registration — the additions tier's
+// fourth mirror of TestBankReadOnly_RegisteredIC7610_RealHardwareProfile.
+//
+// Its RealHardware profile is its all-Unverified one (writeTrialsComplete
+// is false: no IC-R8600 has ever been written to by this project), so the
+// three derived core fields are Write spec.Unverified — which is NOT
+// spec.Unsupported, and therefore NOT read-only under bankReadOnly's
+// standing rule, on the same footing as every other row.
+//
+// A RECEIVER IS NOT A READ-ONLY RADIO, and this is the test that says so.
+// spec.ReceiveOnly is anatomy — it removes tx_frequency and tone_tx from
+// the graded set (additions spec D4.2's invariant) — and it says nothing
+// whatever about whether the memories may be written. Collapsing the two
+// would lock a receiver's grid and break the offline clone workflow for
+// the one model in this registry that is most obviously a memory-list
+// radio, so the assertion below is deliberately identical to every
+// transceiver's.
+//
+// ONE BANK, and no discovered-bank contrast at the STATIC baseline: the
+// single spec.BankMemory this driver declares is fixed at construction
+// (core/driver/icr8600/caps.go), and it is SPARSE with no materialised
+// Slots until a session walks the space, which is a property of the slot
+// list rather than of the bank's field grading.
+func TestBankReadOnly_RegisteredICR8600_RealHardwareProfile(t *testing.T) {
+	caps, err := wiring.StaticCapabilities(wiring.ICR8600Model)
+	if err != nil {
+		t.Fatalf("wiring.StaticCapabilities(%q): unexpected error: %v", wiring.ICR8600Model, err)
+	}
+	if len(caps.Banks) != 1 {
+		t.Fatalf("the registered %s's static baseline has %d banks, want exactly 1 (the sparse MEM space)", wiring.ICR8600Model, len(caps.Banks))
+	}
+	if caps.Transmit != spec.ReceiveOnly {
+		t.Fatalf("the registered %s declares Transmit = %v, want spec.ReceiveOnly — every assertion below is about a receiver", wiring.ICR8600Model, caps.Transmit)
+	}
+	for _, b := range caps.Banks {
+		if !b.Sparse || !b.BudgetUnstated {
+			t.Errorf("bank %s Sparse = %v, BudgetUnstated = %v, want both true — the guide states no capacity anywhere (additions spec D3.4, register entry icr8600-budget)", b.ID, b.Sparse, b.BudgetUnstated)
+		}
+		fields := bankCoreFields(caps, b.ID)
+		wantFields(t, "IC-R8600 bank "+string(b.ID), fields, icr8600CoreThree)
+		for _, f := range fields {
+			if w := caps.FieldSupport(b.ID, f).Write; w != spec.Unverified {
+				t.Errorf("bank %s field %s Write = %v, want Unverified (the premise: nothing on a real IC-R8600 is proven writable)", b.ID, f, w)
+			}
+		}
+		if bankReadOnly(caps, b.ID) {
+			t.Errorf("bankReadOnly(%s) = true, want false — Unverified is not Unsupported, a receiver is not a read-only radio, and locking it would break the offline clone workflow", b.ID)
+		}
+	}
+}
+
+// TestGetUISpec_RegisteredICR8600_EveryBankFieldsAndTagDisplay is the
+// additions tier's fourth mirror of
+// TestGetUISpec_RegisteredIC7610_EveryBankFieldsAndTagDisplay: GetUISpec
+// driven for the new row through real registration, connected and
+// offline.
+//
+//   - CONNECTED to the registered fake (Live true, the Simulated profile
+//     — the `--fake --model IC-R8600` path a user actually walks). This
+//     receiver discovers no extra bank; the sparse walk fills the one MEM
+//     space's slot list instead.
+//   - DISCONNECTED with its own working copy loaded (Live false, the
+//     static RealHardware baseline, resolved by currentModel from the
+//     file's own Radio.Model) — the offline clone workflow's path.
+//
+// TagDisplayDefault must be {state: "unavailable"} on both paths: this
+// receiver's 1A 00 record has no display flag at all (FieldTagDisplay
+// carries the zero FieldSupport, core/driver/icr8600/caps.go's
+// bankFields), so a blank row added anywhere must not carry a Known one.
+//
+// FIELDS MUST EQUAL icr8600TierFields ON BOTH PATHS, and this is the
+// assertion the whole D8 design comes to rest on: the seven receiver
+// columns must appear here, derived from THIS MODEL'S CAPABILITIES ALONE
+// through the bankTierFields body that no registration edited, and the
+// two TX-adjacent columns must not.
+//
+// THE OFFLINE LEG USES A ZERO-BASED WIDE-GROUP SLOT, "G00-000": this
+// receiver's groups AND channels both count from zero (additions spec
+// Erratum 2, core/civ/icr8600/profile.go), which no earlier registered
+// model does, and a working copy holding a slot its own driver would
+// refuse would be testing the wrong thing.
+//
+// THE CONNECTED LEG IS WHERE THE REGISTRATION IS ACTUALLY EXERCISED: a row
+// wired to another model's driver or another model's option source shows
+// up here as a wrong Capabilities().Model, which is asserted before
+// anything else.
+func TestGetUISpec_RegisteredICR8600_EveryBankFieldsAndTagDisplay(t *testing.T) {
+	unavailable := codeplug.BoolField{State: codeplug.Unavailable}
+
+	sess, closeAll, err := wiring.OpenFakeSessionFor(testAppCtx(t), wiring.ICR8600Model)
+	if err != nil {
+		t.Fatalf("wiring.OpenFakeSessionFor(%q): unexpected error: %v", wiring.ICR8600Model, err)
+	}
+	t.Cleanup(func() { _ = closeAll() })
+	if got := sess.Capabilities().Model; got != wiring.ICR8600Model {
+		t.Fatalf("the fake session's Capabilities().Model = %q, want %q — this row is wired to the wrong driver", got, wiring.ICR8600Model)
+	}
+
+	a, _ := newTestApp(t)
+	connectDirect(t, a, sess, nil)
+	got, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (connected to the IC-R8600 fake): unexpected error: %v", err)
+	}
+	if !got.Live {
+		t.Error("Live = false, want true (connected to the registered fake)")
+	}
+	if len(got.Banks) != 1 {
+		t.Fatalf("banks = %v, want exactly the one sparse MEM bank — this receiver discovers no second namespace", bankIDs(got.Banks))
+	}
+	for _, b := range got.Banks {
+		if b.TagDisplayDefault != unavailable {
+			t.Errorf("connected bank %s TagDisplayDefault = %+v, want %+v — this receiver's memory frame has no display flag", b.ID, b.TagDisplayDefault, unavailable)
+		}
+		if !reflect.DeepEqual(b.Fields, icr8600TierFields) {
+			t.Errorf("connected bank %s Fields = %v, want %v", b.ID, b.Fields, icr8600TierFields)
+		}
+	}
+
+	// Offline, from this row's own file: the same answers, from the
+	// static RealHardware baseline this time.
+	a.mu.Lock()
+	a.conn = nil
+	a.working = &codeplug.Codeplug{
+		Schema:   codeplug.CurrentSchema,
+		Radio:    codeplug.RadioInfo{Model: wiring.ICR8600Model},
+		Channels: []codeplug.Channel{{Slot: "G00-000"}},
+	}
+	a.mu.Unlock()
+	offline, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (offline, IC-R8600 working copy): unexpected error: %v", err)
+	}
+	if offline.Live {
+		t.Error("Live = true, want false (disconnected)")
+	}
+	if len(offline.Banks) == 0 {
+		t.Fatal("offline IC-R8600 UISpec has no banks — nothing asserted")
+	}
+	for _, b := range offline.Banks {
+		if b.TagDisplayDefault != unavailable {
+			t.Errorf("offline bank %s TagDisplayDefault = %+v, want %+v", b.ID, b.TagDisplayDefault, unavailable)
+		}
+		if !reflect.DeepEqual(b.Fields, icr8600TierFields) {
+			t.Errorf("offline bank %s Fields = %v, want %v", b.ID, b.Fields, icr8600TierFields)
+		}
+	}
+}
+
+// TestGetUISpec_RegisteredICR8600_IsAReceiver is the receiver half of the
+// registration, asserted through the real registry rather than the
+// hand-built fixture TestGetUISpec_TransmitFollowsRadioCapabilities uses.
+//
+// THE TWO TESTS ARE NOT DUPLICATES, and the difference is the point. That
+// one proves the MECHANISM — a fixture declaring spec.ReceiveOnly renders
+// "receive_only" — and it has passed since additions spec D4.2 landed,
+// against a capability value no registered radio held. This one proves the
+// FACT: the registry's IC-R8600 row really is a receiver, on both the live
+// simulated path and the static offline one, so the mechanism is now
+// carrying a real model rather than a fixture.
+//
+// AND IT PINS THE GRID LEGEND'S OWN WORDING. UISpecView.GridLegendNote is
+// served from internal/radiotext (app/uispec.go), and D4.2 asks for the
+// receiver's legend to say "receiver — no transmit fields" IN THOSE WORDS
+// rather than labelling an absent column unwritable. That substring is
+// asserted here because this is the seam where the sentence reaches the
+// UI; internal/radiotext's own TestRadiotext_ICR8600Verbatim pins the
+// whole string at its source.
+//
+// BOTH PATHS, deliberately: Transmit is radio ANATOMY, so a connected
+// session and a file loaded offline must agree about it. A build that
+// derived it from the live session alone would tell an offline user
+// nothing about the radio their file came from.
+func TestGetUISpec_RegisteredICR8600_IsAReceiver(t *testing.T) {
+	const receiverLegend = "receiver — no transmit fields"
+
+	sess, closeAll, err := wiring.OpenFakeSessionFor(testAppCtx(t), wiring.ICR8600Model)
+	if err != nil {
+		t.Fatalf("wiring.OpenFakeSessionFor(%q): unexpected error: %v", wiring.ICR8600Model, err)
+	}
+	t.Cleanup(func() { _ = closeAll() })
+
+	a, _ := newTestApp(t)
+	connectDirect(t, a, sess, nil)
+	got, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (connected to the IC-R8600 fake): unexpected error: %v", err)
+	}
+	if got.Transmit != "receive_only" {
+		t.Errorf("connected Transmit = %q, want \"receive_only\" — the IC-R8600 is the one registered row whose radio has no transmitter", got.Transmit)
+	}
+	if !strings.Contains(got.GridLegendNote, receiverLegend) {
+		t.Errorf("connected GridLegendNote = %q, want it to contain %q — additions spec D4.2 asks for those words, and this is the seam that serves them", got.GridLegendNote, receiverLegend)
+	}
+
+	a.mu.Lock()
+	a.conn = nil
+	a.working = &codeplug.Codeplug{
+		Schema:   codeplug.CurrentSchema,
+		Radio:    codeplug.RadioInfo{Model: wiring.ICR8600Model},
+		Channels: []codeplug.Channel{{Slot: "G00-000"}},
+	}
+	a.mu.Unlock()
+	offline, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (offline, IC-R8600 working copy): unexpected error: %v", err)
+	}
+	if offline.Transmit != "receive_only" {
+		t.Errorf("offline Transmit = %q, want \"receive_only\" — anatomy does not depend on being connected", offline.Transmit)
+	}
+	if !strings.Contains(offline.GridLegendNote, receiverLegend) {
+		t.Errorf("offline GridLegendNote = %q, want it to contain %q", offline.GridLegendNote, receiverLegend)
+	}
+	// And the one bank must carry the undocumented-capacity flag on the
+	// offline path too: additions spec D3.4 makes BudgetUnstated the
+	// positive declaration of a silence, and a UI that lost it offline
+	// would be back to implying a capacity nobody has printed.
+	if len(offline.Banks) != 1 || !offline.Banks[0].BudgetUnstated {
+		t.Errorf("offline Banks = %+v, want one bank carrying BudgetUnstated", offline.Banks)
 	}
 }

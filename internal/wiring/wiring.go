@@ -64,6 +64,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7851"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic905"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
+	"github.com/gm5dna/open-rig-programmer/core/driver/icr8600"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -354,6 +355,60 @@ const IC7760Model = "IC-7760"
 // A2h differ, so a wrong radio at its own address does not answer at all.
 const IC7100Model = "IC-7100"
 
+// ICR8600Model names the IC-R8600's realDrivers/fakeDrivers key, which
+// must equal icr8600.New(...).Model() — pinned, like every other Icom
+// constant above, by TestDriverTableKeysMatchDriverModel walking both
+// tables.
+//
+// THE ADDITIONS TIER'S FOURTH AND LAST REGISTRATION (Tier 4b, Wave 4),
+// and a single-row one: core/driver/icr8600 has one member, one
+// civ.Profile and one fake. It takes its profile as an ARGUMENT
+// (icr8600.New(profile, opts...)), which decides both
+// NewICR8600RealDriver's body below and the TOKEN internal/guards
+// confines for this package (icr8600.Simulated, a Profile constant, not
+// an option) — checked against core/driver/icr8600/icr8600.go:41, not
+// assumed from the nearest precedent.
+//
+// THE FIRST RECEIVER THIS REGISTRY HOLDS, and the first row whose
+// capabilities declare spec.ReceiveOnly (core/driver/icr8600/caps.go;
+// additions spec D4.2). Everything downstream of that is already
+// capability-keyed and needed no code here: spec.Validate refuses a
+// ReceiveOnly model that grades tx_frequency or tone_tx above
+// Unsupported, app.GetUISpec carries the radio-level Transmit string, and
+// internal/radiotext's icr8600Text supplies the "receiver — no transmit
+// fields" grid legend D4.2 asks for by name. What this row adds is the
+// first model that exercises any of it.
+//
+// A ZERO-BASED, SPARSE, WIDE-GROUP ADDRESS SPACE, the first of each in
+// this registry: two packed-BCD group bytes then two channel bytes
+// (civ.AddressFormWideGroupChannel, FOUR address bytes), over groups
+// 0000–0099 × channels 00–99 with BOTH bases 0 (additions spec Erratum 2;
+// core/civ/icr8600/profile.go), rendered "G00-000".."G99-099". The bank is
+// SPARSE and its CAPACITY IS UNDOCUMENTED — spec.Bank.BudgetUnstated is
+// the positive declaration of that silence (additions spec D3.4, register
+// entry icr8600-budget), so codeplug.Diff skips its over-budget refusal
+// and the honesty documents say the radio's behaviour when full is
+// unknown rather than inventing a number.
+//
+// A MODE-KEYED RECORD, the first civ.DiscriminatorModeByte profile:
+// record-only lengths {37, 39, 41, 43, 44, 45}, one per declared tail,
+// with FM and DCR BOTH at 44 and told apart by the mode byte rather than
+// by length (core/civ/icr8600/profile.go's recordLayouts).
+//
+// SEPARABLE FROM EVERY OTHER REGISTERED PROFILE, so it adds NO entry to
+// core/civ/tier_test.go's `indistinguishable` table — the first additions
+// row of which that is true. Its set is disjoint from every other Icom
+// family's EXCEPT the IC-7300's {39} and the IC-7300MK2's {45}, both of
+// which it contains; those two pairings are separated by ADDRESS WIDTH
+// (four bytes against two), measured rather than declared by
+// TestTierRecordShapes_DistinctOrDeclared.
+//
+// NO --civ-address OPTION, as everywhere else in this tier: this driver
+// talks only to 96h (core/civ/icr8600/profile.go's RadioAddress), and a
+// receiver moved off it simply times out (register entry
+// icr8600-address-move).
+const ICR8600Model = "IC-R8600"
+
 // realDrivers is the model-keyed table of real-hardware driver
 // constructors: model name -> a constructor building THAT model's
 // real-profile driver.Driver. It is the single source of truth
@@ -501,6 +556,20 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ic7100.New(ic7100.RealHardware, ic7100.WithConsentedUnverifiedWrites())
 		}
 		return NewIC7100RealDriver()
+	},
+	// ONE ROW, naming its profile explicitly for the IC-7760's and the
+	// IC-7100's reason: core/driver/icr8600's New takes the profile as
+	// its first ARGUMENT (icr8600.go:41), so the consent arm passes
+	// icr8600.RealHardware rather than leaving the profile to an option's
+	// absence. The option changes the SESSION's effective capabilities
+	// and never the profile it was built from —
+	// TestRealDriverFor_DefaultPathByteIdentical is what would catch a
+	// consent arm that had quietly passed icr8600.Simulated.
+	ICR8600Model: func(consent bool) driver.Driver {
+		if consent {
+			return icr8600.New(icr8600.RealHardware, icr8600.WithConsentedUnverifiedWrites())
+		}
+		return NewICR8600RealDriver()
 	},
 }
 
@@ -945,6 +1014,48 @@ func NewIC7760RealDriver() driver.Driver {
 // IC7100Model row above and never this constructor.
 func NewIC7100RealDriver() driver.Driver {
 	return ic7100.New(ic7100.RealHardware)
+}
+
+// NewICR8600RealDriver builds the icr8600 driver for a real-hardware
+// session: profile icr8600.RealHardware, the zero value — the IC-R8600's
+// half of the realDrivers table, split out for the same reason every
+// other model constructor above is (a test can pin the capability set the
+// real wiring path implies without opening a port).
+//
+// A PROFILE ARGUMENT, like the IC-7610's, the IC-905's, the IC-7760's and
+// the IC-7100's and unlike the IC-7851 pair's two constructors:
+// core/driver/icr8600 declares Profile as New's first parameter
+// (icr8600.go:41), so the real-hardware arm is NAMED here rather than
+// left to an option's absence. Its zero value is RealHardware too
+// (caps.go: "The zero value is the fail-safe physical-radio profile"),
+// which is belt and braces rather than a second way of saying the same
+// thing.
+//
+// READ/PROBE ONLY, by the same mechanism as every other row: this
+// driver's writeTrialsComplete (core/driver/icr8600/caps.go) is FALSE, so
+// a RealHardware IC-R8600 driver reports the all-Unverified capability
+// set — every one of the seventeen mapped fields Read Unverified and
+// Write Unverified, nothing writable. No IC-R8600 has been written to by
+// this project, and the capability gate refuses before any frame is
+// built.
+//
+// AND IT IS A RECEIVER, which narrows the set further and does so
+// STRUCTURALLY rather than by grading: caps.Transmit is spec.ReceiveOnly,
+// so spec.Validate refuses this capability value outright if
+// tx_frequency or tone_tx is ever graded above Unsupported on any bank
+// (additions spec D4.2's invariant). Both are written-down zeros in
+// caps.go's bankFields today.
+//
+// THE FAIL-SAFE DIRECTION IS UNCHANGED: an unrecognised Profile value
+// selects the all-Unverified set too, through icr8600.go's Capabilities
+// switch (its default arm returns CapabilitiesUnverified), never the
+// simulator's write-Supported one, and profileRecognised() refuses to
+// spend consent on a profile it does not know. The one named exception —
+// SessionOptions' ConsentUnverifiedWrites, spent from the user's own
+// recorded grant — reaches realDrivers' ICR8600Model row above and never
+// this constructor.
+func NewICR8600RealDriver() driver.Driver {
+	return icr8600.New(icr8600.RealHardware)
 }
 
 // openSerial is OpenRealSessionWith's test seam (and so OpenRealSessionFor's
