@@ -632,6 +632,29 @@ observed reading BOTH `0` and `1` (front-panel-created), only `1` is
 writable, and the `0` state is **not recreatable via CAT** — M-95's
 original P7=0 could not be restored (see "Restoration" below).
 
+### P7 kind drift on a CAT-written PMS slot (field report, 30/08/2026)
+
+Stuart, reading his UK FT-710 with the published v1.2.0: `reading radio:
+… ReadAll: slot "P1L": ft710: MR answer for slot "P1L" carries kind '0',
+want one of {'1','5'} for this slot's bank` — the whole read aborted.
+P1L is the slot the M5b trials CAT-wrote on 13/07/2026 with kind `1`
+(it read back `1` that day, see the matrix above) and it was left
+populated pending manual cleanup; Stuart has neither written it nor
+edited it from the front panel since. **The radio changed P7 from `1`
+to `0` on its own** between 13/07 and 30/08 — so P7 on a read is
+radio-internal state that ordinary use flips (which use, unknown: a PMS
+scan, memory tune or power cycle are the candidates; none was isolated),
+not a label for the slot's bank. This retires the July note's open
+question — "a front-panel-created PMS channel's kind byte was never
+observed" — with a stronger finding: even a CAT-written one does not
+keep `1`. Fixed on 30/08/2026 (v1.2.1): `core/driver/ft710/read.go`
+`acceptedKinds` — PMS now `{0,1,5}`, mirroring MEM; 60 m/EMG unchanged
+(still never observed); write still always sends `1`. The read-side
+check now guards only against genuinely undocumented bytes (`2`, `3`,
+`6`+). Pinned by `TestReadChannel_HWObserved_PMSKindVFO`. Not probed:
+whether P1U (also CAT-written, 7.200 MHz) drifted too — the read
+aborted at P1L, the first PMS slot.
+
 ### Clarifier: silently ignored on write
 
 MW frames carrying non-zero clarifier values and Rx/Tx clarifier flags
