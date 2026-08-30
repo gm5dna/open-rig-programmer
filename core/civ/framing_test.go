@@ -103,6 +103,42 @@ func newCIVPort(replies ...[]byte) *civPort {
 	}
 }
 
+// continuousCIVPort makes the flood a property of Read rather than a
+// separately scheduled producer: whenever no scripted reply is pending,
+// the next Read has another complete frame available.
+type continuousCIVPort struct {
+	*civPort
+	frame []byte
+}
+
+func newContinuousCIVPort(frame []byte, replies ...[]byte) *continuousCIVPort {
+	return &continuousCIVPort{
+		civPort: newCIVPort(replies...),
+		frame:   append([]byte(nil), frame...),
+	}
+}
+
+func (p *continuousCIVPort) Read(b []byte) (int, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.closed {
+		return 0, errCIVPortClosed
+	}
+	// A scripted answer wins over the flood so
+	// TestFraming_ContinuousFloodDoesNotWedgeTheEngine can prove the
+	// engine still recognises an answer after the capped drain.
+	if len(p.pending) > 0 {
+		n := copy(b, p.pending)
+		p.pending = p.pending[n:]
+		return n, nil
+	}
+	n := copy(b, p.frame)
+	if n < len(p.frame) {
+		p.pending = append(p.pending, p.frame[n:]...)
+	}
+	return n, nil
+}
+
 func (p *civPort) Read(b []byte) (int, error) {
 	for {
 		p.mu.Lock()
@@ -664,32 +700,11 @@ func TestFraming_OversizeFrameContaminatesRatherThanClosingThePort(t *testing.T)
 func TestFraming_ContinuousFloodDoesNotWedgeTheEngine(t *testing.T) {
 	p := flatProfile
 
-	// flood starts a goroutine spraying frame at the port until cleanup.
-	flood := func(t *testing.T, port *civPort, frame []byte) {
-		t.Helper()
-		stop := make(chan struct{})
-		done := make(chan struct{})
-		go func() {
-			defer close(done)
-			for {
-				select {
-				case <-stop:
-					return
-				default:
-				}
-				port.deliver(frame)
-				time.Sleep(2 * time.Millisecond)
-			}
-		}()
-		t.Cleanup(func() { close(stop); <-done })
-	}
-
 	t.Run("transceive broadcasts never reach the engine", func(t *testing.T) {
-		port := newCIVPort()
-		t.Cleanup(func() { _ = port.Close() })
 		// Addressed to 0x00, the broadcast address, from this radio —
 		// factory-ON on at least four models in this tier.
-		flood(t, port, rawFrame(0x00, p.RadioAddress(), 0x00, 0x00, 0x01, 0x02, 0x03))
+		port := newContinuousCIVPort(rawFrame(0x00, p.RadioAddress(), 0x00, 0x00, 0x01, 0x02, 0x03))
+		t.Cleanup(func() { _ = port.Close() })
 		e, f := newCIVEngine(t, p, port)
 		stats := f.(AccumulatorStatsReporter)
 
@@ -716,26 +731,28 @@ func TestFraming_ContinuousFloodDoesNotWedgeTheEngine(t *testing.T) {
 	})
 
 	t.Run("a flood addressed to us fails the drain at its absolute cap", func(t *testing.T) {
-		port := newCIVPort()
+		port := newContinuousCIVPort(
+			rawFrame(p.ControllerAddress(), p.RadioAddress(), 0x00, 0x00, 0x01, 0x02, 0x03),
+			idAnswer(p),
+		)
 		t.Cleanup(func() { _ = port.Close() })
-		flood(t, port, rawFrame(p.ControllerAddress(), p.RadioAddress(), 0x00, 0x00, 0x01, 0x02, 0x03))
 		e, _ := newCIVEngine(t, p, port)
 
-		start := time.Now()
 		err := e.Init(context.Background())
-		elapsed := time.Since(start)
+		// The sentinel is the cap assertion. Wall-clock return time also
+		// includes any period for which the test process is descheduled
+		// after the cap is ready; DrainPolicy promises the deadline the
+		// engine honours, not a scheduler latency bound. core/transport's
+		// TestDrainCap_IsACeilingNotAFloor pins the deadline inside the
+		// blocking wait itself.
 		if !errors.Is(err, transport.ErrDrainCapExceeded) {
 			t.Fatalf("Init error = %v, want ErrDrainCapExceeded under a stream that never goes quiet", err)
-		}
-		if elapsed > 4*DrainCap {
-			t.Errorf("Init took %v against an absolute cap of %v — the drain postponed itself", elapsed, DrainCap)
 		}
 
 		// THE RULE THIS TIER READS OFF THAT ERROR: at Init it is nonfatal
 		// with a diagnostic, so the session goes on to talk to the radio.
 		// The engine is not wedged — it answers a read taken from the
 		// same flooded stream.
-		port.deliver(idAnswer(p))
 		cmd, cerr := p.BuildTransceiverIDRead()
 		if cerr != nil {
 			t.Fatalf("BuildTransceiverIDRead: %v", cerr)
