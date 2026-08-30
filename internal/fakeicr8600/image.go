@@ -50,6 +50,16 @@ type defaultChannel struct {
 // domain admits, and the head below is the one the golden-vector leg derived
 // from the same pages: 145.500000 MHz, TS on at step 05, programmable step
 // 9 kHz in the drawn digit order, attenuator off, preamp on, ANT1, IP+ off.
+//
+// THAT LAST CLAUSE LEANS ON G, AND SAYING SO IS THE POINT. This package's
+// evidence base is three quarantined artefacts, not two: the semantic
+// transcription (IC-R8600-transcription-b.csv/.md), the geometry witness
+// (IC-R8600-geometry-witness.csv/.md) AND the golden vectors' provenance
+// (IC-R8600-golden-provenance.md). The plan's Task 9 said "only the
+// manual-derived B/W artefacts"; reading G as well is a deliberate widening of
+// that line, recorded in full in doc.go. G is manual-derived evidence about
+// which printed page each vector's bytes came from — it is not Stage 1 or
+// Stage 2 code, and nothing here depends on any.
 // The tails likewise carry values from the printed domains — TSQL 88.5 Hz and
 // DTCS 023 for FM, NAC 293h for P25, CSQL code 12 for D-STAR, COM ID 123 and
 // CC 12 for dPMR, RAN 05 for NXDN, UC code 123 for DCR, encryption and
