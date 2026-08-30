@@ -1,6 +1,7 @@
 package fakeic7760
 
 import (
+	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -11,9 +12,12 @@ type Radio struct {
 	addr                         byte
 	id                           []byte
 	echo                         bool
-	allowShort                   bool
+	fullRecord                   bool
 	emptyReply                   byte
+	emptyRecordFF                bool
 	recordLen                    int
+	scanEdgeLen                  int
+	broadcastTo                  byte
 	latency                      time.Duration
 	mu                           sync.Mutex
 	slots                        map[int]MemState
@@ -32,8 +36,11 @@ func New(opts ...Option) *Radio {
 		o(&c)
 	}
 	h, d := net.Pipe()
-	r := &Radio{host: h, device: d, addr: c.addr, id: c.id, echo: c.echo, allowShort: c.allowShort, emptyReply: c.emptyReply, recordLen: c.recordLen, latency: c.latency, slots: make(map[int]MemState), closed: make(chan struct{}), out: make(chan []byte, 128)}
+	r := &Radio{host: h, device: d, addr: c.addr, id: c.id, echo: c.echo, fullRecord: c.fullRecord, emptyReply: c.emptyReply, emptyRecordFF: c.emptyRecordFF, recordLen: c.recordLen, scanEdgeLen: c.scanEdgeLen, broadcastTo: c.broadcastTo, latency: c.latency, slots: make(map[int]MemState), closed: make(chan struct{}), out: make(chan []byte, 128)}
 	for ch, v := range c.channels {
+		if n := c.recordLenFor(ch); len(v) != n {
+			panic(fmt.Sprintf("fakeic7760: channel %d record has length %d, want %d", ch, len(v), n))
+		}
 		r.slots[ch] = MemState{Raw: append([]byte(nil), v...)}
 	}
 	r.wg.Add(2)
@@ -134,10 +141,7 @@ func (r *Radio) handle(p []byte) []byte {
 		if len(p) == 4 {
 			return r.read(p[2], p[3])
 		}
-		if len(p) == 4+r.recordLen {
-			return r.write(p[2], p[3], p[4:])
-		}
-		if r.allowShort && len(p) > 4 && len(p) < 4+r.recordLen {
+		if len(p) > 4 {
 			return r.write(p[2], p[3], p[4:])
 		}
 		return reply(r.addr, CodeNG)
@@ -155,9 +159,13 @@ func (r *Radio) read(hi, lo byte) []byte {
 	if !set {
 		return reply(r.addr, r.emptyReply)
 	}
-	allFF := len(m.Raw) > 0
-	for _, b := range m.Raw { allFF = allFF && b == 0xFF }
-	if allFF { return reply(r.addr, r.emptyReply) }
+	// Reading a stored all-FF record back as "empty" is the ASSUMED register
+	// entry ic7760-empty-reply-ff, and it is a different question from the
+	// outbound clear form refused in write below.
+	// TestTheInboundAllFFRecordInterpretationIsOptional pins both halves.
+	if r.emptyRecordFF && allFF(m.Raw) {
+		return reply(r.addr, r.emptyReply)
+	}
 	out := append([]byte{0x1A, 0, hi, lo}, m.Raw...)
 	return reply(r.addr, out...)
 }
@@ -166,19 +174,38 @@ func (r *Radio) write(hi, lo byte, v []byte) []byte {
 	if !ok {
 		return reply(r.addr, CodeNG)
 	}
+	// The printed clear form — a single FF in the ③ select-memory byte and
+	// nothing after it — is matched here explicitly so that the refusal is a
+	// decision at a named place rather than a by-product of the length
+	// arithmetic below, and so that it survives every length knob. Erase is
+	// not admitted by this tier at all.
+	// TestThePrintedClearFormIsRefusedIndependentlyOfShortSets pins it.
+	if len(v) == 1 && v[0] == 0xFF {
+		return reply(r.addr, CodeNG)
+	}
+	n := r.recordLenFor(ch)
+	if len(v) > n || (len(v) != n && r.fullRecord) {
+		return reply(r.addr, CodeNG)
+	}
 	r.mu.Lock()
 	r.slots[ch] = MemState{Raw: append([]byte(nil), v...)}
 	r.commands = append(r.commands, [2]byte{0x1A, 0})
 	r.mu.Unlock()
 	return reply(r.addr, CodeOK)
 }
-func reply(addr byte, p ...byte) []byte {
-	o := []byte{0xFE, 0xFE, AddrController, addr}
+
+// wire builds one frame. The destination comes first on the line, as the
+// data-format diagram draws it: FE FE <to> <from> <data> FD.
+func wire(to, from byte, p ...byte) []byte {
+	o := []byte{0xFE, 0xFE, to, from}
 	o = append(o, p...)
 	return append(o, 0xFD)
 }
+
+// reply is an answer to the controller: to=E0, from=this radio.
+func reply(addr byte, p ...byte) []byte { return wire(AddrController, addr, p...) }
 func (r *Radio) StartBroadcastFlood(d time.Duration) {
-	r.startFlood(AddrBroadcast, d, &r.broadcastStop)
+	r.startFlood(r.broadcastTo, d, &r.broadcastStop)
 }
 func (r *Radio) StartAddressedFlood(d time.Duration) {
 	r.startFlood(AddrController, d, &r.addressedStop)
@@ -202,8 +229,13 @@ func (r *Radio) startFlood(to byte, d time.Duration, slot *chan struct{}) {
 		for {
 			select {
 			case <-t.C:
+				// An unsolicited frame comes FROM the radio, so only the
+				// destination varies between the two floods: the assumed
+				// broadcast form (ic7760-broadcast-form, WithBroadcastForm)
+				// and the synthetic controller-addressed one.
+				// TestTheBroadcastFormIsConfigurable pins both.
 				out := append([]byte{0x19, 0}, r.id...)
-				r.emit(reply(to, out...))
+				r.emit(wire(to, r.addr, out...))
 			case <-s:
 				return
 			case <-r.closed:
@@ -223,4 +255,27 @@ func (r *Radio) StopFloods() {
 		close(r.addressedStop)
 		r.addressedStop = nil
 	}
+}
+
+// recordLenFor is the accepted record length for one slot; see
+// WithScanEdgeRecordShape.
+func (r *Radio) recordLenFor(ch int) int {
+	if (ch == ChanP1 || ch == ChanP2) && r.scanEdgeLen > 0 {
+		return r.scanEdgeLen
+	}
+	return r.recordLen
+}
+
+// allFF reports whether a stored record is every-byte FF. Its meaning is the
+// caller's question, not this helper's.
+func allFF(b []byte) bool {
+	if len(b) == 0 {
+		return false
+	}
+	for _, v := range b {
+		if v != 0xFF {
+			return false
+		}
+	}
+	return true
 }
