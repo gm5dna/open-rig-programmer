@@ -93,6 +93,15 @@ var commonUnmappedHighNibbleOffsets = []int{0, 8, 18, 19, 20}
 // head bytes are followed by the class's own bytes, or by nothing at all.
 const digitalTailOffset = 37
 
+// The offset field's evidenced domain, matrix 3.15.7: eight nibble leaders
+// of which the 100 Hz and 1 GHz digits are printed "0 (Fixed)" and the
+// 100 MHz digit runs 0~2. The four-byte BCD span is wider than this, so the
+// bound is enforced rather than inferred from the field width.
+const (
+	offsetCeilingHz    = 299_999_000
+	offsetResolutionHz = 1_000
+)
+
 // layoutForMode returns the layout a write of this neutral mode would build.
 // Length cannot choose — FM and DCR are both 44 bytes — so the mode span's
 // enum is what discriminates, exactly as the profile's own mode key does.
@@ -348,6 +357,18 @@ func (s *Session) validateWriteFields(slot string, d codeplug.ChannelData) error
 	}
 	if d.OffsetHz.Value > 9_999_999_900 || d.OffsetHz.Value%100 != 0 {
 		return refuse(spec.FieldOffset, fmt.Errorf("%d Hz is outside the four-byte packed-BCD offset field at 100 Hz resolution", d.OffsetHz.Value))
+	}
+	// The field is wider than its evidenced domain. Matrix 3.15.7 draws
+	// the four bytes as eight nibble leaders — [1 kHz | 100 Hz (0 Fixed)],
+	// [100 kHz | 10 kHz], [10 MHz | 1 MHz], [1 GHz (0 Fixed) | 100 MHz
+	// (0~2)] — so the resolution is 1 kHz and the ceiling 299,999,000 Hz.
+	// The two "0 (Fixed)" nibbles have no other gate: unlike bytes 8, 18,
+	// 19, 20 and FM 41, they are packed into one BCD number rather than
+	// left unmapped, so only this bound stops a caller writing a digit
+	// into them. Pinned by
+	// TestWrite_OffsetOutsideThePrintedDomainIsRefusedBeforeTheWire.
+	if d.OffsetHz.Value > offsetCeilingHz || d.OffsetHz.Value%offsetResolutionHz != 0 {
+		return refuse(spec.FieldOffset, fmt.Errorf("%d Hz is outside the offset domain printed at matrix 3.15.7: 0 to %d Hz in %d Hz steps, with the 100 Hz and 1 GHz digits fixed at zero", d.OffsetHz.Value, uint64(offsetCeilingHz), uint64(offsetResolutionHz)))
 	}
 	if d.ProgramTuningStepHz.State == codeplug.Known {
 		r := s.caps.ProgramTuningStepRange
