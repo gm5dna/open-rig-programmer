@@ -90,11 +90,20 @@ func (r *Radio) emit(b []byte) {
 	}
 }
 func (r *Radio) dispatch(raw []byte) {
+	// The echo runs before the address filter and stays there: an echo is a
+	// property of the line (a USB codec reflecting what was put on it),
+	// answering is a property of the radio. That ordering is the modelled
+	// assumption ic7760-echo-default, and TestAForeignControllerIsIgnored
+	// pins it alongside the filter below.
 	if r.echo {
 		r.emit(raw)
 	}
 	f, ok := parseFrame(raw)
-	if !ok || f.to != r.addr {
+	// Both halves of the printed address pair are required: destination B2,
+	// the transceiver's default address, AND source E0, the controller's.
+	// A frame from any other source is on this radio's line but is not its
+	// business, so it earns silence rather than NG.
+	if !ok || f.to != r.addr || f.from != AddrController {
 		return
 	}
 	p := r.handle(f.payload)
