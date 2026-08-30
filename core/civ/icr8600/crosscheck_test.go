@@ -113,6 +113,20 @@ func pinMatrixA(t *testing.T) {
 	}
 }
 
+// readMatrixA returns one matrix authority's text, having first re-pinned
+// every authority's digest. A ruling that quotes the matrix must quote the
+// arbitrated matrix, not whatever is on disk.
+func readMatrixA(t *testing.T, relative string) string {
+	t.Helper()
+	pinMatrixA(t)
+	path := filepath.Join("..", "..", "..", "docs", "superpowers", "icom-matrices", relative)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read matrix A authority %s: %v", path, err)
+	}
+	return string(data)
+}
+
 func TestCrosscheckBReferencedFoliosRemainUnknownNotZero(t *testing.T) {
 	b := indexEvidence(t, loadEvidenceCSV(t, "IC-R8600-transcription-b.csv"), "diagram_id", "field_index")
 	for _, key := range []string{
@@ -269,6 +283,61 @@ func TestCrosscheckArbitrations(t *testing.T) {
 		span := fieldSpan(t, icr8600.Profile().Layouts()[0], civ.FieldSelect)
 		if span.Offset != 0 || span.Enum[1] != "SEL1" {
 			t.Errorf("record SELECT span = %+v", span)
+		}
+	})
+
+	t.Run("plan_global_SELECT_constraint_wins_over_matrix_scan_skip_grading", func(t *testing.T) {
+		// RULING — this is a DEPARTURE FROM THE MATRIX and is recorded
+		// as one. Matrix section 2 row 9 grades neutral scan_skip onto
+		// ⑤'s HIGH nibble and rules the ★ LOW nibble "the select-memory
+		// marker ... which the neutral model has no field for". The
+		// implementation inverts that: the LOW nibble is mapped as
+		// civ.FieldSelect, and spec.FieldScanSkip is a written-down zero
+		// in the driver's capabilities.
+		//
+		// WINNER: the plan's global constraint — never map SELECT as
+		// scan_skip, because collapsing a ten-valued group into a
+		// BoolField destroys eight of its states and answers a question
+		// about scanning with an answer about membership.
+		// LOSER: matrix section 2 row 9's grading of which nibble
+		// carries the neutral field.
+		//
+		// The departure is safe rather than silent. The high nibble is
+		// mapped NOWHERE, so the driver's E6 gate refuses any record
+		// whose SKIP/PSKIP state is non-zero rather than rebuilding it
+		// as SKIP OFF, and a create into an empty slot is refused rather
+		// than inventing a SELECT value.
+		//
+		// L_STOP_3 above settles only WHICH FORMAT owns ⑤. This subtest
+		// settles which NIBBLE of it the neutral model may claim.
+		if got := b[evidenceKey("D1", "⑤")]["values_verbatim"]; got != "0=SKIP OFF | 1=SKIP | 2=PSKIP | 0 =OFF | 1 ~ 9=★1 ~ ★9" {
+			t.Errorf("B ⑤ values = %q, want both nibbles' printed enums in drawn order", got)
+		}
+		if got := b[evidenceKey("D1", "⑤")]["notes"]; !strings.Contains(got, "LEFT nibble carries 0=SKIP OFF") || !strings.Contains(got, "RIGHT nibble carries 0 =OFF") {
+			t.Errorf("B ⑤ notes lost the drawn left-to-right nibble order: %q", got)
+		}
+		if got := l[evidenceKey("D2", "⑤")]["notes"]; !strings.Contains(got, "0=SKIP OFF / 1=SKIP / 2=PSKIP | 0 =OFF / 1 ~ 9=★1 ~ ★9") {
+			t.Errorf("L D2 ⑤ detail box lost the same order: %q", got)
+		}
+		// The loser, quoted from the digest-pinned matrix A itself so a
+		// re-arbitration cannot leave this ruling behind.
+		matrix := readMatrixA(t, "icr8600-capability-matrix.md")
+		if !strings.Contains(matrix, "| 9 | `scan_skip` | Unverified | Unverified | ⑤ **high** nibble") {
+			t.Error("matrix section 2 row 9 no longer grades scan_skip onto the high nibble; re-arbitrate this departure")
+		}
+		// The winner, in the profile: SELECT on the LOW nibble of byte 0
+		// with all ten states, and NOTHING on the high nibble, in every
+		// layout.
+		for _, layout := range icr8600.Profile().Layouts() {
+			span := fieldSpan(t, layout, civ.FieldSelect)
+			if span.Offset != 0 || span.Nibble != civ.NibbleLow || len(span.Enum) != 10 {
+				t.Errorf("%s SELECT span = %+v, want byte 0's low nibble carrying all ten states", layout.ModeClass, span)
+			}
+			for _, other := range layout.Fields {
+				if other.Offset == 0 && other.Nibble != civ.NibbleLow {
+					t.Errorf("%s maps %v onto byte 0 as %v; the SKIP/PSKIP nibble must stay unmapped so E6 refuses it", layout.ModeClass, other.Field, other.Nibble)
+				}
+			}
 		}
 	})
 

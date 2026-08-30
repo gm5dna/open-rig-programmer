@@ -83,11 +83,39 @@ var mandatoryKnownFields = []struct {
 	{spec.FieldIPPlus, func(d codeplug.ChannelData) bool { return d.IPPlus.State == codeplug.Known }},
 }
 
-// commonUnmappedHighNibbleOffsets are the five common fields whose profile
-// span maps only the low nibble. Their high nibble has no neutral carrier;
-// the Stage 1 profile's assumed template is zero, so E6 requires identity
-// with zero before a full-record write may rebuild them.
-var commonUnmappedHighNibbleOffsets = []int{0, 8, 18, 19, 20}
+// unmappedHighNibble is one byte whose profile span maps only the low
+// nibble, together with what the guide actually PRINTS in the half a
+// rebuilt record would overwrite with zero.
+//
+// NONE OF IT IS ASSUMED, and the refusal must not say so. Byte 0's high
+// nibble is a three-valued printed enum; bytes 8, 18, 19, 20 and FM 37
+// each print "0 (Fixed)"; FM 41 sits inside the DTCS span, against which
+// the guide prints no value at all. What an operator must do at the radio
+// differs in each case, so the refusal names which it is. Corrected under
+// review finding F4 and pinned by
+// TestE6_TheHighNibbleRefusalNamesWhatEachNibbleActuallyIs.
+type unmappedHighNibble struct {
+	offset  int
+	printed string
+}
+
+// commonUnmappedHighNibbles are the five common fields — SELECT, duplex,
+// preamp, antenna, IP+ — whose span maps only the low nibble. E6 requires
+// identity with zero before a full-record write may rebuild them.
+var commonUnmappedHighNibbles = []unmappedHighNibble{
+	{0, "the printed scan-skip enum 0=SKIP OFF / 1=SKIP / 2=PSKIP (matrix section 2 row 9), which this profile maps nowhere"},
+	{8, "printed 0 (Fixed)"},
+	{18, "printed 0 (Fixed)"},
+	{19, "printed 0 (Fixed)"},
+	{20, "printed 0 (Fixed)"},
+}
+
+// fmUnmappedHighNibbles are the two the FM tail adds. The mapped tone-mode
+// and receive-polarity enums also occupy only their low nibble.
+var fmUnmappedHighNibbles = []unmappedHighNibble{
+	{37, "printed 0 (Fixed)"},
+	{41, "an unlabelled half of the printed DTCS code span, whose value the guide states nowhere"},
+}
 
 // digitalTailOffset is where every mode-keyed tail begins: the 37 common
 // head bytes are followed by the class's own bytes, or by nothing at all.
@@ -227,19 +255,20 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	if err != nil {
 		return res, fmt.Errorf("icr8600: WriteChannel %s: preservation record: %w", ch.Slot, err)
 	}
-	unmappedHighNibbles := commonUnmappedHighNibbleOffsets
+	unmappedHighNibbles := commonUnmappedHighNibbles
 	if layout.ModeClass == "FM" {
-		// The mapped FM tone-mode and receive-polarity enums also occupy
-		// only their low nibble; their high halves have no neutral carrier.
-		unmappedHighNibbles = append(append([]int(nil), unmappedHighNibbles...), 37, 41)
+		unmappedHighNibbles = append(append([]unmappedHighNibble(nil), unmappedHighNibbles...), fmUnmappedHighNibbles...)
 	}
-	for _, offset := range unmappedHighNibbles {
-		if stored[offset]&0xF0 == 0 {
+	for _, nibble := range unmappedHighNibbles {
+		if stored[nibble.offset]&0xF0 == 0 {
 			continue
 		}
 		return res, &driver.WriteRefusedError{
-			Slot:   ch.Slot,
-			Reason: fmt.Sprintf("record byte %d has unmapped high nibble %#02x rather than the assumed zero template; writing would silently replace it (E6)", offset, stored[offset]&0xF0),
+			Slot: ch.Slot,
+			Reason: fmt.Sprintf(
+				"record byte %d has unmapped high nibble %#02x rather than the zero a rebuilt record would write; that nibble is %s, so writing would silently replace it (E6)",
+				nibble.offset, stored[nibble.offset]&0xF0, nibble.printed,
+			),
 		}
 	}
 	if layout.ModeClass != "NONE" && layout.ModeClass != "FM" {
