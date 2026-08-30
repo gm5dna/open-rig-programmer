@@ -1904,9 +1904,10 @@ func TestOpenRealSessionFor_DelegatesZeroOptions(t *testing.T) {
 // THE CONSENT ARM IS PINNED TOO, for every Icom row (Wave 4 registration
 // reviews' deferred minor). The false arm above only proves that consent
 // did not leak IN; it says nothing about what the TRUE arm builds, and the
-// true arm is the one that reaches a radio's write path. Two of these six
-// drivers carry a second option — ic705.WithFullInventoryWalk() and
-// ic905.WithFullInventoryWalk() — whose whole point is that
+// true arm is the one that reaches a radio's write path. Three of these
+// drivers carry a second option — ic705.WithFullInventoryWalk(),
+// ic905.WithFullInventoryWalk() and icr8600.WithFullInventoryWalk() — whose
+// whole point is that
 // internal/wiring's rows deliberately do NOT pass it (NewIC905RealDriver's
 // own doc comment says so), and an extra option added to a consent arm by
 // a later edit would widen a discovery walk for every consenting user
