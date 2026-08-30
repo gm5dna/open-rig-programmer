@@ -166,6 +166,8 @@ Some things are refused on purpose, with the reason shown:
   channel cannot be written back unless its digital-squelch bytes match
   what the program assumes, and switching a channel INTO one of those
   modes is refused outright — set the digital squelch at the receiver.
+  A channel the operator has marked as skipped is refused rather than
+  rewritten as unskipped.
   It also cannot create a channel in an empty slot at all: the record's
   Select-group setting has no honest default to write, so the program
   refuses the write rather than inventing one — the same refusal the
