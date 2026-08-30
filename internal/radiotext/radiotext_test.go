@@ -1433,8 +1433,14 @@ var icr8600Particulars = []string{
 // anything, under the honesty rule recorded at icr8600Text.
 //
 // "no IC-R8600 has ever answered a frame", "No minimum version is
-// established", "a weaker guess here than on any other radio this build
-// supports" and "this build cannot tell you" are the load-bearing words.
+// established", "assumed on both halves" and "this build cannot tell you"
+// are the load-bearing words. The speed hedge RANKS nothing, and must not:
+// the superlative that stood here before — "a weaker guess here than on
+// any other radio this build supports" — was false, the IC-7760's rate and
+// list being both assumed as well, and it flattered that radio's evidence
+// by implication. The no-other-model-named guard below forbids saying so
+// in this receiver's own prose, so the clause states this receiver's
+// evidence and stops.
 // An editor tidying them into confident advisory copy would attribute
 // evidence to this receiver that nobody holds. That edit fails here.
 //
@@ -1468,7 +1474,7 @@ func TestRadiotext_ICR8600Verbatim(t *testing.T) {
 			ScanSkip: "not read or written over CI-V by this build — this receiver's first record byte holds a printed scan-skip choice and a select-scan group, and neither half is mapped",
 		},
 		FirmwarePlaceholder: "as shown on the IC-R8600's own display",
-		ProbeFirmwareNote:   "Firmware version has no query in this build — check the receiver's display. No minimum version is established for the IC-R8600: this build knows of none to require. This driver talks only to CI-V address 96h, with no --civ-address option to change it and no way to detect a receiver set to a different address; and its opening speed of 19200 is a weaker guess here than on any other radio this build supports — this receiver's CI-V Reference Guide prints no factory default speed, mentions no automatic setting, and never lists the rates its menu offers, so the rate AND the list it was chosen from are both assumed. The guide's own advice is to set the address, the speed and the transceive function in the receiver's Set mode before controlling it, which is the first thing to check. Two more things about this receiver are worth knowing before blaming the port. It has FOUR possible control terminals — a remote jack, a front and a rear USB port, and a network connection — and this build talks over USB, so if one port is silent, check which terminal the receiver has been told to use before concluding the cable is wrong. And neither the transceive setting nor the echo-back setting of either USB port has a printed default, so this build cannot tell you whether unsolicited frames should be expected of the receiver's own accord; any that arrive are counted and ignored, never acted on. If nothing answers, check the receiver's address and speed before assuming the port is wrong.",
+		ProbeFirmwareNote:   "Firmware version has no query in this build — check the receiver's display. No minimum version is established for the IC-R8600: this build knows of none to require. This driver talks only to CI-V address 96h, with no --civ-address option to change it and no way to detect a receiver set to a different address; and its opening speed of 19200 is assumed on both halves — this receiver's CI-V Reference Guide prints no factory default speed, mentions no automatic setting, and never lists the rates its menu offers, so the rate AND the list it was chosen from are both assumed. The guide's own advice is to set the address, the speed and the transceive function in the receiver's Set mode before controlling it, which is the first thing to check. Two more things about this receiver are worth knowing before blaming the port. It has FOUR possible control terminals — a remote jack, a front and a rear USB port, and a network connection — and this build talks over USB, so if one port is silent, check which terminal the receiver has been told to use before concluding the cable is wrong. And neither the transceive setting nor the echo-back setting of either USB port has a printed default, so this build cannot tell you whether unsolicited frames should be expected of the receiver's own accord; any that arrive are counted and ignored, never acted on. If nothing answers, check the receiver's address and speed before assuming the port is wrong.",
 	}
 
 	got, ok := radiotext.For("IC-R8600")
