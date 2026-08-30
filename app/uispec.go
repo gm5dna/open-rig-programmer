@@ -264,6 +264,17 @@ var tierFields = []spec.Field{
 // data area. Pinned by
 // TestGetUISpec_RegisteredIC7851Pair_EveryBankFieldsAndTagDisplay, which
 // drives both rows.
+// FOUR AGAIN — the same tone_mode, tone_tx, tone_rx and filter — for the
+// IC-7760, the additions tier's second registration (Tier 4b), and this
+// is now the THIRD independent derivation of that set rather than a
+// convention: core/driver/ic7760's bankFields grades MEM and SCAN
+// identically and maps exactly the seven fields its own 1A 00 record
+// carries, and its package imports no sibling driver. Additions spec
+// D1.1 predicted it from three documents drawing the same 27-byte data
+// area, and core/civ/tier_test.go's TestTierRecordShapes_7610CloneFamily
+// measures how far that prediction actually holds at the layout level.
+// Pinned here by
+// TestGetUISpec_RegisteredIC7760_EveryBankFieldsAndTagDisplay.
 // A future Icom registration would extend this same list with its own
 // model-specific set.
 func bankTierFields(caps spec.Capabilities, id spec.BankID) []string {

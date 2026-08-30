@@ -474,6 +474,46 @@ var ic7851CoreThree = []spec.Field{
 // the grid must show.
 var ic7851TierFields = []string{"tone_mode", "tone_tx", "tone_rx", "filter"}
 
+// ic7760CoreThree is the core set every IC-7760 bank derives, on every
+// profile — MEM and SCAN alike, since core/driver/ic7760/caps.go's
+// bankFields applies the same support to both (its own comment says why:
+// both banks read and write the SAME 1A 00 record at different values of
+// the same selector).
+//
+// SAME MEMBERS AS ic7610CoreThree, ic7851CoreThree and every other Icom
+// entry's, and that is a COINCIDENCE OF INDEPENDENT EVIDENCE rather than
+// a shared derivation: core/driver/ic7760 imports no sibling driver
+// package, and its bankFields was written from the IC-7760 CI-V Reference
+// Guide revision 2 alone. FieldClarifier, FieldShift, FieldCTCSSState,
+// FieldCTCSSTone, FieldScanSkip and FieldTagDisplay are all the zero
+// FieldSupport on this radio (that file's bankFields and its
+// deliberatelyZero table), so none of them survives bankCoreFields'
+// zero-value test.
+var ic7760CoreThree = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldTag,
+}
+
+// ic7760TierFields is what bankTierFields (app/uispec.go) derives for
+// every IC-7760 bank, on every profile: the four tier-added fields this
+// radio's 1A 00 record maps (tone_mode, tone_tx, tone_rx, filter — in
+// tierFields' own declaration order), and none of the others.
+//
+// A SEPARATE VARIABLE, not a reuse of ic7610TierFields or
+// ic7851TierFields, for the reason every other model's is: the value is
+// this radio's own derivation, and a future divergence between the three
+// records must show up as a diff here rather than being absorbed by a
+// shared name. That the three agree is what additions spec D1.1
+// predicted; that they are measured separately is what would let a
+// divergence be seen.
+//
+// Notably NOT present: data_mode. Byte ⑪'s HIGH nibble IS a data-mode
+// field on this radio, and it is deliberately UNMAPPED under ruling E6
+// (four printed values — OFF/DATA 1/DATA 2/DATA 3 — against a neutral
+// BoolField), so it carries the zero FieldSupport and is unreachable.
+// Absence here is "this build does not expose it", which is exactly what
+// the grid must show.
+var ic7760TierFields = []string{"tone_mode", "tone_tx", "tone_rx", "filter"}
+
 func TestBankTierFields_ReceiverFieldsFollowBankReachability(t *testing.T) {
 	rw := spec.FieldSupport{Read: spec.Supported, Write: spec.Unverified}
 	caps := spec.Capabilities{Banks: []spec.Bank{{
@@ -723,6 +763,11 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		// still gets its own entry in this map.
 		"IC-7851": ic7851CoreThree,
 		"IC-7850": ic7851CoreThree,
+		// The IC-7760 (Tier 4b's second registration): the same three
+		// candidate fields once more, from its own driver's own table —
+		// see ic7760CoreThree's doc comment for why it is a separate
+		// variable rather than a reuse of either set above.
+		"IC-7760": ic7760CoreThree,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {
@@ -3550,5 +3595,135 @@ func TestGetUISpec_RegisteredIC7851Pair_EveryBankFieldsAndTagDisplay(t *testing.
 				}
 			}
 		})
+	}
+}
+
+// TestBankReadOnly_RegisteredIC7760_RealHardwareProfile pins what a REAL
+// IC-7760's grid does today, bank by bank, through real registration —
+// the additions tier's second mirror of
+// TestBankReadOnly_RegisteredIC7610_RealHardwareProfile.
+//
+// Its RealHardware profile is its all-Unverified one (writeTrialsComplete
+// is false: no IC-7760 has ever been written to by this project), so the
+// three derived core fields are Write spec.Unverified on both banks —
+// which is NOT spec.Unsupported, and therefore NOT read-only under
+// bankReadOnly's standing rule, on the same footing as every other row.
+//
+// NO DISCOVERED-BANK CONTRAST, as for the IC-7610 and the IC-7851 pair
+// and for the same reason: this radio has no discovery mechanism at all.
+// Its Banks are fixed at construction — spec.BankMemory and spec.BankScan,
+// core/driver/ic7760/caps.go's baseCapabilities — so the static baseline
+// is the whole of what its bankReadOnly verdict can be.
+func TestBankReadOnly_RegisteredIC7760_RealHardwareProfile(t *testing.T) {
+	caps, err := wiring.StaticCapabilities(wiring.IC7760Model)
+	if err != nil {
+		t.Fatalf("wiring.StaticCapabilities(%q): unexpected error: %v", wiring.IC7760Model, err)
+	}
+	if len(caps.Banks) == 0 {
+		t.Fatalf("the registered %s's static baseline has no banks — nothing asserted", wiring.IC7760Model)
+	}
+	for _, b := range caps.Banks {
+		fields := bankCoreFields(caps, b.ID)
+		wantFields(t, "IC-7760 bank "+string(b.ID), fields, ic7760CoreThree)
+		for _, f := range fields {
+			if w := caps.FieldSupport(b.ID, f).Write; w != spec.Unverified {
+				t.Errorf("bank %s field %s Write = %v, want Unverified (the premise: nothing on a real IC-7760 is proven writable)", b.ID, f, w)
+			}
+		}
+		if bankReadOnly(caps, b.ID) {
+			t.Errorf("bankReadOnly(%s) = true, want false — Unverified is not Unsupported, and locking it would break the offline clone workflow", b.ID)
+		}
+	}
+}
+
+// TestGetUISpec_RegisteredIC7760_EveryBankFieldsAndTagDisplay is the
+// additions tier's second mirror of
+// TestGetUISpec_RegisteredIC7610_EveryBankFieldsAndTagDisplay: GetUISpec
+// driven for the new row through real registration, connected and
+// offline.
+//
+//   - CONNECTED to the registered fake (Live true, the Simulated profile
+//     — the `--fake --model IC-7760` path a user actually walks). This
+//     radio discovers no extra bank, so "every bank" here is just MEM and
+//     SCAN.
+//   - DISCONNECTED with its own working copy loaded (Live false, the
+//     static RealHardware baseline, resolved by currentModel from the
+//     file's own Radio.Model) — the offline clone workflow's path.
+//
+// TagDisplayDefault must be {state: "unavailable"} on both banks of both
+// paths: this radio's 1A 00 record has no display flag at all
+// (FieldTagDisplay carries the zero FieldSupport on both banks,
+// core/driver/ic7760/caps.go's bankFields), so a blank row added anywhere
+// must not carry a Known one.
+//
+// Fields must equal ic7760TierFields on both banks of both paths: the
+// record maps tone_mode, tone_tx, tone_rx and filter and none of the
+// other tier fields, and bankTierFields must derive that same four-field
+// list from whichever capability source GetUISpec used.
+//
+// THE CONNECTED LEG IS WHERE THE REGISTRATION IS ACTUALLY EXERCISED: a
+// row wired to another model's driver or another model's option source
+// shows up here as a wrong Capabilities().Model, which is asserted before
+// anything else.
+func TestGetUISpec_RegisteredIC7760_EveryBankFieldsAndTagDisplay(t *testing.T) {
+	unavailable := codeplug.BoolField{State: codeplug.Unavailable}
+
+	sess, closeAll, err := wiring.OpenFakeSessionFor(testAppCtx(t), wiring.IC7760Model)
+	if err != nil {
+		t.Fatalf("wiring.OpenFakeSessionFor(%q): unexpected error: %v", wiring.IC7760Model, err)
+	}
+	t.Cleanup(func() { _ = closeAll() })
+	if got := sess.Capabilities().Model; got != wiring.IC7760Model {
+		t.Fatalf("the fake session's Capabilities().Model = %q, want %q — this row is wired to the wrong driver", got, wiring.IC7760Model)
+	}
+
+	a, _ := newTestApp(t)
+	connectDirect(t, a, sess, nil)
+	got, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (connected to the IC-7760 fake): unexpected error: %v", err)
+	}
+	if !got.Live {
+		t.Error("Live = false, want true (connected to the registered fake)")
+	}
+	if len(got.Banks) != 2 {
+		t.Fatalf("banks = %v, want exactly MEM and SCAN — this radio discovers no extra bank", bankIDs(got.Banks))
+	}
+	for _, b := range got.Banks {
+		if b.TagDisplayDefault != unavailable {
+			t.Errorf("connected bank %s TagDisplayDefault = %+v, want %+v — this radio's memory frame has no display flag", b.ID, b.TagDisplayDefault, unavailable)
+		}
+		if !reflect.DeepEqual(b.Fields, ic7760TierFields) {
+			t.Errorf("connected bank %s Fields = %v, want %v", b.ID, b.Fields, ic7760TierFields)
+		}
+	}
+
+	// Offline, from this row's own file: the same answers, from the
+	// static RealHardware baseline this time.
+	a.mu.Lock()
+	a.conn = nil
+	a.working = &codeplug.Codeplug{
+		Schema:   codeplug.CurrentSchema,
+		Radio:    codeplug.RadioInfo{Model: wiring.IC7760Model},
+		Channels: []codeplug.Channel{{Slot: "001"}},
+	}
+	a.mu.Unlock()
+	offline, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (offline, IC-7760 working copy): unexpected error: %v", err)
+	}
+	if offline.Live {
+		t.Error("Live = true, want false (disconnected)")
+	}
+	if len(offline.Banks) == 0 {
+		t.Fatal("offline IC-7760 UISpec has no banks — nothing asserted")
+	}
+	for _, b := range offline.Banks {
+		if b.TagDisplayDefault != unavailable {
+			t.Errorf("offline bank %s TagDisplayDefault = %+v, want %+v", b.ID, b.TagDisplayDefault, unavailable)
+		}
+		if !reflect.DeepEqual(b.Fields, ic7760TierFields) {
+			t.Errorf("offline bank %s Fields = %v, want %v", b.ID, b.Fields, ic7760TierFields)
+		}
 	}
 }

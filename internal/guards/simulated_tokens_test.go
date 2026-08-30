@@ -168,6 +168,21 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// does; fileHasCall's ast.Inspect walk finds the call regardless
 		// of what encloses it (see the ic7610 row's own note).
 		{"ic7851", "WithSimulatedProfile", "fakeic7851.New", "internal/fakeic7851"},
+		// The IC-7760 (Tier 4b's second registration): ONE row for ONE
+		// registered model, and its token is a Profile CONSTANT again —
+		// core/driver/ic7760 takes its profile as New's first ARGUMENT,
+		// so ic7760.Simulated is the selector a stray non-test reference
+		// would have to smuggle in, exactly as for the six rows above the
+		// IC-7851's. The pair's WithSimulatedProfile row remains the one
+		// option-shaped exception in this table, and it is an exception
+		// about THAT package's constructor shape, not a new convention.
+		//
+		// The fakeic7760.New call sits inside an ic7760FakeAdapter{...}
+		// composite literal at its one call site, exactly as the
+		// IC-7610's and the IC-7851 pair's do; fileHasCall's ast.Inspect
+		// walk finds the call regardless of what encloses it (see the
+		// ic7610 row's own note).
+		{"ic7760", "Simulated", "fakeic7760.New", "internal/fakeic7760"},
 	}
 
 	// Non-vacuity: an empty table would make the loop below a no-op and

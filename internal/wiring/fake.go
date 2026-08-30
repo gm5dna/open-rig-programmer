@@ -15,6 +15,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300mk2"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7610"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7760"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7851"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic905"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
@@ -24,6 +25,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7300"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7300mk2"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7610"
+	"github.com/gm5dna/open-rig-programmer/internal/fakeic7760"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7851"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic905"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic9700"
@@ -306,6 +308,37 @@ var IC7851FakeSessionOpts []fakeic7851.Option
 // mutually assignable: only the two closures below keep them apart.
 var IC7850FakeSessionOpts []fakeic7851.Option
 
+// IC7760FakeSessionOpts is the IC-7760's own option source: extra
+// fakeic7760.Option values applied, on top of the always-empty production
+// default, to the IC-7760's fake rig on every OpenFakeSessionFor call in
+// this process. It is IC7610FakeSessionOpts' IC-7760 counterpart, on the
+// same terms (a separate variable, of a DIFFERENT element type, read at
+// CALL time inside the IC7760 entry's own newRadio closure below).
+//
+// NO SHARED-TYPE HAZARD HERE, unlike the two variables directly above:
+// internal/fakeic7760 simulates the IC-7760 specifically and its Option
+// is a func(*fakeic7760.config), so a closure reading another model's
+// variable is a COMPILE ERROR rather than a silent crossing. That is why
+// this row needs no non-interference test of the FTdx101/IC-7851 kind —
+// the type system already carries the proof.
+//
+// LEFT AT ITS NIL ZERO VALUE THE DEMO RADIO IS EMPTY, and that is
+// internal/fakeic7760's own default rather than anything this file
+// arranges: its defaultConfig seeds no channel at all, so a
+// `--fake --model IC-7760` session opens UNFINGERPRINTED and reads each
+// of its 101 slots as an empty channel — a decodable answer, not a
+// failure. Contrast the IC905Model row above, whose fake's own default
+// image had to be emptied here.
+//
+// No production flag or GUI control populates this — it adds no second
+// ic7760.Simulated reference to any non-test file, so
+// TestSimulatedProfileTokensConfinement's new ic7760 row keeps passing.
+//
+// A test that sets it MUST restore the previous value (e.g. via
+// t.Cleanup) — this is shared, unsynchronised package state, acceptable
+// only because no test using it calls t.Parallel().
+var IC7760FakeSessionOpts []fakeic7760.Option
+
 // fakeRadio is everything OpenFakeSessionFor needs from a model's fake
 // rig: a port to hand the driver, and a way to shut the rig down
 // afterwards. Interface-typed rather than *fakeradio.Radio (M9c-5 E5)
@@ -383,6 +416,12 @@ var (
 	// prove and two table rows that depend on the proof — the
 	// *fakedx101.Radio assertion's shape, over the IC-7610's adapter.
 	_ fakeRadio = ic7851FakeAdapter{}
+	// The IC-7760's, the additions tier's second (Tier 4b) — via
+	// ic7760FakeAdapter, like the IC-7610's and the IC-7851 pair's and
+	// unlike the four Icom simulators between them, because
+	// internal/fakeic7760's Port() returns net.Conn (checked against that
+	// package's source before this registration, per the task brief).
+	_ fakeRadio = ic7760FakeAdapter{}
 )
 
 // ic7610FakeAdapter narrows *fakeic7610.Radio's Port() — which returns
@@ -429,6 +468,24 @@ type ic7851FakeAdapter struct{ *fakeic7851.Radio }
 // Port implements fakeRadio, narrowing the embedded Radio's net.Conn to
 // io.ReadWriteCloser. See ic7851FakeAdapter's own doc comment.
 func (a ic7851FakeAdapter) Port() io.ReadWriteCloser { return a.Radio.Port() }
+
+// ic7760FakeAdapter narrows *fakeic7760.Radio's Port() — which returns
+// net.Conn, since internal/fakeic7760 is written against the net package
+// directly rather than against this package's fakeRadio seam — to the
+// io.ReadWriteCloser fakeRadio itself requires.
+//
+// THE SAME TYPE-IDENTITY GAP ic7610FakeAdapter closes, for the same
+// reason and with the same limits: see that adapter's own doc comment.
+// It is a THIRD adapter rather than a shared one because each embeds a
+// DIFFERENT concrete simulator type and Go has no way to write one for
+// all three; nothing about any radio's behaviour is involved, and no
+// byte, frame or state transition changes. Close is promoted unchanged
+// from the embedded *fakeic7760.Radio.
+type ic7760FakeAdapter struct{ *fakeic7760.Radio }
+
+// Port implements fakeRadio, narrowing the embedded Radio's net.Conn to
+// io.ReadWriteCloser. See ic7760FakeAdapter's own doc comment.
+func (a ic7760FakeAdapter) Port() io.ReadWriteCloser { return a.Radio.Port() }
 
 // fakeDriverEntry pairs one model's simulated-profile driver constructor
 // with the fake-rig constructor OpenFakeSessionFor uses to build a live
@@ -606,6 +663,26 @@ var fakeDrivers = map[string]fakeDriverEntry{
 			opts := append([]fakeic7851.Option{fakeic7851.WithModelName(IC7850Model)}, IC7850FakeSessionOpts...)
 			return ic7851FakeAdapter{fakeic7851.New(opts...)}
 		},
+	},
+	// The IC-7760 (Tier 4b's second registration): ONE row, ONE driver
+	// package, ONE simulator and ONE profile — the IC-7610's shape, and
+	// the standing warning applies once. writeTrialsComplete is false
+	// (core/driver/ic7760/caps.go), so this radio has no
+	// hardware-evidenced write path and the Supported writes
+	// ic7760.Simulated reaches here are a claim about internal/fakeic7760
+	// alone. This pairing is the only place that Profile value is legal
+	// outside its own package, which is what internal/guards' ic7760 row
+	// confines.
+	//
+	// NO WithModelName TO PASS, unlike the two rows above: this fake
+	// answers `19 00` with its own invented, deliberately implausible
+	// 0xA5 token (internal/fakeic7760's WithIDReply doc comment), the
+	// guide printing no reply value for the command anywhere. The driver
+	// RECORDS that token into Session.Identity().CATID after the static
+	// address B2 and NEVER MATCHES it.
+	IC7760Model: {
+		newDriver: func() driver.Driver { return ic7760.New(ic7760.Simulated) },
+		newRadio:  func() fakeRadio { return ic7760FakeAdapter{fakeic7760.New(IC7760FakeSessionOpts...)} },
 	},
 }
 

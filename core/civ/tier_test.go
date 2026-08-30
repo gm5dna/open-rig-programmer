@@ -11,12 +11,12 @@
 // fingerprint" section: "Cross-model record-length distinctness is a
 // TIER-level check belonging to registration"). This file is that check.
 //
-// SEVEN FAMILIES AND EIGHT REGISTERED ROWS as of the additions tier's
-// first registration (Tier 4b): the Icom tier's six families, plus
-// core/civ/ic7851, which serves the IC-7851 and IC-7850 rows ALIKE. A
-// family is a PROFILE; a row is a registry key; tierRegistrationCoverage
-// below is the map between them, and it is the reason the two counts may
-// legitimately differ.
+// EIGHT FAMILIES AND NINE REGISTERED ROWS as of the additions tier's
+// SECOND registration (Tier 4b): the Icom tier's six families, plus
+// core/civ/ic7851, which serves the IC-7851 and IC-7850 rows ALIKE, plus
+// core/civ/ic7760. A family is a PROFILE; a row is a registry key;
+// tierRegistrationCoverage below is the map between them, and it is the
+// reason the two counts may legitimately differ.
 //
 // It lives in core/civ as an EXTERNAL test package. core/civ can never
 // import core/civ/ic7610 and its siblings — they import core/civ,
@@ -31,8 +31,8 @@
 // undocumented on every one of these documents, spec D5 entry 7, so it is
 // recorded and never compared), and only then walks a bounded run of
 // memory channels for a record whose length confirms the profile. The
-// SEVEN FAMILIES' CI-V addresses are already distinct — 98h, 94h, B6h,
-// A4h, A2h, ACh, 8Eh — so IN THE FIELD a wrong radio on the port does not
+// EIGHT FAMILIES' CI-V addresses are already distinct — 98h, 94h, B6h,
+// A4h, A2h, ACh, 8Eh, B2h — so IN THE FIELD a wrong radio on the port does not
 // answer at all and the open times out. THE LENGTH FINGERPRINT IS
 // THEREFORE DEFENCE IN DEPTH, NOT THE PRIMARY DISCRIMINATOR: it protects
 // against SAME-ADDRESS confusion only — a radio moved onto this address,
@@ -51,12 +51,12 @@
 //
 // # The limitation this file records honestly
 //
-// TWO PAIRS SHARE A RECORD-ONLY LENGTH, and only one of them is
-// separable. The IC-7610 and the IC-7851 share BOTH properties — 25 bytes
-// record-only and a two-byte flat address — and are therefore DECLARED
-// indistinguishable in the table below rather than proven apart; see that
-// table's own comment. The pair this section describes is the separable
-// one.
+// A THREE-MODEL SET AND ONE PAIR SHARE A RECORD-ONLY LENGTH, and only the
+// pair is separable. The IC-7610, the IC-7851 and the IC-7760 share BOTH
+// properties — 25 bytes record-only and a two-byte flat address — so all
+// THREE of that set's pairings are DECLARED indistinguishable in the
+// table below rather than proven apart; see that table's own comment. The
+// pair this section describes is the separable one.
 //
 // The IC-705 and the IC-9700
 // both accept exactly {111}, so a fingerprint that compared record-only
@@ -126,6 +126,7 @@ package civ_test
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -134,6 +135,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7300"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7300mk2"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7610"
+	"github.com/gm5dna/open-rig-programmer/core/civ/ic7760"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7851"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic905"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic9700"
@@ -178,13 +180,14 @@ var tierProfilePopulation = []civ.Profile{
 	// which must hold no model twice — carries it once, and
 	// tierRegistrationCoverage below maps both rows onto it.
 	ic7851.Profile(),
-	// A PLACE, NOT A ROW, for the IC-7760: it is the third member of the
-	// 25 B / Flat declared set (additions spec D5) and its branch is NOT
-	// MERGED, so nothing about it may be pre-registered here. When it
-	// lands, its family joins this list and its pairings against BOTH the
-	// IC-7610 and the IC-7851 must be declared in `indistinguishable`
-	// below with their own citations — the test will fail until they are,
-	// which is the mechanism working.
+	// The additions tier's second family (Tier 4b), and the third and
+	// last member of spec D5's 25 B / Flat set. Its branch is merged, so
+	// the PLACE the IC-7851's registration left here is now a ROW, and
+	// both of its pairings — against the IC-7610 and against the IC-7851
+	// — are declared in `indistinguishable` below with their own
+	// citations. Until they were, this line alone failed the pairwise
+	// walk, which is the mechanism working.
+	ic7760.Profile(),
 }
 
 // tierRegistrationCoverage ties the real driver registry to the profile
@@ -210,6 +213,9 @@ var tierRegistrationCoverage = map[string]string{
 	// (additions spec D1.2).
 	"IC-7851": "IC-7851",
 	"IC-7850": "IC-7851",
+	// The additions tier's second registration: ONE key, ONE family, the
+	// ordinary case again.
+	"IC-7760": "IC-7760",
 }
 
 func registrationCoverageProblems(registered, population []string, coverage map[string]string) []string {
@@ -330,41 +336,56 @@ func disjointLengths(x, y []int) bool {
 // records the limitation; an empty value is not a ruling.
 //
 // IT WAS EMPTY AT THE ICOM TIER'S CLOSE, and that was a measurement: no
-// pair among those six families collided. It has ONE entry now, and that
-// entry is an admission written down rather than a licence — the pair is
-// still logged on every run, and a NEW collision from a family registered
-// later still FAILS unless somebody rules on it here.
+// pair among those six families collided. It has THREE entries now, and
+// each is an admission written down rather than a licence — every one of
+// them is still logged on every run, and a NEW collision from a family
+// registered later still FAILS unless somebody rules on it here.
 //
-// THE ONE ENTRY IS THE 25-BYTE FLAT SET (additions spec D5's first table
-// row). The IC-7610 and the IC-7851 accept the same record-only length,
-// 25 bytes, over the same two-byte flat address geometry, because both
-// documents draw the SAME 27-byte data area — 2 channel bytes + 25 —
-// which is exactly what spec D1.1 predicted and what the two profiles,
-// each derived from its OWN evidence legs, independently produced. So
-// neither of the two properties this file's probe has in hand can
-// separate them, and no arithmetic will make one.
+// THE THREE ENTRIES ARE ONE FINDING: the 25-byte flat set (additions spec
+// D5's first table row) is COMPLETE, and a set of three models yields
+// three pairings. The IC-7610, the IC-7851 and the IC-7760 all accept the
+// same record-only length, 25 bytes, over the same two-byte flat address
+// geometry, because all three documents draw the SAME 27-byte data area —
+// 2 channel bytes + 25 — which is exactly what spec D1.1 predicted and
+// what the three profiles, each derived from its OWN evidence legs,
+// independently produced. So neither of the two properties this file's
+// probe has in hand can separate any pair of them, and no arithmetic will
+// make one.
 //
-// WHAT THIS DOES AND DOES NOT MEAN. In the field the two are separated by
-// their CI-V ADDRESSES — 98h and 8Eh — which differ, so a wrong radio at
-// its own factory address does not answer and the open times out. The
-// declaration is about the FINGERPRINT alone: an IC-7851 MOVED onto 98h
-// (or an IC-7610 onto 8Eh) would answer a record of the length the other
-// profile expects, and this programme could not tell. That is a
-// SAME-ADDRESS confusion, the very case the fingerprint exists for, and
-// for this pair the fingerprint is spent. Both drivers' doc comments say
-// so in their own words, and neither mints a driver.WrongRadioError from
-// a length it cannot attribute.
+// WHAT THIS DOES AND DOES NOT MEAN. In the field the three are separated
+// by their CI-V ADDRESSES — 98h, 8Eh and B2h — which are all distinct, so
+// a wrong radio at its own factory address does not answer and the open
+// times out. The declaration is about the FINGERPRINT alone: any one of
+// the three MOVED onto another's address would answer a record of the
+// length that profile expects, and this programme could not tell. That is
+// a SAME-ADDRESS confusion, the very case the fingerprint exists for, and
+// across this set the fingerprint is spent. All three drivers' doc
+// comments say so in their own words, and none of them mints a
+// driver.WrongRadioError from a length it cannot attribute.
 //
-// THE SET HAS A THIRD MEMBER THAT IS NOT HERE YET: spec D5 names
-// {IC-7610, IC-7851/7850, IC-7760} at 25 B / Flat. The IC-7760's branch
-// is NOT MERGED, so it is deliberately NOT pre-registered — declaring a
-// pair against a family this file cannot measure would be a ruling with
-// no measurement under it, and the "does not name a canonical population
-// pair" arm below would fail it anyway. Its two declarations
-// ("IC-7610|IC-7760" and "IC-7851|IC-7760", in whatever order the
-// population then has) belong to its own registration.
+// THE SET IS NOW CLOSED, and that is worth stating because the previous
+// version of this comment recorded a member that was missing. Spec D5
+// names {IC-7610, IC-7851/7850, IC-7760} at 25 B / Flat and this table
+// carries all three pairings; a FOURTH member would need its own two
+// declarations, and the pairwise walk below would fail until it had them.
+//
+// KEYS ARE IN tierProfilePopulation ORDER, which the "does not name a
+// canonical population pair" arm below enforces: ic7610 precedes ic7851,
+// which precedes ic7760, so the IC-7760's two keys read "IC-7610|IC-7760"
+// and "IC-7851|IC-7760" and neither may be written the other way round.
+//
+// THE DECLARATION IS ABOUT THE FINGERPRINT, NOT ABOUT THE LAYOUTS BEING
+// THE SAME. TestTierRecordShapes_7610CloneFamily below measures how far
+// spec D1.1's "expected to be byte-identical" actually holds across the
+// three, and it does NOT hold uniformly — the IC-7851 excludes its
+// printed fixed pad cells from three spans where the other two include
+// them. That divergence changes nothing here: the accepted LENGTH and the
+// ADDRESS GEOMETRY are what this table rules on, and those three
+// pairings collide whatever the spans inside the record do.
 var indistinguishable = map[string]string{
 	"IC-7610|IC-7851": "additions spec D5 (docs/superpowers/specs/2026-08-28-icom-additions-design.md, the 25 B / Flat row: \"NO — declared indistinguishable\") and D1.1's shared-record finding; the two capability matrices under docs/superpowers/icom-matrices/ (the IC-7610's §1/§3 record reading and the IC-7851's §3.16 one, derived independently); core/driver/ic7851/doc.go's Wave-4 hand-off section, which names this set; and core/driver/ic7610/ic7610.go:142-145, which already refuses to mint a driver.WrongRadioError for any same-address collision. The two radios' factory addresses (98h and 8Eh) differ, so this limitation is reachable only on a radio moved onto the other's address.",
+	"IC-7610|IC-7760": "additions spec D5 (the same 25 B / Flat row, whose declared set is {IC-7610, IC-7851/7850, IC-7760}) and D1.1's shared-record finding; the two capability matrices under docs/superpowers/icom-matrices/ (the IC-7610's §1/§3 record reading and the IC-7760's §3.11/§1b one, whose 25 B record-only and 2 B address width were derived from that radio's own L/W/B/G legs and its own document, the IC-7760 CI-V Reference Guide revision 2, A7788-8EX-2); core/driver/ic7760/doc.go, which admits no cross-model length table; and core/driver/ic7610/ic7610.go:142-145, which already refuses to mint a driver.WrongRadioError for any same-address collision. The two radios' factory addresses (98h and B2h) differ, so this limitation is reachable only on a radio moved onto the other's address.",
+	"IC-7851|IC-7760": "additions spec D5 (the same 25 B / Flat row) and D1.1; the IC-7851's §3.16 record reading and the IC-7760's §3.11/§1b one, derived from two different documents by two different evidence-leg sets — the IC-7850/IC-7851 Instruction Manual section 18, and the IC-7760 CI-V Reference Guide revision 2; core/driver/ic7851/doc.go's Wave-4 hand-off section, which names this set, and core/driver/ic7760/doc.go. NEITHER driver mints a driver.WrongRadioError for a length it cannot attribute, so a same-address collision here fails the open without naming a model. The factory addresses (8Eh and B2h) differ, so the limitation is reachable only on a moved radio — and note that the IC-7851 row's own sibling, the IC-7850, shares 8Eh with it AT FACTORY DEFAULTS, which is a separate and stronger limitation recorded in this file's header.",
 }
 
 // TestTierRecordShapes_DistinctOrDeclared is the tier-close check: every
@@ -372,7 +393,7 @@ var indistinguishable = map[string]string{
 // length/geometry proof or named in indistinguishable with a citation.
 //
 // It prints the measured table on every run, pass or fail. The table is
-// the deliverable as much as the verdict is — six models' record
+// the deliverable as much as the verdict is — EIGHT families' record
 // geometry in one place is exactly what no per-model worktree could
 // write down.
 func TestTierRecordShapes_DistinctOrDeclared(t *testing.T) {
@@ -434,7 +455,7 @@ func TestTierRecordShapes_DistinctOrDeclared(t *testing.T) {
 		// column meant to line up into "[25                ]".
 		t.Logf("  %-12s %-14d %-18s %s", s.model, s.addressBytes, fmt.Sprint(s.recordLengths), fmt.Sprint(s.frameLengths))
 	}
-	t.Log("HONESTLY RECORDED: every length above is an ASSUMED derivation from printed field widths — no document in this tier prints a record total and no radio has confirmed one — and the length fingerprint is DEFENCE IN DEPTH behind the `19 00` address probe every one of the six drivers runs first, since the six CI-V addresses are already distinct and a wrong radio simply does not answer.")
+	t.Log("HONESTLY RECORDED: every length above is an ASSUMED derivation from printed field widths — no document in this tier prints a record total and no radio has confirmed one — and the length fingerprint is DEFENCE IN DEPTH behind the `19 00` address probe every one of the EIGHT families' drivers runs first, since the eight CI-V addresses are already distinct and a wrong radio simply does not answer. The ONE exception is the IC-7851/IC-7850 pair, which shares 8Eh at factory defaults; see this file's header.")
 
 	seen := 0
 	for i := 0; i < len(shapes); i++ {
@@ -707,4 +728,239 @@ func equalLengths(x, y []int) bool {
 		}
 	}
 	return true
+}
+
+// cloneFamily is spec D1.1's "7610-shape clone" set — the THREE profiles
+// the additions spec expected to be byte-identical to core/civ/ic7610's
+// layout, in tierProfilePopulation order.
+//
+// It is a SEPARATE list from tierProfilePopulation rather than a slice of
+// it: this set is a claim about record GEOMETRY, and a future family that
+// joined the population without being a 7610 clone must not silently be
+// dragged into the comparison below.
+var cloneFamily = []civ.Profile{ic7610.Profile(), ic7851.Profile(), ic7760.Profile()}
+
+// spanKey is one field span reduced to the properties spec D1.1's
+// "byte-identical layout" claim is about: which field, where, how wide,
+// which half-byte, and how the bytes carry the value.
+type spanKey struct {
+	field    civ.FieldID
+	offset   int
+	length   int
+	nibble   civ.NibbleSel
+	encoding civ.EncodingKind
+	order    civ.ByteOrder
+	scale    uint64
+}
+
+func keySpan(f civ.FieldSpan) spanKey {
+	return spanKey{field: f.Field, offset: f.Offset, length: f.Length, nibble: f.Nibble, encoding: f.Encoding, order: f.Order, scale: f.Scale}
+}
+
+func (k spanKey) String() string {
+	return fmt.Sprintf("offset %d length %d nibble %v encoding %v order %v scale %d", k.offset, k.length, k.nibble, k.encoding, k.order, k.scale)
+}
+
+// declaredCloneDivergences names every place spec D1.1's byte-identical
+// expectation does NOT hold across cloneFamily, with the reason. The key
+// is the exact rendering TestTierRecordShapes_7610CloneFamily produces;
+// an entry with an empty value is not a ruling.
+//
+// EACH OF THE THREE IS THE SAME DECISION, TAKEN ONCE PER PRINTED PAD
+// CELL. The IC-7851's document draws a literal "0" in both halves of the
+// fifth frequency cell and of the first cell of each repeater-tone
+// triple, and core/civ/ic7851/profile.go EXCLUDES those three bytes from
+// their spans so the layout's Fixed template owns them — which is what
+// makes a radio answering a digit there fail the READ instead of being
+// re-encoded with the byte quietly zeroed (that file's own comment, and
+// register entries ic7851-fixed-nibble-reencode and
+// ic7851-tone-fixed-byte). The IC-7610 and the IC-7760 draw the SAME
+// printed pads and INCLUDE them in their spans, bounding the value at the
+// capability layer instead (core/civ/ic7610/profile.go's layout table;
+// core/driver/ic7760/caps.go's MaxEncodableFreqHz = 69,999,999 and
+// MaxToneDeciHz = 2999).
+//
+// IT IS A FINDING, WHICH IS EXACTLY WHAT SPEC D1.1 ASKED FOR — "the
+// profiles are EXPECTED to be byte-identical ... a tier-level test PINS
+// that expectation ... so a future divergence is a finding, not a silent
+// drift". The divergence is therefore recorded here rather than
+// papered over or resolved by editing a frozen, evidence-bound profile,
+// which no registration may do. THE COST IS BOUNDED AND ONE-SIDED: the
+// three radios still accept the same 25-byte record over the same two-byte
+// flat address, so nothing about the tier fingerprint or the
+// `indistinguishable` rulings above depends on this; what differs is which
+// layer refuses an out-of-range value, and the IC-7851's arrangement is
+// the stricter of the two.
+//
+// A NEW divergence — a span the three disagree on that is not listed here
+// — FAILS the test, which is the whole mechanism.
+var declaredCloneDivergences = map[string]string{
+	"rx_frequency: IC-7610 has offset 1 length 5 nibble NibbleWhole encoding EncodingBCDNumber order OrderLittleEndian scale 1; IC-7851 has offset 1 length 4 nibble NibbleWhole encoding EncodingBCDNumber order OrderLittleEndian scale 1": "core/civ/ic7851/profile.go excludes the printed fifth frequency cell — drawn \"0 : 0\" with rotated \"1000 MHz digit: 0 (Fixed)\" and \"100 MHz digit: 0 (Fixed)\" leaders — from the span, so the layout's Fixed template owns that byte and a radio answering a digit in it fails the read (matrix §3.16.3, register entry ic7851-fixed-nibble-reencode). The IC-7610 and IC-7760 include the same printed cell and bound the value at the capability layer instead.",
+	"tone_tx: IC-7610 has offset 9 length 3 nibble NibbleWhole encoding EncodingBCDNumber order OrderBigEndian scale 1; IC-7851 has offset 10 length 2 nibble NibbleWhole encoding EncodingBCDNumber order OrderBigEndian scale 1":           "the same decision at the repeater-tone triple's FIRST cell, drawn with two \"Fixed digit: 0*\" leaders (matrix §3.16.4, register entry ic7851-tone-fixed-byte): core/civ/ic7851/profile.go excludes it, so the span starts one byte later and is one byte narrower. The two remaining bytes still carry the whole printed 000.0–999.9 Hz domain.",
+	"tone_rx: IC-7610 has offset 12 length 3 nibble NibbleWhole encoding EncodingBCDNumber order OrderBigEndian scale 1; IC-7851 has offset 13 length 2 nibble NibbleWhole encoding EncodingBCDNumber order OrderBigEndian scale 1":          "the TSQL triple's first cell, the same ruling as tone_tx immediately above and drawn identically in the same diagram.",
+}
+
+// TestTierRecordShapes_7610CloneFamily is additions spec D1.1's tier-level
+// pin, DEFERRED by the IC-7851/IC-7850 registration (69e3a5b) because the
+// spec defines it over THREE layouts and only two families were merged
+// then — a two-way comparison would have had to be rewritten when the
+// third landed. This is that registration.
+//
+// WHAT IT ASSERTS, in four parts:
+//
+//  1. THE SHARED SHAPE, on all three: one layout, 25 bytes record-only, a
+//     flat two-byte address MEASURED off two frames each profile builds,
+//     ten-byte names padded with 0x20, a single-length discriminator, a
+//     25-byte all-zero Fixed template, and the same seven mapped fields in
+//     the same order. This is the half of D1.1 that holds without
+//     qualification, and it is the half the tier fingerprint and the
+//     `indistinguishable` table above actually rest on.
+//  2. THE IC-7610 AND THE IC-7760 ARE BYTE-IDENTICAL, layout for layout,
+//     enums included — spec D1.1's expectation MET, between two profiles
+//     built from two different documents by two different evidence-leg
+//     sets. Asserted as exact equality, so a one-byte drift in either is a
+//     failure.
+//  3. THE IC-7851 DIVERGES IN EXACTLY THREE SPANS, each declared in
+//     declaredCloneDivergences with its citation. Every divergence found
+//     must be declared, and every declaration must still be a real
+//     divergence — both directions, so this table cannot rot into a
+//     blanket exemption any more than `indistinguishable` can.
+//  4. THE NAME CHARSETS HOLD THE SAME 95 BYTES, in different printed
+//     ORDER. Order is not a wire property — core/civ builds a byte
+//     membership table from it — so the set is what a "same record"
+//     claim can be about, and the difference is logged rather than
+//     asserted away.
+//
+// EVERY FIGURE IS READ OFF A PROFILE. Nothing here restates a per-model
+// package's own table back at it, for measureShape's reason.
+func TestTierRecordShapes_7610CloneFamily(t *testing.T) {
+	if len(cloneFamily) != 3 {
+		t.Fatalf("cloneFamily has %d members, want the 3 additions spec D1.1 names — {IC-7610, IC-7851/7850, IC-7760}", len(cloneFamily))
+	}
+
+	// Part 1 — the shared shape.
+	var layouts []civ.RecordLayout
+	var fieldOrder []civ.FieldID
+	for i, p := range cloneFamily {
+		shape := measureShape(t, p)
+		if shape.addressBytes != 2 {
+			t.Errorf("%s: measured address width %d, want 2 — spec D1.1's set is defined at a two-byte FLAT address", p.Model(), shape.addressBytes)
+		}
+		if got := p.AddressForm(); got != civ.AddressFormFlat {
+			t.Errorf("%s: AddressForm() = %v, want AddressFormFlat", p.Model(), got)
+		}
+		if !equalLengths(shape.recordLengths, []int{25}) {
+			t.Errorf("%s: RecordLengths() = %v, want [25] — the record-only figure spec D1.1 names, under the tier's Erratum 1 convention", p.Model(), shape.recordLengths)
+		}
+		if got := p.BuildRecordLength(); got != 25 {
+			t.Errorf("%s: BuildRecordLength() = %d, want 25", p.Model(), got)
+		}
+		if got := p.Discriminator(); got != civ.DiscriminatorSingleLength {
+			t.Errorf("%s: Discriminator() = %v, want DiscriminatorSingleLength — one accepted length means one layout", p.Model(), got)
+		}
+		if got := p.NameLength(); got != 10 {
+			t.Errorf("%s: NameLength() = %d, want 10", p.Model(), got)
+		}
+		if got := p.NamePad(); got != 0x20 {
+			t.Errorf("%s: NamePad() = %#x, want 0x20", p.Model(), got)
+		}
+		ls := p.Layouts()
+		if len(ls) != 1 {
+			t.Fatalf("%s: %d layouts, want exactly 1 — a clone-family member with two record shapes is not the thing D1.1 describes", p.Model(), len(ls))
+		}
+		l := ls[0]
+		if l.Length != 25 {
+			t.Errorf("%s: layout Length = %d, want 25", p.Model(), l.Length)
+		}
+		if len(l.Fixed) != 25 {
+			t.Errorf("%s: Fixed template is %d bytes, want 25 — a template that is not the record's width cannot be what E6 compares against", p.Model(), len(l.Fixed))
+		}
+		for off, b := range l.Fixed {
+			if b != 0 {
+				t.Errorf("%s: Fixed[%d] = %#x, want 0 — every unmapped region on all three of these records has an OFF value of zero", p.Model(), off, b)
+				break
+			}
+		}
+		order := make([]civ.FieldID, 0, len(l.Fields))
+		for _, f := range l.Fields {
+			order = append(order, f.Field)
+		}
+		if i == 0 {
+			fieldOrder = order
+		} else if !reflect.DeepEqual(order, fieldOrder) {
+			t.Errorf("%s maps %v, but %s maps %v — the three records are claimed to carry the SAME seven fields in the same positions, and a difference in WHICH fields is a bigger finding than any span offset", p.Model(), order, cloneFamily[0].Model(), fieldOrder)
+		}
+		layouts = append(layouts, l)
+	}
+	if len(fieldOrder) != 7 {
+		t.Errorf("the clone family maps %d fields (%v), want the 7 additions spec D1.1 lists for the 27-byte data area", len(fieldOrder), fieldOrder)
+	}
+
+	// Part 2 — the IC-7610 and the IC-7760, byte for byte.
+	if !reflect.DeepEqual(layouts[0], layouts[2]) {
+		t.Errorf("the %s's and the %s's layouts are NOT identical:\n  %s: %+v\n  %s: %+v\nadditions spec D1.1 expects these two to be byte-identical, and they were derived from two different documents by two different evidence-leg sets — a difference here is a finding in one of those derivations, not something to relax", cloneFamily[0].Model(), cloneFamily[2].Model(), cloneFamily[0].Model(), layouts[0], cloneFamily[2].Model(), layouts[2])
+	} else {
+		t.Logf("%s and %s: layouts byte-identical (spans, enums and Fixed template) — spec D1.1's expectation MET", cloneFamily[0].Model(), cloneFamily[2].Model())
+	}
+
+	// Part 3 — the IC-7851's declared divergences, both directions.
+	found := map[string]bool{}
+	base, other := layouts[0], layouts[1]
+	for i := range base.Fields {
+		if i >= len(other.Fields) {
+			break
+		}
+		a, b := base.Fields[i], other.Fields[i]
+		if a.Field != b.Field {
+			continue // already reported by the field-order check above
+		}
+		if !reflect.DeepEqual(a.Enum, b.Enum) {
+			t.Errorf("%s and %s disagree on the %v ENUM: %v against %v — an enum divergence is a wire-vocabulary difference and is not covered by declaredCloneDivergences, which rules only on span geometry", cloneFamily[0].Model(), cloneFamily[1].Model(), a.Field, a.Enum, b.Enum)
+		}
+		ka, kb := keySpan(a), keySpan(b)
+		if ka == kb {
+			continue
+		}
+		key := fmt.Sprintf("%v: %s has %s; %s has %s", a.Field, cloneFamily[0].Model(), ka, cloneFamily[1].Model(), kb)
+		found[key] = true
+		citation, declared := declaredCloneDivergences[key]
+		switch {
+		case !declared:
+			t.Errorf("UNDECLARED divergence from the 7610 layout:\n  %s\nadditions spec D1.1 expects these layouts to be byte-identical; if this is a documented reading of that radio's own page rather than a transcription error, record it in declaredCloneDivergences with the citation", key)
+		case citation == "":
+			t.Errorf("declaredCloneDivergences[%q] has no documentation citation", key)
+		default:
+			t.Logf("DIVERGENCE (declared, not a regression) %s — %s", key, citation)
+		}
+	}
+	for key := range declaredCloneDivergences {
+		if !found[key] {
+			t.Errorf("declaredCloneDivergences[%q] is stale: the three layouts no longer diverge there. If a profile was corrected, delete the entry; do not leave a ruling with no measurement under it", key)
+		}
+	}
+	if len(found) == 0 {
+		t.Log("no divergence found anywhere in the clone family — all three layouts are byte-identical, which is spec D1.1's expectation in full; declaredCloneDivergences should be empty, and the stale check above says whether it is")
+	}
+
+	// Part 4 — the name charsets: same members, different printed order.
+	baseSet := charsetSet(cloneFamily[0].NameCharset())
+	for _, p := range cloneFamily[1:] {
+		set := charsetSet(p.NameCharset())
+		if !reflect.DeepEqual(set, baseSet) {
+			t.Errorf("%s's name charset holds different BYTES from the %s's — the printed order is a document's own choice and does not matter to core/civ, which builds a membership table from it, but the MEMBERS are a claim about which characters the radio will store", p.Model(), cloneFamily[0].Model())
+		}
+		if string(p.NameCharset()) != string(cloneFamily[0].NameCharset()) {
+			t.Logf("%s and %s print the same %d charset bytes in a DIFFERENT ORDER — recorded, not a defect: core/civ consults membership only", cloneFamily[0].Model(), p.Model(), len(set))
+		}
+	}
+}
+
+// charsetSet reduces a charset to its membership, the only part of it
+// core/civ's nameByteValid consults.
+func charsetSet(b []byte) map[byte]bool {
+	out := make(map[byte]bool, len(b))
+	for _, x := range b {
+		out[x] = true
+	}
+	return out
 }
