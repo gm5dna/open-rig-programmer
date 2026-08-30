@@ -27,7 +27,7 @@ import (
 // use, an answer naming a channel nobody asked for — which is exactly what
 // the error paths need and what a self-consistent fake will never produce.
 //
-// IT ALSO FLOODS. R9-SPLIT's two halves are distinguished by the flood's
+// IT ALSO FLOODS. The init-under-flood rule's two halves are distinguished by the flood's
 // `to` byte, so the flood is a first-class feature here: startFlood emits
 // frames continuously until stopFlood, and the two addresses produce
 // genuinely different behaviour one layer down (the accumulator drops a
@@ -160,7 +160,7 @@ func (p *scriptedPort) Transcript() [][]byte {
 // startFlood emits an unsolicited frame addressed to `to` every 2 ms until
 // stopFlood, so a drain that re-arms on activity never finds its idle gap.
 //
-// TWO ADDRESSES, TWO BEHAVIOURS (R9-SPLIT):
+// TWO ADDRESSES, TWO BEHAVIOURS (the init-under-flood rule):
 //   - to = 0x00 is a transceive BROADCAST. civ's accumulator counts it and
 //     NEVER RETURNS it, so it never becomes an engine event, the idle
 //     timer is never re-armed, and a drain completes normally.
@@ -263,9 +263,9 @@ func (p *scriptedPort) record(frame []byte) {
 // that asked the builder what shape to expect would answer whatever that
 // builder produced, including a wrong shape.
 //
-//	1A 00 read : FE FE 98 E0 1A 00 <ch-hi> <ch-lo> FD          — 9 bytes
-//	1A 00 set  : FE FE 98 E0 1A 00 <ch-hi> <ch-lo> <25> FD     — 34 bytes
-//	19 00 read : FE FE 98 E0 19 00 FD                          — 7 bytes
+//	1A 00 read : FE FE B2 E0 1A 00 <ch-hi> <ch-lo> FD          — 9 bytes
+//	1A 00 set  : FE FE B2 E0 1A 00 <ch-hi> <ch-lo> <25> FD     — 34 bytes
+//	19 00 read : FE FE B2 E0 19 00 FD                          — 7 bytes
 const (
 	memReadFrameLen = 9
 	memSetFrameLen  = 34

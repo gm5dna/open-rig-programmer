@@ -182,14 +182,15 @@ func TestReadChannel_MapsEveryField(t *testing.T) {
 	drivertest.AssertFreshReadSaveLoad(t, ch, codeplug.Load)
 }
 
-// TestReadChannel_EmptySlotIsAnEmptyChannel — adjudication R10 and tier
+// TestReadChannel_EmptySlotIsAnEmptyChannel — the empty-slot hook and tier
 // ruling T4.
 //
 // TWO SEPARATE REGISTER ENTRIES, and ONE CAPTURE CANNOT ESTABLISH BOTH:
-// D5 entry 2(a) / matrix lift R2a is the FA reading; D5 entry 2(b) /
-// matrix lift R2b is the all-FF one. R2a's scope EXCLUDES the scan edges
-// (matrix erratum 2), so P1/P2 emptiness rides matrix lift R18 — and
-// R18's capture names P1 only, so P2 is uncovered even by that.
+// D5 entry 2(a) / register entry ic7760-empty-reply-fa is the FA reading;
+// D5 entry 2(b) / register entry ic7760-empty-reply-ff is the all-FF one.
+// The -fa lift clears MEMORY CHANNEL 99, so its scope excludes the scan
+// edges; P1/P2 emptiness rides ic7760-scan-edge-record-shape — and that
+// lift reads 01 00 only, so P2 is uncovered even by that.
 //
 // The rejection arm drives the FA THROUGH THE ENGINE rather than handing
 // the driver an FA frame, because after Do there IS no frame: Engine.Do
@@ -264,11 +265,13 @@ func TestReadChannel_WrongLengthAborts(t *testing.T) {
 // TestReadChannel_UndecodableEnumIsAnError: a record whose ⑨ is 0x06, or
 // whose ⑩ is 0x00, fails with a parse error naming the offset.
 //
-// Register entries ic7760-mode-code-completeness (matrix lift R19: that
-// the ten printed codes are the complete set, so 06 and 09-11 name
-// nothing) and ic7760-filter-value-set (that byte ⑩ carries only 01, 02
-// or 03 — the page prints three values and no default, and inventing a
-// fourth would be a radio claim).
+// The mode and filter enums are MANUAL-EVIDENCED, not assumed: matrix §1
+// rows 4 and 21 read PDF p.18 (folio 17)'s "Operating mode" table at
+// 400 dpi. Column ① prints ten codes and the enum is SPARSE — 06 and
+// 09-11 are absent from the table and name nothing, and nothing may fill
+// the gaps. Column ② "Filter setting" prints 01 FIL1, 02 FIL2, 03 FIL3
+// and no default, so byte ⑩ carries only those three and inventing a
+// fourth would be a radio claim.
 func TestReadChannel_UndecodableEnumIsAnError(t *testing.T) {
 	for _, tt := range []struct {
 		name   string
@@ -368,7 +371,7 @@ func TestReadChannel_OutOfDomainToneReadsAsUnknown(t *testing.T) {
 // bcd3 renders a tone in tenths of a hertz as this record's three-byte
 // BIG-ENDIAN packed BCD. Written out here rather than taken from the
 // encoder under test: a fixture built by the encoder would agree with a
-// wrong byte order as happily as a right one. PDF p.14's three-cell strip
+// wrong byte order as happily as a right one. PDF p.24 (folio 23)'s three-cell strip
 // prints cell 1 as "0 | 0" and then 100 Hz, 10 Hz, 1 Hz, 0.1 Hz — most
 // significant pair first, and the OPPOSITE of the frequency field's
 // convention on the same radio.

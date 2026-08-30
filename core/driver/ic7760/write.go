@@ -332,7 +332,7 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	// RUNG 8 — BUILD, GATE, EXCHANGE. BuildMemorySet writes the profile's
 	// Fixed template into every unmapped region and every mapped span
 	// from this record, so the 25 record bytes are always sent in full
-	// (register entry ic7760-full-record-mandatory, matrix lift R15: the
+	// (register entry ic7760-write-full-record: the
 	// document prints one full-record form and one three-index clear form
 	// and never says whether a short record is accepted).
 	rec := civ.MemoryRecord{
@@ -356,9 +356,11 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	_, err = s.eng.Do(ctx, cmd, civ.CIVWriteWithAckSpec(p.AcknowledgementMatcher()))
 	switch {
 	case err == nil:
-		// FB arrived. Register entry ic7760-1a00-set-ack, matrix lift
-		// R14: the CODES are MANUAL-EVIDENCED, but that a 1A 00 SET is
-		// answered by one of them is ASSUMED — the nearest printed
+		// FB arrived. Register entry ic7760-write-full-record: the FA/FB
+		// CODES are MANUAL-EVIDENCED (PDF p.3, folio 2, "About the data
+		// format"), but that a 1A 00 SET is answered by one of them is
+		// ASSUMED, and that entry's Stage W lift is what settles it — the
+		// nearest printed
 		// statement is about command 29, which this driver does not read
 		// across.
 		steps[0].Sent = true
@@ -415,7 +417,7 @@ func missingMandatory(d codeplug.ChannelData) (spec.Field, string) {
 				}
 			}
 			if !found {
-				return spec.FieldTag, fmt.Sprintf("the tag carries byte %#02x at index %d, which is not in this radio's printed memory-name charset (PDF p.12's two character tables)", d.Tag[i], i)
+				return spec.FieldTag, fmt.Sprintf("the tag carries byte %#02x at index %d, which is not in this radio's printed memory-name charset (PDF p.20, folio 19, the two \"Codes for character entries\" tables)", d.Tag[i], i)
 			}
 		}
 	}
@@ -485,7 +487,7 @@ func toneRefusalReason(create bool) string {
 
 // noDefaultToneReason is T1(5)'s refuse arm, in words, and it is this
 // model's arm because of an ABSENCE that was actually looked for.
-const noDefaultToneReason = "this slot has no prior record to preserve a tone from, and THIS RADIO'S DOCUMENT PRINTS NO DEFAULT TONE VALUE — all 17 pages were swept for the matrix and no \"Default:\" line appears against the tone frequency; the only tone material is the 1B 00 / 1B 01 digit strip. Tier ruling T1(5)'s REFUSE arm rather than its default arm; register entry ic7760-default-tone-undocumented, whose lift is a capture of 1B 00 and 1B 01 on an IC-7760 taken to All Reset"
+const noDefaultToneReason = "this slot has no prior record to preserve a tone from, and THIS RADIO'S DOCUMENT PRINTS NO DEFAULT TONE VALUE — all 28 pages of the revision 2 guide were swept for the matrix and no \"Default:\" line appears against the tone frequency; the only tone material is the 1B 00 / 1B 01 digit strip on PDF p.24 (folio 23). Tier ruling T1(5)'s REFUSE arm rather than its default arm; register entry ic7760-tone-domain, whose lift reads the lowest and highest tone the front panel offers on an IC-7760"
 
 // toneSource settles where a tone span's bytes come from — tier ruling
 // T1(4) and T1(5) — reporting false when the write must be refused.
@@ -558,11 +560,11 @@ func outsideVocabulary(d codeplug.ChannelData, caps spec.Capabilities) (spec.Fie
 		where string
 	}{
 		{spec.FieldMode, d.Mode, caps.Modes,
-			"the record's ⑨ is a mode enum, and PDF p.11's \"①Receiving mode\" column prints these ten codes and no more"},
+			"the record's ⑨ is a mode enum, and PDF p.18 (folio 17)'s \"Operating mode\" table, column ①, prints these ten codes and no more"},
 		{spec.FieldFilter, d.Filter.Value, caps.Filters,
-			"the record's ⑩ is a filter enum, and PDF p.11's \"Filter setting\" column prints these three values and no default"},
+			"the record's ⑩ is a filter enum, and PDF p.18 (folio 17)'s \"Operating mode\" table, column ② \"Filter setting\", prints these three values and no default"},
 		{spec.FieldToneMode, d.ToneMode.Value, toneModes,
-			"the record's ⑪ low nibble is a tone-mode enum, and PDF p.12's ⑪ sub-diagram prints these three values"},
+			"the record's ⑪ low nibble is a tone-mode enum, and PDF p.20 (folio 19)'s ⑪ sub-diagram prints these three values"},
 	} {
 		if containsVocab(v.vocab, v.value) {
 			continue

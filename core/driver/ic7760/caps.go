@@ -17,7 +17,8 @@ import (
 // model, no write-trial protocol run, and no captured frame from one: no
 // write trial has occurred, so no write result has been observed, so the
 // flag cannot be true. Every byte in this package's tables came from the
-// IC-7760 CI-V Reference Guide rev 4 and from nothing else.
+// IC-7760 CI-V Reference Guide revision 2 and the adjudicated matrix, and
+// from nothing else.
 //
 // FLIPPING IT IS A TWO-PART CHANGE, and stating that here is the point of
 // the constant. It is never enough to edit this line: the flip requires
@@ -78,32 +79,32 @@ const (
 // asserts the gap so that closing it is a visible test change.
 const (
 	// MaxEncodableFreqHz is the largest frequency the record's five-byte
-	// little-endian BCD frequency span can carry. Matrix §1 row 12: the
+	// little-endian BCD frequency span can carry. Matrix §1 row 13: the
 	// 10 MHz digit is labelled 0–6 and the fifth cell is a printed
 	// "0 : 0" marked (Fixed), so 69 999 999 Hz is the ceiling.
 	//
 	// The STORABLE ceiling — what an IC-7760 will actually keep in a
-	// memory — is NOT established by this document (matrix lift R17a).
+	// memory — is NOT established by this document (register entry
+	// ic7760-freq-range).
 	// This is the ENCODABLE figure, which is the only number the document
-	// yields, and matrix erratum 11 exists to record that a driver puts
-	// that number in spec.Capabilities.MaxFreqHz.
+	// yields. The matrix records the conservative capability declaration.
 	//
-	// IT IS NOT IN deliberatelyZero AND CANNOT BE: that table is the R11
+	// IT IS NOT IN deliberatelyZero AND CANNOT BE: that table is the
 	// audit's arm for a field left at its ZERO value, and MaxFreqHz is
 	// POPULATED. TestDeliberatelyZeroAudit enforces the partition in both
 	// directions — a populated field appearing in the table fails its
-	// "the table has gone stale" arm — so this bound discharges R11
+	// "the table has gone stale" arm — so this bound is covered through the
 	// through the OTHER arm: populated, with its matrix section cited at
 	// the field itself in baseCapabilities.
 	MaxEncodableFreqHz = 69_999_999
 	// MaxToneDeciHz is the largest tone the record's three-byte
-	// big-endian BCD tone spans can carry, in tenths of a hertz. Matrix
-	// §1 row 8 / PDF p.14's six rotated nibble labels: 100 Hz: 0–2,
+	// big-endian BCD tone spans can carry, in tenths of a hertz. The
+	// matrix's keyed tone join records six nibble labels: 100 Hz: 0–2,
 	// 10 Hz: 0–9, 1 Hz: 0–9, 0.1 Hz: 0–9.
 	MaxToneDeciHz = 2999
 )
 
-// deliberatelyZero is adjudication R11's audit table: every
+// deliberatelyZero is the capability completeness audit table: every
 // spec.Capabilities field this model leaves at its zero value, with the
 // reason. TestDeliberatelyZeroAudit reflects over the struct and requires
 // each field to be either populated (from the matrix, cited in the comment
@@ -126,9 +127,9 @@ var deliberatelyZero = map[string]string{
 	"PreampOptions":          "additions design D8 — the IC-7760 record carries no preamp field",
 	"AntennaOptions":         "additions design D8 — the IC-7760 record carries no antenna field",
 	"DuplexOptions":          "the Icom repeater vocabulary. The 1A 00 record has no duplex field, FieldDuplex carries the zero FieldSupport on both banks, and E5b's guard makes the empty list lawful",
-	"DTCSPolarities":         "DTCS is printed NOWHERE in this document's 17 pages — swept for the matrix. An empty list is the positive statement that this radio expresses no DTCS polarity",
+	"DTCSPolarities":         "DTCS is printed nowhere in the 28-page revision 2 guide — swept for the matrix. An empty list is the positive statement that this radio expresses no DTCS polarity",
 	"DTCSCodes":              "the same sweep: no DTCS code table is printed anywhere in this document",
-	"MinFreqHz":              "zero IS this radio's declared floor rather than an omission: the record's frequency span is unsigned BCD and its smallest encodable value is 0 Hz. The STORABLE floor is not established by this document (matrix lift R17a), and declaring a non-zero guess would be a radio claim",
+	"MinFreqHz":              "zero IS this radio's declared floor rather than an omission: the record's frequency span is unsigned BCD and its smallest encodable value is 0 Hz. The STORABLE floor is not established by this document (register entry ic7760-freq-range), and declaring a non-zero guess would be a radio claim",
 }
 
 // memSlots is the MEM bank's inventory: "001".."099".
@@ -144,9 +145,8 @@ func memSlots() []string {
 	return slots
 }
 
-// scanSlots is the SCAN bank's inventory: the two scan edges.
-//
-// Matrix §3.15(d) — P1 and P2 are NOT a separate bank in the wire
+// scanSlots is the SCAN bank's MANUAL-EVIDENCED inventory: the two scan
+// edges. P1 and P2 are NOT a separate bank in the wire
 // protocol. They are two more values of the same two-byte selector (BCD
 // "01 00" and "01 01", channel numbers 100 and 101, which is exactly what
 // civ.ProfileConfig.ChannelHi = 101 encodes). This project models them as
@@ -161,7 +161,8 @@ func scanSlots() []string { return []string{"P1", "P2"} }
 // and write the SAME 1A 00 record at different values of the same
 // selector, so a per-cell difference between them would be a claim this
 // document does not make. Whether every field is HONOURED on a scan edge
-// is a separate question and rides matrix lift R18.
+// is a separate question and belongs to register entry
+// ic7760-scan-edge-record-shape.
 //
 // EVERY spec.Field IS LISTED, including the ones this radio does not have.
 // An absent key and an explicit zero FieldSupport mean the same thing to
@@ -183,9 +184,9 @@ func bankFields(rw spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 
 		// RULING E6 — THE TWO UNMAPPED NIBBLES. Byte (3)'s LOW nibble is a
 		// four-valued SELECT-group marker (0=OFF, 1=★1, 2=★2, 3=★3;
-		// matrix §3.16 ADDED-1) and byte (11)'s HIGH nibble is a
+		// the matrix's D2 join) and byte (11)'s HIGH nibble is a
 		// four-valued data mode (0=OFF, 1=DATA 1, 2=DATA 2, 3=DATA 3;
-		// matrix §1b as corrected by erratum 5). Their neutral homes,
+		// the matrix's D3 join). Their neutral homes,
 		// codeplug.ChannelData.ScanSkip and .DataMode, are BOTH BoolField.
 		//
 		// A 4→2 collapse would rewrite a user's SELECT group or data mode
@@ -196,9 +197,9 @@ func bankFields(rw spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 		//
 		// THE CONSEQUENCE: a Known ScanSkip or DataMode is REFUSED by the
 		// capability gate before any wire traffic — never dropped, never
-		// collapsed (adjudication R6). These grades DIFFER from matrix §2,
+		// collapsed (ruling E6). These grades DIFFER from matrix §2,
 		// which has scan_skip Sup/Sup on MEM and data_mode Sup/Sup on
-		// both; two errata are proposed under R16.
+		// both; the adjudicated matrix records that deliberate mismatch.
 		//
 		// On Icom, scan_skip is SELECT-GROUP MEMBERSHIP, never a skip.
 		spec.FieldScanSkip: {},
@@ -218,7 +219,7 @@ func bankFields(rw spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 		// home in this record.
 		spec.FieldCTCSSState: {},
 		spec.FieldCTCSSTone:  {},
-		// DTCS is printed nowhere in this document's 17 pages.
+		// DTCS is printed nowhere in the 28-page revision 2 guide.
 		spec.FieldDTCSCode:     {},
 		spec.FieldDTCSPolarity: {},
 
@@ -240,7 +241,7 @@ func bankFields(rw spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 // Every populated field cites the matrix section it came from. Every field
 // left at its zero value is listed in deliberatelyZero with its reason,
 // and TestDeliberatelyZeroAudit enforces that the two sets partition the
-// struct (adjudication R11).
+// struct.
 func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) spec.Capabilities {
 	return spec.Capabilities{
 		// §1 row 1 — the model name, which must equal the registry key
@@ -253,7 +254,7 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 		// THE STATIC VALUE IS THE ADDRESS ALONE (spec D3.2). A CI-V radio
 		// has no CAT-ID equivalent readable before a port opens: the 19 00
 		// token is a per-session observation, and this driver RECORDS it
-		// and NEVER MATCHES it (D5 entry 7, matrix lift R7). Session
+		// and NEVER MATCHES it (D5 entry 7, register entry ic7760-id-reply). Session
 		// Identity carries "b2" followed by the observed token; this
 		// pre-probe field carries the half that is known statically.
 		//
@@ -290,10 +291,11 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 				Fields:  scanFields,
 			},
 		},
-		// §1 row 4 — the "①Receiving mode" column's ten printed codes, in
-		// the UI's preferred order, which here is the printed one (left
-		// sub-column then right): PDF p.11's "Operating mode" table,
-		// corroborated at PDF p.14's "Command: 26".
+		// §1 row 4 — PDF p.18 (folio 17), "Operating mode" /
+		// Command: 01, 04, 06, table column ①, read at 400 dpi: the ten
+		// printed codes in the UI's preferred order, which here is the
+		// printed one. The record reaches that table through PDF p.20
+		// (folio 19), field band ⑨, ⑩.
 		//
 		// THESE ARE THE TEN VALUES OF core/civ/ic7760's modeEnum, and
 		// TestModes_MatchTheCodec pins the two against each other by
@@ -303,27 +305,31 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 		// this worktree's Stage 2 may not extend; the test is what makes
 		// the duplication safe.
 		//
-		// Codes 0x06 and 0x09–0x11 are printed nowhere and are
-		// deliberately absent from both lists: a record carrying one fails
-		// to decode with a parse error naming the offset (register entry
-		// ic7760-mode-code-completeness, matrix lift R19).
+		// Codes 06 and 09–11 are absent from the printed table and are
+		// deliberately absent from both lists — the enum is SPARSE and
+		// nothing may fill the gaps: a record carrying one fails to decode
+		// with a parse error naming the offset.
 		//
-		// THE RADIX OF THE LAST TWO CODES IS A RULING, NOT A READING —
-		// RULING OQ1 of 24/08/2026 is HEXADECIMAL, so PSK is the wire byte
-		// 0x12 and PSK-R is 0x13. See doc.go.
+		// THE RADIX IS HEXADECIMAL, which is what makes the printed 12 and
+		// 13 the wire bytes 0x12 and 0x13 rather than 0x0C and 0x0D. Under
+		// the decimal reading the table's own gap at 09–11 would sit
+		// inside its numbering; §1 row 4 reads it as hex.
 		Modes: []string{"LSB", "USB", "AM", "CW", "RTTY", "FM", "CW-R", "RTTY-R", "PSK", "PSK-R"},
-		// §1 row 5 — PDF p.11's "Filter setting" column, whose fourth and
-		// fifth rows are printed "-" (matrix Errata (rev 1) erratum 6).
+		// §1 row 21 — PDF p.18 (folio 17), the same "Operating mode"
+		// table, column ② "Filter setting": 01 FIL1, 02 FIL2, 03 FIL3.
 		// The three values of core/civ/ic7760's filterEnum, pinned against
-		// it by TestFilters_MatchTheCodec.
+		// it by TestFilters_MatchTheCodec. That page's note "ⓘ Filter
+		// setting (②) can be skipped with commands 01 and 06" is about
+		// commands 01/06 and NOT about 1A 00, whose bar draws both cells.
 		//
 		// 0x00 IS NOT A MEMBER, and that is a decision with a consequence:
 		// a record whose (10) is 0x00 fails to decode rather than being
 		// read as "no filter". The page prints three values and no
-		// default; inventing a fourth would be a radio claim (register
-		// entry ic7760-filter-value-set).
+		// default; inventing a fourth would be a radio claim.
 		Filters: []string{"FIL1", "FIL2", "FIL3"},
-		// §1 row 8 / erratum 5 — byte (11)'s LOW nibble, with the
+		// §1 row 18 — PDF p.20 (folio 19), the ⑪ sub-diagram "Data mode
+		// and tone type settings", the leader from the RIGHT (low) nibble
+		// running to "0: OFF, 1: TONE, 2: TSQL". Byte (11)'s LOW nibble, with the
 		// semantics the neutral model needs. TONE transmits a CTCSS tone;
 		// TSQL transmits one AND squelches on the received one.
 		ToneModes: []spec.ToneMode{
@@ -331,8 +337,9 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 			{Value: "TONE", Semantics: spec.ToneModeCTCSS},
 			{Value: "TSQL", Semantics: spec.ToneModeCTCSSSquelch},
 		},
-		// §1 row 8 / PDF p.14's six rotated nibble labels — and tier
-		// ruling T1(2).
+		// §1 row 9 — PDF p.24 (folio 23), "Repeater tone/tone squelch
+		// frequency settings" / Command: 1B 00, 1B 01, the three-byte bar's
+		// six rotated nibble labels read at 400 dpi; and tier ruling T1(2).
 		//
 		// THE PRINTED DIGIT RANGE AND THE DECLARED DOMAIN DIFFER, AND THE
 		// DIFFERENCE IS THE POINT. The labels print 100 Hz: 0–2, 10 Hz:
@@ -350,12 +357,12 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 		// this model the grid shows and round-trips tones but the picker
 		// cannot offer them. A Wave-4 item and an honesty row.
 		CTCSSToneRange: &spec.ToneRange{MinDeciHz: 1, MaxDeciHz: MaxToneDeciHz, StepDeciHz: 1},
-		// §1 row 9 — the six rates the document names for the CI-V link,
-		// MANUAL-EVIDENCED as named; that the list is COMPLETE is ASSUMED
-		// (matrix lift R12).
+		// The six-rate list is ASSUMED under the exact matrix register
+		// entry ic7760-baud-list; the guide does not print a complete
+		// USB (B) baud list.
 		Bauds: []int{4800, 9600, 19200, 38400, 57600, 115200},
-		// §3.3 / OQ2 — ASSUMED, register home ic7760-default-baud, matrix
-		// lift R11. THE DOCUMENT MARKS NO DEFAULT. The choice of 19200
+		// ASSUMED under register entry ic7760-default-baud. THE DOCUMENT
+		// MARKS NO DEFAULT. The choice of 19200
 		// within the printed six is ARBITRARY and is recorded as such: no
 		// reading of this document favours one of them. What makes it safe
 		// is not the choice but the grading and the failure mode — the
@@ -364,12 +371,14 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 		// never a wrong byte. The driver cannot sweep: internal/wiring
 		// opens the port from this value, and Wave 3 may never touch it.
 		DefaultBaud: 19200,
-		// §1 row 12 — see MaxEncodableFreqHz. MinFreqHz is in
+		// §1 row 13 — see MaxEncodableFreqHz. MinFreqHz is in
 		// deliberatelyZero.
 		MaxFreqHz: MaxEncodableFreqHz,
-		// §1 row 7 — the name span (18)~(27) is ten bytes wide.
+		// §1 row 5 — PDF p.20 (folio 19), field band ⑱ ~ ㉗, "Memory
+		// name settings / Up to 10 characters": the span is ten bytes wide.
 		TagLen: 10,
-		// PDF p.12's two character tables, transcribed ONCE in
+		// §1 row 22 — PDF p.20 (folio 19)'s two "Codes for character
+		// entries" tables, 94 codes, transcribed ONCE in
 		// core/civ/ic7760 and referenced here. The Icom charset omits
 		// several bytes the pre-Icom family default would allow, which is
 		// exactly why spec.TagByteOK consults a capability-supplied set.

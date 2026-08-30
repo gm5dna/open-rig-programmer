@@ -30,7 +30,7 @@ func TestDriverImplementsSerialFramingReporter(t *testing.T) {
 		t.Fatal("the IC-7760 driver does not implement driver.SerialFramingReporter - spec D3.1 requires every Icom driver to report its framing")
 	}
 	if got := r.StopBits(); got != 1 {
-		t.Errorf("StopBits() = %d, want 1 (8-N-1, ASSUMED: D5 entry 8, lift R8)", got)
+		t.Errorf("StopBits() = %d, want 1 (8-N-1, ASSUMED: additions design D5 entry 8, register entry ic7760-serial-framing)", got)
 	}
 	// Every profile reports the same framing: the stop bits are a fact
 	// about the LINK, not about which capability set a caller chose.
@@ -55,6 +55,18 @@ func TestDriverImplementsSerialFramingReporter(t *testing.T) {
 // editor who deletes the record while leaving the value would leave a
 // number wearing an authority it does not have; this test is what stops
 // that.
+//
+// THE PINNED STRINGS ARE THE IC-7760's OWN. Stage-review finding F1 found
+// this list demanding a sibling model's material: a lift identifier and a
+// register alias that belong to the IC-7610, and a decoder-baud command
+// row that this radio's guide does not print. None of it exists for the
+// IC-7760, whose register entry is ic7760-serial-framing (matrix §5 entry
+// 1). The pins below therefore name the tier home (additions design D5
+// entry 8), that register entry, and the matrix §3.1 absence sweep — whose
+// DATA/RTTY hazard sentence is recorded precisely because it is VACUOUS
+// here: this document has no framing line to be misread in the first
+// place. TestProvenanceUsesOnlyTheIC7760Authority sweeps the package for
+// the removed material.
 func TestStopBitsIsAssumedNotEvidenced(t *testing.T) {
 	for _, tt := range []struct {
 		file  string
@@ -65,9 +77,9 @@ func TestStopBitsIsAssumedNotEvidenced(t *testing.T) {
 			wants: []string{
 				"ASSUMED",
 				"D5 entry 8",
-				"R8",
-				// The capture, and the two things it cannot settle.
-				"ic7760-framing-8n1",
+				// The register entry, and the two things its capture
+				// cannot settle.
+				"ic7760-serial-framing",
 				"[REMOTE]",
 				"not any other model",
 			},
@@ -77,12 +89,11 @@ func TestStopBitsIsAssumedNotEvidenced(t *testing.T) {
 			wants: []string{
 				// The absence sweep, stated as an absence.
 				"appear NOWHERE in the document",
-				// The mandatory hazard sentence.
+				// The mandatory hazard sentence...
 				"SUCH A LINE IS NOT EVIDENCE",
 				"DATA/RTTY",
-				// The trap row that must never be read as CI-V evidence.
-				"1A 05 01 21",
-				"Decode Baud Rate",
+				// ...and this radio's finding about it.
+				"not even a misleading line to be misread",
 				// Materiality.
 				"transport.DefaultStopBits is 2",
 			},

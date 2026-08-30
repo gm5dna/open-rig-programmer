@@ -5,8 +5,8 @@ package ic7760
 import (
 	"testing"
 
-	civic7760 "github.com/gm5dna/open-rig-programmer/core/civ/ic7760"
 	"github.com/gm5dna/open-rig-programmer/core/civ"
+	civic7760 "github.com/gm5dna/open-rig-programmer/core/civ/ic7760"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 )
 

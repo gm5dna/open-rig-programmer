@@ -95,13 +95,14 @@ func TestBaseline_Shape(t *testing.T) {
 	}
 	// S3.4 / spec D3.2 - the STATIC, PRE-PROBE value is the CI-V address
 	// ALONE. The 19 00 token is unknown until a session opens, and this
-	// driver records it without ever matching it (D5 entry 7, lift R7),
+	// driver records it without ever matching it (D5 entry 7, register
+	// entry ic7760-id-reply),
 	// so it cannot appear in a value the composition root reads before any
 	// port exists.
 	if caps.CATID != "b2" {
 		t.Errorf("CATID = %q, want %q - the address alone; the 19 00 token is a per-session observation", caps.CATID, "b2")
 	}
-	// S1 row 7 - the name span (18)~(27) is ten bytes wide, so a tag is
+	// S1 row 5 - the name span (18)~(27) is ten bytes wide, so a tag is
 	// ten characters. Pinned against the codec's own NameLength so the
 	// number cannot drift between the two packages.
 	if caps.TagLen != 10 {
@@ -146,18 +147,19 @@ func TestBaseline_Shape(t *testing.T) {
 		t.Errorf("RequiredSlots = %v, want empty - no IC-7760 slot is documented as un-erasable", caps.RequiredSlots)
 	}
 
-	// S1 row 9 - the six rates printed for the CI-V link.
+	// S1 row 10 - the rate list, which this guide does NOT print: the six
+	// are ASSUMED under register entry ic7760-baud-list.
 	wantBauds := []int{4800, 9600, 19200, 38400, 57600, 115200}
 	if !reflect.DeepEqual(caps.Bauds, wantBauds) {
 		t.Errorf("Bauds = %v, want %v", caps.Bauds, wantBauds)
 	}
-	// OQ2 - ASSUMED, register home ic7760-default-baud, matrix lift R11.
+	// ASSUMED, register home ic7760-default-baud.
 	// The document names six rates and marks NO default; the choice within
 	// that set is arbitrary and recorded as such. What makes it safe is
 	// the grading plus the failure mode: a wrong guess costs a clean
 	// timeout at Open, never a wrong byte.
 	if caps.DefaultBaud != 19200 {
-		t.Errorf("DefaultBaud = %d, want 19200 (ASSUMED, lift R11)", caps.DefaultBaud)
+		t.Errorf("DefaultBaud = %d, want 19200 (ASSUMED, register entry ic7760-default-baud)", caps.DefaultBaud)
 	}
 	found := false
 	for _, b := range caps.Bauds {
@@ -169,9 +171,10 @@ func TestBaseline_Shape(t *testing.T) {
 		t.Error("DefaultBaud is not a member of Bauds")
 	}
 
-	// S1 row 12 - the record's 10 MHz digit is labelled 0-6 and the top
+	// S1 row 13 - the record's 10 MHz digit is labelled 0-6 and the top
 	// byte is a fixed "0 : 0", so 69 999 999 Hz is the largest ENCODABLE
-	// value. The STORABLE ceiling is not established (matrix lift R17a);
+	// value. The STORABLE ceiling is not established (register entry
+	// ic7760-freq-range);
 	// see deliberatelyZero's MaxFreqHz note in caps.go.
 	if caps.MinFreqHz != 0 {
 		t.Errorf("MinFreqHz = %d, want 0", caps.MinFreqHz)
@@ -185,11 +188,11 @@ func TestBaseline_Shape(t *testing.T) {
 	if !reflect.DeepEqual(caps.Modes, wantModes) {
 		t.Errorf("Modes = %v, want %v", caps.Modes, wantModes)
 	}
-	// S1 row 5 - the three printed filter values.
+	// S1 row 21 - the three printed filter values.
 	if !reflect.DeepEqual(caps.Filters, []string{"FIL1", "FIL2", "FIL3"}) {
 		t.Errorf("Filters = %v, want [FIL1 FIL2 FIL3]", caps.Filters)
 	}
-	// S1 row 8 / erratum 5 - the three values of (11)'s low nibble, with
+	// S1 row 18 - the three values of (11)'s low nibble, with
 	// their semantics.
 	wantToneModes := []spec.ToneMode{
 		{Value: "OFF", Semantics: spec.ToneModeOff},
@@ -212,7 +215,7 @@ func TestBaseline_Shape(t *testing.T) {
 		t.Error("DuplexOptions is non-empty - the 1A 00 record has no duplex field")
 	}
 	if len(caps.DTCSCodes) != 0 || len(caps.DTCSPolarities) != 0 {
-		t.Error("a DTCS vocabulary is declared - DTCS is printed nowhere in this document's 17 pages")
+		t.Error("a DTCS vocabulary is declared - DTCS is printed nowhere in the 28-page revision 2 guide")
 	}
 	if caps.ClarMaxHz != 0 || caps.ClarStepHz != 0 {
 		t.Errorf("clarifier bounds are %d/%d, want 0/0 - the record has no clarifier field", caps.ClarMaxHz, caps.ClarStepHz)
@@ -273,13 +276,13 @@ func TestModes_MatchTheCodec(t *testing.T) {
 			t.Errorf("the codec decodes mode %q, which this driver never offers", name)
 		}
 	}
-	// RULING OQ1, pinned at the wire level: the printed 12 and 13 are the
+	// Matrix §1 row 4, pinned at the wire level: the printed 12 and 13 are the
 	// wire bytes 0x12 and 0x13, not the decimal values 12 and 13.
 	if enum[0x12] != "PSK" || enum[0x13] != "PSK-R" {
-		t.Errorf("the codec maps 0x12->%q and 0x13->%q; RULING OQ1 (24/08/2026) is HEXADECIMAL and requires PSK and PSK-R", enum[0x12], enum[0x13])
+		t.Errorf("the codec maps 0x12->%q and 0x13->%q; matrix §1 row 4 reads the printed table as HEXADECIMAL and requires PSK and PSK-R", enum[0x12], enum[0x13])
 	}
 	if _, decimal := enum[0x0C]; decimal {
-		t.Error("the codec maps 0x0c to a mode name; that is the DECIMAL reading of the printed \"12\", which RULING OQ1 rejected")
+		t.Error("the codec maps 0x0c to a mode name; that is the DECIMAL reading of the printed \"12\", which matrix §1 row 4 rejects")
 	}
 }
 
@@ -313,7 +316,7 @@ func TestFilters_MatchTheCodec(t *testing.T) {
 // The printed digit range and the declared domain are DIFFERENT, and the
 // difference is the point (tier ruling T1(2)).
 //
-// PDF p.14's six rotated nibble labels (matrix S1 row 8) print
+// PDF p.24 (folio 23)'s six rotated nibble labels (matrix S1 row 9) print
 // 100Hz: 0-2, 10 Hz: 0-9, 1 Hz: 0-9, 0.1 Hz: 0-9, so the WIRE encodes
 // 0..2999 deciHz. The CAPABILITY floor is max(printed minimum, 1),
 // because 0 Hz is not a tone: spec.ToneRange requires MinDeciHz > 0 and
@@ -367,7 +370,8 @@ func TestToneDomainIsThePrintedRangeIntersectedWithE3sFloor(t *testing.T) {
 // scan_skip and data_mode are REV 2's change FROM matrix S2, which has
 // scan_skip Sup/Sup on MEM and data_mode Sup/Sup on both banks. Ruling E6
 // unmaps both nibbles, and an unmapped region is not a field this driver
-// can honestly claim. Two matrix errata are proposed under R16.
+// can honestly claim; the adjudicated matrix records that deliberate
+// mismatch.
 func TestBaseline_WrittenDownZeroes(t *testing.T) {
 	zeroes := []struct {
 		field spec.Field
@@ -382,8 +386,8 @@ func TestBaseline_WrittenDownZeroes(t *testing.T) {
 		{spec.FieldTxFrequency, "the record carries ONE frequency span; there is no split-TX field"},
 		{spec.FieldDuplex, "the record has no duplex field"},
 		{spec.FieldOffset, "the record has no repeater offset field"},
-		{spec.FieldDTCSCode, "DTCS is printed nowhere in this document's 17 pages"},
-		{spec.FieldDTCSPolarity, "DTCS is printed nowhere in this document's 17 pages"},
+		{spec.FieldDTCSCode, "DTCS is printed nowhere in the 28-page revision 2 guide"},
+		{spec.FieldDTCSPolarity, "DTCS is printed nowhere in the 28-page revision 2 guide"},
 		{spec.FieldScanSkip, "RULING E6: byte (3)'s LOW nibble is a four-valued SELECT-group marker (0=OFF/1=*1/2=*2/3=*3) and codeplug.ChannelData.ScanSkip is a BoolField; a 4->2 collapse would rewrite a user's SELECT group, so the nibble is UNMAPPED and the field is Unsupported both ways. On Icom, scan_skip is SELECT-group membership, never a skip"},
 		{spec.FieldDataMode, "RULING E6: byte (11)'s HIGH nibble is a four-valued data mode (0=OFF/1=DATA 1/2=DATA 2/3=DATA 3) and codeplug.ChannelData.DataMode is a BoolField; same collapse, same ruling, same UNMAPPED outcome"},
 	}
@@ -404,7 +408,7 @@ func TestBaseline_WrittenDownZeroes(t *testing.T) {
 //
 // THE CONSEQUENCE, stated plainly: a Known ScanSkip or DataMode is
 // REFUSED BY THE CAPABILITY GATE BEFORE ANY WIRE TRAFFIC - never dropped,
-// and never collapsed 4->2 (adjudication R6). Task 12's requestedFields
+// and never collapsed 4->2 (ruling E6). Task 12's requestedFields
 // appends both fields when they are Known precisely so the gate can see
 // them and refuse, rather than filtering them out and writing a record
 // that quietly disagrees with what the user asked for.
@@ -432,7 +436,7 @@ func TestE6UnmappedFieldsAreUnsupportedBothWays(t *testing.T) {
 // SAME record - matrix S3.15(d): P1 and P2 are not a separate bank in the
 // wire protocol at all, just two more values of the same two-byte
 // selector. Whether every field is HONOURED on a scan edge rides matrix
-// lift R18.
+// register entry ic7760-scan-edge-record-shape.
 //
 // REV 1 pinned scan_skip write-Unsupported here on the strength of PDF
 // p.12's "(i) Set 0 for P1 and P2." Under E6 the field is Unsupported on
@@ -457,7 +461,7 @@ func TestScanBank_MatchesTheMatrixPerCell(t *testing.T) {
 			}
 		}
 		if caps.FieldSupport(spec.BankScan, spec.FieldScanSkip) != (spec.FieldSupport{}) {
-			t.Errorf("%s: SCAN/scan_skip is not the zero FieldSupport (E6 unmaps it on both banks; PDF p.12's \"Set 0 for P1 and P2\" corroborates)", name)
+			t.Errorf("%s: SCAN/scan_skip is not the zero FieldSupport (E6 unmaps it on both banks; PDF p.20, folio 19, \"Set 0 for P1 and P2\" corroborates)", name)
 		}
 	}
 }
@@ -538,7 +542,7 @@ func TestSimulated_IsAClaimAboutTheFakeOnly(t *testing.T) {
 	}
 }
 
-// TestDeliberatelyZeroAudit is adjudication R11's audit: every capability
+// TestDeliberatelyZeroAudit is the capability completeness audit: every capability
 // bound this model declares is either POPULATED from the matrix (with its
 // section cited in caps.go's own comment against the field) or explicitly
 // listed in caps.go's deliberatelyZero table with the reason it is zero.

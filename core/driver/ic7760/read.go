@@ -81,7 +81,7 @@ func addressToSlot(a civ.ChannelAddress) (string, error) {
 // recordIsAbsent reports whether raw is an all-0xFF record — spec D5 entry
 // 2(b)'s reading of an unwritten channel.
 //
-// IT IS THE R10 PRE-PARSE HOOK, and it must run before the record parser,
+// IT IS THE EMPTY-SLOT PRE-PARSE HOOK, and it must run before the record parser,
 // because an all-0xFF record dies on its first BCD nibble or its first
 // unknown enum value with a failure INDISTINGUISHABLE from a corrupted
 // record. civ.Profile.MemoryAnswerRecord exists for exactly this — its own
@@ -90,10 +90,11 @@ func addressToSlot(a civ.ChannelAddress) (string, error) {
 // own model's evidence".
 //
 // THE EVIDENCE IS TWO SEPARATE, UNVERIFIED ENTRIES AND ONE CAPTURE CANNOT
-// ESTABLISH BOTH. D5 entry 2(a) / matrix lift R2a is the FA reading;
-// D5 entry 2(b) / matrix lift R2b is this one. R2a's scope EXCLUDES the
-// scan edges (matrix erratum 2), so P1/P2 emptiness rides matrix lift R18
-// instead — and R18's capture names P1 only, so P2 is uncovered even by
+// ESTABLISH BOTH. D5 entry 2(a) / register entry ic7760-empty-reply-fa is
+// the FA reading; D5 entry 2(b) / register entry ic7760-empty-reply-ff is
+// this one. The -fa lift clears MEMORY CHANNEL 99, so its scope excludes
+// the scan edges; P1/P2 emptiness rides ic7760-scan-edge-record-shape
+// instead — and that lift reads 01 00 only, so P2 is uncovered even by
 // that.
 //
 // An empty raw is not absent: a zero-length record cannot arise (the

@@ -86,9 +86,9 @@ func TestMemorySetSpec_IsWriteWithAckAndNeverRetries(t *testing.T) {
 
 // TestWriteChannel_FBIsConfirmed: an FB answer yields Sent and Confirmed.
 //
-// Register entry ic7760-1a00-set-ack, matrix lift R14: THE CODES ARE
-// MANUAL-EVIDENCED BUT THAT A 1A 00 SET IS ANSWERED BY ONE OF THEM IS
-// ASSUMED. The nearest printed statement is about command 29, which this
+// Register entry ic7760-write-full-record: THE FA/FB CODES ARE
+// MANUAL-EVIDENCED (PDF p.3, folio 2) BUT THAT A 1A 00 SET IS ANSWERED BY
+// ONE OF THEM IS ASSUMED, AND THAT ENTRY'S STAGE W LIFT SETTLES IT. The nearest printed statement is about command 29, which this
 // driver does not read across.
 func TestWriteChannel_FBIsConfirmed(t *testing.T) {
 	s, p := writeSession(t, ackingRadio())
@@ -218,7 +218,7 @@ func TestWriteChannel_UnverifiedRefusesBeforeAnyWire(t *testing.T) {
 // ScanSkip or DataMode is KNOWN is refused before any wire traffic,
 // because both carry the zero FieldSupport.
 //
-// NEVER DROPPED, NEVER COLLAPSED 4->2 (adjudication R6). A Known value is
+// NEVER DROPPED, NEVER COLLAPSED 4->2 (ruling E6). A Known value is
 // a REQUEST, and this project refuses a request it cannot honour rather
 // than quietly writing a record that disagrees with what the user asked
 // for. requestedFields appends both fields when Known precisely so the
@@ -363,7 +363,7 @@ func TestWriteChannel_EmptySlotWritesAgainstTheTemplate(t *testing.T) {
 // WithConsentedUnverifiedWrites on a RealHardware driver, the frame on the
 // wire is the full 34-byte set.
 //
-// Register entry ic7760-full-record-mandatory, matrix lift R15: the
+// Register entry ic7760-write-full-record: the
 // document prints one full-record form and one three-index clear form and
 // NEVER SAYS whether a short record is accepted, so the driver always
 // sends all 25 record bytes.
@@ -450,8 +450,8 @@ func TestWriteChannel_EraseIsRefused(t *testing.T) {
 // a valid 1A 00 read and a re-validated 1A 00 set — and this asserts the
 // driver never BUILDS one.
 func TestWriteChannel_NoClearFrameIsReachable(t *testing.T) {
-	// (a) FE FE 98 E0 1A 00 <ch-hi> <ch-lo> FF FD, and
-	// (b) FE FE 98 E0 0B FD.
+	// (a) FE FE B2 E0 1A 00 <ch-hi> <ch-lo> FF FD, and
+	// (b) FE FE B2 E0 0B FD.
 	isClearForm := func(f []byte) bool {
 		if len(f) == 6 && f[4] == 0x0B {
 			return true
@@ -500,9 +500,10 @@ func TestWriteChannel_NoClearFrameIsReachable(t *testing.T) {
 }
 
 // TestWriteChannel_RefusesAFrequencyOutsideTheEncodableRange — the
-// adjudication R11 pre-build typed refusal.
+// pre-build typed refusal.
 //
-// Matrix §1 row 12: PDF p.11's five-cell frequency strip labels the 10 MHz
+// Matrix §1 row 13: PDF p.18 (folio 17)'s five-cell \"Operating frequency\"
+// strip labels the 10 MHz
 // digit 0-6 and prints cell 5 as a fixed "0 : 0", so 69 999 999 Hz is the
 // largest encodable value.
 func TestWriteChannel_RefusesAFrequencyOutsideTheEncodableRange(t *testing.T) {
@@ -537,7 +538,7 @@ func TestWriteChannel_RefusesAFrequencyOutsideTheEncodableRange(t *testing.T) {
 }
 
 // TestWriteChannel_RefusesAToneOutsideThePrintedDigitRange: matrix §1
-// row 8 / PDF p.14's six rotated nibble labels (100Hz: 0-2, 10 Hz: 0-9,
+// row 9 / PDF p.24 (folio 23)'s six rotated nibble labels (100Hz: 0-2, 10 Hz: 0-9,
 // 1 Hz: 0-9, 0.1 Hz: 0-9).
 func TestWriteChannel_RefusesAToneOutsideThePrintedDigitRange(t *testing.T) {
 	for _, tt := range []struct {
@@ -880,7 +881,7 @@ func TestWriteChannel_UpdateCarriesTheJustReadToneWhenNotKnown(t *testing.T) {
 // The preservation read is rejected (an empty slot), so the tone spans
 // have no source, and THIS MODEL HAS NO DOCUMENTED DEFAULT TONE TO FALL
 // BACK ON — which is exactly why T1(5)'s other arm does not apply here.
-// Register entry ic7760-default-tone-undocumented.
+// Register entry ic7760-tone-domain.
 func TestWriteChannel_CreateWithoutToneIsRefused(t *testing.T) {
 	for _, tt := range []struct {
 		name  string
@@ -913,7 +914,7 @@ func TestWriteChannel_CreateWithoutToneIsRefused(t *testing.T) {
 			if !errors.As(err, &refusal) || !containsField(refusal.Fields, tt.field) {
 				t.Fatalf("err = %v, want a *driver.WriteRefusedError naming %s", err, tt.field)
 			}
-			if !strings.Contains(refusal.Reason, "ic7760-default-tone-undocumented") {
+			if !strings.Contains(refusal.Reason, "ic7760-tone-domain") {
 				t.Errorf("the refusal does not cite its register entry: %q", refusal.Reason)
 			}
 			if len(res.Steps) != 0 {
@@ -1112,7 +1113,7 @@ func TestUnreachableRefusalsTellTheTruth(t *testing.T) {
 		if create == update {
 			t.Fatal("the CREATE and UPDATE arms share one sentence; they are different facts")
 		}
-		if !strings.Contains(create, "no prior record") || !strings.Contains(create, "ic7760-default-tone-undocumented") {
+		if !strings.Contains(create, "no prior record") || !strings.Contains(create, "ic7760-tone-domain") {
 			t.Errorf("the CREATE reason does not carry T1(5)'s fact and its register entry: %q", create)
 		}
 		if strings.Contains(update, "no prior record") {
