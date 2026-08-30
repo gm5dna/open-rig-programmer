@@ -102,6 +102,22 @@ var shiftByName = map[string]cat.Shift{
 // a gate rather than a hint) — so accepting a wider read-side set on
 // MEM/PMS cannot smuggle a stale or wrong kind back onto the wire.
 //
+// HW-OBSERVED 30/08/2026 (Stuart's UK FT-710 under v1.2.0, field
+// report; docs/hardware-notes.md §P7 kind drift): P1L — the slot the
+// M5b trials CAT-WROTE on 13/07/2026 with kind '1', which read back '1'
+// that day and was never written or front-panel-edited since — answered
+// `MRP1L007100000+000000100000;`, kind '0' (KindVFO). The radio changed
+// the byte on its own. So P7 on a read is NOT a statement about which
+// bank a slot belongs to; it is some radio-internal state that ordinary
+// use flips (a MEM channel's '0' was already known to be un-recreatable
+// via CAT). The former PMS set {'1','5'} therefore aborted every read of
+// a radio in this state ("carries kind '0', want one of {'1','5'}").
+// PMS now mirrors MEM's evidence and accepts '0' as well; the check
+// still refuses genuinely undocumented bytes ('2', '3', '6' and up).
+// The 60m/EMG banks are unchanged — still never observed. Pinned by
+// TestReadChannel_HWObserved_PMSKindVFO and
+// TestAcceptedKinds_PMSMirrorsMEMForVFO.
+//
 // That citation named cat.Slot.Writable until M9d removed it. The
 // replacement is deliberately named without a line number: this comment
 // has now been invalidated once by a change in another package, and a bare
@@ -109,7 +125,7 @@ var shiftByName = map[string]cat.Shift{
 func acceptedKinds(slot cat.Slot) []byte {
 	switch {
 	case slot.IsPMS():
-		return []byte{cat.KindMemory, cat.KindPMS}
+		return []byte{cat.KindVFO, cat.KindMemory, cat.KindPMS}
 	case slot.Is60m() || slot.IsEMG():
 		return []byte{cat.KindMemory}
 	default:

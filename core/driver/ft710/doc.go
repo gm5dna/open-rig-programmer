@@ -69,11 +69,14 @@
 //     populated PMS pair (reproduced live: `ft710: MR answer for slot
 //     "P1L" carries kind '1', want '5' for this slot's bank`). The FIX:
 //     read now accepts a LENIENT, documented set per bank — {'0','1','4'}
-//     for memory-bank slots, {'1','5'} for PMS slots — because a
-//     front-panel-created PMS channel's kind byte remains UNKNOWN (never
-//     observed at M5b); write NEVER re-emits a read kind, it always
-//     builds fresh with KindMemory, so this leniency cannot smuggle a
-//     stale/wrong kind back onto the wire.
+//     for memory-bank slots, {'0','1','5'} for PMS slots; write NEVER
+//     re-emits a read kind, it always builds fresh with KindMemory, so
+//     this leniency cannot smuggle a stale/wrong kind back onto the
+//     wire. The PMS set gained '0' on 30/08/2026 (HW-OBSERVED, field
+//     report under v1.2.0): the CAT-written P1L of 13/07/2026 read back
+//     kind '0' with no intervening write or front-panel edit, aborting
+//     every read of the radio — P7 is radio-internal state the radio
+//     itself changes, not a bank label (read.go, acceptedKinds).
 //
 //  3. 60 m numbering and discovery (ft710.go, discoverInventory;
 //     fakeradio register items 10, 12, 13). 60 m channels are ASSUMED
@@ -106,7 +109,7 @@
 //     fix wave, Fix 5 (adjudicated MEDIUM): acceptedKinds used to apply
 //     MEM's LENIENT {'0','1','4'} set to 60m/EMG too (item 2's leniency
 //     was HW-earned for MEM specifically, never for these banks) — it now
-//     branches explicitly per bank: PMS {'1','5'}; MEM {'0','1','4'};
+//     branches explicitly per bank: PMS {'0','1','5'}; MEM {'0','1','4'};
 //     discovered 60m/EMG STRICT {'1'} only, until an actual 5xx/EMG-bearing
 //     radio is characterised. Verify at a future M5a-class session.
 //
