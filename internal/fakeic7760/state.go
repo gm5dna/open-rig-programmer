@@ -66,8 +66,8 @@ func (r *Radio) SetSlot(ch int, m MemState) {
 	if _, _, ok := selectorFor(ch); !ok {
 		panic(fmt.Sprintf("fakeic7760: channel %d is not addressable", ch))
 	}
-	if len(m.Raw) != r.recordLen {
-		panic(fmt.Sprintf("fakeic7760: channel %d record has length %d, want %d", ch, len(m.Raw), r.recordLen))
+	if n := r.recordLenFor(ch); len(m.Raw) != n {
+		panic(fmt.Sprintf("fakeic7760: channel %d record has length %d, want %d", ch, len(m.Raw), n))
 	}
 	r.mu.Lock()
 	r.slots[ch] = m.clone()
