@@ -439,8 +439,9 @@
 // COVERS THE IC-7850: where that model needs the same assumption it gets
 // its own entry on its own row with its own lift.
 //
-// Six are homed in the civ PROFILE register (core/civ/ic7851/doc.go) and
-// thirteen here. All nineteen are listed together, because a reader of
+// Three are homed in the civ PROFILE register (core/civ/ic7851/doc.go) and
+// sixteen here (two of the sixteen are also exercised in civ, as
+// core/civ/ic7851/doc.go records). All nineteen are listed together, because a reader of
 // either register must be able to see that the set is not complete without
 // the other.
 //
