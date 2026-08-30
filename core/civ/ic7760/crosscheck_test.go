@@ -3,10 +3,13 @@
 package ic7760_test
 
 import (
+	"bytes"
 	"encoding/csv"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -344,5 +347,248 @@ func TestSTOPG1ArbitrationUsesThePage20DataModeNames(t *testing.T) {
 	answer = append(answer, civ.EndByte)
 	if _, _, err := ic7760.Profile().MemoryAnswerRecord(answer); err != nil {
 		t.Fatalf("chosen OFF/OFF record is not executable: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Complete printed domains.
+//
+// The keyed join above compares each field's values_verbatim against a
+// SAMPLE of its printed entries, which is enough to catch a transposed or
+// mislabelled row but not a missing one. Everything below asserts the
+// COMPLETE printed domain instead: the enumerable fields — memory name,
+// operating mode, filter setting and tone type — are reconstructed entry by
+// entry from the frozen B artefact and compared byte for byte against the
+// shipped constant and the layout's enums, so an omitted code is a failure
+// rather than an unsampled gap.
+
+// splitVerbatim splits a frozen values_verbatim cell on the printed
+// separator " | ". The symbols table itself prints a vertical bar as a
+// character — the entry reading "| 7C" — and the frozen row's own notes
+// column records that the padded separator is what keeps the two apart, so
+// splitting on " | " leaves that entry intact.
+func splitVerbatim(s string) []string {
+	parts := strings.Split(s, " | ")
+	for i := range parts {
+		parts[i] = strings.TrimSpace(parts[i])
+	}
+	return parts
+}
+
+func printedCode(t *testing.T, s string) byte {
+	t.Helper()
+	n, err := strconv.ParseUint(s, 16, 8)
+	if err != nil {
+		t.Fatalf("printed code %q: %v", s, err)
+	}
+	return byte(n)
+}
+
+// d1TranscriptionRow returns the single frozen D1 row keyed by the given
+// printed index range, skipping the width-zero conditional clear row.
+func d1TranscriptionRow(t *testing.T, key string) []string {
+	t.Helper()
+	for _, row := range readCSV(t, "IC-7760-transcription-b.csv")[1:] {
+		if row[0] == "D1" && row[3] != "0" && rangeKey(t, row[1]) == key {
+			return row
+		}
+	}
+	t.Fatalf("frozen transcription has no D1 row keyed %s", key)
+	return nil
+}
+
+// printedNameCodes derives every character code the two "Codes for
+// character entries" tables print, from the frozen name row's
+// values_verbatim. The glyph column is not consulted: three of the printed
+// glyphs are drawn as typographic look-alikes (” for 22, ’ for 27 and an
+// en-dash-length stroke for 2D, which the -b.md transcription annotates
+// "transcribed as drawn"), so the ASCII code column is the authority.
+func printedNameCodes(t *testing.T, verbatim string) []byte {
+	t.Helper()
+	var codes []byte
+	for _, entry := range splitVerbatim(verbatim) {
+		fields := strings.Fields(entry)
+		switch len(fields) {
+		case 2: // A single printed pair, e.g. "! 21" or "| 7C".
+			codes = append(codes, printedCode(t, fields[1]))
+		case 6: // A printed run, e.g. "A ~ Z 41 ~ 5A".
+			if fields[1] != "~" || fields[4] != "~" {
+				t.Fatalf("run entry %q is not '<c> ~ <c> <hex> ~ <hex>'", entry)
+			}
+			lo, hi := printedCode(t, fields[3]), printedCode(t, fields[5])
+			if hi < lo {
+				t.Fatalf("run entry %q ends below where it starts", entry)
+			}
+			for b := lo; b <= hi; b++ {
+				codes = append(codes, b)
+			}
+		default:
+			t.Fatalf("name entry %q has %d printed fields, want 2 or 6", entry, len(fields))
+		}
+	}
+	return codes
+}
+
+// TestNameCharsetIsTheCompletePrintedDomain rebuilds NameCharset from the
+// frozen evidence and compares it byte for byte. The letter, lower-case and
+// digit runs come out in the order the "Letters and Numbers" table prints
+// them; the symbols follow in ascending code order, which is the order of
+// the p.20 footnote ("! \" # $ % & ' ( ) * +, - . / : ; < = > ? @ …") and is
+// what fixes 2D between 2C (,) and 2E (.). The assumed space closes the set.
+func TestNameCharsetIsTheCompletePrintedDomain(t *testing.T) {
+	codes := printedNameCodes(t, d1TranscriptionRow(t, "18-27")[5])
+	if len(codes) != 94 {
+		t.Errorf("frozen evidence prints %d character codes, want the 94 the two tables carry", len(codes))
+	}
+
+	seen := map[byte]bool{}
+	var upper, lower, digits, symbols []byte
+	for _, b := range codes {
+		if seen[b] {
+			t.Errorf("frozen evidence prints code %02X twice", b)
+		}
+		seen[b] = true
+		switch {
+		case b >= 'A' && b <= 'Z':
+			upper = append(upper, b)
+		case b >= 'a' && b <= 'z':
+			lower = append(lower, b)
+		case b >= '0' && b <= '9':
+			digits = append(digits, b)
+		default:
+			symbols = append(symbols, b)
+		}
+	}
+	sort.Slice(symbols, func(i, j int) bool { return symbols[i] < symbols[j] })
+	want := string(upper) + string(lower) + string(digits) + string(symbols) + " "
+
+	if ic7760.NameCharset != want {
+		t.Errorf("NameCharset does not reproduce the complete printed domain:\n got %q\nwant %q", ic7760.NameCharset, want)
+	}
+	if len(ic7760.NameCharset) != 95 {
+		t.Errorf("NameCharset is %d bytes, want 95 — the 94 printed codes plus the assumed space", len(ic7760.NameCharset))
+	}
+	if got := string(ic7760.Profile().NameCharset()); got != ic7760.NameCharset {
+		t.Errorf("the built profile's charset = %q, want the constant %q", got, ic7760.NameCharset)
+	}
+	// The printed hyphen-minus, named explicitly so a regression says so.
+	if !strings.Contains(ic7760.NameCharset, ",-.") {
+		t.Errorf("NameCharset does not carry 2D in printed order between 2C and 2E: %q", ic7760.NameCharset)
+	}
+	if bytes.IndexByte(ic7760.Profile().NameCharset(), 0x2D) < 0 {
+		t.Error("the built profile refuses the printed hyphen-minus 2D")
+	}
+}
+
+func layoutEnum(t *testing.T, field civ.FieldID) map[byte]string {
+	t.Helper()
+	for _, sp := range ic7760.Profile().Layouts()[0].Fields {
+		if sp.Field == field {
+			return sp.Enum
+		}
+	}
+	t.Fatalf("layout has no span for field %v", field)
+	return nil
+}
+
+// TestPrintedEnumDomainsAreCompleteNotSampled asserts the whole printed
+// operating-mode, filter-setting and tone-type domains against the layout's
+// enums, so a code the document prints and the profile omits — or the
+// reverse — fails here rather than slipping through an unsampled entry.
+func TestPrintedEnumDomainsAreCompleteNotSampled(t *testing.T) {
+	wantMode, wantFilter := map[byte]string{}, map[byte]string{}
+	target := wantMode
+	for _, entry := range splitVerbatim(d1TranscriptionRow(t, "9-10")[5]) {
+		entry = strings.TrimPrefix(entry, "①Operating mode ")
+		if rest := strings.TrimPrefix(entry, "②Filter setting "); rest != entry {
+			target, entry = wantFilter, rest
+		}
+		if entry == "—" { // The two printed em dashes carry no code.
+			continue
+		}
+		code, name, ok := strings.Cut(entry, ":")
+		if !ok {
+			t.Fatalf("mode/filter entry %q is not '<hex>:<name>'", entry)
+		}
+		target[printedCode(t, code)] = name
+	}
+	if len(wantMode) != 10 || len(wantFilter) != 3 {
+		t.Fatalf("printed mode/filter domains = %d/%d codes, want 10/3", len(wantMode), len(wantFilter))
+	}
+	if got := layoutEnum(t, civ.FieldMode); !reflect.DeepEqual(got, wantMode) {
+		t.Errorf("mode enum is not the complete printed domain:\n got %v\nwant %v", got, wantMode)
+	}
+	if got := layoutEnum(t, civ.FieldFilter); !reflect.DeepEqual(got, wantFilter) {
+		t.Errorf("filter enum is not the complete printed domain:\n got %v\nwant %v", got, wantFilter)
+	}
+
+	// The tone-type half of D3: the UPPER printed line, reached by the
+	// arrow under the RIGHT digit, which is the low nibble the layout maps.
+	var toneRow []string
+	for _, row := range readCSV(t, "IC-7760-transcription-b.csv")[1:] {
+		if row[0] == "D3" && strings.Contains(row[5], "TSQL") {
+			toneRow = row
+		}
+	}
+	if toneRow == nil {
+		t.Fatal("frozen transcription has no D3 tone-type row")
+	}
+	wantTone := map[byte]string{}
+	for _, entry := range strings.Split(toneRow[5], ", ") {
+		code, name, ok := strings.Cut(strings.TrimSpace(entry), ": ")
+		if !ok {
+			t.Fatalf("tone entry %q is not '<code>: <name>'", entry)
+		}
+		wantTone[printedCode(t, code)] = name
+	}
+	if len(wantTone) != 3 {
+		t.Fatalf("printed tone-type domain = %d codes, want 3", len(wantTone))
+	}
+	if got := layoutEnum(t, civ.FieldToneMode); !reflect.DeepEqual(got, wantTone) {
+		t.Errorf("tone-mode enum is not the complete printed domain:\n got %v\nwant %v", got, wantTone)
+	}
+}
+
+// TestRoundTripCarriesAHyphenatedName runs a record whose name uses the
+// printed hyphen-minus through build → parse → re-encode, in the shape of
+// the golden test. A repeater tag such as GB3-IV is the ordinary case that
+// a charset hole makes unreadable: the read-path refusal is not a
+// *civ.RecordLengthError, so probeSlot returns it unwrapped and Open aborts.
+func TestRoundTripCarriesAHyphenatedName(t *testing.T) {
+	p := ic7760.Profile()
+	rec := goldenRecord()
+	rec.Name = civ.Available("GB3-IV")
+
+	set, err := p.BuildMemorySet(rec)
+	if err != nil {
+		t.Fatalf("build a record named GB3-IV: %v", err)
+	}
+	frame := set.Bytes()
+	if len(frame) != 34 {
+		t.Fatalf("set frame is %d bytes, want 34", len(frame))
+	}
+	// Frame index 8 is record offset 0, so the ten name bytes start at 23.
+	if got, want := frame[23:33], []byte("GB3-IV    "); !bytes.Equal(got, want) {
+		t.Errorf("encoded name = % X, want % X", got, want)
+	}
+	if frame[26] != 0x2D {
+		t.Errorf("the hyphen was encoded as %02X, want the printed 2D", frame[26])
+	}
+
+	answer := append([]byte(nil), frame...)
+	answer[2], answer[3] = answer[3], answer[2]
+	got, err := p.ParseMemoryAnswer(answer)
+	if err != nil {
+		t.Fatalf("parse a record named GB3-IV: %v", err)
+	}
+	if got != rec {
+		t.Errorf("hyphenated round trip did not compare field-for-field:\n got %+v\nwant %+v", got, rec)
+	}
+	reencoded, err := p.BuildMemorySet(got)
+	if err != nil {
+		t.Fatalf("re-encode the parsed record: %v", err)
+	}
+	if !bytes.Equal(reencoded.Bytes(), frame) {
+		t.Errorf("re-encoded = % X, want byte-identical % X", reencoded.Bytes(), frame)
 	}
 }
