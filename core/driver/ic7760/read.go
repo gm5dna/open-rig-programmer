@@ -19,10 +19,11 @@ import (
 //
 // MATRIX §3.15(d): P1 AND P2 ARE NOT A SEPARATE BANK IN THE WIRE
 // PROTOCOL. They are two more values of the same two-byte selector — PDF
-// p.12 (folio 11) prints "00 01 ~ 00 99: Memory channel 01 ~ 99",
+// p.20 (folio 19) prints "00 01 ~ 00 99: Memory channel 01 ~ 99",
 // "01 00: Programmed scan edge P1", "01 01: Programmed scan edge P2", one
 // contiguous space with three printed forms — and core/civ/ic7760's
-// profile declares exactly that range (ChannelLo 1, ChannelHi 101).
+// profile declares exactly that space as base MEM 1..99 plus one
+// ExtraRange 100..101 (finding F7).
 //
 // This project models them as a SCAN bank only because the neutral memory
 // model needs the distinction between a memory and a scan edge; the codec

@@ -9,6 +9,13 @@ import (
 	"testing"
 )
 
+// sourceText concatenates paths with comment markers stripped and every run
+// of whitespace collapsed to one space.
+//
+// THE NORMALISATION IS LOAD-BEARING, not tidiness: a phrase that wraps
+// across two comment lines is "matrix lift\n// R7" on disk and would slip
+// past a naive Contains for "matrix lift R7". One IC-7610 lift identifier
+// survived this sweep's first pass on exactly that trick.
 func sourceText(t *testing.T, paths ...string) string {
 	t.Helper()
 	var out strings.Builder
@@ -17,7 +24,7 @@ func sourceText(t *testing.T, paths ...string) string {
 		if err != nil {
 			t.Fatalf("read %s: %v", path, err)
 		}
-		out.Write(b)
+		out.WriteString(strings.Join(strings.Fields(strings.ReplaceAll(string(b), "//", " ")), " "))
 		out.WriteByte('\n')
 	}
 	return out.String()

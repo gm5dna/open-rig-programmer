@@ -37,8 +37,9 @@ func readOne(t *testing.T, ch int, slot string, rec []byte) (codeplug.Channel, e
 //
 // MATRIX §3.15(d): P1 AND P2 ARE NOT A SEPARATE BANK IN THE WIRE PROTOCOL.
 // They are two more values of the same two-byte selector — 100 and 101 in
-// one contiguous space that core/civ/ic7760's profile declares as
-// ChannelLo 1, ChannelHi 101. This project models them as a SCAN bank only
+// one contiguous space that core/civ/ic7760's profile declares as base
+// MEM 1..99 plus one ExtraRange 100..101. This project models them as a
+// SCAN bank only
 // because the neutral memory model needs the distinction between a memory
 // and a scan edge.
 func TestSlotAddressRoundTrip(t *testing.T) {
