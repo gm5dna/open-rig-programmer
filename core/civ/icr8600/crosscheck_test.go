@@ -94,8 +94,19 @@ func TestCrosscheckMatrixBAndLedgerJoinByDiagramAndField(t *testing.T) {
 // rather than an untethered local restatement. The matrices are outside the
 // quarantined testdata freeze, so their own digests are pinned here: a matrix
 // correction must fail this crosscheck and be deliberately re-arbitrated.
+//
+// The matrices live under docs/superpowers/, which is gitignored: a fresh
+// clone and CI do not have them (found the hard way — the v1.2.1 CI run,
+// 30/08/2026). When the directory is absent the digest pin is reported and
+// skipped, and every join below still runs against the frozen testdata,
+// which IS in the repository and is the evidence the profile was derived
+// from; the pin bites on the maintainer's checkout, where the matrices are.
 func pinMatrixA(t *testing.T) {
 	t.Helper()
+	if !matrixAuthorityPresent() {
+		t.Logf("matrix A authority absent (docs/superpowers is gitignored; not in this checkout) — digest pin skipped, frozen-testdata joins still enforced")
+		return
+	}
 	for relative, want := range map[string]string{
 		"icr8600-capability-matrix.md":        "3948edb2705caf393c6144130e6a24a546ea4a8acdb67cd11a7b605607a8db7e",
 		"icr8600-capability-matrix-report.md": "8792f8f1bab14d0e66fd2a27c29c82fee1f606fbbd1aefc2de2429f9d53dd93d",
@@ -118,6 +129,9 @@ func pinMatrixA(t *testing.T) {
 // arbitrated matrix, not whatever is on disk.
 func readMatrixA(t *testing.T, relative string) string {
 	t.Helper()
+	if !matrixAuthorityPresent() {
+		t.Skip("matrix A authority absent (docs/superpowers is gitignored; not in this checkout) — this quotation check runs only where the matrices are")
+	}
 	pinMatrixA(t)
 	path := filepath.Join("..", "..", "..", "docs", "superpowers", "icom-matrices", relative)
 	data, err := os.ReadFile(path)
@@ -125,6 +139,13 @@ func readMatrixA(t *testing.T, relative string) string {
 		t.Fatalf("read matrix A authority %s: %v", path, err)
 	}
 	return string(data)
+}
+
+// matrixAuthorityPresent reports whether the gitignored matrix directory
+// exists in this checkout.
+func matrixAuthorityPresent() bool {
+	_, err := os.Stat(filepath.Join("..", "..", "..", "docs", "superpowers", "icom-matrices", "icr8600-capability-matrix.md"))
+	return err == nil
 }
 
 func TestCrosscheckBReferencedFoliosRemainUnknownNotZero(t *testing.T) {
