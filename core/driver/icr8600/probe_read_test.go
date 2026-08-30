@@ -106,6 +106,64 @@ func TestRead_EveryModeLayoutAndFreshD8Fields(t *testing.T) {
 	}
 }
 
+func TestRead_ValuesOutsideTheDeclaredDomainsReadUnknownNotKnown(t *testing.T) {
+	// THE CIV SPANS ARE WIDER THAN THE DECLARED CAPABILITY DOMAINS.
+	// Attenuator is any BCD 00-99 against AttenuatorDB{0,10,20,30}; DTCS
+	// is any BCD 000-999 against the 512 octal-shaped codes; the
+	// programmable step admits 0000 against an ASSUMED MinHz of 100
+	// (matrix 1b.2 says the document sets no floor and does not say
+	// whether 0000 is admissible).
+	//
+	// A radio that answers such a value is not lying and the read must
+	// not fail — but calling it Known fabricates a codeplug that
+	// codeplug.Validate then refuses to save. Unknown is the honest
+	// state, and it is already what ToneRx does two lines away.
+	addr := testWireAddress{0, 0}
+	record := testRecord(t, addr, "FM")
+	record[15], record[16] = 0x00, 0x00 // programmable step 0 Hz, below the ASSUMED floor
+	record[17] = 0x55                   // 55 dB, not one of the four printed steps
+	record[42], record[43] = 0x08, 0x88 // DTCS 888, whose digits are not octal
+
+	_, s := openTestSession(t, testRadioImage{idToken: []byte{0x01}, records: map[testWireAddress][]byte{addr: record}})
+	ch, err := s.ReadChannel(context.Background(), "G00-000")
+	if err != nil || ch.Data == nil {
+		t.Fatalf("ReadChannel = %+v, %v; a value outside a declared domain must not fail the read", ch, err)
+	}
+	if got := ch.Data.ProgramTuningStepHz.State; got != codeplug.Unknown {
+		t.Errorf("ProgramTuningStepHz state = %v (value %d), want Unknown", got, ch.Data.ProgramTuningStepHz.Value)
+	}
+	if got := ch.Data.AttenuatorDB.State; got != codeplug.Unknown {
+		t.Errorf("AttenuatorDB state = %v (value %d), want Unknown", got, ch.Data.AttenuatorDB.Value)
+	}
+	if got := ch.Data.DTCSCode.State; got != codeplug.Unknown {
+		t.Errorf("DTCSCode state = %v (value %d), want Unknown", got, ch.Data.DTCSCode.Value)
+	}
+
+	// The point of Unknown: what came back is saveable.
+	cp := &codeplug.Codeplug{
+		Radio:    codeplug.RadioInfo{Model: s.Capabilities().Model, CATID: s.Capabilities().CATID},
+		Channels: []codeplug.Channel{ch},
+	}
+	for _, issue := range codeplug.Validate(cp, s.Capabilities()) {
+		switch issue.Field {
+		case spec.FieldProgramTuningStep, spec.FieldAttenuator, spec.FieldDTCSCode:
+			t.Errorf("a read the radio answered is unsaveable: %s: %s", issue.Field, issue.Msg)
+		}
+	}
+
+	// An in-domain record still reads Known, so the guard is a domain
+	// check and not a blanket downgrade.
+	inDomain := testRecord(t, addr, "FM")
+	_, s2 := openTestSession(t, testRadioImage{idToken: []byte{0x01}, records: map[testWireAddress][]byte{addr: inDomain}})
+	ok, err := s2.ReadChannel(context.Background(), "G00-000")
+	if err != nil || ok.Data == nil {
+		t.Fatalf("ReadChannel(in-domain) = %+v, %v", ok, err)
+	}
+	if ok.Data.ProgramTuningStepHz.State != codeplug.Known || ok.Data.AttenuatorDB.State != codeplug.Known || ok.Data.DTCSCode.State != codeplug.Known {
+		t.Errorf("in-domain read = step %v atten %v dtcs %v, want all Known", ok.Data.ProgramTuningStepHz.State, ok.Data.AttenuatorDB.State, ok.Data.DTCSCode.State)
+	}
+}
+
 func TestRead_ContinuousFingerprintAndAddressChecks(t *testing.T) {
 	addr := testWireAddress{0, 0}
 	p, s := openTestSession(t, testRadioImage{idToken: []byte{0x01}, records: map[testWireAddress][]byte{addr: testRecord(t, addr, "AM")}})
