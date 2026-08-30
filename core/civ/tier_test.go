@@ -11,12 +11,12 @@
 // fingerprint" section: "Cross-model record-length distinctness is a
 // TIER-level check belonging to registration"). This file is that check.
 //
-// EIGHT FAMILIES AND NINE REGISTERED ROWS as of the additions tier's
-// SECOND registration (Tier 4b): the Icom tier's six families, plus
+// NINE FAMILIES AND TEN REGISTERED ROWS as of the additions tier's
+// THIRD registration (Tier 4b): the Icom tier's six families, plus
 // core/civ/ic7851, which serves the IC-7851 and IC-7850 rows ALIKE, plus
-// core/civ/ic7760. A family is a PROFILE; a row is a registry key;
-// tierRegistrationCoverage below is the map between them, and it is the
-// reason the two counts may legitimately differ.
+// core/civ/ic7760 and core/civ/ic7100. A family is a PROFILE; a row is a
+// registry key; tierRegistrationCoverage below is the map between them,
+// and it is the reason the two counts may legitimately differ.
 //
 // It lives in core/civ as an EXTERNAL test package. core/civ can never
 // import core/civ/ic7610 and its siblings — they import core/civ,
@@ -31,8 +31,8 @@
 // undocumented on every one of these documents, spec D5 entry 7, so it is
 // recorded and never compared), and only then walks a bounded run of
 // memory channels for a record whose length confirms the profile. The
-// EIGHT FAMILIES' CI-V addresses are already distinct — 98h, 94h, B6h,
-// A4h, A2h, ACh, 8Eh, B2h — so IN THE FIELD a wrong radio on the port does not
+// NINE FAMILIES' CI-V addresses are already distinct — 98h, 94h, B6h,
+// A4h, A2h, ACh, 8Eh, B2h, 88h — so IN THE FIELD a wrong radio on the port does not
 // answer at all and the open times out. THE LENGTH FINGERPRINT IS
 // THEREFORE DEFENCE IN DEPTH, NOT THE PRIMARY DISCRIMINATOR: it protects
 // against SAME-ADDRESS confusion only — a radio moved onto this address,
@@ -51,12 +51,26 @@
 //
 // # The limitation this file records honestly
 //
-// A THREE-MODEL SET AND ONE PAIR SHARE A RECORD-ONLY LENGTH, and only the
-// pair is separable. The IC-7610, the IC-7851 and the IC-7760 share BOTH
-// properties — 25 bytes record-only and a two-byte flat address — so all
-// THREE of that set's pairings are DECLARED indistinguishable in the
-// table below rather than proven apart; see that table's own comment. The
-// pair this section describes is the separable one.
+// TWO SETS OF THREE SHARE A RECORD-ONLY LENGTH, and they fail differently.
+//
+// The IC-7610, the IC-7851 and the IC-7760 share BOTH properties — 25
+// bytes record-only and a two-byte flat address — so all THREE of that
+// set's pairings are DECLARED indistinguishable in the table below rather
+// than proven apart; see that table's own comment.
+//
+// The IC-705, the IC-9700 and the IC-7100 all accept exactly {111}, so a
+// fingerprint that compared record-only lengths ALONE could not tell any
+// of the three apart. Here the ADDRESS WIDTH does part of the work and
+// not all of it: the IC-705 uses FOUR address bytes where the other two
+// use THREE, so BOTH of its pairings are proven apart — and the section
+// below traces that separation in full, because it is the one this file
+// can demonstrate exhaustively. THE THIRD PAIRING IS NOT SEPARABLE. The
+// IC-9700 and the IC-7100 agree on both properties: three address bytes
+// each, and the leading byte is a small index in both cases (a band 01–03
+// against a bank 01–05), which is nothing the wire can tell apart. That
+// pairing is DECLARED in the table below, citing spec D5's 111 B row and
+// spec D2.1, and it is the only reason the walk below does not fail on
+// this set. What follows describes the SEPARABLE half.
 //
 // The IC-705 and the IC-9700
 // both accept exactly {111}, so a fingerprint that compared record-only
@@ -108,6 +122,16 @@
 // make, which is the reason this file exists. Nothing here changes that,
 // and this file mints nothing of its own.
 //
+// THE IC-7100 MINTS NONE EITHER, BY THE SAME REASONING AND IN ITS OWN
+// WORDS. core/driver/ic7100/doc.go's Wave-4 hand-off section records that
+// "measuring 111 record bytes proves the radio is not an IC-7610 or an
+// IC-7300, and proves NOTHING about whether it is an IC-7100 or an
+// IC-9700", so its probe refuses a foreign record length with a
+// driver.WrongRadioError carrying the two RECORD-ONLY lengths and NO
+// model name. A name appears there only when a caller injects one through
+// WithSiblingRecordLengths — which no registered composition passes, so
+// the refusal renders as the ID-only form, exactly as the IC-905's does.
+//
 // The three drivers that DO mint one on a length mismatch are the IC-7300
 // and IC-7300MK2 (each with a one-entry sibling hint for the other,
 // rendered *provisional*) and the IC-905 (whose attribution comes from a
@@ -132,6 +156,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic705"
+	"github.com/gm5dna/open-rig-programmer/core/civ/ic7100"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7300"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7300mk2"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7610"
@@ -188,6 +213,13 @@ var tierProfilePopulation = []civ.Profile{
 	// citations. Until they were, this line alone failed the pairwise
 	// walk, which is the mechanism working.
 	ic7760.Profile(),
+	// The additions tier's THIRD family (Tier 4b), and the third member of
+	// spec D5's 111 B row. Its branch is merged, so it enters as a ROW
+	// with no PLACE stage: its one colliding pairing, against the IC-9700,
+	// is declared in `indistinguishable` below with its own citation.
+	// Until it was, this line alone failed the pairwise walk, which is the
+	// mechanism working.
+	ic7100.Profile(),
 }
 
 // tierRegistrationCoverage ties the real driver registry to the profile
@@ -216,6 +248,8 @@ var tierRegistrationCoverage = map[string]string{
 	// The additions tier's second registration: ONE key, ONE family, the
 	// ordinary case again.
 	"IC-7760": "IC-7760",
+	// And its third: ONE key, ONE family.
+	"IC-7100": "IC-7100",
 }
 
 func registrationCoverageProblems(registered, population []string, coverage map[string]string) []string {
@@ -336,12 +370,12 @@ func disjointLengths(x, y []int) bool {
 // records the limitation; an empty value is not a ruling.
 //
 // IT WAS EMPTY AT THE ICOM TIER'S CLOSE, and that was a measurement: no
-// pair among those six families collided. It has THREE entries now, and
+// pair among those six families collided. It has FOUR entries now, and
 // each is an admission written down rather than a licence — every one of
 // them is still logged on every run, and a NEW collision from a family
 // registered later still FAILS unless somebody rules on it here.
 //
-// THE THREE ENTRIES ARE ONE FINDING: the 25-byte flat set (additions spec
+// THE FIRST THREE ENTRIES ARE ONE FINDING: the 25-byte flat set (additions spec
 // D5's first table row) is COMPLETE, and a set of three models yields
 // three pairings. The IC-7610, the IC-7851 and the IC-7760 all accept the
 // same record-only length, 25 bytes, over the same two-byte flat address
@@ -363,21 +397,46 @@ func disjointLengths(x, y []int) bool {
 // comments say so in their own words, and none of them mints a
 // driver.WrongRadioError from a length it cannot attribute.
 //
-// THE SET IS NOW CLOSED, and that is worth stating because the previous
+// THAT SET IS NOW CLOSED, and that is worth stating because an earlier
 // version of this comment recorded a member that was missing. Spec D5
 // names {IC-7610, IC-7851/7850, IC-7760} at 25 B / Flat and this table
-// carries all three pairings; a FOURTH member would need its own two
+// carries all three pairings; a FOURTH member would need its own three
 // declarations, and the pairwise walk below would fail until it had them.
+//
+// THE FOURTH ENTRY IS A SECOND, SEPARATE FINDING, in spec D5's 111 B row
+// and with a DIFFERENT shape: that row holds three profiles too, but only
+// ONE of its three pairings collides. The IC-705, the IC-9700 and the
+// IC-7100 all accept exactly {111} record-only bytes, so the length alone
+// separates none of them — but the IC-705 addresses a channel in FOUR
+// bytes where the other two use THREE, so both of its pairings are
+// separated by geometry and are proven apart below rather than declared.
+// What is left is the IC-9700 against the IC-7100: three address bytes
+// each, both leading with a small index byte (a band 01–03 on one, a bank
+// 01–05 on the other) that the wire cannot tell apart, and the same
+// record length behind it. Neither property this file's probe holds
+// separates them, and no arithmetic will make one.
+//
+// AND NOTE WHAT THE 111 B ROW COSTS THAT THE 25 B ROW DOES NOT. Those
+// three radios do NOT share a record layout: the IC-7100's own document
+// draws a 47-byte transmit duplicate and sixteen name bytes at record
+// offset 95 (core/civ/ic7100/profile.go), and nothing here claims the
+// three are clones the way spec D1.1 claims it of the 25 B set. The
+// collision is in the two properties a PROBE has in hand — length and
+// address width — and those are exactly what this table rules on. It is
+// therefore possible for two of these radios to disagree byte for byte
+// inside the record and still be indistinguishable to the fingerprint,
+// which is a sharper statement of the limitation than the 25 B row needs.
 //
 // KEYS ARE IN tierProfilePopulation ORDER, which the "does not name a
 // canonical population pair" arm below enforces: ic7610 precedes ic7851,
 // which precedes ic7760, so the IC-7760's two keys read "IC-7610|IC-7760"
-// and "IC-7851|IC-7760" and neither may be written the other way round.
+// and "IC-7851|IC-7760" and neither may be written the other way round;
+// ic9700 precedes ic7100, so the fourth entry reads "IC-9700|IC-7100".
 //
 // THE DECLARATION IS ABOUT THE FINGERPRINT, NOT ABOUT THE LAYOUTS BEING
 // THE SAME. TestTierRecordShapes_7610CloneFamily below measures how far
 // spec D1.1's "expected to be byte-identical" actually holds across the
-// three, and it does NOT hold uniformly — the IC-7851 excludes its
+// 25 B three, and it does NOT hold uniformly — the IC-7851 excludes its
 // printed fixed pad cells from three spans where the other two include
 // them. That divergence changes nothing here: the accepted LENGTH and the
 // ADDRESS GEOMETRY are what this table rules on, and those three
@@ -386,6 +445,7 @@ var indistinguishable = map[string]string{
 	"IC-7610|IC-7851": "additions spec D5 (docs/superpowers/specs/2026-08-28-icom-additions-design.md, the 25 B / Flat row: \"NO — declared indistinguishable\") and D1.1's shared-record finding; the two capability matrices under docs/superpowers/icom-matrices/ (the IC-7610's §1/§3 record reading and the IC-7851's §3.16 one, derived independently); core/driver/ic7851/doc.go's Wave-4 hand-off section, which names this set; and core/driver/ic7610/ic7610.go:142-145, which already refuses to mint a driver.WrongRadioError for any same-address collision. The two radios' factory addresses (98h and 8Eh) differ, so this limitation is reachable only on a radio moved onto the other's address.",
 	"IC-7610|IC-7760": "additions spec D5 (the same 25 B / Flat row, whose declared set is {IC-7610, IC-7851/7850, IC-7760}) and D1.1's shared-record finding; the two capability matrices under docs/superpowers/icom-matrices/ (the IC-7610's §1/§3 record reading and the IC-7760's §3.11/§1b one, whose 25 B record-only and 2 B address width were derived from that radio's own L/W/B/G legs and its own document, the IC-7760 CI-V Reference Guide revision 2, A7788-8EX-2); core/driver/ic7760/doc.go, which admits no cross-model length table; and core/driver/ic7610/ic7610.go:142-145, which already refuses to mint a driver.WrongRadioError for any same-address collision. The two radios' factory addresses (98h and B2h) differ, so this limitation is reachable only on a radio moved onto the other's address.",
 	"IC-7851|IC-7760": "additions spec D5 (the same 25 B / Flat row) and D1.1; the IC-7851's §3.16 record reading and the IC-7760's §3.11/§1b one, derived from two different documents by two different evidence-leg sets — the IC-7850/IC-7851 Instruction Manual section 18, and the IC-7760 CI-V Reference Guide revision 2; core/driver/ic7851/doc.go's Wave-4 hand-off section, which names this set, and core/driver/ic7760/doc.go. NEITHER driver mints a driver.WrongRadioError for a length it cannot attribute, so a same-address collision here fails the open without naming a model. The factory addresses (8Eh and B2h) differ, so the limitation is reachable only on a moved radio — and note that the IC-7851 row's own sibling, the IC-7850, shares 8Eh with it AT FACTORY DEFAULTS, which is a separate and stronger limitation recorded in this file's header.",
+	"IC-9700|IC-7100": "additions spec D5 (docs/superpowers/specs/2026-08-28-icom-additions-design.md, the 111 B row: \"9700 vs 7100: NO — both 3 B with a leading 01–05 index byte — declared indistinguishable\") and D2.1, which derives the IC-7100's 111 B record-only length over a 3 B address and states in as many words that it is \"the SAME record-only length as the IC-705 and IC-9700, at the 9700's address width\"; the two capability matrices under docs/superpowers/icom-matrices/ (the IC-9700's §3.11 record arithmetic, from the IC-9700 CI-V Reference Guide, and the IC-7100's §3.11 one, from section 20 of the IC-7100 full manual revision A7085-2EX-5 — two different documents, two different evidence-leg sets, and the IC-7100's matrix §4 states explicitly that it makes no cross-model claim of its own). NEITHER driver mints a driver.WrongRadioError for a length it cannot attribute: core/driver/ic9700's doc.go says \"No driver.WrongRadioError is ever minted here\", and core/driver/ic7100's doc.go carries the Wave-4 hand-off naming this very pair — \"measuring 111 record bytes proves the radio is not an IC-7610 or an IC-7300, and proves NOTHING about whether it is an IC-7100 or an IC-9700\" — so a same-address collision here fails the open without naming a model. The third member of spec D5's 111 B row, the IC-705, IS separable from both by address width (four bytes against three) and is proven apart by the pairwise walk rather than declared here. The two radios' factory addresses (A2h and 88h) differ, so this limitation is reachable only on a radio moved onto the other's address.",
 }
 
 // TestTierRecordShapes_DistinctOrDeclared is the tier-close check: every
@@ -393,7 +453,7 @@ var indistinguishable = map[string]string{
 // length/geometry proof or named in indistinguishable with a citation.
 //
 // It prints the measured table on every run, pass or fail. The table is
-// the deliverable as much as the verdict is — EIGHT families' record
+// the deliverable as much as the verdict is — NINE families' record
 // geometry in one place is exactly what no per-model worktree could
 // write down.
 func TestTierRecordShapes_DistinctOrDeclared(t *testing.T) {
@@ -455,7 +515,7 @@ func TestTierRecordShapes_DistinctOrDeclared(t *testing.T) {
 		// column meant to line up into "[25                ]".
 		t.Logf("  %-12s %-14d %-18s %s", s.model, s.addressBytes, fmt.Sprint(s.recordLengths), fmt.Sprint(s.frameLengths))
 	}
-	t.Log("HONESTLY RECORDED: every length above is an ASSUMED derivation from printed field widths — no document in this tier prints a record total and no radio has confirmed one — and the length fingerprint is DEFENCE IN DEPTH behind the `19 00` address probe every one of the EIGHT families' drivers runs first, since the eight CI-V addresses are already distinct and a wrong radio simply does not answer. The ONE exception is the IC-7851/IC-7850 pair, which shares 8Eh at factory defaults; see this file's header.")
+	t.Log("HONESTLY RECORDED: every length above is an ASSUMED derivation from printed field widths — no document in this tier prints a record total and no radio has confirmed one — and the length fingerprint is DEFENCE IN DEPTH behind the `19 00` address probe every one of the NINE families' drivers runs first, since the nine CI-V addresses are already distinct and a wrong radio simply does not answer. The ONE exception is the IC-7851/IC-7850 pair, which shares 8Eh at factory defaults; see this file's header.")
 
 	seen := 0
 	for i := 0; i < len(shapes); i++ {
@@ -683,7 +743,7 @@ func firstChannel(p civ.Profile) int {
 }
 
 // TestTierRecordShapes_CheckIsNotVacuous is the permanent red proof:
-// distinguishable must REFUSE a pair the six real profiles never
+// distinguishable must REFUSE a pair the nine real profiles never
 // produce.
 //
 // Two shapes that agree on both properties are what the check is for, and

@@ -1324,6 +1324,117 @@ var ic7760Text = Text{
 	ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7760: this build knows of none to require. This driver talks only to CI-V address B2h, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200, along with the whole six-rate list it is chosen from, is ASSUMED — this radio's CI-V Reference Guide prints no rate figure anywhere, about any port, and its own CI-V settings block carries no speed item at all. This radio is also two boxes, and which socket you use matters: the link this build supports is the controller's rear-panel USB B connection, which enumerates as TWO virtual COM ports, and which of the two answers is a radio setting the guide prints no default for — if one port is silent, try the other before concluding the radio is wrong. The RF deck's remote jack is a second path this build does not address. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
 }
 
+// ic7100Text is the IC-7100's entry (Tier 4b, the additions tier's THIRD
+// registration), landed with that model's wiring registration for the
+// same reason every Icom entry above was: internal/wiring's
+// TestEverySupportedModelHasRadiotext fails a registration whose prose is
+// missing.
+//
+// A SINGLE-MODEL ENTRY, like the IC-7760's directly above: core/driver/
+// ic7100 has one member, so there is one entry here, no sibling to keep in
+// step and no substitution test.
+//
+// WRITTEN FROM THIS RADIO'S OWN DOCUMENT — the IC-7100 full manual,
+// revision A7085-2EX-5, section 20 CONTROL COMMAND, which is a CHAPTER of
+// the operating manual and not a separate protocol guide, the only
+// registered model of which that is true. TestRadiotext_IC7100Verbatim's
+// non-borrowing legs refuse a field byte-identical to any other entry's
+// and refuse another radio's address hex or bare name anywhere in this
+// one's text.
+//
+// EVERY FACT RESTATED HERE IS TRUE TODAY. writeTrialsComplete is FALSE
+// (core/driver/ic7100/caps.go); the CI-V address is 88h (matrix §3.4);
+// two clear forms are printed and neither has a builder (matrix §3.13,
+// internal/fakeic7100/doc.go entry 12 — the 1A 00 set carrying FF, and
+// top-level command 0B); the clearing block's own scope contradicts the
+// address legend and omits the bank byte (matrix §3.15.3); the SELECT
+// nibble, the split flag and the D-STAR/DSQL/CSQL regions are unmapped, so
+// a stored channel carrying any of them is REFUSED rather than rewritten
+// (ruling E6, core/driver/ic7100/write.go's templateGuard and its
+// select-membership check); the five printed rates and the ASSUMED 19200
+// default are register entry ic7100-default-baud-auto; the manual's own
+// warning that defaults differ by transceiver version is the reason that
+// register entry asks a lift to record the version; the 495-slot inventory
+// with no scan-edge or call channels is register entry
+// ic7100-special-bank-byte; and Transceive is printed as shipping ON.
+var ic7100Text = Text{
+	// TWO printed clear forms, as on every other Icom entry, and this
+	// build sends NEITHER: there is no builder for either, and core/civ's
+	// AllowedCommand admits only 19 00, a valid 1A 00 read and a
+	// re-validated 1A 00 set. FieldErase carries the zero FieldSupport,
+	// which is what makes core/clone's DiffErased branch unreachable for
+	// this model.
+	//
+	// THE SECOND SENTENCE IS THIS RADIO'S OWN, and it is a contradiction
+	// rather than a silence: the clearing block prints a channel range
+	// that does not match the address field's, and leaves the bank number
+	// out entirely (matrix §3.15.3). Where the IC-7760's prose says
+	// nobody knows whether the scan edges can be cleared, this one says
+	// the printed form does not identify its own target.
+	EraseProcedure: "The IC-7100's control-command chapter prints two memory clear forms — a 1A 00 set carrying FF in place of the record, and a separate top-level memory-clear command — but this build sends neither: no builder exists for either, and no IC-7100 has ever confirmed what either does, so sending one risks clearing the wrong channel rather than the intended one. On this radio there is a further reason to leave them alone: the clearing block names \"memory channel 0 to 99\" where the address field itself is printed as 0001 to 0099 and omits the bank number altogether, so the printed form does not even say WHICH of the five banks it would clear. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	// No minimum-firmware fact is established, and the hedge is about what
+	// THIS BUILD implements as much as about the document: this driver's
+	// admitted command set is 19 00 and 1A 00, so there is no firmware
+	// query to run whatever any manual may hold. THE VERSION SENTENCE IS
+	// LOAD-BEARING AND THIS RADIO'S ALONE — the manual states that its
+	// own factory defaults differ between transceiver versions, which is
+	// exactly why register entry ic7100-default-baud-auto asks a lift to
+	// record the version alongside the baud it confirms.
+	FirmwareGuidance: "No minimum firmware version is established for the IC-7100: nothing this project holds states one, and no IC-7100 has been asked. Its control-command chapter names no version query either, and this build's whole admitted command set is the identity read and the memory record — so read the version off the radio's display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established. It is worth recording accurately on this radio: the manual warns that its own default settings differ between transceiver versions.",
+	// Tone IS read and written for this radio — over CI-V, unverified
+	// against real hardware, since no IC-7100 has ever answered a frame.
+	// Scan Skip is not, and the reason is the SELECT-MEMORY one the other
+	// Icom rows give: collapsing that nibble to a two-valued skip flag
+	// would rewrite a user's select membership on every write-back while
+	// readback verification compared equal (matrix §3.16.1).
+	//
+	// THE THREE FURTHER REFUSALS ARE THIS RADIO'S OWN SHAPE, and they are
+	// stated because they surprise: a channel already IN the select memory
+	// and a channel stored with SPLIT ON are both blocked outright by
+	// write.go (the select-membership check, and templateGuard's high-
+	// nibble comparison, whose own comment records that writing would
+	// silently clear Split ON); and the D-STAR UR/R1/R2 call signs, DSQL
+	// and CSQL are unmapped regions templateGuard refuses on any
+	// difference. Data mode is NOT in that list on this radio — it is a
+	// mapped, writable field here — and the note says nothing about it
+	// for that reason.
+	GridLegendNote: "Tone is read and written for the IC-7100 over CI-V by this build, but unverified against real hardware — no IC-7100 has ever answered a frame. Scan Skip is not: the nearest nibble in this radio's memory record marks a channel's SELECT-MEMORY membership, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not. Two further states of a stored channel stop a write outright, because there is no honest value to preserve in a region this build does not map: a channel already switched INTO the select memory, and a channel stored with split on. So are the D-STAR call-sign fields and the two digital-squelch bytes — if a channel carries anything but the assumed template in those, the write is refused rather than blanking them.",
+	// DELIBERATELY EMPTY, exactly as every other registered model's is and
+	// for the same reason: writeTrialsComplete is false, so there is no
+	// hardware-preservation verification of any kind to report.
+	ToneScanSkipVerification: "",
+	// Byte-identical to EraseProcedure, as every other model's is: the
+	// delete dialog and the blocked-erase review answer the same question.
+	EraseDialogNote: "The IC-7100's control-command chapter prints two memory clear forms — a 1A 00 set carrying FF in place of the record, and a separate top-level memory-clear command — but this build sends neither: no builder exists for either, and no IC-7100 has ever confirmed what either does, so sending one risks clearing the wrong channel rather than the intended one. On this radio there is a further reason to leave them alone: the clearing block names \"memory channel 0 to 99\" where the address field itself is printed as 0001 to 0099 and omits the bank number altogether, so the printed form does not even say WHICH of the five banks it would clear. Follow the memory-channel clear procedure in the radio's own manual instead.",
+	// The two tooltips DIFFER, exactly as every other Icom entry's do and
+	// for the same reason: the evidence differs between Tone (on the CI-V
+	// surface, unverified) and Scan Skip (a select-memory marker this
+	// build refuses to reinterpret).
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7100 has ever answered a frame",
+		ScanSkip: "not read or written over CI-V by this build — the IC-7100's nearest wire nibble marks select-memory membership, not a skip flag",
+	},
+	// A placeholder LABEL, not an example: no IC-7100 version string has
+	// been seen here. It names the model, which is also what keeps it
+	// distinct from every other registered model's own placeholder.
+	FirmwarePlaceholder: "as shown on the IC-7100's own display",
+	// Restates the no-query and no-minimum-version facts, then the four
+	// things this radio's probe failure modes turn on: the fixed 88h
+	// address with no --civ-address option; the ASSUMED 19200 default,
+	// which here is the TOP of a five-rate printed list picked because the
+	// radio's CI-V speed item ships on Auto; the MISSING TEN CHANNELS,
+	// which no other registered model has — the six programmed scan
+	// edges and four call channels exist on the radio and are deliberately
+	// not read, because the manual never prints the bank number that
+	// addresses them (register entry ic7100-special-bank-byte), and a user
+	// counting 495 slots deserves to be told that rather than left to
+	// infer the radio has no scan edges; and TRANSCEIVE SHIPPING ON, which
+	// means unsolicited frames on the bus are expected traffic on this
+	// radio rather than a fault, and the probe's own unexpected-frame
+	// count will show them.
+	ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7100: this build knows of none to require. This driver talks only to CI-V address 88h, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200 is ASSUMED — it is the highest of the five speeds the manual prints, chosen because the radio's own CI-V speed item ships on Auto and names no number to prefer, and the manual warns that defaults differ between transceiver versions in any case. Two more things about this radio are worth knowing before blaming the port. Its memory list here holds the 495 ordinary channels, banks A to E, and NOTHING ELSE: the six programmed scan edges and four call channels are real channels on the radio, but the manual never says what bank number addresses them, so this build does not read them rather than guess an address. And CI-V Transceive ships ON, so the radio may be putting unsolicited frames on the bus of its own accord; they are counted and ignored, never acted on. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+}
+
 // texts is the registry For consults, keyed by the exact model string a
 // driver.Driver.Model() (or driver.Identity/spec.Capabilities.Model)
 // call returns, e.g. "FT-710".
@@ -1354,17 +1465,18 @@ var texts = map[string]Text{
 	"IC-7851":    ic7851Text,
 	"IC-7850":    ic7850Text,
 	"IC-7760":    ic7760Text,
+	"IC-7100":    ic7100Text,
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",
 // "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700",
-// "IC-905", "IC-7851", "IC-7850" and "IC-7760" are populated — the
-// THIRTEEN models internal/wiring registers AS OF the additions tier's
-// SECOND registration (Tier 4b), a count a fourteenth registration would
-// falsify; any other model — including "", a future driver not yet given
-// an entry, or a near-miss typo ("FT-DX10", "IC7610", "IC7300", "IC705",
-// "IC9700", "IC905", "IC7851" or "IC7760", say) — returns the zero Text
-// and false.
+// "IC-905", "IC-7851", "IC-7850", "IC-7760" and "IC-7100" are populated —
+// the FOURTEEN models internal/wiring registers AS OF the additions
+// tier's THIRD registration (Tier 4b), a count a fifteenth registration
+// would falsify; any other model — including "", a future driver not yet
+// given an entry, or a near-miss typo ("FT-DX10", "IC7610", "IC7300",
+// "IC705", "IC9700", "IC905", "IC7851", "IC7760" or "IC7100", say) —
+// returns the zero Text and false.
 // Callers must never treat a zero Text as if it were real advisory copy.
 //
 // THE MATCH IS EXACT AND CASE-SENSITIVE, and for the FTDX101 pair that is

@@ -1,26 +1,26 @@
 # Icom models — per-model limitations and evidence
 
 Moved verbatim from the README on 28/08/2026 so the README can stay short. Every claim below cites the code that makes it true; the citations are for reviewers and contributors.
-## The nine Icom models
+## The ten Icom models
 
 IC-7610, IC-7300, IC-7300MK2, IC-705, IC-9700, IC-905, IC-7851,
-IC-7850 and IC-7760 talk a different wire protocol from the Yaesu models
-(Icom's CI-V, rather than Yaesu's CAT), and each carries its own honesty
-rows beyond the README's shared "no radio has ever been connected" small
-print.
+IC-7850, IC-7760 and IC-7100 talk a different wire protocol from the
+Yaesu models (Icom's CI-V, rather than Yaesu's CAT), and each carries its
+own honesty rows beyond the README's shared "no radio has ever been
+connected" small print.
 
-Nine models, EIGHT memory formats: the IC-7851 and the IC-7850 are two
+Ten models, NINE memory formats: the IC-7851 and the IC-7850 are two
 entries in the model list over one manual, one address and one record
 format, because this program cannot tell them apart (see the sections
 below).
 
-Three costs are shared by all nine:
+Three costs are shared by all ten:
 
 - **No `--civ-address` option.** Each driver talks only to its one
   factory CI-V address (98h IC-7610, 94h IC-7300, B6h IC-7300MK2, A4h
-  IC-705, A2h IC-9700, ACh IC-905, B2h IC-7760, 8Eh IC-7851 AND
-  IC-7850 — that last address is printed in the manual as the default
-  for both radios) and
+  IC-705, A2h IC-9700, ACh IC-905, B2h IC-7760, 88h IC-7100, 8Eh
+  IC-7851 AND IC-7850 — that last address is printed in the manual as the
+  default for both radios) and
   there is no setting to change it. Two different things can happen when this driver meets a radio
   it did not expect. A different Icom model at ITS OWN factory address
   simply does not answer — nothing was heard from, so nothing can be
@@ -33,8 +33,13 @@ Three costs are shared by all nine:
   not the default: IC-7300, IC-7300MK2, IC-705 and IC-905 each mint a
   `driver.WrongRadioError` naming what they found
   (`core/driver/ic7300/ic7300.go:270`; `core/driver/ic7300mk2/ic7300mk2.go:272`;
-  `core/driver/ic705/ic705.go:364`; `core/driver/ic905/ic905.go:495`),
-  while IC-7610, IC-9700, IC-7851, IC-7850 and IC-7760 NEVER mint one
+  `core/driver/ic705/ic705.go:364`; `core/driver/ic905/ic905.go:495`).
+  The IC-7100 mints one too but names NOBODY: it carries the two
+  record-only lengths and leaves both model fields empty unless a caller
+  supplies an attribution table, and no registered composition supplies
+  one, so today its refusal always renders as the lengths-only form
+  (`core/driver/ic7100/ic7100.go:211-221`; `core/driver/ic7100/doc.go:35-39`).
+  Meanwhile IC-7610, IC-9700, IC-7851, IC-7850 and IC-7760 NEVER mint one
   for any same-address collision, by design — they hold no cross-model
   table and refuse to guess an identity they cannot support
   (`core/driver/ic7610/ic7610.go:142-145`;
@@ -48,7 +53,7 @@ Three costs are shared by all nine:
   the length check that would otherwise have named it
   (`core/civ/tier_test.go:68-80`).
 - **The tone picker stays list-driven while every model's tone range
-  is numeric (enabler E3).** All nine declare a numeric
+  is numeric (enabler E3).** All ten declare a numeric
   `CTCSSToneRange` rather than a fixed tone chart, because their tone
   spans are BCD frequencies, not indices — but the picker widget
   itself was built for a list. The channel grid still shows and
@@ -68,13 +73,21 @@ Three costs are shared by all nine:
     (`core/driver/ic7610/doc.go:220-249`; `core/driver/ic705/write.go:265-280`;
     `core/driver/ic9700/write.go:529-531`; `core/driver/ic905/write.go:578-590`;
     `core/driver/ic7851/doc.go:274-306`;
-    `core/driver/ic7760/write.go:36-42,54-60`).
+    `core/driver/ic7760/write.go:36-42,54-60`;
+    `core/driver/ic7100/write.go:114-116`).
     The IC-7610, the IC-7851/IC-7850 and the IC-7760 additionally refuse
     a channel whose data mode is DATA 1/2/3, for the same
     unmapped-nibble reason
     (`core/driver/ic7610/doc.go:235-238`;
     `core/driver/ic7851/caps.go:202-224`;
-    `core/driver/ic7760/caps.go:186-207`).
+    `core/driver/ic7760/caps.go:186-207`). The IC-7100 does NOT: its data
+    mode is a two-valued OFF/ON byte of its own, mapped and writable
+    (`core/civ/ic7100/profile.go`'s `dataModeNames`). What it refuses
+    instead is a Split-ON channel — the split flag shares record byte ④
+    with the select nibble and its high half is unmapped, so writing
+    would silently clear it — and any channel whose D-STAR call-sign,
+    DSQL or CSQL bytes differ from the assumed template
+    (`core/driver/ic7100/write.go:169-198`).
   - **IC-7300 and IC-7300MK2**: a Select-group channel writes
     normally — the SELECT nibble round-trips, carried through
     unchanged from the record the radio holds
@@ -91,7 +104,7 @@ Three costs are shared by all nine:
   In every case the write is refused, naming the reason, never
   downgraded or cleared.
 
-All nine open at 19200 baud by default, but what grades that default
+All ten open at 19200 baud by default, but what grades that default
 differs, and none of it is a reading of a printed factory value:
 
 - **IC-7610** — ASSUMED, an arbitrary pick among the six rates the
@@ -131,6 +144,14 @@ differs, and none of it is a reading of a printed factory value:
   which is not the path this build supports
   (`core/driver/ic7760/caps.go:361-374`; `core/driver/ic7760/doc.go:77-81`;
   matrix §1 row 10, §3.3).
+- **IC-7100** — ASSUMED: 19200 is the highest of the five rates this
+  radio's manual prints, picked because the radio's own CI-V baud item
+  ships set to `Auto` and names no number to prefer. The manual adds a
+  reason to distrust any printed default here at all — it states that its
+  own factory settings differ between transceiver versions — which is why
+  the register entry asks a lift to record the radio's version alongside
+  the speed it confirms (`core/driver/ic7100/caps.go:33,38,131-135`;
+  `core/driver/ic7100/register.go`, entry `ic7100-default-baud-auto`).
 
 What is specific to one or two models:
 
@@ -266,3 +287,45 @@ What is specific to one or two models:
   measured and recorded rather than smoothed over
   (`core/civ/tier_test.go`'s `TestTierRecordShapes_7610CloneFamily` and
   its `declaredCloneDivergences` table).
+- **The IC-7100's ten special channels are not read at all, and that is
+  a refusal rather than an omission.** This program lists the radio's 495
+  ordinary memories — banks A to E, channels 001 to 099, the only Icom
+  model here whose slot names carry a bank letter — and stops there. The
+  radio also has six programmed scan edges (0100–0105) and four call
+  channels (0106–0109), and the manual's field legend names them; what it
+  never says is what the BANK byte carries for any of them, and its
+  clearing block omits that byte altogether. Reading one would mean
+  putting an invented address on the wire, so the profile declares no
+  extra range and the driver refuses every channel outside 1–99 before
+  any traffic (`core/driver/ic7100/read.go:28-44`;
+  `core/civ/ic7100/doc.go`, register entry `ic7100-special-bank-byte`,
+  whose lift is to select scan edge 0100 and call channel 0106 at the
+  front panel, read each with `1A 00` and record byte ①). Their absence
+  from the channel list is not evidence the radio has none.
+- **The IC-7100 is the one Icom model here opened with TWO stop bits.**
+  Every other Icom driver reports 8-N-1 to the serial layer; this one
+  reports nothing, so the port opens at the program's own 8-N-2 default.
+  The reason is an absence in the document rather than a reading of it:
+  the single 8-N-1 sentence anywhere in the manual belongs to the DV
+  low-speed DATA application and not to the CI-V link, so this project
+  holds no framing evidence for this radio at all and declines to invent
+  one (`core/civ/ic7100/doc.go`, register entry `ic7100-serial-framing`;
+  `core/driver/ic7100/doc.go:10-13`; pinned at the wiring seam by
+  `internal/wiring`'s `TestOpenRealSessionFor_IC7100OpensAtEightNTwo`).
+- **The IC-9700 and the IC-7100 cannot be told apart by the length check
+  either, and this pair fails differently from the 25-byte three.** Both
+  read a 111-byte record behind a three-byte address whose leading byte
+  is a small index — a band 01–03 on one, a bank 01–05 on the other —
+  and nothing on the wire distinguishes those. The third radio with a
+  111-byte record, the IC-705, IS separable: it addresses a channel in
+  four bytes, and the program proves that separation exhaustively rather
+  than declaring it. What makes this pair's limitation sharper than the
+  25-byte set's is that these two records are NOT claimed to be alike
+  inside: the IC-7100's carries a 47-byte transmit duplicate and a
+  sixteen-character name where the IC-9700's does not, and they still
+  fingerprint identically, because a fingerprint sees only length and
+  address width. In normal use it costs nothing — the factory addresses
+  (A2h and 88h) differ, so a wrong radio at its own address never answers
+  — and it costs the fallback, a radio MOVED onto the other's address
+  (`core/civ/tier_test.go`'s `indistinguishable` table, entry
+  `IC-9700|IC-7100`; `core/driver/ic7100/doc.go:14-45`).

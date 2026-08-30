@@ -933,6 +933,9 @@ func TestFor_UnknownModel(t *testing.T) {
 		// IC-7760 near misses (Tier 4b's second registration): the same
 		// five-shape set again.
 		"IC7760", "ic-7760", "IC-7760 ", " IC-7760", "7760",
+		// IC-7100 near misses (Tier 4b's third registration): the same
+		// five-shape set once more.
+		"IC7100", "ic-7100", "IC-7100 ", " IC-7100", "7100",
 	} {
 		got, ok := radiotext.For(model)
 		if ok {
@@ -1292,6 +1295,101 @@ func TestRadiotext_IC7760Verbatim(t *testing.T) {
 		for _, particular := range ic7760Particulars {
 			if strings.Contains(val, particular) {
 				t.Errorf("IC-7760 %s contains %q — another radio's particular in this one's prose is that radio's evidence claimed for this one", field, particular)
+			}
+		}
+	}
+}
+
+// ic7100Particulars is the non-borrowing particulars list for the IC-7100
+// (Tier 4b's third registration) — the same shape as ic7760Particulars and
+// every Icom entry's before it: the Yaesu-vocabulary-plus-bare-"CAT" set
+// plus the address hex and bare model name of EVERY OTHER registered Icom
+// entry, the IC-7851/IC-7850 pair's shared 8Eh included.
+//
+// THE IC-7100 HAS NO SIBLING, so like the IC-7760's list this one carries
+// every other name without exception, and its own 88h is deliberately
+// absent (it is this radio's own). No prefix hazard runs either way: none
+// of the names below is a substring of "IC-7100", and "IC-7100" is a
+// substring of none of them.
+var ic7100Particulars = []string{
+	"V01-10", "[V/M]", "[ERASE]", "FT-710", "hardware-verified",
+	"FTdx10", "FTdx101D", "FTdx101MP", "CAT manual", "CAT command", "CAT query", "CAT",
+	"IC-7610", "98h",
+	"IC-7300", "94h",
+	"IC-7300MK2", "B6h",
+	"IC-705", "A4h",
+	"IC-9700", "A2h",
+	"IC-905", "ACh",
+	"IC-7851", "IC-7850", "8Eh",
+	"IC-7760", "B2h",
+}
+
+// TestRadiotext_IC7100Verbatim is TestRadiotext_IC7760Verbatim's sibling
+// for the additions tier's THIRD registration, and it guards the same kind
+// of fact: the HEDGES. This prose was written in radiotext.go itself, for a
+// radio this project has never connected to anything, under the honesty
+// rule recorded at ic7100Text.
+//
+// "no IC-7100 has ever answered a frame", "No minimum version is
+// established", "is ASSUMED" and "this build does not read them rather
+// than guess an address" are the load-bearing words. An editor tidying
+// them into confident advisory copy — or reaching for the IC-705's or the
+// IC-9700's wording, which this radio's own record resembles closely
+// enough to tempt one — would attribute one radio's evidence to another.
+// That edit fails here.
+//
+// ToneScanSkipVerification is asserted EMPTY for the same reason every
+// other model's is: core/driver/ic7100's writeTrialsComplete is false, so
+// there is no hardware-preservation verification of any kind to report.
+//
+// THE NON-BORROWING CHECK RUNS AGAINST ALL THIRTEEN OTHER ENTRIES,
+// including the two whose radios accept the SAME 111-byte record as this
+// one (additions spec D5's 111 B row). Those two are the borrowing risk
+// this registration actually carries, and byte-identity is what catches a
+// wholesale copy while the particulars catch a partial one.
+func TestRadiotext_IC7100Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure:   "The IC-7100's control-command chapter prints two memory clear forms — a 1A 00 set carrying FF in place of the record, and a separate top-level memory-clear command — but this build sends neither: no builder exists for either, and no IC-7100 has ever confirmed what either does, so sending one risks clearing the wrong channel rather than the intended one. On this radio there is a further reason to leave them alone: the clearing block names \"memory channel 0 to 99\" where the address field itself is printed as 0001 to 0099 and omits the bank number altogether, so the printed form does not even say WHICH of the five banks it would clear. Follow the memory-channel clear procedure in the radio's own manual instead.",
+		FirmwareGuidance: "No minimum firmware version is established for the IC-7100: nothing this project holds states one, and no IC-7100 has been asked. Its control-command chapter names no version query either, and this build's whole admitted command set is the identity read and the memory record — so read the version off the radio's display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established. It is worth recording accurately on this radio: the manual warns that its own default settings differ between transceiver versions.",
+		GridLegendNote:   "Tone is read and written for the IC-7100 over CI-V by this build, but unverified against real hardware — no IC-7100 has ever answered a frame. Scan Skip is not: the nearest nibble in this radio's memory record marks a channel's SELECT-MEMORY membership, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not. Two further states of a stored channel stop a write outright, because there is no honest value to preserve in a region this build does not map: a channel already switched INTO the select memory, and a channel stored with split on. So are the D-STAR call-sign fields and the two digital-squelch bytes — if a channel carries anything but the assumed template in those, the write is refused rather than blanking them.",
+		// Deliberately empty — see this test's doc comment.
+		ToneScanSkipVerification: "",
+		EraseDialogNote:          "The IC-7100's control-command chapter prints two memory clear forms — a 1A 00 set carrying FF in place of the record, and a separate top-level memory-clear command — but this build sends neither: no builder exists for either, and no IC-7100 has ever confirmed what either does, so sending one risks clearing the wrong channel rather than the intended one. On this radio there is a further reason to leave them alone: the clearing block names \"memory channel 0 to 99\" where the address field itself is printed as 0001 to 0099 and omits the bank number altogether, so the printed form does not even say WHICH of the five banks it would clear. Follow the memory-channel clear procedure in the radio's own manual instead.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7100 has ever answered a frame",
+			ScanSkip: "not read or written over CI-V by this build — the IC-7100's nearest wire nibble marks select-memory membership, not a skip flag",
+		},
+		FirmwarePlaceholder: "as shown on the IC-7100's own display",
+		ProbeFirmwareNote:   "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7100: this build knows of none to require. This driver talks only to CI-V address 88h, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200 is ASSUMED — it is the highest of the five speeds the manual prints, chosen because the radio's own CI-V speed item ships on Auto and names no number to prefer, and the manual warns that defaults differ between transceiver versions in any case. Two more things about this radio are worth knowing before blaming the port. Its memory list here holds the 495 ordinary channels, banks A to E, and NOTHING ELSE: the six programmed scan edges and four call channels are real channels on the radio, but the manual never says what bank number addresses them, so this build does not read them rather than guess an address. And CI-V Transceive ships ON, so the radio may be putting unsolicited frames on the bus of its own accord; they are counted and ignored, never acted on. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+	}
+
+	got, ok := radiotext.For("IC-7100")
+	if !ok {
+		t.Fatal(`For("IC-7100") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"IC-7100\") = %#v,\nwant %#v", got, want)
+	}
+
+	for _, other := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850", "IC-7760"} {
+		otherText, ok := radiotext.For(other)
+		if !ok {
+			t.Fatalf("For(%q) ok = false, want true — sanity check failed", other)
+		}
+		otherFields := ftdx101Fields(otherText)
+		for field, val := range ftdx101Fields(got) {
+			if val == "" {
+				continue
+			}
+			if val == otherFields[field] {
+				t.Errorf("IC-7100 %s is byte-identical to the %s's — one radio's prose must never be served as another's", field, other)
+			}
+		}
+	}
+	for field, val := range ftdx101Fields(got) {
+		for _, particular := range ic7100Particulars {
+			if strings.Contains(val, particular) {
+				t.Errorf("IC-7100 %s contains %q — another radio's particular in this one's prose is that radio's evidence claimed for this one", field, particular)
 			}
 		}
 	}

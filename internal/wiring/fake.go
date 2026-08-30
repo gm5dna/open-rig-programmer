@@ -12,6 +12,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx10"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx101"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300mk2"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7610"
@@ -22,6 +23,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx10"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx101"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic705"
+	"github.com/gm5dna/open-rig-programmer/internal/fakeic7100"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7300"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7300mk2"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7610"
@@ -339,6 +341,38 @@ var IC7850FakeSessionOpts []fakeic7851.Option
 // only because no test using it calls t.Parallel().
 var IC7760FakeSessionOpts []fakeic7760.Option
 
+// IC7100FakeSessionOpts is the IC-7100's own option source: extra
+// fakeic7100.Option values applied, on top of the always-empty production
+// default, to the IC-7100's fake rig on every OpenFakeSessionFor call in
+// this process. It is IC7610FakeSessionOpts' IC-7100 counterpart, on the
+// same terms (a separate variable, of a DIFFERENT element type, read at
+// CALL time inside the IC7100 entry's own newRadio closure below).
+//
+// NO SHARED-TYPE HAZARD HERE, as for the IC-7760's variable directly
+// above and unlike the FTdx101 and IC-7851 pairs': internal/fakeic7100
+// simulates the IC-7100 specifically and its Option is a
+// func(*fakeic7100.config), so a closure reading another model's variable
+// is a COMPILE ERROR rather than a silent crossing. That is why this row
+// needs no non-interference test — the type system already carries the
+// proof.
+//
+// LEFT AT ITS NIL ZERO VALUE THE DEMO RADIO IS EMPTY, and that is
+// internal/fakeic7100's own default rather than anything this file
+// arranges: New seeds only what its options ask for, so a
+// `--fake --model IC-7100` session opens and reads each of its 495 dense
+// slots ("A-001".."E-099") as an empty channel — a decodable answer, not
+// a failure. Contrast the IC905Model row below, whose fake's own default
+// image had to be emptied here.
+//
+// No production flag or GUI control populates this — it adds no second
+// ic7100.Simulated reference to any non-test file, so
+// TestSimulatedProfileTokensConfinement's new ic7100 row keeps passing.
+//
+// A test that sets it MUST restore the previous value (e.g. via
+// t.Cleanup) — this is shared, unsynchronised package state, acceptable
+// only because no test using it calls t.Parallel().
+var IC7100FakeSessionOpts []fakeic7100.Option
+
 // fakeRadio is everything OpenFakeSessionFor needs from a model's fake
 // rig: a port to hand the driver, and a way to shut the rig down
 // afterwards. Interface-typed rather than *fakeradio.Radio (M9c-5 E5)
@@ -422,6 +456,16 @@ var (
 	// internal/fakeic7760's Port() returns net.Conn (checked against that
 	// package's source before this registration, per the task brief).
 	_ fakeRadio = ic7760FakeAdapter{}
+	// The IC-7100's, the additions tier's third (Tier 4b) — DIRECTLY, and
+	// so NO FOURTH ADAPTER IS NEEDED: internal/fakeic7100's own Port()
+	// method is already declared to return io.ReadWriteCloser
+	// (internal/fakeic7100/fake.go, checked against source before this
+	// registration, per the task brief), so *fakeic7100.Radio satisfies
+	// fakeRadio as written. It is the IC-705's, IC-9700's and IC-905's
+	// case rather than the two adapters' immediately above — the split in
+	// this table runs by which package the simulator was written against,
+	// not by which tier registered it.
+	_ fakeRadio = (*fakeic7100.Radio)(nil)
 )
 
 // ic7610FakeAdapter narrows *fakeic7610.Radio's Port() — which returns
@@ -683,6 +727,31 @@ var fakeDrivers = map[string]fakeDriverEntry{
 	IC7760Model: {
 		newDriver: func() driver.Driver { return ic7760.New(ic7760.Simulated) },
 		newRadio:  func() fakeRadio { return ic7760FakeAdapter{fakeic7760.New(IC7760FakeSessionOpts...)} },
+	},
+	// The IC-7100 (Tier 4b's third registration): ONE row, ONE driver
+	// package, ONE simulator and ONE profile — the IC-7610's shape again,
+	// and the standing warning applies once. writeTrialsComplete is false
+	// (core/driver/ic7100/caps.go), so this radio has no
+	// hardware-evidenced write path and the Supported writes
+	// ic7100.Simulated reaches here are a claim about internal/fakeic7100
+	// alone. This pairing is the only place that Profile value is legal
+	// outside its own package, which is what internal/guards' ic7100 row
+	// confines.
+	//
+	// NO ADAPTER, unlike the two rows above: this fake's Port() already
+	// returns io.ReadWriteCloser, so the *fakeic7100.Radio goes into the
+	// table as it stands (see the fakeRadio proof above).
+	//
+	// NO WithModelName TO PASS EITHER, and there is no such option to
+	// pass: this fake answers `19 00` with its own invented, deliberately
+	// implausible DE AD token (internal/fakeic7100's
+	// defaultIdentityToken), the manual's command table printing an EMPTY
+	// Data cell for 19 00 and no reply value anywhere. The driver RECORDS
+	// that token into Session.Identity().CATID after the static address
+	// 88 and NEVER MATCHES it (register entry ic7100-id-reply-value).
+	IC7100Model: {
+		newDriver: func() driver.Driver { return ic7100.New(ic7100.Simulated) },
+		newRadio:  func() fakeRadio { return fakeic7100.New(IC7100FakeSessionOpts...) },
 	},
 }
 
