@@ -117,3 +117,54 @@ func TestPortIsADeadlineCapablePipe(t *testing.T) {
 		t.Fatal("Port is not a net.Conn")
 	}
 }
+
+// expectSilence asserts the radio puts nothing further on the wire. Silence,
+// not a code, is what a frame that is not this radio's business earns: an NG
+// addressed to a controller this radio has not heard from would be a frame no
+// radio would send.
+func expectSilence(t *testing.T, r *Radio) {
+	t.Helper()
+	c := r.Port()
+	_ = c.SetReadDeadline(time.Now().Add(150 * time.Millisecond))
+	defer c.SetReadDeadline(time.Time{})
+	one := make([]byte, 1)
+	n, err := c.Read(one)
+	if n > 0 || err == nil {
+		t.Fatalf("radio answered % X, want silence", one[:n])
+	}
+}
+
+// TestAForeignControllerIsIgnored pins the whole B2/E0 address filter: the
+// destination must be this radio AND the source must be the controller
+// address the data-format diagram captions "Controller's (PC's) default
+// address". A frame from any other source is echoed, because the echo is a
+// property of the line rather than of the radio, and then dropped without an
+// answer, a state change or a CommandLog entry.
+func TestAForeignControllerIsIgnored(t *testing.T) {
+	r := New(WithUSBEcho())
+	defer r.Close()
+	set := append([]byte{0x1A, 0x00, 0x00, 0x07}, record(0x40)...)
+	foreign := frame(AddrRadio, 0xE1, set...)
+	if _, err := r.Port().Write(foreign); err != nil {
+		t.Fatal(err)
+	}
+	if got := readFrame(t, r); !bytes.Equal(got, foreign) {
+		t.Fatalf("echo = % X, want % X", got, foreign)
+	}
+	expectSilence(t, r)
+	if _, ok := r.SlotState(7); ok {
+		t.Fatal("a foreign controller's set reached a slot")
+	}
+	if log := r.CommandLog(); len(log) != 0 {
+		t.Fatalf("command log = %v, want empty", log)
+	}
+	if _, err := r.Port().Write(wireTo(0x19, 0x00)); err != nil {
+		t.Fatal(err)
+	}
+	if got := readFrame(t, r); !bytes.Equal(got, wireTo(0x19, 0x00)) {
+		t.Fatalf("echo of the configured controller = % X", got)
+	}
+	if got := readFrame(t, r); len(got) < 5 || got[4] != 0x19 {
+		t.Fatalf("identity reply = % X", got)
+	}
+}
