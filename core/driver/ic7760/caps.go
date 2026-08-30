@@ -359,12 +359,12 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 		// cannot offer them. A Wave-4 item and an honesty row.
 		CTCSSToneRange: &spec.ToneRange{MinDeciHz: 1, MaxDeciHz: MaxToneDeciHz, StepDeciHz: 1},
 		// The six-rate list is ASSUMED under the exact matrix register
-		// entry ic7760-baud-list; the guide does not print a complete
-		// USB (B) baud list.
+		// entry ic7760-baud-list; the guide prints no baud rate and no
+		// rate list at all.
 		Bauds: []int{4800, 9600, 19200, 38400, 57600, 115200},
 		// ASSUMED under register entry ic7760-default-baud. THE DOCUMENT
 		// MARKS NO DEFAULT. The choice of 19200
-		// within the printed six is ARBITRARY and is recorded as such: no
+		// within the assumed six is ARBITRARY and is recorded as such: no
 		// reading of this document favours one of them. What makes it safe
 		// is not the choice but the grading and the failure mode — the
 		// probe requires an address-matched 19 00 reply, and silence is
@@ -379,8 +379,9 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 		// name settings / Up to 10 characters": the span is ten bytes wide.
 		TagLen: 10,
 		// §1 row 22 — PDF p.20 (folio 19)'s two "Codes for character
-		// entries" tables, 94 codes, transcribed ONCE in
-		// core/civ/ic7760 and referenced here. The Icom charset omits
+		// entries" tables print 94 codes; with the assumed space the set
+		// is 95 bytes, transcribed ONCE in core/civ/ic7760 and referenced
+		// here. The 94 include 2D, the hyphen-minus. The Icom charset omits
 		// several bytes the pre-Icom family default would allow, which is
 		// exactly why spec.TagByteOK consults a capability-supplied set.
 		TagCharset: civic7760.NameCharset,

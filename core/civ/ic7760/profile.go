@@ -11,9 +11,18 @@ const (
 )
 
 // NameCharset is the 94 printed character codes plus the assumed ASCII
-// space (ic7760-name-space-code, Stage R lift). The space is also the
-// assumed pad byte (ic7760-name-pad-byte, Stage R lift).
-const NameCharset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!\"#$%&'()*+,./:;<=>?@[\\]^_`{|}~ "
+// space (ic7760-name-space-code, Stage R lift), 95 bytes in all. The space
+// is also the assumed pad byte (ic7760-name-pad-byte, Stage R lift).
+//
+// The symbols run in ascending code order, which is the order PDF p.20
+// (folio 19) prints them in the "Memory name*" footnote. That fixes 2D,
+// the hyphen-minus, between 2C (,) and 2E (.). The symbols table draws 2D
+// as a stroke of en-dash length and the frozen transcription records it as
+// drawn, but the code column is the authority and it prints 2D — so an
+// ordinary repeater tag such as GB3-IV is a name this radio can carry.
+// TestNameCharsetIsTheCompletePrintedDomain rebuilds this constant from
+// the frozen artefact byte for byte rather than sampling it.
+const NameCharset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~ "
 
 var modeEnum = map[byte]string{
 	0x00: "LSB", 0x01: "USB", 0x02: "AM", 0x03: "CW", 0x04: "RTTY",
