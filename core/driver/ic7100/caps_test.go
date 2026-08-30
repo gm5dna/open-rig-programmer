@@ -125,8 +125,8 @@ func TestCapabilityValuesFromMatrix(t *testing.T) {
 	if caps.ClarMaxHz != 0 || caps.ClarStepHz != 0 || len(caps.CTCSSTones) != 0 || len(caps.ShiftOptions) != 0 || len(caps.CTCSSStates) != 0 {
 		t.Error("deliberately-zero legacy capability fields drifted from matrix §1 rows 6–8/15–16")
 	}
-	if caps.CTCSSToneRange == nil || *caps.CTCSSToneRange != (spec.ToneRange{MinDeciHz: 670, MaxDeciHz: 2541, StepDeciHz: 1871}) {
-		t.Errorf("CTCSSToneRange = %+v, want endpoint-only fail-closed policy pinned by the profile (matrix §1 row 9; ic7100-tone-range-step)", caps.CTCSSToneRange)
+	if caps.CTCSSToneRange == nil || *caps.CTCSSToneRange != (spec.ToneRange{MinDeciHz: 670, MaxDeciHz: 2541, StepDeciHz: 1}) {
+		t.Errorf("CTCSSToneRange = %+v, want the charted 67.0–254.1 Hz bounds at the wire field's 0.1 Hz resolution (matrix §1 row 9; ic7100-tone-range-step)", caps.CTCSSToneRange)
 	}
 	if !reflect.DeepEqual(caps.Bauds, []int{300, 1200, 4800, 9600, 19200}) || caps.DefaultBaud != 19200 {
 		t.Errorf("baud policy = %v/default %d (matrix §1 rows 10–11; ic7100-default-baud-auto)", caps.Bauds, caps.DefaultBaud)
@@ -139,5 +139,37 @@ func TestCapabilityValuesFromMatrix(t *testing.T) {
 	}
 	if len(caps.DuplexOptions) != 3 || len(caps.ToneModes) != 4 || !reflect.DeepEqual(caps.DTCSPolarities, []string{"NN", "NR", "RN", "RR"}) || len(caps.DTCSCodes) != 104 || !reflect.DeepEqual(caps.Filters, []string{"FIL1", "FIL2", "FIL3"}) {
 		t.Errorf("Icom vocabularies drifted: duplex=%d tone=%d polarity=%v DTCS=%d filters=%v (matrix §1 rows 17–21)", len(caps.DuplexOptions), len(caps.ToneModes), caps.DTCSPolarities, len(caps.DTCSCodes), caps.Filters)
+	}
+}
+
+// TestCTCSSToneDomainAdmitsEveryChartTone is the test that decides what the
+// declared tone domain is FOR: reading and writing the tones the radio's own
+// manual prints. PDF p.91 charts 50 tones from 67.0 to 254.1 Hz — the
+// family-standard list — and the wire field carries a tenth-of-a-hertz
+// NUMBER, not an index into that chart, so the honest declaration is the
+// chart's evidenced bounds at the field's own resolution (matrix §1 row 9 /
+// §3.16.2, first candidate).
+//
+// A domain narrower than the chart is not caution: Session.toneField turns
+// any tone the capabilities refuse into an Unknown field, and
+// codeplug.ToneField.Valid refuses it on write, so a channel holding a
+// printed tone would lose it on read and be unwritable — the very hazard
+// core/codeplug/fieldstate.go names. What remains genuinely open is whether
+// the radio accepts an OFF-CHART tenth of a hertz between those bounds:
+// register entry ic7100-tone-range-step, whose lift settles it.
+func TestCTCSSToneDomainAdmitsEveryChartTone(t *testing.T) {
+	for _, caps := range []spec.Capabilities{CapabilitiesUnverified(), CapabilitiesSimulated()} {
+		for i, tone := range spec.StandardCTCSSTones() {
+			if !caps.AdmitsTone(tone) {
+				t.Errorf("AdmitsTone(%v) = false, want true — chart tone %d of the 50 printed on PDF p.91", tone, i)
+			}
+		}
+		// The bounds ARE the claim, so a tenth of a hertz outside either
+		// end must still be refused.
+		for _, tone := range []spec.Tone{669, 2542} {
+			if caps.AdmitsTone(tone) {
+				t.Errorf("AdmitsTone(%v) = true, want false — outside the charted 67.0–254.1 Hz bounds", tone)
+			}
+		}
 	}
 }

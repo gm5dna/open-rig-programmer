@@ -17,14 +17,6 @@ const (
 	// ASSUMED: ic7100-tx-block-mandatory; TestGeometryTXDuplicate pins the
 	// arithmetic and the complete block equality used for safe writes.
 	duplicateBlockShift = 47
-
-	// CTCSSStepDeciHz is deliberately the distance between the two chart
-	// endpoints. core/spec.ToneRange can express only an arithmetic sequence,
-	// while the IC-7100's printed 50-tone chart is irregular. This admits only
-	// the evidenced endpoints, rather than falsely admitting off-chart values.
-	// ASSUMED/open decision: ic7100-tone-range-step; TestRecordToneRangeDecision
-	// pins this fail-closed policy until its named hardware lift is performed.
-	CTCSSStepDeciHz = 2541 - 670
 )
 
 // nameCharset is the manual's explicit character-code table, not the
