@@ -208,7 +208,6 @@ func WithShortSetsAccepted() Option {
 // do, which is how a test tells "the write was lost" from "the write never
 // happened". Everything else the radio does is unchanged: reads, 19 00 and
 // every refusal are answered as before.
-
 func WithNoSetAnswer() Option {
 	return func(c *config) { c.noSetAnswer = true }
 }

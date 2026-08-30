@@ -605,10 +605,10 @@ func TestE2E_AWrongRecordLengthIsRefusedAndCanBeAttributed(t *testing.T) {
 		t.Fatal("Open accepted a radio whose records are 104 bytes")
 	}
 	// THE PROBE'S LENGTH REFUSAL IS AN IDENTITY VERDICT, NOT A PARSE ERROR,
-	// and that is why civ.RecordLengthError is NOT in this chain: Session.
-	// wrongRecordLength (ic7100.go:196) translates the length it measured
-	// into a driver.WrongRadioError carrying both record-only lengths as
-	// its Want and Got, which is what a caller deciding "this is not the
+	// and that is why civ.RecordLengthError is NOT in this chain:
+	// Session.wrongRecordLength translates the length it measured into a
+	// driver.WrongRadioError carrying both record-only lengths as its
+	// Want and Got, which is what a caller deciding "this is not the
 	// radio you asked for" can act on. TestProbeRejectsWrongRecordLength
 	// Continuously (probe_test.go:35) pins the same shape through the
 	// scripted port; asserting a wrapped *civ.RecordLengthError here would

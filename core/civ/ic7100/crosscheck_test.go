@@ -4,7 +4,6 @@ package ic7100
 
 import (
 	"encoding/csv"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -283,7 +282,4 @@ func TestEvidenceCrosscheck(t *testing.T) {
 		}
 	}
 
-	if 47 != 51-5+1 {
-		t.Fatal(fmt.Sprintf("duplicate arithmetic changed: 47 != %d", 51-5+1))
-	}
 }
