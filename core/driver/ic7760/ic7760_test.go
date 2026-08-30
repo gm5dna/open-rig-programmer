@@ -3,16 +3,25 @@
 package ic7760
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 )
 
-// goldenRecord is the 25-byte record the G leg derived by hand from PDF
-// p.12 and committed as core/civ/ic7760/testdata/ic7760-vectors.golden's
-// `set-record-name-with-space` vector. Written out here in wire bytes
-// rather than built by the codec: a fixture assembled by the encoder under
-// test would agree with a wrong offset as happily as a right one.
+// goldenRecord is this package's 25-byte record fixture, laid out by hand
+// from the frozen geometry witness (core/civ/ic7760/testdata/
+// IC-7760-geometry-witness.csv) and written out in wire bytes rather than
+// built by the codec: a fixture assembled by the encoder under test would
+// agree with a wrong offset as happily as a right one.
+//
+// IT IS NOT THE FROZEN GOLDEN VECTOR, and stage-review finding F1 is why
+// that is said out loud. An earlier comment here claimed these bytes WERE
+// IC-7760-vectors.golden's `set-record-name-with-space` record; they are
+// not — that vector carries 14 100 000 Hz, tone/tone OFF and "ALPHA BETA".
+// The frozen vector is replayed byte-for-byte where it belongs, in
+// core/civ/ic7760's TestGolden. These bytes exercise the DRIVER against a
+// second, differently-valued record of the same documented shape.
 //
 //	offset  0      00            UNMAPPED (E6): SELECT-group nibble, OFF
 //	offset  1-5    00 00 25 14 00  14 250 000 Hz, little-endian BCD
@@ -75,3 +84,38 @@ func occupiedRadio() radioImage {
 // all, so a reply from another station, a broadcast, or silence must not
 // open a session.
 //
+
+func TestProbeScheduleIncludesP1AndP2AfterBoundedMEMSearch(t *testing.T) {
+	p := newScriptedPort(t, radioImage{
+		idToken: []byte{0x42},
+		records: map[int][]byte{101: goldenRecord},
+	})
+	s := openWith(t, p)
+	report := s.OpenDiagnostics()
+	if !report.Fingerprinted || report.RecordLength != 25 || report.SlotsTried != 12 {
+		t.Fatalf("OpenDiagnostics = %+v, want P2 fingerprint after 12 bounded slots", report)
+	}
+
+	want := [][]byte{idReadFrame}
+	for ch := 1; ch <= 10; ch++ {
+		want = append(want, memReadFrame(ch))
+	}
+	want = append(want, memReadFrame(100), memReadFrame(101))
+	got := p.Transcript()
+	if len(got) != len(want) {
+		t.Fatalf("probe transcript has %d frames, want %d:\n  %s", len(got), len(want), hexFrames(got))
+	}
+	for i := range want {
+		if !bytes.Equal(got[i], want[i]) {
+			t.Errorf("probe frame %d = % X, want % X", i, got[i], want[i])
+		}
+	}
+}
+
+func TestProbeScheduleOpensEmptyMEMAndSCANOnAddressEvidence(t *testing.T) {
+	p := newScriptedPort(t, radioImage{idToken: []byte{0x42}, records: map[int][]byte{}})
+	s := openWith(t, p)
+	if report := s.OpenDiagnostics(); report.Fingerprinted || report.RecordLength != 0 || report.SlotsTried != 12 {
+		t.Fatalf("OpenDiagnostics = %+v, want un-fingerprinted open after all 12 bounded slots", report)
+	}
+}

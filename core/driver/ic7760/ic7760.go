@@ -16,17 +16,19 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
-// probeSlotCount is how many memory channels Open's occupied-slot search
-// reads before giving up and opening UNFINGERPRINTED.
-//
-// BOUNDED ON PURPOSE. The fingerprint's job is to confirm a record length,
-// which one occupied channel settles; walking all 99 to find a radio's
-// only populated memory would put ninety-nine exchanges into every open
-// for no further evidence. Ten is enough to clear a radio whose first few
-// memories happen to be empty and short enough that an entirely empty
-// radio opens promptly — on address evidence alone, which spec D3.2
-// explicitly allows.
-const probeSlotCount = 10
+// probeSchedule is the bounded occupied-slot fingerprint search: ten early
+// MEM slots followed by both SCAN selectors P1/P2. Walking all 99 memories
+// would add no evidence once one occupied record has fixed the length, but
+// omitting P1/P2 would miss a radio whose early memories are empty and a
+// scan edge is occupied. TestProbeScheduleIncludesP1AndP2AfterBoundedMEMSearch
+// pins the exact frames and stop point.
+func probeSchedule() [12]civ.ChannelAddress {
+	return [12]civ.ChannelAddress{
+		{Channel: 1}, {Channel: 2}, {Channel: 3}, {Channel: 4}, {Channel: 5},
+		{Channel: 6}, {Channel: 7}, {Channel: 8}, {Channel: 9}, {Channel: 10},
+		{Channel: 100}, {Channel: 101},
+	}
+}
 
 // New returns the IC-7760 driver built with profile.
 //
@@ -113,7 +115,7 @@ func (d *ic7760Driver) Capabilities() spec.Capabilities {
 // worktrees would want.
 type OpenReport struct {
 	// IDToken is what the radio answered to 19 00, recorded and NEVER
-	// matched (D5 entry 7, lift R7).
+	// matched (D5 entry 7, register entry ic7760-id-reply).
 	IDToken []byte
 	// SlotsTried is how many channels the occupied-slot search read
 	// before it stopped.
@@ -126,7 +128,8 @@ type OpenReport struct {
 	RecordLength int
 	// InitDrainCapExceeded records that Engine.Init hit its absolute
 	// drain cap and that Open continued anyway — the NONFATAL half of
-	// R9-SPLIT. It can only be true under a CONTROLLER-ADDRESSED flood:
+	// THE INIT-UNDER-FLOOD RULE, ADDRESSED HALF. It can only be true under
+	// a CONTROLLER-ADDRESSED flood:
 	// a to=00 broadcast flood never reaches the engine at all.
 	InitDrainCapExceeded bool
 	// WireAtOpen is the adapter's own counter snapshot taken when Open
@@ -157,7 +160,7 @@ type RecordLengthMismatchError struct {
 
 func (e *RecordLengthMismatchError) Error() string {
 	return fmt.Sprintf(
-		"ic7760: %s answered a %d-byte memory record, want %d — the expected length is itself an ASSUMED derivation from one document (D5 entry 6, matrix lift R6), and this refusal names no other model because cross-model record-length distinctness is a Wave-4 tier check",
+		"ic7760: %s answered a %d-byte memory record, want %d — the expected length is itself an ASSUMED derivation from one document (D5 entry 6, register entry ic7760-record-length), and this refusal names no other model because cross-model record-length distinctness is a Wave-4 tier check",
 		e.Slot, e.Got, e.Want)
 }
 
@@ -201,8 +204,8 @@ func (e *AnswerMismatchError) Unwrap() error { return ErrAnswerMismatch }
 // The choreography, and nothing else on the wire: build the CI-V framing,
 // build the engine, Init (which for CI-V is a DRAIN ALONE — E1's
 // InitSequence is EMPTY, so no radio mutation ever happens here), probe
-// 19 00 for an address-matched reply, then read up to probeSlotCount
-// memory channels for a record whose length confirms the fingerprint.
+// 19 00 for an address-matched reply, then read the bounded MEM/SCAN
+// schedule for a record whose length confirms the fingerprint.
 //
 // Open takes ownership of port on BOTH outcomes: the Session's Close
 // releases it on success, and Open itself closes it before returning an
@@ -252,7 +255,7 @@ func (d *ic7760Driver) open(ctx context.Context, eng *transport.Engine, stats ci
 	p := civic7760.Profile()
 	var report OpenReport
 
-	// R9-SPLIT, THE NONFATAL HALF. Init is a drain alone on CI-V, and the
+	// THE INIT-UNDER-FLOOD RULE, THE NONFATAL HALF. Init is a drain alone on CI-V, and the
 	// drain is bounded by an ABSOLUTE cap precisely so it cannot fail the
 	// open: a line saturated with traffic addressed to this controller
 	// never yields the idle gap, and refusing to open on that basis would
@@ -284,7 +287,7 @@ func (d *ic7760Driver) open(ctx context.Context, eng *transport.Engine, stats ci
 	//
 	// The address check belongs to the CODEC — the matcher comes from
 	// Profile.TransceiverIDAnswerMatcher and checks both the `to` and the
-	// `from` byte — and is never a rule written here (adjudication R1).
+	// `from` byte — and is never a rule written here.
 	// One retry: an identity read is idempotent, and an open should
 	// survive a single swallowed reply.
 	idCmd, err := p.BuildTransceiverIDRead()
@@ -298,7 +301,7 @@ func (d *ic7760Driver) open(ctx context.Context, eng *transport.Engine, stats ci
 		// nothing can be attributed (spec D3.3). A radio at a CI-V baud
 		// other than the assumed 19200 lands here identically, which is
 		// why a wrong default-baud guess costs a clean timeout and never
-		// a wrong byte (OQ2).
+		// a wrong byte (register entry ic7760-default-baud).
 		return nil, fmt.Errorf("ic7760: Open: 19 00 identity probe: %w", err)
 	}
 	token, err := p.ParseTransceiverID(frame)
@@ -320,9 +323,9 @@ func (d *ic7760Driver) open(ctx context.Context, eng *transport.Engine, stats ci
 	// THE OCCUPIED-SLOT SEARCH, and the fingerprint it confirms. A
 	// rejection means "empty, keep looking" (tier ruling T4); a record
 	// confirms the length; any other error aborts the open.
-	for ch := 1; ch <= probeSlotCount; ch++ {
-		report.SlotsTried = ch
-		raw, empty, err := probeSlot(ctx, eng, p, civ.ChannelAddress{Channel: ch})
+	for i, address := range probeSchedule() {
+		report.SlotsTried = i + 1
+		raw, empty, err := probeSlot(ctx, eng, p, address)
 		if err != nil {
 			return nil, err
 		}
@@ -334,7 +337,7 @@ func (d *ic7760Driver) open(ctx context.Context, eng *transport.Engine, stats ci
 		break
 	}
 	// AN EMPTY RADIO OPENS ANYWAY, on address evidence alone (spec D3.2,
-	// D5 entry 2(a), matrix lift R2a). Refusing here would make a radio
+	// D5 entry 2(a), register entry ic7760-empty-reply-fa). Refusing here would make a radio
 	// whose memories are all empty unprogrammable by this programme, which
 	// is precisely the radio a user most wants to programme.
 
