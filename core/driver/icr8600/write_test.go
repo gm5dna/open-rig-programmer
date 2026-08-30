@@ -203,9 +203,12 @@ func TestE6_DigitalTailMismatchUsesExactReason(t *testing.T) {
 func TestE6_EveryCommonUnmappedHighNibbleIsRefused(t *testing.T) {
 	addr := testWireAddress{0, 0}
 	// These bytes map only their low nibble: SELECT, duplex, preamp,
-	// antenna and IP+. A set rebuilt by the codec writes the assumed zero
-	// template into each high nibble, so E6 must refuse before that can
-	// silently replace a state the neutral model cannot carry.
+	// antenna and IP+. A set rebuilt by the codec writes ZERO into each
+	// high nibble, so E6 must refuse before that can silently replace a
+	// state the neutral model cannot carry. What each of those nibbles
+	// actually prints is named by the refusal itself and pinned by
+	// TestE6_TheHighNibbleRefusalNamesWhatEachNibbleActuallyIs; none of
+	// them is an assumed template.
 	for name, offset := range map[string]int{"select": 0, "duplex": 8, "preamp": 18, "antenna": 19, "ip_plus": 20} {
 		t.Run(name, func(t *testing.T) {
 			record := testRecord(t, addr, "AM")
@@ -245,6 +248,49 @@ func TestE6_EveryFMOnlyUnmappedHighNibbleIsRefused(t *testing.T) {
 			}
 			if got := len(setFrames(p.Transcript())); got != 0 {
 				t.Errorf("E6 refusal sent %d set frames", got)
+			}
+		})
+	}
+}
+
+func TestE6_TheHighNibbleRefusalNamesWhatEachNibbleActuallyIs(t *testing.T) {
+	// NONE OF THESE NIBBLES IS "ASSUMED". Byte 0's high nibble is the
+	// three-valued printed enum 0=SKIP OFF / 1=SKIP / 2=PSKIP (matrix
+	// section 2 row 9, section 3.16.4); bytes 8, 18, 19, 20 and FM 37
+	// each print "0 (Fixed)" against their high nibble; FM 41 sits in
+	// the DTCS span ㊻ ~ ㊽, against which the guide prints no value at
+	// all. An operator reading the refusal has to be told which of those
+	// it is, because what they must do at the radio differs: a SKIP or
+	// PSKIP channel has a state to clear, a "0 (Fixed)" nibble that is
+	// non-zero means the record is not what the document describes.
+	addr := testWireAddress{0, 0}
+	for _, tc := range []struct {
+		name   string
+		mode   string
+		offset int
+		want   []string
+	}{
+		{"select carries the SKIP/PSKIP enum", "AM", 0, []string{"SKIP OFF", "PSKIP"}},
+		{"duplex is printed 0 (Fixed)", "AM", 8, []string{"0 (Fixed)"}},
+		{"preamp is printed 0 (Fixed)", "AM", 18, []string{"0 (Fixed)"}},
+		{"antenna is printed 0 (Fixed)", "AM", 19, []string{"0 (Fixed)"}},
+		{"ip_plus is printed 0 (Fixed)", "AM", 20, []string{"0 (Fixed)"}},
+		{"fm tone mode is printed 0 (Fixed)", "FM", 37, []string{"0 (Fixed)"}},
+		{"fm dtcs polarity has no printed value", "FM", 41, []string{"DTCS"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			record := testRecord(t, addr, tc.mode)
+			record[tc.offset] |= 0x10
+			_, s := openConsentedWriteSession(t, testRadioImage{idToken: []byte{0x01}, acknowledge: true, records: map[testWireAddress][]byte{addr: record}})
+			res, err := s.WriteChannel(context.Background(), writableChannel("G00-000", tc.mode))
+			refused := requireWriteRefused(t, res, err)
+			for _, want := range tc.want {
+				if !strings.Contains(refused.Reason, want) {
+					t.Errorf("reason = %q, want it to name %q", refused.Reason, want)
+				}
+			}
+			if strings.Contains(refused.Reason, "assumed") {
+				t.Errorf("reason = %q, but nothing about this nibble is assumed", refused.Reason)
 			}
 		})
 	}
