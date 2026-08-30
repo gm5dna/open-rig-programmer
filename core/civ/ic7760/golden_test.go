@@ -166,7 +166,12 @@ func TestGoldenNegativeVectors(t *testing.T) {
 	if !p.AllowedCommand(set) {
 		t.Error("the unchanged frozen set vector was refused")
 	}
-	if got := goldenRecord(); reflect.ValueOf(got).NumField() != 15 {
-		t.Fatalf("MemoryRecord field count = %d, want 15; update the full-field golden comparison for new fields", reflect.ValueOf(got).NumField())
+	// 22 = the tier's 15 plus Erratum 6's seven receiver fields
+	// (tuning step enable/code, programmable step, attenuator, preamp,
+	// antenna, IP+), which this profile leaves unmapped: the whole-struct
+	// golden comparison above still covers them, as an unexpectedly
+	// decoded value would break equality against the zero Optionals.
+	if got := goldenRecord(); reflect.ValueOf(got).NumField() != 22 {
+		t.Fatalf("MemoryRecord field count = %d, want 22; update the full-field golden comparison for new fields", reflect.ValueOf(got).NumField())
 	}
 }
