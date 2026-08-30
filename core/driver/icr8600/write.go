@@ -89,6 +89,29 @@ var mandatoryKnownFields = []struct {
 // with zero before a full-record write may rebuild them.
 var commonUnmappedHighNibbleOffsets = []int{0, 8, 18, 19, 20}
 
+// digitalTailOffset is where every mode-keyed tail begins: the 37 common
+// head bytes are followed by the class's own bytes, or by nothing at all.
+const digitalTailOffset = 37
+
+// layoutForMode returns the layout a write of this neutral mode would build.
+// Length cannot choose — FM and DCR are both 44 bytes — so the mode span's
+// enum is what discriminates, exactly as the profile's own mode key does.
+func layoutForMode(p civ.Profile, mode string) (civ.RecordLayout, bool) {
+	for _, layout := range p.Layouts() {
+		for _, span := range layout.Fields {
+			if span.Field != civ.FieldMode {
+				continue
+			}
+			for _, name := range span.Enum {
+				if name == mode {
+					return layout, true
+				}
+			}
+		}
+	}
+	return civ.RecordLayout{}, false
+}
+
 func (s *Session) memorySetSpec() transport.CommandSpec {
 	sp := civ.CIVWriteWithAckSpec(s.profile.AcknowledgementMatcher())
 	sp.Timeout, sp.Settle = s.readTimeout, s.settle
@@ -227,6 +250,22 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 				Fields: missingFMTailFields(data),
 				Reason: "the target FM record needs explicit receive-squelch values because the stored non-FM record has no FM tail to preserve",
 			}
+		}
+	}
+	// The same refusal for the digital classes, whose tails no neutral
+	// field carries at all. E6 above compares the STORED record with the
+	// STORED layout's template, so it says nothing about a mode change:
+	// when the target class differs, every one of its tail bytes would
+	// come from the assumed icr8600-tail-templates entry rather than from
+	// anything read back. Pinned by
+	// TestEndToEnd_AModeChangeIntoADigitalClassIsRefusedRatherThanInventTheTail.
+	if target, ok := layoutForMode(s.profile, data.Mode); ok && len(target.Fixed) > 0 && target.ModeClass != layout.ModeClass {
+		return res, &driver.WriteRefusedError{
+			Slot: ch.Slot,
+			Reason: fmt.Sprintf(
+				"the stored %s record has no %s tail to preserve: record bytes %d-%d would be invented from the assumed icr8600-tail-templates entry (% X) — set the digital squelch at the radio instead",
+				layout.ModeClass, target.ModeClass, digitalTailOffset, len(target.Fixed)-1, target.Fixed[digitalTailOffset:],
+			),
 		}
 	}
 
