@@ -64,42 +64,58 @@ const (
 	Simulated
 )
 
-// The two numeric bounds Task 12's pre-build refusals enforce, stated once
-// here so the capability domain and the refusal cannot drift apart.
+// The numeric bounds this driver DECLARES and, at WriteChannel's rung 4,
+// ENFORCES. Stated once here so the capability domain and the pre-build
+// refusal cannot drift apart, and read off the reviewed matrix rather than
+// off the width of a BCD field.
+//
+// WHY THE RADIO'S NUMBERS AND NOT THE FIELD'S. The record's frequency
+// digits could express 69 999 999 Hz and its tone digits 2999 deci-Hz, and
+// an earlier draft declared exactly those. But spec.Capabilities is what a
+// consented write is judged against, so declaring the FIELD's width
+// authorises a frequency this radio cannot receive and a tone that is not
+// on its chart. Matrix §1 row 13 makes the narrower, radio-true ceiling
+// the CHOICE for that reason, and rows 9 and 12 supply the other three
+// numbers.
 //
 // THEY ARE DEFENCE IN DEPTH AND NOT THE GATE. civ.FieldSpan carries no
 // numeric domain and civ's validateSpanValue checks only BCD width and
 // scale, so Profile.AllowedCommand — the last defence before a radio sees
-// bytes — would admit a 1A 00 set carrying 70 MHz. Closing that at the
-// gate is a shared core/civ change the orchestrator DEFERRED on
-// 24/08/2026 to a post-Wave-3 enabler follow-up; see doc.go, and see
-// write_test.go's TestNumericRefusalIsDefenceInDepthNotTheGate, which
-// asserts the gap so that closing it is a visible test change.
+// bytes — would admit a 1A 00 set carrying 65 MHz. Closing that at the
+// gate is a shared core/civ change deferred to a post-Wave-3 enabler
+// follow-up; see doc.go, and see caps_test.go's
+// TestPreBuildRefusalEnforcesTheCapabilityBounds, which is what proves the
+// driver's own door is shut.
 const (
-	// MaxEncodableFreqHz is the largest frequency the record's five-byte
-	// little-endian BCD frequency span can carry. Matrix §1 row 12: the
-	// 10 MHz digit is labelled 0–6 and the fifth cell is a printed
-	// "0 : 0" marked (Fixed), so 69 999 999 Hz is the ceiling.
+	// MinRadioFreqHz is the receiver coverage floor, MANUAL-EVIDENCED:
+	// matrix §1 row 12, PDF p.267 (folio 19-2), "• Frequency coverage
+	// (unit: MHz): Receiver 0.030000–60.000000". That a MEMORY may be
+	// stored anywhere in that coverage is the row's ASSUMED half, register
+	// entry ic7851-memory-freq-bounds.
+	MinRadioFreqHz = 30_000
+	// MaxRadioFreqHz is the same row's ceiling. Matrix §1 row 13 records
+	// that the FIELD reaches 69 999 999 Hz — the 10 MHz digit is labelled
+	// 0–6 over a fixed "0 : 0" fifth cell — and that declaring the
+	// narrower radio figure is the CHOICE. Same register entry.
+	MaxRadioFreqHz = 60_000_000
+	// MinToneDeciHz and MaxToneDeciHz are the printed selectable CTCSS
+	// bounds: matrix §1 row 9, PDF p.115 (folio 5-38), "• Selectable tone
+	// frequencies (unit: Hz)", a 50-tone table running 67.0 to 254.1.
+	// MANUAL-EVIDENCED.
 	//
-	// The STORABLE ceiling — what an IC-7851 will actually keep in a
-	// memory — is NOT established by this document (matrix lift R17a).
-	// This is the ENCODABLE figure, which is the only number the document
-	// yields, and matrix erratum 11 exists to record that a driver puts
-	// that number in spec.Capabilities.MaxFreqHz.
-	//
-	// IT IS NOT IN deliberatelyZero AND CANNOT BE: that table is the R11
-	// audit's arm for a field left at its ZERO value, and MaxFreqHz is
-	// POPULATED. TestDeliberatelyZeroAudit enforces the partition in both
-	// directions — a populated field appearing in the table fails its
-	// "the table has gone stale" arm — so this bound discharges R11
-	// through the OTHER arm: populated, with its matrix section cited at
-	// the field itself in baseCapabilities.
-	MaxEncodableFreqHz = 69_999_999
-	// MaxToneDeciHz is the largest tone the record's three-byte
-	// big-endian BCD tone spans can carry, in tenths of a hertz. Matrix
-	// §1 row 8 / PDF p.14's six rotated nibble labels: 100 Hz: 0–2,
-	// 10 Hz: 0–9, 1 Hz: 0–9, 0.1 Hz: 0–9.
-	MaxToneDeciHz = 2999
+	// The record's digits reach 299.9 Hz, which is wider; the chart is
+	// what the radio offers.
+	MinToneDeciHz = 670
+	MaxToneDeciHz = 2541
+	// ToneStepDeciHz is the row's one ASSUMED half, register entry
+	// ic7851-tone-step-domain: the WIRE resolves to 0.1 Hz (the "0.1 Hz
+	// digit: 0–9" leader), but the radio's own set is 50 DISCRETE tones
+	// and the document never says whether an off-chart value is accepted.
+	// A step of 1 therefore declares a range MORE permissive than the
+	// printed chart, which is the conservative direction for a READ (no
+	// captured tone becomes Unknown for being between chart entries) and
+	// is bounded on both sides for a WRITE.
+	ToneStepDeciHz = 1
 )
 
 // deliberatelyZero is adjudication R11's audit table: every
@@ -116,7 +132,7 @@ var deliberatelyZero = map[string]string{
 	"ClarMaxHz":              "the 1A 00 record has no clarifier field, so there is no offset bound to state (matrix §2, clarifier row)",
 	"ClarStepHz":             "the same: no clarifier field, no step",
 	"CTCSSTones":             "this radio's tone spans are BCD FREQUENCIES, not indices into a chart. There is no tone number to index, and spec.Capabilities.Validate refuses a model declaring both a chart and a range. CTCSSToneRange is the declaration (tier ruling T1(2), enabler E3)",
-	"RequiredSlots":          "nothing in this document says any IC-7851 memory or scan edge must stay populated. RequiredSlots is the per-SLOT mechanism and this radio uses none of it",
+	"RequiredSlots":          "RequiredSlots names INDIVIDUAL slots that must stay populated, and this radio has no such slot: its 99 regular channels are all clearable and its two scan edges are all non-clearable. The scan edges' rule is a WHOLE-BANK one and is carried by SCAN's NoBlank instead (matrix §1b.3, which sets the two mechanisms against each other explicitly)",
 	"ShiftOptions":           "the Yaesu repeater-shift vocabulary. The 1A 00 record has no shift field at all, and FieldShift carries the zero FieldSupport on both banks, so enabler E5b's anyBankReaches guard makes the empty list lawful",
 	"CTCSSStates":            "the Yaesu tone-state vocabulary. This radio expresses tone through ToneModes, the Icom one; a model declares one or the other",
 	"TuningSteps":            "additions design D8 — the IC-7851 record carries no receiver tuning-step field",
@@ -127,7 +143,6 @@ var deliberatelyZero = map[string]string{
 	"DuplexOptions":          "the Icom repeater vocabulary. The 1A 00 record has no duplex field, FieldDuplex carries the zero FieldSupport on both banks, and E5b's guard makes the empty list lawful",
 	"DTCSPolarities":         "DTCS is printed NOWHERE in this document's 17 pages — swept for the matrix. An empty list is the positive statement that this radio expresses no DTCS polarity",
 	"DTCSCodes":              "the same sweep: no DTCS code table is printed anywhere in this document",
-	"MinFreqHz":              "zero IS this radio's declared floor rather than an omission: the record's frequency span is unsigned BCD and its smallest encodable value is 0 Hz. The STORABLE floor is not established by this document (matrix lift R17a), and declaring a non-zero guess would be a radio claim",
 }
 
 // memSlots is the MEM bank's inventory: "001".."099".
@@ -272,9 +287,10 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 				Slots: memSlots(),
 				// §1b — 99 memories, addressed 1..99.
 				//
-				// NoBlank stated FALSE explicitly, and conservatively:
-				// nothing in this document says an IC-7851 memory channel
-				// must stay populated.
+				// NoBlank FALSE, and MANUAL-EVIDENCED rather than merely
+				// conservative: matrix §1b.3, PDF p.181 (folio 11-2),
+				// "■ Memory channels", capability table, the "Regular
+				// memory channels / 1–99" row's CLEAR column reads "Yes".
 				NoBlank: false,
 				Fields:  memFields,
 			},
@@ -283,9 +299,17 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 				Label: "Scan edges",
 				Slots: scanSlots(),
 				// §3.15(d) — P1 and P2 are two more values of the same
-				// selector, not a protocol-level bank. NoBlank false for
-				// the memory bank's reason.
-				NoBlank: false,
+				// selector, not a protocol-level bank.
+				//
+				// NoBlank TRUE, and it is the one place the two banks
+				// differ: matrix §1b.3 reads the same capability table's
+				// "Scan Edge memory channels / P1, P2" row as TRANSFER TO
+				// VFO "Yes", OVER-WRITING "Yes", CLEAR **"No"**. A scan
+				// edge may be overwritten and may not be cleared, which is
+				// a WHOLE-BANK rule and therefore Bank.NoBlank rather than
+				// a RequiredSlots list (that list names INDIVIDUAL slots
+				// and this radio has no such slot). MANUAL-EVIDENCED.
+				NoBlank: true,
 				Fields:  scanFields,
 			},
 		},
@@ -348,7 +372,7 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 		// RECORDED COST, from E3: the tone PICKER stays list-driven, so on
 		// this model the grid shows and round-trips tones but the picker
 		// cannot offer them. A Wave-4 item and an honesty row.
-		CTCSSToneRange: &spec.ToneRange{MinDeciHz: 1, MaxDeciHz: MaxToneDeciHz, StepDeciHz: 1},
+		CTCSSToneRange: &spec.ToneRange{MinDeciHz: MinToneDeciHz, MaxDeciHz: MaxToneDeciHz, StepDeciHz: ToneStepDeciHz},
 		// §1 row 9 — the six rates the document names for the CI-V link,
 		// MANUAL-EVIDENCED as named; that the list is COMPLETE is ASSUMED
 		// (matrix lift R12).
@@ -363,9 +387,17 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 		// never a wrong byte. The driver cannot sweep: internal/wiring
 		// opens the port from this value, and Wave 3 may never touch it.
 		DefaultBaud: 19200,
-		// §1 row 12 — see MaxEncodableFreqHz. MinFreqHz is in
-		// deliberatelyZero.
-		MaxFreqHz: MaxEncodableFreqHz,
+		// §1 rows 12 and 13 — the receiver's printed coverage, both ends.
+		// See MinRadioFreqHz and MaxRadioFreqHz for the reading and for
+		// why the RADIO's ceiling is declared rather than the FIELD's.
+		//
+		// NEITHER IS IN deliberatelyZero AND NEITHER MAY BE: that table is
+		// the zero-value audit's arm for a field left at its zero, and both
+		// of these are POPULATED. TestDeliberatelyZeroAudit enforces the
+		// partition in both directions, so a populated field appearing in
+		// the table fails its "the table has gone stale" arm.
+		MinFreqHz: MinRadioFreqHz,
+		MaxFreqHz: MaxRadioFreqHz,
 		// §1 row 7 — the name span (18)~(27) is ten bytes wide.
 		TagLen: 10,
 		// PDF p.12's two character tables, transcribed ONCE in
