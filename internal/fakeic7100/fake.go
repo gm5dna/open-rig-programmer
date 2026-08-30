@@ -300,12 +300,20 @@ func (r *Radio) answerRead(f frame, addr []byte) {
 }
 
 // answerSet stores one channel. Called with mu held.
+//
+// Under WithNoSetAnswer the store happens exactly as it always does and the
+// acknowledgement alone goes missing — the lost-acknowledgement lever, not a
+// radio declining to answer. A REFUSAL is untouched by it: what disappears is
+// the FB, and a set that was never acceptable never had one to lose.
 func (r *Radio) answerSet(f frame, addr, record []byte) {
 	if !r.setIsAcceptable(record) {
 		r.send(r.reject(f.from))
 		return
 	}
 	r.image.write(addr, record)
+	if r.cfg.noSetAnswer {
+		return
+	}
 	r.send(r.acknowledge(f.from))
 }
 

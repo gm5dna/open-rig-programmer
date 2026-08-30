@@ -66,6 +66,7 @@
 //	1A 00, an address, nothing more, occupied      -> 1A 00, the address, 111 record bytes
 //	1A 00, an address, nothing more, unoccupied    -> FA (or an all-FF record; entry 2)
 //	1A 00, an address, a whole record              -> FB, and the record stored
+//	  … the same, under WithNoSetAnswer            -> nothing, and the record stored
 //	1A 00, an address, a record of another length  -> FA
 //	1A 00, a record whose transmit block differs   -> FA (entry 6)
 //	1A 00, an address outside banks A-E / 1-99     -> FA (entry 10)
@@ -247,6 +248,27 @@
 // permitted VALUES and never a shipped default — so there is nothing to source
 // a factory record from, and inventing one would put bytes in front of anybody
 // who renders a fake rig's memories.
+//
+// Nor is WithNoSetAnswer one. It is a TEST LEVER, and the only option in this
+// package that is not the other reading of an open page. The radio hears an
+// acceptable set, STORES it exactly as it always does, and then says nothing
+// at all — no FB, and no FA either, because nothing was refused. That models a
+// LOST ACKNOWLEDGEMENT ON THE LINK, not an IC-7100 declining to acknowledge, so
+// no capture from a radio could settle it and there is nothing here to lift.
+//
+// It is in this package because of the tier's WRITE QUARANTINE RULE, which the
+// transport engine states and this fake must be able to put a driver through
+// (core/transport, "Command classes are stated, not inferred"): a memory set is
+// an acknowledged write, transmitted EXACTLY ONCE and never retransmitted when
+// the acknowledgement fails to arrive, with an unconditional post-write
+// quarantine drain afterwards whatever the outcome. A radio that always answers
+// cannot take a driver down that branch. This is the radio that hears one set
+// frame and then goes quiet; entry 11's silence is its read-path counterpart,
+// and strands a read the same way.
+//
+// Because the set IS stored, Slot and Transcript still report it, which is how
+// a test tells a lost acknowledgement from a write that never landed. Nothing
+// else changes: reads, 19 00 and every refusal are answered as before.
 //
 // # HARDWARE STATUS: UNVERIFIED
 //

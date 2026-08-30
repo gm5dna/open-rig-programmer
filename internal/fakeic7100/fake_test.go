@@ -397,6 +397,93 @@ func TestTheClearFormIsRefusedInBothPrintedReadings(t *testing.T) {
 	}
 }
 
+func TestWithNoSetAnswerStoresTheSetAndSaysNothing(t *testing.T) {
+	// A TEST LEVER, not a radio behaviour: this is the acknowledgement going
+	// missing on the link, so there is no register entry to lift. See doc.go,
+	// WHAT IS NOT IN THAT REGISTER.
+	//
+	// The radio hears the set and STORES it, exactly as it always does. What
+	// never arrives is the FB — and no FA arrives in its place either, because
+	// nothing was refused.
+	r := New(WithNoSetAnswer())
+
+	rec := equalBlockRecord("LOST ACK")
+	req := append([]byte{0xFE, 0xFE, 0x88, 0xE0, 0x1A, 0x00, 0x02, 0x00, 0x42}, rec...)
+	req = append(req, 0xFD)
+	if _, err := r.Port().Write(req); err != nil {
+		t.Fatalf("writing the set: %v", err)
+	}
+
+	// Give the radio a moment to be wrong, then close it and read the wire
+	// directly. Close leaves any queued bytes readable and reports io.EOF only
+	// once the queue is drained, so a single byte of answer would show up here.
+	//
+	// This is spelt out rather than handed to readFrames(t, r, 0), whose want=0
+	// path returns before its reader has looked at the pipe at all.
+	time.Sleep(50 * time.Millisecond)
+	if err := r.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	buf := make([]byte, 512)
+	if n, err := r.Port().Read(buf); n != 0 || err != io.EOF {
+		t.Errorf("the radio said %s (err %v) — an unanswered set must put no byte on the wire, neither FB nor FA", hexBytes(buf[:n]), err)
+	}
+
+	held, ok := r.Slot(2, 42)
+	if !ok {
+		t.Fatal("bank B channel 42 is empty — an unanswered set must still be stored")
+	}
+	if !bytes.Equal(held, rec) {
+		t.Errorf("stored record differs from the one sent:\n got %s\nwant %s", hexBytes(held), hexBytes(rec))
+	}
+
+	// And the frame is on the transcript, once: what a driver's write path is
+	// tested for here is that it sends the set exactly once and never
+	// retransmits it when the acknowledgement fails to come back.
+	// The frame is on the transcript exactly as it was written: two preamble
+	// bytes in, two preamble bytes recorded.
+	assertFrames(t, r.Transcript(), [][]byte{req})
+}
+
+func TestWithNoSetAnswerLeavesEverythingElseAnswered(t *testing.T) {
+	// Only the acknowledgement is lost. Reads, 19 00 and every refusal are
+	// unchanged, which is what makes the lever usable in a test that has to get
+	// the radio talking again after the silence.
+	r := New(WithNoSetAnswer())
+	defer r.Close()
+
+	rec := equalBlockRecord("SCRATCH")
+	set := append([]byte{0xFE, 0xFE, 0x88, 0xE0, 0x1A, 0x00, 0x01, 0x00, 0x01}, rec...)
+	set = append(set, 0xFD)
+	if _, err := r.Port().Write(set); err != nil {
+		t.Fatalf("writing the set: %v", err)
+	}
+
+	// The very next frame off the wire is the READ's answer. Had the set been
+	// acknowledged, an FB would have arrived first and this comparison would
+	// fail on it.
+	back := exchange(t, r, 1, []byte{0xFE, 0xFE, 0x88, 0xE0, 0x1A, 0x00, 0x01, 0x00, 0x01, 0xFD})
+	want := []byte{0xFE, 0xFE, 0xE0, 0x88, 0x1A, 0x00, 0x01, 0x00, 0x01}
+	want = append(want, rec...)
+	want = append(want, 0xFD)
+	assertFrames(t, back, [][]byte{want})
+
+	// A set this radio REFUSES is still refused out loud: the lever suppresses
+	// an acknowledgement, not an answer.
+	short := make([]byte, 110)
+	copy(short, rec)
+	bad := append([]byte{0xFE, 0xFE, 0x88, 0xE0, 0x1A, 0x00, 0x01, 0x00, 0x02}, short...)
+	bad = append(bad, 0xFD)
+	assertFrames(t, exchange(t, r, 1, bad), [][]byte{{0xFE, 0xFE, 0xE0, 0x88, 0xFA, 0xFD}})
+
+	// So is the printed clear form, and so is a frame for another command.
+	clear := []byte{0xFE, 0xFE, 0x88, 0xE0, 0x1A, 0x00, 0x01, 0x00, 0x01, 0xFF, 0xFD}
+	assertFrames(t, exchange(t, r, 1, clear), [][]byte{{0xFE, 0xFE, 0xE0, 0x88, 0xFA, 0xFD}})
+
+	got := exchange(t, r, 1, []byte{0xFE, 0xFE, 0x88, 0xE0, 0x19, 0x00, 0xFD})
+	assertFrames(t, got, [][]byte{{0xFE, 0xFE, 0xE0, 0x88, 0x19, 0x00, 0xDE, 0xAD, 0xFD}})
+}
+
 func TestUnknownCommandsAreRefused(t *testing.T) {
 	r := New()
 	defer r.Close()
