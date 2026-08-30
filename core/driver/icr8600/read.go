@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -164,6 +165,30 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 	return neutralChannel(rec, slot, s.caps), nil
 }
 
+// admittedFreq and admittedInt carry a decoded value only when the declared
+// capability domain admits it. Outside it the value is dropped rather than
+// carried alongside Unknown, so nothing downstream can read it back.
+func admittedFreq(v uint64, admitted bool) codeplug.FreqField {
+	if !admitted {
+		return codeplug.FreqField{State: codeplug.Unknown}
+	}
+	return codeplug.FreqField{State: codeplug.Known, Value: v}
+}
+
+func admittedInt(v int, admitted bool) codeplug.IntField {
+	if !admitted {
+		return codeplug.IntField{State: codeplug.Unknown}
+	}
+	return codeplug.IntField{State: codeplug.Known, Value: v}
+}
+
+// admitsProgramStep applies the same bound codeplug.Validate applies, so a
+// read this driver calls Known is one the validator accepts.
+func admitsProgramStep(caps spec.Capabilities, v uint64) bool {
+	r := caps.ProgramTuningStepRange
+	return r != nil && r.ResolutionHz != 0 && v >= r.MinHz && v <= r.MaxHz && v%r.ResolutionHz == 0
+}
+
 func neutralChannel(rec civ.MemoryRecord, slot string, caps spec.Capabilities) codeplug.Channel {
 	freq, _ := rec.RXFreqHz.Get()
 	mode, _ := rec.Mode.Get()
@@ -193,12 +218,21 @@ func neutralChannel(rec civ.MemoryRecord, slot string, caps spec.Capabilities) c
 		OffsetHz: codeplug.FreqField{State: codeplug.Known, Value: offset},
 		ToneMode: unavailableString, ToneTx: unavailableTone, ToneRx: unavailableTone,
 		DTCSCode: unavailableInt, DTCSPolarity: unavailableString,
-		Filter:              codeplug.StringField{State: codeplug.Known, Value: filter},
-		DataMode:            unavailableBool,
-		TuningStepEnabled:   codeplug.BoolField{State: codeplug.Known, Value: tsEnabled == "ON"},
-		TuningStep:          codeplug.StringField{State: codeplug.Known, Value: ts},
-		ProgramTuningStepHz: codeplug.FreqField{State: codeplug.Known, Value: programStep},
-		AttenuatorDB:        codeplug.IntField{State: codeplug.Known, Value: int(attenuator)},
+		Filter:            codeplug.StringField{State: codeplug.Known, Value: filter},
+		DataMode:          unavailableBool,
+		TuningStepEnabled: codeplug.BoolField{State: codeplug.Known, Value: tsEnabled == "ON"},
+		TuningStep:        codeplug.StringField{State: codeplug.Known, Value: ts},
+		// The civ spans are WIDER than the declared capability domains:
+		// the programmable step admits 0000 against an ASSUMED MinHz of
+		// 100 (matrix 1b.2 sets no floor and does not say whether 0000
+		// is admissible), and the attenuator is any BCD 00-99 against
+		// the four printed steps. A radio may answer such a value, and
+		// calling it Known fabricates a codeplug codeplug.Validate then
+		// refuses to save. Unknown is the honest state — the treatment
+		// ToneRx already gets below. Pinned by
+		// TestRead_ValuesOutsideTheDeclaredDomainsReadUnknownNotKnown.
+		ProgramTuningStepHz: admittedFreq(programStep, admitsProgramStep(caps, programStep)),
+		AttenuatorDB:        admittedInt(int(attenuator), slices.Contains(caps.AttenuatorDB, int(attenuator))),
 		Preamp:              codeplug.StringField{State: codeplug.Known, Value: preamp},
 		Antenna:             codeplug.StringField{State: codeplug.Known, Value: antenna},
 		IPPlus:              codeplug.BoolField{State: codeplug.Known, Value: ipPlus == "ON"},
@@ -214,7 +248,9 @@ func neutralChannel(rec civ.MemoryRecord, slot string, caps spec.Capabilities) c
 		}
 	}
 	if v, ok := rec.DTCSCode.Get(); ok {
-		d.DTCSCode = codeplug.IntField{State: codeplug.Known, Value: int(v)}
+		// Three BCD digits span 000-999; only the 512 octal-shaped
+		// combinations are codes this radio declares.
+		d.DTCSCode = admittedInt(int(v), slices.Contains(caps.DTCSCodes, int(v)))
 	}
 	if v, ok := rec.DTCSPolarity.Get(); ok {
 		d.DTCSPolarity = codeplug.StringField{State: codeplug.Known, Value: v}
