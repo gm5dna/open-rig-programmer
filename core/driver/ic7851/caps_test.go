@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/gm5dna/open-rig-programmer/core/civ"
+	civic7851 "github.com/gm5dna/open-rig-programmer/core/civ/ic7851"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
@@ -190,9 +192,92 @@ func TestPreBuildRefusalEnforcesTheCapabilityBounds(t *testing.T) {
 	}
 }
 
-func TestWriteTrialsCompletePinnedFalse(t *testing.T) {
+func TestWriteTrialsComplete_PinnedFalse(t *testing.T) {
 	if writeTrialsComplete7851 || writeTrialsComplete7850 {
 		t.Fatal("write trial guard unlocked")
+	}
+	// AND NEITHER ARM IS WRITABLE WITHOUT CONSENT while they are false.
+	// The constants are not read by Capabilities, deliberately, so this is
+	// what actually holds the fail-safe down.
+	for _, caps := range []spec.Capabilities{New7851().Capabilities(), New7850().Capabilities()} {
+		for _, b := range caps.Banks {
+			for f, sup := range b.Fields {
+				if sup.CanWrite() {
+					t.Errorf("%s is writable on bank %s with both write-trial guards false", f, b.ID)
+				}
+			}
+		}
+	}
+}
+
+// TestBaseline_Validate runs the shared validator over every capability
+// set this package can hand out, including the consented transforms: an
+// invalid set is a set no registry would accept and no UI could render.
+func TestBaseline_Validate(t *testing.T) {
+	for name, caps := range map[string]spec.Capabilities{
+		"unverified":            capabilitiesUnverified(),
+		"simulated":             capabilitiesSimulated(),
+		"unverified+consent":    spec.ConsentUnverifiedWrites(capabilitiesUnverified()),
+		"simulated+consent":     spec.ConsentUnverifiedWrites(capabilitiesSimulated()),
+		"IC-7851 constructor":   New7851().Capabilities(),
+		"IC-7850 constructor":   New7850().Capabilities(),
+		"IC-7851 simulated arm": New7851(WithSimulatedProfile()).Capabilities(),
+	} {
+		if err := caps.Validate(); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
+// TestModes_MatchTheCodec and TestFilters_MatchTheCodec pin the
+// vocabularies caps.go writes out against the codec's own enum tables.
+//
+// THE DUPLICATION IS DELIBERATE AND THESE TESTS ARE WHAT MAKE IT SAFE.
+// core/civ/ic7851's enum maps live inside a frozen, evidence-bound
+// package; the capability lists are the UI's vocabulary and its order is a
+// display choice. Writing them out here and pinning them against the codec
+// keeps one radio's reading in one place without the driver reaching into
+// the codec's tables at run time.
+func TestModes_MatchTheCodec(t *testing.T) {
+	checkVocabulary(t, civ.FieldMode, New7851().Capabilities().Modes)
+}
+func TestFilters_MatchTheCodec(t *testing.T) {
+	checkVocabulary(t, civ.FieldFilter, New7851().Capabilities().Filters)
+}
+func TestToneModes_MatchTheCodec(t *testing.T) {
+	caps := New7851().Capabilities()
+	names := make([]string, len(caps.ToneModes))
+	for i, m := range caps.ToneModes {
+		names[i] = m.Value
+	}
+	checkVocabulary(t, civ.FieldToneMode, names)
+}
+
+func checkVocabulary(t *testing.T, field civ.FieldID, declared []string) {
+	t.Helper()
+	var codec map[byte]string
+	for _, sp := range civic7851.Profile().Layouts()[0].Fields {
+		if sp.Field == field {
+			codec = sp.Enum
+		}
+	}
+	if codec == nil {
+		t.Fatalf("the codec maps no %s span", field)
+	}
+	if len(codec) != len(declared) {
+		t.Fatalf("the capability declares %d %s values and the codec maps %d: %v vs %v", len(declared), field, len(codec), declared, codec)
+	}
+	have := map[string]bool{}
+	for _, v := range declared {
+		if have[v] {
+			t.Errorf("the capability declares %s %q twice", field, v)
+		}
+		have[v] = true
+	}
+	for code, name := range codec {
+		if !have[name] {
+			t.Errorf("the codec decodes %#02x as %s %q, which the capability does not declare — a record this driver can READ would then carry a value its own UI refuses", code, field, name)
+		}
 	}
 }
 
