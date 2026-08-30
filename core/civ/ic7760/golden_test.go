@@ -5,11 +5,14 @@ package ic7760_test
 import (
 	"bytes"
 	"encoding/hex"
+	"errors"
+	"reflect"
+	"strings"
+	"testing"
+
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic7760"
 	"os"
-	"strings"
-	"testing"
 )
 
 func goldenVectors(t *testing.T) map[string][]byte {
@@ -65,8 +68,15 @@ func TestGolden(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Name != goldenRecord().Name || got.RXFreqHz != goldenRecord().RXFreqHz {
-		t.Errorf("golden round trip = %+v", got)
+	if want := goldenRecord(); got != want {
+		t.Errorf("golden parse did not compare field-for-field:\n got %+v\nwant %+v", got, want)
+	}
+	reencoded, err := p.BuildMemorySet(got)
+	if err != nil {
+		t.Fatalf("re-encode parsed golden: %v", err)
+	}
+	if !bytes.Equal(reencoded.Bytes(), v["set-record-name-with-space"]) {
+		t.Errorf("re-encoded parsed golden = % X, want byte-identical % X", reencoded.Bytes(), v["set-record-name-with-space"])
 	}
 	id, err := p.BuildTransceiverIDRead()
 	if err != nil {
@@ -82,10 +92,81 @@ func TestGolden(t *testing.T) {
 			t.Errorf("ID token %#02x parsed %q, err %v", token, parsed, err)
 		}
 	}
-	if _, err := p.ParseMemoryAnswer(append(answer[:len(answer)-2], 0xfd)); err == nil {
-		t.Error("wrong record length accepted")
+	if _, err := p.ParseMemoryAnswer(append(answer[:len(answer)-2], 0xfd)); !errors.Is(err, civ.ErrRecordLength) {
+		t.Errorf("wrong record length error = %v, want ErrRecordLength", err)
 	}
 	if !p.AllowedCommand(v["read-transceiver-id"]) {
 		t.Error("documented diagnostic ID read was refused")
+	}
+}
+
+func TestGoldenNegativeVectors(t *testing.T) {
+	p := ic7760.Profile()
+	set := append([]byte(nil), goldenVectors(t)["set-record-name-with-space"]...)
+	answer := append([]byte(nil), set...)
+	answer[2], answer[3] = answer[3], answer[2]
+
+	t.Run("wrong mode enum", func(t *testing.T) {
+		bad := append([]byte(nil), answer...)
+		bad[14] = 0x06 // record offset 6; 06 is absent from the printed mode enum.
+		if _, err := p.ParseMemoryAnswer(bad); err == nil || !strings.Contains(err.Error(), "mode") {
+			t.Errorf("ParseMemoryAnswer error = %v, want mode-enum refusal", err)
+		}
+	})
+	t.Run("wrong data enum", func(t *testing.T) {
+		bad := append([]byte(nil), set...)
+		bad[16] = 0x40 // record offset 8 high nibble; the printed domain ends at 3.
+		if p.AllowedCommand(bad) {
+			t.Error("gate admitted data-mode nibble 4")
+		}
+	})
+	t.Run("unsupported fields", func(t *testing.T) {
+		for name, mutate := range map[string]func(*civ.MemoryRecord){
+			"TX frequency": func(r *civ.MemoryRecord) { r.TXFreqHz = civ.Available[uint64](14_200_000) },
+			"data mode":    func(r *civ.MemoryRecord) { r.DataMode = civ.Available("DATA 1") },
+			"select":       func(r *civ.MemoryRecord) { r.Select = civ.Available("★1") },
+		} {
+			t.Run(name, func(t *testing.T) {
+				rec := goldenRecord()
+				mutate(&rec)
+				if cmd, err := p.BuildMemorySet(rec); err == nil || !cmd.IsZero() {
+					t.Errorf("BuildMemorySet = % X, %v; want zero command and refusal", cmd.Bytes(), err)
+				}
+			})
+		}
+	})
+	t.Run("clear forms", func(t *testing.T) {
+		forms := [][]byte{
+			{0xFE, 0xFE, 0xB2, 0xE0, 0x0B, 0xFD},
+			{0xFE, 0xFE, 0xB2, 0xE0, 0x1A, 0x00, 0x00, 0x01, 0xFF, 0xFD},
+		}
+		for _, frame := range forms {
+			if p.AllowedCommand(frame) {
+				t.Errorf("gate admitted clear frame % X", frame)
+			}
+		}
+	})
+	t.Run("malformed names", func(t *testing.T) {
+		for _, name := range []string{"ELEVENCHARS", "BAD\nNAME"} {
+			rec := goldenRecord()
+			rec.Name = civ.Available(name)
+			if _, err := p.BuildMemorySet(rec); err == nil {
+				t.Errorf("BuildMemorySet accepted malformed name %q", name)
+			}
+		}
+		bad := append([]byte(nil), answer...)
+		bad[23] = 0x00 // record offset 15, first name byte.
+		if _, err := p.ParseMemoryAnswer(bad); err == nil || !strings.Contains(err.Error(), "name") {
+			t.Errorf("ParseMemoryAnswer error = %v, want malformed-name refusal", err)
+		}
+	})
+
+	// The frozen vector itself is the final negative-vector control: it must
+	// remain accepted exactly as written after all mutations above.
+	if !p.AllowedCommand(set) {
+		t.Error("the unchanged frozen set vector was refused")
+	}
+	if got := goldenRecord(); reflect.ValueOf(got).NumField() != 15 {
+		t.Fatalf("MemoryRecord field count = %d, want 15; update the full-field golden comparison for new fields", reflect.ValueOf(got).NumField())
 	}
 }
