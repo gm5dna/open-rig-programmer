@@ -123,14 +123,16 @@ func (d *ic7851Driver) Capabilities() spec.Capabilities {
 	return caps
 }
 
-// OpenReport is what Open observed while probing, kept on the  ic7851
+// OpenReport is what Open observed while probing, kept on this package's
 // Session rather than on the neutral seam: driver.SessionDiagnostics
 // carries ONE aggregate counter (core/driver/optional.go) and cannot carry
 // any of this, and widening the neutral seam is a tier-shared change five
 // worktrees would want.
 type OpenReport struct {
 	// IDToken is what the radio answered to 19 00, recorded and NEVER
-	// matched (D5 entry 7, lift R7).
+	// matched: PDF p.253 (folio 18-4)'s command table prints the 19 00
+	// row with no reply value at all (register entry
+	// ic7851-id-reply-value).
 	IDToken []byte
 	// SlotsTried is how many channels the occupied-slot search read
 	// before it stopped.
@@ -174,7 +176,7 @@ type RecordLengthMismatchError struct {
 
 func (e *RecordLengthMismatchError) Error() string {
 	return fmt.Sprintf(
-		"ic7851: %s answered a %d-byte memory record, want %d — the expected length is itself an ASSUMED derivation from one document (D5 entry 6, matrix lift R6), and this refusal names no other model because cross-model record-length distinctness is a Wave-4 tier check",
+		"ic7851: %s answered a %d-byte memory record, want %d — the expected length is itself a derivation from one document (register entry ic7851-record-length), and this refusal names no other model because cross-model record-length distinctness is a Wave-4 tier check",
 		e.Slot, e.Got, e.Want)
 }
 
@@ -280,8 +282,7 @@ func (d *ic7851Driver) open(ctx context.Context, eng *transport.Engine, stats ci
 	// once the session is exchanging frames, a drain that cannot find
 	// quiet means this program can no longer tell its own answers from
 	// somebody else's, and continuing would be guessing. Nothing below
-	// tolerates a drain-cap error, and TestOpen_LaterQuarantineFailureFailsClosed
-	// holds that down.
+	// tolerates a drain-cap error.
 	//
 	// A BROADCAST FLOOD NEVER GETS HERE AT ALL. Frames addressed to 0x00
 	// are counted and dropped by the accumulator before any engine event,
@@ -296,8 +297,9 @@ func (d *ic7851Driver) open(ctx context.Context, eng *transport.Engine, stats ci
 
 	// THE IDENTITY PROBE (spec D3.2). What identifies the radio is that an
 	// ADDRESS-MATCHED 19 00 reply arrived at all: the reply VALUE is
-	// undocumented on every model in this tier (D5 entry 7, matrix lift
-	// R7), so it is recorded as a diagnostic and compared against nothing.
+	// undocumented on every model in this tier — PDF p.253 (folio 18-4)
+	// prints the 19 00 row with no reply value and no cross-reference — so
+	// it is recorded as a diagnostic and compared against nothing.
 	//
 	// The address check belongs to the CODEC — the matcher comes from
 	// Profile.TransceiverIDAnswerMatcher and checks both the `to` and the
@@ -315,7 +317,7 @@ func (d *ic7851Driver) open(ctx context.Context, eng *transport.Engine, stats ci
 		// nothing can be attributed (spec D3.3). A radio at a CI-V baud
 		// other than the assumed 19200 lands here identically, which is
 		// why a wrong default-baud guess costs a clean timeout and never
-		// a wrong byte (OQ2).
+		// a wrong byte. TestE2E_MovedAddressTimesOutCleanly observes it.
 		return nil, fmt.Errorf("ic7851: Open: 19 00 identity probe: %w", err)
 	}
 	token, err := p.ParseTransceiverID(frame)
@@ -350,8 +352,8 @@ func (d *ic7851Driver) open(ctx context.Context, eng *transport.Engine, stats ci
 		report.RecordLength = len(raw)
 		break
 	}
-	// AN EMPTY RADIO OPENS ANYWAY, on address evidence alone (spec D3.2,
-	// D5 entry 2(a), matrix lift R2a). Refusing here would make a radio
+	// AN EMPTY RADIO OPENS ANYWAY, on address evidence alone (spec D3.2).
+	// Refusing here would make a radio
 	// whose memories are all empty unprogrammable by this programme, which
 	// is precisely the radio a user most wants to programme.
 
@@ -509,7 +511,7 @@ func (s *Session) Close() error { return s.eng.Close() }
 // Fingerprint reports the record-only length Open confirmed, and whether
 // it confirmed one at all.
 //
-// AN IC7610-PACKAGE ACCESSOR, NOT A NEUTRAL-SEAM ADDITION.
+// A PACKAGE ACCESSOR, NOT A NEUTRAL-SEAM ADDITION.
 // driver.SessionDiagnostics carries only UnexpectedFrames, and widening
 // the neutral seam to carry a per-tier fingerprint is a tier-shared change
 // five worktrees would want a say in. A caller that needs this reaches for

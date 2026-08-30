@@ -6,32 +6,33 @@ import "github.com/gm5dna/open-rig-programmer/core/driver"
 
 // StopBits reports one stop bit for the CI-V link (8-N-1), per spec D3.1.
 //
-// ASSUMED, ON NO EVIDENCE FROM THIS RADIO'S DOCUMENT. The IC-7851 CI-V
-// Reference Guide says nothing about serial framing anywhere: the words
-// "stop bit", "data bit", "parity" and "8 bit" appear in none of its 17
-// pages, about any port (matrix §3.1, reproduced in full in doc.go with
-// the four-row table naming which port each rate-bearing line is about,
-// and with the mandatory hazard sentence about DATA/RTTY-port
-// "8 bit / 1 stop" lines).
+// ASSUMED, ON NO EVIDENCE FROM THIS RADIO'S DOCUMENT. The IC-7850/IC-7851
+// Instruction Manual says nothing about serial framing anywhere: "stop
+// bit", "start bit", "parity", "data bit", "8 bit", "flow control", "Xon"
+// and "handshake" have zero hits across all 283 pages, about any port
+// (matrix §3.1). doc.go §2 reproduces that sweep in full, names the four
+// pages where such a statement would live and does not, and carries the
+// mandatory hazard sentence about DATA/RTTY-port "8 bit / 1 stop" lines.
 //
-// Register home: D5 entry 8, "Serial framing 8-N-1 (D3.1) per model".
+// Register entry: ic7851-serial-framing.
 //
-// LIFT R8 — Stage R capture  ic7851-framing-8n1: with an IC-7851 at its
-// factory CI-V settings, open its USB CI-V endpoint at 8-N-1 and then at
-// 8-N-2, send FE FE 98 E0 19 00 FD at each, and record which framing
-// returns a well-formed address-matched frame and which returns nothing or
-// garbage. SCOPE: that capture settles which framing THAT radio's USB CI-V
-// endpoint accepts, and nothing wider — not the [REMOTE] jack, not the
-// [LAN] port, and not any other model.
+// THE ONE LIFT, on an IC-7851 itself: open its [USB B] CI-V port at
+// 9600 8-N-1, send FE FE 8E E0 19 00 FD, and confirm an address-matched
+// answer; then repeat at 8-N-2 and at 8-E-1 and record which framings the
+// radio answers under. SCOPE: that capture settles which framing THAT
+// radio's [USB B] CI-V endpoint accepts and nothing wider — not the
+// [REMOTE] jack, not the [LAN] port, and not the IC-7850, which needs its
+// own entry and its own lift.
 //
-// IT IS ON THE DRIVER, NOT THE SESSION, and enabler E2 records why that is
-// forced: internal/wiring holds the driver value BEFORE the port is
-// opened, and the stop bits are chosen at open. A session-side reporter
-// could only be consulted after the framing had already been guessed.
+// IT IS ON THE DRIVER, NOT THE SESSION, and that is forced:
+// internal/wiring holds the driver value BEFORE the port is opened, and
+// the stop bits are chosen at open. A session-side reporter could only be
+// consulted after the framing had already been guessed.
 //
 // PROFILE-INDEPENDENT, and deliberately so: which capability set a caller
 // asked for says nothing about how the radio frames a byte on the wire. An
-// unrecognised Profile reports 1 like the rest.
+// unrecognised Profile reports 1 like the rest, and TestStopBits exercises
+// both rows and the simulated arm.
 //
 // MATERIALITY: transport.DefaultStopBits is 2, so a driver that did NOT
 // implement this interface would have its port opened at 8-N-2 — the

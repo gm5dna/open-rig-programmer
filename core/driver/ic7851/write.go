@@ -261,7 +261,7 @@ func refused(slot string, fields []spec.Field, reason string) (driver.WriteResul
 //	  2. capability gate       requestedFields x FieldSupport -> ErrWriteRefused
 //	  3. field-state shape     non-Known mandatory field      -> ErrWriteRefused
 //	  3b. vocabularies         mode/filter/tone_mode not expressible -> ErrWriteRefused
-//	  4. numeric domains       freq > 69_999_999, tone > 2999 -> *OutOfDomainError
+//	  4. numeric domains       freq and tone outside caps      -> *OutOfDomainError
 //	  -----------------------------------------------------------------------
 //	  5. ONE read              readRaw (T2 address check, T4 rejection branch)
 //	  -----------------------------------------------------------------------
@@ -293,7 +293,7 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	// this refusal stands under consent too.
 	//
 	// UNLIKE YAESU, THE WIRE FORM EXISTS ON THIS RADIO, IN TWO SHAPES —
-	// see doc.go §7 — and no builder for either exists in this tier.
+	// see doc.go §9 — and no builder for either exists in this tier.
 	if ch.Data == nil {
 		return refused(ch.Slot, []spec.Field{spec.FieldErase},
 			"this radio's memory-clear forms are printed in its document but no IC-7851 has ever been asked to use one, so FieldErase carries the zero FieldSupport and consent structurally never reaches it (spec D4 \"Erase\"; matrix §3.13)")
@@ -342,7 +342,7 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	}
 
 	// RUNG 4 — NUMERIC DOMAINS. Defence in depth and NOT the gate; see
-	// OutOfDomainError and doc.go §6.
+	// OutOfDomainError and doc.go §8.
 	if err := domainRefusal(d, s.caps); err != nil {
 		return driver.WriteResult{Steps: []driver.WriteStep{}}, err
 	}
@@ -379,9 +379,9 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	// RUNG 8 — BUILD, GATE, EXCHANGE. BuildMemorySet writes the profile's
 	// Fixed template into every unmapped region and every mapped span
 	// from this record, so the 25 record bytes are always sent in full
-	// (register entry ic7851-full-record-mandatory, matrix lift R15: the
-	// document prints one full-record form and one three-index clear form
-	// and never says whether a short record is accepted).
+	// (the document prints one full-record form and one three-byte clear
+	// form and never says whether a short record is accepted; matrix §3.10
+	// grades the "mandatory" half CANNOT ESTABLISH).
 	rec := civ.MemoryRecord{
 		Address:      a,
 		RXFreqHz:     civ.Available(d.FreqHz),
@@ -403,11 +403,11 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	_, err = s.eng.Do(ctx, cmd, civ.CIVWriteWithAckSpec(p.AcknowledgementMatcher()))
 	switch {
 	case err == nil:
-		// FB arrived. Register entry ic7851-1a00-set-ack, matrix lift
-		// R14: the CODES are MANUAL-EVIDENCED, but that a 1A 00 SET is
-		// answered by one of them is ASSUMED — the nearest printed
-		// statement is about command 29, which this driver does not read
-		// across.
+		// FB arrived. Register entry ic7851-write-ack-fb: the CODES are
+		// MANUAL-EVIDENCED — PDF p.251 (folio 18-2), "◇ Data format",
+		// prints "OK message to controller" FE FE E0 8E FB FD and "NG
+		// message to controller" FE FE E0 8E FA FD — but that a 1A 00 SET
+		// is answered by one of them is ASSUMED.
 		steps[0].Sent = true
 		steps[0].Confirmed = true
 		return driver.WriteResult{Steps: steps}, nil
@@ -462,7 +462,7 @@ func missingMandatory(d codeplug.ChannelData) (spec.Field, string) {
 				}
 			}
 			if !found {
-				return spec.FieldTag, fmt.Sprintf("the tag carries byte %#02x at index %d, which is not in this radio's printed memory-name charset (PDF p.12's two character tables)", d.Tag[i], i)
+				return spec.FieldTag, fmt.Sprintf("the tag carries byte %#02x at index %d, which is not in this radio's printed memory-name charset (PDF p.261, folio 18-12, the Letters and Symbols code tables)", d.Tag[i], i)
 			}
 		}
 	}
@@ -481,10 +481,12 @@ func missingMandatory(d codeplug.ChannelData) (spec.Field, string) {
 // nibble, printed ⑪'s left nibble, the four-valued data mode. Byte 8's LOW
 // nibble is tone_mode and IS mapped.
 //
-// The template is asked for by name (civic7851.FixedTemplate) rather than
-// compared against a literal zero, because E6's ruling is stated in terms
-// of "the profile's Fixed template" and a driver that hard-coded the
-// zeroes would keep passing if the template ever changed.
+// THE FIXED-DIGIT PADS ⑧, ⑫ AND ⑮ ARE NOT E6's BUSINESS, and are refused
+// one layer earlier, on the READ, by fixedDigitsDiffer. They are not
+// regions this radio uses and this programme declines to map; they are
+// bytes the document draws as literal zeros, so a record carrying a digit
+// in one is not a record to refuse a WRITE for — it is a record to refuse
+// outright.
 func unmappedRegionsDiffer(raw []byte) error {
 	// The IC-7851 profile's Fixed template is the all-zero record (Stage-1
 	// geometry test). Keep this driver-side copy local: the profile's public
@@ -535,7 +537,7 @@ func toneRefusalReason(create bool) string {
 
 // noDefaultToneReason is T1(5)'s refuse arm, in words, and it is this
 // model's arm because of an ABSENCE that was actually looked for.
-const noDefaultToneReason = "this slot has no prior record to preserve a tone from, and THIS RADIO'S DOCUMENT PRINTS NO DEFAULT TONE VALUE — all 17 pages were swept for the matrix and no \"Default:\" line appears against the tone frequency; the only tone material is the 1B 00 / 1B 01 digit strip. Tier ruling T1(5)'s REFUSE arm rather than its default arm; register entry ic7851-default-tone-undocumented, whose lift is a capture of 1B 00 and 1B 01 on an IC-7851 taken to All Reset"
+const noDefaultToneReason = "this slot has no prior record to preserve a tone from, and THIS RADIO'S DOCUMENT PRINTS NO DEFAULT TONE VALUE — all 283 pages were swept for the matrix and no \"Default:\" line appears against the tone frequency; the only tone material is PDF p.262 (folio 18-13)'s 1B 00 / 1B 01 digit strip. Tier ruling T1(5)'s REFUSE arm rather than its default arm"
 
 // toneSource settles where a tone span's bytes come from — tier ruling
 // T1(4) and T1(5) — reporting false when the write must be refused.
@@ -608,11 +610,11 @@ func outsideVocabulary(d codeplug.ChannelData, caps spec.Capabilities) (spec.Fie
 		where string
 	}{
 		{spec.FieldMode, d.Mode, caps.Modes,
-			"the record's ⑨ is a mode enum, and PDF p.11's \"①Receiving mode\" column prints these ten codes and no more"},
+			"the record's ⑨ is a mode enum, and PDF p.260's \"① Operating mode\" column prints these ten codes and no more"},
 		{spec.FieldFilter, d.Filter.Value, caps.Filters,
-			"the record's ⑩ is a filter enum, and PDF p.11's \"Filter setting\" column prints these three values and no default"},
+			"the record's ⑩ is a filter enum, and PDF p.260's \"② Filter setting\" column prints these three values and no default"},
 		{spec.FieldToneMode, d.ToneMode.Value, toneModes,
-			"the record's ⑪ low nibble is a tone-mode enum, and PDF p.12's ⑪ sub-diagram prints these three values"},
+			"the record's ⑪ low nibble is a tone-mode enum, and PDF p.263's ⑪ sub-diagram prints these three values"},
 	} {
 		if containsVocab(v.vocab, v.value) {
 			continue

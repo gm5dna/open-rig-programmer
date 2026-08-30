@@ -1,236 +1,292 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Package ic7851 is the Icom IC-7851/IC-7850 driver: the capability profiles,
-// the session probe, the acknowledged write, and the serial-framing
-// report. It is core/driver/ftdx101's sibling above the neutral
-// driver.Driver/Session seam, and the first driver in this tree to sit on
-// a BINARY codec rather than a ';'-terminated one.
+// Package ic7851 is the Icom IC-7851/IC-7850 driver: the capability
+// profiles, the session probe, the acknowledged write, and the
+// serial-framing report. It sits above the neutral driver.Driver/Session
+// seam on a BINARY codec rather than a ';'-terminated one.
 //
 // The wire codec lives next door in core/civ/ic7851 and is imported here
-// as civic7851, exactly as core/driver/ftdx101 imports core/cat/ftdx101 as
-// catftdx101. NOTHING in this package builds a frame, a matcher, a
+// as civic7851. NOTHING in this package builds a frame, a matcher, a
 // command-spec helper or a drain policy of its own: the CI-V framing
-// adapter is core/civ's (enabler E1), the answer matchers are the
-// profile's, and the two command specs come from civ.CIVReadSpec and
-// civ.CIVWriteWithAckSpec. A local re-implementation of any of them would
-// be a second reading of the same protocol, free to drift from the one the
-// gate enforces.
+// adapter is core/civ's, the answer matchers are the profile's, and the
+// two command specs come from civ.CIVReadSpec and civ.CIVWriteWithAckSpec.
+// A local re-implementation of any of them would be a second reading of
+// the same protocol, free to drift from the one the gate enforces.
 //
-// # Provenance
+// This package does not import another model's driver and must not: those
+// drivers' SHAPES are precedents, but their VALUES are their own radios'
+// manual readings, and importing one is how another radio's evidence
+// silently becomes this one's claim.
 //
-// Everything protocol-shaped here comes from the IC-7851 CI-V Reference
-// Guide rev 4, through core/civ/ic7851's profile and through the
-// IC-7851 capability matrix (docs/superpowers/icom-matrices/,
+// # 0. The document
 //
-//	ic7851-capability-matrix.md rev 1 plus its Errata). NO IC-7851 HAS EVER
+// There is NO standalone CI-V reference guide for this model. The whole
+// authority is
 //
-// BEEN CONNECTED TO THIS PROJECT. Every value below is a reading of a
-// document or a stated choice; none is a hardware finding, and
-// writeTrialsComplete7851 and writeTrialsComplete7850 (caps.go) are FALSE in consequence.
+//	IC-7850/IC-7851 Instruction Manual, Revision 3,
+//	document code A7205H-1EX-3, 283 PDF pages, (c) 2015-2018 Icom Inc.
 //
-// This package does not import core/driver/ftdx101, core/driver/ftdx10 or
-// core/driver/ft710, and must not: those drivers' shapes are templates,
-// but their VALUES are their own radios' manual readings, and importing
-// one is how a Yaesu radio's evidence silently becomes an Icom's claim.
+// Its CI-V material is Section 18, "CONTROL COMMAND", which is PDF pages
+// 250-265 (printed folios 18-1 to 18-16). The memory record this driver
+// reads and writes is PDF p.263 (folio 18-14), "• Memory content setting /
+// Command: 1A 00". Citations below give the PDF page first and the printed
+// folio in brackets, because Icom's byte diagrams are vector artwork and a
+// layout-text line number is neither checkable nor evidence.
 //
-// # 1. SERIAL FRAMING - ASSUMED 8-N-1, ON NO EVIDENCE FROM THIS DOCUMENT
+// The reading is the IC-7851 capability matrix trio under
+// docs/superpowers/icom-matrices/ (ic7851-capability-matrix.md rev 1 plus
+// Errata 1-15, its report, and its Approved-with-fixes review), and
+// core/civ/ic7851's frozen evidence legs under that package's testdata.
 //
-// Task 10's framing.go implements driver.SerialFramingReporter on the
-// CONCRETE DRIVER, returning StopBits() == 1. The number is an ASSUMED
-// tier convention (spec D3.1: "Every Icom driver returns 1, as an ASSUMED
-// register entry with a named lift per model"), not a reading of this
-// radio's document.
+// NO IC-7851 AND NO IC-7850 HAS EVER BEEN CONNECTED TO THIS PROJECT.
+// Every value below is a reading of that document or a stated choice; none
+// is a hardware finding, and writeTrialsComplete7851 and
+// writeTrialsComplete7850 (caps.go) are FALSE in consequence.
 //
-// WHAT THIS DOCUMENT SAYS ABOUT SERIAL FRAMING: NOTHING. All 17 pages
-// were rendered at 300 dpi and read. The words "stop bit", "data bit",
-// "parity" and "8 bit" appear NOWHERE in the document, about any port
-// (matrix §3.1).
+// # 1. THE TWO MODELS ARE INDISTINGUISHABLE BY THIS PROGRAMME'S EVIDENCE
+//
+// New7851 and New7850 are two rows over ONE implementation, ONE
+// civ.Profile and ONE address, differing in Model(), Identity and the
+// registry row Wave 4 will add. There is no bare New.
+//
+// THE USER PICKS THE ROW, AND THE PROBE CANNOT NARROW IT (matrix §4):
+//
+//   - The two share one manual: PDF p.1 (front cover), "THE TRANSCEIVERS /
+//     IC-7850 / IC-7851 / Instruction Manual"; PDF metadata Title
+//     "IC-7850/IC-7851 Instruction Manual".
+//   - They share one CI-V address: PDF p.229 (folio 15-18), item "CI-V
+//     Address (Default: 8Eh)", with the note '"8Eh" is the default address
+//     of IC-7850/IC-7851.'
+//   - They share one frame shape: PDF p.251 (folio 18-2), "◇ Data format",
+//     whose diagram legends read "Controller to IC-7850/IC-7851" and
+//     "IC-7850/IC-7851 to controller" — the document addresses the pair
+//     jointly.
+//   - The 19 00 reply value is undocumented for both (§3.12a), so the
+//     probe has nothing to separate them with either.
+//
+// Matrix §4.1 lists the eight places in 283 pages where the document names
+// the two models apart, of which exactly ONE is inside Section 18: PDF
+// p.255 (folio 18-6), the row `1A 05 0078`, "Send/read screen image type
+// (00=A, 01=B, 02=50th Anniversary for only IC-7850)". That is a 1A 05
+// menu value, and this tier's gate refuses ALL 1A 05, so it is unreachable
+// by this programme on either model. Nothing in the CI-V section
+// distinguishes their memory behaviour.
+//
+// EVIDENCE FOR ONE MODEL IS NEVER EVIDENCE FOR THE OTHER. The two
+// write-trial constants are deliberately separate for that reason, and no
+// assumption in the register below covers both with one entry: where the
+// IC-7850 needs the same assumption it gets its own entry with its own
+// lift on an IC-7850 (matrix §4.2).
+//
+// TestE2E_ProbeFingerprints and TestE2E_ConsentedWriteAndReadback run
+// every case for both constructors, which is how the shared-implementation
+// claim is exercised rather than merely written down.
+//
+// # 2. SERIAL FRAMING — ASSUMED 8-N-1, ON NO EVIDENCE FROM THIS DOCUMENT
+//
+// framing.go implements driver.SerialFramingReporter on the CONCRETE
+// driver, returning StopBits() == 1. That is the tier-wide Icom assumption
+// (spec D3.1), not a reading of this radio's document.
+//
+// WHAT THIS DOCUMENT SAYS ABOUT SERIAL FRAMING: NOTHING, ABOUT ANY PORT.
+// All 283 pages of extracted text were searched for "stop bit", "start
+// bit", "parity", "data bit", "8 bit", "8-bit", "bit/1", "flow control",
+// "Xon" and "handshake" — zero hits for every one (matrix §3.1). The only
+// occurrence of the word "bit" in the whole document is a sampling-rate
+// line in the USB audio specifications.
 //
 // THE MANDATORY HAZARD SENTENCE, written down even though this document
-// prints no such line: Icom manuals print "8 bit / 1 stop bit" style lines
+// prints no such line: Icom manuals print "8 bit / 1 stop bit"-style lines
 // about the DATA/RTTY application port, and SUCH A LINE IS NOT EVIDENCE
 // ABOUT CI-V SERIAL FRAMING. Only a statement explicitly about the CI-V /
-// REMOTE / USB CI-V link counts. It is recorded here so that a later
-// reader does not go looking for one and mistake a neighbouring line for
-// it.
+// [REMOTE] / USB CI-V link would count. It is recorded here so a later
+// reader does not go looking for one and mistake a neighbour for it.
 //
-// The four rate-bearing or framing-adjacent lines this document does
-// print, and which port each is about (matrix §3.1's table):
+// The pages where a framing statement would live and does not: PDF p.251
+// (folio 18-2), the CI-V setup page, which names the three things to set —
+// "its address, data communication speed, and transceive function" — and
+// framing is not among them; PDF pp.228-229 (folios 15-17, 15-18), where
+// every CI-V set-mode item is enumerated and there is no framing item; PDF
+// p.274 (folio 20-5), "■ [REMOTE] jack"; and PDF p.267 (folio 19-2), "•
+// CI-V connector: 2-conductor 3.5 (d) mm", which is a connector and not a
+// framing statement.
 //
-//   - PDF p.3 (folio 2), "◇ Preparing": "To control the transceiver, first
-//     set its address, data communication speed, and transceive function.
-//     These settings are set in Set mode (Refer to the IC-7851 instruction
-//     manual)." — CI-V, explicitly. NOT framing evidence: it names "data
-//     communication speed" as a settable item and defers its value, and
-//     everything about the link's framing, to a document this project does
-//     not hold.
-//   - PDF p.10 (folio 9), "◇ Command table" footnote *4: "• 115200 bps:
-//     150 FEs" … "• 4800 bps: 7 FEs" — CI-V, explicitly (the preamble a
-//     power-ON frame needs at each rate). NOT framing evidence: line rates
-//     only, no word about data bits, parity or stop bits.
-//   - PDF p.10 (folio 9), footnote *7: "need to select 115200 in the CI-V
-//     Baud Rate item", "MENU » SET > Connectors > CI-V" — CI-V,
-//     explicitly, but scoped to using [USB 1] for scope waveform output.
-//     NOT framing evidence.
-//   - PDF p.7 (folio 6), row "1A 05 01 21": "Connectors > Decode Baud Rate
-//     (00=4800 bps, 01=9600 bps, 02=19200 bps, 03=38400 bps)" — NOT CI-V.
-//     This is the internal RTTY/PSK DECODER's baud rate, and IT MUST NEVER
-//     BE READ AS CI-V EVIDENCE. It is the nearest thing in this document
-//     to the classic DATA/RTTY-port trap: a "baud rate" row sitting three
-//     rows below the CI-V rows in the same column.
+// MATERIALITY, verified: transport.DefaultStopBits is 2, so a driver that
+// did NOT implement this interface would have its port opened at 8-N-2 —
+// the silent divergence spec D3.1 exists to prevent. internal/wiring
+// consults this and refuses any value but 1 or 2 rather than substituting
+// a default. TestStopBits pins the value on both rows and on both
+// capability arms.
 //
-// MATERIALITY, verified: transport.DefaultStopBits is 2, so without the
-// reporter an IC-7851 would open at 8-N-2 against the tier's assumed
-// 8-N-1 — the silent divergence spec D3.1 exists to prevent.
+// # 3. CONTROL-LINE POLICY — THIS DRIVER NEVER TOGGLES RTS OR DTR
 //
-// Register home: D5 entry 8, "Serial framing 8-N-1 (D3.1) per model".
-// Lift R8 — see framing.go, which carries the capture verbatim.
+// No page states what the radio expects on RTS or DTR, and there is no
+// flow-control setting anywhere (matrix §3.2). The [REMOTE] jack is a
+// 2-conductor 3.5 mm mini plug — a single-wire bidirectional bus with no
+// modem control lines at all — so on that path the question does not
+// arise.
 //
-// # 2. CONTROL-LINE POLICY - THIS DRIVER NEVER TOGGLES RTS OR DTR
+// ON THE [USB B] PATH IT DOES, AND THE DOCUMENT SUPPLIES THE HAZARD RATHER
+// THAN THE ANSWER. PDF p.229 (folio 15-18) and PDF p.230 (folio 15-19),
+// three consecutive items:
 //
-// WHAT THE DOCUMENT SAYS ABOUT RTS/DTR AT OPEN, OR ABOUT FLOW CONTROL ON
-// THE CI-V LINK: NOTHING. All 17 pages swept at 300 dpi. There is no
-// handshake statement, no flow-control setting and no statement about the
-// state of any modem control line (matrix §3.2).
+//	USB SEND           (Default: OFF)  OFF | USB1 DTR | USB1 RTS | USB2 DTR | USB2 RTS
+//	USB Keying (CW)    (Default: OFF)  the same five options
+//	USB Keying (RTTY)  (Default: OFF)  the same five options
 //
-// WHAT IT DOES SAY, AND WHY IT MATTERS - A HAZARD, NOT A PERMISSION. PDF
-// p.7 (folio 6), "◇ Command table", left column, three consecutive rows:
+// with "USB1 DTR: Use the DTR terminal on the CI-V (PC) side" and "USB1
+// RTS: Use the RTS terminal on the CI-V (PC) side".
 //
-//	1A 05  00 95  00 ~ 04  Connectors > USB SEND/Keying > USB SEND
-//	                       (00=OFF, 01=USB1(A) DTR, 02=USB1(A) RTS,
-//	                        03=USB1(B) DTR, 04=USB1(B) RTS)
-//	1A 05  00 96  00 ~ 04  … USB Keying (CW)    — same five values
-//	1A 05  00 97  00 ~ 04  … USB Keying (RTTY)  — same five values
+// MANUAL-EVIDENCED: at the factory all three are OFF, so DTR and RTS on
+// the CI-V virtual port carry no function. THE HAZARD, RECORDED AND NOT
+// RESOLVED: they can be moved to USB1 DTR or USB1 RTS, which binds the
+// very lines a host CDC driver typically raises when it opens a port to
+// the transmitter's SEND or to CW/RTTY keying. On a radio whose owner has
+// done so, a session open that asserted RTS or DTR could key a 200 W
+// transmitter.
 //
-// MANUAL-EVIDENCED: on this radio, DTR and RTS of either USB serial
-// endpoint can be assigned to PTT (USB SEND) or to CW/RTTY keying. The
-// CI-V endpoint is one of those same USB serial ports — PDF p.3 (folio 2),
-// "◇ CI-V connection": "Use a USB cable (user supplied) to connect the
-// IC-7851 and the PC (controller)", with the callout "To the [USB 1] port"
-// on a Type-B socket.
+// THE POLICY: transport.OpenSerial already drives both lines low at open,
+// before this driver ever sees the port, and THIS DRIVER NEVER TOGGLES
+// EITHER. transport.Port is an io.ReadWriteCloser and carries neither
+// method, so the only route to one is a type assertion;
+// TestOpen_ControlLinesAreNeverToggled hands the driver a port that DOES
+// offer both and counts any use, so such an assertion becomes visible the
+// moment anyone writes one.
 //
-// ERRATUM 8's ADDITION: THE DOCUMENT NEVER SAYS WHICH OF THE TWO ENDPOINTS
-// CARRIES CI-V. All 17 pages were swept; no line identifies the CI-V
-// endpoint among the [USB 1] sub-ports. That silence is part of why the
-// conservative choice is the only defensible one — a driver cannot know
-// whether the endpoint it has opened is the one whose DTR or RTS has been
-// assigned to PTT.
-//
-// CONSEQUENCE, RECORDED: a driver that asserts RTS or DTR when it opens
-// the CI-V port CAN KEY THE TRANSMITTER of a radio whose owner has set
-// USB SEND to that line.
-//
-// THE POLICY: transport.OpenSerial already drives both lines low at open
-// (core/transport/port.go, safety obligation 4), before this driver ever
-// sees the port, and THIS DRIVER NEVER TOGGLES EITHER. transport.Port is
-// an io.ReadWriteCloser and carries neither method, so the only way to
-// reach one is a type assertion; TestOpen_ControlLinesAreNeverToggled
-// exists to make such an assertion visible if anyone ever writes one.
-//
-// # 3. THE PROBE
+// # 4. THE PROBE
 //
 // Open's whole wire traffic is: NOTHING for Init, one 19 00 read, and up
-// to probeSlotCount 1A 00 reads. TestOpen_InitWritesNothing compares the
-// exact byte sequence.
+// to probeSlotCount 1A 00 reads. TestE2E_InitAndProbeSendNothingElse
+// compares the exact byte sequence against
 //
-//   - NO RADIO MUTATION AT INIT, EVER. E1's InitSequence() is EMPTY
-//     (core/civ/framing.go), which is a safety property rather than an
-//     omission: transceive broadcasts are excluded STRUCTURALLY, by
-//     address filtering, instead of by writing a transceive-off setting,
-//     so opening a session touches nothing outside the consent regime. No
-//     1A 05, no transceive set, no clear.
+//		FE FE 8E E0 19 00 FD
+//		FE FE 8E E0 1A 00 00 01 FD
 //
-//   - THE IDENTITY STEP. A 19 00 read to 98h, with an ADDRESS-MATCHED
-//     reply REQUIRED. The reply VALUE is undocumented on every model in
-//     this tier (D5 entry 7, matrix lift R7), so it is RECORDED and NEVER
-//     MATCHED: Session.Identity().CATID is the static address followed by
-//     the observed token, and OpenReport.IDToken keeps the raw bytes for a
-//     future hardware lift to compare against. Three different tokens all
-//     open a session, and TestOpen_IDTokenIsRecordedNeverMatched pins that.
+//	  - NO RADIO MUTATION AT INIT, EVER. The CI-V InitSequence is EMPTY, a
+//	    safety property rather than an omission: transceive broadcasts are
+//	    excluded STRUCTURALLY, by address filtering, instead of by writing a
+//	    transceive-off setting, so opening a session touches nothing outside
+//	    the consent regime. No 1A 05, no transceive set, no clear. There is
+//	    no admitted frame that could turn transceive off even if this
+//	    project wanted one — CI-V Transceive is a set-mode item and 1A 05 is
+//	    a tier non-goal.
 //
-//   - THE BOUNDED OCCUPIED-SLOT SEARCH. Channels 1..probeSlotCount are
-//     read until one answers with a record. A rejection means "empty, keep
-//     looking" — and under tier ruling T4 that branch keys on
-//     errors.Is(err, transport.ErrRejected), because Engine.Do consumes
-//     the FA and returns NO frame. Nothing here calls civ.IsRejection.
+//	  - THE IDENTITY STEP. A 19 00 read to 8E, with an ADDRESS-MATCHED reply
+//	    REQUIRED. PDF p.253 (folio 18-4)'s command table prints the row
+//	    "19 | 00 | Read the transceiver ID" with NO reply value and no "see
+//	    p." cross-reference: no page in this document says what an IC-7851
+//	    answers. So the value is RECORDED and NEVER MATCHED —
+//	    Session.Identity().CATID is the static address followed by the
+//	    observed token, and OpenReport.IDToken keeps the raw bytes for a
+//	    future hardware lift to compare against. TestE2E_ProbeFingerprints
+//	    opens a session against three different tokens, which is what makes
+//	    "never matched" a demonstrated claim.
 //
-//   - THE 25-BYTE FINGERPRINT, AND IT IS CONTINUOUS. Twenty-five is the
-//     RECORD-ONLY length, excluding the two channel-selector bytes (spec
-//     Erratum 1; the data area including them is 27 and the whole set
-//     frame is 34). It is confirmed at the probe and then RE-VALIDATED ON
-//     EVERY RECORD READ, because civ.Profile.MemoryAnswerRecord checks the
-//     length on every call. A record at any other length fails with an
-//     error satisfying errors.Is(err, driver.ErrWrongRadio) — see
-//     RecordLengthMismatchError, which NAMES NO FOUND MODEL:
-//     cross-model record-length distinctness is a TIER-LEVEL WAVE-4 CHECK
-//     and this model has no registered sibling.
+//	  - THE BOUNDED OCCUPIED-SLOT SEARCH. Channels 1..probeSlotCount are
+//	    read until one answers with a record. A rejection means "empty, keep
+//	    looking", and that branch keys on errors.Is(err,
+//	    transport.ErrRejected) because Engine.Do consumes the FA and returns
+//	    NO frame. Nothing here calls civ.IsRejection.
 //
-//   - AN EMPTY RADIO OPENS UNFINGERPRINTED, on address evidence alone
-//     (spec D3.2, D5 entry 2(a), matrix lift R2a). Refusing there would
-//     make a radio whose memories are all empty unprogrammable by this
-//     programme, which is precisely the radio a user most wants to
-//     programme.
+//	  - THE 25-BYTE FINGERPRINT, AND IT IS CONTINUOUS. Twenty-five is the
+//	    RECORD-ONLY length, excluding the two channel-selector bytes; the
+//	    data area including them is 27 and the whole set frame is 34. It is
+//	    confirmed at the probe and RE-VALIDATED ON EVERY RECORD READ,
+//	    because civ.Profile.MemoryAnswerRecord checks the length on every
+//	    call. A record at any other length fails with an error satisfying
+//	    errors.Is(err, driver.ErrWrongRadio) — see RecordLengthMismatchError,
+//	    which NAMES NO FOUND MODEL, because cross-model record-length
+//	    distinctness is a TIER-LEVEL WAVE-4 check and this package holds no
+//	    table of other radios' lengths.
+//	    TestE2E_WrongRecordLengthRefusesTheRadio drives a 24- and a 26-byte
+//	    radio.
 //
-//   - THE R9-SPLIT INIT-UNDER-FLOOD RULE, BOTH HALVES. (a) A BROADCAST
-//     flood (to = 00) never reaches the engine at all: civ's accumulator
-//     counts and NEVER RETURNS those frames, so the drain's idle timer is
-//     never re-armed, Engine.Init SUCCEEDS, and what rises is the
-//     ADAPTER's Unexpected counter. (b) A CONTROLLER-ADDRESSED flood
-//     (to = E0) does reach the engine and drives Init's drain to its
-//     absolute cap; that INITIAL failure is NONFATAL-WITH-DIAGNOSTIC
-//     (OpenReport.InitDrainCapExceeded), because E1's drain is bounded
-//     precisely so it cannot fail the open. EVERY LATER QUARANTINE DRAIN
-//     FAILURE REMAINS FAIL-CLOSED: once the session is exchanging frames,
-//     a drain that cannot find quiet means this program can no longer tell
-//     its own answers from somebody else's. Two tests hold the two halves
-//     apart so neither can be relaxed into the other.
+//	  - AN EMPTY RADIO OPENS UNFINGERPRINTED, on address evidence alone
+//	    (spec D3.2). Refusing there would make a radio whose memories are
+//	    all empty unprogrammable by this programme, which is precisely the
+//	    radio a user most wants to programme. The two unverified empty
+//	    readings reach the probe differently and
+//	    TestE2E_EmptyRadioOpensUnfingerprinted keeps them apart: an FA
+//	    returns no frame and teaches the probe nothing, while an all-FF
+//	    answer IS a record of the declared length and settles the LENGTH
+//	    even though the slot is empty.
 //
-//   - THE TWO LIMITATIONS, STATED PLAINLY (spec D3.3). A radio at a CI-V
-//     address other than 98h times out — this driver builds every frame
-//     for 98h and the codec refuses any answer not from 98h, and there is
-//     no --civ-address option. A DIFFERENT ICOM MODEL at ITS factory
-//     address times out identically: nothing was heard from, so nothing
-//     can be attributed, and Open reports a timeout rather than a
-//     wrong-radio refusal.
+//	  - THE INIT-UNDER-FLOOD RULE, BOTH HALVES. (a) A BROADCAST flood
+//	    (to = 00) never reaches the engine at all: civ's accumulator counts
+//	    and NEVER RETURNS those frames, so the drain's idle timer is never
+//	    re-armed, Engine.Init SUCCEEDS, and what rises is the ADAPTER's
+//	    Unexpected counter — which is why Session.Diagnostics SUMS the
+//	    adapter's count with the engine's rather than trusting either.
+//	    (b) A CONTROLLER-ADDRESSED flood does reach the engine and can drive
+//	    Init's drain to its absolute cap; that INITIAL failure is
+//	    NONFATAL-WITH-DIAGNOSTIC (OpenReport.InitDrainCapExceeded), because
+//	    the drain is bounded precisely so it cannot fail the open. EVERY
+//	    LATER DRAIN FAILURE REMAINS FATAL: once the session is exchanging
+//	    frames, a drain that cannot find quiet means this programme can no
+//	    longer tell its own answers from somebody else's.
+//	    TestE2E_FloodsDoNotStarveTheSession runs a whole 101-slot read under
+//	    each flood.
 //
-//   - FINGERPRINT AND OPENDIAGNOSTICS ARE IC7610-PACKAGE ACCESSORS, NOT
-//     NEUTRAL-SEAM ADDITIONS. driver.SessionDiagnostics carries ONE
-//     aggregate counter, and widening the neutral seam to carry a per-tier
-//     fingerprint is a tier-shared change five worktrees would want a say
-//     in. A deliberate scope choice.
+//	  - THE TWO LIMITATIONS, STATED PLAINLY (spec D3.3). A radio at a CI-V
+//	    address other than 8E TIMES OUT: this driver builds every frame for
+//	    8E, the codec refuses any answer not from 8E, and there is no
+//	    --civ-address option and no address sweep.
+//	    TestE2E_MovedAddressTimesOutCleanly observes it, and observes that
+//	    the failure is a timeout rather than a wrong-radio refusal —
+//	    nothing was heard from, so nothing can be attributed. A DIFFERENT
+//	    ICOM MODEL at ITS factory address fails identically.
 //
-// # 4. THE DEFAULT BAUD (OQ2)
+//	  - Fingerprint, OpenDiagnostics and WireStats are THIS PACKAGE'S
+//	    accessors, not neutral-seam additions. driver.SessionDiagnostics
+//	    carries ONE aggregate counter, and widening the neutral seam to
+//	    carry a per-tier fingerprint is a tier-shared change several
+//	    worktrees would want a say in. A deliberate scope choice.
 //
-// DefaultBaud is 19200, graded ASSUMED. Register home:
-// ` ic7851-default-baud` (civ PROFILE register, core/civ/ic7851/doc.go);
-// matrix lift R11.
+// # 5. THE DEFAULT BAUD
 //
-// THE ARBITRARINESS IS RECORDED. The document names six rates (PDF p.10's
-// footnote *4) and MARKS NO DEFAULT: PDF p.3 defers the value to the
-// IC-7851 instruction manual, which this project does not hold. The choice
-// of 19200 within that printed set is the plan's, and no reading of this
-// document favours one of the six.
+// DefaultBaud is 19200, graded ASSUMED under register entry
+// ic7851-auto-baud-open.
+//
+// THE ARBITRARINESS IS RECORDED. THIS RADIO HAS NO NUMERIC FACTORY
+// DEFAULT: PDF p.228 (folio 15-17), "CI-V Baud Rate (Default: Auto)" and
+// PDF p.229 (folio 15-18), "CI-V USB Baud Rate (Default: Auto)", both with
+// "When 'Auto' is selected, the baud rate is automatically set according
+// to the data rate of the connected controller." The tier probe opens "at
+// the model's default baud"; on this model there is no such number, only
+// an auto-detector, and the choice of 19200 within the printed set is the
+// plan's.
 //
 // WHAT MAKES IT SAFE IS NOT THE CHOICE BUT THE GRADING AND THE FAILURE
 // MODE: the probe requires an address-matched 19 00 reply, and silence is
 // silence, so a wrong guess costs A CLEAN TIMEOUT AT Open AND NEVER A
 // WRONG BYTE. THE DRIVER CANNOT SWEEP: internal/wiring opens the port from
-// Capabilities().DefaultBaud, and Wave 3 may never touch internal/wiring.
-// This belongs in the README's honesty rows at Wave 4, alongside the
-// no---civ-address one.
+// Capabilities().DefaultBaud, and this worktree may never touch
+// internal/wiring.
 //
-// # 5. THE E6 RULING AND ITS COST
+// THE RATE LIST IS PER-PORT AND spec.Capabilities HAS ONE (matrix
+// §3.16.1). [USB B] prints 4800, 9600, 19200, 38400, 57600, 115200 and
+// Auto; [REMOTE] (the CT-17 path) prints only 4800, 9600, 19200 and Auto.
+// Declaring the USB superset is the CHOICE, and its cost is that the port
+// picker will offer 57600 and 115200 to a user who has wired a CT-17 to
+// [REMOTE], where the radio cannot go above 19200. A README honesty row at
+// Wave 4; register entry ic7851-baud-list-per-port.
+//
+// # 6. THE E6 RULING AND ITS COST
 //
 // Ruling E6: A SLOT MAY BE WRITTEN ONLY WHEN ITS UNMAPPED REGIONS EQUAL
 // THE PROFILE'S Fixed TEMPLATE; ANYTHING ELSE IS REFUSED WITH THE REASON
 // NAMED, NEVER REWRITTEN.
 //
-// On this model the unmapped regions are byte ③'s LOW nibble (a
-// four-valued SELECT-group marker, 0=OFF / 1=★1 / 2=★2 / 3=★3; matrix
-// §3.16 ADDED-1) and byte ⑪'s HIGH nibble (a four-valued data mode,
-// 0=OFF / 1=DATA 1 / 2=DATA 2 / 3=DATA 3; matrix §1b as corrected by
-// erratum 5, scope widened by erratum 12). Their neutral homes,
-// codeplug.ChannelData.ScanSkip and .DataMode, are BOTH BoolField.
+// On this model the unmapped regions are byte ③'s LOW nibble — a
+// four-valued SELECT-group marker printed "00 : OFF / 01 : ★1 / 02 : ★2 /
+// 03 : ★3" (PDF p.263, folio 18-14; matrix §3.16.2) — and byte ⑪'s HIGH
+// nibble, a four-valued data mode printed "0: OFF, 1: DATA 1, 2: DATA 2,
+// 3: DATA 3". Their neutral homes, codeplug.ChannelData.ScanSkip and
+// .DataMode, are BOTH BoolField.
+//
+// ON ICOM, scan_skip IS SELECT-GROUP MEMBERSHIP, NEVER A SKIP. A 4-to-2
+// collapse would rewrite a user's select group or data mode on every
+// write-back while readback verification compared equal.
 //
 // THE COSTS, stated as E6 requires:
 //
@@ -239,85 +295,92 @@
 //     is REFUSED with the reason named. It is NEVER silently downgraded to
 //     ★1/DATA 1 and NEVER silently cleared to OFF.
 //   - Those two fields cannot be read back, exposed or edited: they are
-//     Unavailable on every read, because an unmapped region is not decoded.
+//     Unavailable on every read, because an unmapped region is not
+//     decoded.
 //   - EVERY ELIGIBLE WRITE COSTS ONE EXTRA READ EXCHANGE — the E6
 //     comparison read, which is also tier ruling T5's one recorded
 //     exception to "refusal before any wire traffic".
-//   - These grades DIFFER from matrix §2 as it stood at rev 1, which had
-//     scan_skip Sup/Sup on MEM and data_mode Sup/Sup on both banks. The
-//     matrix's own errata 9 and 10 now record the zero FieldSupport on
-//     both banks; erratum 12 widens ADDED-1 to cover byte ⑪.
 //
-// ON ICOM, scan_skip IS SELECT-GROUP MEMBERSHIP, NEVER A SKIP.
+// TestE6RefusesNonTemplateUnmappedBytes and TestE6AcceptsTemplate pin the
+// three nibbles and the one that is mapped.
 //
-// # 5b. THE ONE APPROXIMATION IN THE WRITE GATE'S FIELD SET
+// # 6b. THE THREE PRINTED-FIXED BYTES, AND WHY THEY ARE NOT SPANNED
+//
+// Three record bytes are drawn with a literal 0 in BOTH nibbles: ⑧, whose
+// rotated leaders read "1000 MHz digit: 0 (Fixed)" and "100 MHz digit:
+// 0 (Fixed)" (PDF p.260, folio 18-11; matrix §3.16.3), and ⑫ and ⑮, the
+// leading cell of the repeater-tone diagram both tone triples point at,
+// whose leaders read "Fixed digit: 0*" (PDF p.262, folio 18-13; matrix
+// §3.16.4).
+//
+// core/civ/ic7851's layout therefore stops each numeric span SHORT of its
+// fixed byte and lets the Fixed template supply it. civ.FieldSpan carries
+// no numeric domain, so a span covering one of those bytes would encode a
+// digit into it for any large enough value AND re-encode it identically at
+// the gate; the template only supplies bytes no span maps.
+//
+// THE COST OF THAT EXCLUSION IS ON THE READ PATH, and this driver pays it
+// rather than hiding it: the record parser no longer looks at those bytes,
+// so a radio answering with a digit in one would be read as a value 100
+// times smaller and written back with the byte quietly zeroed. readRaw
+// refuses such a record instead (*FixedDigitError), after the all-FF empty
+// branch and before the parse. TestFixedDigitBytesAreRefusedOnRead and
+// TestE2E_FixedDigitRecordIsRefusedOnTheWire cover both halves.
+//
+// # 7. THE ONE APPROXIMATION IN THE WRITE GATE'S FIELD SET
 //
 // write.go's conditionalRequestedFields appends every state-bearing field
 // OUTSIDE the base set when it is Known, so the capability gate can REFUSE
-// a request rather than drop it. Ten of the twelve predicates are exact
-// tri-state tests. Two of the remaining three plain fields — CTCSS and
-// Shift — are exact too, because an empty string is a vocabulary member of
-// no radio.
+// a request rather than drop it. Every tri-state predicate is exact, and
+// so are the two plain-string ones — CTCSS and Shift — because an empty
+// string is a vocabulary member of no radio.
 //
 // THE CLARIFIER IS THE APPROXIMATION. codeplug.ChannelData carries it as
 // ClarHz plus two bools, with no state, so a channel asking for an
 // explicitly-ZERO clarifier is indistinguishable from one that never
-// carried a clarifier at all: FieldClarifier is not appended, and the gate
+// carried a clarifier at all: FieldClarifier is not appended and the gate
 // never sees the request.
 //
 // ON THIS MODEL IT COSTS NOTHING, and the reason is worth writing down
 // rather than assuming: the 1A 00 record has no clarifier span, so there
 // is nothing to write even if the gate saw it; and core/codeplug's own
-// touchedFields treats clarifier as one of the UNCONDITIONAL six and
+// touchedFields treats clarifier as one of the unconditional six and
 // FILTERS IT OUT on a bank that cannot reach the field, so the clone
-// service never requests it either. The gap is therefore unreachable
-// through the model layer, exactly like §6's. It is recorded here as an
-// honesty row, and it would need re-examining for any Icom model whose
-// record DOES carry a clarifier.
+// service never requests it either. An honesty row, and one that would
+// need re-examining for any Icom model whose record DOES carry a
+// clarifier.
 //
-// # 6. THE DEFERRED GATE-DOMAIN GAP, RECORDED AND NOT PAPERED OVER
+// # 8. THE DEFERRED GATE-DOMAIN GAP, RECORDED AND NOT PAPERED OVER
 //
-// civ.FieldSpan HAS NO NUMERIC DOMAIN. civ's validateSpanValue
-// (core/civ/recordcodec.go) checks only BCD width and scale, so
-// civ.Profile.AllowedCommand — the last defence before a radio sees bytes
-// — WOULD ADMIT a 1A 00 set carrying 70 MHz, or a tone above 299.9 Hz,
-// even though matrix §1 row 12 fixes the encodable ceiling at 69 999 999
-// Hz and §1 row 8 fixes the tone digits at 0..2999 deci-Hz.
+// civ.FieldSpan HAS NO NUMERIC DOMAIN. civ's validateSpanValue checks only
+// BCD width and scale, so civ.Profile.AllowedCommand — the last defence
+// before a radio sees bytes — WOULD ADMIT a 1A 00 set carrying 65 MHz,
+// which is above this radio's printed 60 MHz receiver ceiling and still
+// inside what the four variable frequency bytes can encode.
 //
 // WHAT IS ALREADY CLOSED, verified in code: codeplug.Validate bounds the
-// primary frequency against caps.MinFreqHz/MaxFreqHz
-// (core/codeplug/validate.go), and since enabler E3 the tone range bounds
-// tones. So EVERY PATH THAT REACHES THIS DRIVER THROUGH THE MODEL LAYER IS
-// ALREADY COVERED; the residual exposure is the gate's own blindness to a
-// frame arriving by any other route.
+// primary frequency against caps.MinFreqHz/MaxFreqHz, and the tone range
+// bounds tones. So EVERY PATH THAT REACHES THIS DRIVER THROUGH THE MODEL
+// LAYER IS ALREADY COVERED; the residual exposure is the gate's own
+// blindness to a frame arriving by any other route.
 //
-// WHAT THIS DRIVER DOES ABOUT IT: WriteChannel's ladder carries
-// driver-level PRE-BUILD TYPED REFUSALS for a Known frequency above
-// MaxEncodableFreqHz and a Known tone above MaxToneDeciHz
-// (*OutOfDomainError). THESE ARE DEFENCE IN DEPTH AND THEY ARE NOT THE
+// WHAT THIS DRIVER DOES ABOUT IT: WriteChannel's rung 4 carries a
+// driver-level PRE-BUILD TYPED REFUSAL (*OutOfDomainError) for a Known
+// frequency or tone outside THIS SESSION'S declared capability bounds —
+// both ends of both domains. THIS IS DEFENCE IN DEPTH AND IT IS NOT THE
 // GATE.
 //
-// THE ORCHESTRATOR DEFERRED gate-level enforcement on 24/08/2026 to a
-// post-Wave-3 enabler follow-up, on three grounds:
+// TestNumericRefusalIsDefenceInDepthNotTheGate asserts that the gate
+// currently ADMITS such a frame while the driver refuses it. An enabler
+// that closes the gap turns that test red, which is a reviewable change
+// rather than a silent one. DO NOT DELETE THAT TEST TO "FIX" IT. The
+// follow-up's likely shape: FieldSpan gains optional Min/Max in the
+// field's neutral unit, enforced in validateSpanValue on both the encode
+// and the gate paths.
 //
-//  1. The width is bounded by the upper layers named above, so no path
-//     through the model layer is exposed while the deferral stands.
-//  2. The gap FLIPS VISIBLY when it closes.
-//     TestNumericRefusalIsDefenceInDepthNotTheGate asserts that the gate
-//     currently ADMITS an out-of-domain frame; a later enabler that closes
-//     the gap turns that test red, which is a reviewable change rather
-//     than a silent one. DO NOT DELETE THAT TEST TO "FIX" IT.
-//  3. No mid-flight enabler scope grows: Wave 2.5 is already specified and
-//     sequenced, and widening it would re-open a dual-reviewed document.
+// # 9. ERASE
 //
-// The follow-up's likely shape, for whoever picks it up: FieldSpan gains
-// optional Min/Max in the field's neutral unit, enforced in
-// validateSpanValue on both the encode and the gate paths, with per-model
-// negative gate tests and the four Yaesu profiles pinned unchanged.
-//
-// # 7. ERASE
-//
-// FieldErase carries the zero FieldSupport in BOTH profiles;
+// FieldErase carries the zero FieldSupport in BOTH capability arms;
 // spec.ConsentUnverifiedWrites structurally never consents it (its
 // `f != FieldErase` guard); and core/clone/execute.go's DiffErased branch
 // stays UNREACHABLE for this model.
@@ -325,229 +388,118 @@
 // UNLIKE YAESU, THE WIRE FORM EXISTS HERE, IN TWO SHAPES (matrix §3.13,
 // both MANUAL-EVIDENCED as printed forms, both recorded as evidence only):
 //
-//   - (a) The 1A 00 clear form. PDF p.12 (folio 11), right column, under
-//     the heading "To clear the memory channel contents on 1A 00:":
-//     "①, ②: Memory channel (00 01~00 99)", "③: FF", "④: None" — a
-//     three-byte data area, i.e. the frame
-//     FE FE 98 E0 1A 00 <ch-hi> <ch-lo> FF FD. Note the internal conflict
-//     with the ③ sub-diagram's Fixed 0 high nibble, recorded at matrix
-//     §3.8(b) and UNRESOLVED. Note also that the clear list's channel
-//     range is printed as 00 01~00 99 only — it does not name the scan
-//     edges.
-//   - (b) Command 0B, "Memory clear". PDF p.4 (folio 3), "◇ Command
-//     table", left column, row "0B | (blank) | Memory clear" — a whole
-//     command, no sub-command, no data, which clears the currently
-//     selected memory channel.
+//   - (a) The 1A 00 clear form. PDF p.263 (folio 18-14), the hatched note
+//     immediately under the ①,② legend: "To clear the memory channel
+//     contents, add the code "FF" after the memory channel number.
+//     (instead of the data ③ to ㉗) This completes the memory clearing." —
+//     i.e. FE FE 8E E0 1A 00 <ch-hi> <ch-lo> FF FD, a 3-byte data area
+//     rather than 27. The gate refuses it because a 1-byte record-only
+//     payload is not in the declared singleton {25}. Note also that the
+//     clear note's channel range is printed 00 01~00 99 only: it does not
+//     name the scan edges, and PDF p.181 (folio 11-2) gives the Scan Edge
+//     row CLEAR = "No" independently.
+//   - (b) Top-level command 0B. PDF p.252 (folio 18-3), "◇ Command table",
+//     three consecutive rows with no sub-command and no data: 09 "Memory
+//     write", 0A "Memory to VFO", 0B "Memory clear".
 //
-// NO CLEAR COMMAND EXISTS IN THIS TIER — a CHOICE fixed by the tier spec
-// (D1 and D4 "Erase"). There is no builder for either form, and core/civ's
+// NO CLEAR COMMAND EXISTS IN THIS TIER — a CHOICE fixed by the tier spec.
+// There is no builder for any of those forms, and core/civ's
 // AllowedCommand admits only 19 00, a valid 1A 00 read and a re-validated
-// 1A 00 set, so neither clear frame can reach the wire.
-// TestWriteChannel_NoClearFrameIsReachable asserts the driver never builds
-// one either.
+// 1A 00 set. TestWriteChannel_NoClearFrameIsReachable asserts the gate
+// refuses all four frames and that no capability arm — consented or not —
+// makes FieldErase writable; TestE2E_BothEraseFormsAreRefused asserts the
+// driver emits none of them across a whole read/write cycle and that the
+// radio itself answers FA to each.
 //
-// WHAT A FUTURE WRITE-TRIAL MILESTONE ON THE IC-7851 WOULD NEED (matrix
-// §3.13, reproduced verbatim): all of the following, on an IC-7851 Stuart
-// or a collaborator actually owns: a hardware-verified read path (so a
-// cleared channel can be confirmed cleared); a resolution of the ③
-// Fixed-0 versus "FF" conflict above, from the radio rather than from the
-// page; a captured answer to each of the two clear forms, showing which is
-// acknowledged and what the radio's own front panel then displays; a
-// FieldErase FieldSupport value earned by that capture rather than
-// assumed; a builder and a gate admission for whichever form the capture
-// validates; and neither per-model write-trial guard may move off FALSE
-// (§3.14). Until every one of those lands, DiffErased stays unreachable.
+// WHAT A FUTURE WRITE-TRIAL MILESTONE WOULD NEED (matrix §3.13): a
+// hardware-verified read path, so a cleared channel can be confirmed
+// cleared; a captured answer to each of the two clear forms, showing which
+// is acknowledged and what the front panel then displays; a FieldErase
+// FieldSupport value earned by that capture rather than assumed; a builder
+// and a gate admission for whichever form the capture validates; and
+// neither per-model write-trial guard may move off FALSE.
 //
-// # 8. THE STALE "4-CHARACTER CAT ID" COMMENTS
+// # 10. RULING OQ1 — THE RADIX OF THE PRINTED MODE CODES
 //
-// core/spec/capabilities.go's CATID field, core/driver/driver.go's
-// Identity.CATID and Driver.Open, and core/codeplug/radioinfo.go all
-// describe CATID as a "4-character CAT ID answer". THAT DOES NOT DESCRIBE
-// A CI-V RADIO: this driver's CATID is the CI-V address followed by an
-// observed 19 00 token of undocumented width, which spec D3.2 generalises
-// those comments to cover.
-//
-// ALL THREE FILES ARE OUTSIDE THIS WORKTREE'S OWNERSHIP. They are recorded
-// here, by name, as contradicting spec D3.2, and left for the Wave-4 doc
-// pass. DONE at tier close: all three now read "a CAT ID (four hex digits
-// on Yaesu; the CI-V address, optionally with a recorded token, on
-// Icom)", and driver.go's Identity.CATID comment additionally records the
-// tier's observed (non-uniform) casing convention.
-//
-// # 9. RULING OQ1 - THE RADIX OF THE PRINTED MODE CODES
-//
-// RULING OQ1 (24/08/2026, orchestrator): THE PRINTED MODE CODES ARE
-// HEXADECIMAL. PSK is the wire byte 0x12 and PSK-R is 0x13.
+// RULING OQ1 (orchestrator): THE PRINTED MODE CODES ARE HEXADECIMAL, so
+// PSK is the wire byte 0x12 and PSK-R is 0x13.
 //
 // REASON: the document prints every command, sub-command and address as
-// hexadecimal byte pairs, and the "①Receiving mode" column is a column of
-// the same kind. The one place it prints packed BCD of a decimal number
-// naming a hex value (PDF p.7's "1A 05 01 13 … (00 00=00h ~ 02 23=DFh)
-// (in Hexadecimal)") announces itself as such; this column does not.
+// hexadecimal byte pairs and PDF p.260 (folio 18-11)'s "① Operating mode"
+// column is a column of the same kind. The ruling touches PSK and PSK-R
+// alone — the other eight codes are identical under either reading.
+// Reversing it is the ORCHESTRATOR'S to do and not an editor's;
+// core/civ/ic7851/crosscheck_test.go says so at the comparison that would
+// first show the change.
 //
-// The ruling touches PSK and PSK-R alone — the other eight codes are
-// identical under either reading. Its capture is register entry
-// ` ic7851-mode-code-radix` in core/civ/ic7851/doc.go. Reversing the ruling
-// is the orchestrator's to do, not an editor's, and
-// core/civ/ic7851/crosscheck_test.go says so at the failure site.
+// # THE NINETEEN REGISTER ENTRIES
 //
-// # The ic7851DRIVER register
+// The matrix implies exactly nineteen, every one scoped to the IC-7851 and
+// every one carrying exactly ONE lift on an IC-7851 itself. NONE OF THEM
+// COVERS THE IC-7850: where that model needs the same assumption it gets
+// its own entry on its own row with its own lift.
 //
-// Six entries, homed HERE, each with its capture block reproduced from the
-// matrix. The civ-homed entries live in core/civ/ic7851/doc.go and are
-// LISTED at the foot of this register so a reader knows the set is not
-// complete without them.
+// Six are homed in the civ PROFILE register (core/civ/ic7851/doc.go) and
+// thirteen here. All nineteen are listed together, because a reader of
+// either register must be able to see that the set is not complete without
+// the other.
 //
-//   - ic7851-control-lines-inert (R16) - that RTS and DTR left DEASSERTED
-//     neither key the radio nor prevent CI-V traffic.
-//     GRADE: ASSUMED. The document says nothing about any modem control
-//     line (§3.2); what it does say is that either endpoint's DTR or RTS
-//     can be ASSIGNED to PTT or keying, which is a hazard rather than a
-//     permission. The project CHOICE is to open with both deasserted and
-//     never toggle them.
-//     STAGE R LIFTS IT WITH: capture  ic7851-control-lines-inert - with
-//     USB SEND, USB Keying (CW) and USB Keying (RTTY) all set to 00 (OFF)
-//     from the front panel, open the IC-7851's USB CI-V endpoint with RTS
-//     and DTR deasserted, send FE FE 98 E0 19 00 FD, and record whether an
-//     answer arrives and whether the radio's TX indicator lights.
-//     SCOPE: that one radio, that one port, those three settings.
+//	ENTRY                              HOME    LIFT (one, on an IC-7851)
+//	ic7851-read-request-form           driver  Send FE FE 8E E0 1A 00 00 01 FD; record the answer frame in full.
+//	ic7851-empty-reply-fa              driver  Clear M-CH50 at the front panel; read it; record the answer verbatim.
+//	ic7851-all-ff-record               driver  If that read returns a full-length record, record its 27 bytes and whether every data byte is FF.
+//	ic7851-name-pad-byte               driver  Name M-CH01 "AB"; read back; record bytes ⑲-㉗.
+//	ic7851-name-digit-space-codes      driver  Name M-CH02 "A 1"; read back; record bytes ⑱⑲⑳.
+//	ic7851-record-length               civ     Read M-CH01; count the bytes between the sub-command and FD.
+//	ic7851-id-reply-value              driver  Send 19 00 at 8Eh; record the answer frame verbatim.
+//	ic7851-serial-framing              driver  Open [USB B] at 9600 8-N-1, send 19 00, confirm an address-matched answer; repeat at 8-N-2 and 8-E-1.
+//	ic7851-broadcast-address-form      driver  With transceive ON, turn the main dial while capturing; record the destination byte of the command-00 frames.
+//	ic7851-auto-baud-open              driver  Power on at factory defaults, open at 19200, send one 19 00; record whether it is answered first time.
+//	ic7851-rts-dtr-at-open             driver  With USB SEND = USB1 RTS, open the port with this programme's settings; record whether the radio transmits.
+//	ic7851-echo-link-to-remote         driver  At factory defaults (echo-back OFF, port Linked), send 19 00 over [USB B]; record whether the sent frame is read back.
+//	ic7851-write-ack-fb                driver  Send a 1A 00 set for M-CH99 with a space-containing name; record the answer — FB, FA or silence.
+//	ic7851-tone-step-domain            driver  Send 1B 00 with an off-chart tone (e.g. 0700); read back; record accept, clamp or FA.
+//	ic7851-baud-list-per-port          driver  Confirm 19 00 at 115200 over [USB B]; then at 19200 and 38400 over [REMOTE] with a CT-17.
+//	ic7851-select-memory-vocabulary    driver  Set M-CH03 to ★2 at the front panel; read back; record byte ③.
+//	ic7851-fixed-nibble-reencode       civ     Read any programmed channel; record byte ⑧ to confirm it is 00.
+//	ic7851-tone-fixed-byte             civ     Set M-CH04's repeater tone to 88.5 Hz; read back; record bytes ⑫⑬⑭ (expected 00 08 85).
+//	ic7851-memory-freq-bounds          driver  Store 0.030000 MHz in M-CH01 at the front panel; read the channel back.
 //
-//   - ic7851-storable-frequency-ceiling (R17a) - what the radio will
-//     actually STORE and return, as against what the record can ENCODE.
-//     GRADE: the ENCODING bound (69 999 999 Hz) is MANUAL-EVIDENCED —
-//     PDF p.11 (folio 10)'s five-cell frequency strip prints cell 5 as
-//     "0 : 0" with the rotated labels "1 GHz digit: 0 (Fixed)" and
-//     "100 MHz digit: 0 (Fixed)", and cell 4's high nibble as "10 MHz
-//     digit: 0-6". The radio's TUNING ceiling is ASSUMED.
-//     spec.Capabilities.MaxFreqHz carries the ENCODABLE figure, because it
-//     is the only number the document yields (matrix erratum 11). The
-//     distinction is recorded in the comment beside MaxEncodableFreqHz in
-//     caps.go — NOT in deliberatelyZero, which is the R11 audit's arm for
-//     a field left ZERO, and this one is populated; it discharges R11
-//     through the audit's populated arm instead.
-//     STAGE W LIFTS IT WITH: capture  ic7851-storable-ceiling-ch03 - on one
-//     IC-7851, write memory channel 03 with 1A 00 at successively higher
-//     frequencies - 60.000000, 69.999999 MHz - reading each back with
-//     1A 00 after the acknowledgement, and record the highest value the
-//     radio both acknowledges with FB and returns unchanged.
-//     SCOPE: the highest frequency THAT radio stores and returns for THAT
-//     one channel. It says nothing about what the radio will TUNE, nothing
-//     about the Sub band, and nothing about any other model.
+// THREE OF THOSE LIFTS ARE THIS DRIVER'S OWN GRADING, restated where the
+// value lives: ic7851-id-reply-value beside the probe (§4), ic7851-serial-
+// framing beside StopBits (framing.go), and ic7851-memory-freq-bounds
+// beside MinRadioFreqHz/MaxRadioFreqHz (caps.go). The rest are cited at
+// the code that depends on them.
 //
-//   - ic7851-storable-frequency-floor (R17b) - the same question at the
-//     other end.
-//     GRADE: the ENCODING bound (0 Hz) is MANUAL-EVIDENCED — the same
-//     strip's eight variable nibbles are labelled 0-9, so 0 is encodable
-//     in every one. The radio's TUNING floor is ASSUMED.
-//     spec.Capabilities.MinFreqHz carries 0, and THAT one IS in caps.go's
-//     deliberatelyZero table, because zero is this radio's declared floor
-//     rather than an omission.
-//     STAGE W LIFTS IT WITH: capture  ic7851-storable-floor-ch04 - on the
-//     same radio, write memory channel 04 with 1A 00 at successively lower
-//     frequencies - 0.030000, 0.010000, 0.000000 MHz - reading each back,
-//     and record the lowest value the radio both acknowledges with FB and
-//     returns unchanged.
-//     SCOPE: the lowest frequency THAT radio stores and returns for THAT
-//     one channel. Same exclusions as R17a.
+// TWO PRINTED FACTS AND TWO ASSUMPTIONS SIT BESIDE EACH OTHER AND MUST NOT
+// BE CONFLATED. Transceive ON (PDF p.229, "CI-V Transceive (Default: ON)")
+// and USB echo-back OFF (same page, "CI-V USB Echo Back (Default: OFF)")
+// are PRINTED DEFAULTS. That a transceive broadcast reaching this
+// controller carries the destination byte 00, and that a linked
+// USB/[REMOTE] echo is absent or structurally removable, are ASSUMPTIONS —
+// entries ic7851-broadcast-address-form and ic7851-echo-link-to-remote.
+// The document prints 00h in a CI-V address context exactly once and it is
+// a DIFFERENT setting ("CI-V USB/LAN➡REMOTE Transceive Address (Default:
+// 00h)", which governs the address the radio uses when it BRIDGES a
+// control signal out of [REMOTE]). Matrix §3.5 records both and resolves
+// neither.
 //
-//   - ic7851-scan-edge-record-fields (R18) - that a scan edge's record
-//     honours the record's NON-FREQUENCY fields the way a memory
-//     channel's does.
-//     GRADE: ASSUMED. Matrix §3.15(d): P1 and P2 are not a separate bank
-//     in the wire protocol at all - they are two more values of the same
-//     two-byte selector, so the record is the SAME record. Whether the
-//     radio HONOURS every field on an edge is a different question, and
-//     this document does not answer it. Erratum 2 folds the SCAN bank's
-//     NoBlank claim under this same lift; P2 is uncovered even by that.
-//     STAGE W LIFTS IT WITH: capture  ic7851-scan-edge-p1 - on one IC-7851
-//     whose P1 has never been set, first read 01 00 with 1A 00 and record
-//     the answer frame verbatim; then write 01 00 with a full record
-//     carrying a distinct value in every non-frequency field (USB, FIL2,
-//     DATA 1, TONE, repeater tone 88.5 Hz, tone squelch 100.0 Hz, name
-//     EDGEP1TST), read 01 00 back, and record which of those fields return
-//     the value written.
-//     SCOPE: what THAT radio answers for THAT one unwritten scan edge, and
-//     which record fields THAT radio honours on THAT one edge. It says
-//     nothing about P2, nothing about an ordinary memory channel, and
-//     nothing about any other model.
+// # A procedural fact every capture above inherits
 //
-//   - ic7851-mode-code-completeness (R19) - that the ten printed mode
-//     codes are the COMPLETE set, i.e. that 06 and 09-11 name nothing.
-//     GRADE: ASSUMED. The ten pairs themselves are MANUAL-EVIDENCED
-//     (PDF p.11's "①Receiving mode" column, corroborated at PDF p.14's
-//     "Command: 26"); that no eleventh exists is not stated anywhere. A
-//     record carrying an unlisted code therefore FAILS TO DECODE with a
-//     parse error naming the offset, which is the honest outcome.
-//     STAGE R LIFTS IT WITH: capture  ic7851-mode-code-sweep - on one
-//     IC-7851, step the Main band through every mode position the front
-//     panel offers, reading 04 after each and recording the mode code
-//     returned; then send each code printed nowhere in the table - 06, 09,
-//     10, 11 - with 06 and record whether the radio answers FB or FA.
-//     SCOPE: which mode codes THAT radio reports and accepts on THAT band.
-//     It does not establish what an unlisted code MEANS, and it says
-//     nothing about any other model.
-//
-//   - ic7851-select-marker-semantics (R20) - what byte ③'s low-nibble
-//     values 1, 2 and 3 actually DO to a scan.
-//     GRADE: the VOCABULARY is MANUAL-EVIDENCED - PDF p.12 (folio 11)'s ③
-//     sub-diagram prints "0=OFF / 1= ★1 / 2= ★2 / 3= ★3", and PDF p.4
-//     (folio 3)'s command 0E rows (B1 01~03 "Set the channel as a Select
-//     channel (01=SEL1, 02=SEL2, 03=SEL3)", B0 "Clear the Select channel
-//     setting", B2 00~03, 23 "Start a Select memory scan") show what the
-//     values name. What each value DOES to a scan on a real radio is
-//     ASSUMED. This is the nibble ruling E6 leaves UNMAPPED.
-//     STAGE W LIFTS IT WITH: capture  ic7851-select-marker-ch05 - write
-//     memory channel 05 with byte ③ = 02, then start a Select memory scan
-//     pointed at SEL2 (0E B2 02) and record whether channel 05 is scanned,
-//     and whether the front panel shows it as ★2.
-//     SCOPE: what the value 2 means on THAT one channel on THAT radio.
-//
-// # The civ PROFILE register - LISTED HERE, REPRODUCED IN FULL THERE
-//
-// These entries live in core/civ/ic7851/doc.go with their capture blocks;
-// they are named here so a reader of this register knows the set is not
-// complete without them:  ic7851-read-request-form (R1),
-//
-//	ic7851-empty-channel-fa (R2a),  ic7851-empty-channel-ff (R2b),
-//	ic7851-name-space-character (R3),  ic7851-name-pad-byte (R4),
-//	ic7851-wire-order (R5),  ic7851-record-length (R6),
-//	ic7851-id-token (R7),  ic7851-transceive-broadcast-address (R9),
-//	ic7851-transceive-factory-default (R10),  ic7851-default-baud (R11),
-//	ic7851-civ-rate-list (R12),  ic7851-usb-echo-default (R13),
-//	ic7851-1a00-set-ack (R14),  ic7851-full-record-mandatory (R15),
-//	ic7851-mode-code-radix (RULING OQ1),  ic7851-filter-value-set,
-//	ic7851-default-tone-undocumented and  ic7851-e6-unmapped-regions.
-//
-// # A procedural fact every capture above inherits (matrix ADDED-3)
-//
-// PDF p.4 (folio 3)'s grey NOTE panel: "Operating some control dials
+// PDF p.252 (folio 18-3)'s grey NOTE panel: "Operating some control dials
 // overrides CI-V commands. If a control dial (such as the AF Volume dial
 // that has a mark on it) is rotated after sending a CI-V command, the
 // command will be overwritten by the operation." MANUAL-EVIDENCED. On this
 // radio a readback that disagrees with what was written is not necessarily
-// a protocol fault — it may be a hand on the front panel. EVERY Stage R
-// and Stage W capture named above must record that no control was touched
-// during the capture.
+// a protocol fault — it may be a hand on the front panel. EVERY lift above
+// must record that no control was touched during the capture.
 //
-// # Stage-2 assumption register
+// # Wave-4 hand-off
 //
-// The driver-side matrix entries are: ic7851-id-reply-value,
-// ic7851-tone-step-domain, ic7851-memory-freq-bounds,
-// ic7851-serial-framing, ic7851-rts-dtr-at-open, ic7851-auto-baud-open,
-// ic7851-broadcast-address-form, ic7851-echo-link-to-remote,
-// ic7851-read-request-form, ic7851-empty-reply-fa, ic7851-all-ff-record,
-// ic7851-name-pad-byte, ic7851-name-digit-space-codes,
-// ic7851-write-ack-fb, ic7851-baud-list-per-port,
-// ic7851-select-memory-vocabulary, ic7851-fixed-nibble-reencode,
-// ic7851-tone-fixed-byte, and ic7851-record-length. Each ASSUMED value
-// has one named hardware lift in the matrix; the profile owns only the
-// frozen wire geometry.
-//
-// USB chooses 19200 from the printed baud superset; [REMOTE] prints only
-// 4800/9600/19200. The 19 00 payload is recorded but never matched. CI-V
-// framing is assumed 8-N-1, and RTS/DTR are never asserted because the
-// manual assigns them to USB SEND/keying. Transceive ON and USB echo-back
-// OFF are printed defaults; broadcast destination and linked-bus echo are
-// assumptions. Init emits no CI-V frame, and this package has no wiring
-// registration.
+// NEITHER ROW IS REGISTERED, deliberately: registration, the README and
+// radiotext rows, and the tier's record-shape table are Wave 4's, not this
+// worktree's. This package joins the DECLARED INDISTINGUISHABLE SET
+// {IC-7610, IC-7851/IC-7850, IC-7760} at record-only 25 bytes and flat
+// two-byte geometry, and TestTierRecordShapes_DistinctOrDeclared remains
+// an icom-core responsibility.
 package ic7851
