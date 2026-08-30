@@ -19,10 +19,11 @@ import (
 //
 // MATRIX §3.15(d): P1 AND P2 ARE NOT A SEPARATE BANK IN THE WIRE
 // PROTOCOL. They are two more values of the same two-byte selector — PDF
-// p.12 (folio 11) prints "00 01 ~ 00 99: Memory channel 01 ~ 99",
-// "01 00: Programmed scan edge P1", "01 01: Programmed scan edge P2", one
-// contiguous space with three printed forms — and core/civ/ic7851's
-// profile declares exactly that range (ChannelLo 1, ChannelHi 101).
+// p.263 (folio 18-14), field ①,②, prints "0001–0099: Memory channel 1 to
+// 99", "0100: Programmed scan edge P1", "0101: Programmed scan edge P2",
+// one contiguous space with three printed forms, corroborated by command
+// 08 at PDF p.252 (folio 18-3) — and core/civ/ic7851's profile declares
+// exactly that range (ChannelLo 1, ChannelHi 101).
 //
 // This project models them as a SCAN bank only because the neutral memory
 // model needs the distinction between a memory and a scan edge; the codec
@@ -78,8 +79,8 @@ func addressToSlot(a civ.ChannelAddress) (string, error) {
 	return fmt.Sprintf("%03d", a.Channel), nil
 }
 
-// recordIsAbsent reports whether raw is an all-0xFF record — spec D5 entry
-// 2(b)'s reading of an unwritten channel.
+// recordIsAbsent reports whether raw is an all-0xFF record — register
+// entry ic7851-all-ff-record's reading of an unwritten channel.
 //
 // IT IS THE R10 PRE-PARSE HOOK, and it must run before the record parser,
 // because an all-0xFF record dies on its first BCD nibble or its first
@@ -90,11 +91,11 @@ func addressToSlot(a civ.ChannelAddress) (string, error) {
 // own model's evidence".
 //
 // THE EVIDENCE IS TWO SEPARATE, UNVERIFIED ENTRIES AND ONE CAPTURE CANNOT
-// ESTABLISH BOTH. D5 entry 2(a) / matrix lift R2a is the FA reading;
-// D5 entry 2(b) / matrix lift R2b is this one. R2a's scope EXCLUDES the
-// scan edges (matrix erratum 2), so P1/P2 emptiness rides matrix lift R18
-// instead — and R18's capture names P1 only, so P2 is uncovered even by
-// that.
+// ESTABLISH BOTH. Register entry ic7851-empty-reply-fa is the FA reading,
+// whose lift clears M-CH50 and records the answer verbatim;
+// ic7851-all-ff-record is this one, whose lift asks whether that same
+// answer was instead a full-length record of all FF. Both lifts name a
+// MEMORY channel, so neither covers P1 or P2.
 //
 // An empty raw is not absent: a zero-length record cannot arise (the
 // length fingerprint has already run) and reading "empty" out of one would

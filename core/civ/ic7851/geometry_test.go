@@ -36,7 +36,7 @@ func TestGeometryAndFixedRegions(t *testing.T) {
 	}
 	want := []byte{
 		0xfe, 0xfe, 0x8e, 0xe0, 0x1a, 0x00, 0x00, 0x01,
-		0x00, // ③ select memory, E6-unmapped, template zero
+		0x00,                   // ③ select memory, E6-unmapped, template zero
 		0x00, 0x50, 0x12, 0x50, // ④~⑦ frequency, little-endian packed BCD
 		0x00,       // ⑧ the printed "(Fixed)" zero pair (matrix §3.16.3)
 		0x01, 0x02, // ⑨ mode USB, ⑩ filter FIL2

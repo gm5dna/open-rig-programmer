@@ -4,10 +4,15 @@ package ic7851
 
 import "github.com/gm5dna/open-rig-programmer/core/civ"
 
-// profile is the literal validated dialect. TestProfileShape pins the
-// printed default address (register ic7851-moved-address is out of scope),
-// while TestCrosscheckProfileAgainstLegs pins the independently measured
-// layout.
+// profile is the literal validated dialect: the IC-7850/IC-7851
+// Instruction Manual's 1A 00 memory record, PDF p.263 (folio 18-14) and
+// the three pages it cross-refers to.
+//
+// TestProfileShape pins the printed default address 8E — a radio moved off
+// it is unreachable this tier, which is a documented limitation and not a
+// bug — and TestProfileMatchesTheEvidenceLegs derives every span, width,
+// offset, encoding, byte order, enum and fixed byte below from the frozen
+// L/W/B artefacts rather than restating them.
 var profile = civ.MustNewProfile(civ.ProfileConfig{
 	Model: "IC-7851", RadioAddress: 0x8e, ControllerAddress: civ.ControllerAddressDefault,
 	AddressForm: civ.AddressFormFlat, ChannelLo: 1, ChannelHi: 101,

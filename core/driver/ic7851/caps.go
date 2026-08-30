@@ -17,7 +17,9 @@ import (
 // model, no write-trial protocol run, and no captured frame from one: no
 // write trial has occurred, so no write result has been observed, so the
 // flag cannot be true. Every byte in this package's tables came from the
-// IC-7851 CI-V Reference Guide rev 4 and from nothing else.
+// IC-7850/IC-7851 Instruction Manual (Revision 3, 283 pages) through the
+// reviewed capability matrix, and from nothing else. There is no
+// standalone CI-V reference guide for this model; see doc.go §0.
 //
 // FLIPPING IT IS A TWO-PART CHANGE, and stating that here is the point of
 // either constant. It is never enough to edit this line: the flip requires
@@ -29,7 +31,9 @@ import (
 //  3. the Capabilities switch in ic7851.go rewritten to select it,
 //
 // with TestWriteTrialsComplete_PinnedFalse's expectation rewritten so the
-// flip lands in a diff a reviewer can see.
+// flip lands in a diff a reviewer can see. That test also asserts that no
+// field is writable on either row while the guards are false, which is
+// what actually holds the fail-safe down.
 //
 // The two constants are deliberately separate even though the models share
 // one manual and one profile: evidence for one model is never evidence for
@@ -141,8 +145,8 @@ var deliberatelyZero = map[string]string{
 	"PreampOptions":          "additions design D8 — the IC-7851 record carries no preamp field",
 	"AntennaOptions":         "additions design D8 — the IC-7851 record carries no antenna field",
 	"DuplexOptions":          "the Icom repeater vocabulary. The 1A 00 record has no duplex field, FieldDuplex carries the zero FieldSupport on both banks, and E5b's guard makes the empty list lawful",
-	"DTCSPolarities":         "DTCS is printed NOWHERE in this document's 17 pages — swept for the matrix. An empty list is the positive statement that this radio expresses no DTCS polarity",
-	"DTCSCodes":              "the same sweep: no DTCS code table is printed anywhere in this document",
+	"DTCSPolarities":         "the strings \"DTCS\" and \"DCS\" occur ZERO times in all 283 pages — swept for the matrix (§1 row 19). An empty list is the positive statement that this radio expresses no DTCS polarity",
+	"DTCSCodes":              "the same sweep: no DTCS code table is printed anywhere in this document, and field ⑪'s tone-type nibble stops at 2: TSQL",
 }
 
 // memSlots is the MEM bank's inventory: "001".."099".
@@ -175,7 +179,7 @@ func scanSlots() []string { return []string{"P1", "P2"} }
 // and write the SAME 1A 00 record at different values of the same
 // selector, so a per-cell difference between them would be a claim this
 // document does not make. Whether every field is HONOURED on a scan edge
-// is a separate question and rides matrix lift R18.
+// is a separate question this document does not answer.
 //
 // EVERY spec.Field IS LISTED, including the ones this radio does not have.
 // An absent key and an explicit zero FieldSupport mean the same thing to
@@ -187,19 +191,20 @@ func bankFields(rw spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 	return map[spec.Field]spec.FieldSupport{
 		// The seven the record maps — core/civ/ic7851's layout() carries a
 		// FieldSpan for each and nothing else.
-		spec.FieldFrequency: rw, // (4)~(8), five bytes, little-endian BCD
-		spec.FieldMode:      rw, // (9), the ten printed mode codes
-		spec.FieldFilter:    rw, // (10), FIL1/FIL2/FIL3
-		spec.FieldToneMode:  rw, // (11) low nibble, OFF/TONE/TSQL
-		spec.FieldToneTx:    rw, // (12)~(14), three bytes, big-endian BCD
-		spec.FieldToneRx:    rw, // (15)~(17), three bytes, big-endian BCD
-		spec.FieldTag:       rw, // (18)~(27), ten name bytes
+		spec.FieldFrequency: rw, // ④~⑧, little-endian BCD, ⑧ a fixed-zero pad
+		spec.FieldMode:      rw, // ⑨, the ten printed mode codes
+		spec.FieldFilter:    rw, // ⑩, FIL1/FIL2/FIL3
+		spec.FieldToneMode:  rw, // ⑪ low nibble, OFF/TONE/TSQL
+		spec.FieldToneTx:    rw, // ⑫~⑭, big-endian BCD, ⑫ a fixed-zero pad
+		spec.FieldToneRx:    rw, // ⑮~⑰, big-endian BCD, ⑮ a fixed-zero pad
+		spec.FieldTag:       rw, // ⑱~㉗, ten name bytes
 
-		// RULING E6 — THE TWO UNMAPPED NIBBLES. Byte (3)'s LOW nibble is a
-		// four-valued SELECT-group marker (0=OFF, 1=★1, 2=★2, 3=★3;
-		// matrix §3.16 ADDED-1) and byte (11)'s HIGH nibble is a
-		// four-valued data mode (0=OFF, 1=DATA 1, 2=DATA 2, 3=DATA 3;
-		// matrix §1b as corrected by erratum 5). Their neutral homes,
+		// RULING E6 — THE TWO UNMAPPED NIBBLES. Byte ③'s LOW nibble is a
+		// four-valued SELECT-group marker (00: OFF, 01: ★1, 02: ★2,
+		// 03: ★3; matrix §3.16.2, register entry
+		// ic7851-select-memory-vocabulary) and byte ⑪'s HIGH nibble is a
+		// four-valued data mode (0: OFF, 1: DATA 1, 2: DATA 2, 3: DATA 3;
+		// matrix §3.15.1). Their neutral homes,
 		// codeplug.ChannelData.ScanSkip and .DataMode, are BOTH BoolField.
 		//
 		// A 4→2 collapse would rewrite a user's SELECT group or data mode
@@ -210,9 +215,8 @@ func bankFields(rw spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 		//
 		// THE CONSEQUENCE: a Known ScanSkip or DataMode is REFUSED by the
 		// capability gate before any wire traffic — never dropped, never
-		// collapsed (adjudication R6). These grades DIFFER from matrix §2,
-		// which has scan_skip Sup/Sup on MEM and data_mode Sup/Sup on
-		// both; two errata are proposed under R16.
+		// collapsed. TestWriteChannel_LocalRefusalsPrecedeAllWireTraffic
+		// exercises both against a session with no engine at all.
 		//
 		// On Icom, scan_skip is SELECT-GROUP MEMBERSHIP, never a skip.
 		spec.FieldScanSkip: {},
@@ -232,18 +236,19 @@ func bankFields(rw spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 		// home in this record.
 		spec.FieldCTCSSState: {},
 		spec.FieldCTCSSTone:  {},
-		// DTCS is printed nowhere in this document's 17 pages.
+		// DTCS is printed nowhere in all 283 pages.
 		spec.FieldDTCSCode:     {},
 		spec.FieldDTCSPolarity: {},
 
 		// ERASE. Unlike Yaesu, the wire form EXISTS on this radio, in two
-		// shapes (1A 00 <ch> FF, and command 0B) — and NO IC-7851 has ever
-		// been asked to use either. The zero FieldSupport is what makes
-		// core/clone/execute.go's DiffErased branch unreachable for this
-		// model, and spec.ConsentUnverifiedWrites structurally never
-		// consents this field (its `f != FieldErase` guard), so consent
-		// cannot open it either. Matrix §3.13's six requirements for a
-		// future write-trial milestone are reproduced in doc.go.
+		// shapes (1A 00 <ch> FF at PDF p.263, and top-level 0B at PDF
+		// p.252) — and NO IC-7851 has ever been asked to use either. The
+		// zero FieldSupport is what makes core/clone/execute.go's
+		// DiffErased branch unreachable for this model, and
+		// spec.ConsentUnverifiedWrites structurally never consents this
+		// field (its `f != FieldErase` guard), so consent cannot open it
+		// either. Matrix §3.13's requirements for a future write-trial
+		// milestone are reproduced in doc.go §9.
 		spec.FieldErase: {},
 	}
 }
@@ -257,26 +262,27 @@ func bankFields(rw spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 // struct (adjudication R11).
 func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) spec.Capabilities {
 	return spec.Capabilities{
-		// §1 row 1 — the model name, which must equal the registry key
-		// Wave 4 will register this driver under. The document sets it
-		// "IC-7851" throughout.
+		// §1 row 1 — the model name, overwritten per row by Capabilities;
+		// it must equal the registry key Wave 4 will register each row
+		// under. PDF p.1 (front cover): "THE TRANSCEIVERS / IC-7850 /
+		// IC-7851 / Instruction Manual".
 		Model: "IC-7851",
-		// §3.4 — the CI-V address 0x98, MANUAL-EVIDENCED, rendered as the
-		// document prints it.
+		// §1 row 2 / §3.4 — the CI-V address 0x8E, MANUAL-EVIDENCED: PDF
+		// p.229 (folio 15-18), item "CI-V Address (Default: 8Eh)", with
+		// the note '"8Eh" is the default address of IC-7850/IC-7851.' —
+		// the one place the shared claim is PRINTED rather than inherited.
 		//
 		// THE STATIC VALUE IS THE ADDRESS ALONE (spec D3.2). A CI-V radio
 		// has no CAT-ID equivalent readable before a port opens: the 19 00
 		// token is a per-session observation, and this driver RECORDS it
-		// and NEVER MATCHES it (D5 entry 7, matrix lift R7). Session
-		// Identity carries "98" followed by the observed token; this
-		// pre-probe field carries the half that is known statically.
+		// and NEVER MATCHES it (register entry ic7851-id-reply-value).
+		// Session Identity carries "8e" followed by the observed token;
+		// this pre-probe field carries the half that is known statically.
 		//
-		// The "4-character CAT ID" comments in core/spec/capabilities.go,
-		// core/driver/driver.go and core/codeplug/radioinfo.go, which
-		// once contradicted spec D3.2, were generalised at Wave-4 tier
-		// close (doc.go recorded them for that pass); driver.go's own
-		// Identity.CATID comment now also carries the tier's observed
-		// casing convention.
+		// THE LOWER-CASE RENDERING IS THIS MODEL'S FIXED CONVENTION, not a
+		// per-session choice: the tier's casing is not uniform, and
+		// internal/wiring compares a session CATID against this value as
+		// an exact-case prefix.
 		CATID:    "8e",
 		Transmit: spec.HasTransmitter,
 		Banks: []spec.Bank{
@@ -285,7 +291,7 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 				// A display string, not a protocol fact.
 				Label: "Memories",
 				Slots: memSlots(),
-				// §1b — 99 memories, addressed 1..99.
+				// §1 row 3 / §1b.3 — 99 memories, addressed 0001..0099.
 				//
 				// NoBlank FALSE, and MANUAL-EVIDENCED rather than merely
 				// conservative: matrix §1b.3, PDF p.181 (folio 11-2),
@@ -315,70 +321,78 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 		},
 		// §1 row 4 — the "①Receiving mode" column's ten printed codes, in
 		// the UI's preferred order, which here is the printed one (left
-		// sub-column then right): PDF p.11's "Operating mode" table,
-		// corroborated at PDF p.14's "Command: 26".
+		// sub-column then right): PDF p.260 (folio 18-11), "• Operating
+		// mode / Command: 01, 04, 06", the "① Operating mode" table,
+		// reprinted on the record page itself at PDF p.263 (folio 18-14)
+		// under "Command : 26".
 		//
-		// THESE ARE THE TEN VALUES OF core/civ/ic7851's modeEnum, and
-		// TestModes_MatchTheCodec pins the two against each other by
-		// decoding a record for every one. They are written out here
-		// rather than derived from the codec because modeEnum is
-		// unexported and core/civ/ic7851is frozen evidence-bound code
-		// this worktree's Stage 2 may not extend; the test is what makes
-		// the duplication safe.
+		// THESE ARE THE TEN VALUES OF core/civ/ic7851's mode enum, and
+		// TestModes_MatchTheCodec pins the two against each other. They
+		// are written out here rather than read from the codec at run time
+		// because this list is the UI's vocabulary and its ORDER is a
+		// display choice, while the codec's map is the wire reading; the
+		// test is what makes the duplication safe.
 		//
 		// Codes 0x06 and 0x09–0x11 are printed nowhere and are
 		// deliberately absent from both lists: a record carrying one fails
-		// to decode with a parse error naming the offset (register entry
-		//  ic7851-mode-code-completeness, matrix lift R19).
+		// to decode with a parse error naming the offset. That the ten
+		// printed pairs are the COMPLETE set is not stated anywhere, and
+		// the honest consequence is the parse failure rather than a
+		// guessed eleventh value.
 		//
 		// THE RADIX OF THE LAST TWO CODES IS A RULING, NOT A READING —
 		// RULING OQ1 of 24/08/2026 is HEXADECIMAL, so PSK is the wire byte
 		// 0x12 and PSK-R is 0x13. See doc.go.
 		Modes: []string{"LSB", "USB", "AM", "CW", "RTTY", "FM", "CW-R", "RTTY-R", "PSK", "PSK-R"},
-		// §1 row 5 — PDF p.11's "Filter setting" column, whose fourth and
-		// fifth rows are printed "-" (matrix Errata (rev 1) erratum 6).
-		// The three values of core/civ/ic7851's filterEnum, pinned against
-		// it by TestFilters_MatchTheCodec.
+		// §1 row 21 — PDF p.260 (folio 18-11), the "② Filter setting"
+		// column: 01: FIL1, 02: FIL2, 03: FIL3. Reprinted on the record
+		// page at PDF p.263 (folio 18-14) under Command 26's "③ Filter"
+		// column. The three values of core/civ/ic7851's filter enum,
+		// pinned against it by TestFilters_MatchTheCodec.
 		//
 		// 0x00 IS NOT A MEMBER, and that is a decision with a consequence:
-		// a record whose (10) is 0x00 fails to decode rather than being
-		// read as "no filter". The page prints three values and no
-		// default; inventing a fourth would be a radio claim (register
-		// entry ic7851-filter-value-set).
+		// a record whose ⑩ is 0x00 fails to decode rather than being read
+		// as "no filter". The page prints three values and no default, and
+		// the wire domain starts at 01; inventing a fourth would be a
+		// radio claim.
 		Filters: []string{"FIL1", "FIL2", "FIL3"},
-		// §1 row 8 / erratum 5 — byte (11)'s LOW nibble, with the
-		// semantics the neutral model needs. TONE transmits a CTCSS tone;
+		// §1 row 18 — byte ⑪'s LOW (right) nibble, read off the 400 dpi
+		// ×4.0 crop of PDF p.263 (folio 18-14)'s sub-diagram: "0: OFF,
+		// 1: TONE, 2: TSQL". The nibble's domain is exactly three values;
+		// there is no fourth code printed. The semantics mapping is the
+		// neutral model's, and a CHOICE: TONE transmits a CTCSS tone;
 		// TSQL transmits one AND squelches on the received one.
 		ToneModes: []spec.ToneMode{
 			{Value: "OFF", Semantics: spec.ToneModeOff},
 			{Value: "TONE", Semantics: spec.ToneModeCTCSS},
 			{Value: "TSQL", Semantics: spec.ToneModeCTCSSSquelch},
 		},
-		// §1 row 8 / PDF p.14's six rotated nibble labels — and tier
-		// ruling T1(2).
+		// §1 row 9 — the RADIO'S OWN SELECTABLE CHART, and tier ruling
+		// T1(2). See MinToneDeciHz/MaxToneDeciHz for the reading and for
+		// why the printed chart is declared rather than the wider digit
+		// domain the wire could carry.
 		//
-		// THE PRINTED DIGIT RANGE AND THE DECLARED DOMAIN DIFFER, AND THE
-		// DIFFERENCE IS THE POINT. The labels print 100 Hz: 0–2, 10 Hz:
-		// 0–9, 1 Hz: 0–9, 0.1 Hz: 0–9, so the WIRE encodes 0..2999
-		// deci-Hz. The CAPABILITY floor is max(printed minimum, 1),
-		// because 0 Hz is not a tone: spec.ToneRange requires
-		// MinDeciHz > 0 and Capabilities.Validate refuses a zero minimum.
+		// THE WIRE'S 0 IS NOT LOST BY THAT. A tone-OFF channel's bytes are
+		// 00 00 00 and the codec hands the number 0 up unharmed; it is
+		// handled one layer up, at ReadChannel, which maps an
+		// out-of-domain tone number — 0 included — to UNKNOWN rather than
+		// to a Known value codeplug.Validate would then refuse (T1(3)).
+		// The write path preserves such a number VERBATIM, so a channel
+		// this driver reads as Unknown is still writable.
 		//
-		// The wire's 0 is not lost by that — it is handled one layer up,
-		// at ReadChannel, which maps an out-of-domain tone number (0
-		// included) to UNKNOWN rather than to a Known value
-		// codeplug.Validate would then refuse (T1(3)).
-		//
-		// RECORDED COST, from E3: the tone PICKER stays list-driven, so on
-		// this model the grid shows and round-trips tones but the picker
-		// cannot offer them. A Wave-4 item and an honesty row.
+		// RECORDED COST: the tone PICKER stays list-driven, so on this
+		// model the grid shows and round-trips tones but the picker cannot
+		// offer them. A Wave-4 item and an honesty row.
 		CTCSSToneRange: &spec.ToneRange{MinDeciHz: MinToneDeciHz, MaxDeciHz: MaxToneDeciHz, StepDeciHz: ToneStepDeciHz},
-		// §1 row 9 — the six rates the document names for the CI-V link,
-		// MANUAL-EVIDENCED as named; that the list is COMPLETE is ASSUMED
-		// (matrix lift R12).
+		// §1 row 10 — the six rates PDF p.229 (folio 15-18) names for the
+		// [USB B] CI-V link, MANUAL-EVIDENCED. spec.Capabilities has ONE
+		// list and this radio has two: [REMOTE] prints only 4800, 9600 and
+		// 19200. Declaring the USB superset is the CHOICE; register entry
+		// ic7851-baud-list-per-port, and doc.go §5 states the cost.
 		Bauds: []int{4800, 9600, 19200, 38400, 57600, 115200},
-		// §3.3 / OQ2 — ASSUMED, register home  ic7851-default-baud, matrix
-		// lift R11. THE DOCUMENT MARKS NO DEFAULT. The choice of 19200
+		// §3.3 / §1 row 11 — ASSUMED, register entry
+		// ic7851-auto-baud-open. THE DOCUMENT MARKS NO NUMERIC DEFAULT:
+		// both CI-V paths print "(Default: Auto)". The choice of 19200
 		// within the printed six is ARBITRARY and is recorded as such: no
 		// reading of this document favours one of them. What makes it safe
 		// is not the choice but the grading and the failure mode — the
@@ -398,12 +412,24 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 		// the table fails its "the table has gone stale" arm.
 		MinFreqHz: MinRadioFreqHz,
 		MaxFreqHz: MaxRadioFreqHz,
-		// §1 row 7 — the name span (18)~(27) is ten bytes wide.
+		// §1 row 5 — the name span ⑱~㉗ is ten bytes wide: PDF p.263
+		// (folio 18-14), "Memory name settings / Up to 10 characters.",
+		// corroborated at PDF p.185 (folio 11-6).
 		TagLen: 10,
-		// PDF p.12's two character tables, transcribed ONCE in
-		// core/civ/ic7851and referenced here. The Icom charset omits
-		// several bytes the pre-Icom family default would allow, which is
-		// exactly why spec.TagByteOK consults a capability-supplied set.
+		// §1 row 22 — the 95 printable ASCII bytes, transcribed ONCE in
+		// core/civ/ic7851 and referenced here. PDF p.261 (folio 18-12)
+		// prints a code for every letter and symbol and NONE for the
+		// digits or the space, while its per-command table's 1A 00 row
+		// reads "Memory name / All characters are usable." and PDF p.185
+		// (folio 11-6) supplies the repertoire in words. The missing code
+		// VALUES are ASSUMED: register entry
+		// ic7851-name-digit-space-codes.
+		//
+		// IT MUST BE SUPPLIED EXPLICITLY. spec.Capabilities.TagByteOK's
+		// empty-string default excludes ';' as the NEWCAT frame
+		// terminator, but ';' is 3B in this radio's own printed symbol
+		// table and CI-V has no such terminator, so the default rule would
+		// wrongly reject a legal IC-7851 name character.
 		TagCharset: civic7851.NameCharset,
 	}
 }
