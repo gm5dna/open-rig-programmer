@@ -8,6 +8,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeradio"
@@ -202,6 +203,20 @@ func TestUpdateChannel_ConcurrentWithPrepareSend_RaceClean(t *testing.T) {
 				}
 			}
 		}()
+	}
+
+	// Let the hammerers land at least one clean UpdateChannel BEFORE the
+	// reservation opens: on a slow, loaded runner (CI's macOS job,
+	// 30/08/2026) PrepareSend could otherwise reserve before any goroutine
+	// had been scheduled, and the "never succeeded" assertion below —
+	// which guards the test's own setup, not the product — fired on
+	// scheduling alone. Bounded, so a genuinely broken UpdateChannel still
+	// fails rather than hangs.
+	for deadline := time.Now().Add(5 * time.Second); atomic.LoadInt64(&okCount) == 0; {
+		if time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(time.Millisecond)
 	}
 
 	if _, err := a.PrepareSend(); err != nil {
