@@ -221,6 +221,31 @@ func TestGetSupportedModels_ContainsDefaultModel(t *testing.T) {
 	if !foundIC905 {
 		t.Errorf("GetSupportedModels() = %v, want it to contain wiring.IC905Model %q", got, wiring.IC905Model)
 	}
+	// The IC-7851 and IC-7850 (Tier 4b), on the same explicit membership
+	// footing as every other Icom model above — and BOTH are asserted,
+	// because these two rows are served by ONE driver package: a
+	// registration that added the constant and the driver but only ONE
+	// registry row would build, would pass every per-model test the other
+	// row has, and would leave the second radio unselectable in the
+	// picker. That is precisely the failure this loop exists to catch.
+	foundIC7851 := false
+	for _, m := range got {
+		if m == wiring.IC7851Model {
+			foundIC7851 = true
+		}
+	}
+	if !foundIC7851 {
+		t.Errorf("GetSupportedModels() = %v, want it to contain wiring.IC7851Model %q", got, wiring.IC7851Model)
+	}
+	foundIC7850 := false
+	for _, m := range got {
+		if m == wiring.IC7850Model {
+			foundIC7850 = true
+		}
+	}
+	if !foundIC7850 {
+		t.Errorf("GetSupportedModels() = %v, want it to contain wiring.IC7850Model %q", got, wiring.IC7850Model)
+	}
 }
 
 // TestConnect_EmptyModelIsTheDefaultModel pins Connect/ConnectDemo's new

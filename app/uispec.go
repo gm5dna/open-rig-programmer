@@ -250,9 +250,22 @@ var tierFields = []spec.Field{
 // — pinned by TestGetUISpec_RegisteredIC905_EveryBankFieldsAndTagDisplay.
 // Its two banks, MEM (SPARSE, discovered at Open) and CALL (dense, a
 // distinct namespace), reach the same nine identically, on the same
-// footing as the IC-9700's three. A future Icom registration would extend
-// this same list with its own model-specific set; there is none to
-// register, this being the tier's last.
+// footing as the IC-9700's three.
+// FOUR — the IC-7610's own four, tone_mode, tone_tx, tone_rx and filter —
+// for the IC-7851 AND the IC-7850, the additions tier's first
+// registration (Tier 4b). TWO ROWS, ONE ANSWER, and that is structural
+// rather than a coincidence between two readings: both rows are served by
+// ONE core/driver/ic7851, whose bankFields grades MEM and SCAN
+// identically and maps exactly the seven fields its 1A 00 record carries
+// (frequency, mode, filter, tone_mode, tone_tx, tone_rx and the name).
+// That the SET matches the IC-7610's IS a coincidence of independent
+// evidence — the two packages share no code and no values — and additions
+// spec D1.1 predicted it from the two documents drawing the same 27-byte
+// data area. Pinned by
+// TestGetUISpec_RegisteredIC7851Pair_EveryBankFieldsAndTagDisplay, which
+// drives both rows.
+// A future Icom registration would extend this same list with its own
+// model-specific set.
 func bankTierFields(caps spec.Capabilities, id spec.BankID) []string {
 	var out []string
 	for _, f := range tierFields {

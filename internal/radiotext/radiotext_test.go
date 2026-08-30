@@ -919,6 +919,17 @@ func TestFor_UnknownModel(t *testing.T) {
 		// no-hyphen spelling, a lowercase variant, a trailing- and
 		// leading-space variant, and the bare model number.
 		"IC905", "ic-905", "IC-905 ", " IC-905", "905",
+		// IC-7851 and IC-7850 near misses (Tier 4b): the same five-shape
+		// set as every Icom model's above, for EACH row — no-hyphen
+		// spelling, a lowercase variant, a trailing- and leading-space
+		// variant, and the bare model number. Both rows are listed
+		// explicitly rather than assumed distinct by construction: these
+		// two names differ in ONE character, which is exactly the
+		// circumstance in which a registry lookup that had been made
+		// loose (a prefix match, say) would answer one row's prose to the
+		// other row's typo.
+		"IC7851", "ic-7851", "IC-7851 ", " IC-7851", "7851",
+		"IC7850", "ic-7850", "IC-7850 ", " IC-7850", "7850",
 	} {
 		got, ok := radiotext.For(model)
 		if ok {
@@ -976,5 +987,216 @@ func TestUnverifiedWriteWarningTemplate_CarriesItsFourElements(t *testing.T) {
 	}
 	if strings.Contains(rendered, "%!") {
 		t.Errorf("rendered warning = %q, want no formatting fault", rendered)
+	}
+}
+
+// ic7851Particulars and ic7850Particulars are the non-borrowing
+// particulars lists for the IC-7851 pair (Tier 4b) — the same shape as
+// ic905Particulars (the Yaesu-vocabulary-plus-bare-"CAT" set plus the
+// bare model name and address hex of every other registered Icom entry),
+// with ONE deliberate difference: the SHARED ADDRESS IS NOT IN EITHER
+// LIST.
+//
+// 8Eh is these two radios' OWN address — printed as "the default address
+// of IC-7850/IC-7851" (PDF p.229, folio 15-18) — so checking for it would
+// fault on every one of their own sentences that states the fixed-address
+// limitation. What each list DOES carry is the SIBLING'S BARE NAME, and
+// that is the check with teeth for this pair: neither entry may mention
+// the other model, both because a user reading advice about the radio
+// they chose should not be told about a different one, and because
+// TestRadiotext_IC7851AndIC7850DifferOnlyInTheModelName's substitution
+// depends on it.
+//
+// NO PREFIX HAZARD RUNS EITHER WAY, unlike the IC-7300/IC-7300MK2 pair's
+// lists: "IC-7850" is not a substring of "IC-7851" nor the reverse (they
+// differ in the last character), so each list checks the sibling's bare
+// name rather than a possessive form.
+var ic7851Particulars = []string{
+	"V01-10", "[V/M]", "[ERASE]", "FT-710", "hardware-verified",
+	"FTdx10", "FTdx101D", "FTdx101MP", "CAT manual", "CAT command", "CAT query", "CAT",
+	"IC-7610", "98h",
+	"IC-7300", "94h",
+	"IC-7300MK2", "B6h",
+	"IC-705", "A4h",
+	"IC-9700", "A2h",
+	"IC-905", "ACh",
+	"IC-7850",
+}
+
+var ic7850Particulars = []string{
+	"V01-10", "[V/M]", "[ERASE]", "FT-710", "hardware-verified",
+	"FTdx10", "FTdx101D", "FTdx101MP", "CAT manual", "CAT command", "CAT query", "CAT",
+	"IC-7610", "98h",
+	"IC-7300", "94h",
+	"IC-7300MK2", "B6h",
+	"IC-705", "A4h",
+	"IC-9700", "A2h",
+	"IC-905", "ACh",
+	"IC-7851",
+}
+
+// wantIC7851 and wantIC7850 are the two entries pinned VERBATIM, shared
+// by each model's own verbatim test and by the substitution test below,
+// so that neither can pass against a stale copy of the other's
+// expectation — the wantFTdx101D/wantFTdx101MP arrangement, for the same
+// reason.
+var wantIC7851 = radiotext.Text{
+	EraseProcedure:           "The IC-7851's CI-V protocol prints two memory clear forms — a 1A 00 set carrying FF in place of the record, and a separate top-level command — but this build sends neither: no builder exists for either, and no IC-7851 has ever confirmed what either does, so sending one risks clearing the wrong channel rather than the intended one. Clear the channel at the radio instead, following the memory-channel clear procedure in its own instruction manual. The two programmed scan edges cannot be cleared at all: the radio's own memory-channel table prints their CLEAR column as \"No\".",
+	FirmwareGuidance:         "No minimum firmware version is established for the IC-7851: nothing this project holds states one, and no IC-7851 has been asked. This build implements no CI-V firmware-version query either — its whole admitted command set is the identity read and the memory record — so read the version off the radio's own display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established.",
+	GridLegendNote:           "Tone is read and written for the IC-7851 over CI-V by this build, but unverified against real hardware — no IC-7851 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble marks a channel into one of three SELECT memory groups, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not. The same holds for its data mode, with a wider consequence: a channel already set to DATA 1, DATA 2 or DATA 3 — or already in a SELECT group — cannot be written back by this build at all, because there is no honest value to preserve in a region it does not map.",
+	ToneScanSkipVerification: "",
+	EraseDialogNote:          "The IC-7851's CI-V protocol prints two memory clear forms — a 1A 00 set carrying FF in place of the record, and a separate top-level command — but this build sends neither: no builder exists for either, and no IC-7851 has ever confirmed what either does, so sending one risks clearing the wrong channel rather than the intended one. Clear the channel at the radio instead, following the memory-channel clear procedure in its own instruction manual. The two programmed scan edges cannot be cleared at all: the radio's own memory-channel table prints their CLEAR column as \"No\".",
+	PreservationTooltips: radiotext.PreservationTooltips{
+		Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7851 has ever answered a frame",
+		ScanSkip: "not read or written over CI-V by this build — the IC-7851's nearest wire nibble marks one of three SELECT memory groups, not a skip flag",
+	},
+	FirmwarePlaceholder: "as shown on the IC-7851's own display",
+	ProbeFirmwareNote:   "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7851: this build knows of none to require. This driver talks only to CI-V address 8Eh, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200 is ASSUMED, since both of this radio's printed CI-V speed settings ship on Auto and name no number to prefer. The six speeds offered are the USB port's list: on the remote-jack path with a level converter the radio stops at 19200, and this build cannot tell which path is wired. Note too that the IC-7851 and its sibling share one address, one manual and one frame shape, and this build cannot tell them apart — the model reported is the one you selected, not one it detected. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+}
+
+var wantIC7850 = radiotext.Text{
+	EraseProcedure:           "The IC-7850's CI-V protocol prints two memory clear forms — a 1A 00 set carrying FF in place of the record, and a separate top-level command — but this build sends neither: no builder exists for either, and no IC-7850 has ever confirmed what either does, so sending one risks clearing the wrong channel rather than the intended one. Clear the channel at the radio instead, following the memory-channel clear procedure in its own instruction manual. The two programmed scan edges cannot be cleared at all: the radio's own memory-channel table prints their CLEAR column as \"No\".",
+	FirmwareGuidance:         "No minimum firmware version is established for the IC-7850: nothing this project holds states one, and no IC-7850 has been asked. This build implements no CI-V firmware-version query either — its whole admitted command set is the identity read and the memory record — so read the version off the radio's own display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established.",
+	GridLegendNote:           "Tone is read and written for the IC-7850 over CI-V by this build, but unverified against real hardware — no IC-7850 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble marks a channel into one of three SELECT memory groups, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not. The same holds for its data mode, with a wider consequence: a channel already set to DATA 1, DATA 2 or DATA 3 — or already in a SELECT group — cannot be written back by this build at all, because there is no honest value to preserve in a region it does not map.",
+	ToneScanSkipVerification: "",
+	EraseDialogNote:          "The IC-7850's CI-V protocol prints two memory clear forms — a 1A 00 set carrying FF in place of the record, and a separate top-level command — but this build sends neither: no builder exists for either, and no IC-7850 has ever confirmed what either does, so sending one risks clearing the wrong channel rather than the intended one. Clear the channel at the radio instead, following the memory-channel clear procedure in its own instruction manual. The two programmed scan edges cannot be cleared at all: the radio's own memory-channel table prints their CLEAR column as \"No\".",
+	PreservationTooltips: radiotext.PreservationTooltips{
+		Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7850 has ever answered a frame",
+		ScanSkip: "not read or written over CI-V by this build — the IC-7850's nearest wire nibble marks one of three SELECT memory groups, not a skip flag",
+	},
+	FirmwarePlaceholder: "as shown on the IC-7850's own display",
+	ProbeFirmwareNote:   "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7850: this build knows of none to require. This driver talks only to CI-V address 8Eh, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200 is ASSUMED, since both of this radio's printed CI-V speed settings ship on Auto and name no number to prefer. The six speeds offered are the USB port's list: on the remote-jack path with a level converter the radio stops at 19200, and this build cannot tell which path is wired. Note too that the IC-7850 and its sibling share one address, one manual and one frame shape, and this build cannot tell them apart — the model reported is the one you selected, not one it detected. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+}
+
+// TestRadiotext_IC7851Verbatim and TestRadiotext_IC7850Verbatim are
+// TestRadiotext_IC7610Verbatim's siblings for the additions tier's first
+// registration (Tier 4b), and they guard the same kind of fact: the
+// HEDGES. This prose was written in radiotext.go itself, for two radios
+// this project has never connected to anything, under the honesty rule
+// recorded at ic7851Text.
+//
+// "no IC-7851 has ever answered a frame", "no minimum version is
+// established", "is ASSUMED", "unverified against real hardware" and
+// "this build cannot tell them apart" are the load-bearing words. An
+// editor tidying them into confident advisory copy — or reaching for a
+// neighbouring model's wording because these two look thin — would
+// attribute one radio's evidence to another. That edit fails here.
+//
+// ToneScanSkipVerification is asserted EMPTY for the same reason every
+// other model's is: both of core/driver/ic7851's write-trial guards are
+// false, so there is no hardware-preservation verification of any kind to
+// report.
+//
+// THE NON-BORROWING CHECK RUNS AGAINST ALL ELEVEN OTHER ENTRIES, the
+// sibling included, and for this pair the sibling is the most important
+// of them: the two entries are meant to be near-copies of one another
+// EXCEPT for the model name, so a field that forgot to substitute the
+// name would be byte-identical to the sibling's and would serve one
+// radio's advice under the other's title.
+func TestRadiotext_IC7851Verbatim(t *testing.T) {
+	assertIC7851PairEntry(t, "IC-7851", wantIC7851, ic7851Particulars)
+}
+
+func TestRadiotext_IC7850Verbatim(t *testing.T) {
+	assertIC7851PairEntry(t, "IC-7850", wantIC7850, ic7850Particulars)
+}
+
+// assertIC7851PairEntry runs the verbatim pin and both non-borrowing
+// checks for one row of the IC-7851 pair. See
+// assertFTdx101NotBorrowed for why both checks are needed: byte-identity
+// catches a wholesale copy, particulars catch a partial one.
+func assertIC7851PairEntry(t *testing.T, model string, want radiotext.Text, particulars []string) {
+	t.Helper()
+
+	got, ok := radiotext.For(model)
+	if !ok {
+		t.Fatalf("For(%q) ok = false, want true — the model is registered in internal/wiring, so it must have prose", model)
+	}
+	if got != want {
+		t.Errorf("For(%q) = %#v,\nwant %#v", model, got, want)
+	}
+
+	for _, other := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850"} {
+		if other == model {
+			continue
+		}
+		otherText, ok := radiotext.For(other)
+		if !ok {
+			t.Fatalf("For(%q) ok = false, want true — sanity check failed", other)
+		}
+		otherFields := ftdx101Fields(otherText)
+		for field, val := range ftdx101Fields(got) {
+			if val == "" {
+				continue
+			}
+			if val == otherFields[field] {
+				t.Errorf("%s %s is byte-identical to the %s's — one radio's prose must never be served as another's", model, field, other)
+			}
+		}
+	}
+	for field, val := range ftdx101Fields(got) {
+		for _, particular := range particulars {
+			if strings.Contains(val, particular) {
+				t.Errorf("%s %s contains %q — another radio's particular in this one's prose is that radio's evidence claimed for this one", model, field, particular)
+			}
+		}
+	}
+}
+
+// TestRadiotext_IC7851AndIC7850DifferOnlyInTheModelName is spec D1.2
+// stated as a SUBSTITUTION, exactly as
+// TestRadiotext_FTdx101DAndMPDifferOnlyInTheModelName states plan D8 for
+// the Yaesu pair — and for a stronger reason here, because these two rows
+// share not merely a manual but ONE driver implementation, ONE
+// civ.Profile and ONE CI-V address. Replacing every occurrence of
+// "IC-7850" with "IC-7851" throughout the IC-7850's entry must reproduce
+// the IC-7851's entry byte for byte.
+//
+// Why substitution rather than a field-by-field comparison of the fields
+// that happen not to name the model: the interesting failure is not "two
+// fields drifted apart", it is "somebody added a sentence to ONE row's
+// entry" — a claim about one of these radios that no evidence
+// distinguishes from the other. A comparison restricted to the
+// model-naming fields cannot see that; this can, because the added
+// sentence survives the substitution and breaks the equality.
+//
+// EITHER DIRECTION IS WELL-DEFINED HERE, unlike the FTdx101 pair's (where
+// "FTdx101D" is a substring of nothing but substituting it in would leave
+// the MP's name unmatched): neither of these two names is a substring of
+// the other. IC-7850 -> IC-7851 is the direction taken, arbitrarily and
+// stated as arbitrary.
+//
+// NON-VACUITY: at least one field must actually name the model, or the
+// substitution would be the identity function and this test would prove
+// only that the two entries are equal — which they are not, and must not
+// be.
+func TestRadiotext_IC7851AndIC7850DifferOnlyInTheModelName(t *testing.T) {
+	a, ok := radiotext.For("IC-7851")
+	if !ok {
+		t.Fatal(`For("IC-7851") ok = false, want true`)
+	}
+	b, ok := radiotext.For("IC-7850")
+	if !ok {
+		t.Fatal(`For("IC-7850") ok = false, want true`)
+	}
+
+	aFields := ftdx101Fields(a)
+	naming := 0
+	for field, bVal := range ftdx101Fields(b) {
+		if strings.Contains(bVal, "IC-7850") {
+			naming++
+		}
+		if got := strings.ReplaceAll(bVal, "IC-7850", "IC-7851"); got != aFields[field] {
+			t.Errorf("%s: the IC-7850's text with its model name replaced by the IC-7851's is\n  %q\nbut the IC-7851's is\n  %q\n— spec D1.2: the two entries may differ ONLY where they name the model", field, got, aFields[field])
+		}
+	}
+	if naming == 0 {
+		t.Error("no IC-7850 field names the model — the substitution above is the identity function and this test asserted nothing")
+	}
+
+	// And the two entries are NOT equal: they name different radios, and
+	// a user reading the IC-7850's advisories must see the IC-7850's name.
+	if a == b {
+		t.Error("the IC-7851's and IC-7850's entries are byte-identical — each row's prose must name its own model")
 	}
 }
