@@ -31,6 +31,13 @@ func WithTransportLogger(l transport.Logger) Option {
 	}
 }
 
+// WithFullInventoryWalk makes Open read the whole zero-based 100 × 100
+// memory space instead of the bounded default walk. It is opt-in because
+// 10,000 CI-V exchanges can make Open take minutes on a physical receiver.
+func WithFullInventoryWalk() Option {
+	return func(d *icr8600Driver) { d.fullInventoryWalk = true }
+}
+
 // WithConsentedUnverifiedWrites records the user's session-local consent.
 // It changes no static capability and never consents FieldErase.
 func WithConsentedUnverifiedWrites() Option {
@@ -47,9 +54,10 @@ func New(profile Profile, opts ...Option) driver.Driver {
 }
 
 type icr8600Driver struct {
-	profile          Profile
-	consented        bool
-	transportOptions []transport.Option
+	profile           Profile
+	consented         bool
+	fullInventoryWalk bool
+	transportOptions  []transport.Option
 	// Non-zero only in focused tests. Production deliberately takes the
 	// transport defaults until Stage R measures this radio.
 	readTimeout time.Duration
@@ -87,9 +95,9 @@ func (d *icr8600Driver) sessionCapabilities(discovered []string, catID string) s
 	return caps
 }
 
-// Open sends only the address-matched 19 00 read and bounded 1A 00 memory
-// reads. civ's initialisation sequence is empty, so it never mutates the
-// receiver merely by opening it.
+// Open sends only the address-matched 19 00 read and 1A 00 memory reads. The
+// memory walk is bounded by default and full only with WithFullInventoryWalk.
+// civ's initialisation sequence is empty, so opening never mutates the receiver.
 func (d *icr8600Driver) Open(ctx context.Context, port transport.Port, id driver.Identity) (driver.Session, error) {
 	profile := civicr8600.Profile()
 	framing, err := civ.NewFraming(profile)
@@ -132,10 +140,11 @@ func (d *icr8600Driver) open(ctx context.Context, eng *transport.Engine, profile
 		return nil, fmt.Errorf("icr8600: Open: 19 00 identity probe: %w", err)
 	}
 
-	discovered, err := s.discover(ctx)
+	discovered, complete, err := s.discover(ctx, d.fullInventoryWalk)
 	if err != nil {
-		return nil, fmt.Errorf("icr8600: Open: bounded occupied-slot search: %w", err)
+		return nil, fmt.Errorf("icr8600: Open: occupied-slot search: %w", err)
 	}
+	s.report.InventoryComplete = complete
 	catID := fmt.Sprintf("%02X:%s", civicr8600.RadioAddress, strings.ToUpper(token))
 	id.CATID = catID
 	s.id = id
@@ -143,19 +152,22 @@ func (d *icr8600Driver) open(ctx context.Context, eng *transport.Engine, profile
 	if s.report.Fingerprinted {
 		s.report.AddressDiagnostic = fmt.Sprintf("address %02X confirmed; record fingerprint %d", civicr8600.RadioAddress, s.report.RecordLength)
 	} else {
-		s.report.AddressDiagnostic = fmt.Sprintf("address %02X confirmed; UNFINGERPRINTED: bounded occupied-slot search found no record", civicr8600.RadioAddress)
+		s.report.AddressDiagnostic = fmt.Sprintf("address %02X confirmed; UNFINGERPRINTED: occupied-slot search found no record", civicr8600.RadioAddress)
 	}
 	return s, nil
 }
 
-// OpenReport records the bounded probe result without making it part of the
-// neutral driver seam.
+// OpenReport records the identity and inventory-probe result without making it
+// part of the neutral driver seam.
 type OpenReport struct {
 	SlotsTried        int
 	Fingerprinted     bool
 	RecordLength      int
 	FirstOccupied     string
 	AddressDiagnostic string
+	// InventoryComplete is true only when discovery read all 10,000
+	// ordinary-memory addresses. The bounded default always reports false.
+	InventoryComplete bool
 }
 
 // Session is one address-matched IC-R8600 connection.
