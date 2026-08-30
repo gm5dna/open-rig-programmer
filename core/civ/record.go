@@ -168,7 +168,7 @@ const (
 	// IC-705 and the IC-905 both number a CALL group at wire index 100,
 	// which the radio prints and sends as `01 00`; one packed-BCD byte
 	// stops at 99. A model with 101 groups is not an edge case to round
-	// off — it is two of the six radios in this tier — and the alternative
+	// off — the IC-705, IC-905 and IC-R8600 all address a hundred-odd groups — and the alternative
 	// (renumbering the CALL group to something that fits) would have this
 	// program address a channel by an index its radio has never heard of.
 	AddressFormWideGroupChannel

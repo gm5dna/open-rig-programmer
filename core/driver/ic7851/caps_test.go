@@ -155,6 +155,12 @@ func TestPreBuildRefusalEnforcesTheCapabilityBounds(t *testing.T) {
 		{"a tone squelch above the record's BCD capacity", func(d *codeplug.ChannelData) {
 			d.ToneRx = codeplug.ToneField{State: codeplug.Known, Value: spec.Tone(3000)}
 		}, spec.FieldToneRx},
+		// The lower edge: domainRefusal's v < MinDeciHz branch is reachable
+		// only by a zero tone, so it is pinned here as the IC-7760's sibling
+		// test pins it (tier fix-wave re-review, MINOR).
+		{"a repeater tone below the record's BCD floor", func(d *codeplug.ChannelData) {
+			d.ToneTx = codeplug.ToneField{State: codeplug.Known, Value: spec.Tone(0)}
+		}, spec.FieldToneTx},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			d := base

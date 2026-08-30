@@ -163,7 +163,7 @@ func domainRefusal(d codeplug.ChannelData, caps spec.Capabilities) error {
 			return &OutOfDomainError{
 				Field: tt.field, Value: v,
 				Min: uint64(r.MinDeciHz), Max: uint64(r.MaxDeciHz),
-				Where: "spec.Capabilities.CTCSSToneRange, the selectable tone chart",
+				Where: "spec.Capabilities.CTCSSToneRange, the tone span's BCD capacity (000.0-299.9 Hz)",
 			}
 		}
 	}
