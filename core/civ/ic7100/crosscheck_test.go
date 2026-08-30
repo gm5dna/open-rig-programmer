@@ -145,11 +145,20 @@ func TestEvidenceCrosscheck(t *testing.T) {
 			t.Errorf("%s lost arbitration anchor %q", fileAndNeedle.file, fileAndNeedle.needle)
 		}
 	}
-	matrix, err := os.ReadFile(filepath.Join("..", "..", "..", "docs", "superpowers", "icom-matrices", "ic7100-capability-matrix.md"))
-	if err != nil {
+	// The matrix lives under docs/superpowers/, which is gitignored: a
+	// fresh clone and CI do not have it (the v1.2.1 CI run, 30/08/2026).
+	// The anchors above are in the frozen testdata and always run; this
+	// one is checked only where the matrix is present.
+	matrixPath := filepath.Join("..", "..", "..", "docs", "superpowers", "icom-matrices", "ic7100-capability-matrix.md")
+	matrix, err := os.ReadFile(matrixPath)
+	matrixPresent := err == nil
+	if err != nil && !os.IsNotExist(err) {
 		t.Fatalf("read matrix arbitration: %v", err)
 	}
-	if !strings.Contains(string(matrix), "#### 3.15.1 The name field") || !strings.Contains(string(matrix), "wire bytes 99–114") {
+	if !matrixPresent {
+		t.Logf("matrix authority absent (docs/superpowers is gitignored; not in this checkout) — matrix anchor checks skipped, testdata anchors enforced")
+	}
+	if matrixPresent && (!strings.Contains(string(matrix), "#### 3.15.1 The name field") || !strings.Contains(string(matrix), "wire bytes 99–114")) {
 		t.Error("matrix §3.15.1 no longer carries the 16-byte name arbitration")
 	}
 
@@ -158,7 +167,7 @@ func TestEvidenceCrosscheck(t *testing.T) {
 	// 1; the field legend defines ordinary memories as 0001–0099. With no
 	// erase builder and ic7100-special-bank-byte still CANNOT ESTABLISH,
 	// the declared readable rectangle remains 01–05 × 0001–0099.
-	if !strings.Contains(string(matrix), "#### 3.15.3 The clearing block's \"channel 0 to 99\"") {
+	if matrixPresent && !strings.Contains(string(matrix), "#### 3.15.3 The clearing block's \"channel 0 to 99\"") {
 		t.Error("matrix lost the channel-0 contradiction ruling")
 	}
 
