@@ -18,7 +18,7 @@ type config struct {
 type Option func(*config)
 
 func defaultConfig() config {
-	return config{addr: 0x8e, model: "IC-7851", recordLen: RecordLen, channels: make(map[int][]byte)}
+	return config{addr: radioAddrDefault, model: "IC-7851", recordLen: RecordLen, channels: make(map[int][]byte)}
 }
 func WithModelName(name string) Option { return func(c *config) { c.model = name } }
 func WithRadioAddress(addr byte) Option {
@@ -58,12 +58,16 @@ func WithChannel(addr string, record []byte) Option {
 		c.channels[ch] = append([]byte(nil), record...)
 	}
 }
+
+// parseChannel maps a caller's channel name to the same slot key that the wire
+// selector decodes to, so SetSlot("P1") and a 1A 00 read of 0100 name one
+// record. TestScanEdgeSelectorsAddressP1AndP2 pins that agreement.
 func parseChannel(s string) (int, bool) {
 	if s == "P1" {
-		return -1, true
+		return scanEdgeP1, true
 	}
 	if s == "P2" {
-		return -2, true
+		return scanEdgeP2, true
 	}
 	n, err := strconv.Atoi(s)
 	return n, err == nil && len(s) == 3 && n >= 1 && n <= 99

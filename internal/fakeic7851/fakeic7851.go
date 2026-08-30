@@ -9,6 +9,17 @@ import (
 const RecordLen = 25
 const NameLen = 10
 
+// controllerAddr is the printed controller address; radioAddrDefault is the
+// printed default shared by the IC-7851 and the IC-7850. scanEdgeP1 and
+// scanEdgeP2 are the slot keys parseChannel gives "P1" and "P2": negative, so
+// that they cannot collide with memory channels 1 to 99.
+const (
+	controllerAddr   byte = 0xe0
+	radioAddrDefault byte = 0x8e
+	scanEdgeP1            = -1
+	scanEdgeP2            = -2
+)
+
 type MemState struct{ Raw []byte }
 
 type Radio struct {
@@ -92,10 +103,21 @@ func (r *Radio) serve() {
 	}
 }
 func (r *Radio) dispatch(f wireFrame) {
+	// Echo is a property of the link, not of the addressing: a linked
+	// USB/REMOTE pair echoes whatever it carried, including frames this radio
+	// will not answer. So it happens before both filters below.
 	if r.echo {
 		_, _ = r.fake.Write(f.raw)
 	}
 	if f.to != r.addr {
+		return
+	}
+	// A real transceiver answers the controller it is addressed by. Frames
+	// from any other source — another radio's transceive traffic, a second
+	// controller — are carried past in silence, never refused with FA.
+	// TestOnlyTheControllerIsAnswered pins the silence and that the link
+	// still serves 0xE0 afterwards.
+	if f.from != controllerAddr {
 		return
 	}
 	if v := r.handle(f); v != nil {
@@ -104,36 +126,55 @@ func (r *Radio) dispatch(f wireFrame) {
 }
 func (r *Radio) handle(f wireFrame) []byte {
 	if len(f.data) < 1 {
-		return buildAnswer(0xfa)
+		return r.answer(f, 0xfa)
 	}
 	switch f.data[0] {
 	case 0x19:
 		if len(f.data) == 2 && f.data[1] == 0 {
-			return buildAnswer(append([]byte{0x19, 0}, []byte(r.model)...)...)
+			return r.answer(f, append([]byte{0x19, 0}, []byte(r.model)...)...)
 		}
 	case 0x1a:
-		return r.memory(f.data[1:])
+		return r.memory(f, f.data[1:])
 	case 0x09, 0x0a, 0x0b:
-		return buildAnswer(0xfa)
+		return r.answer(f, 0xfa)
 	}
-	return buildAnswer(0xfa)
+	return r.answer(f, 0xfa)
 }
+
+// selector decodes the two packed-BCD channel bytes ①,② printed on PDF p.263
+// and transcribed as B row D1: 0001-0099 are memory channels 1 to 99, 0100 is
+// programmed scan edge P1 and 0101 is P2. It returns the slot key that
+// parseChannel produces for the same channel, so a frame and a SetSlot call
+// name one record. TestScanEdgeSelectorsAddressP1AndP2 pins the whole space
+// and TestSelectorsOutsideTheFlatSpaceAreRefused its edges.
 func selector(b []byte) (int, bool) {
-	if len(b) != 2 || b[0] != 0 {
+	if len(b) != 2 {
 		return 0, false
 	}
-	if b[1] < 1 || b[1] > 0x99 || b[1]&15 > 9 || b[1]>>4 > 9 {
-		return 0, false
+	n := 0
+	for _, d := range []byte{b[0] >> 4, b[0] & 15, b[1] >> 4, b[1] & 15} {
+		if d > 9 {
+			return 0, false
+		}
+		n = n*10 + int(d)
 	}
-	return int(b[1]>>4)*10 + int(b[1]&15), true
+	switch {
+	case n >= 1 && n <= 99:
+		return n, true
+	case n == 100:
+		return scanEdgeP1, true
+	case n == 101:
+		return scanEdgeP2, true
+	}
+	return 0, false
 }
-func (r *Radio) memory(p []byte) []byte {
+func (r *Radio) memory(f wireFrame, p []byte) []byte {
 	if len(p) < 3 || p[0] != 0 {
-		return buildAnswer(0xfa)
+		return r.answer(f, 0xfa)
 	}
 	ch, ok := selector(p[1:3])
 	if !ok {
-		return buildAnswer(0xfa)
+		return r.answer(f, 0xfa)
 	}
 	rest := p[3:]
 	if len(rest) == 0 {
@@ -147,23 +188,23 @@ func (r *Radio) memory(p []byte) []byte {
 				for i := range b {
 					b[i] = 0xff
 				}
-				return buildAnswer(append([]byte{0x1a, 0, p[1], p[2]}, b...)...)
+				return r.answer(f, append([]byte{0x1a, 0, p[1], p[2]}, b...)...)
 			} else {
-				return buildAnswer(0xfa)
+				return r.answer(f, 0xfa)
 			}
 		}
-		return buildAnswer(append([]byte{0x1a, 0, p[1], p[2]}, b...)...)
+		return r.answer(f, append([]byte{0x1a, 0, p[1], p[2]}, b...)...)
 	}
 	if len(rest) == 1 && rest[0] == 0xff || len(rest) != r.recordLen {
 		if r.shortSetAck && len(rest) > 1 && !(len(rest) == 1 && rest[0] == 0xff) {
-			return buildAnswer(0xfb)
+			return r.answer(f, 0xfb)
 		}
-		return buildAnswer(0xfa)
+		return r.answer(f, 0xfa)
 	}
 	r.mu.Lock()
 	r.slots[ch] = append([]byte(nil), rest...)
 	r.mu.Unlock()
-	return buildAnswer(0xfb)
+	return r.answer(f, 0xfb)
 }
 func (r *Radio) floodLoop(to byte, d time.Duration) {
 	defer r.wg.Done()
