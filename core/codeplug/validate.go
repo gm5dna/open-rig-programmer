@@ -92,6 +92,15 @@ func quotedList(vals []string) string {
 	return strings.Join(quoted, ", ")
 }
 
+// AdmitsProgramTuningStep reports whether v is inside caps' declared
+// programmable-step range and aligned to its resolution. It is the one
+// predicate used by both Validate and core/driver/icr8600's read mapper, so a
+// value the driver marks Known is exactly one validation will accept.
+func AdmitsProgramTuningStep(caps spec.Capabilities, v uint64) bool {
+	r := caps.ProgramTuningStepRange
+	return r != nil && r.ResolutionHz != 0 && v >= r.MinHz && v <= r.MaxHz && v%r.ResolutionHz == 0
+}
+
 // findChannel returns the Channel in channels with the given slot, and
 // true, or the zero Channel and false if no channel has that slot.
 func findChannel(channels []Channel, slot string) (Channel, bool) {
@@ -573,12 +582,8 @@ func validateTierFields(slot string, bank spec.BankID, d ChannelData, caps spec.
 	} else if !absent(spec.FieldProgramTuningStep, d.ProgramTuningStepHz.State) {
 		if err := d.ProgramTuningStepHz.Valid(); err != nil {
 			add(spec.FieldProgramTuningStep, err)
-		} else if d.ProgramTuningStepHz.State == Known {
-			r := caps.ProgramTuningStepRange
-			v := d.ProgramTuningStepHz.Value
-			if r == nil || r.ResolutionHz == 0 || v < r.MinHz || v > r.MaxHz || v%r.ResolutionHz != 0 {
-				add(spec.FieldProgramTuningStep, fmt.Errorf("codeplug: FreqField: Known value %d Hz is not admitted by this radio's range", v))
-			}
+		} else if d.ProgramTuningStepHz.State == Known && !AdmitsProgramTuningStep(caps, d.ProgramTuningStepHz.Value) {
+			add(spec.FieldProgramTuningStep, fmt.Errorf("codeplug: FreqField: Known value %d Hz is not admitted by this radio's range", d.ProgramTuningStepHz.Value))
 		}
 	}
 	if !reachable(spec.FieldAttenuator) {
