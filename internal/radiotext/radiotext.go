@@ -1111,6 +1111,121 @@ var ic905Text = Text{
 	ProbeFirmwareNote: "Firmware version has no CI-V query — check the radio's display. No minimum version is established for the IC-905: this build knows of none to require. This driver talks only to CI-V address ACh, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200, along with the whole five-rate list it is chosen from, is ASSUMED — this radio's CI-V Reference Guide prints no rate figure anywhere, on any port's command-table page. Opening this radio also discovers its MEM bank's occupied slots by a BOUNDED walk — group 0 in full, then channel 00 of every other group, descending into the rest of a group only where its channel 00 answered — not the whole 100x100 space, and this build offers no setting that widens it: a channel stored outside that walk is simply not listed here, so its absence from the grid is not evidence that the radio's channel is empty. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
 }
 
+// ic7851Text and ic7850Text are the IC-7851's and IC-7850's entries
+// (Tier 4b, the additions tier's first registration), landed with that
+// pair's wiring registration for the same reason every Icom entry above
+// was: internal/wiring's TestEverySupportedModelHasRadiotext fails a
+// registration whose prose is missing.
+//
+// THE TWO ENTRIES DIFFER ONLY WHERE THEY NAME THE MODEL, and that is the
+// FTdx101D/FTdx101MP rule applied to this pair for the same reason: one
+// manual, one CI-V address, one profile and one driver implementation, so
+// a sentence true of one is true of the other, and a sentence added to
+// only one would be a claim about that radio which nothing distinguishes
+// from its sibling. TestRadiotext_IC7851AndIC7850DifferOnlyInTheModelName
+// pins it as a SUBSTITUTION, which is what catches an added sentence
+// rather than merely a drifted one.
+//
+// NEITHER ENTRY NAMES THE OTHER MODEL, deliberately. The sibling is
+// referred to as "its sibling", so each entry reads as advice about the
+// radio the user actually chose; the substitution test above depends on
+// that too, since a joint "IC-7850/IC-7851" mention would survive the
+// substitution unchanged in one entry and not the other.
+//
+// EVERY FACT RESTATED HERE IS TRUE TODAY. Both write-trial guards are
+// FALSE (core/driver/ic7851/caps.go), the CI-V address is 8Eh and shared
+// (PDF p.229, folio 15-18), both erase forms exist on paper and neither
+// has a builder (doc.go §9), the SELECT-group and data-mode nibbles are
+// unmapped so a channel in either state is REFUSED rather than rewritten
+// (ruling E6, doc.go §6), the default baud is an ASSUMED pick from a
+// printed list with no numeric factory default, and the declared rate
+// list is the [USB B] port's superset rather than the [REMOTE] path's
+// (register entry ic7851-baud-list-per-port, doc.go §5).
+var ic7851Text = Text{
+	// TWO printed clear forms, not one — a 1A 00 set carrying FF in place
+	// of the record, and top-level command 0B — and this build sends
+	// NEITHER: there is no builder for either, and core/civ's
+	// AllowedCommand admits only 19 00, a valid 1A 00 read and a
+	// re-validated 1A 00 set (doc.go §9). FieldErase carries the zero
+	// FieldSupport on both banks, which is what makes core/clone's
+	// DiffErased branch unreachable for this model. The scan-edge
+	// sentence is MANUAL-EVIDENCED and belongs here because it is the one
+	// place a user is told to go to the radio and would otherwise find
+	// the radio refusing too: PDF p.181 (folio 11-2)'s capability table
+	// prints CLEAR = "No" for P1 and P2, which is also why that bank
+	// carries NoBlank (core/driver/ic7851/caps.go).
+	EraseProcedure: "The IC-7851's CI-V protocol prints two memory clear forms — a 1A 00 set carrying FF in place of the record, and a separate top-level command — but this build sends neither: no builder exists for either, and no IC-7851 has ever confirmed what either does, so sending one risks clearing the wrong channel rather than the intended one. Clear the channel at the radio instead, following the memory-channel clear procedure in its own instruction manual. The two programmed scan edges cannot be cleared at all: the radio's own memory-channel table prints their CLEAR column as \"No\".",
+	// No minimum-firmware fact is established for this radio, and the
+	// hedge is about what THIS BUILD implements rather than about what
+	// the document does or does not print: this driver's admitted command
+	// set is 19 00 and 1A 00 (doc.go §4), so there is no firmware query
+	// to run whatever the manual may hold.
+	FirmwareGuidance: "No minimum firmware version is established for the IC-7851: nothing this project holds states one, and no IC-7851 has been asked. This build implements no CI-V firmware-version query either — its whole admitted command set is the identity read and the memory record — so read the version off the radio's own display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established.",
+	// Tone IS read and written for this radio — over CI-V, unverified
+	// against real hardware, since no IC-7851 has ever answered a frame.
+	// Scan Skip is not, and on this radio the reason is stronger than
+	// "unmapped": the nearest nibble marks a channel into one of three
+	// SELECT memory groups (matrix §3.16.2), so collapsing it to a
+	// two-valued skip flag would rewrite a user's group on every
+	// write-back while readback verification compared equal. The data
+	// mode carries the same consequence and is stated here because it is
+	// the one that surprises: a DATA 1/2/3 channel cannot be written AT
+	// ALL, not merely edited in that one field (doc.go §6).
+	GridLegendNote: "Tone is read and written for the IC-7851 over CI-V by this build, but unverified against real hardware — no IC-7851 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble marks a channel into one of three SELECT memory groups, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not. The same holds for its data mode, with a wider consequence: a channel already set to DATA 1, DATA 2 or DATA 3 — or already in a SELECT group — cannot be written back by this build at all, because there is no honest value to preserve in a region it does not map.",
+	// DELIBERATELY EMPTY, exactly as every other registered model's is
+	// and for the same reason: both write-trial guards are false, so
+	// there is no hardware-preservation verification of any kind to
+	// report.
+	ToneScanSkipVerification: "",
+	// Byte-identical to EraseProcedure, as every other model's is: the
+	// delete dialog and the blocked-erase review answer the same
+	// question.
+	EraseDialogNote: "The IC-7851's CI-V protocol prints two memory clear forms — a 1A 00 set carrying FF in place of the record, and a separate top-level command — but this build sends neither: no builder exists for either, and no IC-7851 has ever confirmed what either does, so sending one risks clearing the wrong channel rather than the intended one. Clear the channel at the radio instead, following the memory-channel clear procedure in its own instruction manual. The two programmed scan edges cannot be cleared at all: the radio's own memory-channel table prints their CLEAR column as \"No\".",
+	// The two tooltips DIFFER, exactly as every other Icom entry's do and
+	// for the same reason: the evidence differs between Tone (on the CI-V
+	// surface, unverified) and Scan Skip (a SELECT-group marker this
+	// build refuses to reinterpret).
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7851 has ever answered a frame",
+		ScanSkip: "not read or written over CI-V by this build — the IC-7851's nearest wire nibble marks one of three SELECT memory groups, not a skip flag",
+	},
+	// A placeholder LABEL, not an example: no IC-7851 version string has
+	// been seen here. It names the model, which is also what keeps it
+	// distinct from every other registered model's own placeholder.
+	FirmwarePlaceholder: "as shown on the IC-7851's own display",
+	// Restates the no-query and no-minimum-version facts, then the three
+	// this radio's probe failure modes turn on: the fixed 8Eh address
+	// with no --civ-address option; the ASSUMED 19200 default, which on
+	// this radio is arbitrary in a way worth stating because BOTH printed
+	// CI-V baud items read "(Default: Auto)" and no numeric default
+	// exists to prefer; and the per-port rate-list cost (register entry
+	// ic7851-baud-list-per-port) — spec.Capabilities carries ONE rate
+	// list and this radio has two, so a user on the CT-17 path is offered
+	// rates that path cannot reach.
+	//
+	// AND THE PAIR FACT, which no other registered model's note carries:
+	// this build cannot tell the two siblings apart, so the model shown
+	// is the row the user picked and never a detection.
+	ProbeFirmwareNote: "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7851: this build knows of none to require. This driver talks only to CI-V address 8Eh, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200 is ASSUMED, since both of this radio's printed CI-V speed settings ship on Auto and name no number to prefer. The six speeds offered are the USB port's list: on the remote-jack path with a level converter the radio stops at 19200, and this build cannot tell which path is wired. Note too that the IC-7851 and its sibling share one address, one manual and one frame shape, and this build cannot tell them apart — the model reported is the one you selected, not one it detected. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+}
+
+// ic7850Text is the IC-7850's entry — see ic7851Text's doc comment for
+// the whole of the reasoning, including why these two entries differ only
+// where they name the model, and why neither names the other.
+var ic7850Text = Text{
+	EraseProcedure:           "The IC-7850's CI-V protocol prints two memory clear forms — a 1A 00 set carrying FF in place of the record, and a separate top-level command — but this build sends neither: no builder exists for either, and no IC-7850 has ever confirmed what either does, so sending one risks clearing the wrong channel rather than the intended one. Clear the channel at the radio instead, following the memory-channel clear procedure in its own instruction manual. The two programmed scan edges cannot be cleared at all: the radio's own memory-channel table prints their CLEAR column as \"No\".",
+	FirmwareGuidance:         "No minimum firmware version is established for the IC-7850: nothing this project holds states one, and no IC-7850 has been asked. This build implements no CI-V firmware-version query either — its whole admitted command set is the identity read and the memory record — so read the version off the radio's own display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established.",
+	GridLegendNote:           "Tone is read and written for the IC-7850 over CI-V by this build, but unverified against real hardware — no IC-7850 has ever answered a frame. Scan Skip is not: this radio's nearest CI-V nibble marks a channel into one of three SELECT memory groups, not a skip flag, so a Scan Skip value is refused before anything reaches the radio rather than being sent as something it is not. The same holds for its data mode, with a wider consequence: a channel already set to DATA 1, DATA 2 or DATA 3 — or already in a SELECT group — cannot be written back by this build at all, because there is no honest value to preserve in a region it does not map.",
+	ToneScanSkipVerification: "",
+	EraseDialogNote:          "The IC-7850's CI-V protocol prints two memory clear forms — a 1A 00 set carrying FF in place of the record, and a separate top-level command — but this build sends neither: no builder exists for either, and no IC-7850 has ever confirmed what either does, so sending one risks clearing the wrong channel rather than the intended one. Clear the channel at the radio instead, following the memory-channel clear procedure in its own instruction manual. The two programmed scan edges cannot be cleared at all: the radio's own memory-channel table prints their CLEAR column as \"No\".",
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over CI-V by this build — unverified against real hardware, since no IC-7850 has ever answered a frame",
+		ScanSkip: "not read or written over CI-V by this build — the IC-7850's nearest wire nibble marks one of three SELECT memory groups, not a skip flag",
+	},
+	FirmwarePlaceholder: "as shown on the IC-7850's own display",
+	ProbeFirmwareNote:   "Firmware version has no query in this build — check the radio's display. No minimum version is established for the IC-7850: this build knows of none to require. This driver talks only to CI-V address 8Eh, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200 is ASSUMED, since both of this radio's printed CI-V speed settings ship on Auto and name no number to prefer. The six speeds offered are the USB port's list: on the remote-jack path with a level converter the radio stops at 19200, and this build cannot tell which path is wired. Note too that the IC-7850 and its sibling share one address, one manual and one frame shape, and this build cannot tell them apart — the model reported is the one you selected, not one it detected. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+}
+
 // texts is the registry For consults, keyed by the exact model string a
 // driver.Driver.Model() (or driver.Identity/spec.Capabilities.Model)
 // call returns, e.g. "FT-710".
@@ -1138,16 +1253,18 @@ var texts = map[string]Text{
 	"IC-705":     ic705Text,
 	"IC-9700":    ic9700Text,
 	"IC-905":     ic905Text,
+	"IC-7851":    ic7851Text,
+	"IC-7850":    ic7850Text,
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",
-// "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700"
-// and "IC-905" are populated — the TEN models internal/wiring registers
-// AS OF Wave 4 task R6, the tier's LAST registration, a count an eleventh
-// registration would falsify; any other model —
-// including "", a future driver not yet given an entry, or a near-miss
-// typo ("FT-DX10", "IC7610", "IC7300", "IC705", "IC9700" or "IC905", say) —
-// returns the zero Text and false.
+// "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700",
+// "IC-905", "IC-7851" and "IC-7850" are populated — the TWELVE models
+// internal/wiring registers AS OF the additions tier's first registration
+// (Tier 4b), a count a thirteenth registration would falsify; any other
+// model — including "", a future driver not yet given an entry, or a
+// near-miss typo ("FT-DX10", "IC7610", "IC7300", "IC705", "IC9700",
+// "IC905" or "IC7851", say) — returns the zero Text and false.
 // Callers must never treat a zero Text as if it were real advisory copy.
 //
 // THE MATCH IS EXACT AND CASE-SENSITIVE, and for the FTDX101 pair that is

@@ -50,12 +50,23 @@
   table. The AppImage notes the v1.0.0 sync above used to carry are
   gone with that sync's rewrite: the Debian packages took the Linux
   GUI row, so there is no AppImage decision left to restore.
+
+  UPDATED AT THE FIRST ADDITIONS-TIER REGISTRATION (30/08/2026): the
+  per-model support table now carries twelve registered models — the
+  ten above plus the IC-7851 and the IC-7850, which are TWO entries
+  over ONE radio manual, one CI-V address and one memory format,
+  because this project cannot tell the two apart. Every "nine
+  manual-derived models" count became ELEVEN with them. The Evidence
+  section's source sentence also stopped saying "CI-V Reference
+  Guides" alone: this pair has no separate CI-V guide published, and
+  its protocol facts come from section 18 of the radio's own
+  instruction manual.
 -->
 
 Open Rig Programmer __VERSION__ — an open-source, cross-platform
 memory-channel programmer for the Yaesu FT-710, built as a free
-alternative to RT Systems' YPS-FT710, with nine further Yaesu and Icom
-models registered for reading and for opt-in writes (see below).
+alternative to RT Systems' YPS-FT710, with eleven further Yaesu and
+Icom models registered for reading and for opt-in writes (see below).
 
 ## What it does
 
@@ -95,6 +106,8 @@ models registered for reading and for opt-in writes (see below).
 | IC-705 | Yes\* | ⚠️ **Opt-in** (unverified writes, off by default) | No | CI-V guide + simulator only; no real radio has been connected |
 | IC-9700 | Yes | ⚠️ **Opt-in** (unverified writes, off by default) | No | CI-V guide + simulator only; no real radio has been connected |
 | IC-905 | Yes\* | ⚠️ **Opt-in** (unverified writes, off by default) | No | CI-V guide + simulator only; no real radio has been connected |
+| IC-7851 | Yes | ⚠️ **Opt-in** (unverified writes, off by default) | No | Instruction manual §18 + simulator only; no real radio has been connected |
+| IC-7850 | Yes | ⚠️ **Opt-in** (unverified writes, off by default) | No | Instruction manual §18 + simulator only; no real radio has been connected. Shares the IC-7851's manual, address and memory format; this program cannot tell the two apart, so the model shown is the one you picked |
 
 \* IC-705 and IC-905 each discover their memory channels by a BOUNDED
 default walk rather than a read of the whole address space (a
@@ -103,7 +116,7 @@ that walk's range is simply not read; its absence is not evidence the
 channel is empty. See docs/icom-models.md for each
 model's exact bound.
 
-Writes to the nine manual-derived models are refused until you enable
+Writes to the eleven manual-derived models are refused until you enable
 unverified writes for that radio, one radio at a time — `rigprog
 settings unverified-writes <model> on` (say `rigprog settings
 unverified-writes FTdx10 on`, or `rigprog settings unverified-writes
@@ -119,9 +132,9 @@ its writes are hardware-verified, so it has nothing to consent to.
 Consent changes what the tool is allowed to send, not how it sends it
 — the read-before-write, the snapshot, the reviewed diff and the
 per-channel verify all still run; README.md's *Switching on writes for an unverified radio*
-section has the full mechanism. Each of the nine drivers carries a
-register of every assumption it makes and the specific capture from a
-real radio that would verify it — if you own one of these radios and
+section has the full mechanism. Each of those eleven models has a
+driver carrying a register of every assumption it makes and the
+specific capture from a real radio that would verify it — if you own one of these radios and
 want to help, open an issue.
 
 ## What it deliberately does not do
@@ -247,15 +260,24 @@ What this release has **not** been exercised against:
   manuals. No real radio of any of the three has ever been connected.
   That is why their writes are opt-in rather than on by default,
   needing your explicit consent.
-- **Any IC-7610, IC-7300, IC-7300MK2, IC-705, IC-9700 or IC-905.**
-  Everything about these six models is derived from Icom's published
-  CI-V Reference Guides through the same kind of documented process,
-  and exercised against simulators built independently from those
-  guides. No real radio of any of the six has ever been connected.
-  That is why their writes need your explicit opt-in consent too.
+- **Any IC-7610, IC-7300, IC-7300MK2, IC-705, IC-9700, IC-905,
+  IC-7851 or IC-7850.** Everything about these eight models is derived
+  from Icom's own published documentation through the same kind of
+  documented process, and exercised against simulators built
+  independently from it — the CI-V Reference Guide for each of the
+  first six, and, for the IC-7851 and IC-7850, section 18 of the
+  radio's instruction manual, there being no separate CI-V guide
+  published for that pair. No real radio of any of the eight has ever
+  been connected. That is why their writes need your explicit opt-in
+  consent too.
+
+  The IC-7851 and the IC-7850 are listed separately but cannot be told
+  apart by this program: they share one manual, one CI-V address and
+  one memory format, and the identity command's reply value is printed
+  nowhere for either. The model reported is the one you selected.
 
 Anything the project has not observed is labelled as such in the code
 and documentation rather than assumed. Reports from real hardware —
-especially the nine manual-derived, opt-in-write models, and the
+especially the eleven manual-derived, opt-in-write models, and the
 FT-710 on Linux — are the most valuable contribution this project can
 receive right now.

@@ -59,6 +59,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300mk2"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7610"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7851"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic905"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
@@ -217,6 +218,45 @@ const IC9700Model = "IC-9700"
 // where the two group ranges happen to sit (ruling R4).
 const IC905Model = "IC-905"
 
+// IC7851Model and IC7850Model name the IC-7851's and the IC-7850's
+// realDrivers/fakeDrivers keys, which must equal
+// ic7851.New7851(...).Model() and ic7851.New7850(...).Model() — pinned,
+// like every other Icom constant above, by
+// TestDriverTableKeysMatchDriverModel walking both tables.
+//
+// THIS IS THE ADDITIONS TIER'S FIRST REGISTRATION (Tier 4b, Wave 4), and
+// the first Icom PAIR SHARING ONE DRIVER PACKAGE: core/driver/ic7851
+// offers New7851 and New7850 over ONE implementation, ONE civ.Profile
+// (core/civ/ic7851) and ONE fake (internal/fakeic7851), with no bare New.
+// That is the FTdx101D/FTdx101MP shape (FTdx101DModel above), not the
+// IC-7300/IC-7300MK2 one — that pair has separate driver packages and
+// separate fakes; these two rows differ in Model(), in Identity and in
+// nothing else the wire can see.
+//
+// THE USER PICKS THE ROW, AND THE PROBE CANNOT NARROW IT (spec D1.2).
+// The two models share one manual, one CI-V address (8Eh, printed as "the
+// default address of IC-7850/IC-7851") and one frame shape, and the 19 00
+// reply value is undocumented for both — so they are INDISTINGUISHABLE by
+// this programme's admitted evidence and probe, at factory defaults and
+// not merely under a moved address. core/driver/ic7851/doc.go §1 states
+// it; core/civ/tier_test.go's `indistinguishable` table records it at
+// tier level with its citation; and neither row may ever be inferred
+// from the other, so a session opened as an IC-7851 reports an IC-7851
+// because that is what the user chose, never because anything confirmed
+// it.
+//
+// TWO BANKS, BOTH DENSE, the IC-7610's shape: MEM ("001".."099") and SCAN
+// (the two programmed scan edges "P1" and "P2"), which the wire addresses
+// as two further values of the SAME flat two-byte selector
+// (core/driver/ic7851/caps.go's memSlots and scanSlots). There is no
+// sparse space to discover here, so a plain `--model IC-7851` session
+// enumerates its whole inventory statically and Open walks a bounded run
+// of channels for the record-length fingerprint alone.
+const (
+	IC7851Model = "IC-7851"
+	IC7850Model = "IC-7850"
+)
+
 // realDrivers is the model-keyed table of real-hardware driver
 // constructors: model name -> a constructor building THAT model's
 // real-profile driver.Driver. It is the single source of truth
@@ -321,6 +361,24 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ic905.New(ic905.RealHardware, ic905.WithConsentedUnverifiedWrites())
 		}
 		return NewIC905RealDriver()
+	},
+	// TWO ROWS OVER ONE CONSTRUCTOR PAIR, and each row calls its OWN
+	// constructor: core/driver/ic7851 offers no bare New, so a
+	// registration cannot accidentally wire both models to one row's
+	// driver the way a package with a default constructor could.
+	// core/driver/ic7851's profile is the RealHardware zero value inside
+	// New7851/New7850, so consent is the only option either row passes.
+	IC7851Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic7851.New7851(ic7851.WithConsentedUnverifiedWrites())
+		}
+		return NewIC7851RealDriver()
+	},
+	IC7850Model: func(consent bool) driver.Driver {
+		if consent {
+			return ic7851.New7850(ic7851.WithConsentedUnverifiedWrites())
+		}
+		return NewIC7850RealDriver()
 	},
 }
 
@@ -652,6 +710,52 @@ func NewIC9700RealDriver() driver.Driver {
 // realDrivers' IC905Model row above and never this constructor.
 func NewIC905RealDriver() driver.Driver {
 	return ic905.New(ic905.RealHardware)
+}
+
+// NewIC7851RealDriver builds the ic7851 driver for a real-hardware
+// IC-7851 session — the IC-7851's half of the realDrivers table, split
+// out for the same reason every other model constructor above is (a test
+// can pin the capability set the real wiring path implies without opening
+// a port).
+//
+// NO PROFILE ARGUMENT, unlike every Icom constructor above it, and that
+// is core/driver/ic7851's own shape rather than an omission here: that
+// package takes its profile through an OPTION (WithSimulatedProfile) and
+// leaves the RealHardware arm as the struct's zero value inside New7851,
+// so a real-hardware driver is what New7851 with no options builds.
+//
+// READ/PROBE ONLY, by the same mechanism as every other row: this
+// driver's writeTrialsComplete7851 (core/driver/ic7851/caps.go) is FALSE,
+// so a RealHardware IC-7851 driver reports the all-Unverified capability
+// set — every mapped field's Write spec.Unverified, nothing writable on
+// either bank. No IC-7851 has been written to by this project, and the
+// capability gate refuses before any frame is built.
+//
+// THE FAIL-SAFE DIRECTION IS UNCHANGED: an unrecognised Profile value
+// selects the all-Unverified set too (ic7851.go's Capabilities switch,
+// through its own explicit default arm), never the simulator's
+// write-Supported one, and the one named exception — SessionOptions'
+// ConsentUnverifiedWrites, spent from the user's own recorded grant — is
+// exactly the mechanism every other row uses, reaching realDrivers'
+// IC7851Model row above and never this constructor.
+func NewIC7851RealDriver() driver.Driver {
+	return ic7851.New7851()
+}
+
+// NewIC7850RealDriver builds the ic7851 driver for a real-hardware
+// IC-7850 session. Same reasoning as NewIC7851RealDriver in every
+// respect, over the SIBLING constructor and the SIBLING write guard
+// (writeTrialsComplete7850, which core/driver/ic7851/caps.go keeps
+// deliberately separate from the IC-7851's: evidence for one model is
+// never evidence for the other, matrix §4).
+//
+// IT IS A SECOND FUNCTION RATHER THAN A PARAMETER ON THE FIRST, for the
+// same reason NewFTdx101MPRealDriver is one: the driver package fixes its
+// model at the constructor and offers no bare New, so the choice of row
+// belongs at the call site the registry provides, where a test can pin
+// each row's capability set on its own.
+func NewIC7850RealDriver() driver.Driver {
+	return ic7851.New7850()
 }
 
 // openSerial is OpenRealSessionWith's test seam (and so OpenRealSessionFor's

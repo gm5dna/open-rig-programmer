@@ -14,20 +14,20 @@ shuffling.
 | --- | --- | --- |
 | **FT-710** | ✅ | ✅ verified on a real radio |
 | **FTdx10**, **FTdx101D**, **FTdx101MP** | ✅ | ⚠️ opt-in |
-| **IC-7610**, **IC-7300**, **IC-7300MK2**, **IC-705**, **IC-9700**, **IC-905** | ✅ | ⚠️ opt-in |
+| **IC-7610**, **IC-7300**, **IC-7300MK2**, **IC-705**, **IC-9700**, **IC-905**, **IC-7851**, **IC-7850** | ✅ | ⚠️ opt-in |
 
 Only the FT-710 has ever been connected to this program. The other
-nine were built from the manufacturers' published protocol manuals and
-tested against simulators. Reading them is safe: the program sends
+eleven were built from the manufacturers' published protocol manuals
+and tested against simulators. Reading them is safe: the program sends
 only documented read commands. Writing to them is switched off until
 you switch it on, one radio at a time.
 
-If you own one of these nine radios and would like to help test it,
+If you own one of these eleven radios and would like to help test it,
 please open an issue.
 
 ### Switching on writes for an unverified radio
 
-Every write command for these nine radios is taken from the maker's
+Every write command for these eleven radios is taken from the maker's
 own manual, but none has been proven on a real radio. So the program
 refuses to send any of them until you say so:
 
@@ -125,12 +125,19 @@ Some things are refused on purpose, with the reason shown:
   edits to them are refused rather than silently dropped.
 - **Icom radios**: each talks only to its factory CI-V address; a few
   channel states (a channel in a Select scan group on most models, a
-  split channel on the IC-7300s, DATA modes on the IC-7610) cannot be
-  written back; the IC-705 and IC-905 only list the memories their
-  start-up scan finds; and the IC-9700's repeater-offset scale is an
-  unresolved question in the manual — a wrong reading would put every
-  offset out by ten times, and the program cannot detect it. The full
-  list, with the evidence for each, is in
+  split channel on the IC-7300s, DATA modes on the IC-7610 and the
+  IC-7851/IC-7850) cannot be written back; the IC-705 and IC-905 only
+  list the memories their start-up scan finds; and the IC-9700's
+  repeater-offset scale is an unresolved question in the manual — a
+  wrong reading would put every offset out by ten times, and the program
+  cannot detect it.
+- **IC-7851 and IC-7850**: these two share one manual, one CI-V address
+  and one memory format, and the program cannot tell them apart. The
+  model it reports is the one you picked from the list, never one it
+  detected. It also offers all six of the radio's USB speeds even if you
+  have wired the older remote-jack path, which stops at 19200.
+
+  The full list of Icom limitations, with the evidence for each, is in
   [docs/icom-models.md](docs/icom-models.md).
 
 ## For developers
@@ -138,9 +145,10 @@ Some things are refused on purpose, with the reason shown:
 [docs/building.md](docs/building.md) covers building from source and
 the layout of the repository. Protocol facts come from Yaesu's CAT
 Operation Reference Manuals (FT-710 2306-C, FTdx10 2308-F, FTdx101D/MP
-2308-L) and Icom's CI-V Reference Guides (IC-7610 rev 4, IC-7300 Full
+2308-L), Icom's CI-V Reference Guides (IC-7610 rev 4, IC-7300 Full
 Manual §19 rev 12b, IC-7300MK2 rev 0, IC-705 rev 6, IC-9700 rev 4,
-IC-905 rev 2).
+IC-905 rev 2) and, where no separate CI-V guide is published, the
+radio's own instruction manual (IC-7850/IC-7851 rev 3, section 18).
 
 ## Licence
 

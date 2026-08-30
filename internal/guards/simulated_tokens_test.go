@@ -142,6 +142,32 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// adapter wraps fakeic905.New — its Port() already returns
 		// io.ReadWriteCloser).
 		{"ic905", "Simulated", "fakeic905.New", "internal/fakeic905"},
+		// The IC-7851 and IC-7850 (Tier 4b, the additions tier's first
+		// registration): ONE row for TWO registered models, and the
+		// reason is the column definition rather than a relaxation. A row
+		// is (package, token, fake CONSTRUCTOR); core/driver/ic7851 is
+		// one package with one simulated-profile selector, and
+		// internal/fakeic7851 offers ONE constructor which both
+		// fakeDrivers rows call. The FTdx101's two rows are earned by its
+		// two constructors (fakedx101.NewD and fakedx101.NewMP); there is
+		// no second constructor here to earn a second row, and a
+		// duplicate row would assert the identical fact twice.
+		//
+		// THE TOKEN IS AN OPTION, NOT A Profile CONSTANT, and it is the
+		// first row here of which that is true: core/driver/ic7851 takes
+		// its profile through WithSimulatedProfile() (its Profile type's
+		// Simulated value is never named from outside the package), so
+		// the selector a stray non-test reference would have to smuggle
+		// in is that option. Naming ic7851.Simulated here instead would
+		// check a token no non-test file mentions, and this guard's own
+		// non-vacuity clause would fail the row rather than confine
+		// anything.
+		//
+		// The fakeic7851.New call sits inside an ic7851FakeAdapter{...}
+		// composite literal at both call sites, exactly as the IC-7610's
+		// does; fileHasCall's ast.Inspect walk finds the call regardless
+		// of what encloses it (see the ic7610 row's own note).
+		{"ic7851", "WithSimulatedProfile", "fakeic7851.New", "internal/fakeic7851"},
 	}
 
 	// Non-vacuity: an empty table would make the loop below a no-op and

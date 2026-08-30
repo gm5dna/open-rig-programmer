@@ -1,19 +1,26 @@
 # Icom models — per-model limitations and evidence
 
 Moved verbatim from the README on 28/08/2026 so the README can stay short. Every claim below cites the code that makes it true; the citations are for reviewers and contributors.
-## The six Icom models
+## The eight Icom models
 
-IC-7610, IC-7300, IC-7300MK2, IC-705, IC-9700 and IC-905 talk a
-different wire protocol from the Yaesu models (Icom's CI-V,
-rather than Yaesu's CAT), and each carries its own honesty rows beyond
-the README's shared "no radio has ever been connected" small print.
+IC-7610, IC-7300, IC-7300MK2, IC-705, IC-9700, IC-905, IC-7851 and
+IC-7850 talk a different wire protocol from the Yaesu models (Icom's
+CI-V, rather than Yaesu's CAT), and each carries its own honesty rows
+beyond the README's shared "no radio has ever been connected" small
+print.
 
-Three costs are shared by all six:
+Eight models, SEVEN memory formats: the IC-7851 and the IC-7850 are two
+entries in the model list over one manual, one address and one record
+format, because this program cannot tell them apart (see the last
+section below).
+
+Three costs are shared by all eight:
 
 - **No `--civ-address` option.** Each driver talks only to its one
   factory CI-V address (98h IC-7610, 94h IC-7300, B6h IC-7300MK2, A4h
-  IC-705, A2h IC-9700, ACh IC-905) and there is no setting to change
-  it. Two different things can happen when this driver meets a radio
+  IC-705, A2h IC-9700, ACh IC-905, 8Eh IC-7851 AND IC-7850 — that last
+  address is printed in the manual as the default for both radios) and
+  there is no setting to change it. Two different things can happen when this driver meets a radio
   it did not expect. A different Icom model at ITS OWN factory address
   simply does not answer — nothing was heard from, so nothing can be
   attributed, and Open reports a plain timeout
@@ -26,11 +33,12 @@ Three costs are shared by all six:
   `driver.WrongRadioError` naming what they found
   (`core/driver/ic7300/ic7300.go:270`; `core/driver/ic7300mk2/ic7300mk2.go:272`;
   `core/driver/ic705/ic705.go:364`; `core/driver/ic905/ic905.go:495`),
-  while IC-7610 and IC-9700 NEVER mint one for any same-address
-  collision, by design — they hold no cross-model table and refuse to
-  guess an identity they cannot support
+  while IC-7610, IC-9700, IC-7851 and IC-7850 NEVER mint one for any
+  same-address collision, by design — they hold no cross-model table and
+  refuse to guess an identity they cannot support
   (`core/driver/ic7610/ic7610.go:142-145`;
-  `core/driver/ic9700/ic9700.go:325-329`; `core/driver/ic9700/doc.go:391`).
+  `core/driver/ic9700/ic9700.go:325-329`; `core/driver/ic9700/doc.go:391`;
+  `core/driver/ic7851/ic7851.go:168-185`).
   Even where a driver CAN attribute, one pair defeats it in practice:
   an IC-9700 moved onto the IC-705's A4h address fails the IC-705's
   open as an unattributed address parse error, not as a named
@@ -38,27 +46,29 @@ Three costs are shared by all six:
   the length check that would otherwise have named it
   (`core/civ/tier_test.go:68-80`).
 - **The tone picker stays list-driven while every model's tone range
-  is numeric (enabler E3).** All six declare a numeric
+  is numeric (enabler E3).** All eight declare a numeric
   `CTCSSToneRange` rather than a fixed tone chart, because their tone
   spans are BCD frequencies, not indices — but the picker widget
   itself was built for a list. The channel grid still shows and
   round-trips tones on every model; only the picker cannot offer them
   (`core/driver/ic7610/caps.go:342-345`; `core/driver/ic9700/caps.go:177-179`;
-  same declaration in each of the other four models' own `caps.go`).
+  same declaration in each of the other models' own `caps.go`).
 - **A channel outside the write gate's template is refused, never
-  silently changed (ruling E6).** Every one of the six records carries
+  silently changed (ruling E6).** Every one of these records carries
   at least one region no `codeplug` field maps, and a slot may be
   written only when those unmapped regions already match the
   profile's template. What that costs differs by model:
-  - **IC-7610, IC-705, IC-9700, IC-905**: a channel already in a
-    Select scan group (★1/★2/★3) cannot be written by this program at
-    all — the SELECT nibble is unmapped and there is no honest value
-    to preserve, so the write is refused, naming the reason
+  - **IC-7610, IC-705, IC-9700, IC-905, IC-7851, IC-7850**: a channel
+    already in a Select scan group (★1/★2/★3) cannot be written by this
+    program at all — the SELECT nibble is unmapped and there is no
+    honest value to preserve, so the write is refused, naming the reason
     (`core/driver/ic7610/doc.go:220-249`; `core/driver/ic705/write.go:265-280`;
-    `core/driver/ic9700/write.go:529-531`; `core/driver/ic905/write.go:578-590`).
-    The IC-7610 additionally refuses a channel whose data mode is
-    DATA 1/2/3, for the same unmapped-nibble reason
-    (`core/driver/ic7610/doc.go:235-238`).
+    `core/driver/ic9700/write.go:529-531`; `core/driver/ic905/write.go:578-590`;
+    `core/driver/ic7851/doc.go:274-306`).
+    The IC-7610 and the IC-7851/IC-7850 additionally refuse a channel
+    whose data mode is DATA 1/2/3, for the same unmapped-nibble reason
+    (`core/driver/ic7610/doc.go:235-238`;
+    `core/driver/ic7851/caps.go:202-224`).
   - **IC-7300 and IC-7300MK2**: a Select-group channel writes
     normally — the SELECT nibble round-trips, carried through
     unchanged from the record the radio holds
@@ -75,7 +85,7 @@ Three costs are shared by all six:
   In every case the write is refused, naming the reason, never
   downgraded or cleared.
 
-All six open at 19200 baud by default, but what grades that default
+All eight open at 19200 baud by default, but what grades that default
 differs, and none of it is a reading of a printed factory value:
 
 - **IC-7610** — ASSUMED, an arbitrary pick among the six rates the
@@ -100,6 +110,13 @@ differs, and none of it is a reading of a printed factory value:
   not a claim about what this radio itself accepts): this radio's
   guide prints no rate figure anywhere
   (`core/driver/ic905/doc.go:141-163`).
+- **IC-7851 and IC-7850** — ASSUMED, and arbitrary in a way the manual
+  itself forces: both CI-V speed settings print "(Default: Auto)", so
+  there is no numeric factory value to prefer and 19200 is a pick from
+  the printed set. A wrong pick costs a clean timeout at connect and
+  never a wrong byte, because the identity probe requires an
+  address-matched reply and silence is silence
+  (`core/driver/ic7851/doc.go:245-265`).
 
 What is specific to one or two models:
 
@@ -153,3 +170,32 @@ What is specific to one or two models:
   pattern but not a DTCS code this project's vocabulary recognises
   (`core/driver/ic705/read.go:160-164`; `core/driver/ic705/write.go:115`;
   `core/driver/ic905/read.go:189-210`; `core/driver/ic905/write.go:458-470`).
+- **The IC-7851 and the IC-7850 cannot be told apart, and the model
+  shown is the one you chose.** They share one instruction manual, one
+  CI-V address (8Eh, printed as the default for both), one frame shape
+  and one memory record, and the identity command's reply value is
+  printed nowhere for either — so the probe has nothing to separate them
+  with. The program lists them as two entries and reports back whichever
+  you selected; that is a choice recorded, never a detection. Evidence
+  for one is never evidence for the other, which is why the two write
+  guards are separate constants
+  (`core/driver/ic7851/doc.go:46-84`; `core/driver/ic7851/caps.go:41-42`;
+  `core/civ/tier_test.go`'s `indistinguishable` table).
+- **The IC-7851/IC-7850 baud list is the USB port's, and the older
+  remote-jack path cannot reach the top of it.** The manual prints two
+  rate lists — six rates for `[USB B]`, but only 4800/9600/19200 for the
+  `[REMOTE]` jack a CT-17-style level converter uses — and the program
+  can declare only one. It declares the USB superset, so the port picker
+  will offer 38400, 57600 and 115200 to a user wired to `[REMOTE]`,
+  where the radio cannot go above 19200. The program has no way to tell
+  which path is wired (`core/driver/ic7851/doc.go:266-273`;
+  `core/driver/ic7851/caps.go:387-392`).
+- **An IC-7851/IC-7850 channel whose record disagrees with the manual's
+  printed fixed digits is refused on READ, not silently mis-read.**
+  Three bytes of this radio's record are drawn with a literal zero in
+  both halves — one in the frequency block and one at the head of each
+  repeater-tone group — so the program maps no field onto them. A radio
+  that answered with a digit in one of those bytes would otherwise be
+  read as a frequency a hundred times too small and written back with
+  the byte quietly zeroed; instead the read fails, naming the byte
+  (`core/driver/ic7851/doc.go:307-329`).
