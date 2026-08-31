@@ -391,6 +391,25 @@ func TestSave_ReceiverContentRoundTripsThroughSchema5(t *testing.T) {
 	if !reflect.DeepEqual(got.Channels, cp.Channels) {
 		t.Errorf("schema 5 round trip differs:\n got %+v\nwant %+v", got.Channels, cp.Channels)
 	}
+
+	// And a second save is byte-identical to the first — the check its
+	// schema-4 sibling (TestSave_TierContentRoundTripsThroughSchema4) has
+	// always had, and schema 5 went without. DeepEqual on the channels
+	// alone cannot see a writer that settles on different BYTES for the
+	// same value: a key order taken from a map, a re-marshal that drops
+	// an omitempty, a schema promoted on the second pass. This is the
+	// assertion that catches those.
+	again := filepath.Join(t.TempDir(), "v5.json")
+	if err := Save(again, got); err != nil {
+		t.Fatalf("second Save() error = %v", err)
+	}
+	raw2, err := os.ReadFile(again)
+	if err != nil {
+		t.Fatalf("reading re-saved file: %v", err)
+	}
+	if string(raw2) != string(raw) {
+		t.Errorf("save(load(save(cp))) is not byte-identical:\n--- first ---\n%s\n--- second ---\n%s", raw, raw2)
+	}
 }
 
 // TestSchemaFor_EveryTierFieldForcesV4 walks all ten tier-added fields
