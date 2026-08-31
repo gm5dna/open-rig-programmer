@@ -205,6 +205,26 @@ var skipByteIdenticalSibling = map[string]string{
 	"FTdx101MP": "FTdx101D",
 }
 
+// TestSkipByteIdenticalSibling_ExactlyThePair is the adjudicated pin on
+// item 8's exception: the review approved skipByteIdenticalSibling on the
+// strength that it names EXACTLY the FTdx101D/FTdx101MP pair and nothing
+// else — a later maintainer silencing a real red by adding a third entry
+// must fail this test rather than quietly widen the exception.
+func TestSkipByteIdenticalSibling_ExactlyThePair(t *testing.T) {
+	want := map[string]string{
+		"FTdx101D":  "FTdx101MP",
+		"FTdx101MP": "FTdx101D",
+	}
+	if len(skipByteIdenticalSibling) != len(want) {
+		t.Fatalf("skipByteIdenticalSibling has %d entries, want exactly %d: %v", len(skipByteIdenticalSibling), len(want), skipByteIdenticalSibling)
+	}
+	for k, v := range want {
+		if got := skipByteIdenticalSibling[k]; got != v {
+			t.Errorf("skipByteIdenticalSibling[%q] = %q, want %q", k, got, v)
+		}
+	}
+}
+
 // ownParticulars is every registered model's own distinguishing evidence:
 // its bare name and, for the Icom entries, its own fixed CI-V address hex
 // — the tokens that identify THIS radio and no other, which must never
