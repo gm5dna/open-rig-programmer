@@ -268,7 +268,8 @@ func TestBanks_ShapeAndSparseDescriptors(t *testing.T) {
 		t.Fatal("no CALL bank")
 	}
 	if call.Sparse || call.Groups != 0 || call.GroupBase != 0 || call.PerGroup != 0 || call.ChannelBase != 0 || call.Budget != 0 || call.BudgetUnstated {
-		t.Errorf("CALL = {Sparse:%v Groups:%d PerGroup:%d Budget:%d}, want a dense bank with all three descriptors zero", call.Sparse, call.Groups, call.PerGroup, call.Budget)
+		t.Errorf("CALL = {Sparse:%v Groups:%d GroupBase:%d PerGroup:%d ChannelBase:%d Budget:%d BudgetUnstated:%v}, want a dense bank with every sparse descriptor zero",
+			call.Sparse, call.Groups, call.GroupBase, call.PerGroup, call.ChannelBase, call.Budget, call.BudgetUnstated)
 	}
 	if !call.NoBlank {
 		t.Error(`CALL NoBlank is false — the clear form prints "You cannot specify group \"01 00\" (Call channel group)" (PDF p.19, folio 18)`)
