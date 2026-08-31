@@ -34,8 +34,8 @@
 # FORMAT. One canonical citation token per line; "#" starts a comment, and a
 # token may carry a trailing note. The tokens are produced by
 # core/driver/internal/drivertest.ScanCitations, whose grammar — including the
-# bare "p.NNN" and bare "§N.N" forms, and the one shape it still omits — is
-# documented in citations.go.
+# bare "p.NNN", spelled-out "page NNN" and bare "§N.N" forms, their case
+# variants, and the two shapes it still omits — is documented in citations.go.
 #
 # WHERE THE AUTHORITY IS ABSENT. docs/superpowers/ is gitignored, so a fresh
 # clone and CI do not have it (the v1.2.1 CI run, 30/08/2026). This list is

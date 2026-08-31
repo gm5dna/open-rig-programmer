@@ -115,16 +115,24 @@ func normalise(src string) normalised {
 // document that has to supply it, which is what makes a positive list over it
 // mean something.
 //
-// TWO EARLIER EXCLUSIONS WERE TOO WIDE, and fix round 1 narrowed them:
+// THREE EARLIER EXCLUSIONS WERE TOO WIDE. Rounds 1 and 2 narrowed them:
 //
 //   - A page used to need the "PDF" prefix. Nine sites cite one bare —
 //     core/driver/ic7851/read.go:22 ("p.263 (folio 18-14)"),
 //     core/driver/ic7760/read.go:22 ("p.20 (folio 19)") — and that is the
 //     EXACT contamination shape this pin exists for: the IC-7610 leak was
 //     PDF p.11/p.12/p.14, so a paraphrase writing "p.11" walked past the
-//     blacklist AND this list. Only the "p."/"pp." abbreviation is admitted
-//     bare; the spelled-out "page 20" still needs its "PDF", because a bare
-//     "page N" is ordinary prose rather than a citation.
+//     blacklist AND this list.
+//   - The SPELLED-OUT "page 375" then had the same gap, and for a while it
+//     was argued away as "ordinary prose rather than a citation". It is not:
+//     core/civ/ic7100/crosscheck_test.go writes "PDF arbitration ruling,
+//     page 375 (folio 20-16)" three times, and re-typing one of those as
+//     "page 999" was invisible to this list. The spelled-out form and the
+//     abbreviation now canonicalise to the SAME token, so the two collapse.
+//     CASE is not part of the citation either: core/driver/ic7851/e2e_test.go:23
+//     shouts "PDF P.263" in an upper-case heading, and a paraphrase could
+//     have hidden in "pdf p.263" just as easily. The whole page shape is
+//     therefore case-insensitive.
 //   - A section used to need the word "matrix". That rationale — "doc.go §6c"
 //     is an internal cross-reference, not a citation — is sound only for the
 //     FILE-QUALIFIED form. caps.go cites the matrix by bare section
@@ -132,9 +140,11 @@ func normalise(src string) normalised {
 //     IS the provenance for that capability row. The exclusion is now
 //     "<file>.go §N" alone, and a bare "§N" canonicalises to the same
 //     "matrix §N" token as the qualified form, so the two collapse rather
-//     than double-count.
+//     than double-count. The spelled-out "section 3.16.4" — which
+//     core/driver/icr8600/write_test.go:259 writes with the word "matrix"
+//     left behind on the previous clause — collapses to that same token.
 //
-// One exclusion stands:
+// TWO EXCLUSIONS STAND, and each is a claim about what the words mean here:
 //
 //   - A bare "Erratum 5". In these packages that number belongs to the tier
 //     additions spec, not to the model's matrix ("per additions-spec Erratum
@@ -142,8 +152,19 @@ func normalise(src string) normalised {
 //     every model — it is not a provenance question for one radio. Only the
 //     qualified "matrix erratum N" form is a claim about a radio's matrix, so
 //     only that form is extracted.
+//   - A spelled-out section with NO dot, "Section 18". Unqualified, that is
+//     the MANUAL's own part number, not the matrix's: core/driver/ic7851/doc.go:29
+//     writes "Its CI-V material is Section 18, \"CONTROL COMMAND\"", and no
+//     IC-7851 matrix heads a §18. Only a dotted "section N.N" is read as a
+//     matrix section on its own; the undotted form still needs its "matrix"
+//     or its "§", both of which the bare-section shape below still admits.
+//
 // sectionNumber matches a matrix section: "1", "1b", "3.15.1", "3.12a".
 const sectionNumber = `\d+[a-z]?(?:\.\d+[a-z]?)*`
+
+// dottedSectionNumber is sectionNumber with at least one dot, which is the
+// only form the spelled-out "section N" shape reads without a qualifier.
+const dottedSectionNumber = `\d+[a-z]?(?:\.\d+[a-z]?)+`
 
 var citationShapes = []struct {
 	re    *regexp.Regexp
@@ -151,8 +172,9 @@ var citationShapes = []struct {
 }{
 	{
 		// "PDF p.263", "PDF page 20", "PDF pages 250-265", "PDF pp. 228-229",
-		// and the bare "p.20" / "pp. 361-375" the packages also write.
-		re: regexp.MustCompile(`(?:PDF (?:pp?\.|pages? )|\bpp?\.) ?(\d+)(?:-(\d+))?`),
+		// the bare "p.20" / "pp. 361-375" / "page 375" the packages also
+		// write, and any casing of all of them ("PDF P.263", "pdf p.263").
+		re: regexp.MustCompile(`(?i)(?:pdf +)?(?:\bpp?\.|\bpages?\b) *(\d+)(?:-(\d+))?`),
 		canon: func(m []string) string {
 			if m[2] == "" {
 				return "PDF p." + m[1]
@@ -167,9 +189,10 @@ var citationShapes = []struct {
 	},
 	{
 		// "matrix §3.15.1", "MATRIX §3.15", "Matrix section 1", "matrix
-		// section 1b". An "IC-7300 matrix §..." qualifier is kept in the
-		// token: it is the prose's own attribution and the list must show it.
-		re: regexp.MustCompile(`(?:(IC-[0-9A-Za-z]+) )?(?i:matrix) (?:§ ?|section )(` + sectionNumber + `)`),
+		// section 1b", "Matrix sections 1b.3 and ...". An "IC-7300 matrix
+		// §..." qualifier is kept in the token: it is the prose's own
+		// attribution and the list must show it.
+		re: regexp.MustCompile(`(?:(IC-[0-9A-Za-z]+) )?(?i:matrix) (?i:§ ?|sections? )(` + sectionNumber + `)`),
 		canon: func(m []string) string {
 			if m[1] != "" {
 				return m[1] + " matrix §" + m[2]
@@ -187,6 +210,32 @@ var citationShapes = []struct {
 		// FILE-QUALIFIED "doc.go §6c" is dropped, because it points at this
 		// package's own prose rather than at any document.
 		re: regexp.MustCompile(`([A-Za-z0-9_./-]+ )?§ ?(` + sectionNumber + `)`),
+		canon: func(m []string) string {
+			lead := strings.TrimSpace(m[1])
+			if strings.HasSuffix(lead, ".go") || strings.EqualFold(lead, "matrix") {
+				return ""
+			}
+			return "matrix §" + m[2]
+		},
+	},
+	{
+		// A BARE SPELLED-OUT section, "section 3.16.4". It reaches the same
+		// token as "§3.16.4" and as "matrix section 3.16.4", so all three
+		// collapse — which is the point: core/driver/icr8600/write_test.go:259
+		// writes "(matrix section 2 row 9, section 3.16.4)", where the second
+		// citation inherits its "matrix" from the first clause and nothing in
+		// the text repeats it.
+		//
+		// It requires a DOT. An undotted "Section 18" is the manual's own
+		// part number (core/driver/ic7851/doc.go:29) and reading it as a
+		// matrix section would demand an IC-7851 §18 that does not exist —
+		// the shape would then be manufacturing citations rather than
+		// finding them. The same two lead-in exclusions as the bare "§"
+		// shape apply: "matrix" is left to the qualified shape so an
+		// "IC-nnnn" attribution is not silently dropped, and a
+		// FILE-QUALIFIED "doc.go section 6.1" points at this package's own
+		// prose rather than at any document.
+		re: regexp.MustCompile(`([A-Za-z0-9_./-]+ )?(?i:sections?) (` + dottedSectionNumber + `)`),
 		canon: func(m []string) string {
 			lead := strings.TrimSpace(m[1])
 			if strings.HasSuffix(lead, ".go") || strings.EqualFold(lead, "matrix") {
@@ -366,7 +415,7 @@ func IcomCitationPin(model string) CitationPin {
 		// exists to reject.
 		Exclude:  []string{"provenance_test.go"},
 		ListPath: filepath.Join("testdata", "citations.txt"),
-		Matrix: filepath.Join(matrices, model+"-capability-matrix.md"),
+		Matrix:   filepath.Join(matrices, model+"-capability-matrix.md"),
 		MatrixSupport: []string{
 			filepath.Join(matrices, model+"-capability-matrix-report.md"),
 			filepath.Join(matrices, model+"-capability-matrix-review.md"),
@@ -434,7 +483,7 @@ func (p CitationPin) Assert(t testing.TB) {
 	matrixTokens := extractTokens(trio.norm)
 	registerTokens := extractTokens(trio.norm + "\n" + plans.norm)
 	for token := range allowed {
-		if isForeign(token, p.Model) || authoritySupplies(trio, matrix.raw, matrixTokens, registerTokens, token) {
+		if isForeign(token, p.Model) || authoritySupplies(trio, matrix.raw, matrixTokens, registerTokens, withoutOwnName(token, p.Model)) {
 			continue
 		}
 		t.Errorf("%s allows %q, but the %s authority does not supply it (a page, folio, section or "+
@@ -500,19 +549,42 @@ func suppliedByPageBounds(supplied map[string]bool, token string) bool {
 // registerEntry recognises the register-entry shape at the start of a token.
 var registerEntry = regexp.MustCompile(`^icr?\d`)
 
-// isForeign reports whether the prose itself attributes the token to another
+// isForeign reports whether the prose itself attributes the token to ANOTHER
 // model's document, in which case this model's authority is the wrong place
 // to look for it. The IC-7300's tone-domain doctrine is cited by name in three
 // of these four packages ("IC-7300 matrix erratum 12"); that citation is
 // honest and must stay listed, but the IC-7100 matrix will never print it.
+//
+// A QUALIFIER NAMING THE PACKAGE'S OWN MODEL IS NOT FOREIGN. "IC-7100 matrix
+// §5.1" written inside core/driver/ic7100 says nothing more than "matrix
+// §5.1" does, and exempting it was the one shape a paraphrase could use to
+// walk past the positive list entirely: the token still had to be listed, so
+// a reviewer would see it, but no document was ever asked for it. Such a
+// citation now takes the ordinary route — withoutOwnName drops the qualifier
+// and the usual supply check answers it.
 func isForeign(token, model string) bool {
 	if strings.HasPrefix(token, "IC-") {
-		return true
+		qualifier, _, _ := strings.Cut(token, " ")
+		return !strings.EqualFold(qualifier, ownDisplayName(model))
 	}
 	if registerEntry.MatchString(token) {
 		return !strings.HasPrefix(token, model+"-")
 	}
 	return false
+}
+
+// ownDisplayName renders a package's model id the way the prose spells it:
+// "ic7100" → "IC-7100", "icr8600" → "IC-R8600", "ic7300mk2" → "IC-7300MK2".
+func ownDisplayName(model string) string {
+	return "IC-" + strings.ToUpper(strings.TrimPrefix(model, "ic"))
+}
+
+// withoutOwnName drops a qualifier that names the package's own model, so a
+// self-attributed citation is asked of the authority exactly as the bare form
+// would be — by suppliedBySection for a section, and so on. isForeign has
+// already sent every OTHER model's qualifier away.
+func withoutOwnName(token, model string) string {
+	return strings.TrimPrefix(token, ownDisplayName(model)+" ")
 }
 
 // letteredSubPart splits "3.12a" into "3.12" and true. A bare numeric section
@@ -615,7 +687,18 @@ type authorityText struct {
 // readAuthority concatenates the authority documents that exist. It follows
 // core/civ/ic7100/crosscheck_test.go's idiom exactly: a missing file is the
 // normal gitignored case and is reported as absent, any other error is fatal.
+//
+// AN EMPTY PATH LIST IS ABSENT, NOT PRESENT-AND-EMPTY. CitationPin.Plans comes
+// from a filepath.Glob, which returns no paths and no error when the plan has
+// been renamed or re-shaped; an empty reading that called itself present would
+// then run the register-id supply check against the matrix trio alone and fail
+// an honest citation with a message blaming the citation. core/civ/icr8600/doc.go:77
+// attributes at least one id to the plan, so that is not hypothetical for this
+// tier. A missed glob must look exactly like a missing file.
 func readAuthority(paths []string) (authorityText, error) {
+	if len(paths) == 0 {
+		return authorityText{}, nil
+	}
 	var joined strings.Builder
 	out := authorityText{present: true}
 	for _, path := range paths {
