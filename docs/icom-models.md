@@ -121,7 +121,7 @@ Three costs are shared by all eleven:
   - **IC-R8600**: three costs. The first is the IC-7300s' own, and it
     applies here for the same reason: a CREATE into an empty slot is
     refused, since the record's SELECT group has no honest default to
-    write (`core/driver/icr8600/write.go:267-272`). The other two are
+    write (`core/driver/icr8600/write.go:277-282`). The other two are
     this receiver's own, and neither is the Select-group one the other
     models pay — this receiver's record carries the Select group in
     the LOW half of its first byte and a printed scan-skip setting
