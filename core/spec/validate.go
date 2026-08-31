@@ -306,7 +306,17 @@ func (c Capabilities) Validate() error {
 		// leaves them at their zero values and so contributes nothing here.
 		problems = append(problems, b.sparseProblems()...)
 		if c.Transmit == ReceiveOnly {
-			for _, field := range []Field{FieldTxFrequency, FieldToneTx} {
+			// The set is DERIVED (see transmitFields, which
+			// IsTransmitField answers for callers outside this
+			// package), not restated: a two-item literal here would
+			// have let a transmit-only Field added later go ungraded
+			// on a receiver. This site ranges over the declaration
+			// itself rather than asking the predicate, because it
+			// needs the set in a FIXED ORDER — b.Fields is a map, and
+			// walking it would make the order of these problems
+			// depend on the runtime. Pinned by
+			// TestTransmitFields_MatchTheDeclaredMarker.
+			for _, field := range transmitFields {
 				if b.Fields[field] != (FieldSupport{}) {
 					problems = append(problems, fmt.Sprintf("bank %s field %s must have zero FieldSupport on a ReceiveOnly radio", b.ID, field))
 				}

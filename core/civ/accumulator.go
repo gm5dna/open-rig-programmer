@@ -81,8 +81,8 @@ type AccumulatorStats struct {
 //     this program writes comes straight back. The engine reports each
 //     write through NoteSent before the port write, and the FIRST
 //     subsequent byte-equal frame is dropped.
-//   - BROADCASTS. Transceive is factory-ON on at least four models in
-//     this tier and this tier ships no off-switch, so unsolicited frames
+//   - BROADCASTS. Transceive is factory-ON on SOME of the Icom models this
+//     programme registers and this tier ships no off-switch, so unsolicited frames
 //     addressed to 0x00 (or to another controller) arrive constantly.
 //     They are counted and NEVER RETURNED, which is how transceive is
 //     tolerated without touching the radio's settings.

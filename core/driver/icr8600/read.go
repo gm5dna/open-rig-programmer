@@ -51,13 +51,13 @@ func isEmptyRecord(record []byte) bool {
 	return true
 }
 
-// discover performs one bounded sparse walk. Group zero is read in full;
-// each later group's channel zero is sampled and the remainder is read only
-// when that sample is occupied. Thus the walk is between 199 and 10,000
-// reads, never outside the declared 100x100 space. The first occupied record
-// supplies the diagnostic fingerprint; every record is still validated.
-func (s *Session) discover(ctx context.Context) ([]string, error) {
-	var slots []string
+// discover performs either the bounded default sparse walk or the opt-in full
+// walk. The bounded walk reads group zero in full, samples channel zero in each
+// later group and reads the remainder only when that sample is occupied. The
+// complete result is therefore true only after the full 10,000-address walk.
+// The first occupied record supplies the diagnostic fingerprint; every record
+// is still validated. Pinned by TestEndToEnd_InventoryCompletenessAndFullWalk.
+func (s *Session) discover(ctx context.Context, full bool) (slots []string, complete bool, err error) {
 	probe := func(addr civ.ChannelAddress) (bool, error) {
 		s.report.SlotsTried++
 		record, present, err := s.recordAt(ctx, addr)
@@ -88,26 +88,25 @@ func (s *Session) discover(ctx context.Context) ([]string, error) {
 		return true, nil
 	}
 
-	for channel := 0; channel < civicr8600.MemoryChannelsPerGroup; channel++ {
-		if _, err := probe(civ.ChannelAddress{Group: 0, Channel: channel}); err != nil {
-			return nil, err
+	for group := 0; group < civicr8600.MemoryGroups; group++ {
+		first := 0
+		if !full && group > 0 {
+			present, probeErr := probe(civ.ChannelAddress{Group: group, Channel: 0})
+			if probeErr != nil {
+				return nil, false, probeErr
+			}
+			if !present {
+				continue
+			}
+			first = 1
 		}
-	}
-	for group := 1; group < civicr8600.MemoryGroups; group++ {
-		present, err := probe(civ.ChannelAddress{Group: group, Channel: 0})
-		if err != nil {
-			return nil, err
-		}
-		if !present {
-			continue
-		}
-		for channel := 1; channel < civicr8600.MemoryChannelsPerGroup; channel++ {
+		for channel := first; channel < civicr8600.MemoryChannelsPerGroup; channel++ {
 			if _, err := probe(civ.ChannelAddress{Group: group, Channel: channel}); err != nil {
-				return nil, err
+				return nil, false, err
 			}
 		}
 	}
-	return slots, nil
+	return slots, full, nil
 }
 
 func (s *Session) recordAt(ctx context.Context, addr civ.ChannelAddress) ([]byte, bool, error) {
@@ -139,6 +138,11 @@ func (s *Session) parseRecord(addr civ.ChannelAddress, record []byte) (civ.Memor
 		return civ.MemoryRecord{}, err
 	}
 	request := read.Bytes()
+	// No core/civ builder can express this frame: its builders produce
+	// controller-to-radio requests and sets, while ParseMemoryAnswer needs a
+	// radio-to-controller answer envelope. BuildMemoryRead still supplies the
+	// profile-owned address bytes below, so the driver synthesises only that
+	// reversed envelope and never re-encodes the two-byte group or channel.
 	frame := []byte{0xFE, 0xFE, s.profile.ControllerAddress(), s.profile.RadioAddress(), 0x1A, 0x00}
 	frame = append(frame, request[6:len(request)-1]...)
 	frame = append(frame, record...)
@@ -180,13 +184,6 @@ func admittedInt(v int, admitted bool) codeplug.IntField {
 		return codeplug.IntField{State: codeplug.Unknown}
 	}
 	return codeplug.IntField{State: codeplug.Known, Value: v}
-}
-
-// admitsProgramStep applies the same bound codeplug.Validate applies, so a
-// read this driver calls Known is one the validator accepts.
-func admitsProgramStep(caps spec.Capabilities, v uint64) bool {
-	r := caps.ProgramTuningStepRange
-	return r != nil && r.ResolutionHz != 0 && v >= r.MinHz && v <= r.MaxHz && v%r.ResolutionHz == 0
 }
 
 func neutralChannel(rec civ.MemoryRecord, slot string, caps spec.Capabilities) codeplug.Channel {
@@ -231,7 +228,7 @@ func neutralChannel(rec civ.MemoryRecord, slot string, caps spec.Capabilities) c
 		// refuses to save. Unknown is the honest state — the treatment
 		// ToneRx already gets below. Pinned by
 		// TestRead_ValuesOutsideTheDeclaredDomainsReadUnknownNotKnown.
-		ProgramTuningStepHz: admittedFreq(programStep, admitsProgramStep(caps, programStep)),
+		ProgramTuningStepHz: admittedFreq(programStep, codeplug.AdmitsProgramTuningStep(caps, programStep)),
 		AttenuatorDB:        admittedInt(int(attenuator), slices.Contains(caps.AttenuatorDB, int(attenuator))),
 		Preamp:              codeplug.StringField{State: codeplug.Known, Value: preamp},
 		Antenna:             codeplug.StringField{State: codeplug.Known, Value: antenna},

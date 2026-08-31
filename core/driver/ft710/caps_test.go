@@ -59,8 +59,10 @@ func TestProfiles_Validate(t *testing.T) {
 	}
 }
 
-// allFields is every spec.Field this project models, for exhaustive
-// per-field iteration.
+// allFields is the TRANSMIT-AND-MEMORY spec.Fields — those core/spec/field.go
+// declared before the additions design's D8 minted seven receiver fields on
+// 28/08/2026 — written out for exhaustive per-field iteration. It is NOT every
+// spec.Field, and the comment here said it was until this sweep.
 var allFields = []spec.Field{
 	spec.FieldFrequency,
 	spec.FieldMode,

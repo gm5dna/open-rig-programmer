@@ -366,7 +366,7 @@ const IC7100Model = "IC-7100"
 // (icr8600.New(profile, opts...)), which decides both
 // NewICR8600RealDriver's body below and the TOKEN internal/guards
 // confines for this package (icr8600.Simulated, a Profile constant, not
-// an option) — checked against core/driver/icr8600/icr8600.go:41, not
+// an option) — checked against core/driver/icr8600/icr8600.go:48, not
 // assumed from the nearest precedent.
 //
 // THE FIRST RECEIVER THIS REGISTRY HOLDS, and the first row whose
@@ -1045,6 +1045,12 @@ func NewIC7100RealDriver() driver.Driver {
 // tx_frequency or tone_tx is ever graded above Unsupported on any bank
 // (additions spec D4.2's invariant). Both are written-down zeros in
 // caps.go's bankFields today.
+//
+// NO icr8600.WithFullInventoryWalk() HERE, DELIBERATELY. Like the IC-905
+// option, it is a Go-only opt-in for callers using core/driver/icr8600
+// directly; no CLI flag or GUI control exposes it. The registry therefore
+// keeps the bounded default. TestRealDriverFor_DefaultPathByteIdentical pins
+// both its ordinary and consented rows without the option.
 //
 // THE FAIL-SAFE DIRECTION IS UNCHANGED: an unrecognised Profile value
 // selects the all-Unverified set too, through icr8600.go's Capabilities
