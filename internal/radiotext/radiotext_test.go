@@ -4,6 +4,7 @@ package radiotext_test
 
 import (
 	"fmt"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -114,12 +115,12 @@ func TestRadiotext_FTdx10Verbatim(t *testing.T) {
 	assertNotBorrowedFromAnyOtherModel(t, "FTdx10", got)
 }
 
-// ftdx101Fields returns every Text field of t as a named map, so the
+// textFields returns every Text field of t as a named map, so the
 // non-borrowing and cross-model loops below iterate one list rather than
 // four hand-maintained copies. ToneScanSkipVerification is included: it is
 // empty for the FTdx101s today, and a loop that skipped it would stop
 // noticing the day somebody populated it with a borrowed sentence.
-func ftdx101Fields(txt radiotext.Text) map[string]string {
+func textFields(txt radiotext.Text) map[string]string {
 	return map[string]string{
 		"EraseProcedure":                txt.EraseProcedure,
 		"FirmwareGuidance":              txt.FirmwareGuidance,
@@ -130,6 +131,39 @@ func ftdx101Fields(txt radiotext.Text) map[string]string {
 		"PreservationTooltips.ScanSkip": txt.PreservationTooltips.ScanSkip,
 		"FirmwarePlaceholder":           txt.FirmwarePlaceholder,
 		"ProbeFirmwareNote":             txt.ProbeFirmwareNote,
+	}
+}
+
+// countLeafFields recursively counts v's fields, flattening one level of
+// any nested struct field (radiotext.Text's PreservationTooltips is the
+// only such field today) rather than counting the struct itself as one
+// field — the same flattening textFields performs by hand.
+func countLeafFields(v reflect.Value) int {
+	n := 0
+	t := v.Type()
+	for i := 0; i < t.NumField(); i++ {
+		f := v.Field(i)
+		if f.Kind() == reflect.Struct {
+			n += countLeafFields(f)
+			continue
+		}
+		n++
+	}
+	return n
+}
+
+// TestTextFields_CoversEveryFieldOfText is the completeness pin renaming
+// (minors-review.md F8, minors-fix1-rereview.md's carried item) asked
+// for: without it, a field added to radiotext.Text escapes the
+// byte-identity and non-borrowing loops below with no test noticing,
+// since textFields is otherwise a hand-maintained map. This reads the
+// struct's own shape via reflect rather than restating a field count, so
+// the pin cannot drift from the type it is meant to cover.
+func TestTextFields_CoversEveryFieldOfText(t *testing.T) {
+	want := countLeafFields(reflect.ValueOf(radiotext.Text{}))
+	got := len(textFields(radiotext.Text{}))
+	if got != want {
+		t.Fatalf("textFields returns %d entries, but radiotext.Text has %d leaf fields (nested structs flattened one level) — a field was added to or removed from Text without textFields being updated to match, so it would silently escape every non-borrowing and byte-identity loop in this file", got, want)
 	}
 }
 
@@ -311,8 +345,8 @@ func assertNotBorrowedFromAnyOtherModel(t *testing.T, model string, got radiotex
 		if !ok {
 			t.Fatalf("For(%q) ok = false, want true — %q is registered in internal/wiring but radiotext carries no prose for it", other, other)
 		}
-		otherFields := ftdx101Fields(otherText)
-		for field, val := range ftdx101Fields(got) {
+		otherFields := textFields(otherText)
+		for field, val := range textFields(got) {
 			if val == "" {
 				// Shared emptiness (ToneScanSkipVerification, on every
 				// entry whose write-trial guard is false) is not a copy.
@@ -324,7 +358,7 @@ func assertNotBorrowedFromAnyOtherModel(t *testing.T, model string, got radiotex
 		}
 	}
 	particulars := particularsAgainstEveryOtherModel(model)
-	for field, val := range ftdx101Fields(got) {
+	for field, val := range textFields(got) {
 		bare := stripOwnName(val, model)
 		for _, particular := range particulars {
 			if strings.Contains(bare, particular) {
@@ -519,9 +553,9 @@ func TestRadiotext_FTdx101DAndMPDifferOnlyInTheModelName(t *testing.T) {
 		t.Fatal(`For("FTdx101MP") ok = false, want true`)
 	}
 
-	dFields := ftdx101Fields(d)
+	dFields := textFields(d)
 	naming := 0
-	for field, mpVal := range ftdx101Fields(mp) {
+	for field, mpVal := range textFields(mp) {
 		if strings.Contains(mpVal, "FTdx101MP") {
 			naming++
 		}
@@ -561,7 +595,7 @@ func TestRadiotext_FTdx101DAndMPDifferOnlyInTheModelName(t *testing.T) {
 // the FT-710 and the FTdx10 the way the FTdx101 pair's does: this is the
 // first model with no Yaesu sibling to be careful about specifically, so
 // every prior entry is a borrowing risk, not just the two nearest ones.
-// ftdx101Fields (above) is reused unchanged — it is generic over any
+// textFields (above) is reused unchanged — it is generic over any
 // radiotext.Text value, not FTdx101-specific despite its name.
 func TestRadiotext_IC7610Verbatim(t *testing.T) {
 	want := radiotext.Text{
@@ -620,7 +654,7 @@ func TestRadiotext_IC7610Verbatim(t *testing.T) {
 // would fault on its own self-references ("The IC-7300MK2's...") — by
 // stripping the checked model's own name from each field before scanning
 // particulars, so "IC-7300MK2" leaves no residual "IC-7300" behind.
-// ftdx101Fields is reused unchanged — it is generic over any
+// textFields is reused unchanged — it is generic over any
 // radiotext.Text value.
 func TestRadiotext_IC7300Verbatim(t *testing.T) {
 	want := radiotext.Text{
@@ -704,7 +738,7 @@ func TestRadiotext_IC7300MK2Verbatim(t *testing.T) {
 //
 // THE NON-BORROWING CHECK RUNS AGAINST EVERY OTHER REGISTERED MODEL: this
 // radio has no sibling of its own, so every other registered model is
-// exactly as much a borrowing risk as any other. ftdx101Fields is reused
+// exactly as much a borrowing risk as any other. textFields is reused
 // unchanged — it is generic over any radiotext.Text value.
 func TestRadiotext_IC705Verbatim(t *testing.T) {
 	want := radiotext.Text{
@@ -749,7 +783,7 @@ func TestRadiotext_IC705Verbatim(t *testing.T) {
 //
 // THE NON-BORROWING CHECK RUNS AGAINST EVERY OTHER REGISTERED MODEL: this
 // radio has no sibling of its own, so every other registered model is
-// exactly as much a borrowing risk as any other. ftdx101Fields is reused
+// exactly as much a borrowing risk as any other. textFields is reused
 // unchanged — it is generic over any radiotext.Text value.
 func TestRadiotext_IC9700Verbatim(t *testing.T) {
 	want := radiotext.Text{
@@ -794,7 +828,7 @@ func TestRadiotext_IC9700Verbatim(t *testing.T) {
 //
 // THE NON-BORROWING CHECK RUNS AGAINST EVERY OTHER REGISTERED MODEL: this
 // radio has no sibling of its own, so every other registered model is
-// exactly as much a borrowing risk as any other. ftdx101Fields is reused
+// exactly as much a borrowing risk as any other. textFields is reused
 // unchanged — it is generic over any radiotext.Text value.
 func TestRadiotext_IC905Verbatim(t *testing.T) {
 	want := radiotext.Text{
@@ -1095,9 +1129,9 @@ func TestRadiotext_IC7851AndIC7850DifferOnlyInTheModelName(t *testing.T) {
 		t.Fatal(`For("IC-7850") ok = false, want true`)
 	}
 
-	aFields := ftdx101Fields(a)
+	aFields := textFields(a)
 	naming := 0
-	for field, bVal := range ftdx101Fields(b) {
+	for field, bVal := range textFields(b) {
 		if strings.Contains(bVal, "IC-7850") {
 			naming++
 		}

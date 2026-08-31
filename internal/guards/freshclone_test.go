@@ -34,9 +34,13 @@ import (
 //     filepath.Join("...", "docs", "superpowers", ...) shape both known
 //     readers happen to use — which missed a reader spelling the same
 //     path as one joined literal, "docs/superpowers/x.md", or built via
-//     string concatenation. It now matches the substring "superpowers"
-//     inside ANY string literal. That widening costs nothing against the
-//     four files that merely CITE docs/superpowers/*.md as evidence
+//     string concatenation. It now also matches that joined form, and
+//     the bare "superpowers/..." segment without the "docs/" prefix, and
+//     both forms' Windows-separator spelling — see
+//     namesSuperpowersPath's own doc comment for the exact shapes and
+//     why a bare "superpowers" substring anywhere is still refused. That
+//     widening costs nothing against the four files that merely CITE
+//     docs/superpowers/*.md as evidence
 //     (core/civ/tier_test.go and three files in this package): those
 //     citations live in `//` comments, which are never ast.BasicLits, or
 //     — tier_test.go's case — inside a package-level var with no os call
@@ -64,23 +68,39 @@ import (
 //     halves of that file's guard are never in one function.
 
 // namesSuperpowersPath reports whether s is (or contains) the path this
-// guard cares about: either the bare path segment "superpowers", exactly
-// as filepath.Join("...", "docs", "superpowers", ...) — the two known
-// readers' shape — spells it as its OWN argument, or the joined form
+// guard cares about: the bare path segment "superpowers", exactly as
+// filepath.Join("...", "docs", "superpowers", ...) — the two known
+// readers' shape — spells it as its OWN argument; the joined form
 // "docs/superpowers" appearing anywhere inside a longer literal (F7: a
 // reader is at least as likely to write
 // filepath.Join(root, "docs/superpowers", "x.md") or
-// ".../docs/superpowers/x.md" as one string).
+// ".../docs/superpowers/x.md" as one string); the bare joined segment
+// "superpowers/..." with no "docs/" prefix at all (closing fix wave,
+// carried-forward minor: a reader that already holds the docs root and
+// writes filepath.Join(docsDir, "superpowers/matrix.md") names the same
+// path without ever spelling "docs"); and every one of those forms
+// re-spelled with a Windows path separator ("docs\superpowers",
+// "superpowers\...").
 //
 // NOT A BARE "superpowers" SUBSTRING ANYWHERE, deliberately: fix round 1
 // tried that first and it false-positived on
 // internal/guards/retirednames_test.go's skipDirs[".superpowers"] — a
 // WalkDir EXCLUSION entry that keeps that test from ever descending into
-// the directory, the opposite of a read. Requiring the "docs/" prefix
-// alongside the bare-segment form keeps the F7(a) widening (a joined
-// literal is now caught) without that false positive.
+// the directory, the opposite of a read. Every shape accepted above
+// requires a following path separator (or the exact bare segment), which
+// ".superpowers" — with no separator anywhere in the literal — cannot
+// satisfy, so the false positive stays excluded even with the "docs/"
+// prefix no longer required.
 func namesSuperpowersPath(s string) bool {
-	return s == "superpowers" || strings.Contains(s, "docs/superpowers")
+	for _, sep := range [...]string{"/", `\`} {
+		if s == "superpowers" ||
+			strings.Contains(s, "docs"+sep+"superpowers") ||
+			strings.HasPrefix(s, "superpowers"+sep) ||
+			strings.Contains(s, sep+"superpowers"+sep) {
+			return true
+		}
+	}
+	return false
 }
 
 // superpowersReadCalls is every os-package call this guard treats as a
@@ -159,6 +179,16 @@ func fileReadsUnderSuperpowers(f *ast.File) bool {
 // TestFreshCloneGuard_DoesNotAcceptAnUnrelatedErrEqualsNil's own
 // "if err != nil { t.Fatalf(...) }" after the unguarded read is what
 // this exclusion is for.
+//
+// THE NON-NIL OPERAND MUST BE ERR-SHAPED (closing fix wave,
+// carried-forward minor): fix round 1 accepted "X == nil" for ANY
+// identifier X, so a reader function that reads docs/superpowers
+// unguarded but happens to also contain an unrelated
+// "if caps == nil { t.Fatal(...) }" passed this half of the idiom
+// vacuously. Real callers of this spelling all name the variable "err"
+// or a compound ending in it (matrixAuthorityPresent's own "err"), so
+// requiring that shape closes the gap without narrowing the accepted
+// spelling to the single literal name "err".
 func isNotExistCheck(n ast.Node) bool {
 	call, ok := n.(*ast.CallExpr)
 	if ok {
@@ -184,7 +214,30 @@ func isNotExistCheck(n ast.Node) bool {
 		id, ok := e.(*ast.Ident)
 		return ok && id.Name == "nil"
 	}
-	return isNilIdent(bin.X) || isNilIdent(bin.Y)
+	other := bin.Y
+	switch {
+	case isNilIdent(bin.X):
+		other = bin.Y
+	case isNilIdent(bin.Y):
+		other = bin.X
+	default:
+		return false
+	}
+	return isErrShapedIdent(other)
+}
+
+// isErrShapedIdent reports whether e is an identifier whose name looks
+// like an error variable: exactly "err", or any name ending in "err"
+// case-insensitively (e.g. "readErr", "statErr") — wide enough to cover
+// a compound name without accepting an unrelated identifier like "caps"
+// or "ok".
+func isErrShapedIdent(e ast.Expr) bool {
+	id, ok := e.(*ast.Ident)
+	if !ok {
+		return false
+	}
+	name := strings.ToLower(id.Name)
+	return name == "err" || strings.HasSuffix(name, "err")
 }
 
 // isSkipOrLogCall reports whether call is <recv>.Skip/Skipf/Log/Logf —
@@ -460,5 +513,70 @@ func TestUnguardedReadNearAnUnrelatedCheck(t *testing.T) {
 	}
 	if hasAbsentGuardIdiom(f) {
 		t.Fatal("hasAbsentGuardIdiom = true, want false — the file's only \"err == nil\" and Skip call guard an UNRELATED os.Stat(\"go.mod\"), not the docs/superpowers read, and must not satisfy the idiom vacuously")
+	}
+}
+
+// TestFreshCloneGuard_DoesNotAcceptANonErrShapedNilCheck pins the
+// residual F7(c) vacuity minors-fix1-rereview.md carried forward: the
+// old isNotExistCheck accepted "X == nil" for ANY identifier X, so a
+// reader function that reads under docs/superpowers unguarded but also
+// happens to contain an unrelated "caps == nil" check in its OWN body —
+// satisfying the old function-scoped co-occurrence rule vacuously — must
+// still fail the idiom. caps is not err-shaped, so it must not be
+// mistaken for the existence check.
+func TestFreshCloneGuard_DoesNotAcceptANonErrShapedNilCheck(t *testing.T) {
+	f := parseSnippet(t, `package p
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestUnguardedReadWithAnUnrelatedNilCheck(t *testing.T, caps *int) {
+	if caps == nil {
+		t.Skip("no caps")
+	}
+	body, err := os.ReadFile(filepath.Join("..", "docs", "superpowers", "matrix.md"))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	_ = body
+}
+`)
+	if !fileReadsUnderSuperpowers(f) {
+		t.Fatal("fileReadsUnderSuperpowers = false, want true — this snippet reads under docs/superpowers")
+	}
+	if hasAbsentGuardIdiom(f) {
+		t.Fatal("hasAbsentGuardIdiom = true, want false — \"caps == nil\" is not err-shaped and must not be accepted as the read's existence check, even though it shares the read's function body and is followed by t.Skip")
+	}
+}
+
+// TestNamesSuperpowersPath_WidenedForms pins the detection widening
+// minors-fix1-rereview.md carried forward: the bare "superpowers/..."
+// segment with no "docs/" prefix, and the Windows-separator spelling of
+// both forms, must now be detected; the ".superpowers" WalkDir exclusion
+// entry (internal/guards/retirednames_test.go's skipDirs) must still not
+// be, since it names a directory to SKIP, not a path to read.
+func TestNamesSuperpowersPath_WidenedForms(t *testing.T) {
+	cases := []struct {
+		s    string
+		want bool
+	}{
+		{"superpowers", true},
+		{"docs/superpowers", true},
+		{"docs/superpowers/matrix.md", true},
+		{"superpowers/matrix.md", true},
+		{`docs\superpowers\matrix.md`, true},
+		{`superpowers\matrix.md`, true},
+		{"root/superpowers/matrix.md", true},
+		{`root\superpowers\matrix.md`, true},
+		{".superpowers", false},
+		{"go.mod", false},
+	}
+	for _, c := range cases {
+		if got := namesSuperpowersPath(c.s); got != c.want {
+			t.Errorf("namesSuperpowersPath(%q) = %v, want %v", c.s, got, c.want)
+		}
 	}
 }
