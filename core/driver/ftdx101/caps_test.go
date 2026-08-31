@@ -12,10 +12,17 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
-// allFields is every spec.Field this project models, for exhaustive
-// per-field iteration. Its LENGTH is asserted against the bank field maps
-// below, so a Field added to core/spec and forgotten here fails a test
-// rather than escaping the matrix.
+// allFields is the TRANSMIT-AND-MEMORY spec.Fields — those core/spec/field.go
+// declared before the additions design's D8 minted seven receiver fields on
+// 28/08/2026 — written out for exhaustive per-field iteration.
+//
+// IT IS NOT EVERY spec.Field, and the comment here said it was until this
+// sweep. Its LENGTH is asserted against the bank field maps below, so a Field
+// added to core/spec, listed in this radio's banks and forgotten here still
+// fails a test; a Field this radio's banks do not carry at all — which is
+// every one of the seven D8 receiver fields — escapes both sides equally and
+// is not caught. Widening this slice means widening those bank maps, which is
+// a capability-table decision and not a comment's to take.
 var allFields = []spec.Field{
 	spec.FieldFrequency,
 	spec.FieldMode,

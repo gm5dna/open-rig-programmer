@@ -9,14 +9,19 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
-// allFields is every spec.Field this project models, and the LENGTH
-// ASSERTION below is what stops a newly added Field escaping the write
-// guard: a twenty-first constant would leave this slice short, the pin
-// would fail, and whoever added it has to decide what this radio does
-// with it rather than inheriting a silent Unsupported.
+// allFields is the ten spec.Fields of the pre-Icom model plus the ten the
+// Icom tier added, in core/spec/field.go's own declaration order.
 //
-// Ten from the pre-Icom model and ten the Icom tier added
-// (core/spec/field.go), in that file's own declaration order.
+// IT IS NOT EVERY spec.Field, and the comment here claimed it was: the
+// additions design's D8 minted seven receiver fields on 28/08/2026, taking
+// core/spec/field.go to twenty-seven, and the LENGTH ASSERTION below did not
+// notice — it compares against a written-down twenty rather than against
+// field.go. So the drift alarm this comment used to promise ("a twenty-first
+// constant would leave this slice short") no longer holds, and the seven D8
+// receiver fields are outside the write guard below. They are graded absent
+// on this transceiver, so the guard's CONCLUSION is not thought to be wrong;
+// it is simply not checked here. Closing that needs a spec-side enumeration
+// this package cannot mint on its own.
 var allFields = []spec.Field{
 	spec.FieldFrequency,
 	spec.FieldMode,
@@ -43,7 +48,7 @@ var allFields = []spec.Field{
 
 func TestAllFieldsCoversEverySpecField(t *testing.T) {
 	if len(allFields) != 20 {
-		t.Fatalf("allFields has %d entries, want 20 — core/spec/field.go declares ten pre-tier Fields and ten the Icom tier added; a Field missing from this slice is a Field the write guard below never checks", len(allFields))
+		t.Fatalf("allFields has %d entries, want 20 — the ten pre-tier Fields plus the ten the Icom tier added; a Field missing from this slice is a Field the write guard below never checks. This is NOT core/spec/field.go's whole count: D8 took that to twenty-seven on 28/08/2026 and this pin does not track it", len(allFields))
 	}
 	seen := map[spec.Field]bool{}
 	for _, f := range allFields {
