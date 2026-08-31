@@ -345,17 +345,29 @@ func registrationCoverageProblems(registered, population []string, coverage map[
 // icomModels filters models to the ones the registry itself declares
 // Icom, via capsFor — normally wiring.StaticCapabilities.
 //
-// THE SIGNAL IS spec.Capabilities.CTCSSToneRange, NOT THE MODEL NAME.
-// That field's own doc comment (core/spec/capabilities.go) states it is
-// non-nil for "every CI-V model in the Icom tier" and nil for every
-// registered Yaesu one — the registry's actual vendor declaration, one
-// hop from the CI-V profile every Icom driver builds its capabilities
-// from. A strings.HasPrefix(model, "IC-") check reads the model NAME
+// THE SIGNAL IS A PROXY, NOT A DECLARATION: neither spec.Capabilities nor
+// internal/wiring carries a Vendor/Manufacturer field (fix round 1, F6 —
+// checked again here rather than assumed), and no registry surface
+// exposes a row's civ.Profile or otherwise says "this is CI-V" directly.
+// In its absence icomModels reads spec.Capabilities.CTCSSToneRange, whose
+// own doc comment (core/spec/capabilities.go) states it is non-nil for
+// "every CI-V model in the Icom tier" and nil for every registered Yaesu
+// one — the closest thing to a vendor declaration this registry has,
+// FALLING OUT of the CI-V tone encoding rather than stating vendor as a
+// fact. A strings.HasPrefix(model, "IC-") check reads the model NAME
 // instead, and would miss a real Icom model registered under the
 // family's other prefix — Icom's D-STAR handhelds are "ID-51", "ID-52",
 // "ID-5100" — leaving it out of tierRegistrationCoverage's guard
 // entirely. TestTierRecordShapes_IcomModelsKeyOnVendorNotPrefix pins a
-// fake "ID-52" row being caught.
+// fake "ID-52" row being caught; TestTierRecordShapes_IcomModelsMatchesRegistryRowCountAndNames
+// pins today's real registry selection (count and names), so a drift in
+// the proxy's behaviour is visible even though nothing enforces it
+// structurally; TestTierRecordShapes_EveryModelDeclaresExactlyOneToneShape
+// is the guard against the proxy's one known failure mode — a model
+// declaring NEITHER CTCSSTones nor CTCSSToneRange, which
+// spec.Capabilities.AdmitsTone explicitly tolerates ("fails closed when a
+// radio declares neither") and which would silently vanish from
+// `registered` rather than fail loudly.
 func icomModels(t testing.TB, models []string, capsFor func(string) (spec.Capabilities, error)) []string {
 	t.Helper()
 	var out []string
@@ -664,6 +676,51 @@ func TestTierRecordShapes_IcomModelsKeyOnVendorNotPrefix(t *testing.T) {
 	want := []string{"IC-7610", "ID-52"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("icomModels = %v, want %v — a fake Icom row named %q must be covered whatever its name looks like", got, want, "ID-52")
+	}
+}
+
+// TestTierRecordShapes_IcomModelsMatchesRegistryRowCountAndNames pins the
+// PROXY's live behaviour (fix round 1, F6) against the real registry: it
+// is not enough that icomModels selects on a typed capability rather than
+// a string prefix — since nothing enforces "Icom ⇔ CTCSSToneRange"
+// structurally, this asserts the exact row count and names the proxy
+// selects today, so a driver quietly declaring the wrong tone shape (or a
+// new Yaesu entry that happened to satisfy the proxy) is caught by name
+// rather than passing silently because the COUNT still matched.
+func TestTierRecordShapes_IcomModelsMatchesRegistryRowCountAndNames(t *testing.T) {
+	got := icomModels(t, wiring.SupportedModels(), wiring.StaticCapabilities)
+	want := []string{
+		"IC-705", "IC-7100", "IC-7300", "IC-7300MK2", "IC-7610", "IC-7760",
+		"IC-7850", "IC-7851", "IC-905", "IC-9700", "IC-R8600",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("icomModels(wiring.SupportedModels()) = %v (%d rows),\nwant %v (%d rows) — the registered Yaesu/Icom split has changed; update this list deliberately if it is a real registration, not a proxy regression", got, len(got), want, len(want))
+	}
+}
+
+// TestTierRecordShapes_EveryModelDeclaresExactlyOneToneShape guards the
+// one failure mode icomModels' proxy has (fix round 1, F6): a registered
+// model declaring NEITHER CTCSSTones nor CTCSSToneRange would satisfy
+// neither the Icom test (CTCSSToneRange != nil) nor look like a Yaesu row
+// either — it would simply vanish from `registered` in
+// TestTierRecordShapes_DistinctOrDeclared, with nothing to say so.
+// spec.Capabilities.AdmitsTone's own doc comment states this is possible
+// ("fails closed when a radio declares neither"); this test makes it an
+// error for a REGISTERED row rather than a silently tolerated one.
+// spec.Validate already refuses BOTH being declared at once
+// (core/spec/validate.go:588), so only the "neither" half needs pinning
+// here.
+func TestTierRecordShapes_EveryModelDeclaresExactlyOneToneShape(t *testing.T) {
+	for _, model := range wiring.SupportedModels() {
+		caps, err := wiring.StaticCapabilities(model)
+		if err != nil {
+			t.Fatalf("StaticCapabilities(%q): %v", model, err)
+		}
+		hasList := len(caps.CTCSSTones) > 0
+		hasRange := caps.CTCSSToneRange != nil
+		if hasList == hasRange {
+			t.Errorf("%s declares CTCSSTones (non-empty: %v) and CTCSSToneRange (non-nil: %v) — want exactly one; a model declaring neither would silently drop out of icomModels' proxy and vanish from the registration-coverage guard", model, hasList, hasRange)
+		}
 	}
 }
 
