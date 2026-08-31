@@ -3,6 +3,7 @@
 package spec
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -91,6 +92,70 @@ func TestBankWithinSpace_ZeroBasedSparse(t *testing.T) {
 	for _, out := range []string{"G100-000", "G00-100"} {
 		if b.WithinSpace(out) {
 			t.Errorf("WithinSpace(%q) = true outside zero-based space", out)
+		}
+	}
+}
+
+// TestValidate_GroupBaseDomain sweeps the WHOLE of Bank.GroupBase's
+// documented domain — "the radio's first group number, 0 or 1" — on both
+// kinds of bank, rather than spot-checking one bad value.
+//
+// The rule itself is not new (Bank.sparseProblems has carried it since
+// the sparse descriptor landed, and TestValidate_SparseDescriptorRules
+// below samples it at GroupBase 2 sparse and GroupBase 1 dense). What
+// was missing is a statement of the domain as a whole: with only sample
+// rows, a check narrowed to "> 1" would still have passed while
+// GroupBase -1 sailed through, and SparseSlot would then render a
+// negative group into a slot string no radio has.
+//
+// Both halves of the symmetry are swept because they refuse for
+// DIFFERENT reasons, and the messages say so: on a Sparse bank the value
+// is out of its domain; on a dense bank ANY non-zero value is a
+// descriptor set on a bank that has no addressable space to describe.
+func TestValidate_GroupBaseDomain(t *testing.T) {
+	sparse := func(groupBase int) Capabilities {
+		c := minimalCaps()
+		c.Banks = []Bank{{
+			ID: BankMemory, Sparse: true, Groups: 100, PerGroup: 100,
+			GroupBase: groupBase, BudgetUnstated: true,
+		}}
+		return c
+	}
+	dense := func(groupBase int) Capabilities {
+		c := minimalCaps()
+		c.Banks = []Bank{{ID: BankMemory, Slots: []string{"001"}, GroupBase: groupBase}}
+		return c
+	}
+	for _, tt := range []struct {
+		groupBase  int
+		wantSparse string // substring; "" means the value is accepted
+		wantDense  string
+	}{
+		{groupBase: -1, wantSparse: "GroupBase -1 must be 0 or 1", wantDense: "GroupBase -1 is set on a bank that is not Sparse"},
+		{groupBase: 0, wantSparse: "", wantDense: ""},
+		{groupBase: 1, wantSparse: "", wantDense: "GroupBase 1 is set on a bank that is not Sparse"},
+		{groupBase: 2, wantSparse: "GroupBase 2 must be 0 or 1", wantDense: "GroupBase 2 is set on a bank that is not Sparse"},
+	} {
+		for _, kind := range []struct {
+			name string
+			caps Capabilities
+			want string
+		}{
+			{"sparse", sparse(tt.groupBase), tt.wantSparse},
+			{"dense", dense(tt.groupBase), tt.wantDense},
+		} {
+			t.Run(fmt.Sprintf("%s GroupBase %d", kind.name, tt.groupBase), func(t *testing.T) {
+				err := kind.caps.Validate()
+				if kind.want == "" {
+					if err != nil {
+						t.Fatalf("Validate() = %v, want nil — GroupBase %d is inside the documented domain", err, tt.groupBase)
+					}
+					return
+				}
+				if err == nil || !strings.Contains(err.Error(), kind.want) {
+					t.Fatalf("Validate() = %v, want an error containing %q", err, kind.want)
+				}
+			})
 		}
 	}
 }
