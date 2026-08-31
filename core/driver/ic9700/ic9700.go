@@ -377,6 +377,34 @@ func decodeHexToken(token string) []byte {
 	return out
 }
 
+// RecordLengthMismatchError makes a probe-time record-length refusal
+// reachable via errors.Is(err, driver.ErrWrongRadio), matching the
+// sibling drivers' record-length-mismatch convention (e.g.
+// core/driver/ic7610/ic7610.go:138-166). Before this type existed the
+// refusal was the bare *civ.RecordLengthError, which unwraps only to
+// civ.ErrRecordLength.
+//
+// NO FOUND MODEL IS NAMED, for the reason doc.go gives against ever
+// minting driver.WrongRadioError here: this driver holds no table of
+// other models' record lengths, so Unwrap returns BOTH driver.ErrWrongRadio
+// and the original *civ.RecordLengthError — never a driver.WrongRadioError
+// — which is also what keeps TestProbeFingerprintsTheRecordNotTheDataArea
+// and TestEndToEnd_WrongSiblingRefusedByRecordLength's
+// errors.As(err, &civLengthErr) working unchanged.
+type RecordLengthMismatchError struct {
+	// Err is the record-length refusal this wraps; its own Got/Want carry
+	// the measured and expected lengths.
+	Err *civ.RecordLengthError
+}
+
+func (e *RecordLengthMismatchError) Error() string { return e.Err.Error() }
+
+// Unwrap exposes both the wrong-radio sentinel and the original
+// *civ.RecordLengthError (Go 1.20's multi-error Unwrap), so
+// errors.Is(err, driver.ErrWrongRadio) and errors.As(err, &civLengthErr)
+// both succeed against the same refusal.
+func (e *RecordLengthMismatchError) Unwrap() []error { return []error{driver.ErrWrongRadio, e.Err} }
+
 // probeFingerprint walks a bounded run of channels looking for a record
 // whose length confirms this profile.
 //
@@ -418,34 +446,6 @@ func decodeHexToken(token string) []byte {
 // the safety property. Nothing is lost in attribution either way — this
 // driver names no model on ANY refusal, by design (doc.go, "What this
 // package does NOT claim").
-// RecordLengthMismatchError makes a probe-time record-length refusal
-// reachable via errors.Is(err, driver.ErrWrongRadio), matching the
-// sibling drivers' record-length-mismatch convention (e.g.
-// core/driver/ic7610/ic7610.go:138-166). Before this type existed the
-// refusal was the bare *civ.RecordLengthError, which unwraps only to
-// civ.ErrRecordLength.
-//
-// NO FOUND MODEL IS NAMED, for the reason doc.go gives against ever
-// minting driver.WrongRadioError here: this driver holds no table of
-// other models' record lengths, so Unwrap returns BOTH driver.ErrWrongRadio
-// and the original *civ.RecordLengthError — never a driver.WrongRadioError
-// — which is also what keeps TestProbeFingerprintsTheRecordNotTheDataArea
-// and TestEndToEnd_WrongSiblingRefusedByRecordLength's
-// errors.As(err, &civLengthErr) working unchanged.
-type RecordLengthMismatchError struct {
-	// Err is the record-length refusal this wraps; its own Got/Want carry
-	// the measured and expected lengths.
-	Err *civ.RecordLengthError
-}
-
-func (e *RecordLengthMismatchError) Error() string { return e.Err.Error() }
-
-// Unwrap exposes both the wrong-radio sentinel and the original
-// *civ.RecordLengthError (Go 1.20's multi-error Unwrap), so
-// errors.Is(err, driver.ErrWrongRadio) and errors.As(err, &civLengthErr)
-// both succeed against the same refusal.
-func (e *RecordLengthMismatchError) Unwrap() []error { return []error{driver.ErrWrongRadio, e.Err} }
-
 func probeFingerprint(ctx context.Context, p civ.Profile, eng *transport.Engine) (bool, int, error) {
 	mismatches := 0
 	for ch := 1; ch <= probeSearchChannels; ch++ {
