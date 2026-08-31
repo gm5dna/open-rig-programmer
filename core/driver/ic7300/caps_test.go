@@ -46,7 +46,7 @@ var allFields = []spec.Field{
 	spec.FieldDataMode,
 }
 
-func TestAllFieldsCoversEverySpecField(t *testing.T) {
+func TestAllFieldsCoversThePreD8SpecFields(t *testing.T) {
 	if len(allFields) != 20 {
 		t.Fatalf("allFields has %d entries, want 20 — the ten pre-tier Fields plus the ten the Icom tier added; a Field missing from this slice is a Field the write guard below never checks. This is NOT core/spec/field.go's whole count: D8 took that to twenty-seven on 28/08/2026 and this pin does not track it", len(allFields))
 	}

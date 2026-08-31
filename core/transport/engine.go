@@ -1122,11 +1122,12 @@ func (e *Engine) DrainToQuiet(ctx context.Context) error {
 // CONTAMINATED first, and that 38400 baud cannot deliver constant traffic
 // — held for a Yaesu link answering only what it was asked, and does NOT
 // hold for a radio that BROADCASTS unprompted. Icom's transceive mode is
-// factory-ON on Icom models this programme registers (the set is
-// internal/wiring/wiring_test.go's icomModels, pinned against
+// factory-ON on SOME of the Icom models this programme registers (the set
+// is internal/wiring/wiring_test.go's icomModels, pinned against
 // SupportedModels() by TestYaesuAndIcomModelsPartitionSupportedModels — a
 // count written here would be stale by the next family, and one such radio
-// is all the argument needs), and
+// is all the argument needs; "some" because no radio has been asked and
+// each model's default is an ASSUMED entry), and
 // no off-switch is shipped: a well-formed frame every few
 // milliseconds, forever, is the normal operating condition, and every one
 // of those frames re-arms the timer without ever tripping the length cap.

@@ -14,11 +14,11 @@ import (
 
 // This file is D2's starvation-deadline proof (round 2, F3≈C4). Address
 // filtering prevents FALSE MATCHES; it does nothing about STARVATION. A
-// transceive flood — factory-ON on Icom models this programme registers,
-// with no off-switch shipped — is a stream that never goes quiet, and
-// every loop in this package whose exit condition is "silence" would wait
-// for it forever. (internal/wiring/wiring_test.go's icomModels is the
-// registered set and TestYaesuAndIcomModelsPartitionSupportedModels pins
+// transceive flood — factory-ON on SOME of the Icom models this programme
+// registers, with no off-switch shipped — is a stream that never goes
+// quiet, and every loop in this package whose exit condition is "silence"
+// would wait for it forever. (internal/wiring/wiring_test.go's icomModels
+// is the registered set and TestYaesuAndIcomModelsPartitionSupportedModels pins
 // it; the count is deliberately not repeated here, because one radio that
 // never goes quiet is the whole hazard and a number only goes stale.)
 //
