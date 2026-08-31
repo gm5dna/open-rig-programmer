@@ -2,6 +2,8 @@
 
 package spec
 
+import "slices"
+
 // Field identifies a single addressable piece of memory-channel data whose
 // per-radio support is described by a FieldSupport value inside a Bank.
 // Field is a neutral, radio-family concept: drivers map their own
@@ -45,7 +47,7 @@ const (
 	// stored on the channel itself, distinct from a repeater shift
 	// applied to the receive frequency.
 	//
-	// TRANSMIT-ONLY: see TransmitFields.
+	// TRANSMIT-ONLY: see IsTransmitField.
 	FieldTxFrequency Field = "tx_frequency"
 	// FieldDuplex is the Icom-family repeater duplex selector, whose
 	// vocabulary a radio supplies as Capabilities.DuplexOptions (e.g.
@@ -62,7 +64,7 @@ const (
 	FieldToneMode Field = "tone_mode"
 	// FieldToneTx is the transmitted CTCSS tone.
 	//
-	// TRANSMIT-ONLY: see TransmitFields.
+	// TRANSMIT-ONLY: see IsTransmitField.
 	FieldToneTx Field = "tone_tx"
 	// FieldToneRx is the CTCSS tone required to open squelch on receive.
 	// A radio that cannot hold the two independently reports only one of
@@ -117,7 +119,7 @@ const (
 // from the comments it reads.
 const transmitOnlyMarker = "TRANSMIT-ONLY:"
 
-// TransmitFields is every Field that describes the transmitter. A radio
+// transmitFields is every Field that describes the transmitter. A radio
 // with no transmitter has no anatomy for them, so
 // Capabilities.Validate refuses a spec.ReceiveOnly model whose bank
 // grades any of them above Unsupported.
@@ -127,17 +129,31 @@ const transmitOnlyMarker = "TRANSMIT-ONLY:"
 // as a two-item literal, so a transmit-only Field added later would have
 // been graded freely on a receiver with Validate saying nothing.
 //
-// EXPORTED (Wave 4b closing fix wave, carried-forward minor) so
-// core/codeplug's own receive-only message wording — which needs the
-// same "is this Field transmit-only?" question and previously answered
-// it with a second, hand-written two-item literal at
-// validate.go:503 — can ask this declaration instead of restating it.
-// core/codeplug already imports core/spec and core/spec imports nothing
-// from core/codeplug, so there is no cycle to avoid.
+// PRIVATE, AND THE SET IS VALIDATION POLICY. It was briefly exported so
+// core/codeplug's receive-only message wording could ask it instead of
+// restating the pair, and an exported slice is an exported mutable
+// global: a single `spec.TransmitFields[0] = "nothing"` anywhere in the
+// process would have disabled the receive-only protection in BOTH
+// core/spec's bank loop and core/codeplug's unreachable-field wording,
+// silently and for every radio. A caller has no reason to hold the set;
+// it only ever needs the question, so IsTransmitField is what it gets.
+// TestSpecExportsNoPackageLevelVar keeps it that way.
 //
 // TestTransmitFields_MatchTheDeclaredMarker parses this package's
 // non-test files and fails unless this slice holds exactly the constants
 // whose doc comment carries transmitOnlyMarker — so a new transmit-only
 // Field is caught by the marker its author has already written, rather
 // than by remembering this list exists.
-var TransmitFields = []Field{FieldTxFrequency, FieldToneTx}
+var transmitFields = []Field{FieldTxFrequency, FieldToneTx}
+
+// IsTransmitField reports whether f describes the TRANSMITTER rather than
+// the receiver, and is the whole of this package's exported surface on
+// that question. A receive-only radio has no anatomy for such a field:
+// core/spec's own Capabilities.Validate refuses a bank that grades one
+// above Unsupported, and core/codeplug's validator words the resulting
+// issue as "this radio has no transmitter" rather than naming the field.
+// Both answers come from transmitFields, which the Field constants'
+// TRANSMIT-ONLY markers pin.
+func IsTransmitField(f Field) bool {
+	return slices.Contains(transmitFields, f)
+}

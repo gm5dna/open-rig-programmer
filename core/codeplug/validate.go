@@ -4,7 +4,6 @@ package codeplug
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/gm5dna/open-rig-programmer/core/spec"
@@ -510,13 +509,15 @@ func validateTierFields(slot string, bank spec.BankID, d ChannelData, caps spec.
 			return
 		}
 		msg := fmt.Sprintf("slot %q: this radio has no %s field, but this channel records one", slot, f)
-		// The set is spec.TransmitFields (closing fix wave, carried-forward
-		// minor), not a second hand-written literal: this used to restate
-		// spec.FieldTxFrequency/spec.FieldToneTx as its own two-item pair,
-		// which core/spec's own Capabilities.Validate bank loop already
-		// derives from each Field's TRANSMIT-ONLY doc comment. One
-		// declaration now backs both checks.
-		if caps.Transmit == spec.ReceiveOnly && slices.Contains(spec.TransmitFields, f) {
+		// The question is spec.IsTransmitField's to answer (closing fix
+		// wave, carried-forward minor), not a second hand-written
+		// literal's: this used to restate spec.FieldTxFrequency and
+		// spec.FieldToneTx as its own two-item pair, which core/spec's
+		// Capabilities.Validate bank loop already derives from each
+		// Field's TRANSMIT-ONLY doc comment. One declaration now backs
+		// both checks, and it stays inside core/spec — an exported slice
+		// would have let any caller mutate the policy for both.
+		if caps.Transmit == spec.ReceiveOnly && spec.IsTransmitField(f) {
 			msg = fmt.Sprintf("slot %q: this radio has no transmitter", slot)
 		}
 		issues = append(issues, Issue{
