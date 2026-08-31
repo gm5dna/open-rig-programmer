@@ -31,6 +31,13 @@
   for each release; the rest of the file describes the product as it
   stands.
 
+  SYNC 31/08/2026 (v1.2.2): the "What changed in this version" section
+  rewritten for the Tier 4b follow-ups sweep — the IC-R8600 unlisted-slot
+  write refusal, the IC-7100 absent transmit-frequency/offset read fix
+  and the IC-9700 wrong-radio unwrap. No row of the support table, no
+  model count and no evidence sentence changed with it: the sweep
+  registered no model and connected no radio.
+
   SYNC 26/08/2026: the packaged binaries HAVE now been launch-tested.
   Rehearsal debs built by release.yml were installed on clean Ubuntu
   24.04.4 desktop VMs on both architectures (arm64 23/08/2026, amd64
@@ -100,23 +107,38 @@ reading and for opt-in writes (see below).
 
 ## What changed in this version
 
-- **FT-710 read fix (field report, 30/08/2026).** v1.2.0 aborted a whole
-  read — `rigprog read`, the GUI's Read Radio and clone preparation — on
-  a radio whose PMS pair answered the `MR` read with kind byte `0`
-  (`ft710: MR answer for slot "P1L" carries kind '0', want one of
-  {'1','5'}`). The radio sets that byte itself, on a channel this
-  program had written months earlier and nobody had touched since; it is
-  not a statement about the slot, so the read no longer refuses it. PMS
-  slots now accept the same kind bytes the regular memories always did.
-  Recorded in `docs/hardware-notes.md` (§P7 kind drift). If you hit that
-  error on v1.2.0, this release is the fix.
-- **Five more Icom models registered** (the Icom additions tier):
-  IC-7851 and IC-7850, IC-7760, IC-7100, and the IC-R8600 receiver — the
-  first receive-only model, with its per-channel receiver settings
-  (tuning step, attenuator, preamp, antenna, IP+) carried in a new
-  codeplug schema (5). All five are document-derived and unverified on
-  hardware, exactly like the six Icom models of v1.2.0; the support
-  table below says what each can and cannot do.
+- **IC-R8600: a write can no longer overwrite a channel nothing read.**
+  The receiver's memory is discovered by a bounded walk, and that walk can
+  miss an occupied channel whenever a later group's channel 00 is empty.
+  Before this release, writing to such a slot went ahead and destroyed the
+  stored channel silently. The pre-write read now refuses instead, whenever
+  the receiver answers with a record for a slot this session never listed.
+  The refusal names which walk ran, because the remedy differs: after the
+  bounded walk the slot may simply lie outside its reach, so re-discovering
+  the receiver is worth trying; after a full read of all 10,000 addresses it
+  cannot, and the channel must have arrived after the session opened — at
+  the front panel, or from another controller.
+- **IC-7100: an absent transmit frequency is no longer read as 0 Hz.** A
+  memory record that carries no transmit frequency or no repeater offset
+  now reports those fields as unavailable, the way the other Icom drivers
+  do, instead of a known value of zero. Neither the grid nor the saved file
+  now shows a transmit frequency the radio never sent.
+- **IC-9700: a wrong sibling is reported as the wrong radio.** A record
+  whose length does not match this model — how a different Icom answering
+  the same CI-V address shows up — now identifies itself as a wrong-radio
+  refusal as well as a record-length one, matching what the other drivers
+  do with the same mistake.
+- **The IC-R8600's scan-skip refusal is now written down.** A channel the
+  operator has marked as skipped is refused rather than rewritten as
+  unskipped. That was already true; the README simply never said so.
+
+Everything else in this release is internal hardening and carries no change
+a user can see: citation pins that hold the four newest Icom drivers to the
+documents they were derived from, a byte-identity golden and pinned sparse
+load rules for codeplug schema 5, a CI-V drain test that no longer
+depends on scheduler timing, and corrections to comments and test prose. No model was
+registered, no radio was connected, and the support table below is
+unchanged.
 
 ## What it does
 
