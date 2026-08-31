@@ -113,7 +113,28 @@ func normalise(src string) normalised {
 
 // The citation grammar. Each shape is here because the token ITSELF names the
 // document that has to supply it, which is what makes a positive list over it
-// mean something. Two shapes are deliberately absent:
+// mean something.
+//
+// TWO EARLIER EXCLUSIONS WERE TOO WIDE, and fix round 1 narrowed them:
+//
+//   - A page used to need the "PDF" prefix. Nine sites cite one bare —
+//     core/driver/ic7851/read.go:22 ("p.263 (folio 18-14)"),
+//     core/driver/ic7760/read.go:22 ("p.20 (folio 19)") — and that is the
+//     EXACT contamination shape this pin exists for: the IC-7610 leak was
+//     PDF p.11/p.12/p.14, so a paraphrase writing "p.11" walked past the
+//     blacklist AND this list. Only the "p."/"pp." abbreviation is admitted
+//     bare; the spelled-out "page 20" still needs its "PDF", because a bare
+//     "page N" is ordinary prose rather than a citation.
+//   - A section used to need the word "matrix". That rationale — "doc.go §6c"
+//     is an internal cross-reference, not a citation — is sound only for the
+//     FILE-QUALIFIED form. caps.go cites the matrix by bare section
+//     throughout, and a section number attached to a MANUAL-EVIDENCED grading
+//     IS the provenance for that capability row. The exclusion is now
+//     "<file>.go §N" alone, and a bare "§N" canonicalises to the same
+//     "matrix §N" token as the qualified form, so the two collapse rather
+//     than double-count.
+//
+// One exclusion stands:
 //
 //   - A bare "Erratum 5". In these packages that number belongs to the tier
 //     additions spec, not to the model's matrix ("per additions-spec Erratum
@@ -121,16 +142,17 @@ func normalise(src string) normalised {
 //     every model — it is not a provenance question for one radio. Only the
 //     qualified "matrix erratum N" form is a claim about a radio's matrix, so
 //     only that form is extracted.
-//   - A bare "§N". "doc.go §6c" is an internal cross-reference to this
-//     package's own prose, not a citation, so the section shape requires the
-//     word "matrix" in front of it.
+// sectionNumber matches a matrix section: "1", "1b", "3.15.1", "3.12a".
+const sectionNumber = `\d+[a-z]?(?:\.\d+[a-z]?)*`
+
 var citationShapes = []struct {
 	re    *regexp.Regexp
 	canon func([]string) string
 }{
 	{
-		// "PDF p.263", "PDF page 20", "PDF pages 250-265", "PDF pp. 228-229".
-		re: regexp.MustCompile(`PDF (?:pp?\.|pages? ) ?(\d+)(?:-(\d+))?`),
+		// "PDF p.263", "PDF page 20", "PDF pages 250-265", "PDF pp. 228-229",
+		// and the bare "p.20" / "pp. 361-375" the packages also write.
+		re: regexp.MustCompile(`(?:PDF (?:pp?\.|pages? )|\bpp?\.) ?(\d+)(?:-(\d+))?`),
 		canon: func(m []string) string {
 			if m[2] == "" {
 				return "PDF p." + m[1]
@@ -147,10 +169,28 @@ var citationShapes = []struct {
 		// "matrix §3.15.1", "MATRIX §3.15", "Matrix section 1", "matrix
 		// section 1b". An "IC-7300 matrix §..." qualifier is kept in the
 		// token: it is the prose's own attribution and the list must show it.
-		re: regexp.MustCompile(`(?:(IC-[0-9A-Za-z]+) )?(?i:matrix) (?:§ ?|section )(\d+[a-z]?(?:\.\d+)*)`),
+		re: regexp.MustCompile(`(?:(IC-[0-9A-Za-z]+) )?(?i:matrix) (?:§ ?|section )(` + sectionNumber + `)`),
 		canon: func(m []string) string {
 			if m[1] != "" {
 				return m[1] + " matrix §" + m[2]
+			}
+			return "matrix §" + m[2]
+		},
+	},
+	{
+		// A BARE section mark, "§3.4" — the dominant form in caps.go, and the
+		// one the first round missed. It canonicalises to the same token as
+		// the qualified shape above, so the two collapse.
+		//
+		// A "matrix §" hit is left to that shape, so an "IC-nnnn matrix §..."
+		// qualifier the prose wrote is not silently dropped here; and a
+		// FILE-QUALIFIED "doc.go §6c" is dropped, because it points at this
+		// package's own prose rather than at any document.
+		re: regexp.MustCompile(`([A-Za-z0-9_./-]+ )?§ ?(` + sectionNumber + `)`),
+		canon: func(m []string) string {
+			lead := strings.TrimSpace(m[1])
+			if strings.HasSuffix(lead, ".go") || strings.EqualFold(lead, "matrix") {
+				return ""
 			}
 			return "matrix §" + m[2]
 		},
@@ -189,7 +229,7 @@ func extractTokens(text string) map[string]bool {
 	for _, shape := range citationShapes {
 		for _, m := range shape.re.FindAllStringSubmatch(text, -1) {
 			token := shape.canon(m)
-			if documentName.MatchString(token) {
+			if token == "" || documentName.MatchString(token) {
 				continue
 			}
 			found[token] = true
@@ -237,7 +277,7 @@ func ScanCitations(t testing.TB, dirs []string, exclude []string) []Citation {
 						}
 					}
 					token := shape.canon(m)
-					if documentName.MatchString(token) {
+					if token == "" || documentName.MatchString(token) {
 						continue
 					}
 					if _, dup := seen[token]; dup {
@@ -273,10 +313,27 @@ type CitationPin struct {
 	Exclude []string
 	// ListPath is the checked-in allowed-citation list.
 	ListPath string
-	// Authority names the model's matrix trio. These live under
-	// docs/superpowers/, which is gitignored: present in a working checkout,
-	// absent on CI and in a fresh clone (the v1.2.1 CI run, 30/08/2026).
-	Authority []string
+	// Matrix names the model's capability-matrix trio. It is the ONLY
+	// authority for page, folio, section and erratum citations.
+	//
+	// Plans names the model's implementation plan, and it may answer
+	// REGISTER-ID citations ALONE. That split is the orchestrator's ruling and
+	// it has to be structural, not a comment: the plans carry page and folio
+	// citations of their own (docs/superpowers/plans/2026-08-28-icom-ic7100.md
+	// cites PDF p.174 and PDF p.317; …-icr8600.md:85 cites folios 3/9/18), so
+	// a single concatenated authority would let a plan answer a page claim
+	// about the radio. A register ID is a different kind of thing: it is a
+	// name this project mints for an open question, and the plan is where
+	// several were minted — core/civ/icr8600/doc.go:77 says so outright
+	// ("called icr8600-digital-tail-template by the implementation plan").
+	// An id in neither document is an invented one, which is finding F3's
+	// whole point.
+	//
+	// Both live under docs/superpowers/, which is gitignored: present in a
+	// working checkout, absent on CI and in a fresh clone (the v1.2.1 CI run,
+	// 30/08/2026).
+	Matrix []string
+	Plans  []string
 }
 
 // IcomCitationPin builds the standard pin for an Icom model whose driver is
@@ -289,18 +346,6 @@ func IcomCitationPin(model string) CitationPin {
 	matrices := filepath.Join(root, "docs", "superpowers", "icom-matrices")
 	// The plan is dated in its filename, so it is matched rather than spelled.
 	plans, _ := filepath.Glob(filepath.Join(root, "docs", "superpowers", "plans", "*-icom-"+model+".md"))
-	authority := []string{
-		filepath.Join(matrices, model+"-capability-matrix.md"),
-		filepath.Join(matrices, model+"-capability-matrix-report.md"),
-		filepath.Join(matrices, model+"-capability-matrix-review.md"),
-	}
-	// The implementation plan is authority for the ASSUMPTION-REGISTER NAMES
-	// only, and it earns that place: the matrix grades a D8 field in §1b.2
-	// without always minting an id for it, and core/civ/icr8600/doc.go:77
-	// already attributes one id to the plan in so many words ("called
-	// icr8600-digital-tail-template by the implementation plan"). An id in
-	// neither document is an invented one, which is finding F3's whole point.
-	authority = append(authority, plans...)
 	return CitationPin{
 		Model: model,
 		Dirs:  []string{".", filepath.Join("..", "..", "civ", model)},
@@ -308,9 +353,14 @@ func IcomCitationPin(model string) CitationPin {
 		// foreign literals it forbids necessarily appear in it, and a scan
 		// that read them would demand the list allow exactly what that file
 		// exists to reject.
-		Exclude:   []string{"provenance_test.go"},
-		ListPath:  filepath.Join("testdata", "citations.txt"),
-		Authority: authority,
+		Exclude:  []string{"provenance_test.go"},
+		ListPath: filepath.Join("testdata", "citations.txt"),
+		Matrix: []string{
+			filepath.Join(matrices, model+"-capability-matrix.md"),
+			filepath.Join(matrices, model+"-capability-matrix-report.md"),
+			filepath.Join(matrices, model+"-capability-matrix-review.md"),
+		},
+		Plans: plans,
 	}
 }
 
@@ -342,39 +392,58 @@ func (p CitationPin) Assert(t testing.TB) {
 		}
 	}
 
-	authority, err := readAuthority(p.Authority)
+	matrix, err := readAuthority(p.Matrix)
 	if err != nil {
-		t.Fatalf("read authority: %v", err)
+		t.Fatalf("read matrix authority: %v", err)
 	}
-	if !authority.present {
+	plans, err := readAuthority(p.Plans)
+	if err != nil {
+		t.Fatalf("read plan authority: %v", err)
+	}
+	// Presence is ALL-OR-NOTHING across both. A checkout holding some of the
+	// documents but not others would run supply checks against a partial
+	// authority and fail honest citations, which is a worse failure than not
+	// checking: the checked-in list is enforced above either way.
+	if !matrix.present || !plans.present {
 		t.Logf("matrix authority absent (docs/superpowers is gitignored; not in this checkout) — "+
 			"authority supply checks skipped, the %s list is still enforced", p.ListPath)
 		return
 	}
-	supplied := extractTokens(authority.norm)
+	// TWO TOKEN SETS, and which one a token is asked of is the ruling.
+	matrixTokens := extractTokens(matrix.norm)
+	registerTokens := extractTokens(matrix.norm + "\n" + plans.norm)
 	for token := range allowed {
-		if isForeign(token, p.Model) || authoritySupplies(authority, supplied, token) {
+		if isForeign(token, p.Model) || authoritySupplies(matrix, matrixTokens, registerTokens, token) {
 			continue
 		}
-		t.Errorf("%s allows %q, but the %s authority does not supply it", p.ListPath, token, p.Model)
+		t.Errorf("%s allows %q, but the %s authority does not supply it (a page, folio, section or "+
+			"erratum must come from the capability matrix; only a register id may come from the "+
+			"implementation plan)", p.ListPath, token, p.Model)
 	}
 }
 
-// authoritySupplies answers one token against the authority. Most tokens are
-// settled by running the same extractor over the authority and comparing, but
-// three shapes are written differently there and get their own reading.
-func authoritySupplies(a authorityText, supplied map[string]bool, token string) bool {
+// authoritySupplies answers one token. Most are settled by running the same
+// extractor over the authority and comparing; three shapes are written
+// differently there and get their own reading.
+//
+// matrixTokens is the capability-matrix trio ALONE. registerTokens is that
+// trio plus the implementation plan, and ONLY a register id is asked of it —
+// see CitationPin.Matrix for why the split has to be here rather than in a
+// comment.
+func authoritySupplies(matrix authorityText, matrixTokens, registerTokens map[string]bool, token string) bool {
 	switch {
+	case registerEntry.MatchString(token):
+		return registerTokens[token]
 	case strings.HasPrefix(token, "folio "):
-		return suppliedByFolio(a.norm, token)
+		return suppliedByFolio(matrix.norm, token)
 	case strings.HasPrefix(token, "PDF pp."):
-		return supplied[token] || suppliedByPageBounds(supplied, token)
+		return matrixTokens[token] || suppliedByPageBounds(matrixTokens, token)
 	case strings.HasPrefix(token, "matrix §"):
-		return suppliedBySection(a.raw, token)
+		return suppliedBySection(matrix.raw, token)
 	case strings.HasPrefix(token, "matrix erratum "):
-		return suppliedByErratum(a.raw, token)
+		return suppliedByErratum(matrix.raw, token)
 	}
-	return supplied[token]
+	return matrixTokens[token]
 }
 
 var folioNumber = regexp.MustCompile(`^\d+(?:-\d+)?$`)
@@ -425,16 +494,28 @@ func isForeign(token, model string) bool {
 	return false
 }
 
-// suppliedBySection answers a "matrix §S" token against the authority's
-// headings, which number themselves "## §3" and "### 3.15.1" rather than
-// repeating the word "matrix".
+// suppliedBySection answers a "matrix §S" token two ways, because a matrix
+// names its own sections two ways.
+//
+// The usual one is a HEADING, numbered "## §3" or "### 3.15.1" rather than
+// repeating the word "matrix". The other is the matrix's own CROSS-REFERENCE
+// in body text, and it is not redundant: core/driver/ic7851/doc.go:64 cites
+// §3.12a, and the IC-7851 matrix heads only "### 3.12 Probe identity" while
+// naming §3.12a six times in its prose (lines 636, 1632, 1683, 1760, 1775,
+// 1792) for a lettered sub-part that never got a heading of its own. A
+// document that labels a section repeatedly has supplied that label.
+//
+// Both guards are tight in the direction that matters: §3.15 is not answered
+// by a §3.15.1 heading, and §3.12 is not answered by the string §3.12a.
 func suppliedBySection(authority, token string) bool {
 	s, ok := strings.CutPrefix(token, "matrix §")
 	if !ok {
 		return false
 	}
-	re := regexp.MustCompile(`(?m)^#{1,6} +§?` + regexp.QuoteMeta(s) + `(?:[^0-9.]|$)`)
-	return re.MatchString(authority)
+	quoted := regexp.QuoteMeta(s)
+	heading := regexp.MustCompile(`(?m)^#{1,6} +§?` + quoted + `(?:[^0-9.]|$)`)
+	crossRef := regexp.MustCompile(`§ ?` + quoted + `(?:[^0-9.a-z]|$)`)
+	return heading.MatchString(authority) || crossRef.MatchString(authority)
 }
 
 // suppliedByErratum answers a "matrix erratum N" token: the matrix prints its
@@ -483,21 +564,21 @@ type authorityText struct {
 // normal gitignored case and is reported as absent, any other error is fatal.
 func readAuthority(paths []string) (authorityText, error) {
 	var joined strings.Builder
-	out := authorityText{}
+	out := authorityText{present: true}
 	for _, path := range paths {
 		b, err := os.ReadFile(path)
 		if os.IsNotExist(err) {
+			out.present = false
 			continue
 		}
 		if err != nil {
 			return authorityText{}, err
 		}
-		out.present = true
 		joined.Write(b)
 		joined.WriteByte('\n')
 	}
 	if !out.present {
-		return out, nil
+		return authorityText{}, nil
 	}
 	// The authorities are Markdown and emphasise their own key values, so the
 	// IC-7760 matrix's source table reads "printed folios **1–26**". The
