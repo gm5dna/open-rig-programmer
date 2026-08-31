@@ -45,7 +45,7 @@ const (
 	// stored on the channel itself, distinct from a repeater shift
 	// applied to the receive frequency.
 	//
-	// TRANSMIT-ONLY: see transmitFields.
+	// TRANSMIT-ONLY: see TransmitFields.
 	FieldTxFrequency Field = "tx_frequency"
 	// FieldDuplex is the Icom-family repeater duplex selector, whose
 	// vocabulary a radio supplies as Capabilities.DuplexOptions (e.g.
@@ -62,7 +62,7 @@ const (
 	FieldToneMode Field = "tone_mode"
 	// FieldToneTx is the transmitted CTCSS tone.
 	//
-	// TRANSMIT-ONLY: see transmitFields.
+	// TRANSMIT-ONLY: see TransmitFields.
 	FieldToneTx Field = "tone_tx"
 	// FieldToneRx is the CTCSS tone required to open squelch on receive.
 	// A radio that cannot hold the two independently reports only one of
@@ -117,7 +117,7 @@ const (
 // from the comments it reads.
 const transmitOnlyMarker = "TRANSMIT-ONLY:"
 
-// transmitFields is every Field that describes the transmitter. A radio
+// TransmitFields is every Field that describes the transmitter. A radio
 // with no transmitter has no anatomy for them, so
 // Capabilities.Validate refuses a spec.ReceiveOnly model whose bank
 // grades any of them above Unsupported.
@@ -127,9 +127,17 @@ const transmitOnlyMarker = "TRANSMIT-ONLY:"
 // as a two-item literal, so a transmit-only Field added later would have
 // been graded freely on a receiver with Validate saying nothing.
 //
-// TestTransmitFields_MatchTheDeclaredMarker parses this file and fails
-// unless this slice holds exactly the constants whose doc comment
-// carries transmitOnlyMarker — so a new transmit-only Field is caught by
-// the marker its author has already written, rather than by remembering
-// this list exists.
-var transmitFields = []Field{FieldTxFrequency, FieldToneTx}
+// EXPORTED (Wave 4b closing fix wave, carried-forward minor) so
+// core/codeplug's own receive-only message wording — which needs the
+// same "is this Field transmit-only?" question and previously answered
+// it with a second, hand-written two-item literal at
+// validate.go:503 — can ask this declaration instead of restating it.
+// core/codeplug already imports core/spec and core/spec imports nothing
+// from core/codeplug, so there is no cycle to avoid.
+//
+// TestTransmitFields_MatchTheDeclaredMarker parses this package's
+// non-test files and fails unless this slice holds exactly the constants
+// whose doc comment carries transmitOnlyMarker — so a new transmit-only
+// Field is caught by the marker its author has already written, rather
+// than by remembering this list exists.
+var TransmitFields = []Field{FieldTxFrequency, FieldToneTx}

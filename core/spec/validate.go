@@ -306,11 +306,11 @@ func (c Capabilities) Validate() error {
 		// leaves them at their zero values and so contributes nothing here.
 		problems = append(problems, b.sparseProblems()...)
 		if c.Transmit == ReceiveOnly {
-			// The set is DERIVED (see transmitFields), not restated:
+			// The set is DERIVED (see TransmitFields), not restated:
 			// a two-item literal here would have let a transmit-only
 			// Field added later go ungraded on a receiver. Pinned by
 			// TestTransmitFields_MatchTheDeclaredMarker.
-			for _, field := range transmitFields {
+			for _, field := range TransmitFields {
 				if b.Fields[field] != (FieldSupport{}) {
 					problems = append(problems, fmt.Sprintf("bank %s field %s must have zero FieldSupport on a ReceiveOnly radio", b.ID, field))
 				}
