@@ -151,14 +151,25 @@
 // papered over, and NOT a hole in the refusal.
 //
 // THE IC-9700 MINTS NO driver.WrongRadioError AT ALL, for any pair, BY
-// DESIGN — not merely because this pair pre-empts it.
-// core/driver/ic9700/ic9700.go's probeFingerprint wraps every error from
-// MemoryAnswerRecord generically, its doc.go says so in as many words
-// ("No driver.WrongRadioError is ever minted here"), and that package's
-// TestUnexpectedLengthIsRefusedWithoutAttribution pins it: naming a model
-// from {111} would be the cross-model claim no per-model worktree may
-// make, which is the reason this file exists. Nothing here changes that,
-// and this file mints nothing of its own.
+// DESIGN — not merely because this pair pre-empts it. Its doc.go says so in
+// as many words ("No driver.WrongRadioError is ever minted here"), and that
+// package's TestUnexpectedLengthIsRefusedWithoutAttribution pins it: naming
+// a model from {111} would be the cross-model claim no per-model worktree
+// may make, which is the reason this file exists. This file mints nothing
+// of its own either.
+//
+// IT DOES NOW MATCH driver.ErrWrongRadio, WHICH IS NOT THE SAME THING, and
+// the earlier wording here — that its probe "wraps every error from
+// MemoryAnswerRecord generically" — stopped being true when it did.
+// core/driver/ic9700/ic9700.go:464 wraps a record-length refusal in a
+// *RecordLengthMismatchError whose multi-error Unwrap returns
+// driver.ErrWrongRadio ALONGSIDE the original *civ.RecordLengthError, so
+// errors.Is(err, driver.ErrWrongRadio) succeeds against it and
+// errors.As(err, &civLengthErr) still does too. The refusal stays
+// ANONYMOUS: no model name, no driver.WrongRadioError value, no table of
+// other models' record lengths — the driver has none to consult. What
+// changed is only that a caller can ask "is this a wrong-radio refusal?"
+// and be told yes; the rule above is untouched.
 //
 // THE IC-7100 MINTS NONE EITHER, BY THE SAME REASONING AND IN ITS OWN
 // WORDS. core/driver/ic7100/doc.go's Wave-4 hand-off section records that

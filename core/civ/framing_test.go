@@ -716,7 +716,7 @@ func TestFraming_ContinuousFloodDoesNotWedgeTheEngine(t *testing.T) {
 
 	t.Run("transceive broadcasts never reach the engine", func(t *testing.T) {
 		// Addressed to 0x00, the broadcast address, from this radio —
-		// factory-ON on at least four models in this tier.
+		// factory-ON on SOME of the Icom models this programme registers.
 		port := newContinuousCIVPort(rawFrame(0x00, p.RadioAddress(), 0x00, 0x00, 0x01, 0x02, 0x03))
 		t.Cleanup(func() { _ = port.Close() })
 		e, f := newCIVEngine(t, p, port)

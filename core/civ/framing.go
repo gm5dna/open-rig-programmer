@@ -29,8 +29,8 @@ import (
 // Engine.Init's INITIAL ErrDrainCapExceeded is NONFATAL for a CI-V driver
 // — it is diagnosed and the session opens. Spec D2 is explicit that CI-V's
 // "drain to quiet" is a bounded idle-gap wait that "cannot fail the open",
-// and transceive is factory-ON on at least four models in this tier with
-// no off-switch shipped, so a line that never goes quiet is a NORMAL
+// and transceive is factory-ON on SOME of the Icom models this programme
+// registers with no off-switch shipped, so a line that never goes quiet is a NORMAL
 // operating state at open rather than a fault. Every LATER quarantine
 // drain failure stays fail-closed exactly as the engine has it: Do's entry
 // quarantine still refuses to transmit into a stream that might deliver an
