@@ -143,9 +143,13 @@ func TestSaveLoad_CanonicalV4ByteIdentical(t *testing.T) {
 // byte-identity pin the schema-3 and schema-4 goldens already have.
 // Until it existed, schema 5 was the ONE version this package could both
 // read and write with nothing checking that the two agreed byte for
-// byte: a reordered ChannelData field, a state key that gained
-// omitempty, or a saveValue branch quietly rerouted would all have
-// passed unnoticed.
+// byte: a reordered ChannelData field or a saveValue branch quietly
+// rerouted would both now fail here. It does NOT cover a state key
+// gaining omitempty: every field in the fixture is Known or Unavailable,
+// so no field ever renders as the empty Absent state
+// (`{"state": ""}`), and omitempty changes no byte when the value is
+// never empty. The on-disk rendering of Absent is not pinned by any
+// test in this package.
 func TestSaveLoad_CanonicalV5ByteIdentical(t *testing.T) {
 	for _, name := range canonicalV5Goldens {
 		t.Run(name, func(t *testing.T) {
