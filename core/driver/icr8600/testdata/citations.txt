@@ -1,11 +1,14 @@
 # IC-R8600 — the ALLOWED CITATIONS of core/driver/icr8600 and core/civ/icr8600.
 #
-# This list is the POSITIVE half of the provenance pins. The blacklist beside
-# it (core/driver/icr8600/provenance_test.go) names literals a rejected branch
-# actually copied from another radio; a paraphrase walks past it. This list
-# asks the other question, and it is the one the tier review asked for: of
-# every document citation these two packages make, can this model's OWN
-# authority supply it? A citation not written here fails the test, and the
+# This list is the POSITIVE half of the provenance pins. The tier's only
+# blacklist is core/driver/ic7760/provenance_test.go — it names literals a
+# rejected IC-7760 branch actually copied from the IC-7610. THIS package has
+# no blacklist of its own, and would not be much helped by one: a paraphrase
+# walks past a named literal.
+#
+# This list asks the other question, and it is the one the tier review asked
+# for: of every document citation these two packages make, can this model's
+# OWN authority supply it? A citation not written here fails the test, and the
 # answer is to check the authority — never to widen the list to fit the prose.
 #
 # The authority. core/driver/icr8600/doc.go states this package's scope but
@@ -20,10 +23,17 @@
 # The reading is that matrix, its report and its review, together with
 # docs/superpowers/plans/2026-08-28-icom-icr8600.md.
 #
+# THE SPLIT. A page, folio, section or erratum must come from the capability
+# matrix trio. ONLY a register id may come from the implementation plan, which
+# is where several were minted; the plans carry page and folio citations of
+# their own, so this is enforced in code, not by convention. See
+# CitationPin.Matrix in citations.go.
+#
 # FORMAT. One canonical citation token per line; "#" starts a comment, and a
 # token may carry a trailing note. The tokens are produced by
-# core/driver/internal/drivertest.ScanCitations, whose grammar and the two
-# shapes it deliberately omits are documented in citations.go.
+# core/driver/internal/drivertest.ScanCitations, whose grammar — including the
+# bare "p.NNN" and bare "§N.N" forms, and the one shape it still omits — is
+# documented in citations.go.
 #
 # WHERE THE AUTHORITY IS ABSENT. docs/superpowers/ is gitignored, so a fresh
 # clone and CI do not have it (the v1.2.1 CI run, 30/08/2026). This list is

@@ -73,10 +73,10 @@ func TestCitationPinEnforcesTheListWhenTheAuthorityIsAbsent(t *testing.T) {
 		t.Fatal(err)
 	}
 	pin := CitationPin{
-		Model:     "ic7760",
-		Dirs:      []string{dir},
-		ListPath:  list,
-		Authority: []string{filepath.Join(dir, "no-such-matrix.md")},
+		Model:    "ic7760",
+		Dirs:     []string{dir},
+		ListPath: list,
+		Matrix:   []string{filepath.Join(dir, "no-such-matrix.md")},
 	}
 	spy := &recordingTB{TB: t}
 	pin.Assert(spy)
@@ -88,6 +88,77 @@ func TestCitationPinEnforcesTheListWhenTheAuthorityIsAbsent(t *testing.T) {
 	}
 	if !strings.Contains(spy.errs[1], `allows "PDF p.9"`) {
 		t.Errorf("second failure does not name the uncited list entry: %q", spy.errs[1])
+	}
+}
+
+// TestCitationPinRefusesAPageTheMatrixDoesNotSupply is the permanent red proof
+// for the THIRD arm — "allows X, but the authority does not supply it". The
+// first round proved this arm with a one-off injection into a real list, which
+// is evidence that does not survive the commit.
+func TestCitationPinRefusesAPageTheMatrixDoesNotSupply(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "x.go", "package x\n\n// see PDF p.7\n")
+	write(t, dir, "matrix.md", "# a matrix\n\nThe record is at PDF p.9.\n")
+	list := filepath.Join(dir, "citations.txt")
+	write(t, dir, "citations.txt", "# a list\nPDF p.7\n")
+
+	spy := &recordingTB{TB: t}
+	CitationPin{
+		Model:    "ic7760",
+		Dirs:     []string{dir},
+		ListPath: list,
+		Matrix:   []string{filepath.Join(dir, "matrix.md")},
+	}.Assert(spy)
+
+	if len(spy.errs) != 1 {
+		t.Fatalf("got %d failures, want 1 (the listed page the matrix never prints): %v", len(spy.errs), spy.errs)
+	}
+	if !strings.Contains(spy.errs[0], `allows "PDF p.7"`) || !strings.Contains(spy.errs[0], "does not supply it") {
+		t.Errorf("failure does not name the unsupplied page: %q", spy.errs[0])
+	}
+}
+
+// TestThePlanMaySupplyARegisterIDButNeverAPage pins the orchestrator's ruling
+// STRUCTURALLY. The implementation plans carry page and folio citations of
+// their own, so an authority that concatenated plan and matrix would let a
+// plan answer a page claim about the radio; the first round did exactly that
+// and was right only by luck, because no package happened to cite such a page.
+//
+// The fixture is that luck removed: the plan alone prints "PDF p.7" and the
+// register id, and the matrix prints neither. The page must be REFUSED and the
+// id ADMITTED.
+func TestThePlanMaySupplyARegisterIDButNeverAPage(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "x.go", "package x\n\n// PDF p.7, register entry ic7760-plan-only-entry.\n")
+	write(t, dir, "matrix.md", "# a matrix that prints neither\n\nNothing to see.\n")
+	write(t, dir, "plan.md", "# a plan\n\nRead PDF p.7. Register entry `ic7760-plan-only-entry`.\n")
+	list := filepath.Join(dir, "citations.txt")
+	write(t, dir, "citations.txt", "# a list\nPDF p.7\nic7760-plan-only-entry\n")
+
+	spy := &recordingTB{TB: t}
+	CitationPin{
+		Model:    "ic7760",
+		Dirs:     []string{dir},
+		ListPath: list,
+		Matrix:   []string{filepath.Join(dir, "matrix.md")},
+		Plans:    []string{filepath.Join(dir, "plan.md")},
+	}.Assert(spy)
+
+	if len(spy.errs) != 1 {
+		t.Fatalf("got %d failures, want exactly 1 — the page refused, the register id admitted: %v", len(spy.errs), spy.errs)
+	}
+	if !strings.Contains(spy.errs[0], `allows "PDF p.7"`) {
+		t.Errorf("the plan answered a PAGE citation, which is the ruling this test exists to hold: %q", spy.errs[0])
+	}
+	if strings.Contains(spy.errs[0], "ic7760-plan-only-entry") {
+		t.Errorf("the plan was refused a REGISTER ID, which it is allowed to supply: %q", spy.errs[0])
+	}
+}
+
+func write(t *testing.T, dir, name, content string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+		t.Fatal(err)
 	}
 }
 
