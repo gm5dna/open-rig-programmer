@@ -31,7 +31,10 @@ const (
 	// geometry this bound is small against, never a recommended probe
 	// depth, so eight is this package's own engineering choice rather
 	// than a document-derived value.
-	// TestOpenEmptyRadioIsExplicitlyUnfingerprinted pins it staying eight.
+	// TestProbeSlotsIsEight pins the literal staying eight;
+	// TestOpenEmptyRadioIsExplicitlyUnfingerprinted pins only that the probe
+	// reads exactly probeSlots slots before giving up, which holds for any
+	// value of the constant.
 	probeSlots = 8
 )
 
