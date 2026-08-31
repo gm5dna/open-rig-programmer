@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/clone"
+	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
 )
 
 func TestReadAllWalksExactlyDenseBanksAThroughE(t *testing.T) {
@@ -60,4 +62,18 @@ func TestReadChannelRefusesSpecialsBeforeTraffic(t *testing.T) {
 	if got := len(p.frames()); got != before {
 		t.Errorf("invalid reads sent %d frames", got-before)
 	}
+}
+
+// TestReadChannel_FreshReadSurvivesSaveLoad pins the D8 fresh-read rule on
+// this driver (drivertest.AssertFreshReadSaveLoad): a freshly read
+// occupied channel reports the seven receiver fields Unavailable, and
+// survives a save/load round trip byte-for-byte.
+func TestReadChannel_FreshReadSurvivesSaveLoad(t *testing.T) {
+	p := newRespondingPort(t, withRecord(1, 1, occupiedRecord(t)))
+	s := openTestSession(t, p)
+	ch, err := s.ReadChannel(context.Background(), "A-001")
+	if err != nil {
+		t.Fatalf("ReadChannel: %v", err)
+	}
+	drivertest.AssertFreshReadSaveLoad(t, ch, codeplug.Load)
 }
