@@ -6,6 +6,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/gm5dna/open-rig-programmer/core/civ"
 	"github.com/gm5dna/open-rig-programmer/core/clone"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
@@ -76,4 +77,57 @@ func TestReadChannel_FreshReadSurvivesSaveLoad(t *testing.T) {
 		t.Fatalf("ReadChannel: %v", err)
 	}
 	drivertest.AssertFreshReadSaveLoad(t, ch, codeplug.Load)
+}
+
+// fullMemoryRecord is every field channelData reads, all present, so a
+// table test can knock one out at a time and see only that field move.
+func fullMemoryRecord() civ.MemoryRecord {
+	return civ.MemoryRecord{
+		Address:      civ.ChannelAddress{Group: 1, Channel: 1},
+		RXFreqHz:     civ.Available(uint64(145_500_000)),
+		TXFreqHz:     civ.Available(uint64(145_500_000)),
+		OffsetHz:     civ.Available(uint64(600_000)),
+		ToneTXDeciHz: civ.Available(uint64(885)),
+		ToneRXDeciHz: civ.Available(uint64(885)),
+		DTCSCode:     civ.Available(uint64(23)),
+		Duplex:       civ.Available("OFF"),
+		Mode:         civ.Available("FM"),
+		Filter:       civ.Available("FIL1"),
+		DataMode:     civ.Available("OFF"),
+		ToneMode:     civ.Available("OFF"),
+		DTCSPolarity: civ.Available("NN"),
+		Name:         civ.Available("HOME BASE"),
+		Select:       civ.Available("OFF"),
+	}
+}
+
+// TestChannelData_AbsentTxFreqAndOffsetAreUnavailable pins the correct
+// non-Known FreqField state for TxFreqHz/OffsetHz when civ.Optional
+// reports the record does not carry them.
+//
+// numberOf discards Optional's presence flag, so an absent TXFreqHz or
+// OffsetHz used to read as Known 0 — indistinguishable from a genuine
+// zero-Hz value. FreqHz (RXFreqHz) is left as the bare numberOf
+// conversion: it is a plain uint64 by a known upstream defect that a
+// separate design task owns, not this one.
+func TestChannelData_AbsentTxFreqAndOffsetAreUnavailable(t *testing.T) {
+	p := newRespondingPort(t)
+	s := openTestSession(t, p)
+	for _, tc := range []struct {
+		name  string
+		clear func(*civ.MemoryRecord)
+		get   func(codeplug.ChannelData) codeplug.FreqField
+	}{
+		{"TxFreqHz", func(r *civ.MemoryRecord) { r.TXFreqHz = civ.Optional[uint64]{} }, func(d codeplug.ChannelData) codeplug.FreqField { return d.TxFreqHz }},
+		{"OffsetHz", func(r *civ.MemoryRecord) { r.OffsetHz = civ.Optional[uint64]{} }, func(d codeplug.ChannelData) codeplug.FreqField { return d.OffsetHz }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := fullMemoryRecord()
+			tc.clear(&rec)
+			got := tc.get(s.channelData(rec))
+			if got != (codeplug.FreqField{State: codeplug.Unavailable}) {
+				t.Errorf("%s = %+v, want Unavailable — the record does not carry it", tc.name, got)
+			}
+		})
+	}
 }
