@@ -134,7 +134,8 @@ func TestCallBankIsDenseWithFourSlots(t *testing.T) {
 		// Sparse false and every sparse descriptor zero, or
 		// spec.Validate refuses the bank outright.
 		if b.Sparse || b.Groups != 0 || b.GroupBase != 0 || b.PerGroup != 0 || b.ChannelBase != 0 || b.Budget != 0 || b.BudgetUnstated {
-			t.Errorf("%s profile: CALL bank carries a sparse descriptor (%v/%d/%d/%d) — it is dense", name, b.Sparse, b.Groups, b.PerGroup, b.Budget)
+			t.Errorf("%s profile: CALL bank carries a sparse descriptor (Sparse:%v Groups:%d GroupBase:%d PerGroup:%d ChannelBase:%d Budget:%d BudgetUnstated:%v) — it is dense",
+				name, b.Sparse, b.Groups, b.GroupBase, b.PerGroup, b.ChannelBase, b.Budget, b.BudgetUnstated)
 		}
 	}
 }

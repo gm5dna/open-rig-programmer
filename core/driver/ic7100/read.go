@@ -106,9 +106,9 @@ func (s *Session) channelData(rec civ.MemoryRecord) codeplug.ChannelData {
 		CTCSSTone:  codeplug.ToneField{State: codeplug.Unavailable},
 		TagDisplay: codeplug.BoolField{State: codeplug.Unavailable},
 		ScanSkip:   codeplug.BoolField{State: codeplug.Unavailable},
-		TxFreqHz:   codeplug.FreqField{State: codeplug.Known, Value: numberOf(rec.TXFreqHz)},
+		TxFreqHz:   freqFieldOf(rec.TXFreqHz),
 		Duplex:     vocabField(rec.Duplex, duplexValues(s.caps)),
-		OffsetHz:   codeplug.FreqField{State: codeplug.Known, Value: numberOf(rec.OffsetHz)},
+		OffsetHz:   freqFieldOf(rec.OffsetHz),
 		ToneMode:   vocabField(rec.ToneMode, toneModeValues(s.caps)),
 		ToneTx:     s.toneField(rec.ToneTXDeciHz), ToneRx: s.toneField(rec.ToneRXDeciHz),
 		DTCSCode:            s.dtcsField(rec.DTCSCode),
@@ -178,4 +178,20 @@ func toneModeValues(c spec.Capabilities) []string {
 	return out
 }
 func numberOf(v civ.Optional[uint64]) uint64 { value, _ := v.Get(); return value }
+
+// freqFieldOf reports the correct non-Known FreqField state for an
+// absent civ.Optional: Unavailable, matching how the other Icom drivers
+// build a FreqField for "the record does not carry it" (e.g. TxFreqHz in
+// core/driver/ic7760/read.go when the field is absent). numberOf alone
+// discards the presence flag, which is the right choice only for FreqHz
+// (:105) — a bare uint64 by a known upstream defect a separate design
+// task owns — and the wrong one for TxFreqHz/OffsetHz, which do carry a
+// FieldState.
+func freqFieldOf(v civ.Optional[uint64]) codeplug.FreqField {
+	value, ok := v.Get()
+	if !ok {
+		return codeplug.FreqField{State: codeplug.Unavailable}
+	}
+	return codeplug.FreqField{State: codeplug.Known, Value: value}
+}
 func stringOf(v civ.Optional[string]) string { value, _ := v.Get(); return value }
