@@ -4,6 +4,7 @@ package radiotext_test
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -304,12 +305,76 @@ func assertNotBorrowedFromAnyOtherModel(t *testing.T, model string, got radiotex
 	}
 	particulars := particularsAgainstEveryOtherModel(model)
 	for field, val := range ftdx101Fields(got) {
-		bare := strings.ReplaceAll(val, model, "")
+		bare := stripOwnName(val, model)
 		for _, particular := range particulars {
 			if strings.Contains(bare, particular) {
 				t.Errorf("%s %s contains %q — another radio's particular in this one's prose is that radio's evidence claimed for this one", model, field, particular)
 			}
 		}
+	}
+}
+
+// stripOwnName removes model's own self-references from val before the
+// particulars scan, WITHOUT masking a longer sibling name that happens to
+// have model as a PREFIX ("IC-7300" is a prefix of "IC-7300MK2"; "FTdx10"
+// is a prefix of "FTdx101D"/"FTdx101MP").
+//
+// F5 (fix round 1): a plain strings.ReplaceAll(val, model, "") strips
+// EVERY occurrence of the substring model, including the "IC-7300" inside
+// "IC-7300MK2" — so a genuine borrowing of the sibling's name would be
+// silently reduced to "MK2" and the particulars scan below would never
+// see "IC-7300MK2" to match against. A regexp word-boundary match on
+// model does not have that problem: Go's \b fires only at a transition
+// between a word character ([0-9A-Za-z_]) and a non-word one, and both
+// the last character of "IC-7300" (a digit) and the first character of
+// "MK2" (a letter) are word characters, so there is NO boundary between
+// them — the pattern does not match inside "IC-7300MK2" at all, leaving
+// it intact for the particulars scan. An ordinary self-reference like
+// "IC-7300's" DOES have a boundary (the apostrophe is not a word
+// character), so it is still stripped exactly as before.
+func stripOwnName(val, model string) string {
+	return regexp.MustCompile(`\b`+regexp.QuoteMeta(model)+`\b`).ReplaceAllString(val, "")
+}
+
+// TestStripOwnName_DoesNotMaskAPrefixSibling pins F5's fix directly: the
+// IC-7300/IC-7300MK2 case a plain strings.ReplaceAll used to mangle.
+func TestStripOwnName_DoesNotMaskAPrefixSibling(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		val   string
+		model string
+		want  string
+	}{
+		{
+			"self-reference is stripped",
+			"The IC-7300's own display shows the version.",
+			"IC-7300",
+			"The 's own display shows the version.",
+		},
+		{
+			"a genuine sibling borrowing survives the strip",
+			"borrowed sibling text IC-7300MK2 mention",
+			"IC-7300",
+			"borrowed sibling text IC-7300MK2 mention",
+		},
+		{
+			"the FTdx10/FTdx101D pair has the identical hazard",
+			"The FTdx10 has no CAT erase command, borrowed from FTdx101D",
+			"FTdx10",
+			"The  has no CAT erase command, borrowed from FTdx101D",
+		},
+		{
+			"the longer sibling's own self-reference still strips in full",
+			"The IC-7300MK2's own display shows the version.",
+			"IC-7300MK2",
+			"The 's own display shows the version.",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := stripOwnName(tc.val, tc.model); got != tc.want {
+				t.Errorf("stripOwnName(%q, %q) = %q, want %q", tc.val, tc.model, got, tc.want)
+			}
+		})
 	}
 }
 
