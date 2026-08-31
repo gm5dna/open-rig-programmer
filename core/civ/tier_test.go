@@ -203,6 +203,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic905"
 	"github.com/gm5dna/open-rig-programmer/core/civ/ic9700"
 	"github.com/gm5dna/open-rig-programmer/core/civ/icr8600"
+	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
 
@@ -339,6 +340,35 @@ func registrationCoverageProblems(registered, population []string, coverage map[
 		}
 	}
 	return problems
+}
+
+// icomModels filters models to the ones the registry itself declares
+// Icom, via capsFor — normally wiring.StaticCapabilities.
+//
+// THE SIGNAL IS spec.Capabilities.CTCSSToneRange, NOT THE MODEL NAME.
+// That field's own doc comment (core/spec/capabilities.go) states it is
+// non-nil for "every CI-V model in the Icom tier" and nil for every
+// registered Yaesu one — the registry's actual vendor declaration, one
+// hop from the CI-V profile every Icom driver builds its capabilities
+// from. A strings.HasPrefix(model, "IC-") check reads the model NAME
+// instead, and would miss a real Icom model registered under the
+// family's other prefix — Icom's D-STAR handhelds are "ID-51", "ID-52",
+// "ID-5100" — leaving it out of tierRegistrationCoverage's guard
+// entirely. TestTierRecordShapes_IcomModelsKeyOnVendorNotPrefix pins a
+// fake "ID-52" row being caught.
+func icomModels(t testing.TB, models []string, capsFor func(string) (spec.Capabilities, error)) []string {
+	t.Helper()
+	var out []string
+	for _, model := range models {
+		caps, err := capsFor(model)
+		if err != nil {
+			t.Fatalf("capabilities for registered model %q: %v", model, err)
+		}
+		if caps.CTCSSToneRange != nil {
+			out = append(out, model)
+		}
+	}
+	return out
 }
 
 // measureShape reads one profile's shape through the EXPORTED API alone,
@@ -534,12 +564,8 @@ func TestTierRecordShapes_DistinctOrDeclared(t *testing.T) {
 		}
 		models[shapes[i].model] = true
 	}
-	var registered, population []string
-	for _, model := range wiring.SupportedModels() {
-		if strings.HasPrefix(model, "IC-") {
-			registered = append(registered, model)
-		}
-	}
+	registered := icomModels(t, wiring.SupportedModels(), wiring.StaticCapabilities)
+	var population []string
 	for _, shape := range shapes {
 		population = append(population, shape.model)
 	}
@@ -611,6 +637,33 @@ func TestTierRecordShapes_RegistrationCoverageGuardIsNotVacuous(t *testing.T) {
 	problems := registrationCoverageProblems(registered, population, coverage)
 	if len(problems) != 1 || !strings.Contains(problems[0], "IC-FUTURE") {
 		t.Fatalf("registrationCoverageProblems = %v, want one missing-ruling problem for IC-FUTURE", problems)
+	}
+}
+
+// TestTierRecordShapes_IcomModelsKeyOnVendorNotPrefix pins that icomModels
+// selects on the registry's own Icom declaration (CTCSSToneRange
+// non-nil), not on the model NAME. "ID-52" is a real Icom model number
+// (the D-STAR handhelds carry the "ID-" prefix, not "IC-"), and a
+// strings.HasPrefix(model, "IC-") filter would silently drop a row
+// registered under it, taking it out of tierRegistrationCoverage's guard
+// entirely. "FT-710" stands in for a registered Yaesu row, which
+// icomModels must still exclude.
+func TestTierRecordShapes_IcomModelsKeyOnVendorNotPrefix(t *testing.T) {
+	icomToneRange := &spec.ToneRange{MinDeciHz: 1, MaxDeciHz: 2999, StepDeciHz: 1}
+	capsFor := func(model string) (spec.Capabilities, error) {
+		switch model {
+		case "IC-7610", "ID-52":
+			return spec.Capabilities{Model: model, CTCSSToneRange: icomToneRange}, nil
+		case "FT-710":
+			return spec.Capabilities{Model: model}, nil // Yaesu: declares a CTCSSTones list instead
+		default:
+			return spec.Capabilities{}, fmt.Errorf("capsFor: unexpected model %q", model)
+		}
+	}
+	got := icomModels(t, []string{"IC-7610", "ID-52", "FT-710"}, capsFor)
+	want := []string{"IC-7610", "ID-52"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("icomModels = %v, want %v — a fake Icom row named %q must be covered whatever its name looks like", got, want, "ID-52")
 	}
 }
 
