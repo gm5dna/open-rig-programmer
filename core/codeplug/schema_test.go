@@ -560,3 +560,250 @@ func TestLoadV3_FreqHzOutsideSchema3RangeIsRefused(t *testing.T) {
 		}
 	})
 }
+
+// receiverFieldStates names every one of the seven receiver fields
+// schema 5 added (additions design D8) alongside the state d records for
+// it. One table serves the three schema-5 tests below so that an eighth
+// receiver field cannot be added without a row here, exactly as
+// tierFieldNormalisers works for the seventeen.
+func receiverFieldStates(d *ChannelData) map[string]FieldState {
+	return map[string]FieldState{
+		"tuning_step_enabled": d.TuningStepEnabled.State,
+		"tuning_step":         d.TuningStep.State,
+		"program_tuning_step": d.ProgramTuningStepHz.State,
+		"attenuator":          d.AttenuatorDB.State,
+		"preamp":              d.Preamp.State,
+		"antenna":             d.Antenna.State,
+		"ip_plus":             d.IPPlus.State,
+	}
+}
+
+// icomTierFieldStates names the ten fields the Icom tier added (design
+// D4) alongside the state d records for each. Companion to
+// receiverFieldStates.
+func icomTierFieldStates(d *ChannelData) map[string]FieldState {
+	return map[string]FieldState{
+		"tx_frequency":  d.TxFreqHz.State,
+		"duplex":        d.Duplex.State,
+		"offset":        d.OffsetHz.State,
+		"tone_mode":     d.ToneMode.State,
+		"tone_tx":       d.ToneTx.State,
+		"tone_rx":       d.ToneRx.State,
+		"dtcs_code":     d.DTCSCode.State,
+		"dtcs_polarity": d.DTCSPolarity.State,
+		"filter":        d.Filter.State,
+		"data_mode":     d.DataMode.State,
+	}
+}
+
+// v5FileWithExtraKeys builds a minimal, well-formed schema-5 file whose
+// one channel carries schema 3's own seven required keys plus whatever
+// extra is (a JSON fragment, leading comma included, or empty), and
+// returns its path.
+//
+// Built INLINE for the reason v3FileWithFreqHz is: a SPARSE file — one
+// omitting keys the writer would always emit — cannot be obtained by
+// editing a canonical golden without destroying the evidence that golden
+// exists to be.
+func v5FileWithExtraKeys(t *testing.T, extra string) string {
+	t.Helper()
+	body := `{"schema":5,"generator":"x","radio":{"model":"IC-R8600","cat_id":"96","read_at":"2026-08-30T00:00:00Z"},` +
+		`"channels":[{"slot":"G00-000","data":{"freq_hz":145500000,"mode":"FM","ctcss":"OFF",` +
+		`"ctcss_tone":{"state":"unavailable"},"shift":"SIMPLEX","tag_display":{"state":"unavailable"},` +
+		`"scan_skip":{"state":"unavailable"}` + extra + `}}]}`
+	path := filepath.Join(t.TempDir(), "v5.json")
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("writing fixture: %v", err)
+	}
+	return path
+}
+
+// TestLoadV5_SparseFileGetsNoBlanketRule pins the ONE rule Load's doc
+// comment states for schema 5 and that no test previously exercised:
+// loadV5 applies no blanket migration, and must not.
+//
+// Every older loader resolves the added fields for the whole file —
+// loadV1/V2/V3 set all seventeen Unavailable, loadV4 sets the seven
+// receiver ones Unavailable — because a file written before those fields
+// existed says, by having no key, that its radio has none. A schema-5
+// file says no such thing: it can hold any of the seventeen honestly, so
+// a key it does NOT hold means either "this radio has no such field" or
+// "nobody has answered yet", and only the model's own capabilities can
+// tell those apart. That decision is NormaliseTierFields', not Load's,
+// and this test is what stops a well-meaning "loadV5 is the odd one out"
+// change from pre-empting it.
+//
+// So the assertion is deliberately the negative one: the missing keys
+// come back ABSENT — not Unavailable, which would be a claim about the
+// radio this file never made.
+func TestLoadV5_SparseFileGetsNoBlanketRule(t *testing.T) {
+	cp, err := Load(v5FileWithExtraKeys(t, `,"preamp":{"state":"unknown"},"antenna":{"state":"known","value":"ANT1"}`))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	// Load's contract: every accepted file comes back at CurrentSchema.
+	// Tautological while schema 5 IS the current one; it stops being so
+	// the day CurrentSchema moves and loadV5 becomes a frozen loader.
+	if cp.Schema != CurrentSchema {
+		t.Errorf("Load().Schema = %d, want %d (migrate-on-load)", cp.Schema, CurrentSchema)
+	}
+
+	d := cp.Channels[0].Data
+	if d.Preamp != (StringField{State: Unknown}) {
+		t.Errorf("preamp = %+v, want an Unknown StringField preserved as written", d.Preamp)
+	}
+	if d.Antenna != (StringField{State: Known, Value: "ANT1"}) {
+		t.Errorf("antenna = %+v, want the Known value preserved as written", d.Antenna)
+	}
+	for name, state := range receiverFieldStates(d) {
+		if name == "preamp" || name == "antenna" {
+			continue
+		}
+		if state != Absent {
+			t.Errorf("receiver field %s = %q, want Absent: a schema-5 file's missing key is not a claim that the radio lacks the field", name, state)
+		}
+	}
+	for name, state := range icomTierFieldStates(d) {
+		if state != Absent {
+			t.Errorf("tier field %s = %q, want Absent: loadV5 has no blanket rule for schema 4's ten either", name, state)
+		}
+	}
+}
+
+// TestSaveLoad_SparseV5RoundTripsAbsentDistinctFromRecorded is the
+// round-trip half: a schema-5 file whose receiver content is PRESENT but
+// SPARSE — one field Known, one Unknown, the other five never spoken
+// about — must survive Save/Load with all three answers still distinct.
+//
+// It can only work because schemaFor promotes the file to 5 (a Recorded
+// receiver field forces it), and because the schema-5 marshal shape
+// writes every field's "state" key without omitempty, so an Absent field
+// goes to disk as an explicit empty state rather than vanishing. Drop
+// either and Absent would come back as something the file invented for
+// it — which is precisely the distinction the send gate depends on
+// (codeplug.Validate refuses an Absent field the radio HAS; it accepts
+// an Unavailable one).
+func TestSaveLoad_SparseV5RoundTripsAbsentDistinctFromRecorded(t *testing.T) {
+	src := v5FileWithExtraKeys(t, `,"preamp":{"state":"unknown"},"antenna":{"state":"known","value":"ANT1"}`)
+	cp, err := Load(src)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	dst := filepath.Join(t.TempDir(), "resaved.json")
+	if err := Save(dst, cp); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	raw, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatalf("reading re-saved file: %v", err)
+	}
+	var probe struct {
+		Schema int `json:"schema"`
+	}
+	if err := json.Unmarshal(raw, &probe); err != nil {
+		t.Fatalf("probing re-saved file: %v", err)
+	}
+	if probe.Schema != 5 {
+		t.Fatalf("re-saved schema = %d, want 5: a Recorded receiver field is exactly what schema 5 exists to hold\n%s", probe.Schema, raw)
+	}
+
+	got, err := Load(dst)
+	if err != nil {
+		t.Fatalf("re-Load() error = %v", err)
+	}
+	if !reflect.DeepEqual(got.Channels, cp.Channels) {
+		t.Errorf("sparse schema-5 round trip differs:\n got %+v\nwant %+v", *got.Channels[0].Data, *cp.Channels[0].Data)
+	}
+
+	// And a second save is byte-identical to the first, so the sparse
+	// file settles rather than drifting a key at a time.
+	again := filepath.Join(t.TempDir(), "resaved.json")
+	if err := Save(again, got); err != nil {
+		t.Fatalf("second Save() error = %v", err)
+	}
+	raw2, err := os.ReadFile(again)
+	if err != nil {
+		t.Fatalf("reading second re-saved file: %v", err)
+	}
+	if string(raw2) != string(raw) {
+		t.Errorf("save(load(save(cp))) is not byte-identical:\n--- first ---\n%s\n--- second ---\n%s", raw, raw2)
+	}
+}
+
+// TestSaveLoad_V5WithNothingRecordedIsRewrittenAsSchema3 pins the
+// behaviour that looks like a bug and is not, so that nobody "fixes" it
+// into one.
+//
+// A schema-5 file whose channel mentions none of the seventeen added
+// fields re-saves as SCHEMA 3, and reloading it turns those seventeen
+// from Absent into Unavailable. Both halves are correct by the schemaFor
+// doctrine (see schemaFor and FieldState.Recorded), and the alternative
+// is the damaging one:
+//
+//   - Absent is not Recorded, so it needs no key, so schema 3 can
+//     represent this content. Promoting a file on Absent instead would
+//     mean every channel built without a bank in hand — the GUI's
+//     newChannelData omits every added key — dragged an ordinary Yaesu
+//     codeplug up to schema 5, destroying the byte identity design D4
+//     exists to guarantee.
+//   - the reload's Unavailable is what a schema-3 file MEANS (see
+//     migrateV3ChannelData), and it is what a read of a radio without
+//     those fields reports, so the reloaded codeplug still compares
+//     equal to a fresh read.
+//
+// What IS lost across that round trip is the Absent/Unavailable
+// distinction, and it is lost deliberately: this file recorded nothing,
+// so there is nothing the lower schema fails to carry. The distinction
+// is preserved wherever the file actually holds receiver content — see
+// TestSaveLoad_SparseV5RoundTripsAbsentDistinctFromRecorded.
+func TestSaveLoad_V5WithNothingRecordedIsRewrittenAsSchema3(t *testing.T) {
+	cp, err := Load(v5FileWithExtraKeys(t, ""))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	for name, state := range receiverFieldStates(cp.Channels[0].Data) {
+		if state != Absent {
+			t.Fatalf("receiver field %s = %q on load, want Absent", name, state)
+		}
+	}
+
+	dst := filepath.Join(t.TempDir(), "resaved.json")
+	if err := Save(dst, cp); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	raw, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatalf("reading re-saved file: %v", err)
+	}
+	var probe struct {
+		Schema int `json:"schema"`
+	}
+	if err := json.Unmarshal(raw, &probe); err != nil {
+		t.Fatalf("probing re-saved file: %v", err)
+	}
+	if probe.Schema != lowestSchema {
+		t.Fatalf("re-saved schema = %d, want %d: nothing here is Recorded, so nothing needs a later schema\n%s", probe.Schema, lowestSchema, raw)
+	}
+	for _, key := range []string{"tx_frequency", "preamp", "ip_plus"} {
+		if strings.Contains(string(raw), key) {
+			t.Errorf("re-saved schema-3 file carries the key %q, which schema 3 has no place for:\n%s", key, raw)
+		}
+	}
+
+	got, err := Load(dst)
+	if err != nil {
+		t.Fatalf("re-Load() error = %v", err)
+	}
+	d := got.Channels[0].Data
+	for name, state := range receiverFieldStates(d) {
+		if state != Unavailable {
+			t.Errorf("after the schema-3 round trip, receiver field %s = %q, want Unavailable — what a schema-3 file says", name, state)
+		}
+	}
+	for name, state := range icomTierFieldStates(d) {
+		if state != Unavailable {
+			t.Errorf("after the schema-3 round trip, tier field %s = %q, want Unavailable", name, state)
+		}
+	}
+}
