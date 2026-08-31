@@ -944,8 +944,9 @@ type waitOutcome struct {
 //
 // THE ABSOLUTE DEADLINE IS CHECKED FIRST, ahead of everything including
 // already-buffered events (D2, starvation deadlines). This ordering is the
-// whole mechanism: an Icom transceive flood — factory-ON on at least four
-// models, with no off-switch this tier ships — keeps e.events permanently
+// whole mechanism: an Icom transceive flood — factory-ON on SOME of the
+// Icom models this programme registers, with no off-switch this tier ships
+// — keeps e.events permanently
 // non-empty, and the buffered-events priority check below would then take
 // the event branch on EVERY iteration, so the timeout channel and
 // ctx.Done() would never be selected on at all. A context deadline cannot

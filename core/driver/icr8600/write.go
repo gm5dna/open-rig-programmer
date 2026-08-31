@@ -180,6 +180,29 @@ func (s *Session) bankFor(slot string) (spec.BankID, bool) {
 // (an honest SELECT default), this rung must grow an occupied-this-session
 // set too, or it will wrongly refuse the second write to a slot the same
 // session just created.
+//
+// THE DIAGNOSTIC IS TAILORED TO THE WALK THIS SESSION ACTUALLY RAN (closing
+// review). One sentence cannot be true of both walks, and the wrong one
+// sends the user looking for the wrong thing:
+//
+//   - After the BOUNDED walk the slot may simply lie outside its reach, and
+//     re-discovery is worth trying, because that reach depends on which
+//     channel 00s answer.
+//   - After a FULL walk it cannot. Every one of the 10,000 addresses was
+//     read, so a record here means the channel arrived AFTER this session
+//     opened — at the front panel, or from another controller — and the
+//     user needs to be told that rather than to re-run a walk that already
+//     covered everything.
+//
+// AND THE OLD SENTENCE OVERSTATED THE REST. "This build offers no setting
+// that widens it" is true of the command line and the window, which expose
+// nothing, but this package does export WithFullInventoryWalk
+// (icr8600.go:34) and internal/wiring's row simply does not pass it. Saying
+// which of those is meant costs one clause and stops the statement being
+// false to anyone who reads the package. The IC-905's same-named rung
+// already refuses to name a remedy the user cannot reach (ic905/write.go,
+// "NO REMEDY IS NAMED THAT THE USER CANNOT REACH"); this keeps that rule
+// and removes the over-claim it left behind.
 func (s *Session) occupiedSurprise(slot string, readReturnedRecord bool) error {
 	if !readReturnedRecord {
 		return nil
@@ -188,10 +211,12 @@ func (s *Session) occupiedSurprise(slot string, readReturnedRecord bool) error {
 	if ok && slices.Contains(mem.Slots, slot) {
 		return nil
 	}
-	return &driver.WriteRefusedError{
-		Slot:   slot,
-		Reason: "this session's inventory does not list this slot, but the receiver answered the pre-write read with a record: the discovery walk never saw it, so writing would overwrite a channel nothing has read. Re-discover the receiver; if the slot is still not listed it lies outside the bounded walk — group 0 in full, then channel 00 of every other group and the rest of a group whose 00 answered — and this build offers no setting that widens it",
+	const surprise = "this session's inventory does not list this slot, but the receiver answered the pre-write read with a record: the discovery walk never saw it, so writing would overwrite a channel nothing has read. "
+	reason := surprise + "This session ran the BOUNDED walk — group 0 in full, then channel 00 of every other group and the rest of a group whose 00 answered — so a channel stored outside it is never listed. Re-discover the receiver; if the slot is still not listed it lies outside that walk, and nothing on this build's command line or in its window widens it (the driver's own WithFullInventoryWalk is a Go-level option no registered composition passes)"
+	if s.report.InventoryComplete {
+		reason = surprise + "This session read the WHOLE 100x100 memory space, so the channel was stored AFTER this session opened — at the receiver's front panel, or by another controller. Re-discover the receiver before writing to it"
 	}
+	return &driver.WriteRefusedError{Slot: slot, Reason: reason}
 }
 
 // WriteChannel performs one read-modify-write transaction and one
