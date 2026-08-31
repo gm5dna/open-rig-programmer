@@ -27,10 +27,9 @@ const (
 	// "Wave-4 hand-off" section records the full A-E geometry) that only
 	// runs once the radio is already fingerprinted.
 	//
-	// ASSUMED: ic7100-probe-slots-count. The manual states the memory
-	// geometry this bound is small against, never a recommended probe
-	// depth, so eight is this package's own engineering choice rather
-	// than a document-derived value.
+	// EIGHT IS A CHOICE, ARGUED, not a document-derived value: the manual
+	// states the memory geometry this bound is small against, never a
+	// recommended probe depth.
 	// TestProbeSlotsIsEight pins the literal staying eight;
 	// TestOpenEmptyRadioIsExplicitlyUnfingerprinted pins only that the probe
 	// reads exactly probeSlots slots before giving up, which holds for any
