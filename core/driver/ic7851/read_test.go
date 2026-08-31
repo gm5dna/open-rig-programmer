@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	civic7851 "github.com/gm5dna/open-rig-programmer/core/civ/ic7851"
+	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
 )
 
 // TestFixedDigitBytesAreRefusedOnRead is the READ half of F1.
@@ -77,4 +79,20 @@ func TestAllFFIsEmpty(t *testing.T) {
 	if recordIsAbsent(nil) {
 		t.Fatal("nil record treated as empty")
 	}
+}
+
+// TestReadChannel_FreshReadSurvivesSaveLoad pins the D8 fresh-read rule on
+// this driver (drivertest.AssertFreshReadSaveLoad): a freshly read
+// occupied channel reports the seven receiver fields Unavailable, and
+// survives a save/load round trip byte-for-byte.
+func TestReadChannel_FreshReadSurvivesSaveLoad(t *testing.T) {
+	r := newFake(t)
+	f := e2eSeed(0)
+	r.SetSlot("001", f.record(t))
+	s, _ := openFake(t, r, New7851)
+	ch, err := s.ReadChannel(t.Context(), "001")
+	if err != nil {
+		t.Fatalf("ReadChannel: %v", err)
+	}
+	drivertest.AssertFreshReadSaveLoad(t, ch, codeplug.Load)
 }

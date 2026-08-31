@@ -4,10 +4,12 @@ package radiotext_test
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/internal/radiotext"
+	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
 
 // TestRadiotext_FT710Verbatim pins every FT-710 Text field against a
@@ -54,6 +56,7 @@ func TestRadiotext_FT710Verbatim(t *testing.T) {
 	if got != want {
 		t.Errorf("For(\"FT-710\") = %#v,\nwant %#v", got, want)
 	}
+	assertNotBorrowedFromAnyOtherModel(t, "FT-710", got)
 }
 
 // TestRadiotext_FTdx10Verbatim is TestRadiotext_FT710Verbatim's sibling for
@@ -106,45 +109,9 @@ func TestRadiotext_FTdx10Verbatim(t *testing.T) {
 		t.Errorf("For(\"FTdx10\") = %#v,\nwant %#v", got, want)
 	}
 
-	// The FTdx10's prose must not have become the FT-710's by copy. Every
-	// FIELD that both models populate must differ, and no FTdx10 string may
-	// carry an FT-710 hardware particular — the two mistakes a later edit
-	// would actually make.
-	ft710, ok := radiotext.For("FT-710")
-	if !ok {
-		t.Fatal(`For("FT-710") ok = false, want true — sanity check failed`)
-	}
-	for _, tc := range []struct{ field, ftdx10Val, ft710Val string }{
-		{"EraseProcedure", got.EraseProcedure, ft710.EraseProcedure},
-		{"FirmwareGuidance", got.FirmwareGuidance, ft710.FirmwareGuidance},
-		{"GridLegendNote", got.GridLegendNote, ft710.GridLegendNote},
-		{"EraseDialogNote", got.EraseDialogNote, ft710.EraseDialogNote},
-		{"PreservationTooltips.Tone", got.PreservationTooltips.Tone, ft710.PreservationTooltips.Tone},
-		{"PreservationTooltips.ScanSkip", got.PreservationTooltips.ScanSkip, ft710.PreservationTooltips.ScanSkip},
-		{"FirmwarePlaceholder", got.FirmwarePlaceholder, ft710.FirmwarePlaceholder},
-		{"ProbeFirmwareNote", got.ProbeFirmwareNote, ft710.ProbeFirmwareNote},
-	} {
-		if tc.ftdx10Val == tc.ft710Val {
-			t.Errorf("%s is byte-identical to the FT-710's — one radio's prose must never be served as another's", tc.field)
-		}
-	}
-	for _, particular := range []string{"V01-10", "[V/M]", "[ERASE]", "FT-710", "hardware-verified"} {
-		for field, val := range map[string]string{
-			"EraseProcedure":                got.EraseProcedure,
-			"FirmwareGuidance":              got.FirmwareGuidance,
-			"GridLegendNote":                got.GridLegendNote,
-			"ToneScanSkipVerification":      got.ToneScanSkipVerification,
-			"EraseDialogNote":               got.EraseDialogNote,
-			"PreservationTooltips.Tone":     got.PreservationTooltips.Tone,
-			"PreservationTooltips.ScanSkip": got.PreservationTooltips.ScanSkip,
-			"FirmwarePlaceholder":           got.FirmwarePlaceholder,
-			"ProbeFirmwareNote":             got.ProbeFirmwareNote,
-		} {
-			if strings.Contains(val, particular) {
-				t.Errorf("FTdx10 %s contains %q — an FT-710 particular in the FTdx10's prose is that radio's evidence claimed for this one", field, particular)
-			}
-		}
-	}
+	// The FTdx10's prose must not have become the FT-710's by copy, or any
+	// other registered model's.
+	assertNotBorrowedFromAnyOtherModel(t, "FTdx10", got)
 }
 
 // ftdx101Fields returns every Text field of t as a named map, so the
@@ -163,6 +130,271 @@ func ftdx101Fields(txt radiotext.Text) map[string]string {
 		"PreservationTooltips.ScanSkip": txt.PreservationTooltips.ScanSkip,
 		"FirmwarePlaceholder":           txt.FirmwarePlaceholder,
 		"ProbeFirmwareNote":             txt.ProbeFirmwareNote,
+	}
+}
+
+// ---------------------------------------------------------------------
+// The non-borrowing check, DERIVED rather than hand-copied per entry.
+//
+// Follow-up 9 (Tier 4b tier review): every entry below used to carry its
+// OWN literal "every other registered model" list — both the byte-
+// identity loop's slice of model names and the particulars slice checked
+// by substring — frozen at whatever this project had registered on the
+// day that entry was written. NOTHING EVER REVISITED an earlier entry's
+// list when a later model registered, so IC-7610 through IC-905's checks
+// never learned about IC-7760, IC-7851, IC-7850, IC-7100 or IC-R8600 (the
+// five Tier 4b models), and even the Tier 4b entries only checked against
+// whichever of THAT set existed on their own registration day — IC-7851/
+// IC-7850's own lists stop at IC-905, IC-7760's stops at the 7851 pair,
+// IC-7100's stops at IC-7760, and only IC-R8600's, the last of the five,
+// happened to be complete by construction.
+//
+// assertNotBorrowedFromAnyOtherModel and particularsAgainstEveryOtherModel
+// replace all of that with ONE mechanism, keyed off
+// wiring.SupportedModels() — the registry itself — so a sixteenth
+// registration extends every existing entry's check on its next run,
+// rather than needing this file edited once per existing entry.
+// ---------------------------------------------------------------------
+
+// yaesuModels is the four registered models whose radiotext entry predates
+// (and is unrelated to) any CI-V vocabulary — the set catFamilyVocabulary
+// below must NOT be checked against, since every one of these radios'
+// prose legitimately says "CAT".
+var yaesuModels = map[string]bool{
+	"FT-710": true, "FTdx10": true, "FTdx101D": true, "FTdx101MP": true,
+}
+
+// catFamilyVocabulary is the Yaesu CAT-protocol vocabulary every Icom
+// entry's prose must never carry, on top of the other Yaesu models' own
+// particulars (ownParticulars, below): these four tokens are not any ONE
+// Yaesu model's evidence, they are the shared fact "this driver speaks
+// CAT", which is true of all four Yaesu entries and false of every Icom
+// one. Checked only when the model being checked is NOT itself Yaesu — a
+// Yaesu entry's own prose legitimately contains "CAT" throughout.
+var catFamilyVocabulary = []string{"CAT manual", "CAT command", "CAT query", "CAT"}
+
+// sharedIC7851PairAddress is 8Eh, "the default address of IC-7850/
+// IC-7851" (PDF p.229, folio 15-18) — the one particular that belongs to
+// NEITHER radio exclusively. Every OTHER model's check must still refuse
+// it (claiming that address would misattribute this pair's evidence), but
+// checking it against the pair's OWN prose would fault on their own
+// stated limitation, so it is added to particularsAgainstEveryOtherModel
+// explicitly rather than living in either's ownParticulars entry.
+const sharedIC7851PairAddress = "8Eh"
+
+// skipByteIdenticalSibling is a small, explicit exception to the derived
+// byte-identical loop below: the FTdx101D/FTdx101MP pair share one CAT
+// manual and, deliberately, three fields whose text never names the model
+// at all (PreservationTooltips.Tone, PreservationTooltips.ScanSkip,
+// FirmwarePlaceholder — see wantFTdx101D/wantFTdx101MP). Their shared
+// byte content is checked, more precisely, by
+// TestRadiotext_FTdx101DAndMPDifferOnlyInTheModelName's substitution,
+// which REQUIRES every non-naming field to already be equal; that is the
+// mechanism this pair has always relied on, and the byte-identical loop
+// (which cannot tell "shared by design" from "borrowed by accident") has
+// never run the two against each other.
+//
+// THE IC-7851/IC-7850 PAIR CARRIES NO SUCH EXCEPTION: every one of their
+// fields differs except where a substitution replaces the model name, so
+// their own byte-identical check runs against the sibling exactly like
+// any other model (see TestRadiotext_IC7851Verbatim's doc comment,
+// "the sibling included, and for this pair the sibling is the most
+// important of them").
+var skipByteIdenticalSibling = map[string]string{
+	"FTdx101D":  "FTdx101MP",
+	"FTdx101MP": "FTdx101D",
+}
+
+// TestSkipByteIdenticalSibling_ExactlyThePair is the adjudicated pin on
+// item 8's exception: the review approved skipByteIdenticalSibling on the
+// strength that it names EXACTLY the FTdx101D/FTdx101MP pair and nothing
+// else — a later maintainer silencing a real red by adding a third entry
+// must fail this test rather than quietly widen the exception.
+func TestSkipByteIdenticalSibling_ExactlyThePair(t *testing.T) {
+	want := map[string]string{
+		"FTdx101D":  "FTdx101MP",
+		"FTdx101MP": "FTdx101D",
+	}
+	if len(skipByteIdenticalSibling) != len(want) {
+		t.Fatalf("skipByteIdenticalSibling has %d entries, want exactly %d: %v", len(skipByteIdenticalSibling), len(want), skipByteIdenticalSibling)
+	}
+	for k, v := range want {
+		if got := skipByteIdenticalSibling[k]; got != v {
+			t.Errorf("skipByteIdenticalSibling[%q] = %q, want %q", k, got, v)
+		}
+	}
+}
+
+// ownParticulars is every registered model's own distinguishing evidence:
+// its bare name and, for the Icom entries, its own fixed CI-V address hex
+// — the tokens that identify THIS radio and no other, which must never
+// appear in another model's prose. IC-7851's and IC-7850's entries omit
+// 8Eh (see sharedIC7851PairAddress); FT-710's is exactly the five tokens
+// TestRadiotext_FTdx10Verbatim always checked ("CAT" family tokens
+// excluded — see catFamilyVocabulary).
+var ownParticulars = map[string][]string{
+	"FT-710":     {"FT-710", "V01-10", "[V/M]", "[ERASE]", "hardware-verified"},
+	"FTdx10":     {"FTdx10"},
+	"FTdx101D":   {"FTdx101D"},
+	"FTdx101MP":  {"FTdx101MP"},
+	"IC-7610":    {"IC-7610", "98h"},
+	"IC-7300":    {"IC-7300", "94h"},
+	"IC-7300MK2": {"IC-7300MK2", "B6h"},
+	"IC-705":     {"IC-705", "A4h"},
+	"IC-9700":    {"IC-9700", "A2h"},
+	"IC-905":     {"IC-905", "ACh"},
+	"IC-7851":    {"IC-7851"},
+	"IC-7850":    {"IC-7850"},
+	"IC-7760":    {"IC-7760", "B2h"},
+	"IC-7100":    {"IC-7100", "88h"},
+	"IC-R8600":   {"IC-R8600", "96h"},
+}
+
+// particularsAgainstEveryOtherModel returns every particular model's own
+// prose must not contain: every OTHER registered model's ownParticulars,
+// unioned; the shared IC-7851/IC-7850 address, unless model IS one of
+// that pair; and the Yaesu CAT vocabulary, if model is itself an Icom
+// entry.
+//
+// DERIVED FROM wiring.SupportedModels(), not a hand-copied slice: a model
+// registered in internal/wiring but missing here would panic on the
+// map-miss below, which is deliberate — radiotext.For already refuses to
+// serve a registered model with no prose (internal/wiring's
+// TestEverySupportedModelHasRadiotext), and this table must stay in the
+// same lockstep.
+func particularsAgainstEveryOtherModel(model string) []string {
+	var out []string
+	if !yaesuModels[model] {
+		out = append(out, catFamilyVocabulary...)
+	}
+	for _, other := range wiring.SupportedModels() {
+		if other == model {
+			continue
+		}
+		own, ok := ownParticulars[other]
+		if !ok {
+			panic(fmt.Sprintf("radiotext_test: %q is registered but ownParticulars carries no entry for it", other))
+		}
+		out = append(out, own...)
+	}
+	if model != "IC-7851" && model != "IC-7850" {
+		out = append(out, sharedIC7851PairAddress)
+	}
+	return out
+}
+
+// assertNotBorrowedFromAnyOtherModel is the ONE non-borrowing check every
+// entry's test below calls. It replaces each entry's former hand-
+// maintained "every other model, as of this model's own registration"
+// list — see this section's header comment for why that mattered.
+//
+// BOTH CHECKS RUN, AND THEY CATCH DIFFERENT MISTAKES, exactly as the
+// per-entry versions this replaces always argued: the byte-identity loop
+// catches a wholesale copy (a field filled by pasting a neighbour's), and
+// the particulars loop catches a partial one (a sentence reworded but
+// still carrying "94h" or "IC-7300" inside it), which byte-identity
+// alone would sail past.
+//
+// model's OWN NAME is stripped from each field before the particulars
+// scan (the FTdx101 pair's existing technique, generalised): every
+// registered model name is checked as a particular of every OTHER model,
+// and a model whose own name happens to be a substring of a longer
+// registered name (IC-7300 inside IC-7300MK2) would otherwise fault on
+// its own self-references.
+func assertNotBorrowedFromAnyOtherModel(t *testing.T, model string, got radiotext.Text) {
+	t.Helper()
+	for _, other := range wiring.SupportedModels() {
+		if other == model || skipByteIdenticalSibling[model] == other {
+			continue
+		}
+		otherText, ok := radiotext.For(other)
+		if !ok {
+			t.Fatalf("For(%q) ok = false, want true — %q is registered in internal/wiring but radiotext carries no prose for it", other, other)
+		}
+		otherFields := ftdx101Fields(otherText)
+		for field, val := range ftdx101Fields(got) {
+			if val == "" {
+				// Shared emptiness (ToneScanSkipVerification, on every
+				// entry whose write-trial guard is false) is not a copy.
+				continue
+			}
+			if val == otherFields[field] {
+				t.Errorf("%s %s is byte-identical to the %s's — one radio's prose must never be served as another's", model, field, other)
+			}
+		}
+	}
+	particulars := particularsAgainstEveryOtherModel(model)
+	for field, val := range ftdx101Fields(got) {
+		bare := stripOwnName(val, model)
+		for _, particular := range particulars {
+			if strings.Contains(bare, particular) {
+				t.Errorf("%s %s contains %q — another radio's particular in this one's prose is that radio's evidence claimed for this one", model, field, particular)
+			}
+		}
+	}
+}
+
+// stripOwnName removes model's own self-references from val before the
+// particulars scan, WITHOUT masking a longer sibling name that happens to
+// have model as a PREFIX ("IC-7300" is a prefix of "IC-7300MK2"; "FTdx10"
+// is a prefix of "FTdx101D"/"FTdx101MP").
+//
+// F5 (fix round 1): a plain strings.ReplaceAll(val, model, "") strips
+// EVERY occurrence of the substring model, including the "IC-7300" inside
+// "IC-7300MK2" — so a genuine borrowing of the sibling's name would be
+// silently reduced to "MK2" and the particulars scan below would never
+// see "IC-7300MK2" to match against. A regexp word-boundary match on
+// model does not have that problem: Go's \b fires only at a transition
+// between a word character ([0-9A-Za-z_]) and a non-word one, and both
+// the last character of "IC-7300" (a digit) and the first character of
+// "MK2" (a letter) are word characters, so there is NO boundary between
+// them — the pattern does not match inside "IC-7300MK2" at all, leaving
+// it intact for the particulars scan. An ordinary self-reference like
+// "IC-7300's" DOES have a boundary (the apostrophe is not a word
+// character), so it is still stripped exactly as before.
+func stripOwnName(val, model string) string {
+	return regexp.MustCompile(`\b`+regexp.QuoteMeta(model)+`\b`).ReplaceAllString(val, "")
+}
+
+// TestStripOwnName_DoesNotMaskAPrefixSibling pins F5's fix directly: the
+// IC-7300/IC-7300MK2 case a plain strings.ReplaceAll used to mangle.
+func TestStripOwnName_DoesNotMaskAPrefixSibling(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		val   string
+		model string
+		want  string
+	}{
+		{
+			"self-reference is stripped",
+			"The IC-7300's own display shows the version.",
+			"IC-7300",
+			"The 's own display shows the version.",
+		},
+		{
+			"a genuine sibling borrowing survives the strip",
+			"borrowed sibling text IC-7300MK2 mention",
+			"IC-7300",
+			"borrowed sibling text IC-7300MK2 mention",
+		},
+		{
+			"the FTdx10/FTdx101D pair has the identical hazard",
+			"The FTdx10 has no CAT erase command, borrowed from FTdx101D",
+			"FTdx10",
+			"The  has no CAT erase command, borrowed from FTdx101D",
+		},
+		{
+			"the longer sibling's own self-reference still strips in full",
+			"The IC-7300MK2's own display shows the version.",
+			"IC-7300MK2",
+			"The 's own display shows the version.",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := stripOwnName(tc.val, tc.model); got != tc.want {
+				t.Errorf("stripOwnName(%q, %q) = %q, want %q", tc.val, tc.model, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -238,7 +470,7 @@ func TestRadiotext_FTdx101DVerbatim(t *testing.T) {
 	if got != wantFTdx101D {
 		t.Errorf("For(\"FTdx101D\") = %#v,\nwant %#v", got, wantFTdx101D)
 	}
-	assertFTdx101NotBorrowed(t, "FTdx101D", got)
+	assertNotBorrowedFromAnyOtherModel(t, "FTdx101D", got)
 }
 
 // TestRadiotext_FTdx101MPVerbatim is the same pin for the MP. It is a
@@ -254,57 +486,7 @@ func TestRadiotext_FTdx101MPVerbatim(t *testing.T) {
 	if got != wantFTdx101MP {
 		t.Errorf("For(\"FTdx101MP\") = %#v,\nwant %#v", got, wantFTdx101MP)
 	}
-	assertFTdx101NotBorrowed(t, "FTdx101MP", got)
-}
-
-// assertFTdx101NotBorrowed runs both non-borrowing checks for one FTdx101
-// model: no field may be byte-identical to the FT-710's or the FTdx10's,
-// and no field may carry either of those radios' PARTICULARS.
-//
-// BOTH DIRECTIONS MATTER AND THEY CATCH DIFFERENT MISTAKES. The
-// byte-identity loop catches a wholesale copy — the edit that fills a field
-// by pasting a neighbouring model's. The particulars loop catches a partial
-// one, where a sentence was reworded but kept "V01-10" or "FTdx10" inside
-// it, which byte-identity would sail past.
-//
-// The FTdx10 is in the particulars list as a literal STRING, which needs a
-// word: "FTdx10" is a prefix of nothing here, since this package's own
-// model names are "FTdx101D" and "FTdx101MP" and neither of THOSE appears
-// in the FTdx10's prose — but "FTdx101D" does contain "FTdx10" as a
-// substring, so the check is applied to the FTdx10's own name only after
-// the FTdx101's model names are removed from the field. Without that step
-// every field naming this radio would fail against its own name.
-func assertFTdx101NotBorrowed(t *testing.T, model string, got radiotext.Text) {
-	t.Helper()
-
-	for _, other := range []string{"FT-710", "FTdx10"} {
-		otherText, ok := radiotext.For(other)
-		if !ok {
-			t.Fatalf("For(%q) ok = false, want true — sanity check failed", other)
-		}
-		otherFields := ftdx101Fields(otherText)
-		for field, val := range ftdx101Fields(got) {
-			if val == "" {
-				// ToneScanSkipVerification is empty on the FTdx10 too, and
-				// two deliberate emptinesses are not a copy.
-				continue
-			}
-			if val == otherFields[field] {
-				t.Errorf("%s %s is byte-identical to the %s's — one radio's prose must never be served as another's", model, field, other)
-			}
-		}
-	}
-
-	// Particulars. The FT-710's are its hardware evidence; the FTdx10's are
-	// its own name and its own manual's absence of one.
-	for field, val := range ftdx101Fields(got) {
-		bare := strings.ReplaceAll(val, model, "")
-		for _, particular := range []string{"V01-10", "[V/M]", "[ERASE]", "FT-710", "hardware-verified", "FTdx10"} {
-			if strings.Contains(bare, particular) {
-				t.Errorf("%s %s contains %q — another radio's particular in this one's prose is that radio's evidence claimed for this one", model, field, particular)
-			}
-		}
-	}
+	assertNotBorrowedFromAnyOtherModel(t, "FTdx101MP", got)
 }
 
 // TestRadiotext_FTdx101DAndMPDifferOnlyInTheModelName is plan D8, stated as
@@ -405,77 +587,12 @@ func TestRadiotext_IC7610Verbatim(t *testing.T) {
 		t.Errorf("For(\"IC-7610\") = %#v,\nwant %#v", got, want)
 	}
 
-	// Non-borrowing, against all four Yaesu entries: no field may be
-	// byte-identical to, or carry a particular of, any of them.
-	for _, other := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP"} {
-		otherText, ok := radiotext.For(other)
-		if !ok {
-			t.Fatalf("For(%q) ok = false, want true — sanity check failed", other)
-		}
-		otherFields := ftdx101Fields(otherText)
-		for field, val := range ftdx101Fields(got) {
-			if val == "" {
-				// ToneScanSkipVerification is empty on every Yaesu entry
-				// too, and shared emptiness is not a copy.
-				continue
-			}
-			if val == otherFields[field] {
-				t.Errorf("IC-7610 %s is byte-identical to the %s's — one radio's prose must never be served as another's", field, other)
-			}
-		}
-	}
-	for field, val := range ftdx101Fields(got) {
-		for _, particular := range []string{
-			"V01-10", "[V/M]", "[ERASE]", "FT-710", "hardware-verified",
-			"FTdx10", "FTdx101D", "FTdx101MP", "CAT manual", "CAT command", "CAT query",
-			// The bare token too (R1 review, fix round 1): this radio's
-			// protocol is CI-V, not CAT, and the entry says so throughout
-			// rather than borrowing the Yaesu radios' "CAT" vocabulary —
-			// reviewer-confirmed that nothing legitimate in ic7610Text
-			// contains this substring, so it is safe to check standalone
-			// rather than only in the two-word forms above.
-			"CAT",
-		} {
-			if strings.Contains(val, particular) {
-				t.Errorf("IC-7610 %s contains %q — another radio's particular in this one's prose is that radio's evidence claimed for this one", field, particular)
-			}
-		}
-	}
-}
-
-// ic7300Particulars and ic7300mk2Particulars are the non-borrowing
-// particulars lists for the IC-7300 pair — extending the six shared with
-// TestRadiotext_IC7610Verbatim (the Yaesu vocabulary tokens and the bare
-// "CAT" token, since this pair is CI-V throughout too) with EACH MODEL'S
-// OWN address hex and a check for the sibling.
-//
-// THE PREFIX HAZARD RUNS ONLY ONE DIRECTION, and the two lists differ
-// because of it: "IC-7300" is a byte-for-byte PREFIX of "IC-7300MK2", so
-// checking the IC-7300MK2's OWN prose for the bare substring "IC-7300"
-// would fault on every one of its own self-references (its own entry says
-// "The IC-7300MK2's..." throughout, which itself contains "IC-7300") —
-// ic7300mk2Particulars therefore checks the POSSESSIVE form, "IC-7300's",
-// which is NOT a substring of "IC-7300MK2's" (after "IC-7300" the MK2's
-// own text always continues "MK2's", never "'s" directly), so it catches
-// a genuine borrowing of the sibling's sentences without faulting on the
-// MK2's own self-reference. The IC-7300's OWN prose never mentions its
-// sibling at all, so ic7300Particulars has no such self-reference to
-// avoid and checks the bare model name, "IC-7300MK2" — strictly STRONGER
-// than the possessive form, since it also matches a possessive
-// occurrence, and safe here because the hazard the possessive form exists
-// to dodge does not run in this direction.
-var ic7300Particulars = []string{
-	"V01-10", "[V/M]", "[ERASE]", "FT-710", "hardware-verified",
-	"FTdx10", "FTdx101D", "FTdx101MP", "CAT manual", "CAT command", "CAT query", "CAT",
-	"IC-7610", "98h",
-	"IC-7300MK2", "B6h",
-}
-
-var ic7300mk2Particulars = []string{
-	"V01-10", "[V/M]", "[ERASE]", "FT-710", "hardware-verified",
-	"FTdx10", "FTdx101D", "FTdx101MP", "CAT manual", "CAT command", "CAT query", "CAT",
-	"IC-7610", "98h",
-	"IC-7300's", "94h",
+	// Non-borrowing, against every other registered model: no field may be
+	// byte-identical to, or carry a particular of, any of them. R1 review
+	// (fix round 1) confirmed that nothing legitimate in ic7610Text
+	// contains the bare "CAT" token, which is why catFamilyVocabulary
+	// checks it standalone rather than only in two-word forms.
+	assertNotBorrowedFromAnyOtherModel(t, "IC-7610", got)
 }
 
 // TestRadiotext_IC7300Verbatim is TestRadiotext_IC7610Verbatim's sibling
@@ -492,13 +609,19 @@ var ic7300mk2Particulars = []string{
 // writeTrialsComplete is false, so there is no hardware-preservation
 // verification of any kind to report.
 //
-// THE NON-BORROWING CHECK RUNS AGAINST SIX OTHER MODELS, not four: the
-// four Yaesu entries, IC-7610 (this project's first Icom registration),
-// AND its own IC-7300MK2 sibling — because core/driver/ic7300/doc.go's own
-// package comment states the two Icom documents this pair is built from
-// are mutually silent about each other, so the sibling is exactly as much
-// a borrowing risk as any Yaesu radio's prose. ftdx101Fields is reused
-// unchanged — it is generic over any radiotext.Text value.
+// THE NON-BORROWING CHECK RUNS AGAINST EVERY OTHER REGISTERED MODEL,
+// including its own IC-7300MK2 sibling — because core/driver/ic7300/
+// doc.go's own package comment states the two Icom documents this pair is
+// built from are mutually silent about each other, so the sibling is
+// exactly as much a borrowing risk as any other radio's prose.
+// assertNotBorrowedFromAnyOtherModel dodges the one hazard the sibling
+// check runs into — "IC-7300" is a byte-for-byte PREFIX of "IC-7300MK2",
+// so checking IC-7300MK2's OWN prose for the bare substring "IC-7300"
+// would fault on its own self-references ("The IC-7300MK2's...") — by
+// stripping the checked model's own name from each field before scanning
+// particulars, so "IC-7300MK2" leaves no residual "IC-7300" behind.
+// ftdx101Fields is reused unchanged — it is generic over any
+// radiotext.Text value.
 func TestRadiotext_IC7300Verbatim(t *testing.T) {
 	want := radiotext.Text{
 		EraseProcedure:   "The IC-7300's CI-V protocol prints two erase command forms — a 1A 00 set with a SELECT byte of FF, and a separate command 0B — but this build sends neither: no IC-7300 has ever confirmed what either does, and sending an unconfirmed erase command risks clearing the wrong channel rather than the intended one. Follow the memory-channel clear procedure printed in the IC-7300's own full operating manual.",
@@ -523,28 +646,7 @@ func TestRadiotext_IC7300Verbatim(t *testing.T) {
 		t.Errorf("For(\"IC-7300\") = %#v,\nwant %#v", got, want)
 	}
 
-	for _, other := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300MK2"} {
-		otherText, ok := radiotext.For(other)
-		if !ok {
-			t.Fatalf("For(%q) ok = false, want true — sanity check failed", other)
-		}
-		otherFields := ftdx101Fields(otherText)
-		for field, val := range ftdx101Fields(got) {
-			if val == "" {
-				continue
-			}
-			if val == otherFields[field] {
-				t.Errorf("IC-7300 %s is byte-identical to the %s's — one radio's prose must never be served as another's", field, other)
-			}
-		}
-	}
-	for field, val := range ftdx101Fields(got) {
-		for _, particular := range ic7300Particulars {
-			if strings.Contains(val, particular) {
-				t.Errorf("IC-7300 %s contains %q — another radio's particular in this one's prose is that radio's evidence claimed for this one", field, particular)
-			}
-		}
-	}
+	assertNotBorrowedFromAnyOtherModel(t, "IC-7300", got)
 }
 
 // TestRadiotext_IC7300MK2Verbatim is TestRadiotext_IC7300Verbatim's
@@ -583,44 +685,7 @@ func TestRadiotext_IC7300MK2Verbatim(t *testing.T) {
 		t.Errorf("For(\"IC-7300MK2\") = %#v,\nwant %#v", got, want)
 	}
 
-	for _, other := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300"} {
-		otherText, ok := radiotext.For(other)
-		if !ok {
-			t.Fatalf("For(%q) ok = false, want true — sanity check failed", other)
-		}
-		otherFields := ftdx101Fields(otherText)
-		for field, val := range ftdx101Fields(got) {
-			if val == "" {
-				continue
-			}
-			if val == otherFields[field] {
-				t.Errorf("IC-7300MK2 %s is byte-identical to the %s's — one radio's prose must never be served as another's", field, other)
-			}
-		}
-	}
-	for field, val := range ftdx101Fields(got) {
-		for _, particular := range ic7300mk2Particulars {
-			if strings.Contains(val, particular) {
-				t.Errorf("IC-7300MK2 %s contains %q — another radio's particular in this one's prose is that radio's evidence claimed for this one", field, particular)
-			}
-		}
-	}
-}
-
-// ic705Particulars is the non-borrowing particulars list for the IC-705
-// (Wave 4 task R4) — extending the Yaesu-vocabulary-plus-bare-"CAT" set
-// TestRadiotext_IC7610Verbatim's own list carries with the address hex and
-// bare model name of EVERY OTHER registered Icom entry: the IC-705 has no
-// sibling of its own to worry a prefix hazard over (unlike the IC-7300
-// pair), and none of "IC-7610", "IC-7300" or "IC-7300MK2" is a substring of
-// this radio's own self-references ("The IC-705's..."), so the bare forms
-// are safe to check directly.
-var ic705Particulars = []string{
-	"V01-10", "[V/M]", "[ERASE]", "FT-710", "hardware-verified",
-	"FTdx10", "FTdx101D", "FTdx101MP", "CAT manual", "CAT command", "CAT query", "CAT",
-	"IC-7610", "98h",
-	"IC-7300", "94h",
-	"IC-7300MK2", "B6h",
+	assertNotBorrowedFromAnyOtherModel(t, "IC-7300MK2", got)
 }
 
 // TestRadiotext_IC705Verbatim is TestRadiotext_IC7610Verbatim's sibling for
@@ -637,12 +702,10 @@ var ic705Particulars = []string{
 // writeTrialsComplete is false, so there is no hardware-preservation
 // verification of any kind to report.
 //
-// THE NON-BORROWING CHECK RUNS AGAINST SEVEN OTHER MODELS: the four Yaesu
-// entries, and all three other registered Icom ones (IC-7610, IC-7300,
-// IC-7300MK2) — this radio has no sibling of its own, so every other
-// registered model is exactly as much a borrowing risk as any other.
-// ftdx101Fields is reused unchanged — it is generic over any
-// radiotext.Text value.
+// THE NON-BORROWING CHECK RUNS AGAINST EVERY OTHER REGISTERED MODEL: this
+// radio has no sibling of its own, so every other registered model is
+// exactly as much a borrowing risk as any other. ftdx101Fields is reused
+// unchanged — it is generic over any radiotext.Text value.
 func TestRadiotext_IC705Verbatim(t *testing.T) {
 	want := radiotext.Text{
 		EraseProcedure:   "The IC-705's CI-V protocol prints two erase command forms — a 1A 00 set carrying FF at the fifth data position, and a separate command 0B — but this build sends neither: no IC-705 has ever confirmed what either does, and sending an unconfirmed erase command risks clearing the wrong channel rather than the intended one. This project's own copy of the IC-705 Basic Manual is admitted for three unrelated values only, so it names no front-panel clear procedure — follow the memory-channel clear procedure in the radio's own full operating manual.",
@@ -667,45 +730,7 @@ func TestRadiotext_IC705Verbatim(t *testing.T) {
 		t.Errorf("For(\"IC-705\") = %#v,\nwant %#v", got, want)
 	}
 
-	for _, other := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2"} {
-		otherText, ok := radiotext.For(other)
-		if !ok {
-			t.Fatalf("For(%q) ok = false, want true — sanity check failed", other)
-		}
-		otherFields := ftdx101Fields(otherText)
-		for field, val := range ftdx101Fields(got) {
-			if val == "" {
-				continue
-			}
-			if val == otherFields[field] {
-				t.Errorf("IC-705 %s is byte-identical to the %s's — one radio's prose must never be served as another's", field, other)
-			}
-		}
-	}
-	for field, val := range ftdx101Fields(got) {
-		for _, particular := range ic705Particulars {
-			if strings.Contains(val, particular) {
-				t.Errorf("IC-705 %s contains %q — another radio's particular in this one's prose is that radio's evidence claimed for this one", field, particular)
-			}
-		}
-	}
-}
-
-// ic9700Particulars is the non-borrowing particulars list for the IC-9700
-// (Wave 4 task R5) — the same shape as ic705Particulars: the
-// Yaesu-vocabulary-plus-bare-"CAT" set plus the address hex and bare model
-// name of EVERY OTHER registered Icom entry. The IC-9700 has no sibling of
-// its own to worry a prefix hazard over, and none of "IC-7610", "IC-7300",
-// "IC-7300MK2" or "IC-705" is a substring of this radio's own
-// self-references ("The IC-9700's..."), so the bare forms are safe to
-// check directly.
-var ic9700Particulars = []string{
-	"V01-10", "[V/M]", "[ERASE]", "FT-710", "hardware-verified",
-	"FTdx10", "FTdx101D", "FTdx101MP", "CAT manual", "CAT command", "CAT query", "CAT",
-	"IC-7610", "98h",
-	"IC-7300", "94h",
-	"IC-7300MK2", "B6h",
-	"IC-705", "A4h",
+	assertNotBorrowedFromAnyOtherModel(t, "IC-705", got)
 }
 
 // TestRadiotext_IC9700Verbatim is TestRadiotext_IC7610Verbatim's sibling
@@ -722,12 +747,10 @@ var ic9700Particulars = []string{
 // writeTrialsComplete is false, so there is no hardware-preservation
 // verification of any kind to report.
 //
-// THE NON-BORROWING CHECK RUNS AGAINST EIGHT OTHER MODELS: the four Yaesu
-// entries, and all four other registered Icom ones (IC-7610, IC-7300,
-// IC-7300MK2, IC-705) — this radio has no sibling of its own, so every
-// other registered model is exactly as much a borrowing risk as any
-// other. ftdx101Fields is reused unchanged — it is generic over any
-// radiotext.Text value.
+// THE NON-BORROWING CHECK RUNS AGAINST EVERY OTHER REGISTERED MODEL: this
+// radio has no sibling of its own, so every other registered model is
+// exactly as much a borrowing risk as any other. ftdx101Fields is reused
+// unchanged — it is generic over any radiotext.Text value.
 func TestRadiotext_IC9700Verbatim(t *testing.T) {
 	want := radiotext.Text{
 		EraseProcedure:   "The IC-9700's CI-V protocol prints one memory clear form — a 1A 00 set carrying FF at the address's data position — but this build sends it to no channel: no builder exists in this driver, and sending an unconfirmed erase command risks clearing the wrong channel rather than the intended one. This document is a CI-V reference guide, not a full operating manual, and prints no front-panel clear procedure either, so follow the memory-channel clear procedure in the radio's own operating manual.",
@@ -752,46 +775,7 @@ func TestRadiotext_IC9700Verbatim(t *testing.T) {
 		t.Errorf("For(\"IC-9700\") = %#v,\nwant %#v", got, want)
 	}
 
-	for _, other := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705"} {
-		otherText, ok := radiotext.For(other)
-		if !ok {
-			t.Fatalf("For(%q) ok = false, want true — sanity check failed", other)
-		}
-		otherFields := ftdx101Fields(otherText)
-		for field, val := range ftdx101Fields(got) {
-			if val == "" {
-				continue
-			}
-			if val == otherFields[field] {
-				t.Errorf("IC-9700 %s is byte-identical to the %s's — one radio's prose must never be served as another's", field, other)
-			}
-		}
-	}
-	for field, val := range ftdx101Fields(got) {
-		for _, particular := range ic9700Particulars {
-			if strings.Contains(val, particular) {
-				t.Errorf("IC-9700 %s contains %q — another radio's particular in this one's prose is that radio's evidence claimed for this one", field, particular)
-			}
-		}
-	}
-}
-
-// ic905Particulars is the non-borrowing particulars list for the IC-905
-// (Wave 4 task R6, the tier's LAST registration) — the same shape as
-// ic9700Particulars: the Yaesu-vocabulary-plus-bare-"CAT" set plus the
-// address hex and bare model name of EVERY OTHER registered Icom entry.
-// The IC-905 has no sibling of its own to worry a prefix hazard over, and
-// none of "IC-7610", "IC-7300", "IC-7300MK2", "IC-705" or "IC-9700" is a
-// substring of this radio's own self-references ("The IC-905's..."), so
-// the bare forms are safe to check directly.
-var ic905Particulars = []string{
-	"V01-10", "[V/M]", "[ERASE]", "FT-710", "hardware-verified",
-	"FTdx10", "FTdx101D", "FTdx101MP", "CAT manual", "CAT command", "CAT query", "CAT",
-	"IC-7610", "98h",
-	"IC-7300", "94h",
-	"IC-7300MK2", "B6h",
-	"IC-705", "A4h",
-	"IC-9700", "A2h",
+	assertNotBorrowedFromAnyOtherModel(t, "IC-9700", got)
 }
 
 // TestRadiotext_IC905Verbatim is TestRadiotext_IC7610Verbatim's sibling
@@ -808,12 +792,10 @@ var ic905Particulars = []string{
 // writeTrialsComplete is false, so there is no hardware-preservation
 // verification of any kind to report.
 //
-// THE NON-BORROWING CHECK RUNS AGAINST NINE OTHER MODELS: the four Yaesu
-// entries, and all five other registered Icom ones (IC-7610, IC-7300,
-// IC-7300MK2, IC-705, IC-9700) — this radio has no sibling of its own, so
-// every other registered model is exactly as much a borrowing risk as any
-// other. ftdx101Fields is reused unchanged — it is generic over any
-// radiotext.Text value.
+// THE NON-BORROWING CHECK RUNS AGAINST EVERY OTHER REGISTERED MODEL: this
+// radio has no sibling of its own, so every other registered model is
+// exactly as much a borrowing risk as any other. ftdx101Fields is reused
+// unchanged — it is generic over any radiotext.Text value.
 func TestRadiotext_IC905Verbatim(t *testing.T) {
 	want := radiotext.Text{
 		EraseProcedure:   "The IC-905's CI-V protocol prints one memory clear form — a 1A 00 set carrying FF after the group and channel bytes, for memory groups 00 00 ~ 00 99 only, the CALL group being excluded by the document's own words — but this build sends it to no channel: no builder exists in this driver, and sending an unconfirmed erase command risks clearing the wrong channel rather than the intended one. This document is a CI-V reference guide, not a full operating manual, and prints no front-panel clear procedure either, so follow the memory-channel clear procedure in the radio's own operating manual.",
@@ -838,28 +820,7 @@ func TestRadiotext_IC905Verbatim(t *testing.T) {
 		t.Errorf("For(\"IC-905\") = %#v,\nwant %#v", got, want)
 	}
 
-	for _, other := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700"} {
-		otherText, ok := radiotext.For(other)
-		if !ok {
-			t.Fatalf("For(%q) ok = false, want true — sanity check failed", other)
-		}
-		otherFields := ftdx101Fields(otherText)
-		for field, val := range ftdx101Fields(got) {
-			if val == "" {
-				continue
-			}
-			if val == otherFields[field] {
-				t.Errorf("IC-905 %s is byte-identical to the %s's — one radio's prose must never be served as another's", field, other)
-			}
-		}
-	}
-	for field, val := range ftdx101Fields(got) {
-		for _, particular := range ic905Particulars {
-			if strings.Contains(val, particular) {
-				t.Errorf("IC-905 %s contains %q — another radio's particular in this one's prose is that radio's evidence claimed for this one", field, particular)
-			}
-		}
-	}
+	assertNotBorrowedFromAnyOtherModel(t, "IC-905", got)
 }
 
 // TestFor_UnknownModel: any model that is not EXACTLY one of this
@@ -1001,50 +962,20 @@ func TestUnverifiedWriteWarningTemplate_CarriesItsFourElements(t *testing.T) {
 	}
 }
 
-// ic7851Particulars and ic7850Particulars are the non-borrowing
-// particulars lists for the IC-7851 pair (Tier 4b) — the same shape as
-// ic905Particulars (the Yaesu-vocabulary-plus-bare-"CAT" set plus the
-// bare model name and address hex of every other registered Icom entry),
-// with ONE deliberate difference: the SHARED ADDRESS IS NOT IN EITHER
-// LIST.
-//
-// 8Eh is these two radios' OWN address — printed as "the default address
-// of IC-7850/IC-7851" (PDF p.229, folio 15-18) — so checking for it would
-// fault on every one of their own sentences that states the fixed-address
-// limitation. What each list DOES carry is the SIBLING'S BARE NAME, and
-// that is the check with teeth for this pair: neither entry may mention
+// The IC-7851/IC-7850 pair's shared address, 8Eh, is handled by
+// sharedIC7851PairAddress and particularsAgainstEveryOtherModel above: it
+// is these two radios' OWN address — printed as "the default address of
+// IC-7850/IC-7851" (PDF p.229, folio 15-18) — so checking for it against
+// either radio's OWN prose would fault on their own stated fixed-address
+// limitation, and it is checked against every OTHER model instead. What
+// each entry's own ownParticulars DOES carry is the sibling's bare name,
+// which is the check with teeth for this pair: neither entry may mention
 // the other model, both because a user reading advice about the radio
 // they chose should not be told about a different one, and because
 // TestRadiotext_IC7851AndIC7850DifferOnlyInTheModelName's substitution
-// depends on it.
-//
-// NO PREFIX HAZARD RUNS EITHER WAY, unlike the IC-7300/IC-7300MK2 pair's
-// lists: "IC-7850" is not a substring of "IC-7851" nor the reverse (they
-// differ in the last character), so each list checks the sibling's bare
-// name rather than a possessive form.
-var ic7851Particulars = []string{
-	"V01-10", "[V/M]", "[ERASE]", "FT-710", "hardware-verified",
-	"FTdx10", "FTdx101D", "FTdx101MP", "CAT manual", "CAT command", "CAT query", "CAT",
-	"IC-7610", "98h",
-	"IC-7300", "94h",
-	"IC-7300MK2", "B6h",
-	"IC-705", "A4h",
-	"IC-9700", "A2h",
-	"IC-905", "ACh",
-	"IC-7850",
-}
-
-var ic7850Particulars = []string{
-	"V01-10", "[V/M]", "[ERASE]", "FT-710", "hardware-verified",
-	"FTdx10", "FTdx101D", "FTdx101MP", "CAT manual", "CAT command", "CAT query", "CAT",
-	"IC-7610", "98h",
-	"IC-7300", "94h",
-	"IC-7300MK2", "B6h",
-	"IC-705", "A4h",
-	"IC-9700", "A2h",
-	"IC-905", "ACh",
-	"IC-7851",
-}
+// depends on it. NO PREFIX HAZARD RUNS EITHER WAY, unlike the IC-7300/
+// IC-7300MK2 pair's: "IC-7850" is not a substring of "IC-7851" nor the
+// reverse (they differ in the last character).
 
 // wantIC7851 and wantIC7850 are the two entries pinned VERBATIM, shared
 // by each model's own verbatim test and by the substitution test below,
@@ -1098,26 +1029,23 @@ var wantIC7850 = radiotext.Text{
 // false, so there is no hardware-preservation verification of any kind to
 // report.
 //
-// THE NON-BORROWING CHECK RUNS AGAINST EVERY ENTRY REGISTERED BEFORE THIS
-// PAIR, the sibling included, and for this pair the sibling is the most
-// important
+// THE NON-BORROWING CHECK RUNS AGAINST EVERY OTHER REGISTERED ENTRY, the
+// sibling included, and for this pair the sibling is the most important
 // of them: the two entries are meant to be near-copies of one another
 // EXCEPT for the model name, so a field that forgot to substitute the
 // name would be byte-identical to the sibling's and would serve one
 // radio's advice under the other's title.
 func TestRadiotext_IC7851Verbatim(t *testing.T) {
-	assertIC7851PairEntry(t, "IC-7851", wantIC7851, ic7851Particulars)
+	assertIC7851PairEntry(t, "IC-7851", wantIC7851)
 }
 
 func TestRadiotext_IC7850Verbatim(t *testing.T) {
-	assertIC7851PairEntry(t, "IC-7850", wantIC7850, ic7850Particulars)
+	assertIC7851PairEntry(t, "IC-7850", wantIC7850)
 }
 
-// assertIC7851PairEntry runs the verbatim pin and both non-borrowing
-// checks for one row of the IC-7851 pair. See
-// assertFTdx101NotBorrowed for why both checks are needed: byte-identity
-// catches a wholesale copy, particulars catch a partial one.
-func assertIC7851PairEntry(t *testing.T, model string, want radiotext.Text, particulars []string) {
+// assertIC7851PairEntry runs the verbatim pin and the non-borrowing check
+// for one row of the IC-7851 pair.
+func assertIC7851PairEntry(t *testing.T, model string, want radiotext.Text) {
 	t.Helper()
 
 	got, ok := radiotext.For(model)
@@ -1127,32 +1055,7 @@ func assertIC7851PairEntry(t *testing.T, model string, want radiotext.Text, part
 	if got != want {
 		t.Errorf("For(%q) = %#v,\nwant %#v", model, got, want)
 	}
-
-	for _, other := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850"} {
-		if other == model {
-			continue
-		}
-		otherText, ok := radiotext.For(other)
-		if !ok {
-			t.Fatalf("For(%q) ok = false, want true — sanity check failed", other)
-		}
-		otherFields := ftdx101Fields(otherText)
-		for field, val := range ftdx101Fields(got) {
-			if val == "" {
-				continue
-			}
-			if val == otherFields[field] {
-				t.Errorf("%s %s is byte-identical to the %s's — one radio's prose must never be served as another's", model, field, other)
-			}
-		}
-	}
-	for field, val := range ftdx101Fields(got) {
-		for _, particular := range particulars {
-			if strings.Contains(val, particular) {
-				t.Errorf("%s %s contains %q — another radio's particular in this one's prose is that radio's evidence claimed for this one", model, field, particular)
-			}
-		}
-	}
+	assertNotBorrowedFromAnyOtherModel(t, model, got)
 }
 
 // TestRadiotext_IC7851AndIC7850DifferOnlyInTheModelName is spec D1.2
@@ -1213,29 +1116,6 @@ func TestRadiotext_IC7851AndIC7850DifferOnlyInTheModelName(t *testing.T) {
 	}
 }
 
-// ic7760Particulars is the non-borrowing particulars list for the IC-7760
-// (Tier 4b's second registration) — the same shape as ic905Particulars
-// and the IC-7851 pair's: the Yaesu-vocabulary-plus-bare-"CAT" set plus
-// the address hex and bare model name of EVERY OTHER registered Icom
-// entry, the pair's shared 8Eh included.
-//
-// THE IC-7760 HAS NO SIBLING, so unlike the pair's two lists this one
-// carries every other name without exception, and its own B2h is
-// deliberately absent (it is this radio's own). No prefix hazard runs
-// either way: none of the names below is a substring of "IC-7760", and
-// "IC-7760" is a substring of none of them.
-var ic7760Particulars = []string{
-	"V01-10", "[V/M]", "[ERASE]", "FT-710", "hardware-verified",
-	"FTdx10", "FTdx101D", "FTdx101MP", "CAT manual", "CAT command", "CAT query", "CAT",
-	"IC-7610", "98h",
-	"IC-7300", "94h",
-	"IC-7300MK2", "B6h",
-	"IC-705", "A4h",
-	"IC-9700", "A2h",
-	"IC-905", "ACh",
-	"IC-7851", "IC-7850", "8Eh",
-}
-
 // TestRadiotext_IC7760Verbatim is TestRadiotext_IC905Verbatim's sibling
 // for the additions tier's SECOND registration, and it guards the same
 // kind of fact: the HEDGES. This prose was written in radiotext.go
@@ -1253,8 +1133,8 @@ var ic7760Particulars = []string{
 // other model's is: core/driver/ic7760's writeTrialsComplete is false, so
 // there is no hardware-preservation verification of any kind to report.
 //
-// THE NON-BORROWING CHECK RUNS AGAINST EVERY ENTRY REGISTERED BEFORE THIS
-// ONE, including the two whose radios draw the SAME 27-byte data area as this
+// THE NON-BORROWING CHECK RUNS AGAINST EVERY OTHER REGISTERED ENTRY,
+// including the two whose radios draw the SAME 27-byte data area as this
 // one (additions spec D1.1). Those two are the borrowing risk this
 // registration actually carries, and byte-identity is what catches a
 // wholesale copy while the particulars catch a partial one.
@@ -1282,52 +1162,7 @@ func TestRadiotext_IC7760Verbatim(t *testing.T) {
 		t.Errorf("For(\"IC-7760\") = %#v,\nwant %#v", got, want)
 	}
 
-	for _, other := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850"} {
-		otherText, ok := radiotext.For(other)
-		if !ok {
-			t.Fatalf("For(%q) ok = false, want true — sanity check failed", other)
-		}
-		otherFields := ftdx101Fields(otherText)
-		for field, val := range ftdx101Fields(got) {
-			if val == "" {
-				continue
-			}
-			if val == otherFields[field] {
-				t.Errorf("IC-7760 %s is byte-identical to the %s's — one radio's prose must never be served as another's", field, other)
-			}
-		}
-	}
-	for field, val := range ftdx101Fields(got) {
-		for _, particular := range ic7760Particulars {
-			if strings.Contains(val, particular) {
-				t.Errorf("IC-7760 %s contains %q — another radio's particular in this one's prose is that radio's evidence claimed for this one", field, particular)
-			}
-		}
-	}
-}
-
-// ic7100Particulars is the non-borrowing particulars list for the IC-7100
-// (Tier 4b's third registration) — the same shape as ic7760Particulars and
-// every Icom entry's before it: the Yaesu-vocabulary-plus-bare-"CAT" set
-// plus the address hex and bare model name of EVERY OTHER registered Icom
-// entry, the IC-7851/IC-7850 pair's shared 8Eh included.
-//
-// THE IC-7100 HAS NO SIBLING, so like the IC-7760's list this one carries
-// every other name without exception, and its own 88h is deliberately
-// absent (it is this radio's own). No prefix hazard runs either way: none
-// of the names below is a substring of "IC-7100", and "IC-7100" is a
-// substring of none of them.
-var ic7100Particulars = []string{
-	"V01-10", "[V/M]", "[ERASE]", "FT-710", "hardware-verified",
-	"FTdx10", "FTdx101D", "FTdx101MP", "CAT manual", "CAT command", "CAT query", "CAT",
-	"IC-7610", "98h",
-	"IC-7300", "94h",
-	"IC-7300MK2", "B6h",
-	"IC-705", "A4h",
-	"IC-9700", "A2h",
-	"IC-905", "ACh",
-	"IC-7851", "IC-7850", "8Eh",
-	"IC-7760", "B2h",
+	assertNotBorrowedFromAnyOtherModel(t, "IC-7760", got)
 }
 
 // TestRadiotext_IC7100Verbatim is TestRadiotext_IC7760Verbatim's sibling
@@ -1348,8 +1183,8 @@ var ic7100Particulars = []string{
 // other model's is: core/driver/ic7100's writeTrialsComplete is false, so
 // there is no hardware-preservation verification of any kind to report.
 //
-// THE NON-BORROWING CHECK RUNS AGAINST EVERY ENTRY REGISTERED BEFORE THIS
-// ONE, including the two whose radios accept the SAME 111-byte record as this
+// THE NON-BORROWING CHECK RUNS AGAINST EVERY OTHER REGISTERED ENTRY,
+// including the two whose radios accept the SAME 111-byte record as this
 // one (additions spec D5's 111 B row). Those two are the borrowing risk
 // this registration actually carries, and byte-identity is what catches a
 // wholesale copy while the particulars catch a partial one.
@@ -1377,54 +1212,7 @@ func TestRadiotext_IC7100Verbatim(t *testing.T) {
 		t.Errorf("For(\"IC-7100\") = %#v,\nwant %#v", got, want)
 	}
 
-	for _, other := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850", "IC-7760"} {
-		otherText, ok := radiotext.For(other)
-		if !ok {
-			t.Fatalf("For(%q) ok = false, want true — sanity check failed", other)
-		}
-		otherFields := ftdx101Fields(otherText)
-		for field, val := range ftdx101Fields(got) {
-			if val == "" {
-				continue
-			}
-			if val == otherFields[field] {
-				t.Errorf("IC-7100 %s is byte-identical to the %s's — one radio's prose must never be served as another's", field, other)
-			}
-		}
-	}
-	for field, val := range ftdx101Fields(got) {
-		for _, particular := range ic7100Particulars {
-			if strings.Contains(val, particular) {
-				t.Errorf("IC-7100 %s contains %q — another radio's particular in this one's prose is that radio's evidence claimed for this one", field, particular)
-			}
-		}
-	}
-}
-
-// icr8600Particulars is the non-borrowing particulars list for the
-// IC-R8600 (Tier 4b's FOURTH and last registration) — the same shape as
-// ic7100Particulars and every Icom entry's before it: the
-// Yaesu-vocabulary-plus-bare-"CAT" set plus the address hex and bare
-// model name of EVERY OTHER registered Icom entry, the IC-7851/IC-7850
-// pair's shared 8Eh included.
-//
-// THE IC-R8600 HAS NO SIBLING, so like the IC-7760's and the IC-7100's
-// lists this one carries every other name without exception, and its own
-// 96h is deliberately absent (it is this receiver's own). No prefix hazard
-// runs either way: none of the names below is a substring of "IC-R8600",
-// and "IC-R8600" is a substring of none of them.
-var icr8600Particulars = []string{
-	"V01-10", "[V/M]", "[ERASE]", "FT-710", "hardware-verified",
-	"FTdx10", "FTdx101D", "FTdx101MP", "CAT manual", "CAT command", "CAT query", "CAT",
-	"IC-7610", "98h",
-	"IC-7300", "94h",
-	"IC-7300MK2", "B6h",
-	"IC-705", "A4h",
-	"IC-9700", "A2h",
-	"IC-905", "ACh",
-	"IC-7851", "IC-7850", "8Eh",
-	"IC-7760", "B2h",
-	"IC-7100", "88h",
+	assertNotBorrowedFromAnyOtherModel(t, "IC-7100", got)
 }
 
 // TestRadiotext_ICR8600Verbatim is TestRadiotext_IC7100Verbatim's sibling
@@ -1457,9 +1245,8 @@ var icr8600Particulars = []string{
 // other model's is: core/driver/icr8600's writeTrialsComplete is false, so
 // there is no hardware-preservation verification of any kind to report.
 //
-// THE NON-BORROWING CHECK RUNS AGAINST EVERY ENTRY REGISTERED BEFORE THIS
-// ONE. None of them describes a receiver, so wholesale borrowing here would be
-// more
+// THE NON-BORROWING CHECK RUNS AGAINST EVERY OTHER REGISTERED ENTRY. None
+// of them describes a receiver, so wholesale borrowing here would be more
 // visible than usual — which is exactly why the partial kind, a clause
 // lifted from a transceiver's entry, is the one the particulars list
 // catches.
@@ -1487,26 +1274,5 @@ func TestRadiotext_ICR8600Verbatim(t *testing.T) {
 		t.Errorf("For(\"IC-R8600\") = %#v,\nwant %#v", got, want)
 	}
 
-	for _, other := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100"} {
-		otherText, ok := radiotext.For(other)
-		if !ok {
-			t.Fatalf("For(%q) ok = false, want true — sanity check failed", other)
-		}
-		otherFields := ftdx101Fields(otherText)
-		for field, val := range ftdx101Fields(got) {
-			if val == "" {
-				continue
-			}
-			if val == otherFields[field] {
-				t.Errorf("IC-R8600 %s is byte-identical to the %s's — one radio's prose must never be served as another's", field, other)
-			}
-		}
-	}
-	for field, val := range ftdx101Fields(got) {
-		for _, particular := range icr8600Particulars {
-			if strings.Contains(val, particular) {
-				t.Errorf("IC-R8600 %s contains %q — another radio's particular in this one's prose is that radio's evidence claimed for this one", field, particular)
-			}
-		}
-	}
+	assertNotBorrowedFromAnyOtherModel(t, "IC-R8600", got)
 }
