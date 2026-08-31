@@ -170,6 +170,16 @@ func (s *Session) bankFor(slot string) (spec.BankID, bool) {
 // miss such a channel whenever a later group's channel 00 is empty; allowing
 // the write would overwrite a channel absent from the codeplug. Pinned by
 // TestEndToEnd_WriteToAnOccupiedSlotTheBoundedWalkMissedIsRefused.
+//
+// UNLIKE THE IC-905'S SAME-NAMED RUNG, this one asks only whether discovery
+// listed the slot — it has no knownOccupied set a confirmed write can grow.
+// That is safe only because WriteChannel's create rung (above this one)
+// refuses every write to an empty slot unconditionally: no session can ever
+// add a slot this inventory does not already list, so the inventory never
+// needs to grow. If a later change ever lets the R8600 create a channel
+// (an honest SELECT default), this rung must grow an occupied-this-session
+// set too, or it will wrongly refuse the second write to a slot the same
+// session just created.
 func (s *Session) occupiedSurprise(slot string, readReturnedRecord bool) error {
 	if !readReturnedRecord {
 		return nil

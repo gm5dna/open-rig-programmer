@@ -366,7 +366,7 @@ const IC7100Model = "IC-7100"
 // (icr8600.New(profile, opts...)), which decides both
 // NewICR8600RealDriver's body below and the TOKEN internal/guards
 // confines for this package (icr8600.Simulated, a Profile constant, not
-// an option) — checked against core/driver/icr8600/icr8600.go:41, not
+// an option) — checked against core/driver/icr8600/icr8600.go:48, not
 // assumed from the nearest precedent.
 //
 // THE FIRST RECEIVER THIS REGISTRY HOLDS, and the first row whose
