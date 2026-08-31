@@ -313,8 +313,18 @@ type CitationPin struct {
 	Exclude []string
 	// ListPath is the checked-in allowed-citation list.
 	ListPath string
-	// Matrix names the model's capability-matrix trio. It is the ONLY
-	// authority for page, folio, section and erratum citations.
+	// Matrix is the capability matrix FILE ITSELF, and MatrixSupport is its
+	// report and its review. Together they are the only authority for page,
+	// folio, section and erratum citations — but SECTION citations are
+	// answered from Matrix ALONE.
+	//
+	// That second split is structural for the same reason the first one is.
+	// The report and the review NUMBER THEIR OWN SECTIONS, and a driver cites
+	// the matrix, not its review. Reading sections out of the concatenated
+	// trio admitted "matrix §5.1" and "matrix §7" for the IC-7100 against a
+	// matrix that heads neither: §5.1 is the report's own numbering
+	// (ic7100-capability-matrix-report.md:307) and §7 is the review's
+	// (ic7100-capability-matrix-review.md:170).
 	//
 	// Plans names the model's implementation plan, and it may answer
 	// REGISTER-ID citations ALONE. That split is the orchestrator's ruling and
@@ -332,8 +342,9 @@ type CitationPin struct {
 	// Both live under docs/superpowers/, which is gitignored: present in a
 	// working checkout, absent on CI and in a fresh clone (the v1.2.1 CI run,
 	// 30/08/2026).
-	Matrix []string
-	Plans  []string
+	Matrix        string
+	MatrixSupport []string
+	Plans         []string
 }
 
 // IcomCitationPin builds the standard pin for an Icom model whose driver is
@@ -355,8 +366,8 @@ func IcomCitationPin(model string) CitationPin {
 		// exists to reject.
 		Exclude:  []string{"provenance_test.go"},
 		ListPath: filepath.Join("testdata", "citations.txt"),
-		Matrix: []string{
-			filepath.Join(matrices, model+"-capability-matrix.md"),
+		Matrix: filepath.Join(matrices, model+"-capability-matrix.md"),
+		MatrixSupport: []string{
 			filepath.Join(matrices, model+"-capability-matrix-report.md"),
 			filepath.Join(matrices, model+"-capability-matrix-review.md"),
 		},
@@ -392,9 +403,13 @@ func (p CitationPin) Assert(t testing.TB) {
 		}
 	}
 
-	matrix, err := readAuthority(p.Matrix)
+	matrix, err := readAuthority([]string{p.Matrix})
 	if err != nil {
 		t.Fatalf("read matrix authority: %v", err)
+	}
+	support, err := readAuthority(p.MatrixSupport)
+	if err != nil {
+		t.Fatalf("read matrix support authority: %v", err)
 	}
 	plans, err := readAuthority(p.Plans)
 	if err != nil {
@@ -404,16 +419,22 @@ func (p CitationPin) Assert(t testing.TB) {
 	// documents but not others would run supply checks against a partial
 	// authority and fail honest citations, which is a worse failure than not
 	// checking: the checked-in list is enforced above either way.
-	if !matrix.present || !plans.present {
+	if !matrix.present || !support.present || !plans.present {
 		t.Logf("matrix authority absent (docs/superpowers is gitignored; not in this checkout) — "+
 			"authority supply checks skipped, the %s list is still enforced", p.ListPath)
 		return
 	}
-	// TWO TOKEN SETS, and which one a token is asked of is the ruling.
-	matrixTokens := extractTokens(matrix.norm)
-	registerTokens := extractTokens(matrix.norm + "\n" + plans.norm)
+	// THREE READINGS, and which one a token gets is the ruling. The trio
+	// answers pages, folios and errata; the matrix ALONE answers sections;
+	// the trio plus the plans answers register ids and nothing else.
+	trio := authorityText{
+		raw:  matrix.raw + "\n" + support.raw,
+		norm: matrix.norm + "\n" + support.norm,
+	}
+	matrixTokens := extractTokens(trio.norm)
+	registerTokens := extractTokens(trio.norm + "\n" + plans.norm)
 	for token := range allowed {
-		if isForeign(token, p.Model) || authoritySupplies(matrix, matrixTokens, registerTokens, token) {
+		if isForeign(token, p.Model) || authoritySupplies(trio, matrix.raw, matrixTokens, registerTokens, token) {
 			continue
 		}
 		t.Errorf("%s allows %q, but the %s authority does not supply it (a page, folio, section or "+
@@ -426,22 +447,22 @@ func (p CitationPin) Assert(t testing.TB) {
 // extractor over the authority and comparing; three shapes are written
 // differently there and get their own reading.
 //
-// matrixTokens is the capability-matrix trio ALONE. registerTokens is that
-// trio plus the implementation plan, and ONLY a register id is asked of it —
-// see CitationPin.Matrix for why the split has to be here rather than in a
-// comment.
-func authoritySupplies(matrix authorityText, matrixTokens, registerTokens map[string]bool, token string) bool {
+// matrixTokens is the capability-matrix trio. registerTokens is that trio plus
+// the implementation plan, and ONLY a register id is asked of it. matrixProper
+// is the matrix FILE, and only a section is asked of it — see CitationPin.Matrix
+// for why both splits have to be here rather than in a comment.
+func authoritySupplies(trio authorityText, matrixProper string, matrixTokens, registerTokens map[string]bool, token string) bool {
 	switch {
 	case registerEntry.MatchString(token):
 		return registerTokens[token]
 	case strings.HasPrefix(token, "folio "):
-		return suppliedByFolio(matrix.norm, token)
+		return suppliedByFolio(trio.norm, token)
 	case strings.HasPrefix(token, "PDF pp."):
 		return matrixTokens[token] || suppliedByPageBounds(matrixTokens, token)
 	case strings.HasPrefix(token, "matrix §"):
-		return suppliedBySection(matrix.raw, token)
+		return suppliedBySection(matrixProper, token)
 	case strings.HasPrefix(token, "matrix erratum "):
-		return suppliedByErratum(matrix.raw, token)
+		return suppliedByErratum(trio.raw, token)
 	}
 	return matrixTokens[token]
 }
@@ -494,28 +515,60 @@ func isForeign(token, model string) bool {
 	return false
 }
 
-// suppliedBySection answers a "matrix §S" token two ways, because a matrix
-// names its own sections two ways.
+// letteredSubPart splits "3.12a" into "3.12" and true. A bare numeric section
+// returns false: only a LETTERED sub-part may be answered by a cross-reference.
+var letteredSubPart = regexp.MustCompile(`^(\d+(?:\.\d+)*)[a-z]$`)
+
+// suppliedBySection answers a "matrix §S" token against THE MATRIX FILE, never
+// its report or its review, and in one of two ways.
 //
-// The usual one is a HEADING, numbered "## §3" or "### 3.15.1" rather than
-// repeating the word "matrix". The other is the matrix's own CROSS-REFERENCE
-// in body text, and it is not redundant: core/driver/ic7851/doc.go:64 cites
-// §3.12a, and the IC-7851 matrix heads only "### 3.12 Probe identity" while
-// naming §3.12a six times in its prose (lines 636, 1632, 1683, 1760, 1775,
-// 1792) for a lettered sub-part that never got a heading of its own. A
-// document that labels a section repeatedly has supplied that label.
+// THE ORDINARY WAY IS A HEADING, numbered "## §3" or "### 3.15.1" rather than
+// repeating the word "matrix". Every listed section but one is answered here.
 //
-// Both guards are tight in the direction that matters: §3.15 is not answered
-// by a §3.15.1 heading, and §3.12 is not answered by the string §3.12a.
-func suppliedBySection(authority, token string) bool {
+// THE SECOND WAY IS DELIBERATELY NARROW, and it exists for exactly one real
+// citation. core/driver/ic7851/doc.go:64 cites §3.12a; the IC-7851 matrix heads
+// only "### 3.12 Probe identity" (:1071) and then labels §3.12a six times in
+// its own body, its own register table among them (:636, 1632, 1683, 1760,
+// 1775, 1792). A document that labels a sub-part six times has supplied that
+// label. So a cross-reference is accepted ONLY for a lettered sub-part WHOSE
+// PARENT IS HEADED — never for a bare numbered section.
+//
+// THAT NARROWNESS IS THE POINT. A first attempt accepted any cross-reference
+// anywhere in the trio, which let a matrix supply a section by DENYING it
+// ("there is NO §3.20 in this matrix") or by citing another document's
+// section, and let the report's and review's own numbering answer for the
+// matrix — it admitted "matrix §5.1" and "matrix §7" for the IC-7100, which
+// heads neither. A driver could then have minted "§7 — the boundary
+// statement", listed it, and gone green against a matrix with no §7: a false
+// provenance admitted by the pin that exists to refuse exactly that.
+//
+// Both arms share one trailing guard so the two agree: §3.15 is answered by
+// neither a "### 3.15.1" heading nor a "§3.15.1" mention, and §3.12 is
+// answered by neither a "### 3.12a" heading nor a "§3.12a" mention.
+// TestSuppliedBySection pins every one of those cases.
+func suppliedBySection(matrixProper, token string) bool {
 	s, ok := strings.CutPrefix(token, "matrix §")
 	if !ok {
 		return false
 	}
-	quoted := regexp.QuoteMeta(s)
-	heading := regexp.MustCompile(`(?m)^#{1,6} +§?` + quoted + `(?:[^0-9.]|$)`)
-	crossRef := regexp.MustCompile(`§ ?` + quoted + `(?:[^0-9.a-z]|$)`)
-	return heading.MatchString(authority) || crossRef.MatchString(authority)
+	if sectionHasHeading(matrixProper, s) {
+		return true
+	}
+	parent := letteredSubPart.FindStringSubmatch(s)
+	if parent == nil {
+		return false
+	}
+	crossRef := regexp.MustCompile(`§ ?` + regexp.QuoteMeta(s) + sectionGuard)
+	return sectionHasHeading(matrixProper, parent[1]) && crossRef.MatchString(matrixProper)
+}
+
+// sectionGuard stops a section number being answered by a longer one that
+// merely starts with it — neither a deeper number nor a lettered sub-part.
+const sectionGuard = `(?:[^0-9.a-z]|$)`
+
+// sectionHasHeading reports whether the matrix heads a section numbered s.
+func sectionHasHeading(matrixProper, s string) bool {
+	return regexp.MustCompile(`(?m)^#{1,6} +§?` + regexp.QuoteMeta(s) + sectionGuard).MatchString(matrixProper)
 }
 
 // suppliedByErratum answers a "matrix erratum N" token: the matrix prints its
