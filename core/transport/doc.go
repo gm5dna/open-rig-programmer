@@ -213,12 +213,14 @@
 // is a safe assumption, and the earlier note argued exactly that (the
 // accumulator's length cap would trip on endless noise; 38400 baud cannot
 // deliver constant traffic). Icom's transceive mode BROADCASTS
-// unprompted, is factory-ON on Icom models this programme registers, and
-// no off-switch is shipped for it. (The registered set is
+// unprompted, is factory-ON on SOME of the Icom models this programme
+// registers, and no off-switch is shipped for it. (The registered set is
 // internal/wiring/wiring_test.go's icomModels, and
 // TestYaesuAndIcomModelsPartitionSupportedModels pins it against
 // SupportedModels(); a count written here would be stale by the next
-// family, and the argument never needed one — one such radio is enough.)
+// family, and the argument never needed one — one such radio is enough.
+// "Some" is the honest quantifier: this project has asked no radio, and
+// the per-model default is an ASSUMED register entry on every one of them.)
 // A well-formed frame every
 // few milliseconds, forever, is that radio's normal operating condition —
 // and every one of those frames re-arms a drain's idle timer without ever
