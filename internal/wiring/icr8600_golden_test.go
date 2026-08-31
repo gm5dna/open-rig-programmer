@@ -29,6 +29,15 @@ import (
 // longer admits, with nothing failing until a human noticed the
 // mismatch. This test does not touch the golden itself (frozen, per the
 // closing fix wave's constraints) — it only reads it.
+//
+// IT ASSERTS THAT THE FIXTURE STILL CARRIES THE VALUES IT BOUNDS (closing
+// review). Every domain check here is a claim about a Known value, so a
+// golden regenerated with one of these five receiver fields Absent or
+// Unknown would leave this test passing while asserting nothing at all —
+// and the only thing that would fail is core/codeplug's own
+// TestCanonicalV5Golden_RecordsEveryReceiverField, in a package this one
+// cannot see and whose name this comment used not to mention. The
+// non-vacuity leg below makes that dependency this test's own.
 func TestICR8600Golden_ReceiverFieldsAreInCapabilityDomain(t *testing.T) {
 	path := filepath.Join("..", "..", "core", "codeplug", "testdata", "canonical-v5-basic.json")
 	cp, err := codeplug.Load(path)
@@ -41,6 +50,21 @@ func TestICR8600Golden_ReceiverFieldsAreInCapabilityDomain(t *testing.T) {
 	d := cp.Channels[0].Data
 
 	caps := icr8600.CapabilitiesUnverified()
+
+	for _, field := range []struct {
+		name  string
+		state codeplug.FieldState
+	}{
+		{"tuning_step", d.TuningStep.State},
+		{"program_tuning_step", d.ProgramTuningStepHz.State},
+		{"attenuator", d.AttenuatorDB.State},
+		{"preamp", d.Preamp.State},
+		{"antenna", d.Antenna.State},
+	} {
+		if field.state != codeplug.Known {
+			t.Errorf("golden %s is %q, not Known: every domain check below is guarded on Known, so a fixture that stopped recording this field would make this test pass while bounding nothing", field.name, field.state)
+		}
+	}
 
 	if d.TuningStep.State == codeplug.Known && !slices.Contains(caps.TuningSteps, d.TuningStep.Value) {
 		t.Errorf("golden tuning_step = %q, not in icr8600's TuningSteps %v", d.TuningStep.Value, caps.TuningSteps)
