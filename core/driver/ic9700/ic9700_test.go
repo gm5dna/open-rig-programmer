@@ -111,6 +111,31 @@ func TestUnexpectedLengthIsRefusedWithoutAttribution(t *testing.T) {
 	}
 }
 
+// TestRecordLengthMismatchUnwrapsToErrWrongRadio pins that a probe-time
+// record-length refusal is reachable via errors.Is(err, driver.ErrWrongRadio),
+// the same as the sibling drivers whose own record-length-mismatch error
+// unwraps to it (e.g. core/driver/ic7610/ic7610.go:164-166). Before this,
+// ic9700 was the one Icom driver whose refusal did not.
+//
+// The original *civ.RecordLengthError must stay reachable too:
+// TestProbeFingerprintsTheRecordNotTheDataArea and
+// TestEndToEnd_WrongSiblingRefusedByRecordLength already pin
+// errors.As(err, &rl), and this test does not relax that.
+func TestRecordLengthMismatchUnwrapsToErrWrongRadio(t *testing.T) {
+	port := newRecordingPort(t, answersWithDataArea(50))
+	_, err := ic9700.New(ic9700.RealHardware).Open(context.Background(), port.Port(), driver.Identity{})
+	if err == nil {
+		t.Fatal("Open accepted a record at a length this profile does not declare")
+	}
+	if !errors.Is(err, driver.ErrWrongRadio) {
+		t.Fatalf("err = %v, want errors.Is(err, driver.ErrWrongRadio)", err)
+	}
+	var rl *civ.RecordLengthError
+	if !errors.As(err, &rl) {
+		t.Fatalf("err = %v, want *civ.RecordLengthError still reachable via errors.As", err)
+	}
+}
+
 func TestEmptyRadioOpensUnfingerprinted(t *testing.T) {
 	port := newRecordingPort(t, allRejections()) // every 1A 00 read answers FA
 	sess, err := ic9700.New(ic9700.RealHardware).Open(context.Background(), port.Port(), driver.Identity{})

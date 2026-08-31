@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -78,10 +79,14 @@ var e2eImage = []struct {
 // production deliberately takes the transport defaults until a Stage R
 // capture measures this radio.
 func openFake(t *testing.T, profile Profile, consented bool, opts ...fakeicr8600.Option) (*fakeicr8600.Radio, *Session) {
+	return openFakeWithDriverOptions(t, profile, consented, nil, opts...)
+}
+
+func openFakeWithDriverOptions(t *testing.T, profile Profile, consented bool, driverOpts []Option, opts ...fakeicr8600.Option) (*fakeicr8600.Radio, *Session) {
 	t.Helper()
 	radio := fakeicr8600.New(opts...)
 	t.Cleanup(func() { _ = radio.Close() })
-	sess, err := newFakeDriver(profile, consented).Open(context.Background(), radio.Port(), driver.Identity{Port: "fake"})
+	sess, err := newFakeDriver(profile, consented, driverOpts...).Open(context.Background(), radio.Port(), driver.Identity{Port: "fake"})
 	if err != nil {
 		t.Fatalf("Open against the independent fake: %v", err)
 	}
@@ -89,12 +94,96 @@ func openFake(t *testing.T, profile Profile, consented bool, opts ...fakeicr8600
 	return radio, sess.(*Session)
 }
 
-func newFakeDriver(profile Profile, consented bool) driver.Driver {
-	opts := []Option{fastTiming()}
+func newFakeDriver(profile Profile, consented bool, extra ...Option) driver.Driver {
+	opts := append([]Option{fastTiming()}, extra...)
 	if consented {
 		opts = append(opts, WithConsentedUnverifiedWrites())
 	}
 	return New(profile, opts...)
+}
+
+// TestEndToEnd_InventoryCompletenessAndFullWalk pins the IC-905-shaped
+// completeness contract against the independent fake. The hidden record is
+// copied from the fake's own default image, so this test adds no evidence and
+// changes none of the quarantined evidence tables.
+func TestEndToEnd_InventoryCompletenessAndFullWalk(t *testing.T) {
+	seed := fakeicr8600.New()
+	hidden, ok := seed.Record(0, 0)
+	if !ok {
+		t.Fatal("the fake's default G00-000 record is missing")
+	}
+	if err := seed.Close(); err != nil {
+		t.Fatalf("close seed fake: %v", err)
+	}
+
+	t.Run("bounded default is partial", func(t *testing.T) {
+		_, s := openFake(t, RealHardware, false, fakeicr8600.WithRecord(5, 37, hidden))
+		mem, ok := s.Capabilities().Bank(spec.BankMemory)
+		if !ok {
+			t.Fatal("the session has no MEM bank")
+		}
+		if slices.Contains(mem.Slots, "G05-037") {
+			t.Fatal("the bounded walk found G05-037 although G05-000 is empty")
+		}
+		if d := s.OpenDiagnostics(); d.InventoryComplete || d.SlotsTried != 199 {
+			t.Errorf("OpenDiagnostics = %+v, want InventoryComplete false after 199 reads", d)
+		}
+	})
+
+	t.Run("full walk is complete", func(t *testing.T) {
+		_, s := openFakeWithDriverOptions(t, RealHardware, false, []Option{WithFullInventoryWalk()}, fakeicr8600.WithRecord(5, 37, hidden))
+		mem, ok := s.Capabilities().Bank(spec.BankMemory)
+		if !ok {
+			t.Fatal("the session has no MEM bank")
+		}
+		if !slices.Contains(mem.Slots, "G05-037") {
+			t.Fatalf("full-walk slots = %v, want hidden G05-037", mem.Slots)
+		}
+		if d := s.OpenDiagnostics(); !d.InventoryComplete || d.SlotsTried != 10_000 {
+			t.Errorf("OpenDiagnostics = %+v, want InventoryComplete true after 10,000 reads", d)
+		}
+	})
+}
+
+// TestEndToEnd_WriteToAnOccupiedSlotTheBoundedWalkMissedIsRefused pins the
+// IC-905-shaped occupied-surprise guard. G05-000 is empty, so discovery never
+// reads G05-037 into the inventory; the preservation read then finds a record,
+// and the driver must refuse rather than overwrite a channel the codeplug never
+// saw.
+func TestEndToEnd_WriteToAnOccupiedSlotTheBoundedWalkMissedIsRefused(t *testing.T) {
+	seed := fakeicr8600.New()
+	hidden, ok := seed.Record(0, 0)
+	if !ok {
+		t.Fatal("the fake's default G00-000 record is missing")
+	}
+	if err := seed.Close(); err != nil {
+		t.Fatalf("close seed fake: %v", err)
+	}
+
+	radio, s := openFake(t, RealHardware, true, fakeicr8600.WithRecord(5, 37, hidden))
+	mem, ok := s.Capabilities().Bank(spec.BankMemory)
+	if !ok {
+		t.Fatal("the session has no MEM bank")
+	}
+	if slices.Contains(mem.Slots, "G05-037") {
+		t.Fatal("the bounded walk found G05-037 although G05-000 is empty")
+	}
+
+	beforeSets := len(setFrames(radio.Frames()))
+	res, err := s.WriteChannel(context.Background(), writableChannel("G05-037", "AM"))
+	refused := requireWriteRefused(t, res, err)
+	if refused.Slot != "G05-037" {
+		t.Errorf("WriteRefusedError.Slot = %q, want G05-037", refused.Slot)
+	}
+	if !strings.Contains(refused.Reason, "discovery walk never saw it") {
+		t.Errorf("WriteRefusedError.Reason = %q, want the undiscovered-slot cause", refused.Reason)
+	}
+	if got := len(setFrames(radio.Frames())); got != beforeSets {
+		t.Errorf("refused write sent %d memory-set frames, want zero", got-beforeSets)
+	}
+	if got, ok := radio.Record(5, 37); !ok || !bytes.Equal(got, hidden) {
+		t.Errorf("the refused write changed G05-037: present=%v record=% X", ok, got)
+	}
 }
 
 // readFrames is Frames() reduced to the memory READ grammar: 1A 00 plus the

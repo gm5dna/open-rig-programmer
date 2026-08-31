@@ -944,8 +944,9 @@ type waitOutcome struct {
 //
 // THE ABSOLUTE DEADLINE IS CHECKED FIRST, ahead of everything including
 // already-buffered events (D2, starvation deadlines). This ordering is the
-// whole mechanism: an Icom transceive flood — factory-ON on at least four
-// models, with no off-switch this tier ships — keeps e.events permanently
+// whole mechanism: an Icom transceive flood — factory-ON on SOME of the
+// Icom models this programme registers, with no off-switch this tier ships
+// — keeps e.events permanently
 // non-empty, and the buffered-events priority check below would then take
 // the event branch on EVERY iteration, so the timeout channel and
 // ctx.Done() would never be selected on at all. A context deadline cannot
@@ -1122,9 +1123,13 @@ func (e *Engine) DrainToQuiet(ctx context.Context) error {
 // CONTAMINATED first, and that 38400 baud cannot deliver constant traffic
 // — held for a Yaesu link answering only what it was asked, and does NOT
 // hold for a radio that BROADCASTS unprompted. Icom's transceive mode is
-// factory-ON on at least four of the eleven Icom models this tier
-// registers, and
-// the tier ships no off-switch: a well-formed frame every few
+// factory-ON on SOME of the Icom models this programme registers (the set
+// is internal/wiring/wiring_test.go's icomModels, pinned against
+// SupportedModels() by TestYaesuAndIcomModelsPartitionSupportedModels — a
+// count written here would be stale by the next family, and one such radio
+// is all the argument needs; "some" because no radio has been asked and
+// each model's default is an ASSUMED entry), and
+// no off-switch is shipped: a well-formed frame every few
 // milliseconds, forever, is the normal operating condition, and every one
 // of those frames re-arms the timer without ever tripping the length cap.
 //

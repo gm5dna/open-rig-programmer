@@ -453,3 +453,80 @@ func TestErase_RefusedWithoutWireAndGateAdmitsOnlyThreeGrammars(t *testing.T) {
 		}
 	}
 }
+
+// TestOccupiedSurprise_TheDiagnosticNamesTheWalkThisSessionRan pins the two
+// halves of the occupied-surprise refusal, because a single message cannot be
+// true of both walks and the wrong one sends the user somewhere useless.
+//
+// The closing review found the old single message asserting that "this build
+// offers no setting that widens it" while icr8600.go:34 exports
+// WithFullInventoryWalk. What is true is that no COMMAND-LINE or WINDOW
+// control reaches it and no registered composition passes it, and that is what
+// the bounded half now says. The full-walk half must not offer widening at
+// all: there is nothing left to widen.
+//
+// This calls the rung directly rather than through a session, because after a
+// FULL walk the fake cannot present the surprise — every address has been
+// read, so producing one would mean the receiver gained a record mid-session,
+// which the fake has no way to do. The condition is still exactly the one
+// WriteChannel reaches: a slot absent from s.caps' MEM bank whose pre-write
+// read returned a record.
+func TestOccupiedSurprise_TheDiagnosticNamesTheWalkThisSessionRan(t *testing.T) {
+	sessionWith := func(complete bool) *Session {
+		return &Session{
+			caps:   spec.Capabilities{Banks: []spec.Bank{{ID: spec.BankMemory, Slots: []string{"G00-000"}}}},
+			report: OpenReport{InventoryComplete: complete},
+		}
+	}
+
+	t.Run("a listed slot is not a surprise", func(t *testing.T) {
+		if err := sessionWith(false).occupiedSurprise("G00-000", true); err != nil {
+			t.Errorf("a slot the walk DID list was refused: %v", err)
+		}
+	})
+	t.Run("an empty pre-write read is not a surprise", func(t *testing.T) {
+		if err := sessionWith(false).occupiedSurprise("G05-037", false); err != nil {
+			t.Errorf("a slot that read EMPTY was refused: %v", err)
+		}
+	})
+
+	t.Run("after the bounded walk", func(t *testing.T) {
+		var refused *driver.WriteRefusedError
+		if err := sessionWith(false).occupiedSurprise("G05-037", true); !errors.As(err, &refused) {
+			t.Fatalf("occupiedSurprise = %v, want a WriteRefusedError", err)
+		}
+		for _, want := range []string{
+			"discovery walk never saw it",
+			"BOUNDED walk",
+			"Re-discover the receiver",
+			// The honest form of the over-claim: no user-reachable
+			// control widens it, and the Go option is named as one.
+			"command line",
+			"WithFullInventoryWalk",
+		} {
+			if !strings.Contains(refused.Reason, want) {
+				t.Errorf("bounded refusal = %q, want it to contain %q", refused.Reason, want)
+			}
+		}
+		if strings.Contains(refused.Reason, "no setting that widens it") {
+			t.Errorf("the refusal still claims no setting widens the walk, which WithFullInventoryWalk falsifies: %q", refused.Reason)
+		}
+	})
+
+	t.Run("after a full walk", func(t *testing.T) {
+		var refused *driver.WriteRefusedError
+		if err := sessionWith(true).occupiedSurprise("G05-037", true); !errors.As(err, &refused) {
+			t.Fatalf("occupiedSurprise = %v, want a WriteRefusedError", err)
+		}
+		for _, want := range []string{"WHOLE 100x100", "AFTER this session opened", "front panel"} {
+			if !strings.Contains(refused.Reason, want) {
+				t.Errorf("full-walk refusal = %q, want it to contain %q", refused.Reason, want)
+			}
+		}
+		for _, unwanted := range []string{"BOUNDED walk", "WithFullInventoryWalk"} {
+			if strings.Contains(refused.Reason, unwanted) {
+				t.Errorf("full-walk refusal offers %q, but there is nothing left to widen: %q", unwanted, refused.Reason)
+			}
+		}
+	})
+}

@@ -17,6 +17,23 @@ import (
 
 const (
 	retryReads = 1
+
+	// probeSlots is how many bank-A MEM channels (A-001..A-probeSlots)
+	// the open-time fingerprint probe reads before giving up on finding
+	// an occupied one, argued the same way as the sibling drivers' probe
+	// bounds (core/driver/ic7300/ic7300.go:31-44,
+	// core/driver/ic705/ic705.go:167-176): bounded per spec D3.2, small,
+	// and confined to one bank rather than the 495-channel walk (caps.go:107
+	// declares the full A-E geometry, Matrix §1 row 3 and §1b) that only
+	// runs once the radio is already fingerprinted.
+	//
+	// EIGHT IS A CHOICE, ARGUED, not a document-derived value: the manual
+	// states the memory geometry this bound is small against, never a
+	// recommended probe depth.
+	// TestProbeSlotsIsEight pins the literal staying eight;
+	// TestOpenEmptyRadioIsExplicitlyUnfingerprinted pins only that the probe
+	// reads exactly probeSlots slots before giving up, which holds for any
+	// value of the constant.
 	probeSlots = 8
 )
 

@@ -17,6 +17,6 @@
 // two flood options expose the assumed broadcast destination and synthetic
 // controller-addressed traffic (ic7851-broadcast-address-form). Short sets
 // are refused by default; WithShortSetAcknowledgement exposes the open edge
-// under ic7851-write-ack-fb. TestNoProjectImports pins the stdlib-only fence,
+// under ic7851-write-ack-fb. TestNoCoreImports pins the stdlib-only fence,
 // and the package tests pin the wire grammar independently of these builders.
 package fakeic7851

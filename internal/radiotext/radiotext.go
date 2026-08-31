@@ -529,8 +529,11 @@ var ic7610Text = Text{
 // has not been confirmed.
 // TestRadiotext_IC7300Verbatim pins every string, and its own non-borrowing
 // check refuses any field that is byte-identical to, or carries a
-// particular of, any of the six other registered models — the four Yaesu
-// entries, IC-7610, AND its own IC-7300MK2 sibling.
+// particular of, any OTHER registered model — every Yaesu entry, every
+// other Icom entry, AND its own IC-7300MK2 sibling. The set is derived
+// from internal/wiring.SupportedModels() (radiotext_test.go's
+// assertNotBorrowedFromAnyOtherModel) rather than a count fixed at this
+// entry's own registration, so a later registration is covered here too.
 //
 // WHAT IS DIFFERENT ABOUT THIS RADIO, AND WHY IT SHOWS IN THE PROSE:
 //
@@ -735,11 +738,14 @@ var ic7300mk2Text = Text{
 // THIS ENTRY CARRIES NO OTHER RADIO'S EVIDENCE OR PARTICULARS: it is a
 // fourth manufacturer-and-model combination in this file, and
 // TestRadiotext_IC705Verbatim's own non-borrowing check refuses any field
-// that is byte-identical to, or carries a particular of, any of the
-// SEVEN other registered models — the four Yaesu entries and all three
-// other registered Icom ones (IC-7610, IC-7300, IC-7300MK2). The shared
-// sentence SKELETON several entries use (house style, see ic7300Text's
-// own doc comment) is not itself a borrowing; what must never cross is
+// that is byte-identical to, or carries a particular of, any OTHER
+// registered model — this radio has no sibling of its own, so every
+// other registered model is exactly as much a borrowing risk as any
+// other. The set is derived from internal/wiring.SupportedModels()
+// (radiotext_test.go's assertNotBorrowedFromAnyOtherModel) rather than a
+// count fixed at this entry's own registration. The shared sentence
+// SKELETON several entries use (house style, see ic7300Text's own doc
+// comment) is not itself a borrowing; what must never cross is
 // the evidence each skeleton carries.
 //
 // WHAT IS DIFFERENT ABOUT THIS RADIO, AND WHY IT SHOWS IN THE PROSE:
@@ -847,12 +853,15 @@ var ic705Text = Text{
 // THIS ENTRY CARRIES NO OTHER RADIO'S EVIDENCE OR PARTICULARS: it is a
 // fifth manufacturer-and-model combination in this file, and
 // TestRadiotext_IC9700Verbatim's own non-borrowing check refuses any field
-// that is byte-identical to, or carries a particular of, any of the EIGHT
-// other registered models — the four Yaesu entries and all four other
-// registered Icom ones (IC-7610, IC-7300, IC-7300MK2, IC-705). The shared
-// sentence SKELETON several entries use (house style, see ic7300Text's
-// own doc comment) is not itself a borrowing; what must never cross is
-// the evidence each skeleton carries.
+// that is byte-identical to, or carries a particular of, any OTHER
+// registered model — this radio has no sibling of its own, so every
+// other registered model is exactly as much a borrowing risk as any
+// other. The set is derived from internal/wiring.SupportedModels()
+// (radiotext_test.go's assertNotBorrowedFromAnyOtherModel) rather than a
+// count fixed at this entry's own registration. The shared sentence
+// SKELETON several entries use (house style, see ic7300Text's own doc
+// comment) is not itself a borrowing; what must never cross is the
+// evidence each skeleton carries.
 //
 // WHAT IS DIFFERENT ABOUT THIS RADIO, AND WHY IT SHOWS IN THE PROSE:
 //
@@ -979,12 +988,15 @@ var ic9700Text = Text{
 // THIS ENTRY CARRIES NO OTHER RADIO'S EVIDENCE OR PARTICULARS: it is a
 // tenth manufacturer-and-model combination in this file, and
 // TestRadiotext_IC905Verbatim's own non-borrowing check refuses any field
-// that is byte-identical to, or carries a particular of, any of the NINE
-// other registered models — the four Yaesu entries and all five other
-// registered Icom ones (IC-7610, IC-7300, IC-7300MK2, IC-705, IC-9700).
-// The shared sentence SKELETON several entries use (house style, see
-// ic7300Text's own doc comment) is not itself a borrowing; what must
-// never cross is the evidence each skeleton carries.
+// that is byte-identical to, or carries a particular of, any OTHER
+// registered model — this radio has no sibling of its own, so every
+// other registered model is exactly as much a borrowing risk as any
+// other. The set is derived from internal/wiring.SupportedModels()
+// (radiotext_test.go's assertNotBorrowedFromAnyOtherModel) rather than a
+// count fixed at this entry's own registration. The shared sentence
+// SKELETON several entries use (house style, see ic7300Text's own doc
+// comment) is not itself a borrowing; what must never cross is the
+// evidence each skeleton carries.
 //
 // WHAT IS DIFFERENT ABOUT THIS RADIO, AND WHY IT SHOWS IN THE PROSE:
 //

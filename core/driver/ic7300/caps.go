@@ -179,13 +179,12 @@ func bankFields(rw spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 }
 
 // baseCapabilities builds the whole capability description, with EVERY ONE
-// of spec.Capabilities' twenty-eight fields set explicitly — every zero
-// value named by caps_test.go's deliberatelyZero audit, including D8's
-// five receiver vocabularies,
-// are deliberately zero are set to their zero value in the literal below,
-// beside the reading that says why, and caps_test.go's reflection pin
-// refuses a field that is neither non-zero nor named in its
-// deliberatelyZero map.
+// of spec.Capabilities' twenty-eight fields set explicitly: the fields
+// that are deliberately zero — named by caps_test.go's deliberatelyZero
+// audit, including D8's five receiver vocabularies — are set to their
+// zero value in the literal below, beside the reading that says why, and
+// caps_test.go's reflection pin refuses a field that is neither non-zero
+// nor named in its deliberatelyZero map.
 //
 // Additions design D4.2 moved the pinned count from twenty-seven to
 // twenty-eight by requiring this driver's transmitter anatomy explicitly.

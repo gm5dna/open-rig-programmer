@@ -55,10 +55,12 @@ type Accumulator interface {
 // DrainPolicy is the framing's answer to "how long may the engine spend
 // waiting for this line to go quiet, and when must it give up regardless?"
 // Both halves are load-bearing, and the second is the one D2 added
-// (starvation deadlines): a transceive flood — factory-ON on at least four
-// Icom models, with no off-switch this tier ships — is a stream that never
-// goes quiet, and an idle-gap wait alone would postpone itself forever
-// against one.
+// (starvation deadlines): a transceive flood — factory-ON on SOME of the
+// Icom models this programme registers, with no off-switch this tier ships
+// — is a stream that never goes quiet, and an idle-gap wait alone would
+// postpone itself forever against one. (The count is deliberately not
+// written here: engine.go's nextEvent gives the whole argument, and one
+// such radio is all of it that this type needs.)
 type DrainPolicy struct {
 	// IdleGap is how long the line must be silent — no frame, no
 	// accumulator error — before the engine calls it drained. Any

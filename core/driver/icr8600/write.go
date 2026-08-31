@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	civicr8600 "github.com/gm5dna/open-rig-programmer/core/civ/icr8600"
@@ -164,6 +165,60 @@ func (s *Session) bankFor(slot string) (spec.BankID, bool) {
 	return "", false
 }
 
+// occupiedSurprise refuses a write when the preservation read finds a channel
+// that the session's discovery walk never materialised. The bounded walk can
+// miss such a channel whenever a later group's channel 00 is empty; allowing
+// the write would overwrite a channel absent from the codeplug. Pinned by
+// TestEndToEnd_WriteToAnOccupiedSlotTheBoundedWalkMissedIsRefused.
+//
+// UNLIKE THE IC-905'S SAME-NAMED RUNG, this one asks only whether discovery
+// listed the slot — it has no knownOccupied set a confirmed write can grow.
+// That is safe only because WriteChannel's create rung (above this one)
+// refuses every write to an empty slot unconditionally: no session can ever
+// add a slot this inventory does not already list, so the inventory never
+// needs to grow. If a later change ever lets the R8600 create a channel
+// (an honest SELECT default), this rung must grow an occupied-this-session
+// set too, or it will wrongly refuse the second write to a slot the same
+// session just created.
+//
+// THE DIAGNOSTIC IS TAILORED TO THE WALK THIS SESSION ACTUALLY RAN (closing
+// review). One sentence cannot be true of both walks, and the wrong one
+// sends the user looking for the wrong thing:
+//
+//   - After the BOUNDED walk the slot may simply lie outside its reach, and
+//     re-discovery is worth trying, because that reach depends on which
+//     channel 00s answer.
+//   - After a FULL walk it cannot. Every one of the 10,000 addresses was
+//     read, so a record here means the channel arrived AFTER this session
+//     opened — at the front panel, or from another controller — and the
+//     user needs to be told that rather than to re-run a walk that already
+//     covered everything.
+//
+// AND THE OLD SENTENCE OVERSTATED THE REST. "This build offers no setting
+// that widens it" is true of the command line and the window, which expose
+// nothing, but this package does export WithFullInventoryWalk
+// (icr8600.go:34) and internal/wiring's row simply does not pass it. Saying
+// which of those is meant costs one clause and stops the statement being
+// false to anyone who reads the package. The IC-905's same-named rung
+// already refuses to name a remedy the user cannot reach (ic905/write.go,
+// "NO REMEDY IS NAMED THAT THE USER CANNOT REACH"); this keeps that rule
+// and removes the over-claim it left behind.
+func (s *Session) occupiedSurprise(slot string, readReturnedRecord bool) error {
+	if !readReturnedRecord {
+		return nil
+	}
+	mem, ok := s.caps.Bank(spec.BankMemory)
+	if ok && slices.Contains(mem.Slots, slot) {
+		return nil
+	}
+	const surprise = "this session's inventory does not list this slot, but the receiver answered the pre-write read with a record: the discovery walk never saw it, so writing would overwrite a channel nothing has read. "
+	reason := surprise + "This session ran the BOUNDED walk — group 0 in full, then channel 00 of every other group and the rest of a group whose 00 answered — so a channel stored outside it is never listed. Re-discover the receiver; if the slot is still not listed it lies outside that walk, and nothing on this build's command line or in its window widens it (the driver's own WithFullInventoryWalk is a Go-level option no registered composition passes)"
+	if s.report.InventoryComplete {
+		reason = surprise + "This session read the WHOLE 100x100 memory space, so the channel was stored AFTER this session opened — at the receiver's front panel, or by another controller. Re-discover the receiver before writing to it"
+	}
+	return &driver.WriteRefusedError{Slot: slot, Reason: reason}
+}
+
 // WriteChannel performs one read-modify-write transaction and one
 // address-matched acknowledged 1A 00 set. All locally decidable refusals
 // precede the preservation read; E6 is necessarily read-dependent.
@@ -275,6 +330,9 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 		if len(layout.Fixed) != len(stored) || !bytes.Equal(stored[37:], layout.Fixed[37:]) {
 			return res, &driver.WriteRefusedError{Slot: ch.Slot, Reason: civicr8600.DigitalTailRefusalReason}
 		}
+	}
+	if err := s.occupiedSurprise(ch.Slot, occupied); err != nil {
+		return res, err
 	}
 
 	prior, err := s.parseRecord(addr, stored)

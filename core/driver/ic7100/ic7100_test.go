@@ -40,3 +40,16 @@ func TestControlLinePolicyMakesNoDriverAssertion(t *testing.T) {
 		t.Fatal("driver unexpectedly asserts DTR")
 	}
 }
+
+// TestProbeSlotsIsEight pins the literal probeSlots value itself, which
+// TestOpenEmptyRadioIsExplicitlyUnfingerprinted and
+// TestE2E_ReadAllWalksEveryDeclaredSlot do not: both compare
+// ProbeSlotsRead against probeSlots on both sides, so either would still
+// pass if probeSlots were edited to 4 tomorrow. This is the sibling
+// drivers' own style (core/driver/ic7300/ic7300_test.go's
+// "probeSlots != 8" check) applied here.
+func TestProbeSlotsIsEight(t *testing.T) {
+	if probeSlots != 8 {
+		t.Errorf("probeSlots = %d, want 8 — bounded per spec D3.2 and small (ic7100.go's own probeSlots doc comment)", probeSlots)
+	}
+}
