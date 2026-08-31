@@ -1098,8 +1098,9 @@ var wantIC7850 = radiotext.Text{
 // false, so there is no hardware-preservation verification of any kind to
 // report.
 //
-// THE NON-BORROWING CHECK RUNS AGAINST ALL ELEVEN OTHER ENTRIES, the
-// sibling included, and for this pair the sibling is the most important
+// THE NON-BORROWING CHECK RUNS AGAINST EVERY ENTRY REGISTERED BEFORE THIS
+// PAIR, the sibling included, and for this pair the sibling is the most
+// important
 // of them: the two entries are meant to be near-copies of one another
 // EXCEPT for the model name, so a field that forgot to substitute the
 // name would be byte-identical to the sibling's and would serve one
@@ -1252,8 +1253,8 @@ var ic7760Particulars = []string{
 // other model's is: core/driver/ic7760's writeTrialsComplete is false, so
 // there is no hardware-preservation verification of any kind to report.
 //
-// THE NON-BORROWING CHECK RUNS AGAINST ALL TWELVE OTHER ENTRIES,
-// including the two whose radios draw the SAME 27-byte data area as this
+// THE NON-BORROWING CHECK RUNS AGAINST EVERY ENTRY REGISTERED BEFORE THIS
+// ONE, including the two whose radios draw the SAME 27-byte data area as this
 // one (additions spec D1.1). Those two are the borrowing risk this
 // registration actually carries, and byte-identity is what catches a
 // wholesale copy while the particulars catch a partial one.
@@ -1347,8 +1348,8 @@ var ic7100Particulars = []string{
 // other model's is: core/driver/ic7100's writeTrialsComplete is false, so
 // there is no hardware-preservation verification of any kind to report.
 //
-// THE NON-BORROWING CHECK RUNS AGAINST ALL THIRTEEN OTHER ENTRIES,
-// including the two whose radios accept the SAME 111-byte record as this
+// THE NON-BORROWING CHECK RUNS AGAINST EVERY ENTRY REGISTERED BEFORE THIS
+// ONE, including the two whose radios accept the SAME 111-byte record as this
 // one (additions spec D5's 111 B row). Those two are the borrowing risk
 // this registration actually carries, and byte-identity is what catches a
 // wholesale copy while the particulars catch a partial one.
@@ -1456,8 +1457,9 @@ var icr8600Particulars = []string{
 // other model's is: core/driver/icr8600's writeTrialsComplete is false, so
 // there is no hardware-preservation verification of any kind to report.
 //
-// THE NON-BORROWING CHECK RUNS AGAINST ALL FOURTEEN OTHER ENTRIES. None of
-// them describes a receiver, so wholesale borrowing here would be more
+// THE NON-BORROWING CHECK RUNS AGAINST EVERY ENTRY REGISTERED BEFORE THIS
+// ONE. None of them describes a receiver, so wholesale borrowing here would be
+// more
 // visible than usual — which is exactly why the partial kind, a clause
 // lifted from a transceiver's entry, is the one the particulars list
 // catches.
