@@ -36,6 +36,31 @@ var canonicalV4Goldens = []string{
 	"canonical-v4-basic.json",
 }
 
+// canonicalV5Goldens are the schema-5 files in testdata, mirroring
+// canonicalV4Goldens' construction: produced by this package's own Save
+// over a hand-built codeplug, then frozen.
+//
+// Their PROVENANCE differs from the schema-3 goldens' and the difference
+// is worth stating. A schema-3 golden had to come from the pre-tier
+// build, because its whole job is to prove the CURRENT writer still
+// emits what an OLDER one did. Schema 5 has no older writer: it is what
+// this build introduced, so the pin here is against DRIFT — a changed
+// key order, a lost omitempty, a marshal type quietly swapped for the
+// live struct — rather than against a predecessor.
+//
+// The one fixture covers what schema 5 alone can carry: all SEVEN
+// receiver fields (additions design D8) Recorded, each with a value
+// inside the IC-R8600's own declared domain (core/driver/icr8600/caps.go
+// — "12.5 kHz" from TuningSteps, 500 Hz on the 100 Hz programmable
+// grid, 20 dB from AttenuatorDB, "ON" from PreampOptions, "ANT2" from
+// AntennaOptions), on that receiver's zero-based sparse slot form. Its
+// two transmit fields are Unavailable because the IC-R8600 is
+// spec.ReceiveOnly and has no transmitter to describe — the honest
+// state, not a convenient one.
+var canonicalV5Goldens = []string{
+	"canonical-v5-basic.json",
+}
+
 // TestSaveLoad_CanonicalV3ByteIdentical is the FIRST of design D4's two
 // pinned tests (adjudication 4; round 2 F6+C7): save(load(f)) is
 // byte-identical for every canonical writer-produced schema-3 file.
@@ -111,6 +136,60 @@ func TestSaveLoad_CanonicalV4ByteIdentical(t *testing.T) {
 				t.Errorf("save(load(%s)) is not byte-identical.\n--- want ---\n%s\n--- got ---\n%s", name, want, got)
 			}
 		})
+	}
+}
+
+// TestSaveLoad_CanonicalV5ByteIdentical is the schema-5 arm of the
+// byte-identity pin the schema-3 and schema-4 goldens already have.
+// Until it existed, schema 5 was the ONE version this package could both
+// read and write with nothing checking that the two agreed byte for
+// byte: a reordered ChannelData field, a state key that gained
+// omitempty, or a saveValue branch quietly rerouted would all have
+// passed unnoticed.
+func TestSaveLoad_CanonicalV5ByteIdentical(t *testing.T) {
+	for _, name := range canonicalV5Goldens {
+		t.Run(name, func(t *testing.T) {
+			src := filepath.Join("testdata", name)
+			want, err := os.ReadFile(src)
+			if err != nil {
+				t.Fatalf("reading golden: %v", err)
+			}
+			cp, err := Load(src)
+			if err != nil {
+				t.Fatalf("Load(%s) error = %v", src, err)
+			}
+			if cp.Schema != CurrentSchema {
+				t.Fatalf("Load(%s).Schema = %d, want %d (migrate-on-load)", src, cp.Schema, CurrentSchema)
+			}
+			dst := filepath.Join(t.TempDir(), name)
+			if err := Save(dst, cp); err != nil {
+				t.Fatalf("Save() error = %v", err)
+			}
+			got, err := os.ReadFile(dst)
+			if err != nil {
+				t.Fatalf("reading re-saved file: %v", err)
+			}
+			if string(got) != string(want) {
+				t.Errorf("save(load(%s)) is not byte-identical.\n--- want ---\n%s\n--- got ---\n%s", name, want, got)
+			}
+		})
+	}
+}
+
+// TestCanonicalV5Golden_RecordsEveryReceiverField holds the golden to
+// the job it was added for: a receiver field left out of the fixture
+// would leave that field's on-disk rendering unpinned while the
+// byte-identity test above still passed.
+func TestCanonicalV5Golden_RecordsEveryReceiverField(t *testing.T) {
+	cp, err := Load(filepath.Join("testdata", "canonical-v5-basic.json"))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	d := cp.Channels[0].Data
+	for name, state := range receiverFieldStates(d) {
+		if state != Known {
+			t.Errorf("golden receiver field %s = %q, want Known: the fixture must exercise every schema-5 field", name, state)
+		}
 	}
 }
 
