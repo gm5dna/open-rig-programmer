@@ -11,9 +11,11 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
-// allFields is matrix §2's row set, written out by hand: the twenty
-// spec.Fields this project models, ten from the Yaesu era and ten the Icom
-// tier added. Hand-written so that the "every cell is explicit" test
+// allFields is matrix §2's row set, written out by hand: the ten spec.Fields
+// of the Yaesu era plus the ten the Icom tier added. It is NOT every
+// spec.Field this project models — the additions design's D8 minted seven
+// receiver fields on 28/08/2026, which this radio's matrix §2 does not carry
+// a row for. Hand-written so that the "every cell is explicit" test
 // asserts a set rather than whatever the code under test happened to put in
 // its map.
 var allFields = []spec.Field{
