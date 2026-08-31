@@ -105,10 +105,14 @@ func newCIVPort(replies ...[]byte) *civPort {
 
 // continuousCIVPort makes the flood a property of Read rather than a
 // separately scheduled producer: whenever no scripted reply is pending,
-// the next Read has another complete frame available.
+// the next Read has another complete frame available. It never blocks
+// and never yields, so it deliberately busy-loops readLoop's goroutine
+// for the whole drain window — sleeping here would reintroduce the
+// scheduler-timing flakiness this fake exists to remove.
 type continuousCIVPort struct {
 	*civPort
-	frame []byte
+	frame     []byte
+	floodTurn bool // whose turn it is when p.pending also has bytes queued
 }
 
 func newContinuousCIVPort(frame []byte, replies ...[]byte) *continuousCIVPort {
@@ -124,13 +128,23 @@ func (p *continuousCIVPort) Read(b []byte) (int, error) {
 	if p.closed {
 		return 0, errCIVPortClosed
 	}
-	// A scripted answer wins over the flood so
-	// TestFraming_ContinuousFloodDoesNotWedgeTheEngine can prove the
-	// engine still recognises an answer after the capped drain.
+	// A scripted answer is INTERLEAVED into the flood rather than served
+	// ahead of it: one flood frame, then the pending bytes, then flood
+	// again. That is what a real flooded port does — civPort.Write and
+	// civPort.deliver already append to one shared pending FIFO, so a
+	// reply lands amid a stream that keeps flowing rather than jumping a
+	// queue the wire does not have — and it is why
+	// TestFraming_ContinuousFloodDoesNotWedgeTheEngine still exercises
+	// waitForAnswer walking non-matching flood frames, and Do's entry
+	// purge, rather than handing the engine an uncontested answer.
 	if len(p.pending) > 0 {
-		n := copy(b, p.pending)
-		p.pending = p.pending[n:]
-		return n, nil
+		if p.floodTurn {
+			p.floodTurn = false
+			n := copy(b, p.pending)
+			p.pending = p.pending[n:]
+			return n, nil
+		}
+		p.floodTurn = true
 	}
 	n := copy(b, p.frame)
 	if n < len(p.frame) {
@@ -738,15 +752,34 @@ func TestFraming_ContinuousFloodDoesNotWedgeTheEngine(t *testing.T) {
 		t.Cleanup(func() { _ = port.Close() })
 		e, _ := newCIVEngine(t, p, port)
 
+		start := time.Now()
 		err := e.Init(context.Background())
-		// The sentinel is the cap assertion. Wall-clock return time also
-		// includes any period for which the test process is descheduled
-		// after the cap is ready; DrainPolicy promises the deadline the
-		// engine honours, not a scheduler latency bound. core/transport's
-		// TestDrainCap_IsACeilingNotAFloor pins the deadline inside the
-		// blocking wait itself.
+		elapsed := time.Since(start)
+		// The sentinel is the primary assertion: it proves WHY the drain
+		// gave up. A TIGHT wall-clock bound here would measure scheduler
+		// latency rather than the engine's promise — wall-clock return
+		// time includes any period for which the test process is
+		// descheduled after the cap is ready, and DrainPolicy promises
+		// the deadline the engine honours, not that latency.
+		// core/transport's TestDrainCap_IsACeilingNotAFloor already pins
+		// that deadline tightly, inside the blocking wait itself, over a
+		// synthetic policy.
+		//
+		// A COARSE bound is a different thing and is kept: nothing else
+		// asserts that a CI-V flood drain ends near CI-V's own DrainCap
+		// rather than seconds later (transport's own flood shape,
+		// flood_test.go, is bounded only by a 5s watchdog), and a
+		// regression that let this drain postpone itself to Cap+IdleGap
+		// — the failure engine.go's capC exists to prevent — would still
+		// return ErrDrainCapExceeded and slip past the sentinel alone.
+		// So elapsed is checked against a threshold four times the cap:
+		// a hang-detector, not a latency pin, matching the repository's
+		// own idiom for this (withinBound, core/transport/flood_test.go).
 		if !errors.Is(err, transport.ErrDrainCapExceeded) {
 			t.Fatalf("Init error = %v, want ErrDrainCapExceeded under a stream that never goes quiet", err)
+		}
+		if elapsed > 4*DrainCap {
+			t.Errorf("Init took %v against an absolute cap of %v — the drain postponed itself past the cap instead of failing at it", elapsed, DrainCap)
 		}
 
 		// THE RULE THIS TIER READS OFF THAT ERROR: at Init it is nonfatal
