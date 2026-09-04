@@ -190,25 +190,56 @@ func TestRenderGo_LabelsAbsentEmitsEmptyLabels(t *testing.T) {
 }
 
 // TestRegisteredProfiles_DeclareTodaysBehaviourExplicitly is the byte-identity
-// guard's companion: the three registered radios must SAY that their charts
-// are six-digit, labelled and text-bearing, rather than inherit it.
+// guard's companion: every registered radio must SAY what shape its chart is,
+// rather than inherit it.
+//
+// Until the FT-891 there was one population and the assertion could be a
+// blanket "all three are six-digit, labelled and text-bearing". There are now
+// two, so the expectations are stated PER REGISTRATION: the FT-710, FTdx10
+// and FTdx101D/MP keep the values whose byte identity this guard protects,
+// and the FT-891 declares the opposite of all three at once. Keeping it a
+// blanket over RegisteredProfiles() would have meant weakening it to the
+// intersection of two charts, which is no assertion at all.
+//
+// The table is keyed by lookup name and its size is compared against the
+// registry's, so a FIFTH registration fails here rather than slipping through
+// a sweep that never looked at it.
 func TestRegisteredProfiles_DeclareTodaysBehaviourExplicitly(t *testing.T) {
+	want := map[string]struct {
+		addr      AddressForm
+		labels    Labels
+		textRows  TextRows
+		textWidth int
+	}{
+		"ft710":   {AddressTriple, LabelsRequired, TextRowsAllowed, 12},
+		"ftdx10":  {AddressTriple, LabelsRequired, TextRowsAllowed, 12},
+		"ftdx101": {AddressTriple, LabelsRequired, TextRowsAllowed, 12},
+		// The FT-891's chart prints a four-digit MENU Number, no group
+		// labels and no free-text row: core/cat/ft891/table2.csv's
+		// provenance header records all three as readings of that chart.
+		"ft891": {AddressPair, LabelsAbsent, TextRowsAbsent, 0},
+	}
 	regs := RegisteredProfiles()
-	if len(regs) != 3 {
-		t.Fatalf("RegisteredProfiles() returned %d entries, want 3 — this check would pass vacuously", len(regs))
+	if len(regs) != len(want) {
+		t.Fatalf("RegisteredProfiles() returned %d entries, want %d — a registration this table does not name would pass vacuously", len(regs), len(want))
 	}
 	for _, np := range regs {
-		if np.Profile.Addresses != AddressTriple {
-			t.Errorf("%s: Addresses = %v, want AddressTriple", np.Name, np.Profile.Addresses)
+		w, ok := want[np.Name]
+		if !ok {
+			t.Errorf("registration %q is not named by this table; state its chart's shape here", np.Name)
+			continue
 		}
-		if np.Profile.LabelPolicy != LabelsRequired {
-			t.Errorf("%s: LabelPolicy = %v, want LabelsRequired", np.Name, np.Profile.LabelPolicy)
+		if np.Profile.Addresses != w.addr {
+			t.Errorf("%s: Addresses = %v, want %v", np.Name, np.Profile.Addresses, w.addr)
 		}
-		if np.Profile.TextRowPolicy != TextRowsAllowed {
-			t.Errorf("%s: TextRowPolicy = %v, want TextRowsAllowed", np.Name, np.Profile.TextRowPolicy)
+		if np.Profile.LabelPolicy != w.labels {
+			t.Errorf("%s: LabelPolicy = %v, want %v", np.Name, np.Profile.LabelPolicy, w.labels)
 		}
-		if np.Profile.TextWidth != 12 {
-			t.Errorf("%s: TextWidth = %d, want 12 — the three registered charts all print a 12-byte text row", np.Name, np.Profile.TextWidth)
+		if np.Profile.TextRowPolicy != w.textRows {
+			t.Errorf("%s: TextRowPolicy = %v, want %v", np.Name, np.Profile.TextRowPolicy, w.textRows)
+		}
+		if np.Profile.TextWidth != w.textWidth {
+			t.Errorf("%s: TextWidth = %d, want %d", np.Name, np.Profile.TextWidth, w.textWidth)
 		}
 	}
 }

@@ -424,8 +424,11 @@ func TestFTdx101Profile_MatchesTodaysConstants(t *testing.T) {
 // satisfied; this asserts the EXACT set, so silently dropping a registration
 // — or adding a fourth without updating this pin — is a failure rather than a
 // smaller happy enumeration. The sort order is asserted by value here, not
-// merely as "ascending": "ft710" < "ftdx10" < "ftdx101" is the ordering the
-// CLI's -profile listing and every registry-selected staleness test see.
+// merely as "ascending": "ft710" < "ft891" < "ftdx10" < "ftdx101" is the
+// ordering the CLI's -profile listing and every registry-selected staleness
+// test see. ASCII puts "ft891" second, between the FT-710 and the FTdx10,
+// which is not the order the models were added in — pinning it by value is
+// how that stops being a surprise.
 //
 // (Named for two models until M9d-1; the FTdx101D/MP made "both" wrong.)
 func TestRegistry_HoldsEveryModel(t *testing.T) {
@@ -434,7 +437,7 @@ func TestRegistry_HoldsEveryModel(t *testing.T) {
 	for _, np := range got {
 		names = append(names, np.Name)
 	}
-	want := []string{"ft710", "ftdx10", "ftdx101"}
+	want := []string{"ft710", "ft891", "ftdx10", "ftdx101"}
 	if len(names) != len(want) {
 		t.Fatalf("RegisteredProfiles() names = %v, want %v", names, want)
 	}
@@ -443,7 +446,7 @@ func TestRegistry_HoldsEveryModel(t *testing.T) {
 			t.Fatalf("RegisteredProfiles() names = %v, want %v", names, want)
 		}
 	}
-	wantModels := []string{"FT-710", "FTdx10", "FTdx101D/MP"}
+	wantModels := []string{"FT-710", "FT-891", "FTdx10", "FTdx101D/MP"}
 	for i := range wantModels {
 		if got[i].Profile.Model != wantModels[i] {
 			t.Errorf("models[%d] = %q, want %q", i, got[i].Profile.Model, wantModels[i])
@@ -459,5 +462,87 @@ func TestRegistry_HoldsEveryModel(t *testing.T) {
 				t.Errorf("profiles %q and %q both emit into package %q", got[i].Name, got[j].Name, got[i].Profile.Package)
 			}
 		}
+	}
+}
+
+// TestFT891Profile_MatchesTodaysConstants pins the FT-891's registration as
+// LITERALS, the way the FTdx10's and FTdx101D/MP's are. It is the first
+// registration to declare the three chart-shape policies in their MINORITY
+// values, so each is asserted by name here rather than left to the
+// registry-wide sweep in policies_test.go, which now has two populations to
+// keep apart.
+//
+// The three numeric bounds are the FT-891's OWN chart readings, recorded in
+// core/cat/ft891/table2.csv's provenance header: Digits runs 1..5, the 5
+// coming from exactly two rows — 0803 OTHER DISP (ft891_layout.txt:595) and
+// 0804 OTHER SHIFT (:596), whose signed "-3000 ... +3000" parameter counts
+// its sign — and there is no text row anywhere in the chart, so TextWidth is
+// 0 rather than the 12 the other three profiles carry.
+//
+// ExpectedRows is NOT a reading by this package: it is the committed
+// group-boundary ledger's sum, in the sense the ftdx10 and ftdx101 profiles
+// record. Pinning it here means an edit to the profile's copy fails a test
+// rather than quietly re-baselining RenderGo's completeness gate.
+func TestFT891Profile_MatchesTodaysConstants(t *testing.T) {
+	p, ok := Lookup("ft891")
+	if !ok {
+		t.Fatal("Lookup(\"ft891\") failed; the FT-891 must be registered")
+	}
+	if p.Model != "FT-891" {
+		t.Errorf("Model = %q, want \"FT-891\"", p.Model)
+	}
+	if p.Package != "ft891" {
+		t.Errorf("Package = %q, want \"ft891\"", p.Package)
+	}
+	if p.Types != TypesImported {
+		t.Errorf("Types = %v, want TypesImported", p.Types)
+	}
+	if p.ImportPath != "github.com/gm5dna/open-rig-programmer/core/cat" {
+		t.Errorf("ImportPath = %q", p.ImportPath)
+	}
+	if p.ImportAlias != "cat" {
+		t.Errorf("ImportAlias = %q, want \"cat\"", p.ImportAlias)
+	}
+	if p.VarName != "exItems" {
+		t.Errorf("VarName = %q, want \"exItems\"", p.VarName)
+	}
+	if p.OutFile != "exinventory_gen.go" {
+		t.Errorf("OutFile = %q, want \"exinventory_gen.go\"", p.OutFile)
+	}
+	if p.ManualCSV != "table2.csv" {
+		t.Errorf("ManualCSV = %q, want \"table2.csv\"", p.ManualCSV)
+	}
+	if p.ObservedCSV != "" {
+		t.Errorf("ObservedCSV = %q, want empty under ObservationsAbsent", p.ObservedCSV)
+	}
+	if p.Addresses != AddressPair {
+		t.Errorf("Addresses = %v, want AddressPair — the FT-891's EX field is four digits", p.Addresses)
+	}
+	if p.LabelPolicy != LabelsAbsent {
+		t.Errorf("LabelPolicy = %v, want LabelsAbsent — the chart prints no group labels", p.LabelPolicy)
+	}
+	if p.TextRowPolicy != TextRowsAbsent {
+		t.Errorf("TextRowPolicy = %v, want TextRowsAbsent — the chart prints no free-text row", p.TextRowPolicy)
+	}
+	if p.MinDigits != 1 {
+		t.Errorf("MinDigits = %d, want 1", p.MinDigits)
+	}
+	if p.MaxDigits != 5 {
+		t.Errorf("MaxDigits = %d, want 5 (0803 and 0804, ft891_layout.txt:595-596)", p.MaxDigits)
+	}
+	if p.TextWidth != 0 {
+		t.Errorf("TextWidth = %d, want 0 under TextRowsAbsent", p.TextWidth)
+	}
+	if p.MaxObservedWidth != 12 {
+		t.Errorf("MaxObservedWidth = %d, want 12 (the inert sentinel)", p.MaxObservedWidth)
+	}
+	if p.ExpectedRows != 159 {
+		t.Errorf("ExpectedRows = %d, want 159 (the group-boundary ledger's count)", p.ExpectedRows)
+	}
+	if p.Observations != ObservationsAbsent {
+		t.Errorf("Observations = %v, want ObservationsAbsent", p.Observations)
+	}
+	if !strings.HasPrefix(p.DocLines[0], "exItems is the FT-891's EX address inventory") {
+		t.Errorf("DocLines[0] = %q", p.DocLines[0])
 	}
 }
