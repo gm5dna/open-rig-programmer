@@ -279,6 +279,28 @@ func TestValidateDialectConfig_V9P11(t *testing.T) {
 	}
 }
 
+// TestMTP11_ZeroPolicyRefusesRatherThanDefaultingWide is the
+// defense-in-depth arm LOW-3 asks for. A zero MTP11Policy on a combined-form
+// dialect is impossible past NewDialect's V9 clause (dialectvalidate.go) —
+// which is why this test builds its dialect by copying a valid one and
+// zeroing the field directly, rather than through NewDialect, to reach code
+// the config validator cannot.
+//
+// buildMTSetCombined's byte-28 write must REFUSE on this value, not
+// silently take the P11Fixed (wide) reading — the same posture p11Valid
+// (mtcombined.go) enforces on the read side via the shared predicate.
+func TestMTP11_ZeroPolicyRefusesRatherThanDefaultingWide(t *testing.T) {
+	d := combinedDialect
+	d.mt.P11 = 0
+
+	rec := p11TestRecord(t, d)
+	if cmd, err := d.BuildMTSetCombined(rec, "AB"); err == nil {
+		t.Errorf("BuildMTSetCombined with a zero MT.P11 succeeded, emitting %q — an unset policy must refuse, not default to the wide (P11Fixed) reading", cmd.Bytes())
+	} else if !strings.Contains(err.Error(), "P11") {
+		t.Errorf("the refusal %q does not mention P11", err)
+	}
+}
+
 // TestMTP11Policy_String pins the names the refusals quote.
 func TestMTP11Policy_String(t *testing.T) {
 	for _, tc := range []struct {

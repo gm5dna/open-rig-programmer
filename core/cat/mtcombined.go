@@ -144,10 +144,23 @@ func (d Dialect) validateCombinedMTFields(m MemoryData) error {
 	// clarifier is REFUSED rather than quietly encoded as '0': a caller that
 	// believed it was writing the clarifier finds out, which is the
 	// validate-don't-rewrite posture this validator takes with every other
-	// field. Shared with the outbound gate, which reaches this same
-	// validator, so the refusal holds for a forged frame too.
-	if d.memoryP5 == P5Fixed && m.TxClar {
-		return newParseError([]byte{boolDigit(m.TxClar)}, fmt.Sprintf("MT: TxClar must be false under %v — this dialect's manual prints P5 (position 21) \"(Fixed)\", so there is no TX clarifier flag to set", d.memoryP5))
+	// field. This is the WRITE-direction check on a caller-supplied
+	// MemoryData; a FORGED wire frame is instead refused earlier, by
+	// parseMemoryFields (memdata.go), which the gate's combined-MT grammar
+	// check reaches before this validator ever runs.
+	//
+	// A SWITCH, not an if with an implicit "everything else passes" arm: see
+	// parseMemoryFields' matching comment (memdata.go) — an omitted config
+	// semantic refuses rather than defaults, and NewDialect's V14 already
+	// keeps every registered dialect from reaching the default case.
+	switch d.memoryP5 {
+	case P5Fixed:
+		if m.TxClar {
+			return newParseError([]byte{boolDigit(m.TxClar)}, fmt.Sprintf("MT: TxClar must be false under %v — this dialect's manual prints P5 (position 21) \"(Fixed)\", so there is no TX clarifier flag to set", d.memoryP5))
+		}
+	case P5TxClar:
+	default:
+		return newParseError(nil, "MT: P5 (position 21) policy unset — refusing to guess whether the byte is fixed schema or the TX clarifier flag")
 	}
 
 	// CTCSSState/Shift are byte-alias types exactly like Mode: re-validate
@@ -250,10 +263,22 @@ func (d Dialect) buildMTSetCombined(m MemoryData, tag string, display bool) (Com
 	// — validated above, not overwritten here.
 	frame := make([]byte, d.mtCombinedLen())
 	frame[0], frame[1] = 'M', 'T'
-	d.encodeMemoryFields(frame, m)
-	frame[mtCombinedP11Offset] = combinedMTP11
-	if d.mt.P11 == P11TagDisplay {
+	if err := d.encodeMemoryFields(frame, m); err != nil {
+		return Command{}, err
+	}
+	// P11, BY THIS DIALECT'S OWN READING. A SWITCH, not an if with an
+	// implicit "everything else is P11Fixed" arm: NewDialect's V9
+	// (dialectvalidate.go) already refuses a zero MTP11Policy on a
+	// combined-form dialect at construction, but the default branch below
+	// is what keeps this builder from silently taking the P11Fixed (wide)
+	// reading in the one place V9 cannot reach.
+	switch d.mt.P11 {
+	case P11Fixed:
+		frame[mtCombinedP11Offset] = combinedMTP11
+	case P11TagDisplay:
 		frame[mtCombinedP11Offset] = boolDigit(display)
+	default:
+		return Command{}, newParseError(nil, "MT: P11 (position 28) policy unset — refusing to guess whether the byte is fixed schema or a live TAG flag")
 	}
 
 	field := frame[mtCombinedTagOffset : mtCombinedTagOffset+d.mt.TagMaxBytes]
@@ -319,6 +344,24 @@ func (d Dialect) ParseMTAnswerCombinedDisplay(frame []byte) (MemoryData, string,
 	return d.parseMTAnswerCombined(frame)
 }
 
+// p11Valid reports whether b is an admissible byte 28 of a combined MT
+// record for THIS dialect's P11 reading: under P11TagDisplay, one of the two
+// documented TAG ON/OFF values; under P11Fixed (and any other/zero value,
+// which validateDialectConfig's V9 already refuses at construction), the
+// record's printed-fixed byte and nothing else.
+//
+// ONE FUNCTION DECIDES. Both the parser (parseMTAnswerCombined, below) and
+// the gate (AllowedCommand's MTFormCombined branch, allowlist.go) call this
+// rather than each re-testing d.mt.P11 against the byte — so byte 28's
+// admission rule cannot drift into two answers from one dialect.
+func (d Dialect) p11Valid(b byte) bool {
+	if d.mt.P11 == P11TagDisplay {
+		_, err := parseBoolDigit(b)
+		return err == nil
+	}
+	return b == combinedMTP11
+}
+
 // parseMTAnswerCombined is the one body both combined parsers share. The
 // display flag it returns is false under P11Fixed, where byte 28 is required
 // to be combinedMTP11 and carries no state.
@@ -342,20 +385,22 @@ func (d Dialect) parseMTAnswerCombined(frame []byte) (MemoryData, string, bool, 
 	default:
 		return MemoryData{}, "", false, newParseError(frame, fmt.Sprintf("MT frame: kind field (P7) must be %q (VFO) or %q (Memory)", KindVFO, KindMemory))
 	}
-	// P11, BY THIS DIALECT'S OWN READING. Under P11Fixed this is the
-	// pre-existing refusal, wording untouched — the badP11 test in
-	// mtcombined_test.go stands on it. Under P11TagDisplay the byte is a
-	// flag, and only its two documented values are accepted: a third value
-	// is an undocumented frame, and this package does not turn one into
-	// data.
+	// P11, BY THIS DIALECT'S OWN READING, through p11Valid — the same
+	// predicate the gate consults. Under P11Fixed this is the pre-existing
+	// refusal, wording untouched — the badP11 test in mtcombined_test.go
+	// stands on it. Under P11TagDisplay the byte is a flag, and only its two
+	// documented values are accepted: a third value is an undocumented
+	// frame, and this package does not turn one into data.
 	display := false
-	if d.mt.P11 == P11TagDisplay {
-		display, err = parseBoolDigit(frame[mtCombinedP11Offset])
-		if err != nil {
+	if !d.p11Valid(frame[mtCombinedP11Offset]) {
+		if d.mt.P11 == P11TagDisplay {
 			return MemoryData{}, "", false, newParseError(frame, fmt.Sprintf("MT frame: P11 (position 28) must be '0' or '1' under %v — it is this dialect's TAG ON/OFF flag", d.mt.P11))
 		}
-	} else if frame[mtCombinedP11Offset] != combinedMTP11 {
 		return MemoryData{}, "", false, newParseError(frame, fmt.Sprintf("MT frame: P11 must be fixed %q", combinedMTP11))
+	}
+	if d.mt.P11 == P11TagDisplay {
+		// p11Valid has already confirmed this succeeds.
+		display, _ = parseBoolDigit(frame[mtCombinedP11Offset])
 	}
 
 	return m, d.decodeCombinedTag(string(frame[mtCombinedTagOffset : mtCombinedTagOffset+d.mt.TagMaxBytes])), display, nil

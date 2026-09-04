@@ -316,16 +316,14 @@ func (d Dialect) validMTCommand(frame []byte) bool {
 		if d.validateCombinedMTFields(m) != nil {
 			return false
 		}
-		// P11, BY THIS DIALECT'S OWN READING. Under P11Fixed only the
-		// printed-fixed byte is admitted, as before. Under P11TagDisplay the
-		// byte is a live TAG flag and both of its documented values are
-		// admitted — and nothing else, so an undocumented third value is
-		// still refused outbound.
-		if d.mt.P11 == P11TagDisplay {
-			if _, err := parseBoolDigit(frame[mtCombinedP11Offset]); err != nil {
-				return false
-			}
-		} else if frame[mtCombinedP11Offset] != combinedMTP11 {
+		// P11, BY THIS DIALECT'S OWN READING, through p11Valid — the same
+		// predicate parseMTAnswerCombined consults (mtcombined.go), so one
+		// function decides byte 28's admission rule for both the parser and
+		// the gate. Under P11Fixed only the printed-fixed byte is admitted,
+		// as before. Under P11TagDisplay the byte is a live TAG flag and
+		// both of its documented values are admitted — and nothing else, so
+		// an undocumented third value is still refused outbound.
+		if !d.p11Valid(frame[mtCombinedP11Offset]) {
 			return false
 		}
 		// THE RAW TAG FIELD, PER BYTE, WITH validMTTagByte ONLY —
