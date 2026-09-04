@@ -152,6 +152,40 @@ func TestUpdateChannel_NormalisesUnreachableAbsentTierField(t *testing.T) {
 	}
 }
 
+// TestUpdateChannel_MismatchedConnectedModelKeepsReachableAbsent pins the
+// edit path's half of the same rule ImportCSV's mismatched-model test
+// pins: applyEditsLocked resolves Absent against the WORKING COPY's
+// model, never the connected session's.
+//
+// An FT-710 is connected while the working copy is an IC-7610 — a pairing
+// the app permits and Validate's radio-identity check reports, not one
+// this pass may act on. Normalising against the session would write "no
+// such field" into a channel of a radio that has one, and an edit is
+// exactly where that laundering would be invisible: the state is settled
+// silently, and the IC-7610's own Validate then finds nothing to refuse.
+func TestUpdateChannel_MismatchedConnectedModelKeepsReachableAbsent(t *testing.T) {
+	a, _ := newTestApp(t)
+	sess := openTestSimSession(t) // a connected FT-710, not the working copy's radio
+	a.mu.Lock()
+	a.working = icomWorkingCopy(t)
+	a.conn = &connectionState{session: sess}
+	edit := a.working.Channels[0]
+	data := *edit.Data // copy: the working copy's own Data must not be edited in place
+	data.Filter = codeplug.StringField{State: codeplug.Absent}
+	edit.Data = &data
+	a.mu.Unlock()
+
+	if _, err := a.UpdateChannel(edit); err != nil {
+		t.Fatalf("UpdateChannel: %v", err)
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if got := a.working.Channels[0].Data.Filter.State; got != codeplug.Absent {
+		t.Errorf("edited filter state = %q, want Absent (the working copy's IC-7610 HAS a filter field; only the connected FT-710 does not)", got)
+	}
+}
+
 // TestUpdateChannel_NothingLoaded pins the ErrNothingLoaded guard.
 func TestUpdateChannel_NothingLoaded(t *testing.T) {
 	a, _ := newTestApp(t)

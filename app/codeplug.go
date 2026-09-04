@@ -104,14 +104,23 @@ func (a *App) applyEditsLocked(chs []codeplug.Channel) (EditResult, error) {
 			return EditResult{}, &UnknownSlotError{Slot: ch.Slot}
 		}
 	}
+	// The CONNECTED session's capabilities when connected, which is the
+	// right question for the Validate below (task-15 brief §2's
+	// connected-authoritative/disconnected-advisory rule) and for nothing
+	// else in this function.
 	caps, _ := currentCaps(a.conn, a.working)
 	for _, ch := range chs {
 		a.working.Channels[index[ch.Slot]] = ch
 	}
 	// An edit may carry bare Absent from a v2 import or frontend state; key
 	// unreachable fields before Diff can mistake them for a radio change (see
-	// TestUpdateChannel_NormalisesUnreachableAbsentTierField).
-	codeplug.NormaliseTierFields(a.working, caps)
+	// TestUpdateChannel_NormalisesUnreachableAbsentTierField) — against THE
+	// WORKING COPY'S OWN model, so a field the working copy's radio really
+	// has stays Absent for Validate to refuse even when a different radio is
+	// connected (see
+	// TestUpdateChannel_MismatchedConnectedModelKeepsReachableAbsent, and
+	// normaliseTierFieldsForOwnModel for why).
+	normaliseTierFieldsForOwnModel(a.working)
 	a.bumpWorkingRevLocked() // Fix 4: working-copy channels mutated
 	a.dirty = true
 
