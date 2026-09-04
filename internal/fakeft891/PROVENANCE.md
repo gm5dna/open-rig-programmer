@@ -26,8 +26,9 @@ the address → raw-P4 map the fake answers EX reads from.
 ## What the artefact is
 
 **Transcription B of the FT-891 CAT Operation Reference Book's MENU chart**,
-manual revision 1909-C. It was produced at this milestone's Stage 0 evidence
-wave, derived **PDF-primary by a quarantined agent** that never opened this
+manual revision 1909-C. It was produced at this milestone's quarantined-evidence
+wave (commit `adf3d21`, "the three quarantined evidence legs, committed
+verbatim"), derived **PDF-primary by a quarantined agent** that never opened this
 repository, never saw transcription A or the group-boundary ledger, and was
 told no row count and no address. Its delivered schema is
 
