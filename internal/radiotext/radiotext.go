@@ -1576,24 +1576,35 @@ var icr8600Text = Text{
 	// expected on this receiver at all; either way they are counted and
 	// ignored.
 	//
-	// AND, LAST, THE BOUNDED INVENTORY WALK (F1, follow-up sweep) — the
-	// fact only the IC-905's own ProbeFirmwareNote states elsewhere,
+	// AND, LAST, THE BOUNDED INVENTORY WALK (F1, follow-up sweep) — a
+	// fact only the IC-905's own ProbeFirmwareNote states elsewhere. NOT
 	// because no other registered model's default Open leaves part of its
-	// memory space unwalked. (*Session).discover
-	// (core/driver/icr8600/read.go) reads group 0 in full, then samples
-	// channel 00 of every later group, descending into the rest of that
-	// group only where the sample answered with a record — this
-	// receiver's OWN shape, with neither a CALL bank nor an occupied-count
-	// budget to also describe, unlike the IC-905's discoverInventory. IT
-	// NAMES NO REMEDY, for the same reason the IC-905's own note names
-	// none: WithFullInventoryWalk (icr8600.go) opts a session into the
-	// whole 100x100 space, but it is a Go-only option no registered
+	// memory space unwalked: the IC-705's default is bounded too
+	// (core/driver/ic705/ic705.go:52-63), and
+	// internal/wiring/wiring.go:843-845's NewIC705RealDriver passes it no
+	// ic705.WithFullInventoryWalk() — only the 905's own note happens to
+	// SAY so today; the IC-705's note does not carry this paragraph yet
+	// (a recorded follow-up, not this round). It is a free-standing
+	// sentence here, as on the IC-905's entry, not folded into the
+	// "things worth knowing before blaming the port" list above it: the
+	// walk is a fact about what discovery covers, not a port-diagnosis
+	// step. (*Session).discover (core/driver/icr8600/read.go) reads
+	// group 0 in full, then samples channel 00 of every later group,
+	// descending into the rest of that group only where the sample
+	// answered with a record — this receiver's OWN shape, with neither a
+	// CALL bank nor an occupied-count budget to also describe, unlike
+	// the IC-905's discoverInventory. IT NAMES NO REMEDY THE USER CAN
+	// REACH, for the same reason the honest refusal at
+	// core/driver/icr8600/write.go:215 does not either:
+	// WithFullInventoryWalk (icr8600.go) opts a session into the whole
+	// 100x100 space, but it is a Go-only option no registered
 	// composition passes (internal/wiring's NewICR8600RealDriver), so
-	// naming it here would point the reader at a control that does not
-	// exist for them. What the clause states instead is the bound and its
-	// consequence: a channel missing from this build's list is not
-	// evidence that the receiver's channel is empty.
-	ProbeFirmwareNote: "Firmware version has no query in this build — check the receiver's display. No minimum version is established for the IC-R8600: this build knows of none to require. This driver talks only to CI-V address 96h, with no --civ-address option to change it and no way to detect a receiver set to a different address; and its opening speed of 19200 is assumed on both halves — this receiver's CI-V Reference Guide prints no factory default speed, mentions no automatic setting, and never lists the rates its menu offers, so the rate AND the list it was chosen from are both assumed. The guide's own advice is to set the address, the speed and the transceive function in the receiver's Set mode before controlling it, which is the first thing to check. Three more things about this receiver are worth knowing before blaming the port. It has FOUR possible control terminals — a remote jack, a front and a rear USB port, and a network connection — and this build talks over USB, so if one port is silent, check which terminal the receiver has been told to use before concluding the cable is wrong. Neither the transceive setting nor the echo-back setting of either USB port has a printed default, so this build cannot tell you whether unsolicited frames should be expected of the receiver's own accord; any that arrive are counted and ignored, never acted on. And opening this receiver discovers its Memories bank's occupied slots by a BOUNDED walk — group 0 in full, then channel 00 of every other group, reading the rest of a group only where its channel 00 answered — not the whole 100x100 space, and this build offers no setting that widens it: a channel stored outside that walk is simply not listed here, so its absence from the grid is not evidence that the receiver's channel is empty. If nothing answers, check the receiver's address and speed before assuming the port is wrong.",
+	// the clause NAMES it, to keep "nothing on this build's command line
+	// or in its window widens it" honest, without pointing the reader at
+	// a control they cannot reach. What the clause states beyond that is
+	// the bound and its consequence: a channel missing from this build's
+	// list is not evidence that the receiver's channel is empty.
+	ProbeFirmwareNote: "Firmware version has no query in this build — check the receiver's display. No minimum version is established for the IC-R8600: this build knows of none to require. This driver talks only to CI-V address 96h, with no --civ-address option to change it and no way to detect a receiver set to a different address; and its opening speed of 19200 is assumed on both halves — this receiver's CI-V Reference Guide prints no factory default speed, mentions no automatic setting, and never lists the rates its menu offers, so the rate AND the list it was chosen from are both assumed. The guide's own advice is to set the address, the speed and the transceive function in the receiver's Set mode before controlling it, which is the first thing to check. Two more things about this receiver are worth knowing before blaming the port. It has FOUR possible control terminals — a remote jack, a front and a rear USB port, and a network connection — and this build talks over USB, so if one port is silent, check which terminal the receiver has been told to use before concluding the cable is wrong. Neither the transceive setting nor the echo-back setting of either USB port has a printed default, so this build cannot tell you whether unsolicited frames should be expected of the receiver's own accord; any that arrive are counted and ignored, never acted on. Opening this receiver also discovers its Memories bank's occupied slots by a BOUNDED walk — group 0 in full, then channel 00 of every other group, reading the rest of a group only where its channel 00 answered — not the whole 100x100 space, and nothing on this build's command line or in its window widens it (the driver's own WithFullInventoryWalk is a Go-level option no registered composition passes): a channel stored outside that walk is simply not listed here, so its absence from the grid is not evidence that the receiver's channel is empty. If nothing answers, check the receiver's address and speed before assuming the port is wrong.",
 }
 
 // texts is the registry For consults, keyed by the exact model string a
