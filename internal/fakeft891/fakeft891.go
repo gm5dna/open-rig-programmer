@@ -26,9 +26,10 @@ type Radio struct {
 	// mutated afterwards, so the parser may read it without r.mu.
 	mtReadUnsupported bool
 
-	mu    sync.Mutex
-	slots map[string]MemState
-	ai    byte // '0' or '1'; OFF at construction, a MANUAL FACT (ft891_layout.txt:231)
+	mu             sync.Mutex
+	slots          map[string]MemState
+	currentChannel string
+	ai             byte // '0' or '1'; OFF at construction, a MANUAL FACT (ft891_layout.txt:231)
 
 	// shutdown is closed (exactly once, by closePipes) when the radio goes
 	// away. WithLatency's wait selects against it (sleepInterruptible)
@@ -50,6 +51,12 @@ func New(opts ...Option) *Radio {
 		hostConn: hostConn,
 		fakeConn: fakeConn,
 		slots:    map[string]MemState{},
+		// The answer-only none form: what "MC;" reports before any MC-set
+		// has happened. The wire spelling is the DIALECT's ASSUMED
+		// NoneWire (core/cat/ft891/doc.go's register entry
+		// "SlotSpace.NoneWire = \"000\""), cited not re-derived — it
+		// appears in no FT-891 slot legend.
+		currentChannel: slotNoneWire,
 		// OFF at construction: New models a freshly-powered radio, and this
 		// radio's own manual says what that state is — "This parameter is set
 		// to '0' (OFF) automatically when the transceiver is turned 'OFF'"

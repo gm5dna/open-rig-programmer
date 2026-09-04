@@ -302,3 +302,107 @@ func TestClose_IsPromptDespiteAPendingLatency(t *testing.T) {
 		t.Fatalf("Close did not return within %v while a %v latency was pending — the wait is not interruptible, and internal/wiring's fake-rig teardown depends on it being so", testTimeout, 30*time.Second)
 	}
 }
+
+// --- MC: the current-channel answer, and recall (availability 160; frames
+// 906-915) ---
+
+func TestMC_ReadAnswersTheNoneFormUntilARecall(t *testing.T) {
+	_, conn := newTestRadio(t)
+
+	// Hand-written from the MC chart (ft891_layout.txt:906-915): "MC" + the
+	// 3-byte current channel + ';'. "000" is the DIALECT's ASSUMED none form
+	// (core/cat/ft891/doc.go's register entry "SlotSpace.NoneWire"), which
+	// this fake reports until an MC-set.
+	if got, want := exchange(t, conn, "MC;"), "MC000;"; got != want {
+		t.Errorf("MC; on a fresh radio -> %q, want %q", got, want)
+	}
+	if got, want := selectionOverTheWire(t, conn), "000"; got != want {
+		t.Errorf("the selection reads back as %q, want %q", got, want)
+	}
+}
+
+// selectionOverTheWire reads the selection back over the WIRE and returns the
+// slot the answer names, so a test asserting on the selection asserts on what
+// a host would see rather than on package state.
+func selectionOverTheWire(t *testing.T, conn io.ReadWriteCloser) string {
+	t.Helper()
+	got := exchange(t, conn, "MC;")
+	if len(got) != 6 || !strings.HasPrefix(got, "MC") || got[5] != ';' {
+		t.Fatalf("MC; -> %q, want a 6-byte \"MC\" answer", got)
+	}
+	return got[2:5]
+}
+
+func TestMC_RecallOfAPopulatedSlotIsSilentAndMovesTheSelection(t *testing.T) {
+	r, conn := newTestRadio(t, WithSlot("001", ordinaryState()))
+
+	writeFrame(t, conn, "MC001;")
+	assertNoReply(t, conn)
+
+	if got, want := exchange(t, conn, "MC;"), "MC001;"; got != want {
+		t.Errorf("MC; after MC001; -> %q, want %q", got, want)
+	}
+	if got, want := r.CurrentChannel(), "001"; got != want {
+		t.Errorf("CurrentChannel() = %q, want %q", got, want)
+	}
+}
+
+func TestMC_RecallOfAnEmptySlotIsRejected(t *testing.T) {
+	_, conn := newTestRadio(t)
+
+	// ASSUMED — doc.go's register entry EMPTY-SLOT ANSWERS: a channel with no
+	// stored data cannot be recalled, paired with the read rule.
+	assertRejected(t, conn, "MC050;")
+	if got, want := selectionOverTheWire(t, conn), "000"; got != want {
+		t.Errorf("a rejected recall moved the selection to %q, want it left at %q", got, want)
+	}
+}
+
+// TestMC_RefusesTheSlotClassesItsLegendDoesNotName is the fake's twin of
+// core/cat/ft891's TestDifferencePinMCSelects. This radio's MC block prints
+// TWO slot classes only — "001 - 099: Regular Memory Channel" and "P1L - P9U
+// (PMS)" (ft891_layout.txt:907-909) — where every registered sibling's MC
+// legend prints 5xx and EMG as well. So a 5 MHz channel this fake will happily
+// answer over MR cannot be recalled by MC, and that is the legend rather than
+// a policy.
+func TestMC_RefusesTheSlotClassesItsLegendDoesNotName(t *testing.T) {
+	for _, slot := range []string{"501", "510", "EMG"} {
+		r, conn := newTestRadio(t, WithSlot(slot, ordinaryState()))
+
+		// Populated, and MR proves it in the same session, so the MC refusal
+		// below cannot be an empty slot in disguise.
+		if got := exchange(t, conn, "MR"+slot+";"); got == "?;" {
+			t.Fatalf("MR%s; -> %q, so the MC refusal proves nothing", slot, got)
+		}
+		assertRejected(t, conn, "MC"+slot+";")
+		if got, want := r.CurrentChannel(), "000"; got != want {
+			t.Errorf("a refused recall moved the selection to %q, want %q", got, want)
+		}
+	}
+}
+
+func TestMC_MalformedRejected(t *testing.T) {
+	_, conn := newTestRadio(t)
+	assertRejected(t, conn, "MC000;")  // the answer-only none form is never a request
+	assertRejected(t, conn, "MC100;")  // grammatical, out of inventory
+	assertRejected(t, conn, "MC01;")   // two-byte slot
+	assertRejected(t, conn, "MC0011;") // four-byte slot
+}
+
+// TestSetsDoNotMoveTheSelection pins the DELIBERATE NON-BORROWING doc.go's
+// register entry A SET DOES NOT MOVE THE SELECTED CHANNEL records:
+// internal/fakeradio's MW moves the FT-710's selection on that radio's own
+// hardware finding, and inventing the same side effect for a radio nobody has
+// written to is exactly the borrowed-fact class this package refuses.
+func TestSetsDoNotMoveTheSelection(t *testing.T) {
+	r, conn := newTestRadio(t)
+
+	writeFrame(t, conn, ordinaryChannel("007", '0').frame())
+	assertNoReply(t, conn)
+	if _, ok := r.SlotState("007"); !ok {
+		t.Fatal("the Set did not land, so the selection assertion below proves nothing")
+	}
+	if got, want := selectionOverTheWire(t, conn), "000"; got != want {
+		t.Errorf("an MT Set moved the selection to %q, want it left at %q", got, want)
+	}
+}

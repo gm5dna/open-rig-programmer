@@ -767,6 +767,71 @@ func (r *Radio) handleAI(body []byte) []byte {
 	return rejection
 }
 
+// --- MC: MEMORY CHANNEL (recall) (availability 160; frames 906-915) ---
+//
+// O O O X. Set frame (6 bytes) "MC" + 3-byte slot + ';', fire-and-forget,
+// recalling the channel; Read frame "MC;" answered by "MC" + the 3-byte
+// current channel + ';'. Disambiguated by length, as MT is.
+//
+// THIS RADIO'S MC LEGEND PRINTS TWO SLOT CLASSES ONLY — "001 - 099: Regular
+// Memory Channel" and "P1L - P9U (PMS)" (ft891_layout.txt:907-909) — where
+// every registered sibling's prints 5xx and EMG as well. So a 5 MHz channel
+// this fake answers over MR cannot be recalled by MC. Not an assumption: this
+// is the legend, transcribed, and it is what core/cat/ft891/dialect.go's
+// MCSelectsMemoryPMS carries on the send side.
+//
+// A NOTE ON THE ANSWER DIRECTION, so that a later reader does not read a gap
+// as a decision: core/cat/ft891/doc.go's register entry "THE MC ANSWER DOMAIN
+// BEYOND MEMORY AND PMS" records that the codec will ACCEPT an MC answer
+// naming a 5xx or EMG channel, because a radio put on one from the front
+// panel would report it however narrow its Set domain is. This fake never
+// produces such an answer — nothing here models a front panel, and only an
+// MC-set moves the selection — so it neither exercises that tolerance nor
+// contradicts it.
+//
+// MC-set of a slot this fake holds no state for answers "?;", paired with the
+// read rule (doc.go's register entry EMPTY-SLOT ANSWERS): a channel with no
+// stored data cannot be recalled.
+
+// mcSettableSlot reports whether kind is a slot an MC Set may name, per MC's
+// own legend. Its own function rather than a call to mtSlot: the two legends
+// agree on this radio (907-909 against 998-999) as two separate facts that
+// happen to coincide, and a radio that ever separated them would take one
+// function with it.
+func mcSettableSlot(kind slotKind) bool { return kind == slotMemory || kind == slotPMS }
+
+func buildMCAnswer(current string) []byte {
+	out := make([]byte, 0, 2+slotWireLen+1)
+	out = append(out, 'M', 'C')
+	out = append(out, current...)
+	out = append(out, ';')
+	return out
+}
+
+func (r *Radio) handleMC(body []byte) []byte {
+	switch len(body) {
+	case 0:
+		r.mu.Lock()
+		cur := r.currentChannel
+		r.mu.Unlock()
+		return buildMCAnswer(cur)
+
+	case slotWireLen:
+		slot := string(body)
+		if !mcSettableSlot(parseSlotForm(slot)) {
+			return rejection
+		}
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		if _, ok := r.slots[slot]; !ok {
+			return rejection // empty slot — the EMPTY-SLOT ANSWERS entry
+		}
+		r.currentChannel = slot
+		return nil // fire-and-forget success
+	}
+	return rejection
+}
+
 // --- Top-level dispatch ---
 
 // handleFrame parses one complete, ';'-terminated frame (as produced by
@@ -804,6 +869,8 @@ func (r *Radio) handleFrame(frame []byte) []byte {
 		return r.handleMR(rest)
 	case [2]byte{'M', 'T'}:
 		return r.handleMT(rest)
+	case [2]byte{'M', 'C'}:
+		return r.handleMC(rest)
 	default:
 		return rejection
 	}
