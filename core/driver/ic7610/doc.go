@@ -161,7 +161,11 @@
 //     error satisfying errors.Is(err, driver.ErrWrongRadio) — see
 //     RecordLengthMismatchError, which NAMES NO FOUND MODEL:
 //     cross-model record-length distinctness is a TIER-LEVEL WAVE-4 CHECK
-//     and this model has no registered sibling.
+//     and this model has no registered sibling. errors.As(err, &civLengthErr)
+//     also succeeds, against the *civ.RecordLengthError this type wraps
+//     alongside driver.ErrWrongRadio — the same shape as the IC-9700's
+//     RecordLengthMismatchError (core/civ/tier_test.go documents the
+//     harmonisation).
 //
 //   - AN EMPTY RADIO OPENS UNFINGERPRINTED, on address evidence alone
 //     (spec D3.2, D5 entry 2(a), matrix lift R2a). Refusing there would
