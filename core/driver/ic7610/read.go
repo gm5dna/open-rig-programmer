@@ -232,6 +232,11 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 	}
 	// TestReadChannel_RefusesFrequencyAboveCeiling pins this refusal: a
 	// read must not construct a frequency codeplug.Validate will reject.
+	// TestReadChannel_AcceptsFrequencyAtCeiling pins the boundary itself:
+	// the strict > below refuses only what exceeds the ceiling, not the
+	// ceiling value. There is no floor check, by design: MinFreqHz is
+	// deliberately zero (caps.go:367), so no decoded frequency can fall
+	// below it.
 	if freq > MaxEncodableFreqHz {
 		return codeplug.Channel{}, &OutOfDomainError{
 			Field: spec.FieldFrequency, Value: freq, Max: MaxEncodableFreqHz,

@@ -101,8 +101,9 @@ var ErrOutOfDomain = errors.New("ic7851: a Known value lies outside what this ra
 type OutOfDomainError struct {
 	// Field is the neutral field whose value was refused.
 	Field spec.Field
-	// Value is what was asked for, in the field's own neutral unit (hertz
-	// for a frequency, tenths of a hertz for a tone).
+	// Value is what was asked for on a write, or what was decoded on a
+	// read, in the field's own neutral unit (hertz for a frequency,
+	// tenths of a hertz for a tone).
 	Value uint64
 	// Min and Max are this session's declared bounds for the field, in
 	// the same unit.
@@ -111,9 +112,15 @@ type OutOfDomainError struct {
 	Where string
 }
 
+// Error's wording holds at both call sites: WriteChannel raises this
+// before a frame is built, and ReadChannel raises it after decoding one
+// (via domainRefusal), where there is no outbound frame at all — see
+// TestReadChannel_RefusesFrequencyOutsideRadioDomain. So the gate
+// reference below states what civ.FieldSpan can never check, not what a
+// specific frame would do.
 func (e *OutOfDomainError) Error() string {
 	return fmt.Sprintf(
-		"ic7851: %s = %d is outside this radio's declared domain %d..%d (%s) — refused by the driver. This is a DRIVER-level refusal and NOT the outbound gate: civ.FieldSpan carries no numeric domain, so the gate would admit this frame (see doc.go, the deferred gate-domain gap)",
+		"ic7851: %s = %d is outside this radio's declared domain %d..%d (%s) — refused by the driver. This is a DRIVER-level refusal, not the outbound gate: civ.FieldSpan carries no numeric domain, so the gate offers no such check (see doc.go, the deferred gate-domain gap)",
 		e.Field, e.Value, e.Min, e.Max, e.Where)
 }
 
