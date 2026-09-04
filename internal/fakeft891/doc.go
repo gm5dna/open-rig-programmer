@@ -63,8 +63,9 @@
 // its byte 21 is schema where the FTdx10's is a TX clarifier flag, its byte
 // 28 is a live flag where the FTdx10's is schema, its MT read legend names
 // two slot classes where the FTdx10's names four, and its 5 MHz bank is ten
-// channels where the FTdx10's is a hundred. A shared implementation would
-// have had to be unpicked from every one of those.
+// transcribed channels where the FTdx10's is 501..599 on an inherited
+// numbering its own register carries as an assumption. A shared
+// implementation would have had to be unpicked from every one of those.
 //
 // Where this fake DIVERGES from fakedx10, the divergence is a decision with a
 // reason, and each is stated at the code that implements it:
