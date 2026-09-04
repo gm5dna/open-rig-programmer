@@ -400,17 +400,26 @@ func (d Dialect) parseMemoryFields(frame []byte, wantPrefix string) (MemoryData,
 	// flag — the same treatment P9 gets, and the combined form's P11 under
 	// P11Fixed. Turning an undocumented byte into data is what this package
 	// refuses to do.
-	txClar := false
-	if d.memoryP5 == P5Fixed {
+	//
+	// A SWITCH, not an if/else with a wide else arm: NewDialect's V14
+	// (dialectvalidate.go) already refuses a zero MemoryP5Policy at
+	// construction, but this package's stated posture is that an omitted
+	// config semantic refuses rather than defaults, and the default branch
+	// below is what makes that hold even in the one place V14 cannot reach.
+	var txClar bool
+	switch d.memoryP5 {
+	case P5Fixed:
 		if frame[memTxClarOffset] != '0' {
 			return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: P5 (position 21) must be fixed '0' under %v — this dialect's manual prints the byte \"(Fixed)\", so it carries no TX clarifier state to decode", wantPrefix, d.memoryP5))
 		}
-	} else {
+	case P5TxClar:
 		var err error
 		txClar, err = parseBoolDigit(frame[memTxClarOffset])
 		if err != nil {
 			return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: TX CLAR field (P5) must be '0' or '1'", wantPrefix))
 		}
+	default:
+		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: P5 (position 21) policy unset — refusing to guess whether the byte is fixed schema or the TX clarifier flag", wantPrefix))
 	}
 
 	mode, err := d.ParseMode(frame[memModeOffset])
@@ -459,9 +468,10 @@ func (d Dialect) parseMemoryFields(frame []byte, wantPrefix string) (MemoryData,
 // frame is CALLER-SIZED and must already be at least memShiftOffset+1 bytes
 // long; every caller allocates its own form's exact length. m must already
 // have passed that caller's write-direction validation — this function
-// encodes, it does not judge. (Both callers validate first: BuildMWSet via
-// validateMWFields, and the combined MT builder via
-// validateCombinedMTFields.)
+// encodes, it does not judge, EXCEPT for the P5 default below, which is
+// defense-in-depth rather than a rule this function enforces on m's other
+// fields. (Both callers validate first: BuildMWSet via validateMWFields, and
+// the combined MT builder via validateCombinedMTFields.)
 //
 // Extracted verbatim from BuildMWSet's body (mw.go) in M9c-3 task 3, which
 // is why the byte-identity of the MW golden vectors G5/G7 is this
@@ -477,8 +487,12 @@ func (d Dialect) parseMemoryFields(frame []byte, wantPrefix string) (MemoryData,
 // datum. So it is a method, and the policy comes off the receiver rather
 // than a package global.
 //
-// Under P5TxClar this writes exactly what it always wrote.
-func (d Dialect) encodeMemoryFields(frame []byte, m MemoryData) {
+// Under P5TxClar this writes exactly what it always wrote. The returned
+// error is always nil there and under P5Fixed — a zero MemoryP5Policy is the
+// only case that produces one, and NewDialect's V14 already keeps every
+// registered dialect from reaching this function with one; see
+// TestMemoryP5_ZeroPolicyRefusesRatherThanDefaultingWide.
+func (d Dialect) encodeMemoryFields(frame []byte, m MemoryData) error {
 	copy(frame[memSlotOffset:], m.Slot.Wire())
 	copy(frame[memFreqOffset:], fmt.Sprintf("%0*d", memFreqDigits, m.FreqHz))
 
@@ -497,16 +511,26 @@ func (d Dialect) encodeMemoryFields(frame []byte, m MemoryData) {
 	// validateCombinedMTFields) — so this is not a silent correction of a
 	// flag the caller asked for, it is the encoding of a byte that has only
 	// one legal value on such a radio.
-	if d.memoryP5 == P5Fixed {
+	//
+	// A SWITCH, not an if/else with a wide else arm: see parseMemoryFields'
+	// matching comment above. The default here can only fire if a caller
+	// reaches this function with an unvalidated Dialect, which is why it
+	// exists alongside, not instead of, validateMWFields'/
+	// validateCombinedMTFields' own refusal.
+	switch d.memoryP5 {
+	case P5Fixed:
 		frame[memTxClarOffset] = '0'
-	} else {
+	case P5TxClar:
 		frame[memTxClarOffset] = boolDigit(m.TxClar)
+	default:
+		return newParseError(frame, "P5 (position 21) policy unset — refusing to guess whether the byte is fixed schema or the TX clarifier flag")
 	}
 	frame[memModeOffset] = m.Mode.Wire()
 	frame[memKindOffset] = m.Kind
 	frame[memCTCSSOffset] = m.CTCSS.Wire()
 	copy(frame[memP9Offset:], "00")
 	frame[memShiftOffset] = m.Shift.Wire()
+	return nil
 }
 
 // FreqTooWideError reports that a frequency taken from the neutral

@@ -131,11 +131,7 @@ func TestMTReadSlots_RegisteredDialectsReadEverythingReadable(t *testing.T) {
 		if nd.dia.mt.ReadSlots != MTReadsReadable {
 			continue
 		}
-		for n := 0; n <= 999; n++ {
-			s, err := nd.dia.ParseSlot(threeDigits(n))
-			if err != nil {
-				continue
-			}
+		for _, s := range everyClassOfSlot(nd.dia) {
 			checked++
 			if nd.dia.mtReadSlotValid(s) != nd.dia.readableSlot(s) {
 				t.Errorf("%s: mtReadSlotValid(%q) = %v but readableSlot(%q) = %v — under MTReadsReadable the two must agree exactly, or an existing MT read has moved", nd.name, s.Wire(), nd.dia.mtReadSlotValid(s), s.Wire(), nd.dia.readableSlot(s))
@@ -154,11 +150,7 @@ func TestMTReadSlots_RegisteredDialectsReadEverythingReadable(t *testing.T) {
 	// And the narrow dialect must DISAGREE somewhere, or the check above
 	// proves only that both predicates are the same function.
 	disagreements := 0
-	for n := 0; n <= 999; n++ {
-		s, err := mtReadMemoryPMSDialect.ParseSlot(threeDigits(n))
-		if err != nil {
-			continue
-		}
+	for _, s := range everyClassOfSlot(mtReadMemoryPMSDialect) {
 		if mtReadMemoryPMSDialect.mtReadSlotValid(s) != mtReadMemoryPMSDialect.readableSlot(s) {
 			disagreements++
 		}
@@ -169,6 +161,33 @@ func TestMTReadSlots_RegisteredDialectsReadEverythingReadable(t *testing.T) {
 	t.Logf("MT read domain: %d slots agreed with readableSlot on the wide dialects, %d disagreements on the narrow one", agreed, disagreements)
 }
 
+// everyClassOfSlot returns every slot d classifies at all — three-digit
+// forms (memory, 60m, "000"/none), both PMS forms of every pair, and EMG —
+// so a sweep built on it cannot pass by construction over a slot class it
+// never tried. Lifted out of TestEveryDialect_MTReadGateAgreesWithItsBuilder's
+// walk (below), which built the same three-part list inline; LOW-7 is what a
+// sweep missing PMS and EMG looks like when that list is only two-thirds
+// built.
+func everyClassOfSlot(d Dialect) []Slot {
+	var slots []Slot
+	for n := 0; n <= 999; n++ {
+		if s, err := d.ParseSlot(threeDigits(n)); err == nil {
+			slots = append(slots, s)
+		}
+	}
+	for pair := 1; pair <= 9; pair++ {
+		for _, upper := range []bool{false, true} {
+			if s, err := d.PMSSlot(pair, upper); err == nil {
+				slots = append(slots, s)
+			}
+		}
+	}
+	if s := d.EMGSlot(); s.Wire() != "" {
+		slots = append(slots, s)
+	}
+	return slots
+}
+
 // TestEveryDialect_MTReadGateAgreesWithItsBuilder is the builder/gate
 // agreement over every dialect and every slot, the same property the MC
 // split gets, for the same reason: dialecttest tolerates a refused MT read
@@ -176,23 +195,7 @@ func TestMTReadSlots_RegisteredDialectsReadEverythingReadable(t *testing.T) {
 func TestEveryDialect_MTReadGateAgreesWithItsBuilder(t *testing.T) {
 	checked, refused := 0, 0
 	for _, nd := range allTestDialects() {
-		var slots []Slot
-		for n := 0; n <= 999; n++ {
-			if s, err := nd.dia.ParseSlot(threeDigits(n)); err == nil {
-				slots = append(slots, s)
-			}
-		}
-		for pair := 1; pair <= 9; pair++ {
-			for _, upper := range []bool{false, true} {
-				if s, err := nd.dia.PMSSlot(pair, upper); err == nil {
-					slots = append(slots, s)
-				}
-			}
-		}
-		if s := nd.dia.EMGSlot(); s.Wire() != "" {
-			slots = append(slots, s)
-		}
-		for _, s := range slots {
+		for _, s := range everyClassOfSlot(nd.dia) {
 			frame := []byte("MT" + s.Wire() + ";")
 			_, buildErr := nd.dia.BuildMTRead(s)
 			admitted := nd.dia.AllowedCommand(frame)

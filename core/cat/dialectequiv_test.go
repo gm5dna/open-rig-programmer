@@ -194,8 +194,8 @@ func assertDialectsBehaveIdentically(t *testing.T, label string, want, got Diale
 		t.Errorf("%s: exP4MaxBytes = %d, want %d", label, got.exP4MaxBytes(), want.exP4MaxBytes())
 	}
 
-	// The three promoted policies. Omitting these is how a dialect with
-	// entirely zero policies passes an "equivalence" test.
+	// The promoted policies. Omitting these is how a dialect with entirely
+	// zero policies passes an "equivalence" test.
 	if want.mt != got.mt {
 		t.Errorf("%s: MT policy = %+v, want %+v", label, got.mt, want.mt)
 	}
@@ -204,6 +204,22 @@ func assertDialectsBehaveIdentically(t *testing.T, label string, want, got Diale
 	}
 	if want.mwWriteKind != got.mwWriteKind {
 		t.Errorf("%s: MWWriteKind = %#02x, want %#02x", label, got.mwWriteKind, want.mwWriteKind)
+	}
+	if want.memoryP5 != got.memoryP5 {
+		t.Errorf("%s: MemoryP5 = %v, want %v", label, got.memoryP5, want.memoryP5)
+	}
+	if want.slots.mcSelects != got.slots.mcSelects {
+		t.Errorf("%s: MCSelects = %v, want %v", label, got.slots.mcSelects, want.slots.mcSelects)
+	}
+	// mt.ReadSlots and mt.P11 are already covered by the whole-struct
+	// want.mt != got.mt check above; asserted again here, by name, so a
+	// reader of this list does not have to know that to see the axis is
+	// covered — belt-and-braces, matching the two checks above.
+	if want.mt.ReadSlots != got.mt.ReadSlots {
+		t.Errorf("%s: MT.ReadSlots = %v, want %v", label, got.mt.ReadSlots, want.mt.ReadSlots)
+	}
+	if want.mt.P11 != got.mt.P11 {
+		t.Errorf("%s: MT.P11 = %v, want %v", label, got.mt.P11, want.mt.P11)
 	}
 }
 

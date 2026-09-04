@@ -291,6 +291,71 @@ func TestValidateDialectConfig_V14MemoryP5(t *testing.T) {
 	}
 }
 
+// TestMemoryP5_ZeroPolicyRefusesRatherThanDefaultingWide is the
+// defense-in-depth arm LOW-3 asks for. A zero MemoryP5Policy is impossible
+// past NewDialect's V14 clause (dialectvalidate.go) — which is why this test
+// builds its dialect by copying a valid one and zeroing the field directly,
+// rather than through NewDialect, to reach code the config validator cannot.
+//
+// Every site that reads d.memoryP5 must REFUSE on this value, not silently
+// take the P5TxClar (wide) reading: parseMemoryFields (read), encodeMemoryFields
+// (write) and validateMWFields (the builder's gate) all switch on the policy,
+// and each one's default arm must fire here.
+func TestMemoryP5_ZeroPolicyRefusesRatherThanDefaultingWide(t *testing.T) {
+	d := FT710
+	d.memoryP5 = 0
+
+	// validateMWFields, reached through the public builder.
+	rec := p5TestRecord(t, d, false)
+	if cmd, err := d.BuildMWSet(rec); err == nil {
+		t.Errorf("BuildMWSet with a zero MemoryP5 succeeded, emitting %q — an unset policy must refuse, not default to the wide (TxClar) reading", cmd.Bytes())
+	} else if !strings.Contains(err.Error(), "P5") {
+		t.Errorf("the refusal %q does not mention P5", err)
+	}
+
+	// encodeMemoryFields itself, called directly: validateMWFields above
+	// refuses first on every public path, so this is the only way to prove
+	// the encoder's OWN default refuses too, rather than resting entirely on
+	// its caller's validation.
+	frame := make([]byte, memoryFrameLen)
+	if err := d.encodeMemoryFields(frame, rec); err == nil {
+		t.Error("encodeMemoryFields with a zero MemoryP5 succeeded — it must refuse rather than silently encode byte 21 as the wide (TxClar) reading")
+	}
+
+	// parseMemoryFields, reached through ParseMRAnswer.
+	clean, err := FT710.BuildMWSet(p5TestRecord(t, FT710, false))
+	if err != nil {
+		t.Fatalf("fixture broken: FT710.BuildMWSet: %v", err)
+	}
+	mrFrame := append([]byte(nil), clean.Bytes()...)
+	mrFrame[0], mrFrame[1] = 'M', 'R'
+	if _, err := d.ParseMRAnswer(mrFrame); err == nil {
+		t.Error("ParseMRAnswer with a zero MemoryP5 succeeded — an unset policy must refuse, not decode byte 21 as the TX clarifier flag")
+	} else if !strings.Contains(err.Error(), "P5") {
+		t.Errorf("the refusal %q does not mention P5", err)
+	}
+
+	// validateCombinedMTFields, reached through the combined builder. Built
+	// by hand rather than via p5TestRecord: a combined Set's Kind must be
+	// CombinedMTSetKind, the form's own constant, not d.MWWriteKind() (see
+	// TestMemoryP5_CombinedMTCarriesTheSamePolicy).
+	cd := combinedDialect
+	cd.memoryP5 = 0
+	cslot, err := cd.MemorySlot(7)
+	if err != nil {
+		t.Fatalf("fixture broken: MemorySlot(7): %v", err)
+	}
+	crec := MemoryData{
+		Slot: cslot, FreqHz: 14_250_000, Mode: ModeUSB,
+		Kind: CombinedMTSetKind, CTCSS: CTCSSOff, Shift: ShiftSimplex,
+	}
+	if cmd, err := cd.BuildMTSetCombined(crec, "AB"); err == nil {
+		t.Errorf("BuildMTSetCombined with a zero MemoryP5 succeeded, emitting %q — an unset policy must refuse, not default to the wide (TxClar) reading", cmd.Bytes())
+	} else if !strings.Contains(err.Error(), "P5") {
+		t.Errorf("the refusal %q does not mention P5", err)
+	}
+}
+
 // TestMemoryP5Policy_String pins the names the refusals quote.
 func TestMemoryP5Policy_String(t *testing.T) {
 	for _, tc := range []struct {

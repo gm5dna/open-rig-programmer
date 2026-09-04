@@ -530,6 +530,74 @@ func (r *conformanceRun) checkMemoryP5() {
 			r.t.Errorf("%s: a record built with TxClar true came back with TxClar false under %v — the flag is lost in one direction or the other", r.name(), policy)
 		}
 	}
+
+	// The COMBINED form shares this byte with MW, and validateCombinedMTFields
+	// applies the same policy independently of validateMWFields — so a suite
+	// that drove BuildMWSet alone would leave that second validator's P5
+	// refusal entirely unexercised from outside core/cat. See LOW-6.
+	if r.d.MTForm() == cat.MTFormCombined {
+		r.checkCombinedMemoryP5(ctcss, shift)
+	}
+}
+
+// checkCombinedMemoryP5 is checkMemoryP5's combined-form arm: the same P5
+// truth table, driven through buildCombined (BuildMTSetCombined under
+// P11Fixed, BuildMTSetCombinedDisplay under P11TagDisplay) rather than
+// BuildMWSet, so validateCombinedMTFields' own P5 refusal is exercised from
+// outside core/cat too, with its own non-vacuity counters
+// (checkNonVacuity's MTFormCombined arm).
+func (r *conformanceRun) checkCombinedMemoryP5(ctcss cat.CTCSSState, shift cat.Shift) {
+	r.t.Helper()
+
+	var writable cat.Slot
+	found := false
+	for _, s := range r.slots {
+		m := recordFor(s, r.emittable[0], cat.CombinedMTSetKind, 0, ctcss, shift)
+		if _, err := r.buildCombined(m, "", false); err == nil {
+			writable, found = s, true
+			break
+		}
+	}
+	if !found {
+		return // checkCombinedMTSets has already reported this
+	}
+
+	m := recordFor(writable, r.emittable[0], cat.CombinedMTSetKind, 0, ctcss, shift)
+	m.TxClar = true
+
+	policy := r.d.MemoryP5()
+	cmd, err := r.buildCombined(m, "", false)
+
+	switch policy {
+	case cat.P5Fixed:
+		if err == nil {
+			r.t.Errorf("%s: BuildMTSetCombined ACCEPTED a record with TxClar true under %v, emitting %q — this dialect's manual prints P5 \"(Fixed)\", so the flag must be refused rather than silently encoded as '0'", r.name(), policy, cmd.Bytes())
+			return
+		}
+		if !cmd.IsZero() {
+			r.t.Errorf("%s: BuildMTSetCombined returned a non-zero Command alongside its P5 refusal; every fallible builder returns the zero Command", r.name())
+		}
+		r.refusals["combined MT set TxClar true under P5Fixed"]++
+
+	default:
+		if err != nil {
+			r.t.Errorf("%s: BuildMTSetCombined REFUSED a record with TxClar true under %v (%v) — this dialect's manual prints P5 as the TX clarifier flag, so both its values must be writable", r.name(), policy, err)
+			return
+		}
+		frame := cmd.Bytes()
+		r.checkFrame("MT set combined (TxClar true)", frame)
+		if got := frame[memoryP5WireOffset]; got != '1' {
+			r.t.Errorf("%s: combined BuildMTSetCombined with TxClar true emitted %q, whose position 21 is %q rather than '1' — the flag is not reaching the byte the frame puts it in", r.name(), frame, got)
+		}
+		gotM, _, _, err := r.parseCombined(frame)
+		if err != nil {
+			r.t.Errorf("%s: parseCombined(%q) = %v — a frame its own builder produced must parse", r.name(), frame, err)
+			return
+		}
+		if !gotM.TxClar {
+			r.t.Errorf("%s: a combined record built with TxClar true came back with TxClar false under %v — the flag is lost in one direction or the other", r.name(), policy)
+		}
+	}
 }
 
 // memoryP5WireOffset is position 21 of the shared memory field block,
@@ -1239,8 +1307,14 @@ func (r *conformanceRun) checkNonVacuity() {
 			"TxClar true under P5Fixed",
 			"P5 '1' at the parser under P5Fixed",
 			"P5 '1' at the gate under P5Fixed")
+		if r.d.MTForm() == cat.MTFormCombined {
+			requiredRefusals = append(requiredRefusals, "combined MT set TxClar true under P5Fixed")
+		}
 	default:
 		required = append(required, "MW set (TxClar true)")
+		if r.d.MTForm() == cat.MTFormCombined {
+			required = append(required, "MT set combined (TxClar true)")
+		}
 	}
 	for _, what := range required {
 		if r.frames[what] == 0 {
