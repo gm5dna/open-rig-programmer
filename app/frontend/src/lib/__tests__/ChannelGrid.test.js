@@ -7,6 +7,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/svelte'
 import { appState } from '../state/app.svelte.js'
 import ChannelGrid from '../ChannelGrid.svelte'
+// The tier-editing block below compares what an EDIT sends against what a
+// PASTE of the same text produces, so it drives the real parser rather
+// than restating its answers.
+import { columnsFor, parsePasteCell } from '../grid/columns.js'
 
 vi.mock('../bridge/bindings.js', () => ({
 	updateChannel: vi.fn().mockResolvedValue({ Issues: [], Dirty: true }),
@@ -1160,5 +1164,359 @@ describe('empty states', () => {
 		appState.setUISpec(null)
 		render(ChannelGrid)
 		expect(screen.getByText('Grid layout unavailable')).toBeInTheDocument()
+	})
+})
+
+// --- tier-column editing (this task) -------------------------------------
+//
+// The seventeen Icom-tier columns had NO editor: a double-click on one
+// opened an empty select that cancelled on blur, so paste (grid/paste.js)
+// and CSV import were the only routes to answering such a cell. These
+// tests drive the editors themselves, one per TierColumn KIND — which is
+// what the component actually branches on (grid/columns.js's
+// TierColumn.kind), so a fixture reaching all five kinds is what covers
+// the wiring.
+//
+// The fixture bank is the REGISTERED IC-7100's one dense MEM bank, chosen
+// because it is the only registered row whose Fields list reaches all five
+// kinds at once: its 111-byte record maps all ten of the tier's original
+// fields (freq, text, tone, int and bool between them). The Fields list
+// and the 'unavailable' tag-display default below are the values Go's own
+// TestGetUISpec_RegisteredIC7100_EveryBankFieldsAndTagDisplay pins against
+// the real registration (app/uispec_test.go's ic7100TierFields) — update
+// them from that test, never by hand. The slot strings carry this radio's
+// own bank letter (civ.AddressFormBankChannel), as that test's offline leg
+// does.
+
+/** app/uispec_test.go's ic7100TierFields, in TIER_COLUMNS order. */
+const IC7100_TIER_FIELDS = [
+	'tx_frequency',
+	'duplex',
+	'offset',
+	'tone_mode',
+	'tone_tx',
+	'tone_rx',
+	'dtcs_code',
+	'dtcs_polarity',
+	'filter',
+	'data_mode',
+]
+
+const TIER_UI_SPEC = {
+	...UI_SPEC,
+	Banks: [
+		{
+			ID: 'MEM',
+			Label: 'Memories',
+			ReadOnly: false,
+			Slots: [
+				{ Slot: 'A-001', Display: 'M-01' },
+				{ Slot: 'A-002', Display: 'M-02' },
+			],
+			// This radio's 1A 00 record has no display flag at all.
+			TagDisplayDefault: { state: 'unavailable' },
+			Fields: IC7100_TIER_FIELDS,
+		},
+	],
+}
+
+/** A populated IC-7100 row with every tier field still UNANSWERED — the
+ * state a radio read leaves them in, and the one the defect made
+ * unanswerable except by paste. @param {Record<string, unknown>} extra */
+function tierData(extra = {}) {
+	return {
+		freq_hz: 145500000,
+		mode: 'FM',
+		clar_hz: 0,
+		rx_clar: false,
+		tx_clar: false,
+		ctcss: 'OFF',
+		ctcss_tone: { state: 'unknown' },
+		shift: 'SIMPLEX',
+		tag: 'MYCALL',
+		tag_display: { state: 'unavailable' },
+		scan_skip: { state: 'unknown' },
+		tx_frequency: { state: 'unknown' },
+		duplex: { state: 'unknown' },
+		offset: { state: 'unknown' },
+		tone_mode: { state: 'unknown' },
+		tone_tx: { state: 'unknown' },
+		tone_rx: { state: 'unknown' },
+		dtcs_code: { state: 'unknown' },
+		dtcs_polarity: { state: 'unknown' },
+		filter: { state: 'unknown' },
+		data_mode: { state: 'unknown' },
+		...extra,
+	}
+}
+
+// The ten pre-tier columns are 0..9; the bank's own ten follow in
+// TIER_COLUMNS order (columnsFor).
+const TX_FREQ = 10
+const DUPLEX = 11
+const TONE_MODE = 13
+const TONE_TX = 14
+const DTCS_CODE = 16
+const DATA_MODE = 19
+
+describe('tier-column editing', () => {
+	beforeEach(() => {
+		appState.setUISpec(TIER_UI_SPEC)
+		appState.setCodeplug({
+			Schema: 1,
+			Generator: 'test',
+			Radio: { model: 'IC-7100', cat_id: '88', read_at: null, region: 'GB' },
+			Channels: [
+				{ slot: 'A-001', data: tierData() },
+				{ slot: 'A-002', data: null },
+			],
+			WorkingPath: '',
+			Dirty: false,
+			BaselineStale: false,
+		})
+	})
+
+	it('a freq-kind cell opens the text editor and commits the frequency in Hz', async () => {
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, TX_FREQ)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+
+		const input = screen.getByRole('textbox', { name: 'TX frequency (MHz), M-01' })
+		expect(input).toHaveValue('') // unanswered opens EMPTY, never the em dash the cell displays
+
+		await fireEvent.input(input, { target: { value: '145.5' } })
+		await fireEvent.keyDown(input, { key: 'Enter' })
+
+		expect(updateChannel).toHaveBeenCalledTimes(1)
+		expect(updateChannelMock.mock.calls[0][0].data.tx_frequency).toEqual({ state: 'known', value: 145500000 })
+	})
+
+	it('an int-kind cell commits a whole number', async () => {
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DTCS_CODE)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+		const input = screen.getByRole('textbox', { name: 'DTCS code, M-01' })
+		await fireEvent.input(input, { target: { value: '023' } })
+		await fireEvent.keyDown(input, { key: 'Enter' })
+
+		expect(updateChannelMock.mock.calls[0][0].data.dtcs_code).toEqual({ state: 'known', value: 23 })
+	})
+
+	it('a text-kind cell is FREE TEXT — no enum is invented for a vocabulary the backend does not publish', async () => {
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DUPLEX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+
+		// A text input, not a select: GetUISpec serves no duplex/tone-mode/
+		// filter vocabulary (app/types.go's UISpecView), so a pick-list here
+		// could only be a frontend-invented enum.
+		const input = screen.getByRole('textbox', { name: 'Duplex, M-01' })
+		expect(input.tagName).toBe('INPUT')
+
+		await fireEvent.input(input, { target: { value: 'DUP+' } })
+		await fireEvent.keyDown(input, { key: 'Enter' })
+
+		// The SAME field object a paste of that text produces — one parser,
+		// shared with grid/paste.js, so the two routes cannot diverge.
+		const columns = columnsFor(TIER_UI_SPEC.Banks[0])
+		const pasted = parsePasteCell(columns[DUPLEX], 'DUP+', TIER_UI_SPEC)
+		expect(pasted.ok).toBe(true)
+		expect(updateChannelMock.mock.calls[0][0].data.duplex).toEqual(pasted.ok && pasted.patch.duplex)
+	})
+
+	it('the other tier fields ride through an edit untouched, each in the state it arrived in', async () => {
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, TONE_MODE)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+		const input = screen.getByRole('textbox', { name: 'Tone mode, M-01' })
+		await fireEvent.input(input, { target: { value: 'TONE' } })
+		await fireEvent.keyDown(input, { key: 'Enter' })
+
+		const sent = updateChannelMock.mock.calls[0][0].data
+		expect(sent.tone_mode).toEqual({ state: 'known', value: 'TONE' })
+		for (const key of IC7100_TIER_FIELDS) {
+			if (key === 'tone_mode') continue
+			expect(sent[key]).toEqual({ state: 'unknown' })
+		}
+	})
+
+	it('a tone-kind cell opens the UISpec’s own tone list and commits decihertz', async () => {
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, TONE_TX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+
+		const select = screen.getByRole('combobox', { name: 'TX tone, M-01' })
+		expect(screen.getByRole('option', { name: '88.5 Hz' })).toBeInTheDocument()
+
+		await fireEvent.change(select, { target: { value: '885' } })
+		await fireEvent.keyDown(select, { key: 'Enter' })
+
+		expect(updateChannelMock.mock.calls[0][0].data.tone_tx).toEqual({ state: 'known', value: 885 })
+	})
+
+	it('an unanswered tone cell opens on a no-value placeholder that commits nothing when blurred', async () => {
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, TONE_TX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+
+		const select = screen.getByRole('combobox', { name: 'TX tone, M-01' })
+		// The placeholder sits AT THE HEAD of the real list, not instead of
+		// it: the tones are all offered, and the selected entry is the one
+		// that answers nothing.
+		expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['—', '67.0 Hz', '88.5 Hz'])
+		expect(/** @type {HTMLSelectElement} */ (select).value).toBe('')
+
+		// Blurring without choosing must not manufacture the first tone in
+		// the list — the cell is a question, and closing it unanswered is a
+		// legitimate answer to give.
+		await fireEvent.blur(select)
+		expect(updateChannel).not.toHaveBeenCalled()
+	})
+
+	it('a bool-kind cell toggles in one keystroke, walking unanswered → Off → On', async () => {
+		updateChannelMock.mockImplementation(async (ch) => {
+			appState.applyChannelEdits([ch])
+			return { Issues: [], Dirty: true }
+		})
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DATA_MODE)
+		cellEl.focus()
+		expect(cellEl.textContent?.trim()).toBe('—')
+
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+		await Promise.resolve()
+		expect(updateChannelMock.mock.calls[0][0].data.data_mode).toEqual({ state: 'known', value: false })
+		expect(cell(container, 0, DATA_MODE).textContent?.trim()).toBe('Off')
+		expect(screen.queryByRole('textbox')).not.toBeInTheDocument() // no editor: a one-keystroke commit
+
+		await fireEvent.keyDown(cell(container, 0, DATA_MODE), { key: ' ' })
+		await Promise.resolve()
+		expect(updateChannelMock.mock.calls[1][0].data.data_mode).toEqual({ state: 'known', value: true })
+	})
+
+	it('Escape cancels a tier edit without committing', async () => {
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DUPLEX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+		const input = screen.getByRole('textbox', { name: 'Duplex, M-01' })
+		await fireEvent.input(input, { target: { value: 'DUP-' } })
+		await fireEvent.keyDown(input, { key: 'Escape' })
+
+		expect(updateChannel).not.toHaveBeenCalled()
+		expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+		expect(cell(container, 0, DUPLEX).textContent?.trim()).toBe('—')
+	})
+
+	it('an unreadable entry is refused the way the Frequency editor refuses one — an alert, no commit', async () => {
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DTCS_CODE)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+		const input = screen.getByRole('textbox', { name: 'DTCS code, M-01' })
+		await fireEvent.input(input, { target: { value: 'not a number' } })
+		await fireEvent.keyDown(input, { key: 'Enter' })
+
+		expect(updateChannel).not.toHaveBeenCalled()
+		expect(appState.alerts).toHaveLength(1)
+		expect(appState.alerts[0].message).toBe('"not a number" is not a whole number for DTCS code — the edit was not applied')
+	})
+
+	it('an unchanged tier commit is skipped (no call)', async () => {
+		appState.setCodeplug({
+			Schema: 1,
+			Generator: 'test',
+			Radio: { model: 'IC-7100', cat_id: '88', read_at: null, region: 'GB' },
+			Channels: [{ slot: 'A-001', data: tierData({ duplex: { state: 'known', value: 'DUP+' } }) }],
+			WorkingPath: '',
+			Dirty: false,
+			BaselineStale: false,
+		})
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DUPLEX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+
+		// A Known cell opens on the value it already holds, in the spelling
+		// the parser reads back, so committing it untouched is a no-op.
+		const input = screen.getByRole('textbox', { name: 'Duplex, M-01' })
+		expect(input).toHaveValue('DUP+')
+		await fireEvent.keyDown(input, { key: 'Enter' })
+		expect(updateChannel).not.toHaveBeenCalled()
+	})
+
+	it('an ABSENT cell — Go’s {"state": ""} — edits exactly as an unanswered one does', async () => {
+		appState.setCodeplug({
+			Schema: 1,
+			Generator: 'test',
+			Radio: { model: 'IC-7100', cat_id: '88', read_at: null, region: 'GB' },
+			Channels: [{ slot: 'A-001', data: tierData({ duplex: { state: '' } }) }],
+			WorkingPath: '',
+			Dirty: false,
+			BaselineStale: false,
+		})
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DUPLEX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+		const input = screen.getByRole('textbox', { name: 'Duplex, M-01' })
+		await fireEvent.input(input, { target: { value: 'OFF' } })
+		await fireEvent.keyDown(input, { key: 'Enter' })
+
+		expect(updateChannelMock.mock.calls[0][0].data.duplex).toEqual({ state: 'known', value: 'OFF' })
+	})
+
+	it('an UNAVAILABLE cell stays refused: no editor, no toggle, no commit', async () => {
+		appState.setCodeplug({
+			Schema: 1,
+			Generator: 'test',
+			Radio: { model: 'IC-7100', cat_id: '88', read_at: null, region: 'GB' },
+			Channels: [
+				{
+					slot: 'A-001',
+					data: tierData({ duplex: { state: 'unavailable' }, data_mode: { state: 'unavailable' } }),
+				},
+			],
+			WorkingPath: '',
+			Dirty: false,
+			BaselineStale: false,
+		})
+		const { container } = render(ChannelGrid)
+		const duplexCell = cell(container, 0, DUPLEX)
+		duplexCell.focus()
+		await fireEvent.keyDown(duplexCell, { key: 'Enter' })
+		expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+
+		const boolCell = cell(container, 0, DATA_MODE)
+		boolCell.focus()
+		await fireEvent.keyDown(boolCell, { key: 'Enter' })
+		expect(updateChannel).not.toHaveBeenCalled()
+	})
+
+	it('typing a character opens a tier text editor seeded with it, as it does for Frequency', async () => {
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DUPLEX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'D' })
+		expect(screen.getByRole('textbox', { name: 'Duplex, M-01' })).toHaveValue('D')
+	})
+
+	it('a read-only bank opens no tier editor', async () => {
+		appState.setUISpec({
+			...TIER_UI_SPEC,
+			Banks: [{ ...TIER_UI_SPEC.Banks[0], ReadOnly: true }],
+		})
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DUPLEX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+		expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+		expect(updateChannel).not.toHaveBeenCalled()
 	})
 })
