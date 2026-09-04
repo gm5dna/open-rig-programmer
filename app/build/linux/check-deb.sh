@@ -61,8 +61,8 @@ diff -q "$here/copyright" \
   "$data/usr/share/doc/open-rig-programmer/copyright" || err "copyright file drifted from repo copy"
 diff -q "$here/open-rig-programmer-512.png" \
   "$data/usr/share/icons/hicolor/512x512/apps/open-rig-programmer.png" || err "icon drifted from repo copy"
-diff -q "$here/open-rig-programmer.svg" \
-  "$data/usr/share/icons/hicolor/scalable/apps/open-rig-programmer.svg" || err "scalable icon drifted from repo copy"
+diff -q "$here/../appicon.svg" \
+  "$data/usr/share/icons/hicolor/scalable/apps/open-rig-programmer.svg" || err "scalable icon drifted from build/appicon.svg"
 for s in postinstall postremove; do
   ctlname="$( [ "$s" = postinstall ] && echo postinst || echo postrm )"
   diff -q "$here/scripts/$s.sh" "$ctl/DEBIAN/$ctlname" || err "$ctlname drifted from repo $s.sh"
