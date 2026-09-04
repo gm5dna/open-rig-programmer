@@ -232,6 +232,17 @@ func validShiftByte(b byte) bool { return b >= '0' && b <= '2' }
 
 func validBoolFlagByte(b byte) bool { return b == '0' || b == '1' }
 
+// validClarSign reports whether b is one of P3's two printed direction bytes,
+// "+: Plus Shift, -: Minus Shift" (ft891_layout.txt:1002 and four more
+// blocks).
+//
+// THE MINUS BYTE IS THE ASCII HYPHEN-MINUS, 0x2D, and that is the DIALECT's
+// ASSUMED register entry "THE CLARIFIER'S MINUS-DIRECTION BYTE" — cited here,
+// never re-derived. Its own note records why: a rendered glyph in a PDF is
+// not a byte value, and the extraction that produced the layout file is
+// exactly where an en-dash would have been flattened to an ASCII hyphen
+// without trace. If that entry's Stage R capture moves the byte, this
+// validator and core/cat move together.
 func validClarSign(b byte) bool { return b == '+' || b == '-' }
 
 // validClarMagDigits reports whether s is a 4-digit clarifier magnitude field
