@@ -254,7 +254,9 @@ type ReportView struct {
 //     this), TargetKind is "channel", TargetID is the slot's WIRE form;
 //   - a settings event (ReadSettingsRadio's per-item progress, phase
 //     "read-settings"): Slot is empty (there is no slot at all), TargetKind
-//     is "setting", TargetID is the 6-digit setting ID, TargetDisplay is
+//     is "setting", TargetID is four or six ASCII digits — the EX address
+//     in its dialect's wire form (S0-close review's LOW-4 finding: this
+//     comment previously promised six unconditionally) — TargetDisplay is
 //     the descriptor's own Display string for that ID (e.g. "01-01-01").
 type ProgressEvent struct {
 	Phase string
@@ -267,8 +269,9 @@ type ProgressEvent struct {
 	// TargetKind is "channel" or "setting" — see this type's doc comment.
 	TargetKind string
 	// TargetID is the stable identifier this progress step just touched:
-	// the slot's WIRE form (e.g. "001") for a channel event, or the
-	// 6-digit setting ID for a settings event.
+	// the slot's WIRE form (e.g. "001") for a channel event, or four or
+	// six ASCII digits — the EX address in its dialect's wire form — for a
+	// settings event.
 	TargetID string
 	// TargetDisplay is TargetID's human-readable form — see this type's
 	// doc comment for the exact source per TargetKind.
