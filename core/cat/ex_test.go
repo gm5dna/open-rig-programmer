@@ -79,7 +79,7 @@ func TestBuildEXRead_RejectsNonMembers(t *testing.T) {
 // TestBuildEXRead_PropertyAll296 builds a read frame for every one of the
 // 296 inventory addresses: every build must succeed, every frame must be
 // exactly FT710.exReadLen() bytes, and all 296 frames must be pairwise distinct
-// (Wire() is injective over the inventory, exinventory_test.go's
+// (Dialect.EXWire is injective over the inventory, exinventory_test.go's
 // TestEXInventory_NoDuplicatesSortedAndWireStable).
 func TestBuildEXRead_PropertyAll296(t *testing.T) {
 	items := FT710.EXItems()
@@ -223,11 +223,11 @@ func TestParseEXAnswer_RawP4Verbatim(t *testing.T) {
 }
 
 // TestParseEXAnswer_RoundTripAll296 builds a synthetic answer frame for
-// every inventory item ("EX" + Wire() + a P4 body of exactly the item's
-// Digits width, all zero bytes + ";") and checks it parses back to the same
-// address and the exact raw P4 string, for all 296 items (Digits is
-// already 12 for the six Text items, exinventory.go's EXItem.Digits doc
-// comment).
+// every inventory item ("EX" + Dialect.EXWire(it.Addr) + a P4 body of
+// exactly the item's Digits width, all zero bytes + ";") and checks it
+// parses back to the same address and the exact raw P4 string, for all 296
+// items (Digits is already 12 for the six Text items, exinventory.go's
+// EXItem.Digits doc comment).
 func TestParseEXAnswer_RoundTripAll296(t *testing.T) {
 	items := FT710.EXItems()
 	for _, it := range items {
