@@ -51,6 +51,18 @@ var fixtureAbsent = func() Profile {
 	return p
 }()
 
+// fixturePairRequired is fixtureRequired under the OTHER address form,
+// AddressPair — the FT-891's own shape, where the wire field carries P1 and
+// P2 only and every row's P3 must be 0. It exists only for
+// TestRenderGo_PairProfileKeysObservationsByFourDigitForm (extable_test.go):
+// a fixture-only profile, never registered, so no staleness consumer goes
+// looking for a generated file that does not exist.
+var fixturePairRequired = func() Profile {
+	p := fixtureRequired
+	p.Addresses = AddressPair
+	return p
+}()
+
 // withRows returns p with ExpectedRows set to n. Tests whose subject is not
 // the row-count gate use it so each test asserts one thing.
 func withRows(p Profile, n int) Profile {
