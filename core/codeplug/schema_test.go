@@ -209,14 +209,17 @@ func TestCanonicalV5Golden_RecordsEveryReceiverField(t *testing.T) {
 	}
 }
 
-// TestSchemaFor_NoV3RepresentableContentEverWritesV4 is the SECOND of
-// design D4's two pinned tests: no schema-3-representable content ever
-// produces a schema-4 file.
+// TestSchemaFor_ChoosesLowestRepresentableSchema pins design D4's
+// schema-selection table: schemaFor picks schema 3 only when every
+// tier-added field is Unavailable (RepresentableByOmission) and the
+// frequency fits schema 3's uint32; Known, Unknown, or Absent on any
+// tier field, or a frequency past that ceiling, forces schema 4.
 //
 // The two clauses of the rule are exercised from both sides — a
-// tier-added field at each state, and a frequency either side of
-// schema 3's uint32 ceiling — so neither clause can be quietly dropped
-// without a failure here.
+// tier-added field at each of its four states, and a frequency either
+// side of schema 3's uint32 ceiling — so neither clause can be quietly
+// dropped without a failure here, and Absent is pinned separately from
+// Unavailable so the two can never be conflated again.
 func TestSchemaFor_ChoosesLowestRepresentableSchema(t *testing.T) {
 	v3able := func(mutate func(*ChannelData)) *Codeplug {
 		d := withUnavailableTierFields(&ChannelData{

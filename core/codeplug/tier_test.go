@@ -775,12 +775,14 @@ func TestDiff_DuplicateSlotRefused(t *testing.T) {
 }
 
 // v4YaesuBodyNoTierKeys is a schema-4 file for a Yaesu-shaped radio whose
-// ten tier-added keys are simply ABSENT from the JSON — the file shape
+// ten tier-added keys are simply OMITTED from the JSON — the file shape
 // deviation (c) is about. It is deliberately hand-written rather than
-// produced by Save: Save emits schema 3 for any content schema 3 can
-// represent (schemaFor), and a channel saying nothing about those ten is
-// exactly such content — the case that was never in doubt, since the
-// schema-3 loader migrates all ten to Unavailable unconditionally.
+// produced by Save: schemaFor picks schema 3 when every one of the ten
+// is Unavailable (RepresentableByOmission), and schema 4 with explicit
+// "state":"" keys when any is Absent — Save never emits a v4 file with
+// the keys themselves omitted, so this shape has no producer to pin
+// against; the case that was never in doubt, since the schema-3 loader
+// migrates all ten to Unavailable unconditionally.
 const v4YaesuBodyNoTierKeys = `{"schema":4,"generator":"test","radio":{"model":"TEST-710","cat_id":"0000","read_at":"2026-08-27T09:00:00Z"},"channels":[` +
 	`{"slot":"001","data":{"freq_hz":14250000,"mode":"USB","ctcss":"OFF","ctcss_tone":{"state":"unknown"},"shift":"SIMPLEX","tag":"CALLING","tag_display":{"state":"known"},"scan_skip":{"state":"known"}}},` +
 	`{"slot":"003"}]}`
