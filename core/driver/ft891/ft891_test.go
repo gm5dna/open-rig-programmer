@@ -344,22 +344,47 @@ func TestOpen_DiscoveryProbesEveryDeclaredSlot(t *testing.T) {
 // discoveryTranscript() exactly; asserting that first proves the walk
 // actually happened in full before the negative check over its frames
 // means anything.
+//
+// THE WALK DOES NOT STOP AT OPEN (LOW-1, task-1 review). The prohibition
+// this test states — no MT read of a 5xx or EMG slot, ever — is a claim
+// about the whole session, and readDiscovered (read.go) is the OTHER site
+// that could violate it, at ReadChannel time rather than Open's. So after
+// Open this test reads back every discovered slot the image answered, and
+// re-checks the negative property over the FULL Open+read transcript. Each
+// such ReadChannel call sends its own "MR5xx;"/"MREMG;" frame, which is
+// this walk's non-vacuity for the read-time half specifically: the count
+// assertion below fails if readDiscovered stopped sending anything at all,
+// exactly as the Open-only equality above fails if discovery did.
 func TestOpen_NeverBuildsAnMTReadOfADiscoveredSlot(t *testing.T) {
 	img := slotImage{mrAnswers: map[string]string{}}
+	discovered := make([]string, 0, 11)
 	for n := 501; n <= 510; n++ {
 		slot := fmt.Sprintf("%03d", n)
 		img.mrAnswers[slot] = populatedMR(slot)
+		discovered = append(discovered, slot)
 	}
 	img.mrAnswers["EMG"] = populatedMR("EMG")
+	discovered = append(discovered, "EMG")
 
-	p, _ := openSession(t, Simulated, img)
+	p, sess := openSession(t, Simulated, img)
 
 	got := p.Transcript()
 	if want := discoveryTranscript(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("transcript = %v, want %v — this image answers every probe, so the full eleven-frame walk must have happened before the negative MT check below means anything", got, want)
 	}
 
-	for i, frame := range got {
+	beforeReads := len(p.Transcript())
+	for _, slot := range discovered {
+		if _, err := sess.ReadChannel(testCtx(t), slot); err != nil {
+			t.Fatalf("ReadChannel(%q) after Open: unexpected error %v", slot, err)
+		}
+	}
+	if got, want := len(p.Transcript())-beforeReads, len(discovered); got != want {
+		t.Fatalf("the read-back sent %d frames after Open, want exactly %d (one MR frame per discovered slot) — the read-time half of this walk is vacuous unless each ReadChannel call actually reached the wire", got, want)
+	}
+
+	full := p.Transcript()
+	for i, frame := range full {
 		if !strings.HasPrefix(frame, "MT") {
 			continue
 		}
