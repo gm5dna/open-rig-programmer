@@ -31,9 +31,19 @@ for tool in rsvg-convert python3; do
 done
 [ -s "$src" ] || { echo "render-icons: $src missing or empty" >&2; exit 1; }
 
+# One trap covers every scratch path: png() exits from inside a failed render,
+# so cleanup cannot be left to the happy path.
+scratch_out=""; scratch_tmp=""
+cleanup() {
+  [ -n "$scratch_out" ] && rm -rf "$scratch_out"
+  [ -n "$scratch_tmp" ] && rm -rf "$scratch_tmp"
+  return 0
+}
+trap cleanup EXIT
+
 if [ "$mode" = "--check" ]; then
   out=$(mktemp -d) || exit 1
-  trap 'rm -rf "$out"' EXIT
+  scratch_out="$out"
   mkdir -p "$out/windows" "$out/linux"
 else
   out="$here/app/build"
@@ -48,11 +58,11 @@ png 512 "$out/linux/open-rig-programmer-512.png"
 cp "$src" "$out/linux/open-rig-programmer.svg" || exit 1
 
 tmp=$(mktemp -d) || exit 1
+scratch_tmp="$tmp"
 for s in 256 128 64 48 32 24 16; do png "$s" "$tmp/$s.png"; done
 python3 "$here/scripts/png2ico.py" "$out/windows/icon.ico" \
   "$tmp/256.png" "$tmp/128.png" "$tmp/64.png" "$tmp/48.png" "$tmp/32.png" "$tmp/24.png" "$tmp/16.png" \
-  || { echo "render-icons: ico assembly failed" >&2; rm -rf "$tmp"; exit 1; }
-rm -rf "$tmp"
+  || { echo "render-icons: ico assembly failed" >&2; exit 1; }
 
 for f in appicon.png windows/icon.ico linux/open-rig-programmer-512.png linux/open-rig-programmer.svg; do
   [ -s "$out/$f" ] || { echo "render-icons: $f came out empty" >&2; exit 1; }
