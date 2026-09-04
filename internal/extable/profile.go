@@ -550,11 +550,86 @@ var ftdx101Profile = Profile{
 	},
 }
 
+// ft891Profile carries the FT-891's menu-chart transcription facts. It is
+// the registry's first entry to take the MINORITY value of all three
+// chart-shape policies at once, which is what those policies were added for:
+// the FT-891's EX address field is four digits, its chart prints no group
+// labels, and it prints no free-text row.
+//
+// Evidence, all from CAT manual rev 1909-C's menu chart (see
+// core/cat/ft891/table2.csv's own provenance header, which records the
+// chart's printed quirks): the Digits column runs 1..5, the 5 coming from
+// exactly two rows — 0803 OTHER DISP and 0804 OTHER SHIFT, at
+// ft891_layout.txt:595-596, whose signed "-3000 Hz - 0 - +3000 Hz"
+// parameter counts its sign as a digit. MaxDigits is therefore 5 where the
+// other three profiles carry 4, and it is a reading of THIS chart rather
+// than a widening of theirs.
+//
+// TextWidth is 0, which under TextRowsAbsent is the only value Validate
+// admits: a chart with no text row has no text width, and spelling 12 here
+// out of resemblance to the other three would state two incompatible things
+// about one chart.
+//
+// Deliberately NOT given a named accessor, for the reason the ftdx10 and
+// ftdx101 profiles are not: its only consumers reach it through
+// Lookup/RegisteredProfiles, which is what lets core/cat/ft891's staleness
+// test select its registration by Package rather than by a lookup name.
+var ft891Profile = Profile{
+	Model:       "FT-891",
+	Package:     "ft891",
+	Types:       TypesImported,
+	ImportPath:  "github.com/gm5dna/open-rig-programmer/core/cat",
+	ImportAlias: "cat",
+	VarName:     "exItems",
+	OutFile:     "exinventory_gen.go",
+	ManualCSV:   "table2.csv",
+
+	// The FT-891's chart, said out loud: a four-digit MENU Number whose
+	// two halves are the whole address (every row's p3 is 0), no group
+	// labels in either column, and no text row.
+	Addresses:     AddressPair,
+	LabelPolicy:   LabelsAbsent,
+	TextRowPolicy: TextRowsAbsent,
+
+	MinDigits: 1,
+	MaxDigits: 5,
+	TextWidth: 0,
+	// MaxObservedWidth is an INERT API-REQUIRED SENTINEL here, exactly as
+	// on the ftdx10 and ftdx101 profiles: ObservationsAbsent means no
+	// observation CSV is ever parsed and this bound is never consulted. It
+	// carries NO hardware claim about the FT-891 — no FT-891 has ever been
+	// asked anything — and must not be read as one; the moment observations
+	// do exist it is re-derived from them rather than kept. It is spelt 12
+	// only because a sentinel has to be spelt something, and 12 is NOT this
+	// radio's text width: this chart has no text row at all.
+	MaxObservedWidth: 12,
+	// ExpectedRows comes from the group-boundary ledger
+	// (core/cat/ft891/testdata/), derived from the rendered PDF before any
+	// transcription existed — NOT from transcriptions A and B agreeing with
+	// each other. If they agree on a number that is not this one, the answer
+	// is arbitration against the PDF, never an edit here.
+	ExpectedRows: 159,
+
+	Observations: ObservationsAbsent,
+	DocLines: []string{
+		"exItems is the FT-891's EX address inventory, sorted by (P1,P2), built",
+		"from ONE source: the manual transcription in table2.csv (the FT-891 CAT",
+		"manual rev 1909-C's menu chart). The FT-891's EX address is a PAIR: the",
+		"chart's four-digit MENU Number is P1 and P2, every item's P3 is 0, and",
+		"the chart prints no group labels, so every P1Label and P2Label is \"\".",
+		"There are no hardware READ observations to join — no FT-891 has ever",
+		"been asked anything — so every item carries the absence sentinels",
+		"ObservedReadWidth 0 and ObservedReadShape \"\". Regenerate with",
+		"`go generate ./core/cat/ft891`; do not edit by hand.",
+	},
+}
+
 // registry maps a lookup name to its profile. It is validated at init, so an
 // inconsistent profile panics the build tooling rather than emitting a wrong
 // inventory.
 var registry = mustRegistry(map[string]Profile{
 	"ft710":   ft710Profile,
+	"ft891":   ft891Profile,
 	"ftdx10":  ftdx10Profile,
 	"ftdx101": ftdx101Profile,
 })
