@@ -309,7 +309,7 @@ func TestAllowedCommand_EXAnswersRejectedOutboundAll296(t *testing.T) {
 		} else {
 			p4 = strings.Repeat("0", it.Digits)
 		}
-		frame := "EX" + it.Addr.Wire() + p4 + ";"
+		frame := "EX" + FT710.EXWire(it.Addr) + p4 + ";"
 		if FT710.AllowedCommand([]byte(frame)) {
 			t.Errorf("AllowedCommand(%q) = true, want false (EX Set/Answer-shaped, phase-scoped rejection) for %v", frame, it.Addr)
 		}

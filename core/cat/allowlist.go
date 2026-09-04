@@ -40,9 +40,10 @@ package cat
 // one — see validMTCommand, which enforces it by reusing the builder's own
 // validateCombinedMTFields rather than by a rule of its own.
 //
-// EX is deliberately narrower than the other six: only the 9-byte EX READ
-// frame is accepted. EX Set and Answer share an identical wire shape —
-// "EX" prefix, the same six-digit address field, just a longer body
+// EX is deliberately narrower than the other six: only the EX READ frame
+// is accepted, at exactly this dialect's own read length. EX Set and
+// Answer share an identical wire shape — "EX" prefix, the same address
+// field, just a longer body
 // (manual lines ~630-637) — and are REJECTED here even though they are
 // otherwise syntactically well-formed; see validEXRead's doc comment for
 // the REVIEWED DECISION. This was written as a phase restriction; the
@@ -358,10 +359,18 @@ func (d Dialect) validMCCommand(frame []byte) bool {
 	return d.mcValid(slot)
 }
 
-// validEXRead reports whether frame is a legal EX READ: exactly
-// exReadLen (9) bytes with an address ParseEXAddress accepts — the same
+// validEXRead reports whether frame is a legal EX READ: exactly THIS
+// DIALECT'S d.exReadLen() bytes — 9 under EXAddressTriple, 7 under
+// EXAddressPair — with an address ParseEXAddress accepts, the same
 // membership rule BuildEXRead enforces (shared, not duplicated: the
 // "cannot drift apart" rule).
+//
+// The length and the address slice both come from d.EXAddressWidth(), the
+// same datum the builder measures. Until the FT-891 Stage 0 seam both were
+// the package constant 9, read through this receiver, so this gate would
+// have refused a four-digit dialect's own builder's output —
+// TestEveryDialect_BuiltFramesAreCleanAndGateAdmissible over pairDialect is
+// what reports that.
 // SHIPPED POLICY, not a phase restriction: EX Set and Answer share an
 // identical wire shape (manual lines ~630–637), and this rejects that
 // entire shape outbound. Originally scoped to M8a–M8d pending the
@@ -375,9 +384,9 @@ func (d Dialect) validMCCommand(frame []byte) bool {
 // for the precedent — and the classes named in that decision document
 // stay denied regardless. Loosening this is a REVIEWED DECISION.
 func (d Dialect) validEXRead(frame []byte) bool {
-	if len(frame) != exReadLen {
+	if len(frame) != d.exReadLen() {
 		return false
 	}
-	_, err := d.ParseEXAddress(string(frame[2:8]))
+	_, err := d.ParseEXAddress(string(frame[2 : 2+d.EXAddressWidth()]))
 	return err == nil
 }

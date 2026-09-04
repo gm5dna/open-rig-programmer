@@ -128,7 +128,7 @@ func TestEXInventory_P1AnomalyRecorded(t *testing.T) {
 }
 
 // TestEXInventory_NoDuplicatesSortedAndWireStable pins uniqueness, six-digit
-// Wire() output, and a ParseEXAddress(Wire()) round-trip for every item.
+// EXWire output, and a ParseEXAddress(EXWire) round-trip for every item.
 func TestEXInventory_NoDuplicatesSortedAndWireStable(t *testing.T) {
 	seen := map[EXAddress]bool{}
 	for _, a := range FT710.EXAddresses() {
@@ -137,7 +137,7 @@ func TestEXInventory_NoDuplicatesSortedAndWireStable(t *testing.T) {
 		}
 		seen[a] = true
 
-		wire := a.Wire()
+		wire := FT710.EXWire(a)
 		if len(wire) != 6 {
 			t.Errorf("Wire()=%q for %v is not 6 digits", wire, a)
 		}
@@ -147,8 +147,18 @@ func TestEXInventory_NoDuplicatesSortedAndWireStable(t *testing.T) {
 				break
 			}
 		}
-		if a.String() != wire {
-			t.Errorf("String()=%q != Wire()=%q for %v", a.String(), wire, a)
+		// This pin is the OPPOSITE of the one it replaces. String() used to
+		// return the same six digits as the deleted Wire(); it is now the
+		// non-wire debug form, because an address cannot know how wide its
+		// family's field is (exinventory.go). The two must therefore never
+		// coincide. Its message text is the only literal in this file that
+		// moved at the FT-891 Stage 0 seam, and the single matching record
+		// in testdata/evidence-literals.golden moved with it — deliberately
+		// and on its own, not by regeneration. The wider guarantee (every
+		// configured dialect's own ParseEXAddress refuses the debug form)
+		// belongs to TestEXAddressString_IsNotAWireField.
+		if a.String() == wire {
+			t.Errorf("String()=%q is identical to the wire field %q for %v — the debug form must never be mistakable for an address field", a.String(), wire, a)
 		}
 
 		back, err := FT710.ParseEXAddress(wire)
@@ -355,7 +365,7 @@ func TestEXItems_ObservedReadWidthDeviatesOnlyForToneFreq(t *testing.T) {
 	var deviations []EXItem
 	for _, it := range FT710.EXItems() {
 		if it.ObservedReadWidth == 0 {
-			t.Errorf("%s has no M8c observation — every inventory address was read", it.Addr.Wire())
+			t.Errorf("%s has no M8c observation — every inventory address was read", FT710.EXWire(it.Addr))
 			continue
 		}
 		want := it.Digits
@@ -372,7 +382,7 @@ func TestEXItems_ObservedReadWidthDeviatesOnlyForToneFreq(t *testing.T) {
 	got := deviations[0]
 	if got.Addr != (EXAddress{P1: 1, P2: 3, P3: 21}) || got.Name != "TONE FREQ" || got.Digits != 2 || got.ObservedReadWidth != 3 {
 		t.Errorf("deviation = %s %s (manual %d / observed %d), want 01 03 21 TONE FREQ manual 2 / observed 3",
-			got.Addr.Wire(), got.Name, got.Digits, got.ObservedReadWidth)
+			FT710.EXWire(got.Addr), got.Name, got.Digits, got.ObservedReadWidth)
 	}
 }
 
@@ -385,7 +395,7 @@ func TestEXItems_ObservedReadShapes(t *testing.T) {
 	for _, it := range FT710.EXItems() {
 		counts[it.ObservedReadShape]++
 		if it.Text && it.ObservedReadShape != "text" {
-			t.Errorf("%s is a Text item but its observed read shape is %q", it.Addr.Wire(), it.ObservedReadShape)
+			t.Errorf("%s is a Text item but its observed read shape is %q", FT710.EXWire(it.Addr), it.ObservedReadShape)
 		}
 	}
 	for shape, want := range map[string]int{"numeric": 264, "signed": 26, "text": 6} {
@@ -402,7 +412,7 @@ func TestEXItems_ObservedReadShapes(t *testing.T) {
 func TestEXItems_ObservedReadWidthWithinP4Bounds(t *testing.T) {
 	for _, it := range FT710.EXItems() {
 		if it.ObservedReadWidth < 1 || it.ObservedReadWidth > FT710.exP4MaxBytes() {
-			t.Errorf("%s: observed read width %d is outside 1..%d", it.Addr.Wire(), it.ObservedReadWidth, FT710.exP4MaxBytes())
+			t.Errorf("%s: observed read width %d is outside 1..%d", FT710.EXWire(it.Addr), it.ObservedReadWidth, FT710.exP4MaxBytes())
 		}
 	}
 }
