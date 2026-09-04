@@ -143,7 +143,7 @@
 //     that failed is the answer's exact width, the next entry.
 //
 //   - THE COMBINED MT ANSWER'S EXACT LENGTH, 41 (consumed here as
-//     MTAnswerBounds() = (41, 41), pinned by TestIdentityPinMTAnswerBounds).
+//     MTAnswerBounds() = (41, 41), pinned by TestIdentityPinFrameGeometry).
 //     Not a field of this dialect but an assumption it inherits from
 //     core/cat's combined form (mtcombined.go's own ASSUMED-until-Stage-R
 //     note): the manual's Answer grid draws the MAXIMAL frame (layout
