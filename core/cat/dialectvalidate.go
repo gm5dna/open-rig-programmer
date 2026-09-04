@@ -454,10 +454,12 @@ func validateMCSelects(cfg DialectConfig) error {
 // An omitted config semantic is REFUSED, not defaulted. Defaulting to
 // P5TxClar would have this codec emit a '1' into a byte a radio's own manual
 // prints "(Fixed)" — a frame that manual never describes, built and admitted
-// by this dialect's own gate, since this field reaches AllowedCommand
-// through validateMWFields and validateCombinedMTFields. Defaulting to
-// P5Fixed would silently drop a real TX-clarifier flag on the floor. Neither
-// default is safe, which is exactly when a field must be declared.
+// by this dialect's own gate, since this field reaches AllowedCommand's MW
+// and combined-MT checks through parseMemoryFields, which decodes byte 21
+// under this same policy before validateMWFields/validateCombinedMTFields
+// ever run. Defaulting to P5Fixed would silently drop a real TX-clarifier
+// flag on the floor. Neither default is safe, which is exactly when a field
+// must be declared.
 func validateMemoryP5(cfg DialectConfig) error {
 	switch cfg.MemoryP5 {
 	case P5TxClar, P5Fixed:
