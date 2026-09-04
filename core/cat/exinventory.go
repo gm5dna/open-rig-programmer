@@ -23,7 +23,9 @@ type EXAddress struct {
 // wireEXAddress renders a as the CAT address field of a dialect declaring
 // form: six zero-padded digits under EXAddressTriple ("E X P1 P1 P2 P2 P3
 // P3", the FT-710/FTdx10/FTdx101 grammar blocks), four under EXAddressPair
-// ("E X P1 P1 P2 P2").
+// — a's own (P1,P2) components with P3 dropped; that naming is this
+// package's, not necessarily the radio's own — see EXAddressPair's doc
+// comment (dialectconfig.go) for the FT-891 naming caveat.
 //
 // IT IS THE ONLY PLACE AN ADDRESS BECOMES WIRE DIGITS. Until this seam that
 // place was EXAddress.Wire(), a method on the ADDRESS — which carries no

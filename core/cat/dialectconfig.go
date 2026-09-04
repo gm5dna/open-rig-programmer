@@ -103,10 +103,22 @@ const (
 	// EXAddressTriple is the six-digit "P1 P1 P2 P2 P3 P3" field, the form
 	// every registered dialect's EX grammar block prints.
 	EXAddressTriple EXAddressForm = iota + 1
-	// EXAddressPair is the four-digit "P1 P1 P2 P2" field. Under it every
-	// EXItems member must have P3 == 0 (V12): the render drops P3, and a
-	// component silently dropped from every frame is exactly the failure
-	// this validator exists to make impossible.
+	// EXAddressPair is the four-digit field EXAddress's own (P1,P2)
+	// components render as, with P3 dropped. Under it every EXItems member
+	// must have P3 == 0 (V12): the render drops P3, and a component
+	// silently dropped from every frame is exactly the failure this
+	// validator exists to make impossible.
+	//
+	// NAMING TRAP for a reader with a manual open: "(P1,P2)" is THIS
+	// PACKAGE'S naming for the field's two two-digit components, not
+	// necessarily the radio's own. The FT-891 — this form's first member —
+	// spells the whole four-digit field a single P1 in its own EX grammar
+	// block ("E X P1 P1 P1 P1", ft891_layout.txt:513-522) and calls the
+	// parameter body P2; it has no P3 or P4 at all. The BYTES agree
+	// exactly (wireEXAddress under this form emits the same four digits
+	// the FT-891's P1 does) — only the component names differ. Any comment
+	// elsewhere that mentions this form's naming should point here rather
+	// than restate it.
 	EXAddressPair
 )
 
