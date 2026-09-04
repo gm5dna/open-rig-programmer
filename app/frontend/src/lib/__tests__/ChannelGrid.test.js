@@ -1534,6 +1534,24 @@ describe('tier-column editing', () => {
 		expect(updateChannelMock.mock.calls[1][0].data.ip_plus).toEqual({ state: 'known', value: false })
 	})
 
+	it('blurring a tier text editor COMMITS the typed value, as the Frequency editor does', async () => {
+		// The route Tab out of the cell takes: nothing special-cases Tab, so
+		// it blurs the input and the onblur commit fires — the same thing
+		// Tab has always done out of the Frequency and Tag editors. The tone
+		// select's blur is pinned above; this is the free-text half.
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DUPLEX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+		const input = screen.getByRole('textbox', { name: `Duplex, ${ROW}` })
+		await fireEvent.input(input, { target: { value: 'DUP-' } })
+
+		await fireEvent.blur(input)
+
+		expect(updateChannel).toHaveBeenCalledTimes(1)
+		expect(updateChannelMock.mock.calls[0][0].data.duplex).toEqual({ state: 'known', value: 'DUP-' })
+	})
+
 	it('Escape cancels a tier edit without committing', async () => {
 		const { container } = render(ChannelGrid)
 		const cellEl = cell(container, 0, DUPLEX)
