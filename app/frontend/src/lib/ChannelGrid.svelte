@@ -298,12 +298,21 @@
 	 * with no Known value opens EMPTY — never the em dash displayValue
 	 * renders for it, which is a "no claim made" mark and not a value
 	 * anyone could edit.
+	 *
+	 * A KNOWN field with no `value` key is Known ZERO, and opens on zero:
+	 * FieldState.Value is `json:"value,omitempty"`
+	 * (core/codeplug/fieldstate.go), so Go drops the key for every zero it
+	 * sends, and an attenuator answered 0 dB or an offset answered 0 Hz
+	 * arrives as {"state":"known"} alone. Opening such a cell EMPTY would
+	 * make it unre-committable, an emptied editor being the no-op below —
+	 * pinned by the two "a Known ZERO opens the … editor on zero" tests, and
+	 * displayValue normalises the same way.
 	 * @param {{key: string, kind: string}} tier @param {ChannelData | null} data */
 	function tierEditText(tier, data) {
 		const f = tierField(tier, data)
 		if (f?.state !== 'known') return ''
-		if (tier.kind === 'freq') return typeof f.value === 'number' ? hzToMHz(f.value) : ''
-		if (tier.kind === 'int') return typeof f.value === 'number' ? String(f.value) : ''
+		if (tier.kind === 'freq') return hzToMHz(typeof f.value === 'number' ? f.value : 0)
+		if (tier.kind === 'int') return String(typeof f.value === 'number' ? f.value : 0)
 		return f.value == null ? '' : String(f.value)
 	}
 

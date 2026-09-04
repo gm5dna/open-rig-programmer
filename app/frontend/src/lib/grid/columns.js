@@ -267,13 +267,27 @@ export function displayValue(column, data, uiSpec) {
 		// frequency in MHz are claims about the radio, and this grid does
 		// not make claims it cannot support.
 		if (f?.state !== 'known') return '—'
+		// A KNOWN field with no `value` key is Known ZERO, not a missing
+		// answer: core/codeplug/fieldstate.go marks FieldState.Value
+		// `json:"value,omitempty"`, so Go drops the key for every zero it
+		// sends. Zero is a real answer on both numeric kinds — "zero, when
+		// present, means off" for the attenuator (core/spec/capabilities.go's
+		// AttenuatorDB), and a simplex channel's offset is a Known 0 Hz — so
+		// reading the missing key as the em dash above would hide a
+		// radio-supplied value inside the mark reserved for "no claim made".
+		// Pinned by "renders a Known ZERO as zero" (tierColumns.test.js),
+		// which asserts the two spellings agree.
 		switch (tier.kind) {
 			case 'freq':
-				return typeof f.value === 'number' ? hzToMHz(f.value) : '—'
+				return hzToMHz(typeof f.value === 'number' ? f.value : 0)
 			case 'tone':
+				// The tone kind is NOT normalised the same way: zero decihertz
+				// is not a tone any radio's table lists, so a Known tone with
+				// no value is malformed rather than an answer, and the em dash
+				// stays the honest rendering of it.
 				return typeof f.value === 'number' ? toneDisplay(f.value, uiSpec) : '—'
 			case 'int':
-				return typeof f.value === 'number' ? String(f.value) : '—'
+				return String(typeof f.value === 'number' ? f.value : 0)
 			case 'bool':
 				return f.value ? 'On' : 'Off'
 			default:
