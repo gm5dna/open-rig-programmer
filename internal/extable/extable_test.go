@@ -319,25 +319,60 @@ func TestRenderGo_EmitsObservedFields(t *testing.T) {
 }
 
 // TestRenderGo_PairProfileKeysObservationsByFourDigitForm is the S0-close
-// review's LOW-3 fix: the observation lookup key must be rendered in the
-// profile's OWN address form, not always six digits. Under AddressPair the
-// wire field carries P1 and P2 only (parseRecord above refuses a non-zero
-// P3), so a Pair radio's own observation CSV could never carry the
-// six-digit shape the old unconditional %02d%02d%02d render looked up —
-// every row would fail with "no hardware observation" however complete the
-// CSV was. fixturePairRequired exists only for this test (fixture-only, no
-// registered profile changes): see profile_test.go.
+// review's LOW-3/MEDIUM-2 fix: the observation lookup key must be rendered
+// in the profile's OWN address form, not always six digits — on BOTH sides
+// of the join. LOW-3 (wave 1) fixed RenderGo's lookup key alone; the
+// wave-1 version of this test then bypassed ParseObservedCSV entirely,
+// hand-building a four-digit-keyed map, which is exactly what let
+// MEDIUM-2's defect — ParseObservedCSV itself still always keyed six
+// digits, so a real Pair-form observation CSV could never actually reach
+// RenderGo's fixed lookup — pass unnoticed. This version goes THROUGH
+// ParseObservedCSV on a genuine Pair-form CSV row, so the two sides'
+// disagreement would fail here.
+//
+// fixturePairRequired exists only for this test (fixture-only, no
+// registered profile changes): see profile_test.go. The Triple path is
+// UNCHANGED by this fix — ParseObservedCSV's AddressTriple case still
+// builds the same six-digit key it always did — which is what keeps the
+// FT-710's committed observation CSV and generated inventory byte-identical
+// (core/cat's own staleness test re-derives and byte-compares the FT-710's
+// generated file on every run, so a Triple-path regression here would fail
+// there, not just here).
 func TestRenderGo_PairProfileKeysObservationsByFourDigitForm(t *testing.T) {
 	rows := []Row{
 		{P1: 8, P2: 1, P3: 0, P1Label: "RADIO", P2Label: "GROUP", Name: "ITEM", P4: "x", Digits: 4, Text: false, ManualLine: 1},
 	}
-	observed := map[string]Observed{"0801": {ReadWidth: 4, ReadShape: "numeric"}}
-	out, err := RenderGo(withRows(fixturePairRequired, 1), rows, observed)
+	// A genuine Pair-form observation CSV row: p3 is "00", the one value
+	// AddressPair permits, and it must NOT appear in the lookup key below.
+	observedCSV := "08,01,00,4,numeric\n"
+	profile := withRows(fixturePairRequired, 1)
+	observed, err := ParseObservedCSV(profile, []byte(observedCSV))
 	if err != nil {
-		t.Fatalf("RenderGo: %v — the observation key must follow this profile's own AddressPair form (four digits), not a six-digit render no Pair CSV could produce", err)
+		t.Fatalf("ParseObservedCSV: %v", err)
+	}
+	if _, ok := observed["0801"]; !ok {
+		t.Fatalf("ParseObservedCSV keyed the row as %v, want a four-digit key \"0801\" under AddressPair", observed)
+	}
+	out, err := RenderGo(profile, rows, observed)
+	if err != nil {
+		t.Fatalf("RenderGo: %v — a real Pair-form observation CSV, parsed by ParseObservedCSV and keyed under this profile's own AddressPair form, must be found by RenderGo's matching lookup", err)
 	}
 	if !strings.Contains(string(out), "ObservedReadWidth: 4") {
 		t.Errorf("generated output does not carry the four-digit-keyed observation")
+	}
+}
+
+// TestParseObservedCSV_PairFormRefusesNonZeroP3 pins the other half of the
+// MEDIUM-2 fix: under AddressPair, p3 is not on the wire (parseRecord
+// enforces the identical rule for the inventory CSV's own P3), so a
+// non-zero p3 in the observation CSV is a component the radio can never
+// have answered with — refused, not silently dropped from the key.
+func TestParseObservedCSV_PairFormRefusesNonZeroP3(t *testing.T) {
+	profile := withRows(fixturePairRequired, 1)
+	if _, err := ParseObservedCSV(profile, []byte("08,01,01,4,numeric\n")); err == nil {
+		t.Error("ParseObservedCSV accepted a non-zero p3 under AddressPair; want a refusal")
+	} else if !strings.Contains(err.Error(), "p3 must be 0") {
+		t.Errorf("ParseObservedCSV refused with %q, which does not say p3 must be 0", err)
 	}
 }
 
