@@ -390,7 +390,8 @@ func TestCrossCheck_A_B_Ledger(t *testing.T) {
 // something else: what the inventory MEANS once loaded — that the rows are
 // the chart's rows, in address order, carrying this chart's shape (P3 zero,
 // no labels, no text) and this chart's widths. It reaches the inventory
-// through ft891.EXItems(), the package's only access to it.
+// through ft891.Dialect().EXItems() — the package's only access to it now
+// that the dialect exists, and the route every other consumer uses.
 func TestCrossCheck_InventoryAgainstTranscriptionA(t *testing.T) {
 	p, ok := extable.Lookup("ft891")
 	if !ok {
@@ -400,7 +401,7 @@ func TestCrossCheck_InventoryAgainstTranscriptionA(t *testing.T) {
 	a := namesAndDigits(aRows)
 	order := sortedAddrs(a)
 
-	items := ft891.EXItems()
+	items := ft891.Dialect().EXItems()
 	if len(items) != len(a) {
 		t.Fatalf("the generated inventory holds %d items, transcription A (%s) holds %d rows", len(items), p.ManualCSV, len(a))
 	}

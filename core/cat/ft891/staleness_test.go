@@ -7,7 +7,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/gm5dna/open-rig-programmer/core/cat/ft891"
 	"github.com/gm5dna/open-rig-programmer/internal/extable"
 )
 
@@ -69,23 +68,6 @@ func TestEXInventoryGenerated_NotStale(t *testing.T) {
 
 	if !bytes.Equal(got, want) {
 		t.Errorf("%s is stale relative to %s; run `go generate ./core/cat/ft891` and commit the result (regenerated %d bytes, committed %d bytes)", p.OutFile, p.ManualCSV, len(want), len(got))
-	}
-}
-
-// TestEXItems_ReturnsACopy pins the one claim exinventory.go's accessor
-// makes beyond returning the inventory: that a caller cannot reach the
-// generated slice through it. The accessor exists only because this package
-// has no dialect.go yet, so it is the sole route to exItems and a caller
-// that mutated what it got back would corrupt every later reader in the
-// process.
-func TestEXItems_ReturnsACopy(t *testing.T) {
-	first := ft891.EXItems()
-	if len(first) == 0 {
-		t.Fatal("EXItems() is empty — the mutation below would prove nothing")
-	}
-	first[0].Name = "MUTATED"
-	if again := ft891.EXItems(); again[0].Name == "MUTATED" {
-		t.Error("EXItems() shares its backing array with the generated inventory")
 	}
 }
 
