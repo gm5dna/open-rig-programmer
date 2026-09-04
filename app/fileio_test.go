@@ -349,10 +349,11 @@ func TestSaveFile_RevisionGuard_NoSilentLossUnderConcurrentMutation(t *testing.T
 // tierDefaults).
 //
 // Hand-written rather than produced by codeplug.Save, deliberately: Save
-// emits the LOWEST schema that can represent the content, so a channel
-// with nothing recorded in those ten fields is written as schema 3 — the
-// case that was never in doubt, since the schema-3 loader migrates all
-// ten to Unavailable unconditionally.
+// would write schema 4 with an explicit "state":"" key for a channel
+// with an Absent field, and schema 3 (whose loader migrates all ten to
+// Unavailable unconditionally) when every one of the ten is already
+// Unavailable — it never produces a v4 file with the keys themselves
+// omitted, so this shape has no producer to pin against.
 func v4BodyNoTierKeys(model, catID, slot, mode string) string {
 	return fmt.Sprintf(`{"schema":4,"generator":"test","radio":{"model":%q,"cat_id":%q,"read_at":"2026-08-27T09:00:00Z"},`+
 		`"channels":[{"slot":%q,"data":{"freq_hz":145500000,"mode":%q,"ctcss":"OFF","ctcss_tone":{"state":"unavailable"},`+
