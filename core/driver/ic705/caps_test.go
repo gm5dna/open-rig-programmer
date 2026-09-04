@@ -27,6 +27,44 @@ var allFields = []spec.Field{
 	spec.FieldFilter, spec.FieldDataMode,
 }
 
+var deliberatelyUnexpressedFields = map[spec.Field]string{
+	spec.FieldTuningStepEnabled: "additions design D8 — the IC-705 memory frame carries no tuning-step-enabled field",
+	spec.FieldTuningStep:        "additions design D8 — the IC-705 memory frame carries no tuning-step field",
+	spec.FieldProgramTuningStep: "additions design D8 — the IC-705 memory frame carries no programmable-tuning-step field",
+	spec.FieldAttenuator:        "additions design D8 — the IC-705 memory frame carries no attenuator field",
+	spec.FieldPreamp:            "additions design D8 — the IC-705 memory frame carries no preamp field",
+	spec.FieldAntenna:           "additions design D8 — the IC-705 memory frame carries no antenna-selection field",
+	spec.FieldIPPlus:            "additions design D8 — the IC-705 memory frame carries no IP+ field",
+}
+
+func TestFieldAuditCoversEverySpecField(t *testing.T) {
+	audited := make(map[spec.Field]bool, len(allFields)+len(deliberatelyUnexpressedFields))
+	for _, field := range allFields {
+		if audited[field] {
+			t.Errorf("allFields lists %s more than once", field)
+		}
+		audited[field] = true
+	}
+	for field, reason := range deliberatelyUnexpressedFields {
+		if reason == "" {
+			t.Errorf("deliberatelyUnexpressedFields[%s] has no reason", field)
+		}
+		if audited[field] {
+			t.Errorf("field %s is both audited and deliberately unexpressed", field)
+		}
+		audited[field] = true
+	}
+	for _, field := range spec.AllFields() {
+		if !audited[field] {
+			t.Errorf("spec.Field %s is neither audited nor deliberately unexpressed", field)
+		}
+		delete(audited, field)
+	}
+	for field := range audited {
+		t.Errorf("field audit names %s, which spec.AllFields does not", field)
+	}
+}
+
 // bothProfiles is every capability set this driver can hand out, for the
 // checks that must hold of all of them.
 func bothProfiles() map[string]spec.Capabilities {
