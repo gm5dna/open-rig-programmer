@@ -412,7 +412,105 @@ func (r *conformanceRun) checkSlotFrames() {
 	// that carries the data back. That half is covered in-package against
 	// captured frames, and is out of this suite's reach by design.
 
+	r.checkMCSendDomain()
+	r.checkMTReadDomain()
 	r.checkOverlongMTFrameIsRefused()
+}
+
+// checkMCSendDomain requires BuildMCSet and the gate's own verdict on
+// "MC"+s.Wire()+";" to AGREE for every slot this dialect classifies — both
+// admit, or both refuse — and requires that agreement to match the SEND-side
+// policy this dialect declares (MCSelects): under MCSelectsMemoryPMS every
+// 60m/EMG slot is refused by both while every memory/PMS slot is admitted by
+// both; under MCSelectsAll every slot this dialect classifies is admitted by
+// both.
+//
+// The loop above already proves half of this: every "MC set" frame the
+// builder DOES produce is offered to checkFrame, which asserts the gate
+// admits it. It is silent when the builder REFUSES, which is exactly the gap
+// a builder or a gate reading the wrong policy value would hide behind — a
+// gate that admitted everything, or a builder that refused everything, would
+// leave no evidence in that loop alone. This function is what turns the
+// refusal into a checked property, with its own non-vacuity counter
+// (checkNonVacuity) so a dialect with no 60m/EMG slot in its space cannot
+// satisfy that counter by having nothing to offer.
+func (r *conformanceRun) checkMCSendDomain() {
+	r.t.Helper()
+
+	policy := r.d.MCSelects()
+	for _, s := range r.slots {
+		cmd, buildErr := r.d.BuildMCSet(s)
+		builderOK := buildErr == nil
+		gateOK := r.d.AllowedCommand([]byte("MC" + s.Wire() + ";"))
+
+		if builderOK != gateOK {
+			r.t.Errorf("%s: MC send domain disagreement for slot %q under %v — BuildMCSet admits=%v, gate admits=%v; a builder and a gate that disagree about the send domain mean one of them is not reading this dialect's own MCSelects", r.name(), s.Wire(), policy, builderOK, gateOK)
+			continue
+		}
+		if !builderOK && !cmd.IsZero() {
+			r.t.Errorf("%s: BuildMCSet returned a non-zero Command alongside its refusal for slot %q; every fallible builder returns the zero Command", r.name(), s.Wire())
+		}
+
+		wide := s.Is60m() || s.IsEMG()
+		switch {
+		case wide && policy == cat.MCSelectsMemoryPMS:
+			if builderOK {
+				r.t.Errorf("%s: BuildMCSet ADMITTED slot %q under %v — its MC legend does not print the 5xx or EMG banks, and an MC Set recalls the channel on the radio", r.name(), s.Wire(), policy)
+				continue
+			}
+			r.refusals["MC send refused for 60m/EMG under MCSelectsMemoryPMS"]++
+		case wide:
+			if !builderOK {
+				r.t.Errorf("%s: BuildMCSet refused slot %q (%v) under %v — 60m and EMG are in the MC send domain under MCSelectsAll", r.name(), s.Wire(), buildErr, policy)
+			}
+		case s.IsMemory() || s.IsPMS():
+			if !builderOK {
+				r.t.Errorf("%s: BuildMCSet refused slot %q (%v) under %v — memory and PMS are always in the MC send domain", r.name(), s.Wire(), buildErr, policy)
+			}
+		}
+	}
+}
+
+// checkMTReadDomain is checkMCSendDomain's counterpart for MT: BuildMTRead
+// against the gate's own verdict on "MT"+s.Wire()+";", held to this
+// dialect's declared MTReadSlots rather than MC's MCSelects — the two
+// policies are independent (a radio may narrow one legend and not the
+// other), so each gets its own walk and its own non-vacuity counter.
+func (r *conformanceRun) checkMTReadDomain() {
+	r.t.Helper()
+
+	policy := r.d.MTReadSlots()
+	for _, s := range r.slots {
+		cmd, buildErr := r.d.BuildMTRead(s)
+		builderOK := buildErr == nil
+		gateOK := r.d.AllowedCommand([]byte("MT" + s.Wire() + ";"))
+
+		if builderOK != gateOK {
+			r.t.Errorf("%s: MT read domain disagreement for slot %q under %v — BuildMTRead admits=%v, gate admits=%v; a builder and a gate that disagree about the read domain mean one of them is not reading this dialect's own MTReadSlots", r.name(), s.Wire(), policy, builderOK, gateOK)
+			continue
+		}
+		if !builderOK && !cmd.IsZero() {
+			r.t.Errorf("%s: BuildMTRead returned a non-zero Command alongside its refusal for slot %q; every fallible builder returns the zero Command", r.name(), s.Wire())
+		}
+
+		wide := s.Is60m() || s.IsEMG()
+		switch {
+		case wide && policy == cat.MTReadsMemoryPMS:
+			if builderOK {
+				r.t.Errorf("%s: BuildMTRead ADMITTED slot %q under %v — its MT block's slot legend prints neither the 5xx nor the EMG bank, which MR reads instead", r.name(), s.Wire(), policy)
+				continue
+			}
+			r.refusals["MT read refused for 60m/EMG under MTReadsMemoryPMS"]++
+		case wide:
+			if !builderOK {
+				r.t.Errorf("%s: BuildMTRead refused slot %q (%v) under %v — 60m and EMG are in the MT read domain under MTReadsReadable", r.name(), s.Wire(), buildErr, policy)
+			}
+		case s.IsMemory() || s.IsPMS():
+			if !builderOK {
+				r.t.Errorf("%s: BuildMTRead refused slot %q (%v) under %v — memory and PMS are always in the MT read domain", r.name(), s.Wire(), buildErr, policy)
+			}
+		}
+	}
 }
 
 // recordFor is the memory record Run offers a dialect for slot s and mode m,
@@ -534,7 +632,8 @@ func (r *conformanceRun) checkMemoryP5() {
 	// The COMBINED form shares this byte with MW, and validateCombinedMTFields
 	// applies the same policy independently of validateMWFields — so a suite
 	// that drove BuildMWSet alone would leave that second validator's P5
-	// refusal entirely unexercised from outside core/cat. See LOW-6.
+	// refusal entirely unexercised from outside core/cat. This is the S0-MEM
+	// lane review's LOW-6 finding; checkCombinedMemoryP5 below is the fix.
 	if r.d.MTForm() == cat.MTFormCombined {
 		r.checkCombinedMemoryP5(ctcss, shift)
 	}
@@ -1353,6 +1452,18 @@ func (r *conformanceRun) checkNonVacuity() {
 		requiredRefusals = append(requiredRefusals,
 			"display-bearing combined build under P11Fixed",
 			"display-bearing combined parse under P11Fixed")
+	}
+	// The MC send and MT read domains, each counted against its OWN policy.
+	// A narrow dialect with no 60m/EMG slot in its space cannot satisfy
+	// either counter by having nothing to offer — that is the point: a
+	// fixture declaring MCSelectsMemoryPMS or MTReadsMemoryPMS without a
+	// 5xx bank or an EMG channel leaves checkMCSendDomain/checkMTReadDomain
+	// vacuous over it, and this is what fails that silently.
+	if r.d.MCSelects() == cat.MCSelectsMemoryPMS {
+		requiredRefusals = append(requiredRefusals, "MC send refused for 60m/EMG under MCSelectsMemoryPMS")
+	}
+	if r.d.MTReadSlots() == cat.MTReadsMemoryPMS {
+		requiredRefusals = append(requiredRefusals, "MT read refused for 60m/EMG under MTReadsMemoryPMS")
 	}
 	switch r.d.MemoryP5() {
 	case cat.P5Fixed:

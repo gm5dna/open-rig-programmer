@@ -292,11 +292,15 @@ func TestValidateDialectConfig_V14MemoryP5(t *testing.T) {
 	}
 }
 
-// TestMemoryP5_ZeroPolicyRefusesRatherThanDefaultingWide is the
-// defense-in-depth arm LOW-3 asks for. A zero MemoryP5Policy is impossible
-// past NewDialect's V14 clause (dialectvalidate.go) — which is why this test
-// builds its dialect by copying a valid one and zeroing the field directly,
-// rather than through NewDialect, to reach code the config validator cannot.
+// TestMemoryP5_ZeroPolicyRefusesRatherThanDefaultingWide is a
+// defense-in-depth arm the S0-MEM lane review's LOW-3 finding asked for: the
+// config validator (V14) already refuses a zero MemoryP5Policy, so this test
+// proves the SAME refusal holds one layer further in, at the sites that
+// actually read the field, in case a caller ever reaches one without going
+// through NewDialect. A zero MemoryP5Policy is impossible past NewDialect's
+// V14 clause (dialectvalidate.go) — which is why this test builds its
+// dialect by copying a valid one and zeroing the field directly, rather than
+// through NewDialect, to reach code the config validator cannot.
 //
 // Every site that reads d.memoryP5 must REFUSE on this value, not silently
 // take the P5TxClar (wide) reading: parseMemoryFields (read), encodeMemoryFields

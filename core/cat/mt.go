@@ -114,6 +114,28 @@ func (d Dialect) MTP11() MTP11Policy { return d.mt.P11 }
 // it at all.
 func (d Dialect) MemoryP5() MemoryP5Policy { return d.memoryP5 }
 
+// MCSelects reports the SEND-side slot domain of this family's MC (memory
+// channel recall) command: memory and PMS only (MCSelectsMemoryPMS) or
+// every slot class this dialect classifies outside "000" (MCSelectsAll).
+// The zero Dialect reports the zero policy, which NewDialect refuses to
+// construct.
+//
+// Exported for the same reason MTP11 and MemoryP5 are: core/cat/dialecttest
+// cannot see the unexported field, and it must branch on this to know
+// which slots BuildMCSet and the gate's own MC branch MUST admit and which
+// they MUST refuse (checkMCSendDomain).
+func (d Dialect) MCSelects() MCSlotPolicy { return d.slots.mcSelects }
+
+// MTReadSlots reports this family's MT READ slot domain: memory and PMS
+// only (MTReadsMemoryPMS) or the full readable space (MTReadsReadable).
+// The zero Dialect reports the zero policy, which NewDialect refuses to
+// construct.
+//
+// Exported for the same reason MCSelects is: core/cat/dialecttest must
+// branch on this to know which slots BuildMTRead and the gate's own MT
+// read branch MUST admit and which they MUST refuse (checkMTReadDomain).
+func (d Dialect) MTReadSlots() MTReadSlotPolicy { return d.mt.ReadSlots }
+
 // Clarifier returns this family's clarifier step and range.
 //
 // Exported for core/driver/ft710's write path, which FORMERLY pre-checked
