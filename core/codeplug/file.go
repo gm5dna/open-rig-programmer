@@ -25,7 +25,7 @@ import (
 // It is no longer the version Save always emits, and that is the whole
 // point of the Icom tier's file work (design D4, adjudication 4; round 2
 // F6+C7). Save emits the LOWEST schema that can REPRESENT the content —
-// see schemaFor — so a codeplug holding nothing the tier added, with
+// see schemaFor — so a codeplug whose tier fields are all Unavailable, with
 // every value inside schema 3's ranges, is written as schema 3 exactly
 // as it was before the tier existed. That is what makes every existing
 // Yaesu codeplug and manifest artefact byte-identical BY CONSTRUCTION
@@ -653,6 +653,10 @@ func migrateV3Channels(v3 []channelV3) []Channel {
 // none of these fields, so "this radio has no such field" is exactly
 // what such a file says by having no key for it — and it is precisely
 // what a read of any of those radios reports (core/driver/*/read.go).
+// It STAYS true because Save never omits an Absent field: only
+// Unavailable is representable by omission (see
+// FieldState.RepresentableByOmission), so a missing key in a schema-3
+// file this program wrote cannot have meant anything else.
 //
 // The rejected alternative was the zero value, Absent ("this codeplug
 // never spoke about the field"), which reads as the more cautious
@@ -1170,13 +1174,15 @@ func migrateV4ChannelData(d *channelDataV4) *ChannelData {
 // the rule design D4 (adjudication 4; round 2 F6+C7) settled on, and the
 // reason every pre-tier file stays byte-identical.
 //
-// Schema 3 unless D4 content or a wide frequency needs schema 4; schema
-// 5 only when one of D8's seven receiver fields is Recorded.
+// Schema 3 unless a D4 state or a wide frequency needs schema 4; schema
+// 5 when one of D8's seven receiver states cannot be omitted.
 //
-//   - a tier-added field is PRESENT — its state RECORDS something, i.e.
-//     is Known or Unknown rather than Absent or Unavailable (see
-//     FieldState.Recorded and ChannelData.tierFieldsUnrecorded) —
-//     because schema 3 has no key to put it in; or
+//   - a tier-added field is not Unavailable (see
+//     FieldState.RepresentableByOmission and
+//     ChannelData.tierFieldsRepresentableByOmission), because an older
+//     schema has no key for it and its loader would reconstruct omission
+//     as Unavailable. Absent therefore needs an explicit empty state key
+//     to preserve the distinction Validate's send gate relies on; or
 //   - a value does not fit schema 3's ranges — today that means a
 //     freq_hz above MaxUint32, which the IC-905's 10 GHz reach makes
 //     real.
@@ -1190,16 +1196,18 @@ func migrateV4ChannelData(d *channelDataV4) *ChannelData {
 // NOT consulted: it is always CurrentSchema after a Load (migrate-on-
 // load), so honouring it would make every re-save a CurrentSchema file —
 // schema 5 today — and destroy the byte identity this function exists for.
+// TestSaveLoad_ReachableAbsentFieldRemainsInvalid pins both schema
+// boundaries and the send-gate consequence.
 func schemaFor(cp *Codeplug) int {
 	needsSchema4 := false
 	for _, ch := range cp.Channels {
 		if ch.Data == nil {
 			continue
 		}
-		if !ch.Data.receiverFieldsUnrecorded() {
+		if !ch.Data.receiverFieldsRepresentableByOmission() {
 			return 5
 		}
-		if !ch.Data.icomTierFieldsUnrecorded() || ch.Data.FreqHz > math.MaxUint32 {
+		if !ch.Data.icomTierFieldsRepresentableByOmission() || ch.Data.FreqHz > math.MaxUint32 {
 			needsSchema4 = true
 		}
 	}
@@ -1361,9 +1369,9 @@ func saveChannelsV4(channels []Channel) []channelV4 {
 // SCHEMA CHOICE (design D4): Save writes the LOWEST schema that can
 // REPRESENT cp — schemaFor's answer — through that version's own marshal
 // type, never through the live struct and never through cp.Schema. A
-// codeplug holding nothing the Icom tier added, with every value inside
-// schema 3's ranges, is therefore written exactly as this program wrote
-// it before that tier existed, byte for byte.
+// codeplug whose tier fields are all Unavailable, with every value
+// inside schema 3's ranges, is therefore written exactly as this program
+// wrote it before that tier existed, byte for byte.
 func Save(path string, cp *Codeplug) error {
 	if err := cp.Menus.Validate(); err != nil {
 		return fmt.Errorf("codeplug: save %s: %w", path, err)
