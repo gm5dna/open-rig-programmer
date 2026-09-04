@@ -16,7 +16,7 @@ import (
 )
 
 // This file is Stage 1 item 3: the mechanical byte-compare of this
-// dialect's codec against the sixteen hand-derived wire frames in
+// dialect's codec against the nineteen hand-derived wire frames in
 // testdata/*.golden.
 //
 // # What the vectors are, and what this file may do with them
@@ -60,7 +60,7 @@ import (
 //
 // # Hardware status
 //
-// UNVERIFIED, for all sixteen vectors, and there is no route to verifying
+// UNVERIFIED, for all nineteen vectors, and there is no route to verifying
 // them: no FT-891 has ever been asked anything by this project (doc.go's
 // provenance section). Green here means the codec agrees with the manual as
 // one agent read it, not that any radio accepts these bytes. doc.go's
