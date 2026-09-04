@@ -77,6 +77,96 @@ func (t TypeRefPolicy) String() string {
 	}
 }
 
+// AddressForm, Labels and TextRows are the three CHART-SHAPE policies. Each
+// zero value is refused by Profile.Validate for the reason ObservationPolicy
+// and TypeRefPolicy are: an omitted semantic must refuse, never default.
+//
+// THEY ARE extable's OWN TYPES, not core/cat's. This package imports no
+// core/cat — it is build-time tooling that RENDERS core/cat source text, and
+// an import would make the transcoder depend on the package it generates
+// into. AddressTriple/AddressPair correspond one-for-one with core/cat's
+// EXAddressTriple/EXAddressPair, and the correspondence is a fact about the
+// two radios' charts rather than a type relationship: a Pair profile's CSV
+// carries P3 == 0 on every row, which is exactly what core/cat's rule V12
+// requires of a Pair dialect's inventory.
+type AddressForm int
+
+const (
+	// AddressTriple: the chart's MENU Number is a (P1,P2,P3) triple and the
+	// radio's EX address field is six digits.
+	AddressTriple AddressForm = iota + 1
+	// AddressPair: the field is four digits, so every row's p3 column must
+	// be 0. ParseCSV refuses any other value rather than dropping it: a
+	// component that reaches no frame must not reach the inventory either.
+	AddressPair
+)
+
+func (a AddressForm) String() string {
+	switch a {
+	case AddressTriple:
+		return "AddressTriple"
+	case AddressPair:
+		return "AddressPair"
+	default:
+		return fmt.Sprintf("AddressForm(%d)", int(a))
+	}
+}
+
+// Labels declares whether the model's chart prints GROUP LABELS — the P1 and
+// P2 column headings the FT-710's Table 2 carries and the FT-891's does not.
+type Labels int
+
+const (
+	// LabelsRequired: both label columns carry text, and a blank one is a
+	// transcription error.
+	LabelsRequired Labels = iota + 1
+	// LabelsAbsent: the chart prints no group labels, so both columns must
+	// be BLANK and the rendered EXItem carries "" for each. Inventing a
+	// label would put words in a manual's mouth; carrying a whitespace-only
+	// cell through would give a consumer a space where it must see an
+	// absence, which is why RenderGo normalises rather than copies.
+	LabelsAbsent
+)
+
+func (l Labels) String() string {
+	switch l {
+	case LabelsRequired:
+		return "LabelsRequired"
+	case LabelsAbsent:
+		return "LabelsAbsent"
+	default:
+		return fmt.Sprintf("Labels(%d)", int(l))
+	}
+}
+
+// TextRows declares whether the model's chart has free-text rows: the
+// FT-710's six (MY CALL and five PRESET NAMEs), the FTdx10's and FTdx101's
+// one each, and — on the evidence read so far — the FT-891's none.
+//
+// It makes the transcriber's "a text row is a STOP" convention MECHANICAL.
+// Under TextRowsAbsent a row with text=true is refused by ParseCSV rather
+// than being carried into an inventory whose radio's chart never printed it.
+type TextRows int
+
+const (
+	// TextRowsAllowed: text rows exist and carry exactly TextWidth digits.
+	TextRowsAllowed TextRows = iota + 1
+	// TextRowsAbsent: the chart has none, TextWidth must be 0, and any row
+	// flagged text is refused.
+	TextRowsAbsent
+)
+
+func (t TextRows) String() string {
+	switch t {
+	case TextRowsAllowed:
+		return "TextRowsAllowed"
+	case TextRowsAbsent:
+		return "TextRowsAbsent"
+	default:
+		return fmt.Sprintf("TextRows(%d)", int(t))
+	}
+}
+
 // Profile is every fact about one radio model that the transcoder needs and
 // that differs between models. It is the single source those facts have: the
 // generator and every staleness test read the same value, so they cannot
@@ -106,12 +196,23 @@ type Profile struct {
 	ManualCSV   string
 	ObservedCSV string // must be empty iff Observations is ObservationsAbsent
 
+	// Addresses, LabelPolicy and TextRowPolicy are the chart-shape
+	// policies. Each has no default; see AddressForm, Labels and TextRows.
+	Addresses     AddressForm
+	LabelPolicy   Labels
+	TextRowPolicy TextRows
+
 	// MinDigits and MaxDigits bound a non-text row's Digits column.
 	MinDigits int
 	MaxDigits int
 	// TextWidth is the exact Digits a text row must carry. It is a
 	// MANUAL-SCHEMA fact and must never be used as an evidence bound: see
 	// MaxObservedWidth.
+	//
+	// It is positive under TextRowsAllowed and EXACTLY 0 under
+	// TextRowsAbsent — the one cross-field rule the three new policies
+	// carry. A model with no text rows and a text width of 12 is stating
+	// two incompatible things about one chart.
 	TextWidth int
 	// MaxObservedWidth bounds a hardware observation's P4 width. It is
 	// deliberately independent of MinDigits/MaxDigits/TextWidth, which are
@@ -189,13 +290,37 @@ func (p Profile) Validate() error {
 	default:
 		return fmt.Errorf("extable: profile %s: TypeRefPolicy %v must be set explicitly", p.Model, p.Types)
 	}
+	switch p.Addresses {
+	case AddressTriple, AddressPair:
+	default:
+		return fmt.Errorf("extable: profile %s: AddressForm %v must be set explicitly", p.Model, p.Addresses)
+	}
+	switch p.LabelPolicy {
+	case LabelsRequired, LabelsAbsent:
+	default:
+		return fmt.Errorf("extable: profile %s: Labels %v must be set explicitly", p.Model, p.LabelPolicy)
+	}
+	// TextWidth is validated INSIDE this switch rather than in the
+	// positive-integer sweep below, because its permitted value is the
+	// policy's to say: positive under Allowed, exactly 0 under Absent.
+	switch p.TextRowPolicy {
+	case TextRowsAllowed:
+		if p.TextWidth <= 0 {
+			return fmt.Errorf("extable: profile %s: TextWidth must be positive under TextRowsAllowed, got %d", p.Model, p.TextWidth)
+		}
+	case TextRowsAbsent:
+		if p.TextWidth != 0 {
+			return fmt.Errorf("extable: profile %s: TextWidth is %d under TextRowsAbsent, want 0 — a model whose chart prints no text row has no text width", p.Model, p.TextWidth)
+		}
+	default:
+		return fmt.Errorf("extable: profile %s: TextRows %v must be set explicitly", p.Model, p.TextRowPolicy)
+	}
 	for _, f := range []struct {
 		name string
 		val  int
 	}{
 		{"MinDigits", p.MinDigits},
 		{"MaxDigits", p.MaxDigits},
-		{"TextWidth", p.TextWidth},
 		{"MaxObservedWidth", p.MaxObservedWidth},
 		{"ExpectedRows", p.ExpectedRows},
 	} {
@@ -285,6 +410,13 @@ var ft710Profile = Profile{
 	ManualCSV:   "table2.csv",
 	ObservedCSV: "table2-observed.csv",
 
+	// Today's behaviour, said out loud rather than inherited: the FT-710's
+	// Table 2 prints a (P1,P2,P3) MENU Number, group labels in both label
+	// columns, and six 12-byte free-text rows.
+	Addresses:     AddressTriple,
+	LabelPolicy:   LabelsRequired,
+	TextRowPolicy: TextRowsAllowed,
+
 	MinDigits:        1,
 	MaxDigits:        4,
 	TextWidth:        12,
@@ -327,6 +459,13 @@ var ftdx10Profile = Profile{
 	VarName:     "exItems",
 	OutFile:     "exinventory_gen.go",
 	ManualCSV:   "table2.csv",
+
+	// Today's behaviour, said out loud rather than inherited: the FTdx10's
+	// chart prints a (P1,P2,P3) MENU Number, both group labels, and one
+	// 12-byte text row (MY CALL. at 04/01/01).
+	Addresses:     AddressTriple,
+	LabelPolicy:   LabelsRequired,
+	TextRowPolicy: TextRowsAllowed,
 
 	MinDigits: 1,
 	MaxDigits: 4,
@@ -375,6 +514,13 @@ var ftdx101Profile = Profile{
 	VarName:     "exItems",
 	OutFile:     "exinventory_gen.go",
 	ManualCSV:   "table2.csv",
+
+	// Today's behaviour, said out loud rather than inherited: the FTdx101's
+	// chart prints a (P1,P2,P3) MENU Number, both group labels, and one
+	// 12-byte text row.
+	Addresses:     AddressTriple,
+	LabelPolicy:   LabelsRequired,
+	TextRowPolicy: TextRowsAllowed,
 
 	MinDigits: 1,
 	MaxDigits: 4,

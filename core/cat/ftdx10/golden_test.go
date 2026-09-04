@@ -647,7 +647,7 @@ func TestGoldenEXReadVectors(t *testing.T) {
 			}
 			built, err := d.BuildEXRead(addr)
 			if err != nil {
-				t.Fatalf("BuildEXRead(%s): %v\nTHIS IS A STOP.", addr.Wire(), err)
+				t.Fatalf("BuildEXRead(%s): %v\nTHIS IS A STOP.", d.EXWire(addr), err)
 			}
 			requireGoldenFrame(t, v, built, "Dialect().BuildEXRead")
 
@@ -663,14 +663,14 @@ func TestGoldenEXReadVectors(t *testing.T) {
 				}
 			}
 			if found == nil {
-				t.Fatalf("address %s is a KnownEXAddress but has no EXItem — the inventory is inconsistent", addr.Wire())
+				t.Fatalf("address %s is a KnownEXAddress but has no EXItem — the inventory is inconsistent", d.EXWire(addr))
 			}
 			if found.P1Label != want.p1Label || found.P2Label != want.p2Label || found.Name != want.itemName || found.Digits != want.digits {
 				t.Errorf("Table 2 row for %s disagrees between the quarantined vector derivation and transcription A.\n"+
 					"  vector file: %q / %q / %q, %d digits\n"+
 					"  inventory:   %q / %q / %q, %d digits\n"+
 					"THIS IS A STOP: two blind readings of one printed table disagree; arbitrate against the PDF.",
-					addr.Wire(),
+					d.EXWire(addr),
 					want.p1Label, want.p2Label, want.itemName, want.digits,
 					found.P1Label, found.P2Label, found.Name, found.Digits)
 			}

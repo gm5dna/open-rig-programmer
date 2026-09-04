@@ -45,9 +45,10 @@ func clarPeerConfig() DialectConfig {
 			MemoryLo: 1, MemoryHi: 99, // identical to the FT-710's own range
 			NoneWire: "000",
 		},
-		MT:          MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
-		Clarifier:   ClarifierPolicy{StepHz: 1, MaxAbsHz: 9999},
-		MWWriteKind: KindMemory,
+		EXAddressForm: EXAddressTriple,
+		MT:            MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+		Clarifier:     ClarifierPolicy{StepHz: 1, MaxAbsHz: 9999},
+		MWWriteKind:   KindMemory,
 	}
 }
 

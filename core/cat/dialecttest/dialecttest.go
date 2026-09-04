@@ -813,6 +813,18 @@ func (r *conformanceRun) firstWritableSlot(m cat.Mode, ctcss cat.CTCSSState, shi
 // dialect lists but does not recognise would make every EX answer it
 // received unattributable.
 //
+// EVERY LENGTH HERE IS THIS DIALECT'S OWN. The EX address field is four
+// digits on some radios and six on others (cat.EXAddressForm), so the read
+// frame is 2 + d.EXAddressWidth() + 1 bytes and the address occupies
+// exactly the width d.EXWire renders. Written against a constant 9 this
+// suite would have declared a four-digit dialect non-conformant while its
+// builder, gate and parser all agreed with each other.
+//
+// The answer round-trip is the other half: the narrowest answer this
+// dialect can receive at each address must parse back to that same address.
+// A read frame that is well-formed and a parser that cannot read the reply
+// is a dialect that can ask a question and not hear the answer.
+//
 // An empty inventory is legal (DialectConfig documents it: "a radio with no
 // menu inventory described yet"), so it is logged rather than failed.
 func (r *conformanceRun) checkEXReads() {
@@ -823,9 +835,20 @@ func (r *conformanceRun) checkEXReads() {
 		r.t.Logf("%s: declares no EX inventory, so the EX half of this suite is empty for it (DialectConfig permits this)", r.name())
 		return
 	}
+	width := r.d.EXAddressWidth()
+	if width <= 0 {
+		r.t.Errorf("%s: EXAddressWidth() = %d for a dialect with %d inventory addresses — it can render no address field, so none of its EX frames can be built", r.name(), width, len(addrs))
+		return
+	}
+	roundTrips := 0
 	for _, a := range addrs {
 		if !r.d.KnownEXAddress(a) {
 			r.t.Errorf("%s: KnownEXAddress(%v) is false for an address its own EXAddresses() lists", r.name(), a)
+		}
+		wire := r.d.EXWire(a)
+		if len(wire) != width {
+			r.t.Errorf("%s: EXWire(%v) is %d bytes but EXAddressWidth() says %d — the width and the render have come apart", r.name(), a, len(wire), width)
+			continue
 		}
 		cmd, err := r.d.BuildEXRead(a)
 		if err != nil {
@@ -833,6 +856,37 @@ func (r *conformanceRun) checkEXReads() {
 			continue
 		}
 		r.checkFrame("EX read", cmd.Bytes())
+
+		frame := cmd.Bytes()
+		if len(frame) != 2+width+1 {
+			r.t.Errorf("%s: BuildEXRead(%v) is %d bytes, want %d (\"EX\" + a %d-byte address + \";\")", r.name(), a, len(frame), 2+width+1, width)
+			continue
+		}
+		if got := string(frame[2 : 2+width]); got != wire {
+			r.t.Errorf("%s: BuildEXRead(%v) carries address field %q, want %q", r.name(), a, got, wire)
+		}
+
+		// The narrowest answer this dialect can receive: one P4 byte.
+		answer := []byte("EX" + wire + "0;")
+		gotAddr, raw, err := r.d.ParseEXAnswer(answer)
+		if err != nil {
+			r.t.Errorf("%s: ParseEXAnswer(%q) = %v — this is the narrowest answer to a read this same dialect just built", r.name(), answer, err)
+			continue
+		}
+		if gotAddr != a {
+			r.t.Errorf("%s: ParseEXAnswer(%q) returned address %v, want %v", r.name(), answer, gotAddr, a)
+			continue
+		}
+		if raw != "0" {
+			r.t.Errorf("%s: ParseEXAnswer(%q) returned P4 %q, want %q verbatim", r.name(), answer, raw, "0")
+			continue
+		}
+		roundTrips++
+	}
+	// Non-vacuity, in this suite's usual sense: a loop that round-tripped
+	// nothing passes in silence.
+	if roundTrips == 0 {
+		r.t.Errorf("%s: no EX answer round-tripped, though this dialect lists %d addresses — the property above passed vacuously", r.name(), len(addrs))
 	}
 }
 

@@ -39,7 +39,7 @@ import (
 func TestEXInventoryCrossCheck_AddressSetsIdentical(t *testing.T) {
 	catAddrs := make(map[string]bool)
 	for _, item := range cat.FT710.EXItems() {
-		catAddrs[item.Addr.Wire()] = true
+		catAddrs[cat.FT710.EXWire(item.Addr)] = true
 	}
 	fakeAddrs := fakeradio.EXDefaults()
 
@@ -78,7 +78,7 @@ func TestEXInventoryCrossCheck_WidthsAgree(t *testing.T) {
 	var mismatches []string
 	checked := 0
 	for _, item := range cat.FT710.EXItems() {
-		addr := item.Addr.Wire()
+		addr := cat.FT710.EXWire(item.Addr)
 		p4, ok := fakeAddrs[addr]
 		if !ok {
 			continue // reported by TestEXInventoryCrossCheck_AddressSetsIdentical
@@ -200,7 +200,7 @@ func TestEXFakeradioRoundTrip_All296RawPort(t *testing.T) {
 		if gotAddr != item.Addr {
 			t.Errorf("%v: answer echoed address %v, want %v", item.Addr, gotAddr, item.Addr)
 		}
-		wantRaw, ok := fakeDefaults[item.Addr.Wire()]
+		wantRaw, ok := fakeDefaults[cat.FT710.EXWire(item.Addr)]
 		if !ok {
 			t.Errorf("%v: address answered over the wire but absent from fakeradio.EXRuntimeDefaults() — inconsistent with handleEX's own membership check", item.Addr)
 			continue
@@ -234,7 +234,7 @@ func TestEXCrossCheck_FakeRuntimeMatchesObservedReads(t *testing.T) {
 	var mismatches []string
 	checked := 0
 	for _, item := range cat.FT710.EXItems() {
-		addr := item.Addr.Wire()
+		addr := cat.FT710.EXWire(item.Addr)
 		p4, ok := runtime[addr]
 		if !ok {
 			continue // reported by TestEXInventoryCrossCheck_AddressSetsIdentical

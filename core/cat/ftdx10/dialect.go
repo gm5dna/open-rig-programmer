@@ -80,6 +80,10 @@ var dialect = cat.MustNewDialect(cat.DialectConfig{
 		NoneWire:      "000", // ASSUMED — in no FTdx10 slot legend
 	},
 	EXItems: exItems,
+	// The FTdx10's EX grammar block prints "E X P1 P1 P2 P2 P3 P3"
+	// (ftdx10_layout.txt:636-645, Read frame at 642, Answer at 645): six
+	// digits, three components.
+	EXAddressForm: cat.EXAddressTriple,
 	MT: cat.MTPolicy{
 		Form:         cat.MTFormCombined,
 		TagMaxBytes:  12,

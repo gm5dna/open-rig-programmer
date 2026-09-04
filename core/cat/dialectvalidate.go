@@ -15,6 +15,14 @@ import (
 // describe answers its own transport can never receive whole, and
 // Dialect.exAnswerMaxLen's arithmetic would run away with a large enough
 // value.
+//
+// IT STAYS KEYED ON THE SIX-DIGIT FORM. An EXAddressPair dialect's own
+// overhead is 7, not 9, so this ceiling is CONSERVATIVE for it by two
+// bytes: it can refuse a P4 that radio's transport could in fact have
+// assembled, and can never admit one it could not. Widening it per form
+// would move a bound that internal/extable.MaxDigitsCeiling mirrors as a
+// single number (exdigits_ceiling_test.go pins the two equal), for two
+// bytes of headroom no chart is anywhere near.
 const maxEXDigits = DefaultMaxFrame - 9 // 247
 
 // maxMTTagBytes is the largest MTPolicy.TagMaxBytes a dialect may declare.
@@ -32,12 +40,13 @@ const maxSlotDecimal = 999
 
 // maxEXComponent is the largest value an EXAddress component may hold.
 //
-// EXAddress.Wire renders each component with %02d, which is a MINIMUM
+// wireEXAddress renders each component with %02d, which is a MINIMUM
 // width, not an exact one: a component of 100 renders three digits and
-// produces a seven-byte address in a field the grammar fixes at six. The
-// resulting frame is rejected by the dialect's own gate and can never be
-// reconstructed by its own parser, because ParseEXAddress consumes exactly
-// six digits. uint8 alone therefore does not constrain this enough.
+// produces a seven-byte address in a field the grammar fixes at six (or a
+// five-byte one in the four-digit field). The resulting frame is rejected
+// by the dialect's own gate and can never be reconstructed by its own
+// parser, because ParseEXAddress consumes exactly the declared width.
+// uint8 alone therefore does not constrain this enough.
 const maxEXComponent = 99
 
 // clarFieldMaxHz is the largest magnitude the 4-digit clarifier field can
@@ -53,17 +62,18 @@ const clarFieldMaxHz = 9999
 // check before.
 func validateDialectConfig(cfg DialectConfig) error {
 	for _, rule := range []func(DialectConfig) error{
-		validateCATID,        // V1
-		validateModeNames,    // V2
-		validatePMSPairs,     // V3
-		validateSpecialWires, // V4
-		validateMemoryRange,  // V5
-		validateSixtyRange,   // V6
-		validateShadowing,    // V7
-		validateEXItems,      // V8
-		validateMTPolicy,     // V9
-		validateClarifier,    // V10
-		validateMWWriteKind,  // V11
+		validateCATID,         // V1
+		validateModeNames,     // V2
+		validatePMSPairs,      // V3
+		validateSpecialWires,  // V4
+		validateMemoryRange,   // V5
+		validateSixtyRange,    // V6
+		validateShadowing,     // V7
+		validateEXItems,       // V8
+		validateMTPolicy,      // V9
+		validateClarifier,     // V10
+		validateMWWriteKind,   // V11
+		validateEXAddressForm, // V12
 	} {
 		if err := rule(cfg); err != nil {
 			return err
@@ -276,6 +286,23 @@ func pmsWireInRange(wire string, pairs int) bool {
 }
 
 // validateEXItems is V8.
+//
+// Its three address renders go through wireEXAddress with the config's OWN
+// form, not through EXAddress's %v: this rule runs before any Dialect
+// exists, so cfg.EXAddressForm is the only form in scope, and rendering an
+// address here as the debug String() would have moved three shipped error
+// sentences. TestValidateEXItems_TripleErrorTextIsByteIdentical pins all
+// three against their pre-seam spelling.
+//
+// V8 runs at rule position 8, four places before V12
+// (validateEXAddressForm) refuses a zero form — so a config that omits
+// EXAddressForm AND fails V8 reaches this renderer first, with
+// wireEXAddress(0, addr) returning "". renderEXAddressForV8 falls back to
+// the debug String() form in that case, so the message still names the
+// address rather than rendering an empty string.
+// TestValidateEXItems_ZeroFormFallsBackToDebugForm pins this. The rule
+// ORDER is untouched — V12 still runs fourth after V8 — this only changes
+// what V8 renders when asked to render through a form it cannot.
 func validateEXItems(cfg DialectConfig) error {
 	seen := make(map[EXAddress]int, len(cfg.EXItems))
 	for i, it := range cfg.EXItems {
@@ -284,21 +311,34 @@ func validateEXItems(cfg DialectConfig) error {
 			v    uint8
 		}{{"P1", it.Addr.P1}, {"P2", it.Addr.P2}, {"P3", it.Addr.P3}} {
 			if int(c.v) > maxEXComponent {
-				return fmt.Errorf("cat: EXItems[%d].Addr.%s is %d, want <= %d — EXAddress.Wire renders %%02d, a MINIMUM width, so a larger component produces a 7-byte address in a 6-byte field", i, c.name, c.v, maxEXComponent)
+				return fmt.Errorf("cat: EXItems[%d].Addr.%s is %d, want <= %d — wireEXAddress renders %%02d, a MINIMUM width, so a larger component overruns the fixed-width address field this dialect's own ParseEXAddress reads back", i, c.name, c.v, maxEXComponent)
 			}
 		}
 		if prev, dup := seen[it.Addr]; dup {
-			return fmt.Errorf("cat: EXItems[%d] repeats address %v, already at index %d", i, it.Addr, prev)
+			return fmt.Errorf("cat: EXItems[%d] repeats address %s, already at index %d", i, renderEXAddressForV8(cfg.EXAddressForm, it.Addr), prev)
 		}
 		seen[it.Addr] = i
 		if it.Digits < 1 {
-			return fmt.Errorf("cat: EXItems[%d] (%v) has Digits %d, want >= 1", i, it.Addr, it.Digits)
+			return fmt.Errorf("cat: EXItems[%d] (%s) has Digits %d, want >= 1", i, renderEXAddressForV8(cfg.EXAddressForm, it.Addr), it.Digits)
 		}
 		if it.Digits > maxEXDigits {
-			return fmt.Errorf("cat: EXItems[%d] (%v) has Digits %d, want <= %d — a wider P4 describes an answer frame longer than DefaultMaxFrame (%d), which this dialect's own transport could never assemble", i, it.Addr, it.Digits, maxEXDigits, DefaultMaxFrame)
+			return fmt.Errorf("cat: EXItems[%d] (%s) has Digits %d, want <= %d — a wider P4 describes an answer frame longer than DefaultMaxFrame (%d), which this dialect's own transport could never assemble", i, renderEXAddressForV8(cfg.EXAddressForm, it.Addr), it.Digits, maxEXDigits, DefaultMaxFrame)
 		}
 	}
 	return nil
+}
+
+// renderEXAddressForV8 renders addr through form for a V8 error message,
+// falling back to addr's debug String() form when form is the zero value
+// (wireEXAddress(0, addr) is ""). V8 runs before V12, so a config that
+// omits EXAddressForm can still reach here; this keeps its refusal message
+// naming the address rather than rendering an empty string.
+// TestValidateEXItems_ZeroFormFallsBackToDebugForm pins it.
+func renderEXAddressForV8(form EXAddressForm, addr EXAddress) string {
+	if form == EXAddressForm(0) {
+		return addr.String()
+	}
+	return wireEXAddress(form, addr)
 }
 
 // validateMTPolicy is V9: the TagMaxBytes ceiling, then per-form field
@@ -405,5 +445,37 @@ func validMWWriteKindByte(b byte) bool {
 		return true
 	default: // KindUnset and anything undocumented
 		return false
+	}
+}
+
+// validateEXAddressForm is V12: the EX address field's width, and the P3
+// rule the narrow form implies.
+//
+// The zero value is REFUSED rather than defaulted, for the M9c-1 reason and
+// with a concrete cost behind it: defaulting to EXAddressTriple would give
+// a four-digit radio a nine-byte EX read where its grammar prints seven —
+// built, admitted by this dialect's own gate, and sent — and would make
+// every answer that radio sent back unparseable. The rule fires even for an
+// empty EXItems, because the width also sizes the read frame the gate
+// measures, not only the addresses in the inventory.
+//
+// The Pair clause is the other half of wireEXAddress's four-digit render:
+// that render drops P3, so a member carrying a non-zero one would lose it
+// from every frame silently. The refusal names the offending index AND the
+// address as the frame would have carried it, through the same renderer, so
+// a three-hundred-row inventory does not have to be searched by hand.
+func validateEXAddressForm(cfg DialectConfig) error {
+	switch cfg.EXAddressForm {
+	case EXAddressTriple:
+		return nil
+	case EXAddressPair:
+		for i, it := range cfg.EXItems {
+			if it.Addr.P3 != 0 {
+				return fmt.Errorf("cat: EXItems[%d] (%s) has P3 %d under %v — the four-digit field renders P1 and P2 only, so a non-zero P3 would be dropped from every frame this dialect builds", i, wireEXAddress(cfg.EXAddressForm, it.Addr), it.Addr.P3, cfg.EXAddressForm)
+			}
+		}
+		return nil
+	default:
+		return fmt.Errorf("cat: EXAddressForm %v must be set explicitly — the zero value is not a form (an omitted form must refuse, not default)", cfg.EXAddressForm)
 	}
 }

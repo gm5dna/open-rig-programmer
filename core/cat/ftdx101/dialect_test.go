@@ -751,7 +751,7 @@ func TestEXAnswerBound(t *testing.T) {
 			if len(body) != maxDigits {
 				t.Fatalf("the test's P4 body is %d bytes, want %d", len(body), maxDigits)
 			}
-			frame := []byte("EX" + addr.Wire() + body + ";")
+			frame := []byte("EX" + d.EXWire(addr) + body + ";")
 			gotAddr, gotBody, err := d.ParseEXAnswer(frame)
 			if err != nil {
 				t.Errorf("ParseEXAnswer(%q) = %v — a %d-byte P4 is this dialect's own widest item, so its parser must read one", frame, err, maxDigits)
@@ -764,7 +764,7 @@ func TestEXAnswerBound(t *testing.T) {
 				}
 			}
 
-			over := []byte("EX" + addr.Wire() + body + "X" + ";")
+			over := []byte("EX" + d.EXWire(addr) + body + "X" + ";")
 			if _, _, err := d.ParseEXAnswer(over); err == nil {
 				t.Errorf("ParseEXAnswer(%q) ACCEPTED a %d-byte P4, one past this dialect's widest inventory item — the bound is not deriving from this inventory", over, maxDigits+1)
 			}
