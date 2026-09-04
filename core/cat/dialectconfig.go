@@ -42,6 +42,55 @@ type SlotSpace struct {
 
 	// NoneWire is the "VFO or MT or QMB" form, e.g. "000". "" means absent.
 	NoneWire string
+
+	// MCSelects is the SEND-side domain of this family's MC (memory channel
+	// recall) command: which of the slots above an MC Set may name.
+	//
+	// It has no default — the zero value is refused by V13 — because the
+	// two readings differ by four whole slot banks and the wrong one is
+	// SIDE-EFFECTING: an MC Set recalls the channel and changes the radio's
+	// operating state, so defaulting a family whose legend prints memory and
+	// PMS only to "all" would send a frame its own manual never describes.
+	// The M9c-1 ruling, applied to a slot domain.
+	MCSelects MCSlotPolicy
+}
+
+// MCSlotPolicy names the SEND-side slot domain of the MC command.
+//
+// It exists because the MC legend is NOT the MR legend on every radio. Each
+// of the three registered dialects prints all four classes — memory, PMS,
+// 5xx and EMG — against MC; a family whose MC block prints only memory and
+// PMS must not have an MC Set built for a bank its manual never lists there,
+// and must not have one admitted by its own outbound gate either.
+//
+// IT GOVERNS THE SEND DIRECTION ONLY. ParseMCAnswer keeps the full readable
+// space whatever this says: an MC Set and an MC Answer share one wire shape,
+// and a radio sitting on a 60m channel it reached from the front panel will
+// answer with it however narrow its Set domain is. Narrowing the parse side
+// from this field would turn a legitimate answer into an error.
+//
+// Its zero value is deliberately NOT a policy, so a config omitting it is
+// refused (V13) rather than defaulted.
+type MCSlotPolicy int
+
+const (
+	// MCSelectsAll is the three registered dialects' domain: memory, PMS,
+	// 60m and EMG — every slot class outside the "000" none form.
+	MCSelectsAll MCSlotPolicy = iota + 1
+	// MCSelectsMemoryPMS is the narrower domain: memory and PMS only.
+	MCSelectsMemoryPMS
+)
+
+// String names the policy, so a refusal can quote it.
+func (p MCSlotPolicy) String() string {
+	switch p {
+	case MCSelectsAll:
+		return "MCSelectsAll"
+	case MCSelectsMemoryPMS:
+		return "MCSelectsMemoryPMS"
+	default:
+		return fmt.Sprintf("MCSlotPolicy(%d)", int(p))
+	}
 }
 
 // MTForm names the FRAME SHAPE a family's MT command takes.
@@ -300,6 +349,8 @@ func NewDialect(cfg DialectConfig) (Dialect, error) {
 			pmsPairs: cfg.Slots.PMSPairs,
 			emgWire:  cfg.Slots.EmergencyWire,
 			noneWire: cfg.Slots.NoneWire,
+
+			mcSelects: cfg.Slots.MCSelects,
 		},
 		exItems:     items,
 		exMembers:   buildEXMembers(items),

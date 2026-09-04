@@ -37,6 +37,7 @@ func mustCombinedDialect(t *testing.T, tagMax int, fill byte, mwKind byte) Diale
 			PMSPairs:      9,
 			EmergencyWire: "EMG",
 			NoneWire:      "000",
+			MCSelects:     MCSelectsAll,
 		},
 		EXItems: []EXItem{
 			{Addr: EXAddress{P1: 7, P2: 1, P3: 1}, Name: "ITEM ONE", Digits: 2},

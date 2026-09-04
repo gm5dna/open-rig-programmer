@@ -43,6 +43,7 @@ func ft710EquivalentConfig() cat.DialectConfig {
 			PMSPairs:      9,
 			EmergencyWire: "EMG",
 			NoneWire:      "000",
+			MCSelects:     cat.MCSelectsAll,
 		},
 		MT:          cat.MTPolicy{Form: cat.MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 		Clarifier:   cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},

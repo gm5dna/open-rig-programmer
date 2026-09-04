@@ -771,3 +771,51 @@ func TestEXAnswerBound(t *testing.T) {
 		})
 	}
 }
+
+// --- FT-891 Stage 0 (S0.2): the MC send domain ---
+
+// TestMCSelects_MatchesTheMCLegend pins the cat.MCSelectsAll both models
+// declare against the legend it is transcribed from.
+//
+// This manual's MC block prints all four slot classes — "001-099 (Memory
+// Channel), P1L -P9U (PMS), 5xx (5MHz BAND), EMG (EMERGENCY CH)" (rev
+// 2308-L, layout 1225-1227) — so an MC Set may select every one of them on
+// this radio. The FT-891's MC block prints memory and PMS only, which is the
+// disagreement the cat.MCSlotPolicy axis exists to carry; without this pin
+// the declaration in dialect.go would be a comment claiming more than any
+// test holds.
+func TestMCSelects_MatchesTheMCLegend(t *testing.T) {
+	for _, m := range bothModels() {
+		t.Run(m.name, func(t *testing.T) {
+			d := m.d
+
+			sixty, err := d.SixtyMSlot(1)
+			if err != nil {
+				t.Fatalf("SixtyMSlot(1): %v", err)
+			}
+			emg := d.EMGSlot()
+			if emg.Wire() == "" {
+				t.Fatal("EMGSlot() is empty — this manual's MC legend names EMG (EMERGENCY CH)")
+			}
+			mem, err := d.MemorySlot(1)
+			if err != nil {
+				t.Fatalf("MemorySlot(1): %v", err)
+			}
+			pms, err := d.PMSSlot(1, false)
+			if err != nil {
+				t.Fatalf("PMSSlot(1, false): %v", err)
+			}
+
+			for _, s := range []cat.Slot{mem, pms, sixty, emg} {
+				cmd, err := d.BuildMCSet(s)
+				if err != nil {
+					t.Errorf("BuildMCSet(%q) = %v — every one of the four classes this manual's MC legend prints must build", s.Wire(), err)
+					continue
+				}
+				if !d.AllowedCommand(cmd.Bytes()) {
+					t.Errorf("its own gate refused BuildMCSet(%q)'s frame %q", s.Wire(), cmd.Bytes())
+				}
+			}
+		})
+	}
+}

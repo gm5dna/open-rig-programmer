@@ -63,6 +63,7 @@ func combinedRadioConfig() cat.DialectConfig {
 			PMSPairs:      9,
 			EmergencyWire: "EMG",
 			NoneWire:      "000",
+			MCSelects:     cat.MCSelectsAll,
 		},
 		EXItems: []cat.EXItem{
 			{Addr: cat.EXAddress{P1: 1, P2: 1, P3: 1}, P1Label: "RADIO", P2Label: "GROUP", Name: "ITEM ONE", Digits: 3},
@@ -128,6 +129,7 @@ func shortPeerRadioConfig() cat.DialectConfig {
 			PMSPairs:      2,
 			EmergencyWire: "",
 			NoneWire:      "000",
+			MCSelects:     cat.MCSelectsAll,
 		},
 		EXItems: []cat.EXItem{
 			{Addr: cat.EXAddress{P1: 2, P2: 3, P3: 4}, P1Label: "RADIO", P2Label: "GROUP", Name: "ITEM", Digits: 2},

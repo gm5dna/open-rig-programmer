@@ -412,3 +412,50 @@ func TestEXAnswerBound(t *testing.T) {
 		t.Errorf("ParseEXAnswer(%q) ACCEPTED a %d-byte P4, one past this dialect's widest inventory item — the bound is not deriving from this inventory", over, maxDigits+1)
 	}
 }
+
+// --- FT-891 Stage 0 (S0.2): the MC send domain ---
+
+// TestMCSelects_MatchesTheMCLegend pins the cat.MCSelectsAll this dialect
+// declares against the legend it is transcribed from.
+//
+// The FTdx10's MC block prints all four slot classes — "001-099 (Memory
+// Channel), P1L-P9U (PMS), 5xx (5MHz BAND), EMG (EMERGENCY CH)" (manual rev
+// 2308-F, layout 1131-1133) — so an MC Set may select every one of them on
+// this radio. The FT-891's MC block prints memory and PMS only, which is the
+// disagreement the cat.MCSlotPolicy axis exists to carry; without this pin
+// the declaration here would be a comment claiming more than any test holds.
+//
+// The GATE half is asserted alongside the builder because they are two
+// separate consultations of the same policy, and a dialect whose builder
+// emits a frame its own gate refuses cannot send it.
+func TestMCSelects_MatchesTheMCLegend(t *testing.T) {
+	d := ftdx10.Dialect()
+
+	sixty, err := d.SixtyMSlot(1)
+	if err != nil {
+		t.Fatalf("SixtyMSlot(1): %v", err)
+	}
+	emg := d.EMGSlot()
+	if emg.Wire() == "" {
+		t.Fatal("EMGSlot() is empty — this manual's MC legend names EMG (EMERGENCY CH)")
+	}
+	mem, err := d.MemorySlot(1)
+	if err != nil {
+		t.Fatalf("MemorySlot(1): %v", err)
+	}
+	pms, err := d.PMSSlot(1, false)
+	if err != nil {
+		t.Fatalf("PMSSlot(1, false): %v", err)
+	}
+
+	for _, s := range []cat.Slot{mem, pms, sixty, emg} {
+		cmd, err := d.BuildMCSet(s)
+		if err != nil {
+			t.Errorf("BuildMCSet(%q) = %v — every one of the four classes this manual's MC legend prints must build", s.Wire(), err)
+			continue
+		}
+		if !d.AllowedCommand(cmd.Bytes()) {
+			t.Errorf("its own gate refused BuildMCSet(%q)'s frame %q", s.Wire(), cmd.Bytes())
+		}
+	}
+}

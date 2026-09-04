@@ -24,8 +24,9 @@ func kindPeerDialect(t *testing.T) Dialect {
 		ModeNames: map[Mode]string{Mode('1'): "LSB", Mode('2'): "USB"},
 		Slots: SlotSpace{
 			MemoryLo: 1, MemoryHi: 99,
-			PMSPairs: 9,
-			NoneWire: "000",
+			PMSPairs:  9,
+			NoneWire:  "000",
+			MCSelects: MCSelectsAll,
 		},
 		MT:        MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 		Clarifier: ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},

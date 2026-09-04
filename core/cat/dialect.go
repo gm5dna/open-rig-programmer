@@ -13,6 +13,14 @@ type slotSpace struct {
 	pmsPairs           int    // e.g. 9 -> P1L..P9U; valid range 0..9 — the pair number is a single wire digit ('1'-'9'), so this can never validly exceed 9; consumers must go through pmsCap() rather than trust this raw; 0 if absent
 	emgWire            string // "" if this family has no emergency channel
 	noneWire           string // the "VFO or MT or QMB" form, e.g. "000"
+
+	// mcSelects is the SEND-side domain of the MC command — which of the
+	// classes above an MC Set may name. It lives here, beside the ranges it
+	// selects from, because it is a statement ABOUT this slot space rather
+	// than about the MC frame's shape; and it reaches the OUTBOUND WRITE
+	// GATE through validMCCommand, which is why it is dialect data at all
+	// (see MCSlotPolicy, dialectconfig.go).
+	mcSelects MCSlotPolicy
 }
 
 // Dialect is one radio family's CAT variation: everything this codec
@@ -162,6 +170,11 @@ var FT710 = Dialect{
 		pmsPairs: 9,
 		emgWire:  "EMG",
 		noneWire: "000",
+
+		// The FT-710 CAT manual's MC block prints all four classes against
+		// this command: "001-099 / P1L-P9U / 5xx: (5MHz BAND) / EMG:
+		// (EMERGENCY CH)". Pinned by TestMCSelects_RegisteredDialectsSelectAll.
+		mcSelects: MCSelectsAll,
 	},
 	exItems:    exItemsGen,
 	exMembers:  buildEXMembers(exItemsGen),
@@ -175,6 +188,7 @@ var FT710 = Dialect{
 	// was previously assumed to share with every dialect.
 	// TestNewDialect_ReproducesFT710 pins that this literal and a
 	// config-built equivalent agree.
+
 	mt:          MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	clar:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	mwWriteKind: KindMemory,

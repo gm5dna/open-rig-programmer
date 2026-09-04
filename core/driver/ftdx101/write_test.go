@@ -1301,6 +1301,7 @@ func TestBuildWriteCommand_P7IsTheFormConstant(t *testing.T) {
 			PMSPairs:      9,
 			EmergencyWire: "EMG",
 			NoneWire:      "000",
+			MCSelects:     cat.MCSelectsAll,
 		},
 		MT:          cat.MTPolicy{Form: cat.MTFormCombined, TagMaxBytes: 12, TagFill: ' '},
 		Clarifier:   cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},

@@ -100,6 +100,12 @@ func newDialect(catID string) cat.Dialect {
 			PMSPairs:      9,
 			EmergencyWire: "EMG",
 			NoneWire:      "000", // ASSUMED — in no FTdx101 slot legend
+			// The FTdx101's MC block prints all four slot classes —
+			// "001-099 (Memory Channel), P1L -P9U (PMS), 5xx (5MHz
+			// BAND), EMG (EMERGENCY CH)" (layout 1225-1227) — so an MC
+			// Set may select every one of them on this radio. Not an
+			// assumption: this is the legend, transcribed.
+			MCSelects: cat.MCSelectsAll,
 		},
 		EXItems: exItems,
 		MT: cat.MTPolicy{

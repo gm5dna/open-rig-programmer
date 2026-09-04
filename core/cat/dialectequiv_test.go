@@ -57,6 +57,7 @@ func ft710ConfigFromIndependentLiterals() DialectConfig {
 			PMSPairs:      9,
 			EmergencyWire: "EMG",
 			NoneWire:      "000",
+			MCSelects:     MCSelectsAll,
 		},
 		EXItems:     exItemsGen, // NOT independent — see the doc comment
 		MT:          MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
@@ -309,6 +310,7 @@ func TestNewDialect_InputIndependenceAcrossEveryDerivedStructure(t *testing.T) {
 		Slots: SlotSpace{
 			MemoryLo: 1, MemoryHi: 50,
 			PMSPairs: 2, NoneWire: "000",
+			MCSelects: MCSelectsAll,
 		},
 		EXItems: []EXItem{
 			{Addr: EXAddress{P1: 3, P2: 1, P3: 1}, Name: "A", Digits: 2},

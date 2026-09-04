@@ -64,6 +64,7 @@ func validateDialectConfig(cfg DialectConfig) error {
 		validateMTPolicy,     // V9
 		validateClarifier,    // V10
 		validateMWWriteKind,  // V11
+		validateMCSelects,    // V13
 	} {
 		if err := rule(cfg); err != nil {
 			return err
@@ -405,5 +406,23 @@ func validMWWriteKindByte(b byte) bool {
 		return true
 	default: // KindUnset and anything undocumented
 		return false
+	}
+}
+
+// validateMCSelects is V13: the MC command's SEND-side slot domain must be
+// declared, never inferred.
+//
+// An omitted config semantic is REFUSED, not defaulted. The two policies
+// differ by the 60m and EMG banks, and an MC Set is SIDE-EFFECTING — it
+// recalls the channel on the radio — so a family whose MC legend prints
+// memory and PMS only, silently given the wider domain, would have frames
+// its own manual never describes built AND admitted by its own gate (this
+// rule's field reaches AllowedCommand through validMCCommand).
+func validateMCSelects(cfg DialectConfig) error {
+	switch cfg.Slots.MCSelects {
+	case MCSelectsAll, MCSelectsMemoryPMS:
+		return nil
+	default:
+		return fmt.Errorf("cat: Slots.MCSelects is %v, which is not a policy — declare MCSelectsAll or MCSelectsMemoryPMS explicitly (an omitted config semantic is refused, never defaulted; MC's send domain is not always MR's read domain)", cfg.Slots.MCSelects)
 	}
 }
