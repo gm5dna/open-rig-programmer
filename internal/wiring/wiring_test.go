@@ -4,6 +4,7 @@ package wiring
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -357,6 +358,8 @@ func TestOpenFakeSessionFor_EveryRegisteredModel_ReadsEveryDefaultSlot(t *testin
 			}
 
 			reads := 0
+			populatedReads := 0
+			var channels []codeplug.Channel
 			for _, bank := range caps.Banks {
 				if len(bank.Slots) == 0 {
 					if !bank.Sparse {
@@ -381,11 +384,110 @@ func TestOpenFakeSessionFor_EveryRegisteredModel_ReadsEveryDefaultSlot(t *testin
 					if ch.Slot != slot {
 						t.Errorf("ReadChannel(%q) in bank %s: Channel.Slot = %q, want %q", slot, bank.ID, ch.Slot, slot)
 					}
+					channels = append(channels, ch)
+					if ch.Data != nil {
+						populatedReads++
+						for field, state := range wiringTierFieldStates(ch.Data) {
+							if state == codeplug.Absent {
+								t.Errorf("ReadChannel(%q) in bank %s left %s Absent; a fresh read must state Known, Unknown or Unavailable before Save chooses a schema", slot, bank.ID, field)
+							}
+						}
+					}
 					reads++
 				}
 			}
+
+			// The schema this whole fleet read saves as is the invariant
+			// the Absent/omission rule leans on for `rigprog read` ->
+			// Save (cmd/rigprog/fileio.go) and the clone journal
+			// (core/clone/journal.go): now that Absent promotes a file
+			// (codeplug.FieldState.RepresentableByOmission), a driver
+			// that ever left one of the seventeen Absent would silently
+			// bump a Yaesu codeplug's schema and break byte identity.
+			//
+			// What this actually exercises, and no more: the schema-3
+			// arm by the four Yaesu models, and the >= 4 arm by the
+			// IC-R8600 alone, whose fake ships populated default slots
+			// at schema 5. The other ten Icom fakes have EMPTY default
+			// images, so both the Absent sweep above and the >= 4 arm
+			// are vacuous for them and the branch below says so out
+			// loud rather than passing quietly. Their populated reads
+			// are pinned per-driver instead, by
+			// drivertest.AssertFreshReadSaveLoad.
+			path := filepath.Join(t.TempDir(), "fresh-read.json")
+			if err := codeplug.Save(path, &codeplug.Codeplug{Generator: "wiring fleet test", Channels: channels}); err != nil {
+				t.Fatalf("Save(fresh read): %v", err)
+			}
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("reading saved fresh read: %v", err)
+			}
+			var probe struct {
+				Schema int `json:"schema"`
+			}
+			if err := json.Unmarshal(raw, &probe); err != nil {
+				t.Fatalf("probing saved fresh read: %v", err)
+			}
+			reachesTierField := false
+			for _, bank := range caps.Banks {
+				for _, field := range wiringTierFields {
+					if !caps.FieldSupport(bank.ID, field).Unreachable() {
+						reachesTierField = true
+					}
+				}
+			}
+			// Guarded by populatedReads, symmetrically with the >= 4
+			// arm below: with no populated channel at all, Save has
+			// nothing but empty slots to represent and schemaFor
+			// returns 3 regardless of what this model's driver would
+			// have done with a populated one — an empty Yaesu fake
+			// image would otherwise pass this arm having proved
+			// nothing about the Absent/omission rule it exists to pin.
+			if !reachesTierField && populatedReads > 0 && probe.Schema != 3 {
+				t.Errorf("fresh-read schema = %d, want 3: %q reaches none of the seventeen tier fields", probe.Schema, model)
+			}
+			if !reachesTierField && populatedReads == 0 {
+				t.Logf("fresh-read schema = %d: %q's default image has no populated channel, so there is no tier state for Save to represent", probe.Schema, model)
+			}
+			if reachesTierField && populatedReads > 0 && probe.Schema < 4 {
+				t.Errorf("fresh-read schema = %d, want at least 4: %q reaches tier fields", probe.Schema, model)
+			}
+			if reachesTierField && populatedReads == 0 {
+				t.Logf("fresh-read schema = %d: %q's default image has no populated channel, so there is no tier state for Save to represent", probe.Schema, model)
+			}
 			t.Logf("%q: %d slot(s) read across %d bank(s)", model, reads, len(caps.Banks))
 		})
+	}
+}
+
+var wiringTierFields = []spec.Field{
+	spec.FieldTxFrequency, spec.FieldDuplex, spec.FieldOffset,
+	spec.FieldToneMode, spec.FieldToneTx, spec.FieldToneRx,
+	spec.FieldDTCSCode, spec.FieldDTCSPolarity, spec.FieldFilter,
+	spec.FieldDataMode, spec.FieldTuningStepEnabled, spec.FieldTuningStep,
+	spec.FieldProgramTuningStep, spec.FieldAttenuator, spec.FieldPreamp,
+	spec.FieldAntenna, spec.FieldIPPlus,
+}
+
+func wiringTierFieldStates(d *codeplug.ChannelData) map[spec.Field]codeplug.FieldState {
+	return map[spec.Field]codeplug.FieldState{
+		spec.FieldTxFrequency:       d.TxFreqHz.State,
+		spec.FieldDuplex:            d.Duplex.State,
+		spec.FieldOffset:            d.OffsetHz.State,
+		spec.FieldToneMode:          d.ToneMode.State,
+		spec.FieldToneTx:            d.ToneTx.State,
+		spec.FieldToneRx:            d.ToneRx.State,
+		spec.FieldDTCSCode:          d.DTCSCode.State,
+		spec.FieldDTCSPolarity:      d.DTCSPolarity.State,
+		spec.FieldFilter:            d.Filter.State,
+		spec.FieldDataMode:          d.DataMode.State,
+		spec.FieldTuningStepEnabled: d.TuningStepEnabled.State,
+		spec.FieldTuningStep:        d.TuningStep.State,
+		spec.FieldProgramTuningStep: d.ProgramTuningStepHz.State,
+		spec.FieldAttenuator:        d.AttenuatorDB.State,
+		spec.FieldPreamp:            d.Preamp.State,
+		spec.FieldAntenna:           d.Antenna.State,
+		spec.FieldIPPlus:            d.IPPlus.State,
 	}
 }
 

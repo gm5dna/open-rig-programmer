@@ -395,10 +395,11 @@ func TestOpenCSVCommit_ForceTruncates(t *testing.T) {
 //
 // A schema-4 file with no key for any of the ten tier-added fields is
 // hand-written here for the reason writeTooNewCodeplug is: codeplug.Save
-// emits the LOWEST schema that can represent the content, so a channel
-// saying nothing about those ten is written as schema 3, whose loader has
-// migrated them unconditionally since the tier landed. The schema-4 file
-// is the one nothing normalised before this task.
+// would write schema 4 with an explicit "state":"" key for an Absent
+// field, and schema 3 (whose loader migrates all ten to Unavailable
+// unconditionally) when every one of the ten is already Unavailable —
+// it never produces a v4 file with the keys themselves omitted. The
+// schema-4 file is the one nothing normalised before this task.
 func TestLoadCodeplugStrict_NormalisesTierFieldsAgainstTheFileSOwnModel(t *testing.T) {
 	body := func(model, catID string) string {
 		return `{"schema":4,"generator":"test","radio":{"model":"` + model + `","cat_id":"` + catID +

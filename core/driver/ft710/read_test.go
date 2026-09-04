@@ -126,7 +126,7 @@ func TestReadChannel_GoldenMappings(t *testing.T) {
 			if *got.Data != want {
 				t.Errorf("ReadChannel(%q) data =\n%+v\nwant\n%+v", tt.slot, *got.Data, want)
 			}
-			drivertest.AssertFreshReadSaveLoad(t, got, codeplug.Load)
+			drivertest.AssertFreshReadSaveLoad(t, got, sess.Capabilities(), codeplug.Load)
 		})
 	}
 }

@@ -165,5 +165,5 @@ func TestReadChannel_FreshReadSurvivesSaveLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadChannel: %v", err)
 	}
-	drivertest.AssertFreshReadSaveLoad(t, ch, codeplug.Load)
+	drivertest.AssertFreshReadSaveLoad(t, ch, s.Capabilities(), codeplug.Load)
 }
