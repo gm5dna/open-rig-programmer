@@ -11,8 +11,10 @@ import (
 	"time"
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
+	"github.com/gm5dna/open-rig-programmer/core/clone"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
+	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
@@ -391,6 +393,80 @@ func TestReadChannel_DiscoveredBanksAreReadByMRAlone(t *testing.T) {
 			drivertest.AssertFreshReadSaveLoad(t, ch, sess.Capabilities(), codeplug.Load)
 		})
 	}
+}
+
+// TestReadChannel_DiscoveredSlotThatStopsAnsweringIsARefusal is MEDIUM-1
+// (task-1 review): a 5xx or EMG slot that answered a well-formed MR read
+// during Open and rejects the IDENTICAL MR read at ReadChannel time gets a
+// typed refusal, not an empty channel — matrix erratum M-E6, §3.8.4, and
+// the driver register's A DISCOVERED SLOT KEEPS ANSWERING MR WITHIN A
+// SESSION entry.
+//
+// RED-PROOF (recorded here, not re-run as part of this suite): run against
+// the pre-fix readDiscovered — whose errors.Is(err, cat.ErrRejected) arm
+// returned `codeplug.Channel{Slot: sl.Wire()}, nil` — this exact test body
+// showed ReadChannel("503") returning {Slot:"503" Data:<nil>}, err=nil (an
+// EMPTY channel, no error), and the ReadAll sub-test below returning a
+// non-nil *codeplug.Codeplug carrying a blank "503" channel with nil error
+// rather than failing. That is the silent-anomaly-deferred-to-Validate
+// failure the review's own empirical check demonstrated: a fresh read
+// followed by codeplug.Validate on that result fails with `slot "503" is
+// part of NoBlank bank "60M" and must stay populated, but is empty` —
+// blaming the codeplug for something the radio did.
+func TestReadChannel_DiscoveredSlotThatStopsAnsweringIsARefusal(t *testing.T) {
+	img := slotImage{mrAnswersOnce: map[string]string{"503": populatedMR("503")}}
+	p, sess := openSession(t, Simulated, img)
+
+	// Open's own discovery probe is the "first" MR read of 503 — confirm
+	// it actually discovered the bank, or this test is not exercising the
+	// scenario it claims to.
+	caps := sess.Capabilities()
+	sixty, ok := caps.Bank(spec.Bank60m)
+	if !ok || !reflect.DeepEqual(sixty.Slots, []string{"503"}) {
+		t.Fatalf("discovered 60M bank slots = %v (present=%v), want exactly [\"503\"] from Open's own probe", sixty.Slots, ok)
+	}
+
+	before := len(p.Transcript())
+	_, err := sess.ReadChannel(testCtx(t), "503")
+	if err == nil {
+		t.Fatal("ReadChannel(\"503\") = nil error, want a refusal: this slot answered MR at Open and now rejects the identical read")
+	}
+	var refusal *MRReadRejectedForDiscoveredSlotError
+	if !errors.As(err, &refusal) {
+		t.Fatalf("error %v (%T) is not an *MRReadRejectedForDiscoveredSlotError", err, err)
+	}
+	if !errors.Is(err, ErrMRReadRejectedForDiscoveredSlot) {
+		t.Error("errors.Is(err, ErrMRReadRejectedForDiscoveredSlot) = false — the sentinel is what a caller compares against")
+	}
+	if !errors.Is(err, cat.ErrRejected) {
+		t.Error("errors.Is(err, cat.ErrRejected) = false — the radio's answer WAS a rejection, and a caller handling rejections generically must still see one")
+	}
+	if refusal.Slot != "503" {
+		t.Errorf("Slot = %q, want \"503\"", refusal.Slot)
+	}
+	text := refusal.Error()
+	for _, want := range []string{"503", "Open", "NoBlank", "DISCOVERED SLOT KEEPS ANSWERING"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("Error() = %q, want it to contain %q", text, want)
+		}
+	}
+	if got, want := p.Transcript()[before:], []string{"MR503;"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("the refusal path sent %v, want exactly %v — ONE MR frame, the second read of the same slot", got, want)
+	}
+
+	t.Run("ReadAll fails whole and returns no partial codeplug", func(t *testing.T) {
+		service := clone.NewService(sess, clone.SnapshotStore{})
+		cp, err := service.ReadAll(testCtx(t))
+		if err == nil {
+			t.Fatal("ReadAll = nil error, want the discovered-slot refusal to propagate")
+		}
+		if !errors.Is(err, ErrMRReadRejectedForDiscoveredSlot) {
+			t.Errorf("ReadAll error %v does not wrap ErrMRReadRejectedForDiscoveredSlot", err)
+		}
+		if cp != nil {
+			t.Errorf("ReadAll returned a non-nil codeplug (%+v) alongside its error, want no partial codeplug", cp)
+		}
+	})
 }
 
 // TestReadChannel_ErrorTyping covers the failure classes that must be TYPED

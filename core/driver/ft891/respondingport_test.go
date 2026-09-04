@@ -88,6 +88,17 @@ type slotImage struct {
 	// for an MR read of it. Discovery consults exactly this map, and so
 	// does the MEM/PMS cross-check's second frame.
 	mrAnswers map[string]string
+	// mrAnswersOnce maps a 3-byte slot wire form to the RAW answer frame
+	// served for the FIRST MR read of it in the session — ordinarily
+	// discovery's own probe — and "?;" for every MR read of that slot
+	// after the first. It models a discovered slot that STOPS answering
+	// within one session: MEDIUM-1 (task-1 review)'s
+	// MRReadRejectedForDiscoveredSlotError exists for exactly this shape,
+	// which a static mrAnswers entry cannot express (it would answer the
+	// same way forever) and no self-consistent fake radio would ever
+	// produce on its own. Takes priority over mrAnswers for a slot present
+	// in both.
+	mrAnswersOnce map[string]string
 	// mtSilent names slots whose MT read draws NO REPLY AT ALL — the
 	// timeout row of the read truth table (matrix §3.5), which no
 	// self-consistent radio image can express and no "?;" can stand in
@@ -143,6 +154,11 @@ func (p *respondingPort) Transcript() []string {
 func (p *respondingPort) serve(img slotImage) {
 	buf := make([]byte, 256)
 	var acc []byte
+	// mrSeen counts MR reads per slot, for mrAnswersOnce's "first read
+	// only" behaviour. Local to this one goroutine — serve is the sole
+	// reader and sole writer of the pipe's remote end, so nothing else
+	// touches it and no lock is needed.
+	mrSeen := map[string]int{}
 	for {
 		n, err := p.remote.Read(buf)
 		if n > 0 {
@@ -155,7 +171,7 @@ func (p *respondingPort) serve(img slotImage) {
 				frame := string(acc[:i+1])
 				acc = acc[i+1:]
 				p.record(frame)
-				if reply := img.reply(frame); reply != "" {
+				if reply := img.reply(frame, mrSeen); reply != "" {
 					if _, werr := p.remote.Write([]byte(reply)); werr != nil {
 						return
 					}
@@ -176,6 +192,9 @@ func (p *respondingPort) record(frame string) {
 }
 
 // reply returns the bytes this image answers frame with, or "" for silence.
+// mrSeen is the per-slot MR-read counter mrAnswersOnce consults, owned and
+// mutated here rather than on img: img is a value receiver and its maps are
+// the fixed script, while mrSeen is this ONE serve loop's running state.
 // See respondingPort's doc comment for the command classes, the register
 // entries that hold the convention, and why the default is a NAK.
 //
@@ -184,7 +203,7 @@ func (p *respondingPort) record(frame string) {
 // read's silence (mtSilent) is a radio that did not answer a read at all,
 // which the engine turns into a timeout. Only the second is a fault being
 // scripted.
-func (img slotImage) reply(frame string) string {
+func (img slotImage) reply(frame string, mrSeen map[string]int) string {
 	switch {
 	case frame == "ID;":
 		return "ID" + img.catID + ";"
@@ -200,7 +219,15 @@ func (img slotImage) reply(frame string) string {
 		}
 		return "?;"
 	case strings.HasPrefix(frame, "MR") && len(frame) == mrReadFrameLen:
-		if ans, ok := img.mrAnswers[frame[2:5]]; ok {
+		slot := frame[2:5]
+		mrSeen[slot]++
+		if ans, ok := img.mrAnswersOnce[slot]; ok {
+			if mrSeen[slot] == 1 {
+				return ans
+			}
+			return "?;"
+		}
+		if ans, ok := img.mrAnswers[slot]; ok {
 			return ans
 		}
 		return "?;"

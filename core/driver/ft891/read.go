@@ -216,6 +216,60 @@ func (e *MTReadTimeoutError) Unwrap() []error {
 	return []error{ErrMTReadTimeout, e.Err}
 }
 
+// ErrMRReadRejectedForDiscoveredSlot is the sentinel a caller compares
+// against (via errors.Is) when a 5xx or EMG slot that answered a
+// well-formed MR read during this session's Open rejects the identical MR
+// read later, at ReadChannel time. The error actually returned is an
+// *MRReadRejectedForDiscoveredSlotError naming the slot.
+var ErrMRReadRejectedForDiscoveredSlot = errors.New("ft891: MR read rejected for a discovered slot that answered at Open")
+
+// MRReadRejectedForDiscoveredSlotError reports a discovered-slot "?;" at
+// ReadChannel time (matrix erratum M-E6, §3.8.4; the driver register's A
+// DISCOVERED SLOT KEEPS ANSWERING MR WITHIN A SESSION entry).
+//
+// THE SLOT ANSWERED THIS EXACT FRAME DURING OPEN — that is why it is in
+// this bank at all — and now refuses it. That is a DIFFERENT proposition
+// from the "?;" ON A 5xx/EMG DISCOVERY PROBE MEANS ABSENT FROM THIS RADIO
+// entry, which governs the FIRST read of a slot, at the moment discovery
+// decides bank MEMBERSHIP: by ReadChannel time membership is already
+// settled, and reading the same rejection as CHANNEL STATE would be a
+// fourth, unregistered interpretation of "?;" where matrix §3.8 draws only
+// three.
+//
+// IT NAMES THE CONTRADICTION; IT DOES NOT DIAGNOSE IT — same posture as
+// MTReadRejectedForOccupiedSlotError, and for the same reason: "?;" carries
+// no reason code, so nothing here is assumed about WHY the radio stopped
+// answering.
+//
+// THE SESSION READ FAILS WHOLE, not per-slot: this bank's own capabilities
+// publish NoBlank true (effectiveCapabilities' "these channels exist
+// because they answered a read"), so reporting an empty channel here would
+// silently contradict that claim and surface later as a codeplug.Validate
+// error naming the codeplug rather than the radio — the same failure mode
+// MTReadRejectedForOccupiedSlotError's doc comment states in terms.
+//
+// It unwraps to both its own sentinel and cat.ErrRejected: the radio's
+// answer really was a rejection, so a caller handling rejections
+// generically must still see one, while a caller that knows about this
+// specific contradiction can match it.
+type MRReadRejectedForDiscoveredSlotError struct {
+	// Slot is the canonical wire-form slot whose read was refused.
+	Slot string
+}
+
+// Error implements the error interface. The text names the slot, the
+// contradiction (this slot answered the identical MR read at Open and
+// refuses it now), and the ONE capture that would settle it.
+func (e *MRReadRejectedForDiscoveredSlotError) Error() string {
+	return fmt.Sprintf("ft891: MR read of discovered slot %q was rejected (\"?;\") but this radio answered the identical MR read during this session's Open — the bank exists only because that earlier read succeeded, and a rejection now means the radio has stopped reporting a channel it reported minutes earlier; the whole session read fails, because this bank's own capabilities declare it NoBlank and an empty channel here would silently contradict that and surface later as a codeplug validation error naming the codeplug rather than the radio. A second MR read of the same slot within one session on a real FT-891 is the one capture that would settle it — the driver register's \"A DISCOVERED SLOT KEEPS ANSWERING MR WITHIN A SESSION\" entry", e.Slot)
+}
+
+// Unwrap exposes both meanings: this package's own sentinel and the general
+// one (the radio rejected a frame).
+func (e *MRReadRejectedForDiscoveredSlotError) Unwrap() []error {
+	return []error{ErrMRReadRejectedForDiscoveredSlot, cat.ErrRejected}
+}
+
 // ReadChannel implements driver.Session: matrix §3.5's truth table, exactly.
 //
 //   - MEM and PMS are read by ONE combined 41-byte MT read. A well-formed
@@ -385,15 +439,22 @@ func (s *Session) crossCheck(ctx context.Context, sl cat.Slot) (codeplug.Channel
 // what makes that refusal never fire in ordinary use, and
 // TestOpen_NeverBuildsAnMTReadOfADiscoveredSlot is the negative pin.
 //
-// A "?;" HERE IS AN EMPTY CHANNEL, not an error, and the interpretation is
-// the register's "?;" ON A 5xx/EMG DISCOVERY PROBE MEANS ABSENT FROM THIS
-// RADIO entry applied to the SAME FRAME at a later moment: the bank exists
-// only because this very MR read answered during Open, so a rejection now
-// means the radio has stopped reporting a channel it reported minutes
-// earlier. Reporting nothing for the slot is the conservative direction —
-// an error would fail a whole codeplug read over a bank the user may not
-// even edit — and it is the same reading, of the same rejection, of the
-// same command.
+// A "?;" HERE IS A TYPED REFUSAL, not an empty channel (matrix erratum
+// M-E6, §3.8.4, from the task-1 review). The register's "?;" ON A 5xx/EMG
+// DISCOVERY PROBE MEANS ABSENT FROM THIS RADIO entry governs the FIRST MR
+// read of a slot, at Open, where the question is bank MEMBERSHIP; by
+// ReadChannel time membership is already settled by that earlier answer,
+// and reading the SAME rejection as CHANNEL STATE would be a fourth,
+// unregistered interpretation of "?;" where matrix §3.8 draws only three.
+// It also contradicts this bank's own capabilities: effectiveCapabilities
+// (caps.go) publishes the discovered bank NoBlank TRUE — "these channels
+// exist because they answered a read" — so a slot that answered at Open
+// and now refuses is exactly a slot for which that premise has failed, and
+// reporting the one channel shape NoBlank declares impossible would not
+// suppress the anomaly, it would defer and misattribute it to a LATER
+// codeplug.Validate error naming the codeplug rather than the radio. See
+// *MRReadRejectedForDiscoveredSlotError and the driver register's A
+// DISCOVERED SLOT KEEPS ANSWERING MR WITHIN A SESSION entry.
 func (s *Session) readDiscovered(ctx context.Context, sl cat.Slot) (codeplug.Channel, error) {
 	cmd, err := s.dialect.BuildMRRead(sl)
 	if err != nil {
@@ -404,7 +465,7 @@ func (s *Session) readDiscovered(ctx context.Context, sl cat.Slot) (codeplug.Cha
 	}
 	frame, err := s.eng.Do(ctx, cmd, mrSpec())
 	if errors.Is(err, cat.ErrRejected) {
-		return codeplug.Channel{Slot: sl.Wire()}, nil
+		return codeplug.Channel{}, &MRReadRejectedForDiscoveredSlotError{Slot: sl.Wire()}
 	}
 	if err != nil {
 		return codeplug.Channel{}, fmt.Errorf("ft891: ReadChannel %s: MR: %w", sl.Wire(), err)

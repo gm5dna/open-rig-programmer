@@ -334,6 +334,16 @@ func TestOpen_DiscoveryProbesEveryDeclaredSlot(t *testing.T) {
 // gate refuse such a frame anyway (MTPolicy.ReadSlots =
 // cat.MTReadsMemoryPMS), so a driver that tried would fail — this is what
 // makes the failure legible.
+//
+// THE TRANSCRIPT EQUALITY BELOW IS THE NON-VACUITY HALF (LOW-1, task-1
+// review). A `continue`-loop that only fires on an "MT" prefix passes
+// silently over an empty transcript, and Open sends no "MT" frame at all —
+// so without this assertion the loop's body never runs and the test would
+// pass just as happily if discovery were removed outright. This image
+// answers every one of the eleven declared probes, so it must produce
+// discoveryTranscript() exactly; asserting that first proves the walk
+// actually happened in full before the negative check over its frames
+// means anything.
 func TestOpen_NeverBuildsAnMTReadOfADiscoveredSlot(t *testing.T) {
 	img := slotImage{mrAnswers: map[string]string{}}
 	for n := 501; n <= 510; n++ {
@@ -344,7 +354,12 @@ func TestOpen_NeverBuildsAnMTReadOfADiscoveredSlot(t *testing.T) {
 
 	p, _ := openSession(t, Simulated, img)
 
-	for i, frame := range p.Transcript() {
+	got := p.Transcript()
+	if want := discoveryTranscript(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("transcript = %v, want %v — this image answers every probe, so the full eleven-frame walk must have happened before the negative MT check below means anything", got, want)
+	}
+
+	for i, frame := range got {
 		if !strings.HasPrefix(frame, "MT") {
 			continue
 		}
