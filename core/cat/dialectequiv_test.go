@@ -57,11 +57,13 @@ func ft710ConfigFromIndependentLiterals() DialectConfig {
 			PMSPairs:      9,
 			EmergencyWire: "EMG",
 			NoneWire:      "000",
+			MCSelects:     MCSelectsAll,
 		},
 		EXItems:       exItemsGen, // NOT independent — see the doc comment
 		EXAddressForm: EXAddressTriple,
-		MT:            MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+		MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 		Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+		MemoryP5:      P5TxClar,
 		MWWriteKind:   KindMemory,
 	}
 }
@@ -217,8 +219,8 @@ func assertDialectsBehaveIdentically(t *testing.T, label string, want, got Diale
 		t.Errorf("%s: exP4MaxBytes = %d, want %d", label, got.exP4MaxBytes(), want.exP4MaxBytes())
 	}
 
-	// The three promoted policies. Omitting these is how a dialect with
-	// entirely zero policies passes an "equivalence" test.
+	// The promoted policies. Omitting these is how a dialect with entirely
+	// zero policies passes an "equivalence" test.
 	if want.mt != got.mt {
 		t.Errorf("%s: MT policy = %+v, want %+v", label, got.mt, want.mt)
 	}
@@ -227,6 +229,22 @@ func assertDialectsBehaveIdentically(t *testing.T, label string, want, got Diale
 	}
 	if want.mwWriteKind != got.mwWriteKind {
 		t.Errorf("%s: MWWriteKind = %#02x, want %#02x", label, got.mwWriteKind, want.mwWriteKind)
+	}
+	if want.memoryP5 != got.memoryP5 {
+		t.Errorf("%s: MemoryP5 = %v, want %v", label, got.memoryP5, want.memoryP5)
+	}
+	if want.slots.mcSelects != got.slots.mcSelects {
+		t.Errorf("%s: MCSelects = %v, want %v", label, got.slots.mcSelects, want.slots.mcSelects)
+	}
+	// mt.ReadSlots and mt.P11 are already covered by the whole-struct
+	// want.mt != got.mt check above; asserted again here, by name, so a
+	// reader of this list does not have to know that to see the axis is
+	// covered — belt-and-braces, matching the two checks above.
+	if want.mt.ReadSlots != got.mt.ReadSlots {
+		t.Errorf("%s: MT.ReadSlots = %v, want %v", label, got.mt.ReadSlots, want.mt.ReadSlots)
+	}
+	if want.mt.P11 != got.mt.P11 {
+		t.Errorf("%s: MT.P11 = %v, want %v", label, got.mt.P11, want.mt.P11)
 	}
 }
 
@@ -334,14 +352,16 @@ func TestNewDialect_InputIndependenceAcrossEveryDerivedStructure(t *testing.T) {
 		Slots: SlotSpace{
 			MemoryLo: 1, MemoryHi: 50,
 			PMSPairs: 2, NoneWire: "000",
+			MCSelects: MCSelectsAll,
 		},
 		EXItems: []EXItem{
 			{Addr: EXAddress{P1: 3, P2: 1, P3: 1}, Name: "A", Digits: 2},
 			{Addr: EXAddress{P1: 3, P2: 1, P3: 2}, Name: "B", Digits: 4},
 		},
 		EXAddressForm: EXAddressTriple,
-		MT:            MTPolicy{Form: MTFormShort, TagMaxBytes: 10, ClearTagByte: ' '},
+		MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 10, ClearTagByte: ' '},
 		Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 100},
+		MemoryP5:      P5TxClar,
 		MWWriteKind:   KindMemory,
 	}
 

@@ -412,3 +412,195 @@ func TestEXAnswerBound(t *testing.T) {
 		t.Errorf("ParseEXAnswer(%q) ACCEPTED a %d-byte P4, one past this dialect's widest inventory item — the bound is not deriving from this inventory", over, maxDigits+1)
 	}
 }
+
+// --- FT-891 Stage 0 (S0.2): the MC send domain ---
+
+// TestMCSelects_MatchesTheMCLegend pins the cat.MCSelectsAll this dialect
+// declares against the legend it is transcribed from.
+//
+// The FTdx10's MC block prints all four slot classes — "001-099 (Memory
+// Channel), P1L-P9U (PMS), 5xx (5MHz BAND), EMG (EMERGENCY CH)" (manual rev
+// 2308-F, layout 1131-1133) — so an MC Set may select every one of them on
+// this radio. The FT-891's MC block prints memory and PMS only, which is the
+// disagreement the cat.MCSlotPolicy axis exists to carry; without this pin
+// the declaration here would be a comment claiming more than any test holds.
+//
+// The GATE half is asserted alongside the builder because they are two
+// separate consultations of the same policy, and a dialect whose builder
+// emits a frame its own gate refuses cannot send it.
+func TestMCSelects_MatchesTheMCLegend(t *testing.T) {
+	d := ftdx10.Dialect()
+
+	sixty, err := d.SixtyMSlot(1)
+	if err != nil {
+		t.Fatalf("SixtyMSlot(1): %v", err)
+	}
+	emg := d.EMGSlot()
+	if emg.Wire() == "" {
+		t.Fatal("EMGSlot() is empty — this manual's MC legend names EMG (EMERGENCY CH)")
+	}
+	mem, err := d.MemorySlot(1)
+	if err != nil {
+		t.Fatalf("MemorySlot(1): %v", err)
+	}
+	pms, err := d.PMSSlot(1, false)
+	if err != nil {
+		t.Fatalf("PMSSlot(1, false): %v", err)
+	}
+
+	for _, s := range []cat.Slot{mem, pms, sixty, emg} {
+		cmd, err := d.BuildMCSet(s)
+		if err != nil {
+			t.Errorf("BuildMCSet(%q) = %v — every one of the four classes this manual's MC legend prints must build", s.Wire(), err)
+			continue
+		}
+		if !d.AllowedCommand(cmd.Bytes()) {
+			t.Errorf("its own gate refused BuildMCSet(%q)'s frame %q", s.Wire(), cmd.Bytes())
+		}
+	}
+}
+
+// --- FT-891 Stage 0 (S0.3): the MT read domain ---
+
+// TestMTReadSlots_MatchesTheMTLegend pins the cat.MTReadsReadable this
+// dialect declares against the legend it is transcribed from.
+//
+// The FTdx10's MT block prints the same four slot classes its MR block does
+// (manual rev 2308-F, layout 1218), so an MT read may name every slot this
+// dialect can read — which is what cat.Dialect.readableSlot has always
+// admitted here. The FT-891's MT legend prints memory and PMS only, and the
+// axis exists to carry that disagreement; without this pin the declaration
+// in dialect.go would be a comment claiming more than any test holds.
+func TestMTReadSlots_MatchesTheMTLegend(t *testing.T) {
+	d := ftdx10.Dialect()
+
+	sixty, err := d.SixtyMSlot(1)
+	if err != nil {
+		t.Fatalf("SixtyMSlot(1): %v", err)
+	}
+	emg := d.EMGSlot()
+	if emg.Wire() == "" {
+		t.Fatal("EMGSlot() is empty — this manual's MT legend names EMG (EMERGENCY CH)")
+	}
+	mem, err := d.MemorySlot(1)
+	if err != nil {
+		t.Fatalf("MemorySlot(1): %v", err)
+	}
+	pms, err := d.PMSSlot(1, false)
+	if err != nil {
+		t.Fatalf("PMSSlot(1, false): %v", err)
+	}
+
+	for _, s := range []cat.Slot{mem, pms, sixty, emg} {
+		cmd, err := d.BuildMTRead(s)
+		if err != nil {
+			t.Errorf("BuildMTRead(%q) = %v — every one of the four classes this manual's MT legend prints must build", s.Wire(), err)
+			continue
+		}
+		if !d.AllowedCommand(cmd.Bytes()) {
+			t.Errorf("its own gate refused BuildMTRead(%q)'s frame %q", s.Wire(), cmd.Bytes())
+		}
+	}
+}
+
+// --- FT-891 Stage 0 (S0.4): byte 21 of the shared memory block ---
+
+// TestMemoryP5_MatchesTheP5Legend pins the cat.P5TxClar this dialect
+// declares against the legend it is transcribed from.
+//
+// The FTdx10's memory blocks print P5 "0: TX CLAR \"OFF\" 1: TX CLAR \"ON\""
+// (manual rev 2308-F, layout 1226 in the MT block; MR and MW print the
+// same), so byte 21 carries this radio's TX clarifier flag and both of its
+// values are writable. The FT-891 prints "0: (Fixed)" on every one of those
+// blocks, which is the disagreement the cat.MemoryP5Policy axis carries;
+// without this pin the declaration in dialect.go would be a comment claiming
+// more than any test holds.
+func TestMemoryP5_MatchesTheP5Legend(t *testing.T) {
+	d := ftdx10.Dialect()
+
+	if got := d.MemoryP5(); got != cat.P5TxClar {
+		t.Fatalf("MemoryP5() = %v, want P5TxClar", got)
+	}
+
+	slot, err := d.MemorySlot(7)
+	if err != nil {
+		t.Fatalf("MemorySlot(7): %v", err)
+	}
+	for _, tx := range []bool{false, true} {
+		m := cat.MemoryData{
+			Slot: slot, FreqHz: 14_250_000, TxClar: tx,
+			Mode: cat.ModeUSB, Kind: d.MWWriteKind(),
+			CTCSS: cat.CTCSSOff, Shift: cat.ShiftSimplex,
+		}
+		cmd, err := d.BuildMWSet(m)
+		if err != nil {
+			t.Errorf("BuildMWSet with TxClar %v = %v — this manual prints P5 as the TX clarifier flag, so both values must be writable", tx, err)
+			continue
+		}
+		want := byte('0')
+		if tx {
+			want = '1'
+		}
+		// Position 21, 1-indexed as the manual's table numbers it.
+		if got := cmd.Bytes()[20]; got != want {
+			t.Errorf("BuildMWSet with TxClar %v emitted %q, whose position 21 is %q, want %q", tx, cmd.Bytes(), got, want)
+		}
+		if !d.AllowedCommand(cmd.Bytes()) {
+			t.Errorf("its own gate refused %q", cmd.Bytes())
+		}
+	}
+}
+
+// --- FT-891 Stage 0 (S0.6): byte 28 of the combined MT record ---
+
+// TestMTP11_MatchesTheP11Legend pins the cat.P11Fixed this dialect declares
+// against the legend it is transcribed from.
+//
+// The FTdx10's MT block prints "P11 0: (Fixed)" (manual rev 2308-F, layout
+// 1235), so byte 28 of its combined record is schema and carries no state:
+// the display-less builder and parser are this radio's pair, and the
+// display-bearing ones must refuse it. The FT-891 prints `P11 0: TAG "OFF"
+// 1: TAG "ON"` there, which is the disagreement the cat.MTP11Policy axis
+// carries; without this pin the declaration in dialect.go would be a comment
+// claiming more than any test holds.
+func TestMTP11_MatchesTheP11Legend(t *testing.T) {
+	d := ftdx10.Dialect()
+
+	if got := d.MTP11(); got != cat.P11Fixed {
+		t.Fatalf("MTP11() = %v, want P11Fixed", got)
+	}
+
+	slot, err := d.MemorySlot(7)
+	if err != nil {
+		t.Fatalf("MemorySlot(7): %v", err)
+	}
+	m := cat.MemoryData{
+		Slot: slot, FreqHz: 14_250_000,
+		Mode: cat.ModeUSB, Kind: cat.CombinedMTSetKind,
+		CTCSS: cat.CTCSSOff, Shift: cat.ShiftSimplex,
+	}
+
+	cmd, err := d.BuildMTSetCombined(m, "CQ")
+	if err != nil {
+		t.Fatalf("BuildMTSetCombined = %v — under P11Fixed this is the radio's own builder", err)
+	}
+	// Position 28, 1-indexed as the manual's table numbers it.
+	if got := cmd.Bytes()[27]; got != '0' {
+		t.Errorf("BuildMTSetCombined emitted %q, whose position 28 is %q, want '0' — the legend prints it \"(Fixed)\"", cmd.Bytes(), got)
+	}
+	if !d.AllowedCommand(cmd.Bytes()) {
+		t.Errorf("its own gate refused %q", cmd.Bytes())
+	}
+	if _, _, err := d.ParseMTAnswerCombined(cmd.Bytes()); err != nil {
+		t.Errorf("ParseMTAnswerCombined(%q) = %v", cmd.Bytes(), err)
+	}
+
+	// The display-bearing pair must refuse: this radio has no TAG flag for a
+	// caller to set or to read.
+	if got, err := d.BuildMTSetCombinedDisplay(m, "CQ", true); err == nil {
+		t.Errorf("BuildMTSetCombinedDisplay succeeded, emitting %q — this manual prints byte 28 \"(Fixed)\"", got.Bytes())
+	}
+	if _, _, _, err := d.ParseMTAnswerCombinedDisplay(cmd.Bytes()); err == nil {
+		t.Error("ParseMTAnswerCombinedDisplay accepted a frame whose byte 28 this manual prints \"(Fixed)\" — reporting schema as state")
+	}
+}

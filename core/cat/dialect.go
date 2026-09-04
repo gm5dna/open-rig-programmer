@@ -13,6 +13,14 @@ type slotSpace struct {
 	pmsPairs           int    // e.g. 9 -> P1L..P9U; valid range 0..9 — the pair number is a single wire digit ('1'-'9'), so this can never validly exceed 9; consumers must go through pmsCap() rather than trust this raw; 0 if absent
 	emgWire            string // "" if this family has no emergency channel
 	noneWire           string // the "VFO or MT or QMB" form, e.g. "000"
+
+	// mcSelects is the SEND-side domain of the MC command — which of the
+	// classes above an MC Set may name. It lives here, beside the ranges it
+	// selects from, because it is a statement ABOUT this slot space rather
+	// than about the MC frame's shape; and it reaches the OUTBOUND WRITE
+	// GATE through validMCCommand, which is why it is dialect data at all
+	// (see MCSlotPolicy, dialectconfig.go).
+	mcSelects MCSlotPolicy
 }
 
 // Dialect is one radio family's CAT variation: everything this codec
@@ -132,6 +140,15 @@ type Dialect struct {
 	mt          MTPolicy
 	clar        ClarifierPolicy
 	mwWriteKind byte
+
+	// memoryP5 says what byte 21 of the shared memory field block means on
+	// this family (MemoryP5Policy, dialectconfig.go). It is dialect data for
+	// the reason the three fields above are: it reaches the OUTBOUND WRITE
+	// GATE, through the same validateMWFields and validateCombinedMTFields
+	// the builders use — and the M9b lesson is that a bound must be consulted
+	// from the same place as its datum, which is why encodeMemoryFields and
+	// parseMemoryFields take this receiver rather than a package global.
+	memoryP5 MemoryP5Policy
 }
 
 // ModeByName resolves a display name to this dialect's own mode nibble.
@@ -163,6 +180,11 @@ var FT710 = Dialect{
 		pmsPairs: 9,
 		emgWire:  "EMG",
 		noneWire: "000",
+
+		// The FT-710 CAT manual's MC block prints all four classes against
+		// this command: "001-099 / P1L-P9U / 5xx: (5MHz BAND) / EMG:
+		// (EMERGENCY CH)". Pinned by TestMCSelects_RegisteredDialectsSelectAll.
+		mcSelects: MCSelectsAll,
 	},
 	exItems: exItemsGen,
 	// The FT-710's EX grammar block prints "E X P1 P1 P2 P2 P3 P3"
@@ -179,8 +201,26 @@ var FT710 = Dialect{
 	// was previously assumed to share with every dialect.
 	// TestNewDialect_ReproducesFT710 pins that this literal and a
 	// config-built equivalent agree.
-	mt:          MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
-	clar:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	//
+	// ReadSlots is MTReadsReadable because the FT-710 CAT manual's own slot
+	// table marks the MT column ✓ for 5xx and EMG alongside memory and PMS —
+	// the same four classes its MR column carries, which is what
+	// Dialect.readableSlot has always admitted here. No hardware evidence
+	// bears on it either way: docs/hardware-notes.md records no MT read of a
+	// 5xx or EMG slot, and could not, since Stuart's UK radio has neither
+	// bank (§60m regional finding). The declaration is the manual's, and it
+	// moves not a byte. Pinned by mtreadpolicy_test.go's
+	// TestMTReadSlots_RegisteredDialectsReadEverythingReadable.
+	mt:   MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	clar: ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+
+	// The FT-710 CAT manual's MW block prints P5 "0: TX CLAR OFF 1: TX CLAR
+	// ON", and its MR block the same, so byte 21 is this radio's TX
+	// clarifier flag in both directions — which is what MemoryData.TxClar
+	// has always carried here. Pinned by memoryp5_test.go's
+	// TestMemoryP5_RegisteredDialectsCarryTheTxClarifier.
+	memoryP5: P5TxClar,
+
 	mwWriteKind: KindMemory,
 }
 

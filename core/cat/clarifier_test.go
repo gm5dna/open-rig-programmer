@@ -43,11 +43,13 @@ func clarPeerConfig() DialectConfig {
 		},
 		Slots: SlotSpace{
 			MemoryLo: 1, MemoryHi: 99, // identical to the FT-710's own range
-			NoneWire: "000",
+			NoneWire:  "000",
+			MCSelects: MCSelectsAll,
 		},
 		EXAddressForm: EXAddressTriple,
-		MT:            MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+		MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 		Clarifier:     ClarifierPolicy{StepHz: 1, MaxAbsHz: 9999},
+		MemoryP5:      P5TxClar,
 		MWWriteKind:   KindMemory,
 	}
 }

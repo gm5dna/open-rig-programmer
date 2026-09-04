@@ -22,9 +22,15 @@ package cat
 // The per-command checks below share their field-validation logic with
 // the corresponding builder (readableSlot, parseMemoryFrame,
 // parseMemoryFields, validateMWFields, validateCombinedMTFields,
-// mtSlotValid, validMTTag, validMTTagByte, mcValid) rather than duplicating
-// it, so "what AllowedCommand accepts" and "what the builders produce"
-// cannot drift apart.
+// mtSlotValid, validMTTag, validMTTagByte, mcSendValid) rather than
+// duplicating it, so "what AllowedCommand accepts" and "what the builders
+// produce" cannot drift apart.
+//
+// IT IS AN OUTBOUND GATE, and that direction is load-bearing wherever a Set
+// and an Answer share a wire shape. MC is the clearest case: this gate
+// re-validates a 6-byte MC frame against the SEND domain (mcSendValid),
+// not against the wider domain ParseMCAnswer accepts, because a frame
+// offered here is by definition one this program is about to write.
 //
 // MT IS THE ONE ACKNOWLEDGED SET/ANSWER EXCEPTION, and since M9c-3 it is
 // narrower under one form than the other. A SHORT-form MT Set and its
@@ -211,7 +217,11 @@ func (d Dialect) validMWCommand(frame []byte) bool {
 // switch below is a safety boundary, not a convenience.
 //
 // READ (form-independent, and checked FIRST): exactly mtReadLen (6) bytes,
-// with a slot readableSlot accepts — the same rule BuildMTRead enforces.
+// with a slot mtReadSlotValid accepts — the same rule BuildMTRead enforces,
+// which is THIS DIALECT'S declared MT read domain (MTPolicy.ReadSlots) and
+// not MR's. Under MTReadsReadable the two coincide exactly; under
+// MTReadsMemoryPMS an "MT501;" or "MTEMG;" is refused here as the builder
+// refuses it, while the same slots stay legal for MR.
 // The read request carries neither a record nor a tag, so its shape is the
 // same under both forms, and no Set branch can claim a 6-byte frame: the
 // short form's floor is 7 bytes and the combined form's shortest possible
@@ -232,6 +242,11 @@ func (d Dialect) validMWCommand(frame []byte) bool {
 // the gate enforces: d.validMTTag reads d.mt.TagMaxBytes off the receiver
 // this method was called on, so a dialect whose tag is narrower than 12
 // bytes has its own bound enforced here, not the FT-710's wider one.
+//
+// COMBINED Set, P11: judged by this dialect's MTP11Policy — the printed-fixed
+// byte under P11Fixed, either documented value of the TAG flag under
+// P11TagDisplay. The gate cannot ask "which builder made this", so it asks
+// the policy, exactly as the builders do.
 //
 // COMBINED Set: exactly d.mtCombinedLen() bytes (29 + this dialect's tag
 // width — 41 for the evidenced 12-byte family, and a receiver method
@@ -261,7 +276,7 @@ func (d Dialect) validMTCommand(frame []byte) bool {
 		if err != nil {
 			return false
 		}
-		return d.readableSlot(slot)
+		return d.mtReadSlotValid(slot)
 	}
 
 	switch d.mt.Form {
@@ -302,7 +317,14 @@ func (d Dialect) validMTCommand(frame []byte) bool {
 		if d.validateCombinedMTFields(m) != nil {
 			return false
 		}
-		if frame[mtCombinedP11Offset] != combinedMTP11 {
+		// P11, BY THIS DIALECT'S OWN READING, through p11Valid — the same
+		// predicate parseMTAnswerCombined consults (mtcombined.go), so one
+		// function decides byte 28's admission rule for both the parser and
+		// the gate. Under P11Fixed only the printed-fixed byte is admitted,
+		// as before. Under P11TagDisplay the byte is a live TAG flag and
+		// both of its documented values are admitted — and nothing else, so
+		// an undocumented third value is still refused outbound.
+		if !d.p11Valid(frame[mtCombinedP11Offset]) {
 			return false
 		}
 		// THE RAW TAG FIELD, PER BYTE, WITH validMTTagByte ONLY —
@@ -342,9 +364,18 @@ func (d Dialect) validMTCommand(frame []byte) bool {
 	}
 }
 
-// validMCCommand reports whether frame is a legal MC read or Set/Answer
-// frame: the fixed "MC;" read request, or mcSetLen (6) bytes with a slot
-// mcValid accepts (the same rule BuildMCSet and ParseMCAnswer share).
+// validMCCommand reports whether frame is a legal MC read or Set frame: the
+// fixed "MC;" read request, or mcSetLen (6) bytes with a slot mcSendValid
+// accepts — the SEND-side predicate, the same rule BuildMCSet enforces.
+//
+// THIS IS AN OUTBOUND GATE, so the send-side reading is the right one and
+// the ONLY safe one. A 6-byte MC frame arriving here can only be a Set: an
+// Answer is something the radio sends, never something this program writes,
+// even though the two share a wire shape exactly. Judging it by
+// ParseMCAnswer's wider read-side domain instead would let a dialect whose
+// own MC legend omits the 5xx and EMG banks have a side-effecting recall of
+// one of them admitted by its own gate. See mcSendValid (mc.go) for the
+// full statement of the split.
 func (d Dialect) validMCCommand(frame []byte) bool {
 	if string(frame) == mcReadFrame {
 		return true
@@ -356,7 +387,7 @@ func (d Dialect) validMCCommand(frame []byte) bool {
 	if err != nil {
 		return false
 	}
-	return d.mcValid(slot)
+	return d.mcSendValid(slot)
 }
 
 // validEXRead reports whether frame is a legal EX READ: exactly THIS

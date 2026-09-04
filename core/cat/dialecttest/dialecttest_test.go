@@ -63,14 +63,16 @@ func combinedRadioConfig() cat.DialectConfig {
 			PMSPairs:      9,
 			EmergencyWire: "EMG",
 			NoneWire:      "000",
+			MCSelects:     cat.MCSelectsAll,
 		},
 		EXItems: []cat.EXItem{
 			{Addr: cat.EXAddress{P1: 1, P2: 1, P3: 1}, P1Label: "RADIO", P2Label: "GROUP", Name: "ITEM ONE", Digits: 3},
 			{Addr: cat.EXAddress{P1: 1, P2: 1, P3: 2}, P1Label: "RADIO", P2Label: "GROUP", Name: "TEXT ITEM", Digits: 16, Text: true},
 		},
 		EXAddressForm: cat.EXAddressTriple,
-		MT:            cat.MTPolicy{Form: cat.MTFormCombined, TagMaxBytes: 6, TagFill: ' '},
+		MT:            cat.MTPolicy{Form: cat.MTFormCombined, P11: cat.P11Fixed, ReadSlots: cat.MTReadsReadable, TagMaxBytes: 6, TagFill: ' '},
 		Clarifier:     cat.ClarifierPolicy{StepHz: 5, MaxAbsHz: 9995},
+		MemoryP5:      cat.P5TxClar,
 		MWWriteKind:   cat.KindMemTune,
 	}
 }
@@ -129,13 +131,15 @@ func shortPeerRadioConfig() cat.DialectConfig {
 			PMSPairs:      2,
 			EmergencyWire: "",
 			NoneWire:      "000",
+			MCSelects:     cat.MCSelectsAll,
 		},
 		EXItems: []cat.EXItem{
 			{Addr: cat.EXAddress{P1: 2, P2: 3, P3: 4}, P1Label: "RADIO", P2Label: "GROUP", Name: "ITEM", Digits: 2},
 		},
 		EXAddressForm: cat.EXAddressTriple,
-		MT:            cat.MTPolicy{Form: cat.MTFormShort, TagMaxBytes: 6, ClearTagByte: ' ', PadByte: ' '},
+		MT:            cat.MTPolicy{Form: cat.MTFormShort, ReadSlots: cat.MTReadsReadable, TagMaxBytes: 6, ClearTagByte: ' ', PadByte: ' '},
 		Clarifier:     cat.ClarifierPolicy{StepHz: 1, MaxAbsHz: 9999},
+		MemoryP5:      cat.P5TxClar,
 		MWWriteKind:   cat.KindMemory,
 	}
 }
@@ -198,14 +202,16 @@ func pairAddressRadioConfig() cat.DialectConfig {
 			PMSPairs:      2,
 			EmergencyWire: "",
 			NoneWire:      "000",
+			MCSelects:     cat.MCSelectsAll,
 		},
 		EXItems: []cat.EXItem{
 			{Addr: cat.EXAddress{P1: 8, P2: 1, P3: 0}, P1Label: "RADIO", P2Label: "GROUP", Name: "ITEM ONE", Digits: 2},
 			{Addr: cat.EXAddress{P1: 8, P2: 3, P3: 0}, P1Label: "RADIO", P2Label: "GROUP", Name: "ITEM TWO", Digits: 5},
 		},
 		EXAddressForm: cat.EXAddressPair,
-		MT:            cat.MTPolicy{Form: cat.MTFormShort, TagMaxBytes: 8, ClearTagByte: ' ', PadByte: ' '},
+		MT:            cat.MTPolicy{Form: cat.MTFormShort, ReadSlots: cat.MTReadsReadable, TagMaxBytes: 8, ClearTagByte: ' ', PadByte: ' '},
 		Clarifier:     cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+		MemoryP5:      cat.P5TxClar,
 		MWWriteKind:   cat.KindMemory,
 	}
 }
@@ -227,6 +233,135 @@ func TestRun_ExternallyBuiltPairAddressDialect(t *testing.T) {
 	// a 4-byte address + ";".
 	if got, want := len(d.EXWire(d.EXAddresses()[0])), 4; got != want {
 		t.Fatalf("EXWire is %d bytes, want %d", got, want)
+	}
+
+	dialecttest.Run(t, d)
+}
+
+// p5FixedRadioConfig is a SHORT-form dialect declaring cat.P5Fixed: byte 21
+// of the shared memory block is printed "(Fixed)" on its manual, not the TX
+// clarifier flag.
+//
+// It is here for the reason shortPeerRadioConfig is: an axis exercised only
+// by dialects that all take the same value of it is not exercised at all.
+// Every other fixture in this file and every registered radio declares
+// P5TxClar, so without this one the P5Fixed arm of dialecttest.checkMemoryP5
+// — the refusals, which are the half that keeps a printed-fixed byte off the
+// wire — would never run from outside core/cat.
+func p5FixedRadioConfig() cat.DialectConfig {
+	return cat.DialectConfig{
+		CATID: "0764",
+		ModeNames: map[cat.Mode]string{
+			cat.ModeUnset: "-",
+			cat.ModeLSB:   "LSB",
+			cat.ModeUSB:   "USB",
+		},
+		Slots: cat.SlotSpace{
+			MemoryLo: 1, MemoryHi: 30,
+			SixtyLo: 0, SixtyHi: 0,
+			PMSPairs:      3,
+			EmergencyWire: "",
+			NoneWire:      "000",
+			MCSelects:     cat.MCSelectsAll,
+		},
+		EXItems: []cat.EXItem{
+			{Addr: cat.EXAddress{P1: 5, P2: 2, P3: 1}, P1Label: "RADIO", P2Label: "GROUP", Name: "ITEM", Digits: 2},
+		},
+		EXAddressForm: cat.EXAddressTriple,
+		MT: cat.MTPolicy{
+			Form: cat.MTFormShort, ReadSlots: cat.MTReadsReadable,
+			TagMaxBytes: 8, ClearTagByte: ' ', PadByte: ' ',
+		},
+		Clarifier:   cat.ClarifierPolicy{StepHz: 20, MaxAbsHz: 9980},
+		MemoryP5:    cat.P5Fixed,
+		MWWriteKind: cat.KindMemory,
+	}
+}
+
+// TestRun_ExternallyBuiltP5FixedDialect runs the suite over that dialect.
+//
+// The assertion before Run is not ceremony, for shortPeerRadioConfig's
+// reason: a fixture that silently came back P5TxClar would make this a
+// slower copy of TestRun_ExternallyBuiltShortPeerDialect while reporting
+// that the fixed reading was covered.
+func TestRun_ExternallyBuiltP5FixedDialect(t *testing.T) {
+	d := cat.MustNewDialect(p5FixedRadioConfig())
+
+	if got := d.MemoryP5(); got != cat.P5Fixed {
+		t.Fatalf("MemoryP5() = %v, want P5Fixed — this fixture exists to cover the OTHER reading of byte 21", got)
+	}
+
+	dialecttest.Run(t, d)
+}
+
+// tagDisplayRadioConfig is a COMBINED-form dialect whose P11 is a live TAG
+// ON/OFF flag rather than the printed "0: (Fixed)" byte 28 carries on every
+// registered combined-form radio.
+//
+// It is here for the reason p5FixedRadioConfig is: without it the
+// P11TagDisplay arm of dialecttest — the display-bearing builder and parser,
+// and the two refusals that stop a live flag being defaulted — would never
+// run from outside core/cat, and a model package declaring that policy would
+// arrive with no conformance evidence for the half of the API it actually
+// uses.
+//
+// Its geometry disagrees with combinedRadioConfig's on both dimensions the
+// combined record derives from its receiver — a 9-byte tag field filled with
+// '.', against 6 and ' ' — so a length or fill byte hardwired to the other
+// fixture's is refused here too. Its EX address form is the narrow one as
+// well (see the test below): this is the one fixture that carries every
+// Stage 0 axis at its FT-891 reading.
+func tagDisplayRadioConfig() cat.DialectConfig {
+	return cat.DialectConfig{
+		CATID: "0765",
+		ModeNames: map[cat.Mode]string{
+			cat.ModeUnset: "-",
+			cat.ModeLSB:   "LSB",
+			cat.ModeUSB:   "USB",
+			cat.ModeCWU:   "CW-U",
+		},
+		Slots: cat.SlotSpace{
+			MemoryLo: 1, MemoryHi: 40,
+			SixtyLo: 0, SixtyHi: 0,
+			PMSPairs:      5,
+			EmergencyWire: "",
+			NoneWire:      "000",
+			MCSelects:     cat.MCSelectsMemoryPMS,
+		},
+		EXItems: []cat.EXItem{
+			// P3 is 0 because cat's V12 requires it of every member of an
+			// EXAddressPair inventory: the four-digit render carries P1 and
+			// P2 only, so a non-zero P3 would be dropped from every frame.
+			{Addr: cat.EXAddress{P1: 8, P2: 1, P3: 0}, P1Label: "RADIO", P2Label: "GROUP", Name: "ITEM", Digits: 4},
+		},
+		EXAddressForm: cat.EXAddressPair,
+		MT: cat.MTPolicy{
+			Form: cat.MTFormCombined, ReadSlots: cat.MTReadsMemoryPMS,
+			P11:         cat.P11TagDisplay,
+			TagMaxBytes: 9,
+			TagFill:     '.',
+		},
+		Clarifier:   cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+		MemoryP5:    cat.P5Fixed,
+		MWWriteKind: cat.KindMemory,
+	}
+}
+
+// TestRun_ExternallyBuiltTagDisplayDialect runs the suite over that dialect.
+//
+// It is also this milestone's constructibility proof for the narrow reading
+// of all five Stage 0 axes at once: EXAddressPair, MCSelectsMemoryPMS,
+// MTReadsMemoryPMS, P5Fixed and P11TagDisplay together are the FT-891's
+// declared shape, and if any of them became unreachable from outside
+// core/cat this stops compiling here rather than at Stage 1's first task.
+func TestRun_ExternallyBuiltTagDisplayDialect(t *testing.T) {
+	d := cat.MustNewDialect(tagDisplayRadioConfig())
+
+	if got := d.MTP11(); got != cat.P11TagDisplay {
+		t.Fatalf("MTP11() = %v, want P11TagDisplay — this fixture exists to cover the OTHER reading of byte 28", got)
+	}
+	if got := d.MTForm(); got != cat.MTFormCombined {
+		t.Fatalf("MTForm() = %v, want MTFormCombined", got)
 	}
 
 	dialecttest.Run(t, d)

@@ -52,6 +52,15 @@ func allTestDialects() []namedDialect {
 		{"combinedDialect", combinedDialect},
 		{"combinedPeerDialect", combinedPeerDialect},
 		{"pairDialect", pairDialect},
+
+		// The FT-891 Stage 0 axes' disagreeing fixtures, appended: see the
+		// block at the end of this file for what each one varies and why a
+		// fixture that agreed with the registered dialects would prove
+		// nothing about the axis it names.
+		{"mcMemoryPMSDialect", mcMemoryPMSDialect},
+		{"mtReadMemoryPMSDialect", mtReadMemoryPMSDialect},
+		{"p5FixedDialect", p5FixedDialect},
+		{"combinedTagDisplayDialect", combinedTagDisplayDialect},
 	}
 }
 
@@ -76,11 +85,13 @@ var testDialect = mustFixtureDialect(DialectConfig{
 		PMSPairs:      2,  // FT-710: 9
 		EmergencyWire: "", // no emergency channel
 		NoneWire:      "000",
+		MCSelects:     MCSelectsAll,
 	},
 	EXItems:       nil,
 	EXAddressForm: EXAddressTriple,
-	MT:            MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:      P5TxClar,
 	MWWriteKind:   KindMemory,
 })
 
@@ -107,11 +118,13 @@ var noneWireDialect = mustFixtureDialect(DialectConfig{
 		PMSPairs:      0,
 		EmergencyWire: "",
 		NoneWire:      "900", // FT-710: "000"
+		MCSelects:     MCSelectsAll,
 	},
 	EXItems:       nil,
 	EXAddressForm: EXAddressTriple,
-	MT:            MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:      P5TxClar,
 	MWWriteKind:   KindMemory,
 })
 
@@ -164,11 +177,13 @@ var peerDialect = mustFixtureDialect(DialectConfig{
 		PMSPairs:      4,     // FT-710: 9
 		EmergencyWire: "XYZ", // FT-710: "EMG", present but different
 		NoneWire:      "777", // FT-710: "000"
+		MCSelects:     MCSelectsAll,
 	},
 	EXItems:       peerEXItems,
 	EXAddressForm: EXAddressTriple,
-	MT:            MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:      P5TxClar,
 	MWWriteKind:   KindMemory,
 })
 
@@ -1528,11 +1543,13 @@ var combinedDialect = mustFixtureDialect(DialectConfig{
 		PMSPairs:      9,
 		EmergencyWire: "EMG",
 		NoneWire:      "000",
+		MCSelects:     MCSelectsAll,
 	},
 	EXItems:       combinedEXItems,
 	EXAddressForm: EXAddressTriple,
-	MT:            MTPolicy{Form: MTFormCombined, TagMaxBytes: 6, TagFill: ' '},
+	MT:            MTPolicy{Form: MTFormCombined, P11: P11Fixed, ReadSlots: MTReadsReadable, TagMaxBytes: 6, TagFill: ' '},
 	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:      P5TxClar,
 	MWWriteKind:   KindMemory,
 })
 
@@ -1578,11 +1595,13 @@ var combinedPeerDialect = mustFixtureDialect(DialectConfig{
 		PMSPairs:      4,     // FT-710: 9
 		EmergencyWire: "XYZ", // FT-710: "EMG"
 		NoneWire:      "777", // FT-710: "000"
+		MCSelects:     MCSelectsAll,
 	},
 	EXItems:       peerEXItems,
 	EXAddressForm: EXAddressTriple,
-	MT:            MTPolicy{Form: MTFormCombined, TagMaxBytes: 12, TagFill: '_'},
+	MT:            MTPolicy{Form: MTFormCombined, P11: P11Fixed, ReadSlots: MTReadsReadable, TagMaxBytes: 12, TagFill: '_'},
 	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:      P5TxClar,
 	MWWriteKind:   KindMemTune,
 })
 
@@ -1632,10 +1651,147 @@ var pairDialect = mustFixtureDialect(DialectConfig{
 		PMSPairs:      2,
 		EmergencyWire: "",
 		NoneWire:      "000",
+		MCSelects:     MCSelectsAll, // unremarkable, as the doc comment says: the address width is this fixture's one variable
 	},
 	EXItems:       pairEXItems,
 	EXAddressForm: EXAddressPair, // the FT-891's four-digit field (EXAddressPair's doc comment, dialectconfig.go, has the naming caveat)
-	MT:            MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:      P5TxClar,
 	MWWriteKind:   KindMemory,
+})
+
+// --- FT-891 Stage 0: one fixture per new dialect axis ---
+//
+// Each of the four axes added in Stage 0 (S0.2 MCSelects, S0.3
+// MTPolicy.ReadSlots, S0.4 MemoryP5, S0.6 MTPolicy.P11) declares TODAY'S
+// behaviour by name on every dialect above, so a fixture that only ever saw
+// those entries would exercise one value of each and prove nothing. These
+// four are the DISAGREEING side, and they are appended to allTestDialects()
+// so that every property this package states over "any dialect" is stated
+// over the narrow reading as well as the wide one.
+//
+// They vary ONE axis each, against an otherwise FT-710-shaped slot space
+// (memory 1-99, PMS 1-9, a 60m bank and an EMG channel) — because the whole
+// point of each is a slot class or a byte that the narrow reading refuses
+// and the wide one admits, and a fixture lacking that class would have
+// nothing to refuse.
+
+// mcMemoryPMSDialect declares MCSelectsMemoryPMS: its MC Set may name a
+// memory or PMS slot and nothing else, while its MR/MT reads keep the full
+// readable space. That is the FT-891's printed shape (S0.2) and no
+// registered dialect's.
+var mcMemoryPMSDialect = mustFixtureDialect(DialectConfig{
+	CATID:     "4444",
+	ModeNames: map[Mode]string{ModeUnset: "-", ModeUSB: "USB-MC", ModeLSB: "LSB-MC"},
+	Slots: SlotSpace{
+		MemoryLo: 1, MemoryHi: 99,
+		SixtyLo: 501, SixtyHi: 599,
+		PMSPairs:      9,
+		EmergencyWire: "EMG",
+		NoneWire:      "000",
+		MCSelects:     MCSelectsMemoryPMS, // THE AXIS UNDER TEST
+	},
+	EXItems:       nil,
+	EXAddressForm: EXAddressTriple, // the wide reading: this fixture varies ONE axis, and it is not the address form
+	MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:      P5TxClar,
+	MWWriteKind:   KindMemory,
+})
+
+// mtReadMemoryPMSDialect declares MTReadsMemoryPMS: its MT READ may name a
+// memory or PMS slot and nothing else, while its MR read keeps the whole
+// readable slot space. That is the FT-891's printed shape (S0.3) — its MT
+// legend prints `001 - 099 / P1L - P9U` where its MR legend prints the 5xx
+// and EMG banks too — and no registered dialect's.
+//
+// Its MCSelects is MCSelectsAll, so the ONE axis this fixture varies is the
+// MT read domain: a refusal seen here cannot be the MC policy's.
+var mtReadMemoryPMSDialect = mustFixtureDialect(DialectConfig{
+	CATID:     "3333",
+	ModeNames: map[Mode]string{ModeUnset: "-", ModeUSB: "USB-MTR", ModeLSB: "LSB-MTR"},
+	Slots: SlotSpace{
+		MemoryLo: 1, MemoryHi: 99,
+		SixtyLo: 501, SixtyHi: 599,
+		PMSPairs:      9,
+		EmergencyWire: "EMG",
+		NoneWire:      "000",
+		MCSelects:     MCSelectsAll,
+	},
+	EXItems:       nil,
+	EXAddressForm: EXAddressTriple, // the wide reading: this fixture varies ONE axis, and it is not the address form
+	MT: MTPolicy{
+		Form:        MTFormShort,
+		ReadSlots:   MTReadsMemoryPMS, // THE AXIS UNDER TEST
+		TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' ',
+	},
+	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:    P5TxClar,
+	MWWriteKind: KindMemory,
+})
+
+// p5FixedDialect declares MemoryP5: P5Fixed — byte 21 of the shared memory
+// block is schema, not the TX clarifier flag. That is the FT-891's printed
+// shape (S0.4): "0: (Fixed)" on its MR, MT, MW and IF blocks alike, where
+// every registered dialect prints `0: TX CLAR "OFF" 1: TX CLAR "ON"`.
+//
+// Its MC and MT-read domains are the wide ones, so the ONE axis this fixture
+// varies is P5: a refusal seen here cannot be another policy's.
+var p5FixedDialect = mustFixtureDialect(DialectConfig{
+	CATID:     "2222",
+	ModeNames: map[Mode]string{ModeUnset: "-", ModeUSB: "USB-P5", ModeLSB: "LSB-P5"},
+	Slots: SlotSpace{
+		MemoryLo: 1, MemoryHi: 99,
+		SixtyLo: 501, SixtyHi: 599,
+		PMSPairs:      9,
+		EmergencyWire: "EMG",
+		NoneWire:      "000",
+		MCSelects:     MCSelectsAll,
+	},
+	EXItems:       nil,
+	EXAddressForm: EXAddressTriple, // the wide reading: this fixture varies ONE axis, and it is not the address form
+	MT: MTPolicy{
+		Form: MTFormShort, ReadSlots: MTReadsReadable,
+		TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' ',
+	},
+	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:    P5Fixed, // THE AXIS UNDER TEST
+	MWWriteKind: KindMemory,
+})
+
+// combinedTagDisplayDialect declares MTP11Policy P11TagDisplay: byte 28 of
+// its combined record is a live TAG ON/OFF flag rather than the printed
+// "0: (Fixed)" every registered combined-form sibling carries. That is the
+// FT-891's printed shape (S0.6).
+//
+// Its geometry deliberately disagrees with BOTH existing combined fixtures —
+// a 9-byte tag field filled with '.', against combinedDialect's 6/' ' and
+// combinedPeerDialect's 12/'_' — so a length or fill byte hardwired to
+// either of theirs is refused here as well.
+//
+// Its MC, MT-read and P5 policies are all the wide readings, so the ONE axis
+// this fixture varies is P11.
+var combinedTagDisplayDialect = mustFixtureDialect(DialectConfig{
+	CATID:     "0999",
+	ModeNames: map[Mode]string{ModeUnset: "-", ModeUSB: "USB-P11", ModeLSB: "LSB-P11"},
+	Slots: SlotSpace{
+		MemoryLo: 1, MemoryHi: 99,
+		SixtyLo: 501, SixtyHi: 599,
+		PMSPairs:      9,
+		EmergencyWire: "EMG",
+		NoneWire:      "000",
+		MCSelects:     MCSelectsAll,
+	},
+	EXItems:       nil,
+	EXAddressForm: EXAddressTriple, // the wide reading: this fixture varies ONE axis, and it is not the address form
+	MT: MTPolicy{
+		Form: MTFormCombined, ReadSlots: MTReadsReadable,
+		P11:         P11TagDisplay, // THE AXIS UNDER TEST
+		TagMaxBytes: 9,
+		TagFill:     '.',
+	},
+	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:    P5TxClar,
+	MWWriteKind: KindMemory,
 })
