@@ -845,21 +845,36 @@ func (r *Radio) handleMC(body []byte) []byte {
 
 // --- Top-level dispatch ---
 
+// toUpperASCII folds one ASCII lower-case byte to upper case and leaves every
+// other byte alone. Used on COMMAND NAMES ONLY — see handleFrame.
+func toUpperASCII(b byte) byte {
+	if b >= 'a' && b <= 'z' {
+		return b - 'a' + 'A'
+	}
+	return b
+}
+
 // handleFrame parses one complete, ';'-terminated frame (as produced by
 // reassembler.push) and returns the reply to send: nil for a fire-and-forget
 // success, or a non-nil frame — a real answer, or rejection — otherwise.
 // Unknown and garbled commands fall through to rejection.
 //
-// COMMAND NAMES ARE MATCHED IN UPPER CASE ONLY, and that is an ASSUMPTION on
-// this radio — doc.go's register entry COMMAND NAMES ARE UPPER CASE ONLY,
-// pinned by TestCommandNamesAreUpperCaseOnly. The FTdx10's manual states the
-// either-case leniency in terms (ftdx10_layout.txt:160-161) and
-// internal/fakedx10 accepts either case on that line; nothing in this
-// repository cites such a sentence for the FT-891, and the transcription of
-// this manual's own folio-2 "Control Command" prose
-// (core/cat/ft891/testdata/provenance.md, "Pages read", PDF page 3) records
-// no statement about case at all. Strictness is the fail-loud direction and
-// costs nothing: every frame core/cat builds is upper case.
+// COMMAND NAMES ARE MATCHED IN EITHER CASE, and that is a MANUAL FACT of this
+// radio rather than a leniency inherited from fakeradio: "A command consists
+// of 2 alphabetical characters. You may use either lower or upper case
+// charac-/ters." (hyphenated across the column break, ft891_layout.txt:
+// 100-102, under the "Alphabetical Commands" heading at 99) — the same
+// sentence the FTdx10's manual states (ftdx10_layout.txt:160-161), which
+// internal/fakedx10 already honours on this line. TestCommandNamesAre
+// AcceptedInEitherCase pins it, including the mixed-case form: "either lower
+// or upper" says nothing about mixing, so admitting it is a CONSEQUENCE of
+// folding each byte independently, not a separate invented leniency. See
+// doc.go's "What is NOT in this register, and why".
+//
+// FIELD VALUES REMAIN CASE-SENSITIVE (the mode nibble's hex letters, the PMS
+// L/U suffix, "EMG"): the manual's statement is about the two-character
+// command NAME and says nothing about parameters, so extending it would be an
+// invented leniency.
 func (r *Radio) handleFrame(frame []byte) []byte {
 	if len(frame) == 0 || frame[len(frame)-1] != ';' {
 		return rejection // defensive: the reassembler never hands us this
@@ -868,7 +883,7 @@ func (r *Radio) handleFrame(frame []byte) []byte {
 	if len(body) < 2 {
 		return rejection
 	}
-	cmd := [2]byte{body[0], body[1]}
+	cmd := [2]byte{toUpperASCII(body[0]), toUpperASCII(body[1])}
 	rest := body[2:]
 
 	switch cmd {
