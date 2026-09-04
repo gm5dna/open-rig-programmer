@@ -130,3 +130,13 @@ func (r *Radio) SlotState(slot string) (MemState, bool) {
 	s, ok := r.slots[slot]
 	return s, ok
 }
+
+// CurrentChannel returns this fake's "selected channel" state, as last set by
+// an MC-set, or the answer-only none form ("000") if no MC-set has happened
+// yet. A Set never changes it — doc.go's register entry A SET DOES NOT MOVE
+// THE SELECTED CHANNEL, pinned by TestSetsDoNotMoveTheSelection.
+func (r *Radio) CurrentChannel() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.currentChannel
+}
