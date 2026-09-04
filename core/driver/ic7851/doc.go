@@ -392,7 +392,11 @@
 // driver-level PRE-BUILD TYPED REFUSAL (*OutOfDomainError) for a Known
 // frequency or tone outside THIS SESSION'S declared capability bounds —
 // both ends of both domains. THIS IS DEFENCE IN DEPTH AND IT IS NOT THE
-// GATE.
+// GATE. ReadChannel reuses the same domainRefusal helper and raises the
+// same *OutOfDomainError, POST-DECODE rather than pre-build, for a
+// decoded frequency outside those bounds — see
+// TestReadChannel_RefusesFrequencyOutsideRadioDomain — so no read hands
+// codeplug.Validate a Known frequency it would then refuse.
 //
 // TestNumericRefusalIsDefenceInDepthNotTheGate asserts that the gate
 // currently ADMITS such a frame while the driver refuses it. An enabler

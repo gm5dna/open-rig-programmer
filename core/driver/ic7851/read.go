@@ -306,6 +306,12 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 	}
 	// TestReadChannel_RefusesFrequencyOutsideRadioDomain pins this reuse of
 	// the write rung: no read may construct a frequency validation refuses.
+	// TestReadChannel_AcceptsFrequencyAtCeiling pins the boundary itself:
+	// domainRefusal's frequency arm is a strict >, so the ceiling value
+	// passes. The synthetic ChannelData below carries only FreqHz; every
+	// other field is left at its zero value, which is not FieldState
+	// Known (core/codeplug/fieldstate.go:28-33), so domainRefusal's tone
+	// arms never trip on this call.
 	if err := domainRefusal(codeplug.ChannelData{FreqHz: freq}, s.caps); err != nil {
 		return codeplug.Channel{}, err
 	}
