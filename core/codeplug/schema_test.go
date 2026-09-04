@@ -212,8 +212,11 @@ func TestCanonicalV5Golden_RecordsEveryReceiverField(t *testing.T) {
 // TestSchemaFor_ChoosesLowestRepresentableSchema pins design D4's
 // schema-selection table: schemaFor picks schema 3 only when every
 // tier-added field is Unavailable (RepresentableByOmission) and the
-// frequency fits schema 3's uint32; Known, Unknown, or Absent on any
-// tier field, or a frequency past that ceiling, forces schema 4.
+// frequency fits schema 3's uint32; Known, Unknown, or Absent on any of
+// the ten D4 tier fields — the ones this table mutates — or a frequency
+// past that ceiling, forces schema 4. The seven D8 receiver fields obey
+// the same rule one schema up (any state but Unavailable forces 5),
+// pinned separately by TestSchemaFor_ReceiverFieldsForceV5UnlessUnavailable.
 //
 // The two clauses of the rule are exercised from both sides — a
 // tier-added field at each of its four states, and a frequency either
