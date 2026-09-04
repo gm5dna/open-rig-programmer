@@ -50,6 +50,12 @@ func allTestDialects() []namedDialect {
 		{"peerDialect", peerDialect},
 		{"combinedDialect", combinedDialect},
 		{"combinedPeerDialect", combinedPeerDialect},
+
+		// The FT-891 Stage 0 axes' disagreeing fixtures, appended: see the
+		// block at the end of this file for what each one varies and why a
+		// fixture that agreed with the registered dialects would prove
+		// nothing about the axis it names.
+		{"mcMemoryPMSDialect", mcMemoryPMSDialect},
 	}
 }
 
@@ -74,6 +80,7 @@ var testDialect = mustFixtureDialect(DialectConfig{
 		PMSPairs:      2,  // FT-710: 9
 		EmergencyWire: "", // no emergency channel
 		NoneWire:      "000",
+		MCSelects:     MCSelectsAll,
 	},
 	EXItems:     nil,
 	MT:          MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
@@ -104,6 +111,7 @@ var noneWireDialect = mustFixtureDialect(DialectConfig{
 		PMSPairs:      0,
 		EmergencyWire: "",
 		NoneWire:      "900", // FT-710: "000"
+		MCSelects:     MCSelectsAll,
 	},
 	EXItems:     nil,
 	MT:          MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
@@ -160,6 +168,7 @@ var peerDialect = mustFixtureDialect(DialectConfig{
 		PMSPairs:      4,     // FT-710: 9
 		EmergencyWire: "XYZ", // FT-710: "EMG", present but different
 		NoneWire:      "777", // FT-710: "000"
+		MCSelects:     MCSelectsAll,
 	},
 	EXItems:     peerEXItems,
 	MT:          MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
@@ -1523,6 +1532,7 @@ var combinedDialect = mustFixtureDialect(DialectConfig{
 		PMSPairs:      9,
 		EmergencyWire: "EMG",
 		NoneWire:      "000",
+		MCSelects:     MCSelectsAll,
 	},
 	EXItems:     combinedEXItems,
 	MT:          MTPolicy{Form: MTFormCombined, TagMaxBytes: 6, TagFill: ' '},
@@ -1572,9 +1582,47 @@ var combinedPeerDialect = mustFixtureDialect(DialectConfig{
 		PMSPairs:      4,     // FT-710: 9
 		EmergencyWire: "XYZ", // FT-710: "EMG"
 		NoneWire:      "777", // FT-710: "000"
+		MCSelects:     MCSelectsAll,
 	},
 	EXItems:     peerEXItems,
 	MT:          MTPolicy{Form: MTFormCombined, TagMaxBytes: 12, TagFill: '_'},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MWWriteKind: KindMemTune,
+})
+
+// --- FT-891 Stage 0: one fixture per new dialect axis ---
+//
+// Each of the four axes added in Stage 0 (S0.2 MCSelects, S0.3
+// MTPolicy.ReadSlots, S0.4 MemoryP5, S0.6 MTPolicy.P11) declares TODAY'S
+// behaviour by name on every dialect above, so a fixture that only ever saw
+// those entries would exercise one value of each and prove nothing. These
+// four are the DISAGREEING side, and they are appended to allTestDialects()
+// so that every property this package states over "any dialect" is stated
+// over the narrow reading as well as the wide one.
+//
+// They vary ONE axis each, against an otherwise FT-710-shaped slot space
+// (memory 1-99, PMS 1-9, a 60m bank and an EMG channel) — because the whole
+// point of each is a slot class or a byte that the narrow reading refuses
+// and the wide one admits, and a fixture lacking that class would have
+// nothing to refuse.
+
+// mcMemoryPMSDialect declares MCSelectsMemoryPMS: its MC Set may name a
+// memory or PMS slot and nothing else, while its MR/MT reads keep the full
+// readable space. That is the FT-891's printed shape (S0.2) and no
+// registered dialect's.
+var mcMemoryPMSDialect = mustFixtureDialect(DialectConfig{
+	CATID:     "4444",
+	ModeNames: map[Mode]string{ModeUnset: "-", ModeUSB: "USB-MC", ModeLSB: "LSB-MC"},
+	Slots: SlotSpace{
+		MemoryLo: 1, MemoryHi: 99,
+		SixtyLo: 501, SixtyHi: 599,
+		PMSPairs:      9,
+		EmergencyWire: "EMG",
+		NoneWire:      "000",
+		MCSelects:     MCSelectsMemoryPMS, // THE AXIS UNDER TEST
+	},
+	EXItems:     nil,
+	MT:          MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MWWriteKind: KindMemory,
 })

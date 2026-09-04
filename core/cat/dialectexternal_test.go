@@ -38,6 +38,7 @@ func fictionalRadioConfig() cat.DialectConfig {
 			PMSPairs:      9,
 			EmergencyWire: "",
 			NoneWire:      "000",
+			MCSelects:     cat.MCSelectsAll,
 		},
 		EXItems: []cat.EXItem{
 			{Addr: cat.EXAddress{P1: 1, P2: 1, P3: 1}, P1Label: "RADIO", P2Label: "GROUP", Name: "ITEM", Digits: 3},

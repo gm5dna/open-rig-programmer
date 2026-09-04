@@ -95,6 +95,7 @@ func validBaselineConfig() DialectConfig {
 			PMSPairs:      3,
 			EmergencyWire: "HLP",
 			NoneWire:      "888",
+			MCSelects:     MCSelectsAll,
 		},
 		EXItems: []EXItem{
 			{Addr: EXAddress{P1: 7, P2: 1, P3: 1}, Name: "ITEM ONE", Digits: 2},
