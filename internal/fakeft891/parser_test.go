@@ -238,7 +238,8 @@ func TestMRRead_EmptyAndMalformed(t *testing.T) {
 	_, conn := newTestRadio(t)
 
 	// An empty slot — ASSUMED, doc.go's register entry EMPTY-SLOT ANSWERS.
-	assertRejected(t, conn, "MR001;")
+	// 050 rather than 001 because DefaultImage populates the latter.
+	assertRejected(t, conn, "MR050;")
 	// Grammatical but not a slot of this radio.
 	assertRejected(t, conn, "MR511;")
 	assertRejected(t, conn, "MR100;")
@@ -256,9 +257,9 @@ func TestMRRead_EmptyAndMalformed(t *testing.T) {
 func TestMR_HasNoSetDirection(t *testing.T) {
 	r, conn := newTestRadio(t)
 
-	setShaped := ordinaryChannel("002", '0').mrFrame()
+	setShaped := ordinaryChannel("050", '0').mrFrame()
 	assertRejected(t, conn, setShaped)
-	if _, ok := r.SlotState("002"); ok {
+	if _, ok := r.SlotState("050"); ok {
 		t.Error("a Set-shaped MR frame created a channel — MR has no Set direction on this radio")
 	}
 }
@@ -392,7 +393,8 @@ func TestMTRead_TagFieldIsSpacePaddedAndAllFillIsNoTag(t *testing.T) {
 func TestMTRead_EmptyAndMalformedSlots(t *testing.T) {
 	_, conn := newTestRadio(t)
 
-	assertRejected(t, conn, "MT001;") // empty — the register's EMPTY-SLOT ANSWERS
+	assertRejected(t, conn, "MT050;") // empty — the register's EMPTY-SLOT ANSWERS
+	//                                   (050, because DefaultImage populates 001)
 	assertRejected(t, conn, "MT100;") // grammatical, not a slot of this radio
 	assertRejected(t, conn, "MT000;") // the answer-only none form
 	assertRejected(t, conn, "MT01;")
@@ -435,13 +437,15 @@ func TestMTSet_CreatesAnAbsentChannelWithEitherTagFlag(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r, conn := newTestRadio(t)
 
-			set := ordinaryChannel("002", '0').with(func(f *combinedFrame) {
+			// 050 is absent from DefaultImage, so this really is a
+			// creation rather than an overwrite.
+			set := ordinaryChannel("050", '0').with(func(f *combinedFrame) {
 				f.p11 = tc.p11
 			}).frame()
 			writeFrame(t, conn, set)
 			assertNoReply(t, conn)
 
-			got, ok := r.SlotState("002")
+			got, ok := r.SlotState("050")
 			if !ok {
 				t.Fatal("the Set did not create the channel")
 			}
@@ -594,9 +598,9 @@ func TestWithMTReadUnsupported_HonoursTheCommandList(t *testing.T) {
 
 	// The Set direction is what the command list DOES give MT, so it still
 	// works.
-	writeFrame(t, conn, ordinaryChannel("002", '0').frame())
+	writeFrame(t, conn, ordinaryChannel("050", '0').frame())
 	assertNoReply(t, conn)
-	if _, ok := r.SlotState("002"); !ok {
+	if _, ok := r.SlotState("050"); !ok {
 		t.Error("WithMTReadUnsupported() disabled the Set direction too — the command list gives MT \"Set O\"")
 	}
 }

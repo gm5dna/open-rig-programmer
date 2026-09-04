@@ -71,3 +71,18 @@ func WithMTReadUnsupported() Option {
 		r.mtReadUnsupported = true
 	}
 }
+
+// WithFactoryImage REPLACES the fake's entire slot map with img's output. Pass
+// it BEFORE any WithSlot, With5MHz or WithEMG option in the same New call, or
+// the image will overwrite them. Without this option, New defaults to
+// DefaultImage.
+//
+// It exists for the case internal/wiring's per-model FakeSessionOpts variable
+// documents: a test that needs a fake rig with a non-default inventory,
+// reached through the EXACT code path a real "--fake" invocation uses rather
+// than by hand-building a session that bypasses the constructor.
+func WithFactoryImage(img Image) Option {
+	return func(r *Radio) {
+		r.slots = img()
+	}
+}
