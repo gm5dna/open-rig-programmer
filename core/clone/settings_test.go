@@ -652,3 +652,55 @@ func TestPrepareSend_PerformsNoSettingsTraffic(t *testing.T) {
 		t.Errorf("Diff summary differs between nil-Menus and non-nil-Menus candidates:\n  nil-Menus:     %+v\n  non-nil-Menus: %+v", diffA, diffB)
 	}
 }
+
+// TestReadSettings_FourDigitItemIDPassesThePreflight is the positive control
+// for the preflight above, at the OTHER EX address width.
+//
+// A radio whose MENU Number is a (P1,P2) pair renders four-digit setting IDs
+// (core/cat's EXAddressPair), and MenuSnapshot.Validate accepts exactly four
+// or exactly six ASCII digits. Without this the preflight could be narrowed
+// back to six and only the five-digit negative above would notice — which it
+// would not, since five is refused either way.
+func TestReadSettings_FourDigitItemIDPassesThePreflight(t *testing.T) {
+	var calls int
+	sess := &stubSettingsSession{
+		stubSession: stubSession{caps: spec.Capabilities{Model: "STUB-1"}},
+		descriptor: driver.SettingsDescriptor{
+			Version: "stub-pair@1",
+			Menus: []driver.SettingMenu{{
+				ID: "08", Label: "M8",
+				Groups: []driver.SettingGroup{{
+					ID: "0801", Label: "G1",
+					Items: []driver.SettingItem{
+						{ID: "0801", Label: "A (4 chars, the pair form)"},
+						{ID: "0803", Label: "B (4 chars, the pair form)"},
+					},
+				}},
+			}},
+		},
+		readSetting: func(ctx context.Context, id string) (driver.SettingValue, error) {
+			calls++
+			return driver.SettingValue{ID: id, State: driver.SettingKnown, Raw: "7"}, nil
+		},
+	}
+	svc := NewService(sess, newStore(t))
+
+	snap, err := svc.ReadSettings(testCtx(t))
+	if err != nil {
+		t.Fatalf("ReadSettings on a four-digit descriptor = %v, want it to pass the preflight and read", err)
+	}
+	if calls != 2 {
+		t.Errorf("ReadSetting called %d times, want 2 — the preflight refused a descriptor it should accept", calls)
+	}
+	if snap == nil || len(snap.Entries) != 2 {
+		t.Fatalf("snapshot = %+v, want two entries", snap)
+	}
+	for _, e := range snap.Entries {
+		if len(e.ID) != 4 {
+			t.Errorf("snapshot entry ID %q is %d bytes, want the descriptor's own 4", e.ID, len(e.ID))
+		}
+	}
+	if err := snap.Validate(); err != nil {
+		t.Errorf("the snapshot ReadSettings built does not validate: %v", err)
+	}
+}
