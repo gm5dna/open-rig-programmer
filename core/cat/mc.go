@@ -89,11 +89,29 @@ func (d Dialect) mcParseValid(s Slot) bool {
 // TestMCSelects_MemoryPMSRefusesSixtyAndEMGAtBuilderAndGate (both halves on
 // the same wire forms) and TestEveryDialect_MCGateAgreesWithItsBuilder.
 func (d Dialect) mcSendValid(s Slot) bool {
-	switch d.classifySlot(s.Wire()) {
-	case slotKindMemory, slotKindPMS:
-		return true
-	case slotKind60m, slotKindEMG:
-		return d.slots.mcSelects == MCSelectsAll
+	// A SWITCH ON THE POLICY FIRST, not a classify-then-if-else with an
+	// implicit "everything else is narrow" arm: the S0-close review's
+	// HIGH-1 finding was exactly that shape — a zero MCSlotPolicy fell
+	// through to the memory/PMS reading instead of refusing. NewDialect's
+	// V13 (dialectvalidate.go) already refuses a zero MCSlotPolicy at
+	// construction, but the default branch below is what keeps this site
+	// from silently taking ANY reading, memory/PMS included, in the one
+	// place V13 cannot reach — see unsetpolicy_test.go.
+	switch d.slots.mcSelects {
+	case MCSelectsAll:
+		switch d.classifySlot(s.Wire()) {
+		case slotKindMemory, slotKindPMS, slotKind60m, slotKindEMG:
+			return true
+		default:
+			return false
+		}
+	case MCSelectsMemoryPMS:
+		switch d.classifySlot(s.Wire()) {
+		case slotKindMemory, slotKindPMS:
+			return true
+		default:
+			return false
+		}
 	default:
 		return false
 	}
