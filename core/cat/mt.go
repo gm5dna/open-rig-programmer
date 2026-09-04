@@ -233,19 +233,61 @@ func (d Dialect) BuildMTSet(s Slot, display bool, tag string) (Command, error) {
 	return newCommand(frame), nil
 }
 
+// mtReadSlotValid reports whether s is a legal target for an MT READ under
+// THIS DIALECT'S declared read domain (MTPolicy.ReadSlots): memory and PMS
+// always, 60m and EMG only under MTReadsReadable.
+//
+// SHARED BY BuildMTRead AND AllowedCommand's MT read branch, and by nothing
+// else — the same "one rule, two consultations" discipline every other
+// write-direction predicate in this package keeps, so the builder and the
+// gate cannot drift apart.
+//
+// IT IS NOT Dialect.readableSlot ANY MORE, and the separation is the point.
+// readableSlot is the rule for a bare slot-only READ whose domain is the
+// dialect's whole readable slot space, and it still governs MR: on a
+// MTReadsMemoryPMS radio the 5xx and EMG banks are read by MR alone. Under
+// MTReadsReadable the two predicates agree exactly, which is what keeps
+// every existing MT-read frame and refusal byte-identical.
+//
+// It classifies through d.classifySlot rather than reading the kind s
+// carries, for the reason Slot's own doc comment gives: the stored kind is
+// the verdict of whichever dialect BUILT the slot, and the question here is
+// whether THIS dialect will read it.
+func (d Dialect) mtReadSlotValid(s Slot) bool {
+	switch d.classifySlot(s.Wire()) {
+	case slotKindMemory, slotKindPMS:
+		return true
+	case slotKind60m, slotKindEMG:
+		return d.mt.ReadSlots == MTReadsReadable
+	default:
+		return false
+	}
+}
+
 // BuildMTRead builds an MT read request for slot s. Reference: "Read frame
 // (6 bytes): MT P0 P0 P0 ;", golden vector G10: "MT001;".
 //
-// Unlike BuildMTSet, reads are not restricted to memory/PMS slots: reading
-// a tag has no side effect and carries none of the write-direction
-// hardware-verification concern the project policy above is about, so 5xx
-// and EMG (✓ in the manual's MT column) are allowed here. "000" remains
-// rejected (✗ in the manual's MT column, semantics unknown). See
-// Dialect.readableSlot (slot.go), shared with BuildMRRead and
-// AllowedCommand's MR/MT grammar checks.
+// Unlike BuildMTSet, reads are not restricted to memory/PMS slots BY THE
+// WRITE-DIRECTION POLICY: reading a tag has no side effect and carries none
+// of the hardware-verification concern the project policy above is about.
+// What bounds them instead is the dialect's own MT slot legend, carried as
+// MTPolicy.ReadSlots: under MTReadsReadable — the three registered dialects,
+// whose MT blocks print 5xx and EMG alongside memory and PMS — this admits
+// exactly what Dialect.readableSlot admits and not a byte moves; under
+// MTReadsMemoryPMS the 5xx and EMG banks are refused here and at the gate,
+// and MR is the only command that reads them. "000" remains rejected under
+// both (✗ in the manual's MT column, semantics unknown).
+//
+// TWO REFUSALS, in this order, because they say different things: the first
+// is the none/invalid case and its wording is unchanged, which is what keeps
+// every FT-710 refusal in the frame corpus byte-identical; the second fires
+// only where ReadSlots narrows the space the first admits.
 func (d Dialect) BuildMTRead(s Slot) (Command, error) {
 	if !d.readableSlot(s) {
 		return Command{}, newParseError([]byte(s.Wire()), "MT: slot must not be \"000\"/invalid (reference MT column: ✗)")
+	}
+	if !d.mtReadSlotValid(s) {
+		return Command{}, newParseError([]byte(s.Wire()), fmt.Sprintf("MT: slot %q is outside this dialect's MT read domain (%v: memory and PMS only) — its MT block's slot legend prints neither the 5xx nor the EMG bank, which MR reads instead", s.Wire(), d.mt.ReadSlots))
 	}
 	frame := make([]byte, 0, mtReadLen)
 	frame = append(frame, 'M', 'T')

@@ -318,6 +318,18 @@ func validateMTPolicy(cfg DialectConfig) error {
 	if n := cfg.MT.TagMaxBytes; n < 1 || n > maxMTTagBytes {
 		return fmt.Errorf("cat: MT.TagMaxBytes is %d, want 1..%d — it bounds the outbound write gate, so an unbounded value would authorise a pathologically long MT frame", n, maxMTTagBytes)
 	}
+	// ReadSlots, BEFORE the form switch: the MT read request carries neither
+	// a record nor a tag, so it is the one part of this command that is the
+	// same shape under both forms, and a config omitting its domain must be
+	// refused whichever form it declares. An omitted config semantic is
+	// REFUSED, never defaulted — and defaulting this one to the wide reading
+	// would have BuildMTRead emit, and this dialect's own gate admit, a read
+	// of a bank the radio's MT block never lists.
+	switch cfg.MT.ReadSlots {
+	case MTReadsReadable, MTReadsMemoryPMS:
+	default:
+		return fmt.Errorf("cat: MT.ReadSlots is %v, which is not a policy — declare MTReadsReadable or MTReadsMemoryPMS explicitly (MT's read domain is not always MR's)", cfg.MT.ReadSlots)
+	}
 	switch cfg.MT.Form {
 	case MTFormShort:
 		// The pre-existing short-form requirements, verbatim: ClearTagByte

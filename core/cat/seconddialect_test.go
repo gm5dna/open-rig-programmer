@@ -56,6 +56,7 @@ func allTestDialects() []namedDialect {
 		// fixture that agreed with the registered dialects would prove
 		// nothing about the axis it names.
 		{"mcMemoryPMSDialect", mcMemoryPMSDialect},
+		{"mtReadMemoryPMSDialect", mtReadMemoryPMSDialect},
 	}
 }
 
@@ -83,7 +84,7 @@ var testDialect = mustFixtureDialect(DialectConfig{
 		MCSelects:     MCSelectsAll,
 	},
 	EXItems:     nil,
-	MT:          MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	MT:          MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MWWriteKind: KindMemory,
 })
@@ -114,7 +115,7 @@ var noneWireDialect = mustFixtureDialect(DialectConfig{
 		MCSelects:     MCSelectsAll,
 	},
 	EXItems:     nil,
-	MT:          MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	MT:          MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MWWriteKind: KindMemory,
 })
@@ -171,7 +172,7 @@ var peerDialect = mustFixtureDialect(DialectConfig{
 		MCSelects:     MCSelectsAll,
 	},
 	EXItems:     peerEXItems,
-	MT:          MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	MT:          MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MWWriteKind: KindMemory,
 })
@@ -1535,7 +1536,7 @@ var combinedDialect = mustFixtureDialect(DialectConfig{
 		MCSelects:     MCSelectsAll,
 	},
 	EXItems:     combinedEXItems,
-	MT:          MTPolicy{Form: MTFormCombined, TagMaxBytes: 6, TagFill: ' '},
+	MT:          MTPolicy{Form: MTFormCombined, ReadSlots: MTReadsReadable, TagMaxBytes: 6, TagFill: ' '},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MWWriteKind: KindMemory,
 })
@@ -1585,7 +1586,7 @@ var combinedPeerDialect = mustFixtureDialect(DialectConfig{
 		MCSelects:     MCSelectsAll,
 	},
 	EXItems:     peerEXItems,
-	MT:          MTPolicy{Form: MTFormCombined, TagMaxBytes: 12, TagFill: '_'},
+	MT:          MTPolicy{Form: MTFormCombined, ReadSlots: MTReadsReadable, TagMaxBytes: 12, TagFill: '_'},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MWWriteKind: KindMemTune,
 })
@@ -1622,7 +1623,36 @@ var mcMemoryPMSDialect = mustFixtureDialect(DialectConfig{
 		MCSelects:     MCSelectsMemoryPMS, // THE AXIS UNDER TEST
 	},
 	EXItems:     nil,
-	MT:          MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	MT:          MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MWWriteKind: KindMemory,
+})
+
+// mtReadMemoryPMSDialect declares MTReadsMemoryPMS: its MT READ may name a
+// memory or PMS slot and nothing else, while its MR read keeps the whole
+// readable slot space. That is the FT-891's printed shape (S0.3) — its MT
+// legend prints `001 - 099 / P1L - P9U` where its MR legend prints the 5xx
+// and EMG banks too — and no registered dialect's.
+//
+// Its MCSelects is MCSelectsAll, so the ONE axis this fixture varies is the
+// MT read domain: a refusal seen here cannot be the MC policy's.
+var mtReadMemoryPMSDialect = mustFixtureDialect(DialectConfig{
+	CATID:     "3333",
+	ModeNames: map[Mode]string{ModeUnset: "-", ModeUSB: "USB-MTR", ModeLSB: "LSB-MTR"},
+	Slots: SlotSpace{
+		MemoryLo: 1, MemoryHi: 99,
+		SixtyLo: 501, SixtyHi: 599,
+		PMSPairs:      9,
+		EmergencyWire: "EMG",
+		NoneWire:      "000",
+		MCSelects:     MCSelectsAll,
+	},
+	EXItems: nil,
+	MT: MTPolicy{
+		Form:        MTFormShort,
+		ReadSlots:   MTReadsMemoryPMS, // THE AXIS UNDER TEST
+		TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' ',
+	},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MWWriteKind: KindMemory,
 })

@@ -819,3 +819,49 @@ func TestMCSelects_MatchesTheMCLegend(t *testing.T) {
 		})
 	}
 }
+
+// --- FT-891 Stage 0 (S0.3): the MT read domain ---
+
+// TestMTReadSlots_MatchesTheMTLegend pins the cat.MTReadsReadable both
+// models declare against the legend it is transcribed from.
+//
+// This manual's MT block prints the same four slot classes its MR block does
+// (rev 2308-L, layout 1312-1313), so an MT read may name every slot this
+// dialect can read — which is what cat.Dialect.readableSlot has always
+// admitted here. The FT-891's MT legend prints memory and PMS only, and the
+// axis exists to carry that disagreement.
+func TestMTReadSlots_MatchesTheMTLegend(t *testing.T) {
+	for _, m := range bothModels() {
+		t.Run(m.name, func(t *testing.T) {
+			d := m.d
+
+			sixty, err := d.SixtyMSlot(1)
+			if err != nil {
+				t.Fatalf("SixtyMSlot(1): %v", err)
+			}
+			emg := d.EMGSlot()
+			if emg.Wire() == "" {
+				t.Fatal("EMGSlot() is empty — this manual's MT legend names EMG (EMERGENCY CH)")
+			}
+			mem, err := d.MemorySlot(1)
+			if err != nil {
+				t.Fatalf("MemorySlot(1): %v", err)
+			}
+			pms, err := d.PMSSlot(1, false)
+			if err != nil {
+				t.Fatalf("PMSSlot(1, false): %v", err)
+			}
+
+			for _, s := range []cat.Slot{mem, pms, sixty, emg} {
+				cmd, err := d.BuildMTRead(s)
+				if err != nil {
+					t.Errorf("BuildMTRead(%q) = %v — every one of the four classes this manual's MT legend prints must build", s.Wire(), err)
+					continue
+				}
+				if !d.AllowedCommand(cmd.Bytes()) {
+					t.Errorf("its own gate refused BuildMTRead(%q)'s frame %q", s.Wire(), cmd.Bytes())
+				}
+			}
+		})
+	}
+}
