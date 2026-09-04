@@ -279,8 +279,12 @@ func TestValidateDialectConfig_V9P11(t *testing.T) {
 	}
 }
 
-// TestMTP11_ZeroPolicyRefusesRatherThanDefaultingWide is the
-// defense-in-depth arm LOW-3 asks for. A zero MTP11Policy on a combined-form
+// TestMTP11_ZeroPolicyRefusesRatherThanDefaultingWide is a
+// defense-in-depth arm the S0-MEM lane review's LOW-3 finding asked for: the
+// config validator (V9) already refuses a zero MTP11Policy on a combined-form
+// dialect, so this test proves the SAME refusal holds one layer further in,
+// at the site that actually reads the field, in case a caller ever reaches
+// it without going through NewDialect. A zero MTP11Policy on a combined-form
 // dialect is impossible past NewDialect's V9 clause (dialectvalidate.go) —
 // which is why this test builds its dialect by copying a valid one and
 // zeroing the field directly, rather than through NewDialect, to reach code

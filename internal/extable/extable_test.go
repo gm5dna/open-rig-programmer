@@ -387,7 +387,9 @@ func TestParseCSV_BoundsComeFromProfile(t *testing.T) {
 // by accident. ParseCSV never range-checked P1/P2/P3; the observation CSV's
 // exactly-two-digits rule rejected the matching row instead. Under
 // ObservationsAbsent there is no observation CSV, so a component of 100
-// would render into an EXAddress whose Wire() is seven digits.
+// would render into a seven-digit wire address under the six-digit
+// (AddressTriple) form — one digit wider than the field the radio's own
+// EX frame carries.
 func TestParseCSV_AddressComponentRange(t *testing.T) {
 	cases := []struct {
 		name    string

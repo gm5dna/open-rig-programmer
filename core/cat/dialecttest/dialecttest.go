@@ -632,7 +632,8 @@ func (r *conformanceRun) checkMemoryP5() {
 	// The COMBINED form shares this byte with MW, and validateCombinedMTFields
 	// applies the same policy independently of validateMWFields — so a suite
 	// that drove BuildMWSet alone would leave that second validator's P5
-	// refusal entirely unexercised from outside core/cat. See LOW-6.
+	// refusal entirely unexercised from outside core/cat. This is the S0-MEM
+	// lane review's LOW-6 finding; checkCombinedMemoryP5 below is the fix.
 	if r.d.MTForm() == cat.MTFormCombined {
 		r.checkCombinedMemoryP5(ctcss, shift)
 	}
