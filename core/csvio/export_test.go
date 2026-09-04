@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/csv"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -223,10 +224,23 @@ func TestExport_TagDisplayFourStates(t *testing.T) {
 				TagDisplay: tc.field,
 				ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
 			}
+			// This test is about the tag_display cell, not the tier
+			// columns. A hand-built ChannelData leaves the seventeen
+			// tier fields at the zero value, Absent — which no read of
+			// the Yaesu radio this fixture describes ever produces,
+			// and which now correctly forces the version-3 header
+			// (needsTierColumns/needsReceiverColumns). Unavailable is
+			// what such a radio actually reports, and what keeps the
+			// export at version 1 so the fixed column index below
+			// (11) means what it says.
+			markTierFieldsUnavailable(&d)
 			if err := Export(&buf, []codeplug.Channel{{Slot: "001", Data: &d}}); err != nil {
 				t.Fatalf("Export() error = %v", err)
 			}
 			rows := readCSV(t, buf.Bytes())
+			if !slices.Equal(rows[0], header) {
+				t.Fatalf("header = %v, want version 1 (%v)", rows[0], header)
+			}
 			if got := rows[1][11]; got != tc.wantCell { // tag_display column index
 				t.Errorf("tag_display cell for %+v = %q, want %q", tc.field, got, tc.wantCell)
 			}
@@ -269,11 +283,24 @@ func TestExport_FormulaInjectionEscaping(t *testing.T) {
 				TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
 				ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
 			}
+			// This test is about escaping the tag and clar_hz cells,
+			// not the tier columns. A hand-built ChannelData leaves
+			// the seventeen tier fields at the zero value, Absent —
+			// which no read of the Yaesu radio this fixture describes
+			// ever produces, and which now correctly forces the
+			// version-3 header (needsTierColumns/needsReceiverColumns).
+			// Unavailable is what such a radio actually reports, and
+			// what keeps the export at version 1 so the fixed column
+			// indices below (4, 10) mean what they say.
+			markTierFieldsUnavailable(&d)
 			channels := []codeplug.Channel{{Slot: "001", Data: &d}}
 			if err := Export(&buf, channels); err != nil {
 				t.Fatalf("Export() error = %v", err)
 			}
 			rows := readCSV(t, buf.Bytes())
+			if !slices.Equal(rows[0], header) {
+				t.Fatalf("header = %v, want version 1 (%v)", rows[0], header)
+			}
 			gotTag := rows[1][10] // tag column index
 			if gotTag != tc.wantTag {
 				t.Errorf("tag column = %q, want %q", gotTag, tc.wantTag)
@@ -361,10 +388,21 @@ func TestExport_WriteFailure_MidRow(t *testing.T) {
 // Import exists.
 func TestExport_FullImageRoundTripSlotOrder(t *testing.T) {
 	var buf bytes.Buffer
+	d001 := codeplug.ChannelData{FreqHz: 14250000, Mode: "USB", CTCSS: "OFF", CTCSSTone: codeplug.ToneField{State: codeplug.Unknown}, Shift: "SIMPLEX", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}, ScanSkip: codeplug.BoolField{State: codeplug.Unknown}}
+	d003 := codeplug.ChannelData{FreqHz: 7100000, Mode: "LSB", CTCSS: "OFF", CTCSSTone: codeplug.ToneField{State: codeplug.Unknown}, Shift: "SIMPLEX", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}, ScanSkip: codeplug.BoolField{State: codeplug.Unknown}}
+	// This test is about row order and the empty middle slot, not the
+	// tier columns. A hand-built ChannelData leaves the seventeen tier
+	// fields at the zero value, Absent — which no read of the Yaesu
+	// radio these fixtures describe ever produces, and which now
+	// correctly forces the version-3 header
+	// (needsTierColumns/needsReceiverColumns). Unavailable is what such
+	// a radio actually reports, and what keeps the export at version 1.
+	markTierFieldsUnavailable(&d001)
+	markTierFieldsUnavailable(&d003)
 	channels := []codeplug.Channel{
-		{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 14250000, Mode: "USB", CTCSS: "OFF", CTCSSTone: codeplug.ToneField{State: codeplug.Unknown}, Shift: "SIMPLEX", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}, ScanSkip: codeplug.BoolField{State: codeplug.Unknown}}},
+		{Slot: "001", Data: &d001},
 		{Slot: "002"},
-		{Slot: "003", Data: &codeplug.ChannelData{FreqHz: 7100000, Mode: "LSB", CTCSS: "OFF", CTCSSTone: codeplug.ToneField{State: codeplug.Unknown}, Shift: "SIMPLEX", TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false}, ScanSkip: codeplug.BoolField{State: codeplug.Unknown}}},
+		{Slot: "003", Data: &d003},
 	}
 	if err := Export(&buf, channels); err != nil {
 		t.Fatalf("Export() error = %v", err)
@@ -372,6 +410,9 @@ func TestExport_FullImageRoundTripSlotOrder(t *testing.T) {
 	rows := readCSV(t, buf.Bytes())
 	if len(rows) != 4 {
 		t.Fatalf("Export() = %d rows, want 4 (header + 3 slots)", len(rows))
+	}
+	if !slices.Equal(rows[0], header) {
+		t.Fatalf("header = %v, want version 1 (%v)", rows[0], header)
 	}
 	wantSlots := []string{"001", "002", "003"}
 	for i, want := range wantSlots {

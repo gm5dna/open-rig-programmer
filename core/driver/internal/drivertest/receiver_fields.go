@@ -110,10 +110,11 @@ type tierFieldState struct {
 }
 
 // tierFieldStates lists all seventeen — D4's ten and D8's seven — under
-// the column names core/csvio and the file schemas use for them. Adding
-// an eighteenth tier field without adding it here would silently narrow
-// the assertion, which is why
-// TestAssertFreshReadSaveLoad_RefusesAnAbsentField tables every entry.
+// the column names core/csvio and the file schemas use for them.
+// TestTierFieldStates_MatchAllFields pins that this list names exactly
+// spec.AllFields() minus the ten pre-tier fields (FieldFrequency
+// through FieldErase in core/spec/field.go), so a newly minted Field
+// left out of this slice fails that test until it is added here.
 func tierFieldStates(d *codeplug.ChannelData) []tierFieldState {
 	return []tierFieldState{
 		{"tx_frequency", d.TxFreqHz.State},

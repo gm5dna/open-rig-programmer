@@ -591,7 +591,7 @@ func TestImportCHIRP_YaesuBranchUnchanged(t *testing.T) {
 // FieldState.RepresentableByOmission — Known, Unknown OR ABSENT — which
 // is the clause schemaFor applies through
 // ChannelData.tierFieldsRepresentableByOmission
-// (core/codeplug/file.go:1201-1216).
+// (core/codeplug/file.go:1201-1217).
 //
 // Agreement is checked against what core/codeplug ACTUALLY DOES with
 // the same channels — Save, then read the schema back — rather than
