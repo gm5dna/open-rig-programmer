@@ -355,11 +355,25 @@ func (d Dialect) ParseMTAnswerCombinedDisplay(frame []byte) (MemoryData, string,
 // rather than each re-testing d.mt.P11 against the byte — so byte 28's
 // admission rule cannot drift into two answers from one dialect.
 func (d Dialect) p11Valid(b byte) bool {
-	if d.mt.P11 == P11TagDisplay {
+	// A SWITCH, not an if/else with an implicit "everything else is
+	// P11Fixed" arm: that shape was the S0-close review's HIGH-1 finding —
+	// a zero MTP11Policy fell through to the P11Fixed reading and let a
+	// combined answer's undocumented byte 28 (including a live '0' that
+	// happened to coincide with combinedMTP11) pass both this parser and
+	// the gate. NewDialect's V9 (validateMTPolicy, dialectvalidate.go)
+	// already refuses a zero MTP11Policy on a combined-form dialect at
+	// construction, but the default branch below is what keeps this
+	// shared predicate from taking EITHER reading in the one place V9
+	// cannot reach — see unsetpolicy_test.go.
+	switch d.mt.P11 {
+	case P11TagDisplay:
 		_, err := parseBoolDigit(b)
 		return err == nil
+	case P11Fixed:
+		return b == combinedMTP11
+	default:
+		return false
 	}
-	return b == combinedMTP11
 }
 
 // parseMTAnswerCombined is the one body both combined parsers share. The
