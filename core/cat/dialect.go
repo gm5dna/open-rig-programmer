@@ -188,8 +188,17 @@ var FT710 = Dialect{
 	// was previously assumed to share with every dialect.
 	// TestNewDialect_ReproducesFT710 pins that this literal and a
 	// config-built equivalent agree.
-
-	mt:          MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	//
+	// ReadSlots is MTReadsReadable because the FT-710 CAT manual's own slot
+	// table marks the MT column ✓ for 5xx and EMG alongside memory and PMS —
+	// the same four classes its MR column carries, which is what
+	// Dialect.readableSlot has always admitted here. No hardware evidence
+	// bears on it either way: docs/hardware-notes.md records no MT read of a
+	// 5xx or EMG slot, and could not, since Stuart's UK radio has neither
+	// bank (§60m regional finding). The declaration is the manual's, and it
+	// moves not a byte. Pinned by mtreadpolicy_test.go's
+	// TestMTReadSlots_RegisteredDialectsReadEverythingReadable.
+	mt:          MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	clar:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	mwWriteKind: KindMemory,
 }

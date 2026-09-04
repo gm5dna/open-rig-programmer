@@ -69,7 +69,7 @@ func combinedRadioConfig() cat.DialectConfig {
 			{Addr: cat.EXAddress{P1: 1, P2: 1, P3: 1}, P1Label: "RADIO", P2Label: "GROUP", Name: "ITEM ONE", Digits: 3},
 			{Addr: cat.EXAddress{P1: 1, P2: 1, P3: 2}, P1Label: "RADIO", P2Label: "GROUP", Name: "TEXT ITEM", Digits: 16, Text: true},
 		},
-		MT:          cat.MTPolicy{Form: cat.MTFormCombined, TagMaxBytes: 6, TagFill: ' '},
+		MT:          cat.MTPolicy{Form: cat.MTFormCombined, ReadSlots: cat.MTReadsReadable, TagMaxBytes: 6, TagFill: ' '},
 		Clarifier:   cat.ClarifierPolicy{StepHz: 5, MaxAbsHz: 9995},
 		MWWriteKind: cat.KindMemTune,
 	}
@@ -134,7 +134,7 @@ func shortPeerRadioConfig() cat.DialectConfig {
 		EXItems: []cat.EXItem{
 			{Addr: cat.EXAddress{P1: 2, P2: 3, P3: 4}, P1Label: "RADIO", P2Label: "GROUP", Name: "ITEM", Digits: 2},
 		},
-		MT:          cat.MTPolicy{Form: cat.MTFormShort, TagMaxBytes: 6, ClearTagByte: ' ', PadByte: ' '},
+		MT:          cat.MTPolicy{Form: cat.MTFormShort, ReadSlots: cat.MTReadsReadable, TagMaxBytes: 6, ClearTagByte: ' ', PadByte: ' '},
 		Clarifier:   cat.ClarifierPolicy{StepHz: 1, MaxAbsHz: 9999},
 		MWWriteKind: cat.KindMemory,
 	}

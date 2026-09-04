@@ -109,7 +109,15 @@ func newDialect(catID string) cat.Dialect {
 		},
 		EXItems: exItems,
 		MT: cat.MTPolicy{
-			Form:         cat.MTFormCombined,
+			Form: cat.MTFormCombined,
+			// This manual's MT block prints the same four slot classes its
+			// MR block does — "001-099 (Memory Channel), P1L -P9U (PMS),
+			// 5xx (5MHz BAND), EMG (EMERGENCY CH)" (layout 1312-1313) — so
+			// an MT read may name every slot this dialect can read. Not an
+			// assumption: this is the legend, transcribed. The FT-891's MT
+			// legend prints memory and PMS only, which is the disagreement
+			// this axis carries.
+			ReadSlots:    cat.MTReadsReadable,
 			TagMaxBytes:  12,
 			ClearTagByte: 0,   // must be 0 under MTFormCombined (V9)
 			PadByte:      0,   // must be 0 under MTFormCombined (V9)

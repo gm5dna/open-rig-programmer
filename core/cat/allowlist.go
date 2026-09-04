@@ -216,7 +216,11 @@ func (d Dialect) validMWCommand(frame []byte) bool {
 // switch below is a safety boundary, not a convenience.
 //
 // READ (form-independent, and checked FIRST): exactly mtReadLen (6) bytes,
-// with a slot readableSlot accepts — the same rule BuildMTRead enforces.
+// with a slot mtReadSlotValid accepts — the same rule BuildMTRead enforces,
+// which is THIS DIALECT'S declared MT read domain (MTPolicy.ReadSlots) and
+// not MR's. Under MTReadsReadable the two coincide exactly; under
+// MTReadsMemoryPMS an "MT501;" or "MTEMG;" is refused here as the builder
+// refuses it, while the same slots stay legal for MR.
 // The read request carries neither a record nor a tag, so its shape is the
 // same under both forms, and no Set branch can claim a 6-byte frame: the
 // short form's floor is 7 bytes and the combined form's shortest possible
@@ -266,7 +270,7 @@ func (d Dialect) validMTCommand(frame []byte) bool {
 		if err != nil {
 			return false
 		}
-		return d.readableSlot(slot)
+		return d.mtReadSlotValid(slot)
 	}
 
 	switch d.mt.Form {

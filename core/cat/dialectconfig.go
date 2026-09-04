@@ -132,6 +132,51 @@ func (f MTForm) String() string {
 	}
 }
 
+// MTReadSlotPolicy names the slot domain of the MT READ request.
+//
+// It exists because the FT-891's MT block is the first whose own slot legend
+// prints memory and PMS ONLY — `001 - 099 / P1L - P9U` — where its MR block
+// prints the 5xx and EMG banks as well, and where every registered sibling's
+// MT legend prints all four classes. Until Stage 0 this codec had one rule
+// for both commands ("reads are not restricted", mt.go): a read has no side
+// effect, so the write-direction hardware concern that confines MT SET to
+// memory and PMS does not apply to it. That reasoning is still right and is
+// not what this field changes. What it changes is the assumption underneath
+// it — that MT's readable domain is MR's — which the FT-891 refutes in
+// print.
+//
+// It governs BuildMTRead and the outbound gate's MT read branch, which is
+// the whole of the MT read's surface. MR's own read domain is untouched:
+// Dialect.readableSlot still answers for BuildMRRead and the gate's MR
+// branch, and the discovered 5xx/EMG banks are read by MR alone on a
+// MTReadsMemoryPMS radio.
+//
+// Its zero value is deliberately NOT a policy, so a config omitting it is
+// refused (inside V9) rather than defaulted.
+type MTReadSlotPolicy int
+
+const (
+	// MTReadsReadable is the three registered dialects' domain: every slot
+	// this dialect's ParseSlot accepts except the "000" none form —
+	// Dialect.readableSlot, the rule MR reads by.
+	MTReadsReadable MTReadSlotPolicy = iota + 1
+	// MTReadsMemoryPMS is the narrower domain: memory and PMS only, the
+	// slots an MT legend printing just those two names.
+	MTReadsMemoryPMS
+)
+
+// String names the policy, so a refusal can quote it.
+func (p MTReadSlotPolicy) String() string {
+	switch p {
+	case MTReadsReadable:
+		return "MTReadsReadable"
+	case MTReadsMemoryPMS:
+		return "MTReadsMemoryPMS"
+	default:
+		return fmt.Sprintf("MTReadSlotPolicy(%d)", int(p))
+	}
+}
+
 // MTPolicy carries the MT command's dialect-varying dimensions, ACROSS BOTH
 // evidenced frame forms.
 //
@@ -153,6 +198,15 @@ func (f MTForm) String() string {
 type MTPolicy struct {
 	// Form is this family's MT frame shape. It has no default: see MTForm.
 	Form MTForm
+
+	// ReadSlots is the MT READ request's slot domain. It belongs to BOTH
+	// forms — the read request carries neither a record nor a tag, so its
+	// shape and its domain are the same question under either — which is
+	// why it sits outside the per-form ownership table above and V9
+	// requires it whatever Form says.
+	//
+	// It has no default: see MTReadSlotPolicy.
+	ReadSlots MTReadSlotPolicy
 
 	// TagMaxBytes is the longest tag this family accepts, measured in
 	// BYTES. FT-710: 12.
