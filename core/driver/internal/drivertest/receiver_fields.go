@@ -9,12 +9,14 @@ import (
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
 // AssertFreshReadSaveLoad pins the D8 fresh-read rule: every existing
 // driver reports the seven receiver fields Unavailable, and that exact
-// populated channel survives the lowest-schema save/load migration.
-func AssertFreshReadSaveLoad(t testing.TB, ch codeplug.Channel, load func(string) (*codeplug.Codeplug, error)) {
+// populated channel survives the normalised lowest-schema save/load
+// migration.
+func AssertFreshReadSaveLoad(t testing.TB, ch codeplug.Channel, caps spec.Capabilities, load func(string) (*codeplug.Codeplug, error)) {
 	t.Helper()
 	if ch.Data == nil {
 		t.Fatal("fresh-read channel is empty")
@@ -32,8 +34,25 @@ func AssertFreshReadSaveLoad(t testing.TB, ch codeplug.Channel, load func(string
 			t.Errorf("fresh-read %s state = %q, want Unavailable", name, state)
 		}
 	}
+	AssertFreshReadSaveLoadNormalised(t, ch, caps, load)
+}
 
-	cp := &codeplug.Codeplug{Generator: "driver fresh-read test", Channels: []codeplug.Channel{ch}}
+// AssertFreshReadSaveLoadNormalised checks the composition-root path for
+// a fresh channel whose D8 states are pinned by its caller. Both sides
+// are normalised before comparison because Load itself deliberately has
+// no capabilities with which to resolve reachable and unreachable
+// Absent fields.
+func AssertFreshReadSaveLoadNormalised(t testing.TB, ch codeplug.Channel, caps spec.Capabilities, load func(string) (*codeplug.Codeplug, error)) {
+	t.Helper()
+	if ch.Data == nil {
+		t.Fatal("fresh-read channel is empty")
+	}
+	normalised := ch
+	data := *ch.Data
+	normalised.Data = &data
+
+	cp := &codeplug.Codeplug{Generator: "driver fresh-read test", Channels: []codeplug.Channel{normalised}}
+	codeplug.NormaliseTierFields(cp, caps)
 	path := filepath.Join(t.TempDir(), "fresh-read.json")
 	if err := codeplug.Save(path, cp); err != nil {
 		t.Fatalf("Save(fresh read): %v", err)
@@ -42,7 +61,8 @@ func AssertFreshReadSaveLoad(t testing.TB, ch codeplug.Channel, load func(string
 	if err != nil {
 		t.Fatalf("Load(saved fresh read): %v", err)
 	}
-	if len(got.Channels) != 1 || !reflect.DeepEqual(got.Channels[0], ch) {
-		t.Errorf("fresh read differs after save/load:\n got %+v\nwant %+v", got.Channels, ch)
+	codeplug.NormaliseTierFields(got, caps)
+	if len(got.Channels) != 1 || !reflect.DeepEqual(got.Channels[0], normalised) {
+		t.Errorf("fresh read differs after normalised save/load:\n got %+v\nwant %+v", got.Channels, normalised)
 	}
 }
