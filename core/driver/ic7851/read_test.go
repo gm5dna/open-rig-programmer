@@ -156,7 +156,8 @@ func TestReadChannel_AcceptsFrequencyAtCeiling(t *testing.T) {
 // this driver (drivertest.AssertFreshReadSaveLoad): a freshly read
 // occupied channel reports the seven receiver fields Unavailable, answers
 // all seventeen tier fields rather than leaving one Absent, and survives a
-// save/load round trip byte-for-byte.
+// save/load round trip field-for-field (the helper compares the
+// loaded channel with reflect.DeepEqual; it never compares file bytes).
 //
 // BOTH ROWS, like every E2E case in this package: New7851 and New7850
 // share one implementation, one profile and one capability set, so the

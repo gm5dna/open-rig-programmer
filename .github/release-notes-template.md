@@ -127,7 +127,7 @@ reading and for opt-in writes (see below).
   (or type one into the CSV column) or leave the cell empty in the CSV,
   which records it as "unknown, keep whatever the radio has". Codeplug files
   written before this release are unaffected: every file this program wrote
-  still loads and re-saves byte for byte. A hand-edited sparse file —
+  for the radio it names still loads and re-saves byte for byte. A hand-edited sparse file —
   one that omitted a field's state — gains an explicit empty state key on
   its first save and keeps the schema its remaining fields need: a file
   omitting only one of the ten Icom-tier states re-saves at schema 4; one
