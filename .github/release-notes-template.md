@@ -31,6 +31,13 @@
   for each release; the rest of the file describes the product as it
   stands.
 
+  SYNC 04/09/2026 (v1.2.3): the "What changed in this version" section
+  rewritten for the parked-decisions sweep — the Absent-field send-gate
+  fix at Save and on the CSV route (with how to answer such a field), the
+  read-side frequency refusal on the three 25 B clone-family Icoms, and
+  the IC-R8600 probe note's bounded-walk sentence. No row of the support
+  table, no model count and no evidence sentence changed with it.
+
   SYNC 31/08/2026 (v1.2.2): the "What changed in this version" section
   rewritten for the Tier 4b follow-ups sweep — the IC-R8600 unlisted-slot
   write refusal, the IC-7100 absent transmit-frequency/offset read fix
@@ -107,38 +114,40 @@ reading and for opt-in writes (see below).
 
 ## What changed in this version
 
-- **IC-R8600: a write can no longer overwrite a channel nothing read.**
-  The receiver's memory is discovered by a bounded walk, and that walk can
-  miss an occupied channel whenever a later group's channel 00 is empty.
-  Before this release, writing to such a slot went ahead and destroyed the
-  stored channel silently. The pre-write read now refuses instead, whenever
-  the receiver answers with a record for a slot this session never listed.
-  The refusal names which walk ran, because the remedy differs: after the
-  bounded walk the slot may simply lie outside its reach, so re-discovering
-  the receiver is worth trying; after a full read of all 10,000 addresses it
-  cannot, and the channel must have arrived after the session opened — at
-  the front panel, or from another controller.
-- **IC-7100: an absent transmit frequency is no longer read as 0 Hz.** A
-  memory record that carries no transmit frequency or no repeater offset
-  now reports those fields as unavailable, the way the other Icom drivers
-  do, instead of a known value of zero. Neither the grid nor the saved file
-  now shows a transmit frequency the radio never sent.
-- **IC-9700: a wrong sibling is reported as the wrong radio.** A record
-  whose length does not match this model — how a different Icom answering
-  the same CI-V address shows up — now identifies itself as a wrong-radio
-  refusal as well as a record-length one, matching what the other drivers
-  do with the same mistake.
-- **The IC-R8600's scan-skip refusal is now written down.** A channel the
-  operator has marked as skipped is refused rather than rewritten as
-  unskipped. That was already true; the README simply never said so.
+- **An unanswered field can no longer slip past the send gate by being
+  saved and reloaded.** On the Icom models a memory channel carries fields
+  the Yaesu frame does not have — duplex, offset, tone mode, filter and the
+  like — and a channel that says nothing about one of them (a channel built
+  by hand, or imported from a spreadsheet) is refused until you answer it.
+  Before this release, saving such a codeplug and opening it again quietly
+  turned "nothing said" into "not available on this radio", which the gate
+  accepts. A saved file now keeps the distinction, so the same refusal
+  greets the channel after a reload as before it. The same fix applies to
+  CSV export and import. To answer the field, paste a value into the cell
+  (or type one into the CSV column) or leave the cell empty in the CSV,
+  which records it as "unknown, keep whatever the radio has". Codeplug files
+  written before this release are unaffected: every existing file still
+  loads and re-saves byte for byte, and a sparse schema-5 file — one that
+  omitted a field's state — now stays schema 5 on re-save instead of being
+  rewritten as schema 3.
+- **IC-7610, IC-7760 and IC-7851: a frequency the radio's record cannot hold
+  is refused when it is read, not later.** A record whose decoded frequency
+  lies outside the model's declared range is reported as out of domain at
+  the read, with the measured value and the limit, instead of arriving in
+  the grid as a value the send gate would then refuse without saying why.
+- **IC-R8600: the probe note now says how much of the memory the bounded
+  walk covers**, in the same terms the write refusal already used: nothing
+  on this build's command line or in its window widens it, and a channel
+  stored outside the walk is simply not listed, so its absence from the
+  grid is not evidence that the receiver's channel is empty.
 
 Everything else in this release is internal hardening and carries no change
-a user can see: citation pins that hold the four newest Icom drivers to the
-documents they were derived from, a byte-identity golden and pinned sparse
-load rules for codeplug schema 5, a CI-V drain test that no longer
-depends on scheduler timing, and corrections to comments and test prose. No model was
-registered, no radio was connected, and the support table below is
-unchanged.
+a user can see: an enumeration of every channel field so each driver's
+capability audit must account for all of them, one shared shape for the
+wrong-radio-by-record-length refusal across the four drivers that make it,
+a stricter rule for the page-span citations the provenance tests accept, and
+corrections to comments and test prose. No model was registered, no radio
+was connected, and the support table below is unchanged.
 
 ## What it does
 
