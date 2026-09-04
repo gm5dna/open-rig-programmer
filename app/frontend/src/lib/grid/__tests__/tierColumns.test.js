@@ -10,6 +10,7 @@ import {
 	isCellEditable,
 	newChannelData,
 	parsePasteCell,
+	tierColumnFor,
 } from '../columns.js'
 
 /** The FT-710's MEM bank as GetUISpec serves it today: no tier field is
@@ -117,6 +118,20 @@ describe('columnsFor', () => {
 		}
 	})
 
+	it('tierColumnFor answers by ID, and only for a tier column', () => {
+		// The lookup ChannelGrid.svelte chooses a cell's editor with. BY ID:
+		// a column that merely sits at a tier column's index is not one, so
+		// a bank whose Fields list changes cannot silently re-point an
+		// editor at another field.
+		for (const column of TIER_COLUMNS) {
+			expect(tierColumnFor({ id: column.id, label: column.label, field: column.field })).toBe(column)
+		}
+		for (const column of COLUMNS) {
+			expect(tierColumnFor(column)).toBeNull()
+		}
+		expect(tierColumnFor({ id: 'not-a-column', label: '', field: null })).toBeNull()
+	})
+
 	it('shows each receiver column only when the bank lists its field', () => {
 		expect(columnsFor(receiverBank).slice(COLUMNS.length).map((c) => c.id)).toEqual([
 			'tuningStepEnabled',
@@ -208,16 +223,22 @@ describe('tier cells', () => {
 
 describe('the edit primitives on an absent tier cell', () => {
 	// This composes isCellEditable, cloneData and parsePasteCell — the same
-	// three exported, already-tested primitives ChannelGrid.svelte's commit
-	// handlers (commitSelectEditor, commitTextEditor) reduce to: gate with
-	// isCellEditable, then `{ ...cloneData(fresh ?? data), [key]: value }`.
-	// It is NOT a claim about the grid itself: no tier column is wired into
-	// that Svelte template yet (grep confirms no tier id or `column.kind`
-	// appears there), so wiring one up is a recorded follow-up, not
-	// something this file can pin. What this pins is the three-part
-	// behaviour (open, commit, cancel) those primitives would produce for
-	// both shapes 'absent' reaches the frontend as: a missing key on a
-	// frontend-built row, and Go's `{"state": ""}` on a loaded one.
+	// three exported primitives ChannelGrid.svelte's commit handlers reduce
+	// to: gate with isCellEditable, then `{ ...cloneData(fresh ?? data),
+	// [key]: value }`. What it pins is the three-part behaviour (open,
+	// commit, cancel) those primitives produce for both shapes 'absent'
+	// reaches the frontend as: a missing key on a frontend-built row, and
+	// Go's `{"state": ""}` on a loaded one.
+	//
+	// It is still not a claim about the GRID. That gap has since been
+	// closed at the other end: ChannelGrid.svelte now opens an editor for
+	// every tier column (commitTierTextEditor, and the tone/bool paths
+	// beside it), and lib/__tests__/ChannelGrid.test.js's "tier-column
+	// editing" block drives the real component — including this file's own
+	// absent case, "an ABSENT cell — Go's {"state": ""} — edits exactly as
+	// an unanswered one does". These tests stay because they pin the
+	// primitives themselves, which paste and CSV import reach without
+	// going through any component.
 	const duplex = TIER_COLUMNS.find((c) => c.id === 'duplex')
 	/** @type {Record<string, any>} */
 	const absentChannel = { freq_hz: 14250000, mode: 'USB' } // no 'duplex' key: absent

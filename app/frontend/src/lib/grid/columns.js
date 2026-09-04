@@ -90,6 +90,22 @@ export const TIER_COLUMNS = [
 const TIER_BY_ID = new Map(TIER_COLUMNS.map((c) => [c.id, c]))
 
 /**
+ * The TierColumn a rendered column IS, or null for one of the ten that
+ * predate the tier.
+ *
+ * Exported because ChannelGrid.svelte chooses a cell's editor by KIND
+ * (TierColumn.kind — freq/int/text take the free-text editor and the
+ * parser below, tone the UISpec's own tone list, bool the one-keystroke
+ * toggle), and the lookup rule — BY ID, never by position — belongs
+ * here beside the table it reads rather than restated in the component.
+ * @param {Column} column
+ * @returns {TierColumn | null}
+ */
+export function tierColumnFor(column) {
+	return TIER_BY_ID.get(column.id) ?? null
+}
+
+/**
  * The columns to render for one bank: always the ten in COLUMNS, then
  * every TIER_COLUMNS entry that bank's capabilities say the radio
  * actually has (BankView.Fields).
