@@ -1,0 +1,302 @@
+# FT-891 CAT manual MENU chart -- EX address inventory.
+# Source: Yaesu FT-891 CAT Operation Reference Book, revision 1909-C
+#   (docs/fixtures-private/manuals/ft891_cat_1909-C.pdf, gitignored;
+#   SHA-256 59e2295177633b970408bec10aae62f697c3bde5fe48a3be25282d992bc3bbb0;
+#   20 pages; the revision code is printed on the back cover beside the UK
+#   address, layout line 1604). The chart is the UNTITLED table that follows
+#   the EX MENU command block; this manual gives it no "Table 2" caption, and
+#   the file is named table2.csv only because every model package's manual
+#   transcription is.
+# Method: LAYOUT-TEXT-LED, PDF-CHECKED. The working text was the layout
+#   extraction docs/fixtures-private/manuals/ft891_layout.txt, where the
+#   chart spans lines 524-697 -- the column header at 524, the first row
+#   0101 at 525, the last row 1803 at 697, with the header reprinted at 560
+#   and 647 where the chart crosses a page. The rendered PDF's ruled cells
+#   (PDF pages 8-10 = printed folios 7-9, rendered at 150 dpi with
+#   pdftoppm) arbitrated: every row's Function, parameter text and Digits
+#   was read off the rendered page as well as the layout. A SECOND,
+#   PDF-PRIMARY transcription of the same chart and a group-boundary ledger
+#   were derived independently before this file existed and are committed
+#   under core/cat/ft891/testdata/; this file was written WITHOUT sight of
+#   either, and the cross-check task binds the three afterwards.
+# Transcribed: 04/09/2026 (Tier 1 Stage 1 task A). Values are the manual's
+#   own; this file makes no claim about what any radio does. No FT-891
+#   hardware is available to this project, so there is no observation CSV
+#   and no corrections file to accompany it.
+#
+# Columns: p1,p2,p3,p1_label,p2_label,name,p4,digits,text,manual_line
+#   p1,p2,p3     decimal (P1,P2,P3) triple. The FT-891's EX address has only
+#                TWO components: p1 and p2 are the printed MENU Number's
+#                first and second two-digit halves (0803 -> 08,03), and p3
+#                is 0 on EVERY row -- extable's AddressPair, core/cat's
+#                EXAddressPair, whose wire form is the four digits "0803".
+#   p1_label     EMPTY on every row.
+#   p2_label     EMPTY on every row. This chart prints no label columns at
+#                all -- extable's LabelsAbsent. See NO GROUP LABELS below.
+#   name         chart Function column, verbatim
+#   p4           chart parameter-description column, verbatim (audit trail
+#                only -- it is not emitted into the generated Go).
+#                COLUMN-NAME COLLISION, worth reading twice: this radio's
+#                chart calls that column "P2", because its EX frame's
+#                parameter is P2 where the FT-710's is P4. The ten-column
+#                CSV shape is shared with the FT-710, FTdx10 and FTdx101,
+#                so it keeps the name p4. The CSV's own p2 column is the
+#                ADDRESS's second component and has nothing to do with the
+#                chart's P2 heading.
+#   digits       chart Digits column, AS PRINTED (1..5; see the quirks
+#                below before reading it as a width)
+#   text         false on every row -- the chart prints no free-text item.
+#                See NO TEXT ITEMS below.
+#   manual_line  line in ft891_layout.txt carrying the row's MENU Number
+#
+# TRANSCRIPTION CONVENTIONS -- what was and was not normalised
+#   VERBATIM, DEFECTS INCLUDED. The chart's own spacings and defects are
+#   transcribed as found, never corrected; see the quirks section.
+#   P4 whitespace: runs of whitespace are collapsed to single spaces, as in
+#   the FT-710 and FTdx10 transcriptions. Six rows print a wide gap inside
+#   their option list -- the five HCUT FREQ rows (0603, 0703, 0807, 1003,
+#   1103) after "00: OFF", and 0809 DATA IN SELECT after "0: MIC" -- and
+#   those gaps are collapsed like any other.
+#   P4 CHARACTERS are NOT transliterated. Every line of this chart in this
+#   extraction is pure ASCII: ranges and negative signs alike render as the
+#   ASCII hyphen "-", where the FTdx10's extraction rendered them "~" and
+#   U+2013. Neither is normalised to the other -- each transcription
+#   records the characters its own source presented.
+#   WRAPPED ROWS: 1504 EQ2 FREQ and 1513 P-EQ2 FREQ each print their
+#   parameter column over three layout lines (652-654 and 663-665), the
+#   middle line carrying the MENU Number and the Digits. Each parameter is
+#   joined in reading order and manual_line is that middle line, 653 and
+#   664. No row's NAME wraps.
+#
+# PRINTED QUIRKS RECORDED, NOT RESOLVED
+#   1. 0905 RPT SHIFT 50MHz (layout 609) prints Digits 1 against its own
+#      "0 - 4000 kHz (P2= 0000 - 4000) (10 kHz/step)" legend, which needs
+#      four. Its twin 0904 RPT SHIFT 28MHz (608), same shape of legend,
+#      prints 4. The printed 1 is transcribed. This is the ONLY row in the
+#      chart whose Digits contradicts its own printed range -- checked
+#      mechanically over every row carrying a "P2= x - y" range -- and both
+#      independent transcriptions record the printed 1, so no cross-check
+#      can catch it. It is a manual defect, and this repository has no
+#      FT-891 to ask which of 1 and 4 the radio answers.
+#   2. TWO FIVE-DIGIT ROWS: 0803 OTHER DISP (595) and 0804 OTHER SHIFT
+#      (596), both "-3000 Hz - 0 - +3000 Hz (P2= -3000 - -0000 or +0000 -
+#      +3000) (10 Hz/steps)". Five counts the SIGN: the widest magnitude
+#      printed is four digits. They are the whole reason the ft891 profile
+#      declares MaxDigits 5 where the other three declare 4.
+#   3. 0710 CW WAVE SHAPE (589) prints "1: 2 msec 2: 4 msec" -- an option
+#      list with NO "0:" entry, the only such row in the chart. Whether the
+#      radio's P2 domain starts at 1 or the chart lost a line is not
+#      knowable from this manual; nothing here fills the gap in.
+#   4. A RANGE SPLICED INTO AN OPTION LIST, twice with no space after the
+#      hyphen: 1507 EQ3 FREQ (657) and 1516 P-EQ3 FREQ (668) both print
+#      "... 06: 2000 Hz -18: 3200 Hz", where the intent is plainly
+#      "06: 2000 Hz - 18: 3200 Hz". Transcribed as printed: not respaced,
+#      not expanded into the twelve options it stands for.
+#   5. UNSPACED UNITS: 1504 EQ2 FREQ (653) and 1513 P-EQ2 FREQ (664) print
+#      "04: 1000Hz" with no space between the number and the unit, while
+#      every neighbouring option in the same row is spaced ("03: 900 Hz",
+#      "05: 1100 Hz").
+#   6. The same range-in-an-option-list splice, spaced, is the chart's HOUSE
+#      STYLE on the cut-filter rows: "00: OFF 01: 100 Hz - 19: 1000 Hz
+#      (50 Hz steps)" at 0601, 0701, 0805, 1001, 1101 and "00: OFF 01:
+#      700 Hz - 67: 4000 Hz (50 Hz steps)" at 0603, 0703, 0807, 1003, 1103.
+#      Recorded for the same reason quirk 4 is: a consumer that parses an
+#      option list must not read these as three options.
+#   7. NO DUPLICATE INDEX NUMBERS -- recorded as an ABSENCE, because the
+#      FT-710's and the FTdx10's charts both number two SHIFT FREQUENCY
+#      options "1", and a reader who knows those will come looking. Checked
+#      mechanically across all 159 rows: no option list repeats an index.
+#      This chart's 1009 RTTY SHIFT FREQ numbers its four options 0..3.
+#
+# NO GROUP LABELS. The chart's columns are "P1 | Function | P2 | Digits" and
+#   nothing else. The FT-710's and the FTdx10's charts print a parenthesised
+#   group name in their P1 and P2 columns ("01 (MODE SSB)"); this one prints
+#   only the four-digit MENU Number. Both label columns are therefore blank
+#   on every row and the profile declares LabelsAbsent, under which ParseCSV
+#   REFUSES a non-blank label column: an invented group name would be words
+#   put in a manual's mouth. Nothing downstream may supply one either.
+#
+# NO TEXT ITEMS. No row's parameter column describes free text; there is no
+#   "(up to N characters) (ASCII)" anywhere in this chart. The nearest
+#   candidates are 0407-0411 CW MEMORY 1-5 (543-547), which print
+#   "0: TEXT 1: MESSAGE" with Digits 1 -- an enumerated two-option selector
+#   in which "TEXT" NAMES one of the two choices; it does not make the
+#   parameter textual. Every row's text column is therefore false, and the
+#   profile declares TextRowsAbsent so that a text row is refused by
+#   ParseCSV rather than transcribed. TextWidth is 0: a chart with no text
+#   row has no text width.
+#
+# HEADER-VS-CHART. Unlike the FTdx10's, this manual's grammar block and its
+#   chart AGREE. The EX block (layout 513-522) states
+#   "P1 : 0101 - 1803 (MENU Number)"; the chart's first row is 0101 and its
+#   last is 1803. The chart populates the eighteen two-digit prefixes 01..18
+#   with no gap, and within each prefix the second half runs from 01 upwards
+#   with no gap. Recorded because the absence of an anomaly is itself worth
+#   stating where two sibling transcriptions carry one.
+#
+# Counts: 159 items across 18 MENU-Number prefixes. There are no group
+#   names to give them, so the prefix is the manual's own number --
+#   01: 3   02: 7   03: 2   04: 11  05: 20  06: 7
+#   07: 13  08: 12  09: 6   10: 11  11: 9   12: 4
+#   13: 2   14: 7   15: 18  16: 23  17: 1   18: 3
+#   Digits are 1..4 on 157 rows and 5 on the two signed rows 0803 and 0804.
+#
+01,01,00,,,AGC FAST DELAY,"20 - 4000 (msec) (P2= 0020 - 4000, 20 msec/step)",4,false,525
+01,02,00,,,AGC MID DELAY,"20 - 4000 (msec) (P2= 0020 - 4000, 20 msec/step)",4,false,526
+01,03,00,,,AGC SLOW DELAY,"20 - 4000 (msec) (P2= 0020 - 4000, 20 msec/step)",4,false,527
+02,01,00,,,LCD CONTRAST,01 - 15,2,false,528
+02,02,00,,,DIMMER BACKLIT,01 - 15,2,false,529
+02,03,00,,,DIMMER LCD,01 - 15,2,false,530
+02,04,00,,,DIMMER TX/BUSY,01 - 15,2,false,531
+02,05,00,,,PEAK HOLD,0: OFF 1: 0.5 sec 2: 1.0 sec 3: 2.0 sec,1,false,532
+02,06,00,,,ZIN LED,0: DISABLE 1: ENABLE,1,false,533
+02,07,00,,,POP-UP MENU,0: UPPER 1: LOWER,1,false,534
+03,01,00,,,DVS RX OUT LVL,000 - 100 (P2= 000 - 100),3,false,535
+03,02,00,,,DVS TX OUT LVL,000 - 100 (P2= 000 - 100),3,false,536
+04,01,00,,,KEYER TYPE,0: OFF 1: BUG 2: ELEKEY-A 3: ELEKEY-B 4: ELEKEY-Y 5: ACS,1,false,537
+04,02,00,,,KEYER DOT/DASH,0: NOR 1: REV,1,false,538
+04,03,00,,,CW WEIGHT,2.5 - 4.5 (P2= 25 - 45),2,false,539
+04,04,00,,,BEACON INTERVAL,"OFF/1 - 690 sec (P2= 000 - 690, 000: OFF)",3,false,540
+04,05,00,,,NUMBER STYLE,0: 1290 1: AUNO 2: AUNT 3: A2NO 4: A2NT 5: 12NO 6: 12NT,1,false,541
+04,06,00,,,CONTEST NUMBER,0000 - 9999,4,false,542
+04,07,00,,,CW MEMORY 1,0: TEXT 1: MESSAGE,1,false,543
+04,08,00,,,CW MEMORY 2,0: TEXT 1: MESSAGE,1,false,544
+04,09,00,,,CW MEMORY 3,0: TEXT 1: MESSAGE,1,false,545
+04,10,00,,,CW MEMORY 4,0: TEXT 1: MESSAGE,1,false,546
+04,11,00,,,CW MEMORY 5,0: TEXT 1: MESSAGE,1,false,547
+05,01,00,,,NB WIDTH,0: 1 msec 1: 3 msec 2: 10 msec,1,false,548
+05,02,00,,,NB REJECTION,0: 10 dB 1: 30 dB 2: 50 dB,1,false,549
+05,03,00,,,NB LEVEL,0 - 10 (P2= 00 - 10),2,false,550
+05,04,00,,,BEEP LEVEL,0 - 100 (P2= 000 - 100),3,false,551
+05,05,00,,,RF/SQL VR,0: RF 1: SQL,1,false,552
+05,06,00,,,CAT RATE,0: 4800 bps 1: 9600 bps 2: 19200 bps 3: 38400 bps,1,false,553
+05,07,00,,,CAT TOT,0: 10 msec 1: 100 msec 2: 1000 msec 3: 3000 msec,1,false,554
+05,08,00,,,CAT RTS,0: DISABLE 1: ENABLE,1,false,555
+05,09,00,,,MEM GROUP,0: DISABLE 1: ENABLE,1,false,561
+05,10,00,,,FM SETTING,0: DISABLE 1: ENABLE,1,false,562
+05,11,00,,,REC SETTING,0: DISABLE 1: ENABLE,1,false,563
+05,12,00,,,ATAS SETTING,0: DISABLE 1: ENABLE,1,false,564
+05,13,00,,,QUICK SPL FREQ,-20 kHz - +00 (or -00) - +20 kHz (P2= -20 - +00 or -00 - +20),3,false,565
+05,14,00,,,TX TOT,"00 - 30 min (P2= 00 - 30, 00: OFF)",2,false,566
+05,15,00,,,MIC SCAN,0: DISABLE 1: ENABLE,1,false,567
+05,16,00,,,MIC SCAN RESUME,0: PAUSE 1: TIME,1,false,568
+05,17,00,,,REF FREQ ADJ,-25 - +00 (or -00) - +25 (P2= -25 - +00 or -00 - +25),3,false,569
+05,18,00,,,CLAR SELECT,0: RX 1: TX 2: TRX,1,false,570
+05,19,00,,,APO,0: OFF 1: 1 h 2: 2 h 3: 4 h 4: 6 h 5: 8 h 6: 10 h 7: 12 h,1,false,571
+05,20,00,,,FAN CONTROL,0: NORMAL 1: CONTEST,1,false,572
+06,01,00,,,AM LCUT FREQ,00: OFF 01: 100 Hz - 19: 1000 Hz (50 Hz steps),2,false,573
+06,02,00,,,AM LCUT SLOPE,0: 6 dB/oct 1: 18 dB/oct,1,false,574
+06,03,00,,,AM HCUT FREQ,00: OFF 01: 700 Hz - 67: 4000 Hz (50 Hz steps),2,false,575
+06,04,00,,,AM HCUT SLOPE,0: 6 dB/oct 1: 18 dB/oct,1,false,576
+06,05,00,,,AM MIC SELECT,0: MIC 1: REAR,1,false,577
+06,06,00,,,AM OUT LEVEL,0 - 100 (P2= 000 - 100),3,false,578
+06,07,00,,,AM PTT SELECT,0: DAKY 1: RTS 2: DTR,1,false,579
+07,01,00,,,CW LCUT FREQ,00: OFF 01: 100 Hz - 19: 1000 Hz (50 Hz steps),2,false,580
+07,02,00,,,CW LCUT SLOPE,0: 6 dB/oct 1: 18 dB/oct,1,false,581
+07,03,00,,,CW HCUT FREQ,00: OFF 01: 700 Hz - 67: 4000 Hz (50 Hz steps),2,false,582
+07,04,00,,,CW HCUT SLOPE,0: 6 dB/oct 1: 18 dB/oct,1,false,583
+07,05,00,,,CW OUT LEVEL,0 - 100 (P2= 000 - 100),3,false,584
+07,06,00,,,CW AUTO MODE,0: OFF 1: 50M 2: ON,1,false,585
+07,07,00,,,CW BFO,0: USB 1: LSB 2: AUTO,1,false,586
+07,08,00,,,CW BK-IN TYPE,0: SEMI 1: FULL,1,false,587
+07,09,00,,,CW BK-IN DELAY,30 - 3000 msec (P2= 0030 - 3000) (10 msec/step),4,false,588
+07,10,00,,,CW WAVE SHAPE,1: 2 msec 2: 4 msec,1,false,589
+07,11,00,,,CW FREQ DISPLAY,0: FREQ 1: PITCH,1,false,590
+07,12,00,,,PC KEYING,0: OFF 1: DAKY 2: RTS 3: DTR,1,false,591
+07,13,00,,,QSK DELAY TIME,0: 15 msec 1: 20 msec 2: 25 msec 3: 30 msec,1,false,592
+08,01,00,,,DATA MODE,0: PSK 1: OTHERS,1,false,593
+08,02,00,,,PSK TONE,0: 1000 Hz 1: 1500 Hz 2: 2000 Hz,1,false,594
+08,03,00,,,OTHER DISP,-3000 Hz - 0 - +3000 Hz (P2= -3000 - -0000 or +0000 - +3000) (10 Hz/steps),5,false,595
+08,04,00,,,OTHER SHIFT,-3000 Hz - 0 - +3000 Hz (P2= -3000 - -0000 or +0000 - +3000) (10 Hz/steps),5,false,596
+08,05,00,,,DATA LCUT FREQ,00: OFF 01: 100 Hz - 19: 1000 Hz (50 Hz steps),2,false,597
+08,06,00,,,DATA LCUT SLOPE,0: 6 dB/oct 1: 18 dB/oct,1,false,598
+08,07,00,,,DATA HCUT FREQ,00: OFF 01: 700 Hz - 67: 4000 Hz (50 Hz steps),2,false,599
+08,08,00,,,DATA HCUT SLOPE,0: 6 dB/oct 1: 18 dB/oct,1,false,600
+08,09,00,,,DATA IN SELECT,0: MIC 1: REAR,1,false,601
+08,10,00,,,DATA PTT SELECT,0: DAKY 1: RTS 2: DTR,1,false,602
+08,11,00,,,DATA OUT LEVEL,0 - 100 (P2= 000 - 100),3,false,603
+08,12,00,,,DATA BFO,0: USB 1: LSB,1,false,604
+09,01,00,,,FM MIC SELECT,0: MIC 1: REAR,1,false,605
+09,02,00,,,FM OUT LEVEL,0 - 100 (P2= 000 - 100),3,false,606
+09,03,00,,,PKT PTT SELECT,0: DAKY 1: RTS 2: DTR,1,false,607
+09,04,00,,,RPT SHIFT 28MHz,0 - 1000 kHz (P2= 0000 - 1000) (10 kHz/step),4,false,608
+09,05,00,,,RPT SHIFT 50MHz,0 - 4000 kHz (P2= 0000 - 4000) (10 kHz/step),1,false,609
+09,06,00,,,DCS POLARITY,0: Tn-Rn 1: Tn-Riv 2: Tiv-Rn 3: Tiv-Riv,1,false,610
+10,01,00,,,RTTY LCUT FREQ,00: OFF 01: 100 Hz - 19: 1000 Hz (50 Hz steps),2,false,611
+10,02,00,,,RTTY LCUT SLOPE,0: 6 dB/oct 1: 18 dB/oct,1,false,612
+10,03,00,,,RTTY HCUT FREQ,00: OFF 01: 700 Hz - 67: 4000 Hz (50 Hz steps),2,false,613
+10,04,00,,,RTTY HCUT SLOPE,0: 6 dB/oct 1: 18 dB/oct,1,false,614
+10,05,00,,,RTTY SHIFT PORT,0: SHIFT 1: DTR 2: RTS,1,false,615
+10,06,00,,,RTTY POLARITY-R,0: NOR 1: REV,1,false,616
+10,07,00,,,RTTY POLARITY-T,0: NOR 1: REV,1,false,617
+10,08,00,,,RTTY OUT LEVEL,0 - 100 (P2= 000 - 100),3,false,618
+10,09,00,,,RTTY SHIFT FREQ,0: 170 Hz 1: 200 Hz 2: 425 Hz 3: 850 Hz,1,false,619
+10,10,00,,,RTTY MARK FREQ,0: 1275 Hz 1: 2125 Hz,1,false,620
+10,11,00,,,RTTY BFO,0: USB 1: LSB,1,false,621
+11,01,00,,,SSB LCUT FREQ,00: OFF 01: 100 Hz - 19: 1000 Hz (50 Hz steps),2,false,622
+11,02,00,,,SSB LCUT SLOPE,0: 6 dB/oct 1: 18 dB/oct,1,false,623
+11,03,00,,,SSB HCUT FREQ,00: OFF 01: 700 Hz - 67: 4000 Hz (50 Hz steps),2,false,624
+11,04,00,,,SSB HCUT SLOPE,0: 6 dB/oct 1: 18 dB/oct,1,false,625
+11,05,00,,,SSB MIC SELECT,0: MIC 1: REAR,1,false,626
+11,06,00,,,SSB OUT LEVEL,0 - 100 (P2= 000 - 100),3,false,627
+11,07,00,,,SSB BFO,0: USB 1: LSB 2: AUTO,1,false,628
+11,08,00,,,SSB PTT SELECT,0: DAKY 1: RTS 2: DTR,1,false,629
+11,09,00,,,SSB TX BPF,0: 100-3000 1: 100-2900 2: 200-2800 3: 300-2700 4: 400-2600,1,false,630
+12,01,00,,,APF WIDTH,0: NARROW 1: MEDIUM 2: WIDE,1,false,631
+12,02,00,,,CONTOUR LEVEL,-40 - 0 - +20 (P2= -40 - -00 or +00 - +20),3,false,632
+12,03,00,,,CONTOUR WIDTH,01 - 11,2,false,633
+12,04,00,,,IF NOTCH WIDTH,0: NARROW 1: WIDE,1,false,634
+13,01,00,,,SCP START CYCLE,0: OFF 1: 3 sec 2: 5 sec 3: 10 sec,1,false,635
+13,02,00,,,SCP SPAN FREQ,0: 37.5 kHz 1: 75 kHz 2: 150 kHz 3: 375 kHz 4: 750 kHz,1,false,636
+14,01,00,,,QUICK DIAL,0: 50 kHz 1: 100 kHz 2: 500 kHz,1,false,637
+14,02,00,,,SSB DIAL STEP,0: 2 Hz 1: 5 Hz 2: 10 Hz,1,false,638
+14,03,00,,,AM DIAL STEP,0: 10 Hz 1: 100 Hz,1,false,639
+14,04,00,,,FM DIAL STEP,0: 10 Hz 1: 100 Hz,1,false,640
+14,05,00,,,DIAL STEP,0: 2 Hz 1: 5 Hz 2: 10 Hz,1,false,641
+14,06,00,,,AM CH STEP,0: 2.5 kHz 1: 5 kHz 2: 9 kHz 3: 10 kHz 4: 12.5 kHz 5: 25 kHz,1,false,642
+14,07,00,,,FM CH STEP,0: 5 kHz 1: 6.25 kHz 2: 10 kHz 3: 12.5 kHz 4: 15 kHz 5: 20 kHz 6: 25 kHz,1,false,648
+15,01,00,,,EQ1 FREQ,00: OFF 01: 100 Hz 02: 200 Hz 03: 300 Hz 04: 400 Hz 05: 500 Hz 06: 600 Hz 07: 700 Hz,2,false,649
+15,02,00,,,EQ1 LEVEL,-20 - 0 - +10 (P2= -20 - -00 or +00 - +10),3,false,650
+15,03,00,,,EQ1 BWTH,01 - 10,2,false,651
+15,04,00,,,EQ2 FREQ,00: OFF 01: 700 Hz 02: 800 Hz 03: 900 Hz 04: 1000Hz 05: 1100 Hz 06: 1200 Hz 07: 1300 Hz 08: 1400 Hz 09: 1500 Hz,2,false,653
+15,05,00,,,EQ2 LEVEL,-20 - 0 - +10 (P2= -20 - -00 or +00 - +10),3,false,655
+15,06,00,,,EQ2 BWTH,01 - 10,2,false,656
+15,07,00,,,EQ3 FREQ,00: OFF 01: 1500 Hz 02: 1600 Hz 03: 1700 Hz 04: 1800 Hz 05: 1900 Hz 06: 2000 Hz -18: 3200 Hz,2,false,657
+15,08,00,,,EQ3 LEVEL,-20 - 0 - +10 (P2= -20 - -00 or +00 - +10),3,false,658
+15,09,00,,,EQ3 BWTH,01 - 10,2,false,659
+15,10,00,,,P-EQ1 FREQ,00: OFF 01: 100 Hz 02: 200 Hz 03: 300 Hz 04: 400 Hz 05: 500 Hz 06: 600 Hz 07: 700 Hz,2,false,660
+15,11,00,,,P-EQ1 LEVEL,-20 - 0 - +10 (P2= -20 - -00 or +00 - +10),3,false,661
+15,12,00,,,P-EQ1 BWTH,01 - 10,2,false,662
+15,13,00,,,P-EQ2 FREQ,00: OFF 01: 700 Hz 02: 800 Hz 03: 900 Hz 04: 1000Hz 05: 1100 Hz 06: 1200 Hz 07: 1300 Hz 08: 1400 Hz 09: 1500 Hz,2,false,664
+15,14,00,,,P-EQ2 LEVEL,-20 - 0 - +10 (P2= -20 - -00 or +00 - +10),3,false,666
+15,15,00,,,P-EQ2 BWTH,01 - 10,2,false,667
+15,16,00,,,P-EQ3 FREQ,00: OFF 01: 1500 Hz 02: 1600 Hz 03: 1700 Hz 04: 1800 Hz 05: 1900 Hz 06: 2000 Hz -18: 3200 Hz,2,false,668
+15,17,00,,,P-EQ3 LEVEL,-20 - 0 - +10 (P2= -20 - -00 or +00 - +10),3,false,669
+15,18,00,,,P-EQ3 BWTH,01 - 10,2,false,670
+16,01,00,,,HF SSB PWR,5 - 100 (P2= 005 - 100),3,false,671
+16,02,00,,,HF AM PWR,5 - 40 (P2= 005 - 040),3,false,672
+16,03,00,,,HF PWR,5 - 100 (P2= 005 - 100),3,false,673
+16,04,00,,,50M SSB PWR,5 - 100 (P2= 005 - 100),3,false,674
+16,05,00,,,50M AM PWR,5 - 40 (P2= 005 - 040),3,false,675
+16,06,00,,,50M PWR,5 - 100 (P2= 005 - 100),3,false,676
+16,07,00,,,SSB MIC GAIN,0 - 100 (P2= 000 - 100),3,false,677
+16,08,00,,,AM MIC GAIN,0 - 100 (P2= 000 - 100),3,false,678
+16,09,00,,,FM MIC GAIN,0 - 100 (P2= 000 - 100),3,false,679
+16,10,00,,,DATA MIC GAIN,0 - 100 (P2= 000 - 100),3,false,680
+16,11,00,,,SSB DATA GAIN,0 - 100 (P2= 000 - 100),3,false,681
+16,12,00,,,AM DATA GAIN,0 - 100 (P2= 000 - 100),3,false,682
+16,13,00,,,FM DATA GAIN,0 - 100 (P2= 000 - 100),3,false,683
+16,14,00,,,DATA DATA GAIN,0 - 100 (P2= 000 - 100),3,false,684
+16,15,00,,,TUNER SELECT,0: OFF 1: EXTERNAL 2: ATAS 3: LAMP,1,false,685
+16,16,00,,,VOX SELECT,0: MIC 1: DATA,1,false,686
+16,17,00,,,VOX GAIN,0 - 100 (P2= 000 - 100),3,false,687
+16,18,00,,,VOX DELAY,30 - 3000 msec (P2= 0030 - 3000) (10 msec/step),4,false,688
+16,19,00,,,ANTI VOX GAIN,0 - 100 (P2= 000 - 100),3,false,689
+16,20,00,,,DATA VOX GAIN,0 - 100 (P2= 000 - 100),3,false,690
+16,21,00,,,DATA VOX DELAY,30 - 3000 msec (P2= 0030 - 3000),4,false,691
+16,22,00,,,ANTI DVOX GAIN,0 - 100 (P2= 000 - 100),3,false,692
+16,23,00,,,EMERGENCY FREQ,0: DISABLE 1: ENABLE,1,false,693
+17,01,00,,,RESET,0: ALL 1: DATA 2: FUNC,1,false,694
+18,01,00,,,MAIN VERSION,0000 - 9999 (V01-23 = 0123),4,false,695
+18,02,00,,,DSP VERSION,0000 - 9999 (V01-23 = 0123),4,false,696
+18,03,00,,,LCD VERSION,0000 - 9999 (V01-23 = 0123),4,false,697
