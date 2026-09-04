@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
@@ -215,6 +216,10 @@ func TestOpen_WrongRecordLengthIsRefusedWithANamedReason(t *testing.T) {
 		}
 		if mismatch.Got != n || mismatch.Want != 25 {
 			t.Errorf("%d-byte record: Got/Want = %d/%d, want %d/25", n, mismatch.Got, mismatch.Want, n)
+		}
+		if n == 24 {
+			drivertest.AssertRecordLengthMismatch(t, mismatch, mismatch.Got, mismatch.Want,
+				"ic7760: g0/ch1 answered a 24-byte memory record, want 25 — the expected length is itself an ASSUMED derivation from one document (D5 entry 6, register entry ic7760-record-length), and this refusal names no other model because cross-model record-length distinctness is a Wave-4 tier check")
 		}
 		if !errors.Is(err, driver.ErrWrongRadio) {
 			t.Errorf("%d-byte record: err does not satisfy errors.Is(err, driver.ErrWrongRadio)", n)
