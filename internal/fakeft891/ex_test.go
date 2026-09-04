@@ -22,15 +22,21 @@ import (
 
 // --- EX read: the answer, and its width ---
 
-// TestEXRead_KnownAddressDefault drives four addresses chosen to cover the
-// width alphabet's extremes and the chart's own bounds, each with its answer
-// spelt out in full.
+// TestEXRead_KnownAddressDefault drives five addresses chosen to cover the
+// width alphabet's extremes, the chart's own bounds, and its one printed
+// defect, each with its answer spelt out in full.
 //
 // The chart's EX block prints "P1 : 0101 - 1803 (MENU Number)", which bounds it
 // at exactly the first and last rows transcribed, so 0101 and 1803 are the
 // endpoints. 0205 is the narrowest field this chart has (PEAK HOLD, one digit)
 // and 0803 the widest (OTHER DISP, five) — the token this radio's alphabet
-// extends to and no sibling's has.
+// extends to and no sibling's has. 0905 RPT SHIFT 50MHz is the printed
+// defect: the chart's own Digits column reads 1 against a legend that needs
+// four (PROVENANCE.md § "What no comparison can catch";
+// core/cat/ft891/crosscheck_test.go's quirkRowDigits pins the same row from
+// transcription A), and this fake answers it exactly as transcribed — one
+// byte — because that is what the chart says, not because it is claimed to
+// be what the radio answers.
 //
 // The values are INVENTED — n x '0' — doc.go's register entry THE EX MENU
 // VALUES ARE INVENTED.
@@ -46,6 +52,7 @@ func TestEXRead_KnownAddressDefault(t *testing.T) {
 		{"0205 PEAK HOLD, one digit — the narrowest field", "EX0205;", "EX02050;"},
 		{"0803 OTHER DISP, five digits — the widest, and no sibling has it", "EX0803;", "EX080300000;"},
 		{"1803 LCD VERSION, four digits — the chart's last row", "EX1803;", "EX18030000;"},
+		{"0905 RPT SHIFT 50MHz — the printed defect, answered as transcribed (one byte)", "EX0905;", "EX09050;"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -384,7 +391,12 @@ func TestWithFactoryImage_LeavesTheMenuAlone(t *testing.T) {
 // equivalent of exercising SlotState concurrently with command processing (see
 // the Radio doc comment: safe for concurrent use, run tests with -race). No
 // *testing.T call is made from the background goroutine; its only job is to
-// give -race something to catch if exSettings access were ever unguarded.
+// pin that EXState may be legitimately polled while the serve goroutine is
+// answering EX reads. exSettings has no post-construction writer today —
+// EXState (state.go) and handleEX (ex.go) are both readers — so -race has
+// nothing to catch here yet; the locks are the regression guard for the day
+// an EX Set arrives (doc.go's "What this fake deliberately does NOT model" §
+// EX SET), not a proof that either lock is load-bearing now.
 func TestEXState_ConcurrentWithReads(t *testing.T) {
 	r, conn := newTestRadio(t)
 

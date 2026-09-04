@@ -126,7 +126,13 @@ const exMaxWidth = 5
 func buildEXDefaults() map[string]string {
 	out := make(map[string]string)
 	for _, g := range exGroups {
-		for i, w := range g.widths {
+		// Indexed by BYTE, not by rune: g.widths is one ASCII digit per item
+		// (gen/main.go's widthToken, the '1'..'5' alphabet), so a byte index is
+		// the intended item position and `range` over the string would give a
+		// rune index instead — the same value here because the alphabet is
+		// ASCII, but not what the loop means to compute.
+		for i := 0; i < len(g.widths); i++ {
+			w := g.widths[i]
 			p2 := fmt.Sprintf("%02d", i+1)
 			addr := exAddr(g.p1, p2)
 			if w < '1' || w > '0'+exMaxWidth {
