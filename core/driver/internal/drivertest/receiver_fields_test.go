@@ -14,7 +14,15 @@ import (
 // errorRecorder captures what a helper reports instead of failing the
 // test that is checking the helper. Everything else — Helper, TempDir,
 // Fatalf — forwards to the embedded real testing.TB, so the helper runs
-// exactly as it does at its fifteen driver call sites.
+// exactly as it does at its driver call sites.
+//
+// TWELVE of those, counted rather than guessed — one per driver package
+// but the IC-R8600's, which reports the seven D8 fields Known and so
+// calls AssertFreshReadSaveLoadNormalised instead. They cover fourteen of
+// the fifteen registered models: the ftdx101 and ic7851 packages each run
+// their one call over a pair of constructors, so two models come out of
+// each. This comment said "fifteen" until the count was checked, and at
+// that point the IC-7850 was in fact covered by nothing.
 type errorRecorder struct {
 	testing.TB
 	errs []string
