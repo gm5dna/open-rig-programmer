@@ -12,6 +12,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -95,6 +96,9 @@ func TestRead_EveryModeLayoutAndFreshD8Fields(t *testing.T) {
 		}
 		if d.TuningStepEnabled.State != codeplug.Known || d.TuningStep.State != codeplug.Known || d.ProgramTuningStepHz.State != codeplug.Known || d.AttenuatorDB.State != codeplug.Known || d.Preamp.State != codeplug.Known || d.Antenna.State != codeplug.Known || d.IPPlus.State != codeplug.Known {
 			t.Errorf("%s did not initialise all seven D8 fields Known: %+v", mode, *d)
+		}
+		if i == 0 {
+			drivertest.AssertFreshReadSaveLoadNormalised(t, ch, s.Capabilities(), codeplug.Load)
 		}
 		if mode == "FM" {
 			if d.ToneMode.State != codeplug.Known || d.ToneMode.Value != "TSQL" || d.ToneRx.Value != 885 || d.DTCSCode.Value != 23 || d.DTCSPolarity.Value != "Reverse" {

@@ -313,7 +313,7 @@ func TestReadChannelMapsEveryFieldTheRecordCarries(t *testing.T) {
 	if err := d.Duplex.Valid(duplexValues()); err != nil {
 		t.Errorf("Duplex.Valid: %v", err)
 	}
-	drivertest.AssertFreshReadSaveLoad(t, ch, codeplug.Load)
+	drivertest.AssertFreshReadSaveLoad(t, ch, ic9700.CapabilitiesUnverified(), codeplug.Load)
 }
 
 // duplexValues is caps.DuplexOptions as the plain vocabulary

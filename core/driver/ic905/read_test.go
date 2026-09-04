@@ -402,7 +402,7 @@ func TestReadChannel_TenGigahertzSurvivesTheCodeplugRoundTrip(t *testing.T) {
 	if got := ch.Data.FreqHz; got != 10_250_000_000 {
 		t.Fatalf("FreqHz = %d, want 10250000000 — about 2.4 times uint32's ceiling, which is what forced D4's widening", got)
 	}
-	drivertest.AssertFreshReadSaveLoad(t, ch, codeplug.Load)
+	drivertest.AssertFreshReadSaveLoad(t, ch, s.Capabilities(), codeplug.Load)
 
 	cp := &codeplug.Codeplug{
 		Generator: "ic905 test",

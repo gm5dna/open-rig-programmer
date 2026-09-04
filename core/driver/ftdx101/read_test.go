@@ -154,7 +154,7 @@ func TestReadChannel_MappingsFromThePositionChart(t *testing.T) {
 				if !reflect.DeepEqual(*ch.Data, want) {
 					t.Errorf("ChannelData =\n %+v\nwant\n %+v", *ch.Data, want)
 				}
-				drivertest.AssertFreshReadSaveLoad(t, ch, codeplug.Load)
+				drivertest.AssertFreshReadSaveLoad(t, ch, sess.Capabilities(), codeplug.Load)
 			})
 		}
 	}
