@@ -293,7 +293,10 @@
 // driver-level PRE-BUILD TYPED REFUSALS for a Known frequency above
 // MaxEncodableFreqHz and a Known tone above MaxToneDeciHz
 // (*OutOfDomainError). THESE ARE DEFENCE IN DEPTH AND THEY ARE NOT THE
-// GATE.
+// GATE. ReadChannel raises the same *OutOfDomainError, POST-DECODE rather
+// than pre-build, for a decoded frequency above MaxEncodableFreqHz — see
+// TestReadChannel_RefusesFrequencyAboveCeiling — so no read hands
+// codeplug.Validate a Known frequency it would then refuse.
 //
 // THE ORCHESTRATOR DEFERRED gate-level enforcement on 24/08/2026 to a
 // post-Wave-3 enabler follow-up, on three grounds:
