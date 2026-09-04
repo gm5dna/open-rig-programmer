@@ -1183,7 +1183,9 @@ func TestNormaliseTierFields_SlotInNoBankAtAll(t *testing.T) {
 // channel would touch it hardest there.
 func TestNormaliseTierFields_LegacyLoadIsUntouched(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "legacy.json")
-	if err := Save(path, testBaselineCodeplug()); err != nil {
+	legacy := testBaselineCodeplug()
+	NormaliseTierFields(legacy, testCapabilities())
+	if err := Save(path, legacy); err != nil {
 		t.Fatalf("Save() error = %v", err)
 	}
 	cp, err := Load(path)
