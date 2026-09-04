@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
+	civic7760 "github.com/gm5dna/open-rig-programmer/core/civ/ic7760"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
@@ -30,6 +31,63 @@ func readOne(t *testing.T, ch int, slot string, rec []byte) (codeplug.Channel, e
 	p := newScriptedPort(t, img)
 	s := openWith(t, p)
 	return s.ReadChannel(t.Context(), slot)
+}
+
+// recordAtFrequency uses the CI-V builder so the test record exercises the
+// same frequency encoding the driver parses, then removes the set envelope.
+func recordAtFrequency(t *testing.T, hz uint64) []byte {
+	t.Helper()
+	cmd, err := civic7760.Profile().BuildMemorySet(civ.MemoryRecord{
+		Address:      civ.ChannelAddress{Channel: 42},
+		RXFreqHz:     civ.Available(hz),
+		Mode:         civ.Available("USB"),
+		Filter:       civ.Available("FIL1"),
+		ToneMode:     civ.Available("TONE"),
+		ToneTXDeciHz: civ.Available[uint64](885),
+		ToneRXDeciHz: civ.Available[uint64](1000),
+		Name:         civ.Available("FREQ LIMIT"),
+	})
+	if err != nil {
+		t.Fatalf("BuildMemorySet(%d Hz): %v", hz, err)
+	}
+	frame := cmd.Bytes()
+	return frame[8 : len(frame)-1]
+}
+
+// TestReadChannel_RefusesFrequencyAboveCeiling pins the read-side half of
+// the rule that a driver must not construct a channel codeplug.Validate
+// will immediately refuse.
+func TestReadChannel_RefusesFrequencyAboveCeiling(t *testing.T) {
+	hz := uint64(MaxEncodableFreqHz + 1)
+	ch, err := readOne(t, 42, "042", recordAtFrequency(t, hz))
+	var domain *OutOfDomainError
+	if !errors.As(err, &domain) {
+		t.Fatalf("ReadChannel = (%+v, %v), want *OutOfDomainError", ch, err)
+	}
+	if domain.Field != spec.FieldFrequency || domain.Value != hz || domain.Max != MaxEncodableFreqHz {
+		t.Errorf("OutOfDomainError = %+v, want {frequency, %d, %d}", domain, hz, uint64(MaxEncodableFreqHz))
+	}
+	if !errors.Is(err, ErrOutOfDomain) {
+		t.Errorf("errors.Is(%v, ErrOutOfDomain) = false", err)
+	}
+	if msg := err.Error(); !strings.Contains(msg, fmt.Sprint(hz)) || !strings.Contains(msg, fmt.Sprint(MaxEncodableFreqHz)) {
+		t.Errorf("error %q does not render measured frequency %d and ceiling %d", msg, hz, uint64(MaxEncodableFreqHz))
+	}
+	if !ch.Empty() {
+		t.Errorf("refused read returned a populated channel: %+v", ch)
+	}
+}
+
+// TestReadChannel_AcceptsFrequencyAtCeiling pins the strict > comparison:
+// MaxEncodableFreqHz is the largest valid value, not the first invalid one.
+func TestReadChannel_AcceptsFrequencyAtCeiling(t *testing.T) {
+	ch, err := readOne(t, 42, "042", recordAtFrequency(t, MaxEncodableFreqHz))
+	if err != nil {
+		t.Fatalf("ReadChannel at %d Hz: %v", uint64(MaxEncodableFreqHz), err)
+	}
+	if ch.Empty() || ch.Data.FreqHz != MaxEncodableFreqHz {
+		t.Errorf("ReadChannel at ceiling = %+v, want Known frequency %d", ch, uint64(MaxEncodableFreqHz))
+	}
 }
 
 // TestSlotAddressRoundTrip pins the slot map in both directions over all
