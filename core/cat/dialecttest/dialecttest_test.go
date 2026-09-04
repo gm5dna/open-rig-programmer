@@ -311,6 +311,15 @@ func TestRun_ExternallyBuiltP5FixedDialect(t *testing.T) {
 // fixture's is refused here too. Its EX address form is the narrow one as
 // well (see the test below): this is the one fixture that carries every
 // Stage 0 axis at its FT-891 reading.
+//
+// It also carries a 5xx bank (SixtyLo/SixtyHi) and an EMG channel
+// (EmergencyWire), where earlier revisions declared neither. Without them
+// this fixture's MCSelectsMemoryPMS and MTReadsMemoryPMS have no 60m/EMG
+// slot to refuse, so dialecttest's checkMCSendDomain/checkMTReadDomain
+// non-vacuity counters — the arms that require the WRONG slot to be seen
+// refused, not merely absent from the walk — would be vacuous over the only
+// external fixture that declares either narrow reading. This is the Stage 0
+// closing review's MEDIUM-1 finding.
 func tagDisplayRadioConfig() cat.DialectConfig {
 	return cat.DialectConfig{
 		CATID: "0765",
@@ -322,9 +331,9 @@ func tagDisplayRadioConfig() cat.DialectConfig {
 		},
 		Slots: cat.SlotSpace{
 			MemoryLo: 1, MemoryHi: 40,
-			SixtyLo: 0, SixtyHi: 0,
+			SixtyLo: 501, SixtyHi: 510,
 			PMSPairs:      5,
-			EmergencyWire: "",
+			EmergencyWire: "EMG",
 			NoneWire:      "000",
 			MCSelects:     cat.MCSelectsMemoryPMS,
 		},

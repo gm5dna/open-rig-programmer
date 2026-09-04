@@ -376,7 +376,19 @@ func RenderGo(p Profile, rows []Row, observed map[string]Observed) ([]byte, erro
 		}
 	}
 	for _, r := range sorted {
-		addr := fmt.Sprintf("%02d%02d%02d", r.P1, r.P2, r.P3)
+		// The observation lookup key follows THIS PROFILE'S OWN address
+		// form (S0-close review, LOW-3) rather than always being rendered
+		// six digits wide: under AddressPair the wire field carries P1 and
+		// P2 only (parseRecord above refuses a non-zero P3), so a Pair
+		// radio's own observation CSV can never carry a six-digit address —
+		// keying the lookup that way would refuse every row's observation,
+		// however complete the CSV was. It is a CSV join token, not a wire
+		// render — core/cat's wireEXAddress is the wire-side counterpart —
+		// so it is derived here rather than through that renderer.
+		addr := fmt.Sprintf("%02d%02d", r.P1, r.P2)
+		if p.Addresses == AddressTriple {
+			addr = fmt.Sprintf("%02d%02d%02d", r.P1, r.P2, r.P3)
+		}
 		var obs Observed
 		if p.Observations == ObservationsRequired {
 			var ok bool
