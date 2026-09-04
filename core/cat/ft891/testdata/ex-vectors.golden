@@ -1,0 +1,113 @@
+# ex-vectors.golden --- EX (MENU), Read-request frames
+#
+# SOURCE MANUAL
+#   Title (cover, PDF page 1):  FT-891  CAT Operation Reference Book
+#   Publisher:                  YAESU MUSEN CO., LTD.  (Copyright 2019)
+#   Printed revision:           1909-C   (printed bottom-right of the back cover,
+#                               PDF page 20; the cover carries no revision)
+#   Chart used:                 EX command block, printed folio 7, PDF page 8
+#   Menu chart used:            the P1/Function/P2/Digits table that follows the EX
+#                               block --- printed folios 7, 8 and 9
+#                               (PDF pages 8, 9 and 10). It begins at row "0101
+#                               AGC FAST DELAY" on printed folio 7 and ends at row
+#                               "1803 LCD VERSION" on printed folio 9.
+#   Command-list entry:         printed folio 3, PDF page 4
+#   Derivation date:            04/09/2026
+#
+# METHOD
+#   Located at 300 dpi; the EX block re-rendered at 600 dpi (pdftoppm -r 600) and
+#   cropped in a left and a right strip with magick, because the block's rows run
+#   past the ten-column grid into "~ / n-1 / n" cells that are not legible at
+#   300 dpi. Two independent counts of the Read chart (left-to-right, then by
+#   per-parameter cell totals) both gave 7. The Digits column was then counted a
+#   second, independent way: the column was cropped out of each of the three menu
+#   chart pages and rotated 90 degrees so the whole column could be read in one
+#   pass; that pass agreed with the row-by-row reading -- maximum 4 on printed
+#   folio 7, maximum 5 on printed folio 8, maximum 4 on printed folio 9.
+#
+#   NO code, no generator, no other file and no other document was consulted.
+#
+# WHICH CHART THE LAYOUT WAS COUNTED FROM, AND WHY
+#   Counted from the EX *Read* chart, because every vector below is a
+#   Read-direction request. The EX Set and Answer charts print a different,
+#   variable-length layout (they carry P2 as well) and are recorded below as
+#   comments only.
+#
+# COUNTED FRAME LENGTH: 7 bytes (terminator included) --- fixed, for every menu
+# item, because a Read request carries no P2.
+#
+# POSITION-BY-POSITION FIELD MAP (EX Read chart, counted)
+#   pos 1      "E"    command character (printed literal)
+#   pos 2      "X"    command character (printed literal)
+#   pos 3      P1     legend verbatim: "P1  : 0101 - 1803 (MENU Number)"
+#   pos 4      P1     "
+#   pos 5      P1     "
+#   pos 6      P1     "
+#   pos 7      ";"    terminator (printed literal)
+#   pos 8-10   ---    printed as empty cells
+#   (P1 is thus 4 positions, counted, not inferred; the legend's "0101 - 1803"
+#   range happens to agree, but the width used here is the counted cell count.)
+#
+#   The second legend entry, verbatim: "P2  : Parameter (See Table below)"
+#
+# THE SET AND ANSWER CHARTS, AS PRINTED (comment only --- no vector below uses them)
+#   Set:     pos 1 "E"  pos 2 "X"  pos 3-6 "P1"  pos 7 "P2"  ... "~" ... "n-1" "P2"  "n" ";"
+#   Answer:  pos 1 "E"  pos 2 "X"  pos 3-6 "P1"  pos 7 "P2"  ... "~" ... "n-1" "P2"  "n" ";"
+#   Both are printed with the literal cells "~", "n-1" and "n" in the position
+#   header, i.e. the manual leaves the total length n open and defers it to the
+#   menu chart's "Digits" column: n = 6 + Digits + 1.
+#
+# ANSWER FRAME SHAPE FOR ONE ITEM, PARAMETER POSITIONS MARKED, NO VALUE INVENTED
+#   Item 0803 "OTHER DISP", whose Digits column prints 5:
+#     pos  1     "E"
+#     pos  2     "X"
+#     pos  3     "0"   \
+#     pos  4     "8"    |  P1 = the menu number, 4 counted positions
+#     pos  5     "0"    |
+#     pos  6     "3"   /
+#     pos  7     P2[1]  \
+#     pos  8     P2[2]   |
+#     pos  9     P2[3]   |  P2 = 5 positions, from the Digits column value 5
+#     pos 10     P2[4]   |  (legend for the value: "-3000 Hz - 0 - +3000 Hz
+#     pos 11     P2[5]  /    (P2= -3000 - -0000 or +0000 - +3000) (10 Hz/steps)")
+#     pos 12     ";"
+#   Total 12 bytes = 6 + 5 + 1. No P2 value is written here.
+#
+# MENU ITEMS CHOSEN, AND WHY
+#   0101  AGC FAST DELAY   --- the FIRST row of the FIRST group (01xx) on the chart,
+#                              printed folio 7. P2 "20 - 4000 (msec) (P2= 0020 -
+#                              4000, 20 msec/step)", Digits 4.
+#   0803  OTHER DISP       --- the item whose Digits column prints the LARGEST value
+#                              found anywhere in the chart: Digits = 5, on printed
+#                              folio 8. Only one other row shares it, 0804 OTHER
+#                              SHIFT, also Digits 5; every other row in the whole
+#                              chart prints 1, 2, 3 or 4.
+#   0506  CAT RATE         --- free choice. P2 "0: 4800 bps  1: 9600 bps
+#                              2: 19200 bps  3: 38400 bps", Digits 1, printed folio 7.
+#   1803  LCD VERSION      --- the LAST row of the LAST group (18xx) on the chart,
+#                              printed folio 9. P2 "0000 - 9999 (V01-23 = 0123)",
+#                              Digits 4.
+#
+# BYTES THE MANUAL DETERMINES
+#   All seven. pos 1-2 are the printed command characters, pos 3-6 are the menu
+#   numbers printed in the chart's P1 column, pos 7 is the printed terminator.
+#
+# INHERITED-ASSUMED BYTES
+#   NONE in the four vectors below --- a Read request contains no value the manual
+#   leaves open.
+#   (For the record, the Answer *shape* above does rest on one thing the manual
+#   does not itself state: that the "n" of the Set/Answer charts equals
+#   6 + Digits + 1, i.e. that the Digits column gives the P2 width in the frame.
+#   That reading is INHERITED-ASSUMED. The chart itself contradicts it in at
+#   least one row -- see provenance.md, item 0905.)
+#
+# DIRECTION SUPPORT: the command list (printed folio 3, PDF page 4) prints
+#   Command "EX" | Function "MENU" | Set "O" | Read "O" | Ans. "O" | AI "O",
+#   and the EX detail block agrees: all three charts are printed and filled.
+#
+# HARDWARE STATUS: UNVERIFIED for every vector below.
+
+ex_read_0101_agc_fast_delay_first_group	EX0101;
+ex_read_0506_cat_rate	EX0506;
+ex_read_0803_other_disp_largest_digits_5	EX0803;
+ex_read_1803_lcd_version_last_group	EX1803;
