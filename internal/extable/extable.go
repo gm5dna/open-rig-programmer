@@ -210,16 +210,27 @@ type Observed struct {
 
 // ParseObservedCSV decodes a model's hardware observation CSV — for the
 // FT-710, core/cat/table2-observed.csv, but the path is the profile's
-// ObservedCSV, not this one — into observations keyed by six-digit wire
-// address, e.g. "010321". Lines beginning with '#' are provenance comments
-// and are skipped, as in ParseCSV.
+// ObservedCSV, not this one — into observations keyed by THIS PROFILE'S
+// OWN address form (S0-close review's MEDIUM-2 finding): six digits under
+// AddressTriple, e.g. "010321", or four under AddressPair, e.g. "0801". The
+// key follows p.Addresses for the same reason RenderGo's lookup does (see
+// that function's matching comment) — it is a CSV join token, not a wire
+// render, but the two sides of the join must agree on its shape or a
+// complete Pair-form observation CSV can never be found by RenderGo's own
+// lookup, however exhaustively it was captured. Lines beginning with '#'
+// are provenance comments and are skipped, as in ParseCSV.
 //
 // Parsing is strict for privacy as much as correctness: each address
 // component must be exactly two digits, each width an integer in 1..the
 // profile's MaxObservedWidth, and each shape one of the three known
-// classes, so a row cannot carry free text. Duplicates are rejected. Error
-// text names the row and address only — never another field — so a
-// malformed artefact cannot leak captured content through a build log.
+// classes, so a row cannot carry free text. Under AddressPair the p3
+// column must additionally be "0" — mirroring parseRecord's own P3 rule
+// for the inventory CSV — and is not part of the key: a Pair-form radio's
+// wire field carries P1 and P2 only, so a component the wire can never
+// express must be refused, not silently folded into a six-digit key
+// nothing else can produce. Duplicates are rejected. Error text names the
+// row and address only — never another field — so a malformed artefact
+// cannot leak captured content through a build log.
 //
 // That bound is hardware-evidence policy and is deliberately independent of
 // the manual-schema widths in MinDigits/MaxDigits/TextWidth — the two
@@ -246,7 +257,29 @@ func ParseObservedCSV(p Profile, data []byte) (map[string]Observed, error) {
 				return nil, fmt.Errorf("extable: observation row %d: address component %d must be exactly two digits", i+1, c)
 			}
 		}
-		addr := rec[0] + rec[1] + rec[2]
+		// The key follows p.Addresses — RenderGo's lookup key's own form,
+		// not always six digits (S0-close review, MEDIUM-2). A switch, not
+		// an AddressTriple-shaped default: p.Validate above has already
+		// required p.Addresses to be one of the two known forms, but this
+		// switch is the site that actually reads it, and an omitted config
+		// semantic is refused here too, not defaulted to the wider key.
+		var addr string
+		switch p.Addresses {
+		case AddressTriple:
+			addr = rec[0] + rec[1] + rec[2]
+		case AddressPair:
+			// p3 is not on the wire under this form (parseRecord enforces
+			// the same rule for the inventory CSV's own P3), so it is
+			// checked here and dropped from the key rather than folded
+			// into a six-digit form RenderGo's Pair-form lookup can never
+			// produce.
+			if p3, err := strconv.Atoi(rec[2]); err != nil || p3 != 0 {
+				return nil, fmt.Errorf("extable: observation row %d: p3 must be 0 under %v, got %q", i+1, p.Addresses, rec[2])
+			}
+			addr = rec[0] + rec[1]
+		default:
+			return nil, fmt.Errorf("extable: profile %s: AddressForm %v must be set explicitly", p.Model, p.Addresses)
+		}
 		width, err := strconv.Atoi(rec[3])
 		if err != nil || width < 1 || width > p.MaxObservedWidth {
 			return nil, fmt.Errorf("extable: observation row %d (%s): observed_read_width must be an integer in 1..%d", i+1, addr, p.MaxObservedWidth)

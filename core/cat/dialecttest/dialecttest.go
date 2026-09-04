@@ -1125,6 +1125,16 @@ func (r *conformanceRun) keepOwnFormFrames(frame []byte, cleared bool) {
 // "within the window" with only the tag charset between a forged frame and
 // the radio. A dialect that let this frame through would have exactly that
 // defect back.
+//
+// UNDER MTFormCombined THE PARSER CALLED MUST FOLLOW d.MTP11(), not always
+// the display-less ParseMTAnswerCombined (S0-close review's MEDIUM-3
+// finding): that parser refuses a P11TagDisplay dialect UNCONDITIONALLY,
+// before it ever looks at length — "use the display-bearing
+// builder/parser" — so on the FT-891-shaped fixture this check exercised no
+// length rule at all, and its refusal counter passed on the wrong-API
+// refusal instead. Each combined-form policy gets its OWN non-vacuity
+// counter below, so a dispatch bug that silently reverted to one parser for
+// both policies leaves the other's counter at zero.
 func (r *conformanceRun) checkOverlongMTFrameIsRefused() {
 	r.t.Helper()
 
@@ -1137,16 +1147,31 @@ func (r *conformanceRun) checkOverlongMTFrameIsRefused() {
 	over = append(over, 'X', ';')
 
 	var err error
+	refusalKey := "over-long MT answer"
 	switch r.d.MTForm() {
 	case cat.MTFormShort:
 		_, _, _, err = r.d.ParseMTAnswer(over)
 	case cat.MTFormCombined:
-		_, _, err = r.d.ParseMTAnswerCombined(over)
+		switch r.d.MTP11() {
+		case cat.P11TagDisplay:
+			_, _, _, err = r.d.ParseMTAnswerCombinedDisplay(over)
+			refusalKey = "over-long MT answer (display-bearing)"
+		default:
+			_, _, err = r.d.ParseMTAnswerCombined(over)
+			refusalKey = "over-long MT answer (display-less)"
+		}
 	}
 	if err == nil {
 		r.t.Errorf("%s: its own answer parser ACCEPTED %q, one byte past the %d-byte top of the window it reports — the answer window is not deriving from this dialect", r.name(), over, r.mtMax)
+	} else if strings.Contains(err.Error(), "use the display") {
+		// THE REFUSAL MUST BE FOR LENGTH, NOT THE WRONG API: this is
+		// exactly the vacuous shape MEDIUM-3 found — a dispatch bug (or the
+		// pre-fix code, which always called the display-less parser) gets a
+		// non-nil error here too, but it says nothing about the frame being
+		// one byte too long.
+		r.t.Errorf("%s: the over-long-frame refusal %q is the WRONG-API refusal, not a length refusal — this check called the parser for the WRONG P11 policy (this dialect declares %v)", r.name(), err, r.d.MTP11())
 	} else {
-		r.refusals["over-long MT answer"]++
+		r.refusals[refusalKey]++
 	}
 	if r.d.AllowedCommand(over) {
 		r.t.Errorf("%s: its own gate ADMITTED %q, one byte past the %d-byte top of the window it reports — the outbound gate is judging MT frames by some other dialect's tag width", r.name(), over, r.mtMax)
@@ -1437,10 +1462,28 @@ func (r *conformanceRun) checkNonVacuity() {
 	requiredRefusals := []string{
 		"wrong-form MT Set build",
 		"wrong-form MT answer parse",
-		"over-long MT answer",
 		"over-long MT frame at the gate",
 		"clarifier past MaxAbsHz",
 		"malformed frame at the gate",
+	}
+	// The over-long-answer counter, split by which parser
+	// checkOverlongMTFrameIsRefused actually had to call (S0-close review's
+	// MEDIUM-3 fix): short form has one API, but combined form has two, and
+	// a dialect whose own policy is P11TagDisplay must be seen to refuse
+	// through ITS OWN display-bearing parser, not the display-less one —
+	// requiring only the unconditional pre-fix name would have let a
+	// dispatch bug that silently reverted to one parser for both policies
+	// go unnoticed here, the same way it went unnoticed in review.
+	switch r.d.MTForm() {
+	case cat.MTFormShort:
+		requiredRefusals = append(requiredRefusals, "over-long MT answer")
+	case cat.MTFormCombined:
+		switch r.d.MTP11() {
+		case cat.P11TagDisplay:
+			requiredRefusals = append(requiredRefusals, "over-long MT answer (display-bearing)")
+		default:
+			requiredRefusals = append(requiredRefusals, "over-long MT answer (display-less)")
+		}
 	}
 	switch r.d.MTP11() {
 	case cat.P11TagDisplay:
