@@ -131,7 +131,8 @@
 //
 // TIMING. Every reply is near-instant unless WithLatency says otherwise. No
 // FT-891 timing has ever been observed by this project, so there is nothing
-// to model.//
+// to model.
+//
 // # The ASSUMED register
 //
 // NO FT-891 HARDWARE HAS EVER BEEN ASKED ANYTHING by this project — the
