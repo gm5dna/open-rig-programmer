@@ -44,13 +44,14 @@ type Radio struct {
 	wg        sync.WaitGroup
 }
 
-// New constructs a *Radio and starts its servicing goroutine.
+// New constructs a *Radio and starts its servicing goroutine. Without a
+// WithFactoryImage option the slot map defaults to DefaultImage().
 func New(opts ...Option) *Radio {
 	hostConn, fakeConn := net.Pipe()
 	r := &Radio{
 		hostConn: hostConn,
 		fakeConn: fakeConn,
-		slots:    map[string]MemState{},
+		slots:    DefaultImage(),
 		// The answer-only none form: what "MC;" reports before any MC-set
 		// has happened. The wire spelling is the DIALECT's ASSUMED
 		// NoneWire (core/cat/ft891/doc.go's register entry
