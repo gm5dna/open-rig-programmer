@@ -150,6 +150,9 @@ type OpenReport struct {
 // so the honest refusal says what was measured, what was expected, and
 // that the expectation is itself ASSUMED.
 type RecordLengthMismatchError struct {
+	// Err is the codec refusal whose measured and accepted lengths are
+	// retained for errors.As callers.
+	Err *civ.RecordLengthError
 	// Got is the record-only length the radio's answer carried.
 	Got int
 	// Want is the length this profile declares.
@@ -164,9 +167,12 @@ func (e *RecordLengthMismatchError) Error() string {
 		e.Slot, e.Got, e.Want)
 }
 
-// Unwrap lets errors.Is(err, driver.ErrWrongRadio) match: whatever is on
-// this port, its memory records are not the shape this driver writes.
-func (e *RecordLengthMismatchError) Unwrap() error { return driver.ErrWrongRadio }
+// Unwrap exposes both classifications supported by the four harmonised
+// mismatch wrappers. errors.Unwrap returns nil for this multi-error form;
+// callers use errors.Is and errors.As.
+func (e *RecordLengthMismatchError) Unwrap() []error {
+	return []error{driver.ErrWrongRadio, e.Err}
+}
 
 // ErrAnswerMismatch is the sentinel for tier ruling T2: a memory answer
 // whose decoded channel address is not the one that was asked for.
@@ -388,7 +394,7 @@ func probeSlot(ctx context.Context, eng *transport.Engine, p civ.Profile, a civ.
 	if err != nil {
 		var lengthErr *civ.RecordLengthError
 		if errors.As(err, &lengthErr) {
-			return nil, false, &RecordLengthMismatchError{Got: lengthErr.Got, Want: civic7760.RecordOnlyLength, Slot: a}
+			return nil, false, &RecordLengthMismatchError{Err: lengthErr, Got: lengthErr.Got, Want: civic7760.RecordOnlyLength, Slot: a}
 		}
 		return nil, false, fmt.Errorf("ic7760: Open: probing %s: %w", a, err)
 	}
