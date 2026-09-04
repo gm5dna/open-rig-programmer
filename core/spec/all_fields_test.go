@@ -44,6 +44,12 @@ func declaredFieldsInSourceOrder(t *testing.T) []Field {
 		files = append(files, pkg.Files[name])
 	}
 
+	// Type-checking with go/types + importer.Default() is a deliberate
+	// trade against transmit_fields_test.go's AST-only precedent: it
+	// catches a Field-typed constant declared without an explicit type
+	// ident (which the AST alone cannot distinguish from an untyped or
+	// differently-typed constant), at the cost of this test needing an
+	// invocable go command and a populated build cache to run.
 	info := &types.Info{Defs: map[*ast.Ident]types.Object{}}
 	checked, err := (&types.Config{Importer: importer.Default()}).Check(
 		"github.com/gm5dna/open-rig-programmer/core/spec", fset, files, info)

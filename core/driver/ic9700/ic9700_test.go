@@ -115,7 +115,7 @@ func TestUnexpectedLengthIsRefusedWithoutAttribution(t *testing.T) {
 // TestRecordLengthMismatchUnwrapsToErrWrongRadio pins that a probe-time
 // record-length refusal is reachable via errors.Is(err, driver.ErrWrongRadio),
 // the same as the sibling drivers whose own record-length-mismatch error
-// unwraps to it (e.g. core/driver/ic7610/ic7610.go:164-166). Before this,
+// unwraps to it (e.g. core/driver/ic7610/ic7610.go:167-172). Before this,
 // ic9700 was the one Icom driver whose refusal did not.
 //
 // The original *civ.RecordLengthError must stay reachable too:
