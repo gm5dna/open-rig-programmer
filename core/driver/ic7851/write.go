@@ -113,7 +113,7 @@ type OutOfDomainError struct {
 
 func (e *OutOfDomainError) Error() string {
 	return fmt.Sprintf(
-		"ic7851: %s = %d is outside this radio's declared domain %d..%d (%s) — refused before any frame was built. This is a DRIVER-level refusal and NOT the outbound gate: civ.FieldSpan carries no numeric domain, so the gate would admit this frame (see doc.go, the deferred gate-domain gap)",
+		"ic7851: %s = %d is outside this radio's declared domain %d..%d (%s) — refused by the driver. This is a DRIVER-level refusal and NOT the outbound gate: civ.FieldSpan carries no numeric domain, so the gate would admit this frame (see doc.go, the deferred gate-domain gap)",
 		e.Field, e.Value, e.Min, e.Max, e.Where)
 }
 
