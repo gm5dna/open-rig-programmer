@@ -18,17 +18,22 @@
 // two classes its legend names, ID answers "ID0650;" and AI is accepted and
 // readable.
 //
-// EX (MENU) IS DELIBERATELY NOT MODELLED YET — see "What this fake
-// deliberately does NOT model" below.
+// EX (MENU) is answered, READ ONLY, from an inventory generated from this
+// package's own copy of transcription B — a FOUR-digit address on this radio
+// where every registered sibling's is six (ex.go). An EX Set is not modelled;
+// see "What this fake deliberately does NOT model" below.
 //
 // # The hard rule: NOTHING project-internal
 //
 // fakeft891 MUST NOT import any package of this project — not core/cat, not
 // core/cat/ft891, not core/codeplug, not core/spec, and not
 // internal/fakeradio or any sibling fake. Standard library only, in every
-// non-test file, in this directory AND every directory beneath it (the
-// generator internal/fakeft891/gen arrives at this milestone's next task and
-// is inside the fence from birth: imports_test.go's scan walks the tree).
+// non-test file, in this directory AND every directory beneath it — which
+// now includes internal/fakeft891/gen, the stdlib-only generator for this
+// radio's transcription B. The fence was recursive from birth for that
+// directory's sake, and TestNoCoreImports_ReachesTheGenerator asserts that the
+// scan of this package really does parse gen/main.go rather than merely being
+// capable of it.
 // Every byte offset, field width and validation rule below is re-derived from
 // the FT-891 CAT Operation Reference Book's own position charts (rev 1909-C),
 // as cited by core/cat/ft891/doc.go's reused-command verification and by
@@ -90,17 +95,18 @@
 //
 // # What this fake deliberately does NOT model
 //
-// EX (MENU), FOR NOW. This radio's EX grammar is four-digit
-// ("EX P1 P1 P1 P1 ;", seven bytes — ft891_layout.txt:513-522) where every
-// registered sibling's is six, and answering it needs this package's own
-// independent copy of transcription B and a NEW generator for the FT-891's
-// three-column schema. That is the next task of this milestone's plan, and it
-// is a task rather than a paragraph because the generator, the transcription
-// copy, the staleness test and the core/transport cross-check land together
-// or not at all. UNTIL THEN AN EX FRAME OF ANY SHAPE ANSWERS "?;",
-// indistinguishably from an unknown command, and that answer is a STUB rather
-// than a claim about the radio — TestEX_IsDeliberatelyAbsentUntilItsGenerator
-// pins it as one.
+// EX SET. This radio's EX grammar is four-digit ("EX P1 P1 P1 P1 ;", seven
+// bytes — ft891_layout.txt:513-522) where every registered sibling's is six,
+// and the READ direction is answered in full, from an inventory generated from
+// this package's own copy of transcription B (ex.go, PROVENANCE.md). The SET
+// direction is not implemented, so a valid address followed by a P4 payload is
+// simply a too-long body to handleEX and draws "?;". That is a MODELLING GAP,
+// KNOWN-DIVERGENT from the documented grammar, and it is not a claim that this
+// radio refuses EX Set — TestEXSetShaped_NotModelled pins the gap's shape
+// (refused, state unchanged) so that a later task adding EX Set has to change
+// it deliberately. It is out of scope by this milestone's plan for the same
+// reason MW is: no layer above this fake sends one. internal/fakeradio and
+// internal/fakedx10 both decline it too.
 //
 // MW (MEMORY CHANNEL WRITE). This radio documents MW — Set only, no Read and
 // no Answer (availability 167), its Set frame the 28-position MR chart under
@@ -441,6 +447,52 @@
 //     its port settles nothing about silence.
 //     (parser.go: handleAI and the AI section's note; fakeft891.go: serve and
 //     handleEvent, whose only write is a reply)
+//
+//  15. THE EX MENU VALUES ARE INVENTED. Every menu item this fake answers
+//     reads back n x '0', n being the width transcription B's digits column
+//     prints for it. The chart documents each item's VALID RANGE and its
+//     option legends and NEVER a shipped default, so there is nothing to
+//     source a real one from. The uniformity is the point: a placeholder that
+//     is obviously uniform is harder to mistake for evidence than a
+//     plausible-looking spread of values, and this matters beyond the test
+//     suite, because `rigprog read --settings --fake --model FT-891` renders
+//     these bytes to a user who must not read them as what an FT-891 ships
+//     with. It is internal/fakeradio's convention, adopted whole.
+//     WHAT IS NOT ASSUMED HERE IS THE WIDTH. Each item's field width is
+//     transcribed, not guessed — including the one place the transcription is
+//     known to be transcribing a printed DEFECT: 0905 RPT SHIFT 50MHz prints
+//     Digits 1 against a legend that needs four, and this fake answers the
+//     printed one byte. That is a recorded state (PROVENANCE.md;
+//     core/cat/ft891/crosscheck_test.go pins it from the other side), not an
+//     assumption of this register, because no comparison in this repository
+//     can catch a defect all three derivations read faithfully.
+//     STAGE R LIFTS IT WITH: an EX read sweep of a factory-condition FT-891.
+//     Expect this entry to stay ASSUMED with better placeholders rather than
+//     to retire — one radio's menu is not the model's — but the SAME sweep
+//     settles 0905's width outright, which is the more valuable half.
+//     (ex.go: exDefaultDigit, buildEXDefaults)
+//
+//  16. AN OUT-OF-INVENTORY EX ADDRESS ANSWERS "?;". A syntactically valid
+//     four-digit address that transcription B never enumerated — past the end
+//     of a real group, or a group prefix the chart has no rows for at all —
+//     draws the same unattributed NAK an empty slot does. Membership comes
+//     from the chart's own rows via the generated inventory, and NOT from the
+//     EX block's printed bound: that block prints "P1 : 0101 - 1803 (MENU
+//     Number)", which happens to be exactly the first and last rows
+//     transcribed, so enforcing it as a range would add a second authority
+//     over one fact and would disagree with the inventory the moment the two
+//     were edited apart.
+//     THIS IS ASSUMED HERE WHERE THE FT-710'S IS OBSERVED: M8c put two
+//     out-of-chart EX addresses to a real FT-710 and both drew "?;"
+//     (docs/hardware-notes.md), which is that radio's finding on that radio's
+//     six-digit grammar, and is not borrowed. No FT-891 has been asked.
+//     STAGE R LIFTS IT WITH: one EX read of an address the chart does not
+//     carry — "EX1901;" will do, the group after the chart's last — with the
+//     port watched. An answer rather than "?;" would mean the chart
+//     under-describes this radio's menu, which would be a finding about the
+//     transcription as much as about the fake.
+//     (ex.go: handleEX; options.go: WithEXUnavailable, which reaches this
+//     same answer for a known address without inventing a new behaviour)
 //
 // # What is NOT in this register, and why
 //

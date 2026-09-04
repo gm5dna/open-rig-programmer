@@ -44,6 +44,43 @@ func WithSlot(slot string, s MemState) Option {
 	}
 }
 
+// WithEXSetting overlays one EX (MENU) address's raw P4 verbatim — the same
+// overlay semantics as WithSlot: it is applied to whatever exSettings already
+// holds (EXDefaults(), seeded in New), with no shape or range validation, so
+// several WithEXSetting options may be given, including for an address the
+// generated inventory does not know about. Such an address becomes answerable
+// even though EXDefaults() never produced it, because the option does not
+// consult exGroups — which is deliberate: it is how a test reaches a wire
+// behaviour the transcription does not describe, WITHOUT editing the projection
+// of transcription B that the cross-check depends on. Editing that projection
+// to make a test possible would quietly dissolve the cross-check's whole point.
+//
+// The address is this radio's FOUR digits ("0506"), not a sibling's six.
+func WithEXSetting(addr, p4 string) Option {
+	return func(r *Radio) {
+		r.exSettings[addr] = p4
+	}
+}
+
+// WithEXUnavailable removes addr from the fake's EX (MENU) address map, applied
+// to whatever exSettings already holds (EXDefaults() by default, or a prior
+// WithEXSetting in the same Option list), so a subsequent EX read of addr
+// answers "?;" — indistinguishable from an address the chart never enumerated
+// (ex.go's handleEX, doc.go's register entry AN OUT-OF-INVENTORY EX ADDRESS
+// ANSWERS "?;").
+//
+// It introduces no NEW assumed behaviour: it only removes a map entry, which
+// triggers the fake's existing documented "?;". This is the test-only seam for
+// forcing a KNOWN, otherwise-valid address to answer as unavailable — what a
+// settings reader maps to an unavailable setting — so that such a test need not
+// depend on a genuinely out-of-inventory address that no SettingsDescriptor
+// would ever offer an ID for in the first place.
+func WithEXUnavailable(addr string) Option {
+	return func(r *Radio) {
+		delete(r.exSettings, addr)
+	}
+}
+
 // WithMTReadUnsupported makes the fake honour the COMMAND LIST rather than
 // MT's detail block: an MT read of any slot answers "?;" while the Set
 // direction and MR are untouched.
