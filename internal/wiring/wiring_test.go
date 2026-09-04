@@ -436,8 +436,18 @@ func TestOpenFakeSessionFor_EveryRegisteredModel_ReadsEveryDefaultSlot(t *testin
 					}
 				}
 			}
-			if !reachesTierField && probe.Schema != 3 {
+			// Guarded by populatedReads, symmetrically with the >= 4
+			// arm below: with no populated channel at all, Save has
+			// nothing but empty slots to represent and schemaFor
+			// returns 3 regardless of what this model's driver would
+			// have done with a populated one — an empty Yaesu fake
+			// image would otherwise pass this arm having proved
+			// nothing about the Absent/omission rule it exists to pin.
+			if !reachesTierField && populatedReads > 0 && probe.Schema != 3 {
 				t.Errorf("fresh-read schema = %d, want 3: %q reaches none of the seventeen tier fields", probe.Schema, model)
+			}
+			if !reachesTierField && populatedReads == 0 {
+				t.Logf("fresh-read schema = %d: %q's default image has no populated channel, so there is no tier state for Save to represent", probe.Schema, model)
 			}
 			if reachesTierField && populatedReads > 0 && probe.Schema < 4 {
 				t.Errorf("fresh-read schema = %d, want at least 4: %q reaches tier fields", probe.Schema, model)

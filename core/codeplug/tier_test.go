@@ -1187,8 +1187,13 @@ func TestNormaliseTierFields_LegacyLoadIsUntouched(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "legacy.json")
 	legacy := testBaselineCodeplug()
 	NormaliseTierFields(legacy, testCapabilities())
-	if err := Save(path, legacy); err != nil {
-		t.Fatalf("Save() error = %v", err)
+	// This test's name claims legacy.json is a file a legacy loader
+	// could have produced — make the setup state that claim itself
+	// rather than assume it: testCapabilities() reaches none of the
+	// ten D4 fields, so NormaliseTierFields has already turned them
+	// all Unavailable, and Save must therefore choose schema 3.
+	if got := saveAndProbeSchema(t, path, legacy); got != lowestSchema {
+		t.Fatalf("legacy fixture saved at schema %d, want %d: a file this test claims a legacy loader could have produced must actually be schema 3", got, lowestSchema)
 	}
 	cp, err := Load(path)
 	if err != nil {
