@@ -237,7 +237,7 @@ func TestReadChannel_MapsEveryField(t *testing.T) {
 	if d.CTCSS != "" || d.Shift != "" {
 		t.Errorf("a Yaesu vocabulary value was invented: CTCSS %q, Shift %q", d.CTCSS, d.Shift)
 	}
-	drivertest.AssertFreshReadSaveLoad(t, ch, codeplug.Load)
+	drivertest.AssertFreshReadSaveLoad(t, ch, capabilitiesSimulated(), codeplug.Load)
 }
 
 // TestReadChannel_EmptySlotIsAnEmptyChannel — adjudication R10 and tier

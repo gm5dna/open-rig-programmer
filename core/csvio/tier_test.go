@@ -575,12 +575,21 @@ func TestImportCHIRP_YaesuBranchUnchanged(t *testing.T) {
 	})
 }
 
-// TestNeedsTierColumns_MatchesSchemaFor states the invariant the two
-// writers share: the CSV exporter and the codeplug file writer must
-// agree, channel for channel, about whether a tier field records
-// anything — otherwise a codeplug could round-trip through schema 3
-// while its CSV export claimed version 2, or the reverse.
-func TestNeedsTierColumns_MatchesSchemaFor(t *testing.T) {
+// TestNeedsTierColumns_MatchesTheRecordedRule pins needsTierColumns to
+// its documented predicate — Known or Unknown on any D4 field, i.e.
+// FieldState.Recorded() (export.go:181-186) — rather than to
+// core/codeplug's schemaFor, which the two writers no longer agree
+// with channel for channel.
+//
+// They diverge on Absent (see FieldState.RepresentableByOmission):
+// schemaFor promotes a codeplug file to schema 4 for an Absent field,
+// because a v3 file has no way to write it down — the "" key would be
+// read back as Unavailable, corrupting it. A CSV row has no such
+// hazard: an Absent field and an Unavailable one both render as an
+// empty cell, so needsTierColumns has nothing to gain from promoting
+// on Absent, and CSV export stays version 1 for it (the "one Absent"
+// case below pins that this divergence is deliberate, not a gap).
+func TestNeedsTierColumns_MatchesTheRecordedRule(t *testing.T) {
 	for name, channels := range map[string][]codeplug.Channel{
 		"all Unavailable": yaesuLikeChannels(),
 		"one Known":       withTierField(func(d *codeplug.ChannelData) { d.Filter = codeplug.StringField{State: codeplug.Known, Value: "FIL1"} }),
@@ -589,9 +598,11 @@ func TestNeedsTierColumns_MatchesSchemaFor(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			wantV2 := needsTierColumns(channels)
-			// core/codeplug decides the same question with the same
-			// predicate; reproduce it here rather than importing an
-			// unexported function.
+			// Reproduce the Recorded() predicate needsTierColumns
+			// itself is documented to implement, rather than importing
+			// an unexported function — NOT core/codeplug's schemaFor,
+			// which uses RepresentableByOmission and disagrees on
+			// Absent (see the doc comment above).
 			gotV2 := false
 			for _, ch := range channels {
 				if ch.Data == nil {

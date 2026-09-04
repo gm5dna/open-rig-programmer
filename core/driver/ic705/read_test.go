@@ -131,7 +131,7 @@ func TestReadChannelDecodesTheGoldenRecord(t *testing.T) {
 			t.Errorf("%s.State = %q, want Unavailable — this record has no such field (ScanSkip per O-6)", tc.name, tc.state)
 		}
 	}
-	drivertest.AssertFreshReadSaveLoad(t, ch, codeplug.Load)
+	drivertest.AssertFreshReadSaveLoad(t, ch, sess.Capabilities(), codeplug.Load)
 }
 
 func TestReadChannelOfARejectedSlotIsAnEmptyChannel(t *testing.T) {
