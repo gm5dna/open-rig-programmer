@@ -269,6 +269,50 @@ type MTPolicy struct {
 	TagFill byte
 }
 
+// MemoryP5Policy names what byte 21 of the shared 28-position memory field
+// block — P5, memdata.go's memTxClarOffset — MEANS on one family.
+//
+// The three registered dialects print `P5 0: TX CLAR "OFF" 1: TX CLAR "ON"`
+// against MR, MT and MW alike, so the byte carries MemoryData.TxClar. The
+// FT-891 prints `0: (Fixed)` on every one of those blocks and on IF: the
+// byte is schema there, not state, and this codec must neither emit a '1'
+// into it nor read one back as a flag.
+//
+// IT GOVERNS BOTH DIRECTIONS, unlike MCSelects. Under P5Fixed the encoder
+// writes '0', every builder REFUSES a record carrying TxClar true rather
+// than silently correcting it — a caller who believed it was writing the TX
+// clarifier finds out — and the parser REQUIRES '0', which is the same
+// treatment this package already gives P9 and the combined form's P11 under
+// P11Fixed. A printed-fixed byte that comes back as something else is an
+// undocumented frame, and turning one into data is what this package
+// refuses to do.
+//
+// Its zero value is deliberately NOT a policy, so a config omitting it is
+// refused (V14) rather than defaulted.
+type MemoryP5Policy int
+
+const (
+	// P5TxClar is the three registered dialects' reading: byte 21 is the
+	// TX clarifier flag, '0' off and '1' on, in both directions.
+	P5TxClar MemoryP5Policy = iota + 1
+	// P5Fixed is the FT-891's: byte 21 is printed "0: (Fixed)" on every
+	// memory-bearing block, so '0' is the only value either direction may
+	// carry and TxClar is never true.
+	P5Fixed
+)
+
+// String names the policy, so a refusal can quote it.
+func (p MemoryP5Policy) String() string {
+	switch p {
+	case P5TxClar:
+		return "P5TxClar"
+	case P5Fixed:
+		return "P5Fixed"
+	default:
+		return fmt.Sprintf("MemoryP5Policy(%d)", int(p))
+	}
+}
+
 // ClarifierPolicy bounds MemoryData.ClarHz for one family.
 type ClarifierPolicy struct {
 	// StepHz is the clarifier's granularity in Hz. FT-710: 10.
@@ -315,6 +359,11 @@ type DialectConfig struct {
 
 	// Clarifier bounds the clarifier field.
 	Clarifier ClarifierPolicy
+
+	// MemoryP5 says what byte 21 of the shared memory field block means on
+	// this family: the TX clarifier flag, or a printed-fixed '0'. It has no
+	// default: see MemoryP5Policy.
+	MemoryP5 MemoryP5Policy
 
 	// MWWriteKind is the single P7 "kind" byte this family accepts on
 	// EVERY memory write, e.g. KindMemory for the FT-710.
@@ -413,6 +462,7 @@ func NewDialect(cfg DialectConfig) (Dialect, error) {
 		modeByName:  buildModeByName(modes),
 		mt:          cfg.MT,
 		clar:        cfg.Clarifier,
+		memoryP5:    cfg.MemoryP5,
 		mwWriteKind: cfg.MWWriteKind,
 	}, nil
 }

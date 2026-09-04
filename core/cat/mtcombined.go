@@ -133,6 +133,17 @@ func (d Dialect) validateCombinedMTFields(m MemoryData) error {
 		return newParseError([]byte(fmt.Sprintf("%d", m.FreqHz)), "MT: FreqHz must be nonzero and fit in 9 digits (<= 999999999)")
 	}
 
+	// P5, BY THIS DIALECT'S OWN READING. Under P5Fixed byte 21 is printed
+	// "(Fixed)" on this radio's memory blocks, so a record asking for the TX
+	// clarifier is REFUSED rather than quietly encoded as '0': a caller that
+	// believed it was writing the clarifier finds out, which is the
+	// validate-don't-rewrite posture this validator takes with every other
+	// field. Shared with the outbound gate, which reaches this same
+	// validator, so the refusal holds for a forged frame too.
+	if d.memoryP5 == P5Fixed && m.TxClar {
+		return newParseError([]byte{boolDigit(m.TxClar)}, fmt.Sprintf("MT: TxClar must be false under %v — this dialect's manual prints P5 (position 21) \"(Fixed)\", so there is no TX clarifier flag to set", d.memoryP5))
+	}
+
 	// CTCSSState/Shift are byte-alias types exactly like Mode: re-validate
 	// via their own Parse functions for the same reason.
 	if _, err := ParseCTCSSState(m.CTCSS.Wire()); err != nil {
@@ -196,7 +207,7 @@ func (d Dialect) BuildMTSetCombined(m MemoryData, tag string) (Command, error) {
 	// — validated above, not overwritten here.
 	frame := make([]byte, d.mtCombinedLen())
 	frame[0], frame[1] = 'M', 'T'
-	encodeMemoryFields(frame, m)
+	d.encodeMemoryFields(frame, m)
 	frame[mtCombinedP11Offset] = combinedMTP11
 
 	field := frame[mtCombinedTagOffset : mtCombinedTagOffset+d.mt.TagMaxBytes]

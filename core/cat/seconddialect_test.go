@@ -57,6 +57,7 @@ func allTestDialects() []namedDialect {
 		// nothing about the axis it names.
 		{"mcMemoryPMSDialect", mcMemoryPMSDialect},
 		{"mtReadMemoryPMSDialect", mtReadMemoryPMSDialect},
+		{"p5FixedDialect", p5FixedDialect},
 	}
 }
 
@@ -86,6 +87,7 @@ var testDialect = mustFixtureDialect(DialectConfig{
 	EXItems:     nil,
 	MT:          MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:    P5TxClar,
 	MWWriteKind: KindMemory,
 })
 
@@ -117,6 +119,7 @@ var noneWireDialect = mustFixtureDialect(DialectConfig{
 	EXItems:     nil,
 	MT:          MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:    P5TxClar,
 	MWWriteKind: KindMemory,
 })
 
@@ -174,6 +177,7 @@ var peerDialect = mustFixtureDialect(DialectConfig{
 	EXItems:     peerEXItems,
 	MT:          MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:    P5TxClar,
 	MWWriteKind: KindMemory,
 })
 
@@ -1538,6 +1542,7 @@ var combinedDialect = mustFixtureDialect(DialectConfig{
 	EXItems:     combinedEXItems,
 	MT:          MTPolicy{Form: MTFormCombined, ReadSlots: MTReadsReadable, TagMaxBytes: 6, TagFill: ' '},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:    P5TxClar,
 	MWWriteKind: KindMemory,
 })
 
@@ -1588,6 +1593,7 @@ var combinedPeerDialect = mustFixtureDialect(DialectConfig{
 	EXItems:     peerEXItems,
 	MT:          MTPolicy{Form: MTFormCombined, ReadSlots: MTReadsReadable, TagMaxBytes: 12, TagFill: '_'},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:    P5TxClar,
 	MWWriteKind: KindMemTune,
 })
 
@@ -1625,6 +1631,7 @@ var mcMemoryPMSDialect = mustFixtureDialect(DialectConfig{
 	EXItems:     nil,
 	MT:          MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:    P5TxClar,
 	MWWriteKind: KindMemory,
 })
 
@@ -1654,5 +1661,34 @@ var mtReadMemoryPMSDialect = mustFixtureDialect(DialectConfig{
 		TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' ',
 	},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:    P5TxClar,
+	MWWriteKind: KindMemory,
+})
+
+// p5FixedDialect declares MemoryP5: P5Fixed — byte 21 of the shared memory
+// block is schema, not the TX clarifier flag. That is the FT-891's printed
+// shape (S0.4): "0: (Fixed)" on its MR, MT, MW and IF blocks alike, where
+// every registered dialect prints `0: TX CLAR "OFF" 1: TX CLAR "ON"`.
+//
+// Its MC and MT-read domains are the wide ones, so the ONE axis this fixture
+// varies is P5: a refusal seen here cannot be another policy's.
+var p5FixedDialect = mustFixtureDialect(DialectConfig{
+	CATID:     "2222",
+	ModeNames: map[Mode]string{ModeUnset: "-", ModeUSB: "USB-P5", ModeLSB: "LSB-P5"},
+	Slots: SlotSpace{
+		MemoryLo: 1, MemoryHi: 99,
+		SixtyLo: 501, SixtyHi: 599,
+		PMSPairs:      9,
+		EmergencyWire: "EMG",
+		NoneWire:      "000",
+		MCSelects:     MCSelectsAll,
+	},
+	EXItems: nil,
+	MT: MTPolicy{
+		Form: MTFormShort, ReadSlots: MTReadsReadable,
+		TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' ',
+	},
+	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:    P5Fixed, // THE AXIS UNDER TEST
 	MWWriteKind: KindMemory,
 })

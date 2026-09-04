@@ -65,6 +65,7 @@ func validateDialectConfig(cfg DialectConfig) error {
 		validateClarifier,    // V10
 		validateMWWriteKind,  // V11
 		validateMCSelects,    // V13
+		validateMemoryP5,     // V14
 	} {
 		if err := rule(cfg); err != nil {
 			return err
@@ -436,5 +437,24 @@ func validateMCSelects(cfg DialectConfig) error {
 		return nil
 	default:
 		return fmt.Errorf("cat: Slots.MCSelects is %v, which is not a policy — declare MCSelectsAll or MCSelectsMemoryPMS explicitly (an omitted config semantic is refused, never defaulted; MC's send domain is not always MR's read domain)", cfg.Slots.MCSelects)
+	}
+}
+
+// validateMemoryP5 is V14: byte 21 of the shared memory field block must be
+// declared, never inferred.
+//
+// An omitted config semantic is REFUSED, not defaulted. Defaulting to
+// P5TxClar would have this codec emit a '1' into a byte a radio's own manual
+// prints "(Fixed)" — a frame that manual never describes, built and admitted
+// by this dialect's own gate, since this field reaches AllowedCommand
+// through validateMWFields and validateCombinedMTFields. Defaulting to
+// P5Fixed would silently drop a real TX-clarifier flag on the floor. Neither
+// default is safe, which is exactly when a field must be declared.
+func validateMemoryP5(cfg DialectConfig) error {
+	switch cfg.MemoryP5 {
+	case P5TxClar, P5Fixed:
+		return nil
+	default:
+		return fmt.Errorf("cat: MemoryP5 is %v, which is not a policy — declare P5TxClar or P5Fixed explicitly (byte 21 of the memory block is the TX clarifier flag on some radios and a printed-fixed '0' on others)", cfg.MemoryP5)
 	}
 }

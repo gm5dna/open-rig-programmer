@@ -71,6 +71,7 @@ func combinedRadioConfig() cat.DialectConfig {
 		},
 		MT:          cat.MTPolicy{Form: cat.MTFormCombined, ReadSlots: cat.MTReadsReadable, TagMaxBytes: 6, TagFill: ' '},
 		Clarifier:   cat.ClarifierPolicy{StepHz: 5, MaxAbsHz: 9995},
+		MemoryP5:    cat.P5TxClar,
 		MWWriteKind: cat.KindMemTune,
 	}
 }
@@ -136,6 +137,7 @@ func shortPeerRadioConfig() cat.DialectConfig {
 		},
 		MT:          cat.MTPolicy{Form: cat.MTFormShort, ReadSlots: cat.MTReadsReadable, TagMaxBytes: 6, ClearTagByte: ' ', PadByte: ' '},
 		Clarifier:   cat.ClarifierPolicy{StepHz: 1, MaxAbsHz: 9999},
+		MemoryP5:    cat.P5TxClar,
 		MWWriteKind: cat.KindMemory,
 	}
 }
@@ -170,4 +172,59 @@ func TestRun_ExternallyBuiltShortPeerDialect(t *testing.T) {
 // uninitialised dialect would get a green conformance report.
 func TestRunZeroValue_RefusesEverything(t *testing.T) {
 	dialecttest.RunZeroValue(t)
+}
+
+// p5FixedRadioConfig is a SHORT-form dialect declaring cat.P5Fixed: byte 21
+// of the shared memory block is printed "(Fixed)" on its manual, not the TX
+// clarifier flag.
+//
+// It is here for the reason shortPeerRadioConfig is: an axis exercised only
+// by dialects that all take the same value of it is not exercised at all.
+// Every other fixture in this file and every registered radio declares
+// P5TxClar, so without this one the P5Fixed arm of dialecttest.checkMemoryP5
+// — the refusals, which are the half that keeps a printed-fixed byte off the
+// wire — would never run from outside core/cat.
+func p5FixedRadioConfig() cat.DialectConfig {
+	return cat.DialectConfig{
+		CATID: "0764",
+		ModeNames: map[cat.Mode]string{
+			cat.ModeUnset: "-",
+			cat.ModeLSB:   "LSB",
+			cat.ModeUSB:   "USB",
+		},
+		Slots: cat.SlotSpace{
+			MemoryLo: 1, MemoryHi: 30,
+			SixtyLo: 0, SixtyHi: 0,
+			PMSPairs:      3,
+			EmergencyWire: "",
+			NoneWire:      "000",
+			MCSelects:     cat.MCSelectsAll,
+		},
+		EXItems: []cat.EXItem{
+			{Addr: cat.EXAddress{P1: 5, P2: 2, P3: 1}, P1Label: "RADIO", P2Label: "GROUP", Name: "ITEM", Digits: 2},
+		},
+		MT: cat.MTPolicy{
+			Form: cat.MTFormShort, ReadSlots: cat.MTReadsReadable,
+			TagMaxBytes: 8, ClearTagByte: ' ', PadByte: ' ',
+		},
+		Clarifier:   cat.ClarifierPolicy{StepHz: 20, MaxAbsHz: 9980},
+		MemoryP5:    cat.P5Fixed,
+		MWWriteKind: cat.KindMemory,
+	}
+}
+
+// TestRun_ExternallyBuiltP5FixedDialect runs the suite over that dialect.
+//
+// The assertion before Run is not ceremony, for shortPeerRadioConfig's
+// reason: a fixture that silently came back P5TxClar would make this a
+// slower copy of TestRun_ExternallyBuiltShortPeerDialect while reporting
+// that the fixed reading was covered.
+func TestRun_ExternallyBuiltP5FixedDialect(t *testing.T) {
+	d := cat.MustNewDialect(p5FixedRadioConfig())
+
+	if got := d.MemoryP5(); got != cat.P5Fixed {
+		t.Fatalf("MemoryP5() = %v, want P5Fixed — this fixture exists to cover the OTHER reading of byte 21", got)
+	}
+
+	dialecttest.Run(t, d)
 }

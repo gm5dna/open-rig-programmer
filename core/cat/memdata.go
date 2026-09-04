@@ -392,9 +392,25 @@ func (d Dialect) parseMemoryFields(frame []byte, wantPrefix string) (MemoryData,
 	if err != nil {
 		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: RX CLAR field (P4) must be '0' or '1'", wantPrefix))
 	}
-	txClar, err := parseBoolDigit(frame[memTxClarOffset])
-	if err != nil {
-		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: TX CLAR field (P5) must be '0' or '1'", wantPrefix))
+	// P5, BY THIS DIALECT'S OWN READING (MemoryP5Policy, dialectconfig.go).
+	// Under P5TxClar the byte is the TX clarifier flag and this is the
+	// pre-existing '0'/'1' rule, unchanged. Under P5Fixed the radio's own
+	// manual prints the byte "(Fixed)" on every memory-bearing block, so a
+	// '1' is an undocumented frame and is refused rather than decoded into a
+	// flag — the same treatment P9 gets, and the combined form's P11 under
+	// P11Fixed. Turning an undocumented byte into data is what this package
+	// refuses to do.
+	txClar := false
+	if d.memoryP5 == P5Fixed {
+		if frame[memTxClarOffset] != '0' {
+			return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: P5 (position 21) must be fixed '0' under %v — this dialect's manual prints the byte \"(Fixed)\", so it carries no TX clarifier state to decode", wantPrefix, d.memoryP5))
+		}
+	} else {
+		var err error
+		txClar, err = parseBoolDigit(frame[memTxClarOffset])
+		if err != nil {
+			return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: TX CLAR field (P5) must be '0' or '1'", wantPrefix))
+		}
 	}
 
 	mode, err := d.ParseMode(frame[memModeOffset])
@@ -451,11 +467,18 @@ func (d Dialect) parseMemoryFields(frame []byte, wantPrefix string) (MemoryData,
 // is why the byte-identity of the MW golden vectors G5/G7 is this
 // extraction's proof.
 //
-// No dialect receiver: unlike the decoder, encoding a validated MemoryData
-// involves no membership decision — every byte written here comes from m,
-// via the same Wire() accessors the caller's validator already round-tripped
-// them through.
-func encodeMemoryFields(frame []byte, m MemoryData) {
+// IT TOOK NO DIALECT RECEIVER UNTIL STAGE 0, on the reasoning that encoding
+// a validated MemoryData involves no membership decision — every byte
+// written here comes from m, via the same Wire() accessors the caller's
+// validator already round-tripped them through. That held while every field
+// meant the same thing on every radio. P5 does not: MemoryP5Policy decides
+// whether byte 21 is the TX clarifier flag or a printed-fixed '0', and the
+// M9b lesson is that a bound must be consulted from the same place as its
+// datum. So it is a method, and the policy comes off the receiver rather
+// than a package global.
+//
+// Under P5TxClar this writes exactly what it always wrote.
+func (d Dialect) encodeMemoryFields(frame []byte, m MemoryData) {
 	copy(frame[memSlotOffset:], m.Slot.Wire())
 	copy(frame[memFreqOffset:], fmt.Sprintf("%0*d", memFreqDigits, m.FreqHz))
 
@@ -469,7 +492,16 @@ func encodeMemoryFields(frame []byte, m MemoryData) {
 	copy(frame[memClarMagOffset:], fmt.Sprintf("%0*d", memClarMagDigits, clarMag))
 
 	frame[memRxClarOffset] = boolDigit(m.RxClar)
-	frame[memTxClarOffset] = boolDigit(m.TxClar)
+	// P5. Under P5Fixed the byte is schema, not state, and both callers have
+	// already REFUSED a record carrying TxClar true (validateMWFields,
+	// validateCombinedMTFields) — so this is not a silent correction of a
+	// flag the caller asked for, it is the encoding of a byte that has only
+	// one legal value on such a radio.
+	if d.memoryP5 == P5Fixed {
+		frame[memTxClarOffset] = '0'
+	} else {
+		frame[memTxClarOffset] = boolDigit(m.TxClar)
+	}
 	frame[memModeOffset] = m.Mode.Wire()
 	frame[memKindOffset] = m.Kind
 	frame[memCTCSSOffset] = m.CTCSS.Wire()

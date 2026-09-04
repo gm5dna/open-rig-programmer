@@ -127,6 +127,15 @@ func newDialect(catID string) cat.Dialect {
 			StepHz:   10, // ASSUMED — no step stated in the manual
 			MaxAbsHz: 9990,
 		},
+		// This manual's memory blocks print P5 "0: TX CLAR \"OFF\" 1: TX
+		// CLAR \"ON\"" — the same legend the FTdx10 prints at
+		// ftdx10_layout.txt:1226, inside this radio's own MT block (layout
+		// 1311-1345) and its MR and MW blocks — so byte 21 carries this
+		// radio's TX clarifier flag in both directions. Not an assumption:
+		// this is the legend, transcribed. The FT-891 prints "0: (Fixed)"
+		// on every one of those blocks, which is the disagreement this axis
+		// carries.
+		MemoryP5:    cat.P5TxClar,
 		MWWriteKind: cat.CombinedMTSetKind, // MW P7 "(Fixed)" — a fact
 		// of this radio, not a rule; see the difference pins.
 	})

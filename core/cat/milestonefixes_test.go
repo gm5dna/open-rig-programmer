@@ -132,6 +132,7 @@ func TestMTClearTag_DecodingPreservesLegitimateTrailingBytes(t *testing.T) {
 		Slots:       SlotSpace{MemoryLo: 1, MemoryHi: 9, NoneWire: "000", MCSelects: MCSelectsAll},
 		MT:          MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 6, ClearTagByte: '-'},
 		Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+		MemoryP5:    P5TxClar,
 		MWWriteKind: KindMemory,
 	})
 	if err != nil {
@@ -243,7 +244,7 @@ func TestMTPadByte_DeclaredNotInferred(t *testing.T) {
 			CATID: "6668", ModeNames: map[Mode]string{Mode('2'): "USB"},
 			Slots:     SlotSpace{MemoryLo: 1, MemoryHi: 9, NoneWire: "000", MCSelects: MCSelectsAll},
 			MT:        MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 8, ClearTagByte: '-', PadByte: pad},
-			Clarifier: ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990}, MWWriteKind: KindMemory,
+			Clarifier: ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990}, MemoryP5: P5TxClar, MWWriteKind: KindMemory,
 		})
 		if err != nil {
 			t.Fatalf("NewDialect(pad=%#02x): %v", pad, err)

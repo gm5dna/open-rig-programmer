@@ -865,3 +865,54 @@ func TestMTReadSlots_MatchesTheMTLegend(t *testing.T) {
 		})
 	}
 }
+
+// --- FT-891 Stage 0 (S0.4): byte 21 of the shared memory block ---
+
+// TestMemoryP5_MatchesTheP5Legend pins the cat.P5TxClar both models declare
+// against the legend it is transcribed from.
+//
+// This manual's memory blocks print P5 "0: TX CLAR \"OFF\" 1: TX CLAR \"ON\""
+// — the same legend the FTdx10 prints, inside this radio's own MT block
+// (rev 2308-L, layout 1311-1345) and its MR and MW blocks — so byte 21
+// carries this radio's TX clarifier flag and both of its values are
+// writable. The FT-891 prints "0: (Fixed)" on every one of those blocks,
+// which is the disagreement the cat.MemoryP5Policy axis carries.
+func TestMemoryP5_MatchesTheP5Legend(t *testing.T) {
+	for _, m := range bothModels() {
+		t.Run(m.name, func(t *testing.T) {
+			d := m.d
+
+			if got := d.MemoryP5(); got != cat.P5TxClar {
+				t.Fatalf("MemoryP5() = %v, want P5TxClar", got)
+			}
+
+			slot, err := d.MemorySlot(7)
+			if err != nil {
+				t.Fatalf("MemorySlot(7): %v", err)
+			}
+			for _, tx := range []bool{false, true} {
+				rec := cat.MemoryData{
+					Slot: slot, FreqHz: 14_250_000, TxClar: tx,
+					Mode: cat.ModeUSB, Kind: d.MWWriteKind(),
+					CTCSS: cat.CTCSSOff, Shift: cat.ShiftSimplex,
+				}
+				cmd, err := d.BuildMWSet(rec)
+				if err != nil {
+					t.Errorf("BuildMWSet with TxClar %v = %v — this manual prints P5 as the TX clarifier flag, so both values must be writable", tx, err)
+					continue
+				}
+				want := byte('0')
+				if tx {
+					want = '1'
+				}
+				// Position 21, 1-indexed as the manual's table numbers it.
+				if got := cmd.Bytes()[20]; got != want {
+					t.Errorf("BuildMWSet with TxClar %v emitted %q, whose position 21 is %q, want %q", tx, cmd.Bytes(), got, want)
+				}
+				if !d.AllowedCommand(cmd.Bytes()) {
+					t.Errorf("its own gate refused %q", cmd.Bytes())
+				}
+			}
+		})
+	}
+}

@@ -139,6 +139,15 @@ type Dialect struct {
 	mt          MTPolicy
 	clar        ClarifierPolicy
 	mwWriteKind byte
+
+	// memoryP5 says what byte 21 of the shared memory field block means on
+	// this family (MemoryP5Policy, dialectconfig.go). It is dialect data for
+	// the reason the three fields above are: it reaches the OUTBOUND WRITE
+	// GATE, through the same validateMWFields and validateCombinedMTFields
+	// the builders use — and the M9b lesson is that a bound must be consulted
+	// from the same place as its datum, which is why encodeMemoryFields and
+	// parseMemoryFields take this receiver rather than a package global.
+	memoryP5 MemoryP5Policy
 }
 
 // ModeByName resolves a display name to this dialect's own mode nibble.
@@ -198,8 +207,16 @@ var FT710 = Dialect{
 	// bank (§60m regional finding). The declaration is the manual's, and it
 	// moves not a byte. Pinned by mtreadpolicy_test.go's
 	// TestMTReadSlots_RegisteredDialectsReadEverythingReadable.
-	mt:          MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
-	clar:        ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	mt:   MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	clar: ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+
+	// The FT-710 CAT manual's MW block prints P5 "0: TX CLAR OFF 1: TX CLAR
+	// ON", and its MR block the same, so byte 21 is this radio's TX
+	// clarifier flag in both directions — which is what MemoryData.TxClar
+	// has always carried here. Pinned by memoryp5_test.go's
+	// TestMemoryP5_RegisteredDialectsCarryTheTxClarifier.
+	memoryP5: P5TxClar,
+
 	mwWriteKind: KindMemory,
 }
 

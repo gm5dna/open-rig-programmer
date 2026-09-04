@@ -44,6 +44,7 @@ func mustCombinedDialect(t *testing.T, tagMax int, fill byte, mwKind byte) Diale
 		},
 		MT:          MTPolicy{Form: MTFormCombined, ReadSlots: MTReadsReadable, TagMaxBytes: tagMax, TagFill: fill},
 		Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+		MemoryP5:    P5TxClar,
 		MWWriteKind: mwKind,
 	})
 }
