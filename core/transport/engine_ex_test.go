@@ -14,8 +14,8 @@ import (
 // This file pins the EX (MENU) full-address correlation convention
 // documented on CommandSpec.ExpectPrefix: for a command family whose
 // answer frames share a short prefix ("EX") across many addresses,
-// ExpectPrefix must carry the FULL address ("EX"+addr.Wire()), never the
-// bare command name. Every test below either proves that convention holds
+// ExpectPrefix must carry the FULL address ("EX"+d.EXWire(addr)), never
+// the bare command name. Every test below either proves that convention holds
 // against Engine's existing, unmodified matching logic (no engine change
 // was needed for this task — see CommandSpec.matches, engine.go), or —
 // the negative-space test — proves WHY the convention exists at all: a
@@ -35,7 +35,7 @@ import (
 func exReadSpec(addr cat.EXAddress) CommandSpec {
 	return CommandSpec{
 		Class:      ClassRead,
-		Match:      cat.PrefixLenMatcher("EX"+addr.Wire(), 0),
+		Match:      cat.PrefixLenMatcher("EX"+cat.FT710.EXWire(addr), 0),
 		RetryReads: 1,
 	}
 }
@@ -76,7 +76,7 @@ func TestEngine_EXRead_FullAddressSpec_HappyPath(t *testing.T) {
 		if gotAddr != addr {
 			t.Errorf("ParseEXAnswer address = %v, want %v", gotAddr, addr)
 		}
-		wantRaw := fakeradio.EXRuntimeDefaults()[addr.Wire()]
+		wantRaw := fakeradio.EXRuntimeDefaults()[cat.FT710.EXWire(addr)]
 		if gotRaw != wantRaw {
 			t.Errorf("ParseEXAnswer raw = %q, want %q (the fake's runtime default)", gotRaw, wantRaw)
 		}
@@ -85,7 +85,7 @@ func TestEngine_EXRead_FullAddressSpec_HappyPath(t *testing.T) {
 	t.Run("WithEXSetting override", func(t *testing.T) {
 		const overridden = "007"
 		_, eng := newTestEngine(t, []fakeradio.Option{
-			fakeradio.WithEXSetting(addr.Wire(), overridden),
+			fakeradio.WithEXSetting(cat.FT710.EXWire(addr), overridden),
 		})
 		ctx := testCtx(t)
 
@@ -141,7 +141,7 @@ func TestEngine_EXRead_WrongAddressInjectedFirst_NotConsumed(t *testing.T) {
 	if gotAddr != addr {
 		t.Errorf("ParseEXAnswer address = %v, want %v (must not have been correlated to the injected wrong-address frame)", gotAddr, addr)
 	}
-	wantRaw := fakeradio.EXRuntimeDefaults()[addr.Wire()]
+	wantRaw := fakeradio.EXRuntimeDefaults()[cat.FT710.EXWire(addr)]
 	if gotRaw != wantRaw {
 		t.Errorf("ParseEXAnswer raw = %q, want %q", gotRaw, wantRaw)
 	}
@@ -187,7 +187,7 @@ func TestEngine_EXRead_AIChatterStorm_StillCorrelates(t *testing.T) {
 	if gotAddr != addr {
 		t.Errorf("ParseEXAnswer address = %v, want %v", gotAddr, addr)
 	}
-	wantRaw := fakeradio.EXRuntimeDefaults()[addr.Wire()]
+	wantRaw := fakeradio.EXRuntimeDefaults()[cat.FT710.EXWire(addr)]
 	if gotRaw != wantRaw {
 		t.Errorf("ParseEXAnswer raw = %q, want %q", gotRaw, wantRaw)
 	}
@@ -287,8 +287,8 @@ func TestEngine_EXRead_DelayedPriorAnswer_NeverCrossesToNextRead(t *testing.T) {
 		t.Errorf("Do (addr B) returned after %v, want >= QuietPeriod (%v) — the entry suspect drain must genuinely have run", elapsed, QuietPeriod)
 	}
 
-	wantA := "EX010101" + fakeradio.EXRuntimeDefaults()[addrA.Wire()] + ";"
-	wantB := "EX010104" + fakeradio.EXRuntimeDefaults()[addrB.Wire()] + ";"
+	wantA := "EX010101" + fakeradio.EXRuntimeDefaults()[cat.FT710.EXWire(addrA)] + ";"
+	wantB := "EX010104" + fakeradio.EXRuntimeDefaults()[cat.FT710.EXWire(addrB)] + ";"
 	if string(got) == wantA {
 		t.Fatalf("Do (addr B) returned addr A's STALE answer (%q) — quarantine failed, exactly the worst-case scenario this test guards against", got)
 	}

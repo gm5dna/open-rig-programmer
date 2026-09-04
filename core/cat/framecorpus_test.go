@@ -160,7 +160,7 @@ func buildFrameCorpus(t *testing.T) []string {
 	}
 
 	for _, a := range FT710.EXAddresses() {
-		recordOrReject(t, &out, "EX.read."+a.Wire(), func() (Command, error) { return FT710.BuildEXRead(a) })
+		recordOrReject(t, &out, "EX.read."+FT710.EXWire(a), func() (Command, error) { return FT710.BuildEXRead(a) })
 	}
 
 	// The zero-value EXAddress is not a Table 2 member: exercises

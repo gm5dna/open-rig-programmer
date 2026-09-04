@@ -105,6 +105,7 @@ type Dialect struct {
 	slots     slotSpace
 
 	exItems    []EXItem
+	exAddrForm EXAddressForm        // this dialect's OWN EX address field width (six digits or four)
 	exMembers  map[EXAddress]bool   // this dialect's OWN membership index
 	exByTriple map[[3]int]EXAddress // this dialect's OWN decimal-triple index
 	exP4Max    int                  // this dialect's OWN widest P4 answer field, derived from exItems
@@ -163,7 +164,10 @@ var FT710 = Dialect{
 		emgWire:  "EMG",
 		noneWire: "000",
 	},
-	exItems:    exItemsGen,
+	exItems: exItemsGen,
+	// The FT-710's EX grammar block prints "E X P1 P1 P2 P2 P3 P3"
+	// (manual extract line ~629): six digits, three components.
+	exAddrForm: EXAddressTriple,
 	exMembers:  buildEXMembers(exItemsGen),
 	exByTriple: buildEXByTriple(exItemsGen),
 	exP4Max:    maxEXP4Bytes(exItemsGen),
@@ -325,6 +329,27 @@ func (d Dialect) EXAddresses() []EXAddress {
 // evidence is consistent with the reading this inventory already had
 // rather than prompting a change to it.
 func (d Dialect) KnownEXAddress(a EXAddress) bool { return d.exMembers[a] }
+
+// EXWire renders a as THIS DIALECT'S EX address field: six digits under
+// EXAddressTriple, four under EXAddressPair.
+//
+// It is the method every caller outside this package uses, and it replaced
+// EXAddress.Wire() — a method on the address, which carries no family and
+// so rendered six digits for every radio. See wireEXAddress for the whole
+// argument and for the P3 rule the four-digit render depends on.
+func (d Dialect) EXWire(a EXAddress) string { return wireEXAddress(d.exAddrForm, a) }
+
+// EXAddressWidth is the byte width of this dialect's EX address field: 6
+// under EXAddressTriple, 4 under EXAddressPair, 0 for a dialect that
+// declares no form (only the inert zero Dialect, since V12 refuses such a
+// config).
+//
+// It MEASURES the renderer rather than repeating its widths in a second
+// switch. A bound consulted from somewhere other than its own datum is the
+// drift this package has paid for repeatedly; here the two would be one
+// edit apart and nothing would fail. TestDialect_EXWireAndWidth asserts the
+// identity directly.
+func (d Dialect) EXAddressWidth() int { return len(wireEXAddress(d.exAddrForm, EXAddress{})) }
 
 // pmsCap returns this dialect's PMS pair count, clamped to 9. The wire
 // form's pair digit is a single ASCII byte ('1'-'9'), so pmsPairs can

@@ -1302,9 +1302,10 @@ func TestBuildWriteCommand_P7IsTheFormConstant(t *testing.T) {
 			EmergencyWire: "EMG",
 			NoneWire:      "000",
 		},
-		MT:          cat.MTPolicy{Form: cat.MTFormCombined, TagMaxBytes: 12, TagFill: ' '},
-		Clarifier:   cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-		MWWriteKind: cat.KindMemory,
+		EXAddressForm: cat.EXAddressTriple,
+		MT:            cat.MTPolicy{Form: cat.MTFormCombined, TagMaxBytes: 12, TagFill: ' '},
+		Clarifier:     cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+		MWWriteKind:   cat.KindMemory,
 	})
 	if peer.MWWriteKind() == cat.CombinedMTSetKind {
 		t.Fatal("the peer dialect's MWWriteKind equals the form constant — it cannot discriminate")
