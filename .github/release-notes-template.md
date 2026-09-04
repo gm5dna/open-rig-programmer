@@ -127,15 +127,18 @@ reading and for opt-in writes (see below).
   (or type one into the CSV column) or leave the cell empty in the CSV,
   which records it as "unknown, keep whatever the radio has". Codeplug files
   written before this release are unaffected: every file this program wrote
-  still loads and re-saves byte for byte. A hand-edited sparse schema-5
-  file — one that omitted a field's state — gains explicit empty states on
-  its first save, and stays schema 5 rather than being rewritten as
-  schema 3.
+  still loads and re-saves byte for byte. A hand-edited sparse file —
+  one that omitted a field's state — gains an explicit empty state key on
+  its first save and keeps the schema its remaining fields need: a file
+  omitting only one of the ten Icom-tier states re-saves at schema 4; one
+  omitting a receiver state re-saves at schema 5.
 - **IC-7610, IC-7760 and IC-7851: a frequency the radio's record cannot hold
   is refused when it is read, not later.** A record whose decoded frequency
-  lies outside the model's declared range is reported as out of domain at
-  the read, with the measured value and the limit, instead of arriving in
-  the grid as a value the send gate would then refuse without saying why.
+  lies beyond what that model's memory record can hold (and, on the
+  IC-7851, outside its declared receive range) is reported as out of
+  domain at the read, with the measured value and the limit, instead of
+  arriving in the grid as a value the send gate would then refuse without
+  saying why.
 - **IC-R8600: the probe note now says how much of the memory the bounded
   walk covers**, in the same terms the write refusal already used: nothing
   on this build's command line or in its window widens it, and a channel

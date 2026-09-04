@@ -489,6 +489,39 @@ var wiringTierFields = []spec.Field{
 	spec.FieldAntenna, spec.FieldIPPlus,
 }
 
+// wiringPreTierFields is the ten Field constants core/spec declared
+// before the Icom tier — everything spec.AllFields() lists ahead of
+// spec.FieldTxFrequency. A duplicate of drivertest's preTierFields
+// rather than a shared import: core/driver/internal/drivertest is
+// internal to the core/driver tree, so this package (a sibling of
+// core/driver, not a descendant) cannot import it.
+var wiringPreTierFields = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldClarifier,
+	spec.FieldCTCSSState, spec.FieldCTCSSTone, spec.FieldShift,
+	spec.FieldTag, spec.FieldTagDisplay, spec.FieldScanSkip, spec.FieldErase,
+}
+
+// TestWiringTierFields_MatchAllFields pins that wiringTierFields names
+// exactly spec.AllFields() minus the ten pre-tier fields above, so a
+// Field added to core/spec and left out of wiringTierFields is caught
+// here rather than silently narrowing the reachesTierField sweep this
+// slice feeds.
+func TestWiringTierFields_MatchAllFields(t *testing.T) {
+	preTier := make(map[spec.Field]bool, len(wiringPreTierFields))
+	for _, f := range wiringPreTierFields {
+		preTier[f] = true
+	}
+	var want []spec.Field
+	for _, f := range spec.AllFields() {
+		if !preTier[f] {
+			want = append(want, f)
+		}
+	}
+	if !slices.Equal(wiringTierFields, want) {
+		t.Errorf("wiringTierFields = %v, want %v (spec.AllFields() minus the ten pre-tier fields)", wiringTierFields, want)
+	}
+}
+
 func wiringTierFieldStates(d *codeplug.ChannelData) map[spec.Field]codeplug.FieldState {
 	return map[spec.Field]codeplug.FieldState{
 		spec.FieldTxFrequency:       d.TxFreqHz.State,

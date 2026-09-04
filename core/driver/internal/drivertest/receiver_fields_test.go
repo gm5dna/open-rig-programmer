@@ -4,12 +4,62 @@ package drivertest
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
+
+// preTierFields is the ten Field constants core/spec declared before the
+// Icom tier: everything AllFields() lists ahead of
+// spec.FieldTxFrequency. Named here, rather than counted off AllFields()
+// by position, so the list is legible beside the test that uses it.
+var preTierFields = []spec.Field{
+	spec.FieldFrequency,
+	spec.FieldMode,
+	spec.FieldClarifier,
+	spec.FieldCTCSSState,
+	spec.FieldCTCSSTone,
+	spec.FieldShift,
+	spec.FieldTag,
+	spec.FieldTagDisplay,
+	spec.FieldScanSkip,
+	spec.FieldErase,
+}
+
+// TestTierFieldStates_MatchAllFields pins the mitigation
+// tierFieldStates' own doc comment claims: the set of fields it names is
+// exactly spec.AllFields() minus the ten pre-tier fields above. Without
+// this, a newly minted Field could be added to core/spec and never wired
+// into tierFieldStates, and nothing would say so — the seventeen-case
+// table in TestAssertFreshReadSaveLoad_RefusesAnAbsentField only proves
+// its OWN seventeen are covered, not that an eighteenth exists. This
+// test fails the moment AllFields() grows past seventeen tier fields
+// without a matching entry here, which is the whole point.
+func TestTierFieldStates_MatchAllFields(t *testing.T) {
+	preTier := make(map[spec.Field]bool, len(preTierFields))
+	for _, f := range preTierFields {
+		preTier[f] = true
+	}
+	var want []string
+	for _, f := range spec.AllFields() {
+		if !preTier[f] {
+			want = append(want, string(f))
+		}
+	}
+
+	d := yaesuShapeChannelData()
+	var got []string
+	for _, f := range tierFieldStates(&d) {
+		got = append(got, f.name)
+	}
+
+	if !slices.Equal(got, want) {
+		t.Errorf("tierFieldStates names = %v, want %v (spec.AllFields() minus the ten pre-tier fields)", got, want)
+	}
+}
 
 // errorRecorder captures what a helper reports instead of failing the
 // test that is checking the helper. Everything else — Helper, TempDir,
@@ -112,8 +162,15 @@ func TestAssertFreshReadSaveLoad_RefusesAnAbsentField(t *testing.T) {
 			if len(rec.errs) != 1 {
 				t.Fatalf("helper reported %d errors, want exactly one naming %s: %v", len(rec.errs), tt.field, rec.errs)
 			}
-			if !strings.Contains(rec.errs[0], tt.field) || !strings.Contains(rec.errs[0], "Absent") {
-				t.Errorf("helper reported %q, want an Absent complaint naming %s", rec.errs[0], tt.field)
+			// Match the field name EXACTLY, delimited by the fixed
+			// wording either side ("fresh-read X state is Absent"):
+			// a plain strings.Contains(rec.errs[0], tt.field) would
+			// let "tuning_step" pass on a report that actually named
+			// "tuning_step_enabled", since the former is a prefix of
+			// the latter.
+			want := fmt.Sprintf("fresh-read %s state is Absent", tt.field)
+			if !strings.Contains(rec.errs[0], want) {
+				t.Errorf("helper reported %q, want it to contain %q", rec.errs[0], want)
 			}
 		})
 	}
