@@ -176,15 +176,19 @@ export function isCellEditable(column, data) {
 	const tier = TIER_BY_ID.get(column.id)
 	if (tier) {
 		// A tier column's cell follows tag_display's rule, not
-		// tone/scan-skip's: 'known' and 'unknown' are both editable, and
-		// 'unavailable' never is. The column only renders where the radio
-		// HAS the field (columnsFor), so an unresolved value there is a
-		// question the user may legitimately answer — while 'unavailable'
-		// says the frame has no room for one, and 'absent' (the zero
-		// state, from a file that predates the field) says the codeplug
-		// never spoke about it, which is not an answer to offer either.
-		const state = /** @type {Record<string, any>} */ (data ?? {})[tier.key]?.state
-		return state === 'known' || state === 'unknown'
+		// tone/scan-skip's: 'known', 'unknown' AND 'absent' are all
+		// editable, and only 'unavailable' never is. The column only
+		// renders where the radio HAS the field (columnsFor), so an
+		// unresolved value there is a question the user may legitimately
+		// answer — and 'absent' (the zero state: the key is simply
+		// missing, e.g. a Yaesu channel with no tier fields, or a file
+		// that predates the field) is exactly that question unanswered,
+		// same as 'unknown'. Only 'unavailable' stays refused: it says
+		// the frame has no room for a value at all, so there is no
+		// question outstanding to answer.
+		if (data == null) return false // no populated channel: same empty-slot rule as every other column
+		const state = /** @type {Record<string, any>} */ (data)[tier.key]?.state
+		return state === 'known' || state === 'unknown' || state === undefined
 	}
 	switch (column.id) {
 		case 'slot':
