@@ -7,9 +7,9 @@ package fakeft891
 // in the FT-891 CAT Operation Reference Book, rev 1909-C — the Control
 // Command List on printed folio 3, whose rows are cited line by line beside
 // each section below, and the per-command charts cited with them — and NOT
-// from core/cat. See doc.go for why that
-// independence matters and for the full ASSUMED register; individual assumed
-// points are flagged inline, next to the code that implements them.
+// from core/cat. See doc.go for why that independence matters and for the
+// full ASSUMED register; individual assumed points are flagged inline, next
+// to the code that implements them.
 //
 // The manual itself is gitignored (docs/fixtures-private/manuals/), so the
 // line references here are citations in the sense core/cat/ft891/doc.go uses
@@ -94,7 +94,435 @@ func (a *reassembler) push(chunk []byte) []accEvent {
 
 func isDigit(b byte) bool { return b >= '0' && b <= '9' }
 
+// --- Slot grammar ---
+//
+// MR's slot legend is the WIDEST this manual prints, and it prints the 5 MHz
+// bank's ACTUAL NUMBERS: "001 - 099 (Regular Memory Channel)", "P1L - P9U
+// (PMS)", "501 - 510 (5 MHz, U.S. and U.K. version only)" and "EMG
+// (Emergency)" (ft891_layout.txt:960-964), repeated by IF (776, 778) and OI
+// (1122, 1123). MT's and MW's legends print the first two classes only
+// (998-999, 1035-1036) and MC's the same (907-909) — the disagreement
+// core/cat/ft891/testdata/provenance.md records as item 5 and does not
+// resolve.
+//
+// THE 5xx BOUNDS ARE TRANSCRIBED, NOT INHERITED, and this radio is the first
+// Yaesu dialect of which that can be said: the FTdx10's and the FT-710's
+// manuals print only "5xx (5MHz BAND)" and their 501..599 sits on their own
+// ASSUMED registers, which is why internal/fakedx10's grammar takes any 5xx
+// and this one does not (core/cat/ft891/doc.go, "WHAT IS DELIBERATELY NOT AN
+// ENTRY"; TestParseSlotForm holds 511 and 599 as invalid).
+
+// slotNoneWire is the answer-only "no slot" form. The wire spelling is the
+// DIALECT's ASSUMED NoneWire (core/cat/ft891/doc.go's register entry
+// "SlotSpace.NoneWire = \"000\""): it appears in no FT-891 slot legend. It is
+// never a valid REQUEST slot here — a read or recall naming it is malformed —
+// and it appears only in the MC answer of a radio sitting on a VFO.
+const slotNoneWire = "000"
+
+// slotEMGWire is the emergency channel's wire form, from MR's slot legend
+// ("EMG (Emergency)", ft891_layout.txt:964).
+const slotEMGWire = "EMG"
+
+// slotWireLen is the width of every slot code on the wire: three bytes for
+// every form in every legend.
+const slotWireLen = 3
+
+// The 5 MHz bank's printed bounds (ft891_layout.txt:962).
+const (
+	fiveMHzLo = 501
+	fiveMHzHi = 510
+)
+
+// slotKind classifies a 3-byte slot code.
+type slotKind int
+
+const (
+	slotInvalid slotKind = iota // malformed: none of the forms below
+	slotNone                    // "000" — answer-only, never a valid request
+	slotMemory                  // 001-099
+	slotPMS                     // P1L-P9U
+	slotFiveMHz                 // 501-510 (which values are POPULATED is a state question — image.go)
+	slotEMG                     // "EMG"
+)
+
+// parseSlotForm classifies s per the slot legends above. It is a pure grammar
+// check and says nothing about whether the slot is populated.
+func parseSlotForm(s string) slotKind {
+	if len(s) != slotWireLen {
+		return slotInvalid
+	}
+	if s == slotEMGWire {
+		return slotEMG
+	}
+	if s == slotNoneWire {
+		return slotNone
+	}
+	if isDigit(s[0]) && isDigit(s[1]) && isDigit(s[2]) {
+		n := int(s[0]-'0')*100 + int(s[1]-'0')*10 + int(s[2]-'0')
+		switch {
+		case n >= 1 && n <= 99:
+			return slotMemory
+		case n >= fiveMHzLo && n <= fiveMHzHi:
+			return slotFiveMHz
+		default:
+			return slotInvalid // "100".."500", "511".."999"
+		}
+	}
+	if s[0] == 'P' && s[1] >= '1' && s[1] <= '9' && (s[2] == 'L' || s[2] == 'U') {
+		return slotPMS
+	}
+	return slotInvalid
+}
+
+// mrReadableSlot reports whether kind is a slot an MR read may name: the four
+// classes MR's own legend lists (ft891_layout.txt:960-964). "000" is
+// answer-only.
+func mrReadableSlot(kind slotKind) bool {
+	switch kind {
+	case slotMemory, slotPMS, slotFiveMHz, slotEMG:
+		return true
+	}
+	return false
+}
+
+// --- Field validators (wire level) ---
+//
+// Every one of them is enforced on the SET direction, and every one is
+// ASSUMED to be what the radio itself enforces — doc.go's register entry
+// SET-DIRECTION FIELD STRICTNESS.
+
+// validModeWireByte reports whether b is a mode nibble this radio's legend
+// admits. The legend is printed beside three commands — MR's P6
+// (ft891_layout.txt:972-974), MT's P6 (1007-1010) and MW's P6 (1043-1046) —
+// and all three are identical: 1..9, then a PRINTED HOLE at 'A' ("A: -"),
+// then B, C, D, with 'E' and 'F' not printed at all. '0' is accepted
+// additionally as the "-" placeholder, which appears in NO FT-891 legend and
+// is the DIALECT's ASSUMED register entry "THE cat.ModeUnset MEMBER OF THE
+// MODE TABLE" (cited): parsers must accept a placeholder even where builders
+// must never emit one.
+//
+// NOTE THE DIVERGENCE FROM internal/fakedx10, which accepts 1..F: that
+// radio's legend fills 'A', 'E' and 'F' (DATA-FM, PSK, DATA-FM-N). Six of
+// this radio's twelve names disagree with the FTdx10's at the same nibble
+// besides, which is why core/cat/ft891's mode table is transcribed afresh and
+// why this one is too.
+func validModeWireByte(b byte) bool {
+	switch {
+	case b == '0':
+		return true
+	case b >= '1' && b <= '9':
+		return true
+	case b >= 'B' && b <= 'D':
+		return true
+	}
+	return false
+}
+
+// validCTCSSByte reports whether b is one of P8's three printed values,
+// `0: CTCSS "OFF" 1: CTCSS ENC/DEC 2: CTCSS ENC` (ft891_layout.txt:1012 and
+// four more blocks). CT's own P2 legend runs to a fourth value (3: DCS "ON",
+// 410-414) and is NOT read across: that describes what the radio is doing
+// now, not what the memory record can hold.
+func validCTCSSByte(b byte) bool { return b >= '0' && b <= '2' }
+
+// validShiftByte reports whether b is one of P10's three printed values,
+// `0: Simplex 1: Plus Shift 2: Minus Shift` (ft891_layout.txt:1015 and four
+// more blocks).
+func validShiftByte(b byte) bool { return b >= '0' && b <= '2' }
+
 func validBoolFlagByte(b byte) bool { return b == '0' || b == '1' }
+
+func validClarSign(b byte) bool { return b == '+' || b == '-' }
+
+// validClarMagDigits reports whether s is a 4-digit clarifier magnitude field
+// inside this manual's printed range.
+//
+// THE RANGE IS THE PRINTED ONE, 0000-9999, AND THE DIALECT'S NARROWER POLICY
+// IS DELIBERATELY NOT APPLIED HERE. The manual prints "Clarifier Offset:
+// 0000 - 9999 (Hz)" on every block carrying the field (MR 967, MT 1003, MW
+// 1040, IF 781, OI 1126) and states NO STEP ANYWHERE.
+// core/cat/ft891/dialect.go's ClarifierPolicy takes 10 Hz and 9990 — a
+// DEDUCTION FROM AN ASSUMPTION, registered as one ("ClarifierPolicy.StepHz =
+// 10 AND ClarifierPolicy.MaxAbsHz = 9990") — and 9990 is what this project
+// permits ITSELF to build, not what this radio's manual says it accepts.
+// This fake models the radio, so it takes the printed range; the consequence
+// is that it accepts a magnitude core/cat would refuse to build, which is the
+// same direction as internal/fakedx10's MT-Set slot leniency and is recorded
+// in doc.go's register entry SET-DIRECTION FIELD STRICTNESS.
+func validClarMagDigits(s string) bool {
+	if len(s) != 4 {
+		return false
+	}
+	for i := 0; i < 4; i++ {
+		if !isDigit(s[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// validTagField reports whether field is acceptable as a combined record's
+// P12 tag field.
+//
+// THIS MANUAL STATES ITS OWN BYTE RULE, and it is broader than core/cat's
+// default charset: "the parameter digits should be filled using any character
+// except the ASCII control codes (00 to 1Fh) and the terminator (;)"
+// (ft891_layout.txt:93-96, printed folio 2). P12's own legend says only "TAG
+// Characters (up to 12 characters) (ASCII)" (1017) and names no set. So the
+// check here is the folio-2 rule — not a control code, not ';' — where
+// core/spec's Capabilities.TagByteOK default narrows to printable ASCII
+// 0x20-0x7E for the FT-891's capability table (the conservative direction for
+// what this project PUTS ON THE WIRE, which is a different question from what
+// the radio accepts off it).
+//
+// SAFETY-CRITICAL, and it stays whatever hardware turns out to accept: ';' is
+// the frame terminator, so a tag carrying one would make command injection
+// possible. (The reassembler splits on ';' before a frame ever reaches here,
+// which means that half of the check is unreachable through Port() — it is
+// kept because unreachable-today is not a security property, and
+// buildMTAnswer's field is written from stored state that WithSlot can set
+// directly.)
+func validTagField(field []byte) bool {
+	for _, b := range field {
+		if b < 0x20 || b == ';' {
+			return false
+		}
+	}
+	return true
+}
+
+// --- The shared memory field block ---
+//
+// This radio's MR Answer and MW Set are one 28-position chart under two
+// prefixes (ft891_layout.txt:968-975 and 1034-1050), and the 41-position
+// combined MT Set/Answer record (996-1027) carries that same block as its
+// head. So there is one block layout in this file, used by every frame that
+// carries channel data.
+//
+// Positions, from the charts' own 1-indexed numbering as counted twice by the
+// geometry witness (core/cat/ft891/testdata/provenance.md §MT, §MR),
+// expressed as 0-indexed offsets INTO THE BLOCK (i.e. into a frame's bytes
+// after the two-byte command name):
+//
+//	pos(1-idx)  field                  block offset
+//	3-5         P1  slot               [0:3]
+//	6-14        P2  frequency, 9 dig   [3:12]
+//	15          P3  clarifier sign     12
+//	16-19       P3  clarifier mag      [13:17]
+//	20          P4  RX clarifier       17
+//	21          P5  fixed '0'          18
+//	22          P6  mode nibble        19
+//	23          P7  kind               20
+//	24          P8  CTCSS state        21
+//	25-26       P9  fixed "00"         [22:24]
+//	27          P10 shift              24
+//
+// The MR/MW frame's ';' sits at position 28, immediately after the block; the
+// combined record puts P11 there instead and continues with the tag field.
+
+const memBlockLen = 25 // 3+9+1+4+1+1+1+1+1+2+1
+
+const (
+	blkSlotStart, blkSlotEnd       = 0, 3
+	blkFreqStart, blkFreqEnd       = 3, 12
+	blkClarSign                    = 12
+	blkClarMagStart, blkClarMagEnd = 13, 17
+	blkRXClar                      = 17
+	blkP5                          = 18
+	blkMode                        = 19
+	blkKind                        = 20
+	blkCTCSS                       = 21
+	blkP9Start, blkP9End           = 22, 24
+	blkShift                       = 24
+)
+
+// blkP5Fixed is P5's documented fixed value, position 21 — "P5 0: (Fixed)"
+// (ft891_layout.txt:971, 1006, 1042, 783, 1129). It is required of a Set
+// arriving and emitted in every answer unless a crafted MemState.P5 says
+// otherwise.
+const blkP5Fixed = '0'
+
+// blkP9Fixed is P9's documented fixed value, positions 25-26 — "P9 00:
+// (Fixed)" (ft891_layout.txt:1013).
+const blkP9Fixed = "00"
+
+// kindMemory is the P7 byte every populated slot in this fake answers with —
+// memory channels, PMS pair members, 5 MHz channels and EMG alike.
+//
+// MR's legend prints "P7 0: VFO 1: Memory" (ft891_layout.txt:976) and MT's
+// prints no read vocabulary at all ("P7 0: (Fixed)", 1011), so for a memory
+// channel this is MR's legend read plainly and carried across to MT — which
+// is exactly the cross-command inference core/cat/ft891/doc.go's register
+// entry "THE COMBINED ANSWER'S P7 READ DOMAIN" records for the parse side.
+// For PMS, 5xx and EMG it is doc.go's own register entry PMS, 5 MHz AND EMG
+// SLOTS ANSWER P7 '1', because the legend has exactly two members and no
+// manual statement says which of them those slots answer with.
+//
+// Note what this fake does NOT do: internal/fakeradio serves '5' (PMS) on the
+// FT-710's MR answer, whose own P7 table runs 0-5 and has a member for it.
+// This radio's legend documents two values, so inventing a third would
+// produce a frame core/cat would rightly refuse to parse.
+const kindMemory = '1'
+
+// parseMemoryBlock validates a memBlockLen-byte field block against every
+// vocabulary the charts print (doc.go's register entry SET-DIRECTION FIELD
+// STRICTNESS) and returns the slot it names together with the state it
+// encodes. ok is false on the first violation found; the caller answers "?;"
+// and changes nothing.
+//
+// wantKind is the P7 byte the CALLING COMMAND's chart documents for its Set
+// direction, passed in rather than assumed, because MT-Set P7 (1011) and
+// MW-Set P7 (1047) are two command-specific facts that happen to coincide on
+// this radio and deriving either from the other is the conflation
+// core/cat/ft891/dialect.go's MWWriteKind comment records at length.
+//
+// The returned MemState carries the ANSWER kind, kindMemory, NOT wantKind: a
+// Set's P7 is a fixed placeholder carrying no channel information, so there
+// is nothing in it to store (see MemState.Kind). P5 is left zero — the
+// schema's fixed '0' — because a Set that reached here carried exactly that
+// byte. Tag and TagDisplay are left to the caller: they are outside this
+// block.
+func parseMemoryBlock(block []byte, wantKind byte) (slot string, s MemState, ok bool) {
+	if len(block) != memBlockLen {
+		return "", MemState{}, false
+	}
+	slot = string(block[blkSlotStart:blkSlotEnd])
+
+	freq := block[blkFreqStart:blkFreqEnd]
+	for _, b := range freq {
+		if !isDigit(b) {
+			return "", MemState{}, false
+		}
+	}
+	sign := block[blkClarSign]
+	if !validClarSign(sign) {
+		return "", MemState{}, false
+	}
+	mag := string(block[blkClarMagStart:blkClarMagEnd])
+	if !validClarMagDigits(mag) {
+		return "", MemState{}, false
+	}
+	rx := block[blkRXClar]
+	if !validBoolFlagByte(rx) {
+		return "", MemState{}, false
+	}
+	// P5 is schema on this radio, so a Set carrying anything else is not a
+	// frame this radio's charts describe — the ONE refusal internal/fakedx10
+	// cannot have, because there the same byte is a TX clarifier flag.
+	if block[blkP5] != blkP5Fixed {
+		return "", MemState{}, false
+	}
+	mode := block[blkMode]
+	if !validModeWireByte(mode) {
+		return "", MemState{}, false
+	}
+	if block[blkKind] != wantKind {
+		return "", MemState{}, false
+	}
+	ctcss := block[blkCTCSS]
+	if !validCTCSSByte(ctcss) {
+		return "", MemState{}, false
+	}
+	if string(block[blkP9Start:blkP9End]) != blkP9Fixed {
+		return "", MemState{}, false
+	}
+	shift := block[blkShift]
+	if !validShiftByte(shift) {
+		return "", MemState{}, false
+	}
+
+	return slot, MemState{
+		Freq: string(freq),
+		// STORED, not zeroed — doc.go's register entry THE CLARIFIER IS
+		// STORED, the deliberate non-borrowing of the FT-710's clarifier
+		// hardware finding. This is the line that makes the combined Set
+		// round-trip byte-faithfully.
+		ClarSign: sign,
+		ClarMag:  mag,
+		RXClar:   rx == '1',
+		Mode:     mode,
+		// The ANSWER kind, never the Set's placeholder: memory, PMS, 5xx and
+		// EMG slots all answer '1'.
+		Kind:  kindMemory,
+		CTCSS: ctcss,
+		Shift: shift,
+	}, true
+}
+
+func boolFlagByte(b bool) byte {
+	if b {
+		return '1'
+	}
+	return '0'
+}
+
+// appendMemBlock concatenates an already-validated MemState into its
+// memBlockLen-byte field block. It trusts its input — state reaching here came
+// from a validated Set or from an image constant — and returns no error.
+func appendMemBlock(out []byte, slot string, s MemState) []byte {
+	out = append(out, slot...)
+	out = append(out, s.Freq...)
+	out = append(out, s.ClarSign)
+	out = append(out, s.ClarMag...)
+	out = append(out, boolFlagByte(s.RXClar))
+	// The zero value means the schema's fixed '0' — see MemState.P5.
+	p5 := s.P5
+	if p5 == 0 {
+		p5 = blkP5Fixed
+	}
+	out = append(out, p5)
+	out = append(out, s.Mode)
+	out = append(out, s.Kind)
+	out = append(out, s.CTCSS)
+	out = append(out, blkP9Fixed...)
+	out = append(out, s.Shift)
+	return out
+}
+
+// --- MR: MEMORY CHANNEL READ (availability 164; frames 959-979) ---
+//
+// X O O X: no Set, a Read, an Answer, no AI push. Read frame (6 bytes) "MR" +
+// 3-byte slot + ';'; Answer frame (28 bytes) "MR" + the field block + ';'.
+//
+// MR IS THIS RADIO'S ONLY ROUTE TO THE DISCOVERED BANKS. MT's legend names
+// memory and PMS only, so core/driver/ft891 probes 501..510 and EMG by MR and
+// reads those banks by MR alone — which is why every readable slot class is
+// served here and why the answer carries no tag: the block stops at position
+// 27, and Tag and TagDisplay read Unavailable on those banks in consequence.
+
+// buildMRAnswer builds the 28-byte MR answer for slot.
+func buildMRAnswer(slot string, s MemState) []byte {
+	out := make([]byte, 0, 2+memBlockLen+1)
+	out = append(out, 'M', 'R')
+	out = appendMemBlock(out, slot, s)
+	out = append(out, ';')
+	return out
+}
+
+func (r *Radio) handleMR(body []byte) []byte {
+	if len(body) != slotWireLen {
+		// Includes an MR frame in the 28-byte SET shape: this radio's
+		// availability row gives MR no Set direction at all (a manual fact,
+		// not an assumption — ft891_layout.txt:164), so such a frame is
+		// simply unknown. TestMR_HasNoSetDirection.
+		return rejection
+	}
+	slot := string(body)
+	if !mrReadableSlot(parseSlotForm(slot)) {
+		return rejection
+	}
+	r.mu.Lock()
+	s, ok := r.slots[slot]
+	r.mu.Unlock()
+	if !ok {
+		// Empty slot — ASSUMED, doc.go's register entry EMPTY-SLOT ANSWERS.
+		// This is the exchange core/driver/ft891 reads as "the slot is empty"
+		// in its MT/MR cross-check and as "absent from this radio" during
+		// 5xx/EMG discovery.
+		return rejection
+	}
+	return buildMRAnswer(slot, s)
+}
 
 // --- ID (availability 147; frames 762-770) ---
 //
@@ -180,6 +608,8 @@ func (r *Radio) handleFrame(frame []byte) []byte {
 		return r.handleID(rest)
 	case [2]byte{'A', 'I'}:
 		return r.handleAI(rest)
+	case [2]byte{'M', 'R'}:
+		return r.handleMR(rest)
 	default:
 		return rejection
 	}

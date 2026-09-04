@@ -28,3 +28,18 @@ func WithLatency(d time.Duration) Option {
 		r.latency = d
 	}
 }
+
+// WithSlot overlays one slot's state onto whatever image is already present.
+//
+// No validation is applied: the state is stored verbatim, so a test may craft
+// a slot whose ANSWER is deliberately malformed — a P5 that is not the fixed
+// '0', a P7 outside the tolerated {'0','1'} pair, a mode nibble the legend
+// does not list — and drive a real driver's parse-error path through a real
+// fake rather than through a scripted transcript. That is the reason
+// MemState's answer-side fields are fields at all (see MemState.P5 and
+// MemState.Kind).
+func WithSlot(slot string, s MemState) Option {
+	return func(r *Radio) {
+		r.slots[slot] = s
+	}
+}
