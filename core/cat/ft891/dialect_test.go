@@ -975,8 +975,12 @@ func TestASSUMEDRegisterIsComplete(t *testing.T) {
 		}
 	}
 
-	// The markers in dialect.go, each within reach of its own field.
+	// The markers in dialect.go, each within reach of its own field. This
+	// walk also records, line by line, which lines fall in an anchor's
+	// reach — the reverse walk below uses that to catch the direction this
+	// one cannot: a field marked ASSUMED with no register entry.
 	lines := strings.Split(string(dialectSrc), "\n")
+	covered := make([]bool, len(lines))
 	for _, row := range assumedRegister {
 		if row.Anchor == "" {
 			if row.Elsewhere == "" {
@@ -1007,6 +1011,44 @@ func TestASSUMEDRegisterIsComplete(t *testing.T) {
 		}
 		if !strings.Contains(strings.Join(lines[lo:at+1], "\n"), "ASSUMED") {
 			t.Errorf("dialect.go's %q carries no ASSUMED marker within %d lines above it, but doc.go registers %q — a registered assumption with no marker at its point of use is one a later reader takes for a transcription", row.Anchor, window, row.Entry)
+		}
+		for i := lo; i <= at; i++ {
+			covered[i] = true
+		}
+	}
+
+	// REVERSE WALK: every marker line in dialect.go must fall inside a
+	// window an anchor above claimed. A marker outside every window is a
+	// field the register does not know about — the M9d-1 shape (an
+	// assumption travelling unregistered) run the other way.
+	//
+	// A "marker line" flags its OWN field; it is not any line that merely
+	// uses the word. This file also says "NOT ASSUMED" (ruling an
+	// assumption OUT, at the 5 MHz bank), that "assumptions ... are marked
+	// ASSUMED below" (scoping prose for the whole struct) and that a
+	// sibling dialect reads "their own ASSUMED registers" (someone else's
+	// register) — none of those names a field of THIS dialect as assumed,
+	// so none should have to anchor to one here. Every field genuinely
+	// flagged in this file does it one of two ways: the register's own
+	// opening word ("// ASSUMED — ...") or a declarative "…ARE ASSUMED" /
+	// "…IS ASSUMED" sentence; "NOT ASSUMED" is excluded because it says the
+	// opposite.
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "//") {
+			continue
+		}
+		if strings.Contains(line, "NOT ASSUMED") {
+			continue
+		}
+		isMarker := strings.HasPrefix(trimmed, "// ASSUMED") ||
+			strings.Contains(line, "ARE ASSUMED") ||
+			strings.Contains(line, "IS ASSUMED")
+		if !isMarker {
+			continue
+		}
+		if !covered[i] {
+			t.Errorf("dialect.go:%d carries an ASSUMED marker outside every register entry's window: %q — an assumption travelling unregistered", i+1, trimmed)
 		}
 	}
 }
