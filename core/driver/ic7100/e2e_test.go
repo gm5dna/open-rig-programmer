@@ -27,9 +27,10 @@ import (
 // and nothing more. internal/fakeic7100 is the OTHER witness: a stdlib-only
 // radio derived from the same printed pages by agents who never opened
 // core/civ/ic7100, this driver, or its golden vectors. Where the two agree
-// here, two independent readings of PDF pp. 361–375 landed in the same
-// place, which is evidence; where they disagreed, the disagreement is
-// recorded rather than assumed away.
+// here, two independent readings of the record layout — PDF p.361 (folio
+// 20-2) opens it, PDF p.375 (folio 20-16) carries the field diagram it
+// ends on — landed in the same place, which is evidence; where they
+// disagreed, the disagreement is recorded rather than assumed away.
 //
 // WHERE THIS TEST LIVES AND WHAT IT MAY TOUCH. Wave 3 registers nothing:
 // internal/wiring, internal/guards, internal/radiotext, cmd/rigprog and
