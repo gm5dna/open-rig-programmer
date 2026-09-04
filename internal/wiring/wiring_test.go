@@ -406,14 +406,28 @@ func TestOpenFakeSessionFor_EveryRegisteredModel_ReadsEveryDefaultSlot(t *testin
 			// bump a Yaesu codeplug's schema and break byte identity.
 			//
 			// What this actually exercises, and no more: the schema-3
-			// arm by the four Yaesu models, and the >= 4 arm by the
-			// IC-R8600 alone, whose fake ships populated default slots
-			// at schema 5. The other ten Icom fakes have EMPTY default
-			// images, so both the Absent sweep above and the >= 4 arm
-			// are vacuous for them and the branch below says so out
-			// loud rather than passing quietly. Their populated reads
-			// are pinned per-driver instead, by
-			// drivertest.AssertFreshReadSaveLoad.
+			// arm by the four Yaesu models (FT-710, FTdx10, FTdx101D,
+			// FTdx101MP), and the >= 4 arm by the IC-R8600 alone,
+			// whose fake ships populated default slots at schema 5.
+			// Those five are also the only models the Absent sweep
+			// above is non-vacuous for. The other ten Icom fakes have
+			// EMPTY default images — nothing to read a tier state from
+			// — so both the sweep and the >= 4 arm say nothing about
+			// them, and the branches below log that rather than
+			// passing quietly.
+			//
+			// Their populated reads are covered per-driver, by
+			// drivertest.AssertFreshReadSaveLoadNormalised, which each
+			// driver's own read test calls on a real populated channel
+			// and which makes the same no-Absent assertion over the
+			// same seventeen fields. It did NOT until the fix this
+			// comment was corrected alongside: the helper checked only
+			// the seven D8 states, and its Save/Load DeepEqual cannot
+			// catch an Absent field at all (see that function's doc
+			// comment, pinned by
+			// TestAssertFreshReadSaveLoad_RefusesAnAbsentField). Adding
+			// channels to the ten fake images is not the alternative:
+			// a fake's contents are frozen evidence.
 			path := filepath.Join(t.TempDir(), "fresh-read.json")
 			if err := codeplug.Save(path, &codeplug.Codeplug{Generator: "wiring fleet test", Channels: channels}); err != nil {
 				t.Fatalf("Save(fresh read): %v", err)
