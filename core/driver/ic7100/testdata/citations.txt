@@ -47,13 +47,12 @@
 PDF p.91
 PDF p.174
 PDF p.317
+PDF p.361
 PDF p.375
-
-# Page spans.
-PDF pp.361-375
 
 # Printed folios.
 folio 4-26
+folio 20-2
 folio 20-16
 
 # Matrix sections.
