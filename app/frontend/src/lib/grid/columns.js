@@ -95,8 +95,9 @@ const TIER_BY_ID = new Map(TIER_COLUMNS.map((c) => [c.id, c]))
  *
  * Exported because ChannelGrid.svelte chooses a cell's editor by KIND
  * (TierColumn.kind — freq/int/text take the free-text editor and the
- * parser below, tone the UISpec's own tone list, bool the one-keystroke
- * toggle), and the lookup rule — BY ID, never by position — belongs
+ * parser below, tone the UISpec's own tone list, bool a three-way select
+ * until it is answered and the one-keystroke flip after that), and the
+ * lookup rule — BY ID, never by position — belongs
  * here beside the table it reads rather than restated in the component.
  * @param {Column} column
  * @returns {TierColumn | null}

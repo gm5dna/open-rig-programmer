@@ -280,9 +280,38 @@
 	}
 
 	/** Columns a single keystroke TOGGLES rather than opening an editor
-	 * for: Tag display, Scan skip and every tier column of the bool kind.
+	 * for: Tag display, Scan skip and a tier column of the bool kind whose
+	 * cell is ALREADY Known.
+	 *
+	 * The Known condition is the whole of the difference between flipping a
+	 * value and inventing one, and it applies to the tier kind alone. Tag
+	 * display's unanswered half is toggled too, because its Unknown BLOCKS
+	 * the channel at plan time ("tag display unknown — set On or Off before
+	 * sending", core/codeplug/diff.go) — the toggle is how the user answers
+	 * a question the app has already put to them. A tier bool's unanswered
+	 * cell blocks nothing and is never sent (that file's touchedFields adds
+	 * a tier field only where its state is Known), so a keystroke that
+	 * committed Off there would turn "this codeplug makes no claim" into a
+	 * frame the radio receives, with no erase for a tier field and no undo
+	 * to reach back through. Such a cell opens the three-way select instead
+	 * (openEditor). Pinned by "an unanswered bool-kind cell opens a
+	 * three-way select" and "a Known bool-kind cell still flips in one
+	 * keystroke".
+	 * @param {ReturnType<typeof columnsFor>[number]} column
+	 * @param {ChannelData | null} data */
+	function isToggleColumn(column, data) {
+		if (column.id === 'tagDisplay' || column.id === 'skip') return true
+		const tier = tierColumnFor(column)
+		if (tier?.kind !== 'bool') return false
+		return tierField(tier, data)?.state === 'known'
+	}
+
+	/** Columns SPACE activates, as distinct from the ones it toggles: every
+	 * column above, plus a tier bool that is NOT yet Known — Space opens
+	 * that one's select rather than committing anything, and swallowing the
+	 * key is what stops the page scrolling underneath the editor.
 	 * @param {ReturnType<typeof columnsFor>[number]} column */
-	function isToggleColumn(column) {
+	function activatesOnSpace(column) {
 		return column.id === 'tagDisplay' || column.id === 'skip' || tierColumnFor(column)?.kind === 'bool'
 	}
 
@@ -322,7 +351,7 @@
 		const column = columns[colIdx]
 		const data = dataAt(rowIdx)
 		if (!isCellEditable(column, data)) return
-		if (isToggleColumn(column)) {
+		if (isToggleColumn(column, data)) {
 			toggleCell(rowIdx, column)
 			return
 		}
@@ -449,7 +478,7 @@
 	}
 
 	/** Commit a select editor (Mode/Shift/CTCSS/Tone, and a tier column of
-	 * the tone kind).
+	 * the tone or bool kind).
 	 * @param {number} rowIdx @param {number} colIdx @param {string} value */
 	function commitSelectEditor(rowIdx, colIdx, value) {
 		if (!editing) return
@@ -472,6 +501,26 @@
 			submitEdit(sv.Slot, (fresh) => ({
 				...cloneData(fresh ?? data),
 				[tier.key]: { state: 'known', value: decihertz },
+			}))
+			return
+		}
+		if (tier?.kind === 'bool') {
+			// The select an UNANSWERED tier bool opens (see the markup and
+			// toggleCell's comment): its head entry is the same '' the tone
+			// kind uses, so blurring away without choosing answers nothing.
+			// The two real options are the paste parser's own spellings, and
+			// the field this builds is the object parseTierCell's bool case
+			// builds for them — pinned by "choosing Off from that select
+			// commits the same field a paste of "off" produces", which
+			// compares against parsePasteCell's own answer rather than
+			// restating it.
+			if (value === '') return cancelEditor()
+			const next = value === 'on'
+			const current = tierField(tier, data)
+			if (current?.state === 'known' && current.value === next) return cancelEditor()
+			submitEdit(sv.Slot, (fresh) => ({
+				...cloneData(fresh ?? data),
+				[tier.key]: { state: 'known', value: next },
 			}))
 			return
 		}
@@ -556,19 +605,23 @@
 	 * here; these guards are the second line of that defence.
 	 *
 	 * A TIER COLUMN OF THE BOOL KIND (data_mode, tuning_step_enabled,
-	 * ip_plus) follows TAG DISPLAY's rule, not scan skip's, because
-	 * isCellEditable already says it does: such a column renders only where
-	 * the bank's capabilities say the radio HAS the field, so an unresolved
-	 * value there is a question the user may legitimately answer — and its
-	 * 'unknown' and its absent zero state are that same question left
-	 * unanswered. The first activation therefore commits Off and it flips
-	 * from there, walking the cell unanswered → Off → On. Off is exactly
-	 * what a paste of "off" into the column already produces
-	 * (parsePasteCell), which is what makes it a starting point rather than
-	 * an invention: the two routes to answering the cell agree. The
-	 * admission is ASKED of isCellEditable rather than restated here, so
-	 * this toggle can never admit a cell the grid refuses to open —
-	 * 'unavailable' included.
+	 * ip_plus) FLIPS ONLY FROM KNOWN, and takes NEITHER of the two rules
+	 * above whole. Such a column renders only where the bank's capabilities
+	 * say the radio HAS the field, so an unresolved value there IS a
+	 * question the user may legitimately answer — that much is tag
+	 * display's half, and isCellEditable admits the cell for it. But it is
+	 * not a question the app has FORCED: a tier field's Unknown blocks
+	 * nothing at plan time and is never sent, because touchedFields adds a
+	 * tier field only where its state is Known (core/codeplug/diff.go), so
+	 * unanswered means "leave the radio's own setting alone" and a
+	 * manufactured Off would mean "write Off to the radio". Nothing here
+	 * makes that value mandatory the way tag display's wire flag does, and
+	 * there is no erase for a tier field and no undo in this frontend to
+	 * reach back through it. So the FIRST answer is CHOSEN, from the
+	 * three-way select openEditor falls through to; only afterwards is
+	 * there a value to flip. The guard below is the second line of that
+	 * defence, as the isCellEditable call beside it is for 'unavailable':
+	 * neither restates a rule, both re-ASK one.
 	 * @param {number} rowIdx @param {ReturnType<typeof columnsFor>[number]} column */
 	function toggleCell(rowIdx, column) {
 		const sv = slots[rowIdx]
@@ -578,10 +631,10 @@
 		if (tier?.kind === 'bool') {
 			if (!isCellEditable(column, data)) return
 			const current = tierField(tier, data)
-			const next = current?.state === 'known' ? !current.value : false
+			if (current?.state !== 'known') return // unanswered: the select answers it, not this
 			submitEdit(sv.Slot, (fresh) => ({
 				...cloneData(fresh ?? data),
-				[tier.key]: { state: 'known', value: next },
+				[tier.key]: { state: 'known', value: !current.value },
 			}))
 			return
 		}
@@ -901,7 +954,7 @@
 			return
 		}
 		const column = columns[colIdx]
-		if (e.key === 'Enter' || (e.key === ' ' && isToggleColumn(column))) {
+		if (e.key === 'Enter' || (e.key === ' ' && activatesOnSpace(column))) {
 			e.preventDefault()
 			openEditor(rowIdx, colIdx)
 			return
@@ -1180,14 +1233,28 @@
 														<!-- The head-of-list "nothing chosen yet" entry, shown
 														     only while the cell is unanswered: without it, opening
 														     such a cell and blurring away would commit whichever
-														     tone the radio happens to list first. It is the em dash
-														     the cell itself displays, and commitSelectEditor makes
-														     a no-op of it. -->
-														<option value="" selected>—</option>
+														     tone the radio happens to list first.
+														     commitSelectEditor makes a no-op of it. Its LABEL is
+														     words rather than the bare em dash the cell shows,
+														     because an option's text is its accessible name and a
+														     screen reader says nothing useful for a lone dash; it
+														     is plain UI chrome of the same sort as the "empty"
+														     affordance below, not radio vocabulary. -->
+														<option value="" selected>— not set</option>
 													{/if}
 													{#each appState.uiSpec.Tones ?? [] as tone (tone.Decihertz)}
 														<option value={String(tone.Decihertz)} selected={current?.state === 'known' && tone.Decihertz === current.value}>{tone.Display}</option>
 													{/each}
+												{:else if tier && tier.kind === 'bool'}
+													<!-- A tier bool the user has NOT yet answered: the only way
+													     this select is reached, since isToggleColumn sends a
+													     Known one straight to the one-keystroke flip. So the
+													     head entry is always the selected one, and the two
+													     options carry the paste parser's own spellings (see
+													     commitSelectEditor's bool branch). -->
+													<option value="" selected>— not set</option>
+													<option value="on">On</option>
+													<option value="off">Off</option>
 												{/if}
 											</select>
 										{/if}

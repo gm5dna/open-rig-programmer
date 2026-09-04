@@ -1434,7 +1434,10 @@ describe('tier-column editing', () => {
 		// The placeholder sits AT THE HEAD of the real list, not instead of
 		// it: the tones are all offered, and the selected entry is the one
 		// that answers nothing.
-		expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['—', '67.0 Hz', '88.5 Hz'])
+		// Its label is words, not the bare em dash the CELL shows: an option's
+		// text is its accessible name, and a screen reader says nothing
+		// useful for a lone dash.
+		expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['— not set', '67.0 Hz', '88.5 Hz'])
 		expect(/** @type {HTMLSelectElement} */ (select).value).toBe('')
 
 		// Blurring without choosing must not manufacture the first tone in
@@ -1444,25 +1447,82 @@ describe('tier-column editing', () => {
 		expect(updateChannel).not.toHaveBeenCalled()
 	})
 
-	it('a bool-kind cell toggles in one keystroke, walking unanswered → Off → On', async () => {
-		updateChannelMock.mockImplementation(async (ch) => {
-			appState.applyChannelEdits([ch])
-			return { Issues: [], Dirty: true }
-		})
+	// --- the first answer to a tier bool (fix round 1, MED-2) -------------
+	//
+	// An UNANSWERED tier bool is answered by CHOOSING, never by a keystroke
+	// that manufactures one. A tier field's Unknown blocks nothing and is
+	// never sent (core/codeplug/diff.go's touchedFields adds a tier field
+	// only where its state is Known), so committing Off on the first Enter
+	// would convert "this codeplug makes no claim" into "write Off to the
+	// radio" — with no editor, no confirmation, no erase for a tier field
+	// and no undo anywhere in this frontend. That is defaulting an omitted
+	// semantic, which this repository's standing rules forbid.
+	//
+	// Once the cell IS Known the one-keystroke flip stays: that is the
+	// genuinely cheap, genuinely reversible case, and it is Tag display's
+	// Known half exactly.
+
+	it('an unanswered bool-kind cell opens a three-way select, and commits nothing when blurred', async () => {
 		const { container } = render(ChannelGrid)
 		const cellEl = cell(container, 0, DATA_MODE)
 		cellEl.focus()
 		expect(cellEl.textContent?.trim()).toBe('—')
 
 		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+		expect(updateChannel).not.toHaveBeenCalled() // no value manufactured by the keystroke itself
+
+		const select = screen.getByRole('combobox', { name: 'Data mode, M-01' })
+		expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['— not set', 'On', 'Off'])
+		expect(/** @type {HTMLSelectElement} */ (select).value).toBe('')
+
+		await fireEvent.blur(select)
+		expect(updateChannel).not.toHaveBeenCalled()
+	})
+
+	it('choosing Off from that select commits the same field a paste of "off" produces', async () => {
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DATA_MODE)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: ' ' }) // Space activates it too
+
+		const select = screen.getByRole('combobox', { name: 'Data mode, M-01' })
+		await fireEvent.change(select, { target: { value: 'off' } })
+		await fireEvent.keyDown(select, { key: 'Enter' })
+
+		const columns = columnsFor(TIER_UI_SPEC.Banks[0])
+		const pasted = parsePasteCell(columns[DATA_MODE], 'off', TIER_UI_SPEC)
+		expect(pasted.ok).toBe(true)
+		expect(updateChannelMock.mock.calls[0][0].data.data_mode).toEqual(pasted.ok && pasted.patch.data_mode)
+	})
+
+	it('a Known bool-kind cell still flips in one keystroke, with no editor', async () => {
+		updateChannelMock.mockImplementation(async (ch) => {
+			appState.applyChannelEdits([ch])
+			return { Issues: [], Dirty: true }
+		})
+		appState.setCodeplug({
+			Schema: 1,
+			Generator: 'test',
+			Radio: { model: 'IC-7100', cat_id: '88', read_at: null, region: 'GB' },
+			Channels: [{ slot: 'A-001', data: tierData({ data_mode: { state: 'known', value: false } }) }],
+			WorkingPath: '',
+			Dirty: false,
+			BaselineStale: false,
+		})
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DATA_MODE)
+		cellEl.focus()
+		expect(cellEl.textContent?.trim()).toBe('Off')
+
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
 		await Promise.resolve()
-		expect(updateChannelMock.mock.calls[0][0].data.data_mode).toEqual({ state: 'known', value: false })
-		expect(cell(container, 0, DATA_MODE).textContent?.trim()).toBe('Off')
-		expect(screen.queryByRole('textbox')).not.toBeInTheDocument() // no editor: a one-keystroke commit
+		expect(updateChannelMock.mock.calls[0][0].data.data_mode).toEqual({ state: 'known', value: true })
+		expect(cell(container, 0, DATA_MODE).textContent?.trim()).toBe('On')
+		expect(screen.queryByRole('combobox')).not.toBeInTheDocument() // no editor: a one-keystroke commit
 
 		await fireEvent.keyDown(cell(container, 0, DATA_MODE), { key: ' ' })
 		await Promise.resolve()
-		expect(updateChannelMock.mock.calls[1][0].data.data_mode).toEqual({ state: 'known', value: true })
+		expect(updateChannelMock.mock.calls[1][0].data.data_mode).toEqual({ state: 'known', value: false })
 	})
 
 	it('Escape cancels a tier edit without committing', async () => {
