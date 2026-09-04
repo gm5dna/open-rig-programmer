@@ -78,6 +78,12 @@ var dialect = cat.MustNewDialect(cat.DialectConfig{
 		PMSPairs:      9,
 		EmergencyWire: "EMG",
 		NoneWire:      "000", // ASSUMED — in no FTdx10 slot legend
+		// The FTdx10's MC block prints all four slot classes —
+		// "001-099 (Memory Channel), P1L-P9U (PMS), 5xx (5MHz BAND),
+		// EMG (EMERGENCY CH)" (layout 1131-1133) — so an MC Set may
+		// select every one of them on this radio. Not an assumption:
+		// this is the legend, transcribed.
+		MCSelects: cat.MCSelectsAll,
 	},
 	EXItems: exItems,
 	// The FTdx10's EX grammar block prints "E X P1 P1 P2 P2 P3 P3"
@@ -85,18 +91,38 @@ var dialect = cat.MustNewDialect(cat.DialectConfig{
 	// digits, three components.
 	EXAddressForm: cat.EXAddressTriple,
 	MT: cat.MTPolicy{
-		Form:         cat.MTFormCombined,
+		Form: cat.MTFormCombined,
+		// The FTdx10's MT block prints the same four slot classes its MR
+		// block does — "001-099 (Memory Channel), P1L-P9U (PMS), 5xx (5MHz
+		// BAND), EMG (EMERGENCY CH)" (layout 1218) — so an MT read may name
+		// every slot this dialect can read. Not an assumption: this is the
+		// legend, transcribed. The FT-891's MT legend prints memory and PMS
+		// only, which is the disagreement this axis carries.
+		ReadSlots:    cat.MTReadsReadable,
 		TagMaxBytes:  12,
 		ClearTagByte: 0,   // must be 0 under MTFormCombined (V9)
 		PadByte:      0,   // must be 0 under MTFormCombined (V9)
 		TagFill:      ' ', // ASSUMED — the FTdx10's padding byte has
 		// never been observed
+		// The FTdx10's MT block prints "P11 0: (Fixed)" (layout 1235), so
+		// byte 28 of its combined record is schema and carries no state.
+		// Not an assumption: this is the legend, transcribed. The FT-891
+		// prints `P11 0: TAG "OFF" 1: TAG "ON"` there, which is the
+		// disagreement this axis carries.
+		P11: cat.P11Fixed,
 	},
 	Clarifier: cat.ClarifierPolicy{
 		StepHz: 10, // ASSUMED — no step stated anywhere in the
 		// manual; the 9990 range supports, not proves
 		MaxAbsHz: 9990,
 	},
+	// The FTdx10's memory blocks print P5 "0: TX CLAR \"OFF\" 1: TX CLAR
+	// \"ON\"" (layout 1226, the MT block; MR and MW print the same), so
+	// byte 21 carries this radio's TX clarifier flag in both directions.
+	// Not an assumption: this is the legend, transcribed. The FT-891 prints
+	// "0: (Fixed)" on every one of those blocks, which is the disagreement
+	// this axis carries.
+	MemoryP5:    cat.P5TxClar,
 	MWWriteKind: cat.CombinedMTSetKind, // the FTdx10's MW P7
 	// "(Fixed)" — equal to the combined MT Set constant AS A FACT OF
 	// THIS RADIO, not a rule; see the difference pins.

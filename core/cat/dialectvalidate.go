@@ -74,6 +74,8 @@ func validateDialectConfig(cfg DialectConfig) error {
 		validateClarifier,     // V10
 		validateMWWriteKind,   // V11
 		validateEXAddressForm, // V12
+		validateMCSelects,     // V13
+		validateMemoryP5,      // V14
 	} {
 		if err := rule(cfg); err != nil {
 			return err
@@ -357,6 +359,18 @@ func validateMTPolicy(cfg DialectConfig) error {
 	if n := cfg.MT.TagMaxBytes; n < 1 || n > maxMTTagBytes {
 		return fmt.Errorf("cat: MT.TagMaxBytes is %d, want 1..%d — it bounds the outbound write gate, so an unbounded value would authorise a pathologically long MT frame", n, maxMTTagBytes)
 	}
+	// ReadSlots, BEFORE the form switch: the MT read request carries neither
+	// a record nor a tag, so it is the one part of this command that is the
+	// same shape under both forms, and a config omitting its domain must be
+	// refused whichever form it declares. An omitted config semantic is
+	// REFUSED, never defaulted — and defaulting this one to the wide reading
+	// would have BuildMTRead emit, and this dialect's own gate admit, a read
+	// of a bank the radio's MT block never lists.
+	switch cfg.MT.ReadSlots {
+	case MTReadsReadable, MTReadsMemoryPMS:
+	default:
+		return fmt.Errorf("cat: MT.ReadSlots is %v, which is not a policy — declare MTReadsReadable or MTReadsMemoryPMS explicitly (MT's read domain is not always MR's)", cfg.MT.ReadSlots)
+	}
 	switch cfg.MT.Form {
 	case MTFormShort:
 		// The pre-existing short-form requirements, verbatim: ClearTagByte
@@ -372,6 +386,9 @@ func validateMTPolicy(cfg DialectConfig) error {
 		if cfg.MT.TagFill != 0 {
 			return fmt.Errorf("cat: MT.TagFill %#02x is set under MTFormShort — TagFill is combined-form data and an inapplicable field must be explicitly zero", cfg.MT.TagFill)
 		}
+		if cfg.MT.P11 != 0 {
+			return fmt.Errorf("cat: MT.P11 %v is set under MTFormShort — P11 is the COMBINED record's byte 28, and the short form's display flag is already a parameter of BuildMTSet; an inapplicable field must be explicitly zero", cfg.MT.P11)
+		}
 	case MTFormCombined:
 		if cfg.MT.ClearTagByte != 0 {
 			return fmt.Errorf("cat: MT.ClearTagByte %#02x is set under MTFormCombined — no distinct clear encoding is documented for the combined form; an empty tag is the all-TagFill field", cfg.MT.ClearTagByte)
@@ -381,6 +398,11 @@ func validateMTPolicy(cfg DialectConfig) error {
 		}
 		if !validWireByte(cfg.MT.TagFill) {
 			return fmt.Errorf("cat: MT.TagFill is %#02x under MTFormCombined, want printable ASCII 0x20-0x7E excluding ';' — it fills every outbound tag field, and zero would silently emit NUL", cfg.MT.TagFill)
+		}
+		switch cfg.MT.P11 {
+		case P11Fixed, P11TagDisplay:
+		default:
+			return fmt.Errorf("cat: MT.P11 is %v, which is not a policy — declare P11Fixed or P11TagDisplay explicitly (byte 28 of the combined record is a printed-fixed '0' on some radios and a live TAG flag on others, and a live flag is never defaulted)", cfg.MT.P11)
 		}
 	default:
 		return fmt.Errorf("cat: MT.Form %v must be set explicitly — the zero value is not a form (an omitted form must refuse, not default)", cfg.MT.Form)
@@ -477,5 +499,44 @@ func validateEXAddressForm(cfg DialectConfig) error {
 		return nil
 	default:
 		return fmt.Errorf("cat: EXAddressForm %v must be set explicitly — the zero value is not a form (an omitted form must refuse, not default)", cfg.EXAddressForm)
+	}
+}
+
+// validateMCSelects is V13: the MC command's SEND-side slot domain must be
+// declared, never inferred.
+//
+// An omitted config semantic is REFUSED, not defaulted. The two policies
+// differ by the 60m and EMG banks, and an MC Set is SIDE-EFFECTING — it
+// recalls the channel on the radio — so a family whose MC legend prints
+// memory and PMS only, silently given the wider domain, would have frames
+// its own manual never describes built AND admitted by its own gate (this
+// rule's field reaches AllowedCommand through validMCCommand).
+func validateMCSelects(cfg DialectConfig) error {
+	switch cfg.Slots.MCSelects {
+	case MCSelectsAll, MCSelectsMemoryPMS:
+		return nil
+	default:
+		return fmt.Errorf("cat: Slots.MCSelects is %v, which is not a policy — declare MCSelectsAll or MCSelectsMemoryPMS explicitly (an omitted config semantic is refused, never defaulted; MC's send domain is not always MR's read domain)", cfg.Slots.MCSelects)
+	}
+}
+
+// validateMemoryP5 is V14: byte 21 of the shared memory field block must be
+// declared, never inferred.
+//
+// An omitted config semantic is REFUSED, not defaulted. Defaulting to
+// P5TxClar would have this codec emit a '1' into a byte a radio's own manual
+// prints "(Fixed)" — a frame that manual never describes, built and admitted
+// by this dialect's own gate, since this field reaches AllowedCommand's MW
+// and combined-MT checks through parseMemoryFields, which decodes byte 21
+// under this same policy before validateMWFields/validateCombinedMTFields
+// ever run. Defaulting to P5Fixed would silently drop a real TX-clarifier
+// flag on the floor. Neither default is safe, which is exactly when a field
+// must be declared.
+func validateMemoryP5(cfg DialectConfig) error {
+	switch cfg.MemoryP5 {
+	case P5TxClar, P5Fixed:
+		return nil
+	default:
+		return fmt.Errorf("cat: MemoryP5 is %v, which is not a policy — declare P5TxClar or P5Fixed explicitly (byte 21 of the memory block is the TX clarifier flag on some radios and a printed-fixed '0' on others)", cfg.MemoryP5)
 	}
 }

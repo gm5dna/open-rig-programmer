@@ -129,10 +129,11 @@ func TestMTClearTag_DecodingPreservesLegitimateTrailingBytes(t *testing.T) {
 	peer, err := NewDialect(DialectConfig{
 		CATID:         "6666",
 		ModeNames:     map[Mode]string{Mode('2'): "USB"},
-		Slots:         SlotSpace{MemoryLo: 1, MemoryHi: 9, NoneWire: "000"},
+		Slots:         SlotSpace{MemoryLo: 1, MemoryHi: 9, NoneWire: "000", MCSelects: MCSelectsAll},
 		EXAddressForm: EXAddressTriple,
-		MT:            MTPolicy{Form: MTFormShort, TagMaxBytes: 6, ClearTagByte: '-'},
+		MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 6, ClearTagByte: '-'},
 		Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+		MemoryP5:      P5TxClar,
 		MWWriteKind:   KindMemory,
 	})
 	if err != nil {
@@ -242,10 +243,10 @@ func TestMTPadByte_DeclaredNotInferred(t *testing.T) {
 	mk := func(pad byte) Dialect {
 		d, err := NewDialect(DialectConfig{
 			CATID: "6668", ModeNames: map[Mode]string{Mode('2'): "USB"},
-			Slots:         SlotSpace{MemoryLo: 1, MemoryHi: 9, NoneWire: "000"},
+			Slots:         SlotSpace{MemoryLo: 1, MemoryHi: 9, NoneWire: "000", MCSelects: MCSelectsAll},
 			EXAddressForm: EXAddressTriple,
-			MT:            MTPolicy{Form: MTFormShort, TagMaxBytes: 8, ClearTagByte: '-', PadByte: pad},
-			Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990}, MWWriteKind: KindMemory,
+			MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 8, ClearTagByte: '-', PadByte: pad},
+			Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990}, MemoryP5: P5TxClar, MWWriteKind: KindMemory,
 		})
 		if err != nil {
 			t.Fatalf("NewDialect(pad=%#02x): %v", pad, err)

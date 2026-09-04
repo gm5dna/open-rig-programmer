@@ -42,6 +42,55 @@ type SlotSpace struct {
 
 	// NoneWire is the "VFO or MT or QMB" form, e.g. "000". "" means absent.
 	NoneWire string
+
+	// MCSelects is the SEND-side domain of this family's MC (memory channel
+	// recall) command: which of the slots above an MC Set may name.
+	//
+	// It has no default — the zero value is refused by V13 — because the
+	// two readings differ by four whole slot banks and the wrong one is
+	// SIDE-EFFECTING: an MC Set recalls the channel and changes the radio's
+	// operating state, so defaulting a family whose legend prints memory and
+	// PMS only to "all" would send a frame its own manual never describes.
+	// The M9c-1 ruling, applied to a slot domain.
+	MCSelects MCSlotPolicy
+}
+
+// MCSlotPolicy names the SEND-side slot domain of the MC command.
+//
+// It exists because the MC legend is NOT the MR legend on every radio. Each
+// of the three registered dialects prints all four classes — memory, PMS,
+// 5xx and EMG — against MC; a family whose MC block prints only memory and
+// PMS must not have an MC Set built for a bank its manual never lists there,
+// and must not have one admitted by its own outbound gate either.
+//
+// IT GOVERNS THE SEND DIRECTION ONLY. ParseMCAnswer keeps the full readable
+// space whatever this says: an MC Set and an MC Answer share one wire shape,
+// and a radio sitting on a 60m channel it reached from the front panel will
+// answer with it however narrow its Set domain is. Narrowing the parse side
+// from this field would turn a legitimate answer into an error.
+//
+// Its zero value is deliberately NOT a policy, so a config omitting it is
+// refused (V13) rather than defaulted.
+type MCSlotPolicy int
+
+const (
+	// MCSelectsAll is the three registered dialects' domain: memory, PMS,
+	// 60m and EMG — every slot class outside the "000" none form.
+	MCSelectsAll MCSlotPolicy = iota + 1
+	// MCSelectsMemoryPMS is the narrower domain: memory and PMS only.
+	MCSelectsMemoryPMS
+)
+
+// String names the policy, so a refusal can quote it.
+func (p MCSlotPolicy) String() string {
+	switch p {
+	case MCSelectsAll:
+		return "MCSelectsAll"
+	case MCSelectsMemoryPMS:
+		return "MCSelectsMemoryPMS"
+	default:
+		return fmt.Sprintf("MCSlotPolicy(%d)", int(p))
+	}
 }
 
 // MTForm names the FRAME SHAPE a family's MT command takes.
@@ -133,6 +182,94 @@ func (f EXAddressForm) String() string {
 	}
 }
 
+// MTReadSlotPolicy names the slot domain of the MT READ request.
+//
+// It exists because the FT-891's MT block is the first whose own slot legend
+// prints memory and PMS ONLY — `001 - 099 / P1L - P9U` — where its MR block
+// prints the 5xx and EMG banks as well, and where every registered sibling's
+// MT legend prints all four classes. Until Stage 0 this codec had one rule
+// for both commands ("reads are not restricted", mt.go): a read has no side
+// effect, so the write-direction hardware concern that confines MT SET to
+// memory and PMS does not apply to it. That reasoning is still right and is
+// not what this field changes. What it changes is the assumption underneath
+// it — that MT's readable domain is MR's — which the FT-891 refutes in
+// print.
+//
+// It governs BuildMTRead and the outbound gate's MT read branch, which is
+// the whole of the MT read's surface. MR's own read domain is untouched:
+// Dialect.readableSlot still answers for BuildMRRead and the gate's MR
+// branch, and the discovered 5xx/EMG banks are read by MR alone on a
+// MTReadsMemoryPMS radio.
+//
+// Its zero value is deliberately NOT a policy, so a config omitting it is
+// refused (inside V9) rather than defaulted.
+type MTReadSlotPolicy int
+
+const (
+	// MTReadsReadable is the three registered dialects' domain: every slot
+	// this dialect's ParseSlot accepts except the "000" none form —
+	// Dialect.readableSlot, the rule MR reads by.
+	MTReadsReadable MTReadSlotPolicy = iota + 1
+	// MTReadsMemoryPMS is the narrower domain: memory and PMS only, the
+	// slots an MT legend printing just those two names.
+	MTReadsMemoryPMS
+)
+
+// String names the policy, so a refusal can quote it.
+func (p MTReadSlotPolicy) String() string {
+	switch p {
+	case MTReadsReadable:
+		return "MTReadsReadable"
+	case MTReadsMemoryPMS:
+		return "MTReadsMemoryPMS"
+	default:
+		return fmt.Sprintf("MTReadSlotPolicy(%d)", int(p))
+	}
+}
+
+// MTP11Policy names what byte 28 of the COMBINED MT record — P11, the byte
+// immediately after the shared memory field block — means on one family.
+//
+// Every registered combined-form sibling prints it "P11 0: (Fixed)", which
+// is why core/cat carried it as the form constant combinedMTP11. The FT-891
+// prints `P11 0: TAG "OFF" 1: TAG "ON"`: on that radio the byte is a live
+// flag the caller supplies and the radio reports, exactly as the FT-710's
+// SHORT form already carries a display flag beside its tag.
+//
+// A LIVE FLAG IS NEVER DEFAULTED (the M9c-1 ruling, and both spec
+// reviewers). Under P11TagDisplay the display-LESS builder and parser —
+// BuildMTSetCombined and ParseMTAnswerCombined — REFUSE, rather than
+// silently writing '0' for a flag the caller never expressed an intention
+// about; and under P11Fixed the display-BEARING pair refuses in turn, so a
+// caller cannot express a flag on a radio that has none.
+//
+// It belongs to MTFormCombined alone. Under MTFormShort the display flag is
+// already a parameter of BuildMTSet, so V9 requires this to be explicitly
+// zero there — the same ownership rule TagFill, ClearTagByte and PadByte
+// keep.
+type MTP11Policy int
+
+const (
+	// P11Fixed is the FTdx10 family's: byte 28 is the printed "0: (Fixed)",
+	// emitted by the builder and required by the parser.
+	P11Fixed MTP11Policy = iota + 1
+	// P11TagDisplay is the FT-891's: byte 28 is the TAG ON/OFF flag, built
+	// from a caller-supplied value and parsed into one, '0' or '1' only.
+	P11TagDisplay
+)
+
+// String names the policy, so a refusal can quote it.
+func (p MTP11Policy) String() string {
+	switch p {
+	case P11Fixed:
+		return "P11Fixed"
+	case P11TagDisplay:
+		return "P11TagDisplay"
+	default:
+		return fmt.Sprintf("MTP11Policy(%d)", int(p))
+	}
+}
+
 // MTPolicy carries the MT command's dialect-varying dimensions, ACROSS BOTH
 // evidenced frame forms.
 //
@@ -148,12 +285,29 @@ func (f EXAddressForm) String() string {
 //	ClearTagByte | required valid wire byte | must be 0
 //	PadByte      | 0, or a valid wire byte  | must be 0
 //	TagFill      | must be 0                | required valid wire byte
+//	P11          | must be 0                | required valid policy
 //
 // The type stays comparable — scalars only — because Dialect equivalence is
 // asserted with != (dialectequiv_test.go).
 type MTPolicy struct {
 	// Form is this family's MT frame shape. It has no default: see MTForm.
 	Form MTForm
+
+	// ReadSlots is the MT READ request's slot domain. It belongs to BOTH
+	// forms — the read request carries neither a record nor a tag, so its
+	// shape and its domain are the same question under either — which is
+	// why it sits outside the per-form ownership table above and V9
+	// requires it whatever Form says.
+	//
+	// It has no default: see MTReadSlotPolicy.
+	ReadSlots MTReadSlotPolicy
+
+	// P11 says what byte 28 of the COMBINED record means: the printed
+	// "(Fixed)" '0', or a live TAG ON/OFF flag. COMBINED-FORM ONLY; must be
+	// zero under MTFormShort, whose display flag is already a parameter of
+	// BuildMTSet. It has no default under the combined form: see
+	// MTP11Policy.
+	P11 MTP11Policy
 
 	// TagMaxBytes is the longest tag this family accepts, measured in
 	// BYTES. FT-710: 12.
@@ -216,6 +370,50 @@ type MTPolicy struct {
 	TagFill byte
 }
 
+// MemoryP5Policy names what byte 21 of the shared 28-position memory field
+// block — P5, memdata.go's memTxClarOffset — MEANS on one family.
+//
+// The three registered dialects print `P5 0: TX CLAR "OFF" 1: TX CLAR "ON"`
+// against MR, MT and MW alike, so the byte carries MemoryData.TxClar. The
+// FT-891 prints `0: (Fixed)` on every one of those blocks and on IF: the
+// byte is schema there, not state, and this codec must neither emit a '1'
+// into it nor read one back as a flag.
+//
+// IT GOVERNS BOTH DIRECTIONS, unlike MCSelects. Under P5Fixed the encoder
+// writes '0', every builder REFUSES a record carrying TxClar true rather
+// than silently correcting it — a caller who believed it was writing the TX
+// clarifier finds out — and the parser REQUIRES '0', which is the same
+// treatment this package already gives P9 and the combined form's P11 under
+// P11Fixed. A printed-fixed byte that comes back as something else is an
+// undocumented frame, and turning one into data is what this package
+// refuses to do.
+//
+// Its zero value is deliberately NOT a policy, so a config omitting it is
+// refused (V14) rather than defaulted.
+type MemoryP5Policy int
+
+const (
+	// P5TxClar is the three registered dialects' reading: byte 21 is the
+	// TX clarifier flag, '0' off and '1' on, in both directions.
+	P5TxClar MemoryP5Policy = iota + 1
+	// P5Fixed is the FT-891's: byte 21 is printed "0: (Fixed)" on every
+	// memory-bearing block, so '0' is the only value either direction may
+	// carry and TxClar is never true.
+	P5Fixed
+)
+
+// String names the policy, so a refusal can quote it.
+func (p MemoryP5Policy) String() string {
+	switch p {
+	case P5TxClar:
+		return "P5TxClar"
+	case P5Fixed:
+		return "P5Fixed"
+	default:
+		return fmt.Sprintf("MemoryP5Policy(%d)", int(p))
+	}
+}
+
 // ClarifierPolicy bounds MemoryData.ClarHz for one family.
 type ClarifierPolicy struct {
 	// StepHz is the clarifier's granularity in Hz. FT-710: 10.
@@ -268,6 +466,11 @@ type DialectConfig struct {
 
 	// Clarifier bounds the clarifier field.
 	Clarifier ClarifierPolicy
+
+	// MemoryP5 says what byte 21 of the shared memory field block means on
+	// this family: the TX clarifier flag, or a printed-fixed '0'. It has no
+	// default: see MemoryP5Policy.
+	MemoryP5 MemoryP5Policy
 
 	// MWWriteKind is the single P7 "kind" byte this family accepts on
 	// EVERY memory write, e.g. KindMemory for the FT-710.
@@ -356,6 +559,8 @@ func NewDialect(cfg DialectConfig) (Dialect, error) {
 			pmsPairs: cfg.Slots.PMSPairs,
 			emgWire:  cfg.Slots.EmergencyWire,
 			noneWire: cfg.Slots.NoneWire,
+
+			mcSelects: cfg.Slots.MCSelects,
 		},
 		exItems:     items,
 		exAddrForm:  cfg.EXAddressForm,
@@ -365,6 +570,7 @@ func NewDialect(cfg DialectConfig) (Dialect, error) {
 		modeByName:  buildModeByName(modes),
 		mt:          cfg.MT,
 		clar:        cfg.Clarifier,
+		memoryP5:    cfg.MemoryP5,
 		mwWriteKind: cfg.MWWriteKind,
 	}, nil
 }

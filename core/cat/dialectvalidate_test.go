@@ -95,14 +95,16 @@ func validBaselineConfig() DialectConfig {
 			PMSPairs:      3,
 			EmergencyWire: "HLP",
 			NoneWire:      "888",
+			MCSelects:     MCSelectsAll,
 		},
 		EXItems: []EXItem{
 			{Addr: EXAddress{P1: 7, P2: 1, P3: 1}, Name: "ITEM ONE", Digits: 2},
 			{Addr: EXAddress{P1: 7, P2: 1, P3: 2}, Name: "ITEM TWO", Digits: 5},
 		},
 		EXAddressForm: EXAddressTriple,
-		MT:            MTPolicy{Form: MTFormShort, TagMaxBytes: 8, ClearTagByte: '_'},
+		MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 8, ClearTagByte: '_'},
 		Clarifier:     ClarifierPolicy{StepHz: 5, MaxAbsHz: 500},
+		MemoryP5:      P5TxClar,
 		MWWriteKind:   KindMemory,
 	}
 }
