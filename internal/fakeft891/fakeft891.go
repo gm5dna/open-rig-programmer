@@ -22,6 +22,10 @@ type Radio struct {
 	// afterwards, so serve() may read it without r.mu.
 	latency time.Duration
 
+	// mtReadUnsupported is populated only while New's options run and never
+	// mutated afterwards, so the parser may read it without r.mu.
+	mtReadUnsupported bool
+
 	mu    sync.Mutex
 	slots map[string]MemState
 	ai    byte // '0' or '1'; OFF at construction, a MANUAL FACT (ft891_layout.txt:231)

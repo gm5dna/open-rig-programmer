@@ -43,3 +43,31 @@ func WithSlot(slot string, s MemState) Option {
 		r.slots[slot] = s
 	}
 }
+
+// WithMTReadUnsupported makes the fake honour the COMMAND LIST rather than
+// MT's detail block: an MT read of any slot answers "?;" while the Set
+// direction and MR are untouched.
+//
+// IT EXISTS BECAUSE THIS MANUAL CONTRADICTS ITSELF and the contradiction is
+// the largest unresolved thing about this radio. The Control Command List
+// gives MT "Set O, Read X, Ans. X" (ft891_layout.txt:166); MT's own detail
+// block, on the same printed page, prints a filled Read chart and a filled
+// 41-position Answer chart (1016-1027). Both cannot be true, and
+// core/cat/ft891/doc.go records the disagreement without resolving it because
+// no FT-891 has been asked. The default fake plays the DETAIL BLOCK; this
+// option plays the COMMAND LIST.
+//
+// What it makes reachable is core/driver/ft891's typed whole-session refusal:
+// with the option on, an occupied slot answers "?;" to MT and a record to MR
+// in the same session, which is exactly the pair the driver turns into
+// ErrMTReadRejectedForOccupiedSlot. Without it that path would have to be
+// scripted, and a scripted transcript proves the driver reads its own script.
+// TestWithMTReadUnsupported_HonoursTheCommandList pins all three halves.
+//
+// NOT A FAULT OPTION. It does not model a misbehaving radio; it models the
+// other radio this manual describes.
+func WithMTReadUnsupported() Option {
+	return func(r *Radio) {
+		r.mtReadUnsupported = true
+	}
+}

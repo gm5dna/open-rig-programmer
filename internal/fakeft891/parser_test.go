@@ -300,3 +300,303 @@ func TestMRAnswer_CarriesP5AsTheFixedZero(t *testing.T) {
 		t.Errorf("a crafted P5 answered %q, want '1' — the field is there so the refutation is reachable", got2[20])
 	}
 }
+
+// --- MT: MEMORY WRITE & TAG, THE COMBINED FORM (availability 166; frames
+// 996-1027) ---
+//
+// The availability row gives MT "Set O, Read X, Ans. X" and its own detail
+// block prints a filled Read chart and a filled 41-position Answer chart.
+// BOTH CANNOT BE TRUE, and core/cat/ft891/doc.go records the contradiction
+// without resolving it. This fake models the DETAIL BLOCK by default —
+// doc.go's register entry MT READ IS ANSWERED — and models the COMMAND LIST
+// under WithMTReadUnsupported(), so a driver's refusal path is reachable end
+// to end without a scripted transcript.
+
+// TestMTRead_ServesTheTagFlagInByte28 is this radio's one genuinely new axis:
+// MT's P11 legend prints `0: TAG "OFF" 1: TAG "ON"` (ft891_layout.txt:1016)
+// where every registered combined-form sibling prints "0: (Fixed)". The fake
+// stores the flag per channel and answers it back, which is the half of
+// core/driver/ft891's read path that reads TagDisplay Known.
+func TestMTRead_ServesTheTagFlagInByte28(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		display bool
+		want    byte
+	}{
+		{"TAG display ON", true, '1'},
+		{"TAG display OFF", false, '0'},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			state := ordinaryState()
+			state.TagDisplay = tc.display
+			_, conn := newTestRadio(t, WithSlot("001", state))
+
+			want := ordinaryChannel("001", kindMemory).with(func(f *combinedFrame) {
+				f.p11 = tc.want
+			}).frame()
+			got := mustBeACombinedAnswer(t, exchange(t, conn, "MT001;"))
+			if got != want {
+				t.Fatalf("MT001; ->\n got %q\nwant %q", got, want)
+			}
+			if got[27] != tc.want {
+				t.Errorf("byte 28 = %q, want %q", got[27], tc.want)
+			}
+		})
+	}
+}
+
+// mustBeACombinedAnswer fails the test unless got is a 41-byte MT answer, so
+// a per-position assertion below reports a wrong reply rather than panicking
+// on a short one — which a "?;" would otherwise do, taking the whole test
+// binary with it.
+func mustBeACombinedAnswer(t *testing.T, got string) string {
+	t.Helper()
+	if len(got) != 41 || got[:2] != "MT" || got[40] != ';' {
+		t.Fatalf("reply %q is not a 41-byte combined MT answer", got)
+	}
+	return got
+}
+
+// TestMTRead_TagFieldIsSpacePaddedAndAllFillIsNoTag pins the storage rule:
+// stored TRIMMED, answered PADDED to the full 12-byte field, so an all-fill
+// field means "no tag" with no branch of its own. The fill byte is a space
+// because the DIALECT says so — core/cat/ft891/doc.go's ASSUMED register entry
+// "MTPolicy.TagFill = ' '", cited here and never re-derived.
+func TestMTRead_TagFieldIsSpacePaddedAndAllFillIsNoTag(t *testing.T) {
+	short := ordinaryState()
+	short.Tag = "TWENTY"
+	_, conn := newTestRadio(t, WithSlot("001", short))
+	got := mustBeACombinedAnswer(t, exchange(t, conn, "MT001;"))
+	if want := "TWENTY      "; got[28:40] != want {
+		t.Errorf("tag field = %q, want %q (six characters then six spaces)", got[28:40], want)
+	}
+
+	none := ordinaryState()
+	none.Tag = ""
+	_, conn2 := newTestRadio(t, WithSlot("001", none))
+	got2 := mustBeACombinedAnswer(t, exchange(t, conn2, "MT001;"))
+	if want := "            "; got2[28:40] != want {
+		t.Errorf("empty tag field = %q, want twelve spaces", got2[28:40])
+	}
+
+	// Only reachable through WithSlot — the wire cannot deliver a 13th byte.
+	long := ordinaryState()
+	long.Tag = "THIRTEENCHARS"
+	_, conn3 := newTestRadio(t, WithSlot("001", long))
+	got3 := mustBeACombinedAnswer(t, exchange(t, conn3, "MT001;"))
+	if want := "THIRTEENCHAR"; got3[28:40] != want {
+		t.Errorf("truncated tag field = %q, want %q", got3[28:40], want)
+	}
+}
+
+func TestMTRead_EmptyAndMalformedSlots(t *testing.T) {
+	_, conn := newTestRadio(t)
+
+	assertRejected(t, conn, "MT001;") // empty — the register's EMPTY-SLOT ANSWERS
+	assertRejected(t, conn, "MT100;") // grammatical, not a slot of this radio
+	assertRejected(t, conn, "MT000;") // the answer-only none form
+	assertRejected(t, conn, "MT01;")
+	assertRejected(t, conn, "MT;")
+}
+
+// TestMTRead_RefusesTheSlotsItsLegendDoesNotName is the divergence from
+// internal/fakedx10 that matters most, and it is a MANUAL FACT rather than a
+// policy: this radio's MT block prints its slot legend as memory and PMS ONLY
+// (ft891_layout.txt:998-999) where its own MR block prints the 5 MHz bank and
+// EMG as well (960-964). So a populated 501 answers MR and refuses MT.
+//
+// It is the fake's half of core/driver/ft891's negative discovery pin — that
+// no MT read of a 5xx or EMG slot is ever built — and of the dialect's
+// MTPolicy.ReadSlots = cat.MTReadsMemoryPMS.
+func TestMTRead_RefusesTheSlotsItsLegendDoesNotName(t *testing.T) {
+	for _, slot := range []string{"501", "510", "EMG"} {
+		_, conn := newTestRadio(t, WithSlot(slot, ordinaryState()))
+
+		// Populated, and MR proves it in the same session, so the MT refusal
+		// below cannot be an empty slot in disguise.
+		if got := exchange(t, conn, "MR"+slot+";"); got == "?;" {
+			t.Fatalf("MR%s; -> %q, so the MT refusal proves nothing", slot, got)
+		}
+		assertRejected(t, conn, "MT"+slot+";")
+	}
+}
+
+// --- MT Set ---
+
+func TestMTSet_CreatesAnAbsentChannelWithEitherTagFlag(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		p11     byte
+		display bool
+	}{
+		{"TAG ON", '1', true},
+		{"TAG OFF", '0', false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, conn := newTestRadio(t)
+
+			set := ordinaryChannel("002", '0').with(func(f *combinedFrame) {
+				f.p11 = tc.p11
+			}).frame()
+			writeFrame(t, conn, set)
+			assertNoReply(t, conn)
+
+			got, ok := r.SlotState("002")
+			if !ok {
+				t.Fatal("the Set did not create the channel")
+			}
+			want := ordinaryState()
+			want.TagDisplay = tc.display
+			if got != want {
+				t.Errorf("stored state:\n got %+v\nwant %+v", got, want)
+			}
+		})
+	}
+}
+
+func TestMTSet_OverwritesAPopulatedChannel(t *testing.T) {
+	before := ordinaryState()
+	before.Freq = "007100000"
+	before.Tag = "OLD"
+	r, conn := newTestRadio(t, WithSlot("001", before))
+
+	set := ordinaryChannel("001", '0').with(func(f *combinedFrame) {
+		f.p11 = '0'
+		f.tag = "NEW"
+	}).frame()
+	writeFrame(t, conn, set)
+	assertNoReply(t, conn)
+
+	got, ok := r.SlotState("001")
+	if !ok {
+		t.Fatal("the channel vanished")
+	}
+	want := ordinaryState()
+	want.TagDisplay = false
+	want.Tag = "NEW"
+	if got != want {
+		t.Errorf("stored state:\n got %+v\nwant %+v", got, want)
+	}
+}
+
+// TestMTSet_RoundTripsByteFaithfully is the property core/clone's
+// write-then-verify rests on: everything the Set carried comes back, and the
+// ONLY byte that differs is P7 — the Set's fixed '0' against the answer's
+// '1'.
+func TestMTSet_RoundTripsByteFaithfully(t *testing.T) {
+	_, conn := newTestRadio(t)
+
+	ch := ordinaryChannel("003", '0').with(func(f *combinedFrame) {
+		f.clarSign = '+'
+		f.clarMag = "9999" // this manual's printed ceiling, off the dialect's assumed 10 Hz step
+		f.mode = 'D'       // AM-N, the top of this radio's printed nibble range
+		f.ctcss = '2'
+		f.shift = '2'
+		f.p11 = '1'
+		f.tag = "PMSLOWEREDGE"
+	})
+	writeFrame(t, conn, ch.frame())
+	assertNoReply(t, conn)
+
+	want := ch.with(func(f *combinedFrame) { f.kind = kindMemory }).frame()
+	if got := exchange(t, conn, "MT003;"); got != want {
+		t.Errorf("read back:\n got %q\nwant %q", got, want)
+	}
+}
+
+// TestMTSet_RefusedOnTheSlotsItsLegendDoesNotName mirrors the read refusal,
+// and is again this manual's legend rather than a project policy — the
+// direction internal/fakedx10 registers a LENIENCY for, because its MT legend
+// names all four classes.
+func TestMTSet_RefusedOnTheSlotsItsLegendDoesNotName(t *testing.T) {
+	for _, slot := range []string{"501", "510", "EMG"} {
+		r, conn := newTestRadio(t)
+		assertRejected(t, conn, ordinaryChannel(slot, '0').frame())
+		if _, ok := r.SlotState(slot); ok {
+			t.Errorf("a refused MT Set created %s anyway", slot)
+		}
+	}
+}
+
+// TestMTSet_RejectionsLeaveTheChannelUntouched walks the SET-DIRECTION FIELD
+// STRICTNESS register entry field by field. Every case is a frame this
+// radio's own charts do not describe, and every one must draw "?;" with no
+// state change.
+func TestMTSet_RejectionsLeaveTheChannelUntouched(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*combinedFrame)
+	}{
+		{"frequency not nine digits", func(f *combinedFrame) { f.freq = "01425000X" }},
+		{"clarifier sign outside +/-", func(f *combinedFrame) { f.clarSign = '*' }},
+		{"clarifier magnitude not four digits", func(f *combinedFrame) { f.clarMag = "01X0" }},
+		{"RX clarifier flag outside 0/1", func(f *combinedFrame) { f.rxClar = '2' }},
+		{"P5 not the fixed '0'", func(f *combinedFrame) { f.p5 = '1' }},
+		{"mode at the legend's printed hole 'A'", func(f *combinedFrame) { f.mode = 'A' }},
+		{"mode 'E', not printed in any legend", func(f *combinedFrame) { f.mode = 'E' }},
+		{"mode 'F', not printed in any legend", func(f *combinedFrame) { f.mode = 'F' }},
+		{"P7 not the Set chart's fixed '0'", func(f *combinedFrame) { f.kind = '1' }},
+		{"CTCSS state outside 0-2", func(f *combinedFrame) { f.ctcss = '3' }},
+		{"P9 not the fixed \"00\"", func(f *combinedFrame) { f.p9 = "01" }},
+		{"shift outside 0-2", func(f *combinedFrame) { f.shift = '3' }},
+		{"P11 outside the TAG flag's 0/1", func(f *combinedFrame) { f.p11 = '2' }},
+		{"tag carrying a control byte", func(f *combinedFrame) { f.tag = "A\x01B" }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, conn := newTestRadio(t)
+			assertRejected(t, conn, ordinaryChannel("004", '0').with(tt.mutate).frame())
+			if _, ok := r.SlotState("004"); ok {
+				t.Error("a refused Set stored a channel")
+			}
+		})
+	}
+}
+
+// TestMTSet_AcceptsTheClarifierRangeThisManualPrints is the other side of
+// TestMTSet_RejectionsLeaveTheChannelUntouched: 9999 is inside the printed
+// "Clarifier Offset: 0000 - 9999 (Hz)" and OUTSIDE the dialect's assumed
+// 10 Hz step and 9990 ceiling, and this fake models the radio rather than the
+// project's own build policy.
+func TestMTSet_AcceptsTheClarifierRangeThisManualPrints(t *testing.T) {
+	for _, mag := range []string{"0000", "0005", "9990", "9999"} {
+		r, conn := newTestRadio(t)
+		writeFrame(t, conn, ordinaryChannel("005", '0').with(func(f *combinedFrame) {
+			f.clarMag = mag
+		}).frame())
+		assertNoReply(t, conn)
+		got, ok := r.SlotState("005")
+		if !ok {
+			t.Fatalf("clarifier magnitude %q was refused", mag)
+		}
+		if got.ClarMag != mag {
+			t.Errorf("stored magnitude = %q, want %q", got.ClarMag, mag)
+		}
+	}
+}
+
+// TestWithMTReadUnsupported_HonoursTheCommandList makes the fake play the
+// OTHER radio the manual describes — the one whose availability row says MT is
+// Set-only (ft891_layout.txt:166) — so core/driver/ft891's
+// ErrMTReadRejectedForOccupiedSlot is reachable end to end against a real
+// fake rather than a scripted transcript. Set and MR are untouched, which is
+// exactly the pair that produces the driver's typed refusal.
+func TestWithMTReadUnsupported_HonoursTheCommandList(t *testing.T) {
+	r, conn := newTestRadio(t, WithMTReadUnsupported(), WithSlot("001", ordinaryState()))
+
+	assertRejected(t, conn, "MT001;")
+
+	// The same slot answers MR in the same session — the contradiction the
+	// driver reports rather than diagnoses.
+	if got, want := exchange(t, conn, "MR001;"), ordinaryChannel("001", kindMemory).mrFrame(); got != want {
+		t.Errorf("MR001; ->\n got %q\nwant %q", got, want)
+	}
+
+	// The Set direction is what the command list DOES give MT, so it still
+	// works.
+	writeFrame(t, conn, ordinaryChannel("002", '0').frame())
+	assertNoReply(t, conn)
+	if _, ok := r.SlotState("002"); !ok {
+		t.Error("WithMTReadUnsupported() disabled the Set direction too — the command list gives MT \"Set O\"")
+	}
+}
