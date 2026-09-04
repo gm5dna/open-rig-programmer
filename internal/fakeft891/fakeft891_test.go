@@ -111,12 +111,18 @@ func exchange(t *testing.T, conn io.ReadWriteCloser, send string) string {
 	return mustReadFrame(t, conn)
 }
 
-// assertRejected writes send and requires the single unattributed NAK.
+// assertRejected writes send and requires EXACTLY the single unattributed
+// NAK and nothing after it within the latency window: the acknowledgement
+// convention "AN ACCEPTED SET PRODUCES NO REPLY; A REJECTED ONE PRODUCES
+// EXACTLY ONE '?;'" (doc.go's register entry) means a passing rejection frame
+// is not merely "the first frame back is '?;'", but that no second frame
+// follows it.
 func assertRejected(t *testing.T, conn io.ReadWriteCloser, send string) {
 	t.Helper()
 	if got := exchange(t, conn, send); got != "?;" {
 		t.Errorf("%q -> %q, want %q", send, got, "?;")
 	}
+	assertNoReply(t, conn)
 }
 
 // --- ID: the CAT identity, and the byte-level difference a probe uses ---
@@ -192,30 +198,48 @@ func TestUnknownCommandRejected(t *testing.T) {
 	assertRejected(t, conn, ";")            // an empty frame
 }
 
-// TestCommandNamesAreUpperCaseOnly pins the narrower of the two readings this
-// repository can defend, and it is an ASSUMPTION — doc.go's register entry
-// COMMAND NAMES ARE UPPER CASE ONLY.
+// TestCommandNamesAreAcceptedInEitherCase pins the leniency this radio's own
+// manual states in terms — "A command consists of 2 alphabetical characters.
+// You may use either lower or upper case charac-/ters." (hyphenated across
+// the column break, ft891_layout.txt:100-102) — and pins that it stops at the
+// command NAME.
 //
-// The FTdx10's manual states the leniency in terms ("You may use either lower
-// or upper case characters", ftdx10_layout.txt:160-161) and internal/fakedx10
-// accepts either case on that line. NOTHING IN THIS REPOSITORY CITES SUCH A
-// SENTENCE FOR THE FT-891: the transcription of this manual's own folio-2
-// "Control Command" prose (core/cat/ft891/testdata/provenance.md, "Pages
-// read", PDF page 3) records the two-character command name, the parameters,
-// the terminator and the inapplicable-digit note, and no statement about
-// case at all.
+// It REPLACES TestCommandNamesAreUpperCaseOnly, which asserted the exact
+// opposite and pinned a defect against this radio's own manual: the former
+// register entry COMMAND NAMES ARE UPPER CASE ONLY's "NOTHING IN THIS
+// REPOSITORY CITES SUCH A SENTENCE FOR THE FT-891" was wrong, on a
+// hyphen-tolerant re-read of folio 2. See doc.go's "What is NOT in this
+// register, and why".
 //
-// Strict is the fail-LOUD direction: a fake stricter than the radio makes a
-// test that expected acceptance fail visibly, where a fake more lenient than
-// the radio lets a test pass that real hardware would refuse. Nothing is lost
-// meanwhile — every frame core/cat builds is upper case.
-func TestCommandNamesAreUpperCaseOnly(t *testing.T) {
+// Mixed case (Mt001;) is pinned too, and it is a CONSEQUENCE of per-character
+// folding rather than a separate leniency the manual grants: "either lower or
+// upper" says nothing about mixing, so admitting it is what per-character
+// case-insensitivity yields, not an invented extra allowance.
+func TestCommandNamesAreAcceptedInEitherCase(t *testing.T) {
 	_, conn := newTestRadio(t)
 
-	assertRejected(t, conn, "id;")
-	assertRejected(t, conn, "Id;")
-	if got, want := exchange(t, conn, "ID;"), "ID0650;"; got != want {
-		t.Errorf("ID; -> %q, want %q — the lower-case rejections above prove nothing if the upper-case form is refused too", got, want)
+	if got, want := exchange(t, conn, "id;"), "ID0650;"; got != want {
+		t.Errorf("id; -> %q, want %q", got, want)
+	}
+	lower := exchange(t, conn, "mr001;")
+	upper := exchange(t, conn, "MR001;")
+	if lower != upper {
+		t.Errorf("mr001; -> %q but MR001; -> %q — the command name's case must not matter", lower, upper)
+	}
+	if lower == "?;" {
+		t.Errorf("MR001; -> %q for both cases, so the equality above proves nothing", lower)
+	}
+
+	mtLower := exchange(t, conn, "mt001;")
+	mtUpper := exchange(t, conn, "MT001;")
+	if mtLower != mtUpper {
+		t.Errorf("mt001; -> %q but MT001; -> %q — the command name's case must not matter", mtLower, mtUpper)
+	}
+	if mtLower == "?;" {
+		t.Errorf("MT001; -> %q for both cases, so the equality above proves nothing", mtLower)
+	}
+	if got, want := exchange(t, conn, "Mt001;"), mtUpper; got != want {
+		t.Errorf("Mt001; -> %q, want %q — mixed case is two alphabetical characters like any other", got, want)
 	}
 }
 

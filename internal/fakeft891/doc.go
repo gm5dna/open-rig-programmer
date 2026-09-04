@@ -86,10 +86,6 @@
 //     numbers (962) where the FTdx10's prints only "5xx"; the numbering is
 //     therefore not on any ASSUMED register (core/cat/ft891/doc.go, "WHAT IS
 //     DELIBERATELY NOT AN ENTRY").
-//   - COMMAND NAMES ARE UPPER CASE ONLY, and that is registered as an
-//     assumption rather than asserted: the FTdx10's manual states the
-//     either-case leniency in terms and nothing in this repository cites such
-//     a sentence for the FT-891.
 //   - No fault injection, and no MW — see the next section.
 //
 // # What this fake deliberately does NOT model
@@ -358,33 +354,7 @@
 //     capture that also lifts the driver register's acknowledgement entry.
 //     (fakeft891.go: handleEvent; parser.go: every Set arm returning nil)
 //
-//  11. COMMAND NAMES ARE UPPER CASE ONLY. "MT001;" is answered and "mt001;"
-//     is refused. THIS IS THE ONE PLACE THIS FAKE IS DELIBERATELY STRICTER
-//     THAN ITS SIBLING, and the reason is evidential rather than a taste for
-//     strictness: the FTdx10's manual states the leniency in terms ("A
-//     command consists of 2 alphabetical characters. You may use either lower
-//     or upper case characters.", ftdx10_layout.txt:160-161), and
-//     internal/fakedx10 accepts either case on that line — after a wave of
-//     this project's own history in which it wrongly refused. NOTHING IN THIS
-//     REPOSITORY CITES SUCH A SENTENCE FOR THE FT-891: the transcription of
-//     this manual's folio-2 "Control Command" prose
-//     (core/cat/ft891/testdata/provenance.md, "Pages read", PDF page 3)
-//     records the two-character command name, the parameters, the terminator
-//     and the inapplicable-digit note, and no statement about case at all.
-//     Strict is the fail-LOUD direction — a fake stricter than the radio
-//     makes a test that expected acceptance fail visibly, where a fake more
-//     lenient than the radio lets a test pass that hardware would refuse —
-//     and nothing is lost meanwhile, because every frame core/cat builds is
-//     upper case. FIELD values are separately case-sensitive here (the mode
-//     nibble's letters, the PMS L/U suffix, "EMG"), which would remain the
-//     narrower claim even if the command-name half were lifted.
-//     SETTLED BY A DOCUMENTARY CHECK, NOT A CAPTURE: re-reading folio 2 of
-//     this radio's own manual. If it carries the FTdx10's sentence, this
-//     entry is a defect against the manual rather than a cautious strictness,
-//     and it becomes a "What is NOT in this register" line the same day.
-//     (parser.go: handleFrame, parseSlotForm, validModeWireByte)
-//
-//  12. THE DEFAULT IMAGE'S CONTENT IS INVENTED. Memory 001 at 7.000000 MHz
+//  11. THE DEFAULT IMAGE'S CONTENT IS INVENTED. Memory 001 at 7.000000 MHz
 //     LSB, memory 002 at 14.250000 MHz USB tagged "TWENTY" with its TAG
 //     display ON, the nine PMS pairs at plausible IARU Region 1 band edges,
 //     With5MHz's placeholder 5 MHz channels and WithEMG's 5.1675 MHz — all
@@ -407,7 +377,7 @@
 //     placeholders rather than to retire.
 //     (image.go: DefaultImage, With5MHz, WithEMG)
 //
-//  13. THE FRAME ACCUMULATOR'S CAP AND RESYNC. Once more than 256 bytes have
+//  12. THE FRAME ACCUMULATOR'S CAP AND RESYNC. Once more than 256 bytes have
 //     accumulated without a ';', this fake replies "?;" once and discards
 //     bytes up to and including the next ';' before resuming normal framing.
 //     NOT a radio claim and NOT liftable by any capture: it is this package's
@@ -415,8 +385,8 @@
 //     here so that a test relying on it knows what it is relying on.
 //     (parser.go: reassembler)
 //
-//  14. THE "?;" REJECTION CONVENTION ITSELF IS INHERITED. Entries 1, 2, 7 and
-//     11 all say what draws a rejection; this one records that the
+//  13. THE "?;" REJECTION CONVENTION ITSELF IS INHERITED. Entries 1, 2 and 7
+//     all say what draws a rejection; this one records that the
 //     rejection's very EXISTENCE is an assumption on this radio. "?;" is
 //     core/cat's ErrRejected, adopted from the FT-710's reference
 //     (core/cat/errors.go:10-19), and NO FT-891 LINE IS CITED FOR IT ANYWHERE
@@ -434,7 +404,7 @@
 //     not, is the convention.
 //     (parser.go: rejection, and every refusal in the file)
 //
-//  15. AUTOMATIC-INFORMATION SUPPRESSION: THIS FAKE NEVER PUSHES AN
+//  14. AUTOMATIC-INFORMATION SUPPRESSION: THIS FAKE NEVER PUSHES AN
 //     UNSOLICITED FRAME, WHATEVER AI IS SET TO. "AI1;" is accepted, stored
 //     and read back faithfully, and then nothing follows from it: this radio
 //     writes to the port only in reply to a frame that arrived on it, so an
@@ -483,8 +453,8 @@
 //     231, inside AI's own block at 226-235). New models a freshly-powered
 //     radio, and that is this manual's own statement rather than an
 //     inheritance. What is NOT covered by this absence is what the fake does
-//     once AI is turned ON — entry 15 above, and the two must not be read as
-//     one absence.
+//     once AI is turned ON — AUTOMATIC-INFORMATION SUPPRESSION above, and the
+//     two must not be read as one absence.
 //   - P5 IS THE SCHEMA BYTE '0', REQUIRED ON A SET AND EMITTED IN EVERY
 //     ANSWER. "P5 0: (Fixed)", printed on all five blocks that carry the
 //     field (MR 971, MT 1006, MW 1042, IF 783, OI 1129). This fake follows
@@ -517,4 +487,21 @@
 //     any character except the ASCII control codes (00 to 1Fh) and the
 //     terminator (;)" (93-96, printed folio 2). What IS assumed about the tag
 //     is the strictness of ENFORCING it on a Set — entry 7 — not the rule.
+//   - COMMAND NAMES ARE ACCEPTED IN EITHER CASE. "A command consists of 2
+//     alphabetical characters. You may use either lower or upper case
+//     charac-/ters." (hyphenated across the column break, ft891_layout.txt:
+//     100-102, under the "Alphabetical Commands" heading at 99) — the same
+//     sentence, in the same words, that the FTdx10's manual states
+//     (ftdx10_layout.txt:159-161) and that internal/fakedx10 already honours.
+//     A former register entry read the absence of this sentence from a
+//     hyphen-defeated search and a summary row that quoted only its first
+//     half; it was a defect against this radio's own manual, not a cautious
+//     strictness, corrected the day the folio was re-read directly. Mixed
+//     case (e.g. "Mt001;") is admitted too, as a CONSEQUENCE of folding each
+//     of the two command bytes independently — "either lower or upper" does
+//     not itself license mixing, but per-character folding yields it anyway,
+//     and that is stated rather than left implicit
+//     (TestCommandNamesAreAcceptedInEitherCase). FIELD values remain
+//     case-sensitive — the mode nibble's hex letters, the PMS L/U suffix,
+//     "EMG" — which the manual's sentence never touches.
 package fakeft891
