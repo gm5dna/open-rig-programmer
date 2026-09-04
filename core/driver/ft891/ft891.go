@@ -9,7 +9,6 @@ import (
 	"sync"
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
-	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
@@ -477,7 +476,7 @@ func (d *ft891Driver) SynthesiseDiscoveredBanks(slots []string) []spec.Bank {
 //
 // The lock guards a SINGLE DRIVER OPERATION (spec erratum S-E4, matrix
 // M-E2): the whole cross-check inside ReadChannel, and the single exchange
-// inside WriteChannel when task 2 lands it. IT IS NOT HELD ACROSS
+// inside WriteChannel (write.go). IT IS NOT HELD ACROSS
 // WRITE-THEN-VERIFY: that pair belongs to core/clone, as the driver
 // interface assigns it, and holding a driver lock across it would serialise
 // two operations the seam deliberately keeps separate.
@@ -532,35 +531,8 @@ func (s *Session) Diagnostics() driver.SessionDiagnostics {
 // already guarantees repeat calls return the same result.
 func (s *Session) Close() error { return s.eng.Close() }
 
-// WriteChannel implements driver.Session — AND IS A PLACEHOLDER THAT TASK 2
-// REPLACES WHOLE. It exists in this commit because driver.Session requires
-// the method and *Session must satisfy that interface for Open to return one
-// at all; it deliberately does NOT attempt a partial choreography. Both
-// registered combined-form siblings' skeletons carried the identical
-// placeholder for the identical reason.
-//
-// Every call is refused with a typed *driver.WriteRefusedError before any
-// frame is built or any byte reaches the wire — which is the correct
-// behaviour for the RealHardware and fail-safe profiles regardless (their
-// capability gate would refuse anyway, writeTrialsComplete being false), and
-// a temporary, visible gap for the Simulated profile, whose seven Supported
-// writes have nothing behind them until the MT-only Set lands.
-//
-// Task 2 replaces this with the real ladder in plan P7's order — ParseSlot,
-// bankFor, the erase refusal, Valid(), the CAPABILITY GATE, then the two
-// mandatory semantic refusals this radio's own legends force (a non-Known
-// TagDisplay, because P11 is a LIVE flag with no "leave it alone" encoding,
-// and a TxClar-true record, because P5 is printed "(Fixed)" and the field
-// vocabulary cannot grade the TX half separately) — then ONE
-// BuildMTSetCombinedDisplay frame, with the steps declared before it goes
-// out. TestWriteChannel_RefusedUntilTask2 pins this placeholder and is
-// replaced along with it.
-func (s *Session) WriteChannel(_ context.Context, ch codeplug.Channel) (driver.WriteResult, error) {
-	return driver.WriteResult{Steps: []driver.WriteStep{}}, &driver.WriteRefusedError{
-		Slot:   ch.Slot,
-		Reason: "the FT-891 driver's write path is not implemented yet (Stage 2 task 2 lands the MT-only combined Set); no frame is built and nothing reaches the wire",
-	}
-}
+// WriteChannel implements driver.Session and lives in write.go, beside the
+// refusal ladder and the one combined MT Set it builds.
 
 // ErrAnswerMismatch is the sentinel a caller should compare against (via
 // errors.Is) when a slot-addressed answer names a DIFFERENT slot than the

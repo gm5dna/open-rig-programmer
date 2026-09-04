@@ -166,7 +166,7 @@
 //
 // The mutex guards a SINGLE DRIVER OPERATION (spec erratum S-E4, matrix
 // M-E2): the MT+MR cross-check inside ReadChannel, and WriteChannel's one
-// exchange when task 2 lands it. The write-then-verify PAIR is
+// exchange (write.go). The write-then-verify PAIR is
 // core/clone's, as the driver interface assigns it, and is deliberately
 // not held under one driver lock.
 //
