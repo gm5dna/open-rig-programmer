@@ -753,7 +753,7 @@ func TestRadiotext_IC705Verbatim(t *testing.T) {
 			ScanSkip: "not read or written over CI-V by this build — the IC-705's nearest wire nibble marks select-scan group membership, not a skip flag",
 		},
 		FirmwarePlaceholder: "as shown on the IC-705's own display",
-		ProbeFirmwareNote:   "Firmware version has no CI-V query — check the radio's display. No minimum version is established for the IC-705: this build knows of none to require. This driver talks only to CI-V address A4h, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200, along with the whole six-rate list it is chosen from, is ASSUMED — this radio's CI-V Reference Guide prints no baud information for the CI-V port at all, and the one related fact admitted from the Basic Manual is a negative: the microUSB CI-V port is baud-agnostic, which lowers the cost of a wrong guess without being evidence of one. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+		ProbeFirmwareNote:   "Firmware version has no CI-V query — check the radio's display. No minimum version is established for the IC-705: this build knows of none to require. This driver talks only to CI-V address A4h, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200, along with the whole six-rate list it is chosen from, is ASSUMED — this radio's CI-V Reference Guide prints no baud information for the CI-V port at all, and the one related fact admitted from the Basic Manual is a negative: the microUSB CI-V port is baud-agnostic, which lowers the cost of a wrong guess without being evidence of one. Opening this radio also discovers its MEM bank's occupied slots by a BOUNDED walk — the first ten display groups, G01 through G10, each in full — not the whole 100-group by 100-channel space: the radio's own front panel fills groups from the bottom and the budget is 500 channels against 10,000 addresses, so a user whose memories sit above group ten needs the fuller walk, and nothing on this build's command line or in its window offers it (the driver's own WithFullInventoryWalk is a Go-level option no registered composition passes). A channel stored above group ten is simply not listed here, so its absence from the grid is not evidence that the radio's channel is empty; and a write to a slot the bounded walk never visited is refused rather than sent if the radio's own pre-write read finds a record already there. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
 	}
 
 	got, ok := radiotext.For("IC-705")
@@ -1331,15 +1331,19 @@ func TestRadiotext_ICR8600Verbatim(t *testing.T) {
 // verbatim comparisons above (which would also catch a regression, but
 // only by chance — this test names the exact hazard).
 //
-// TWO MODELS, ONE TABLE (radio-roadmap.md follow-up, 04/09/2026): the
+// THREE MODELS, ONE TABLE (radio-roadmap.md follow-ups, 04/09/2026): the
 // IC-905's own ProbeFirmwareNote carried the identical struck phrase —
 // ic905.go exports WithFullInventoryWalk exactly as icr8600.go does, and
 // neither package's option is reachable from any registered composition,
 // CLI flag or GUI control (checked internal/wiring and cmd/rigprog) — so
 // the same negative pin now covers both, rather than leaving the IC-905
-// free to regress into the wording the IC-R8600's own text already struck.
+// free to regress into the wording the IC-R8600's own text already
+// struck. The IC-705's newly added bounded-walk paragraph (Item B) is
+// held to the identical rule from the moment it is written, for the
+// identical reason: ic705.go also exports WithFullInventoryWalk, and no
+// registered composition passes it either.
 func TestRadiotext_ProbeNote_DoesNotOverstateTheWalkBound(t *testing.T) {
-	for _, model := range []string{"IC-R8600", "IC-905"} {
+	for _, model := range []string{"IC-R8600", "IC-905", "IC-705"} {
 		t.Run(model, func(t *testing.T) {
 			got, ok := radiotext.For(model)
 			if !ok {
