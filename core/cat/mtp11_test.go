@@ -293,6 +293,16 @@ func TestValidateDialectConfig_V9P11(t *testing.T) {
 // buildMTSetCombined's byte-28 write must REFUSE on this value, not
 // silently take the P11Fixed (wide) reading — the same posture p11Valid
 // (mtcombined.go) enforces on the read side via the shared predicate.
+//
+// EXTENDED at the S0-close review's HIGH-1 finding to reach p11Valid
+// itself, not just the builder that consults it: p11Valid's pre-fix
+// if/else took the P11Fixed reading for "anything that is not
+// P11TagDisplay", zero included, so both combined parsers and the gate
+// admitted a frame whose byte 28 happened to be combinedMTP11 ('0') even
+// under a zero policy. See TestUnsetPolicy_MTP11_RefusesAtBuilderParserAndGate
+// (unsetpolicy_test.go) for the fuller walk over all four Stage 0 axes;
+// this is the one Codex's review named directly, so its assertions live
+// here too.
 func TestMTP11_ZeroPolicyRefusesRatherThanDefaultingWide(t *testing.T) {
 	d := combinedDialect
 	d.mt.P11 = 0
@@ -302,6 +312,34 @@ func TestMTP11_ZeroPolicyRefusesRatherThanDefaultingWide(t *testing.T) {
 		t.Errorf("BuildMTSetCombined with a zero MT.P11 succeeded, emitting %q — an unset policy must refuse, not default to the wide (P11Fixed) reading", cmd.Bytes())
 	} else if !strings.Contains(err.Error(), "P11") {
 		t.Errorf("the refusal %q does not mention P11", err)
+	}
+	if cmd, err := d.BuildMTSetCombinedDisplay(rec, "AB", true); err == nil {
+		t.Errorf("BuildMTSetCombinedDisplay with a zero MT.P11 succeeded, emitting %q — an unset policy must refuse this API too", cmd.Bytes())
+	} else if !strings.Contains(err.Error(), "P11") {
+		t.Errorf("the refusal %q does not mention P11", err)
+	}
+
+	// A frame combinedDialect (P11Fixed, unzeroed) really did build, so
+	// byte 28 is combinedMTP11 ('0') — exactly the byte the pre-fix
+	// p11Valid's else-arm admitted for any non-TagDisplay policy.
+	cmd, err := combinedDialect.BuildMTSetCombined(rec, "AB")
+	if err != nil {
+		t.Fatalf("fixture broken: combinedDialect.BuildMTSetCombined: %v", err)
+	}
+	frame := cmd.Bytes()
+
+	if m, tag, err := d.ParseMTAnswerCombined(frame); err == nil {
+		t.Errorf("ParseMTAnswerCombined(%q) with a zero MT.P11 accepted it, returning (%+v, %q) — p11Valid must refuse rather than read byte 28 as the printed-fixed schema byte", frame, m, tag)
+	} else if !strings.Contains(err.Error(), "P11") {
+		t.Errorf("the refusal %q does not mention P11", err)
+	}
+	if m, tag, disp, err := d.ParseMTAnswerCombinedDisplay(frame); err == nil {
+		t.Errorf("ParseMTAnswerCombinedDisplay(%q) with a zero MT.P11 accepted it, returning (%+v, %q, %v) — p11Valid must refuse rather than read byte 28 as a live TAG flag", frame, m, tag, disp)
+	} else if !strings.Contains(err.Error(), "P11") {
+		t.Errorf("the refusal %q does not mention P11", err)
+	}
+	if d.AllowedCommand(frame) {
+		t.Errorf("the gate ADMITTED %q under a zero MT.P11 — p11Valid gates AllowedCommand too, and must refuse there as well as in the parsers", frame)
 	}
 }
 
