@@ -1305,6 +1305,7 @@ func TestBuildWriteCommand_P7IsTheFormConstant(t *testing.T) {
 		},
 		MT:          cat.MTPolicy{Form: cat.MTFormCombined, ReadSlots: cat.MTReadsReadable, TagMaxBytes: 12, TagFill: ' '},
 		Clarifier:   cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+		MemoryP5:    cat.P5TxClar,
 		MWWriteKind: cat.KindMemory,
 	})
 	if peer.MWWriteKind() == cat.CombinedMTSetKind {

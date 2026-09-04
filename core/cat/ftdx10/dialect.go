@@ -106,6 +106,13 @@ var dialect = cat.MustNewDialect(cat.DialectConfig{
 		// manual; the 9990 range supports, not proves
 		MaxAbsHz: 9990,
 	},
+	// The FTdx10's memory blocks print P5 "0: TX CLAR \"OFF\" 1: TX CLAR
+	// \"ON\"" (layout 1226, the MT block; MR and MW print the same), so
+	// byte 21 carries this radio's TX clarifier flag in both directions.
+	// Not an assumption: this is the legend, transcribed. The FT-891 prints
+	// "0: (Fixed)" on every one of those blocks, which is the disagreement
+	// this axis carries.
+	MemoryP5:    cat.P5TxClar,
 	MWWriteKind: cat.CombinedMTSetKind, // the FTdx10's MW P7
 	// "(Fixed)" — equal to the combined MT Set constant AS A FACT OF
 	// THIS RADIO, not a rule; see the difference pins.

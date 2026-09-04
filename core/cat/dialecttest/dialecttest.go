@@ -132,6 +132,7 @@ func Run(t *testing.T, d cat.Dialect) {
 	r.checkFixedFrames()
 	r.checkSlotFrames()
 	r.checkMemoryWrites()
+	r.checkMemoryP5()
 	r.checkEXReads()
 	r.checkFormSeam()
 	r.checkGateRefusesTheUnacceptable()
@@ -417,6 +418,11 @@ func (r *conformanceRun) checkSlotFrames() {
 // recordFor is the memory record Run offers a dialect for slot s and mode m,
 // carrying the P7 kind the caller names: the combined MT Set's own schema
 // value for an MT Set, and this dialect's declared MWWriteKind for an MW Set.
+//
+// TxClar IS FALSE HERE ON PURPOSE, and it is the ONE value every dialect can
+// carry whatever its cat.MemoryP5Policy says. The true case is a per-policy
+// truth table rather than a record every walk can use, so it lives in
+// checkMemoryP5 below instead of being threaded through every caller.
 func recordFor(s cat.Slot, m cat.Mode, kind byte, clarHz int16, ctcss cat.CTCSSState, shift cat.Shift) cat.MemoryData {
 	return cat.MemoryData{
 		Slot:   s,
@@ -429,6 +435,130 @@ func recordFor(s cat.Slot, m cat.Mode, kind byte, clarHz int16, ctcss cat.CTCSSS
 		CTCSS:  ctcss,
 		Shift:  shift,
 	}
+}
+
+// checkMemoryP5 is byte 21 of the shared memory field block, held to the
+// policy this dialect declares — in BOTH directions and through BOTH the
+// builders and the gate.
+//
+// THE TRUTH TABLE, and it is the whole of the check:
+//
+//	                     | P5TxClar                | P5Fixed
+//	---------------------|-------------------------|------------------------
+//	TxClar false, build  | builds, gate admits     | builds, gate admits
+//	TxClar TRUE,  build  | builds, gate admits     | REFUSED by the builder
+//	TxClar TRUE,  parse  | decodes back as true    | REFUSED by the parser
+//
+// Both halves matter. Without the P5TxClar column a dialect that refused
+// every TxClar-true record would pass; without the P5Fixed column one that
+// silently encoded the flag as '0' would. The wire byte is asserted too, not
+// just the round trip, because a codec that wrote the flag into some OTHER
+// position would round-trip perfectly and put a wrong byte on the wire.
+func (r *conformanceRun) checkMemoryP5() {
+	r.t.Helper()
+
+	if len(r.emittable) == 0 || len(r.slots) == 0 {
+		return
+	}
+	ctcss, shift, ok := r.mustParseStates()
+	if !ok {
+		return
+	}
+	writable, found := r.firstWritableSlot(r.emittable[0], ctcss, shift)
+	if !found {
+		return // checkMemoryWrites has already reported this
+	}
+
+	m := recordFor(writable, r.emittable[0], r.d.MWWriteKind(), 0, ctcss, shift)
+	m.TxClar = true
+
+	policy := r.d.MemoryP5()
+	cmd, err := r.d.BuildMWSet(m)
+
+	switch policy {
+	case cat.P5Fixed:
+		if err == nil {
+			r.t.Errorf("%s: BuildMWSet ACCEPTED a record with TxClar true under %v, emitting %q — this dialect's manual prints P5 \"(Fixed)\", so the flag must be refused rather than silently encoded as '0'", r.name(), policy, cmd.Bytes())
+			break
+		}
+		if !cmd.IsZero() {
+			r.t.Errorf("%s: BuildMWSet returned a non-zero Command alongside its P5 refusal; every fallible builder returns the zero Command", r.name())
+		}
+		r.refusals["TxClar true under P5Fixed"]++
+
+		// AND THE PARSER, on a frame whose byte 21 is '1'. It is spliced
+		// into a frame this dialect really did build, so nothing but that
+		// one byte can be the reason for the refusal.
+		clean, cleanErr := r.d.BuildMWSet(recordFor(writable, r.emittable[0], r.d.MWWriteKind(), 0, ctcss, shift))
+		if cleanErr != nil {
+			r.t.Errorf("%s: BuildMWSet with TxClar false was refused under %v (%v) — P5Fixed refuses the FLAG, not the record", r.name(), policy, cleanErr)
+			return
+		}
+		r.checkFrame("MW set (P5 fixed)", clean.Bytes())
+		forged := append([]byte(nil), clean.Bytes()...)
+		if got := forged[memoryP5WireOffset]; got != '0' {
+			r.t.Errorf("%s: its own MW Set carries %q at position 21 under %v, want '0' — the printed-fixed byte is not being written where the frame puts it", r.name(), got, policy)
+		}
+		forged[memoryP5WireOffset] = '1'
+		if _, err := r.d.ParseMRAnswer(mrShaped(forged)); err == nil {
+			r.t.Errorf("%s: its own parser ACCEPTED %q, whose P5 is '1' under %v — a byte this radio's manual prints \"(Fixed)\" must not be decoded into a flag", r.name(), mrShaped(forged), policy)
+		} else {
+			r.refusals["P5 '1' at the parser under P5Fixed"]++
+		}
+		if r.d.AllowedCommand(forged) {
+			r.t.Errorf("%s: its gate ADMITTED %q, whose P5 is '1' under %v", r.name(), forged, policy)
+		} else {
+			r.refusals["P5 '1' at the gate under P5Fixed"]++
+		}
+
+	default:
+		if err != nil {
+			r.t.Errorf("%s: BuildMWSet REFUSED a record with TxClar true under %v (%v) — this dialect's manual prints P5 as the TX clarifier flag, so both its values must be writable", r.name(), policy, err)
+			return
+		}
+		frame := cmd.Bytes()
+		r.checkFrame("MW set (TxClar true)", frame)
+		if got := frame[memoryP5WireOffset]; got != '1' {
+			r.t.Errorf("%s: BuildMWSet with TxClar true emitted %q, whose position 21 is %q rather than '1' — the flag is not reaching the byte the frame puts it in", r.name(), frame, got)
+		}
+		back, err := r.d.ParseMRAnswer(mrShaped(frame))
+		if err != nil {
+			r.t.Errorf("%s: ParseMRAnswer(%q) = %v — a frame its own builder produced, with the command prefix swapped, must parse", r.name(), mrShaped(frame), err)
+			return
+		}
+		if !back.TxClar {
+			r.t.Errorf("%s: a record built with TxClar true came back with TxClar false under %v — the flag is lost in one direction or the other", r.name(), policy)
+		}
+	}
+}
+
+// memoryP5WireOffset is position 21 of the shared memory field block,
+// 0-indexed — the byte cat.MemoryP5Policy governs.
+//
+// It is restated here rather than imported because core/cat's offsets are
+// unexported, which is the condition this package works under. It is a
+// documented protocol fact (the manuals' own position tables number P5 at
+// 21) and not a receiver-varying one, so restating it cannot drift into
+// describing one radio. What it must NOT become is a second opinion: the
+// checks above assert that this dialect's own builder puts the flag HERE,
+// which is what would fail if core/cat ever moved the field.
+const memoryP5WireOffset = 20
+
+// mrShaped returns frame with its two-byte command prefix rewritten to "MR",
+// so an MW Set this package just built can be offered to the MR answer
+// parser.
+//
+// The two frames are byte-for-byte identical in every documented position
+// except that prefix — core/cat's memdata.go says so, and this package's
+// only route to the memory-record DECODER is ParseMRAnswer, since MW has no
+// Answer form and no exported parser. Without this the read direction of the
+// P5 policy would be unreachable from outside core/cat altogether.
+func mrShaped(frame []byte) []byte {
+	out := append([]byte(nil), frame...)
+	if len(out) >= 2 {
+		out[0], out[1] = 'M', 'R'
+	}
+	return out
 }
 
 // mustParseStates returns the CTCSS and shift states a P8/P10 wire byte of
@@ -931,20 +1061,35 @@ func (r *conformanceRun) checkNonVacuity() {
 	case cat.MTFormCombined:
 		required = append(required, "MT set combined (tagged)", "MT set combined (cleared)")
 	}
-	for _, what := range required {
-		if r.frames[what] == 0 {
-			r.t.Errorf("%s: builder %q contributed no frames — either this dialect refuses it for every input this suite can offer, or the builder was dropped from the walk, and both are defects this property must not pass over", r.name(), what)
-		}
-	}
-
-	for _, what := range []string{
+	// The P5 arm this dialect's own policy selects. Both arms are counted,
+	// because "the check ran" and "the check ran for THIS policy" are
+	// different claims: a suite that only required the P5TxClar frame would
+	// go green on a P5Fixed dialect whose whole arm had been skipped.
+	requiredRefusals := []string{
 		"wrong-form MT Set build",
 		"wrong-form MT answer parse",
 		"over-long MT answer",
 		"over-long MT frame at the gate",
 		"clarifier past MaxAbsHz",
 		"malformed frame at the gate",
-	} {
+	}
+	switch r.d.MemoryP5() {
+	case cat.P5Fixed:
+		required = append(required, "MW set (P5 fixed)")
+		requiredRefusals = append(requiredRefusals,
+			"TxClar true under P5Fixed",
+			"P5 '1' at the parser under P5Fixed",
+			"P5 '1' at the gate under P5Fixed")
+	default:
+		required = append(required, "MW set (TxClar true)")
+	}
+	for _, what := range required {
+		if r.frames[what] == 0 {
+			r.t.Errorf("%s: builder %q contributed no frames — either this dialect refuses it for every input this suite can offer, or the builder was dropped from the walk, and both are defects this property must not pass over", r.name(), what)
+		}
+	}
+
+	for _, what := range requiredRefusals {
 		if r.refusals[what] == 0 {
 			r.t.Errorf("%s: no %q refusal was observed — the check either never ran or never had anything to refuse, and a rule that was never exercised is not evidence that it is enforced", r.name(), what)
 		}

@@ -90,6 +90,19 @@ func (d Dialect) MTForm() MTForm { return d.mt.Form }
 // a valid MW frame for an arbitrary dialect.
 func (d Dialect) MWWriteKind() byte { return d.mwWriteKind }
 
+// MemoryP5 reports what byte 21 of the shared memory field block means on
+// this family: the TX clarifier flag (P5TxClar) or a printed-fixed '0'
+// (P5Fixed). The zero Dialect reports the zero policy, which NewDialect
+// refuses to construct.
+//
+// Exported for the same reason MTForm is: core/cat/dialecttest's conformance
+// suite cannot see the unexported field, and it must branch on this to know
+// whether a TxClar-true record is one this dialect MUST build or one it MUST
+// refuse. Without the accessor that half of the suite could only be written
+// in-package, and a model package outside core/cat would get no coverage of
+// it at all.
+func (d Dialect) MemoryP5() MemoryP5Policy { return d.memoryP5 }
+
 // Clarifier returns this family's clarifier step and range.
 //
 // Exported for core/driver/ft710's write path, which FORMERLY pre-checked

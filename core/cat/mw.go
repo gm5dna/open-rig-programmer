@@ -26,7 +26,7 @@ func (d Dialect) BuildMWSet(m MemoryData) (Command, error) {
 	// not a byte moved.
 	frame := make([]byte, memoryFrameLen)
 	frame[0], frame[1] = 'M', 'W'
-	encodeMemoryFields(frame, m)
+	d.encodeMemoryFields(frame, m)
 	frame[memTermOffset] = ';'
 
 	return newCommand(frame), nil
@@ -138,6 +138,17 @@ func (d Dialect) validateMWFields(m MemoryData) error {
 
 	if m.FreqHz == 0 || m.FreqHz > memFreqMax {
 		return newParseError([]byte(fmt.Sprintf("%d", m.FreqHz)), "MW: FreqHz must be nonzero and fit in 9 digits (<= 999999999)")
+	}
+
+	// P5, BY THIS DIALECT'S OWN READING. Under P5Fixed byte 21 is printed
+	// "(Fixed)" on this radio's memory blocks, so a record asking for the TX
+	// clarifier is REFUSED rather than quietly encoded as '0': a caller that
+	// believed it was writing the clarifier finds out, which is the
+	// validate-don't-rewrite posture this validator takes with every other
+	// field. Shared with the outbound gate, which reaches this same
+	// validator, so the refusal holds for a forged frame too.
+	if d.memoryP5 == P5Fixed && m.TxClar {
+		return newParseError([]byte{boolDigit(m.TxClar)}, fmt.Sprintf("MW: TxClar must be false under %v — this dialect's manual prints P5 (position 21) \"(Fixed)\", so there is no TX clarifier flag to set", d.memoryP5))
 	}
 
 	// CTCSSState/Shift are byte-alias types exactly like Mode: never trust

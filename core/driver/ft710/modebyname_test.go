@@ -47,6 +47,7 @@ func ft710EquivalentConfig() cat.DialectConfig {
 		},
 		MT:          cat.MTPolicy{Form: cat.MTFormShort, ReadSlots: cat.MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 		Clarifier:   cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+		MemoryP5:    cat.P5TxClar,
 		MWWriteKind: cat.KindMemory,
 	}
 }
