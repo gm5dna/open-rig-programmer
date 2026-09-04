@@ -231,9 +231,11 @@ func cmdImport(args []string, stdout, stderr io.Writer) int {
 			return exitError
 		}
 		// csvio preserves an explicit v2 "absent" cell; resolve it against
-		// the selected model before validating and saving (see
-		// TestCmdImport_CSVNormalisesExplicitAbsentTierField).
-		codeplug.NormaliseTierFields(base, caps)
+		// THE MODEL --into ITSELF NAMES before validating and saving (see
+		// TestCmdImport_CSVNormalisesExplicitAbsentTierField, and
+		// normaliseTierFieldsForOwnModel in fileio.go for why not
+		// --model's caps, which need not be this file's radio at all).
+		normaliseTierFieldsForOwnModel(base)
 	} else {
 		f, err := os.Open(*chirpIn)
 		if err != nil {

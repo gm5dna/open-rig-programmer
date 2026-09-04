@@ -48,7 +48,7 @@ const codeplugPath = "core/codeplug"
 // file of the same package — app/ and cmd/rigprog are large packages —
 // which is the very thing being prevented, not a variant of it.
 var codeplugLoadRoots = map[string]string{
-	"app/fileio.go":         "loadFilePath (the GUI's file-open path; normalises via normaliseLoadedTierFields)",
+	"app/fileio.go":         "loadFilePath (the GUI's file-open path; normalises via normaliseTierFieldsForOwnModel)",
 	"cmd/rigprog/fileio.go": "loadCodeplugStrict (the CLI's ONE strict-load helper, shared by diff/export/import/write/settings)",
 }
 

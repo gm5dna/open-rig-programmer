@@ -79,10 +79,18 @@ func (a *App) ImportCSV() (ImportResultView, error) {
 		return ImportResultView{Path: path, RefusalReason: err.Error()}, nil
 	}
 	// CSV import preserves an explicit v2 "absent" cell; resolve it here
-	// against the active model so unreachable fields match a radio read (see
-	// TestImportCSV_NormalisesExplicitAbsentTierField).
+	// against THE WORKING COPY'S OWN model so unreachable fields match a
+	// radio read (see TestImportCSV_NormalisesExplicitAbsentTierField),
+	// while a field the working copy's radio really has stays Absent for
+	// Validate to refuse — even with a different radio connected (see
+	// TestImportCSV_MismatchedConnectedModelKeepsReachableAbsent, and
+	// normaliseTierFieldsForOwnModel for why the connected session's
+	// capabilities are the wrong question here).
+	normaliseTierFieldsForOwnModel(a.working)
+	// caps is the CONNECTED session's when connected, which is the right
+	// question for the advisory/authoritative Validate below and nothing
+	// else in this function.
 	caps, _ := currentCaps(a.conn, a.working)
-	codeplug.NormaliseTierFields(a.working, caps)
 	a.bumpWorkingRevLocked() // Fix 4: working-copy channels merged
 	a.dirty = true
 
