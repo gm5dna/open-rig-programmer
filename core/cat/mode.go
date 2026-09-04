@@ -2,7 +2,11 @@
 
 package cat
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+	"strings"
+)
 
 // Mode is the CAT P6 mode nibble: a single upper-case ASCII character
 // ('0'-'9', 'A'-'F') identifying the operating mode of a memory channel or
@@ -79,9 +83,66 @@ var modeNames = map[Mode]string{
 func (d Dialect) ParseMode(c byte) (Mode, error) {
 	m := Mode(c)
 	if !d.ValidMode(m) {
-		return 0, newParseError([]byte{c}, "invalid mode code: want '0'-'9' or 'A'-'F'")
+		return 0, newParseError([]byte{c}, "invalid mode code: want "+d.modeDomainText())
 	}
 	return m, nil
+}
+
+// modeDomainText renders THIS DIALECT'S OWN accepted mode bytes as the
+// compact range list a refusal quotes.
+//
+// IT IS DERIVED, NOT WRITTEN DOWN, and that is the whole of the change. The
+// refusal above read "want '0'-'9' or 'A'-'F'" on every dialect — the
+// FT-710's contiguous nibble space, stated as though it were the protocol's.
+// It is not: the FT-891's mode legend has a HOLE at 'A' and no 'E' or 'F',
+// so that sentence is simply false there, and a user told to send a byte the
+// radio rejects has been misdirected by this program rather than by the
+// radio.
+//
+// The FT-710's own table is exactly '0'-'9' and 'A'-'F', which this renders
+// as "'0'-'9' or 'A'-'F'" — the same string, byte for byte, which is why
+// core/cat/testdata/parser-corpus.golden's three ParseMode rows do not move.
+// That coincidence is the POINT rather than a lucky accident: a message
+// derived from the dialect says the true thing on every radio and happens to
+// say the old thing on this one.
+//
+// A dialect with no modes at all (only the zero Dialect, which NewDialect
+// cannot produce) gets a sentence rather than an empty list, because "want "
+// followed by nothing tells a reader nothing.
+func (d Dialect) modeDomainText() string {
+	keys := make([]int, 0, len(d.modeNames))
+	for m := range d.modeNames {
+		keys = append(keys, int(byte(m)))
+	}
+	if len(keys) == 0 {
+		return "a mode this dialect declares, but it declares none"
+	}
+	sort.Ints(keys)
+
+	// Collapse consecutive byte values into ranges, so a contiguous table
+	// reads as a range and a table with holes shows them.
+	var parts []string
+	for i := 0; i < len(keys); {
+		j := i
+		for j+1 < len(keys) && keys[j+1] == keys[j]+1 {
+			j++
+		}
+		lo, hi := rune(byte(keys[i])), rune(byte(keys[j]))
+		if lo == hi {
+			parts = append(parts, fmt.Sprintf("%q", lo))
+		} else {
+			parts = append(parts, fmt.Sprintf("%q-%q", lo, hi))
+		}
+		i = j + 1
+	}
+	switch len(parts) {
+	case 1:
+		return parts[0]
+	case 2:
+		return parts[0] + " or " + parts[1]
+	default:
+		return strings.Join(parts[:len(parts)-1], ", ") + " or " + parts[len(parts)-1]
+	}
 }
 
 // Wire returns the single wire byte for m.
