@@ -112,7 +112,7 @@ func newDialect(catID string) cat.Dialect {
 			Form: cat.MTFormCombined,
 			// This manual's MT block prints the same four slot classes its
 			// MR block does — "001-099 (Memory Channel), P1L -P9U (PMS),
-			// 5xx (5MHz BAND), EMG (EMERGENCY CH)" (layout 1312-1313) — so
+			// 5xx (5MHz BAND), EMG (EMERGENCY CH)" (layout 1312) — so
 			// an MT read may name every slot this dialect can read. Not an
 			// assumption: this is the legend, transcribed. The FT-891's MT
 			// legend prints memory and PMS only, which is the disagreement
@@ -133,14 +133,13 @@ func newDialect(catID string) cat.Dialect {
 			StepHz:   10, // ASSUMED — no step stated in the manual
 			MaxAbsHz: 9990,
 		},
-		// This manual's memory blocks print P5 "0: TX CLAR \"OFF\" 1: TX
-		// CLAR \"ON\"" — the same legend the FTdx10 prints at
-		// ftdx10_layout.txt:1226, inside this radio's own MT block (layout
-		// 1311-1345) and its MR and MW blocks — so byte 21 carries this
-		// radio's TX clarifier flag in both directions. Not an assumption:
-		// this is the legend, transcribed. The FT-891 prints "0: (Fixed)"
-		// on every one of those blocks, which is the disagreement this axis
-		// carries.
+		// This manual prints P5 "0: TX CLAR \"OFF\" 1: TX CLAR \"ON\""
+		// FOUR times, and this radio's own printings are what is cited: IF
+		// (layout 1088), MR (layout 1285), MT (layout 1320) and MW (layout
+		// 1360) — so byte 21 carries this radio's TX clarifier flag in both
+		// directions. Not an assumption: this is the legend, transcribed.
+		// The FT-891 prints "0: (Fixed)" on every one of those blocks,
+		// which is the disagreement this axis carries.
 		MemoryP5:    cat.P5TxClar,
 		MWWriteKind: cat.CombinedMTSetKind, // MW P7 "(Fixed)" — a fact
 		// of this radio, not a rule; see the difference pins.
