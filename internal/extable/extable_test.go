@@ -318,6 +318,29 @@ func TestRenderGo_EmitsObservedFields(t *testing.T) {
 	}
 }
 
+// TestRenderGo_PairProfileKeysObservationsByFourDigitForm is the S0-close
+// review's LOW-3 fix: the observation lookup key must be rendered in the
+// profile's OWN address form, not always six digits. Under AddressPair the
+// wire field carries P1 and P2 only (parseRecord above refuses a non-zero
+// P3), so a Pair radio's own observation CSV could never carry the
+// six-digit shape the old unconditional %02d%02d%02d render looked up —
+// every row would fail with "no hardware observation" however complete the
+// CSV was. fixturePairRequired exists only for this test (fixture-only, no
+// registered profile changes): see profile_test.go.
+func TestRenderGo_PairProfileKeysObservationsByFourDigitForm(t *testing.T) {
+	rows := []Row{
+		{P1: 8, P2: 1, P3: 0, P1Label: "RADIO", P2Label: "GROUP", Name: "ITEM", P4: "x", Digits: 4, Text: false, ManualLine: 1},
+	}
+	observed := map[string]Observed{"0801": {ReadWidth: 4, ReadShape: "numeric"}}
+	out, err := RenderGo(withRows(fixturePairRequired, 1), rows, observed)
+	if err != nil {
+		t.Fatalf("RenderGo: %v — the observation key must follow this profile's own AddressPair form (four digits), not a six-digit render no Pair CSV could produce", err)
+	}
+	if !strings.Contains(string(out), "ObservedReadWidth: 4") {
+		t.Errorf("generated output does not carry the four-digit-keyed observation")
+	}
+}
+
 // TestParseCSV_BoundsComeFromProfile proves each digit bound is READ from
 // the profile rather than hardcoded, by asserting rows that are legal under
 // one profile and illegal under the other — in both directions. A test that
@@ -364,7 +387,9 @@ func TestParseCSV_BoundsComeFromProfile(t *testing.T) {
 // by accident. ParseCSV never range-checked P1/P2/P3; the observation CSV's
 // exactly-two-digits rule rejected the matching row instead. Under
 // ObservationsAbsent there is no observation CSV, so a component of 100
-// would render into an EXAddress whose Wire() is seven digits.
+// would render into a seven-digit wire address under the six-digit
+// (AddressTriple) form — one digit wider than the field the radio's own
+// EX frame carries.
 func TestParseCSV_AddressComponentRange(t *testing.T) {
 	cases := []struct {
 		name    string
