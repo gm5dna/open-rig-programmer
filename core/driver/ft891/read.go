@@ -535,7 +535,12 @@ func (s *Session) channelData(m cat.MemoryData, sl cat.Slot) (*codeplug.ChannelD
 		// faithfully (codeplug.Validate flags it as not a selectable mode,
 		// which is the right outcome for a placeholder this radio's legends
 		// do not list — the DIALECT register's THE cat.ModeUnset MEMBER OF
-		// THE MODE TABLE entry).
+		// THE MODE TABLE entry). That the parser refuses any P6 nibble
+		// outside the transcribed 1-9/B-D table is the DRIVER register's
+		// THE MODE NIBBLE'S TOP END entry: this manual's three mode legends
+		// print no member above 'D', but a legend is a statement about what
+		// the chart draws, not a guarantee about what the radio will ever
+		// send.
 		Mode: s.dialect.ModeName(m.Mode),
 		// The magnitude is manual-evidenced (P3's four digits at positions
 		// 16-19); the byte carrying a NEGATIVE sign is not — the DIALECT
