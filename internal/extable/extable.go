@@ -370,8 +370,8 @@ func RenderGo(p Profile, rows []Row, observed map[string]Observed) ([]byte, erro
 	// whitespace-only cell; emitting that verbatim would give a consumer a
 	// space where it must see an absence. TestRenderGo_LabelsAbsentEmitsEmptyLabels
 	// pins it; the labelled regime is untouched.
-	for i := range sorted {
-		if p.LabelPolicy == LabelsAbsent {
+	if p.LabelPolicy == LabelsAbsent {
+		for i := range sorted {
 			sorted[i].P1Label, sorted[i].P2Label = "", ""
 		}
 	}

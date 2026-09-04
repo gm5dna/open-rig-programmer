@@ -50,19 +50,24 @@ func (d Dialect) exAnswerMaxLen() int {
 // such addresses to a real radio and both were rejected with "?;", which
 // supports that reading without surveying the whole P1=05 space.
 //
-// THE NON-MEMBER REFUSAL REPORTS THE WIRE RENDER, not the debug String()
-// form, and that is a deliberate deviation from the FT-891 Stage 0 brief:
-// core/cat/testdata/frame-corpus.golden line 357 pins this refusal's input
-// bytes verbatim ("000000"), and the milestone's standing claim is that no
-// existing golden moves through Stage 0. The cost is confined to an
-// EXAddressPair dialect asked to build a NON-MEMBER whose P3 is non-zero:
-// its diagnostic names the four digits the frame would have carried and not
-// the third component. Members cannot be affected — V12 requires every Pair
-// member's P3 to be zero.
+// THE NON-MEMBER REFUSAL REPORTS THE WIRE RENDER under EXAddressTriple, so
+// that core/cat/testdata/frame-corpus.golden line 357 — which pins this
+// refusal's input bytes verbatim ("000000") — stays byte-identical, per
+// the milestone's standing claim that no existing golden moves through
+// Stage 0. Under EXAddressPair the wire render drops P3 (EXWire renders
+// only P1 and P2 for that form), so a Pair non-member refusal reports the
+// debug String() form instead — the only rendering that names all three
+// components. TestBuildEXRead_UsesThisDialectsWidth pins both sides: the
+// Triple refusal's reported input unchanged, the Pair refusal's naming all
+// three components.
 func (d Dialect) BuildEXRead(addr EXAddress) (Command, error) {
 	wire := d.EXWire(addr)
 	if !d.KnownEXAddress(addr) {
-		return Command{}, newParseError([]byte(wire), "EX: address is not a known Table 2 member")
+		reported := wire
+		if d.exAddrForm == EXAddressPair {
+			reported = addr.String()
+		}
+		return Command{}, newParseError([]byte(reported), "EX: address is not a known Table 2 member")
 	}
 	frame := make([]byte, 0, d.exReadLen())
 	frame = append(frame, 'E', 'X')
