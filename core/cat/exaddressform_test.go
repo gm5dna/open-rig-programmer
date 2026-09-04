@@ -352,7 +352,14 @@ func TestEXFramesOfTheWrongWidthAreRefused(t *testing.T) {
 }
 
 // TestBuildEXRead_UsesThisDialectsWidth pins the builder end: the frame a
-// Pair dialect builds is seven bytes and carries four address digits.
+// Pair dialect builds is seven bytes and carries four address digits. It
+// also pins the non-member refusal's reported input on both sides of the
+// review's ex.go:52-61 deviation: under EXAddressTriple the refusal still
+// reports the WIRE render (frame-corpus.golden:357 stays byte-identical —
+// "000000" is both the wire render and, coincidentally, the debug form's
+// digits in a different shape), but under EXAddressPair it reports the
+// debug String() form, which is the only rendering that names all three
+// components — a four-digit Pair wire render drops P3 entirely.
 func TestBuildEXRead_UsesThisDialectsWidth(t *testing.T) {
 	a := pairDialect.EXAddresses()[1] // (08,03,00)
 	cmd, err := pairDialect.BuildEXRead(a)
@@ -362,7 +369,46 @@ func TestBuildEXRead_UsesThisDialectsWidth(t *testing.T) {
 	if got, want := string(cmd.Bytes()), "EX0803;"; got != want {
 		t.Errorf("pairDialect.BuildEXRead(%v) = %q, want %q", a, got, want)
 	}
-	if _, err := pairDialect.BuildEXRead(EXAddress{P1: 8, P2: 3, P3: 7}); err == nil {
-		t.Error("pairDialect.BuildEXRead accepted (08,03,07), which is not a member of its inventory")
+	nonMember := EXAddress{P1: 8, P2: 3, P3: 7}
+	_, err = pairDialect.BuildEXRead(nonMember)
+	if err == nil {
+		t.Fatal("pairDialect.BuildEXRead accepted (08,03,07), which is not a member of its inventory")
+	}
+	if want := `cat: parse error: EX: address is not a known Table 2 member (input="P1=08 P2=03 P3=07")`; err.Error() != want {
+		t.Errorf("pairDialect.BuildEXRead(%v) error = %q, want %q — the Pair refusal must name all three components", nonMember, err.Error(), want)
+	}
+
+	tripleNonMember := EXAddress{P1: 99, P2: 99, P3: 99}
+	_, err = FT710.BuildEXRead(tripleNonMember)
+	if err == nil {
+		t.Fatal("FT710.BuildEXRead accepted (99,99,99), which is not a member of its inventory")
+	}
+	if want := `cat: parse error: EX: address is not a known Table 2 member (input="999999")`; err.Error() != want {
+		t.Errorf("FT710.BuildEXRead(%v) error = %q, want %q — the Triple refusal must stay the WIRE render (frame-corpus.golden:357 pins the zero-value case)", tripleNonMember, err.Error(), want)
+	}
+}
+
+// TestValidateEXItems_ZeroFormFallsBackToDebugForm covers the review's 3a:
+// V8 (validateEXItems) runs at rule position 8, four places before V12
+// (validateEXAddressForm) refuses a zero EXAddressForm. A config that omits
+// EXAddressForm AND has a duplicate item therefore reaches V8 first, and
+// wireEXAddress(0, addr) renders "" — so without a fallback the message
+// would lose the address it exists to supply. This does not change WHICH
+// rule fires first (the rule slice is untouched); it only changes what V8
+// renders when the form it is asked to render through is the zero value.
+func TestValidateEXItems_ZeroFormFallsBackToDebugForm(t *testing.T) {
+	dup := EXAddress{P1: 7, P2: 1, P3: 1}
+	cfg := validBaselineConfig()
+	cfg.EXAddressForm = EXAddressForm(0)
+	cfg.EXItems = []EXItem{
+		{Addr: dup, Name: "ITEM ONE", Digits: 2},
+		{Addr: dup, Name: "ITEM TWO", Digits: 2},
+	}
+	err := validateEXItems(cfg)
+	if err == nil {
+		t.Fatal("validateEXItems() accepted a config with a duplicate address")
+	}
+	if want := "cat: EXItems[1] repeats address P1=07 P2=01 P3=01, already at index 0"; err.Error() != want {
+		t.Errorf("validateEXItems() error = %q, want %q — a zero form must fall back to the debug String() form, not render an empty address", err.Error(), want)
 	}
 }

@@ -293,6 +293,16 @@ func pmsWireInRange(wire string, pairs int) bool {
 // address here as the debug String() would have moved three shipped error
 // sentences. TestValidateEXItems_TripleErrorTextIsByteIdentical pins all
 // three against their pre-seam spelling.
+//
+// V8 runs at rule position 8, four places before V12
+// (validateEXAddressForm) refuses a zero form — so a config that omits
+// EXAddressForm AND fails V8 reaches this renderer first, with
+// wireEXAddress(0, addr) returning "". renderEXAddressForV8 falls back to
+// the debug String() form in that case, so the message still names the
+// address rather than rendering an empty string.
+// TestValidateEXItems_ZeroFormFallsBackToDebugForm pins this. The rule
+// ORDER is untouched — V12 still runs fourth after V8 — this only changes
+// what V8 renders when asked to render through a form it cannot.
 func validateEXItems(cfg DialectConfig) error {
 	seen := make(map[EXAddress]int, len(cfg.EXItems))
 	for i, it := range cfg.EXItems {
@@ -305,17 +315,30 @@ func validateEXItems(cfg DialectConfig) error {
 			}
 		}
 		if prev, dup := seen[it.Addr]; dup {
-			return fmt.Errorf("cat: EXItems[%d] repeats address %s, already at index %d", i, wireEXAddress(cfg.EXAddressForm, it.Addr), prev)
+			return fmt.Errorf("cat: EXItems[%d] repeats address %s, already at index %d", i, renderEXAddressForV8(cfg.EXAddressForm, it.Addr), prev)
 		}
 		seen[it.Addr] = i
 		if it.Digits < 1 {
-			return fmt.Errorf("cat: EXItems[%d] (%s) has Digits %d, want >= 1", i, wireEXAddress(cfg.EXAddressForm, it.Addr), it.Digits)
+			return fmt.Errorf("cat: EXItems[%d] (%s) has Digits %d, want >= 1", i, renderEXAddressForV8(cfg.EXAddressForm, it.Addr), it.Digits)
 		}
 		if it.Digits > maxEXDigits {
-			return fmt.Errorf("cat: EXItems[%d] (%s) has Digits %d, want <= %d — a wider P4 describes an answer frame longer than DefaultMaxFrame (%d), which this dialect's own transport could never assemble", i, wireEXAddress(cfg.EXAddressForm, it.Addr), it.Digits, maxEXDigits, DefaultMaxFrame)
+			return fmt.Errorf("cat: EXItems[%d] (%s) has Digits %d, want <= %d — a wider P4 describes an answer frame longer than DefaultMaxFrame (%d), which this dialect's own transport could never assemble", i, renderEXAddressForV8(cfg.EXAddressForm, it.Addr), it.Digits, maxEXDigits, DefaultMaxFrame)
 		}
 	}
 	return nil
+}
+
+// renderEXAddressForV8 renders addr through form for a V8 error message,
+// falling back to addr's debug String() form when form is the zero value
+// (wireEXAddress(0, addr) is ""). V8 runs before V12, so a config that
+// omits EXAddressForm can still reach here; this keeps its refusal message
+// naming the address rather than rendering an empty string.
+// TestValidateEXItems_ZeroFormFallsBackToDebugForm pins it.
+func renderEXAddressForV8(form EXAddressForm, addr EXAddress) string {
+	if form == EXAddressForm(0) {
+		return addr.String()
+	}
+	return wireEXAddress(form, addr)
 }
 
 // validateMTPolicy is V9: the TagMaxBytes ceiling, then per-form field
