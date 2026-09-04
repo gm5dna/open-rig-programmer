@@ -22,8 +22,9 @@ type Radio struct {
 	// afterwards, so serve() may read it without r.mu.
 	latency time.Duration
 
-	mu sync.Mutex
-	ai byte // '0' or '1'; OFF at construction, a MANUAL FACT (ft891_layout.txt:231)
+	mu    sync.Mutex
+	slots map[string]MemState
+	ai    byte // '0' or '1'; OFF at construction, a MANUAL FACT (ft891_layout.txt:231)
 
 	// shutdown is closed (exactly once, by closePipes) when the radio goes
 	// away. WithLatency's wait selects against it (sleepInterruptible)
@@ -44,6 +45,7 @@ func New(opts ...Option) *Radio {
 	r := &Radio{
 		hostConn: hostConn,
 		fakeConn: fakeConn,
+		slots:    map[string]MemState{},
 		// OFF at construction: New models a freshly-powered radio, and this
 		// radio's own manual says what that state is — "This parameter is set
 		// to '0' (OFF) automatically when the transceiver is turned 'OFF'"
