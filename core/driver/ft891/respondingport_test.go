@@ -109,9 +109,26 @@ type slotImage struct {
 	// address.
 	exAnswers map[string]string
 	// rejectSets makes every combined MT Set answer "?;" instead of the
-	// silence the ASSUMED convention reads as accepted. Task 2's rejection
-	// path.
+	// silence the ASSUMED convention reads as accepted — the write path's
+	// radio-rejected row.
 	rejectSets bool
+	// echoSets makes an ACCEPTED combined MT Set become that slot's MT
+	// answer from then on, verbatim — which is available at all only
+	// because this radio's MT Set and MT Answer share the SAME 41
+	// positions (layout 996-1027, one chart under one prefix), so the
+	// bytes the driver wrote are already a well-formed answer.
+	//
+	// It is the narrowest possible memory, and it is here for ONE thing:
+	// core/clone owns write-then-verify (plan P3), so the pair cannot be
+	// exercised at all against a peer that answers the same way forever.
+	// This is deliberately NOT a step towards a fake radio — no field is
+	// interpreted, nothing is validated, no state is modelled, and a Set
+	// this driver got wrong would be echoed back just as wrongly. What it
+	// demonstrates is that the write and the read agree about every
+	// position of the frame; whether a REAL FT-891 reports back what it
+	// was told is the driver register's A SINGLE COMBINED MT SET SUFFICES
+	// entry and no test can settle it.
+	echoSets bool
 }
 
 // newRespondingPort starts a scripted radio serving img and registers its
@@ -155,10 +172,12 @@ func (p *respondingPort) serve(img slotImage) {
 	buf := make([]byte, 256)
 	var acc []byte
 	// mrSeen counts MR reads per slot, for mrAnswersOnce's "first read
-	// only" behaviour. Local to this one goroutine — serve is the sole
+	// only" behaviour; mtWritten holds the Sets echoSets has accepted, per
+	// slot. Both are local to this one goroutine — serve is the sole
 	// reader and sole writer of the pipe's remote end, so nothing else
-	// touches it and no lock is needed.
+	// touches them and no lock is needed.
 	mrSeen := map[string]int{}
+	mtWritten := map[string]string{}
 	for {
 		n, err := p.remote.Read(buf)
 		if n > 0 {
@@ -171,7 +190,7 @@ func (p *respondingPort) serve(img slotImage) {
 				frame := string(acc[:i+1])
 				acc = acc[i+1:]
 				p.record(frame)
-				if reply := img.reply(frame, mrSeen); reply != "" {
+				if reply := img.reply(frame, mrSeen, mtWritten); reply != "" {
 					if _, werr := p.remote.Write([]byte(reply)); werr != nil {
 						return
 					}
@@ -203,7 +222,7 @@ func (p *respondingPort) record(frame string) {
 // read's silence (mtSilent) is a radio that did not answer a read at all,
 // which the engine turns into a timeout. Only the second is a fault being
 // scripted.
-func (img slotImage) reply(frame string, mrSeen map[string]int) string {
+func (img slotImage) reply(frame string, mrSeen map[string]int, mtWritten map[string]string) string {
 	switch {
 	case frame == "ID;":
 		return "ID" + img.catID + ";"
@@ -213,6 +232,11 @@ func (img slotImage) reply(frame string, mrSeen map[string]int) string {
 		slot := frame[2:5]
 		if img.mtSilent[slot] {
 			return ""
+		}
+		// An echoed Set takes priority over the static image: it is the
+		// LATER statement about the same slot. See echoSets.
+		if ans, ok := mtWritten[slot]; ok {
+			return ans
 		}
 		if ans, ok := img.mtAnswers[slot]; ok {
 			return ans
@@ -236,6 +260,11 @@ func (img slotImage) reply(frame string, mrSeen map[string]int) string {
 		// silence is what this image serves for accepted.
 		if img.rejectSets {
 			return "?;"
+		}
+		if img.echoSets {
+			// Verbatim, prefix and all: the Set and the Answer are the
+			// same 41 positions on this radio. See echoSets.
+			mtWritten[frame[2:5]] = frame
 		}
 		return ""
 	case strings.HasPrefix(frame, "EX") && len(frame) == exReadFrameLen:
