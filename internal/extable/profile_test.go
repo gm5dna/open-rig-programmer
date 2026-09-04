@@ -26,6 +26,10 @@ var fixtureRequired = Profile{
 	ManualCSV:   "fixture.csv",
 	ObservedCSV: "fixture-observed.csv",
 
+	Addresses:     AddressTriple,
+	LabelPolicy:   LabelsRequired,
+	TextRowPolicy: TextRowsAllowed,
+
 	MinDigits:        2,
 	MaxDigits:        6,
 	TextWidth:        8,

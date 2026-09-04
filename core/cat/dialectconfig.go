@@ -83,6 +83,56 @@ func (f MTForm) String() string {
 	}
 }
 
+// EXAddressForm names the WIRE WIDTH a family's EX address field takes.
+//
+// Its zero value is deliberately NOT a valid form, so a config that omits
+// it is refused rather than defaulting to one — the M9c-1 ruling, and
+// MTForm's own reason above. Defaulting to the six-digit form would give a
+// four-digit radio an address field two bytes too long in every EX read
+// this codec builds, gate-approves and sends, and would make that radio's
+// own honest answers unparseable.
+//
+// The form is DATA on the DIALECT rather than on the ADDRESS, because an
+// EXAddress carries no family: the same (P1,P2,P3) triple is six digits for
+// one radio and four for another. That is why EXAddress.Wire() was deleted
+// at this seam — see wireEXAddress, the one place an address becomes wire
+// digits.
+type EXAddressForm int
+
+const (
+	// EXAddressTriple is the six-digit "P1 P1 P2 P2 P3 P3" field, the form
+	// every registered dialect's EX grammar block prints.
+	EXAddressTriple EXAddressForm = iota + 1
+	// EXAddressPair is the four-digit field EXAddress's own (P1,P2)
+	// components render as, with P3 dropped. Under it every EXItems member
+	// must have P3 == 0 (V12): the render drops P3, and a component
+	// silently dropped from every frame is exactly the failure this
+	// validator exists to make impossible.
+	//
+	// NAMING TRAP for a reader with a manual open: "(P1,P2)" is THIS
+	// PACKAGE'S naming for the field's two two-digit components, not
+	// necessarily the radio's own. The FT-891 — this form's first member —
+	// spells the whole four-digit field a single P1 in its own EX grammar
+	// block ("E X P1 P1 P1 P1", ft891_layout.txt:513-522) and calls the
+	// parameter body P2; it has no P3 or P4 at all. The BYTES agree
+	// exactly (wireEXAddress under this form emits the same four digits
+	// the FT-891's P1 does) — only the component names differ. Any comment
+	// elsewhere that mentions this form's naming should point here rather
+	// than restate it.
+	EXAddressPair
+)
+
+func (f EXAddressForm) String() string {
+	switch f {
+	case EXAddressTriple:
+		return "EXAddressTriple"
+	case EXAddressPair:
+		return "EXAddressPair"
+	default:
+		return fmt.Sprintf("EXAddressForm(%d)", int(f))
+	}
+}
+
 // MTPolicy carries the MT command's dialect-varying dimensions, ACROSS BOTH
 // evidenced frame forms.
 //
@@ -207,6 +257,12 @@ type DialectConfig struct {
 	// no modelled EX surface is representable.
 	EXItems []EXItem
 
+	// EXAddressForm is the wire width of this family's EX address field.
+	// It has no default — see EXAddressForm — and V12 refuses the zero
+	// value even for a dialect whose EXItems is empty, because the width
+	// also sizes the EX read frame the outbound gate measures.
+	EXAddressForm EXAddressForm
+
 	// MT is the MT command's frame form and tag policy.
 	MT MTPolicy
 
@@ -302,6 +358,7 @@ func NewDialect(cfg DialectConfig) (Dialect, error) {
 			noneWire: cfg.Slots.NoneWire,
 		},
 		exItems:     items,
+		exAddrForm:  cfg.EXAddressForm,
 		exMembers:   buildEXMembers(items),
 		exByTriple:  buildEXByTriple(items),
 		exP4Max:     maxEXP4Bytes(items),

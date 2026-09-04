@@ -77,7 +77,7 @@ import (
 func TestEXInventoryCrossCheck_FTdx101AddressSetsIdentical(t *testing.T) {
 	dialectAddrs := make(map[string]bool)
 	for _, item := range ftdx101.DialectD().EXItems() {
-		dialectAddrs[item.Addr.Wire()] = true
+		dialectAddrs[ftdx101.DialectD().EXWire(item.Addr)] = true
 	}
 	fakeAddrs := fakedx101.EXDefaults()
 
@@ -134,7 +134,7 @@ func TestEXInventoryCrossCheck_FTdx101WidthsAndShapesAgree(t *testing.T) {
 	var mismatches []string
 	checked, textChecked := 0, 0
 	for _, item := range ftdx101.DialectD().EXItems() {
-		addr := item.Addr.Wire()
+		addr := ftdx101.DialectD().EXWire(item.Addr)
 		p4, ok := fakeAddrs[addr]
 		if !ok {
 			continue // reported by TestEXInventoryCrossCheck_FTdx101AddressSetsIdentical
@@ -242,7 +242,7 @@ func TestEXFTdx101RoundTrip_AllAddressesRawPort(t *testing.T) {
 		if len(gotRaw) != item.Digits {
 			t.Errorf("%v (%s / %s): answered %d raw P4 bytes (%q), want %d per the dialect's inventory", item.Addr, item.P1Label, item.Name, len(gotRaw), gotRaw, item.Digits)
 		}
-		wantRaw, ok := fakeDefaults[item.Addr.Wire()]
+		wantRaw, ok := fakeDefaults[ftdx101.DialectD().EXWire(item.Addr)]
 		if !ok {
 			t.Errorf("%v: answered over the wire but absent from fakedx101.EXDefaults() — inconsistent with handleEX's own membership check", item.Addr)
 			continue

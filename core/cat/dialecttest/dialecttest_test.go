@@ -68,9 +68,10 @@ func combinedRadioConfig() cat.DialectConfig {
 			{Addr: cat.EXAddress{P1: 1, P2: 1, P3: 1}, P1Label: "RADIO", P2Label: "GROUP", Name: "ITEM ONE", Digits: 3},
 			{Addr: cat.EXAddress{P1: 1, P2: 1, P3: 2}, P1Label: "RADIO", P2Label: "GROUP", Name: "TEXT ITEM", Digits: 16, Text: true},
 		},
-		MT:          cat.MTPolicy{Form: cat.MTFormCombined, TagMaxBytes: 6, TagFill: ' '},
-		Clarifier:   cat.ClarifierPolicy{StepHz: 5, MaxAbsHz: 9995},
-		MWWriteKind: cat.KindMemTune,
+		EXAddressForm: cat.EXAddressTriple,
+		MT:            cat.MTPolicy{Form: cat.MTFormCombined, TagMaxBytes: 6, TagFill: ' '},
+		Clarifier:     cat.ClarifierPolicy{StepHz: 5, MaxAbsHz: 9995},
+		MWWriteKind:   cat.KindMemTune,
 	}
 }
 
@@ -132,9 +133,10 @@ func shortPeerRadioConfig() cat.DialectConfig {
 		EXItems: []cat.EXItem{
 			{Addr: cat.EXAddress{P1: 2, P2: 3, P3: 4}, P1Label: "RADIO", P2Label: "GROUP", Name: "ITEM", Digits: 2},
 		},
-		MT:          cat.MTPolicy{Form: cat.MTFormShort, TagMaxBytes: 6, ClearTagByte: ' ', PadByte: ' '},
-		Clarifier:   cat.ClarifierPolicy{StepHz: 1, MaxAbsHz: 9999},
-		MWWriteKind: cat.KindMemory,
+		EXAddressForm: cat.EXAddressTriple,
+		MT:            cat.MTPolicy{Form: cat.MTFormShort, TagMaxBytes: 6, ClearTagByte: ' ', PadByte: ' '},
+		Clarifier:     cat.ClarifierPolicy{StepHz: 1, MaxAbsHz: 9999},
+		MWWriteKind:   cat.KindMemory,
 	}
 }
 
@@ -168,4 +170,64 @@ func TestRun_ExternallyBuiltShortPeerDialect(t *testing.T) {
 // uninitialised dialect would get a green conformance report.
 func TestRunZeroValue_RefusesEverything(t *testing.T) {
 	dialecttest.RunZeroValue(t)
+}
+
+// pairAddressRadioConfig is a dialect whose EX address field is FOUR digits,
+// where every other fixture here and every registered radio's is six.
+//
+// It is here for the same reason shortPeerRadioConfig is, one seam along.
+// Until the FT-891 Stage 0 change the EX read's length was the package
+// constant exReadLen = 9 and the answer's address slice was frame[2:8], both
+// consulted through a Dialect receiver — so every check Run could make about
+// an EX frame was satisfied by a six-digit answer whatever dialect it ran
+// on. TestRun_FT710 cannot notice that: the FT-710's width IS six.
+//
+// Every member's P3 is 0, which cat's rule V12 requires of an
+// EXAddressPair inventory: the four-digit render carries P1 and P2 only.
+func pairAddressRadioConfig() cat.DialectConfig {
+	return cat.DialectConfig{
+		CATID: "0764",
+		ModeNames: map[cat.Mode]string{
+			cat.ModeUnset: "-",
+			cat.ModeLSB:   "LSB",
+			cat.ModeUSB:   "USB",
+		},
+		Slots: cat.SlotSpace{
+			MemoryLo: 1, MemoryHi: 20,
+			SixtyLo: 0, SixtyHi: 0,
+			PMSPairs:      2,
+			EmergencyWire: "",
+			NoneWire:      "000",
+		},
+		EXItems: []cat.EXItem{
+			{Addr: cat.EXAddress{P1: 8, P2: 1, P3: 0}, P1Label: "RADIO", P2Label: "GROUP", Name: "ITEM ONE", Digits: 2},
+			{Addr: cat.EXAddress{P1: 8, P2: 3, P3: 0}, P1Label: "RADIO", P2Label: "GROUP", Name: "ITEM TWO", Digits: 5},
+		},
+		EXAddressForm: cat.EXAddressPair,
+		MT:            cat.MTPolicy{Form: cat.MTFormShort, TagMaxBytes: 8, ClearTagByte: ' ', PadByte: ' '},
+		Clarifier:     cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+		MWWriteKind:   cat.KindMemory,
+	}
+}
+
+// TestRun_ExternallyBuiltPairAddressDialect runs the whole suite over the
+// four-digit form.
+//
+// The two assertions before Run are the fixture's own guard, in the shape
+// the two fixtures above use: a fixture that silently came back six-digit
+// would make this a slower copy of TestRun_ExternallyBuiltShortPeerDialect
+// while reporting that the narrow address form was covered.
+func TestRun_ExternallyBuiltPairAddressDialect(t *testing.T) {
+	d := cat.MustNewDialect(pairAddressRadioConfig())
+
+	if got := d.EXAddressWidth(); got != 4 {
+		t.Fatalf("EXAddressWidth() = %d, want 4 — this fixture exists to cover the OTHER address form", got)
+	}
+	// This config's own arithmetic, written out rather than derived: "EX" +
+	// a 4-byte address + ";".
+	if got, want := len(d.EXWire(d.EXAddresses()[0])), 4; got != want {
+		t.Fatalf("EXWire is %d bytes, want %d", got, want)
+	}
+
+	dialecttest.Run(t, d)
 }

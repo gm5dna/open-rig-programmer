@@ -75,9 +75,22 @@ func (m *MenuSnapshot) Clone() *MenuSnapshot {
 	return &out
 }
 
-// isSixASCIIDigits reports whether id is exactly six ASCII digits.
-func isSixASCIIDigits(id string) bool {
-	if len(id) != 6 {
+// isSettingIDWidth reports whether id is exactly FOUR or exactly SIX ASCII
+// digits.
+//
+// A menu setting ID is a radio's EX address rendered as wire digits, so its
+// width belongs to the RADIO and not to this package. Both widths the
+// project's dialects express are admitted: six for a (P1,P2,P3) MENU Number
+// — the FT-710, FTdx10 and FTdx101, core/cat's EXAddressTriple — and four
+// for a (P1,P2) one, core/cat's EXAddressPair. This is a validator rule
+// only: no serialised field changed and the schema did not move.
+//
+// FIVE STAYS REFUSED, and that is the whole reason this is two exact widths
+// rather than a 4..6 range. The rule exists to catch a mis-shaped ID before
+// it is written to a file or put to a radio, and a range would admit
+// precisely the truncated six-digit address it was written to catch.
+func isSettingIDWidth(id string) bool {
+	if len(id) != 4 && len(id) != 6 {
 		return false
 	}
 	for i := 0; i < len(id); i++ {
@@ -97,7 +110,8 @@ func isSixASCIIDigits(id string) bool {
 //   - a Known entry must have a non-empty Value; an Unavailable entry must
 //     have an empty Value; an Unsupported entry's Value is preserved
 //     verbatim and may be empty;
-//   - every ID is exactly six ASCII digits, and no ID repeats;
+//   - every ID is exactly four or exactly six ASCII digits — the two EX
+//     address widths, see isSettingIDWidth — and no ID repeats;
 //   - a Complete snapshot contains no Unavailable and no Unsupported
 //     entries (those two states are precisely the ways a read was NOT
 //     complete).
@@ -107,8 +121,8 @@ func (m *MenuSnapshot) Validate() error {
 	}
 	seen := make(map[string]bool, len(m.Entries))
 	for i, e := range m.Entries {
-		if !isSixASCIIDigits(e.ID) {
-			return &MenuEntryError{Index: i, ID: e.ID, Reason: "id must be exactly 6 ASCII digits"}
+		if !isSettingIDWidth(e.ID) {
+			return &MenuEntryError{Index: i, ID: e.ID, Reason: "id must be exactly 4 or 6 ASCII digits"}
 		}
 		if seen[e.ID] {
 			return &DuplicateMenuIDError{ID: e.ID}

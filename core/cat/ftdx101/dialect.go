@@ -102,6 +102,10 @@ func newDialect(catID string) cat.Dialect {
 			NoneWire:      "000", // ASSUMED — in no FTdx101 slot legend
 		},
 		EXItems: exItems,
+		// The FTdx101's EX grammar block prints "E X P1 P1 P2 P2 P3 P3"
+		// (ftdx101_layout.txt:699-708, Set at 702, Read at 705, Answer at
+		// 708): six digits, three components, as on both siblings.
+		EXAddressForm: cat.EXAddressTriple,
 		MT: cat.MTPolicy{
 			Form:         cat.MTFormCombined,
 			TagMaxBytes:  12,
