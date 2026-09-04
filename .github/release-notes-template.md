@@ -126,10 +126,11 @@ reading and for opt-in writes (see below).
   CSV export and import. To answer the field, paste a value into the cell
   (or type one into the CSV column) or leave the cell empty in the CSV,
   which records it as "unknown, keep whatever the radio has". Codeplug files
-  written before this release are unaffected: every existing file still
-  loads and re-saves byte for byte, and a sparse schema-5 file — one that
-  omitted a field's state — now stays schema 5 on re-save instead of being
-  rewritten as schema 3.
+  written before this release are unaffected: every file this program wrote
+  still loads and re-saves byte for byte. A hand-edited sparse schema-5
+  file — one that omitted a field's state — gains explicit empty states on
+  its first save, and stays schema 5 rather than being rewritten as
+  schema 3.
 - **IC-7610, IC-7760 and IC-7851: a frequency the radio's record cannot hold
   is refused when it is read, not later.** A record whose decoded frequency
   lies outside the model's declared range is reported as out of domain at
