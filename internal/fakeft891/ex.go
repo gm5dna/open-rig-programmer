@@ -101,7 +101,7 @@ const exDefaultDigit = '0'
 // "-3000 Hz - 0 - +3000 Hz" parameter counts its sign as a digit — and both
 // sides of the evidence pin those two addresses independently:
 // gen/main_test.go's TestParseB_TheOnlyFiveWideRowsAre0803And0804 from B, and
-// core/cat/ft891/crosscheck_test.go's widestRowDigits from A.
+// core/cat/ft891/crosscheck_test.go's widestRowAP1/AP2/BP1/BP2 literals from A.
 //
 // THERE IS NO 'T' TOKEN AND NO exTextWidth. The FTdx10's inventory has a
 // twelve-byte text item (MY CALL.) that answers spaces rather than zeros; this
