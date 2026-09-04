@@ -479,6 +479,198 @@ func appendMemBlock(out []byte, slot string, s MemState) []byte {
 	return out
 }
 
+// --- MT: MEMORY WRITE & TAG, THE COMBINED FORM (availability 166; frames
+// 996-1027) ---
+//
+// THE AVAILABILITY ROW AND THE DETAIL BLOCK CONTRADICT EACH OTHER on this
+// radio, and it is the only one of the four registered Yaesu models of which
+// that is true. The Control Command List gives MT "Set O, Read X, Ans. X"
+// (ft891_layout.txt:166); MT's own block, on the same printed page, prints a
+// filled Read chart ("M T P0 P0 P0 ;", 1016) and a filled 41-position Answer
+// chart (1018-1027). core/cat/ft891/doc.go records the disagreement and
+// deliberately does not settle it.
+//
+// THIS FAKE PLAYS BOTH RADIOS. By default it honours the detail block —
+// doc.go's register entry MT READ IS ANSWERED — and WithMTReadUnsupported()
+// makes it honour the command list, which is what puts core/driver/ft891's
+// typed refusal within reach of a test against a real fake.
+//
+// Set frame and Answer frame are ONE 41-position chart: "MT" + the 25-byte
+// shared field block + P11 + a 12-byte P12 tag field + ';'. The two
+// directions are disambiguated purely by length: a Read body (after "MT",
+// before ';') is exactly 3 bytes, a Set body exactly combinedBodyLen.
+//
+// THE READ'S SLOT DOMAIN IS MT's OWN LEGEND, memory and PMS (998-999), and
+// nothing else. Its Read chart labels positions 3-5 "P0" and MT's legend
+// column defines no P0 at all — the defect
+// core/cat/ft891/testdata/provenance.md records as item 2 — so there is no
+// second legend to read the read's domain from: the block's one slot legend
+// is it. That is what core/cat/ft891/dialect.go's MTReadsMemoryPMS carries,
+// and internal/fakedx10's opposite leniency is that radio's legend, not a
+// shared rule.
+
+// mtSetKindFixed is the combined Set's P7, "0: (Fixed)" (ft891_layout.txt:
+// 1011). Deliberately its own constant rather than a reference to any other
+// command's: MT-Set P7 and MW-Set P7 coincide as a fact of this radio
+// (core/cat/ft891/dialect.go's MWWriteKind comment says exactly that about
+// the same pair), not as a rule, and a radio that ever separated them would
+// take one constant with it.
+const mtSetKindFixed = '0'
+
+// tagFieldLen is P12's fixed width, "TAG Characters (up to 12 characters)
+// (ASCII)" (ft891_layout.txt:1017), drawn over positions 29-40.
+const tagFieldLen = 12
+
+// combinedBodyLen is a combined MT Set/Answer frame's body: everything after
+// "MT" and before the trailing ';' — the shared field block, P11, and the tag
+// field. 38, making the frame the counted 41
+// (core/cat/ft891/testdata/provenance.md §MT).
+const combinedBodyLen = memBlockLen + 1 + tagFieldLen
+
+// Body offsets past the shared field block.
+const (
+	cmbP11                 = memBlockLen
+	cmbTagStart, cmbTagEnd = memBlockLen + 1, memBlockLen + 1 + tagFieldLen
+)
+
+// tagFill is the byte a short tag is padded to width with, and the byte
+// trimmed from an answer's field to recover the tag.
+//
+// A SPACE because the DIALECT says so — core/cat/ft891/doc.go's ASSUMED
+// register entry "MTPolicy.TagFill = ' '", whose own note records that this
+// manual's P12 legend names a width and an alphabet and no fill, and that no
+// FT-891 has been asked. Cited here, not re-derived: if that entry's Stage R
+// capture moves the byte, this constant moves with it.
+const tagFill = ' '
+
+// mtSlot reports whether kind is a slot MT may name, in EITHER direction:
+// memory channels and PMS pairs only, per MT's own P1 legend
+// (ft891_layout.txt:998-999). A MANUAL FACT of this radio, not a policy —
+// TestMTRead_RefusesTheSlotsItsLegendDoesNotName and
+// TestMTSet_RefusedOnTheSlotsItsLegendDoesNotName hold both directions
+// against a slot MR answers in the same session.
+func mtSlot(kind slotKind) bool { return kind == slotMemory || kind == slotPMS }
+
+// buildMTAnswer builds the 41-byte combined MT answer for slot.
+//
+// ALWAYS THE FULL WIDTH, which is the DIALECT's ASSUMED register entry "THE
+// COMBINED MT ANSWER'S EXACT LENGTH, 41" seen from the other side: that entry
+// records that the manual's grid draws the MAXIMAL frame and that a
+// variable-width ANSWER is live, with a recorded contingency of a 30..41
+// window. This fake answers at the width core/cat expects (a fake that
+// answered short would fail the parser rather than exercise it); if that
+// entry's Stage R capture takes the contingency, this builder and core/cat
+// move together.
+//
+// The tag field is written by copying the stored tag into a fixed-width,
+// fill-initialised field, so a tag longer than tagFieldLen (only reachable
+// through WithSlot — the wire cannot deliver one) is truncated rather than
+// overflowing the frame.
+func buildMTAnswer(slot string, s MemState) []byte {
+	out := make([]byte, 0, 2+combinedBodyLen+1)
+	out = append(out, 'M', 'T')
+	out = appendMemBlock(out, slot, s)
+
+	// P11 is a LIVE flag here, so it is written from stored channel data and
+	// has no schema constant to fall back on — the difference from P5 two
+	// lines up in the block, and from every registered sibling's byte 28.
+	out = append(out, boolFlagByte(s.TagDisplay))
+
+	field := make([]byte, tagFieldLen)
+	for i := range field {
+		field[i] = tagFill
+	}
+	copy(field, s.Tag)
+	out = append(out, field...)
+
+	out = append(out, ';')
+	return out
+}
+
+func (r *Radio) handleMT(body []byte) []byte {
+	switch len(body) {
+	case slotWireLen:
+		if r.mtReadUnsupported {
+			// The COMMAND LIST's radio: MT is Set-only (ft891_layout.txt:166).
+			// The refusal is deliberately indistinguishable from every other
+			// "?;" — that is the whole difficulty core/driver/ft891 reports
+			// rather than diagnoses.
+			return rejection
+		}
+		slot := string(body)
+		if !mtSlot(parseSlotForm(slot)) {
+			return rejection
+		}
+		r.mu.Lock()
+		s, ok := r.slots[slot]
+		r.mu.Unlock()
+		if !ok {
+			// Empty slot — ASSUMED, doc.go's register entry EMPTY-SLOT
+			// ANSWERS. This is the first frame of core/driver/ft891's
+			// cross-check, and the MR that follows it is the second.
+			return rejection
+		}
+		return buildMTAnswer(slot, s)
+
+	case combinedBodyLen:
+		slot, s, ok := parseMemoryBlock(body[:memBlockLen], mtSetKindFixed)
+		if !ok {
+			return rejection
+		}
+		if !mtSlot(parseSlotForm(slot)) {
+			return rejection
+		}
+		// P11 is the LIVE TAG display flag on this radio, so both values are
+		// legal and nothing else is — where every registered sibling requires
+		// the fixed '0' here. TestMTSet_RejectionsLeaveTheChannelUntouched
+		// holds the refusal.
+		if !validBoolFlagByte(body[cmbP11]) {
+			return rejection
+		}
+		s.TagDisplay = body[cmbP11] == '1'
+		field := body[cmbTagStart:cmbTagEnd]
+		if !validTagField(field) {
+			return rejection
+		}
+		// Stored TRIMMED, answered PADDED — doc.go's register entry THE TAG
+		// IS STORED TRIMMED AND ANSWERED PADDED. An all-fill field is no tag,
+		// by the same rule, with no branch of its own. The FT-710's
+		// HW-confirmed rejection of a ZERO-BYTE tag Set has no analogue: a
+		// 41-byte frame always carries the full 12-byte field, so the shape
+		// does not exist on this radio to accept or refuse.
+		s.Tag = trimRightBytes(string(field), tagFill)
+
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		// The Set carries the WHOLE record, so it overwrites an existing
+		// channel and CREATES an absent one, with no MW first — ASSUMED,
+		// doc.go's register entry AN MT SET CREATES AN ABSENT CHANNEL, and
+		// the fake's half of the driver register's "A SINGLE COMBINED MT SET
+		// SUFFICES ...". An MT-only driver against a fake that demanded an MW
+		// could not write at all.
+		r.slots[slot] = s
+		// The selection is NOT moved — doc.go's register entry A SET DOES NOT
+		// MOVE THE SELECTED CHANNEL.
+		return nil // fire-and-forget success
+	}
+	return rejection
+}
+
+// trimRightBytes returns s without its trailing runs of cut.
+//
+// strings.TrimRight would do, and this package could import strings — the
+// hard rule forbids project-internal imports, not the standard library. It is
+// four lines here so that the tag's trimming rule is visible beside the
+// storage decision it implements rather than behind a call whose second
+// argument is a cutset rather than a byte.
+func trimRightBytes(s string, cut byte) string {
+	end := len(s)
+	for end > 0 && s[end-1] == cut {
+		end--
+	}
+	return s[:end]
+}
+
 // --- MR: MEMORY CHANNEL READ (availability 164; frames 959-979) ---
 //
 // X O O X: no Set, a Read, an Answer, no AI push. Read frame (6 bytes) "MR" +
@@ -610,6 +802,8 @@ func (r *Radio) handleFrame(frame []byte) []byte {
 		return r.handleAI(rest)
 	case [2]byte{'M', 'R'}:
 		return r.handleMR(rest)
+	case [2]byte{'M', 'T'}:
+		return r.handleMT(rest)
 	default:
 		return rejection
 	}
