@@ -166,6 +166,25 @@ describe('tier cells', () => {
 		expect(displayValue(duplex, {}, uiSpec)).toBe('—')
 	})
 
+	it('renders a Known ZERO as zero — Go leaves the value key out, and that is still an answer', () => {
+		// core/codeplug/fieldstate.go marks FieldState.Value
+		// `json:"value,omitempty"`, so a field the radio answered with ZERO
+		// reaches the frontend as {"state":"known"} and nothing else. It is
+		// a real answer: core/spec/capabilities.go's AttenuatorDB says
+		// "zero, when present, means off", and a simplex channel's offset is
+		// a Known 0 Hz. Rendering it as the em dash would put a
+		// radio-supplied value in the mark this module reserves for "this
+		// cell makes no claim" — the one confusion the whole posture of this
+		// file is built to prevent.
+		const attenuator = TIER_COLUMNS.find((c) => c.id === 'attenuator')
+		expect(displayValue(attenuator, { attenuator: { state: 'known' } }, uiSpec)).toBe('0')
+		expect(displayValue(offset, { offset: { state: 'known' } }, uiSpec)).toBe('0.000000')
+		// An explicit zero reads the same way, which is what makes the two
+		// spellings of the same answer indistinguishable in the grid.
+		expect(displayValue(attenuator, { attenuator: { state: 'known', value: 0 } }, uiSpec)).toBe('0')
+		expect(displayValue(offset, { offset: { state: 'known', value: 0 } }, uiSpec)).toBe('0.000000')
+	})
+
 	it('is editable from known, unknown or absent — only unavailable stays refused (this task)', () => {
 		expect(isCellEditable(duplex, { duplex: { state: 'known', value: 'OFF' } })).toBe(true)
 		expect(isCellEditable(duplex, { duplex: { state: 'unknown' } })).toBe(true)

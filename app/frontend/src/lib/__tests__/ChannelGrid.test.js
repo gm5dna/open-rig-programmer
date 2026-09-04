@@ -1254,6 +1254,7 @@ function tierData(extra = {}) {
 // TIER_COLUMNS order (columnsFor).
 const TX_FREQ = 10
 const DUPLEX = 11
+const OFFSET = 12
 const TONE_MODE = 13
 const TONE_TX = 14
 const DTCS_CODE = 16
@@ -1302,6 +1303,70 @@ describe('tier-column editing', () => {
 		await fireEvent.keyDown(input, { key: 'Enter' })
 
 		expect(updateChannelMock.mock.calls[0][0].data.dtcs_code).toEqual({ state: 'known', value: 23 })
+	})
+
+	// --- a Known ZERO (fix round 1, MED-1) --------------------------------
+	//
+	// Go's FieldState.Value carries `json:"value,omitempty"`
+	// (core/codeplug/fieldstate.go), so a field that is KNOWN with a value
+	// of zero arrives here as {"state":"known"} with no `value` key at all.
+	// That is a real answer from the radio — core/spec/capabilities.go says
+	// of AttenuatorDB that "zero, when present, means off", and a simplex
+	// channel's offset is a Known 0 Hz — so it must render and open as
+	// zero. Rendering it as the em dash would make a radio-supplied answer
+	// indistinguishable from an unanswered cell, which is the one confusion
+	// this grid exists to avoid; opening the editor empty would make it
+	// unre-committable, since an emptied editor is a no-op.
+
+	it('a Known ZERO displays as zero, not as the em dash that means "no claim made"', () => {
+		appState.setCodeplug({
+			Schema: 1,
+			Generator: 'test',
+			Radio: { model: 'IC-7100', cat_id: '88', read_at: null, region: 'GB' },
+			Channels: [
+				{ slot: 'A-001', data: tierData({ offset: { state: 'known' }, dtcs_code: { state: 'known' } }) },
+			],
+			WorkingPath: '',
+			Dirty: false,
+			BaselineStale: false,
+		})
+		const { container } = render(ChannelGrid)
+		expect(cell(container, 0, OFFSET).textContent?.trim()).toBe('0.000000')
+		expect(cell(container, 0, DTCS_CODE).textContent?.trim()).toBe('0')
+	})
+
+	it('a Known ZERO opens the freq-kind editor on zero, not empty', async () => {
+		appState.setCodeplug({
+			Schema: 1,
+			Generator: 'test',
+			Radio: { model: 'IC-7100', cat_id: '88', read_at: null, region: 'GB' },
+			Channels: [{ slot: 'A-001', data: tierData({ offset: { state: 'known' } }) }],
+			WorkingPath: '',
+			Dirty: false,
+			BaselineStale: false,
+		})
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, OFFSET)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+		expect(screen.getByRole('textbox', { name: 'Offset (MHz), M-01' })).toHaveValue('0.000000')
+	})
+
+	it('a Known ZERO opens the int-kind editor on zero, not empty', async () => {
+		appState.setCodeplug({
+			Schema: 1,
+			Generator: 'test',
+			Radio: { model: 'IC-7100', cat_id: '88', read_at: null, region: 'GB' },
+			Channels: [{ slot: 'A-001', data: tierData({ dtcs_code: { state: 'known' } }) }],
+			WorkingPath: '',
+			Dirty: false,
+			BaselineStale: false,
+		})
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DTCS_CODE)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+		expect(screen.getByRole('textbox', { name: 'DTCS code, M-01' })).toHaveValue('0')
 	})
 
 	it('a text-kind cell is FREE TEXT — no enum is invented for a vocabulary the backend does not publish', async () => {
