@@ -247,7 +247,8 @@ func pmsSlots() []string {
 //     and TxClar are three Go fields under ONE spec.Field, so grading the
 //     field unwritable would block the offset and the RX flag as well, on
 //     a radio whose frame carries both. The refusal is an explicit
-//     pre-wire check in the write path (task 2), never a capability grade.
+//     pre-wire check in the write path (write.go's buildWriteCommand),
+//     never a capability grade.
 //
 //   - spec.FieldCTCSSTone and spec.FieldScanSkip are the zero
 //     FieldSupport, and the reason is the WEAKER one: the ASSUMED register

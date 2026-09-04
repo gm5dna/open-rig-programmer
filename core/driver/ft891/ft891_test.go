@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
@@ -533,42 +532,6 @@ func TestSession_DiagnosticsCountsUnexpectedFrames(t *testing.T) {
 
 	if got := sess.Diagnostics(); got.UnexpectedFrames != 0 {
 		t.Errorf("Diagnostics() = %+v on a fresh session, want UnexpectedFrames 0", got)
-	}
-}
-
-// TestWriteChannel_RefusedUntilTask2 pins the PLACEHOLDER: while this
-// package has no write path, every WriteChannel call is refused with a
-// typed *driver.WriteRefusedError before any frame is built and before any
-// byte reaches the wire.
-//
-// The placeholder exists because driver.Session requires the method and
-// *Session must satisfy that interface for Open to return one at all; both
-// registered combined-form siblings' skeletons carried the identical
-// placeholder for the identical reason. Task 2 replaces it and this test
-// together.
-func TestWriteChannel_RefusedUntilTask2(t *testing.T) {
-	p, sess := openSession(t, Simulated, slotImage{})
-	before := len(p.Transcript())
-
-	res, err := sess.WriteChannel(testCtx(t), codeplug.Channel{
-		Slot: "001",
-		Data: &codeplug.ChannelData{FreqHz: 14_250_000, Mode: "USB", CTCSS: "OFF", Shift: "SIMPLEX"},
-	})
-	if !errors.Is(err, driver.ErrWriteRefused) {
-		t.Fatalf("WriteChannel = %v, want errors.Is match against driver.ErrWriteRefused while the write path is a placeholder", err)
-	}
-	var wre *driver.WriteRefusedError
-	if !errors.As(err, &wre) {
-		t.Fatalf("WriteChannel error %v (%T) is not a *driver.WriteRefusedError", err, err)
-	}
-	if wre.Slot != "001" {
-		t.Errorf("WriteRefusedError.Slot = %q, want \"001\"", wre.Slot)
-	}
-	if res.Steps == nil || len(res.Steps) != 0 {
-		t.Errorf("WriteResult.Steps = %#v, want an EMPTY, non-nil slice — a refusal before any frame is built has no sequence to describe", res.Steps)
-	}
-	if after := p.Transcript(); len(after) != before {
-		t.Errorf("the placeholder sent %v — nothing may reach the wire", after[before:])
 	}
 }
 
