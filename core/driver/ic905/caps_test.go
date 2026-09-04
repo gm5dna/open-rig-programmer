@@ -15,6 +15,7 @@ import (
 	civic905 "github.com/gm5dna/open-rig-programmer/core/civ/ic905"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -322,6 +323,16 @@ var fieldGrid = []struct {
 	{spec.FieldDataMode, true, "row 20 — byte (13)"},
 }
 
+var deliberatelyUnexpressedFields = map[spec.Field]string{}
+
+func TestFieldAuditCoversEverySpecField(t *testing.T) {
+	audited := make([]spec.Field, len(fieldGrid))
+	for i, row := range fieldGrid {
+		audited[i] = row.field
+	}
+	drivertest.AssertFieldAuditCoversEverySpecField(t, "fieldGrid", audited, deliberatelyUnexpressedFields)
+}
+
 // TestFieldGrid_MatchesTheMatrix compares matrix section 2's eighty
 // gradings against caps.FieldSupport, for both banks and both profiles.
 //
@@ -587,13 +598,15 @@ func TestFieldGrid_TheZerosAreWrittenDown(t *testing.T) {
 // TestFieldGrid_GradesEverySpecFieldThereIs is the tripwire for a field
 // added by a LATER WAVE.
 //
-// core/spec has no enumeration of its Field constants — nothing to range
-// over — so this parses the declarations out of core/spec/field.go the
-// way internal/guards parses the tree, and requires every one of them to
-// appear in fieldGrid. Without it a twenty-first spec.Field would be
-// silently ungraded by this driver: absent from both banks' maps, absent
-// from the grid, and reported Unsupported by a lookup that cannot tell
-// "decided against" from "never considered".
+// This predates spec.AllFields and remains an independent source-level pin:
+// it parses the declarations out of core/spec/field.go the way
+// internal/guards parses the tree, and requires every one of them to appear
+// in fieldGrid. TestFieldAuditCoversEverySpecField now also catches a
+// spec.Field missing from fieldGrid, via drivertest's comparison against
+// spec.AllFields() — so a later omission is no longer SILENT. This test
+// still earns its keep: it reads field.go's declarations directly, so it
+// would still catch an omission that spec.AllFields itself failed to
+// record, which the other test cannot.
 //
 // It is the counterpart to TestCapabilities_EveryFieldExplicit, which
 // pins spec.Capabilities' 22 STRUCT fields for the same reason.

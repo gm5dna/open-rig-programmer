@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -19,6 +20,12 @@ var allCapabilityFields = []spec.Field{
 	spec.FieldDataMode, spec.FieldTuningStepEnabled, spec.FieldTuningStep,
 	spec.FieldProgramTuningStep, spec.FieldAttenuator, spec.FieldPreamp,
 	spec.FieldAntenna, spec.FieldIPPlus,
+}
+
+var deliberatelyUnexpressedFields = map[spec.Field]string{}
+
+func TestFieldAuditCoversEverySpecField(t *testing.T) {
+	drivertest.AssertFieldAuditCoversEverySpecField(t, "allCapabilityFields", allCapabilityFields, deliberatelyUnexpressedFields)
 }
 
 var mappedFields = map[spec.Field]bool{

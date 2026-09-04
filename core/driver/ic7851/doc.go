@@ -197,7 +197,11 @@
 //	    errors.Is(err, driver.ErrWrongRadio) — see RecordLengthMismatchError,
 //	    which NAMES NO FOUND MODEL, because cross-model record-length
 //	    distinctness is a TIER-LEVEL WAVE-4 check and this package holds no
-//	    table of other radios' lengths.
+//	    table of other radios' lengths. errors.As(err, &civLengthErr) also
+//	    succeeds, against the *civ.RecordLengthError this type wraps
+//	    alongside driver.ErrWrongRadio — the same shape as the IC-9700's
+//	    RecordLengthMismatchError (core/civ/tier_test.go documents the
+//	    harmonisation).
 //	    TestE2E_WrongRecordLengthRefusesTheRadio drives a 24- and a 26-byte
 //	    radio.
 //

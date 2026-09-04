@@ -15,6 +15,7 @@ import (
 	civic7851 "github.com/gm5dna/open-rig-programmer/core/civ/ic7851"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7851"
@@ -639,6 +640,10 @@ func TestE2E_WrongRecordLengthRefusesTheRadio(t *testing.T) {
 			}
 			if e.Got != length || e.Want != civic7851.RecordOnlyLength {
 				t.Errorf("RecordLengthMismatchError = %+v, want got %d want %d", e, length, civic7851.RecordOnlyLength)
+			}
+			if length == 24 {
+				drivertest.AssertRecordLengthMismatch(t, e, e.Got, e.Want,
+					"ic7851: g0/ch1 answered a 24-byte memory record, want 25 — the expected length is itself a derivation from one document (register entry ic7851-record-length), and this refusal names no other model because cross-model record-length distinctness is a Wave-4 tier check")
 			}
 		})
 	}

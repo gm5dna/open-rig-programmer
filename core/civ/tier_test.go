@@ -171,6 +171,16 @@
 // changed is only that a caller can ask "is this a wrong-radio refusal?"
 // and be told yes; the rule above is untouched.
 //
+// THE IC-9700 IS NO LONGER THE ONLY ONE SHAPED THIS WAY. core/driver/ic7610,
+// core/driver/ic7760 and core/driver/ic7851 have since adopted the same
+// *RecordLengthMismatchError{Err *civ.RecordLengthError, Unwrap() []error}
+// form — their own Got/Want/Slot fields and their pinned Error() text are
+// unchanged — so errors.Is(err, driver.ErrWrongRadio) and errors.As(err,
+// &civLengthErr) both succeed against all four drivers' length-mismatch
+// refusals, not this one alone. core/driver/internal/drivertest's
+// AssertRecordLengthMismatch pins that shared contract once; each driver's
+// own probe test calls it.
+//
 // THE IC-7100 MINTS NONE EITHER, BY THE SAME REASONING AND IN ITS OWN
 // WORDS. core/driver/ic7100/doc.go's Wave-4 hand-off section records that
 // "measuring 111 record bytes proves the radio is not an IC-7610 or an

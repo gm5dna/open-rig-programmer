@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	civicr8600 "github.com/gm5dna/open-rig-programmer/core/civ/icr8600"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -161,4 +162,10 @@ func allFieldsForAudit() []spec.Field {
 		spec.FieldTuningStepEnabled, spec.FieldTuningStep, spec.FieldProgramTuningStep,
 		spec.FieldAttenuator, spec.FieldPreamp, spec.FieldAntenna, spec.FieldIPPlus,
 	}
+}
+
+var deliberatelyUnexpressedFields = map[spec.Field]string{}
+
+func TestFieldAuditCoversEverySpecField(t *testing.T) {
+	drivertest.AssertFieldAuditCoversEverySpecField(t, "allFieldsForAudit", allFieldsForAudit(), deliberatelyUnexpressedFields)
 }
