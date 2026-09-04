@@ -227,7 +227,7 @@ func TestValidateDialectConfig_V9ReadSlots(t *testing.T) {
 		mt   MTPolicy
 	}{
 		{"short", MTPolicy{Form: MTFormShort, TagMaxBytes: 8, ClearTagByte: '_'}},
-		{"combined", MTPolicy{Form: MTFormCombined, TagMaxBytes: 8, TagFill: '_'}},
+		{"combined", MTPolicy{Form: MTFormCombined, P11: P11Fixed, TagMaxBytes: 8, TagFill: '_'}},
 	}
 	for _, f := range forms {
 		t.Run(f.name+"/zero refused", func(t *testing.T) {

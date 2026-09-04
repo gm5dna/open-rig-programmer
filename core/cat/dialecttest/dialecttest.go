@@ -713,7 +713,7 @@ func (r *conformanceRun) checkCombinedMTSets(s cat.Slot) {
 			// empty tag IS the all-fill field.
 			what = "MT set combined (cleared)"
 		}
-		cmd, err := r.d.BuildMTSetCombined(m, tag)
+		cmd, err := r.buildCombined(m, tag, true)
 		if err != nil {
 			if tag == "" {
 				// Not tolerable: the empty tag is the one every combined
@@ -733,7 +733,7 @@ func (r *conformanceRun) checkCombinedMTSets(s cat.Slot) {
 		r.checkMTFrameLength(what, frame, true)
 		r.keepOwnFormFrames(frame, tag == "")
 
-		gotM, gotTag, err := r.d.ParseMTAnswerCombined(frame)
+		gotM, gotTag, gotDisplay, err := r.parseCombined(frame)
 		if err != nil {
 			r.t.Errorf("%s: ParseMTAnswerCombined(%q) = %v — a frame its own builder produced must parse", r.name(), frame, err)
 			continue
@@ -745,10 +745,158 @@ func (r *conformanceRun) checkCombinedMTSets(s cat.Slot) {
 			r.t.Errorf("%s: %s for slot %q round-tripped tag %q, want %q — the fill padding is a wire-encoding concern and must not survive the parse", r.name(), what, s.Wire(), gotTag, tag)
 			continue
 		}
+		if !gotDisplay {
+			r.t.Errorf("%s: %s for slot %q was built with the TAG flag ON and came back OFF — under %v byte 28 is a live flag, and one that does not survive its own round trip is not being carried", r.name(), what, s.Wire(), r.d.MTP11())
+		}
 		if tag != "" {
 			r.exactTagRoundTrips++
 		}
 	}
+
+	r.checkCombinedP11Seam(m)
+}
+
+// buildCombined calls whichever combined Set builder this dialect's P11
+// policy answers to, with display as the TAG flag under P11TagDisplay and
+// ignored under P11Fixed.
+//
+// The two are not interchangeable: a live flag is never defaulted, so the
+// display-less builder REFUSES a P11TagDisplay dialect and the
+// display-bearing one refuses a P11Fixed one. checkCombinedP11Seam is where
+// that pair of refusals is required to be SEEN; this helper is just the
+// right call.
+func (r *conformanceRun) buildCombined(m cat.MemoryData, tag string, display bool) (cat.Command, error) {
+	if r.d.MTP11() == cat.P11TagDisplay {
+		return r.d.BuildMTSetCombinedDisplay(m, tag, display)
+	}
+	return r.d.BuildMTSetCombined(m, tag)
+}
+
+// parseCombined is buildCombined's counterpart. Under P11Fixed the flag it
+// reports is false, because byte 28 carries no state there.
+func (r *conformanceRun) parseCombined(frame []byte) (cat.MemoryData, string, bool, error) {
+	if r.d.MTP11() == cat.P11TagDisplay {
+		return r.d.ParseMTAnswerCombinedDisplay(frame)
+	}
+	m, tag, err := r.d.ParseMTAnswerCombined(frame)
+	// Under P11Fixed the byte is the printed "(Fixed)" and there is no flag
+	// to report; true is returned so the round-trip assertion above states
+	// something only where a flag exists, rather than failing every
+	// P11Fixed dialect on a value it does not have.
+	return m, tag, true, err
+}
+
+// checkCombinedP11Seam requires the WRONG P11 pair to refuse, and to be SEEN
+// to refuse — all four refusals, both builders and both parsers.
+//
+// It is checkFormSeam's rule applied one level down. A live flag is never
+// defaulted, so a P11TagDisplay dialect must refuse the display-less builder
+// rather than quietly writing '0' for a flag the caller never expressed an
+// intention about; and a P11Fixed dialect must refuse the display-bearing
+// one rather than letting a caller set a flag its radio does not have. A
+// call that was skipped and a seam that is enforced look identical from
+// outside, which is why every refusal below is counted.
+func (r *conformanceRun) checkCombinedP11Seam(m cat.MemoryData) {
+	r.t.Helper()
+
+	if r.d.MTForm() != cat.MTFormCombined {
+		return
+	}
+	// A frame this dialect really did build, so the parser refusals below
+	// can only be about the API pairing.
+	cmd, err := r.buildCombined(m, "", false)
+	if err != nil {
+		return // the empty-tag assertion above has already reported this
+	}
+	frame := cmd.Bytes()
+
+	tagDisplay := r.d.MTP11() == cat.P11TagDisplay
+
+	wrongBuild, wrongBuildErr := r.d.BuildMTSetCombined(m, "")
+	if tagDisplay {
+		r.requireP11Refusal("display-less combined build under P11TagDisplay", wrongBuild, wrongBuildErr)
+	} else if wrongBuildErr != nil {
+		r.t.Errorf("%s: BuildMTSetCombined was refused (%v) on a %v dialect — it is that policy's OWN builder", r.name(), wrongBuildErr, r.d.MTP11())
+	}
+
+	wrongDisplayBuild, wrongDisplayErr := r.d.BuildMTSetCombinedDisplay(m, "", true)
+	if tagDisplay {
+		if wrongDisplayErr != nil {
+			r.t.Errorf("%s: BuildMTSetCombinedDisplay was refused (%v) on a %v dialect — it is that policy's OWN builder", r.name(), wrongDisplayErr, r.d.MTP11())
+		}
+	} else {
+		r.requireP11Refusal("display-bearing combined build under P11Fixed", wrongDisplayBuild, wrongDisplayErr)
+	}
+
+	if _, _, err := r.d.ParseMTAnswerCombined(frame); (err == nil) == tagDisplay {
+		if tagDisplay {
+			r.t.Errorf("%s: ParseMTAnswerCombined ACCEPTED %q on a %v dialect — byte 28 is a live flag there, and a parser that drops it hands back a record the radio did not send", r.name(), frame, r.d.MTP11())
+		} else {
+			r.t.Errorf("%s: ParseMTAnswerCombined refused %q on a %v dialect — it is that policy's OWN parser", r.name(), frame, r.d.MTP11())
+		}
+	} else if tagDisplay {
+		r.refusals["display-less combined parse under P11TagDisplay"]++
+	}
+
+	if _, _, _, err := r.d.ParseMTAnswerCombinedDisplay(frame); (err == nil) != tagDisplay {
+		if tagDisplay {
+			r.t.Errorf("%s: ParseMTAnswerCombinedDisplay refused %q on a %v dialect — it is that policy's OWN parser", r.name(), frame, r.d.MTP11())
+		} else {
+			r.t.Errorf("%s: ParseMTAnswerCombinedDisplay ACCEPTED %q on a %v dialect — byte 28 is the printed \"(Fixed)\" there, and reporting it as a flag reads schema as state", r.name(), frame, r.d.MTP11())
+		}
+	} else if !tagDisplay {
+		r.refusals["display-bearing combined parse under P11Fixed"]++
+	}
+
+	// THE FLAG MUST REACH THE WIRE, and be seen to. Under P11TagDisplay a
+	// TAG-ON frame and a TAG-OFF frame must differ at byte 28 and nowhere
+	// else, which is what makes the round trip above evidence of a flag
+	// rather than of a constant.
+	if !tagDisplay {
+		return
+	}
+	on, errOn := r.buildCombined(m, "", true)
+	if errOn != nil {
+		r.t.Errorf("%s: BuildMTSetCombinedDisplay with the TAG flag ON = %v", r.name(), errOn)
+		return
+	}
+	off, errOff := r.buildCombined(m, "", false)
+	if errOff != nil {
+		r.t.Errorf("%s: BuildMTSetCombinedDisplay with the TAG flag OFF = %v", r.name(), errOff)
+		return
+	}
+	r.checkFrame("MT set combined (TAG on)", on.Bytes())
+	diffs := 0
+	a, b := on.Bytes(), off.Bytes()
+	if len(a) != len(b) {
+		r.t.Errorf("%s: the TAG-on and TAG-off combined frames differ in LENGTH (%d vs %d) — the flag is one byte", r.name(), len(a), len(b))
+		return
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			diffs++
+		}
+	}
+	if diffs != 1 {
+		r.t.Errorf("%s: the TAG-on and TAG-off combined frames differ in %d bytes (%q vs %q), want exactly 1 — byte 28 is the flag and nothing else may move with it", r.name(), diffs, a, b)
+	}
+}
+
+// requireP11Refusal holds one wrong-pair call to the refusal contract: an
+// error, the zero Command, and a message naming this dialect's own policy —
+// a refusal for some other reason would leave the seam unproven while
+// looking exactly like proof of it.
+func (r *conformanceRun) requireP11Refusal(what string, cmd cat.Command, err error) {
+	r.t.Helper()
+
+	if err == nil {
+		r.t.Errorf("%s: %s SUCCEEDED, emitting %q — the P11 seam is not being enforced", r.name(), what, cmd.Bytes())
+		return
+	}
+	if !cmd.IsZero() {
+		r.t.Errorf("%s: %s returned a non-zero Command alongside its error; every fallible builder returns the zero Command", r.name(), what)
+	}
+	r.refusals[what]++
 }
 
 // slotTakesACombinedSet reports whether this dialect will build a combined
@@ -1072,6 +1220,17 @@ func (r *conformanceRun) checkNonVacuity() {
 		"over-long MT frame at the gate",
 		"clarifier past MaxAbsHz",
 		"malformed frame at the gate",
+	}
+	switch r.d.MTP11() {
+	case cat.P11TagDisplay:
+		required = append(required, "MT set combined (TAG on)")
+		requiredRefusals = append(requiredRefusals,
+			"display-less combined build under P11TagDisplay",
+			"display-less combined parse under P11TagDisplay")
+	case cat.P11Fixed:
+		requiredRefusals = append(requiredRefusals,
+			"display-bearing combined build under P11Fixed",
+			"display-bearing combined parse under P11Fixed")
 	}
 	switch r.d.MemoryP5() {
 	case cat.P5Fixed:

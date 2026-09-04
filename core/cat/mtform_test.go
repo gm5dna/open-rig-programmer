@@ -30,7 +30,7 @@ func shortFormBaseConfig() DialectConfig {
 // assuming the evidenced width fails here.
 func combinedFormBaseConfig() DialectConfig {
 	cfg := validBaselineConfig()
-	cfg.MT = MTPolicy{Form: MTFormCombined, ReadSlots: MTReadsReadable, TagMaxBytes: 6, TagFill: ' '}
+	cfg.MT = MTPolicy{Form: MTFormCombined, P11: P11Fixed, ReadSlots: MTReadsReadable, TagMaxBytes: 6, TagFill: ' '}
 	return cfg
 }
 

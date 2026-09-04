@@ -206,7 +206,7 @@ func TestMemoryP5_CombinedMTCarriesTheSamePolicy(t *testing.T) {
 			NoneWire: "000", MCSelects: MCSelectsAll,
 		},
 		MT: MTPolicy{
-			Form: MTFormCombined, ReadSlots: MTReadsReadable,
+			Form: MTFormCombined, ReadSlots: MTReadsReadable, P11: P11Fixed,
 			TagMaxBytes: 6, TagFill: ' ',
 		},
 		Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},

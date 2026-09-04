@@ -32,11 +32,17 @@ import (
 // bearing.
 const CombinedMTSetKind byte = '0'
 
-// combinedMTP11 is the combined record's P11, documented "0" fixed in both
-// directions: emitted by the builder and required by the parser. A form
-// constant for the same reason as CombinedMTSetKind — it is schema, not
-// policy, and no dialect may vary it. If hardware ever divorces the two,
-// an MT-specific policy field is added then, additively.
+// combinedMTP11 is the byte P11Fixed puts at position 28 of the combined
+// record, emitted by the builder and required by the parser.
+//
+// It was described here as "schema, not policy, and no dialect may vary it",
+// with the note that "if hardware ever divorces the two, an MT-specific
+// policy field is added then, additively". The FT-891's manual is that
+// divorce — it prints `P11 0: TAG "OFF" 1: TAG "ON"` where every registered
+// sibling prints "0: (Fixed)" — and MTPolicy.P11 is that field, added
+// exactly as anticipated. This constant is now THE P11Fixed POLICY'S BYTE
+// rather than the form's, which is why nothing about the FTdx10 family's
+// frames moves: P11Fixed is what they declare.
 const combinedMTP11 byte = '0'
 
 // Positions AFTER the shared memory field block, fixed for every combined
@@ -191,6 +197,43 @@ func (d Dialect) BuildMTSetCombined(m MemoryData, tag string) (Command, error) {
 	if d.mt.Form != MTFormCombined {
 		return Command{}, newParseError(nil, fmt.Sprintf("MT: combined-form Set called on a %v dialect — use the short-form API", d.mt.Form))
 	}
+	// POLICY SECOND. A dialect whose P11 is a live TAG flag gets no default
+	// from this builder: it has no display argument to offer, and writing
+	// '0' for a flag the caller never expressed an intention about is exactly
+	// the silent defaulting the M9c-1 ruling forbids.
+	if d.mt.P11 == P11TagDisplay {
+		return Command{}, newParseError(nil, "MT: this dialect's P11 is a live TAG flag; use the display-bearing builder/parser (BuildMTSetCombinedDisplay/ParseMTAnswerCombinedDisplay)")
+	}
+	return d.buildMTSetCombined(m, tag, false)
+}
+
+// BuildMTSetCombinedDisplay is BuildMTSetCombined for a dialect whose P11 is
+// a live TAG ON/OFF flag: the caller supplies the flag, and it is written
+// into byte 28 of the record.
+//
+// It REFUSES a P11Fixed dialect, symmetric with BuildMTSetCombined's refusal
+// of a P11TagDisplay one. The two are not interchangeable in either
+// direction: on a radio whose manual prints "0: (Fixed)" there is no flag to
+// express, and a caller asking to set one has misunderstood the radio rather
+// than made a harmless request.
+//
+// Everything else — the form check, the field validation, the tag rules, the
+// fixed-width fill — is BuildMTSetCombined's, unchanged and shared.
+func (d Dialect) BuildMTSetCombinedDisplay(m MemoryData, tag string, display bool) (Command, error) {
+	if d.mt.Form != MTFormCombined {
+		return Command{}, newParseError(nil, fmt.Sprintf("MT: combined-form Set called on a %v dialect — use the short-form API", d.mt.Form))
+	}
+	if d.mt.P11 != P11TagDisplay {
+		return Command{}, newParseError(nil, fmt.Sprintf("MT: this dialect's P11 is %v, the record's printed-fixed byte 28; use the display-less builder/parser (BuildMTSetCombined/ParseMTAnswerCombined)", d.mt.P11))
+	}
+	return d.buildMTSetCombined(m, tag, display)
+}
+
+// buildMTSetCombined is the one body both combined builders share. display
+// is meaningful only under P11TagDisplay; under P11Fixed the caller passes
+// false and this writes combinedMTP11, which is the same byte the builder
+// wrote before this policy existed.
+func (d Dialect) buildMTSetCombined(m MemoryData, tag string, display bool) (Command, error) {
 	if err := d.validateCombinedMTFields(m); err != nil {
 		return Command{}, err
 	}
@@ -209,6 +252,9 @@ func (d Dialect) BuildMTSetCombined(m MemoryData, tag string) (Command, error) {
 	frame[0], frame[1] = 'M', 'T'
 	d.encodeMemoryFields(frame, m)
 	frame[mtCombinedP11Offset] = combinedMTP11
+	if d.mt.P11 == P11TagDisplay {
+		frame[mtCombinedP11Offset] = boolDigit(display)
+	}
 
 	field := frame[mtCombinedTagOffset : mtCombinedTagOffset+d.mt.TagMaxBytes]
 	n := copy(field, tag)
@@ -248,30 +294,71 @@ func (d Dialect) ParseMTAnswerCombined(frame []byte) (MemoryData, string, error)
 	if d.mt.Form != MTFormCombined {
 		return MemoryData{}, "", newParseError(frame, fmt.Sprintf("MT: combined-form answer parsed on a %v dialect — use the short-form API", d.mt.Form))
 	}
+	if d.mt.P11 == P11TagDisplay {
+		return MemoryData{}, "", newParseError(frame, "MT: this dialect's P11 is a live TAG flag; use the display-bearing builder/parser (BuildMTSetCombinedDisplay/ParseMTAnswerCombinedDisplay)")
+	}
+	m, tag, _, err := d.parseMTAnswerCombined(frame)
+	return m, tag, err
+}
+
+// ParseMTAnswerCombinedDisplay is ParseMTAnswerCombined for a dialect whose
+// P11 is a live TAG ON/OFF flag: the flag comes back beside the tag, which is
+// the shape the FT-710's SHORT form already uses. MemoryData is unchanged —
+// the flag travels beside the record, not inside it.
+//
+// It REFUSES a P11Fixed dialect, symmetric with ParseMTAnswerCombined's
+// refusal of a P11TagDisplay one: a caller reading a flag off a radio whose
+// manual prints "(Fixed)" would be reading schema as state.
+func (d Dialect) ParseMTAnswerCombinedDisplay(frame []byte) (MemoryData, string, bool, error) {
+	if d.mt.Form != MTFormCombined {
+		return MemoryData{}, "", false, newParseError(frame, fmt.Sprintf("MT: combined-form answer parsed on a %v dialect — use the short-form API", d.mt.Form))
+	}
+	if d.mt.P11 != P11TagDisplay {
+		return MemoryData{}, "", false, newParseError(frame, fmt.Sprintf("MT: this dialect's P11 is %v, the record's printed-fixed byte 28; use the display-less builder/parser (BuildMTSetCombined/ParseMTAnswerCombined)", d.mt.P11))
+	}
+	return d.parseMTAnswerCombined(frame)
+}
+
+// parseMTAnswerCombined is the one body both combined parsers share. The
+// display flag it returns is false under P11Fixed, where byte 28 is required
+// to be combinedMTP11 and carries no state.
+func (d Dialect) parseMTAnswerCombined(frame []byte) (MemoryData, string, bool, error) {
 	if want := d.mtCombinedLen(); len(frame) != want {
-		return MemoryData{}, "", newParseError(frame, fmt.Sprintf("MT combined answer must be %d bytes", want))
+		return MemoryData{}, "", false, newParseError(frame, fmt.Sprintf("MT combined answer must be %d bytes", want))
 	}
 	if frame[0] != 'M' || frame[1] != 'T' {
-		return MemoryData{}, "", newParseError(frame, "MT combined answer missing \"MT\" prefix")
+		return MemoryData{}, "", false, newParseError(frame, "MT combined answer missing \"MT\" prefix")
 	}
 	if frame[len(frame)-1] != ';' {
-		return MemoryData{}, "", newParseError(frame, "MT combined answer missing ';' terminator")
+		return MemoryData{}, "", false, newParseError(frame, "MT combined answer missing ';' terminator")
 	}
 
 	m, err := d.parseMemoryFields(frame, "MT")
 	if err != nil {
-		return MemoryData{}, "", err
+		return MemoryData{}, "", false, err
 	}
 	switch m.Kind {
 	case KindVFO, KindMemory:
 	default:
-		return MemoryData{}, "", newParseError(frame, fmt.Sprintf("MT frame: kind field (P7) must be %q (VFO) or %q (Memory)", KindVFO, KindMemory))
+		return MemoryData{}, "", false, newParseError(frame, fmt.Sprintf("MT frame: kind field (P7) must be %q (VFO) or %q (Memory)", KindVFO, KindMemory))
 	}
-	if frame[mtCombinedP11Offset] != combinedMTP11 {
-		return MemoryData{}, "", newParseError(frame, fmt.Sprintf("MT frame: P11 must be fixed %q", combinedMTP11))
+	// P11, BY THIS DIALECT'S OWN READING. Under P11Fixed this is the
+	// pre-existing refusal, wording untouched — the badP11 test in
+	// mtcombined_test.go stands on it. Under P11TagDisplay the byte is a
+	// flag, and only its two documented values are accepted: a third value
+	// is an undocumented frame, and this package does not turn one into
+	// data.
+	display := false
+	if d.mt.P11 == P11TagDisplay {
+		display, err = parseBoolDigit(frame[mtCombinedP11Offset])
+		if err != nil {
+			return MemoryData{}, "", false, newParseError(frame, fmt.Sprintf("MT frame: P11 (position 28) must be '0' or '1' under %v — it is this dialect's TAG ON/OFF flag", d.mt.P11))
+		}
+	} else if frame[mtCombinedP11Offset] != combinedMTP11 {
+		return MemoryData{}, "", false, newParseError(frame, fmt.Sprintf("MT frame: P11 must be fixed %q", combinedMTP11))
 	}
 
-	return m, d.decodeCombinedTag(string(frame[mtCombinedTagOffset : mtCombinedTagOffset+d.mt.TagMaxBytes])), nil
+	return m, d.decodeCombinedTag(string(frame[mtCombinedTagOffset : mtCombinedTagOffset+d.mt.TagMaxBytes])), display, nil
 }
 
 // decodeCombinedTag turns a combined answer's raw tag field into a tag
