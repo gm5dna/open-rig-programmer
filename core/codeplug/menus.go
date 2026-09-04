@@ -27,7 +27,12 @@ const (
 
 // MenuEntry is one menu/EX setting captured in a MenuSnapshot.
 type MenuEntry struct {
-	// ID is the stable 6-digit menu identifier, P1P2P3.
+	// ID is the stable menu identifier: four or six ASCII digits — the EX
+	// address in its dialect's wire form (P1P2P3 under EXAddressTriple,
+	// P1P2 under EXAddressPair; cat.Dialect.EXWire renders each). Not
+	// always six: the S0-close review's LOW-4 finding was this comment
+	// still promising P1P2P3 unconditionally after the FT-891's narrower
+	// wire form was added.
 	ID string `json:"id"`
 	// Value is the raw canonical P4 value (see MenuEntryState for when it
 	// is populated).
