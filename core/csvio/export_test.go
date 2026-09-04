@@ -153,6 +153,17 @@ func TestExport_PopulatedSlot(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var buf bytes.Buffer
 			d := tc.data
+			// The fixtures above name the PRE-TIER fields only, and
+			// this test is about their cells. A hand-built
+			// ChannelData leaves the seventeen tier fields at the zero
+			// value, Absent — which no read of the Yaesu these
+			// fixtures describe ever produces, and which now correctly
+			// forces the version-3 header
+			// (needsTierColumns/needsReceiverColumns). Unavailable is
+			// what such a radio actually reports, and what keeps the
+			// export at version 1 so the column offsets below mean
+			// what they say.
+			markTierFieldsUnavailable(&d)
 			channels := []codeplug.Channel{{Slot: "001", Data: &d}}
 			if err := Export(&buf, channels); err != nil {
 				t.Fatalf("Export() error = %v", err)
