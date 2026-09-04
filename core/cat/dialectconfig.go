@@ -177,6 +177,49 @@ func (p MTReadSlotPolicy) String() string {
 	}
 }
 
+// MTP11Policy names what byte 28 of the COMBINED MT record — P11, the byte
+// immediately after the shared memory field block — means on one family.
+//
+// Every registered combined-form sibling prints it "P11 0: (Fixed)", which
+// is why core/cat carried it as the form constant combinedMTP11. The FT-891
+// prints `P11 0: TAG "OFF" 1: TAG "ON"`: on that radio the byte is a live
+// flag the caller supplies and the radio reports, exactly as the FT-710's
+// SHORT form already carries a display flag beside its tag.
+//
+// A LIVE FLAG IS NEVER DEFAULTED (the M9c-1 ruling, and both spec
+// reviewers). Under P11TagDisplay the display-LESS builder and parser —
+// BuildMTSetCombined and ParseMTAnswerCombined — REFUSE, rather than
+// silently writing '0' for a flag the caller never expressed an intention
+// about; and under P11Fixed the display-BEARING pair refuses in turn, so a
+// caller cannot express a flag on a radio that has none.
+//
+// It belongs to MTFormCombined alone. Under MTFormShort the display flag is
+// already a parameter of BuildMTSet, so V9 requires this to be explicitly
+// zero there — the same ownership rule TagFill, ClearTagByte and PadByte
+// keep.
+type MTP11Policy int
+
+const (
+	// P11Fixed is the FTdx10 family's: byte 28 is the printed "0: (Fixed)",
+	// emitted by the builder and required by the parser.
+	P11Fixed MTP11Policy = iota + 1
+	// P11TagDisplay is the FT-891's: byte 28 is the TAG ON/OFF flag, built
+	// from a caller-supplied value and parsed into one, '0' or '1' only.
+	P11TagDisplay
+)
+
+// String names the policy, so a refusal can quote it.
+func (p MTP11Policy) String() string {
+	switch p {
+	case P11Fixed:
+		return "P11Fixed"
+	case P11TagDisplay:
+		return "P11TagDisplay"
+	default:
+		return fmt.Sprintf("MTP11Policy(%d)", int(p))
+	}
+}
+
 // MTPolicy carries the MT command's dialect-varying dimensions, ACROSS BOTH
 // evidenced frame forms.
 //
@@ -192,6 +235,7 @@ func (p MTReadSlotPolicy) String() string {
 //	ClearTagByte | required valid wire byte | must be 0
 //	PadByte      | 0, or a valid wire byte  | must be 0
 //	TagFill      | must be 0                | required valid wire byte
+//	P11          | must be 0                | required valid policy
 //
 // The type stays comparable — scalars only — because Dialect equivalence is
 // asserted with != (dialectequiv_test.go).
@@ -207,6 +251,13 @@ type MTPolicy struct {
 	//
 	// It has no default: see MTReadSlotPolicy.
 	ReadSlots MTReadSlotPolicy
+
+	// P11 says what byte 28 of the COMBINED record means: the printed
+	// "(Fixed)" '0', or a live TAG ON/OFF flag. COMBINED-FORM ONLY; must be
+	// zero under MTFormShort, whose display flag is already a parameter of
+	// BuildMTSet. It has no default under the combined form: see
+	// MTP11Policy.
+	P11 MTP11Policy
 
 	// TagMaxBytes is the longest tag this family accepts, measured in
 	// BYTES. FT-710: 12.

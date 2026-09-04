@@ -122,6 +122,12 @@ func newDialect(catID string) cat.Dialect {
 			ClearTagByte: 0,   // must be 0 under MTFormCombined (V9)
 			PadByte:      0,   // must be 0 under MTFormCombined (V9)
 			TagFill:      ' ', // ASSUMED — never observed on this radio
+			// This manual's MT block prints "P11 0: (Fixed)" (layout
+			// 1329), so byte 28 of its combined record is schema and
+			// carries no state. Not an assumption: this is the legend,
+			// transcribed. The FT-891 prints `P11 0: TAG "OFF" 1: TAG
+			// "ON"` there, which is the disagreement this axis carries.
+			P11: cat.P11Fixed,
 		},
 		Clarifier: cat.ClarifierPolicy{
 			StepHz:   10, // ASSUMED — no step stated in the manual

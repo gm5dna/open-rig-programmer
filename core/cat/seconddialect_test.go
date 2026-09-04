@@ -58,6 +58,7 @@ func allTestDialects() []namedDialect {
 		{"mcMemoryPMSDialect", mcMemoryPMSDialect},
 		{"mtReadMemoryPMSDialect", mtReadMemoryPMSDialect},
 		{"p5FixedDialect", p5FixedDialect},
+		{"combinedTagDisplayDialect", combinedTagDisplayDialect},
 	}
 }
 
@@ -1540,7 +1541,7 @@ var combinedDialect = mustFixtureDialect(DialectConfig{
 		MCSelects:     MCSelectsAll,
 	},
 	EXItems:     combinedEXItems,
-	MT:          MTPolicy{Form: MTFormCombined, ReadSlots: MTReadsReadable, TagMaxBytes: 6, TagFill: ' '},
+	MT:          MTPolicy{Form: MTFormCombined, P11: P11Fixed, ReadSlots: MTReadsReadable, TagMaxBytes: 6, TagFill: ' '},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MemoryP5:    P5TxClar,
 	MWWriteKind: KindMemory,
@@ -1591,7 +1592,7 @@ var combinedPeerDialect = mustFixtureDialect(DialectConfig{
 		MCSelects:     MCSelectsAll,
 	},
 	EXItems:     peerEXItems,
-	MT:          MTPolicy{Form: MTFormCombined, ReadSlots: MTReadsReadable, TagMaxBytes: 12, TagFill: '_'},
+	MT:          MTPolicy{Form: MTFormCombined, P11: P11Fixed, ReadSlots: MTReadsReadable, TagMaxBytes: 12, TagFill: '_'},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MemoryP5:    P5TxClar,
 	MWWriteKind: KindMemTune,
@@ -1690,5 +1691,40 @@ var p5FixedDialect = mustFixtureDialect(DialectConfig{
 	},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MemoryP5:    P5Fixed, // THE AXIS UNDER TEST
+	MWWriteKind: KindMemory,
+})
+
+// combinedTagDisplayDialect declares MTP11Policy P11TagDisplay: byte 28 of
+// its combined record is a live TAG ON/OFF flag rather than the printed
+// "0: (Fixed)" every registered combined-form sibling carries. That is the
+// FT-891's printed shape (S0.6).
+//
+// Its geometry deliberately disagrees with BOTH existing combined fixtures —
+// a 9-byte tag field filled with '.', against combinedDialect's 6/' ' and
+// combinedPeerDialect's 12/'_' — so a length or fill byte hardwired to
+// either of theirs is refused here as well.
+//
+// Its MC, MT-read and P5 policies are all the wide readings, so the ONE axis
+// this fixture varies is P11.
+var combinedTagDisplayDialect = mustFixtureDialect(DialectConfig{
+	CATID:     "0999",
+	ModeNames: map[Mode]string{ModeUnset: "-", ModeUSB: "USB-P11", ModeLSB: "LSB-P11"},
+	Slots: SlotSpace{
+		MemoryLo: 1, MemoryHi: 99,
+		SixtyLo: 501, SixtyHi: 599,
+		PMSPairs:      9,
+		EmergencyWire: "EMG",
+		NoneWire:      "000",
+		MCSelects:     MCSelectsAll,
+	},
+	EXItems: nil,
+	MT: MTPolicy{
+		Form: MTFormCombined, ReadSlots: MTReadsReadable,
+		P11:         P11TagDisplay, // THE AXIS UNDER TEST
+		TagMaxBytes: 9,
+		TagFill:     '.',
+	},
+	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:    P5TxClar,
 	MWWriteKind: KindMemory,
 })

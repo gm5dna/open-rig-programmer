@@ -242,6 +242,11 @@ func (d Dialect) validMWCommand(frame []byte) bool {
 // this method was called on, so a dialect whose tag is narrower than 12
 // bytes has its own bound enforced here, not the FT-710's wider one.
 //
+// COMBINED Set, P11: judged by this dialect's MTP11Policy — the printed-fixed
+// byte under P11Fixed, either documented value of the TAG flag under
+// P11TagDisplay. The gate cannot ask "which builder made this", so it asks
+// the policy, exactly as the builders do.
+//
 // COMBINED Set: exactly d.mtCombinedLen() bytes (29 + this dialect's tag
 // width — 41 for the evidenced 12-byte family, and a receiver method
 // precisely so this line cannot become another radio's number), "MT" prefix,
@@ -311,7 +316,16 @@ func (d Dialect) validMTCommand(frame []byte) bool {
 		if d.validateCombinedMTFields(m) != nil {
 			return false
 		}
-		if frame[mtCombinedP11Offset] != combinedMTP11 {
+		// P11, BY THIS DIALECT'S OWN READING. Under P11Fixed only the
+		// printed-fixed byte is admitted, as before. Under P11TagDisplay the
+		// byte is a live TAG flag and both of its documented values are
+		// admitted — and nothing else, so an undocumented third value is
+		// still refused outbound.
+		if d.mt.P11 == P11TagDisplay {
+			if _, err := parseBoolDigit(frame[mtCombinedP11Offset]); err != nil {
+				return false
+			}
+		} else if frame[mtCombinedP11Offset] != combinedMTP11 {
 			return false
 		}
 		// THE RAW TAG FIELD, PER BYTE, WITH validMTTagByte ONLY —

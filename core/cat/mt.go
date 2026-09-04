@@ -90,6 +90,17 @@ func (d Dialect) MTForm() MTForm { return d.mt.Form }
 // a valid MW frame for an arbitrary dialect.
 func (d Dialect) MWWriteKind() byte { return d.mwWriteKind }
 
+// MTP11 reports what byte 28 of the COMBINED MT record means on this
+// family: the printed-fixed '0' (P11Fixed) or a live TAG ON/OFF flag
+// (P11TagDisplay). A short-form dialect reports the zero policy, which V9
+// requires of it.
+//
+// Exported for the same reason MTForm and MemoryP5 are: core/cat/dialecttest
+// cannot see the unexported field, and it must branch on this to know which
+// of the two combined builder/parser pairs a dialect answers to — and which
+// it must be seen to REFUSE.
+func (d Dialect) MTP11() MTP11Policy { return d.mt.P11 }
+
 // MemoryP5 reports what byte 21 of the shared memory field block means on
 // this family: the TX clarifier flag (P5TxClar) or a printed-fixed '0'
 // (P5Fixed). The zero Dialect reports the zero policy, which NewDialect

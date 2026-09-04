@@ -550,3 +550,57 @@ func TestMemoryP5_MatchesTheP5Legend(t *testing.T) {
 		}
 	}
 }
+
+// --- FT-891 Stage 0 (S0.6): byte 28 of the combined MT record ---
+
+// TestMTP11_MatchesTheP11Legend pins the cat.P11Fixed this dialect declares
+// against the legend it is transcribed from.
+//
+// The FTdx10's MT block prints "P11 0: (Fixed)" (manual rev 2308-F, layout
+// 1235), so byte 28 of its combined record is schema and carries no state:
+// the display-less builder and parser are this radio's pair, and the
+// display-bearing ones must refuse it. The FT-891 prints `P11 0: TAG "OFF"
+// 1: TAG "ON"` there, which is the disagreement the cat.MTP11Policy axis
+// carries; without this pin the declaration in dialect.go would be a comment
+// claiming more than any test holds.
+func TestMTP11_MatchesTheP11Legend(t *testing.T) {
+	d := ftdx10.Dialect()
+
+	if got := d.MTP11(); got != cat.P11Fixed {
+		t.Fatalf("MTP11() = %v, want P11Fixed", got)
+	}
+
+	slot, err := d.MemorySlot(7)
+	if err != nil {
+		t.Fatalf("MemorySlot(7): %v", err)
+	}
+	m := cat.MemoryData{
+		Slot: slot, FreqHz: 14_250_000,
+		Mode: cat.ModeUSB, Kind: cat.CombinedMTSetKind,
+		CTCSS: cat.CTCSSOff, Shift: cat.ShiftSimplex,
+	}
+
+	cmd, err := d.BuildMTSetCombined(m, "CQ")
+	if err != nil {
+		t.Fatalf("BuildMTSetCombined = %v — under P11Fixed this is the radio's own builder", err)
+	}
+	// Position 28, 1-indexed as the manual's table numbers it.
+	if got := cmd.Bytes()[27]; got != '0' {
+		t.Errorf("BuildMTSetCombined emitted %q, whose position 28 is %q, want '0' — the legend prints it \"(Fixed)\"", cmd.Bytes(), got)
+	}
+	if !d.AllowedCommand(cmd.Bytes()) {
+		t.Errorf("its own gate refused %q", cmd.Bytes())
+	}
+	if _, _, err := d.ParseMTAnswerCombined(cmd.Bytes()); err != nil {
+		t.Errorf("ParseMTAnswerCombined(%q) = %v", cmd.Bytes(), err)
+	}
+
+	// The display-bearing pair must refuse: this radio has no TAG flag for a
+	// caller to set or to read.
+	if got, err := d.BuildMTSetCombinedDisplay(m, "CQ", true); err == nil {
+		t.Errorf("BuildMTSetCombinedDisplay succeeded, emitting %q — this manual prints byte 28 \"(Fixed)\"", got.Bytes())
+	}
+	if _, _, _, err := d.ParseMTAnswerCombinedDisplay(cmd.Bytes()); err == nil {
+		t.Error("ParseMTAnswerCombinedDisplay accepted a frame whose byte 28 this manual prints \"(Fixed)\" — reporting schema as state")
+	}
+}

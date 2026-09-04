@@ -346,6 +346,9 @@ func validateMTPolicy(cfg DialectConfig) error {
 		if cfg.MT.TagFill != 0 {
 			return fmt.Errorf("cat: MT.TagFill %#02x is set under MTFormShort — TagFill is combined-form data and an inapplicable field must be explicitly zero", cfg.MT.TagFill)
 		}
+		if cfg.MT.P11 != 0 {
+			return fmt.Errorf("cat: MT.P11 %v is set under MTFormShort — P11 is the COMBINED record's byte 28, and the short form's display flag is already a parameter of BuildMTSet; an inapplicable field must be explicitly zero", cfg.MT.P11)
+		}
 	case MTFormCombined:
 		if cfg.MT.ClearTagByte != 0 {
 			return fmt.Errorf("cat: MT.ClearTagByte %#02x is set under MTFormCombined — no distinct clear encoding is documented for the combined form; an empty tag is the all-TagFill field", cfg.MT.ClearTagByte)
@@ -355,6 +358,11 @@ func validateMTPolicy(cfg DialectConfig) error {
 		}
 		if !validWireByte(cfg.MT.TagFill) {
 			return fmt.Errorf("cat: MT.TagFill is %#02x under MTFormCombined, want printable ASCII 0x20-0x7E excluding ';' — it fills every outbound tag field, and zero would silently emit NUL", cfg.MT.TagFill)
+		}
+		switch cfg.MT.P11 {
+		case P11Fixed, P11TagDisplay:
+		default:
+			return fmt.Errorf("cat: MT.P11 is %v, which is not a policy — declare P11Fixed or P11TagDisplay explicitly (byte 28 of the combined record is a printed-fixed '0' on some radios and a live TAG flag on others, and a live flag is never defaulted)", cfg.MT.P11)
 		}
 	default:
 		return fmt.Errorf("cat: MT.Form %v must be set explicitly — the zero value is not a form (an omitted form must refuse, not default)", cfg.MT.Form)
