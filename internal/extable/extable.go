@@ -62,8 +62,10 @@ type Row struct {
 // validates first. Lines beginning with '#' are treated as provenance
 // comments and skipped. Parsing is deliberately strict: a malformed row
 // (wrong column count, unparseable integer/boolean fields), a blank (empty
-// or whitespace-only) P1Label, P2Label, Name, or P4, a non-positive
-// ManualLine, a duplicate (P1,P2,P3) triple, a non-text row whose Digits
+// or whitespace-only) P1Label or P2Label under LabelsRequired — or a
+// NON-blank one under LabelsAbsent — a blank Name or P4, a non-positive
+// ManualLine, a duplicate (P1,P2,P3) triple, a non-zero P3 under
+// AddressPair, a text row under TextRowsAbsent, a non-text row whose Digits
 // falls outside the profile's MinDigits..MaxDigits, a text row whose Digits
 // is not the profile's TextWidth, an address component outside 0..99 each
 // fail with a non-nil error rather than being guessed at. The returned rows
@@ -119,15 +121,35 @@ func parseRecord(p Profile, rec []string) (Row, error) {
 			return Row{}, fmt.Errorf("address component P%d must be 0..99, got %d", i+1, v)
 		}
 	}
+	// AddressPair: the radio's field carries P1 and P2 only, so a non-zero
+	// p3 names a component no frame can express. Refused rather than
+	// dropped — a value silently discarded here would reach the generated
+	// inventory as a 0 that nothing recorded having changed.
+	if p.Addresses == AddressPair && row.P3 != 0 {
+		return Row{}, fmt.Errorf("p3 must be 0 under %v, got %d", p.Addresses, row.P3)
+	}
 	row.P1Label = rec[3]
 	row.P2Label = rec[4]
 	row.Name = rec[5]
 	row.P4 = rec[6]
-	if strings.TrimSpace(row.P1Label) == "" {
-		return Row{}, fmt.Errorf("blank p1_label")
-	}
-	if strings.TrimSpace(row.P2Label) == "" {
-		return Row{}, fmt.Errorf("blank p2_label")
+	// The label columns are the LabelPolicy's to rule on, in both
+	// directions: a labelled chart's blank column is a transcription error,
+	// and an unlabelled chart's non-blank one is an invented label.
+	switch p.LabelPolicy {
+	case LabelsAbsent:
+		if strings.TrimSpace(row.P1Label) != "" {
+			return Row{}, fmt.Errorf("p1_label is %q under %v, want blank — this model's chart prints no group labels", row.P1Label, p.LabelPolicy)
+		}
+		if strings.TrimSpace(row.P2Label) != "" {
+			return Row{}, fmt.Errorf("p2_label is %q under %v, want blank — this model's chart prints no group labels", row.P2Label, p.LabelPolicy)
+		}
+	default:
+		if strings.TrimSpace(row.P1Label) == "" {
+			return Row{}, fmt.Errorf("blank p1_label")
+		}
+		if strings.TrimSpace(row.P2Label) == "" {
+			return Row{}, fmt.Errorf("blank p2_label")
+		}
 	}
 	if strings.TrimSpace(row.Name) == "" {
 		return Row{}, fmt.Errorf("blank name")
@@ -150,7 +172,15 @@ func parseRecord(p Profile, rec []string) (Row, error) {
 
 	// Digits/Text consistency: a text item carries exactly this radio's text
 	// width; every other item is a numeric field within its digit bounds.
+	//
+	// Under TextRowsAbsent there is no such width — the model's chart prints
+	// no text row — so the flag itself is refused. That makes the
+	// transcriber's "a text row is a STOP" convention mechanical instead of
+	// a note in a brief.
 	if row.Text {
+		if p.TextRowPolicy == TextRowsAbsent {
+			return Row{}, fmt.Errorf("row (%s) is flagged text under %v — this model's chart prints no free-text row, so a text row is a transcription error", row.Name, p.TextRowPolicy)
+		}
 		if row.Digits != p.TextWidth {
 			return Row{}, fmt.Errorf("text row (%s) must have digits %d, got %d", row.Name, p.TextWidth, row.Digits)
 		}
@@ -335,6 +365,16 @@ func RenderGo(p Profile, rows []Row, observed map[string]Observed) ([]byte, erro
 		fmt.Fprintf(&buf, "// %s\n", l)
 	}
 	fmt.Fprintf(&buf, "var %s = []%sEXItem{\n", p.VarName, qual)
+	// Under LabelsAbsent the generated item carries "" for both labels.
+	// ParseCSV has already required the columns to be BLANK, which admits a
+	// whitespace-only cell; emitting that verbatim would give a consumer a
+	// space where it must see an absence. TestRenderGo_LabelsAbsentEmitsEmptyLabels
+	// pins it; the labelled regime is untouched.
+	for i := range sorted {
+		if p.LabelPolicy == LabelsAbsent {
+			sorted[i].P1Label, sorted[i].P2Label = "", ""
+		}
+	}
 	for _, r := range sorted {
 		addr := fmt.Sprintf("%02d%02d%02d", r.P1, r.P2, r.P3)
 		var obs Observed
