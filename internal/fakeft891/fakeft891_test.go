@@ -406,3 +406,45 @@ func TestSetsDoNotMoveTheSelection(t *testing.T) {
 		t.Errorf("an MT Set moved the selection to %q, want it left at %q", got, want)
 	}
 }
+
+// --- EX (MENU): deliberately absent, for now ---
+
+// TestEX_IsDeliberatelyAbsentUntilItsGenerator pins the STUB as a stub. Every
+// EX frame — a well-formed four-digit read of the chart's first and last
+// addresses, a six-digit read of the shape every registered sibling uses, a
+// Set-shaped body, a malformed one — draws the same "?;" as an unknown
+// command, because this fake holds no menu state at all yet.
+//
+// It is here so that the absence reads as a decision rather than as an
+// oversight, and so that the task which lands ex.go, this package's own copy
+// of transcription B and the generator behind it REPLACES a test rather than
+// merely adding one. See doc.go's "What this fake deliberately does NOT
+// model".
+//
+// Note what this test does NOT claim: that a real FT-891 refuses EX. It
+// documents this fake's state, and the "?;" it asserts is the stub's, not the
+// radio's.
+func TestEX_IsDeliberatelyAbsentUntilItsGenerator(t *testing.T) {
+	_, conn := newTestRadio(t)
+
+	// This radio's EX Read is SEVEN bytes — "EX P1 P1 P1 P1 ;", four address
+	// digits (ft891_layout.txt:513-522) — where every registered sibling's is
+	// nine. 0101 and 1803 are the chart's first and last rows
+	// (core/cat/ft891/testdata/provenance.md §EX).
+	for _, frame := range []string{
+		"EX0101;",     // this radio's own four-digit read, first row
+		"EX1803;",     // ... and last row
+		"EX010101;",   // the siblings' six-digit shape
+		"EX0101011;",  // a Set-shaped body
+		"EX;",         // no address at all
+		"EX99999999;", // nonsense
+	} {
+		assertRejected(t, conn, frame)
+	}
+
+	// Indistinguishable from an unknown command, which is the whole of the
+	// convention while the arm is a stub.
+	if got, want := exchange(t, conn, "EX0101;"), exchange(t, conn, "ZZ;"); got != want {
+		t.Errorf("EX0101; -> %q but ZZ; -> %q — while EX is unmodelled the two must be the same answer", got, want)
+	}
+}
