@@ -1634,7 +1634,7 @@ var pairDialect = mustFixtureDialect(DialectConfig{
 		NoneWire:      "000",
 	},
 	EXItems:       pairEXItems,
-	EXAddressForm: EXAddressPair, // the FT-891's four-digit "E X P1 P1 P2 P2" field
+	EXAddressForm: EXAddressPair, // the FT-891's four-digit field (EXAddressPair's doc comment, dialectconfig.go, has the naming caveat)
 	MT:            MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MWWriteKind:   KindMemory,

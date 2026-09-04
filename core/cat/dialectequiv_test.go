@@ -89,6 +89,10 @@ func TestNewDialect_ReproducesFT710(t *testing.T) {
 // earlier draft checked CATID, modes and a "slot corpus" left undefined,
 // and would have passed while a dialect carried zero policies, a corrupted
 // EX inventory, or a wrong derived index (Codex plan review, finding 4).
+// It also covers EXWire, EXAddressWidth and ParseEXAddress, added at the
+// FT-891 Stage 0 seam: a dialect that agreed on EXItems and EXAddresses
+// but disagreed on its own EXAddressForm would otherwise pass silently,
+// since neither of those two fields observes the form.
 func assertDialectsBehaveIdentically(t *testing.T, label string, want, got Dialect) {
 	t.Helper()
 
@@ -165,6 +169,12 @@ func assertDialectsBehaveIdentically(t *testing.T, label string, want, got Diale
 		}
 	}
 
+	// EXAddressWidth is the form observed once, not per-address — it does
+	// not vary with a, only with the dialect's own declared form.
+	if want.EXAddressWidth() != got.EXAddressWidth() {
+		t.Errorf("%s: EXAddressWidth() = %d, want %d", label, got.EXAddressWidth(), want.EXAddressWidth())
+	}
+
 	// BOTH EX lookup paths. KnownEXAddress reads exMembers; NewEXAddress
 	// reads exByTriple. Checking only the first leaves the second index
 	// entirely unverified, and it is the one a caller-supplied triple goes
@@ -177,6 +187,20 @@ func assertDialectsBehaveIdentically(t *testing.T, label string, want, got Diale
 		_, gerr := got.NewEXAddress(int(a.P1), int(a.P2), int(a.P3))
 		if (werr == nil) != (gerr == nil) {
 			t.Errorf("%s: NewEXAddress(%v) error = %v, want error = %v", label, a, gerr, werr)
+		}
+		// EXWire and its inverse, ParseEXAddress: the render must agree,
+		// and parsing the WANT dialect's own render back through each
+		// dialect must agree too — a form mismatch here is exactly the
+		// gap EXItems/EXAddresses cannot see (neither carries a rendered
+		// wire form).
+		wwire, gwire := want.EXWire(a), got.EXWire(a)
+		if wwire != gwire {
+			t.Errorf("%s: EXWire(%v) = %q, want %q", label, a, gwire, wwire)
+		}
+		wpa, wperr := want.ParseEXAddress(wwire)
+		gpa, gperr := got.ParseEXAddress(wwire)
+		if (wperr == nil) != (gperr == nil) || wpa != gpa {
+			t.Errorf("%s: ParseEXAddress(%q) = (%v,%v), want (%v,%v)", label, wwire, gpa, gperr, wpa, wperr)
 		}
 	}
 	// A triple that is NOT a member, so the negative direction is covered

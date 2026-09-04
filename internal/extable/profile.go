@@ -460,8 +460,9 @@ var ftdx10Profile = Profile{
 	OutFile:     "exinventory_gen.go",
 	ManualCSV:   "table2.csv",
 
-	// Today's behaviour, said out loud rather than inherited: the FTdx10's chart prints a (P1,P2,P3) MENU Number, both group labels,
-	// and one 12-byte text row (MY CALL. at 04/01/01).
+	// Today's behaviour, said out loud rather than inherited: the FTdx10's
+	// chart prints a (P1,P2,P3) MENU Number, both group labels, and one
+	// 12-byte text row (MY CALL. at 04/01/01).
 	Addresses:     AddressTriple,
 	LabelPolicy:   LabelsRequired,
 	TextRowPolicy: TextRowsAllowed,
@@ -514,8 +515,9 @@ var ftdx101Profile = Profile{
 	OutFile:     "exinventory_gen.go",
 	ManualCSV:   "table2.csv",
 
-	// Today's behaviour, said out loud rather than inherited: the FTdx101's chart prints a (P1,P2,P3) MENU Number, both group labels,
-	// and one 12-byte text row.
+	// Today's behaviour, said out loud rather than inherited: the FTdx101's
+	// chart prints a (P1,P2,P3) MENU Number, both group labels, and one
+	// 12-byte text row.
 	Addresses:     AddressTriple,
 	LabelPolicy:   LabelsRequired,
 	TextRowPolicy: TextRowsAllowed,
