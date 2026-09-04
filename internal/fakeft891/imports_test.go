@@ -89,10 +89,13 @@ type forbiddenImport struct {
 
 // scanResult is what one scan of a directory tree observed. The two counts
 // exist for the vacuity checks: a scan that parsed no files, or files with no
-// imports at all, would report "no violations" while proving nothing.
+// imports at all, would report "no violations" while proving nothing. The paths
+// are what lets a test assert WHICH files were reached — see
+// TestNoCoreImports_ReachesTheGenerator.
 type scanResult struct {
 	files      int
 	imports    int
+	paths      []string
 	violations []forbiddenImport
 }
 
@@ -139,6 +142,7 @@ func scanForbiddenImports(root string) (scanResult, error) {
 			return perr
 		}
 		res.files++
+		res.paths = append(res.paths, path)
 		for _, imp := range file.Imports {
 			p, uerr := strconv.Unquote(imp.Path.Value)
 			if uerr != nil {
@@ -177,6 +181,35 @@ func TestNoCoreImports(t *testing.T) {
 	if res.imports == 0 {
 		t.Fatal("scanned zero imports — every parsed file had an empty import block, which cannot be true of this package; this test would pass vacuously")
 	}
+}
+
+// TestNoCoreImports_ReachesTheGenerator closes the fence's last gap, now that
+// the directory it was built for exists.
+//
+// TestNoCoreImports above scans "." and reports no violation, which is the
+// result whether the walk descended into gen/ or stopped at this directory.
+// TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory proves the
+// walk WOULD bite a subdirectory, but it does so against a temporary tree of
+// this test's own making. Neither of them, alone or together, says that the
+// scan of the REAL package reached the REAL generator — a filter that skipped
+// "gen" by name, or a walk rooted somewhere unexpected, would leave both green.
+//
+// So this asserts the file by path. gen/main.go is the piece most likely to
+// reach for internal/extable, the A-side machinery whose Digits parsing was a
+// known defect locus, and the whole two-source cross-check rests on it not
+// doing so.
+func TestNoCoreImports_ReachesTheGenerator(t *testing.T) {
+	res, err := scanForbiddenImports(".")
+	if err != nil {
+		t.Fatalf("scanForbiddenImports(\".\"): %v", err)
+	}
+	want := filepath.Join("gen", "main.go")
+	for _, p := range res.paths {
+		if p == want {
+			return
+		}
+	}
+	t.Errorf("the scan of this package parsed %v — %s is not among them, so the recursive fence is not in fact covering the generator", res.paths, want)
 }
 
 // writeTree writes a set of relative path -> content files under a fresh
