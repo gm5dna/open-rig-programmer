@@ -898,23 +898,12 @@ func (r *Radio) handleFrame(frame []byte) []byte {
 	case [2]byte{'M', 'C'}:
 		return r.handleMC(rest)
 	case [2]byte{'E', 'X'}:
-		// EX (MENU) IS DELIBERATELY NOT MODELLED YET, and this arm exists so
-		// that the absence is visible at the dispatch rather than hidden in
-		// the default case. This radio's EX read is SEVEN bytes — four
-		// address digits (ft891_layout.txt:513-522) — where every registered
-		// sibling's is nine, so answering it needs this package's own copy of
-		// transcription B and a new generator for the FT-891's three-column
-		// schema. That is the next task of this milestone's plan, and it is a
-		// task rather than a paragraph because the transcription copy, the
-		// generator, the staleness test and the core/transport cross-check
-		// land together or not at all.
-		//
-		// Until then EVERY EX frame draws the same "?;" as an unknown
-		// command. That is a STUB, not a claim about the radio —
-		// TestEX_IsDeliberatelyAbsentUntilItsGenerator pins it as one, and
-		// doc.go's "What this fake deliberately does NOT model" says so in
-		// terms.
-		return rejection
+		// EX (MENU), READ ONLY — ex.go, which carries this radio's own
+		// four-digit grammar (a SEVEN-byte read frame where every registered
+		// sibling's is nine, ft891_layout.txt:513-522) and the inventory
+		// generated from this package's own copy of transcription B. A Set
+		// draws "?;" as a too-long body: a modelling gap, stated there.
+		return r.handleEX(rest)
 	default:
 		return rejection
 	}

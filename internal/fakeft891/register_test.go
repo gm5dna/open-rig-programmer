@@ -35,6 +35,8 @@ var registerEntries = []string{
 	"THE FRAME ACCUMULATOR'S CAP AND RESYNC",
 	`THE "?;" REJECTION CONVENTION ITSELF IS INHERITED`,
 	"AUTOMATIC-INFORMATION SUPPRESSION",
+	"THE EX MENU VALUES ARE INVENTED",
+	`AN OUT-OF-INVENTORY EX ADDRESS ANSWERS "?;"`,
 }
 
 // normalise strips Go comment markers and collapses every run of whitespace to
