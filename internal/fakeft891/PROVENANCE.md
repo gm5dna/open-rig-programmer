@@ -158,9 +158,10 @@ Markdown documents use.
 The CSV itself carries **no SPDX header, deliberately**: it is a byte-identical
 copy of a committed, hash-frozen evidential artefact, and adding a line to it
 would break exactly the byte identity that makes it that artefact rather than a
-variant of it — and would break `TestQuarantinedEvidenceFrozen`'s sibling check
-here. It is covered by the repository licence like every other file, and this
-adjacent note is where that is recorded — the same treatment
+variant of it — and would break `core/transport/ex_crosscheck_ft891_test.go`'s
+`TestFT891TranscriptionBCopy_ByteIdenticalToTheDialects`, the check that binds
+this copy to the dialect's. It is covered by the repository licence like every
+other file, and this adjacent note is where that is recorded — the same treatment
 `core/cat/ft891/table2.csv` and the `testdata/` artefacts get.
 
 The underlying chart is Yaesu Musen Co., Ltd.'s, from the FT-891 CAT Operation
