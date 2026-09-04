@@ -110,9 +110,9 @@ func TestTransmitFields_MatchTheDeclaredMarker(t *testing.T) {
 
 // declaredFieldConstants returns the value of every `Field` constant this
 // package declares, read from the source for the same reason the marker test
-// reads it: a hand-written list here would be one more copy to forget, and
-// core/spec has no runtime enumeration of its Fields (that is a roadmap item
-// of its own).
+// reads it: a hand-written list here would be one more copy to forget. This
+// remains source-derived evidence independent of AllFields, whose own
+// declaration audit uses the same package-wide source boundary.
 func declaredFieldConstants(t *testing.T) []Field {
 	t.Helper()
 	fset := token.NewFileSet()

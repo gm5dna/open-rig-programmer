@@ -380,7 +380,7 @@ func decodeHexToken(token string) []byte {
 // RecordLengthMismatchError makes a probe-time record-length refusal
 // reachable via errors.Is(err, driver.ErrWrongRadio), matching the
 // sibling drivers' record-length-mismatch convention (e.g.
-// core/driver/ic7610/ic7610.go:138-166). Before this type existed the
+// core/driver/ic7610/ic7610.go:138-172). Before this type existed the
 // refusal was the bare *civ.RecordLengthError, which unwraps only to
 // civ.ErrRecordLength.
 //
