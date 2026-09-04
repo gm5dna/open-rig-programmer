@@ -13,6 +13,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -134,6 +135,12 @@ func TestRecordLengthMismatchUnwrapsToErrWrongRadio(t *testing.T) {
 	if !errors.As(err, &rl) {
 		t.Fatalf("err = %v, want *civ.RecordLengthError still reachable via errors.As", err)
 	}
+	var mismatch *ic9700.RecordLengthMismatchError
+	if !errors.As(err, &mismatch) {
+		t.Fatalf("err = %v, want *ic9700.RecordLengthMismatchError", err)
+	}
+	drivertest.AssertRecordLengthMismatch(t, mismatch, mismatch.Err.Got, mismatch.Err.Want[0],
+		"civ: memory record is 47 bytes, want one of [111]")
 }
 
 func TestEmptyRadioOpensUnfingerprinted(t *testing.T) {
