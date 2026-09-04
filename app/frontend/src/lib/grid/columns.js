@@ -180,15 +180,21 @@ export function isCellEditable(column, data) {
 		// editable, and only 'unavailable' never is. The column only
 		// renders where the radio HAS the field (columnsFor), so an
 		// unresolved value there is a question the user may legitimately
-		// answer — and 'absent' (the zero state: the key is simply
-		// missing, e.g. a Yaesu channel with no tier fields, or a file
-		// that predates the field) is exactly that question unanswered,
-		// same as 'unknown'. Only 'unavailable' stays refused: it says
-		// the frame has no room for a value at all, so there is no
+		// answer — and 'absent' (the zero FieldState) is exactly that
+		// question unanswered, same as 'unknown'. It reaches here two
+		// ways: a missing key on a frontend-built row (columnsFor and
+		// newChannelData both omit a key the radio does not reach), or an
+		// empty string on a row the Go backend marshalled, which sends an
+		// Absent FieldState as `{"state": ""}` — every tier field in
+		// core/codeplug/channel.go and FieldState itself
+		// (core/codeplug/fieldstate.go) has no `omitempty` on `state`, so
+		// app/codeplug.go hands the frontend that empty string verbatim
+		// rather than dropping the key. Only 'unavailable' stays refused:
+		// it says the frame has no room for a value at all, so there is no
 		// question outstanding to answer.
 		if (data == null) return false // no populated channel: same empty-slot rule as every other column
 		const state = /** @type {Record<string, any>} */ (data)[tier.key]?.state
-		return state === 'known' || state === 'unknown' || state === undefined
+		return state === 'known' || state === 'unknown' || state === undefined || state === ''
 	}
 	switch (column.id) {
 		case 'slot':
