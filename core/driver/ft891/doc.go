@@ -30,7 +30,7 @@
 //
 // Every capability VALUE in caps.go comes from
 // docs/superpowers/ft891-capability-matrix.md (revision 1 + errata
-// M-E1..M-E5), with the matrix section cited at the field it sets. The
+// M-E1..M-E6), with the matrix section cited at the field it sets. The
 // matrix is a gitignored record, so those citations are citations too; the
 // values they justify are pinned by caps_test.go.
 //
@@ -221,7 +221,7 @@
 //
 // # The ASSUMED register
 //
-// FIFTEEN ENTRIES, covering the behaviours this driver encodes that are
+// SIXTEEN ENTRIES, covering the behaviours this driver encodes that are
 // NOT FT-891-manual facts. Each is listed here once, marked ASSUMED at the
 // point of use, and paired with the ONE Stage R or Stage W capture that
 // lifts it. The captures are individual on purpose: one FT-891 session
@@ -557,4 +557,46 @@
 //     (rejection, partial field application, tag written without the
 //     field block) converts the write path to a two-frame choreography
 //     and this half to a finding.
+//
+//  16. A DISCOVERED SLOT KEEPS ANSWERING MR WITHIN A SESSION (read.go's
+//     readDiscovered). That a 5xx or EMG slot which answered a well-formed
+//     MR read during Open answers the SAME MR read again, later in the
+//     same session. THIS MANUAL STATES NO SUCH RULE: MR's slot legend says
+//     a well-formed answer means present and a "?;" means absent (the "?;"
+//     ON A 5xx/EMG DISCOVERY PROBE MEANS ABSENT FROM THIS RADIO entry), but
+//     that entry is about the FIRST read of a slot in a session, at the
+//     moment discovery is deciding bank MEMBERSHIP — it says nothing about
+//     a SECOND read of the identical frame, later, once membership is
+//     already settled. Reading that second "?;" as "empty" would be a
+//     FOURTH interpretation of this protocol's single unattributed NAK,
+//     where matrix §3.8 draws only three, and it is the one interpretation
+//     with no register entry and no matrix section (matrix erratum M-E6,
+//     §3.8.4, from the task-1 review).
+//     WHAT MAKES "EMPTY" DISHONEST HERE, SPECIFICALLY: the bank this slot
+//     lives in is published NoBlank TRUE by this very session
+//     (caps.go's effectiveCapabilities, "these channels exist because they
+//     answered a read"). A slot that answered at Open and rejects at
+//     ReadChannel time is exactly a slot for which that premise has
+//     failed, so emitting the one channel shape the bank's own NoBlank
+//     flag declares impossible would not suppress the anomaly, it would
+//     DEFER AND MISATTRIBUTE it: the read would look complete and a LATER
+//     codeplug.Validate would blame the codeplug for something the radio
+//     did (verified empirically in the task-1 review: such a read, then
+//     Validate, produces `slot "503" is part of NoBlank bank "60M" and
+//     must stay populated, but is empty`).
+//     THE FIX IS A TYPED REFUSAL, in the same shape as
+//     MTReadRejectedForOccupiedSlotError: *MRReadRejectedForDiscoveredSlotError
+//     names the slot and the contradiction — this slot answered an MR read
+//     during this session's Open and refuses the identical frame now — and
+//     does not diagnose it, because "?;" carries no reason code here
+//     either. The session read fails WHOLE, for the same reason the
+//     memory/PMS refusal does: a partial read that silently dropped a
+//     slot the driver itself just discovered would be a codeplug the user
+//     could not tell from a complete one.
+//     STAGE R LIFTS IT WITH: a second MR read of the same slot within one
+//     session on a real FT-891 — the same frame the discovery probe
+//     already sent, repeated once more (e.g. at the point ReadChannel
+//     would otherwise send it). Both answers agreeing closes the entry;
+//     either one rejecting having accepted the other is the finding this
+//     refusal exists to report honestly rather than mask.
 package ft891

@@ -48,13 +48,25 @@ func TestDriver_CarriesADialect(t *testing.T) {
 	}
 }
 
-// TestSession_CarriesTheDriversDialect pins the other half of the plumb: a
-// Session codes and decodes through the SAME dialect its transport engine
-// was gated with. A session encoding with one radio's dialect while its
-// transport gated with another's is the exact failure the dialect seam
-// exists to prevent — and on THIS radio it would be silent in a new way,
-// because a sibling's dialect would happily build the MT reads of 5xx slots
-// that this one refuses, which is the whole reason discovery here is MR.
+// TestSession_CarriesTheDriversDialect pins that Open's Session carries A
+// CONFIGURED FT-891 dialect: Configured() true, CATID "0650", and the
+// three read-shaping policies (MTReadSlots, MTP11, MemoryP5) this radio's
+// read path depends on.
+//
+// NARROWED FROM A STRONGER CLAIM (LOW-2, task-1 review). This test cannot
+// pin "the SAME dialect value Open's engine was gated with", which is what
+// an earlier version of this comment claimed: this package holds exactly
+// ONE FT-891 dialect value (catDialect), so every assertion below is
+// equally true of a Session built by substituting catDialect for d.dialect
+// in Open's Session literal (ft891.go) — that mutation was run and this
+// test stayed green. Making the stronger property testable needs a SECOND,
+// deliberately distinct but still-Configured cat.Dialect value, and no
+// seam in this package builds one today (TestOpen_UnconfiguredDialectRefusesToOpen
+// is the one hand-built dialect variant that exists, and it is the ZERO
+// value, which cannot stand in for a distinguishable configured one). If a
+// second FT-891 dialect variant is ever needed for another purpose, this
+// test should be rebuilt on it to pin the plumb itself rather than a
+// property every dialect value in this package already has.
 func TestSession_CarriesTheDriversDialect(t *testing.T) {
 	_, sess := openSession(t, Simulated, slotImage{})
 
