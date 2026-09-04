@@ -1110,17 +1110,25 @@ var ic905Text = Text{
 	// registered model's default open leaves part of its memory space
 	// unwalked.
 	//
-	// IT NAMES NO REMEDY, DELIBERATELY (registration review, deferred
-	// minor). The walk widens only under ic905.WithFullInventoryWalk() —
-	// a Go option internal/wiring's registry row does not pass and which
-	// no CLI flag and no GUI control reaches — so a user reading this
-	// text could not act on it, and prose naming an unreachable option
-	// reads as a setting the reader has failed to find. What it states
-	// instead is the BOUND and its consequence, which IS actionable: a
+	// IT NAMES NO REMEDY THE READER CAN REACH, DELIBERATELY (registration
+	// review, deferred minor; wording corrected 04/09/2026 —
+	// radio-roadmap.md follow-up). The walk widens only under
+	// ic905.WithFullInventoryWalk() (ic905.go:80) — a Go-level option no
+	// registered composition passes, and which neither cmd/rigprog's
+	// flags nor internal/wiring's registry row nor app/frontend reaches —
+	// so a user reading this text could not act on the option by name.
+	// What the text used to say instead — "this build offers no setting
+	// that widens it" — went further than that and OVERCLAIMED: the
+	// package does export the option, so "no setting" is false to anyone
+	// who reads it, the exact over-claim the IC-R8600's own
+	// occupiedSurprise text struck (core/driver/icr8600/write.go:215).
+	// The fix keeps the no-reachable-remedy rule and removes only the
+	// false part: it names the option and says why it is not reachable,
+	// then states the BOUND and its consequence, which IS actionable: a
 	// channel missing from this build's list is not evidence that the
 	// radio's channel is empty, so check the radio before concluding
 	// anything from an absence.
-	ProbeFirmwareNote: "Firmware version has no CI-V query — check the radio's display. No minimum version is established for the IC-905: this build knows of none to require. This driver talks only to CI-V address ACh, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200, along with the whole five-rate list it is chosen from, is ASSUMED — this radio's CI-V Reference Guide prints no rate figure anywhere, on any port's command-table page. Opening this radio also discovers its MEM bank's occupied slots by a BOUNDED walk — group 0 in full, then channel 00 of every other group, descending into the rest of a group only where its channel 00 answered — not the whole 100x100 space, and this build offers no setting that widens it: a channel stored outside that walk is simply not listed here, so its absence from the grid is not evidence that the radio's channel is empty. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+	ProbeFirmwareNote: "Firmware version has no CI-V query — check the radio's display. No minimum version is established for the IC-905: this build knows of none to require. This driver talks only to CI-V address ACh, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200, along with the whole five-rate list it is chosen from, is ASSUMED — this radio's CI-V Reference Guide prints no rate figure anywhere, on any port's command-table page. Opening this radio also discovers its MEM bank's occupied slots by a BOUNDED walk — group 0 in full, then channel 00 of every other group, descending into the rest of a group only where its channel 00 answered — not the whole 100x100 space, and nothing on this build's command line or in its window widens it (the driver's own WithFullInventoryWalk is a Go-level option no registered composition passes): a channel stored outside that walk is simply not listed here, so its absence from the grid is not evidence that the radio's channel is empty. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
 }
 
 // ic7851Text and ic7850Text are the IC-7851's and IC-7850's entries
