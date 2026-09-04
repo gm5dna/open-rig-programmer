@@ -420,7 +420,13 @@ func TestOpenFakeSessionFor_EveryRegisteredModel_ReadsEveryDefaultSlot(t *testin
 			// drivertest.AssertFreshReadSaveLoadNormalised, which each
 			// driver's own read test calls on a real populated channel
 			// and which makes the same no-Absent assertion over the
-			// same seventeen fields. It did NOT until the fix this
+			// same seventeen fields. Per MODEL, not per package, which
+			// takes reading in the two packages that serve two rows
+			// each: ic7851's TestReadChannel_FreshReadSurvivesSaveLoad
+			// runs over that package's `constructors` pair, so the
+			// registered IC-7850 is exercised here and not merely
+			// named — until that loop it opened New7851 alone. It did
+			// NOT until the fix this
 			// comment was corrected alongside: the helper checked only
 			// the seven D8 states, and its Save/Load DeepEqual cannot
 			// catch an Absent field at all (see that function's doc

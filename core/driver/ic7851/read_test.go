@@ -154,16 +154,31 @@ func TestReadChannel_AcceptsFrequencyAtCeiling(t *testing.T) {
 
 // TestReadChannel_FreshReadSurvivesSaveLoad pins the D8 fresh-read rule on
 // this driver (drivertest.AssertFreshReadSaveLoad): a freshly read
-// occupied channel reports the seven receiver fields Unavailable, and
-// survives a save/load round trip byte-for-byte.
+// occupied channel reports the seven receiver fields Unavailable, answers
+// all seventeen tier fields rather than leaving one Absent, and survives a
+// save/load round trip byte-for-byte.
+//
+// BOTH ROWS, like every E2E case in this package: New7851 and New7850
+// share one implementation, one profile and one capability set, so the
+// second invocation asserts nothing new about this package — it is what
+// makes the REGISTERED IC-7850 a model the fleet's per-driver arm actually
+// exercises. internal/wiring's
+// TestOpenFakeSessionFor_EveryRegisteredModel_ReadsEveryDefaultSlot
+// delegates the ten Icom models with empty default fake images to exactly
+// this call, and until this loop the IC-7850 was named there without
+// anything running for it.
 func TestReadChannel_FreshReadSurvivesSaveLoad(t *testing.T) {
-	r := newFake(t)
-	f := e2eSeed(0)
-	r.SetSlot("001", f.record(t))
-	s, _ := openFake(t, r, New7851)
-	ch, err := s.ReadChannel(t.Context(), "001")
-	if err != nil {
-		t.Fatalf("ReadChannel: %v", err)
+	for _, c := range constructors {
+		t.Run(c.model, func(t *testing.T) {
+			r := newFake(t)
+			f := e2eSeed(0)
+			r.SetSlot("001", f.record(t))
+			s, _ := openFake(t, r, c.make)
+			ch, err := s.ReadChannel(t.Context(), "001")
+			if err != nil {
+				t.Fatalf("ReadChannel: %v", err)
+			}
+			drivertest.AssertFreshReadSaveLoad(t, ch, s.Capabilities(), codeplug.Load)
+		})
 	}
-	drivertest.AssertFreshReadSaveLoad(t, ch, s.Capabilities(), codeplug.Load)
 }
