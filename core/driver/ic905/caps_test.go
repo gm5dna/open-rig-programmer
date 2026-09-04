@@ -15,6 +15,7 @@ import (
 	civic905 "github.com/gm5dna/open-rig-programmer/core/civ/ic905"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -325,31 +326,11 @@ var fieldGrid = []struct {
 var deliberatelyUnexpressedFields = map[spec.Field]string{}
 
 func TestFieldAuditCoversEverySpecField(t *testing.T) {
-	audited := make(map[spec.Field]bool, len(fieldGrid)+len(deliberatelyUnexpressedFields))
-	for _, row := range fieldGrid {
-		if audited[row.field] {
-			t.Errorf("fieldGrid lists %s more than once", row.field)
-		}
-		audited[row.field] = true
+	audited := make([]spec.Field, len(fieldGrid))
+	for i, row := range fieldGrid {
+		audited[i] = row.field
 	}
-	for field, reason := range deliberatelyUnexpressedFields {
-		if reason == "" {
-			t.Errorf("deliberatelyUnexpressedFields[%s] has no reason", field)
-		}
-		if audited[field] {
-			t.Errorf("field %s is both audited and deliberately unexpressed", field)
-		}
-		audited[field] = true
-	}
-	for _, field := range spec.AllFields() {
-		if !audited[field] {
-			t.Errorf("spec.Field %s is neither audited nor deliberately unexpressed", field)
-		}
-		delete(audited, field)
-	}
-	for field := range audited {
-		t.Errorf("field audit names %s, which spec.AllFields does not", field)
-	}
+	drivertest.AssertFieldAuditCoversEverySpecField(t, "fieldGrid", audited, deliberatelyUnexpressedFields)
 }
 
 // TestFieldGrid_MatchesTheMatrix compares matrix section 2's eighty
@@ -620,10 +601,12 @@ func TestFieldGrid_TheZerosAreWrittenDown(t *testing.T) {
 // This predates spec.AllFields and remains an independent source-level pin:
 // it parses the declarations out of core/spec/field.go the way
 // internal/guards parses the tree, and requires every one of them to appear
-// in fieldGrid. Without it a later spec.Field would be
-// silently ungraded by this driver: absent from both banks' maps, absent
-// from the grid, and reported Unsupported by a lookup that cannot tell
-// "decided against" from "never considered".
+// in fieldGrid. TestFieldAuditCoversEverySpecField now also catches a
+// spec.Field missing from fieldGrid, via drivertest's comparison against
+// spec.AllFields() — so a later omission is no longer SILENT. This test
+// still earns its keep: it reads field.go's declarations directly, so it
+// would still catch an omission that spec.AllFields itself failed to
+// record, which the other test cannot.
 //
 // It is the counterpart to TestCapabilities_EveryFieldExplicit, which
 // pins spec.Capabilities' 22 STRUCT fields for the same reason.

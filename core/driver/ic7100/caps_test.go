@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -24,31 +25,7 @@ var allCapabilityFields = []spec.Field{
 var deliberatelyUnexpressedFields = map[spec.Field]string{}
 
 func TestFieldAuditCoversEverySpecField(t *testing.T) {
-	audited := make(map[spec.Field]bool, len(allCapabilityFields)+len(deliberatelyUnexpressedFields))
-	for _, field := range allCapabilityFields {
-		if audited[field] {
-			t.Errorf("allCapabilityFields lists %s more than once", field)
-		}
-		audited[field] = true
-	}
-	for field, reason := range deliberatelyUnexpressedFields {
-		if reason == "" {
-			t.Errorf("deliberatelyUnexpressedFields[%s] has no reason", field)
-		}
-		if audited[field] {
-			t.Errorf("field %s is both audited and deliberately unexpressed", field)
-		}
-		audited[field] = true
-	}
-	for _, field := range spec.AllFields() {
-		if !audited[field] {
-			t.Errorf("spec.Field %s is neither audited nor deliberately unexpressed", field)
-		}
-		delete(audited, field)
-	}
-	for field := range audited {
-		t.Errorf("field audit names %s, which spec.AllFields does not", field)
-	}
+	drivertest.AssertFieldAuditCoversEverySpecField(t, "allCapabilityFields", allCapabilityFields, deliberatelyUnexpressedFields)
 }
 
 var mappedFields = map[spec.Field]bool{

@@ -8,6 +8,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	civic705 "github.com/gm5dna/open-rig-programmer/core/civ/ic705"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -38,31 +39,7 @@ var deliberatelyUnexpressedFields = map[spec.Field]string{
 }
 
 func TestFieldAuditCoversEverySpecField(t *testing.T) {
-	audited := make(map[spec.Field]bool, len(allFields)+len(deliberatelyUnexpressedFields))
-	for _, field := range allFields {
-		if audited[field] {
-			t.Errorf("allFields lists %s more than once", field)
-		}
-		audited[field] = true
-	}
-	for field, reason := range deliberatelyUnexpressedFields {
-		if reason == "" {
-			t.Errorf("deliberatelyUnexpressedFields[%s] has no reason", field)
-		}
-		if audited[field] {
-			t.Errorf("field %s is both audited and deliberately unexpressed", field)
-		}
-		audited[field] = true
-	}
-	for _, field := range spec.AllFields() {
-		if !audited[field] {
-			t.Errorf("spec.Field %s is neither audited nor deliberately unexpressed", field)
-		}
-		delete(audited, field)
-	}
-	for field := range audited {
-		t.Errorf("field audit names %s, which spec.AllFields does not", field)
-	}
+	drivertest.AssertFieldAuditCoversEverySpecField(t, "allFields", allFields, deliberatelyUnexpressedFields)
 }
 
 // bothProfiles is every capability set this driver can hand out, for the
