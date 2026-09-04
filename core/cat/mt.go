@@ -300,11 +300,31 @@ func (d Dialect) BuildMTSet(s Slot, display bool, tag string) (Command, error) {
 // the verdict of whichever dialect BUILT the slot, and the question here is
 // whether THIS dialect will read it.
 func (d Dialect) mtReadSlotValid(s Slot) bool {
-	switch d.classifySlot(s.Wire()) {
-	case slotKindMemory, slotKindPMS:
-		return true
-	case slotKind60m, slotKindEMG:
-		return d.mt.ReadSlots == MTReadsReadable
+	// A SWITCH ON THE POLICY FIRST, not a classify-then-if-else with an
+	// implicit "everything else is narrow" arm — the same shape mc.go's
+	// mcSendValid takes, for the same reason: the S0-close review's HIGH-1
+	// finding was that a zero MTReadSlotPolicy fell through to the
+	// memory/PMS reading instead of refusing. NewDialect's V9
+	// (validateMTPolicy, dialectvalidate.go) already refuses a zero
+	// MTReadSlotPolicy at construction, but the default branch below is
+	// what keeps this site from silently taking ANY reading, memory/PMS
+	// included, in the one place V9 cannot reach — see
+	// unsetpolicy_test.go.
+	switch d.mt.ReadSlots {
+	case MTReadsReadable:
+		switch d.classifySlot(s.Wire()) {
+		case slotKindMemory, slotKindPMS, slotKind60m, slotKindEMG:
+			return true
+		default:
+			return false
+		}
+	case MTReadsMemoryPMS:
+		switch d.classifySlot(s.Wire()) {
+		case slotKindMemory, slotKindPMS:
+			return true
+		default:
+			return false
+		}
 	default:
 		return false
 	}
