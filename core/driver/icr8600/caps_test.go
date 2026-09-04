@@ -162,3 +162,34 @@ func allFieldsForAudit() []spec.Field {
 		spec.FieldAttenuator, spec.FieldPreamp, spec.FieldAntenna, spec.FieldIPPlus,
 	}
 }
+
+var deliberatelyUnexpressedFields = map[spec.Field]string{}
+
+func TestFieldAuditCoversEverySpecField(t *testing.T) {
+	fields := allFieldsForAudit()
+	audited := make(map[spec.Field]bool, len(fields)+len(deliberatelyUnexpressedFields))
+	for _, field := range fields {
+		if audited[field] {
+			t.Errorf("allFieldsForAudit lists %s more than once", field)
+		}
+		audited[field] = true
+	}
+	for field, reason := range deliberatelyUnexpressedFields {
+		if reason == "" {
+			t.Errorf("deliberatelyUnexpressedFields[%s] has no reason", field)
+		}
+		if audited[field] {
+			t.Errorf("field %s is both audited and deliberately unexpressed", field)
+		}
+		audited[field] = true
+	}
+	for _, field := range spec.AllFields() {
+		if !audited[field] {
+			t.Errorf("spec.Field %s is neither audited nor deliberately unexpressed", field)
+		}
+		delete(audited, field)
+	}
+	for field := range audited {
+		t.Errorf("field audit names %s, which spec.AllFields does not", field)
+	}
+}

@@ -112,6 +112,42 @@ const (
 	FieldIPPlus Field = "ip_plus"
 )
 
+// AllFields returns every Field constant declared by this package, ordered by
+// source file name and then declaration position. It exists so capability and
+// write-guard tests can audit their coverage; it is not a statement that any
+// radio can reach these fields. Each call returns a fresh slice.
+func AllFields() []Field {
+	return []Field{
+		FieldFrequency,
+		FieldMode,
+		FieldClarifier,
+		FieldCTCSSState,
+		FieldCTCSSTone,
+		FieldShift,
+		FieldTag,
+		FieldTagDisplay,
+		FieldScanSkip,
+		FieldErase,
+		FieldTxFrequency,
+		FieldDuplex,
+		FieldOffset,
+		FieldToneMode,
+		FieldToneTx,
+		FieldToneRx,
+		FieldDTCSCode,
+		FieldDTCSPolarity,
+		FieldFilter,
+		FieldDataMode,
+		FieldTuningStepEnabled,
+		FieldTuningStep,
+		FieldProgramTuningStep,
+		FieldAttenuator,
+		FieldPreamp,
+		FieldAntenna,
+		FieldIPPlus,
+	}
+}
+
 // transmitOnlyMarker is the exact phrase a Field constant's doc comment
 // carries when that Field describes the TRANSMITTER rather than the
 // receiver. It is a constant, not a literal in the test, so the

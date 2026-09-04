@@ -17,9 +17,9 @@ import (
 // sweep. Its LENGTH is asserted against the bank field maps below, so a Field
 // added to core/spec, listed in this radio's banks and forgotten here still
 // fails a test; a Field this radio's banks do not carry at all — which is
-// every one of the seven D8 receiver fields — escapes both sides equally and
-// is not caught. Widening this slice means widening those bank maps, which is
-// a capability-table decision and not a comment's to take.
+// every one of the seven D8 receiver fields — escapes both sides equally.
+// TestFieldAuditCoversEverySpecField now catches that case without widening
+// this slice or making a capability-table decision.
 var allFields = []spec.Field{
 	spec.FieldFrequency,
 	spec.FieldMode,
@@ -31,6 +31,54 @@ var allFields = []spec.Field{
 	spec.FieldTagDisplay,
 	spec.FieldScanSkip,
 	spec.FieldErase,
+}
+
+var deliberatelyUnexpressedFields = map[spec.Field]string{
+	spec.FieldTxFrequency:       "design D4 — the FTdx10 memory frame carries no independent transmit-frequency field",
+	spec.FieldDuplex:            "design D4 — the FTdx10 memory frame carries no Icom duplex field",
+	spec.FieldOffset:            "design D4 — the FTdx10 memory frame carries no per-channel repeater-offset field",
+	spec.FieldToneMode:          "design D4 — the FTdx10 memory frame carries no Icom tone-mode field",
+	spec.FieldToneTx:            "design D4 — the FTdx10 memory frame carries no separate transmit-tone field",
+	spec.FieldToneRx:            "design D4 — the FTdx10 memory frame carries no separate receive-tone field",
+	spec.FieldDTCSCode:          "design D4 — the FTdx10 memory frame carries no DTCS-code field",
+	spec.FieldDTCSPolarity:      "design D4 — the FTdx10 memory frame carries no DTCS-polarity field",
+	spec.FieldFilter:            "design D4 — the FTdx10 memory frame carries no per-channel IF-filter field",
+	spec.FieldDataMode:          "design D4 — the FTdx10 memory frame carries no Icom data-mode flag",
+	spec.FieldTuningStepEnabled: "additions design D8 — the FTdx10 memory frame carries no tuning-step-enabled field",
+	spec.FieldTuningStep:        "additions design D8 — the FTdx10 memory frame carries no tuning-step field",
+	spec.FieldProgramTuningStep: "additions design D8 — the FTdx10 memory frame carries no programmable-tuning-step field",
+	spec.FieldAttenuator:        "additions design D8 — the FTdx10 memory frame carries no attenuator field",
+	spec.FieldPreamp:            "additions design D8 — the FTdx10 memory frame carries no preamp field",
+	spec.FieldAntenna:           "additions design D8 — the FTdx10 memory frame carries no antenna-selection field",
+	spec.FieldIPPlus:            "additions design D8 — the FTdx10 memory frame carries no IP+ field",
+}
+
+func TestFieldAuditCoversEverySpecField(t *testing.T) {
+	audited := make(map[spec.Field]bool, len(allFields)+len(deliberatelyUnexpressedFields))
+	for _, field := range allFields {
+		if audited[field] {
+			t.Errorf("allFields lists %s more than once", field)
+		}
+		audited[field] = true
+	}
+	for field, reason := range deliberatelyUnexpressedFields {
+		if reason == "" {
+			t.Errorf("deliberatelyUnexpressedFields[%s] has no reason", field)
+		}
+		if audited[field] {
+			t.Errorf("field %s is both audited and deliberately unexpressed", field)
+		}
+		audited[field] = true
+	}
+	for _, field := range spec.AllFields() {
+		if !audited[field] {
+			t.Errorf("spec.Field %s is neither audited nor deliberately unexpressed", field)
+		}
+		delete(audited, field)
+	}
+	for field := range audited {
+		t.Errorf("field audit names %s, which spec.AllFields does not", field)
+	}
 }
 
 // TestWriteTrialsComplete_PinnedFalse is this driver's write guard, pinned

@@ -322,6 +322,36 @@ var fieldGrid = []struct {
 	{spec.FieldDataMode, true, "row 20 — byte (13)"},
 }
 
+var deliberatelyUnexpressedFields = map[spec.Field]string{}
+
+func TestFieldAuditCoversEverySpecField(t *testing.T) {
+	audited := make(map[spec.Field]bool, len(fieldGrid)+len(deliberatelyUnexpressedFields))
+	for _, row := range fieldGrid {
+		if audited[row.field] {
+			t.Errorf("fieldGrid lists %s more than once", row.field)
+		}
+		audited[row.field] = true
+	}
+	for field, reason := range deliberatelyUnexpressedFields {
+		if reason == "" {
+			t.Errorf("deliberatelyUnexpressedFields[%s] has no reason", field)
+		}
+		if audited[field] {
+			t.Errorf("field %s is both audited and deliberately unexpressed", field)
+		}
+		audited[field] = true
+	}
+	for _, field := range spec.AllFields() {
+		if !audited[field] {
+			t.Errorf("spec.Field %s is neither audited nor deliberately unexpressed", field)
+		}
+		delete(audited, field)
+	}
+	for field := range audited {
+		t.Errorf("field audit names %s, which spec.AllFields does not", field)
+	}
+}
+
 // TestFieldGrid_MatchesTheMatrix compares matrix section 2's eighty
 // gradings against caps.FieldSupport, for both banks and both profiles.
 //
@@ -587,10 +617,10 @@ func TestFieldGrid_TheZerosAreWrittenDown(t *testing.T) {
 // TestFieldGrid_GradesEverySpecFieldThereIs is the tripwire for a field
 // added by a LATER WAVE.
 //
-// core/spec has no enumeration of its Field constants — nothing to range
-// over — so this parses the declarations out of core/spec/field.go the
-// way internal/guards parses the tree, and requires every one of them to
-// appear in fieldGrid. Without it a twenty-first spec.Field would be
+// This predates spec.AllFields and remains an independent source-level pin:
+// it parses the declarations out of core/spec/field.go the way
+// internal/guards parses the tree, and requires every one of them to appear
+// in fieldGrid. Without it a later spec.Field would be
 // silently ungraded by this driver: absent from both banks' maps, absent
 // from the grid, and reported Unsupported by a lookup that cannot tell
 // "decided against" from "never considered".
