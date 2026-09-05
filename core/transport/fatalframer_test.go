@@ -23,7 +23,10 @@ import (
 // as an answer on the very chunk that carried the link failure). No
 // framing registered before it implements it: catFraming does not, and a
 // framing that does not implement it pays one nil-field check per read
-// chunk and takes no lock at all — TestFatalFramer_AbsentIsInert pins that.
+// chunk and one on the way to a write that is otherwise base's — no lock,
+// no closed recheck, no change of timing. The three tests under
+// "additivity" below pin that, and two of them pin the write path
+// specifically, where it is the only thing keeping the claim true.
 
 // --- fixtures -----------------------------------------------------------
 
@@ -483,10 +486,15 @@ func TestFatalFramer_PostPurgeRace_NoFrameLeavesAfterAReceivedFatalFrame(t *test
 
 // --- additivity ---------------------------------------------------------
 
-// TestFatalFramer_AbsentIsInert is the byte-identity claim's own pin: a
+// TestFatalFramer_AbsentIsInert is the byte-identity claim's first pin: a
 // framing that does not implement FatalFramer resolves to a nil field at
-// construction, so neither hot site asserts a type, takes a lock or enters
-// a branch. Every model registered before this hook uses such a framing.
+// construction, so neither hot site asserts a type or takes a lock. Every
+// model registered before this hook uses such a framing.
+//
+// This test alone cannot see the difference between the two shapes of
+// gatedWrite — an ordinary exchange passes whether or not the write took
+// the gate on its way out. The two tests after it are the ones that can,
+// and the claim rests on them: they are not decoration.
 func TestFatalFramer_AbsentIsInert(t *testing.T) {
 	plain := &lineFraming{policy: fastPolicy}
 	port := newScriptedPort("RD ok\n")
@@ -535,5 +543,111 @@ func TestFatalFramer_ResolvedOnceAtConstruction(t *testing.T) {
 	}
 	if e.fatal.IsFatal([]byte("RD ok\n")) != nil {
 		t.Error("IsFatal claimed an ordinary frame")
+	}
+}
+
+// TestFatalFramer_AbsentWriteRacingCloseGoesOutAsBaseDid is pin (a) of the
+// additivity claim, and it is the one that discriminates: it pins the
+// fatal-ABSENT write path as base's, not merely as "a write that
+// succeeds".
+//
+// The seam is the same one the post-purge pin uses — a NoteSent hook — but
+// on a framing that does NOT implement FatalFramer, and what it does there
+// is close the engine. Because Engine.Close runs to completion before
+// NoteSent returns, the frame that follows is written by a Do that has
+// ALREADY lost the race with a close, deterministically: no sleep, no won
+// race. Base transmits it (the closed check base makes is at Do's entry,
+// and nothing re-reads e.closed afterwards), and the closure is then
+// reported from the read wait as ErrPortClosed.
+//
+// Assertion 1 is the discriminating one. Under an unconditional gate —
+// gatedWrite taking fatalGate and running the closed recheck for EVERY
+// framing — the write is suppressed and this reads "the port saw 0
+// write(s)". Assertion 2 holds either way (both routes end in the same
+// e.closedErr()) and is here to pin that the error VALUE is base's too.
+func TestFatalFramer_AbsentWriteRacingCloseGoesOutAsBaseDid(t *testing.T) {
+	port := newScriptedPort() // no reply: the close, not an answer, ends the Do
+	t.Cleanup(func() { _ = port.Close() })
+
+	f := &orderingFraming{lineFraming: lineFraming{policy: fastPolicy}}
+	e, err := NewEngineWith(port, f)
+	if err != nil {
+		t.Fatalf("NewEngineWith: unexpected error: %v", err)
+	}
+	t.Cleanup(func() { _ = e.Close() })
+
+	if e.fatal != nil {
+		t.Fatalf("Engine.fatal = %v for a framing that does not implement FatalFramer, want nil — this test would otherwise pin the gated path", e.fatal)
+	}
+
+	var noteOnce sync.Once
+	f.onNote = func([]byte) {
+		// Engine.Close joins the reader before returning, so by the time
+		// Do reaches its write step the closure is complete and visible.
+		noteOnce.Do(func() { _ = e.Close() })
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	_, err = e.Do(ctx, lineCommand("RD?\n"), CommandSpec{Class: ClassRead, Match: lineMatch("RD "), Timeout: 5 * time.Second, Settle: time.Millisecond})
+
+	// Assertion 1 — the frame went out, exactly as base sent it.
+	if w := port.written(); len(w) != 1 || string(w[0]) != "RD?\n" {
+		t.Errorf("the port saw %d write(s) = %q, want exactly [%q] — a framing without FatalFramer must reach e.port.Write on base's path, taking no gate and making no closed recheck", len(w), w, "RD?\n")
+	}
+	// Assertion 2 — and the error value is base's.
+	if !errors.Is(err, ErrPortClosed) {
+		t.Errorf("Do error = %v, want ErrPortClosed — the close is reported from the read wait, as it was before the hook", err)
+	}
+}
+
+// TestFatalFramer_AbsentExchangeDoesNotQueueBehindTheFatalGate is pin (b):
+// the liveness half of the same claim. A framing without FatalFramer never
+// touches fatalGate at all, so a goroutine holding that gate — readLoop
+// publishing a fatal frame on some OTHER engine, or a stuck Port.Close on
+// this one — cannot delay a registered radio's exchange by so much as a
+// scheduling slot.
+//
+// The gate is held for the WHOLE exchange. Under an unconditional gate the
+// Do blocks on Lock and this fails as a bounded TIMEOUT (5s, well inside
+// the 30s command timeout, which is deliberately far longer so a block
+// cannot be rescued by the read timeout and reported as something else).
+func TestFatalFramer_AbsentExchangeDoesNotQueueBehindTheFatalGate(t *testing.T) {
+	plain := &lineFraming{policy: fastPolicy}
+	port := newScriptedPort("RD ok\n")
+	t.Cleanup(func() { _ = port.Close() })
+
+	e, err := NewEngineWith(port, plain)
+	if err != nil {
+		t.Fatalf("NewEngineWith: unexpected error: %v", err)
+	}
+	t.Cleanup(func() { _ = e.Close() })
+
+	if e.fatal != nil {
+		t.Fatalf("Engine.fatal = %v for a framing that does not implement FatalFramer, want nil", e.fatal)
+	}
+
+	e.fatalGate.Lock()
+	var unlockOnce sync.Once
+	unlock := func() { unlockOnce.Do(e.fatalGate.Unlock) }
+	defer unlock()
+
+	done := make(chan error, 1)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		_, err := e.Do(ctx, lineCommand("RD?\n"), CommandSpec{Class: ClassRead, Match: lineMatch("RD "), Timeout: 30 * time.Second, Settle: time.Millisecond})
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Do: unexpected error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		// Unwedge before failing, so the cleanup below cannot hang.
+		unlock()
+		t.Fatal("a Do on a framing WITHOUT FatalFramer did not complete within 5s while another goroutine held fatalGate — the absent path is queueing behind a lock it must never take")
 	}
 }
