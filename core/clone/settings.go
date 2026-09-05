@@ -86,8 +86,10 @@ func (s *Service) ReadSettings(ctx context.Context) (*codeplug.MenuSnapshot, err
 	}
 
 	// SettingsDescriptor.Validate accepts any non-empty, unique opaque item
-	// ID, but a MenuSnapshot requires every ID to be exactly 4 or exactly 6
-	// ASCII digits — the two EX address widths (see MenuSnapshot.Validate).
+	// ID, but a MenuSnapshot requires every ID to be exactly 3, 4 or 6
+	// ASCII digits — the three EX address widths (see MenuSnapshot.Validate
+	// and codeplug's isSettingIDWidth, which is the only place a width is
+	// judged).
 	// Without this preflight a custom SettingsReader minting a mis-shaped ID
 	// would pass descriptor validation, be READ against the wire, and fail
 	// only AFTER every read when the built snapshot is validated. Probe the
