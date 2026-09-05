@@ -1,0 +1,176 @@
+# Command: MR (Read request frame + Answer frame)
+# Radio: Kenwood TS-590S / TS-590SG
+# Title (cover, verbatim): "TS-590S TS-590SG / PC CONTROL COMMAND / Reference Guide"
+# Printed revision: NO revision number is printed anywhere on the cover or the
+#   pages read.  The cover prints only "JVCKENWOOD Corporation" and the date
+#   "January/30/2019".  (The string "rev3" appears only in the supplied filename.)
+# Source page: printed folio "- 18 -"  ==  PDF page 19 of 35
+# Charts used: the "Read" chart and the "Answer" chart of the MR block
+# Derivation date: 05/09/2026
+# NO code, no generator, no other file and no other document was consulted.
+#
+# COUNTED FRAME LENGTHS (two independent counts of the printed numbered ruler,
+# then a third look at 600 dpi to settle the terminator cell):
+#   MR Read   = 7 positions   (ruler printed 1..10; cells 1..7 filled)
+#   MR Answer = 50 positions  (five ruler rows: 1-10, 11-20, 21-30, 31-40, 41-50)
+#
+# ---------------------------------------------------------------------------
+# READ CHART, position by position (printed cell contents):
+#   1  M
+#   2  R
+#   3  P1
+#   4  P2
+#   5  P3
+#   6  P3
+#   7  :        <-- the chart prints a COLON here, not a semicolon.  See FINDING F1.
+#   8,9,10  empty
+#
+# ANSWER CHART, position by position (printed cell contents):
+#   1  M          2  R
+#   3  P1
+#   4  P2         5-6  P3
+#   7-17  P4      (11 positions)
+#   18  P5
+#   19  P6
+#   20  P7
+#   21-22  P8
+#   23-24  P9
+#   25-27  P10
+#   28  P11
+#   29  P12
+#   30-38  P13   (9 positions)
+#   39-40  P14
+#   41  P15
+#   42-49  P16   (8 positions)
+#   50  ;        (semicolon; verified at 600 dpi against the colon at Read pos 7)
+#
+# ---------------------------------------------------------------------------
+# LEGEND TEXT, VERBATIM (right-hand column of the MR block; header line
+# "[TS-590S / TS-590SG common]" then "Parameters:"):
+#
+# P1 legend (the 0/1 flag and its notes) VERBATIM:
+#   P1
+#     0:  Simplex
+#     1:  Split
+#     * When reading the simplex channel data or the receive frequency of the split
+#       channel in receive mode, enter 0 for parameter P1. When reading the transmit
+#       frequency of the split channel in transmit mode, enter 1.
+#     * When reading the start frequency of a section defined channel, enter 0 for
+#       parameter P1.  When reading the end frequency, enter 1.
+#
+#   P2, P3
+#     Channel number (refer to the MC command)
+#   P4
+#     Frequency (depending on the P1 setting, unused high-end digits will become 0)
+#
+# Mode legend VERBATIM (MR prints only a cross-reference, not the table):
+#   P5
+#     Mode (depending on the P1 setting, refer to the MD command)
+#   P6
+#     Data mode (depending on the P1 setting, refer to the DA command)
+#   -- the MD table itself is printed on folio 16 / PDF p.17 and reads VERBATIM:
+#      "0:  None (setting failure) / 1:  LSB / 2:  USB / 3:  CW / 4:  FM / 5:  AM /
+#       6:  FSK / 7:  CW-R / 8:  None (setting failure) / 9:  FSK-R"
+#   -- the DA table (folio 6 / PDF p.7) reads VERBATIM:
+#      "0:  DATA mode OFF / 1:  DATA mode ON"
+#
+# Tone legends VERBATIM:
+#   P7
+#     0:  TONE/CTCSS OFF
+#     1:  TONE ON
+#     2:  CTCSS ON
+#     3:  Cross Tone ON
+#   P8
+#     Tone frequency (refer to the TN command)
+#   P9
+#     CTCSS frequency (refer to the CN command)
+#   INDEX -> Hz TABLES: BOTH ARE PRINTED in this book (they are NOT absent).
+#     TN table, folio 28 / PDF p.29, "P1 / 00 ~ 42 (refer to the table below)":
+#       00 67.0  01 69.3  02 71.9  03 74.4  04 77.0  05 79.7  06 82.5  07 85.4
+#       08 88.5  09 91.5  10 94.8  11 97.4  12 100.0 13 103.5 14 107.2 15 110.9
+#       16 114.8 17 118.8 18 123.0 19 127.3 20 131.8 21 136.5 22 141.3 23 146.2
+#       24 151.4 25 156.7 26 162.2 27 167.9 28 173.8 29 179.9 30 186.2 31 192.8
+#       32 203.5 33 206.5 34 210.7 35 218.1 36 225.7 37 229.1 38 233.6 39 241.8
+#       40 250.3 41 254.1 42 1750
+#       plus the bullet VERBATIM: "An entered value of 43 or higher results in an error."
+#     CN table, folio 6 / PDF p.7, "P1 / 00 ~ 41": identical 00..41 rows to the above;
+#       CN has NO index 42 (no 1750 entry).
+#
+# EVERY POSITION THE CHART PRINTS AS FIXED / "Always" (listed by position number),
+# with the legend text VERBATIM:
+#   positions 25,26,27  (P10)  -- "P10 / 000:  Always 000"
+#   position  29        (P12)  -- "P12 / 0:  Always 0"
+#   positions 30..38    (P13)  -- "P13 / 000000000:  Always 000000000"
+#   (no other position carries an "Always" note in the MR block)
+#
+# The remaining variable legends VERBATIM:
+#   P11 (Selected status of FILTER A/B (Status of FILTER A/B in the
+#        mode indicated by P5 and P6 parameters))
+#     0:  FILTER A
+#     1:  FILTER B
+#     *  In firmware version 1.xx of TS-590S, always "0".
+#   P14
+#     00:  FM Normal
+#     01:  FM Narrow
+#   P15
+#     0:  Channel Lockout OFF
+#     1:  Channel Lockout ON
+#   P16
+#     Memory name (up to 8 digits)
+#   bullet VERBATIM: "If the selected channel is empty, P4 ~ P15 will be 0 and P16 will
+#     be blank."
+#
+# ---------------------------------------------------------------------------
+# BYTES WHOSE VALUE THE MANUAL DOES NOT DETERMINE  -> INHERITED-ASSUMED
+#
+#   [A1] Read pos 4 (P2, the 100's digit) for a channel below 100.  The MC legend
+#        determines this only for MC itself: "When entering a setting command, enter 0
+#        or a space for a channel number less than 100."  MR's Read frame is an input
+#        command, so BOTH "0" and " " are permitted by that wording and the book does
+#        not say which MR expects.  ASSUMED: ASCII "0" in every Read vector below.
+#   [A2] Answer pos 4 (P2) for a channel below 100.  MC's legend says "For a response
+#        command, a space is entered for a channel number less than 100."  That IS
+#        documented, so the SPACE in the Answer vectors is documented, not assumed.
+#   [A3] Answer positions 7..17 (P4) - the manual gives only the format ("Frequency",
+#        11 digits per the FA/FB legend "Frequency (11 digits in Hz)" and its bullet
+#        "For example, enter 00014195000 for 14.195 MHz.  Blank digits must be entered
+#        as 0.").  The particular frequency VALUE in each vector is ASSUMED.
+#   [A4] Answer positions 42..49 (P16) when the name is SHORTER than 8 characters.
+#        WHAT THE BOOK SAYS ABOUT PADDING: for MR it says only "P16 / Memory name (up
+#        to 8 digits)" and "If the selected channel is empty, P4 ~ P15 will be 0 and
+#        P16 will be blank."  It says NOTHING about how a 1..7 character name occupies
+#        the 8 printed positions - no left/right justification and no pad character
+#        are stated.  ASSUMED: the name is left-justified and padded on the right with
+#        ASCII space (0x20) to 8 positions.
+#   [A5] Answer positions 21..22 (P8) and 23..24 (P9) when the corresponding tone
+#        system is OFF.  The book prints no "don't care" value.  ASSUMED: "00".
+#   [A6] Answer pos 28 (P11) and pos 39..40 (P14) VALUES in each vector are ASSUMED;
+#        only their legends are documented.
+#   [A7] The channel numbers, mode digits and name strings chosen below are ASSUMED
+#        illustrative values; only their field widths and legends are documented.
+#
+# Hardware status: UNVERIFIED for every vector in this file.
+#
+# ---------------------------------------------------------------------------
+# VECTORS  (name <TAB> frame bytes verbatim, terminator included; a space inside a
+# frame is a real space)
+#
+# --- Read request frames (7 positions; position 7 is the printed COLON, F1) ---
+mr590_read_ch03_simplex_rx	MR0003:
+mr590_read_ch04_simplex_rx	MR0004:
+mr590_read_ch12_split_tx	MR1012:
+mr590_read_ch100_P00_simplex	MR0100:
+#
+# NOTE: no vector with a SEMICOLON terminator is emitted for the MR Read frame.
+# The chart prints ":" at position 7 and FINDING F1 is left unresolved by
+# instruction; substituting ";" would be resolving it.
+#
+# --- Answer frames (50 positions) ---
+# A: ordinary simplex channel, 8-character name
+mr590_answer_ch03_simplex_name8	MR0 0300014250000200000000000000000000000DXCLUSTR;
+# B: channel whose name is SHORTER than the field (3 characters + 5 assumed spaces, A4)
+mr590_answer_ch04_simplex_name3	MR0 0400007150000100000000000000000000000NET     ;
+# C: tone state other than OFF (P7=1 TONE ON, P8=08 -> 88.5 Hz) and a non-simplex
+#    indication (P1=1, the transmit frequency of a split channel), P11=1 FILTER B,
+#    P14=01 FM Narrow
+mr590_answer_ch12_split_tx_tone_on	MR1 1200051500000401080000010000000000010REPEATER;

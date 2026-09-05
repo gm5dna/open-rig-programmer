@@ -1,0 +1,285 @@
+# TS-590SG EX Command Parameter List -- EX address inventory.
+# Source: Kenwood TS-590S/TS-590SG PC Control Command Reference Guide,
+#   Rev.3, document code B5A-0316-20/01, January/30/2019
+#   (docs/fixtures-private/manuals/ts590sg_pc_rev3.pdf, gitignored;
+#   SHA-256 619f14667ddfa463c03068399be2f697570a4939c90beed7cf83a28e23a7e9a4;
+#   35 PDF pages, folios 1-33 on PDF pages 2-34). The chart is the one
+#   headed "EX Command Parameter List (for TS-590SG)".
+# THE OTHER CHART IN THE SAME BOOK IS NOT THIS ONE. The book prints TWO EX
+#   parameter lists, "EX Command Parameter List (for TS-590S)" at layout 564
+#   and this one at layout 744, over COLLIDING addresses with different
+#   meanings: the SG's list is the S's shifted by two with a new read-only
+#   row at the top, so address 000 is Firmware Version here and something
+#   else there, and every address above it differs too. Nothing in this file
+#   was read from the TS-590S list; the two are separate tables, separate
+#   CSVs and separate profiles, and a copy-paste between them is a defect
+#   the cross-check exists to catch.
+# Method: LAYOUT-TEXT-LED, PDF-CHECKED. The working text was the layout
+#   extraction docs/fixtures-private/manuals/ts590sg_pc_rev3_layout.txt,
+#   where this chart spans lines 744-956 -- the caption at 744, the column
+#   header at 746-748, the first row 000 at 749, the last row 099 at 956,
+#   with the header reprinted at 799-801 and 907-909 where the chart crosses
+#   a page. Every row's Function, parameter cells and Digits was then read
+#   off the rendered PDF as well: folios 9, 10 and 11 = PDF pages 10, 11 and
+#   12, rendered at 300 dpi with pdftoppm. THE LAYOUT TEXT IS THE SOURCE AND
+#   THE RENDER IS THE CHECK; where they disagree the disagreement is
+#   recorded below rather than silently resolved.
+#   A row is NOT one layout line. This chart's cells wrap: a row's Function
+#   commonly occupies the line above and the line below the line carrying
+#   its menu number, and the last parameter column ("10 ~") wraps too. Every
+#   row here was assembled from its whole cell block, never from one output
+#   line.
+# Transcribed: 05/09/2026 (Tier 6 Stage 1 task 9b, transcription A). Values
+#   are the manual's own; this file makes no claim about what any radio
+#   does. No TS-590SG hardware is available to this project, so there is no
+#   observation CSV and no corrections file to accompany it.
+#
+# Columns: p1,p2,p3,p1_label,p2_label,name,p4,digits,text,manual_line
+#   p1,p2,p3     decimal (P1,P2,P3) triple. The TS-590SG's EX address has
+#                only ONE component: p1 is the printed three-digit Menu (P1)
+#                number, and p2 and p3 are 0 on EVERY row -- extable's
+#                AddressSingle. The printed number runs 000 ~ 099, so it is
+#                numerically 0..99 and fits the parser's per-component
+#                domain.
+#   p1_label     EMPTY on every row.
+#   p2_label     EMPTY on every row. This chart prints no group-label
+#                columns at all -- extable's LabelsAbsent. See NO GROUP
+#                LABELS below.
+#   name         chart Function column, verbatim (whitespace normalised as
+#                below)
+#   p4           chart "Command Parameter (P5)" cells, transcribed as
+#                "<P5 code>: <cell text>" pairs in printed order, separated
+#                by single spaces (audit trail only -- it is not emitted
+#                into the generated Go). COLUMN-NAME COLLISION, worth
+#                reading twice: this radio's chart calls that column P5,
+#                because a Kenwood EX frame's parameter is P5 where the
+#                FT-710's is P4. The ten-column CSV shape is shared with
+#                every other model in this repository, so it keeps the name
+#                p4. The CSV's own p2 column is the ADDRESS's second
+#                component and has nothing to do with the chart's P5
+#                heading.
+#                THE CODE IS THE COLUMN HEADER, NOT THE CELL. The chart is a
+#                grid: the headers "0 1 2 ... 9  10 ~" ARE the P5 values and
+#                each cell under one is the setting that value selects. So
+#                003 Back light color reads "9: 10" -- P5 code 9 selects
+#                colour 10 -- and not "10: ...".
+#                Rows whose parameter area is ONE merged cell spanning the
+#                whole grid (000, 001 and the block 087-099) carry that
+#                cell's text with no code prefix, because the chart states
+#                no per-code cells for them.
+#   digits       the character width of the largest P5 CODE the row uses,
+#                which on a grid chart is the width of the column HEADER
+#                over the row's last populated cell: a row whose cells stop
+#                under header 6 is 1, a row reaching the "10 ~" column is 2,
+#                and a row whose merged cell prints "(3-digit)" is 3. It is
+#                NOT the width of the widest cell CONTENTS -- see the note
+#                on p4 above, and DIGITS IS A CODE WIDTH below.
+#   text         true on exactly ONE row, 001 Power on message. See TEXT
+#                ROWS below.
+#   manual_line  line in ts590sg_pc_rev3_layout.txt carrying the row's Menu
+#                (P1) number
+#
+# TRANSCRIPTION CONVENTIONS -- what was and was not normalised
+#   VERBATIM, DEFECTS INCLUDED. The chart's own spellings and defects are
+#   transcribed as found, never corrected; see the quirks section.
+#   WHITESPACE: runs of whitespace inside a name or a p4 cell are collapsed
+#   to single spaces, as in the FT-891 and FT-710 transcriptions. This chart
+#   is set justified, so inter-word gaps carry no information and the layout
+#   extraction and the render disagree about several of them (recorded under
+#   LAYOUT vs RENDER below).
+#   WRAPPED CELLS are joined in reading order with ONE space: a Function
+#   printed over two or three lines ("Tuning control adjustment rate" +
+#   "(Hz)"), and a "10 ~" cell printed over two ("up to 1000" +
+#   "(steps of 50)").
+#   CHARACTERS are NOT transliterated. This extraction renders the chart's
+#   range mark as ASCII "~" ("000 ~ 255", "~ 20") and its hyphens as ASCII
+#   "-"; both are recorded as the source presented them.
+#
+# DIGITS IS A CODE WIDTH, AND THE TRAP IS THE LAST COLUMN. Ten rows reach
+#   the chart's final column, whose header is "10 ~": 005-008 (the four
+#   volume rows, "~ 20 (steps of 1)"), 018 and 019 ("P5=10: 100"), 040
+#   ("up to 1000 (steps of 50)"), 042 ("up to 4.0 (steps of 0.1)"), 063
+#   ("up to 60 (steps of 1)") and 077 ("up to 100 (steps of 5)"). Those ten
+#   are the chart's only two-digit codes. Every other numbered row stops at
+#   or before header 9 and is 1. A unit or step annotation is not a code:
+#   the "(Hz)" of 013 and the "(minutes)" of 086 are parts of their FUNCTION
+#   text that the two-column layout extraction prints at a horizontal
+#   position resembling the parameter grid, and neither was read as a cell.
+#
+# THE THIRTEEN THREE-DIGIT ROWS. 087-099 share ONE merged parameter cell
+#   reading "000 ~ 255 (3-digit)" followed by "Refer to the TS-590SG
+#   instruction manual for the numbers and functions. (When the function is
+#   turned OFF, 255 is used.)". The printed "(3-digit)" is the width claim,
+#   so all thirteen carry digits 3; the referred-to numbering is in another
+#   book this repository does not hold, and nothing here invents it.
+#
+# THE VERSION ROW IS NOT A TEXT ROW. 000 Firmware Version prints "Version
+#   information (4 ASCII characters) read only" and is transcribed
+#   digits=4, text=false. That is the design decision, not a reading: the
+#   profile carries ONE exact TextWidth, this chart prints strings of two
+#   different widths (4 here, 8 at 001), and the repository's existing
+#   treatment of a version string is the FT-891's 18/01/00 MAIN VERSION,
+#   digits=4 text=false (core/cat/ft891/table2.csv). text marks the chart's
+#   FREE-TEXT row -- the one a transcriber must stop at -- not any row whose
+#   parameter happens to be characters. The 4 is a WIDTH claim only; it
+#   asserts nothing about the string's grammar.
+#
+# TEXT ROWS. Exactly one: 001 Power on message, "Power on Message (up to 8
+#   ASCII characters)", digits 8, which is the profile's TextWidth. No other
+#   row in this chart describes free text.
+#
+# NO GROUP LABELS. The chart's columns are "Menu (P1) | Function | Command
+#   Parameter (P5)" and nothing else. The FT-710's and the FTdx10's charts
+#   print a parenthesised group name in their address columns ("01 (MODE
+#   SSB)"); this one prints only the three-digit menu number. Both label
+#   columns are therefore blank on every row and the profile declares
+#   LabelsAbsent, under which ParseCSV REFUSES a non-blank label column: an
+#   invented group name would be words put in a manual's mouth. Nothing
+#   downstream may supply one either.
+#
+# PRINTED QUIRKS RECORDED, NOT RESOLVED
+#   1. 016 and 017 (MULTI/CH control step change for SSB and for CW/ FSK)
+#      each print "0.5" TWICE, under P5 codes 1 and 2, before "1 2.5 5 10".
+#      Both the layout text and the render agree, on both rows. Whether one
+#      of the pair should read a different step is not knowable from this
+#      manual, and this repository has no TS-590SG to ask.
+#   2. 028 and 029 number their two options 1 and 2 in the CELLS while the
+#      codes that select them are 0 and 1: "0: 1 (HI/LO) 1: 2 (WIDTH/
+#      SHIFT)". A consumer that reads the cell text as the wire value would
+#      be off by one on these two rows.
+#   3. 064 Split transfer function prints its options with internal spaces:
+#      "A-T R" (P5 1) and "A-SUB R" (P5 2, printed over two lines, "A-SUB"
+#      above and "R" below). Transcribed as printed, not closed up.
+#   4. 018 and 019 spell their final cell as an equation, "P5=10: 100",
+#      where every other over-column cell spells a range ("up to 100 (steps
+#      of 5)"). Recorded because the "10:" inside it is the chart's own
+#      code, and a parser that split p4 on ": " would see two.
+#   5. 036 and 037 differ in ONE cell: P5 6 is "C" on Transmit equalizer and
+#      "FLAT" on Receive equalizer, everything else identical. Recorded
+#      because two near-identical adjacent rows are exactly where a
+#      transcriber borrows.
+#   6. The chart prints no P5 code between 9 and the "10 ~" column, so a row
+#      reaching the last column states only its lower bound and its step,
+#      never its full option list.
+#
+# LAYOUT vs RENDER -- every disagreement found, all whitespace, none
+#   affecting an address, a digit or a text flag
+#   a. 004: the layout prints "Panel  key response for double" (two spaces
+#      after "Panel"), the render prints one. Collapsed.
+#   b. 028: the render sets "Shift  change (SSB)" with a wide gap, the
+#      layout prints one space; 029 is single-spaced in both. Justification,
+#      not a defect. Collapsed.
+#   c. 095-099: the render sets "Mic  PF n function" with a wide gap after
+#      "Mic" while 094 is single-spaced; the layout prints one space on all
+#      six. Collapsed.
+#   d. 057: the render sets "TX  hold  when  AT  completes" with justified
+#      gaps; the layout prints single spaces. Collapsed.
+#   No disagreement was found on any Function WORD, any parameter cell, any
+#   Digits reading or any row's presence.
+#
+# ROW COUNT. 100 rows, 000 through 099 with no gap and no repeat, which is
+#   the domain the book declares for the SG's EX command ("000 ~ 099"). The
+#   count that governs is the profile's ExpectedRows, derived from a
+#   boundary ledger built from the rendered PDF before this file existed;
+#   this transcription was written without sight of it.
+#
+0,0,0,,,Firmware Version,Version information (4 ASCII characters) read only,4,false,749
+1,0,0,,,Power on message,Power on Message (up to 8 ASCII characters),8,true,750
+2,0,0,,,Display brightness,0: OFF 1: 1 2: 2 3: 3 4: 4 5: 5 6: 6,1,false,751
+3,0,0,,,Back light color,0: 1 1: 2 2: 3 3: 4 4: 5 5: 6 6: 7 7: 8 8: 9 9: 10,1,false,752
+4,0,0,,,Panel key response for double function,0: 1 1: 2 2: 3,1,false,753
+5,0,0,,,Beep volume,0: OFF 1: 1 2: 2 3: 3 4: 4 5: 5 6: 6 7: 7 8: 8 9: 9 10 ~: ~ 20 (steps of 1),2,false,756
+6,0,0,,,Sidetone volume,0: OFF 1: 1 2: 2 3: 3 4: 4 5: 5 6: 6 7: 7 8: 8 9: 9 10 ~: ~ 20 (steps of 1),2,false,758
+7,0,0,,,Message playback volume,0: OFF 1: 1 2: 2 3: 3 4: 4 5: 5 6: 6 7: 7 8: 8 9: 9 10 ~: ~ 20 (steps of 1),2,false,760
+8,0,0,,,Voice guide volume,0: OFF 1: 1 2: 2 3: 3 4: 4 5: 5 6: 6 7: 7 8: 8 9: 9 10 ~: ~ 20 (steps of 1),2,false,762
+9,0,0,,,Voice guide speed,0: 0 1: 1 2: 2 3: 3 4: 4,1,false,763
+10,0,0,,,Voice guide language,0: EN 1: JP,1,false,764
+11,0,0,,,Auto announcement,0: OFF 1: 1 2: 2,1,false,765
+12,0,0,,,MHz step (MHz),0: 0.1 1: 0.5 2: 1,1,false,766
+13,0,0,,,Tuning control adjustment rate (Hz),0: 250 1: 500 2: 1000,1,false,768
+14,0,0,,,MULTI/CH control rounding off process,0: OFF 1: ON,1,false,771
+15,0,0,,,Dedicated step change inside the BC band (AM),0: OFF 1: ON,1,false,774
+16,0,0,,,MULTI/CH control step change for SSB (kHz),0: OFF 1: 0.5 2: 0.5 3: 1 4: 2.5 5: 5 6: 10,1,false,777
+17,0,0,,,MULTI/CH control step change for CW/ FSK (kHz),0: OFF 1: 0.5 2: 0.5 3: 1 4: 2.5 5: 5 6: 10,1,false,780
+18,0,0,,,MULTI/CH control step change for AM (kHz),0: OFF 1: 5 2: 6.25 3: 10 4: 12.5 5: 15 6: 20 7: 25 8: 30 9: 50 10 ~: P5=10: 100,2,false,783
+19,0,0,,,MULTI/CH control step change for FM (kHz),0: OFF 1: 5 2: 6.25 3: 10 4: 12.5 5: 15 6: 20 7: 25 8: 30 9: 50 10 ~: P5=10: 100,2,false,786
+20,0,0,,,Shiftable RX frequency during split transmission,0: OFF 1: ON,1,false,789
+21,0,0,,,Maximum number of Quick Memory channels,0: 3 1: 5 2: 10,1,false,792
+22,0,0,,,Temporary variable of the standard/ Extension memory frequency,0: OFF 1: ON,1,false,803
+23,0,0,,,Program Scan slow down function,0: OFF 1: ON,1,false,806
+24,0,0,,,Program Scan slow down frequency range (Hz),0: 100 1: 200 2: 300 3: 400 4: 500,1,false,809
+25,0,0,,,Program Scan hold,0: OFF 1: ON,1,false,811
+26,0,0,,,Scan Resume method,0: TO 1: CO,1,false,812
+27,0,0,,,Auto mode change,0: OFF 1: ON,1,false,813
+28,0,0,,,Low Cut/ Low Cut and Width/ Shift change (SSB),0: 1 (HI/LO) 1: 2 (WIDTH/ SHIFT),1,false,816
+29,0,0,,,Low Cut/ Low Cut and Width/ Shift change (SSB-DATA),0: 1 (HI/LO) 1: 2 (WIDTH/ SHIFT),1,false,820
+30,0,0,,,Following speed setting of AUTO NOTCH,0: 0 1: 1 2: 2 3: 3 4: 4,1,false,823
+31,0,0,,,SSB/AM Low Cut transmit filter (Hz),0: 10 1: 100 2: 200 3: 300 4: 400 5: 500,1,false,826
+32,0,0,,,SSB/AM High Cut transmit filter (Hz),0: 2500 1: 2600 2: 2700 3: 2800 4: 2900 5: 3000,1,false,829
+33,0,0,,,SSB-DATA Low Cut transmit filter (Hz),0: 10 1: 100 2: 200 3: 300 4: 400 5: 500,1,false,832
+34,0,0,,,SSB-DATA High Cut transmit filter (Hz),0: 2500 1: 2600 2: 2700 3: 2800 4: 2900 5: 3000,1,false,835
+35,0,0,,,Effective change of Speech Processor,0: SOFT 1: HARD,1,false,838
+36,0,0,,,Transmit equalizer,0: OFF 1: HB1 2: HB2 3: FP 4: BB1 5: BB2 6: C 7: U,1,false,840
+37,0,0,,,Receive equalizer,0: OFF 1: HB1 2: HB2 3: FP 4: BB1 5: BB2 6: FLAT 7: U,1,false,841
+38,0,0,,,Electronic keyer operation mode,0: A 1: B,1,false,843
+39,0,0,,,Insert keying ON/OFF,0: OFF 1: ON,1,false,845
+40,0,0,,,Side tone/ pitch frequency setting (Hz),0: 300 1: 350 2: 400 3: 450 4: 500 5: 550 6: 600 7: 650 8: 700 9: 750 10 ~: up to 1000 (steps of 50),2,false,847
+41,0,0,,,CW clipping (ms),0: 1 1: 2 2: 4 3: 6,1,false,849
+42,0,0,,,Keying weight ratio,0: AUTO 1: 2.5 2: 2.6 3: 2.7 4: 2.8 5: 2.9 6: 3.0 7: 3.1 8: 3.2 9: 3.3 10 ~: up to 4.0 (steps of 0.1),2,false,851
+43,0,0,,,Reverse keying auto weight ratio,0: OFF 1: ON,1,false,853
+44,0,0,,,Bug key function,0: OFF 1: ON,1,false,855
+45,0,0,,,Paddle dot/dash replacement setting,0: OFF 1: ON,1,false,857
+46,0,0,,,Mic paddle function,0: PF 1: PA,1,false,859
+47,0,0,,,Auto CW TX in SSB mode,0: OFF 1: ON,1,false,860
+48,0,0,,,Frequency correction for changing SSB to CW mode,0: OFF 1: ON,1,false,862
+49,0,0,,,Break-in null configuration at time of keying speed configuration,0: OFF 1: ON,1,false,865
+50,0,0,,,FSK shift,0: 170 1: 200 2: 425 3: 850,1,false,867
+51,0,0,,,FSK keying polarity,0: OFF 1: ON,1,false,868
+52,0,0,,,FSK tone frequency (Hz),0: 1275 1: 2125,1,false,869
+53,0,0,,,Mic gain for FM,0: 1 1: 2 2: 3,1,false,870
+54,0,0,,,Power fine,0: OFF 1: ON,1,false,871
+55,0,0,,,Time-out Timer,0: OFF 1: 3 2: 5 3: 10 4: 20 5: 30,1,false,872
+56,0,0,,,Configuring the Transverter function and power down,0: OFF 1: 1 2: 2,1,false,874
+57,0,0,,,TX hold when AT completes the tuning,0: OFF 1: ON,1,false,877
+58,0,0,,,AT operation when receiving,0: OFF 1: ON,1,false,879
+59,0,0,,,HF linear amplifier control,0: OFF 1: 1 2: 2 3: 3 4: 4 5: 5,1,false,880
+60,0,0,,,50 MHz linear amplifier control,0: OFF 1: 1 2: 2 3: 3 4: 4 5: 5,1,false,881
+61,0,0,,,Constant recording,0: OFF 1: ON,1,false,882
+62,0,0,,,Voice/ message playback repeat,0: OFF 1: ON,1,false,884
+63,0,0,,,Voice/ message playback repeat duration (seconds),0: 0 1: 1 2: 2 3: 3 4: 4 5: 5 6: 6 7: 7 8: 8 9: 9 10 ~: up to 60 (steps of 1),2,false,887
+64,0,0,,,Split transfer function,0: OFF 1: A-T R 2: A-SUB R 3: B,1,false,890
+65,0,0,,,Write split transfer data to the VFO,0: OFF 1: ON,1,false,893
+66,0,0,,,Transmit inhibit,0: OFF 1: ON,1,false,895
+67,0,0,,,COM port communication speed,0: 4800 1: 9600 2: 19200 3: 38400 4: 57600 5: 115200,1,false,897
+68,0,0,,,USB port communication speed,0: 4800 1: 9600 2: 19200 3: 38400 4: 57600 5: 115200,1,false,900
+69,0,0,,,DATA modulation line,0: ACC2 1: USB,1,false,902
+70,0,0,,,Audio source of SEND/PTT transmission for data mode,0: FRONT 1: REAR,1,false,911
+71,0,0,,,USB audio input level,0: 0 1: 1 2: 2 3: 3 4: 4 5: 5 6: 6 7: 7 8: 8 9: 9,1,false,913
+72,0,0,,,USB audio output level,0: 0 1: 1 2: 2 3: 3 4: 4 5: 5 6: 6 7: 7 8: 8 9: 9,1,false,914
+73,0,0,,,ACC2 terminal AF input level,0: 0 1: 1 2: 2 3: 3 4: 4 5: 5 6: 6 7: 7 8: 8 9: 9,1,false,915
+74,0,0,,,ACC2 terminal AF output level,0: 0 1: 1 2: 2 3: 3 4: 4 5: 5 6: 6 7: 7 8: 8 9: 9,1,false,916
+75,0,0,,,External AF output beep mix,0: OFF 1: ON,1,false,917
+76,0,0,,,DATA VOX,0: OFF 1: ON,1,false,918
+77,0,0,,,DATA VOX delay,0: 0 1: 5 2: 10 3: 15 4: 20 5: 25 6: 30 7: 35 8: 40 9: 45 10 ~: up to 100 (steps of 5),2,false,920
+78,0,0,,,DATA VOX gain for USB audio input,0: 0 1: 1 2: 2 3: 3 4: 4 5: 5 6: 6 7: 7 8: 8 9: 9,1,false,922
+79,0,0,,,DATA VOX gain for ACC2 terminal input,0: 0 1: 1 2: 2 3: 3 4: 4 5: 5 6: 6 7: 7 8: 8 9: 9,1,false,925
+80,0,0,,,PKS polarity change,0: OFF 1: ON,1,false,927
+81,0,0,,,Busy transmit inhibit,0: OFF 1: ON,1,false,928
+82,0,0,,,CTCSS mute operation change,0: 1 1: 2,1,false,930
+83,0,0,,,PSQ control signal logic selection,0: LO 1: OPEN,1,false,933
+84,0,0,,,PSQ control signal output condition,0: OFF 1: BSY 2: SQL 3: SND 4: BSY-SND 5: SQL-SND,1,false,936
+85,0,0,,,DRV connector output function,0: DRO 1: ANT,1,false,938
+86,0,0,,,APO function (minutes),0: OFF 1: 60 2: 120 3: 180,1,false,939
+87,0,0,,,Panel PF A function,"000 ~ 255 (3-digit) Refer to the TS-590SG instruction manual for the numbers and functions. (When the function is turned OFF, 255 is used.)",3,false,940
+88,0,0,,,Panel PF B function,"000 ~ 255 (3-digit) Refer to the TS-590SG instruction manual for the numbers and functions. (When the function is turned OFF, 255 is used.)",3,false,941
+89,0,0,,,RIT Key function,"000 ~ 255 (3-digit) Refer to the TS-590SG instruction manual for the numbers and functions. (When the function is turned OFF, 255 is used.)",3,false,942
+90,0,0,,,XIT Key function,"000 ~ 255 (3-digit) Refer to the TS-590SG instruction manual for the numbers and functions. (When the function is turned OFF, 255 is used.)",3,false,943
+91,0,0,,,CL Key function,"000 ~ 255 (3-digit) Refer to the TS-590SG instruction manual for the numbers and functions. (When the function is turned OFF, 255 is used.)",3,false,944
+92,0,0,,,Front panel MULTI/CH key assignment (exclude CW mode),"000 ~ 255 (3-digit) Refer to the TS-590SG instruction manual for the numbers and functions. (When the function is turned OFF, 255 is used.)",3,false,946
+93,0,0,,,Front panel MULTI/CH key assignment (CW mode),"000 ~ 255 (3-digit) Refer to the TS-590SG instruction manual for the numbers and functions. (When the function is turned OFF, 255 is used.)",3,false,949
+94,0,0,,,Mic PF 1 function,"000 ~ 255 (3-digit) Refer to the TS-590SG instruction manual for the numbers and functions. (When the function is turned OFF, 255 is used.)",3,false,951
+95,0,0,,,Mic PF 2 function,"000 ~ 255 (3-digit) Refer to the TS-590SG instruction manual for the numbers and functions. (When the function is turned OFF, 255 is used.)",3,false,952
+96,0,0,,,Mic PF 3 function,"000 ~ 255 (3-digit) Refer to the TS-590SG instruction manual for the numbers and functions. (When the function is turned OFF, 255 is used.)",3,false,953
+97,0,0,,,Mic PF 4 function,"000 ~ 255 (3-digit) Refer to the TS-590SG instruction manual for the numbers and functions. (When the function is turned OFF, 255 is used.)",3,false,954
+98,0,0,,,Mic PF (DWN) function,"000 ~ 255 (3-digit) Refer to the TS-590SG instruction manual for the numbers and functions. (When the function is turned OFF, 255 is used.)",3,false,955
+99,0,0,,,Mic PF (UP) function,"000 ~ 255 (3-digit) Refer to the TS-590SG instruction manual for the numbers and functions. (When the function is turned OFF, 255 is used.)",3,false,956

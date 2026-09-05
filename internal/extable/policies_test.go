@@ -244,6 +244,42 @@ func TestRegisteredProfiles_DeclareTodaysBehaviourExplicitly(t *testing.T) {
 		// Its DigitsCeiling is still core/cat's — the FT-891 renders into
 		// core/cat/ft891, not a package of its own.
 		"ft891": {AddressPair, LabelsAbsent, TextRowsAbsent, 0, MaxDigitsCeiling},
+		// The TS-480's chart prints ONE three-digit Menu No. — the whole
+		// address — no group labels, and no free-text row:
+		// core/kw/ts480/menu480.csv's provenance header records all three
+		// as readings of that chart. Its ceiling is the LITERAL 246, not
+		// MaxDigitsCeiling: this profile renders into core/kw, whose EX
+		// answer has one more fixed byte than a Yaesu one, and core/kw's
+		// MaxEXDigits is the datum. The two differ by exactly one, which is
+		// why this row spells the number rather than a symbol — a stanza
+		// that copy-pasted 247 would pass every other test in this package,
+		// and core/kw/exdigits_ceiling_test.go is the twin pin.
+		"ts480": {AddressSingle, LabelsAbsent, TextRowsAbsent, 0, 246},
+		// The TS-590S is the first registration to take a value in this
+		// table that is NOT MaxDigitsCeiling, and that is the whole reason
+		// the ceiling column exists. Its inventory renders into core/kw,
+		// whose EX answer carries ten fixed bytes against a Yaesu one's
+		// nine, so its ceiling is core/kw.MaxEXDigits — 246, one less than
+		// core/cat's 247. A stanza that copy-pasted MaxDigitsCeiling would
+		// pass every other test in this package; it fails here.
+		//
+		// Its chart's shape, from core/kw/ts590/menu590s.csv's provenance
+		// header: one three-digit Menu number that is the whole address, no
+		// group labels, and one free-text row — menu 087 Power on message,
+		// eight ASCII characters.
+		"ts590s": {AddressSingle, LabelsAbsent, TextRowsAllowed, 8, 246},
+		// The TS-590SG is the first registration that does NOT render into
+		// core/cat, and so the first whose ceiling is not MaxDigitsCeiling:
+		// 246 is core/kw's MaxEXDigits, spelt as a literal here because this
+		// package must not import the package it renders into.
+		// core/kw/exdigits_ceiling_test.go pins the profile field to that
+		// constant; this row pins it against a number a reader can check, so
+		// a stanza carrying core/cat's 247 fails in both places rather than
+		// passing every test in this one. Its chart prints one three-digit
+		// menu number that is the whole address (AddressSingle), no group
+		// labels, and one free-text row of eight characters — menu 001 Power
+		// on message. See core/kw/ts590/menu590sg.csv's provenance header.
+		"ts590sg": {AddressSingle, LabelsAbsent, TextRowsAllowed, 8, 246},
 	}
 	regs := RegisteredProfiles()
 	if len(regs) != len(want) {
