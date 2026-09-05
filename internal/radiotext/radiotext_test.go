@@ -753,7 +753,7 @@ func TestRadiotext_IC705Verbatim(t *testing.T) {
 			ScanSkip: "not read or written over CI-V by this build — the IC-705's nearest wire nibble marks select-scan group membership, not a skip flag",
 		},
 		FirmwarePlaceholder: "as shown on the IC-705's own display",
-		ProbeFirmwareNote:   "Firmware version has no CI-V query — check the radio's display. No minimum version is established for the IC-705: this build knows of none to require. This driver talks only to CI-V address A4h, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200, along with the whole six-rate list it is chosen from, is ASSUMED — this radio's CI-V Reference Guide prints no baud information for the CI-V port at all, and the one related fact admitted from the Basic Manual is a negative: the microUSB CI-V port is baud-agnostic, which lowers the cost of a wrong guess without being evidence of one. Opening this radio also discovers its MEM bank's occupied slots by a BOUNDED walk — the first ten display groups, G01 through G10, each in full — not the whole 100-group by 100-channel space: the radio's own front panel fills groups from the bottom and the budget is 500 channels against 10,000 addresses, so a user whose memories sit above group ten needs the fuller walk, and nothing on this build's command line or in its window offers it (the driver's own WithFullInventoryWalk is a Go-level option no registered composition passes). A channel stored above group ten is simply not listed here, so its absence from the grid is not evidence that the radio's channel is empty; and a write to a slot the bounded walk never visited is refused rather than sent if the radio's own pre-write read finds a record already there. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
+		ProbeFirmwareNote:   "Firmware version has no CI-V query — check the radio's display. No minimum version is established for the IC-705: this build knows of none to require. This driver talks only to CI-V address A4h, with no --civ-address option to change it and no way to detect a radio set to a different address; and its default baud of 19200, along with the whole six-rate list it is chosen from, is ASSUMED — this radio's CI-V Reference Guide prints no baud information for the CI-V port at all, and the one related fact admitted from the Basic Manual is a negative: the microUSB CI-V port is baud-agnostic, which lowers the cost of a wrong guess without being evidence of one. Opening this radio also discovers its MEM bank's occupied slots by a BOUNDED walk — the first ten display groups, G01 through G10, each in full — not the whole 100-group by 100-channel space: the radio's own front panel fills groups from the bottom and its ASSUMED budget is 500 channels against 10,000 addresses, so a user whose memories sit above group ten needs the fuller walk, and nothing on this build's command line or in its window offers it (the driver's own WithFullInventoryWalk is a Go-level option no registered composition passes). A channel stored above group ten is simply not listed here, so its absence from the grid is not evidence that the radio's channel is empty; and a write to a slot the bounded walk never visited is refused rather than sent if the radio's own pre-write read finds a record already there. If nothing answers, check the radio's address and speed before assuming the port is wrong.",
 	}
 
 	got, ok := radiotext.For("IC-705")
@@ -1326,6 +1326,14 @@ func TestRadiotext_ICR8600Verbatim(t *testing.T) {
 // test fails the build if the write-refusal text carries the struck
 // phrase "no setting that widens it", because icr8600.go:34 exports
 // WithFullInventoryWalk and the phrase claims no setting exists at all.
+//
+// THE PIN FORBIDS THE STEM, "no setting that widens", NOT ONLY THE EXACT
+// PHRASE (side lanes fix round 1, review icom-minors-review-opus.md
+// LOW-2): a literal match on "no setting that widens it" let the IC-705's
+// own write refusal (ic705/write.go:343, "no setting that widens the
+// walk") say the identical false thing and walk straight past this test,
+// because the tail word differed. The stem catches that variant and any
+// future "no option that widens it" too.
 // The probe note tells the same bounded-walk story and is held to the
 // same honesty rule, so it is pinned here too, independently of the
 // verbatim comparisons above (which would also catch a regression, but
@@ -1349,7 +1357,7 @@ func TestRadiotext_ProbeNote_DoesNotOverstateTheWalkBound(t *testing.T) {
 			if !ok {
 				t.Fatalf("For(%q) ok = false, want true — the model is registered in internal/wiring, so it must have prose", model)
 			}
-			if strings.Contains(got.ProbeFirmwareNote, "no setting that widens it") {
+			if strings.Contains(got.ProbeFirmwareNote, "no setting that widens") {
 				t.Errorf("ProbeFirmwareNote still claims no setting widens the walk, which this model's own WithFullInventoryWalk export falsifies: %q", got.ProbeFirmwareNote)
 			}
 			for _, want := range []string{
