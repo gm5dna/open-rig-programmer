@@ -1,0 +1,62 @@
+menu_number,name,digits,text
+000,Display brightness,1,0
+001,Key illumination,1,0
+002,Auto Mode operation,1,0
+003,Tuning control adjustment rate,1,0
+004,Tuning with Tuning control in FM mode,1,0
+005,Rounds off VFO frequencies changed by using the MULTI control,1,0
+006,9 kHz frequency step size for the MULTI control in AM mode on the AM broadcast band,1,0
+007,Tunable (ON) or fixed (OFF) memory channel frequencies,1,0
+008,Program scan partially slowed,1,0
+009,Slow down frequency range for the Program scan,1,0
+010,Program scan hold,1,0
+011,Scan resume method,1,0
+012,Beep output level,1,0
+013,TX sidetone volume,1,0
+014,VGS-1 message playback volume,1,0
+015,VGS-1 announcement volume,1,0
+016,VGS-1 announcement speed,1,0
+017,Use CW IF filter for SSB reception,1,0
+018,DSP RX equalizer,1,0
+019,DSP TX equalizer,1,0
+020,DSP TX filter bandwidth for SSB or AM,1,0
+021,Fine transmission power tuning,1,0
+022,Time-out timer,1,0
+023,Transverter frequency display,1,0
+024,Output power adjustment for Transverter,1,0
+025,TX hold when AT completes the tuning,1,0
+026,In-line AT while receiving,1,0
+027,Control method for the external AT,1,0
+028,Linear amplifier control delay for HF band,1,0
+029,Linear amplifier control delay for 50 MHz band,1,0
+030,Constant recording,1,0
+031,Repeat the playback,1,0
+032,Interval time for repeating the playback,2,0
+033,Keying priority over playback,1,0
+034,CW RX pitch/ TX sidetone frequency,2,0
+035,"CW keying dot, dash weight ratio",2,0
+036,Reverse CW keying auto weight ratio,1,0
+037,Bug key function,1,0
+038,Swap dot and dash paddle position,1,0
+039,Auto CW TX in SSB mode,1,0
+040,Frequency correction for changing SSB to CW,1,0
+041,FSK shift,1,0
+042,FSK keying polarity,1,0
+043,FSK tone frequency,1,0
+044,Mic gain for FM,1,0
+045,Filter bandwidth for Data communications,1,0
+046,AF input level for Data communications,1,0
+047,AF output level for Data communications,1,0
+048,Remote Control panel PF key,2,1
+049,Microphone PF1 key,2,1
+050,Microphone PF2 key,2,1
+051,Microphone PF3 key,2,1
+052,Microphone PF4 key,2,1
+053,Split frequency transfer in master/ slave operation,1,0
+054,Permit to write the transferred Split frequencies to the target VFOs,1,0
+055,TX inhibit,1,0
+056,COM port communication speed,1,0
+057,DTS polarity,1,0
+058,Busy lockout (TX),1,0
+059,APO (Auto Power Off) function,1,0
+060,Transmit with the audio input on the DATA terminal,1,0

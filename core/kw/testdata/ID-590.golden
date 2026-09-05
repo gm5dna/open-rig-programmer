@@ -1,0 +1,50 @@
+# Command: ID (Read and Answer frames)
+# Radio: Kenwood TS-590S / TS-590SG
+# Title (cover, verbatim): "TS-590S TS-590SG / PC CONTROL COMMAND / Reference Guide"
+# Printed revision: NONE printed; cover carries "JVCKENWOOD Corporation" and
+#   "January/30/2019".
+# Source page: printed folio "- 13 -"  ==  PDF page 14 of 35
+# Charts used: the Read and Answer charts of the ID block (the block prints NO Set
+#   chart at all - the row is absent, not empty)
+# Derivation date: 05/09/2026
+# NO code, no generator, no other file and no other document was consulted.
+#
+# COUNTED FRAME LENGTHS (two independent counts of the printed numbered ruler):
+#   ID Read   = 3 positions
+#   ID Answer = 6 positions
+#
+# CHARTS, position by position:
+#   Read:    1 I  2 D  3 ;                          (4..10 empty)
+#   Answer:  1 I  2 D  3 P1  4 P1  5 P1  6 ;        (7..10 empty)
+#
+# Field map:
+#   pos 1-2  "ID"
+#   pos 3-5  P1  (three characters)
+#   pos 6    ";"
+#
+# ---------------------------------------------------------------------------
+# ID LEGEND, VERBATIM (every model/number pair printed; the complete right-hand
+# column, "[TS-590S / TS-590SG common]" / "Parameters:"):
+#
+#   P1
+#     021:  TS-590S
+#     023:  TS-590SG
+#
+#   (Two pairs, and only two.  No 022 and no other value is printed.
+#    The block's one-line description reads "Reads the transceiver ID number.")
+#
+# POSITIONS THE CHART PRINTS AS FIXED / "Always": NONE in the ID block.
+#
+# ---------------------------------------------------------------------------
+# BYTES WHOSE VALUE THE MANUAL DOES NOT DETERMINE  -> INHERITED-ASSUMED
+#   NONE.  Every byte of both frames below is determined by the printed chart and
+#   the printed legend.
+#
+# Hardware status: UNVERIFIED for every vector in this file.
+#
+# ---------------------------------------------------------------------------
+# VECTORS  (name <TAB> frame bytes verbatim)
+#
+id590_read	ID;
+id590_answer_ts590s	ID021;
+id590_answer_ts590sg	ID023;
