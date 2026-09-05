@@ -473,7 +473,16 @@
 		}
 		const next = /** @type {Record<string, any>} */ (parsed.patch)[tier.key]
 		const current = tierField(tier, data)
-		if (current?.state === 'known' && current.value === next.value) return cancelEditor() // unchanged
+		// A Known field with no `value` key is Known ZERO on the numeric
+		// kinds — the same normalisation tierEditText opens the editor
+		// with (fix round 1, MED-1) — so an untouched commit of such a
+		// cell must compare against the SAME zero, or this skip misses and
+		// sends a redundant UpdateChannel that marks the working copy
+		// dirty for nothing (app/codeplug.go's applyEditsLocked sets dirty
+		// unconditionally). Fix round 2, MED-3.
+		const currentValue =
+			current?.value === undefined && (tier.kind === 'freq' || tier.kind === 'int') ? 0 : current?.value
+		if (current?.state === 'known' && currentValue === next.value) return cancelEditor() // unchanged
 		submitEdit(sv.Slot, (fresh) => ({ ...cloneData(fresh ?? data), [tier.key]: next }))
 	}
 
