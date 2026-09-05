@@ -116,16 +116,23 @@ const (
 	// one component further down.
 	//
 	// P1's WIDTH AND DOMAIN ARE A PER-FORM FACT, owned by the arms that
-	// implement the form and not by this constant: parseRecord's 0..99
-	// component cap (TestParseCSV_AddressSingleP1DomainIs0To99 pins it as
-	// this form's bound), ParseObservedCSV's exactly-two-digits column
-	// check, and RenderGo's "%02d" observation key. The last two are the
-	// two sides of one join and agree only while the domain is two digits,
-	// so a radio whose single menu number runs wider widens them together;
-	// widening one side alone makes every observation miss, on a complete
-	// CSV, silently. Recorded at the Stage 0 close, when no registration
-	// carried this form yet and neither observation path could run on a
-	// Single row.
+	// implement the form and not by this constant: parseRecord's 0..999
+	// domain check (TestParseCSV_AddressSingleP1DomainIs0To999 pins it, and
+	// TestParseCSV_TheOtherFormsKeepTheTwoDigitDomain pins that the other
+	// two forms keep 0..99), ParseObservedCSV's exactly-three-digits column
+	// check, and RenderGo's "%03d" observation key. The last two are the two
+	// sides of one join and agree only while both render the same width, so
+	// they widen together; widening one side alone makes every observation
+	// miss, on a complete CSV, silently.
+	//
+	// The domain WAS 0..99, a package-wide cap that sat above the form
+	// switch, and the FT-991A milestone widened it: that radio's chart is
+	// "P1 : 001 - 153" over 153 contiguous rows, so 54 of them were
+	// untranscribable and the generator would have failed on row 100. The
+	// Kenwood charts that first carried this form stop at 099 and are
+	// unaffected — 0..99 is a subset of 0..999 — but their observation KEY
+	// moved from "08" to "008" with the rest, which is the half a "wider
+	// domain is a superset" argument does not cover.
 	AddressSingle
 )
 
