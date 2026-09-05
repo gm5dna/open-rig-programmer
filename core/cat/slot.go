@@ -2,7 +2,10 @@
 
 package cat
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Slot is a CAT slot code (the P1/P0 field used by MR/MW/MT/MC): a memory
 // channel, a PMS pair, a 60m channel, the Alaska emergency channel, or the
@@ -290,4 +293,133 @@ func (d Dialect) readableSlot(s Slot) bool {
 func (d Dialect) writableSlot(s Slot) bool {
 	kind := d.classifySlot(s.wire)
 	return kind == slotKindMemory || kind == slotKindPMS
+}
+
+// --- The slot-domain refusal sentences (S0.2) ---
+//
+// MW's and MT's slot refusals name the domains they will accept and the
+// banks they will not. Until the FT-991A both were LITERALS: "001-099",
+// "P1L-P9U" and "5xx/EMG" on every dialect. All three are false on a
+// numeric-PMS radio with neither special bank — and a support diagnostic
+// quoting them would tell that radio's owner it has banks awaiting hardware
+// verification that it does not have at all.
+//
+// So the sentences are COMPOSED from this dialect's own slot space, by the
+// three helpers below. THE FOUR TOKEN DIALECTS' RENDERS ARE BYTE-IDENTICAL
+// TO THE LITERALS THEY REPLACE — all four declare memory 001-099, nine
+// token pairs, a 5 MHz bank and an emergency channel — so
+// core/cat/testdata/frame-corpus.golden does not move, which is what makes
+// this change permitted at all (see validateMWFields' own note).
+// TestSlotDomainText_FT710SentencesAreByteIdentical holds it directly.
+
+// memoryDomainText renders this dialect's memory range as the refusal
+// sentences print it, or "" if it has no memory bank at all.
+func (d Dialect) memoryDomainText() string {
+	if d.slots.memoryHi == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%03d-%03d", d.slots.memoryLo, d.slots.memoryHi)
+}
+
+// pmsDomainText renders this dialect's PMS domain IN THE FORM IT DECLARES —
+// "P1L-P9U" under PMSFormToken, the decimal range under PMSFormNumeric — or
+// "" if it has no pairs.
+//
+// The pair count comes from pmsCap() and the numeric bounds from
+// numericPMSRange(), which are the same two sources PMSSlot and
+// classifySlot consult, so the sentence cannot describe a domain different
+// from the one this dialect actually builds and accepts.
+func (d Dialect) pmsDomainText() string {
+	pc := d.pmsCap()
+	if pc <= 0 {
+		return ""
+	}
+	if lo, hi, ok := d.numericPMSRange(); ok {
+		return fmt.Sprintf("%03d-%03d", lo, hi)
+	}
+	return fmt.Sprintf("P1L-P%dU", pc)
+}
+
+// specialBankText names the special banks THIS DIALECT DECLARES — the 5 MHz
+// bank only when it has one, the emergency channel only when it has one,
+// and "" when it has neither.
+//
+// IT DERIVES FROM THE DECLARED BANKS, NOT FROM THE PMS FORM. The two
+// questions give the same answer on all four dialects registered today,
+// which is exactly why the choice has to be made deliberately: a future
+// token-PMS radio without a 5 MHz bank must not inherit the FT-710's
+// sentence, and a bank is consulted from the same place as its datum.
+//
+// "5xx" is the reference's own shorthand, and it is derived rather than
+// assumed: a bank that did not sit inside one hundred-block could not
+// honestly be spelled that way, so it is written out instead.
+// TestSpecialBankText_DerivesFromTheDECLAREDBanks holds both arms.
+func (d Dialect) specialBankText() string {
+	var banks []string
+	if d.slots.sixtyHi > 0 {
+		if d.slots.sixtyLo/100 == d.slots.sixtyHi/100 {
+			banks = append(banks, fmt.Sprintf("%dxx", d.slots.sixtyLo/100))
+		} else {
+			banks = append(banks, fmt.Sprintf("%03d-%03d", d.slots.sixtyLo, d.slots.sixtyHi))
+		}
+	}
+	if d.slots.emgWire != "" {
+		banks = append(banks, "EMG")
+	}
+	return strings.Join(banks, "/")
+}
+
+// writableDomainsText joins the memory and PMS domains in the shape one of
+// the two sentences prints them: MW writes "memory 001-099 or PMS P1L-P9U",
+// MT parenthesises each domain. Only the domains this dialect HAS appear.
+func (d Dialect) writableDomainsText(parenthesised bool) string {
+	wrap := func(s string) string {
+		if parenthesised {
+			return "(" + s + ")"
+		}
+		return s
+	}
+	var parts []string
+	if mem := d.memoryDomainText(); mem != "" {
+		parts = append(parts, "memory "+wrap(mem))
+	}
+	if pms := d.pmsDomainText(); pms != "" {
+		parts = append(parts, "PMS "+wrap(pms))
+	}
+	if len(parts) == 0 {
+		// Unreachable for any registered dialect, and stated rather than
+		// left to render as an empty string: a dialect with neither bank
+		// can write nothing at all, and the refusal should say so.
+		return "no writable slot"
+	}
+	return strings.Join(parts, " or ")
+}
+
+// mwSlotDomainRefusal is validateMWFields' slot sentence, composed.
+//
+// THE WORDING IS FROZEN and still says "Writable()" although M9d removed
+// that method — see validateMWFields, which explains why and where the
+// bytes are pinned.
+func (d Dialect) mwSlotDomainRefusal() string {
+	rejected := `"000"`
+	if banks := d.specialBankText(); banks != "" {
+		rejected = banks + `/` + rejected
+	}
+	return fmt.Sprintf("MW: slot must be Writable() (%s; %s rejected)", d.writableDomainsText(false), rejected)
+}
+
+// mtSlotDomainRefusal is the MT Set's slot sentence, composed, and it is
+// ONE function because BuildMTSet (short form) and validateCombinedMTFields
+// (combined form) refuse in identical words. They carried the same literal
+// twice until S0.2; two copies of a sentence that must agree is the drift
+// this package keeps paying for.
+//
+// The M5a policy clause appears only when this dialect HAS the banks that
+// policy governs. Where it does, the citation is unchanged.
+func (d Dialect) mtSlotDomainRefusal() string {
+	policy := ""
+	if banks := d.specialBankText(); banks != "" {
+		policy = banks + " rejected by project policy pending M5a, "
+	}
+	return fmt.Sprintf("MT: slot must be %s; %s\"000\"/invalid rejected per reference", d.writableDomainsText(true), policy)
 }
