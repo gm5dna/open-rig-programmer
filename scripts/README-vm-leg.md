@@ -11,11 +11,11 @@ it finishes; read this BEFORE running it, not after — several of the
 steps below have to happen first, and the two writes below it are
 never made by that script.
 
-Full detail lives in
-`docs/superpowers/specs/2026-09-04-windows-packaging-design.md`'s
-"Verification bar" and "Register" sections; this file is the
-step-by-step version to follow on the day, in the spec's order.
-Evidence (script output, screenshots) goes to
+Full detail lives in this project's internal design record's
+Verification bar and Register sections (register entries cited by name
+below — W1, W2, W3, W4, W6, W9, W13); this file is the step-by-step
+version to follow on the day, in the same order. Evidence (script
+output, screenshots) goes to
 `.superpowers/sdd/2026-09-04-windows/evidence/`.
 
 ## Safety preamble (read this every time, not just the first)
@@ -100,10 +100,11 @@ preamble"):
    `baseline.json` and confirm M-96's `data` field is **non-null**
    (populated). This matters because the restoration write in step 6
    sends M-96's ENTIRE baseline back, and the FT-710 has no CAT erase:
-   restoring an EMPTY baseline slot is a `DiffErased`, which this
-   project's send path always Blocks rather than sends — the
-   restoration would fail by design, not by accident. **If M-96 is
-   empty**, do not use it: pick another POPULATED slot Stuart names
+   restoring an EMPTY baseline slot is a `DiffErased`, which
+   `codeplug.Diff`'s own erase gate (`core/codeplug/diff.go:777`, the
+   `kind == DiffErased` branch) always marks Blocked rather than sends
+   — the restoration would fail by design, not by accident. **If M-96
+   is empty**, do not use it: pick another POPULATED slot Stuart names
    instead, and CHANGE one of its existing fields (e.g. its tag) for
    the trial edit — never create a channel in an empty one.
 5. **GUI: the trial edit.**
