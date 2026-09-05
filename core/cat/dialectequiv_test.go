@@ -291,7 +291,7 @@ func TestNewDialect_DerivedEXIndicesMatchRecomputation(t *testing.T) {
 	for p1 := 0; p1 <= 9; p1++ {
 		for p2 := 0; p2 <= 20; p2++ {
 			for p3 := 0; p3 <= 25; p3++ {
-				a := EXAddress{P1: uint8(p1), P2: uint8(p2), P3: uint8(p3)}
+				a := EXAddress{P1: uint16(p1), P2: uint16(p2), P3: uint16(p3)}
 				want := inInventory[a]
 				swept++
 				if want {

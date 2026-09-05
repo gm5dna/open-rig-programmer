@@ -26,6 +26,7 @@ func TestEXAddressForm_String(t *testing.T) {
 	}{
 		{EXAddressTriple, "EXAddressTriple"},
 		{EXAddressPair, "EXAddressPair"},
+		{EXAddressSingle, "EXAddressSingle"},
 		{EXAddressForm(0), "EXAddressForm(0)"},
 		{EXAddressForm(99), "EXAddressForm(99)"},
 	} {
@@ -36,9 +37,10 @@ func TestEXAddressForm_String(t *testing.T) {
 }
 
 // TestWireEXAddress_RendersPerForm is the whole seam in one assertion: the
-// SAME address becomes six digits under one form and four under the other,
-// and the four-digit render drops P3 — which is safe only because V12 has
-// already required every Pair member's P3 to be zero.
+// SAME address becomes six digits under one form, four under another and
+// three under the third, and the narrower renders drop P3 (Pair) or P2 and
+// P3 (Single) — which is safe only because V12 has already required those
+// components to be zero under the form that drops them.
 //
 // The formless case renders "" deliberately. A dialect that never declared
 // a form has no wire address; NewDialect refuses to build one (V12), so the
@@ -57,6 +59,8 @@ func TestWireEXAddress_RendersPerForm(t *testing.T) {
 		{"triple zero value", EXAddressTriple, EXAddress{}, "000000"},
 		{"pair 8,3,0", EXAddressPair, EXAddress{P1: 8, P2: 3, P3: 0}, "0803"},
 		{"pair 1,2,3 drops P3", EXAddressPair, EXAddress{P1: 1, P2: 2, P3: 3}, "0102"},
+		{"single 153", EXAddressSingle, EXAddress{P1: 153}, "153"},
+		{"single 1,2,3 drops P2 and P3", EXAddressSingle, EXAddress{P1: 1, P2: 2, P3: 3}, "001"},
 		{"formless renders nothing", EXAddressForm(0), EXAddress{P1: 1, P2: 2, P3: 3}, ""},
 	} {
 		if got := wireEXAddress(tc.form, tc.addr); got != tc.want {
@@ -259,11 +263,19 @@ func TestValidateEXItems_TripleErrorTextIsByteIdentical(t *testing.T) {
 	}
 }
 
-// TestParseEXAddress_RefusalTextNamesTheFormsWidthInWords pins both
-// spellings. "six" is the shipped text — parser-corpus.golden line 145
-// carries it verbatim — and "four" is its Pair counterpart. Two literals
-// selected by form rather than one composed from a number, because the
-// shipped one has to survive byte for byte.
+// TestParseEXAddress_RefusalTextNamesTheFormsWidthInWords pins all three
+// forms' spellings — six sentences now, having been four.
+//
+// What the GOLDEN pins is ONE of them: parser-corpus.golden line 145 carries
+// "EX address must be exactly six digits" verbatim and nothing else from this
+// function. "six ASCII digits", "exactly four digits", "four ASCII digits"
+// and now the two "three" sentences are pinned by THIS TEST ALONE, which is
+// a weaker guarantee than a golden and is worth saying out loud: an
+// implementer widening this table is editing the only thing that holds five
+// of the six.
+//
+// Three literals selected by form rather than one composed from a number,
+// because the shipped one has to survive byte for byte.
 func TestParseEXAddress_RefusalTextNamesTheFormsWidthInWords(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -275,6 +287,8 @@ func TestParseEXAddress_RefusalTextNamesTheFormsWidthInWords(t *testing.T) {
 		{"Triple, non-digit", FT710, "01010X", []string{"six ASCII digits"}},
 		{"Pair, wrong length", pairDialect, "080", []string{"exactly four digits"}},
 		{"Pair, non-digit", pairDialect, "08X3", []string{"four ASCII digits"}},
+		{"Single, wrong length", singleDialect, "08", []string{"exactly three digits"}},
+		{"Single, non-digit", singleDialect, "0X1", []string{"three ASCII digits"}},
 		{"formless dialect refuses every field", Dialect{}, "010101", []string{"address"}},
 	} {
 		_, err := tc.d.ParseEXAddress(tc.wire)
