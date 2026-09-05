@@ -318,22 +318,25 @@ var tierRequestedFields = []struct {
 // exchange, so the lock buys nothing for the write considered alone — and on
 // this radio the READ is one exchange too, so there is no cross-check for a
 // write to land inside, which is the FT-891's reason and is not available
-// here. TODAY, WITH EVERY OPERATION THIS SESSION PERFORMS BEING A SINGLE
-// EXCHANGE, the engine's own per-exchange serialisation already keeps a
-// write's and a read's frames from interleaving, so opMu buys this method
-// nothing that the engine does not already give it. It is taken even before
-// the refusal checks, since a refused write returns without wire traffic
-// either way.
+// here. It is taken even before the refusal checks, since a refused write
+// returns without wire traffic either way.
 //
-// WHAT THE LOCK IS FOR IS TASK 12's SETTINGS READ, a MULTI-exchange operation
-// this session does not yet have. Once it lands, a write racing a settings
-// read could otherwise put its one MT Set frame between two frames of the
-// settings read's own exchange — a DRIVER OPERATION interleaving the engine's
-// per-exchange serialisation cannot prevent, because it only serialises one
-// exchange at a time. TASK 12 MUST PIN THIS: park the settings read inside
-// opMu via a gap hook that lets a test attempt a concurrent WriteChannel
-// mid-sequence, and assert that no MT Set frame reaches the wire until the
-// settings operation completes.
+// WHAT THE LOCK IS FOR IS THE SETTINGS READ (settings.go), AND IT IS NOW
+// PINNED. Every operation this session performs is a single
+// transport.Engine.Do — that method holds the engine's own mutex for its
+// whole body, retries included — so the engine alone would keep any two
+// operations' FRAMES from interleaving, and until settings.go landed no test
+// could tell this lock's presence from its absence (the task 11 review
+// deleted it and the whole package stayed green under -race). opMu's claim is
+// the larger one: that a whole DRIVER OPERATION excludes another, including
+// any work the operation does outside its Do call.
+// TestReadSetting_HoldsOpMuAgainstAConcurrentWrite constructs exactly that —
+// a settings read parked inside opMu through settings.go's
+// readSettingGapHook, with a concurrent WriteChannel attempted — and asserts
+// that no MT Set frame reaches the wire until the settings operation
+// completes. IT IS RED ON THE DELETION OF EITHER LOCK, this method's or
+// ReadSetting's, which is what makes it this method's pin and not only that
+// one's.
 //
 // IT IS NOT HELD ACROSS WRITE-THEN-VERIFY: that pair is core/clone's, as the
 // driver interface assigns it.

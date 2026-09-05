@@ -130,9 +130,11 @@
 // serialises each individual exchange, so one MT read needs no lock of its
 // own — but opMu guards a whole DRIVER OPERATION (spec erratum S-E4, matrix
 // M-E2), and this session has more than one kind: a read, a write (write.go)
-// and a settings read (task 12) must not interleave their frames. The
+// and a settings read (settings.go) must not interleave their frames. The
 // concurrency pin is that two racing ReadChannels cannot interleave two MT
-// frames. IT IS NOT HELD ACROSS WRITE-THEN-VERIFY: that pair belongs to
+// frames; the pin of the LOCK is settings.go's readSettingGapHook, which is
+// what makes opMu's exclusion observable at all on a session whose every
+// operation is a single engine-serialised exchange. IT IS NOT HELD ACROSS WRITE-THEN-VERIFY: that pair belongs to
 // core/clone, as the driver interface assigns it, and holding a driver lock
 // across it would serialise two operations the seam deliberately keeps
 // separate.
@@ -281,10 +283,9 @@
 // reading the dialect's own doc.go rather than trusting a transcription.
 // ALL ELEVEN are reached by this package, which is a consequence of the
 // register being shared rather than of this radio being better understood.
-// One of the eleven is reached FORWARD rather than by code standing today —
-// ROW 087 RADIO ID'S EXCLUSION, whose site is the settings descriptor task
-// 12 has yet to write — and it is named here so the count is not read as
-// eleven live dependence sites:
+// Every one of the eleven now has a dependence site in code standing today:
+// the last to arrive was ROW 087 RADIO ID'S EXCLUSION, whose site is
+// settings.go's descriptor:
 //
 //   - MTPolicy.TagFill = ' ' — caps.go's TagLen (a width is evidenced, a
 //     fill is not), read.go, where the answer's tag field is trimmed back
@@ -316,9 +317,11 @@
 //   - THE DCS STATES' SET ACCEPTANCE — caps.go's ctcssStates, which
 //     publishes all five P8 values as writable, and write.go's ctcssByName
 //     and buildWriteCommand, which may put '3' or '4' on the wire.
-//   - ROW 087 RADIO ID'S EXCLUSION — the settings descriptor (task 12),
+//   - ROW 087 RADIO ID'S EXCLUSION — settings.go's buildSettingsDescriptor,
 //     whose item count is the dialect's inventory: 152 items for a chart
-//     printing 153 rows.
+//     printing 153 rows, and ReadSetting, which refuses "087" with zero
+//     frames sent. This is the site that makes the exclusion USER-VISIBLE,
+//     because the descriptor's count is what a viewer shows.
 //   - FRAMING: 8 DATA BITS, NO PARITY, TWO STOP BITS — reached BY ABSENCE:
 //     this package declares no driver.SerialFramingReporter, so every
 //     session opens at core/transport's DefaultStopBits.
