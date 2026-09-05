@@ -453,6 +453,118 @@ func TestBuildMWSet_TheAxisRefusalsRunInTheBUILDDirectionToo(t *testing.T) {
 	}
 }
 
+// TestSlotWire_HasNoPermissiveDefaultAndNoSilentTruncation.
+//
+// slotWire is the last site in this package to read a layout axis, and it is
+// reached only behind Configured(); that is exactly what the FT-891 Stage 0
+// site had going for it too. A ZERO LAYOUT FAILS CLOSED (layout.go), so an
+// unset byte-4 policy must refuse rather than emit three digits on behalf of
+// no radio.
+//
+// The ceiling arm is an ASSERTION rather than the mechanism: NewLayout now
+// refuses P2FixedZero alongside any slot above 99 (480:953 against 480:955),
+// so no layout this package mints can reach it. It is pinned here because a
+// Slot is a value that may have been minted anywhere, and the failure it
+// guards is a frame that names a DIFFERENT channel and reports success.
+func TestSlotWire_HasNoPermissiveDefaultAndNoSilentTruncation(t *testing.T) {
+	// The zero Layout: byte 4's policy is unset and no byte may be emitted.
+	var zero Layout
+	if got, err := zero.slotWire(Slot{number: 7, class: SlotMemory}); err == nil {
+		t.Errorf("a zero Layout rendered byte 4 as %q; an unset axis must refuse, never default", got)
+	}
+
+	// A slot above the two-digit ceiling handed to a fixed-zero row. The
+	// truncating form emitted "003" for channel 103 and returned success.
+	if got, err := layout480().slotWire(Slot{number: 103, class: SlotMemory}); err == nil {
+		t.Errorf("the TS-480 rendered slot 103 as %q; byte 4 is \"Always 0\" there (480:953) and P3 holds \"00 ~ 99\" (480:955), so there is no channel 103 to name", got)
+	}
+
+	// Both policies still render what their books print.
+	for _, tt := range []struct {
+		name   string
+		layout Layout
+		number int
+		want   string
+	}{
+		{"the TS-480's fixed zero below 100", layout480(), 7, "007"},
+		{"the 590 pair's hundreds digit below 100", layout590SG(), 7, "007"},
+		{"the 590 pair's hundreds digit above 99", layout590SG(), 103, "103"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.layout.slotWire(Slot{number: tt.number, class: SlotMemory})
+			if err != nil {
+				t.Fatalf("slotWire = %v, want nil", err)
+			}
+			if got != tt.want {
+				t.Errorf("slotWire = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestCheckSlot_RefusesASlotWhoseCLASSDisagreesWithThisLayout is the arm the
+// two foreign-slot tests above cannot reach: slot 115 is outside the 480's
+// and the 590S's spaces ENTIRELY, so both stop at the earlier
+// SlotClassInvalid arm. The arm that matters is a slot number legal on both
+// rows that resolves to a DIFFERENT class on each — the shape a TS-590SG
+// section channel takes when it is handed to a row whose 103 is an ordinary
+// memory.
+//
+// No layout in this tree resolves 103 to SlotMemory: the three fixtures
+// happen to agree on 0-99 MEM and 100-109 SCAN. So the witness is an
+// in-package Slot literal, which is precisely the value another radio's
+// layout would mint and precisely what checkSlot exists to catch — "trusting
+// the class the value carries would let a frame legal only on another radio
+// out of this builder" (builders.go). A fourth fixture layout would be a row
+// no book prints, which testlayouts_test.go must not carry.
+func TestCheckSlot_RefusesASlotWhoseCLASSDisagreesWithThisLayout(t *testing.T) {
+	l := layout590SG()
+	for _, tt := range []struct {
+		name string
+		slot Slot
+		want string
+	}{
+		{
+			// THE ESCAPE. Neither half arm below can see this one — the
+			// carried class is not SlotScan and the slot names no half — so
+			// without the class arm checkSlot returns nil and a frame legal
+			// only on another radio leaves this builder.
+			"an ordinary memory number carrying another row's EXTENSION class",
+			Slot{number: 7, class: SlotExtension},
+			"resolved against another layout",
+		},
+		{
+			"a section channel's number carrying another row's MEMORY class",
+			Slot{number: 103, class: SlotMemory},
+			"resolved against another layout",
+		},
+		{
+			"a section channel with no half named",
+			Slot{number: 103, class: SlotScan},
+			"which of its two frequencies",
+		},
+		{
+			"an ordinary memory slot carrying a half",
+			Slot{number: 7, class: SlotMemory, half: ScanUpper},
+			"no half to name",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := l.checkSlot("MW set", tt.slot); err == nil {
+				t.Fatalf("checkSlot accepted %v carrying %v", tt.slot, tt.slot.class)
+			} else if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("refusal = %q, want it to say %q", err, tt.want)
+			}
+			if _, err := l.BuildMWSet(populatedRecord(tt.slot)); err == nil {
+				t.Error("BuildMWSet built a frame for it")
+			}
+			if _, err := l.BuildMRRead(tt.slot); err == nil {
+				t.Error("BuildMRRead built a frame for it")
+			}
+		})
+	}
+}
+
 // TestBuildMRRead_RefusesASlotFromAnotherLayoutAndAnUnresolvedOne: the read
 // side re-resolves the slot against ITS OWN receiver exactly as the write
 // side does, because a Slot is a value and may have been minted anywhere.

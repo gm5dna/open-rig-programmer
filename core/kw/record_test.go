@@ -127,10 +127,7 @@ func TestParseMRAnswer_AnEmptyChannelIsNeverRefused(t *testing.T) {
 		layout Layout
 	}{{"TS-590SG", layout590SG()}, {"TS-480", layout480()}} {
 		t.Run(tt.name, func(t *testing.T) {
-			f := answer590()
-			f.p4, f.p5, f.p6, f.p7 = "00000000000", "0", "0", "0"
-			f.p8, f.p9, f.p11, f.p14, f.p15 = "00", "00", "0", "00", "0"
-			f.p16 = "        "
+			f := emptyWindow()
 
 			rec, err := tt.layout.ParseMRAnswer(f.frame(t))
 			if err != nil {
@@ -144,6 +141,117 @@ func TestParseMRAnswer_AnEmptyChannelIsNeverRefused(t *testing.T) {
 			}
 			if rec.Slot.Number() != 7 {
 				t.Errorf("Slot = %v, want 007 — the slot is outside the empty window and is still decoded", rec.Slot)
+			}
+		})
+	}
+}
+
+// emptyWindow zeroes P4-P15 and blanks P16, which is the empty channel of
+// 590:1492-1493 (A18a). The tests below start from it and put ONE byte of
+// the window back, which is what separates "the whole window is zero" from
+// "P5 is zero".
+func emptyWindow() recordFields {
+	f := answer590()
+	f.p4, f.p5, f.p6, f.p7 = "00000000000", "0", "0", "0"
+	f.p8, f.p9, f.p11, f.p14, f.p15 = "00", "00", "0", "00", "0"
+	f.p16 = "        "
+	return f
+}
+
+// TestParseMRAnswer_TheEmptyWindowIsTheWholeRangeAndNotP5Alone is the OTHER
+// direction of A18a, and it is the dangerous one.
+//
+// 590:1492-1493 says "If the selected channel is empty, P4 ~ P15 will be 0
+// and P16 will be blank", and plan P15 states the rule as the whole range,
+// never "P5 is zero". A predicate that tested the mode nibble alone would
+// satisfy TestParseMRAnswer_AnEmptyChannelIsNeverRefused identically — that
+// frame zeroes the whole window — and would then report EVERY answer whose
+// P5 is '0' as an empty channel, whatever P4-P15 held. A record with a live
+// frequency, name, tone indices and lockout would be returned with
+// Empty = true and its content silently discarded on the READ path, which a
+// downstream cannot detect because Record.Empty is exactly the flag it is
+// told to trust. That is the data-loss class decision 11 and M9 exist to
+// prevent, arriving through the one predicate that decides whether any
+// field is read at all.
+//
+// The two cases are the two ways the window can be got wrong: a live byte
+// BELOW P5 (a P5-only predicate calls it empty) and a live byte at the
+// window's far end (a predicate that stopped before P15 calls it empty).
+func TestParseMRAnswer_TheEmptyWindowIsTheWholeRangeAndNotP5Alone(t *testing.T) {
+	// A real 14.250 MHz channel whose mode nibble happens to be '0'. It is
+	// NOT the empty channel, and it is not interpretable either: P5 names no
+	// mode in any legend, so the frame is refused rather than read.
+	t.Run("a live frequency with a zero mode nibble", func(t *testing.T) {
+		for _, tt := range []struct {
+			name   string
+			layout Layout
+		}{{"TS-590SG", layout590SG()}, {"TS-480", layout480()}} {
+			t.Run(tt.name, func(t *testing.T) {
+				f := emptyWindow()
+				f.p4 = "00014250000"
+				rec, err := tt.layout.ParseMRAnswer(f.frame(t))
+				if err == nil {
+					t.Fatalf("ParseMRAnswer accepted a frame with a live P4 and P5='0': Empty = %v, FreqHz = %d — the empty-channel test is P4-P15, not P5 alone", rec.Empty, rec.FreqHz)
+				}
+				if !strings.Contains(err.Error(), "not all zero") {
+					t.Errorf("refusal = %q, want it to say a frame whose P4-P15 are not all zero is not the empty channel", err)
+				}
+			})
+		}
+	})
+
+	// The window's far end. P15 is the channel lockout on the 590 pair
+	// (590:1572-1574), so a lockout-ON byte is a live field inside the
+	// window and the frame is not the empty channel. The 480 is not run
+	// here: its P15 is a printed constant (480:982) and checkPrintedFixed
+	// refuses '1' there for a different reason entirely.
+	t.Run("the window zero except P15, the channel lockout", func(t *testing.T) {
+		for _, tt := range []struct {
+			name   string
+			layout Layout
+		}{{"TS-590SG", layout590SG()}, {"TS-590S", layout590S()}} {
+			t.Run(tt.name, func(t *testing.T) {
+				f := emptyWindow()
+				f.p15 = "1"
+				rec, err := tt.layout.ParseMRAnswer(f.frame(t))
+				if err == nil {
+					t.Fatalf("ParseMRAnswer accepted a frame whose P15 is '1': Empty = %v — position 41 is inside P4-P15 and a locked-out channel is not an empty one", rec.Empty)
+				}
+				if !strings.Contains(err.Error(), "not all zero") {
+					t.Errorf("refusal = %q, want it to say a frame whose P4-P15 are not all zero is not the empty channel", err)
+				}
+			})
+		}
+	})
+}
+
+// TestParseMRAnswer_RefusesAModeNibbleThisRowsLegendDoesNotName is the READ
+// direction of the per-layout MD legend, and it is why ParseMode is
+// membership against the receiver rather than a byte range (mode.go: "a
+// range check would pass every test in this tree while the per-layout seam
+// was fiction").
+//
+// Nibble '8' is "None (setting failure)" on the 590 pair (590:1362) and
+// "Tune (Not used for the TS-480)" on the 480 (480:853), so no legend names
+// it and no answer carrying it can be read as a mode. The BUILD direction is
+// pinned by TestBuildMWSet_RefusesTheModeNibblesThatNameNoMode; without this
+// pin a parser that dropped ParseMode's second return would carry Mode(0)
+// into a record and report success.
+func TestParseMRAnswer_RefusesAModeNibbleThisRowsLegendDoesNotName(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		layout Layout
+		fields recordFields
+	}{{"TS-590SG", layout590SG(), answer590()}, {"TS-480", layout480(), answer480()}} {
+		t.Run(tt.name, func(t *testing.T) {
+			f := tt.fields
+			f.p5 = "8"
+			rec, err := tt.layout.ParseMRAnswer(f.frame(t))
+			if err == nil {
+				t.Fatalf("ParseMRAnswer accepted P5='8': Mode = %v — neither book names that nibble as a mode a channel can be in", rec.Mode)
+			}
+			if !strings.Contains(err.Error(), "MD legend") {
+				t.Errorf("refusal = %q, want it to name the row's MD legend", err)
 			}
 		})
 	}

@@ -223,6 +223,60 @@ func TestNewLayout_RefusesOverlappingSlotRanges(t *testing.T) {
 	}
 }
 
+// TestNewLayout_RefusesAFixedZeroByte4AboveTheTwoDigitCeiling is the
+// cross-check between the P2 axis and the SLOT SPACE, and it is the one axis
+// where nothing else would catch a mis-mint.
+//
+// A row whose byte 4 is "Always 0 for the TS-480." (480:953) has no hundreds
+// digit to carry: its channel number is the two digits of P3, "00 ~ 99"
+// (480:955). A layout that declared P2FixedZero and then claimed slots above
+// 99 would ask slotWire to render a three-digit number into a field that
+// holds two, and the frame that came out would name a DIFFERENT channel and
+// be reported as Sent — the silent data loss decision 11 exists to prevent,
+// on the one byte the printed-fixed cross-check cannot see.
+//
+// The bound is consulted from the same place as its datum: 480:955 prints
+// the ceiling that 480:953 implies.
+func TestNewLayout_RefusesAFixedZeroByte4AboveTheTwoDigitCeiling(t *testing.T) {
+	fixedZero := func() LayoutConfig {
+		cfg := validLayoutConfig()
+		cfg.P2 = P2FixedZero
+		cfg.PrintedFixed = append(cfg.PrintedFixed, FixedField{Pos: 4, Printed: "0"})
+		return cfg
+	}
+
+	// The TS-480's own shape: a flat 00-99, which is what 480:955 prints.
+	ok := fixedZero()
+	ok.Slots = []SlotRange{{Class: SlotMemory, Lo: 0, Hi: 99}}
+	if _, err := NewLayout(ok); err != nil {
+		t.Fatalf("NewLayout refused a fixed-zero byte 4 over the flat 00-99 of 480:955: %v", err)
+	}
+
+	for _, tt := range []struct {
+		name  string
+		slots []SlotRange
+	}{
+		{"the 590 pair's section channels", []SlotRange{{Class: SlotMemory, Lo: 0, Hi: 99}, {Class: SlotScan, Lo: 100, Hi: 109}}},
+		{"one slot past the ceiling", []SlotRange{{Class: SlotMemory, Lo: 0, Hi: 100}}},
+		{"a range wholly above it", []SlotRange{{Class: SlotMemory, Lo: 0, Hi: 99}, {Class: SlotExtension, Lo: 110, Hi: 119}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := fixedZero()
+			cfg.Slots = tt.slots
+			l, err := NewLayout(cfg)
+			if err == nil {
+				t.Fatalf("NewLayout accepted a fixed-zero byte 4 alongside slots above 99: %v", l.slotSpaceText())
+			}
+			if !errors.Is(err, ErrLayoutInvalid) {
+				t.Errorf("errors.Is(err, ErrLayoutInvalid) = false for %v", err)
+			}
+			if !strings.Contains(err.Error(), "480:953") || !strings.Contains(err.Error(), "480:955") {
+				t.Errorf("refusal = %q, want it to cite both 480:953 (\"Always 0\") and 480:955 (\"00 ~ 99\")", err)
+			}
+		})
+	}
+}
+
 // TestLayout_AccessorsReturnIndependentCopies: a caller's mutation of what
 // it is handed must never become every session's layout.
 func TestLayout_AccessorsReturnIndependentCopies(t *testing.T) {

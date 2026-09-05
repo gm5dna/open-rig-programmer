@@ -474,6 +474,16 @@ func validateModeNames(cfg LayoutConfig) error {
 // one that matters: a number resolving to two classes would make the
 // P1-from-slot-class rule (M9) ambiguous, and the ambiguity would be
 // resolved by map iteration order.
+//
+// IT ALSO CROSS-CHECKS THE SLOT SPACE AGAINST THE P2 AXIS, which is the
+// third of the byte-4 cross-checks and the only one the printed-fixed set
+// cannot see. A row whose byte 4 is a printed constant has no hundreds digit
+// to carry and its channel number is P3's two digits alone; declaring slots
+// above 99 on such a row would ask slotWire to put three digits in a
+// two-digit field, and the frame that came out would name a DIFFERENT
+// channel and be reported as Sent. That is the failure class decision 11
+// exists to prevent, and NewLayout is where it is caught rather than at the
+// wire-rendering site, which has no error return to a user.
 func validateSlots(cfg LayoutConfig) error {
 	for _, r := range cfg.Slots {
 		switch r.Class {
@@ -483,6 +493,9 @@ func validateSlots(cfg LayoutConfig) error {
 		}
 		if r.Lo < 0 || r.Hi < r.Lo || r.Hi > maxSlotNumber {
 			return fmt.Errorf("%w (%s): slot range %d-%d is not inside 0-%d, the three digits P2 and P3 carry", ErrLayoutInvalid, cfg.Model, r.Lo, r.Hi, maxSlotNumber)
+		}
+		if cfg.P2 == P2FixedZero && r.Hi > maxFixedZeroSlot {
+			return fmt.Errorf("%w (%s): slot range %d-%d reaches %d, but byte 4's policy is %s — a row whose P2 prints \"Always 0\" (480:953) carries its channel number in P3's two digits alone, \"00 ~ 99\" (480:955), so it has no hundreds digit for a slot above %d", ErrLayoutInvalid, cfg.Model, r.Lo, r.Hi, r.Hi, cfg.P2, maxFixedZeroSlot)
 		}
 	}
 	for i, a := range cfg.Slots {

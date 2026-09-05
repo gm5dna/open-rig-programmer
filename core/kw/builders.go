@@ -26,7 +26,11 @@ func (l Layout) BuildMRRead(s Slot) (Command, error) {
 	frame := make([]byte, 0, MRReadLen)
 	frame = append(frame, 'M', 'R')
 	frame = append(frame, s.P1())
-	frame = append(frame, l.slotWire(s)...)
+	wire, err := l.slotWire(s)
+	if err != nil {
+		return Command{}, err
+	}
+	frame = append(frame, wire...)
 	frame = append(frame, ';')
 	if len(frame) != MRReadLen {
 		return Command{}, newParseError(frame, "MR read: built %d bytes, want exactly %d (590:1442, 480:918)", len(frame), MRReadLen)
@@ -129,10 +133,15 @@ func (l Layout) BuildMWSet(rec Record) (Command, error) {
 		}
 	}
 
+	wire, err := l.slotWire(rec.Slot)
+	if err != nil {
+		return Command{}, err
+	}
+
 	frame := make([]byte, RecordLen)
 	frame[recPrefixOff], frame[recPrefixOff+1] = 'M', 'W'
 	frame[recP1Off] = rec.Slot.P1()
-	copy(frame[recP2Off:], l.slotWire(rec.Slot))
+	copy(frame[recP2Off:], wire)
 	copy(frame[recFreqOff:], fmt.Sprintf("%0*d", recFreqDigits, rec.FreqHz))
 	frame[recModeOff] = rec.Mode.Wire()
 	frame[recByte19Off] = rec.Byte19
@@ -212,15 +221,37 @@ func (l Layout) checkSlot(what string, s Slot) error {
 // IT EMITS '0' RATHER THAN A SPACE below 100 on the 590 pair, WHICH IS A10.
 // MC prints both as legal on a Set — "enter 0 or a space for a channel number
 // less than 100" (590:1334-1335) — but MR and MW themselves only say "refer
-// to the MC command" (590:1539-1540), so that the same convention governs
-// THIS pair of frames is assumed rather than printed. A digit is the one of
-// the two that also passes the outbound envelope unremarkably and reads the
-// same in a log. A10's lift is the dangerous half: a P2 the radio reads
-// differently on a Set writes a channel the operator did not name. The
-// ANSWER's space is a different direction and is what parseSlot admits.
-func (l Layout) slotWire(s Slot) string {
-	if l.p2 == P2FixedZero {
-		return fmt.Sprintf("0%02d", s.number%100)
+// to the MC command" (590:1452-1453 for the MR answer, 590:1539-1540 for the
+// MW Set), so that the same convention governs THIS pair of frames is
+// assumed rather than printed. A digit is the one of the two that also passes
+// the outbound envelope unremarkably and reads the same in a log. A10's lift
+// is the dangerous half: a P2 the radio reads differently on a Set writes a
+// channel the operator did not name. The ANSWER's space is a different
+// direction and is what parseSlot admits.
+//
+// IT RETURNS AN ERROR BECAUSE ITS DEFAULT MUST REFUSE. This is the last site
+// in the package to read a layout axis, and a zero Layout has no byte-4
+// policy: emitting three digits there would be a permissive default on an
+// unset axis, which is the FT-891 Stage 0 failure and the rule layout.go
+// states in capitals. Both callers already return errors.
+//
+// The ceiling arm is an ASSERTION, not the mechanism. NewLayout refuses
+// P2FixedZero alongside any slot above maxFixedZeroSlot (validateSlots), so
+// no layout this package mints can reach it; a Slot is a value that may have
+// been minted anywhere, and the truncation this replaces rendered channel
+// 103 as "003" and returned success — a frame naming a DIFFERENT channel,
+// reported as Sent. TestSlotWire_HasNoPermissiveDefaultAndNoSilentTruncation
+// pins all three arms.
+func (l Layout) slotWire(s Slot) (string, error) {
+	switch l.p2 {
+	case P2FixedZero:
+		if s.number > maxFixedZeroSlot {
+			return "", newParseError(nil, "slot %d cannot be named on the %s: byte 4 prints \"Always 0\" there (480:953) and P3 holds \"00 ~ 99\" (480:955), so there is no digit to carry the hundreds", s.number, l.model)
+		}
+		return fmt.Sprintf("0%02d", s.number), nil
+	case P2HundredsDigit:
+		return fmt.Sprintf("%03d", s.number), nil
+	default:
+		return "", newParseError(nil, "byte 4's policy is unset on this layout — refusing to guess whether it is the channel's hundreds digit or a printed constant")
 	}
-	return fmt.Sprintf("%03d", s.number)
 }
