@@ -9,9 +9,10 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
-// TestCommand_SatisfiesTheNeutralSeam is asserted by the compiler in
-// framing.go; this test exists for the two behavioural halves of the
-// contract that a type assertion cannot see.
+// THERE IS NO TestCommand_SatisfiesTheNeutralSeam: that half of the contract
+// is asserted by the compiler, in framing.go's var block, so there is nothing
+// for a test to run. The two tests below are the behavioural halves a type
+// assertion cannot see.
 
 // TestCommand_BytesReturnsAFreshCopyEveryCall pins the TOCTOU closure that is
 // the type's whole reason to exist: what the gate judges and what the port

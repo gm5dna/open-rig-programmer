@@ -409,6 +409,13 @@ func (r *run) checkIdentity() {
 		}
 		r.refuse("the other book's command", "FV appears nowhere in the 2003 TS-480 document", []byte("FV;"))
 		r.refuse("answer frame", "a TY ANSWER is never a legal outbound command", []byte("TY001;"))
+	default:
+		// checkLayoutSelfConsistency has already reported an unknown Book,
+		// and kw.NewLayout refuses one, so this arm is unreachable today.
+		// It is here because a silent arm would drop the WHOLE FV/TY family
+		// from the suite on the day a third book is added — the sibling
+		// switch above refuses rather than falls through, and so does this.
+		r.t.Errorf("%s: Book is %v, so neither the FV leg nor the TY leg ran and this whole command family went unchecked", r.name(), l.Book())
 	}
 }
 
