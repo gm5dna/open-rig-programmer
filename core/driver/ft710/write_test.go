@@ -464,12 +464,18 @@ func TestWriteChannel_NonKnownTagDisplayRefusedBeforeWire(t *testing.T) {
 //
 // The channel is otherwise the ordinary writable one this profile ACCEPTS
 // (see TestWriteChannel_HappyPath), so the refusal is attributable to the
-// one Known tier value and to nothing else. ToneMode is this driver's
-// chosen representative; the FTdx10 and FTdx101 pin a different field each,
-// so the three tests between them exercise three of the ten.
+// one Known tier value and to nothing else.
+//
+// OFFSET IS THIS DRIVER'S REPRESENTATIVE, and the write-gate sweep's item
+// (i) is why it is no longer ToneMode: OffsetHz is a codeplug.FreqField, so
+// its Valid takes no vocabulary and cannot fail for a Known value, which
+// leaves the CAPABILITY GATE as the rung that answers — the mechanism this
+// test exists to pin. A Known ToneMode is now stopped one rung earlier, by
+// the FieldState walk's empty-vocabulary rule, and has its own test
+// (TestWriteChannel_KnownTierVocabFieldRefusedByTheFieldStateRung).
 //
 // The MECHANISM is a lookup MISS, and the test says so directly: this
-// radio's capability map has no entry for spec.FieldToneMode on any bank,
+// radio's capability map has no entry for spec.FieldOffset on any bank,
 // FieldSupport therefore answers the ZERO spec.FieldSupport, and the zero
 // Support is neither CanWrite nor spec.Inert — so the gate refuses. Nothing
 // had to be added to caps.go for the refusal to happen, and the assertion
@@ -481,8 +487,56 @@ func TestWriteChannel_KnownTierFieldRefusedBeforeWire(t *testing.T) {
 	if !ok {
 		t.Fatalf("bankFor(%q) found no bank — the fixture is wrong, not the gate", "010")
 	}
-	if fs := sess.caps.FieldSupport(bank, spec.FieldToneMode); fs.CanWrite() || fs.Write == spec.Inert {
-		t.Fatalf("FieldSupport(%q, %s) = %+v, want the zero FieldSupport (no tier field is in this radio's capability map)", bank, spec.FieldToneMode, fs)
+	if fs := sess.caps.FieldSupport(bank, spec.FieldOffset); fs.CanWrite() || fs.Write == spec.Inert {
+		t.Fatalf("FieldSupport(%q, %s) = %+v, want the zero FieldSupport (no tier field is in this radio's capability map)", bank, spec.FieldOffset, fs)
+	}
+
+	ch := writableChannel("010")
+	ch.Data.OffsetHz = codeplug.FreqField{State: codeplug.Known, Value: 600_000}
+
+	baseline := cp.writes.Load()
+	_, err := sess.WriteChannel(testCtx(t), ch)
+	if !errors.Is(err, driver.ErrWriteRefused) {
+		t.Fatalf("WriteChannel = %v, want errors.Is match against driver.ErrWriteRefused", err)
+	}
+	if got := cp.writes.Load(); got != baseline {
+		t.Errorf("refused WriteChannel produced %d wire writes, want 0 (refusal must precede ALL wire traffic)", got-baseline)
+	}
+	var wre *driver.WriteRefusedError
+	if !errors.As(err, &wre) {
+		t.Fatalf("WriteChannel = %v, want a *driver.WriteRefusedError", err)
+	}
+	if !slices.Contains(wre.Fields, spec.FieldOffset) {
+		t.Errorf("WriteRefusedError.Fields = %v, want %s named — a refusal that does not name the field is not the contract", wre.Fields, spec.FieldOffset)
+	}
+	if !strings.Contains(wre.Reason, "not write-Supported for this session") {
+		t.Errorf("WriteRefusedError.Reason = %q, want the capability gate's own sentence", wre.Reason)
+	}
+	if wre.Slot != "010" {
+		t.Errorf("WriteRefusedError.Slot = %q, want %q", wre.Slot, "010")
+	}
+}
+
+// TestWriteChannel_KnownTierVocabFieldRefusedByTheFieldStateRung records
+// where a Known VOCABULARY-KEYED tier field is now stopped, and it is a
+// deliberate consequence of the write-gate sweep's item (i) rather than a
+// new rule: the FieldState walk passes each StringField/IntField/ToneField
+// THIS RADIO'S OWN vocabulary or table, and every Icom-tier vocabulary in
+// this driver's capabilities is the EMPTY slice — an FT-710's manual
+// expresses none of it. An empty vocabulary fails CLOSED for every Known
+// value (StringField.Valid's own doc comment), so ToneMode is refused one
+// rung above the capability gate.
+//
+// The VERDICT is unchanged and that is the point of asserting it here: the
+// same field is named, the refusal is still typed, and no frame reaches the
+// wire. Only the sentence differs, and only because a rung that knows the
+// radio's vocabulary answers before a rung that knows only its capability
+// map.
+func TestWriteChannel_KnownTierVocabFieldRefusedByTheFieldStateRung(t *testing.T) {
+	cp, sess := openCountingSession(t, Simulated)
+
+	if len(sess.caps.ToneModes) != 0 {
+		t.Fatalf("caps.ToneModes = %v, want empty — this test's premise is that the FT-710 declares no Icom-tier vocabulary", sess.caps.ToneModes)
 	}
 
 	ch := writableChannel("010")
@@ -500,14 +554,114 @@ func TestWriteChannel_KnownTierFieldRefusedBeforeWire(t *testing.T) {
 	if !errors.As(err, &wre) {
 		t.Fatalf("WriteChannel = %v, want a *driver.WriteRefusedError", err)
 	}
-	if !slices.Contains(wre.Fields, spec.FieldToneMode) {
-		t.Errorf("WriteRefusedError.Fields = %v, want %s named — a refusal that does not name the field is not the contract", wre.Fields, spec.FieldToneMode)
+	if len(wre.Fields) != 1 || wre.Fields[0] != spec.FieldToneMode {
+		t.Errorf("WriteRefusedError.Fields = %v, want exactly [%s]", wre.Fields, spec.FieldToneMode)
 	}
-	if !strings.Contains(wre.Reason, "not write-Supported for this session") {
-		t.Errorf("WriteRefusedError.Reason = %q, want the capability gate's own sentence", wre.Reason)
+	if !strings.Contains(wre.Reason, "not one of this radio's values") {
+		t.Errorf("WriteRefusedError.Reason = %q, want the FieldState rung's empty-vocabulary sentence", wre.Reason)
 	}
-	if wre.Slot != "010" {
-		t.Errorf("WriteRefusedError.Slot = %q, want %q", wre.Slot, "010")
+}
+
+// TestWriteChannel_IncoherentFieldStateRefusedBeforeWire is the fleet
+// FieldState stance's first half (write-gate sweep item (i)): a field whose
+// State says "preserve whatever the radio has" while its Value makes a
+// claim about what that preserved state should be is INCOHERENT, and is
+// refused rather than interpreted — for every one of ChannelData's twenty
+// FieldState fields, not the three (CTCSSTone, ScanSkip, TagDisplay) this
+// rung used to check.
+//
+// TxFreqHz IS THE PROOF FIELD because nothing else on this write path would
+// ever have noticed it: codeplug.Validate skips every non-Recorded field
+// outright, requestedFields is Known-only so the capability gate is never
+// asked about it, and this radio's MW/MT frames have no transmit-frequency
+// position at all, so buildWriteCommands has nothing to refuse either.
+//
+// RED-PROOF, captured against the pre-wire write.go (the three-field rung),
+// this sub-test's own body unchanged: no refusal happened at all —
+//
+//	WriteChannel = {Steps:[{Command:MW Sent:true Confirmed:true} {Command:MT Sent:true Confirmed:true}]}, err = <nil>
+//	2 wire writes
+//
+// i.e. both frames went out exactly as writableChannel() alone would have
+// produced them, and the caller's malformed TxFreqHz was silently DROPPED.
+func TestWriteChannel_IncoherentFieldStateRefusedBeforeWire(t *testing.T) {
+	cp, sess := openCountingSession(t, Simulated)
+
+	ch := writableChannel("010")
+	ch.Data.TxFreqHz = codeplug.FreqField{State: codeplug.Unavailable, Value: 1}
+
+	baseline := cp.writes.Load()
+	_, err := sess.WriteChannel(testCtx(t), ch)
+	if !errors.Is(err, driver.ErrWriteRefused) {
+		t.Fatalf("WriteChannel = %v, want errors.Is match against driver.ErrWriteRefused", err)
+	}
+	if got := cp.writes.Load(); got != baseline {
+		t.Errorf("refused WriteChannel produced %d wire writes, want 0 (refusal must precede ALL wire traffic)", got-baseline)
+	}
+	var wre *driver.WriteRefusedError
+	if !errors.As(err, &wre) {
+		t.Fatalf("WriteChannel = %v, want a *driver.WriteRefusedError", err)
+	}
+	if len(wre.Fields) != 1 || wre.Fields[0] != spec.FieldTxFrequency {
+		t.Errorf("WriteRefusedError.Fields = %v, want exactly [%s]", wre.Fields, spec.FieldTxFrequency)
+	}
+	if !strings.Contains(wre.Reason, "must have zero Value") {
+		t.Errorf("WriteRefusedError.Reason = %q, want the typed validator's own incoherence sentence", wre.Reason)
+	}
+}
+
+// TestWriteChannel_AbsentFieldStatesStillWrite is the fleet FieldState
+// stance's OTHER half, and the reason this driver does not simply call
+// Valid() on all twenty fields: codeplug.Absent — the ZERO FieldState, what
+// a hand-built ChannelData leaves behind — is ADMITTED, because a caller who
+// set nothing has requested nothing (core/driver's FieldStateChecks, and the
+// IC-9700 stance it is drawn from). An unconditional walk would refuse every
+// ordinary MODIFY, since codeplug's typed validators reject Absent outright.
+//
+// TAGDISPLAY IS THE ONE EXCEPTION on THIS radio, and it is not this rung's
+// doing: MT's display flag (P1) is mandatory on the frame, so a non-Known
+// TagDisplay is refused by buildWriteCommands however it got that way —
+// TestWriteChannel_NonKnownTagDisplayRefusedBeforeWire pins that separately,
+// including for the zero BoolField. Everything else here is left at its zero
+// value on purpose, which is exactly what a composite literal that names only
+// the frequency and the mode produces.
+//
+// RED-PROOF (pre-wire, three-field rung): the same channel was refused,
+// because that rung called CTCSSTone.Valid unconditionally —
+//
+//	WriteChannel = ft710: write refused for slot 010 [ctcss_tone]: codeplug: ToneField: invalid State ""
+//
+// which is the "refuse every ordinary MODIFY" failure in miniature.
+func TestWriteChannel_AbsentFieldStatesStillWrite(t *testing.T) {
+	radio, sess := openSession(t, Simulated)
+
+	ch := codeplug.Channel{
+		Slot: "010",
+		Data: &codeplug.ChannelData{
+			FreqHz:     14_250_000,
+			Mode:       "USB",
+			CTCSS:      "OFF",
+			Shift:      "SIMPLEX",
+			Tag:        "TEST",
+			TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: true},
+		},
+	}
+	for _, c := range driver.FieldStateChecks(sess.caps, *ch.Data) {
+		if c.Field == spec.FieldTagDisplay {
+			continue
+		}
+		if c.Err != nil {
+			t.Fatalf("the fixture's %s is not Absent-and-admitted (%v) — this test asserts nothing unless every other FieldState field is left at its zero value", c.Field, c.Err)
+		}
+	}
+
+	res, err := sess.WriteChannel(testCtx(t), ch)
+	if err != nil {
+		t.Fatalf("WriteChannel: unexpected error: %v — an all-Absent channel requests nothing and must WRITE", err)
+	}
+	assertSteps(t, res, wantSteps(true, true, true, true))
+	if state, ok := radio.SlotState("010"); !ok || state.Freq != "014250000" {
+		t.Errorf("SlotState(%q) = %+v/%v, want the written frequency stored", "010", state, ok)
 	}
 }
 

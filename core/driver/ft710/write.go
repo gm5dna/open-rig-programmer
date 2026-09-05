@@ -215,14 +215,35 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	// FieldState sanity before anything else trusts .State: a malformed
 	// field (unknown State, or a non-Known value smuggled alongside) is
 	// refused, not interpreted.
-	if err := ch.Data.CTCSSTone.Valid(s.caps); err != nil {
-		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{spec.FieldCTCSSTone}, Reason: err.Error()}
-	}
-	if err := ch.Data.ScanSkip.Valid(); err != nil {
-		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{spec.FieldScanSkip}, Reason: err.Error()}
-	}
-	if err := ch.Data.TagDisplay.Valid(); err != nil {
-		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{spec.FieldTagDisplay}, Reason: err.Error()}
+	//
+	// EVERY FieldState field of ch.Data, not the three (CTCSSTone,
+	// ScanSkip, TagDisplay) this rung used to check — the write-gate
+	// sweep's item (i), and the same gap the FT-891's C-M1 found: a tier
+	// field carrying State Unavailable and a non-zero Value passed both
+	// codeplug.Validate (which skips every non-Recorded field outright)
+	// and the old three-field list, and requestedFields is Known-only, so
+	// nothing ever named it and the malformed value was silently DROPPED
+	// from the frame rather than refused.
+	// TestWriteChannel_IncoherentFieldStateRefusedBeforeWire is the pin,
+	// and its comment quotes the pre-fix transcript (both frames sent,
+	// TxFreqHz simply absent from them).
+	//
+	// THE WALK IS THE FLEET'S, driver.CheckFieldStates, not a fourth
+	// private copy: its doc comment carries the four-rule stance, of which
+	// the load-bearing one HERE is that codeplug.Absent is ADMITTED. Every
+	// ChannelData this driver's own read path produces leaves the tier
+	// fields Unavailable, but a hand-built one — the GUI's, a test's, a
+	// caller's composite literal — leaves them Absent, and refusing those
+	// would refuse every ordinary MODIFY.
+	// TestWriteChannel_AbsentFieldStatesStillWrite is that half's pin.
+	//
+	// TagDisplay is the ONE field this rung does not settle on its own:
+	// MT's P1 flag is mandatory, so a non-Known value — Absent included —
+	// is refused by buildWriteCommands further down
+	// (TestWriteChannel_NonKnownTagDisplayRefusedBeforeWire). That is a
+	// question about a well-formed field and belongs there, not here.
+	if field, err := driver.CheckFieldStates(s.caps, *ch.Data); err != nil {
+		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{field}, Reason: err.Error()}
 	}
 
 	// THE write gate (defence in depth below the clone service): every
