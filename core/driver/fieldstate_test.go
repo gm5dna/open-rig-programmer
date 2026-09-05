@@ -55,7 +55,7 @@ func walkCaps() spec.Capabilities {
 // calls, or a field judged against the wrong caps vocabulary, would pass
 // this test unchanged — only TestCheckFieldStates_FleetStance's and
 // TestCheckFieldStates_ReportsTheFirstIncoherentField's value-carrying rows
-// pin any individual binding, and between them they cover six of the
+// pin any individual binding, and between them they cover seven of the
 // twenty. The reviewer checked all twenty bindings and all twenty
 // vocabulary arguments by hand against codeplug/channel.go and
 // core/codeplug/validate.go and found every one correct.

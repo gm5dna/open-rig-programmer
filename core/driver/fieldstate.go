@@ -163,7 +163,7 @@ func judge[T comparable](state codeplug.FieldState, value T, valid func() error)
 	if state == codeplug.Absent {
 		var zero T
 		if value != zero {
-			return fmt.Errorf("codeplug: Absent field must have zero Value, got %v — a value with no State recorded is the same malformation Unknown/Unavailable refuse when they carry one", value)
+			return fmt.Errorf("driver: Absent field must have zero Value, got %v — a value with no State recorded is the same malformation Unknown/Unavailable refuse when they carry one", value)
 		}
 		return nil
 	}
