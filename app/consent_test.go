@@ -150,11 +150,28 @@ func (r *realSessionRecorder) only(t *testing.T) realSessionCall {
 // os.UserConfigDir(), and no test may write into the developer's own
 // config directory. The consent store is NOT covered by this — it has its
 // own seam (tempUserConfig), which every caller of this helper also uses.
+//
+// All four variables are set because os.UserConfigDir has THREE branches
+// (Go 1.25 os/file.go): darwin reads HOME directly (appending
+// "/Library/Application Support"), windows reads %AppData%, and every
+// other unix reads XDG_CONFIG_HOME, falling back to HOME. So on this
+// developer's own macOS, HOME is the line doing the work — it is NOT
+// redundant with XDG_CONFIG_HOME here, and dropping it as "covered
+// already" would silently restore the bug this helper exists to prevent.
+// AppData is set because no amount of HOME setting redirects it on
+// Windows, so without that line this test would create a real directory
+// in the runner's own roaming profile. LocalAppData is set alongside it,
+// belt-and-braces, so no per-user Windows location can leak outside the
+// temporary HOME. Go looks environment variables up case-insensitively on
+// Windows, so the mixed-case spellings that platform uses are the ones
+// written here.
 func containSnapshotDir(t *testing.T) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
+	t.Setenv("AppData", home)
+	t.Setenv("LocalAppData", home)
 }
 
 // TestGetUnverifiedWriteConsent_TheThreeStates pins the distinction the

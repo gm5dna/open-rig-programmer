@@ -199,12 +199,22 @@ func TestResolveSnapshotDir_DefaultModelStaysAtRoot(t *testing.T) {
 // <base>/<model-slug>/ subdirectory — applied to an explicit override
 // too, since two models sharing one named directory is exactly the
 // collision this rule exists to prevent.
+//
+// The expectation is built with filepath.Join, not spelt "/tmp/snaps/ftdx10":
+// the claim is "the slug is a child of the base", and the separator that
+// expresses it is the platform's. resolveSnapshotDir joins (wiring.go:1599),
+// so a literal forward slash asserted the separator rather than the
+// relationship, and said nothing true on Windows. The _Override,
+// _Default and _DefaultModelStaysAtRoot siblings keep their literals:
+// they pin that the override is returned VERBATIM, which is the same
+// string on every platform.
 func TestResolveSnapshotDir_OtherModelGetsSubdir(t *testing.T) {
-	got, err := resolveSnapshotDir("/tmp/snaps", "FTdx10")
+	const base = "/tmp/snaps"
+	got, err := resolveSnapshotDir(base, "FTdx10")
 	if err != nil {
 		t.Fatalf("resolveSnapshotDir: %v", err)
 	}
-	if want := "/tmp/snaps/ftdx10"; got != want {
+	if want := filepath.Join(base, "ftdx10"); got != want {
 		t.Errorf("resolveSnapshotDir(override, %q) = %q, want %q", "FTdx10", got, want)
 	}
 }
