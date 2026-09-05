@@ -30,11 +30,12 @@ import (
 // need and what a self-consistent fake will never produce.
 //
 // WHAT IT KNOWS, and how to extend it: AI (any AI frame, answered with
-// silence), ID;, the 6-byte MT READ, and the 41-byte combined MT SET. ANY
-// OTHER frame is answered "?;", which is also how this file serves the
-// negative pins: an MR frame, or an MT read of a slot outside 001-117, is a
-// frame this driver must never build, and if one is ever built it appears
-// in the transcript and is rejected rather than quietly answered.
+// silence), ID;, the 6-byte MT READ, the 41-byte combined MT SET, and the
+// 6-byte EX READ (settings.go). ANY OTHER frame is answered "?;", which is
+// also how this file serves the negative pins: an MR frame, or an MT read of
+// a slot outside 001-117, is a frame this driver must never build, and if one
+// is ever built it appears in the transcript and is rejected rather than
+// quietly answered.
 //
 // THE TWO MT LENGTHS ARE THE ONLY MT FRAMES ADMITTED, and an MT frame of
 // any OTHER length falls through to "?;" rather than being taken for a Set.
@@ -123,6 +124,17 @@ type slotImage struct {
 	// every position of the frame; whether a REAL FT-991A reports back what
 	// it was told is not settleable by any test.
 	echoSets bool
+	// exAnswers maps a 3-byte EX wire address to the RAW answer frame served
+	// for an EX read of it (settings.go). Raw, like mtAnswers and for the
+	// same reason: the malformed-answer legs need frames no builder would
+	// produce. An address ABSENT from the map is answered "?;", which this
+	// driver maps to driver.SettingUnavailable and NOT to an error.
+	exAnswers map[string]string
+	// exSilent names EX addresses whose read draws NO REPLY AT ALL — the
+	// timeout leg of the settings surface, mtSilent's counterpart. It is
+	// what makes exSpec's ONE retry observable: a rejection is a frame and a
+	// timeout is not, and only the second retransmits.
+	exSilent map[string]bool
 }
 
 // newRespondingPort starts a scripted radio serving img and registers its
@@ -247,6 +259,20 @@ func (img slotImage) reply(frame string, mtWritten map[string]string) string {
 			mtWritten[frame[2:5]] = frame
 		}
 		return img.junkAfterSet
+	case strings.HasPrefix(frame, "EX") && len(frame) == exReadFrameLen:
+		// An EX (MENU) READ. The length is pinned for the reason the two MT
+		// arms pin theirs: this driver builds exactly one EX frame shape, so
+		// any other EX length is a defect that must be REJECTED loudly
+		// rather than answered.
+		addr := frame[2:5]
+		if img.exSilent[addr] {
+			return ""
+		}
+		ans, ok := img.exAnswers[addr]
+		if !ok {
+			return "?;"
+		}
+		return ans
 	default:
 		return "?;"
 	}
@@ -259,6 +285,20 @@ func (img slotImage) reply(frame string, mtWritten map[string]string) string {
 // the code under test would answer whatever that code asked for, including a
 // wrong shape.
 const mtReadFrameLen = 6
+
+// exReadFrameLen is the length of this radio's EX read frame: "EX" + a
+// 3-byte MENU Number + ';' (the Read chart "E X P1 P1 P1 ;", layout 525).
+//
+// SIX BYTES, the narrowest EX read in this fleet — the FT-891's is seven and
+// the FTdx10's nine — because this chart's address is a single three-digit
+// MENU Number (the grammar block's "P1 : 001 - 153", layout 520). Written
+// out here rather than derived from the dialect for mtReadFrameLen's reason:
+// a fixture that took its frame shapes from the code under test would answer
+// whatever that code asked for, including a wrong shape.
+//
+// It coincides with mtReadFrameLen, and the two arms are told apart by their
+// PREFIX rather than by their length, which is why both are named.
+const exReadFrameLen = 6
 
 // mtAnswerLen is the length of this radio's combined MT answer — AND of its
 // combined MT SET, which is the same chart under the same prefix, so this
