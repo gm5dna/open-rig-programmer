@@ -114,7 +114,9 @@ func mtSetSpec() transport.CommandSpec {
 // anything. What it refuses in its own right is the answer-only none form
 // "000" — grammatical per ParseSlot (the DIALECT register's ASSUMED
 // SlotSpace.NoneWire entry, which cat.SlotSpace structurally requires) and
-// in no bank.
+// in no bank. THE FT-891 COUNTS THE SAME CODE SHAPE AS ITS OWN RUNG
+// ("ParseSlot, bankFor, …", ft891/write.go) — matrix §3.6's own numbered
+// ladder omits bankFor, which is why this file does not follow it there.
 func (s *Session) bankFor(slot string) (spec.BankID, bool) {
 	for _, b := range s.caps.Banks {
 		for _, sl := range b.Slots {
@@ -255,7 +257,8 @@ var tierRequestedFields = []struct {
 // anything deriving frame shapes mechanically, and named as one in the spec
 // (matrix §3.6). That ONE combined Set SUFFICES to create or overwrite a
 // channel — that the radio accepts it as a complete channel definition — is
-// ASSUMED (matrix §3.6's status line); that its silence means acceptance is
+// the DRIVER register's own A SINGLE COMBINED MT SET SUFFICES TO CREATE OR
+// OVERWRITE A CHANNEL entry (doc.go); that its silence means acceptance is
 // the SHARED register's THE ACKNOWLEDGEMENT CONVENTIONS entry.
 //
 // THE REFUSAL LADDER IS THE FOLDED MATRIX §3.6's FIVE RUNGS, ALL PRE-WIRE:
@@ -311,14 +314,26 @@ var tierRequestedFields = []struct {
 //     the frame has no room for and refuse every ordinary channel.
 //
 // THE OPERATION MUTEX IS HELD FOR THE WHOLE CALL (spec erratum S-E4, matrix
-// M-E2). One Set is one exchange and transport.Engine already serialises
-// each exchange, so the lock buys nothing for the write considered alone —
-// and on this radio the READ is one exchange too, so there is no
-// cross-check for a write to land inside, which is the FT-891's reason and
-// is not available here. What it buys is that a write, a read and a settings
-// read are different DRIVER OPERATIONS and must not interleave their frames.
-// It is taken even before the refusal checks, since a refused write returns
-// without wire traffic either way.
+// M-E2). One Set is one exchange and transport.Engine already serialises each
+// exchange, so the lock buys nothing for the write considered alone — and on
+// this radio the READ is one exchange too, so there is no cross-check for a
+// write to land inside, which is the FT-891's reason and is not available
+// here. TODAY, WITH EVERY OPERATION THIS SESSION PERFORMS BEING A SINGLE
+// EXCHANGE, the engine's own per-exchange serialisation already keeps a
+// write's and a read's frames from interleaving, so opMu buys this method
+// nothing that the engine does not already give it. It is taken even before
+// the refusal checks, since a refused write returns without wire traffic
+// either way.
+//
+// WHAT THE LOCK IS FOR IS TASK 12's SETTINGS READ, a MULTI-exchange operation
+// this session does not yet have. Once it lands, a write racing a settings
+// read could otherwise put its one MT Set frame between two frames of the
+// settings read's own exchange — a DRIVER OPERATION interleaving the engine's
+// per-exchange serialisation cannot prevent, because it only serialises one
+// exchange at a time. TASK 12 MUST PIN THIS: park the settings read inside
+// opMu via a gap hook that lets a test attempt a concurrent WriteChannel
+// mid-sequence, and assert that no MT Set frame reaches the wire until the
+// settings operation completes.
 //
 // IT IS NOT HELD ACROSS WRITE-THEN-VERIFY: that pair is core/clone's, as the
 // driver interface assigns it.

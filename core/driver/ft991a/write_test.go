@@ -114,7 +114,8 @@ func withData(mutate func(*codeplug.ChannelData)) codeplug.Channel {
 // fields redundantly and could not carry the tag at all (layout 1036-1051),
 // and MW's Read and Answer grids are printed EMPTY (1048, 1051). That one
 // Set SUFFICES to create or overwrite a channel — that the radio accepts it
-// as a complete channel definition — is ASSUMED (matrix §3.6's status line);
+// as a complete channel definition — is the DRIVER register's own A SINGLE
+// COMBINED MT SET SUFFICES TO CREATE OR OVERWRITE A CHANNEL entry (doc.go);
 // that its silence means acceptance is the SHARED register's THE
 // ACKNOWLEDGEMENT CONVENTIONS entry.
 //
@@ -617,6 +618,46 @@ func TestWriteChannel_RefusalLadder(t *testing.T) {
 			}),
 			fields: []spec.Field{spec.FieldClarifier},
 		},
+		{
+			// Three inputs land in buildWriteCommand's UNFIELDED catch-all
+			// (task 11 review, LOW-2): every adjacent refusal names a
+			// spec.Field and this one does not, because BuildMTSetCombined's
+			// error carries no field of its own. Pinned here AS IT STANDS
+			// TODAY — no Fields — so the shape does not drift unnoticed; a
+			// fielded catch-all is a fleet follow-up, not this task's.
+			//
+			// 155 Hz is inside the dialect's declared +/-9990 Hz ceiling and
+			// not a multiple of the ASSUMED 10 Hz step, so it clears the
+			// magnitude rung above and meets the builder's own step check.
+			name: "a clarifier that is not a multiple of this dialect's step",
+			ch: withData(func(d *codeplug.ChannelData) {
+				d.ClarHz = 155
+			}),
+			reason: "must be a multiple of",
+		},
+		{
+			// Same catch-all: a tag past this dialect's TagMaxBytes (12)
+			// clears every rung above (Tag carries no FieldState and no
+			// vocabulary of its own) and meets only the builder's length
+			// check.
+			name: "a tag longer than this dialect admits",
+			ch: withData(func(d *codeplug.ChannelData) {
+				d.Tag = "THIRTEEN BYTE"
+			}),
+			reason: "tag must be 0-12 bytes",
+		},
+		{
+			// Same catch-all again, and the one the mode rung's OWN ok check
+			// cannot catch: dialect.ModeByName("-") answers ok=true (it is
+			// cat.ModeUnset, the SHARED register's own ASSUMED member), so
+			// write.go's mode rung admits it and only the builder's
+			// Set-frame check refuses — pre-wire, same as the other two.
+			name: "a mode that resolves to cat.ModeUnset",
+			ch: withData(func(d *codeplug.ChannelData) {
+				d.Mode = "-"
+			}),
+			reason: "must not be ModeUnset",
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			p, sess := openSession(t, Simulated, slotImage{})
@@ -941,6 +982,15 @@ func TestDCSState_AcceptedHereAndRefusedAtAllThreeGatesOnASibling(t *testing.T) 
 		}
 		if sibling.AllowedCommand([]byte(dcsFrame)) {
 			t.Error("the ToneStatesCTCSS sibling's outbound gate ADMITTED a DCS record — the gate is the last thing between a wrong byte and the wire")
+		}
+		// POSITIVE CONTROL (task 11 review, LOW-3): without this, the refusal
+		// above would pass just as well if the sibling's gate refused every
+		// MT frame wholesale. Swap P8's DCS ENC/DEC ('3', position 24) for
+		// the sibling's own ENC/DEC ('1') and confirm its gate ADMITS the
+		// otherwise-identical, ordinary CTCSS frame.
+		ctcssFrame := dcsFrame[:23] + "1" + dcsFrame[24:]
+		if !sibling.AllowedCommand([]byte(ctcssFrame)) {
+			t.Error("the ToneStatesCTCSS sibling's outbound gate refused an ordinary CTCSS record — gate 3's DCS refusal above would be vacuous if the gate refused every MT frame")
 		}
 	})
 
