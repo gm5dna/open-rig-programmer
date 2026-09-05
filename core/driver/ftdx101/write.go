@@ -301,9 +301,12 @@ var tierRequestedFields = []struct {
 //     separate display-flag refusal in this ladder, because there is no
 //     display flag.
 //
-//   - An UNAVAILABLE (or Unknown) TagDisplay is NOT refused, on any profile:
-//     it is the state every FTdx101 channel legitimately carries (read.go),
-//     it requests nothing, and the frame has no field it could reach.
+//   - An UNAVAILABLE, Unknown or ABSENT TagDisplay is NOT refused, on any
+//     profile: Unavailable is the state every FTdx101 channel legitimately
+//     carries (read.go), and none of the three requests anything, or
+//     reaches a field the frame has (TagDisplay.Value is read nowhere in
+//     this file — P11 is cat.P11Fixed, so there is no display flag to
+//     carry it).
 //
 //   - An empty channel (erase) is refused. This radio's command availability
 //     table (layout 236-337) lists its entire CAT command set and contains NO

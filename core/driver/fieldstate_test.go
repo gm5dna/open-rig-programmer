@@ -18,17 +18,27 @@ import (
 // own vocabularies are empty (every Yaesu driver's are) fails closed on
 // every Known value instead — that is StringField.Valid's and
 // IntField.Valid's own documented rule, not something this walk decides.
+//
+// Every field's vocabulary is DISJOINT from every other field's (Opus
+// review LOW-2, 05/09/2026): the pre-fix fixture gave DuplexOptions,
+// ToneModes and PreampOptions a shared "OFF" member, which is exactly the
+// condition under which a field judged against the WRONG caps vocabulary
+// (Preamp.Valid(caps.AntennaOptions) instead of caps.PreampOptions, say)
+// can still admit a value and go undetected. With disjoint vocabularies a
+// value that belongs to one field's list is never accidentally valid
+// against another's, so TestCheckFieldStates_VocabularyIsFieldSpecific's
+// per-field rows below actually exercise the BINDING, not just the type.
 func walkCaps() spec.Capabilities {
 	return spec.Capabilities{
 		CTCSSTones:     []spec.Tone{670, 1000},
-		DuplexOptions:  []spec.DuplexOption{{Value: "OFF"}, {Value: "DUP+"}},
-		ToneModes:      []spec.ToneMode{{Value: "OFF"}, {Value: "TSQL"}},
+		DuplexOptions:  []spec.DuplexOption{{Value: "DUP+"}, {Value: "DUP-"}},
+		ToneModes:      []spec.ToneMode{{Value: "TSQL"}, {Value: "DCS"}},
 		DTCSCodes:      []int{23, 25},
 		DTCSPolarities: []string{"NN", "NR"},
 		Filters:        []string{"FIL1", "FIL2"},
 		TuningSteps:    []string{"5", "10"},
 		AttenuatorDB:   []int{0, 12},
-		PreampOptions:  []string{"OFF", "AMP1"},
+		PreampOptions:  []string{"AMP1", "AMP2"},
 		AntennaOptions: []string{"ANT1", "ANT2"},
 	}
 }
@@ -52,13 +62,31 @@ func walkCaps() spec.Capabilities {
 // THIS PIN BINDS NAMES AND ORDER, NOT NAME↔MEMBER↔VOCABULARY (Opus review
 // LOW-3, 05/09/2026): an all-Absent codeplug.ChannelData{} makes every
 // check in the walk return nil, so a copy/paste swap of two fields' judge
-// calls, or a field judged against the wrong caps vocabulary, would pass
-// this test unchanged — only TestCheckFieldStates_FleetStance's and
-// TestCheckFieldStates_ReportsTheFirstIncoherentField's value-carrying rows
-// pin any individual binding, and between them they cover seven of the
-// twenty. The reviewer checked all twenty bindings and all twenty
-// vocabulary arguments by hand against codeplug/channel.go and
-// core/codeplug/validate.go and found every one correct.
+// calls would pass this test unchanged. Individual bindings are pinned
+// elsewhere, in three layers:
+//
+//   - TestCheckFieldStates_FleetStance's and
+//     TestCheckFieldStates_ReportsTheFirstIncoherentField's value-carrying
+//     rows name a refusal's field directly, covering seven of the twenty
+//     (CTCSSTone, ScanSkip, TxFrequency, Duplex, ToneTx, Attenuator,
+//     IPPlus);
+//   - TestCheckFieldStates_VocabularyIsFieldSpecific (below) pins the
+//     VOCABULARY ARGUMENT for all nine vocab-keyed fields directly, in
+//     this package (Opus review LOW-2, 05/09/2026): a field judged
+//     against the wrong caps member — the review's own reproduction,
+//     d.Preamp.Valid(caps.PreampOptions) swapped for caps.AntennaOptions
+//     — turns that field's row red, because walkCaps gives every
+//     vocab-keyed field a vocabulary disjoint from every other's;
+//   - each driver's own TestWriteChannel_KnownD8TierFieldsRefusedBeforeWire
+//     (or equivalent) additionally pins the MEMBER binding — not the
+//     vocabulary argument, since every Yaesu vocabulary is empty — for
+//     TuningStep, Attenuator, Preamp and Antenna, at all four drivers.
+//
+// That leaves the eleven non-vocab-keyed fields' member bindings pinned
+// only where the two rows above happen to name them (five of the eleven);
+// no hand check stands in for the rest — a wrong binding for one of those
+// six would be caught, if at all, by whichever caller-level test happens
+// to exercise that exact field, not by anything in this package.
 func TestFieldStateWalk_CoversEveryFieldStateField(t *testing.T) {
 	plain := map[spec.Field]bool{
 		spec.FieldFrequency:  true,
@@ -262,5 +290,66 @@ func TestCheckFieldStates_ReportsTheFirstIncoherentField(t *testing.T) {
 	}
 	if field != spec.FieldScanSkip {
 		t.Errorf("CheckFieldStates named %s, want %s — the walk must report the first failure in ChannelData's declaration order", field, spec.FieldScanSkip)
+	}
+}
+
+// TestCheckFieldStates_VocabularyIsFieldSpecific pins the vocabulary
+// ARGUMENT the walk consults for each of the nine vocab-keyed fields
+// (Opus review LOW-2, 05/09/2026: "the vocabulary ARGUMENT is unpinned
+// for six of the nine vocab-keyed fields"). One row per field, each
+// setting ONLY that field to Known with a value drawn from its OWN
+// walkCaps list; every other field stays Absent.
+//
+// walkCaps gives every vocab-keyed field a vocabulary DISJOINT from
+// every other field's, so a value that is valid here is valid against
+// NO other field's list — that is what makes this a binding pin rather
+// than a domain pin. A field judged against the WRONG caps member turns
+// its own row red: the review's own reproduction (mutation M9) swapped
+// d.Preamp.Valid(caps.PreampOptions) for caps.AntennaOptions and
+// d.Filter.Valid(caps.Filters) for caps.DTCSPolarities, and re-running
+// that swap against this table sends the "Preamp" and "Filter" subtests
+// red, because "AMP1" is not in AntennaOptions and "FIL1" is not in
+// DTCSPolarities.
+func TestCheckFieldStates_VocabularyIsFieldSpecific(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		mutate func(*codeplug.ChannelData)
+	}{
+		{"CTCSSTone", func(d *codeplug.ChannelData) {
+			d.CTCSSTone = codeplug.ToneField{State: codeplug.Known, Value: 670}
+		}},
+		{"Duplex", func(d *codeplug.ChannelData) {
+			d.Duplex = codeplug.StringField{State: codeplug.Known, Value: "DUP+"}
+		}},
+		{"ToneMode", func(d *codeplug.ChannelData) {
+			d.ToneMode = codeplug.StringField{State: codeplug.Known, Value: "TSQL"}
+		}},
+		{"DTCSCode", func(d *codeplug.ChannelData) {
+			d.DTCSCode = codeplug.IntField{State: codeplug.Known, Value: 23}
+		}},
+		{"DTCSPolarity", func(d *codeplug.ChannelData) {
+			d.DTCSPolarity = codeplug.StringField{State: codeplug.Known, Value: "NN"}
+		}},
+		{"Filter", func(d *codeplug.ChannelData) {
+			d.Filter = codeplug.StringField{State: codeplug.Known, Value: "FIL1"}
+		}},
+		{"TuningStep", func(d *codeplug.ChannelData) {
+			d.TuningStep = codeplug.StringField{State: codeplug.Known, Value: "5"}
+		}},
+		{"Preamp", func(d *codeplug.ChannelData) {
+			d.Preamp = codeplug.StringField{State: codeplug.Known, Value: "AMP1"}
+		}},
+		{"Antenna", func(d *codeplug.ChannelData) {
+			d.Antenna = codeplug.StringField{State: codeplug.Known, Value: "ANT1"}
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var d codeplug.ChannelData
+			tt.mutate(&d)
+			field, err := driver.CheckFieldStates(walkCaps(), d)
+			if err != nil {
+				t.Fatalf("CheckFieldStates = (%s, %v), want no refusal — the value is in THIS field's own walkCaps list and no other field's", field, err)
+			}
+		})
 	}
 }
