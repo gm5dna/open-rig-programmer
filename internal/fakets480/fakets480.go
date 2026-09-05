@@ -24,6 +24,7 @@ type Radio struct {
 	latency                time.Duration
 	tyReserved             string
 	tyVariant              byte
+	memoryReadUnsupported  bool
 	transientNAKSuppressed bool
 	streamErrors           map[int]StreamError
 
@@ -32,7 +33,11 @@ type Radio struct {
 	// writes fakeConn. It indexes the scripted stream errors.
 	exchanges int
 
-	mu sync.Mutex
+	mu      sync.Mutex
+	records map[recordKey]MemState
+	// currentChannel is what an "MC;" reports. It moves only by an MC Set;
+	// nothing here models a front panel.
+	currentChannel int
 	// ai is '0', '1', '2' or '3' — the whole of this book's AI legend
 	// (480:185-190). It is '0' at construction; see doc.go's register entry
 	// THE INITIAL AI VALUE IS THE POWER-OFF ONE.
@@ -51,7 +56,8 @@ type Radio struct {
 	wg        sync.WaitGroup
 }
 
-// New constructs a *Radio and starts its servicing goroutine.
+// New constructs a *Radio and starts its servicing goroutine. Without a
+// WithFactoryImage option the record map defaults to DefaultImage().
 //
 // IT TAKES NO ROW ARGUMENT, where internal/fakets590's New requires one. The
 // 2003 document describes ONE PC-control radio and prints ONE identity for
@@ -68,8 +74,14 @@ func New(opts ...Option) *Radio {
 		tyReserved:   defaultTYReserved,
 		tyVariant:    defaultTYVariant,
 		streamErrors: map[int]StreamError{},
-		ai:           aiOff,
-		shutdown:     make(chan struct{}),
+		records:      DefaultImage(),
+		// A radio that has had no MC Set is sitting on SOME channel, and
+		// this book prints no power-on value anywhere, so the fake takes the
+		// lowest number its slot space has and says so — doc.go's register
+		// entry THE SELECTED CHANNEL AT CONSTRUCTION.
+		currentChannel: lowestChannel,
+		ai:             aiOff,
+		shutdown:       make(chan struct{}),
 	}
 	for _, opt := range opts {
 		opt(r)
