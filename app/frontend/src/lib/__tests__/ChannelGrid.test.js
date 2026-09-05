@@ -7,6 +7,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/svelte'
 import { appState } from '../state/app.svelte.js'
 import ChannelGrid from '../ChannelGrid.svelte'
+// The tier-editing block below compares what an EDIT sends against what a
+// PASTE of the same text produces, so it drives the real parser rather
+// than restating its answers.
+import { columnsFor, parsePasteCell } from '../grid/columns.js'
 
 vi.mock('../bridge/bindings.js', () => ({
 	updateChannel: vi.fn().mockResolvedValue({ Issues: [], Dirty: true }),
@@ -1160,5 +1164,673 @@ describe('empty states', () => {
 		appState.setUISpec(null)
 		render(ChannelGrid)
 		expect(screen.getByText('Grid layout unavailable')).toBeInTheDocument()
+	})
+})
+
+// --- tier-column editing (this task) -------------------------------------
+//
+// The seventeen Icom-tier columns had NO editor: a double-click on one
+// opened an empty select that cancelled on blur, so paste (grid/paste.js)
+// and CSV import were the only routes to answering such a cell. These
+// tests drive the editors themselves, one per TierColumn KIND — which is
+// what the component actually branches on (grid/columns.js's
+// TierColumn.kind), so a fixture reaching all five kinds is what covers
+// the wiring.
+//
+// The fixture bank is the REGISTERED IC-R8600's one sparse memory bank.
+// Several registered rows reach all five kinds — the IC-705's and
+// IC-9700's identical ten-field lists do, and so does the IC-7100's — but
+// this receiver's is the WIDEST: fourteen of the seventeen columns, and it
+// is the only one that reaches the seven receiver columns (tuning step,
+// program tuning step, attenuator, preamp, antenna, IP+ and the
+// tuning-step enable) that no transceiver's record maps. Two columns are
+// missing by anatomy, tx_frequency and tone_tx, because this radio has no
+// transmitter; data_mode is missing because its record has no such byte.
+//
+// ONLY TIER_UI_SPEC.Banks[0] BELOW IS GO-PINNED (fix round 2, LOW-B): it
+// is a VERBATIM COPY of the JSON Go serves for it — app/uispec_test.go's
+// icr8600MEMBankJSON, asserted against the real registration by
+// TestGetUISpec_ICR8600MEMBank_IsTheJSGridFixture. Update Banks[0] from
+// that test's failure output, never by hand — though the failure
+// message itself reads as though the whole constant were pinned ("update
+// … TIER_UI_SPEC with the new value"); it names only Banks[0], since that
+// is all the Go test constructs or compares. That includes the Display
+// strings: codeplug.DisplaySlot returns a slot of any length but three
+// unchanged (core/codeplug/channel.go), so this receiver's own
+// group-and-channel form is what the app really renders, and it is what
+// every accessible name below is built from.
+//
+// Everything else in the object — Live, ClarMaxHz/ClarStepHz,
+// GridLegendNote, TagMaxBytes and, in particular, Tones — is UI_SPEC's,
+// the FT-710's own values, spread in as SCAFFOLDING so the tests below
+// exercise the editors this bank's ten pre-tier columns share with every
+// other radio (Mode/Shift/CTCSS/Frequency/Tag/Clarifier), not a claim
+// about what the IC-R8600 serves. Tones is the sharpest divergence: the
+// FT-710's two-tone chart here is what the SERVED-list tone tests below
+// exercise, but this radio's own GetUISpec answer is `Tones: []` (every
+// Icom driver declares CTCSSTones nil) — TIER_UI_SPEC_NO_TONES, below, is
+// the shape this radio actually serves, and the tone tests against it are
+// the real case (fix round 2, MED-A).
+
+const TIER_UI_SPEC = {
+	...UI_SPEC,
+	Banks: [
+		{
+			ID: 'MEM',
+			Label: 'Memories',
+			ReadOnly: false,
+			// Sparse memory space, undocumented capacity.
+			BudgetUnstated: true,
+			Slots: [
+				{ Slot: 'G00-000', Display: 'G00-000' },
+				{ Slot: 'G00-001', Display: 'G00-001' },
+			],
+			// This receiver's 1A 00 record has no display flag at all.
+			TagDisplayDefault: { state: 'unavailable' },
+			Fields: [
+				'duplex',
+				'offset',
+				'tone_mode',
+				'tone_rx',
+				'dtcs_code',
+				'dtcs_polarity',
+				'filter',
+				'tuning_step_enabled',
+				'tuning_step',
+				'program_tuning_step',
+				'attenuator',
+				'preamp',
+				'antenna',
+				'ip_plus',
+			],
+		},
+	],
+}
+
+/** The bank's Fields, in TIER_COLUMNS order — the ride-through test walks
+ * them, and columnsFor renders one column per entry. */
+const ICR8600_TIER_FIELDS = TIER_UI_SPEC.Banks[0].Fields
+
+/** TIER_UI_SPEC's `Tones` is UI_SPEC's — the FT-710's own two-tone chart,
+ * kept there so the served-list tests exercise the shared select editor
+ * (see the tone-kind tests below). It is NOT what the IC-R8600 serves:
+ * every Icom driver declares `CTCSSTones: nil`, and GetUISpec always
+ * serialises that as `Tones: []` (app/uispec.go — `make([]ToneView, 0,
+ * …)`, never omitted), which is the REAL shape this radio's own tests
+ * (fix round 2, MED-A) drive. */
+const TIER_UI_SPEC_NO_TONES = { ...TIER_UI_SPEC, Tones: [] }
+
+/** A populated IC-R8600 row with every tier field still UNANSWERED — the
+ * state a radio read leaves them in, and the one the defect made
+ * unanswerable except by paste. @param {Record<string, unknown>} extra */
+function tierData(extra = {}) {
+	return {
+		freq_hz: 145500000,
+		mode: 'FM',
+		clar_hz: 0,
+		rx_clar: false,
+		tx_clar: false,
+		ctcss: 'OFF',
+		ctcss_tone: { state: 'unknown' },
+		shift: 'SIMPLEX',
+		tag: 'MYCALL',
+		tag_display: { state: 'unavailable' },
+		scan_skip: { state: 'unknown' },
+		...Object.fromEntries(ICR8600_TIER_FIELDS.map((f) => [f, { state: 'unknown' }])),
+		...extra,
+	}
+}
+
+/** The row every test edits, in the served Display spelling. */
+const ROW = 'G00-000'
+
+// The ten pre-tier columns are 0..9 (COLUMNS is unconditional); the bank's
+// own fourteen follow in TIER_COLUMNS order (columnsFor).
+const DUPLEX = 10
+const OFFSET = 11
+const TONE_MODE = 12
+const TONE_RX = 13
+const DTCS_CODE = 14
+const ATTENUATOR = 20
+const IP_PLUS = 23
+
+describe('tier-column editing', () => {
+	beforeEach(() => {
+		appState.setUISpec(TIER_UI_SPEC)
+		appState.setCodeplug({
+			Schema: 1,
+			Generator: 'test',
+			Radio: { model: 'IC-R8600', cat_id: '96', read_at: null, region: 'GB' },
+			Channels: [
+				{ slot: 'G00-000', data: tierData() },
+				{ slot: 'G00-001', data: null },
+			],
+			WorkingPath: '',
+			Dirty: false,
+			BaselineStale: false,
+		})
+	})
+
+	it('a freq-kind cell opens the text editor and commits the frequency in Hz', async () => {
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, OFFSET)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+
+		const input = screen.getByRole('textbox', { name: `Offset (MHz), ${ROW}` })
+		expect(input).toHaveValue('') // unanswered opens EMPTY, never the em dash the cell displays
+
+		await fireEvent.input(input, { target: { value: '0.6' } })
+		await fireEvent.keyDown(input, { key: 'Enter' })
+
+		expect(updateChannel).toHaveBeenCalledTimes(1)
+		expect(updateChannelMock.mock.calls[0][0].data.offset).toEqual({ state: 'known', value: 600000 })
+	})
+
+	it('an int-kind cell commits a whole number', async () => {
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DTCS_CODE)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+		const input = screen.getByRole('textbox', { name: `DTCS code, ${ROW}` })
+		await fireEvent.input(input, { target: { value: '023' } })
+		await fireEvent.keyDown(input, { key: 'Enter' })
+
+		expect(updateChannelMock.mock.calls[0][0].data.dtcs_code).toEqual({ state: 'known', value: 23 })
+	})
+
+	// --- a Known ZERO (fix round 1, MED-1) --------------------------------
+	//
+	// Go's FieldState.Value carries `json:"value,omitempty"`
+	// (core/codeplug/fieldstate.go), so a field that is KNOWN with a value
+	// of zero arrives here as {"state":"known"} with no `value` key at all.
+	// That is a real answer from the radio — core/spec/capabilities.go says
+	// of AttenuatorDB that "zero, when present, means off", and a simplex
+	// channel's offset is a Known 0 Hz — so it must render and open as
+	// zero. Rendering it as the em dash would make a radio-supplied answer
+	// indistinguishable from an unanswered cell, which is the one confusion
+	// this grid exists to avoid; opening the editor empty would make it
+	// unre-committable, since an emptied editor is a no-op.
+
+	it('a Known ZERO displays as zero, not as the em dash that means "no claim made"', () => {
+		appState.setCodeplug({
+			Schema: 1,
+			Generator: 'test',
+			Radio: { model: 'IC-R8600', cat_id: '96', read_at: null, region: 'GB' },
+			Channels: [
+				{ slot: ROW, data: tierData({ offset: { state: 'known' }, attenuator: { state: 'known' } }) },
+			],
+			WorkingPath: '',
+			Dirty: false,
+			BaselineStale: false,
+		})
+		const { container } = render(ChannelGrid)
+		expect(cell(container, 0, OFFSET).textContent?.trim()).toBe('0.000000')
+		expect(cell(container, 0, ATTENUATOR).textContent?.trim()).toBe('0')
+	})
+
+	it('a Known ZERO opens the freq-kind editor on zero, not empty', async () => {
+		appState.setCodeplug({
+			Schema: 1,
+			Generator: 'test',
+			Radio: { model: 'IC-R8600', cat_id: '96', read_at: null, region: 'GB' },
+			Channels: [{ slot: ROW, data: tierData({ offset: { state: 'known' } }) }],
+			WorkingPath: '',
+			Dirty: false,
+			BaselineStale: false,
+		})
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, OFFSET)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+		expect(screen.getByRole('textbox', { name: `Offset (MHz), ${ROW}` })).toHaveValue('0.000000')
+	})
+
+	it('a Known ZERO opens the int-kind editor on zero, not empty', async () => {
+		appState.setCodeplug({
+			Schema: 1,
+			Generator: 'test',
+			Radio: { model: 'IC-R8600', cat_id: '96', read_at: null, region: 'GB' },
+			Channels: [{ slot: ROW, data: tierData({ attenuator: { state: 'known' } }) }],
+			WorkingPath: '',
+			Dirty: false,
+			BaselineStale: false,
+		})
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, ATTENUATOR)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+		expect(screen.getByRole('textbox', { name: `Attenuator (dB), ${ROW}` })).toHaveValue('0')
+	})
+
+	it('a text-kind cell is FREE TEXT — no enum is invented for a vocabulary the backend does not publish', async () => {
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DUPLEX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+
+		// A text input, not a select: GetUISpec serves no duplex/tone-mode/
+		// filter vocabulary (app/types.go's UISpecView), so a pick-list here
+		// could only be a frontend-invented enum.
+		const input = screen.getByRole('textbox', { name: `Duplex, ${ROW}` })
+		expect(input.tagName).toBe('INPUT')
+
+		await fireEvent.input(input, { target: { value: 'DUP+' } })
+		await fireEvent.keyDown(input, { key: 'Enter' })
+
+		// The SAME field object a paste of that text produces — one parser,
+		// shared with grid/paste.js, so the two routes cannot diverge.
+		const columns = columnsFor(TIER_UI_SPEC.Banks[0])
+		const pasted = parsePasteCell(columns[DUPLEX], 'DUP+', TIER_UI_SPEC)
+		expect(pasted.ok).toBe(true)
+		expect(updateChannelMock.mock.calls[0][0].data.duplex).toEqual(pasted.ok && pasted.patch.duplex)
+	})
+
+	it('the other tier fields ride through an edit untouched, each in the state it arrived in', async () => {
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, TONE_MODE)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+		const input = screen.getByRole('textbox', { name: `Tone mode, ${ROW}` })
+		await fireEvent.input(input, { target: { value: 'TONE' } })
+		await fireEvent.keyDown(input, { key: 'Enter' })
+
+		const sent = updateChannelMock.mock.calls[0][0].data
+		expect(sent.tone_mode).toEqual({ state: 'known', value: 'TONE' })
+		for (const key of ICR8600_TIER_FIELDS) {
+			if (key === 'tone_mode') continue
+			expect(sent[key]).toEqual({ state: 'unknown' })
+		}
+	})
+
+	it('a tone-kind cell opens the UISpec’s own tone list and commits decihertz', async () => {
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, TONE_RX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+
+		const select = screen.getByRole('combobox', { name: `RX tone, ${ROW}` })
+		expect(screen.getByRole('option', { name: '88.5 Hz' })).toBeInTheDocument()
+
+		await fireEvent.change(select, { target: { value: '885' } })
+		await fireEvent.keyDown(select, { key: 'Enter' })
+
+		expect(updateChannelMock.mock.calls[0][0].data.tone_rx).toEqual({ state: 'known', value: 885 })
+	})
+
+	it('an unanswered tone cell opens on a no-value placeholder that commits nothing when blurred', async () => {
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, TONE_RX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+
+		const select = screen.getByRole('combobox', { name: `RX tone, ${ROW}` })
+		// The placeholder sits AT THE HEAD of the real list, not instead of
+		// it: the tones are all offered, and the selected entry is the one
+		// that answers nothing.
+		// Its label is words, not the bare em dash the CELL shows: an option's
+		// text is its accessible name, and a screen reader says nothing
+		// useful for a lone dash.
+		expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['— not set', '67.0 Hz', '88.5 Hz'])
+		expect(/** @type {HTMLSelectElement} */ (select).value).toBe('')
+
+		// Blurring without choosing must not manufacture the first tone in
+		// the list — the cell is a question, and closing it unanswered is a
+		// legitimate answer to give.
+		await fireEvent.blur(select)
+		expect(updateChannel).not.toHaveBeenCalled()
+	})
+
+	// --- a tone kind with NO served list (fix round 2, MED-A) --------------
+	//
+	// Every registered Icom driver declares `CTCSSTones: nil` and a
+	// numeric range instead (core/spec/capabilities.go), so GetUISpec
+	// serves `Tones: []` for the only radios that render a tier tone
+	// column at all — the two tests above drive a chart (TIER_UI_SPEC's
+	// FT-710-borrowed `Tones`) no radio with a tone_tx/tone_rx column
+	// actually serves. Before this fix a Known cell on such a radio opened
+	// a select with NOTHING in it: the value vanished from view with no
+	// entry to keep or re-choose. The two tests below are the real case,
+	// on TIER_UI_SPEC_NO_TONES.
+
+	it('a Known tone cell with a SERVED list opens the select on its current value, no placeholder', async () => {
+		appState.setCodeplug({
+			Schema: 1,
+			Generator: 'test',
+			Radio: { model: 'IC-R8600', cat_id: '96', read_at: null, region: 'GB' },
+			Channels: [{ slot: ROW, data: tierData({ tone_rx: { state: 'known', value: 885 } }) }],
+			WorkingPath: '',
+			Dirty: false,
+			BaselineStale: false,
+		})
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, TONE_RX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+
+		const select = screen.getByRole('combobox', { name: `RX tone, ${ROW}` })
+		// No head-of-list placeholder once the cell is Known — only the
+		// select an UNANSWERED cell opens carries one (see above).
+		expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['67.0 Hz', '88.5 Hz'])
+		expect(/** @type {HTMLSelectElement} */ (select).value).toBe('885')
+	})
+
+	it('a Known tone cell with NO served tone list edits as free text, opening on its own display spelling', async () => {
+		appState.setUISpec(TIER_UI_SPEC_NO_TONES)
+		appState.setCodeplug({
+			Schema: 1,
+			Generator: 'test',
+			Radio: { model: 'IC-R8600', cat_id: '96', read_at: null, region: 'GB' },
+			Channels: [{ slot: ROW, data: tierData({ tone_rx: { state: 'known', value: 885 } }) }],
+			WorkingPath: '',
+			Dirty: false,
+			BaselineStale: false,
+		})
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, TONE_RX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+
+		// A text input, not a combobox-with-nothing-in-it: the widget the
+		// defect left behind.
+		expect(screen.queryByRole('combobox', { name: `RX tone, ${ROW}` })).not.toBeInTheDocument()
+		const input = screen.getByRole('textbox', { name: `RX tone, ${ROW}` })
+		// Opens on the SAME spelling displayValue would render for it
+		// (toneDisplay's own table-or-arithmetic fallback), so an untouched
+		// commit round-trips.
+		expect(input).toHaveValue('88.5 Hz')
+
+		await fireEvent.input(input, { target: { value: '100.0 Hz' } })
+		await fireEvent.keyDown(input, { key: 'Enter' })
+
+		// The SAME field a paste of that text would produce — parsed
+		// through parsePasteCell exactly as the other free-text tier
+		// kinds are, per ruling §4.
+		const columns = columnsFor(TIER_UI_SPEC_NO_TONES.Banks[0])
+		const pasted = parsePasteCell(columns[TONE_RX], '100.0 Hz', TIER_UI_SPEC_NO_TONES)
+		expect(pasted.ok).toBe(true)
+		expect(updateChannelMock.mock.calls[0][0].data.tone_rx).toEqual(pasted.ok && pasted.patch.tone_rx)
+	})
+
+	it('an UNANSWERED tone cell with no served tone list opens the free-text editor empty', async () => {
+		appState.setUISpec(TIER_UI_SPEC_NO_TONES)
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, TONE_RX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+
+		expect(screen.queryByRole('combobox', { name: `RX tone, ${ROW}` })).not.toBeInTheDocument()
+		expect(screen.getByRole('textbox', { name: `RX tone, ${ROW}` })).toHaveValue('')
+	})
+
+	// --- the first answer to a tier bool (fix round 1, MED-2) -------------
+	//
+	// An UNANSWERED tier bool is answered by CHOOSING, never by a keystroke
+	// that manufactures one. A tier field's Unknown blocks nothing and is
+	// never sent (core/codeplug/diff.go's touchedFields adds a tier field
+	// only where its state is Known), so committing Off on the first Enter
+	// would convert "this codeplug makes no claim" into "write Off to the
+	// radio" — with no editor, no confirmation, no erase for a tier field
+	// and no undo anywhere in this frontend. That is defaulting an omitted
+	// semantic, which this repository's standing rules forbid.
+	//
+	// Once the cell IS Known the one-keystroke flip stays: that is the
+	// genuinely cheap, genuinely reversible case, and it is Tag display's
+	// Known half exactly.
+
+	it('an unanswered bool-kind cell opens a three-way select, and commits nothing when blurred', async () => {
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, IP_PLUS)
+		cellEl.focus()
+		expect(cellEl.textContent?.trim()).toBe('—')
+
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+		expect(updateChannel).not.toHaveBeenCalled() // no value manufactured by the keystroke itself
+
+		const select = screen.getByRole('combobox', { name: `IP+, ${ROW}` })
+		expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['— not set', 'On', 'Off'])
+		expect(/** @type {HTMLSelectElement} */ (select).value).toBe('')
+
+		await fireEvent.blur(select)
+		expect(updateChannel).not.toHaveBeenCalled()
+	})
+
+	it('choosing Off from that select commits the same field a paste of "off" produces', async () => {
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, IP_PLUS)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: ' ' }) // Space activates it too
+
+		const select = screen.getByRole('combobox', { name: `IP+, ${ROW}` })
+		await fireEvent.change(select, { target: { value: 'off' } })
+		await fireEvent.keyDown(select, { key: 'Enter' })
+
+		const columns = columnsFor(TIER_UI_SPEC.Banks[0])
+		const pasted = parsePasteCell(columns[IP_PLUS], 'off', TIER_UI_SPEC)
+		expect(pasted.ok).toBe(true)
+		expect(updateChannelMock.mock.calls[0][0].data.ip_plus).toEqual(pasted.ok && pasted.patch.ip_plus)
+	})
+
+	it('a Known bool-kind cell still flips in one keystroke, with no editor', async () => {
+		updateChannelMock.mockImplementation(async (ch) => {
+			appState.applyChannelEdits([ch])
+			return { Issues: [], Dirty: true }
+		})
+		appState.setCodeplug({
+			Schema: 1,
+			Generator: 'test',
+			Radio: { model: 'IC-R8600', cat_id: '96', read_at: null, region: 'GB' },
+			Channels: [{ slot: ROW, data: tierData({ ip_plus: { state: 'known', value: false } }) }],
+			WorkingPath: '',
+			Dirty: false,
+			BaselineStale: false,
+		})
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, IP_PLUS)
+		cellEl.focus()
+		expect(cellEl.textContent?.trim()).toBe('Off')
+
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+		await Promise.resolve()
+		expect(updateChannelMock.mock.calls[0][0].data.ip_plus).toEqual({ state: 'known', value: true })
+		expect(cell(container, 0, IP_PLUS).textContent?.trim()).toBe('On')
+		expect(screen.queryByRole('combobox')).not.toBeInTheDocument() // no editor: a one-keystroke commit
+
+		await fireEvent.keyDown(cell(container, 0, IP_PLUS), { key: ' ' })
+		await Promise.resolve()
+		expect(updateChannelMock.mock.calls[1][0].data.ip_plus).toEqual({ state: 'known', value: false })
+	})
+
+	it('blurring a tier text editor COMMITS the typed value, as the Frequency editor does', async () => {
+		// The route Tab out of the cell takes: nothing special-cases Tab, so
+		// it blurs the input and the onblur commit fires — the same thing
+		// Tab has always done out of the Frequency and Tag editors. The tone
+		// select's blur is pinned above; this is the free-text half.
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DUPLEX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+		const input = screen.getByRole('textbox', { name: `Duplex, ${ROW}` })
+		await fireEvent.input(input, { target: { value: 'DUP-' } })
+
+		await fireEvent.blur(input)
+
+		expect(updateChannel).toHaveBeenCalledTimes(1)
+		expect(updateChannelMock.mock.calls[0][0].data.duplex).toEqual({ state: 'known', value: 'DUP-' })
+	})
+
+	it('Escape cancels a tier edit without committing', async () => {
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DUPLEX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+		const input = screen.getByRole('textbox', { name: `Duplex, ${ROW}` })
+		await fireEvent.input(input, { target: { value: 'DUP-' } })
+		await fireEvent.keyDown(input, { key: 'Escape' })
+
+		expect(updateChannel).not.toHaveBeenCalled()
+		expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+		expect(cell(container, 0, DUPLEX).textContent?.trim()).toBe('—')
+	})
+
+	it('an unreadable entry is refused the way the Frequency editor refuses one — an alert, no commit', async () => {
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DTCS_CODE)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+		const input = screen.getByRole('textbox', { name: `DTCS code, ${ROW}` })
+		await fireEvent.input(input, { target: { value: 'not a number' } })
+		await fireEvent.keyDown(input, { key: 'Enter' })
+
+		expect(updateChannel).not.toHaveBeenCalled()
+		expect(appState.alerts).toHaveLength(1)
+		expect(appState.alerts[0].message).toBe('"not a number" is not a whole number for DTCS code — the edit was not applied')
+	})
+
+	it('an unchanged tier commit is skipped (no call)', async () => {
+		appState.setCodeplug({
+			Schema: 1,
+			Generator: 'test',
+			Radio: { model: 'IC-R8600', cat_id: '96', read_at: null, region: 'GB' },
+			Channels: [{ slot: ROW, data: tierData({ duplex: { state: 'known', value: 'DUP+' } }) }],
+			WorkingPath: '',
+			Dirty: false,
+			BaselineStale: false,
+		})
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DUPLEX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+
+		// A Known cell opens on the value it already holds, in the spelling
+		// the parser reads back, so committing it untouched is a no-op.
+		const input = screen.getByRole('textbox', { name: `Duplex, ${ROW}` })
+		expect(input).toHaveValue('DUP+')
+		await fireEvent.keyDown(input, { key: 'Enter' })
+		expect(updateChannel).not.toHaveBeenCalled()
+	})
+
+	// A KNOWN-ZERO commit is the mirror of the test above (fix round 2,
+	// MED-3): fix round 1 made a Known-zero cell OPEN on zero, but the
+	// unchanged-skip in commitTierTextEditor still compared the field's
+	// raw (omitted) `value` against the parser's `0`, so an untouched
+	// Enter on such a cell sent a redundant UpdateChannel — and
+	// app/codeplug.go's applyEditsLocked marks the working copy dirty
+	// unconditionally, so merely opening and closing a Known-zero
+	// attenuator or offset cell looked like an edit that changed nothing.
+	it('an unchanged KNOWN-ZERO commit is skipped (no call) — fix round 2, MED-3', async () => {
+		appState.setCodeplug({
+			Schema: 1,
+			Generator: 'test',
+			Radio: { model: 'IC-R8600', cat_id: '96', read_at: null, region: 'GB' },
+			Channels: [{ slot: ROW, data: tierData({ attenuator: { state: 'known' } }) }],
+			WorkingPath: '',
+			Dirty: false,
+			BaselineStale: false,
+		})
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, ATTENUATOR)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+
+		const input = screen.getByRole('textbox', { name: `Attenuator (dB), ${ROW}` })
+		expect(input).toHaveValue('0') // opens on the zero the field is missing (fix round 1, MED-1)
+		await fireEvent.keyDown(input, { key: 'Enter' })
+		expect(updateChannel).not.toHaveBeenCalled()
+	})
+
+	it('an ABSENT cell — Go’s {"state": ""} — edits exactly as an unanswered one does', async () => {
+		appState.setCodeplug({
+			Schema: 1,
+			Generator: 'test',
+			Radio: { model: 'IC-R8600', cat_id: '96', read_at: null, region: 'GB' },
+			Channels: [{ slot: ROW, data: tierData({ duplex: { state: '' } }) }],
+			WorkingPath: '',
+			Dirty: false,
+			BaselineStale: false,
+		})
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DUPLEX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+		const input = screen.getByRole('textbox', { name: `Duplex, ${ROW}` })
+		await fireEvent.input(input, { target: { value: 'OFF' } })
+		await fireEvent.keyDown(input, { key: 'Enter' })
+
+		expect(updateChannelMock.mock.calls[0][0].data.duplex).toEqual({ state: 'known', value: 'OFF' })
+	})
+
+	it('an UNAVAILABLE cell stays refused: no editor, no toggle, no commit', async () => {
+		appState.setCodeplug({
+			Schema: 1,
+			Generator: 'test',
+			Radio: { model: 'IC-R8600', cat_id: '96', read_at: null, region: 'GB' },
+			Channels: [
+				{
+					slot: ROW,
+					data: tierData({ duplex: { state: 'unavailable' }, ip_plus: { state: 'unavailable' } }),
+				},
+			],
+			WorkingPath: '',
+			Dirty: false,
+			BaselineStale: false,
+		})
+		const { container } = render(ChannelGrid)
+		const duplexCell = cell(container, 0, DUPLEX)
+		duplexCell.focus()
+		await fireEvent.keyDown(duplexCell, { key: 'Enter' })
+		expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+
+		const boolCell = cell(container, 0, IP_PLUS)
+		boolCell.focus()
+		await fireEvent.keyDown(boolCell, { key: 'Enter' })
+		expect(screen.queryByRole('combobox')).not.toBeInTheDocument() // not even the three-way select
+		expect(updateChannel).not.toHaveBeenCalled()
+	})
+
+	it('typing a character opens a tier text editor seeded with it, as it does for Frequency', async () => {
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DUPLEX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'D' })
+		expect(screen.getByRole('textbox', { name: `Duplex, ${ROW}` })).toHaveValue('D')
+	})
+
+	it('a read-only bank opens no tier editor', async () => {
+		appState.setUISpec({
+			...TIER_UI_SPEC,
+			Banks: [{ ...TIER_UI_SPEC.Banks[0], ReadOnly: true }],
+		})
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, DUPLEX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+		expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+		expect(updateChannel).not.toHaveBeenCalled()
+	})
+
+	it('every one of this bank’s fourteen columns opens the editor its kind dictates', async () => {
+		// The tests above drive one column per KIND, which is what the
+		// component branches on. This one walks the whole rendered row, so a
+		// column that renders but reaches no editor — the state all
+		// seventeen were in before this lane — cannot hide behind a
+		// same-kind neighbour. The seven receiver columns are only reachable
+		// on this row: no transceiver's record maps them.
+		const columns = columnsFor(TIER_UI_SPEC.Banks[0])
+		expect(columns).toHaveLength(10 + ICR8600_TIER_FIELDS.length)
+
+		for (let c = 10; c < columns.length; c++) {
+			const column = columns[c]
+			const { container, unmount } = render(ChannelGrid)
+			const cellEl = cell(container, 0, c)
+			cellEl.focus()
+			await fireEvent.keyDown(cellEl, { key: 'Enter' })
+			// Unanswered, so the tone and bool kinds are both on their
+			// placeholder select and every other kind on the free-text input.
+			const role = column.kind === 'tone' || column.kind === 'bool' ? 'combobox' : 'textbox'
+			expect(screen.getByRole(role, { name: `${column.label}, ${ROW}` }), column.id).toBeInTheDocument()
+			unmount()
+		}
+		expect(updateChannel).not.toHaveBeenCalled() // opening an editor commits nothing
 	})
 })

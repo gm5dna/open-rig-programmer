@@ -3625,6 +3625,81 @@ func TestGetUISpec_IC7610MEMBank_IsTheJSGridFixture(t *testing.T) {
 	t.Logf("IC-7610 MEM BankView as the frontend receives it: %s", raw)
 }
 
+// icr8600MEMBankJSON is the IC-R8600's one bank as GetUISpec serves it to
+// the frontend, for an offline working copy holding the two slots
+// "G00-000" and "G00-001".
+//
+// It is the source of the TIER_UI_SPEC fixture in
+// app/frontend/src/lib/__tests__/ChannelGrid.test.js, which is a verbatim
+// copy of this literal (JSON being a subset of the JS object syntax it is
+// written in) — the same relationship ic7610MEMBankJSON has with
+// tierColumns.test.js's ic7610MemBank, and for the same reason.
+//
+// THIS ROW RATHER THAN THE IC-7100's, which the JS fixture used before
+// the review of this lane: fourteen of the seventeen tier columns render
+// here against the IC-7100's ten, and they include the seven receiver
+// columns (tuning step, attenuator, preamp, antenna, IP+ and the rest) no
+// other registered model reaches. All five TierColumn kinds are still
+// present, so nothing the old fixture drove is lost.
+//
+// NOTHING IS TRIMMED BY THE COPY: the working copy below holds exactly
+// the two channels the grid fixture needs, so its Slots list IS the
+// served one, Display strings included. Those come from
+// codeplug.DisplaySlot (core/codeplug/channel.go), which returns a slot
+// of any length but three unchanged — so this receiver's own bank-letter
+// form is what the app renders and what every accessible name in the JS
+// tests is built from.
+// BudgetUnstated is present here where it is absent from the IC-7610's
+// literal, and it is a fact about this bank rather than noise: the
+// receiver's memory space is sparse with an undocumented capacity
+// (BankView.BudgetUnstated, `json:",omitempty"`), so the key appears only
+// for a bank that says so.
+const icr8600MEMBankJSON = `{"ID":"MEM","Label":"Memories","ReadOnly":false,"BudgetUnstated":true,` +
+	`"Slots":[{"Slot":"G00-000","Display":"G00-000"},{"Slot":"G00-001","Display":"G00-001"}],` +
+	`"TagDisplayDefault":{"state":"unavailable"},` +
+	`"Fields":["duplex","offset","tone_mode","tone_rx","dtcs_code","dtcs_polarity","filter",` +
+	`"tuning_step_enabled","tuning_step","program_tuning_step","attenuator","preamp","antenna","ip_plus"]}`
+
+// TestGetUISpec_ICR8600MEMBank_IsTheJSGridFixture pins the JSON the
+// frontend actually receives for the IC-R8600's one bank, so the JS grid
+// fixture copied from it cannot drift away from the Go side unnoticed:
+// change this receiver's capabilities, or bankTierFields, or BankView's
+// shape, and this test fails naming the difference — at which point the
+// JS fixture named in icr8600MEMBankJSON's comment must be updated with
+// the new literal.
+//
+// It is TestGetUISpec_IC7610MEMBank_IsTheJSGridFixture's mirror for the
+// second JS fixture, and it asserts the SERIALISED form for the same
+// reason that one does: what the frontend consumes is the JSON, key names
+// and all, and a renamed field would leave a struct-level assertion
+// passing while the grid silently stopped finding the value.
+func TestGetUISpec_ICR8600MEMBank_IsTheJSGridFixture(t *testing.T) {
+	a, _ := newTestApp(t)
+	a.mu.Lock()
+	a.working = &codeplug.Codeplug{
+		Schema:   codeplug.CurrentSchema,
+		Radio:    codeplug.RadioInfo{Model: wiring.ICR8600Model},
+		Channels: []codeplug.Channel{{Slot: "G00-000"}, {Slot: "G00-001"}},
+	}
+	a.mu.Unlock()
+
+	got, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (offline, IC-R8600 working copy): unexpected error: %v", err)
+	}
+	if len(got.Banks) != 1 {
+		t.Fatalf("banks = %v, want exactly the one bank this receiver has", bankIDs(got.Banks))
+	}
+	raw, err := json.Marshal(got.Banks[0])
+	if err != nil {
+		t.Fatalf("marshalling the BankView: %v", err)
+	}
+	if string(raw) != icr8600MEMBankJSON {
+		t.Errorf("the IC-R8600's BankView is now\n  %s\nbut the JS grid fixture was copied from\n  %s\n(update app/frontend/src/lib/__tests__/ChannelGrid.test.js's TIER_UI_SPEC with the new value)", raw, icr8600MEMBankJSON)
+	}
+	t.Logf("IC-R8600 BankView as the frontend receives it: %s", raw)
+}
+
 // TestBankReadOnly_RegisteredIC7851Pair_RealHardwareProfile pins what a
 // REAL IC-7851's and a REAL IC-7850's grids do today, bank by bank,
 // through real registration — the additions tier's mirror of
