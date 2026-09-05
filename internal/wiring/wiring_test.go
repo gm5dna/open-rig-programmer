@@ -455,11 +455,11 @@ func TestOpenFakeSessionFor_EveryRegisteredModel_ReadsEveryDefaultSlot(t *testin
 			// bump a Yaesu codeplug's schema and break byte identity.
 			//
 			// What this actually exercises, and no more: the schema-3
-			// arm by the five Yaesu models (FT-710, FTdx10, FTdx101D,
-			// FTdx101MP, FT-891 — the FT-891 reaches none of the tier
-			// fields either), and the >= 4 arm by the IC-R8600 alone,
-			// whose fake ships populated default slots at schema 5.
-			// Those six are also the only models the Absent sweep
+			// arm by the six Yaesu models (FT-710, FTdx10, FTdx101D,
+			// FTdx101MP, FT-891, FT-991A — neither Tier 1 model reaches
+			// any of the tier fields either), and the >= 4 arm by the
+			// IC-R8600 alone, whose fake ships populated default slots
+			// at schema 5. Those seven are also the only models the Absent sweep
 			// above is non-vacuous for. The other ten Icom fakes have
 			// EMPTY default images — nothing to read a tier state from
 			// — so both the sweep and the >= 4 arm say nothing about
@@ -2640,7 +2640,7 @@ func registerFramingFixture(t *testing.T, model string, stopBits int) {
 }
 
 // TestOpenRealSessionFor_StopBitsFollowAReportingDriver is spec D3.1's
-// half that the five registered Yaesu models cannot prove: a driver
+// half that the six registered Yaesu models cannot prove: a driver
 // implementing driver.SerialFramingReporter has its answer carried into
 // the port's own configuration, so an Icom radio's 8-N-1 line is opened
 // 8-N-1 rather than at transport's fixed 8-N-2.
@@ -2700,7 +2700,7 @@ func TestOpenRealSessionFor_StopBitsRefuseAnImpossibleReport(t *testing.T) {
 	}
 }
 
-// yaesuModels names the five registered Yaesu models, BY NAME rather than
+// yaesuModels names the six registered Yaesu models, BY NAME rather than
 // by "every registered model" — the scoping Wave 4's IC-7610 registration
 // (task R1) forced on the three tests below. Before Wave 4, SupportedModels()
 // and "every registered model" were the same set and a hardcoded
@@ -2745,7 +2745,7 @@ var yaesuModels = []string{DefaultModel, FTdx10Model, FTdx101DModel, FTdx101MPMo
 // MEMBERSHIP HERE IS ABOUT THE MAKER, NOT ABOUT SERIAL FRAMING, and the
 // IC-7100 is why that distinction now has to be stated: it is the first
 // Icom row that implements NO driver.SerialFramingReporter, so it opens
-// at 8-N-2 like the five Yaesu rows. It still belongs in this list —
+// at 8-N-2 like the six Yaesu rows. It still belongs in this list —
 // TestYaesuAndIcomModelsPartitionSupportedModels partitions
 // SupportedModels() by maker — and its framing coverage is
 // TestOpenRealSessionFor_IC7100OpensAtEightNTwo rather than an
@@ -2782,7 +2782,7 @@ func TestYaesuAndIcomModelsPartitionSupportedModels(t *testing.T) {
 
 // TestOpenRealSessionFor_EveryYaesuModelOpensAtEightNTwo is the pin the
 // adjudication asks for, on the honest observable: the PORT CONFIGURATION
-// each of the five registered Yaesu models is opened with. None of them
+// each of the six registered Yaesu models is opened with. None of them
 // implements SerialFramingReporter, so each must still reach the serial
 // layer at transport.DefaultStopBits — before and after E2, unchanged.
 //
@@ -2800,7 +2800,7 @@ func TestOpenRealSessionFor_EveryYaesuModelOpensAtEightNTwo(t *testing.T) {
 				t.Fatalf("realDriverFor(%q): %v", model, err)
 			}
 			if r, ok := d.(driver.SerialFramingReporter); ok {
-				t.Fatalf("%s implements SerialFramingReporter (reporting %d) — the five Yaesu models must not, so that 8-N-2 stays their port configuration by default rather than by a driver's statement", model, r.StopBits())
+				t.Fatalf("%s implements SerialFramingReporter (reporting %d) — the six Yaesu models must not, so that 8-N-2 stays their port configuration by default rather than by a driver's statement", model, r.StopBits())
 			}
 
 			got := recordSerialConfig(t)
@@ -3918,5 +3918,190 @@ func TestOpenFakeSessionFor_FT891MTReadRejectionEndToEnd(t *testing.T) {
 	}
 	if !errors.Is(err, cat.ErrRejected) {
 		t.Error("ReadAll: errors.Is(err, cat.ErrRejected) = false, want true")
+	}
+}
+
+// TestOpenFakeSessionFor_FT991ACloneWriteVerifyRoundTrip is the end-to-end
+// write→verify leg Stage 2's lane A DEFERRED to this task (plan task 11,
+// moved to 15a by the rev-3 review): that lane ran without
+// internal/fakeft991a on its branch, so core/driver/ft991a's own
+// TestClone_WriteThenVerifyIsClonesOwnPair could prove the pair only against
+// a scripted responder. This proves the WIRING — that the registered model's
+// Simulated profile, its registered fake rig and core/clone's write→verify
+// pair actually compose — from ReadAll to read-back.
+//
+// It can only live here. The composition needs a Simulated-profile driver
+// paired with internal/fakeft991a, and that pairing exists in exactly one
+// place repo-wide: fake.go's fakeDrivers entry, pinned there by
+// internal/guards' TestSimulatedProfileTokensConfinement.
+//
+// THE VERIFICATION IS CLONE'S, NOT THE DRIVER'S, and that boundary is plan
+// decision P12: this driver's WriteChannel sends ONE combined MT Set and
+// reports it sent and unrejected, and the read-back comparison that turns
+// that into "the radio holds what was asked for" belongs one layer up.
+// Report.Verified below is core/clone's own answer, not a re-derivation by
+// this test.
+//
+// TWO DELTAS, ONE PER BANK, because this radio's two banks are where it is
+// least like its siblings:
+//
+//   - A MEM MODIFY on "002", the default image's tagged channel, whose tag
+//     changes. It is a plain overwrite of an occupied slot.
+//   - A PMS CREATE at "108", which the default image deliberately leaves
+//     empty (its populated pairs are the first and the last, 100/101 and
+//     116/117). The slot string is a DECIMAL WIRE NUMBER, which is the whole
+//     novelty of this radio's PMS bank: every registered sibling's PMS slots
+//     are "P1L".."P9U", strings this dialect's ParseSlot refuses. A create
+//     here therefore exercises the numbering end to end — plan, write frame,
+//     read-back, comparison — rather than only inside the driver's own
+//     package.
+//
+// The write is against the FAKE, and nothing here is evidence about any
+// physical FT-991A: that model's RealHardware profile reports every Write
+// Unverified while writeTrialsComplete is false, so the capability gate
+// refuses before a frame is built.
+func TestOpenFakeSessionFor_FT991ACloneWriteVerifyRoundTrip(t *testing.T) {
+	ctx := testCtx(t)
+
+	sess, closeAll, err := OpenFakeSessionFor(ctx, FT991AModel)
+	if err != nil {
+		t.Fatalf("OpenFakeSessionFor(%q): unexpected error: %v", FT991AModel, err)
+	}
+	t.Cleanup(func() {
+		if err := closeAll(); err != nil {
+			t.Errorf("closeAll: unexpected error: %v", err)
+		}
+	})
+
+	// The rig answered as this model's own radio, not as a sibling's.
+	wantCATID := NewFT991ARealDriver().Capabilities().CATID
+	if wantCATID == "" {
+		t.Fatal("the ft991a driver declares an empty CATID — the identity check below would pass vacuously")
+	}
+	if got := sess.Identity().CATID; got != wantCATID {
+		t.Errorf("Identity().CATID = %q, want %q — the fake rig answering this session is not the FT-991A's own", got, wantCATID)
+	}
+
+	service := clone.NewService(sess, clone.SnapshotStore{Dir: t.TempDir()})
+
+	// The baseline is READ, through the caller every real send goes through,
+	// rather than hand-built: a baseline that disagreed with the rig would
+	// surface as extra Modified entries or as a verify-read drift abort, and
+	// reading it is what makes the plan below exactly two entries.
+	baseline, err := service.ReadAll(ctx)
+	if err != nil {
+		t.Fatalf("ReadAll: unexpected error: %v", err)
+	}
+
+	const memSlot, pmsSlot = "002", "108"
+	var memData, pmsTemplate *codeplug.ChannelData
+	for _, ch := range baseline.Channels {
+		switch ch.Slot {
+		case memSlot:
+			memData = ch.Data
+		case "100":
+			pmsTemplate = ch.Data
+		case pmsSlot:
+			if ch.Data != nil {
+				t.Fatalf("the default image populates PMS slot %q — this test needs it EMPTY so the write below is a create", pmsSlot)
+			}
+		}
+	}
+	if memData == nil {
+		t.Fatalf("the default image leaves MEM slot %q empty — this test needs it occupied so the write below is an overwrite", memSlot)
+	}
+	if pmsTemplate == nil {
+		t.Fatal(`the default image leaves PMS slot "100" empty — this test builds its create from that slot's read shape`)
+	}
+
+	// Both deltas are built FROM WHAT THE READ PATH PRODUCED, so every field
+	// this test does not deliberately change already matches the rig and the
+	// plan carries exactly the two entries below.
+	memAfter := *memData
+	memAfter.Tag = "NETCALL"
+	pmsAfter := *pmsTemplate
+	pmsAfter.FreqHz = 50_000_000
+	pmsAfter.Tag = ""
+
+	file := &codeplug.Codeplug{Schema: baseline.Schema, Radio: baseline.Radio}
+	file.Channels = append(file.Channels, baseline.Channels...)
+	for i := range file.Channels {
+		switch file.Channels[i].Slot {
+		case memSlot:
+			file.Channels[i].Data = &memAfter
+		case pmsSlot:
+			file.Channels[i].Data = &pmsAfter
+		}
+	}
+
+	plan, err := service.PrepareSend(ctx, file)
+	if err != nil {
+		t.Fatalf("PrepareSend: unexpected error: %v", err)
+	}
+	diff := plan.Diff()
+	deltas := map[string]codeplug.DiffKind{}
+	for _, e := range diff.Entries {
+		if e.Kind == codeplug.DiffUnchanged {
+			continue
+		}
+		if e.Blocked {
+			t.Fatalf("diff entry for slot %q is Blocked (%q) — neither delta touches a field this radio refuses", e.Slot, e.BlockReason)
+		}
+		deltas[e.Slot] = e.Kind
+	}
+	wantDeltas := map[string]codeplug.DiffKind{memSlot: codeplug.DiffModified, pmsSlot: codeplug.DiffAdded}
+	if !reflect.DeepEqual(deltas, wantDeltas) {
+		t.Fatalf("PrepareSend's deltas = %v, want %v — one MEM overwrite and one PMS create, and nothing else", deltas, wantDeltas)
+	}
+
+	report, err := service.Execute(ctx, plan, plan.ConfirmationDigest(), clone.ExecuteOptions{
+		// The first-write gate wants a human-supplied string. It is not a
+		// claim about any real radio — no FT-991A has ever been connected to
+		// this project — only the value the gate requires.
+		FirmwareConfirmed: "registered fake",
+	})
+	if err != nil {
+		t.Fatalf("Execute: unexpected error: %v (the Simulated profile must be write-capable against the registered fake)", err)
+	}
+	if report.Aborted {
+		t.Fatalf("Execute aborted: %s (slots: %+v)", report.AbortReason, report.Slots)
+	}
+	if report.Written != 2 || report.Verified != 2 {
+		t.Errorf("Execute wrote %d and verified %d channel(s), want 2 and 2 — Report.Verified is core/clone's OWN read-back comparison (plan P12), not a re-derivation by this test", report.Written, report.Verified)
+	}
+	for _, sr := range report.Slots {
+		if sr.Action != "write" || !sr.VerifyOK {
+			t.Errorf("slot %q: Action = %q, VerifyOK = %v, want \"write\" and true (%s)", sr.Slot, sr.Action, sr.VerifyOK, sr.Detail)
+		}
+	}
+
+	// The read-back, this time straight from the session, so the assertion
+	// does not rest on the same comparison it is checking.
+	for _, tc := range []struct {
+		slot string
+		want *codeplug.ChannelData
+	}{
+		{memSlot, &memAfter},
+		{pmsSlot, &pmsAfter},
+	} {
+		got, err := sess.ReadChannel(ctx, tc.slot)
+		if err != nil {
+			t.Fatalf("ReadChannel(%q) after the send: unexpected error: %v", tc.slot, err)
+		}
+		if got.Data == nil {
+			t.Fatalf("ReadChannel(%q) after the send: Data is nil, want the channel just written", tc.slot)
+		}
+		if got.Slot != tc.slot {
+			t.Errorf("read-back Slot = %q, want %q", got.Slot, tc.slot)
+		}
+		if got.Data.FreqHz != tc.want.FreqHz {
+			t.Errorf("slot %q read-back FreqHz = %d, want %d", tc.slot, got.Data.FreqHz, tc.want.FreqHz)
+		}
+		if got.Data.Tag != tc.want.Tag {
+			t.Errorf("slot %q read-back Tag = %q, want %q — the combined MT form carries the tag in the SAME frame as the fields", tc.slot, got.Data.Tag, tc.want.Tag)
+		}
+		if got.Data.CTCSS != tc.want.CTCSS {
+			t.Errorf("slot %q read-back CTCSS = %q, want %q", tc.slot, got.Data.CTCSS, tc.want.CTCSS)
+		}
 	}
 }
