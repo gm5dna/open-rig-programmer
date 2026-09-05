@@ -9,6 +9,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft710"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ft891"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx10"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx101"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
@@ -23,6 +24,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/icr8600"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx10"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx101"
+	"github.com/gm5dna/open-rig-programmer/internal/fakeft891"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic705"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7100"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7300"
@@ -411,6 +413,49 @@ var IC7100FakeSessionOpts []fakeic7100.Option
 // only because no test using it calls t.Parallel().
 var ICR8600FakeSessionOpts []fakeicr8600.Option
 
+// FT891FakeSessionOpts is the FT-891's own option source: extra
+// fakeft891.Option values applied, on top of the always-empty production
+// default, to the FT-891's fake rig on every OpenFakeSessionFor call in this
+// process. It is FakeSessionOpts' FT-891 counterpart and, like every
+// variable above, NOT a generalisation of anything — a separate variable, of
+// a different element type, read at CALL time inside the FT891 entry's own
+// newRadio closure below.
+//
+// NO SHARED-TYPE HAZARD, as for the single-model Icom variables above and
+// unlike the FTdx101 and IC-7851 pairs': internal/fakeft891 simulates the
+// FT-891 specifically and its Option is a func(*fakeft891.Radio), so a
+// closure reading another model's variable is a COMPILE ERROR rather than a
+// silent crossing. This row therefore needs no non-interference test of the
+// FTdx101 pair's kind — the type system already carries that proof — and the
+// test it does have (TestOpenFakeSessionFor_FT891OptionSourceIsItsOwn) pins
+// the OTHER half: that this variable actually reaches this model's rig.
+//
+// LEFT AT ITS NIL ZERO VALUE THE DEMO FT-891 SHIPS TWO OCCUPIED MEMORY
+// CHANNELS AND NINE POPULATED PMS PAIRS, and NO 5 MHz or emergency channel
+// at all — internal/fakeft891's own DefaultImage, constrained that way on
+// purpose (plan decision P13). The ">= 1 populated MEM channel" half is what
+// keeps this package's read-every-default-slot fleet pin non-vacuous for
+// this row; the "no 5xx/EMG" half is what keeps a plain `--fake --model
+// FT-891` session's discovery walk finding nothing, so the discovered banks
+// are a thing a test asks for rather than a thing the demo radio happens to
+// have.
+//
+// ITS USERS ARE THE TESTS THAT NEED WHAT THE DEFAULT IMAGE DELIBERATELY
+// WITHHOLDS: fakeft891.With5MHz() / fakeft891.WithEMG() for the discovered
+// banks (this package's own SynthesiseDiscoveredBanks agreement test and
+// app/uispec_test.go's FT-891 discovered-bank test), and
+// fakeft891.WithEXUnavailable / WithEXSetting for the settings legs — each
+// through the very code path a real `--fake --model FT-891` invocation uses.
+//
+// No production flag or GUI control populates this — it adds no second
+// ft891.Simulated reference to any non-test file, so
+// TestSimulatedProfileTokensConfinement's new ft891 row keeps passing.
+//
+// A test that sets it MUST restore the previous value (e.g. via t.Cleanup) —
+// this is shared, unsynchronised package state, acceptable only because no
+// test using it calls t.Parallel().
+var FT891FakeSessionOpts []fakeft891.Option
+
 // fakeRadio is everything OpenFakeSessionFor needs from a model's fake
 // rig: a port to hand the driver, and a way to shut the rig down
 // afterwards. Interface-typed rather than *fakeradio.Radio (M9c-5 E5)
@@ -513,6 +558,15 @@ var (
 	// IC-705's, IC-9700's, IC-905's and IC-7100's case, not the two
 	// adapters' above.
 	_ fakeRadio = (*fakeicr8600.Radio)(nil)
+	// The FT-891's (Tier 1) — DIRECTLY, and so still no fourth adapter:
+	// internal/fakeft891's own Port() method is already declared to return
+	// io.ReadWriteCloser (internal/fakeft891/fakeft891.go:89, checked
+	// against source before this registration, per the task brief), so
+	// *fakeft891.Radio satisfies fakeRadio as written. It is the four Yaesu
+	// simulators' case as much as the IC-7100's and IC-R8600's: the split
+	// in this table runs by which package the simulator was written
+	// against, not by maker and not by which tier registered it.
+	_ fakeRadio = (*fakeft891.Radio)(nil)
 )
 
 // ic7610FakeAdapter narrows *fakeic7610.Radio's Port() — which returns
@@ -830,6 +884,31 @@ var fakeDrivers = map[string]fakeDriverEntry{
 	ICR8600Model: {
 		newDriver: func() driver.Driver { return icr8600.New(icr8600.Simulated) },
 		newRadio:  func() fakeRadio { return fakeicr8600.New(ICR8600FakeSessionOpts...) },
+	},
+	// The FT-891 (Tier 1): ONE row, ONE driver package, ONE simulator and
+	// ONE profile — the FTdx10's shape, and the standing warning applies
+	// once. writeTrialsComplete is false (core/driver/ft891/caps.go), so
+	// this radio has no hardware-evidenced write path and the Supported
+	// writes ft891.Simulated reaches here are a claim about
+	// internal/fakeft891 alone: that simulator stores and returns what the
+	// combined MT Set carries, byte 28's live TAG flag included. This
+	// pairing is the only place that Profile value is legal outside its own
+	// package, which is what internal/guards' ft891 row confines.
+	//
+	// NO ADAPTER: this fake's Port() already returns io.ReadWriteCloser, so
+	// the *fakeft891.Radio goes into the table as it stands (see the
+	// fakeRadio proof above).
+	//
+	// NOTHING IS EMPTIED HERE AND NOTHING IS SEEDED, unlike the IC905Model
+	// row above: internal/fakeft891's DefaultImage is already constrained to
+	// what a demo radio should be (plan decision P13) — two occupied memory
+	// channels and nine PMS pairs, every one of them decodable by this
+	// radio's own dialect, and no 5xx or EMG slot, so the eleven-frame
+	// discovery walk this driver's Open runs finds none and the demo radio
+	// shows the two static banks alone.
+	FT891Model: {
+		newDriver: func() driver.Driver { return ft891.New(ft891.Simulated) },
+		newRadio:  func() fakeRadio { return fakeft891.New(FT891FakeSessionOpts...) },
 	},
 }
 

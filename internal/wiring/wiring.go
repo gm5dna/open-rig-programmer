@@ -53,6 +53,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft710"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ft891"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx10"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx101"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
@@ -409,6 +410,51 @@ const IC7100Model = "IC-7100"
 // icr8600-address-move).
 const ICR8600Model = "IC-R8600"
 
+// FT891Model names the FT-891's realDrivers/fakeDrivers key, which must
+// equal ft891.New(...).Model() — pinned, like every constant above, by
+// TestDriverTableKeysMatchDriverModel walking both tables. A named
+// constant rather than a bare literal at each of its uses for the same
+// reason every other model constant is: the two table keys MUST be the
+// same string, and a typo in one alone would build a model openable for
+// real but not simulated.
+//
+// TIER 1's REGISTRATION, and the FIRST YAESU MODEL ADDED SINCE M9d-2 —
+// fifteen Icom rows separate it from FTdx101MPModel above. It is a
+// single-row registration on the FTdx10's footing rather than the
+// FTdx101 pair's: core/driver/ft891 has one member, core/cat/ft891 offers
+// one bare Dialect(), and internal/fakeft891 one bare New. The spelling
+// is the manual's own, hyphen included (capability matrix §1.1).
+//
+// TWO SLUGS EXIST FOR THIS RADIO AND THEY ARE DIFFERENT STRINGS (plan
+// decision P14, spec erratum S-E2). The Go PACKAGE slug is "ft891" —
+// core/driver/ft891, core/cat/ft891, internal/fakeft891, and
+// internal/extable's own profile key. ModelSlug(FT891Model), which is
+// what names this radio's snapshot and journal directory, is "ft-891":
+// the hyphen in the model name is collapsed to a separator, not deleted.
+// TestModelSlug pins the second and TestModelSlugsUnique pins that it
+// collides with no other registered model's.
+//
+// TWO STATIC BANKS AND UP TO TWO MORE DISCOVERED AT Open. MEM ("001".."099")
+// and PMS ("P1L".."P9U") are declared statically and DENSE; the 5 MHz bank
+// ("501".."510") and the emergency channel ("EMG") are DISCOVERED, by an
+// eleven-frame MR walk at Open, and appear only when the radio answers
+// (core/driver/ft891/ft891.go's discoverInventory, matrix §3.4). Those two
+// are READ-ONLY, and more sharply so than the FTdx10's and FTdx101's
+// equivalents: this radio reads them by MR alone, and MR's 28-position
+// answer carries neither a tag nor a tag-display flag, so both of those
+// fields take the ZERO FieldSupport there rather than merely an unwritable
+// one (matrix §2.5, plan decision P4). Nothing about registration itself
+// changes for that; it is app/uispec_test.go's own bank-shape tests that
+// have to say so, not this table.
+//
+// NO SerialFramingReporter, like the four Yaesu rows above it and unlike
+// every Icom row but the IC-7100's: this radio's CAT manual carries no
+// serial-framing statement at all, so 8-N-2 for the FT-891 is an ASSUMED
+// entry in core/driver/ft891/doc.go's own register (entry 1) with a named
+// hardware lift, and the port opens at transport.DefaultStopBits by the
+// absence of a report rather than by a driver's claim.
+const FT891Model = "FT-891"
+
 // realDrivers is the model-keyed table of real-hardware driver
 // constructors: model name -> a constructor building THAT model's
 // real-profile driver.Driver. It is the single source of truth
@@ -570,6 +616,23 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return icr8600.New(icr8600.RealHardware, icr8600.WithConsentedUnverifiedWrites())
 		}
 		return NewICR8600RealDriver()
+	},
+	// ONE ROW, naming its profile explicitly, and for once that is not a
+	// choice this table makes among alternatives: core/driver/ft891's New
+	// takes the profile as its first ARGUMENT (ft891.go:71,
+	// `func New(profile Profile, opts ...Option) driver.Driver`), so the
+	// consent arm passes ft891.RealHardware rather than leaving the
+	// profile to an option's absence. That driver's zero Profile value IS
+	// RealHardware and any unrecognised value fails the same way (its
+	// caps.go says so in terms), so a consent arm that had quietly passed
+	// ft891.Simulated would not be caught by a fail-safe — it would be
+	// caught by TestRealDriverFor_DefaultPathByteIdentical, which is why
+	// the profile is named here rather than defaulted.
+	FT891Model: func(consent bool) driver.Driver {
+		if consent {
+			return ft891.New(ft891.RealHardware, ft891.WithConsentedUnverifiedWrites())
+		}
+		return NewFT891RealDriver()
 	},
 }
 
@@ -1062,6 +1125,37 @@ func NewIC7100RealDriver() driver.Driver {
 // this constructor.
 func NewICR8600RealDriver() driver.Driver {
 	return icr8600.New(icr8600.RealHardware)
+}
+
+// NewFT891RealDriver builds the ft891 driver for a real-hardware session:
+// profile ft891.RealHardware, the zero value — the FT-891's half of the
+// realDrivers table, split out for the same reason NewRealDriver and every
+// constructor above it is (a test can pin the capability set the real
+// wiring path implies without opening a port).
+//
+// READ/PROBE ONLY for every unconsented caller, by the same mechanism the
+// FTdx10's entry is: this driver's writeTrialsComplete is FALSE, so a
+// RealHardware FT-891 driver reports ft891.CapabilitiesUnverified — every
+// candidate field's Read AND Write spec.Unverified, nothing writable on any
+// bank. No FT-891 has been written to by this project, and no FT-891 has
+// answered a frame at all, which is why the READ labels are Unverified here
+// too rather than Supported (capability matrix §2.1, "the honest one"). The
+// capability gate refuses before any frame is built, so registering the
+// model adds a read/probe path against real hardware and, for an
+// unconsented session, no write path — see core/driver/ft891/doc.go's
+// sixteen-entry ASSUMED register for what a Stage R session would lift, and
+// its entry 7 ("MT READ IS SUPPORTED FOR MEMORY AND PMS") for the one
+// capture that would settle this radio's largest open question.
+//
+// The CONSENTED row is a different construction —
+// ft891.New(RealHardware, WithConsentedUnverifiedWrites()), built only when
+// the user's recorded grant says so — and the session IT assembles
+// re-labels the write-side Unverified fields spec.ConsentedUnverified,
+// which FieldSupport.CanWrite opens. Even there the driver's STATIC
+// Capabilities is untouched, which is what lets NeedsUnverifiedConsent read
+// it to decide the radio is consent-eligible at all.
+func NewFT891RealDriver() driver.Driver {
+	return ft891.New(ft891.RealHardware)
 }
 
 // openSerial is OpenRealSessionWith's test seam (and so OpenRealSessionFor's

@@ -208,6 +208,10 @@ var fakePackageForModel = map[string]string{
 	// And the IC-R8600 likewise: one simulator package to itself, the
 	// tier's fourth and last.
 	ICR8600Model: "internal/fakeicr8600",
+	// The FT-891 (Tier 1): one simulator package to itself again, on the
+	// same footing as every single-row entry above — one driver package,
+	// one fake, no sibling to share either with.
+	FT891Model: "internal/fakeft891",
 }
 
 func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
@@ -1399,7 +1403,7 @@ func TestSupportedModels_SortedNonEmpty(t *testing.T) {
 // deleting a constant cannot make this test agree with the change.
 func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	got := SupportedModels()
-	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600"} {
+	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600", "FT-891"} {
 		found := false
 		for _, m := range got {
 			if m == want {
@@ -1469,6 +1473,15 @@ func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	// RECEIVER.
 	if ICR8600Model != "IC-R8600" {
 		t.Errorf("ICR8600Model = %q, want \"IC-R8600\"", ICR8600Model)
+	}
+	// Tier 1's FT-891, the first YAESU registration since M9d-2 and the
+	// sixteenth model overall. The hyphen is the project's spelling of the
+	// manual's own "FT-891" (capability matrix §1.1) and the same string
+	// core/driver/ft891's modelName carries, which is what
+	// TestDriverTableKeysMatchDriverModel checks against the driver rather
+	// than against this literal.
+	if FT891Model != "FT-891" {
+		t.Errorf("FT891Model = %q, want \"FT-891\"", FT891Model)
 	}
 }
 
@@ -1844,6 +1857,17 @@ func TestModelSlug(t *testing.T) {
 		// exercises the "/" collapse, and because keeping it beside the two
 		// real keys shows at a glance that the three are different strings.
 		{"FTDX101D/MP", "ftdx101d-mp"},
+		// Tier 1's FT-891 (plan decision P14, spec erratum S-E2). TWO
+		// slugs exist for this radio and they are different strings: the
+		// Go PACKAGE slug is "ft891" (core/driver/ft891, core/cat/ft891,
+		// internal/fakeft891, internal/extable's profile key), and THIS —
+		// the model slug, which is what names its snapshot/journal
+		// directory — is "ft-891", because ModelSlug collapses the
+		// hyphen it finds in the model name rather than deleting it. The
+		// two must never be confused: a caller that reached for the
+		// package slug here would silently write this radio's snapshots
+		// somewhere no reader looks for them.
+		{"FT-891", "ft-891"},
 		{"FTX-1", "ftx-1"},
 	} {
 		if got := ModelSlug(tc.model); got != tc.want {
@@ -2295,6 +2319,15 @@ func TestNeedsUnverifiedConsent_PerModel(t *testing.T) {
 		// from the graded set, and the remaining seventeen fields are
 		// Unverified in both directions.
 		ICR8600Model: true,
+		// The FT-891 (Tier 1). Its writeTrialsComplete
+		// (core/driver/ft891/caps.go) is FALSE, so its RealHardware
+		// profile is CapabilitiesUnverified — every candidate field's
+		// Write Unverified on both of its static banks, which is what
+		// this predicate must find. Being the first Yaesu model added
+		// since M9d-2 changes nothing about the rule: what decides the
+		// answer is the write-trial guard, not the maker, and the
+		// FT-710's false is still the exception earned by trials.
+		FT891Model: true,
 	}
 	models := SupportedModels()
 	if len(models) != len(want) {
@@ -2537,7 +2570,22 @@ func TestOpenRealSessionFor_StopBitsRefuseAnImpossibleReport(t *testing.T) {
 // the four here, rather than deriving them from SupportedModels() minus a
 // filter, keeps the SET this file's own Yaesu-specific tests describe
 // explicit and independent of whatever else gets registered later.
-var yaesuModels = []string{DefaultModel, FTdx10Model, FTdx101DModel, FTdx101MPModel}
+//
+// FIVE SINCE TIER 1's FT-891, and that model is why this list is not
+// merely longer. TestYaesuAndIcomModelsPartitionSupportedModels below is
+// the alarm for a Yaesu registration that joined SupportedModels() and
+// neither list; the FT-891 is the first registration since that alarm was
+// written to actually exercise it, and it belongs HERE rather than in
+// icomModels for the plain reason that list states — this partition runs
+// by MAKER. It implements no driver.SerialFramingReporter
+// (core/driver/ft891 declares none: that radio's CAT manual carries no
+// framing statement, which its own ASSUMED register entry 1 records), so
+// it opens at transport.DefaultStopBits and the first test below covers it
+// unchanged; and its CTCSSToneRange is nil with a populated CTCSSTones
+// (core/driver/ft891/caps.go, matrix §1.9-1.10 — this radio names a tone
+// by INDEX into its own 50-entry chart), which is the second test's Yaesu
+// shape rather than the Icom one.
+var yaesuModels = []string{DefaultModel, FTdx10Model, FTdx101DModel, FTdx101MPModel, FT891Model}
 
 // icomModels names every registered Icom model, on the same by-name
 // footing as yaesuModels — ELEVEN rows now (the IC-7610, the IC-7300 pair
