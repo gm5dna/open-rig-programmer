@@ -388,7 +388,19 @@ func baseCapabilities(m modelParams, memFields, pmsFields map[spec.Field]spec.Fi
 		// five frame blocks (IF at layout 1086, MR 1282, MT 1317, MW 1357,
 		// OI 1440) and both dedicated clarifier commands agree (RD's P1 at
 		// 1602, RU's P1 at 1700). Seven unconditional statements.
-		ClarMaxHz: 9990,
+		//
+		// CONSULTED, not transcribed (write-gate sweep item (h), the
+		// FT-891's C-H2 applied here): caps.go carried its own literal while
+		// write.go's buildWriteCommand already read the same pair through
+		// dialect.Clarifier(). A bound must be read from the same place as
+		// its datum. THIS MODEL'S OWN dialect is asked — m.dialect, not a
+		// package-level one — so the D and the MP each carry their own
+		// answer rather than one model's number reaching the other's
+		// capabilities. That the two agree today is core/cat/ftdx101's own
+		// pin, not an assumption made here.
+		// TestCapabilities_ClarifierDerivesFromDialect pins the identity for
+		// both models.
+		ClarMaxHz: m.dialect.Clarifier().MaxAbsHz,
 		// §1.7 — ASSUMED: NO step is stated anywhere in this manual. The
 		// 0000-9990 range supports the inherited value without proving it (a
 		// 20 Hz radio could not reach its own stated 9990; a 1 Hz one would
@@ -398,7 +410,9 @@ func baseCapabilities(m modelParams, memFields, pmsFields map[spec.Field]spec.Fi
 		// correcting it is a dialect change. core/cat enforces it as a
 		// multiple-of-step rule on every MW and combined-MT Set, so it is
 		// load-bearing on the write path even while nothing may be written.
-		ClarStepHz: 10,
+		// CONSULTED from that register entry rather than transcribed beside
+		// it — see ClarMaxHz above for item (h).
+		ClarStepHz: m.dialect.Clarifier().StepHz,
 		// §1.8 — MANUAL-EVIDENCED: this manual prints its own "Table 1
 		// (CTCSS Tone Chart)" (heading at layout 566, body 567-575, printed
 		// page 8), reached from CN's P3 legend "000 - 049: Tone Frequency

@@ -29,15 +29,18 @@ import (
 // unstated field would be testing a default rather than a decision.
 //
 // THE SEVENTEEN ICOM-TIER FIELDS ARE tierUnavailable'D, not left at their
-// zero value (C-M1, closing review wave 2): a zero FieldState is
-// codeplug.Absent, which is NOT one of the three states Valid() accepts —
-// fieldStateChecks (write.go) now walks every one of them, so a channel
-// fixture leaving them Absent would report "invalid State" for a field
-// nobody meant to say anything about. tierUnavailable is the SAME
-// production shape read.go's channelData actually produces (plan P12: every
-// FT-891 read sets all seventeen Unavailable), so this fixture stays an
-// honest "otherwise writable" channel rather than one that happens to dodge
-// a check no real FT-891 channel would ever fail.
+// zero value, and the reason has CHANGED without the fixture changing
+// (write-gate sweep item (i), 05/09/2026). Under closing-review wave 2's
+// own fieldStateChecks a zero FieldState — codeplug.Absent — was REFUSED
+// outright, so the fixture had to state them or the write rung would report
+// "invalid State" for a field nobody meant to say anything about. The fleet
+// walk this driver now calls ADMITS Absent, so the fixture no longer needs
+// to; it stays as it is because tierUnavailable is the SAME production shape
+// read.go's channelData actually produces (plan P12: every FT-891 read sets
+// all seventeen Unavailable), which is what makes this an honest "otherwise
+// writable" channel. The Absent case has its own test now —
+// TestWriteChannel_AbsentFieldStatesStillWrite — rather than being something
+// every fixture has to dodge.
 func writableChannel() codeplug.Channel {
 	d := tierUnavailable(codeplug.ChannelData{
 		FreqHz:     14_250_000,
@@ -159,6 +162,77 @@ func TestWriteChannel_OneCombinedMTSetFrame(t *testing.T) {
 				t.Errorf("WriteResult.Steps = %+v, want %+v", res.Steps, want)
 			}
 		})
+	}
+}
+
+// TestWriteChannel_AbsentFieldStatesStillWrite is the fleet FieldState
+// stance's Absent rule (write-gate sweep item (i), 05/09/2026), and it is a
+// DELIBERATE RELAXATION of what closing-review wave 2 shipped here: this
+// driver's own fieldStateChecks called Valid() on all twenty FieldState
+// fields unconditionally, and codeplug's typed validators reject
+// codeplug.Absent outright, so a hand-built ChannelData that simply left the
+// seventeen tier fields alone was REFUSED. The fleet stance — the IC-9700's
+// (core/driver/ic9700/write.go's validateKnownValues), which the sweep
+// adopted for all four Yaesu drivers — admits Absent: a caller who set
+// nothing has requested nothing, and refusing those would refuse every
+// ordinary MODIFY.
+//
+// The C-M1 half is UNCHANGED and is still pinned, by this suite's ladder row
+// "an incoherent TxFreqHz field is refused, not interpreted (C-M1)": a
+// non-Known state carrying a value is still refused.
+//
+// TAGDISPLAY IS THE ONE EXCEPTION on THIS radio, and it is not this rung's
+// doing: byte 28 is mandatory on the frame, so a non-Known TagDisplay —
+// Absent included — is refused by buildWriteCommand however it got that way,
+// which the ladder's "a non-Known TagDisplay would manufacture byte 28" row
+// pins separately.
+//
+// RED-PROOF (against the wave-2 fieldStateChecks, before the rewrite onto
+// driver.CheckFieldStates), this test's own body unchanged:
+//
+//	WriteChannel = driver: write to slot "001" refused (ctcss_tone): codeplug: ToneField: invalid State ""
+func TestWriteChannel_AbsentFieldStatesStillWrite(t *testing.T) {
+	p, sess := openSession(t, Simulated, slotImage{})
+
+	// EVERY FieldState field left at its zero value except TagDisplay, and
+	// the plain fields set to writableChannel's own values, so the frame
+	// below is comparable with writableChannelFrame byte for byte.
+	d := codeplug.ChannelData{
+		FreqHz:     14_250_000,
+		Mode:       "USB",
+		ClarHz:     -150,
+		RxClar:     true,
+		TxClar:     false,
+		CTCSS:      "ENC-DEC",
+		Shift:      "PLUS",
+		Tag:        "CALLING",
+		TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: true},
+	}
+	ch := codeplug.Channel{Slot: "001", Data: &d}
+	for _, c := range driver.FieldStateChecks(CapabilitiesSimulated(), d) {
+		if c.Field == spec.FieldTagDisplay {
+			continue
+		}
+		if c.Err != nil {
+			t.Fatalf("the fixture's %s is not Absent-and-admitted (%v) — this test asserts nothing unless every other FieldState field is left at its zero value", c.Field, c.Err)
+		}
+	}
+
+	before := len(p.Transcript())
+	res, err := sess.WriteChannel(testCtx(t), ch)
+	if err != nil {
+		t.Fatalf("WriteChannel = %v, want nil — an all-Absent channel requests nothing and must WRITE", err)
+	}
+	if got, want := p.Transcript()[before:], []string{writableChannelFrame}; !reflect.DeepEqual(got, want) {
+		// The fields writableChannel states and this one leaves Absent
+		// (CTCSSTone, ScanSkip and the seventeen) have no position in the
+		// 41-byte record, so an Absent state cannot move a byte — a frame
+		// that differed would mean the walk had let a non-Known field reach
+		// the wire.
+		t.Errorf("wire carried %q\nwant             %q", got, want)
+	}
+	if want := []driver.WriteStep{{Command: "MT", Sent: true, Confirmed: true}}; !reflect.DeepEqual(res.Steps, want) {
+		t.Errorf("WriteResult.Steps = %+v, want %+v", res.Steps, want)
 	}
 }
 
@@ -301,6 +375,40 @@ func TestWriteChannel_RefusalLadder(t *testing.T) {
 			reason: "must have zero Value",
 		},
 		{
+			// MEDIUM-1 (Opus review of this sweep, 05/09/2026), the
+			// erratum to the write-gate sweep's (i) DECISION: codeplug.
+			// Absent IS the zero FieldState, so a caller who sets a Value
+			// and forgets to set State — a copy/paste slip, not a
+			// hand-built ChannelData that genuinely left a field
+			// untouched — produces exactly the struct
+			// TestWriteChannel_AbsentFieldStatesStillWrite's fixture is
+			// built from. This is C-M1 again with the State OMITTED
+			// instead of wrong.
+			//
+			// CTCSSTONE IS THE PROOF FIELD, the reviewer's own
+			// reproduction: this radio's 41-byte combined Set has no
+			// CTCSS-tone position at all (the C-M1 row above makes the
+			// same point for TxFreqHz), so nothing past the walk would
+			// ever have noticed it.
+			//
+			// RED-PROOF, captured against the pre-erratum judge (Absent
+			// admitted regardless of Value), this sub-test's own body
+			// unchanged: no refusal happened at all —
+			//
+			//	WriteChannel = {Steps:[{Command:MT Sent:true Confirmed:true}]}, err = <nil>
+			//	frames sent: [MT001014250000-0150102010011CALLING     ;]
+			//
+			// i.e. the 41-byte MT Set went out exactly as writableChannel()
+			// alone would have produced it, with the caller's CTCSSTone
+			// value silently DROPPED.
+			name: "an Absent CTCSSTone field carrying a non-zero value is refused, not interpreted (MEDIUM-1)",
+			ch: withData(func(d *codeplug.ChannelData) {
+				d.CTCSSTone = codeplug.ToneField{Value: 1000}
+			}),
+			fields: []spec.Field{spec.FieldCTCSSTone},
+			reason: "must have zero Value",
+		},
+		{
 			name: "a Known CTCSS tone the record cannot express",
 			ch: withData(func(d *codeplug.ChannelData) {
 				d.CTCSSTone = codeplug.ToneField{State: codeplug.Known, Value: 1000}
@@ -316,10 +424,11 @@ func TestWriteChannel_RefusalLadder(t *testing.T) {
 			reason: "not write-Supported",
 		},
 		{
-			// C-M1: fieldStateChecks passes Duplex.Valid THIS RADIO'S OWN
-			// (empty) DuplexOptions, so a Known value is now caught HERE,
-			// by the FieldState rung's own vocabulary check, rather than
-			// reaching the capability gate further down — an empty vocab
+			// C-M1: the FieldState rung (driver.CheckFieldStates) passes
+			// Duplex.Valid THIS RADIO'S OWN (empty) DuplexOptions, so a
+			// Known value is caught HERE, by that rung's own vocabulary
+			// check, rather than reaching the capability gate further down
+			// — an empty vocab
 			// fails closed for every Known value (StringField.Valid's own
 			// doc comment), which on this radio is every Icom-tier
 			// StringField there is. Still the same field named, still a
@@ -349,7 +458,7 @@ func TestWriteChannel_RefusalLadder(t *testing.T) {
 		{
 			// C-M1: same move as Duplex's above — TuningSteps is one of
 			// the twelve EMPTY vocab/table caps fields on this radio, so
-			// fieldStateChecks' StringField.Valid catches a Known value
+			// the walk's StringField.Valid catches a Known value
 			// first.
 			name: "a Known TuningStep this frame has no room for",
 			ch: withData(func(d *codeplug.ChannelData) {
@@ -373,7 +482,7 @@ func TestWriteChannel_RefusalLadder(t *testing.T) {
 		{
 			// C-M1: AttenuatorDB is one of the twelve EMPTY caps fields
 			// (s.caps.AttenuatorDB is nil on this radio), so
-			// fieldStateChecks' IntField.Valid catches a Known value
+			// the walk's IntField.Valid catches a Known value
 			// first, the same move as Duplex's above.
 			name: "a Known Attenuator this frame has no room for",
 			ch: withData(func(d *codeplug.ChannelData) {
@@ -902,51 +1011,15 @@ func TestRequestedFields_MembershipAndOrder(t *testing.T) {
 	})
 }
 
-// TestFieldStateChecks_CoversExactlyTheFieldStateFields is C-M1's own pin
-// (closing review wave 2), the same fallback shape as
-// TestRequestedFields_MembershipAndOrder's "the seventeen are exactly
-// spec.AllFields()'s tier-added tail" subtest above: codeplug exports no
-// enumeration of "every field that carries a FieldState" bound to
-// ChannelData, so this derives the TWENTY independently from
-// spec.AllFields() (minus the seven plain fields ChannelData carries with
-// no FieldState at all) and requires EXACT membership and order against
-// fieldStateChecks' own list. A spec.Field this table forgets to mirror —
-// or that AllFields gains and this table does not — fails HERE rather than
-// silently letting a future field's malformed value reach the wire
-// unchecked, which is exactly the shape of gap C-M1 found.
-func TestFieldStateChecks_CoversExactlyTheFieldStateFields(t *testing.T) {
-	// The seven ChannelData carries with NO FieldState at all: FreqHz,
-	// Mode, ClarHz, CTCSS and Shift are plain uint64/string/int, Tag is a
-	// plain string, and FieldErase has no ChannelData field whatsoever (an
-	// empty channel IS the erase request — channel.go's Empty).
-	plain := map[spec.Field]bool{
-		spec.FieldFrequency:  true,
-		spec.FieldMode:       true,
-		spec.FieldClarifier:  true,
-		spec.FieldCTCSSState: true,
-		spec.FieldShift:      true,
-		spec.FieldTag:        true,
-		spec.FieldErase:      true,
-	}
-	var want []spec.Field
-	for _, f := range spec.AllFields() {
-		if !plain[f] {
-			want = append(want, f)
-		}
-	}
-	if len(want) != 20 {
-		t.Fatalf("spec.AllFields() minus the seven plain fields has %d entries, want 20 — this test's own derivation is wrong, not fieldStateChecks", len(want))
-	}
-
-	checks := fieldStateChecks(CapabilitiesSimulated(), *writableChannel().Data)
-	got := make([]spec.Field, len(checks))
-	for i, c := range checks {
-		got[i] = c.field
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("fieldStateChecks names\n %v\nbut spec.AllFields() minus the seven plain fields is\n %v\n(the two must be exactly the same twenty fields, in the same order)", got, want)
-	}
-}
+// The FT-891 no longer carries its own "every FieldState field is
+// covered" pin. Wave 2's TestFieldStateChecks_CoversExactlyTheFieldStateFields
+// asserted that against this package's own fieldStateChecks table; the
+// write-gate sweep's item (i) moved that table into core/driver, where the
+// four Yaesu drivers share it, and the assertion moved with it —
+// driver_test.TestFieldStateWalk_CoversEveryFieldStateField makes exactly
+// the same derivation from spec.AllFields() minus the seven plain fields.
+// The walk's field list does not depend on which radio's capabilities it is
+// handed, so a copy here would be the same assertion twice.
 
 // TestMTSetSpec_IsFireAndForgetAndNeverRetries pins the transport spec the
 // combined Set goes out under, and every part of it is load-bearing.
