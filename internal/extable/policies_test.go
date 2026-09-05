@@ -43,6 +43,11 @@ func TestPolicyStrings(t *testing.T) {
 		{TextRowsAllowed.String(), "TextRowsAllowed"},
 		{TextRowsAbsent.String(), "TextRowsAbsent"},
 		{TextRows(0).String(), "TextRows(0)"},
+		// The fourth chart-shape policy's cases live here too, for the
+		// reason AddressSingle's do: one table of every policy string.
+		{ParameterlessRefused.String(), "ParameterlessRefused"},
+		{ParameterlessExcluded.String(), "ParameterlessExcluded"},
+		{ParameterlessRows(0).String(), "ParameterlessRows(0)"},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("String() = %q, want %q", tc.got, tc.want)
@@ -228,22 +233,27 @@ func TestRenderGo_LabelsAbsentEmitsEmptyLabels(t *testing.T) {
 // ceiling test asserts its constant against the REGISTERED profile's
 // DigitsCeiling rather than against a literal.
 func TestRegisteredProfiles_DeclareTodaysBehaviourExplicitly(t *testing.T) {
+	// Every registered chart is ParameterlessRefused, and the column is here
+	// rather than assumed: it is what keeps the four committed inventories
+	// byte-identical across the seam that admitted parameterless rows, since
+	// RenderGo emits its exclusion header only for a non-empty address set.
 	want := map[string]struct {
-		addr      AddressForm
-		labels    Labels
-		textRows  TextRows
-		textWidth int
-		ceiling   int
+		addr          AddressForm
+		labels        Labels
+		textRows      TextRows
+		parameterless ParameterlessRows
+		textWidth     int
+		ceiling       int
 	}{
-		"ft710":   {AddressTriple, LabelsRequired, TextRowsAllowed, 12, MaxDigitsCeiling},
-		"ftdx10":  {AddressTriple, LabelsRequired, TextRowsAllowed, 12, MaxDigitsCeiling},
-		"ftdx101": {AddressTriple, LabelsRequired, TextRowsAllowed, 12, MaxDigitsCeiling},
+		"ft710":   {AddressTriple, LabelsRequired, TextRowsAllowed, ParameterlessRefused, 12, MaxDigitsCeiling},
+		"ftdx10":  {AddressTriple, LabelsRequired, TextRowsAllowed, ParameterlessRefused, 12, MaxDigitsCeiling},
+		"ftdx101": {AddressTriple, LabelsRequired, TextRowsAllowed, ParameterlessRefused, 12, MaxDigitsCeiling},
 		// The FT-891's chart prints a four-digit MENU Number, no group
 		// labels and no free-text row: core/cat/ft891/table2.csv's
 		// provenance header records all three as readings of that chart.
 		// Its DigitsCeiling is still core/cat's — the FT-891 renders into
 		// core/cat/ft891, not a package of its own.
-		"ft891": {AddressPair, LabelsAbsent, TextRowsAbsent, 0, MaxDigitsCeiling},
+		"ft891": {AddressPair, LabelsAbsent, TextRowsAbsent, ParameterlessRefused, 0, MaxDigitsCeiling},
 	}
 	regs := RegisteredProfiles()
 	if len(regs) != len(want) {
@@ -266,6 +276,12 @@ func TestRegisteredProfiles_DeclareTodaysBehaviourExplicitly(t *testing.T) {
 		}
 		if np.Profile.TextRowPolicy != w.textRows {
 			t.Errorf("%s: TextRowPolicy = %v, want %v", np.Name, np.Profile.TextRowPolicy, w.textRows)
+		}
+		if np.Profile.ParameterlessPolicy != w.parameterless {
+			t.Errorf("%s: ParameterlessPolicy = %v, want %v", np.Name, np.Profile.ParameterlessPolicy, w.parameterless)
+		}
+		if len(np.Profile.ParameterlessAddresses) != 0 {
+			t.Errorf("%s: ParameterlessAddresses = %v, want none", np.Name, np.Profile.ParameterlessAddresses)
 		}
 		if np.Profile.TextWidth != w.textWidth {
 			t.Errorf("%s: TextWidth = %d, want %d", np.Name, np.Profile.TextWidth, w.textWidth)
