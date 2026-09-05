@@ -281,6 +281,24 @@ type LayoutConfig struct {
 	Byte41    Byte41Meaning
 	ToneModes ToneModeSet
 
+	// MaxEXAddress is the highest menu number THIS ROW'S BOOK PRINTS for
+	// the EX command, inclusive: 87 on the TS-590S (590:543), 99 on the
+	// TS-590SG (590:544) and 60 on the TS-480 (480:401).
+	//
+	// IT IS THE PRINTED DOMAIN AND NOT AN INVENTORY. Which addresses a row
+	// HAS, what each is called and how wide its answer is are the generated
+	// inventory's facts, and those live in core/kw/ts590 and core/kw/ts480,
+	// which import this package (BuildEXRead's own doc comment states the
+	// division). What this axis carries is one number a reader can put
+	// beside the chart it came from, which is the same shape as SlotRange.
+	//
+	// ZERO IS REFUSED, like every other axis. Address 000 is a real menu on
+	// all three rows, so a zero here cannot be read as "no EX surface"; it
+	// is indistinguishable from an unset field, and defaulting it would put
+	// the widest domain of the three on a row whose book prints the
+	// narrowest.
+	MaxEXAddress uint8
+
 	// ModeNames is this row's MD legend in the programme's own spellings.
 	// It may not name ModeNone or ModeTune, neither of which names a mode a
 	// channel can be in.
@@ -321,12 +339,13 @@ type Layout struct {
 	book  Book
 	model string
 
-	p2        P2Policy
-	byte19    Byte19Meaning
-	byte28    Byte28Policy
-	byte3940  Byte3940Meaning
-	byte41    Byte41Meaning
-	toneModes ToneModeSet
+	p2           P2Policy
+	byte19       Byte19Meaning
+	byte28       Byte28Policy
+	byte3940     Byte3940Meaning
+	byte41       Byte41Meaning
+	toneModes    ToneModeSet
+	maxEXAddress uint8
 
 	modeNames    map[Mode]string
 	slots        []SlotRange
@@ -397,6 +416,9 @@ func NewLayout(cfg LayoutConfig) (Layout, error) {
 	if cfg.ToneModes == ToneModesUnset {
 		return Layout{}, fmt.Errorf("%w (%s): the tone-mode value set is unset — four values on the 590 pair, three on the 480", ErrLayoutInvalid, cfg.Model)
 	}
+	if cfg.MaxEXAddress == 0 {
+		return Layout{}, fmt.Errorf("%w (%s): the highest printed EX menu number is unset — each book prints its own domain per row, \"000 ~ 087\" for the TS-590S (590:543), \"000 ~ 099\" for the TS-590SG (590:544) and \"000 ~ 060\" for the TS-480 (480:401), and a zero here is not \"no menu surface\": address 000 is a real menu on all three", ErrLayoutInvalid, cfg.Model)
+	}
 	if len(cfg.ModeNames) == 0 {
 		return Layout{}, fmt.Errorf("%w (%s): the mode legend is empty — MR/MW P5 carries no legend of its own on either radio, so a layout with no MD legend can name no channel's mode", ErrLayoutInvalid, cfg.Model)
 	}
@@ -435,6 +457,7 @@ func NewLayout(cfg LayoutConfig) (Layout, error) {
 		byte3940:     cfg.Byte3940,
 		byte41:       cfg.Byte41,
 		toneModes:    cfg.ToneModes,
+		maxEXAddress: cfg.MaxEXAddress,
 		modeNames:    names,
 		slots:        slots,
 		printedFixed: fixed,
@@ -602,6 +625,11 @@ func (l Layout) Byte41() Byte41Meaning { return l.byte41 }
 
 // ToneModes is byte 20's value set on this row.
 func (l Layout) ToneModes() ToneModeSet { return l.toneModes }
+
+// MaxEXAddress is the highest EX menu number this row's book prints,
+// inclusive (590:543, 590:544, 480:401). It is 0 on the zero Layout, which
+// builds and admits no EX read at all.
+func (l Layout) MaxEXAddress() uint8 { return l.maxEXAddress }
 
 // ModeNames returns an independent copy of this row's mode legend.
 func (l Layout) ModeNames() map[Mode]string {

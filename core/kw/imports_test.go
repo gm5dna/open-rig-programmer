@@ -36,7 +36,11 @@ import (
 //
 // core/transport IS permitted and is imported: it is the neutral seam, it
 // knows nothing of core/kw, and the direction is the cycle-free one
-// core/civ's adapter already takes.
+// core/civ's adapter already takes. THAT IS NOT A CLAIM ABOUT THE BUILD
+// CLOSURE: core/transport imports core/cat for its own adapter
+// (core/transport/catframing.go), so `go list -deps ./core/kw/...` does list
+// core/cat. What this fence forbids is BORROWING, and borrowing needs a
+// direct import.
 
 // modulePrefix is this project's module path (go.mod: "module
 // github.com/gm5dna/open-rig-programmer") — NOT the repository directory
