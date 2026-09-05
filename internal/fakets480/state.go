@@ -98,6 +98,15 @@ type MemState struct {
 	//
 	// STORED, NOT RANGE-CHECKED — doc.go's register entry TONE INDICES ARE
 	// STORED, NOT RANGE-CHECKED.
+	//
+	// TWO UNRECORDED DOCUMENT QUIRKS, neither affecting a byte here and both
+	// left for core/kw/doc.go's errata schedule to number (E-numbers are
+	// that file's to assign, not this package's): MR's own P8 legend points
+	// at "page 35" for the TN chart (480:924) where TN's own heading says
+	// "page 32" (480:1559) and CN's says "page 33" (480:339) — three page
+	// numbers for two tables; and MW's P8 legend carries a printed typo,
+	// "Refero to the TN command." (480:966, quoted at parser_test.go:26),
+	// the same kind of slip as "fimware" (E10).
 	ToneNo string
 	// CTCSSNo is P9, positions 23-24: the two-digit index into the CN chart
 	// ("00 ~ 41", 480:337). The two charts are NOT the same length, which is

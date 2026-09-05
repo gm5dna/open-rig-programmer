@@ -61,8 +61,11 @@ func WithLatency(d time.Duration) Option {
 // which is also this document's own general rule for a parameter
 // (480:108-111, 480:127-129). Everything else is admitted, control codes
 // included, so that a driver's refusal of those is reachable too. A bad
-// fixture panics, which is New's reasoning one layer up: every call site
-// passes a compile-time-known constant.
+// fixture panics rather than returning an error nobody can act on: every
+// call site passes a compile-time-known constant, the same reasoning
+// core/kw.MustNewLayout applies one layer down (internal/fakets590 cites it
+// for the same choice; this package's own New takes no row and has nothing
+// to refuse there).
 func WithTYAnswer(reserved string, variant byte) Option {
 	if len(reserved) != tyReservedLen {
 		panic(fmt.Sprintf("fakets480: TY reserved field %q is %d bytes; P1 is %d (480:1634)", reserved, len(reserved), tyReservedLen))

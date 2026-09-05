@@ -35,6 +35,7 @@ var registerEntries = []string{
 	"THE INITIAL AI VALUE IS THE POWER-OFF ONE",
 	"AUTOMATIC-INFORMATION SUPPRESSION",
 	"THE FRAME ACCUMULATOR'S CAP AND RESYNC",
+	"A REFUSAL TO A CONTROL BYTE IS ALWAYS ANSWERED",
 }
 
 // normalise strips Go comment markers and collapses every run of whitespace to
@@ -164,16 +165,21 @@ func TestPROVENANCECarriesA27Verbatim(t *testing.T) {
 	//
 	// These checks run against the RAW markdown (before the "*" markup
 	// stripper above runs), and match the bullet form the file actually uses
-	// — "- **A1** — …" — as "**A1**". A plain substring search on the
-	// stripped text is vacuous here: Contains(prov, "A1") is also satisfied
-	// by "A10", "A18a" and "A24", so a missing A1 bullet would never be
-	// caught. "**A1**" cannot collide with "**A10**" or "**A18a**" because
-	// the two asterisks immediately follow the digits only in A1's own
-	// bullet.
+	// — "- **A1** — …" — in full, leading hyphen included, on BOTH loops
+	// below. A plain substring search on the stripped text is vacuous here:
+	// Contains(prov, "A1") is also satisfied by "A10", "A18a" and "A24", so a
+	// missing A1 bullet would never be caught, and "**A1**" alone is no
+	// better — this file also says "an image rides on **A1**" and similar in
+	// running prose for A3, A4 and A27, so a search that drops the leading
+	// "- " would find the entry's NAME anywhere in the document and never
+	// notice its BULLET going missing. "- **A1**" cannot collide with
+	// "- **A10**" or "- **A18a**" because the two asterisks immediately
+	// follow the digits only in A1's own bullet, and it cannot collide with
+	// prose because prose never opens a line with "- ".
 	raw := string(b)
 	for _, entry := range []string{"A1", "A3", "A4", "A24", "A27"} {
-		if !strings.Contains(raw, "**"+entry+"**") {
-			t.Errorf("PROVENANCE.md does not carry the bullet **%s**, one of the family-level entries an image rides on", entry)
+		if !strings.Contains(raw, "- **"+entry+"**") {
+			t.Errorf("PROVENANCE.md does not carry the bullet - **%s**, one of the family-level entries an image rides on", entry)
 		}
 	}
 	for _, entry := range []string{"A10", "A18a"} {
