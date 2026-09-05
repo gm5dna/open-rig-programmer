@@ -16,8 +16,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gm5dna/open-rig-programmer/core/cat"
+	"github.com/gm5dna/open-rig-programmer/core/clone"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ft891"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
@@ -30,8 +33,10 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/icr8600"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
+	"github.com/gm5dna/open-rig-programmer/internal/extable"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx10"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx101"
+	"github.com/gm5dna/open-rig-programmer/internal/fakeft891"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7851"
 	"github.com/gm5dna/open-rig-programmer/internal/radiotext"
 )
@@ -208,6 +213,10 @@ var fakePackageForModel = map[string]string{
 	// And the IC-R8600 likewise: one simulator package to itself, the
 	// tier's fourth and last.
 	ICR8600Model: "internal/fakeicr8600",
+	// The FT-891 (Tier 1): one simulator package to itself again, on the
+	// same footing as every single-row entry above — one driver package,
+	// one fake, no sibling to share either with.
+	FT891Model: "internal/fakeft891",
 }
 
 func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
@@ -333,6 +342,33 @@ func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
 // filter: byte 0x00 at offset 7 is not a value this profile defines" —
 // the same error the CLI reproduction in the task brief hit. Restoring
 // the row makes it pass again.
+// nonVacuousDefaultImage names the registered models whose simulator SHIPS a
+// populated channel by design, so that the test below's populated-read
+// assertions actually run for them.
+//
+// IT IS NOT "every model that happens to have one today", and it is
+// deliberately not derived: the ten Icom fakes with EMPTY default images are
+// absent because emptiness is THEIR design (a fake's contents are frozen
+// evidence, and several of those images were deliberately emptied at the row
+// that registered them — see fake.go's IC905Model entry), and adding them
+// here would demand a change to that evidence.
+//
+// THE FT-891 IS HERE BECAUSE ITS FAKE'S DEFAULT IMAGE IS CONSTRAINED IN BOTH
+// DIRECTIONS (plan decision P13): at least ONE occupied MEM channel, so this
+// fleet pin is non-vacuous for it, and NO 5xx or EMG slot, so a plain
+// --fake --model FT-891 session's eleven-frame discovery walk finds nothing
+// and the discovered banks stay something a test asks for. Only the first
+// half is checkable here; the second is
+// TestOpenFakeSessionFor_FT891OptionSourceIsItsOwn's premise.
+var nonVacuousDefaultImage = map[string]bool{
+	DefaultModel:   true,
+	FTdx10Model:    true,
+	FTdx101DModel:  true,
+	FTdx101MPModel: true,
+	ICR8600Model:   true,
+	FT891Model:     true,
+}
+
 func TestOpenFakeSessionFor_EveryRegisteredModel_ReadsEveryDefaultSlot(t *testing.T) {
 	models := SupportedModels()
 	if len(models) == 0 {
@@ -406,10 +442,11 @@ func TestOpenFakeSessionFor_EveryRegisteredModel_ReadsEveryDefaultSlot(t *testin
 			// bump a Yaesu codeplug's schema and break byte identity.
 			//
 			// What this actually exercises, and no more: the schema-3
-			// arm by the four Yaesu models (FT-710, FTdx10, FTdx101D,
-			// FTdx101MP), and the >= 4 arm by the IC-R8600 alone,
+			// arm by the five Yaesu models (FT-710, FTdx10, FTdx101D,
+			// FTdx101MP, FT-891 — the FT-891 reaches none of the tier
+			// fields either), and the >= 4 arm by the IC-R8600 alone,
 			// whose fake ships populated default slots at schema 5.
-			// Those five are also the only models the Absent sweep
+			// Those six are also the only models the Absent sweep
 			// above is non-vacuous for. The other ten Icom fakes have
 			// EMPTY default images — nothing to read a tier state from
 			// — so both the sweep and the >= 4 arm say nothing about
@@ -474,6 +511,18 @@ func TestOpenFakeSessionFor_EveryRegisteredModel_ReadsEveryDefaultSlot(t *testin
 			}
 			if reachesTierField && populatedReads == 0 {
 				t.Logf("fresh-read schema = %d: %q's default image has no populated channel, so there is no tier state for Save to represent", probe.Schema, model)
+			}
+			// NON-VACUITY, PER MODEL AND BY NAME. Every branch above is
+			// guarded by populatedReads > 0, so a model whose fake image
+			// were silently emptied would sail through this whole subtest
+			// having proved nothing about the Absent/omission rule it
+			// exists to pin — the log lines say so, but a log is not a
+			// failure. nonVacuousDefaultImage names the models whose
+			// simulator is DESIGNED to ship a populated channel, so
+			// emptying one is a test failure rather than a quiet
+			// reduction in coverage.
+			if nonVacuousDefaultImage[model] && populatedReads == 0 {
+				t.Errorf("%q read %d slot(s) and NONE of them populated — this model's simulator is designed to ship at least one occupied channel, so every populated-read assertion in this subtest just passed vacuously", model, reads)
 			}
 			t.Logf("%q: %d slot(s) read across %d bank(s)", model, reads, len(caps.Banks))
 		})
@@ -1399,7 +1448,7 @@ func TestSupportedModels_SortedNonEmpty(t *testing.T) {
 // deleting a constant cannot make this test agree with the change.
 func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	got := SupportedModels()
-	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600"} {
+	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600", "FT-891"} {
 		found := false
 		for _, m := range got {
 			if m == want {
@@ -1469,6 +1518,15 @@ func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	// RECEIVER.
 	if ICR8600Model != "IC-R8600" {
 		t.Errorf("ICR8600Model = %q, want \"IC-R8600\"", ICR8600Model)
+	}
+	// Tier 1's FT-891, the first YAESU registration since M9d-2 and the
+	// sixteenth model overall. The hyphen is the project's spelling of the
+	// manual's own "FT-891" (capability matrix §1.1) and the same string
+	// core/driver/ft891's modelName carries, which is what
+	// TestDriverTableKeysMatchDriverModel checks against the driver rather
+	// than against this literal.
+	if FT891Model != "FT-891" {
+		t.Errorf("FT891Model = %q, want \"FT-891\"", FT891Model)
 	}
 }
 
@@ -1844,6 +1902,17 @@ func TestModelSlug(t *testing.T) {
 		// exercises the "/" collapse, and because keeping it beside the two
 		// real keys shows at a glance that the three are different strings.
 		{"FTDX101D/MP", "ftdx101d-mp"},
+		// Tier 1's FT-891 (plan decision P14, spec erratum S-E2). TWO
+		// slugs exist for this radio and they are different strings: the
+		// Go PACKAGE slug is "ft891" (core/driver/ft891, core/cat/ft891,
+		// internal/fakeft891, internal/extable's profile key), and THIS —
+		// the model slug, which is what names its snapshot/journal
+		// directory — is "ft-891", because ModelSlug collapses the
+		// hyphen it finds in the model name rather than deleting it. The
+		// two must never be confused: a caller that reached for the
+		// package slug here would silently write this radio's snapshots
+		// somewhere no reader looks for them.
+		{"FT-891", "ft-891"},
 		{"FTX-1", "ftx-1"},
 	} {
 		if got := ModelSlug(tc.model); got != tc.want {
@@ -1977,21 +2046,46 @@ func assertNoConsentAnywhere(t *testing.T, what string, caps spec.Capabilities) 
 // SessionOptions{ConsentUnverifiedWrites: true}, the session the real wiring
 // path returns must carry the consent transform — MEM's frequency write,
 // spec.Unverified in each of these radios' real-hardware baselines (no
-// FTdx10, FTDX101D, FTDX101MP, IC-7610, IC-7300 or IC-7300MK2 has been
-// written to by this project), becomes spec.ConsentedUnverified — and must
-// carry it on the write side only.
+// FTdx10, FTDX101D, FTDX101MP, IC-7610, IC-7300, IC-7300MK2 or FT-891 has
+// been written to by this project), becomes spec.ConsentedUnverified — and
+// must carry it on the write side only.
 //
 // EVERY consent-eligible model, one subtest each, deliberately: the rows
 // differ in which driver package they reach (ftdx10; ftdx101 twice over two
-// constructors; and, since Wave 4, ic7610, ic7300 and ic7300mk2, three
-// separate driver packages), and a table that threaded the option through
-// one row and dropped it in another would leave a user's recorded consent
-// silently inert for that radio. The FT-710 is not here because its row's
-// option is a proven no-op (its real-hardware set has no Unverified write to
+// constructors; ic7610, ic7300 and ic7300mk2 since Wave 4; and, since Tier
+// 1's FT-891, ft891, the first Yaesu row added since this table was
+// written), and a table that threaded the option through one row and
+// dropped it in another would leave a user's recorded consent silently
+// inert for that radio. The FT-710 is not here because its row's option is
+// a proven no-op (its real-hardware set has no Unverified write to
 // transform); core/driver/ft710's own tests own that proof, and
 // TestRealDriverFor_DefaultPathByteIdentical below covers its default path.
+//
+// COMPLETENESS GUARD: every OTHER registered model is consent-eligible
+// (TestNeedsUnverifiedConsent_PerModel says so per model), so a registration
+// that added neither a subtest here nor a review-visible reason to skip one
+// would escape silently — the FT-891's did, twice, which is why this guard
+// exists. It walks SupportedModels() and asks NeedsUnverifiedConsent rather
+// than hand-counting, so it stays true of a model this table has not met
+// yet.
 func TestOpenRealSessionWith_ConsentedSessionCaps(t *testing.T) {
-	for _, model := range []string{FTdx10Model, FTdx101DModel, FTdx101MPModel, IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model, IC7851Model, IC7850Model, IC7760Model, IC7100Model, ICR8600Model} {
+	models := []string{FTdx10Model, FTdx101DModel, FTdx101MPModel, IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model, IC7851Model, IC7850Model, IC7760Model, IC7100Model, ICR8600Model, FT891Model}
+
+	tested := make(map[string]bool, len(models))
+	for _, m := range models {
+		tested[m] = true
+	}
+	for _, m := range SupportedModels() {
+		eligible, err := NeedsUnverifiedConsent(m)
+		if err != nil {
+			t.Fatalf("NeedsUnverifiedConsent(%q): unexpected error: %v", m, err)
+		}
+		if eligible && !tested[m] {
+			t.Fatalf("%q is consent-eligible (NeedsUnverifiedConsent) but has no subtest in this table — its consent transform would be untested at session level", m)
+		}
+	}
+
+	for _, model := range models {
 		t.Run(model, func(t *testing.T) {
 			fakePortSeam(t, model)
 
@@ -2079,10 +2173,21 @@ func TestOpenRealSessionFor_DelegatesZeroOptions(t *testing.T) {
 // stayed green. Comparing realDriverFor(model, true) against the
 // constructor call the row is supposed to make sees exactly that.
 //
-// wantConsent is nil on the four Yaesu rows, which no review deferred and
-// which the table above already covers on the false arm.
+// wantConsent is nil on the four ORIGINAL Yaesu rows (FT-710, FTdx10,
+// FTdx101D, FTdx101MP), which no review deferred and which the table above
+// already covers on the false arm. The FT-891 breaks that pattern
+// deliberately: its consent arm IS pinned here, on the same terms as the
+// IC-7760/IC-7100/IC-R8600 rows below — core/driver/ft891's New takes the
+// profile as an argument, so a consent arm that had quietly passed
+// ft891.Simulated would be caught only here.
+//
+// COMPLETENESS GUARD: this table carries exactly one row per registered
+// model (unlike TestOpenRealSessionWith_ConsentedSessionCaps above, which
+// carries only the consent-eligible ones), so a registration that added no
+// row here would escape the default-path byte-identity pin altogether —
+// which is exactly what happened to the FT-891 before this guard existed.
 func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
-	for _, tc := range []struct {
+	table := []struct {
 		model       string
 		want        func() driver.Driver
 		wantConsent func() driver.Driver
@@ -2148,7 +2253,23 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		{model: ICR8600Model, want: NewICR8600RealDriver, wantConsent: func() driver.Driver {
 			return icr8600.New(icr8600.RealHardware, icr8600.WithConsentedUnverifiedWrites())
 		}},
-	} {
+		// The FT-891 (Tier 1), on exactly the same terms as the IC-7760,
+		// IC-7100 and IC-R8600 rows above: core/driver/ft891's New takes
+		// the profile as an argument, so its consent arm NAMES
+		// ft891.RealHardware rather than leaving the profile to an
+		// option's absence, and this row is where a consent arm that had
+		// quietly passed ft891.Simulated would be caught — the property
+		// wiring.go's own FT891Model comment claims this test proves.
+		{model: FT891Model, want: NewFT891RealDriver, wantConsent: func() driver.Driver {
+			return ft891.New(ft891.RealHardware, ft891.WithConsentedUnverifiedWrites())
+		}},
+	}
+
+	if models := SupportedModels(); len(table) != len(models) {
+		t.Fatalf("SupportedModels() = %v — this table has %d rows and must name every registered model", models, len(table))
+	}
+
+	for _, tc := range table {
 		got, err := realDriverFor(tc.model, false)
 		if err != nil {
 			t.Fatalf("realDriverFor(%q, false): unexpected error: %v", tc.model, err)
@@ -2303,6 +2424,15 @@ func TestNeedsUnverifiedConsent_PerModel(t *testing.T) {
 		// from the graded set, and the remaining seventeen fields are
 		// Unverified in both directions.
 		ICR8600Model: true,
+		// The FT-891 (Tier 1). Its writeTrialsComplete
+		// (core/driver/ft891/caps.go) is FALSE, so its RealHardware
+		// profile is CapabilitiesUnverified — every candidate field's
+		// Write Unverified on both of its static banks, which is what
+		// this predicate must find. Being the first Yaesu model added
+		// since M9d-2 changes nothing about the rule: what decides the
+		// answer is the write-trial guard, not the maker, and the
+		// FT-710's false is still the exception earned by trials.
+		FT891Model: true,
 	}
 	models := SupportedModels()
 	if len(models) != len(want) {
@@ -2468,7 +2598,7 @@ func registerFramingFixture(t *testing.T, model string, stopBits int) {
 }
 
 // TestOpenRealSessionFor_StopBitsFollowAReportingDriver is spec D3.1's
-// half that the four registered Yaesu models cannot prove: a driver
+// half that the five registered Yaesu models cannot prove: a driver
 // implementing driver.SerialFramingReporter has its answer carried into
 // the port's own configuration, so an Icom radio's 8-N-1 line is opened
 // 8-N-1 rather than at transport's fixed 8-N-2.
@@ -2528,7 +2658,7 @@ func TestOpenRealSessionFor_StopBitsRefuseAnImpossibleReport(t *testing.T) {
 	}
 }
 
-// yaesuModels names the four registered Yaesu models, BY NAME rather than
+// yaesuModels names the five registered Yaesu models, BY NAME rather than
 // by "every registered model" — the scoping Wave 4's IC-7610 registration
 // (task R1) forced on the three tests below. Before Wave 4, SupportedModels()
 // and "every registered model" were the same set and a hardcoded
@@ -2545,7 +2675,22 @@ func TestOpenRealSessionFor_StopBitsRefuseAnImpossibleReport(t *testing.T) {
 // the four here, rather than deriving them from SupportedModels() minus a
 // filter, keeps the SET this file's own Yaesu-specific tests describe
 // explicit and independent of whatever else gets registered later.
-var yaesuModels = []string{DefaultModel, FTdx10Model, FTdx101DModel, FTdx101MPModel}
+//
+// FIVE SINCE TIER 1's FT-891, and that model is why this list is not
+// merely longer. TestYaesuAndIcomModelsPartitionSupportedModels below is
+// the alarm for a Yaesu registration that joined SupportedModels() and
+// neither list; the FT-891 is the first registration since that alarm was
+// written to actually exercise it, and it belongs HERE rather than in
+// icomModels for the plain reason that list states — this partition runs
+// by MAKER. It implements no driver.SerialFramingReporter
+// (core/driver/ft891 declares none: that radio's CAT manual carries no
+// framing statement, which its own ASSUMED register entry 1 records), so
+// it opens at transport.DefaultStopBits and the first test below covers it
+// unchanged; and its CTCSSToneRange is nil with a populated CTCSSTones
+// (core/driver/ft891/caps.go, matrix §1.9-1.10 — this radio names a tone
+// by INDEX into its own 50-entry chart), which is the second test's Yaesu
+// shape rather than the Icom one.
+var yaesuModels = []string{DefaultModel, FTdx10Model, FTdx101DModel, FTdx101MPModel, FT891Model}
 
 // icomModels names every registered Icom model, on the same by-name
 // footing as yaesuModels — ELEVEN rows now (the IC-7610, the IC-7300 pair
@@ -2558,7 +2703,7 @@ var yaesuModels = []string{DefaultModel, FTdx10Model, FTdx101DModel, FTdx101MPMo
 // MEMBERSHIP HERE IS ABOUT THE MAKER, NOT ABOUT SERIAL FRAMING, and the
 // IC-7100 is why that distinction now has to be stated: it is the first
 // Icom row that implements NO driver.SerialFramingReporter, so it opens
-// at 8-N-2 like the four Yaesu rows. It still belongs in this list —
+// at 8-N-2 like the five Yaesu rows. It still belongs in this list —
 // TestYaesuAndIcomModelsPartitionSupportedModels partitions
 // SupportedModels() by maker — and its framing coverage is
 // TestOpenRealSessionFor_IC7100OpensAtEightNTwo rather than an
@@ -2595,7 +2740,7 @@ func TestYaesuAndIcomModelsPartitionSupportedModels(t *testing.T) {
 
 // TestOpenRealSessionFor_EveryYaesuModelOpensAtEightNTwo is the pin the
 // adjudication asks for, on the honest observable: the PORT CONFIGURATION
-// each of the four registered Yaesu models is opened with. None of them
+// each of the five registered Yaesu models is opened with. None of them
 // implements SerialFramingReporter, so each must still reach the serial
 // layer at transport.DefaultStopBits — before and after E2, unchanged.
 //
@@ -2613,7 +2758,7 @@ func TestOpenRealSessionFor_EveryYaesuModelOpensAtEightNTwo(t *testing.T) {
 				t.Fatalf("realDriverFor(%q): %v", model, err)
 			}
 			if r, ok := d.(driver.SerialFramingReporter); ok {
-				t.Fatalf("%s implements SerialFramingReporter (reporting %d) — the four Yaesu models must not, so that 8-N-2 stays their port configuration by default rather than by a driver's statement", model, r.StopBits())
+				t.Fatalf("%s implements SerialFramingReporter (reporting %d) — the five Yaesu models must not, so that 8-N-2 stays their port configuration by default rather than by a driver's statement", model, r.StopBits())
 			}
 
 			got := recordSerialConfig(t)
@@ -3173,5 +3318,563 @@ func TestOpenRealSessionFor_ICR8600OpensAtEightNOne(t *testing.T) {
 	}
 	if got.StopBits != 1 {
 		t.Errorf("SerialConfig.StopBits = %d, want 1 — the IC-R8600's own StopBits() report must reach the port, not transport.DefaultStopBits (%d)", got.StopBits, transport.DefaultStopBits)
+	}
+}
+
+// --- The FT-891 (Tier 1 task 7): registration's own end-to-end legs ---
+
+// TestSynthesiseDiscoveredBanks_FT891MatchesDriver is the FTdx10 test's
+// counterpart for the model Tier 1 registered, carrying the same
+// load-bearing assertion for the same reason: driver.DiscoveredBankSynthesizer
+// is OPTIONAL, so a driver that does not implement it fails SILENTLY here —
+// ok=false, and app/ then renders no discovered banks at all for an offline
+// FT-891 codeplug (data loaded, rows invisible, no error anywhere).
+//
+// THE FIXTURE IS THIS RADIO'S OWN, not the FTdx10's copied across, and that
+// matters for one slot: "599" is a legal 5 MHz slot on the FTdx10 and is NOT
+// one on the FT-891, whose own legend prints "501 - 510" and whose ParseSlot
+// refuses 511 upwards (internal/fakeft891/image.go's fiveMHzSlot cites the
+// transcription). Reusing the sibling's list would have handed this driver a
+// slot it silently drops, and the comparison below — which asks only that
+// wiring's answer equals the driver's — would have agreed about nothing.
+// "510" is this radio's declared ceiling and "0X1" is the deliberate
+// classifies-as-neither member.
+func TestSynthesiseDiscoveredBanks_FT891MatchesDriver(t *testing.T) {
+	slots := []string{"501", "510", "EMG", "0X1"}
+
+	got, ok := SynthesiseDiscoveredBanks(FT891Model, slots)
+	if !ok {
+		t.Fatalf("SynthesiseDiscoveredBanks(%q, ...): ok = false, want true (the ft891 driver implements driver.DiscoveredBankSynthesizer — its absence would drop discovered banks from the GUI silently)", FT891Model)
+	}
+
+	synth, synthOK := NewFT891RealDriver().(driver.DiscoveredBankSynthesizer)
+	if !synthOK {
+		t.Fatal("NewFT891RealDriver() does not implement driver.DiscoveredBankSynthesizer — sanity check failed")
+	}
+	want := synth.SynthesiseDiscoveredBanks(slots)
+	if len(want) != 2 {
+		t.Fatalf("the ft891 driver classified the fixture into %d bank(s), want 2 (60M and EMG) — the comparison below would not be exercising both", len(want))
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("SynthesiseDiscoveredBanks(%q, ...) = %#v,\nwant %#v (must equal the driver's own classification)", FT891Model, got, want)
+	}
+}
+
+// TestOpenFakeSessionFor_FT891OptionSourceIsItsOwn pins M9c-5 E5's design
+// for this model: the FT891 fakeDrivers entry reads its OWN option source,
+// inside its own newRadio closure, at CALL time.
+//
+// FT891FakeSessionOpts is set here to populate the fake's 5 MHz bank and its
+// emergency channel — deliberately NOT expressible any other way, because
+// internal/fakeft891's DefaultImage has neither, and has neither ON PURPOSE
+// (plan decision P13: a demo radio whose discovery walk finds a 5xx bank
+// would make every "this radio discovered nothing" assertion a fixture
+// accident). Two things follow if the seam works, and both are asserted: the
+// option reached the FT-891's rig, and core/driver/ft891's eleven-frame MR
+// discovery walk found what the option added and reported it as discovered
+// BANKS in the session's own capabilities — the whole registered read path,
+// through the same constructor a real "--fake --model FT-891" invocation
+// uses.
+//
+// The crossing this design prevents is a COMPILE error, not a test case:
+// FT891FakeSessionOpts is []fakeft891.Option and no other model's variable
+// has that element type, so neither model's options can be applied to the
+// other's rig even by mistake. That is why there is no "another model
+// ignored it" assertion below — there is nothing to ignore.
+//
+// THE DEFAULT-IMAGE HALF IS ASSERTED FIRST, and it is not decoration: a fake
+// that shipped a 5xx bank by default would make the option-fed assertions
+// below pass whether or not the option ever reached the rig.
+func TestOpenFakeSessionFor_FT891OptionSourceIsItsOwn(t *testing.T) {
+	plain, closePlain, err := OpenFakeSessionFor(testCtx(t), FT891Model)
+	if err != nil {
+		t.Fatalf("OpenFakeSessionFor(%q) with no options: unexpected error: %v", FT891Model, err)
+	}
+	t.Cleanup(func() { _ = closePlain() })
+	if _, ok := plain.Capabilities().Bank(spec.Bank60m); ok {
+		t.Fatal("the DEFAULT FT-891 fake produced a 60M bank — plan P13 constrains that image to have no 5xx slot, and the option-fed assertions below would pass without the option")
+	}
+	if _, ok := plain.Capabilities().Bank(spec.BankEMG); ok {
+		t.Fatal("the DEFAULT FT-891 fake produced an EMG bank — plan P13 constrains that image to have no EMG slot")
+	}
+
+	prev := FT891FakeSessionOpts
+	FT891FakeSessionOpts = []fakeft891.Option{fakeft891.With5MHz(), fakeft891.WithEMG()}
+	t.Cleanup(func() { FT891FakeSessionOpts = prev })
+
+	sess, closeAll, err := OpenFakeSessionFor(testCtx(t), FT891Model)
+	if err != nil {
+		t.Fatalf("OpenFakeSessionFor(%q) with options: unexpected error: %v", FT891Model, err)
+	}
+	t.Cleanup(func() { _ = closeAll() })
+
+	caps := sess.Capabilities()
+	sixty, ok := caps.Bank(spec.Bank60m)
+	if !ok {
+		t.Fatal("no 60M bank in the session's capabilities — fakeft891.With5MHz() did not reach the FT-891's rig, or discovery did not run")
+	}
+	// internal/fakeft891's sparseFiveMHzChannels: the first channel, a gap,
+	// one mid-bank channel, a longer gap, and the declared ceiling. The
+	// SHAPE is the point — a walk that stopped at the first "?;" would find
+	// 501 alone, and one that missed the ceiling would find 510 nowhere.
+	wantSixty := []string{"501", "505", "510"}
+	if !reflect.DeepEqual(sixty.Slots, wantSixty) {
+		t.Errorf("60M.Slots = %v, want %v — the discovery walk must cover the whole declared 501..510 range with no contiguity assumption", sixty.Slots, wantSixty)
+	}
+	emg, ok := caps.Bank(spec.BankEMG)
+	if !ok {
+		t.Fatal("no EMG bank in the session's capabilities — fakeft891.WithEMG() did not reach the FT-891's rig")
+	}
+	if !reflect.DeepEqual(emg.Slots, []string{"EMG"}) {
+		t.Errorf("EMG.Slots = %v, want [EMG]", emg.Slots)
+	}
+	// Both discovered banks are read-only in the sharpest sense this fleet
+	// has (plan decision P4, matrix §2.5): every Write forced Unsupported,
+	// AND FieldTag/FieldTagDisplay reduced to the ZERO FieldSupport, because
+	// this radio reads those banks by MR alone and MR's 28-position answer
+	// carries neither field.
+	for _, bank := range []spec.Bank{sixty, emg} {
+		if fs := caps.FieldSupport(bank.ID, spec.FieldTag); fs != (spec.FieldSupport{}) {
+			t.Errorf("bank %s FieldTag = %+v, want the ZERO FieldSupport — MR's answer carries no tag", bank.ID, fs)
+		}
+		if fs := caps.FieldSupport(bank.ID, spec.FieldTagDisplay); fs != (spec.FieldSupport{}) {
+			t.Errorf("bank %s FieldTagDisplay = %+v, want the ZERO FieldSupport — MR's answer carries no display flag", bank.ID, fs)
+		}
+		if fs := caps.FieldSupport(bank.ID, spec.FieldFrequency); fs.Write != spec.Unsupported {
+			t.Errorf("bank %s FieldFrequency.Write = %v, want Unsupported — no profile may claim a discovered slot writable", bank.ID, fs.Write)
+		}
+	}
+}
+
+// ft891WritableChannel is the channel the write round trip sends, with the
+// TAG display flag as a parameter — the one field byte 28 carries live on
+// this radio and the one place a sibling's FIXED value could leak in.
+//
+// TagDisplay is MANDATORY and Known here (plan decision P6): this driver
+// refuses a non-Known one outright, so there is no "leave it Unknown"
+// variant of this fixture to write.
+func ft891WritableChannel(slot string, tagDisplay bool) codeplug.Channel {
+	return codeplug.Channel{
+		Slot: slot,
+		Data: &codeplug.ChannelData{
+			FreqHz: 14_250_000,
+			Mode:   "USB",
+			// A non-zero clarifier with ASYMMETRIC Rx/Tx flags, as the
+			// FTdx10's fixture uses, and TxClar deliberately FALSE: a true
+			// one is refused at the write on this radio (plan decision P5),
+			// which is a different test's subject.
+			ClarHz:     -150,
+			RxClar:     true,
+			TxClar:     false,
+			CTCSS:      "ENC-DEC",
+			CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+			Shift:      "PLUS",
+			Tag:        "CALLING",
+			TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: tagDisplay},
+			ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
+			// THE SEVENTEEN ICOM-TIER FIELDS, EXPLICITLY Unavailable: a real
+			// FT-891 read (this package's own fake included) always reports
+			// all seventeen Unavailable (core/driver/ft891/read.go's
+			// channelData, plan P12), so stating them here is the same
+			// shape a genuine round-trip channel carries, not a dodge
+			// around anything the write side would otherwise refuse — the
+			// write-gate sweep (05/09/2026, item (i)) admits an Absent tier
+			// field too now (core/driver.FieldStateChecks, the fleet
+			// stance), so this fixture's choice of Unavailable over Absent
+			// is no longer load-bearing for THIS test, only for matching a
+			// real read.
+			TxFreqHz:            codeplug.FreqField{State: codeplug.Unavailable},
+			Duplex:              codeplug.StringField{State: codeplug.Unavailable},
+			OffsetHz:            codeplug.FreqField{State: codeplug.Unavailable},
+			ToneMode:            codeplug.StringField{State: codeplug.Unavailable},
+			ToneTx:              codeplug.ToneField{State: codeplug.Unavailable},
+			ToneRx:              codeplug.ToneField{State: codeplug.Unavailable},
+			DTCSCode:            codeplug.IntField{State: codeplug.Unavailable},
+			DTCSPolarity:        codeplug.StringField{State: codeplug.Unavailable},
+			Filter:              codeplug.StringField{State: codeplug.Unavailable},
+			DataMode:            codeplug.BoolField{State: codeplug.Unavailable},
+			TuningStepEnabled:   codeplug.BoolField{State: codeplug.Unavailable},
+			TuningStep:          codeplug.StringField{State: codeplug.Unavailable},
+			ProgramTuningStepHz: codeplug.FreqField{State: codeplug.Unavailable},
+			AttenuatorDB:        codeplug.IntField{State: codeplug.Unavailable},
+			Preamp:              codeplug.StringField{State: codeplug.Unavailable},
+			Antenna:             codeplug.StringField{State: codeplug.Unavailable},
+			IPPlus:              codeplug.BoolField{State: codeplug.Unavailable},
+		},
+	}
+}
+
+// TestOpenFakeSessionFor_FT891SimulatedWriteRoundTrip is the end-to-end
+// write leg Stage 2's lane A DEFERRED to this task: that lane ran without
+// internal/fakeft891 on its branch, so the choreography could only be proved
+// there against a scripted responder. This proves the WIRING — that a
+// registered model's simulated profile, its fake rig and its write path
+// actually compose — from probe to read-back.
+//
+// It can only live here. The choreography needs a Simulated-profile driver
+// paired with internal/fakeft891, and that pairing exists in exactly one
+// place repo-wide: fake.go's fakeDrivers entry, pinned there by
+// internal/guards' TestSimulatedProfileTokensConfinement.
+//
+// BOTH TAG STATES, and that is what this test adds over its siblings' single
+// pass. Byte 28 of the combined record is a LIVE flag on this radio and on no
+// registered sibling — every other Yaesu model prints it fixed — so it is the
+// one position where a sibling's constant could leak in and still round-trip
+// convincingly for one of the two values. A run that only ever sent TAG ON
+// would pass against a fake that hard-coded '1'.
+//
+// The write is against the FAKE, and nothing here is evidence about any
+// physical FT-891: that model's RealHardware profile reports every Write
+// Unverified while writeTrialsComplete is false, so the capability gate
+// refuses before a frame is built.
+func TestOpenFakeSessionFor_FT891SimulatedWriteRoundTrip(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		slot       string
+		tagDisplay bool
+	}{
+		{"TAG ON", "003", true},
+		{"TAG OFF", "004", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := testCtx(t)
+
+			sess, closeAll, err := OpenFakeSessionFor(ctx, FT891Model)
+			if err != nil {
+				t.Fatalf("OpenFakeSessionFor(%q): unexpected error: %v", FT891Model, err)
+			}
+			t.Cleanup(func() {
+				if err := closeAll(); err != nil {
+					t.Errorf("closeAll: unexpected error: %v", err)
+				}
+			})
+
+			// 1. Identity: the rig answered as this model's own radio.
+			wantCATID := NewFT891RealDriver().Capabilities().CATID
+			if wantCATID == "" {
+				t.Fatal("the ft891 driver declares an empty CATID — the identity check below would pass vacuously")
+			}
+			if got := sess.Identity().CATID; got != wantCATID {
+				t.Errorf("Identity().CATID = %q, want %q — the fake rig answering this session is not the FT-891's own", got, wantCATID)
+			}
+
+			// 2. A slot the default image populates, read through the MT+MR
+			//    choreography. TagDisplay is KNOWN here, unlike every
+			//    registered sibling's Unavailable: byte 28 is live.
+			const populated = "002"
+			before, err := sess.ReadChannel(ctx, populated)
+			if err != nil {
+				t.Fatalf("ReadChannel(%q): unexpected error: %v", populated, err)
+			}
+			if before.Data == nil {
+				t.Fatalf("ReadChannel(%q): Data is nil, want a populated channel (fakeft891's default image populates M-02)", populated)
+			}
+			if got := before.Data.TagDisplay; got.State != codeplug.Known || !got.Value {
+				t.Errorf("ReadChannel(%q): TagDisplay = %+v, want {Known,true} — M-02 is the default image's TAG-ON channel and byte 28 is a live flag on this radio", populated, got)
+			}
+			if got := before.Data.CTCSSTone.State; got != codeplug.Unknown {
+				t.Errorf("ReadChannel(%q): CTCSSTone.State = %v, want Unknown", populated, got)
+			}
+			if got := before.Data.ScanSkip.State; got != codeplug.Unknown {
+				t.Errorf("ReadChannel(%q): ScanSkip.State = %v, want Unknown", populated, got)
+			}
+
+			// 3. Write into a slot the default image leaves empty — a
+			//    create, which on this radio ONE combined MT Set is claimed
+			//    to suffice for (the driver register's A SINGLE COMBINED MT
+			//    SET SUFFICES TO CREATE OR OVERWRITE A CHANNEL).
+			empty, err := sess.ReadChannel(ctx, tc.slot)
+			if err != nil {
+				t.Fatalf("ReadChannel(%q): unexpected error: %v", tc.slot, err)
+			}
+			if empty.Data != nil {
+				t.Fatalf("ReadChannel(%q): Data = %+v, want nil — this test needs an EMPTY target slot, so the write below is a create", tc.slot, empty.Data)
+			}
+
+			ch := ft891WritableChannel(tc.slot, tc.tagDisplay)
+			res, err := sess.WriteChannel(ctx, ch)
+			if err != nil {
+				t.Fatalf("WriteChannel(%q): unexpected error: %v (the Simulated profile must be write-capable against the fake)", tc.slot, err)
+			}
+			wantSteps := []driver.WriteStep{{Command: "MT", Sent: true, Confirmed: true}}
+			if !reflect.DeepEqual(res.Steps, wantSteps) {
+				t.Errorf("WriteResult.Steps = %+v, want %+v — this radio's whole write choreography is ONE combined MT frame", res.Steps, wantSteps)
+			}
+
+			// 4. Read it back, field by field, including the clarifier and
+			//    the live TAG flag.
+			after, err := sess.ReadChannel(ctx, tc.slot)
+			if err != nil {
+				t.Fatalf("ReadChannel(%q) after write: unexpected error: %v", tc.slot, err)
+			}
+			if after.Data == nil {
+				t.Fatalf("ReadChannel(%q) after write: Data is nil, want the channel just written", tc.slot)
+			}
+			if after.Slot != tc.slot {
+				t.Errorf("read-back Slot = %q, want %q", after.Slot, tc.slot)
+			}
+			sent := ch.Data
+			got := after.Data
+			if got.FreqHz != sent.FreqHz {
+				t.Errorf("read-back FreqHz = %d, want %d", got.FreqHz, sent.FreqHz)
+			}
+			if got.Mode != sent.Mode {
+				t.Errorf("read-back Mode = %q, want %q", got.Mode, sent.Mode)
+			}
+			if got.ClarHz != sent.ClarHz {
+				t.Errorf("read-back ClarHz = %d, want %d — the FT-891's Simulated clarifier is Supported, NOT the FT-710's Inert (that is an FT-710 hardware finding, deliberately not borrowed)", got.ClarHz, sent.ClarHz)
+			}
+			if got.RxClar != sent.RxClar || got.TxClar != sent.TxClar {
+				t.Errorf("read-back RxClar/TxClar = %v/%v, want %v/%v — the two flags are independent and must not be collapsed", got.RxClar, got.TxClar, sent.RxClar, sent.TxClar)
+			}
+			if got.CTCSS != sent.CTCSS {
+				t.Errorf("read-back CTCSS = %q, want %q", got.CTCSS, sent.CTCSS)
+			}
+			if got.Shift != sent.Shift {
+				t.Errorf("read-back Shift = %q, want %q", got.Shift, sent.Shift)
+			}
+			if got.Tag != sent.Tag {
+				t.Errorf("read-back Tag = %q, want %q (the combined form carries the tag in the SAME frame as the fields)", got.Tag, sent.Tag)
+			}
+			// THE LEG THIS TEST EXISTS FOR: the flag written is the flag
+			// read back, in BOTH directions.
+			if got.TagDisplay != (codeplug.BoolField{State: codeplug.Known, Value: tc.tagDisplay}) {
+				t.Errorf("read-back TagDisplay = %+v, want {Known,%v} — byte 28 is this radio's LIVE flag, and a fixed value borrowed from a sibling would round-trip only one of the two cases", got.TagDisplay, tc.tagDisplay)
+			}
+			// These two are NOT round-tripped values: they are what this
+			// radio's read path always reports, whatever was sent.
+			if got.CTCSSTone.State != codeplug.Unknown {
+				t.Errorf("read-back CTCSSTone.State = %v, want Unknown", got.CTCSSTone.State)
+			}
+			if got.ScanSkip.State != codeplug.Unknown {
+				t.Errorf("read-back ScanSkip.State = %v, want Unknown", got.ScanSkip.State)
+			}
+		})
+	}
+}
+
+// TestOpenFakeSessionFor_FT891SettingsEndToEnd is the settings leg Stage 2's
+// lane A DEFERRED to this task, for the same reason the write leg above was:
+// that lane had no internal/fakeft891 to read against, so its settings tests
+// could exercise the descriptor and a scripted single read but never the
+// whole walk through the registered pairing.
+//
+// It drives core/clone's ReadSettings — the caller every real settings read
+// goes through, CLI and GUI alike — against a session opened by
+// OpenFakeSessionFor, so what is proved is the composition: descriptor,
+// per-item ReadSetting, EX frame, fake, and back.
+//
+// THREE SUBTESTS, ONE PER PROPERTY:
+//
+//  1. The WHOLE descriptor walks, Complete true. Every one of the items the
+//     ft891-ex@1 descriptor defines comes back MenuKnown.
+//  2. ONE item forced unavailable yields MenuUnavailable for that item and a
+//     PARTIAL snapshot with every other item still present — the
+//     partial-tolerant contract, exercised on this radio.
+//  3. A set value reads back VERBATIM, so the path carries bytes rather than
+//     interpreting them.
+//
+// NON-VACUITY IS DERIVED, NEVER A LITERAL: the expected item count comes
+// from internal/extable's own ft891 profile (ExpectedRows), which is the
+// number the generated inventory is checked against when it is built. A
+// descriptor that silently lost half its items would fail here rather than
+// walk a shorter list quietly.
+func TestOpenFakeSessionFor_FT891SettingsEndToEnd(t *testing.T) {
+	profile, ok := extable.Lookup("ft891")
+	if !ok {
+		t.Fatal(`extable.Lookup("ft891") failed — the FT-891's EX profile must be registered, and this test's item bound comes from it rather than from a literal`)
+	}
+	wantItems := profile.ExpectedRows
+	if wantItems == 0 {
+		t.Fatal("the ft891 extable profile declares ExpectedRows 0 — every assertion below would hold vacuously")
+	}
+
+	openSettings := func(t *testing.T, opts ...fakeft891.Option) *clone.Service {
+		t.Helper()
+		prev := FT891FakeSessionOpts
+		FT891FakeSessionOpts = opts
+		t.Cleanup(func() { FT891FakeSessionOpts = prev })
+
+		sess, closeAll, err := OpenFakeSessionFor(testCtx(t), FT891Model)
+		if err != nil {
+			t.Fatalf("OpenFakeSessionFor(%q): unexpected error: %v", FT891Model, err)
+		}
+		t.Cleanup(func() { _ = closeAll() })
+		return clone.NewService(sess, clone.SnapshotStore{Dir: t.TempDir()})
+	}
+
+	t.Run("whole descriptor walks", func(t *testing.T) {
+		snap, err := openSettings(t).ReadSettings(testCtx(t))
+		if err != nil {
+			t.Fatalf("ReadSettings: unexpected error: %v", err)
+		}
+		if snap.Descriptor != "ft891-ex@1" {
+			t.Errorf("snapshot Descriptor = %q, want \"ft891-ex@1\"", snap.Descriptor)
+		}
+		if len(snap.Entries) != wantItems {
+			t.Errorf("snapshot has %d entries, want %d (internal/extable's ft891 profile ExpectedRows)", len(snap.Entries), wantItems)
+		}
+		if !snap.Complete {
+			t.Error("snapshot Complete = false, want true — the default fake answers every address its own inventory carries")
+		}
+		for _, e := range snap.Entries {
+			if e.State != codeplug.MenuKnown {
+				t.Errorf("entry %q State = %v, want MenuKnown", e.ID, e.State)
+			}
+			if len(e.ID) != 4 {
+				t.Errorf("entry ID %q is %d characters, want 4 — this radio's EX address is a PAIR (core/cat's EXAddressPair), not a sibling's six digits", e.ID, len(e.ID))
+			}
+		}
+	})
+
+	t.Run("one unavailable item leaves the rest present", func(t *testing.T) {
+		// 0101 is AGC FAST DELAY, an ordinary four-digit address the chart
+		// enumerates (core/cat/ft891/table2.csv). Removing it from the
+		// fake's projection makes it answer "?;", which is what a settings
+		// reader maps to an unavailable setting.
+		const missing = "0101"
+		snap, err := openSettings(t, fakeft891.WithEXUnavailable(missing)).ReadSettings(testCtx(t))
+		if err != nil {
+			t.Fatalf("ReadSettings: unexpected error: %v", err)
+		}
+		if len(snap.Entries) != wantItems {
+			t.Errorf("snapshot has %d entries, want %d — an unavailable item is RECORDED, never dropped", len(snap.Entries), wantItems)
+		}
+		if snap.Complete {
+			t.Error("snapshot Complete = true, want false — one item came back unavailable, so the snapshot is PARTIAL")
+		}
+		seen := false
+		for _, e := range snap.Entries {
+			if e.ID == missing {
+				seen = true
+				if e.State != codeplug.MenuUnavailable {
+					t.Errorf("entry %q State = %v, want MenuUnavailable", e.ID, e.State)
+				}
+				if e.Value != "" {
+					t.Errorf("entry %q Value = %q, want empty — an unavailable setting has no value to carry", e.ID, e.Value)
+				}
+				continue
+			}
+			if e.State != codeplug.MenuKnown {
+				t.Errorf("entry %q State = %v, want MenuKnown — only %q was made unavailable", e.ID, e.State, missing)
+			}
+		}
+		if !seen {
+			t.Fatalf("no entry for %q in the snapshot — this test's premise (that the descriptor offers that address) is wrong, so it asserted nothing", missing)
+		}
+	})
+
+	t.Run("a set value reads back verbatim", func(t *testing.T) {
+		// 0506 is CAT RATE, whose printed legend is "0: 4800 bps 1: 9600
+		// bps 2: 19200 bps 3: 38400 bps" over a ONE-digit field
+		// (ft891_layout.txt:553). "3" is 38400 — this driver's own ASSUMED
+		// DefaultBaud — and the value travels as the byte it is: nothing on
+		// this path interprets a menu legend (matrix §3.9).
+		const addr, value = "0506", "3"
+		snap, err := openSettings(t, fakeft891.WithEXSetting(addr, value)).ReadSettings(testCtx(t))
+		if err != nil {
+			t.Fatalf("ReadSettings: unexpected error: %v", err)
+		}
+		if !snap.Complete {
+			t.Error("snapshot Complete = false, want true — setting a value must not make an address unavailable")
+		}
+		found := false
+		for _, e := range snap.Entries {
+			if e.ID != addr {
+				continue
+			}
+			found = true
+			if e.State != codeplug.MenuKnown {
+				t.Errorf("entry %q State = %v, want MenuKnown", addr, e.State)
+			}
+			if e.Value != value {
+				t.Errorf("entry %q Value = %q, want %q verbatim", addr, e.Value, value)
+			}
+		}
+		if !found {
+			t.Fatalf("no entry for %q in the snapshot — this test's premise is wrong, so it asserted nothing", addr)
+		}
+	})
+}
+
+// TestOpenFakeSessionFor_FT891MTReadRejectionEndToEnd is the end-to-end pin
+// the closing review's MEDIUM-1 finding named: WithMTReadUnsupported()
+// makes core/driver/ft891's typed whole-session refusal reachable, but
+// before this test the only things pinning it were a scripted peer
+// (core/driver/ft891/respondingport_test.go) and the raw fake against raw
+// frames (internal/fakeft891/parser_test.go's
+// TestWithMTReadUnsupported_HonoursTheCommandList) — nothing bound the
+// REGISTERED fake to the REGISTERED driver on this path, so a future change
+// to the fake's "?;" shape, the cross-check's MR frame, or rejection
+// detection through the real transport engine could disagree with nothing
+// in the tree noticing.
+//
+// FT891FakeSessionOpts is option-source isolation (see
+// TestOpenFakeSessionFor_FT891OptionSourceIsItsOwn): saved, replaced for
+// this test only, restored by t.Cleanup.
+//
+// The default image's own "001" is occupied and "050" is not
+// (fakeft891.DefaultImage, TestDefaultImage_IsMinimalAndExactlyEnumerated),
+// so both arms of the truth table are exercised with no WithSlot overlay.
+func TestOpenFakeSessionFor_FT891MTReadRejectionEndToEnd(t *testing.T) {
+	prev := FT891FakeSessionOpts
+	FT891FakeSessionOpts = []fakeft891.Option{fakeft891.WithMTReadUnsupported()}
+	t.Cleanup(func() { FT891FakeSessionOpts = prev })
+
+	ctx := testCtx(t)
+	sess, closeAll, err := OpenFakeSessionFor(ctx, FT891Model)
+	if err != nil {
+		t.Fatalf("OpenFakeSessionFor(%q): unexpected error: %v", FT891Model, err)
+	}
+	t.Cleanup(func() { _ = closeAll() })
+
+	// The occupied slot: MT answers "?;", the cross-check's MR finds a
+	// record, and the driver's typed whole-session refusal is what comes
+	// back — not a bare error, and not an empty channel.
+	const occupied = "001"
+	if _, err := sess.ReadChannel(ctx, occupied); err == nil {
+		t.Fatalf("ReadChannel(%q): no error, want *ft891.MTReadRejectedForOccupiedSlotError — WithMTReadUnsupported() should have made MT refuse this occupied slot", occupied)
+	} else {
+		var rejected *ft891.MTReadRejectedForOccupiedSlotError
+		if !errors.As(err, &rejected) {
+			t.Errorf("ReadChannel(%q): err = %v, want errors.As *ft891.MTReadRejectedForOccupiedSlotError", occupied, err)
+		} else if rejected.Slot != occupied {
+			t.Errorf("MTReadRejectedForOccupiedSlotError.Slot = %q, want %q", rejected.Slot, occupied)
+		}
+		if !errors.Is(err, cat.ErrRejected) {
+			t.Errorf("ReadChannel(%q): errors.Is(err, cat.ErrRejected) = false, want true — the radio's answer really was a rejection", occupied)
+		}
+	}
+
+	// The empty slot: MT "?;" costs one MR cross-check, which ALSO answers
+	// "?;" — ASSUMED EMPTY, no error, Data nil.
+	const empty = "050"
+	ch, err := sess.ReadChannel(ctx, empty)
+	if err != nil {
+		t.Fatalf("ReadChannel(%q): unexpected error: %v — an empty slot must still read empty under WithMTReadUnsupported()", empty, err)
+	}
+	if ch.Data != nil {
+		t.Errorf("ReadChannel(%q): Data = %+v, want nil", empty, ch.Data)
+	}
+
+	// The whole session read fails WHOLE, not per-slot: core/clone's
+	// ReadAll — the caller every real read goes through — must propagate
+	// the same typed error and return no partial codeplug, which is the
+	// design's whole point (MTReadRejectedForOccupiedSlotError's doc
+	// comment).
+	svc := clone.NewService(sess, clone.SnapshotStore{Dir: t.TempDir()})
+	cp, err := svc.ReadAll(ctx)
+	if err == nil {
+		t.Fatal("ReadAll: no error, want the occupied slot's rejection to fail the whole read")
+	}
+	if cp != nil {
+		t.Errorf("ReadAll: Codeplug = %+v, want nil — a partial codeplug must never come back from a failed whole-session read", cp)
+	}
+	var rejectedWhole *ft891.MTReadRejectedForOccupiedSlotError
+	if !errors.As(err, &rejectedWhole) {
+		t.Errorf("ReadAll: err = %v, want errors.As *ft891.MTReadRejectedForOccupiedSlotError", err)
+	}
+	if !errors.Is(err, cat.ErrRejected) {
+		t.Error("ReadAll: errors.Is(err, cat.ErrRejected) = false, want true")
 	}
 }

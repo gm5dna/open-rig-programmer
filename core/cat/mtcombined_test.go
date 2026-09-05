@@ -37,13 +37,16 @@ func mustCombinedDialect(t *testing.T, tagMax int, fill byte, mwKind byte) Diale
 			PMSPairs:      9,
 			EmergencyWire: "EMG",
 			NoneWire:      "000",
+			MCSelects:     MCSelectsAll,
 		},
 		EXItems: []EXItem{
 			{Addr: EXAddress{P1: 7, P2: 1, P3: 1}, Name: "ITEM ONE", Digits: 2},
 		},
-		MT:          MTPolicy{Form: MTFormCombined, TagMaxBytes: tagMax, TagFill: fill},
-		Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-		MWWriteKind: mwKind,
+		EXAddressForm: EXAddressTriple,
+		MT:            MTPolicy{Form: MTFormCombined, P11: P11Fixed, ReadSlots: MTReadsReadable, TagMaxBytes: tagMax, TagFill: fill},
+		Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+		MemoryP5:      P5TxClar,
+		MWWriteKind:   mwKind,
 	})
 }
 
@@ -1010,7 +1013,7 @@ func TestEveryDialect_MTFormCoverage(t *testing.T) {
 						// cleared tag IS the all-fill field.
 						what = "MT set combined (cleared)"
 					}
-					cmd, err := d.BuildMTSetCombined(m, tag)
+					cmd, err := buildCombinedForWalk(d, m, tag)
 					if err != nil {
 						t.Errorf("%s: BuildMTSetCombined(%q, %q) = %v — its OWN form must build for a slot its own MT write policy admits", nd.name, slot.Wire(), tag, err)
 						continue
@@ -1018,7 +1021,7 @@ func TestEveryDialect_MTFormCoverage(t *testing.T) {
 					frame := cmd.Bytes()
 					built(what, frame)
 
-					gotM, gotTag, err := d.ParseMTAnswerCombined(frame)
+					gotM, gotTag, err := parseCombinedForWalk(d, frame)
 					if err != nil {
 						t.Errorf("%s: ParseMTAnswerCombined(%q) = %v, want its own builder's record back", nd.name, frame, err)
 						continue
@@ -1094,4 +1097,41 @@ func TestCombinedMTSetKindCoincidesWithKindVFO(t *testing.T) {
 	if CombinedMTSetKind != KindVFO {
 		t.Errorf("CombinedMTSetKind = %q, KindVFO = %q — on the evidenced radio the combined Set's \"(Fixed)\" P7 and the read-side \"VFO\" P7 are the same byte; this test only records that coincidence, so if it has genuinely ended, delete this test rather than deriving either constant from the other", CombinedMTSetKind, KindVFO)
 	}
+}
+
+// --- FT-891 Stage 0 (S0.6): the walk's P11-aware dispatch ---
+
+// buildCombinedForWalk and parseCombinedForWalk are the combined form's
+// builder and parser, selected by the dialect's own MTP11Policy.
+//
+// TestEveryDialect_MTFormCoverage above walks every combined-form fixture,
+// and since Stage 0 those no longer share one API: under P11Fixed byte 28 is
+// the printed "(Fixed)" and the display-less pair is the one that works,
+// while under P11TagDisplay it is a live TAG flag and the display-less pair
+// REFUSES rather than defaulting it. Calling the wrong one is not a failure
+// the walk should report as "its OWN form must build" — that message would
+// send a reader looking for a form bug that is not there.
+//
+// They are helpers rather than a switch inlined into the walk so that the
+// walk's own body changes by an identifier and nothing else. mtcombined_test.go
+// is one of the files core/cat/testdata/evidence-literals.golden pins BY FILE
+// AND ORDINAL, and a string literal added mid-file renumbers every literal
+// after it.
+//
+// The display flag is DISCARDED here on purpose: what that walk states is
+// about the FORM seam and the record round trip, and the flag's own truth
+// table is mtp11_test.go's and dialecttest's.
+func buildCombinedForWalk(d Dialect, m MemoryData, tag string) (Command, error) {
+	if d.MTP11() == P11TagDisplay {
+		return d.BuildMTSetCombinedDisplay(m, tag, false)
+	}
+	return d.BuildMTSetCombined(m, tag)
+}
+
+func parseCombinedForWalk(d Dialect, frame []byte) (MemoryData, string, error) {
+	if d.MTP11() == P11TagDisplay {
+		m, tag, _, err := d.ParseMTAnswerCombinedDisplay(frame)
+		return m, tag, err
+	}
+	return d.ParseMTAnswerCombined(frame)
 }

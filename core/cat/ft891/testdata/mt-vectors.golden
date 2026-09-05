@@ -1,0 +1,126 @@
+# mt-vectors.golden --- MT (MEMORY WRITE & TAG), Set-direction frames
+#
+# SOURCE MANUAL
+#   Title (cover, PDF page 1):  FT-891  CAT Operation Reference Book
+#   Publisher:                  YAESU MUSEN CO., LTD.  (Copyright 2019)
+#   Printed revision:           1909-C   (printed bottom-right of the back cover,
+#                               PDF page 20; the cover carries no revision)
+#   Chart used:                 MT command block, printed folio 12, PDF page 13
+#   Command-list entry:         printed folio 3, PDF page 4
+#   Derivation date:            04/09/2026
+#
+# METHOD
+#   Pages rendered at 300 dpi for location; the MT block re-rendered at 600 dpi
+#   (pdftoppm -r 600) and cropped row-by-row with magick, because at 300 dpi the
+#   position numbers in the 41-cell Set chart interleave with the legend column
+#   and are not unambiguous. Two independent counts were made (left-to-right
+#   across the four printed rows 1-10 / 11-20 / 21-30 / 31-40 plus the single
+#   cell 41, then again by per-parameter cell totals); both gave 41 and needed
+#   no third look.
+#
+#   NO code, no generator, no other file and no other document was consulted.
+#
+# WHICH CHART THE LAYOUT WAS COUNTED FROM, AND WHY
+#   Counted from the MT *Set* chart, because every vector below is a Set-direction
+#   frame. The MT *Answer* chart in the same block prints an identical 41-position
+#   layout with identical parameter labels and was used as the independent
+#   cross-check of the count.
+#
+# COUNTED FRAME LENGTH: 41 bytes (terminator included)
+#
+# POSITION-BY-POSITION FIELD MAP (MT Set chart, counted)
+#   pos  1      "M"        command character (printed literal)
+#   pos  2      "T"        command character (printed literal)
+#   pos  3- 5   P1         legend verbatim: "P1  001 - 099 (Regular Memory Channel)"
+#                                           "    P1L - P9U (PMS)"
+#   pos  6-14   P2         legend verbatim: "P2  Frequency (Hz)"       (9 positions counted)
+#   pos 15      "+/-"      printed literally as "+/-" in the chart cell; the legend
+#                          text that covers it is under P3 (see next line)
+#   pos 16-19   P3         legend verbatim: "P3  Clarifier Direction +: Plus Shift, -: Minus Shift"
+#                                           "    Clarifier Offset: 0000 - 9999 (Hz)"
+#                          (4 positions counted for the offset digits)
+#   pos 20      P4         legend verbatim: "P4  0: CLAR "OFF"    1: CLAR "ON""
+#   pos 21      P5         legend verbatim: "P5  0: (Fixed)"
+#   pos 22      P6         legend verbatim: "P6  MODE  1: LSB    2: USB    3: CW    4: FM    5: AM    6: RTTY-LSB    7: CW-R"
+#                                           "          8: DATA-LSB    9: RTTY-USB    A: -    B: FM-N    C: DATA-USB"
+#                                           "          D: AM-N"
+#   pos 23      P7         legend verbatim: "P7  0: (Fixed)"
+#   pos 24      P8         legend verbatim: "P8  0: CTCSS "OFF"    1: CTCSS ENC/DEC    2: CTCSS ENC"
+#   pos 25-26   P9         legend verbatim: "P9  00: (Fixed)"        (2 positions counted)
+#   pos 27      P10        legend verbatim: "P10 0: Simplex    1: Plus Shift    2: Minus Shift"
+#   pos 28      P11        legend verbatim: "P11 0: TAG "OFF"    1: TAG "ON""
+#   pos 29-40   P12        legend verbatim: "P12 TAG Characters (up to 12 characters) (ASCII)"
+#                          (12 positions counted: 29,30 on the 21-30 row and 31-40
+#                          on the 31-40 row)
+#   pos 41      ";"        terminator (printed literal on its own single-cell row)
+#
+# BYTES THE MANUAL DETERMINES
+#   pos 1-2 (M,T), pos 21 (P5 fixed "0"), pos 23 (P7 fixed "0"), pos 25-26 (P9
+#   fixed "00"), pos 41 (";"). Every other position's *set* of legal values is
+#   printed; the particular value chosen below is mine from that set.
+#
+# INHERITED-ASSUMED BYTES
+#   1. TAG PADDING (pos 29-40 in mt_ch002_14m250_usb_tag_short_padded and in
+#      mt_ch003_21m200_usb_tag_cleared). The chart fixes 12 tag positions; the
+#      legend says only "up to 12 characters", and the manual NOWHERE says what
+#      fills the unused positions or whether the tag is left- or right-justified.
+#      ASSUMED: ASCII space, 0x20, trailing (tag left-justified). Reason for the
+#      choice: the manual's own "Control Command / Parameters" note on printed
+#      folio 2 (PDF page 3) says "If a particular parameter is not applicable to
+#      the FT-891, the parameter digits should be filled using any character
+#      except the ASCII control codes (00 to 1Fh) and the terminator (;)" --
+#      0x20 satisfies that rule. But that note is about inapplicable parameters,
+#      not about short tags, so this remains an assumption, as does the
+#      justification (trailing rather than leading pad).
+#   2. TAG CHARACTER SUBSET (pos 29-40, all six vectors). The legend says only
+#      "(ASCII)". Which ASCII subset the radio accepts (lower case? punctuation?)
+#      is not printed. ASSUMED: upper-case A-Z and digits 0-9 only.
+#   3. FREQUENCY RANGE (pos 6-14). The MT legend prints only "Frequency (Hz)" with
+#      no range. To keep the chosen values inside what this manual permits, the
+#      range printed for FA/FB on printed folio 9 (PDF page 10) --
+#      "P1  000030000 - 056000000 (Hz)" -- was inherited. INHERITED-ASSUMED that
+#      the MT P2 range is the same as the VFO range. (This is why no 145 MHz
+#      channel appears below: 145 MHz is outside the only frequency range this
+#      manual prints.)
+#   4. CLARIFIER CONSISTENCY (pos 15-20). Whether pos 16-19 must read "0000" when
+#      P4 (pos 20) is "0" (CLAR "OFF"), and whether the pos-15 sign is meaningful
+#      when the offset is zero, is not printed. ASSUMED: "+0000" with P4="0" for
+#      the no-clarifier vectors.
+#   5. MODE/SHIFT/CTCSS COMBINATION LEGALITY. The manual prints each parameter's
+#      values independently and never says which combinations a channel may hold
+#      (e.g. whether a minus repeater shift is accepted on a 51 MHz FM channel, or
+#      whether CTCSS ENC/DEC is accepted in LSB). ASSUMED: the combinations below
+#      are accepted.
+#   6. WHICH SLOT NAMES MT ACCEPTS. The MT P1 legend lists only "001 - 099
+#      (Regular Memory Channel)" and "P1L - P9U (PMS)". The MR block's P0/1 legend
+#      on the SAME printed page additionally lists "501 - 510 (5 MHz, U.S. and
+#      U.K. version only)" and "EMG (Emergency)". No MT vector below uses 501-510
+#      or EMG, because the MT legend does not print them. Recorded, not resolved.
+#
+# MT READ REQUEST FRAME, exactly as the MT block's Read chart prints it
+#   The MT Read chart prints:  pos 1 "M"  pos 2 "T"  pos 3 "P0"  pos 4 "P0"
+#                              pos 5 "P0"  pos 6 ";"      -- counted length 6 bytes.
+#   A read of memory channel 001 is therefore:  MT001;
+#   NOTE: the MT block's legend column has NO "P0" entry at all. The three P0
+#   positions in the Read chart are unlabelled by the MT legend; the nearest
+#   printed legend for a 3-character slot name is the MT "P1" entry above, and the
+#   MR block's "P0/1" entry. Recorded, not resolved.
+#
+# DIRECTION SUPPORT: THE TWO PRINTED READINGS, VERBATIM, NOT RESOLVED
+#   (a) Command list, printed folio 3 (PDF page 4), row "MT":
+#         Command "MT" | Function "MEMORY WRITE & TAG" | Set "O" | Read "X" | Ans. "X" | AI "X"
+#   (b) MT detail block, printed folio 12 (PDF page 13), header "MT MEMORY WRITE & TAG":
+#         a Set chart is printed and filled (41 positions);
+#         a Read chart is printed and FILLED: "M T P0 P0 P0 ;";
+#         an Answer chart is printed and FILLED: identical 41-position layout to Set.
+#   The command list says MT supports Set only; the detail block prints all three
+#   directions filled in. Recorded, not resolved.
+#
+# HARDWARE STATUS: UNVERIFIED for every vector below.
+
+mt_ch001_7m100_lsb_tag_full_tagon	MT001007100000+0000001000001FORTYMETERS1;
+mt_ch001_7m100_lsb_tag_full_tagoff	MT001007100000+0000001000000FORTYMETERS1;
+mt_ch002_14m250_usb_tag_short_padded	MT002014250000+0000002000001TWENTY      ;
+mt_ch003_21m200_usb_tag_cleared	MT003021200000+0000002000000            ;
+mt_pms_p1l_3m500_lsb_tag_full_tagon	MTP1L003500000+0000001000001PMSLOWEREDGE;
+mt_ch010_51m000_fm_clar_minus_ctcss_encdec_minus_shift	MT010051000000-0250104010021FMREPEATER01;

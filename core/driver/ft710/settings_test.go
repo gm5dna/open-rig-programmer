@@ -207,17 +207,17 @@ func TestParseEXResponse_Table(t *testing.T) {
 	}{
 		{
 			name:  "known answer",
-			frame: []byte(fmt.Sprintf("EX%s123;", requested.Wire())),
-			want:  driver.SettingValue{ID: requested.Wire(), Raw: "123", State: driver.SettingKnown},
+			frame: []byte(fmt.Sprintf("EX%s123;", catDialect.EXWire(requested))),
+			want:  driver.SettingValue{ID: catDialect.EXWire(requested), Raw: "123", State: driver.SettingKnown},
 		},
 		{
 			name:  "rejection frame",
 			frame: []byte("?;"),
-			want:  driver.SettingValue{ID: requested.Wire(), State: driver.SettingUnavailable},
+			want:  driver.SettingValue{ID: catDialect.EXWire(requested), State: driver.SettingUnavailable},
 		},
 		{
 			name:         "wrong-address answer",
-			frame:        []byte(fmt.Sprintf("EX%s5;", other.Wire())),
+			frame:        []byte(fmt.Sprintf("EX%s5;", catDialect.EXWire(other))),
 			wantErr:      true,
 			wantMismatch: true,
 		},
@@ -240,8 +240,8 @@ func TestParseEXResponse_Table(t *testing.T) {
 					if !errors.As(err, &mismatch) {
 						t.Fatalf("error = %v (%T), want *SettingAnswerMismatchError", err, err)
 					}
-					if mismatch.Requested != requested.Wire() || mismatch.Answered != other.Wire() {
-						t.Errorf("mismatch = %+v, want Requested=%q Answered=%q", mismatch, requested.Wire(), other.Wire())
+					if mismatch.Requested != catDialect.EXWire(requested) || mismatch.Answered != catDialect.EXWire(other) {
+						t.Errorf("mismatch = %+v, want Requested=%q Answered=%q", mismatch, catDialect.EXWire(requested), catDialect.EXWire(other))
 					}
 				}
 				return

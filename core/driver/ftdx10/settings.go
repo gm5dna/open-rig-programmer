@@ -43,7 +43,7 @@ var ftdx10SettingsDescriptor = buildSettingsDescriptor(catDialect)
 // per distinct (P1,P2) pair nested under its menu (ID the 4-digit P1P2,
 // e.g. "0101"; Label the manual's P2 column), and one SettingItem per
 // inventory row nested under its group, IN INVENTORY ORDER (ID the item's
-// 6-digit wire address via EXAddress.Wire, Label the manual's Function
+// 6-digit wire address via cat.Dialect.EXWire, Label the manual's Function
 // name, Display the human "P1-P2-P3" form, e.g. "01-01-01").
 //
 // DIALECT-PARAMETERISED THROUGHOUT, which is what lets this be the FT-710
@@ -97,7 +97,7 @@ func buildSettingsDescriptor(dialect cat.Dialect) driver.SettingsDescriptor {
 		group := &menu.Groups[len(menu.Groups)-1]
 
 		group.Items = append(group.Items, driver.SettingItem{
-			ID:      it.Addr.Wire(),
+			ID:      dialect.EXWire(it.Addr),
 			Label:   it.Name,
 			Display: fmt.Sprintf("%02d-%02d-%02d", it.Addr.P1, it.Addr.P2, it.Addr.P3),
 		})
@@ -224,13 +224,13 @@ func (e *SettingAnswerMismatchError) Error() string {
 // honest answer into a timeout.
 //
 // One retry: an EX read is idempotent, exactly mtSpec's rationale.
-func exSpec(addr cat.EXAddress) transport.CommandSpec {
-	return transport.CATReadSpec("EX"+addr.Wire(), 0, 1)
+func exSpec(dialect cat.Dialect, addr cat.EXAddress) transport.CommandSpec {
+	return transport.CATReadSpec("EX"+dialect.EXWire(addr), 0, 1)
 }
 
 // parseEXResponse interprets the outcome of one EX exchange for requested:
 //   - a rejection frame (cat.IsRejection) maps to
-//     SettingValue{ID: requested.Wire(), State: SettingUnavailable}, with NO
+//     SettingValue{ID: dialect.EXWire(requested), State: SettingUnavailable}, with NO
 //     error — the project's established "?;" -> empty-result rule, the same
 //     one ReadChannel's empty-slot mapping follows (read.go);
 //   - a well-formed EX answer naming requested's own address maps to
@@ -264,7 +264,7 @@ func exSpec(addr cat.EXAddress) transport.CommandSpec {
 // handed to this same function, so every response-interpretation rule lives
 // in exactly one place.
 func parseEXResponse(dialect cat.Dialect, requested cat.EXAddress, frame []byte) (driver.SettingValue, error) {
-	id := requested.Wire()
+	id := dialect.EXWire(requested)
 
 	if cat.IsRejection(frame) {
 		return driver.SettingValue{ID: id, State: driver.SettingUnavailable}, nil
@@ -274,8 +274,8 @@ func parseEXResponse(dialect cat.Dialect, requested cat.EXAddress, frame []byte)
 	if err != nil {
 		return driver.SettingValue{}, fmt.Errorf("ftdx10: ReadSetting %s: %w", id, err)
 	}
-	if addr.Wire() != id {
-		return driver.SettingValue{}, &SettingAnswerMismatchError{Requested: id, Answered: addr.Wire()}
+	if answered := dialect.EXWire(addr); answered != id {
+		return driver.SettingValue{}, &SettingAnswerMismatchError{Requested: id, Answered: answered}
 	}
 
 	return driver.SettingValue{ID: id, Raw: raw, State: driver.SettingKnown}, nil
@@ -337,15 +337,15 @@ func (s *Session) ReadSetting(ctx context.Context, id string) (driver.SettingVal
 		// identical inventory membership BuildEXRead checks (both via
 		// cat.Dialect.KnownEXAddress). Kept as defence in depth rather than
 		// as a silent assumption that the two rules stay the same one.
-		return driver.SettingValue{}, fmt.Errorf("ftdx10: ReadSetting %s: %w", addr.Wire(), err)
+		return driver.SettingValue{}, fmt.Errorf("ftdx10: ReadSetting %s: %w", s.dialect.EXWire(addr), err)
 	}
 
-	frame, err := s.eng.Do(ctx, cmd, exSpec(addr))
+	frame, err := s.eng.Do(ctx, cmd, exSpec(s.dialect, addr))
 	switch {
 	case errors.Is(err, cat.ErrRejected):
 		frame = rejectionFrameBytes
 	case err != nil:
-		return driver.SettingValue{}, fmt.Errorf("ftdx10: ReadSetting %s: %w", addr.Wire(), err)
+		return driver.SettingValue{}, fmt.Errorf("ftdx10: ReadSetting %s: %w", s.dialect.EXWire(addr), err)
 	}
 
 	return parseEXResponse(s.dialect, addr, frame)

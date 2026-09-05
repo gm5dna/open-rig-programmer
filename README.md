@@ -14,21 +14,22 @@ shuffling.
 | --- | --- | --- |
 | **FT-710** | ✅ | ✅ verified on a real radio |
 | **FTdx10**, **FTdx101D**, **FTdx101MP** | ✅ | ⚠️ opt-in |
+| **FT-891** | ✅ | ⚠️ opt-in |
 | **IC-7610**, **IC-7300**, **IC-7300MK2**, **IC-705**, **IC-9700**, **IC-905**, **IC-7851**, **IC-7850**, **IC-7760**, **IC-7100** | ✅ | ⚠️ opt-in |
 | **IC-R8600** (a receiver) | ✅ | ⚠️ opt-in |
 
 Only the FT-710 has ever been connected to this program. The other
-fourteen were built from the manufacturers' published protocol manuals
+fifteen were built from the manufacturers' published protocol manuals
 and tested against simulators. Reading them is safe: the program sends
 only documented read commands. Writing to them is switched off until
 you switch it on, one radio at a time.
 
-If you own one of these fourteen radios and would like to help test it,
+If you own one of these fifteen radios and would like to help test it,
 please open an issue.
 
 ### Switching on writes for an unverified radio
 
-Every write command for these fourteen radios is taken from the maker's
+Every write command for these fifteen radios is taken from the maker's
 own manual, but none has been proven on a real radio. So the program
 refuses to send any of them until you say so:
 
@@ -164,6 +165,26 @@ Some things are refused on purpose, with the reason shown:
   menus are not read at all.
 - **FT-710**: tone, scan-skip and clarifier cannot be set over CAT, so
   edits to them are refused rather than silently dropped.
+- **FT-891**: tone and scan-skip cannot be set over CAT here either —
+  this radio's memory record has no tone-number byte and no scan-skip
+  flag at all — and a transmit-clarifier flag arriving in a file
+  written for another radio is refused rather than sent, that position
+  being printed as fixed. A CHIRP file's `CW`, `CWR` and `RTTY` rows
+  are not imported: they resolve to the sideband-specific names
+  `CW-U`, `CW-L` and `RTTY-U`, which this radio's own mode list does
+  not print — it prints `CW`, `CW-R`, `RTTY-LSB` and `RTTY-USB`
+  instead — so the row is blocked rather than guessed at. Two more
+  things are honest guesses. Its speed: the manual prints the four
+  rates its CAT RATE menu row offers and marks none of them the
+  factory setting, so the program opens at 38400 and, if that is wrong,
+  the only remedy is menu 0506 on the radio — there is no speed setting
+  in the program. And its socket: the radio's USB connection is a
+  dual-UART bridge, so it appears as two serial ports, and the manual
+  never says which one carries CAT; if the first is silent, try the
+  other. The manual also contradicts itself about whether a memory
+  channel may be read at all, so a read refused for a channel that is
+  plainly in use is the manual's ambiguity showing, not a fault in the
+  program.
 - **Icom radios**: each talks only to its factory CI-V address; a few
   channel states (a channel in a Select scan group on most models, a
   split channel on the IC-7300s and the IC-7100, DATA modes on the
@@ -229,7 +250,7 @@ Some things are refused on purpose, with the reason shown:
 [docs/building.md](docs/building.md) covers building from source and
 the layout of the repository. Protocol facts come from Yaesu's CAT
 Operation Reference Manuals (FT-710 2306-C, FTdx10 2308-F, FTdx101D/MP
-2308-L), Icom's CI-V Reference Guides (IC-7610 rev 4, IC-7300 Full
+2308-L, FT-891 1909-C), Icom's CI-V Reference Guides (IC-7610 rev 4, IC-7300 Full
 Manual §19 rev 12b, IC-7300MK2 rev 0, IC-705 rev 6, IC-9700 rev 4,
 IC-905 rev 2, IC-7760 rev 2, IC-R8600 rev 3a) and, where no separate
 CI-V guide is published, the radio's own manual (IC-7850/IC-7851 rev 3,

@@ -686,18 +686,21 @@ func TestWrite_AnAddToASlotTheBoundedWalkMissedIsRefused(t *testing.T) {
 	}
 	res, err := s.WriteChannel(context.Background(), writableChannel("G06-038"))
 	wre := requireRefused(t, p, res, err)
-	// The refusal must name the remedy the user CAN act on, and must not
-	// name the one they cannot: ic905.WithFullInventoryWalk() is a Go
-	// option no CLI flag and no GUI control reaches, so the text states
-	// the bound instead (registration review, deferred minor).
+	// The refusal must name the remedy the user CAN act on, and the bound
+	// for when it does not reach: naming ic905.WithFullInventoryWalk()
+	// while saying no registered composition passes it is not the same
+	// as offering it as a remedy — it is the honest reason the setting
+	// the user might go looking for is not there (side lanes fix round
+	// 1, review icom-minors-review-opus.md MEDIUM-1/item-4; matches the
+	// IC-R8600's same-named rung).
 	if !strings.Contains(wre.Reason, "Re-discover the radio") {
 		t.Errorf("reason = %q, want it to NAME the remedy the user can act on", wre.Reason)
 	}
-	if !strings.Contains(wre.Reason, "no setting that widens it") {
-		t.Errorf("reason = %q, want it to state the bound for a slot the walk cannot reach", wre.Reason)
+	if !strings.Contains(wre.Reason, "command line") || !strings.Contains(wre.Reason, "WithFullInventoryWalk") {
+		t.Errorf("reason = %q, want it to name the option and say nothing reachable passes it", wre.Reason)
 	}
-	if strings.Contains(wre.Reason, "WithFullInventoryWalk") {
-		t.Errorf("reason = %q, still names a Go option no user surface exposes", wre.Reason)
+	if strings.Contains(wre.Reason, "no setting that widens") {
+		t.Errorf("reason = %q, still claims no setting exists when the driver exports one", wre.Reason)
 	}
 	if !strings.Contains(wre.Reason, "G06-038") && wre.Slot != "G06-038" {
 		t.Errorf("the refusal does not name the slot: %+v", wre)

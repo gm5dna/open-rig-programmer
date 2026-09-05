@@ -91,12 +91,12 @@ func TestFT710Dialect_EXMembershipIsPerDialect(t *testing.T) {
 		t.Fatal("FT710.EXAddresses() is empty")
 	}
 	if !FT710.KnownEXAddress(addrs[0]) {
-		t.Errorf("FT710.KnownEXAddress(%s) = false for its own first address", addrs[0].Wire())
+		t.Errorf("FT710.KnownEXAddress(%s) = false for its own first address", FT710.EXWire(addrs[0]))
 	}
 
 	var zero Dialect
 	if zero.KnownEXAddress(addrs[0]) {
-		t.Errorf("zero Dialect claims to know EX address %s — membership is reading a package global, not the receiver", addrs[0].Wire())
+		t.Errorf("zero Dialect claims to know EX address %s — membership is reading a package global, not the receiver", FT710.EXWire(addrs[0]))
 	}
 }
 

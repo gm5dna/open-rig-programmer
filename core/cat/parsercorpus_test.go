@@ -63,7 +63,7 @@ func buildParserCorpus(t *testing.T) []string {
 			slotWire(md.Slot), md.FreqHz, md.Mode.Wire(), md.Kind, md.RxClar, md.TxClar, md.CTCSS.Wire(), md.Shift.Wire()), err))
 
 		addr, raw, err := FT710.ParseEXAnswer(f)
-		out = append(out, record("ParseEXAnswer."+in.label, fmt.Sprintf("%s|%q", addr.Wire(), raw), err))
+		out = append(out, record("ParseEXAnswer."+in.label, fmt.Sprintf("%s|%q", FT710.EXWire(addr), raw), err))
 	}
 
 	// A real MR answer, taken from the existing golden vectors rather
@@ -108,7 +108,7 @@ func buildParserCorpus(t *testing.T) []string {
 	}
 	for _, w := range []string{"010101", "010321", "050101", "999999", "01010"} {
 		a, err := FT710.ParseEXAddress(w)
-		out = append(out, record("ParseEXAddress."+w, a.Wire(), err))
+		out = append(out, record("ParseEXAddress."+w, FT710.EXWire(a), err))
 	}
 
 	return out

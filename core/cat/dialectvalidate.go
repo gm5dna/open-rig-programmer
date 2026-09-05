@@ -15,6 +15,14 @@ import (
 // describe answers its own transport can never receive whole, and
 // Dialect.exAnswerMaxLen's arithmetic would run away with a large enough
 // value.
+//
+// IT STAYS KEYED ON THE SIX-DIGIT FORM. An EXAddressPair dialect's own
+// overhead is 7, not 9, so this ceiling is CONSERVATIVE for it by two
+// bytes: it can refuse a P4 that radio's transport could in fact have
+// assembled, and can never admit one it could not. Widening it per form
+// would move a bound that internal/extable.MaxDigitsCeiling mirrors as a
+// single number (exdigits_ceiling_test.go pins the two equal), for two
+// bytes of headroom no chart is anywhere near.
 const maxEXDigits = DefaultMaxFrame - 9 // 247
 
 // maxMTTagBytes is the largest MTPolicy.TagMaxBytes a dialect may declare.
@@ -32,12 +40,13 @@ const maxSlotDecimal = 999
 
 // maxEXComponent is the largest value an EXAddress component may hold.
 //
-// EXAddress.Wire renders each component with %02d, which is a MINIMUM
+// wireEXAddress renders each component with %02d, which is a MINIMUM
 // width, not an exact one: a component of 100 renders three digits and
-// produces a seven-byte address in a field the grammar fixes at six. The
-// resulting frame is rejected by the dialect's own gate and can never be
-// reconstructed by its own parser, because ParseEXAddress consumes exactly
-// six digits. uint8 alone therefore does not constrain this enough.
+// produces a seven-byte address in a field the grammar fixes at six (or a
+// five-byte one in the four-digit field). The resulting frame is rejected
+// by the dialect's own gate and can never be reconstructed by its own
+// parser, because ParseEXAddress consumes exactly the declared width.
+// uint8 alone therefore does not constrain this enough.
 const maxEXComponent = 99
 
 // clarFieldMaxHz is the largest magnitude the 4-digit clarifier field can
@@ -53,17 +62,20 @@ const clarFieldMaxHz = 9999
 // check before.
 func validateDialectConfig(cfg DialectConfig) error {
 	for _, rule := range []func(DialectConfig) error{
-		validateCATID,        // V1
-		validateModeNames,    // V2
-		validatePMSPairs,     // V3
-		validateSpecialWires, // V4
-		validateMemoryRange,  // V5
-		validateSixtyRange,   // V6
-		validateShadowing,    // V7
-		validateEXItems,      // V8
-		validateMTPolicy,     // V9
-		validateClarifier,    // V10
-		validateMWWriteKind,  // V11
+		validateCATID,         // V1
+		validateModeNames,     // V2
+		validatePMSPairs,      // V3
+		validateSpecialWires,  // V4
+		validateMemoryRange,   // V5
+		validateSixtyRange,    // V6
+		validateShadowing,     // V7
+		validateEXItems,       // V8
+		validateMTPolicy,      // V9
+		validateClarifier,     // V10
+		validateMWWriteKind,   // V11
+		validateEXAddressForm, // V12
+		validateMCSelects,     // V13
+		validateMemoryP5,      // V14
 	} {
 		if err := rule(cfg); err != nil {
 			return err
@@ -276,6 +288,23 @@ func pmsWireInRange(wire string, pairs int) bool {
 }
 
 // validateEXItems is V8.
+//
+// Its three address renders go through wireEXAddress with the config's OWN
+// form, not through EXAddress's %v: this rule runs before any Dialect
+// exists, so cfg.EXAddressForm is the only form in scope, and rendering an
+// address here as the debug String() would have moved three shipped error
+// sentences. TestValidateEXItems_TripleErrorTextIsByteIdentical pins all
+// three against their pre-seam spelling.
+//
+// V8 runs at rule position 8, four places before V12
+// (validateEXAddressForm) refuses a zero form — so a config that omits
+// EXAddressForm AND fails V8 reaches this renderer first, with
+// wireEXAddress(0, addr) returning "". renderEXAddressForV8 falls back to
+// the debug String() form in that case, so the message still names the
+// address rather than rendering an empty string.
+// TestValidateEXItems_ZeroFormFallsBackToDebugForm pins this. The rule
+// ORDER is untouched — V12 still runs fourth after V8 — this only changes
+// what V8 renders when asked to render through a form it cannot.
 func validateEXItems(cfg DialectConfig) error {
 	seen := make(map[EXAddress]int, len(cfg.EXItems))
 	for i, it := range cfg.EXItems {
@@ -284,21 +313,34 @@ func validateEXItems(cfg DialectConfig) error {
 			v    uint8
 		}{{"P1", it.Addr.P1}, {"P2", it.Addr.P2}, {"P3", it.Addr.P3}} {
 			if int(c.v) > maxEXComponent {
-				return fmt.Errorf("cat: EXItems[%d].Addr.%s is %d, want <= %d — EXAddress.Wire renders %%02d, a MINIMUM width, so a larger component produces a 7-byte address in a 6-byte field", i, c.name, c.v, maxEXComponent)
+				return fmt.Errorf("cat: EXItems[%d].Addr.%s is %d, want <= %d — wireEXAddress renders %%02d, a MINIMUM width, so a larger component overruns the fixed-width address field this dialect's own ParseEXAddress reads back", i, c.name, c.v, maxEXComponent)
 			}
 		}
 		if prev, dup := seen[it.Addr]; dup {
-			return fmt.Errorf("cat: EXItems[%d] repeats address %v, already at index %d", i, it.Addr, prev)
+			return fmt.Errorf("cat: EXItems[%d] repeats address %s, already at index %d", i, renderEXAddressForV8(cfg.EXAddressForm, it.Addr), prev)
 		}
 		seen[it.Addr] = i
 		if it.Digits < 1 {
-			return fmt.Errorf("cat: EXItems[%d] (%v) has Digits %d, want >= 1", i, it.Addr, it.Digits)
+			return fmt.Errorf("cat: EXItems[%d] (%s) has Digits %d, want >= 1", i, renderEXAddressForV8(cfg.EXAddressForm, it.Addr), it.Digits)
 		}
 		if it.Digits > maxEXDigits {
-			return fmt.Errorf("cat: EXItems[%d] (%v) has Digits %d, want <= %d — a wider P4 describes an answer frame longer than DefaultMaxFrame (%d), which this dialect's own transport could never assemble", i, it.Addr, it.Digits, maxEXDigits, DefaultMaxFrame)
+			return fmt.Errorf("cat: EXItems[%d] (%s) has Digits %d, want <= %d — a wider P4 describes an answer frame longer than DefaultMaxFrame (%d), which this dialect's own transport could never assemble", i, renderEXAddressForV8(cfg.EXAddressForm, it.Addr), it.Digits, maxEXDigits, DefaultMaxFrame)
 		}
 	}
 	return nil
+}
+
+// renderEXAddressForV8 renders addr through form for a V8 error message,
+// falling back to addr's debug String() form when form is the zero value
+// (wireEXAddress(0, addr) is ""). V8 runs before V12, so a config that
+// omits EXAddressForm can still reach here; this keeps its refusal message
+// naming the address rather than rendering an empty string.
+// TestValidateEXItems_ZeroFormFallsBackToDebugForm pins it.
+func renderEXAddressForV8(form EXAddressForm, addr EXAddress) string {
+	if form == EXAddressForm(0) {
+		return addr.String()
+	}
+	return wireEXAddress(form, addr)
 }
 
 // validateMTPolicy is V9: the TagMaxBytes ceiling, then per-form field
@@ -317,6 +359,18 @@ func validateMTPolicy(cfg DialectConfig) error {
 	if n := cfg.MT.TagMaxBytes; n < 1 || n > maxMTTagBytes {
 		return fmt.Errorf("cat: MT.TagMaxBytes is %d, want 1..%d — it bounds the outbound write gate, so an unbounded value would authorise a pathologically long MT frame", n, maxMTTagBytes)
 	}
+	// ReadSlots, BEFORE the form switch: the MT read request carries neither
+	// a record nor a tag, so it is the one part of this command that is the
+	// same shape under both forms, and a config omitting its domain must be
+	// refused whichever form it declares. An omitted config semantic is
+	// REFUSED, never defaulted — and defaulting this one to the wide reading
+	// would have BuildMTRead emit, and this dialect's own gate admit, a read
+	// of a bank the radio's MT block never lists.
+	switch cfg.MT.ReadSlots {
+	case MTReadsReadable, MTReadsMemoryPMS:
+	default:
+		return fmt.Errorf("cat: MT.ReadSlots is %v, which is not a policy — declare MTReadsReadable or MTReadsMemoryPMS explicitly (MT's read domain is not always MR's)", cfg.MT.ReadSlots)
+	}
 	switch cfg.MT.Form {
 	case MTFormShort:
 		// The pre-existing short-form requirements, verbatim: ClearTagByte
@@ -332,6 +386,9 @@ func validateMTPolicy(cfg DialectConfig) error {
 		if cfg.MT.TagFill != 0 {
 			return fmt.Errorf("cat: MT.TagFill %#02x is set under MTFormShort — TagFill is combined-form data and an inapplicable field must be explicitly zero", cfg.MT.TagFill)
 		}
+		if cfg.MT.P11 != 0 {
+			return fmt.Errorf("cat: MT.P11 %v is set under MTFormShort — P11 is the COMBINED record's byte 28, and the short form's display flag is already a parameter of BuildMTSet; an inapplicable field must be explicitly zero", cfg.MT.P11)
+		}
 	case MTFormCombined:
 		if cfg.MT.ClearTagByte != 0 {
 			return fmt.Errorf("cat: MT.ClearTagByte %#02x is set under MTFormCombined — no distinct clear encoding is documented for the combined form; an empty tag is the all-TagFill field", cfg.MT.ClearTagByte)
@@ -341,6 +398,11 @@ func validateMTPolicy(cfg DialectConfig) error {
 		}
 		if !validWireByte(cfg.MT.TagFill) {
 			return fmt.Errorf("cat: MT.TagFill is %#02x under MTFormCombined, want printable ASCII 0x20-0x7E excluding ';' — it fills every outbound tag field, and zero would silently emit NUL", cfg.MT.TagFill)
+		}
+		switch cfg.MT.P11 {
+		case P11Fixed, P11TagDisplay:
+		default:
+			return fmt.Errorf("cat: MT.P11 is %v, which is not a policy — declare P11Fixed or P11TagDisplay explicitly (byte 28 of the combined record is a printed-fixed '0' on some radios and a live TAG flag on others, and a live flag is never defaulted)", cfg.MT.P11)
 		}
 	default:
 		return fmt.Errorf("cat: MT.Form %v must be set explicitly — the zero value is not a form (an omitted form must refuse, not default)", cfg.MT.Form)
@@ -405,5 +467,76 @@ func validMWWriteKindByte(b byte) bool {
 		return true
 	default: // KindUnset and anything undocumented
 		return false
+	}
+}
+
+// validateEXAddressForm is V12: the EX address field's width, and the P3
+// rule the narrow form implies.
+//
+// The zero value is REFUSED rather than defaulted, for the M9c-1 reason and
+// with a concrete cost behind it: defaulting to EXAddressTriple would give
+// a four-digit radio a nine-byte EX read where its grammar prints seven —
+// built, admitted by this dialect's own gate, and sent — and would make
+// every answer that radio sent back unparseable. The rule fires even for an
+// empty EXItems, because the width also sizes the read frame the gate
+// measures, not only the addresses in the inventory.
+//
+// The Pair clause is the other half of wireEXAddress's four-digit render:
+// that render drops P3, so a member carrying a non-zero one would lose it
+// from every frame silently. The refusal names the offending index AND the
+// address as the frame would have carried it, through the same renderer, so
+// a three-hundred-row inventory does not have to be searched by hand.
+func validateEXAddressForm(cfg DialectConfig) error {
+	switch cfg.EXAddressForm {
+	case EXAddressTriple:
+		return nil
+	case EXAddressPair:
+		for i, it := range cfg.EXItems {
+			if it.Addr.P3 != 0 {
+				return fmt.Errorf("cat: EXItems[%d] (%s) has P3 %d under %v — the four-digit field renders P1 and P2 only, so a non-zero P3 would be dropped from every frame this dialect builds", i, wireEXAddress(cfg.EXAddressForm, it.Addr), it.Addr.P3, cfg.EXAddressForm)
+			}
+		}
+		return nil
+	default:
+		return fmt.Errorf("cat: EXAddressForm %v must be set explicitly — the zero value is not a form (an omitted form must refuse, not default)", cfg.EXAddressForm)
+	}
+}
+
+// validateMCSelects is V13: the MC command's SEND-side slot domain must be
+// declared, never inferred.
+//
+// An omitted config semantic is REFUSED, not defaulted. The two policies
+// differ by the 60m and EMG banks, and an MC Set is SIDE-EFFECTING — it
+// recalls the channel on the radio — so a family whose MC legend prints
+// memory and PMS only, silently given the wider domain, would have frames
+// its own manual never describes built AND admitted by its own gate (this
+// rule's field reaches AllowedCommand through validMCCommand).
+func validateMCSelects(cfg DialectConfig) error {
+	switch cfg.Slots.MCSelects {
+	case MCSelectsAll, MCSelectsMemoryPMS:
+		return nil
+	default:
+		return fmt.Errorf("cat: Slots.MCSelects is %v, which is not a policy — declare MCSelectsAll or MCSelectsMemoryPMS explicitly (an omitted config semantic is refused, never defaulted; MC's send domain is not always MR's read domain)", cfg.Slots.MCSelects)
+	}
+}
+
+// validateMemoryP5 is V14: byte 21 of the shared memory field block must be
+// declared, never inferred.
+//
+// An omitted config semantic is REFUSED, not defaulted. Defaulting to
+// P5TxClar would have this codec emit a '1' into a byte a radio's own manual
+// prints "(Fixed)" — a frame that manual never describes, built and admitted
+// by this dialect's own gate, since this field reaches AllowedCommand's MW
+// and combined-MT checks through parseMemoryFields, which decodes byte 21
+// under this same policy before validateMWFields/validateCombinedMTFields
+// ever run. Defaulting to P5Fixed would silently drop a real TX-clarifier
+// flag on the floor. Neither default is safe, which is exactly when a field
+// must be declared.
+func validateMemoryP5(cfg DialectConfig) error {
+	switch cfg.MemoryP5 {
+	case P5TxClar, P5Fixed:
+		return nil
+	default:
+		return fmt.Errorf("cat: MemoryP5 is %v, which is not a policy — declare P5TxClar or P5Fixed explicitly (byte 21 of the memory block is the TX clarifier flag on some radios and a printed-fixed '0' on others)", cfg.MemoryP5)
 	}
 }

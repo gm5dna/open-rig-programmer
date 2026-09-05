@@ -34,8 +34,8 @@ func TestBuildEXRead_WireShape(t *testing.T) {
 			if string(got) != tc.want {
 				t.Errorf("BuildEXRead(%v) = %q, want %q", tc.addr, got, tc.want)
 			}
-			if len(got) != exReadLen {
-				t.Errorf("len(BuildEXRead(%v)) = %d, want %d", tc.addr, len(got), exReadLen)
+			if len(got) != FT710.exReadLen() {
+				t.Errorf("len(BuildEXRead(%v)) = %d, want %d", tc.addr, len(got), FT710.exReadLen())
 			}
 		})
 	}
@@ -78,8 +78,8 @@ func TestBuildEXRead_RejectsNonMembers(t *testing.T) {
 
 // TestBuildEXRead_PropertyAll296 builds a read frame for every one of the
 // 296 inventory addresses: every build must succeed, every frame must be
-// exactly exReadLen bytes, and all 296 frames must be pairwise distinct
-// (Wire() is injective over the inventory, exinventory_test.go's
+// exactly FT710.exReadLen() bytes, and all 296 frames must be pairwise distinct
+// (Dialect.EXWire is injective over the inventory, exinventory_test.go's
 // TestEXInventory_NoDuplicatesSortedAndWireStable).
 func TestBuildEXRead_PropertyAll296(t *testing.T) {
 	items := FT710.EXItems()
@@ -90,8 +90,8 @@ func TestBuildEXRead_PropertyAll296(t *testing.T) {
 			t.Fatalf("BuildEXRead(%v): unexpected error: %v", it.Addr, err)
 		}
 		got := cmd.Bytes()
-		if len(got) != exReadLen {
-			t.Errorf("BuildEXRead(%v): len = %d, want %d", it.Addr, len(got), exReadLen)
+		if len(got) != FT710.exReadLen() {
+			t.Errorf("BuildEXRead(%v): len = %d, want %d", it.Addr, len(got), FT710.exReadLen())
 		}
 		frame := string(got)
 		if seen[frame] {
@@ -223,16 +223,16 @@ func TestParseEXAnswer_RawP4Verbatim(t *testing.T) {
 }
 
 // TestParseEXAnswer_RoundTripAll296 builds a synthetic answer frame for
-// every inventory item ("EX" + Wire() + a P4 body of exactly the item's
-// Digits width, all zero bytes + ";") and checks it parses back to the same
-// address and the exact raw P4 string, for all 296 items (Digits is
-// already 12 for the six Text items, exinventory.go's EXItem.Digits doc
-// comment).
+// every inventory item ("EX" + Dialect.EXWire(it.Addr) + a P4 body of
+// exactly the item's Digits width, all zero bytes + ";") and checks it
+// parses back to the same address and the exact raw P4 string, for all 296
+// items (Digits is already 12 for the six Text items, exinventory.go's
+// EXItem.Digits doc comment).
 func TestParseEXAnswer_RoundTripAll296(t *testing.T) {
 	items := FT710.EXItems()
 	for _, it := range items {
 		rawWant := strings.Repeat("0", it.Digits)
-		frame := "EX" + it.Addr.Wire() + rawWant + ";"
+		frame := "EX" + FT710.EXWire(it.Addr) + rawWant + ";"
 		addr, raw, err := FT710.ParseEXAnswer([]byte(frame))
 		if err != nil {
 			t.Fatalf("ParseEXAnswer(%q) for %v: unexpected error: %v", frame, it.Addr, err)
@@ -251,7 +251,7 @@ func TestParseEXAnswer_RoundTripAll296(t *testing.T) {
 
 // FuzzParseEXAnswer requires ParseEXAnswer never panics, and that on
 // success: the returned address is a known inventory member, the raw P4
-// string is 1-12 bytes, and reassembling "EX"+addr.Wire()+raw+";"
+// string is 1-12 bytes, and reassembling "EX"+FT710.EXWire(addr)+raw+";"
 // reproduces the input byte-for-byte (proves the split points are exactly
 // right and nothing was silently dropped, trimmed, or added).
 func FuzzParseEXAnswer(f *testing.F) {
@@ -289,7 +289,7 @@ func FuzzParseEXAnswer(f *testing.F) {
 		if len(raw) < 1 || len(raw) > FT710.exP4MaxBytes() {
 			t.Fatalf("ParseEXAnswer(%q) succeeded with raw %q of length %d, want 1-%d", frame, raw, len(raw), FT710.exP4MaxBytes())
 		}
-		reconstructed := "EX" + addr.Wire() + raw + ";"
+		reconstructed := "EX" + FT710.EXWire(addr) + raw + ";"
 		if reconstructed != string(frame) {
 			t.Fatalf("ParseEXAnswer(%q): reconstruction %q != input", frame, reconstructed)
 		}

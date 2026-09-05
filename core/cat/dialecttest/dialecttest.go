@@ -132,6 +132,7 @@ func Run(t *testing.T, d cat.Dialect) {
 	r.checkFixedFrames()
 	r.checkSlotFrames()
 	r.checkMemoryWrites()
+	r.checkMemoryP5()
 	r.checkEXReads()
 	r.checkFormSeam()
 	r.checkGateRefusesTheUnacceptable()
@@ -411,12 +412,115 @@ func (r *conformanceRun) checkSlotFrames() {
 	// that carries the data back. That half is covered in-package against
 	// captured frames, and is out of this suite's reach by design.
 
+	r.checkMCSendDomain()
+	r.checkMTReadDomain()
 	r.checkOverlongMTFrameIsRefused()
+}
+
+// checkMCSendDomain requires BuildMCSet and the gate's own verdict on
+// "MC"+s.Wire()+";" to AGREE for every slot this dialect classifies — both
+// admit, or both refuse — and requires that agreement to match the SEND-side
+// policy this dialect declares (MCSelects): under MCSelectsMemoryPMS every
+// 60m/EMG slot is refused by both while every memory/PMS slot is admitted by
+// both; under MCSelectsAll every slot this dialect classifies is admitted by
+// both.
+//
+// The loop above already proves half of this: every "MC set" frame the
+// builder DOES produce is offered to checkFrame, which asserts the gate
+// admits it. It is silent when the builder REFUSES, which is exactly the gap
+// a builder or a gate reading the wrong policy value would hide behind — a
+// gate that admitted everything, or a builder that refused everything, would
+// leave no evidence in that loop alone. This function is what turns the
+// refusal into a checked property, with its own non-vacuity counter
+// (checkNonVacuity) so a dialect with no 60m/EMG slot in its space cannot
+// satisfy that counter by having nothing to offer.
+func (r *conformanceRun) checkMCSendDomain() {
+	r.t.Helper()
+
+	policy := r.d.MCSelects()
+	for _, s := range r.slots {
+		cmd, buildErr := r.d.BuildMCSet(s)
+		builderOK := buildErr == nil
+		gateOK := r.d.AllowedCommand([]byte("MC" + s.Wire() + ";"))
+
+		if builderOK != gateOK {
+			r.t.Errorf("%s: MC send domain disagreement for slot %q under %v — BuildMCSet admits=%v, gate admits=%v; a builder and a gate that disagree about the send domain mean one of them is not reading this dialect's own MCSelects", r.name(), s.Wire(), policy, builderOK, gateOK)
+			continue
+		}
+		if !builderOK && !cmd.IsZero() {
+			r.t.Errorf("%s: BuildMCSet returned a non-zero Command alongside its refusal for slot %q; every fallible builder returns the zero Command", r.name(), s.Wire())
+		}
+
+		wide := s.Is60m() || s.IsEMG()
+		switch {
+		case wide && policy == cat.MCSelectsMemoryPMS:
+			if builderOK {
+				r.t.Errorf("%s: BuildMCSet ADMITTED slot %q under %v — its MC legend does not print the 5xx or EMG banks, and an MC Set recalls the channel on the radio", r.name(), s.Wire(), policy)
+				continue
+			}
+			r.refusals["MC send refused for 60m/EMG under MCSelectsMemoryPMS"]++
+		case wide:
+			if !builderOK {
+				r.t.Errorf("%s: BuildMCSet refused slot %q (%v) under %v — 60m and EMG are in the MC send domain under MCSelectsAll", r.name(), s.Wire(), buildErr, policy)
+			}
+		case s.IsMemory() || s.IsPMS():
+			if !builderOK {
+				r.t.Errorf("%s: BuildMCSet refused slot %q (%v) under %v — memory and PMS are always in the MC send domain", r.name(), s.Wire(), buildErr, policy)
+			}
+		}
+	}
+}
+
+// checkMTReadDomain is checkMCSendDomain's counterpart for MT: BuildMTRead
+// against the gate's own verdict on "MT"+s.Wire()+";", held to this
+// dialect's declared MTReadSlots rather than MC's MCSelects — the two
+// policies are independent (a radio may narrow one legend and not the
+// other), so each gets its own walk and its own non-vacuity counter.
+func (r *conformanceRun) checkMTReadDomain() {
+	r.t.Helper()
+
+	policy := r.d.MTReadSlots()
+	for _, s := range r.slots {
+		cmd, buildErr := r.d.BuildMTRead(s)
+		builderOK := buildErr == nil
+		gateOK := r.d.AllowedCommand([]byte("MT" + s.Wire() + ";"))
+
+		if builderOK != gateOK {
+			r.t.Errorf("%s: MT read domain disagreement for slot %q under %v — BuildMTRead admits=%v, gate admits=%v; a builder and a gate that disagree about the read domain mean one of them is not reading this dialect's own MTReadSlots", r.name(), s.Wire(), policy, builderOK, gateOK)
+			continue
+		}
+		if !builderOK && !cmd.IsZero() {
+			r.t.Errorf("%s: BuildMTRead returned a non-zero Command alongside its refusal for slot %q; every fallible builder returns the zero Command", r.name(), s.Wire())
+		}
+
+		wide := s.Is60m() || s.IsEMG()
+		switch {
+		case wide && policy == cat.MTReadsMemoryPMS:
+			if builderOK {
+				r.t.Errorf("%s: BuildMTRead ADMITTED slot %q under %v — its MT block's slot legend prints neither the 5xx nor the EMG bank, which MR reads instead", r.name(), s.Wire(), policy)
+				continue
+			}
+			r.refusals["MT read refused for 60m/EMG under MTReadsMemoryPMS"]++
+		case wide:
+			if !builderOK {
+				r.t.Errorf("%s: BuildMTRead refused slot %q (%v) under %v — 60m and EMG are in the MT read domain under MTReadsReadable", r.name(), s.Wire(), buildErr, policy)
+			}
+		case s.IsMemory() || s.IsPMS():
+			if !builderOK {
+				r.t.Errorf("%s: BuildMTRead refused slot %q (%v) under %v — memory and PMS are always in the MT read domain", r.name(), s.Wire(), buildErr, policy)
+			}
+		}
+	}
 }
 
 // recordFor is the memory record Run offers a dialect for slot s and mode m,
 // carrying the P7 kind the caller names: the combined MT Set's own schema
 // value for an MT Set, and this dialect's declared MWWriteKind for an MW Set.
+//
+// TxClar IS FALSE HERE ON PURPOSE, and it is the ONE value every dialect can
+// carry whatever its cat.MemoryP5Policy says. The true case is a per-policy
+// truth table rather than a record every walk can use, so it lives in
+// checkMemoryP5 below instead of being threaded through every caller.
 func recordFor(s cat.Slot, m cat.Mode, kind byte, clarHz int16, ctcss cat.CTCSSState, shift cat.Shift) cat.MemoryData {
 	return cat.MemoryData{
 		Slot:   s,
@@ -429,6 +533,199 @@ func recordFor(s cat.Slot, m cat.Mode, kind byte, clarHz int16, ctcss cat.CTCSSS
 		CTCSS:  ctcss,
 		Shift:  shift,
 	}
+}
+
+// checkMemoryP5 is byte 21 of the shared memory field block, held to the
+// policy this dialect declares — in BOTH directions and through BOTH the
+// builders and the gate.
+//
+// THE TRUTH TABLE, and it is the whole of the check:
+//
+//	                     | P5TxClar                | P5Fixed
+//	---------------------|-------------------------|------------------------
+//	TxClar false, build  | builds, gate admits     | builds, gate admits
+//	TxClar TRUE,  build  | builds, gate admits     | REFUSED by the builder
+//	TxClar TRUE,  parse  | decodes back as true    | REFUSED by the parser
+//
+// Both halves matter. Without the P5TxClar column a dialect that refused
+// every TxClar-true record would pass; without the P5Fixed column one that
+// silently encoded the flag as '0' would. The wire byte is asserted too, not
+// just the round trip, because a codec that wrote the flag into some OTHER
+// position would round-trip perfectly and put a wrong byte on the wire.
+func (r *conformanceRun) checkMemoryP5() {
+	r.t.Helper()
+
+	if len(r.emittable) == 0 || len(r.slots) == 0 {
+		return
+	}
+	ctcss, shift, ok := r.mustParseStates()
+	if !ok {
+		return
+	}
+	writable, found := r.firstWritableSlot(r.emittable[0], ctcss, shift)
+	if !found {
+		return // checkMemoryWrites has already reported this
+	}
+
+	m := recordFor(writable, r.emittable[0], r.d.MWWriteKind(), 0, ctcss, shift)
+	m.TxClar = true
+
+	policy := r.d.MemoryP5()
+	cmd, err := r.d.BuildMWSet(m)
+
+	switch policy {
+	case cat.P5Fixed:
+		if err == nil {
+			r.t.Errorf("%s: BuildMWSet ACCEPTED a record with TxClar true under %v, emitting %q — this dialect's manual prints P5 \"(Fixed)\", so the flag must be refused rather than silently encoded as '0'", r.name(), policy, cmd.Bytes())
+			break
+		}
+		if !cmd.IsZero() {
+			r.t.Errorf("%s: BuildMWSet returned a non-zero Command alongside its P5 refusal; every fallible builder returns the zero Command", r.name())
+		}
+		r.refusals["TxClar true under P5Fixed"]++
+
+		// AND THE PARSER, on a frame whose byte 21 is '1'. It is spliced
+		// into a frame this dialect really did build, so nothing but that
+		// one byte can be the reason for the refusal.
+		clean, cleanErr := r.d.BuildMWSet(recordFor(writable, r.emittable[0], r.d.MWWriteKind(), 0, ctcss, shift))
+		if cleanErr != nil {
+			r.t.Errorf("%s: BuildMWSet with TxClar false was refused under %v (%v) — P5Fixed refuses the FLAG, not the record", r.name(), policy, cleanErr)
+			return
+		}
+		r.checkFrame("MW set (P5 fixed)", clean.Bytes())
+		forged := append([]byte(nil), clean.Bytes()...)
+		if got := forged[memoryP5WireOffset]; got != '0' {
+			r.t.Errorf("%s: its own MW Set carries %q at position 21 under %v, want '0' — the printed-fixed byte is not being written where the frame puts it", r.name(), got, policy)
+		}
+		forged[memoryP5WireOffset] = '1'
+		if _, err := r.d.ParseMRAnswer(mrShaped(forged)); err == nil {
+			r.t.Errorf("%s: its own parser ACCEPTED %q, whose P5 is '1' under %v — a byte this radio's manual prints \"(Fixed)\" must not be decoded into a flag", r.name(), mrShaped(forged), policy)
+		} else {
+			r.refusals["P5 '1' at the parser under P5Fixed"]++
+		}
+		if r.d.AllowedCommand(forged) {
+			r.t.Errorf("%s: its gate ADMITTED %q, whose P5 is '1' under %v", r.name(), forged, policy)
+		} else {
+			r.refusals["P5 '1' at the gate under P5Fixed"]++
+		}
+
+	default:
+		if err != nil {
+			r.t.Errorf("%s: BuildMWSet REFUSED a record with TxClar true under %v (%v) — this dialect's manual prints P5 as the TX clarifier flag, so both its values must be writable", r.name(), policy, err)
+			return
+		}
+		frame := cmd.Bytes()
+		r.checkFrame("MW set (TxClar true)", frame)
+		if got := frame[memoryP5WireOffset]; got != '1' {
+			r.t.Errorf("%s: BuildMWSet with TxClar true emitted %q, whose position 21 is %q rather than '1' — the flag is not reaching the byte the frame puts it in", r.name(), frame, got)
+		}
+		back, err := r.d.ParseMRAnswer(mrShaped(frame))
+		if err != nil {
+			r.t.Errorf("%s: ParseMRAnswer(%q) = %v — a frame its own builder produced, with the command prefix swapped, must parse", r.name(), mrShaped(frame), err)
+			return
+		}
+		if !back.TxClar {
+			r.t.Errorf("%s: a record built with TxClar true came back with TxClar false under %v — the flag is lost in one direction or the other", r.name(), policy)
+		}
+	}
+
+	// The COMBINED form shares this byte with MW, and validateCombinedMTFields
+	// applies the same policy independently of validateMWFields — so a suite
+	// that drove BuildMWSet alone would leave that second validator's P5
+	// refusal entirely unexercised from outside core/cat. This is the S0-MEM
+	// lane review's LOW-6 finding; checkCombinedMemoryP5 below is the fix.
+	if r.d.MTForm() == cat.MTFormCombined {
+		r.checkCombinedMemoryP5(ctcss, shift)
+	}
+}
+
+// checkCombinedMemoryP5 is checkMemoryP5's combined-form arm: the same P5
+// truth table, driven through buildCombined (BuildMTSetCombined under
+// P11Fixed, BuildMTSetCombinedDisplay under P11TagDisplay) rather than
+// BuildMWSet, so validateCombinedMTFields' own P5 refusal is exercised from
+// outside core/cat too, with its own non-vacuity counters
+// (checkNonVacuity's MTFormCombined arm).
+func (r *conformanceRun) checkCombinedMemoryP5(ctcss cat.CTCSSState, shift cat.Shift) {
+	r.t.Helper()
+
+	var writable cat.Slot
+	found := false
+	for _, s := range r.slots {
+		m := recordFor(s, r.emittable[0], cat.CombinedMTSetKind, 0, ctcss, shift)
+		if _, err := r.buildCombined(m, "", false); err == nil {
+			writable, found = s, true
+			break
+		}
+	}
+	if !found {
+		return // checkCombinedMTSets has already reported this
+	}
+
+	m := recordFor(writable, r.emittable[0], cat.CombinedMTSetKind, 0, ctcss, shift)
+	m.TxClar = true
+
+	policy := r.d.MemoryP5()
+	cmd, err := r.buildCombined(m, "", false)
+
+	switch policy {
+	case cat.P5Fixed:
+		if err == nil {
+			r.t.Errorf("%s: BuildMTSetCombined ACCEPTED a record with TxClar true under %v, emitting %q — this dialect's manual prints P5 \"(Fixed)\", so the flag must be refused rather than silently encoded as '0'", r.name(), policy, cmd.Bytes())
+			return
+		}
+		if !cmd.IsZero() {
+			r.t.Errorf("%s: BuildMTSetCombined returned a non-zero Command alongside its P5 refusal; every fallible builder returns the zero Command", r.name())
+		}
+		r.refusals["combined MT set TxClar true under P5Fixed"]++
+
+	default:
+		if err != nil {
+			r.t.Errorf("%s: BuildMTSetCombined REFUSED a record with TxClar true under %v (%v) — this dialect's manual prints P5 as the TX clarifier flag, so both its values must be writable", r.name(), policy, err)
+			return
+		}
+		frame := cmd.Bytes()
+		r.checkFrame("MT set combined (TxClar true)", frame)
+		if got := frame[memoryP5WireOffset]; got != '1' {
+			r.t.Errorf("%s: combined BuildMTSetCombined with TxClar true emitted %q, whose position 21 is %q rather than '1' — the flag is not reaching the byte the frame puts it in", r.name(), frame, got)
+		}
+		gotM, _, _, err := r.parseCombined(frame)
+		if err != nil {
+			r.t.Errorf("%s: parseCombined(%q) = %v — a frame its own builder produced must parse", r.name(), frame, err)
+			return
+		}
+		if !gotM.TxClar {
+			r.t.Errorf("%s: a combined record built with TxClar true came back with TxClar false under %v — the flag is lost in one direction or the other", r.name(), policy)
+		}
+	}
+}
+
+// memoryP5WireOffset is position 21 of the shared memory field block,
+// 0-indexed — the byte cat.MemoryP5Policy governs.
+//
+// It is restated here rather than imported because core/cat's offsets are
+// unexported, which is the condition this package works under. It is a
+// documented protocol fact (the manuals' own position tables number P5 at
+// 21) and not a receiver-varying one, so restating it cannot drift into
+// describing one radio. What it must NOT become is a second opinion: the
+// checks above assert that this dialect's own builder puts the flag HERE,
+// which is what would fail if core/cat ever moved the field.
+const memoryP5WireOffset = 20
+
+// mrShaped returns frame with its two-byte command prefix rewritten to "MR",
+// so an MW Set this package just built can be offered to the MR answer
+// parser.
+//
+// The two frames are byte-for-byte identical in every documented position
+// except that prefix — core/cat's memdata.go says so, and this package's
+// only route to the memory-record DECODER is ParseMRAnswer, since MW has no
+// Answer form and no exported parser. Without this the read direction of the
+// P5 policy would be unreachable from outside core/cat altogether.
+func mrShaped(frame []byte) []byte {
+	out := append([]byte(nil), frame...)
+	if len(out) >= 2 {
+		out[0], out[1] = 'M', 'R'
+	}
+	return out
 }
 
 // mustParseStates returns the CTCSS and shift states a P8/P10 wire byte of
@@ -583,7 +880,7 @@ func (r *conformanceRun) checkCombinedMTSets(s cat.Slot) {
 			// empty tag IS the all-fill field.
 			what = "MT set combined (cleared)"
 		}
-		cmd, err := r.d.BuildMTSetCombined(m, tag)
+		cmd, err := r.buildCombined(m, tag, true)
 		if err != nil {
 			if tag == "" {
 				// Not tolerable: the empty tag is the one every combined
@@ -603,7 +900,7 @@ func (r *conformanceRun) checkCombinedMTSets(s cat.Slot) {
 		r.checkMTFrameLength(what, frame, true)
 		r.keepOwnFormFrames(frame, tag == "")
 
-		gotM, gotTag, err := r.d.ParseMTAnswerCombined(frame)
+		gotM, gotTag, gotDisplay, err := r.parseCombined(frame)
 		if err != nil {
 			r.t.Errorf("%s: ParseMTAnswerCombined(%q) = %v — a frame its own builder produced must parse", r.name(), frame, err)
 			continue
@@ -615,10 +912,158 @@ func (r *conformanceRun) checkCombinedMTSets(s cat.Slot) {
 			r.t.Errorf("%s: %s for slot %q round-tripped tag %q, want %q — the fill padding is a wire-encoding concern and must not survive the parse", r.name(), what, s.Wire(), gotTag, tag)
 			continue
 		}
+		if !gotDisplay {
+			r.t.Errorf("%s: %s for slot %q was built with the TAG flag ON and came back OFF — under %v byte 28 is a live flag, and one that does not survive its own round trip is not being carried", r.name(), what, s.Wire(), r.d.MTP11())
+		}
 		if tag != "" {
 			r.exactTagRoundTrips++
 		}
 	}
+
+	r.checkCombinedP11Seam(m)
+}
+
+// buildCombined calls whichever combined Set builder this dialect's P11
+// policy answers to, with display as the TAG flag under P11TagDisplay and
+// ignored under P11Fixed.
+//
+// The two are not interchangeable: a live flag is never defaulted, so the
+// display-less builder REFUSES a P11TagDisplay dialect and the
+// display-bearing one refuses a P11Fixed one. checkCombinedP11Seam is where
+// that pair of refusals is required to be SEEN; this helper is just the
+// right call.
+func (r *conformanceRun) buildCombined(m cat.MemoryData, tag string, display bool) (cat.Command, error) {
+	if r.d.MTP11() == cat.P11TagDisplay {
+		return r.d.BuildMTSetCombinedDisplay(m, tag, display)
+	}
+	return r.d.BuildMTSetCombined(m, tag)
+}
+
+// parseCombined is buildCombined's counterpart. Under P11Fixed the flag it
+// reports is false, because byte 28 carries no state there.
+func (r *conformanceRun) parseCombined(frame []byte) (cat.MemoryData, string, bool, error) {
+	if r.d.MTP11() == cat.P11TagDisplay {
+		return r.d.ParseMTAnswerCombinedDisplay(frame)
+	}
+	m, tag, err := r.d.ParseMTAnswerCombined(frame)
+	// Under P11Fixed the byte is the printed "(Fixed)" and there is no flag
+	// to report; true is returned so the round-trip assertion above states
+	// something only where a flag exists, rather than failing every
+	// P11Fixed dialect on a value it does not have.
+	return m, tag, true, err
+}
+
+// checkCombinedP11Seam requires the WRONG P11 pair to refuse, and to be SEEN
+// to refuse — all four refusals, both builders and both parsers.
+//
+// It is checkFormSeam's rule applied one level down. A live flag is never
+// defaulted, so a P11TagDisplay dialect must refuse the display-less builder
+// rather than quietly writing '0' for a flag the caller never expressed an
+// intention about; and a P11Fixed dialect must refuse the display-bearing
+// one rather than letting a caller set a flag its radio does not have. A
+// call that was skipped and a seam that is enforced look identical from
+// outside, which is why every refusal below is counted.
+func (r *conformanceRun) checkCombinedP11Seam(m cat.MemoryData) {
+	r.t.Helper()
+
+	if r.d.MTForm() != cat.MTFormCombined {
+		return
+	}
+	// A frame this dialect really did build, so the parser refusals below
+	// can only be about the API pairing.
+	cmd, err := r.buildCombined(m, "", false)
+	if err != nil {
+		return // the empty-tag assertion above has already reported this
+	}
+	frame := cmd.Bytes()
+
+	tagDisplay := r.d.MTP11() == cat.P11TagDisplay
+
+	wrongBuild, wrongBuildErr := r.d.BuildMTSetCombined(m, "")
+	if tagDisplay {
+		r.requireP11Refusal("display-less combined build under P11TagDisplay", wrongBuild, wrongBuildErr)
+	} else if wrongBuildErr != nil {
+		r.t.Errorf("%s: BuildMTSetCombined was refused (%v) on a %v dialect — it is that policy's OWN builder", r.name(), wrongBuildErr, r.d.MTP11())
+	}
+
+	wrongDisplayBuild, wrongDisplayErr := r.d.BuildMTSetCombinedDisplay(m, "", true)
+	if tagDisplay {
+		if wrongDisplayErr != nil {
+			r.t.Errorf("%s: BuildMTSetCombinedDisplay was refused (%v) on a %v dialect — it is that policy's OWN builder", r.name(), wrongDisplayErr, r.d.MTP11())
+		}
+	} else {
+		r.requireP11Refusal("display-bearing combined build under P11Fixed", wrongDisplayBuild, wrongDisplayErr)
+	}
+
+	if _, _, err := r.d.ParseMTAnswerCombined(frame); (err == nil) == tagDisplay {
+		if tagDisplay {
+			r.t.Errorf("%s: ParseMTAnswerCombined ACCEPTED %q on a %v dialect — byte 28 is a live flag there, and a parser that drops it hands back a record the radio did not send", r.name(), frame, r.d.MTP11())
+		} else {
+			r.t.Errorf("%s: ParseMTAnswerCombined refused %q on a %v dialect — it is that policy's OWN parser", r.name(), frame, r.d.MTP11())
+		}
+	} else if tagDisplay {
+		r.refusals["display-less combined parse under P11TagDisplay"]++
+	}
+
+	if _, _, _, err := r.d.ParseMTAnswerCombinedDisplay(frame); (err == nil) != tagDisplay {
+		if tagDisplay {
+			r.t.Errorf("%s: ParseMTAnswerCombinedDisplay refused %q on a %v dialect — it is that policy's OWN parser", r.name(), frame, r.d.MTP11())
+		} else {
+			r.t.Errorf("%s: ParseMTAnswerCombinedDisplay ACCEPTED %q on a %v dialect — byte 28 is the printed \"(Fixed)\" there, and reporting it as a flag reads schema as state", r.name(), frame, r.d.MTP11())
+		}
+	} else if !tagDisplay {
+		r.refusals["display-bearing combined parse under P11Fixed"]++
+	}
+
+	// THE FLAG MUST REACH THE WIRE, and be seen to. Under P11TagDisplay a
+	// TAG-ON frame and a TAG-OFF frame must differ at byte 28 and nowhere
+	// else, which is what makes the round trip above evidence of a flag
+	// rather than of a constant.
+	if !tagDisplay {
+		return
+	}
+	on, errOn := r.buildCombined(m, "", true)
+	if errOn != nil {
+		r.t.Errorf("%s: BuildMTSetCombinedDisplay with the TAG flag ON = %v", r.name(), errOn)
+		return
+	}
+	off, errOff := r.buildCombined(m, "", false)
+	if errOff != nil {
+		r.t.Errorf("%s: BuildMTSetCombinedDisplay with the TAG flag OFF = %v", r.name(), errOff)
+		return
+	}
+	r.checkFrame("MT set combined (TAG on)", on.Bytes())
+	diffs := 0
+	a, b := on.Bytes(), off.Bytes()
+	if len(a) != len(b) {
+		r.t.Errorf("%s: the TAG-on and TAG-off combined frames differ in LENGTH (%d vs %d) — the flag is one byte", r.name(), len(a), len(b))
+		return
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			diffs++
+		}
+	}
+	if diffs != 1 {
+		r.t.Errorf("%s: the TAG-on and TAG-off combined frames differ in %d bytes (%q vs %q), want exactly 1 — byte 28 is the flag and nothing else may move with it", r.name(), diffs, a, b)
+	}
+}
+
+// requireP11Refusal holds one wrong-pair call to the refusal contract: an
+// error, the zero Command, and a message naming this dialect's own policy —
+// a refusal for some other reason would leave the seam unproven while
+// looking exactly like proof of it.
+func (r *conformanceRun) requireP11Refusal(what string, cmd cat.Command, err error) {
+	r.t.Helper()
+
+	if err == nil {
+		r.t.Errorf("%s: %s SUCCEEDED, emitting %q — the P11 seam is not being enforced", r.name(), what, cmd.Bytes())
+		return
+	}
+	if !cmd.IsZero() {
+		r.t.Errorf("%s: %s returned a non-zero Command alongside its error; every fallible builder returns the zero Command", r.name(), what)
+	}
+	r.refusals[what]++
 }
 
 // slotTakesACombinedSet reports whether this dialect will build a combined
@@ -680,6 +1125,16 @@ func (r *conformanceRun) keepOwnFormFrames(frame []byte, cleared bool) {
 // "within the window" with only the tag charset between a forged frame and
 // the radio. A dialect that let this frame through would have exactly that
 // defect back.
+//
+// UNDER MTFormCombined THE PARSER CALLED MUST FOLLOW d.MTP11(), not always
+// the display-less ParseMTAnswerCombined (S0-close review's MEDIUM-3
+// finding): that parser refuses a P11TagDisplay dialect UNCONDITIONALLY,
+// before it ever looks at length — "use the display-bearing
+// builder/parser" — so on the FT-891-shaped fixture this check exercised no
+// length rule at all, and its refusal counter passed on the wrong-API
+// refusal instead. Each combined-form policy gets its OWN non-vacuity
+// counter below, so a dispatch bug that silently reverted to one parser for
+// both policies leaves the other's counter at zero.
 func (r *conformanceRun) checkOverlongMTFrameIsRefused() {
 	r.t.Helper()
 
@@ -692,16 +1147,31 @@ func (r *conformanceRun) checkOverlongMTFrameIsRefused() {
 	over = append(over, 'X', ';')
 
 	var err error
+	refusalKey := "over-long MT answer"
 	switch r.d.MTForm() {
 	case cat.MTFormShort:
 		_, _, _, err = r.d.ParseMTAnswer(over)
 	case cat.MTFormCombined:
-		_, _, err = r.d.ParseMTAnswerCombined(over)
+		switch r.d.MTP11() {
+		case cat.P11TagDisplay:
+			_, _, _, err = r.d.ParseMTAnswerCombinedDisplay(over)
+			refusalKey = "over-long MT answer (display-bearing)"
+		default:
+			_, _, err = r.d.ParseMTAnswerCombined(over)
+			refusalKey = "over-long MT answer (display-less)"
+		}
 	}
 	if err == nil {
 		r.t.Errorf("%s: its own answer parser ACCEPTED %q, one byte past the %d-byte top of the window it reports — the answer window is not deriving from this dialect", r.name(), over, r.mtMax)
+	} else if strings.Contains(err.Error(), "use the display") {
+		// THE REFUSAL MUST BE FOR LENGTH, NOT THE WRONG API: this is
+		// exactly the vacuous shape MEDIUM-3 found — a dispatch bug (or the
+		// pre-fix code, which always called the display-less parser) gets a
+		// non-nil error here too, but it says nothing about the frame being
+		// one byte too long.
+		r.t.Errorf("%s: the over-long-frame refusal %q is the WRONG-API refusal, not a length refusal — this check called the parser for the WRONG P11 policy (this dialect declares %v)", r.name(), err, r.d.MTP11())
 	} else {
-		r.refusals["over-long MT answer"]++
+		r.refusals[refusalKey]++
 	}
 	if r.d.AllowedCommand(over) {
 		r.t.Errorf("%s: its own gate ADMITTED %q, one byte past the %d-byte top of the window it reports — the outbound gate is judging MT frames by some other dialect's tag width", r.name(), over, r.mtMax)
@@ -813,6 +1283,18 @@ func (r *conformanceRun) firstWritableSlot(m cat.Mode, ctcss cat.CTCSSState, shi
 // dialect lists but does not recognise would make every EX answer it
 // received unattributable.
 //
+// EVERY LENGTH HERE IS THIS DIALECT'S OWN. The EX address field is four
+// digits on some radios and six on others (cat.EXAddressForm), so the read
+// frame is 2 + d.EXAddressWidth() + 1 bytes and the address occupies
+// exactly the width d.EXWire renders. Written against a constant 9 this
+// suite would have declared a four-digit dialect non-conformant while its
+// builder, gate and parser all agreed with each other.
+//
+// The answer round-trip is the other half: the narrowest answer this
+// dialect can receive at each address must parse back to that same address.
+// A read frame that is well-formed and a parser that cannot read the reply
+// is a dialect that can ask a question and not hear the answer.
+//
 // An empty inventory is legal (DialectConfig documents it: "a radio with no
 // menu inventory described yet"), so it is logged rather than failed.
 func (r *conformanceRun) checkEXReads() {
@@ -823,9 +1305,20 @@ func (r *conformanceRun) checkEXReads() {
 		r.t.Logf("%s: declares no EX inventory, so the EX half of this suite is empty for it (DialectConfig permits this)", r.name())
 		return
 	}
+	width := r.d.EXAddressWidth()
+	if width <= 0 {
+		r.t.Errorf("%s: EXAddressWidth() = %d for a dialect with %d inventory addresses — it can render no address field, so none of its EX frames can be built", r.name(), width, len(addrs))
+		return
+	}
+	roundTrips := 0
 	for _, a := range addrs {
 		if !r.d.KnownEXAddress(a) {
 			r.t.Errorf("%s: KnownEXAddress(%v) is false for an address its own EXAddresses() lists", r.name(), a)
+		}
+		wire := r.d.EXWire(a)
+		if len(wire) != width {
+			r.t.Errorf("%s: EXWire(%v) is %d bytes but EXAddressWidth() says %d — the width and the render have come apart", r.name(), a, len(wire), width)
+			continue
 		}
 		cmd, err := r.d.BuildEXRead(a)
 		if err != nil {
@@ -833,6 +1326,37 @@ func (r *conformanceRun) checkEXReads() {
 			continue
 		}
 		r.checkFrame("EX read", cmd.Bytes())
+
+		frame := cmd.Bytes()
+		if len(frame) != 2+width+1 {
+			r.t.Errorf("%s: BuildEXRead(%v) is %d bytes, want %d (\"EX\" + a %d-byte address + \";\")", r.name(), a, len(frame), 2+width+1, width)
+			continue
+		}
+		if got := string(frame[2 : 2+width]); got != wire {
+			r.t.Errorf("%s: BuildEXRead(%v) carries address field %q, want %q", r.name(), a, got, wire)
+		}
+
+		// The narrowest answer this dialect can receive: one P4 byte.
+		answer := []byte("EX" + wire + "0;")
+		gotAddr, raw, err := r.d.ParseEXAnswer(answer)
+		if err != nil {
+			r.t.Errorf("%s: ParseEXAnswer(%q) = %v — this is the narrowest answer to a read this same dialect just built", r.name(), answer, err)
+			continue
+		}
+		if gotAddr != a {
+			r.t.Errorf("%s: ParseEXAnswer(%q) returned address %v, want %v", r.name(), answer, gotAddr, a)
+			continue
+		}
+		if raw != "0" {
+			r.t.Errorf("%s: ParseEXAnswer(%q) returned P4 %q, want %q verbatim", r.name(), answer, raw, "0")
+			continue
+		}
+		roundTrips++
+	}
+	// Non-vacuity, in this suite's usual sense: a loop that round-tripped
+	// nothing passes in silence.
+	if roundTrips == 0 {
+		r.t.Errorf("%s: no EX answer round-tripped, though this dialect lists %d addresses — the property above passed vacuously", r.name(), len(addrs))
 	}
 }
 
@@ -931,20 +1455,82 @@ func (r *conformanceRun) checkNonVacuity() {
 	case cat.MTFormCombined:
 		required = append(required, "MT set combined (tagged)", "MT set combined (cleared)")
 	}
+	// The P5 arm this dialect's own policy selects. Both arms are counted,
+	// because "the check ran" and "the check ran for THIS policy" are
+	// different claims: a suite that only required the P5TxClar frame would
+	// go green on a P5Fixed dialect whose whole arm had been skipped.
+	requiredRefusals := []string{
+		"wrong-form MT Set build",
+		"wrong-form MT answer parse",
+		"over-long MT frame at the gate",
+		"clarifier past MaxAbsHz",
+		"malformed frame at the gate",
+	}
+	// The over-long-answer counter, split by which parser
+	// checkOverlongMTFrameIsRefused actually had to call (S0-close review's
+	// MEDIUM-3 fix): short form has one API, but combined form has two, and
+	// a dialect whose own policy is P11TagDisplay must be seen to refuse
+	// through ITS OWN display-bearing parser, not the display-less one —
+	// requiring only the unconditional pre-fix name would have let a
+	// dispatch bug that silently reverted to one parser for both policies
+	// go unnoticed here, the same way it went unnoticed in review.
+	switch r.d.MTForm() {
+	case cat.MTFormShort:
+		requiredRefusals = append(requiredRefusals, "over-long MT answer")
+	case cat.MTFormCombined:
+		switch r.d.MTP11() {
+		case cat.P11TagDisplay:
+			requiredRefusals = append(requiredRefusals, "over-long MT answer (display-bearing)")
+		default:
+			requiredRefusals = append(requiredRefusals, "over-long MT answer (display-less)")
+		}
+	}
+	switch r.d.MTP11() {
+	case cat.P11TagDisplay:
+		required = append(required, "MT set combined (TAG on)")
+		requiredRefusals = append(requiredRefusals,
+			"display-less combined build under P11TagDisplay",
+			"display-less combined parse under P11TagDisplay")
+	case cat.P11Fixed:
+		requiredRefusals = append(requiredRefusals,
+			"display-bearing combined build under P11Fixed",
+			"display-bearing combined parse under P11Fixed")
+	}
+	// The MC send and MT read domains, each counted against its OWN policy.
+	// A narrow dialect with no 60m/EMG slot in its space cannot satisfy
+	// either counter by having nothing to offer — that is the point: a
+	// fixture declaring MCSelectsMemoryPMS or MTReadsMemoryPMS without a
+	// 5xx bank or an EMG channel leaves checkMCSendDomain/checkMTReadDomain
+	// vacuous over it, and this is what fails that silently.
+	if r.d.MCSelects() == cat.MCSelectsMemoryPMS {
+		requiredRefusals = append(requiredRefusals, "MC send refused for 60m/EMG under MCSelectsMemoryPMS")
+	}
+	if r.d.MTReadSlots() == cat.MTReadsMemoryPMS {
+		requiredRefusals = append(requiredRefusals, "MT read refused for 60m/EMG under MTReadsMemoryPMS")
+	}
+	switch r.d.MemoryP5() {
+	case cat.P5Fixed:
+		required = append(required, "MW set (P5 fixed)")
+		requiredRefusals = append(requiredRefusals,
+			"TxClar true under P5Fixed",
+			"P5 '1' at the parser under P5Fixed",
+			"P5 '1' at the gate under P5Fixed")
+		if r.d.MTForm() == cat.MTFormCombined {
+			requiredRefusals = append(requiredRefusals, "combined MT set TxClar true under P5Fixed")
+		}
+	default:
+		required = append(required, "MW set (TxClar true)")
+		if r.d.MTForm() == cat.MTFormCombined {
+			required = append(required, "MT set combined (TxClar true)")
+		}
+	}
 	for _, what := range required {
 		if r.frames[what] == 0 {
 			r.t.Errorf("%s: builder %q contributed no frames — either this dialect refuses it for every input this suite can offer, or the builder was dropped from the walk, and both are defects this property must not pass over", r.name(), what)
 		}
 	}
 
-	for _, what := range []string{
-		"wrong-form MT Set build",
-		"wrong-form MT answer parse",
-		"over-long MT answer",
-		"over-long MT frame at the gate",
-		"clarifier past MaxAbsHz",
-		"malformed frame at the gate",
-	} {
+	for _, what := range requiredRefusals {
 		if r.refusals[what] == 0 {
 			r.t.Errorf("%s: no %q refusal was observed — the check either never ran or never had anything to refuse, and a rule that was never exercised is not evidence that it is enforced", r.name(), what)
 		}

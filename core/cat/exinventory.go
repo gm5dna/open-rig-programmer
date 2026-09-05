@@ -12,20 +12,63 @@ import "fmt"
 // table2.csv. The zero value is NOT a member of the inventory; construct
 // addresses only via NewEXAddress or ParseEXAddress, both of which validate
 // membership.
+//
+// It has NO wire rendering of its own. How many digits the field carries is
+// a fact of the RADIO, not of the address — see EXAddressForm and
+// wireEXAddress — so a caller renders through Dialect.EXWire.
 type EXAddress struct {
 	P1, P2, P3 uint8
 }
 
-// Wire renders the address as its six-digit CAT field: two zero-padded
-// decimal digits per component, e.g. EXAddress{1,2,3} -> "010203". Reference:
-// the EX grammar block's "E X P1 P1 P2 P2 P3 P3" layout.
-func (a EXAddress) Wire() string {
-	return fmt.Sprintf("%02d%02d%02d", a.P1, a.P2, a.P3)
+// wireEXAddress renders a as the CAT address field of a dialect declaring
+// form: six zero-padded digits under EXAddressTriple ("E X P1 P1 P2 P2 P3
+// P3", the FT-710/FTdx10/FTdx101 grammar blocks), four under EXAddressPair
+// — a's own (P1,P2) components with P3 dropped; that naming is this
+// package's, not necessarily the radio's own — see EXAddressPair's doc
+// comment (dialectconfig.go) for the FT-891 naming caveat.
+//
+// IT IS THE ONLY PLACE AN ADDRESS BECOMES WIRE DIGITS. Until this seam that
+// place was EXAddress.Wire(), a method on the ADDRESS — which carries no
+// family — so every caller rendered six digits whatever dialect it was
+// working for, and a four-digit radio was inexpressible. Routing every
+// render through the form serves both callers that have one: Dialect.EXWire
+// for anything holding a Dialect, and validateEXItems, which has
+// cfg.EXAddressForm in scope before any Dialect exists.
+//
+// Dropping P3 under Pair is safe ONLY because V12 requires every Pair
+// member's P3 to be zero (dialectvalidate.go); the rule and this render are
+// the two halves of one fact. TestWireEXAddress_RendersPerForm pins both
+// branches.
+//
+// An unspecified form renders "": a dialect that never declared one has no
+// wire address at all, NewDialect refuses to build such a dialect, and the
+// only receiver that reaches this branch is the hand-built zero Dialect,
+// which is inert by design. Returning "" rather than a plausible six digits
+// is what lets Dialect.EXAddressWidth measure this render instead of
+// keeping a second table of widths.
+func wireEXAddress(form EXAddressForm, a EXAddress) string {
+	switch form {
+	case EXAddressTriple:
+		return fmt.Sprintf("%02d%02d%02d", a.P1, a.P2, a.P3)
+	case EXAddressPair:
+		return fmt.Sprintf("%02d%02d", a.P1, a.P2)
+	default:
+		return ""
+	}
 }
 
-// String returns the same six-digit wire form as Wire.
+// String returns a NON-WIRE debug rendering, "P1=08 P2=03 P3=00".
+//
+// It used to return the six-digit wire form, and stopped when Wire() was
+// deleted: an address alone cannot know how many digits its family's field
+// has, so any wire-shaped String() would be the FT-710's answer given to
+// every radio. The debug form is deliberately unmistakable — it carries
+// bytes no address field may hold, so a debug print can never be read back
+// as one, and it names all THREE components, which the four-digit wire form
+// cannot. TestEXAddressString_IsNotAWireField pins both properties, the
+// second against every configured dialect's own ParseEXAddress.
 func (a EXAddress) String() string {
-	return a.Wire()
+	return fmt.Sprintf("P1=%02d P2=%02d P3=%02d", a.P1, a.P2, a.P3)
 }
 
 // EXItem is one transcribed Table 2 row: an address plus the manual's
@@ -42,9 +85,13 @@ type EXItem struct {
 	P2Label string
 	// Name is the manual's Function column, verbatim.
 	Name string
-	// Digits is the manual's Digits column: 1..4 for a numeric field, or 12
-	// for a Text item. A signed field counts its sign in the width (e.g. the
-	// manual's "-20".."+10" is 3).
+	// Digits is the manual's Digits column: for a numeric field, whatever
+	// width that radio's own chart prints — 1..4 across the FT-710, FTdx10
+	// and FTdx101 inventories, and a registered inventory is free to be
+	// wider; or the model's text width (12 on all three) for a Text item. A
+	// signed field counts its sign in the width (e.g. the manual's
+	// "-20".."+10" is 3). The per-model bounds are the profile's, enforced
+	// by internal/extable's CSV validator, not a fact of this type.
 	//
 	// It is also the source of a dialect's P4 answer-length bound: the
 	// largest Digits over an inventory sets that dialect's exAnswerMaxLen
@@ -93,22 +140,65 @@ func (d Dialect) NewEXAddress(p1, p2, p3 int) (EXAddress, error) {
 	return EXAddress{}, newParseError([]byte(fmt.Sprintf("%d,%d,%d", p1, p2, p3)), "EX address is not a known Table 2 member")
 }
 
-// ParseEXAddress parses a six-ASCII-digit wire field ("010203") into an
-// address that is a member of THIS DIALECT'S inventory. It performs only a
-// shape check (exactly six digits) followed by a membership lookup; it
-// applies NO numeric range logic to the parsed components. A malformed
-// shape or a non-member address yields a *ParseError.
+// ParseEXAddress parses THIS DIALECT'S wire address field — six ASCII
+// digits ("010203") under EXAddressTriple, four ("0803") under
+// EXAddressPair — into an address that is a member of its inventory. It
+// performs only a shape check (exactly the declared width, all ASCII
+// digits) followed by a membership lookup; it applies NO numeric range
+// logic to the parsed components. A malformed shape or a non-member address
+// yields a *ParseError.
+//
+// The two widths carry SEPARATE refusal sentences rather than one composed
+// from a number. The six-digit spellings are shipped text, pinned verbatim
+// in core/cat/testdata/parser-corpus.golden, and had to survive this change
+// byte for byte; the four-digit ones are their counterparts.
+// TestParseEXAddress_RefusalTextNamesTheFormsWidthInWords pins all four.
+//
+// A dialect with no declared form refuses every field, and says so: it has
+// no address width, so there is no shape to check. That branch is
+// reachable only from the zero Dialect (V12 refuses a formless config), and
+// the refusal still names the address, which is what
+// TestEveryDialect_EXAnswerBoundIsWellOrdered requires of every
+// inventory-less receiver.
 func (d Dialect) ParseEXAddress(wire string) (EXAddress, error) {
-	if len(wire) != 6 {
-		return EXAddress{}, newParseError([]byte(wire), "EX address must be exactly six digits")
-	}
-	for i := 0; i < 6; i++ {
-		if wire[i] < '0' || wire[i] > '9' {
+	switch d.exAddrForm {
+	case EXAddressTriple:
+		if len(wire) != 6 {
+			return EXAddress{}, newParseError([]byte(wire), "EX address must be exactly six digits")
+		}
+		if !allASCIIDigits(wire) {
 			return EXAddress{}, newParseError([]byte(wire), "EX address must be six ASCII digits")
 		}
+		return d.NewEXAddress(twoDigitsAt(wire, 0), twoDigitsAt(wire, 2), twoDigitsAt(wire, 4))
+	case EXAddressPair:
+		if len(wire) != 4 {
+			return EXAddress{}, newParseError([]byte(wire), "EX address must be exactly four digits")
+		}
+		if !allASCIIDigits(wire) {
+			return EXAddress{}, newParseError([]byte(wire), "EX address must be four ASCII digits")
+		}
+		// P3 is not on the wire, and V12 has already required every member
+		// of a Pair inventory to have P3 == 0, so 0 is the only value the
+		// lookup below can match — not a default standing in for an absent
+		// datum.
+		return d.NewEXAddress(twoDigitsAt(wire, 0), twoDigitsAt(wire, 2), 0)
+	default:
+		return EXAddress{}, newParseError([]byte(wire), "EX address: this dialect declares no EXAddressForm, so it has no address field")
 	}
-	p1 := int(wire[0]-'0')*10 + int(wire[1]-'0')
-	p2 := int(wire[2]-'0')*10 + int(wire[3]-'0')
-	p3 := int(wire[4]-'0')*10 + int(wire[5]-'0')
-	return d.NewEXAddress(p1, p2, p3)
+}
+
+// allASCIIDigits reports whether every byte of s is '0'..'9'.
+func allASCIIDigits(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// twoDigitsAt reads the two-digit decimal component at offset i. Callers
+// have already established that s is all digits and long enough.
+func twoDigitsAt(s string, i int) int {
+	return int(s[i]-'0')*10 + int(s[i+1]-'0')
 }

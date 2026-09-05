@@ -18,7 +18,16 @@
 	import { tick } from 'svelte'
 	import { appState } from './state/app.svelte.js'
 	import { updateChannel, updateChannels } from './bridge/bindings.js'
-	import { columnsFor, isCellEditable, displayValue, newChannelData, cloneData } from './grid/columns.js'
+	import {
+		columnsFor,
+		isCellEditable,
+		displayValue,
+		newChannelData,
+		cloneData,
+		parsePasteCell,
+		tierColumnFor,
+		toneDisplay,
+	} from './grid/columns.js'
 	import { hzToMHz, mhzToHz } from './grid/freq.js'
 	import { initialFocus, moveFocus, clampFocus } from './grid/nav.js'
 	import { parseBlock, mapPasteToChannels } from './grid/paste.js'
@@ -233,17 +242,160 @@
 		}
 	}
 
+	// --- tier columns: which editor each KIND opens -----------------------
+	//
+	// The seventeen tier-added columns (grid/columns.js's TIER_COLUMNS) had
+	// no editor at all until this task: a double-click opened the select
+	// below with no options in it and cancelled on blur, so paste and CSV
+	// import were the only routes to answering such a cell. The editor is
+	// chosen by the column's KIND, and each kind reuses a path that already
+	// existed rather than growing a new one:
+	//   freq / int / text → the free-text editor, committed through the
+	//     PASTE parser (grid/columns.js's parsePasteCell) so an edit and a
+	//     paste of the same text produce the identical field object.
+	//   tone → the same UISpec-served tone list the CTCSS Tone column
+	//     uses, WHEN the radio serves one — falling through to the same
+	//     free-text editor the seven unserved vocabularies below use when
+	//     that list is empty (tierTextColumn), which fix round 2 (MED-A)
+	//     found true of every radio that renders this column today: every
+	//     registered Icom driver declares CTCSSTones nil and a numeric
+	//     range instead, so GetUISpec's own Tones list arrives empty.
+	//   bool → a three-way select ({— not set, On, Off}) while the cell is
+	//     unanswered, then the one-keystroke flip Tag display uses once it
+	//     is Known — see isToggleColumn for why the FIRST answer is CHOSEN
+	//     rather than manufactured (fix round 1, MED-2).
+	//
+	// NO SELECT FOR THE TEXT KINDS (duplex, tone_mode, dtcs_polarity,
+	// filter, tuning_step, preamp, antenna), deliberately, and the reason
+	// is a GAP rather than an absence: each of the seven has a declared
+	// per-radio vocabulary in core/spec/capabilities.go (DuplexOptions,
+	// ToneModes, DTCSPolarities, Filters, TuningSteps, PreampOptions,
+	// AntennaOptions), but GetUISpec serves NONE of them to the frontend —
+	// app/types.go's UISpecView carries only Modes, ShiftOptions,
+	// CTCSSStateOptions and Tones. So a pick-list here could only offer a
+	// vocabulary this file invented, which is exactly what columns.js's own
+	// header forbids. Free text passes the entry to Go unjudged, precisely
+	// as a paste of the same string does, and Go's Validate answers it.
+	// Serving those seven lists is the change that would earn a select
+	// here; until one is served, this stays free text.
+
+	/** The TierColumn whose editor is the free-text one — the freq, int and
+	 * text kinds, PLUS the tone kind when the UISpec serves no tone list
+	 * to pick from (fix round 2, MED-A): every Icom driver today declares
+	 * `CTCSSTones: nil` and a numeric range instead, so `Tones` reaches
+	 * here as `[]`, and a select built from it would offer nothing to
+	 * keep or choose for a Known cell. That is the same gap the file
+	 * header above describes for the seven unserved vocabularies, and the
+	 * same answer: free text, parsed by the same paste parser, when the
+	 * backend serves no list. null for a non-tier column, for a tone
+	 * column when a list IS served (the select stays, and shows the
+	 * current value selected), and for the bool kind, which has its own
+	 * path above.
+	 * @param {ReturnType<typeof columnsFor>[number]} column */
+	function tierTextColumn(column) {
+		const tier = tierColumnFor(column)
+		if (!tier || tier.kind === 'bool') return null
+		if (tier.kind === 'tone' && (appState.uiSpec?.Tones?.length ?? 0) > 0) return null
+		return tier
+	}
+
+	/** Columns a single keystroke TOGGLES rather than opening an editor
+	 * for: Tag display, Scan skip and a tier column of the bool kind whose
+	 * cell is ALREADY Known.
+	 *
+	 * The Known condition is the whole of the difference between flipping a
+	 * value and inventing one, and it applies to the tier kind alone. Tag
+	 * display's unanswered half is toggled too, because its Unknown BLOCKS
+	 * the channel at plan time ("tag display unknown — set On or Off before
+	 * sending", core/codeplug/diff.go) — the toggle is how the user answers
+	 * a question the app has already put to them. A tier bool's unanswered
+	 * cell blocks nothing and is never sent (that file's touchedFields adds
+	 * a tier field only where its state is Known), so a keystroke that
+	 * committed Off there would turn "this codeplug makes no claim" into a
+	 * frame the radio receives, with no erase for a tier field and no undo
+	 * to reach back through. Such a cell opens the three-way select instead
+	 * (openEditor). Pinned by "an unanswered bool-kind cell opens a
+	 * three-way select" and "a Known bool-kind cell still flips in one
+	 * keystroke".
+	 * @param {ReturnType<typeof columnsFor>[number]} column
+	 * @param {ChannelData | null} data */
+	function isToggleColumn(column, data) {
+		if (column.id === 'tagDisplay' || column.id === 'skip') return true
+		const tier = tierColumnFor(column)
+		if (tier?.kind !== 'bool') return false
+		return tierField(tier, data)?.state === 'known'
+	}
+
+	/** Columns SPACE activates, as distinct from the ones it toggles: every
+	 * column above, plus a tier bool that is NOT yet Known — Space opens
+	 * that one's select rather than committing anything, and swallowing the
+	 * key is what stops the page scrolling underneath the editor.
+	 * @param {ReturnType<typeof columnsFor>[number]} column */
+	function activatesOnSpace(column) {
+		return column.id === 'tagDisplay' || column.id === 'skip' || tierColumnFor(column)?.kind === 'bool'
+	}
+
+	/** The {state, value} object a tier column edits, or undefined.
+	 * @param {{key: string}} tier @param {ChannelData | null} data */
+	function tierField(tier, data) {
+		return data ? /** @type {Record<string, any>} */ (data)[tier.key] : undefined
+	}
+
+	/** The text a tier editor OPENS with: the value the cell already holds,
+	 * in the same spelling parsePasteCell reads back, so committing an
+	 * untouched cell is the no-op the unchanged-commit skip expects. A cell
+	 * with no Known value opens EMPTY — never the em dash displayValue
+	 * renders for it, which is a "no claim made" mark and not a value
+	 * anyone could edit.
+	 *
+	 * A KNOWN field with no `value` key is Known ZERO, and opens on zero:
+	 * FieldState.Value is `json:"value,omitempty"`
+	 * (core/codeplug/fieldstate.go), so Go drops the key for every zero it
+	 * sends, and an attenuator answered 0 dB or an offset answered 0 Hz
+	 * arrives as {"state":"known"} alone. Opening such a cell EMPTY would
+	 * make it unre-committable, an emptied editor being the no-op below —
+	 * pinned by the two "a Known ZERO opens the … editor on zero" tests, and
+	 * displayValue normalises the same way. (fix round 2, LOW-C: the
+	 * fallback triggers on an OMITTED `value` key only, not on any
+	 * non-number — that shape is not reachable from Go, and stringifying
+	 * one it were would be a lie about a real answer.)
+	 *
+	 * A TONE reaches this function only when tierTextColumn has already
+	 * decided the UISpec serves no tone list (fix round 2, MED-A): its
+	 * text is the identical spelling displayValue renders for the same
+	 * field — toneDisplay's own table-or-arithmetic answer — so committing
+	 * it untouched round-trips through parseTierCell's tone case exactly
+	 * as the freq/int kinds do.
+	 * @param {{key: string, kind: string}} tier @param {ChannelData | null} data */
+	function tierEditText(tier, data) {
+		const f = tierField(tier, data)
+		if (f?.state !== 'known') return ''
+		if (tier.kind === 'freq') return hzToMHz(f.value === undefined ? 0 : f.value)
+		if (tier.kind === 'int') return String(f.value === undefined ? 0 : f.value)
+		if (tier.kind === 'tone') {
+			const spec = appState.uiSpec
+			// Reached only when tierTextColumn has already found the spec's
+			// Tones list empty, so a spec DOES exist here (openEditor's own
+			// guard) — the narrowing is for the type checker, not a real case.
+			if (typeof f.value !== 'number' || !spec) return ''
+			return toneDisplay(f.value, spec)
+		}
+		return f.value == null ? '' : String(f.value)
+	}
+
 	/** @param {number} rowIdx @param {number} colIdx @param {string | null} seed */
 	function openEditor(rowIdx, colIdx, seed = null) {
 		if (bankLocked || !appState.uiSpec) return
 		const column = columns[colIdx]
 		const data = dataAt(rowIdx)
 		if (!isCellEditable(column, data)) return
-		if (column.id === 'tagDisplay' || column.id === 'skip') {
+		if (isToggleColumn(column, data)) {
 			toggleCell(rowIdx, column)
 			return
 		}
-		if (column.id === 'freq') textDraft = seed ?? (data ? hzToMHz(data.freq_hz) : '')
+		const tierText = tierTextColumn(column)
+		if (tierText) textDraft = seed ?? tierEditText(tierText, data)
+		else if (column.id === 'freq') textDraft = seed ?? (data ? hzToMHz(data.freq_hz) : '')
 		else if (column.id === 'tag') textDraft = seed ?? data?.tag ?? ''
 		else if (column.id === 'clar') {
 			clarDraft = { hz: seed ?? String(data?.clar_hz ?? 0), rx: data?.rx_clar ?? false, tx: data?.tx_clar ?? false }
@@ -327,7 +479,53 @@
 		submitEdit(sv.Slot, (fresh) => ({ ...cloneData(fresh ?? data), tag: textDraft }))
 	}
 
-	/** Commit a select editor (Mode/Shift/CTCSS/Tone).
+	/** Commit a tier column's free-text editor (the freq, int and text
+	 * kinds) THROUGH THE PASTE PARSER: parsePasteCell is the one place a
+	 * typed string becomes a tier field, so an edit and a paste of the same
+	 * text cannot diverge — pinned by "a text-kind cell is FREE TEXT",
+	 * which compares this commit's field against parsePasteCell's own
+	 * answer for the same string.
+	 *
+	 * An unreadable entry is REFUSED exactly as the Frequency editor
+	 * refuses one: the parser's own reason as an alert, and no commit — the
+	 * cell keeps whatever state it had. An emptied editor is the same
+	 * no-op the Frequency editor makes of one; there is no route back to
+	 * unanswered here, and inventing an "erase" for a tier field is out of
+	 * scope for this task.
+	 * @param {number} rowIdx @param {number} colIdx */
+	function commitTierTextEditor(rowIdx, colIdx) {
+		if (!editing) return
+		const column = columns[colIdx]
+		const tier = tierTextColumn(column)
+		const sv = slots[rowIdx]
+		const data = dataAt(rowIdx)
+		const spec = appState.uiSpec
+		if (!sv || !data || !tier || !spec) return cancelEditor()
+
+		const text = textDraft.trim()
+		if (text === '') return cancelEditor()
+		const parsed = parsePasteCell(column, text, spec)
+		if (!parsed.ok) {
+			appState.pushAlert(`${parsed.reason} — the edit was not applied`)
+			return cancelEditor()
+		}
+		const next = /** @type {Record<string, any>} */ (parsed.patch)[tier.key]
+		const current = tierField(tier, data)
+		// A Known field with no `value` key is Known ZERO on the numeric
+		// kinds — the same normalisation tierEditText opens the editor
+		// with (fix round 1, MED-1) — so an untouched commit of such a
+		// cell must compare against the SAME zero, or this skip misses and
+		// sends a redundant UpdateChannel that marks the working copy
+		// dirty for nothing (app/codeplug.go's applyEditsLocked sets dirty
+		// unconditionally). Fix round 2, MED-3.
+		const currentValue =
+			current?.value === undefined && (tier.kind === 'freq' || tier.kind === 'int') ? 0 : current?.value
+		if (current?.state === 'known' && currentValue === next.value) return cancelEditor() // unchanged
+		submitEdit(sv.Slot, (fresh) => ({ ...cloneData(fresh ?? data), [tier.key]: next }))
+	}
+
+	/** Commit a select editor (Mode/Shift/CTCSS/Tone, and a tier column of
+	 * the tone or bool kind).
 	 * @param {number} rowIdx @param {number} colIdx @param {string} value */
 	function commitSelectEditor(rowIdx, colIdx, value) {
 		if (!editing) return
@@ -335,6 +533,44 @@
 		const sv = slots[rowIdx]
 		const data = dataAt(rowIdx)
 		if (!sv || !data) return cancelEditor()
+		const tier = tierColumnFor(column)
+		if (tier?.kind === 'tone') {
+			// '' is the head-of-list placeholder an UNANSWERED tone cell
+			// opens on (see the markup): committing it answers nothing, so
+			// blurring away from an untouched cell cannot manufacture
+			// whichever tone happens to be first in the radio's own list.
+			// The pre-tier Tone column needs no such entry — it is editable
+			// only from 'known', so it always opens on a real value.
+			if (value === '') return cancelEditor()
+			const decihertz = Number(value)
+			const current = tierField(tier, data)
+			if (current?.state === 'known' && current.value === decihertz) return cancelEditor()
+			submitEdit(sv.Slot, (fresh) => ({
+				...cloneData(fresh ?? data),
+				[tier.key]: { state: 'known', value: decihertz },
+			}))
+			return
+		}
+		if (tier?.kind === 'bool') {
+			// The select an UNANSWERED tier bool opens (see the markup and
+			// toggleCell's comment): its head entry is the same '' the tone
+			// kind uses, so blurring away without choosing answers nothing.
+			// The two real options are the paste parser's own spellings, and
+			// the field this builds is the object parseTierCell's bool case
+			// builds for them — pinned by "choosing Off from that select
+			// commits the same field a paste of "off" produces", which
+			// compares against parsePasteCell's own answer rather than
+			// restating it.
+			if (value === '') return cancelEditor()
+			const next = value === 'on'
+			const current = tierField(tier, data)
+			if (current?.state === 'known' && current.value === next) return cancelEditor()
+			submitEdit(sv.Slot, (fresh) => ({
+				...cloneData(fresh ?? data),
+				[tier.key]: { state: 'known', value: next },
+			}))
+			return
+		}
 		switch (column.id) {
 			case 'mode':
 				if (value === data.mode) return cancelEditor()
@@ -414,11 +650,41 @@
 	 * such flag, so there is no question outstanding and any value would
 	 * be a fiction. isCellEditable refuses it before openEditor reaches
 	 * here; these guards are the second line of that defence.
+	 *
+	 * A TIER COLUMN OF THE BOOL KIND (data_mode, tuning_step_enabled,
+	 * ip_plus) FLIPS ONLY FROM KNOWN, and takes NEITHER of the two rules
+	 * above whole. Such a column renders only where the bank's capabilities
+	 * say the radio HAS the field, so an unresolved value there IS a
+	 * question the user may legitimately answer — that much is tag
+	 * display's half, and isCellEditable admits the cell for it. But it is
+	 * not a question the app has FORCED: a tier field's Unknown blocks
+	 * nothing at plan time and is never sent, because touchedFields adds a
+	 * tier field only where its state is Known (core/codeplug/diff.go), so
+	 * unanswered means "leave the radio's own setting alone" and a
+	 * manufactured Off would mean "write Off to the radio". Nothing here
+	 * makes that value mandatory the way tag display's wire flag does, and
+	 * there is no erase for a tier field and no undo in this frontend to
+	 * reach back through it. So the FIRST answer is CHOSEN, from the
+	 * three-way select openEditor falls through to; only afterwards is
+	 * there a value to flip. The guard below is the second line of that
+	 * defence, as the isCellEditable call beside it is for 'unavailable':
+	 * neither restates a rule, both re-ASK one.
 	 * @param {number} rowIdx @param {ReturnType<typeof columnsFor>[number]} column */
 	function toggleCell(rowIdx, column) {
 		const sv = slots[rowIdx]
 		const data = dataAt(rowIdx)
 		if (!sv || !data) return
+		const tier = tierColumnFor(column)
+		if (tier?.kind === 'bool') {
+			if (!isCellEditable(column, data)) return
+			const current = tierField(tier, data)
+			if (current?.state !== 'known') return // unanswered: the select answers it, not this
+			submitEdit(sv.Slot, (fresh) => ({
+				...cloneData(fresh ?? data),
+				[tier.key]: { state: 'known', value: !current.value },
+			}))
+			return
+		}
 		const tagDisplayState = data.tag_display?.state
 		if (column.id === 'tagDisplay' && (tagDisplayState === 'known' || tagDisplayState === 'unknown')) {
 			// Unknown's first press lands on false; Known flips.
@@ -682,9 +948,17 @@
 
 	// --- grid keyboard handling -------------------------------------------
 
-	/** Columns whose editor is a text input (typing a character opens it
-	 * prefilled). */
+	/** Pre-tier columns whose editor is a text input (typing a character
+	 * opens it prefilled). */
 	const TEXT_COLUMNS = new Set(['freq', 'tag', 'clar'])
+
+	/** Whether typing a printable character opens this column's editor
+	 * seeded with it: the three above, and every tier column that takes the
+	 * free-text editor.
+	 * @param {ReturnType<typeof columnsFor>[number]} column */
+	function opensOnTyping(column) {
+		return TEXT_COLUMNS.has(column.id) || tierTextColumn(column) !== null
+	}
 
 	/** @param {KeyboardEvent} e @param {number} rowIdx @param {number} colIdx */
 	function onCellKeydown(e, rowIdx, colIdx) {
@@ -727,12 +1001,12 @@
 			return
 		}
 		const column = columns[colIdx]
-		if (e.key === 'Enter' || (e.key === ' ' && (column.id === 'tagDisplay' || column.id === 'skip'))) {
+		if (e.key === 'Enter' || (e.key === ' ' && activatesOnSpace(column))) {
 			e.preventDefault()
 			openEditor(rowIdx, colIdx)
 			return
 		}
-		if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && TEXT_COLUMNS.has(column.id)) {
+		if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && opensOnTyping(column)) {
 			e.preventDefault()
 			openEditor(rowIdx, colIdx, e.key)
 		}
@@ -901,6 +1175,8 @@
 								{@const issues = cellIssues(sv.Slot, column)}
 								{@const cellSeverity = severityClass(issues)}
 								{@const preserved = cellPreserved(column, data)}
+								{@const tier = tierColumnFor(column)}
+								{@const tierText = tierTextColumn(column)}
 								<td
 									class={`col-${column.id}`}
 									class:cell-issue-error={cellSeverity === 'error'}
@@ -934,6 +1210,25 @@
 												{#if column.id === 'tag'}
 													<span class="byte-counter" class:over={tagBytes > tagMaxBytes}>{tagBytes}/{tagMaxBytes}</span>
 												{/if}
+											</span>
+										{:else if tierText}
+											<!-- A tier column of the freq, int or text kind: the same
+											     plain text editor Frequency uses, committed through the
+											     PASTE parser (commitTierTextEditor). Free text is
+											     deliberate for the text kinds — see the "which editor
+											     each KIND opens" comment above for the seven
+											     vocabularies core/spec declares and GetUISpec does not
+											     serve. -->
+											<span class="editor-wrap">
+												<input
+													type="text"
+													class="cell-editor"
+													aria-label={`${column.label}, ${sv.Display}`}
+													bind:value={textDraft}
+													use:autofocus={{ selectAll: editing.seed === null }}
+													onkeydown={(e) => onEditorKeydown(e, () => commitTierTextEditor(r, c))}
+													onblur={() => commitTierTextEditor(r, c)}
+												/>
 											</span>
 										{:else if column.id === 'clar'}
 											<span class="editor-wrap clar-editor" onfocusout={(e) => onClarFocusOut(e, r)}>
@@ -979,6 +1274,34 @@
 													{#each appState.uiSpec.Tones ?? [] as tone (tone.Decihertz)}
 														<option value={String(tone.Decihertz)} selected={data?.ctcss_tone?.state === 'known' && tone.Decihertz === data.ctcss_tone.value}>{tone.Display}</option>
 													{/each}
+												{:else if tier && tier.kind === 'tone'}
+													{@const current = tierField(tier, data)}
+													{#if current?.state !== 'known'}
+														<!-- The head-of-list "nothing chosen yet" entry, shown
+														     only while the cell is unanswered: without it, opening
+														     such a cell and blurring away would commit whichever
+														     tone the radio happens to list first.
+														     commitSelectEditor makes a no-op of it. Its LABEL is
+														     words rather than the bare em dash the cell shows,
+														     because an option's text is its accessible name and a
+														     screen reader says nothing useful for a lone dash; it
+														     is plain UI chrome of the same sort as the "empty"
+														     affordance below, not radio vocabulary. -->
+														<option value="" selected>— not set</option>
+													{/if}
+													{#each appState.uiSpec.Tones ?? [] as tone (tone.Decihertz)}
+														<option value={String(tone.Decihertz)} selected={current?.state === 'known' && tone.Decihertz === current.value}>{tone.Display}</option>
+													{/each}
+												{:else if tier && tier.kind === 'bool'}
+													<!-- A tier bool the user has NOT yet answered: the only way
+													     this select is reached, since isToggleColumn sends a
+													     Known one straight to the one-keystroke flip. So the
+													     head entry is always the selected one, and the two
+													     options carry the paste parser's own spellings (see
+													     commitSelectEditor's bool branch). -->
+													<option value="" selected>— not set</option>
+													<option value="on">On</option>
+													<option value="off">Off</option>
 												{/if}
 											</select>
 										{/if}

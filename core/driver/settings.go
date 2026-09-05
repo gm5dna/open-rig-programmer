@@ -15,10 +15,12 @@ import (
 //
 // Generic layers (task 33's MenuSnapshot, and everything above it) walk
 // this tree without ever importing a driver's protocol package: the
-// FT-710's cat.EXAddress never appears here, only the ID string its Wire()
-// form happens to equal (core/driver/ft710/settings.go mints item IDs as
-// the 6-digit wire address, but nothing in this package or its callers may
-// assume that shape belongs to every future driver).
+// FT-710's cat.EXAddress never appears here, only the ID string its
+// dialect-rendered wire form (cat.Dialect.EXWire) happens to equal
+// (core/driver/ft710/settings.go mints item IDs as the 6-digit wire
+// address, but nothing in this package or its callers may assume that
+// shape belongs to every future driver — a Pair-form dialect renders four
+// digits, not six).
 type SettingsDescriptor struct {
 	// Version identifies the SHAPE of this descriptor, e.g.
 	// "ft710-ex@1" — minted by the driver that built it, carried

@@ -339,8 +339,20 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 // inside the bounded walk's range and was merely empty when the session
 // opened. For a slot ABOVE that range the honest answer is the BOUND
 // itself, which is what the text now gives.
+//
+// THE BOUND'S OWN WORDING WAS LATER FOUND FALSE (side lanes fix round 1,
+// review icom-minors-review-opus.md MEDIUM-1): "this build offers no
+// setting that widens the walk" was untrue in the same way the IC-905's
+// and IC-R8600's identical over-claim was — this package DOES export
+// WithFullInventoryWalk (ic705.go:64), and internal/wiring's row simply
+// does not pass it. That is not the removed wording reappearing as a
+// remedy: naming the option while saying in the same clause that no
+// registered composition passes it states the bound rather than offering
+// an unreachable fix, which is exactly what the rule above already asks
+// for. The text now matches the R8600's and 905's wording for the same
+// bound.
 func occupiedSurpriseReason(slot string) string {
-	return fmt.Sprintf("slot %s holds a record this session's inventory never saw, and writing here would overwrite a channel nobody has looked at: this session's walk covered display groups G01-G%02d, so re-open the session to run discovery again — a slot outside that range stays unlisted, and this build offers no setting that widens the walk. Reading the slot does not help: ReadChannel never adds one to the inventory", slot, defaultWalkGroups)
+	return fmt.Sprintf("slot %s holds a record this session's inventory never saw, and writing here would overwrite a channel nobody has looked at: this session's walk covered display groups G01-G%02d, so re-open the session to run discovery again — a slot outside that range stays unlisted, and nothing on this build's command line or in its window widens it (the driver's own WithFullInventoryWalk is a Go-level option no registered composition passes). Reading the slot does not help: ReadChannel never adds one to the inventory", slot, defaultWalkGroups)
 }
 
 // requestedFields names every field this channel ASKS this radio to store,

@@ -21,7 +21,7 @@ package cat
 // command family whose answer frames share a short prefix across MANY
 // distinct addresses — EX (MENU) is the case in point, where every one of
 // the 296 Table 2 addresses answers with a frame starting "EX" — prefix
-// MUST include the full address, e.g. "EX"+addr.Wire(), never the bare
+// MUST include the full address, e.g. "EX"+d.EXWire(addr), never the bare
 // command name "EX". The returned matcher only compares
 // frame[:len(prefix)]; a bare "EX" would let it correlate ANY EX answer —
 // a different address's own reply still in flight, or an unsolicited
