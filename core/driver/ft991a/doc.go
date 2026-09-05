@@ -129,8 +129,8 @@
 // THE MUTEX IS STILL EARNED, and by a different property. transport.Engine
 // serialises each individual exchange, so one MT read needs no lock of its
 // own — but opMu guards a whole DRIVER OPERATION (spec erratum S-E4, matrix
-// M-E2), and this session has more than one kind: a read, a write
-// (write.go) and a settings read (task 12) must not interleave their frames. The
+// M-E2), and this session has more than one kind: a read, a write (write.go)
+// and a settings read (task 12) must not interleave their frames. The
 // concurrency pin is that two racing ReadChannels cannot interleave two MT
 // frames. IT IS NOT HELD ACROSS WRITE-THEN-VERIFY: that pair belongs to
 // core/clone, as the driver interface assigns it, and holding a driver lock
@@ -249,7 +249,7 @@
 //
 // # The ASSUMED register
 //
-// TEN ENTRIES, covering the behaviours this DRIVER encodes that are NOT
+// ELEVEN ENTRIES, covering the behaviours this DRIVER encodes that are NOT
 // FT-991A-manual facts. Each is listed here once, marked ASSUMED at the
 // point of use, and paired with the ONE Stage R or Stage W capture that
 // lifts it. The captures are individual on purpose: one FT-991A session does
@@ -257,7 +257,7 @@
 // frames actually speak to, and an entry whose capture was not taken stays
 // here afterwards.
 //
-// THAT RULE IS WHY THERE ARE TEN AND NOT EIGHT. Entries 4, 5 and 6 were one
+// THAT RULE IS WHY THERE ARE ELEVEN AND NOT NINE. Entries 4, 5 and 6 were one
 // bundled "TONE-NUMBER, DCS-CODE AND SCAN-SKIP UNREACHABILITY" until matrix
 // erratum M-E10, whose whole argument is this paragraph applied to itself:
 // the bundle named three lifting experiments, so under one entry to ONE
@@ -287,15 +287,17 @@
 // eleven live dependence sites:
 //
 //   - MTPolicy.TagFill = ' ' — caps.go's TagLen (a width is evidenced, a
-//     fill is not) and read.go, where the answer's tag field is trimmed
-//     back off.
+//     fill is not), read.go, where the answer's tag field is trimmed back
+//     off, and write.go's buildWriteCommand, whose padded tag bytes ARE
+//     the fill.
 //   - THE COMBINED MT ANSWER'S EXACT LENGTH, 41 — read.go's mtSpec, which
 //     derives the length from the dialect precisely because the exactness
 //     is that entry's assumption and its recorded contingency is a 30..41
 //     WINDOW.
 //   - SlotSpace.NoneWire = "000" — read.go's BuildMTRead refusal site,
 //     where the answer-only none form is grammatical per ParseSlot and
-//     never a legal read target.
+//     never a legal read target, and write.go's bankFor, which refuses
+//     the same none form on the write side.
 //   - THE cat.ModeUnset MEMBER OF THE MODE TABLE — caps.go's modeNames,
 //     which excludes it, and read.go, which maps it through faithfully when
 //     a radio sends it.
@@ -331,23 +333,26 @@
 //     its own menu.
 //   - THE ACKNOWLEDGEMENT CONVENTIONS — read.go's reading of "?;" as a
 //     rejection at all, and write.go's mtSetSpec, whose fire-and-forget
-//     class reads silence as acceptance and a "?;" as the rejection. This manual describes no ACK/NAK vocabulary beyond the
-//     "?;" every Yaesu CAT manual in this repository shows for a rejected
-//     command, and it never says whether an accepted Set answers at all.
+//     class reads silence as acceptance and a "?;" as the rejection. This
+//     manual describes no ACK/NAK vocabulary beyond the "?;" every Yaesu CAT
+//     manual in this repository shows for a rejected command, and it never
+//     says whether an accepted Set answers at all.
 //
-// NO EQUIVALENT "ALL TEN ARE REACHED" CLAIM IS MADE FOR THE TEN BELOW, and
-// CONTROL-LINE POLICY is why: it has no dependence site in this package at
-// all. core/transport.OpenSerial drives RTS and DTR for every model, this
+// NO EQUIVALENT "ALL ELEVEN ARE REACHED" CLAIM IS MADE FOR THE ELEVEN BELOW,
+// and CONTROL-LINE POLICY is why: it has no dependence site in this package
+// at all. core/transport.OpenSerial drives RTS and DTR for every model, this
 // driver has no code for either, and the entry is here because the
 // assumption is made ON THIS RADIO'S BEHALF rather than because this package
 // encodes it. Disclosed rather than quietly excused, so that a reader
-// counting citations against entries finds the shortfall accounted for.
+// counting citations against entries finds the shortfall accounted for. The
+// new entry 11 IS reached (write.go's WriteChannel and buildWriteCommand),
+// so the shortfall stays exactly one.
 //
 // Correcting a dialect entry is a change in core/cat/ft991a; correcting one
-// of the ten below is a change here.
+// of the eleven below is a change here.
 // NEITHER REGISTER MAY ABSORB THE OTHER, even though this milestone shares
 // their content: the eleven are facts about the dialect and the codec, and
-// these ten are facts about this driver's choreography and its capability
+// these eleven are facts about this driver's choreography and its capability
 // values.
 //
 //  1. CONTROL-LINE POLICY: that driving RTS and DTR low unconditionally is
@@ -548,4 +553,15 @@
 //     STAGE R LIFTS IT WITH: set a channel's DCS code from the front panel,
 //     read it back on the panel, write that channel through this programme
 //     with the same P8 state, then read the code on the panel again.
+//
+//  11. A SINGLE COMBINED MT SET SUFFICES TO CREATE OR OVERWRITE A CHANNEL:
+//     that the radio accepts one 41-byte MT Set as a complete channel
+//     definition (no MW, no second frame). write.go's WriteChannel and
+//     buildWriteCommand are the ONE site that builds and sends this frame;
+//     matrix erratum M-E18 records that §3.6's status line labelled this
+//     ASSUMED with no register home until this fix round, the FT-891
+//     registering the identical claim.
+//     STAGE R LIFTS IT WITH: One MT Set to a known-empty slot on a real
+//     FT-991A, then an MT read of it and a front-panel check of the same
+//     channel.
 package ft991a

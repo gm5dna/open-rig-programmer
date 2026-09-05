@@ -44,13 +44,14 @@ var sharedRegisterEntryNames = []string{
 	"THE ACKNOWLEDGEMENT CONVENTIONS",
 }
 
-// driverRegisterEntryNames quotes the TEN entries this driver adds beside
+// driverRegisterEntryNames quotes the ELEVEN entries this driver adds beside
 // the shared eleven, in doc.go's order — the matrix's §4b list, which the
 // spec's own six-item reminder does not enumerate (matrix erratum M-E1: five
 // of that list's six are already on the shared register, only the MT "?;"
-// entry is new, and this matrix reaches ten).
+// entry is new, and this matrix reaches eleven, M-E18's SINGLE COMBINED MT
+// SET entry the last of them).
 //
-// THREE OF THE TEN WERE ONE ENTRY UNTIL matrix erratum M-E10. A single
+// THREE OF THE ELEVEN WERE ONE ENTRY UNTIL matrix erratum M-E10. A single
 // "TONE-NUMBER, DCS-CODE AND SCAN-SKIP UNREACHABILITY" bundled three
 // independent claims under one name against its own three separate lifting
 // experiments, and the register's own rule — one entry, ONE capture — is what
@@ -75,6 +76,7 @@ var driverRegisterEntryNames = []string{
 	"THE MODE NIBBLE'S DOMAIN",
 	"THE PRINTED-FIXED BYTES ARE ANSWERED AS PRINTED",
 	"A DCS-STATE CHANNEL'S CODE SURVIVES A REWRITE",
+	"A SINGLE COMBINED MT SET SUFFICES TO CREATE OR OVERWRITE A CHANNEL",
 }
 
 // registerSection returns the text of the "# The ASSUMED register" section of
@@ -184,7 +186,7 @@ func registerEntryOpensWith(entry, name string) bool {
 // space. Written out rather than regexp'd so the shape it accepts is the
 // shape gofmt produces and nothing wider.
 //
-// THE TWO SPACES ARE LOAD-BEARING AND A TEN-ENTRY LIST IS WHERE THAT BITES:
+// THE TWO SPACES ARE LOAD-BEARING AND AN ELEVEN-ENTRY LIST IS WHERE THAT BITES:
 // gofmt writes "//  10." with the same two-space marker indent as "//  1.",
 // and a hand-written "// 10." parses as neither an entry nor a continuation,
 // so the entry vanishes and its body is glued onto its predecessor. The
@@ -235,7 +237,7 @@ func TestSharedRegisterNamesMatchTheDialects(t *testing.T) {
 
 // TestDriverRegisterCarriesBothHalves holds THIS package's doc.go to both
 // lists: the shared eleven as a bullet list, in the dialect's order and by
-// its names, and this driver's own eight as a numbered list, each naming the
+// its names, and this driver's own eleven as a numbered list, each naming the
 // ONE capture that lifts it.
 //
 // The "STAGE R LIFTS IT WITH:" count is asserted rather than merely spot
@@ -277,7 +279,7 @@ func TestDriverRegisterCarriesBothHalves(t *testing.T) {
 	for _, want := range []string{
 		"CITE THESE ENTRIES BY NAME, NEVER BY POSITION",
 		"NEITHER REGISTER MAY ABSORB THE OTHER",
-		"TEN",
+		"ELEVEN",
 	} {
 		if !strings.Contains(section, want) {
 			t.Errorf("this driver's register no longer says %q", want)
