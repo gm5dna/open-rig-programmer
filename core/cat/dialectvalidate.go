@@ -38,16 +38,46 @@ const maxMTTagBytes = 64
 // maxSlotDecimal is the largest value a 3-digit numeric slot can express.
 const maxSlotDecimal = 999
 
-// maxEXComponent is the largest value an EXAddress component may hold.
+// maxEXComponent is the largest value an EXAddress component may hold
+// UNDER EXAddressTriple AND EXAddressPair, and — under EXAddressSingle —
+// the largest P2 and P3 may hold, which V12 separately requires to be zero.
 //
-// wireEXAddress renders each component with %02d, which is a MINIMUM
-// width, not an exact one: a component of 100 renders three digits and
-// produces a seven-byte address in a field the grammar fixes at six (or a
-// five-byte one in the four-digit field). The resulting frame is rejected
+// wireEXAddress renders each of those components with %02d, which is a
+// MINIMUM width, not an exact one: a component of 100 renders three digits
+// and produces a seven-byte address in a field the grammar fixes at six (or
+// a five-byte one in the four-digit field). The resulting frame is rejected
 // by the dialect's own gate and can never be reconstructed by its own
 // parser, because ParseEXAddress consumes exactly the declared width.
-// uint8 alone therefore does not constrain this enough.
+//
+// THE BOUND IS FORM-DEPENDENT, and this constant is only two thirds of it.
+// EXAddressSingle renders P1 with %03d into a three-digit field, so that
+// component's ceiling is maxEXComponentSingleP1 below. Both are applied by
+// V8 (validateEXItems), which selects between them on cfg.EXAddressForm.
+//
+// The type is NOT the bound. EXAddress's components were uint8 until the
+// FT-991A seam, and that paragraph used to end "uint8 alone therefore does
+// not constrain this enough" — true, but it invited the reading that the
+// type constrained it at all. It is uint16 now precisely so that the STATED
+// rule is the operative one: a P1 of 300 is representable, legal under
+// Single and refused under Triple by this constant, which is a disagreement
+// no uint8 field could express. TestValidateEXItems_ComponentBoundIsForm-
+// Dependent pins it.
 const maxEXComponent = 99
+
+// maxEXComponentSingleP1 is the largest P1 an EXAddressSingle dialect may
+// hold: the three-digit field's own capacity, 999.
+//
+// It is a SEPARATE constant rather than a number computed from a width,
+// because it is read beside maxEXComponent by the same rule and the two must
+// be legible together. wireEXAddress renders %03d under this form — again a
+// MINIMUM width — so a P1 of 1000 would produce a four-digit address in a
+// field the FT-991A's grammar fixes at three, built and gate-approved and
+// unparseable by this dialect's own ParseEXAddress.
+//
+// The FT-991A's chart stops at 153. The bound is the FIELD's, not the
+// chart's: membership is what refuses 154, and this rule exists for the
+// address the field could never carry at all.
+const maxEXComponentSingleP1 = 999
 
 // clarFieldMaxHz is the largest magnitude the 4-digit clarifier field can
 // carry, whatever a family's step size.
@@ -308,10 +338,22 @@ func pmsWireInRange(wire string, pairs int) bool {
 func validateEXItems(cfg DialectConfig) error {
 	seen := make(map[EXAddress]int, len(cfg.EXItems))
 	for i, it := range cfg.EXItems {
-		for _, c := range []struct {
+		for ci, c := range []struct {
 			name string
-			v    uint8
+			v    uint16
 		}{{"P1", it.Addr.P1}, {"P2", it.Addr.P2}, {"P3", it.Addr.P3}} {
+			// P1 under EXAddressSingle is the ONE component with a wider
+			// domain: its field is three digits, so its ceiling is
+			// maxEXComponentSingleP1 and its refusal is its own sentence.
+			// The Triple/Pair sentence below is SHIPPED TEXT and must not
+			// move by a byte, which is why the two are separate literals
+			// rather than one composed from whichever number is in force.
+			if ci == 0 && cfg.EXAddressForm == EXAddressSingle {
+				if int(c.v) > maxEXComponentSingleP1 {
+					return fmt.Errorf("cat: EXItems[%d].Addr.P1 is %d, want <= %d under %v — wireEXAddress renders %%03d under this form, a MINIMUM width, so a larger P1 overruns the three-digit address field this dialect's own ParseEXAddress reads back", i, c.v, maxEXComponentSingleP1, cfg.EXAddressForm)
+				}
+				continue
+			}
 			if int(c.v) > maxEXComponent {
 				return fmt.Errorf("cat: EXItems[%d].Addr.%s is %d, want <= %d — wireEXAddress renders %%02d, a MINIMUM width, so a larger component overruns the fixed-width address field this dialect's own ParseEXAddress reads back", i, c.name, c.v, maxEXComponent)
 			}
@@ -483,9 +525,13 @@ func validMWWriteKindByte(b byte) bool {
 //
 // The Pair clause is the other half of wireEXAddress's four-digit render:
 // that render drops P3, so a member carrying a non-zero one would lose it
-// from every frame silently. The refusal names the offending index AND the
-// address as the frame would have carried it, through the same renderer, so
-// a three-hundred-row inventory does not have to be searched by hand.
+// from every frame silently. The Single clause is the same rule one
+// component further down — that render drops P2 as well as P3 — and it is
+// the half of the FT-991A's chart shape this validator owns: the printed
+// menu number IS the whole address, so any other component names something
+// no frame can carry. The refusal names the offending index AND the address
+// as the frame would have carried it, through the same renderer, so a
+// hundred-and-fifty-row inventory does not have to be searched by hand.
 func validateEXAddressForm(cfg DialectConfig) error {
 	switch cfg.EXAddressForm {
 	case EXAddressTriple:
@@ -494,6 +540,13 @@ func validateEXAddressForm(cfg DialectConfig) error {
 		for i, it := range cfg.EXItems {
 			if it.Addr.P3 != 0 {
 				return fmt.Errorf("cat: EXItems[%d] (%s) has P3 %d under %v — the four-digit field renders P1 and P2 only, so a non-zero P3 would be dropped from every frame this dialect builds", i, wireEXAddress(cfg.EXAddressForm, it.Addr), it.Addr.P3, cfg.EXAddressForm)
+			}
+		}
+		return nil
+	case EXAddressSingle:
+		for i, it := range cfg.EXItems {
+			if it.Addr.P2 != 0 || it.Addr.P3 != 0 {
+				return fmt.Errorf("cat: EXItems[%d] (%s) has P2 %d and P3 %d under %v — the three-digit field renders P1 only, so a non-zero P2 or P3 would be dropped from every frame this dialect builds", i, wireEXAddress(cfg.EXAddressForm, it.Addr), it.Addr.P2, it.Addr.P3, cfg.EXAddressForm)
 			}
 		}
 		return nil

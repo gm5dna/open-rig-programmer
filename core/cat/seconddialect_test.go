@@ -52,6 +52,7 @@ func allTestDialects() []namedDialect {
 		{"combinedDialect", combinedDialect},
 		{"combinedPeerDialect", combinedPeerDialect},
 		{"pairDialect", pairDialect},
+		{"singleDialect", singleDialect},
 
 		// The FT-891 Stage 0 axes' disagreeing fixtures, appended: see the
 		// block at the end of this file for what each one varies and why a
