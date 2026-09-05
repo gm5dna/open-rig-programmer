@@ -250,6 +250,56 @@ func TestParseMRAnswer_TheEmptyWindowIsTheWholeRangeAndNotP5Alone(t *testing.T) 
 	})
 }
 
+// TestParseMRAnswer_TheEmptyWindowRequiresABlankP16 is the OTHER half of
+// 590:1492-1493's sentence, and until this pin only the first half was
+// enforced: "If the selected channel is empty, P4 ~ P15 will be 0 AND P16
+// WILL BE BLANK."
+//
+// A3 IS WHAT "BLANK" MEANS HERE — eight spaces — and it is ASSUMED: the book
+// says "blank" and defines it nowhere, so the register carries the reading
+// and L-HW-2b lifts it per row. This codec therefore states the assumption
+// and refuses what contradicts it, rather than tolerating any P16 under a
+// window it has already decided is empty. A frame with a zero window and a
+// live name is not a shape either book describes; returning it as
+// Empty = true WITH a name would hand a caller a channel that is empty and
+// named at once, and the name is exactly the field a driver would then write
+// back.
+//
+// BOTH ROWS ARE RUN. The window test is a property of the frame and is
+// applied on both (A4 leaves open whether a TS-480 answers an empty channel
+// at all, which is a question about the radio, not about this shape).
+func TestParseMRAnswer_TheEmptyWindowRequiresABlankP16(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		layout Layout
+	}{{"TS-590SG", layout590SG()}, {"TS-480", layout480()}} {
+		t.Run(tt.name, func(t *testing.T) {
+			// Codex's own frame: a valid-length answer whose P4-P15 are all
+			// zero and whose P16 spells a name.
+			for _, p16 := range []string{"ABCDEFGH", "       X", "X       ", "00000000"} {
+				f := emptyWindow()
+				f.p16 = p16
+				rec, err := tt.layout.ParseMRAnswer(f.frame(t))
+				if err == nil {
+					t.Errorf("ParseMRAnswer accepted an empty window whose P16 is %q: Empty = %v, Name = %q — the book prints P16 blank for an empty channel (590:1492-1493) and A3 reads blank as eight spaces", p16, rec.Empty, rec.Name)
+					continue
+				}
+				if !strings.Contains(err.Error(), "A3") {
+					t.Errorf("refusal for P16 %q reads %q, and it should cite A3, whose reading of \"blank\" it applies", p16, err)
+				}
+			}
+			// The positive control is the blank name itself, which
+			// TestParseMRAnswer_AnEmptyChannelIsNeverRefused also asserts:
+			// eight spaces are admitted and trim to the empty name.
+			if rec, err := tt.layout.ParseMRAnswer(emptyWindow().frame(t)); err != nil {
+				t.Errorf("ParseMRAnswer refused the empty channel of 590:1492-1493 with its P16 blank: %v", err)
+			} else if !rec.Empty || rec.Name != "" {
+				t.Errorf("the blank-named empty channel decoded as Empty = %v, Name = %q", rec.Empty, rec.Name)
+			}
+		})
+	}
+}
+
 // TestParseMRAnswer_RefusesAModeNibbleThisRowsLegendDoesNotName is the READ
 // direction of the per-layout MD legend, and it is why ParseMode is
 // membership against the receiver rather than a byte range (mode.go: "a
@@ -672,5 +722,20 @@ func TestRecordLengthError_CarriesABoundedCopyOfTheOffendingFrame(t *testing.T) 
 	}
 	if !strings.Contains(lengthErr.Error(), `input="AAA`) {
 		t.Errorf("Error() = %q, want the offending input rendered %%q-quoted", lengthErr)
+	}
+}
+
+// TestEmptyName_IsEightSpaces keeps emptyName honest against recNameLen: a
+// literal of spaces cannot be read at a glance, and one space too few would
+// make the empty-window P16 check refuse every genuinely blank name — the
+// whole-radio-read failure A18a's own comment exists to prevent.
+func TestEmptyName_IsEightSpaces(t *testing.T) {
+	if len(emptyName) != recNameLen {
+		t.Fatalf("emptyName is %d bytes, and P16 is %d (590:1576, 480:984)", len(emptyName), recNameLen)
+	}
+	for i := 0; i < len(emptyName); i++ {
+		if emptyName[i] != ' ' {
+			t.Errorf("emptyName byte %d is %q, want a space — A3 reads \"blank\" as spaces", i+1, emptyName[i])
+		}
 	}
 }
