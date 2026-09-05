@@ -665,7 +665,7 @@ func validWireString(s string) bool {
 // after the fact by whoever built it is not a gate.
 //
 // Validation is exhaustive rather than advisory. See dialectvalidate.go for
-// the fourteen rules and, for each, the concrete failure it prevents — three
+// the sixteen rules and, for each, the concrete failure it prevents — three
 // of them (the wire-byte domain on mode keys, on special slot forms, and on
 // the MT clear byte) exist specifically because a caller-built dialect
 // could otherwise put a byte no CAT reference documents inside a frame this

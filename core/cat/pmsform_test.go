@@ -316,6 +316,17 @@ func TestClassifySlot_TokenDialectsRefuseNumericPMS(t *testing.T) {
 // "exactly one" means for a switch, so the real content is the SECOND half:
 // the numeric fixture refuses every token form, and each token dialect
 // refuses every numeric form outside its own memory and 60m ranges.
+//
+// "THIS PACKAGE CAN SEE" IS HALF THE SPEC'S SENTENCE, and the other half is
+// discharged elsewhere: the spec asks for the property under EACH REGISTERED
+// dialect, and allTestDialects() reaches FT710 and this package's fixtures
+// but not ftdx10, ftdx101 or ft891, which import core/cat and so cannot be
+// imported back. Those three get the equivalent property from the
+// conformance suite's checkPMSSlotForm (core/cat/dialecttest), whose token
+// arm sweeps all of "000"-"999" asserting !IsPMS() and whose positive half
+// round-trips every pair their own PMSSlot builds. Between the two the
+// sentence holds for all five registered dialects; neither half states it
+// alone (Stage 0 close review, seat 1 LOW-7).
 func TestClassifierSweep_EveryWireFormHasExactlyOneKind(t *testing.T) {
 	for _, nd := range allTestDialects() {
 		t.Run(nd.name, func(t *testing.T) {

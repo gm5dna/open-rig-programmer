@@ -428,7 +428,10 @@ func TestValidate_CTCSSStateZeroValueSemanticsRejected(t *testing.T) {
 }
 
 // TestValidate_CTCSSStateSemanticsOutOfRange covers a Semantics value
-// outside the three declared ToneSemantics constants entirely.
+// outside the five declared ToneSemantics constants entirely. It said
+// "three" until S0.4 appended the two DCS members and the Stage 0 close
+// review found the count stale in the very test that exercises the widened
+// rule (seat 2, LOW-5).
 func TestValidate_CTCSSStateSemanticsOutOfRange(t *testing.T) {
 	c := validTestCapabilities()
 	c.CTCSSStates = []ToneState{
