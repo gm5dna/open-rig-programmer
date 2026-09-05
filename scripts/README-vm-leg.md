@@ -73,12 +73,16 @@ preamble"):
    `1.3.0`, no leading `v`, no `-rc.N` suffix).
    - Right-click `Open Rig Programmer.exe` → *Properties* → *Details*:
      record the Product version and File version shown (expected: the
-     numeric tag). If either is blank, that is a finding for the
-     write-up, not a failure of this leg — `.NET`'s own
-     `FileVersionInfo` reader returned empty for this build's
-     language-neutral version resource on the CI runner (release run
-     33950484060, 05/09/2026); `check-windows.sh` is the byte-level
-     gate that actually enforces this value.
+     numeric tag). Confirmed non-blank on the 05/09/2026 VM session
+     (File version 1.3.0.0, Product version 1.3.0 —
+     vm-08-properties-details.png): Explorer's shell reads this
+     build's language-neutral version resource correctly. Only an
+     automated reader built on .NET's own `FileVersionInfo` (for
+     example PowerShell's `.VersionInfo`) sees every string field
+     empty for this build (release run 33950484060, 05/09/2026) — a
+     .NET quirk with the language-neutral block, not a defect in the
+     binary; `check-windows.sh` uses the byte-level 7-Zip resource
+     check as the actual gate, precisely because of that quirk.
 3. **Launch the GUI from the Start menu.** Confirm the status bar
    shows the rehearsal tag. Run the Demo workflow end to end (connect
    to the built-in Demo radio, edit, Send) — this exercises nothing on
@@ -148,20 +152,30 @@ preamble"):
    rigprog.exe read --port COMn --model FT-710 --out after.json
    ```
    and confirm `after.json` is byte-identical to `baseline.json` after
-   normalising `read_at` the same way the smoke script does (a
-   regex replace of the `"read_at":"..."` value in both files before
-   comparing).
+   normalising `read_at` (a regex replace of the `"read_at":"..."`
+   value in both files before comparing). The smoke script's own
+   compare additionally normalises `generator`, because it diffs a
+   `read` output against an `import` round-trip; here both files are
+   `read` outputs, so their `generator` field already matches and only
+   `read_at` needs normalising.
 7. **Uninstall.** Confirm the install directory and the Start-menu/
    desktop shortcuts are gone. Confirm `%AppData%\rigprog` is **STILL
    PRESENT** — a package never deletes user data, and the uninstall
    Section is written to prove it (`app/build/windows/README.md`).
 
-## Contingency
+## Contingency (did not occur)
 
-If Windows-on-ARM binds no driver to the CP2105 and Silicon Labs offers
-no ARM64 package, stop at step 3 — the packaging still merges, and the
-docs are written to say "installed and launch-tested on an ARM64 VM;
-no radio has been connected on Windows", with W1/W3-W7 staying ASSUMED
-and the lifts they still need named. The same applies if UTM cannot
+This did not happen: the 05/09/2026 session's Windows-on-ARM bound no
+driver on its own, but Silicon Labs' own ARM64 package bound both
+interfaces by hand, and UTM passed the composite CP2105 through
+cleanly (see `docs/hardware-notes.md`'s "Windows (ARM64 VM) session —
+05/09/2026"). Recorded here for the next session this checklist
+serves: had Windows-on-ARM bound no driver at all and Silicon Labs
+offered no ARM64 package, the leg would have stopped at step 3 — the
+packaging still merges, and the docs would have been written to say
+"installed and launch-tested on an ARM64 VM; no radio has been
+connected on Windows", with W1/W3-W7 staying ASSUMED and the lifts
+they still need named. The same would have applied if UTM could not
 pass the composite CP2105 through at all; in that case the roadmap
-records that this needs a physical Windows machine instead of a VM.
+would record that this needs a physical Windows machine instead of a
+VM.
