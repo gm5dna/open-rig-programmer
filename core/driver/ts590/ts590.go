@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/kw"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
@@ -570,33 +569,7 @@ func (s *Session) Diagnostics() driver.SessionDiagnostics {
 
 // Close implements driver.Session. Idempotent: transport.Engine.Close already
 // guarantees repeat calls return the same result.
+//
+// WriteChannel — the other half of driver.Session — is write.go's: ONE
+// 50-byte MW Set behind the refusal ladder of plan P7.
 func (s *Session) Close() error { return s.eng.Close() }
-
-// WriteChannel implements driver.Session — AND IS A PLACEHOLDER THAT STAGE 2
-// TASK 12 REPLACES WHOLE. It exists in this file because driver.Session
-// requires the method and *Session must satisfy that interface for Open to
-// return one at all; it deliberately does NOT attempt a partial choreography.
-// The FT-891's skeleton carried the identical placeholder for the identical
-// reason, and its task 2 replaced it and its pin together.
-//
-// Every call is refused with a typed *driver.WriteRefusedError BEFORE any
-// frame is built or any byte reaches the wire — which is the correct
-// behaviour for the RealHardware and fail-safe profiles regardless (their
-// capability gate would refuse anyway, writeTrialsComplete being false), and
-// a temporary, visible gap for the Simulated profile.
-//
-// What replaces it is the refusal ladder of the plan's P7, in that order:
-// ParseSlot, then bank membership, then codeplug.Validate, then the CAPABILITY
-// GATE, then the row's own pre-wire refusals — A13/A14 (a TS-590S whose FV is
-// >= 2.00 or unparseable, which is what this session's fvGrammarOK and
-// fvMajor exist for), A23 (a non-FM write), A9 (a non-empty channel whose
-// bank publishes FieldTxFrequency and whose TxFreqHz is not Known) and
-// decision 14 (a Known tone_rx of 1750 Hz) — and then ONE 50-byte MW reported
-// Sent, never Confirmed. TestWriteChannel_RefusedUntilTask12 pins this
-// placeholder and is replaced along with it.
-func (s *Session) WriteChannel(_ context.Context, ch codeplug.Channel) (driver.WriteResult, error) {
-	return driver.WriteResult{Steps: []driver.WriteStep{}}, &driver.WriteRefusedError{
-		Slot:   ch.Slot,
-		Reason: "the TS-590 driver's write path is not implemented yet (Stage 2 task 12 lands the single MW Set and its refusal ladder); no frame is built and nothing reaches the wire",
-	}
-}
