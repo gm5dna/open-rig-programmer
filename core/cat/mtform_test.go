@@ -18,7 +18,7 @@ import (
 // still fails here rather than passing by coincidence.
 func shortFormBaseConfig() DialectConfig {
 	cfg := validBaselineConfig()
-	cfg.MT = MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '}
+	cfg.MT = MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '}
 	return cfg
 }
 
@@ -30,7 +30,7 @@ func shortFormBaseConfig() DialectConfig {
 // assuming the evidenced width fails here.
 func combinedFormBaseConfig() DialectConfig {
 	cfg := validBaselineConfig()
-	cfg.MT = MTPolicy{Form: MTFormCombined, TagMaxBytes: 6, TagFill: ' '}
+	cfg.MT = MTPolicy{Form: MTFormCombined, P11: P11Fixed, ReadSlots: MTReadsReadable, TagMaxBytes: 6, TagFill: ' '}
 	return cfg
 }
 
@@ -135,7 +135,7 @@ func TestMTFrameCeilings_FitTransportFrame(t *testing.T) {
 func mustShortPeerDialect(t *testing.T) Dialect {
 	t.Helper()
 	cfg := validBaselineConfig()
-	cfg.MT = MTPolicy{Form: MTFormShort, TagMaxBytes: 6, ClearTagByte: '-'}
+	cfg.MT = MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 6, ClearTagByte: '-'}
 	return MustNewDialect(cfg)
 }
 

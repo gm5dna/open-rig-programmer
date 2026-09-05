@@ -82,10 +82,14 @@ var ErrOutOfDomain = errors.New("ic7760: a Known value lies outside what this ra
 // OutOfDomainError reports a Known numeric value — asked for on a write,
 // or decoded on a read — that this radio's record cannot express.
 //
-// DEFENCE IN DEPTH, AND NOT THE GATE — see doc.go §6. civ.FieldSpan has no
-// numeric domain, so civ.Profile.AllowedCommand would ADMIT a set carrying
-// 70 MHz. codeplug.Validate already bounds the primary frequency and
-// enabler E3 bounds tones, so every path through the model layer is
+// DEFENCE IN DEPTH, AND NOT THE GATE — see ic7610/doc.go §6, THE DEFERRED
+// GATE-DOMAIN GAP: this package's own doc.go has no numbered sections and
+// does not restate the argument, and the IC-7760 is the IC-7610's profile
+// clone on exactly this ground — identical MaxEncodableFreqHz (69 999 999)
+// and MaxToneDeciHz (2999), the same unbounded civ.FieldSpan. civ.FieldSpan
+// has no numeric domain, so civ.Profile.AllowedCommand would ADMIT a set
+// carrying 70 MHz. codeplug.Validate already bounds the primary frequency
+// and enabler E3 bounds tones, so every path through the model layer is
 // covered; these refusals close the driver's own door as well, and
 // TestNumericRefusalIsDefenceInDepthNotTheGate asserts the gap that
 // remains so that closing it later is a visible test change.
@@ -241,7 +245,16 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	// this refusal stands under consent too.
 	//
 	// UNLIKE YAESU, THE WIRE FORM EXISTS ON THIS RADIO, IN TWO SHAPES —
-	// see doc.go §7 — and no builder for either exists in this tier.
+	// see ic7610/doc.go §7, ERASE, for the same argument written out in
+	// full against that radio's document (this package's own doc.go has
+	// no numbered sections and does not restate it; unlike the kinship
+	// claim OutOfDomainError's comment makes above, the IC-7610 is a
+	// SHAPE precedent only here, not shared ground —
+	// core/civ/ic7760/doc.go:17 keeps registration, transport AND erase
+	// outside this package's own profile). This radio's own evidence is
+	// matrix §3.13 and doc.go's assumption register
+	// (`ic7760-clear-scope`) — and no builder for either shape exists in
+	// this tier.
 	if ch.Data == nil {
 		return refused(ch.Slot, []spec.Field{spec.FieldErase},
 			"this radio's memory-clear forms are printed in its document but no IC-7760 has ever been asked to use one, so FieldErase carries the zero FieldSupport and consent structurally never reaches it (spec D4 \"Erase\"; matrix §3.13)")
@@ -290,7 +303,7 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	}
 
 	// RUNG 4 — NUMERIC DOMAINS. Defence in depth and NOT the gate; see
-	// OutOfDomainError and doc.go §6.
+	// OutOfDomainError and ic7610/doc.go §6.
 	if d.FreqHz > MaxEncodableFreqHz {
 		return driver.WriteResult{Steps: []driver.WriteStep{}},
 			&OutOfDomainError{Field: spec.FieldFrequency, Value: d.FreqHz, Max: MaxEncodableFreqHz}

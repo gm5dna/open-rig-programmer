@@ -12,6 +12,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx10"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx101"
+	"github.com/gm5dna/open-rig-programmer/internal/fakeft891"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic705"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeradio"
 	"github.com/gm5dna/open-rig-programmer/internal/radiotext"
@@ -242,6 +243,62 @@ var ft710CoreSeven = []spec.Field{
 var ftdx10CoreSix = []spec.Field{
 	spec.FieldFrequency, spec.FieldMode, spec.FieldClarifier,
 	spec.FieldShift, spec.FieldCTCSSState, spec.FieldTag,
+}
+
+// ft891CoreSeven is the core set the FT-891's two STATIC banks derive — MEM
+// and PMS alike, since core/driver/ft891/caps.go builds one bankFields
+// product for both (capability matrix §2.7: this radio's memory-channel
+// surface is printed once and carries no per-bank qualifier).
+//
+// SAME MEMBERS AS ft710CoreSeven, AND A SEPARATE VARIABLE ANYWAY. The
+// coincidence is one of independent evidence, not a shared derivation:
+// core/driver/ft891 does not import core/driver/ft710, and its bankFields
+// was written from the FT-891 CAT manual alone (capability matrix §2.1,
+// which cites a layout line for every cell). What that manual happens to
+// grade the same way is the seven fields its combined 41-position MT record
+// carries — frequency, mode, clarifier, shift, CTCSS state, tag and the TAG
+// DISPLAY FLAG.
+//
+// THE SEVENTH IS WHERE THIS RADIO PARTS FROM ITS TWO COMBINED-FORM
+// SIBLINGS, and it is why ftdx10CoreSix could not simply be reused with a
+// field appended. On the FTdx10 and the FTdx101 pair, byte 28 of the same
+// record is printed "0: (Fixed)" and FieldTagDisplay is the zero
+// FieldSupport, so it drops out of the derived set (see this map's FTdx101
+// entry). On the FT-891 the SAME position is printed `0: TAG "OFF" 1: TAG
+// "ON"` (matrix §3.7, layout 1016) — a LIVE flag, manual-evidenced, and the
+// first of its kind in this fleet — so it survives the derivation here.
+//
+// FieldCTCSSTone and FieldScanSkip are absent for the reason every Yaesu
+// model's are: this record has no tone-NUMBER byte and no scan-skip flag
+// anywhere in its 41 positions (matrix §2.3, the driver register's TONE AND
+// SCAN-SKIP UNREACHABILITY entry). FieldErase is absent structurally — this
+// radio's Control Command List holds no erase command at all (§2.6).
+var ft891CoreSeven = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldClarifier,
+	spec.FieldShift, spec.FieldCTCSSState, spec.FieldTag, spec.FieldTagDisplay,
+}
+
+// ft891CoreFive is the core set the FT-891's DISCOVERED banks derive — 60M
+// and EMG — and it is ft891CoreSeven minus BOTH tag fields.
+//
+// THIS IS NOT THE FTdx10's OR FTdx101's DERIVATION AND MUST NOT BE READ AS
+// ONE (matrix §2.5, plan decision P4). Those drivers build a discovered
+// bank's map from MEM's with every Write forced Unsupported and every Read
+// carried through, because they read every bank with the SAME combined
+// frame — which carries the tag. The FT-891 reads its discovered banks by
+// MR ALONE, and MR's answer is 28 positions carrying neither a tag nor a
+// display flag (layout 968-975), so this driver's readOnlyFields reduces
+// FieldTag and FieldTagDisplay to the ZERO FieldSupport there rather than
+// merely making them unwritable — and a zero pair does not survive
+// bankCoreFields' own test.
+//
+// The honest reading of that zero is "this driver's read of this bank
+// cannot reach the field", never "this radio has no such field": whether an
+// FT-891's 5 MHz channels carry tags at all is not established by this
+// manual either way, and nothing here claims they do not.
+var ft891CoreFive = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldClarifier,
+	spec.FieldShift, spec.FieldCTCSSState,
 }
 
 // ic7610CoreThree is the core set every IC-7610 bank derives, on every
@@ -871,6 +928,21 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		// set, none of the two fields spec.ReceiveOnly removes being a
 		// bankCoreCandidates member.
 		"IC-R8600": icr8600CoreThree,
+		// The FT-891 (Tier 1). SEVEN fields, its own variable, reached by
+		// this radio's own evidence rather than by reusing the FT-710's
+		// identically-membered list — see ft891CoreSeven's doc comment for
+		// what makes byte 28 live here and fixed on its two combined-form
+		// Yaesu siblings.
+		//
+		// ONE ENTRY COVERS BOTH STATIC BANKS AND ONLY THOSE: the loop below
+		// walks the STATIC baseline and the DEFAULT fake session, and this
+		// radio's default fake image is deliberately free of 5xx and EMG
+		// slots (plan P13), so no discovered bank reaches this test. The
+		// discovered banks' own FIVE-field set is asserted where a session
+		// can actually have one —
+		// TestBankReadOnly_RegisteredFT891_RealHardwareProfile, through the
+		// option variable.
+		"FT-891": ft891CoreSeven,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {
@@ -1856,7 +1928,7 @@ func TestGetUISpec_RegisteredIC705_EveryBankFieldsAndTagDisplay(t *testing.T) {
 // driver's own slots.go builds), not hand-typed — the same
 // recompute-rather-than-hardcode discipline
 // TestGetUISpec_SlotClassification_DenseBanksUnchangedByWithinSpace uses
-// for the four Yaesu models — because hand-typing 321 slot strings is 321
+// for the five Yaesu models — because hand-typing 321 slot strings is 321
 // chances to mistype one, exactly the risk core/driver/ic9700/slots.go's
 // own bankSlots doc comment names. The sanity-check loop below confirms
 // three REAL addresses are actually present in that recomputed list, so
@@ -2935,7 +3007,12 @@ func TestGetUISpec_SlotClassification_OfflineWorkingCopy(t *testing.T) {
 // "ZZZ", which nothing claims — GetUISpec's orphan case, and the pin that
 // the widened rule admits nothing it should not.
 func TestGetUISpec_SlotClassification_DenseBanksUnchangedByWithinSpace(t *testing.T) {
-	for _, model := range []string{wiring.DefaultModel, "FTdx10", "FTdx101D", "FTdx101MP"} {
+	// FIVE models since Tier 1, not four: the FT-891's two STATIC banks are
+	// dense too (MEM "001".."099", PMS "P1L".."P9U"), so the same "nothing
+	// about their grids may move by so much as a slot" promise covers it.
+	// Its discovered 60M/EMG banks are not static and never reach this test;
+	// the Sparse Fatalf below is what would say so if that ever changed.
+	for _, model := range []string{wiring.DefaultModel, "FTdx10", "FTdx101D", "FTdx101MP", "FT-891"} {
 		t.Run(model, func(t *testing.T) {
 			caps, err := wiring.StaticCapabilities(model)
 			if err != nil {
@@ -3546,6 +3623,81 @@ func TestGetUISpec_IC7610MEMBank_IsTheJSGridFixture(t *testing.T) {
 		t.Errorf("the IC-7610's MEM BankView is now\n  %s\nbut the JS grid fixture was copied from\n  %s\n(update app/frontend/src/lib/grid/__tests__/tierColumns.test.js's ic7610MemBank with the new value)", raw, ic7610MEMBankJSON)
 	}
 	t.Logf("IC-7610 MEM BankView as the frontend receives it: %s", raw)
+}
+
+// icr8600MEMBankJSON is the IC-R8600's one bank as GetUISpec serves it to
+// the frontend, for an offline working copy holding the two slots
+// "G00-000" and "G00-001".
+//
+// It is the source of the TIER_UI_SPEC fixture in
+// app/frontend/src/lib/__tests__/ChannelGrid.test.js, which is a verbatim
+// copy of this literal (JSON being a subset of the JS object syntax it is
+// written in) — the same relationship ic7610MEMBankJSON has with
+// tierColumns.test.js's ic7610MemBank, and for the same reason.
+//
+// THIS ROW RATHER THAN THE IC-7100's, which the JS fixture used before
+// the review of this lane: fourteen of the seventeen tier columns render
+// here against the IC-7100's ten, and they include the seven receiver
+// columns (tuning step, attenuator, preamp, antenna, IP+ and the rest) no
+// other registered model reaches. All five TierColumn kinds are still
+// present, so nothing the old fixture drove is lost.
+//
+// NOTHING IS TRIMMED BY THE COPY: the working copy below holds exactly
+// the two channels the grid fixture needs, so its Slots list IS the
+// served one, Display strings included. Those come from
+// codeplug.DisplaySlot (core/codeplug/channel.go), which returns a slot
+// of any length but three unchanged — so this receiver's own bank-letter
+// form is what the app renders and what every accessible name in the JS
+// tests is built from.
+// BudgetUnstated is present here where it is absent from the IC-7610's
+// literal, and it is a fact about this bank rather than noise: the
+// receiver's memory space is sparse with an undocumented capacity
+// (BankView.BudgetUnstated, `json:",omitempty"`), so the key appears only
+// for a bank that says so.
+const icr8600MEMBankJSON = `{"ID":"MEM","Label":"Memories","ReadOnly":false,"BudgetUnstated":true,` +
+	`"Slots":[{"Slot":"G00-000","Display":"G00-000"},{"Slot":"G00-001","Display":"G00-001"}],` +
+	`"TagDisplayDefault":{"state":"unavailable"},` +
+	`"Fields":["duplex","offset","tone_mode","tone_rx","dtcs_code","dtcs_polarity","filter",` +
+	`"tuning_step_enabled","tuning_step","program_tuning_step","attenuator","preamp","antenna","ip_plus"]}`
+
+// TestGetUISpec_ICR8600MEMBank_IsTheJSGridFixture pins the JSON the
+// frontend actually receives for the IC-R8600's one bank, so the JS grid
+// fixture copied from it cannot drift away from the Go side unnoticed:
+// change this receiver's capabilities, or bankTierFields, or BankView's
+// shape, and this test fails naming the difference — at which point the
+// JS fixture named in icr8600MEMBankJSON's comment must be updated with
+// the new literal.
+//
+// It is TestGetUISpec_IC7610MEMBank_IsTheJSGridFixture's mirror for the
+// second JS fixture, and it asserts the SERIALISED form for the same
+// reason that one does: what the frontend consumes is the JSON, key names
+// and all, and a renamed field would leave a struct-level assertion
+// passing while the grid silently stopped finding the value.
+func TestGetUISpec_ICR8600MEMBank_IsTheJSGridFixture(t *testing.T) {
+	a, _ := newTestApp(t)
+	a.mu.Lock()
+	a.working = &codeplug.Codeplug{
+		Schema:   codeplug.CurrentSchema,
+		Radio:    codeplug.RadioInfo{Model: wiring.ICR8600Model},
+		Channels: []codeplug.Channel{{Slot: "G00-000"}, {Slot: "G00-001"}},
+	}
+	a.mu.Unlock()
+
+	got, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (offline, IC-R8600 working copy): unexpected error: %v", err)
+	}
+	if len(got.Banks) != 1 {
+		t.Fatalf("banks = %v, want exactly the one bank this receiver has", bankIDs(got.Banks))
+	}
+	raw, err := json.Marshal(got.Banks[0])
+	if err != nil {
+		t.Fatalf("marshalling the BankView: %v", err)
+	}
+	if string(raw) != icr8600MEMBankJSON {
+		t.Errorf("the IC-R8600's BankView is now\n  %s\nbut the JS grid fixture was copied from\n  %s\n(update app/frontend/src/lib/__tests__/ChannelGrid.test.js's TIER_UI_SPEC with the new value)", raw, icr8600MEMBankJSON)
+	}
+	t.Logf("IC-R8600 BankView as the frontend receives it: %s", raw)
 }
 
 // TestBankReadOnly_RegisteredIC7851Pair_RealHardwareProfile pins what a
@@ -4186,5 +4338,203 @@ func TestGetUISpec_RegisteredICR8600_IsAReceiver(t *testing.T) {
 	// would be back to implying a capacity nobody has printed.
 	if len(offline.Banks) != 1 || !offline.Banks[0].BudgetUnstated {
 		t.Errorf("offline Banks = %+v, want one bank carrying BudgetUnstated", offline.Banks)
+	}
+}
+
+// --- The FT-891 (Tier 1 task 7) ---
+
+// TestBankReadOnly_RegisteredFT891_RealHardwareProfile is the FTdx10 test's
+// counterpart for the model Tier 1 registered, and it pins the same rule
+// against the same premise: this radio's RealHardware profile is its
+// all-Unverified one (writeTrialsComplete is false — no FT-891 has ever been
+// written to by this project, or asked anything at all), so its seven
+// derived fields are Write spec.Unverified on MEM and PMS, which is NOT
+// spec.Unsupported and therefore NOT read-only under bankReadOnly's standing
+// rule. Those two banks stay EDITABLE and every write is refused later, at
+// the capability gate. See
+// TestBankReadOnly_RegisteredFTdx10_RealHardwareProfile's doc comment for
+// why that is the right verdict; the reasoning is the rule's, not any one
+// radio's.
+//
+// THE SECOND HALF IS THIS RADIO'S OWN AND IS WHY THIS TEST IS NOT A COPY.
+// The FTdx10's discovered 60M bank derives the same six fields its static
+// banks do — that driver reads every bank with the same combined frame. The
+// FT-891's derives FIVE, not seven: it reads its discovered banks by MR
+// alone, MR's 28-position answer carries neither a tag nor a display flag,
+// and so plan decision P4 forces FieldTag and FieldTagDisplay to the ZERO
+// FieldSupport there rather than merely making them unwritable (matrix
+// §2.5). A test that asserted ft891CoreSeven on the discovered bank would
+// fail; one that asserted the sibling's six would fail differently. The
+// contrast between the two halves is also what stops half one passing
+// because bankReadOnly always answers false.
+//
+// The discovered bank has to be ASKED FOR, through the registered option
+// variable: internal/fakeft891's default image deliberately has no 5xx and
+// no EMG slot (plan P13), so no default session can express this property.
+func TestBankReadOnly_RegisteredFT891_RealHardwareProfile(t *testing.T) {
+	caps, err := wiring.StaticCapabilities("FT-891")
+	if err != nil {
+		t.Fatalf("wiring.StaticCapabilities(\"FT-891\"): unexpected error: %v", err)
+	}
+	if len(caps.Banks) != 2 {
+		t.Fatalf("the registered FT-891's static baseline has %d bank(s), want exactly MEM and PMS — its 60M/EMG banks are DISCOVERED, never static", len(caps.Banks))
+	}
+	for _, b := range caps.Banks {
+		fields := bankCoreFields(caps, b.ID)
+		if len(fields) == 0 {
+			t.Fatalf("FT-891 bank %s derives no core fields — the Write check below would be vacuous", b.ID)
+		}
+		for _, f := range fields {
+			if got := caps.FieldSupport(b.ID, f).Write; got != spec.Unverified {
+				t.Errorf("bank %s field %s Write = %v, want Unverified (the premise: nothing on a real FT-891 is proven writable)", b.ID, f, got)
+			}
+		}
+		if bankReadOnly(caps, b.ID) {
+			t.Errorf("bankReadOnly(%s) = true, want false — Unverified is not Unsupported, and locking it would break the offline clone workflow", b.ID)
+		}
+	}
+
+	// The discovered banks, whose Writes ARE Unsupported and whose two tag
+	// fields are the ZERO pair: read-only, and FIVE core fields, not seven.
+	prev := wiring.FT891FakeSessionOpts
+	wiring.FT891FakeSessionOpts = []fakeft891.Option{fakeft891.With5MHz(), fakeft891.WithEMG()}
+	t.Cleanup(func() { wiring.FT891FakeSessionOpts = prev })
+	sess, closeAll, err := wiring.OpenFakeSessionFor(testAppCtx(t), "FT-891")
+	if err != nil {
+		t.Fatalf("wiring.OpenFakeSessionFor(\"FT-891\"): unexpected error: %v", err)
+	}
+	t.Cleanup(func() { _ = closeAll() })
+	live := sess.Capabilities()
+	for _, id := range []spec.BankID{spec.Bank60m, spec.BankEMG} {
+		if _, ok := live.Bank(id); !ok {
+			t.Fatalf("the option-fed FT-891 fake produced no %s bank — the contrast half of this test would be vacuous (and its option var did not reach its rig)", id)
+		}
+		wantFields(t, "the FT-891's discovered "+string(id)+" bank", bankCoreFields(live, id), ft891CoreFive)
+		if !bankReadOnly(live, id) {
+			t.Errorf("bankReadOnly(%s) = false, want true — no profile may claim a discovered 5xx or EMG slot writable", id)
+		}
+	}
+	// And the static banks of the SAME live session still derive seven and
+	// stay editable: one capability set, two different verdicts, from one
+	// rule.
+	for _, id := range []spec.BankID{spec.BankMemory, spec.BankPMS} {
+		wantFields(t, "the FT-891's live "+string(id)+" bank", bankCoreFields(live, id), ft891CoreSeven)
+		if bankReadOnly(live, id) {
+			t.Errorf("bankReadOnly(%s) = true on the Simulated profile, want false", id)
+		}
+	}
+}
+
+// TestGetUISpec_RegisteredFT891_TagDisplayDefaults is the TagDisplay-default
+// class for Tier 1's model, and this radio is the first registered one for
+// which the answer differs BETWEEN ITS OWN BANKS.
+//
+// Every earlier model answers the same thing everywhere: {Known,false} on
+// every bank (the FT-710, whose frame carries the flag) or {unavailable} on
+// every bank (the FTdx10, the FTdx101 pair and every Icom model, whose
+// frames do not). The FT-891 carries the flag in the frame it reads MEM and
+// PMS with, and does not carry it in the frame it reads 60M and EMG with, so
+// a blank row added to a memory channel must state the flag OFF while a
+// blank row added to a discovered bank must not claim a flag at all. That is
+// exactly the per-BANK rather than per-model derivation
+// bankTagDisplayDefault's own doc comment argues for, and until now nothing
+// registered exercised the distinction.
+//
+// THREE PATHS, because GetUISpec has three ways to reach a capability set
+// and they must agree: connected to the default fake (the static two banks),
+// connected to an option-fed fake (the discovered two as well), and offline
+// from an FT-891 working copy (the static RealHardware baseline, resolved by
+// currentModel from the file's own Radio.Model).
+func TestGetUISpec_RegisteredFT891_TagDisplayDefaults(t *testing.T) {
+	knownOff := codeplug.BoolField{State: codeplug.Known, Value: false}
+	unavailable := codeplug.BoolField{State: codeplug.Unavailable}
+
+	// 1. Connected to the DEFAULT fake: two banks, both {Known,false}.
+	plain, closePlain, err := wiring.OpenFakeSessionFor(testAppCtx(t), "FT-891")
+	if err != nil {
+		t.Fatalf("wiring.OpenFakeSessionFor(\"FT-891\"): unexpected error: %v", err)
+	}
+	t.Cleanup(func() { _ = closePlain() })
+
+	a, _ := newTestApp(t)
+	connectDirect(t, a, plain, nil)
+	got, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (connected to the default FT-891 fake): unexpected error: %v", err)
+	}
+	if !got.Live {
+		t.Error("Live = false, want true (connected to the registered fake)")
+	}
+	if len(got.Banks) != 2 {
+		t.Fatalf("banks = %v, want exactly MEM and PMS — the default fake image has no 5xx or EMG slot to discover (plan P13)", bankIDs(got.Banks))
+	}
+	for _, b := range got.Banks {
+		if b.TagDisplayDefault != knownOff {
+			t.Errorf("connected FT-891 bank %s TagDisplayDefault = %+v, want %+v — byte 28 of this radio's combined memory record is a LIVE TAG flag, so a blank row states it OFF", b.ID, b.TagDisplayDefault, knownOff)
+		}
+		if len(b.Fields) != 0 {
+			t.Errorf("connected FT-891 bank %s Fields = %v, want empty — this radio maps none of the Icom tier's fields", b.ID, b.Fields)
+		}
+	}
+
+	// 2. Connected to an OPTION-FED fake: the two discovered banks answer
+	//    {unavailable}, the two static ones still answer {Known,false}.
+	prev := wiring.FT891FakeSessionOpts
+	wiring.FT891FakeSessionOpts = []fakeft891.Option{fakeft891.With5MHz(), fakeft891.WithEMG()}
+	t.Cleanup(func() { wiring.FT891FakeSessionOpts = prev })
+	discovered, closeDiscovered, err := wiring.OpenFakeSessionFor(testAppCtx(t), "FT-891")
+	if err != nil {
+		t.Fatalf("wiring.OpenFakeSessionFor(\"FT-891\") with options: unexpected error: %v", err)
+	}
+	t.Cleanup(func() { _ = closeDiscovered() })
+
+	b, _ := newTestApp(t)
+	connectDirect(t, b, discovered, nil)
+	live, err := b.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (connected to the option-fed FT-891 fake): unexpected error: %v", err)
+	}
+	if len(live.Banks) != 4 {
+		t.Fatalf("banks = %v, want four (MEM, PMS and the two discovered) — the option did not reach the rig, so the per-bank distinction below is untested", bankIDs(live.Banks))
+	}
+	wantDefault := map[string]codeplug.BoolField{
+		"MEM": knownOff, "PMS": knownOff,
+		"60M": unavailable, "EMG": unavailable,
+	}
+	for _, bank := range live.Banks {
+		want, ok := wantDefault[bank.ID]
+		if !ok {
+			t.Errorf("unexpected bank %q in the FT-891's live UISpec", bank.ID)
+			continue
+		}
+		if bank.TagDisplayDefault != want {
+			t.Errorf("live FT-891 bank %s TagDisplayDefault = %+v, want %+v — this radio reads its discovered banks by MR alone, and MR's answer carries no display flag", bank.ID, bank.TagDisplayDefault, want)
+		}
+	}
+
+	// 3. OFFLINE, from an FT-891 file: the static baseline's two banks, both
+	//    {Known,false} again.
+	b.mu.Lock()
+	b.conn = nil
+	b.working = &codeplug.Codeplug{
+		Schema:   codeplug.CurrentSchema,
+		Radio:    codeplug.RadioInfo{Model: "FT-891"},
+		Channels: []codeplug.Channel{{Slot: "001"}},
+	}
+	b.mu.Unlock()
+	offline, err := b.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (offline, FT-891 working copy): unexpected error: %v", err)
+	}
+	if offline.Live {
+		t.Error("Live = true, want false (disconnected)")
+	}
+	if len(offline.Banks) == 0 {
+		t.Fatal("offline FT-891 UISpec has no banks — nothing asserted")
+	}
+	for _, bank := range offline.Banks {
+		if bank.TagDisplayDefault != knownOff {
+			t.Errorf("offline FT-891 bank %s TagDisplayDefault = %+v, want %+v", bank.ID, bank.TagDisplayDefault, knownOff)
+		}
 	}
 }

@@ -316,10 +316,25 @@ func baseCapabilities(memFields, pmsFields map[spec.Field]spec.FieldSupport) spe
 				Fields: pmsFields,
 			},
 		},
-		Modes:      modeNames(),
-		TagLen:     12,   // reference §MT: "tag, up to 12 ASCII characters"
-		ClarMaxHz:  9990, // reference P3: "4-digit offset 0000-9990 Hz"
-		ClarStepHz: 10,   // reference P3: 10 Hz steps
+		Modes:  modeNames(),
+		TagLen: 12, // reference §MT: "tag, up to 12 ASCII characters"
+		// Clarifier policy, CONSULTED FROM THE DIALECT (write-gate sweep
+		// item (h), the FT-891's C-H2 applied here): a bound must be read
+		// from the same place as its datum. This package carried its own
+		// literal 9990/10 until the sweep — a second transcription of the
+		// values write.go's buildWriteCommands already reads through
+		// dialect.Clarifier(), able to drift silently if either were edited
+		// alone.
+		//
+		// BOTH NUMBERS STAY MANUAL-EVIDENCED, and their evidence is the
+		// FT-710 CAT reference's P3 legend: "4-digit offset 0000-9990 Hz",
+		// in 10 Hz steps. Only the SOURCE of the numbers moves — cat.FT710's
+		// ClarifierPolicy carries the same manual-evidenced pair, and it is
+		// cited here rather than restated.
+		// TestCapabilities_ClarifierDerivesFromDialect pins the identity,
+		// not merely the values.
+		ClarMaxHz:  catDialect.Clarifier().MaxAbsHz,
+		ClarStepHz: catDialect.Clarifier().StepHz,
 		CTCSSTones: tones[:],
 		// CAT-1 serial rates per the FT-710 operation manual's CAT RATE
 		// menu; 38400 8-N-2 is the reference's stated default

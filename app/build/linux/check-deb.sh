@@ -29,7 +29,7 @@ command -v dpkg-deb >/dev/null 2>&1 || { echo "dpkg-deb not found" >&2; exit 2; 
 # package that ships everything expected PLUS something extra (a stray
 # /usr/bin/backdoor), and an unanchored match also accepts a renamed
 # neighbour (rigprogXYZ contains rigprog). The shipped file list must be
-# exactly these six paths — no more, no fewer. Directories are excluded;
+# exactly these seven paths — no more, no fewer. Directories are excluded;
 # nfpm synthesises the parent tree, which is not a packaging decision.
 actual="$(dpkg-deb --fsys-tarfile "$deb" | tar -t | grep -v '/$' | LC_ALL=C sort)"
 expected="$(printf '%s\n' \
@@ -37,6 +37,7 @@ expected="$(printf '%s\n' \
   ./usr/bin/rigprog \
   ./usr/share/applications/open-rig-programmer.desktop \
   ./usr/share/icons/hicolor/512x512/apps/open-rig-programmer.png \
+  ./usr/share/icons/hicolor/scalable/apps/open-rig-programmer.svg \
   ./usr/lib/udev/rules.d/99-open-rig-programmer.rules \
   ./usr/share/doc/open-rig-programmer/copyright | LC_ALL=C sort)"
 [ "$actual" = "$expected" ] || err "package contents differ from the expected set
@@ -60,6 +61,8 @@ diff -q "$here/copyright" \
   "$data/usr/share/doc/open-rig-programmer/copyright" || err "copyright file drifted from repo copy"
 diff -q "$here/open-rig-programmer-512.png" \
   "$data/usr/share/icons/hicolor/512x512/apps/open-rig-programmer.png" || err "icon drifted from repo copy"
+diff -q "$here/../appicon.svg" \
+  "$data/usr/share/icons/hicolor/scalable/apps/open-rig-programmer.svg" || err "scalable icon drifted from build/appicon.svg"
 for s in postinstall postremove; do
   ctlname="$( [ "$s" = postinstall ] && echo postinst || echo postrm )"
   diff -q "$here/scripts/$s.sh" "$ctl/DEBIAN/$ctlname" || err "$ctlname drifted from repo $s.sh"

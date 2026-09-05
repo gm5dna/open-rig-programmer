@@ -26,7 +26,9 @@ func (d Dialect) BuildMWSet(m MemoryData) (Command, error) {
 	// not a byte moved.
 	frame := make([]byte, memoryFrameLen)
 	frame[0], frame[1] = 'M', 'W'
-	encodeMemoryFields(frame, m)
+	if err := d.encodeMemoryFields(frame, m); err != nil {
+		return Command{}, err
+	}
 	frame[memTermOffset] = ';'
 
 	return newCommand(frame), nil
@@ -138,6 +140,30 @@ func (d Dialect) validateMWFields(m MemoryData) error {
 
 	if m.FreqHz == 0 || m.FreqHz > memFreqMax {
 		return newParseError([]byte(fmt.Sprintf("%d", m.FreqHz)), "MW: FreqHz must be nonzero and fit in 9 digits (<= 999999999)")
+	}
+
+	// P5, BY THIS DIALECT'S OWN READING. Under P5Fixed byte 21 is printed
+	// "(Fixed)" on this radio's memory blocks, so a record asking for the TX
+	// clarifier is REFUSED rather than quietly encoded as '0': a caller that
+	// believed it was writing the clarifier finds out, which is the
+	// validate-don't-rewrite posture this validator takes with every other
+	// field. This is the WRITE-direction check on a caller-supplied
+	// MemoryData; a FORGED wire frame is instead refused earlier, by
+	// parseMemoryFields (memdata.go), which the gate's MW grammar check
+	// reaches before this validator ever runs.
+	//
+	// A SWITCH, not an if with an implicit "everything else passes" arm: see
+	// parseMemoryFields' matching comment (memdata.go) — an omitted config
+	// semantic refuses rather than defaults, and NewDialect's V14 already
+	// keeps every registered dialect from reaching the default case.
+	switch d.memoryP5 {
+	case P5Fixed:
+		if m.TxClar {
+			return newParseError([]byte{boolDigit(m.TxClar)}, fmt.Sprintf("MW: TxClar must be false under %v — this dialect's manual prints P5 (position 21) \"(Fixed)\", so there is no TX clarifier flag to set", d.memoryP5))
+		}
+	case P5TxClar:
+	default:
+		return newParseError(nil, "MW: P5 (position 21) policy unset — refusing to guess whether the byte is fixed schema or the TX clarifier flag")
 	}
 
 	// CTCSSState/Shift are byte-alias types exactly like Mode: never trust

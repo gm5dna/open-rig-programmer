@@ -247,10 +247,12 @@ What is specific to one or two models:
 - **IC-905's default Open discovers its MEM bank by a bounded walk**
   — group 0 in full, then channel 00 of every other group, descending
   into the rest of a group only where its channel 00 answered — not
-  the whole 100×100 space, and there is no setting that widens it. A
-  channel stored outside that walk is simply not listed; its absence
-  from the grid is not evidence the channel is empty
-  (`internal/radiotext/radiotext.go:1111`).
+  the whole 100×100 space; `WithFullInventoryWalk()` widens it, but no
+  `rigprog` flag and no GUI control reaches that option and no
+  registered composition passes it. A channel stored outside that walk
+  is simply not listed; its absence from the grid is not evidence the
+  channel is empty
+  (`internal/radiotext/radiotext.go:1146-1164`).
 - **A non-octal DTCS code (IC-705 and IC-905) reads back as Unknown,
   not as a wrong number, and the same check blocks writing one until
   it is corrected.** Both radios' printed DTCS range is octal (digits

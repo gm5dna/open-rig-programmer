@@ -224,7 +224,7 @@ var tierFields = []spec.Field{
 // reachable" with no special-casing — caps that say nothing about a
 // field are not evidence that the radio has one.
 //
-// AN OPEN LIST, NOT A SNAPSHOT: every bank of all four registered Yaesu
+// AN OPEN LIST, NOT A SNAPSHOT: every bank of all five registered Yaesu
 // models reaches none of the ten tier fields, so their grids' column sets
 // stay empty; every registered Icom model returns its OWN bank's own
 // reachable set, independently derived from that model's own record —

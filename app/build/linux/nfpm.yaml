@@ -41,6 +41,10 @@ contents:
     dst: /usr/share/applications/open-rig-programmer.desktop
   - src: build/linux/open-rig-programmer-512.png
     dst: /usr/share/icons/hicolor/512x512/apps/open-rig-programmer.png
+  # The icon source itself (build/appicon.svg, one directory up) is the
+  # scalable entry — no second copy to drift from it.
+  - src: build/appicon.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/open-rig-programmer.svg
   - src: build/linux/99-open-rig-programmer.rules
     dst: /usr/lib/udev/rules.d/99-open-rig-programmer.rules
   - src: build/linux/copyright

@@ -310,8 +310,18 @@ func baseCapabilities(memFields, pmsFields map[spec.Field]spec.FieldSupport) spe
 		// pages all agree), the 10 Hz STEP is ASSUMED — in the DIALECT's
 		// register (ClarifierPolicy.StepHz), cited here and deliberately not
 		// re-registered as this driver's own.
-		ClarMaxHz:  9990,
-		ClarStepHz: 10,
+		//
+		// CONSULTED, not transcribed (write-gate sweep item (h), the
+		// FT-891's C-H2 applied here): this comment said "from the dialect"
+		// while the numbers beside it were a second literal, which
+		// write.go's buildWriteCommand already reads through
+		// dialect.Clarifier(). A bound must be read from the same place as
+		// its datum, and now it is — the values are unchanged and their
+		// evidence status is unchanged, only their source moves.
+		// TestCapabilities_ClarifierDerivesFromDialect pins the identity,
+		// not merely the values.
+		ClarMaxHz:  catDialect.Clarifier().MaxAbsHz,
+		ClarStepHz: catDialect.Clarifier().StepHz,
 		// The 50-tone chart, manual-evidenced: Table 1, entries 000-049,
 		// 67.0-254.1 Hz, cross-checked element for element against
 		// spec.standardCTCSSTones at spec review and re-checked by

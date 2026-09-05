@@ -62,8 +62,10 @@ type Row struct {
 // validates first. Lines beginning with '#' are treated as provenance
 // comments and skipped. Parsing is deliberately strict: a malformed row
 // (wrong column count, unparseable integer/boolean fields), a blank (empty
-// or whitespace-only) P1Label, P2Label, Name, or P4, a non-positive
-// ManualLine, a duplicate (P1,P2,P3) triple, a non-text row whose Digits
+// or whitespace-only) P1Label or P2Label under LabelsRequired — or a
+// NON-blank one under LabelsAbsent — a blank Name or P4, a non-positive
+// ManualLine, a duplicate (P1,P2,P3) triple, a non-zero P3 under
+// AddressPair, a text row under TextRowsAbsent, a non-text row whose Digits
 // falls outside the profile's MinDigits..MaxDigits, a text row whose Digits
 // is not the profile's TextWidth, an address component outside 0..99 each
 // fail with a non-nil error rather than being guessed at. The returned rows
@@ -119,15 +121,49 @@ func parseRecord(p Profile, rec []string) (Row, error) {
 			return Row{}, fmt.Errorf("address component P%d must be 0..99, got %d", i+1, v)
 		}
 	}
+	// A SWITCH, not an if/else with an implicit AddressTriple arm — the
+	// shape ParseObservedCSV below already takes, and for the same reason:
+	// Profile.Validate (profile.go) has already required p.Addresses to be
+	// one of the two known forms, but THIS is the site that reads it, and an
+	// omitted config semantic is refused here too rather than defaulted to
+	// the permissive arm.
+	//
+	// Under AddressPair the radio's field carries P1 and P2 only, so a
+	// non-zero p3 names a component no frame can express. Refused rather
+	// than dropped — a value silently discarded here would reach the
+	// generated inventory as a 0 that nothing recorded having changed.
+	switch p.Addresses {
+	case AddressTriple:
+		// All three components are on the wire; nothing further to check.
+	case AddressPair:
+		if row.P3 != 0 {
+			return Row{}, fmt.Errorf("p3 must be 0 under %v, got %d", p.Addresses, row.P3)
+		}
+	default:
+		return Row{}, fmt.Errorf("extable: profile %s: AddressForm %v must be set explicitly", p.Model, p.Addresses)
+	}
 	row.P1Label = rec[3]
 	row.P2Label = rec[4]
 	row.Name = rec[5]
 	row.P4 = rec[6]
-	if strings.TrimSpace(row.P1Label) == "" {
-		return Row{}, fmt.Errorf("blank p1_label")
-	}
-	if strings.TrimSpace(row.P2Label) == "" {
-		return Row{}, fmt.Errorf("blank p2_label")
+	// The label columns are the LabelPolicy's to rule on, in both
+	// directions: a labelled chart's blank column is a transcription error,
+	// and an unlabelled chart's non-blank one is an invented label.
+	switch p.LabelPolicy {
+	case LabelsAbsent:
+		if strings.TrimSpace(row.P1Label) != "" {
+			return Row{}, fmt.Errorf("p1_label is %q under %v, want blank — this model's chart prints no group labels", row.P1Label, p.LabelPolicy)
+		}
+		if strings.TrimSpace(row.P2Label) != "" {
+			return Row{}, fmt.Errorf("p2_label is %q under %v, want blank — this model's chart prints no group labels", row.P2Label, p.LabelPolicy)
+		}
+	default:
+		if strings.TrimSpace(row.P1Label) == "" {
+			return Row{}, fmt.Errorf("blank p1_label")
+		}
+		if strings.TrimSpace(row.P2Label) == "" {
+			return Row{}, fmt.Errorf("blank p2_label")
+		}
 	}
 	if strings.TrimSpace(row.Name) == "" {
 		return Row{}, fmt.Errorf("blank name")
@@ -150,7 +186,15 @@ func parseRecord(p Profile, rec []string) (Row, error) {
 
 	// Digits/Text consistency: a text item carries exactly this radio's text
 	// width; every other item is a numeric field within its digit bounds.
+	//
+	// Under TextRowsAbsent there is no such width — the model's chart prints
+	// no text row — so the flag itself is refused. That makes the
+	// transcriber's "a text row is a STOP" convention mechanical instead of
+	// a note in a brief.
 	if row.Text {
+		if p.TextRowPolicy == TextRowsAbsent {
+			return Row{}, fmt.Errorf("row (%s) is flagged text under %v — this model's chart prints no free-text row, so a text row is a transcription error", row.Name, p.TextRowPolicy)
+		}
 		if row.Digits != p.TextWidth {
 			return Row{}, fmt.Errorf("text row (%s) must have digits %d, got %d", row.Name, p.TextWidth, row.Digits)
 		}
@@ -180,16 +224,27 @@ type Observed struct {
 
 // ParseObservedCSV decodes a model's hardware observation CSV — for the
 // FT-710, core/cat/table2-observed.csv, but the path is the profile's
-// ObservedCSV, not this one — into observations keyed by six-digit wire
-// address, e.g. "010321". Lines beginning with '#' are provenance comments
-// and are skipped, as in ParseCSV.
+// ObservedCSV, not this one — into observations keyed by THIS PROFILE'S
+// OWN address form (S0-close review's MEDIUM-2 finding): six digits under
+// AddressTriple, e.g. "010321", or four under AddressPair, e.g. "0801". The
+// key follows p.Addresses for the same reason RenderGo's lookup does (see
+// that function's matching comment) — it is a CSV join token, not a wire
+// render, but the two sides of the join must agree on its shape or a
+// complete Pair-form observation CSV can never be found by RenderGo's own
+// lookup, however exhaustively it was captured. Lines beginning with '#'
+// are provenance comments and are skipped, as in ParseCSV.
 //
 // Parsing is strict for privacy as much as correctness: each address
 // component must be exactly two digits, each width an integer in 1..the
 // profile's MaxObservedWidth, and each shape one of the three known
-// classes, so a row cannot carry free text. Duplicates are rejected. Error
-// text names the row and address only — never another field — so a
-// malformed artefact cannot leak captured content through a build log.
+// classes, so a row cannot carry free text. Under AddressPair the p3
+// column must additionally be "0" — mirroring parseRecord's own P3 rule
+// for the inventory CSV — and is not part of the key: a Pair-form radio's
+// wire field carries P1 and P2 only, so a component the wire can never
+// express must be refused, not silently folded into a six-digit key
+// nothing else can produce. Duplicates are rejected. Error text names the
+// row and address only — never another field — so a malformed artefact
+// cannot leak captured content through a build log.
 //
 // That bound is hardware-evidence policy and is deliberately independent of
 // the manual-schema widths in MinDigits/MaxDigits/TextWidth — the two
@@ -216,7 +271,29 @@ func ParseObservedCSV(p Profile, data []byte) (map[string]Observed, error) {
 				return nil, fmt.Errorf("extable: observation row %d: address component %d must be exactly two digits", i+1, c)
 			}
 		}
-		addr := rec[0] + rec[1] + rec[2]
+		// The key follows p.Addresses — RenderGo's lookup key's own form,
+		// not always six digits (S0-close review, MEDIUM-2). A switch, not
+		// an AddressTriple-shaped default: p.Validate above has already
+		// required p.Addresses to be one of the two known forms, but this
+		// switch is the site that actually reads it, and an omitted config
+		// semantic is refused here too, not defaulted to the wider key.
+		var addr string
+		switch p.Addresses {
+		case AddressTriple:
+			addr = rec[0] + rec[1] + rec[2]
+		case AddressPair:
+			// p3 is not on the wire under this form (parseRecord enforces
+			// the same rule for the inventory CSV's own P3), so it is
+			// checked here and dropped from the key rather than folded
+			// into a six-digit form RenderGo's Pair-form lookup can never
+			// produce.
+			if p3, err := strconv.Atoi(rec[2]); err != nil || p3 != 0 {
+				return nil, fmt.Errorf("extable: observation row %d: p3 must be 0 under %v, got %q", i+1, p.Addresses, rec[2])
+			}
+			addr = rec[0] + rec[1]
+		default:
+			return nil, fmt.Errorf("extable: profile %s: AddressForm %v must be set explicitly", p.Model, p.Addresses)
+		}
 		width, err := strconv.Atoi(rec[3])
 		if err != nil || width < 1 || width > p.MaxObservedWidth {
 			return nil, fmt.Errorf("extable: observation row %d (%s): observed_read_width must be an integer in 1..%d", i+1, addr, p.MaxObservedWidth)
@@ -335,8 +412,39 @@ func RenderGo(p Profile, rows []Row, observed map[string]Observed) ([]byte, erro
 		fmt.Fprintf(&buf, "// %s\n", l)
 	}
 	fmt.Fprintf(&buf, "var %s = []%sEXItem{\n", p.VarName, qual)
+	// Under LabelsAbsent the generated item carries "" for both labels.
+	// ParseCSV has already required the columns to be BLANK, which admits a
+	// whitespace-only cell; emitting that verbatim would give a consumer a
+	// space where it must see an absence. TestRenderGo_LabelsAbsentEmitsEmptyLabels
+	// pins it; the labelled regime is untouched.
+	if p.LabelPolicy == LabelsAbsent {
+		for i := range sorted {
+			sorted[i].P1Label, sorted[i].P2Label = "", ""
+		}
+	}
 	for _, r := range sorted {
-		addr := fmt.Sprintf("%02d%02d%02d", r.P1, r.P2, r.P3)
+		// The observation lookup key follows THIS PROFILE'S OWN address
+		// form (S0-close review, LOW-3) rather than always being rendered
+		// six digits wide: under AddressPair the wire field carries P1 and
+		// P2 only (parseRecord above refuses a non-zero P3), so a Pair
+		// radio's own observation CSV can never carry a six-digit address —
+		// keying the lookup that way would refuse every row's observation,
+		// however complete the CSV was. It is a CSV join token, not a wire
+		// render — core/cat's wireEXAddress is the wire-side counterpart —
+		// so it is derived here rather than through that renderer.
+		// A SWITCH, not an if/else with an implicit AddressPair arm, for the
+		// reason parseRecord's own switch above gives: Profile.Validate has
+		// already required one of the two known forms, and this site refuses
+		// an unset one rather than quietly rendering the narrower key.
+		var addr string
+		switch p.Addresses {
+		case AddressTriple:
+			addr = fmt.Sprintf("%02d%02d%02d", r.P1, r.P2, r.P3)
+		case AddressPair:
+			addr = fmt.Sprintf("%02d%02d", r.P1, r.P2)
+		default:
+			return nil, fmt.Errorf("extable: profile %s: AddressForm %v must be set explicitly", p.Model, p.Addresses)
+		}
 		var obs Observed
 		if p.Observations == ObservationsRequired {
 			var ok bool

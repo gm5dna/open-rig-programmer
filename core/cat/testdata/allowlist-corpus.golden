@@ -345,3 +345,17 @@ EX.read.060518	ALLOWED
 golden.G4	REJECTED
 golden.G6	REJECTED
 golden.G7	REJECTED
+stage0.mc.501.MCSelectsAll	ALLOWED
+stage0.mc.501.MCSelectsMemoryPMS	REJECTED
+stage0.mc.EMG.MCSelectsAll	ALLOWED
+stage0.mc.EMG.MCSelectsMemoryPMS	REJECTED
+stage0.mtread.501.MTReadsReadable	ALLOWED
+stage0.mtread.501.MTReadsMemoryPMS	REJECTED
+stage0.mrread.501.MTReadsMemoryPMS	ALLOWED
+stage0.mtread.EMG.MTReadsReadable	ALLOWED
+stage0.mtread.EMG.MTReadsMemoryPMS	REJECTED
+stage0.mrread.EMG.MTReadsMemoryPMS	ALLOWED
+stage0.mw.p5one.P5TxClar	ALLOWED
+stage0.mw.p5one.P5Fixed	REJECTED
+stage0.mtcombined.p11one.P11TagDisplay	ALLOWED
+stage0.mtcombined.p11one.P11Fixed	REJECTED

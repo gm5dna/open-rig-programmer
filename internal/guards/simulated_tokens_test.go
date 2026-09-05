@@ -216,6 +216,29 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// ic7610's and the ic7760's. fileHasCall's ast.Inspect walk finds
 		// the call either way (see the ic7610 row's own note).
 		{"icr8600", "Simulated", "fakeicr8600.New", "internal/fakeicr8600"},
+		// The FT-891 (Tier 1, the first YAESU registration since M9d-2):
+		// ONE row for ONE registered model, and its token is a Profile
+		// CONSTANT — core/driver/ft891 takes its profile as New's first
+		// ARGUMENT (ft891.go:71, `func New(profile Profile, opts
+		// ...Option) driver.Driver`), so ft891.Simulated is the selector a
+		// stray non-test reference would have to smuggle in. The IC-7851
+		// pair's WithSimulatedProfile row remains the one option-shaped
+		// exception in this table.
+		//
+		// The fakeft891.New call sits BARE at its one call site, as the
+		// IC-7100's and IC-R8600's do and for the same reason:
+		// internal/fakeft891's Port() already returns io.ReadWriteCloser
+		// (fakeft891.go:89), so this row needs no adapter and there is no
+		// ft891FakeAdapter to find beside the ic7610's and the ic7760's.
+		// fileHasCall's ast.Inspect walk finds the call either way (see
+		// the ic7610 row's own note).
+		//
+		// THE PAIRING CLAUSE IS WHAT THIS ROW REALLY BUYS, exactly as the
+		// ftdx10 row's comment says it did for the second driver: the one
+		// file naming ft891.Simulated must also call fakeft891.New, so a
+		// Simulated FT-891 driver can never be wired to another model's
+		// rig or to a real port.
+		{"ft891", "Simulated", "fakeft891.New", "internal/fakeft891"},
 	}
 
 	// Non-vacuity: an empty table would make the loop below a no-op and

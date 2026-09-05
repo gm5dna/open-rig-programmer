@@ -105,8 +105,8 @@ func TestObservedCSV_CoversEveryInventoryAddressExactlyOnce(t *testing.T) {
 		seen[addr] = true
 	}
 	for _, it := range items {
-		if !seen[it.Addr.Wire()] {
-			t.Errorf("inventory address %s has no observation row", it.Addr.Wire())
+		if !seen[cat.FT710.EXWire(it.Addr)] {
+			t.Errorf("inventory address %s has no observation row", cat.FT710.EXWire(it.Addr))
 		}
 	}
 }
@@ -238,7 +238,7 @@ func readCorrectionRows(t *testing.T) [][]string {
 func TestCorrectionsCSV_AddressesAreInventoryMembers(t *testing.T) {
 	members := map[string]bool{}
 	for _, it := range cat.FT710.EXItems() {
-		members[it.Addr.Wire()] = true
+		members[cat.FT710.EXWire(it.Addr)] = true
 	}
 	seen := map[string]bool{}
 	for _, rec := range readCorrectionRows(t) {
@@ -283,11 +283,11 @@ func TestCorrectionsCSV_WidthCorrectionAgreesWithTheObservations(t *testing.T) {
 			want = 12
 		}
 		deviates := it.ObservedReadWidth != want
-		if deviates && !recorded[it.Addr.Wire()] {
-			t.Errorf("%s (%s) deviates from the manual (%d vs observed %d) but has no field_width correction", it.Addr.Wire(), it.Name, want, it.ObservedReadWidth)
+		if deviates && !recorded[cat.FT710.EXWire(it.Addr)] {
+			t.Errorf("%s (%s) deviates from the manual (%d vs observed %d) but has no field_width correction", cat.FT710.EXWire(it.Addr), it.Name, want, it.ObservedReadWidth)
 		}
-		if !deviates && recorded[it.Addr.Wire()] {
-			t.Errorf("%s (%s) has a field_width correction but its observed read width matches the manual", it.Addr.Wire(), it.Name)
+		if !deviates && recorded[cat.FT710.EXWire(it.Addr)] {
+			t.Errorf("%s (%s) has a field_width correction but its observed read width matches the manual", cat.FT710.EXWire(it.Addr), it.Name)
 		}
 	}
 }

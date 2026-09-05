@@ -109,12 +109,12 @@ type SessionDiagnostics struct {
 // Deliberately NOT added to driver.Driver itself, and deliberately NOT a
 // spec.Capabilities field. The M9c-5 (E2) rule stands, upheld at M9c-6
 // and restated by spec D3.1: a Capabilities framing field is added only
-// with HARDWARE EVIDENCE, and none of the four Yaesu models has any — the
+// with HARDWARE EVIDENCE, and none of the five Yaesu models has any — the
 // FTdx10's CAT manual makes no framing statement anywhere, so 8-N-2 for it
 // is an ASSUMED register entry with a named lift rather than a fact. A
 // driver that has nothing honest to say implements nothing, and
 // internal/wiring opens its port at transport.DefaultStopBits exactly as
-// before. All four registered Yaesu drivers are in that position today.
+// before. All five registered Yaesu drivers are in that position today.
 //
 // THE ICOM SIDE IS WHY IT EXISTS (spec D3.1): every Icom driver in the
 // tier reports 1, as its own ASSUMED register entry with its own named
