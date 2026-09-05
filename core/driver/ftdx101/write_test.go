@@ -780,16 +780,23 @@ func withEveryTierFieldKnown(data codeplug.ChannelData) codeplug.ChannelData {
 //
 // The channel is otherwise the ordinary one this profile accepts, so the
 // refusal is attributable to the one Known tier value and to nothing else.
-// DTCSCode is this driver's chosen representative — the FT-710 pins ToneMode
-// and the FTdx10 TxFrequency, so the three tests between them exercise three
-// of the ten.
+//
+// DATAMODE IS THIS DRIVER'S REPRESENTATIVE, and the write-gate sweep's item
+// (i) is why it is no longer DTCSCode: DataMode is a codeplug.BoolField, so
+// its Valid takes no table and cannot fail for a Known value, which leaves
+// the CAPABILITY GATE as the rung that answers — the mechanism this test
+// exists to pin. A Known DTCSCode is now stopped one rung earlier, by the
+// FieldState walk's empty-table rule, and has its own test
+// (TestWriteChannel_KnownTierTableFieldRefusedByTheFieldStateRung). The
+// FT-710 pins Offset and the FTdx10 TxFrequency, so the three tests between
+// them still exercise three different tier fields.
 //
 // BOTH MODELS, because the gate is the capability profile's and the profiles
 // are per model: a tier field that had somehow acquired write support on one
 // model's map and not the other's would pass a single-model test.
 //
 // The MECHANISM is a lookup MISS: this radio's capability map (caps.go's
-// bankFields) has no entry for spec.FieldDTCSCode on any bank of either
+// bankFields) has no entry for spec.FieldDataMode on any bank of either
 // model, so FieldSupport answers the ZERO spec.FieldSupport, which is neither
 // CanWrite nor spec.Inert. Nothing had to be added to caps.go for the refusal
 // to happen, and the first assertion below is what keeps that true.
@@ -802,18 +809,18 @@ func TestWriteChannel_KnownTierFieldRefusedBeforeWire(t *testing.T) {
 			if !ok {
 				t.Fatalf("bankFor(%q) found no bank — the fixture is wrong, not the gate", "042")
 			}
-			if fs := sess.caps.FieldSupport(bank, spec.FieldDTCSCode); fs.CanWrite() || fs.Write == spec.Inert {
-				t.Fatalf("FieldSupport(%q, %s) = %+v, want the zero FieldSupport (no tier field is in this radio's capability map)", bank, spec.FieldDTCSCode, fs)
+			if fs := sess.caps.FieldSupport(bank, spec.FieldDataMode); fs.CanWrite() || fs.Write == spec.Inert {
+				t.Fatalf("FieldSupport(%q, %s) = %+v, want the zero FieldSupport (no tier field is in this radio's capability map)", bank, spec.FieldDataMode, fs)
 			}
 
 			ch := writableChannel("042")
-			ch.Data.DTCSCode = codeplug.IntField{State: codeplug.Known, Value: 23}
+			ch.Data.DataMode = codeplug.BoolField{State: codeplug.Known, Value: true}
 
 			before := len(p.Transcript())
 			wre := refusedFields(t, sess, ch)
 
-			if !slices.Contains(wre.Fields, spec.FieldDTCSCode) {
-				t.Errorf("WriteRefusedError.Fields = %v, want %s named — a refusal that does not name the field is not the contract", wre.Fields, spec.FieldDTCSCode)
+			if !slices.Contains(wre.Fields, spec.FieldDataMode) {
+				t.Errorf("WriteRefusedError.Fields = %v, want %s named — a refusal that does not name the field is not the contract", wre.Fields, spec.FieldDataMode)
 			}
 			if !strings.Contains(wre.Reason, "not write-Supported for this session") {
 				t.Errorf("WriteRefusedError.Reason = %q, want the capability gate's own sentence", wre.Reason)
@@ -823,6 +830,169 @@ func TestWriteChannel_KnownTierFieldRefusedBeforeWire(t *testing.T) {
 			}
 			if got := p.Transcript(); len(got) != before {
 				t.Errorf("a refused WriteChannel sent %d frames (%q), want 0 — the refusal must precede ALL wire traffic", len(got)-before, got[before:])
+			}
+		})
+	}
+}
+
+// TestWriteChannel_KnownTierTableFieldRefusedByTheFieldStateRung records
+// where a Known TABLE- or VOCABULARY-KEYED tier field is now stopped, and it
+// is a deliberate consequence of the write-gate sweep's item (i) rather than
+// a new rule: the FieldState walk passes each IntField/StringField/ToneField
+// THIS RADIO'S OWN table or vocabulary, and every Icom-tier table in this
+// driver's capabilities is the EMPTY slice — an FTdx101's manual expresses
+// none of it. An empty table fails CLOSED for every Known value
+// (IntField.Valid's own doc comment), so DTCSCode is refused one rung above
+// the capability gate.
+//
+// The VERDICT is unchanged and that is the point of asserting it here: the
+// same field is named, the refusal is still typed, and no frame reaches the
+// wire. Only the sentence differs, and only because a rung that knows the
+// radio's table answers before a rung that knows only its capability map.
+func TestWriteChannel_KnownTierTableFieldRefusedByTheFieldStateRung(t *testing.T) {
+	for _, m := range testModels {
+		t.Run(m.name, func(t *testing.T) {
+			p, sess := openSession(t, m, Simulated, slotImage{})
+
+			if len(sess.caps.DTCSCodes) != 0 {
+				t.Fatalf("caps.DTCSCodes = %v, want empty — this test's premise is that the FTdx101 declares no Icom-tier table", sess.caps.DTCSCodes)
+			}
+
+			ch := writableChannel("042")
+			ch.Data.DTCSCode = codeplug.IntField{State: codeplug.Known, Value: 23}
+
+			before := len(p.Transcript())
+			wre := refusedFields(t, sess, ch)
+
+			if !slices.Equal(wre.Fields, []spec.Field{spec.FieldDTCSCode}) {
+				t.Errorf("WriteRefusedError.Fields = %v, want exactly [%s]", wre.Fields, spec.FieldDTCSCode)
+			}
+			if !strings.Contains(wre.Reason, "not one of this radio's values") {
+				t.Errorf("WriteRefusedError.Reason = %q, want the FieldState rung's empty-table sentence", wre.Reason)
+			}
+			if got := p.Transcript(); len(got) != before {
+				t.Errorf("a refused WriteChannel sent %d frames (%q), want 0 — the refusal must precede ALL wire traffic", len(got)-before, got[before:])
+			}
+		})
+	}
+}
+
+// TestWriteChannel_IncoherentFieldStateRefusedBeforeWire is the fleet
+// FieldState stance's first half (write-gate sweep item (i)): a field whose
+// State says "preserve whatever the radio has" while its Value makes a
+// claim about what that preserved state should be is INCOHERENT, and is
+// refused rather than interpreted — for every one of ChannelData's twenty
+// FieldState fields, not the three (CTCSSTone, ScanSkip, TagDisplay) this
+// rung used to check.
+//
+// TxFreqHz IS THE PROOF FIELD because nothing else on this write path would
+// ever have noticed it: codeplug.Validate skips every non-Recorded field
+// outright, requestedFields is Known-only so the capability gate is never
+// asked about it, and this radio's 41-byte combined Set has no
+// transmit-frequency position at all, so buildWriteCommand has nothing to
+// refuse either.
+//
+// RED-PROOF, captured against the pre-wire write.go (the three-field rung),
+// this test's own body unchanged: no refusal happened on either model —
+//
+//	WriteChannel = {Steps:[{Command:MT Sent:true Confirmed:true}]}, err = <nil>; frames sent: ["MT042007074000-123001C020020FT8 CALL    ;"]
+//
+// i.e. exactly the frame writableChannel() alone produces (wantSetFrame),
+// with the caller's malformed TxFreqHz silently DROPPED.
+func TestWriteChannel_IncoherentFieldStateRefusedBeforeWire(t *testing.T) {
+	for _, m := range testModels {
+		t.Run(m.name, func(t *testing.T) {
+			p, sess := openSession(t, m, Simulated, slotImage{})
+
+			ch := writableChannel("042")
+			ch.Data.TxFreqHz = codeplug.FreqField{State: codeplug.Unavailable, Value: 1}
+
+			before := len(p.Transcript())
+			wre := refusedFields(t, sess, ch)
+
+			if !slices.Equal(wre.Fields, []spec.Field{spec.FieldTxFrequency}) {
+				t.Errorf("WriteRefusedError.Fields = %v, want exactly [%s]", wre.Fields, spec.FieldTxFrequency)
+			}
+			if !strings.Contains(wre.Reason, "must have zero Value") {
+				t.Errorf("WriteRefusedError.Reason = %q, want the typed validator's own incoherence sentence", wre.Reason)
+			}
+			if got := p.Transcript(); len(got) != before {
+				t.Errorf("a refused WriteChannel sent %d frames (%q), want 0 — the refusal must precede ALL wire traffic", len(got)-before, got[before:])
+			}
+		})
+	}
+}
+
+// TestWriteChannel_AbsentFieldStatesStillWrite is the fleet FieldState
+// stance's OTHER half, and the reason this driver does not simply call
+// Valid() on all twenty fields: codeplug.Absent — the ZERO FieldState, what
+// a hand-built ChannelData leaves behind — is ADMITTED, because a caller who
+// set nothing has requested nothing (core/driver's FieldStateChecks, and the
+// IC-9700 stance it is drawn from). An unconditional walk would refuse every
+// ordinary MODIFY, since codeplug's typed validators reject Absent outright.
+//
+// EVERY FieldState field is left at its zero value here, TagDisplay
+// included: this radio's combined Set carries no display flag at all, so
+// nothing further down has an opinion about it either
+// (TestWriteChannel_UnavailableTagDisplayIsNotRefused makes the neighbouring
+// point for the state a real FTdx101 read produces). The channel names the
+// frequency, the mode and the plain fields the frame cannot omit, and
+// nothing else — which is exactly what a composite literal written against
+// this radio produces.
+//
+// RED-PROOF (pre-wire, three-field rung): the same channel was REFUSED on
+// both models, because that rung called CTCSSTone.Valid unconditionally —
+//
+//	WriteChannel = driver: write to slot "042" refused (ctcss_tone): codeplug: ToneField: invalid State ""
+//
+// which is "refuse every ordinary MODIFY" in miniature.
+func TestWriteChannel_AbsentFieldStatesStillWrite(t *testing.T) {
+	for _, m := range testModels {
+		t.Run(m.name, func(t *testing.T) {
+			p, sess := openSession(t, m, Simulated, slotImage{})
+
+			ch := codeplug.Channel{
+				Slot: "042",
+				Data: &codeplug.ChannelData{
+					// The PLAIN fields only — the ones that carry no
+					// FieldState and that this radio's record has a
+					// position for. They match writableChannel's exactly,
+					// so the frame below can be compared against
+					// wantSetFrame byte for byte.
+					FreqHz: 7_074_000,
+					Mode:   "DATA-U",
+					ClarHz: -1230,
+					RxClar: false,
+					TxClar: true,
+					CTCSS:  "ENC",
+					Shift:  "MINUS",
+					Tag:    "FT8 CALL",
+				},
+			}
+			for _, c := range driver.FieldStateChecks(sess.caps, *ch.Data) {
+				if c.Err != nil {
+					t.Fatalf("the fixture's %s is not Absent-and-admitted (%v) — this test asserts nothing unless every FieldState field is left at its zero value", c.Field, c.Err)
+				}
+			}
+
+			before := len(p.Transcript())
+			res, err := sess.WriteChannel(testCtx(t), ch)
+			if err != nil {
+				t.Fatalf("WriteChannel = %v, want nil — an all-Absent channel requests nothing and must WRITE", err)
+			}
+			assertSteps(t, res, wantOneStep(true, true))
+
+			got := p.Transcript()[before:]
+			if len(got) != 1 {
+				t.Fatalf("one WriteChannel sent %d frames (%q), want exactly 1", len(got), got)
+			}
+			// The SAME 41 bytes writableChannel() produces: the fields
+			// that differ between the two fixtures (TagDisplay, CTCSSTone,
+			// ScanSkip) have no position in this radio's record, so an
+			// Absent state cannot move a byte — and a frame that differed
+			// would mean the walk had let a non-Known field reach the wire.
+			if got[0] != wantSetFrame {
+				t.Errorf("Set frame =\n %q\nwant\n %q", got[0], wantSetFrame)
 			}
 		})
 	}
