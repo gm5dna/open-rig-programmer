@@ -100,7 +100,7 @@ the two copies cannot silently diverge into a "B" that is no longer B.
 ## One inventory, two radios
 
 The FTDX101D and the FTDX101MP share this chart. The manual prints Table 2 once
-for both models, and `docs/superpowers/m9d2-capability-matrix.md` §4 records
+for both models, and `docs/superpowers/m9d2-capability-matrix.md` §4 (a private evidence record, not in the repository) records
 that the manual's whole model-distinguishing surface is three places, none of
 them the MENU chart. So this ONE projection serves both `NewD` and `NewMP`
 radios, exactly as `core/cat/ftdx101`'s single `exItems` serves both

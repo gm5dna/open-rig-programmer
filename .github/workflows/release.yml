@@ -220,7 +220,7 @@ jobs:
           # `wails build` ends with its OWN ad-hoc codesign, and that step
           # can fail with "resource fork, Finder information, or similar
           # detritus not allowed" when the freshly-built binary carries
-          # com.apple.provenance extended attributes. app/README.md
+          # com.apple.provenance extended attributes. docs/developing.md
           # documents the identical failure in a local checkout, and a
           # local dry-run of this workflow (25/07/2026) reproduced it: the
           # .app is COMPLETE at that point — only the signature is missing

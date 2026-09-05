@@ -30,6 +30,10 @@ jobs:
         # expectations were fixed beforehand. Anything the platform
         # still surfaces that this plan did not predict becomes a
         # ledgered win-code follow-up.
+        # Runner policy: the CI matrix and the release jobs float on
+        # ubuntu-latest / macos-latest; only the Windows leg is pinned
+        # (windows-2025), because the release job installs a sha256-pinned
+        # NSIS there and a runner image change would move that check.
         os: [ubuntu-latest, macos-latest, windows-2025]
     runs-on: ${{ matrix.os }}
     # Job-level, so it caps all three matrix legs, not only windows-2025 —

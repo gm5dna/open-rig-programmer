@@ -24,11 +24,11 @@ vendor: Open Rig Programmer
 homepage: https://github.com/gm5dna/open-rig-programmer
 license: GPL-3.0-or-later
 description: |
-  Memory-channel programmer for Yaesu and Icom transceivers.
+  Memory-channel programmer for Yaesu and Icom radios.
   Desktop GUI (open-rig-programmer) and command-line tool (rigprog)
-  sharing one core. The FT-710 reads and writes; FTdx10, FTdx101D/MP
-  and the Icom IC-7610, IC-7300, IC-7300MK2, IC-705, IC-9700 and
-  IC-905 read, and write only after opt-in.
+  sharing one core. The FT-710 reads and writes, verified on a real
+  radio; every other supported model reads, and writes only after
+  opt-in. The supported list is in the README.
 depends:
   - libwebkit2gtk-4.1-0
   - libgtk-3-0t64 | libgtk-3-0

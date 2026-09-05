@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Which radios are supported, and how far each has been tested
+    url: https://github.com/gm5dna/open-rig-programmer/blob/main/docs/radio-notes.md
+    about: Read this first if your question is "does it work with my radio?"
