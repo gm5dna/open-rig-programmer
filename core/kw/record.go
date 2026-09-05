@@ -362,8 +362,16 @@ type Record struct {
 	AnswerP1 byte
 }
 
+// emptyName is A3's reading of "P16 will be blank" (590:1492-1493): the
+// eight bytes of P16, every one a space. It is stated once, beside the
+// window predicate it accompanies, because the two are the two halves of one
+// sentence and a second copy of either would be one edit from disagreeing.
+const emptyName = "        " // recNameLen spaces
+
 // isEmptyWindow reports whether every byte of P4-P15 in frame is '0', which
-// is the empty-channel test of 590:1492-1493 (A18a).
+// is the empty-channel test of 590:1492-1493 (A18a). It is HALF the
+// sentence: the other half is P16, which parseRecordFrame requires to be
+// emptyName.
 func isEmptyWindow(frame []byte) bool {
 	for _, b := range frame[recEmptyLoOff : recEmptyHiOff+1] {
 		if b != '0' {
