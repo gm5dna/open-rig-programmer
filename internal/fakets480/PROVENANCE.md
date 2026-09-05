@@ -140,17 +140,74 @@ What the image does carry is SHAPE: every printed value of both live legends
 two mode nibbles and two step indices, so that no read behaviour on any of
 them is a fixture accident.
 
-## The EX menu inventory is not here yet
+## The EX menu inventory — one copy, one generator, one cross-check
 
 The second evidence leg of a fake in this project is its **independently
 transcribed menu inventory** — transcription B, copied into the fake that
 serves it, so that the fake's inventory and the codec's come from two
 different readings of one chart and a transport cross-check can assert they
-agree. This radio's chart is the best-documented menu legend of any radio in
-this programme (`480:399-416` for the command, and the full printed legend
-after it).
+agree. This book prints the best-documented menu legend of any radio in this
+programme (`480:424-539`), and the whole of it is now transcribed twice.
 
-None of that has landed. Until it does, an `EX` frame in either direction
-draws `?;`, `doc.go` says so under "What this fake deliberately does NOT
-model", and `TestEX_IsNotModelledYet` pins the gap's shape so that adding EX
-has to change a test rather than fill a silence.
+- `transcription-b-480.csv` is a **byte copy** of the quarantined artefact
+  committed at `core/kw/ts480/testdata/`. It is a COPY, not a move:
+  `core/kw/ts480/crosscheck_test.go` keeps reading the original as an artefact
+  it binds and hashes by name.
+  `core/transport/ex_crosscheck_ts480_test.go` asserts the copy is still
+  byte-identical to it, because "the codec from A versus the fake from B" holds
+  only for as long as this side's copy really is B.
+- `internal/fakets480/gen` projects the copy into `exinventory_gen.go`. It
+  imports nothing project-internal — in particular not `internal/extable`,
+  which generates the CODEC's side — so a shared parsing bug cannot reproduce
+  itself identically into both inventories and be invisible.
+  `imports_test.go` enforces that recursively, `gen/` included.
+- `core/transport/ex_crosscheck_ts480_test.go` compares the two sides address
+  for address and width for width, and drives every address over the wire.
+
+**If the cross-check ever fires: report the diff. Do NOT edit either table to
+make it pass.** Which side is wrong — or whether the printed chart is — is an
+arbitration against the PDF, and an edit that merely restores agreement
+destroys the evidence the agreement was worth.
+
+### One printed defect rides through unchanged
+
+The EX block's prose lists the two-digit menus as "Menu No. 32, 35 and 48 ~ 52"
+(`480:411`) and **omits menu 034**, whose grid row reaches the chart's second
+parameter column all the same. Both quarantined derivations read the GRID and
+record 034 as two digits; `core/kw/ts480`'s errata and its `crosscheck_test.go`
+pin it as a defect of the printed block. This fake answers **two** bytes there,
+because that is what the transcription says, and no TS-480 has been asked which
+the radio answers. Three faithful readings of one chart agree perfectly, so no
+comparison in this repository can catch this class — which is why the state is
+pinned rather than merely obtained.
+
+### What the menu VALUES are, and what they are not
+
+Each menu's default raw P5 is its **printed width in `0` bytes** — an INVENTED
+placeholder, `doc.go`'s register entry THE EX MENU VALUES ARE INVENTED. The
+parameter list prints each menu's available settings and never a shipped
+default. What is transcribed is the **width**, and only the width.
+
+One address is not arbitrary, and the coincidence is recorded rather than leant
+on: at menu 000 the book prints a complete worked ANSWER, `EX00000000;
+(Display illumination OFF)` (`480:415`), whose P5 is exactly this placeholder
+byte. It is the only complete EX answer either Kenwood book prints, and it is
+the only byte sequence on this surface that can be checked against a literal.
+
+Two family-level entries the EX surface rides on, by number:
+
+- **A19** — an `EX` answer's P5 never exceeds the width the parameter list
+  prints for that menu number. Both books call P5 "variable length" and print
+  no ceiling (`480:409-411`). It is a CEILING, so a short answer is admitted on
+  both sides and `WithEXSetting` can script one.
+- **A2** — the printable-ASCII charset, bounded at `0x7E`. `WithEXSetting`
+  stores what it is given; the charset is enforced by the codec, on the side
+  that has to read a real radio's bytes.
+
+The **text flag** of transcription B is deliberately **not projected** into this
+fake's table. `core/kw/ts480/crosscheck_test.go` records the orchestrator's
+ruling that the flag is a CONVENTION and the digits are the datum: B applied a
+structural test and flagged menus 048-052, whose merged cell prints the NUMERIC
+legend `00 ~ 99 (2-digit)`, while transcription A marks no text row at all on
+this chart. A fake that projected B's flag would answer spaces at five
+addresses the repository has ruled numeric. See `gen/main.go`'s `widthToken`.

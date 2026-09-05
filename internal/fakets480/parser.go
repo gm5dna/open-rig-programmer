@@ -720,21 +720,16 @@ func (r *Radio) handleFrame(frame []byte) []byte {
 		return r.handleMW(rest)
 	case [2]byte{'M', 'C'}:
 		return r.handleMC(rest)
+	case [2]byte{'E', 'X'}:
+		// READ ONLY (ex.go). An EX SET falls through handleEX's own body
+		// check to "?;" — a MODELLING GAP, stated in doc.go, not a claim
+		// that a real TS-480 refuses EX Set.
+		return r.handleEX(rest)
 	default:
-		// TWO DIFFERENT KINDS OF THING LAND HERE.
-		//
 		// "FV;" is a command this book does not contain at all — a grep of
-		// this document for the name returns nothing — so refusing it is
-		// what a real TS-480 must do and is a fact about the radio.
-		//
-		// EX (MENU) falls here DELIBERATELY and is a MODELLING GAP: this
-		// book prints a full EX chart (480:399-416) and the radio plainly
-		// has the command, but this fake serves no menu inventory yet, and
-		// the next task of the plan brings one in from its own copy of
-		// transcription B. Until then an EX frame in either direction draws
-		// "?;", doc.go says so, and TestEX_IsNotModelledYet pins the gap's
-		// shape so that adding EX has to change a test rather than fill a
-		// silence.
+		// this document for the name returns nothing — so refusing it here
+		// is what a real TS-480 must do and is a fact about the radio, not
+		// a modelling gap.
 		return rejection
 	}
 }

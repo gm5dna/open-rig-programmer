@@ -244,8 +244,9 @@ func TestWithTYAnswer_RefusesAFixtureNoRadioCouldSend(t *testing.T) {
 // reports a hardware variant rather than a version, and the document carries
 // no firmware statement at all (erratum E15).
 //
-// The distinction matters: TestEX_IsNotModelledYet below refuses a command
-// this book DOES print, and that one is a gap.
+// The distinction matters: ex_test.go's
+// TestEX_MalformedAndSetShapedBodiesAreRefused refuses a DIRECTION of a
+// command this book prints and this fake serves, and that one is a gap.
 func TestFV_IsNotACommandOfThisRadio(t *testing.T) {
 	_, conn := newTestRadio(t)
 	for _, send := range []string{"FV;", "FV1.00;"} {
@@ -336,18 +337,11 @@ func TestUnknownCommandIsRejected(t *testing.T) {
 	}
 }
 
-// TestEX_IsNotModelledYet pins the MODELLING GAP this task ships
-// deliberately: the EX menu inventory arrives at the next task of the plan
-// (a transcription-B copy and a generator), and until it does an EX frame in
-// either direction draws "?;". This book prints a full EX chart
-// (480:399-416) and the radio plainly has the command, so the pin exists to
-// make adding EX change a test rather than fill a silence.
-func TestEX_IsNotModelledYet(t *testing.T) {
-	_, conn := newTestRadio(t)
-	for _, send := range []string{"EX;", "EX00000000;", "EX000000003;"} {
-		assertRejected(t, conn, send)
-	}
-}
+// The EX (MENU) surface has its own file: ex.go and ex_test.go. Until this
+// milestone's task 17 it was a modelling gap pinned here as
+// TestEX_IsNotModelledYet; the gap that remains — the EX SET — is pinned by
+// ex_test.go's TestEX_MalformedAndSetShapedBodiesAreRefused, beside the read
+// it is a gap in.
 
 // --- The two serial-line tokens, and the transient "?;" (480:126-144) ---
 

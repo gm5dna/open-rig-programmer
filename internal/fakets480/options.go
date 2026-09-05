@@ -206,3 +206,64 @@ func WithStreamError(kind StreamError, n int) Option {
 		r.streamErrors[n] = kind
 	}
 }
+
+// WithEXSetting overlays one EX (MENU) address's raw P5 verbatim — the same
+// overlay semantics as WithChannel: it is applied to whatever exSettings
+// already holds (EXDefaults, seeded in New), so several WithEXSetting options
+// may be given, and a later one wins.
+//
+// IT IS DELIBERATELY LOOSE ABOUT MEMBERSHIP AND WIDTH, which is
+// internal/fakedx10's decision inherited: the option does not consult the
+// generated widths table, so an address this chart does not print becomes
+// answerable, and a P5 shorter or wider than the printed width can be
+// scripted — WITHOUT editing the projection of transcription B that
+// core/transport's cross-check depends on. Both halves earn their keep here:
+// A19 claims a MAXIMUM and nothing else, so core/kw's parser admits a short
+// answer and must be exercised with one, and the same parser REFUSES an
+// over-wide answer, which can only be driven from a fake willing to send one.
+//
+// IT IS STRICT ABOUT THE ADDRESS'S SHAPE, and that is not the same thing. This
+// radio's wire address is three ASCII digits (480:401), so an entry keyed "42"
+// could never be reached by handleEX and would read as a working overlay that
+// silently did nothing. Every call site passes a literal, so a malformed
+// address panics.
+//
+// The bytes it stores are INVENTED, like the defaults they replace: doc.go's
+// register entry THE EX MENU VALUES ARE INVENTED covers both.
+func WithEXSetting(addr, p5 string) Option {
+	mustBeEXAddr("WithEXSetting", addr)
+	return func(r *Radio) {
+		r.exSettings[addr] = p5
+	}
+}
+
+// WithEXUnavailable removes addr from the fake's EX (MENU) address map,
+// applied to whatever exSettings already holds (EXDefaults by default, or a
+// prior WithEXSetting in the same Option list), so a subsequent EX read of
+// addr answers "?;" — indistinguishable from a menu number this chart never
+// printed (ex.go's handleEX, doc.go's register entry AN OUT-OF-INVENTORY EX
+// ADDRESS ANSWERS "?;").
+//
+// IT INTRODUCES NO NEW ASSUMED BEHAVIOUR: it only removes a map entry, which
+// triggers the fake's existing documented "?;". This is the test-only seam for
+// forcing a KNOWN, otherwise-valid menu to answer as unavailable — what a
+// settings reader maps to an unavailable setting — so that a partial snapshot
+// can be built from menus a test names rather than from whichever addresses
+// the chart happens not to have.
+//
+// The address's SHAPE is checked for WithEXSetting's reason: a delete keyed
+// "42" removes nothing and reads as a working option.
+func WithEXUnavailable(addr string) Option {
+	mustBeEXAddr("WithEXUnavailable", addr)
+	return func(r *Radio) {
+		delete(r.exSettings, addr)
+	}
+}
+
+// mustBeEXAddr panics unless addr is exactly three ASCII digits — the whole of
+// this radio's EX wire address (480:401).
+func mustBeEXAddr(option, addr string) {
+	if len(addr) != 3 || !allDigits(addr) {
+		panic(fmt.Sprintf("fakets480: %s(%q) — this radio's EX address is exactly three ASCII digits (480:401), and any other key is unreachable from handleEX", option, addr))
+	}
+}
