@@ -301,9 +301,9 @@ func writeSettingsRender(w io.Writer, recognised, unrecognised []settingsRow) {
 // Every free-text column (menu/group/label/value) is escaped against
 // CSV/formula injection via csvio.EscapeCell — the SAME rule "rigprog
 // export" applies (task-34 brief, Codex plan-review F10); id and state
-// are not free text (id is always 4 or 6 ASCII digits — the two EX address
-// widths, see codeplug.MenuSnapshot.Validate — and state is one of three
-// fixed enum words), so neither is escaped.
+// are not free text (id is always 3, 4 or 6 ASCII digits — the three EX
+// address widths, see codeplug.MenuSnapshot.Validate — and state is one of
+// three fixed enum words), so neither is escaped.
 func writeSettingsCSV(w io.Writer, recognised, unrecognised []settingsRow) error {
 	cw := csv.NewWriter(w)
 	if err := cw.Write(settingsCSVHeader); err != nil {
