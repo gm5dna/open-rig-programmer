@@ -66,13 +66,12 @@ rigprog probe --port COM4
 
 ## 3. SmartScreen and Defender
 
-The installer and the GUI are not code-signed this milestone
-(**STUART**'s decision, `docs/superpowers/specs/2026-09-04-windows-
-packaging-design.md` decision 9) — running the downloaded installer for
-the first time is expected to show Windows SmartScreen's "Windows
-protected your PC" dialogue. Click **More info**, then **Run anyway** to
-proceed; this is the same unknown-publisher warning every unsigned
-Windows program shows, not something specific to this project. Whether
+The installer and the GUI are not code-signed this milestone —
+running the downloaded installer for the first time is expected to
+show Windows SmartScreen's "Windows protected your PC" dialogue. Click
+**More info**, then **Run anyway** to proceed; this is the same
+unknown-publisher warning every unsigned Windows program shows, not
+something specific to this project. Whether
 that dialogue actually appears, and in what form, is recorded as
 **ASSUMED, register entry W9** until the verification session observes
 it.
@@ -97,6 +96,11 @@ ARM64 Windows can emulate x64 programs — install the **arm64**
 installer on an ARM64 machine; installing the amd64 one there will not
 work around it.
 
+The GUI needs Microsoft's WebView2 runtime — Windows 11 is expected to
+already ship it; if it is missing, the installer is configured to
+download it, which needs an internet connection — **ASSUMED, register
+entry W8**; not yet tried by this project.
+
 Settings and read-back snapshots live under
 `%AppData%\rigprog\settings.json` and `%AppData%\rigprog\snapshots\` —
 the same `os.UserConfigDir()`-based path this project uses on every
@@ -119,18 +123,18 @@ contents.
 ## 5. Status
 
 Nothing on this page has been tried on a Windows machine by this
-project yet; the ARM64 verification session is planned (see
-`docs/superpowers/specs/2026-09-04-windows-packaging-design.md`'s
-"Verification bar"). Every driver, COM-port and SmartScreen/Defender
-claim above is labelled ASSUMED with its register entry (W1, W2, W3,
-W4, W9, W10) precisely because none of it has been observed on real
-Windows hardware; W5, W6, W7, W8, W11, W12 and W13 concern behaviour
-this page does not describe directly (a field in `probe`/`read`
-output, TX safety at open, read/write timing, the WebView2
-bootstrapper, USB passthrough, the amd64 GUI, and the exact driver
-wording) but are lifted, or not, by the same session or are explicitly
-not liftable this milestone — see the spec's Register table for the
-full list and what would lift each one.
+project yet; an ARM64 verification session is planned. Every driver,
+COM-port, SmartScreen/Defender and WebView2 claim above is labelled
+ASSUMED with its register entry (W1, W2, W3, W4, W8, W9, W10)
+precisely because none of it has been observed on real Windows
+hardware; W5, W6, W7, W11, W12 and W13 concern behaviour this page
+does not describe directly (a field in `probe`/`read` output, TX
+safety at open, read/write timing, USB passthrough, the amd64 GUI, and
+the exact driver wording) but are lifted, or not, by the same session
+or are explicitly not liftable this milestone. The full register and
+what would lift each entry are kept in this project's internal design
+record, not in this document; `docs/hardware-notes.md` and
+`docs/building.md` carry the parts of it this project has published.
 
 Until that session has run and this page has been updated with its
 findings, treat everything above as a best-effort starting point drawn
