@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# No end-of-line conversion for any tracked file: the frozen-evidence
+# hash tests and three tracked CRLF CSVs must check out byte-for-byte
+# on a Windows clone, and `text=auto`/`eol=lf` would renormalise them.
+* -text
