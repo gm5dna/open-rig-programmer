@@ -146,12 +146,27 @@ func (l Layout) BuildEXRead(addr EXAddress) (Command, error) {
 // Digits above MaxEXDigits describes an answer longer than this family's own
 // maximum frame, which this family's own accumulator would discard as
 // contamination.
+//
+// AND THE ADDRESS IS BOUNDED BY THE ROW'S PRINTED MENU DOMAIN, from the same
+// MaxEXAddress axis BuildEXRead and the outbound gate read — a bound
+// consulted from the same place as its datum. Without it this parser would
+// be the one UNBOUNDED path through the domain: the builder and the gate
+// refuse to SEND a menu number this row's book does not print (590:543,
+// 590:544, 480:401), and an answer for such a number would still be decoded
+// and returned as a setting of a menu this radio has none of.
+// TestParseEXAnswer_BoundsTheAddressToTheRowsPrintedMenuDomain pins 480:061,
+// S:088 and SG:100. The WIRE address needs no second test of its own: it
+// must equal item.Addr.Wire() below, so bounding the inventory row bounds
+// both.
 func (l Layout) ParseEXAnswer(frame []byte, item EXItem) (string, error) {
 	if !l.Configured() {
 		return "", newParseError(frame, "EX answer: this layout is unconfigured and describes no radio, so no byte of this frame has a meaning to read")
 	}
 	if item.Digits < 1 || item.Digits > MaxEXDigits {
 		return "", newParseError(frame, "EX answer: the inventory row for %v declares a printed width of %d, and this codec admits 1 to %d — a zero width is a row that was never transcribed, and a wider one describes an answer longer than this family's own %d-byte frame bound (A19)", item.Addr, item.Digits, MaxEXDigits, DefaultMaxFrame)
+	}
+	if item.Addr.P1 > l.maxEXAddress {
+		return "", newParseError(frame, "EX answer: menu %d is outside %s's printed menu domain, 000 ~ %03d (590:543, 590:544, 480:401) — the builder and the gate refuse to send that address, and an answer carrying it is not a setting this row has", item.Addr.P1, l.model, l.maxEXAddress)
 	}
 	if len(frame) < EXMinAnswerLen {
 		return "", newParseError(frame, "EX answer: the frame is %d bytes; the ten fixed bytes are followed by at least one character of P5, and a frame of exactly %d bytes is the READ (590:552, 480:410)", len(frame), EXReadLen)

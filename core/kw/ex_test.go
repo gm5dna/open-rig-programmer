@@ -269,3 +269,46 @@ func TestEX_ZeroLayoutBuildsAndParsesNothing(t *testing.T) {
 		t.Error("a zero Layout parsed an EX answer")
 	}
 }
+
+// TestParseEXAnswer_BoundsTheAddressToTheRowsPrintedMenuDomain is the
+// INGRESS half of the per-row menu domain, and it is the half the builder
+// and the gate cannot supply.
+//
+// BuildEXRead and AllowedCommand both consult MaxEXAddress, so no address
+// above the row's printed domain leaves this host; nothing about that stops
+// an ANSWER for such an address being decoded and returned, and an answer is
+// what a radio (or a line still carrying another session's traffic) puts in
+// front of the parser. A menu number the row's own book does not print is
+// not a setting this row has: 000 ~ 087 on the TS-590S (590:543), 000 ~ 099
+// on the TS-590SG (590:544), 000 ~ 060 on the TS-480 (480:401).
+//
+// THE THREE ROWS ARE PINNED SEPARATELY because the bound is per row and the
+// two 590 rows read one book: a single-row test would pass on either 590
+// domain put on the other, and their inventories are one identifier apart.
+func TestParseEXAnswer_BoundsTheAddressToTheRowsPrintedMenuDomain(t *testing.T) {
+	for _, tt := range []struct {
+		name         string
+		layout       Layout
+		past, last   uint8
+		pastF, lastF string
+	}{
+		{"TS-480, 000 ~ 060 (480:401)", layout480(), 61, 60, "EX06100001;", "EX06000001;"},
+		{"TS-590S, 000 ~ 087 (590:543)", layout590S(), 88, 87, "EX08800001;", "EX08700001;"},
+		{"TS-590SG, 000 ~ 099 (590:544)", layout590SG(), 100, 99, "EX10000001;", "EX09900001;"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			past := EXItem{Addr: EXAddress{P1: tt.past}, Name: "a menu number this row's book does not print", Digits: 1}
+			if got, err := tt.layout.ParseEXAnswer([]byte(tt.pastF), past); err == nil {
+				t.Errorf("ParseEXAnswer(%q) returned %q for menu %03d, which is past the domain this row's own book prints (000 ~ %03d)", tt.pastF, got, tt.past, tt.last)
+			} else if !strings.Contains(err.Error(), "printed menu domain") {
+				t.Errorf("the refusal reads %v, and it should name the row's printed menu domain", err)
+			}
+			// The positive control, one address below: the bound is a
+			// ceiling on the row's own chart, not a narrowing of it.
+			last := EXItem{Addr: EXAddress{P1: tt.last}, Name: "the last menu number this row prints", Digits: 1}
+			if _, err := tt.layout.ParseEXAnswer([]byte(tt.lastF), last); err != nil {
+				t.Errorf("ParseEXAnswer(%q) refused menu %03d, the last address this row's own book prints: %v", tt.lastF, tt.last, err)
+			}
+		})
+	}
+}
