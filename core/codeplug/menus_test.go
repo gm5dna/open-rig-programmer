@@ -290,3 +290,79 @@ func TestValidate_IgnoresMenus(t *testing.T) {
 		t.Error("Validate issues moved when only Menus differed")
 	}
 }
+
+// TestMenuSnapshotValidate_ThreeDigitIDs pins the THIRD exact width the
+// Kenwood line needs, and — the pin that carries the whole decision — pins
+// that FIVE is still refused after it.
+//
+// The Kenwood TS-590S/SG and TS-480 address a menu by a three-digit MENU
+// number, so isSettingIDWidth admits three exact widths: 3, 4 and 6. It is
+// three EXACT widths and never a 3..6 range, because a range would admit
+// the truncated (P1,P2,P3) address the rule was written to catch. See
+// isSettingIDWidth's own rationale for the cost the third width re-opens
+// one width down, and why this milestone judges it acceptable.
+func TestMenuSnapshotValidate_ThreeDigitIDs(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		id     string
+		wantOK bool
+	}{
+		{"three digits (the Kenwood MENU number)", "080", true},
+		{"three digits, all zero", "000", true},
+		{"four digits (the pair form) still accepted", "0801", true},
+		{"six digits (the triple form) still accepted", "000101", true},
+		{"five digits is still none of the three", "00010", false},
+		{"two digits", "08", false},
+		{"three with a non-digit", "08X", false},
+	} {
+		snap := &MenuSnapshot{Entries: []MenuEntry{{ID: tc.id, Value: "3", State: MenuKnown}}}
+		err := snap.Validate()
+		if tc.wantOK && err != nil {
+			t.Errorf("%s: Validate() on ID %q = %v, want accepted", tc.name, tc.id, err)
+		}
+		if !tc.wantOK && err == nil {
+			t.Errorf("%s: Validate() accepted ID %q", tc.name, tc.id)
+		}
+	}
+}
+
+// TestMenuSnapshotValidate_KenwoodShapedSnapshot validates a whole snapshot
+// shaped the way a Kenwood settings read will build one: every ID three
+// digits, the three entry states mixed, Complete false. It is the
+// snapshot-level counterpart of the width table above — the per-entry rules
+// beside the width (uniqueness, the per-state Value rules, the Complete
+// rule) must all still fire on a three-digit ID, exactly as
+// TestMenuSnapshotValidate_FourDigitIDsGoThroughEveryOtherRule asserts for
+// the pair form.
+func TestMenuSnapshotValidate_KenwoodShapedSnapshot(t *testing.T) {
+	snap := &MenuSnapshot{
+		Descriptor: "ts590sg-ex@1",
+		Entries: []MenuEntry{
+			{ID: "000", Value: "1", State: MenuKnown},
+			{ID: "021", State: MenuUnavailable},
+			{ID: "087", Value: "2", State: MenuUnsupported},
+		},
+	}
+	if err := snap.Validate(); err != nil {
+		t.Errorf("Validate() on a Kenwood-shaped snapshot = %v, want accepted", err)
+	}
+
+	dup := &MenuSnapshot{Entries: []MenuEntry{
+		{ID: "080", Value: "3", State: MenuKnown},
+		{ID: "080", Value: "5", State: MenuKnown},
+	}}
+	var de *DuplicateMenuIDError
+	if err := dup.Validate(); !errors.As(err, &de) {
+		t.Errorf("Validate() on duplicate three-digit IDs = %v, want *DuplicateMenuIDError", err)
+	}
+
+	empty := &MenuSnapshot{Entries: []MenuEntry{{ID: "080", State: MenuKnown}}}
+	if err := empty.Validate(); err == nil {
+		t.Error("Validate() accepted a Known three-digit entry with an empty value")
+	}
+
+	complete := &MenuSnapshot{Complete: true, Entries: []MenuEntry{{ID: "080", State: MenuUnavailable}}}
+	if err := complete.Validate(); err == nil {
+		t.Error("Validate() accepted a Complete snapshot carrying an Unavailable three-digit entry")
+	}
+}
