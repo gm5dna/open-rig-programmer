@@ -244,18 +244,35 @@ func (s *Session) bankNames() string {
 	return strings.Join(parts, ", ")
 }
 
-// mrSpec is the transport spec for one MR read: the "MR" prefix, this
-// family's EXACT 50-byte answer, and one retry.
+// mrSpec is the transport spec for one MR read of slot: the codec's own MR
+// answer matcher, and one retry.
 //
-// THE LENGTH IS core/kw's kw.RecordLen, never a literal here. It is also what
-// makes a MIS-SIZED answer a correlation failure rather than a parse failure:
-// kw.PrefixLenMatcher with a positive exactLen refuses a frame of any other
-// width as not being this read's answer at all, so a 49-byte "MR…" never
-// reaches Layout.ParseMRAnswer and the read times out instead. That is the
-// right order — the frame the radio sent is not the frame this command asked
-// for — and the codec's own width predicate stays the authority on what a
-// memory frame is (see TestReadChannel_AShortMRAnswerNeverReachesTheParser,
-// which pins both halves).
+// IT IS kw.Layout.MRAnswerMatcher AND NOT kw.PrefixLenMatcher, and the
+// difference is the ANSWERED CHANNEL. Every memory answer this family sends
+// is fifty bytes and starts "MR", with the channel number at P2/P3 rather
+// than immediately after the command name, so no prefix a caller can spell
+// separates one channel's answer from another's: under a prefix-and-length
+// matcher a very late answer to a PREVIOUS read is delivered as this read's
+// own. The driver would then refuse it — the *AnswerMismatchError below is
+// exactly that defence — but refusing is the wrong verdict for a frame that
+// was never this read's answer, and it costs the retry that would have
+// succeeded. The codec's matcher skips it instead, and the read times out or
+// its retry answers. Pinned by
+// TestReadChannel_ALateAnswerIsNeverTheNextReadsAnswer.
+//
+// IT COMPARES THE SLOT AND NOT P1, which is the matcher's own division
+// (core/kw/matcher.go): a section channel's wrong HALF is still correlated
+// and still refused precisely, by *AnswerP1MismatchError or by the slot-string
+// comparison, rather than disappearing into a timeout.
+//
+// THE LENGTH IS STILL core/kw's, inside that matcher rather than passed to
+// it: a frame of any width but kw.RecordLen is not this read's answer at all,
+// so a 49-byte "MR…" never reaches Layout.ParseMRAnswer and the read times
+// out instead. That is the right order — the frame the radio sent is not the
+// frame this command asked for — and the codec's own width predicate stays
+// the authority on what a memory frame is (see
+// TestReadChannel_AShortMRAnswerNeverReachesTheParser, which pins both
+// halves).
 //
 // ONE RETRY, and it is the ordinary reasoning: a read is idempotent and a
 // single swallowed reply should not fail a whole-radio read of 120 slots. The
@@ -265,8 +282,8 @@ func (s *Session) bankNames() string {
 // fails the session read WHOLE, with the typed error kw.NewTimeoutError
 // builds, because both books say the NAK is unreliable (590:106-108,
 // 480:136-138) and a timeout is therefore neither "absent" nor "rejected".
-func (s *Session) mrSpec() transport.CommandSpec {
-	return s.newReadSpec("MR", kw.RecordLen, 1)
+func (s *Session) mrSpec(slot kw.Slot) transport.CommandSpec {
+	return s.newReadSpec(s.layout.MRAnswerMatcher(slot), 1)
 }
 
 // ReadChannel implements driver.Session: ONE MR frame per slot, and nothing
@@ -349,7 +366,7 @@ func (s *Session) ReadChannel(ctx context.Context, id string) (codeplug.Channel,
 	if err != nil {
 		return codeplug.Channel{}, fmt.Errorf("ts590: ReadChannel %s: %w", id, err)
 	}
-	frame, err := s.eng.Do(ctx, cmd, s.mrSpec())
+	frame, err := s.eng.Do(ctx, cmd, s.mrSpec(slot))
 	if err != nil {
 		// wireFailure is what types a "?;" and a timeout — see there, and
 		// see this function's own doc comment for what each means on this

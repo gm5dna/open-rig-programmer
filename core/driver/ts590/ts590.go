@@ -202,21 +202,32 @@ func (d *ts590Driver) StopBits() int { return 1 }
 // core/cat's is seven, which is one of the seven dialect axes that make this
 // a separate codec at all.
 func (d *ts590Driver) idSpec() transport.CommandSpec {
-	return d.readSpec("ID", kw.IDAnswerLen, 1)
+	return d.readSpec(kw.PrefixLenMatcher("ID", kw.IDAnswerLen), 1)
 }
 
 // fvSpec is the transport spec for the "FV;" probe, on idSpec's terms.
 func (d *ts590Driver) fvSpec() transport.CommandSpec {
-	return d.readSpec("FV", kw.FVAnswerLen, 1)
+	return d.readSpec(kw.PrefixLenMatcher("FV", kw.FVAnswerLen), 1)
 }
 
-// readSpec builds a Kenwood read spec: the prefix and exact answer length
-// correlate the answer (kw.PrefixLenMatcher), and this driver's test-only
-// timing overrides are applied in ONE place.
-func (d *ts590Driver) readSpec(prefix string, exactLen, retries int) transport.CommandSpec {
+// readSpec builds a Kenwood read spec around the ANSWER MATCHER its caller
+// supplies, applying this driver's test-only timing overrides in ONE place.
+//
+// THE MATCHER IS A PARAMETER RATHER THAN A PREFIX AND A LENGTH, because this
+// family has two matching rules and not one. Every fixed singleton — ID, FV,
+// and T14's TY and MC — is correlated by kw.PrefixLenMatcher on a prefix and
+// an exact width, and so is the EX read, whose caller carries the full
+// three-digit address in the prefix (settings.go, and kw.PrefixLenMatcher's
+// own full-address obligation). MR is neither: every memory answer is fifty
+// bytes and starts "MR", and the channel number sits at P2/P3, so no prefix
+// separates one channel's answer from another's and read.go's mrSpec passes
+// kw.Layout.MRAnswerMatcher instead. Taking the predicate here keeps one
+// construction site for a CommandSpec in this package while letting each
+// command state its own correlation rule.
+func (d *ts590Driver) readSpec(match func(frame []byte) bool, retries int) transport.CommandSpec {
 	return transport.CommandSpec{
 		Class:      transport.ClassRead,
-		Match:      kw.PrefixLenMatcher(prefix, exactLen),
+		Match:      match,
 		RetryReads: retries,
 		Timeout:    d.readTimeout,
 		Settle:     d.settle,
@@ -489,7 +500,7 @@ type Session struct {
 	// there is one construction site for a CommandSpec in this package.
 	// NAMED FOR THE PACKAGE IT MUST NOT BE MISTAKEN FOR: these files also
 	// use spec.Bank and spec.Capabilities two lines away.
-	newReadSpec func(prefix string, exactLen, retries int) transport.CommandSpec
+	newReadSpec func(match func(frame []byte) bool, retries int) transport.CommandSpec
 
 	// The probe's FV answer and what this programme could read of it.
 	//
