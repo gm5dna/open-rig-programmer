@@ -333,18 +333,21 @@ opens normally.
 ## Windows: first launch
 
 The installer is unsigned (no code-signing certificate this
-milestone), so Windows SmartScreen will show "Windows protected your
-PC" the first time you run it. Click **More info**, then **Run
-anyway**. Windows Defender may also flag or scan the download; if it
-quarantines the file, restore it from Defender's Protection History —
-nothing here has been reported as malicious, this project simply has
-no publisher reputation with Microsoft yet.
+milestone), so expect Windows SmartScreen to show "Windows protected
+your PC" the first time you run it — this has not been tried yet by
+this project. If it appears, click **More info**, then **Run anyway**.
+Windows Defender may also flag or scan the download; if it quarantines
+the file, restore it from Defender's Protection History — nothing here
+has been reported as malicious, this project simply has no publisher
+reputation with Microsoft yet.
 
-The GUI needs Microsoft's WebView2 runtime, which Windows 11 already
-ships with. If it is missing (older Windows 10 builds, or a
-stripped-down image), the installer downloads and installs it for you
-during setup — that step needs an internet connection; the rest of the
-installer does not.
+The GUI needs Microsoft's WebView2 runtime, which Windows 11 is
+expected to already ship with. If it is missing (older Windows 10
+builds, or a stripped-down image), the installer is configured to
+download and install it for you during setup, in the Wails template's
+default mode — that step would need an internet connection, the rest
+of the installer does not — but this bootstrapping path has not been
+tried yet by this project.
 
 ## Linux: serial port access
 
