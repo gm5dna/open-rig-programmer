@@ -1,0 +1,123 @@
+# Command: MW (Set frame)
+# Radio: Kenwood TS-480HX / TS-480SAT
+# Title (cover, verbatim): "PC CONTROL COMMAND REFERENCE FOR THE TS-480HX/ SAT
+#   TRANSCEIVER"
+# Printed revision: NONE printed; cover carries "KENWOOD CORPORATION",
+#   "(c) 2003/11/28" and the printing code line "09 08 07 06 05 04 03 02 01 00".
+# Source page: printed folio "14"  ==  PDF page 15 of 26
+# Charts used: the "Set" chart of the MW block.  The block ALSO prints a "Read" row
+#   and an "Answer" row, each with its ruler 1..10 drawn and every one of its ten
+#   cells EMPTY - see FINDING F3.
+# Derivation date: 05/09/2026
+# NO code, no generator, no other file and no other document was consulted.
+#
+# COUNTED FRAME LENGTHS (two independent counts of the printed numbered ruler):
+#   MW Set    = 50 positions  (five ruler rows: 1-10, 11-20, 21-30, 31-40, 41-50)
+#   MW Read   = 0 positions filled (ruler printed 1..10, every cell empty)
+#   MW Answer = 0 positions filled (ruler printed 1..10, every cell empty)
+#
+# ---------------------------------------------------------------------------
+# SET CHART, position by position:
+#   1  M          2  W
+#   3  P1
+#   4  P2         5-6  P3
+#   7-17  P4      (11 positions)
+#   18  P5
+#   19  P6
+#   20  P7
+#   21-22  P8
+#   23-24  P9
+#   25-27  P10
+#   28  P11
+#   29  P12
+#   30-38  P13   (9 positions)
+#   39-40  P14
+#   41  P15
+#   42-49  P16   (8 positions)
+#   50  ;
+#
+# ---------------------------------------------------------------------------
+# LEGEND, VERBATIM (the complete right-hand column, headed "Parameters:"; block
+# description reads "Store the data to the Memory channel."):
+#
+#   P1
+#     0: RX frequency, 1: TX frequency
+#   P2
+#     Always 0 for the TS-480.
+#   P3
+#     00 ~ 99: Memory channel number
+#   P4
+#     Frequency in Hz (11-digit).
+#   P5
+#     Mode.  Refer to the MD command.
+#   P6
+#     Lockout status.  0: Lockout OFF, 1: Lockout ON
+#   P7
+#     0: OFF, 1: TONE, 2: CTCSS
+#   P8
+#     Tone Number.  Refero to the TN command.
+#   P9
+#     CTCSS tone number.  Refer to the CN command.
+#   P10
+#     Always 000 for the TS-480.
+#   P11
+#     Always 0 for the TS-480.
+#   P12
+#     Always 0 for the TS-480.
+#   P13
+#     Always 000000000 for the TS-480.
+#   P14
+#     Step size.  Refer to the ST command.
+#   P15
+#     Always 0 for the TS-480.
+#   P16
+#     Memory name.  A maximum of 8 characters.
+#
+#   Memory channel 90 ~ 99:
+#   P1=0 (start frequency), P1=1 (end frequency)
+#
+#   (P8 is transcribed exactly as printed: "Refero".  MR's P8 in the SAME book reads
+#    "Tone Number.  Refer to page 35." - see FINDINGS F4 and F6.)
+#
+# WHAT THE BOOK SAYS ABOUT OMITTING THE NAME OR SENDING A SHORTER FRAME, AND WHAT
+# HAPPENS TO THE CHANNEL THEN:
+#   NOTHING.  The MW block of this book prints no statement at all about omitting
+#   P16, about a shorter frame, or about erasing a channel.  (Compare the TS-590
+#   book, whose MW block does carry such a note.)  The only nearby general statement
+#   in the whole document is the folio-2 note, VERBATIM:
+#     "Note:  If a particular parameter is not applicable to this transceiver, the
+#      parameter digits should be filled using any character except the ASCII control
+#      codes (00 to 1Fh) and the terminator (;)."
+#   No erase vector is emitted here, because no shorter-frame shape is printed.
+#
+# EVERY POSITION THE CHART PRINTS AS FIXED / "Always" (by position number):
+#   position  4         (P2)   -- "Always 0 for the TS-480."
+#   positions 25,26,27  (P10)  -- "Always 000 for the TS-480."
+#   position  28        (P11)  -- "Always 0 for the TS-480."
+#   position  29        (P12)  -- "Always 0 for the TS-480."
+#   positions 30..38    (P13)  -- "Always 000000000 for the TS-480."
+#   position  41        (P15)  -- "Always 0 for the TS-480."
+#   (No "not used" note appears in the MW block.)
+#
+# ---------------------------------------------------------------------------
+# BYTES WHOSE VALUE THE MANUAL DOES NOT DETERMINE  -> INHERITED-ASSUMED
+#   [B1] positions 7..17 (P4) - the frequency VALUE in each vector is ASSUMED; only
+#        the 11-digit Hz format is documented.
+#   [B2] positions 42..49 (P16) when the name is shorter than 8.  The book says
+#        NOTHING about padding.  Not exercised below (both names are exactly 8).
+#   [B3] positions 21..22 (P8) and 23..24 (P9) when the tone system is OFF -
+#        ASSUMED "00"; no don't-care value is printed.
+#   [B4] positions 39..40 (P14) VALUES - the width 2 follows the chart and the ST
+#        legend, but the value in each vector is ASSUMED.
+#   [B5] The channel numbers, mode digits and name strings are ASSUMED illustrative
+#        values; only their field widths and legends are documented.
+#
+# Hardware status: UNVERIFIED for every vector in this file.
+#
+# ---------------------------------------------------------------------------
+# VECTORS  (name <TAB> frame bytes verbatim, terminator included)
+#
+# Mirrors mr480_answer_ch03_rx_name8: RX frequency, tone OFF, 8-character name
+mw480_set_ch03_rx_name8	MW000300014250000200000000000000000000000DXCLUSTR;
+# Mirrors mr480_answer_ch12_tx_tone_on: TX frequency, TONE on (P8=08), 10 kHz step
+mw480_set_ch12_tx_tone_on	MW101200051500000401080000000000000000020REPEATER;

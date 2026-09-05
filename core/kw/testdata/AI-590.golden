@@ -1,0 +1,67 @@
+# Command: AI (Set frame(s))
+# Radio: Kenwood TS-590S / TS-590SG
+# Title (cover, verbatim): "TS-590S TS-590SG / PC CONTROL COMMAND / Reference Guide"
+# Printed revision: NONE printed; cover carries "JVCKENWOOD Corporation" and
+#   "January/30/2019".
+# Source page: printed folio "- 3 -"  ==  PDF page 4 of 35
+# Charts used: the Set chart of the AI block (Read and Answer charts recorded below
+#   for completeness of the position map)
+# Derivation date: 05/09/2026
+# NO code, no generator, no other file and no other document was consulted.
+#
+# COUNTED FRAME LENGTHS (two independent counts of the printed numbered ruler):
+#   AI Set    = 4 positions
+#   AI Read   = 3 positions
+#   AI Answer = 4 positions
+#
+# CHARTS, position by position:
+#   Set:     1 A  2 I  3 P1  4 ;      (5..10 empty)
+#   Read:    1 A  2 I  3 ;            (4..10 empty)
+#   Answer:  1 A  2 I  3 P1  4 ;      (5..10 empty)
+#
+# Field map (Set):
+#   pos 1-2  "AI"
+#   pos 3    P1  (one character)
+#   pos 4    ";"
+#
+# ---------------------------------------------------------------------------
+# LEGEND, VERBATIM (the complete right-hand column; block description reads
+# "Sets and reads the Auto Information (AI) function ON/ OFF."):
+#
+#   [TS-590S / TS-590SG common]
+#   Parameters:
+#   P1
+#     0:  AI OFF
+#     2:  AI ON (without backup)
+#     4:  AI ON (with backup)
+#
+#   * When AI is ON, the respective response command is output
+#     when the parameter is changed by the command with the
+#     response command.
+#   * When AI is ON by setting P1 parameter to 2 and the power is
+#     turned to OFF, AI is also turned to OFF.
+#   * P1 parameter 4 (with backup) is supported from the firmware
+#     version 2.00 in TS-590S
+#
+#   (Transcribed exactly as printed.  Only 0, 2 and 4 are printed; 1 and 3 are not
+#    listed at all.  See FINDING F9 - not resolved here.)
+#
+# POSITIONS THE CHART PRINTS AS FIXED / "Always": NONE in the AI block.
+#
+# ---------------------------------------------------------------------------
+# BYTES WHOSE VALUE THE MANUAL DOES NOT DETERMINE  -> INHERITED-ASSUMED
+#   NONE.  Every byte of every vector below is determined by the printed chart and
+#   the printed legend.
+#
+# Hardware status: UNVERIFIED for every vector in this file.
+#
+# ---------------------------------------------------------------------------
+# VECTORS  (name <TAB> frame bytes verbatim)
+#
+ai590_set_off	AI0;
+ai590_set_on_without_backup	AI2;
+ai590_set_on_with_backup	AI4;
+ai590_read	AI;
+ai590_answer_off	AI0;
+ai590_answer_on_without_backup	AI2;
+ai590_answer_on_with_backup	AI4;

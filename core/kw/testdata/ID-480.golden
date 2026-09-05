@@ -1,0 +1,58 @@
+# Command: ID (Read and Answer frames)
+# Radio: Kenwood TS-480HX / TS-480SAT
+# Title (cover, verbatim): "PC CONTROL COMMAND REFERENCE FOR THE TS-480HX/ SAT
+#   TRANSCEIVER"
+# Printed revision: NONE printed; cover carries "KENWOOD CORPORATION",
+#   "(c) 2003/11/28" and the printing code line "09 08 07 06 05 04 03 02 01 00".
+# Source page: printed folio "10"  ==  PDF page 11 of 26
+# Charts used: the Read and Answer charts of the ID block.  The block ALSO prints a
+#   "Set" row whose ruler 1..10 is drawn and whose ten cells are ALL EMPTY - see
+#   FINDING F3.  (The TS-590 book omits the Set row from its ID block entirely
+#   rather than printing it empty.)
+# Derivation date: 05/09/2026
+# NO code, no generator, no other file and no other document was consulted.
+#
+# COUNTED FRAME LENGTHS (two independent counts of the printed numbered ruler, then a
+# third look at 600 dpi to confirm the Set row really is blank and not faint):
+#   ID Set    = 0 positions filled (ruler printed 1..10, every cell empty)
+#   ID Read   = 3 positions
+#   ID Answer = 6 positions
+#
+# CHARTS, position by position:
+#   Set:     1..10 all empty
+#   Read:    1 I  2 D  3 ;                          (4..10 empty)
+#   Answer:  1 I  2 D  3 P1  4 P1  5 P1  6 ;        (7..10 empty)
+#
+# Field map:
+#   pos 1-2  "ID"
+#   pos 3-5  P1  (three characters)
+#   pos 6    ";"
+#
+# ---------------------------------------------------------------------------
+# ID LEGEND, VERBATIM (every model/number pair printed; the complete right-hand
+# column; block description reads "Reads the transceiver ID number."):
+#
+#   Parameters:
+#   P1
+#     020: TS-480
+#
+#   ONE pair, and only one.  The book does NOT distinguish TS-480HX from TS-480SAT
+#   here; both are "020: TS-480".  (The model split is carried by the TY command
+#   instead - see TY-480.golden.)
+#
+# POSITIONS THE CHART PRINTS AS FIXED / "Always": NONE in the ID block.
+#
+# ---------------------------------------------------------------------------
+# BYTES WHOSE VALUE THE MANUAL DOES NOT DETERMINE  -> INHERITED-ASSUMED
+#   NONE for the Read and Answer frames below: every byte is determined by the
+#   printed chart and the printed legend.
+#   No Set vector is emitted, because the Set chart is empty (FINDING F3) and
+#   inventing one would be resolving that finding.
+#
+# Hardware status: UNVERIFIED for every vector in this file.
+#
+# ---------------------------------------------------------------------------
+# VECTORS  (name <TAB> frame bytes verbatim)
+#
+id480_read	ID;
+id480_answer_ts480	ID020;
