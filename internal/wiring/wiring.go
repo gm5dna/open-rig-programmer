@@ -54,6 +54,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft710"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft891"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ft991a"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx10"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx101"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
@@ -456,6 +457,60 @@ const ICR8600Model = "IC-R8600"
 // driver's claim.
 const FT891Model = "FT-891"
 
+// FT991AModel names the FT-991A's realDrivers/fakeDrivers key, which must
+// equal ft991a.New(...).Model() — pinned, like every constant above, by
+// TestDriverTableKeysMatchDriverModel walking both tables. A named
+// constant rather than a bare literal at each of its uses for the same
+// reason every other model constant is: the two table keys MUST be the
+// same string, and a typo in one alone would build a model openable for
+// real but not simulated.
+//
+// TIER 1's SECOND REGISTRATION, and the SECOND YAESU MODEL ADDED SINCE
+// M9d-2 — the FT-891's row above is the one it follows. It is a
+// single-row registration on the FT-891's own footing rather than the
+// FTdx101 pair's: core/driver/ft991a has one member, core/cat/ft991a
+// offers one bare Dialect(), and internal/fakeft991a one bare New. The
+// spelling is the manual's own, hyphen and trailing capital A included
+// (capability matrix §1.1). "FT-991" IS A DIFFERENT REAL RADIO — an
+// earlier Yaesu product this project does not support — so it is never a
+// key here and never a fallback for one.
+//
+// TWO SLUGS EXIST FOR THIS RADIO AND THEY ARE DIFFERENT STRINGS (plan
+// decision P13, spec erratum S-E2). The Go PACKAGE slug is "ft991a" —
+// core/driver/ft991a, core/cat/ft991a, internal/fakeft991a, and
+// internal/extable's own profile key. ModelSlug(FT991AModel), which is
+// what names this radio's snapshot and journal directory, is "ft-991a":
+// the hyphen in the model name is collapsed to a separator, not deleted,
+// and the trailing A is lowercased with the rest. TestModelSlug pins the
+// second and TestModelSlugsUnique pins that it collides with no other
+// registered model's — "ft-891" and "ft-991a" being one character apart
+// in the middle rather than at either end.
+//
+// TWO STATIC BANKS AND NO DISCOVERED BANK AT ALL, which is where this row
+// differs from the FT-891's above. MEM ("001".."099") and PMS
+// ("100".."117") are declared statically and DENSE, and Open probes
+// nothing: this radio's manual describes no 5 MHz bank and no emergency
+// channel, so there is nothing to discover and the absence is
+// TRANSCRIBED rather than deferred (matrix §3.4). A session's bank list
+// is therefore its static capability set exactly.
+//
+// THE PMS SLOTS ARE THE WIRE NUMBERS "100".."117", not the "P1L".."P9U"
+// every registered sibling uses (plan decision P20, matrix §1.4.2 and
+// §3.13). This dialect's PMSForm is numeric — the pair number never
+// reaches the wire — so those sibling literals are strings this radio's
+// own ParseSlot REFUSES. The radio's own MC legend prints the same slots
+// as "P-1L".."P-9U", and that divergence is TOLD to the user in
+// internal/radiotext's GridLegendNote rather than papered over here.
+//
+// NO SerialFramingReporter, like the five Yaesu rows above it and unlike
+// every Icom row but the IC-7100's: this radio's CAT manual carries no
+// serial-framing statement at all, so 8-N-2 for the FT-991A is an ASSUMED
+// entry in core/cat/ft991a's own register — FRAMING: 8 DATA BITS, NO
+// PARITY, TWO STOP BITS — with a named hardware lift, and the port opens
+// at transport.DefaultStopBits by the absence of a report rather than by a
+// driver's claim.
+const FT991AModel = "FT-991A"
+
 // realDrivers is the model-keyed table of real-hardware driver
 // constructors: model name -> a constructor building THAT model's
 // real-profile driver.Driver. It is the single source of truth
@@ -637,6 +692,24 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ft891.New(ft891.RealHardware, ft891.WithConsentedUnverifiedWrites())
 		}
 		return NewFT891RealDriver()
+	},
+	// ONE ROW, naming its profile explicitly, on exactly the FT-891 row's
+	// terms above and for the same reason: core/driver/ft991a's New takes
+	// the profile as its first ARGUMENT (ft991a.go's `func New(profile
+	// Profile, opts ...Option) driver.Driver`), so the consent arm passes
+	// ft991a.RealHardware rather than leaving the profile to an option's
+	// absence. That driver's zero Profile value IS RealHardware, so a
+	// consent arm that had quietly passed ft991a.Simulated would not be
+	// caught by a fail-safe — it would be caught by
+	// TestRealDriverFor_DefaultPathByteIdentical's FT991AModel row (both
+	// arms pinned there, false and consent), and the session-level consent
+	// transform this row feeds is separately pinned by
+	// TestOpenRealSessionWith_ConsentedSessionCaps's FT-991A subtest.
+	FT991AModel: func(consent bool) driver.Driver {
+		if consent {
+			return ft991a.New(ft991a.RealHardware, ft991a.WithConsentedUnverifiedWrites())
+		}
+		return NewFT991ARealDriver()
 	},
 }
 
@@ -1171,6 +1244,37 @@ func NewICR8600RealDriver() driver.Driver {
 // it to decide the radio is consent-eligible at all.
 func NewFT891RealDriver() driver.Driver {
 	return ft891.New(ft891.RealHardware)
+}
+
+// NewFT991ARealDriver builds the ft991a driver for a real-hardware session:
+// profile ft991a.RealHardware, the zero value — the FT-991A's half of the
+// realDrivers table, split out for the same reason NewRealDriver and every
+// constructor above it is (a test can pin the capability set the real
+// wiring path implies without opening a port).
+//
+// READ/PROBE ONLY for every unconsented caller, by the same mechanism the
+// FT-891's entry is: this driver's writeTrialsComplete is FALSE, so a
+// RealHardware FT-991A driver reports ft991a.CapabilitiesUnverified — every
+// candidate field's Read AND Write spec.Unverified, nothing writable on
+// either bank. No FT-991A has been written to by this project, and no
+// FT-991A has answered a frame at all, which is why the READ labels are
+// Unverified here too rather than Supported (capability matrix §2.1). The
+// capability gate refuses before any frame is built, so registering the
+// model adds a read/probe path against real hardware and, for an
+// unconsented session, no write path — see core/driver/ft991a/doc.go's
+// eleven-entry ASSUMED register for what a Stage R session would lift, and
+// its entry "A SINGLE COMBINED MT SET SUFFICES TO CREATE OR OVERWRITE A
+// CHANNEL" for the one capture that would settle this radio's write path.
+//
+// The CONSENTED row is a different construction —
+// ft991a.New(RealHardware, WithConsentedUnverifiedWrites()), built only when
+// the user's recorded grant says so — and the session IT assembles
+// re-labels the write-side Unverified fields spec.ConsentedUnverified,
+// which FieldSupport.CanWrite opens. Even there the driver's STATIC
+// Capabilities is untouched, which is what lets NeedsUnverifiedConsent read
+// it to decide the radio is consent-eligible at all.
+func NewFT991ARealDriver() driver.Driver {
+	return ft991a.New(ft991a.RealHardware)
 }
 
 // openSerial is OpenRealSessionWith's test seam (and so OpenRealSessionFor's

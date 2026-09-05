@@ -202,14 +202,14 @@ func TestTextFields_CoversEveryFieldOfText(t *testing.T) {
 // one simulator.
 var yaesuModels = map[string]bool{
 	"FT-710": true, "FTdx10": true, "FTdx101D": true, "FTdx101MP": true,
-	"FT-891": true,
+	"FT-891": true, "FT-991A": true,
 }
 
 // catFamilyVocabulary is the Yaesu CAT-protocol vocabulary every Icom
 // entry's prose must never carry, on top of the other Yaesu models' own
 // particulars (ownParticulars, below): these four tokens are not any ONE
 // Yaesu model's evidence, they are the shared fact "this driver speaks
-// CAT", which is true of all five Yaesu entries and false of every Icom
+// CAT", which is true of all six Yaesu entries and false of every Icom
 // one. Checked only when the model being checked is NOT itself Yaesu — a
 // Yaesu entry's own prose legitimately contains "CAT" throughout.
 var catFamilyVocabulary = []string{"CAT manual", "CAT command", "CAT query", "CAT"}
@@ -283,7 +283,15 @@ var ownParticulars = map[string][]string{
 	// guard (no FT-891 has ever answered a frame), so the bare name is
 	// the whole of this radio's distinguishing evidence — the three
 	// FTdx entries' shape, not the FT-710's five-token one.
-	"FT-891":     {"FT-891"},
+	"FT-891": {"FT-891"},
+	// The FT-991A's own name, and nothing else, on the FT-891's terms
+	// exactly: no address hex (it is not a CI-V radio) and no hardware
+	// finding to guard (no FT-991A has ever answered a frame). Its
+	// distinctive strings — "P-1L", "EX087;", "031 CAT RATE" — are facts
+	// about this radio's MANUAL rather than particulars another entry
+	// could plausibly borrow, and listing them here would guard nothing
+	// the bare name does not.
+	"FT-991A":    {"FT-991A"},
 	"IC-7610":    {"IC-7610", "98h"},
 	"IC-7300":    {"IC-7300", "94h"},
 	"IC-7300MK2": {"IC-7300MK2", "B6h"},
@@ -957,6 +965,23 @@ func TestFor_UnknownModel(t *testing.T) {
 		// the space-for-hyphen spelling Yaesu's own marketing uses, and
 		// the bare model number.
 		"FT891", "ft-891", "FT-891 ", " FT-891", "FT 891", "891",
+		// FT-991A near misses (Tier 1's second registration): the same
+		// five-shape set once more — the no-hyphen spelling, the lowercase
+		// slug this project's own ModelSlug produces ("ft-991a", a real
+		// string in this build, which is exactly why it must not resolve
+		// here), a trailing- and a leading-space variant, the
+		// space-for-hyphen spelling, and the bare model number.
+		//
+		// AND ONE THAT IS NOT A TYPO AT ALL. "FT-991" is a DIFFERENT REAL
+		// RADIO — a shipping Yaesu product this project does not support —
+		// and it is also a strict PREFIX of the key above it, which is the
+		// circumstance in which a lookup that had been made loose would
+		// serve one radio's prose to the other's owner. It must return
+		// false for both reasons, and calling it a misspelling would be
+		// untrue (plan-level decision: "FT-991" is never a registry key
+		// and never a negative fixture outside this list).
+		"FT991A", "ft-991a", "FT-991A ", " FT-991A", "FT 991A", "991A",
+		"FT-991",
 	} {
 		got, ok := radiotext.For(model)
 		if ok {
@@ -1509,5 +1534,137 @@ func TestRadiotext_FT891ProbeNote_CarriesItsThreeNamedFacts(t *testing.T) {
 	// the sentence has to say so rather than implying a flag exists.
 	if !strings.Contains(got.ProbeFirmwareNote, "neither this build's command line nor its window offers a way to open at another rate") {
 		t.Errorf("ProbeFirmwareNote = %q,\nwant it to state that no baud override exists in either face of this build", got.ProbeFirmwareNote)
+	}
+}
+
+// TestRadiotext_FT991AVerbatim pins the FT-991A's entry (Tier 1 task 15a,
+// landed IN THE SAME COMMIT as that model's wiring registration —
+// internal/wiring's TestEverySupportedModelHasRadiotext refuses a registered
+// model with no prose, and ownParticulars' lockstep above PANICS on one).
+//
+// THE HONESTY RULE APPLIES UNCHANGED. No FT-991A has ever been asked
+// anything by this project (core/driver/ft991a/doc.go), no FT-991A OPERATING
+// manual is held — only the CAT Operation Reference Manual — and no write
+// trial has happened (that driver's writeTrialsComplete is false). Every
+// string therefore says what is actually known, including where something is
+// NOT known, and borrows the wording of no other entry.
+//
+// WHAT THIS ENTRY CAN SAY THAT ITS YAESU SIBLINGS' CANNOT, and why it is
+// written fresh rather than adapted: this radio's memory record carries a
+// FIVE-state tone byte where every sibling's carries three, so the DCS CODE
+// joins the tone number as radio-side (matrix §1.17, §2.4); its PMS slots
+// are the wire NUMBERS 100-117 where its own front panel prints P-1L to
+// P-9U (matrix §1.4.2, §3.13, plan decision P20); its menu chart's row 087
+// is excluded, so the settings viewer shows 152 items for 153 printed rows
+// (matrix §3.9, plan decision P15); its baud menu is 031 and 029 is a
+// different port's (matrix §1.11-1.12, plan decision P11); and its USB
+// socket enumerates two serial devices while a second RS-232C path is gated
+// by a menu row whose printed legend has a hole in it (matrix §3.12).
+//
+// assertNotBorrowedFromAnyOtherModel runs against every OTHER registered
+// entry, derived from wiring.SupportedModels() rather than a list fixed at
+// this registration, so a later registration is covered here too.
+func TestRadiotext_FT991AVerbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure:   "There is no CAT erase command for the FT-991A, and here that absence is printed rather than merely unclaimed: this radio's Control Command List is the whole of its CAT vocabulary and holds no command that clears a memory channel — the nearest entries, QMB STORE and QMB RECALL, address the quick-memory bank instead. Clearing a channel is therefore something only the radio itself can do, and this build will not describe how: no FT-991A operating manual is held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than saying so. Follow the memory-channel erase procedure in the radio's own operating manual.",
+		FirmwareGuidance: "No minimum firmware version is established for the FT-991A: nothing this project holds states one, and no FT-991A has ever been asked. Nor is there a version query to ask with — the CAT vocabulary this build speaks to this radio is the identity read, the one combined memory read, the one combined memory write and the menu read, and nothing besides — so read the version off the radio's own display and type it here, where it is recorded alongside the send rather than tested against a threshold nobody has established.",
+		GridLegendNote:   "Tone and Scan Skip are neither read nor written for the FT-991A by this build. Its combined memory record carries a five-state tone byte — CTCSS off, CTCSS encode and decode, CTCSS encode, DCS encode and decode, DCS encode — and no more of either kind: the tone frequency number and the DCS code both live on a separate command that reports what the radio is doing now rather than what a memory channel holds, and no position anywhere in the record marks a channel for scan skip, so set the tone number, the DCS code and the skip marking at the radio. Two further things this window shows will not match what the radio prints. C4FM is one of this radio's fourteen modes and CHIRP has no name for it, so a C4FM channel cannot be carried out to a CHIRP file as itself. And the PMS pairs are shown here as the channel numbers 100 to 117, which is what this radio's own CAT record uses, while its front panel and its manual print the same eighteen slots as P-1L to P-9U — the numbers are the wire's and the letters are the panel's, and they name the same slots in the same order. One count is worth explaining before it surprises you: the settings list shows 152 items where this radio's menu chart prints 153 rows. Row 087, RADIO ID, is left out because the chart gives it neither a width nor a parameter — ten printed hyphens and nothing else — so this build cannot size an answer to it and will not send a question it cannot read. One EX087; read on a real radio would settle it either way.",
+		// Deliberately empty, exactly as every other model's is whose
+		// write-trial guard is false: this field states what IS and is NOT
+		// verified on real hardware about preservation across a rewrite,
+		// and with core/driver/ft991a's writeTrialsComplete false there is
+		// no verification of any kind to report.
+		ToneScanSkipVerification: "",
+		// Byte-identical to EraseProcedure, as every other entry's is.
+		EraseDialogNote: "There is no CAT erase command for the FT-991A, and here that absence is printed rather than merely unclaimed: this radio's Control Command List is the whole of its CAT vocabulary and holds no command that clears a memory channel — the nearest entries, QMB STORE and QMB RECALL, address the quick-memory bank instead. Clearing a channel is therefore something only the radio itself can do, and this build will not describe how: no FT-991A operating manual is held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than saying so. Follow the memory-channel erase procedure in the radio's own operating manual.",
+		// The two tooltips DIFFER because the two absences are differently
+		// evidenced (matrix §2.4): the tone number and the DCS code are a
+		// DIFFERENT COMMAND's live state, while the scan-skip marking has
+		// no position in this record at all. Neither claims a preservation
+		// finding — there is none.
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "not read or written over CAT by this build — this radio's memory record carries a tone STATE but no tone frequency number and no DCS code, both of which are a different command's live state, and nothing has established what a rewrite does to either",
+			ScanSkip: "not read or written over CAT by this build — no position anywhere in this radio's memory record marks a channel for scan skip, and nothing has established what a rewrite does to the marking",
+		},
+		// A placeholder LABEL, not an example: no FT-991A version string
+		// has been seen here, so there is no format to exemplify.
+		FirmwarePlaceholder: "as printed on the FT-991A's own display",
+		ProbeFirmwareNote:   "Firmware version has no CAT query in this build — read it off the radio's display. No minimum version is established for the FT-991A: this build knows of none to require. The 38400 this build opens at is ASSUMED, not read off the radio. The menu row that sets the rate for the socket this programme uses is 031 CAT RATE, which prints 4800, 9600, 19200 and 38400 and marks none of them as the factory setting, and neither this build's command line nor its window offers a way to open at another rate, so a radio set differently has to be put back at menu 031 before it will answer. Menu 029 is NOT that row: 029 232C RATE sets the rate of the rear-panel RS-232C jack, which is a different port from the one this programme opens, so changing it will not make this radio answer here. Two more things are worth knowing before blaming the port. This radio's rear-panel USB socket is a built-in USB-to-dual-UART bridge, so it enumerates TWO serial devices and the manual never says which of the two carries CAT — if one is silent, try the other before concluding the cable or the speed is wrong. And there is a second, entirely separate CAT path on the rear-panel RS-232C jack, gated by menu 028 GPS/232C SELECT; that row's own printed option list is defective in the manual this build was written from — it prints 0: GPS1, 1: GPS2 and 3: RS232C, with key 2 missing — so a reader who goes looking for that setting should expect the printed list and the radio's own to disagree.",
+	}
+
+	got, ok := radiotext.For("FT-991A")
+	if !ok {
+		t.Fatal(`For("FT-991A") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"FT-991A\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "FT-991A", got)
+}
+
+// TestRadiotext_FT991ANamedFacts pins the facts the Tier 1 plan (task 15a)
+// requires of THIS model's two long fields BY NAME, rather than leaving them
+// to the verbatim comparison above, which would also catch a regression but
+// only by accident — a reworded note that quietly dropped one of them would
+// still be "verbatim" once someone updated the literal.
+//
+// ProbeFirmwareNote's three (plan decision P11, matrix §1.11-1.12 and
+// §3.12): the ASSUMED opening speed named with menu 031 CAT RATE, with menu
+// 029 EXCLUDED as the RS-232C jack's own rate rather than merely unmentioned
+// — a user sent to 029 sets the wrong port's rate and the radio stays silent
+// — the two enumerated USB serial devices, and the menu-028 RS-232C gate
+// WITH that row's own printed defect, which is stated rather than silently
+// corrected because nothing establishes whether the hole is the radio's or
+// the chart's.
+//
+// GridLegendNote's four (plan decisions P15 and P20, matrix §2.4, §3.9 and
+// §3.13): the tone number AND the DCS code as radio-side, C4FM as
+// unmappable in CHIRP, the 087 exclusion as 152 items against 153 printed
+// rows with the one EX087; capture that would settle it, and the PMS slots'
+// two spellings — the wire numbers this build shows and the P-1L to P-9U the
+// radio's own panel and manual print.
+func TestRadiotext_FT991ANamedFacts(t *testing.T) {
+	got, ok := radiotext.For("FT-991A")
+	if !ok {
+		t.Fatal(`For("FT-991A") ok = false, want true`)
+	}
+	for _, want := range []string{
+		// The baud sentence, and the menu row that is its only remedy.
+		"38400 this build opens at is ASSUMED",
+		"031 CAT RATE",
+		// Menu 029 named ONLY to exclude it.
+		"Menu 029 is NOT that row",
+		"different port from the one this programme opens",
+		// The two enumerated USB serial devices.
+		"USB-to-dual-UART bridge",
+		"never says which of the two carries CAT",
+		// The RS-232C gate and its own printed defect.
+		"028 GPS/232C SELECT",
+		"0: GPS1, 1: GPS2 and 3: RS232C, with key 2 missing",
+	} {
+		if !strings.Contains(got.ProbeFirmwareNote, want) {
+			t.Errorf("ProbeFirmwareNote = %q,\nwant it to contain %q", got.ProbeFirmwareNote, want)
+		}
+	}
+	for _, want := range []string{
+		// The tone number AND the DCS code, both radio-side.
+		"tone frequency number and the DCS code",
+		"set the tone number, the DCS code and the skip marking at the radio",
+		// C4FM, unmappable in CHIRP.
+		"C4FM",
+		"CHIRP has no name for it",
+		// The 087 exclusion, its arithmetic and its one capture.
+		"152 items",
+		"153 rows",
+		"Row 087",
+		"EX087;",
+		// The PMS slots' two spellings.
+		"100 to 117",
+		"P-1L to P-9U",
+	} {
+		if !strings.Contains(got.GridLegendNote, want) {
+			t.Errorf("GridLegendNote = %q,\nwant it to contain %q", got.GridLegendNote, want)
+		}
 	}
 }

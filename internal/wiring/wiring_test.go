@@ -21,6 +21,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft891"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ft991a"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
@@ -217,6 +218,11 @@ var fakePackageForModel = map[string]string{
 	// same footing as every single-row entry above — one driver package,
 	// one fake, no sibling to share either with.
 	FT891Model: "internal/fakeft891",
+	// The FT-991A (Tier 1's second): one simulator package to itself as
+	// well — internal/fakeft991a is written against this radio's own
+	// manual and shares neither a package nor a constructor with the
+	// FT-891's.
+	FT991AModel: "internal/fakeft991a",
 }
 
 func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
@@ -367,6 +373,13 @@ var nonVacuousDefaultImage = map[string]bool{
 	FTdx101MPModel: true,
 	ICR8600Model:   true,
 	FT891Model:     true,
+	// THE FT-991A IS HERE ON THE SAME TERMS (plan decision P14): its
+	// fake's default image is constrained to at least ONE occupied MEM
+	// channel and at least ONE populated PMS slot, so this fleet pin is
+	// non-vacuous for both of its banks. It has no discovered bank to keep
+	// empty — this radio discovers nothing at Open (matrix §3.4) — so the
+	// FT-891 row's second half has no counterpart here.
+	FT991AModel: true,
 }
 
 func TestOpenFakeSessionFor_EveryRegisteredModel_ReadsEveryDefaultSlot(t *testing.T) {
@@ -1448,7 +1461,7 @@ func TestSupportedModels_SortedNonEmpty(t *testing.T) {
 // deleting a constant cannot make this test agree with the change.
 func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	got := SupportedModels()
-	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600", "FT-891"} {
+	for _, want := range []string{"FT-710", "FTdx10", "FTdx101D", "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600", "FT-891", "FT-991A"} {
 		found := false
 		for _, m := range got {
 			if m == want {
@@ -1527,6 +1540,16 @@ func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 	// than against this literal.
 	if FT891Model != "FT-891" {
 		t.Errorf("FT891Model = %q, want \"FT-891\"", FT891Model)
+	}
+	// Tier 1's SECOND registration and the seventeenth model overall. The
+	// hyphen and the trailing capital A are the manual's own spelling
+	// ("FT-991A", capability matrix §1.1) and the same string
+	// core/driver/ft991a's modelName carries, which is what
+	// TestDriverTableKeysMatchDriverModel checks against the driver rather
+	// than against this literal. "FT-991" is a DIFFERENT REAL RADIO and is
+	// never this registry's key.
+	if FT991AModel != "FT-991A" {
+		t.Errorf("FT991AModel = %q, want \"FT-991A\"", FT991AModel)
 	}
 }
 
@@ -2069,7 +2092,7 @@ func assertNoConsentAnywhere(t *testing.T, what string, caps spec.Capabilities) 
 // than hand-counting, so it stays true of a model this table has not met
 // yet.
 func TestOpenRealSessionWith_ConsentedSessionCaps(t *testing.T) {
-	models := []string{FTdx10Model, FTdx101DModel, FTdx101MPModel, IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model, IC7851Model, IC7850Model, IC7760Model, IC7100Model, ICR8600Model, FT891Model}
+	models := []string{FTdx10Model, FTdx101DModel, FTdx101MPModel, IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model, IC7851Model, IC7850Model, IC7760Model, IC7100Model, ICR8600Model, FT891Model, FT991AModel}
 
 	tested := make(map[string]bool, len(models))
 	for _, m := range models {
@@ -2263,6 +2286,17 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		{model: FT891Model, want: NewFT891RealDriver, wantConsent: func() driver.Driver {
 			return ft891.New(ft891.RealHardware, ft891.WithConsentedUnverifiedWrites())
 		}},
+		// The FT-991A (Tier 1's second), on exactly the same terms as the
+		// FT-891 row above: core/driver/ft991a's New takes the profile as
+		// its first argument (ft991a.go's `func New(profile Profile, opts
+		// ...Option) driver.Driver`), so its consent arm NAMES
+		// ft991a.RealHardware, and this row is where a consent arm that
+		// had quietly passed ft991a.Simulated would be caught. That
+		// driver's zero Profile value IS RealHardware, so the mistake
+		// would not be caught by a fail-safe.
+		{model: FT991AModel, want: NewFT991ARealDriver, wantConsent: func() driver.Driver {
+			return ft991a.New(ft991a.RealHardware, ft991a.WithConsentedUnverifiedWrites())
+		}},
 	}
 
 	if models := SupportedModels(); len(table) != len(models) {
@@ -2433,6 +2467,14 @@ func TestNeedsUnverifiedConsent_PerModel(t *testing.T) {
 		// answer is the write-trial guard, not the maker, and the
 		// FT-710's false is still the exception earned by trials.
 		FT891Model: true,
+		// The FT-991A (Tier 1's second). Its writeTrialsComplete
+		// (core/driver/ft991a/caps.go) is FALSE, so its RealHardware
+		// profile is CapabilitiesUnverified — every candidate field's
+		// Write Unverified on both of its static banks, which is what
+		// this predicate must find. Its five-state CTCSSStates and its
+		// numeric PMS slots change nothing here: what decides the answer
+		// is the write-trial guard alone.
+		FT991AModel: true,
 	}
 	models := SupportedModels()
 	if len(models) != len(want) {
@@ -2690,7 +2732,7 @@ func TestOpenRealSessionFor_StopBitsRefuseAnImpossibleReport(t *testing.T) {
 // (core/driver/ft891/caps.go, matrix §1.9-1.10 — this radio names a tone
 // by INDEX into its own 50-entry chart), which is the second test's Yaesu
 // shape rather than the Icom one.
-var yaesuModels = []string{DefaultModel, FTdx10Model, FTdx101DModel, FTdx101MPModel, FT891Model}
+var yaesuModels = []string{DefaultModel, FTdx10Model, FTdx101DModel, FTdx101MPModel, FT891Model, FT991AModel}
 
 // icomModels names every registered Icom model, on the same by-name
 // footing as yaesuModels — ELEVEN rows now (the IC-7610, the IC-7300 pair
