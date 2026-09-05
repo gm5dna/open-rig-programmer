@@ -891,6 +891,9 @@ func isNonZeroCHIRPOffset(s string) bool {
 // its per-field write support, its radio identity). Validate remains the
 // semantic gate a caller must run before a send.
 //
+// Encoding: as Import — one leading UTF-8 BOM is dropped, CRLF needs no
+// handling, nothing else is interpreted.
+//
 // Header: recognised at minimum are Location, Name, Frequency, Duplex,
 // Offset, Tone, rToneFreq, cToneFreq, DtcsCode, DtcsPolarity, Mode,
 // TStep, Skip, Comment (see chirpKnownColumns), looked up by name
@@ -909,7 +912,9 @@ func isNonZeroCHIRPOffset(s string) bool {
 // recognised-but-unmapped columns (chirpExtraColumns), which are
 // non-blocking even when they carry data.
 func ImportCHIRP(rd io.Reader, caps spec.Capabilities) ([]codeplug.Channel, LossReport, error) {
-	cr := csv.NewReader(rd)
+	// As Import: a leading UTF-8 BOM would otherwise attach to
+	// "Location" and make a core column look missing. See skipUTF8BOM.
+	cr := csv.NewReader(skipUTF8BOM(rd))
 	cr.FieldsPerRecord = -1
 
 	chirpHeader, err := cr.Read()
