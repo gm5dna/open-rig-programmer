@@ -85,6 +85,14 @@ type radioImage struct {
 	// — the timeout row of the read choreography, which the books state
 	// carries no information at all (590:106-108).
 	mrSilent map[string]bool
+	// exAnswers maps the THREE-DIGIT menu address of an EX read —
+	// frame[2:5] — to the RAW answer frame served for it, and exSilent
+	// names addresses whose read draws no reply at all. Raw, so a test can
+	// serve an answer wider than the row's printed width or one naming
+	// another address on purpose. An address with neither entry is answered
+	// "?;", which the settings surface maps to SettingUnavailable.
+	exAnswers map[string]string
+	exSilent  map[string]bool
 	// mwReject makes every 50-byte MW Set answer "?;" — the radio's
 	// explicit rejection, which is attributable and is therefore reported
 	// with Sent true. Its default, silence, is the ASSUMED acceptance
@@ -200,6 +208,15 @@ func (img radioImage) reply(frame string) string {
 			return ""
 		}
 		if ans, ok := img.mrAnswers[addr]; ok {
+			return ans
+		}
+		return "?;"
+	case strings.HasPrefix(frame, "EX") && len(frame) == kw.EXReadLen:
+		addr := frame[2:5]
+		if img.exSilent[addr] {
+			return ""
+		}
+		if ans, ok := img.exAnswers[addr]; ok {
 			return ans
 		}
 		return "?;"
