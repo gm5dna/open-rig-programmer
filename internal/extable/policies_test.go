@@ -237,6 +237,17 @@ func TestRegisteredProfiles_DeclareTodaysBehaviourExplicitly(t *testing.T) {
 		// Its DigitsCeiling is still core/cat's — the FT-891 renders into
 		// core/cat/ft891, not a package of its own.
 		"ft891": {AddressPair, LabelsAbsent, TextRowsAbsent, 0, MaxDigitsCeiling},
+		// The TS-480's chart prints ONE three-digit Menu No. — the whole
+		// address — no group labels, and no free-text row:
+		// core/kw/ts480/menu480.csv's provenance header records all three
+		// as readings of that chart. Its ceiling is the LITERAL 246, not
+		// MaxDigitsCeiling: this profile renders into core/kw, whose EX
+		// answer has one more fixed byte than a Yaesu one, and core/kw's
+		// MaxEXDigits is the datum. The two differ by exactly one, which is
+		// why this row spells the number rather than a symbol — a stanza
+		// that copy-pasted 247 would pass every other test in this package,
+		// and core/kw/exdigits_ceiling_test.go is the twin pin.
+		"ts480": {AddressSingle, LabelsAbsent, TextRowsAbsent, 0, 246},
 		// The TS-590S is the first registration to take a value in this
 		// table that is NOT MaxDigitsCeiling, and that is the whole reason
 		// the ceiling column exists. Its inventory renders into core/kw,
