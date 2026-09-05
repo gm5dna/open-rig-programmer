@@ -55,6 +55,7 @@ func ft710ConfigFromIndependentLiterals() DialectConfig {
 			MemoryLo: 1, MemoryHi: 99,
 			SixtyLo: 501, SixtyHi: 599,
 			PMSPairs:      9,
+			PMSForm:       PMSFormToken,
 			EmergencyWire: "EMG",
 			NoneWire:      "000",
 			MCSelects:     MCSelectsAll,
@@ -352,6 +353,7 @@ func TestNewDialect_InputIndependenceAcrossEveryDerivedStructure(t *testing.T) {
 		Slots: SlotSpace{
 			MemoryLo: 1, MemoryHi: 50,
 			PMSPairs: 2, NoneWire: "000",
+			PMSForm:   PMSFormToken,
 			MCSelects: MCSelectsAll,
 		},
 		EXItems: []EXItem{

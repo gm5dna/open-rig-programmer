@@ -65,6 +65,7 @@ func validateDialectConfig(cfg DialectConfig) error {
 		validateCATID,         // V1
 		validateModeNames,     // V2
 		validatePMSPairs,      // V3
+		validatePMSForm,       // V15 — see its own comment for why it runs HERE
 		validateSpecialWires,  // V4
 		validateMemoryRange,   // V5
 		validateSixtyRange,    // V6
@@ -138,10 +139,70 @@ func validateModeNames(cfg DialectConfig) error {
 	return nil
 }
 
-// validatePMSPairs is V3.
+// validatePMSPairs is V3, and its ceiling is FORM-AWARE.
+//
+// The 0..9 bound is the TOKEN form's, and so is its reason: the pair number
+// sits between 'P' and 'L'/'U' as a single ASCII digit, so a tenth pair
+// builds a wire form this dialect's own ParseSlot rejects. That reason is
+// untrue under PMSFormNumeric, where the pair number never reaches the wire
+// at all and the slots are ordinary decimal channel numbers — the operative
+// ceiling there is V15's (the range must end at or below 999), derived from
+// the wire form the dialect actually builds. Dialect.pmsCap makes the same
+// split, so a numeric dialect declaring more than nine pairs is BUILT with
+// them rather than silently clamped.
+//
+// The token sentence is unchanged, byte for byte, and the test that pins it
+// is TestV3_PairBoundIsFormAware. An omitted form takes the token bound
+// here and is then refused by V15 at the next position, so no config
+// escapes a ceiling.
 func validatePMSPairs(cfg DialectConfig) error {
-	if n := cfg.Slots.PMSPairs; n < 0 || n > 9 {
+	n := cfg.Slots.PMSPairs
+	if n < 0 {
+		return fmt.Errorf("cat: Slots.PMSPairs is %d, want >= 0 — a negative pair count describes no slot either form could build", n)
+	}
+	if cfg.Slots.PMSForm != PMSFormNumeric && n > 9 {
 		return fmt.Errorf("cat: Slots.PMSPairs is %d, want 0..9 — the wire form's pair number is a single ASCII digit, so a larger value builds forms this dialect's own ParseSlot rejects", n)
+	}
+	return nil
+}
+
+// validatePMSForm is V15: the PMS wire form must be declared, never
+// inferred, and the numeric form's base must describe a range a 3-digit
+// slot can express.
+//
+// IT RUNS AT RULE POSITION 4, immediately after V3 and before V5/V6/V7, and
+// the position is load-bearing. validateDialectConfig returns the FIRST
+// error, and both V6 and V7 consult PMSForm and PMSNumericLo: a config with
+// PMSPairs 9 and PMSForm omitted would otherwise be diagnosed by V6 as
+// "memory range 1..99 overlaps PMS numeric range 0..17" — a range nobody
+// configured — instead of by this rule's honest "declare a form". The
+// package already documents the mirror hazard at renderEXAddressForV8,
+// where V8 needs a special renderer because it runs BEFORE V12. Inserting
+// here renumbers nothing: the V-numbers are comment labels, not indices.
+//
+// An omitted config semantic is REFUSED, never defaulted, and the cost of a
+// default is a WRITE cost — see PMSSlotForm's own doc comment.
+func validatePMSForm(cfg DialectConfig) error {
+	s := cfg.Slots
+	switch s.PMSForm {
+	case PMSFormToken:
+		if s.PMSNumericLo != 0 {
+			return fmt.Errorf("cat: Slots.PMSNumericLo is %d under %v, want exactly 0 — the token form's pairs carry no decimal numbering, so a base here describes nothing this dialect builds", s.PMSNumericLo, s.PMSForm)
+		}
+	case PMSFormNumeric:
+		if s.PMSNumericLo < 1 {
+			return fmt.Errorf("cat: Slots.PMSNumericLo is %d under %v, want >= 1 — pair 1's lower slot is a decimal channel number, and 0 collides with the \"000\" none form every registered family declares", s.PMSNumericLo, s.PMSForm)
+		}
+		if hi := s.PMSNumericLo + 2*s.PMSPairs - 1; hi > maxSlotDecimal {
+			return fmt.Errorf("cat: Slots.PMSNumericLo %d with PMSPairs %d reaches %d, want <= %d — a slot wire form is 3 digits, so the pairs above that could never be built or parsed", s.PMSNumericLo, s.PMSPairs, hi, maxSlotDecimal)
+		}
+	default:
+		if s.PMSPairs > 0 {
+			return fmt.Errorf("cat: Slots.PMSForm is %v with PMSPairs %d — declare PMSFormToken or PMSFormNumeric explicitly (an omitted config semantic is refused, never defaulted; the two forms put different bytes on the wire, and writableSlot admits either)", s.PMSForm, s.PMSPairs)
+		}
+		if s.PMSNumericLo != 0 {
+			return fmt.Errorf("cat: Slots.PMSNumericLo is %d with no PMSForm declared and no PMS pairs, want exactly 0 — a numeric base with nothing to number is dead configuration", s.PMSNumericLo)
+		}
 	}
 	return nil
 }
@@ -186,11 +247,21 @@ func validateMemoryRange(cfg DialectConfig) error {
 	return validateSlotRange("Slots.Memory", cfg.Slots.MemoryLo, cfg.Slots.MemoryHi)
 }
 
-// validateSixtyRange is V6: the same range rule, plus non-overlap.
+// validateSixtyRange is V6: the same range rule, plus non-overlap — now
+// over THREE numeric intervals rather than two.
 //
-// classifySlot tests the memory range BEFORE the 60m range, so an overlap
-// is not ambiguous at runtime — memory simply wins, and every colliding
-// slot is silently misclassified as an ordinary channel.
+// classifySlot tests the memory range BEFORE the 60m range and both before
+// the numeric PMS range, so an overlap is not ambiguous at runtime — the
+// earlier arm simply wins, and every colliding slot is silently
+// misclassified.
+//
+// THE THIRD INTERVAL IS PMSFormNumeric'S, and it is what makes slot.go's
+// "the four static kinds are not a second opinion" invariant true under
+// that form: PMSSlot hard-codes kind: slotKindPMS, so the numeric interval
+// must be disjoint from the other two or a slot the constructor calls PMS
+// is a memory channel to the same dialect's own classifier. Under
+// PMSFormToken there is no interval and these clauses are inert.
+// TestV15_PMSFormRefusals' two overlap cases pin them.
 func validateSixtyRange(cfg DialectConfig) error {
 	if err := validateSlotRange("Slots.Sixty", cfg.Slots.SixtyLo, cfg.Slots.SixtyHi); err != nil {
 		return err
@@ -199,7 +270,32 @@ func validateSixtyRange(cfg DialectConfig) error {
 	if s.MemoryHi > 0 && s.SixtyHi > 0 && s.MemoryLo <= s.SixtyHi && s.SixtyLo <= s.MemoryHi {
 		return fmt.Errorf("cat: memory range %d..%d overlaps 60m range %d..%d — classifySlot checks memory first, so every slot in the overlap would be classified as an ordinary channel", s.MemoryLo, s.MemoryHi, s.SixtyLo, s.SixtyHi)
 	}
+	// V15 has already run (rule position 4), so under the numeric form the
+	// base is >= 1 and the top is <= 999 before this arithmetic happens.
+	if lo, hi, ok := numericPMSInterval(s); ok {
+		if s.MemoryHi > 0 && s.MemoryLo <= hi && lo <= s.MemoryHi {
+			return fmt.Errorf("cat: memory range %d..%d overlaps PMS numeric range %d..%d — classifySlot checks memory first, so every PMS slot in the overlap would be classified as an ordinary channel", s.MemoryLo, s.MemoryHi, lo, hi)
+		}
+		if s.SixtyHi > 0 && s.SixtyLo <= hi && lo <= s.SixtyHi {
+			return fmt.Errorf("cat: 60m range %d..%d overlaps PMS numeric range %d..%d — classifySlot checks 60m first, so every PMS slot in the overlap would be classified as a 60m channel", s.SixtyLo, s.SixtyHi, lo, hi)
+		}
+	}
 	return nil
+}
+
+// numericPMSInterval returns the inclusive decimal range s's PMS pairs
+// occupy under PMSFormNumeric, and whether it has one at all.
+//
+// It is the CONFIG-side twin of Dialect.numericPMSRange, which the
+// classifier consults; the two compute the same arithmetic from the same
+// two fields, because a validator runs before any Dialect exists. Nothing
+// stores the range's top: it is derived from PMSNumericLo and PMSPairs in
+// both places, so there is no second field for either to drift from.
+func numericPMSInterval(s SlotSpace) (lo, hi int, ok bool) {
+	if s.PMSForm != PMSFormNumeric || s.PMSPairs <= 0 {
+		return 0, 0, false
+	}
+	return s.PMSNumericLo, s.PMSNumericLo + 2*s.PMSPairs - 1, true
 }
 
 // validateSlotRange is the shared range rule for V5 and V6: absent is
@@ -254,7 +350,7 @@ func validateShadowing(cfg DialectConfig) error {
 				return fmt.Errorf("cat: %s is %q, which falls inside the 60m range %d..%d — classifySlot tests it first, so 60m slot %d would be unreachable", w.field, w.value, s.SixtyLo, s.SixtyHi, n)
 			}
 		}
-		if pmsWireInRange(w.value, s.PMSPairs) {
+		if pmsWireInRange(w.value, s) {
 			return fmt.Errorf("cat: %s is %q, which is also a PMS form this dialect can build (PMSPairs %d) — PMSSlot would return a wire form classifySlot reports as something else", w.field, w.value, s.PMSPairs)
 		}
 	}
@@ -276,14 +372,25 @@ func decimalWire(wire string) (int, bool) {
 	return int(wire[0]-'0')*100 + int(wire[1]-'0')*10 + int(wire[2]-'0'), true
 }
 
-// pmsWireInRange reports whether wire is a PMS form a dialect with pairs
-// pairs would build and classify, i.e. "P<1..pairs><L|U>".
-func pmsWireInRange(wire string, pairs int) bool {
-	if pairs <= 0 || len(wire) != 3 {
+// pmsWireInRange reports whether wire is a PMS form a dialect with slot
+// space s would build and classify.
+//
+// IT IS FORM-AWARE, and it has to be. Form-blind it asked one question —
+// "does this spell P<1..pairs><L|U>?" — which under PMSFormNumeric is the
+// wrong question in both directions: it would refuse a NoneWire of "P1L"
+// for a collision that cannot happen (that dialect builds no token form at
+// all) and would NOT refuse one of "100", which really is the wire form its
+// own PMSSlot builds for pair 1. V7 exists to catch exactly that shadowing.
+func pmsWireInRange(wire string, s SlotSpace) bool {
+	if s.PMSPairs <= 0 || len(wire) != 3 {
 		return false
 	}
+	if lo, hi, ok := numericPMSInterval(s); ok {
+		n, allDigits := decimalWire(wire)
+		return allDigits && n >= lo && n <= hi
+	}
 	return wire[0] == 'P' &&
-		wire[1] >= '1' && wire[1] <= byte('0'+pairs) &&
+		wire[1] >= '1' && wire[1] <= byte('0'+s.PMSPairs) &&
 		(wire[2] == 'L' || wire[2] == 'U')
 }
 

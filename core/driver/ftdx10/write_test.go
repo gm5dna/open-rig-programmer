@@ -1481,6 +1481,7 @@ func TestBuildWriteCommand_P7IsTheFormConstant(t *testing.T) {
 			MemoryLo: 1, MemoryHi: 99,
 			SixtyLo: 501, SixtyHi: 599,
 			PMSPairs:      9,
+			PMSForm:       cat.PMSFormToken,
 			EmergencyWire: "EMG",
 			NoneWire:      "000",
 			MCSelects:     cat.MCSelectsAll,

@@ -36,6 +36,7 @@ func fictionalRadioConfig() cat.DialectConfig {
 			MemoryLo: 1, MemoryHi: 99,
 			SixtyLo: 0, SixtyHi: 0,
 			PMSPairs:      9,
+			PMSForm:       cat.PMSFormToken,
 			EmergencyWire: "",
 			NoneWire:      "000",
 			MCSelects:     cat.MCSelectsAll,

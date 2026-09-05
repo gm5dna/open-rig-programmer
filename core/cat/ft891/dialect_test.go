@@ -1052,3 +1052,36 @@ func TestASSUMEDRegisterIsComplete(t *testing.T) {
 		}
 	}
 }
+
+// --- FT-991A Stage 0 (S0.1): the PMS wire form ---
+
+// TestPMSForm_MatchesTheSlotLegend pins the cat.PMSFormToken this dialect
+// declares against the legends it is transcribed from.
+//
+// The FT-891's MR, MT and MW blocks all spell the pairs as the TOKEN
+// "P1L - P9U (PMS)" (ft891_layout.txt:961, 999, 1036), so the pair number
+// is a wire byte on this radio and PMSSlot must build it. The FT-991A's MC
+// legend numbers its pairs 100..117 instead, which is the disagreement the
+// cat.PMSSlotForm axis exists to carry.
+func TestPMSForm_MatchesTheSlotLegend(t *testing.T) {
+	d := ft891.Dialect()
+
+	if got := d.PMSForm(); got != cat.PMSFormToken {
+		t.Fatalf("PMSForm() = %v, want cat.PMSFormToken — this manual's slot legends print \"P1L - P9U (PMS)\"", got)
+	}
+	if got := d.PMSNumericLo(); got != 0 {
+		t.Errorf("PMSNumericLo() = %d, want 0 under the token form", got)
+	}
+	s, err := d.PMSSlot(9, true)
+	if err != nil {
+		t.Fatalf("PMSSlot(9, true): %v", err)
+	}
+	if s.Wire() != "P9U" {
+		t.Errorf("PMSSlot(9, true) = %q, want \"P9U\"", s.Wire())
+	}
+	for _, wire := range []string{"100", "117"} {
+		if got, err := d.ParseSlot(wire); err == nil && got.IsPMS() {
+			t.Errorf("ParseSlot(%q).IsPMS() = true — no FT-891 legend gives a PMS pair a decimal channel number", wire)
+		}
+	}
+}

@@ -61,6 +61,7 @@ func combinedRadioConfig() cat.DialectConfig {
 			MemoryLo: 1, MemoryHi: 99,
 			SixtyLo: 501, SixtyHi: 599,
 			PMSPairs:      9,
+			PMSForm:       cat.PMSFormToken,
 			EmergencyWire: "EMG",
 			NoneWire:      "000",
 			MCSelects:     cat.MCSelectsAll,
@@ -129,6 +130,7 @@ func shortPeerRadioConfig() cat.DialectConfig {
 			MemoryLo: 1, MemoryHi: 20,
 			SixtyLo: 0, SixtyHi: 0,
 			PMSPairs:      2,
+			PMSForm:       cat.PMSFormToken,
 			EmergencyWire: "",
 			NoneWire:      "000",
 			MCSelects:     cat.MCSelectsAll,
@@ -200,6 +202,7 @@ func pairAddressRadioConfig() cat.DialectConfig {
 			MemoryLo: 1, MemoryHi: 20,
 			SixtyLo: 0, SixtyHi: 0,
 			PMSPairs:      2,
+			PMSForm:       cat.PMSFormToken,
 			EmergencyWire: "",
 			NoneWire:      "000",
 			MCSelects:     cat.MCSelectsAll,
@@ -260,6 +263,7 @@ func p5FixedRadioConfig() cat.DialectConfig {
 			MemoryLo: 1, MemoryHi: 30,
 			SixtyLo: 0, SixtyHi: 0,
 			PMSPairs:      3,
+			PMSForm:       cat.PMSFormToken,
 			EmergencyWire: "",
 			NoneWire:      "000",
 			MCSelects:     cat.MCSelectsAll,
@@ -333,6 +337,7 @@ func tagDisplayRadioConfig() cat.DialectConfig {
 			MemoryLo: 1, MemoryHi: 40,
 			SixtyLo: 501, SixtyHi: 510,
 			PMSPairs:      5,
+			PMSForm:       cat.PMSFormToken,
 			EmergencyWire: "EMG",
 			NoneWire:      "000",
 			MCSelects:     cat.MCSelectsMemoryPMS,
@@ -374,4 +379,100 @@ func TestRun_ExternallyBuiltTagDisplayDialect(t *testing.T) {
 	}
 
 	dialecttest.Run(t, d)
+}
+
+// numericPMSRadioConfig is a NUMERIC-PMS dialect described using only the
+// exported API, as core/cat/ft991a will have to describe the real FT-991A.
+//
+// It is this milestone's constructibility proof for the S0.1 axis: if
+// PMSFormNumeric or SlotSpace.PMSNumericLo became unreachable from outside
+// core/cat, this stops compiling here rather than at Stage 1's first task.
+//
+// It is a fiction with FT-991A-shaped slot geometry, not the FT-991A: the
+// CAT ID and the MW write kind are deliberately not that radio's. What it
+// DOES take from the manual's shape is the part the axis is about — memory
+// 001-099, nine PMS pairs numbered 100..117, and NO 60m bank and NO
+// emergency channel — because those are what make the numeric arm of the
+// conformance suite non-vacuous, and what make S0.2's bank-derived refusal
+// sentence measurable from outside this package.
+func numericPMSRadioConfig() cat.DialectConfig {
+	return cat.DialectConfig{
+		CATID: "0670",
+		ModeNames: map[cat.Mode]string{
+			cat.ModeUnset: "-",
+			cat.ModeLSB:   "LSB",
+			cat.ModeUSB:   "USB",
+			cat.ModeFM:    "FM",
+		},
+		Slots: cat.SlotSpace{
+			MemoryLo: 1, MemoryHi: 99,
+			SixtyLo: 0, SixtyHi: 0,
+			PMSPairs:      9,
+			PMSForm:       cat.PMSFormNumeric,
+			PMSNumericLo:  100,
+			EmergencyWire: "",
+			NoneWire:      "000",
+			MCSelects:     cat.MCSelectsAll,
+		},
+		EXItems: []cat.EXItem{
+			{Addr: cat.EXAddress{P1: 1, P2: 1, P3: 1}, P1Label: "RADIO", P2Label: "GROUP", Name: "ITEM", Digits: 1},
+		},
+		EXAddressForm: cat.EXAddressTriple,
+		MT: cat.MTPolicy{
+			Form: cat.MTFormCombined, ReadSlots: cat.MTReadsReadable,
+			P11:         cat.P11Fixed,
+			TagMaxBytes: 12,
+			TagFill:     ' ',
+		},
+		Clarifier:   cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+		MemoryP5:    cat.P5TxClar,
+		MWWriteKind: cat.KindMemory,
+	}
+}
+
+// TestRun_ExternallyBuiltNumericPMSDialect runs the suite over that dialect,
+// and pins the two directions the S0.1 axis exists to separate.
+func TestRun_ExternallyBuiltNumericPMSDialect(t *testing.T) {
+	d := cat.MustNewDialect(numericPMSRadioConfig())
+
+	if got := d.PMSForm(); got != cat.PMSFormNumeric {
+		t.Fatalf("PMSForm() = %v, want PMSFormNumeric — this fixture exists to cover the OTHER PMS wire form", got)
+	}
+	if got := d.PMSNumericLo(); got != 100 {
+		t.Fatalf("PMSNumericLo() = %d, want 100", got)
+	}
+
+	// What it BUILDS: pair 1 lower is "100" and pair 9 upper is "117",
+	// the numbers the FT-991A's MC legend prints against P-1L and P-9U.
+	for _, tc := range []struct {
+		pair  int
+		upper bool
+		want  string
+	}{{1, false, "100"}, {1, true, "101"}, {9, false, "116"}, {9, true, "117"}} {
+		s, err := d.PMSSlot(tc.pair, tc.upper)
+		if err != nil {
+			t.Fatalf("PMSSlot(%d, %t): %v", tc.pair, tc.upper, err)
+		}
+		if s.Wire() != tc.want {
+			t.Errorf("PMSSlot(%d, %t) = %q, want %q", tc.pair, tc.upper, s.Wire(), tc.want)
+		}
+		if !s.IsPMS() {
+			t.Errorf("PMSSlot(%d, %t).IsPMS() = false", tc.pair, tc.upper)
+		}
+	}
+
+	// What it REFUSES: the token form, at the parser and at the write gate
+	// alike. A dialect that merely failed to BUILD "P1L" while still
+	// classifying it would have writableSlot admit a slot forged elsewhere.
+	for _, wire := range []string{"P1L", "P9U"} {
+		if s, err := d.ParseSlot(wire); err == nil {
+			t.Errorf("ParseSlot(%q) accepted a token PMS form (kind: IsPMS=%t) on a numeric-PMS dialect", wire, s.IsPMS())
+		}
+		if d.AllowedCommand([]byte("MC" + wire + ";")) {
+			t.Errorf("its own gate admitted %q on a numeric-PMS dialect", "MC"+wire+";")
+		}
+	}
+
+	dialecttest.Run(t, d)
+	dialecttest.RunZeroValue(t)
 }

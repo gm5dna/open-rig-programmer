@@ -48,9 +48,17 @@ import "fmt"
 // constructing dialect's own classifySlot would return for the wire form
 // that constructor built, because DialectConfig validation rejects every
 // configuration in which they could disagree: V6 forbids a memory range
-// overlapping the 60m range, and V7 forbids a none or emergency wire that
-// shadows either numeric range or a PMS form the dialect can build (see
-// validateSixtyRange and validateShadowing in dialectvalidate.go).
+// overlapping the 60m range AND — under PMSFormNumeric, where PMSSlot
+// builds a decimal wire form too — either of them overlapping the numeric
+// PMS interval; and V7 forbids a none or emergency wire that shadows any
+// numeric range or a PMS form the dialect can build (see validateSixtyRange
+// and validateShadowing in dialectvalidate.go).
+//
+// THE NUMERIC PMS TERM IS THE THIRD ONE, and it is not decoration: PMSSlot
+// hard-codes kind: slotKindPMS below, so under the numeric form agreement
+// needs that interval to be disjoint from the memory and 60m ranges exactly
+// as those two need to be disjoint from each other. V6's extension supplies
+// it (TestV15_PMSFormRefusals' overlap cases).
 //
 // A Dialect method asking about a Slot IT MAY NOT HAVE BUILT must still
 // classify the wire form under itself — d.classifySlot — rather than read
@@ -106,9 +114,30 @@ func (d Dialect) MemorySlot(n int) (Slot, error) {
 // PMSSlot builds the Slot for PMS pair (1-9), lower or upper, under this
 // dialect's PMS pair count. Reference: "P1L-P9U | PMS pairs (9
 // lower/upper pairs)".
+//
+// IT RENDERS THE FORM THIS DIALECT DECLARES (S0.1). Under PMSFormToken
+// that is the "P<n><L|U>" token above. Under PMSFormNumeric pair k's lower
+// and upper slots are the consecutive decimal channel numbers
+// PMSNumericLo + 2*(k-1) and one past it — the FT-991A's "100: P-1L
+// 101: P-1U ~ 116: P-9L 117: P-9U". The pair argument is the same in both:
+// the form changes the BYTES, not the addressing.
+// TestPMSSlot_RendersItsDeclaredForm pins both renders and that each
+// round-trips through this same dialect's own classifySlot.
 func (d Dialect) PMSSlot(pair int, upper bool) (Slot, error) {
-	if pair < 1 || pair > d.pmsCap() {
-		return Slot{}, newParseError([]byte(fmt.Sprintf("PMSSlot(%d)", pair)), "PMS pair out of range 1-9")
+	// The bound names THIS DIALECT'S cap rather than the FT-710's nine: on
+	// nine pairs the sentence is byte-identical to the frozen one, and a
+	// numeric dialect may declare more than nine (see pmsCap), where "1-9"
+	// would be false.
+	pc := d.pmsCap()
+	if pair < 1 || pair > pc {
+		return Slot{}, newParseError([]byte(fmt.Sprintf("PMSSlot(%d)", pair)), fmt.Sprintf("PMS pair out of range 1-%d", pc))
+	}
+	if d.slots.pmsForm == PMSFormNumeric {
+		n := d.slots.pmsNumericLo + 2*(pair-1)
+		if upper {
+			n++
+		}
+		return Slot{wire: fmt.Sprintf("%03d", n), kind: slotKindPMS}, nil
 	}
 	suffix := byte('L')
 	if upper {

@@ -25,6 +25,7 @@ func kindPeerDialect(t *testing.T) Dialect {
 		Slots: SlotSpace{
 			MemoryLo: 1, MemoryHi: 99,
 			PMSPairs:  9,
+			PMSForm:   PMSFormToken,
 			NoneWire:  "000",
 			MCSelects: MCSelectsAll,
 		},
