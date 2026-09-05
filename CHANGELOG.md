@@ -11,6 +11,10 @@ tag. The full release notes for each version are on the
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [1.3.0] - 2026-09-05
+
 ### Added
 - **Windows**: an installer (app + command line) and a command-line zip,
   each for amd64 and ARM64. Tested on a Windows 11 ARM64 virtual machine
@@ -101,7 +105,8 @@ tag. The full release notes for each version are on the
   and the safe-send ladder: read before write, snapshot, reviewed
   diff, per-channel read-back.
 
-[Unreleased]: https://github.com/gm5dna/open-rig-programmer/compare/v1.2.2...HEAD
+[Unreleased]: https://github.com/gm5dna/open-rig-programmer/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/gm5dna/open-rig-programmer/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/gm5dna/open-rig-programmer/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.1.0...v1.2.0
