@@ -147,13 +147,19 @@ func (l Layout) parseRecordFrame(command, what string, frame []byte) (Record, er
 	// the release gate for that row. The structural test below is a property
 	// of the FRAME and is applied on both rows: it makes no claim that a
 	// TS-480 ever sends one.
+	// AND P16 MUST BE BLANK, which is the second half of that same sentence
+	// and A3's reading of it: "P4 ~ P15 will be 0 AND P16 WILL BE BLANK."
+	// The book never defines blank, so A3 does — eight spaces — and this
+	// codec states its assumption rather than tolerating whatever P16
+	// carries under a window it has already decided is empty. A frame that
+	// is empty and named at once is not a shape either book describes, and
+	// the name is the field a driver would write back.
+	// TestParseMRAnswer_TheEmptyWindowRequiresABlankP16 pins both rows.
 	if isEmptyWindow(frame) {
-		name, err := parseName(what, frame)
-		if err != nil {
-			return Record{}, err
+		if got := string(frame[recNameOff : recNameOff+recNameLen]); got != emptyName {
+			return Record{}, newParseError(frame, "%s: P4-P15 are all zero, which is the empty channel of 590:1492-1493, but P16 is %q — the same sentence says P16 \"will be blank\", and A3 reads blank as %d spaces", what, got, recNameLen)
 		}
 		rec.Empty = true
-		rec.Name = name
 		return rec, nil
 	}
 
