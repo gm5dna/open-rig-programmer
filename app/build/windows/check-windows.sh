@@ -73,7 +73,34 @@ check_machine() {
   [ "$got" = "$want" ] || err "$label ($f) has PE machine $got, want $want ($arch)"
 }
 
-sha() { shasum -a 256 "$1" 2>/dev/null | awk '{print $1}' || sha256sum "$1" | awk '{print $1}'; }
+# SHA-256 tool lookup: `sha256sum` (the runner's house tool, coreutils via
+# Git Bash) first, else `shasum -a 256` (macOS). Resolved ONCE up front,
+# same shape as the 7-Zip lookup above — not `shasum ... || sha256sum ...`
+# piped through awk, which binds `||` to the pipeline (awk's exit status,
+# not shasum's) and so never fires: when shasum is absent, awk reads empty
+# input, exits 0, and sha() silently returns "", making every SHA-256 tie
+# in this script compare "" = "" and pass.
+if command -v sha256sum >/dev/null 2>&1; then
+  _sha_raw() { sha256sum "$1" | awk '{print $1}'; }
+elif command -v shasum >/dev/null 2>&1; then
+  _sha_raw() { shasum -a 256 "$1" | awk '{print $1}'; }
+else
+  echo "no sha256sum/shasum found" >&2
+  exit 2
+fi
+
+# Fail loudly rather than degrade: a resolved tool that still produces no
+# (or malformed) output — an unreadable file, a broken pipe — must not be
+# allowed to silently make a tie compare "" = "".
+sha() {
+  local digest
+  digest="$(_sha_raw "$1")"
+  case "$digest" in
+    [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]*) ;;
+    *) echo "sha() produced no usable SHA-256 digest for: $1" >&2; exit 2 ;;
+  esac
+  printf '%s\n' "$digest"
+}
 
 for arch in amd64 arm64; do
   raw_gui="app/build/bin/open-rig-programmer-${arch}.exe"
