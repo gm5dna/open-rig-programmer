@@ -81,6 +81,18 @@ const (
 // channels.
 const maxSlotNumber = 999
 
+// maxFixedZeroSlot is the largest slot number a row whose byte 4 is a
+// printed constant can name, and it is READ FROM THE SAME CHART AS ITS
+// DATUM: where 480:953 prints "Always 0 for the TS-480." for P2, 480:955
+// prints "00 ~ 99: Memory channel number" for P3. A row with no hundreds
+// digit has only those two digits, so its slot space stops at 99.
+//
+// NewLayout refuses P2FixedZero alongside any range above it
+// (validateSlots), which is what keeps slotWire from having to render a
+// three-digit number into a two-digit field —
+// TestNewLayout_RefusesAFixedZeroByte4AboveTheTwoDigitCeiling is the pin.
+const maxFixedZeroSlot = 99
+
 // MaxRecordFreqHz is the widest value the 11-digit P4 field can carry
 // (590:1541-1543, 480:957).
 //
