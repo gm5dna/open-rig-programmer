@@ -25,7 +25,7 @@ import (
 // rejection over a slot MR reports as occupied, silence) are answers a
 // self-consistent fake would never give.
 //
-// Every Open in this package costs the AI0 init's error window plus THIRTEEN
+// Every Open in this package costs the AI0 init's error window plus TWELVE
 // exchanges — ID and the eleven discovery probes — at the engine's default
 // 20 ms per-exchange settle. That is a fraction of the FTdx10's ~100 probes,
 // because this radio's manual prints its 5 MHz bank's actual bounds (501-510,

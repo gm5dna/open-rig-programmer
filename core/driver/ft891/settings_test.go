@@ -333,7 +333,7 @@ func TestSettingsDescriptor_IsADefensiveCopy(t *testing.T) {
 		// session-INDEPENDENT (it never consults s.dialect), so exercising
 		// it on a zero Session is the claim rather than a shortcut — and it
 		// spares this test one Open, which on this radio costs the AI0
-		// window plus thirteen exchanges (ft891_test.go). The live-session
+		// window plus twelve exchanges (ft891_test.go). The live-session
 		// leg is in TestSession_ReadSetting_ScriptedRoundTrips, on a session
 		// that already exists.
 		{"Session.SettingsDescriptor()", (&Session{}).SettingsDescriptor},
