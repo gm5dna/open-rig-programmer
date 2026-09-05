@@ -1,0 +1,71 @@
+# Command: TY (Read and Answer frames)   -- TS-480 ONLY (no TY block exists in the
+#   TS-590 book)
+# Radio: Kenwood TS-480HX / TS-480SAT
+# Title (cover, verbatim): "PC CONTROL COMMAND REFERENCE FOR THE TS-480HX/ SAT
+#   TRANSCEIVER"
+# Printed revision: NONE printed; cover carries "KENWOOD CORPORATION",
+#   "(c) 2003/11/28" and the printing code line "09 08 07 06 05 04 03 02 01 00".
+# Source page: printed folio "22"  ==  PDF page 23 of 26
+# Charts used: the Read and Answer charts of the TY block.  The block ALSO prints a
+#   "Set" row whose ruler 1..10 is drawn and whose ten cells are ALL EMPTY - see
+#   FINDING F3.
+# Derivation date: 05/09/2026
+# NO code, no generator, no other file and no other document was consulted.
+#
+# COUNTED FRAME LENGTHS (two independent counts of the printed numbered ruler):
+#   TY Set    = 0 positions filled (ruler printed 1..10, every cell empty)
+#   TY Read   = 3 positions
+#   TY Answer = 6 positions
+#
+# CHARTS, position by position:
+#   Set:     1..10 all empty
+#   Read:    1 T  2 Y  3 ;                          (4..10 empty)
+#   Answer:  1 T  2 Y  3 P1  4 P1  5 P2  6 ;        (7..10 empty)
+#
+# Field map:
+#   pos 1-2  "TY"
+#   pos 3-4  P1  (TWO characters)
+#   pos 5    P2  (ONE character)
+#   pos 6    ";"
+#
+# ---------------------------------------------------------------------------
+# LEGEND, VERBATIM (the complete right-hand column; the block's description line
+# reads, exactly as printed, "Sets or reads the microprocessor fimware type." -
+# "fimware", see FINDING F10):
+#
+#   Parameters:
+#   P1
+#     Reserved
+#   P2
+#     0: TS-480HX (200 W)
+#     1: TS-480SAT (100 W + AT)
+#     2: Japanese 50 W type
+#     3: Japanese 20 W type
+#
+# POSITIONS THE CHART PRINTS AS FIXED / "Always": NONE.  P1 is labelled "Reserved",
+#   which is NOT an "Always" note: the book gives P1 a width (positions 3 and 4) but
+#   no value at all.
+#
+# ---------------------------------------------------------------------------
+# BYTES WHOSE VALUE THE MANUAL DOES NOT DETERMINE  -> INHERITED-ASSUMED
+#
+#   [T1] positions 3 and 4 (P1).  The legend is the single word "Reserved" and prints
+#        NO value, no range and no fill character.  ASSUMED in every vector below:
+#        the two ASCII characters "00".  The book's only general fill guidance is the
+#        folio-2 note, VERBATIM: "If a particular parameter is not applicable to this
+#        transceiver, the parameter digits should be filled using any character
+#        except the ASCII control codes (00 to 1Fh) and the terminator (;)." - which
+#        would permit almost anything in those two positions.  This is the single
+#        most important assumption in this file.
+#   [T2] No Set vector is emitted, because the Set chart is empty (FINDING F3).
+#
+# Hardware status: UNVERIFIED for every vector in this file.
+#
+# ---------------------------------------------------------------------------
+# VECTORS  (name <TAB> frame bytes verbatim; positions 3-4 are the ASSUMED "00", [T1])
+#
+ty480_read	TY;
+ty480_answer_ts480hx_200w	TY000;
+ty480_answer_ts480sat_100w_at	TY001;
+ty480_answer_japanese_50w	TY002;
+ty480_answer_japanese_20w	TY003;
