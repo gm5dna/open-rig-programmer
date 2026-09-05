@@ -839,6 +839,13 @@ func registeredRadioCapabilities() []spec.Capabilities {
 		ftdx10LikeCapabilities(),
 		ftdx101LikeCapabilities("FTdx101D", "0681"),
 		ftdx101LikeCapabilities("FTdx101MP", "0682"),
+		// The FT-891 (Tier 1), the two-place change this function's doc
+		// comment asks for. Its scan_skip is the zero FieldSupport too
+		// (ft891/caps.go's bankFields, capability matrix §2.3: the
+		// 41-position combined record carries no skip flag anywhere), so
+		// it lands in the caps-aware branch with the other four and the
+		// Unreachable precondition below holds for it unchanged.
+		ft891LikeCapabilities(),
 	}
 }
 
@@ -1792,4 +1799,185 @@ func TestSanitizeCHIRPName(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ft891LikeCapabilities mirrors the FT-891 fields ImportCHIRP consults
+// (core/driver/ft891/caps.go). Hand-built rather than the real driver's
+// Capabilities for the layering reason ft710LikeCapabilities gives:
+// core/csvio sits BELOW core/driver in the import graph and must not depend
+// on it, even in tests.
+//
+// THE ONE FIELD THAT MATTERS HERE IS Modes, and it is the reason this
+// fixture exists rather than a reuse of ftdx10LikeCapabilities. Every Yaesu
+// fixture above lists the family display names "CW-U", "CW-L" and "RTTY-U";
+// the FT-891's own mode legend, transcribed once into core/cat/ft891's
+// dialect from three identical printings (MR's P6 at layout 972-974, MT's
+// at 1007-1010, MW's at 1043-1046), prints "CW", "CW-R", "RTTY-LSB" and
+// "RTTY-USB" instead — twelve names, with a printed HOLE at nibble 'A' and
+// no 'E' or 'F' at all. The driver DERIVES caps.Modes from that dialect
+// rather than transcribing a second list (core/driver/ft891/caps.go's
+// modeNames), so these twelve are the radio's own names in the radio's own
+// wire-code order.
+//
+// PMS IS ABSENT FROM THIS FIXTURE and that is deliberate, not an omission:
+// ImportCHIRP writes into the MEMORY bank alone (memBank), so a second bank
+// would change nothing any assertion below can see. The real driver has one.
+//
+// The two zeroed fields mirror the real driver's for the reason every Yaesu
+// fixture's do: this radio's 41-position combined record carries no
+// tone-NUMBER byte and no scan-skip flag (capability matrix §2.3), so a
+// CHIRP Skip cell has nowhere to go. FieldTagDisplay is rw here, unlike the
+// FTdx10 fixture's zero — byte 28 is a LIVE flag on this radio (§3.7).
+func ft891LikeCapabilities() spec.Capabilities {
+	caps := ft710LikeCapabilities()
+	caps.Model = "FT-891"
+	caps.CATID = "0650"
+	rw := spec.FieldSupport{Read: spec.Supported, Write: spec.Supported}
+	banks := make([]spec.Bank, len(caps.Banks))
+	copy(banks, caps.Banks)
+	for i := range banks {
+		banks[i].Fields = map[spec.Field]spec.FieldSupport{
+			spec.FieldFrequency:  rw,
+			spec.FieldMode:       rw,
+			spec.FieldClarifier:  rw,
+			spec.FieldCTCSSState: rw,
+			spec.FieldShift:      rw,
+			spec.FieldTag:        rw,
+			// A LIVE display flag, unlike the FTdx10's and FTdx101's.
+			spec.FieldTagDisplay: rw,
+			spec.FieldCTCSSTone:  {},
+			spec.FieldScanSkip:   {},
+		}
+	}
+	caps.Banks = banks
+	caps.Modes = []string{
+		"LSB", "USB", "CW", "FM", "AM", "RTTY-LSB",
+		"CW-R", "DATA-LSB", "RTTY-USB", "FM-N", "DATA-USB", "AM-N",
+	}
+	return caps
+}
+
+// TestImportCHIRP_FT891BlocksCWAndRTTYRows is Tier 1's CHIRP pin, and it
+// records a LIMITATION rather than celebrating a behaviour.
+//
+// chirpModeMap resolves CHIRP's "CW" to "CW-U", its "CWR" to "CW-L" and its
+// "RTTY" to "RTTY-U" — the sideband-specific names three of the four
+// registered Yaesu models print. The FT-891 prints "CW", "CW-R",
+// "RTTY-LSB" and "RTTY-USB", so none of those three mapped names is in its
+// caps.Modes and containsMode says no. Each such row therefore BLOCKS with
+// a Blocking ActionUnsupported entry naming the Mode column — exactly what
+// every Icom model already does with the same three rows, and for the same
+// reason: a mapped mode the radio does not list must be refused, never
+// written as a mode the radio has never been shown to have.
+//
+// THE RESOLUTION IS DEFERRED, NOT DECIDED AGAINST THIS RADIO (plan decision
+// P9, spec erratum S-E3). Teaching chirpModeMap to consult caps for a
+// sideband-agnostic alternative would change ELEVEN Icom models' CHIRP
+// outcome as well as this one, and every one of those models' byte-identity
+// baselines with it, so it is a fleet question and a recorded roadmap
+// follow-up. What this test does is make the FT-891's current answer
+// EXPLICIT, so the day that question is settled the change shows up here as
+// a deliberate edit rather than as a baseline that silently moved.
+//
+// THE FIVE ONE-NAME ROWS ARE THE OTHER HALF, and they are what stops this
+// test passing because the import refuses everything: FM, NFM, AM, USB and
+// LSB each map to a name this radio's legend does print, and every one of
+// them imports cleanly.
+func TestImportCHIRP_FT891BlocksCWAndRTTYRows(t *testing.T) {
+	caps := ft891LikeCapabilities()
+
+	// Precondition, stated rather than assumed: the three mapped names are
+	// genuinely absent from this radio's mode list. If a later edit added
+	// them, every blocking assertion below would become false and this test
+	// would be pinning nothing.
+	for _, absent := range []string{"CW-U", "CW-L", "RTTY-U"} {
+		if containsMode(caps, absent) {
+			t.Fatalf("fixture precondition: %q IS in the FT-891's Modes — this test is about the three names its legend does NOT print", absent)
+		}
+	}
+
+	t.Run("CW, CWR and RTTY block", func(t *testing.T) {
+		const csv = "Location,Name,Frequency,Mode\n" +
+			"1,MORSE,7.030000,CW\n" +
+			"2,MORSER,7.031000,CWR\n" +
+			"3,TELETYPE,14.080000,RTTY\n"
+
+		channels, report, err := ImportCHIRP(strings.NewReader(csv), caps)
+		if err != nil {
+			t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+		}
+		if !report.HasBlocking() {
+			t.Fatalf("HasBlocking() = false, want true: %+v", report.Entries)
+		}
+		for i, want := range []struct {
+			line   int
+			raw    string
+			mapped string
+		}{
+			// LossEntry.Line counts the FILE's lines, so the header is 1
+			// and the three data rows are 2, 3 and 4.
+			{2, "CW", "CW-U"},
+			{3, "CWR", "CW-L"},
+			{4, "RTTY", "RTTY-U"},
+		} {
+			var modeEntries []LossEntry
+			for _, e := range entriesForLine(report, want.line) {
+				if e.Column == "Mode" {
+					modeEntries = append(modeEntries, e)
+				}
+			}
+			if len(modeEntries) != 1 {
+				t.Errorf("row %d: %d Mode entries, want exactly 1: %+v", i+1, len(modeEntries), modeEntries)
+				continue
+			}
+			e := modeEntries[0]
+			if e.Action != ActionUnsupported || !e.Blocking {
+				t.Errorf("row %d: Mode entry = %+v, want a Blocking ActionUnsupported one", i+1, e)
+			}
+			if e.Value != want.raw {
+				t.Errorf("row %d: entry Value = %q, want the CHIRP cell %q", i+1, e.Value, want.raw)
+			}
+			// The detail must name BOTH names, so a user can see that the
+			// refusal is about a NAME this radio's legend does not print
+			// rather than about a mode it lacks.
+			if !strings.Contains(e.Detail, want.raw) || !strings.Contains(e.Detail, want.mapped) {
+				t.Errorf("row %d: Detail = %q, want it to name both the CHIRP mode %q and the mapped name %q", i+1, e.Detail, want.raw, want.mapped)
+			}
+		}
+		for _, ch := range channels {
+			if ch.Data != nil && ch.Data.Mode != "" {
+				t.Errorf("channel %q imported Mode %q — a blocked row must not carry a mode at all", ch.Slot, ch.Data.Mode)
+			}
+		}
+	})
+
+	t.Run("the five one-name rows import", func(t *testing.T) {
+		const csv = "Location,Name,Frequency,Mode\n" +
+			"1,SIMPLEX,145.500000,FM\n" +
+			"2,NARROW,145.525000,NFM\n" +
+			"3,AIRBAND,118.000000,AM\n" +
+			"4,UPPER,14.250000,USB\n" +
+			"5,LOWER,7.100000,LSB\n"
+
+		channels, report, err := ImportCHIRP(strings.NewReader(csv), caps)
+		if err != nil {
+			t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+		}
+		if report.HasBlocking() {
+			t.Fatalf("HasBlocking() = true, want false — these five CHIRP names all map to modes this radio's legend prints: %+v", report.Entries)
+		}
+		want := []string{"FM", "FM-N", "AM", "USB", "LSB"}
+		if len(channels) != len(want) {
+			t.Fatalf("len(channels) = %d, want %d", len(channels), len(want))
+		}
+		for i, w := range want {
+			if channels[i].Data == nil {
+				t.Errorf("channels[%d].Data is nil, want an imported channel", i)
+				continue
+			}
+			if got := channels[i].Data.Mode; got != w {
+				t.Errorf("channels[%d].Data.Mode = %q, want %q", i, got, w)
+			}
+		}
+	})
 }
