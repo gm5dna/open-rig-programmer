@@ -157,11 +157,13 @@ Section "uninstall"
     # "RMDir /r $AppData\${PRODUCT_EXECUTABLE}" line (meant to remove the
     # WebView2 profile) is a no-op under machine-scope install: $AppData
     # resolves to %ProgramData%, which the WebView2 runtime never writes
-    # to (it uses the per-user %LocalAppData%\...\EBWebView profile), so
-    # it is dropped rather than carried forward pointing at the wrong
-    # tree. The per-user WebView2 profile folder is deliberately left in
-    # place, same as %AppData%\rigprog (settings, snapshots, journals):
-    # this uninstaller only removes what it installed.
+    # to — the per-user profile was observed at
+    # %AppData%\Open Rig Programmer.exe (Roaming, not %LocalAppData%) on
+    # the Windows 11 ARM64 VM, 05/09/2026 — so it is dropped rather than
+    # carried forward pointing at the wrong tree. The per-user WebView2
+    # profile folder is deliberately left in place, same as
+    # %AppData%\rigprog (settings, snapshots, journals): this
+    # uninstaller only removes what it installed.
     SetOutPath "$TEMP"
 
     Delete "$INSTDIR\${PRODUCT_EXECUTABLE}"
