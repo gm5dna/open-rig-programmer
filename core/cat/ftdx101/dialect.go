@@ -97,7 +97,15 @@ func newDialect(catID string) cat.Dialect {
 			// BAND)"; 501..599 is interpretation inherited from the
 			// FT-710/FTdx10, both unverified. Register entry.
 			SixtyLo: 501, SixtyHi: 599,
-			PMSPairs:      9,
+			PMSPairs: 9,
+			// This manual's slot legends spell the pairs as the TOKEN
+			// "P1L -P9U (PMS)" — MC's at layout 1225-1227, MT's at 1312,
+			// MW's at 1353 — so the pair number is a wire byte on this
+			// radio and there is no decimal numbering to declare. Not an
+			// assumption: this is the legend, transcribed. The FT-991A's
+			// MC legend gives its pairs decimal channel numbers instead,
+			// which is the disagreement this axis carries.
+			PMSForm:       cat.PMSFormToken,
 			EmergencyWire: "EMG",
 			NoneWire:      "000", // ASSUMED — in no FTdx101 slot legend
 			// The FTdx101's MC block prints all four slot classes —

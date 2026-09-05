@@ -109,6 +109,13 @@ var dialect = cat.MustNewDialect(cat.DialectConfig{
 		SixtyLo: 501, SixtyHi: 510,
 		// "P1L - P9U (PMS)" on all three memory blocks (961, 999, 1036).
 		PMSPairs: 9,
+		// Those same three legends spell the pairs as a TOKEN, so the pair
+		// number is a wire byte on this radio and there is no decimal
+		// numbering to declare. Not an assumption: this is the legend,
+		// transcribed. The FT-991A's MC legend gives its pairs decimal
+		// channel numbers continuing the memory range instead, which is
+		// the disagreement this axis carries.
+		PMSForm: cat.PMSFormToken,
 		// "EMG (Emergency)", MR's legend (ft891_layout.txt:964). MT's and
 		// MW's do not print it; that is what MT.ReadSlots carries.
 		EmergencyWire: "EMG",

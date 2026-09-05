@@ -604,3 +604,47 @@ func TestMTP11_MatchesTheP11Legend(t *testing.T) {
 		t.Error("ParseMTAnswerCombinedDisplay accepted a frame whose byte 28 this manual prints \"(Fixed)\" — reporting schema as state")
 	}
 }
+
+// --- FT-991A Stage 0 (S0.1): the PMS wire form ---
+
+// TestPMSForm_MatchesTheSlotLegend pins the cat.PMSFormToken this dialect
+// declares against the legends it is transcribed from.
+//
+// The FTdx10's MC, MT and MW blocks all spell the pairs as the TOKEN
+// "P1L-P9U (PMS)" (manual rev 2308-F, layout 1131-1133, 1218, 1259), so the
+// pair number is a wire byte on this radio and PMSSlot must build it. The
+// FT-991A's MC legend numbers its pairs 100..117 instead, which is the
+// disagreement the cat.PMSSlotForm axis exists to carry; without this pin
+// the declaration would be a comment claiming more than any test holds.
+//
+// The NEGATIVE half is the point: a three-digit form just past this
+// dialect's memory range must not classify as PMS here, because on this
+// radio nothing numeric is a PMS slot.
+func TestPMSForm_MatchesTheSlotLegend(t *testing.T) {
+	d := ftdx10.Dialect()
+
+	if got := d.PMSForm(); got != cat.PMSFormToken {
+		t.Fatalf("PMSForm() = %v, want cat.PMSFormToken — this manual's slot legends print \"P1L-P9U (PMS)\"", got)
+	}
+	if got := d.PMSNumericLo(); got != 0 {
+		t.Errorf("PMSNumericLo() = %d, want 0 under the token form", got)
+	}
+	for _, tc := range []struct {
+		pair  int
+		upper bool
+		want  string
+	}{{1, false, "P1L"}, {9, true, "P9U"}} {
+		s, err := d.PMSSlot(tc.pair, tc.upper)
+		if err != nil {
+			t.Fatalf("PMSSlot(%d, %t): %v", tc.pair, tc.upper, err)
+		}
+		if s.Wire() != tc.want {
+			t.Errorf("PMSSlot(%d, %t) = %q, want %q", tc.pair, tc.upper, s.Wire(), tc.want)
+		}
+	}
+	for _, wire := range []string{"100", "117"} {
+		if s, err := d.ParseSlot(wire); err == nil && s.IsPMS() {
+			t.Errorf("ParseSlot(%q).IsPMS() = true — no FTdx10 legend gives a PMS pair a decimal channel number", wire)
+		}
+	}
+}

@@ -414,6 +414,7 @@ func (r *conformanceRun) checkSlotFrames() {
 
 	r.checkMCSendDomain()
 	r.checkMTReadDomain()
+	r.checkPMSSlotForm()
 	r.checkOverlongMTFrameIsRefused()
 }
 
@@ -466,6 +467,94 @@ func (r *conformanceRun) checkMCSendDomain() {
 		case s.IsMemory() || s.IsPMS():
 			if !builderOK {
 				r.t.Errorf("%s: BuildMCSet refused slot %q (%v) under %v — memory and PMS are always in the MC send domain", r.name(), s.Wire(), buildErr, policy)
+			}
+		}
+	}
+}
+
+// checkPMSSlotForm holds this dialect's PMS pairs to the WIRE FORM it
+// declares, in BOTH directions.
+//
+// The axis is not a policy like MCSelects or MTReadSlots: it decides WHICH
+// BYTES a builder emits. Under cat.PMSFormToken pair k is "P<k><L|U>" and
+// no decimal wire number is ever a PMS slot; under cat.PMSFormNumeric pair
+// k is a pair of consecutive decimal channel numbers and the token form is
+// not a wire form this radio has at all. Getting it wrong is a WRITE
+// defect: cat.Dialect.writableSlot admits every PMS slot, so a numeric-PMS
+// radio classifying "P1L" as PMS would have "MW P1L…;" built for it and
+// admitted by its own gate — a frame its manual never prints.
+//
+// So both halves are asserted here rather than only the positive one: what
+// PMSSlot BUILDS must round-trip through this dialect's own ParseSlot as a
+// PMS slot, and every form of the OTHER shape must be refused. The refusal
+// counter is keyed by form so that a dialect of either kind must be SEEN to
+// refuse the other's forms, never merely to have none to offer.
+func (r *conformanceRun) checkPMSSlotForm() {
+	r.t.Helper()
+
+	form := r.d.PMSForm()
+	// A dialect with no pairs declares no form (V15 requires one only when
+	// PMSPairs > 0), and has nothing for this check to hold.
+	if _, err := r.d.PMSSlot(1, false); err != nil {
+		return
+	}
+
+	// The positive half: every pair this dialect can build must come back
+	// from its own ParseSlot as a PMS slot, in the declared shape.
+	for pair := 1; pair <= 9; pair++ {
+		for _, upper := range []bool{false, true} {
+			s, err := r.d.PMSSlot(pair, upper)
+			if err != nil {
+				continue
+			}
+			isToken := len(s.Wire()) == 3 && s.Wire()[0] == 'P' &&
+				(s.Wire()[2] == 'L' || s.Wire()[2] == 'U')
+			if (form == cat.PMSFormToken) != isToken {
+				r.t.Errorf("%s: PMSSlot(%d, %t) built %q under %v — the token form is \"P<n><L|U>\" and the numeric form is a decimal channel number, and a builder emitting the other one puts bytes on the wire this dialect's manual does not print", r.name(), pair, upper, s.Wire(), form)
+				continue
+			}
+			back, err := r.d.ParseSlot(s.Wire())
+			if err != nil {
+				r.t.Errorf("%s: its own ParseSlot refused %q, which its own PMSSlot(%d, %t) built: %v", r.name(), s.Wire(), pair, upper, err)
+				continue
+			}
+			if !back.IsPMS() {
+				r.t.Errorf("%s: ParseSlot(%q) classified its own PMSSlot(%d, %t) output as something other than PMS — the constructor and the classifier disagree", r.name(), s.Wire(), pair, upper)
+			}
+		}
+	}
+
+	// The negative half: every form of the OTHER shape is refused.
+	switch form {
+	case cat.PMSFormNumeric:
+		for pair := 1; pair <= 9; pair++ {
+			for _, suffix := range []byte{'L', 'U'} {
+				wire := string([]byte{'P', byte('0' + pair), suffix})
+				s, err := r.d.ParseSlot(wire)
+				if err == nil && s.IsPMS() {
+					r.t.Errorf("%s: ParseSlot(%q) = a PMS slot under %v — this dialect's pairs are decimal channel numbers, so no token form is a slot it has", r.name(), wire, form)
+					continue
+				}
+				r.refusals["token PMS form refused under PMSFormNumeric"]++
+			}
+		}
+	case cat.PMSFormToken:
+		// Every three-digit form this dialect classifies at all must be a
+		// memory, 60m, EMG or none slot — never PMS, because under the
+		// token form no decimal number is one.
+		for n := 0; n <= 999; n++ {
+			wire := threeDigits(n)
+			s, err := r.d.ParseSlot(wire)
+			if err != nil {
+				// A decimal form this dialect does not classify AT ALL is
+				// the FT-991A's numeric PMS form refused here — "100" is
+				// not a slot on a token radio — and counting it is what
+				// says this sweep actually ran.
+				r.refusals["decimal PMS form refused under PMSFormToken"]++
+				continue
+			}
+			if s.IsPMS() {
+				r.t.Errorf("%s: ParseSlot(%q) = a PMS slot under %v — this dialect's pairs are the \"P<n><L|U>\" token, so no decimal channel number is one", r.name(), wire, form)
 			}
 		}
 	}
@@ -1507,6 +1596,17 @@ func (r *conformanceRun) checkNonVacuity() {
 	}
 	if r.d.MTReadSlots() == cat.MTReadsMemoryPMS {
 		requiredRefusals = append(requiredRefusals, "MT read refused for 60m/EMG under MTReadsMemoryPMS")
+	}
+	// The PMS wire form, counted against the form the dialect declares. A
+	// dialect with no pairs declares no form and checkPMSSlotForm returns
+	// early, so neither counter is required of it.
+	if _, err := r.d.PMSSlot(1, false); err == nil {
+		switch r.d.PMSForm() {
+		case cat.PMSFormNumeric:
+			requiredRefusals = append(requiredRefusals, "token PMS form refused under PMSFormNumeric")
+		case cat.PMSFormToken:
+			requiredRefusals = append(requiredRefusals, "decimal PMS form refused under PMSFormToken")
+		}
 	}
 	switch r.d.MemoryP5() {
 	case cat.P5Fixed:

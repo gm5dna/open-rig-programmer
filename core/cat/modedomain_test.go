@@ -39,6 +39,7 @@ func TestParseMode_RefusalNamesThisDialectsOwnDomain(t *testing.T) {
 		},
 		Slots: SlotSpace{
 			MemoryLo: 1, MemoryHi: 99, PMSPairs: 9,
+			PMSForm:  PMSFormToken,
 			NoneWire: "000", MCSelects: MCSelectsMemoryPMS,
 		},
 		EXAddressForm: EXAddressPair, // the FT-891's shape throughout, as the comment above says
