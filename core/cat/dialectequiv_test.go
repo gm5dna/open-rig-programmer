@@ -57,11 +57,14 @@ func ft710ConfigFromIndependentLiterals() DialectConfig {
 			PMSPairs:      9,
 			EmergencyWire: "EMG",
 			NoneWire:      "000",
+			MCSelects:     MCSelectsAll,
 		},
-		EXItems:     exItemsGen, // NOT independent — see the doc comment
-		MT:          MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
-		Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-		MWWriteKind: KindMemory,
+		EXItems:       exItemsGen, // NOT independent — see the doc comment
+		EXAddressForm: EXAddressTriple,
+		MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+		Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+		MemoryP5:      P5TxClar,
+		MWWriteKind:   KindMemory,
 	}
 }
 
@@ -88,6 +91,10 @@ func TestNewDialect_ReproducesFT710(t *testing.T) {
 // earlier draft checked CATID, modes and a "slot corpus" left undefined,
 // and would have passed while a dialect carried zero policies, a corrupted
 // EX inventory, or a wrong derived index (Codex plan review, finding 4).
+// It also covers EXWire, EXAddressWidth and ParseEXAddress, added at the
+// FT-891 Stage 0 seam: a dialect that agreed on EXItems and EXAddresses
+// but disagreed on its own EXAddressForm would otherwise pass silently,
+// since neither of those two fields observes the form.
 func assertDialectsBehaveIdentically(t *testing.T, label string, want, got Dialect) {
 	t.Helper()
 
@@ -164,6 +171,12 @@ func assertDialectsBehaveIdentically(t *testing.T, label string, want, got Diale
 		}
 	}
 
+	// EXAddressWidth is the form observed once, not per-address — it does
+	// not vary with a, only with the dialect's own declared form.
+	if want.EXAddressWidth() != got.EXAddressWidth() {
+		t.Errorf("%s: EXAddressWidth() = %d, want %d", label, got.EXAddressWidth(), want.EXAddressWidth())
+	}
+
 	// BOTH EX lookup paths. KnownEXAddress reads exMembers; NewEXAddress
 	// reads exByTriple. Checking only the first leaves the second index
 	// entirely unverified, and it is the one a caller-supplied triple goes
@@ -176,6 +189,20 @@ func assertDialectsBehaveIdentically(t *testing.T, label string, want, got Diale
 		_, gerr := got.NewEXAddress(int(a.P1), int(a.P2), int(a.P3))
 		if (werr == nil) != (gerr == nil) {
 			t.Errorf("%s: NewEXAddress(%v) error = %v, want error = %v", label, a, gerr, werr)
+		}
+		// EXWire and its inverse, ParseEXAddress: the render must agree,
+		// and parsing the WANT dialect's own render back through each
+		// dialect must agree too — a form mismatch here is exactly the
+		// gap EXItems/EXAddresses cannot see (neither carries a rendered
+		// wire form).
+		wwire, gwire := want.EXWire(a), got.EXWire(a)
+		if wwire != gwire {
+			t.Errorf("%s: EXWire(%v) = %q, want %q", label, a, gwire, wwire)
+		}
+		wpa, wperr := want.ParseEXAddress(wwire)
+		gpa, gperr := got.ParseEXAddress(wwire)
+		if (wperr == nil) != (gperr == nil) || wpa != gpa {
+			t.Errorf("%s: ParseEXAddress(%q) = (%v,%v), want (%v,%v)", label, wwire, gpa, gperr, wpa, wperr)
 		}
 	}
 	// A triple that is NOT a member, so the negative direction is covered
@@ -192,8 +219,8 @@ func assertDialectsBehaveIdentically(t *testing.T, label string, want, got Diale
 		t.Errorf("%s: exP4MaxBytes = %d, want %d", label, got.exP4MaxBytes(), want.exP4MaxBytes())
 	}
 
-	// The three promoted policies. Omitting these is how a dialect with
-	// entirely zero policies passes an "equivalence" test.
+	// The promoted policies. Omitting these is how a dialect with entirely
+	// zero policies passes an "equivalence" test.
 	if want.mt != got.mt {
 		t.Errorf("%s: MT policy = %+v, want %+v", label, got.mt, want.mt)
 	}
@@ -202,6 +229,22 @@ func assertDialectsBehaveIdentically(t *testing.T, label string, want, got Diale
 	}
 	if want.mwWriteKind != got.mwWriteKind {
 		t.Errorf("%s: MWWriteKind = %#02x, want %#02x", label, got.mwWriteKind, want.mwWriteKind)
+	}
+	if want.memoryP5 != got.memoryP5 {
+		t.Errorf("%s: MemoryP5 = %v, want %v", label, got.memoryP5, want.memoryP5)
+	}
+	if want.slots.mcSelects != got.slots.mcSelects {
+		t.Errorf("%s: MCSelects = %v, want %v", label, got.slots.mcSelects, want.slots.mcSelects)
+	}
+	// mt.ReadSlots and mt.P11 are already covered by the whole-struct
+	// want.mt != got.mt check above; asserted again here, by name, so a
+	// reader of this list does not have to know that to see the axis is
+	// covered — belt-and-braces, matching the two checks above.
+	if want.mt.ReadSlots != got.mt.ReadSlots {
+		t.Errorf("%s: MT.ReadSlots = %v, want %v", label, got.mt.ReadSlots, want.mt.ReadSlots)
+	}
+	if want.mt.P11 != got.mt.P11 {
+		t.Errorf("%s: MT.P11 = %v, want %v", label, got.mt.P11, want.mt.P11)
 	}
 }
 
@@ -309,14 +352,17 @@ func TestNewDialect_InputIndependenceAcrossEveryDerivedStructure(t *testing.T) {
 		Slots: SlotSpace{
 			MemoryLo: 1, MemoryHi: 50,
 			PMSPairs: 2, NoneWire: "000",
+			MCSelects: MCSelectsAll,
 		},
 		EXItems: []EXItem{
 			{Addr: EXAddress{P1: 3, P2: 1, P3: 1}, Name: "A", Digits: 2},
 			{Addr: EXAddress{P1: 3, P2: 1, P3: 2}, Name: "B", Digits: 4},
 		},
-		MT:          MTPolicy{Form: MTFormShort, TagMaxBytes: 10, ClearTagByte: ' '},
-		Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 100},
-		MWWriteKind: KindMemory,
+		EXAddressForm: EXAddressTriple,
+		MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 10, ClearTagByte: ' '},
+		Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 100},
+		MemoryP5:      P5TxClar,
+		MWWriteKind:   KindMemory,
 	}
 
 	d, err := NewDialect(cfg)

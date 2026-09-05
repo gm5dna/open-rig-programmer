@@ -317,7 +317,7 @@ func currentCaps(conn *connectionState, working *codeplug.Codeplug) (spec.Capabi
 // returns) and normaliseTierFieldsForOwnModel (fileio.go, the file's own
 // model) — so this package's own tests can exercise the working-copy-
 // model resolution above against a model name wiring itself does not
-// register. internal/wiring registers fifteen models today (four Yaesu,
+// register. internal/wiring registers sixteen models today (five Yaesu,
 // eleven Icom rows), and this seam is still needed —
 // more so, not less: what these tests need is an
 // UNREGISTRABLE name whose resolution is theirs to control, which no real

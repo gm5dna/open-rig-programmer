@@ -1,0 +1,134 @@
+# mr-vectors.golden --- MR (MEMORY CHANNEL READ), Read-request and Answer frames
+#
+# SOURCE MANUAL
+#   Title (cover, PDF page 1):  FT-891  CAT Operation Reference Book
+#   Publisher:                  YAESU MUSEN CO., LTD.  (Copyright 2019)
+#   Printed revision:           1909-C   (printed bottom-right of the back cover,
+#                               PDF page 20; the cover carries no revision)
+#   Chart used:                 MR command block, printed folio 12, PDF page 13
+#   Command-list entry:         printed folio 3, PDF page 4
+#   Derivation date:            04/09/2026
+#
+# METHOD
+#   Located at 300 dpi; the MR block re-rendered at 600 dpi (pdftoppm -r 600) and
+#   cropped strip-by-strip with magick, because at 300 dpi the Answer chart's
+#   three numbered rows interleave with the ten-line legend column and the
+#   position numbers are not unambiguous. Two independent counts of the Answer
+#   chart (left-to-right across rows 1-10 / 11-20 / 21-30, then by per-parameter
+#   cell totals) both gave 28; the Read chart was counted twice the same way and
+#   both counts gave 6. No third look was needed.
+#
+#   NO code, no generator, no other file and no other document was consulted.
+#
+# WHICH CHARTS THE LAYOUTS WERE COUNTED FROM, AND WHY
+#   The Read-request frames were counted from the MR *Read* chart, and the Answer
+#   frames from the MR *Answer* chart, because those are the two directions this
+#   command supports. The MR *Set* chart is printed but its value row is BLANK,
+#   agreeing with the command list (Set "X"). The Answer count was cross-checked
+#   against the MW Set chart on printed folio 13, which prints the same
+#   28-position layout with the same parameter labels.
+#
+# COUNTED FRAME LENGTHS
+#   MR Read request:  6 bytes (terminator included)
+#   MR Answer:       28 bytes (terminator included)
+#
+# POSITION-BY-POSITION FIELD MAP --- MR READ CHART (counted)
+#   pos 1   "M"    command character (printed literal)
+#   pos 2   "R"    command character (printed literal)
+#   pos 3   P0     see the P0/1 legend below
+#   pos 4   P0     see the P0/1 legend below
+#   pos 5   P0     see the P0/1 legend below
+#   pos 6   ";"    terminator (printed literal)
+#
+# POSITION-BY-POSITION FIELD MAP --- MR ANSWER CHART (counted)
+#   pos  1      "M"        command character (printed literal)
+#   pos  2      "R"        command character (printed literal)
+#   pos  3- 5   P1         see the P0/1 legend below                (3 positions counted)
+#   pos  6-14   P2         legend verbatim: "P2  VFO-A Frequency (Hz)"  (9 positions counted)
+#   pos 15      "+/-"      printed literally as "+/-" in the chart cell; covered by
+#                          the P3 legend line below
+#   pos 16-19   P3         legend verbatim: "P3  Clarifier Direction +: Plus Shift, -: Minus Shift"
+#                                           "    Clarifier Offset: 0000 - 9999 (Hz)"
+#   pos 20      P4         legend verbatim: "P4  0: CLAR "OFF"    1: CLAR "ON""
+#   pos 21      P5         legend verbatim: "P5  0: (Fixed)"
+#   pos 22      P6         legend verbatim (MODE legend, transcribed exactly, including
+#                          the missing space after "1:" that the manual prints):
+#                          "P6  MODE  1:LSB    2: USB    3: CW    4: FM    5: AM    6: RTTY-LSB    7: CW-R"
+#                          "          8: DATA-LSB    9: RTTY-USB    A: -    B: FM-N    C: DATA-USB"
+#                          "          D: AM-N"
+#   pos 23      P7         legend verbatim: "P7  0: VFO  1: Memory"
+#   pos 24      P8         legend verbatim: "P8  0: CTCSS "OFF"    1: CTCSS ENC/DEC    2: CTCSS ENC"
+#   pos 25-26   P9         legend verbatim: "P9  00: (Fixed)"        (2 positions counted)
+#   pos 27      P10        legend verbatim: "P10 0: Simplex    1: Plus Shift    2: Minus Shift"
+#   pos 28      ";"        terminator (printed literal)
+#   pos 29-30   ---        printed as empty cells on the 21-30 row
+#
+# THE SLOT-NAME LEGEND, VERBATIM (it is printed as one entry labelled "P0/1",
+# i.e. it covers the Read chart's P0 and the Answer chart's P1 together):
+#   "P0/1  001 - 099 (Regular Memory Channel)"
+#   "      P1L - P9U (PMS)"
+#   "      501 - 510 (5 MHz, U.S. and U.K. version only)"
+#   "      EMG (Emergency)"
+#
+# THE ANSWER CHART'S PARAMETER LEGEND, VERBATIM AND COMPLETE
+#   P0/1  001 - 099 (Regular Memory Channel)
+#         P1L - P9U (PMS)
+#         501 - 510 (5 MHz, U.S. and U.K. version only)
+#         EMG (Emergency)
+#   P2    VFO-A Frequency (Hz)
+#   P3    Clarifier Direction +: Plus Shift, -: Minus Shift
+#         Clarifier Offset: 0000 - 9999 (Hz)
+#   P4    0: CLAR "OFF"    1: CLAR "ON"
+#   P5    0: (Fixed)
+#   P6    MODE  1:LSB    2: USB    3: CW    4: FM    5: AM    6: RTTY-LSB    7: CW-R
+#               8: DATA-LSB    9: RTTY-USB    A: -    B: FM-N    C: DATA-USB
+#               D: AM-N
+#   P7    0: VFO  1: Memory
+#   P8    0: CTCSS "OFF"    1: CTCSS ENC/DEC    2: CTCSS ENC
+#   P9    00: (Fixed)
+#   P10   0: Simplex    1: Plus Shift    2: Minus Shift
+#
+# BYTES THE MANUAL DETERMINES
+#   Read request: pos 1-2 (M,R) and pos 6 (";"); pos 3-5 are one of the four slot
+#   forms the P0/1 legend prints.
+#   Answer: pos 1-2 (M,R), pos 21 (P5 fixed "0"), pos 25-26 (P9 fixed "00"),
+#   pos 28 (";").
+#
+# INHERITED-ASSUMED BYTES (Answer vectors only --- the Read requests below contain
+# no assumed byte)
+#   1. EVERY DATA BYTE OF AN ANSWER IS A PREDICTION. The manual prints no worked
+#      MR example anywhere, so the Answer frames below are hand-derived shapes
+#      filled with values the legend permits, not observed replies.
+#   2. P7 VALUE (pos 23). The legend prints "0: VFO  1: Memory" but does not say
+#      what the radio actually returns in an answer to a *memory* read. ASSUMED
+#      "1" (Memory). Note that the MT and MW blocks give position 23 an entirely
+#      different legend ("P7  0: (Fixed)") -- see provenance.md.
+#   3. FREQUENCY RANGE (pos 6-14). The MR legend prints "VFO-A Frequency (Hz)"
+#      with no range. Inherited the FA/FB range printed on printed folio 9
+#      (PDF page 10), "P1  000030000 - 056000000 (Hz)".
+#   4. CLARIFIER CONSISTENCY (pos 15-20). Not printed whether pos 16-19 read
+#      "0000" and what the pos-15 sign reads when P4 is "0" (CLAR "OFF").
+#      ASSUMED "+0000".
+#   5. WHAT AN UNPROGRAMMED OR OUT-OF-RANGE SLOT RETURNS. Not printed. The Read
+#      requests for slot "501" and slot "EMG" below are the frames the chart
+#      permits; the manual says nothing about the reply to either, and "501 - 510"
+#      is qualified "(5 MHz, U.S. and U.K. version only)".
+#
+# DIRECTION SUPPORT: the command list (printed folio 3, PDF page 4) prints
+#   Command "MR" | Function "MEMORY READ" | Set "X" | Read "O" | Ans. "O" | AI "X",
+#   and the MR detail block agrees: its Set value row is blank, its Read and
+#   Answer rows are filled. (Only the block *title* differs -- see provenance.md.)
+#
+# HARDWARE STATUS: UNVERIFIED for every vector below.
+#
+# --- Read-request frames (6 bytes each), one from each range the P0/1 legend lists
+
+mr_read_ch001_regular	MR001;
+mr_read_pms_p1l	MRP1L;
+mr_read_5mhz_501	MR501;
+mr_read_emg	MREMG;
+
+# --- Answer frames (28 bytes each), as the Answer chart prints the layout
+
+mr_answer_ch001_7m100_lsb_memory	MR001007100000+000000110000;
+mr_answer_pms_p1l_3m500_lsb_memory	MRP1L003500000+000000110000;

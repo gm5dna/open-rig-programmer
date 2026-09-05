@@ -90,6 +90,52 @@ func (d Dialect) MTForm() MTForm { return d.mt.Form }
 // a valid MW frame for an arbitrary dialect.
 func (d Dialect) MWWriteKind() byte { return d.mwWriteKind }
 
+// MTP11 reports what byte 28 of the COMBINED MT record means on this
+// family: the printed-fixed '0' (P11Fixed) or a live TAG ON/OFF flag
+// (P11TagDisplay). A short-form dialect reports the zero policy, which V9
+// requires of it.
+//
+// Exported for the same reason MTForm and MemoryP5 are: core/cat/dialecttest
+// cannot see the unexported field, and it must branch on this to know which
+// of the two combined builder/parser pairs a dialect answers to — and which
+// it must be seen to REFUSE.
+func (d Dialect) MTP11() MTP11Policy { return d.mt.P11 }
+
+// MemoryP5 reports what byte 21 of the shared memory field block means on
+// this family: the TX clarifier flag (P5TxClar) or a printed-fixed '0'
+// (P5Fixed). The zero Dialect reports the zero policy, which NewDialect
+// refuses to construct.
+//
+// Exported for the same reason MTForm is: core/cat/dialecttest's conformance
+// suite cannot see the unexported field, and it must branch on this to know
+// whether a TxClar-true record is one this dialect MUST build or one it MUST
+// refuse. Without the accessor that half of the suite could only be written
+// in-package, and a model package outside core/cat would get no coverage of
+// it at all.
+func (d Dialect) MemoryP5() MemoryP5Policy { return d.memoryP5 }
+
+// MCSelects reports the SEND-side slot domain of this family's MC (memory
+// channel recall) command: memory and PMS only (MCSelectsMemoryPMS) or
+// every slot class this dialect classifies outside "000" (MCSelectsAll).
+// The zero Dialect reports the zero policy, which NewDialect refuses to
+// construct.
+//
+// Exported for the same reason MTP11 and MemoryP5 are: core/cat/dialecttest
+// cannot see the unexported field, and it must branch on this to know
+// which slots BuildMCSet and the gate's own MC branch MUST admit and which
+// they MUST refuse (checkMCSendDomain).
+func (d Dialect) MCSelects() MCSlotPolicy { return d.slots.mcSelects }
+
+// MTReadSlots reports this family's MT READ slot domain: memory and PMS
+// only (MTReadsMemoryPMS) or the full readable space (MTReadsReadable).
+// The zero Dialect reports the zero policy, which NewDialect refuses to
+// construct.
+//
+// Exported for the same reason MCSelects is: core/cat/dialecttest must
+// branch on this to know which slots BuildMTRead and the gate's own MT
+// read branch MUST admit and which they MUST refuse (checkMTReadDomain).
+func (d Dialect) MTReadSlots() MTReadSlotPolicy { return d.mt.ReadSlots }
+
 // Clarifier returns this family's clarifier step and range.
 //
 // Exported for core/driver/ft710's write path, which FORMERLY pre-checked
@@ -233,19 +279,92 @@ func (d Dialect) BuildMTSet(s Slot, display bool, tag string) (Command, error) {
 	return newCommand(frame), nil
 }
 
+// mtReadSlotValid reports whether s is a legal target for an MT READ under
+// THIS DIALECT'S declared read domain (MTPolicy.ReadSlots): memory and PMS
+// always, 60m and EMG only under MTReadsReadable.
+//
+// SHARED BY BuildMTRead AND AllowedCommand's MT read branch, and by nothing
+// else — the same "one rule, two consultations" discipline every other
+// write-direction predicate in this package keeps, so the builder and the
+// gate cannot drift apart.
+//
+// IT IS NOT Dialect.readableSlot ANY MORE, and the separation is the point.
+// readableSlot is the rule for a bare slot-only READ whose domain is the
+// dialect's whole readable slot space, and it still governs MR: on a
+// MTReadsMemoryPMS radio the 5xx and EMG banks are read by MR alone. Under
+// MTReadsReadable the two predicates agree exactly, which is what keeps
+// every existing MT-read frame and refusal byte-identical.
+//
+// It classifies through d.classifySlot rather than reading the kind s
+// carries, for the reason Slot's own doc comment gives: the stored kind is
+// the verdict of whichever dialect BUILT the slot, and the question here is
+// whether THIS dialect will read it.
+func (d Dialect) mtReadSlotValid(s Slot) bool {
+	// A SWITCH ON THE POLICY FIRST, not a classify-then-if-else with an
+	// implicit "everything else is narrow" arm — the same shape mc.go's
+	// mcSendValid takes, for the same reason: the S0-close review's HIGH-1
+	// finding was that a zero MTReadSlotPolicy fell through to the
+	// memory/PMS reading instead of refusing. NewDialect's V9
+	// (validateMTPolicy, dialectvalidate.go) already refuses a zero
+	// MTReadSlotPolicy at construction, but the default branch below is
+	// what keeps this site from silently taking ANY reading, memory/PMS
+	// included, in the one place V9 cannot reach — see
+	// unsetpolicy_test.go.
+	switch d.mt.ReadSlots {
+	case MTReadsReadable:
+		switch d.classifySlot(s.Wire()) {
+		case slotKindMemory, slotKindPMS, slotKind60m, slotKindEMG:
+			return true
+		default:
+			return false
+		}
+	case MTReadsMemoryPMS:
+		switch d.classifySlot(s.Wire()) {
+		case slotKindMemory, slotKindPMS:
+			return true
+		default:
+			return false
+		}
+	default:
+		return false
+	}
+}
+
 // BuildMTRead builds an MT read request for slot s. Reference: "Read frame
 // (6 bytes): MT P0 P0 P0 ;", golden vector G10: "MT001;".
 //
-// Unlike BuildMTSet, reads are not restricted to memory/PMS slots: reading
-// a tag has no side effect and carries none of the write-direction
-// hardware-verification concern the project policy above is about, so 5xx
-// and EMG (✓ in the manual's MT column) are allowed here. "000" remains
-// rejected (✗ in the manual's MT column, semantics unknown). See
-// Dialect.readableSlot (slot.go), shared with BuildMRRead and
-// AllowedCommand's MR/MT grammar checks.
+// Unlike BuildMTSet, reads are not restricted to memory/PMS slots BY THE
+// WRITE-DIRECTION POLICY: reading a tag has no side effect and carries none
+// of the hardware-verification concern the project policy above is about.
+// What bounds them instead is the dialect's own MT slot legend, carried as
+// MTPolicy.ReadSlots: under MTReadsReadable — the three registered dialects,
+// whose MT blocks print 5xx and EMG alongside memory and PMS — this admits
+// exactly what Dialect.readableSlot admits and not a byte moves; under
+// MTReadsMemoryPMS the 5xx and EMG banks are refused here and at the gate,
+// and MR is the only command that reads them. "000" remains rejected under
+// both (✗ in the manual's MT column, semantics unknown).
+//
+// TWO REFUSALS, in this order, because they say different things: the first
+// is the none/invalid case and its wording is unchanged, which is what keeps
+// every FT-710 refusal in the frame corpus byte-identical; the second fires
+// only where ReadSlots narrows the space the first admits.
 func (d Dialect) BuildMTRead(s Slot) (Command, error) {
 	if !d.readableSlot(s) {
 		return Command{}, newParseError([]byte(s.Wire()), "MT: slot must not be \"000\"/invalid (reference MT column: ✗)")
+	}
+	if !d.mtReadSlotValid(s) {
+		// TWO WORDINGS, for the reason mc.go's BuildMCSet gives at the same
+		// rung: the narrow wording asserts "memory and PMS only" of this
+		// dialect's MT slot legend, and a policy that declares nothing has
+		// no legend to assert. The unset arm takes the P5/P11 sites' own
+		// "policy unset — refusing to guess" wording. Unreachable through
+		// NewDialect (V9 refuses a zero MTReadSlotPolicy at construction);
+		// reachable through the hand-built zero Dialect unsetpolicy_test.go
+		// builds.
+		if d.mt.ReadSlots != MTReadsReadable && d.mt.ReadSlots != MTReadsMemoryPMS {
+			return Command{}, newParseError([]byte(s.Wire()), "MT: slot policy unset — refusing to guess whether this dialect's MT block prints the 5xx and EMG banks")
+		}
+		return Command{}, newParseError([]byte(s.Wire()), fmt.Sprintf("MT: slot %q is outside this dialect's MT read domain (%v: memory and PMS only) — its MT block's slot legend prints neither the 5xx nor the EMG bank, which MR reads instead", s.Wire(), d.mt.ReadSlots))
 	}
 	frame := make([]byte, 0, mtReadLen)
 	frame = append(frame, 'M', 'T')

@@ -34,7 +34,7 @@ var ft710SettingsDescriptor = buildSettingsDescriptor(catDialect)
 // distinct (P1,P2) pair nested under its menu (ID the 4-digit P1P2, e.g.
 // "0101"; Label the manual's P2Label), and one SettingItem per inventory
 // row nested under its group, IN INVENTORY ORDER (ID the item's 6-digit
-// wire address via EXAddress.Wire, Label the manual's Function name,
+// wire address via cat.Dialect.EXWire, Label the manual's Function name,
 // Display the human "P1-P2-P3" form, e.g. "01-01-01").
 //
 // Dialect.EXItems already returns its rows sorted by (P1,P2,P3) (see its
@@ -66,7 +66,7 @@ func buildSettingsDescriptor(dialect cat.Dialect) driver.SettingsDescriptor {
 		group := &menu.Groups[len(menu.Groups)-1]
 
 		group.Items = append(group.Items, driver.SettingItem{
-			ID:      it.Addr.Wire(),
+			ID:      dialect.EXWire(it.Addr),
 			Label:   it.Name,
 			Display: fmt.Sprintf("%02d-%02d-%02d", it.Addr.P1, it.Addr.P2, it.Addr.P3),
 		})
@@ -138,13 +138,13 @@ func (e *SettingAnswerMismatchError) Error() string {
 // items (cat.EXItem.Digits/Text), so only the prefix is checked —
 // mirroring mtSpec's own variable-length answer, ft710.go. One retry —
 // reads are idempotent, exactly mrSpec/mtSpec's rationale.
-func exSpec(addr cat.EXAddress) transport.CommandSpec {
-	return transport.CATReadSpec("EX"+addr.Wire(), 0, 1)
+func exSpec(dialect cat.Dialect, addr cat.EXAddress) transport.CommandSpec {
+	return transport.CATReadSpec("EX"+dialect.EXWire(addr), 0, 1)
 }
 
 // parseEXResponse interprets the outcome of one EX exchange for requested:
 //   - a rejection frame (cat.IsRejection) maps to
-//     SettingValue{ID: requested.Wire(), State: SettingUnavailable}, with
+//     SettingValue{ID: dialect.EXWire(requested), State: SettingUnavailable}, with
 //     NO error — mirroring the project's established "?;" -> empty-result
 //     rule (ReadChannel's empty-slot mapping, read.go);
 //   - a well-formed EX answer naming requested's own address maps to
@@ -175,7 +175,7 @@ func exSpec(addr cat.EXAddress) transport.CommandSpec {
 // (see ReadSetting) before being handed to this same function, so all
 // three response-interpretation rules live in exactly one place.
 func parseEXResponse(dialect cat.Dialect, requested cat.EXAddress, frame []byte) (driver.SettingValue, error) {
-	id := requested.Wire()
+	id := dialect.EXWire(requested)
 
 	if cat.IsRejection(frame) {
 		return driver.SettingValue{ID: id, State: driver.SettingUnavailable}, nil
@@ -185,8 +185,8 @@ func parseEXResponse(dialect cat.Dialect, requested cat.EXAddress, frame []byte)
 	if err != nil {
 		return driver.SettingValue{}, fmt.Errorf("ft710: ReadSetting %s: %w", id, err)
 	}
-	if addr.Wire() != id {
-		return driver.SettingValue{}, &SettingAnswerMismatchError{Requested: id, Answered: addr.Wire()}
+	if answered := dialect.EXWire(addr); answered != id {
+		return driver.SettingValue{}, &SettingAnswerMismatchError{Requested: id, Answered: answered}
 	}
 
 	return driver.SettingValue{ID: id, Raw: raw, State: driver.SettingKnown}, nil
@@ -242,15 +242,15 @@ func (s *Session) ReadSetting(ctx context.Context, id string) (driver.SettingVal
 		// enforces the identical Table 2 membership BuildEXRead itself
 		// checks (both via cat.Dialect.KnownEXAddress) — kept as defence in
 		// depth rather than a silent assumption.
-		return driver.SettingValue{}, fmt.Errorf("ft710: ReadSetting %s: %w", addr.Wire(), err)
+		return driver.SettingValue{}, fmt.Errorf("ft710: ReadSetting %s: %w", s.dialect.EXWire(addr), err)
 	}
 
-	frame, err := s.eng.Do(ctx, cmd, exSpec(addr))
+	frame, err := s.eng.Do(ctx, cmd, exSpec(s.dialect, addr))
 	switch {
 	case errors.Is(err, cat.ErrRejected):
 		frame = rejectionFrameBytes
 	case err != nil:
-		return driver.SettingValue{}, fmt.Errorf("ft710: ReadSetting %s: %w", addr.Wire(), err)
+		return driver.SettingValue{}, fmt.Errorf("ft710: ReadSetting %s: %w", s.dialect.EXWire(addr), err)
 	}
 
 	return parseEXResponse(s.dialect, addr, frame)
