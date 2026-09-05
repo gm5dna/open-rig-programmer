@@ -84,6 +84,54 @@ func (l Layout) ModeName(m Mode) (string, bool) {
 	return name, ok
 }
 
+// fmNarrowSuffix is what the synthesised narrow name adds to THE LAYOUT'S
+// OWN name for the FM nibble, rather than to a literal "FM", so a row whose
+// legend spelled the nibble differently could not publish a narrow name
+// unrelated to its own normal one.
+// TestRecordModeName_FMNarrowIsSynthesisedFromP5AndP14 pins the pair of
+// names this milestone's rows actually produce.
+const fmNarrowSuffix = "-N"
+
+// RecordModeName is the name this layout publishes for rec's MODE, which on
+// the 590 pair is a function of TWO bytes rather than one.
+//
+// Q6's RULING, AND IT TURNS ON THE Byte3940 AXIS RATHER THAN A MODEL NAME.
+// The 590 book carries FM Narrow as a flag beside the mode nibble — P5 = '4'
+// is FM (590:1358) and P14 is "00: FM Normal" or "01: FM Narrow"
+// (590:1569-1571) — where the Yaesu family folds the same distinction into
+// the mode legend itself. So the published names FM and FM-N are synthesised
+// from P5 = 4 x P14, on the rows whose P14 IS that flag.
+//
+// ON THE TS-480 THE SAME TWO BYTES ARE A TUNING STEP INDEX (480:979, whose
+// own legend is mode-conditional at 480:1494-1500), so P14 = "01" there is
+// step 1 and says nothing about bandwidth. A synthesis keyed on the model
+// name would publish "FM-N" for a TS-480 channel whose step happened to be
+// the second on its list; keyed on the axis, that radio's FM records are
+// named FM whatever P14 carries.
+//
+// AN FM RECORD WHOSE P14 IS NEITHER PRINTED VALUE HAS NO NAME AT ALL. This
+// codec neither parses nor builds such a record (checkByte3940), and
+// defaulting to the normal name would silently widen a narrow channel — the
+// alternative the spec rejects. A zero Layout publishes no name for
+// anything, and neither does a nibble that names no mode (A18b).
+func (l Layout) RecordModeName(rec Record) (string, bool) {
+	base, ok := l.ModeName(rec.Mode)
+	if !ok {
+		return "", false
+	}
+	if rec.Mode != ModeFM || l.byte3940 != Byte3940FMNarrowFlag {
+		return base, true
+	}
+	switch rec.Byte3940Wire() {
+	case byte3940FMNormal:
+		return base, true
+	case byte3940FMNarrow:
+		return base + fmNarrowSuffix, true
+	default:
+		return "", false
+	}
+}
+
 // ParseMode resolves a P5 wire byte against THIS LAYOUT'S OWN legend,
 // returning the mode and whether the layout knows it.
 //
