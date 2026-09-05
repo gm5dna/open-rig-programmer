@@ -315,10 +315,13 @@ func (d *ft991aDriver) profileRecognised() bool {
 //
 // What opMu guards is a whole DRIVER OPERATION (spec erratum S-E4, matrix
 // M-E2), and this session has more than one kind of those: a read, a write
-// (write.go) and a settings read (task 12) must not interleave their frames
-// even though the engine would happily serialise them one exchange at a
-// time. The concurrency pin plan P12 asks for is that two racing
-// ReadChannels cannot interleave two MT frames.
+// (write.go) and a settings read (settings.go) must not interleave their
+// frames even though the engine would happily serialise them one exchange at
+// a time. The concurrency pin plan P12 asks for is that two racing
+// ReadChannels cannot interleave two MT frames; the pin of the LOCK ITSELF is
+// settings.go's readSettingGapHook, which parks a settings read inside opMu
+// so a concurrent WriteChannel can be shown to be excluded by the lock and
+// not merely by the engine.
 //
 // IT IS NOT HELD ACROSS WRITE-THEN-VERIFY: that pair belongs to core/clone,
 // as the driver interface assigns it, and holding a driver lock across it
