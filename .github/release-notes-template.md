@@ -108,6 +108,39 @@
   paragraph now reads "models" rather than "transceivers", and the
   bounded-walk footnote covers three models rather than two.
 
+  SYNC 05/09/2026 (Tier 0 P2, Windows packaging, PRE-LEG): the
+  Downloads table gains two Windows installer rows and two Windows CLI
+  zip rows, built by release.yml's new `windows` job; a "Windows: first
+  launch" section sits beside "macOS: first launch" (SmartScreen,
+  Defender, WebView2); "Checking which version you have" now names
+  `rigprog.exe version` alongside `rigprog version`; the SHA256SUMS
+  verification block gains the `certutil -hashfile <file> SHA256`
+  equivalent for a reader with no `sha256sum`. The evidence section's
+  Windows bullet is written in its PRE-LEG form — built and checked by
+  the pipeline on a Windows x64 host, nothing installed or connected to
+  a radio yet — because the ARM64 VM verification session (this
+  milestone's Task 7) has not run; Task 8 trues it from that session's
+  evidence. No row of the per-model support table, no model count, and
+  no other evidence sentence changed with this sync.
+
+  FIX ROUND 1 (05/09/2026, cross-check with lane D's t4-docs-review-
+  opus.md finding 5): the Downloads section gains a one-sentence note
+  that the four Windows rows are native-only (amd64 refuses to run on
+  ARM64, even though ARM64 Windows can emulate x64) — the same rule
+  README.md's Windows paragraph already states, now stated here too so
+  a reader who only sees the release page (where the asset choice is
+  actually made) gets it as well.
+
+  SYNC 05/09/2026, POST-LEG (Tier 0 P2, Windows packaging): the
+  evidence section's Windows bullet is trued from the ARM64 VM
+  verification session that ran the same day (docs/hardware-notes.md's
+  "Windows (ARM64 VM) session — 05/09/2026") — installed and
+  launch-tested with a real FT-710 attached, the Silicon Labs CP210x
+  driver installed by hand (Windows Update supplied nothing on ARM64),
+  two writes made and the radio restored byte-identical. amd64 stays as
+  the PRE-LEG sentence had it: built and CLI-run in CI only, no amd64
+  Windows machine tried. No other evidence sentence, row of the
+  per-model support table, or model count changed with this sync.
   SYNC 05/09/2026 (v1.2.4), TIER 1: SIXTEEN registered models — the
   fifteen above plus the FT-891, whose protocol facts come from Yaesu's
   CAT Operation Reference Manual revision 1909-C. It is the FIRST YAESU
@@ -299,6 +332,10 @@ want to help, open an issue.
 | Linux arm64 | CLI | `rigprog-__VERSION__-linux-arm64.tar.gz` |
 | Linux amd64 (Debian/Ubuntu/Mint) | GUI + CLI (.deb) | `open-rig-programmer___VERSION_NO_V___amd64.deb` |
 | Linux arm64 (Debian/Ubuntu/Mint) | GUI + CLI (.deb) | `open-rig-programmer___VERSION_NO_V___arm64.deb` |
+| Windows amd64 | GUI + CLI (installer) | `open-rig-programmer-__VERSION__-windows-amd64-installer.exe` |
+| Windows arm64 | GUI + CLI (installer) | `open-rig-programmer-__VERSION__-windows-arm64-installer.exe` |
+| Windows amd64 | CLI only (zip) | `rigprog-__VERSION__-windows-amd64.zip` |
+| Windows arm64 | CLI only (zip) | `rigprog-__VERSION__-windows-arm64.zip` |
 
 Either Debian package installs the GUI, the `rigprog` CLI, a desktop
 entry and the ModemManager udev rule; `sudo apt install ./<file>`
@@ -312,19 +349,38 @@ other distributions, take the CLI tarball or build the GUI from source
 (`wails build -tags webkit2_41` in `app/`); either way,
 `docs/linux-setup.md` covers the serial-port setup.
 
+The installer's architecture check is native-only: the amd64 installer
+refuses to run on an ARM64 machine, even though ARM64 Windows can
+emulate x64 programs — install the arm64 installer on an ARM64 PC. The
+CLI zip carries no such check — it is a plain executable, and an amd64
+`rigprog.exe` extracted from it will very likely run on ARM64 Windows
+under emulation, but this project has not tried it either way.
+
 `SHA256SUMS` (attached below) covers every file above. Verify with:
 
 ```sh
 sha256sum -c SHA256SUMS --ignore-missing
 ```
 
+On Windows, without `sha256sum`, check one file at a time in PowerShell
+or Command Prompt and compare the printed hash to its line in
+`SHA256SUMS` by eye:
+
+```
+certutil -hashfile <file> SHA256
+```
+
 ## Checking which version you have
 
-`rigprog version` prints it; the GUI shows it at the right-hand end of
-the status bar. Quote that string in any bug report. A build that
-reports `dev (unreleased build)` did not come from this release page —
-if you downloaded it here, please say so in the report, because that
-would be a packaging fault.
+`rigprog version` prints it; on Windows the installer adds nothing to
+PATH, so in PowerShell run `& "C:\Program Files\Open Rig
+Programmer\rigprog.exe" version` for the installed CLI, or
+`.\rigprog.exe version` from wherever you unpacked the zip. The GUI
+shows it at the right-hand end of the
+status bar. Quote that string in any bug report. A build that reports
+`dev (unreleased build)` did not come from this release page — if you
+downloaded it here, please say so in the report, because that would be
+a packaging fault.
 
 ## Firmware requirement
 
@@ -339,6 +395,31 @@ will refuse to open it the ordinary way the first time. In Finder,
 right-click (Control-click) the app and choose **Open**, then confirm
 in the dialogue that appears. This is only needed once; after that it
 opens normally.
+
+## Windows: first launch
+
+The installer is unsigned (no code-signing certificate this
+milestone). Edge's Downloads pane flags the download itself as "isn't
+commonly downloaded" before you open it, then Windows SmartScreen
+shows "Windows protected your PC" the first time you run it —
+confirmed on a Windows 11 ARM64 VM, 05/09/2026, register entry **W9,
+LIFTED** (see `docs/windows-setup.md`). If it appears, click **More
+info**, then **Run anyway**. Windows Defender did not quarantine or
+block either the installer or the CLI on that session, register entry
+**W10, LIFTED**; if a future build is ever flagged, restore it from
+Defender's Protection History — nothing here has been reported as
+malicious, this project simply has no publisher reputation with
+Microsoft yet.
+
+The GUI needs Microsoft's WebView2 runtime. On the Windows 11 ARM64 VM
+that ran the 05/09/2026 session, the Evergreen runtime (version
+152.0.4191.62) was already present, so the installer's bootstrapper
+had nothing to install — confirmed, register entry **W8, LIFTED**. If
+it is missing (older Windows 10 builds, or a stripped-down image), the
+installer is configured to download and install it for you during
+setup, in the Wails template's default mode — that step would need an
+internet connection, the rest of the installer does not — but this
+download path itself has not been tried yet by this project.
 
 ## Linux: serial port access
 
@@ -460,6 +541,16 @@ What this release has **not** been exercised against:
   empty slot at all: the record's Select-group setting has no honest
   default to write, so the write path refuses rather than inventing one —
   the same refusal the IC-7300s make, for the same reason.
+- **Windows.** Installed and launch-tested on a Windows 11 ARM64 virtual
+  machine with a real FT-710 attached (05/09/2026): Windows Update
+  supplied no CP210x driver on ARM64, so the Silicon Labs CP210x
+  Universal Windows Driver was installed by hand; SmartScreen and
+  WebView2 behaved as documented; two writes were made from the GUI and
+  the CLI and the radio was read back byte-identical to its pre-session
+  state afterwards. The amd64 builds are produced by the same pipeline
+  on a Windows x64 host and the amd64 CLI has run there too — but the
+  amd64 GUI has never been launched by anyone, and no physical Windows
+  machine of either architecture has been tried.
 
 Anything the project has not observed is labelled as such in the code
 and documentation rather than assumed. Reports from real hardware —

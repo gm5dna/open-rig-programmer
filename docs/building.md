@@ -43,6 +43,63 @@ CI runs):
 git config core.hooksPath scripts/git-hooks
 ```
 
+## Building for Windows
+
+The GUI installer and the CLI zip that `release.yml` ships are built
+on a `windows-2025` GitHub Actions runner (the "Windows-hosted build"
+— never call a cross-compiled build "native"). To build the same
+things yourself, either on a Windows machine or by cross-compiling
+from macOS/Linux, the CLI has to exist BEFORE the installer step:
+`project.nsi` reaches for it by a fixed relative path per architecture,
+`..\..\..\dist\<arch>\rigprog.exe`.
+
+```sh
+# 1. CLI, one build per architecture, into the path project.nsi expects
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o app/dist/amd64/rigprog.exe ./cmd/rigprog
+GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build -o app/dist/arm64/rigprog.exe ./cmd/rigprog
+
+# 2. GUI + NSIS installer, both architectures in one call (from app/)
+cd app
+wails build -platform windows/amd64,windows/arm64 -nsis
+```
+
+`-nsis` needs `makensis` on `PATH` — this project pins NSIS 3.12
+(Homebrew's `makensis` on macOS is the same version the release
+pipeline installs on the runner). Without `makensis`, `wails build
+-nsis` still exits 0 but silently produces no installer — check for
+`app/build/bin/Open Rig Programmer-<arch>-installer.exe` rather than
+trusting the exit code.
+
+A Wails build (with or without `-nsis`) regenerates the tracked
+frontend bindings under `app/frontend/wailsjs/` and, for `-nsis`
+specifically, the tracked template file
+`app/build/windows/installer/wails_tools.nsh` (its placeholders become
+literal values). It does NOT rewrite `app/wails.json`: that file's
+`info.productVersion` is stamped only by the release job and by the
+local dry-run script, and each of those restores the file itself
+afterwards — the build never touches it. Restore the two files a build
+DOES change before committing anything — but only if you had no
+uncommitted edits of your own in either one; check `git diff` first,
+and if you did, restore your own saved copies instead of discarding
+them (the same advice `app/README.md` gives for the frontend's build
+collateral):
+
+```sh
+git checkout -- app/frontend/wailsjs/ app/build/windows/installer/wails_tools.nsh
+```
+
+The release job and the local dry-run script never take this
+shortcut: both save the exact pre-build bytes first and restore those
+exact bytes afterwards, never a blind `git checkout --` (see
+`app/build/windows/README.md`'s "Template-generated files" section).
+
+`app/build/windows/README.md` covers which files under that directory
+are template-generated versus hand-edited, and the same churn rule in
+full; `docs/windows-setup.md` covers what the installer does once it
+runs on a real machine — confirmed on a Windows 11 ARM64 VM,
+05/09/2026; amd64 and a physical machine of either architecture
+remain untried (see its "Status" section).
+
 ## Repository layout
 
 | Path | Contents |
@@ -51,5 +108,5 @@ git config core.hooksPath scripts/git-hooks
 | `cmd/rigprog/` | The CLI. |
 | `app/` | Wails v2 + Svelte desktop GUI. |
 | `internal/` | The radio simulators — `fakeradio`, `fakedx10`, `fakedx101`, `fakeft891` for Yaesu; `fakeic7610`, `fakeic7300`, `fakeic7300mk2`, `fakeic705`, `fakeic9700`, `fakeic905`, `fakeic7851`, `fakeic7760`, `fakeic7100`, `fakeicr8600` for Icom — composition-root wiring, the shared settings store the CLI and GUI both use for unverified-write consent (`userconfig`), menu-table generator (`extable`), and the import-graph guard tests (`guards`). |
-| `docs/` | Hardware findings, Linux setup, the menu-write decision, and the fixture redaction policy. |
+| `docs/` | Hardware findings, Linux and Windows setup, the menu-write decision, and the fixture redaction policy. |
 | `docs/fixtures-private/` | Git-ignored. Raw radio backups and serial captures — never committed. |

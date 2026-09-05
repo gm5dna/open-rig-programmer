@@ -108,14 +108,39 @@ var openPort = func(path string, mode *serial.Mode) (serialPort, error) {
 // cfg.Baud (default DefaultBaud) with cfg.StopBits (default
 // DefaultStopBits) stop bits.
 //
-// Immediately after opening — safety obligation 4 — it drives RTS and DTR
-// low (SetRTS(false), SetDTR(false)) before returning the port to the
-// caller. go.bug.st/serial does not expose a way to request these lines'
-// state be low AT THE INSTANT the OS opens the underlying device node
-// (Mode.InitialStatusBits only controls what it sets them to once open
-// completes); whatever the hardware UART/USB-serial bridge drives them to
-// by default in the brief window between the OS-level open and these two
-// calls landing is unknown and unverified — this is an M5a hardware
+// Safety obligation 4 — RTS and DTR must be low — is asked for twice, and
+// both asks matter.
+//
+// First, the Mode handed to the open carries
+// InitialStatusBits = &serial.ModemOutputBits{RTS: false, DTR: false}. This
+// is the earliest lever the library exposes, and what it reaches differs by
+// platform. On unix it is a setModemBitsStatus call inside the open, after
+// the term settings and before the mandatory-last SetMode
+// (serial_unix.go:249-269) — earlier than the explicit calls below, but
+// still after the OS-level open, so the brief pulse the device node's own
+// open causes is not preventable here. On Windows it is not a separate
+// call at all: it selects the DTR_CONTROL/RTS_CONTROL flags of the DCB the
+// library hands SetCommState (serial_windows.go:401-411), so the lines are
+// configured as the port is configured. Leaving the field nil is NOT
+// neutral there — nil means DTR_CONTROL_ENABLE|RTS_CONTROL_ENABLE, both
+// lines asserted, which is exactly the dangerous state. Register entry W6
+// (LIFTED, 05/09/2026): a Windows 11 ARM64 VM session with a real FT-710
+// attached watched a Windows open for TX key-up, and the same
+// verification bar's host-Mac step watched the changed macOS path the
+// same way — see docs/hardware-notes.md's "Windows (ARM64 VM) session"
+// section. Pinned by TestOpenSerial_RequestsRTSAndDTRLowAtOpen in
+// port_test.go.
+//
+// Second, immediately after opening it still drives both lines low
+// explicitly (SetRTS(false), SetDTR(false)) before returning the port to
+// the caller — the belt to the Mode's braces, and the only ask on any
+// platform whose open path ignores InitialStatusBits. Pinned by
+// TestOpenSerial_DrivesRTSAndDTRLowImmediately (one call each, false), see
+// the SetRTS/SetDTR calls below.
+//
+// Whatever the hardware UART/USB-serial bridge drives these lines to by
+// default in the window between the OS-level open and the library's own
+// configuration landing remains unknown and unverified — an M5a hardware
 // observation item, not something this package can control or test.
 //
 // It then configures a short internal read poll interval (see
@@ -138,6 +163,10 @@ func OpenSerial(path string, cfg SerialConfig) (Port, error) {
 		DataBits: 8,
 		Parity:   serial.NoParity,
 		StopBits: sb,
+		// Both lines low from the earliest point the library allows; see
+		// the doc comment above for what this reaches on each platform,
+		// and why nil would be the dangerous choice on Windows.
+		InitialStatusBits: &serial.ModemOutputBits{RTS: false, DTR: false},
 	}
 
 	p, err := openPort(path, mode)
