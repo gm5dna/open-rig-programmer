@@ -89,12 +89,10 @@ type forbiddenImport struct {
 
 // scanResult is what one scan of a directory tree observed. The two counts
 // exist for the vacuity checks: a scan that parsed no files, or files with no
-// imports at all, would report "no violations" while proving nothing. The
-// paths are what lets a test assert WHICH files were reached.
+// imports at all, would report "no violations" while proving nothing.
 type scanResult struct {
 	files      int
 	imports    int
-	paths      []string
 	violations []forbiddenImport
 }
 
@@ -141,7 +139,6 @@ func scanForbiddenImports(root string) (scanResult, error) {
 			return perr
 		}
 		res.files++
-		res.paths = append(res.paths, path)
 		for _, imp := range file.Imports {
 			p, uerr := strconv.Unquote(imp.Path.Value)
 			if uerr != nil {

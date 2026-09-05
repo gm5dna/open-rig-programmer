@@ -243,8 +243,7 @@ func TestWithFirmwareVersion_IsAnsweredVerbatim(t *testing.T) {
 
 // TestWithFirmwareVersion_RefusesAWidthTheChartCannotCarry: the field is four
 // bytes on the wire, so a fixture of any other width could not be sent by any
-// radio. Panicking is defaultState's reasoning: the argument is a fixture
-// constant.
+// radio. Panicking is New's reasoning: the argument is a fixture constant.
 func TestWithFirmwareVersion_RefusesAWidthTheChartCannotCarry(t *testing.T) {
 	defer func() {
 		if recover() == nil {

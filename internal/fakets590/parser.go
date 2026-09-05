@@ -95,11 +95,8 @@ type reassembler struct {
 	resyncing bool
 }
 
-func newReassembler(max int) *reassembler {
-	if max <= 0 {
-		max = maxAccumulatorBytes
-	}
-	return &reassembler{max: max}
+func newReassembler() *reassembler {
+	return &reassembler{max: maxAccumulatorBytes}
 }
 
 // accEvent is one unit reassembler.push hands back: either a complete frame
@@ -155,7 +152,7 @@ func allDigits(s string) bool {
 //   - 000-099, ordinary memory channels. MC's P2 prints "00 ~ 99: Two digit
 //     channel number" and its P1 the hundreds digit (590:1332-1343), and
 //     both memory charts refer their P2/P3 cells to MC (590:1452-1453,
-//     590:1538-1539).
+//     590:1539-1540).
 //   - 100-109, the section-defined channels: "Channel numbers P00 ~ P09 are
 //     represented by 100 ~ 109." (590:1345).
 //
@@ -172,6 +169,12 @@ func allDigits(s string) bool {
 // domain and NOT a claim that either radio refuses those numbers.
 
 // The served slot space's bounds.
+//
+// highestChannel is 109 on BOTH rows, but for two different reasons. On the
+// SG it is entry 10's deliberate narrowing below the printed 110-119. On the
+// S the book never states a ceiling at all — doc.go's register entry THE S
+// ROW'S CEILING IS UNSTATED, the design's A12 (unlifted; core/kw/ts590's
+// layout.go names A12 for the same row).
 const (
 	lowestChannel  = 0
 	highestChannel = 109
@@ -307,7 +310,7 @@ func parseChannelDigits(hundreds byte, twoDigits string) (int, bool) {
 //
 // "For a response command, a space is entered for a channel number less than
 // 100." (590:1336-1337) — printed for MC, and both memory charts refer their
-// P2 cell to MC (590:1452-1453, 590:1538-1539). Applying MC's response
+// P2 cell to MC (590:1452-1453, 590:1539-1540). Applying MC's response
 // convention to MR's answer is this fake's reading of that cross-reference,
 // registered in doc.go as AN ANSWER'S HUNDREDS DIGIT IS A SPACE BELOW
 // CHANNEL 100. It is deliberately the OPPOSITE spelling to the one core/kw
@@ -367,7 +370,7 @@ func (r *Radio) handleMR(body []byte) []byte {
 		// WithMemoryReadUnsupported: the book's second "?;" cause, played —
 		// "Command was not executed due to the current status of the
 		// transceiver (even though the command syntax was correct)"
-		// (590:101-103). Not a claim that any TS-590 refuses MR.
+		// (590:100-105). Not a claim that any TS-590 refuses MR.
 		return rejection
 	}
 
@@ -471,8 +474,6 @@ func (r *Radio) handleMW(body []byte) []byte {
 	case !validLockoutByte(s.Lockout):
 		return rejection
 	case !validNameField(frame[recNameOff : recNameOff+recNameLen]):
-		return rejection
-	case frame[recTermOff] != ';':
 		return rejection
 	}
 

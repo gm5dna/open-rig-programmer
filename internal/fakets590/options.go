@@ -48,8 +48,8 @@ func WithLatency(d time.Duration) Option {
 // what "2.00" or "1.xx" means is the driver's job, and a fake that validated
 // the field would be asserting A13 as a fact about the radio. The WIDTH is
 // enforced, because the chart counts four P1 bytes and a field of any other
-// width could not be sent by any radio; a bad fixture panics, which is
-// defaultRecord's reasoning — every call site passes a constant.
+// width could not be sent by any radio; a bad fixture panics, which is New's
+// reasoning (fakets590.go) one layer up — every call site passes a constant.
 func WithFirmwareVersion(s string) Option {
 	if len(s) != firmwareFieldLen {
 		panic(fmt.Sprintf("fakets590: firmware version %q is %d bytes; FV's P1 field is %d (590:1037)", s, len(s), firmwareFieldLen))
@@ -146,7 +146,7 @@ func WithEmptyChannel(channel int) Option {
 // NOT A CLAIM THAT ANY TS-590 REFUSES MR. It plays the SECOND cause the error
 // table itself prints — "Command was not executed due to the current status
 // of the transceiver (even though the command syntax was correct)"
-// (590:101-103) — which is a state, not a defect.
+// (590:100-105) — which is a state, not a defect.
 func WithMemoryReadUnsupported() Option {
 	return func(r *Radio) {
 		r.memoryReadUnsupported = true
@@ -173,8 +173,10 @@ func WithTransientNAKSuppressed() Option {
 }
 
 // WithStreamError scripts one of the two SERIAL-LINE error tokens
-// (590:110-113) in place of exchange n's reply, where n counts complete
-// frames the fake has handled from 1.
+// (590:110-113) in place of exchange n's reply, where n counts EVENTS the
+// fake has handled from 1 — an accumulator overflow counts too, since
+// handleEvent increments before it knows whether the event is a complete
+// frame.
 //
 // The tokens are not command outcomes: "E;" reports "a communication error
 // ... such as an overrun or framing error during a serial data transmission"
