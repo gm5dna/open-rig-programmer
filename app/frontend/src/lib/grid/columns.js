@@ -234,12 +234,15 @@ export function isCellEditable(column, data) {
 /**
  * A tone in decihertz as display text, preferring the UISpec's own
  * table (Go-formatted), falling back to the same arithmetic for a
- * value the table does not list.
+ * value the table does not list. Exported so ChannelGrid.svelte's
+ * free-text tier editor can open a Known tone cell on the identical
+ * spelling this module already displays it in, for the radios whose
+ * UISpec serves no tone list at all (MED-A).
  * @param {number} decihertz
  * @param {UISpecView} uiSpec
  * @returns {string}
  */
-function toneDisplay(decihertz, uiSpec) {
+export function toneDisplay(decihertz, uiSpec) {
 	const entry = (uiSpec.Tones ?? []).find((t) => t.Decihertz === decihertz)
 	if (entry) return entry.Display
 	return `${(decihertz / 10).toFixed(1)} Hz`
@@ -280,7 +283,15 @@ export function displayValue(column, data, uiSpec) {
 		// which asserts the two spellings agree.
 		switch (tier.kind) {
 			case 'freq':
-				return hzToMHz(typeof f.value === 'number' ? f.value : 0)
+				// The exact zero-fallback (fix round 2, LOW-C): only an
+				// OMITTED `value` key is Known ZERO. A non-number value is
+				// not reachable from Go (FieldState.Value is a typed field,
+				// so json.Unmarshal refuses anything else at load), and
+				// falling back to zero for one anyway would hide a
+				// malformed field behind a confident answer; hzToMHz's own
+				// guard already turns anything else into '' rather than a
+				// silent zero.
+				return hzToMHz(f.value === undefined ? 0 : f.value)
 			case 'tone':
 				// The tone kind is NOT normalised the same way: zero decihertz
 				// is not a tone any radio's table lists, so a Known tone with
@@ -288,7 +299,7 @@ export function displayValue(column, data, uiSpec) {
 				// stays the honest rendering of it.
 				return typeof f.value === 'number' ? toneDisplay(f.value, uiSpec) : '—'
 			case 'int':
-				return String(typeof f.value === 'number' ? f.value : 0)
+				return String(f.value === undefined ? 0 : f.value)
 			case 'bool':
 				return f.value ? 'On' : 'Off'
 			default:
