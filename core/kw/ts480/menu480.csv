@@ -1,0 +1,223 @@
+# TS-480 PC control command reference -- EX menu inventory.
+# Source: Kenwood TS-480HX/SAT PC CONTROL COMMAND reference (Adobe PageMaker
+#   6.0 / Acrobat Distiller 3.01, created 27/11/2003; the document carries no
+#   revision number, no part code and no firmware statement anywhere -- E15
+#   in core/kw/doc.go's errata schedule). File
+#   docs/fixtures-private/manuals/ts480_pc_2003.pdf, gitignored; SHA-256
+#   7508e7fcdd5e4d0597e215f4ebe5ee0007397eab9b70a0613d9cdcbd6fb8e6bd;
+#   26 PDF pages. The chart is the UNTITLED table that follows the EX command
+#   block; this book gives it no caption, and no "Table 2" exists here.
+# Method: LAYOUT-TEXT-LED, PDF-CHECKED, exactly the FT-891 rule. The working
+#   text was the layout extraction
+#   docs/fixtures-private/manuals/ts480_pc_2003_layout.txt (SHA-256
+#   3a96a2bcf8d53cd0c0587b698eecf3cf352c7d203e0cae1414ef7df467c5e498; 1808
+#   lines), where the chart spans lines 424-539 -- the column header at
+#   424-426, the first row 000 at 427, the last row 060 at 538, with the
+#   header reprinted at 498-500 where the chart crosses a page. The EX
+#   command block that declares the domain is at 394-417 (the domain
+#   "000 ~ 060: Menu No." at 401).
+#   THE RENDER ARBITRATED: PDF pages 8 and 9 = printed folios 7 and 8,
+#   rendered at 300 dpi with pdftoppm. Every row's Function, parameter cells
+#   and last populated column was read off the rendered page as well as the
+#   layout. Rows 000-037 are on folio 7 (layout 427-490), rows 038-060 on
+#   folio 8 (layout 501-538).
+#   A SECOND, PDF-PRIMARY transcription of the same chart and a boundary
+#   ledger were derived independently before this file existed; this file was
+#   written WITHOUT sight of either, and the cross-check task binds them
+#   afterwards.
+# Transcribed: 05/09/2026 (Kenwood pair 1, Stage 1 task 9c, transcription A).
+#   Values are the manual's own; this file makes no claim about what any
+#   radio does. No TS-480 hardware is available to this project, so there is
+#   no observation CSV and no corrections file to accompany it.
+#
+# Columns: p1,p2,p3,p1_label,p2_label,name,p4,digits,text,manual_line
+#   p1,p2,p3     decimal (P1,P2,P3) triple. The TS-480's EX address has ONE
+#                component: p1 is the chart's printed three-digit Menu No.,
+#                and p2 and p3 are 0 on EVERY row -- extable's
+#                AddressSingle, core/kw's EXAddress, whose wire form is the
+#                three digits "060". The columns are written in the widths
+#                the EX frame itself prints -- p1 three digits, p2 two, p3
+#                one -- because the frame is "E X P1 P1 P1 P2 P2 P3 P4 ;"
+#                with "00: Always 00 for the TS-480" and "0: Always 0 for
+#                the TS-480" (layout 403-407). The widths are cosmetic;
+#                ParseCSV reads all three as decimal integers.
+#   p1_label     EMPTY on every row.
+#   p2_label     EMPTY on every row. This chart prints no label columns at
+#                all -- extable's LabelsAbsent. See NO GROUP LABELS below.
+#   name         chart Function column, verbatim; a Function printed over
+#                two or three layout lines is joined in reading order with
+#                one space.
+#   p4           the row's "EX command parameter P5" cells (audit trail
+#                only -- it is not emitted into the generated Go). SEE
+#                "THE P5 GRID, AND HOW IT IS FLATTENED" below: this column
+#                is a RENDERING of a grid, not a verbatim copy of one
+#                printed cell, and the convention is stated there because it
+#                is the one place this transcription adds text the chart
+#                does not print.
+#   digits       the character width of the LARGEST P5 code the row uses,
+#                DERIVED from the column header over the row's last
+#                populated cell. It is 1 or 2 here; see THE DIGITS RULE.
+#   text         false on every row -- the chart prints no free-text item.
+#                See NO TEXT ITEMS below.
+#   manual_line  line in ts480_pc_2003_layout.txt carrying the row's Menu
+#                No. On a wrapped row that is the MIDDLE or LAST line of the
+#                Function cell, because the extraction prints the number
+#                beside whichever Function line is vertically centred.
+#
+# THE P5 GRID, AND HOW IT IS FLATTENED
+#   This chart does NOT have a parameter-description column of the shape the
+#   four Yaesu transcriptions have. It has a GRID: eleven columns headed
+#   "0 1 2 3 4 5 6 7 8 9 Over" under one "EX command parameter P5" heading
+#   (layout 424-426), where the header is the P5 CODE and the cell under it
+#   is the value that code selects. A flat copy of the cells would lose
+#   which code selects which value, which is the whole content of the row.
+#   So each populated numbered cell is rendered "<code>: <cell>" in reading
+#   order, and the Over cell, where populated, is appended VERBATIM with no
+#   prefix -- because it is not a code's value: it is either a unit for the
+#   whole row ("(Hz)", "(minutes)", "(bps)") or a range continuation
+#   ("~ 60 (in steps of 1 s)"). The "<code>: " prefixes are THIS FILE'S, not
+#   the manual's. Every other character in the column is the chart's own.
+#   The five PF-key rows are the exception and are described below.
+#
+# THE DIGITS RULE, and the eight two-digit rows
+#   The EX block states the width directly: P5 is "A string of characters
+#   (Variable length) Normally 1-digit for the TS-480. Menu No. 32, 35 and
+#   48 ~ 52 use 2-digit parameters." (layout 409-411). Read off the chart
+#   instead, digits is 1 wherever the row's last populated cell sits under a
+#   single-digit header, and 2 where the Over column carries a RANGE the
+#   codes 0-9 cannot reach or the cell prints "(2-digit)".
+#   The two readings agree on seven rows and DISAGREE ON ONE -- see printed
+#   quirk 1. The eight two-digit rows here are 032, 034, 035 and 048-052.
+#
+# NO GROUP LABELS
+#   The chart's only columns are Menu No., Function and the P5 grid. There
+#   is no group hierarchy of any kind, so both label columns are blank on
+#   every row and the generated items carry "" for each.
+#
+# NO TEXT ITEMS
+#   No row of this chart is a free-text field. The nearest candidates are
+#   048-052, and they are NOT text: their shared cell prints "00 ~ 99
+#   (2-digit)", a numeric code range, and the second line refers the reader
+#   to the instruction manual for what each number means. They are
+#   transcribed text=false, digits=2 -- a two-digit numeric field like any
+#   other. The ts480 profile registers TextRowsAbsent with TextWidth 0, and
+#   ParseCSV refuses any row flagged text under that policy.
+#
+# PRINTED QUIRKS RECORDED, NOT RESOLVED
+#   1. MENU 034 IS A TWO-DIGIT ROW THE EX BLOCK'S OWN LIST OMITS. The block
+#      says only "Menu No. 32, 35 and 48 ~ 52 use 2-digit parameters"
+#      (layout 409-411), but 034's row runs 400/450/.../850 under codes 0-9
+#      and its Over cell reads "~ 1000 (in steps of 50)" (layout 483-485,
+#      folio 7): 400 to 1000 in steps of 50 is thirteen values, so the codes
+#      run 00-12 and the field is two digits. Its two neighbours in the same
+#      shape, 032 ("~ 60 (in steps of 1 s)") and 035 ("~ 4.0 (in steps of
+#      0.1)"), ARE in the block's list. The chart is transcribed; the
+#      omission in the prose is recorded here and nothing fills it in. This
+#      repository has no TS-480 to ask which width the radio answers.
+#   2. THE LETTER-SPACING ARTEFACT, four cells. The layout extraction prints
+#      "25 0" (430), "40 0" (484), "A UT O" (487) and "17 0" (506) where the
+#      RENDERED PAGE prints "250", "400", "AUTO" and "170". This is the same
+#      PageMaker letter-spacing that gives this book "Se t" for "Set"
+#      throughout, which core/kw/doc.go records as E18 -- an ANTI-defect,
+#      "recorded so no transcriber corrects it into evidence". The rendered
+#      spelling is transcribed, because the printed page is what the chart
+#      says; the four extraction artefacts are named here so that a reader
+#      diffing this file against the layout text finds the reason rather
+#      than a discrepancy.
+#   3. MENU 011's TWO CELLS ARE LOWER CASE. "to" and "co" (layout 448), not
+#      "TO" and "CO", confirmed on folio 7 at 300 dpi. Almost certainly
+#      time-operated and carrier-operated scan resume; the chart does not
+#      say so and neither does this file.
+#   4. MENUS 018 AND 019 PRINT MIXED-CASE EQUALIZER NAMES: "OFF Hb1 Hb2 FP
+#      bb1 bb2 c U" (layout 455-456), with a lower-case "bb" against an
+#      upper-case "Hb", a bare "c" and a bare "U". Confirmed at 300 dpi and
+#      transcribed as printed. The chart offers no expansion for any of them.
+#   5. MENU 053's FUNCTION PRINTS A SPACE AFTER ITS SOLIDUS: "Split frequency
+#      transfer in master/" / "slave operation" (layout 526-528), joined here
+#      as "master/ slave operation". Menu 034's is printed on one line and
+#      carries the same space: "CW RX pitch/ TX sidetone frequency" (484).
+#      Neither is normalised.
+#   6. THE FIVE PF-KEY ROWS SHARE ONE MERGED CELL. 048-052 (layout 519-525)
+#      have five Menu No. and five Function cells against a SINGLE parameter
+#      cell spanning all five rows and the full width of the grid, whose two
+#      printed lines are "00 ~ 99 (2-digit)" and "Refer to page 64 of the
+#      TS-480 instruction manual for the numbers and functions." (layout 521
+#      and 523, which the extraction interleaves BETWEEN the menu-number
+#      lines). The merged cell's two lines are joined with one space and
+#      repeated on each of the five rows: a CSV row is one address, and each
+#      of these five addresses genuinely carries that legend.
+#   7. THE "Over" COLUMN IS NOT ALWAYS A CODE. Seven rows put a unit there
+#      and nothing else -- 003, 009, 041, 043 and 056 print "(Hz)" or
+#      "(bps)", 022 and 059 print "(minutes)" -- and a unit is not a
+#      parameter value, so those rows' digits comes from their last
+#      populated NUMBERED cell. Three rows put a range continuation there
+#      (032, 034, 035) and those are the two-digit rows of quirk 1.
+#
+# WHAT THIS FILE DOES NOT CLAIM
+#   Nothing here is a hardware observation. A19 -- that an EX answer's P5
+#   never exceeds the width this chart prints -- is ASSUMED and its lift is
+#   an exhaustive read of all 61 addresses on a real TS-480; a ceiling is
+#   not lifted by a sample. The row is also not registered: A4 gates it.
+#   Both are recorded in core/kw/doc.go's ASSUMED register, which is the
+#   authoritative copy and is not restated here.
+000,00,0,,,Display brightness,0: OFF 1: 1 2: 2 3: 3 4: 4,1,false,427
+001,00,0,,,Key illumination,0: OFF 1: ON,1,false,428
+002,00,0,,,Auto Mode operation,0: OFF 1: ON,1,false,429
+003,00,0,,,Tuning control adjustment rate,0: 250 1: 500 2: 1000 (Hz),1,false,430
+004,00,0,,,Tuning with Tuning control in FM mode,0: OFF 1: ON,1,false,432
+005,00,0,,,Rounds off VFO frequencies changed by using the MULTI control,0: OFF 1: ON,1,false,435
+006,00,0,,,9 kHz frequency step size for the MULTI control in AM mode on the AM broadcast band,0: OFF 1: ON,1,false,438
+007,00,0,,,Tunable (ON) or fixed (OFF) memory channel frequencies,0: OFF 1: ON,1,false,441
+008,00,0,,,Program scan partially slowed,0: OFF 1: ON,1,false,443
+009,00,0,,,Slow down frequency range for the Program scan,0: 100 1: 200 2: 300 3: 400 4: 500 (Hz),1,false,445
+010,00,0,,,Program scan hold,0: OFF 1: ON,1,false,447
+011,00,0,,,Scan resume method,0: to 1: co,1,false,448
+012,00,0,,,Beep output level,0: OFF 1: 1 2: 2 3: 3 4: 4 5: 5 6: 6 7: 7 8: 8 9: 9,1,false,449
+013,00,0,,,TX sidetone volume,0: OFF 1: 1 2: 2 3: 3 4: 4 5: 5 6: 6 7: 7 8: 8 9: 9,1,false,450
+014,00,0,,,VGS-1 message playback volume,0: OFF 1: 1 2: 2 3: 3 4: 4 5: 5 6: 6 7: 7 8: 8 9: 9,1,false,451
+015,00,0,,,VGS-1 announcement volume,0: OFF 1: 1 2: 2 3: 3 4: 4 5: 5 6: 6 7: 7,1,false,452
+016,00,0,,,VGS-1 announcement speed,0: OFF 1: 1 2: 2 3: 3 4: 4,1,false,453
+017,00,0,,,Use CW IF filter for SSB reception,0: OFF 1: ON,1,false,454
+018,00,0,,,DSP RX equalizer,0: OFF 1: Hb1 2: Hb2 3: FP 4: bb1 5: bb2 6: c 7: U,1,false,455
+019,00,0,,,DSP TX equalizer,0: OFF 1: Hb1 2: Hb2 3: FP 4: bb1 5: bb2 6: c 7: U,1,false,456
+020,00,0,,,DSP TX filter bandwidth for SSB or AM,0: 2.0 1: 2.4,1,false,458
+021,00,0,,,Fine transmission power tuning,0: OFF 1: ON,1,false,460
+022,00,0,,,Time-out timer,0: OFF 1: 3 2: 5 3: 10 4: 20 5: 30 (minutes),1,false,461
+023,00,0,,,Transverter frequency display,0: OFF 1: ON,1,false,462
+024,00,0,,,Output power adjustment for Transverter,0: OFF 1: ON,1,false,464
+025,00,0,,,TX hold when AT completes the tuning,0: OFF 1: ON,1,false,467
+026,00,0,,,In-line AT while receiving,0: OFF 1: ON,1,false,469
+027,00,0,,,Control method for the external AT,0: At1 1: At2,1,false,470
+028,00,0,,,Linear amplifier control delay for HF band,0: OFF 1: 1 2: 2 3: 3,1,false,472
+029,00,0,,,Linear amplifier control delay for 50 MHz band,0: OFF 1: 1 2: 2 3: 3,1,false,475
+030,00,0,,,Constant recording,0: OFF 1: ON,1,false,477
+031,00,0,,,Repeat the playback,0: OFF 1: ON,1,false,478
+032,00,0,,,Interval time for repeating the playback,0: 0 1: 1 2: 2 3: 3 4: 4 5: 5 6: 6 7: 7 8: 8 9: 9 ~ 60 (in steps of 1 s),2,false,480
+033,00,0,,,Keying priority over playback,0: OFF 1: ON,1,false,482
+034,00,0,,,CW RX pitch/ TX sidetone frequency,0: 400 1: 450 2: 500 3: 550 4: 600 5: 650 6: 700 7: 750 8: 800 9: 850 ~ 1000 (in steps of 50),2,false,484
+035,00,0,,,"CW keying dot, dash weight ratio",0: AUTO 1: 2.5 2: 2.6 3: 2.7 4: 2.8 5: 2.9 6: 3.0 7: 3.1 8: 3.2 9: 3.3 ~ 4.0 (in steps of 0.1),2,false,487
+036,00,0,,,Reverse CW keying auto weight ratio,0: OFF 1: ON,1,false,489
+037,00,0,,,Bug key function,0: OFF 1: ON,1,false,490
+038,00,0,,,Swap dot and dash paddle position,0: OFF 1: ON,1,false,501
+039,00,0,,,Auto CW TX in SSB mode,0: OFF 1: ON,1,false,502
+040,00,0,,,Frequency correction for changing SSB to CW,0: OFF 1: ON,1,false,504
+041,00,0,,,FSK shift,0: 170 1: 200 2: 425 3: 850 (Hz),1,false,506
+042,00,0,,,FSK keying polarity,0: OFF 1: ON,1,false,507
+043,00,0,,,FSK tone frequency,0: 1275 1: 2125 (Hz),1,false,508
+044,00,0,,,Mic gain for FM,0: 1 1: 2 2: 3,1,false,509
+045,00,0,,,Filter bandwidth for Data communications,0: OFF 1: ON,1,false,511
+046,00,0,,,AF input level for Data communications,0: 0 1: 1 2: 2 3: 3 4: 4 5: 5 6: 6 7: 7 8: 8 9: 9,1,false,514
+047,00,0,,,AF output level for Data communications,0: 0 1: 1 2: 2 3: 3 4: 4 5: 5 6: 6 7: 7 8: 8 9: 9,1,false,517
+048,00,0,,,Remote Control panel PF key,00 ~ 99 (2-digit) Refer to page 64 of the TS-480 instruction manual for the numbers and functions.,2,false,519
+049,00,0,,,Microphone PF1 key,00 ~ 99 (2-digit) Refer to page 64 of the TS-480 instruction manual for the numbers and functions.,2,false,520
+050,00,0,,,Microphone PF2 key,00 ~ 99 (2-digit) Refer to page 64 of the TS-480 instruction manual for the numbers and functions.,2,false,522
+051,00,0,,,Microphone PF3 key,00 ~ 99 (2-digit) Refer to page 64 of the TS-480 instruction manual for the numbers and functions.,2,false,524
+052,00,0,,,Microphone PF4 key,00 ~ 99 (2-digit) Refer to page 64 of the TS-480 instruction manual for the numbers and functions.,2,false,525
+053,00,0,,,Split frequency transfer in master/ slave operation,0: OFF 1: ON,1,false,527
+054,00,0,,,Permit to write the transferred Split frequencies to the target VFOs,0: OFF 1: ON,1,false,530
+055,00,0,,,TX inhibit,0: OFF 1: ON,1,false,532
+056,00,0,,,COM port communication speed,0: 4800 1: 9600 2: 19200 3: 38400 4: 57600 5: 115200 (bps),1,false,533
+057,00,0,,,DTS polarity,0: OFF 1: ON,1,false,534
+058,00,0,,,Busy lockout (TX),0: OFF 1: ON,1,false,535
+059,00,0,,,APO (Auto Power Off) function,0: OFF 1: 60 2: 120 3: 180 (minutes),1,false,536
+060,00,0,,,Transmit with the audio input on the DATA terminal,0: OFF 1: ON,1,false,538
