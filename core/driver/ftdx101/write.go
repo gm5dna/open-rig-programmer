@@ -131,10 +131,10 @@ func (s *Session) bankFor(slot string) (spec.BankID, bool) {
 // defence-in-depth gate and the diff layer's gate judge the same set for the
 // same channel. That derivation is two pieces on the codeplug side and both
 // are mirrored here: addedFields' six unconditional plus three conditional
-// fields, and then the TEN Icom-tier conditionals codeplug carries in
+// fields, and then the SEVENTEEN Icom-tier conditionals codeplug carries in
 // tierAddedFieldFor and appends in touchedFields (see tierRequestedFields
-// below). The ten come LAST, in ChannelData's declaration order, exactly as
-// they do there.
+// below). The seventeen come LAST, in ChannelData's declaration order,
+// exactly as they do there.
 // TestRequestedFields_MembershipAndOrder pins it here as those packages' own
 // tests pin it there. (Mirrored, NOT imported: this package imports no other
 // driver package, by the rule in doc.go.)
@@ -205,14 +205,31 @@ func requestedFields(data codeplug.ChannelData) []spec.Field {
 // MODEL-INDEPENDENT, like requestedFields itself and for the same reason.
 //
 // Every one of these predicates answers false for a channel this driver
-// produced: an FTdx101 read leaves all ten UNAVAILABLE (read.go), and a load
+// produced: an FTdx101 read leaves all seventeen UNAVAILABLE (read.go), and a load
 // of a schema-1/2/3 file migrates to the same. So the ordinary write is
 // unchanged by their presence, and what they add is the one case the gate
 // promised to cover and did not — a caller who hands WriteChannel a
 // ChannelData with a Known tier value, which the combined MT Set cannot
 // express and which must therefore be REFUSED rather than dropped.
 //
+// SEVENTEEN, and this table used to carry only the first TEN: the
+// pre-D8-wave count, unchanged here when codeplug's tierAddedFieldFor gained
+// the seven receiver-tier fields (TuningStepEnabled through IPPlus). A
+// channel carrying a Known TuningStep, Preamp or Antenna was therefore
+// written with the value silently DROPPED — nothing named the field, so the
+// capability gate never saw it and this radio's record has no position for
+// it. That is a breach of "an omitted config semantic is REFUSED, never
+// defaulted"; the write-gate sweep's item (g) closes it, as the FT-891's own
+// HIGH-1 fix did. TestWriteChannel_KnownD8TierFieldsRefusedBeforeWire is the
+// behavioural pin.
+//
 // Mirrored, NOT imported, for the reason requestedFields gives.
+// TestRequestedFields_MembershipAndOrder's "the seventeen are exactly
+// spec.AllFields()'s tier-added tail" subtest pins the membership against an
+// INDEPENDENT derivation — the same exported spec.Field constants
+// tierAddedFieldFor is itself built from — rather than against a count, so a
+// future spec.Field this table fails to mirror fails there rather than
+// passing silently.
 var tierRequestedFields = []struct {
 	field   spec.Field
 	present func(codeplug.ChannelData) bool
@@ -227,6 +244,13 @@ var tierRequestedFields = []struct {
 	{spec.FieldDTCSPolarity, func(d codeplug.ChannelData) bool { return d.DTCSPolarity.State == codeplug.Known }},
 	{spec.FieldFilter, func(d codeplug.ChannelData) bool { return d.Filter.State == codeplug.Known }},
 	{spec.FieldDataMode, func(d codeplug.ChannelData) bool { return d.DataMode.State == codeplug.Known }},
+	{spec.FieldTuningStepEnabled, func(d codeplug.ChannelData) bool { return d.TuningStepEnabled.State == codeplug.Known }},
+	{spec.FieldTuningStep, func(d codeplug.ChannelData) bool { return d.TuningStep.State == codeplug.Known }},
+	{spec.FieldProgramTuningStep, func(d codeplug.ChannelData) bool { return d.ProgramTuningStepHz.State == codeplug.Known }},
+	{spec.FieldAttenuator, func(d codeplug.ChannelData) bool { return d.AttenuatorDB.State == codeplug.Known }},
+	{spec.FieldPreamp, func(d codeplug.ChannelData) bool { return d.Preamp.State == codeplug.Known }},
+	{spec.FieldAntenna, func(d codeplug.ChannelData) bool { return d.Antenna.State == codeplug.Known }},
+	{spec.FieldIPPlus, func(d codeplug.ChannelData) bool { return d.IPPlus.State == codeplug.Known }},
 }
 
 // WriteChannel implements driver.Session: ONE combined MT Set,
@@ -267,7 +291,7 @@ var tierRequestedFields = []struct {
 //     profile: the combined record has no tone-NUMBER byte and no skip flag
 //     (DRIVER register entry 6 for what that does and does not establish), so
 //     silently dropping a value the caller explicitly marked Known would be a
-//     lie. The same holds for any of the TEN Icom-tier fields
+//     lie. The same holds for any of the SEVENTEEN Icom-tier fields
 //     (requestedFields' tierRequestedFields): none appears in either model's
 //     capability map at all, so FieldSupport answers the zero FieldSupport
 //     and the gate refuses.
