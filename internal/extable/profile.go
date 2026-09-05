@@ -688,10 +688,17 @@ var ft891Profile = Profile{
 }
 
 // ts590sProfile carries the TS-590S's menu-chart transcription facts. It is
-// the registry's first entry to render OUTSIDE core/cat: the inventory is
-// emitted into core/kw/ts590, so EXItem and EXAddress are qualified by the
-// explicit "kw" alias, and — the part that matters — the ceiling it declares
-// is core/kw's, not this package's constant.
+// one of the three Kenwood registrations, all of which render OUTSIDE
+// core/cat: the inventory is emitted into core/kw/ts590, so EXItem and
+// EXAddress are qualified by the explicit "kw" alias, and — the part that
+// matters — the ceiling it declares is core/kw's, not this package's
+// constant.
+//
+// "FIRST" IS NOT SAID OF IT, and that is deliberate. The registry is a map
+// (see registry below), so the only order that exists is the sort
+// RegisteredProfiles applies, under which the first Kenwood entry is ts480.
+// The three stanzas landed together in one milestone; none preceded the
+// others.
 //
 // THE CEILING IS TRANSCRIBED, WHICH IS WHY IT IS TESTED TWICE. 246 is
 // core/kw.MaxEXDigits (core/kw/exdigits.go): that package's DefaultMaxFrame
@@ -763,11 +770,12 @@ var ts590sProfile = Profile{
 	// asked anything by this project, so no observation CSV is ever parsed
 	// and this bound is never consulted. It carries NO hardware claim and
 	// must not be read as one; the moment observations do exist it is
-	// re-derived from them rather than kept. It is spelt 8 only because a
-	// sentinel has to be spelt something, and 8 is the widest width this
-	// chart prints — a MANUAL-schema fact, which is precisely the category
-	// this field is documented to be independent of.
-	MaxObservedWidth: 8,
+	// re-derived from them rather than kept. It is spelt 12 for the reason
+	// ts480Profile gives: that is what the other absent profiles spell, and
+	// a sentinel that coincided with this chart's own widest width would
+	// look derived from the chart, which is the one property a sentinel must
+	// not have.
+	MaxObservedWidth: 12,
 	ExpectedRows:     88,
 
 	Observations: ObservationsAbsent,
@@ -788,8 +796,11 @@ var ts590sProfile = Profile{
 }
 
 // ts590sgProfile carries the TS-590SG's menu-chart transcription facts. It is
-// the registry's first entry to render outside core/cat, and so the first to
-// carry a DigitsCeiling that is not MaxDigitsCeiling.
+// one of the three Kenwood registrations, which are the reason DigitsCeiling
+// is a per-profile field at all: they render outside core/cat, so their
+// ceiling is core/kw's MaxEXDigits and not this package's MaxDigitsCeiling.
+// None of the three is "first" — the registry is a map, and under
+// RegisteredProfiles' sort ts480 sorts ahead of both 590 rows.
 //
 // Evidence, all from the Kenwood TS-590S/TS-590SG PC Control Command
 // Reference Guide Rev.3 (see core/kw/ts590/menu590sg.csv's own provenance
@@ -853,9 +864,9 @@ var ts590sgProfile = Profile{
 	// carries NO hardware claim about the TS-590SG — no TS-590SG has ever
 	// been asked anything — and must not be read as one; the moment
 	// observations do exist it is re-derived from them rather than kept. It
-	// is spelt 8 only because a sentinel has to be spelt something, and it
-	// is NOT a claim that the widest answer this radio gives is eight bytes.
-	MaxObservedWidth: 8,
+	// is spelt 12, the same sentinel those three spell, and it is NOT a
+	// claim that the widest answer this radio gives is twelve bytes.
+	MaxObservedWidth: 12,
 	// ExpectedRows comes from the group-boundary ledger derived from the
 	// rendered PDF before any transcription existed — NOT from the
 	// transcriptions agreeing with each other. If they agree on a number that
@@ -881,9 +892,11 @@ var ts590sgProfile = Profile{
 }
 
 // ts480Profile carries the TS-480's menu-chart transcription facts. It is the
-// registry's first entry that does NOT render into core/cat: its inventory is
-// emitted into core/kw/ts480, so its types are qualified by the "kw" alias and
-// its width ceiling is that family's own, not this package's.
+// first registry entry that does NOT render into core/cat — first under the
+// only ordering there is, RegisteredProfiles' sort, where "ts480" precedes
+// "ts590s" and "ts590sg". Its inventory is emitted into core/kw/ts480, so its
+// types are qualified by the "kw" alias and its width ceiling is that
+// family's own, not this package's.
 //
 // Evidence, all from the TS-480 PC control command reference of 27/11/2003
 // (see core/kw/ts480/menu480.csv's own provenance header, which records the
