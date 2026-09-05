@@ -4,6 +4,7 @@ package cat
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -362,6 +363,20 @@ func (d Dialect) pmsDomainText() string {
 // assumed: a bank that did not sit inside one hundred-block could not
 // honestly be spelled that way, so it is written out instead.
 // TestSpecialBankText_DerivesFromTheDECLAREDBanks holds both arms.
+//
+// SITTING INSIDE A HUNDRED-BLOCK IS NOT FILLING ONE, and this renders "5xx"
+// either way. The FT-891's transcribed bank is 501-510 (core/cat/ft891/
+// dialect.go), so its refusal sentence names ninety slots it does not have —
+// harmless, because everything in 5xx is refused on that radio whether as a
+// 60m slot or as invalid, but it is an overclaim of the class S0.2 exists to
+// remove (Stage 0 close review, seat 2 LOW-1). SPELLING THE RANGE WHEN THE
+// BANK IS PARTIAL WOULD MOVE A REGISTERED DIALECT'S SHIPPED SENTENCE — the
+// FT-891's, from "5xx/EMG/\"000\" rejected" to "501-510/EMG/\"000\"
+// rejected" — which the Stage 0 close forbids and which
+// TestSlotDomainRefusals_EveryRegisteredDialectIsByteIdentical
+// (core/transport) now catches. The finding is therefore recorded here and
+// referred back, not applied: it is a byte-identity decision, not an
+// implementation choice.
 func (d Dialect) specialBankText() string {
 	var banks []string
 	if d.slots.sixtyHi > 0 {
@@ -375,6 +390,35 @@ func (d Dialect) specialBankText() string {
 		banks = append(banks, "EMG")
 	}
 	return strings.Join(banks, "/")
+}
+
+// noneFormText renders THIS DIALECT'S none form as the refusal sentences
+// quote it — `"000"` on every dialect registered today — or "" if it has no
+// none form at all.
+//
+// IT DERIVES FROM slotSpace.noneWire, which is the same datum classifySlot
+// tests first (dialect.go) and the same one Writable() answers against, so
+// the sentence cannot reject a form this dialect does not have. It was the
+// last literal left in the two renderers when S0.2 composed everything else,
+// and it was false where it mattered: seconddialect_test.go's
+// noneWireDialect declares NoneWire "900", so the old text offered "memory
+// 000-005" and rejected "000" in the same breath, on a dialect for which
+// "000" is an ordinary writable memory channel (Stage 0 close review, seat 2
+// MEDIUM-3). The FT-991A's own NoneWire "000" is an ASSUMED entry against a
+// manual that prints no none form, so this is also the seam that keeps the
+// sentence honest if that assumption is corrected.
+//
+// strconv.Quote rather than "\"" + s + "\"" so that the quoting is the wire
+// form's own, not a pair of bytes glued on: every registered dialect's
+// noneWire is three ASCII digits, for which the two spellings agree, and
+// TestSlotDomainRefusals_EveryRegisteredDialectIsByteIdentical
+// (core/transport) is what says they still do.
+// TestSlotDomainText_NamesNoBankItsDialectLacks holds the property.
+func (d Dialect) noneFormText() string {
+	if d.slots.noneWire == "" {
+		return ""
+	}
+	return strconv.Quote(d.slots.noneWire)
 }
 
 // writableDomainsText joins the memory and PMS domains in the shape one of
@@ -409,11 +453,20 @@ func (d Dialect) writableDomainsText(parenthesised bool) string {
 // that method — see validateMWFields, which explains why and where the
 // bytes are pinned.
 func (d Dialect) mwSlotDomainRefusal() string {
-	rejected := `"000"`
+	var rejected []string
 	if banks := d.specialBankText(); banks != "" {
-		rejected = banks + `/` + rejected
+		rejected = append(rejected, banks)
 	}
-	return fmt.Sprintf("MW: slot must be Writable() (%s; %s rejected)", d.writableDomainsText(false), rejected)
+	if none := d.noneFormText(); none != "" {
+		rejected = append(rejected, none)
+	}
+	if len(rejected) == 0 {
+		// Unreachable for any registered dialect, and stated rather than
+		// left to render "; rejected)" with nothing before it: a dialect
+		// with no special bank and no none form has nothing to list.
+		return fmt.Sprintf("MW: slot must be Writable() (%s)", d.writableDomainsText(false))
+	}
+	return fmt.Sprintf("MW: slot must be Writable() (%s; %s rejected)", d.writableDomainsText(false), strings.Join(rejected, "/"))
 }
 
 // mtSlotDomainRefusal is the MT Set's slot sentence, composed, and it is
@@ -429,5 +482,9 @@ func (d Dialect) mtSlotDomainRefusal() string {
 	if banks := d.specialBankText(); banks != "" {
 		policy = banks + " rejected by project policy pending M5a, "
 	}
-	return fmt.Sprintf("MT: slot must be %s; %s\"000\"/invalid rejected per reference", d.writableDomainsText(true), policy)
+	none := ""
+	if n := d.noneFormText(); n != "" {
+		none = n + "/"
+	}
+	return fmt.Sprintf("MT: slot must be %s; %s%sinvalid rejected per reference", d.writableDomainsText(true), policy, none)
 }

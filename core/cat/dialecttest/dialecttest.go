@@ -516,7 +516,20 @@ func (r *conformanceRun) checkPMSSlotForm() {
 
 	// The positive half: every pair this dialect can build must come back
 	// from its own ParseSlot as a PMS slot, in the declared shape.
-	for pair := 1; pair <= 9; pair++ {
+	//
+	// IT SWEEPS UNTIL THIS DIALECT'S OWN PMSSlot STOPS BUILDING, not to a
+	// fixed nine. pmsCap() clamps to nine under PMSFormToken ONLY — the pair
+	// number is one ASCII wire byte there, which TestV3_PairBoundIsFormAware
+	// pins — so a numeric dialect may legally declare more, and a fixed
+	// bound left every pair past the ninth built by PMSSlot, classified by
+	// classifySlot and never seen by this suite (Stage 0 close review, seat
+	// 2 LOW-3). maxSweptPMSPairs is a runaway guard on a loop whose real
+	// bound is the receiver, not a domain: a numeric pair costs two channels
+	// inside 000-999, so no dialect can offer 500 of them.
+	for pair := 1; pair <= maxSweptPMSPairs; pair++ {
+		if _, err := r.d.PMSSlot(pair, false); err != nil {
+			break
+		}
 		for _, upper := range []bool{false, true} {
 			s, err := r.d.PMSSlot(pair, upper)
 			if err != nil {
@@ -567,7 +580,9 @@ func (r *conformanceRun) checkPMSSlotForm() {
 		// is no honest refusal to count on this side — a token dialect has no
 		// numeric PMS range to refuse, and that ABSENCE is exactly what the
 		// IsPMS() assertion below states — so the counter is named for the
-		// only thing it witnesses — every three-digit form in the space is declined as PMS, whether by not classifying at all or by classifying as some other bank — and counts them all. Its twin
+		// only thing it witnesses: every three-digit form in the space is
+		// declined as PMS, whether by not classifying at all or by
+		// classifying as some other bank, and it counts them all. Its twin
 		// "token PMS form refused under PMSFormNumeric" IS a genuine refusal
 		// count and keeps its name.
 		for n := 0; n <= 999; n++ {
@@ -581,8 +596,23 @@ func (r *conformanceRun) checkPMSSlotForm() {
 				r.t.Errorf("%s: ParseSlot(%q) = a PMS slot under %v — this dialect's pairs are the \"P<n><L|U>\" token, so no decimal channel number is one", r.name(), wire, form)
 			}
 		}
+	default:
+		// A THIRD PMS form would take this whole check out of the suite
+		// silently, which is the hazard the counters above exist for
+		// (Stage 0 close review, seat 2 LOW-4). Production switches on this
+		// axis all refuse; this one is the suite's own, and says so here.
+		r.t.Errorf("%s: declares PMS form %v, which this check does not enumerate — add its arm here, or the wire form of a whole class of slots is conformed by nothing", r.name(), form)
 	}
 }
+
+// maxSweptPMSPairs bounds checkPMSSlotForm's positive sweep. It is a
+// runaway guard, NOT this suite's opinion about how many pairs a dialect may
+// declare: the loop's real bound is where the receiver's own PMSSlot stops
+// building. A numeric pair occupies two consecutive channels inside the
+// three-digit space, so 500 pairs is already more than any slot space can
+// hold, and reaching this bound means PMSSlot answered for a pair no wire
+// form could carry.
+const maxSweptPMSPairs = 500
 
 // checkToneStateDomain holds this dialect to its declared P8 domain in
 // THREE places, which is how many places decide it.
@@ -701,6 +731,12 @@ func (r *conformanceRun) checkToneStateDomain() {
 			} else {
 				r.acceptances["DCS state decoded by ParseMRAnswer under ToneStatesCTCSSAndDCS"]++
 			}
+		default:
+			// A THIRD tone-state domain would silently take the whole P8
+			// write-direction check out of the suite (seat 2 LOW-4). V16
+			// refuses an undeclared domain in production; this is the
+			// suite's own enumeration saying it is not complete.
+			r.t.Errorf("%s: declares tone-state domain %v, which this check does not enumerate — add its arm here, or nothing conforms P8 on radios of that kind", r.name(), domain)
 		}
 	}
 }
@@ -1787,6 +1823,11 @@ func (r *conformanceRun) checkNonVacuity() {
 			if r.d.MTForm() == cat.MTFormCombined {
 				requiredAcceptances = append(requiredAcceptances, "DCS state accepted at BuildMTSetCombined under ToneStatesCTCSSAndDCS")
 			}
+		default:
+			// A domain neither arm names requires nothing, so the whole P8
+			// axis would be non-vacuous by vacuity — the failure this
+			// function exists to prevent (seat 2 LOW-4).
+			r.t.Errorf("%s: declares tone-state domain %v, which the coverage ledger does not enumerate — its P8 legs would be required of nothing", r.name(), r.d.ToneStates())
 		}
 	}
 	// The PMS wire form, counted against the form the dialect declares. A
@@ -1798,6 +1839,11 @@ func (r *conformanceRun) checkNonVacuity() {
 			requiredRefusals = append(requiredRefusals, "token PMS form refused under PMSFormNumeric")
 		case cat.PMSFormToken:
 			requiredRefusals = append(requiredRefusals, "three-digit form declined as PMS under PMSFormToken")
+		default:
+			// As the tone-state arm above: a third form would require
+			// neither counter, and checkPMSSlotForm's own sweep would be
+			// witnessed by nothing (seat 2 LOW-4).
+			r.t.Errorf("%s: declares PMS form %v, which the coverage ledger does not enumerate — its slot-form legs would be required of nothing", r.name(), r.d.PMSForm())
 		}
 	}
 	switch r.d.MemoryP5() {

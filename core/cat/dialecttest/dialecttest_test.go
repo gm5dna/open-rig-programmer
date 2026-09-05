@@ -393,6 +393,17 @@ func TestRun_ExternallyBuiltTagDisplayDialect(t *testing.T) {
 // PMSFormNumeric or SlotSpace.PMSNumericLo became unreachable from outside
 // core/cat, this stops compiling here rather than at Stage 1's first task.
 //
+// SINCE THE STAGE 0 CLOSE IT CARRIES ALL FOUR OF THE FT-991A'S AXES AT ONCE
+// — numeric PMS from 100, EXAddressSingle over three-digit addresses, five
+// P8 tone states, and the combined MT form under P11Fixed. Both closing
+// reviewers found that no COMMITTED object was more than three of the four,
+// and that EXAddressSingle was declared by exactly one fixture, inside
+// core/cat: the EX legs of this suite had therefore never run against a
+// three-digit address form from any package (MEDIUM-4, both seats). Each
+// seat then built the full shape by hand, ran the whole suite over it
+// non-vacuously, and deleted the file. This is that composition, committed —
+// so Stage 1 task 7 inherits a build-time guarantee rather than a probe.
+//
 // It is a fiction with FT-991A-shaped slot geometry, not the FT-991A: the
 // CAT ID and the MW write kind are deliberately not that radio's. What it
 // DOES take from the manual's shape is the part the axis is about — memory
@@ -419,10 +430,17 @@ func numericPMSRadioConfig() cat.DialectConfig {
 			NoneWire:      "000",
 			MCSelects:     cat.MCSelectsAll,
 		},
+		// A SINGLE-COMPONENT inventory: P2 and P3 are zero, which is what
+		// V12 requires under EXAddressSingle, and P1 runs to the FT-991A's
+		// own 153 so the three-digit render is exercised at both ends of the
+		// width. The token/Triple fixtures beside this one (combinedRadio-
+		// Config, shortPeerRadioConfig, p5FixedRadioConfig) keep the
+		// six-digit form covered from outside core/cat.
 		EXItems: []cat.EXItem{
-			{Addr: cat.EXAddress{P1: 1, P2: 1, P3: 1}, P1Label: "RADIO", P2Label: "GROUP", Name: "ITEM", Digits: 1},
+			{Addr: cat.EXAddress{P1: 1}, P1Label: "RADIO", P2Label: "GROUP", Name: "ITEM", Digits: 1},
+			{Addr: cat.EXAddress{P1: 153}, P1Label: "RADIO", P2Label: "GROUP", Name: "LAST ITEM", Digits: 3},
 		},
-		EXAddressForm: cat.EXAddressTriple,
+		EXAddressForm: cat.EXAddressSingle,
 		MT: cat.MTPolicy{
 			Form: cat.MTFormCombined, ReadSlots: cat.MTReadsReadable,
 			P11:         cat.P11Fixed,
@@ -452,6 +470,35 @@ func TestRun_ExternallyBuiltNumericPMSDialect(t *testing.T) {
 	}
 	if got := d.PMSNumericLo(); got != 100 {
 		t.Fatalf("PMSNumericLo() = %d, want 100", got)
+	}
+
+	// AND THE THIRD EX ADDRESS FORM, on the same object. This fixture is the
+	// only dialect outside core/cat that declares EXAddressSingle, so the
+	// suite's EX legs — checkEXReads, and the EX frames checkFrame sees —
+	// run at width 3 here or nowhere. Until the Stage 0 close review
+	// measured it (MEDIUM-4, both seats) no committed object composed the
+	// FT-991A's own four axes at once, and the composition Stage 1 builds on
+	// was proved only by probes the reviewers then deleted.
+	if got := d.EXAddressWidth(); got != 3 {
+		t.Fatalf("EXAddressWidth() = %d, want 3 — this fixture exists to cover the THIRD EX address form", got)
+	}
+	for _, tc := range []struct {
+		addr cat.EXAddress
+		want string
+	}{
+		{cat.EXAddress{P1: 1}, "001"},
+		{cat.EXAddress{P1: 153}, "153"},
+	} {
+		if got := d.EXWire(tc.addr); got != tc.want {
+			t.Errorf("EXWire(%+v) = %q, want %q", tc.addr, got, tc.want)
+		}
+		cmd, err := d.BuildEXRead(tc.addr)
+		if err != nil {
+			t.Fatalf("BuildEXRead(%+v): %v", tc.addr, err)
+		}
+		if want := "EX" + tc.want + ";"; string(cmd.Bytes()) != want {
+			t.Errorf("BuildEXRead(%+v) = %q, want %q", tc.addr, cmd.Bytes(), want)
+		}
 	}
 
 	// What it BUILDS: pair 1 lower is "100" and pair 9 upper is "117",

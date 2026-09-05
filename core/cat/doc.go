@@ -39,6 +39,17 @@
 // declares a 5 MHz bank or an emergency channel, which is every dialect
 // registered today, so all four render byte-for-byte what they always did
 // and core/cat/testdata/frame-corpus.golden does not move. On a dialect
-// with neither bank the clause is absent and the sentence keeps its
-// "000"/invalid half, which is true of that radio.
+// with neither bank the clause is absent.
+//
+// THE NONE FORM IS DERIVED TOO. The sentences quoted "000" as a literal
+// until the Stage 0 close review (seat 2, MEDIUM-3) measured it against
+// noneWireDialect, whose none form is "900" and for which "000" is an
+// ordinary writable memory channel: the MW sentence offered "memory
+// 000-005" and rejected "000" in the same breath. It now comes from
+// slotSpace.noneWire through Dialect.noneFormText, and is omitted entirely
+// by a dialect that declares no none form. Every registered dialect
+// declares NoneWire "000", so this too moves no byte —
+// TestSlotDomainRefusals_EveryRegisteredDialectIsByteIdentical
+// (core/transport) is the measurement, over all five, rather than the
+// claim.
 package cat
