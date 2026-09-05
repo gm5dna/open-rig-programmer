@@ -49,6 +49,7 @@ func TestParseMode_RefusalNamesThisDialectsOwnDomain(t *testing.T) {
 		},
 		Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 		MemoryP5:    P5Fixed,
+		ToneStates:  ToneStatesCTCSS,
 		MWWriteKind: KindMemory,
 	})
 
@@ -82,6 +83,7 @@ func TestParseMode_RefusalNamesThisDialectsOwnDomain(t *testing.T) {
 		},
 		Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 		MemoryP5:    P5TxClar,
+		ToneStates:  ToneStatesCTCSS,
 		MWWriteKind: KindMemory,
 	})
 	if got, want := single.modeDomainText(), "'2'"; got != want {

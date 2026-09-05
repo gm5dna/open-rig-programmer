@@ -180,7 +180,7 @@ func (d Dialect) validateMWFields(m MemoryData) error {
 	// CTCSSState/Shift are byte-alias types exactly like Mode: never trust
 	// a caller-forged value (e.g. CTCSSState('9')). Re-validate via their
 	// own Parse functions for the same reason as the Mode check above.
-	if _, err := ParseCTCSSState(m.CTCSS.Wire()); err != nil {
+	if _, err := d.ParseCTCSSState(m.CTCSS.Wire()); err != nil {
 		return newParseError([]byte{m.CTCSS.Wire()}, "MW: CTCSS field (P8) is not a valid CTCSSState")
 	}
 	if _, err := ParseShift(m.Shift.Wire()); err != nil {

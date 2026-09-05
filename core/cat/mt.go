@@ -114,6 +114,16 @@ func (d Dialect) MTP11() MTP11Policy { return d.mt.P11 }
 // it at all.
 func (d Dialect) MemoryP5() MemoryP5Policy { return d.memoryP5 }
 
+// ToneStates reports the domain of byte 24 of the shared memory field block
+// on this family: the three CTCSS states (ToneStatesCTCSS) or those plus
+// the two DCS ones (ToneStatesCTCSSAndDCS). The zero Dialect reports the
+// zero domain, which NewDialect refuses to construct.
+//
+// Exported for the same reason MemoryP5 is: core/cat/dialecttest cannot see
+// the unexported field, and it must branch on this to know whether a
+// DCS-state record is one this dialect MUST build or one it MUST refuse.
+func (d Dialect) ToneStates() ToneStateDomain { return d.toneStates }
+
 // MCSelects reports the SEND-side slot domain of this family's MC (memory
 // channel recall) command: memory and PMS only (MCSelectsMemoryPMS) or
 // every slot class this dialect classifies outside "000" (MCSelectsAll).

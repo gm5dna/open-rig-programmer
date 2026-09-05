@@ -50,6 +50,7 @@ func clarPeerConfig() DialectConfig {
 		MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 		Clarifier:     ClarifierPolicy{StepHz: 1, MaxAbsHz: 9999},
 		MemoryP5:      P5TxClar,
+		ToneStates:    ToneStatesCTCSS,
 		MWWriteKind:   KindMemory,
 	}
 }

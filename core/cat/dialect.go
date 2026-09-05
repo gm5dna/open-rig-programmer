@@ -160,6 +160,15 @@ type Dialect struct {
 	// from the same place as its datum, which is why encodeMemoryFields and
 	// parseMemoryFields take this receiver rather than a package global.
 	memoryP5 MemoryP5Policy
+
+	// toneStates is the domain of byte 24 of that same block — P8 — on this
+	// family: the three CTCSS states, or those plus the two DCS ones
+	// (ToneStateDomain, dialectconfig.go). Dialect data for memoryP5's
+	// reason: it reaches the OUTBOUND WRITE GATE through the same
+	// validateMWFields and validateCombinedMTFields the builders use, so a
+	// wrong value here can authorise a P8 byte a radio's manual does not
+	// print.
+	toneStates ToneStateDomain
 }
 
 // ModeByName resolves a display name to this dialect's own mode nibble.
@@ -238,6 +247,14 @@ var FT710 = Dialect{
 	// has always carried here. Pinned by memoryp5_test.go's
 	// TestMemoryP5_RegisteredDialectsCarryTheTxClarifier.
 	memoryP5: P5TxClar,
+
+	// The FT-710 CAT manual gives P8 as "CTCSS: 0 off, 1 ENC/DEC, 2 ENC"
+	// and nothing beyond '2' — the domain cat.ParseCTCSSState has always
+	// enforced here. The FT-991A's P8 legend prints two DCS states as well,
+	// which is the disagreement the ToneStateDomain axis carries. Pinned by
+	// tonestates_test.go's
+	// TestToneStates_RegisteredDialectDeclaresTheCTCSSDomain.
+	toneStates: ToneStatesCTCSS,
 
 	mwWriteKind: KindMemory,
 }

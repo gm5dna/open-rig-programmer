@@ -34,6 +34,7 @@ func kindPeerDialect(t *testing.T) Dialect {
 		Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 		// The whole point of this fixture.
 		MemoryP5:    P5TxClar,
+		ToneStates:  ToneStatesCTCSS,
 		MWWriteKind: KindPMS,
 	})
 	if err != nil {

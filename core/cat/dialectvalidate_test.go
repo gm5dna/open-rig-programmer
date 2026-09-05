@@ -106,6 +106,7 @@ func validBaselineConfig() DialectConfig {
 		MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 8, ClearTagByte: '_'},
 		Clarifier:     ClarifierPolicy{StepHz: 5, MaxAbsHz: 500},
 		MemoryP5:      P5TxClar,
+		ToneStates:    ToneStatesCTCSS,
 		MWWriteKind:   KindMemory,
 	}
 }

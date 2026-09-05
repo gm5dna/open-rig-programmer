@@ -213,6 +213,7 @@ func TestMemoryP5_CombinedMTCarriesTheSamePolicy(t *testing.T) {
 		},
 		Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 		MemoryP5:    P5Fixed,
+		ToneStates:  ToneStatesCTCSS,
 		MWWriteKind: KindMemory,
 	}
 	fixed, err := NewDialect(cfg)

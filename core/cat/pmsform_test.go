@@ -41,6 +41,7 @@ func pmsFormBaseConfig() DialectConfig {
 		MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 		Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 		MemoryP5:      P5TxClar,
+		ToneStates:    ToneStatesCTCSS,
 		MWWriteKind:   KindMemory,
 	}
 }

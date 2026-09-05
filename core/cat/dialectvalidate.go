@@ -77,6 +77,7 @@ func validateDialectConfig(cfg DialectConfig) error {
 		validateEXAddressForm, // V12
 		validateMCSelects,     // V13
 		validateMemoryP5,      // V14
+		validateToneStates,    // V16
 	} {
 		if err := rule(cfg); err != nil {
 			return err
@@ -645,5 +646,29 @@ func validateMemoryP5(cfg DialectConfig) error {
 		return nil
 	default:
 		return fmt.Errorf("cat: MemoryP5 is %v, which is not a policy — declare P5TxClar or P5Fixed explicitly (byte 21 of the memory block is the TX clarifier flag on some radios and a printed-fixed '0' on others)", cfg.MemoryP5)
+	}
+}
+
+// validateToneStates is V16: the P8 state domain must be declared, never
+// inferred.
+//
+// An omitted config semantic is REFUSED, not defaulted, and here neither
+// default is safe. Defaulting to ToneStatesCTCSS would silently drop a real
+// DCS state on the floor for a radio whose legend prints five; defaulting
+// to ToneStatesCTCSSAndDCS would authorise this codec to emit P8 '3' or '4'
+// into an MW or combined-MT frame for the four registered siblings, whose
+// manuals print 0/1/2 only — built AND admitted by their own gates, since
+// this field reaches AllowedCommand through validateMWFields and
+// validateCombinedMTFields as well as through parseMemoryFields.
+//
+// It runs LAST, at rule position 16. Nothing else consults ToneStates, so
+// unlike V15 its position carries no diagnostic weight; appending keeps the
+// existing rules' order untouched.
+func validateToneStates(cfg DialectConfig) error {
+	switch cfg.ToneStates {
+	case ToneStatesCTCSS, ToneStatesCTCSSAndDCS:
+		return nil
+	default:
+		return fmt.Errorf("cat: ToneStates is %v, which is not a domain — declare ToneStatesCTCSS or ToneStatesCTCSSAndDCS explicitly (P8 prints three states on some radios and five on others, and a state this dialect cannot express must be refused rather than encoded)", cfg.ToneStates)
 	}
 }
