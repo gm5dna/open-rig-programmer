@@ -401,7 +401,15 @@ func TestWritePathReachableOnlyThroughDriver(t *testing.T) {
 		// on — see the doc comment, and the recorded red-proof in
 		// docs/superpowers/m9c4-red-proofs.md, which fires this very check
 		// from a transient non-test decoy in core/cat/ftdx10.
-		if !(pf.relDir == "core/cat" || pf.relDir == "core/cat/dialecttest") {
+		// WIDENED at Kenwood pair 1 (Stage 1 T7, 05/09/2026), by name and for
+		// the same two reasons: core/kw is the Kenwood builders' own package
+		// (its outbound gate re-validates an MW through its own BuildMWSet,
+		// exactly as core/cat's does), and core/kw/kwtest is that family's
+		// NON-test exported conformance suite (dialecttest's reason). No
+		// other core/kw subpackage is exempt: core/kw/ts590 and core/kw/ts480
+		// are data-only layout packages and are swept like every other.
+		if !(pf.relDir == "core/cat" || pf.relDir == "core/cat/dialecttest" ||
+			pf.relDir == "core/kw" || pf.relDir == "core/kw/kwtest") {
 			ast.Inspect(pf.file, func(n ast.Node) bool {
 				sel, isSel := n.(*ast.SelectorExpr)
 				if !isSel {
@@ -414,7 +422,7 @@ func TestWritePathReachableOnlyThroughDriver(t *testing.T) {
 					sawDriverBuildMW = true
 					return true
 				}
-				t.Errorf("%s: references .%s — the Set-frame builders may be used only from core/cat, core/cat/dialecttest (the conformance suite) and core/driver/**; other core/cat subpackages are NOT exempt, the carve-out having been narrowed from the core/cat prefix to those two packages at M9c-4 (composition-root discipline; see this test's doc comment)", pf.relPath, sel.Sel.Name)
+				t.Errorf("%s: references .%s — the Set-frame builders may be used only from core/cat, core/cat/dialecttest, core/kw, core/kw/kwtest (the two families' builder packages and their conformance suites) and core/driver/**; other core/cat and core/kw subpackages are NOT exempt, the carve-out having been narrowed from the core/cat prefix to those two packages at M9c-4 (composition-root discipline; see this test's doc comment)", pf.relPath, sel.Sel.Name)
 				return true
 			})
 		}
