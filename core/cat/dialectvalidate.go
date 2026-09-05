@@ -199,7 +199,8 @@ func validatePMSPairs(cfg DialectConfig) error {
 
 // validatePMSForm is V15: the PMS wire form must be declared, never
 // inferred, and the numeric form's base must describe a range a 3-digit
-// slot can express.
+// slot can express — a promise this rule keeps for EVERY int pair count and
+// base, not only the ones whose arithmetic fits (see the ceiling clause).
 //
 // IT RUNS AT RULE POSITION 4, immediately after V3 and before V5/V6/V7, and
 // the position is load-bearing. validateDialectConfig returns the FIRST
@@ -229,8 +230,27 @@ func validatePMSForm(cfg DialectConfig) error {
 		if s.PMSNumericLo < 1 {
 			return fmt.Errorf("cat: Slots.PMSNumericLo is %d under %v, want >= 1 — pair 1's lower slot is a decimal channel number, and 0 collides with the \"000\" none form every registered family declares", s.PMSNumericLo, s.PMSForm)
 		}
-		if hi := s.PMSNumericLo + 2*s.PMSPairs - 1; hi > maxSlotDecimal {
-			return fmt.Errorf("cat: Slots.PMSNumericLo %d with PMSPairs %d reaches %d, want <= %d — a slot wire form is 3 digits, so the pairs above that could never be built or parsed", s.PMSNumericLo, s.PMSPairs, hi, maxSlotDecimal)
+		// THE CEILING IS DERIVED BY DIVISION, BEFORE ANY MULTIPLICATION.
+		// This clause used to compute PMSNumericLo + 2*PMSPairs - 1 and
+		// compare that with 999, and the product WRAPS for a count near
+		// math.MaxInt: base 1 with math.MaxInt pairs reached -2, which is
+		// below the ceiling, so NewDialect ACCEPTED a dialect whose
+		// PMSSlot(500, true) rendered the four-byte wire "1000" that the
+		// same dialect's ParseSlot refuses (Codex third seat, MEDIUM C-M1).
+		// A base near math.MaxInt wrapped on the ADDITION for the same
+		// reason. V3 has already refused a negative count and the clause
+		// above has already put the base at >= 1, so maxPairs is the exact
+		// largest count whose top slot still fits three digits — clamped at
+		// 0 so a base past the ceiling reports "at most 0 pairs" rather
+		// than a wrapped negative. TestV15_PairCountBoundIsOverflowSafe
+		// pins both wrapping shapes and the exact ceiling either side.
+		//
+		// It is also what keeps every LATER derivation of the same interval
+		// safe: numericPMSInterval below and Dialect.numericPMSRange both
+		// repeat the multiplication, and both now run only over counts this
+		// rule has bounded at 499 or fewer.
+		if maxPairs := max(0, (maxSlotDecimal-s.PMSNumericLo+1)/2); s.PMSPairs > maxPairs {
+			return fmt.Errorf("cat: Slots.PMSNumericLo %d with PMSPairs %d, want at most %d pairs — a slot wire form is 3 digits, and pair n's upper slot is PMSNumericLo + 2n - 1, so the pairs reaching past %d could never be built or parsed", s.PMSNumericLo, s.PMSPairs, maxPairs, maxSlotDecimal)
 		}
 		// The same dead configuration the default arm refuses by name, seen
 		// from inside the numeric form: a base with no pairs numbers nothing,
@@ -346,6 +366,13 @@ func validateSixtyRange(cfg DialectConfig) error {
 // two fields, because a validator runs before any Dialect exists. Nothing
 // stores the range's top: it is derived from PMSNumericLo and PMSPairs in
 // both places, so there is no second field for either to drift from.
+//
+// THE MULTIPLICATION HERE CANNOT OVERFLOW, because V15's ceiling clause has
+// already refused every count above 499 — including the counts near
+// math.MaxInt whose doubling used to wrap past that clause itself and reach
+// this one (Codex third seat, MEDIUM C-M1). This helper is reached only
+// from V6, which runs at a later rule position, so an overflowing count is
+// unreachable here rather than merely unlikely.
 func numericPMSInterval(s SlotSpace) (lo, hi int, ok bool) {
 	if s.PMSForm != PMSFormNumeric || s.PMSPairs <= 0 {
 		return 0, 0, false

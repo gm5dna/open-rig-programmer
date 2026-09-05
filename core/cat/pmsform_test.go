@@ -4,6 +4,7 @@ package cat
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 )
@@ -398,5 +399,55 @@ func TestPMSForm_RegisteredDialectDeclaresTheTokenForm(t *testing.T) {
 	}
 	if got := FT710.PMSNumericLo(); got != 0 {
 		t.Errorf("FT710 declares PMSNumericLo %d, want 0 under the token form", got)
+	}
+}
+
+// TestV15_PairCountBoundIsOverflowSafe pins that V15's ceiling holds for
+// EVERY int pair count, not only the ones whose arithmetic fits.
+//
+// The rule used to compute PMSNumericLo + 2*PMSPairs - 1 and compare the
+// result with 999. On a 64-bit build that product wraps: PMSPairs
+// math.MaxInt with base 1 gives -2, which is <= 999, so NewDialect ACCEPTED
+// a dialect whose PMSSlot(500, true) renders the four-byte wire "1000" that
+// its own ParseSlot refuses (Codex third seat, MEDIUM C-M1). The bound is
+// now derived by division, before any multiplication, so V15's stated <= 999
+// promise is true of the whole int domain. The smallest count that wraps is
+// math.MaxInt/2 + 1 — the first value whose doubling leaves the range — and
+// it is pinned beside math.MaxInt because a bound that only catches the
+// extreme is no bound.
+//
+// The base is bounded by the same arithmetic and for the same reason: a
+// PMSNumericLo of math.MaxInt with a single pair overflows on the ADDITION
+// rather than the doubling.
+func TestV15_PairCountBoundIsOverflowSafe(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		lo      int
+		pairs   int
+		wantSub string // "" means the config must be ACCEPTED
+	}{
+		{"the largest possible pair count", 1, math.MaxInt, "999"},
+		{"the smallest pair count that wraps", 1, math.MaxInt/2 + 1, "999"},
+		{"a base that wraps on the addition", math.MaxInt, 1, "999"},
+		{"the exact ceiling is still accepted", 500, 250, ""},
+		{"one pair past the exact ceiling", 500, 251, "999"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := pmsFormBaseConfig()
+			cfg.Slots.PMSForm, cfg.Slots.PMSNumericLo, cfg.Slots.PMSPairs = PMSFormNumeric, tc.lo, tc.pairs
+			d, err := NewDialect(cfg)
+			switch {
+			case tc.wantSub == "":
+				if err != nil {
+					t.Fatalf("NewDialect refused a config it must accept: %v", err)
+				}
+				return
+			case err == nil:
+				slot, slotErr := d.PMSSlot(500, true)
+				t.Fatalf("NewDialect accepted PMSNumericLo %d with PMSPairs %d; its 500th pair renders %q (err %v), and a wire wider than three bytes is one its own ParseSlot refuses", tc.lo, tc.pairs, slot.Wire(), slotErr)
+			case !strings.Contains(err.Error(), tc.wantSub):
+				t.Fatalf("refusal %q does not name %q — V15's ceiling is the rule that must fire", err, tc.wantSub)
+			}
+		})
 	}
 }
