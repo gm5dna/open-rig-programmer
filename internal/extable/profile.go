@@ -228,11 +228,17 @@ func (t TextRows) String() string {
 // under Excluded the inventory it renders is len(rows) −
 // len(ParameterlessAddresses) items, so a complete observation sweep of the
 // REGISTRABLE addresses is one short of that comparison. No registered
-// profile meets it — the only Excluded profile this repository has declares
-// ObservationsAbsent — so the arm is left exactly as it was rather than
-// changed against a case nothing exercises. The first profile that does meet
-// it owns the change, and this comment is the record that the arithmetic was
-// known and deferred, not missed.
+// profile meets it: every profile in the registry today declares
+// ParameterlessRefused, so the only Excluded profiles that exist are this
+// package's own test fixtures, and the FT-991A's stanza — the first Excluded
+// one the registry will hold — is planned as ObservationsAbsent, which does
+// not reach this arm either. (This sentence said "the only Excluded profile
+// this repository has declares ObservationsAbsent", which described a
+// registered profile that does not yet exist — Stage 0 close review, seat 1
+// LOW-3.) So the arm is left exactly as it was rather than changed against a
+// case nothing exercises. The first profile that does meet it owns the
+// change, and this comment is the record that the arithmetic was known and
+// deferred, not missed.
 type ParameterlessRows int
 
 const (

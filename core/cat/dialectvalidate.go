@@ -209,7 +209,12 @@ func validatePMSPairs(cfg DialectConfig) error {
 // configured — instead of by this rule's honest "declare a form". The
 // package already documents the mirror hazard at renderEXAddressForV8,
 // where V8 needs a special renderer because it runs BEFORE V12. Inserting
-// here renumbers nothing: the V-numbers are comment labels, not indices.
+// here renumbers no V-LABEL: the V-numbers are comment labels, not indices,
+// which is why this rule is V15 in a slice it enters fourth. It does
+// renumber POSITIONS, and one comment in this file states one: V8 moved
+// from position 8 to 9, corrected in validateEXItems' own doc (Stage 0
+// close review, both seats, MEDIUM-2). A comment that states a position
+// rather than a label has to move with the slice.
 //
 // An omitted config semantic is REFUSED, never defaulted, and the cost of a
 // default is a WRITE cost — see PMSSlotForm's own doc comment.
@@ -453,7 +458,7 @@ func pmsWireInRange(wire string, s SlotSpace) bool {
 // sentences. TestValidateEXItems_TripleErrorTextIsByteIdentical pins all
 // three against their pre-seam spelling.
 //
-// V8 runs at rule position 8, four places before V12
+// V8 runs at rule position 9, four places before V12
 // (validateEXAddressForm) refuses a zero form — so a config that omits
 // EXAddressForm AND fails V8 reaches this renderer first, with
 // wireEXAddress(0, addr) returning "". renderEXAddressForV8 falls back to

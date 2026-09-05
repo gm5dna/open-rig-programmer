@@ -230,7 +230,7 @@ func TestParseSlot(t *testing.T) {
 // later ordinal in the file and fails
 // TestEvidenceLiterals_OrderedRecordsSurvive, whose own message says "Do
 // NOT regenerate the golden file" — and core/cat/testdata/ is one of the
-// ten paths the milestone golden gate forbids moving. Measured: deleting
+// twenty paths the milestone golden gate forbids moving. Measured: deleting
 // this block breaks 39 pinned literals. The call and the function name are
 // IDENTIFIERS, not literals, so re-pointing them costs nothing; the
 // message wording is the price of the pin, and is deliberate.
