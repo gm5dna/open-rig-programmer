@@ -5,10 +5,12 @@
 # "Verification bar" step 4). Targets Windows PowerShell 5.1 — the
 # shell a clean Windows 11 install ships with, not pwsh 7 — because
 # that is what the verification VM has. PowerShell is not installed on
-# the macOS machine that wrote this script, so it has been checked
+# the macOS machine that wrote this script, so it was checked
 # statically only (balanced braces, every external call captured, no
-# Write-Host for data): it has never been run. Treat it as reviewed,
-# not verified, until the VM session runs it.
+# Write-Host for data) before it ran. It HAS since been run, on the
+# Windows 11 ARM64 VM session, 05/09/2026 (evidence/vm-14-smoke-run.txt;
+# per-command captures under evidence/vm-smoke/20260905-101214/) — see
+# docs/hardware-notes.md's "Windows (ARM64 VM) session — 05/09/2026".
 #
 # This script makes NO write to the radio and takes no parameter that
 # would start one. The two writes this milestone makes — the GUI Send
