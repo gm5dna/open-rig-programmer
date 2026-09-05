@@ -52,8 +52,11 @@ func TestNewFraming_BothBooksBuild(t *testing.T) {
 // has no AI1 and no AI3 at all (590:159-162) and its AI2/AI4 push a response
 // per changed parameter (590:165-167); the 480's AI1/AI3 push an IF frame
 // every 1.5 s while the IF parameters change (480:194-195). Nothing in this
-// programme wants either, and the negative half of this test is what stops a
-// later reader adding one.
+// programme wants either, and the two assertions below are what stop a
+// later reader adding one: exactly ONE command, and that command byte-equal
+// to "AI0;". A further loop over "AI1;".."AI4;" used to follow them, and it
+// could only ever fire in company with the equality check — it is gone,
+// because a test line that cannot fail alone reads as coverage and is not.
 func TestFraming_InitSequenceIsAI0AndNothingElse(t *testing.T) {
 	for _, b := range []Book{Book590, Book480} {
 		f, err := NewFraming(b)
@@ -65,12 +68,7 @@ func TestFraming_InitSequenceIsAI0AndNothingElse(t *testing.T) {
 			t.Fatalf("%v: InitSequence() has %d commands, want exactly 1", b, len(seq))
 		}
 		if got := string(seq[0].Bytes()); got != "AI0;" {
-			t.Errorf("%v: InitSequence()[0] = %q, want \"AI0;\"", b, got)
-		}
-		for _, forbidden := range []string{"AI1;", "AI2;", "AI3;", "AI4;"} {
-			if string(seq[0].Bytes()) == forbidden {
-				t.Errorf("%v: InitSequence built %q — no AI state but 0 is ever transmitted", b, forbidden)
-			}
+			t.Errorf("%v: InitSequence()[0] = %q, want \"AI0;\" — no AI state but 0 is ever transmitted", b, got)
 		}
 	}
 }
@@ -171,6 +169,12 @@ func TestFraming_NewAccumulatorHonoursMax(t *testing.T) {
 // completes the gate with the eight grammars; until then this is the whole
 // of it, and it is written so that widening it later is an addition rather
 // than a rewrite.
+//
+// The three OUTBOUND-TOKEN rows record an outcome, not a mechanism: "?;",
+// "E;" and "O;" are two bytes each and are refused by the two-byte-opcode
+// floor, so they would still be refused with the explicit token branch
+// deleted. envelopeAllows' fourth bullet says so rather than letting these
+// rows imply otherwise.
 func TestEnvelopeAllows_TheDocumentedEnvelope(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -225,6 +229,54 @@ func TestFraming_AllowRefusesAnOverlongFrame(t *testing.T) {
 	}
 }
 
+// TestFraming_AllowsBoundIsTheDefaultAccumulatorsBound pins the half of the
+// gate's length rule that is actually true, because the doc comment used to
+// claim the whole of it.
+//
+// The gate's ceiling and the ceiling of the accumulator THIS SAME ADAPTER
+// hands out with max <= 0 are ONE datum, DefaultMaxFrame, consulted from one
+// place — the house rule that a bound is consulted from the same place as
+// its datum. The frame exactly at the bound must pass both; the frame one
+// byte over must fail both.
+//
+// WHAT THIS DOES NOT PIN, AND CANNOT: an Engine built WithMaxFrame(N) for
+// N < DefaultMaxFrame narrows its accumulator only. The seam gives Allow no
+// sight of that option — the Framing receiver is a value and NewAccumulator
+// is the only method told the number — so on such a session this gate is the
+// wider of the two. framing.go's fifth envelope bullet says so rather than
+// claiming otherwise.
+func TestFraming_AllowsBoundIsTheDefaultAccumulatorsBound(t *testing.T) {
+	f, err := NewFraming(Book590)
+	if err != nil {
+		t.Fatalf("NewFraming: %v", err)
+	}
+	frameOfLen := func(n int) []byte {
+		b := make([]byte, n)
+		for i := range b {
+			b[i] = 'A'
+		}
+		b[n-1] = ';'
+		return b
+	}
+
+	atBound := frameOfLen(DefaultMaxFrame)
+	if !f.Allow(atBound) {
+		t.Errorf("Allow refused a %d-byte frame, which is exactly the bound", DefaultMaxFrame)
+	}
+	frames, err := f.NewAccumulator(0).Push(atBound)
+	if err != nil || len(frames) != 1 {
+		t.Errorf("the default accumulator returned (%d frames, %v) for the longest frame Allow admits — the gate and the accumulator are meant to read one bound", len(frames), err)
+	}
+
+	over := frameOfLen(DefaultMaxFrame + 1)
+	if f.Allow(over) {
+		t.Errorf("Allow admitted a %d-byte frame, one over the bound", DefaultMaxFrame+1)
+	}
+	if _, err := f.NewAccumulator(0).Push(over); err == nil {
+		t.Error("the default accumulator reassembled a frame one byte over the bound that Allow refuses")
+	}
+}
+
 // TestFraming_ZeroValueFailsClosed is the standing rule stated for this
 // adapter: a hand-built zero value describes no radio, and its gate must
 // admit nothing rather than admit everything.
@@ -235,5 +287,18 @@ func TestFraming_ZeroValueFailsClosed(t *testing.T) {
 	}
 	if len(zero.InitSequence()) != 0 {
 		t.Error("a zero framing offered an init sequence")
+	}
+	// AND ITS THIRD DOOR, IsFatal, WHICH IS THE ONE THAT RUNS ON THE
+	// ENGINE'S READER GOROUTINE. That goroutine has no recover, so a
+	// verdict this adapter cannot honestly give must be withheld rather
+	// than raised: an adapter that names no document can quote no cause
+	// sentence, and inventing one would put words in a manufacturer's
+	// mouth (the M9c-1 ruling — an omitted config semantic is REFUSED,
+	// never defaulted). Withholding is the fail-closed direction here
+	// because Allow above already admits nothing, so no frame can leave.
+	for _, frame := range []string{"E;", "O;", "ID023;", ""} {
+		if err := zero.IsFatal([]byte(frame)); err != nil {
+			t.Errorf("a zero framing returned %v for %q — it speaks for no document and must quote none", err, frame)
+		}
 	}
 }

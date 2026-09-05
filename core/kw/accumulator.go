@@ -5,11 +5,15 @@ package kw
 // DefaultMaxFrame is the maximum frame length, in bytes, FrameAccumulator
 // enforces when NewFrameAccumulator is given a non-positive maxFrame.
 //
-// A RESOURCE bound, not a protocol fact, and this package's OWN — the third
-// independent one, beside core/cat's and core/civ's, because the fence
-// forbids reading either of theirs and because the arithmetic below is
-// Kenwood's.
+// A RESOURCE bound, not a protocol fact. It is DECLARED here — the fence
+// forbids importing core/cat or core/civ, so this package cannot read
+// either of theirs — but the VALUE IS NOT A KENWOOD DERIVATION AND THIS
+// COMMENT DOES NOT PRETEND OTHERWISE. 256 is the fleet's shared frame
+// bound, byte-identical to core/cat's and core/civ's, and it is kept
+// because one round number across three families is one number a reader has
+// to hold rather than three. NO ARITHMETIC PRODUCES IT.
 //
+// WHAT IS KENWOOD'S IS THE CHECK THAT THE SHARED NUMBER IS BIG ENOUGH HERE.
 // The widest frame either book prints is the 50-byte MR answer / MW set
 // (590:1440-1461, 590:1518-1536; 480:923-943, 480:955-976). Every other
 // frame this milestone builds or parses is far narrower: ID read 3 and
@@ -17,10 +21,15 @@ package kw
 // Set/Answer 6, MR read 7, EX read 10. The ONE frame with no printed
 // ceiling is the EX ANSWER, whose P5 is declared "variable length" with no
 // upper bound anywhere (590:555-556, 480:409-411) — recorded as A19, whose
-// lift is an exhaustive EX sweep. So the bound cannot be derived from the
-// documents; it is chosen, at five times the widest printed frame, which
-// leaves ample room for any P5 the parameter lists print while still
-// refusing to buffer a wedged or noisy line without limit.
+// lift is an exhaustive EX sweep. So no bound is DERIVABLE from these
+// documents at all; 256 is ADEQUATE rather than derived — comfortably above
+// every printed Kenwood frame, with 246 bytes of margin left for a P5 the
+// parameter lists never print anywhere near that wide, and still small
+// enough to refuse to buffer a wedged or noisy line without limit.
+//
+// TestDefaultMaxFrame_ExceedsTheWidestPrintedFrame pins the ONE relation
+// that holds — the bound exceeds the 50-byte frame — and pins nothing more,
+// because nothing more is true.
 //
 // It is also the datum MaxEXDigits is derived from (exdigits.go), which is
 // why it is stated here once rather than in two places.

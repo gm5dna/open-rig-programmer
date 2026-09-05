@@ -193,12 +193,26 @@ func (f framing) IsRejection(frame []byte) bool { return IsRejection(frame) }
 //
 // NEITHER TOKEN IS EVER RETRIED and neither is ever matched as an answer.
 //
+// A ZERO framing WITHHOLDS THE VERDICT, on Allow's and InitSequence's
+// terms and for one extra reason: this is the only one of the three that
+// runs on the engine's READER GOROUTINE, which has no recover. The cause an
+// "E;" or an "O;" closes a session with is that BOOK'S own sentence (E13),
+// so an adapter that names no document has no honest verdict to give — and
+// the M9c-1 ruling says an omitted config semantic is REFUSED, never
+// defaulted, so it gives none rather than quoting a document at a venture.
+// Withholding is the closed direction here: Allow already admits nothing,
+// so no frame can leave whatever this returns.
+// TestFraming_ZeroValueFailsClosed pins all three doors together.
+//
 // TestFatalTokens_FourStatesTwoTokensTwoBooks is the injection matrix;
 // TestFatalTokens_SameChunk_SuppressesTheAnswerItArrivedWith and
 // TestFatalTokens_PostPurgeRace_NoFrameLeavesAfterAReceivedFatalFrame are
 // core/transport's two adversarial pins re-run through this accumulator and
 // this cause. doc.go carries the commitment and the residual liveness facts.
 func (f framing) IsFatal(frame []byte) error {
+	if !f.book.valid() {
+		return nil
+	}
 	token := streamErrorToken(frame)
 	if token == "" {
 		return nil
@@ -252,9 +266,25 @@ func (f framing) Allow(frame []byte) bool {
 //     in either book says what a radio would do with a higher byte.
 //   - Never an ANSWER frame. "?;", "E;" and "O;" travel radio-to-host only;
 //     a host that emitted one would be inventing a frame no document
-//     describes.
-//   - Never longer than DefaultMaxFrame — a frame this package's own
-//     accumulator could not reassemble is one no answer to could be read.
+//     describes. THE RULE THAT ACTUALLY REFUSES THEM TODAY IS THE ONE
+//     ABOVE, not a check of its own: all three tokens are two bytes, and
+//     two bytes cannot carry an opcode and a terminator. The explicit
+//     branch below is belt and braces, unreachable as the three tokens
+//     stand, and no test can distinguish it — the three token rows in
+//     TestEnvelopeAllows_TheDocumentedEnvelope pass on the length floor. It
+//     is kept because T7 puts per-command grammars IN FRONT of this gate
+//     rather than replacing it, so the day a token grows a third byte the
+//     rule is already written.
+//   - Never longer than DefaultMaxFrame, which is the SAME datum the
+//     accumulator this adapter hands out enforces when given max <= 0:
+//     TestFraming_AllowsBoundIsTheDefaultAccumulatorsBound pins the gate
+//     and that accumulator to one bound in both directions. IT IS NOT THE
+//     ENGINE'S WithMaxFrame(N). The seam tells NewAccumulator that number
+//     and tells this gate nothing, so on a session built with
+//     N < DefaultMaxFrame this gate is the WIDER of the two and would admit
+//     an outbound frame that session's accumulator could not reassemble.
+//     Nothing this milestone builds sets N, and T7's per-command grammars
+//     bound every frame this programme builds far below either number.
 func envelopeAllows(frame []byte) bool {
 	if len(frame) < 3 || len(frame) > DefaultMaxFrame {
 		return false
@@ -262,6 +292,8 @@ func envelopeAllows(frame []byte) bool {
 	if frame[len(frame)-1] != ';' {
 		return false
 	}
+	// Belt and braces; unreachable while every token is two bytes. See the
+	// fourth bullet above.
 	if IsRejection(frame) || streamErrorToken(frame) != "" {
 		return false
 	}
