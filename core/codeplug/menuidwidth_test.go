@@ -14,10 +14,12 @@ import (
 // A menu setting ID is a radio's EX address rendered as wire digits, so its
 // width is the radio's, not this package's: six for the FT-710, FTdx10 and
 // FTdx101 (a (P1,P2,P3) triple), four for a radio whose MENU Number is a
-// (P1,P2) pair. Five is neither, and stays refused — the point of the rule
-// is that a mis-shaped ID is caught before it is written to a file or put
-// to a radio, and widening it to "four to six" would admit exactly the
-// truncation it exists to catch.
+// (P1,P2) pair, and three for a Kenwood one. Five is none of them, and
+// stays refused — the point of the rule is that a mis-shaped ID is caught
+// before it is written to a file or put to a radio, and widening it to a
+// range would admit exactly the truncation it exists to catch. The third
+// width and its cost are pinned separately by
+// TestMenuSnapshotValidate_ThreeDigitIDs (menus_test.go).
 func TestMenuSnapshotValidate_SettingIDWidths(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -26,8 +28,9 @@ func TestMenuSnapshotValidate_SettingIDWidths(t *testing.T) {
 	}{
 		{"six digits (the triple form)", "000101", true},
 		{"four digits (the pair form)", "0801", true},
-		{"five digits is neither form", "00010", false},
-		{"three digits", "080", false},
+		{"five digits is none of the three forms", "00010", false},
+		{"three digits (the Kenwood form)", "080", true},
+		{"two digits", "08", false},
 		{"seven digits", "0001011", false},
 		{"empty", "", false},
 		{"four with a non-digit", "08X1", false},
@@ -48,8 +51,8 @@ func TestMenuSnapshotValidate_SettingIDWidths(t *testing.T) {
 				t.Errorf("%s: Validate() = %v, want a *MenuEntryError", tc.name, err)
 				continue
 			}
-			if !strings.Contains(mee.Reason, "4 or 6 ASCII digits") {
-				t.Errorf("%s: MenuEntryError.Reason = %q, want it to name both widths", tc.name, mee.Reason)
+			if !strings.Contains(mee.Reason, "3, 4 or 6 ASCII digits") {
+				t.Errorf("%s: MenuEntryError.Reason = %q, want it to name all three widths", tc.name, mee.Reason)
 			}
 			if mee.ID != tc.id {
 				t.Errorf("%s: MenuEntryError.ID = %q, want %q — the refusal must name the offending ID", tc.name, mee.ID, tc.id)
