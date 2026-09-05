@@ -14,6 +14,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gm5dna/open-rig-programmer/core/cat"
+	"github.com/gm5dna/open-rig-programmer/core/cat/ft991a"
 	"github.com/gm5dna/open-rig-programmer/internal/extable"
 )
 
@@ -92,11 +94,15 @@ import (
 // pins the two this chart is known to carry in a COMPARED column, so that
 // the limit is recorded in the test rather than only in prose.
 //
-// The generated inventory is not bound here, as it is on the FT-891, for one
-// reason: this package has no dialect yet, exItems is unexported, and
-// staleness_test.go already re-renders the generated file from table2.csv
-// and byte-compares it. The semantic binding the FT-891 reaches through
-// ft891.Dialect().EXItems() belongs with the dialect that provides it.
+// The generated inventory IS bound here, as it is on the FT-891, and the
+// leg arrived one task late. When this file was first written the package
+// had no dialect, exItems was unexported and there was no exported route to
+// it at all, so the binding was deferred with the note that it "belongs with
+// the dialect that provides it". ft991a.Dialect() now provides it, and
+// TestCrossCheck_InventoryAgainstTranscriptionA below is that leg:
+// staleness_test.go's byte-comparison proves the generated file was rendered
+// from table2.csv, and this one proves the SEMANTIC content the rest of the
+// repository reads through the dialect is the transcription's.
 
 const (
 	// transcriptionBPath and pageLedgerPath are relative to the package
@@ -569,6 +575,168 @@ func TestCrossCheck_A_B_Ledger(t *testing.T) {
 			requireRow(t, p, a, b, s.slopeAddr, s.slopeName, strconv.Itoa(s.slopeDigits), "the untransposed-sibling pin")
 		}
 		requireRow(t, p, a, b, misspeltRowAddr, misspeltRowName, strconv.Itoa(misspeltRowDigits), "the printed-misspelling pin")
+	})
+}
+
+// TestCrossCheck_InventoryAgainstTranscriptionA binds the GENERATED
+// inventory — the artefact the whole repository reads, through
+// ft991a.Dialect().EXItems() — to transcription A, row by row.
+//
+// It is the FT-891 precedent's fourth leg
+// (core/cat/ft891/crosscheck_test.go's test of the same name), and it says
+// something staleness_test.go cannot. That test re-renders the generated
+// file from table2.csv and byte-compares: it proves the bytes came from the
+// CSV. This one reads the inventory back through the DIALECT and compares
+// the values a consumer actually sees — address, name, Digits, the absent
+// second and third components, the absent labels, the absent text flag —
+// against the same CSV parsed through extable.ParseCSV. A generator that
+// dropped a column consistently would satisfy the byte-comparison and fail
+// here.
+//
+// THE ONE ROW THAT IS NOT THERE is the whole difference from the FT-891
+// version. That chart's inventory is its whole transcription; this one's is
+// the transcription LESS the address the profile declares parameterless, so
+// the walk below is over A's rows minus that address, and the address itself
+// is asserted absent rather than skipped silently.
+func TestCrossCheck_InventoryAgainstTranscriptionA(t *testing.T) {
+	p, ok := extable.Lookup("ft991a")
+	if !ok {
+		t.Fatal(`extable.Lookup("ft991a"): the profile is not registered`)
+	}
+	aRows := loadTranscriptionA(t, p)
+	a := namesAndDigits(aRows)
+	parameterless := declaredParameterless(t, p)
+
+	// A's rows in chart order, less the declared parameterless address(es).
+	var order []menuAddr
+	for _, m := range sortedAddrs(a) {
+		if parameterless[m] {
+			continue
+		}
+		order = append(order, m)
+	}
+
+	items := ft991a.Dialect().EXItems()
+	if len(items) != len(order) {
+		t.Fatalf("the generated inventory holds %d items; transcription A (%s) holds %d rows, of which %d are declared parameterless, leaving %d", len(items), p.ManualCSV, len(a), len(parameterless), len(order))
+	}
+
+	// The items must be in ascending P1 order in their own right, not merely
+	// be a permutation that happens to match A once sorted: the generated
+	// file's doc comment claims the sort, so the claim is pinned here rather
+	// than assumed.
+	for i := 1; i < len(items); i++ {
+		prev, cur := items[i-1].Addr, items[i].Addr
+		if prev.P1 >= cur.P1 {
+			t.Errorf("the generated inventory is not in ascending P1 order at index %d: %s follows %s", i, cur, prev)
+		}
+	}
+
+	for i, want := range order {
+		got := items[i]
+		gotAddr := menuAddr(got.Addr.P1)
+		if gotAddr != want {
+			t.Errorf("inventory item %d is MENU number %s, transcription A (%s) has %s there", i, gotAddr, p.ManualCSV, want)
+			continue
+		}
+		row := aRows[want]
+		if got.Name != row.Name {
+			t.Errorf("MENU number %s: the inventory's Name is %q, transcription A (%s) has %q", want, got.Name, p.ManualCSV, row.Name)
+		}
+		// A's Digits reaches this file as a TOKEN (see chartRow), because one
+		// row of this chart prints a hyphen. Every row REACHING THE INVENTORY
+		// is numeric by construction — the hyphen row is the excluded one —
+		// so the comparison is against the token's decimal spelling, and a
+		// non-numeric token here would be a generator that admitted a row the
+		// profile excludes.
+		if wantDigits := strconv.Itoa(got.Digits); wantDigits != row.Digits {
+			t.Errorf("MENU number %s (%q): the inventory's Digits is %d, transcription A (%s) has %q", want, row.Name, got.Digits, p.ManualCSV, row.Digits)
+		}
+		if got.Addr.P2 != 0 || got.Addr.P3 != 0 {
+			t.Errorf("MENU number %s (%q): the inventory's P2 is %d and P3 is %d, but this radio's EX address is a SINGLE component and both must be 0 (AddressSingle)", want, row.Name, got.Addr.P2, got.Addr.P3)
+		}
+		if got.P1Label != "" || got.P2Label != "" {
+			t.Errorf("MENU number %s (%q): the inventory carries labels P1Label=%q P2Label=%q, but this chart prints no label columns (LabelsAbsent)", want, row.Name, got.P1Label, got.P2Label)
+		}
+		if got.Text {
+			t.Errorf("MENU number %s (%q): the inventory marks a text item, but this chart prints no free-text item (TextRowsAbsent)", want, row.Name)
+		}
+	}
+
+	t.Run("the_declared_parameterless_address_is_absent", func(t *testing.T) {
+		// Not a silent skip: the row the chart prints and the inventory omits
+		// is asserted present in A and absent from the dialect, so the
+		// 153-against-152 difference is exactly that address and nothing
+		// else.
+		for m := range parameterless {
+			if _, in := a[m]; !in {
+				t.Errorf("transcription A (%s) has no MENU number %s, which the profile declares parameterless", p.ManualCSV, m)
+			}
+			addr := cat.EXAddress{P1: uint16(m)}
+			if ft991a.Dialect().KnownEXAddress(addr) {
+				t.Errorf("the dialect knows EX address %v — the chart prints that row with no parameter at all, so it is transcribed and counted but names no field an EX frame could read or write", addr)
+			}
+			for _, it := range items {
+				if menuAddr(it.Addr.P1) == m {
+					t.Errorf("the generated inventory carries MENU number %s, which the profile excludes by address", m)
+				}
+			}
+		}
+	})
+
+	t.Run("the_widest_rows", func(t *testing.T) {
+		// Two independent statements of the same fact, deliberately: wideRows
+		// came from the chart, and the derivation walks the inventory for
+		// whatever is widest. A silent change to the transcription moves the
+		// derivation away from the literals; a mistaken literal disagrees
+		// with the derivation. Neither can be satisfied by editing the other.
+		widest := 0
+		var at []menuAddr
+		for _, it := range items {
+			m := menuAddr(it.Addr.P1)
+			switch {
+			case it.Digits > widest:
+				widest, at = it.Digits, []menuAddr{m}
+			case it.Digits == widest:
+				at = append(at, m)
+			}
+		}
+		if widest != widestRowDigits {
+			t.Errorf("the widest Digits in the generated inventory is %d, the chart pin says %d", widest, widestRowDigits)
+		}
+		// The profile's MaxDigits is the BOUND the parser enforces; the
+		// widest row OBSERVED is what the chart actually prints. They are the
+		// same number for this chart, and binding them here is what stops
+		// MaxDigits drifting into a bound nothing reaches.
+		if widest != p.MaxDigits {
+			t.Errorf("the widest Digits observed is %d, the registered profile's MaxDigits is %d", widest, p.MaxDigits)
+		}
+		var wantAt []menuAddr
+		for _, w := range wideRows {
+			if w.digits == widestRowDigits {
+				wantAt = append(wantAt, w.addr)
+			}
+		}
+		if !sameAddrs(at, wantAt) {
+			t.Errorf("the widest inventory items are %v, the chart pin (wideRows) says %v", at, wantAt)
+		}
+		// …and every wide row, read out of the inventory by address, so that
+		// the L ledger's own "greater than 4" table is bound to the artefact
+		// the repository reads and not only to transcription A.
+		byAddr := make(map[menuAddr]int, len(items))
+		for _, it := range items {
+			byAddr[menuAddr(it.Addr.P1)] = it.Digits
+		}
+		for _, w := range wideRows {
+			got, in := byAddr[w.addr]
+			if !in {
+				t.Errorf("the generated inventory has no MENU number %s, which the wide-row pin requires", w.addr)
+				continue
+			}
+			if got != w.digits {
+				t.Errorf("MENU number %s (%q): the inventory's Digits is %d, the wide-row pin says %d", w.addr, w.name, got, w.digits)
+			}
+		}
 	})
 }
 
