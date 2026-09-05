@@ -14,8 +14,19 @@ jobs:
       fail-fast: false
       matrix:
         # macOS restored 16/08/2026: the repo is public, Actions minutes are free.
-        os: [ubuntu-latest, macos-latest]
+        # windows-2025 added 05/09/2026: the first place this project's Go
+        # tests run on Windows at all (Tier 0 P2 decision 13,
+        # docs/superpowers/specs/2026-09-04-windows-packaging-design.md).
+        # The first run was expected red on tests that compared
+        # filepath.Join results against `/`-literal expectations and one
+        # 0600-permission assertion with no Windows guard — fixed ahead of
+        # time in the win-code lane, following the userconfig precedent's
+        # Windows skip for the permission bit ("never weaken a claim the
+        # platform can express"); anything the platform still surfaces that
+        # this plan did not predict becomes a ledgered win-code follow-up.
+        os: [ubuntu-latest, macos-latest, windows-2025]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -70,6 +81,10 @@ jobs:
         run: go test ./...
 
       - name: Add Go bin to PATH
+        # Explicit shell: bash — this job's default shell on windows-2025
+        # is pwsh, which does not run the $(...) command substitution
+        # below the way this step needs.
+        shell: bash
         run: echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Install Wails CLI
@@ -109,4 +124,16 @@ jobs:
       - name: wails build (macOS)
         if: runner.os == 'macOS'
         working-directory: app
+        run: wails build
+
+      - name: wails build (Windows)
+        if: runner.os == 'Windows'
+        working-directory: app
+        # No -nsis here: NSIS isn't installed on this leg (that only
+        # happens in release.yml's `windows` job, which needs it to make
+        # the installer); this leg only proves the GUI itself still
+        # compiles on Windows. No GUI launch check either — three stacked
+        # unverified premises (WebView2 present, Wine-free Windows-native
+        # launch semantics under a headless runner, a fake radio),
+        # deliberately left to the VM leg, which launches the real thing.
         run: wails build
