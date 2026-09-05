@@ -217,6 +217,29 @@
 // this section a precondition of the first two register entries rather than
 // background.
 //
+// # Two captures the Stage 1 evidence does not cover
+//
+// Distinct from the register below, and recorded here because they are gaps
+// in the GOLDEN VECTORS rather than assumptions in the code: evidence leg G
+// built this radio's vector files from the manual's own charts, and two
+// shapes this driver can produce or accept have no vector behind them.
+//
+//   - ONE MR READ OF A CHANNEL WITH THE TX CLARIFIER ON — byte 21, position
+//     21, answered '1'. No G vector carries it, so the live P5 this radio
+//     prints on all five blocks (971, 1004, 1042, 787, 1122) is exercised in
+//     this package only against hand-built fixtures. It is the byte that
+//     most distinguishes this radio from the FT-891 exemplar (erratum
+//     M-E3), and the one a copied driver would refuse.
+//   - ONE MW OR MT OF A PMS SLOT, 100-117. No G MW vector names one, so the
+//     numeric PMS form — this fleet's first — reaches the wire in this
+//     package's tests and nowhere in the committed evidence.
+//
+// Neither is an assumption this driver makes: both are captures that would
+// turn a manual reading into an observation. They are listed as a section
+// rather than as register entries because the register is for values and
+// behaviours this code encodes without manual evidence, and these two are
+// manual-evidenced and merely unwitnessed.
+//
 // # The ASSUMED register
 //
 // EIGHT ENTRIES, covering the behaviours this DRIVER encodes that are NOT
