@@ -120,6 +120,12 @@
   surface" count was also corrected to eleven — it had been stale since
   the additions tier, and leaving it wrong while its neighbours moved
   would have been worse than fixing it here.
+
+  TASK 8 GATE: the "every one of their stored comparison baselines is
+  byte for byte identical" sentence a few paragraphs below is task 8's
+  finding, not task 7's — it must be REMOVED or reworded if the
+  byte-identity run at the release tip moves anything beyond the three
+  model-list artefacts (bare.stderr, help.stdout, nomodel.stderr).
 -->
 
 Open Rig Programmer __VERSION__ — an open-source, cross-platform
