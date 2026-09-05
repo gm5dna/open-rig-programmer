@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gm5dna/open-rig-programmer/core/clone"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
@@ -30,8 +31,10 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/icr8600"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
+	"github.com/gm5dna/open-rig-programmer/internal/extable"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx10"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx101"
+	"github.com/gm5dna/open-rig-programmer/internal/fakeft891"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7851"
 	"github.com/gm5dna/open-rig-programmer/internal/radiotext"
 )
@@ -337,6 +340,33 @@ func TestOpenFakeSessionFor_EveryRegisteredModel(t *testing.T) {
 // filter: byte 0x00 at offset 7 is not a value this profile defines" —
 // the same error the CLI reproduction in the task brief hit. Restoring
 // the row makes it pass again.
+// nonVacuousDefaultImage names the registered models whose simulator SHIPS a
+// populated channel by design, so that the test below's populated-read
+// assertions actually run for them.
+//
+// IT IS NOT "every model that happens to have one today", and it is
+// deliberately not derived: the ten Icom fakes with EMPTY default images are
+// absent because emptiness is THEIR design (a fake's contents are frozen
+// evidence, and several of those images were deliberately emptied at the row
+// that registered them — see fake.go's IC905Model entry), and adding them
+// here would demand a change to that evidence.
+//
+// THE FT-891 IS HERE BECAUSE ITS FAKE'S DEFAULT IMAGE IS CONSTRAINED IN BOTH
+// DIRECTIONS (plan decision P13): at least ONE occupied MEM channel, so this
+// fleet pin is non-vacuous for it, and NO 5xx or EMG slot, so a plain
+// --fake --model FT-891 session's eleven-frame discovery walk finds nothing
+// and the discovered banks stay something a test asks for. Only the first
+// half is checkable here; the second is
+// TestOpenFakeSessionFor_FT891OptionSourceIsItsOwn's premise.
+var nonVacuousDefaultImage = map[string]bool{
+	DefaultModel:   true,
+	FTdx10Model:    true,
+	FTdx101DModel:  true,
+	FTdx101MPModel: true,
+	ICR8600Model:   true,
+	FT891Model:     true,
+}
+
 func TestOpenFakeSessionFor_EveryRegisteredModel_ReadsEveryDefaultSlot(t *testing.T) {
 	models := SupportedModels()
 	if len(models) == 0 {
@@ -478,6 +508,18 @@ func TestOpenFakeSessionFor_EveryRegisteredModel_ReadsEveryDefaultSlot(t *testin
 			}
 			if reachesTierField && populatedReads == 0 {
 				t.Logf("fresh-read schema = %d: %q's default image has no populated channel, so there is no tier state for Save to represent", probe.Schema, model)
+			}
+			// NON-VACUITY, PER MODEL AND BY NAME. Every branch above is
+			// guarded by populatedReads > 0, so a model whose fake image
+			// were silently emptied would sail through this whole subtest
+			// having proved nothing about the Absent/omission rule it
+			// exists to pin — the log lines say so, but a log is not a
+			// failure. nonVacuousDefaultImage names the models whose
+			// simulator is DESIGNED to ship a populated channel, so
+			// emptying one is a test failure rather than a quiet
+			// reduction in coverage.
+			if nonVacuousDefaultImage[model] && populatedReads == 0 {
+				t.Errorf("%q read %d slot(s) and NONE of them populated — this model's simulator is designed to ship at least one occupied channel, so every populated-read assertion in this subtest just passed vacuously", model, reads)
 			}
 			t.Logf("%q: %d slot(s) read across %d bank(s)", model, reads, len(caps.Banks))
 		})
@@ -3214,4 +3256,452 @@ func TestOpenRealSessionFor_ICR8600OpensAtEightNOne(t *testing.T) {
 	if got.StopBits != 1 {
 		t.Errorf("SerialConfig.StopBits = %d, want 1 — the IC-R8600's own StopBits() report must reach the port, not transport.DefaultStopBits (%d)", got.StopBits, transport.DefaultStopBits)
 	}
+}
+
+// --- The FT-891 (Tier 1 task 7): registration's own end-to-end legs ---
+
+// TestSynthesiseDiscoveredBanks_FT891MatchesDriver is the FTdx10 test's
+// counterpart for the model Tier 1 registered, carrying the same
+// load-bearing assertion for the same reason: driver.DiscoveredBankSynthesizer
+// is OPTIONAL, so a driver that does not implement it fails SILENTLY here —
+// ok=false, and app/ then renders no discovered banks at all for an offline
+// FT-891 codeplug (data loaded, rows invisible, no error anywhere).
+//
+// THE FIXTURE IS THIS RADIO'S OWN, not the FTdx10's copied across, and that
+// matters for one slot: "599" is a legal 5 MHz slot on the FTdx10 and is NOT
+// one on the FT-891, whose own legend prints "501 - 510" and whose ParseSlot
+// refuses 511 upwards (internal/fakeft891/image.go's fiveMHzSlot cites the
+// transcription). Reusing the sibling's list would have handed this driver a
+// slot it silently drops, and the comparison below — which asks only that
+// wiring's answer equals the driver's — would have agreed about nothing.
+// "510" is this radio's declared ceiling and "0X1" is the deliberate
+// classifies-as-neither member.
+func TestSynthesiseDiscoveredBanks_FT891MatchesDriver(t *testing.T) {
+	slots := []string{"501", "510", "EMG", "0X1"}
+
+	got, ok := SynthesiseDiscoveredBanks(FT891Model, slots)
+	if !ok {
+		t.Fatalf("SynthesiseDiscoveredBanks(%q, ...): ok = false, want true (the ft891 driver implements driver.DiscoveredBankSynthesizer — its absence would drop discovered banks from the GUI silently)", FT891Model)
+	}
+
+	synth, synthOK := NewFT891RealDriver().(driver.DiscoveredBankSynthesizer)
+	if !synthOK {
+		t.Fatal("NewFT891RealDriver() does not implement driver.DiscoveredBankSynthesizer — sanity check failed")
+	}
+	want := synth.SynthesiseDiscoveredBanks(slots)
+	if len(want) != 2 {
+		t.Fatalf("the ft891 driver classified the fixture into %d bank(s), want 2 (60M and EMG) — the comparison below would not be exercising both", len(want))
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("SynthesiseDiscoveredBanks(%q, ...) = %#v,\nwant %#v (must equal the driver's own classification)", FT891Model, got, want)
+	}
+}
+
+// TestOpenFakeSessionFor_FT891OptionSourceIsItsOwn pins M9c-5 E5's design
+// for this model: the FT891 fakeDrivers entry reads its OWN option source,
+// inside its own newRadio closure, at CALL time.
+//
+// FT891FakeSessionOpts is set here to populate the fake's 5 MHz bank and its
+// emergency channel — deliberately NOT expressible any other way, because
+// internal/fakeft891's DefaultImage has neither, and has neither ON PURPOSE
+// (plan decision P13: a demo radio whose discovery walk finds a 5xx bank
+// would make every "this radio discovered nothing" assertion a fixture
+// accident). Two things follow if the seam works, and both are asserted: the
+// option reached the FT-891's rig, and core/driver/ft891's eleven-frame MR
+// discovery walk found what the option added and reported it as discovered
+// BANKS in the session's own capabilities — the whole registered read path,
+// through the same constructor a real "--fake --model FT-891" invocation
+// uses.
+//
+// The crossing this design prevents is a COMPILE error, not a test case:
+// FT891FakeSessionOpts is []fakeft891.Option and no other model's variable
+// has that element type, so neither model's options can be applied to the
+// other's rig even by mistake. That is why there is no "another model
+// ignored it" assertion below — there is nothing to ignore.
+//
+// THE DEFAULT-IMAGE HALF IS ASSERTED FIRST, and it is not decoration: a fake
+// that shipped a 5xx bank by default would make the option-fed assertions
+// below pass whether or not the option ever reached the rig.
+func TestOpenFakeSessionFor_FT891OptionSourceIsItsOwn(t *testing.T) {
+	plain, closePlain, err := OpenFakeSessionFor(testCtx(t), FT891Model)
+	if err != nil {
+		t.Fatalf("OpenFakeSessionFor(%q) with no options: unexpected error: %v", FT891Model, err)
+	}
+	t.Cleanup(func() { _ = closePlain() })
+	if _, ok := plain.Capabilities().Bank(spec.Bank60m); ok {
+		t.Fatal("the DEFAULT FT-891 fake produced a 60M bank — plan P13 constrains that image to have no 5xx slot, and the option-fed assertions below would pass without the option")
+	}
+	if _, ok := plain.Capabilities().Bank(spec.BankEMG); ok {
+		t.Fatal("the DEFAULT FT-891 fake produced an EMG bank — plan P13 constrains that image to have no EMG slot")
+	}
+
+	prev := FT891FakeSessionOpts
+	FT891FakeSessionOpts = []fakeft891.Option{fakeft891.With5MHz(), fakeft891.WithEMG()}
+	t.Cleanup(func() { FT891FakeSessionOpts = prev })
+
+	sess, closeAll, err := OpenFakeSessionFor(testCtx(t), FT891Model)
+	if err != nil {
+		t.Fatalf("OpenFakeSessionFor(%q) with options: unexpected error: %v", FT891Model, err)
+	}
+	t.Cleanup(func() { _ = closeAll() })
+
+	caps := sess.Capabilities()
+	sixty, ok := caps.Bank(spec.Bank60m)
+	if !ok {
+		t.Fatal("no 60M bank in the session's capabilities — fakeft891.With5MHz() did not reach the FT-891's rig, or discovery did not run")
+	}
+	// internal/fakeft891's sparseFiveMHzChannels: the first channel, a gap,
+	// one mid-bank channel, a longer gap, and the declared ceiling. The
+	// SHAPE is the point — a walk that stopped at the first "?;" would find
+	// 501 alone, and one that missed the ceiling would find 510 nowhere.
+	wantSixty := []string{"501", "505", "510"}
+	if !reflect.DeepEqual(sixty.Slots, wantSixty) {
+		t.Errorf("60M.Slots = %v, want %v — the discovery walk must cover the whole declared 501..510 range with no contiguity assumption", sixty.Slots, wantSixty)
+	}
+	emg, ok := caps.Bank(spec.BankEMG)
+	if !ok {
+		t.Fatal("no EMG bank in the session's capabilities — fakeft891.WithEMG() did not reach the FT-891's rig")
+	}
+	if !reflect.DeepEqual(emg.Slots, []string{"EMG"}) {
+		t.Errorf("EMG.Slots = %v, want [EMG]", emg.Slots)
+	}
+	// Both discovered banks are read-only in the sharpest sense this fleet
+	// has (plan decision P4, matrix §2.5): every Write forced Unsupported,
+	// AND FieldTag/FieldTagDisplay reduced to the ZERO FieldSupport, because
+	// this radio reads those banks by MR alone and MR's 28-position answer
+	// carries neither field.
+	for _, bank := range []spec.Bank{sixty, emg} {
+		if fs := caps.FieldSupport(bank.ID, spec.FieldTag); fs != (spec.FieldSupport{}) {
+			t.Errorf("bank %s FieldTag = %+v, want the ZERO FieldSupport — MR's answer carries no tag", bank.ID, fs)
+		}
+		if fs := caps.FieldSupport(bank.ID, spec.FieldTagDisplay); fs != (spec.FieldSupport{}) {
+			t.Errorf("bank %s FieldTagDisplay = %+v, want the ZERO FieldSupport — MR's answer carries no display flag", bank.ID, fs)
+		}
+		if fs := caps.FieldSupport(bank.ID, spec.FieldFrequency); fs.Write != spec.Unsupported {
+			t.Errorf("bank %s FieldFrequency.Write = %v, want Unsupported — no profile may claim a discovered slot writable", bank.ID, fs.Write)
+		}
+	}
+}
+
+// ft891WritableChannel is the channel the write round trip sends, with the
+// TAG display flag as a parameter — the one field byte 28 carries live on
+// this radio and the one place a sibling's FIXED value could leak in.
+//
+// TagDisplay is MANDATORY and Known here (plan decision P6): this driver
+// refuses a non-Known one outright, so there is no "leave it Unknown"
+// variant of this fixture to write.
+func ft891WritableChannel(slot string, tagDisplay bool) codeplug.Channel {
+	return codeplug.Channel{
+		Slot: slot,
+		Data: &codeplug.ChannelData{
+			FreqHz: 14_250_000,
+			Mode:   "USB",
+			// A non-zero clarifier with ASYMMETRIC Rx/Tx flags, as the
+			// FTdx10's fixture uses, and TxClar deliberately FALSE: a true
+			// one is refused at the write on this radio (plan decision P5),
+			// which is a different test's subject.
+			ClarHz:     -150,
+			RxClar:     true,
+			TxClar:     false,
+			CTCSS:      "ENC-DEC",
+			CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+			Shift:      "PLUS",
+			Tag:        "CALLING",
+			TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: tagDisplay},
+			ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
+		},
+	}
+}
+
+// TestOpenFakeSessionFor_FT891SimulatedWriteRoundTrip is the end-to-end
+// write leg Stage 2's lane A DEFERRED to this task: that lane ran without
+// internal/fakeft891 on its branch, so the choreography could only be proved
+// there against a scripted responder. This proves the WIRING — that a
+// registered model's simulated profile, its fake rig and its write path
+// actually compose — from probe to read-back.
+//
+// It can only live here. The choreography needs a Simulated-profile driver
+// paired with internal/fakeft891, and that pairing exists in exactly one
+// place repo-wide: fake.go's fakeDrivers entry, pinned there by
+// internal/guards' TestSimulatedProfileTokensConfinement.
+//
+// BOTH TAG STATES, and that is what this test adds over its siblings' single
+// pass. Byte 28 of the combined record is a LIVE flag on this radio and on no
+// registered sibling — every other Yaesu model prints it fixed — so it is the
+// one position where a sibling's constant could leak in and still round-trip
+// convincingly for one of the two values. A run that only ever sent TAG ON
+// would pass against a fake that hard-coded '1'.
+//
+// The write is against the FAKE, and nothing here is evidence about any
+// physical FT-891: that model's RealHardware profile reports every Write
+// Unverified while writeTrialsComplete is false, so the capability gate
+// refuses before a frame is built.
+func TestOpenFakeSessionFor_FT891SimulatedWriteRoundTrip(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		slot       string
+		tagDisplay bool
+	}{
+		{"TAG ON", "003", true},
+		{"TAG OFF", "004", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := testCtx(t)
+
+			sess, closeAll, err := OpenFakeSessionFor(ctx, FT891Model)
+			if err != nil {
+				t.Fatalf("OpenFakeSessionFor(%q): unexpected error: %v", FT891Model, err)
+			}
+			t.Cleanup(func() {
+				if err := closeAll(); err != nil {
+					t.Errorf("closeAll: unexpected error: %v", err)
+				}
+			})
+
+			// 1. Identity: the rig answered as this model's own radio.
+			wantCATID := NewFT891RealDriver().Capabilities().CATID
+			if wantCATID == "" {
+				t.Fatal("the ft891 driver declares an empty CATID — the identity check below would pass vacuously")
+			}
+			if got := sess.Identity().CATID; got != wantCATID {
+				t.Errorf("Identity().CATID = %q, want %q — the fake rig answering this session is not the FT-891's own", got, wantCATID)
+			}
+
+			// 2. A slot the default image populates, read through the MT+MR
+			//    choreography. TagDisplay is KNOWN here, unlike every
+			//    registered sibling's Unavailable: byte 28 is live.
+			const populated = "002"
+			before, err := sess.ReadChannel(ctx, populated)
+			if err != nil {
+				t.Fatalf("ReadChannel(%q): unexpected error: %v", populated, err)
+			}
+			if before.Data == nil {
+				t.Fatalf("ReadChannel(%q): Data is nil, want a populated channel (fakeft891's default image populates M-02)", populated)
+			}
+			if got := before.Data.TagDisplay; got.State != codeplug.Known || !got.Value {
+				t.Errorf("ReadChannel(%q): TagDisplay = %+v, want {Known,true} — M-02 is the default image's TAG-ON channel and byte 28 is a live flag on this radio", populated, got)
+			}
+			if got := before.Data.CTCSSTone.State; got != codeplug.Unknown {
+				t.Errorf("ReadChannel(%q): CTCSSTone.State = %v, want Unknown", populated, got)
+			}
+			if got := before.Data.ScanSkip.State; got != codeplug.Unknown {
+				t.Errorf("ReadChannel(%q): ScanSkip.State = %v, want Unknown", populated, got)
+			}
+
+			// 3. Write into a slot the default image leaves empty — a
+			//    create, which on this radio ONE combined MT Set is claimed
+			//    to suffice for (the driver register's A SINGLE COMBINED MT
+			//    SET SUFFICES TO CREATE OR OVERWRITE A CHANNEL).
+			empty, err := sess.ReadChannel(ctx, tc.slot)
+			if err != nil {
+				t.Fatalf("ReadChannel(%q): unexpected error: %v", tc.slot, err)
+			}
+			if empty.Data != nil {
+				t.Fatalf("ReadChannel(%q): Data = %+v, want nil — this test needs an EMPTY target slot, so the write below is a create", tc.slot, empty.Data)
+			}
+
+			ch := ft891WritableChannel(tc.slot, tc.tagDisplay)
+			res, err := sess.WriteChannel(ctx, ch)
+			if err != nil {
+				t.Fatalf("WriteChannel(%q): unexpected error: %v (the Simulated profile must be write-capable against the fake)", tc.slot, err)
+			}
+			wantSteps := []driver.WriteStep{{Command: "MT", Sent: true, Confirmed: true}}
+			if !reflect.DeepEqual(res.Steps, wantSteps) {
+				t.Errorf("WriteResult.Steps = %+v, want %+v — this radio's whole write choreography is ONE combined MT frame", res.Steps, wantSteps)
+			}
+
+			// 4. Read it back, field by field, including the clarifier and
+			//    the live TAG flag.
+			after, err := sess.ReadChannel(ctx, tc.slot)
+			if err != nil {
+				t.Fatalf("ReadChannel(%q) after write: unexpected error: %v", tc.slot, err)
+			}
+			if after.Data == nil {
+				t.Fatalf("ReadChannel(%q) after write: Data is nil, want the channel just written", tc.slot)
+			}
+			if after.Slot != tc.slot {
+				t.Errorf("read-back Slot = %q, want %q", after.Slot, tc.slot)
+			}
+			sent := ch.Data
+			got := after.Data
+			if got.FreqHz != sent.FreqHz {
+				t.Errorf("read-back FreqHz = %d, want %d", got.FreqHz, sent.FreqHz)
+			}
+			if got.Mode != sent.Mode {
+				t.Errorf("read-back Mode = %q, want %q", got.Mode, sent.Mode)
+			}
+			if got.ClarHz != sent.ClarHz {
+				t.Errorf("read-back ClarHz = %d, want %d — the FT-891's Simulated clarifier is Supported, NOT the FT-710's Inert (that is an FT-710 hardware finding, deliberately not borrowed)", got.ClarHz, sent.ClarHz)
+			}
+			if got.RxClar != sent.RxClar || got.TxClar != sent.TxClar {
+				t.Errorf("read-back RxClar/TxClar = %v/%v, want %v/%v — the two flags are independent and must not be collapsed", got.RxClar, got.TxClar, sent.RxClar, sent.TxClar)
+			}
+			if got.CTCSS != sent.CTCSS {
+				t.Errorf("read-back CTCSS = %q, want %q", got.CTCSS, sent.CTCSS)
+			}
+			if got.Shift != sent.Shift {
+				t.Errorf("read-back Shift = %q, want %q", got.Shift, sent.Shift)
+			}
+			if got.Tag != sent.Tag {
+				t.Errorf("read-back Tag = %q, want %q (the combined form carries the tag in the SAME frame as the fields)", got.Tag, sent.Tag)
+			}
+			// THE LEG THIS TEST EXISTS FOR: the flag written is the flag
+			// read back, in BOTH directions.
+			if got.TagDisplay != (codeplug.BoolField{State: codeplug.Known, Value: tc.tagDisplay}) {
+				t.Errorf("read-back TagDisplay = %+v, want {Known,%v} — byte 28 is this radio's LIVE flag, and a fixed value borrowed from a sibling would round-trip only one of the two cases", got.TagDisplay, tc.tagDisplay)
+			}
+			// These two are NOT round-tripped values: they are what this
+			// radio's read path always reports, whatever was sent.
+			if got.CTCSSTone.State != codeplug.Unknown {
+				t.Errorf("read-back CTCSSTone.State = %v, want Unknown", got.CTCSSTone.State)
+			}
+			if got.ScanSkip.State != codeplug.Unknown {
+				t.Errorf("read-back ScanSkip.State = %v, want Unknown", got.ScanSkip.State)
+			}
+		})
+	}
+}
+
+// TestOpenFakeSessionFor_FT891SettingsEndToEnd is the settings leg Stage 2's
+// lane A DEFERRED to this task, for the same reason the write leg above was:
+// that lane had no internal/fakeft891 to read against, so its settings tests
+// could exercise the descriptor and a scripted single read but never the
+// whole walk through the registered pairing.
+//
+// It drives core/clone's ReadSettings — the caller every real settings read
+// goes through, CLI and GUI alike — against a session opened by
+// OpenFakeSessionFor, so what is proved is the composition: descriptor,
+// per-item ReadSetting, EX frame, fake, and back.
+//
+// THREE SUBTESTS, ONE PER PROPERTY:
+//
+//  1. The WHOLE descriptor walks, Complete true. Every one of the items the
+//     ft891-ex@1 descriptor defines comes back MenuKnown.
+//  2. ONE item forced unavailable yields MenuUnavailable for that item and a
+//     PARTIAL snapshot with every other item still present — the
+//     partial-tolerant contract, exercised on this radio.
+//  3. A set value reads back VERBATIM, so the path carries bytes rather than
+//     interpreting them.
+//
+// NON-VACUITY IS DERIVED, NEVER A LITERAL: the expected item count comes
+// from internal/extable's own ft891 profile (ExpectedRows), which is the
+// number the generated inventory is checked against when it is built. A
+// descriptor that silently lost half its items would fail here rather than
+// walk a shorter list quietly.
+func TestOpenFakeSessionFor_FT891SettingsEndToEnd(t *testing.T) {
+	profile, ok := extable.Lookup("ft891")
+	if !ok {
+		t.Fatal(`extable.Lookup("ft891") failed — the FT-891's EX profile must be registered, and this test's item bound comes from it rather than from a literal`)
+	}
+	wantItems := profile.ExpectedRows
+	if wantItems == 0 {
+		t.Fatal("the ft891 extable profile declares ExpectedRows 0 — every assertion below would hold vacuously")
+	}
+
+	openSettings := func(t *testing.T, opts ...fakeft891.Option) *clone.Service {
+		t.Helper()
+		prev := FT891FakeSessionOpts
+		FT891FakeSessionOpts = opts
+		t.Cleanup(func() { FT891FakeSessionOpts = prev })
+
+		sess, closeAll, err := OpenFakeSessionFor(testCtx(t), FT891Model)
+		if err != nil {
+			t.Fatalf("OpenFakeSessionFor(%q): unexpected error: %v", FT891Model, err)
+		}
+		t.Cleanup(func() { _ = closeAll() })
+		return clone.NewService(sess, clone.SnapshotStore{Dir: t.TempDir()})
+	}
+
+	t.Run("whole descriptor walks", func(t *testing.T) {
+		snap, err := openSettings(t).ReadSettings(testCtx(t))
+		if err != nil {
+			t.Fatalf("ReadSettings: unexpected error: %v", err)
+		}
+		if snap.Descriptor != "ft891-ex@1" {
+			t.Errorf("snapshot Descriptor = %q, want \"ft891-ex@1\"", snap.Descriptor)
+		}
+		if len(snap.Entries) != wantItems {
+			t.Errorf("snapshot has %d entries, want %d (internal/extable's ft891 profile ExpectedRows)", len(snap.Entries), wantItems)
+		}
+		if !snap.Complete {
+			t.Error("snapshot Complete = false, want true — the default fake answers every address its own inventory carries")
+		}
+		for _, e := range snap.Entries {
+			if e.State != codeplug.MenuKnown {
+				t.Errorf("entry %q State = %v, want MenuKnown", e.ID, e.State)
+			}
+			if len(e.ID) != 4 {
+				t.Errorf("entry ID %q is %d characters, want 4 — this radio's EX address is a PAIR (core/cat's EXAddressPair), not a sibling's six digits", e.ID, len(e.ID))
+			}
+		}
+	})
+
+	t.Run("one unavailable item leaves the rest present", func(t *testing.T) {
+		// 0101 is AGC FAST DELAY, an ordinary four-digit address the chart
+		// enumerates (core/cat/ft891/table2.csv). Removing it from the
+		// fake's projection makes it answer "?;", which is what a settings
+		// reader maps to an unavailable setting.
+		const missing = "0101"
+		snap, err := openSettings(t, fakeft891.WithEXUnavailable(missing)).ReadSettings(testCtx(t))
+		if err != nil {
+			t.Fatalf("ReadSettings: unexpected error: %v", err)
+		}
+		if len(snap.Entries) != wantItems {
+			t.Errorf("snapshot has %d entries, want %d — an unavailable item is RECORDED, never dropped", len(snap.Entries), wantItems)
+		}
+		if snap.Complete {
+			t.Error("snapshot Complete = true, want false — one item came back unavailable, so the snapshot is PARTIAL")
+		}
+		seen := false
+		for _, e := range snap.Entries {
+			if e.ID == missing {
+				seen = true
+				if e.State != codeplug.MenuUnavailable {
+					t.Errorf("entry %q State = %v, want MenuUnavailable", e.ID, e.State)
+				}
+				if e.Value != "" {
+					t.Errorf("entry %q Value = %q, want empty — an unavailable setting has no value to carry", e.ID, e.Value)
+				}
+				continue
+			}
+			if e.State != codeplug.MenuKnown {
+				t.Errorf("entry %q State = %v, want MenuKnown — only %q was made unavailable", e.ID, e.State, missing)
+			}
+		}
+		if !seen {
+			t.Fatalf("no entry for %q in the snapshot — this test's premise (that the descriptor offers that address) is wrong, so it asserted nothing", missing)
+		}
+	})
+
+	t.Run("a set value reads back verbatim", func(t *testing.T) {
+		// 0506 is CAT RATE, whose printed legend is "0: 4800 bps 1: 9600
+		// bps 2: 19200 bps 3: 38400 bps" over a ONE-digit field
+		// (ft891_layout.txt:553). "3" is 38400 — this driver's own ASSUMED
+		// DefaultBaud — and the value travels as the byte it is: nothing on
+		// this path interprets a menu legend (matrix §3.9).
+		const addr, value = "0506", "3"
+		snap, err := openSettings(t, fakeft891.WithEXSetting(addr, value)).ReadSettings(testCtx(t))
+		if err != nil {
+			t.Fatalf("ReadSettings: unexpected error: %v", err)
+		}
+		if !snap.Complete {
+			t.Error("snapshot Complete = false, want true — setting a value must not make an address unavailable")
+		}
+		found := false
+		for _, e := range snap.Entries {
+			if e.ID != addr {
+				continue
+			}
+			found = true
+			if e.State != codeplug.MenuKnown {
+				t.Errorf("entry %q State = %v, want MenuKnown", addr, e.State)
+			}
+			if e.Value != value {
+				t.Errorf("entry %q Value = %q, want %q verbatim", addr, e.Value, value)
+			}
+		}
+		if !found {
+			t.Fatalf("no entry for %q in the snapshot — this test's premise is wrong, so it asserted nothing", addr)
+		}
+	})
 }
