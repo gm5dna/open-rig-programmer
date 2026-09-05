@@ -176,14 +176,59 @@ fi
 
 # nsi source assertions. Grep patterns tolerate the mix of quote styles
 # and incidental whitespace NSIS scripts accumulate; they are not a
-# full NSIS parse. Full-line comments (this file's own explanatory
-# comments included — they discuss the very RMDir/rigprog lines being
-# asserted about) are stripped first so a comment can never fake a
-# pass or a fail; a code line's own trailing comment is left in place
-# since it follows real code on the same line.
+# full NSIS parse.
+#
+# NSIS has three comment forms — `#`, `;`, and `/* ... */` — and a
+# grep that only strips `#` is defeated both ways: a `;` (or a block
+# comment) hides a real hazard line from every assertion below (a
+# fake pass), while documenting the hazard in prose using either form
+# ("; never RMDir /r "$INSTDIR" here") makes an assertion fire on the
+# comment itself (a fake fail) — the exact trap this file's own `#`
+# comments were already written to avoid. nsi_source() is used by
+# EVERY assertion below so neither direction is possible: it folds
+# backslash line-continuations, deletes `/* ... */` blocks (which may
+# span lines), then walks each remaining line with a quote-tracking
+# state machine so only a `#`/`;` outside a double-quoted string ends
+# the line — a trailing code-line comment is dropped like a full-line
+# one, since NSIS treats both the same way and nothing here needs to
+# keep a trailing comment's text.
+nsi_source() {
+  awk '
+    BEGIN { RS="\001"; ORS="" }
+    {
+      s = $0
+      gsub(/\\\n/, " ", s)
+      out = ""
+      while ((i = index(s, "/*")) > 0) {
+        rest = substr(s, i + 2)
+        j = index(rest, "*/")
+        if (j == 0) { s = substr(s, 1, i - 1); break }
+        out = out substr(s, 1, i - 1)
+        s = substr(rest, j + 2)
+      }
+      s = out s
+      print s
+    }
+  ' "$1" | awk '
+    {
+      line = $0
+      n = length(line)
+      out = ""
+      inq = 0
+      for (k = 1; k <= n; k++) {
+        c = substr(line, k, 1)
+        if (c == "\"") { inq = !inq; out = out c; continue }
+        if (!inq && (c == "#" || c == ";")) { break }
+        out = out c
+      }
+      print out
+    }
+  '
+}
+
 if [ -f "$nsi" ]; then
-  code="$(grep -vE '^[[:space:]]*#' "$nsi")"
-  code_numbered="$(grep -nvE '^[[:space:]]*#' "$nsi")"
+  code="$(nsi_source "$nsi")"
+  code_numbered="$(nsi_source "$nsi" | grep -n '')"
 
   printf '%s\n' "$code" | grep -Eiq 'RMDir[[:space:]]*/r[[:space:]]*"?\$INSTDIR' \
     && err "nsi: found a recursive RMDir /r on \$INSTDIR (classic NSIS hazard)"
