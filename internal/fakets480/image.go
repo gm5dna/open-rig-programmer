@@ -26,8 +26,8 @@ var _ Image = DefaultImage
 // cross-field combination has ever been printed or observed. These are not
 // observed contents and not factory defaults. That composition is the design's
 // A27 and this package's register entry THE DEFAULT IMAGE'S RECORD
-// COMPOSITION; the family entries an image rides on are A1, A3, A4, A18b, A21
-// and A27, and PROVENANCE.md carries the whole statement with its citations.
+// COMPOSITION; the family entries an image rides on are A1, A3, A4, A24 and
+// A27, and PROVENANCE.md carries the whole statement with its citations.
 //
 // No byte here is invented, derived from another model, or padded to make a
 // test pass. TestDefaultImage_EveryByteIsAPrintedValue holds the four
