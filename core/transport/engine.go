@@ -769,11 +769,11 @@ func (e *Engine) Do(ctx context.Context, cmd Command, spec CommandSpec) ([]byte,
 		// next NoteSent. A gate refusal is a driver bug that fails
 		// closed either way; letting foreign code between the check and
 		// the write would be a defect in the safety mechanism itself.
-		// gatedWrite's closed recheck is a SECOND such refusal of the
-		// same noted frame, three lines below, and the reasoning
-		// transfers unchanged: the port is closed, so no echo can
-		// follow and the recorded expectation is about a frame that
-		// never arrives.
+		// On a FatalFramer engine, gatedWrite's closed recheck is a
+		// SECOND such refusal of the same noted frame, eight lines
+		// below, and the reasoning transfers unchanged: the port is
+		// closed, so no echo can follow and the recorded expectation
+		// is about a frame that never arrives.
 		e.framing.NoteSent(frame)
 		if !e.allow(frame) {
 			return nil, fmt.Errorf("%w: %s", ErrDisallowedCommand, cmd.String())
@@ -862,10 +862,12 @@ func (e *Engine) Do(ctx context.Context, cmd Command, spec CommandSpec) ([]byte,
 // framing that does not implement FatalFramer — catFraming, core/civ's,
 // every model registered before this hook — reaches writeFrame directly:
 // the same e.port.Write with the same error branch it had before, no lock
-// acquired, no e.closed reread, no change of timing. That is what makes
-// the additivity claim TRUE rather than merely small, and it is what two
-// pins hold it to. TestFatalFramer_AbsentWriteRacingCloseGoesOutAsBaseDid
-// is the discriminating one: a Do that has ALREADY lost the race with
+// acquired, no e.closed reread — the absent path executes base's
+// instructions unchanged, and a nil-field check is the whole addition
+// needed to reach them. That is what makes the additivity claim TRUE
+// rather than merely small, and it is what two pins hold it to.
+// TestFatalFramer_AbsentWriteRacingCloseGoesOutAsBaseDid is the
+// discriminating one: a Do that has ALREADY lost the race with
 // Engine.Close still transmits, and still returns base's error value.
 // TestFatalFramer_AbsentExchangeDoesNotQueueBehindTheFatalGate is its
 // liveness half: a goroutine holding fatalGate cannot delay such an
@@ -898,14 +900,16 @@ func (e *Engine) Do(ctx context.Context, cmd Command, spec CommandSpec) ([]byte,
 //
 //  1. Do takes e.mu and THEN fatalGate; readLoop takes fatalGate and NEVER
 //     e.mu. One direction, so no cycle.
-//  2. This function performs, under fatalGate, no channel operation, no
-//     nextEvent call, no wait on readLoop of any kind and no take of e.mu
-//     — one atomic load and Port.Write, plus, on failure, closePort. It
-//     may block ONLY on the Port's own Write or Close: closePort's
-//     sync.Once can wait on another goroutine already inside it, but that
-//     goroutine is running Port.Close, and the four callers that reach
-//     closePort that way — Engine.Close, readLoop's terminal path,
-//     handleReaderErr and drainToQuietLocked — none of them holds
+//  2. This function performs, under fatalGate, no channel receive and no
+//     channel send, no nextEvent call, no wait on readLoop of any kind and
+//     no take of e.mu — one atomic load and Port.Write, plus, on failure,
+//     closePort. The one channel operation it can reach, closePort's
+//     close(e.closeCh), cannot block, and that is why it does not threaten
+//     the clause. It may block ONLY on the Port's own Write or Close:
+//     closePort's sync.Once can wait on another goroutine already inside
+//     it, but that goroutine is running Port.Close, and the four callers
+//     that reach closePort that way — Engine.Close, readLoop's terminal
+//     path, handleReaderErr and drainToQuietLocked — none of them holds
 //     fatalGate. So the wait is bounded by the driver and cannot close a
 //     cycle.
 //

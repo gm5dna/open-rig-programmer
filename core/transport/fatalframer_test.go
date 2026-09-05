@@ -595,9 +595,13 @@ func TestFatalFramer_AbsentWriteRacingCloseGoesOutAsBaseDid(t *testing.T) {
 	if w := port.written(); len(w) != 1 || string(w[0]) != "RD?\n" {
 		t.Errorf("the port saw %d write(s) = %q, want exactly [%q] — a framing without FatalFramer must reach e.port.Write on base's path, taking no gate and making no closed recheck", len(w), w, "RD?\n")
 	}
-	// Assertion 2 — and the error value is base's.
-	if !errors.Is(err, ErrPortClosed) {
-		t.Errorf("Do error = %v, want ErrPortClosed — the close is reported from the read wait, as it was before the hook", err)
+	// Assertion 2 — and the error value is base's: the bare ErrPortClosed
+	// sentinel, since an explicit Engine.Close records no cause (see the
+	// same comparison in TestFatalFramer_OtherCloseFirst...'s wantCause-nil
+	// case). errors.Is would also pass a wrapped cause, which is not what
+	// this comment claims.
+	if err != ErrPortClosed {
+		t.Errorf("Do error = %v, want the bare ErrPortClosed sentinel — the close is reported from the read wait, as it was before the hook", err)
 	}
 }
 
