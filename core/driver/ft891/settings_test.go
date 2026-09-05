@@ -972,3 +972,68 @@ func TestCloneReadSettings_WalksTheWholeDescriptor(t *testing.T) {
 		}
 	}
 }
+
+// TestSession_ReadSetting_TimeoutIsTypedAndRetriedOnce pins the surface's
+// second refusal shape: a "?;" and a timeout are both typed, and this is the
+// timeout leg (review finding L3 — the "?;" leg is already pinned twice, by
+// TestSession_ReadSetting_ScriptedRoundTrips and TestParseEXResponse_Table).
+//
+// A radio that answers NOTHING is exSilent's shape (respondingport_test.go),
+// mtSilent's counterpart for this surface, and reaches ReadSetting through
+// the real transport.Engine rather than a hand-built error.
+//
+// TWO frames, not one: exSpec's RetryReads is 1 (an EX read is idempotent,
+// and this command's Read carries no MT-style contradiction — see exSpec's
+// own doc comment), so a timeout retransmits exactly once before it is
+// final. Pinning the count is what makes that 1 non-vacuous; a spec that
+// silently regressed to 0 (mtSpec's own value) would still satisfy every
+// other assertion here.
+func TestSession_ReadSetting_TimeoutIsTypedAndRetriedOnce(t *testing.T) {
+	p, sess := openSession(t, Simulated, slotImage{exSilent: map[string]bool{narrowSettingAddr: true}})
+
+	before := len(p.Transcript())
+	_, err := sess.ReadSetting(testCtx(t), narrowSettingAddr)
+	if err == nil {
+		t.Fatal("ReadSetting = nil error, want a timeout refusal: the scripted radio answered nothing at all")
+	}
+	if !errors.Is(err, transport.ErrTimeout) {
+		t.Errorf("errors.Is(err, transport.ErrTimeout) = false — the transport's own error must survive ReadSetting's wrap: got %v", err)
+	}
+
+	wantFrame := "EX" + narrowSettingAddr + ";"
+	if got, want := p.Transcript()[before:], []string{wantFrame, wantFrame}; !reflect.DeepEqual(got, want) {
+		t.Errorf("the timeout path sent %v, want exactly %v — TWO EX frames: the original plus exSpec's one retry (RetryReads: 1)", got, want)
+	}
+}
+
+// TestCloneReadSettings_ADriverTimeoutAbortsWithNilSnapshot pins the
+// snapshot-level outcome of a genuine ReadSetting failure — the other half
+// of review finding L3 the dispatch asked for ("the snapshot-level outcome
+// through clone.ReadSettings must be whatever core/clone does with a driver
+// error"), read out of core/clone/settings.go rather than guessed: on ANY
+// error other than a "?;" rejection, ReadSettings aborts the WHOLE call
+// (there is no partial snapshot on error — see its own doc comment), wraps
+// the failure as "clone: ReadSettings: setting %q: %w" naming the item ID,
+// and returns a nil *codeplug.MenuSnapshot.
+//
+// The silent address is narrowSettingAddr, 0101 — this descriptor's very
+// first item (TestSettingsDescriptor_ShapeFromTheInventory: the chart's own
+// first row) — so the walk aborts on its first iteration and this test costs
+// exactly one timed-out exchange, not a walk over all 159.
+func TestCloneReadSettings_ADriverTimeoutAbortsWithNilSnapshot(t *testing.T) {
+	_, sess := openSession(t, Simulated, slotImage{exSilent: map[string]bool{narrowSettingAddr: true}})
+
+	snap, err := clone.NewService(sess, clone.SnapshotStore{}).ReadSettings(testCtx(t))
+	if err == nil {
+		t.Fatal("clone.ReadSettings = nil error, want the driver's timeout to abort the whole call")
+	}
+	if snap != nil {
+		t.Errorf("clone.ReadSettings snapshot = %+v, want nil — core/clone's own rule is that a partial snapshot is only ever returned on success", snap)
+	}
+	if !errors.Is(err, transport.ErrTimeout) {
+		t.Errorf("errors.Is(err, transport.ErrTimeout) = false — core/clone's wrap must not swallow the transport's own sentinel: got %v", err)
+	}
+	if !strings.Contains(err.Error(), narrowSettingAddr) {
+		t.Errorf("error text %q does not name the failing item %q — core/clone/settings.go's wrap is \"clone: ReadSettings: setting %%q: %%w\"", err.Error(), narrowSettingAddr)
+	}
+}
