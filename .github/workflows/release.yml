@@ -389,7 +389,10 @@ jobs:
           # this job is the first to check, and its failure blocks
           # `release:` (via `needs:` below) — deliberately, per the
           # design's decision 5.
-          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]
+          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || {
+            echo "::error::tag ${VERSION} does not match ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?\$"
+            exit 1
+          }
           NUMERIC=${VERSION#v}
           NUMERIC=${NUMERIC%%-*}
           echo "NUMERIC=$NUMERIC" >> "$GITHUB_ENV"
