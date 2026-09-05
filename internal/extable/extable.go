@@ -123,7 +123,12 @@ func ParseCSV(p Profile, data []byte) ([]Row, error) {
 		// tokens — ParseObservedCSV's key and RenderGo's lookup — became
 		// %03d under Single at the FT-991A seam, and this one is named here
 		// so a later sweep can see it was considered rather than missed, and
-		// so nobody "fixes" it and moves a shipped refusal string.
+		// so nobody "fixes" it and moves a shipped refusal string. A FOURTH
+		// %02d address-key site exists outside this package —
+		// internal/extable/observe/main.go's isText map — and stays %02d
+		// deliberately too: that tool is hard-wired to FT710Profile() and
+		// can only ever see a Triple chart, so it is named at its own site
+		// rather than repeated here.
 		if seen[key] {
 			return nil, fmt.Errorf("extable: CSV data row %d: duplicate (P1,P2,P3) triple %02d/%02d/%02d", i+1, row.P1, row.P2, row.P3)
 		}

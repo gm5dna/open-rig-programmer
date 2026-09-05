@@ -531,7 +531,9 @@ func validMWWriteKindByte(b byte) bool {
 // menu number IS the whole address, so any other component names something
 // no frame can carry. The refusal names the offending index AND the address
 // as the frame would have carried it, through the same renderer, so a
-// hundred-and-fifty-row inventory does not have to be searched by hand.
+// three-digit chart's inventory does not have to be searched by hand: the
+// DOMAIN a Single form's bound must cover is 0..999, of which the FT-991A's
+// own chart populates 153 rows.
 func validateEXAddressForm(cfg DialectConfig) error {
 	switch cfg.EXAddressForm {
 	case EXAddressTriple:
