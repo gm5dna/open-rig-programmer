@@ -164,11 +164,12 @@ func TestFraming_NewAccumulatorHonoursMax(t *testing.T) {
 	}
 }
 
-// TestEnvelopeAllows_TheDocumentedEnvelope pins what T5's gate knows: the
-// ENVELOPE both books print, and nothing about which commands exist. T7
-// completes the gate with the eight grammars; until then this is the whole
-// of it, and it is written so that widening it later is an addition rather
-// than a rewrite.
+// TestEnvelopeAllows_TheDocumentedEnvelope pins what NewFraming's gate
+// knows: the ENVELOPE both books print, and nothing about which commands
+// exist. T7 built the eight-grammar gate as a second, narrower Allow on
+// layoutFraming (NewFramingFor) that sits in FRONT of this one rather than
+// replacing it, so this remains the whole of what envelopeAllows itself
+// checks.
 //
 // The three OUTBOUND-TOKEN rows record an outcome, not a mechanism: "?;",
 // "E;" and "O;" are two bytes each and are refused by the two-byte-opcode

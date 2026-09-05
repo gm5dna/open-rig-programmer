@@ -26,11 +26,17 @@ import (
 //     builders produce" cannot drift apart. Two copies of a field rule would
 //     be one edit from disagreeing, and the disagreement that matters is the
 //     one where the parser refuses a frame and the gate admits it.
-//   - AN ANSWER FRAME IS NEVER ADMITTED, however well formed. This package
-//     parses several inbound frames whose shape is a Set's exactly — MC's
-//     Answer is its Set's six bytes, EX's Answer is its Set's shape, and the
-//     50-byte MR answer is the MW Set's grid with a different prefix — and
-//     admitting one would let a captured reply be written back.
+//   - NO ANSWER FRAME IS ADMITTED EXCEPT WHERE A SET THIS CODEC BUILDS IS
+//     BYTE-IDENTICAL TO IT, and there are exactly two such cases, both
+//     unavoidable and both named where the check is made: "AI0;"
+//     (validAICommand) and an MC Set naming ORDINARY MEMORY, 000-099
+//     (validMCCommand), which are indistinguishable on the wire from the
+//     answers a radio sends for the same state (590:1333 against 590:1341).
+//     Every OTHER inbound shape that coincides with a Set stays refused —
+//     EX's Answer is its Set's shape, the 50-byte MR answer is the MW Set's
+//     grid with a different prefix, and an MC naming a section or extension
+//     channel is refused however well formed — because admitting one would
+//     let a captured reply be written back.
 //   - AN EMBEDDED ';' IS REFUSED even if a prefix matches: exactly one
 //     command must reach the wire per call, and a second terminator anywhere
 //     splits one frame into two on the radio's own parser.
@@ -42,15 +48,22 @@ import (
 //     slot), but "ID;", "AI;", "AI0;", "MC;" and every EX read consult no
 //     layout datum, and the Configured guard is what closes them.
 //
-// IT GATES FOR THE LAYOUT IT IS CALLED ON, AND FOR NO OTHER. Every check
-// below reads the receiver — its book, its slot space, its mode legend, its
-// byte-28/39-40/41 policies — so a frame legal on one Kenwood row is refused
-// by a layout describing another: a TS-480 MW whose P14 is an ST step index
-// is refused by a 590 row, a read of extension channel 110 is refused by the
-// TS-590S (A12), "FV;" is refused by the 480 and "TY;" by the 590 pair. A
-// gate that re-validated against a package-level datum would accept, on any
-// radio, whatever one radio accepts — a safety failure rather than merely a
-// correctness one.
+// IT GATES FOR THE LAYOUT IT IS CALLED ON, AND FOR NO OTHER — but not every
+// check below reads the receiver in the same way, and the three tiers are a
+// genuine property of the gate worth stating rather than an accident: MR,
+// MW and MC's Set half are PER-RADIO (slot space, mode legend, the four
+// byte-28/39-40/41 policies, P2 policy); FV and TY are PER-BOOK; ID, AI,
+// MC's read half and every EX read are PER-FAMILY — validEXRead in
+// particular admits "EX000;" through "EX255;" identically on all three
+// rows, because membership is the inventory's business (ex.go) and there is
+// nothing else in an EX read to vary. What is true on every tier, and is
+// the safety point this gate exists for, is that a frame legal on one
+// Kenwood row is refused by a layout describing another: a TS-480 MW whose
+// P14 is an ST step index is refused by a 590 row, a read of extension
+// channel 110 is refused by the TS-590S (A12), "FV;" is refused by the 480
+// and "TY;" by the 590 pair. A gate that re-validated against a
+// package-level datum would accept, on any radio, whatever one radio
+// accepts — a safety failure rather than merely a correctness one.
 //
 // THE ONE PLACE THE ADMITTED SET IS WIDER THAN THE BUILDER SET, and it is
 // deliberate: MC's own chart PRINTS both spellings of the hundreds digit,
@@ -163,13 +176,21 @@ func (l Layout) validTYCommand(frame []byte) bool {
 // validMCCommand admits the fixed "MC;" read, or a six-byte Set whose
 // channel this layout resolves to ORDINARY MEMORY.
 //
-// THE SEND-SIDE DOMAIN IS THE RIGHT ONE AND THE ONLY SAFE ONE. A six-byte MC
-// frame arriving here can only be a Set: an Answer is something the radio
-// sends, never something this programme writes, even though the two share a
-// wire shape exactly (590:1333 against 590:1341). Judging it by
-// ParseMCAnswer's wider domain instead would let a side-effecting recall of
-// a section-defined or extension channel be admitted by its own gate —
-// exactly what A16 (L-DEC-2) narrows the Set to prevent.
+// A16 (L-DEC-2) NARROWS THE SEND-SIDE DOMAIN TO ORDINARY MEMORY, and that is
+// the right domain to gate on — but it does not make this check able to
+// tell a Set from an Answer. "MC003;" is byte-identical to both a Set
+// naming channel 3 and the Answer a radio sitting on ordinary channel 3
+// sends (590:1333 against 590:1341, six bytes either way), and this is the
+// second of the gate's two disclosed answer-admissions (AllowedCommand's
+// doc comment above names both, beside "AI0;"): AN MC ANSWER NAMING
+// ORDINARY MEMORY IS ADMITTED, because it is what BuildMCSet emits.
+// A16 makes the admitted MC set a STRICT SUBSET of the wider answer domain
+// rather than a disjoint one — every MC answer naming a section-defined or
+// extension channel is refused here, because mcSendValid narrows to
+// ordinary memory, and that refusal is what A16 actually buys: judging this
+// frame by ParseMCAnswer's wider domain instead of mcSendValid's narrower
+// one would let a side-effecting recall of a section-defined or extension
+// channel be admitted by its own gate.
 //
 // It decodes through parseMCFields, the shape decoder both directions share,
 // and then applies mcSendValid, the same predicate BuildMCSet applies.
@@ -193,11 +214,20 @@ func (l Layout) validMCCommand(frame []byte) bool {
 // THE RE-ENCODE IS THE CHECK, and it buys two properties a field-by-field
 // comparison would not. It refuses the 50-byte MR ANSWER outright, since no
 // builder emits one. And it enforces M9 — P1 is derived from the SLOT'S
-// CLASS and never chosen freely (Slot.P1) — so "MR1007;", a read of ordinary
-// channel 007 with P1='1', is refused: that is A9's frame, "an MR with P1=1
-// on a SIMPLEX channel", which is unprinted on both radios and is not safe
-// to send blind. The section channel's own "MR1100;" is admitted, because
-// there P1='1' is the DOCUMENTED read of the end frequency (590:1449-1451).
+// CLASS and never chosen freely (Slot.P1) — so "MR1007;", a read of
+// ordinary memory channel 007 with P1='1', is refused. THE HONEST REASON IS
+// NARROWER THAN "SIMPLEX": P1=1 is the DOCUMENTED read of the transmit
+// frequency of a SPLIT channel (590:1444-1447, "0: RX frequency, 1: TX
+// frequency" 480:951) and "MR1007;" is exactly that printed read whenever
+// channel 007 happens to be split. What this gate cannot know — because a
+// Layout's SlotMemory class carries no split/simplex property — is which
+// kind of channel 007 is, so it refuses rather than guess. A9 records the
+// same refusal, worded "an MR with P1=1 on a SIMPLEX channel", which is
+// unprinted on both radios and is not safe to send blind; the frame that
+// wording names is a strict SUBSET of what this check actually refuses. The
+// section channel's own "MR1100;" is admitted, because there P1='1' is the
+// DOCUMENTED read of the end frequency (590:1449-1451) and section-defined
+// channels are never ordinary memory, so no such ambiguity arises.
 func (l Layout) validMRCommand(frame []byte) bool {
 	if len(frame) != MRReadLen {
 		return false

@@ -278,8 +278,12 @@ func looksLikeOnce(expr ast.Expr) bool {
 //     core/cat's own dialect implementations will keep calling one
 //     another via selectors (e.g. d.BuildMWSet(...)) forever, not just
 //     during Task 54's transitional package-level delegates.
-//     THE CARVE-OUT IS AN EXACT TWO-PACKAGE SET — core/cat and
-//     core/cat/dialecttest, nothing else — and NOT a prefix. It was
+//     THE CARVE-OUT IS AN EXACT PACKAGE SET, NAMED BY EXACT PATH — never a
+//     prefix — and it now holds FOUR packages in TWO families: core/cat and
+//     core/cat/dialecttest (the Yaesu/Icom family), core/kw and
+//     core/kw/kwtest (the Kenwood family, added at Kenwood pair 1 Stage 1
+//     T7, 05/09/2026 — see the WIDENED paragraph below the condition this
+//     comment describes). Nothing else is exempt in either tree. It was
 //     prefix-based (inTree) from M9b until M9c-4 task 1 NARROWED it, the
 //     first of that milestone's closures: a prefix exempts every future
 //     core/cat subpackage in advance, and M9c-4 introduces the first ones
@@ -295,10 +299,12 @@ func looksLikeOnce(expr ast.Expr) bool {
 //     conformance suite for core/cat's own API is core/cat's own tree, not
 //     a new write-path call site), and it was VERIFIED rather than assumed
 //     when BuildMTSetCombined was added: the fence stayed green, naming
-//     nothing in dialecttest. Any FUTURE core/cat subpackage that
-//     legitimately needs a builder must be ADDED HERE BY NAME with its
-//     reason — the same "nothing about this check is automatic" discipline
-//     the builder-name list carries below.
+//     nothing in dialecttest. Any FUTURE core/cat OR core/kw subpackage
+//     that legitimately needs a builder must be ADDED HERE BY NAME with its
+//     reason, in BOTH the condition below and this comment — the same
+//     "nothing about this check is automatic" discipline the builder-name
+//     list carries below, and the discipline the Kenwood widening's own
+//     "WIDENED at Kenwood pair 1" paragraph below follows.
 //     Amended at M9b: before the dialect seam these were package-level
 //     functions and an exact package-qualified check (sel.X an
 //     *ast.Ident naming the core/cat import) sufficed; the seam turns
@@ -422,7 +428,7 @@ func TestWritePathReachableOnlyThroughDriver(t *testing.T) {
 					sawDriverBuildMW = true
 					return true
 				}
-				t.Errorf("%s: references .%s — the Set-frame builders may be used only from core/cat, core/cat/dialecttest, core/kw, core/kw/kwtest (the two families' builder packages and their conformance suites) and core/driver/**; other core/cat and core/kw subpackages are NOT exempt, the carve-out having been narrowed from the core/cat prefix to those two packages at M9c-4 (composition-root discipline; see this test's doc comment)", pf.relPath, sel.Sel.Name)
+				t.Errorf("%s: references .%s — the Set-frame builders may be used only from core/cat, core/cat/dialecttest, core/kw, core/kw/kwtest (the two families' builder packages and their conformance suites) and core/driver/**; other core/cat and core/kw subpackages are NOT exempt, the carve-out having been narrowed from the core/cat prefix to those named packages at M9c-4 and widened by name to the Kenwood pair at Kenwood pair 1 Stage 1 T7 (composition-root discipline; see this test's doc comment)", pf.relPath, sel.Sel.Name)
 				return true
 			})
 		}

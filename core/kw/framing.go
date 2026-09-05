@@ -141,6 +141,15 @@ var (
 // perfectly non-nil interface carrying a perfectly non-nil Allow method, so
 // NewEngineWith's own nil check cannot see it. See ErrUnconfiguredBook for
 // why the book is a semantic rather than a nicety.
+//
+// THIS CONSTRUCTOR'S Allow IS THE ENVELOPE ALONE, never the eight grammars:
+// a book knows which document a session speaks (and so which cause sentence
+// an "O;" carries, E13) but not which RADIO, and the per-command gate is a
+// layout's. A framing built here therefore admits, among other things, the
+// 42-byte erase shape of 590:1579-1581 — a frame the book really prints and
+// this programme never builds. A DRIVER calls NewFramingFor(layout)
+// instead (allowlist.go); NewFraming exists for NewFramingFor to build on
+// and for the envelope's own tests and pins.
 func NewFraming(book Book) (transport.Framing, error) {
 	if !book.valid() {
 		return nil, fmt.Errorf("%w (got %v)", ErrUnconfiguredBook, book)
@@ -223,13 +232,19 @@ func (f framing) IsFatal(frame []byte) error {
 // Allow is the outbound write gate: the last defence before a physical
 // radio sees these bytes.
 //
-// AT THIS TASK IT IS THE ENVELOPE ALONE — the rules both books print about
-// what a frame LOOKS like — and it does not yet know which commands exist.
-// Task 7 completes it with the eight grammars this milestone builds (ID
-// read, AI read/set, FV read, TY read, MC read/set, MR read, MW set, EX
-// read) and their field-by-field re-validation. Until then the envelope is
-// what stands, and it is written so that T7's gate is an ADDITION in front
-// of it rather than a rewrite of it.
+// THIS METHOD IS THE ENVELOPE ALONE — the rules both books print about
+// what a frame LOOKS like — and it does not know which commands exist,
+// because a framing built by NewFraming knows the book and not the layout.
+// T7 built the eight-grammar gate (ID read, AI read/set, FV read, TY read,
+// MC read/set, MR read, MW set, EX read) and their field-by-field
+// re-validation as a SECOND, NARROWER Allow on layoutFraming
+// (allowlist.go's NewFramingFor), sitting in front of this one rather than
+// replacing it — layoutFraming.Allow calls both, and the conjunction is
+// free because the grammars are strictly narrower
+// (TestAllowedCommand_AdmitsOnlyFramesTheEnvelopeAlsoAdmits pins it). This
+// method is what a driver's gate falls back to only if it reaches for
+// NewFraming instead of NewFramingFor, which is why NewFraming's own doc
+// says not to.
 //
 // A zero framing admits nothing: it speaks for no document, and a gate that
 // admitted a frame on behalf of no radio is the one failure this whole file

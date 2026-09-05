@@ -218,6 +218,14 @@ func (l Layout) ParseFVAnswer(frame []byte) (string, error) {
 type TYAnswer struct {
 	// Reserved is P1's two bytes verbatim. It is a string rather than a
 	// name because nothing in the document gives it one.
+	//
+	// IT CAN CARRY 0x7F-0xFF (decision 4; TestParseTYAnswer_IsDecision4sGrammarExactly
+	// pins "\x7f\xff" admitted), and this type has no String() and gives
+	// no rendering obligation. A caller that %v-prints or logs a TYAnswer
+	// without %q-quoting Reserved puts a raw high byte in a log line or a
+	// GUI field. Nothing downstream of this package does that yet; a
+	// caller that renders Reserved for a human (a probe note, in
+	// particular) must %q-quote it.
 	Reserved string
 	// Variant is P2, one of '0'..'3' (480:1626-1629). The parser refuses
 	// any other byte, so a TYAnswer this package produced always carries
