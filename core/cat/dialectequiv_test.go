@@ -238,6 +238,29 @@ func assertDialectsBehaveIdentically(t *testing.T, label string, want, got Diale
 	if want.slots.mcSelects != got.slots.mcSelects {
 		t.Errorf("%s: MCSelects = %v, want %v", label, got.slots.mcSelects, want.slots.mcSelects)
 	}
+	// toneStates is NOT observable anywhere else in this function, and that
+	// is why it is here rather than left to the sweeps below: measured, a
+	// FT710.toneStates flipped to ToneStatesCTCSSAndDCS left this whole test
+	// green (adversarial review, finding MEDIUM-2). The modes loop, the EX
+	// inventory and the exhaustive classifySlot corpus are all blind to it,
+	// so the harness whose job is to stop the hand-built FT710 literal
+	// drifting from its transcribed config had a hole exactly where the
+	// FT-991A lane widened the struct.
+	if want.toneStates != got.toneStates {
+		t.Errorf("%s: ToneStates = %v, want %v", label, got.toneStates, want.toneStates)
+	}
+	// pmsForm and pmsNumericLo, by name, for the same belt-and-braces reason
+	// as mt.ReadSlots and mt.P11 below. pmsForm alone IS already visible
+	// through the classifySlot corpus — flipping it reddens twenty-odd
+	// classifySlot rows — but pmsNumericLo is not: under PMSFormToken V15
+	// forces it to 0 and nothing reads it, so a flipped value passed
+	// silently. An unread field today is a read field after the next axis.
+	if want.slots.pmsForm != got.slots.pmsForm {
+		t.Errorf("%s: PMSForm = %v, want %v", label, got.slots.pmsForm, want.slots.pmsForm)
+	}
+	if want.slots.pmsNumericLo != got.slots.pmsNumericLo {
+		t.Errorf("%s: PMSNumericLo = %d, want %d", label, got.slots.pmsNumericLo, want.slots.pmsNumericLo)
+	}
 	// mt.ReadSlots and mt.P11 are already covered by the whole-struct
 	// want.mt != got.mt check above; asserted again here, by name, so a
 	// reader of this list does not have to know that to see the axis is
