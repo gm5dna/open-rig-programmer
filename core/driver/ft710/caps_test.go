@@ -426,3 +426,42 @@ func TestModes_MatchCatModeNames(t *testing.T) {
 		t.Errorf("modeByName has %d entries, caps.Modes has %d — the two must cover the same set", len(modeByName), len(caps.Modes))
 	}
 }
+
+// TestCapabilities_ClarifierDerivesFromDialect is the write-gate sweep's
+// item (h), the FT-891's C-H2 applied to this driver: a bound must be
+// CONSULTED from the same place as its datum. Before this fix caps.go
+// carried its own literal 9990/10, a second transcription of the values
+// write.go's builder already reads through the dialect's Clarifier() — two
+// places able to drift silently if either were ever edited alone.
+//
+// WHAT THIS PIN CAN AND CANNOT SEE: it asserts that caps carry the dialect's
+// CURRENT ClarifierPolicy values. A literal in caps.go that happened to equal
+// 9990/10 would pass it too — no value comparison can tell a literal from a
+// consultation. What it adds over the bare "== 9990" the shape tests make is
+// DIRECTION: if the dialect's entry is ever lifted or corrected, this test
+// fails until caps follow it, where a bare check would keep asserting the
+// stale number. The red-proof (caps.go hard-coded to 9999) fails both, which
+// is fine — they guard different things.
+//
+// THE VALUES DO NOT CHANGE, only their source, so no capability VALUE moves
+// and no golden or byte-identity artefact does either.
+func TestCapabilities_ClarifierDerivesFromDialect(t *testing.T) {
+	want := catDialect.Clarifier()
+	for _, tt := range []struct {
+		name string
+		caps spec.Capabilities
+	}{
+		{"Unverified", CapabilitiesUnverified()},
+		{"Simulated", CapabilitiesSimulated()},
+		{"RealHardware", CapabilitiesRealHardware()},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.caps.ClarMaxHz != want.MaxAbsHz {
+				t.Errorf("ClarMaxHz = %d, want catDialect.Clarifier().MaxAbsHz = %d — the bound must be CONSULTED from the dialect, not a second literal that can drift from it", tt.caps.ClarMaxHz, want.MaxAbsHz)
+			}
+			if tt.caps.ClarStepHz != want.StepHz {
+				t.Errorf("ClarStepHz = %d, want catDialect.Clarifier().StepHz = %d — the bound must be CONSULTED from the dialect, not a second literal that can drift from it", tt.caps.ClarStepHz, want.StepHz)
+			}
+		})
+	}
+}
