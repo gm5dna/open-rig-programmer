@@ -53,6 +53,15 @@ func New(opts ...Option) *Radio {
 		// (core/cat/ft991a/doc.go's register entry `SlotSpace.NoneWire =
 		// "000"`), cited not re-derived — it appears in no FT-991A slot
 		// legend.
+		//
+		// This opening answer ("MC000;") is a frame core/cat's ParseMCAnswer
+		// deliberately REJECTS (its mcParseValid ASSUMED rejection of "000"),
+		// the same as internal/fakeradio's and internal/fakeft891's own
+		// opening answers. That is fleet-wide posture, not a bug in this
+		// fake: the FT-710's driver already turns that parse failure into
+		// ErrMCSnapshotUnavailable (core/driver/ft710/mc.go) rather than
+		// guessing, and this milestone's plan has any FT-991A analogue do
+		// the same — skip the restore, never invent a recall target.
 		currentChannel: slotNoneWire,
 		// OFF at construction: New models a freshly-powered radio, and this
 		// radio's own manual says what that state is — "This parameter is set

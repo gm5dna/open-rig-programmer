@@ -131,11 +131,12 @@
 // "MW" prefix (1036-1051) — and this fake does not implement it, so an MW frame
 // answers "?;". That is a MODELLING GAP, KNOWN-DIVERGENT from the documented
 // grammar, and it is not a claim that this radio lacks the command. It is out
-// of scope by this milestone's plan: core/driver/ft991a's write path is
-// MT-only (one combined Set carries the field block and the tag, where MW could
-// carry neither the tag nor the P11 position), the dialect's own MW coverage is
-// its golden vectors and its conformance tests in core/cat/ft991a, and no layer
-// above this fake sends one. internal/fakedx10 models MW for a radio-fidelity
+// of scope by this milestone's plan, which has core/driver/ft991a's write
+// path as MT-only (one combined Set carries the field block and the tag,
+// where MW could carry neither the tag nor the P11 position); the dialect's
+// own MW coverage is its golden vectors and its conformance tests in
+// core/cat/ft991a, and no layer above this fake sends one. internal/fakedx10
+// models MW for a radio-fidelity
 // reason this note declines, and its handler is the template if a later task
 // wants one here.
 //
@@ -185,7 +186,7 @@
 //
 // ASSUMPTIONS THAT BELONG TO THE DIALECT are CITED here where this fake depends
 // on them and NEVER RE-REGISTERED. core/cat/ft991a/doc.go's register carries
-// ELEVEN, and this package depends on FIVE of them: "MTPolicy.TagFill = ' '"
+// ELEVEN, and this package depends on EIGHT of them: "MTPolicy.TagFill = ' '"
 // (parser.go's tagFill), "THE COMBINED MT ANSWER'S EXACT LENGTH, 41"
 // (buildMTAnswer), `SlotSpace.NoneWire = "000"` (slotNoneWire),
 // "THE cat.ModeUnset MEMBER OF THE MODE TABLE" (validModeWireByte),
@@ -376,10 +377,10 @@
 //     The two must not be read as one absence.
 //     WHAT RESTS ON IT: core/transport.Engine's drain-to-quiet discipline is
 //     exercised against internal/fakeradio, whose AI-flood behaviour is the
-//     FT-710's OWN observed one, and NOT against this fake. So no FT-991A test
-//     in this repository exercises the engine against a talking radio, and none
-//     may claim to: every FT-991A exchange in every suite is one frame in, at
-//     most one frame out.
+//     FT-710's OWN observed one, and NOT against this fake. By this
+//     milestone's plan, no FT-991A test exercises the engine against a
+//     talking radio, and none may claim to: every FT-991A exchange in every
+//     suite here is one frame in, at most one frame out.
 //     STAGE R LIFTS IT WITH: one session on a real FT-991A with AI set to 1 and
 //     the port then watched — idle, and while the front panel is operated (VFO
 //     turned, mode changed, memory recalled). Whatever that radio pushes, and

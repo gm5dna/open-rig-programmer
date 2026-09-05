@@ -97,6 +97,12 @@ func mustReadFrame(t *testing.T, r io.Reader) string {
 // DIALECT's assumption, cited by name: "THE ACKNOWLEDGEMENT CONVENTIONS"
 // (core/cat/ft991a/doc.go's register), which records that this manual "never
 // says whether an accepted Set answers at all".
+//
+// The 150 ms window is inherited verbatim from internal/fakeft891's own
+// convention and is this suite's whole -race time budget: every rejection
+// this package pins pays it once, so a task adding more assertRejected cases
+// (an EX suite, say) adds 150 ms each. Worth knowing before it does; not a
+// reason to shrink the window now.
 func assertNoReply(t *testing.T, r io.Reader) {
 	t.Helper()
 	frame, _, timedOut := readOneFrame(t, r, 150*time.Millisecond)

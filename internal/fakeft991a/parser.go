@@ -318,9 +318,11 @@ func validClarMagDigits(s string) bool {
 // the frame terminator, so a tag carrying one would make command injection
 // possible. (The reassembler splits on ';' before a frame ever reaches here,
 // which means that half of the check is unreachable through Port() — it is
-// kept because unreachable-today is not a security property, and
-// buildMTAnswer's field is written from stored state that WithSlot can set
-// directly.)
+// kept because unreachable-today is not a security property, full stop.
+// Separately: WithSlot's Tag is stored verbatim with no validation of its
+// own (see WithSlot's doc), so a caller can still make buildMTAnswer emit a
+// ';' mid-frame — that is the caller's own crafted frame, not one this check
+// is meant to guard.)
 func validTagField(field []byte) bool {
 	for _, b := range field {
 		if b < 0x20 || b == ';' {
@@ -631,9 +633,9 @@ func (r *Radio) handleMT(body []byte) []byte {
 		r.mu.Unlock()
 		if !ok {
 			// Empty slot — ASSUMED, doc.go's register entry EMPTY-SLOT
-			// ANSWERS. This is the ONE "?;" core/driver/ft991a interprets, and
-			// it is the only frame that driver sends which could draw one from
-			// a slot.
+			// ANSWERS. This milestone's plan has core/driver/ft991a treat
+			// this as the ONE "?;" it interprets, and the only frame that
+			// driver sends which could draw one from a slot.
 			return rejection
 		}
 		return buildMTAnswer(slot, s)
