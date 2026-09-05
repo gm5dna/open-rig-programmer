@@ -73,6 +73,26 @@ func TestV15_PMSFormRefusals(t *testing.T) {
 		{"numeric base with no form declared", func(c *DialectConfig) {
 			c.Slots.PMSPairs, c.Slots.PMSForm, c.Slots.PMSNumericLo = 0, PMSSlotForm(0), 100
 		}, "PMSNumericLo"},
+		// An UNDECLARED MEMBER is refused unconditionally, which is the rule
+		// V14 (validateMemoryP5) and V16 (validateToneStates) already apply
+		// to their own enums. Only PMSSlotForm(0) — "no form declared" — can
+		// be legitimate, and only for a dialect with no PMS pairs; a value
+		// that is no member of the type at all is a transcription error
+		// wherever it appears, and the pair count does not change that. The
+		// adversarial review measured PMSSlotForm(7) with no pairs being
+		// ACCEPTED (finding L1).
+		{"an undeclared form value with no pairs", func(c *DialectConfig) {
+			c.Slots.PMSPairs, c.Slots.PMSForm = 0, PMSSlotForm(7)
+		}, "not a declared member"},
+		{"an undeclared form value with pairs", func(c *DialectConfig) {
+			c.Slots.PMSForm = PMSSlotForm(7)
+		}, "not a declared member"},
+		// The numeric arm's own dead configuration, refused by the same
+		// sentence the default arm has always used for the identical shape
+		// (finding L1, second half): a base with nothing to number.
+		{"numeric with a base and no pairs", func(c *DialectConfig) {
+			c.Slots.PMSPairs, c.Slots.PMSForm, c.Slots.PMSNumericLo = 0, PMSFormNumeric, 100
+		}, "nothing to number"},
 		{"numeric range overlapping memory", func(c *DialectConfig) {
 			c.Slots.PMSForm, c.Slots.PMSNumericLo = PMSFormNumeric, 90
 		}, "overlaps PMS numeric range"},
@@ -148,6 +168,32 @@ func TestV3_PairBoundIsFormAware(t *testing.T) {
 	}
 	if want := "the wire form's pair number is a single ASCII digit"; !strings.Contains(err.Error(), want) {
 		t.Errorf("V3's token sentence is %q, want it to contain %q verbatim", err, want)
+	}
+
+	// V3's NEGATIVE branch. This lane split it out of the ceiling clause so
+	// that the ceiling's sentence could become form-aware whilst staying
+	// verbatim; the new sentence is a shipped refusal string that nothing
+	// pinned beyond a substring check for "PMSPairs" (finding L2), and it
+	// reaches no golden, so it is pinned here instead. It holds under BOTH
+	// forms, because no form can build a negative pair.
+	for _, tc := range []struct {
+		name string
+		form PMSSlotForm
+		lo   int
+	}{
+		{"token", PMSFormToken, 0},
+		{"numeric", PMSFormNumeric, 100},
+	} {
+		neg := pmsFormBaseConfig()
+		neg.Slots.PMSPairs = -1
+		neg.Slots.PMSForm, neg.Slots.PMSNumericLo = tc.form, tc.lo
+		_, err := NewDialect(neg)
+		if err == nil {
+			t.Fatalf("NewDialect accepted PMSPairs -1 under %s", tc.name)
+		}
+		if want := "cat: Slots.PMSPairs is -1, want >= 0 — a negative pair count describes no slot either form could build"; err.Error() != want {
+			t.Errorf("V3's negative sentence under %s is %q, want %q byte for byte", tc.name, err, want)
+		}
 	}
 
 	numericTwelve := pmsFormBaseConfig()

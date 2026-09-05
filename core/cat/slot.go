@@ -108,8 +108,16 @@ func (d Dialect) ParseSlot(wire string) (Slot, error) {
 // 1..99, i.e. M-01…M-99; reference: "001-099 | Memory channels
 // M-01…M-99".
 func (d Dialect) MemorySlot(n int) (Slot, error) {
+	// The bound NAMES THIS DIALECT'S OWN RANGE, for the reason PMSSlot's
+	// does four lines below: a bound is consulted from the same place as its
+	// datum. The sentence used to be the literal "1-99", which is the
+	// FT-710's range and was already false for peerDialect's 100-200 — a
+	// refusal telling a reader to try a channel this radio does not have
+	// (adversarial review, finding L3). On 1..99 it is byte-identical to the
+	// frozen spelling, which TestMemorySlot_RangeTextNamesItsOwnDialect pins
+	// alongside the derived one.
 	if n < d.slots.memoryLo || n > d.slots.memoryHi || d.slots.memoryHi == 0 {
-		return Slot{}, newParseError([]byte(fmt.Sprintf("MemorySlot(%d)", n)), "memory channel out of range 1-99")
+		return Slot{}, newParseError([]byte(fmt.Sprintf("MemorySlot(%d)", n)), fmt.Sprintf("memory channel out of range %d-%d", d.slots.memoryLo, d.slots.memoryHi))
 	}
 	return Slot{wire: fmt.Sprintf("%03d", n), kind: slotKindMemory}, nil
 }
