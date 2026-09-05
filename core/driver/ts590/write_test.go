@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
@@ -260,7 +261,9 @@ func TestRequestedFields_MembershipAndOrder(t *testing.T) {
 // TestRequestedFields_TheEightTheRecordAlwaysCarries pins which fields a
 // write requests UNCONDITIONALLY, and it is the frame's own shape: the
 // 50-byte record has a position for each of them on every write, with no
-// "leave it alone" encoding anywhere in the grid (590:1539-1577).
+// "leave it alone" encoding anywhere in the grid (590:1518-1538, the
+// positional grid; 590:1539-1577 is the parameter definitions that follow
+// it).
 //
 // The other eighteen are requested only when the channel actually carries a
 // value for them, so an ordinary write is not refused by the capability gate
@@ -392,7 +395,8 @@ func TestWriteChannel_OneMWReportedSentNeverConfirmed(t *testing.T) {
 // data loss decision 11 exists to prevent — and it would pass every other
 // assertion in this file.
 func TestWriteChannel_TheFiftyByteFrameIsHandDerived(t *testing.T) {
-	// Positions, 1-indexed as the book prints them (590:1539-1577):
+	// Positions, 1-indexed as the book prints them (590:1518-1538; the
+	// parameter definitions that follow are at 590:1539-1577):
 	// 1-2 "MW" | 3 P1 | 4 P2 | 5-6 P3 | 7-17 P4, 11 digits | 18 P5 | 19 P6
 	// 20 P7 | 21-22 P8 | 23-24 P9 | 25-27 P10 "000" | 28 P11 | 29 P12 "0"
 	// 30-38 P13 "000000000" | 39-40 P14 | 41 P15 | 42-49 P16 | 50 ";"
@@ -625,5 +629,77 @@ func TestWriteChannel_AFrequencyWiderThanTheFieldIsRefusedByTheCodec(t *testing.
 	got := p2.Transcript()
 	if frame := got[len(got)-1]; frame[6:17] != "00000000001" {
 		t.Errorf("P4 = %q, want the 11-digit encoding of 1 Hz", frame[6:17])
+	}
+}
+
+// TestWriteChannel_IsAtomicUnderOpMu is MEDIUM-1's fix (Opus review, T12 fix
+// round 1): the read path has its own deterministic negative pin
+// (read_test.go's TestReadChannel_IsAtomicUnderOpMu), and the WRITE path
+// reused none of it — deleting the two opMu lines from WriteChannel left the
+// whole 103-second package green.
+//
+// THE HOOK IS read.go's readChannelGapHook, REUSED RATHER THAN DUPLICATED: it
+// parks a ReadChannel deterministically inside opMu (already held, before any
+// frame is built), which is what makes a WriteChannel racing it against
+// scheduling alone near-impossible to reproduce otherwise. While the read is
+// parked, WriteChannel must not so much as build its frame — the mutex is
+// P13/P14's WHOLE-OPERATION guarantee, on the one operation that changes the
+// radio.
+//
+// RED PROOF, observed: with the two opMu lines removed from WriteChannel, the
+// MW leaves within microseconds of the parked ReadChannel and this test fails
+// at "WriteChannel returned while a ReadChannel held opMu".
+func TestWriteChannel_IsAtomicUnderOpMu(t *testing.T) {
+	const id = "001"
+	sess, p := openWriteSession(t, RowSG, Simulated, writeImage{
+		radioImage: radioImage{mrAnswers: map[string]string{mrAddr(id): populatedMR(id)}},
+	})
+
+	entered := make(chan struct{}, 1)
+	release := make(chan struct{})
+	readChannelGapHook = func() {
+		entered <- struct{}{}
+		<-release
+	}
+	t.Cleanup(func() { readChannelGapHook = nil })
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if _, err := sess.ReadChannel(context.Background(), id); err != nil {
+			t.Errorf("parked ReadChannel: %v", err)
+		}
+	}()
+	<-entered // the read is inside opMu and parked
+
+	writeDone := make(chan struct{})
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if _, err := sess.WriteChannel(context.Background(), writableChannel(RowSG, "042")); err != nil {
+			t.Errorf("WriteChannel: %v", err)
+		}
+		close(writeDone)
+	}()
+
+	select {
+	case <-writeDone:
+		t.Fatal("WriteChannel returned while a ReadChannel held opMu")
+	case <-time.After(250 * time.Millisecond):
+	}
+	if got := p.Transcript(); len(got) != len(probeFrames) {
+		t.Errorf("transcript while the read is parked inside opMu = %v, want the probe's three frames alone", got)
+	}
+
+	close(release)
+	wg.Wait()
+
+	got := p.Transcript()
+	if len(got) != len(probeFrames)+2 {
+		t.Fatalf("transcript = %v, want the probe, one MR and one MW", got)
+	}
+	if !strings.HasPrefix(got[len(probeFrames)], "MR") || !strings.HasPrefix(got[len(probeFrames)+1], "MW") {
+		t.Errorf("transcript = %v, want the parked ReadChannel's MR before the released WriteChannel's MW", got)
 	}
 }

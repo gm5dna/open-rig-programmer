@@ -57,6 +57,41 @@ func TestAllSpecFields_IsTwentySeven(t *testing.T) {
 	}
 }
 
+// TestAllSpecFields_MatchesTheAuditedAndUnexpressedFields is LOW-2's fix
+// (Opus review, T12 fix round 1): the test above pins only a COUNT and no
+// duplicates, both of which survive a fleet field addition landing in the
+// wrong list — a new spec.Field added to unexpressedFields alone would leave
+// requestedFieldRules (which is anchored to allSpecFields, not to
+// spec.AllFields) silently ungated, the exact C-M1 class of loss the
+// capability gate exists to close.
+//
+// ANCHORED WITHOUT NAMING spec.AllFields HERE (P5: no Kenwood file names it):
+// TestFieldAudit_CoversEverySpecField already proves, via
+// drivertest.AssertFieldAuditCoversEverySpecField, that auditedFields(row)
+// and unexpressedFields(row) partition spec.AllFields() exactly, for both
+// rows. Pinning allSpecFields against THAT union anchors it, transitively,
+// to the real field list.
+func TestAllSpecFields_MatchesTheAuditedAndUnexpressedFields(t *testing.T) {
+	for _, row := range bothRows {
+		want := map[spec.Field]bool{}
+		for _, f := range auditedFields(row) {
+			want[f] = true
+		}
+		for f := range unexpressedFields(row) {
+			want[f] = true
+		}
+		for _, f := range allSpecFields {
+			if !want[f] {
+				t.Errorf("%s: allSpecFields names %s, which is neither audited nor unexpressed", modelNameFor(row), f)
+			}
+			delete(want, f)
+		}
+		for f := range want {
+			t.Errorf("%s: audited/unexpressed names %s, which allSpecFields does not", modelNameFor(row), f)
+		}
+	}
+}
+
 // TestCapabilities_ValidateOnEveryRowAndProfile is the floor: a capability
 // set that does not validate cannot be registered at all.
 func TestCapabilities_ValidateOnEveryRowAndProfile(t *testing.T) {
