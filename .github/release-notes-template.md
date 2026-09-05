@@ -127,6 +127,17 @@
   README.md's Windows paragraph already states, now stated here too so
   a reader who only sees the release page (where the asset choice is
   actually made) gets it as well.
+
+  SYNC 05/09/2026, POST-LEG (Tier 0 P2, Windows packaging): the
+  evidence section's Windows bullet is trued from the ARM64 VM
+  verification session that ran the same day (docs/hardware-notes.md's
+  "Windows (ARM64 VM) session — 05/09/2026") — installed and
+  launch-tested with a real FT-710 attached, the Silicon Labs CP210x
+  driver installed by hand (Windows Update supplied nothing on ARM64),
+  two writes made and the radio restored byte-identical. amd64 stays as
+  the PRE-LEG sentence had it: built and CLI-run in CI only, no amd64
+  Windows machine tried. No other evidence sentence, row of the
+  per-model support table, or model count changed with this sync.
 -->
 
 Open Rig Programmer __VERSION__ — an open-source, cross-platform
@@ -345,21 +356,27 @@ opens normally.
 ## Windows: first launch
 
 The installer is unsigned (no code-signing certificate this
-milestone), so expect Windows SmartScreen to show "Windows protected
-your PC" the first time you run it — this has not been tried yet by
-this project. If it appears, click **More info**, then **Run anyway**.
-Windows Defender may also flag or scan the download; if it quarantines
-the file, restore it from Defender's Protection History — nothing here
-has been reported as malicious, this project simply has no publisher
-reputation with Microsoft yet.
+milestone). Edge's Downloads pane flags the download itself as "isn't
+commonly downloaded" before you open it, then Windows SmartScreen
+shows "Windows protected your PC" the first time you run it —
+confirmed on a Windows 11 ARM64 VM, 05/09/2026, register entry **W9,
+LIFTED** (see `docs/windows-setup.md`). If it appears, click **More
+info**, then **Run anyway**. Windows Defender did not quarantine or
+block either the installer or the CLI on that session, register entry
+**W10, LIFTED**; if a future build is ever flagged, restore it from
+Defender's Protection History — nothing here has been reported as
+malicious, this project simply has no publisher reputation with
+Microsoft yet.
 
-The GUI needs Microsoft's WebView2 runtime, which Windows 11 is
-expected to already ship with. If it is missing (older Windows 10
-builds, or a stripped-down image), the installer is configured to
-download and install it for you during setup, in the Wails template's
-default mode — that step would need an internet connection, the rest
-of the installer does not — but this bootstrapping path has not been
-tried yet by this project.
+The GUI needs Microsoft's WebView2 runtime. On the Windows 11 ARM64 VM
+that ran the 05/09/2026 session, the Evergreen runtime (version
+152.0.4191.62) was already present, so the installer's bootstrapper
+had nothing to install — confirmed, register entry **W8, LIFTED**. If
+it is missing (older Windows 10 builds, or a stripped-down image), the
+installer is configured to download and install it for you during
+setup, in the Wails template's default mode — that step would need an
+internet connection, the rest of the installer does not — but this
+download path itself has not been tried yet by this project.
 
 ## Linux: serial port access
 
@@ -464,9 +481,16 @@ What this release has **not** been exercised against:
   empty slot at all: the record's Select-group setting has no honest
   default to write, so the write path refuses rather than inventing one —
   the same refusal the IC-7300s make, for the same reason.
-- **Windows.** The installers and CLI zips are built by the release
-  pipeline on a Windows x64 host and checked there; no person has yet
-  installed them and no radio has been connected on Windows.
+- **Windows.** Installed and launch-tested on a Windows 11 ARM64 virtual
+  machine with a real FT-710 attached (05/09/2026): Windows Update
+  supplied no CP210x driver on ARM64, so the Silicon Labs CP210x
+  Universal Windows Driver was installed by hand; SmartScreen and
+  WebView2 behaved as documented; two writes were made from the GUI and
+  the CLI and the radio was read back byte-identical to its pre-session
+  state afterwards. **amd64 is built and its CLI run in CI only** — no
+  amd64 Windows machine, physical or virtual, has run this project's
+  code, and no physical Windows machine of either architecture has been
+  tried.
 
 Anything the project has not observed is labelled as such in the code
 and documentation rather than assumed. Reports from real hardware —

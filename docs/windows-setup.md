@@ -7,9 +7,9 @@ This document covers the things a Windows user needs to know before
 to expect from an unsigned installer. See `README.md`'s "Install" and
 "First use" sections for where this fits into the overall
 install/connect flow, and `docs/hardware-notes.md` for the hardware
-facts this project has actually confirmed (macOS only, so far — see
-"Status" below; nothing on this page has itself been tried on a
-Windows machine yet).
+facts this project has actually confirmed — macOS, and, since
+05/09/2026, a Windows 11 ARM64 VM with a real FT-710 attached (see
+"Status" below for exactly what that session did and did not settle).
 
 ## 1. Driver
 
@@ -27,12 +27,25 @@ project to confirm it, and W2 says explicitly that it cannot be lifted
 this milestone. If Windows Update does not find it, or you are offline,
 Silicon Labs publish the driver directly.
 
-On Windows 11 on ARM64 (the platform this milestone's verification
-session targets), whether Windows binds a working CP210x driver at all
-is itself unconfirmed — **ASSUMED, register entry W1** — and Silicon
-Labs' own driver page says nothing about ARM64 support one way or the
-other. See "Status" below for what the planned verification session is
-expected to settle.
+On Windows 11 on ARM64, Windows has **no in-box CP210x driver**, and
+Windows Update did not supply one either, in the roughly three minutes
+this project waited for it before installing by hand — **register
+entry W1, LIFTED (qualified)**: confirmed on a real Windows 11 ARM64 VM
+with a real FT-710 attached, 05/09/2026 (`docs/hardware-notes.md`'s
+"Windows (ARM64 VM) session — 05/09/2026", "Driver"). What works is
+Silicon Labs' **"CP210x Universal Windows Driver" package, version
+11.6.0.420** (`DriverVer 08/14/2026`): although that package's own
+release notes list only x64/x86 support, its zip in fact ships an
+`arm64\silabser.sys` driver and an INF section covering the CP2105's
+two interfaces. The zip is **INF-only — it has no setup/installer
+executable**. Either extract it and, in Device Manager, select the
+"Enhanced Com Port" device (the one in the `CM_PROB_FAILED_INSTALL`
+error state) → **Update driver** → **Browse my computer for drivers**
+→ point it at the extracted folder; or, from an admin PowerShell, run
+`pnputil /add-driver silabser.inf /install` — this is what the
+verification session did, and it bound both COM ports in one step.
+**Do not wait for Windows Update to find a driver on ARM64 — install
+the Silicon Labs package directly.**
 
 ## 2. Two COM ports
 
@@ -41,22 +54,28 @@ interfaces from one physical adapter. Device Manager, under "Ports (COM
 & LPT)", will show two devices, each with its own `COMn` number. On
 macOS, only one of the two ("Enhanced") is CAT-capable at all; the
 other ("Standard") fails to configure (see `docs/hardware-notes.md`'s
-"Port mapping" section). On Windows, both are expected to enumerate as
-ordinary COM ports, with exactly one answering the FT-710's `ID;`
-identity query and the other either silent or failing to open —
-**ASSUMED, register entry W3**; this has not been confirmed on
-Windows, only inferred from the macOS behaviour.
+"Port mapping" section). On Windows, both enumerate as ordinary COM
+ports, and exactly one answers the FT-710's `ID;` identity query — the
+other fails to open outright rather than staying silent — **confirmed,
+register entry W3, LIFTED** (`docs/hardware-notes.md`'s "Windows (ARM64
+VM) session — 05/09/2026", "Port mapping": COM3 answered, COM4 failed
+with "Invalid serial port").
 
-`rigprog ports` lists candidate ports and scores each one, but on
-Windows the scoring most likely ranks both ports **equally** rather
-than picking the Enhanced port out — **ASSUMED, register entry W4**:
-the driver's per-port friendly name is overwritten by a device-level
-string shared by both UARTs before `rigprog`'s ranking logic ever sees
-it, so the two ports tie. **No document in this project claims the
-Enhanced port ranks first on Windows.** Use `rigprog probe --port
-COMn` against each listed port in turn — that is the authoritative,
-active check (it sends the FT-710's CAT identity query and only the
-CAT-capable port answers), not the port's ranking or its number:
+`rigprog ports` lists candidate ports and scores each one; on Windows
+the scoring ranks both ports **equally**, tied at 50, rather than
+picking the Enhanced port out — **confirmed, register entry W4,
+LIFTED**: the driver's per-port friendly name is overwritten by a
+device-level string shared by both UARTs before `rigprog`'s ranking
+logic ever sees it, so the two ports tie with the identical description
+"CP2105 Dual USB to UART Bridge Controller". The same tie was observed
+on macOS the same session (`docs/hardware-notes.md`'s "fleet note" in
+that section): **this scoring rule has now been checked on both
+platforms and fires on neither.** **No document in this project claims
+the Enhanced port ranks first on Windows, or on any platform.** Use
+`rigprog probe --port COMn` against each listed port in turn — that is
+the authoritative, active check (it sends the FT-710's CAT identity
+query and only the CAT-capable port answers), not the port's ranking or
+its number:
 
 ```sh
 rigprog ports
@@ -67,19 +86,18 @@ rigprog probe --port COM4
 ## 3. SmartScreen and Defender
 
 The installer and the GUI are not code-signed this milestone —
-running the downloaded installer for the first time is expected to
-show Windows SmartScreen's "Windows protected your PC" dialogue. Click
-**More info**, then **Run anyway** to proceed; this is the same
+running the downloaded installer for the first time shows Windows
+SmartScreen's "Windows protected your PC" dialogue. Click **More
+info**, then **Run anyway** to proceed; this is the same
 unknown-publisher warning every unsigned Windows program shows, not
-something specific to this project. Whether
-that dialogue actually appears, and in what form, is recorded as
-**ASSUMED, register entry W9** until the verification session observes
-it.
+something specific to this project. **Confirmed, register entry W9,
+LIFTED**: observed exactly as described, on the Edge-downloaded
+installer on the Windows 11 ARM64 VM, 05/09/2026
+(`docs/hardware-notes.md`'s "Windows (ARM64 VM) session — 05/09/2026").
 
-Windows Defender may also scan the download; it is expected not to
-quarantine it (**ASSUMED, register entry W10**) since the binaries are
-built by a public GitHub Actions pipeline from this project's own
-source, but that has likewise not yet been observed on real Windows.
+Windows Defender may also scan the download; it did not quarantine or
+block any binary this project ran that session — **confirmed, register
+entry W10, LIFTED**.
 
 ## 4. Where things live
 
@@ -98,8 +116,24 @@ work around it.
 
 The GUI needs Microsoft's WebView2 runtime — Windows 11 is expected to
 already ship it; if it is missing, the installer is configured to
-download it, which needs an internet connection — **ASSUMED, register
-entry W8**; not yet tried by this project.
+download it, which needs an internet connection. **Confirmed, register
+entry W8, LIFTED**: the Windows 11 ARM64 VM already had the WebView2
+Evergreen runtime (version 152.0.4191.62) before the installer ran, so
+the bootstrapper's download step had nothing to do
+(`docs/hardware-notes.md`'s "Windows (ARM64 VM) session — 05/09/2026",
+"GUI and Demo"); the download path itself has still not been exercised.
+
+**Version information shown on installed files differs by tool.**
+Explorer's Properties → Details on `Open Rig Programmer.exe` correctly
+shows File description, File version, Product name, Product version
+and the licence line — confirmed on the Windows 11 ARM64 VM,
+05/09/2026 (`docs/hardware-notes.md`'s "Windows (ARM64 VM) session —
+05/09/2026", "The install"). PowerShell's `(Get-Item …).VersionInfo`,
+by contrast, reads every one of those string fields as empty: that is
+a .NET `FileVersionInfo` quirk with the language-neutral ("0000")
+version-resource block Wails writes, not a defect in the installed
+binary. Check Explorer's Properties dialogue, not a PowerShell
+`VersionInfo` read, when confirming what shipped.
 
 Settings and read-back snapshots live under
 `%AppData%\rigprog\settings.json` and `%AppData%\rigprog\snapshots\` —
@@ -116,32 +150,57 @@ platform, not a weaker guarantee than the wording might suggest.
 exe, the CLI exe, `LICENSE`, `uninstall.exe`, the Start-menu and
 desktop shortcuts, and the install directory itself — and leaves
 `%AppData%\rigprog` (your settings and snapshots) and the per-user
-WebView2 profile folder untouched. A package never deletes user data;
-see `app/build/windows/README.md` for the uninstall Section's exact
+WebView2 profile folder untouched. **Confirmed on the Windows 11 ARM64
+VM, 05/09/2026**: after uninstalling via Settings → Apps, the install
+directory, both shortcuts and the Programs-and-Features entry were
+gone, while `%AppData%\rigprog` (all three snapshot+journal pairs from
+the session) and the per-user WebView2 profile were still present, and
+no `rigprog` process remained running
+(`docs/hardware-notes.md`'s "Windows (ARM64 VM) session — 05/09/2026",
+"Uninstall"). A package never deletes user data; see
+`app/build/windows/README.md` for the uninstall Section's exact
 contents.
 
 ## 5. Status
 
-Nothing on this page has been tried on a Windows machine by this
-project yet; an ARM64 verification session is planned. Every driver,
-COM-port, SmartScreen/Defender and WebView2 claim above is labelled
-ASSUMED with its register entry (W1, W2, W3, W4, W8, W9, W10)
-precisely because none of it has been observed on real Windows
-hardware; W5, W6, W7, W11, W12 and W13 concern behaviour this page
-does not describe directly (a field in `probe`/`read` output, TX
-safety at open, read/write timing, USB passthrough, the amd64 GUI, and
-the exact driver wording) but are lifted, or not, by the same session
-or are explicitly not liftable this milestone. The full register and
-what would lift each entry are kept in this project's internal design
-record, not in this document; `docs/hardware-notes.md` and
-`docs/building.md` carry the parts of it this project has published.
+**An ARM64 verification session has run** (05/09/2026): a Windows 11
+Pro ARM64 virtual machine (UTM, on this project's own macOS host), a
+real FT-710 passed through over USB, the rehearsal installer and CLI
+downloaded, installed and driven end to end, and two writes made and
+then restored — the full write-up is `docs/hardware-notes.md`'s
+"Windows (ARM64 VM) session — 05/09/2026". Every driver, COM-port,
+SmartScreen/Defender and WebView2 claim above that carries a register
+entry from that list — **W1 (qualified — the vendor package installed
+by hand), W3, W4, W8, W9, W10** — is now **LIFTED**, confirmed on that
+session, not inferred from macOS. **W2** (whether an x64 machine's
+Windows Update supplies the CP210x driver on its own) stays
+**ASSUMED**: this session's VM was ARM64, not x64, so it cannot speak
+to that claim. W6, W7, W11 and W13 concern behaviour this page does
+not describe directly (TX safety at open, read/write timing, USB
+passthrough, and the exact driver wording) and are likewise **LIFTED**
+by the same session; **W5** is **observed (recorded only)** rather
+than lifted — the USB serial field stayed empty in the `probe` output
+on Windows, and no code change follows from that — see
+`docs/hardware-notes.md` for each. **W12** (the amd64 GUI, launched by
+a person) stays **ASSUMED**: no amd64 Windows machine, physical or
+virtual, has run this project's code.
 
-Until that session has run and this page has been updated with its
-findings, treat everything above as a best-effort starting point drawn
-from the CP2105's documented behaviour and this project's macOS
-record, nothing more.
+**Console output.** `rigprog.exe`'s prose uses em dashes; captured
+under a legacy console code page (as PowerShell's redirected output
+was on the ARM64 VM) they render as `ÔÇö` rather than "—" — a code-page
+display quirk, not a difference in what the CLI printed. Run `chcp
+65001` first, or use Windows Terminal, to see them correctly.
+
+**What remains untried on Windows**: amd64 (built and CLI-run in CI
+only — no amd64 Windows machine has run this project's code, physical
+or virtual), Windows 10, and a physical Windows machine of either
+architecture. Everything above that is not qualified as ASSUMED is
+confirmed for the platform the 05/09/2026 session actually used —
+Windows 11 on ARM64, virtualised — and should not be read as a claim
+about amd64 or about a physical machine.
 
 Every GitHub release this project makes starts as a DRAFT:
 `.github/workflows/release.yml` never clears that flag, so whether any
-artefact ships is a separate human decision. This pending Windows
-hardware evidence is one of the things that decision has to weigh.
+artefact ships is a separate human decision. The remaining Windows
+hardware gap — amd64, and a physical machine of either architecture —
+is one of the things that decision has to weigh.
