@@ -230,6 +230,93 @@ var tierRequestedFields = []struct {
 	{spec.FieldIPPlus, func(d codeplug.ChannelData) bool { return d.IPPlus.State == codeplug.Known }},
 }
 
+// fieldStateChecks pairs EVERY spec.Field whose codeplug.ChannelData
+// counterpart carries a FieldState (codeplug.FreqField, BoolField,
+// ToneField, StringField or IntField) with the result of that field's own
+// Valid call — TWENTY of spec.AllFields()'s twenty-seven. The other seven
+// (FieldFrequency, FieldMode, FieldClarifier, FieldCTCSSState, FieldShift,
+// FieldTag, FieldErase) are ChannelData's plain uint64/string/int fields
+// (FreqHz, Mode, ClarHz, CTCSS, Shift, Tag) or, for FieldErase, no struct
+// field at all — none carries a FieldState and none has a Valid to call.
+//
+// C-M1 (closing review wave 2, ACCEPT MEDIUM): WriteChannel used to call
+// only three of the twenty (CTCSSTone, ScanSkip, TagDisplay) at this rung.
+// A tier field carrying State Unavailable and a non-zero Value — e.g.
+// TxFreqHz{State: Unavailable, Value: 1} — is INCOHERENT (Unavailable means
+// "preserve whatever the radio has"; a Value alongside it is a claim about
+// what that preserved state should be, which is not what Unavailable
+// means), and before this fix nothing on the write path ever said so:
+// codeplug.Validate skips every non-Recorded field (core/codeplug's own
+// per-field capability gate judges Known/Unknown only), and requestedFields
+// (above) is Known-only too, so the malformed value never reached the
+// capability gate or buildWriteCommand — it was silently DROPPED from the
+// wire rather than refused. TestWriteChannel_RefusalLadder's
+// "an incoherent TxFreqHz field is refused, not interpreted (C-M1)" row is
+// the red-proof for this exact shape (its own comment quotes the pre-fix
+// transcript: the frame WAS sent, TxFreqHz simply absent from it).
+//
+// THE VOCAB/TABLE EACH StringField/IntField/ToneField NEEDS IS caps' OWN —
+// s.caps.DuplexOptions, s.caps.Filters, and so on — not a placeholder. On
+// THIS radio every one of the Icom-tier vocab/table caps fields is the
+// EMPTY slice (the "TWELVE EMPTY" fields caps.go's baseCapabilities doc
+// comment names: this radio's manual expresses none of this vocabulary),
+// so a Known value on any of them fails closed exactly as
+// StringField.Valid's and IntField.Valid's own doc comments say an empty
+// vocabulary/table must — but the COHERENCE question this rung exists to
+// answer (a non-Known State paired with a non-zero/non-empty Value) is
+// settled without consulting the vocab or table at all, so the emptiness
+// changes no incoherent channel's outcome.
+//
+// ORDER is ChannelData's OWN declaration order (channel.go) — the three
+// pre-tier fields, then the seventeen tier fields in the same order
+// tierRequestedFields carries them — which is also, independently,
+// spec.AllFields()'s own order with the seven plain fields filtered out;
+// TestFieldStateChecks_CoversExactlyTheFieldStateFields pins that identity,
+// not merely a count, so a spec.Field this table forgets to mirror — or
+// that AllFields gains and this table does not — fails that test rather
+// than silently letting a malformed value from a future field through. The
+// loop above returns on the FIRST incoherent field, so the order matters
+// only for which field a channel broken in several ways at once is
+// reported for.
+func fieldStateChecks(caps spec.Capabilities, d codeplug.ChannelData) []struct {
+	field spec.Field
+	err   error
+} {
+	duplex := make([]string, len(caps.DuplexOptions))
+	for i, o := range caps.DuplexOptions {
+		duplex[i] = o.Value
+	}
+	toneModes := make([]string, len(caps.ToneModes))
+	for i, m := range caps.ToneModes {
+		toneModes[i] = m.Value
+	}
+	return []struct {
+		field spec.Field
+		err   error
+	}{
+		{spec.FieldCTCSSTone, d.CTCSSTone.Valid(caps)},
+		{spec.FieldTagDisplay, d.TagDisplay.Valid()},
+		{spec.FieldScanSkip, d.ScanSkip.Valid()},
+		{spec.FieldTxFrequency, d.TxFreqHz.Valid()},
+		{spec.FieldDuplex, d.Duplex.Valid(duplex)},
+		{spec.FieldOffset, d.OffsetHz.Valid()},
+		{spec.FieldToneMode, d.ToneMode.Valid(toneModes)},
+		{spec.FieldToneTx, d.ToneTx.Valid(caps)},
+		{spec.FieldToneRx, d.ToneRx.Valid(caps)},
+		{spec.FieldDTCSCode, d.DTCSCode.Valid(caps.DTCSCodes)},
+		{spec.FieldDTCSPolarity, d.DTCSPolarity.Valid(caps.DTCSPolarities)},
+		{spec.FieldFilter, d.Filter.Valid(caps.Filters)},
+		{spec.FieldDataMode, d.DataMode.Valid()},
+		{spec.FieldTuningStepEnabled, d.TuningStepEnabled.Valid()},
+		{spec.FieldTuningStep, d.TuningStep.Valid(caps.TuningSteps)},
+		{spec.FieldProgramTuningStep, d.ProgramTuningStepHz.Valid()},
+		{spec.FieldAttenuator, d.AttenuatorDB.Valid(caps.AttenuatorDB)},
+		{spec.FieldPreamp, d.Preamp.Valid(caps.PreampOptions)},
+		{spec.FieldAntenna, d.Antenna.Valid(caps.AntennaOptions)},
+		{spec.FieldIPPlus, d.IPPlus.Valid()},
+	}
+}
+
 // WriteChannel implements driver.Session: ONE combined 41-byte MT Set,
 // fire-and-forget with the transport's bounded "?;" listen.
 //
@@ -355,20 +442,21 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 
 	// FieldState sanity before anything else trusts .State: a malformed
 	// field (an unrecognised State, or a non-Known value smuggled alongside
-	// a value) is refused, not interpreted. TagDisplay is checked here for
-	// exactly the same reason as its two neighbours and for no other: an
-	// Unavailable-with-a-true-Value BoolField is incoherent whatever the
-	// radio can express, and this driver must not read a coherent meaning
-	// out of it. It is NOT the mandatory-flag refusal, which is a different
-	// question about a well-formed field and lives in buildWriteCommand.
-	if err := ch.Data.CTCSSTone.Valid(s.caps); err != nil {
-		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{spec.FieldCTCSSTone}, Reason: err.Error()}
-	}
-	if err := ch.Data.ScanSkip.Valid(); err != nil {
-		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{spec.FieldScanSkip}, Reason: err.Error()}
-	}
-	if err := ch.Data.TagDisplay.Valid(); err != nil {
-		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{spec.FieldTagDisplay}, Reason: err.Error()}
+	// a value) is refused, not interpreted. EVERY field of ch.Data that
+	// carries a FieldState, not the three (CTCSSTone, ScanSkip, TagDisplay)
+	// this rung used to check — see fieldStateChecks' doc comment for C-M1,
+	// the gap this closes: a tier field carrying State Unavailable and a
+	// non-zero Value passed both codeplug.Validate (which skips
+	// non-Recorded fields outright) and this rung's old three-field list,
+	// so requestedFields (Known-only) never named it and the malformed
+	// value was silently DROPPED from the frame rather than refused. This
+	// is NOT the mandatory-flag refusal TagDisplay separately earns, which
+	// is a different question about a well-formed field and lives in
+	// buildWriteCommand.
+	for _, check := range fieldStateChecks(s.caps, *ch.Data) {
+		if check.err != nil {
+			return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{check.field}, Reason: check.err.Error()}
+		}
 	}
 
 	// THE CAPABILITY GATE (defence in depth below the clone service): every

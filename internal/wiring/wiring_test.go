@@ -3464,6 +3464,34 @@ func ft891WritableChannel(slot string, tagDisplay bool) codeplug.Channel {
 			Tag:        "CALLING",
 			TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: tagDisplay},
 			ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
+			// THE SEVENTEEN ICOM-TIER FIELDS, EXPLICITLY Unavailable (C-M1,
+			// closing review wave 2): a zero FieldState is codeplug.Absent,
+			// which is NOT one of the three states any FieldState.Valid
+			// accepts, and core/driver/ft891's WriteChannel now walks every
+			// one of them (fieldStateChecks) before the capability gate. An
+			// Absent tier field would therefore refuse this "otherwise
+			// writable" fixture with "invalid State", which is not what
+			// this test is about — a real FT-891 read (this package's own
+			// fake included) always reports all seventeen Unavailable
+			// (core/driver/ft891/read.go's channelData, plan P12), so this
+			// is the same shape a genuine round-trip channel carries.
+			TxFreqHz:            codeplug.FreqField{State: codeplug.Unavailable},
+			Duplex:              codeplug.StringField{State: codeplug.Unavailable},
+			OffsetHz:            codeplug.FreqField{State: codeplug.Unavailable},
+			ToneMode:            codeplug.StringField{State: codeplug.Unavailable},
+			ToneTx:              codeplug.ToneField{State: codeplug.Unavailable},
+			ToneRx:              codeplug.ToneField{State: codeplug.Unavailable},
+			DTCSCode:            codeplug.IntField{State: codeplug.Unavailable},
+			DTCSPolarity:        codeplug.StringField{State: codeplug.Unavailable},
+			Filter:              codeplug.StringField{State: codeplug.Unavailable},
+			DataMode:            codeplug.BoolField{State: codeplug.Unavailable},
+			TuningStepEnabled:   codeplug.BoolField{State: codeplug.Unavailable},
+			TuningStep:          codeplug.StringField{State: codeplug.Unavailable},
+			ProgramTuningStepHz: codeplug.FreqField{State: codeplug.Unavailable},
+			AttenuatorDB:        codeplug.IntField{State: codeplug.Unavailable},
+			Preamp:              codeplug.StringField{State: codeplug.Unavailable},
+			Antenna:             codeplug.StringField{State: codeplug.Unavailable},
+			IPPlus:              codeplug.BoolField{State: codeplug.Unavailable},
 		},
 	}
 }
