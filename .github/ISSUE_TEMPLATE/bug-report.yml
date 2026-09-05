@@ -1,0 +1,66 @@
+name: Bug report
+description: Something went wrong in the app or on the command line
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please do not paste a whole memory file: it carries
+        your callsign and your channel list. One channel's line is plenty.
+  - type: dropdown
+    id: radio
+    attributes:
+      label: Radio
+      options:
+        - FT-710
+        - FT-891
+        - FTdx10
+        - FTdx101D
+        - FTdx101MP
+        - IC-705
+        - IC-7100
+        - IC-7300
+        - IC-7300MK2
+        - IC-7610
+        - IC-7760
+        - IC-7850
+        - IC-7851
+        - IC-905
+        - IC-9700
+        - IC-R8600
+        - Demo (simulated radio)
+        - Not radio-specific
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS
+        - Windows
+        - Linux (.deb)
+        - Linux (tarball or built from source)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The output of `rigprog version`, or the app's About box
+      placeholder: rigprog v1.3.0 (…)
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead. If the program refused something, paste the refusal text as shown.
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Command output or screenshot
+      description: For the command line, the exact command and its output. For the app, a screenshot of the preview or error.
+      render: text

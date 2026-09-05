@@ -1,0 +1,68 @@
+name: I own one of the unverified radios and can test it
+description: Only the FT-710 has been connected to this program. If you own another supported radio, this is how to help.
+labels: [hardware-testing]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Reading is safe on every supported radio: the program only sends the
+        maker's documented read commands. Writing stays switched off until you
+        switch it on for that radio, and even then every send is previewed,
+        snapshotted and read back. You choose how far to go.
+  - type: dropdown
+    id: radio
+    attributes:
+      label: Radio
+      options:
+        - FT-891
+        - FTdx10
+        - FTdx101D
+        - FTdx101MP
+        - IC-705
+        - IC-7100
+        - IC-7300
+        - IC-7300MK2
+        - IC-7610
+        - IC-7760
+        - IC-7850
+        - IC-7851
+        - IC-905
+        - IC-9700
+        - IC-R8600
+        - FT-710 on Linux (the one platform the FT-710 has not been tried on)
+        - FT-710 on Windows amd64 (only ARM64 has been tried)
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware version
+      description: As shown on the radio
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Computer
+      options:
+        - macOS
+        - Windows
+        - Linux
+    validations:
+      required: true
+  - type: input
+    id: connection
+    attributes:
+      label: Connection
+      description: USB cable straight to the radio, a CI-V interface, a USB-serial adapter…
+  - type: checkboxes
+    id: willing
+    attributes:
+      label: What you are willing to try
+      options:
+        - label: Read the memories and report whether the channels look right
+        - label: Switch on unverified writes and send one edited channel, with the read-back result
+        - label: Send the output of `rigprog probe` and `rigprog read` for one occupied channel (callsigns can be blanked)
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: Which serial port answered, how the radio is set up (CI-V address, baud rate, menu settings), anything the program said that surprised you.
