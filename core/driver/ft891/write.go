@@ -374,10 +374,14 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	// relaxation recorded here. Wave 2's local table called Valid()
 	// unconditionally, which REFUSED codeplug.Absent as well, and the fleet
 	// stance (the IC-9700's, ic9700/write.go's validateKnownValues) admits
-	// it: a caller who set nothing has requested nothing, and refusing
-	// those would refuse every ordinary MODIFY that a hand-built
-	// ChannelData produces. TestWriteChannel_AbsentFieldStatesStillWrite is
-	// that relaxation's pin.
+	// it PROVIDED THE VALUE IS ZERO: a caller who set nothing has requested
+	// nothing, and refusing those would refuse every ordinary MODIFY that a
+	// hand-built ChannelData produces. TestWriteChannel_AbsentFieldStatesStillWrite
+	// is that relaxation's pin; the RefusalLadder's "an Absent CTCSSTone
+	// field carrying a non-zero value is refused, not interpreted
+	// (MEDIUM-1)" row pins the erratum that keeps the relaxation from
+	// reopening C-M1 — a value with no state recorded is refused exactly
+	// as one alongside Unknown/Unavailable is (Opus review, 05/09/2026).
 	//
 	// This is NOT the mandatory-flag refusal TagDisplay separately earns,
 	// which is a different question about a well-formed field and lives in

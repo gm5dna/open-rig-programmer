@@ -938,6 +938,54 @@ func TestWriteChannel_IncoherentFieldStateRefusedBeforeWire(t *testing.T) {
 	}
 }
 
+// TestWriteChannel_AbsentFieldStateWithValueRefusedBeforeWire is MEDIUM-1
+// (Opus review of this sweep, 05/09/2026) and the DECISION erratum it
+// forced: codeplug.Absent IS the zero FieldState, so a caller who sets a
+// Value and forgets to set State — a copy/paste slip, not a hand-built
+// ChannelData that genuinely left a field untouched — produces exactly the
+// struct TestWriteChannel_AbsentFieldStatesStillWrite's fixture is built
+// from. This is C-M1 again with the State OMITTED instead of wrong: a
+// value with no state recorded is not a claim this project can act on, and
+// the pre-erratum judge let it straight through, on both models.
+//
+// CTCSSTONE IS THE PROOF FIELD, the reviewer's own reproduction: this
+// radio's 41-byte combined Set has no CTCSS-tone position at all
+// (TestWriteChannel_IncoherentFieldStateRefusedBeforeWire makes the same
+// point for TxFreqHz), so nothing past the walk would ever have noticed
+// it.
+//
+// RED-PROOF, captured against the pre-erratum judge (Absent admitted
+// regardless of Value), this test's own body unchanged: no refusal
+// happened on either model —
+//
+//	WriteChannel = {Steps:[{Command:MT Sent:true Confirmed:true}]}, err = <nil>; frames sent: ["MT042007074000-123001C020020FT8 CALL    ;"]
+//
+// i.e. exactly the frame writableChannel() alone produces (wantSetFrame),
+// with the caller's CTCSSTone value silently DROPPED.
+func TestWriteChannel_AbsentFieldStateWithValueRefusedBeforeWire(t *testing.T) {
+	for _, m := range testModels {
+		t.Run(m.name, func(t *testing.T) {
+			p, sess := openSession(t, m, Simulated, slotImage{})
+
+			ch := writableChannel("042")
+			ch.Data.CTCSSTone = codeplug.ToneField{Value: 1000}
+
+			before := len(p.Transcript())
+			wre := refusedFields(t, sess, ch)
+
+			if !slices.Equal(wre.Fields, []spec.Field{spec.FieldCTCSSTone}) {
+				t.Errorf("WriteRefusedError.Fields = %v, want exactly [%s]", wre.Fields, spec.FieldCTCSSTone)
+			}
+			if !strings.Contains(wre.Reason, "must have zero Value") {
+				t.Errorf("WriteRefusedError.Reason = %q, want the typed validator's own incoherence sentence", wre.Reason)
+			}
+			if got := p.Transcript(); len(got) != before {
+				t.Errorf("a refused WriteChannel sent %d frames (%q), want 0 — the refusal must precede ALL wire traffic", len(got)-before, got[before:])
+			}
+		})
+	}
+}
+
 // TestWriteChannel_AbsentFieldStatesStillWrite is the fleet FieldState
 // stance's OTHER half, and the reason this driver does not simply call
 // Valid() on all twenty fields: codeplug.Absent — the ZERO FieldState, what
