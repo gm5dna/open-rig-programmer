@@ -167,13 +167,22 @@ func (e *StreamError) Unwrap() error { return ErrStream }
 // newStreamError builds the StreamError for token as the given book prints
 // it.
 //
-// IT PANICS on a frame that is not one of the two tokens, and the loudness
-// is deliberate: the only caller is framing.IsFatal, which has ALREADY
-// recognised the token, so reaching this branch means the recogniser and
-// the constructor have drifted apart. Returning nil instead would make a
-// fatal frame silently ordinary — the one failure mode this whole design
-// exists to prevent — and returning a placeholder sentence would put words
-// in a manufacturer's mouth.
+// IT PANICS on a frame that is not one of the two tokens OR on a book that
+// names no document, and the loudness is deliberate — but the panic arm
+// fires on TWO conditions and the caller guarantees BOTH, which is what
+// this comment used to overstate. framing.IsFatal has recognised the token
+// (streamErrorToken returned non-empty) AND has already returned early on
+// an invalid book, so neither condition can reach here from the only door
+// there is. Reaching this branch therefore means the recogniser and the
+// constructor have drifted apart, and that is worth a panic: returning nil
+// instead would make a fatal frame silently ordinary — the one failure mode
+// this whole design exists to prevent — and returning a placeholder
+// sentence would put words in a manufacturer's mouth.
+//
+// The unconfigured book is refused at the CALLER rather than here because
+// IsFatal runs on the engine's reader goroutine, which has no recover; see
+// framing.IsFatal for why withholding the verdict is the closed direction.
+// TestFraming_ZeroValueFailsClosed pins that no zero framing ever arrives.
 func newStreamError(token string, book Book) *StreamError {
 	switch {
 	case token == communicationErrorFrame && book == Book590:
@@ -224,20 +233,45 @@ type RejectionError struct {
 }
 
 func (e *RejectionError) Error() string {
-	cite, transientCite := "590:100-105", "590:106-108"
-	if e.Book == Book480 {
-		cite, transientCite = "480:130-135", "480:136-138"
+	// THE SENTENCES ARE COMMON TO BOTH BOOKS; ONLY THE LINES DIFFER. Each
+	// document prints the same two alternative causes and the same
+	// transient warning, which is why rejectionCauses and
+	// transientSentence are written once. So a value that names no
+	// document can still say WHAT a "?;" means — it simply may not say
+	// WHERE, and it says that it cannot rather than falling through to
+	// one book's line numbers.
+	// TestTypedErrors_QuoteNoDocumentTheyWereNotGiven pins the third arm.
+	switch e.Book {
+	case Book590, Book480:
+		cite, transientCite := "590:100-105", "590:106-108"
+		if e.Book == Book480 {
+			cite, transientCite = "480:130-135", "480:136-138"
+		}
+		return fmt.Sprintf("kw: the radio refused %q with \"?;\": %s (%s); %s (%s), so a refusal that did not arrive is not evidence that none was sent",
+			e.Command, rejectionCauses, cite, transientSentence, transientCite)
+	default:
+		return fmt.Sprintf("kw: the radio refused %q with \"?;\": %s; %s — this error names no document (%s), so no line is cited: both books print these sentences, but naming a document this session was never told it was speaking to is what ErrUnconfiguredBook exists to prevent",
+			e.Command, rejectionCauses, transientSentence, e.Book)
 	}
-	return fmt.Sprintf("kw: the radio refused %q with \"?;\": %s (%s); %s (%s), so a refusal that did not arrive is not evidence that none was sent",
-		e.Command, rejectionCauses, cite, transientSentence, transientCite)
 }
 
 // Unwrap lets errors.Is(err, transport.ErrRejected) match.
 func (e *RejectionError) Unwrap() error { return transport.ErrRejected }
 
 // NewRejectionError builds the typed refusal for command as book prints it.
-func NewRejectionError(book Book, command string) *RejectionError {
-	return &RejectionError{Book: book, Command: command}
+//
+// IT IS FALLIBLE, ON NewFraming'S MODEL, and for NewFraming's reason: it is
+// exported, a caller can hand it BookUnset, and an error that fell through
+// to the TS-590's line numbers would quote a document the session was never
+// told it was speaking to (ErrUnconfiguredBook). An omitted config semantic
+// is REFUSED, never defaulted — the M9c-1 ruling — and a constructor is the
+// place a Kenwood session can still be refused cheaply.
+// TestNewRejectionError_RefusesAnUnsetBook pins it.
+func NewRejectionError(book Book, command string) (*RejectionError, error) {
+	if !book.valid() {
+		return nil, fmt.Errorf("%w (got %v)", ErrUnconfiguredBook, book)
+	}
+	return &RejectionError{Book: book, Command: command}, nil
 }
 
 // TimeoutError is the typed cause a read timeout produces, and it is a
@@ -260,18 +294,36 @@ type TimeoutError struct {
 }
 
 func (e *TimeoutError) Error() string {
-	cite := "590:106-108"
-	if e.Book == Book480 {
-		cite = "480:136-138"
+	// The three arms are RejectionError.Error's exactly, for its reason:
+	// the transient sentence is printed in both books, so a value that
+	// names no document may still quote it and must not invent a line
+	// number for it.
+	switch e.Book {
+	case Book590, Book480:
+		cite := "590:106-108"
+		if e.Book == Book480 {
+			cite = "480:136-138"
+		}
+		return fmt.Sprintf("kw: no answer to %q within the read timeout: this is not evidence of absence and not a refusal — %s (%s), so silence carries no information; the session read fails whole and is not retried",
+			e.Command, transientSentence, cite)
+	default:
+		return fmt.Sprintf("kw: no answer to %q within the read timeout: this is not evidence of absence and not a refusal — %s; this error names no document (%s), so no line is cited; the session read fails whole and is not retried",
+			e.Command, transientSentence, e.Book)
 	}
-	return fmt.Sprintf("kw: no answer to %q within the read timeout: this is not evidence of absence and not a refusal — %s (%s), so silence carries no information; the session read fails whole and is not retried",
-		e.Command, transientSentence, cite)
 }
 
 // Unwrap lets errors.Is(err, transport.ErrTimeout) match.
 func (e *TimeoutError) Unwrap() error { return transport.ErrTimeout }
 
 // NewTimeoutError builds the typed timeout for command as book prints it.
-func NewTimeoutError(book Book, command string) *TimeoutError {
-	return &TimeoutError{Book: book, Command: command}
+//
+// FALLIBLE ON NewRejectionError'S TERMS EXACTLY — see there for why an
+// exported constructor of a document-quoting error refuses BookUnset rather
+// than defaulting to one book. TestNewTimeoutError_RefusesAnUnsetBook pins
+// it.
+func NewTimeoutError(book Book, command string) (*TimeoutError, error) {
+	if !book.valid() {
+		return nil, fmt.Errorf("%w (got %v)", ErrUnconfiguredBook, book)
+	}
+	return &TimeoutError{Book: book, Command: command}, nil
 }
