@@ -290,3 +290,37 @@ func TestScanForbiddenImports_IsRecursiveWhereParseDirIsNot(t *testing.T) {
 		t.Fatalf("the walking scan found %d violations, want 1 — the subdirectory violation ParseDir cannot see", len(res.violations))
 	}
 }
+
+// TestNoCoreImports_ReachesTheGenerator makes TestNoCoreImports's coverage of
+// gen/ VISIBLE rather than merely intended. That test reports violations, so
+// it passes whether the walk reached the generator or never descended into it
+// at all — a silent regression in the walk would look exactly like a clean
+// tree. This one asserts the scan actually parsed the file, by name.
+//
+// It is the standing half of the fence's red proof: the tree fixture above
+// proves the scan WOULD bite a violation in gen/, and this proves it is
+// looking at the real gen/ while doing so.
+func TestNoCoreImports_ReachesTheGenerator(t *testing.T) {
+	fset := token.NewFileSet()
+	const genMain = "gen/main.go"
+	if _, err := parser.ParseFile(fset, genMain, nil, parser.ImportsOnly); err != nil {
+		t.Fatalf("parsing %s: %v — the generator this package's EX inventory comes from is not where the fence expects it", genMain, err)
+	}
+
+	var seen int
+	err := filepath.WalkDir(".", func(path string, d fs.DirEntry, werr error) error {
+		if werr != nil {
+			return werr
+		}
+		if !d.IsDir() && filepath.ToSlash(path) == genMain {
+			seen++
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("WalkDir: %v", err)
+	}
+	if seen != 1 {
+		t.Errorf("the walk visited %s %d times, want 1 — TestNoCoreImports scans the same tree, so a zero here means its coverage of gen/ is vacuous", genMain, seen)
+	}
+}

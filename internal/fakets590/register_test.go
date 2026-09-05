@@ -36,6 +36,8 @@ var registerEntries = []string{
 	"AUTOMATIC-INFORMATION SUPPRESSION",
 	"THE FRAME ACCUMULATOR'S CAP AND RESYNC",
 	"THE S ROW'S CEILING IS UNSTATED",
+	"THE EX MENU VALUES ARE INVENTED",
+	`AN OUT-OF-INVENTORY EX ADDRESS ANSWERS "?;"`,
 }
 
 // normalise strips Go comment markers and collapses every run of whitespace to
