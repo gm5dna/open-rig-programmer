@@ -356,21 +356,27 @@ opens normally.
 ## Windows: first launch
 
 The installer is unsigned (no code-signing certificate this
-milestone), so expect Windows SmartScreen to show "Windows protected
-your PC" the first time you run it — this has not been tried yet by
-this project. If it appears, click **More info**, then **Run anyway**.
-Windows Defender may also flag or scan the download; if it quarantines
-the file, restore it from Defender's Protection History — nothing here
-has been reported as malicious, this project simply has no publisher
-reputation with Microsoft yet.
+milestone). Edge's Downloads pane flags the download itself as "isn't
+commonly downloaded" before you open it, then Windows SmartScreen
+shows "Windows protected your PC" the first time you run it —
+confirmed on a Windows 11 ARM64 VM, 05/09/2026, register entry **W9,
+LIFTED** (see `docs/windows-setup.md`). If it appears, click **More
+info**, then **Run anyway**. Windows Defender did not quarantine or
+block either the installer or the CLI on that session, register entry
+**W10, LIFTED**; if a future build is ever flagged, restore it from
+Defender's Protection History — nothing here has been reported as
+malicious, this project simply has no publisher reputation with
+Microsoft yet.
 
-The GUI needs Microsoft's WebView2 runtime, which Windows 11 is
-expected to already ship with. If it is missing (older Windows 10
-builds, or a stripped-down image), the installer is configured to
-download and install it for you during setup, in the Wails template's
-default mode — that step would need an internet connection, the rest
-of the installer does not — but this bootstrapping path has not been
-tried yet by this project.
+The GUI needs Microsoft's WebView2 runtime. On the Windows 11 ARM64 VM
+that ran the 05/09/2026 session, the Evergreen runtime (version
+152.0.4191.62) was already present, so the installer's bootstrapper
+had nothing to install — confirmed, register entry **W8, LIFTED**. If
+it is missing (older Windows 10 builds, or a stripped-down image), the
+installer is configured to download and install it for you during
+setup, in the Wails template's default mode — that step would need an
+internet connection, the rest of the installer does not — but this
+download path itself has not been tried yet by this project.
 
 ## Linux: serial port access
 
