@@ -46,8 +46,10 @@
 # reasoning as the darwin job's Info.plist stamp below). arm64 is
 # CROSS-compiled on this x64 host: `wails build -platform
 # windows/amd64,windows/arm64 -nsis` builds both GUI installers in one
-# process and the arm64 slice is never run here — only the amd64 CLI and
-# GUI are exercised. This job also asserts the tag matches this
+# process and the arm64 slice is never run here — only the amd64 CLI is
+# run; its GUI, like arm64's, is never launched by anyone (spec decision
+# 1: "its GUI never launched by anyone"; register W12 stays ASSUMED).
+# This job also asserts the tag matches this
 # workflow's own trigger shape (`^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$`,
 # tighter than the `on.push.tags: v*` glob below) before building anything
 # — deliberately the whole release's gate, since no other job here has
