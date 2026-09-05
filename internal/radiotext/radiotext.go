@@ -1739,6 +1739,100 @@ var ft891Text = Text{
 	ProbeFirmwareNote:   "Firmware version has no CAT query in this build — check the radio's display. No minimum version is established for the FT-891: this build knows of none to require. Its opening speed of 38400 is ASSUMED, not read off the radio: this radio's CAT manual prints the four rates its CAT RATE menu row offers — 4800, 9600, 19200 and 38400 — and marks none of them as the factory setting, and neither this build's command line nor its window offers a way to open at another rate, so a radio set differently has to be put back at menu 0506 before it will answer. Two more things about this radio are worth knowing before blaming the port. Its rear-panel USB socket is a built-in USB-to-dual-UART bridge, so the radio enumerates TWO serial devices, and the manual mentions the second only in the word \"Dual\" — it never says which of the two carries CAT — so if one is silent, try the other before concluding the cable or the speed is wrong. And this manual contradicts itself about READING a memory channel: its Control Command List marks the combined MEMORY WRITE & TAG command settable only, while that same command's own detail block, on the same printed page, gives it a read request and a full answer chart. This build asks the detail block's question and cross-checks the answer against the plain memory read, so a read refused for a channel that is plainly occupied is the manual's own ambiguity surfacing, not a fault in the port — one such read of a channel you know is populated is what would settle it.",
 }
 
+// ft991aText is the FT-991A's entry (Tier 1 task 15a, landed IN THE SAME
+// COMMIT as that model's wiring registration — internal/wiring's
+// TestEverySupportedModelHasRadiotext refuses a registered model with no
+// prose, and radiotext_test.go's ownParticulars lockstep PANICS on one, so
+// neither half of the registration is green without the other).
+//
+// THE HONESTY RULE APPLIES UNCHANGED. NOTHING BELOW IS INVENTED. No FT-991A
+// has ever been asked anything by this project (core/driver/ft991a/doc.go),
+// no FT-991A OPERATING manual is held — only the CAT Operation Reference
+// Manual — and no write trial has happened (that driver's
+// writeTrialsComplete is false). Every string says what is actually known,
+// including where something is NOT known, and borrows the wording of no
+// other entry: not the FT-710's, whose hedgeless sentences are ITS hardware
+// evidence; not the FTdx10's, the FTdx101 pair's or the FT-891's, whose
+// hedges are about different radios and different manuals; and not any Icom
+// entry's. assertNotBorrowedFromAnyOtherModel (radiotext_test.go) pins the
+// non-borrowing mechanically and field by field.
+//
+// WHAT THIS ENTRY CAN SAY THAT NO OTHER YAESU ENTRY CAN is the point of
+// writing it fresh rather than adapting one of theirs. Five facts are this
+// radio's own, each with its home in the capability matrix:
+//
+//   - THE FIVE-STATE TONE BYTE (matrix §1.17, §3.7). This is the first
+//     Yaesu memory record in this fleet with a DCS state in it at all, so
+//     GridLegendNote has to name the DCS CODE as radio-side beside the tone
+//     number — a sentence no sibling entry has any occasion to write.
+//   - THE PMS SLOTS ARE NUMBERS, AND THE PANEL PRINTS LETTERS (matrix
+//     §1.4.2, §3.13; plan decision P20, Stuart decision 5). Every surface
+//     shows 100-117, because those are the wire numbers; the radio's own MC
+//     legend prints the same eighteen slots as P-1L to P-9U. P20's ruling is
+//     that the divergence is TOLD rather than hidden, and this is where it
+//     is told.
+//   - THE 087 EXCLUSION IS USER-VISIBLE (matrix §3.9; plan decision P15).
+//     The settings viewer shows 152 items for a chart printing 153 rows,
+//     because row 087 RADIO ID prints ten hyphens for its parameter and a
+//     hyphen for its width, so no answer to an EX087; could be sized. A user
+//     who counts is entitled to the reason and to the one capture that would
+//     settle it.
+//   - THE BAUD MENU IS 031, AND 029 IS A TRAP (matrix §1.11-1.12; plan
+//     decision P11). Both rows print the same four rates, so nothing changes
+//     numerically — but 029 232C RATE belongs to the RS-232C jack, which is
+//     not the port this programme opens, so a user sent to 029 sets the
+//     wrong port's rate and the radio stays silent. ProbeFirmwareNote names
+//     031 and mentions 029 only to exclude it.
+//   - TWO SERIAL DEVICES, AND A GATING MENU ROW WHOSE OWN PRINTING IS
+//     DEFECTIVE (matrix §3.12). The USB socket is a built-in USB-to-dual-UART
+//     bridge and the manual never says which endpoint carries CAT; the
+//     separate RS-232C path is gated by 028 GPS/232C SELECT, whose printed
+//     legend runs 0: GPS1, 1: GPS2, 3: RS232C with key 2 missing. The
+//     defect is stated rather than silently corrected, because nothing here
+//     establishes whether the hole is the radio's or the chart's.
+//
+// C4FM IS NAMED IN GridLegendNote BY PLAN, and it describes a refusal a user
+// would otherwise meet without explanation: this radio's mode legend prints
+// C4FM at nibble 'E' where the FTdx10 prints PSK, and CHIRP has no name for
+// it, so such a channel cannot leave as itself.
+//
+// TestRadiotext_FT991AVerbatim pins every string, and
+// TestRadiotext_FT991ANamedFacts pins the facts the plan requires by name, so
+// a well-meant later edit that firmed up a hedge or dropped a caveat fails
+// there rather than quietly telling a user something no one established.
+var ft991aText = Text{
+	EraseProcedure:   "There is no CAT erase command for the FT-991A, and here that absence is printed rather than merely unclaimed: this radio's Control Command List is the whole of its CAT vocabulary and holds no command that clears a memory channel — the nearest entries, QMB STORE and QMB RECALL, address the quick-memory bank instead. Clearing a channel is therefore something only the radio itself can do, and this build will not describe how: no FT-991A operating manual is held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than saying so. Follow the memory-channel erase procedure in the radio's own operating manual.",
+	FirmwareGuidance: "No minimum firmware version is established for the FT-991A: nothing this project holds states one, and no FT-991A has ever been asked. Nor is there a version query to ask with — the CAT vocabulary this build speaks to this radio is the identity read, the one combined memory read, the one combined memory write and the menu read, and nothing besides — so read the version off the radio's own display and type it here, where it is recorded alongside the send rather than tested against a threshold nobody has established.",
+	GridLegendNote:   "Tone and Scan Skip are neither read nor written for the FT-991A by this build. Its combined memory record carries a five-state tone byte — CTCSS off, CTCSS encode and decode, CTCSS encode, DCS encode and decode, DCS encode — and no more of either kind: the tone frequency number and the DCS code both live on a separate command that reports what the radio is doing now rather than what a memory channel holds, and no position anywhere in the record marks a channel for scan skip, so set the tone number, the DCS code and the skip marking at the radio. Two further things this window shows will not match what the radio prints. C4FM is one of this radio's fourteen modes and CHIRP has no name for it, so a C4FM channel cannot be carried out to a CHIRP file as itself. And the PMS pairs are shown here as the channel numbers 100 to 117, which is what this radio's own CAT record uses, while its front panel and its manual print the same eighteen slots as P-1L to P-9U — the numbers are the wire's and the letters are the panel's, and they name the same slots in the same order. One count is worth explaining before it surprises you: the settings list shows 152 items where this radio's menu chart prints 153 rows. Row 087, RADIO ID, is left out because the chart gives it neither a width nor a parameter — ten printed hyphens and nothing else — so this build cannot size an answer to it and will not send a question it cannot read. One EX087; read on a real radio would settle it either way.",
+	// DELIBERATELY EMPTY, exactly as every entry's is whose write-trial
+	// guard is false, and for the same reason: this field states what IS
+	// and is NOT verified on real hardware about preservation across a
+	// rewrite, and with core/driver/ft991a's writeTrialsComplete false
+	// there is no verification of any kind to report. internal/wiring's
+	// TestEverySupportedModelHasRadiotext requires EraseProcedure,
+	// FirmwareGuidance and ProbeFirmwareNote and deliberately excludes
+	// this one.
+	ToneScanSkipVerification: "",
+	// Byte-identical to EraseProcedure, as every other entry's is.
+	EraseDialogNote: "There is no CAT erase command for the FT-991A, and here that absence is printed rather than merely unclaimed: this radio's Control Command List is the whole of its CAT vocabulary and holds no command that clears a memory channel — the nearest entries, QMB STORE and QMB RECALL, address the quick-memory bank instead. Clearing a channel is therefore something only the radio itself can do, and this build will not describe how: no FT-991A operating manual is held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than saying so. Follow the memory-channel erase procedure in the radio's own operating manual.",
+	// The two tooltips DIFFER, because this radio's two absences are
+	// differently evidenced INSIDE the record (matrix §2.4): the tone
+	// number and the DCS code are a DIFFERENT COMMAND's live state, while
+	// the scan-skip marking has no position in this record at all. Neither
+	// claims a preservation finding, because there is none — the ASSUMED
+	// half of those register entries is the step from "the record has no
+	// such position" to "this radio cannot reach the field at all", and
+	// neither tooltip takes it.
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "not read or written over CAT by this build — this radio's memory record carries a tone STATE but no tone frequency number and no DCS code, both of which are a different command's live state, and nothing has established what a rewrite does to either",
+		ScanSkip: "not read or written over CAT by this build — no position anywhere in this radio's memory record marks a channel for scan skip, and nothing has established what a rewrite does to the marking",
+	},
+	// A placeholder LABEL, not an example: no FT-991A version string has
+	// been seen here, so there is no format to exemplify.
+	FirmwarePlaceholder: "as printed on the FT-991A's own display",
+	ProbeFirmwareNote:   "Firmware version has no CAT query in this build — read it off the radio's display. No minimum version is established for the FT-991A: this build knows of none to require. The 38400 this build opens at is ASSUMED, not read off the radio. The menu row that sets the rate for the socket this programme uses is 031 CAT RATE, which prints 4800, 9600, 19200 and 38400 and marks none of them as the factory setting, and neither this build's command line nor its window offers a way to open at another rate, so a radio set differently has to be put back at menu 031 before it will answer. Menu 029 is NOT that row: 029 232C RATE sets the rate of the rear-panel RS-232C jack, which is a different port from the one this programme opens, so changing it will not make this radio answer here. Two more things are worth knowing before blaming the port. This radio's rear-panel USB socket is a built-in USB-to-dual-UART bridge, so it enumerates TWO serial devices and the manual never says which of the two carries CAT — if one is silent, try the other before concluding the cable or the speed is wrong. And there is a second, entirely separate CAT path on the rear-panel RS-232C jack, gated by menu 028 GPS/232C SELECT; that row's own printed option list is defective in the manual this build was written from — it prints 0: GPS1, 1: GPS2 and 3: RS232C, with key 2 missing — so a reader who goes looking for that setting should expect the printed list and the radio's own to disagree.",
+}
+
 // texts is the registry For consults, keyed by the exact model string a
 // driver.Driver.Model() (or driver.Identity/spec.Capabilities.Model)
 // call returns, e.g. "FT-710".
@@ -1772,17 +1866,21 @@ var texts = map[string]Text{
 	"IC-7100":    ic7100Text,
 	"IC-R8600":   icr8600Text,
 	"FT-891":     ft891Text,
+	"FT-991A":    ft991aText,
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",
 // "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700",
-// "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600" and
-// "FT-891" are populated — the SIXTEEN models internal/wiring registers AS
-// OF Tier 1's FT-891 registration, a count a seventeenth would falsify; any
-// other model — including "", a future driver not yet given an entry, or a
-// near-miss typo ("FT-DX10", "IC7610", "IC7300", "IC705", "IC9700",
-// "IC905", "IC7851", "IC7760", "IC7100", "ICR8600", "FT891" or "ft-891",
-// say) — returns the zero Text and false.
+// "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600",
+// "FT-891" and "FT-991A" are populated — the SEVENTEEN models
+// internal/wiring registers AS OF Tier 1's FT-991A registration, a count an
+// eighteenth would falsify; any other model — including "", a future driver
+// not yet given an entry, a near-miss typo ("FT-DX10", "IC7610", "IC7300",
+// "IC705", "IC9700", "IC905", "IC7851", "IC7760", "IC7100", "ICR8600",
+// "FT891", "ft-891", "FT991A" or "ft-991a", say), OR A DIFFERENT REAL RADIO
+// THIS PROJECT DOES NOT SUPPORT ("FT-991", which is a shipping Yaesu product
+// in its own right and not a misspelling of anything here) — returns the
+// zero Text and false.
 // Callers must never treat a zero Text as if it were real advisory copy.
 //
 // THE MATCH IS EXACT AND CASE-SENSITIVE, and for the FTDX101 pair that is
