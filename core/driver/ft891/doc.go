@@ -599,4 +599,14 @@
 //     would otherwise send it). Both answers agreeing closes the entry;
 //     either one rejecting having accepted the other is the finding this
 //     refusal exists to report honestly rather than mask.
+//
+//     THIS ENTRY'S PRECONDITION, MADE EXPLICIT (C-H1, closing review wave
+//     2): the assumption above is about a slot that DID answer at Open —
+//     it says nothing about a slot that never did. ReadChannel now checks
+//     SESSION MEMBERSHIP before dispatching to readDiscovered at all
+//     (read.go), so a 5xx or EMG slot outside this session's own
+//     discovered banks is refused by *SlotNotInSessionBanksError, with no
+//     frame sent — a structural check against capabilities this session
+//     already published, NOT a new assumption about the radio, and this
+//     register gains no seventeenth entry for it.
 package ft891
