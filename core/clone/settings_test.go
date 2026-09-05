@@ -344,8 +344,9 @@ func TestReadSettings_MalformedDescriptorRefusedBeforeWire(t *testing.T) {
 
 // TestReadSettings_BadItemIDShapeRefusedBeforeWire (Codex M8b #5): a stub
 // SettingsReader whose descriptor is structurally valid (non-empty, unique
-// IDs, so SettingsDescriptor.Validate passes) but whose item ID is NOT the
-// 6-ASCII-digit shape a MenuSnapshot requires is refused BEFORE any read.
+// IDs, so SettingsDescriptor.Validate passes) but whose item ID is five
+// digits — none of the three widths a MenuSnapshot requires, which are
+// exactly 3, 4 or 6 ASCII digits — is refused BEFORE any read.
 // Without the item-ID preflight this failed only AFTER every read, when the
 // built snapshot was validated.
 func TestReadSettings_BadItemIDShapeRefusedBeforeWire(t *testing.T) {
@@ -654,13 +655,20 @@ func TestPrepareSend_PerformsNoSettingsTraffic(t *testing.T) {
 }
 
 // TestReadSettings_FourDigitItemIDPassesThePreflight is the positive control
-// for the preflight above, at the OTHER EX address width.
+// for the preflight above, at a SECOND of the three EX address widths.
 //
 // A radio whose MENU Number is a (P1,P2) pair renders four-digit setting IDs
-// (core/cat's EXAddressPair), and MenuSnapshot.Validate accepts exactly four
-// or exactly six ASCII digits. Without this the preflight could be narrowed
-// back to six and only the five-digit negative above would notice — which it
-// would not, since five is refused either way.
+// (core/cat's EXAddressPair), and MenuSnapshot.Validate accepts exactly 3, 4
+// or 6 ASCII digits. Without this the preflight could be narrowed back to six
+// alone and only the five-digit negative above would notice — which it would
+// not, since five is refused either way.
+//
+// THE THIRD WIDTH HAS NO CONTROL AT THIS PREFLIGHT. Three-digit IDs (the
+// Kenwood MENU number) are pinned where the rule lives — core/codeplug's
+// TestMenuSnapshotValidate_ThreeDigitIDs — so a narrowing of the preflight
+// to four-or-six would pass this file. The sibling of this test at width
+// three is the cheap way to close that, and this comment must not be read
+// as claiming it exists.
 func TestReadSettings_FourDigitItemIDPassesThePreflight(t *testing.T) {
 	var calls int
 	sess := &stubSettingsSession{

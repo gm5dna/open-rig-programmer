@@ -3,6 +3,7 @@
 package extable
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -30,6 +31,7 @@ var fixtureRequired = Profile{
 	LabelPolicy:   LabelsRequired,
 	TextRowPolicy: TextRowsAllowed,
 
+	DigitsCeiling:    MaxDigitsCeiling,
 	MinDigits:        2,
 	MaxDigits:        6,
 	TextWidth:        8,
@@ -108,6 +110,8 @@ func TestProfileValidate_Refusals(t *testing.T) {
 		{"TypesImported without ImportPath", func(p *Profile) { p.ImportPath = "" }},
 		{"TypesImported without ImportAlias", func(p *Profile) { p.ImportAlias = "" }},
 		{"ImportAlias not an identifier", func(p *Profile) { p.ImportAlias = "not an ident" }},
+		{"zero DigitsCeiling", func(p *Profile) { p.DigitsCeiling = 0 }},
+		{"negative DigitsCeiling", func(p *Profile) { p.DigitsCeiling = -1 }},
 		{"zero MinDigits", func(p *Profile) { p.MinDigits = 0 }},
 		{"zero MaxDigits", func(p *Profile) { p.MaxDigits = 0 }},
 		{"zero TextWidth", func(p *Profile) { p.TextWidth = 0 }},
@@ -133,6 +137,60 @@ func TestProfileValidate_Refusals(t *testing.T) {
 				t.Error("Validate() accepted an invalid profile; want an error")
 			}
 		})
+	}
+}
+
+// TestProfileValidate_CeilingComesFromTheProfile proves the width ceiling is
+// READ from the profile rather than from this package's MaxDigitsCeiling
+// constant, in both directions.
+//
+// That constant mirrors core/cat's maxEXDigits, and core/cat's own
+// exdigits_ceiling_test.go pins the two equal. Bounding a profile that renders
+// into a DIFFERENT package by it would be a bound consulted from one place
+// with its datum taken from another — the defect shape Profile's own doc
+// comment says this type exists to prevent.
+//
+// Downwards is the case that matters: a family whose frame budget is narrower
+// than core/cat's would have every width core/cat admits waved through here,
+// and the refusal would arrive two packages downstream if at all. Upwards is
+// asserted because a ceiling that silently clamped to the constant would pass
+// every downward case and still not be the profile's own.
+func TestProfileValidate_CeilingComesFromTheProfile(t *testing.T) {
+	// 100 is far BELOW MaxDigitsCeiling's 247, so a check against the
+	// constant would accept every refusal case here.
+	for _, tc := range []struct {
+		name       string
+		mut        func(*Profile)
+		wantRefuse bool
+	}{
+		{"a width inside the profile's own ceiling", func(p *Profile) { p.MaxDigits = 32 }, false},
+		{"MaxDigits above the profile's own ceiling", func(p *Profile) { p.MaxDigits = 100 }, true},
+		{"TextWidth above the profile's own ceiling", func(p *Profile) { p.TextWidth = 100 }, true},
+		{"MaxObservedWidth above the profile's own ceiling", func(p *Profile) { p.MaxObservedWidth = 100 }, true},
+	} {
+		p := fixtureRequired
+		p.DigitsCeiling = 32
+		tc.mut(&p)
+		err := p.Validate()
+		switch {
+		case !tc.wantRefuse && err != nil:
+			t.Errorf("%s: Validate() = %v, want accepted", tc.name, err)
+		case tc.wantRefuse && err == nil:
+			t.Errorf("%s: Validate() accepted a width above the profile's ceiling of 32; want a refusal", tc.name)
+		case tc.wantRefuse && !strings.Contains(err.Error(), "32"):
+			t.Errorf("%s: Validate() = %v, want the refusal to name the profile's own ceiling of 32", tc.name, err)
+		}
+	}
+
+	// Upwards. No registered profile does this — all four Yaesu
+	// registrations carry MaxDigitsCeiling, because all four render into
+	// core/cat — and it is asserted only to prove the constant is not
+	// consulted behind the field's back.
+	wide := fixtureRequired
+	wide.DigitsCeiling = MaxDigitsCeiling + 100
+	wide.MaxDigits = MaxDigitsCeiling + 50
+	if err := wide.Validate(); err != nil {
+		t.Errorf("Validate() refused a width inside the profile's own wider ceiling: %v", err)
 	}
 }
 
@@ -296,6 +354,13 @@ func TestFT710Profile_MatchesTodaysConstants(t *testing.T) {
 	if p.MinDigits != 1 || p.MaxDigits != 4 || p.TextWidth != 12 || p.MaxObservedWidth != 12 {
 		t.Errorf("bounds drifted: %+v", p)
 	}
+	// Every registered profile renders into core/cat, so every one of them
+	// carries core/cat's own ceiling. A Kenwood profile will not: it renders
+	// into core/kw and supplies that package's constant instead, which is
+	// what makes the field per-family rather than global.
+	if p.DigitsCeiling != MaxDigitsCeiling {
+		t.Errorf("DigitsCeiling = %d, want %d (core/cat's own ceiling)", p.DigitsCeiling, MaxDigitsCeiling)
+	}
 	if p.ExpectedRows != 296 {
 		t.Errorf("ExpectedRows = %d, want 296", p.ExpectedRows)
 	}
@@ -350,6 +415,9 @@ func TestFTdx10Profile_Registered(t *testing.T) {
 	}
 	if p.MinDigits != 1 || p.MaxDigits != 4 || p.TextWidth != 12 || p.MaxObservedWidth != 12 {
 		t.Errorf("bounds drifted: %+v", p)
+	}
+	if p.DigitsCeiling != MaxDigitsCeiling {
+		t.Errorf("DigitsCeiling = %d, want %d (core/cat's own ceiling)", p.DigitsCeiling, MaxDigitsCeiling)
 	}
 	if p.ExpectedRows != 197 {
 		t.Errorf("ExpectedRows = %d, want 197 (the group-boundary ledger's count)", p.ExpectedRows)
@@ -419,6 +487,9 @@ func TestFTdx101Profile_MatchesTodaysConstants(t *testing.T) {
 	if p.MaxObservedWidth != 12 {
 		t.Errorf("MaxObservedWidth = %d, want 12 (the inert sentinel)", p.MaxObservedWidth)
 	}
+	if p.DigitsCeiling != MaxDigitsCeiling {
+		t.Errorf("DigitsCeiling = %d, want %d (core/cat's own ceiling)", p.DigitsCeiling, MaxDigitsCeiling)
+	}
 	if p.ExpectedRows != 193 {
 		t.Errorf("ExpectedRows = %d, want 193 (the group-boundary ledger's count)", p.ExpectedRows)
 	}
@@ -465,14 +536,226 @@ func TestRegistry_HoldsEveryModel(t *testing.T) {
 		}
 	}
 	// No two profiles may share the datum that would let one `go generate`
-	// overwrite another's artefact. validateRegistry already refuses a
-	// collision at init; this states the expected separation, pairwise, so a
-	// third registration cannot slip past a check written for two.
-	for i := range got {
-		for j := i + 1; j < len(got); j++ {
-			if got[i].Profile.Package == got[j].Profile.Package {
-				t.Errorf("profiles %q and %q both emit into package %q", got[i].Name, got[j].Name, got[i].Profile.Package)
+	// overwrite another's artefact, or read another's source CSV. That datum
+	// is validateRegistry's four collision keys — OutFile, VarName,
+	// ManualCSV and ObservedCSV — NOT the package clause.
+	//
+	// Until the FT-891 every registration lived in a package of its own, so
+	// "no two share a Package" and the real rule happened to coincide; they do
+	// not coincide in general, and a family whose two sibling inventories
+	// belong in ONE directory is refused by the narrower reading while
+	// validateRegistry accepts it. The assertion is widened rather than
+	// deleted, and sharedGenerateDatum is what states it —
+	// TestSharedPackageNeedsAllKeysToDiffer proves it both fires and
+	// does not fire, so the widening cannot quietly become no rule at all.
+	//
+	// RECORDED, because the widening did not reach them: five tests
+	// OUTSIDE this package still express the narrower reading, selecting
+	// a registration by Package alone and fataling unless exactly one
+	// matches — the three core/cat/<model>/staleness_test.go files
+	// (ft891, ftdx10, ftdx101), core/cat/ft891/dialect_test.go and
+	// core/driver/ft891/settings_test.go. Every one is CORRECT for its
+	// own package, which holds exactly one registration, so none was
+	// edited. A test written for a family
+	// whose sibling inventories share a directory cannot copy them: it
+	// must select its profile by VarName or OutFile (or Lookup by name),
+	// never by Package alone, which selects both siblings and then
+	// refuses the pair it was handed.
+	for _, v := range sharedGenerateDatum(got) {
+		t.Error(v)
+	}
+}
+
+// sharedGenerateDatum reports each pair in ps that shares a package AND any
+// one of validateRegistry's four collision keys. A shared package alone is
+// permitted: it is a directory, not a datum, and two profiles in one
+// directory collide with nothing provided their output file, their generated
+// variable and their source CSVs all differ. Package is a proxy for the
+// output DIRECTORY here, not the collision itself: Go requires one package
+// clause per directory, so two profiles that write into one directory always
+// share Package, and the only failure mode this proxy can have is a false
+// positive for two profiles in different directories that happen to declare
+// the same package name — the safe direction.
+//
+// The keys fold exactly as validateRegistry's own do, and for its reasons:
+// OutFile, ManualCSV and ObservedCSV are PATHS, and APFS and NTFS resolve a
+// case-only difference to one file, so a byte-equal comparison would miss a
+// real collision. VarName is a Go IDENTIFIER, where case is significant to
+// the compiler — exItems and EXItems are two legal package-level variables —
+// so folding it would refuse a pair Go itself accepts.
+//
+// Two of the four are also refused by validateRegistry at init. ManualCSV and
+// ObservedCSV are not: that function's inputs map exists to catch one
+// profile's OUTPUT landing on another's source, and it simply overwrites a
+// shared input rather than refusing the second write. So this helper is the
+// whole of that rule for both source keys, and what it protects is a sibling
+// inventory being generated from the wrong radio's chart — from the wrong
+// manual CSV, or (ObservationsRequired siblings) the wrong observation CSV.
+func sharedGenerateDatum(ps []NamedProfile) []string {
+	var out []string
+	for i := range ps {
+		for j := i + 1; j < len(ps); j++ {
+			a, b := ps[i], ps[j]
+			if a.Profile.Package != b.Profile.Package {
+				continue
 			}
+			for _, k := range []struct{ key, av, bv string }{
+				{"OutFile", strings.ToLower(a.Profile.OutFile), strings.ToLower(b.Profile.OutFile)},
+				{"VarName", a.Profile.VarName, b.Profile.VarName},
+				{"ManualCSV", strings.ToLower(a.Profile.ManualCSV), strings.ToLower(b.Profile.ManualCSV)},
+			} {
+				if k.av == k.bv {
+					out = append(out, fmt.Sprintf("profiles %q and %q both emit into package %q and share %s %q",
+						a.Name, b.Name, a.Profile.Package, k.key, k.av))
+				}
+			}
+			// ObservedCSV is checked separately, with an empty-string guard
+			// the other three keys do not need: "" is a real ManualCSV-shape
+			// collision but not a real ObservedCSV one, because "" is what
+			// every ObservationsAbsent profile carries (Validate refuses any
+			// other value under that policy) and validateRegistry itself
+			// never adds a blank ObservedCSV to its inputs map
+			// (profile.go:756-757) — two absent siblings share nothing.
+			if av, bv := strings.ToLower(a.Profile.ObservedCSV), strings.ToLower(b.Profile.ObservedCSV); av != "" && av == bv {
+				out = append(out, fmt.Sprintf("profiles %q and %q both emit into package %q and share %s %q",
+					a.Name, b.Name, a.Profile.Package, "ObservedCSV", av))
+			}
+		}
+	}
+	return out
+}
+
+// TestSharedPackageNeedsAllKeysToDiffer is the red proof each way for
+// the widening above: the rule must ADMIT a shared package when all four
+// collision keys — OutFile, VarName, ManualCSV and ObservedCSV — differ,
+// and must still REFUSE each key on its own. A widening proved only in the
+// permissive direction is indistinguishable from deleting the assertion.
+//
+// The fourth key carries ONE exception, and the first row below is its
+// pin: a blank ObservedCSV is not a collision, because "" is what every
+// ObservationsAbsent profile declares (Validate refuses any other value
+// under that policy) and validateRegistry itself never adds a blank input
+// to its map. Two absent siblings share the empty string and nothing else,
+// so that row's pair must be PERMITTED even though one of the four keys is
+// byte-equal across it.
+//
+// Every profile here is test-local. The three Kenwood registrations land in
+// their own tasks with their own CSVs; nothing in this test registers
+// anything.
+func TestSharedPackageNeedsAllKeysToDiffer(t *testing.T) {
+	single := func(pkg, out, varName, csv string) Profile {
+		p := fixtureAbsent
+		p.Package = pkg
+		p.OutFile = out
+		p.VarName = varName
+		p.ManualCSV = csv
+		return p
+	}
+	// withObserved switches p to ObservationsRequired and gives it the named
+	// observation CSV — fixtureAbsent's ObservedCSV is "" under
+	// ObservationsAbsent, so the fourth key needs a fixture that carries one.
+	withObserved := func(p Profile, csv string) Profile {
+		p.Observations = ObservationsRequired
+		p.ObservedCSV = csv
+		return p
+	}
+	for _, tc := range []struct {
+		name                string
+		a, b                Profile
+		wantKey             string // "" means the pair must be permitted
+		wantRegistryRefusal bool
+	}{
+		{
+			// The shape this widening exists for: one driver's two sibling
+			// inventories in one package directory.
+			// Both profiles carry a blank ObservedCSV (fixtureAbsent is
+			// ObservationsAbsent), so this row is also the pin for the
+			// fourth key's empty-string exception.
+			"one package, no collision key shared (both ObservedCSVs blank)",
+			single("ts590", "exinventory590s_gen.go", "exItems590S", "menu590s.csv"),
+			single("ts590", "exinventory590sg_gen.go", "exItems590SG", "menu590sg.csv"),
+			"", false,
+		},
+		{
+			"one package, one OutFile",
+			single("ts590", "exinventory_gen.go", "exItems590S", "menu590s.csv"),
+			single("ts590", "exinventory_gen.go", "exItems590SG", "menu590sg.csv"),
+			"OutFile", true,
+		},
+		{
+			// APFS and NTFS resolve these to one file, so the second
+			// generate would silently replace the first's artefact.
+			"one package, OutFiles differing only in case",
+			single("ts590", "exinventory590s_gen.go", "exItems590S", "menu590s.csv"),
+			single("ts590", "EXINVENTORY590S_GEN.GO", "exItems590SG", "menu590sg.csv"),
+			"OutFile", true,
+		},
+		{
+			"one package, one VarName",
+			single("ts590", "exinventory590s_gen.go", "exItems", "menu590s.csv"),
+			single("ts590", "exinventory590sg_gen.go", "exItems", "menu590sg.csv"),
+			"VarName", true,
+		},
+		{
+			// Case IS significant to the compiler, so these are two legal
+			// variables and neither the helper nor validateRegistry refuses
+			// them.
+			"one package, VarNames differing only in case",
+			single("ts590", "exinventory590s_gen.go", "exItems", "menu590s.csv"),
+			single("ts590", "exinventory590sg_gen.go", "EXItems", "menu590sg.csv"),
+			"", false,
+		},
+		{
+			// validateRegistry does NOT refuse this pair, which is why the
+			// assertion states the key: the cost of dropping it would be the
+			// SG's inventory generated from the S's chart, with the whole
+			// suite green.
+			"one package, one ManualCSV",
+			single("ts590", "exinventory590s_gen.go", "exItems590S", "menu590s.csv"),
+			single("ts590", "exinventory590sg_gen.go", "exItems590SG", "menu590s.csv"),
+			"ManualCSV", false,
+		},
+		{
+			// validateRegistry's fourth input key (profile.go:755-757), and
+			// the one MEDIUM-1 found missing here: two ObservationsRequired
+			// siblings sharing an observation chart would have the SG's
+			// inventory rendered from the S's hardware readings, the whole
+			// suite green, and neither this helper nor validateRegistry said
+			// a word. Before this case was checked, sharedGenerateDatum's
+			// key table had only three rows (OutFile, VarName, ManualCSV) and
+			// reported nothing for this pair — red until the fourth
+			// {"ObservedCSV", ...} row below was added.
+			"one package, one ObservedCSV",
+			withObserved(single("ts590", "exinventory590s_gen.go", "exItems590S", "menu590s.csv"), "menu590-observed.csv"),
+			withObserved(single("ts590", "exinventory590sg_gen.go", "exItems590SG", "menu590sg.csv"), "menu590-observed.csv"),
+			"ObservedCSV", false,
+		},
+		{
+			// The four Yaesu registrations' own shape: identical file,
+			// variable and source names in different packages.
+			"different packages, every key identical",
+			single("ts590", "exinventory_gen.go", "exItems", "table2.csv"),
+			single("ts480", "exinventory_gen.go", "exItems", "table2.csv"),
+			"", false,
+		},
+	} {
+		got := sharedGenerateDatum([]NamedProfile{{Name: "a", Profile: tc.a}, {Name: "b", Profile: tc.b}})
+		switch {
+		case tc.wantKey == "" && len(got) != 0:
+			t.Errorf("%s: reported %v, want the pair permitted", tc.name, got)
+		case tc.wantKey != "" && len(got) != 1:
+			t.Errorf("%s: reported %v, want exactly one violation naming %s", tc.name, got, tc.wantKey)
+		case tc.wantKey != "" && !strings.Contains(got[0], tc.wantKey):
+			t.Errorf("%s: reported %q, want it to name %s", tc.name, got[0], tc.wantKey)
+		}
+		// And the same pair against validateRegistry, so the test-side rule
+		// and the function-side one are compared rather than assumed equal.
+		err := validateRegistry(map[string]Profile{"a": tc.a, "b": tc.b})
+		if tc.wantRegistryRefusal && err == nil {
+			t.Errorf("%s: validateRegistry accepted the pair; want a refusal", tc.name)
+		}
+		if !tc.wantRegistryRefusal && err != nil {
+			t.Errorf("%s: validateRegistry refused the pair: %v", tc.name, err)
 		}
 	}
 }
@@ -547,6 +830,9 @@ func TestFT891Profile_MatchesTodaysConstants(t *testing.T) {
 	}
 	if p.MaxObservedWidth != 12 {
 		t.Errorf("MaxObservedWidth = %d, want 12 (the inert sentinel)", p.MaxObservedWidth)
+	}
+	if p.DigitsCeiling != MaxDigitsCeiling {
+		t.Errorf("DigitsCeiling = %d, want %d (core/cat's own ceiling)", p.DigitsCeiling, MaxDigitsCeiling)
 	}
 	if p.ExpectedRows != 159 {
 		t.Errorf("ExpectedRows = %d, want 159 (the group-boundary ledger's count)", p.ExpectedRows)
