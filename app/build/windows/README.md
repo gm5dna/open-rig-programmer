@@ -4,10 +4,11 @@
 
 Windows packaging assets for Open Rig Programmer: the NSIS installer
 template and its check script. Built by `release.yml`'s `windows` job
-(one `wails build -platform windows/amd64,windows/arm64 -nsis` run,
-CLIs built first) and by the local rehearsal path
-(`.superpowers/sdd/release-dryrun.sh`); never run on a Windows machine
-by this project yet (the hardware leg has not run).
+(added by the same milestone; one `wails build -platform
+windows/amd64,windows/arm64 -nsis` run, CLIs built first) and by the
+maintainer's local rehearsal script (not part of this repository — see
+`docs/building.md` for building from source); never run on a Windows
+machine by this project yet (the hardware leg has not run).
 
 ## Template-generated files (never hand-edit)
 
