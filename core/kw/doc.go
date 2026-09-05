@@ -136,8 +136,10 @@
 //
 // # Errata schedule — recorded, not resolved
 //
-// Twenty-one rows in THREE categories, and the categories matter: two of
-// the twenty-one are not defects at all.
+// Twenty-two rows in FOUR categories (P21), and the categories matter: two
+// of the twenty-one book-side rows are not defects at all, and the
+// twenty-second row is not about either book — it is about this
+// milestone's OWN spec, and P21 did not originally name that category.
 //
 // NINETEEN DOCUMENT DEFECTS:
 //
@@ -224,6 +226,23 @@
 //	           have; it is listed because a transcriber who carries SS's
 //	           numbers into an MC frame writes the wrong channel
 //	           (590:2181 vs 590:1345).
+//
+// ONE SPEC WORDING ERROR — not a book defect, and recorded here because
+// this is this milestone's decision register and prose on a safety gate is
+// this repository's contract:
+//
+//	S-E1 spec  §Testing's requirement that "the outbound gate refus[e]
+//	           every answer frame" is not achievable, and T7 did not
+//	           achieve it: "AI0;" (validAICommand) and an MC Set naming
+//	           ORDINARY MEMORY (validMCCommand, A16) are each
+//	           byte-identical to an answer a radio sends for the same
+//	           state, so the gate necessarily admits both. The true
+//	           invariant — no answer admitted EXCEPT where it coincides
+//	           with a Set this codec builds, and there are exactly two
+//	           such coincidences — is stated in AllowedCommand's own doc
+//	           comment (allowlist.go) and is what the gate actually holds
+//	           to; TestAllowedCommand_RefusesEveryAnswerFrameExceptTheTwoDisclosedCases
+//	           is the negative pin for every OTHER answer shape.
 //
 // # The ASSUMED register — the authoritative copy
 //
@@ -349,6 +368,14 @@
 //	     SG has been observed, and vice versa. Three trials, three
 //	     independent unblockings; no partial credit and no sibling
 //	     inheritance.
+//	     LIFTING A9 IS NOT FREE OF THIS PACKAGE. Today's gate refuses
+//	     P1=1 on every ordinary-memory MR unconditionally (allowlist.go's
+//	     validMRCommand): lifting A9 would need this gate widened to admit
+//	     it on channels a caller has some other reason to believe are
+//	     split, and Slot/Record given a way to carry a caller-chosen P1 on
+//	     a MEM slot — neither exists yet. FieldTxFrequency (spec :1359,
+//	     :1542-1544) is the field this would unlock; until it does, "MEM
+//	     only: Unavailable" is not a gap in this milestone, it is this row.
 //
 //	A10  MR/MW P2 accepts '0' for a channel below 100 on the two 590 rows.
 //	     Documented for MC Set (590:1334-1335); MR/MW only say "refer to the

@@ -69,15 +69,23 @@ func TestAllowedCommand_AcceptsExactlyTheEightGrammars(t *testing.T) {
 	}
 }
 
-// TestAllowedCommand_RefusesEveryAnswerFrame. An answer is something the
-// radio sends and never something this programme writes, however well formed
-// — and admitting one would let a captured reply be written back.
+// TestAllowedCommand_RefusesEveryAnswerFrameExceptTheTwoDisclosedCases. An
+// answer is refused unless it is byte-identical to a Set this codec builds
+// — and only "AI0;" and an MC naming ordinary memory ever are (both
+// disclosed in AllowedCommand's doc comment and pinned by their own tests).
+// Every OTHER answer frame this gate could be shown, however well formed,
+// is refused — because admitting one would let a captured reply be written
+// back — and this test is the negative case for all of them.
 //
-// MC IS THE CASE THAT MATTERS: its Set and its Answer are the same six bytes
-// exactly, so the gate cannot tell them apart by shape and judges the frame
-// against the SEND domain instead. "MC110;" below is that pin: a legitimate
-// TS-590SG ANSWER, refused outbound because A16 narrows the Set.
-func TestAllowedCommand_RefusesEveryAnswerFrame(t *testing.T) {
+// MC IS THE CASE THAT MATTERS EVEN HERE: its Set and its Answer are the
+// same six bytes exactly, so the gate cannot tell them apart by shape and
+// judges the frame against the SEND domain instead. "MC110;" and "MC100;"
+// below are that pin's refusing half: legitimate TS-590SG ANSWERS naming an
+// extension or section-defined channel, refused outbound because A16
+// narrows the Set to ordinary memory — the narrower domain that makes an MC
+// answer naming ORDINARY memory (not tested as a refusal here; see
+// validMCCommand's doc comment) the gate's second disclosed admission.
+func TestAllowedCommand_RefusesEveryAnswerFrameExceptTheTwoDisclosedCases(t *testing.T) {
 	sg, t480 := layout590SG(), layout480()
 
 	for _, tc := range []struct {
@@ -259,16 +267,22 @@ func TestAllowedCommand_RefusesAnMWTheBuilderWouldNotHaveEmitted(t *testing.T) {
 	}
 }
 
-// TestAllowedCommand_RefusesAnMRReadWithP1EqualsOneOnASimplexSlot. The MR
+// TestAllowedCommand_RefusesAnMROrdinaryMemoryReadWithP1EqualsOne. The MR
 // read's P1 is derived from the slot's CLASS and never chosen freely (M9,
-// Slot.P1), so "MR1007;" — the read A9 says is not safe to send blind — is a
-// frame no builder can produce and the gate refuses it. The SCAN 'U' read
+// Slot.P1), so "MR1007;" is a frame no builder can produce and the gate
+// refuses it. "Simplex" is A9's own word for the frame this refuses and is
+// not a property any Layout slot carries — SlotMemory is the class, and it
+// has no split/simplex axis at all — so the refusal is stated here in terms
+// of what the gate actually checks: P1=1 on an ORDINARY MEMORY channel,
+// which is unbuildable and, per 590:1444-1447 and 480:951, ambiguous with
+// the documented read of a split channel's transmit frequency (see
+// validMRCommand's doc comment for the full reasoning). The SCAN 'U' read
 // beside it is the positive control: P1='1' is legal there, and it is a
 // DOCUMENTED read (590:1449-1451).
-func TestAllowedCommand_RefusesAnMRReadWithP1EqualsOneOnASimplexSlot(t *testing.T) {
+func TestAllowedCommand_RefusesAnMROrdinaryMemoryReadWithP1EqualsOne(t *testing.T) {
 	sg := layout590SG()
 	if sg.AllowedCommand([]byte("MR1007;")) {
-		t.Error("the gate ADMITTED \"MR1007;\": channel 007 is ordinary memory, whose class derives P1='0', and an MR with P1=1 on a simplex channel is A9's unsafe frame")
+		t.Error("the gate ADMITTED \"MR1007;\": channel 007 is ordinary memory, whose class derives P1='0', and an MR with P1=1 on an ordinary-memory channel is unbuildable and ambiguous with a split channel's TX-frequency read")
 	}
 	if !sg.AllowedCommand([]byte("MR0007;")) {
 		t.Error("the gate refused \"MR0007;\", the read this codec issues for every MEM slot (P13)")

@@ -603,18 +603,24 @@ func TestGoldenVectors_RosterAndCountedLengths(t *testing.T) {
 // SHIPPED outbound gate for the book it was derived from, and must be
 // admitted.
 //
-// IT IS THE ENVELOPE, NOT A GRAMMAR, and that is the whole claim. framing.go
-// says so itself — Allow today "is the envelope alone … and it does not yet
-// know which commands exist" — so a pass here means the frame satisfies the
-// rules both books print about what a frame LOOKS like: a terminator, exactly
-// one, as the last byte; at least two upper-case name bytes before it; every
-// body byte 0x20..0x7E; never a radio-to-host token; never longer than
-// DefaultMaxFrame. It does NOT mean the codec agrees the frame is a valid MR,
-// MW or EX — nothing in this package can say that yet, which is what
-// TestTODO_T8_ReplayEveryVectorThroughItsOwnCodec records.
+// IT IS THE ENVELOPE, NOT A GRAMMAR, and that is the whole claim. The gate
+// under test here is NewFraming's Allow, which framing.go's own doc says is
+// the envelope alone: it knows the book, not the layout, so it cannot ask
+// whether a frame is a valid MR, MW or EX — that per-command question is
+// layoutFraming's (NewFramingFor), reached only through a configured
+// Layout, and this test deliberately does not go through it. So a pass here
+// means the frame satisfies the rules both books print about what a frame
+// LOOKS like: a terminator, exactly one, as the last byte; at least two
+// upper-case name bytes before it; every body byte 0x20..0x7E; never a
+// radio-to-host token; never longer than DefaultMaxFrame. It does NOT mean
+// the codec agrees the frame is a valid MR, MW or EX — this leg cannot say
+// that, and TestTODO_T8_ReplayEveryVectorThroughItsOwnCodec is the separate,
+// still-open record of the per-command REPLAY (build from fields, compare
+// bytes) rather than the gate check this test performs.
 //
-// The gate is reached through NewFraming, the seam every caller uses, rather
-// than through envelopeAllows directly: the pin is on the shipped behaviour.
+// The gate is reached through NewFraming, not NewFramingFor: the pin is on
+// the envelope NewFraming ships, not on the layout-narrowed gate a driver
+// actually uses.
 //
 // Two properties make this leg non-vacuous rather than a tautology over
 // "printable bytes":
@@ -629,8 +635,11 @@ func TestGoldenVectors_RosterAndCountedLengths(t *testing.T) {
 //
 // mw590_set_ch03_erase_no_P16, the 590 book's erase shape, is also asserted
 // ADMITTED here — a true statement about the envelope, which is not a
-// grammar; this programme never builds that frame, and T7's per-command gate
-// is what will refuse it.
+// grammar; this programme never builds that frame, and the per-command gate
+// T7 built (layoutFraming.Allow, reached through NewFramingFor) is what
+// refuses it. TestNewFramingFor_PutsTheGrammarsInFrontOfTheEnvelope pins
+// exactly this pair on this same 42-byte shape: the book-only framing
+// admits it and the layout-bearing one refuses it.
 func TestGoldenVectors_TheOutboundGateAdmitsEveryHostBuiltFrame(t *testing.T) {
 	hostBuilt, refused := 0, 0
 	for _, spec := range goldenSpecs {
