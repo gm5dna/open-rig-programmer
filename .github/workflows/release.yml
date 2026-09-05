@@ -28,9 +28,12 @@
 # an arm64 runner, or vice versa), so leaving CGO_ENABLED unset would
 # silently drop the enumerator's darwin backend and fail to link.
 #
-# Windows: go.bug.st/serial's Windows implementation (serial_windows.go,
-# enumerator/usb_windows.go) is also cgo-free — CreateFile/DCB/overlapped
-# I/O and a setupapi walk, both via golang.org/x/sys/windows — so the
+# Windows: go.bug.st/serial's Windows implementation is also cgo-free,
+# but its two halves differ: the port (serial_windows.go) is
+# CreateFile/DCB/overlapped I/O via golang.org/x/sys/windows and
+# syscall, while the enumerator (enumerator/usb_windows.go) is a
+# setupapi walk plus a USB hub IOCTL, reached via
+# windows.NewLazySystemDLL("setupapi.dll") — no cgo either way, so the
 # `windows` job below builds both CLI arches with CGO_ENABLED=0.
 # windows-2025 ships no NSIS (Windows2025-Readme, read 04/09/2026), so the
 # job fetches the official 3.12 distribution zip, verifies it against a
