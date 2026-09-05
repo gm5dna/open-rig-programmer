@@ -312,12 +312,13 @@ func currentCaps(conn *connectionState, working *codeplug.Codeplug) (spec.Capabi
 	return caps, true
 }
 
-// capsForModel indirects wiring.StaticCapabilities — called only by
-// currentModel (the recognition check) and currentCaps (the value it
-// returns) — so this package's own tests can exercise the working-copy-
+// capsForModel indirects wiring.StaticCapabilities — called by
+// currentModel (the recognition check), currentCaps (the value it
+// returns) and normaliseTierFieldsForOwnModel (fileio.go, the file's own
+// model) — so this package's own tests can exercise the working-copy-
 // model resolution above against a model name wiring itself does not
-// register. internal/wiring registers FOUR models since M9d-2 ("FT-710",
-// "FTdx10", "FTdx101D" and "FTdx101MP"), and this seam is still needed —
+// register. internal/wiring registers fifteen models today (four Yaesu,
+// eleven Icom rows), and this seam is still needed —
 // more so, not less: what these tests need is an
 // UNREGISTRABLE name whose resolution is theirs to control, which no real
 // registered model can be. Reassigned ONLY by tests (e.g.

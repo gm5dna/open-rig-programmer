@@ -8,6 +8,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	civic705 "github.com/gm5dna/open-rig-programmer/core/civ/ic705"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -25,6 +26,20 @@ var allFields = []spec.Field{
 	spec.FieldTxFrequency, spec.FieldDuplex, spec.FieldOffset, spec.FieldToneMode,
 	spec.FieldToneTx, spec.FieldToneRx, spec.FieldDTCSCode, spec.FieldDTCSPolarity,
 	spec.FieldFilter, spec.FieldDataMode,
+}
+
+var deliberatelyUnexpressedFields = map[spec.Field]string{
+	spec.FieldTuningStepEnabled: "additions design D8 — the IC-705 memory frame carries no tuning-step-enabled field",
+	spec.FieldTuningStep:        "additions design D8 — the IC-705 memory frame carries no tuning-step field",
+	spec.FieldProgramTuningStep: "additions design D8 — the IC-705 memory frame carries no programmable-tuning-step field",
+	spec.FieldAttenuator:        "additions design D8 — the IC-705 memory frame carries no attenuator field",
+	spec.FieldPreamp:            "additions design D8 — the IC-705 memory frame carries no preamp field",
+	spec.FieldAntenna:           "additions design D8 — the IC-705 memory frame carries no antenna-selection field",
+	spec.FieldIPPlus:            "additions design D8 — the IC-705 memory frame carries no IP+ field",
+}
+
+func TestFieldAuditCoversEverySpecField(t *testing.T) {
+	drivertest.AssertFieldAuditCoversEverySpecField(t, "allFields", allFields, deliberatelyUnexpressedFields)
 }
 
 // bothProfiles is every capability set this driver can hand out, for the

@@ -232,6 +232,18 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 		// fabricated 0 Hz channel.
 		return codeplug.Channel{}, fmt.Errorf("ic7760: ReadChannel %s: the record carries no frequency", slot)
 	}
+	// TestReadChannel_RefusesFrequencyAboveCeiling pins this refusal: a
+	// read must not construct a frequency codeplug.Validate will reject.
+	// TestReadChannel_AcceptsFrequencyAtCeiling pins the boundary itself:
+	// the strict > below refuses only what exceeds the ceiling, not the
+	// ceiling value. There is no floor check, by design: MinFreqHz is
+	// deliberately zero (caps.go:375), so no decoded frequency can fall
+	// below it.
+	if freq > MaxEncodableFreqHz {
+		return codeplug.Channel{}, &OutOfDomainError{
+			Field: spec.FieldFrequency, Value: freq, Max: MaxEncodableFreqHz,
+		}
+	}
 	mode, ok := rec.Mode.Get()
 	if !ok {
 		return codeplug.Channel{}, fmt.Errorf("ic7760: ReadChannel %s: the record carries no mode", slot)

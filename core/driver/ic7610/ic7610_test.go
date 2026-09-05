@@ -13,6 +13,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	civic7610 "github.com/gm5dna/open-rig-programmer/core/civ/ic7610"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -268,6 +269,10 @@ func TestOpen_WrongLengthRefusesWithoutAttribution(t *testing.T) {
 			}
 			if mismatch.Want != civic7610.RecordOnlyLength {
 				t.Errorf("*RecordLengthMismatchError.Want = %d, want %d", mismatch.Want, civic7610.RecordOnlyLength)
+			}
+			if n == 24 {
+				drivertest.AssertRecordLengthMismatch(t, mismatch, mismatch.Got, mismatch.Want,
+					"ic7610: g0/ch1 answered a 24-byte memory record, want 25 — the expected length is itself an ASSUMED derivation from one document (D5 entry 6, matrix lift R6), and this refusal names no other model because cross-model record-length distinctness is a Wave-4 tier check")
 			}
 			// And the message carries all three things the plan names:
 			// the length found, the length expected, and that the

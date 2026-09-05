@@ -70,7 +70,7 @@ func TestReadChannel_PopulatedMemorySlot(t *testing.T) {
 	if err := d.ToneTx.Valid(sess.Capabilities()); err != nil {
 		t.Errorf("ToneTx.Valid: %v — a read must never construct a Known value the radio's own tone domain refuses (T1(3))", err)
 	}
-	drivertest.AssertFreshReadSaveLoad(t, ch, codeplug.Load)
+	drivertest.AssertFreshReadSaveLoad(t, ch, sess.Capabilities(), codeplug.Load)
 }
 
 // An FA answer is an EMPTY channel, not an error (D5 entry 2(a)).

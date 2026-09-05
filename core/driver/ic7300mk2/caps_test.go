@@ -7,6 +7,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -20,9 +21,8 @@ import (
 // field.go. So the drift alarm this comment used to promise ("a twenty-first
 // constant would leave this slice short") no longer holds, and the seven D8
 // receiver fields are outside the write guard below. They are graded absent
-// on this transceiver, so the guard's CONCLUSION is not thought to be wrong;
-// it is simply not checked here. Closing that needs a spec-side enumeration
-// this package cannot mint on its own.
+// on this transceiver, and TestFieldAuditCoversEverySpecField now requires
+// that exclusion to stay explicit without changing this matrix row set.
 var allFields = []spec.Field{
 	spec.FieldFrequency,
 	spec.FieldMode,
@@ -45,6 +45,20 @@ var allFields = []spec.Field{
 	spec.FieldDTCSPolarity,
 	spec.FieldFilter,
 	spec.FieldDataMode,
+}
+
+var deliberatelyUnexpressedFields = map[spec.Field]string{
+	spec.FieldTuningStepEnabled: "additions design D8 — the IC-7300MK2 memory frame carries no tuning-step-enabled field",
+	spec.FieldTuningStep:        "additions design D8 — the IC-7300MK2 memory frame carries no tuning-step field",
+	spec.FieldProgramTuningStep: "additions design D8 — the IC-7300MK2 memory frame carries no programmable-tuning-step field",
+	spec.FieldAttenuator:        "additions design D8 — the IC-7300MK2 memory frame carries no attenuator field",
+	spec.FieldPreamp:            "additions design D8 — the IC-7300MK2 memory frame carries no preamp field",
+	spec.FieldAntenna:           "additions design D8 — the IC-7300MK2 memory frame carries no antenna-selection field",
+	spec.FieldIPPlus:            "additions design D8 — the IC-7300MK2 memory frame carries no IP+ field",
+}
+
+func TestFieldAuditCoversEverySpecField(t *testing.T) {
+	drivertest.AssertFieldAuditCoversEverySpecField(t, "allFields", allFields, deliberatelyUnexpressedFields)
 }
 
 func TestAllFieldsCoversThePreD8SpecFields(t *testing.T) {

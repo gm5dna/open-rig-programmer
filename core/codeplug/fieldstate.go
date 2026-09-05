@@ -139,32 +139,23 @@ func (f BoolField) Valid() error {
 // Absent is deliberately NOT the state a radio read or a file load
 // produces for a field the radio lacks — those produce Unavailable, the
 // positive statement "this radio/protocol has no such field". See
-// FieldState.Recorded for why the two nevertheless answer the file
-// writer's question identically.
+// FieldState.RepresentableByOmission for why the file writer must keep
+// the two distinct.
 const Absent FieldState = ""
 
-// Recorded reports whether s carries something a codeplug FILE has to
-// write down: Known (a value) or Unknown (an open question about a field
-// the radio does have).
-//
-// Absent and Unavailable both answer false, and that pairing is the
-// hinge of the Icom tier's byte-identity guarantee (design D4). Schema 3
-// has no key for any tier-added field, and the absence of a key says
-// exactly what Unavailable says — this codeplug has nothing to store
-// here. So a channel read from a Yaesu radio, whose ten tier fields all
-// come back Unavailable (the TagDisplay precedent), is fully
-// representable in schema 3 and is written there, byte for byte as it
-// was before the tier existed. A load of such a file reproduces
-// Unavailable, so the round trip is stable and, just as importantly, a
-// codeplug loaded from an old file still compares EQUAL to a fresh read
-// of the same radio — which is what keeps codeplug.Diff from reporting
-// every channel as modified.
-//
-// Only Known and Unknown are recorded: a recorded Icom-tier field forces
-// schema 4 and a recorded receiver field (additions D8) forces schema 5,
-// because only they say something the lower schema could not hold;
-// Absent and Unavailable never promote a file.
+// Recorded reports whether s claims that the field exists: Known carries
+// a value and Unknown carries an open question about a field the radio
+// does have. Validate uses that question when an unreachable field must
+// not make either claim.
 func (s FieldState) Recorded() bool { return s == Known || s == Unknown }
+
+// RepresentableByOmission reports whether a lower file schema can carry
+// s by having no key for the field. Only Unavailable can be omitted:
+// legacy loaders reconstruct a missing tier field as Unavailable, so
+// omitting Absent would change it into a positive claim that the radio
+// lacks the field. TestSaveLoad_ReachableAbsentFieldRemainsInvalid pins
+// the consequence at the send gate.
+func (s FieldState) RepresentableByOmission() bool { return s == Unavailable }
 
 // FreqField holds a frequency in hertz together with how confidently it
 // is known — the FieldTxFrequency and FieldOffset shape. See FieldState

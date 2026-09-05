@@ -1275,6 +1275,14 @@ func TestRadiotext_IC7100Verbatim(t *testing.T) {
 // leave the first receiver's grid explaining nothing, so the verbatim
 // comparison below is what holds the spec's wording in place.
 //
+// ProbeFirmwareNote ALSO CARRIES THE BOUNDED-WALK PARAGRAPH the IC-905's
+// note carries (F1, this file's sibling task): this receiver's default
+// Open leaves part of its memory space unwalked too, so "a channel
+// stored outside that walk is simply not listed here" and "not evidence
+// that the receiver's channel is empty" are load-bearing here for the
+// same reason they are on the IC-905's entry, in this receiver's own
+// words for its own walk — see core/driver/icr8600/read.go's discover.
+//
 // ToneScanSkipVerification is asserted EMPTY for the same reason every
 // other model's is: core/driver/icr8600's writeTrialsComplete is false, so
 // there is no hardware-preservation verification of any kind to report.
@@ -1297,7 +1305,7 @@ func TestRadiotext_ICR8600Verbatim(t *testing.T) {
 			ScanSkip: "not read or written over CI-V by this build — this receiver's first record byte holds a printed scan-skip choice and a select-scan group, and neither half is mapped",
 		},
 		FirmwarePlaceholder: "as shown on the IC-R8600's own display",
-		ProbeFirmwareNote:   "Firmware version has no query in this build — check the receiver's display. No minimum version is established for the IC-R8600: this build knows of none to require. This driver talks only to CI-V address 96h, with no --civ-address option to change it and no way to detect a receiver set to a different address; and its opening speed of 19200 is assumed on both halves — this receiver's CI-V Reference Guide prints no factory default speed, mentions no automatic setting, and never lists the rates its menu offers, so the rate AND the list it was chosen from are both assumed. The guide's own advice is to set the address, the speed and the transceive function in the receiver's Set mode before controlling it, which is the first thing to check. Two more things about this receiver are worth knowing before blaming the port. It has FOUR possible control terminals — a remote jack, a front and a rear USB port, and a network connection — and this build talks over USB, so if one port is silent, check which terminal the receiver has been told to use before concluding the cable is wrong. And neither the transceive setting nor the echo-back setting of either USB port has a printed default, so this build cannot tell you whether unsolicited frames should be expected of the receiver's own accord; any that arrive are counted and ignored, never acted on. If nothing answers, check the receiver's address and speed before assuming the port is wrong.",
+		ProbeFirmwareNote:   "Firmware version has no query in this build — check the receiver's display. No minimum version is established for the IC-R8600: this build knows of none to require. This driver talks only to CI-V address 96h, with no --civ-address option to change it and no way to detect a receiver set to a different address; and its opening speed of 19200 is assumed on both halves — this receiver's CI-V Reference Guide prints no factory default speed, mentions no automatic setting, and never lists the rates its menu offers, so the rate AND the list it was chosen from are both assumed. The guide's own advice is to set the address, the speed and the transceive function in the receiver's Set mode before controlling it, which is the first thing to check. Two more things about this receiver are worth knowing before blaming the port. It has FOUR possible control terminals — a remote jack, a front and a rear USB port, and a network connection — and this build talks over USB, so if one port is silent, check which terminal the receiver has been told to use before concluding the cable is wrong. Neither the transceive setting nor the echo-back setting of either USB port has a printed default, so this build cannot tell you whether unsolicited frames should be expected of the receiver's own accord; any that arrive are counted and ignored, never acted on. Opening this receiver also discovers its Memories bank's occupied slots by a BOUNDED walk — group 0 in full, then channel 00 of every other group, reading the rest of a group only where its channel 00 answered — not the whole 100x100 space, and nothing on this build's command line or in its window widens it (the driver's own WithFullInventoryWalk is a Go-level option no registered composition passes): a channel stored outside that walk is simply not listed here, so its absence from the grid is not evidence that the receiver's channel is empty. If nothing answers, check the receiver's address and speed before assuming the port is wrong.",
 	}
 
 	got, ok := radiotext.For("IC-R8600")
@@ -1309,4 +1317,33 @@ func TestRadiotext_ICR8600Verbatim(t *testing.T) {
 	}
 
 	assertNotBorrowedFromAnyOtherModel(t, "IC-R8600", got)
+}
+
+// TestRadiotext_ICR8600ProbeNote_DoesNotOverstateTheWalkBound mirrors
+// core/driver/icr8600/write_test.go's
+// TestOccupiedSurprise_TheDiagnosticNamesTheWalkThisSessionRan (its
+// "after the bounded walk" subtest, around write_test.go:511-513): that
+// test fails the build if the write-refusal text carries the struck
+// phrase "no setting that widens it", because icr8600.go:34 exports
+// WithFullInventoryWalk and the phrase claims no setting exists at all.
+// The probe note tells the same bounded-walk story and is held to the
+// same honesty rule, so it is pinned here too, independently of the
+// verbatim comparison above (which would also catch a regression, but
+// only by chance — this test names the exact hazard).
+func TestRadiotext_ICR8600ProbeNote_DoesNotOverstateTheWalkBound(t *testing.T) {
+	got, ok := radiotext.For("IC-R8600")
+	if !ok {
+		t.Fatal(`For("IC-R8600") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if strings.Contains(got.ProbeFirmwareNote, "no setting that widens it") {
+		t.Errorf("ProbeFirmwareNote still claims no setting widens the walk, which WithFullInventoryWalk (core/driver/icr8600/icr8600.go) falsifies: %q", got.ProbeFirmwareNote)
+	}
+	for _, want := range []string{
+		"command line",
+		"WithFullInventoryWalk",
+	} {
+		if !strings.Contains(got.ProbeFirmwareNote, want) {
+			t.Errorf("ProbeFirmwareNote = %q, want it to contain %q (the honest form used at core/driver/icr8600/write.go:215)", got.ProbeFirmwareNote, want)
+		}
+	}
 }

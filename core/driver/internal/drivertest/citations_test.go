@@ -410,6 +410,59 @@ func TestSuppliedBySection(t *testing.T) {
 	}
 }
 
+// TestSuppliedByPageBounds pins F2's ruling: a "PDF pp.lo-hi" span is
+// admitted only when the authority supplies that EXACT span token, never
+// merely both its endpoints. The endpoint-only case is the red proof —
+// before F2's fix, supplying "PDF p.3" and "PDF p.90" alone let a claim as
+// broad as "PDF pp.3-90" walk past the positive list unsupported. The
+// reversed and malformed cases pin that the function validates the token's
+// own shape rather than trusting a map lookup on an unparsed string.
+func TestSuppliedByPageBounds(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		supplied map[string]bool
+		token    string
+		want     bool
+	}{
+		{
+			name:     "endpoints alone do not supply the span",
+			supplied: map[string]bool{"PDF p.3": true, "PDF p.90": true},
+			token:    "PDF pp.3-90",
+			want:     false,
+		},
+		{
+			name:     "the exact span token supplies itself",
+			supplied: map[string]bool{"PDF pp.3-90": true},
+			token:    "PDF pp.3-90",
+			want:     true,
+		},
+		{
+			name:     "a reversed span is never admitted, even if somehow supplied",
+			supplied: map[string]bool{"PDF pp.90-3": true},
+			token:    "PDF pp.90-3",
+			want:     false,
+		},
+		{
+			name:     "a span with no high bound is never admitted",
+			supplied: map[string]bool{"PDF pp.3-": true},
+			token:    "PDF pp.3-",
+			want:     false,
+		},
+		{
+			name:     "a span with no low bound is never admitted",
+			supplied: map[string]bool{"PDF pp.-3": true},
+			token:    "PDF pp.-3",
+			want:     false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := suppliedByPageBounds(tc.supplied, tc.token); got != tc.want {
+				t.Errorf("suppliedByPageBounds(%v, %q) = %v, want %v", tc.supplied, tc.token, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestCitationGrammarReadsTheSpelledOutAndCasedForms is the recall half of the
 // closing review's finding, at the level of the grammar itself. Each POSITIVE
 // case is a spelling the packages actually use that the first two rounds did

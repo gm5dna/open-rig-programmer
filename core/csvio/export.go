@@ -177,41 +177,58 @@ func receiverCells(ch codeplug.Channel) []string {
 	}
 }
 
-// needsTierColumns reports whether any channel carries a D4 field
-// field whose state RECORDS something (Known or Unknown — see
-// codeplug.FieldState.Recorded). It is the CSV exporter's exact analogue
-// of core/codeplug's schemaFor, down to treating Unavailable as nothing
-// to record, and it is the reason an FT-710 export — every one of whose
-// tier fields comes back Unavailable — is byte-identical to what this
-// program wrote before the tier.
+// needsTierColumns reports whether any channel carries a D4 field whose
+// state a version-1 file CANNOT REPRESENT BY LEAVING THE COLUMN OUT —
+// anything but Unavailable, i.e.
+// !codeplug.FieldState.RepresentableByOmission. It is the CSV
+// exporter's exact analogue of core/codeplug's schemaFor, which applies
+// the same clause through ChannelData.tierFieldsRepresentableByOmission,
+// and it is the reason an FT-710 export — every one of whose tier fields
+// comes back Unavailable — is byte-identical to what this program wrote
+// before the tier.
+//
+// ABSENT promotes, and the omission rule is the only rule that gets
+// that right. An empty CSV cell does not mean Absent: version 1 has no
+// cell at all, and Import reconstructs a missing column group as
+// Unavailable (markTierFieldsUnavailable), the positive claim "this
+// radio has no such field". Selecting on Recorded() therefore laundered
+// a reachable Absent field — which codeplug.Validate refuses at the send
+// gate — into an Unavailable one it accepts, the same hole schemaFor
+// closed on the JSON route.
+// TestNeedsTierColumns_AgreesWithTheSchemaRule pins the agreement and
+// TestExportImport_ReachableAbsentFieldRemainsInvalid the consequence.
 func needsTierColumns(channels []codeplug.Channel) bool {
 	for _, ch := range channels {
 		if ch.Empty() {
 			continue
 		}
 		d := ch.Data
-		if d.TxFreqHz.State.Recorded() || d.Duplex.State.Recorded() ||
-			d.OffsetHz.State.Recorded() || d.ToneMode.State.Recorded() ||
-			d.ToneTx.State.Recorded() || d.ToneRx.State.Recorded() ||
-			d.DTCSCode.State.Recorded() || d.DTCSPolarity.State.Recorded() ||
-			d.Filter.State.Recorded() || d.DataMode.State.Recorded() {
+		if !d.TxFreqHz.State.RepresentableByOmission() || !d.Duplex.State.RepresentableByOmission() ||
+			!d.OffsetHz.State.RepresentableByOmission() || !d.ToneMode.State.RepresentableByOmission() ||
+			!d.ToneTx.State.RepresentableByOmission() || !d.ToneRx.State.RepresentableByOmission() ||
+			!d.DTCSCode.State.RepresentableByOmission() || !d.DTCSPolarity.State.RepresentableByOmission() ||
+			!d.Filter.State.RepresentableByOmission() || !d.DataMode.State.RepresentableByOmission() {
 			return true
 		}
 	}
 	return false
 }
 
-// needsReceiverColumns is the D8 version-selection predicate. As with
-// the native schema rule, only Known and Unknown are Recorded.
+// needsReceiverColumns is the D8 version-selection predicate, and the
+// rule is the same one for the same reason: only Unavailable survives
+// having no column, because that is the state Import's
+// markReceiverFieldsUnavailable gives all seven when the group is
+// missing. See needsTierColumns.
 func needsReceiverColumns(channels []codeplug.Channel) bool {
 	for _, ch := range channels {
 		if ch.Empty() {
 			continue
 		}
 		d := ch.Data
-		if d.TuningStepEnabled.State.Recorded() || d.TuningStep.State.Recorded() ||
-			d.ProgramTuningStepHz.State.Recorded() || d.AttenuatorDB.State.Recorded() ||
-			d.Preamp.State.Recorded() || d.Antenna.State.Recorded() || d.IPPlus.State.Recorded() {
+		if !d.TuningStepEnabled.State.RepresentableByOmission() || !d.TuningStep.State.RepresentableByOmission() ||
+			!d.ProgramTuningStepHz.State.RepresentableByOmission() || !d.AttenuatorDB.State.RepresentableByOmission() ||
+			!d.Preamp.State.RepresentableByOmission() || !d.Antenna.State.RepresentableByOmission() ||
+			!d.IPPlus.State.RepresentableByOmission() {
 			return true
 		}
 	}
@@ -365,16 +382,18 @@ func exportRow(ch codeplug.Channel, tier, receiver bool) []string {
 //
 // WHICH header depends on the content, by the same lowest-that-can-
 // represent-it rule core/codeplug's file writer uses (design D4): the
-// version-1 header while no channel records an added field, version 2
-// when only D4 records content, and version 3 when any D8 field is Known
-// or Unknown. UNAVAILABLE is the case
+// version-1 header while every added field is Unavailable, version 2
+// when only D4 holds a state omission cannot carry, and version 3 as
+// soon as any D8 field does (see needsTierColumns for why Absent counts
+// and what selecting on Recorded() laundered). UNAVAILABLE is the case
 // that actually decides this for the radios registered today: every read
-// of a Yaesu leaves all seventeen Unavailable, and it is precisely because
-// Unavailable is not Recorded that such an export stays version 1. An
-// export of any radio registered before the
-// Icom tier is therefore byte-identical to what this program produced
-// before it, and losslessness holds in both versions — a version-1 file
-// is only ever written for content version 1 can hold.
+// of a Yaesu leaves all seventeen Unavailable, and it is precisely
+// because Unavailable is the one state a missing column reconstructs
+// correctly that such an export stays version 1. An export of any radio
+// registered before the Icom tier is therefore byte-identical to what
+// this program produced before it, and losslessness holds in every
+// version — a version-1 file is only ever written for content version 1
+// can hold.
 func Export(w io.Writer, channels []codeplug.Channel) error {
 	cw := csv.NewWriter(w)
 	receiver := needsReceiverColumns(channels)

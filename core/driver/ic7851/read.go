@@ -304,6 +304,17 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 		// fabricated 0 Hz channel.
 		return codeplug.Channel{}, fmt.Errorf("ic7851: ReadChannel %s: the record carries no frequency", slot)
 	}
+	// TestReadChannel_RefusesFrequencyOutsideRadioDomain pins this reuse of
+	// the write rung: no read may construct a frequency validation refuses.
+	// TestReadChannel_AcceptsFrequencyAtCeiling pins the boundary itself:
+	// domainRefusal's frequency arm is a strict >, so the ceiling value
+	// passes. The synthetic ChannelData below carries only FreqHz; every
+	// other field is left at its zero value, which is not FieldState
+	// Known (core/codeplug/fieldstate.go:28-33), so domainRefusal's tone
+	// arms never trip on this call.
+	if err := domainRefusal(codeplug.ChannelData{FreqHz: freq}, s.caps); err != nil {
+		return codeplug.Channel{}, err
+	}
 	mode, ok := rec.Mode.Get()
 	if !ok {
 		return codeplug.Channel{}, fmt.Errorf("ic7851: ReadChannel %s: the record carries no mode", slot)

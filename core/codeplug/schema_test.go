@@ -11,6 +11,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
 // canonicalV3Goldens are the schema-3 files in testdata. Every one of
@@ -94,6 +96,16 @@ func TestSaveLoad_CanonicalV3ByteIdentical(t *testing.T) {
 			if cp.Schema != CurrentSchema {
 				t.Fatalf("Load(%s).Schema = %d, want %d (migrate-on-load)", src, cp.Schema, CurrentSchema)
 			}
+			for _, ch := range cp.Channels {
+				if ch.Data == nil {
+					continue
+				}
+				for field, state := range allTierFieldStates(ch.Data) {
+					if state != Unavailable {
+						t.Fatalf("Load(%s) slot %q %s state = %q, want Unavailable: this is why schema 3 can represent the loaded content by omission", src, ch.Slot, field, state)
+					}
+				}
+			}
 
 			dst := filepath.Join(t.TempDir(), name)
 			if err := Save(dst, cp); err != nil {
@@ -148,8 +160,8 @@ func TestSaveLoad_CanonicalV4ByteIdentical(t *testing.T) {
 // gaining omitempty: every field in the fixture is Known or Unavailable,
 // so no field ever renders as the empty Absent state
 // (`{"state": ""}`), and omitempty changes no byte when the value is
-// never empty. The on-disk rendering of Absent is not pinned by any
-// test in this package.
+// never empty. The on-disk rendering of Absent is pinned separately by
+// TestSaveLoad_SparseV5WithNothingRecordedPreservesAbsent.
 func TestSaveLoad_CanonicalV5ByteIdentical(t *testing.T) {
 	for _, name := range canonicalV5Goldens {
 		t.Run(name, func(t *testing.T) {
@@ -197,23 +209,29 @@ func TestCanonicalV5Golden_RecordsEveryReceiverField(t *testing.T) {
 	}
 }
 
-// TestSchemaFor_NoV3RepresentableContentEverWritesV4 is the SECOND of
-// design D4's two pinned tests: no schema-3-representable content ever
-// produces a schema-4 file.
+// TestSchemaFor_ChoosesLowestRepresentableSchema pins design D4's
+// schema-selection table: schemaFor picks schema 3 only when every
+// tier-added field is Unavailable (RepresentableByOmission) and the
+// frequency fits schema 3's uint32; Known, Unknown, or Absent on any of
+// the ten D4 tier fields — the ones this table mutates — or a frequency
+// past that ceiling, forces schema 4. The seven D8 receiver fields obey
+// the same rule one schema up (any state but Unavailable forces 5),
+// pinned separately by TestSchemaFor_ReceiverFieldsForceV5UnlessUnavailable.
 //
 // The two clauses of the rule are exercised from both sides — a
-// tier-added field at each state, and a frequency either side of
-// schema 3's uint32 ceiling — so neither clause can be quietly dropped
-// without a failure here.
-func TestSchemaFor_NoV3RepresentableContentEverWritesV4(t *testing.T) {
+// tier-added field at each of its four states, and a frequency either
+// side of schema 3's uint32 ceiling — so neither clause can be quietly
+// dropped without a failure here, and Absent is pinned separately from
+// Unavailable so the two can never be conflated again.
+func TestSchemaFor_ChoosesLowestRepresentableSchema(t *testing.T) {
 	v3able := func(mutate func(*ChannelData)) *Codeplug {
-		d := &ChannelData{
+		d := withUnavailableTierFields(&ChannelData{
 			FreqHz: 14250000, Mode: "USB", CTCSS: "OFF",
 			CTCSSTone:  ToneField{State: Unknown},
 			Shift:      "SIMPLEX",
 			TagDisplay: BoolField{State: Known},
 			ScanSkip:   BoolField{State: Unknown},
-		}
+		})
 		if mutate != nil {
 			mutate(d)
 		}
@@ -255,9 +273,9 @@ func TestSchemaFor_NoV3RepresentableContentEverWritesV4(t *testing.T) {
 			4, "Unknown is a state somebody chose; Absent is not",
 		},
 		{
-			"a tier field left Absent records nothing",
+			"a tier field left Absent needs an explicit state key",
 			v3able(func(d *ChannelData) { d.Filter = StringField{} }),
-			lowestSchema, "the zero FieldState says nothing",
+			4, "schema 3 would reconstruct the omitted field as Unavailable",
 		},
 		{
 			"an Unavailable tier field records nothing either",
@@ -278,7 +296,7 @@ func TestSchemaFor_NoV3RepresentableContentEverWritesV4(t *testing.T) {
 	}
 }
 
-func TestSchemaFor_ReceiverFieldsForceV5OnlyWhenRecorded(t *testing.T) {
+func TestSchemaFor_ReceiverFieldsForceV5UnlessUnavailable(t *testing.T) {
 	setters := map[string]func(*ChannelData, FieldState){
 		"tuning_step_enabled": func(d *ChannelData, s FieldState) { d.TuningStepEnabled = BoolField{State: s} },
 		"tuning_step":         func(d *ChannelData, s FieldState) { d.TuningStep = StringField{State: s} },
@@ -289,9 +307,9 @@ func TestSchemaFor_ReceiverFieldsForceV5OnlyWhenRecorded(t *testing.T) {
 		"ip_plus":             func(d *ChannelData, s FieldState) { d.IPPlus = BoolField{State: s} },
 	}
 	for name, set := range setters {
-		for _, state := range []FieldState{Known, Unknown} {
+		for _, state := range []FieldState{Known, Unknown, Absent} {
 			t.Run(name+"/"+string(state), func(t *testing.T) {
-				d := &ChannelData{FreqHz: 145_500_000, Duplex: StringField{State: Known, Value: "OFF"}}
+				d := withUnavailableReceiverFields(&ChannelData{FreqHz: 145_500_000, Duplex: StringField{State: Known, Value: "OFF"}})
 				set(d, state)
 				cp := &Codeplug{Channels: []Channel{{Slot: "001", Data: d}}}
 				if got := schemaFor(cp); got != 5 {
@@ -300,7 +318,7 @@ func TestSchemaFor_ReceiverFieldsForceV5OnlyWhenRecorded(t *testing.T) {
 			})
 		}
 		t.Run(name+"/unavailable", func(t *testing.T) {
-			d := &ChannelData{FreqHz: 145_500_000, Duplex: StringField{State: Known, Value: "OFF"}}
+			d := withUnavailableReceiverFields(&ChannelData{FreqHz: 145_500_000, Duplex: StringField{State: Known, Value: "OFF"}})
 			set(d, Unavailable)
 			cp := &Codeplug{Channels: []Channel{{Slot: "001", Data: d}}}
 			if got := schemaFor(cp); got != 4 {
@@ -310,17 +328,227 @@ func TestSchemaFor_ReceiverFieldsForceV5OnlyWhenRecorded(t *testing.T) {
 	}
 
 	t.Run("a later D8 channel wins over an earlier schema-4 channel", func(t *testing.T) {
+		d8 := withUnavailableReceiverFields(&ChannelData{FreqHz: 145_500_000})
+		d8.Antenna = StringField{State: Known, Value: "ANT2"}
 		cp := &Codeplug{Channels: []Channel{
-			{Slot: "001", Data: &ChannelData{FreqHz: math.MaxUint32 + 1}},
-			{Slot: "002", Data: &ChannelData{
-				FreqHz:  145_500_000,
-				Antenna: StringField{State: Known, Value: "ANT2"},
-			}},
+			{Slot: "001", Data: withUnavailableReceiverFields(&ChannelData{FreqHz: math.MaxUint32 + 1})},
+			{Slot: "002", Data: d8},
 		}}
 		if got := schemaFor(cp); got != 5 {
 			t.Errorf("schemaFor() = %d, want 5: a schema-4 channel must not hide later D8 content", got)
 		}
 	})
+}
+
+// TestSaveLoad_ReachableAbsentFieldRemainsInvalid is the permanent
+// reproduction for the 31/08/2026 send-gate laundering defect. An
+// Absent field which the radio can reach is invalid before Save and must
+// remain the same invalid Absent field after Save, Load and capability
+// normalisation. D4 and D8 are separate cases because they require
+// separate schema boundaries.
+func TestSaveLoad_ReachableAbsentFieldRemainsInvalid(t *testing.T) {
+	cases := []struct {
+		name       string
+		field      spec.Field
+		key        string
+		wantSchema int
+		prepare    func(*ChannelData)
+	}{
+		{
+			name: "D4 duplex", field: spec.FieldDuplex, key: "duplex", wantSchema: 4,
+			prepare: func(d *ChannelData) { d.Duplex = StringField{} },
+		},
+		{
+			name: "D8 preamp", field: spec.FieldPreamp, key: "preamp", wantSchema: 5,
+			prepare: func(d *ChannelData) { d.Preamp = StringField{} },
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			caps := icomTestCapabilities()
+			caps.Banks[0].Slots = []string{"G01-001"}
+			caps.Banks[0].Fields = map[spec.Field]spec.FieldSupport{
+				spec.FieldFrequency: {Read: spec.Supported, Write: spec.Supported},
+				spec.FieldMode:      {Read: spec.Supported, Write: spec.Supported},
+				spec.FieldTag:       {Read: spec.Supported, Write: spec.Supported},
+				tt.field:            {Read: spec.Supported, Write: spec.Supported},
+			}
+			caps.PreampOptions = []string{"OFF", "ON"}
+
+			d := withUnavailableTierFields(&ChannelData{
+				FreqHz:     145_500_000,
+				Mode:       "FM",
+				CTCSSTone:  ToneField{State: Unavailable},
+				TagDisplay: BoolField{State: Unavailable},
+				ScanSkip:   BoolField{State: Unavailable},
+			})
+			tt.prepare(d)
+			cp := &Codeplug{
+				Schema: CurrentSchema,
+				Radio:  RadioInfo{Model: caps.Model, CATID: caps.CATID},
+				Channels: []Channel{{
+					Slot: "G01-001", Data: d,
+				}},
+			}
+
+			assertOnlyAbsentFieldIssue(t, Validate(cp, caps), tt.field)
+
+			path := filepath.Join(t.TempDir(), "absent.json")
+			if got := saveAndProbeSchema(t, path, cp); got != tt.wantSchema {
+				t.Errorf("Save schema = %d, want %d: Absent %s needs an explicit state key", got, tt.wantSchema, tt.field)
+			}
+			if got, ok := savedFieldState(t, path, tt.key); !ok {
+				t.Errorf("saved schema-%d file omits %q; promoting the schema is pointless unless the key is written", tt.wantSchema, tt.key)
+			} else if got != Absent {
+				t.Errorf("saved %q state = %q, want the explicit empty Absent state", tt.key, got)
+			}
+			loaded, err := Load(path)
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			NormaliseTierFields(loaded, caps)
+			assertOnlyAbsentFieldIssue(t, Validate(loaded, caps), tt.field)
+		})
+	}
+}
+
+func assertOnlyAbsentFieldIssue(t testing.TB, issues []Issue, field spec.Field) {
+	t.Helper()
+	if len(issues) != 1 {
+		t.Fatalf("Validate() returned %d issues, want exactly one for Absent %s: %+v", len(issues), field, issues)
+	}
+	issue := issues[0]
+	if issue.Severity != SeverityError || issue.Field != field || !strings.Contains(issue.Msg, "says nothing about it") {
+		t.Errorf("Validate() issue = %+v, want an error for Absent %s saying the channel says nothing about it", issue, field)
+	}
+}
+
+func saveAndProbeSchema(t testing.TB, path string, cp *Codeplug) int {
+	t.Helper()
+	if err := Save(path, cp); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading saved file: %v", err)
+	}
+	var probe struct {
+		Schema int `json:"schema"`
+	}
+	if err := json.Unmarshal(raw, &probe); err != nil {
+		t.Fatalf("probing saved file: %v", err)
+	}
+	return probe.Schema
+}
+
+// savedFieldState reports the state the saved file wrote under one
+// channel-data key, and whether the key is there at all.
+//
+// It is what turns the reproduction above into a verification rather
+// than an assumption for SCHEMA 4: the schema-5 rendering of Absent is
+// pinned by TestSaveLoad_SparseV5WithNothingRecordedPreservesAbsent, but
+// schema 4 has its own marshal type (saveChannelsV4 / channelDataV4),
+// and the whole fix rests on that type carrying `"state": ""` — no
+// omitempty on a field's state, no omitempty on the field itself — so
+// that a promoted file really does keep Absent distinct from the
+// Unavailable an omission would reconstruct.
+func savedFieldState(t testing.TB, path, key string) (FieldState, bool) {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading saved file: %v", err)
+	}
+	var probe struct {
+		Channels []struct {
+			Data map[string]json.RawMessage `json:"data"`
+		} `json:"channels"`
+	}
+	if err := json.Unmarshal(raw, &probe); err != nil {
+		t.Fatalf("probing saved file: %v", err)
+	}
+	if len(probe.Channels) != 1 {
+		t.Fatalf("saved channels = %d, want 1", len(probe.Channels))
+	}
+	field, ok := probe.Channels[0].Data[key]
+	if !ok {
+		return "", false
+	}
+	var state struct {
+		State FieldState `json:"state"`
+	}
+	if err := json.Unmarshal(field, &state); err != nil {
+		t.Fatalf("decoding saved %q: %v", key, err)
+	}
+	return state.State, true
+}
+
+// TestSaveLoad_AllTierFieldsUnavailableUsesSchema3 pins the honest
+// fresh-read case. Unavailable is exactly what schema 3 reconstructs
+// from omission, so all seventeen fields may be omitted without losing
+// a state distinction.
+func TestSaveLoad_AllTierFieldsUnavailableUsesSchema3(t *testing.T) {
+	cp := &Codeplug{Channels: []Channel{{
+		Slot: "001",
+		Data: withUnavailableTierFields(&ChannelData{
+			FreqHz:     145_500_000,
+			Mode:       "FM",
+			CTCSSTone:  ToneField{State: Unavailable},
+			TagDisplay: BoolField{State: Unavailable},
+			ScanSkip:   BoolField{State: Unavailable},
+		}),
+	}}}
+	path := filepath.Join(t.TempDir(), "unavailable.json")
+	if got := saveAndProbeSchema(t, path, cp); got != lowestSchema {
+		t.Fatalf("Save schema = %d, want %d", got, lowestSchema)
+	}
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	for field, state := range allTierFieldStates(loaded.Channels[0].Data) {
+		if state != Unavailable {
+			t.Errorf("reloaded %s state = %q, want Unavailable", field, state)
+		}
+	}
+}
+
+// TestSave_NormalisedPreTierChannelUsesSchema3 pins both halves of the
+// bank-less GUI route. Its zero-value channel begins with all seventeen
+// fields Absent and therefore needs schema 5 on its own; once the
+// pre-tier capabilities resolve every unreachable field to Unavailable,
+// the same channel is honestly representable by schema 3 omission.
+func TestSave_NormalisedPreTierChannelUsesSchema3(t *testing.T) {
+	newBanklessCodeplug := func() *Codeplug {
+		return &Codeplug{Channels: []Channel{{
+			Slot: "001",
+			Data: &ChannelData{
+				FreqHz:     145_500_000,
+				Mode:       "FM",
+				CTCSSTone:  ToneField{State: Unavailable},
+				TagDisplay: BoolField{State: Unavailable},
+				ScanSkip:   BoolField{State: Unavailable},
+			},
+		}}}
+	}
+
+	withoutNormalisation := newBanklessCodeplug()
+	path := filepath.Join(t.TempDir(), "without-normalisation.json")
+	if got := saveAndProbeSchema(t, path, withoutNormalisation); got != 5 {
+		t.Errorf("unnormalised bank-less channel schema = %d, want 5: its D8 fields are Absent", got)
+	}
+
+	normalised := newBanklessCodeplug()
+	NormaliseTierFields(normalised, testCapabilities())
+	for field, state := range allTierFieldStates(normalised.Channels[0].Data) {
+		if state != Unavailable {
+			t.Errorf("normalised %s state = %q, want Unavailable", field, state)
+		}
+	}
+	path = filepath.Join(t.TempDir(), "normalised.json")
+	if got := saveAndProbeSchema(t, path, normalised); got != lowestSchema {
+		t.Errorf("normalised bank-less channel schema = %d, want %d", got, lowestSchema)
+	}
 }
 
 func TestLoadV4_FrozenShapeMigratesReceiverFields(t *testing.T) {
@@ -434,7 +662,7 @@ func TestSchemaFor_EveryTierFieldForcesV4(t *testing.T) {
 		"data_mode":     func(d *ChannelData) { d.DataMode = BoolField{State: Known, Value: true} },
 	} {
 		t.Run(name, func(t *testing.T) {
-			d := &ChannelData{FreqHz: 14250000, Mode: "USB"}
+			d := withUnavailableTierFields(&ChannelData{FreqHz: 14250000, Mode: "USB"})
 			mutate(d)
 			cp := &Codeplug{Schema: CurrentSchema, Channels: []Channel{{Slot: "001", Data: d}}}
 			if got := schemaFor(cp); got != 4 {
@@ -546,7 +774,7 @@ func TestLoadV3_MigratesTierFieldsToUnavailable(t *testing.T) {
 		if ch.Data == nil {
 			continue
 		}
-		if !ch.Data.tierFieldsUnrecorded() {
+		if !ch.Data.tierFieldsRepresentableByOmission() {
 			t.Errorf("slot %q: a schema-3 file produced a Recorded tier field: %+v", ch.Slot, *ch.Data)
 		}
 		for name, state := range map[string]FieldState{
@@ -698,6 +926,16 @@ func icomTierFieldStates(d *ChannelData) map[string]FieldState {
 	}
 }
 
+// allTierFieldStates joins the D4 and D8 state tables for assertions
+// whose rule applies to all seventeen fields.
+func allTierFieldStates(d *ChannelData) map[string]FieldState {
+	states := icomTierFieldStates(d)
+	for name, state := range receiverFieldStates(d) {
+		states[name] = state
+	}
+	return states
+}
+
 // v5FileWithExtraKeys builds a minimal, well-formed schema-5 file whose
 // one channel carries schema 3's own seven required keys plus whatever
 // extra is (a JSON fragment, leading comma included, or empty), and
@@ -833,33 +1071,16 @@ func TestSaveLoad_SparseV5RoundTripsAbsentDistinctFromRecorded(t *testing.T) {
 	}
 }
 
-// TestSaveLoad_V5WithNothingRecordedIsRewrittenAsSchema3 pins the
-// behaviour that looks like a bug and is not, so that nobody "fixes" it
-// into one.
-//
-// A schema-5 file whose channel mentions none of the seventeen added
-// fields re-saves as SCHEMA 3, and reloading it turns those seventeen
-// from Absent into Unavailable. Both halves are correct by the schemaFor
-// doctrine (see schemaFor and FieldState.Recorded), and the alternative
-// is the damaging one:
-//
-//   - Absent is not Recorded, so it needs no key, so schema 3 can
-//     represent this content. Promoting a file on Absent instead would
-//     mean every channel built without a bank in hand — the GUI's
-//     newChannelData omits every added key — dragged an ordinary Yaesu
-//     codeplug up to schema 5, destroying the byte identity design D4
-//     exists to guarantee.
-//   - the reload's Unavailable is what a schema-3 file MEANS (see
-//     migrateV3ChannelData), and it is what a read of a radio without
-//     those fields reports, so the reloaded codeplug still compares
-//     equal to a fresh read.
-//
-// What IS lost across that round trip is the Absent/Unavailable
-// distinction, and it is lost deliberately: this file recorded nothing,
-// so there is nothing the lower schema fails to carry. The distinction
-// is preserved wherever the file actually holds receiver content — see
-// TestSaveLoad_SparseV5RoundTripsAbsentDistinctFromRecorded.
-func TestSaveLoad_V5WithNothingRecordedIsRewrittenAsSchema3(t *testing.T) {
+// TestSaveLoad_SparseV5WithNothingRecordedPreservesAbsent deliberately
+// REVERSES the 31/08/2026 ruling formerly pinned here. A lower schema
+// does fail to carry something when all seventeen fields are Absent: it
+// reconstructs their omission as Unavailable, erasing the distinction
+// Validate's send gate depends on. The sparse file therefore stays at
+// schema 5, writes the empty state keys explicitly, and reloads Absent.
+// A bank-less Yaesu channel reaches schema 3 only after
+// NormaliseTierFields has resolved its unreachable fields; that separate
+// route is pinned by TestSave_NormalisedPreTierChannelUsesSchema3.
+func TestSaveLoad_SparseV5WithNothingRecordedPreservesAbsent(t *testing.T) {
 	cp, err := Load(v5FileWithExtraKeys(t, ""))
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
@@ -879,17 +1100,33 @@ func TestSaveLoad_V5WithNothingRecordedIsRewrittenAsSchema3(t *testing.T) {
 		t.Fatalf("reading re-saved file: %v", err)
 	}
 	var probe struct {
-		Schema int `json:"schema"`
+		Schema   int `json:"schema"`
+		Channels []struct {
+			Data map[string]json.RawMessage `json:"data"`
+		} `json:"channels"`
 	}
 	if err := json.Unmarshal(raw, &probe); err != nil {
 		t.Fatalf("probing re-saved file: %v", err)
 	}
-	if probe.Schema != lowestSchema {
-		t.Fatalf("re-saved schema = %d, want %d: nothing here is Recorded, so nothing needs a later schema\n%s", probe.Schema, lowestSchema, raw)
+	if probe.Schema != 5 {
+		t.Errorf("re-saved schema = %d, want 5: Absent needs an explicit state key\n%s", probe.Schema, raw)
+	}
+	if len(probe.Channels) != 1 {
+		t.Fatalf("re-saved channels = %d, want 1", len(probe.Channels))
 	}
 	for _, key := range []string{"tx_frequency", "preamp", "ip_plus"} {
-		if strings.Contains(string(raw), key) {
-			t.Errorf("re-saved schema-3 file carries the key %q, which schema 3 has no place for:\n%s", key, raw)
+		field, ok := probe.Channels[0].Data[key]
+		if !ok {
+			t.Errorf("re-saved schema-5 file omits %q:\n%s", key, raw)
+			continue
+		}
+		var state struct {
+			State FieldState `json:"state"`
+		}
+		if err := json.Unmarshal(field, &state); err != nil {
+			t.Errorf("decoding re-saved %q: %v", key, err)
+		} else if state.State != Absent {
+			t.Errorf("re-saved %q state = %q, want explicit Absent", key, state.State)
 		}
 	}
 
@@ -897,15 +1134,9 @@ func TestSaveLoad_V5WithNothingRecordedIsRewrittenAsSchema3(t *testing.T) {
 	if err != nil {
 		t.Fatalf("re-Load() error = %v", err)
 	}
-	d := got.Channels[0].Data
-	for name, state := range receiverFieldStates(d) {
-		if state != Unavailable {
-			t.Errorf("after the schema-3 round trip, receiver field %s = %q, want Unavailable — what a schema-3 file says", name, state)
-		}
-	}
-	for name, state := range icomTierFieldStates(d) {
-		if state != Unavailable {
-			t.Errorf("after the schema-3 round trip, tier field %s = %q, want Unavailable", name, state)
+	for name, state := range allTierFieldStates(got.Channels[0].Data) {
+		if state != Absent {
+			t.Errorf("after the schema-5 round trip, tier field %s = %q, want Absent", name, state)
 		}
 	}
 }
