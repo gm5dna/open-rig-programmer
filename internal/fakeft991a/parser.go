@@ -901,13 +901,13 @@ func (r *Radio) handleFrame(frame []byte) []byte {
 		return r.handleMT(rest)
 	case [2]byte{'M', 'C'}:
 		return r.handleMC(rest)
+	case [2]byte{'E', 'X'}:
+		return r.handleEX(rest)
 	default:
-		// EX (MENU) IS DELIBERATELY ABSENT AND FALLS THROUGH HERE. This radio
-		// documents it — availability 155, block 519-528, a THREE-digit
-		// address, the narrowest read frame in the family at six bytes — and
-		// this fake does not model it yet, so an EX frame in either direction
+		// MW falls through here: this radio documents it (Set only,
+		// availability 183) and this fake does not model it, so an MW frame
 		// draws "?;". See doc.go, "What this fake deliberately does NOT
-		// model". MW falls through for its own reason, stated there too.
+		// model".
 		return rejection
 	}
 }
