@@ -121,9 +121,10 @@ type slotImage struct {
 	// It is the narrowest possible memory, and it is here for ONE thing:
 	// core/clone owns write-then-verify (plan P3), so the pair cannot be
 	// exercised at all against a peer that answers the same way forever.
-	// This is deliberately NOT a step towards a fake radio — no field is
-	// interpreted, nothing is validated, no state is modelled, and a Set
-	// this driver got wrong would be echoed back just as wrongly. What it
+	// This is deliberately NOT a step towards a fake radio — no field but
+	// the slot is interpreted (positions 3-5, so the echo is per-slot at
+	// all), nothing is validated, no state is modelled, and a Set this
+	// driver got wrong would be echoed back just as wrongly. What it
 	// demonstrates is that the write and the read agree about every
 	// position of the frame; whether a REAL FT-891 reports back what it
 	// was told is the driver register's A SINGLE COMBINED MT SET SUFFICES
@@ -261,9 +262,13 @@ func (img slotImage) reply(frame string, mrSeen map[string]int, mtWritten map[st
 		if img.rejectSets {
 			return "?;"
 		}
-		if img.echoSets {
+		if img.echoSets && len(frame) >= 5 {
 			// Verbatim, prefix and all: the Set and the Answer are the
-			// same 41 positions on this radio. See echoSets.
+			// same 41 positions on this radio. See echoSets. The length
+			// guard is defensive only — no test sends anything shorter
+			// than the 41-byte Set today, and this driver never will —
+			// so a future MT-shaped frame reaches "?;" below rather than
+			// panicking this serve goroutine on frame[2:5].
 			mtWritten[frame[2:5]] = frame
 		}
 		return ""

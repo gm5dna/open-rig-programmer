@@ -122,14 +122,14 @@ func (s *Session) bankFor(slot string) (spec.BankID, bool) {
 // defence-in-depth gate and the diff layer's gate judge the same set for
 // the same channel. That derivation is two pieces on the codeplug side and
 // both are mirrored here: addedFields' six unconditional plus three
-// conditional fields, and then the TEN Icom-tier conditionals codeplug
-// carries in tierAddedFieldFor and appends in touchedFields (see
-// tierRequestedFields). The ten come LAST, in ChannelData's declaration
-// order, exactly as they do there, so no BlockReason a user has ever read
-// is reordered by their arrival. Mirrored, NOT imported: tierAddedFieldFor
-// is unexported, and the mirror is held by both sides pinning the same
-// shape (TestRequestedFields_MembershipAndOrder here, codeplug's own tests
-// there).
+// conditional fields, and then the SEVENTEEN Icom-tier conditionals
+// codeplug carries in tierAddedFieldFor and appends in touchedFields (see
+// tierRequestedFields). The seventeen come LAST, in ChannelData's
+// declaration order, exactly as they do there, so no BlockReason a user has
+// ever read is reordered by their arrival. Mirrored, NOT imported:
+// tierAddedFieldFor is unexported, and the mirror is held by both sides
+// pinning the same shape (TestRequestedFields_MembershipAndOrder here,
+// codeplug's own tests there).
 //
 // TAGDISPLAY'S CONDITIONAL NEEDS A WORD ITS TWO NEIGHBOURS DO NOT, and on
 // this radio it is the FT-710's word rather than the FTdx10's. Byte 28 is a
@@ -183,10 +183,30 @@ func requestedFields(data codeplug.ChannelData) []spec.Field {
 // which this radio's 41-byte record cannot express and which must therefore
 // be REFUSED rather than dropped.
 //
-// TEN, where read.go's channelData sets SEVENTEEN Unavailable, and the
-// asymmetry is codeplug's rather than this radio's: only these ten are
-// diffable added fields, so only these ten belong in a set that must mirror
-// the diff layer's. TestRequestedFields_MembershipAndOrder pins the count.
+// SEVENTEEN, matching read.go's channelData, which sets all seventeen
+// Unavailable on a read (plan P12): codeplug.diff.go's tierAddedFieldFor
+// carries the D4 (Icom-tier) ten AND the D8 (receiver) seven, and
+// touchedFields appends all seventeen (core/codeplug/tier_test.go:868 says
+// so verbatim). This table used to carry only the first ten — the
+// pre-second-extension count, copied unchanged from the FT-710/FTdx10/
+// FTdx101 mirror when the D8 seven landed there but not here — which meant
+// a channel carrying a Known TuningStep, Preamp or AttenuatorDB was
+// silently written with those values dropped rather than refused. Fixed
+// here; the sibling drivers carry the identical ten-entry gap and are a
+// tracked fleet follow-up, not this task's to touch.
+//
+// tierAddedFieldFor itself is unexported, so this table cannot import it;
+// codeplug offers no exported enumeration bound to ChannelData's tier
+// fields either (only the unbound spec.Field constants themselves, via
+// spec.AllFields). What follows is therefore the brief's prescribed
+// fallback: a LOCAL list of all seventeen, built from the same exported
+// building blocks tierAddedFieldFor itself is built from (the spec.Field
+// constants and ChannelData's own exported struct fields) — and
+// TestRequestedFields_MembershipAndOrder's "every tier predicate is
+// reachable" subtest pins both the count AND, independently of any count,
+// that it names exactly the seventeen fields spec.AllFields() carries
+// after the ten pre-tier ones, so a future spec.Field addition that this
+// table fails to mirror fails that test rather than passing silently.
 var tierRequestedFields = []struct {
 	field   spec.Field
 	present func(codeplug.ChannelData) bool
@@ -201,6 +221,13 @@ var tierRequestedFields = []struct {
 	{spec.FieldDTCSPolarity, func(d codeplug.ChannelData) bool { return d.DTCSPolarity.State == codeplug.Known }},
 	{spec.FieldFilter, func(d codeplug.ChannelData) bool { return d.Filter.State == codeplug.Known }},
 	{spec.FieldDataMode, func(d codeplug.ChannelData) bool { return d.DataMode.State == codeplug.Known }},
+	{spec.FieldTuningStepEnabled, func(d codeplug.ChannelData) bool { return d.TuningStepEnabled.State == codeplug.Known }},
+	{spec.FieldTuningStep, func(d codeplug.ChannelData) bool { return d.TuningStep.State == codeplug.Known }},
+	{spec.FieldProgramTuningStep, func(d codeplug.ChannelData) bool { return d.ProgramTuningStepHz.State == codeplug.Known }},
+	{spec.FieldAttenuator, func(d codeplug.ChannelData) bool { return d.AttenuatorDB.State == codeplug.Known }},
+	{spec.FieldPreamp, func(d codeplug.ChannelData) bool { return d.Preamp.State == codeplug.Known }},
+	{spec.FieldAntenna, func(d codeplug.ChannelData) bool { return d.Antenna.State == codeplug.Known }},
+	{spec.FieldIPPlus, func(d codeplug.ChannelData) bool { return d.IPPlus.State == codeplug.Known }},
 }
 
 // WriteChannel implements driver.Session: ONE combined 41-byte MT Set,

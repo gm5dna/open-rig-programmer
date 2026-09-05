@@ -211,11 +211,49 @@ func TestWriteChannel_RefusalLadder(t *testing.T) {
 			reason: "erase",
 		},
 		{
+			// reason pins this to the Valid() rung specifically (MEDIUM-1):
+			// "must have zero Value" is BoolField.Valid's own message, and
+			// it is NOT "P11", the DIFFERENT refusal buildWriteCommand
+			// gives a well-formed-but-non-Known TagDisplay further down
+			// the ladder (see the "would manufacture byte 28" row below).
+			// Without the Valid() check this row would still be refused —
+			// by that later rung, with the wrong reason — so the reason
+			// substring is what makes this row discriminating rather than
+			// coincidentally green.
 			name: "an incoherent TagDisplay field is refused, not interpreted",
 			ch: withData(func(d *codeplug.ChannelData) {
 				d.TagDisplay = codeplug.BoolField{State: codeplug.Unavailable, Value: true}
 			}),
 			fields: []spec.Field{spec.FieldTagDisplay},
+			reason: "must have zero Value",
+		},
+		{
+			// ScanSkip's own incoherent case has NO later rung to catch
+			// it: unlike TagDisplay, an Unavailable ScanSkip is never
+			// requested at all (requestedFields' Known-only conditional),
+			// so if this Valid() check were deleted the incoherent value
+			// would reach neither the capability gate nor
+			// buildWriteCommand — it would simply be ignored and the
+			// write would proceed. This row is MEDIUM-1's
+			// "Unavailable-with-a-value" case.
+			name: "an incoherent ScanSkip field is refused, not interpreted",
+			ch: withData(func(d *codeplug.ChannelData) {
+				d.ScanSkip = codeplug.BoolField{State: codeplug.Unavailable, Value: true}
+			}),
+			fields: []spec.Field{spec.FieldScanSkip},
+			reason: "must have zero Value",
+		},
+		{
+			// MEDIUM-1's "a bogus FieldState value" case: a State no
+			// FieldState constant names. Nothing past this rung — not the
+			// capability gate, not buildWriteCommand — inspects State for
+			// well-formedness; only BoolField.Valid does.
+			name: "a bogus ScanSkip FieldState is refused, not interpreted",
+			ch: withData(func(d *codeplug.ChannelData) {
+				d.ScanSkip = codeplug.BoolField{State: codeplug.FieldState("bogus")}
+			}),
+			fields: []spec.Field{spec.FieldScanSkip},
+			reason: `invalid State "bogus"`,
 		},
 		{
 			name: "a Known CTCSS tone the record cannot express",
@@ -238,6 +276,69 @@ func TestWriteChannel_RefusalLadder(t *testing.T) {
 				d.Duplex = codeplug.StringField{State: codeplug.Known, Value: "DUP+"}
 			}),
 			fields: []spec.Field{spec.FieldDuplex},
+			reason: "not write-Supported",
+		},
+		// The seven D8 receiver-tier fields (HIGH-1): before this fix,
+		// tierRequestedFields carried only the ten D4 fields, so a Known
+		// value for any of these seven never reached requestedFields at
+		// all — not refused, not written correctly, silently DROPPED from
+		// the frame. Each row below is that exact shape: a channel this
+		// radio's 41-byte record cannot express, which must be refused by
+		// the capability gate naming the field, not dropped.
+		{
+			name: "a Known TuningStepEnabled this frame has no room for",
+			ch: withData(func(d *codeplug.ChannelData) {
+				d.TuningStepEnabled = codeplug.BoolField{State: codeplug.Known, Value: true}
+			}),
+			fields: []spec.Field{spec.FieldTuningStepEnabled},
+			reason: "not write-Supported",
+		},
+		{
+			name: "a Known TuningStep this frame has no room for",
+			ch: withData(func(d *codeplug.ChannelData) {
+				d.TuningStep = codeplug.StringField{State: codeplug.Known, Value: "5"}
+			}),
+			fields: []spec.Field{spec.FieldTuningStep},
+			reason: "not write-Supported",
+		},
+		{
+			name: "a Known ProgramTuningStep this frame has no room for",
+			ch: withData(func(d *codeplug.ChannelData) {
+				d.ProgramTuningStepHz = codeplug.FreqField{State: codeplug.Known, Value: 5000}
+			}),
+			fields: []spec.Field{spec.FieldProgramTuningStep},
+			reason: "not write-Supported",
+		},
+		{
+			name: "a Known Attenuator this frame has no room for",
+			ch: withData(func(d *codeplug.ChannelData) {
+				d.AttenuatorDB = codeplug.IntField{State: codeplug.Known, Value: 20}
+			}),
+			fields: []spec.Field{spec.FieldAttenuator},
+			reason: "not write-Supported",
+		},
+		{
+			name: "a Known Preamp this frame has no room for",
+			ch: withData(func(d *codeplug.ChannelData) {
+				d.Preamp = codeplug.StringField{State: codeplug.Known, Value: "1"}
+			}),
+			fields: []spec.Field{spec.FieldPreamp},
+			reason: "not write-Supported",
+		},
+		{
+			name: "a Known Antenna this frame has no room for",
+			ch: withData(func(d *codeplug.ChannelData) {
+				d.Antenna = codeplug.StringField{State: codeplug.Known, Value: "ANT1"}
+			}),
+			fields: []spec.Field{spec.FieldAntenna},
+			reason: "not write-Supported",
+		},
+		{
+			name: "a Known IPPlus this frame has no room for",
+			ch: withData(func(d *codeplug.ChannelData) {
+				d.IPPlus = codeplug.BoolField{State: codeplug.Known, Value: true}
+			}),
+			fields: []spec.Field{spec.FieldIPPlus},
 			reason: "not write-Supported",
 		},
 		{
@@ -640,7 +741,7 @@ func TestNameMaps_AreExactInverses(t *testing.T) {
 // The six plain fields are ALWAYS requested: this radio's combined Set
 // carries frequency, mode, clarifier, CTCSS state, shift AND the tag in one
 // frame whether or not any of them changed. TagDisplay keeps the seventh
-// place it holds whenever it appears at all, and the ten Icom-tier
+// place it holds whenever it appears at all, and the seventeen Icom-tier
 // conditionals come LAST, in codeplug.ChannelData's declaration order.
 //
 // TagDisplay's conditional needs a word its neighbours do not, because on
@@ -689,13 +790,47 @@ func TestRequestedFields_MembershipAndOrder(t *testing.T) {
 		// Non-vacuity for the tier half: each entry's own predicate must
 		// answer true for SOME channel, or the entry is dead weight the
 		// gate would never consult.
-		if len(tierRequestedFields) != 10 {
-			t.Fatalf("tierRequestedFields has %d entries, want the ten codeplug's tierAddedFieldFor carries", len(tierRequestedFields))
+		if len(tierRequestedFields) != 17 {
+			t.Fatalf("tierRequestedFields has %d entries, want the seventeen codeplug's tierAddedFieldFor carries", len(tierRequestedFields))
 		}
 		for _, tr := range tierRequestedFields {
 			if tr.present(*writableChannel().Data) {
 				t.Errorf("%s is requested by an ordinary FT-891 channel — every tier field reads back Unavailable on this radio", tr.field)
 			}
+		}
+	})
+
+	// TestRequestedFields' seventeen must be exactly the seventeen fields
+	// codeplug's own tierAddedFieldFor carries, in the same order — and
+	// since tierAddedFieldFor is unexported (this table cannot import it;
+	// see tierRequestedFields' doc comment for what codeplug DOES export),
+	// this is the fallback the brief calls for: derive the same seventeen
+	// independently, from spec.AllFields() (an exported enumeration built
+	// from the very same spec.Field constants tierAddedFieldFor's own
+	// table is built from) minus the ten pre-tier fields, and require
+	// EXACT membership and order against that derivation. A tier field
+	// this table forgets to mirror — or the codeplug side gains and this
+	// one doesn't — fails HERE rather than passing silently until a caller
+	// hits the hole HIGH-1 measured.
+	t.Run("the seventeen are exactly spec.AllFields()'s tier-added tail", func(t *testing.T) {
+		preTier := []spec.Field{
+			spec.FieldFrequency, spec.FieldMode, spec.FieldClarifier,
+			spec.FieldCTCSSState, spec.FieldCTCSSTone, spec.FieldShift,
+			spec.FieldTag, spec.FieldTagDisplay, spec.FieldScanSkip,
+			spec.FieldErase,
+		}
+		all := spec.AllFields()
+		if len(all) < len(preTier) || !reflect.DeepEqual(all[:len(preTier)], preTier) {
+			t.Fatalf("spec.AllFields() = %v, want it to start with the ten pre-tier fields %v — this test's derivation assumes that prefix", all, preTier)
+		}
+		wantTier := all[len(preTier):]
+
+		gotTier := make([]spec.Field, len(tierRequestedFields))
+		for i, tr := range tierRequestedFields {
+			gotTier[i] = tr.field
+		}
+		if !reflect.DeepEqual(gotTier, wantTier) {
+			t.Errorf("tierRequestedFields names\n %v\nbut spec.AllFields() carries the tier-added\n %v\n(the two must be the same seventeen fields in the same order)", gotTier, wantTier)
 		}
 	})
 }
