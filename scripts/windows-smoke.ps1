@@ -52,7 +52,7 @@ function Write-SmokeLog {
     param([string]$Message)
     $line = '[{0}] {1}' -f (Get-Date -Format 'HH:mm:ss'), $Message
     Write-Host $line
-    Add-Content -Path $logPath -Value $line
+    Add-Content -Encoding utf8 -Path $logPath -Value $line
 }
 
 # Runs one native command and captures stdout+stderr merged as PLAIN
@@ -71,8 +71,8 @@ function Invoke-Captured {
     $out = (& $Exe @Arguments 2>&1 | ForEach-Object { "$_" }) -join "`n"
     $rc = $LASTEXITCODE
     $outFile = Join-Path $session "$Name.out.txt"
-    Set-Content -Path $outFile -Value $out
-    Add-Content -Path $outFile -Value "`n--- exit code: $rc ---"
+    Set-Content -Encoding utf8 -Path $outFile -Value $out
+    Add-Content -Encoding utf8 -Path $outFile -Value "`n--- exit code: $rc ---"
     Write-SmokeLog "DONE: $Name (exit $rc) -> $outFile"
     [PSCustomObject]@{ Name = $Name; Output = $out; ExitCode = $rc; File = $outFile }
 }
@@ -87,28 +87,37 @@ if (-not (Test-Path -LiteralPath $RigProg)) {
 # --- 1. Host facts ---------------------------------------------------
 Write-SmokeLog 'Capturing Get-ComputerInfo subset (OS build, architecture)'
 Get-ComputerInfo -Property OsName, OsArchitecture, OsBuildNumber, OsVersion, WindowsProductName |
-    Format-List | Out-File -FilePath (Join-Path $session 'computerinfo.txt')
+    Format-List | Out-File -Encoding utf8 -FilePath (Join-Path $session 'computerinfo.txt')
 
 # --- 2. CP2105 device + driver ----------------------------------------
+# Wrapped in @(...): under StrictMode, a Where-Object/foreach pipeline
+# that matches nothing collapses to $null and one that matches exactly
+# one collapses to a bare scalar rather than a one-element array —
+# either would trip a later foreach or .Count on the no-device
+# contingency path this script exists to handle cleanly.
 Write-SmokeLog "Capturing Get-PnpDevice for VID_10C4 (the FT-710's Silicon Labs CP2105)"
-$cp2105 = Get-PnpDevice | Where-Object { $_.InstanceId -match 'VID_10C4' }
-$cp2105 | Format-Table -AutoSize | Out-File -FilePath (Join-Path $session 'pnpdevice.txt')
+$cp2105 = @(Get-PnpDevice | Where-Object { $_.InstanceId -match 'VID_10C4' })
+# Format-List, not Format-Table -AutoSize: Out-File in Windows
+# PowerShell 5.1 defaults to the host width (80 with no console), and
+# Format-Table truncates columns to fit — this is exactly the
+# InstanceId/driver evidence the verification bar exists to collect.
+$cp2105 | Format-List | Out-File -Encoding utf8 -FilePath (Join-Path $session 'pnpdevice.txt')
 
-$driverProps = foreach ($dev in $cp2105) {
+$driverProps = @(foreach ($dev in $cp2105) {
     Get-PnpDeviceProperty -InstanceId $dev.InstanceId -KeyName `
         'DEVPKEY_Device_DriverVersion', 'DEVPKEY_Device_DriverProvider', 'DEVPKEY_Device_DriverDesc' `
         -ErrorAction SilentlyContinue
-}
-$driverProps | Format-Table -AutoSize | Out-File -FilePath (Join-Path $session 'pnpdevice-driver.txt')
+})
+$driverProps | Format-List | Out-File -Encoding utf8 -FilePath (Join-Path $session 'pnpdevice-driver.txt')
 
 # --- 3. Serial port inventory -------------------------------------------
 Write-SmokeLog 'Capturing Get-CimInstance Win32_SerialPort'
-Get-CimInstance Win32_SerialPort | Format-Table -AutoSize |
-    Out-File -FilePath (Join-Path $session 'win32-serialport.txt')
+Get-CimInstance Win32_SerialPort | Format-List |
+    Out-File -Encoding utf8 -FilePath (Join-Path $session 'win32-serialport.txt')
 
 Write-SmokeLog 'Capturing HKLM:\HARDWARE\DEVICEMAP\SERIALCOMM'
 Get-ItemProperty -Path 'HKLM:\HARDWARE\DEVICEMAP\SERIALCOMM' -ErrorAction SilentlyContinue |
-    Format-List | Out-File -FilePath (Join-Path $session 'serialcomm.txt')
+    Format-List | Out-File -Encoding utf8 -FilePath (Join-Path $session 'serialcomm.txt')
 
 # --- 4. rigprog version + ports ------------------------------------------
 Invoke-Captured -Name 'version' -Exe $RigProg -Arguments @('version') | Out-Null
@@ -116,9 +125,12 @@ $portsResult = Invoke-Captured -Name 'ports' -Exe $RigProg -Arguments @('ports')
 
 # rigprog's own port table is the thing under test here, so this pulls
 # COMn tokens out of its printed text with a plain regex rather than
-# relying on any structured rigprog output format.
-$comPorts = [regex]::Matches($portsResult.Output, 'COM\d+') |
-    ForEach-Object { $_.Value } | Select-Object -Unique
+# relying on any structured rigprog output format. Wrapped in @(...):
+# under StrictMode this pipeline collapses to $null with zero matches
+# and to a bare scalar with exactly one, either of which would trip
+# the .Count read below on the no-COM-ports contingency path.
+$comPorts = @([regex]::Matches($portsResult.Output, 'COM\d+') |
+    ForEach-Object { $_.Value } | Select-Object -Unique)
 Write-SmokeLog "COM ports found in 'rigprog ports' output: $($comPorts -join ', ')"
 
 if ($comPorts.Count -eq 0) {
@@ -161,7 +173,11 @@ if ($readResult.ExitCode -ne 0) {
 }
 
 Invoke-Captured -Name 'export' -Exe $RigProg -Arguments @('export', '--csv', $baselineCsv, $baselineJson) | Out-Null
-Invoke-Captured -Name 'import' -Exe $RigProg -Arguments @('import', '--csv', $baselineCsv, '--into', $baselineJson, '--out', $roundtripJson, '--model', $Model, '--force') | Out-Null
+# No --force: $roundtripJson is a fresh path under this run's timestamped
+# $session directory and $baselineJson (--into) never equals it, so
+# rigprog's overwrite guard can never fire here — passing --force would
+# silently widen a guard this script has no need to widen.
+Invoke-Captured -Name 'import' -Exe $RigProg -Arguments @('import', '--csv', $baselineCsv, '--into', $baselineJson, '--out', $roundtripJson, '--model', $Model) | Out-Null
 
 # --- 7. Compare baseline.json and roundtrip.json, normalising read_at ---
 # read_at is a wall-clock timestamp set at read time; export and import
@@ -181,10 +197,10 @@ $identical = $baselineNorm -ceq $roundtripNorm
 
 $compareReport = Join-Path $session 'compare-baseline-roundtrip.txt'
 if ($identical) {
-    "IDENTICAL after normalising read_at: $baselineJson vs $roundtripJson" | Set-Content -Path $compareReport
+    "IDENTICAL after normalising read_at: $baselineJson vs $roundtripJson" | Set-Content -Encoding utf8 -Path $compareReport
     Write-SmokeLog 'Export/import round trip: IDENTICAL (after normalising read_at)'
 } else {
-    "DIFFERENT after normalising read_at: $baselineJson vs $roundtripJson" | Set-Content -Path $compareReport
+    "DIFFERENT after normalising read_at: $baselineJson vs $roundtripJson" | Set-Content -Encoding utf8 -Path $compareReport
     Write-SmokeLog 'Export/import round trip: DIFFERENT — see compare-baseline-roundtrip.txt. This is a FAIL: do not continue to the writes in scripts/README-vm-leg.md until this is understood.'
 }
 
