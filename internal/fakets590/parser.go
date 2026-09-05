@@ -593,10 +593,10 @@ func (r *Radio) handleFV(body []byte) []byte {
 //
 // This fake never PUSHES anything unsolicited whatever AI is set to. No
 // TS-590 of either row has been observed by this project, and modelling
-// silence is the honest default — doc.go's register entry AUTOMATIC-
-// INFORMATION SUPPRESSION. core/transport.Engine.Init opens every session
-// with an AI-off Set, so this handler's silent-accept path is on the critical
-// path of every fake session.
+// silence is the honest default — doc.go's register entry
+// AUTOMATIC-INFORMATION SUPPRESSION. core/transport.Engine.Init opens every
+// session with an AI-off Set, so this handler's silent-accept path is on the
+// critical path of every fake session.
 
 // The three P1 values this book prints (590:159-162).
 const (
