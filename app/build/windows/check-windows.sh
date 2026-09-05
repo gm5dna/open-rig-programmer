@@ -153,11 +153,13 @@ for arch in amd64 arm64; do
     mkdir -p "$zdir"
     "$SEVENZ" x -o"$zdir" -y "$zip" >/dev/null || err "extraction failed for $zip"
     ex_zip_cli="${zdir}/rigprog.exe"
+    [ -f "$ex_zip_cli" ] || err "zip ($arch) does not contain rigprog.exe"
+
     if [ -f "$ex_zip_cli" ] && [ -f "$dist_cli" ]; then
       [ "$(sha "$ex_zip_cli")" = "$(sha "$dist_cli")" ] \
         || err "zip ($arch) rigprog.exe does not match $dist_cli (sha256 differs)"
-    else
-      err "zip ($arch) does not contain rigprog.exe"
+    elif [ -f "$ex_zip_cli" ] && [ ! -f "$dist_cli" ]; then
+      err "zip ($arch) rigprog.exe cannot be verified: dist CLI missing: $dist_cli"
     fi
   fi
 
