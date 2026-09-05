@@ -680,13 +680,12 @@ func (r *Radio) handleFrame(frame []byte) []byte {
 		return r.handleMW(rest)
 	case [2]byte{'M', 'C'}:
 		return r.handleMC(rest)
+	case [2]byte{'E', 'X'}:
+		// READ ONLY (ex.go). An EX SET falls through handleEX's own body
+		// check to "?;" — a MODELLING GAP, stated in doc.go, not a claim
+		// that a real TS-590 refuses EX Set.
+		return r.handleEX(rest)
 	default:
-		// EX (MENU) falls here DELIBERATELY: this fake serves no menu
-		// inventory yet, and the next task of the plan brings one in from
-		// its own copy of transcription B. Until then an EX frame in either
-		// direction draws "?;" — a MODELLING GAP, stated in doc.go and
-		// pinned by TestEX_IsNotModelledYet so that adding EX has to change
-		// a test rather than fill a silence.
 		return rejection
 	}
 }

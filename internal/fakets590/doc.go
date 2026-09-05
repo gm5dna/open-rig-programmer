@@ -73,14 +73,15 @@
 //
 // # What this fake deliberately does NOT model
 //
-// EX (MENU), IN EITHER DIRECTION. The two siblings print two disjoint menu
-// charts in one book, and the fake's inventory is to come from its own copy
-// of each chart's independent transcription — the two-source evidence design
-// this project uses on the Yaesu side. That work is the NEXT task of this
-// milestone's plan; until it lands, an EX frame draws "?;". That is a
-// MODELLING GAP, KNOWN-DIVERGENT from the documented grammar, and it is not a
-// claim that either radio refuses EX. TestEX_IsNotModelledYet pins the gap's
-// shape so that adding EX has to change a test rather than fill a silence.
+// THE EX (MENU) SET. The EX READ is modelled — ex.go, from this package's own
+// copies of each sibling's transcription B — and the Set is not. The book
+// prints one (590:542-547), and core/kw builds none either: the Set and the
+// Answer share an identical wire shape, so admitting the Set would admit a
+// captured answer being written back. A Set-shaped body therefore falls
+// through handleEX's read check to "?;". That is a MODELLING GAP,
+// KNOWN-DIVERGENT from the documented grammar, and it is not a claim that
+// either radio refuses EX Set.
+// TestEX_MalformedAndSetShapedBodiesAreRefused pins the gap's shape.
 //
 // THE ERASE FORM OF MW. The book describes one: "If you do not specify one
 // digit in P16 and execute all the parameters from P4 to P15 set to 0, the
@@ -244,6 +245,25 @@
 //     core/kw/ts590/layout.go names A12 for this same row. This fake stops
 //     at 109 on the S because that is as far as the book's section-defined
 //     channels go, not because a ceiling has been observed.
+//
+//  16. THE EX MENU VALUES ARE INVENTED. Every menu's default raw P5 is its
+//     printed width in '0' bytes. The two parameter lists print each menu's
+//     available SETTINGS and never a shipped default (590:564, 590:744), so
+//     there is nothing to source a real one from — and `rigprog read
+//     --settings --fake` renders these bytes to a user, who must not read
+//     them as what a TS-590 ships with. The placeholder is uniform on
+//     purpose: an obviously uniform value is harder to mistake for evidence
+//     than a plausible-looking spread. What the tables DO carry is each
+//     menu's WIDTH, which is transcribed (ex.go).
+//
+//  17. AN OUT-OF-INVENTORY EX ADDRESS ANSWERS "?;". A well-formed read
+//     naming a menu number this ROW's chart does not print draws the
+//     rejection, with the state unchanged. Neither list prints what happens
+//     at an address it does not carry; "?;" is the error table's first cause
+//     — a syntactically correct command the transceiver cannot execute
+//     (590:96-105) — applied to a menu the radio has none of. The sharp case
+//     is the S's 088: a REAL menu on the SG and past the end of the S's own
+//     domain (590:543-544), which is why the inventory is per row.
 //
 // # What is NOT in this register, and why
 //

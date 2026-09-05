@@ -89,6 +89,12 @@ type Radio struct {
 
 	mu      sync.Mutex
 	records map[recordKey]MemState
+	// exSettings is this radio's menu state: three-digit wire address ->
+	// raw P5. It starts as this ROW's own EXDefaults (ex.go — the two
+	// siblings' charts are two disjoint tables) and moves only by
+	// WithEXSetting/WithEXUnavailable at construction; nothing here models
+	// an EX Set, and nothing models a front panel.
+	exSettings map[string]string
 	// currentChannel is what an "MC;" reports. It moves only by an MC Set;
 	// nothing here models a front panel.
 	currentChannel int
@@ -136,6 +142,9 @@ func New(row Row, opts ...Option) *Radio {
 		firmware:     defaultFirmware,
 		streamErrors: map[int]StreamError{},
 		records:      DefaultImage(),
+		// THIS ROW's menu table, never the other's (ex.go). EXDefaults
+		// returns a fresh map, so two radios never share menu state.
+		exSettings: EXDefaults(row),
 		// A radio that has had no MC Set is sitting on SOME channel, and
 		// this book prints no power-on value anywhere, so the fake takes the
 		// lowest number its slot space has and says so — doc.go's register

@@ -338,17 +338,11 @@ func TestUnknownCommandIsRejected(t *testing.T) {
 	}
 }
 
-// TestEX_IsNotModelledYet pins the MODELLING GAP this task ships
-// deliberately: the EX menu inventory arrives at the next task of the plan
-// (three transcription-B copies and three generators), and until it does an
-// EX frame in either direction draws "?;". The pin exists so that adding EX
-// has to change a test rather than fill a silence.
-func TestEX_IsNotModelledYet(t *testing.T) {
-	_, conn := newTestRadio(t, RowSG)
-	for _, send := range []string{"EX;", "EX0000000;", "EX0000000 1;"} {
-		assertRejected(t, conn, send)
-	}
-}
+// The EX (MENU) surface has its own file: ex.go and ex_test.go. Until this
+// milestone's task 17 it was a modelling gap pinned here as
+// TestEX_IsNotModelledYet; the gap that remains — the EX SET — is pinned by
+// ex_test.go's TestEX_MalformedAndSetShapedBodiesAreRefused, beside the read
+// it is a gap in.
 
 // --- The two serial-line tokens, and the transient "?;" (590:93-113) ---
 

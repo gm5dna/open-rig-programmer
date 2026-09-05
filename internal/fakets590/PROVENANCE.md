@@ -108,16 +108,62 @@ channel with DATA mode on, and BOTH halves of one section-defined channel, so
 that the paired read at `590:1449-1451` meets two stored records rather than
 one and a silence.
 
-## The EX menu inventory is not here yet
+## The EX menu inventory — two charts, two copies, one cross-check
 
 The second evidence leg of a fake in this project is its **independently
 transcribed menu inventory** — transcription B, copied into the fake that
 serves it, so that the fake's inventory and the codec's come from two
 different readings of one chart and a transport cross-check can assert they
 agree. The 590 pair needs **two** of them, because the two siblings print two
-disjoint menu charts in one book.
+disjoint menu charts in one book, over colliding addresses with different
+meanings (`590:564`, `590:744`).
 
-None of that has landed. Until it does, an `EX` frame in either direction
-draws `?;`, `doc.go` says so under "What this fake deliberately does NOT
-model", and `TestEX_IsNotModelledYet` pins the gap's shape so that adding EX
-has to change a test rather than fill a silence.
+Both have landed:
+
+- `transcription-b-590s.csv` and `transcription-b-590sg.csv` are **byte copies**
+  of the quarantined artefacts committed at `core/kw/ts590/testdata/`. They are
+  COPIES, not moves: `core/kw/ts590/crosscheck_test.go` keeps reading the
+  originals as artefacts it binds and hashes by name.
+  `core/transport/ex_crosscheck_ts590_test.go` asserts the copies are still
+  byte-identical to them, because "the codec from A versus the fake from B"
+  holds only for as long as this side's copy really is B.
+- `internal/fakets590/gen` projects each copy into `exinventory590s_gen.go` and
+  `exinventory590sg_gen.go`. It imports nothing project-internal — in
+  particular not `internal/extable`, which generates the CODEC's side — so a
+  shared parsing bug cannot reproduce itself identically into both inventories
+  and be invisible. `imports_test.go` enforces that recursively, `gen/`
+  included.
+- `core/transport/ex_crosscheck_ts590_test.go` compares the two sides address
+  for address and width for width, on both rows, and drives every address over
+  the wire.
+
+**If the cross-check ever fires: report the diff. Do NOT edit either table to
+make it pass.** Which side is wrong — or whether the printed chart is — is an
+arbitration against the PDF, and an edit that merely restores agreement
+destroys the evidence the agreement was worth.
+
+### What the menu VALUES are, and what they are not
+
+Each menu's default raw P5 is its **printed width in `0` bytes** — an INVENTED
+placeholder, `doc.go`'s register entry THE EX MENU VALUES ARE INVENTED. Neither
+parameter list prints a shipped default anywhere; both print each menu's
+available settings. What is transcribed is the **width**, and only the width.
+
+Two family-level entries the EX surface rides on, by number:
+
+- **A19** — an `EX` answer's P5 never exceeds the width the parameter list
+  prints for that menu number. Both books call P5 "variable length" and print
+  no ceiling (`590:554-556`). It is a CEILING, so a short answer is admitted on
+  both sides and `WithEXSetting` can script one.
+- **A2** — the printable-ASCII charset, bounded at `0x7E`. `WithEXSetting`
+  stores what it is given; the charset is enforced by the codec, on the side
+  that has to read a real radio's bytes.
+
+The **text flag** of transcription B is deliberately **not projected** into this
+fake's tables. `core/kw/ts590/crosscheck_test.go` records the orchestrator's
+ruling that the flag is a CONVENTION and the digits are the datum: A and B were
+briefed with different definitions of "text row", and the one address where they
+differ on this pair — the SG's menu 000, "Version information (4 ASCII
+characters) read only" — is transcribed by A as a fixed-width numeric row. A
+fake that projected B's flag would answer spaces at an address the repository
+has ruled numeric. See `gen/main.go`'s `widthToken`.
