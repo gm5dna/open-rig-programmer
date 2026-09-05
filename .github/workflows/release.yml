@@ -512,22 +512,27 @@ jobs:
           test -f "build/bin/Open Rig Programmer-amd64-installer.exe"
           test -f "build/bin/Open Rig Programmer-arm64-installer.exe"
 
-      - name: Version resource
+      # This step is a diagnostic only, never a gate: on run 33950484060
+      # (05/09/2026) .NET's FileVersionInfo came back EMPTY for both raw
+      # GUI exes' ProductVersion even though the PE resource itself
+      # (`.rsrc/0/version.txt`) carried the correct value — the
+      # StringFileInfo block Wails writes is language-neutral
+      # ("000004b0"), a shape FileVersionInfo does not resolve. The real
+      # gate is `check-windows.sh`, which reads the resource bytes
+      # directly (see its `check_version_resource` function) rather than
+      # asking .NET. What Explorer's Properties → Details dialog shows
+      # for these fields is left as a VM-leg checklist item
+      # (`scripts/README-vm-leg.md`) rather than asserted here.
+      - name: Version resource as .NET sees it (diagnostic)
         shell: pwsh
         working-directory: app
         run: |
           $numeric = $env:NUMERIC
-          $failed = $false
           foreach ($arch in @("amd64", "arm64")) {
             $path = "build/bin/open-rig-programmer-$arch.exe"
-            $actual = (Get-Item $path).VersionInfo.ProductVersion
-            Write-Host "$path ProductVersion: $actual (want $numeric)"
-            if ($actual -ne $numeric) {
-              $failed = $true
-            }
-          }
-          if ($failed) {
-            throw "a raw GUI exe's ProductVersion did not match $numeric"
+            $info = (Get-Item $path).VersionInfo
+            Write-Host "$path (want $numeric):"
+            $info | Format-List FileVersion,ProductVersion,FileVersionRaw,ProductVersionRaw,FileDescription,ProductName
           }
 
       - name: Name the assets

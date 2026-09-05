@@ -22,14 +22,24 @@
 #   <assets-dir>/open-rig-programmer-<tag>-windows-{amd64,arm64}-installer.exe
 #   <assets-dir>/rigprog-<tag>-windows-{amd64,arm64}.zip
 #
-# CHECK_WIN_SKIP_TAG=1 skips only the tag-string assertion (unstamped
-# local builds carry "v0.0.0-check", not a real tag) — never set in CI.
+# CHECK_WIN_SKIP_TAG=1 skips the tag-string assertion and the raw GUI
+# exes' PE version-resource assertions (unstamped local builds carry
+# "v0.0.0-check" and 0.0.0/1.0.0 respectively, not a real tag or
+# productVersion) — never set in CI.
 set -u
 
 tag="${1:?usage: check-windows.sh <tag> <assets-dir>}"
 assets="${2:?usage: check-windows.sh <tag> <assets-dir>}"
 nsi="app/build/windows/installer/project.nsi"
 scratch="app/build/bin/check-tmp"
+
+# Same derivation as release.yml's "Tag shape" step: strip the leading
+# `v` and any `-…` pre-release suffix, leaving the plain X.Y.Z the PE
+# version resource carries (NSIS's VIProductVersion and PRODUCTVERSION
+# only accept four dot/comma-separated integers, never a `v` or a
+# suffix).
+numeric="${tag#v}"
+numeric="${numeric%%-*}"
 
 fail=0
 err() { echo "FAIL: $*" >&2; fail=1; }
@@ -71,6 +81,34 @@ check_machine() {
   got="$(pe_machine "$f")"
   want="$(want_machine "$arch")"
   [ "$got" = "$want" ] || err "$label ($f) has PE machine $got, want $want ($arch)"
+}
+
+# Reads the PE version resource itself rather than trusting .NET's
+# FileVersionInfo lookup: on release run 33950484060 (05/09/2026),
+# `(Get-Item $path).VersionInfo.ProductVersion` came back EMPTY for
+# both raw GUI exes even though `.rsrc/0/version.txt` held the correct
+# StringFileInfo block — the block is language-neutral ("000004b0",
+# codepage 1200), which is a shape .NET's FileVersionInfo does not
+# resolve; release.yml keeps that .NET read only as a diagnostic now.
+# `7z`/`7zz x` extracts the resource as UTF-16LE-with-embedded-NUL
+# text; `tr -d '\0\r'` collapses it to plain ASCII for grep.
+check_version_resource() {
+  local f="$1" arch="$2" label="$3" vdir vtxt txt a b c
+  [ -f "$f" ] || { err "$label missing: $f"; return; }
+  vdir="${scratch}/${arch}-ver"
+  rm -rf "$vdir"
+  mkdir -p "$vdir"
+  "$SEVENZ" x -y -o"$vdir" "$f" ".rsrc/0/version.txt" >/dev/null 2>&1
+  vtxt="${vdir}/.rsrc/0/version.txt"
+  [ -f "$vtxt" ] || { err "$label ($f): could not extract .rsrc/0/version.txt"; return; }
+  txt="$(tr -d '\0\r' < "$vtxt")"
+  IFS=. read -r a b c <<< "$numeric"
+  printf '%s\n' "$txt" | grep -qE "VALUE \"ProductVersion\",[[:space:]]+\"${numeric}\"" \
+    || err "$label ($f): version resource has no VALUE \"ProductVersion\", \"${numeric}\" (read from $vtxt):
+$txt"
+  printf '%s\n' "$txt" | grep -qE "^[[:space:]]*FILEVERSION[[:space:]]+${a},${b},${c},0[[:space:]]*\$" \
+    || err "$label ($f): version resource has no FILEVERSION ${a},${b},${c},0 line (read from $vtxt):
+$txt"
 }
 
 # SHA-256 tool lookup: `sha256sum` (the runner's house tool, coreutils via
@@ -166,6 +204,7 @@ for arch in amd64 arm64; do
   if [ "${CHECK_WIN_SKIP_TAG:-0}" != "1" ]; then
     if [ -f "$raw_gui" ]; then
       LC_ALL=C grep -qaF -- "$tag" "$raw_gui" || err "tag '$tag' not found in raw GUI exe ($arch)"
+      check_version_resource "$raw_gui" "$arch" "raw GUI exe"
     fi
     if [ -f "$dist_cli" ]; then
       LC_ALL=C grep -qaF -- "$tag" "$dist_cli" || err "tag '$tag' not found in dist CLI ($arch)"
@@ -173,7 +212,7 @@ for arch in amd64 arm64; do
   fi
 done
 if [ "${CHECK_WIN_SKIP_TAG:-0}" = "1" ]; then
-  echo "check-windows: SKIPPED tag-string assertion (CHECK_WIN_SKIP_TAG=1)"
+  echo "check-windows: SKIPPED tag-string and version-resource assertions (CHECK_WIN_SKIP_TAG=1)"
 fi
 
 # nsi source assertions. Grep patterns tolerate the mix of quote styles

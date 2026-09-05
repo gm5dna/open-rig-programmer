@@ -70,6 +70,14 @@ preamble"):
    and `LICENSE` are in the install directory; a Start-menu entry
    exists; Programs-and-Features shows the numeric version (e.g.
    `1.3.0`, no leading `v`, no `-rc.1` suffix).
+   - Right-click `Open Rig Programmer.exe` → *Properties* → *Details*:
+     record the Product version and File version shown (expected: the
+     numeric tag). If either is blank, that is a finding for the
+     write-up, not a failure of this leg — `.NET`'s own
+     `FileVersionInfo` reader returned empty for this build's
+     language-neutral version resource on the CI runner (release run
+     33950484060, 05/09/2026); `check-windows.sh` is the byte-level
+     gate that actually enforces this value.
 3. **Launch the GUI from the Start menu.** Confirm the status bar
    shows the rehearsal tag. Run the Demo workflow end to end (connect
    to the built-in Demo radio, edit, Send) — this exercises nothing on
