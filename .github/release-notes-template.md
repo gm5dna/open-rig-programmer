@@ -487,10 +487,10 @@ What this release has **not** been exercised against:
   Universal Windows Driver was installed by hand; SmartScreen and
   WebView2 behaved as documented; two writes were made from the GUI and
   the CLI and the radio was read back byte-identical to its pre-session
-  state afterwards. **amd64 is built and its CLI run in CI only** — no
-  amd64 Windows machine, physical or virtual, has run this project's
-  code, and no physical Windows machine of either architecture has been
-  tried.
+  state afterwards. The amd64 builds are produced by the same pipeline
+  on a Windows x64 host and the amd64 CLI has run there too — but the
+  amd64 GUI has never been launched by anyone, and no physical Windows
+  machine of either architecture has been tried.
 
 Anything the project has not observed is labelled as such in the code
 and documentation rather than assumed. Reports from real hardware —
