@@ -5,9 +5,7 @@ package ts590
 import (
 	"context"
 	"errors"
-	"fmt"
 	"reflect"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -645,10 +643,15 @@ func TestReadChannel_ALateAnswerIsNeverTheNextReadsAnswer(t *testing.T) {
 //
 // SECOND, THE WIDTH PREDICATE ITSELF. core/kw's own checkRecordLen is what
 // says a memory frame is fifty bytes, and its refusal is typed, carries BOTH
-// measured lengths and renders exact text. That contract is asserted here in
-// this family's own error vocabulary — see assertKenwoodRecordLengthMismatch,
-// whose doc comment records why the fleet helper of the same shape could not
-// be the one called.
+// measured lengths and renders exact text. That contract is asserted through
+// drivertest.AssertKenwoodRecordLengthMismatch — the FLEET helper, in this
+// family's own error vocabulary, which T14 landed and which
+// core/driver/ts480 calls on the same bytes. It is a SIBLING of
+// AssertRecordLengthMismatch rather than a use of it: that one asserts CI-V's
+// contract (driver.ErrWrongRadio and a *civ.RecordLengthError, a probe-time
+// radio classification), and a Kenwood short MR answer is a malformed memory
+// frame on the READ path instead. Its own doc comment carries the whole
+// reasoning, and this package no longer keeps a private copy.
 func TestReadChannel_AShortMRAnswerNeverReachesTheParser(t *testing.T) {
 	// FORTY-NINE BYTES: the whole record less its last name byte, then the
 	// terminator, so the frame is one byte short of the printed grid and is
@@ -674,40 +677,7 @@ func TestReadChannel_AShortMRAnswerNeverReachesTheParser(t *testing.T) {
 
 		// The codec's own width predicate, on the same bytes.
 		_, perr := sess.layout.ParseMRAnswer([]byte(short))
-		assertKenwoodRecordLengthMismatch(t, perr, "MR", kw.RecordLen-1, kw.RecordLen)
-	}
-}
-
-// assertKenwoodRecordLengthMismatch pins the record-length refusal contract:
-// a caller can CLASSIFY the failure, RECOVER the codec's measured lengths,
-// and the user-facing text is EXACT.
-//
-// IT STANDS IN FOR drivertest.AssertRecordLengthMismatch, WHICH THIS TASK WAS
-// NAMED AS THE CONSUMER OF AND WHICH CANNOT BE CALLED HERE. That helper's
-// contract is CI-V's: it asserts errors.Is(err, driver.ErrWrongRadio) and
-// recovers a *civ.RecordLengthError (core/driver/internal/drivertest/
-// record_length.go), because on the Icom side a mis-sized record is a
-// PROBE-TIME radio classification. A Kenwood short MR answer is neither — it
-// is a malformed memory frame on the READ path, typed *kw.RecordLengthError
-// and wrapping kw.ErrParse — so calling the fleet helper would require this
-// driver to import core/civ and to claim "wrong radio" for a frame width,
-// which would be false. The SHAPE of the contract is what matters and is
-// reproduced here in this family's own vocabulary; the divergence is reported
-// rather than papered over.
-func assertKenwoodRecordLengthMismatch(t testing.TB, err error, command string, got, want int) {
-	t.Helper()
-	if !errors.Is(err, kw.ErrParse) {
-		t.Errorf("errors.Is(err, kw.ErrParse) = false for %v", err)
-	}
-	var lengthErr *kw.RecordLengthError
-	if !errors.As(err, &lengthErr) {
-		t.Fatalf("errors.As(err, **kw.RecordLengthError) = false for %v", err)
-	}
-	if lengthErr.Command != command || lengthErr.Got != got || lengthErr.Want != want {
-		t.Errorf("kw.RecordLengthError = %s %d/%d, want %s %d/%d", lengthErr.Command, lengthErr.Got, lengthErr.Want, command, got, want)
-	}
-	if text := lengthErr.Error(); !strings.Contains(text, fmt.Sprintf("kw: %s memory frame is %d bytes, want exactly %d bytes", command, got, want)) {
-		t.Errorf("Error() = %q, want it to open with the two measured lengths", text)
+		drivertest.AssertKenwoodRecordLengthMismatch(t, perr, "MR", kw.RecordLen-1, kw.RecordLen)
 	}
 }
 
