@@ -321,7 +321,7 @@ type Profile struct {
 	// DigitsCeiling is the largest width THIS profile's family admits, and
 	// it is what bounds MaxDigits, TextWidth and MaxObservedWidth. It is a
 	// PER-FAMILY datum because the bound is a property of the family's own
-	// frame budget: the four Yaesu profiles render into core/cat and carry
+	// frame budget: the five Yaesu profiles render into core/cat and carry
 	// MaxDigitsCeiling, which core/cat/exdigits_ceiling_test.go pins to that
 	// package's maxEXDigits; a profile rendering into another package
 	// supplies that package's own constant and pins the pair there.

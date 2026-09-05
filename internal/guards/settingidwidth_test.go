@@ -84,13 +84,16 @@ import (
 // field, the form"), core/driver/<model>, internal/fake*. Each such
 // statement is true as written and becomes FALSE if generalised, which is
 // the opposite of the drift this guard catches. Counted with the two
-// passes below, over every git-tracked .go file, at the time of writing:
-// 99 of them in non-test files outside the scoped directories, and 227
-// across every .go file including tests — 50 of that last number are this
-// file's own samples and prose, which the guard never scans. Re-measure
-// before citing either; the passes widened at the Stage 0 close and both
-// numbers moved with them. A guard that swept them would need an
-// allowlist longer than the rule.
+// passes below, over every git-tracked .go file, RE-MEASURED at Tier 1's
+// FT-991A registration: 105 of them in non-test files outside the scoped
+// directories, and 245 across every .go file including tests — 50 of that
+// last number are this file's own samples and prose, which the guard never
+// scans. Re-measure before citing either; the passes widened at the Stage 0
+// close, and this milestone's three new packages (core/cat/ft991a,
+// core/driver/ft991a, internal/fakeft991a) moved both figures again — which
+// is why the INSTRUCTION is the load-bearing part of this paragraph and the
+// figures are not. A guard that swept them would need an allowlist longer
+// than the rule.
 //
 // TWO out-of-scope statements are NOT of that kind, and neither is this
 // guard's to fix. internal/extable states a six-digit width six times,

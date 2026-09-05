@@ -1015,7 +1015,7 @@ func TestRequestedFields_MembershipAndOrder(t *testing.T) {
 // covered" pin. Wave 2's TestFieldStateChecks_CoversExactlyTheFieldStateFields
 // asserted that against this package's own fieldStateChecks table; the
 // write-gate sweep's item (i) moved that table into core/driver, where the
-// four Yaesu drivers share it, and the assertion moved with it —
+// five Yaesu drivers share it, and the assertion moved with it —
 // driver_test.TestFieldStateWalk_CoversEveryFieldStateField makes exactly
 // the same derivation from spec.AllFields() minus the seven plain fields.
 // The walk's field list does not depend on which radio's capabilities it is

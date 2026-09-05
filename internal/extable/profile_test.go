@@ -184,8 +184,8 @@ func TestProfileValidate_CeilingComesFromTheProfile(t *testing.T) {
 		}
 	}
 
-	// Upwards. No registered profile does this — all four Yaesu
-	// registrations carry MaxDigitsCeiling, because all four render into
+	// Upwards. No registered profile does this — all five Yaesu
+	// registrations carry MaxDigitsCeiling, because all five render into
 	// core/cat — and it is asserted only to prove the constant is not
 	// consulted behind the field's back.
 	wide := fixtureRequired
@@ -734,7 +734,7 @@ func TestSharedPackageNeedsAllKeysToDiffer(t *testing.T) {
 			"ObservedCSV", false,
 		},
 		{
-			// The four Yaesu registrations' own shape: identical file,
+			// The five Yaesu registrations' own shape: identical file,
 			// variable and source names in different packages.
 			"different packages, every key identical",
 			single("ts590", "exinventory_gen.go", "exItems", "table2.csv"),

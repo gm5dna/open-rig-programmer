@@ -608,7 +608,7 @@ var (
 	// internal/fakeft891's own Port() method is already declared to return
 	// io.ReadWriteCloser (internal/fakeft891/fakeft891.go:89, checked
 	// against source before this registration, per the task brief), so
-	// *fakeft891.Radio satisfies fakeRadio as written. It is the four Yaesu
+	// *fakeft891.Radio satisfies fakeRadio as written. It is the five Yaesu
 	// simulators' case as much as the IC-7100's and IC-R8600's: the split
 	// in this table runs by which package the simulator was written
 	// against, not by maker and not by which tier registered it.
