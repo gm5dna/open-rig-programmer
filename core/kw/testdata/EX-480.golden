@@ -1,0 +1,117 @@
+# Command: EX (Read frame - all positions - plus the Answer/Set shape)
+# Radio: Kenwood TS-480HX / TS-480SAT
+# Title (cover, verbatim): "PC CONTROL COMMAND REFERENCE FOR THE TS-480HX/ SAT
+#   TRANSCEIVER"
+# Printed revision: NONE printed; cover carries "KENWOOD CORPORATION",
+#   "(c) 2003/11/28" and the printing code line "09 08 07 06 05 04 03 02 01 00".
+# Source page: printed folio "6"  ==  PDF page 7 of 26
+#   (the EX menu tables that follow run from folio 7 to folio 9 / PDF pp. 8-10; they
+#    were consulted only for the P5 value legends quoted below)
+# Charts used: the Set, Read and Answer charts of the EX block
+# Derivation date: 05/09/2026
+# NO code, no generator, no other file and no other document was consulted.
+#
+# COUNTED FRAME LENGTHS (two independent counts of the printed numbered rulers; Set
+# and Answer each print TWO ruler rows, so both were counted):
+#   EX Read   = 10 positions  (single ruler row 1-10; terminator in cell 10)
+#   EX Set    = 12 positions AS ILLUSTRATED  (ruler rows 1-10 and 11-20; the chart
+#               fills cells 1..11 and puts ";" in cell 12, i.e. it draws P5 as TWO
+#               characters).  The true length is VARIABLE - see the P5 note.
+#   EX Answer = 12 positions AS ILLUSTRATED  (identical shape to Set)
+#   (The TS-590 book draws the SAME command with P5 as EIGHT characters and the
+#    terminator in cell 18 - see FINDING F2.)
+#
+# ---------------------------------------------------------------------------
+# CHARTS, position by position:
+#
+#   Set / Answer, ruler row 1-10:
+#     1 E   2 X   3 P1  4 P1  5 P1  6 P2  7 P2  8 P3  9 P4  10 P5
+#   Set / Answer, ruler row 11-20:
+#     11 P5  12 ;   13..20 empty
+#
+#   Read, ruler row 1-10:
+#     1 E   2 X   3 P1  4 P1  5 P1  6 P2  7 P2  8 P3  9 P4  10 ;
+#
+# Field map:
+#   pos 1-2    "EX"
+#   pos 3-5    P1   (3 characters, menu number)
+#   pos 6-7    P2   (2 characters)
+#   pos 8      P3   (1 character)
+#   pos 9      P4   (1 character)
+#   pos 10..   P5   (variable length; drawn as 2 characters, pos 10..11)
+#   last       ";"  (drawn in pos 12 for Set/Answer, pos 10 for Read)
+#
+# ---------------------------------------------------------------------------
+# LEGEND, VERBATIM (the complete right-hand column; block description reads
+# "Sets or reads the Extension Menu."):
+#
+#   Parameters:
+#   P1
+#     000 ~ 060: Menu No.
+#
+#   THE P2 / P3 / P4 "Always" LEGENDS, VERBATIM:
+#   P2
+#     00: Always 00 for the TS-480
+#   P3
+#     0: Always 0 for the TS-480
+#   P4
+#     0: Always 0 for the TS-480
+#
+#   THE P5 VARIABLE-LENGTH NOTE, VERBATIM:
+#   P5
+#     A string of characters (Variable length)
+#     Normally 1-digit for the TS-480.
+#     Menu No. 32, 35 and 48 ~ 52 use 2-digit parameters.
+#
+#   Command example:
+#     Display brightness
+#     EX00000000; (Display illumination OFF).
+#     EX00000003; (Display brightness level 3).
+#
+#   (Both printed examples are ELEVEN characters long, i.e. a ONE-character P5 with
+#    the terminator in position 11 - whereas the chart above draws TWELVE positions
+#    with a TWO-character P5.  Chart and worked example disagree; see FINDING F2b.)
+#
+# EVERY POSITION THE CHART PRINTS AS FIXED / "Always" (by position number):
+#   positions 6,7  (P2)  -- "00: Always 00 for the TS-480"
+#   position  8    (P3)  -- "0: Always 0 for the TS-480"
+#   position  9    (P4)  -- "0: Always 0 for the TS-480"
+#   (Same three positions as the TS-590 book, but the wording carries the model name.)
+#
+# ---------------------------------------------------------------------------
+# BYTES WHOSE VALUE THE MANUAL DOES NOT DETERMINE  -> INHERITED-ASSUMED
+#
+#   [E1] The LENGTH of P5 for any menu number outside the list "32, 35 and 48 ~ 52".
+#        The legend says "Normally 1-digit", which is a normality claim, not a rule,
+#        and the chart draws 2.  The 1-character vectors below take the length from
+#        the book's own worked examples, so their length is documented; the
+#        2-character vector's length is documented only for the listed menus.
+#   [E2] The P5 VALUE in the 2-character vector below.  The menu-32 row of the EX
+#        table was not needed for the width (the legend names menu 32 explicitly),
+#        but the particular value "05" is ASSUMED.
+#   [E3] Padding of a P5 string shorter than the width the radio expects: the book
+#        prints NOTHING about it.  Not exercised below.
+#
+# Hardware status: UNVERIFIED for every vector in this file.
+#
+# ---------------------------------------------------------------------------
+# VECTORS  (name <TAB> frame bytes verbatim)
+#
+# --- Read frames: all 10 positions, every one determined by the chart + legends ---
+ex480_read_menu000	EX0000000;
+ex480_read_menu032	EX0320000;
+ex480_read_menu060_last	EX0600000;
+#
+# --- Set frames quoted CHARACTER FOR CHARACTER from the book's own worked examples
+#     (11 positions, one-character P5) ---
+ex480_set_menu000_illumination_off	EX00000000;
+ex480_set_menu000_brightness_3	EX00000003;
+#
+# --- Set / Answer shape EXACTLY as the chart draws it: P5 two characters, ";" in
+#     position 12.  Menu 32 is one of the menus the legend says takes two digits.
+#     The value "05" is ASSUMED (see [E2]). ---
+ex480_set_menu032_two_digit	EX032000005;
+ex480_answer_menu032_two_digit	EX032000005;
+#
+# --- Answer of the one-character shape, mirroring the worked example ---
+ex480_answer_menu000_brightness_3	EX00000003;

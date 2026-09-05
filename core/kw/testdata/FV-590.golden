@@ -1,0 +1,65 @@
+# Command: FV (Read and Answer frames)   -- TS-590 ONLY (no FV block exists in the
+#   TS-480 book)
+# Radio: Kenwood TS-590S / TS-590SG
+# Title (cover, verbatim): "TS-590S TS-590SG / PC CONTROL COMMAND / Reference Guide"
+# Printed revision: NONE printed; cover carries "JVCKENWOOD Corporation" and
+#   "January/30/2019".
+# Source page: printed folio "- 12 -"  ==  PDF page 13 of 35
+# Charts used: the Read and Answer charts of the FV block (the block prints NO Set
+#   chart - the row is absent, not empty)
+# Derivation date: 05/09/2026
+# NO code, no generator, no other file and no other document was consulted.
+#
+# COUNTED FRAME LENGTHS (two independent counts of the printed numbered ruler):
+#   FV Read   = 3 positions
+#   FV Answer = 7 positions
+#
+# CHARTS, position by position:
+#   Read:    1 F  2 V  3 ;                                     (4..10 empty)
+#   Answer:  1 F  2 V  3 P1  4 P1  5 P1  6 P1  7 ;             (8,9,10 empty)
+#
+# Field map:
+#   pos 1-2  "FV"
+#   pos 3-6  P1  (four characters)
+#   pos 7    ";"
+#
+# ---------------------------------------------------------------------------
+# LEGEND, VERBATIM (the complete right-hand column; block description reads
+# "Verifies the Firmware version."):
+#
+#   [TS-590S / TS-590SG common]
+#   Parameters:
+#   P1
+#     Reads out the character string of the firmware version.
+#
+#   * For example, for firmware version 1.00, it reads "FV1.00;".
+#
+#   THE WORKED EXAMPLE, VERBATIM:  For example, for firmware version 1.00, it reads
+#   "FV1.00;".
+#   (The example is 7 characters long and so agrees exactly with the counted chart:
+#    P1 = "1.00", four characters occupying positions 3,4,5,6, with the full stop
+#    counted as one of the four.  Positions 3..6 therefore need NOT be digits.)
+#
+# POSITIONS THE CHART PRINTS AS FIXED / "Always": NONE in the FV block.
+#
+# ---------------------------------------------------------------------------
+# BYTES WHOSE VALUE THE MANUAL DOES NOT DETERMINE  -> INHERITED-ASSUMED
+#   [V1] The four characters of P1 for any version other than the one in the worked
+#        example.  The legend gives no format ("the character string of the firmware
+#        version"), only the worked example fixes the shape "d.dd".  The two extra
+#        answer vectors below extend that shape to other version numbers and their
+#        exact bytes are therefore ASSUMED.
+#   The "fv590_answer_v1_00" vector is NOT assumed: it is the book's own worked
+#   example, character for character.
+#
+# Hardware status: UNVERIFIED for every vector in this file.
+#
+# ---------------------------------------------------------------------------
+# VECTORS  (name <TAB> frame bytes verbatim)
+#
+fv590_read	FV;
+# The book's own worked example, quoted character for character
+fv590_answer_v1_00	FV1.00;
+# Same shape, other versions - bytes ASSUMED, see [V1]
+fv590_answer_v2_00	FV2.00;
+fv590_answer_v1_08	FV1.08;

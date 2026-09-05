@@ -1,0 +1,80 @@
+# Command: MC (Read, Set and Answer frames)
+# Radio: Kenwood TS-590S / TS-590SG
+# Title (cover, verbatim): "TS-590S TS-590SG / PC CONTROL COMMAND / Reference Guide"
+# Printed revision: NONE printed; cover carries "JVCKENWOOD Corporation" and
+#   "January/30/2019".
+# Source page: printed folio "- 16 -"  ==  PDF page 17 of 35
+# Charts used: the Set, Read and Answer charts of the MC block
+# Derivation date: 05/09/2026
+# NO code, no generator, no other file and no other document was consulted.
+#
+# COUNTED FRAME LENGTHS (two independent counts of the printed numbered ruler):
+#   MC Set    = 6 positions
+#   MC Read   = 3 positions
+#   MC Answer = 6 positions
+#
+# ---------------------------------------------------------------------------
+# CHARTS, position by position:
+#   Set:     1 M  2 C  3 P1  4 P2  5 P2  6 ;      (7,8,9,10 empty)
+#   Read:    1 M  2 C  3 ;                        (4..10 empty)
+#   Answer:  1 M  2 C  3 P1  4 P2  5 P2  6 ;      (7,8,9,10 empty)
+#
+# Field map:
+#   pos 1-2  "MC"
+#   pos 3    P1  (the 100's digit, 1 character)
+#   pos 4-5  P2  (the two-digit channel number)
+#   pos 6    ";"
+#
+# ---------------------------------------------------------------------------
+# CHANNEL-NUMBER LEGEND, VERBATIM (the complete right-hand column,
+# "[TS-590S / TS-590SG common]" / "Parameters:"):
+#
+#   P1
+#     Sets the 100's digit for the channel number
+#     When entering a setting command, enter 0 or a space for a
+#     channel number less than 100.
+#     For a response command, a space is entered for a channel
+#     number less than 100.
+#
+#   P2
+#     00 ~ 99: Two digit channel number
+#     When the channel number is less than 10, both for setting and
+#     response commands, the first digit is "0".
+#
+#   * Channel numbers P00 ~ P09 are represented by 100 ~ 109.
+#   * TS-590SG extension channel numbers E00 ~ P09 are
+#     represented by 110 ~ 119.
+#
+#   (The second bullet is transcribed exactly as printed: it reads "E00 ~ P09",
+#    mixing the E and P prefixes.  See FINDING F5 - not resolved here.)
+#
+# POSITIONS THE CHART PRINTS AS FIXED / "Always": NONE.  The MC block contains no
+#   "Always" and no "not used" note for any position.
+#
+# ---------------------------------------------------------------------------
+# BYTES WHOSE VALUE THE MANUAL DOES NOT DETERMINE  -> INHERITED-ASSUMED
+#   [C1] Set pos 3 (P1) for a channel below 100: the legend permits EITHER "0" or a
+#        space and does not say which the radio prefers.  Both are emitted below, and
+#        the choice of which one a caller should use is ASSUMED-UNDECIDED.
+#   [C2] The particular channel numbers below are ASSUMED illustrative values.
+#
+# Hardware status: UNVERIFIED for every vector in this file.
+#
+# ---------------------------------------------------------------------------
+# VECTORS  (name <TAB> frame bytes verbatim; a space inside a frame is a real space)
+#
+mc590_read	MC;
+# Set, channel 3, P1 written as "0" (permitted form 1 of 2, see [C1])
+mc590_set_ch03_zero_hundreds	MC003;
+# Set, channel 3, P1 written as a SPACE (permitted form 2 of 2, see [C1])
+mc590_set_ch03_space_hundreds	MC 03;
+# Set, channel 100 == front-panel channel P00 (documented by the first bullet)
+mc590_set_ch100_P00	MC100;
+# Set, channel 110 == TS-590SG extension channel E00 (documented by the second bullet)
+mc590_set_ch110_E00	MC110;
+# Answer, channel 3: the legend REQUIRES a space in P1 for a channel below 100
+mc590_answer_ch03	MC 03;
+# Answer, channel 100 (P00): P1 is the real digit 1
+mc590_answer_ch100_P00	MC100;
+# Answer, channel 119 (extension, top of the documented 110~119 range)
+mc590_answer_ch119	MC119;

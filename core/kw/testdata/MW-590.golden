@@ -1,0 +1,140 @@
+# Command: MW (Set frame)
+# Radio: Kenwood TS-590S / TS-590SG
+# Title (cover, verbatim): "TS-590S TS-590SG / PC CONTROL COMMAND / Reference Guide"
+# Printed revision: NONE printed; cover carries only "JVCKENWOOD Corporation" and
+#   "January/30/2019".  ("rev3" appears only in the supplied filename.)
+# Source page: printed folio "- 19 -"  ==  PDF page 20 of 35
+# Chart used: the single "Set" chart of the MW block (MW has NO Read and NO Answer
+#   chart in this book - only "Set" is printed)
+# Derivation date: 05/09/2026
+# NO code, no generator, no other file and no other document was consulted.
+#
+# COUNTED FRAME LENGTH (two independent counts of the printed numbered ruler):
+#   MW Set = 50 positions  (five ruler rows: 1-10, 11-20, 21-30, 31-40, 41-50)
+#
+# ---------------------------------------------------------------------------
+# SET CHART, position by position (printed cell contents):
+#   1  M          2  W
+#   3  P1
+#   4  P2         5-6  P3
+#   7-17  P4      (11 positions)
+#   18  P5
+#   19  P6
+#   20  P7
+#   21-22  P8
+#   23-24  P9
+#   25-27  P10
+#   28  P11
+#   29  P12
+#   30-38  P13   (9 positions)
+#   39-40  P14
+#   41  P15
+#   42-49  P16   (8 positions)
+#   50  ;
+#
+# ---------------------------------------------------------------------------
+# LEGEND TEXT, VERBATIM ("[TS-590S / TS-590SG common]" / "Parameters:"):
+#
+# P1
+#   0:  Simplex
+#   1:  Split
+#   * When registering a simplex channel, set parameter P1 to 0.
+#     After setting P1 to 0, the channel becomes a simplex channel,
+#     even if it was already a split channel.
+#   * When registering a split channel, set parameter P1 to 1 (set the
+#     transmission frequency and mode).  The reception frequency
+#     and mode are not updated at this time.
+#   * When registering a section defined channel, set parameter P1
+#     to 0 to enter the Start frequency, then set P1 to 1 to set the End
+#     frequency.
+#   * When you have a blank channel selected, and set parameter
+#     P1 to 1, the channel becomes a split channel.  However, the
+#     transmit and receive frequencies are the same, and the transmit
+#     and receive modes are the same.
+#   * When registering a section defined channel and parameter P1
+#     is set to 1, the Start and End frequencies are the same.
+# P2, P3
+#   Channel number (refer to the MC command)
+# P4
+#   Frequency (depending on the P1 setting, unused high-end
+#   digits will become 0)
+# P5
+#   Mode (depending on the P1 setting, refer to the MD command)
+# P6
+#   Data mode (depending on the P1 setting, refer to the DA
+#   command)
+# P7
+#   0:  TONE/CTCSS OFF
+#   1:  TONE ON
+#   2:  CTCSS ON
+#   3:  Cross Tone ON
+# P8
+#   Tone frequency (refer to the TN command)
+# P9
+#   CTCSS frequency (refer to the CN command)
+# P10
+#   000:  Always 000
+# P11 (Selected status of FILTER A/B (Status of FILTER A/B in the
+#      mode indicated by P5 and P6 parameters))
+#   0:  FILTER A
+#   1:  FILTER B
+#   This is always set to "0" in the firmware version 1.xx of TS-590S.
+# P12
+#   0:  Always 0
+# P13
+#   000000000:  Always 000000000
+# P14
+#   00:  FM Normal
+#   01:  FM Narrow
+# P15
+#   0:  Channel Lockout OFF
+#   1:  Channel Lockout ON
+# P16
+#   Memory name (up to 8 digits)
+#   * ";" (semicolon) cannot be used for the parameter P16.
+#
+# WHAT THE BOOK SAYS ABOUT OMITTING THE NAME / SENDING A SHORTER FRAME, VERBATIM,
+# AND WHAT HAPPENS TO THE CHANNEL THEN (the only such statement in the MW block):
+#   "If you do not specify one digit in P16 and execute all the
+#    parameters from P4 to P15 set to 0, the channels specified by
+#    P2 and P3 will be erased."
+#   (Nothing else is printed about shorter frames.  Nothing is printed about how a
+#    1..7 character name occupies the 8 printed positions.)
+#
+# EVERY POSITION THE CHART PRINTS AS FIXED / "Always" (by position number):
+#   positions 25,26,27  (P10)  -- "000:  Always 000"
+#   position  29        (P12)  -- "0:  Always 0"
+#   positions 30..38    (P13)  -- "000000000:  Always 000000000"
+#
+# ---------------------------------------------------------------------------
+# BYTES WHOSE VALUE THE MANUAL DOES NOT DETERMINE  -> INHERITED-ASSUMED
+#
+#   [B1] pos 4 (P2, the 100's digit) for a channel below 100.  MC's legend permits
+#        EITHER for a setting command: "When entering a setting command, enter 0 or a
+#        space for a channel number less than 100."  ASSUMED: ASCII "0" below.
+#   [B2] positions 7..17 (P4) - the frequency VALUE in each vector is ASSUMED; only
+#        the 11-digit Hz format is documented.
+#   [B3] positions 42..49 (P16) when the name is shorter than 8.  The book says
+#        NOTHING about padding (see the quoted note above - it speaks only of erasure).
+#        Not exercised in the two mirror vectors below (both names are exactly 8).
+#   [B4] positions 21..22 (P8) and 23..24 (P9) when the tone system is OFF -
+#        ASSUMED "00"; the book prints no don't-care value.
+#   [B5] The erase vector below reads "do not specify one digit in P16" as meaning
+#        P16 is omitted ENTIRELY (zero characters, terminator moves to position 42).
+#        The phrase is ambiguous (see FINDING F7) and this reading is ASSUMED.
+#   [B6] Channel numbers, mode digits and name strings are ASSUMED illustrative
+#        values; only their field widths and legends are documented.
+#
+# Hardware status: UNVERIFIED for every vector in this file.
+#
+# ---------------------------------------------------------------------------
+# VECTORS  (name <TAB> frame bytes verbatim, terminator included)
+#
+# Mirrors mr590_answer_ch03_simplex_name8: ordinary simplex channel, 8-character name
+mw590_set_ch03_simplex_name8	MW000300014250000200000000000000000000000DXCLUSTR;
+# Mirrors mr590_answer_ch12_split_tx_tone_on: split registration, TONE ON (P8=08 ->
+# 88.5 Hz), FILTER B, FM Narrow
+mw590_set_ch12_split_tone_on	MW101200051500000401080000010000000000010REPEATER;
+# The erase shape described by the quoted note (P4..P15 all 0, P16 omitted) - 42
+# positions.  See [B5] and FINDING F7.
+mw590_set_ch03_erase_no_P16	MW000300000000000000000000000000000000000;
