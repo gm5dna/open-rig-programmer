@@ -114,6 +114,16 @@ func (d Dialect) MTP11() MTP11Policy { return d.mt.P11 }
 // it at all.
 func (d Dialect) MemoryP5() MemoryP5Policy { return d.memoryP5 }
 
+// ToneStates reports the domain of byte 24 of the shared memory field block
+// on this family: the three CTCSS states (ToneStatesCTCSS) or those plus
+// the two DCS ones (ToneStatesCTCSSAndDCS). The zero Dialect reports the
+// zero domain, which NewDialect refuses to construct.
+//
+// Exported for the same reason MemoryP5 is: core/cat/dialecttest cannot see
+// the unexported field, and it must branch on this to know whether a
+// DCS-state record is one this dialect MUST build or one it MUST refuse.
+func (d Dialect) ToneStates() ToneStateDomain { return d.toneStates }
+
 // MCSelects reports the SEND-side slot domain of this family's MC (memory
 // channel recall) command: memory and PMS only (MCSelectsMemoryPMS) or
 // every slot class this dialect classifies outside "000" (MCSelectsAll).
@@ -249,7 +259,14 @@ func (d Dialect) BuildMTSet(s Slot, display bool, tag string) (Command, error) {
 		return Command{}, newParseError(nil, fmt.Sprintf("MT: short-form Set called on a %v dialect — use the combined-form API", d.mt.Form))
 	}
 	if !d.mtSlotValid(s) {
-		return Command{}, newParseError([]byte(s.Wire()), "MT: slot must be memory (001-099) or PMS (P1L-P9U); 5xx/EMG rejected by project policy pending M5a, \"000\"/invalid rejected per reference")
+		// Composed from this dialect's own slot space (S0.2): the domains
+		// and the special-bank clause were literals true only of the
+		// token-PMS radios. The four token dialects render byte-for-byte
+		// what stood here, so frame-corpus.golden does not move. ONE
+		// renderer, shared with validateCombinedMTFields, because the two
+		// forms refuse in identical words and two copies of a sentence that
+		// must agree is the drift this package keeps paying for.
+		return Command{}, newParseError([]byte(s.Wire()), d.mtSlotDomainRefusal())
 	}
 	if !d.validMTTag(tag) {
 		return Command{}, newParseError([]byte(tag), fmt.Sprintf("MT: tag must be 0-%d bytes of printable ASCII 0x20-0x7E, excluding ';', with no control bytes", d.mt.TagMaxBytes))
