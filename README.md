@@ -77,18 +77,23 @@ unpack and run. To build the app yourself, see
 [docs/building.md](docs/building.md).
 
 **Windows**: the installer is not code-signed, so the first time,
-Windows SmartScreen is expected to show *Windows protected your PC* —
-click *More info*, then *Run anyway*. Pick the installer that matches
-your machine: it refuses to run on the wrong architecture, and the
-amd64 installer will not run on an ARM64 machine even though ARM64
-Windows can emulate x64 programs. The installer puts the app, the
-command line and a Start-menu entry under `Program Files`; the zip is
-a single `rigprog.exe` — unpack and run, no install. The GUI needs
-Microsoft's WebView2 runtime: Windows 11 is expected to already ship
-it; if it is missing, the installer is configured to download it,
-which needs an internet connection — not yet tried by this project.
-None of the Windows instructions has been tried on a Windows machine
-by this project yet; see
+Windows SmartScreen shows *Windows protected your PC* — click *More
+info*, then *Run anyway*. Pick the installer that matches your
+machine: it refuses to run on the wrong architecture, and the amd64
+installer will not run on an ARM64 machine even though ARM64 Windows
+can emulate x64 programs. The installer puts the app, the command line
+and a Start-menu entry under `Program Files`; the zip is a single
+`rigprog.exe` — unpack and run, no install. The GUI needs Microsoft's
+WebView2 runtime: Windows 11 is expected to already ship it (confirmed
+present on the ARM64 VM below, so its bootstrapper had nothing to
+install); if it is missing, the installer is configured to download
+it, which needs an internet connection — the download path itself has
+not been tried. Tested on a Windows 11 ARM64 virtual machine with a
+real FT-710 attached (05/09/2026): installer, driver, GUI, CLI and two
+writes-then-restore all worked as described. **amd64 is built and its
+CLI run in CI only** — no amd64 Windows machine, physical or virtual,
+has run this project's code, and no physical Windows machine of either
+architecture has been tried. See
 [docs/windows-setup.md](docs/windows-setup.md) for the full picture.
 
 ## First use
@@ -108,14 +113,15 @@ the tarball, create it by hand as described in
 [docs/linux-setup.md](docs/linux-setup.md). The Linux port setup has
 been tested in virtual machines, not yet with a radio attached.
 
-**Serial port, Windows**: nothing to install beyond the driver Windows
-normally supplies on its own (see
-[docs/windows-setup.md](docs/windows-setup.md)). The radio's USB
-adapter shows two COM ports in Device Manager, and unlike macOS,
-Windows most likely lists both as usable — probe each one
-(`rigprog probe --port COM3`, `rigprog probe --port COM4`, and so on)
-to find the one that answers. None of this has been tried on a Windows
-machine yet.
+**Serial port, Windows**: on ARM64, Windows Update did not supply a
+driver in this project's testing — install Silicon Labs' CP210x
+Universal Windows Driver by hand (see
+[docs/windows-setup.md](docs/windows-setup.md)); x64 is expected to get
+one from Windows Update automatically, but that has not been tried.
+The radio's USB adapter shows two COM ports in Device Manager, and
+unlike macOS, Windows lists both as usable, tied and indistinguishable
+by name — probe each one (`rigprog probe --port COM3`, `rigprog probe
+--port COM4`, and so on) to find the one that answers.
 
 **In the app**: choose the radio and the port, connect (or press
 *Demo* to try it with a simulated radio), read, edit in the grid, then
