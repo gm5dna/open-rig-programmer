@@ -79,9 +79,16 @@ func (b Byte19Meaning) String() string {
 // THIS IS THE ONE AXIS ON WHICH THE TWO 590 ROWS DIFFER, which is why it is
 // a policy rather than a meaning. The book prints one P11 legend for both —
 // "0: FILTER A / 1: FILTER B" (590:1560-1563) — and then a sentence that
-// applies to one of them: "In firmware version 1.xx of TS-590S, always
-// \"0\"." (590:1564). The 480 has no filter field here at all: "Always 0 for
+// applies to one of them: "* In firmware version 1.xx of TS-590S, always
+// \"0\"." (590:1478). The 480 has no filter field here at all: "Always 0 for
 // the TS-480." (480:973).
+//
+// THE QUOTED WORDING IS MR'S, AT 590:1478. MW prints the same condition in
+// different words and with a mismatched quotation mark — "This is always set
+// to “0" in the firmware version 1.xx of TS-590S." (590:1564) — which is
+// erratum E7 in doc.go. The two are one datum and either may be cited; what
+// must not happen is one line's text under the other line's number, because
+// this axis rests on that sentence and E7 is the record that they differ.
 type Byte28Policy int
 
 // The three byte-28 policies, plus the refusing default.
@@ -304,8 +311,9 @@ type LayoutConfig struct {
 // every axis reads its unset value, its legend and slot space are empty, and
 // every builder and parser method on it refuses. That is the FT-891 Stage 0
 // lesson — a policy-reading site must not default on a zero axis — applied
-// from birth rather than retrofitted, and TestZeroLayout_FailsClosedOnEvery
-// Axis is the pin.
+// from birth rather than retrofitted. The pin is
+// TestZeroLayout_FailsClosedOnEveryAxis, named on one line so a reader can
+// grep for it.
 //
 // The fields are unexported and the accessors copy, so a layout a model
 // package minted at initialisation cannot be edited by a caller holding it.

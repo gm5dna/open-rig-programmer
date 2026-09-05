@@ -67,6 +67,15 @@ func (l Layout) BuildMWSet(rec Record) (Command, error) {
 	// half of a section channel to the other without changing its slot, the
 	// two disagree, and the write would put the START frequency in the END
 	// slot: the silent data loss decision 11 exists to prevent.
+	//
+	// ON THIS MILESTONE'S PATHS THE REFUSAL IS LATENT RATHER THAN LIVE, and
+	// that is worth saying because the message names only section-defined
+	// channels. Plan P13 reads MR with P1=0 on every MEM slot and P1=1 only
+	// on a SCAN 'U' slot — A8 and A9 are why — so a MEM record can only ever
+	// carry AnswerP1='0', which is exactly what Slot.P1() derives for it, and
+	// no MEM read on this milestone can reach this refusal. If a later path
+	// ever reads a MEM slot answering P1='1', the message would be wrong as
+	// well as surprising and should be widened before that path lands.
 	if want := rec.Slot.P1(); rec.AnswerP1 != 0 && rec.AnswerP1 != want {
 		return Command{}, newParseError(nil, "MW set: this record was read with P1=%q but slot %v derives P1=%q from its class; writing it would put one half of a section-defined channel into the other (590:1529-1531)", rec.AnswerP1, rec.Slot, want)
 	}
@@ -166,7 +175,12 @@ func (l Layout) BuildMWSet(rec Record) (Command, error) {
 		copy(frame[ff.Pos-1:], ff.Printed)
 	}
 
-	// The gate, through the same predicate the answer parser uses.
+	// The gate, through the same predicate the answer parser uses. IT IS AN
+	// ASSERTION AND NOT THE MECHANISM: what actually keeps the short erase
+	// form of 590:1579-1581 out is the fixed-length allocation above — no
+	// input can change len(frame) — and this gate records that invariant so
+	// an edit making the width variable would meet it. record_test.go is
+	// explicit that no input can make it fire.
 	if err := checkRecordLen("MW", len(frame), frame); err != nil {
 		return Command{}, err
 	}

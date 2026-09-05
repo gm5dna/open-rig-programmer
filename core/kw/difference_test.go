@@ -87,8 +87,9 @@ func TestDifference_Byte19MeansDataModeOnThe590PairAndLockoutOnThe480(t *testing
 // is the ONE axis on which the two 590 ROWS differ as well.
 //
 // The 590 book prints one P11 legend for both rows — "0: FILTER A / 1:
-// FILTER B" (590:1560-1563) — then scopes a sentence to one of them: "In
-// firmware version 1.xx of TS-590S, always \"0\"." (590:1564). So BOTH 590
+// FILTER B" (590:1560-1563) — then scopes a sentence to one of them: "* In
+// firmware version 1.xx of TS-590S, always \"0\"." (590:1478, MR's wording;
+// MW says the same in different words at 590:1564, erratum E7). So BOTH 590
 // rows must accept '1' on a read, because an S at firmware 2.00 or later
 // answers with it, and the difference between the rows is what a WRITE may
 // carry — the driver's question, not this codec's. The 480 prints "Always 0
@@ -99,7 +100,7 @@ func TestDifference_Byte28IsALiveFilterOnThe590PairAndAConstantOnThe480(t *testi
 		t.Errorf("TS-590SG byte 28 = %v, want Byte28FilterLive (590:1560-1563)", got)
 	}
 	if got := layout590S().Byte28(); got != Byte28FilterEither {
-		t.Errorf("TS-590S byte 28 = %v, want Byte28FilterEither (590:1564)", got)
+		t.Errorf("TS-590S byte 28 = %v, want Byte28FilterEither (590:1478/1564, the E7 pair)", got)
 	}
 	if got := layout480().Byte28(); got != Byte28FixedZero {
 		t.Errorf("TS-480 byte 28 = %v, want Byte28FixedZero (480:973)", got)
@@ -111,7 +112,7 @@ func TestDifference_Byte28IsALiveFilterOnThe590PairAndAConstantOnThe480(t *testi
 		t.Errorf("the TS-590SG refused FILTER B at byte 28: %v", err)
 	}
 	if _, err := layout590S().ParseMRAnswer(f.frame(t)); err != nil {
-		t.Errorf("the TS-590S refused FILTER B at byte 28, and 590:1564's \"always 0\" is scoped to firmware 1.xx: %v", err)
+		t.Errorf("the TS-590S refused FILTER B at byte 28, and 590:1478's \"always \\\"0\\\"\" is scoped to firmware 1.xx: %v", err)
 	}
 	if _, err := layout480().ParseMRAnswer(f.frame(t)); err == nil {
 		t.Error("the TS-480 accepted '1' at byte 28, where its book prints \"Always 0 for the TS-480.\" (480:973)")

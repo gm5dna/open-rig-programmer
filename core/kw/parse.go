@@ -208,8 +208,10 @@ func (l Layout) ParseMRAnswer(frame []byte) (Record, error) {
 // with p1 resolving a section channel's half.
 //
 // A SPACE IS A LEGAL "NUMERIC" BYTE HERE. MR/MW's P2 and P3 are "Channel
-// number (refer to the MC command)" (590:1539-1540), and MC's own chart
-// prints the convention: "When entering a setting command, enter 0 or a
+// number (refer to the MC command)" — 590:1452-1453 in the MR ANSWER's own
+// chart, which is the frame this method parses, and 590:1539-1540 in MW's,
+// which is where slotWire reads it — and MC's own chart prints the
+// convention: "When entering a setting command, enter 0 or a
 // space for a channel number less than 100. For a response command, a space
 // is entered for a channel number less than 100." (590:1334-1337). So the
 // ANSWER form for channels 000-099 — most of a radio's channels — carries a
@@ -300,19 +302,34 @@ func checkNameByte(b byte) error {
 // checkPrintedFixed requires every byte THIS LAYOUT declares hard-wired to
 // carry its printed constant.
 //
-// A24: ON THE TS-480 THIS IS REQUIRED ON PARSE, NOT MERELY EMITTED ON BUILD.
-// The 480's general permission — digits for a parameter "not applicable to
-// this transceiver" may be filled with any character except the control codes
-// and ';' (480:108-110) — governs the SET side, so a radio answering a
-// hard-wired byte with something else would not necessarily be faulty.
-// Strictness on the answer side is this programme's choice, and A24's lift is
-// a dozen real reads: a single counter-example converts the rule from
-// "required" to "accepted and normalised".
+// IT RUNS ON EVERY ROW, UNDER DECISION 7: the 480's sixteen printed-fixed
+// bytes and the 590 pair's thirteen are all REQUIRED ON PARSE and not merely
+// emitted on build (spec :1531-1533).
+//
+// A24 IS THE 480'S ESCAPE HATCH AND ONLY THE 480'S. That book carries a
+// general permission the 590 book does not: digits for a parameter "not
+// applicable to this transceiver" may be filled with any character except
+// the control codes and ';' (480:108-110). It governs the SET side, so a
+// TS-480 answering a hard-wired byte with something else would not
+// necessarily be faulty. Strictness on the answer side is this programme's
+// choice, and A24's lift L-HW-18 is a dozen real reads OF THAT RADIO: a
+// single counter-example converts the rule from "required" to "accepted and
+// normalised" there. The 590 pair's thirteen bytes rest on decision 7 and on
+// nothing L-HW-18 will ever observe, so no reading of this method should
+// take them as covered by that lift.
 func (l Layout) checkPrintedFixed(what string, frame []byte) error {
+	// The refusal names decision 7, which covers both rows, and adds A24 on
+	// the 480 alone — that entry's claim and its lift are about that radio,
+	// so quoting it on a 590 refusal would offer a reader a hardware
+	// observation that will never be made.
+	why := "decision 7"
+	if l.book == Book480 {
+		why = "decision 7, and this parse-side strictness on the 480 is A24"
+	}
 	for _, ff := range l.printedFixed {
 		got := string(frame[ff.Pos-1 : ff.Pos-1+len(ff.Printed)])
 		if got != ff.Printed {
-			return newParseError(frame, "%s: positions %d-%d are %q, and the %s's book prints %q there (A24)", what, ff.Pos, ff.end(), got, l.model, ff.Printed)
+			return newParseError(frame, "%s: positions %d-%d are %q, and the %s's book prints %q there (%s)", what, ff.Pos, ff.end(), got, l.model, ff.Printed, why)
 		}
 	}
 	return nil
@@ -322,13 +339,15 @@ func (l Layout) checkPrintedFixed(what string, frame []byte) error {
 //
 // THE THREE POLICIES ARE THE THREE READINGS THE BOOK SUPPORTS. The 590 pair
 // share one printed legend, "0: FILTER A / 1: FILTER B" (590:1560-1563), and
-// then a sentence scoped to one of them: "In firmware version 1.xx of
-// TS-590S, always \"0\"." (590:1564). So both 590 rows must ACCEPT '1' on a
-// read — an S at firmware 2.00 or later answers with it — and the difference
-// between the rows is what a WRITE may carry, which is the driver's
-// question. The 480 prints a constant instead (480:973), and that arm is
-// already covered by checkPrintedFixed; it is restated here so the switch is
-// exhaustive rather than leaving a policy to an implicit default.
+// then a sentence scoped to one of them: "* In firmware version 1.xx of
+// TS-590S, always \"0\"." (590:1478, MR's wording; MW says the same thing in
+// different words at 590:1564, which is erratum E7). So both 590 rows must
+// ACCEPT '1' on a read — an S at firmware 2.00 or later answers with it —
+// and the difference between the rows is what a WRITE may carry, which is
+// the driver's question. The 480 prints a constant instead (480:973), and
+// that arm is already covered by checkPrintedFixed; it is restated here so
+// the switch is exhaustive rather than leaving a policy to an implicit
+// default.
 func (l Layout) checkByte28(b byte) error {
 	switch l.byte28 {
 	case Byte28FilterLive, Byte28FilterEither:
@@ -364,10 +383,17 @@ const (
 // (590:1569-1571), and nothing else; the 480 prints a step index referred to
 // ST (480:979), whose own legend is mode-conditional over two ranges,
 // 00-04 for SSB/CW/FSK and 00-09 for AM/FM (480:1494-1500). The bound
-// enforced here is the UNION, 00-09, because this codec does not carry the
-// channel's ST mode class and a narrower bound would refuse a legitimate AM
-// or FM answer. That the 480 cannot be WRITTEN at all is A22, and it is the
-// driver's refusal, not this one.
+// enforced here is the UNION, 00-09, AND THAT IS A CHOICE RATHER THAN A
+// LIMITATION: the parser holds frame[recModeOff] and a Record holds
+// rec.Mode, either of which maps onto ST's SSB/CW/FSK against AM/FM split,
+// so a narrower bound is available. It is not taken, because MR and MW only
+// refer P14 to ST and neither chart says the channel's own P5 selects which
+// of ST's two legends applies; enforcing that pairing would make this codec
+// the author of a rule no page prints. The wider printed bound is admitted
+// and nothing narrower is invented. The cost is nil while A22 refuses every
+// TS-480 channel write, and a milestone that lifts A22 should revisit this
+// line rather than inherit it. That the 480 cannot be WRITTEN at all is A22,
+// and it is the driver's refusal, not this one.
 func (l Layout) checkByte3940(s string) error {
 	switch l.byte3940 {
 	case Byte3940FMNarrowFlag:
