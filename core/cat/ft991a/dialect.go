@@ -136,11 +136,15 @@ var dialect = cat.MustNewDialect(cat.DialectConfig{
 		// top is DERIVED from this and PMSPairs rather than declared beside
 		// them, so there is no second field for it to disagree with.
 		PMSNumericLo: 100,
-		// NO EMERGENCY CHANNEL. "EMG" and "Emergency" appear nowhere in this
+		// NO EMERGENCY CHANNEL. "EMG" appears in NO slot legend of this
 		// manual — checked mechanically over the whole extraction — where
-		// the FTdx10's and the FT-891's MR legends both print "EMG". "" is
-		// how cat.SlotSpace spells absent, and this absence is transcribed
-		// too.
+		// the FTdx10's and the FT-891's MR legends both print "EMG". The
+		// word EMERGENCY does appear once, and it is not a bank: the chart's
+		// row 149 EMERGENCY FREQ TX (ft991a_layout.txt:690, and this
+		// package's testdata/transcription-b.csv:150) is a menu that enables
+		// a transmission. "" is how cat.SlotSpace spells absent, and this
+		// absence is transcribed too. doc.go and TestDifferencePinAbsentBanks
+		// scope the same statement the same way.
 		EmergencyWire: "",
 		// ASSUMED — "000" appears in NO FT-991A slot legend. MC's gives
 		// 001-117 with its PMS decomposition (913-916), and MR's, MT's,

@@ -174,7 +174,7 @@ func unknownModeName(m Mode) string {
 // THE CLOSING SENTENCE ABOVE IS NOW AN UNDERSTATEMENT, and the FT-991A is
 // why. Until that dialect, every divergence between this table and a
 // registered radio's was harmless: either a different SPELLING of the same
-// mode (the FTdx10's "CW-U" for the FT-891's "CW") or a nibble the radio
+// mode (this table's "CW-U" against the FT-891's "CW") or a nibble the radio
 // simply does not have, where the fallback names a mode that is merely
 // unauthoritative. The FT-991A prints "E: C4FM" on all five of its memory
 // legends, where the table above says 'E' is "PSK" — A DIFFERENT REAL MODE.

@@ -94,7 +94,6 @@ import (
 // pins the two this chart is known to carry in a COMPARED column, so that
 // the limit is recorded in the test rather than only in prose.
 //
-// The generated inventory is not bound here, as it is on the FT-891, for one
 // The generated inventory IS bound here, as it is on the FT-891, and the
 // leg arrived one task late. When this file was first written the package
 // had no dialect, exItems was unexported and there was no exported route to
@@ -528,9 +527,6 @@ func TestCrossCheck_A_B_Ledger(t *testing.T) {
 	})
 }
 
-// requireRow asserts that BOTH transcriptions carry addr with exactly the
-// given name and Digits token. Every pin in this file goes through it, so a
-// pin can never be satisfied by one leg alone.
 // TestCrossCheck_InventoryAgainstTranscriptionA binds the GENERATED
 // inventory — the artefact the whole repository reads, through
 // ft991a.Dialect().EXItems() — to transcription A, row by row.
@@ -693,6 +689,9 @@ func TestCrossCheck_InventoryAgainstTranscriptionA(t *testing.T) {
 	})
 }
 
+// requireRow asserts that BOTH transcriptions carry addr with exactly the
+// given name and Digits token. Every pin in this file goes through it, so a
+// pin can never be satisfied by one leg alone.
 func requireRow(t *testing.T, p extable.Profile, a, b map[menuAddr]chartRow, addr menuAddr, name, digits, pin string) {
 	t.Helper()
 	want := chartRow{Name: name, Digits: digits}

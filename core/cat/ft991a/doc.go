@@ -76,7 +76,9 @@
 // is one somebody later silently "corrects". They are RECORDED, NOT
 // RESOLVED: this repository has no FT-991A to ask which reading is right.
 // table2.csv's provenance header carries the same list against the rows it
-// transcribes; this is the dialect's copy of record. There are SEVEN.
+// transcribes; this is the dialect's copy of record. There are SEVEN — the
+// seventh is a transcription trap rather than a statement about the radio,
+// and is counted here because the chart prints it.
 //
 //   - 068 DATA HCUT FREQ (layout 604) and 069 DATA HCUT SLOPE (605) PRINT
 //     EACH OTHER'S DIGITS. 068's legend is "00: OFF 01: 700 Hz ~ 67:
