@@ -70,13 +70,18 @@ pipeline installs on the runner). Without `makensis`, `wails build
 `app/build/bin/Open Rig Programmer-<arch>-installer.exe` rather than
 trusting the exit code.
 
-A `-nsis` build regenerates the tracked template file
+A Wails build (with or without `-nsis`) regenerates the tracked
+frontend bindings under `app/frontend/wailsjs/` and, for `-nsis`
+specifically, the tracked template file
 `app/build/windows/installer/wails_tools.nsh` (its placeholders become
-literal values) and can rewrite `app/wails.json`'s `info.productVersion`
-if you stamped one. Restore both from git before committing anything:
+literal values). It does NOT rewrite `app/wails.json`: that file's
+`info.productVersion` is stamped only by the release job and by the
+local dry-run script, and each of those restores the file itself
+afterwards — the build never touches it. Restore the two files a build
+DOES change before committing anything:
 
 ```sh
-git checkout -- app/build/windows/installer/wails_tools.nsh app/wails.json
+git checkout -- app/frontend/wailsjs/ app/build/windows/installer/wails_tools.nsh
 ```
 
 `app/build/windows/README.md` covers which files under that directory
