@@ -30,8 +30,8 @@ import (
 // the wrong slot, a short MR answer, or SILENCE — which is exactly what the
 // error paths need and what a self-consistent fake will never produce.
 //
-// WHAT IT KNOWS: "AI0;" (silence), "ID;", "FV;", and the seven-byte MR read.
-// ANY OTHER frame is answered "?;".
+// WHAT IT KNOWS: "AI0;" (silence), "ID;", "FV;", the seven-byte MR read, the
+// 50-byte MW Set and the ten-byte EX read. ANY OTHER frame is answered "?;".
 //
 // THE ACKNOWLEDGEMENT SEMANTICS OF THOSE ANSWERS ARE AN ASSUMED CONVENTION
 // APPLIED, NOT AN OBSERVED RADIO TRANSCRIBED — no Kenwood radio has ever been
@@ -85,6 +85,13 @@ type radioImage struct {
 	// — the timeout row of the read choreography, which the books state
 	// carries no information at all (590:106-108).
 	mrSilent map[string]bool
+	// mwReject makes every 50-byte MW Set answer "?;" — the radio's
+	// explicit rejection, which is attributable and is therefore reported
+	// with Sent true. Its default, silence, is the ASSUMED acceptance
+	// signal (A6): no Kenwood radio has ever been written to by this
+	// project, and it is because the convention is assumed that
+	// WriteChannel reports Sent and never Confirmed.
+	mwReject bool
 }
 
 // newRespondingPort starts a scripted radio serving img and registers its
@@ -196,6 +203,16 @@ func (img radioImage) reply(frame string) string {
 			return ans
 		}
 		return "?;"
+	case strings.HasPrefix(frame, "MW") && len(frame) == kw.RecordLen:
+		// AN MW OF ANY OTHER WIDTH FALLS THROUGH TO "?;", and that is the
+		// right answer for this peer: the 42-byte erase form of
+		// 590:1579-1581 is a frame this milestone never builds, and a test
+		// that saw one accepted would be the failure the codec's own
+		// 50-byte outbound gate exists to prevent.
+		if img.mwReject {
+			return "?;"
+		}
+		return ""
 	default:
 		return "?;"
 	}

@@ -23,16 +23,15 @@ func testTiming() Option { return withTiming(80*time.Millisecond, time.Milliseco
 
 // openTestSession opens row against a scripted radio serving img, failing the
 // test if Open does. The returned port is the transcript's source.
+//
+// SIMULATED, AND THAT IS THE WHOLE DIFFERENCE from openWriteSession
+// (write_test.go), which takes the profile as an argument because plan P7's H2
+// requires the capability-gate rung and the semantic rungs to be pinned under
+// different profiles. A read needs no such distinction, so this helper names
+// the one profile every read test wants and delegates the rest.
 func openTestSession(t *testing.T, row Row, img radioImage, opts ...Option) (*Session, *respondingPort) {
 	t.Helper()
-	p := newRespondingPort(t, row, img)
-	d := New(row, Simulated, append([]Option{testTiming()}, opts...)...)
-	sess, err := d.Open(context.Background(), p.Port(), driver.Identity{Port: "/dev/test"})
-	if err != nil {
-		t.Fatalf("Open(%s): %v", modelNameFor(row), err)
-	}
-	t.Cleanup(func() { _ = sess.Close() })
-	return sess.(*Session), p
+	return openWriteSession(t, row, Simulated, img, opts...)
 }
 
 // TestNew_ModelAndCATIDPerRow pins the two registry keys and their three-digit

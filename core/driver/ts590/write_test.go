@@ -3,10 +3,8 @@
 package ts590
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"net"
 	"reflect"
 	"strings"
 	"sync"
@@ -20,119 +18,6 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
-// writeImage is a radioImage that also says what an MW Set draws back.
-//
-// IT IS A SEPARATE IMAGE RATHER THAN A FIELD ON radioImage BECAUSE THIS
-// TASK'S FILE LIST DOES NOT INCLUDE respondingport_test.go, and the plan's
-// lane rule is that a task touches the files its own entry names (plan
-// §Stage 2). The scripted radio the read path needs answers "?;" to every
-// frame it does not know, MW included, so the write path needs a peer that
-// knows one more grammar; everything else — the identity probe, FV, the MR
-// answers, the silence rows — is served by DELEGATION to radioImage.reply,
-// so the two images cannot disagree about what a probe says.
-type writeImage struct {
-	radioImage
-	// mwReject makes every 50-byte MW Set answer "?;" — the radio's
-	// explicit rejection, which is attributable and therefore reported
-	// with Sent true.
-	mwReject bool
-}
-
-// replyWrite answers frame: the 50-byte MW Set here, everything else through
-// the read path's own image.
-//
-// SILENCE IS THE ACCEPTANCE SIGNAL AND IT IS AN ASSUMED CONVENTION APPLIED,
-// NOT AN OBSERVED RADIO TRANSCRIBED (A6). No Kenwood radio has ever been
-// written to by this project; that a "?;" is a rejection at all is the books'
-// own error table (590:100-105) and that an accepted Set draws nothing at all
-// is assumed. It is precisely because the convention is assumed that
-// WriteChannel reports Sent and never Confirmed.
-//
-// AN MW OF ANY OTHER WIDTH FALLS THROUGH TO "?;", which is the right answer
-// for this peer: the 42-byte erase form of 590:1579-1581 is a frame this
-// milestone never builds, and a test that saw one accepted would be the
-// failure the codec's own 50-byte gate exists to prevent.
-func (img writeImage) replyWrite(frame string) string {
-	if strings.HasPrefix(frame, "MW") && len(frame) == kw.RecordLen {
-		if img.mwReject {
-			return "?;"
-		}
-		return ""
-	}
-	return img.radioImage.reply(frame)
-}
-
-// mwPort is the write path's scripted radio: respondingPort's shape over
-// writeImage. See writeImage for why it is not respondingPort itself.
-type mwPort struct {
-	host   net.Conn
-	remote net.Conn
-
-	mu       sync.Mutex
-	received []string
-}
-
-// newMWPort starts a scripted radio serving img and registers its cleanup.
-func newMWPort(t *testing.T, row Row, img writeImage) *mwPort {
-	t.Helper()
-	if img.catID == "" {
-		img.catID = catIDFor(row)
-	}
-	if img.fvAnswer == "" {
-		img.fvAnswer = "FV1.00;"
-	}
-	host, remote := net.Pipe()
-	p := &mwPort{host: host, remote: remote}
-	t.Cleanup(func() {
-		_ = host.Close()
-		_ = remote.Close()
-	})
-	go p.serve(img)
-	return p
-}
-
-// Port returns the end handed to the driver, which takes ownership of it.
-func (p *mwPort) Port() transport.Port { return p.host }
-
-// Transcript returns a copy of every complete frame received, in order.
-func (p *mwPort) Transcript() []string {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return append([]string(nil), p.received...)
-}
-
-// serve splits the driver's bytes into ';'-terminated frames, records each
-// and answers per img.
-func (p *mwPort) serve(img writeImage) {
-	buf := make([]byte, 256)
-	var acc []byte
-	for {
-		n, err := p.remote.Read(buf)
-		if n > 0 {
-			acc = append(acc, buf[:n]...)
-			for {
-				i := bytes.IndexByte(acc, ';')
-				if i < 0 {
-					break
-				}
-				frame := string(acc[:i+1])
-				acc = acc[i+1:]
-				p.mu.Lock()
-				p.received = append(p.received, frame)
-				p.mu.Unlock()
-				if reply := img.replyWrite(frame); reply != "" {
-					if _, werr := p.remote.Write([]byte(reply)); werr != nil {
-						return
-					}
-				}
-			}
-		}
-		if err != nil {
-			return
-		}
-	}
-}
-
 // openWriteSession opens row at profile against a scripted radio serving img.
 //
 // THE PROFILE IS AN ARGUMENT AND NOT A DEFAULT, and that is plan P7's H2 in
@@ -141,9 +26,9 @@ func (p *mwPort) serve(img writeImage) {
 // passed that gate (Simulated, or RealHardware with consent). A helper that
 // chose the profile for its callers is exactly how a whole ladder of
 // semantic pins goes green with none of the rungs implemented.
-func openWriteSession(t *testing.T, row Row, profile Profile, img writeImage, opts ...Option) (*Session, *mwPort) {
+func openWriteSession(t *testing.T, row Row, profile Profile, img radioImage, opts ...Option) (*Session, *respondingPort) {
 	t.Helper()
-	p := newMWPort(t, row, img)
+	p := newRespondingPort(t, row, img)
 	d := New(row, profile, append([]Option{testTiming()}, opts...)...)
 	sess, err := d.Open(context.Background(), p.Port(), driver.Identity{Port: "/dev/test"})
 	if err != nil {
@@ -358,7 +243,7 @@ func TestRequestedFields_EveryConditionalIsReachable(t *testing.T) {
 // calls ReadChannel, and a driver that did would double every write.
 func TestWriteChannel_OneMWReportedSentNeverConfirmed(t *testing.T) {
 	for _, row := range bothRows {
-		sess, p := openWriteSession(t, row, Simulated, writeImage{})
+		sess, p := openWriteSession(t, row, Simulated, radioImage{})
 		res, err := sess.WriteChannel(context.Background(), writableChannel(row, "042"))
 		if err != nil {
 			t.Fatalf("%s: WriteChannel: %v", modelNameFor(row), err)
@@ -418,7 +303,7 @@ func TestWriteChannel_TheFiftyByteFrameIsHandDerived(t *testing.T) {
 		if len(tc.want) != kw.RecordLen {
 			t.Fatalf("%s: the hand-derived frame is %d bytes, want %d — the derivation is wrong, not the code", tc.slot, len(tc.want), kw.RecordLen)
 		}
-		sess, p := openWriteSession(t, RowSG, Simulated, writeImage{})
+		sess, p := openWriteSession(t, RowSG, Simulated, radioImage{})
 		if _, err := sess.WriteChannel(context.Background(), writableChannel(RowSG, tc.slot)); err != nil {
 			t.Fatalf("%s: WriteChannel: %v", tc.slot, err)
 		}
@@ -441,7 +326,7 @@ func TestWriteChannel_TheFiftyByteFrameIsHandDerived(t *testing.T) {
 // document GUARANTEES the zero, which is what makes this a defaulted byte
 // WITH a register entry rather than an invented one.
 func TestWriteChannel_TheSRowsByte28IsTheDocumentedZero(t *testing.T) {
-	sess, p := openWriteSession(t, RowS, Simulated, writeImage{})
+	sess, p := openWriteSession(t, RowS, Simulated, radioImage{})
 	if _, err := sess.WriteChannel(context.Background(), writableChannel(RowS, "042")); err != nil {
 		t.Fatalf("WriteChannel: %v", err)
 	}
@@ -460,7 +345,7 @@ func TestWriteChannel_TheSGsByte28CarriesTheChosenFilter(t *testing.T) {
 		label string
 		want  byte
 	}{{filterALabel, '0'}, {filterBLabel, '1'}} {
-		sess, p := openWriteSession(t, RowSG, Simulated, writeImage{})
+		sess, p := openWriteSession(t, RowSG, Simulated, radioImage{})
 		ch := writableChannel(RowSG, "042")
 		ch.Data.Filter = codeplug.StringField{State: codeplug.Known, Value: tc.label}
 		if _, err := sess.WriteChannel(context.Background(), ch); err != nil {
@@ -479,7 +364,7 @@ func TestWriteChannel_TheSGsByte28CarriesTheChosenFilter(t *testing.T) {
 // transient-suppression sentence, and the step reports Sent TRUE — the frame
 // provably went out and the radio provably refused it — with Confirmed false.
 func TestWriteChannel_ARejectionIsTypedAndAttributable(t *testing.T) {
-	sess, _ := openWriteSession(t, RowSG, Simulated, writeImage{mwReject: true})
+	sess, _ := openWriteSession(t, RowSG, Simulated, radioImage{mwReject: true})
 	res, err := sess.WriteChannel(context.Background(), writableChannel(RowSG, "042"))
 	if !errors.Is(err, transport.ErrRejected) {
 		t.Fatalf("WriteChannel err = %v, want a rejection", err)
@@ -506,9 +391,7 @@ func TestWriteChannel_ARejectionIsTypedAndAttributable(t *testing.T) {
 // every value in the frame came from the radio rather than from a fixture.
 func TestWriteChannel_ARoundTripFromTheReadPathReachesTheWire(t *testing.T) {
 	const id = "042"
-	sess, p := openWriteSession(t, RowSG, Simulated, writeImage{
-		radioImage: radioImage{mrAnswers: map[string]string{mrAddr(id): populatedMR(id)}},
-	})
+	sess, p := openWriteSession(t, RowSG, Simulated, radioImage{mrAnswers: map[string]string{mrAddr(id): populatedMR(id)}})
 	ch, err := sess.ReadChannel(context.Background(), id)
 	if err != nil {
 		t.Fatalf("ReadChannel: %v", err)
@@ -563,7 +446,7 @@ func TestWriteChannel_TheMandatoryLiveBytesRequireAKnownValue(t *testing.T) {
 			d.Filter = codeplug.StringField{State: codeplug.Unavailable}
 		}, spec.FieldFilter},
 	} {
-		sess, p := openWriteSession(t, tc.row, Simulated, writeImage{})
+		sess, p := openWriteSession(t, tc.row, Simulated, radioImage{})
 		ch := writableChannel(tc.row, "042")
 		tc.blank(ch.Data)
 		_, err := sess.WriteChannel(context.Background(), ch)
@@ -586,7 +469,7 @@ func TestWriteChannel_TheMandatoryLiveBytesRequireAKnownValue(t *testing.T) {
 // refusal is the driver's typed one and no frame is built.
 func TestWriteChannel_ATagTheRecordCannotHoldIsRefused(t *testing.T) {
 	for _, tag := range []string{"TOOLONGATAG", "SEMI;COLON"} {
-		sess, p := openWriteSession(t, RowSG, Simulated, writeImage{})
+		sess, p := openWriteSession(t, RowSG, Simulated, radioImage{})
 		ch := writableChannel(RowSG, "042")
 		ch.Data.Tag = tag
 		_, err := sess.WriteChannel(context.Background(), ch)
@@ -606,7 +489,7 @@ func TestWriteChannel_ATagTheRecordCannotHoldIsRefused(t *testing.T) {
 // ceiling, so a channel at 1 Hz writes and one needing more than eleven
 // digits is refused by the field width (A17).
 func TestWriteChannel_AFrequencyWiderThanTheFieldIsRefusedByTheCodec(t *testing.T) {
-	sess, p := openWriteSession(t, RowSG, Simulated, writeImage{})
+	sess, p := openWriteSession(t, RowSG, Simulated, radioImage{})
 	ch := writableChannel(RowSG, "042")
 	ch.Data.FreqHz = kw.MaxRecordFreqHz + 1
 	ch.Data.TxFreqHz = codeplug.FreqField{State: codeplug.Known, Value: ch.Data.FreqHz}
@@ -619,7 +502,7 @@ func TestWriteChannel_AFrequencyWiderThanTheFieldIsRefusedByTheCodec(t *testing.
 	}
 
 	// And the other end of the same disabled check: 1 Hz is written.
-	sess2, p2 := openWriteSession(t, RowSG, Simulated, writeImage{})
+	sess2, p2 := openWriteSession(t, RowSG, Simulated, radioImage{})
 	low := writableChannel(RowSG, "042")
 	low.Data.FreqHz = 1
 	low.Data.TxFreqHz = codeplug.FreqField{State: codeplug.Known, Value: 1}
@@ -651,9 +534,7 @@ func TestWriteChannel_AFrequencyWiderThanTheFieldIsRefusedByTheCodec(t *testing.
 // at "WriteChannel returned while a ReadChannel held opMu".
 func TestWriteChannel_IsAtomicUnderOpMu(t *testing.T) {
 	const id = "001"
-	sess, p := openWriteSession(t, RowSG, Simulated, writeImage{
-		radioImage: radioImage{mrAnswers: map[string]string{mrAddr(id): populatedMR(id)}},
-	})
+	sess, p := openWriteSession(t, RowSG, Simulated, radioImage{mrAnswers: map[string]string{mrAddr(id): populatedMR(id)}})
 
 	entered := make(chan struct{}, 1)
 	release := make(chan struct{})
