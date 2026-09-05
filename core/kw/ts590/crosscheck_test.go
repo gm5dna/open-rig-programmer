@@ -47,8 +47,9 @@ import (
 //     ledger, and were told no row count.
 //   - THE PAGE LEDGER — testdata/ledger-590s.csv and ledger-590sg.csv.
 //     Derived from the rendered PDF's ruled cells by a further quarantined
-//     agent BEFORE either transcription existed, and the source of each
-//     profile's ExpectedRows (88 and 100).
+//     agent before transcription A existed, and blind to transcription B,
+//     which ran alongside it — and the source of each profile's
+//     ExpectedRows (88 and 100).
 //
 // Agreement between three blind derivations is the evidence; this file is
 // where that agreement is made mechanical rather than asserted in prose. ANY
@@ -57,6 +58,12 @@ import (
 // this test, and never an artefact edited merely to make the test pass. That
 // is why every complaint below prints the offending menu number and both
 // sides' values: the failure output is the arbitration's input.
+//
+// Transcription A was given each radio's row COUNT by the orchestrator as a
+// single integer (plan §T9a) and nothing else of the ledger — no page, no
+// boundary, no name — so the COUNT term of the four-way equality below is
+// not blind for A, while the boundary tiling (checkAgainstLedger) and every
+// per-row name/digits comparison are.
 //
 // # What is compared, and what deliberately is not
 //
@@ -128,10 +135,13 @@ const (
 	lastAddrOnS  = 87
 	lastAddrOnSG = 99
 	// sharedAddrCount is 088: every address the S chart prints also exists
-	// on the SG chart. sharedAddrsWithEqualNames is what makes the pair
-	// dangerous and is asserted to be ZERO — not one of those 88 addresses
-	// means the same thing on both radios, so an address-keyed copy-paste
-	// between the two CSVs changes every row it touches.
+	// on the SG chart — arithmetically forced, since the S runs 000..087
+	// contiguously and the SG 000..099, so this is little more than a
+	// restatement of the S's row count. sharedAddrsWithEqualNames is the
+	// leg that earns its place and is what makes the pair dangerous: it is
+	// asserted to be ZERO — not one of those 88 addresses means the same
+	// thing on both radios, so an address-keyed copy-paste between the two
+	// CSVs changes every row it touches.
 	sharedAddrCount           = 88
 	sharedAddrsWithEqualNames = 0
 	// namesCommonToBothCharts is the other half of the same fact: 86 of the
@@ -314,10 +324,15 @@ func crossCheck(c chart) []string {
 	out = append(out, checkAgainstLedger(c, "transcription B", c.bPath, c.b)...)
 
 	// One four-way equality, reported whole: which of the four moved is the
-	// first question arbitration asks. The ExpectedRows value itself is
-	// pinned on the profile by internal/extable's registration test, so this
-	// leg binds the artefacts to that pinned constant rather than keeping a
-	// second copy of it.
+	// first question arbitration asks. Nothing in internal/extable pins
+	// ExpectedRows' VALUE for this family — that registration test covers
+	// the four Yaesu profiles only. For the TS-590S and TS-590SG, ExpectedRows
+	// is read from the registered profile rather than re-typed here, and what
+	// actually holds 88 and 100 to the evidence is this leg together with the
+	// staleness tests' length assertions: TestEXItemsS_HasExpectedRows
+	// (ts590/staleness590s_test.go) and
+	// TestEXItemsSG_LengthIsTheProfilesExpectedRows
+	// (ts590/staleness590sg_test.go).
 	sum := 0
 	for _, l := range c.ledger {
 		sum += l.RowCount
@@ -502,8 +517,8 @@ func TestCrossCheck_TextFlagsAreTheRecordedConventions(t *testing.T) {
 // The rows where the whitespace collapsing is LOAD-BEARING — the ones on
 // which A and B differ verbatim and agree only once collapsed.
 //
-// Five on the S and six on the SG: the five "Mic  PF …" rows each chart ends
-// with, plus the SG's 028 "… Low Cut and Width/ Shift  change (SSB)". Every
+// Five on the S and six on the SG: the chart's five "Mic  PF …" rows, plus
+// the SG's 028 "… Low Cut and Width/ Shift  change (SSB)". Every
 // one is a doubled space inside a printed name, which is the instrument
 // difference the file comment describes — A reads the layout text, which
 // collapses the printed inter-word gap, and B reads a 600 dpi render, which
@@ -609,8 +624,8 @@ func TestCrossCheck_TheTwoTablesArePinnedAsTwo(t *testing.T) {
 		} {
 			addrs := sortedAddrs(tc.rows)
 			if got := addrs[len(addrs)-1]; got != tc.want {
-				t.Errorf("%s: transcription A (%s) runs to menu %03d, the chart pin says %03d — an S carrying an address above %03d is the SG's list wearing the S's name",
-					tc.label, tc.path, got, tc.want, lastAddrOnS)
+				t.Errorf("%s: transcription A (%s) runs to menu %03d, the chart pin says %03d",
+					tc.label, tc.path, got, tc.want)
 			}
 			if len(tc.items) == 0 {
 				t.Fatalf("%s: the generated inventory is empty", tc.label)
