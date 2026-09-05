@@ -338,6 +338,13 @@ var tierRequestedFields = []struct {
 // ReadSetting's, which is what makes it this method's pin and not only that
 // one's.
 //
+// NO PRODUCTION PATH HAS ANY SUCH WORK TODAY: readSettingGapHook is nil
+// outside a test and this is a synthetic window it alone constructs
+// (settings.go states the same limitation for its own half). What is pinned
+// is the invariant — a driver operation excludes another for its whole
+// duration, not only for its Do call — not an observable production
+// behaviour.
+//
 // IT IS NOT HELD ACROSS WRITE-THEN-VERIFY: that pair is core/clone's, as the
 // driver interface assigns it.
 //

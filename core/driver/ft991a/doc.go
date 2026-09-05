@@ -134,7 +134,9 @@
 // concurrency pin is that two racing ReadChannels cannot interleave two MT
 // frames; the pin of the LOCK is settings.go's readSettingGapHook, which is
 // what makes opMu's exclusion observable at all on a session whose every
-// operation is a single engine-serialised exchange. IT IS NOT HELD ACROSS WRITE-THEN-VERIFY: that pair belongs to
+// operation is a single engine-serialised exchange.
+//
+// IT IS NOT HELD ACROSS WRITE-THEN-VERIFY: that pair belongs to
 // core/clone, as the driver interface assigns it, and holding a driver lock
 // across it would serialise two operations the seam deliberately keeps
 // separate.
