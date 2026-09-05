@@ -192,16 +192,22 @@ func TestAI_MalformedRejected(t *testing.T) {
 
 // --- Framing ---
 
-// TestUnknownCommandRejected covers EX explicitly, because its absence is a
-// DECISION of this task rather than an accident: this radio documents EX
-// (availability 155, block 519-528) and this fake does not model it yet, so an
-// EX frame is an unknown command until the task that adds the inventory.
+// TestUnknownCommandRejected covers MW explicitly, because its absence is a
+// DECISION rather than an accident: this radio documents MW (Set only,
+// availability 183) and this fake does not model it, so an MW frame is an
+// unknown command.
+//
+// EX WAS ON THIS LIST AND IS NOT ANY MORE, which is the change the task that
+// added the menu inventory had to make DELIBERATELY — the shape task 13 pinned
+// so that it could not be made by accident. EX is now a modelled command with
+// its own suite (ex_test.go), including the refusals: an out-of-inventory
+// address, a wrong-width address and a Set-shaped body all still draw "?;", but
+// from handleEX rather than from this dispatch default, and that distinction is
+// exactly what the move records.
 func TestUnknownCommandRejected(t *testing.T) {
 	_, conn := newTestRadio(t)
 	for _, frame := range []string{
 		"ZZ;",       // no such command in the list at all
-		"EX001;",    // documented, deliberately not modelled here
-		"EX0011;",   // an EX Set shape, likewise
 		"MW001;",    // documented Set-only, deliberately not modelled
 		";",         // a bare terminator
 		"M;",        // one command byte

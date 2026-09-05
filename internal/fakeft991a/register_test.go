@@ -21,14 +21,18 @@ import (
 // is unambiguous — enough to identify the entry, short enough to survive an
 // editorial tidy of the sentence it heads.
 //
-// TEN, WHERE internal/fakeft891's ROLL HAS SIXTEEN, and the difference is not a
-// thinner register. Two of that package's entries are this radio's DIALECT
-// register's rather than its fake's ("THE ACKNOWLEDGEMENT CONVENTIONS" covers
-// both the "?;" convention and silence on an accepted Set); two more are EX's
-// and arrive with the menu inventory; one — "MT READ IS ANSWERED, BY DEFAULT" —
-// exists only because the FT-891's manual contradicts itself and this one does
-// not; and one — "P7 IN AN MT ANSWER IS '1' (Memory)" — is a MANUAL FACT here,
-// printed in MT's own legend, leaving only the PMS half assumed.
+// TWELVE, WHERE internal/fakeft891's ROLL HAS SIXTEEN, and the difference is
+// not a thinner register. Two of that package's entries are this radio's
+// DIALECT register's rather than its fake's ("THE ACKNOWLEDGEMENT CONVENTIONS"
+// covers both the "?;" convention and silence on an accepted Set); one — "MT
+// READ IS ANSWERED, BY DEFAULT" — exists only because the FT-891's manual
+// contradicts itself and this one does not; and one — "P7 IN AN MT ANSWER IS
+// '1' (Memory)" — is a MANUAL FACT here, printed in MT's own legend, leaving
+// only the PMS half assumed.
+//
+// THE LAST TWO ARRIVED WITH THE MENU INVENTORY, which is why the roll was TEN
+// when this file was written: EX was deliberately unmodelled in the task that
+// built this package's core, so its two assumptions had nothing to sit beside.
 var registerEntries = []string{
 	"EMPTY-SLOT ANSWERS",
 	"PMS SLOTS ANSWER P7 '1'",
@@ -40,6 +44,8 @@ var registerEntries = []string{
 	"THE DEFAULT IMAGE'S CONTENT IS INVENTED",
 	"THE FRAME ACCUMULATOR'S CAP AND RESYNC",
 	"AUTOMATIC-INFORMATION SUPPRESSION",
+	"THE EX MENU VALUES ARE INVENTED",
+	`AN OUT-OF-INVENTORY EX ADDRESS ANSWERS "?;"`,
 }
 
 // dialectEntries are the entries of core/cat/ft991a/doc.go's ELEVEN-member

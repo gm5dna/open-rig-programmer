@@ -22,7 +22,11 @@ import "time"
 //     its own detail block prints a Read chart and a full Answer chart
 //     (998-1033), and the two agree. There is no second radio to play, and
 //     this milestone's plan decision P14 says so in terms.
-//   - NO EX OPTIONS. EX is not modelled yet at all (doc.go).
+//   - TWO EX OPTIONS AND NO MORE. WithEXSetting and WithEXUnavailable are
+//     internal/fakeft891's pair, verbatim in shape; between them they cover
+//     both directions a menu reader needs staged (a value it did not expect,
+//     and an address that answers as unavailable) without teaching this fake
+//     any behaviour the register does not already carry.
 //   - NO BANK OPTIONS. internal/fakeft891 has With5MHz and WithEMG because
 //     that radio's legends print those banks; "5xx", "5 MHz" and "EMG" appear
 //     in no slot legend of this manual, so there is nothing to populate.
@@ -57,6 +61,44 @@ func WithLatency(d time.Duration) Option {
 func WithSlot(slot string, s MemState) Option {
 	return func(r *Radio) {
 		r.slots[slot] = s
+	}
+}
+
+// WithEXSetting overlays one EX (MENU) address's raw P4 verbatim — the same
+// overlay semantics as WithSlot: it is applied to whatever exSettings already
+// holds (EXDefaults(), seeded in New), with no shape or range validation, so
+// several WithEXSetting options may be given, including for an address the
+// generated inventory does not know about. Such an address becomes answerable
+// even though EXDefaults() never produced it, because the option does not
+// consult exItems — which is deliberate: it is how a test reaches a wire
+// behaviour the transcription does not describe, WITHOUT editing the projection
+// of transcription B that the cross-check depends on. Editing that projection
+// to make a test possible would quietly dissolve the cross-check's whole point.
+//
+// The address is this radio's THREE digits ("027"), not the FT-891's four or a
+// sibling's six.
+func WithEXSetting(addr, p4 string) Option {
+	return func(r *Radio) {
+		r.exSettings[addr] = p4
+	}
+}
+
+// WithEXUnavailable removes addr from the fake's EX (MENU) address map, applied
+// to whatever exSettings already holds (EXDefaults() by default, or a prior
+// WithEXSetting in the same Option list), so a subsequent EX read of addr
+// answers "?;" — indistinguishable from an address the chart never enumerated
+// (ex.go's handleEX, doc.go's register entry AN OUT-OF-INVENTORY EX ADDRESS
+// ANSWERS "?;").
+//
+// It introduces no NEW assumed behaviour: it only removes a map entry, which
+// triggers the fake's existing documented "?;". This is the test-only seam for
+// forcing a KNOWN, otherwise-valid address to answer as unavailable — what a
+// settings reader maps to an unavailable setting — so that such a test need not
+// depend on a genuinely out-of-inventory address that no SettingsDescriptor
+// would ever offer an ID for in the first place.
+func WithEXUnavailable(addr string) Option {
+	return func(r *Radio) {
+		delete(r.exSettings, addr)
 	}
 }
 

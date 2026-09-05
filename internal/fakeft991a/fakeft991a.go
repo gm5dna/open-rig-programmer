@@ -24,6 +24,7 @@ type Radio struct {
 
 	mu             sync.Mutex
 	slots          map[string]MemState
+	exSettings     map[string]string // EX (MENU) three-digit address -> raw P4; see ex.go
 	currentChannel string
 	ai             byte // '0' or '1'; OFF at construction, a MANUAL FACT (ft991a_layout.txt:242)
 
@@ -48,6 +49,12 @@ func New(opts ...Option) *Radio {
 		hostConn: hostConn,
 		fakeConn: fakeConn,
 		slots:    DefaultImage(),
+		// The menu state is SEPARATE from the slot map, and deliberately so:
+		// WithFactoryImage replaces the slots and says nothing about the menu
+		// (TestWithFactoryImage_LeavesTheMenuAlone). EXDefaults() returns a
+		// fresh copy per call, so this Radio's map is its own — a later
+		// WithEXSetting cannot reach the generated table or another Radio.
+		exSettings: EXDefaults(),
 		// The answer-only none form: what "MC;" reports before any MC-set has
 		// happened. The wire spelling is the DIALECT's ASSUMED NoneWire
 		// (core/cat/ft991a/doc.go's register entry `SlotSpace.NoneWire =
