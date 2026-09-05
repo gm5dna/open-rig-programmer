@@ -171,6 +171,23 @@ func unknownModeName(m Mode) string {
 // formatting via unknownModeName — so this distinction costs nothing today
 // and is the whole point the moment a second dialect exists.
 //
+// THE CLOSING SENTENCE ABOVE IS NOW AN UNDERSTATEMENT, and the FT-991A is
+// why. Until that dialect, every divergence between this table and a
+// registered radio's was harmless: either a different SPELLING of the same
+// mode (the FTdx10's "CW-U" for the FT-891's "CW") or a nibble the radio
+// simply does not have, where the fallback names a mode that is merely
+// unauthoritative. The FT-991A prints "E: C4FM" on all five of its memory
+// legends, where the table above says 'E' is "PSK" — A DIFFERENT REAL MODE.
+// So for that radio this fallback is ACTIVELY WRONG rather than
+// unauthoritative: it prints a mode the radio does not have and hides the
+// one it does. Nothing changes here — a bare Mode still carries no dialect,
+// and widening this table to a union would make it wrong for everybody
+// instead of one. What changes is the cost of using it on a user-visible
+// path, which is now a mis-statement rather than a vagueness.
+// core/cat/ft991a/doc.go records it, and that package's
+// TestModeStringFallbackIsWrongHere pins both halves plus the FTdx10
+// counter-example, where the fallback is still right.
+//
 // Returns the reference table's display name for m (e.g. "LSB",
 // "DATA-FM-N"), or "-" for ModeUnset. A Mode constructed by an invalid
 // cast rather than ParseMode returns unknownModeName's placeholder.
