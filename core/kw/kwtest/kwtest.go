@@ -533,6 +533,10 @@ func (r *run) checkMemorySets() {
 	r.t.Helper()
 	l := r.l
 
+	// The witness slot the matcher legs below correlate AGAINST: any slot
+	// of this row's own space that is not the one being answered.
+	witness := r.firstMemorySlot()
+
 	for _, s := range r.sampleSlots() {
 		rec := r.conformanceRecord(s)
 		cmd, err := l.BuildMWSet(rec)
@@ -568,6 +572,23 @@ func (r *run) checkMemorySets() {
 		}
 		r.roundTrips++
 		r.refuse("answer frame", "a 50-byte MR ANSWER is never a legal outbound command — MR has no Set on either radio (480:911, erratum E17)", answer)
+
+		// THE ANSWER-TO-READ CORRELATION, which for MR is the matcher's
+		// and no caller's. Every memory answer is fifty bytes and starts
+		// "MR", so the channel number in P2/P3 is the only thing that
+		// separates one from another; a late answer for a channel whose
+		// read has already timed out is otherwise correlated to the NEXT
+		// read (kw.Layout.MRAnswerMatcher's own doc comment).
+		if !l.MRAnswerMatcher(s)(answer) {
+			r.t.Errorf("%s: the MR matcher for %v refused the answer for that very slot %q", r.name(), s, answer)
+		}
+		if s.Number() != witness.Number() {
+			if l.MRAnswerMatcher(witness)(answer) {
+				r.t.Errorf("%s: the MR matcher for %v correlated %v's answer %q — one channel's record would be returned under another's number", r.name(), witness, s, answer)
+			} else {
+				r.refusals["another channel's MR answer"]++
+			}
+		}
 	}
 
 	// The EMPTY record, which is never written: the only documented clear is
@@ -577,6 +598,61 @@ func (r *run) checkMemorySets() {
 		r.t.Errorf("%s: BuildMWSet wrote an EMPTY channel; the only documented clear is the short MW of 590:1579-1581 (decision 8, A5)", r.name())
 	} else {
 		r.refusals["an empty record"]++
+	}
+
+	r.checkEmptyChannel()
+}
+
+// checkEmptyChannel holds the row to BOTH halves of one sentence: "If the
+// selected channel is empty, P4 ~ P15 will be 0 and P16 will be blank."
+// (590:1492-1493). The first half is A18a and is why an empty channel is
+// never refused; the second is A3, whose reading of "blank" — eight spaces —
+// this codec states and enforces rather than admitting whatever P16 carries
+// under a window it has already called empty.
+//
+// THE FRAME IS BUILT FROM THE BOOKS' OWN POSITIONS, not from core/kw's
+// offsets: positions 7-41 are P4 ~ P15 and positions 42-49 are P16 on both
+// charts (590:1440-1461, 480:923-943), and writing them here keeps the
+// suite's frame independent of the codec it is checking.
+//
+// IT MAKES NO CLAIM THAT ANY RADIO SENDS ONE. Whether a TS-480 answers an
+// empty channel at all is A4, a question about that radio settled at
+// hardware item 3; the shape is a property of the FRAME and is held on every
+// row.
+func (r *run) checkEmptyChannel() {
+	r.t.Helper()
+	l := r.l
+
+	s := r.firstMemorySlot()
+	cmd, err := l.BuildMWSet(r.conformanceRecord(s))
+	if err != nil {
+		r.t.Errorf("%s: BuildMWSet(%v): %v", r.name(), s, err)
+		return
+	}
+	empty := cmd.Bytes()
+	empty[0], empty[1] = 'M', 'R'
+	for i := 6; i <= 40; i++ {
+		empty[i] = '0'
+	}
+	for i := 41; i <= 48; i++ {
+		empty[i] = ' '
+	}
+
+	rec, err := l.ParseMRAnswer(empty)
+	if err != nil {
+		r.t.Errorf("%s: ParseMRAnswer refused the empty channel of 590:1492-1493 (A18a) %q: %v", r.name(), empty, err)
+		return
+	}
+	if !rec.Empty || rec.Name != "" {
+		r.t.Errorf("%s: the empty channel %q decoded as Empty = %v, Name = %q", r.name(), empty, rec.Empty, rec.Name)
+	}
+
+	named := append([]byte{}, empty...)
+	copy(named[41:], "NAME")
+	if got, err := l.ParseMRAnswer(named); err == nil {
+		r.t.Errorf("%s: ParseMRAnswer accepted an empty window whose P16 is not blank, returning Name = %q — the same sentence says P16 \"will be blank\", and A3 reads blank as eight spaces", r.name(), got.Name)
+	} else {
+		r.refusals["an empty channel whose P16 is not blank"]++
 	}
 }
 
@@ -665,6 +741,19 @@ func (r *run) checkEXDomain() {
 	}
 	beyond := []byte("EX" + threeDigits(int(last)+1) + "0000;")
 	r.refuse("an EX read past the row's printed menu domain", "the menu domain is printed per row (590:543, 590:544, 480:401), so an address this row's book does not print is not one this row may be sent", beyond)
+
+	// AND THE INGRESS DIRECTION, which the builder and the gate cannot
+	// cover: the same ten bytes with a P5 are the ANSWER a radio sends, and
+	// a menu number this row's book does not print is not a setting this
+	// row has. Without this leg the parser would be the one unbounded path
+	// through the domain.
+	answer := append(append([]byte{}, beyond[:len(beyond)-1]...), '3', ';')
+	item := kw.EXItem{Addr: kw.EXAddress{P1: last + 1}, Name: "a menu number this row's book does not print", Digits: 1}
+	if v, err := l.ParseEXAnswer(answer, item); err == nil {
+		r.t.Errorf("%s: ParseEXAnswer returned %q for menu %03d, past the domain this row's own book prints (000 ~ %03d)", r.name(), v, last+1, last)
+	} else {
+		r.refusals["an EX answer past the row's printed menu domain"]++
+	}
 }
 
 // threeDigits renders n as the EX address field's three zero-padded digits.
@@ -767,7 +856,7 @@ func (r *run) checkNonVacuity() {
 	if r.roundTrips == 0 {
 		r.t.Errorf("%s: no record survived a build -> parse round trip, so the codec was never exercised in both directions", r.name())
 	}
-	for _, kind := range []string{"answer frame", "an AI state other than OFF", "an unbuilt command", "an MW of the wrong width", "a mutated printed-fixed byte", "an empty record", "an EX read past the row's printed menu domain"} {
+	for _, kind := range []string{"answer frame", "an AI state other than OFF", "an unbuilt command", "an MW of the wrong width", "a mutated printed-fixed byte", "an empty record", "an EX read past the row's printed menu domain", "an EX answer past the row's printed menu domain", "another channel's MR answer", "an empty channel whose P16 is not blank"} {
 		if r.refusals[kind] == 0 {
 			r.t.Errorf("%s: no refusal of kind %q was ever SEEN — a silent skip and an enforced rule are indistinguishable without this count", r.name(), kind)
 		}

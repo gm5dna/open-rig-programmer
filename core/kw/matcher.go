@@ -57,3 +57,63 @@ func PrefixLenMatcher(prefix string, exactLen int) func(frame []byte) bool {
 		return true
 	}
 }
+
+// MRAnswerMatcher returns the ANSWER MATCHER for one MR read: the same
+// contract PrefixLenMatcher serves, with the ANSWERED SLOT compared against
+// the slot the outstanding read named.
+//
+// WHY MR NEEDS ITS OWN AND THE OTHER FRAMES DO NOT. PrefixLenMatcher
+// correlates on a prefix and a length, which is enough for every fixed
+// singleton this milestone reads — one ID answer, one FV, one TY, one MC —
+// and enough for EX only because the caller is REQUIRED to put the whole
+// address in the prefix (see above). MR is the third case: every one of a
+// radio's memory answers is 50 bytes and starts "MR", and the channel number
+// sits at P2/P3 rather than immediately after the command name, so no prefix
+// a caller can spell separates one channel's answer from another's. The
+// sequence that exploits it is ordinary rather than exotic: a read of 007
+// times out, the engine quarantines the port, a read of 008 goes out, and
+// 007's very late answer arrives while 008's read is waiting. Under a
+// prefix-and-length matcher that frame IS 008's answer, and ParseMRAnswer
+// then returns a record whose Slot says 007 —
+// TestMRAnswerMatcher_ALateAnswerIsNeverTheNextReadsAnswer drives exactly
+// that through the real engine.
+//
+// IT COMPARES THE SLOT AND NOT P1, and the division is deliberate. P1 is the
+// half of a section-defined channel (590:1529-1531), and a driver's own read
+// path compares it against the half it asked for; a matcher that also
+// refused on P1 would make an answer for the right channel's wrong half look
+// like no answer at all — a timeout where the driver has a precise,
+// reportable mismatch. The slot is the correlation key; the half is the
+// driver's check on a frame already correlated.
+//
+// THE COMPARISON IS OF THE SLOT, NOT OF THE BYTES. A 590 answers a channel
+// below 100 with a SPACE in P2 (590:1332-1337, inherited by MR under A10)
+// while this codec's own read spells it '0', so comparing P2/P3 literally
+// against the read frame would refuse nearly every genuine answer. Decoding
+// through parseSlot — the same method the record parser and the outbound
+// gate use — is what makes the two spellings one slot, and keeps the
+// convention read from one place.
+//
+// IT IS A CORRELATION PREDICATE AND NOT A PARSE. Everything past the slot —
+// the printed-fixed bytes, the mode nibble, the field domains — stays
+// ParseMRAnswer's, so a corrupt answer TO THIS READ is still delivered and
+// still refused with a message naming what was wrong with it, rather than
+// silently missing its match and being reported as a timeout.
+//
+// CONTRACT ON frame: as PrefixLenMatcher's — the returned matcher only READS
+// frame and never retains it.
+func (l Layout) MRAnswerMatcher(s Slot) func(frame []byte) bool {
+	return func(frame []byte) bool {
+		if len(frame) != RecordLen {
+			return false
+		}
+		if frame[recPrefixOff] != 'M' || frame[recPrefixOff+1] != 'R' {
+			return false
+		}
+		got, err := l.parseSlot("MR answer", frame, frame[recP1Off])
+		if err != nil {
+			return false
+		}
+		return got.number == s.number
+	}
+}
