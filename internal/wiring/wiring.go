@@ -841,7 +841,7 @@ func NewIC7300MK2RealDriver() driver.Driver {
 // it. The registry therefore keeps the bounded default — the ten display
 // groups G01-G10, each in full — on the same operational grounds those
 // two rows state. internal/radiotext's IC-705 ProbeFirmwareNote and this
-// driver's own occupied-surprise refusal (write.go:343) both now lean on
+// driver's own occupied-surprise refusal (write.go:354) both now lean on
 // that omission being a recorded choice rather than an oversight; this
 // comment is what makes the two agree in writing.
 //
