@@ -92,13 +92,17 @@ func (t TypeRefPolicy) String() string {
 // THEY ARE extable's OWN TYPES, not core/cat's. This package imports no
 // core/cat — it is build-time tooling that RENDERS core/cat source text, and
 // an import would make the transcoder depend on the package it generates
-// into. AddressTriple/AddressPair correspond one-for-one with core/cat's
-// EXAddressTriple/EXAddressPair, and the correspondence is a fact about the
-// two radios' charts rather than a type relationship: a Pair profile's CSV
-// carries P3 == 0 on every row, which is exactly what core/cat's rule V12
-// requires of a Pair dialect's inventory. AddressSingle has no core/cat
-// counterpart at all: the family whose chart takes that shape renders through
-// core/kw, which is a different package with its own address type.
+// into. All three correspond ONE-FOR-ONE with core/cat's forms —
+// AddressTriple with EXAddressTriple, AddressPair with EXAddressPair,
+// AddressSingle with EXAddressSingle — and each correspondence is a fact
+// about the radios' charts rather than a type relationship: a Pair
+// profile's CSV carries P3 == 0 on every row and a Single profile's carries
+// P2 AND P3 == 0, which is exactly what core/cat's rule V12 requires of a
+// Pair and a Single dialect's inventory. This comment used to say
+// AddressSingle had no core/cat counterpart and rendered through a separate
+// Kenwood package; cat.EXAddressSingle is the seam the FT-991A milestone
+// added, and the generated ft991a inventory is what consumes it (Codex
+// third seat, LOW C-L2).
 type AddressForm int
 
 const (
@@ -208,7 +212,7 @@ func (t TextRows) String() string {
 // PARAMETER: a menu number that occupies a line of the chart but names no
 // settable field, so its parameter column and its Digits cell are drawn as
 // hyphens. The FT-991A's chart has exactly one — 087 RADIO ID, whose
-// parameter column is ten hyphens and whose Digits cell is a single one —
+// parameter column is ten hyphens and whose Digits cell is a single hyphen —
 // and the four charts registered before it have none.
 //
 // IT IS INDEPENDENT OF AddressForm. A four-digit chart may print a
