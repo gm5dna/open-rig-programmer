@@ -1,0 +1,163 @@
+# Command: MR (Read request frame + Answer frame)
+# Radio: Kenwood TS-480HX / TS-480SAT
+# Title (cover, verbatim): "PC CONTROL COMMAND REFERENCE FOR THE TS-480HX/ SAT
+#   TRANSCEIVER"
+# Printed revision: NO revision number is printed anywhere on the cover or the pages
+#   read.  The cover prints "KENWOOD CORPORATION", "(c) 2003/11/28" and the printing
+#   code line "09 08 07 06 05 04 03 02 01 00".
+# Source page: printed folio "13"  ==  PDF page 14 of 26
+# Charts used: the Read chart and the Answer chart of the MR block.  The block ALSO
+#   prints a "Set" row whose ruler 1..10 is drawn but whose ten cells are ALL EMPTY -
+#   see FINDING F3.
+# Derivation date: 05/09/2026
+# NO code, no generator, no other file and no other document was consulted.
+#
+# COUNTED FRAME LENGTHS (two independent counts of the printed numbered ruler, then a
+# third look at 600 dpi at the terminator cell of the Read row):
+#   MR Set    = 0 positions filled (ruler printed 1..10, every cell empty)
+#   MR Read   = 7 positions
+#   MR Answer = 50 positions  (five ruler rows: 1-10, 11-20, 21-30, 31-40, 41-50)
+#
+# ---------------------------------------------------------------------------
+# READ CHART, position by position:
+#   1  M
+#   2  R
+#   3  P1
+#   4  P2
+#   5  P3
+#   6  P3
+#   7  ;        <-- a SEMICOLON.  Verified at 600 dpi.  The TS-590 book prints a
+#                   COLON in the very same cell of its MR Read chart (FINDING F1).
+#   8,9,10  empty
+#
+# ANSWER CHART, position by position:
+#   1  M          2  R
+#   3  P1
+#   4  P2         5-6  P3
+#   7-17  P4      (11 positions)
+#   18  P5
+#   19  P6
+#   20  P7
+#   21-22  P8
+#   23-24  P9
+#   25-27  P10
+#   28  P11
+#   29  P12
+#   30-38  P13   (9 positions)
+#   39-40  P14
+#   41  P15
+#   42-49  P16   (8 positions)
+#   50  ;
+#
+# ---------------------------------------------------------------------------
+# LEGEND TEXT, VERBATIM (right-hand column of the MR block, headed "Parameters:";
+# this book prints NO "[model] common" banner):
+#
+# P1 legend (the 0/1 flag and its notes) VERBATIM:
+#   P1
+#     0: RX frequency, 1: TX frequency
+#   and, at the foot of the same column:
+#     Memory channel 90 ~ 99:
+#     P1=0 (start frequency), P1=1 (end frequency)
+#
+#   P2
+#     Always 0 for the TS-480.
+#   P3
+#     00 ~ 99: Memory channel number
+#   P4
+#     Frequency in Hz (11-digit).
+#
+# Mode legend VERBATIM (MR prints only a cross-reference, not the table):
+#   P5
+#     Mode.  Refer to the MD command.
+#   -- the MD table itself (folio 12 / PDF p.13) reads VERBATIM:
+#      "0: No mode (Not used for the TS-480) / 1: LSB / 2: USB / 3: CW / 4: FM /
+#       5: AM / 6: FSK / 7: CWR (CW Reverse) / 8: Tune (Not used for the TS-480) /
+#       9: FSR (FSK Reverse)"
+#
+# Tone legends VERBATIM:
+#   P7
+#     0: OFF, 1: TONE, 2: CTCSS
+#   P8
+#     Tone Number.  Refer to page 35.
+#   P9
+#     CTCSS tone number.  Refer to the CN command.
+#   INDEX -> Hz TABLES: BOTH ARE ABSENT from this book.  No tone or CTCSS
+#     index-to-frequency table is printed anywhere in it.  The two commands the
+#     legends point at print only ranges and an outward cross-reference:
+#       TN (folio 21 / PDF p.22) VERBATIM: "P1 / 00 ~ 42" and "Refer to page 32 of the
+#         TS-480 instruction manual for the Tone numbers and frequencies."
+#       CN (folio 5 / PDF p.6) VERBATIM: "P1 / 00 ~ 41" and "Refer to page 33 of the
+#         TS-480 instruction manual for the CTCSS tone numbers and frequencies."
+#     MR's own P8 line points at "page 35", which is not a page of this 26-page
+#     document (see FINDING F4) - and MW's P8 line in the same book points at the TN
+#     command instead (see FINDING F6).
+#
+# EVERY POSITION THE CHART PRINTS AS FIXED / "Always" (by position number), with the
+# legend text VERBATIM.  NOTE how many more there are than in the TS-590 book:
+#   position  4         (P2)   -- "P2 / Always 0 for the TS-480."
+#   positions 25,26,27  (P10)  -- "P10 / Always 000 for the TS-480."
+#   position  28        (P11)  -- "P11 / Always 0 for the TS-480."
+#   position  29        (P12)  -- "P12 / Always 0 for the TS-480."
+#   positions 30..38    (P13)  -- "P13 / Always 000000000 for the TS-480."
+#   position  41        (P15)  -- "P15 / Always 0 for the TS-480."
+#   ("Always" is the only such wording used; the book prints no "not used" note in
+#    the MR block.  The wording "Not used for the TS-480" DOES appear, but only in the
+#    MD mode table quoted above, for mode values 0 and 8.)
+#
+# The remaining variable legends VERBATIM:
+#   P6
+#     Lockout status.  0: Lockout OFF, 1: Lockout ON
+#   P14
+#     Step size.  Refer to the ST command.
+#   P16
+#     Memory name.  A maximum of 8 characters.
+#
+# ---------------------------------------------------------------------------
+# BYTES WHOSE VALUE THE MANUAL DOES NOT DETERMINE  -> INHERITED-ASSUMED
+#
+#   [A1] positions 7..17 (P4) - only "Frequency in Hz (11-digit)." is documented; the
+#        frequency VALUE in each vector is ASSUMED.  (The AS command's P3 legend in
+#        the same book adds "Unused digit(s) must be 0.", which is what the leading
+#        zeros below follow.)
+#   [A2] positions 42..49 (P16) when the name is SHORTER than 8 characters.
+#        WHAT THE BOOK SAYS ABOUT PADDING: for MR it says only "P16 / Memory name.  A
+#        maximum of 8 characters."  It says NOTHING about justification or a pad
+#        character.  The nearest general statement in the book is the folio-2 note
+#        "If a particular parameter is not applicable to this transceiver, the
+#        parameter digits should be filled using any character except the ASCII
+#        control codes (00 to 1Fh) and the terminator (;)." - which is about
+#        inapplicable parameters, not about short names.  ASSUMED: the name is
+#        left-justified and padded on the right with ASCII space (0x20) to 8.
+#   [A3] positions 21..22 (P8) and 23..24 (P9) when the corresponding tone system is
+#        OFF.  No don't-care value is printed.  ASSUMED: "00".
+#   [A4] positions 39..40 (P14) VALUES.  The ST legend (folio 20 / PDF p.21) reads
+#        VERBATIM "SSB/ CW/ FSK mode: 00 ~ 04 / 00: 0.5 kHz, 01: 1 kHz, 02: 2.5 kHz,
+#        03: 5 kHz, 04: 10 kHz / AM/ FM mode: 00 ~ 09 / 00: 5 kHz, 01: 6.25 kHz,
+#        02: 10 kHz, 03: 12.5 kHz, / 04: 15 kHz, 05: 20 kHz, 06: 25 kHz, 07: 30 kHz,
+#        / 08: 50 kHz, 09: 100 kHz" - so the width 2 is documented but the value in
+#        each vector is ASSUMED.
+#   [A5] The channel numbers, mode digits and name strings are ASSUMED illustrative
+#        values; only their field widths and legends are documented.
+#
+# Hardware status: UNVERIFIED for every vector in this file.
+#
+# ---------------------------------------------------------------------------
+# VECTORS  (name <TAB> frame bytes verbatim, terminator included; a space inside a
+# frame is a real space)
+#
+# --- Read request frames (7 positions; P2 is the fixed "0") ---
+mr480_read_ch03_rx	MR0003;
+mr480_read_ch04_rx	MR0004;
+mr480_read_ch12_tx	MR1012;
+mr480_read_ch90_start_freq	MR0090;
+mr480_read_ch90_end_freq	MR1090;
+#
+# --- Answer frames (50 positions) ---
+# A: ordinary simplex channel (P1=0 RX frequency, tone OFF), 8-character name
+mr480_answer_ch03_rx_name8	MR000300014250000200000000000000000000000DXCLUSTR;
+# B: channel whose name is SHORTER than the field (3 characters + 5 assumed spaces, A2)
+mr480_answer_ch04_rx_name3	MR000400007150000100000000000000000000000NET     ;
+# C: tone state other than OFF (P7=1 TONE) and the non-simplex indication this book
+#    allows (P1=1, the TX frequency); P14=02 (10 kHz AM/FM step)
+mr480_answer_ch12_tx_tone_on	MR101200051500000401080000000000000000020REPEATER;
