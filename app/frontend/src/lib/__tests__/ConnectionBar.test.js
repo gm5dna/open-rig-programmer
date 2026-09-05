@@ -257,3 +257,43 @@ describe('ConnectionBar unverified-write consent affordances (task 14, M9d)', ()
 		expect(screen.getByRole('button', { name: 'Enable unverified writes' })).toBeInTheDocument()
 	})
 })
+
+// UISpecView.Transmit (this task): radio-level ANATOMY —
+// core/spec.Capabilities.Transmit, served as "has_transmitter",
+// "receive_only" or "" — was sent to the frontend and read by nothing
+// here. The radio badge is where this app already states the connected
+// radio's identity, so it is where the one fact about that radio's
+// anatomy belongs. It is NOT used to hide columns: which columns a bank
+// renders is BankView.Fields' contract alone (grid/columns.js's
+// columnsFor), and that must not gain a second source.
+describe('ConnectionBar receiver label (UISpecView.Transmit)', () => {
+	const connected = { Model: 'IC-R8600', CATID: '96', Port: '/dev/tty.usbserial-A', USBSerial: '', Region: '', Demo: false }
+
+	it('labels a receive_only radio "Receive only" beside its model', () => {
+		appState.setConnection(connected)
+		appState.setUISpec({ Transmit: 'receive_only', Banks: [] })
+		render(ConnectionBar)
+		expect(screen.getByText(/Receive only/)).toBeInTheDocument()
+	})
+
+	it('says nothing for a transceiver, and nothing for an unspecified Transmit', () => {
+		appState.setConnection({ ...connected, Model: 'FT-710', CATID: '0800' })
+		appState.setUISpec({ Transmit: 'has_transmitter', Banks: [] })
+		const { unmount } = render(ConnectionBar)
+		expect(screen.queryByText(/Receive only/)).not.toBeInTheDocument()
+		unmount()
+
+		// The zero value: a capability set that never stated its anatomy
+		// says nothing rather than guessing either way.
+		appState.setUISpec({ Transmit: '', Banks: [] })
+		render(ConnectionBar)
+		expect(screen.queryByText(/Receive only/)).not.toBeInTheDocument()
+	})
+
+	it('says nothing while nothing is connected — the label describes the radio on the cable', () => {
+		appState.setUISpec({ Transmit: 'receive_only', Banks: [] })
+		render(ConnectionBar)
+		expect(screen.getByText('Not connected')).toBeInTheDocument()
+		expect(screen.queryByText(/Receive only/)).not.toBeInTheDocument()
+	})
+})

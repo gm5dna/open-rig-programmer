@@ -78,6 +78,23 @@
 	const readTime = $derived(formatReadTime(appState.codeplug?.Radio?.read_at))
 	const connection = $derived(appState.connection)
 
+	/** Whether the connected radio has no transmitter — UISpecView.Transmit,
+	 * which is core/spec.Capabilities.Transmit stringified
+	 * ("has_transmitter" / "receive_only" / "" for a capability set that
+	 * never stated its anatomy). The badge is where this app already says
+	 * WHICH radio is on the cable, so it is where the one fact about that
+	 * radio's anatomy belongs.
+	 *
+	 * ONLY 'receive_only' says anything: a transceiver needs no label, and
+	 * the unspecified zero value is not evidence of either answer.
+	 *
+	 * It is NOT consulted anywhere else, and specifically not to decide
+	 * which columns the channel grid renders — that is BankView.Fields'
+	 * contract alone (grid/columns.js's columnsFor), derived per bank from
+	 * the radio's own FieldSupport, and it must not gain a second source
+	 * that could disagree with it. */
+	const receiveOnly = $derived(appState.uiSpec?.Transmit === 'receive_only')
+
 	async function handleConnect() {
 		if (!selectedPort) return
 		pendingAction = 'connect'
@@ -226,6 +243,9 @@
 					{connection.Model} · ID {connection.CATID}{connection.Demo
 						? ''
 						: ` · ${connection.Port}`}
+					{#if receiveOnly}
+						<span class="badge-receive-only"> · Receive only</span>
+					{/if}
 					{#if readTime}
 						<span class="badge-read"> · read {readTime}</span>
 					{/if}
@@ -446,6 +466,12 @@
 	}
 
 	.badge-read {
+		color: var(--colour-text-dim);
+	}
+
+	/* Dimmed like the read time beside it: a standing fact about the
+	   radio, not a warning about anything the user has done. */
+	.badge-receive-only {
 		color: var(--colour-text-dim);
 	}
 

@@ -90,6 +90,23 @@ export const TIER_COLUMNS = [
 const TIER_BY_ID = new Map(TIER_COLUMNS.map((c) => [c.id, c]))
 
 /**
+ * The TierColumn a rendered column IS, or null for one of the ten that
+ * predate the tier.
+ *
+ * Exported because ChannelGrid.svelte chooses a cell's editor by KIND
+ * (TierColumn.kind — freq/int/text take the free-text editor and the
+ * parser below, tone the UISpec's own tone list, bool a three-way select
+ * until it is answered and the one-keystroke flip after that), and the
+ * lookup rule — BY ID, never by position — belongs
+ * here beside the table it reads rather than restated in the component.
+ * @param {Column} column
+ * @returns {TierColumn | null}
+ */
+export function tierColumnFor(column) {
+	return TIER_BY_ID.get(column.id) ?? null
+}
+
+/**
  * The columns to render for one bank: always the ten in COLUMNS, then
  * every TIER_COLUMNS entry that bank's capabilities say the radio
  * actually has (BankView.Fields).
@@ -217,12 +234,15 @@ export function isCellEditable(column, data) {
 /**
  * A tone in decihertz as display text, preferring the UISpec's own
  * table (Go-formatted), falling back to the same arithmetic for a
- * value the table does not list.
+ * value the table does not list. Exported so ChannelGrid.svelte's
+ * free-text tier editor can open a Known tone cell on the identical
+ * spelling this module already displays it in, for the radios whose
+ * UISpec serves no tone list at all (MED-A).
  * @param {number} decihertz
  * @param {UISpecView} uiSpec
  * @returns {string}
  */
-function toneDisplay(decihertz, uiSpec) {
+export function toneDisplay(decihertz, uiSpec) {
 	const entry = (uiSpec.Tones ?? []).find((t) => t.Decihertz === decihertz)
 	if (entry) return entry.Display
 	return `${(decihertz / 10).toFixed(1)} Hz`
@@ -251,13 +271,35 @@ export function displayValue(column, data, uiSpec) {
 		// frequency in MHz are claims about the radio, and this grid does
 		// not make claims it cannot support.
 		if (f?.state !== 'known') return '—'
+		// A KNOWN field with no `value` key is Known ZERO, not a missing
+		// answer: core/codeplug/fieldstate.go marks FieldState.Value
+		// `json:"value,omitempty"`, so Go drops the key for every zero it
+		// sends. Zero is a real answer on both numeric kinds — "zero, when
+		// present, means off" for the attenuator (core/spec/capabilities.go's
+		// AttenuatorDB), and a simplex channel's offset is a Known 0 Hz — so
+		// reading the missing key as the em dash above would hide a
+		// radio-supplied value inside the mark reserved for "no claim made".
+		// Pinned by "renders a Known ZERO as zero" (tierColumns.test.js),
+		// which asserts the two spellings agree.
 		switch (tier.kind) {
 			case 'freq':
-				return typeof f.value === 'number' ? hzToMHz(f.value) : '—'
+				// The exact zero-fallback (fix round 2, LOW-C): only an
+				// OMITTED `value` key is Known ZERO. A non-number value is
+				// not reachable from Go (FieldState.Value is a typed field,
+				// so json.Unmarshal refuses anything else at load), and
+				// falling back to zero for one anyway would hide a
+				// malformed field behind a confident answer; hzToMHz's own
+				// guard already turns anything else into '' rather than a
+				// silent zero.
+				return hzToMHz(f.value === undefined ? 0 : f.value)
 			case 'tone':
+				// The tone kind is NOT normalised the same way: zero decihertz
+				// is not a tone any radio's table lists, so a Known tone with
+				// no value is malformed rather than an answer, and the em dash
+				// stays the honest rendering of it.
 				return typeof f.value === 'number' ? toneDisplay(f.value, uiSpec) : '—'
 			case 'int':
-				return typeof f.value === 'number' ? String(f.value) : '—'
+				return String(f.value === undefined ? 0 : f.value)
 			case 'bool':
 				return f.value ? 'On' : 'Off'
 			default:
