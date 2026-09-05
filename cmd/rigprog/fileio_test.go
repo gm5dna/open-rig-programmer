@@ -202,7 +202,7 @@ func TestResolveSnapshotDir_DefaultModelStaysAtRoot(t *testing.T) {
 //
 // The expectation is built with filepath.Join, not spelt "/tmp/snaps/ftdx10":
 // the claim is "the slug is a child of the base", and the separator that
-// expresses it is the platform's. resolveSnapshotDir joins (wiring.go:1499),
+// expresses it is the platform's. resolveSnapshotDir joins (wiring.go:1599),
 // so a literal forward slash asserted the separator rather than the
 // relationship, and said nothing true on Windows. The _Override,
 // _Default and _DefaultModelStaysAtRoot siblings keep their literals:
