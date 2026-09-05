@@ -3464,17 +3464,17 @@ func ft891WritableChannel(slot string, tagDisplay bool) codeplug.Channel {
 			Tag:        "CALLING",
 			TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: tagDisplay},
 			ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
-			// THE SEVENTEEN ICOM-TIER FIELDS, EXPLICITLY Unavailable (C-M1,
-			// closing review wave 2): a zero FieldState is codeplug.Absent,
-			// which is NOT one of the three states any FieldState.Valid
-			// accepts, and core/driver/ft891's WriteChannel now walks every
-			// one of them (fieldStateChecks) before the capability gate. An
-			// Absent tier field would therefore refuse this "otherwise
-			// writable" fixture with "invalid State", which is not what
-			// this test is about — a real FT-891 read (this package's own
-			// fake included) always reports all seventeen Unavailable
-			// (core/driver/ft891/read.go's channelData, plan P12), so this
-			// is the same shape a genuine round-trip channel carries.
+			// THE SEVENTEEN ICOM-TIER FIELDS, EXPLICITLY Unavailable: a real
+			// FT-891 read (this package's own fake included) always reports
+			// all seventeen Unavailable (core/driver/ft891/read.go's
+			// channelData, plan P12), so stating them here is the same
+			// shape a genuine round-trip channel carries, not a dodge
+			// around anything the write side would otherwise refuse — the
+			// write-gate sweep (05/09/2026, item (i)) admits an Absent tier
+			// field too now (core/driver.FieldStateChecks, the fleet
+			// stance), so this fixture's choice of Unavailable over Absent
+			// is no longer load-bearing for THIS test, only for matching a
+			// real read.
 			TxFreqHz:            codeplug.FreqField{State: codeplug.Unavailable},
 			Duplex:              codeplug.StringField{State: codeplug.Unavailable},
 			OffsetHz:            codeplug.FreqField{State: codeplug.Unavailable},

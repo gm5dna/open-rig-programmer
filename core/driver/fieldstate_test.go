@@ -48,6 +48,17 @@ func walkCaps() spec.Capabilities {
 // A spec.Field the walk forgets to mirror, or that AllFields gains and the
 // walk does not, fails HERE rather than silently letting a future field's
 // malformed value reach a wire unchecked.
+//
+// THIS PIN BINDS NAMES AND ORDER, NOT NAME↔MEMBER↔VOCABULARY (Opus review
+// LOW-3, 05/09/2026): an all-Absent codeplug.ChannelData{} makes every
+// check in the walk return nil, so a copy/paste swap of two fields' judge
+// calls, or a field judged against the wrong caps vocabulary, would pass
+// this test unchanged — only TestCheckFieldStates_FleetStance's and
+// TestCheckFieldStates_ReportsTheFirstIncoherentField's value-carrying rows
+// pin any individual binding, and between them they cover six of the
+// twenty. The reviewer checked all twenty bindings and all twenty
+// vocabulary arguments by hand against codeplug/channel.go and
+// core/codeplug/validate.go and found every one correct.
 func TestFieldStateWalk_CoversEveryFieldStateField(t *testing.T) {
 	plain := map[spec.Field]bool{
 		spec.FieldFrequency:  true,
