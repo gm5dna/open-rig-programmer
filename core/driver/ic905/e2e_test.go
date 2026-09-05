@@ -516,8 +516,13 @@ func TestE2E_AnAddOverAnUndiscoveredOccupiedSlotIsRefused(t *testing.T) {
 		if !strings.Contains(wre.Reason, "Re-discover the radio") {
 			t.Errorf("reason = %q, want it to NAME the remedy the user can act on", wre.Reason)
 		}
-		if strings.Contains(wre.Reason, "WithFullInventoryWalk") {
-			t.Errorf("reason = %q, still names a Go option no user surface exposes", wre.Reason)
+		// Naming WithFullInventoryWalk() while saying no registered
+		// composition passes it is not the same as offering it as a
+		// remedy (side lanes fix round 1, review
+		// icom-minors-review-opus.md MEDIUM-1/item-4) — it is the honest
+		// reason the setting the user might go looking for is not there.
+		if strings.Contains(wre.Reason, "no setting that widens") {
+			t.Errorf("reason = %q, still claims no setting exists when the driver exports one", wre.Reason)
 		}
 		if n := len(setFrames(radio)); n != before {
 			t.Errorf("%d set frames reached the fake", n-before)

@@ -382,24 +382,28 @@ func TestAnAddToASlotTheInventoryNeverSawIsRefusedIfOccupied(t *testing.T) {
 	// remedy is only as good as the remedy: an earlier wording offered
 	// "or read this slot first", which cannot work — ReadChannel never
 	// adds a slot to the inventory, so a user who did that met this
-	// refusal again. A later wording offered WithFullInventoryWalk(),
-	// which works in Go and not from any surface a user has: no CLI flag
-	// and no GUI control reaches it (registration review, deferred
-	// minor). The one remedy named here changes the answer, and the
-	// sentence after it states the bound rather than a second remedy.
+	// refusal again. The one remedy named here changes the answer, and
+	// the sentence after it states the bound rather than a second
+	// remedy. That bound now NAMES WithFullInventoryWalk() again (side
+	// lanes fix round 1, review icom-minors-review-opus.md MEDIUM-1): the
+	// earlier "no setting that widens the walk" wording was untrue, since
+	// this package exports the option — naming it while saying in the
+	// same clause that no registered composition passes it is the honest
+	// bound, not the removed remedy reappearing, and matches the
+	// IC-R8600's and IC-905's identical rungs.
 	var refused *driver.WriteRefusedError
 	if !errors.As(err, &refused) {
 		t.Fatalf("%v is not a *driver.WriteRefusedError", err)
 	}
-	want := "slot G11-001 holds a record this session's inventory never saw, and writing here would overwrite a channel nobody has looked at: this session's walk covered display groups G01-G10, so re-open the session to run discovery again — a slot outside that range stays unlisted, and this build offers no setting that widens the walk. Reading the slot does not help: ReadChannel never adds one to the inventory"
+	want := "slot G11-001 holds a record this session's inventory never saw, and writing here would overwrite a channel nobody has looked at: this session's walk covered display groups G01-G10, so re-open the session to run discovery again — a slot outside that range stays unlisted, and nothing on this build's command line or in its window widens it (the driver's own WithFullInventoryWalk is a Go-level option no registered composition passes). Reading the slot does not help: ReadChannel never adds one to the inventory"
 	if refused.Reason != want {
 		t.Errorf("the refusal reads\n  %q\nwant\n  %q", refused.Reason, want)
 	}
 	if strings.Contains(refused.Reason, "read this slot first") {
 		t.Error("the refusal still offers a remedy that cannot work")
 	}
-	if strings.Contains(refused.Reason, "WithFullInventoryWalk") {
-		t.Error("the refusal still names a Go option no CLI flag and no GUI control reaches")
+	if strings.Contains(refused.Reason, "no setting that widens") {
+		t.Error("the refusal still claims no setting exists when the driver exports one")
 	}
 	if len(res.Steps) != 0 || r.Sets() != setsBefore {
 		t.Error("the occupied-surprise refusal sent something")
