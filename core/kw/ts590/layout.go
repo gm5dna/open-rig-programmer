@@ -8,8 +8,8 @@ import "github.com/gm5dna/open-rig-programmer/core/kw"
 //
 // The TS-590S and the TS-590SG share one PC-command document, one 50-byte
 // memory grid, one MD legend and one hard-wired byte set, so seven of
-// kw.Layout's nine axes are the BOOK'S and are written once below
-// (rowConfig). Two are the ROW'S, and each rests on a sentence the book
+// kw.Layout's ten axes are the BOOK'S and are written once below
+// (rowConfig). Three are the ROW'S, and each rests on a line the book
 // scopes to one radio:
 //
 //   - BYTE 28 (P11), the FILTER A/B selection. One legend for both rows,
@@ -21,6 +21,11 @@ import "github.com/gm5dna/open-rig-programmer/core/kw"
 //     sentence is scoped to firmware 1.xx and a later firmware answers '1'.
 //     That is A14, and what a WRITE may carry is the driver's question, not
 //     this codec's.
+//   - THE PRINTED EX MENU DOMAIN. The EX chart prints one line per row:
+//     "000 ~ 087: Menu number (TS-590S)" (590:543) and "000 ~ 099: Menu
+//     number (TS-590SG)" (590:544). Twelve addresses separate them, and
+//     the two inventories they bound (EXItemsS, EXItemsSG) are one
+//     identifier apart in this package.
 //   - THE SLOT CEILING. "Channel numbers P00 ~ P09 are represented by 100 ~
 //     109" is printed for both rows; "TS-590SG extension channel numbers E00
 //     ~ P09 are represented by 110 ~ 119" (590:1346-1347, the printed typo
@@ -30,7 +35,7 @@ import "github.com/gm5dna/open-rig-programmer/core/kw"
 // EVERY OTHER AXIS AGREES, and core/kw/ts590/layout_test.go pins the
 // agreement as well as the disagreement: a sibling pair sharing a grid is
 // exactly where a value borrowed from the other row would never show, so the
-// two-item disagreement list has to be exhaustive rather than approximate.
+// three-item disagreement list has to be exhaustive rather than approximate.
 //
 // THE VALUES ARE MINTED ONCE, AT INITIALISATION, AND HANDED OUT BY VALUE.
 // kw.Layout's fields are unexported and its accessors copy, so a caller
@@ -46,6 +51,9 @@ var layoutS = kw.MustNewLayout(rowConfig("TS-590S",
 	// TS-590S at 2.00 or later answers '1'. The codec accepts either; the
 	// write refusal is the driver's.
 	kw.Byte28FilterEither,
+	// "000 ~ 087: Menu number (TS-590S)" (590:543) — twelve addresses fewer
+	// than the sibling row printed on the line below it.
+	87,
 	// A12: the book gives 110-119 to the SG and never states this row's
 	// ceiling (590:1345-1347), so this row stops at the section-defined
 	// channels.
@@ -61,6 +69,8 @@ var layoutSG = kw.MustNewLayout(rowConfig("TS-590SG",
 	// (590:1560-1563), and the firmware condition at 590:1478 names the
 	// TS-590S alone.
 	kw.Byte28FilterLive,
+	// "000 ~ 099: Menu number (TS-590SG)" (590:544).
+	99,
 	// 000-099 ordinary memory (590:1341), 100-109 the section-defined
 	// channels P00 ~ P09 (590:1345), and 110-119 the extension channels
 	// E00 ~ E09 (590:1346-1347, printed "E00 ~ P09" — erratum E2).
@@ -95,20 +105,20 @@ func LayoutS() kw.Layout { return layoutS }
 
 // LayoutSG returns the TS-590SG row's reading of the shared memory grid.
 //
-// It differs from LayoutS on exactly two axes — byte 28's policy (A14) and
-// the slot ceiling (A12) — and on nothing else; layout_test.go pins both
-// lists.
+// It differs from LayoutS on exactly three axes — byte 28's policy (A14),
+// the slot ceiling (A12) and the printed EX menu domain (590:543 against
+// 590:544) — and on nothing else; layout_test.go pins both lists.
 func LayoutSG() kw.Layout { return layoutSG }
 
-// rowConfig is the seven axes THE BOOK fixes for both rows, plus the two the
-// caller supplies.
+// rowConfig is the seven axes THE BOOK fixes for both rows, plus the three
+// the caller supplies.
 //
 // IT IS A FUNCTION RATHER THAN A SHARED VARIABLE so that neither row can
 // reach the other's config: a package-level kw.LayoutConfig copied and
 // amended would share the ModeNames map and the PrintedFixed slice between
 // the two values, and one mutation would then edit both radios. Every call
 // builds fresh containers.
-func rowConfig(model string, byte28 kw.Byte28Policy, slots []kw.SlotRange) kw.LayoutConfig {
+func rowConfig(model string, byte28 kw.Byte28Policy, maxEXAddress uint8, slots []kw.SlotRange) kw.LayoutConfig {
 	return kw.LayoutConfig{
 		// The document both rows speak, which is what an "O;" quotes its
 		// cause sentence from (590:113; erratum E13 records that the TS-480
@@ -142,6 +152,13 @@ func rowConfig(model string, byte28 kw.Byte28Policy, slots []kw.SlotRange) kw.La
 		// Tone ON" (590:1549-1553); the TS-480's legend stops at 2
 		// (480:964).
 		ToneModes: kw.ToneModesFour,
+
+		// The EX chart prints a DIFFERENT menu domain for each of the two
+		// rows — "000 ~ 087: Menu number (TS-590S)" (590:543) and "000 ~
+		// 099: Menu number (TS-590SG)" (590:544) — on the one chart, two
+		// lines apart. That is the third axis these rows differ on, and the
+		// one an EX sweep that read the sibling's inventory would cross.
+		MaxEXAddress: maxEXAddress,
 
 		ModeNames: modeNames(),
 		Slots:     slots,

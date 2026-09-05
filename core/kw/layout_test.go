@@ -49,7 +49,7 @@ func TestZeroLayout_FailsClosedOnEveryAxis(t *testing.T) {
 	}
 }
 
-// TestNewLayout_RefusesAnUnsetAxis walks the nine axes one at a time: each
+// TestNewLayout_RefusesAnUnsetAxis walks the ten axes one at a time: each
 // case starts from a complete, valid config and blanks exactly one axis, so
 // a refusal can only be attributed to that axis.
 //
@@ -70,6 +70,7 @@ func TestNewLayout_RefusesAnUnsetAxis(t *testing.T) {
 		{"bytes 39-40", func(c *LayoutConfig) { c.Byte3940 = Byte3940Unset }, "bytes 39-40"},
 		{"byte 41", func(c *LayoutConfig) { c.Byte41 = Byte41Unset }, "byte 41"},
 		{"tone modes", func(c *LayoutConfig) { c.ToneModes = ToneModesUnset }, "tone-mode"},
+		{"EX menu domain", func(c *LayoutConfig) { c.MaxEXAddress = 0 }, "EX menu number"},
 		{"mode legend", func(c *LayoutConfig) { c.ModeNames = nil }, "mode legend"},
 		{"slot classes", func(c *LayoutConfig) { c.Slots = nil }, "slot"},
 		{"printed-fixed set", func(c *LayoutConfig) { c.PrintedFixed = nil }, "printed-fixed"},
@@ -327,6 +328,7 @@ func validLayoutConfig() LayoutConfig {
 		Byte3940:     Byte3940FMNarrowFlag,
 		Byte41:       Byte41Lockout,
 		ToneModes:    ToneModesFour,
+		MaxEXAddress: 99,
 		ModeNames:    modeNames590(),
 		Slots:        []SlotRange{{Class: SlotMemory, Lo: 0, Hi: 99}, {Class: SlotScan, Lo: 100, Hi: 109}},
 		PrintedFixed: commonPrintedFixed(),
