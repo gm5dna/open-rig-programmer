@@ -85,7 +85,7 @@ func (l Layout) BuildMCSet(s Slot) (Command, error) {
 	if err := l.checkSlot("MC set", s); err != nil {
 		return Command{}, err
 	}
-	if !mcSendValid(s) {
+	if !mcSendValid(s.Class()) {
 		return Command{}, newParseError(nil, "MC set: slot %v is %v on the %s, and this milestone narrows the MC SET domain to ordinary memory (A16, L-DEC-2) — recalling a channel changes the radio's operating state, and 590:1345-1347's selectable section and extension numbers are deliberately not selected; the ANSWER domain is the full printed space", s, s.Class(), l.model)
 	}
 	wire, err := l.slotWire(s)
@@ -102,14 +102,17 @@ func (l Layout) BuildMCSet(s Slot) (Command, error) {
 	return newCommand(frame), nil
 }
 
-// mcSendValid is the SEND-side slot predicate, shared by BuildMCSet and by
+// mcSendValid is the SEND-side domain predicate, shared by BuildMCSet and by
 // the outbound gate (allowlist.go) so that "what the builder produces" and
 // "what the gate admits" cannot drift apart.
 //
-// It is A16, and it is deliberately a function of the slot's CLASS rather
-// than of its number: a row whose section channels started somewhere else
-// would be narrowed correctly without this predicate being edited.
-func mcSendValid(s Slot) bool { return s.Class() == SlotMemory }
+// It is A16, and it takes a CLASS rather than a Slot for two reasons. It is
+// what the rule is actually about — a row whose section channels started at
+// some other number would be narrowed correctly with this predicate
+// unedited — and it is the only shape both callers can use: the gate holds
+// an MCChannel decoded off the wire, which carries a class and no half,
+// because an MC frame carries no byte that could name one.
+func mcSendValid(class SlotClass) bool { return class == SlotMemory }
 
 // MCChannel is the channel one MC ANSWER names: its number, and the class
 // this layout resolves that number to.
@@ -155,7 +158,23 @@ func (c MCChannel) String() string { return fmt.Sprintf("%03d", c.Number) }
 // 10, both for setting and response commands, the first digit is 0"
 // (590:1342-1343, 480:830).
 func (l Layout) ParseMCAnswer(frame []byte) (MCChannel, error) {
-	if err := l.checkAnswerShape("MC answer", frame, "MC", MCAnswerLen); err != nil {
+	return l.parseMCFields("MC answer", frame)
+}
+
+// parseMCFields decodes the six bytes an MC Set and an MC Answer share, in
+// whichever direction the frame is travelling, with what naming it in every
+// refusal.
+//
+// THE SHAPE IS ONE SHAPE AND THE DOMAINS ARE TWO. Both directions print the
+// same six positions and the same space-or-zero rule below channel 100
+// (590:1332-1343, 480:827-838), so there is nothing about a frame's BYTES
+// that says which direction it is travelling; what differs is which channels
+// each direction may name, and that is mcSendValid's business and this
+// function's business not at all. The outbound gate therefore decodes here
+// and then applies the send domain explicitly, rather than calling a parser
+// named for the answer and inheriting the answer's wider domain by accident.
+func (l Layout) parseMCFields(what string, frame []byte) (MCChannel, error) {
+	if err := l.checkAnswerShape(what, frame, "MC", MCAnswerLen); err != nil {
 		return MCChannel{}, err
 	}
 
@@ -168,27 +187,27 @@ func (l Layout) ParseMCAnswer(frame []byte) (MCChannel, error) {
 		case b >= '0' && b <= '9':
 			hundreds = int(b - '0')
 		default:
-			return MCChannel{}, newParseError(frame, "MC answer: position 3 is %q; on the %s it is the channel's 100's digit, which the chart prints as a digit or a space below 100 (590:1332-1337)", b, l.model)
+			return MCChannel{}, newParseError(frame, "%s: position 3 is %q; on the %s it is the channel's 100's digit, which the chart prints as a digit or a space below 100 (590:1332-1337)", what, b, l.model)
 		}
 	case P2FixedZero:
 		if b != '0' {
-			return MCChannel{}, newParseError(frame, "MC answer: position 3 is %q, and the %s prints \"0: Always 0 for the TS-480 (Memory bank number)\" there (480:827) — that book prints no space convention", b, l.model)
+			return MCChannel{}, newParseError(frame, "%s: position 3 is %q, and the %s prints \"0: Always 0 for the TS-480 (Memory bank number)\" there (480:827) — that book prints no space convention", what, b, l.model)
 		}
 	default:
-		return MCChannel{}, newParseError(frame, "MC answer: the 100's-digit policy is unset on this layout — refusing to guess whether position 3 is the channel's hundreds digit or a printed constant")
+		return MCChannel{}, newParseError(frame, "%s: the 100's-digit policy is unset on this layout — refusing to guess whether position 3 is the channel's hundreds digit or a printed constant", what)
 	}
 
 	digits := frame[mcDigitsOff : mcDigitsOff+mcDigits]
 	for i, b := range digits {
 		if b < '0' || b > '9' {
-			return MCChannel{}, newParseError(frame, "MC answer: position %d is %q; the chart prints both digits of the channel number, zero-padded below 10 (590:1341-1343, 480:830)", mcDigitsOff+i+1, b)
+			return MCChannel{}, newParseError(frame, "%s: position %d is %q; the chart prints both digits of the channel number, zero-padded below 10 (590:1341-1343, 480:830)", what, mcDigitsOff+i+1, b)
 		}
 	}
 	number := hundreds*100 + int(digits[0]-'0')*10 + int(digits[1]-'0')
 
 	class := l.classOf(number)
 	if class == SlotClassInvalid {
-		return MCChannel{}, newParseError(frame, "MC answer: channel %d is outside the %s's slot space %s", number, l.model, l.slotSpaceText())
+		return MCChannel{}, newParseError(frame, "%s: channel %d is outside the %s's slot space %s", what, number, l.model, l.slotSpaceText())
 	}
 	return MCChannel{Number: number, Class: class}, nil
 }
