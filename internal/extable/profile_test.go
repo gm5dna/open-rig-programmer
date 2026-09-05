@@ -4,6 +4,7 @@ package extable
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -506,13 +507,14 @@ func TestFTdx101Profile_MatchesTodaysConstants(t *testing.T) {
 // just each entry in isolation. TestRegistry_LookupAndEnumeration checks
 // that RegisteredProfiles is sorted and non-empty, which one entry already
 // satisfied; this asserts the EXACT set, so silently dropping a registration
-// — or adding a fourth without updating this pin — is a failure rather than a
+// — or adding a sixth without updating this pin — is a failure rather than a
 // smaller happy enumeration. The sort order is asserted by value here, not
-// merely as "ascending": "ft710" < "ft891" < "ftdx10" < "ftdx101" is the
-// ordering the CLI's -profile listing and every registry-selected staleness
-// test see. ASCII puts "ft891" second, between the FT-710 and the FTdx10,
-// which is not the order the models were added in — pinning it by value is
-// how that stops being a surprise.
+// merely as "ascending": "ft710" < "ft891" < "ft991a" < "ftdx10" < "ftdx101"
+// is the ordering the CLI's -profile listing and every registry-selected
+// staleness test see. ASCII puts "ft891" and "ft991a" second and third,
+// between the FT-710 and the FTdx10 — a digit sorts below a letter, so both
+// FT-8/9 names precede every "ftdx" one — which is not the order the models
+// were added in; pinning it by value is how that stops being a surprise.
 //
 // (Named for two models until M9d-1; the FTdx101D/MP made "both" wrong.)
 func TestRegistry_HoldsEveryModel(t *testing.T) {
@@ -521,7 +523,7 @@ func TestRegistry_HoldsEveryModel(t *testing.T) {
 	for _, np := range got {
 		names = append(names, np.Name)
 	}
-	want := []string{"ft710", "ft891", "ftdx10", "ftdx101"}
+	want := []string{"ft710", "ft891", "ft991a", "ftdx10", "ftdx101"}
 	if len(names) != len(want) {
 		t.Fatalf("RegisteredProfiles() names = %v, want %v", names, want)
 	}
@@ -530,7 +532,7 @@ func TestRegistry_HoldsEveryModel(t *testing.T) {
 			t.Fatalf("RegisteredProfiles() names = %v, want %v", names, want)
 		}
 	}
-	wantModels := []string{"FT-710", "FT-891", "FTdx10", "FTdx101D/MP"}
+	wantModels := []string{"FT-710", "FT-891", "FT-991A", "FTdx10", "FTdx101D/MP"}
 	for i := range wantModels {
 		if got[i].Profile.Model != wantModels[i] {
 			t.Errorf("models[%d] = %q, want %q", i, got[i].Profile.Model, wantModels[i])
@@ -842,6 +844,110 @@ func TestFT891Profile_MatchesTodaysConstants(t *testing.T) {
 		t.Errorf("Observations = %v, want ObservationsAbsent", p.Observations)
 	}
 	if !strings.HasPrefix(p.DocLines[0], "exItems is the FT-891's EX address inventory") {
+		t.Errorf("DocLines[0] = %q", p.DocLines[0])
+	}
+}
+
+// TestFT991AProfile_DeclaresItsValues pins the FT-991A's registration as
+// LITERALS, on the shape TestFT710Profile_MatchesTodaysConstants,
+// TestFTdx10Profile_Registered, TestFTdx101Profile_MatchesTodaysConstants
+// and TestFT891Profile_MatchesTodaysConstants already use for the other four
+// registrations — the exposure LOW-3 of the s1-t5 review named: every other
+// stanza value is pinned indirectly (by RenderGo's arithmetic, by the
+// staleness test's byte comparison, or by policies_test.go's registry-wide
+// sweep), and MaxObservedWidth is pinned by nothing at all. This test closes
+// that gap the way the siblings close theirs, rather than by a special case
+// for one field.
+//
+// It also asserts ParameterlessPolicy and ParameterlessAddresses, which none
+// of the four siblings' per-model tests do, because none of the four is
+// ParameterlessExcluded: policies_test.go's registry-wide table already
+// covers the value by name (ParameterlessExcluded, {{87,0,0}}), but this is
+// the FT-991A's own chart reading — 087 RADIO ID, ft991a_layout.txt:623 —
+// and the profile's own doc comment leads with it, so it belongs here too.
+//
+// The numeric bounds are the FT-991A's OWN chart readings, recorded in
+// core/cat/ft991a/table2.csv's provenance header and in ft991aProfile's own
+// comment (profile.go:812-897): MinDigits is 1 like the other four charts,
+// and MaxDigits is 8 from ONE row — 151 PRESET FREQUENCY
+// (ft991a_layout.txt:692) — a reading of THIS chart, not a widening of the
+// other four profiles' 4 and 5. TextWidth is 0: this chart prints no
+// free-text row at all, so 0 is the only value Validate admits under
+// TextRowsAbsent, not a family resemblance to the FT-710's 12.
+//
+// ExpectedRows is NOT a reading by this package: it COUNTS 087, the
+// parameterless row, the way the profile's own comment states — the chart
+// prints 153 rows, and RenderGo's arithmetic (extable.go:711-712) checks
+// that the 152 emitted plus the 1 excluded-by-address equal it.
+func TestFT991AProfile_DeclaresItsValues(t *testing.T) {
+	p, ok := Lookup("ft991a")
+	if !ok {
+		t.Fatal("Lookup(\"ft991a\") failed; the FT-991A must be registered")
+	}
+	if p.Model != "FT-991A" {
+		t.Errorf("Model = %q, want \"FT-991A\"", p.Model)
+	}
+	if p.Package != "ft991a" {
+		t.Errorf("Package = %q, want \"ft991a\"", p.Package)
+	}
+	if p.Types != TypesImported {
+		t.Errorf("Types = %v, want TypesImported", p.Types)
+	}
+	if p.ImportPath != "github.com/gm5dna/open-rig-programmer/core/cat" {
+		t.Errorf("ImportPath = %q", p.ImportPath)
+	}
+	if p.ImportAlias != "cat" {
+		t.Errorf("ImportAlias = %q, want \"cat\"", p.ImportAlias)
+	}
+	if p.VarName != "exItems" {
+		t.Errorf("VarName = %q, want \"exItems\"", p.VarName)
+	}
+	if p.OutFile != "exinventory_gen.go" {
+		t.Errorf("OutFile = %q, want \"exinventory_gen.go\"", p.OutFile)
+	}
+	if p.ManualCSV != "table2.csv" {
+		t.Errorf("ManualCSV = %q, want \"table2.csv\"", p.ManualCSV)
+	}
+	if p.ObservedCSV != "" {
+		t.Errorf("ObservedCSV = %q, want empty under ObservationsAbsent", p.ObservedCSV)
+	}
+	if p.Addresses != AddressSingle {
+		t.Errorf("Addresses = %v, want AddressSingle — the chart's whole EX address is the three-digit MENU Number", p.Addresses)
+	}
+	if p.LabelPolicy != LabelsAbsent {
+		t.Errorf("LabelPolicy = %v, want LabelsAbsent — the chart prints no group labels", p.LabelPolicy)
+	}
+	if p.TextRowPolicy != TextRowsAbsent {
+		t.Errorf("TextRowPolicy = %v, want TextRowsAbsent — the chart prints no free-text row", p.TextRowPolicy)
+	}
+	if p.ParameterlessPolicy != ParameterlessExcluded {
+		t.Errorf("ParameterlessPolicy = %v, want ParameterlessExcluded — 087 RADIO ID names no settable field", p.ParameterlessPolicy)
+	}
+	if !reflect.DeepEqual(p.ParameterlessAddresses, [][3]int{{87, 0, 0}}) {
+		t.Errorf("ParameterlessAddresses = %v, want [{87 0 0}] (087 RADIO ID, ft991a_layout.txt:623)", p.ParameterlessAddresses)
+	}
+	if p.MinDigits != 1 {
+		t.Errorf("MinDigits = %d, want 1", p.MinDigits)
+	}
+	if p.MaxDigits != 8 {
+		t.Errorf("MaxDigits = %d, want 8 (151 PRESET FREQUENCY, ft991a_layout.txt:692)", p.MaxDigits)
+	}
+	if p.TextWidth != 0 {
+		t.Errorf("TextWidth = %d, want 0 under TextRowsAbsent", p.TextWidth)
+	}
+	if p.MaxObservedWidth != 12 {
+		t.Errorf("MaxObservedWidth = %d, want 12 (the inert sentinel)", p.MaxObservedWidth)
+	}
+	if p.DigitsCeiling != MaxDigitsCeiling {
+		t.Errorf("DigitsCeiling = %d, want %d (core/cat's own ceiling)", p.DigitsCeiling, MaxDigitsCeiling)
+	}
+	if p.ExpectedRows != 153 {
+		t.Errorf("ExpectedRows = %d, want 153 (the chart's own row count, including 087)", p.ExpectedRows)
+	}
+	if p.Observations != ObservationsAbsent {
+		t.Errorf("Observations = %v, want ObservationsAbsent", p.Observations)
+	}
+	if !strings.HasPrefix(p.DocLines[0], "exItems is the FT-991A's EX address inventory") {
 		t.Errorf("DocLines[0] = %q", p.DocLines[0])
 	}
 }
