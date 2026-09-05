@@ -43,6 +43,48 @@ CI runs):
 git config core.hooksPath scripts/git-hooks
 ```
 
+## Building for Windows
+
+The GUI installer and the CLI zip that `release.yml` ships are built
+on a `windows-2025` GitHub Actions runner (the "Windows-hosted build"
+— never call a cross-compiled build "native"). To build the same
+things yourself, either on a Windows machine or by cross-compiling
+from macOS/Linux, the CLI has to exist BEFORE the installer step:
+`project.nsi` reaches for it by a fixed relative path per architecture,
+`..\..\..\dist\<arch>\rigprog.exe`.
+
+```sh
+# 1. CLI, one build per architecture, into the path project.nsi expects
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o app/dist/amd64/rigprog.exe ./cmd/rigprog
+GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build -o app/dist/arm64/rigprog.exe ./cmd/rigprog
+
+# 2. GUI + NSIS installer, both architectures in one call (from app/)
+cd app
+wails build -platform windows/amd64,windows/arm64 -nsis
+```
+
+`-nsis` needs `makensis` on `PATH` — this project pins NSIS 3.12
+(Homebrew's `makensis` on macOS is the same version the release
+pipeline installs on the runner). Without `makensis`, `wails build
+-nsis` still exits 0 but silently produces no installer — check for
+`app/build/bin/Open Rig Programmer-<arch>-installer.exe` rather than
+trusting the exit code.
+
+A `-nsis` build regenerates the tracked template file
+`app/build/windows/installer/wails_tools.nsh` (its placeholders become
+literal values) and can rewrite `app/wails.json`'s `info.productVersion`
+if you stamped one. Restore both from git before committing anything:
+
+```sh
+git checkout -- app/build/windows/installer/wails_tools.nsh app/wails.json
+```
+
+`app/build/windows/README.md` covers which files under that directory
+are template-generated versus hand-edited, and the same churn rule in
+full; `docs/windows-setup.md` covers what the installer does once it
+runs on a real machine, which nobody has yet done on Windows for this
+project (see its "Status" section).
+
 ## Repository layout
 
 | Path | Contents |
@@ -51,5 +93,5 @@ git config core.hooksPath scripts/git-hooks
 | `cmd/rigprog/` | The CLI. |
 | `app/` | Wails v2 + Svelte desktop GUI. |
 | `internal/` | The radio simulators — `fakeradio`, `fakedx10`, `fakedx101` for Yaesu; `fakeic7610`, `fakeic7300`, `fakeic7300mk2`, `fakeic705`, `fakeic9700`, `fakeic905`, `fakeic7851`, `fakeic7760`, `fakeic7100`, `fakeicr8600` for Icom — composition-root wiring, the shared settings store the CLI and GUI both use for unverified-write consent (`userconfig`), menu-table generator (`extable`), and the import-graph guard tests (`guards`). |
-| `docs/` | Hardware findings, Linux setup, the menu-write decision, and the fixture redaction policy. |
+| `docs/` | Hardware findings, Linux and Windows setup, the menu-write decision, and the fixture redaction policy. |
 | `docs/fixtures-private/` | Git-ignored. Raw radio backups and serial captures — never committed. |
