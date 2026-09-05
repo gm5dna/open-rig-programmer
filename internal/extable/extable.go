@@ -65,11 +65,11 @@ type Row struct {
 // or whitespace-only) P1Label or P2Label under LabelsRequired — or a
 // NON-blank one under LabelsAbsent — a blank Name or P4, a non-positive
 // ManualLine, a duplicate (P1,P2,P3) triple, a non-zero P3 under
-// AddressPair, a text row under TextRowsAbsent, a non-text row whose Digits
-// falls outside the profile's MinDigits..MaxDigits, a text row whose Digits
-// is not the profile's TextWidth, an address component outside 0..99 each
-// fail with a non-nil error rather than being guessed at. The returned rows
-// preserve CSV order.
+// AddressPair, a non-zero P2 or P3 under AddressSingle, a text row under
+// TextRowsAbsent, a non-text row whose Digits falls outside the profile's
+// MinDigits..MaxDigits, a text row whose Digits is not the profile's
+// TextWidth, an address component outside 0..99 each fail with a non-nil
+// error rather than being guessed at. The returned rows preserve CSV order.
 func ParseCSV(p Profile, data []byte) ([]Row, error) {
 	// The registry validates registered profiles, but nothing forces a
 	// caller through the registry — the test fixtures do not go through it.
@@ -124,18 +124,31 @@ func parseRecord(p Profile, rec []string) (Row, error) {
 	// A SWITCH, not an if/else with an implicit AddressTriple arm — the
 	// shape ParseObservedCSV below already takes, and for the same reason:
 	// Profile.Validate (profile.go) has already required p.Addresses to be
-	// one of the two known forms, but THIS is the site that reads it, and an
+	// one of the three known forms, but THIS is the site that reads it, and an
 	// omitted config semantic is refused here too rather than defaulted to
 	// the permissive arm.
 	//
-	// Under AddressPair the radio's field carries P1 and P2 only, so a
-	// non-zero p3 names a component no frame can express. Refused rather
-	// than dropped — a value silently discarded here would reach the
-	// generated inventory as a 0 that nothing recorded having changed.
+	// Under AddressPair the radio's field carries P1 and P2 only, and under
+	// AddressSingle P1 alone, so a non-zero component beyond the field names
+	// something no frame can express. Refused rather than dropped — a value
+	// silently discarded here would reach the generated inventory as a 0 that
+	// nothing recorded having changed.
 	switch p.Addresses {
 	case AddressTriple:
 		// All three components are on the wire; nothing further to check.
 	case AddressPair:
+		if row.P3 != 0 {
+			return Row{}, fmt.Errorf("p3 must be 0 under %v, got %d", p.Addresses, row.P3)
+		}
+	case AddressSingle:
+		// The same rule one component further down: the chart prints ONE
+		// menu number and it is the whole address, so p2 joins p3 in having
+		// to be 0. TestParseCSV_AddressSingleRefusesNonZeroP2AndP3 pins both,
+		// and pins that AddressPair still accepts the p2 its own field
+		// carries.
+		if row.P2 != 0 {
+			return Row{}, fmt.Errorf("p2 must be 0 under %v, got %d", p.Addresses, row.P2)
+		}
 		if row.P3 != 0 {
 			return Row{}, fmt.Errorf("p3 must be 0 under %v, got %d", p.Addresses, row.P3)
 		}
@@ -226,23 +239,25 @@ type Observed struct {
 // FT-710, core/cat/table2-observed.csv, but the path is the profile's
 // ObservedCSV, not this one — into observations keyed by THIS PROFILE'S
 // OWN address form (S0-close review's MEDIUM-2 finding): six digits under
-// AddressTriple, e.g. "010321", or four under AddressPair, e.g. "0801". The
-// key follows p.Addresses for the same reason RenderGo's lookup does (see
-// that function's matching comment) — it is a CSV join token, not a wire
-// render, but the two sides of the join must agree on its shape or a
-// complete Pair-form observation CSV can never be found by RenderGo's own
-// lookup, however exhaustively it was captured. Lines beginning with '#'
-// are provenance comments and are skipped, as in ParseCSV.
+// AddressTriple, e.g. "010321", four under AddressPair, e.g. "0801", or two
+// under AddressSingle, e.g. "08". The key follows p.Addresses for the same
+// reason RenderGo's lookup does (see that function's matching comment) — it
+// is a CSV join token, not a wire render, but the two sides of the join must
+// agree on its shape or a complete narrow-form observation CSV can never be
+// found by RenderGo's own lookup, however exhaustively it was captured.
+// Lines beginning with '#' are provenance comments and are skipped, as in
+// ParseCSV.
 //
 // Parsing is strict for privacy as much as correctness: each address
 // component must be exactly two digits, each width an integer in 1..the
 // profile's MaxObservedWidth, and each shape one of the three known
 // classes, so a row cannot carry free text. Under AddressPair the p3
-// column must additionally be "0" — mirroring parseRecord's own P3 rule
-// for the inventory CSV — and is not part of the key: a Pair-form radio's
-// wire field carries P1 and P2 only, so a component the wire can never
-// express must be refused, not silently folded into a six-digit key
-// nothing else can produce. Duplicates are rejected. Error text names the
+// column must additionally be "0" — and under AddressSingle the p2 column
+// as well — mirroring parseRecord's own rules for the inventory CSV, and
+// neither is part of the key: those forms' wire fields carry P1 and P2, or
+// P1 alone, so a component the wire can never express must be refused, not
+// silently folded into a wider key nothing else can produce.
+// Duplicates are rejected. Error text names the
 // row and address only — never another field — so a malformed artefact
 // cannot leak captured content through a build log.
 //
@@ -274,7 +289,7 @@ func ParseObservedCSV(p Profile, data []byte) (map[string]Observed, error) {
 		// The key follows p.Addresses — RenderGo's lookup key's own form,
 		// not always six digits (S0-close review, MEDIUM-2). A switch, not
 		// an AddressTriple-shaped default: p.Validate above has already
-		// required p.Addresses to be one of the two known forms, but this
+		// required p.Addresses to be one of the three known forms, but this
 		// switch is the site that actually reads it, and an omitted config
 		// semantic is refused here too, not defaulted to the wider key.
 		var addr string
@@ -291,6 +306,21 @@ func ParseObservedCSV(p Profile, data []byte) (map[string]Observed, error) {
 				return nil, fmt.Errorf("extable: observation row %d: p3 must be 0 under %v, got %q", i+1, p.Addresses, rec[2])
 			}
 			addr = rec[0] + rec[1]
+		case AddressSingle:
+			// Neither p2 nor p3 is on the wire under this form, so both are
+			// checked and dropped and the key is P1 alone — the same two
+			// digits RenderGo's own lookup renders below, which is what
+			// makes a captured observation findable at all.
+			// TestParseObservedCSV_AddressSingleKeysOnP1Alone pins the key
+			// and TestParseObservedCSV_AddressSingleRefusesNonZeroP2AndP3
+			// the two refusals.
+			if p2, err := strconv.Atoi(rec[1]); err != nil || p2 != 0 {
+				return nil, fmt.Errorf("extable: observation row %d: p2 must be 0 under %v, got %q", i+1, p.Addresses, rec[1])
+			}
+			if p3, err := strconv.Atoi(rec[2]); err != nil || p3 != 0 {
+				return nil, fmt.Errorf("extable: observation row %d: p3 must be 0 under %v, got %q", i+1, p.Addresses, rec[2])
+			}
+			addr = rec[0]
 		default:
 			return nil, fmt.Errorf("extable: profile %s: AddressForm %v must be set explicitly", p.Model, p.Addresses)
 		}
@@ -426,22 +456,30 @@ func RenderGo(p Profile, rows []Row, observed map[string]Observed) ([]byte, erro
 		// The observation lookup key follows THIS PROFILE'S OWN address
 		// form (S0-close review, LOW-3) rather than always being rendered
 		// six digits wide: under AddressPair the wire field carries P1 and
-		// P2 only (parseRecord above refuses a non-zero P3), so a Pair
-		// radio's own observation CSV can never carry a six-digit address —
-		// keying the lookup that way would refuse every row's observation,
-		// however complete the CSV was. It is a CSV join token, not a wire
-		// render — core/cat's wireEXAddress is the wire-side counterpart —
-		// so it is derived here rather than through that renderer.
+		// P2 only (parseRecord above refuses a non-zero P3), and under
+		// AddressSingle P1 alone, so those radios' own observation CSVs can
+		// never carry a six-digit address — keying the lookup that way would
+		// refuse every row's observation, however complete the CSV was. It
+		// is a CSV join token, not a wire render — core/cat's wireEXAddress
+		// is the wire-side counterpart — so it is derived here rather than
+		// through that renderer.
 		// A SWITCH, not an if/else with an implicit AddressPair arm, for the
 		// reason parseRecord's own switch above gives: Profile.Validate has
-		// already required one of the two known forms, and this site refuses
-		// an unset one rather than quietly rendering the narrower key.
+		// already required one of the three known forms, and this site
+		// refuses an unset one rather than quietly rendering a key of the
+		// wrong width.
 		var addr string
 		switch p.Addresses {
 		case AddressTriple:
 			addr = fmt.Sprintf("%02d%02d%02d", r.P1, r.P2, r.P3)
 		case AddressPair:
 			addr = fmt.Sprintf("%02d%02d", r.P1, r.P2)
+		case AddressSingle:
+			// P1 alone, two digits: the chart's menu number IS the address,
+			// and ParseObservedCSV builds the same key from the same column.
+			// TestRenderGo_SingleProfileKeysObservationsByTwoDigitForm goes
+			// through both sides of the join, so a disagreement fails there.
+			addr = fmt.Sprintf("%02d", r.P1)
 		default:
 			return nil, fmt.Errorf("extable: profile %s: AddressForm %v must be set explicitly", p.Model, p.Addresses)
 		}
