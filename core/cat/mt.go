@@ -353,6 +353,17 @@ func (d Dialect) BuildMTRead(s Slot) (Command, error) {
 		return Command{}, newParseError([]byte(s.Wire()), "MT: slot must not be \"000\"/invalid (reference MT column: ✗)")
 	}
 	if !d.mtReadSlotValid(s) {
+		// TWO WORDINGS, for the reason mc.go's BuildMCSet gives at the same
+		// rung: the narrow wording asserts "memory and PMS only" of this
+		// dialect's MT slot legend, and a policy that declares nothing has
+		// no legend to assert. The unset arm takes the P5/P11 sites' own
+		// "policy unset — refusing to guess" wording. Unreachable through
+		// NewDialect (V9 refuses a zero MTReadSlotPolicy at construction);
+		// reachable through the hand-built zero Dialect unsetpolicy_test.go
+		// builds.
+		if d.mt.ReadSlots != MTReadsReadable && d.mt.ReadSlots != MTReadsMemoryPMS {
+			return Command{}, newParseError([]byte(s.Wire()), "MT: slot policy unset — refusing to guess whether this dialect's MT block prints the 5xx and EMG banks")
+		}
 		return Command{}, newParseError([]byte(s.Wire()), fmt.Sprintf("MT: slot %q is outside this dialect's MT read domain (%v: memory and PMS only) — its MT block's slot legend prints neither the 5xx nor the EMG bank, which MR reads instead", s.Wire(), d.mt.ReadSlots))
 	}
 	frame := make([]byte, 0, mtReadLen)

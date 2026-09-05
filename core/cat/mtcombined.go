@@ -346,9 +346,19 @@ func (d Dialect) ParseMTAnswerCombinedDisplay(frame []byte) (MemoryData, string,
 
 // p11Valid reports whether b is an admissible byte 28 of a combined MT
 // record for THIS dialect's P11 reading: under P11TagDisplay, one of the two
-// documented TAG ON/OFF values; under P11Fixed (and any other/zero value,
-// which validateDialectConfig's V9 already refuses at construction), the
-// record's printed-fixed byte and nothing else.
+// documented TAG ON/OFF values; under P11Fixed, the record's printed-fixed
+// byte and nothing else.
+//
+// AN UNSET (or otherwise unrecognised) MTP11Policy ADMITS NOTHING. This
+// comment used to say the opposite in passing — "under P11Fixed (and any
+// other/zero value ...), the record's printed-fixed byte" — which described
+// the defaulting the S0-close review's HIGH-1 fix REMOVED, not the code
+// below it. A policy that declares no reading of byte 28 leaves no reading
+// to apply, and guessing one is exactly what let an undocumented byte 28
+// through both this parser and the gate. NewDialect's V9 (validateMTPolicy,
+// dialectvalidate.go) refuses a zero MTP11Policy on a combined-form dialect
+// at construction; the default arm below is what covers the one place V9
+// cannot reach.
 //
 // ONE FUNCTION DECIDES. Both the parser (parseMTAnswerCombined, below) and
 // the gate (AllowedCommand's MTFormCombined branch, allowlist.go) call this

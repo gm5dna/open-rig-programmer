@@ -54,6 +54,16 @@ func TestUnsetPolicy_MCSelects_RefusesEverySlotAtBuilderAndGate(t *testing.T) {
 			t.Errorf("zeroed.BuildMCSet(%q) succeeded, emitting %q — a zero MCSlotPolicy must refuse EVERY slot, memory and PMS included, not fall to the narrow (memory/PMS) reading", s.Wire(), cmd.Bytes())
 		} else if !strings.Contains(err.Error(), "MC") {
 			t.Errorf("zeroed.BuildMCSet(%q) refused with %q, which does not mention MC", s.Wire(), err)
+		} else if !strings.Contains(err.Error(), "policy unset") {
+			// THE WORDING IS PART OF THE REFUSAL. The declared-narrow arm
+			// says "memory and PMS only", which is a claim about a dialect's
+			// printed MC legend; a policy that declares nothing has no
+			// legend to make that claim from, so this arm must take the
+			// P5/P11 sites' "policy unset — refusing to guess" wording
+			// instead. Without this assertion the two arms could quietly
+			// collapse back into one message asserting the narrow reading of
+			// a dialect that stated none.
+			t.Errorf("zeroed.BuildMCSet(%q) refused with %q, which does not say the policy is unset — it must not assert the narrow (memory/PMS) reading of a dialect that declares no MC domain", s.Wire(), err)
 		}
 
 		// GATE: the same wire form, built by the WIDE dialect (so the
@@ -96,6 +106,11 @@ func TestUnsetPolicy_MTReadSlots_RefusesAtBuilderAndGate(t *testing.T) {
 		t.Errorf("zeroed.BuildMTRead(%q) succeeded, emitting %q — a zero MTReadSlotPolicy must refuse EVERY slot, memory and PMS included, not fall to the narrow (memory/PMS) reading", mem.Wire(), cmd.Bytes())
 	} else if !strings.Contains(err.Error(), "MT") {
 		t.Errorf("zeroed.BuildMTRead(%q) refused with %q, which does not mention MT", mem.Wire(), err)
+	} else if !strings.Contains(err.Error(), "policy unset") {
+		// See the MC case above: the declared-narrow wording asserts
+		// "memory and PMS only" of a printed MT slot legend, and an unset
+		// policy has none to assert.
+		t.Errorf("zeroed.BuildMTRead(%q) refused with %q, which does not say the policy is unset — it must not assert the narrow (memory/PMS) reading of a dialect that declares no MT read domain", mem.Wire(), err)
 	}
 
 	cmd, err := base.BuildMTRead(mem)
