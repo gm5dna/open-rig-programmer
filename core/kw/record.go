@@ -76,9 +76,11 @@ const (
 )
 
 // maxSlotNumber is the largest number P2 and P3 can carry between them:
-// three digits (590:1539-1540 referring to MC, 480:953-955). It bounds a
-// LAYOUT'S declared slot space; it is not a claim that any radio has 1000
-// channels.
+// three digits, one cell for P2 and two for P3 on both charts' own rulers
+// (590:1518-1519, 480:952-955). It bounds a LAYOUT'S declared slot space; it
+// is not a claim that any radio has 1000 channels — and in particular the
+// 480 prints "Always 0" at P2 (480:953) and a two-digit channel number at P3
+// (480:955), which is maxFixedZeroSlot's datum below, not this one's.
 const maxSlotNumber = 999
 
 // maxFixedZeroSlot is the largest slot number a row whose byte 4 is a
@@ -201,7 +203,8 @@ func (s Slot) String() string {
 //
 // THIS IS M9, AND IT IS A DATA-LOSS GUARD RATHER THAN A FORMATTING RULE.
 // The books give P1 two jobs at once. On an ordinary memory channel it
-// selects simplex or split on the 590 pair (590:1519-1520) and the RX or TX
+// selects simplex or split on the 590 pair (590:1519-1520 is the legend,
+// 590:1521-1523 the sentence that carries the consequence) and the RX or TX
 // frequency on the 480 (480:951); on a section-defined channel it selects
 // the START or the END frequency instead — "set parameter P1 to 0 to enter
 // the Start frequency, then set P1 to 1 to set the End frequency"
@@ -219,6 +222,17 @@ func (s Slot) String() string {
 // layout480 declares a flat 000-099 SlotMemory accordingly, so SlotScan is a
 // 590-only class here and the citation above is context, not a rule this
 // codec applies to the 480.
+//
+// THE '0' THIS CODEC EMITS ON AN ORDINARY MEMORY SLOT FLATTENS AN EXISTING
+// SPLIT, and that is a wire consequence a Stage 2 author reading only this
+// package would otherwise miss. "After setting P1 to 0, the channel becomes
+// a simplex channel, even if it was already a split channel." (590:1521-1523
+// — the legend at 590:1519-1520 says only "0: Simplex / 1: Split" and does
+// NOT say this). Nothing in this package can build a split write, because P1
+// comes from the slot's class; the REFUSAL that keeps a driver from
+// overwriting a split channel it did not read is spec decision 11's, keyed
+// on a Known TxFreqHz, and it lives in the driver's write path rather than
+// here.
 //
 // So: '0' for an ordinary memory slot and for a section channel's LOWER
 // half; '1' for a section channel's UPPER half.

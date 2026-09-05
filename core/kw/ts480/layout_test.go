@@ -44,9 +44,9 @@ func TestLayout_IsConfiguredAndNamed(t *testing.T) {
 	}
 }
 
-// TestLayout_EveryAxisByValue pins all nine axes outright, each against the
-// line its own book prints it on. "Nine" is made a fact, not a habit, by
-// core/kw/ts590/layout_test.go's TestLayoutConfig_HasExactlyNineComparedAxes.
+// TestLayout_EveryAxisByValue pins all ten axes outright, each against the
+// line its own book prints it on. "Ten" is made a fact, not a habit, by
+// core/kw/ts590/layout_test.go's TestLayoutConfig_HasExactlyTenComparedAxes.
 func TestLayout_EveryAxisByValue(t *testing.T) {
 	l := ts480.Layout()
 
@@ -67,6 +67,10 @@ func TestLayout_EveryAxisByValue(t *testing.T) {
 	}
 	if got := l.ToneModes(); got != kw.ToneModesThree {
 		t.Errorf("the tone-mode value set is %v, want %v — \"0: OFF, 1: TONE, 2: CTCSS\" and no cross tone (480:964)", got, kw.ToneModesThree)
+	}
+
+	if got := l.MaxEXAddress(); got != 60 {
+		t.Errorf("the printed EX menu domain stops at %d, want 60 — \"000 ~ 060: Menu No.\" (480:401), the narrowest of the three registry rows", got)
 	}
 
 	wantModes := map[kw.Mode]string{

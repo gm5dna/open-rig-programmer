@@ -57,12 +57,12 @@ func TestMaxEXDigits_IsNotCoreCatsCeiling(t *testing.T) {
 // MaxEXDigits and each Kenwood stanza transcribes the value — and without
 // this pin they could drift silently.
 //
-// IT IS VACUOUS UNTIL T9 REGISTERS THE THREE STANZAS, and that is stated
-// rather than hidden: no profile renders into core/kw yet, so the loop runs
-// over nothing. What is NOT vacuous today is the count check below and the
-// two tests above, and the moment a Kenwood stanza is registered this loop
-// becomes the pin the plan asks for. The selector is ImportPath, not a name
-// list, so a fourth Kenwood profile nobody planned is caught too.
+// THE THREE STANZAS HAVE LANDED — ts590s, ts590sg and ts480 — so this loop
+// runs over three profiles and the count check below requires exactly that.
+// ZERO IS NOT A LEGITIMATE OUTCOME any more: it would mean all three Kenwood
+// registrations had been dropped, and a pin that reported that as success
+// would be the decay it exists to catch. The selector is ImportPath, not a
+// name list, so a fourth Kenwood profile nobody planned is caught too.
 func TestExtableCeilingMatchesKenwoodBound(t *testing.T) {
 	seen := 0
 	for _, np := range extable.RegisteredProfiles() {
@@ -75,13 +75,8 @@ func TestExtableCeilingMatchesKenwoodBound(t *testing.T) {
 		}
 	}
 	// The expected population, stated so this test says out loud what it
-	// covers rather than passing quietly over an empty set. It is 0 until
-	// T9 and 3 afterwards (ts590s, ts590sg, ts480); either is legitimate,
-	// and anything else means a stanza landed that nobody accounted for.
-	if seen != 0 && seen != 3 {
-		t.Errorf("%d profiles render into core/kw, want 0 (before T9's stanzas) or 3 (ts590s, ts590sg, ts480)", seen)
-	}
-	if seen == 0 {
-		t.Log("no registered profile renders into core/kw yet: this pin is vacuous until T9 lands the three Kenwood stanzas, by design (see this test's doc comment)")
+	// covers rather than passing quietly over a set that has emptied.
+	if seen != 3 {
+		t.Errorf("%d profiles render into core/kw, want 3 (ts590s, ts590sg, ts480) — a stanza was dropped, or one landed that nobody accounted for", seen)
 	}
 }

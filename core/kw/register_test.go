@@ -38,7 +38,14 @@ func docSource(t *testing.T) string {
 var registerEntry = regexp.MustCompile(`(?m)^//\t(A[0-9]+[ab]?) `)
 
 // erratumEntry matches an errata-schedule row's header line.
-var erratumEntry = regexp.MustCompile(`(?m)^//\t(E[0-9]+) `)
+//
+// THE OPTIONAL "S-" IS THE WHOLE OF THE FOURTH CATEGORY. Twenty-two rows are
+// about a BOOK and are numbered E1..E22; the twenty-third is about this
+// milestone's own spec and is numbered S-E1, so a regexp anchored on "E"
+// alone cannot see it — and S-E1 is the row recording why the outbound gate
+// necessarily admits "AI0;" and an ordinary-memory MC Set, which is the one
+// schedule row a reader most needs to survive a tidy-up.
+var erratumEntry = regexp.MustCompile(`(?m)^//\t((?:S-)?E[0-9]+) `)
 
 // liftID matches any of the three lift-ID forms the register uses.
 var liftID = regexp.MustCompile(`L-(HW|DOC|DEC)-[0-9]+[a-z]?`)
@@ -190,11 +197,19 @@ func TestAssumedRegister_DoesNotCarryTheDriverRegister(t *testing.T) {
 	}
 }
 
-// TestErrataSchedule_TwentyTwoRowsInThreeCategories pins the schedule's
+// TestErrataSchedule_TwentyThreeRowsInFourCategories pins the schedule's
 // population AND its partition, because the partition is the part a later
-// reader gets wrong: two of the twenty-two are not defects at all, and
-// "correcting" either into evidence is exactly what recording them
+// reader gets wrong: two of the twenty-two book-side rows are not defects at
+// all, and "correcting" either into evidence is exactly what recording them
 // prevents.
+//
+// THE TWENTY-THIRD ROW IS NOT ABOUT EITHER BOOK. S-E1 records that spec
+// §Testing's "the outbound gate refus[es] every answer frame" is not
+// achievable — "AI0;" and an MC Set naming ordinary memory are each
+// byte-identical to an answer a radio sends — and states the invariant that
+// IS true in its place. It is the most load-bearing sentence in the safety
+// story and it is the schedule row a structural guard would most easily lose,
+// being the one whose ID does not begin with "E".
 //
 // E22 IS THE ONE THE CROSS-CHECKS COULD NOT FIND. It was routed here by the
 // orchestrator out of T10's cross-check, which discovered that all three
@@ -202,7 +217,7 @@ func TestAssumedRegister_DoesNotCarryTheDriverRegister(t *testing.T) {
 // the EX block's own prose omits it from the two-digit list. Three faithful
 // readings of one incomplete printed sentence agree perfectly, so no
 // comparison between the legs can catch it and only a recorded erratum can.
-func TestErrataSchedule_TwentyTwoRowsInThreeCategories(t *testing.T) {
+func TestErrataSchedule_TwentyThreeRowsInFourCategories(t *testing.T) {
 	src := docSource(t)
 	seen := map[string]int{}
 	for _, m := range erratumEntry.FindAllStringSubmatch(src, -1) {
@@ -215,6 +230,10 @@ func TestErrataSchedule_TwentyTwoRowsInThreeCategories(t *testing.T) {
 		}
 		delete(seen, id)
 	}
+	if seen["S-E1"] != 1 {
+		t.Errorf("erratum S-E1 appears %d times in doc.go, want exactly 1 — it is the row recording that the outbound gate necessarily admits \"AI0;\" and an ordinary-memory MC Set, and the invariant that holds in place of spec §Testing's wording", seen["S-E1"])
+	}
+	delete(seen, "S-E1")
 	for extra := range seen {
 		t.Errorf("doc.go carries an unaccounted erratum %s", extra)
 	}
@@ -226,6 +245,9 @@ func TestErrataSchedule_TwentyTwoRowsInThreeCategories(t *testing.T) {
 		{"TWENTY DOCUMENT DEFECTS:", 20},
 		{"ONE ANTI-DEFECT:", 1},
 		{"ONE TRANSCRIPTION TRAP THAT IS NOT A DEFECT:", 1},
+		// The fourth category's heading runs on into its own sentence, so
+		// it is matched by its opening words rather than to a colon.
+		{"ONE SPEC WORDING ERROR", 1},
 	}
 	for i, c := range categories {
 		start := strings.Index(src, c.heading)

@@ -65,6 +65,11 @@ var layout480 = kw.MustNewLayout(kw.LayoutConfig{
 	Byte41:    kw.Byte41FixedZero,   // "Always 0 for the TS-480." (480:982)
 	ToneModes: kw.ToneModesThree,    // "0: OFF, 1: TONE, 2: CTCSS" (480:964)
 
+	// The EX chart's own printed domain, "000 ~ 060: Menu No." (480:401) —
+	// the narrowest of the three registry rows, and 27 addresses below the
+	// TS-590S's.
+	MaxEXAddress: 60,
+
 	ModeNames: modeNames(),
 
 	// ONE FLAT BANK, "00 ~ 99: Memory channel number" (480:955).
