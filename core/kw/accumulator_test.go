@@ -121,9 +121,16 @@ func TestNewFrameAccumulator_NonPositiveMaxSelectsTheDefault(t *testing.T) {
 	}
 }
 
-// TestDefaultMaxFrame_ExceedsTheWidestPrintedFrame is the arithmetic behind
-// the bound, pinned rather than asserted in prose: the widest frame either
-// book prints is the 50-byte MR answer / MW set.
+// TestDefaultMaxFrame_ExceedsTheWidestPrintedFrame is the ONLY relation the
+// bound's comment claims, pinned rather than asserted in prose: the widest
+// frame either book prints is the 50-byte MR answer / MW set
+// (590:1440-1461, 590:1518-1536; 480:923-943, 480:955-976), and 256 clears
+// it.
+//
+// NO ARITHMETIC IS PINNED HERE BECAUSE NONE IS CLAIMED. 256 is the fleet's
+// shared frame bound, adequate for this family rather than derived from it;
+// see accumulator.go. A test asserting some multiple of 50 would be pinning
+// a derivation that does not exist.
 func TestDefaultMaxFrame_ExceedsTheWidestPrintedFrame(t *testing.T) {
 	const widestPrintedFrame = 50
 	if DefaultMaxFrame <= widestPrintedFrame {

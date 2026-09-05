@@ -5,6 +5,7 @@ package kw
 import (
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -201,7 +202,7 @@ func TestErrataSchedule_TwentyOneRowsInThreeCategories(t *testing.T) {
 		seen[m[1]]++
 	}
 	for i := 1; i <= 21; i++ {
-		id := "E" + itoa(i)
+		id := "E" + strconv.Itoa(i)
 		if seen[id] != 1 {
 			t.Errorf("erratum %s appears %d times in doc.go, want exactly 1", id, seen[id])
 		}
@@ -256,7 +257,7 @@ func TestDoc_NamesTheCeilingConstant(t *testing.T) {
 	// against the constant so the sentence cannot outlive it: a change to
 	// DefaultMaxFrame moves MaxEXDigits, and this fails until doc.go says
 	// the new number.
-	want := "ITS VALUE IS " + itoa(MaxEXDigits) + ","
+	want := "ITS VALUE IS " + strconv.Itoa(MaxEXDigits) + ","
 	if !strings.Contains(src, want) {
 		t.Errorf("doc.go does not state MaxEXDigits' current value (%d) in the form %q — the three profile stanzas transcribe it as a literal and have nowhere else to read it", MaxEXDigits, want)
 	}
@@ -271,20 +272,4 @@ func TestDoc_StatesTheOneVariableLengthFrame(t *testing.T) {
 	if !strings.Contains(src, "THE EX ANSWER IS THE ONLY VARIABLE-LENGTH FRAME THIS MILESTONE PARSES") {
 		t.Error("doc.go no longer states that the EX answer is the only variable-length frame this milestone parses")
 	}
-}
-
-// itoa is strconv.Itoa, spelled locally so this file's imports stay to the
-// three it really needs.
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var b [4]byte
-	i := len(b)
-	for n > 0 {
-		i--
-		b[i] = byte('0' + n%10)
-		n /= 10
-	}
-	return string(b[i:])
 }
