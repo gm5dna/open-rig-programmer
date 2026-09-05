@@ -16,7 +16,8 @@ import (
 
 // exAnswerFrame assembles the answer the book prints for menu with raw P5 p5.
 func exAnswerFrame(menu int, p5 string) string {
-	return fmt.Sprintf("EX%03d00%s%s;", menu, "00", p5)
+	// EX  P1P1P1  P2P2  P3  P4  P5...  ;
+	return fmt.Sprintf("EX%03d%s%c%c%s;", menu, "00", '0', '0', p5)
 }
 
 // exReadFrame assembles the ten-byte read the book prints for menu.

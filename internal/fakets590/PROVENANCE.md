@@ -155,9 +155,10 @@ Two family-level entries the EX surface rides on, by number:
   prints for that menu number. Both books call P5 "variable length" and print
   no ceiling (`590:554-556`). It is a CEILING, so a short answer is admitted on
   both sides and `WithEXSetting` can script one.
-- **A2** — the printable-ASCII charset, bounded at `0x7E`. `WithEXSetting`
-  stores what it is given; the charset is enforced by the codec, on the side
-  that has to read a real radio's bytes.
+- **A2** — the printable-ASCII charset, bounded at `0x7F` (P16's name
+  charset, extended here to EX's P5). `WithEXSetting` stores what it is
+  given; the charset is enforced by the codec, on the side that has to read
+  a real radio's bytes.
 
 The **text flag** of transcription B is deliberately **not projected** into this
 fake's tables. `core/kw/ts590/crosscheck_test.go` records the orchestrator's

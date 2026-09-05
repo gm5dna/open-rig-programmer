@@ -163,19 +163,24 @@ func TestPROVENANCECarriesA27Verbatim(t *testing.T) {
 	//
 	// These two checks run against the RAW markdown (before the "*" markup
 	// stripper above runs), and match the bullet form the file actually uses
-	// — "- **A1** — …" — as "**A1**". A plain substring search on the
-	// stripped text is vacuous here: Contains(prov, "A1") is also satisfied
-	// by "A10", "A11" and "A18a", so a missing A1 bullet would never be
-	// caught. "**A1**" cannot collide with "**A10**" or "**A18a**" because
-	// the two asterisks immediately follow the digits only in A1's own
-	// bullet.
+	// — "- **A1** — …" — in full, leading hyphen included, on BOTH loops
+	// below. A plain substring search on the stripped text is vacuous here:
+	// Contains(prov, "A1") is also satisfied by "A10", "A11" and "A18a", so a
+	// missing A1 bullet would never be caught, and "**A1**" alone is no
+	// better — this file also says "the design's **A27**" and similar in
+	// running prose, so a search that drops the leading "- " would find the
+	// entry's NAME anywhere in the document and never notice its BULLET
+	// going missing. "- **A1**" cannot collide with "- **A10**" or
+	// "- **A18a**" because the two asterisks immediately follow the digits
+	// only in A1's own bullet, and it cannot collide with prose because
+	// prose never opens a line with "- ".
 	raw := string(b)
 	for _, entry := range []string{"A1", "A3", "A4", "A10", "A18a", "A27"} {
-		if !strings.Contains(raw, "**"+entry+"**") {
-			t.Errorf("PROVENANCE.md does not carry the bullet **%s**, one of the family-level entries an image rides on", entry)
+		if !strings.Contains(raw, "- **"+entry+"**") {
+			t.Errorf("PROVENANCE.md does not carry the bullet - **%s**, one of the family-level entries an image rides on", entry)
 		}
 	}
-	if strings.Contains(raw, "**A11**") {
+	if strings.Contains(raw, "- **A11**") {
 		t.Error("PROVENANCE.md lists A11 among the entries the images ride on — no image is shipped for 110-119, so nothing rides on it")
 	}
 }
