@@ -494,7 +494,7 @@ func appendMemBlock(out []byte, slot string, s MemState) []byte {
 // 996-1027) ---
 //
 // THE AVAILABILITY ROW AND THE DETAIL BLOCK CONTRADICT EACH OTHER on this
-// radio, and it is the only one of the four registered Yaesu models of which
+// radio, and it is the only one of the five registered Yaesu models of which
 // that is true. The Control Command List gives MT "Set O, Read X, Ans. X"
 // (ft891_layout.txt:166); MT's own block, on the same printed page, prints a
 // filled Read chart ("M T P0 P0 P0 ;", 1016) and a filled 41-position Answer

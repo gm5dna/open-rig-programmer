@@ -915,10 +915,8 @@ var fakeDrivers = map[string]fakeDriverEntry{
 // OpenFakeSessionFor opens a session against a fresh in-process fake rig
 // for model, via model's own entry in fakeDrivers. This function knows
 // nothing about any model's simulator options: each entry's newRadio
-// closure carries its own (M9c-5 E5 — see FakeSessionOpts,
-// FTdx10FakeSessionOpts, FTdx101DFakeSessionOpts and
-// FTdx101MPFakeSessionOpts, the four test-only seams of that kind, one per
-// registered model).
+// closure carries its own (M9c-5 E5 — one *FakeSessionOpts test-only seam
+// of that kind per registered model).
 //
 // An unrecognised model fails with *UnknownModelError BEFORE any fake rig
 // is constructed. The returned close function releases the session first,

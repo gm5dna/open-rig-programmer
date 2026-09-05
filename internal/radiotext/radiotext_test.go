@@ -209,7 +209,7 @@ var yaesuModels = map[string]bool{
 // entry's prose must never carry, on top of the other Yaesu models' own
 // particulars (ownParticulars, below): these four tokens are not any ONE
 // Yaesu model's evidence, they are the shared fact "this driver speaks
-// CAT", which is true of all four Yaesu entries and false of every Icom
+// CAT", which is true of all five Yaesu entries and false of every Icom
 // one. Checked only when the model being checked is NOT itself Yaesu — a
 // Yaesu entry's own prose legitimately contains "CAT" throughout.
 var catFamilyVocabulary = []string{"CAT manual", "CAT command", "CAT query", "CAT"}
