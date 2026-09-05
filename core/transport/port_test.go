@@ -237,3 +237,34 @@ func containsAll(s string, subs ...string) bool {
 	}
 	return true
 }
+
+// TestOpenSerial_RequestsRTSAndDTRLowAtOpen pins the Mode the open seam is
+// handed: InitialStatusBits must be non-nil with both lines low. Nil is not
+// "leave the lines alone" — on Windows it selects DTR_CONTROL_ENABLE and
+// RTS_CONTROL_ENABLE in the DCB the library hands SetCommState
+// (serial_windows.go:401-411), i.e. both lines asserted for the whole window
+// between the open and this package's SetRTS/SetDTR calls. See decision 6
+// and register entry W6 (ASSUMED — no hardware has watched this yet).
+func TestOpenSerial_RequestsRTSAndDTRLowAtOpen(t *testing.T) {
+	fp := &fakeSerialPort{}
+	cm := withFakeOpenPort(t, fp, nil)
+
+	p, err := OpenSerial("/dev/cu.fake", SerialConfig{})
+	if err != nil {
+		t.Fatalf("OpenSerial: unexpected error: %v", err)
+	}
+	defer p.Close()
+
+	if cm.mode == nil {
+		t.Fatal("openPort mode = nil")
+	}
+	if cm.mode.InitialStatusBits == nil {
+		t.Fatal("Mode.InitialStatusBits = nil, want a non-nil request for both lines low")
+	}
+	if cm.mode.InitialStatusBits.RTS {
+		t.Error("Mode.InitialStatusBits.RTS = true, want false")
+	}
+	if cm.mode.InitialStatusBits.DTR {
+		t.Error("Mode.InitialStatusBits.DTR = true, want false")
+	}
+}
