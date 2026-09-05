@@ -514,3 +514,40 @@ func TestExactlyOneTrailingSemicolon(t *testing.T) {
 		}
 	}
 }
+
+// TestAllowedCommand_BoundsTheEXAddressToTheRowsPrintedMenuDomain is the
+// per-row half of the EX grammar, and the one the gate's doc comment used to
+// name as its own exception.
+//
+// Each book prints its own domain, per row: "000 ~ 087: Menu number
+// (TS-590S)" (590:543), "000 ~ 099: Menu number (TS-590SG)" (590:544) and
+// "000 ~ 060: Menu No." (480:401). A gate that admitted 000-255 on every row
+// would let a TS-590S driver whose sweep took its bound from the SG's
+// hundred rows put twelve frames on a wire whose book stops at 087.
+func TestAllowedCommand_BoundsTheEXAddressToTheRowsPrintedMenuDomain(t *testing.T) {
+	sg, s, t480 := layout590SG(), layout590S(), layout480()
+
+	// 088 is the SG's and not the S's: one address apart, and the two rows
+	// are one identifier apart in ts590.
+	if !sg.AllowedCommand([]byte("EX0880000;")) {
+		t.Error("the TS-590SG gate refused a read of menu 088, inside its printed domain 000 ~ 099 (590:544)")
+	}
+	if s.AllowedCommand([]byte("EX0880000;")) {
+		t.Error("the TS-590S gate ADMITTED a read of menu 088, one past the domain its own book prints, 000 ~ 087 (590:543)")
+	}
+	if !s.AllowedCommand([]byte("EX0870000;")) {
+		t.Error("the TS-590S gate refused a read of menu 087, the last address its own book prints (590:543)")
+	}
+
+	// The 480 stops at 060, so the whole of the 590 pair's upper menu space
+	// is outside it.
+	if !t480.AllowedCommand([]byte("EX0600000;")) {
+		t.Error("the TS-480 gate refused a read of menu 060, the last address its own book prints (480:401)")
+	}
+	if t480.AllowedCommand([]byte("EX0610000;")) {
+		t.Error("the TS-480 gate ADMITTED a read of menu 061, one past its printed domain 000 ~ 060 (480:401)")
+	}
+	if t480.AllowedCommand([]byte("EX0990000;")) {
+		t.Error("the TS-480 gate ADMITTED a read of menu 099, which only the TS-590SG's book prints (590:544, 480:401)")
+	}
+}

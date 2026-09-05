@@ -149,7 +149,9 @@ var (
 // 42-byte erase shape of 590:1579-1581 — a frame the book really prints and
 // this programme never builds. A DRIVER calls NewFramingFor(layout)
 // instead (allowlist.go); NewFraming exists for NewFramingFor to build on
-// and for the envelope's own tests and pins.
+// and for the envelope's own tests and pins. THAT IS A GUARDED RULE AND NOT
+// ONLY A SENTENCE: internal/guards' TestKenwoodDriversUseNewFramingFor fails
+// on any non-test file under core/driver that calls this constructor.
 func NewFraming(book Book) (transport.Framing, error) {
 	if !book.valid() {
 		return nil, fmt.Errorf("%w (got %v)", ErrUnconfiguredBook, book)
@@ -244,7 +246,8 @@ func (f framing) IsFatal(frame []byte) error {
 // (TestAllowedCommand_AdmitsOnlyFramesTheEnvelopeAlsoAdmits pins it). This
 // method is what a driver's gate falls back to only if it reaches for
 // NewFraming instead of NewFramingFor, which is why NewFraming's own doc
-// says not to.
+// says not to and why internal/guards'
+// TestKenwoodDriversUseNewFramingFor refuses it mechanically.
 //
 // A zero framing admits nothing: it speaks for no document, and a gate that
 // admitted a frame on behalf of no radio is the one failure this whole file

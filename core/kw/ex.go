@@ -60,16 +60,28 @@ const (
 // BuildEXRead builds the menu read for addr: "E X P1 P1 P1 P2 P2 P3 P4 ;",
 // ten bytes with P2 "00" and P3 and P4 '0' (590:546-553, 480:402-407).
 //
-// IT KNOWS NOTHING OF MEMBERSHIP, AND THAT IS A DELIBERATE DIVISION rather
-// than a gap. Which addresses a radio HAS is the per-row inventory's fact —
-// 88 rows on the TS-590S, 100 on the TS-590SG, 61 on the TS-480 (A26) — and
-// those three generated inventories live in core/kw/ts590 and core/kw/ts480,
-// which import this package. A membership check here would be an import
-// cycle; a Layout carrying its own copy of an inventory would be a second
-// copy of a generated artefact, which is the drift this repository's
-// staleness tests exist to catch. The caller reads its own inventory and
-// asks for what is in it. EXAddress's own doc comment states the same
-// division for the address type.
+// IT IS BOUNDED BY THIS ROW'S PRINTED MENU DOMAIN, which is a per-row datum
+// each book prints on its own EX chart: "000 ~ 087: Menu number (TS-590S)"
+// (590:543), "000 ~ 099: Menu number (TS-590SG)" (590:544) and "000 ~ 060:
+// Menu No." (480:401). It is the MaxEXAddress axis (layout.go) and it is
+// read here and by the outbound gate, so an address above the row's printed
+// domain is refused before the wire rather than answered "?;" by the radio.
+// TestAllowedCommand_BoundsTheEXAddressToTheRowsPrintedMenuDomain is the
+// per-row pin, and it is the S/SG pair that makes it worth having: the two
+// rows' domains differ by twelve addresses and their two inventories are one
+// identifier apart.
+//
+// IT STILL KNOWS NOTHING OF MEMBERSHIP, AND THAT IS A DELIBERATE DIVISION
+// rather than a gap. The domain is a printed RANGE; which addresses inside
+// it a radio has, what each is called and how wide its answer is are the
+// per-row inventory's facts — 88 rows on the TS-590S, 100 on the TS-590SG,
+// 61 on the TS-480 (A26) — and those three generated inventories live in
+// core/kw/ts590 and core/kw/ts480, which import this package. A membership
+// check here would be an import cycle; a Layout carrying its own copy of an
+// inventory would be a second copy of a generated artefact, which is the
+// drift this repository's staleness tests exist to catch. The caller reads
+// its own inventory and asks for what is in it. EXAddress's own doc comment
+// states the same division for the address type.
 //
 // WHAT IT DOES ENFORCE is the address FORM: EXAddress.Wire fails closed on a
 // non-zero P2 or P3 — values that are not Kenwood addresses at all — and
@@ -78,6 +90,9 @@ const (
 func (l Layout) BuildEXRead(addr EXAddress) (Command, error) {
 	if !l.Configured() {
 		return Command{}, newParseError(nil, "EX read: this layout is unconfigured and describes no radio")
+	}
+	if addr.P1 > l.maxEXAddress {
+		return Command{}, newParseError(nil, "EX read: menu %d is outside %s's printed menu domain, 000 ~ %03d (590:543, 590:544, 480:401) — the two TS-590 rows print different domains and this codec will not send one row's address to the other", addr.P1, l.model, l.maxEXAddress)
 	}
 	wire := addr.Wire()
 	if wire == "" {
