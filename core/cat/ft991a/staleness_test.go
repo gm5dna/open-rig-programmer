@@ -33,6 +33,12 @@ import (
 // test's paths are p.ManualCSV and p.OutFile resolved against the working
 // directory, which is this package's directory, so a registration named
 // ft991a that emitted somewhere else would be comparing the wrong files.
+// TRADED AWAY: the siblings' Package-filtered loop also refuses a SECOND
+// registration that emits into the same package under a different name —
+// validateRegistry (profile.go:967, :973) only refuses two entries sharing
+// Package+OutFile or Package+VarName, not two sharing Package alone, so
+// this test would not notice that arrangement. Selecting by Lookup name
+// buys the guarantee above; it does not buy that one.
 //
 // Scope is deliberately package-local. Profile carries no package-directory
 // datum and its paths are resolved relative to the working directory, so no
