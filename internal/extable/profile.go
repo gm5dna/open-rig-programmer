@@ -815,12 +815,100 @@ var ft891Profile = Profile{
 	},
 }
 
+// ft991aProfile carries the FT-991A's menu-chart transcription facts. It is
+// the registry's first AddressSingle entry and its first ParameterlessExcluded
+// one, which is what those two policies were added for: this chart prints ONE
+// three-digit MENU Number that is the whole EX address, and one of its 153
+// rows names no settable field at all.
+//
+// Evidence, all from CAT manual rev 1711-D's menu chart (see
+// core/cat/ft991a/table2.csv's own provenance header, which records the
+// chart's printed quirks):
+//
+//   - The chart's grammar block prints "P1 : 001 - 153 (MENU Number)"
+//     (ft991a_layout.txt:520) and the chart's own rows run 001 to 153 with no
+//     gap and no repeat, so the address is P1 ALONE and every row's p2 and p3
+//     are 0 — extable's AddressSingle, core/cat's EXAddressSingle.
+//   - MaxDigits is 8, from ONE row: 151 PRESET FREQUENCY (ft991a_layout.txt:692),
+//     "00030000 ~ 47000000". It is a reading of THIS chart, not a widening of
+//     the other four profiles' 4 and 5.
+//   - 087 RADIO ID (ft991a_layout.txt:623) prints ten hyphens for its
+//     parameter and a single hyphen for its Digits. ParameterlessAddresses
+//     names it {87,0,0} so that ParseCSV admits the hyphen THERE and refuses
+//     it on the other 152 rows, and so that RenderGo omits that one address
+//     from the inventory: a menu number naming no field is not an address an
+//     EX frame could read or write.
+//
+// TextWidth is 0, which under TextRowsAbsent is the only value Validate
+// admits: this chart prints no free-text row, and spelling 12 here out of
+// resemblance to the FT-710 family would state two incompatible things about
+// one chart.
+//
+// Deliberately NOT given a named accessor, for the reason the ftdx10, ftdx101
+// and ft891 profiles are not: its consumers reach it through
+// Lookup/RegisteredProfiles.
+var ft991aProfile = Profile{
+	Model:       "FT-991A",
+	Package:     "ft991a",
+	Types:       TypesImported,
+	ImportPath:  "github.com/gm5dna/open-rig-programmer/core/cat",
+	ImportAlias: "cat",
+	VarName:     "exItems",
+	OutFile:     "exinventory_gen.go",
+	ManualCSV:   "table2.csv",
+
+	// The FT-991A's chart, said out loud: a three-digit MENU Number that is
+	// the whole address (every row's p2 AND p3 are 0), no group labels in
+	// either column, no text row, and ONE row that names no field.
+	Addresses:              AddressSingle,
+	LabelPolicy:            LabelsAbsent,
+	TextRowPolicy:          TextRowsAbsent,
+	ParameterlessPolicy:    ParameterlessExcluded,
+	ParameterlessAddresses: [][3]int{{87, 0, 0}},
+
+	// core/cat's ceiling, because this profile renders into core/cat.
+	DigitsCeiling: MaxDigitsCeiling,
+	MinDigits:     1,
+	MaxDigits:     8,
+	TextWidth:     0,
+	// MaxObservedWidth is an INERT API-REQUIRED SENTINEL here, exactly as on
+	// the ftdx10, ftdx101 and ft891 profiles: ObservationsAbsent means no
+	// observation CSV is ever parsed and this bound is never consulted. It
+	// carries NO hardware claim about the FT-991A — no FT-991A has ever been
+	// asked anything — and must not be read as one; the moment observations
+	// do exist it is re-derived from them rather than kept. It is spelt 12
+	// only because a sentinel has to be spelt something, and 12 is NOT this
+	// radio's text width: this chart has no text row at all, nor its widest
+	// Digits, which is 8.
+	MaxObservedWidth: 12,
+	// ExpectedRows COUNTS 087, the parameterless row: the chart prints it, so
+	// it is transcribed and counted, and the inventory is the 152 that remain
+	// after ParameterlessAddresses excludes it BY ADDRESS. RenderGo checks
+	// that arithmetic itself.
+	ExpectedRows: 153,
+
+	Observations: ObservationsAbsent,
+	DocLines: []string{
+		"exItems is the FT-991A's EX address inventory, sorted by (P1,P2,P3),",
+		"built from ONE source: the manual transcription in table2.csv (the",
+		"FT-991A CAT Operation Reference Manual rev 1711-D's menu chart). The",
+		"FT-991A's EX address is a SINGLE component: the chart's three-digit",
+		"MENU Number is P1, every item's P2 and P3 are 0, and the chart prints",
+		"no group labels, so every P1Label and P2Label is \"\". There are no",
+		"hardware READ observations to join — no FT-991A has ever been asked",
+		"anything — so every item carries the absence sentinels",
+		"ObservedReadWidth 0 and ObservedReadShape \"\". Regenerate with",
+		"`go generate ./core/cat/ft991a`; do not edit by hand.",
+	},
+}
+
 // registry maps a lookup name to its profile. It is validated at init, so an
 // inconsistent profile panics the build tooling rather than emitting a wrong
 // inventory.
 var registry = mustRegistry(map[string]Profile{
 	"ft710":   ft710Profile,
 	"ft891":   ft891Profile,
+	"ft991a":  ft991aProfile,
 	"ftdx10":  ftdx10Profile,
 	"ftdx101": ftdx101Profile,
 })

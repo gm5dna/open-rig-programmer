@@ -3,6 +3,7 @@
 package extable
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -204,25 +205,27 @@ func TestRenderGo_LabelsAbsentEmitsEmptyLabels(t *testing.T) {
 // rather than inherit it.
 //
 // Until the FT-891 there was one population and the assertion could be a
-// blanket "all three are six-digit, labelled and text-bearing". There are now
-// two, so the expectations are stated PER REGISTRATION: the FT-710, FTdx10
-// and FTdx101D/MP keep the values whose byte identity this guard protects,
-// and the FT-891 declares the opposite of all three at once. Keeping it a
-// blanket over RegisteredProfiles() would have meant weakening it to the
-// intersection of two charts, which is no assertion at all.
+// blanket "all three are six-digit, labelled and text-bearing". There are
+// now three, so the expectations are stated PER REGISTRATION: the FT-710,
+// FTdx10 and FTdx101D/MP keep the values whose byte identity this guard
+// protects; the FT-891 declares the opposite of all three at once; and the
+// FT-991A is a third population again — the registry's first AddressSingle
+// profile and its first ParameterlessExcluded one. Keeping it a blanket
+// over RegisteredProfiles() would have meant weakening it to the
+// intersection of three charts, which is no assertion at all.
 //
 // The table is keyed by lookup name and its size is compared against the
-// registry's, so a FIFTH registration fails here rather than slipping through
+// registry's, so a SIXTH registration fails here rather than slipping through
 // a sweep that never looked at it.
 //
-// ceiling is here for the reason the other four columns are: it is a
+// ceiling is here for the reason the other six columns are: it is a
 // per-registration fact that TestRegistry_HoldsEveryModel's name-list pin and
-// this test's own length check both make loud on a fifth registration
+// this test's own length check both make loud on a further registration
 // (MEDIUM-3), but neither previously carried DigitsCeiling itself — only the
-// four hand-written per-model tests did, and nothing forces a fifth of those
+// four hand-written per-model tests did, and nothing forces another of those
 // to exist. A Kenwood stanza that copy-pastes core/cat's MaxDigitsCeiling
 // (247) onto a profile rendering into core/kw would otherwise pass every
-// test in this package; naming the ceiling here, in the one sweep a fifth
+// test in this package; naming the ceiling here, in the one sweep a new
 // registration cannot dodge, makes that registration STATE its ceiling a
 // second time, in a second file.
 //
@@ -233,27 +236,41 @@ func TestRenderGo_LabelsAbsentEmitsEmptyLabels(t *testing.T) {
 // ceiling test asserts its constant against the REGISTERED profile's
 // DigitsCeiling rather than against a literal.
 func TestRegisteredProfiles_DeclareTodaysBehaviourExplicitly(t *testing.T) {
-	// Every registered chart is ParameterlessRefused, and the column is here
-	// rather than assumed: it is what keeps the four committed inventories
+	// The parameterless columns are here rather than assumed. Four of the
+	// five registered charts are ParameterlessRefused with an EMPTY address
+	// set, and that pairing is what keeps their committed inventories
 	// byte-identical across the seam that admitted parameterless rows, since
 	// RenderGo emits its exclusion header only for a non-empty address set.
+	// The FT-991A is the one exception, so the SET is stated per
+	// registration too: a policy asserted without its addresses would let a
+	// profile exclude the wrong row and still satisfy this table.
 	want := map[string]struct {
 		addr          AddressForm
 		labels        Labels
 		textRows      TextRows
 		parameterless ParameterlessRows
+		addrs         [][3]int
 		textWidth     int
 		ceiling       int
 	}{
-		"ft710":   {AddressTriple, LabelsRequired, TextRowsAllowed, ParameterlessRefused, 12, MaxDigitsCeiling},
-		"ftdx10":  {AddressTriple, LabelsRequired, TextRowsAllowed, ParameterlessRefused, 12, MaxDigitsCeiling},
-		"ftdx101": {AddressTriple, LabelsRequired, TextRowsAllowed, ParameterlessRefused, 12, MaxDigitsCeiling},
+		"ft710":   {AddressTriple, LabelsRequired, TextRowsAllowed, ParameterlessRefused, nil, 12, MaxDigitsCeiling},
+		"ftdx10":  {AddressTriple, LabelsRequired, TextRowsAllowed, ParameterlessRefused, nil, 12, MaxDigitsCeiling},
+		"ftdx101": {AddressTriple, LabelsRequired, TextRowsAllowed, ParameterlessRefused, nil, 12, MaxDigitsCeiling},
 		// The FT-891's chart prints a four-digit MENU Number, no group
 		// labels and no free-text row: core/cat/ft891/table2.csv's
 		// provenance header records all three as readings of that chart.
 		// Its DigitsCeiling is still core/cat's — the FT-891 renders into
 		// core/cat/ft891, not a package of its own.
-		"ft891": {AddressPair, LabelsAbsent, TextRowsAbsent, ParameterlessRefused, 0, MaxDigitsCeiling},
+		"ft891": {AddressPair, LabelsAbsent, TextRowsAbsent, ParameterlessRefused, nil, 0, MaxDigitsCeiling},
+		// The FT-991A's chart prints ONE three-digit MENU Number that is
+		// the whole address, no group labels, no free-text row, and one
+		// row — 087 RADIO ID — with no parameter at all:
+		// core/cat/ft991a/table2.csv's provenance header records each as a
+		// reading of that chart. It is the registry's first
+		// ParameterlessExcluded entry and its first AddressSingle one. Its
+		// DigitsCeiling is still core/cat's — the FT-991A renders into
+		// core/cat/ft991a, not a package of its own.
+		"ft991a": {AddressSingle, LabelsAbsent, TextRowsAbsent, ParameterlessExcluded, [][3]int{{87, 0, 0}}, 0, MaxDigitsCeiling},
 	}
 	regs := RegisteredProfiles()
 	if len(regs) != len(want) {
@@ -280,8 +297,11 @@ func TestRegisteredProfiles_DeclareTodaysBehaviourExplicitly(t *testing.T) {
 		if np.Profile.ParameterlessPolicy != w.parameterless {
 			t.Errorf("%s: ParameterlessPolicy = %v, want %v", np.Name, np.Profile.ParameterlessPolicy, w.parameterless)
 		}
-		if len(np.Profile.ParameterlessAddresses) != 0 {
-			t.Errorf("%s: ParameterlessAddresses = %v, want none", np.Name, np.Profile.ParameterlessAddresses)
+		// The SET, not its length: a count would be satisfied by a profile
+		// excluding the wrong address, which is the very substitution
+		// Profile.ParameterlessAddresses' own doc comment refuses.
+		if !reflect.DeepEqual(np.Profile.ParameterlessAddresses, w.addrs) {
+			t.Errorf("%s: ParameterlessAddresses = %v, want %v", np.Name, np.Profile.ParameterlessAddresses, w.addrs)
 		}
 		if np.Profile.TextWidth != w.textWidth {
 			t.Errorf("%s: TextWidth = %d, want %d", np.Name, np.Profile.TextWidth, w.textWidth)
