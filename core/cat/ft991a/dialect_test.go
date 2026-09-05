@@ -1296,9 +1296,41 @@ func TestEXAnswerBound(t *testing.T) {
 	}
 }
 
-// assumedRegister is this file's copy of doc.go's ASSUMED register: one row
-// per entry, naming the entry EXACTLY as doc.go opens its bullet, and saying
-// where the assumption is USED.
+// registerEntryNames quotes doc.go's ASSUMED register VERBATIM: the eleven
+// entry NAMES, in doc.go's order, each being the opening of its bullet up to
+// the parenthetical citation or the full stop where the explanation starts.
+// TestASSUMEDRegisterIsComplete asserts every bullet opens with its name, so
+// a name that drifts in either file fails here rather than silently.
+//
+// WHY THE ELEVEN STRINGS ARE WRITTEN OUT RATHER THAN DERIVED. doc.go's
+// register insists entries be cited BY NAME, and Stage 2's core/driver/ft991a
+// carries the SAME eleven in its own doc comment (spec §The ASSUMED
+// register). Nothing mechanical can hold that copy to this one until it
+// exists, so this slice is the form the driver package mirrors: one literal
+// list a test over there can copy verbatim and assert against its own doc
+// comment, in this order.
+//
+// FOUR OF THE ELEVEN NAMES EMBED A VALUE — TagFill's ' ', the combined
+// answer's 41, NoneWire's "000", the clarifier's 10 and 9990. A partial lift
+// that changes one of those values therefore invalidates every by-name
+// citation of it, which is a reason to keep the names in ONE place and let a
+// test find the citations rather than a reader.
+var registerEntryNames = []string{
+	`MTPolicy.TagFill = ' '`,
+	"THE COMBINED MT ANSWER'S EXACT LENGTH, 41",
+	`SlotSpace.NoneWire = "000"`,
+	"THE cat.ModeUnset MEMBER OF THE MODE TABLE",
+	"ClarifierPolicy.StepHz = 10 AND ClarifierPolicy.MaxAbsHz = 9990",
+	`THE CLARIFIER'S MINUS-DIRECTION BYTE, the ASCII HYPHEN-MINUS 0x2D ('-')`,
+	"THE DCS STATES' SET ACCEPTANCE",
+	"ROW 087 RADIO ID'S EXCLUSION",
+	"FRAMING: 8 DATA BITS, NO PARITY, TWO STOP BITS",
+	"DefaultBaud 38400",
+	"THE ACKNOWLEDGEMENT CONVENTIONS",
+}
+
+// assumedRegister says, for each entry of registerEntryNames IN THE SAME
+// ORDER, where the assumption is USED and how dialect.go cites it.
 //
 // It is not a second statement of the assumptions — the register is the
 // statement — it is the machinery that keeps the register and dialect.go
@@ -1309,29 +1341,74 @@ func TestEXAnswerBound(t *testing.T) {
 // driver and are carried here because the register is ONE statement of
 // record for the radio, not one per package (spec §The ASSUMED register).
 var assumedRegister = []struct {
-	// Entry is the opening text of the register bullet in doc.go.
-	Entry string
+	// Cite is the text dialect.go's comment quotes when it names this
+	// entry — the entry's name, shortened where a full name would put a
+	// nested quotation inside a Go comment. It must be a PREFIX of the
+	// entry's name in registerEntryNames, which the test asserts, so a
+	// shortened citation can never come to mean a different entry.
+	Cite string
 	// Anchor is the line in dialect.go whose declaration carries the
 	// assumption; "" means the point of use is outside this package.
 	Anchor string
 	// Elsewhere says where an entry with no Anchor is actually used.
 	Elsewhere string
 }{
-	{Entry: "MTPolicy.TagFill", Anchor: "TagFill:"},
-	{Entry: "THE COMBINED MT ANSWER'S EXACT LENGTH", Elsewhere: "core/cat/mtcombined.go's fixed 29 + TagMaxBytes geometry"},
-	{Entry: "SlotSpace.NoneWire", Anchor: "NoneWire:"},
-	{Entry: "THE cat.ModeUnset MEMBER OF THE MODE TABLE", Anchor: "cat.ModeUnset:"},
-	{Entry: "ClarifierPolicy.StepHz = 10 AND ClarifierPolicy.MaxAbsHz", Anchor: "StepHz:"},
-	{Entry: "THE CLARIFIER'S MINUS-DIRECTION BYTE", Elsewhere: "core/cat/memdata.go's sign encoding and parsing"},
-	{Entry: "THE DCS STATES' SET ACCEPTANCE", Elsewhere: "the radio's behaviour, not a field: ToneStates is TRANSCRIBED from the P8 legend"},
-	{Entry: "ROW 087 RADIO ID'S EXCLUSION", Elsewhere: "internal/extable's ft991a profile stanza (ParameterlessAddresses) and table2.csv"},
-	{Entry: "FRAMING: 8 DATA BITS, NO PARITY, TWO STOP BITS", Elsewhere: "core/transport's DefaultStopBits, reached by ABSENCE — Stage 2's core/driver/ft991a declares no SerialFramingReporter"},
-	{Entry: "DefaultBaud 38400", Elsewhere: "Stage 2's core/driver/ft991a capability table"},
-	{Entry: "THE ACKNOWLEDGEMENT CONVENTIONS", Elsewhere: "Stage 2's core/driver/ft991a write path"},
+	{Cite: "MTPolicy.TagFill", Anchor: "TagFill:"},
+	{Cite: "THE COMBINED MT ANSWER'S EXACT LENGTH", Elsewhere: "core/cat/mtcombined.go's fixed 29 + TagMaxBytes geometry"},
+	{Cite: "SlotSpace.NoneWire", Anchor: "NoneWire:"},
+	{Cite: "THE cat.ModeUnset MEMBER OF THE MODE TABLE", Anchor: "cat.ModeUnset:"},
+	{Cite: "ClarifierPolicy.StepHz = 10 AND ClarifierPolicy.MaxAbsHz", Anchor: "StepHz:"},
+	{Cite: "THE CLARIFIER'S MINUS-DIRECTION BYTE", Elsewhere: "core/cat/memdata.go's sign encoding and parsing"},
+	{Cite: "THE DCS STATES' SET ACCEPTANCE", Elsewhere: "the radio's behaviour, not a field: ToneStates is TRANSCRIBED from the P8 legend"},
+	{Cite: "ROW 087 RADIO ID'S EXCLUSION", Elsewhere: "internal/extable's ft991a profile stanza (ParameterlessAddresses) and table2.csv"},
+	{Cite: "FRAMING: 8 DATA BITS, NO PARITY, TWO STOP BITS", Elsewhere: "core/transport's DefaultStopBits, reached by ABSENCE — Stage 2's core/driver/ft991a declares no SerialFramingReporter"},
+	{Cite: "DefaultBaud 38400", Elsewhere: "Stage 2's core/driver/ft991a capability table"},
+	{Cite: "THE ACKNOWLEDGEMENT CONVENTIONS", Elsewhere: "Stage 2's core/driver/ft991a write path"},
+}
+
+// isDialectComment says whether a line of dialect.go is a whole-line comment.
+// A trailing comment on a declaration is not one: the declaration is what
+// ends a field's comment block.
+func isDialectComment(line string) bool {
+	return strings.HasPrefix(strings.TrimSpace(line), "//")
+}
+
+// isASSUMEDMarker says whether a comment line FLAGS ITS OWN FIELD as assumed.
+//
+// It is deliberately not "any line that uses the word". dialect.go also says
+// "NOT ASSUMED" (ruling an assumption OUT) and carries narrative prose about
+// assumptions in general; neither names a field of this dialect as assumed,
+// so neither should have to anchor to one. Every field genuinely flagged in
+// that file does it one of two ways: the register's own opening word
+// ("// ASSUMED — ...") or a declarative "...ARE ASSUMED" / "...IS ASSUMED"
+// sentence. The comparisons are case-sensitive on purpose — lower-case
+// "assumed" in running prose is discussion, not a flag.
+func isASSUMEDMarker(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	if !strings.HasPrefix(trimmed, "//") || strings.Contains(line, "NOT ASSUMED") {
+		return false
+	}
+	return strings.HasPrefix(trimmed, "// ASSUMED") ||
+		strings.Contains(line, "ARE ASSUMED") ||
+		strings.Contains(line, "IS ASSUMED")
+}
+
+// unwrapComment joins a run of comment lines into one line of prose, so that
+// a quoted register name the comment happened to wrap across two lines is
+// still found by a plain substring search. The clarifier's marker wraps
+// exactly there.
+func unwrapComment(block []string) string {
+	parts := make([]string, 0, len(block))
+	for _, line := range block {
+		parts = append(parts, strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "//")))
+	}
+	return strings.Join(parts, " ")
 }
 
 // TestASSUMEDRegisterIsComplete holds doc.go's ASSUMED register and
-// dialect.go's ASSUMED markers to each other, and both to the table above.
+// dialect.go's ASSUMED markers to each other, and both to the two tables
+// above — registerEntryNames, the eleven names verbatim, and assumedRegister,
+// which says where each is used.
 //
 // THE FAILURE IT EXISTS TO CATCH is an assumption that travels
 // unregistered: a field marked ASSUMED in dialect.go with no register entry
@@ -1367,12 +1444,26 @@ func TestASSUMEDRegisterIsComplete(t *testing.T) {
 	}
 	section := string(rest[:end])
 
-	// Every bullet in the section, in order.
+	// Every bullet in the section, in order, UNWRAPPED. A bullet opens
+	// "//   - " and its continuation lines are indented five spaces, so a
+	// name quoted in registerEntryNames need not stop at whatever column the
+	// comment happened to wrap on — the clarifier's minus-byte name spans a
+	// wrap.
 	var bullets []string
 	for _, line := range strings.Split(section, "\n") {
-		if s, ok := strings.CutPrefix(line, "//   - "); ok {
-			bullets = append(bullets, s)
+		rest, ok := strings.CutPrefix(line, "//")
+		if !ok {
+			continue
 		}
+		switch {
+		case strings.HasPrefix(rest, "   - "):
+			bullets = append(bullets, strings.TrimSpace(rest[len("   - "):]))
+		case strings.HasPrefix(rest, "     ") && len(bullets) > 0:
+			bullets[len(bullets)-1] += " " + strings.TrimSpace(rest)
+		}
+	}
+	if len(registerEntryNames) != len(assumedRegister) {
+		t.Fatalf("registerEntryNames holds %d names and assumedRegister %d rows — the two are index-aligned, one row per name", len(registerEntryNames), len(assumedRegister))
 	}
 	if len(bullets) != len(assumedRegister) {
 		t.Fatalf("doc.go's ASSUMED register holds %d entries, this file's table holds %d — an entry added to one and not the other is exactly the drift this test exists to stop; the bullets are %q", len(bullets), len(assumedRegister), bullets)
@@ -1380,9 +1471,12 @@ func TestASSUMEDRegisterIsComplete(t *testing.T) {
 	if !strings.Contains(section, "ELEVEN members") || len(assumedRegister) != 11 {
 		t.Errorf("the register's prose says a count that no longer matches its %d entries — the sentence opening the section names the number out loud", len(assumedRegister))
 	}
-	for i, row := range assumedRegister {
-		if !strings.HasPrefix(bullets[i], row.Entry) {
-			t.Errorf("register entry %d opens %q, this file's table names it %q — entries are cited BY NAME, so the two spellings must match", i+1, bullets[i], row.Entry)
+	for i, name := range registerEntryNames {
+		if !strings.HasPrefix(bullets[i], name) {
+			t.Errorf("register entry %d opens %q, registerEntryNames spells it %q — the eleven names are quoted VERBATIM so that Stage 2's core/driver/ft991a can mirror them, and every citation of an entry is by name", i+1, bullets[i], name)
+		}
+		if cite := assumedRegister[i].Cite; cite == "" || !strings.HasPrefix(name, cite) {
+			t.Errorf("register entry %d is named %q but this file cites it as %q — a citation must be a prefix of the name, or it names something else", i+1, name, cite)
 		}
 	}
 
@@ -1401,77 +1495,124 @@ func TestASSUMEDRegisterIsComplete(t *testing.T) {
 		}
 	}
 
-	// The markers in dialect.go, each within reach of its own field. This
-	// walk also records, line by line, which lines fall in an anchor's reach
-	// — the reverse walk below uses that to catch the direction this one
-	// cannot: a field marked ASSUMED with no register entry.
+	// THE MARKERS IN dialect.go, MATCHED TO THE REGISTER BOTH WAYS AND BY
+	// NAME.
+	//
+	// The first form of this walk searched for the substring "ASSUMED"
+	// anywhere in a fixed fourteen-line window above each anchored field and
+	// marked the whole window covered. The Stage 1 task 7 review defeated it
+	// in both directions with reverted probes. Deleting the cat.ModeUnset
+	// marker outright still PASSED, because the window then reached narrative
+	// prose in modeNames' own doc comment that uses the word. And a bogus
+	// "// ASSUMED — the twelve-byte tag width is a guess nobody registered."
+	// planted above TagMaxBytes — a different, unregistered field — was
+	// SWALLOWED, because it fell inside the neighbouring anchor's window. A
+	// fixed window over a substring cannot do this job.
+	//
+	// This walk uses the FIELD'S OWN CONTIGUOUS COMMENT BLOCK — the run of
+	// whole-line comments immediately above the declaration, ending at the
+	// first line that is not one, so it can never reach the field above — and
+	// matches marker to entry by name:
+	//
+	//   - the block must hold EXACTLY ONE marker line;
+	//   - the block must quote the citation of EXACTLY ONE register entry,
+	//     and it must be this entry's;
+	//   - every marker line in the whole file must be one an entry claimed;
+	//   - and the file's marker count must equal the number of anchored
+	//     entries, which is what catches a second marker planted INSIDE a
+	//     registered field's own block, where the per-block checks alone
+	//     would take it for that field's.
+	//
+	// Both of the review's probes fail this walk.
 	lines := strings.Split(string(dialectSrc), "\n")
-	covered := make([]bool, len(lines))
+
+	var markers []int
+	for i, line := range lines {
+		if isASSUMEDMarker(line) {
+			markers = append(markers, i)
+		}
+	}
+	anchored := 0
 	for _, row := range assumedRegister {
+		if row.Anchor != "" {
+			anchored++
+		}
+	}
+	if len(markers) != anchored {
+		found := make([]string, 0, len(markers))
+		for _, i := range markers {
+			found = append(found, fmt.Sprintf("dialect.go:%d %s", i+1, strings.TrimSpace(lines[i])))
+		}
+		t.Errorf("dialect.go carries %d ASSUMED marker lines for %d anchored register entries — one marker per anchored entry and no others; the markers are:\n\t%s", len(markers), anchored, strings.Join(found, "\n\t"))
+	}
+
+	claimed := make(map[int]string, anchored)
+	for i, row := range assumedRegister {
+		name := registerEntryNames[i]
 		if row.Anchor == "" {
 			if row.Elsewhere == "" {
-				t.Errorf("register entry %q has neither a dialect.go anchor nor a statement of where it IS used", row.Entry)
+				t.Errorf("register entry %q has neither a dialect.go anchor nor a statement of where it IS used", name)
 			}
 			continue
 		}
 		at := -1
-		for i, line := range lines {
-			if strings.Contains(line, row.Anchor) && !strings.HasPrefix(strings.TrimSpace(line), "//") {
+		for j, line := range lines {
+			if strings.Contains(line, row.Anchor) && !isDialectComment(line) {
 				if at >= 0 {
-					t.Errorf("dialect.go declares %q more than once — this test cannot say which declaration the register entry %q means", row.Anchor, row.Entry)
+					t.Errorf("dialect.go declares %q more than once — this test cannot say which declaration the register entry %q means", row.Anchor, name)
 				}
-				at = i
+				at = j
 			}
 		}
 		if at < 0 {
-			t.Errorf("dialect.go has no declaration matching %q, which register entry %q names as its point of use", row.Anchor, row.Entry)
+			t.Errorf("dialect.go has no declaration matching %q, which register entry %q names as its point of use", row.Anchor, name)
 			continue
 		}
-		// The marker sits in the field's own comment, immediately above it or
-		// on the line itself. Fourteen lines is the longest such comment in
-		// this file; a wider window would start reaching the field above.
-		const window = 14
-		lo := at - window
-		if lo < 0 {
-			lo = 0
+
+		lo := at
+		for lo > 0 && isDialectComment(lines[lo-1]) {
+			lo--
 		}
-		if !strings.Contains(strings.Join(lines[lo:at+1], "\n"), "ASSUMED") {
-			t.Errorf("dialect.go's %q carries no ASSUMED marker within %d lines above it, but doc.go registers %q — a registered assumption with no marker at its point of use is one a later reader takes for a transcription", row.Anchor, window, row.Entry)
+		block := lines[lo:at]
+		var found []int
+		for j := lo; j < at; j++ {
+			if isASSUMEDMarker(lines[j]) {
+				found = append(found, j)
+			}
 		}
-		for i := lo; i <= at; i++ {
-			covered[i] = true
+		for _, j := range found {
+			claimed[j] = name
+		}
+		switch {
+		case len(found) == 0:
+			t.Errorf("dialect.go:%d %q carries NO ASSUMED marker in its own comment block (lines %d-%d), but doc.go registers %q — a registered assumption with no marker at its point of use is one a later reader takes for a transcription", at+1, row.Anchor, lo+1, at, name)
+		case len(found) > 1:
+			t.Errorf("dialect.go:%d %q has %d ASSUMED markers in its own comment block (lines %d-%d) — one field, one marker, one register entry", at+1, row.Anchor, len(found), lo+1, at)
+		}
+
+		// The block must NAME its entry, and only its entry. This is what
+		// makes the match a match rather than a coincidence of position: a
+		// marker that has drifted onto the wrong field still says which
+		// entry it belongs to, and says it in one place a reader can grep.
+		text := unwrapComment(block)
+		var cited []string
+		for k, other := range assumedRegister {
+			if strings.Contains(text, `"`+other.Cite+`"`) {
+				cited = append(cited, registerEntryNames[k])
+			}
+		}
+		if len(cited) != 1 || cited[0] != name {
+			t.Errorf("dialect.go:%d %q's own comment block (lines %d-%d) quotes %d register entry names %q — a marker is matched to its entry BY NAME, so the block must quote exactly one, %q", at+1, row.Anchor, lo+1, at, len(cited), cited, name)
 		}
 	}
 
-	// REVERSE WALK: every marker line in dialect.go must fall inside a window
-	// an anchor above claimed. A marker outside every window is a field the
-	// register does not know about — the M9d-1 shape (an assumption
-	// travelling unregistered) run the other way.
-	//
-	// A "marker line" flags its OWN field; it is not any line that merely
-	// uses the word. This file also says "NOT ASSUMED" (ruling an assumption
-	// OUT) and scoping prose for the whole struct — neither names a field of
-	// THIS dialect as assumed, so neither should have to anchor to one here.
-	// Every field genuinely flagged in this file does it one of two ways: the
-	// register's own opening word ("// ASSUMED — ...") or a declarative
-	// "…ARE ASSUMED" / "…IS ASSUMED" sentence; "NOT ASSUMED" is excluded
-	// because it says the opposite.
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if !strings.HasPrefix(trimmed, "//") {
-			continue
-		}
-		if strings.Contains(line, "NOT ASSUMED") {
-			continue
-		}
-		isMarker := strings.HasPrefix(trimmed, "// ASSUMED") ||
-			strings.Contains(line, "ARE ASSUMED") ||
-			strings.Contains(line, "IS ASSUMED")
-		if !isMarker {
-			continue
-		}
-		if !covered[i] {
-			t.Errorf("dialect.go:%d carries an ASSUMED marker outside every register entry's window: %q — an assumption travelling unregistered", i+1, trimmed)
+	// REVERSE WALK: every marker line must be one an anchored entry claimed.
+	// A marker in no registered field's block is a field the register does
+	// not know about — the M9d-1 shape (an assumption travelling
+	// unregistered) run the other way.
+	for _, i := range markers {
+		if _, ok := claimed[i]; !ok {
+			t.Errorf("dialect.go:%d carries an ASSUMED marker no register entry claims: %q — it is in no anchored field's own comment block, so it is an assumption travelling unregistered", i+1, strings.TrimSpace(lines[i]))
 		}
 	}
 }

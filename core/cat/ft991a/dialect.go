@@ -48,7 +48,8 @@ var modeNames = map[cat.Mode]string{
 	// ASSUMED — cat.ModeUnset ('0', "-") appears in NO FT-991A mode legend;
 	// all five run 1..9 then A..E. It is here because parsers must accept
 	// the placeholder: core/cat refuses to EMIT it in any Set frame, so its
-	// presence widens what this dialect can read and nothing else.
+	// presence widens what this dialect can read and nothing else. See
+	// doc.go's register, entry "THE cat.ModeUnset MEMBER OF THE MODE TABLE".
 	cat.ModeUnset: "-",
 
 	cat.Mode('1'): "LSB",
