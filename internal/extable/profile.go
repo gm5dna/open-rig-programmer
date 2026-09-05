@@ -113,6 +113,18 @@ const (
 	// refuses any other value rather than dropping it, for the reason
 	// AddressPair refuses a non-zero p3 — this form simply carries the rule
 	// one component further down.
+	//
+	// P1's WIDTH AND DOMAIN ARE A PER-FORM FACT, owned by the arms that
+	// implement the form and not by this constant: parseRecord's 0..99
+	// component cap (TestParseCSV_AddressSingleP1DomainIs0To99 pins it as
+	// this form's bound), ParseObservedCSV's exactly-two-digits column
+	// check, and RenderGo's "%02d" observation key. The last two are the
+	// two sides of one join and agree only while the domain is two digits,
+	// so a radio whose single menu number runs wider widens them together;
+	// widening one side alone makes every observation miss, on a complete
+	// CSV, silently. Recorded at the Stage 0 close, when no registration
+	// carried this form yet and neither observation path could run on a
+	// Single row.
 	AddressSingle
 )
 
