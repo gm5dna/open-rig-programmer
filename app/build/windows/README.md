@@ -24,11 +24,11 @@ architecture remain untried.
   discarded after the job, so it never needs restoring there.
 - `info.json`, `wails.exe.manifest` — Wails-generated installer/PE
   metadata; not touched by this milestone.
-- `icon.ico` — placeholder until P3. No lane hand-edits it. P3 deletes
-  it, lets Wails regenerate from the new `app/build/appicon.png`, and
-  — because the icon is compiled into both the installer and the GUI
-  PE — **rebuilds and re-checks the Windows artefacts** rather than
-  treating the icon change as docs-only.
+- `icon.ico` — the application icon, rendered from `app/build/appicon.svg`
+  by `scripts/render-icons.sh` (see `app/build/README.md`); do not
+  hand-edit it. Because the icon is compiled into both the installer and
+  the GUI PE, a change to it means **rebuilding and re-checking the
+  Windows artefacts**, never a docs-only commit.
 
 ## Ours
 

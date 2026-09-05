@@ -1945,7 +1945,7 @@ func TestResolveSnapshotDir_DefaultModelStaysAtRoot(t *testing.T) {
 // The expectation is built with filepath.Join, not spelt "/tmp/snaps/ftdx10":
 // the claim is "the slug is a child of the base", and the separator that
 // expresses it is the platform's (ResolveSnapshotDir joins,
-// wiring.go:1499). The _DefaultModelStaysAtRoot sibling keeps its
+// wiring.go:1599). The _DefaultModelStaysAtRoot sibling keeps its
 // literal: it pins that the base is returned VERBATIM, the same string
 // everywhere.
 func TestResolveSnapshotDir_OtherModelGetsSubdir(t *testing.T) {
