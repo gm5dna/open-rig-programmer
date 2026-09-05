@@ -296,8 +296,8 @@ var ErrSlotNotInSessionBanks = errors.New("ft891: slot did not answer this sessi
 // at Open, in flat contradiction of the very capabilities
 // (effectiveCapabilities' NoBlank banks) this session published. Before this
 // fix ReadChannel dispatched on sl.Is60m()/sl.IsEMG() alone, with no
-// membership check at all — see the RED-PROOF this type's own doc comment
-// on readDiscovered's call site records.
+// membership check at all — the RED-PROOF is recorded on
+// TestReadChannel_DiscoveredSlotOutsideSessionBanksIsRefusedLocally.
 //
 // NOT cat.ErrRejected: no "?;" was received, because nothing was sent.
 type SlotNotInSessionBanksError struct {

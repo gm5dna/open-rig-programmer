@@ -403,10 +403,10 @@ func baseCapabilities(memFields, pmsFields map[spec.Field]spec.FieldSupport) spe
 		// "ClarifierPolicy.StepHz = 10 AND ClarifierPolicy.MaxAbsHz = 9990"
 		// that write.go's buildWriteCommand already reads through
 		// catDialect.Clarifier() — a bound and its datum living in two
-		// places, able to drift silently if either changed alone). Now
-		// there is exactly ONE literal 9990/10 pair in this package: the
-		// dialect's, cited here and still deliberately not re-registered as
-		// this driver's own. THE MANUAL PRINTS 9999, not 9990, on every
+		// places, able to drift silently if either changed alone). This
+		// package now carries NO literal for the pair; the one literal is
+		// the dialect's (core/cat/ft891), cited here and still deliberately
+		// not re-registered as this driver's own. THE MANUAL PRINTS 9999, not 9990, on every
 		// block carrying the field (MR 967, MT 1003, MW 1040, IF 781, OI
 		// 1126) and states NO step anywhere; 9999 is not a multiple of the
 		// inherited 10, so 9990 is the largest multiple of the assumed step
