@@ -90,10 +90,11 @@ install); if it is missing, the installer is configured to download
 it, which needs an internet connection — the download path itself has
 not been tried. Tested on a Windows 11 ARM64 virtual machine with a
 real FT-710 attached (05/09/2026): installer, driver, GUI, CLI and two
-writes-then-restore all worked as described. **amd64 is built and its
-CLI run in CI only** — no amd64 Windows machine, physical or virtual,
-has run this project's code, and no physical Windows machine of either
-architecture has been tried. See
+writes-then-restore all worked as described. The amd64 builds are
+produced by the same pipeline on a Windows x64 host (GitHub's
+`windows-2025` runner) and the amd64 CLI has run there too — but **the
+amd64 GUI has never been launched by anyone**, and no physical Windows
+machine of either architecture has been tried. See
 [docs/windows-setup.md](docs/windows-setup.md) for the full picture.
 
 ## First use

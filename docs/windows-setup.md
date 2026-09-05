@@ -99,7 +99,32 @@ Windows Defender may also scan the download; it did not quarantine or
 block any binary this project ran that session — **confirmed, register
 entry W10, LIFTED**.
 
-## 4. Where things live
+## 4. The CLI zip
+
+The verification session above used the installer throughout, not the
+CLI zip — the three points below are **untested by this project**.
+
+A zip downloaded through a browser and extracted with Explorer marks
+the files it contains with the mark-of-the-web, the same zone
+information that triggers SmartScreen on the installer (§3 above); a
+`rigprog.exe` extracted that way may show the same "Windows protected
+your PC" dialogue on its first run, with the same **More info** → **Run
+anyway** remedy. If it does not appear, or you would rather avoid it,
+right-click the **zip** (before extracting) → **Properties** →
+**Unblock**, then extract.
+
+`rigprog.exe` is a console program: double-clicking it in Explorer
+opens and immediately closes a window, because there is no interactive
+session to hold it open. Run it from PowerShell or Windows Terminal
+instead — the same way the CLI is used from `C:\Program Files\Open Rig
+Programmer\` after an installer run.
+
+If Windows Update does not supply the CP210x driver (§1 above), Silicon
+Labs' driver downloads are at
+<https://www.silabs.com/developer-tools/usb-to-uart-bridge-vcp-drivers> —
+the "CP210x Universal Windows Driver" package.
+
+## 5. Where things live
 
 The installer (machine-scoped, admin required) puts everything under
 `C:\Program Files\Open Rig Programmer\`: `Open Rig Programmer.exe` (the
@@ -161,7 +186,7 @@ no `rigprog` process remained running
 `app/build/windows/README.md` for the uninstall Section's exact
 contents.
 
-## 5. Status
+## 6. Status
 
 **An ARM64 verification session has run** (05/09/2026): a Windows 11
 Pro ARM64 virtual machine (UTM, on this project's own macOS host), a
@@ -182,8 +207,9 @@ by the same session; **W5** is **observed (recorded only)** rather
 than lifted — the USB serial field stayed empty in the `probe` output
 on Windows, and no code change follows from that — see
 `docs/hardware-notes.md` for each. **W12** (the amd64 GUI, launched by
-a person) stays **ASSUMED**: no amd64 Windows machine, physical or
-virtual, has run this project's code.
+a person) stays **ASSUMED**: the amd64 CLI has run on a Windows x64
+host in CI (`rigprog.exe version` and `rigprog.exe ports`), but the
+amd64 GUI has never been launched by anyone.
 
 **Console output.** `rigprog.exe`'s prose uses em dashes; captured
 under a legacy console code page (as PowerShell's redirected output
@@ -191,10 +217,11 @@ was on the ARM64 VM) they render as `ÔÇö` rather than "—" — a code-page
 display quirk, not a difference in what the CLI printed. Run `chcp
 65001` first, or use Windows Terminal, to see them correctly.
 
-**What remains untried on Windows**: amd64 (built and CLI-run in CI
-only — no amd64 Windows machine has run this project's code, physical
-or virtual), Windows 10, and a physical Windows machine of either
-architecture. Everything above that is not qualified as ASSUMED is
+**What remains untried on Windows**: the amd64 GUI (the amd64 builds
+are produced by the same pipeline on a Windows x64 host and the amd64
+CLI runs there too, but its GUI has never been launched by anyone),
+Windows 10, and a physical Windows machine of either architecture.
+Everything above that is not qualified as ASSUMED is
 confirmed for the platform the 05/09/2026 session actually used —
 Windows 11 on ARM64, virtualised — and should not be read as a claim
 about amd64 or about a physical machine.
