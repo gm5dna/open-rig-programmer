@@ -245,10 +245,16 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	// this refusal stands under consent too.
 	//
 	// UNLIKE YAESU, THE WIRE FORM EXISTS ON THIS RADIO, IN TWO SHAPES —
-	// see ic7610/doc.go §7, ERASE, for the argument in full (this
-	// package's own doc.go has no numbered sections and does not restate
-	// it; the IC-7760 is the IC-7610's profile clone on exactly this
-	// ground) — and no builder for either exists in this tier.
+	// see ic7610/doc.go §7, ERASE, for the same argument written out in
+	// full against that radio's document (this package's own doc.go has
+	// no numbered sections and does not restate it; unlike the kinship
+	// claim OutOfDomainError's comment makes above, the IC-7610 is a
+	// SHAPE precedent only here, not shared ground —
+	// core/civ/ic7760/doc.go:17 keeps registration, transport AND erase
+	// outside this package's own profile). This radio's own evidence is
+	// matrix §3.13 and doc.go's assumption register
+	// (`ic7760-clear-scope`) — and no builder for either shape exists in
+	// this tier.
 	if ch.Data == nil {
 		return refused(ch.Slot, []spec.Field{spec.FieldErase},
 			"this radio's memory-clear forms are printed in its document but no IC-7760 has ever been asked to use one, so FieldErase carries the zero FieldSupport and consent structurally never reaches it (spec D4 \"Erase\"; matrix §3.13)")
