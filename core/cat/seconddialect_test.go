@@ -1871,11 +1871,33 @@ var numericPMSDialect = mustFixtureDialect(DialectConfig{
 // printed shape (S0.3) — its P8 legend prints "3: DCS ENC/DEC 4: DCS ENC"
 // on all five blocks that carry the field — and no registered dialect's.
 //
-// It varies ONE axis: its PMS form is the token one, so a DCS record built
-// or refused here cannot be numericPMSDialect's slot space doing the work.
-// Its slot space is otherwise FT-710-shaped, because the properties this
-// fixture has to satisfy are the ordinary build/parse/gate ones and a
-// fixture with nothing to write would exercise none of them.
+// The AXIS it varies is the tone one: its PMS form is the token one, so a
+// DCS record built or refused here cannot be numericPMSDialect's slot space
+// doing the work. Its slot space is otherwise FT-710-shaped, because the
+// properties this fixture has to satisfy are the ordinary build/parse/gate
+// ones and a fixture with nothing to write would exercise none of them.
+//
+// ITS MT FORM IS THE COMBINED ONE, and that is not a second axis — it is
+// what makes the first axis visible at the SECOND gate site. P8 is checked
+// in two independent places, validateMWFields (mw.go) and
+// validateCombinedMTFields (mtcombined.go), and only a dialect that reaches
+// BOTH can tell a widened site from an unwidened one. Whilst this fixture
+// was MTFormShort the combined site had no in-package witness at all:
+// reverting mtcombined.go's d.ParseCTCSSState to the package-level function
+// left the whole of core/cat green and only core/cat/dialecttest complained,
+// measured by the adversarial review as finding MEDIUM-1.
+// TestToneStates_FiveStateCombinedFormBuildsADCSRecord (tonestates_test.go)
+// is the witness, and it asserts this form and P11 policy before it asserts
+// anything else.
+//
+// P11Fixed rather than P11TagDisplay because the display-less builder pair
+// is the one whose refusal leg TestToneStates_ADCSRecordCannotBeBuilt walks;
+// combinedTagDisplayDialect already carries the flag reading.
+//
+// Its tag geometry — 8 bytes filled with '-' — disagrees with all three
+// combined fixtures above (6/' ', 12/'_', 9/'.') on both dimensions the
+// combined record derives from its receiver, for the reason combinedDialect's
+// own comment gives.
 var dcsStatesDialect = mustFixtureDialect(DialectConfig{
 	CATID:     "0671",
 	ModeNames: map[Mode]string{ModeUnset: "-", ModeUSB: "USB-DCS", ModeLSB: "LSB-DCS"},
@@ -1891,8 +1913,9 @@ var dcsStatesDialect = mustFixtureDialect(DialectConfig{
 	EXItems:       nil,
 	EXAddressForm: EXAddressTriple,
 	MT: MTPolicy{
-		Form: MTFormShort, ReadSlots: MTReadsReadable,
-		TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' ',
+		Form: MTFormCombined, ReadSlots: MTReadsReadable,
+		P11:         P11Fixed,
+		TagMaxBytes: 8, TagFill: '-',
 	},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MemoryP5:    P5TxClar,

@@ -145,7 +145,21 @@ func TestCTCSSState_DCSMembers(t *testing.T) {
 // past the gate either. Widening only the codec's parse site would have let
 // a MemoryData{CTCSS: CTCSSState('3')} be built and admitted for an FTdx10,
 // FTdx101D/MP, FT-891 or FT-710, whose manuals print P8 0/1/2 only.
+//
+// EVERY refusal leg NAMES THE FIELD it refuses on, and the combined legs are
+// COUNTED. Merely asserting err != nil made the combined leg vacuous on
+// eleven of the thirteen fixtures — ten refuse at the builder's form check
+// ("combined-form Set called on a MTFormShort dialect") and one at its P11
+// check, neither of which is about P8 at all, and any error passed. The
+// adversarial review measured that (finding MEDIUM-1); dialectvalidate.go's
+// own rule — a refusal must name what it refuses on — is the standard
+// TestV15_PMSFormRefusals already holds this lane to.
 func TestToneStates_ADCSRecordCannotBeBuilt(t *testing.T) {
+	// Counted across the whole walk, asserted after it: how many times a
+	// combined-form builder reached the P8 validator and refused there. Zero
+	// would mean this test says nothing about mtcombined.go's gate site, and
+	// no arrangement of fixtures may leave it silent.
+	combinedP8Refusals := 0
 	for _, nd := range allTestDialects() {
 		t.Run(nd.name, func(t *testing.T) {
 			d := nd.dia
@@ -167,10 +181,41 @@ func TestToneStates_ADCSRecordCannotBeBuilt(t *testing.T) {
 				}
 				if _, err := d.BuildMWSet(m); err == nil {
 					t.Errorf("BuildMWSet built an MW frame carrying P8 %q", state.Wire())
+				} else if !strings.Contains(err.Error(), "CTCSS field (P8)") {
+					t.Errorf("BuildMWSet refused P8 %q with %q, which does not name the field — a refusal for some other reason proves nothing here", state.Wire(), err)
 				}
 				m.Kind = CombinedMTSetKind
-				if _, err := d.BuildMTSetCombined(m, "TAG"); err == nil {
-					t.Errorf("BuildMTSetCombined built a combined MT frame carrying P8 %q", state.Wire())
+				// The combined builder pair is selected by this dialect's own
+				// P11 policy, exactly as mtcombined_test.go's walk selects it:
+				// under P11TagDisplay the display-less builder refuses before
+				// it ever reaches a field validator, so calling it there would
+				// be a refusal about the API, not about P8.
+				switch {
+				case d.mt.Form != MTFormCombined:
+					// A short-form dialect has no combined gate site to reach.
+					// Its refusal must be the FORM one and nothing else, so
+					// that this leg cannot pass on an unrelated error.
+					if _, err := d.BuildMTSetCombined(m, "TAG"); err == nil {
+						t.Errorf("BuildMTSetCombined built a combined MT frame on a %v dialect", d.mt.Form)
+					} else if !strings.Contains(err.Error(), "combined-form Set called on a") {
+						t.Errorf("BuildMTSetCombined on a %v dialect refused with %q, want the form refusal", d.mt.Form, err)
+					}
+				case d.mt.P11 == P11TagDisplay:
+					if _, err := d.BuildMTSetCombinedDisplay(m, "TAG", false); err == nil {
+						t.Errorf("BuildMTSetCombinedDisplay built a combined MT frame carrying P8 %q", state.Wire())
+					} else if !strings.Contains(err.Error(), "CTCSS field (P8)") {
+						t.Errorf("BuildMTSetCombinedDisplay refused P8 %q with %q, which does not name the field", state.Wire(), err)
+					} else {
+						combinedP8Refusals++
+					}
+				default:
+					if _, err := d.BuildMTSetCombined(m, "TAG"); err == nil {
+						t.Errorf("BuildMTSetCombined built a combined MT frame carrying P8 %q", state.Wire())
+					} else if !strings.Contains(err.Error(), "CTCSS field (P8)") {
+						t.Errorf("BuildMTSetCombined refused P8 %q with %q, which does not name the field", state.Wire(), err)
+					} else {
+						combinedP8Refusals++
+					}
 				}
 				// The gate, against a frame forged whole. It is built by
 				// splicing the state byte into a frame this same dialect
@@ -192,6 +237,14 @@ func TestToneStates_ADCSRecordCannotBeBuilt(t *testing.T) {
 				}
 			}
 		})
+	}
+	// Three combined-form three-state fixtures × two DCS states: six. The
+	// bound is stated as "> 0" rather than "== 6" because a lane that adds a
+	// combined fixture should not have to edit an arithmetic constant here;
+	// what must never happen is the count reaching zero, which is exactly the
+	// state this test was in before finding MEDIUM-1.
+	if combinedP8Refusals == 0 {
+		t.Error("no combined-form builder reached the P8 validator: this test asserts nothing about mtcombined.go's gate site, which is the vacuity finding MEDIUM-1 recorded")
 	}
 }
 
@@ -228,6 +281,56 @@ func TestToneStates_FiveStateDialectBuildsAndParsesADCSRecord(t *testing.T) {
 	}
 	if back.CTCSS != CTCSSDCSEncDec {
 		t.Errorf("ParseMRAnswer round-tripped P8 as %v, want %v", back.CTCSS, CTCSSDCSEncDec)
+	}
+}
+
+// TestToneStates_FiveStateCombinedFormBuildsADCSRecord is the SAME
+// direction through the OTHER builder, and it is the only thing in this
+// package that can see the combined-MT gate site at all.
+//
+// validateCombinedMTFields consults d.ParseCTCSSState independently of
+// validateMWFields, so the two sites are two decisions. The REFUSAL
+// direction cannot tell them apart: on a three-state dialect
+// d.ParseCTCSSState delegates to the package-level ParseCTCSSState
+// verbatim, so a combined-MT site reverted to the package function refuses
+// '3' exactly as before and TestToneStates_ADCSRecordCannotBeBuilt stays
+// green. Only a FIVE-STATE combined-form dialect distinguishes them: the
+// reverted site refuses a state its own legend prints, and this test goes
+// red. The adversarial review measured that gap (finding MEDIUM-1) —
+// before dcsStatesDialect became a combined-form fixture, reverting
+// mtcombined.go's gate left the whole of core/cat green and only
+// core/cat/dialecttest complained.
+func TestToneStates_FiveStateCombinedFormBuildsADCSRecord(t *testing.T) {
+	d := dcsStatesDialect
+	if d.mt.Form != MTFormCombined || d.mt.P11 != P11Fixed {
+		t.Fatalf("dcsStatesDialect is %v/%v, want MTFormCombined/P11Fixed — this test proves nothing about the combined-MT gate otherwise", d.mt.Form, d.mt.P11)
+	}
+	slot, err := d.MemorySlot(1)
+	if err != nil {
+		t.Fatalf("MemorySlot(1): %v", err)
+	}
+	for _, state := range []CTCSSState{CTCSSDCSEncDec, CTCSSDCSEnc} {
+		m := MemoryData{
+			Slot: slot, FreqHz: 14250000, Mode: ModeUSB,
+			Kind: CombinedMTSetKind, CTCSS: state, Shift: ShiftSimplex,
+		}
+		cmd, err := d.BuildMTSetCombined(m, "TAG")
+		if err != nil {
+			t.Fatalf("BuildMTSetCombined with P8 %q on a five-state dialect: %v", state.Wire(), err)
+		}
+		if !d.AllowedCommand(cmd.Bytes()) {
+			t.Fatalf("its own gate refused its own combined MT frame %q", cmd.Bytes())
+		}
+		back, tag, err := d.ParseMTAnswerCombined(cmd.Bytes())
+		if err != nil {
+			t.Fatalf("ParseMTAnswerCombined(%q): %v", cmd.Bytes(), err)
+		}
+		if back.CTCSS != state {
+			t.Errorf("ParseMTAnswerCombined round-tripped P8 as %v, want %v", back.CTCSS, state)
+		}
+		if tag != "TAG" {
+			t.Errorf("ParseMTAnswerCombined returned tag %q, want %q", tag, "TAG")
+		}
 	}
 }
 
