@@ -599,7 +599,7 @@ func TestWriteChannel_RealHardwareProfileRefusesEveryRequestedField(t *testing.T
 	}
 }
 
-// tierFieldsInOrder is the Icom tier's ten spec.Fields in ChannelData's
+// tierFieldsInOrder is the Icom tier's SEVENTEEN spec.Fields in ChannelData's
 // declaration order — the order codeplug's tierAddedFieldFor uses and the
 // order requestedFields must append them in.
 //
@@ -620,13 +620,21 @@ func tierFieldsInOrder() []spec.Field {
 		spec.FieldDTCSPolarity,
 		spec.FieldFilter,
 		spec.FieldDataMode,
+		spec.FieldTuningStepEnabled,
+		spec.FieldTuningStep,
+		spec.FieldProgramTuningStep,
+		spec.FieldAttenuator,
+		spec.FieldPreamp,
+		spec.FieldAntenna,
+		spec.FieldIPPlus,
 	}
 }
 
-// withEveryTierFieldKnown marks all ten tier fields Known on data. The
-// values are arbitrary and never reach a wire — this driver's capability
-// map has no entry for any of the ten, so the gate refuses them all — but
-// the STATE is what requestedFields keys on, so it must be Known.
+// withEveryTierFieldKnown marks all SEVENTEEN tier fields Known on data.
+// The values are arbitrary and never reach a wire — this driver's capability
+// map has no entry for any of the seventeen, so the gate refuses them all,
+// and the vocabulary-keyed ones are refused a rung earlier still — but the
+// STATE is what requestedFields keys on, so it must be Known.
 func withEveryTierFieldKnown(data codeplug.ChannelData) codeplug.ChannelData {
 	data.TxFreqHz = codeplug.FreqField{State: codeplug.Known, Value: 14_255_000}
 	data.Duplex = codeplug.StringField{State: codeplug.Known, Value: "DUP+"}
@@ -638,6 +646,13 @@ func withEveryTierFieldKnown(data codeplug.ChannelData) codeplug.ChannelData {
 	data.DTCSPolarity = codeplug.StringField{State: codeplug.Known, Value: "NN"}
 	data.Filter = codeplug.StringField{State: codeplug.Known, Value: "FIL1"}
 	data.DataMode = codeplug.BoolField{State: codeplug.Known, Value: true}
+	data.TuningStepEnabled = codeplug.BoolField{State: codeplug.Known, Value: true}
+	data.TuningStep = codeplug.StringField{State: codeplug.Known, Value: "5"}
+	data.ProgramTuningStepHz = codeplug.FreqField{State: codeplug.Known, Value: 5000}
+	data.AttenuatorDB = codeplug.IntField{State: codeplug.Known, Value: 20}
+	data.Preamp = codeplug.StringField{State: codeplug.Known, Value: "1"}
+	data.Antenna = codeplug.StringField{State: codeplug.Known, Value: "ANT1"}
+	data.IPPlus = codeplug.BoolField{State: codeplug.Known, Value: true}
 	return data
 }
 
@@ -893,9 +908,10 @@ func TestRequestedFields_MembershipAndOrder(t *testing.T) {
 			want: append(append([]spec.Field{}, base...), spec.FieldTxFrequency),
 		},
 		{
-			// The tier ten never displace the pre-tier three: tag_display is
-			// still seventh, tone eighth, skip ninth, and the ten follow.
-			name: "all three pre-tier conditionals and all ten tier fields, in order",
+			// The tier seventeen never displace the pre-tier three:
+			// tag_display is still seventh, tone eighth, skip ninth, and the
+			// seventeen follow.
+			name: "all three pre-tier conditionals and all seventeen tier fields, in order",
 			data: withEveryTierFieldKnown(codeplug.ChannelData{
 				TagDisplay: known(true),
 				CTCSSTone:  codeplug.ToneField{State: codeplug.Known, Value: 670},
@@ -906,9 +922,9 @@ func TestRequestedFields_MembershipAndOrder(t *testing.T) {
 				tierFieldsInOrder()...),
 		},
 		{
-			// The ten alone, with every pre-tier conditional absent: the
-			// declaration order is visible with nothing in front of it.
-			name: "the ten tier fields alone keep ChannelData's declaration order",
+			// The seventeen alone, with every pre-tier conditional absent:
+			// the declaration order is visible with nothing in front of it.
+			name: "the seventeen tier fields alone keep ChannelData's declaration order",
 			data: withEveryTierFieldKnown(codeplug.ChannelData{}),
 			want: append(append([]spec.Field{}, base...), tierFieldsInOrder()...),
 		},
@@ -916,6 +932,154 @@ func TestRequestedFields_MembershipAndOrder(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := requestedFields(tt.data); !slices.Equal(got, tt.want) {
 				t.Errorf("requestedFields = %v, want %v", got, tt.want)
+			}
+		})
+	}
+	// The write-gate sweep's item (g): the tier list must be exactly the
+	// tail spec.AllFields() carries after the ten pre-tier fields, in the
+	// same order — the FT-891's own pin, mirrored here because this driver
+	// carried the identical ten-entry gap.
+	//
+	// codeplug's tierAddedFieldFor is unexported, so this table cannot
+	// import it, and codeplug offers no exported enumeration bound to
+	// ChannelData's tier fields either. The fallback is to derive the same
+	// seventeen INDEPENDENTLY from an exported enumeration built from the
+	// very same spec.Field constants tierAddedFieldFor's own table is built
+	// from, and require exact membership and order against it. A tier field
+	// this table forgets to mirror — or that codeplug gains and this one
+	// does not — fails HERE rather than passing silently until a caller
+	// hits the hole.
+	t.Run("the seventeen are exactly spec.AllFields()'s tier-added tail", func(t *testing.T) {
+		preTier := []spec.Field{
+			spec.FieldFrequency, spec.FieldMode, spec.FieldClarifier,
+			spec.FieldCTCSSState, spec.FieldCTCSSTone, spec.FieldShift,
+			spec.FieldTag, spec.FieldTagDisplay, spec.FieldScanSkip,
+			spec.FieldErase,
+		}
+		all := spec.AllFields()
+		if len(all) < len(preTier) || !slices.Equal(all[:len(preTier)], preTier) {
+			t.Fatalf("spec.AllFields() = %v, want it to start with the ten pre-tier fields %v — this test's derivation assumes that prefix", all, preTier)
+		}
+		wantTier := all[len(preTier):]
+
+		gotTier := make([]spec.Field, len(tierRequestedFields))
+		for i, tr := range tierRequestedFields {
+			gotTier[i] = tr.field
+		}
+		if !slices.Equal(gotTier, wantTier) {
+			t.Errorf("tierRequestedFields names\n %v\nbut spec.AllFields() carries the tier-added\n %v\n(the two must be the same seventeen fields in the same order)", gotTier, wantTier)
+		}
+		// And the hand-written expectation this file's other rows are built
+		// from must agree with the same derivation, or those rows would be
+		// asserting requestedFields against its own echo.
+		if !slices.Equal(tierFieldsInOrder(), wantTier) {
+			t.Errorf("tierFieldsInOrder() = %v, want spec.AllFields()'s tier-added tail %v", tierFieldsInOrder(), wantTier)
+		}
+	})
+}
+
+// TestWriteChannel_KnownD8TierFieldsRefusedBeforeWire is the write-gate
+// sweep's item (g): the SEVEN receiver-tier fields the D8 wave added
+// (TuningStepEnabled through IPPlus) reach the gate like the D4 ten, one row
+// each.
+//
+// THE GAP THIS CLOSES. tierRequestedFields carried only the D4 ten —
+// codeplug's own tierAddedFieldFor has carried seventeen since the D8 wave —
+// so a channel with a Known TuningStep, Preamp or Antenna was written with
+// the value silently DROPPED from the frame: requestedFields never named it,
+// so the capability gate was never asked, and this radio's combined MT record
+// has no position for any of them. That is a breach of "an omitted config
+// semantic is REFUSED, never defaulted", and it is the same gap the FT-891's
+// HIGH-1 measured.
+//
+// WHICH RUNG ANSWERS depends on the field's TYPE, and both answers are
+// pinned here because both are correct refusals of the same channel:
+//
+//   - a StringField or IntField (TuningStep, Attenuator, Preamp, Antenna) is
+//     judged against THIS RADIO'S OWN vocabulary or table by the FieldState
+//     walk one rung above, and every Icom-tier vocabulary in this driver's
+//     capabilities is EMPTY, which fails closed for a Known value;
+//   - a BoolField or FreqField (TuningStepEnabled, ProgramTuningStep,
+//     IPPlus) has no vocabulary to fail against, so the CAPABILITY GATE
+//     answers — and that is the rung tierRequestedFields feeds. Those three
+//     rows are this test's direct red-proof: remove the matching
+//     tierRequestedFields entry and the write succeeds, frame and all.
+//
+// The four vocabulary-keyed entries are red-proved instead by
+// TestRequestedFields_MembershipAndOrder, whose "the seventeen are exactly
+// spec.AllFields()'s tier-added tail" subtest and whose all-seventeen rows
+// both fail on a removed entry.
+func TestWriteChannel_KnownD8TierFieldsRefusedBeforeWire(t *testing.T) {
+	p, sess := openSession(t, Simulated, slotImage{})
+
+	for _, tt := range []struct {
+		name   string
+		mutate func(*codeplug.ChannelData)
+		field  spec.Field
+		reason string
+	}{
+		{
+			name: "TuningStepEnabled",
+			mutate: func(d *codeplug.ChannelData) {
+				d.TuningStepEnabled = codeplug.BoolField{State: codeplug.Known, Value: true}
+			},
+			field:  spec.FieldTuningStepEnabled,
+			reason: "not write-Supported for this session",
+		},
+		{
+			name:   "TuningStep",
+			mutate: func(d *codeplug.ChannelData) { d.TuningStep = codeplug.StringField{State: codeplug.Known, Value: "5"} },
+			field:  spec.FieldTuningStep,
+			reason: "not one of this radio's values",
+		},
+		{
+			name: "ProgramTuningStep",
+			mutate: func(d *codeplug.ChannelData) {
+				d.ProgramTuningStepHz = codeplug.FreqField{State: codeplug.Known, Value: 5000}
+			},
+			field:  spec.FieldProgramTuningStep,
+			reason: "not write-Supported for this session",
+		},
+		{
+			name:   "Attenuator",
+			mutate: func(d *codeplug.ChannelData) { d.AttenuatorDB = codeplug.IntField{State: codeplug.Known, Value: 20} },
+			field:  spec.FieldAttenuator,
+			reason: "not one of this radio's values",
+		},
+		{
+			name:   "Preamp",
+			mutate: func(d *codeplug.ChannelData) { d.Preamp = codeplug.StringField{State: codeplug.Known, Value: "1"} },
+			field:  spec.FieldPreamp,
+			reason: "not one of this radio's values",
+		},
+		{
+			name:   "Antenna",
+			mutate: func(d *codeplug.ChannelData) { d.Antenna = codeplug.StringField{State: codeplug.Known, Value: "ANT1"} },
+			field:  spec.FieldAntenna,
+			reason: "not one of this radio's values",
+		},
+		{
+			name:   "IPPlus",
+			mutate: func(d *codeplug.ChannelData) { d.IPPlus = codeplug.BoolField{State: codeplug.Known, Value: true} },
+			field:  spec.FieldIPPlus,
+			reason: "not write-Supported for this session",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ch := writableChannel("010")
+			tt.mutate(ch.Data)
+
+			before := len(p.Transcript())
+			wre := refusedFields(t, sess, ch)
+
+			if !slices.Contains(wre.Fields, tt.field) {
+				t.Errorf("WriteRefusedError.Fields = %v, want %s named — a Known value this record cannot express must be REFUSED naming the field, never dropped", wre.Fields, tt.field)
+			}
+			if !strings.Contains(wre.Reason, tt.reason) {
+				t.Errorf("WriteRefusedError.Reason = %q, want it to contain %q", wre.Reason, tt.reason)
+			}
+			if got := p.Transcript(); len(got) != before {
+				t.Errorf("a refused WriteChannel sent %d frames (%q), want 0 — the refusal must precede ALL wire traffic", len(got)-before, got[before:])
 			}
 		})
 	}
