@@ -323,6 +323,15 @@ func TestCommandNamesAreAcceptedInEitherCase(t *testing.T) {
 
 // TestUnknownCommandIsRejected: every command this fake does not serve draws
 // the one unattributed NAK (590:93-108).
+//
+// TWO OF THE ENTRIES BELOW ARE DIFFERENT KINDS OF THING, and the difference
+// matters. "TY;" is a command this book does not contain at all — it is the
+// TS-480's microprocessor-type read (480:1626-1629), and the probe sends it
+// only to a radio that answered ID "020" — so refusing it is what a real
+// TS-590 must do and is a fact about the radio. "FA;" and "IF;" ARE printed
+// here (590:959, 590:1128) and are simply not modelled: no layer above this
+// fake sends either, and refusing them is this package's unknown-command
+// path, not a claim about the radio.
 func TestUnknownCommandIsRejected(t *testing.T) {
 	_, conn := newTestRadio(t, RowSG)
 	for _, send := range []string{"XX;", "FA;", "IF;", ";", "M;", "TY;"} {
@@ -339,6 +348,104 @@ func TestEX_IsNotModelledYet(t *testing.T) {
 	_, conn := newTestRadio(t, RowSG)
 	for _, send := range []string{"EX;", "EX0000000;", "EX0000000 1;"} {
 		assertRejected(t, conn, send)
+	}
+}
+
+// --- The two serial-line tokens, and the transient "?;" (590:93-113) ---
+
+// TestWithStreamError_ReplacesThatExchangesReply pins both tokens, in both
+// places a driver can meet them: instead of an ANSWER, and instead of a
+// fire-and-forget silence. They are not command outcomes — "E;" is a
+// communication error such as an overrun or framing error (590:110-112) and
+// "O;" a receive buffer overrun (590:113) — so they replace whatever the
+// exchange would have produced.
+func TestWithStreamError_ReplacesThatExchangesReply(t *testing.T) {
+	for _, tt := range []struct {
+		kind StreamError
+		want string
+	}{
+		{StreamErrorE, "E;"},
+		{StreamErrorO, "O;"},
+	} {
+		t.Run(tt.want, func(t *testing.T) {
+			// In place of an answer.
+			_, conn := newTestRadio(t, RowSG, WithStreamError(tt.kind, 1))
+			if got := exchange(t, conn, "ID;"); got != tt.want {
+				t.Errorf("ID; -> %q, want %q", got, tt.want)
+			}
+			// The next exchange is untouched.
+			if got, want := exchange(t, conn, "ID;"), "ID023;"; got != want {
+				t.Errorf("the second ID; -> %q, want the ordinary %q", got, want)
+			}
+
+			// In place of a fire-and-forget silence: the AI Set at exchange
+			// 2 answers nothing on an ordinary radio.
+			_, conn2 := newTestRadio(t, RowSG, WithStreamError(tt.kind, 2))
+			if got, want := exchange(t, conn2, "ID;"), "ID023;"; got != want {
+				t.Fatalf("exchange 1 -> %q, want %q", got, want)
+			}
+			if got := exchange(t, conn2, "AI0;"); got != tt.want {
+				t.Errorf("the silent AI0; at exchange 2 -> %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestWithStreamError_RefusesAnUnsetTokenOrAZeroExchange: the two tokens have
+// different printed causes (590:110-113), so a scripted fault that defaulted
+// to one of them would put a test on the wrong sentence of the book.
+func TestWithStreamError_RefusesAnUnsetTokenOrAZeroExchange(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		call func()
+	}{
+		{"the unset token", func() { _ = New(RowSG, WithStreamError(StreamErrorUnset, 1)) }},
+		{"exchange 0", func() { _ = New(RowSG, WithStreamError(StreamErrorE, 0)) }},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			defer func() {
+				if recover() == nil {
+					t.Error("accepted, want a panic")
+				}
+			}()
+			tt.call()
+		})
+	}
+}
+
+// TestWithTransientNAKSuppressed_DropsTheNAKAndNothingElse plays the Note
+// printed under the "?;" row itself: "Occasionally, this message may not
+// appear due to microprocessor transients in the transceiver."
+// (590:106-108). A Kenwood host therefore cannot read silence as "the radio
+// did not refuse" — a timeout and a rejection are the same event seen twice —
+// and this option is what lets a driver's typed read failure be pinned
+// against that branch through a real fake.
+//
+// Answers and accepted Sets are untouched: the sentence is about the "?;"
+// message alone.
+func TestWithTransientNAKSuppressed_DropsTheNAKAndNothingElse(t *testing.T) {
+	_, conn := newTestRadio(t, RowSG, WithTransientNAKSuppressed())
+
+	writeFrame(t, conn, "XX;")
+	assertNoReply(t, conn)
+
+	if got, want := exchange(t, conn, "ID;"), "ID023;"; got != want {
+		t.Errorf("ID; -> %q, want the untouched %q", got, want)
+	}
+	writeFrame(t, conn, "AI0;")
+	assertNoReply(t, conn)
+	if got, want := exchange(t, conn, "AI;"), "AI0;"; got != want {
+		t.Errorf("AI; -> %q, want %q — an accepted Set is not affected", got, want)
+	}
+}
+
+// TestWithStreamError_IsNotSuppressedByTheTransientOption: the transient note
+// is about "?;" and says nothing about the two serial-line tokens, so a
+// composition of the two options must still put "E;" on the wire.
+func TestWithStreamError_IsNotSuppressedByTheTransientOption(t *testing.T) {
+	_, conn := newTestRadio(t, RowSG, WithTransientNAKSuppressed(), WithStreamError(StreamErrorE, 1))
+	if got, want := exchange(t, conn, "XX;"), "E;"; got != want {
+		t.Errorf("XX; -> %q, want %q", got, want)
 	}
 }
 
