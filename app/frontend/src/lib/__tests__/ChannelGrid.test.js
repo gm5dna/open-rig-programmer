@@ -1603,6 +1603,35 @@ describe('tier-column editing', () => {
 		expect(updateChannel).not.toHaveBeenCalled()
 	})
 
+	// A KNOWN-ZERO commit is the mirror of the test above (fix round 2,
+	// MED-3): fix round 1 made a Known-zero cell OPEN on zero, but the
+	// unchanged-skip in commitTierTextEditor still compared the field's
+	// raw (omitted) `value` against the parser's `0`, so an untouched
+	// Enter on such a cell sent a redundant UpdateChannel — and
+	// app/codeplug.go's applyEditsLocked marks the working copy dirty
+	// unconditionally, so merely opening and closing a Known-zero
+	// attenuator or offset cell looked like an edit that changed nothing.
+	it('an unchanged KNOWN-ZERO commit is skipped (no call) — fix round 2, MED-3', async () => {
+		appState.setCodeplug({
+			Schema: 1,
+			Generator: 'test',
+			Radio: { model: 'IC-R8600', cat_id: '96', read_at: null, region: 'GB' },
+			Channels: [{ slot: ROW, data: tierData({ attenuator: { state: 'known' } }) }],
+			WorkingPath: '',
+			Dirty: false,
+			BaselineStale: false,
+		})
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, ATTENUATOR)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+
+		const input = screen.getByRole('textbox', { name: `Attenuator (dB), ${ROW}` })
+		expect(input).toHaveValue('0') // opens on the zero the field is missing (fix round 1, MED-1)
+		await fireEvent.keyDown(input, { key: 'Enter' })
+		expect(updateChannel).not.toHaveBeenCalled()
+	})
+
 	it('an ABSENT cell — Go’s {"state": ""} — edits exactly as an unanswered one does', async () => {
 		appState.setCodeplug({
 			Schema: 1,
