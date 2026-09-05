@@ -64,7 +64,7 @@ func TestLayouts_AreConfiguredAndNamedPerRow(t *testing.T) {
 	}
 }
 
-// TestLayoutConfig_HasExactlyNineComparedAxes makes "nine axes" a fact
+// TestLayoutConfig_HasExactlyTenComparedAxes makes "ten axes" a fact
 // rather than a habit (T8 review LOW-4). kw.LayoutConfig's Book and Model
 // fields are never compared as an axis — they are the row's own identity,
 // not a fact about the memory grid — so the compared-axis count is
@@ -72,24 +72,24 @@ func TestLayouts_AreConfiguredAndNamedPerRow(t *testing.T) {
 // THIS test fails first, before the silently-short lists it names: the
 // two lists below (share/differ), core/kw/ts480/layout_test.go's
 // TestLayout_EveryAxisByValue, and core/kw/layout_test.go's
-// TestNewLayout_RefusesAnUnsetAxis (which walks all eleven fields,
+// TestNewLayout_RefusesAnUnsetAxis (which walks all twelve fields,
 // Book and Model included).
-func TestLayoutConfig_HasExactlyNineComparedAxes(t *testing.T) {
+func TestLayoutConfig_HasExactlyTenComparedAxes(t *testing.T) {
 	const bookAndModel = 2 // identity fields, never compared as an axis
-	if got := reflect.TypeOf(kw.LayoutConfig{}).NumField() - bookAndModel; got != 9 {
-		t.Fatalf("kw.LayoutConfig has %d compared axes (NumField()-%d), want 9 — a field was added or removed; update TestLayouts_TheAxesTheTwoRowsShare and TestLayouts_TheTwoAxesTheRowsDifferOn in this file, core/kw/ts480/layout_test.go's TestLayout_EveryAxisByValue, and core/kw/layout_test.go's TestNewLayout_RefusesAnUnsetAxis for the new one", got, bookAndModel)
+	if got := reflect.TypeOf(kw.LayoutConfig{}).NumField() - bookAndModel; got != 10 {
+		t.Fatalf("kw.LayoutConfig has %d compared axes (NumField()-%d), want 10 — a field was added or removed; update TestLayouts_TheAxesTheTwoRowsShare and TestLayouts_TheThreeAxesTheRowsDifferOn in this file, core/kw/ts480/layout_test.go's TestLayout_EveryAxisByValue, and core/kw/layout_test.go's TestNewLayout_RefusesAnUnsetAxis for the new one", got, bookAndModel)
 	}
 }
 
 // TestLayouts_TheAxesTheTwoRowsShare pins the agreement side.
 //
-// SEVEN OF THE NINE AXES ARE THE BOOK'S, not the row's: one document
+// SEVEN OF THE TEN AXES ARE THE BOOK'S, not the row's: one document
 // (590:*) prints one 50-byte grid, one MD legend and one hard-wired byte
 // set for both radios, so a difference appearing on any of these would be a
 // transcription error rather than a discovery. Stating the agreement is what
-// makes the two-item disagreement list below exhaustive rather than
-// approximate. TestLayoutConfig_HasExactlyNineComparedAxes above is what
-// makes "nine" itself a fact.
+// makes the three-item disagreement list below exhaustive rather than
+// approximate. TestLayoutConfig_HasExactlyTenComparedAxes above is what
+// makes "ten" itself a fact.
 func TestLayouts_TheAxesTheTwoRowsShare(t *testing.T) {
 	s, sg := ts590.LayoutS(), ts590.LayoutSG()
 
@@ -151,10 +151,10 @@ func TestLayouts_TheAxesTheTwoRowsShare(t *testing.T) {
 	}
 }
 
-// TestLayouts_TheTwoAxesTheRowsDifferOn is the disagreement side, and the
-// list is exhaustive: byte 28's policy and the slot ceiling, and nothing
-// else.
-func TestLayouts_TheTwoAxesTheRowsDifferOn(t *testing.T) {
+// TestLayouts_TheThreeAxesTheRowsDifferOn is the disagreement side, and the
+// list is exhaustive: byte 28's policy, the slot ceiling and the printed EX
+// menu domain, and nothing else.
+func TestLayouts_TheThreeAxesTheRowsDifferOn(t *testing.T) {
 	s, sg := ts590.LayoutS(), ts590.LayoutSG()
 
 	// A14 / E7. The book prints one P11 legend for both rows
@@ -183,6 +183,51 @@ func TestLayouts_TheTwoAxesTheRowsDifferOn(t *testing.T) {
 	}
 	if hasClass(s, kw.SlotExtension) {
 		t.Error("the S declares a SlotExtension range; 590:1346-1347 gives 110-119 to the SG and says nothing about the S (A12)")
+	}
+
+	// The printed EX menu domain: two lines of one chart, one per row —
+	// "000 ~ 087: Menu number (TS-590S)" (590:543) and "000 ~ 099: Menu
+	// number (TS-590SG)" (590:544). This is DOCUMENTED FACT on both rows,
+	// unlike the slot ceiling above, which rests on the S's silence (A12).
+	if got := s.MaxEXAddress(); got != 87 {
+		t.Errorf("the S's printed EX menu domain stops at %d, want 87 (590:543)", got)
+	}
+	if got := sg.MaxEXAddress(); got != 99 {
+		t.Errorf("the SG's printed EX menu domain stops at %d, want 99 (590:544)", got)
+	}
+	if s.MaxEXAddress() == sg.MaxEXAddress() {
+		t.Error("the two rows carry ONE EX menu domain — the chart prints the two on consecutive lines (590:543-544), and their two inventories are one identifier apart in this package")
+	}
+}
+
+// TestRedProof_TheEXDomainIsThePrintedOnePerRow is the behavioural half of
+// 590:543-544, in the direction that matters: an EX sweep that took the SG's
+// hundred rows as the S's bound would put twelve frames on a TS-590S whose
+// own book stops at 087, and the radio's whole answer would be "?;".
+func TestRedProof_TheEXDomainIsThePrintedOnePerRow(t *testing.T) {
+	s, sg := ts590.LayoutS(), ts590.LayoutSG()
+
+	cmd, err := sg.BuildEXRead(kw.EXAddress{P1: 88})
+	if err != nil {
+		t.Fatalf("the SG refused menu 088, inside the domain its own book prints (590:544): %v", err)
+	}
+	frame := cmd.Bytes()
+	if got := string(frame); got != "EX0880000;" {
+		t.Errorf("the SG's EX read of menu 088 is %q, want %q", got, "EX0880000;")
+	}
+	if !sg.AllowedCommand(frame) {
+		t.Errorf("the SG's own gate refused %q, which its own builder produced", frame)
+	}
+	if s.AllowedCommand(frame) {
+		t.Errorf("the S's gate ADMITTED %q — 088 is outside the domain its own book prints, 000 ~ 087 (590:543)", frame)
+	}
+	if _, err := s.BuildEXRead(kw.EXAddress{P1: 88}); err == nil {
+		t.Error("the S built a read of menu 088 (590:543)")
+	}
+	// And the last address each row DOES print, so the bound is not simply
+	// refusing everything.
+	if _, err := s.BuildEXRead(kw.EXAddress{P1: 87}); err != nil {
+		t.Errorf("the S refused menu 087, the last address its own book prints (590:543): %v", err)
 	}
 }
 

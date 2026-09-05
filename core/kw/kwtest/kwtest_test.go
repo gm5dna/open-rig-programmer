@@ -28,15 +28,16 @@ import (
 // four tone modes, and a hundreds digit at byte 4.
 func fixture590SG() kw.Layout {
 	return kw.MustNewLayout(kw.LayoutConfig{
-		Book:      kw.Book590,
-		Model:     "KWTEST-590SG",
-		P2:        kw.P2HundredsDigit,      // "refer to the MC command" (590:1539-1540)
-		Byte19:    kw.Byte19DataMode,       // P6, the data mode (590:1546-1548)
-		Byte28:    kw.Byte28FilterLive,     // P11, FILTER A/B (590:1560-1563)
-		Byte3940:  kw.Byte3940FMNarrowFlag, // P14 (590:1569-1571)
-		Byte41:    kw.Byte41Lockout,        // P15 (590:1572-1574)
-		ToneModes: kw.ToneModesFour,        // P7's fourth value is Cross Tone (590:1553)
-		ModeNames: modeNames590(),
+		Book:         kw.Book590,
+		Model:        "KWTEST-590SG",
+		P2:           kw.P2HundredsDigit,      // "refer to the MC command" (590:1539-1540)
+		Byte19:       kw.Byte19DataMode,       // P6, the data mode (590:1546-1548)
+		Byte28:       kw.Byte28FilterLive,     // P11, FILTER A/B (590:1560-1563)
+		Byte3940:     kw.Byte3940FMNarrowFlag, // P14 (590:1569-1571)
+		Byte41:       kw.Byte41Lockout,        // P15 (590:1572-1574)
+		ToneModes:    kw.ToneModesFour,        // P7's fourth value is Cross Tone (590:1553)
+		MaxEXAddress: 99,                      // "000 ~ 099: Menu number (TS-590SG)" (590:544)
+		ModeNames:    modeNames590(),
 		Slots: []kw.SlotRange{
 			{Class: kw.SlotMemory, Lo: 0, Hi: 99},
 			{Class: kw.SlotScan, Lo: 100, Hi: 109},
@@ -52,15 +53,16 @@ func fixture590SG() kw.Layout {
 // per-BOOK one.
 func fixture590S() kw.Layout {
 	return kw.MustNewLayout(kw.LayoutConfig{
-		Book:      kw.Book590,
-		Model:     "KWTEST-590S",
-		P2:        kw.P2HundredsDigit,
-		Byte19:    kw.Byte19DataMode,
-		Byte28:    kw.Byte28FilterEither,
-		Byte3940:  kw.Byte3940FMNarrowFlag,
-		Byte41:    kw.Byte41Lockout,
-		ToneModes: kw.ToneModesFour,
-		ModeNames: modeNames590(),
+		Book:         kw.Book590,
+		Model:        "KWTEST-590S",
+		P2:           kw.P2HundredsDigit,
+		Byte19:       kw.Byte19DataMode,
+		Byte28:       kw.Byte28FilterEither,
+		Byte3940:     kw.Byte3940FMNarrowFlag,
+		Byte41:       kw.Byte41Lockout,
+		ToneModes:    kw.ToneModesFour,
+		MaxEXAddress: 87, // "000 ~ 087: Menu number (TS-590S)" (590:543)
+		ModeNames:    modeNames590(),
 		Slots: []kw.SlotRange{
 			{Class: kw.SlotMemory, Lo: 0, Hi: 99},
 			{Class: kw.SlotScan, Lo: 100, Hi: 109},
@@ -73,16 +75,17 @@ func fixture590S() kw.Layout {
 // 590 pair spend on live fields, three tone modes, and no hundreds digit.
 func fixture480() kw.Layout {
 	return kw.MustNewLayout(kw.LayoutConfig{
-		Book:      kw.Book480,
-		Model:     "KWTEST-480",
-		P2:        kw.P2FixedZero,       // "Always 0 for the TS-480." (480:953)
-		Byte19:    kw.Byte19Lockout,     // P6 is the lockout here (480:962)
-		Byte28:    kw.Byte28FixedZero,   // (480:973)
-		Byte3940:  kw.Byte3940StepIndex, // P14 refers to ST (480:979)
-		Byte41:    kw.Byte41FixedZero,   // (480:982)
-		ToneModes: kw.ToneModesThree,    // no cross tone (480:964)
-		ModeNames: modeNames480(),
-		Slots:     []kw.SlotRange{{Class: kw.SlotMemory, Lo: 0, Hi: 99}},
+		Book:         kw.Book480,
+		Model:        "KWTEST-480",
+		P2:           kw.P2FixedZero,       // "Always 0 for the TS-480." (480:953)
+		Byte19:       kw.Byte19Lockout,     // P6 is the lockout here (480:962)
+		Byte28:       kw.Byte28FixedZero,   // (480:973)
+		Byte3940:     kw.Byte3940StepIndex, // P14 refers to ST (480:979)
+		Byte41:       kw.Byte41FixedZero,   // (480:982)
+		ToneModes:    kw.ToneModesThree,    // no cross tone (480:964)
+		MaxEXAddress: 60,                   // "000 ~ 060: Menu No." (480:401)
+		ModeNames:    modeNames480(),
+		Slots:        []kw.SlotRange{{Class: kw.SlotMemory, Lo: 0, Hi: 99}},
 		PrintedFixed: append(commonPrintedFixed(),
 			kw.FixedField{Pos: 4, Printed: "0"},  // P2  (480:953)
 			kw.FixedField{Pos: 28, Printed: "0"}, // P11 (480:973)
@@ -179,6 +182,7 @@ func TestRun_ATinySlotSpaceStillSatisfiesEveryLeg(t *testing.T) {
 		Byte3940:     kw.Byte3940StepIndex,
 		Byte41:       kw.Byte41FixedZero,
 		ToneModes:    kw.ToneModesThree,
+		MaxEXAddress: 60,
 		ModeNames:    modeNames480(),
 		Slots:        []kw.SlotRange{{Class: kw.SlotMemory, Lo: 0, Hi: 9}},
 		PrintedFixed: fixture480().PrintedFixed(),

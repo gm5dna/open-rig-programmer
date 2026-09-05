@@ -573,8 +573,9 @@ func (r *run) checkMemorySets() {
 	}
 }
 
-// checkEX walks the ten-byte read and requires the ANSWER shape — the same
-// frame with P5 appended — to be refused outbound.
+// checkEX walks the ten-byte read, requires the ANSWER shape — the same
+// frame with P5 appended — to be refused outbound, and holds the row to its
+// OWN printed menu domain in both directions.
 func (r *run) checkEX() {
 	r.t.Helper()
 	l := r.l
@@ -617,6 +618,53 @@ func (r *run) checkEX() {
 	} else {
 		r.refusals["another address's EX answer"]++
 	}
+
+	r.checkEXDomain()
+}
+
+// checkEXDomain holds the row to the menu domain ITS OWN BOOK PRINTS: 000 ~
+// 087 on the TS-590S (590:543), 000 ~ 099 on the TS-590SG (590:544) and 000
+// ~ 060 on the TS-480 (480:401).
+//
+// IT IS THE ONE LEG THAT SEPARATES THE TWO 590 ROWS ON A READ FRAME. Their
+// grids, legends and hard-wired bytes are one book's, so a suite that never
+// asked for the last printed address would pass on either row's bound put on
+// the other — which is exactly the mistake a driver sweeping the menu
+// surface would make, the two inventories being one identifier apart.
+func (r *run) checkEXDomain() {
+	r.t.Helper()
+	l := r.l
+
+	// The last address this row prints must build and pass its own gate.
+	last := l.MaxEXAddress()
+	cmd, err := l.BuildEXRead(kw.EXAddress{P1: last})
+	if err != nil {
+		r.t.Errorf("%s: BuildEXRead refused menu %03d, the last address this row's own book prints: %v", r.name(), last, err)
+		return
+	}
+	r.checkFrame("EX read", cmd.Bytes())
+
+	if last == 255 {
+		r.t.Errorf("%s: its printed EX menu domain reaches 255, the whole address space an EXAddress holds — this suite has no address above it to hold the gate to, so the domain leg would pass vacuously", r.name())
+		return
+	}
+
+	// And the first address it does NOT print: refused by the builder, and
+	// refused by the gate even when the frame is handed to it fully formed.
+	if _, err := l.BuildEXRead(kw.EXAddress{P1: last + 1}); err == nil {
+		r.t.Errorf("%s: BuildEXRead built a read of menu %03d, one past the domain this row's own book prints (000 ~ %03d)", r.name(), last+1, last)
+	} else {
+		r.refusals["an EX read past the row's printed menu domain"]++
+	}
+	beyond := []byte("EX" + threeDigits(int(last)+1) + "0000;")
+	r.refuse("an EX read past the row's printed menu domain", "the menu domain is printed per row (590:543, 590:544, 480:401), so an address this row's book does not print is not one this row may be sent", beyond)
+}
+
+// threeDigits renders n as the EX address field's three zero-padded digits.
+// It is here rather than borrowed from core/kw because the frames this suite
+// hands the gate must be built independently of the builders it is checking.
+func threeDigits(n int) string {
+	return string([]byte{byte('0' + n/100%10), byte('0' + n/10%10), byte('0' + n%10)})
 }
 
 // checkGateRefusesTheUnacceptable is the plan's negative-pin list, held
@@ -712,7 +760,7 @@ func (r *run) checkNonVacuity() {
 	if r.roundTrips == 0 {
 		r.t.Errorf("%s: no record survived a build -> parse round trip, so the codec was never exercised in both directions", r.name())
 	}
-	for _, kind := range []string{"answer frame", "an AI state other than OFF", "an unbuilt command", "an MW of the wrong width", "a mutated printed-fixed byte", "an empty record"} {
+	for _, kind := range []string{"answer frame", "an AI state other than OFF", "an unbuilt command", "an MW of the wrong width", "a mutated printed-fixed byte", "an empty record", "an EX read past the row's printed menu domain"} {
 		if r.refusals[kind] == 0 {
 			r.t.Errorf("%s: no refusal of kind %q was ever SEEN — a silent skip and an enforced rule are indistinguishable without this count", r.name(), kind)
 		}
