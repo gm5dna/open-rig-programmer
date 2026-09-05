@@ -75,7 +75,15 @@ var dialect = cat.MustNewDialect(cat.DialectConfig{
 		// this numbering unverified. The SlotSpace.SixtyLo/SixtyHi register
 		// entry.
 		SixtyLo: 501, SixtyHi: 599,
-		PMSPairs:      9,
+		PMSPairs: 9,
+		// The FTdx10's slot legends spell the pairs as the TOKEN
+		// "P1L-P9U (PMS)" — MC's at layout 1131-1133, MT's at 1218, MW's
+		// at 1259 — so the pair number is a wire byte on this radio and
+		// there is no decimal numbering to declare. Not an assumption:
+		// this is the legend, transcribed. The FT-991A's MC legend gives
+		// its pairs decimal channel numbers instead, which is the
+		// disagreement this axis carries.
+		PMSForm:       cat.PMSFormToken,
 		EmergencyWire: "EMG",
 		NoneWire:      "000", // ASSUMED — in no FTdx10 slot legend
 		// The FTdx10's MC block prints all four slot classes —
@@ -122,7 +130,14 @@ var dialect = cat.MustNewDialect(cat.DialectConfig{
 	// Not an assumption: this is the legend, transcribed. The FT-891 prints
 	// "0: (Fixed)" on every one of those blocks, which is the disagreement
 	// this axis carries.
-	MemoryP5:    cat.P5TxClar,
+	MemoryP5: cat.P5TxClar,
+	// The FTdx10's P8 legend prints THREE states — "0: CTCSS \"OFF\"
+	// 1: CTCSS ENC/DEC 2: CTCSS ENC" (layout 1197) — and nothing beyond
+	// '2'. Not an assumption: this is the legend, transcribed. The
+	// FT-991A's prints two DCS states as well, which is the disagreement
+	// this axis carries; a record naming one must be refused here rather
+	// than encoded into a byte this manual does not print.
+	ToneStates:  cat.ToneStatesCTCSS,
 	MWWriteKind: cat.CombinedMTSetKind, // the FTdx10's MW P7
 	// "(Fixed)" — equal to the combined MT Set constant AS A FACT OF
 	// THIS RADIO, not a rule; see the difference pins.

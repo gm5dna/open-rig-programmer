@@ -25,6 +25,7 @@ func kindPeerDialect(t *testing.T) Dialect {
 		Slots: SlotSpace{
 			MemoryLo: 1, MemoryHi: 99,
 			PMSPairs:  9,
+			PMSForm:   PMSFormToken,
 			NoneWire:  "000",
 			MCSelects: MCSelectsAll,
 		},
@@ -33,6 +34,7 @@ func kindPeerDialect(t *testing.T) Dialect {
 		Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 		// The whole point of this fixture.
 		MemoryP5:    P5TxClar,
+		ToneStates:  ToneStatesCTCSS,
 		MWWriteKind: KindPMS,
 	})
 	if err != nil {

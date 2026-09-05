@@ -45,8 +45,8 @@ type ShiftOption struct {
 }
 
 // ToneSemantics is the semantic content of a CTCSS state: whether a
-// channel in that state transmits a tone, requires a matching received
-// tone, or neither.
+// channel in that state transmits a tone or code, requires a matching
+// received one, or neither.
 //
 // ToneSemanticsUnspecified is deliberately the zero value, for the same
 // reason ShiftUnspecified is: (Encodes: false, Decodes: false) — CTCSS
@@ -70,6 +70,26 @@ const (
 	// CTCSS tone and requires a matching received tone before it will
 	// open squelch.
 	ToneEncodeDecode
+	// ToneDCSEncodeDecode means a channel in this state transmits a DCS
+	// code and requires a matching received one before it will open
+	// squelch — the CTCSS-and-DCS analogue of ToneEncodeDecode, on a
+	// radio whose CTCSS state field can name DCS as well.
+	//
+	// APPENDED, not inserted: the two DCS members are the last two, so no
+	// existing constant's value moves and nothing that has already
+	// declared a semantic changes meaning. Whether a radio HAS them is a
+	// capability VALUE (Capabilities.CTCSSStates), not a schema fact, and
+	// StandardCTCSSStates() is unchanged.
+	//
+	// It carries the STATE and not the code: the DCS code itself is not a
+	// field of this record on the radio that motivated these members, so
+	// RequiresTone deliberately does NOT report true for either — see its
+	// own doc comment.
+	ToneDCSEncodeDecode
+	// ToneDCSEncode means a channel in this state transmits a DCS code but
+	// does not require one to open squelch on receive — the DCS analogue
+	// of ToneEncode.
+	ToneDCSEncode
 )
 
 // ToneState is one CTCSS state a memory channel's CTCSS field may hold —
@@ -88,11 +108,18 @@ type ToneState struct {
 }
 
 // RequiresTone reports whether a channel in this CTCSS state must carry
-// a known CTCSS tone for the state to make sense — e.g. an encoder
+// a known CTCSS TONE for the state to make sense — e.g. an encoder
 // (ENC) or encoder+decoder (ENC-DEC) state needs a tone to encode or
 // decode; the off state does not. It is a method, not a stored field,
 // because it is fully derivable from Semantics: there is no
 // representable ToneState for which it could disagree.
+//
+// THE TWO DCS MEMBERS REPORT FALSE, DELIBERATELY. A DCS state needs a
+// CODE, not a tone, and on the radio those members were added for the
+// code is not a field of the memory record at all. Reporting true would
+// make core/codeplug's validator — the only consumer of this predicate,
+// where it raises a warning — demand a FieldCTCSSTone that radio never
+// carries. TestRequiresTone_IsNotWidenedByTheDCSMembers pins it.
 func (t ToneState) RequiresTone() bool {
 	return t.Semantics == ToneEncode || t.Semantics == ToneEncodeDecode
 }
@@ -204,9 +231,13 @@ type DuplexOption struct {
 
 // ToneModeSemantics is the semantic content of an Icom-family tone mode:
 // which squelch mechanism a channel in that mode uses. Unlike
-// ToneSemantics (the Yaesu CTCSS-state three), it spans DTCS and the
-// cross combinations, which is exactly why FieldToneMode is a separate
-// Field from FieldCTCSSState rather than a widening of it.
+// ToneSemantics (the Yaesu CTCSS-state vocabulary), it spans the CROSS
+// combinations and carries a code table with it, which is exactly why
+// FieldToneMode is a separate Field from FieldCTCSSState rather than a
+// widening of it. ToneSemantics gained two DCS members of its own for the
+// FT-991A, whose CTCSS state field names DCS states; the two vocabularies
+// are still separate, and capabilities.go states that they never coexist
+// on one model.
 type ToneModeSemantics int
 
 const (

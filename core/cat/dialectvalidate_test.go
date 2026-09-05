@@ -93,6 +93,7 @@ func validBaselineConfig() DialectConfig {
 			MemoryLo: 10, MemoryHi: 40,
 			SixtyLo: 700, SixtyHi: 720,
 			PMSPairs:      3,
+			PMSForm:       PMSFormToken,
 			EmergencyWire: "HLP",
 			NoneWire:      "888",
 			MCSelects:     MCSelectsAll,
@@ -105,6 +106,7 @@ func validBaselineConfig() DialectConfig {
 		MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 8, ClearTagByte: '_'},
 		Clarifier:     ClarifierPolicy{StepHz: 5, MaxAbsHz: 500},
 		MemoryP5:      P5TxClar,
+		ToneStates:    ToneStatesCTCSS,
 		MWWriteKind:   KindMemory,
 	}
 }

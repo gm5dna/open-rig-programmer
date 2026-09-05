@@ -109,7 +109,10 @@ func (d Dialect) mtCombinedLen() int {
 // MT Set live in exactly one place, as MW's do.
 func (d Dialect) validateCombinedMTFields(m MemoryData) error {
 	if !d.mtSlotValid(m.Slot) {
-		return newParseError([]byte(m.Slot.Wire()), "MT: slot must be memory (001-099) or PMS (P1L-P9U); 5xx/EMG rejected by project policy pending M5a, \"000\"/invalid rejected per reference")
+		// Composed from this dialect's own slot space (S0.2), and it is the
+		// SAME renderer BuildMTSet uses: the two forms refuse in identical
+		// words, and they now do so from one place. See mt.go.
+		return newParseError([]byte(m.Slot.Wire()), d.mtSlotDomainRefusal())
 	}
 
 	// The combined Set's P7 is the FORM's constant, and this is the
@@ -165,7 +168,7 @@ func (d Dialect) validateCombinedMTFields(m MemoryData) error {
 
 	// CTCSSState/Shift are byte-alias types exactly like Mode: re-validate
 	// via their own Parse functions for the same reason.
-	if _, err := ParseCTCSSState(m.CTCSS.Wire()); err != nil {
+	if _, err := d.ParseCTCSSState(m.CTCSS.Wire()); err != nil {
 		return newParseError([]byte{m.CTCSS.Wire()}, "MT: CTCSS field (P8) is not a valid CTCSSState")
 	}
 	if _, err := ParseShift(m.Shift.Wire()); err != nil {
