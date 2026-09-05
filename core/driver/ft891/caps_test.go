@@ -569,13 +569,15 @@ func TestClarifierIsNeverInert(t *testing.T) {
 // already reads through catDialect.Clarifier() — able to drift silently if
 // either literal were ever edited alone.
 //
-// THE PIN IS IDENTITY WITH THE DIALECT, not merely today's values: it must
-// fail if caps.go ever goes back to a literal that happens to still read
-// 9990/10, which a bare "== 9990" assertion (TestBaseline_Shape's, kept
-// unchanged above) cannot catch. See this test's own red-proof: with caps.go
-// reverted to a hard-coded ClarMaxHz 9999 (this dialect's own MaxAbsHz is
-// 9990), this test fails while a bare "== 9990" check would not even notice
-// unless it too happened to assert 9999.
+// WHAT THIS PIN CAN AND CANNOT SEE (closing wave-2 re-review, LOW): it
+// asserts that caps carry the dialect's CURRENT ClarifierPolicy values. A
+// literal in caps.go that happened to equal 9990/10 would pass it too — no
+// value comparison can tell a literal from a consultation. What it adds
+// over TestBaseline_Shape's bare "== 9990" is DIRECTION: if the dialect's
+// ASSUMED register entry is ever lifted to a measured value, this test
+// fails until caps follow it, where the bare check would keep asserting
+// the stale number. The red-proof (caps.go hard-coded to 9999) fails BOTH
+// tests, which is fine — they guard different things.
 func TestCapabilities_ClarifierDerivesFromDialect(t *testing.T) {
 	want := catDialect.Clarifier()
 	for _, tt := range []struct {
