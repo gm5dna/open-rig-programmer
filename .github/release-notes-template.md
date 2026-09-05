@@ -310,9 +310,12 @@ other distributions, take the CLI tarball or build the GUI from source
 (`wails build -tags webkit2_41` in `app/`); either way,
 `docs/linux-setup.md` covers the serial-port setup.
 
-The four Windows rows are native-only: the amd64 installer (or zip)
+The installer's architecture check is native-only: the amd64 installer
 refuses to run on an ARM64 machine, even though ARM64 Windows can
-emulate x64 programs — install the arm64 file on an ARM64 PC.
+emulate x64 programs — install the arm64 installer on an ARM64 PC. The
+CLI zip carries no such check — it is a plain executable, and an amd64
+`rigprog.exe` extracted from it will very likely run on ARM64 Windows
+under emulation, but this project has not tried it either way.
 
 `SHA256SUMS` (attached below) covers every file above. Verify with:
 
@@ -487,10 +490,10 @@ What this release has **not** been exercised against:
   Universal Windows Driver was installed by hand; SmartScreen and
   WebView2 behaved as documented; two writes were made from the GUI and
   the CLI and the radio was read back byte-identical to its pre-session
-  state afterwards. **amd64 is built and its CLI run in CI only** — no
-  amd64 Windows machine, physical or virtual, has run this project's
-  code, and no physical Windows machine of either architecture has been
-  tried.
+  state afterwards. The amd64 builds are produced by the same pipeline
+  on a Windows x64 host and the amd64 CLI has run there too — but the
+  amd64 GUI has never been launched by anyone, and no physical Windows
+  machine of either architecture has been tried.
 
 Anything the project has not observed is labelled as such in the code
 and documentation rather than assumed. Reports from real hardware —

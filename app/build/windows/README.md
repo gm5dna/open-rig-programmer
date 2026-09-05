@@ -68,10 +68,12 @@ The uninstaller only removes what it installed: the program files
 under `$INSTDIR`, the Start Menu and desktop shortcuts, and its own
 registry key. It does **not** touch `%AppData%\rigprog` (settings,
 snapshots, journals — a package never deletes user data) or the
-per-user WebView2 profile folder under `%LocalAppData%` (the frontend
-uses no localStorage/sessionStorage/IndexedDB, so that folder is
-cache only, but it is still the user's disk to reclaim, not this
-package's to delete).
+per-user WebView2 profile folder under `%AppData%` (observed at
+`%AppData%\Open Rig Programmer.exe` on the Windows 11 ARM64 VM,
+05/09/2026 — Roaming, not `%LocalAppData%`; the frontend uses no
+localStorage/sessionStorage/IndexedDB, so that folder is cache only,
+but it is still the user's disk to reclaim, not this package's to
+delete).
 
 See `docs/windows-setup.md` for the end-user side of installing and
 uninstalling.
