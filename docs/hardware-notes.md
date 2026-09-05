@@ -1169,8 +1169,13 @@ the CLI restoration write; and the final read.
 ### Port mapping
 
 Windows enumerates the CP2105's two USB interfaces as two separate
-serial devices, exactly as its datasheet describes; unlike macOS, they
-are not distinguished by name at the `rigprog ports` level.
+serial devices, exactly as its datasheet describes. On neither
+platform does the *description* distinguish them at the
+`rigprog ports` level — see the fleet note below; the two platforms
+differ only in how the *device node itself* is named: macOS gives the
+two nodes different names (`cu.SLAB_USBtoUART` vs
+`cu.SLAB_USBtoUART5`), while Windows gives the two ports different COM
+numbers (COM3 vs COM4) alongside an identical description string.
 
 | Port | `rigprog ports` score | Description | `probe` result |
 | --- | --- | --- | --- |
