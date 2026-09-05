@@ -104,6 +104,29 @@
   the table, so the "Yaesu and Icom models" phrasing in the opening
   paragraph now reads "models" rather than "transceivers", and the
   bounded-walk footnote covers three models rather than two.
+
+  SYNC 05/09/2026 (Tier 0 P2, Windows packaging, PRE-LEG): the
+  Downloads table gains two Windows installer rows and two Windows CLI
+  zip rows, built by release.yml's new `windows` job; a "Windows: first
+  launch" section sits beside "macOS: first launch" (SmartScreen,
+  Defender, WebView2); "Checking which version you have" now names
+  `rigprog.exe version` alongside `rigprog version`; the SHA256SUMS
+  verification block gains the `certutil -hashfile <file> SHA256`
+  equivalent for a reader with no `sha256sum`. The evidence section's
+  Windows bullet is written in its PRE-LEG form — built and checked by
+  the pipeline on a Windows x64 host, nothing installed or connected to
+  a radio yet — because the ARM64 VM verification session (this
+  milestone's Task 7) has not run; Task 8 trues it from that session's
+  evidence. No row of the per-model support table, no model count, and
+  no other evidence sentence changed with this sync.
+
+  FIX ROUND 1 (05/09/2026, cross-check with lane D's t4-docs-review-
+  opus.md finding 5): the Downloads section gains a one-sentence note
+  that the four Windows rows are native-only (amd64 refuses to run on
+  ARM64, even though ARM64 Windows can emulate x64) — the same rule
+  README.md's Windows paragraph already states, now stated here too so
+  a reader who only sees the release page (where the asset choice is
+  actually made) gets it as well.
 -->
 
 Open Rig Programmer __VERSION__ — an open-source, cross-platform
@@ -259,6 +282,10 @@ want to help, open an issue.
 | Linux arm64 | CLI | `rigprog-__VERSION__-linux-arm64.tar.gz` |
 | Linux amd64 (Debian/Ubuntu/Mint) | GUI + CLI (.deb) | `open-rig-programmer___VERSION_NO_V___amd64.deb` |
 | Linux arm64 (Debian/Ubuntu/Mint) | GUI + CLI (.deb) | `open-rig-programmer___VERSION_NO_V___arm64.deb` |
+| Windows amd64 | GUI + CLI (installer) | `open-rig-programmer-__VERSION__-windows-amd64-installer.exe` |
+| Windows arm64 | GUI + CLI (installer) | `open-rig-programmer-__VERSION__-windows-arm64-installer.exe` |
+| Windows amd64 | CLI only (zip) | `rigprog-__VERSION__-windows-amd64.zip` |
+| Windows arm64 | CLI only (zip) | `rigprog-__VERSION__-windows-arm64.zip` |
 
 Either Debian package installs the GUI, the `rigprog` CLI, a desktop
 entry and the ModemManager udev rule; `sudo apt install ./<file>`
@@ -272,19 +299,34 @@ other distributions, take the CLI tarball or build the GUI from source
 (`wails build -tags webkit2_41` in `app/`); either way,
 `docs/linux-setup.md` covers the serial-port setup.
 
+The four Windows rows are native-only: the amd64 installer (or zip)
+refuses to run on an ARM64 machine, even though ARM64 Windows can
+emulate x64 programs — install the arm64 file on an ARM64 PC.
+
 `SHA256SUMS` (attached below) covers every file above. Verify with:
 
 ```sh
 sha256sum -c SHA256SUMS --ignore-missing
 ```
 
+On Windows, without `sha256sum`, check one file at a time in PowerShell
+or Command Prompt and compare the printed hash to its line in
+`SHA256SUMS` by eye:
+
+```
+certutil -hashfile <file> SHA256
+```
+
 ## Checking which version you have
 
-`rigprog version` prints it; the GUI shows it at the right-hand end of
-the status bar. Quote that string in any bug report. A build that
-reports `dev (unreleased build)` did not come from this release page —
-if you downloaded it here, please say so in the report, because that
-would be a packaging fault.
+`rigprog version` prints it; on Windows the installer adds nothing to
+PATH, so run `"C:\Program Files\Open Rig Programmer\rigprog.exe"
+version` for the installed CLI, or `rigprog.exe version` from wherever
+you unpacked the zip. The GUI shows it at the right-hand end of the
+status bar. Quote that string in any bug report. A build that reports
+`dev (unreleased build)` did not come from this release page — if you
+downloaded it here, please say so in the report, because that would be
+a packaging fault.
 
 ## Firmware requirement
 
@@ -299,6 +341,25 @@ will refuse to open it the ordinary way the first time. In Finder,
 right-click (Control-click) the app and choose **Open**, then confirm
 in the dialogue that appears. This is only needed once; after that it
 opens normally.
+
+## Windows: first launch
+
+The installer is unsigned (no code-signing certificate this
+milestone), so expect Windows SmartScreen to show "Windows protected
+your PC" the first time you run it — this has not been tried yet by
+this project. If it appears, click **More info**, then **Run anyway**.
+Windows Defender may also flag or scan the download; if it quarantines
+the file, restore it from Defender's Protection History — nothing here
+has been reported as malicious, this project simply has no publisher
+reputation with Microsoft yet.
+
+The GUI needs Microsoft's WebView2 runtime, which Windows 11 is
+expected to already ship with. If it is missing (older Windows 10
+builds, or a stripped-down image), the installer is configured to
+download and install it for you during setup, in the Wails template's
+default mode — that step would need an internet connection, the rest
+of the installer does not — but this bootstrapping path has not been
+tried yet by this project.
 
 ## Linux: serial port access
 
@@ -403,6 +464,9 @@ What this release has **not** been exercised against:
   empty slot at all: the record's Select-group setting has no honest
   default to write, so the write path refuses rather than inventing one —
   the same refusal the IC-7300s make, for the same reason.
+- **Windows.** The installers and CLI zips are built by the release
+  pipeline on a Windows x64 host and checked there; no person has yet
+  installed them and no radio has been connected on Windows.
 
 Anything the project has not observed is labelled as such in the code
 and documentation rather than assumed. Reports from real hardware —
