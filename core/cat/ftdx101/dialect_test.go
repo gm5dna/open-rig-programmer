@@ -467,9 +467,9 @@ func TestSiblingPins(t *testing.T) {
 	// And over the grammar block's whole declared range, so that NON-members
 	// are compared too: membership agreeing on every address either radio
 	// carries says nothing about the addresses neither does.
-	for p1 := uint8(1); p1 <= 6; p1++ {
-		for p2 := uint8(1); p2 <= 8; p2++ {
-			for p3 := uint8(1); p3 <= 25; p3++ {
+	for p1 := uint16(1); p1 <= 6; p1++ {
+		for p2 := uint16(1); p2 <= 8; p2++ {
+			for p3 := uint16(1); p3 <= 25; p3++ {
 				a := cat.EXAddress{P1: p1, P2: p2, P3: p3}
 				if got, want := dd.KnownEXAddress(a), mp.KnownEXAddress(a); got != want {
 					t.Errorf("KnownEXAddress(%v): D %v, MP %v", a, got, want)

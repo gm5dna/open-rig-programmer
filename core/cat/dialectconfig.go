@@ -232,6 +232,26 @@ const (
 	// elsewhere that mentions this form's naming should point here rather
 	// than restate it.
 	EXAddressPair
+	// EXAddressSingle is the three-digit field EXAddress's P1 component
+	// renders as, with P2 and P3 both dropped. Under it every EXItems
+	// member must have P2 == 0 AND P3 == 0 (V12): the render drops both,
+	// and a component silently dropped from every frame is exactly the
+	// failure this validator exists to make impossible — the Pair rule one
+	// component further down.
+	//
+	// Its member is the FT-991A, whose chart prints ONE menu number per row
+	// ("P1 : 001 - 153", ft991a_layout.txt) rather than a group/subgroup/
+	// item triple, so the printed number IS the whole address.
+	//
+	// P1's DOMAIN is wider under this form than under the other two: 0..999,
+	// the three-digit field's own capacity, against 0..99. That bound lives
+	// with the render it belongs to — maxEXComponentSingleP1 beside
+	// maxEXComponent in dialectvalidate.go, applied by V8 — and is the
+	// reason EXAddress's components are uint16 rather than uint8: under
+	// uint8 the TYPE would be the bound and V8's Single clause would be
+	// vacuous whatever number it stated. TestValidateEXItems_ComponentBound-
+	// IsFormDependent pins the disagreement between the forms.
+	EXAddressSingle
 )
 
 func (f EXAddressForm) String() string {
@@ -240,6 +260,8 @@ func (f EXAddressForm) String() string {
 		return "EXAddressTriple"
 	case EXAddressPair:
 		return "EXAddressPair"
+	case EXAddressSingle:
+		return "EXAddressSingle"
 	default:
 		return fmt.Sprintf("EXAddressForm(%d)", int(f))
 	}

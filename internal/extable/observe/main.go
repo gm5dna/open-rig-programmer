@@ -160,6 +160,17 @@ func derive(captureJSON, manualCSV []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parsing manual CSV: %w", err)
 	}
+	// This is the package tree's FOURTH %02d address-key site — the other
+	// three are internal/extable.go's ParseObservedCSV key and RenderGo
+	// lookup (both %03d under EXAddressSingle at the FT-991A seam) and its
+	// diagnostic duplicate-triple message (left at %02d deliberately, see
+	// extable.go's comment there). This one stays %02d/six-digit and
+	// UNCHANGED: derive is hard-wired to extable.FT710Profile() above, so
+	// it can only ever run against the FT-710's Triple chart and can
+	// neither be reached nor be wrong under Single. It is named here so a
+	// reader copying this file as the template for a Single-form
+	// observation tool sees that the p1 column needs isThreeDigits, not
+	// this two-digit slicing (see o.addr[0:2]/[2:4]/[4:6] below).
 	isText := make(map[string]bool, len(rows))
 	for _, r := range rows {
 		isText[fmt.Sprintf("%02d%02d%02d", r.P1, r.P2, r.P3)] = r.Text

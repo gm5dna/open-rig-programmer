@@ -258,9 +258,9 @@ func TestEXFTdx10RoundTrip_OutOfInventoryAddressIsRefused(t *testing.T) {
 			// know, which is itself worth pinning: the two sides agree that
 			// these are not members.
 			addr := cat.EXAddress{
-				P1: uint8(10*(wire[0]-'0') + (wire[1] - '0')),
-				P2: uint8(10*(wire[2]-'0') + (wire[3] - '0')),
-				P3: uint8(10*(wire[4]-'0') + (wire[5] - '0')),
+				P1: uint16(10*(wire[0]-'0') + (wire[1] - '0')),
+				P2: uint16(10*(wire[2]-'0') + (wire[3] - '0')),
+				P3: uint16(10*(wire[4]-'0') + (wire[5] - '0')),
 			}
 			if dialect.KnownEXAddress(addr) {
 				t.Fatalf("the dialect claims %s is a known address — this negative control is testing the wrong thing", wire)
