@@ -560,11 +560,14 @@
 //	     are printed (590:543, 590:544, 480:401); the counts are arithmetic
 //	     over those ranges, not a count of printed rows.
 //	     LIFT L-DOC-4 — NOT A WIRE OBSERVATION AND NOT HARDWARE: the
-//	     transcription leg's own boundary ledger, derived from a 150 dpi
+//	     transcription leg's own boundary ledger, derived from a 300 dpi
 //	     render of the parameter-list sections BEFORE any transcription
-//	     exists. IF THE LEDGER AND THE ARITHMETIC DISAGREE, THE LEDGER
-//	     WINS, and this row is what says so. The resolution is part of the
-//	     lift: it is the one datum that makes L-DOC-4 reproducible.
+//	     exists (the plan's Task 4 ruling: 300 dpi governs — the spec's
+//	     A26 still says 150 and is scheduled as a draft-8 erratum; the
+//	     legs that ran on 05/09/2026 rendered at 300). IF THE LEDGER AND
+//	     THE ARITHMETIC DISAGREE, THE LEDGER WINS, and this row is what
+//	     says so. The resolution is part of the lift: it is the one datum
+//	     that makes L-DOC-4 reproducible.
 //
 //	A27  The 50-byte record a fake image serves is a record the radio would
 //	     actually answer with — i.e. the cross-field COMBINATION of
