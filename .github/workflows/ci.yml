@@ -17,13 +17,16 @@ jobs:
         # windows-2025 added 05/09/2026: the first place this project's Go
         # tests run on Windows at all (Tier 0 P2 decision 13,
         # docs/superpowers/specs/2026-09-04-windows-packaging-design.md).
-        # The first run was expected red on tests that compared
+        # This leg is EXPECTED RED on its first run, on tests that compare
         # filepath.Join results against `/`-literal expectations and one
-        # 0600-permission assertion with no Windows guard — fixed ahead of
-        # time in the win-code lane, following the userconfig precedent's
-        # Windows skip for the permission bit ("never weaken a claim the
-        # platform can express"); anything the platform still surfaces that
-        # this plan did not predict becomes a ledgered win-code follow-up.
+        # 0600-permission assertion with no Windows guard; the win-code
+        # lane is fixing these ahead of this leg landing, following the
+        # userconfig precedent's Windows skip for the permission bit
+        # ("never weaken a claim the platform can express") — but this
+        # lane cannot observe that lane's result, so it is not claimed
+        # fixed here (plan decision 13). Anything the platform still
+        # surfaces that this plan did not predict becomes a ledgered
+        # win-code follow-up.
         os: [ubuntu-latest, macos-latest, windows-2025]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
