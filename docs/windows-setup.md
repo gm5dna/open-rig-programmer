@@ -182,8 +182,9 @@ by the same session; **W5** is **observed (recorded only)** rather
 than lifted — the USB serial field stayed empty in the `probe` output
 on Windows, and no code change follows from that — see
 `docs/hardware-notes.md` for each. **W12** (the amd64 GUI, launched by
-a person) stays **ASSUMED**: no amd64 Windows machine, physical or
-virtual, has run this project's code.
+a person) stays **ASSUMED**: the amd64 CLI has run on a Windows x64
+host in CI (`rigprog.exe version` and `rigprog.exe ports`), but the
+amd64 GUI has never been launched by anyone.
 
 **Console output.** `rigprog.exe`'s prose uses em dashes; captured
 under a legacy console code page (as PowerShell's redirected output
@@ -191,10 +192,11 @@ was on the ARM64 VM) they render as `ÔÇö` rather than "—" — a code-page
 display quirk, not a difference in what the CLI printed. Run `chcp
 65001` first, or use Windows Terminal, to see them correctly.
 
-**What remains untried on Windows**: amd64 (built and CLI-run in CI
-only — no amd64 Windows machine has run this project's code, physical
-or virtual), Windows 10, and a physical Windows machine of either
-architecture. Everything above that is not qualified as ASSUMED is
+**What remains untried on Windows**: the amd64 GUI (the amd64 builds
+are produced by the same pipeline on a Windows x64 host and the amd64
+CLI runs there too, but its GUI has never been launched by anyone),
+Windows 10, and a physical Windows machine of either architecture.
+Everything above that is not qualified as ASSUMED is
 confirmed for the platform the 05/09/2026 session actually used —
 Windows 11 on ARM64, virtualised — and should not be read as a claim
 about amd64 or about a physical machine.
