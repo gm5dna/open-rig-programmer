@@ -163,10 +163,10 @@ for arch in amd64 arm64; do
 
   if [ "${CHECK_WIN_SKIP_TAG:-0}" != "1" ]; then
     if [ -f "$raw_gui" ]; then
-      LC_ALL=C grep -qa -- "$tag" "$raw_gui" || err "tag '$tag' not found in raw GUI exe ($arch)"
+      LC_ALL=C grep -qaF -- "$tag" "$raw_gui" || err "tag '$tag' not found in raw GUI exe ($arch)"
     fi
     if [ -f "$dist_cli" ]; then
-      LC_ALL=C grep -qa -- "$tag" "$dist_cli" || err "tag '$tag' not found in dist CLI ($arch)"
+      LC_ALL=C grep -qaF -- "$tag" "$dist_cli" || err "tag '$tag' not found in dist CLI ($arch)"
     fi
   fi
 done
