@@ -626,8 +626,11 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 	// RealHardware and any unrecognised value fails the same way (its
 	// caps.go says so in terms), so a consent arm that had quietly passed
 	// ft891.Simulated would not be caught by a fail-safe — it would be
-	// caught by TestRealDriverFor_DefaultPathByteIdentical, which is why
-	// the profile is named here rather than defaulted.
+	// caught by TestRealDriverFor_DefaultPathByteIdentical's FT891Model row
+	// (both arms pinned there, false and consent), and the session-level
+	// consent transform this row feeds is separately pinned by
+	// TestOpenRealSessionWith_ConsentedSessionCaps's FT-891 subtest, which
+	// is why the profile is named here rather than defaulted.
 	FT891Model: func(consent bool) driver.Driver {
 		if consent {
 			return ft891.New(ft891.RealHardware, ft891.WithConsentedUnverifiedWrites())
