@@ -30,6 +30,7 @@ var fixtureRequired = Profile{
 	LabelPolicy:   LabelsRequired,
 	TextRowPolicy: TextRowsAllowed,
 
+	DigitsCeiling:    MaxDigitsCeiling,
 	MinDigits:        2,
 	MaxDigits:        6,
 	TextWidth:        8,
@@ -108,6 +109,8 @@ func TestProfileValidate_Refusals(t *testing.T) {
 		{"TypesImported without ImportPath", func(p *Profile) { p.ImportPath = "" }},
 		{"TypesImported without ImportAlias", func(p *Profile) { p.ImportAlias = "" }},
 		{"ImportAlias not an identifier", func(p *Profile) { p.ImportAlias = "not an ident" }},
+		{"zero DigitsCeiling", func(p *Profile) { p.DigitsCeiling = 0 }},
+		{"negative DigitsCeiling", func(p *Profile) { p.DigitsCeiling = -1 }},
 		{"zero MinDigits", func(p *Profile) { p.MinDigits = 0 }},
 		{"zero MaxDigits", func(p *Profile) { p.MaxDigits = 0 }},
 		{"zero TextWidth", func(p *Profile) { p.TextWidth = 0 }},
@@ -133,6 +136,60 @@ func TestProfileValidate_Refusals(t *testing.T) {
 				t.Error("Validate() accepted an invalid profile; want an error")
 			}
 		})
+	}
+}
+
+// TestProfileValidate_CeilingComesFromTheProfile proves the width ceiling is
+// READ from the profile rather than from this package's MaxDigitsCeiling
+// constant, in both directions.
+//
+// That constant mirrors core/cat's maxEXDigits, and core/cat's own
+// exdigits_ceiling_test.go pins the two equal. Bounding a profile that renders
+// into a DIFFERENT package by it would be a bound consulted from one place
+// with its datum taken from another — the defect shape Profile's own doc
+// comment says this type exists to prevent.
+//
+// Downwards is the case that matters: a family whose frame budget is narrower
+// than core/cat's would have every width core/cat admits waved through here,
+// and the refusal would arrive two packages downstream if at all. Upwards is
+// asserted because a ceiling that silently clamped to the constant would pass
+// every downward case and still not be the profile's own.
+func TestProfileValidate_CeilingComesFromTheProfile(t *testing.T) {
+	// 100 is far BELOW MaxDigitsCeiling's 247, so a check against the
+	// constant would accept every refusal case here.
+	for _, tc := range []struct {
+		name       string
+		mut        func(*Profile)
+		wantRefuse bool
+	}{
+		{"a width inside the profile's own ceiling", func(p *Profile) { p.MaxDigits = 32 }, false},
+		{"MaxDigits above the profile's own ceiling", func(p *Profile) { p.MaxDigits = 100 }, true},
+		{"TextWidth above the profile's own ceiling", func(p *Profile) { p.TextWidth = 100 }, true},
+		{"MaxObservedWidth above the profile's own ceiling", func(p *Profile) { p.MaxObservedWidth = 100 }, true},
+	} {
+		p := fixtureRequired
+		p.DigitsCeiling = 32
+		tc.mut(&p)
+		err := p.Validate()
+		switch {
+		case !tc.wantRefuse && err != nil:
+			t.Errorf("%s: Validate() = %v, want accepted", tc.name, err)
+		case tc.wantRefuse && err == nil:
+			t.Errorf("%s: Validate() accepted a width above the profile's ceiling of 32; want a refusal", tc.name)
+		case tc.wantRefuse && !strings.Contains(err.Error(), "32"):
+			t.Errorf("%s: Validate() = %v, want the refusal to name the profile's own ceiling of 32", tc.name, err)
+		}
+	}
+
+	// Upwards. No registered profile does this — all four Yaesu
+	// registrations carry MaxDigitsCeiling, because all four render into
+	// core/cat — and it is asserted only to prove the constant is not
+	// consulted behind the field's back.
+	wide := fixtureRequired
+	wide.DigitsCeiling = MaxDigitsCeiling + 100
+	wide.MaxDigits = MaxDigitsCeiling + 50
+	if err := wide.Validate(); err != nil {
+		t.Errorf("Validate() refused a width inside the profile's own wider ceiling: %v", err)
 	}
 }
 
@@ -296,6 +353,13 @@ func TestFT710Profile_MatchesTodaysConstants(t *testing.T) {
 	if p.MinDigits != 1 || p.MaxDigits != 4 || p.TextWidth != 12 || p.MaxObservedWidth != 12 {
 		t.Errorf("bounds drifted: %+v", p)
 	}
+	// Every registered profile renders into core/cat, so every one of them
+	// carries core/cat's own ceiling. A Kenwood profile will not: it renders
+	// into core/kw and supplies that package's constant instead, which is
+	// what makes the field per-family rather than global.
+	if p.DigitsCeiling != MaxDigitsCeiling {
+		t.Errorf("DigitsCeiling = %d, want %d (core/cat's own ceiling)", p.DigitsCeiling, MaxDigitsCeiling)
+	}
 	if p.ExpectedRows != 296 {
 		t.Errorf("ExpectedRows = %d, want 296", p.ExpectedRows)
 	}
@@ -350,6 +414,9 @@ func TestFTdx10Profile_Registered(t *testing.T) {
 	}
 	if p.MinDigits != 1 || p.MaxDigits != 4 || p.TextWidth != 12 || p.MaxObservedWidth != 12 {
 		t.Errorf("bounds drifted: %+v", p)
+	}
+	if p.DigitsCeiling != MaxDigitsCeiling {
+		t.Errorf("DigitsCeiling = %d, want %d (core/cat's own ceiling)", p.DigitsCeiling, MaxDigitsCeiling)
 	}
 	if p.ExpectedRows != 197 {
 		t.Errorf("ExpectedRows = %d, want 197 (the group-boundary ledger's count)", p.ExpectedRows)
@@ -418,6 +485,9 @@ func TestFTdx101Profile_MatchesTodaysConstants(t *testing.T) {
 	}
 	if p.MaxObservedWidth != 12 {
 		t.Errorf("MaxObservedWidth = %d, want 12 (the inert sentinel)", p.MaxObservedWidth)
+	}
+	if p.DigitsCeiling != MaxDigitsCeiling {
+		t.Errorf("DigitsCeiling = %d, want %d (core/cat's own ceiling)", p.DigitsCeiling, MaxDigitsCeiling)
 	}
 	if p.ExpectedRows != 193 {
 		t.Errorf("ExpectedRows = %d, want 193 (the group-boundary ledger's count)", p.ExpectedRows)
@@ -547,6 +617,9 @@ func TestFT891Profile_MatchesTodaysConstants(t *testing.T) {
 	}
 	if p.MaxObservedWidth != 12 {
 		t.Errorf("MaxObservedWidth = %d, want 12 (the inert sentinel)", p.MaxObservedWidth)
+	}
+	if p.DigitsCeiling != MaxDigitsCeiling {
+		t.Errorf("DigitsCeiling = %d, want %d (core/cat's own ceiling)", p.DigitsCeiling, MaxDigitsCeiling)
 	}
 	if p.ExpectedRows != 159 {
 		t.Errorf("ExpectedRows = %d, want 159 (the group-boundary ledger's count)", p.ExpectedRows)
