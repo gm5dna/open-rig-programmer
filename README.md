@@ -83,8 +83,12 @@ your machine: it refuses to run on the wrong architecture, and the
 amd64 installer will not run on an ARM64 machine even though ARM64
 Windows can emulate x64 programs. The installer puts the app, the
 command line and a Start-menu entry under `Program Files`; the zip is
-a single `rigprog.exe` — unpack and run, no install. Nothing on this
-page has been tried on a Windows machine by this project yet; see
+a single `rigprog.exe` — unpack and run, no install. The GUI needs
+Microsoft's WebView2 runtime: Windows 11 is expected to already ship
+it; if it is missing, the installer is configured to download it,
+which needs an internet connection — not yet tried by this project.
+None of the Windows instructions has been tried on a Windows machine
+by this project yet; see
 [docs/windows-setup.md](docs/windows-setup.md) for the full picture.
 
 ## First use
