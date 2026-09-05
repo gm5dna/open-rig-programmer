@@ -177,7 +177,7 @@ func TestCapabilities_MatrixValuesPerRow(t *testing.T) {
 // "no ceiling" to every validator, and a zero TagLen makes CHIRP import
 // truncate every name to "".
 func TestCapabilities_EveryFieldExplicit(t *testing.T) {
-	// The twelve the matrix records as deliberately EMPTY on the 590 rows,
+	// The seventeen the matrix records as deliberately EMPTY on the 590 rows,
 	// each with the section that says so. Filters is NOT here: it is empty
 	// on one row and populated on the other, so it is checked per row in
 	// TestCapabilities_MatrixValuesPerRow instead.
@@ -557,5 +557,41 @@ func TestCapabilities_ZeroFrequencyBoundsDisableTheCheck(t *testing.T) {
 	})
 	if !errors.Is(err, kw.ErrOutOfDomain) {
 		t.Errorf("BuildMWSet at 12 digits: err = %v, want kw.ErrOutOfDomain", err)
+	}
+}
+
+// TestCapabilities_ASessionHandsOutDefensiveCopies is the SESSION half of the
+// defence, and it is the half cloneCapabilities is actually for. Its sibling
+// above mutates the result of CapabilitiesUnverified and compares against a
+// freshly BUILT set, which baseCapabilities makes true whatever
+// cloneCapabilities does; only a second call on the SAME session can witness
+// that Session.Capabilities copied anything.
+//
+// It is load-bearing from Stage 2 task 12, when WriteChannel begins enforcing
+// against s.caps: a caller that mutated what it was handed must not be able
+// to widen the gate it is about to be measured by.
+//
+// RED PROOF, observed: with cloneCapabilities' "return out" replaced by
+// "return caps" this test fails at the mutated bank slot and the mutated
+// field grade, while the rest of the package stays green.
+func TestCapabilities_ASessionHandsOutDefensiveCopies(t *testing.T) {
+	for _, row := range bothRows {
+		sess, _ := openTestSession(t, row, radioImage{})
+		handed := sess.Capabilities()
+		handed.Modes[0] = "MUTATED"
+		handed.Bauds[0] = 1
+		handed.Banks[0].Slots[0] = "MUTATED"
+		handed.Banks[0].Fields[spec.FieldErase] = spec.FieldSupport{Read: spec.Supported, Write: spec.Supported}
+
+		next := sess.Capabilities()
+		if next.Modes[0] == "MUTATED" || next.Bauds[0] == 1 {
+			t.Errorf("%s: a mutated slice reached the next Session.Capabilities caller", modelNameFor(row))
+		}
+		if next.Banks[0].Slots[0] == "MUTATED" {
+			t.Errorf("%s: a mutated bank slot reached the next Session.Capabilities caller", modelNameFor(row))
+		}
+		if next.Banks[0].Fields[spec.FieldErase].CanWrite() {
+			t.Errorf("%s: a mutated field grade reached the next Session.Capabilities caller — this is the write gate T12 enforces against, and no Kenwood row grades an erase at all", modelNameFor(row))
+		}
 	}
 }

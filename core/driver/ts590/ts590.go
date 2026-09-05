@@ -224,6 +224,40 @@ func (d *ts590Driver) readSpec(prefix string, exactLen, retries int) transport.C
 	}
 }
 
+// wireFailure types the TWO WIRE EVENTS a Kenwood exchange can meet, so
+// every frame this driver sends reports them the same way: a "?;" as
+// *kw.RejectionError, which names the two indistinguishable causes the books
+// print for it and cites the transient-suppression sentence, and silence as
+// *kw.TimeoutError, which says in as many words that it is not an inference
+// of absence. ReadChannel's doc comment carries the substance of both.
+//
+// IT IS ONE FUNCTION BECAUSE THE RULE IS ONE RULE. The design states it
+// unqualified for this family rather than for the read path only, and the
+// probe's ID; and FV; are frames like any other: a reader who met the typed
+// error on an MR and the transport's bare error on an ID would reasonably
+// conclude the two wire events mean something different there.
+// TestOpen_AProbeFrameThatDoesNotANSWERRefusesTheSession pins both probe
+// frames and TestReadChannel_ARejectionIsDefinitiveAndNeverAbsence and
+// TestReadChannel_ATimeoutIsNotAnInferenceOfAbsence the read.
+//
+// Anything else is returned unchanged, as is either wire event on a layout
+// naming no book — unreachable, since a configured layout always names one,
+// and an error quoting a document this session was never told it was speaking
+// to is what kw's fallible constructors exist to prevent.
+func wireFailure(layout kw.Layout, command string, err error) error {
+	switch {
+	case errors.Is(err, transport.ErrRejected):
+		if rej, nerr := kw.NewRejectionError(layout.Book(), command); nerr == nil {
+			return rej
+		}
+	case errors.Is(err, transport.ErrTimeout):
+		if to, nerr := kw.NewTimeoutError(layout.Book(), command); nerr == nil {
+			return to
+		}
+	}
+	return err
+}
+
 // Open implements driver.Driver: it builds a transport.Engine over port
 // bound to THIS ROW'S codec layout, establishes the session (Init: AI0; and
 // drain-to-quiet), then runs the matrix §3.5 identity probe — "ID;", and on
@@ -304,12 +338,12 @@ func (d *ts590Driver) open(ctx context.Context, eng *transport.Engine, layout kw
 	}
 
 	s := &Session{
-		eng:    eng,
-		row:    d.row,
-		layout: layout,
-		id:     id,
-		caps:   d.sessionCapabilities(),
-		spec:   d.readSpec,
+		eng:         eng,
+		row:         d.row,
+		layout:      layout,
+		id:          id,
+		caps:        d.sessionCapabilities(),
+		newReadSpec: d.readSpec,
 	}
 	s.fvAnswer = fv
 	s.fvMajor, s.fvMinor, s.fvGrammarOK = parseFirmwareVersion(fv)
@@ -324,7 +358,7 @@ func (d *ts590Driver) probeID(ctx context.Context, eng *transport.Engine, layout
 	}
 	frame, err := eng.Do(ctx, cmd, d.idSpec())
 	if err != nil {
-		return "", fmt.Errorf("ts590: Open: ID probe: %w", err)
+		return "", fmt.Errorf("ts590: Open: ID probe: %w", wireFailure(layout, "ID", err))
 	}
 	got, err := layout.ParseIDAnswer(frame)
 	if err != nil {
@@ -351,7 +385,8 @@ func (d *ts590Driver) probeID(ctx context.Context, eng *transport.Engine, layout
 //     raw bytes are carried verbatim into the session and the consequence
 //     is confined to the write path (A13, A14; the ladder is T12's).
 //
-// The 6-byte structural parse in between — prefix, width, printable ASCII —
+// The 7-byte structural parse in between — prefix, width, printable ASCII —
+// (kw.FVAnswerLen; six is the ID answer's length, kw.IDAnswerLen)
 // is the ENVELOPE's, not the grammar's, so its failure is a malformed frame
 // and fails Open like any other.
 func (d *ts590Driver) probeFV(ctx context.Context, eng *transport.Engine, layout kw.Layout) (string, error) {
@@ -361,7 +396,7 @@ func (d *ts590Driver) probeFV(ctx context.Context, eng *transport.Engine, layout
 	}
 	frame, err := eng.Do(ctx, cmd, d.fvSpec())
 	if err != nil {
-		return "", fmt.Errorf("ts590: Open: FV probe: %w", err)
+		return "", fmt.Errorf("ts590: Open: FV probe: %w", wireFailure(layout, "FV", err))
 	}
 	answer, err := layout.ParseFVAnswer(frame)
 	if err != nil {
@@ -450,16 +485,20 @@ type Session struct {
 	layout kw.Layout
 	id     driver.Identity
 	caps   spec.Capabilities // effective; never mutated after Open
-	// spec builds this session's read specs, carrying the driver's
+	// newReadSpec builds this session's read specs, carrying the driver's
 	// test-only timing overrides. A func rather than the two durations so
 	// there is one construction site for a CommandSpec in this package.
-	spec func(prefix string, exactLen, retries int) transport.CommandSpec
+	// NAMED FOR THE PACKAGE IT MUST NOT BE MISTAKEN FOR: these files also
+	// use spec.Bank and spec.Capabilities two lines away.
+	newReadSpec func(prefix string, exactLen, retries int) transport.CommandSpec
 
 	// The probe's FV answer and what this programme could read of it.
 	//
 	// fvAnswer is P1's four characters VERBATIM and is what a probe note
 	// reports, whatever the grammar did — so an owner of a 2.xx TS-590S can
-	// see the version even where this programme could not parse it.
+	// see the version even where this programme could not parse it. It is
+	// read out through FirmwareAnswer, whose doc comment carries the design
+	// requirement and says where the rendering lands.
 	// fvGrammarOK false means A13's assumed M.NN form did not hold, and
 	// fvMajor/fvMinor are then zero and must not be read.
 	//
@@ -482,6 +521,38 @@ func (s *Session) Identity() driver.Identity { return s.id }
 // in the sibling drivers — a caller mutating what it was handed must never
 // alter what WriteChannel enforces.
 func (s *Session) Capabilities() spec.Capabilities { return cloneCapabilities(s.caps) }
+
+// FirmwareAnswer returns the FV probe's P1 EXACTLY AS THE RADIO ANSWERED IT —
+// the four characters verbatim, whether or not this programme could read them
+// as A13's assumed M.NN form, and "" only on a session that never got one
+// (which Open makes unreachable: an FV that does not answer refuses the
+// session).
+//
+// IT EXISTS BECAUSE THE ANSWER IS A REPORTED FACT, NOT A PRIVATE ONE. The
+// design requires the raw bytes to reach the probe note regardless of parse,
+// "so an owner of a 2.xx TS-590S can see that their radio has a capability
+// this row does not publish" — the stated mitigation for the published cost
+// of the S row's firmware-blind filter grade (§"Firmware and the filter
+// field"; §"Error handling"; §"Refusals and their shapes"; matrix §2.7,
+// §3.5). Without an accessor the datum is unreachable outside this package
+// and no note can carry it.
+//
+// WHAT THIS METHOD IS NOT, AND WHERE THE REST LANDS. Rendering it is the
+// registration task's (T18): "rigprog probe" prints internal/radiotext's
+// per-model prose, which is STATIC and so cannot carry a per-session value,
+// and the fleet's per-session probe surfaces are optional interfaces a
+// caller type-asserts (driver.RegionReporter, driver.DiagnosticsReporter).
+// Those interfaces were each named on the neutral seam AFTER the method
+// existed on a driver's own Session — core/driver/optional.go says so of
+// both — so this is that shape's first half and deliberately no more. The
+// Icom route of appending a token to Identity.CATID is NOT available here:
+// internal/wiring's per-model identity check accepts a prefix match only
+// where the static CATID is a bare two-character CI-V address, and this
+// family's is three characters (core/driver/driver.go's Identity).
+//
+// TestOpen_TheFVAnswerIsReadableForTheProbeNote pins it on both rows, parsed
+// and unparsed.
+func (s *Session) FirmwareAnswer() string { return s.fvAnswer }
 
 // Diagnostics reports this session's transport-level health counters as a
 // point-in-time snapshot — the driver-layer surface for the engine's own

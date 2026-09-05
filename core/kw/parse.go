@@ -20,8 +20,16 @@ import (
 // classification that a Kenwood record codec neither has nor should acquire.
 // The record_test.go helper reproduces the contract's SHAPE — classify,
 // recover the measured lengths, exact text — in this family's own error
-// vocabulary. T11 consumes the fleet helper as the plan intends, from a
-// package that can import it.
+// vocabulary. T11 DOES NOT CONSUME THE FLEET HELPER EITHER, and the reason
+// is the second one rather than the import rule: core/driver/ts590 can reach
+// drivertest, but calling it would make that driver import core/civ and claim
+// driver.ErrWrongRadio for a frame width, which on this family is false — a
+// short MR answer is a malformed memory frame on the READ path, not a
+// probe-time radio classification. It keeps a package-local helper of the
+// same shape. The Kenwood-shaped sibling both packages can share
+// (drivertest.AssertKenwoodRecordLengthMismatch, over *RecordLengthError and
+// ErrParse) lands at T14 with the TS-480, which is the first point two
+// drivers need it.
 type RecordLengthError struct {
 	// Command is the two-letter frame name, "MR" or "MW".
 	Command string
