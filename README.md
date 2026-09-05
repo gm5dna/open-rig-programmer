@@ -60,6 +60,8 @@ page lets you check any download.
 | macOS command line | `rigprog-<version>-darwin-universal.tar.gz` |
 | Debian, Ubuntu, Mint (app + command line) | `open-rig-programmer_<version>_amd64.deb` or `_arm64.deb` (version without the leading `v`) |
 | Other Linux (command line only) | `rigprog-<version>-linux-amd64.tar.gz` or `-arm64.tar.gz` |
+| Windows (installer, app + command line) | `open-rig-programmer-<version>-windows-amd64-installer.exe` or `-arm64-installer.exe` |
+| Windows (command line only, zip) | `rigprog-<version>-windows-amd64.zip` or `-arm64.zip` |
 
 **macOS**: the app is not notarised, so the first time, right-click it
 and choose *Open*. After that it opens normally.
@@ -73,6 +75,21 @@ yet.
 **Other Linux**: the command-line tarball is a single static binary —
 unpack and run. To build the app yourself, see
 [docs/building.md](docs/building.md).
+
+**Windows**: the installer is not code-signed, so the first time,
+Windows SmartScreen is expected to show *Windows protected your PC* —
+click *More info*, then *Run anyway*. Pick the installer that matches
+your machine: it refuses to run on the wrong architecture, and the
+amd64 installer will not run on an ARM64 machine even though ARM64
+Windows can emulate x64 programs. The installer puts the app, the
+command line and a Start-menu entry under `Program Files`; the zip is
+a single `rigprog.exe` — unpack and run, no install. The GUI needs
+Microsoft's WebView2 runtime: Windows 11 is expected to already ship
+it; if it is missing, the installer is configured to download it,
+which needs an internet connection — not yet tried by this project.
+None of the Windows instructions has been tried on a Windows machine
+by this project yet; see
+[docs/windows-setup.md](docs/windows-setup.md) for the full picture.
 
 ## First use
 
@@ -91,6 +108,15 @@ the tarball, create it by hand as described in
 [docs/linux-setup.md](docs/linux-setup.md). The Linux port setup has
 been tested in virtual machines, not yet with a radio attached.
 
+**Serial port, Windows**: nothing to install beyond the driver Windows
+normally supplies on its own (see
+[docs/windows-setup.md](docs/windows-setup.md)). The radio's USB
+adapter shows two COM ports in Device Manager, and unlike macOS,
+Windows most likely lists both as usable — probe each one
+(`rigprog probe --port COM3`, `rigprog probe --port COM4`, and so on)
+to find the one that answers. None of this has been tried on a Windows
+machine yet.
+
 **In the app**: choose the radio and the port, connect (or press
 *Demo* to try it with a simulated radio), read, edit in the grid, then
 *Send*. Before anything is transmitted, the app shows every change it
@@ -101,6 +127,7 @@ is about to make, and anything it refuses to make, with the reason.
 ```sh
 rigprog ports                                  # list likely serial ports
 rigprog probe --port /dev/cu.SLAB_USBtoUART    # confirm which radio answers
+rigprog probe --port COM3                      # Windows: the port name from Device Manager
 rigprog read  --port ... --out radio.json      # save the radio's memories to a file
 rigprog diff  --port ... edited.json           # preview what would change
 rigprog write --port ... edited.json           # send the changes
