@@ -537,8 +537,8 @@ func TestRegistry_HoldsEveryModel(t *testing.T) {
 	}
 	// No two profiles may share the datum that would let one `go generate`
 	// overwrite another's artefact, or read another's source CSV. That datum
-	// is validateRegistry's three collision keys — OutFile, VarName and
-	// ManualCSV — NOT the package clause.
+	// is validateRegistry's four collision keys — OutFile, VarName,
+	// ManualCSV and ObservedCSV — NOT the package clause.
 	//
 	// Until the FT-891 every registration lived in a package of its own, so
 	// "no two share a Package" and the real rule happened to coincide; they do
@@ -546,7 +546,7 @@ func TestRegistry_HoldsEveryModel(t *testing.T) {
 	// belong in ONE directory is refused by the narrower reading while
 	// validateRegistry accepts it. The assertion is widened rather than
 	// deleted, and sharedGenerateDatum is what states it —
-	// TestSharedPackageNeedsAllThreeKeysToDiffer proves it both fires and
+	// TestSharedPackageNeedsAllKeysToDiffer proves it both fires and
 	// does not fire, so the widening cannot quietly become no rule at all.
 	for _, v := range sharedGenerateDatum(got) {
 		t.Error(v)
@@ -554,23 +554,30 @@ func TestRegistry_HoldsEveryModel(t *testing.T) {
 }
 
 // sharedGenerateDatum reports each pair in ps that shares a package AND any
-// one of validateRegistry's three collision keys. A shared package alone is
+// one of validateRegistry's four collision keys. A shared package alone is
 // permitted: it is a directory, not a datum, and two profiles in one
 // directory collide with nothing provided their output file, their generated
-// variable and their source CSV all differ.
+// variable and their source CSVs all differ. Package is a proxy for the
+// output DIRECTORY here, not the collision itself: Go requires one package
+// clause per directory, so two profiles that write into one directory always
+// share Package, and the only failure mode this proxy can have is a false
+// positive for two profiles in different directories that happen to declare
+// the same package name — the safe direction.
 //
 // The keys fold exactly as validateRegistry's own do, and for its reasons:
-// OutFile and ManualCSV are PATHS, and APFS and NTFS resolve a case-only
-// difference to one file, so a byte-equal comparison would miss a real
-// collision. VarName is a Go IDENTIFIER, where case is significant to the
-// compiler — exItems and EXItems are two legal package-level variables — so
-// folding it would refuse a pair Go itself accepts.
+// OutFile, ManualCSV and ObservedCSV are PATHS, and APFS and NTFS resolve a
+// case-only difference to one file, so a byte-equal comparison would miss a
+// real collision. VarName is a Go IDENTIFIER, where case is significant to
+// the compiler — exItems and EXItems are two legal package-level variables —
+// so folding it would refuse a pair Go itself accepts.
 //
-// Two of the three are also refused by validateRegistry at init. ManualCSV is
-// not: that function's inputs map exists to catch one profile's OUTPUT
-// landing on another's source, and it simply overwrites a shared input. So
-// this helper is the whole of that third rule, and what it protects is a
-// sibling inventory being generated from the wrong radio's chart.
+// Two of the four are also refused by validateRegistry at init. ManualCSV and
+// ObservedCSV are not: that function's inputs map exists to catch one
+// profile's OUTPUT landing on another's source, and it simply overwrites a
+// shared input rather than refusing the second write. So this helper is the
+// whole of that rule for both source keys, and what it protects is a sibling
+// inventory being generated from the wrong radio's chart — from the wrong
+// manual CSV, or (ObservationsRequired siblings) the wrong observation CSV.
 func sharedGenerateDatum(ps []NamedProfile) []string {
 	var out []string
 	for i := range ps {
@@ -589,12 +596,23 @@ func sharedGenerateDatum(ps []NamedProfile) []string {
 						a.Name, b.Name, a.Profile.Package, k.key, k.av))
 				}
 			}
+			// ObservedCSV is checked separately, with an empty-string guard
+			// the other three keys do not need: "" is a real ManualCSV-shape
+			// collision but not a real ObservedCSV one, because "" is what
+			// every ObservationsAbsent profile carries (Validate refuses any
+			// other value under that policy) and validateRegistry itself
+			// never adds a blank ObservedCSV to its inputs map
+			// (profile.go:756-757) — two absent siblings share nothing.
+			if av, bv := strings.ToLower(a.Profile.ObservedCSV), strings.ToLower(b.Profile.ObservedCSV); av != "" && av == bv {
+				out = append(out, fmt.Sprintf("profiles %q and %q both emit into package %q and share %s %q",
+					a.Name, b.Name, a.Profile.Package, "ObservedCSV", av))
+			}
 		}
 	}
 	return out
 }
 
-// TestSharedPackageNeedsAllThreeKeysToDiffer is the red proof each way for
+// TestSharedPackageNeedsAllKeysToDiffer is the red proof each way for
 // the widening above: the rule must ADMIT a shared package when all three
 // keys differ, and must still REFUSE each key on its own. A widening proved
 // only in the permissive direction is indistinguishable from deleting the
@@ -603,13 +621,21 @@ func sharedGenerateDatum(ps []NamedProfile) []string {
 // Every profile here is test-local. The three Kenwood registrations land in
 // their own tasks with their own CSVs; nothing in this test registers
 // anything.
-func TestSharedPackageNeedsAllThreeKeysToDiffer(t *testing.T) {
+func TestSharedPackageNeedsAllKeysToDiffer(t *testing.T) {
 	single := func(pkg, out, varName, csv string) Profile {
 		p := fixtureAbsent
 		p.Package = pkg
 		p.OutFile = out
 		p.VarName = varName
 		p.ManualCSV = csv
+		return p
+	}
+	// withObserved switches p to ObservationsRequired and gives it the named
+	// observation CSV — fixtureAbsent's ObservedCSV is "" under
+	// ObservationsAbsent, so the fourth key needs a fixture that carries one.
+	withObserved := func(p Profile, csv string) Profile {
+		p.Observations = ObservationsRequired
+		p.ObservedCSV = csv
 		return p
 	}
 	for _, tc := range []struct {
@@ -664,6 +690,21 @@ func TestSharedPackageNeedsAllThreeKeysToDiffer(t *testing.T) {
 			single("ts590", "exinventory590s_gen.go", "exItems590S", "menu590s.csv"),
 			single("ts590", "exinventory590sg_gen.go", "exItems590SG", "menu590s.csv"),
 			"ManualCSV", false,
+		},
+		{
+			// validateRegistry's fourth input key (profile.go:755-757), and
+			// the one MEDIUM-1 found missing here: two ObservationsRequired
+			// siblings sharing an observation chart would have the SG's
+			// inventory rendered from the S's hardware readings, the whole
+			// suite green, and neither this helper nor validateRegistry said
+			// a word. Before this case was checked, sharedGenerateDatum's
+			// key table had only three rows (OutFile, VarName, ManualCSV) and
+			// reported nothing for this pair — red until the fourth
+			// {"ObservedCSV", ...} row below was added.
+			"one package, one ObservedCSV",
+			withObserved(single("ts590", "exinventory590s_gen.go", "exItems590S", "menu590s.csv"), "menu590-observed.csv"),
+			withObserved(single("ts590", "exinventory590sg_gen.go", "exItems590SG", "menu590sg.csv"), "menu590-observed.csv"),
+			"ObservedCSV", false,
 		},
 		{
 			// The four Yaesu registrations' own shape: identical file,

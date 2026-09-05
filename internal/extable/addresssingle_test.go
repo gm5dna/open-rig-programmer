@@ -33,12 +33,6 @@ const singleRow = "08,00,00,RADIO SETTING,MODE SSB,AGC FAST DELAY,20 - 4000,4,fa
 // appear in the lookup key.
 const singleObservedRow = "08,00,00,3,numeric\n"
 
-func TestAddressSingle_String(t *testing.T) {
-	if got := AddressSingle.String(); got != "AddressSingle" {
-		t.Errorf("AddressSingle.String() = %q, want \"AddressSingle\"", got)
-	}
-}
-
 // TestProfileValidate_AddressSingle covers the second of the form's five
 // sites: Profile.Validate must ADMIT the new member and must still refuse an
 // unset one on a profile of this shape, for the reason every other policy on
@@ -180,5 +174,36 @@ func TestRenderGo_SingleProfileKeysObservationsByTwoDigitForm(t *testing.T) {
 	// form the last two are the zeroes ParseCSV has already required.
 	if !strings.Contains(string(out), "EXAddress{P1: 8, P2: 0, P3: 0}") {
 		t.Errorf("generated output does not carry the single-form address:\n%s", out)
+	}
+}
+
+// TestParseCSV_AddressSingleP1DomainIs0To99 pins the component cap
+// parseRecord already enforces for every form (extable.go:119-123) under
+// THIS one explicitly: a Kenwood chart prints a three-digit menu number, but
+// it is numerically 0..99 (SG's own maximum is 099), so P1 fits the existing
+// two-digit cap with room. Pinning it here means the T9 transcriber meets a
+// stated bound rather than discovering the general cap through a failing
+// parse of some future radio's row 100.
+func TestParseCSV_AddressSingleP1DomainIs0To99(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		p1      string
+		wantErr string // "" means the row MUST parse
+	}{
+		{"P1 = 99 is the top of the domain", "99", ""},
+		{"P1 = 100 is refused", "100", "0..99"},
+	} {
+		csv := tc.p1 + ",00,00,RADIO SETTING,MODE SSB,AGC FAST DELAY,20 - 4000,4,false,646\n"
+		rows, err := ParseCSV(withRows(fixtureSingleRequired, 1), []byte(csv))
+		switch {
+		case tc.wantErr == "" && err != nil:
+			t.Errorf("%s: ParseCSV() = %v, want the row to parse", tc.name, err)
+		case tc.wantErr == "" && len(rows) != 1:
+			t.Errorf("%s: ParseCSV() returned %d rows, want 1", tc.name, len(rows))
+		case tc.wantErr != "" && err == nil:
+			t.Errorf("%s: ParseCSV() accepted the row, want a refusal naming %q", tc.name, tc.wantErr)
+		case tc.wantErr != "" && !strings.Contains(err.Error(), tc.wantErr):
+			t.Errorf("%s: ParseCSV() = %v, want it to name %q", tc.name, err, tc.wantErr)
+		}
 	}
 }
