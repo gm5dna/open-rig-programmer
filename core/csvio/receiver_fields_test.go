@@ -67,7 +67,15 @@ func TestExport_ReceiveOnlyTxFrequencyUsesExistingUnavailableCell(t *testing.T) 
 	}
 }
 
-func TestExport_Version3ChosenOnlyByRecordedReceiverField(t *testing.T) {
+// TestExport_Version3ChosenByReceiverFieldNeedingAColumn pins the D8
+// column-set rule: version 3 for any receiver field version 2 cannot
+// carry — Known, Unknown or ABSENT — and version 2 only while all seven
+// are Unavailable, the one state a missing column group reconstructs
+// correctly (import.go markReceiverFieldsUnavailable). It is the same
+// predicate as the D4 group's, and
+// TestNeedsTierColumns_AgreesWithTheSchemaRule pins both to
+// core/codeplug's schema rule.
+func TestExport_Version3ChosenByReceiverFieldNeedingAColumn(t *testing.T) {
 	headerOf := func(channels []codeplug.Channel) string {
 		t.Helper()
 		var buf bytes.Buffer
@@ -87,9 +95,9 @@ func TestExport_Version3ChosenOnlyByRecordedReceiverField(t *testing.T) {
 			channels := yaesuLikeChannels()
 			channels[0].Data.Duplex = codeplug.StringField{State: codeplug.Known, Value: "OFF"}
 			mutate(channels[0].Data)
-			want := strings.Join(headerV2, ",")
-			if name == "known" || name == "unknown" {
-				want = strings.Join(headerV3, ",")
+			want := strings.Join(headerV3, ",")
+			if name == "unavailable" {
+				want = strings.Join(headerV2, ",")
 			}
 			if got := headerOf(channels); got != want {
 				t.Errorf("header = %q, want %q", got, want)

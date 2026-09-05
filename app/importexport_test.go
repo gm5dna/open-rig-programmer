@@ -112,6 +112,80 @@ func TestImportCSV_NormalisesExplicitAbsentTierField(t *testing.T) {
 	}
 }
 
+// icomWorkingCopy returns buildImportBase's channels under the IC-7610's
+// own radio identity — a working copy whose model REACHES filter, which
+// no Yaesu baseline does. It is what the two mismatched-model tests below
+// load into a.working while a.conn holds a connected FT-710, so "whose
+// capabilities did the composition root normalise against" has an
+// observable answer.
+//
+// Only slot "001" matters, and it is in the IC-7610's MEM bank
+// ("001".."099") as well as the FT-710's; the PMS slots belong to no
+// IC-7610 bank, where filter is unreachable and the pass is a no-op
+// either way. The inventory stays buildImportBase's because MergeCSV
+// requires the CSV and the working copy to agree on it exactly, and both
+// sides here are built from this one function.
+func icomWorkingCopy(t *testing.T) *codeplug.Codeplug {
+	t.Helper()
+	caps, err := wiring.StaticCapabilities(wiring.IC7610Model)
+	if err != nil {
+		t.Fatalf("wiring.StaticCapabilities(%s): %v", wiring.IC7610Model, err)
+	}
+	cp := buildImportBase()
+	cp.Radio = codeplug.RadioInfo{Model: caps.Model, CATID: caps.CATID}
+	return cp
+}
+
+// TestImportCSV_MismatchedConnectedModelKeepsReachableAbsent pins WHOSE
+// capabilities the CSV-import root normalises against: the WORKING COPY's
+// model, not the connected session's.
+//
+// The app permits the two to differ — nothing stops a user loading an
+// IC-7610 codeplug with an FT-710 plugged in — and the difference is the
+// whole test. Normalising against the connected FT-710 would answer "this
+// radio has no filter field" for a channel belonging to a radio that has
+// one, settling the state to Unavailable; the IC-7610's own Validate then
+// sees a settled field and raises nothing, which is the send-gate
+// laundering this branch closed at the CSV boundary reopened by a
+// mismatched model. Left Absent, Validate refuses it honestly.
+func TestImportCSV_MismatchedConnectedModelKeepsReachableAbsent(t *testing.T) {
+	a, _ := newTestApp(t)
+	sess := openTestSimSession(t) // a connected FT-710, not the file's radio
+	a.mu.Lock()
+	a.working = icomWorkingCopy(t)
+	a.conn = &connectionState{session: sess}
+	a.mu.Unlock()
+
+	importSource := icomWorkingCopy(t)
+	importSource.Channels[0].Data.Filter = codeplug.StringField{State: codeplug.Absent}
+	csvPath := filepath.Join(t.TempDir(), "reachable-absent.csv")
+	f, err := os.Create(csvPath)
+	if err != nil {
+		t.Fatalf("creating CSV fixture: %v", err)
+	}
+	if err := csvio.Export(f, importSource.Channels); err != nil {
+		t.Fatalf("csvio.Export fixture: %v", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatalf("closing CSV fixture: %v", err)
+	}
+	a.dialogs.(*fakeDialogs).openFilePath = csvPath
+
+	result, err := a.ImportCSV()
+	if err != nil {
+		t.Fatalf("ImportCSV: unexpected error: %v", err)
+	}
+	if !result.Merged {
+		t.Fatalf("ImportCSV(reachable absent) = %+v, want Merged=true", result)
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if got := a.working.Channels[0].Data.Filter.State; got != codeplug.Absent {
+		t.Errorf("merged filter state = %q, want Absent (the working copy's IC-7610 HAS a filter field; only the connected FT-710 does not)", got)
+	}
+}
+
 func TestImportCSV_InventoryMismatchRefuses(t *testing.T) {
 	a, _ := newTestApp(t)
 	a.mu.Lock()

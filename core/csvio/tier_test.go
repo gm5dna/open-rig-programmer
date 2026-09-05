@@ -4,6 +4,8 @@ package csvio
 
 import (
 	"bytes"
+	"encoding/csv"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -90,9 +92,10 @@ func TestExport_YaesuOutputByteIdentical(t *testing.T) {
 }
 
 // TestExport_VersionChosenByContent pins the versioning rule: the
-// version-1 header while nothing is recorded, the version-2 header as
-// soon as one tier field is — the exporter's analogue of
-// core/codeplug's lowest-schema writer.
+// version-1 header while every tier field is Unavailable, the version-2
+// header as soon as one is in any other state — the exporter's analogue
+// of core/codeplug's lowest-schema writer, agreement with which
+// TestNeedsTierColumns_AgreesWithTheSchemaRule pins directly.
 func TestExport_VersionChosenByContent(t *testing.T) {
 	headerOf := func(channels []codeplug.Channel) string {
 		var buf bytes.Buffer
@@ -118,6 +121,13 @@ func TestExport_VersionChosenByContent(t *testing.T) {
 	for name, mutate := range map[string]func(*codeplug.ChannelData){
 		"a Known tier field":    func(d *codeplug.ChannelData) { d.Duplex = codeplug.StringField{State: codeplug.Known, Value: "DUP+"} },
 		"an Unknown tier field": func(d *codeplug.ChannelData) { d.Filter = codeplug.StringField{State: codeplug.Unknown} },
+		// Absent promotes too, and for a reason the other two do not
+		// share: version 1 has no cell for the field, so Import would
+		// reconstruct it as Unavailable (markTierFieldsUnavailable) and
+		// launder a state the send gate refuses into one it accepts.
+		// TestExportImport_ReachableAbsentFieldRemainsInvalid pins that
+		// consequence end to end.
+		"an Absent tier field": func(d *codeplug.ChannelData) { d.Filter = codeplug.StringField{} },
 	} {
 		t.Run(name, func(t *testing.T) {
 			channels := yaesuLikeChannels()
@@ -575,42 +585,105 @@ func TestImportCHIRP_YaesuBranchUnchanged(t *testing.T) {
 	})
 }
 
-// TestNeedsTierColumns_MatchesSchemaFor states the invariant the two
-// writers share: the CSV exporter and the codeplug file writer must
-// agree, channel for channel, about whether a tier field records
-// anything — otherwise a codeplug could round-trip through schema 3
-// while its CSV export claimed version 2, or the reverse.
-func TestNeedsTierColumns_MatchesSchemaFor(t *testing.T) {
-	for name, channels := range map[string][]codeplug.Channel{
-		"all Unavailable": yaesuLikeChannels(),
-		"one Known":       withTierField(func(d *codeplug.ChannelData) { d.Filter = codeplug.StringField{State: codeplug.Known, Value: "FIL1"} }),
-		"one Unknown":     withTierField(func(d *codeplug.ChannelData) { d.Filter = codeplug.StringField{State: codeplug.Unknown} }),
-		"one Absent":      withTierField(func(d *codeplug.ChannelData) { d.Filter = codeplug.StringField{} }),
+// TestNeedsTierColumns_AgreesWithTheSchemaRule pins the CSV exporter's
+// two column-set predicates to core/codeplug's schema rule, field state
+// for field state: promote when a field is NOT
+// FieldState.RepresentableByOmission — Known, Unknown OR ABSENT — which
+// is the clause schemaFor applies through
+// ChannelData.tierFieldsRepresentableByOmission
+// (core/codeplug/file.go:1201-1217).
+//
+// Agreement is checked against what core/codeplug ACTUALLY DOES with
+// the same channels — Save, then read the schema back — rather than
+// against a reimplementation of its rule here, so the two writers
+// cannot drift apart silently.
+//
+// The Absent rows are why this test was rewritten. Its previous version
+// asserted the opposite, on the claim that "an Absent field and an
+// Unavailable one both render as an empty cell". That claim is FALSE:
+// export.go:72-73 spells Absent "absent" and Unavailable "n/a", and a
+// version-1 file has no cell for either — so Import, having no column,
+// gives all seventeen Unavailable (markTierFieldsUnavailable). Staying
+// at version 1 for an Absent field therefore laundered it into
+// Unavailable across a round trip, which is exactly the send-gate hole
+// TestExportImport_ReachableAbsentFieldRemainsInvalid now guards.
+//
+// One deliberate divergence remains, and it is not about field state:
+// schemaFor also promotes to schema 4 for a frequency past schema 3's
+// uint32 ceiling, a limit of the JSON file's frozen loader that the CSV
+// columns never had. No row below carries such a frequency, so the
+// comparison here is of the tier-state clause alone.
+func TestNeedsTierColumns_AgreesWithTheSchemaRule(t *testing.T) {
+	for name, tt := range map[string]struct {
+		channels     []codeplug.Channel
+		wantTier     bool
+		wantReceiver bool
+	}{
+		"all Unavailable": {yaesuLikeChannels(), false, false},
+		"one Known D4": {withTierField(func(d *codeplug.ChannelData) {
+			d.Filter = codeplug.StringField{State: codeplug.Known, Value: "FIL1"}
+		}), true, false},
+		"one Unknown D4": {withTierField(func(d *codeplug.ChannelData) {
+			d.Filter = codeplug.StringField{State: codeplug.Unknown}
+		}), true, false},
+		"one Absent D4": {withTierField(func(d *codeplug.ChannelData) {
+			d.Filter = codeplug.StringField{}
+		}), true, false},
+		"one Known D8": {withTierField(func(d *codeplug.ChannelData) {
+			d.Antenna = codeplug.StringField{State: codeplug.Known, Value: "ANT2"}
+		}), false, true},
+		"one Unknown D8": {withTierField(func(d *codeplug.ChannelData) {
+			d.IPPlus = codeplug.BoolField{State: codeplug.Unknown}
+		}), false, true},
+		"one Absent D8": {withTierField(func(d *codeplug.ChannelData) {
+			d.AttenuatorDB = codeplug.IntField{}
+		}), false, true},
 	} {
 		t.Run(name, func(t *testing.T) {
-			wantV2 := needsTierColumns(channels)
-			// core/codeplug decides the same question with the same
-			// predicate; reproduce it here rather than importing an
-			// unexported function.
-			gotV2 := false
-			for _, ch := range channels {
-				if ch.Data == nil {
-					continue
-				}
-				d := *ch.Data
-				if d.TxFreqHz.State.Recorded() || d.Duplex.State.Recorded() ||
-					d.OffsetHz.State.Recorded() || d.ToneMode.State.Recorded() ||
-					d.ToneTx.State.Recorded() || d.ToneRx.State.Recorded() ||
-					d.DTCSCode.State.Recorded() || d.DTCSPolarity.State.Recorded() ||
-					d.Filter.State.Recorded() || d.DataMode.State.Recorded() {
-					gotV2 = true
-				}
+			if got := needsTierColumns(tt.channels); got != tt.wantTier {
+				t.Errorf("needsTierColumns() = %v, want %v", got, tt.wantTier)
 			}
-			if wantV2 != gotV2 {
-				t.Errorf("needsTierColumns() = %v, but the Recorded rule says %v", wantV2, gotV2)
+			if got := needsReceiverColumns(tt.channels); got != tt.wantReceiver {
+				t.Errorf("needsReceiverColumns() = %v, want %v", got, tt.wantReceiver)
+			}
+
+			// The agreement itself: schema 3 <-> version 1, schema 4
+			// <-> version 2, schema 5 <-> version 3.
+			wantSchema := 3
+			if tt.wantTier {
+				wantSchema = 4
+			}
+			if tt.wantReceiver {
+				wantSchema = 5
+			}
+			if got := savedSchemaOf(t, tt.channels); got != wantSchema {
+				t.Errorf("core/codeplug saved schema %d, but the CSV predicates chose version %d's columns", got, wantSchema-2)
 			}
 		})
 	}
+}
+
+// savedSchemaOf returns the schema core/codeplug's own lowest-schema
+// writer picks for channels, read back off the file it wrote — the
+// authority the CSV predicates are pinned to agree with.
+func savedSchemaOf(t *testing.T, channels []codeplug.Channel) int {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "agreement.json")
+	cp := &codeplug.Codeplug{Schema: codeplug.CurrentSchema, Generator: "csvio test", Channels: channels}
+	if err := codeplug.Save(path, cp); err != nil {
+		t.Fatalf("codeplug.Save() error = %v", err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading saved codeplug: %v", err)
+	}
+	var probe struct {
+		Schema int `json:"schema"`
+	}
+	if err := json.Unmarshal(raw, &probe); err != nil {
+		t.Fatalf("probing saved codeplug: %v", err)
+	}
+	return probe.Schema
 }
 
 // withTierField returns yaesuLikeChannels with one channel's tier field
@@ -619,6 +692,123 @@ func withTierField(mutate func(*codeplug.ChannelData)) []codeplug.Channel {
 	channels := yaesuLikeChannels()
 	mutate(channels[0].Data)
 	return channels
+}
+
+// TestExportImport_ReachableAbsentFieldRemainsInvalid is the CSV route's
+// half of the 31/08/2026 send-gate laundering defect, mirroring
+// core/codeplug's TestSaveLoad_ReachableAbsentFieldRemainsInvalid on the
+// other route out of the program. An Absent field which the radio CAN
+// reach is invalid before Export and must still be invalid after Export,
+// Import and capability normalisation.
+//
+// The chain each case walks is the whole defect: the state forces the
+// column group into the header, the cell spells "absent"
+// (export.go:72-73), Import reads that spelling back as Absent
+// (import.go parseTierState), NormaliseTierFields leaves a REACHABLE
+// Absent alone, and codeplug.Validate still refuses it. Before the fix
+// the first link broke — the header stayed at version 1, the field had
+// no cell at all, and Import's markTierFieldsUnavailable turned it into
+// the positive claim "this radio has no such field", which Validate
+// accepts.
+//
+// D4 and D8 are separate cases because they promote to different column
+// groups.
+func TestExportImport_ReachableAbsentFieldRemainsInvalid(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		field      spec.Field
+		column     string
+		wantHeader []string
+		prepare    func(*codeplug.ChannelData)
+	}{
+		{
+			name: "D4 duplex", field: spec.FieldDuplex, column: "duplex", wantHeader: headerV2,
+			prepare: func(d *codeplug.ChannelData) { d.Duplex = codeplug.StringField{} },
+		},
+		{
+			name: "D8 preamp", field: spec.FieldPreamp, column: "preamp", wantHeader: headerV3,
+			prepare: func(d *codeplug.ChannelData) { d.Preamp = codeplug.StringField{} },
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			caps := icomCHIRPCapabilities()
+			caps.PreampOptions = []string{"OFF", "ON"}
+			caps.Banks[0].Slots = []string{"G01-001"}
+			caps.Banks[0].Fields = map[spec.Field]spec.FieldSupport{
+				spec.FieldFrequency: {Read: spec.Supported, Write: spec.Supported},
+				spec.FieldMode:      {Read: spec.Supported, Write: spec.Supported},
+				spec.FieldTag:       {Read: spec.Supported, Write: spec.Supported},
+				tt.field:            {Read: spec.Supported, Write: spec.Supported},
+			}
+
+			data := codeplug.ChannelData{
+				FreqHz: 145_500_000, Mode: "FM",
+				CTCSSTone:  codeplug.ToneField{State: codeplug.Unavailable},
+				TagDisplay: codeplug.BoolField{State: codeplug.Unavailable},
+				ScanSkip:   codeplug.BoolField{State: codeplug.Unavailable},
+			}
+			markTierFieldsUnavailable(&data)
+			tt.prepare(&data)
+			channels := []codeplug.Channel{{Slot: "G01-001", Data: &data}}
+
+			assertOnlyAbsentFieldIssue(t, validateImported(t, channels, caps), tt.field)
+
+			var buf bytes.Buffer
+			if err := Export(&buf, channels); err != nil {
+				t.Fatalf("Export() error = %v", err)
+			}
+			rows, err := csv.NewReader(bytes.NewReader(buf.Bytes())).ReadAll()
+			if err != nil {
+				t.Fatalf("re-reading the export: %v", err)
+			}
+			if !reflect.DeepEqual(rows[0], tt.wantHeader) {
+				t.Fatalf("export header = %v, want %v: an Absent %s has no cell in a lower version", rows[0], tt.wantHeader, tt.field)
+			}
+			idx := -1
+			for i, name := range rows[0] {
+				if name == tt.column {
+					idx = i
+				}
+			}
+			if idx < 0 {
+				t.Fatalf("export has no %q column", tt.column)
+			}
+			if rows[1][idx] != cellAbsent {
+				t.Errorf("%s cell = %q, want %q", tt.column, rows[1][idx], cellAbsent)
+			}
+
+			got, err := Import(bytes.NewReader(buf.Bytes()))
+			if err != nil {
+				t.Fatalf("Import() error = %v", err)
+			}
+			if len(got) != 1 || got[0].Data == nil {
+				t.Fatalf("Import() = %+v, want one populated channel", got)
+			}
+
+			cp := &codeplug.Codeplug{
+				Schema:    codeplug.CurrentSchema,
+				Generator: "csvio test",
+				Radio:     codeplug.RadioInfo{Model: caps.Model, CATID: caps.CATID},
+				Channels:  got,
+			}
+			codeplug.NormaliseTierFields(cp, caps)
+			assertOnlyAbsentFieldIssue(t, codeplug.Validate(cp, caps), tt.field)
+		})
+	}
+}
+
+// assertOnlyAbsentFieldIssue is the csvio copy of core/codeplug's
+// schema_test helper of the same name: exactly one issue, and it is the
+// send gate refusing a reachable Absent field.
+func assertOnlyAbsentFieldIssue(t *testing.T, issues []codeplug.Issue, field spec.Field) {
+	t.Helper()
+	if len(issues) != 1 {
+		t.Fatalf("Validate() returned %d issues, want exactly one for Absent %s: %+v", len(issues), field, issues)
+	}
+	issue := issues[0]
+	if issue.Severity != codeplug.SeverityError || issue.Field != field || !strings.Contains(issue.Msg, "says nothing about it") {
+		t.Errorf("Validate() issue = %+v, want an error for Absent %s saying the channel says nothing about it", issue, field)
+	}
 }
 
 // TestHeaderVersions_V1IsAPrefixOfV2 pins the structural property the

@@ -12,6 +12,8 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/csvio"
+	"github.com/gm5dna/open-rig-programmer/core/spec"
+	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
 
 // validChannelData returns a ChannelData that validates cleanly against
@@ -157,6 +159,141 @@ func TestCmdImport_CSVNormalisesExplicitAbsentTierField(t *testing.T) {
 	}
 	if got.Channels[0].Data.TxFreqHz.State != codeplug.Unavailable {
 		t.Errorf("saved tx_frequency state = %q, want Unavailable", got.Channels[0].Data.TxFreqHz.State)
+	}
+}
+
+// exportCSVFixture writes chs to a fresh CSV file in t.TempDir() and
+// returns its path — the same csvio.Export round trip every explicit-
+// "absent" case below builds its input with, so the file is always
+// syntactically whatever this program itself writes.
+func exportCSVFixture(t *testing.T, chs []codeplug.Channel) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "fixture.csv")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("creating CSV fixture: %v", err)
+	}
+	if err := csvio.Export(f, chs); err != nil {
+		t.Fatalf("csvio.Export fixture: %v", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatalf("closing CSV fixture: %v", err)
+	}
+	return path
+}
+
+// icomRadioInfo returns the IC-7610's own model and CAT ID, so a fixture
+// codeplug can carry the identity of a radio whose MEM bank REACHES
+// filter — the discriminator these two tests need, since every Yaesu
+// baseline (the --model default included) cannot reach it at all.
+func icomRadioInfo(t *testing.T) (codeplug.RadioInfo, spec.Capabilities) {
+	t.Helper()
+	caps, err := wiring.StaticCapabilities(wiring.IC7610Model)
+	if err != nil {
+		t.Fatalf("wiring.StaticCapabilities(%s): %v", wiring.IC7610Model, err)
+	}
+	return codeplug.RadioInfo{Model: caps.Model, CATID: caps.CATID}, caps
+}
+
+// buildIcomBase is buildValidBase's IC-7610 counterpart: that radio's own
+// static inventory (MEM "001".."099" plus SCAN "P1"/"P2"), slot "001"
+// populated and everything else empty, under the identity radio names.
+// The channel shape is validChannelData's — every tier field Unavailable
+// — which is a lie only about the four fields this radio really reaches,
+// and a deliberate one: the point of each test using it is what happens
+// to the ONE field the CSV then marks absent.
+func buildIcomBase(radio codeplug.RadioInfo) *codeplug.Codeplug {
+	channels := make([]codeplug.Channel, 0, 99+2)
+	channels = append(channels, codeplug.Channel{Slot: "001", Data: validChannelData(7_000_000, "USB")})
+	for n := 2; n <= 99; n++ {
+		channels = append(channels, codeplug.Channel{Slot: fmt.Sprintf("%03d", n)})
+	}
+	channels = append(channels, codeplug.Channel{Slot: "P1"}, codeplug.Channel{Slot: "P2"})
+	return &codeplug.Codeplug{
+		Schema:   codeplug.CurrentSchema,
+		Radio:    radio,
+		Channels: channels,
+	}
+}
+
+// TestCmdImport_CSVKeepsAbsentTierFieldTheFileMODELReaches pins WHOSE
+// capabilities the CLI import root normalises against: the FILE's, not
+// --model's.
+//
+// The two differ here and the difference is the whole test: --model is
+// left at its FT-710 default while --into names an IC-7610, whose MEM
+// bank reaches filter. Normalising against --model would answer "the
+// FT-710 has no filter field" for a channel that came from a radio which
+// has one — writing Unavailable into the saved file, where the IC-7610's
+// own Validate then sees a settled state and raises nothing. That is the
+// send-gate laundering this branch closed at the CSV boundary, reopened
+// by a mismatched model. Left Absent, the file is judged honestly:
+// Validate against the model the FILE names reports the one issue below.
+//
+// The fixture carries the IC-7610's OWN slot inventory (MEM "001".."099"
+// plus SCAN "P1"/"P2"), not buildValidBase's FT-710 one, so the issue
+// list this test counts over is otherwise empty and the count means what
+// it says.
+func TestCmdImport_CSVKeepsAbsentTierFieldTheFileMODELReaches(t *testing.T) {
+	radio, caps := icomRadioInfo(t)
+	base := buildIcomBase(radio)
+	source := buildIcomBase(radio)
+	source.Channels[0].Data.Filter = codeplug.StringField{State: codeplug.Absent}
+	csvPath := exportCSVFixture(t, source.Channels)
+
+	basePath := saveFixture(t, base, "base.json")
+	outPath := filepath.Join(t.TempDir(), "out.json")
+	var stdout, stderr bytes.Buffer
+	// NO --model: the flag sits at its FT-710 default, which is exactly
+	// the mismatch being pinned.
+	if got := cmdImport([]string{"--csv", csvPath, "--into", basePath, "--out", outPath}, &stdout, &stderr); got != exitSuccess {
+		t.Fatalf("cmdImport(IC-7610 file, default --model) = %d, want exitSuccess (%d); stdout=%q stderr=%q", got, exitSuccess, stdout.String(), stderr.String())
+	}
+	got, err := codeplug.Load(outPath)
+	if err != nil {
+		t.Fatalf("codeplug.Load(output): %v", err)
+	}
+	if state := got.Channels[0].Data.Filter.State; state != codeplug.Absent {
+		t.Errorf("saved filter state = %q, want Absent (the IC-7610 HAS a filter field; only --model's FT-710 does not)", state)
+	}
+
+	var said int
+	for _, issue := range codeplug.Validate(got, caps) {
+		if issue.Slot == "001" && issue.Field == spec.FieldFilter && issue.Severity == codeplug.SeverityError {
+			said++
+		}
+	}
+	if said != 1 {
+		t.Errorf("Validate(saved file, IC-7610 caps) reported %d slot-001 filter errors, want exactly 1 (%q)", said, codeplug.Validate(got, caps))
+	}
+}
+
+// TestCmdImport_CSVUnrecognisedFileModelNormalisesNothing pins the other
+// half of the same rule, mirroring loadCodeplugStrict and app/fileio.go's
+// normaliseTierFieldsForOwnModel: a file naming a model this build does
+// not register is left ALONE rather than degraded to the --model default.
+// "The FT-710 has no such field" is not something to write into a file
+// from a radio nobody here can name; left Absent, the field is judged by
+// nothing until a build that knows the radio judges it.
+func TestCmdImport_CSVUnrecognisedFileModelNormalisesNothing(t *testing.T) {
+	base := buildValidBase()
+	base.Radio = codeplug.RadioInfo{Model: "Nonesuch-9000", CATID: "0000"}
+	source := buildValidBase()
+	source.Channels[0].Data.TxFreqHz = codeplug.FreqField{State: codeplug.Absent}
+	csvPath := exportCSVFixture(t, source.Channels)
+
+	basePath := saveFixture(t, base, "base.json")
+	outPath := filepath.Join(t.TempDir(), "out.json")
+	var stdout, stderr bytes.Buffer
+	if got := cmdImport([]string{"--csv", csvPath, "--into", basePath, "--out", outPath}, &stdout, &stderr); got != exitSuccess {
+		t.Fatalf("cmdImport(unrecognised file model) = %d, want exitSuccess (%d); stdout=%q stderr=%q", got, exitSuccess, stdout.String(), stderr.String())
+	}
+	got, err := codeplug.Load(outPath)
+	if err != nil {
+		t.Fatalf("codeplug.Load(output): %v", err)
+	}
+	if state := got.Channels[0].Data.TxFreqHz.State; state != codeplug.Absent {
+		t.Errorf("saved tx_frequency state = %q, want Absent (an unrecognised model is normalised by nothing)", state)
 	}
 }
 

@@ -197,7 +197,11 @@
 //	    errors.Is(err, driver.ErrWrongRadio) — see RecordLengthMismatchError,
 //	    which NAMES NO FOUND MODEL, because cross-model record-length
 //	    distinctness is a TIER-LEVEL WAVE-4 check and this package holds no
-//	    table of other radios' lengths.
+//	    table of other radios' lengths. errors.As(err, &civLengthErr) also
+//	    succeeds, against the *civ.RecordLengthError this type wraps
+//	    alongside driver.ErrWrongRadio — the same shape as the IC-9700's
+//	    RecordLengthMismatchError (core/civ/tier_test.go documents the
+//	    harmonisation).
 //	    TestE2E_WrongRecordLengthRefusesTheRadio drives a 24- and a 26-byte
 //	    radio.
 //
@@ -392,7 +396,11 @@
 // driver-level PRE-BUILD TYPED REFUSAL (*OutOfDomainError) for a Known
 // frequency or tone outside THIS SESSION'S declared capability bounds —
 // both ends of both domains. THIS IS DEFENCE IN DEPTH AND IT IS NOT THE
-// GATE.
+// GATE. ReadChannel reuses the same domainRefusal helper and raises the
+// same *OutOfDomainError, POST-DECODE rather than pre-build, for a
+// decoded frequency outside those bounds — see
+// TestReadChannel_RefusesFrequencyOutsideRadioDomain — so no read hands
+// codeplug.Validate a Known frequency it would then refuse.
 //
 // TestNumericRefusalIsDefenceInDepthNotTheGate asserts that the gate
 // currently ADMITS such a frame while the driver refuses it. An enabler

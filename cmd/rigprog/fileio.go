@@ -145,15 +145,9 @@ func loadCodeplugStrict(stderr io.Writer, cmdName, label, path string) (*codeplu
 		// Deviation (c)'s CLI composition root (Wave 4 task R2): the
 		// capability-keyed Absent-to-Unavailable pass codeplug.Load cannot
 		// run itself, against the capabilities of the model the FILE
-		// names. See codeplug.NormaliseTierFields for the rule and why it
-		// lives there rather than in Load, and app/fileio.go's
-		// normaliseLoadedTierFields — the GUI's identical half — for why
-		// an unrecognised model is left alone rather than degraded to a
-		// default one. A schema-1/2/3 file arrives here with nothing left
-		// to normalise.
-		if caps, capsErr := wiring.StaticCapabilities(cp.Radio.Model); capsErr == nil {
-			codeplug.NormaliseTierFields(cp, caps)
-		}
+		// names. A schema-1/2/3 file arrives here with nothing left to
+		// normalise.
+		normaliseTierFieldsForOwnModel(cp)
 		return cp, exitSuccess
 	}
 
@@ -167,6 +161,42 @@ func loadCodeplugStrict(stderr io.Writer, cmdName, label, path string) (*codeplu
 		fmt.Fprintf(stderr, "rigprog %s: loading %s: %v\n", cmdName, what, err)
 	}
 	return nil, exitError
+}
+
+// normaliseTierFieldsForOwnModel runs codeplug.NormaliseTierFields over
+// cp against the capabilities of the model CP ITSELF names — the CLI half
+// of the composition-root pass that function's doc comment describes, and
+// the twin of app/fileio.go's function of the same name, whose long
+// comment records the reasoning both halves share.
+//
+// BOTH CLI roots that resolve an Absent tier field call this and only
+// this: loadCodeplugStrict (a just-loaded file) and cmdImport (a merged
+// "absent" cell — import.go). cmdImport used to normalise against
+// --model's capabilities, which is the send-gate laundering this branch
+// closed at the CSV boundary reopened by a mismatched flag: --model
+// defaults to the FT-710, so importing an explicit "absent" cell into an
+// IC-7610 codeplug without naming that radio would settle a field the
+// IC-7610 really has to "no such field", and the saved file would then
+// pass the IC-7610's own validation in silence. Pinned by
+// TestCmdImport_CSVKeepsAbsentTierFieldTheFileMODELReaches. What --model
+// legitimately decides — which radio the advisory Validate judges the
+// merged file against, which memory slots and tag width a CHIRP import
+// maps onto — is a different question and still asks the flag.
+//
+// An unrecognised or empty model is left ALONE rather than degraded to
+// wiring.DefaultModel (TestCmdImport_CSVUnrecognisedFileModelNormalises
+// Nothing): "the FT-710 has no such field" is not something to write into
+// a file from a radio nobody here can name, and left Absent the field is
+// refused honestly the day a build that knows the radio validates it.
+func normaliseTierFieldsForOwnModel(cp *codeplug.Codeplug) {
+	if cp == nil {
+		return
+	}
+	caps, err := wiring.StaticCapabilities(cp.Radio.Model)
+	if err != nil {
+		return
+	}
+	codeplug.NormaliseTierFields(cp, caps)
 }
 
 // resolveSnapshotDir returns the snapshot/journal directory a radio-

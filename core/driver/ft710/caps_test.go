@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/drivertest"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -74,6 +75,30 @@ var allFields = []spec.Field{
 	spec.FieldTagDisplay,
 	spec.FieldScanSkip,
 	spec.FieldErase,
+}
+
+var deliberatelyUnexpressedFields = map[spec.Field]string{
+	spec.FieldTxFrequency:       "design D4 — the FT-710 memory frame carries no independent transmit-frequency field",
+	spec.FieldDuplex:            "design D4 — the FT-710 memory frame carries no Icom duplex field",
+	spec.FieldOffset:            "design D4 — the FT-710 memory frame carries no per-channel repeater-offset field",
+	spec.FieldToneMode:          "design D4 — the FT-710 memory frame carries no Icom tone-mode field",
+	spec.FieldToneTx:            "design D4 — the FT-710 memory frame carries no separate transmit-tone field",
+	spec.FieldToneRx:            "design D4 — the FT-710 memory frame carries no separate receive-tone field",
+	spec.FieldDTCSCode:          "design D4 — the FT-710 memory frame carries no DTCS-code field",
+	spec.FieldDTCSPolarity:      "design D4 — the FT-710 memory frame carries no DTCS-polarity field",
+	spec.FieldFilter:            "design D4 — the FT-710 memory frame carries no per-channel IF-filter field",
+	spec.FieldDataMode:          "design D4 — the FT-710 memory frame carries no Icom data-mode flag",
+	spec.FieldTuningStepEnabled: "additions design D8 — the FT-710 memory frame carries no tuning-step-enabled field",
+	spec.FieldTuningStep:        "additions design D8 — the FT-710 memory frame carries no tuning-step field",
+	spec.FieldProgramTuningStep: "additions design D8 — the FT-710 memory frame carries no programmable-tuning-step field",
+	spec.FieldAttenuator:        "additions design D8 — the FT-710 memory frame carries no attenuator field",
+	spec.FieldPreamp:            "additions design D8 — the FT-710 memory frame carries no preamp field",
+	spec.FieldAntenna:           "additions design D8 — the FT-710 memory frame carries no antenna-selection field",
+	spec.FieldIPPlus:            "additions design D8 — the FT-710 memory frame carries no IP+ field",
+}
+
+func TestFieldAuditCoversEverySpecField(t *testing.T) {
+	drivertest.AssertFieldAuditCoversEverySpecField(t, "allFields", allFields, deliberatelyUnexpressedFields)
 }
 
 var receiverCapabilitiesDeliberatelyZero = map[string]string{

@@ -151,12 +151,37 @@ describe('tier cells', () => {
 		expect(displayValue(duplex, {}, uiSpec)).toBe('—')
 	})
 
-	it('is editable only from known or unknown, exactly as tag display is', () => {
+	it('is editable from known, unknown or absent — only unavailable stays refused (this task)', () => {
 		expect(isCellEditable(duplex, { duplex: { state: 'known', value: 'OFF' } })).toBe(true)
 		expect(isCellEditable(duplex, { duplex: { state: 'unknown' } })).toBe(true)
+		// Absent is the zero FieldState, reached two ways: a missing key
+		// on the channel — a Yaesu channel with no tier fields at all, or
+		// a pre-tier file — or an explicit `state: ''`, which is how Go
+		// marshals an Absent field (no `omitempty` on FieldState.State or
+		// on the tier fields themselves, so app/codeplug.go hands the
+		// frontend `{"state": ""}` rather than dropping the key). The
+		// column only renders where columnsFor says the radio HAS the
+		// field, so either shape here is a question the user may
+		// legitimately answer, the same as 'unknown' is.
+		expect(isCellEditable(duplex, { freq_hz: 14250000, mode: 'USB' })).toBe(true)
+		expect(isCellEditable(duplex, {})).toBe(true)
+		expect(isCellEditable(duplex, { duplex: { state: '' } })).toBe(true)
 		expect(isCellEditable(duplex, { duplex: { state: 'unavailable' } })).toBe(false)
-		expect(isCellEditable(duplex, { duplex: { state: '' } })).toBe(false)
+		// A wholly-empty slot (data null) is not "absent" — it is the
+		// same "no populated channel" case every other column refuses
+		// (isCellEditable's Slot/empty-slot rule); only Frequency opens
+		// on it.
 		expect(isCellEditable(duplex, null)).toBe(false)
+	})
+
+	it('leaves the non-tier columns unaffected by the absent rule', () => {
+		// col('tag') is a plain COLUMNS entry (default case: editable iff
+		// data != null) — a missing key on the data object is meaningless
+		// to it, so this pins that the tier-only 'absent' branch has not
+		// leaked into the switch below it.
+		const tag = COLUMNS.find((c) => c.id === 'tag')
+		expect(isCellEditable(tag, { freq_hz: 14250000, mode: 'USB' })).toBe(true)
+		expect(isCellEditable(tag, null)).toBe(false)
 	})
 
 	it('parses a pasted cell per kind, and refuses what it cannot read', () => {
@@ -178,6 +203,73 @@ describe('tier cells', () => {
 		})
 		expect(parsePasteCell(offset, 'not a frequency', uiSpec).ok).toBe(false)
 		expect(parsePasteCell(dataMode, 'maybe', uiSpec).ok).toBe(false)
+	})
+})
+
+describe('the edit primitives on an absent tier cell', () => {
+	// This composes isCellEditable, cloneData and parsePasteCell — the same
+	// three exported, already-tested primitives ChannelGrid.svelte's commit
+	// handlers (commitSelectEditor, commitTextEditor) reduce to: gate with
+	// isCellEditable, then `{ ...cloneData(fresh ?? data), [key]: value }`.
+	// It is NOT a claim about the grid itself: no tier column is wired into
+	// that Svelte template yet (grep confirms no tier id or `column.kind`
+	// appears there), so wiring one up is a recorded follow-up, not
+	// something this file can pin. What this pins is the three-part
+	// behaviour (open, commit, cancel) those primitives would produce for
+	// both shapes 'absent' reaches the frontend as: a missing key on a
+	// frontend-built row, and Go's `{"state": ""}` on a loaded one.
+	const duplex = TIER_COLUMNS.find((c) => c.id === 'duplex')
+	/** @type {Record<string, any>} */
+	const absentChannel = { freq_hz: 14250000, mode: 'USB' } // no 'duplex' key: absent
+	/** @type {Record<string, any>} */
+	const emptyStateChannel = { freq_hz: 14250000, mode: 'USB', duplex: { state: '' } } // Go's shape for the same absent field
+
+	it('opens: an absent cell is editable and displays as an empty editor, same as unknown', () => {
+		expect(isCellEditable(duplex, absentChannel)).toBe(true)
+		expect(displayValue(duplex, absentChannel, uiSpec)).toBe('—')
+
+		// The explicit-empty-string shape Go sends after a load opens
+		// identically — this is the MAJOR the empty-string admission
+		// fixes: without it, a loaded file's unanswered field stayed
+		// refused forever.
+		expect(isCellEditable(duplex, emptyStateChannel)).toBe(true)
+		expect(displayValue(duplex, emptyStateChannel, uiSpec)).toBe('—')
+	})
+
+	it('commits: a value typed into an absent cell yields Known, same as committing over unknown does', () => {
+		const parsed = parsePasteCell(duplex, 'DUP+', uiSpec)
+		expect(parsed.ok).toBe(true)
+		const committed = { ...cloneData(absentChannel), ...(parsed.ok ? parsed.patch : {}) }
+		expect(committed.duplex).toEqual({ state: 'known', value: 'DUP+' })
+
+		// The same commit starting from 'unknown' lands on the identical
+		// shape — the two starting states are indistinguishable once
+		// answered, exactly as tag_display's Known-off already is.
+		const fromUnknown = { ...cloneData({ ...absentChannel, duplex: { state: 'unknown' } }), ...(parsed.ok ? parsed.patch : {}) }
+		expect(fromUnknown.duplex).toEqual(committed.duplex)
+
+		// And starting from Go's explicit `{ state: '' }` lands there too.
+		const fromEmptyState = { ...cloneData(emptyStateChannel), ...(parsed.ok ? parsed.patch : {}) }
+		expect(fromEmptyState.duplex).toEqual(committed.duplex)
+	})
+
+	it('cancels: no commit call leaves the field unanswered — cloneData invents no answer either shape arrives in', () => {
+		// cancelEditor (ChannelGrid.svelte) sets editing = null and calls
+		// nothing that touches data — so the only claim worth pinning here
+		// is the one cloneData already makes doubly sure of: a clone taken
+		// before any commit still carries no answer (already pinned
+		// generally by "omits a tier key the incoming data does not
+		// carry" above; this ties it to the specific absent-editing case).
+		const clone = cloneData(absentChannel)
+		expect(clone).not.toHaveProperty('duplex')
+
+		// cloneData does not literally reproduce this shape: a key already
+		// PRESENT in the source is normalised, not deleted, so the clone
+		// keeps `{ state: '' }` rather than omitting the key — but that is
+		// still no answer invented, the same meaning the omitted-key case
+		// carries (both round-trip to Go as codeplug.Absent).
+		const emptyStateClone = cloneData(emptyStateChannel)
+		expect(emptyStateClone.duplex).toEqual({ state: '' })
 	})
 })
 

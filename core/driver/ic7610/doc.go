@@ -161,7 +161,11 @@
 //     error satisfying errors.Is(err, driver.ErrWrongRadio) — see
 //     RecordLengthMismatchError, which NAMES NO FOUND MODEL:
 //     cross-model record-length distinctness is a TIER-LEVEL WAVE-4 CHECK
-//     and this model has no registered sibling.
+//     and this model has no registered sibling. errors.As(err, &civLengthErr)
+//     also succeeds, against the *civ.RecordLengthError this type wraps
+//     alongside driver.ErrWrongRadio — the same shape as the IC-9700's
+//     RecordLengthMismatchError (core/civ/tier_test.go documents the
+//     harmonisation).
 //
 //   - AN EMPTY RADIO OPENS UNFINGERPRINTED, on address evidence alone
 //     (spec D3.2, D5 entry 2(a), matrix lift R2a). Refusing there would
@@ -293,7 +297,10 @@
 // driver-level PRE-BUILD TYPED REFUSALS for a Known frequency above
 // MaxEncodableFreqHz and a Known tone above MaxToneDeciHz
 // (*OutOfDomainError). THESE ARE DEFENCE IN DEPTH AND THEY ARE NOT THE
-// GATE.
+// GATE. ReadChannel raises the same *OutOfDomainError, POST-DECODE rather
+// than pre-build, for a decoded frequency above MaxEncodableFreqHz — see
+// TestReadChannel_RefusesFrequencyAboveCeiling — so no read hands
+// codeplug.Validate a Known frequency it would then refuse.
 //
 // THE ORCHESTRATOR DEFERRED gate-level enforcement on 24/08/2026 to a
 // post-Wave-3 enabler follow-up, on three grounds:

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -507,7 +508,7 @@ func authoritySupplies(trio authorityText, matrixProper string, matrixTokens, re
 	case strings.HasPrefix(token, "folio "):
 		return suppliedByFolio(trio.norm, token)
 	case strings.HasPrefix(token, "PDF pp."):
-		return matrixTokens[token] || suppliedByPageBounds(matrixTokens, token)
+		return suppliedByPageBounds(matrixTokens, token)
 	case strings.HasPrefix(token, "matrix §"):
 		return suppliedBySection(matrixProper, token)
 	case strings.HasPrefix(token, "matrix erratum "):
@@ -532,18 +533,36 @@ func suppliedByFolio(authority, token string) bool {
 	return re.MatchString(authority)
 }
 
-// suppliedByPageBounds answers a page RANGE the authority does not print as a
-// range. core/driver/ic7100/e2e_test.go:30 cites "PDF pp. 361-375" for the
-// span two independent transcriptions read; the IC-7100 matrix cites p.361 and
-// p.375 (and most pages between) individually and never as a span. A range is
-// a claim about its bounds, so the authority supplies it when it supplies both.
+// suppliedByPageBounds answers a page RANGE token. It used to admit one on
+// its two endpoints alone — "PDF p.3" and "PDF p.90" individually supplied
+// was read as supplying "PDF pp.3-90" — which let a claim as broad as the
+// span walk past the positive list on two isolated pages, with nothing
+// between them ever checked (two reviewers confirmed this: "PDF pp.3-90"
+// passes on p.3 and p.90 alone). RULING: a span is admitted only when the
+// authority supplies that EXACT span token; the endpoint fallback is gone.
+// What remains here is shape validation, not a second admission route —
+// lo, hi both numeric and lo < hi — so a reversed or malformed token
+// (never something a real authority prints) is refused before the lookup
+// rather than trusted to a map that would never hold it in the first
+// place. Pinned by TestSuppliedByPageBounds.
 func suppliedByPageBounds(supplied map[string]bool, token string) bool {
 	span := strings.TrimPrefix(token, "PDF pp.")
 	lo, hi, ok := strings.Cut(span, "-")
-	if !ok {
+	if !ok || lo == "" || hi == "" {
 		return false
 	}
-	return supplied["PDF p."+lo] && supplied["PDF p."+hi]
+	loN, err := strconv.Atoi(lo)
+	if err != nil {
+		return false
+	}
+	hiN, err := strconv.Atoi(hi)
+	if err != nil {
+		return false
+	}
+	if loN >= hiN {
+		return false
+	}
+	return supplied[token]
 }
 
 // registerEntry recognises the register-entry shape at the start of a token.

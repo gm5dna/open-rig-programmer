@@ -97,8 +97,8 @@ type ChannelData struct {
 	// capabilities agree.
 	//
 	// That is what keeps the pre-tier world byte-identical, in three
-	// places at once: the file writer emits schema 3 while none of them
-	// is Recorded (schemaFor — Unavailable says the same thing schema
+	// places at once: the file writer emits schema 3 while every one is
+	// representable by omission (schemaFor — Unavailable says what schema
 	// 3 says by having no key), the send plan counts only a Known field
 	// as touched (touchedFields), and Validate does not judge a field
 	// this radio cannot reach. None of the three needs a per-field
@@ -158,45 +158,44 @@ type ChannelData struct {
 	IPPlus BoolField `json:"ip_plus"`
 }
 
-// tierFieldsUnrecorded reports whether NONE of the seventeen fields the
-// two Icom model extensions added carries anything a file must record.
-func (d ChannelData) tierFieldsUnrecorded() bool {
-	return d.icomTierFieldsUnrecorded() && d.receiverFieldsUnrecorded()
+// tierFieldsRepresentableByOmission reports whether all seventeen fields
+// added by the two Icom model extensions are Unavailable, the only state
+// their omission from an older schema preserves.
+func (d ChannelData) tierFieldsRepresentableByOmission() bool {
+	return d.icomTierFieldsRepresentableByOmission() && d.receiverFieldsRepresentableByOmission()
 }
 
-// icomTierFieldsUnrecorded reports whether NONE of D4's ten fields
-// carries anything this channel needs a file to write down —
-// i.e. every one of them is Absent or Unavailable (see
-// FieldState.Recorded).
+// icomTierFieldsRepresentableByOmission reports whether every D4 field
+// is Unavailable (see FieldState.RepresentableByOmission).
 //
-// It is the "no tier-added field is present" half of the file writer's
-// lowest-schema rule (design D4), and it is deliberately a method on
+// It is the "every tier-added field is Unavailable" half of the file
+// writer's lowest-schema rule (design D4), and it is a method on
 // ChannelData rather than a loop in file.go, so that a later field added
 // to this struct is one edit away from being accounted for here.
-func (d ChannelData) icomTierFieldsUnrecorded() bool {
-	return !d.TxFreqHz.State.Recorded() &&
-		!d.Duplex.State.Recorded() &&
-		!d.OffsetHz.State.Recorded() &&
-		!d.ToneMode.State.Recorded() &&
-		!d.ToneTx.State.Recorded() &&
-		!d.ToneRx.State.Recorded() &&
-		!d.DTCSCode.State.Recorded() &&
-		!d.DTCSPolarity.State.Recorded() &&
-		!d.Filter.State.Recorded() &&
-		!d.DataMode.State.Recorded()
+func (d ChannelData) icomTierFieldsRepresentableByOmission() bool {
+	return d.TxFreqHz.State.RepresentableByOmission() &&
+		d.Duplex.State.RepresentableByOmission() &&
+		d.OffsetHz.State.RepresentableByOmission() &&
+		d.ToneMode.State.RepresentableByOmission() &&
+		d.ToneTx.State.RepresentableByOmission() &&
+		d.ToneRx.State.RepresentableByOmission() &&
+		d.DTCSCode.State.RepresentableByOmission() &&
+		d.DTCSPolarity.State.RepresentableByOmission() &&
+		d.Filter.State.RepresentableByOmission() &&
+		d.DataMode.State.RepresentableByOmission()
 }
 
-// receiverFieldsUnrecorded is the D8 half of the lowest-schema rule.
-// Unavailable remains unrecorded: an FT-710 read must not become schema 5
-// merely because it positively says these seven fields do not exist.
-func (d ChannelData) receiverFieldsUnrecorded() bool {
-	return !d.TuningStepEnabled.State.Recorded() &&
-		!d.TuningStep.State.Recorded() &&
-		!d.ProgramTuningStepHz.State.Recorded() &&
-		!d.AttenuatorDB.State.Recorded() &&
-		!d.Preamp.State.Recorded() &&
-		!d.Antenna.State.Recorded() &&
-		!d.IPPlus.State.Recorded()
+// receiverFieldsRepresentableByOmission is the D8 half of the
+// lowest-schema rule. An FT-710 read must not become schema 5 merely
+// because it positively says these seven fields are Unavailable.
+func (d ChannelData) receiverFieldsRepresentableByOmission() bool {
+	return d.TuningStepEnabled.State.RepresentableByOmission() &&
+		d.TuningStep.State.RepresentableByOmission() &&
+		d.ProgramTuningStepHz.State.RepresentableByOmission() &&
+		d.AttenuatorDB.State.RepresentableByOmission() &&
+		d.Preamp.State.RepresentableByOmission() &&
+		d.Antenna.State.RepresentableByOmission() &&
+		d.IPPlus.State.RepresentableByOmission()
 }
 
 // Empty reports whether c is an empty slot. Data == nil is the sole test:

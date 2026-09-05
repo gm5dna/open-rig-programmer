@@ -79,7 +79,8 @@ func (e *UnmappedRegionError) Unwrap() error { return ErrUnmappedRegion }
 // radio's record can encode.
 var ErrOutOfDomain = errors.New("ic7610: a Known value lies outside what this radio's record can encode")
 
-// OutOfDomainError reports a Known numeric value the wire cannot express.
+// OutOfDomainError reports a Known numeric value — asked for on a write,
+// or decoded on a read — that this radio's record cannot express.
 //
 // DEFENCE IN DEPTH, AND NOT THE GATE — see doc.go §6. civ.FieldSpan has no
 // numeric domain, so civ.Profile.AllowedCommand would ADMIT a set carrying
@@ -91,16 +92,23 @@ var ErrOutOfDomain = errors.New("ic7610: a Known value lies outside what this ra
 type OutOfDomainError struct {
 	// Field is the neutral field whose value was refused.
 	Field spec.Field
-	// Value is what was asked for, in the field's own neutral unit (hertz
-	// for a frequency, tenths of a hertz for a tone).
+	// Value is what was asked for on a write, or what was decoded on a
+	// read, in the field's own neutral unit (hertz for a frequency,
+	// tenths of a hertz for a tone).
 	Value uint64
 	// Max is the largest value this radio's record can encode for it.
 	Max uint64
 }
 
+// Error's wording holds at both call sites: WriteChannel raises this
+// before a frame is built, and ReadChannel raises it after decoding one,
+// where there is no outbound frame at all — see
+// TestReadChannel_RefusesFrequencyAboveCeiling. So the gate reference
+// below states what civ.FieldSpan can never check, not what a specific
+// frame would do.
 func (e *OutOfDomainError) Error() string {
 	return fmt.Sprintf(
-		"ic7610: %s = %d is outside what this radio's record can encode (maximum %d) — refused before any frame was built. This is a DRIVER-level refusal and NOT the outbound gate: civ.FieldSpan carries no numeric domain, so the gate would admit this frame (see doc.go, the deferred gate-domain gap)",
+		"ic7610: %s = %d is outside what this radio's record can encode (maximum %d) — refused by the driver. This is a DRIVER-level refusal, not the outbound gate: civ.FieldSpan carries no numeric domain, so the gate offers no such check (see doc.go, the deferred gate-domain gap)",
 		e.Field, e.Value, e.Max)
 }
 
