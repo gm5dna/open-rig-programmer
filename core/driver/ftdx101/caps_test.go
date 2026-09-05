@@ -881,3 +881,49 @@ func TestEffectiveCapabilities_Validate(t *testing.T) {
 		}
 	}
 }
+
+// TestCapabilities_ClarifierDerivesFromDialect is the write-gate sweep's
+// item (h), the FT-891's C-H2 applied to this driver: a bound must be
+// CONSULTED from the same place as its datum. Before this fix caps.go
+// carried its own literal 9990/10, a second transcription of the values
+// write.go's builder already reads through the dialect's Clarifier() — two
+// places able to drift silently if either were ever edited alone.
+//
+// WHAT THIS PIN CAN AND CANNOT SEE: it asserts that caps carry the dialect's
+// CURRENT ClarifierPolicy values. A literal in caps.go that happened to equal
+// 9990/10 would pass it too — no value comparison can tell a literal from a
+// consultation. What it adds over the bare "== 9990" the shape tests make is
+// DIRECTION: if the dialect's entry is ever lifted or corrected, this test
+// fails until caps follow it, where a bare check would keep asserting the
+// stale number. The red-proof (caps.go hard-coded to 9999) fails both, which
+// is fine — they guard different things.
+//
+// THE VALUES DO NOT CHANGE, only their source, so no capability VALUE moves
+// and no golden or byte-identity artefact does either.
+//
+// BOTH MODELS, because the capability builders are per model and each takes
+// its own modelParams: a driver that consulted the D's dialect while
+// building the MP's capabilities would pass a single-model test. That the two
+// dialects agree on this policy today is core/cat/ftdx101's own pin, not an
+// assumption made here.
+func TestCapabilities_ClarifierDerivesFromDialect(t *testing.T) {
+	for _, m := range testModels {
+		want := m.params.dialect.Clarifier()
+		for _, tt := range []struct {
+			name string
+			caps spec.Capabilities
+		}{
+			{"Unverified", capabilitiesUnverified(m.params)},
+			{"Simulated", capabilitiesSimulated(m.params)},
+		} {
+			t.Run(m.name+"/"+tt.name, func(t *testing.T) {
+				if tt.caps.ClarMaxHz != want.MaxAbsHz {
+					t.Errorf("ClarMaxHz = %d, want this model's dialect.Clarifier().MaxAbsHz = %d — the bound must be CONSULTED from the dialect, not a second literal that can drift from it", tt.caps.ClarMaxHz, want.MaxAbsHz)
+				}
+				if tt.caps.ClarStepHz != want.StepHz {
+					t.Errorf("ClarStepHz = %d, want this model's dialect.Clarifier().StepHz = %d — the bound must be CONSULTED from the dialect, not a second literal that can drift from it", tt.caps.ClarStepHz, want.StepHz)
+				}
+			})
+		}
+	}
+}

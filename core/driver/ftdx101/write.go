@@ -131,10 +131,10 @@ func (s *Session) bankFor(slot string) (spec.BankID, bool) {
 // defence-in-depth gate and the diff layer's gate judge the same set for the
 // same channel. That derivation is two pieces on the codeplug side and both
 // are mirrored here: addedFields' six unconditional plus three conditional
-// fields, and then the TEN Icom-tier conditionals codeplug carries in
+// fields, and then the SEVENTEEN Icom-tier conditionals codeplug carries in
 // tierAddedFieldFor and appends in touchedFields (see tierRequestedFields
-// below). The ten come LAST, in ChannelData's declaration order, exactly as
-// they do there.
+// below). The seventeen come LAST, in ChannelData's declaration order,
+// exactly as they do there.
 // TestRequestedFields_MembershipAndOrder pins it here as those packages' own
 // tests pin it there. (Mirrored, NOT imported: this package imports no other
 // driver package, by the rule in doc.go.)
@@ -205,14 +205,31 @@ func requestedFields(data codeplug.ChannelData) []spec.Field {
 // MODEL-INDEPENDENT, like requestedFields itself and for the same reason.
 //
 // Every one of these predicates answers false for a channel this driver
-// produced: an FTdx101 read leaves all ten UNAVAILABLE (read.go), and a load
+// produced: an FTdx101 read leaves all seventeen UNAVAILABLE (read.go), and a load
 // of a schema-1/2/3 file migrates to the same. So the ordinary write is
 // unchanged by their presence, and what they add is the one case the gate
 // promised to cover and did not — a caller who hands WriteChannel a
 // ChannelData with a Known tier value, which the combined MT Set cannot
 // express and which must therefore be REFUSED rather than dropped.
 //
+// SEVENTEEN, and this table used to carry only the first TEN: the
+// pre-D8-wave count, unchanged here when codeplug's tierAddedFieldFor gained
+// the seven receiver-tier fields (TuningStepEnabled through IPPlus). A
+// channel carrying a Known TuningStep, Preamp or Antenna was therefore
+// written with the value silently DROPPED — nothing named the field, so the
+// capability gate never saw it and this radio's record has no position for
+// it. That is a breach of "an omitted config semantic is REFUSED, never
+// defaulted"; the write-gate sweep's item (g) closes it, as the FT-891's own
+// HIGH-1 fix did. TestWriteChannel_KnownD8TierFieldsRefusedBeforeWire is the
+// behavioural pin.
+//
 // Mirrored, NOT imported, for the reason requestedFields gives.
+// TestRequestedFields_MembershipAndOrder's "the seventeen are exactly
+// spec.AllFields()'s tier-added tail" subtest pins the membership against an
+// INDEPENDENT derivation — the same exported spec.Field constants
+// tierAddedFieldFor is itself built from — rather than against a count, so a
+// future spec.Field this table fails to mirror fails there rather than
+// passing silently.
 var tierRequestedFields = []struct {
 	field   spec.Field
 	present func(codeplug.ChannelData) bool
@@ -227,6 +244,13 @@ var tierRequestedFields = []struct {
 	{spec.FieldDTCSPolarity, func(d codeplug.ChannelData) bool { return d.DTCSPolarity.State == codeplug.Known }},
 	{spec.FieldFilter, func(d codeplug.ChannelData) bool { return d.Filter.State == codeplug.Known }},
 	{spec.FieldDataMode, func(d codeplug.ChannelData) bool { return d.DataMode.State == codeplug.Known }},
+	{spec.FieldTuningStepEnabled, func(d codeplug.ChannelData) bool { return d.TuningStepEnabled.State == codeplug.Known }},
+	{spec.FieldTuningStep, func(d codeplug.ChannelData) bool { return d.TuningStep.State == codeplug.Known }},
+	{spec.FieldProgramTuningStep, func(d codeplug.ChannelData) bool { return d.ProgramTuningStepHz.State == codeplug.Known }},
+	{spec.FieldAttenuator, func(d codeplug.ChannelData) bool { return d.AttenuatorDB.State == codeplug.Known }},
+	{spec.FieldPreamp, func(d codeplug.ChannelData) bool { return d.Preamp.State == codeplug.Known }},
+	{spec.FieldAntenna, func(d codeplug.ChannelData) bool { return d.Antenna.State == codeplug.Known }},
+	{spec.FieldIPPlus, func(d codeplug.ChannelData) bool { return d.IPPlus.State == codeplug.Known }},
 }
 
 // WriteChannel implements driver.Session: ONE combined MT Set,
@@ -267,7 +291,7 @@ var tierRequestedFields = []struct {
 //     profile: the combined record has no tone-NUMBER byte and no skip flag
 //     (DRIVER register entry 6 for what that does and does not establish), so
 //     silently dropping a value the caller explicitly marked Known would be a
-//     lie. The same holds for any of the TEN Icom-tier fields
+//     lie. The same holds for any of the SEVENTEEN Icom-tier fields
 //     (requestedFields' tierRequestedFields): none appears in either model's
 //     capability map at all, so FieldSupport answers the zero FieldSupport
 //     and the gate refuses.
@@ -352,20 +376,41 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 
 	// FieldState sanity before anything else trusts .State: a malformed field
 	// (an unrecognised State, or a non-Known value smuggled alongside a
-	// value) is refused, not interpreted. TagDisplay is checked here for
-	// exactly the same reason as its two neighbours and for no other: an
+	// value) is refused, not interpreted. TagDisplay is included for exactly
+	// the same reason as its neighbours and for no other: an
 	// Unavailable-with-a-true-Value BoolField is incoherent whatever the
 	// radio can express, and this driver must not read a coherent meaning out
 	// of it. This rung SURVIVES the named inversion — it is not the FT-710's
 	// non-Known refusal wearing a different hat.
-	if err := ch.Data.CTCSSTone.Valid(s.caps); err != nil {
-		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{spec.FieldCTCSSTone}, Reason: err.Error()}
-	}
-	if err := ch.Data.ScanSkip.Valid(); err != nil {
-		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{spec.FieldScanSkip}, Reason: err.Error()}
-	}
-	if err := ch.Data.TagDisplay.Valid(); err != nil {
-		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{spec.FieldTagDisplay}, Reason: err.Error()}
+	//
+	// EVERY FieldState field of ch.Data, not the three (CTCSSTone, ScanSkip,
+	// TagDisplay) this rung used to check — the write-gate sweep's item (i),
+	// and the same gap the FT-891's C-M1 found: a tier field carrying State
+	// Unavailable and a non-zero Value passed both codeplug.Validate (which
+	// skips every non-Recorded field outright) and the old three-field list,
+	// and requestedFields is Known-only, so nothing ever named it and the
+	// malformed value was silently DROPPED from the frame rather than
+	// refused. TestWriteChannel_IncoherentFieldStateRefusedBeforeWire is the
+	// pin, and its comment quotes the pre-fix transcript (the 41-byte Set
+	// sent unchanged on BOTH models, TxFreqHz simply absent from it).
+	//
+	// THE WALK IS THE FLEET'S, driver.CheckFieldStates, not a fourth private
+	// copy: its doc comment carries the five-rule stance, of which the
+	// load-bearing one HERE is that codeplug.Absent WITH A ZERO VALUE is
+	// ADMITTED. Every ChannelData this driver's own read path produces
+	// states each field positively, but a hand-built one — the GUI's, a
+	// test's, a caller's composite literal — leaves the untouched ones
+	// Absent, and refusing those would refuse every ordinary MODIFY.
+	// TestWriteChannel_AbsentFieldStatesStillWrite is that half's pin;
+	// TestWriteChannel_AbsentFieldStateWithValueRefusedBeforeWire pins the
+	// erratum's other half — an Absent field carrying a non-zero Value is
+	// still refused (MEDIUM-1, Opus review 05/09/2026).
+	//
+	// MODEL-INDEPENDENT, like the rest of this ladder: the walk asks this
+	// SESSION's own capabilities, so the D and the MP each judge a Known
+	// value against their own vocabulary without this code naming either.
+	if field, err := driver.CheckFieldStates(s.caps, *ch.Data); err != nil {
+		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{field}, Reason: err.Error()}
 	}
 
 	// THE write gate (defence in depth below the clone service): every
