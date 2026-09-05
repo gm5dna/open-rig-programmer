@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gm5dna/open-rig-programmer/core/cat"
 	"github.com/gm5dna/open-rig-programmer/core/clone"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
@@ -3758,4 +3759,86 @@ func TestOpenFakeSessionFor_FT891SettingsEndToEnd(t *testing.T) {
 			t.Fatalf("no entry for %q in the snapshot — this test's premise is wrong, so it asserted nothing", addr)
 		}
 	})
+}
+
+// TestOpenFakeSessionFor_FT891MTReadRejectionEndToEnd is the end-to-end pin
+// the closing review's MEDIUM-1 finding named: WithMTReadUnsupported()
+// makes core/driver/ft891's typed whole-session refusal reachable, but
+// before this test the only things pinning it were a scripted peer
+// (core/driver/ft891/respondingport_test.go) and the raw fake against raw
+// frames (internal/fakeft891/parser_test.go's
+// TestWithMTReadUnsupported_HonoursTheCommandList) — nothing bound the
+// REGISTERED fake to the REGISTERED driver on this path, so a future change
+// to the fake's "?;" shape, the cross-check's MR frame, or rejection
+// detection through the real transport engine could disagree with nothing
+// in the tree noticing.
+//
+// FT891FakeSessionOpts is option-source isolation (see
+// TestOpenFakeSessionFor_FT891OptionSourceIsItsOwn): saved, replaced for
+// this test only, restored by t.Cleanup.
+//
+// The default image's own "001" is occupied and "050" is not
+// (fakeft891.DefaultImage, TestDefaultImage_IsMinimalAndExactlyEnumerated),
+// so both arms of the truth table are exercised with no WithSlot overlay.
+func TestOpenFakeSessionFor_FT891MTReadRejectionEndToEnd(t *testing.T) {
+	prev := FT891FakeSessionOpts
+	FT891FakeSessionOpts = []fakeft891.Option{fakeft891.WithMTReadUnsupported()}
+	t.Cleanup(func() { FT891FakeSessionOpts = prev })
+
+	ctx := testCtx(t)
+	sess, closeAll, err := OpenFakeSessionFor(ctx, FT891Model)
+	if err != nil {
+		t.Fatalf("OpenFakeSessionFor(%q): unexpected error: %v", FT891Model, err)
+	}
+	t.Cleanup(func() { _ = closeAll() })
+
+	// The occupied slot: MT answers "?;", the cross-check's MR finds a
+	// record, and the driver's typed whole-session refusal is what comes
+	// back — not a bare error, and not an empty channel.
+	const occupied = "001"
+	if _, err := sess.ReadChannel(ctx, occupied); err == nil {
+		t.Fatalf("ReadChannel(%q): no error, want *ft891.MTReadRejectedForOccupiedSlotError — WithMTReadUnsupported() should have made MT refuse this occupied slot", occupied)
+	} else {
+		var rejected *ft891.MTReadRejectedForOccupiedSlotError
+		if !errors.As(err, &rejected) {
+			t.Errorf("ReadChannel(%q): err = %v, want errors.As *ft891.MTReadRejectedForOccupiedSlotError", occupied, err)
+		} else if rejected.Slot != occupied {
+			t.Errorf("MTReadRejectedForOccupiedSlotError.Slot = %q, want %q", rejected.Slot, occupied)
+		}
+		if !errors.Is(err, cat.ErrRejected) {
+			t.Errorf("ReadChannel(%q): errors.Is(err, cat.ErrRejected) = false, want true — the radio's answer really was a rejection", occupied)
+		}
+	}
+
+	// The empty slot: MT "?;" costs one MR cross-check, which ALSO answers
+	// "?;" — ASSUMED EMPTY, no error, Data nil.
+	const empty = "050"
+	ch, err := sess.ReadChannel(ctx, empty)
+	if err != nil {
+		t.Fatalf("ReadChannel(%q): unexpected error: %v — an empty slot must still read empty under WithMTReadUnsupported()", empty, err)
+	}
+	if ch.Data != nil {
+		t.Errorf("ReadChannel(%q): Data = %+v, want nil", empty, ch.Data)
+	}
+
+	// The whole session read fails WHOLE, not per-slot: core/clone's
+	// ReadAll — the caller every real read goes through — must propagate
+	// the same typed error and return no partial codeplug, which is the
+	// design's whole point (MTReadRejectedForOccupiedSlotError's doc
+	// comment).
+	svc := clone.NewService(sess, clone.SnapshotStore{Dir: t.TempDir()})
+	cp, err := svc.ReadAll(ctx)
+	if err == nil {
+		t.Fatal("ReadAll: no error, want the occupied slot's rejection to fail the whole read")
+	}
+	if cp != nil {
+		t.Errorf("ReadAll: Codeplug = %+v, want nil — a partial codeplug must never come back from a failed whole-session read", cp)
+	}
+	var rejectedWhole *ft891.MTReadRejectedForOccupiedSlotError
+	if !errors.As(err, &rejectedWhole) {
+		t.Errorf("ReadAll: err = %v, want errors.As *ft891.MTReadRejectedForOccupiedSlotError", err)
+	}
+	if !errors.Is(err, cat.ErrRejected) {
+		t.Error("ReadAll: errors.Is(err, cat.ErrRejected) = false, want true")
+	}
 }
