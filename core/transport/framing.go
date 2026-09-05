@@ -171,3 +171,71 @@ type Framing interface {
 	// traffic, or the radio's real answer, as the echo it meant to drop.
 	NoteSent(frame []byte)
 }
+
+// FatalFramer is an OPTIONAL interface a Framing may implement, and the
+// only one there is: it names the frames that mean "this STREAM is
+// finished", as distinct from IsRejection's "this COMMAND was refused".
+//
+// ADDITIVE, and inert unless implemented. Framing itself is unchanged, and
+// a framing that does not implement this interface is unaffected in every
+// respect: Engine resolves the type assertion ONCE, where it stores the
+// framing, so both hot sites (readLoop's chunk scan and the gated write)
+// are a nil-field check — no lock taken, no branch entered, no byte
+// changed. TestFatalFramer_AbsentIsInert pins that for a framing without
+// it; TestFatalFramer_ResolvedOnceAtConstruction pins the resolution for
+// one with it.
+//
+// WHY IT EXISTS. Kenwood's E; and O; are link-level failures that arrive
+// as ordinary frames. Without this hook the engine has only three places
+// to put them, and each is wrong: IsRejection collapses them into
+// ErrRejected — a refusal, not a link failure, and indistinguishable from
+// ?; — while an unrecognised frame is merely counted (countUnexpected) and
+// an accumulator error is delivered AFTER the frames from the same chunk,
+// so a matching answer arriving in the chunk that carried the failure is
+// reported as a success.
+//
+// THE GUARANTEE, and its definition. A fatal frame is RECEIVED when its
+// publication has taken and released the engine's fatal gate. The
+// guarantee is then exactly: NO FRAME LEAVES THE HOST AFTER A FATAL FRAME
+// THE ENGINE HAS RECEIVED. It is a theorem, not a hope — the gate totally
+// orders the publication's critical section against the final write's, so
+// either the publication went first (the write's closed recheck sees the
+// closure and writes nothing) or the write went first (the frame left
+// BEFORE the fatal frame was received). There is no third interleaving.
+// TestFatalFramer_PostPurgeRace_NoFrameLeavesAfterAReceivedFatalFrame pins
+// it with a two-way handshake, so a pass cannot be a race the run won.
+//
+// TWO LIVENESS FACTS, stated because the guarantee above is narrower than
+// "the port closes immediately in every state" and must not be read as it:
+//
+//  1. Port.Write runs INSIDE the gate and this contract specifies no write
+//     timeout for it. A write that blocks — a wedged line, a stalled USB
+//     endpoint — holds the gate until the underlying driver returns, so a
+//     fatal frame arriving during that write is received only once the
+//     write returns. This is not a deadlock: the write side never waits on
+//     the reader goroutine (see Engine.gatedWrite's lock-order theorem).
+//  2. The typed cause is universal ONLY when the fatal publication wins
+//     the FIRST close. closePort keeps the first cause any caller supplies,
+//     and Engine.Close, a terminal read error, a consumed reader error and
+//     the gated write's own error branch each reach it without queueing
+//     for the gate. When one of those wins, the port is (correctly)
+//     already closed but the fatal frame's own reason is lost.
+//     TestFatalFramer_OtherCloseFirst_TypedCauseDoesNotSurvive pins that
+//     honestly rather than leaving it a caveat.
+type FatalFramer interface {
+	// IsFatal reports whether frame ends the stream, and says why.
+	//
+	// A non-nil return is the TYPED cause the engine closes the port
+	// with — recorded by closePort and wrapped by every subsequent
+	// closed-engine error, so a driver recovers it with errors.As and
+	// can name the token and the document's own cause sentence. A
+	// sentinel would throw away the whole reason this hook exists.
+	// Returning nil means the frame is ordinary and is delivered as
+	// usual.
+	//
+	// It is called on the ENGINE'S READER GOROUTINE, once per frame, over
+	// the complete result of one Accumulator.Push before any frame from
+	// that chunk is delivered. It must not block and — like Match,
+	// AllowFunc and NoteSent — must not mutate or retain the frame.
+	IsFatal(frame []byte) error
+}
