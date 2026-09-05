@@ -152,7 +152,13 @@ func newDialect(catID string) cat.Dialect {
 		// directions. Not an assumption: this is the legend, transcribed.
 		// The FT-891 prints "0: (Fixed)" on every one of those blocks,
 		// which is the disagreement this axis carries.
-		MemoryP5:    cat.P5TxClar,
+		MemoryP5: cat.P5TxClar,
+		// This manual's P8 legend prints THREE states — "0: CTCSS \"OFF\"
+		// 1: CTCSS ENC/DEC 2: CTCSS ENC" (layout 1291) — and nothing beyond
+		// '2'. Not an assumption: this is the legend, transcribed. The
+		// FT-991A's prints two DCS states as well, which is the
+		// disagreement this axis carries.
+		ToneStates:  cat.ToneStatesCTCSS,
 		MWWriteKind: cat.CombinedMTSetKind, // MW P7 "(Fixed)" — a fact
 		// of this radio, not a rule; see the difference pins.
 	})

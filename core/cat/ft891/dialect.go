@@ -201,6 +201,12 @@ var dialect = cat.MustNewDialect(cat.DialectConfig{
 	// TestDifferencePinMemoryP5 holds it against the FTdx10, which builds a
 	// TxClar-true record this dialect refuses.
 	MemoryP5: cat.P5Fixed,
+	// The FT-891's P8 legend prints THREE states — "0: CTCSS \"OFF\"
+	// 1: CTCSS ENC/DEC 2: CTCSS ENC" (ft891_layout.txt:977) — and nothing
+	// beyond '2'. Not an assumption: this is the legend, transcribed. The
+	// FT-991A's prints two DCS states as well, which is the disagreement
+	// this axis carries.
+	ToneStates: cat.ToneStatesCTCSS,
 	// The FT-891's MW legend prints "P7 0: (Fixed)" (ft891_layout.txt:1047),
 	// and cat.CombinedMTSetKind is the byte '0' — so the constant on the
 	// right is the correct SPELLING of what this radio documents. That the

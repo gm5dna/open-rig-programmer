@@ -477,6 +477,51 @@ func (p MemoryP5Policy) String() string {
 	}
 }
 
+// ToneStateDomain names the set of values byte 24 of the shared memory
+// field block — P8, memdata.go's memCTCSSOffset — may hold on one family.
+//
+// Every registered dialect's P8 legend prints three states, "0: CTCSS OFF
+// 1: CTCSS ENC/DEC 2: CTCSS ENC", which is the domain cat.ParseCTCSSState
+// has always enforced for every radio. The FT-991A prints FIVE on all five
+// blocks that carry P8, adding "3: DCS ENC/DEC" and "4: DCS ENC" — the
+// first Yaesu memory record in this fleet with a DCS state.
+//
+// IT GOVERNS BOTH DIRECTIONS, and the write direction is why it is dialect
+// data. Under ToneStatesCTCSS a record carrying a DCS state is REFUSED by
+// the builders and by the outbound gate alike, rather than encoded: a P8
+// byte a radio's manual does not print is a frame that manual never
+// describes. Under ToneStatesCTCSSAndDCS both are accepted in either
+// direction.
+//
+// Its zero value is deliberately NOT a domain, so a config omitting it is
+// refused (V16) rather than defaulted. Defaulting to the three-state
+// reading would silently drop a real DCS state on the floor; defaulting to
+// the five-state one would authorise this codec to send four sibling radios
+// a byte none of their manuals prints. Neither default is safe, which is
+// exactly when a field must be declared.
+type ToneStateDomain int
+
+const (
+	// ToneStatesCTCSS is the four registered dialects' domain: '0'-'2'.
+	ToneStatesCTCSS ToneStateDomain = iota + 1
+	// ToneStatesCTCSSAndDCS is the FT-991A's: '0'-'4', the three CTCSS
+	// states plus the two DCS ones. The STATE only — the DCS code itself
+	// is not a field of this record.
+	ToneStatesCTCSSAndDCS
+)
+
+// String names the domain, so a refusal can quote it.
+func (t ToneStateDomain) String() string {
+	switch t {
+	case ToneStatesCTCSS:
+		return "ToneStatesCTCSS"
+	case ToneStatesCTCSSAndDCS:
+		return "ToneStatesCTCSSAndDCS"
+	default:
+		return fmt.Sprintf("ToneStateDomain(%d)", int(t))
+	}
+}
+
 // ClarifierPolicy bounds MemoryData.ClarHz for one family.
 type ClarifierPolicy struct {
 	// StepHz is the clarifier's granularity in Hz. FT-710: 10.
@@ -534,6 +579,11 @@ type DialectConfig struct {
 	// this family: the TX clarifier flag, or a printed-fixed '0'. It has no
 	// default: see MemoryP5Policy.
 	MemoryP5 MemoryP5Policy
+
+	// ToneStates is the domain of byte 24 of the shared memory field block
+	// — P8 — on this family: the three CTCSS states, or those plus the two
+	// DCS ones. It has no default: see ToneStateDomain.
+	ToneStates ToneStateDomain
 
 	// MWWriteKind is the single P7 "kind" byte this family accepts on
 	// EVERY memory write, e.g. KindMemory for the FT-710.
@@ -636,6 +686,7 @@ func NewDialect(cfg DialectConfig) (Dialect, error) {
 		mt:          cfg.MT,
 		clar:        cfg.Clarifier,
 		memoryP5:    cfg.MemoryP5,
+		toneStates:  cfg.ToneStates,
 		mwWriteKind: cfg.MWWriteKind,
 	}, nil
 }

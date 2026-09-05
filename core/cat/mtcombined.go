@@ -168,7 +168,7 @@ func (d Dialect) validateCombinedMTFields(m MemoryData) error {
 
 	// CTCSSState/Shift are byte-alias types exactly like Mode: re-validate
 	// via their own Parse functions for the same reason.
-	if _, err := ParseCTCSSState(m.CTCSS.Wire()); err != nil {
+	if _, err := d.ParseCTCSSState(m.CTCSS.Wire()); err != nil {
 		return newParseError([]byte{m.CTCSS.Wire()}, "MT: CTCSS field (P8) is not a valid CTCSSState")
 	}
 	if _, err := ParseShift(m.Shift.Wire()); err != nil {

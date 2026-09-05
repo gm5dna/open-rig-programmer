@@ -1085,3 +1085,24 @@ func TestPMSForm_MatchesTheSlotLegend(t *testing.T) {
 		}
 	}
 }
+
+// --- FT-991A Stage 0 (S0.3): the P8 state domain ---
+
+// TestToneStates_MatchesTheP8Legend pins the cat.ToneStatesCTCSS this
+// dialect declares against the legend it is transcribed from.
+//
+// The FT-891's P8 legend prints THREE states (ft891_layout.txt:977) and
+// nothing beyond '2'. The FT-991A's prints two DCS states as well, which is
+// the disagreement the cat.ToneStateDomain axis carries.
+func TestToneStates_MatchesTheP8Legend(t *testing.T) {
+	d := ft891.Dialect()
+
+	if got := d.ToneStates(); got != cat.ToneStatesCTCSS {
+		t.Fatalf("ToneStates() = %v, want cat.ToneStatesCTCSS — this manual's P8 legend prints 0/1/2 only", got)
+	}
+	for _, c := range []byte{'3', '4'} {
+		if _, err := d.ParseCTCSSState(c); err == nil {
+			t.Errorf("ParseCTCSSState(%q) accepted a DCS state this manual does not print", c)
+		}
+	}
+}

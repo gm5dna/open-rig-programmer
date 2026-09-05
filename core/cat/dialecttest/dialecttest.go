@@ -415,6 +415,7 @@ func (r *conformanceRun) checkSlotFrames() {
 	r.checkMCSendDomain()
 	r.checkMTReadDomain()
 	r.checkPMSSlotForm()
+	r.checkToneStateDomain()
 	r.checkOverlongMTFrameIsRefused()
 }
 
@@ -559,6 +560,117 @@ func (r *conformanceRun) checkPMSSlotForm() {
 		}
 	}
 }
+
+// checkToneStateDomain holds this dialect to its declared P8 domain in
+// THREE places, which is how many places decide it.
+//
+// A DCS state ('3' or '4') must be refused by a three-state dialect at
+// BuildMWSet, at BuildMTSetCombined AND at AllowedCommand — it cannot be
+// BUILT by any route, and a frame forged elsewhere cannot get past the gate
+// either. Widening only the parse site would have let a MemoryData carrying
+// CTCSSState('3') be built, admitted and SENT to a radio whose manual prints
+// P8 0/1/2 only, which is what makes this a write-direction check rather
+// than a codec nicety.
+//
+// The forged frame is spliced from one this SAME dialect built and its own
+// gate admits, so the only difference the gate can be reacting to is P8.
+func (r *conformanceRun) checkToneStateDomain() {
+	r.t.Helper()
+
+	domain := r.d.ToneStates()
+	if len(r.emittable) == 0 || len(r.slots) == 0 {
+		return
+	}
+	ctcss, shift, ok := r.mustParseStates()
+	if !ok {
+		return
+	}
+	mem, found := r.firstWritableSlot(r.emittable[0], ctcss, shift)
+	if !found {
+		return // checkMemoryWrites has already reported this
+	}
+	base := recordFor(mem, r.emittable[0], r.d.MWWriteKind(), 0, ctcss, shift)
+
+	clean, err := r.d.BuildMWSet(base)
+	if err != nil {
+		r.t.Errorf("%s: BuildMWSet refused a plain CTCSS-off record for slot %q: %v", r.name(), mem.Wire(), err)
+		return
+	}
+	if !r.d.AllowedCommand(clean.Bytes()) {
+		r.t.Errorf("%s: its own gate refused its own MW frame %q", r.name(), clean.Bytes())
+		return
+	}
+
+	for _, state := range []cat.CTCSSState{cat.CTCSSDCSEncDec, cat.CTCSSDCSEnc} {
+		m := base
+		m.CTCSS = state
+
+		_, mwErr := r.d.BuildMWSet(m)
+		forged := append([]byte(nil), clean.Bytes()...)
+		forged[ctcssOffsetInMemoryFrame] = state.Wire()
+		gateOK := r.d.AllowedCommand(forged)
+
+		mtBuilt := false
+		if r.d.MTForm() == cat.MTFormCombined {
+			combined := m
+			combined.Kind = cat.CombinedMTSetKind
+			cmd, mtErr := r.buildCombined(combined, "TAG", true)
+			mtBuilt = mtErr == nil && !cmd.IsZero()
+		}
+
+		switch domain {
+		case cat.ToneStatesCTCSS:
+			if mwErr == nil {
+				r.t.Errorf("%s: BuildMWSet built an MW frame carrying P8 %q under %v — this radio's legend prints 0/1/2 only", r.name(), state.Wire(), domain)
+			} else {
+				r.refusals["DCS state refused at BuildMWSet under ToneStatesCTCSS"]++
+			}
+			if gateOK {
+				r.t.Errorf("%s: its own gate ADMITTED the forged MW frame %q, whose P8 is %q, under %v", r.name(), forged, state.Wire(), domain)
+			} else {
+				r.refusals["DCS state refused at the gate under ToneStatesCTCSS"]++
+			}
+			if r.d.MTForm() == cat.MTFormCombined {
+				if mtBuilt {
+					r.t.Errorf("%s: BuildMTSetCombined built a combined MT frame carrying P8 %q under %v", r.name(), state.Wire(), domain)
+				} else {
+					r.refusals["DCS state refused at BuildMTSetCombined under ToneStatesCTCSS"]++
+				}
+			}
+		case cat.ToneStatesCTCSSAndDCS:
+			if mwErr != nil {
+				r.t.Errorf("%s: BuildMWSet refused P8 %q under %v (%v) — this radio's legend prints it", r.name(), state.Wire(), domain, mwErr)
+			}
+			if !gateOK {
+				r.t.Errorf("%s: its own gate refused the MW frame %q, whose P8 %q its own legend prints, under %v", r.name(), forged, state.Wire(), domain)
+			}
+			// The combined MT builder is a SEPARATE consultation of the same
+			// domain, so it gets its own assertion in this direction too: a
+			// site left on the package-level three-state parser would refuse
+			// here while MW happily built the frame.
+			if r.d.MTForm() == cat.MTFormCombined && !mtBuilt {
+				r.t.Errorf("%s: BuildMTSetCombined refused P8 %q under %v — this radio's legend prints it, and MW built it", r.name(), state.Wire(), domain)
+			}
+			// And the parse direction: a '3' or '4' must come back as the
+			// state rather than as an error.
+			answer := append([]byte("MR"), forged[2:]...)
+			back, err := r.d.ParseMRAnswer(answer)
+			if err != nil {
+				r.t.Errorf("%s: ParseMRAnswer(%q) refused P8 %q under %v: %v", r.name(), answer, state.Wire(), domain, err)
+			} else if back.CTCSS != state {
+				r.t.Errorf("%s: ParseMRAnswer decoded P8 %q as %v, want %v", r.name(), state.Wire(), back.CTCSS, state)
+			}
+		}
+	}
+}
+
+// ctcssOffsetInMemoryFrame is P8's byte offset in the 28-byte MR/MW field
+// block (position 24, 1-indexed). core/cat holds the offsets unexported, so
+// the one this suite needs is written here with its position — and the
+// splice is taken from a frame the dialect itself built and its own gate
+// admitted, so a wrong offset would corrupt some other field and show up as
+// a refusal on the FIVE-state arm rather than passing silently.
+const ctcssOffsetInMemoryFrame = 23
 
 // checkMTReadDomain is checkMCSendDomain's counterpart for MT: BuildMTRead
 // against the gate's own verdict on "MT"+s.Wire()+";", held to this
@@ -1596,6 +1708,17 @@ func (r *conformanceRun) checkNonVacuity() {
 	}
 	if r.d.MTReadSlots() == cat.MTReadsMemoryPMS {
 		requiredRefusals = append(requiredRefusals, "MT read refused for 60m/EMG under MTReadsMemoryPMS")
+	}
+	// The P8 state domain. A three-state dialect must be SEEN to refuse a
+	// DCS state at each of the three places that decide it; a five-state one
+	// has nothing to refuse there and is required to show none.
+	if r.d.ToneStates() == cat.ToneStatesCTCSS && len(r.emittable) > 0 && len(r.slots) > 0 {
+		requiredRefusals = append(requiredRefusals,
+			"DCS state refused at BuildMWSet under ToneStatesCTCSS",
+			"DCS state refused at the gate under ToneStatesCTCSS")
+		if r.d.MTForm() == cat.MTFormCombined {
+			requiredRefusals = append(requiredRefusals, "DCS state refused at BuildMTSetCombined under ToneStatesCTCSS")
+		}
 	}
 	// The PMS wire form, counted against the form the dialect declares. A
 	// dialect with no pairs declares no form and checkPMSSlotForm returns

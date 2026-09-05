@@ -65,6 +65,7 @@ func allTestDialects() []namedDialect {
 		// The FT-991A Stage 0 axes' disagreeing fixtures, appended in
 		// turn: see the block at the very end of this file.
 		{"numericPMSDialect", numericPMSDialect},
+		{"dcsStatesDialect", dcsStatesDialect},
 	}
 }
 
@@ -97,6 +98,7 @@ var testDialect = mustFixtureDialect(DialectConfig{
 	MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MemoryP5:      P5TxClar,
+	ToneStates:    ToneStatesCTCSS,
 	MWWriteKind:   KindMemory,
 })
 
@@ -130,6 +132,7 @@ var noneWireDialect = mustFixtureDialect(DialectConfig{
 	MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MemoryP5:      P5TxClar,
+	ToneStates:    ToneStatesCTCSS,
 	MWWriteKind:   KindMemory,
 })
 
@@ -190,6 +193,7 @@ var peerDialect = mustFixtureDialect(DialectConfig{
 	MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MemoryP5:      P5TxClar,
+	ToneStates:    ToneStatesCTCSS,
 	MWWriteKind:   KindMemory,
 })
 
@@ -1557,6 +1561,7 @@ var combinedDialect = mustFixtureDialect(DialectConfig{
 	MT:            MTPolicy{Form: MTFormCombined, P11: P11Fixed, ReadSlots: MTReadsReadable, TagMaxBytes: 6, TagFill: ' '},
 	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MemoryP5:      P5TxClar,
+	ToneStates:    ToneStatesCTCSS,
 	MWWriteKind:   KindMemory,
 })
 
@@ -1610,6 +1615,7 @@ var combinedPeerDialect = mustFixtureDialect(DialectConfig{
 	MT:            MTPolicy{Form: MTFormCombined, P11: P11Fixed, ReadSlots: MTReadsReadable, TagMaxBytes: 12, TagFill: '_'},
 	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MemoryP5:      P5TxClar,
+	ToneStates:    ToneStatesCTCSS,
 	MWWriteKind:   KindMemTune,
 })
 
@@ -1667,6 +1673,7 @@ var pairDialect = mustFixtureDialect(DialectConfig{
 	MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MemoryP5:      P5TxClar,
+	ToneStates:    ToneStatesCTCSS,
 	MWWriteKind:   KindMemory,
 })
 
@@ -1707,6 +1714,7 @@ var mcMemoryPMSDialect = mustFixtureDialect(DialectConfig{
 	MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MemoryP5:      P5TxClar,
+	ToneStates:    ToneStatesCTCSS,
 	MWWriteKind:   KindMemory,
 })
 
@@ -1739,6 +1747,7 @@ var mtReadMemoryPMSDialect = mustFixtureDialect(DialectConfig{
 	},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MemoryP5:    P5TxClar,
+	ToneStates:  ToneStatesCTCSS,
 	MWWriteKind: KindMemory,
 })
 
@@ -1769,6 +1778,7 @@ var p5FixedDialect = mustFixtureDialect(DialectConfig{
 	},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MemoryP5:    P5Fixed, // THE AXIS UNDER TEST
+	ToneStates:  ToneStatesCTCSS,
 	MWWriteKind: KindMemory,
 })
 
@@ -1806,6 +1816,7 @@ var combinedTagDisplayDialect = mustFixtureDialect(DialectConfig{
 	},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MemoryP5:    P5TxClar,
+	ToneStates:  ToneStatesCTCSS,
 	MWWriteKind: KindMemory,
 })
 
@@ -1851,5 +1862,40 @@ var numericPMSDialect = mustFixtureDialect(DialectConfig{
 	},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MemoryP5:    P5TxClar,
+	ToneStates:  ToneStatesCTCSS,
+	MWWriteKind: KindMemory,
+})
+
+// dcsStatesDialect declares ToneStatesCTCSSAndDCS: byte 24 of its memory
+// block may hold '3' or '4' as well as '0'-'2'. That is the FT-991A's
+// printed shape (S0.3) — its P8 legend prints "3: DCS ENC/DEC 4: DCS ENC"
+// on all five blocks that carry the field — and no registered dialect's.
+//
+// It varies ONE axis: its PMS form is the token one, so a DCS record built
+// or refused here cannot be numericPMSDialect's slot space doing the work.
+// Its slot space is otherwise FT-710-shaped, because the properties this
+// fixture has to satisfy are the ordinary build/parse/gate ones and a
+// fixture with nothing to write would exercise none of them.
+var dcsStatesDialect = mustFixtureDialect(DialectConfig{
+	CATID:     "0671",
+	ModeNames: map[Mode]string{ModeUnset: "-", ModeUSB: "USB-DCS", ModeLSB: "LSB-DCS"},
+	Slots: SlotSpace{
+		MemoryLo: 1, MemoryHi: 99,
+		SixtyLo: 501, SixtyHi: 599,
+		PMSPairs:      9,
+		PMSForm:       PMSFormToken,
+		EmergencyWire: "EMG",
+		NoneWire:      "000",
+		MCSelects:     MCSelectsAll,
+	},
+	EXItems:       nil,
+	EXAddressForm: EXAddressTriple,
+	MT: MTPolicy{
+		Form: MTFormShort, ReadSlots: MTReadsReadable,
+		TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' ',
+	},
+	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:    P5TxClar,
+	ToneStates:  ToneStatesCTCSSAndDCS, // THE AXIS UNDER TEST
 	MWWriteKind: KindMemory,
 })

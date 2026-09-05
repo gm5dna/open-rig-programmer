@@ -74,6 +74,7 @@ func combinedRadioConfig() cat.DialectConfig {
 		MT:            cat.MTPolicy{Form: cat.MTFormCombined, P11: cat.P11Fixed, ReadSlots: cat.MTReadsReadable, TagMaxBytes: 6, TagFill: ' '},
 		Clarifier:     cat.ClarifierPolicy{StepHz: 5, MaxAbsHz: 9995},
 		MemoryP5:      cat.P5TxClar,
+		ToneStates:    cat.ToneStatesCTCSS,
 		MWWriteKind:   cat.KindMemTune,
 	}
 }
@@ -142,6 +143,7 @@ func shortPeerRadioConfig() cat.DialectConfig {
 		MT:            cat.MTPolicy{Form: cat.MTFormShort, ReadSlots: cat.MTReadsReadable, TagMaxBytes: 6, ClearTagByte: ' ', PadByte: ' '},
 		Clarifier:     cat.ClarifierPolicy{StepHz: 1, MaxAbsHz: 9999},
 		MemoryP5:      cat.P5TxClar,
+		ToneStates:    cat.ToneStatesCTCSS,
 		MWWriteKind:   cat.KindMemory,
 	}
 }
@@ -215,6 +217,7 @@ func pairAddressRadioConfig() cat.DialectConfig {
 		MT:            cat.MTPolicy{Form: cat.MTFormShort, ReadSlots: cat.MTReadsReadable, TagMaxBytes: 8, ClearTagByte: ' ', PadByte: ' '},
 		Clarifier:     cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 		MemoryP5:      cat.P5TxClar,
+		ToneStates:    cat.ToneStatesCTCSS,
 		MWWriteKind:   cat.KindMemory,
 	}
 }
@@ -278,6 +281,7 @@ func p5FixedRadioConfig() cat.DialectConfig {
 		},
 		Clarifier:   cat.ClarifierPolicy{StepHz: 20, MaxAbsHz: 9980},
 		MemoryP5:    cat.P5Fixed,
+		ToneStates:  cat.ToneStatesCTCSS,
 		MWWriteKind: cat.KindMemory,
 	}
 }
@@ -357,6 +361,7 @@ func tagDisplayRadioConfig() cat.DialectConfig {
 		},
 		Clarifier:   cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 		MemoryP5:    cat.P5Fixed,
+		ToneStates:  cat.ToneStatesCTCSS,
 		MWWriteKind: cat.KindMemory,
 	}
 }
@@ -424,8 +429,15 @@ func numericPMSRadioConfig() cat.DialectConfig {
 			TagMaxBytes: 12,
 			TagFill:     ' ',
 		},
-		Clarifier:   cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-		MemoryP5:    cat.P5TxClar,
+		Clarifier: cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+		MemoryP5:  cat.P5TxClar,
+		// The FT-991A's five-state P8 domain, declared here as well as its
+		// numeric PMS form: this fixture carries BOTH of the slot lane's
+		// axes at once, exactly as tagDisplayRadioConfig above carries all
+		// five of the FT-891's. Without it no dialect visible from OUTSIDE
+		// core/cat declares ToneStatesCTCSSAndDCS, and the five-state arm of
+		// the conformance suite's own tone check would never run.
+		ToneStates:  cat.ToneStatesCTCSSAndDCS,
 		MWWriteKind: cat.KindMemory,
 	}
 }
@@ -471,6 +483,19 @@ func TestRun_ExternallyBuiltNumericPMSDialect(t *testing.T) {
 		if d.AllowedCommand([]byte("MC" + wire + ";")) {
 			t.Errorf("its own gate admitted %q on a numeric-PMS dialect", "MC"+wire+";")
 		}
+	}
+
+	// The five-state P8 domain, in both directions and at the gate.
+	if got := d.ToneStates(); got != cat.ToneStatesCTCSSAndDCS {
+		t.Fatalf("ToneStates() = %v, want ToneStatesCTCSSAndDCS", got)
+	}
+	for _, state := range []cat.CTCSSState{cat.CTCSSDCSEncDec, cat.CTCSSDCSEnc} {
+		if _, err := d.ParseCTCSSState(state.Wire()); err != nil {
+			t.Errorf("ParseCTCSSState(%q) on a five-state dialect: %v", state.Wire(), err)
+		}
+	}
+	if _, err := d.ParseCTCSSState('5'); err == nil {
+		t.Error("ParseCTCSSState('5') accepted a byte past the end of the legend")
 	}
 
 	dialecttest.Run(t, d)
