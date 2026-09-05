@@ -1,0 +1,77 @@
+# MW (MEMORY CHANNEL WRITE) — Set-direction wire frames, hand-derived
+#
+# Manual: "FT-991A HF/VHF/UHF ALL MODE TRANSCEIVER — CAT Operation Reference Manual",
+#   YAESU MUSEN CO., LTD., Copyright 2017.
+# Printed revision: "1711-D" (back cover, PDF page 20). No revision on the title page.
+# Chart used: the MW command detail block, printed folio 12 = PDF page 13.
+#   Layout counted from the SET chart. It is the ONLY MW chart carrying content: the Read
+#   chart and the Answer chart in the MW block are printed as empty grids (verified at
+#   600 dpi), so no Read or Answer layout exists to count for this command.
+# Derivation date: 05/09/2026.
+# NO code, no generator, no other file and no other document was consulted.
+#
+# COUNTED FRAME LENGTH (Set): 28 bytes, terminator included.
+#   Count A (left-to-right through the printed position numbers): row 1 = 1..10 all filled,
+#   row 2 = 11..20 all filled, row 3 = 21..30 with 21..28 filled and 29, 30 empty; the ";"
+#   sits in cell 28. Last filled position = 28.
+#   Count B (row totals): 3 printed rows x 10 numbered cells = 30 numbered positions;
+#   filled cells 10+10+8 = 28. Both counts agree; no third look was needed.
+#   Chart and legend were re-rendered and cropped at 600 dpi; the clarifier-direction glyph
+#   in the legend was checked at 1800 dpi.
+#
+# POSITION-BY-POSITION FIELD MAP (Set chart, MW block, printed folio 12)
+#   pos 1      "M"                     command letter (printed literally in the chart)
+#   pos 2      "W"                     command letter (printed literally in the chart)
+#   pos 3-5    P1  (3 positions)       legend: "P1  001-117 (Memory Channel)"
+#   pos 6-14   P2  (9 positions)       legend: "P2    Frequency (Hz)"
+#   pos 15-19  P3  (5 positions)       legend: "P3  Clarifier Direction +: Plus Shift, --: Minus Shift"
+#                                              "Clarifier Offset: 0000 - 9999 (Hz)"
+#   pos 20     P4  (1 position)        legend: "P4  0: RX CLAR "OFF"    1: RX CLAR "ON""
+#   pos 21     P5  (1 position)        legend: "P5  0: TX CLAR "OFF"    1: TX CLAR "ON""
+#   pos 22     P6  (1 position)        legend: "P6  MODE  1: LSB   2: USB   3: CW   4: FM   5: AM   6: RTTY-LSB   7: CW-R"
+#                                              "8: DATA-LSB   9: RTTY-USB   A: DATA-FM   B: FM-N   C: DATA-USB"
+#                                              "D: AM-N   E: C4FM"
+#   pos 23     P7  (1 position)        legend: "P7  00: (Fixed)"      <-- see DISAGREEMENT below
+#   pos 24     P8  (1 position)        legend: "P8  0: CTCSS "OFF"   1: CTCSS ENC/DEC   2: CTCSS ENC   3: DCS ENC/DEC"
+#                                              "4: DCS ENC"
+#   pos 25-26  P9  (2 positions)       legend: "P9  00: (Fixed)"
+#   pos 27     P10 (1 position)        legend: "P10 0: Simplex    1: Plus Shift    2: Minus Shift"
+#   pos 28     ";"                     terminator (printed literally in the chart)
+#
+#   The MW block prints NO P11 and NO P12: there is no tag field on this command, and no
+#   tag ON/OFF flag position anywhere in the block.
+#
+# BYTES THE MANUAL DETERMINES vs INHERITED-ASSUMED
+#   Manual-determined: "MW"; every field width (counted); ";"; P1 range 001-117; P2 unit
+#   (Hz) and 9-digit width; P3 offset range; every P4/P5/P6/P8/P10 index and label;
+#   P9 = "00" (printed "(Fixed)").
+#   INHERITED-ASSUMED (1) — P7 VALUE AND WIDTH: the legend prints "P7  00: (Fixed)" (two
+#     characters) but the chart gives P7 exactly ONE position (23), and a two-character P7
+#     would not fit the counted 28-byte frame. Every vector below writes a single "0" at
+#     position 23. Recorded as a disagreement, not resolved.
+#   INHERITED-ASSUMED (2) — MINUS CLARIFIER DIRECTION BYTE: the P3 legend prints
+#     "+: Plus Shift, --: Minus Shift" — two hyphen glyphs, verified at 1800 dpi — yet P3
+#     has 5 positions and the offset is 4 digits, leaving exactly ONE position for the
+#     direction. Vectors below use a single "-" (0x2D). Recorded, not resolved.
+#
+# SLOT-RANGE LEGEND: the MW legend prints only "P1  001-117 (Memory Channel)". It does NOT
+#   itself name a PMS range or spell a PMS slot; that breakdown appears only under MC.
+#
+# COMMAND-LIST vs DETAIL-BLOCK, MW directions — BOTH readings recorded verbatim, unresolved
+#   Command list, printed folio 3 (PDF page 4), row verbatim:
+#     "MW | MEMORY WRITE | Set: O | Read: X | Ans.: X | AI: X"
+#   Detail block, printed folio 12 (PDF page 13):
+#     Set row: chart printed and filled (28 positions); Read row: chart printed EMPTY;
+#     Answer row: chart printed EMPTY.
+#   The two readings AGREE that MW is Set-only. (Note also that the command list names this
+#   command "MEMORY WRITE" whereas the detail block heads it "MEMORY CHANNEL WRITE".)
+#
+# Hardware status: UNVERIFIED. No frame below has been sent to or read from a radio.
+#
+# These three cases mirror MT vectors 1, 5 and 6 (the tag-carrying fields do not exist here).
+mw_ch001_7m100_lsb_plain	MW001007100000+000000100000;
+mw_ch010_145m500_fm_clar_minus_0500_ctcss_encdec_minus_shift	MW010145500000-050010401002;
+mw_ch011_145m100_fm_p8_1_ctcss_encdec	MW011145100000+000000401000;
+mw_ch012_145m100_fm_p8_2_ctcss_enc	MW012145100000+000000402000;
+mw_ch013_145m100_fm_p8_3_dcs_encdec	MW013145100000+000000403000;
+mw_ch014_145m100_fm_p8_4_dcs_enc	MW014145100000+000000404000;

@@ -1,0 +1,74 @@
+# EX (MENU) — Read-request wire frames, hand-derived
+#
+# Manual: "FT-991A HF/VHF/UHF ALL MODE TRANSCEIVER — CAT Operation Reference Manual",
+#   YAESU MUSEN CO., LTD., Copyright 2017.
+# Printed revision: "1711-D" (back cover, PDF page 20). No revision on the title page.
+# Charts used: the EX command detail block, printed folio 7 = PDF page 8, and the menu
+#   chart that follows it, which runs continuously across printed folios 7, 8 and 9
+#   (PDF pages 8, 9 and 10) as one table with the column headings "P1 | Function | P2 |
+#   Digits" and rows P1 = 001 through 153.
+#   The READ chart of the EX block was counted for the layout below: it is the only one of
+#   the three EX charts with a fixed length. The Set and Answer charts are printed with an
+#   open-ended run ("... P2 P2 ~ P2 ;" over positions "1 2 3 4 5 6 7 ~ n-1 n"), so their
+#   length is not countable from the chart alone and no Set or Answer vector is given here.
+# Derivation date: 05/09/2026.
+# NO code, no generator, no other file and no other document was consulted.
+#
+# COUNTED FRAME LENGTH (Read request): 6 bytes, terminator included.
+#   Count A (left-to-right): 1 "E", 2 "X", 3 P1, 4 P1, 5 P1, 6 ";", 7..10 empty.
+#   Count B (row totals): 1 printed row x 10 numbered cells; filled cells = 6. Agree; no
+#   third look needed. The EX block and its legend were re-rendered and cropped at 600 dpi.
+#   The menu chart's Digits column was counted twice: once from the 300 dpi page images
+#   read top-to-bottom, and once from 600 dpi crops of the P1 and Digits columns lifted out
+#   side by side (the two columns sit at opposite edges of the table, so they were cropped
+#   separately and butted together). The two passes agreed on every row.
+#
+# POSITION-BY-POSITION FIELD MAP (Read chart, EX block, printed folio 7)
+#   pos 1      "E"                     printed literally
+#   pos 2      "X"                     printed literally
+#   pos 3-5    P1  (3 positions)       legend: "P1   : 001 - 153 (MENU Number)"
+#   pos 6      ";"                     terminator, printed literally
+#   (The block's second legend line reads: "P2   : Parameter (See Table)".)
+#
+# MENU CHART GROUPS
+#   The chart prints NO group headings or dividing rows: it is one continuous table from
+#   P1 = 001 to P1 = 153, broken only by the page breaks at 042/043 and 124/125. "First
+#   group" and "last group" below are therefore read as the first and last rows of that
+#   single table.
+#   First row, verbatim:  "001 | AGC FAST DELAY | 20 ~ 4000 msec (P2= 0020 ~ 4000, 20 msec/step) | 4"
+#   Last row,  verbatim:  "153 | WIRES DG-ID | 00: AUTO    01: DG-ID 01 ~ 99: DG-ID 99 | 2"
+#
+# LARGEST VALUE IN THE Digits COLUMN
+#   The largest Digits value printed anywhere in the 001-153 chart is 8, and it occurs at
+#   exactly one row:
+#     "151 | PRESET FREQUENCY | 00030000 ~ 47000000 | 8"
+#   Second largest is 5, at rows 027 (TIME ZONE), 064 (OTHER DISP (SSB)), 065 (OTHER SHIFT
+#   (SSB)) and 083 (RPT SHIFT 430MHz). No other row exceeds 4.
+#   Chart anomaly, recorded not resolved: row 087 prints "087 | RADIO ID | - - - - - - - - - - | -",
+#   i.e. its P2 column and its Digits column are both dashes rather than a value.
+#
+# BYTES THE MANUAL DETERMINES vs INHERITED-ASSUMED
+#   Manual-determined: "EX"; the 3-digit P1 width (counted); ";"; the P1 range 001-153; the
+#   menu number of every vector below (each is a row printed in the chart).
+#   INHERITED-ASSUMED: none. Every byte of every EX Read vector below is fixed by the chart.
+#
+# ANSWER FRAME SHAPE for menu item 151 (comment only; no parameter value is invented)
+#   The EX Answer chart prints, over positions "1 2 3 4 5 6 7 ~ n-1 n":
+#     pos 1   "E"
+#     pos 2   "X"
+#     pos 3-5 P1   -> the three menu-number digits, here 1, 5, 1
+#     pos 6.. P2   -> the parameter, an open-ended run of P2 cells on the chart. For menu
+#                     item 151 the menu chart's Digits column prints 8, so the run would be
+#                     8 positions wide (positions 6..13) and the terminator would fall at
+#                     position n = 14, giving a 14-byte answer.
+#   Marked shape, value NOT invented:
+#     E X 1 5 1 <P2> <P2> <P2> <P2> <P2> <P2> <P2> <P2> ;
+#   The frame length 14 is DERIVED (chart run length + Digits column), not counted from a
+#   closed chart, because the EX Answer chart has no printed final position number.
+#
+# Hardware status: UNVERIFIED. No frame below has been sent to or read from a radio.
+#
+ex_read_menu_001_agc_fast_delay_first_row	EX001;
+ex_read_menu_153_wires_dg_id_last_row	EX153;
+ex_read_menu_151_preset_frequency_largest_digits_8	EX151;
+ex_read_menu_028_gps_232c_select	EX028;
