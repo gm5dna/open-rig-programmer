@@ -37,10 +37,15 @@ Silicon Labs' **"CP210x Universal Windows Driver" package, version
 11.6.0.420** (`DriverVer 08/14/2026`): although that package's own
 release notes list only x64/x86 support, its zip in fact ships an
 `arm64\silabser.sys` driver and an INF section covering the CP2105's
-two interfaces, and installing it (`pnputil /add-driver silabser.inf
-/install`, or the package's own installer) bound both COM ports. **Do
-not wait for Windows Update to find a driver on ARM64 — install the
-Silicon Labs package directly.**
+two interfaces. The zip is **INF-only — it has no setup/installer
+executable**. Either extract it and, in Device Manager, select the
+"Enhanced Com Port" device (the one in the `CM_PROB_FAILED_INSTALL`
+error state) → **Update driver** → **Browse my computer for drivers**
+→ point it at the extracted folder; or, from an admin PowerShell, run
+`pnputil /add-driver silabser.inf /install` — this is what the
+verification session did, and it bound both COM ports in one step.
+**Do not wait for Windows Update to find a driver on ARM64 — install
+the Silicon Labs package directly.**
 
 ## 2. Two COM ports
 
@@ -118,6 +123,18 @@ the bootstrapper's download step had nothing to do
 (`docs/hardware-notes.md`'s "Windows (ARM64 VM) session — 05/09/2026",
 "GUI and Demo"); the download path itself has still not been exercised.
 
+**Version information shown on installed files differs by tool.**
+Explorer's Properties → Details on `Open Rig Programmer.exe` correctly
+shows File description, File version, Product name, Product version
+and the licence line — confirmed on the Windows 11 ARM64 VM,
+05/09/2026 (`docs/hardware-notes.md`'s "Windows (ARM64 VM) session —
+05/09/2026", "The install"). PowerShell's `(Get-Item …).VersionInfo`,
+by contrast, reads every one of those string fields as empty: that is
+a .NET `FileVersionInfo` quirk with the language-neutral ("0000")
+version-resource block Wails writes, not a defect in the installed
+binary. Check Explorer's Properties dialogue, not a PowerShell
+`VersionInfo` read, when confirming what shipped.
+
 Settings and read-back snapshots live under
 `%AppData%\rigprog\settings.json` and `%AppData%\rigprog\snapshots\` —
 the same `os.UserConfigDir()`-based path this project uses on every
@@ -153,17 +170,26 @@ downloaded, installed and driven end to end, and two writes made and
 then restored — the full write-up is `docs/hardware-notes.md`'s
 "Windows (ARM64 VM) session — 05/09/2026". Every driver, COM-port,
 SmartScreen/Defender and WebView2 claim above that carries a register
-entry from that list — **W1, W3, W4, W8, W9, W10** — is now **LIFTED**,
-confirmed on that session, not inferred from macOS. **W2** (whether an
-x64 machine's Windows Update supplies the CP210x driver on its own)
-stays **ASSUMED**: this session's VM was ARM64, not x64, so it cannot
-speak to that claim. W5, W6, W7, W11 and W13 concern behaviour this
-page does not describe directly (a field in `probe`/`read` output, TX
-safety at open, read/write timing, USB passthrough, and the exact
-driver wording) and are likewise lifted by the same session — see
+entry from that list — **W1 (qualified — the vendor package installed
+by hand), W3, W4, W8, W9, W10** — is now **LIFTED**, confirmed on that
+session, not inferred from macOS. **W2** (whether an x64 machine's
+Windows Update supplies the CP210x driver on its own) stays
+**ASSUMED**: this session's VM was ARM64, not x64, so it cannot speak
+to that claim. W6, W7, W11 and W13 concern behaviour this page does
+not describe directly (TX safety at open, read/write timing, USB
+passthrough, and the exact driver wording) and are likewise **LIFTED**
+by the same session; **W5** is **observed (recorded only)** rather
+than lifted — the USB serial field stayed empty in the `probe` output
+on Windows, and no code change follows from that — see
 `docs/hardware-notes.md` for each. **W12** (the amd64 GUI, launched by
 a person) stays **ASSUMED**: no amd64 Windows machine, physical or
 virtual, has run this project's code.
+
+**Console output.** `rigprog.exe`'s prose uses em dashes; captured
+under a legacy console code page (as PowerShell's redirected output
+was on the ARM64 VM) they render as `ÔÇö` rather than "—" — a code-page
+display quirk, not a difference in what the CLI printed. Run `chcp
+65001` first, or use Windows Terminal, to see them correctly.
 
 **What remains untried on Windows**: amd64 (built and CLI-run in CI
 only — no amd64 Windows machine has run this project's code, physical
@@ -175,5 +201,6 @@ about amd64 or about a physical machine.
 
 Every GitHub release this project makes starts as a DRAFT:
 `.github/workflows/release.yml` never clears that flag, so whether any
-artefact ships is a separate human decision. This pending Windows
-hardware evidence is one of the things that decision has to weigh.
+artefact ships is a separate human decision. The remaining Windows
+hardware gap — amd64, and a physical machine of either architecture —
+is one of the things that decision has to weigh.
