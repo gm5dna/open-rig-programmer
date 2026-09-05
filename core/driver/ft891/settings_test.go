@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
+	"github.com/gm5dna/open-rig-programmer/core/clone"
+	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 	"github.com/gm5dna/open-rig-programmer/internal/extable"
@@ -882,5 +884,91 @@ func TestReadSetting_CannotInterleaveWithACrossCheck(t *testing.T) {
 
 	if got, want := p.Transcript()[before:], []string{"MT002;", "MR002;", "EX" + narrowSettingAddr + ";"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("transcript = %v, want %v — the cross-check's two frames must be adjacent", got, want)
+	}
+}
+
+// TestCloneReadSettings_WalksTheWholeDescriptor drives core/clone's
+// ReadSettings — the layer this descriptor exists for — end to end over the
+// scripted radio, and is the only test that puts every one of the
+// descriptor's items on the wire.
+//
+// IT IS THE PREFLIGHT THAT MATTERS MOST. core/clone/settings.go refuses
+// before any wire traffic if the descriptor fails driver.SettingsDescriptor.
+// Validate, and again if an all-MenuUnsupported codeplug.MenuSnapshot built
+// from its item IDs fails codeplug.MenuSnapshot.Validate — which requires
+// every ID to be EXACTLY four or exactly six ASCII digits. This radio is the
+// first registered Yaesu whose IDs are the four-digit half of that rule
+// (core/codeplug/menus.go's isSettingIDWidth), so a descriptor that minted
+// anything else would read the whole radio and only then fail. Neither
+// package-level test can see this: the driver's own tests validate the
+// descriptor but know nothing of the snapshot rule, and core/clone's tests
+// use their own fixtures.
+//
+// The answers are built from the INVENTORY's declared width per item, not
+// from one shared literal, so the walk exercises the full 1..5-byte P4 range
+// this dialect derives its answer bound from rather than one width 159
+// times.
+//
+// Complete is TRUE here because every item answers. The partial-snapshot
+// behaviour — a "?;" becoming MenuUnavailable with the read continuing — is
+// core/clone's own rule, pinned in its package; the driver half it depends
+// on (a rejection is SettingUnavailable and NOT an error) is pinned by
+// TestSession_ReadSetting_ScriptedRoundTrips.
+func TestCloneReadSettings_WalksTheWholeDescriptor(t *testing.T) {
+	d := SettingsDescriptor()
+
+	// One answer per descriptor item, each at that item's own declared
+	// width, filled with a digit that varies per item so a snapshot that
+	// mapped one answer onto another's ID could not pass unnoticed.
+	//
+	// The width is taken from the inventory BY POSITION rather than by
+	// looking the ID up in it, deliberately: this fixture must not depend on
+	// the ID being a well-formed inventory address, or a mis-shaped ID would
+	// break the FIXTURE instead of reaching the clone preflight that exists
+	// to catch it. That the descriptor's items are the inventory in its own
+	// order is pinned separately, by
+	// TestSettingsDescriptor_ShapeFromTheInventory.
+	items := catDialect.EXItems()
+	answers := map[string]string{}
+	wantValue := map[string]string{}
+	var order []string
+	for _, m := range d.Menus {
+		for _, g := range m.Groups {
+			for _, it := range g.Items {
+				if len(order) >= len(items) {
+					t.Fatalf("the descriptor holds more items than the inventory's %d", len(items))
+				}
+				raw := strings.Repeat(string(byte('0'+len(order)%10)), items[len(order)].Digits)
+				answers[it.ID] = "EX" + it.ID + raw + ";"
+				wantValue[it.ID] = raw
+				order = append(order, it.ID)
+			}
+		}
+	}
+
+	_, sess := openSession(t, Simulated, slotImage{exAnswers: answers})
+	snap, err := clone.NewService(sess, clone.SnapshotStore{}).ReadSettings(testCtx(t))
+	if err != nil {
+		t.Fatalf("clone.ReadSettings: unexpected error: %v", err)
+	}
+	if err := snap.Validate(); err != nil {
+		t.Fatalf("the returned snapshot fails codeplug.MenuSnapshot.Validate: %v", err)
+	}
+	if snap.Descriptor != d.Version {
+		t.Errorf("snapshot Descriptor = %q, want this driver's own %q carried through verbatim", snap.Descriptor, d.Version)
+	}
+	if !snap.Complete {
+		t.Error("snapshot Complete = false, want true — every item was answered")
+	}
+	if len(snap.Entries) != len(order) {
+		t.Fatalf("snapshot holds %d entries, the descriptor declares %d items", len(snap.Entries), len(order))
+	}
+	for i, e := range snap.Entries {
+		if e.ID != order[i] {
+			t.Fatalf("Entries[%d].ID = %q, want %q — ReadSettings walks the descriptor in its own order", i, e.ID, order[i])
+		}
+		if e.State != codeplug.MenuKnown || e.Value != wantValue[e.ID] {
+			t.Errorf("entry %q = {Value:%q State:%v}, want {Value:%q State:MenuKnown}", e.ID, e.Value, e.State, wantValue[e.ID])
+		}
 	}
 }
