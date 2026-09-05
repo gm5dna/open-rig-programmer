@@ -228,7 +228,6 @@ nsi_source() {
 
 if [ -f "$nsi" ]; then
   code="$(nsi_source "$nsi")"
-  code_numbered="$(nsi_source "$nsi" | grep -n '')"
 
   # Target-specific, single-line, literal-`$INSTDIR`/`$AppData` greps are
   # dodged three ways: `!define`-indirecting the target
@@ -265,20 +264,26 @@ $rmdir_r_hit"
   printf '%s\n' "$code" | grep -Eiq '^[[:space:]]*!define[[:space:]]+[A-Za-z0-9_]+[[:space:]]+.*\$(INSTDIR|AppData|APPDATA|LOCALAPPDATA|PROGRAMFILES)' \
     && err "nsi: a !define's value contains \$INSTDIR/\$AppData/\$LOCALAPPDATA/\$PROGRAMFILES (indirection is not needed here and is how the RMDir /r check above gets dodged)"
 
-  temp_line="$(printf '%s\n' "$code_numbered" | grep -E 'SetOutPath[[:space:]]+"\$TEMP"' | head -1 | cut -d: -f1)"
-  instdir_line="$(printf '%s\n' "$code_numbered" | grep -E 'RMDir[[:space:]]+"\$INSTDIR"' | head -1 | cut -d: -f1)"
-  if [ -z "$temp_line" ]; then
-    err "nsi: no SetOutPath \"\$TEMP\" line found (needed before removing \$INSTDIR)"
-  elif [ -z "$instdir_line" ]; then
-    err "nsi: no non-recursive RMDir \"\$INSTDIR\" line found"
-  elif [ "$temp_line" -ge "$instdir_line" ]; then
-    err "nsi: SetOutPath \"\$TEMP\" (line $temp_line) does not precede RMDir \"\$INSTDIR\" (line $instdir_line)"
-  fi
-
   uninstall_block="$(printf '%s\n' "$code" | sed -nE '/Section[[:space:]]+"[Uu]ninstall"/,/SectionEnd/p')"
   if [ -z "$uninstall_block" ]; then
     err "nsi: no uninstall Section found"
   else
+    # temp_pos/instdir_pos are positions WITHIN the uninstall Section,
+    # not the nsi file — the whole-file line numbers this used to
+    # report let a $TEMP staged anywhere earlier in the file (e.g. the
+    # install Section) satisfy "precedes $INSTDIR" even though the
+    # uninstall Section itself never ran it, leaving RMDir "$INSTDIR"
+    # to execute with its working directory still inside $INSTDIR.
+    temp_pos="$(printf '%s\n' "$uninstall_block" | grep -n 'SetOutPath[[:space:]]\+"\$TEMP"' | head -1 | cut -d: -f1)"
+    instdir_pos="$(printf '%s\n' "$uninstall_block" | grep -n 'RMDir[[:space:]]\+"\$INSTDIR"' | head -1 | cut -d: -f1)"
+    if [ -z "$temp_pos" ]; then
+      err "nsi: no SetOutPath \"\$TEMP\" line found in the uninstall Section (needed before removing \$INSTDIR)"
+    elif [ -z "$instdir_pos" ]; then
+      err "nsi: no non-recursive RMDir \"\$INSTDIR\" line found in the uninstall Section"
+    elif [ "$temp_pos" -ge "$instdir_pos" ]; then
+      err "nsi: SetOutPath \"\$TEMP\" (uninstall Section line $temp_pos) does not precede RMDir \"\$INSTDIR\" (line $instdir_pos)"
+    fi
+
     bad_rigprog="$(printf '%s\n' "$uninstall_block" | grep -i 'rigprog' | grep -Ev 'Delete[[:space:]]+"\$INSTDIR\\rigprog\.exe"')"
     [ -z "$bad_rigprog" ] || err "nsi: uninstall Section mentions rigprog outside the Delete \"\$INSTDIR\\rigprog.exe\" line:
 $bad_rigprog"
