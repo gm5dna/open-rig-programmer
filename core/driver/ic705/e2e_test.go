@@ -673,8 +673,13 @@ func TestFakeSession_OccupiedSurpriseAddIsRefused(t *testing.T) {
 	if !strings.Contains(err.Error(), "re-open the session to run discovery again") {
 		t.Errorf("the refusal %q does not name the remedy", err)
 	}
-	if strings.Contains(err.Error(), "WithFullInventoryWalk") {
-		t.Errorf("the refusal %q names a Go option no CLI flag and no GUI control reaches", err)
+	// Naming WithFullInventoryWalk() while saying no registered
+	// composition passes it is not the same as offering it as a remedy
+	// (side lanes fix round 1, review icom-minors-review-opus.md
+	// MEDIUM-1) — it is the honest reason the setting the user might go
+	// looking for is not there.
+	if strings.Contains(err.Error(), "no setting that widens") {
+		t.Errorf("the refusal %q still claims no setting exists when the driver exports one", err)
 	}
 	if len(res.Steps) != 0 || bounded.SetsSeen() != setsBefore {
 		t.Error("the refusal sent something")
