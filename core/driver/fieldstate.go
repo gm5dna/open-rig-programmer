@@ -39,10 +39,14 @@ type FieldStateCheck struct {
 // core/driver/ic9700/write.go's validateKnownValues, SHARPENED by the
 // FT-891 closing review's C-M1 finding and then by MEDIUM-1):
 //
-//   - codeplug.Known — the field's own Valid() decides, so BOTH the
+//   - codeplug.Known — the field's own Valid() decides. For a
+//     ToneField/StringField/IntField that always means BOTH the
 //     coherence question (a value that fits its state) and the DOMAIN
 //     question (a value this radio can express, judged against caps' own
-//     vocabulary or table) are asked;
+//     vocabulary or table); a Known BoolField or FreqField's Valid()
+//     answers only the coherence question — those two types carry no
+//     vocabulary of their own, so their domain question belongs to the
+//     capability gate one rung down and, for TxFreqHz, to the codec;
 //   - codeplug.Unknown or codeplug.Unavailable carrying a NON-ZERO
 //     Value — REFUSED as incoherent. Both states mean "preserve whatever
 //     the radio has"; a value alongside one is a claim about what that
@@ -78,11 +82,14 @@ type FieldStateCheck struct {
 // this radio's domains.
 //
 // caps IS THIS RADIO'S OWN, not a standard chart: the vocabulary and table
-// members it supplies (DuplexOptions, ToneModes, DTCSCodes,
-// DTCSPolarities, Filters, TuningSteps, AttenuatorDB, PreampOptions,
-// AntennaOptions) are what each StringField/IntField/ToneField is judged
-// against. A radio declaring an EMPTY vocabulary for a field fails closed
-// on every Known value for it — StringField.Valid's and IntField.Valid's
+// members it supplies (CTCSSTones, CTCSSToneRange, DuplexOptions,
+// ToneModes, DTCSCodes, DTCSPolarities, Filters, TuningSteps,
+// AttenuatorDB, PreampOptions, AntennaOptions) are what each
+// ToneField/StringField/IntField is judged against — a ToneField via
+// caps.AdmitsTone, which reads CTCSSTones or CTCSSToneRange (never both,
+// spec.Capabilities.Validate's own rule). A radio declaring an EMPTY
+// vocabulary for a field fails closed on every Known value for it —
+// StringField.Valid's and IntField.Valid's
 // own documented rule, and the right answer for a radio whose record has
 // no room for the field at all. The COHERENCE half of the stance is
 // settled without consulting caps, so an empty vocabulary changes no
