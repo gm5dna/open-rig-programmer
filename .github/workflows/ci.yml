@@ -112,6 +112,8 @@ jobs:
           # desktops don't need it.
           WEBKIT_DISABLE_DMABUF_RENDERER: '1'
         run: |
+          # shellcheck disable=SC2016
+          # (single quotes are deliberate: the inner `bash -c` string must not expand on the outer shell)
           xvfb-run -a bash -c '
             set -u
             app/build/bin/open-rig-programmer & pid=$!
