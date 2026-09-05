@@ -359,13 +359,16 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	// unchanged, TxFreqHz simply absent from it).
 	//
 	// THE WALK IS THE FLEET'S, driver.CheckFieldStates, not a fourth
-	// private copy: its doc comment carries the four-rule stance, of which
-	// the load-bearing one HERE is that codeplug.Absent is ADMITTED. Every
-	// ChannelData this driver's own read path produces states each field
-	// positively, but a hand-built one — the GUI's, a test's, a caller's
-	// composite literal — leaves the untouched ones Absent, and refusing
-	// those would refuse every ordinary MODIFY.
-	// TestWriteChannel_AbsentFieldStatesStillWrite is that half's pin.
+	// private copy: its doc comment carries the five-rule stance, of which
+	// the load-bearing one HERE is that codeplug.Absent WITH A ZERO VALUE
+	// is ADMITTED. Every ChannelData this driver's own read path produces
+	// states each field positively, but a hand-built one — the GUI's, a
+	// test's, a caller's composite literal — leaves the untouched ones
+	// Absent, and refusing those would refuse every ordinary MODIFY.
+	// TestWriteChannel_AbsentFieldStatesStillWrite is that half's pin;
+	// TestWriteChannel_AbsentFieldStateWithValueRefusedBeforeWire pins the
+	// erratum's other half — an Absent field carrying a non-zero Value is
+	// still refused (MEDIUM-1, Opus review 05/09/2026).
 	if field, err := driver.CheckFieldStates(s.caps, *ch.Data); err != nil {
 		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{field}, Reason: err.Error()}
 	}

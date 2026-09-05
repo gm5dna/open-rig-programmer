@@ -142,6 +142,58 @@ func TestCheckFieldStates_FleetStance(t *testing.T) {
 			wantField: spec.FieldAttenuator,
 			reasonHas: "must have zero Value",
 		},
+		// The five rows below are MEDIUM-1 (Opus review, 05/09/2026) and the
+		// DECISION erratum it forced: codeplug.Absent is the ZERO
+		// FieldState, so a caller who sets a Value and forgets to set
+		// State — a copy/paste slip, not a hand-built ChannelData that
+		// left a field untouched — produces exactly the struct the
+		// all-Absent row above admits. Before the fix judge(state, ...)
+		// looked only at state, so every one of these five was admitted
+		// and its value silently dropped; one row per FieldState-carrying
+		// type (ToneField, BoolField, FreqField, StringField, IntField)
+		// so no type's zero check is trusted on another's evidence, and
+		// each reuses the SAME field/value pair the review's reproduction
+		// used.
+		{
+			name: "an Absent ToneField carrying a non-zero value is refused as incoherent",
+			mutate: func(d *codeplug.ChannelData) {
+				d.CTCSSTone = codeplug.ToneField{Value: 1000}
+			},
+			wantField: spec.FieldCTCSSTone,
+			reasonHas: "must have zero Value",
+		},
+		{
+			name: "an Absent BoolField carrying a non-zero value is refused as incoherent",
+			mutate: func(d *codeplug.ChannelData) {
+				d.ScanSkip = codeplug.BoolField{Value: true}
+			},
+			wantField: spec.FieldScanSkip,
+			reasonHas: "must have zero Value",
+		},
+		{
+			name: "an Absent FreqField carrying a non-zero value is refused as incoherent",
+			mutate: func(d *codeplug.ChannelData) {
+				d.TxFreqHz = codeplug.FreqField{Value: 1}
+			},
+			wantField: spec.FieldTxFrequency,
+			reasonHas: "must have zero Value",
+		},
+		{
+			name: "an Absent StringField carrying a non-zero value is refused as incoherent",
+			mutate: func(d *codeplug.ChannelData) {
+				d.Duplex = codeplug.StringField{Value: "RPS"}
+			},
+			wantField: spec.FieldDuplex,
+			reasonHas: "must have zero Value",
+		},
+		{
+			name: "an Absent IntField carrying a non-zero value is refused as incoherent",
+			mutate: func(d *codeplug.ChannelData) {
+				d.AttenuatorDB = codeplug.IntField{Value: 99}
+			},
+			wantField: spec.FieldAttenuator,
+			reasonHas: "must have zero Value",
+		},
 		{
 			name: "an Unknown field with a zero value is admitted: preserve what the radio has",
 			mutate: func(d *codeplug.ChannelData) {

@@ -252,13 +252,16 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	// TxFreqHz simply absent from them).
 	//
 	// THE WALK IS THE FLEET'S, driver.CheckFieldStates, not a fourth
-	// private copy: its doc comment carries the four-rule stance, of which
-	// the load-bearing one HERE is that codeplug.Absent is ADMITTED. Every
-	// ChannelData this driver's own read path produces leaves the tier
-	// fields Unavailable, but a hand-built one — the GUI's, a test's, a
-	// caller's composite literal — leaves them Absent, and refusing those
-	// would refuse every ordinary MODIFY.
-	// TestWriteChannel_AbsentFieldStatesStillWrite is that half's pin.
+	// private copy: its doc comment carries the five-rule stance, of which
+	// the load-bearing one HERE is that codeplug.Absent WITH A ZERO VALUE
+	// is ADMITTED. Every ChannelData this driver's own read path produces
+	// leaves the tier fields Unavailable, but a hand-built one — the
+	// GUI's, a test's, a caller's composite literal — leaves them Absent,
+	// and refusing those would refuse every ordinary MODIFY.
+	// TestWriteChannel_AbsentFieldStatesStillWrite is that half's pin;
+	// TestWriteChannel_AbsentFieldStateWithValueRefusedBeforeWire pins the
+	// erratum's other half — an Absent field carrying a non-zero Value is
+	// still refused (MEDIUM-1, Opus review 05/09/2026).
 	//
 	// TagDisplay is the ONE field this rung does not settle on its own:
 	// MT's P1 flag is mandatory, so a non-Known value — Absent included —

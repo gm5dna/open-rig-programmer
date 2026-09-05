@@ -375,6 +375,40 @@ func TestWriteChannel_RefusalLadder(t *testing.T) {
 			reason: "must have zero Value",
 		},
 		{
+			// MEDIUM-1 (Opus review of this sweep, 05/09/2026), the
+			// erratum to the write-gate sweep's (i) DECISION: codeplug.
+			// Absent IS the zero FieldState, so a caller who sets a Value
+			// and forgets to set State — a copy/paste slip, not a
+			// hand-built ChannelData that genuinely left a field
+			// untouched — produces exactly the struct
+			// TestWriteChannel_AbsentFieldStatesStillWrite's fixture is
+			// built from. This is C-M1 again with the State OMITTED
+			// instead of wrong.
+			//
+			// CTCSSTONE IS THE PROOF FIELD, the reviewer's own
+			// reproduction: this radio's 41-byte combined Set has no
+			// CTCSS-tone position at all (the C-M1 row above makes the
+			// same point for TxFreqHz), so nothing past the walk would
+			// ever have noticed it.
+			//
+			// RED-PROOF, captured against the pre-erratum judge (Absent
+			// admitted regardless of Value), this sub-test's own body
+			// unchanged: no refusal happened at all —
+			//
+			//	WriteChannel = {Steps:[{Command:MT Sent:true Confirmed:true}]}, err = <nil>
+			//	frames sent: [MT001014250000-0150102010011CALLING     ;]
+			//
+			// i.e. the 41-byte MT Set went out exactly as writableChannel()
+			// alone would have produced it, with the caller's CTCSSTone
+			// value silently DROPPED.
+			name: "an Absent CTCSSTone field carrying a non-zero value is refused, not interpreted (MEDIUM-1)",
+			ch: withData(func(d *codeplug.ChannelData) {
+				d.CTCSSTone = codeplug.ToneField{Value: 1000}
+			}),
+			fields: []spec.Field{spec.FieldCTCSSTone},
+			reason: "must have zero Value",
+		},
+		{
 			name: "a Known CTCSS tone the record cannot express",
 			ch: withData(func(d *codeplug.ChannelData) {
 				d.CTCSSTone = codeplug.ToneField{State: codeplug.Known, Value: 1000}
