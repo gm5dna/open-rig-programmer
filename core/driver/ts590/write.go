@@ -169,7 +169,9 @@ func invertFilters() map[string]byte {
 // EIGHT ARE UNCONDITIONAL, AND THAT IS THE FRAME'S OWN SHAPE. The 50-byte
 // record carries a frequency, a mode, a data-mode flag, a tone mode, two tone
 // indices, a lockout flag and a name on EVERY write, changed or not, with no
-// "leave it alone" encoding anywhere in the grid (590:1539-1577). A write
+// "leave it alone" encoding anywhere in the grid (590:1518-1538, the
+// positional grid; 590:1539-1577 is the parameter definitions that follow
+// it). A write
 // therefore requests all eight whether the caller edited them or not, which
 // is what makes the capability gate below a real gate.
 //
@@ -404,6 +406,14 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 			// decision 11 exists to prevent, so it is refused instead. The
 			// day A9 lifts and a second MW with P1=1 becomes a documented
 			// write, this is the rung that changes.
+			//
+			// THE TWO RUNGS ABOVE ARE NOT INDEPENDENT (Opus review, T12 fix
+			// round 1): with A9 disabled, an Unavailable TxFreqHz reads as
+			// Value 0, and 0 != FreqHz falls straight through into THIS rung —
+			// refusing correctly, but under prose that asserts a split the
+			// channel does not have. Harmless today because A9 fires first and
+			// this rung never sees an Unavailable channel; revisit this
+			// message the day A9 lifts.
 			return res, &driver.WriteRefusedError{
 				Slot:   ch.Slot,
 				Fields: []spec.Field{spec.FieldTxFrequency},

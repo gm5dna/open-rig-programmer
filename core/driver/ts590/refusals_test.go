@@ -60,6 +60,32 @@ func assertRegister(t *testing.T, err error, want string, what string) {
 	}
 }
 
+// TestRegisterConstants_NameTheAuthoritativeEntries is LOW-1's fix (Opus
+// review, T12 fix round 1): assertRegister compares a rung's own Register
+// argument against the SAME constant the rung passed in, so nothing pins the
+// constants' VALUES against the authoritative register core/kw/doc.go names
+// (core/kw/register_test.go:63-65 pins the register itself, by row). Editing
+// a constant's value here would rename every refusal's citation with the
+// whole suite green, and a user reading a log would be told the wrong
+// assumption.
+//
+// registerA13 IS NOT CHECKED AS MEMBERSHIP: it is the composite "A13/A14",
+// one rung answering for two register rows because one comparison consults
+// both (see the const block's own comment), so it cannot be checked against
+// core/kw's per-entry list directly.
+func TestRegisterConstants_NameTheAuthoritativeEntries(t *testing.T) {
+	for _, tc := range []struct{ got, want string }{
+		{registerA9, "A9"},
+		{registerA13, "A13/A14"},
+		{registerA23, "A23"},
+		{registerDecision14, "decision 14"},
+	} {
+		if tc.got != tc.want {
+			t.Errorf("register constant = %q, want %q", tc.got, tc.want)
+		}
+	}
+}
+
 // TestWriteChannel_TheCapabilityGateAnswersFirstOnUnconsentedRealHardware is
 // the ONE rung pinned on the RealHardware profile, and it is pinned SEPARATELY
 // for that reason (plan P7's H2).
@@ -71,23 +97,41 @@ func assertRegister(t *testing.T, err error, want string, what string) {
 // perfectly ordinary FM channel every semantic rung below uses as its
 // positive control. That is the profile working, not a limitation of the
 // method, and the one route past it is the user's own recorded consent.
+//
+// MEDIUM-2's ROW (Opus review, T12 fix round 1): every OTHER case here runs
+// at the default FV1.00;, so none of them can distinguish "the gate fires
+// first" from "A13/A14 was hoisted above it" — a session must trip BOTH to
+// tell the two apart, and an S at FV2.00 is the only row that does.
+// Hoisting A13/A14 above the gate answered an unconsented RealHardware S at
+// FV2.00 with the FIRMWARE refusal instead of the CONSENT one, attributing to
+// an unlifted assumption what is actually a missing consent — exactly the
+// confusion RefusalError.Register exists to prevent — and left the whole
+// package green.
 func TestWriteChannel_TheCapabilityGateAnswersFirstOnUnconsentedRealHardware(t *testing.T) {
-	for _, row := range bothRows {
-		what := modelNameFor(row)
-		sess, p := openWriteSession(t, row, RealHardware, writeImage{})
-		_, err := sess.WriteChannel(context.Background(), writableChannel(row, "042"))
+	cases := []struct {
+		name string
+		row  Row
+		img  writeImage
+	}{
+		{modelNameFor(RowS), RowS, writeImage{}},
+		{modelNameFor(RowSG), RowSG, writeImage{}},
+		{modelNameFor(RowS) + " at FV2.00, still unconsented", RowS, writeImage{radioImage: radioImage{fvAnswer: "FV2.00;"}}},
+	}
+	for _, tc := range cases {
+		sess, p := openWriteSession(t, tc.row, RealHardware, tc.img)
+		_, err := sess.WriteChannel(context.Background(), writableChannel(tc.row, "042"))
 		var ref *driver.WriteRefusedError
 		if !errors.As(err, &ref) {
-			t.Fatalf("%s: err = %v (%T), want *driver.WriteRefusedError", what, err, err)
+			t.Fatalf("%s: err = %v (%T), want *driver.WriteRefusedError", tc.name, err, err)
 		}
 		var semantic *RefusalError
 		if errors.As(err, &semantic) {
-			t.Errorf("%s: the capability gate returned a SEMANTIC refusal (%s); the two must stay distinguishable", what, semantic.Register)
+			t.Errorf("%s: the capability gate returned a SEMANTIC refusal (%s); the two must stay distinguishable", tc.name, semantic.Register)
 		}
 		if len(ref.Fields) == 0 {
-			t.Errorf("%s: the capability refusal names no field", what)
+			t.Errorf("%s: the capability refusal names no field", tc.name)
 		}
-		assertNoWireTraffic(t, p, what)
+		assertNoWireTraffic(t, p, tc.name)
 	}
 }
 
@@ -547,7 +591,7 @@ func TestWriteChannel_AnIncoherentFieldIsRefusedNotInterpreted(t *testing.T) {
 	}
 }
 
-// TestWriteChannel_TheCapabilityGateRefusesAFieldTheRowDoesNotPublish is the
+// TestWriteChannel_AFieldTheRowDoesNotPublishIsRefusedPreWireNamingTheField is the
 // gate's per-field half, on a session that is otherwise fully writable.
 //
 // THE S ROW'S FILTER IS THE MILESTONE'S OWN EXAMPLE (Q12, §2.7): byte 28 is
@@ -564,7 +608,7 @@ func TestWriteChannel_AnIncoherentFieldIsRefusedNotInterpreted(t *testing.T) {
 // pinned here is the field and the pre-wire refusal rather than which of the
 // two adjacent capability rungs fired. The SG row below is the control that
 // the same value is not refused where the row publishes it.
-func TestWriteChannel_TheCapabilityGateRefusesAFieldTheRowDoesNotPublish(t *testing.T) {
+func TestWriteChannel_AFieldTheRowDoesNotPublishIsRefusedPreWireNamingTheField(t *testing.T) {
 	sess, p := openWriteSession(t, RowS, Simulated, writeImage{})
 	ch := writableChannel(RowS, "042")
 	ch.Data.Filter = codeplug.StringField{State: codeplug.Known, Value: filterALabel}
