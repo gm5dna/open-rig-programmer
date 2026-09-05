@@ -2,8 +2,8 @@
 
 // Package ft891 is the Yaesu FT-891 driver: the project's FOURTH
 // implementation of core/driver's Driver/Session seam over the Yaesu
-// NEWCAT grammar, and the second written for a radio this project has
-// never connected to anything.
+// NEWCAT grammar, written, like the FTdx10 and FTdx101 drivers, for a
+// radio this project has never connected to anything.
 //
 // It is structured on core/driver/ftdx10 — the M9c-6 shape — and it
 // deliberately does NOT import it, nor core/driver/ft710 or

@@ -52,7 +52,7 @@ var modeNames = map[cat.Mode]string{
 }
 
 // dialect is the FTdx10, built once at init and validated by
-// cat.MustNewDialect's eleven rules. EVERY FIELD IS SET EXPLICITLY,
+// cat.MustNewDialect's fourteen rules. EVERY FIELD IS SET EXPLICITLY,
 // including the two the combined MT form requires to be zero: a field left
 // out of this literal would be indistinguishable from a field deliberately
 // zeroed, and V9's "an inapplicable field must be explicitly zero" rule is

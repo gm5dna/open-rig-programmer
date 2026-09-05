@@ -419,7 +419,7 @@ const ICR8600Model = "IC-R8600"
 // real but not simulated.
 //
 // TIER 1's REGISTRATION, and the FIRST YAESU MODEL ADDED SINCE M9d-2 —
-// fifteen Icom rows separate it from FTdx101MPModel above. It is a
+// eleven Icom rows separate it from FTdx101MPModel above. It is a
 // single-row registration on the FTdx10's footing rather than the
 // FTdx101 pair's: core/driver/ft891 has one member, core/cat/ft891 offers
 // one bare Dialect(), and internal/fakeft891 one bare New. The spelling
@@ -450,9 +450,10 @@ const ICR8600Model = "IC-R8600"
 // NO SerialFramingReporter, like the four Yaesu rows above it and unlike
 // every Icom row but the IC-7100's: this radio's CAT manual carries no
 // serial-framing statement at all, so 8-N-2 for the FT-891 is an ASSUMED
-// entry in core/driver/ft891/doc.go's own register (entry 1) with a named
-// hardware lift, and the port opens at transport.DefaultStopBits by the
-// absence of a report rather than by a driver's claim.
+// entry in core/driver/ft891/doc.go's own register — FRAMING: 8 DATA BITS,
+// NO PARITY, TWO STOP BITS — with a named hardware lift, and the port opens
+// at transport.DefaultStopBits by the absence of a report rather than by a
+// driver's claim.
 const FT891Model = "FT-891"
 
 // realDrivers is the model-keyed table of real-hardware driver
