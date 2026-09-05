@@ -249,7 +249,14 @@ func (d Dialect) BuildMTSet(s Slot, display bool, tag string) (Command, error) {
 		return Command{}, newParseError(nil, fmt.Sprintf("MT: short-form Set called on a %v dialect — use the combined-form API", d.mt.Form))
 	}
 	if !d.mtSlotValid(s) {
-		return Command{}, newParseError([]byte(s.Wire()), "MT: slot must be memory (001-099) or PMS (P1L-P9U); 5xx/EMG rejected by project policy pending M5a, \"000\"/invalid rejected per reference")
+		// Composed from this dialect's own slot space (S0.2): the domains
+		// and the special-bank clause were literals true only of the
+		// token-PMS radios. The four token dialects render byte-for-byte
+		// what stood here, so frame-corpus.golden does not move. ONE
+		// renderer, shared with validateCombinedMTFields, because the two
+		// forms refuse in identical words and two copies of a sentence that
+		// must agree is the drift this package keeps paying for.
+		return Command{}, newParseError([]byte(s.Wire()), d.mtSlotDomainRefusal())
 	}
 	if !d.validMTTag(tag) {
 		return Command{}, newParseError([]byte(tag), fmt.Sprintf("MT: tag must be 0-%d bytes of printable ASCII 0x20-0x7E, excluding ';', with no control bytes", d.mt.TagMaxBytes))
