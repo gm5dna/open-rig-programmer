@@ -469,6 +469,104 @@ func TestReadChannel_DiscoveredSlotThatStopsAnsweringIsARefusal(t *testing.T) {
 	})
 }
 
+// TestReadChannel_DiscoveredSlotOutsideSessionBanksIsRefusedLocally is C-H1
+// (closing review wave 2, ACCEPT HIGH): a 5xx or EMG slot that never
+// answered THIS session's own discovery walk at Open must be refused before
+// any frame is built, not dispatched to readDiscovered as though it had.
+//
+// RED-PROOF (captured against this commit's parent, then reverted — not
+// re-run as part of this suite): the same scenario as this test's first
+// subtest, run against the pre-fix ReadChannel (whose dispatch was
+// `if sl.Is60m() || sl.IsEMG() { return s.readDiscovered(ctx, sl) }`, no
+// membership check at all), produced:
+//
+//	ReadChannel(501) = {Slot: Data:<nil>}, err = ft891: MR read of
+//	discovered slot "501" was rejected ("?;") but this radio answered the
+//	identical MR read during this session's Open — the bank exists only
+//	because that earlier read succeeded, and a rejection now means the
+//	radio has stopped reporting a channel it reported minutes earlier; ...
+//	(*ft891.MRReadRejectedForDiscoveredSlotError)
+//	frames sent during this call: [MR501;]
+//
+// i.e. the old code SENT "MR501;" and reported a contradiction ("this slot
+// answered at Open") that the default fake's Open — every 5xx/EMG probe
+// answering "?;" — makes flatly false: 501 never answered anything. That is
+// the mistake *SlotNotInSessionBanksError's own doc comment names.
+func TestReadChannel_DiscoveredSlotOutsideSessionBanksIsRefusedLocally(t *testing.T) {
+	t.Run("no discovered banks at all: 501 and EMG are refused, no frame", func(t *testing.T) {
+		p, sess := openSession(t, Simulated, slotImage{})
+
+		caps := sess.Capabilities()
+		if _, ok := caps.Bank(spec.Bank60m); ok {
+			t.Fatal("the default fake's Open discovered a 60M bank — this test needs a session with NONE, or it is not exercising C-H1's scenario")
+		}
+		if _, ok := caps.Bank(spec.BankEMG); ok {
+			t.Fatal("the default fake's Open discovered an EMG bank — this test needs a session with NONE")
+		}
+
+		for _, slot := range []string{"501", "EMG"} {
+			t.Run(slot, func(t *testing.T) {
+				before := len(p.Transcript())
+				_, err := sess.ReadChannel(testCtx(t), slot)
+				if err == nil {
+					t.Fatalf("ReadChannel(%q) = nil error, want a refusal: this slot never answered this session's discovery", slot)
+				}
+				var refusal *SlotNotInSessionBanksError
+				if !errors.As(err, &refusal) {
+					t.Fatalf("error %v (%T) is not a *SlotNotInSessionBanksError", err, err)
+				}
+				if !errors.Is(err, ErrSlotNotInSessionBanks) {
+					t.Error("errors.Is(err, ErrSlotNotInSessionBanks) = false — the sentinel is what a caller compares against")
+				}
+				// NOT cat.ErrRejected: no "?;" was received, because nothing
+				// was sent — the distinguishing property from
+				// *MRReadRejectedForDiscoveredSlotError, which unwraps to
+				// cat.ErrRejected precisely because a frame WAS rejected.
+				if errors.Is(err, cat.ErrRejected) {
+					t.Error("errors.Is(err, cat.ErrRejected) = true, want false — this radio was never asked")
+				}
+				if refusal.Slot != slot {
+					t.Errorf("Slot = %q, want %q", refusal.Slot, slot)
+				}
+				text := refusal.Error()
+				for _, want := range []string{slot, "did not answer", "discovery"} {
+					if !strings.Contains(text, want) {
+						t.Errorf("Error() = %q, want it to contain %q", text, want)
+					}
+				}
+				if after := p.Transcript(); len(after) != before {
+					t.Errorf("ReadChannel(%q) sent %v — this refusal must be PRE-WIRE, matching the RED-PROOF this test's doc comment records for the pre-fix code (which sent %q)", slot, after[before:], "MR"+slot+";")
+				}
+			})
+		}
+	})
+
+	t.Run("501 discovered: it still reads normally", func(t *testing.T) {
+		// The positive control: the new membership check must not disturb
+		// ordinary dispatch for a slot THIS session actually discovered.
+		img := slotImage{mrAnswers: map[string]string{"501": populatedMR("501")}}
+		p, sess := openSession(t, Simulated, img)
+
+		caps := sess.Capabilities()
+		sixty, ok := caps.Bank(spec.Bank60m)
+		if !ok || !reflect.DeepEqual(sixty.Slots, []string{"501"}) {
+			t.Fatalf("discovered 60M bank slots = %v (present=%v), want exactly [\"501\"] from Open's own probe", sixty.Slots, ok)
+		}
+
+		before := len(p.Transcript())
+		ch, err := sess.ReadChannel(testCtx(t), "501")
+		if err != nil {
+			t.Fatalf("ReadChannel(\"501\") = %v, want nil — 501 answered this session's own discovery", err)
+		}
+		if ch.Data == nil {
+			t.Fatal("ReadChannel(\"501\") returned an empty channel, want the populated record MR served")
+		}
+		if got, want := p.Transcript()[before:], []string{"MR501;"}; !reflect.DeepEqual(got, want) {
+			t.Errorf("reading \"501\" sent %v, want exactly %v", got, want)
+		}
+	})
+}
+
 // TestReadChannel_ErrorTyping covers the failure classes that must be TYPED
 // and distinguishable, all via errors.As.
 //

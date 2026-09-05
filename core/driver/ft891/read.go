@@ -270,6 +270,51 @@ func (e *MRReadRejectedForDiscoveredSlotError) Unwrap() []error {
 	return []error{ErrMRReadRejectedForDiscoveredSlot, cat.ErrRejected}
 }
 
+// ErrSlotNotInSessionBanks is the sentinel a caller compares against (via
+// errors.Is) when ReadChannel is asked to read a syntactically valid 5xx or
+// EMG slot that did not answer this SESSION's own discovery walk at Open —
+// it is in neither the 60M nor the EMG bank effectiveCapabilities (caps.go)
+// published for this session. The error actually returned is a
+// *SlotNotInSessionBanksError naming the slot.
+var ErrSlotNotInSessionBanks = errors.New("ft891: slot did not answer this session's discovery walk")
+
+// SlotNotInSessionBanksError reports that ReadChannel was asked for a 5xx or
+// EMG slot outside this session's own discovered banks (C-H1, closing review
+// wave 2).
+//
+// NO FRAME IS SENT: this check runs BEFORE readDiscovered builds an MR read
+// at all, on membership Open already settled by its own discovery walk
+// (ft891.go's discoverInventory/probeSlot, matrix §3.4) — the radio is never
+// asked. That is what makes this a DIFFERENT error from
+// *MRReadRejectedForDiscoveredSlotError, not a narrower spelling of it:
+// readDiscovered's whole premise, the driver register's A DISCOVERED SLOT
+// KEEPS ANSWERING MR WITHIN A SESSION entry, is that the slot ANSWERED THE
+// IDENTICAL MR READ AT OPEN — which a slot outside these banks never did.
+// Dispatching such a slot to readDiscovered anyway would send a fresh
+// "MR501;" and, on the radio's ordinary "?;" for an absent slot, report
+// *MRReadRejectedForDiscoveredSlotError — falsely claiming the slot answered
+// at Open, in flat contradiction of the very capabilities
+// (effectiveCapabilities' NoBlank banks) this session published. Before this
+// fix ReadChannel dispatched on sl.Is60m()/sl.IsEMG() alone, with no
+// membership check at all — see the RED-PROOF this type's own doc comment
+// on readDiscovered's call site records.
+//
+// NOT cat.ErrRejected: no "?;" was received, because nothing was sent.
+type SlotNotInSessionBanksError struct {
+	// Slot is the canonical wire-form slot that was requested.
+	Slot string
+}
+
+// Error implements the error interface.
+func (e *SlotNotInSessionBanksError) Error() string {
+	return fmt.Sprintf("ft891: ReadChannel: slot %q did not answer during this session's discovery, so no read is sent", e.Slot)
+}
+
+// Unwrap exposes this package's own sentinel.
+func (e *SlotNotInSessionBanksError) Unwrap() error {
+	return ErrSlotNotInSessionBanks
+}
+
 // ReadChannel implements driver.Session: matrix §3.5's truth table, exactly.
 //
 //   - MEM and PMS are read by ONE combined 41-byte MT read. A well-formed
@@ -325,7 +370,11 @@ func (e *MRReadRejectedForDiscoveredSlotError) Unwrap() []error {
 // wrap (errors.As finds them, and the wrap adds the slot the bare parser
 // could not know); the SLOT-ECHO check raises *AnswerMismatchError; and the
 // two MT-read refusals above are this driver's own family. None is a bare
-// fmt.Errorf.
+// fmt.Errorf. A FOURTH, pre-wire refusal sits ahead of all of them for a 5xx
+// or EMG slot: *SlotNotInSessionBanksError, when the slot never answered
+// this session's own discovery walk (C-H1) — no frame is sent for it at all,
+// so it is not one of the three "?;" interpretations above and carries none
+// of their premises.
 func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channel, error) {
 	// Held for the WHOLE operation, cross-check included — see the doc
 	// comment and the Session type's.
@@ -338,6 +387,19 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 	}
 
 	if sl.Is60m() || sl.IsEMG() {
+		// SESSION MEMBERSHIP, before any frame is built (C-H1): a slot is
+		// dispatched to readDiscovered only if it is one of THIS session's
+		// own discovered banks (s.bankFor — write.go's, walked over the
+		// same s.caps.Banks readDiscovered's own doc comment cites). A 5xx
+		// or EMG slot outside them never answered at Open, so readDiscovered
+		// would be sending a read whose premise — "this exact frame
+		// answered during Open" — cannot hold; see
+		// *SlotNotInSessionBanksError's doc comment for the mistake this
+		// closes and why it is not the same mistake
+		// *MRReadRejectedForDiscoveredSlotError exists to name.
+		if _, ok := s.bankFor(sl.Wire()); !ok {
+			return codeplug.Channel{}, &SlotNotInSessionBanksError{Slot: sl.Wire()}
+		}
 		return s.readDiscovered(ctx, sl)
 	}
 	return s.readMemoryOrPMS(ctx, sl)
