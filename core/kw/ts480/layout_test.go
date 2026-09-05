@@ -45,7 +45,8 @@ func TestLayout_IsConfiguredAndNamed(t *testing.T) {
 }
 
 // TestLayout_EveryAxisByValue pins all nine axes outright, each against the
-// line its own book prints it on.
+// line its own book prints it on. "Nine" is made a fact, not a habit, by
+// core/kw/ts590/layout_test.go's TestLayoutConfig_HasExactlyNineComparedAxes.
 func TestLayout_EveryAxisByValue(t *testing.T) {
 	l := ts480.Layout()
 

@@ -64,6 +64,23 @@ func TestLayouts_AreConfiguredAndNamedPerRow(t *testing.T) {
 	}
 }
 
+// TestLayoutConfig_HasExactlyNineComparedAxes makes "nine axes" a fact
+// rather than a habit (T8 review LOW-4). kw.LayoutConfig's Book and Model
+// fields are never compared as an axis — they are the row's own identity,
+// not a fact about the memory grid — so the compared-axis count is
+// NumField() minus those two. If a field is ever added to LayoutConfig,
+// THIS test fails first, before the silently-short lists it names: the
+// two lists below (share/differ), core/kw/ts480/layout_test.go's
+// TestLayout_EveryAxisByValue, and core/kw/layout_test.go's
+// TestNewLayout_RefusesAnUnsetAxis (which walks all eleven fields,
+// Book and Model included).
+func TestLayoutConfig_HasExactlyNineComparedAxes(t *testing.T) {
+	const bookAndModel = 2 // identity fields, never compared as an axis
+	if got := reflect.TypeOf(kw.LayoutConfig{}).NumField() - bookAndModel; got != 9 {
+		t.Fatalf("kw.LayoutConfig has %d compared axes (NumField()-%d), want 9 — a field was added or removed; update TestLayouts_TheAxesTheTwoRowsShare and TestLayouts_TheTwoAxesTheRowsDifferOn in this file, core/kw/ts480/layout_test.go's TestLayout_EveryAxisByValue, and core/kw/layout_test.go's TestNewLayout_RefusesAnUnsetAxis for the new one", got, bookAndModel)
+	}
+}
+
 // TestLayouts_TheAxesTheTwoRowsShare pins the agreement side.
 //
 // SEVEN OF THE NINE AXES ARE THE BOOK'S, not the row's: one document
@@ -71,7 +88,8 @@ func TestLayouts_AreConfiguredAndNamedPerRow(t *testing.T) {
 // set for both radios, so a difference appearing on any of these would be a
 // transcription error rather than a discovery. Stating the agreement is what
 // makes the two-item disagreement list below exhaustive rather than
-// approximate.
+// approximate. TestLayoutConfig_HasExactlyNineComparedAxes above is what
+// makes "nine" itself a fact.
 func TestLayouts_TheAxesTheTwoRowsShare(t *testing.T) {
 	s, sg := ts590.LayoutS(), ts590.LayoutSG()
 
