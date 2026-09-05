@@ -121,12 +121,26 @@ func parseRecord(p Profile, rec []string) (Row, error) {
 			return Row{}, fmt.Errorf("address component P%d must be 0..99, got %d", i+1, v)
 		}
 	}
-	// AddressPair: the radio's field carries P1 and P2 only, so a non-zero
-	// p3 names a component no frame can express. Refused rather than
-	// dropped — a value silently discarded here would reach the generated
-	// inventory as a 0 that nothing recorded having changed.
-	if p.Addresses == AddressPair && row.P3 != 0 {
-		return Row{}, fmt.Errorf("p3 must be 0 under %v, got %d", p.Addresses, row.P3)
+	// A SWITCH, not an if/else with an implicit AddressTriple arm — the
+	// shape ParseObservedCSV below already takes, and for the same reason:
+	// Profile.Validate (profile.go) has already required p.Addresses to be
+	// one of the two known forms, but THIS is the site that reads it, and an
+	// omitted config semantic is refused here too rather than defaulted to
+	// the permissive arm.
+	//
+	// Under AddressPair the radio's field carries P1 and P2 only, so a
+	// non-zero p3 names a component no frame can express. Refused rather
+	// than dropped — a value silently discarded here would reach the
+	// generated inventory as a 0 that nothing recorded having changed.
+	switch p.Addresses {
+	case AddressTriple:
+		// All three components are on the wire; nothing further to check.
+	case AddressPair:
+		if row.P3 != 0 {
+			return Row{}, fmt.Errorf("p3 must be 0 under %v, got %d", p.Addresses, row.P3)
+		}
+	default:
+		return Row{}, fmt.Errorf("extable: profile %s: AddressForm %v must be set explicitly", p.Model, p.Addresses)
 	}
 	row.P1Label = rec[3]
 	row.P2Label = rec[4]
@@ -418,9 +432,18 @@ func RenderGo(p Profile, rows []Row, observed map[string]Observed) ([]byte, erro
 		// however complete the CSV was. It is a CSV join token, not a wire
 		// render — core/cat's wireEXAddress is the wire-side counterpart —
 		// so it is derived here rather than through that renderer.
-		addr := fmt.Sprintf("%02d%02d", r.P1, r.P2)
-		if p.Addresses == AddressTriple {
+		// A SWITCH, not an if/else with an implicit AddressPair arm, for the
+		// reason parseRecord's own switch above gives: Profile.Validate has
+		// already required one of the two known forms, and this site refuses
+		// an unset one rather than quietly rendering the narrower key.
+		var addr string
+		switch p.Addresses {
+		case AddressTriple:
 			addr = fmt.Sprintf("%02d%02d%02d", r.P1, r.P2, r.P3)
+		case AddressPair:
+			addr = fmt.Sprintf("%02d%02d", r.P1, r.P2)
+		default:
+			return nil, fmt.Errorf("extable: profile %s: AddressForm %v must be set explicitly", p.Model, p.Addresses)
 		}
 		var obs Observed
 		if p.Observations == ObservationsRequired {

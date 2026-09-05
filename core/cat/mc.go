@@ -135,6 +135,19 @@ func (d Dialect) BuildMCSet(s Slot) (Command, error) {
 		return Command{}, newParseError([]byte(s.Wire()), "MC: slot must not be \"000\"/invalid (reference MC set column: ✗)")
 	}
 	if !d.mcSendValid(s) {
+		// TWO WORDINGS, because an unset policy and a DECLARED narrow one
+		// are different facts. The narrow wording asserts "memory and PMS
+		// only" of this dialect's MC legend; saying that of a policy which
+		// declares nothing would put a reading in a caller's hands that no
+		// manual supports. The unset arm therefore takes the P5/P11 sites'
+		// own wording (memdata.go, mtcombined.go) — the policy is unset and
+		// this refuses to guess. Unreachable through NewDialect, whose V13
+		// (dialectvalidate.go) refuses a zero MCSlotPolicy at construction;
+		// reachable through a hand-built zero Dialect, which is what
+		// unsetpolicy_test.go builds.
+		if d.slots.mcSelects != MCSelectsAll && d.slots.mcSelects != MCSelectsMemoryPMS {
+			return Command{}, newParseError([]byte(s.Wire()), "MC: slot policy unset — refusing to guess whether this dialect's MC legend prints the 5xx and EMG banks")
+		}
 		return Command{}, newParseError([]byte(s.Wire()), fmt.Sprintf("MC: slot %q is outside this dialect's MC send domain (%v: memory and PMS only) — its MC legend does not print the 5xx or EMG banks, and an MC Set recalls the channel on the radio", s.Wire(), d.slots.mcSelects))
 	}
 	frame := make([]byte, 0, mcSetLen)
