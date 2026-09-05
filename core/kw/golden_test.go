@@ -58,7 +58,9 @@ import (
 //     transcribed from each file's own "COUNTED FRAME LENGTHS" block, not
 //     measured from the bytes they check.
 //  3. Replays every vector through EVERY PIECE OF THE CODEC THAT EXISTS —
-//     five legs, and the list is exhaustive of what core/kw ships today:
+//     five replay legs, plus the F1 splitter leg
+//     (TestGoldenVectors_TheF1ReadFramesAreNotFramesToTheSplitter), and the
+//     list is exhaustive of what core/kw ships today:
 //     the outbound gate for the host-built frames
 //     (TestGoldenVectors_TheOutboundGateAdmitsEveryHostBuiltFrame); the frame
 //     accumulator for every radio-sent one
@@ -165,7 +167,10 @@ func TestGoldenVectorsFrozen(t *testing.T) {
 // ruler, and a third look at 600 dpi wherever a terminator cell was in doubt.
 //
 // They are LITERALS, read off the prose, and the vectors are the independent
-// side: a length computed from the bytes it checks would prove nothing.
+// side: a length computed from the bytes it checks would prove nothing —
+// except the two EX-590 one-character-P5 vectors below
+// (ex590_set_menu002_brightness_3, ex590_answer_menu002_brightness_3), whose
+// width EX-590.golden's own [E1] marks ASSUMED rather than counted.
 //
 // The two books agree on every one of these, which the AI-480 and MC-480
 // headers say in as many words ("identical to the TS-590 book's AI lengths").
@@ -373,7 +378,11 @@ var goldenSpecs = []goldenSpec{
 		// The EX Set and Answer lengths are exFixedBytes + this vector's own
 		// P5 width, each width read off the vector's field map: menu 001 is
 		// the SG's "Power on message", eight characters; menu 002 is its
-		// Display brightness, one.
+		// Display brightness — ASSUMED at one character. The chart itself
+		// draws P5 as eight; EX-590.golden's [E1] says a width other than
+		// that drawn 8 is ASSUMED from the menu-002 value legend, a table of
+		// VALUES, not of widths, so the two menu-002 vectors below are an
+		// inherited assumption, not a count off the field map.
 		file: "EX-590.golden",
 		book: Book590,
 		vectors: []vectorSpec{
@@ -384,8 +393,8 @@ var goldenSpecs = []goldenSpec{
 			{"ex590_read_menu099_last_590SG", exReadLen},
 			{"ex590_set_menu001_poweron_msg_8", exFixedBytes + 8},
 			{"ex590_answer_menu001_poweron_msg_8", exFixedBytes + 8},
-			{"ex590_set_menu002_brightness_3", exFixedBytes + 1},
-			{"ex590_answer_menu002_brightness_3", exFixedBytes + 1},
+			{"ex590_set_menu002_brightness_3", exFixedBytes + 1},    // ASSUMED: [E1]
+			{"ex590_answer_menu002_brightness_3", exFixedBytes + 1}, // ASSUMED: [E1]
 		},
 	},
 	{
@@ -617,6 +626,11 @@ func TestGoldenVectors_RosterAndCountedLengths(t *testing.T) {
 //     channel 100 (590:1334-1337) is carried by mc590_set_ch03_space_hundreds
 //     and must be ADMITTED — the case a gate written as "alphanumerics only"
 //     would refuse.
+//
+// mw590_set_ch03_erase_no_P16, the 590 book's erase shape, is also asserted
+// ADMITTED here — a true statement about the envelope, which is not a
+// grammar; this programme never builds that frame, and T7's per-command gate
+// is what will refuse it.
 func TestGoldenVectors_TheOutboundGateAdmitsEveryHostBuiltFrame(t *testing.T) {
 	hostBuilt, refused := 0, 0
 	for _, spec := range goldenSpecs {
@@ -1017,6 +1031,15 @@ func TestGoldenVectors_EveryAnswerIsMatchedByItsOwnReadsMatcher(t *testing.T) {
 	// EX matcher genuinely does accept the 10-byte read frame that opens with
 	// the same five bytes — a real property of this command, recorded here
 	// rather than asserted away.
+	//
+	// This subtest covers reads only. It does not follow that a Set could
+	// never be mistaken for an Answer: ai480_set_off/ai480_answer_off,
+	// mc480_set_ch03/mc480_answer_ch03 and
+	// ex480_set_menu032_two_digit/ex480_answer_menu032_two_digit are each the
+	// same bytes on both sides, so an echoed Set on those three commands
+	// WOULD be correlated as the answer. Nothing in this package's matchers
+	// guards against that; today it is A25's assumption that Kenwood radios
+	// do not echo that keeps it from mattering.
 	t.Run("a_commands_own_read_frame_is_not_its_answer", func(t *testing.T) {
 		reads := 0
 		for _, spec := range goldenSpecs {

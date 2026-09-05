@@ -35,15 +35,21 @@ import (
 //     at ≈600 dpi by a quarantined agent that never opened this repository,
 //     never saw A or the ledger, and was told no row count.
 //   - THE PAGE LEDGER — testdata/ledger-480.csv. Derived from the rendered
-//     PDF's ruled cells by a second quarantined agent BEFORE either
-//     transcription existed, and the source of the profile's ExpectedRows
-//     (61).
+//     PDF's ruled cells by a second quarantined agent before transcription A
+//     existed, and blind to transcription B, which ran alongside it — and
+//     the source of the profile's ExpectedRows (61).
 //
 // Agreement between three blind derivations is the evidence; this file is
 // where that agreement is made mechanical rather than asserted in prose. ANY
 // mismatch this file does not itself name and rule is a STOP for orchestrator
 // arbitration AGAINST THE PDF, which may correct A, B or the ledger — never
 // this test, and never an artefact edited merely to make the test pass.
+//
+// Transcription A was given this radio's row COUNT by the orchestrator as a
+// single integer (plan §T9a) and nothing else of the ledger — no page, no
+// boundary, no name — so the COUNT term of the four-way equality below is
+// not blind for A, while the boundary tiling (checkAgainstLedger) and every
+// per-row name/digits comparison are.
 //
 // # What is compared, and what deliberately is not
 //
@@ -291,10 +297,13 @@ func crossCheck(c chart) []string {
 	out = append(out, checkAgainstLedger(c, "transcription B", c.bPath, c.b)...)
 
 	// One four-way equality, reported whole: which of the four moved is the
-	// first question arbitration asks. The ExpectedRows value itself is
-	// pinned on the profile by internal/extable's registration test, so this
-	// leg binds the artefacts to that pinned constant rather than keeping a
-	// second copy of it.
+	// first question arbitration asks. Nothing in internal/extable pins
+	// ExpectedRows' VALUE for this family — that registration test covers
+	// the four Yaesu profiles only. For the TS-480, ExpectedRows is read
+	// from the registered profile rather than re-typed here, and what
+	// actually holds 61 to the evidence is this leg together with the
+	// staleness test's length assertion: TestEXInventory_LengthIsExpectedRows
+	// (ts480/staleness480_test.go).
 	sum := 0
 	for _, l := range c.ledger {
 		sum += l.RowCount
