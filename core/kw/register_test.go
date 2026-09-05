@@ -190,18 +190,25 @@ func TestAssumedRegister_DoesNotCarryTheDriverRegister(t *testing.T) {
 	}
 }
 
-// TestErrataSchedule_TwentyOneRowsInThreeCategories pins the schedule's
+// TestErrataSchedule_TwentyTwoRowsInThreeCategories pins the schedule's
 // population AND its partition, because the partition is the part a later
-// reader gets wrong: two of the twenty-one are not defects at all, and
+// reader gets wrong: two of the twenty-two are not defects at all, and
 // "correcting" either into evidence is exactly what recording them
 // prevents.
-func TestErrataSchedule_TwentyOneRowsInThreeCategories(t *testing.T) {
+//
+// E22 IS THE ONE THE CROSS-CHECKS COULD NOT FIND. It was routed here by the
+// orchestrator out of T10's cross-check, which discovered that all three
+// TS-480 menu-chart transcription legs read menu 034 as a two-digit row and
+// the EX block's own prose omits it from the two-digit list. Three faithful
+// readings of one incomplete printed sentence agree perfectly, so no
+// comparison between the legs can catch it and only a recorded erratum can.
+func TestErrataSchedule_TwentyTwoRowsInThreeCategories(t *testing.T) {
 	src := docSource(t)
 	seen := map[string]int{}
 	for _, m := range erratumEntry.FindAllStringSubmatch(src, -1) {
 		seen[m[1]]++
 	}
-	for i := 1; i <= 21; i++ {
+	for i := 1; i <= 22; i++ {
 		id := "E" + strconv.Itoa(i)
 		if seen[id] != 1 {
 			t.Errorf("erratum %s appears %d times in doc.go, want exactly 1", id, seen[id])
@@ -216,7 +223,7 @@ func TestErrataSchedule_TwentyOneRowsInThreeCategories(t *testing.T) {
 		heading string
 		want    int
 	}{
-		{"NINETEEN DOCUMENT DEFECTS:", 19},
+		{"TWENTY DOCUMENT DEFECTS:", 20},
 		{"ONE ANTI-DEFECT:", 1},
 		{"ONE TRANSCRIPTION TRAP THAT IS NOT A DEFECT:", 1},
 	}

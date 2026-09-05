@@ -136,12 +136,12 @@
 //
 // # Errata schedule — recorded, not resolved
 //
-// Twenty-two rows in FOUR categories (P21), and the categories matter: two
-// of the twenty-one book-side rows are not defects at all, and the
-// twenty-second row is not about either book — it is about this
+// Twenty-three rows in FOUR categories (P21), and the categories matter:
+// two of the twenty-two book-side rows are not defects at all, and the
+// twenty-third row is not about either book — it is about this
 // milestone's OWN spec, and P21 did not originally name that category.
 //
-// NINETEEN DOCUMENT DEFECTS:
+// TWENTY DOCUMENT DEFECTS:
 //
 //	E1  590SG  The MR Read chart's terminator cell prints ':' where every
 //	           other chart prints ';' (590:1442).
@@ -207,6 +207,24 @@
 //	           (480:725 vs 480:337). IF is not built here; it is recorded
 //	           because a later milestone that builds IF must not read P14
 //	           against CN.
+//	E22 480    The EX block's own prose names the menu numbers whose P5 is
+//	           two characters — "Menu No. 32, 35 and 48 ~ 52 use 2-digit
+//	           parameters" (480:411) — and OMITS menu 034, whose printed
+//	           grid runs 400/450/…/850 under codes 0 ~ 9 and continues into
+//	           the "Over" column (480:483-486). The chart and the block
+//	           disagree, and the chart is the wider of the two. It is the
+//	           one printed defect the three-legged menu cross-check cannot
+//	           find: all three legs read the CHART, all three read 034 as
+//	           two digits, and three faithful readings of one incomplete
+//	           sentence agree perfectly.
+//	           core/kw/ts480/crosscheck_test.go's
+//	           TestCrossCheck_TheMenu034Erratum pins BOTH sets — the
+//	           chart's and the sentence's — so that neither silently
+//	           "correcting" 034 to one digit nor quietly adding it to the
+//	           sentence's list passes unremarked, and so that a SECOND
+//	           omission reads as itself rather than widening a count. This
+//	           repository has no TS-480 to ask which of the two a radio
+//	           answers.
 //
 // ONE ANTI-DEFECT:
 //
