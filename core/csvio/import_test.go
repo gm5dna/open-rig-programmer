@@ -5,6 +5,8 @@ package csvio
 import (
 	"bytes"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -776,5 +778,148 @@ func TestImport_UnparseableCSV(t *testing.T) {
 	_, err := Import(strings.NewReader(body))
 	if err == nil {
 		t.Fatal("Import() error = nil, want error for malformed CSV")
+	}
+}
+
+// --- line endings and the byte-order mark (decision 8) ---
+
+// csvTwins returns lf unchanged, the same bytes with every line ending
+// converted to CRLF, and that CRLF form with a UTF-8 BOM in front. Excel's
+// "CSV UTF-8 (Comma delimited)" writes exactly the third shape, and Notepad
+// and PowerShell's Out-File write the second, so a file that reaches this
+// program from a Windows desktop is as likely to be one of those as the LF
+// form every fixture in this package uses.
+func csvTwins(t *testing.T, lf []byte) (lfOut, crlf, bomCRLF []byte) {
+	t.Helper()
+	if bytes.Contains(lf, []byte("\r")) {
+		t.Fatalf("csvTwins: input already contains CR; the fixture must be LF-only")
+	}
+	crlf = bytes.ReplaceAll(lf, []byte("\n"), []byte("\r\n"))
+	bomCRLF = append([]byte("\xEF\xBB\xBF"), crlf...)
+	return lf, crlf, bomCRLF
+}
+
+// TestImport_CRLFAndBOM_ImportIdentically pins that the three shapes a
+// Windows spreadsheet can hand us all decode to the same channels.
+//
+// CRLF already worked: encoding/csv strips a CR before a LF itself. The BOM
+// did not — its three bytes stuck to the first header cell, so "slot"
+// arrived as "BOM+slot" and Import failed the header with an unknown
+// column and a missing required one, naming a column the user can see is
+// present. Import now strips one leading BOM before the reader sees it.
+func TestImport_CRLFAndBOM_ImportIdentically(t *testing.T) {
+	fixture, err := os.ReadFile(filepath.Join("testdata", "canonical-v1-export.csv"))
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	lf, crlf, bomCRLF := csvTwins(t, fixture)
+
+	want, err := Import(bytes.NewReader(lf))
+	if err != nil {
+		t.Fatalf("Import(LF): unexpected error: %v", err)
+	}
+	if len(want) == 0 {
+		t.Fatal("Import(LF) returned no channels — the fixture cannot pin anything")
+	}
+
+	for _, tc := range []struct {
+		name string
+		in   []byte
+	}{
+		{"CRLF", crlf},
+		{"BOM+CRLF", bomCRLF},
+		{"BOM+LF", append([]byte("\xEF\xBB\xBF"), lf...)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := Import(bytes.NewReader(tc.in))
+			if err != nil {
+				t.Fatalf("Import(%s): unexpected error: %v", tc.name, err)
+			}
+			if !channelsEqual(t, got, want) {
+				t.Errorf("Import(%s) produced different channels from the LF original", tc.name)
+			}
+		})
+	}
+}
+
+// TestImport_BOMStrippedOnlyOnce pins the narrowness of the strip: exactly
+// one leading BOM, and only at the very start. A second BOM is data — it is
+// part of the first column's name, and the header error must still say so
+// rather than silently accepting a column called "BOM+slot".
+func TestImport_BOMStrippedOnlyOnce(t *testing.T) {
+	fixture, err := os.ReadFile(filepath.Join("testdata", "canonical-v1-export.csv"))
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	doubled := append([]byte("\xEF\xBB\xBF\xEF\xBB\xBF"), fixture...)
+
+	_, err = Import(bytes.NewReader(doubled))
+	if err == nil {
+		t.Fatal("Import(BOM BOM ...): want a header error, got nil")
+	}
+	if !strings.Contains(err.Error(), "unknown column(s)") {
+		t.Errorf("Import(BOM BOM ...) error = %q, want it to still name the unknown column", err)
+	}
+}
+
+// TestImport_WrongHeaderStillFailsTheSameWay pins that the strip did not
+// change what a genuinely wrong header does — the same ParseError on line 1
+// with the same wording, with and without a BOM in front of it.
+func TestImport_WrongHeaderStillFailsTheSameWay(t *testing.T) {
+	const wrong = "slot,dsiplay,freq_hz\n001,,145500000\n"
+
+	bare, errBare := Import(strings.NewReader(wrong))
+	withBOM, errBOM := Import(strings.NewReader("\xEF\xBB\xBF" + wrong))
+
+	if errBare == nil || errBOM == nil {
+		t.Fatalf("want an error from both, got %v (bare) and %v (BOM)", errBare, errBOM)
+	}
+	if bare != nil || withBOM != nil {
+		t.Errorf("want nil channels from both, got %v and %v", bare, withBOM)
+	}
+	if errBare.Error() != errBOM.Error() {
+		t.Errorf("error text differs:\n bare = %q\n BOM  = %q", errBare, errBOM)
+	}
+	var pe *ParseError
+	if !errors.As(errBare, &pe) {
+		t.Fatalf("error is %T, want *ParseError", errBare)
+	}
+	if pe.Line != 1 {
+		t.Errorf("ParseError.Line = %d, want 1", pe.Line)
+	}
+	if !strings.Contains(errBare.Error(), "unknown column(s): dsiplay") {
+		t.Errorf("error = %q, want it to name the misspelt column", errBare)
+	}
+	if !strings.Contains(errBare.Error(), "missing required column(s)") {
+		t.Errorf("error = %q, want it to name the missing required columns", errBare)
+	}
+}
+
+// TestImport_EmptyAndBOMOnlyInput pins the degenerate inputs the strip has
+// to survive: nothing at all, and a file that is nothing but a BOM. Both
+// must fail on the header read exactly as an empty file did before, never
+// panic and never succeed.
+func TestImport_EmptyAndBOMOnlyInput(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   string
+	}{
+		{"empty", ""},
+		{"BOM only", "\xEF\xBB\xBF"},
+		{"truncated BOM", "\xEF\xBB"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := Import(strings.NewReader(tc.in))
+			if err == nil {
+				t.Fatalf("Import(%s): want an error, got %d channels", tc.name, len(got))
+			}
+			var pe *ParseError
+			if !errors.As(err, &pe) {
+				t.Fatalf("error is %T, want *ParseError", err)
+			}
+			if pe.Line != 1 {
+				t.Errorf("ParseError.Line = %d, want 1", pe.Line)
+			}
+		})
 	}
 }
