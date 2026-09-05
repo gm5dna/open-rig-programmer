@@ -34,6 +34,22 @@ Unicode true
 ####
 !include "wails_tools.nsh"
 
+####
+## Customisations to the Wails template below (app/build/windows/README.md
+## has the full picture; decisions 2/3 of docs/superpowers/specs/
+## 2026-09-04-windows-packaging-design.md, folded through the plan
+## review's rulings):
+##  - InstallDir is the literal "$PROGRAMFILES64\Open Rig Programmer",
+##    not "$PROGRAMFILES64\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}" —
+##    company name and product name are both "Open Rig Programmer" here,
+##    so the template's default would nest the same name under itself.
+##  - The CLI (app/dist/<arch>/rigprog.exe, built before this makensis
+##    run) and LICENSE are added as File lines alongside wails.files.
+##  - The uninstall Section is rewritten to delete named files and a
+##    non-recursive $INSTDIR rather than the template's two RMDir /r
+##    lines — see the comment on the Section itself for why.
+####
+
 # The version information for this two must consist of 4 parts
 VIProductVersion "${INFO_PRODUCTVERSION}.0"
 VIFileVersion    "${INFO_PRODUCTVERSION}.0"
@@ -76,10 +92,10 @@ OutFile "..\..\bin\${INFO_PROJECTNAME}-${ARCH}-installer.exe" # Name of the inst
   !if "${WAILS_INSTALL_SCOPE}" == "user"
     InstallDir "$LOCALAPPDATA\Programs\${INFO_PRODUCTNAME}"
   !else
-    InstallDir "$PROGRAMFILES64\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}"
+    InstallDir "$PROGRAMFILES64\Open Rig Programmer"
   !endif
 !else
-  InstallDir "$PROGRAMFILES64\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}"
+  InstallDir "$PROGRAMFILES64\Open Rig Programmer"
 !endif # Default installing folder ($PROGRAMFILES is Program Files folder).
 ShowInstDetails show # This will always show the installation details.
 
@@ -96,6 +112,28 @@ Section
 
     !insertmacro wails.files
 
+    # The CLI is not a Wails output: it is built separately (GOOS=windows
+    # GOARCH=<arch> CGO_ENABLED=0 go build ./cmd/rigprog) into
+    # app/dist/<arch>/rigprog.exe before this build, and carried into the
+    # installer by the same arch-selected shape wails.files uses above
+    # (wails_tools.nsh:93-107) — one makensis process builds both arch
+    # installers in one pass, so a hard-coded ARG_WAILS_* style define
+    # would not work for a fixed, non-Wails input. See app/build/windows/
+    # README.md.
+    !ifdef SUPPORTS_AMD64
+        ${If} ${IsNativeAMD64}
+            File "/oname=rigprog.exe" "..\..\..\dist\amd64\rigprog.exe"
+        ${EndIf}
+    !endif
+
+    !ifdef SUPPORTS_ARM64
+        ${If} ${IsNativeARM64}
+            File "/oname=rigprog.exe" "..\..\..\dist\arm64\rigprog.exe"
+        ${EndIf}
+    !endif
+
+    File "..\..\..\..\LICENSE"
+
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
 
@@ -108,9 +146,25 @@ SectionEnd
 Section "uninstall"
     !insertmacro wails.setShellContext
 
-    RMDir /r "$AppData\${PRODUCT_EXECUTABLE}" # Remove the WebView2 DataPath
+    # The template's two RMDir /r lines are both replaced by explicit
+    # per-file Deletes plus a non-recursive RMDir of $INSTDIR: a
+    # recursive remove of a user-editable "install to" directory is a
+    # classic NSIS hazard (it happily deletes anything the user put
+    # there, including outside $INSTDIR if they retargeted it), and a
+    # package never deletes user data. The template's
+    # "RMDir /r $AppData\${PRODUCT_EXECUTABLE}" line (meant to remove the
+    # WebView2 profile) is a no-op under machine-scope install: $AppData
+    # resolves to %ProgramData%, which the WebView2 runtime never writes
+    # to (it uses the per-user %LocalAppData%\...\EBWebView profile), so
+    # it is dropped rather than carried forward pointing at the wrong
+    # tree. The per-user WebView2 profile folder is deliberately left in
+    # place, same as %AppData%\rigprog (settings, snapshots, journals):
+    # this uninstaller only removes what it installed.
+    SetOutPath "$TEMP"
 
-    RMDir /r $INSTDIR
+    Delete "$INSTDIR\${PRODUCT_EXECUTABLE}"
+    Delete "$INSTDIR\rigprog.exe"
+    Delete "$INSTDIR\LICENSE"
 
     Delete "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk"
     Delete "$DESKTOP\${INFO_PRODUCTNAME}.lnk"
@@ -119,4 +173,6 @@ Section "uninstall"
     !insertmacro wails.unassociateCustomProtocols
 
     !insertmacro wails.deleteUninstaller
+
+    RMDir "$INSTDIR"
 SectionEnd
