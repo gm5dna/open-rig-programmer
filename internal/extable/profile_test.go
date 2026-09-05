@@ -3,6 +3,7 @@
 package extable
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -535,14 +536,161 @@ func TestRegistry_HoldsEveryModel(t *testing.T) {
 		}
 	}
 	// No two profiles may share the datum that would let one `go generate`
-	// overwrite another's artefact. validateRegistry already refuses a
-	// collision at init; this states the expected separation, pairwise, so a
-	// third registration cannot slip past a check written for two.
-	for i := range got {
-		for j := i + 1; j < len(got); j++ {
-			if got[i].Profile.Package == got[j].Profile.Package {
-				t.Errorf("profiles %q and %q both emit into package %q", got[i].Name, got[j].Name, got[i].Profile.Package)
+	// overwrite another's artefact, or read another's source CSV. That datum
+	// is validateRegistry's three collision keys — OutFile, VarName and
+	// ManualCSV — NOT the package clause.
+	//
+	// Until the FT-891 every registration lived in a package of its own, so
+	// "no two share a Package" and the real rule happened to coincide; they do
+	// not coincide in general, and a family whose two sibling inventories
+	// belong in ONE directory is refused by the narrower reading while
+	// validateRegistry accepts it. The assertion is widened rather than
+	// deleted, and sharedGenerateDatum is what states it —
+	// TestSharedPackageNeedsAllThreeKeysToDiffer proves it both fires and
+	// does not fire, so the widening cannot quietly become no rule at all.
+	for _, v := range sharedGenerateDatum(got) {
+		t.Error(v)
+	}
+}
+
+// sharedGenerateDatum reports each pair in ps that shares a package AND any
+// one of validateRegistry's three collision keys. A shared package alone is
+// permitted: it is a directory, not a datum, and two profiles in one
+// directory collide with nothing provided their output file, their generated
+// variable and their source CSV all differ.
+//
+// The keys fold exactly as validateRegistry's own do, and for its reasons:
+// OutFile and ManualCSV are PATHS, and APFS and NTFS resolve a case-only
+// difference to one file, so a byte-equal comparison would miss a real
+// collision. VarName is a Go IDENTIFIER, where case is significant to the
+// compiler — exItems and EXItems are two legal package-level variables — so
+// folding it would refuse a pair Go itself accepts.
+//
+// Two of the three are also refused by validateRegistry at init. ManualCSV is
+// not: that function's inputs map exists to catch one profile's OUTPUT
+// landing on another's source, and it simply overwrites a shared input. So
+// this helper is the whole of that third rule, and what it protects is a
+// sibling inventory being generated from the wrong radio's chart.
+func sharedGenerateDatum(ps []NamedProfile) []string {
+	var out []string
+	for i := range ps {
+		for j := i + 1; j < len(ps); j++ {
+			a, b := ps[i], ps[j]
+			if a.Profile.Package != b.Profile.Package {
+				continue
 			}
+			for _, k := range []struct{ key, av, bv string }{
+				{"OutFile", strings.ToLower(a.Profile.OutFile), strings.ToLower(b.Profile.OutFile)},
+				{"VarName", a.Profile.VarName, b.Profile.VarName},
+				{"ManualCSV", strings.ToLower(a.Profile.ManualCSV), strings.ToLower(b.Profile.ManualCSV)},
+			} {
+				if k.av == k.bv {
+					out = append(out, fmt.Sprintf("profiles %q and %q both emit into package %q and share %s %q",
+						a.Name, b.Name, a.Profile.Package, k.key, k.av))
+				}
+			}
+		}
+	}
+	return out
+}
+
+// TestSharedPackageNeedsAllThreeKeysToDiffer is the red proof each way for
+// the widening above: the rule must ADMIT a shared package when all three
+// keys differ, and must still REFUSE each key on its own. A widening proved
+// only in the permissive direction is indistinguishable from deleting the
+// assertion.
+//
+// Every profile here is test-local. The three Kenwood registrations land in
+// their own tasks with their own CSVs; nothing in this test registers
+// anything.
+func TestSharedPackageNeedsAllThreeKeysToDiffer(t *testing.T) {
+	single := func(pkg, out, varName, csv string) Profile {
+		p := fixtureAbsent
+		p.Package = pkg
+		p.OutFile = out
+		p.VarName = varName
+		p.ManualCSV = csv
+		return p
+	}
+	for _, tc := range []struct {
+		name                string
+		a, b                Profile
+		wantKey             string // "" means the pair must be permitted
+		wantRegistryRefusal bool
+	}{
+		{
+			// The shape this widening exists for: one driver's two sibling
+			// inventories in one package directory.
+			"one package, all three keys differ",
+			single("ts590", "exinventory590s_gen.go", "exItems590S", "menu590s.csv"),
+			single("ts590", "exinventory590sg_gen.go", "exItems590SG", "menu590sg.csv"),
+			"", false,
+		},
+		{
+			"one package, one OutFile",
+			single("ts590", "exinventory_gen.go", "exItems590S", "menu590s.csv"),
+			single("ts590", "exinventory_gen.go", "exItems590SG", "menu590sg.csv"),
+			"OutFile", true,
+		},
+		{
+			// APFS and NTFS resolve these to one file, so the second
+			// generate would silently replace the first's artefact.
+			"one package, OutFiles differing only in case",
+			single("ts590", "exinventory590s_gen.go", "exItems590S", "menu590s.csv"),
+			single("ts590", "EXINVENTORY590S_GEN.GO", "exItems590SG", "menu590sg.csv"),
+			"OutFile", true,
+		},
+		{
+			"one package, one VarName",
+			single("ts590", "exinventory590s_gen.go", "exItems", "menu590s.csv"),
+			single("ts590", "exinventory590sg_gen.go", "exItems", "menu590sg.csv"),
+			"VarName", true,
+		},
+		{
+			// Case IS significant to the compiler, so these are two legal
+			// variables and neither the helper nor validateRegistry refuses
+			// them.
+			"one package, VarNames differing only in case",
+			single("ts590", "exinventory590s_gen.go", "exItems", "menu590s.csv"),
+			single("ts590", "exinventory590sg_gen.go", "EXItems", "menu590sg.csv"),
+			"", false,
+		},
+		{
+			// validateRegistry does NOT refuse this pair, which is why the
+			// assertion states the key: the cost of dropping it would be the
+			// SG's inventory generated from the S's chart, with the whole
+			// suite green.
+			"one package, one ManualCSV",
+			single("ts590", "exinventory590s_gen.go", "exItems590S", "menu590s.csv"),
+			single("ts590", "exinventory590sg_gen.go", "exItems590SG", "menu590s.csv"),
+			"ManualCSV", false,
+		},
+		{
+			// The four Yaesu registrations' own shape: identical file,
+			// variable and source names in different packages.
+			"different packages, every key identical",
+			single("ts590", "exinventory_gen.go", "exItems", "table2.csv"),
+			single("ts480", "exinventory_gen.go", "exItems", "table2.csv"),
+			"", false,
+		},
+	} {
+		got := sharedGenerateDatum([]NamedProfile{{Name: "a", Profile: tc.a}, {Name: "b", Profile: tc.b}})
+		switch {
+		case tc.wantKey == "" && len(got) != 0:
+			t.Errorf("%s: reported %v, want the pair permitted", tc.name, got)
+		case tc.wantKey != "" && len(got) != 1:
+			t.Errorf("%s: reported %v, want exactly one violation naming %s", tc.name, got, tc.wantKey)
+		case tc.wantKey != "" && !strings.Contains(got[0], tc.wantKey):
+			t.Errorf("%s: reported %q, want it to name %s", tc.name, got[0], tc.wantKey)
+		}
+		// And the same pair against validateRegistry, so the test-side rule
+		// and the function-side one are compared rather than assumed equal.
+		err := validateRegistry(map[string]Profile{"a": tc.a, "b": tc.b})
+		if tc.wantRegistryRefusal && err == nil {
+			t.Errorf("%s: validateRegistry accepted the pair; want a refusal", tc.name)
+		}
+		if !tc.wantRegistryRefusal && err != nil {
+			t.Errorf("%s: validateRegistry refused the pair: %v", tc.name, err)
 		}
 	}
 }
