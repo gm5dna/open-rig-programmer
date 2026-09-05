@@ -31,6 +31,9 @@
   for each release; the rest of the file describes the product as it
   stands.
 
+  SYNC 05/09/2026 (v1.2.3): the app-icon bullet (Tier 0 P3, merged to main
+  before the sweep) added to the section below.
+
   SYNC 04/09/2026 (v1.2.3): the "What changed in this version" section
   rewritten for the parked-decisions sweep — the Absent-field send-gate
   fix at Save and on the CSV route (with how to answer such a field), the
@@ -144,6 +147,13 @@ reading and for opt-in writes (see below).
   on this build's command line or in its window widens it, and a channel
   stored outside the walk is simply not listed, so its absence from the
   grid is not evidence that the receiver's channel is empty.
+
+- **The application has an icon of its own.** The channel-list mark replaces
+  the Wails template's placeholder on macOS, Windows and Linux; it is drawn
+  once as an SVG (app/build/appicon.svg) and every raster the three
+  platforms need is derived from it by scripts/render-icons.sh, so the
+  shipping .app, the Windows .ico and the .deb's desktop entry all show the
+  same mark.
 
 Everything else in this release is internal hardening and carries no change
 a user can see: an enumeration of every channel field so each driver's
