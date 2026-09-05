@@ -5,7 +5,6 @@ package kw
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -39,17 +38,23 @@ import (
 // is why every failure below prints both sides and both lengths: the failure
 // output is the arbitration's input.
 //
-// # WHAT THIS FILE CAN REPLAY TODAY, AND WHAT IT CANNOT
+// # WHAT THIS FILE REPLAYS
 //
-// THERE IS NO PER-COMMAND BUILDER OR PARSER IN THIS PACKAGE YET. Task 5 built
-// the ENVELOPE — frames, the ';' splitter, the accumulator, the typed errors,
-// the outbound gate and the framing adapter — and tasks 6, 7 and 8 (the
-// record codec, the identity/MC/EX grammars and the two layouts) had not
-// landed when this file was written. So there is no BuildMR, no ParseIF, no
-// EX builder to hand a menu number to, and a test that claimed to replay
-// those would be claiming a codec that does not exist.
+// IT WAS WRITTEN IN TWO PASSES, AND THE SEAM IS STILL VISIBLE. When task 10
+// wrote it, core/kw held the ENVELOPE and nothing else — frames, the ';'
+// splitter, the accumulator, the typed errors, the outbound gate and the
+// framing adapter — so the first five legs are all envelope legs, and a
+// SKIPPED TestTODO_T8_ReplayEveryVectorThroughItsOwnCodec stood at the end
+// naming per file what could not yet be written. Tasks 6, 7 and 8 built the
+// eight grammars and the two layouts; the sixth leg is that TODO, written,
+// and the TODO itself is gone rather than left standing beside its own
+// completion.
 //
-// What this file therefore does is exactly what CAN be done honestly:
+// The envelope legs are NOT superseded by the per-command one and are not
+// folded into it. They assert a different thing — that these bytes satisfy
+// the rules both books print about what a frame LOOKS like, independently of
+// whether any grammar recognises them — and that statement survives a
+// grammar being widened, which is when it matters most.
 //
 //  1. HASH-FREEZES all fifteen artefacts (TestGoldenVectorsFrozen).
 //  2. Pins the ROSTER — every file's vectors, in order, with the frame length
@@ -57,25 +62,25 @@ import (
 //     (TestGoldenVectors_RosterAndCountedLengths). The lengths are literals
 //     transcribed from each file's own "COUNTED FRAME LENGTHS" block, not
 //     measured from the bytes they check.
-//  3. Replays every vector through EVERY PIECE OF THE CODEC THAT EXISTS —
-//     five replay legs, plus the F1 splitter leg
-//     (TestGoldenVectors_TheF1ReadFramesAreNotFramesToTheSplitter), and the
-//     list is exhaustive of what core/kw ships today:
+//  3. Replays every vector through THE ENVELOPE — five legs, plus the F1
+//     splitter leg
+//     (TestGoldenVectors_TheF1ReadFramesAreNotFramesToTheSplitter):
 //     the outbound gate for the host-built frames
 //     (TestGoldenVectors_TheOutboundGateAdmitsEveryHostBuiltFrame); the frame
 //     accumulator for every radio-sent one
 //     (TestGoldenVectors_TheAccumulatorReassemblesEveryAnswer);
 //     InitSequence against the AI0; vector each book prints
-//     (TestGoldenVectors_InitSequenceIsTheAI0Vector), the only WHOLE frame
-//     any shipped code builds today; EXAddress.Wire against the address field
-//     of all seventeen EX vectors
-//     (TestGoldenVectors_TheEXAddressFieldIsWhatWireRenders), which is the
-//     one FIELD a shipped renderer produces; and PrefixLenMatcher against
-//     every answer vector
+//     (TestGoldenVectors_InitSequenceIsTheAI0Vector); EXAddress.Wire against
+//     the address field of all seventeen EX vectors
+//     (TestGoldenVectors_TheEXAddressFieldIsWhatWireRenders); and
+//     PrefixLenMatcher against every answer vector
 //     (TestGoldenVectors_EveryAnswerIsMatchedByItsOwnReadsMatcher), the
 //     answer-correlation half of the codec.
-//  4. Leaves TestTODO_T8_ReplayEveryVectorThroughItsOwnCodec, which names
-//     what task 8 must add.
+//  4. Replays every vector THROUGH ITS OWN GRAMMAR
+//     (TestGoldenVectors_EveryVectorReplaysThroughItsOwnCodec): each of the
+//     eighty-two is BUILT byte for byte, PARSED field by field, REFUSED with
+//     its reason, or recorded as F1, and the walk requires the roster and the
+//     disposition table to be the same set, so "complete" is mechanical.
 //
 // # Hardware status
 //
@@ -614,9 +619,9 @@ func TestGoldenVectors_RosterAndCountedLengths(t *testing.T) {
 // upper-case name bytes before it; every body byte 0x20..0x7E; never a
 // radio-to-host token; never longer than DefaultMaxFrame. It does NOT mean
 // the codec agrees the frame is a valid MR, MW or EX — this leg cannot say
-// that, and TestTODO_T8_ReplayEveryVectorThroughItsOwnCodec is the separate,
-// still-open record of the per-command REPLAY (build from fields, compare
-// bytes) rather than the gate check this test performs.
+// that: the per-command REPLAY — build from fields, compare bytes — is
+// TestGoldenVectors_EveryVectorReplaysThroughItsOwnCodec, a separate leg,
+// and this one is the gate check alone.
 //
 // The gate is reached through NewFraming, not NewFramingFor: the pin is on
 // the envelope NewFraming ships, not on the layout-narrowed gate a driver
@@ -875,12 +880,13 @@ func exVectorMenu(t *testing.T, v goldenVector) uint8 {
 // P3 '0' in 8 and P4 '0' in 9, on BOTH books ("00: Always 00 for the TS-480"
 // / the 590 book's common legend). They are not Wire's output and are not
 // claimed to be; they are the frame's other fixed cells, and a vector that
-// lost one would otherwise reach T8 unremarked.
+// lost one would otherwise reach the per-command leg unremarked.
 //
-// WHAT THIS DOES NOT SAY: nothing here builds an EX frame. P5's width comes
-// from the per-radio inventory, which this package cannot see (the import
-// cycle TestTODO_T8_ReplayEveryVectorThroughItsOwnCodec records), so the
-// whole-frame EX comparison stays task 8's.
+// WHAT THIS DOES NOT SAY: nothing here builds a whole EX frame. That is
+// TestGoldenVectors_EveryVectorReplaysThroughItsOwnCodec's, and its P5 widths
+// are LITERALS read off each vector's own field map rather than an inventory
+// lookup — core/kw/ts590 and core/kw/ts480 import this package, so a test
+// here that read their inventories would be an import cycle.
 func TestGoldenVectors_TheEXAddressFieldIsWhatWireRenders(t *testing.T) {
 	checked := 0
 	for _, spec := range goldenSpecs {
@@ -1106,42 +1112,775 @@ func TestGoldenVectors_EveryAnswerIsMatchedByItsOwnReadsMatcher(t *testing.T) {
 	})
 }
 
-// TestTODO_T8_ReplayEveryVectorThroughItsOwnCodec is the deliberate gap, left
-// SKIPPED so that it is visible in `go test -v` rather than recorded only in
-// prose.
+// ---------------------------------------------------------------------------
+// THE PER-COMMAND REPLAY — what TestTODO_T8_ReplayEveryVectorThroughItsOwnCodec
+// named, now written.
+// ---------------------------------------------------------------------------
 //
-// WHAT IS MISSING AND WHY. When this file was written, core/kw held the
-// envelope and nothing else: no builder and no parser for any of the eight
-// grammars this milestone specifies (ID read, AI read/set, FV read, TY read,
-// MC read/set, MR read, MW set, EX read). Tasks 6, 7 and 8 build them. Until
-// they exist, every vector's per-command replay — build the frame from its
-// documented fields and compare the bytes; parse the answer and compare the
-// fields — is unwritable, and the fourteen files are held by their SHA-256s
-// (TestGoldenVectorsFrozen) and by the four legs above instead.
+// That test stood here, SKIPPED, listing per file the replays task 8 had to
+// add once tasks 6 and 7 built the eight grammars. They exist, so the TODO is
+// GONE rather than left standing beside its own completion: a skipped test
+// that has been done is worse than no test at all, because `go test -v` keeps
+// reporting a gap that closed.
 //
-// WHAT TASK 8 MUST ADD, per file:
+// # What a replay is, and why every vector has exactly one
 //
-//	AI-590, AI-480    the AI Set builder and the AI Answer parser (note the
-//	                  books' value sets DIFFER — 0/2/4 against 0/1/2/3,
-//	                  finding F9 — so one builder may not serve both)
-//	ID-590, ID-480     the ID read frame and the three-digit identity answer
-//	FV-590             the FV read frame and the version answer, including
-//	                   the unparseable case the driver must survive
-//	TY-480             the TY read frame and its four answers
-//	MC-590, MC-480     the MC read and Set frames, including the 590's P1
-//	                   space/zero pair below channel 100
-//	MR-590, MR-480     the MR read frame and the 50-byte answer record, field
-//	                   by field — and the F1 colon must be settled before the
-//	                   590's read builder can be written at all
-//	MW-590, MW-480     the 50-byte MW Set record (this programme builds NO
-//	                   erase frame; mw590_set_ch03_erase_no_P16 is evidence of
-//	                   what the book prints, never a shape to emit)
-//	EX-590, EX-480     the EX read frame and the variable-width Set/Answer,
-//	                   whose P5 width comes from the per-radio inventory —
-//	                   which is why that join cannot live in this file:
-//	                   core/kw/ts590 and core/kw/ts480 import core/kw, so a
-//	                   test here that read their inventories would be an
-//	                   import cycle.
-func TestTODO_T8_ReplayEveryVectorThroughItsOwnCodec(t *testing.T) {
-	t.Skip(fmt.Sprintf("TODO(T8): %d vectors across %d files are frozen and envelope-replayed, but no per-command builder or parser exists in core/kw yet; see this test's comment for what each file needs", totalVectors, len(goldenSpecs)))
+// Each of the eighty-two vectors goes through the ONE thing this codec can
+// honestly do with it. The walk below requires every vector in the roster to
+// have exactly one entry in perCommandReplays and every entry to name a
+// vector in the roster, so "complete" is MECHANICAL rather than a claim: a
+// vector added, renamed or left out fails here.
+//
+//	BUILT    a builder is handed the vector's own documented fields and its
+//	         output must equal the vector BYTE FOR BYTE.
+//	PARSED   a parser decodes it, and every field is compared against a
+//	         literal transcribed from that vector's own field map.
+//	REFUSED  this codec builds no such frame and the layout's own outbound
+//	         gate must refuse it. The reason is stated per vector and is
+//	         never "not implemented": it is a decision or an ASSUMED-register
+//	         entry, and a refusal whose reason had quietly gone would fail
+//	         here rather than pass.
+//	F1       the four TS-590 MR Read frames whose last byte is a COLON, which
+//	         is RECORDED AND NOT RESOLVED. See f1MRReadVectors.
+//
+// A vector may be both BUILT and PARSED — an MC Set naming ordinary memory is
+// byte-identical to the answer a radio sitting on that channel sends — and
+// the entry then does both and counts as one.
+//
+// # The layouts these replays run against
+//
+// core/kw's OWN fixtures (testlayouts_test.go), never the shipping values in
+// core/kw/ts590 and core/kw/ts480: those packages import this one, so a test
+// here that reached for them would be an import cycle. The 590 files run
+// against layout590SG, which is the book's own row for every command these
+// vectors exercise; where the SIBLING differs — the MC vectors naming 110 and
+// 119, which A12 puts outside the TS-590S's space — the entry consults
+// layout590S as well and says so.
+//
+// # Three pieces the TODO named do not exist, and each absence is a design
+//
+//  1. THERE IS NO AI ANSWER PARSER, and there is no state for one to report.
+//     This codec builds exactly one AI frame, "AI0;" (ai.go), because the
+//     session disables Auto Information at open and never asks what the state
+//     was. So the AI answer vectors are dispositioned by the GATE: "AI0;" is
+//     one of the gate's two disclosed answer-admissions, being byte-identical
+//     to the Set this codec really does build, and every other AI value in
+//     either book's legend is refused. Finding F9 — that the two books' P1
+//     legends differ, 0/2/4 against 0/1/2/3 — is why the refused list is
+//     spelt per file rather than shared.
+//  2. THERE IS NO EX SET BUILDER. This milestone reads the menu surface and
+//     writes none of it (allowlist.go's validEXRead), so the EX Set vectors
+//     are REFUSED — and their bytes are also the ANSWER shape, which is
+//     exactly why admitting them would let a captured menu reply be written
+//     back into a radio. Each Set entry therefore refuses the frame outbound
+//     AND decodes the same bytes inbound.
+//  3. THERE IS NO WAY TO ASK FOR A SPLIT WRITE, OR FOR P1='1' ON ORDINARY
+//     MEMORY. P1 is derived from the SLOT'S CLASS and never chosen freely
+//     (M9, Slot.P1), and A9 records that an MR with P1=1 on a simplex channel
+//     is not safe to send blind. Five vectors turn on this — mr590's split
+//     read, mr480's TX read and its 90-99 end-frequency read, and both split
+//     MW Sets — and every one of them is a REFUSED with that reason, not a
+//     replay this file could not be bothered to write.
+//
+// # The EX widths, and the import this file cannot have
+//
+// ParseEXAnswer bounds P5 by the inventory row's own Digits (A19), and the
+// inventories live in the two model packages. The widths below are LITERALS
+// read off each vector's own field map — the same numbers the roster's length
+// constants are built from — so this leg needs no inventory and makes no
+// claim about membership, which stays the per-row inventory's business.
+//
+// # Hardware status
+//
+// UNVERIFIED, for all eighty-two. Green here means this codec and one
+// quarantined reading of the two books agree, and NOT that any radio accepts
+// or sends these bytes (A19, A27).
+
+// replay is one vector's disposition: what this codec does with it, and the
+// kind that disposition counts as for the non-vacuity guard below.
+type replay struct {
+	kind  string
+	check func(t *testing.T, l Layout, frame string)
+}
+
+// The four kinds, named once so a typo in a table entry cannot invent a
+// fifth and pass the coverage guard.
+const (
+	kindBuilt   = "BUILT byte for byte"
+	kindParsed  = "PARSED field by field"
+	kindRefused = "REFUSED, with its reason"
+	kindF1      = "F1: recorded, not resolved"
+)
+
+// replayLayout is the fixture a file's vectors replay against. See the
+// section comment for why it is core/kw's own and not the model packages'.
+func replayLayout(t *testing.T, book Book) Layout {
+	t.Helper()
+	switch book {
+	case Book590:
+		return layout590SG()
+	case Book480:
+		return layout480()
+	}
+	t.Fatalf("no replay layout for book %v", book)
+	return Layout{}
+}
+
+// mustSlot (builders_test.go) resolves a number against a layout or fails
+// the test; it is the package's own helper and is not repeated here.
+
+// builtBy asserts that build's output is the vector, byte for byte.
+func builtBy(what string, build func(t *testing.T, l Layout) (Command, error)) replay {
+	return replay{kind: kindBuilt, check: func(t *testing.T, l Layout, frame string) {
+		t.Helper()
+		cmd, err := build(t, l)
+		if err != nil {
+			t.Fatalf("GOLDEN-VS-CODEC MISMATCH — THIS IS A STOP.\n  %s refused to build a frame the manual's own chart prints: %v", what, err)
+		}
+		if got := string(cmd.Bytes()); got != frame {
+			t.Errorf("GOLDEN-VS-CODEC MISMATCH — THIS IS A STOP, NOT A TEST TO ADJUST.\n"+
+				"  builder %s\n"+
+				"  built   %q (%d bytes)\n"+
+				"  vector  %q (%d bytes)\n"+
+				"Either the hand derivation or this builder misreads the book. The\n"+
+				"vectors are frozen (SHA-256s at commit a1e3779) and are never edited\n"+
+				"to settle it; the arbitration is against the PDF.",
+				what, got, len(got), frame, len(frame))
+		}
+		if !l.AllowedCommand(cmd.Bytes()) {
+			t.Errorf("%s: the %s's own gate refused the frame its own builder produced (%q)", what, l.Model(), cmd.Bytes())
+		}
+	}}
+}
+
+// refusedBecause asserts that the layout's outbound gate refuses the vector,
+// and reports why when it does not.
+func refusedBecause(why string) replay {
+	return replay{kind: kindRefused, check: func(t *testing.T, l Layout, frame string) {
+		t.Helper()
+		if l.AllowedCommand([]byte(frame)) {
+			t.Errorf("the %s's gate ADMITTED %q.\nThis codec builds no such frame: %s", l.Model(), frame, why)
+		}
+	}}
+}
+
+// refusedAndParsed is the disposition of a frame this codec never SENDS and
+// must still READ — an EX Set's bytes are its Answer's, and an MC naming a
+// section or extension channel is a recall a radio really answers with.
+func refusedAndParsed(why string, parse func(t *testing.T, l Layout, frame string)) replay {
+	return replay{kind: kindRefused, check: func(t *testing.T, l Layout, frame string) {
+		t.Helper()
+		if l.AllowedCommand([]byte(frame)) {
+			t.Errorf("the %s's gate ADMITTED %q.\nThis codec builds no such frame: %s", l.Model(), frame, why)
+		}
+		parse(t, l, frame)
+	}}
+}
+
+// parsedBy is the disposition of an answer: decode it, compare its fields,
+// and require the gate to refuse it outbound.
+func parsedBy(parse func(t *testing.T, l Layout, frame string)) replay {
+	return replay{kind: kindParsed, check: func(t *testing.T, l Layout, frame string) {
+		t.Helper()
+		parse(t, l, frame)
+		if l.AllowedCommand([]byte(frame)) {
+			t.Errorf("the %s's gate ADMITTED the ANSWER %q — a captured reply could then be written back to a radio", l.Model(), frame)
+		}
+	}}
+}
+
+// aiDisclosedCoincidence is "AI0;", which is the Set this codec builds AND
+// the answer a radio in that state sends. The gate necessarily admits it, and
+// AllowedCommand's own doc comment discloses it as one of exactly two such
+// cases; spec erratum S-E1 is the record that §Testing's "refuses every
+// answer frame" was never achievable.
+func aiDisclosedCoincidence() replay {
+	return replay{kind: kindParsed, check: func(t *testing.T, l Layout, frame string) {
+		t.Helper()
+		cmd, err := l.BuildAISetOff()
+		if err != nil {
+			t.Fatalf("BuildAISetOff: %v", err)
+		}
+		if got := string(cmd.Bytes()); got != frame {
+			t.Errorf("the AI answer vector %q is not byte-identical to the one AI Set this codec builds (%q); the gate's disclosed admission rests on their being one wire shape", frame, got)
+		}
+		if !l.AllowedCommand([]byte(frame)) {
+			t.Errorf("the %s's gate refused %q, which is the frame its own BuildAISetOff produces", l.Model(), frame)
+		}
+	}}
+}
+
+// decodedRecord is one MR answer's decoded content, every value transcribed
+// from that vector's own field map rather than measured from the bytes it
+// checks.
+type decodedRecord struct {
+	number   int
+	class    SlotClass
+	half     ScanHalf
+	answerP1 byte
+	freqHz   uint64
+	mode     Mode
+	byte19   byte
+	toneMode ToneMode
+	tone     int
+	ctcss    int
+	byte28   byte
+	byte3940 string
+	byte41   byte
+	name     string
+}
+
+// mrAnswer is the disposition of a 50-byte MR answer: decode it and compare
+// all fourteen fields.
+func mrAnswer(want decodedRecord) replay {
+	return parsedBy(func(t *testing.T, l Layout, frame string) {
+		t.Helper()
+		rec, err := l.ParseMRAnswer([]byte(frame))
+		if err != nil {
+			t.Fatalf("GOLDEN-VS-CODEC MISMATCH — THIS IS A STOP.\n  the %s refused a 50-byte MR answer its own book's chart describes: %v", l.Model(), err)
+		}
+		if rec.Empty {
+			t.Errorf("the record came back as the empty channel of 590:1492-1493, and this vector's P4-P15 are not all zero")
+		}
+		for _, f := range []struct {
+			field    string
+			got, wnt any
+		}{
+			{"the slot number", rec.Slot.Number(), want.number},
+			{"the slot class", rec.Slot.Class(), want.class},
+			{"the section half", rec.Slot.Half(), want.half},
+			{"P1 as read", rec.AnswerP1, want.answerP1},
+			{"P4, the frequency", rec.FreqHz, want.freqHz},
+			{"P5, the mode nibble", rec.Mode, want.mode},
+			{"byte 19 (P6)", rec.Byte19, want.byte19},
+			{"P7, the tone mode", rec.ToneMode, want.toneMode},
+			{"P8, the tone index", rec.ToneIndex, want.tone},
+			{"P9, the CTCSS index", rec.CTCSSIndex, want.ctcss},
+			{"byte 28 (P11)", rec.Byte28, want.byte28},
+			{"bytes 39-40 (P14)", rec.Byte3940, want.byte3940},
+			{"byte 41 (P15)", rec.Byte41, want.byte41},
+			{"P16, the memory name", rec.Name, want.name},
+		} {
+			if f.got != f.wnt {
+				t.Errorf("%s decoded as %v, and this vector's own field map prints %v", f.field, f.got, f.wnt)
+			}
+		}
+	})
+}
+
+// idAnswer, fvAnswer and tyAnswer are the identity answers' dispositions.
+func idAnswer(want string) replay {
+	return parsedBy(func(t *testing.T, l Layout, frame string) {
+		t.Helper()
+		got, err := l.ParseIDAnswer([]byte(frame))
+		if err != nil {
+			t.Fatalf("ParseIDAnswer(%q): %v", frame, err)
+		}
+		if got != want {
+			t.Errorf("ParseIDAnswer(%q) = %q, and the vector's own legend prints %q", frame, got, want)
+		}
+	})
+}
+
+func fvAnswer(want string) replay {
+	return parsedBy(func(t *testing.T, l Layout, frame string) {
+		t.Helper()
+		got, err := l.ParseFVAnswer([]byte(frame))
+		if err != nil {
+			t.Fatalf("ParseFVAnswer(%q): %v", frame, err)
+		}
+		if got != want {
+			t.Errorf("ParseFVAnswer(%q) = %q, want %q", frame, got, want)
+		}
+	})
+}
+
+func tyAnswer(variant byte, variantName string) replay {
+	return parsedBy(func(t *testing.T, l Layout, frame string) {
+		t.Helper()
+		a, err := l.ParseTYAnswer([]byte(frame))
+		if err != nil {
+			t.Fatalf("ParseTYAnswer(%q): %v", frame, err)
+		}
+		// [T1]: P1's two bytes are ASSUMED "00" in every vector of this
+		// file, because the chart prints the word "Reserved" and no value at
+		// all (480:1623). The parser carries them OPAQUELY and makes no
+		// claim, which is decision 4; asserting them here asserts the
+		// DERIVATION's assumption, not the radio's behaviour.
+		if a.Reserved != "00" {
+			t.Errorf("P1 came back %q, and this file's [T1] assumes the two ASCII characters \"00\"", a.Reserved)
+		}
+		if a.Variant != variant {
+			t.Errorf("P2 came back %q, want %q", a.Variant, variant)
+		}
+		if got := a.VariantName(); got != variantName {
+			t.Errorf("VariantName() = %q, and the book prints %q (480:1626-1629)", got, variantName)
+		}
+	})
+}
+
+// mcChannel is the disposition of an MC frame this codec both builds and
+// parses: an ordinary-memory recall, whose Set and Answer are one wire shape.
+func mcChannel(number int) replay {
+	return replay{kind: kindBuilt, check: func(t *testing.T, l Layout, frame string) {
+		t.Helper()
+		cmd, err := l.BuildMCSet(mustSlot(t, l, number, ScanHalfNone))
+		if err != nil {
+			t.Fatalf("BuildMCSet(%03d): %v", number, err)
+		}
+		if got := string(cmd.Bytes()); got != frame {
+			t.Errorf("GOLDEN-VS-CODEC MISMATCH — THIS IS A STOP.\n  BuildMCSet(%03d) built %q, the vector is %q", number, got, frame)
+		}
+		mcParses(t, l, frame, number, SlotMemory)
+		if !l.AllowedCommand([]byte(frame)) {
+			t.Errorf("the %s's gate refused %q, the recall its own builder produced", l.Model(), frame)
+		}
+	}}
+}
+
+// mcParses decodes an MC frame and compares its channel and class.
+func mcParses(t *testing.T, l Layout, frame string, number int, class SlotClass) {
+	t.Helper()
+	ch, err := l.ParseMCAnswer([]byte(frame))
+	if err != nil {
+		t.Fatalf("GOLDEN-VS-CODEC MISMATCH — THIS IS A STOP.\n  the %s refused an MC frame its own book prints: %v", l.Model(), err)
+	}
+	if ch.Number != number {
+		t.Errorf("ParseMCAnswer(%q) named channel %d, want %d", frame, ch.Number, number)
+	}
+	if ch.Class != class {
+		t.Errorf("ParseMCAnswer(%q) resolved class %v, want %v", frame, ch.Class, class)
+	}
+}
+
+// exRead is the disposition of a ten-byte EX read.
+func exRead(menu uint8) replay {
+	return builtBy("BuildEXRead", func(t *testing.T, l Layout) (Command, error) {
+		return l.BuildEXRead(EXAddress{P1: menu})
+	})
+}
+
+// exSetOrAnswer is the disposition of an EX Set or Answer: refused outbound —
+// they are ONE wire shape, so admitting either would let a captured menu
+// reply be written back — and decoded inbound against the width this vector's
+// own field map prints.
+func exSetOrAnswer(menu uint8, digits int, wantP5 string) replay {
+	parse := func(t *testing.T, l Layout, frame string) {
+		t.Helper()
+		item := EXItem{Addr: EXAddress{P1: menu}, Name: "the vector's own row", Digits: digits}
+		got, err := l.ParseEXAnswer([]byte(frame), item)
+		if err != nil {
+			t.Fatalf("GOLDEN-VS-CODEC MISMATCH — THIS IS A STOP.\n  ParseEXAnswer(%q, Digits=%d): %v", frame, digits, err)
+		}
+		if got != wantP5 {
+			t.Errorf("P5 came back %q, and this vector's field map prints %q — P5 is returned VERBATIM, trailing spaces included, because neither book states a padding rule for it", got, wantP5)
+		}
+	}
+	return refusedAndParsed("this milestone reads the menu surface and writes none of it, and EX's Set and Answer are one wire shape (allowlist.go's validEXRead)", parse)
+}
+
+// f1MRRead is the disposition of the four TS-590 MR Read vectors, and it
+// RECORDS the divergence rather than resolving it.
+//
+// THE VECTOR IS REFUSED, AND THAT IS THE PIN. Its last byte is a ':' — the
+// terminator cell the 590SG's MR Read chart really prints (590:1442, erratum
+// E1, leg G's FINDING F1) — so it carries no terminator and the gate refuses
+// it. What this entry adds to the envelope leg above is WHERE the divergence
+// is: when the same slot is buildable, the builder's frame agrees with the
+// vector on every byte but the last, and the last is exactly ':' against ';'.
+// A future arbitration that settles F1 has to come back here.
+//
+// buildable is false for the split read, which is refused TWICE OVER: P1 is
+// derived from the slot's class and never chosen (M9), and A9 records that an
+// MR with P1=1 on ordinary memory is not safe to send blind.
+func f1MRRead(number int, half ScanHalf, buildable bool, why string) replay {
+	return replay{kind: kindF1, check: func(t *testing.T, l Layout, frame string) {
+		t.Helper()
+		if l.AllowedCommand([]byte(frame)) {
+			t.Fatalf("the %s's gate ADMITTED %q: its last byte is a COLON, and FINDING F1 is recorded and unresolved. Admitting it would emit a frame no document describes.", l.Model(), frame)
+		}
+		if frame[len(frame)-1] != ':' {
+			t.Fatalf("%q no longer ends in the colon this entry exists to record (590:1442, E1)", frame)
+		}
+		if !buildable {
+			// THE ASSERTION IS ON P1, not on the whole frame. This vector's
+			// slot is perfectly resolvable and the builder happily produces
+			// a read for it; what it CANNOT produce is this vector's P1,
+			// because P1 comes from the slot's class. So the check is that
+			// the two disagree at position 3 and that the byte the codec
+			// derives is '0'.
+			cmd, err := l.BuildMRRead(mustSlot(t, l, number, half))
+			if err != nil {
+				t.Fatalf("BuildMRRead(%d): %v", number, err)
+			}
+			got := string(cmd.Bytes())
+			if got[recP1Off] == frame[recP1Off] {
+				t.Errorf("the %s built %q, whose P1 matches this vector's %q, and %s", l.Model(), got, frame, why)
+			}
+			if got[recP1Off] != '0' {
+				t.Errorf("the %s derived P1 %q for an ordinary memory slot, and Slot.P1 derives '0' for every class but a section channel's UPPER half", l.Model(), got[recP1Off])
+			}
+			return
+		}
+		cmd, err := l.BuildMRRead(mustSlot(t, l, number, half))
+		if err != nil {
+			t.Fatalf("BuildMRRead(%d): %v", number, err)
+		}
+		got := string(cmd.Bytes())
+		if len(got) != len(frame) {
+			t.Fatalf("the builder produced %d bytes and the vector is %d", len(got), len(frame))
+		}
+		if got[:len(got)-1] != frame[:len(frame)-1] {
+			t.Errorf("GOLDEN-VS-CODEC MISMATCH — THIS IS A STOP.\n"+
+				"  built  %q\n  vector %q\n"+
+				"F1 accounts for the LAST byte alone; a difference anywhere else is a\n"+
+				"real disagreement between the derivation and this builder.", got, frame)
+		}
+		if got[len(got)-1] != ';' {
+			t.Errorf("the builder's last byte is %q; every frame this codec emits ends in the terminator both books print (590:87-91, 480:113-118)", got[len(got)-1])
+		}
+	}}
+}
+
+// mwRecord is the record a 50-byte MW Set vector carries, every field
+// transcribed from that vector's own field map.
+func mwSet(number int, rec decodedRecord) replay {
+	return builtBy("BuildMWSet", func(t *testing.T, l Layout) (Command, error) {
+		return l.BuildMWSet(Record{
+			Slot:       mustSlot(t, l, number, rec.half),
+			FreqHz:     rec.freqHz,
+			Mode:       rec.mode,
+			Byte19:     rec.byte19,
+			ToneMode:   rec.toneMode,
+			ToneIndex:  rec.tone,
+			CTCSSIndex: rec.ctcss,
+			Byte28:     rec.byte28,
+			Byte3940:   rec.byte3940,
+			Byte41:     rec.byte41,
+			Name:       rec.name,
+		})
+	})
+}
+
+// perCommandReplays is the roster's other half: one disposition per vector,
+// keyed by the vector's own name.
+var perCommandReplays = map[string]replay{
+	// ----- AI, and the one Set this codec has -----------------------------
+	"ai590_set_off":                  builtBy("BuildAISetOff", func(t *testing.T, l Layout) (Command, error) { return l.BuildAISetOff() }),
+	"ai590_read":                     builtBy("BuildAIRead", func(t *testing.T, l Layout) (Command, error) { return l.BuildAIRead() }),
+	"ai590_set_on_without_backup":    refusedBecause("\"2: AI ON (without backup)\" pushes a response frame per changed parameter into a session that correlates answers by prefix; no AI state but OFF is ever built"),
+	"ai590_set_on_with_backup":       refusedBecause("\"4: AI ON (with backup)\" likewise, and it is supported only from firmware 2.00 of the TS-590S"),
+	"ai590_answer_off":               aiDisclosedCoincidence(),
+	"ai590_answer_on_without_backup": refusedBecause("an AI ANSWER reporting a state this codec never sets; there is no AI answer parser because the session disables Auto Information at open and never asks what the state was"),
+	"ai590_answer_on_with_backup":    refusedBecause("the same, for the with-backup state"),
+
+	"ai480_set_off": builtBy("BuildAISetOff", func(t *testing.T, l Layout) (Command, error) { return l.BuildAISetOff() }),
+	"ai480_read":    builtBy("BuildAIRead", func(t *testing.T, l Layout) (Command, error) { return l.BuildAIRead() }),
+	// F9: this book's legend is 0/1/2/3 where the 590 book's is 0/2/4, so
+	// the refused list is per file and one builder could not serve both.
+	"ai480_set_old_format_only":         refusedBecause("\"1: the old AI format only\" — this book's own note says the transceiver then sends an IF frame every 1.5 seconds (480:194-195)"),
+	"ai480_set_extended_format_only":    refusedBecause("\"2: the extended AI format only\", an ON state (finding F9: this book's legend is 0/1/2/3 where the 590 book's is 0/2/4)"),
+	"ai480_set_both_formats":            refusedBecause("\"3: both formats\", the loudest ON state this book prints"),
+	"ai480_answer_off":                  aiDisclosedCoincidence(),
+	"ai480_answer_old_format_only":      refusedBecause("an AI ANSWER reporting a state this codec never sets"),
+	"ai480_answer_extended_format_only": refusedBecause("the same, for the extended format"),
+	"ai480_answer_both_formats":         refusedBecause("the same, for both formats"),
+
+	// ----- ID, FV and TY: the three identity grammars ---------------------
+	"id590_read":           builtBy("BuildIDRead", func(t *testing.T, l Layout) (Command, error) { return l.BuildIDRead() }),
+	"id590_answer_ts590s":  idAnswer("021"),
+	"id590_answer_ts590sg": idAnswer("023"),
+	"id480_read":           builtBy("BuildIDRead", func(t *testing.T, l Layout) (Command, error) { return l.BuildIDRead() }),
+	"id480_answer_ts480":   idAnswer("020"),
+
+	"fv590_read": builtBy("BuildFVRead", func(t *testing.T, l Layout) (Command, error) {
+		// The OTHER book has no FV block at all, so the TS-480 layout must
+		// refuse the very frame this one builds. It is asserted here rather
+		// than in an entry of its own because no TS-480 vector exists for a
+		// command that radio does not have.
+		if _, err := layout480().BuildFVRead(); err == nil {
+			t.Error("the TS-480 layout built an FV read, and FV appears nowhere in the 2003 document (E15: that radio has no CAT-readable firmware version)")
+		}
+		return l.BuildFVRead()
+	}),
+	// The book's own worked example, quoted character for character
+	// (590:1035).
+	"fv590_answer_v1_00": fvAnswerAndTheUnparseableCase("1.00"),
+	// [V1]: same shape, other versions — the bytes are ASSUMED.
+	"fv590_answer_v2_00": fvAnswer("2.00"),
+	"fv590_answer_v1_08": fvAnswer("1.08"),
+
+	"ty480_read": builtBy("BuildTYRead", func(t *testing.T, l Layout) (Command, error) {
+		// And the mirror of FV's: the 590 book prints no TY anywhere.
+		if _, err := layout590SG().BuildTYRead(); err == nil {
+			t.Error("the TS-590SG layout built a TY read, and TY appears nowhere in the TS-590S/SG document")
+		}
+		return l.BuildTYRead()
+	}),
+	"ty480_answer_ts480hx_200w":     tyAnswer('0', "TS-480HX (200 W)"),
+	"ty480_answer_ts480sat_100w_at": tyAnswer('1', "TS-480SAT (100 W + AT)"),
+	"ty480_answer_japanese_50w":     tyAnswer('2', "Japanese 50 W type"),
+	"ty480_answer_japanese_20w":     tyAnswer('3', "Japanese 20 W type"),
+
+	// ----- MC, whose Set domain and Answer domain are different domains ---
+	"mc590_read": builtBy("BuildMCRead", func(t *testing.T, l Layout) (Command, error) { return l.BuildMCRead() }),
+	// The '0' form is the one this codec emits (A10, slotWire).
+	"mc590_set_ch03_zero_hundreds": mcChannel(3),
+	// The SPACE form is MC's own printed Set convention — "enter 0 or a
+	// space for a channel number less than 100" (590:1334-1335) — so the
+	// gate ADMITS it and the parser decodes it, while the builder emits the
+	// digit. That asymmetry is A10 and it is deliberate: a digit passes the
+	// envelope unremarkably and reads the same in a log.
+	"mc590_set_ch03_space_hundreds": replay{kind: kindParsed, check: func(t *testing.T, l Layout, frame string) {
+		t.Helper()
+		mcParses(t, l, frame, 3, SlotMemory)
+		if !l.AllowedCommand([]byte(frame)) {
+			t.Errorf("the %s's gate refused %q; MC's own chart prints the space as legal on a Set below channel 100 (590:1334-1335)", l.Model(), frame)
+		}
+		cmd, err := l.BuildMCSet(mustSlot(t, l, 3, ScanHalfNone))
+		if err != nil {
+			t.Fatalf("BuildMCSet(003): %v", err)
+		}
+		if string(cmd.Bytes()) == frame {
+			t.Errorf("the builder emitted the SPACE form %q; A10 records that this codec always emits '0' and always accepts either on parse", frame)
+		}
+	}},
+	"mc590_set_ch100_P00": refusedAndParsed(
+		"A16 (L-DEC-2) narrows the MC SET domain to ordinary memory — recalling a channel changes the radio's operating state — while 590:1345-1347's section numbers stay selectable in the ANSWER domain",
+		func(t *testing.T, l Layout, frame string) { mcParses(t, l, frame, 100, SlotScan) }),
+	"mc590_set_ch110_E00": refusedAndParsed(
+		"A16 again, and this is the extension range: what an extension channel IS is never explained anywhere in the book (A11)",
+		func(t *testing.T, l Layout, frame string) {
+			mcParses(t, l, frame, 110, SlotExtension)
+			// The SIBLING: A12 puts 110 outside the TS-590S's space, so the
+			// same frame is refused there. It is the only place in this file
+			// where the two 590 rows part company.
+			if _, err := layout590S().ParseMCAnswer([]byte(frame)); err == nil {
+				t.Errorf("the TS-590S parsed %q; the book gives 110-119 to the SG (590:1346-1347) and never states the S's own ceiling (A12)", frame)
+			}
+		}),
+	"mc590_answer_ch03":      parsedByMC(3, SlotMemory),
+	"mc590_answer_ch100_P00": parsedByMC(100, SlotScan),
+	"mc590_answer_ch119": replay{kind: kindParsed, check: func(t *testing.T, l Layout, frame string) {
+		t.Helper()
+		mcParses(t, l, frame, 119, SlotExtension)
+		if l.AllowedCommand([]byte(frame)) {
+			t.Errorf("the %s's gate ADMITTED %q; A16 keeps the SEND domain at ordinary memory", l.Model(), frame)
+		}
+		if _, err := layout590S().ParseMCAnswer([]byte(frame)); err == nil {
+			t.Errorf("the TS-590S parsed %q, the top of the SG's extension range (A12)", frame)
+		}
+	}},
+
+	"mc480_read":     builtBy("BuildMCRead", func(t *testing.T, l Layout) (Command, error) { return l.BuildMCRead() }),
+	"mc480_set_ch00": mcChannel(0),
+	"mc480_set_ch03": mcChannel(3),
+	// Decision 15: 90-99 are ORDINARY memories on this row that also answer
+	// a second frame, not a scan class, so this recall is an ordinary one.
+	"mc480_set_ch90_program_scan_lower": mcChannel(90),
+	"mc480_set_ch99_top_of_range":       mcChannel(99),
+	"mc480_answer_ch03":                 parsedByMC(3, SlotMemory),
+	"mc480_answer_ch99":                 parsedByMC(99, SlotMemory),
+
+	// ----- MR: the read request and the 50-byte answer --------------------
+	"mr590_read_ch03_simplex_rx":   f1MRRead(3, ScanHalfNone, true, ""),
+	"mr590_read_ch04_simplex_rx":   f1MRRead(4, ScanHalfNone, true, ""),
+	"mr590_read_ch100_P00_simplex": f1MRRead(100, ScanLower, true, ""),
+	"mr590_read_ch12_split_tx": f1MRRead(12, ScanHalfNone, false,
+		"P1 is derived from the SLOT'S CLASS and never chosen freely (M9, Slot.P1); an ordinary memory slot derives '0', and A9 records that an MR with P1=1 on a simplex channel is not safe to send blind"),
+
+	"mr480_read_ch03_rx": builtBy("BuildMRRead", func(t *testing.T, l Layout) (Command, error) {
+		return l.BuildMRRead(mustSlot(t, l, 3, ScanHalfNone))
+	}),
+	"mr480_read_ch04_rx": builtBy("BuildMRRead", func(t *testing.T, l Layout) (Command, error) {
+		return l.BuildMRRead(mustSlot(t, l, 4, ScanHalfNone))
+	}),
+	"mr480_read_ch90_start_freq": builtBy("BuildMRRead", func(t *testing.T, l Layout) (Command, error) {
+		return l.BuildMRRead(mustSlot(t, l, 90, ScanHalfNone))
+	}),
+	"mr480_read_ch12_tx":       refusedBecause("P1='1' is \"1: TX frequency\" (480:951) on an ordinary memory slot, and P1 is derived from the slot's class (M9); A9 records that this frame is not safe to send blind"),
+	"mr480_read_ch90_end_freq": refusedBecause("the book really does print \"Memory channel 90 ~ 99: P1=0 (start frequency), P1=1 (end frequency)\" (480:943-944), but decision 15 rules those ten ordinary memories rather than a scan class on this row, so the P1=1 half of 90-99 is unreachable through this programme"),
+
+	"mr590_answer_ch03_simplex_name8": mrAnswer(decodedRecord{
+		number: 3, class: SlotMemory, half: ScanHalfNone, answerP1: '0',
+		freqHz: 14_250_000, mode: ModeUSB, byte19: '0', toneMode: ToneModeOff,
+		byte28: '0', byte3940: "00", byte41: '0', name: "DXCLUSTR",
+	}),
+	"mr590_answer_ch04_simplex_name3": mrAnswer(decodedRecord{
+		number: 4, class: SlotMemory, half: ScanHalfNone, answerP1: '0',
+		freqHz: 7_150_000, mode: ModeLSB, byte19: '0', toneMode: ToneModeOff,
+		byte28: '0', byte3940: "00", byte41: '0',
+		// A1: P16's five trailing spaces are right-trimmed on read.
+		name: "NET",
+	}),
+	"mr590_answer_ch12_split_tx_tone_on": mrAnswer(decodedRecord{
+		number: 12, class: SlotMemory, half: ScanHalfNone, answerP1: '1',
+		freqHz: 51_500_000, mode: ModeFM, byte19: '0', toneMode: ToneModeTone,
+		tone: 8, byte28: '1', byte3940: "01", byte41: '0', name: "REPEATER",
+	}),
+
+	"mr480_answer_ch03_rx_name8": mrAnswer(decodedRecord{
+		number: 3, class: SlotMemory, half: ScanHalfNone, answerP1: '0',
+		freqHz: 14_250_000, mode: ModeUSB, byte19: '0', toneMode: ToneModeOff,
+		byte28: '0', byte3940: "00", byte41: '0', name: "DXCLUSTR",
+	}),
+	"mr480_answer_ch04_rx_name3": mrAnswer(decodedRecord{
+		number: 4, class: SlotMemory, half: ScanHalfNone, answerP1: '0',
+		freqHz: 7_150_000, mode: ModeLSB, byte19: '0', toneMode: ToneModeOff,
+		byte28: '0', byte3940: "00", byte41: '0', name: "NET",
+	}),
+	"mr480_answer_ch12_tx_tone_on": mrAnswer(decodedRecord{
+		number: 12, class: SlotMemory, half: ScanHalfNone, answerP1: '1',
+		freqHz: 51_500_000, mode: ModeFM, byte19: '0', toneMode: ToneModeTone,
+		tone: 8, byte28: '0', byte3940: "02", byte41: '0', name: "REPEATER",
+	}),
+
+	// ----- MW: the 50-byte Set, and the erase shape this codec never builds
+	"mw590_set_ch03_simplex_name8": mwSet(3, decodedRecord{
+		half: ScanHalfNone, freqHz: 14_250_000, mode: ModeUSB, byte19: '0',
+		toneMode: ToneModeOff, byte28: '0', byte3940: "00", byte41: '0',
+		name: "DXCLUSTR",
+	}),
+	"mw480_set_ch03_rx_name8": mwSet(3, decodedRecord{
+		half: ScanHalfNone, freqHz: 14_250_000, mode: ModeUSB, byte19: '0',
+		toneMode: ToneModeOff, byte28: '0', byte3940: "00", byte41: '0',
+		name: "DXCLUSTR",
+	}),
+	"mw590_set_ch12_split_tone_on": refusedBecause("its P1 is '1', the SPLIT registration of 590:1519-1520, and this codec derives P1 from the slot's CLASS (M9, Slot.P1) — an ordinary memory slot derives '0'. There is no way to ask for a split write, and the gate refuses this frame because BuildMWSet refuses the record the parser decoded from it"),
+	"mw480_set_ch12_tx_tone_on":    refusedBecause("its P1 is '1', \"1: TX frequency\" (480:951), and the same M9 derivation applies; on this row A22 refuses every channel write in the driver as well"),
+	"mw590_set_ch03_erase_no_P16":  refusedBecause("it is the 42-byte ERASE shape of 590:1579-1581 (A5, erratum E19). Decision 8 builds no erase frame, and BuildMWSet emits exactly RecordLen bytes with checkRecordLen as its own gate — the vector is evidence of what the book prints, never a shape to emit"),
+
+	// ----- EX: ten fixed bytes, and a P5 whose width is the row's ---------
+	"ex590_read_menu000":            exRead(0),
+	"ex590_read_menu001":            exRead(1),
+	"ex590_read_menu002":            exRead(2),
+	"ex590_read_menu087_last_590S":  exRead(87),
+	"ex590_read_menu099_last_590SG": exRead(99),
+	// The SG's menu 001, "Power on message", eight characters (590:750);
+	// P5 comes back VERBATIM, the two trailing spaces included.
+	"ex590_set_menu001_poweron_msg_8":    exSetOrAnswer(1, 8, "MYCALL  "),
+	"ex590_answer_menu001_poweron_msg_8": exSetOrAnswer(1, 8, "MYCALL  "),
+	// [E1]: menu 002's one-character width is ASSUMED from a table of
+	// VALUES rather than counted off a field map; the chart itself draws
+	// eight (erratum E16 — that drawn ';' is illustrative, not a width).
+	"ex590_set_menu002_brightness_3":    exSetOrAnswer(2, 1, "3"),
+	"ex590_answer_menu002_brightness_3": exSetOrAnswer(2, 1, "3"),
+
+	"ex480_read_menu000":      exRead(0),
+	"ex480_read_menu032":      exRead(32),
+	"ex480_read_menu060_last": exRead(60),
+	// The two frames quoted from the book's own worked examples
+	// (480:415-416), one-character P5.
+	"ex480_set_menu000_illumination_off": exSetOrAnswer(0, 1, "0"),
+	"ex480_set_menu000_brightness_3":     exSetOrAnswer(0, 1, "3"),
+	"ex480_answer_menu000_brightness_3":  exSetOrAnswer(0, 1, "3"),
+	// Menu 032 is one of the rows the EX block's own prose names as
+	// two-digit (480:411). Menu 034 is another and the prose omits it,
+	// which is erratum E22 — recorded in core/kw/ts480/doc.go, and no
+	// vector of this file exercises it.
+	"ex480_set_menu032_two_digit":    exSetOrAnswer(32, 2, "05"),
+	"ex480_answer_menu032_two_digit": exSetOrAnswer(32, 2, "05"),
+}
+
+// parsedByMC is the disposition of an MC ANSWER: decoded, and refused
+// outbound unless it coincides with a Set this codec builds.
+func parsedByMC(number int, class SlotClass) replay {
+	return replay{kind: kindParsed, check: func(t *testing.T, l Layout, frame string) {
+		t.Helper()
+		mcParses(t, l, frame, number, class)
+		// AN MC ANSWER NAMING ORDINARY MEMORY IS ADMITTED, and that is one
+		// of the gate's exactly two disclosed answer-admissions: it is
+		// byte-identical to the recall BuildMCSet emits for the same
+		// channel (590:1333 against 590:1341). Every other class is
+		// refused, which is what A16's narrowing actually buys.
+		want := class == SlotMemory
+		if got := l.AllowedCommand([]byte(frame)); got != want {
+			t.Errorf("the %s's gate returned %v for the MC answer %q (class %v), want %v — an ordinary-memory answer coincides with the Set this codec builds and every other class does not", l.Model(), got, frame, class, want)
+		}
+	}}
+}
+
+// fvAnswerAndTheUnparseableCase is fvAnswer plus the case the TODO named:
+// a four-character P1 that is not a version number at all.
+//
+// A13 PINS THE WIDTH AND NOT THE GRAMMAR. The answer chart gives four
+// positions and the only format statement anywhere is one worked example
+// (590:1035), so a parser demanding digit-dot-digit-digit would assert a
+// grammar the document does not print and would fail a session on a radio the
+// document permits. The consumer that must survive it is the TS-590S write
+// gate, which reads FV to decide whether byte 28 is live (A14).
+//
+// THE MUTATED FRAME IS DERIVED FROM THIS VECTOR AND IS NOT A NEW ONE. Leg G's
+// files are frozen and nothing here may add to them; the four bytes are
+// replaced in a copy, in this test only.
+func fvAnswerAndTheUnparseableCase(want string) replay {
+	inner := fvAnswer(want)
+	return replay{kind: inner.kind, check: func(t *testing.T, l Layout, frame string) {
+		t.Helper()
+		inner.check(t, l, frame)
+
+		odd := []byte(frame)
+		copy(odd[2:6], "X-.Z")
+		got, err := l.ParseFVAnswer(odd)
+		if err != nil {
+			t.Errorf("ParseFVAnswer refused %q: A13 pins the WIDTH and not the grammar, and a parser demanding digit-dot-digit-digit would fail a session on a radio the document permits (%v)", odd, err)
+		}
+		if got != "X-.Z" {
+			t.Errorf("ParseFVAnswer(%q) = %q, want the four bytes verbatim", odd, got)
+		}
+	}}
+}
+
+// TestGoldenVectors_EveryVectorReplaysThroughItsOwnCodec is the walk: every
+// vector in the roster, through the disposition perCommandReplays gives it.
+//
+// THE COVERAGE CHECK IS THE POINT OF THE MAP. A leg that walked whatever it
+// found would silently shrink as vectors were added; this one requires the
+// roster and the map to be the SAME SET, so a vector with no disposition and
+// a disposition with no vector each fail here by name.
+func TestGoldenVectors_EveryVectorReplaysThroughItsOwnCodec(t *testing.T) {
+	seen := map[string]bool{}
+	kinds := map[string]int{}
+	total := 0
+
+	for _, spec := range goldenSpecs {
+		l := replayLayout(t, spec.book)
+		for _, v := range loadGoldenVectors(t, spec.file) {
+			r, ok := perCommandReplays[v.name]
+			if !ok {
+				t.Errorf("%s (%s:%d) has no per-command disposition. Every vector must be BUILT, PARSED, REFUSED with its reason, or recorded as F1; there is no fifth answer and \"not covered\" is not one of them.", v.name, v.file, v.line)
+				continue
+			}
+			if seen[v.name] {
+				t.Errorf("%s appears twice in the roster; the dispositions are keyed by name and the second would be checked against the first's frame", v.name)
+			}
+			seen[v.name] = true
+			kinds[r.kind]++
+			total++
+			t.Run(v.name, func(t *testing.T) {
+				r.check(t, l, v.frame)
+			})
+		}
+	}
+
+	for name := range perCommandReplays {
+		if !seen[name] {
+			t.Errorf("perCommandReplays carries a disposition for %q, which is in no vector file — a renamed or deleted vector leaves its disposition asserting nothing", name)
+		}
+	}
+	if total != totalVectors {
+		t.Errorf("%d vectors were replayed, and leg G is %d", total, totalVectors)
+	}
+	// Non-vacuity: all four dispositions must actually occur. A table that
+	// had collapsed into "everything is refused" would otherwise pass.
+	for _, kind := range []string{kindBuilt, kindParsed, kindRefused, kindF1} {
+		if kinds[kind] == 0 {
+			t.Errorf("no vector was dispositioned %q — a table with only one kind in it proves far less than it appears to", kind)
+		}
+	}
+	if kinds[kindF1] != len(f1MRReadVectors) {
+		t.Errorf("%d vectors are dispositioned F1, and f1MRReadVectors names %d", kinds[kindF1], len(f1MRReadVectors))
+	}
+	t.Logf("replayed %d vectors: %d built, %d parsed, %d refused with a reason, %d recorded as F1",
+		total, kinds[kindBuilt], kinds[kindParsed], kinds[kindRefused], kinds[kindF1])
 }
