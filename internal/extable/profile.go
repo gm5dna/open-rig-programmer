@@ -675,6 +675,99 @@ var ft891Profile = Profile{
 	},
 }
 
+// ts590sgProfile carries the TS-590SG's menu-chart transcription facts. It is
+// the registry's first entry to render outside core/cat, and so the first to
+// carry a DigitsCeiling that is not MaxDigitsCeiling.
+//
+// Evidence, all from the Kenwood TS-590S/TS-590SG PC Control Command
+// Reference Guide Rev.3 (see core/kw/ts590/menu590sg.csv's own provenance
+// header): the chart headed "EX Command Parameter List (for TS-590SG)" prints
+// a THREE-DIGIT Menu (P1) number that is the whole address, no group-label
+// columns, and one free-text row.
+//
+// THE BOOK PRINTS TWO CHARTS AND THIS IS ONE OF THEM. The TS-590S's list and
+// the TS-590SG's collide on every address with different meanings — 000 is
+// Firmware Version here — so the two radios get two profiles, two CSVs and
+// two generated files in one package directory, which validateRegistry
+// permits because OutFile, VarName and ManualCSV all differ.
+//
+// DigitsCeiling is core/kw's MaxEXDigits, transcribed as the literal 246
+// because internal/extable is build-time tooling and importing the package it
+// renders into would cycle the dependency. That is not an unchecked
+// transcription: core/kw/exdigits_ceiling_test.go selects every profile whose
+// ImportPath is core/kw and requires this field to equal MaxEXDigits, so a
+// copy-paste of core/cat's 247 fails there. The two numbers differ by exactly
+// one byte, because a Kenwood EX answer carries one more fixed byte than a
+// Yaesu one, which is what would have made the mistake invisible.
+//
+// MaxDigits is 4, and the 4 comes from ONE row: 000 Firmware Version, "Version
+// information (4 ASCII characters) read only", carried as digits=4 text=false
+// on the FT-891's 18/01/00 MAIN VERSION precedent. Every other numbered row is
+// 1, 2 or 3 — 3 being the thirteen PF-assignment rows whose merged cell prints
+// "000 ~ 255 (3-digit)". TextWidth is 8, the width of the chart's single
+// free-text row, 001 Power on message; a second text row of a different width
+// is what ParseCSV refuses, and is why 000 is not one.
+//
+// Deliberately NOT given a named accessor, for the reason the ftdx10, ftdx101
+// and ft891 profiles are not: its only consumers reach it through
+// Lookup/RegisteredProfiles.
+var ts590sgProfile = Profile{
+	Model:       "TS-590SG",
+	Package:     "ts590",
+	Types:       TypesImported,
+	ImportPath:  "github.com/gm5dna/open-rig-programmer/core/kw",
+	ImportAlias: "kw",
+	VarName:     "exItems590SG",
+	OutFile:     "exinventory590sg_gen.go",
+	ManualCSV:   "menu590sg.csv",
+
+	// The TS-590SG's chart, said out loud: ONE three-digit Menu number that
+	// is the whole address (every row's p2 and p3 are 0), no group labels,
+	// and one free-text row.
+	Addresses:     AddressSingle,
+	LabelPolicy:   LabelsAbsent,
+	TextRowPolicy: TextRowsAllowed,
+
+	// core/kw's ceiling, because this profile renders into core/kw. The
+	// value is kw.MaxEXDigits (DefaultMaxFrame 256 - 10 fixed EX-answer
+	// bytes); core/kw/exdigits_ceiling_test.go pins this field to it.
+	DigitsCeiling: 246,
+	MinDigits:     1,
+	MaxDigits:     4,
+	TextWidth:     8,
+	// MaxObservedWidth is an INERT API-REQUIRED SENTINEL here, exactly as on
+	// the three Yaesu profiles that carry one: ObservationsAbsent means no
+	// observation CSV is ever parsed and this bound is never consulted. It
+	// carries NO hardware claim about the TS-590SG — no TS-590SG has ever
+	// been asked anything — and must not be read as one; the moment
+	// observations do exist it is re-derived from them rather than kept. It
+	// is spelt 8 only because a sentinel has to be spelt something, and it
+	// is NOT a claim that the widest answer this radio gives is eight bytes.
+	MaxObservedWidth: 8,
+	// ExpectedRows comes from the group-boundary ledger derived from the
+	// rendered PDF before any transcription existed — NOT from the
+	// transcriptions agreeing with each other. If they agree on a number that
+	// is not this one, the answer is arbitration against the PDF, never an
+	// edit here.
+	ExpectedRows: 100,
+
+	Observations: ObservationsAbsent,
+	DocLines: []string{
+		"exItems590SG is the TS-590SG's EX address inventory, sorted by (P1,P2),",
+		"built from ONE source: the manual transcription in menu590sg.csv (the",
+		"TS-590S/TS-590SG PC Control Command Reference Guide Rev.3, the chart",
+		"headed \"EX Command Parameter List (for TS-590SG)\"). This radio's EX",
+		"address is a SINGLE component: the chart's three-digit Menu number is",
+		"P1, every item's P2 and P3 are 0, and the chart prints no group labels,",
+		"so every P1Label and P2Label is \"\". It is NOT the TS-590S's table — the",
+		"book prints two, over colliding addresses with different meanings.",
+		"There are no hardware READ observations to join — no TS-590SG has ever",
+		"been asked anything — so every item carries the absence sentinels",
+		"ObservedReadWidth 0 and ObservedReadShape \"\". Regenerate with",
+		"`go generate ./core/kw/ts590`; do not edit by hand.",
+	},
+}
+
 // registry maps a lookup name to its profile. It is validated at init, so an
 // inconsistent profile panics the build tooling rather than emitting a wrong
 // inventory.
@@ -683,6 +776,7 @@ var registry = mustRegistry(map[string]Profile{
 	"ft891":   ft891Profile,
 	"ftdx10":  ftdx10Profile,
 	"ftdx101": ftdx101Profile,
+	"ts590sg": ts590sgProfile,
 })
 
 func mustRegistry(m map[string]Profile) map[string]Profile {

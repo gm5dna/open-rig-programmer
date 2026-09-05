@@ -237,6 +237,18 @@ func TestRegisteredProfiles_DeclareTodaysBehaviourExplicitly(t *testing.T) {
 		// Its DigitsCeiling is still core/cat's — the FT-891 renders into
 		// core/cat/ft891, not a package of its own.
 		"ft891": {AddressPair, LabelsAbsent, TextRowsAbsent, 0, MaxDigitsCeiling},
+		// The TS-590SG is the first registration that does NOT render into
+		// core/cat, and so the first whose ceiling is not MaxDigitsCeiling:
+		// 246 is core/kw's MaxEXDigits, spelt as a literal here because this
+		// package must not import the package it renders into.
+		// core/kw/exdigits_ceiling_test.go pins the profile field to that
+		// constant; this row pins it against a number a reader can check, so
+		// a stanza carrying core/cat's 247 fails in both places rather than
+		// passing every test in this one. Its chart prints one three-digit
+		// menu number that is the whole address (AddressSingle), no group
+		// labels, and one free-text row of eight characters — menu 001 Power
+		// on message. See core/kw/ts590/menu590sg.csv's provenance header.
+		"ts590sg": {AddressSingle, LabelsAbsent, TextRowsAllowed, 8, 246},
 	}
 	regs := RegisteredProfiles()
 	if len(regs) != len(want) {
