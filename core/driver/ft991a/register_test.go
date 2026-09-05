@@ -44,11 +44,21 @@ var sharedRegisterEntryNames = []string{
 	"THE ACKNOWLEDGEMENT CONVENTIONS",
 }
 
-// driverRegisterEntryNames quotes the EIGHT entries this driver adds beside
+// driverRegisterEntryNames quotes the TEN entries this driver adds beside
 // the shared eleven, in doc.go's order — the matrix's §4b list, which the
 // spec's own six-item reminder does not enumerate (matrix erratum M-E1: five
 // of that list's six are already on the shared register, only the MT "?;"
-// entry is new, and this matrix reaches eight).
+// entry is new, and this matrix reaches ten).
+//
+// THREE OF THE TEN WERE ONE ENTRY UNTIL matrix erratum M-E10. A single
+// "TONE-NUMBER, DCS-CODE AND SCAN-SKIP UNREACHABILITY" bundled three
+// independent claims under one name against its own three separate lifting
+// experiments, and the register's own rule — one entry, ONE capture — is what
+// condemned it: a tone-number byte turning up says nothing about the DCS code
+// or the skip flag, so an operator who takes one capture could retire no part
+// of the bundle. §4b labels the three 4a, 4b and 4c; they are entries 4, 5
+// and 6 of the numbered list in this package's doc.go, which is exactly why
+// both registers say CITE BY NAME, NEVER BY POSITION.
 //
 // These are facts about the DRIVER's choreography and its capability values,
 // where the eleven are facts about the dialect and the codec. Correcting one
@@ -58,7 +68,9 @@ var driverRegisterEntryNames = []string{
 	"CONTROL-LINE POLICY",
 	"MinFreqHz 30 000 / MaxFreqHz 470 000 000 — THE FA/FB RANGE READ AS THE MEMORY-STORABLE RANGE",
 	`RequiredSlots {"001"}`,
-	"TONE-NUMBER, DCS-CODE AND SCAN-SKIP UNREACHABILITY",
+	"TONE-NUMBER UNREACHABILITY",
+	"DCS-CODE UNREACHABILITY",
+	"SCAN-SKIP UNREACHABILITY",
 	`MT "?;" ON A MEMORY OR PMS SLOT MEANS THE SLOT IS EMPTY`,
 	"THE MODE NIBBLE'S DOMAIN",
 	"THE PRINTED-FIXED BYTES ARE ANSWERED AS PRINTED",
@@ -135,10 +147,49 @@ func bulletsAndNumbered(section string) (bullets, numbered []string) {
 	return bullets, numbered
 }
 
+// registerEntryOpensWith reports whether entry opens with name AND ENDS THE
+// NAME THERE.
+//
+// A plain strings.HasPrefix is the obvious test and it is not enough: an
+// entry that GROWS a qualifier — "THE ACKNOWLEDGEMENT CONVENTIONS" becoming
+// "… CONVENTIONS ZZPROBE" — still has the old name as a prefix, so it drifts
+// silently and every by-name citation of the old spelling goes stale
+// unnoticed. Growing a qualifier is the commonest way an entry in this
+// repository is renamed, which makes it exactly the case worth catching
+// (task 10 review, LOW-1).
+//
+// HasPrefix cannot simply become equality, because a register entry
+// continues from its name straight into prose. What ends a name instead is
+// one of the four terminators BOTH registers use — a colon, a full stop, a
+// bracketed file citation, or a spaced em-dash — and a name followed by a
+// space and another word is therefore a rename, not a match.
+func registerEntryOpensWith(entry, name string) bool {
+	rest, ok := strings.CutPrefix(entry, name)
+	if !ok {
+		return false
+	}
+	if rest == "" {
+		return true
+	}
+	for _, terminator := range []string{":", ".", " — ", " ("} {
+		if strings.HasPrefix(rest, terminator) {
+			return true
+		}
+	}
+	return false
+}
+
 // isNumberedEntry reports whether a comment line opens a Go doc-comment
 // numbered list item, i.e. "  1. " — two spaces, digits, a full stop, a
 // space. Written out rather than regexp'd so the shape it accepts is the
 // shape gofmt produces and nothing wider.
+//
+// THE TWO SPACES ARE LOAD-BEARING AND A TEN-ENTRY LIST IS WHERE THAT BITES:
+// gofmt writes "//  10." with the same two-space marker indent as "//  1.",
+// and a hand-written "// 10." parses as neither an entry nor a continuation,
+// so the entry vanishes and its body is glued onto its predecessor. The
+// count assertions below catch that — they did, once — but the cost is a
+// confusing failure, so the shape is stated here rather than left implicit.
 func isNumberedEntry(rest string) bool {
 	body, ok := strings.CutPrefix(rest, "  ")
 	if !ok || body == "" || body[0] < '0' || body[0] > '9' {
@@ -163,7 +214,9 @@ func isNumberedEntry(rest string) bool {
 // The spec requires ONE register carried in two files. Until this package
 // existed, nothing could hold the driver's copy to the dialect's, and the
 // dialect's own test says so in terms ("this slice is the form the driver
-// package mirrors"). A rename in either file now fails here.
+// package mirrors"). A rename in either file now fails here — a rename at
+// the head of the name, and, since registerEntryOpensWith replaced a plain
+// HasPrefix, a name that merely GROWS a qualifier as well.
 func TestSharedRegisterNamesMatchTheDialects(t *testing.T) {
 	section := registerSection(t, filepath.Join("..", "..", "cat", "ft991a", "doc.go"))
 	bullets, numbered := bulletsAndNumbered(section)
@@ -174,7 +227,7 @@ func TestSharedRegisterNamesMatchTheDialects(t *testing.T) {
 		t.Fatalf("core/cat/ft991a's register holds %d entries, this package quotes %d — an entry added to one register and not the other is exactly the drift this test exists to stop; the bullets are %q", len(bullets), len(sharedRegisterEntryNames), bullets)
 	}
 	for i, name := range sharedRegisterEntryNames {
-		if !strings.HasPrefix(bullets[i], name) {
+		if !registerEntryOpensWith(bullets[i], name) {
 			t.Errorf("dialect register entry %d opens %q, this package quotes it %q — the eleven names are mirrored VERBATIM, and every citation of an entry anywhere is by name", i+1, bullets[i], name)
 		}
 	}
@@ -197,7 +250,7 @@ func TestDriverRegisterCarriesBothHalves(t *testing.T) {
 		t.Fatalf("this driver's register cites %d dialect entries, want the %d the dialect declares — the driver carries the same eleven, cited at their dependence sites and never restated; the bullets are %q", len(bullets), len(sharedRegisterEntryNames), bullets)
 	}
 	for i, name := range sharedRegisterEntryNames {
-		if !strings.HasPrefix(bullets[i], name) {
+		if !registerEntryOpensWith(bullets[i], name) {
 			t.Errorf("driver register citation %d opens %q, the dialect names that entry %q", i+1, bullets[i], name)
 		}
 	}
@@ -206,7 +259,7 @@ func TestDriverRegisterCarriesBothHalves(t *testing.T) {
 		t.Fatalf("this driver's register holds %d own entries, want %d (matrix §4b); the entries are %q", len(numbered), len(driverRegisterEntryNames), numbered)
 	}
 	for i, name := range driverRegisterEntryNames {
-		if !strings.HasPrefix(numbered[i], name) {
+		if !registerEntryOpensWith(numbered[i], name) {
 			t.Errorf("driver register entry %d opens %q, this file names it %q — CITE BY NAME, NEVER BY POSITION, so the name is what must not drift", i+1, numbered[i], name)
 		}
 	}
@@ -224,7 +277,7 @@ func TestDriverRegisterCarriesBothHalves(t *testing.T) {
 	for _, want := range []string{
 		"CITE THESE ENTRIES BY NAME, NEVER BY POSITION",
 		"NEITHER REGISTER MAY ABSORB THE OTHER",
-		"EIGHT",
+		"TEN",
 	} {
 		if !strings.Contains(section, want) {
 			t.Errorf("this driver's register no longer says %q", want)

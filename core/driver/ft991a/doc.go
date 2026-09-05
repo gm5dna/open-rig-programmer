@@ -115,9 +115,16 @@
 // and found no disagreement at all. So there is no
 // ErrMTReadRejectedForOccupiedSlot analogue here, and no timeout branch of
 // that family either (spec §Error handling; plan §Plan-vs-spec ruling 5): an
-// MT timeout is a TRANSPORT timeout and is surfaced unwrapped and NOT
-// re-typed. If a future capture ever puts this radio's MT availability in
-// question, the FT-891's MTReadTimeoutError is the shape to add.
+// MT timeout is a TRANSPORT timeout, surfaced as the transport's own error
+// under this path's ordinary slot-naming wrap, and NOT re-typed — errors.Is
+// finds transport.ErrTimeout and errors.As finds no driver type standing
+// between them. THE LOAD-BEARING HALF OF THAT RULING IS "NOT RE-TYPED"
+// (matrix §3.5's clarification of 05/09): the wrap adds the slot the
+// transport cannot know, which every other error on this path also carries,
+// and it is the fleet convention — core/driver/ft891/read.go wraps the same
+// class with the byte-identical format string. If a future capture ever puts
+// this radio's MT availability in question, the FT-891's MTReadTimeoutError
+// is the shape to add.
 //
 // THE MUTEX IS STILL EARNED, and by a different property. transport.Engine
 // serialises each individual exchange, so one MT read needs no lock of its
@@ -242,13 +249,22 @@
 //
 // # The ASSUMED register
 //
-// EIGHT ENTRIES, covering the behaviours this DRIVER encodes that are NOT
+// TEN ENTRIES, covering the behaviours this DRIVER encodes that are NOT
 // FT-991A-manual facts. Each is listed here once, marked ASSUMED at the
 // point of use, and paired with the ONE Stage R or Stage W capture that
 // lifts it. The captures are individual on purpose: one FT-991A session does
 // not retire this register wholesale, it retires the assumptions its own
 // frames actually speak to, and an entry whose capture was not taken stays
 // here afterwards.
+//
+// THAT RULE IS WHY THERE ARE TEN AND NOT EIGHT. Entries 4, 5 and 6 were one
+// bundled "TONE-NUMBER, DCS-CODE AND SCAN-SKIP UNREACHABILITY" until matrix
+// erratum M-E10, whose whole argument is this paragraph applied to itself:
+// the bundle named three lifting experiments, so under one entry to ONE
+// capture it was three entries, and an operator who took the CTCSS-tone
+// capture could retire no part of it. Matrix §4b labels the three 4a, 4b and
+// 4c; they are 4, 5 and 6 here, which is one more reason the rule below is
+// what it is.
 //
 // CITE THESE ENTRIES BY NAME, NEVER BY POSITION. The numbering is for
 // readability; every citation of this register — here, in this package's
@@ -264,7 +280,11 @@
 // nowhere. register_test.go holds the two copies together mechanically,
 // reading the dialect's own doc.go rather than trusting a transcription.
 // ALL ELEVEN are reached by this package, which is a consequence of the
-// register being shared rather than of this radio being better understood:
+// register being shared rather than of this radio being better understood.
+// One of the eleven is reached FORWARD rather than by code standing today —
+// ROW 087 RADIO ID'S EXCLUSION, whose site is the settings descriptor task
+// 12 has yet to write — and it is named here so the count is not read as
+// eleven live dependence sites:
 //
 //   - MTPolicy.TagFill = ' ' — caps.go's TagLen (a width is evidenced, a
 //     fill is not) and read.go, where the answer's tag field is trimmed
@@ -315,11 +335,19 @@
 //     "?;" every Yaesu CAT manual in this repository shows for a rejected
 //     command, and it never says whether an accepted Set answers at all.
 //
+// NO EQUIVALENT "ALL TEN ARE REACHED" CLAIM IS MADE FOR THE TEN BELOW, and
+// CONTROL-LINE POLICY is why: it has no dependence site in this package at
+// all. core/transport.OpenSerial drives RTS and DTR for every model, this
+// driver has no code for either, and the entry is here because the
+// assumption is made ON THIS RADIO'S BEHALF rather than because this package
+// encodes it. Disclosed rather than quietly excused, so that a reader
+// counting citations against entries finds the shortfall accounted for.
+//
 // Correcting a dialect entry is a change in core/cat/ft991a; correcting one
-// of the eight below is a change here.
+// of the ten below is a change here.
 // NEITHER REGISTER MAY ABSORB THE OTHER, even though this milestone shares
 // their content: the eleven are facts about the dialect and the codec, and
-// these eight are facts about this driver's choreography and its capability
+// these ten are facts about this driver's choreography and its capability
 // values.
 //
 //  1. CONTROL-LINE POLICY: that driving RTS and DTR low unconditionally is
@@ -399,37 +427,58 @@
 //     panel will erase it at all. A radio that erases 001 happily drops
 //     this from RequiredSlots.
 //
-//  4. TONE-NUMBER, DCS-CODE AND SCAN-SKIP UNREACHABILITY (caps.go's zero
-//     FieldSupport for spec.FieldCTCSSTone, FieldToneTx, FieldToneRx,
-//     FieldDTCSCode, FieldDTCSPolarity and FieldScanSkip; read.go's
-//     codeplug.Unknown for the tone and the skip flag). WHAT IS STRUCTURAL
-//     AND MANUAL-EVIDENCED: the combined MT record accounts for every one
-//     of its 41 positions and none of them is a tone number, a DCS code or
-//     a skip flag (evidence leg G's position-by-position field map,
-//     testdata/mt-vectors.golden); P9 is documented "00: (Fixed)" on four
-//     blocks (MT 1012, MR 979, MW 1050, IF 797) and "0: (Fixed)" on the
-//     fifth (OI 1130, the mirror printing defect the dialect's doc.go
-//     records); and the tone number and DCS code are CN's, "P2 0: CTCSS
-//     1: DCS" with "000 - 049: Tone Frequency Number" and "000 - 103: DCS
-//     Code Number" (364-374) — LIVE STATE on a different command, which no
-//     frame this codec builds writes together with a memory record. WHAT IS
-//     ASSUMED is the step from that to "these fields are unreachable on
-//     this radio": nothing verifies that some OTHER command in this manual
-//     could not reach a memory channel's tone number or skip flag, and the
-//     FT-710's answer that nothing can is that radio's hardware finding.
-//     THE DCS GAP IS THIS RADIO'S OWN AND IT IS USER-VISIBLE: its P8 can
-//     SAY DCS (the five-state vocabulary, caps.go) and its record cannot
-//     carry the code, so this programme can read and write "this channel
-//     uses DCS encode+decode" while being unable to read, write or even
-//     display WHICH code.
+//  4. TONE-NUMBER UNREACHABILITY: that no CAT command exposes a memory
+//     channel's CTCSS/DCS tone number (caps.go's zero FieldSupport for
+//     spec.FieldCTCSSTone, FieldToneTx and FieldToneRx; read.go's
+//     codeplug.Unknown for the tone). WHAT IS STRUCTURAL AND
+//     MANUAL-EVIDENCED: the combined MT record accounts for every one of
+//     its 41 positions and none of them is a tone number (evidence leg G's
+//     position-by-position field map, testdata/mt-vectors.golden), and P9
+//     is documented "00: (Fixed)" on four blocks (MT 1012, MR 979, MW
+//     1050, IF 797) and "0: (Fixed)" on the fifth (OI 1130, the mirror
+//     printing defect the dialect's doc.go records); the number itself is
+//     CN's, "P2 0: CTCSS 1: DCS" with "000 - 049: Tone Frequency Number"
+//     (364-374) — LIVE STATE on a different command, which no frame this
+//     codec builds writes together with a memory record. WHAT IS ASSUMED
+//     is the step from that to "unreachable on this radio": nothing
+//     verifies that some OTHER command in this manual could reach a memory
+//     channel's stored tone number, and the FT-710's answer that none can
+//     is that radio's hardware finding.
 //     STAGE R LIFTS IT WITH: one channel set to a known CTCSS tone from the
 //     front panel, then read over CAT — if any byte of the answer tracks
 //     the tone number, the entry is refuted and the capability opens; if P9
 //     reads "00" as documented, the entry closes as a confirmed protocol
-//     limit. The same experiment with a DCS CODE set from the front panel,
-//     and again with the front-panel skip flag.
+//     limit.
 //
-//  5. MT "?;" ON A MEMORY OR PMS SLOT MEANS THE SLOT IS EMPTY (read.go).
+//  5. DCS-CODE UNREACHABILITY: that no CAT command exposes a memory
+//     channel's DCS code (caps.go's zero FieldSupport for
+//     spec.FieldDTCSCode). IT IS A SEPARATE ENTRY FROM TONE-NUMBER
+//     UNREACHABILITY BECAUSE ITS CAPTURE IS SEPARATE (matrix erratum
+//     M-E10): a tone-number byte turning up says nothing about the DCS
+//     code, so one capture cannot retire both, and this register's own rule
+//     is one entry to ONE capture. The 41-position count is the structural
+//     half here too, and the code is CN's, "000 - 103: DCS Code Number"
+//     (364-374). THE DCS GAP IS THIS RADIO'S OWN AND IT IS USER-VISIBLE:
+//     its P8 can SAY DCS (the five-state vocabulary, caps.go) and its
+//     record cannot carry the code, so this programme can read and write
+//     "this channel uses DCS encode+decode" while being unable to read,
+//     write or even display WHICH code.
+//     STAGE R LIFTS IT WITH: the TONE-NUMBER UNREACHABILITY experiment
+//     repeated with a DCS CODE set from the front panel.
+//
+//  6. SCAN-SKIP UNREACHABILITY: that no CAT command exposes a memory
+//     channel's front-panel skip flag (caps.go's zero FieldSupport for
+//     spec.FieldScanSkip; read.go's codeplug.Unknown for the skip flag).
+//     SEPARATE FROM THE OTHER TWO UNREACHABILITY ENTRIES ON THE SAME
+//     REASONING (matrix erratum M-E10): neither a tone number nor a DCS
+//     code turning up says anything about the skip flag. No skip position
+//     exists anywhere in the 41-byte MT record or the 28-byte MR/MW block,
+//     which is the structural half; WHAT IS ASSUMED is that no other
+//     command reaches one either.
+//     STAGE R LIFTS IT WITH: the same experiment again with the
+//     front-panel skip flag set.
+//
+//  7. MT "?;" ON A MEMORY OR PMS SLOT MEANS THE SLOT IS EMPTY (read.go).
 //     "?;" is the protocol's SINGLE unattributed NAK (core/cat/errors.go:
 //     "returned for unknown commands, bad parameters, wrong radio state, an
 //     empty memory slot, and anything else that goes wrong — the wire
@@ -441,14 +490,15 @@
 //     whole benefit of having no discovery walk and no cross-check: it
 //     never sends any other frame that could draw a "?;" from a slot, where
 //     the FT-891 has four such readings. A TIMEOUT IS DELIBERATELY NOT
-//     INTERPRETED — read.go surfaces the transport's own error unwrapped,
-//     with no retry and no re-typing, so silence is never read as
-//     emptiness.
+//     INTERPRETED — read.go surfaces the transport's own error under this
+//     path's ordinary slot-naming wrap and NOT re-typed (errors.Is finds
+//     transport.ErrTimeout, errors.As finds no driver type between them),
+//     with no retry, so silence is never read as emptiness.
 //     STAGE R LIFTS IT WITH: one MT read of a memory channel known-empty
 //     from the front panel, and one of a known-populated channel, in the
 //     same session.
 //
-//  6. THE MODE NIBBLE'S DOMAIN: that '1'-'9' and 'A'-'E' is the whole set
+//  8. THE MODE NIBBLE'S DOMAIN: that '1'-'9' and 'A'-'E' is the whole set
 //     this radio ever puts in P6, with NO HOLE and NO 'F'. All five mode
 //     legends print exactly those fourteen (MR 973-975, MT 1006-1008, MW
 //     1044-1046, IF 789-791, OI 1124-1126), and the dialect transcribes
@@ -468,7 +518,7 @@
 //     selectable mode. Any nibble outside the fourteen refutes the entry
 //     and the parse must widen.
 //
-//  7. THE PRINTED-FIXED BYTES ARE ANSWERED AS PRINTED: that P9 really is
+//  9. THE PRINTED-FIXED BYTES ARE ANSWERED AS PRINTED: that P9 really is
 //     "00" and P11 really is '0' in every MR and MT answer, so core/cat's
 //     strict parse never refuses a real answer. Both are printed constants
 //     in this manual (P9 at MT 1012 and its siblings; P11 at MT 1015), and
@@ -484,10 +534,12 @@
 //     single non-conforming byte converts the parse posture from strict to
 //     tolerant and is a finding, not a tweak.
 //
-//  8. A DCS-STATE CHANNEL'S CODE SURVIVES A REWRITE: that writing a memory
+//  10. A DCS-STATE CHANNEL'S CODE SURVIVES A REWRITE: that writing a memory
 //     whose P8 is '3' or '4', with no CN code sent, leaves the radio's
 //     stored code for that channel unchanged. This is the hazard of
-//     shipping a state whose code is unreachable (entry 4): the frame
+//     shipping a state whose code is unreachable (DCS-CODE
+//     UNREACHABILITY, cited by name because the numbering moved when
+//     M-E10 split that entry out of a bundle): the frame
 //     carries no code, so this driver cannot write one, and what the radio
 //     does with the code it already holds is observable only on hardware.
 //     It is a DIFFERENT question from the dialect register's THE DCS
