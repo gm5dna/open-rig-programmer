@@ -868,6 +868,100 @@ var ts590sgProfile = Profile{
 	},
 }
 
+// ts480Profile carries the TS-480's menu-chart transcription facts. It is the
+// registry's first entry that does NOT render into core/cat: its inventory is
+// emitted into core/kw/ts480, so its types are qualified by the "kw" alias and
+// its width ceiling is that family's own, not this package's.
+//
+// Evidence, all from the TS-480 PC control command reference of 27/11/2003
+// (see core/kw/ts480/menu480.csv's own provenance header, which records the
+// chart's printed quirks): the chart prints a single three-digit Menu No. over
+// the declared domain 000 ~ 060, no group columns of any kind, and a P5 GRID
+// headed 0..9 and "Over" rather than a parameter-description column. Reading
+// that grid, the Digits column runs 1..2 — 2 on exactly eight rows, 032, 034,
+// 035 and the five PF-key rows 048-052, each of which either prints
+// "(2-digit)" or carries a range its codes 0-9 cannot reach.
+//
+// Addresses is AddressSingle, the form this family is why extable has: the
+// printed menu number IS the whole address, so ParseCSV requires p2 AND p3 to
+// be 0 on every row.
+//
+// TextRowPolicy is TextRowsAbsent and TextWidth 0, which under that policy is
+// the only value Validate admits. The five PF-key rows are the near miss and
+// are deliberately not text: their shared cell prints "00 ~ 99 (2-digit)",
+// which is a numeric code range, and Text marks the chart's free-text row —
+// the one a transcriber must stop at — not any row whose values happen to be
+// looked up elsewhere.
+//
+// Deliberately NOT given a named accessor, for the reason the ftdx10, ftdx101
+// and ft891 profiles are not: its only consumers reach it through
+// Lookup/RegisteredProfiles, and core/kw/ts480's staleness test selects it by
+// the (Package, VarName) pair rather than by a hardcoded lookup name.
+var ts480Profile = Profile{
+	Model:       "TS-480",
+	Package:     "ts480",
+	Types:       TypesImported,
+	ImportPath:  "github.com/gm5dna/open-rig-programmer/core/kw",
+	ImportAlias: "kw",
+	VarName:     "exItems480",
+	OutFile:     "exinventory_gen.go",
+	ManualCSV:   "menu480.csv",
+
+	// The TS-480's chart, said out loud: one three-digit Menu No. that is
+	// the whole address (every row's p2 and p3 are 0), no group labels in
+	// either column, and no free-text row.
+	Addresses:     AddressSingle,
+	LabelPolicy:   LabelsAbsent,
+	TextRowPolicy: TextRowsAbsent,
+
+	// core/kw's ceiling, NOT this package's MaxDigitsCeiling — this profile
+	// renders into core/kw, so the bound and the frames it bounds belong to
+	// the same package, which is the whole reason DigitsCeiling is a
+	// per-profile field. The value is core/kw.MaxEXDigits, and it is
+	// transcribed as a literal because internal/extable is build-time
+	// tooling that renders that package's source text and may not import
+	// the package it generates into. core/kw/exdigits_ceiling_test.go pins
+	// every profile whose ImportPath is core/kw to the constant, so the two
+	// cannot drift; the number differs from MaxDigitsCeiling (247) by
+	// exactly one byte, which is what would make a copy-paste invisible.
+	DigitsCeiling: 246,
+	MinDigits:     1,
+	MaxDigits:     2,
+	TextWidth:     0,
+	// MaxObservedWidth is an INERT API-REQUIRED SENTINEL here, exactly as on
+	// the ftdx10, ftdx101 and ft891 profiles: ObservationsAbsent means no
+	// observation CSV is ever parsed and this bound is never consulted. It
+	// carries NO hardware claim about the TS-480 — no Kenwood radio has ever
+	// been asked anything by this project, which is A19's whole point — and
+	// must not be read as one; the moment observations do exist it is
+	// re-derived from them rather than kept. It is spelt 12 because that is
+	// what the other three absent profiles spell, and 12 is six times this
+	// chart's widest printed field, so it can only be read as a sentinel.
+	MaxObservedWidth: 12,
+	// ExpectedRows is A26's number for this radio, and it comes from the
+	// boundary ledger derived from the rendered PDF before any transcription
+	// existed — NOT from transcriptions A and B agreeing with each other. If
+	// they agree on a number that is not this one, the answer is arbitration
+	// against the PDF, never an edit here. The printed domain 000 ~ 060 is
+	// arithmetically 61 addresses and the ledger says 61; A26 records that
+	// where the two ever disagree, the ledger wins.
+	ExpectedRows: 61,
+
+	Observations: ObservationsAbsent,
+	DocLines: []string{
+		"exItems480 is the TS-480's EX menu inventory, sorted by (P1,P2,P3),",
+		"built from ONE source: the manual transcription in menu480.csv (the",
+		"TS-480 PC control command reference of 27/11/2003, whose EX parameter",
+		"chart the book leaves untitled). The TS-480's EX address is a SINGLE",
+		"component: the chart's three-digit Menu No. is P1, every item's P2 and",
+		"P3 are 0, and the chart prints no group labels, so every P1Label and",
+		"P2Label is \"\". There are no hardware READ observations to join — no",
+		"TS-480 has ever been asked anything — so every item carries the absence",
+		"sentinels ObservedReadWidth 0 and ObservedReadShape \"\". Regenerate with",
+		"`go generate ./core/kw/ts480`; do not edit by hand.",
+	},
+}
+
 // registry maps a lookup name to its profile. It is validated at init, so an
 // inconsistent profile panics the build tooling rather than emitting a wrong
 // inventory.
@@ -876,6 +970,7 @@ var registry = mustRegistry(map[string]Profile{
 	"ft891":   ft891Profile,
 	"ftdx10":  ftdx10Profile,
 	"ftdx101": ftdx101Profile,
+	"ts480":   ts480Profile,
 	"ts590s":  ts590sProfile,
 	"ts590sg": ts590sgProfile,
 })
