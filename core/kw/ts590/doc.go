@@ -66,12 +66,13 @@
 //
 // THE CODEC'S SLOT DOMAIN AND THE DRIVER'S PUBLISHED BANKS ARE TWO
 // DIFFERENT QUESTIONS. The SG layout DECLARES 110-119 because the book
-// prints them and a front-panel recall of E00 must parse rather than be
-// refused (A12); Stuart ruled on 05/09/2026 (decision row 6) that the same
-// ten slots are OMITTED from the driver's published Banks until A11 lifts,
-// because what an extension channel IS is never explained anywhere in the
-// book. The codec admits what the book prints; the driver publishes what is
-// confirmed.
+// prints them (590:1346-1347, documented fact) and a front-panel recall of
+// E00 must parse rather than be refused; A12 is the S's UN-stated ceiling,
+// not this declaration. Stuart ruled on 05/09/2026 (decision row 6) that
+// the same ten slots are OMITTED from the driver's published Banks until
+// A11 lifts, because what an extension channel IS is never explained
+// anywhere in the book. The codec admits what the book prints; the driver
+// publishes what is confirmed.
 //
 // # This package's share of the errata schedule
 //

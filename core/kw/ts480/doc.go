@@ -101,8 +101,9 @@
 //	E14  Nineteen rows read exactly "Always 0 for the TS-480"; one more
 //	     drops the article (480:292). With the "Always 00", "Always 000"
 //	     and "Always 000000000" variants the hard-wired family is 26
-//	     printed rows — of which sixteen bytes fall inside the memory grid
-//	     and are this layout's printed-fixed set.
+//	     printed rows — of which six rows fall inside the memory grid,
+//	     sixteen bytes in all, and those bytes are this layout's
+//	     printed-fixed set.
 //	E15  No revision number, no part code, no firmware statement anywhere,
 //	     an explicit no-support disclaimer, and TY P1 "Reserved" (480:8-9,
 //	     480:12-15, 480:1623): this radio has no CAT-readable firmware
@@ -120,10 +121,10 @@
 //	     32, 35 and 48 ~ 52 use 2-digit parameters" (480:411) — and OMITS
 //	     menu 034, "CW RX pitch/ TX sidetone frequency", whose printed grid
 //	     runs 400/450/…/850 under codes 0 ~ 9 and continues into the "Over"
-//	     column (480:483-486). THE CHART AND THE BLOCK DISAGREE, and it is
+//	     column (480:483-485). THE CHART AND THE BLOCK DISAGREE, and it is
 //	     the one printed defect this package's three-legged menu
-//	     cross-check cannot find: all three legs read the CHART, all three
-//	     read 034 as two digits, and three faithful readings of one
+//	     cross-check cannot find: both transcription legs read 034 as two
+//	     digits, and so does the chart, and three faithful readings of one
 //	     incomplete sentence agree perfectly.
 //	     crosscheck_test.go's TestCrossCheck_TheMenu034Erratum pins BOTH
 //	     sets — the chart's and the sentence's — so that neither

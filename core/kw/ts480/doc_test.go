@@ -38,7 +38,7 @@ func TestDoc_CarriesTheMenu034Erratum(t *testing.T) {
 		"menu 034",
 		// The citations: the block's sentence and the chart's own row.
 		"480:411",
-		"480:483-486",
+		"480:483-485",
 		// And the cross-reference, which is what this test exists for.
 		"TestCrossCheck_TheMenu034Erratum",
 	} {

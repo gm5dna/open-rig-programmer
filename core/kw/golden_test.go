@@ -1578,9 +1578,9 @@ var perCommandReplays = map[string]replay{
 	"ai480_read":    builtBy("BuildAIRead", func(t *testing.T, l Layout) (Command, error) { return l.BuildAIRead() }),
 	// F9: this book's legend is 0/1/2/3 where the 590 book's is 0/2/4, so
 	// the refused list is per file and one builder could not serve both.
-	"ai480_set_old_format_only":         refusedBecause("\"1: the old AI format only\" — this book's own note says the transceiver then sends an IF frame every 1.5 seconds (480:194-195)"),
-	"ai480_set_extended_format_only":    refusedBecause("\"2: the extended AI format only\", an ON state (finding F9: this book's legend is 0/1/2/3 where the 590 book's is 0/2/4)"),
-	"ai480_set_both_formats":            refusedBecause("\"3: both formats\", the loudest ON state this book prints"),
+	"ai480_set_old_format_only":         refusedBecause("1: the old AI format only — this book's own note says the transceiver then sends an IF frame every 1.5 seconds (480:194-195)"),
+	"ai480_set_extended_format_only":    refusedBecause("2: the extended AI format only, an ON state (finding F9: this book's legend is 0/1/2/3 where the 590 book's is 0/2/4)"),
+	"ai480_set_both_formats":            refusedBecause("3: both formats, the loudest ON state this book prints"),
 	"ai480_answer_off":                  aiDisclosedCoincidence(),
 	"ai480_answer_old_format_only":      refusedBecause("an AI ANSWER reporting a state this codec never sets"),
 	"ai480_answer_extended_format_only": refusedBecause("the same, for the extended format"),

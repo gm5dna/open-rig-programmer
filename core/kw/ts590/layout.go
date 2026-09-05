@@ -67,14 +67,16 @@ var layoutSG = kw.MustNewLayout(rowConfig("TS-590SG",
 	//
 	// THE CODEC'S SLOT DOMAIN AND THE DRIVER'S PUBLISHED BANKS ARE TWO
 	// DIFFERENT QUESTIONS, AND THIS IS THE DOMAIN. The book prints
-	// 110-119, so a front-panel recall of E00 produces "MC115;" and an
-	// "MR0115;" answer that this codec must parse rather than refuse — that
-	// is A12's half of the reasoning, and it is why the range is declared
-	// here. What an extension channel IS is never explained anywhere in the
-	// book (A11), so Stuart ruled on 05/09/2026 (decision row 6) that the
-	// ten slots are OMITTED from the DRIVER'S published Banks until A11
-	// lifts. Both halves hold at once: the codec admits what the book
-	// prints, and the driver publishes what is confirmed.
+	// 110-119 for this row — DOCUMENTED FACT (590:1346-1347), not A12,
+	// which is the OTHER row's UN-stated ceiling, not this row's stated
+	// one — so a front-panel recall of E00 produces "MC115;" and an
+	// "MR0115;" answer that this codec must parse rather than refuse, and
+	// the range is declared here. What an extension channel IS is never
+	// explained anywhere in the book (A11), so Stuart ruled on 05/09/2026
+	// (decision row 6) that the ten slots are OMITTED from the DRIVER'S
+	// published Banks until A11 lifts. Both halves hold at once: the codec
+	// admits what the book prints, and the driver publishes what is
+	// confirmed.
 	[]kw.SlotRange{
 		{Class: kw.SlotMemory, Lo: 0, Hi: 99},
 		{Class: kw.SlotScan, Lo: 100, Hi: 109},

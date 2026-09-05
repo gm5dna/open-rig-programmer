@@ -335,7 +335,7 @@ func checkNameByte(b byte) error {
 // A24 IS THE 480'S ESCAPE HATCH AND ONLY THE 480'S. That book carries a
 // general permission the 590 book does not: digits for a parameter "not
 // applicable to this transceiver" may be filled with any character except
-// the control codes and ';' (480:108-110). It governs the SET side, so a
+// the control codes and ';' (480:108-111). It governs the SET side, so a
 // TS-480 answering a hard-wired byte with something else would not
 // necessarily be faulty. Strictness on the answer side is this programme's
 // choice, and A24's lift L-HW-18 is a dozen real reads OF THAT RADIO: a

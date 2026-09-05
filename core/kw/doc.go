@@ -211,12 +211,12 @@
 //	           two characters — "Menu No. 32, 35 and 48 ~ 52 use 2-digit
 //	           parameters" (480:411) — and OMITS menu 034, whose printed
 //	           grid runs 400/450/…/850 under codes 0 ~ 9 and continues into
-//	           the "Over" column (480:483-486). The chart and the block
+//	           the "Over" column (480:483-485). The chart and the block
 //	           disagree, and the chart is the wider of the two. It is the
 //	           one printed defect the three-legged menu cross-check cannot
-//	           find: all three legs read the CHART, all three read 034 as
-//	           two digits, and three faithful readings of one incomplete
-//	           sentence agree perfectly.
+//	           find: both transcription legs read 034 as two digits, and so
+//	           does the chart, and three faithful readings of one
+//	           incomplete sentence agree perfectly.
 //	           core/kw/ts480/crosscheck_test.go's
 //	           TestCrossCheck_TheMenu034Erratum pins BOTH sets — the
 //	           chart's and the sentence's — so that neither silently
@@ -309,7 +309,7 @@
 //	     rule and this design says nothing about what either radio would do
 //	     with one. The 590SG prints only "';' cannot be used" (590:1577);
 //	     the 480 prints nothing on P16 but forbids 00-1Fh and ';' generally
-//	     (480:108-110, 480:127-129), which does not exclude 0x7F or above.
+//	     (480:108-111, 480:127-129), which does not exclude 0x7F or above.
 //	     LIFT L-HW-7, observing MW then MR, ONCE PER REGISTRY ROW — on a
 //	     TS-590S, on a TS-590SG and again on a TS-480: P16 carrying 0x20,
 //	     0x7E and 0x7F in turn, read back, recording which are stored,
@@ -572,7 +572,7 @@
 //	     sweep of one row enables that row only.
 //
 //	A24  On the TS-480, a printed-fixed byte is REQUIRED ON PARSE, not
-//	     merely emitted on build. 480:108-110 says digits for a parameter
+//	     merely emitted on build. 480:108-111 says digits for a parameter
 //	     "not applicable to this transceiver" may be filled with any
 //	     character except the control codes and ';' — that governs the SET
 //	     side, but it means a radio answering a hard-wired byte with
