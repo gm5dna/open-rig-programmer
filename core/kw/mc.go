@@ -58,7 +58,7 @@ const mcReadFrame = "MC;"
 // knows, not to double as a scheduler — and because a gate admitting a frame
 // no builder can produce is a gate nothing pins.
 func (l Layout) BuildMCRead() (Command, error) {
-	return l.buildFixedRead("MC read", mcReadFrame, MCReadLen)
+	return l.buildFixedFrame("MC read", mcReadFrame, MCReadLen)
 }
 
 // BuildMCSet builds the memory-channel RECALL for s: "M C P1 P2 P2 ;"

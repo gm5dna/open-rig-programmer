@@ -80,7 +80,7 @@ const (
 // the zero-layout refusal reachable — a package function would emit "ID;" on
 // behalf of no radio at all.
 func (l Layout) BuildIDRead() (Command, error) {
-	return l.buildFixedRead("ID read", idReadFrame, IDReadLen)
+	return l.buildFixedFrame("ID read", idReadFrame, IDReadLen)
 }
 
 // BuildFVRead builds the firmware-version read, "FV;" (590:1034).
@@ -94,7 +94,7 @@ func (l Layout) BuildFVRead() (Command, error) {
 	if err := l.requireBook("FV read", Book590); err != nil {
 		return Command{}, err
 	}
-	return l.buildFixedRead("FV read", fvReadFrame, FVReadLen)
+	return l.buildFixedFrame("FV read", fvReadFrame, FVReadLen)
 }
 
 // BuildTYRead builds the microprocessor firmware-type read, "TY;"
@@ -108,17 +108,18 @@ func (l Layout) BuildTYRead() (Command, error) {
 	if err := l.requireBook("TY read", Book480); err != nil {
 		return Command{}, err
 	}
-	return l.buildFixedRead("TY read", tyReadFrame, TYReadLen)
+	return l.buildFixedFrame("TY read", tyReadFrame, TYReadLen)
 }
 
-// buildFixedRead is the one constructor for a read whose bytes are wholly
-// printed — a frame with no parameter field at all.
+// buildFixedFrame is the one constructor for a frame whose bytes are wholly
+// printed — a frame with no parameter field a caller can vary at all. Every
+// read in this codec is one, and so is the single AI Set it builds.
 //
 // The width assertion is not defensive clutter: it is the same discipline
 // BuildMRRead and BuildMWSet apply to their own output, so that a literal
 // edited without its length constant, or the reverse, fails here rather than
 // on a radio.
-func (l Layout) buildFixedRead(what, frame string, wantLen int) (Command, error) {
+func (l Layout) buildFixedFrame(what, frame string, wantLen int) (Command, error) {
 	if !l.Configured() {
 		return Command{}, newParseError(nil, "%s: this layout is unconfigured and describes no radio", what)
 	}
