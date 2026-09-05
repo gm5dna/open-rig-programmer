@@ -53,21 +53,29 @@ func (d Dialect) exAnswerMaxLen() int {
 // such addresses to a real radio and both were rejected with "?;", which
 // supports that reading without surveying the whole P1=05 space.
 //
-// THE NON-MEMBER REFUSAL REPORTS THE WIRE RENDER under EXAddressTriple, so
-// that core/cat/testdata/frame-corpus.golden line 357 — which pins this
-// refusal's input bytes verbatim ("000000") — stays byte-identical, per
-// the milestone's standing claim that no existing golden moves through
-// Stage 0. Under EXAddressPair the wire render drops P3 (EXWire renders
-// only P1 and P2 for that form), so a Pair non-member refusal reports the
-// debug String() form instead — the only rendering that names all three
-// components. TestBuildEXRead_UsesThisDialectsWidth pins both sides: the
-// Triple refusal's reported input unchanged, the Pair refusal's naming all
-// three components.
+// THE NON-MEMBER REFUSAL REPORTS THE WIRE RENDER ONLY UNDER EXAddressTriple,
+// where the six-digit field carries all three components. Reporting it there
+// keeps core/cat/testdata/frame-corpus.golden line 357 — which pins this
+// refusal's input bytes verbatim ("000000") — byte-identical, per the
+// milestone's standing claim that no existing golden moves through Stage 0.
+//
+// EVERY LOSSY FORM REPORTS THE DEBUG String() FORM INSTEAD, which is the
+// only rendering that names all three components: EXWire drops P3 under
+// EXAddressPair and drops both P2 and P3 under EXAddressSingle. The Single
+// form's loss is the sharper one, because a three-digit render of a
+// non-member can BE a member's wire — under an inventory holding 001, the
+// address (01,03,07) reported `input="001"` and named the very item it had
+// just refused (Codex third seat, LOW C-L1). The test that meant to cover
+// this asserted only that an error existed. The condition is now the
+// form's lossiness rather than a named form, so a fourth form added later
+// is safe by default. TestBuildEXRead_UsesThisDialectsWidth pins the
+// Triple and Pair frames; TestBuildEXRead_SingleIsSixBytesAndGateAdmissible
+// pins the Single one.
 func (d Dialect) BuildEXRead(addr EXAddress) (Command, error) {
 	wire := d.EXWire(addr)
 	if !d.KnownEXAddress(addr) {
 		reported := wire
-		if d.exAddrForm == EXAddressPair {
+		if d.exAddrForm != EXAddressTriple {
 			reported = addr.String()
 		}
 		return Command{}, newParseError([]byte(reported), "EX: address is not a known Table 2 member")

@@ -366,9 +366,22 @@ func TestBuildEXRead_SingleIsSixBytesAndGateAdmissible(t *testing.T) {
 	// And the non-member refusal names all three components through the
 	// debug form, as the Pair one does: a three-digit wire render drops P2
 	// and P3 entirely.
-	nonMember := EXAddress{P1: 8, P2: 3, P3: 7}
-	if _, err := singleDialect.BuildEXRead(nonMember); err == nil {
-		t.Fatal("singleDialect.BuildEXRead accepted (08,03,07), which is not a member of its inventory")
+	//
+	// THE ADDRESS IS CHOSEN SO THAT THE WIRE RENDER IS A MEMBER'S. P1 == 1
+	// is 001, the fixture's first row, so a refusal reporting the wire would
+	// read `input="001"` — a message naming a known member as the thing it
+	// refused, with the two components that caused the refusal nowhere in
+	// it (Codex third seat, LOW C-L1; the comment above claimed all three
+	// were named whilst the assertion below checked only err != nil). The
+	// exact frame is pinned, as the Pair form's is in
+	// TestBuildEXRead_UsesThisDialectsWidth.
+	nonMember := EXAddress{P1: 1, P2: 3, P3: 7}
+	_, err = singleDialect.BuildEXRead(nonMember)
+	if err == nil {
+		t.Fatal("singleDialect.BuildEXRead accepted (01,03,07), which is not a member of its inventory")
+	}
+	if want := `cat: parse error: EX: address is not a known Table 2 member (input="P1=01 P2=03 P3=07")`; err.Error() != want {
+		t.Errorf("singleDialect.BuildEXRead(%v) error = %q, want %q — the Single refusal must name all three components, not the member wire \"001\" its P1 alone renders", nonMember, err.Error(), want)
 	}
 }
 
