@@ -19,7 +19,7 @@ import (
 // the transcript is the only thing that can prove it: an error returned
 // after a frame went out is a different — and much worse — event than the
 // same error returned before one was built.
-func assertNoWireTraffic(t *testing.T, p *mwPort, what string) {
+func assertNoWireTraffic(t *testing.T, p *respondingPort, what string) {
 	t.Helper()
 	if got := p.Transcript(); !reflect.DeepEqual(got, probeFrames) {
 		t.Errorf("%s: transcript = %v, want the probe's three frames and nothing more", what, got)
@@ -111,11 +111,11 @@ func TestWriteChannel_TheCapabilityGateAnswersFirstOnUnconsentedRealHardware(t *
 	cases := []struct {
 		name string
 		row  Row
-		img  writeImage
+		img  radioImage
 	}{
-		{modelNameFor(RowS), RowS, writeImage{}},
-		{modelNameFor(RowSG), RowSG, writeImage{}},
-		{modelNameFor(RowS) + " at FV2.00, still unconsented", RowS, writeImage{radioImage: radioImage{fvAnswer: "FV2.00;"}}},
+		{modelNameFor(RowS), RowS, radioImage{}},
+		{modelNameFor(RowSG), RowSG, radioImage{}},
+		{modelNameFor(RowS) + " at FV2.00, still unconsented", RowS, radioImage{fvAnswer: "FV2.00;"}},
 	}
 	for _, tc := range cases {
 		sess, p := openWriteSession(t, tc.row, RealHardware, tc.img)
@@ -147,7 +147,7 @@ func TestWriteChannel_TheCapabilityGateAnswersFirstOnUnconsentedRealHardware(t *
 func TestWriteChannel_ConsentIsTheRouteThroughTheCapabilityGate(t *testing.T) {
 	for _, row := range bothRows {
 		what := modelNameFor(row)
-		sess, p := openWriteSession(t, row, RealHardware, writeImage{}, WithConsentedUnverifiedWrites())
+		sess, p := openWriteSession(t, row, RealHardware, radioImage{}, WithConsentedUnverifiedWrites())
 		res, err := sess.WriteChannel(context.Background(), writableChannel(row, "042"))
 		if err != nil {
 			t.Fatalf("%s: a consented write was refused: %v", what, err)
@@ -182,7 +182,7 @@ func TestWriteChannel_ConsentIsTheRouteThroughTheCapabilityGate(t *testing.T) {
 func TestWriteChannel_A9RefusesAChannelWithNoKnownTXDisposition(t *testing.T) {
 	for _, row := range bothRows {
 		what := modelNameFor(row)
-		sess, p := openWriteSession(t, row, Simulated, writeImage{})
+		sess, p := openWriteSession(t, row, Simulated, radioImage{})
 		ch := writableChannel(row, "042")
 		ch.Data.TxFreqHz = codeplug.FreqField{State: codeplug.Unavailable}
 		_, err := sess.WriteChannel(context.Background(), ch)
@@ -194,7 +194,7 @@ func TestWriteChannel_A9RefusesAChannelWithNoKnownTXDisposition(t *testing.T) {
 		assertNoWireTraffic(t, p, what)
 
 		// The control: the same channel with a Known TX disposition.
-		ctrl, cp := openWriteSession(t, row, Simulated, writeImage{})
+		ctrl, cp := openWriteSession(t, row, Simulated, radioImage{})
 		if _, err := ctrl.WriteChannel(context.Background(), writableChannel(row, "042")); err != nil {
 			t.Fatalf("%s: A9's positive control was refused: %v", what, err)
 		}
@@ -222,7 +222,7 @@ func TestWriteChannel_A9DoesNotGateTheSCANBank(t *testing.T) {
 	for _, row := range bothRows {
 		for _, id := range []string{"100L", "100U"} {
 			what := modelNameFor(row) + " " + id
-			sess, p := openWriteSession(t, row, Simulated, writeImage{})
+			sess, p := openWriteSession(t, row, Simulated, radioImage{})
 			ch := writableChannel(row, id)
 			if ch.Data.TxFreqHz.State != codeplug.Unavailable {
 				t.Fatalf("%s: the fixture carries a TX disposition; the pin would be vacuous", what)
@@ -248,9 +248,7 @@ func TestWriteChannel_ASplitReadEditedInItsNameOnlyIsRefused(t *testing.T) {
 	const id = "042"
 	for _, row := range bothRows {
 		what := modelNameFor(row)
-		sess, p := openWriteSession(t, row, Simulated, writeImage{
-			radioImage: radioImage{mrAnswers: map[string]string{mrAddr(id): populatedMR(id)}},
-		})
+		sess, p := openWriteSession(t, row, Simulated, radioImage{mrAnswers: map[string]string{mrAddr(id): populatedMR(id)}})
 		ch, err := sess.ReadChannel(context.Background(), id)
 		if err != nil {
 			t.Fatalf("%s: ReadChannel: %v", what, err)
@@ -280,7 +278,7 @@ func TestWriteChannel_ASplitReadEditedInItsNameOnlyIsRefused(t *testing.T) {
 func TestWriteChannel_ASplitTheOneFrameCannotExpressIsRefused(t *testing.T) {
 	for _, row := range bothRows {
 		what := modelNameFor(row)
-		sess, p := openWriteSession(t, row, Simulated, writeImage{})
+		sess, p := openWriteSession(t, row, Simulated, radioImage{})
 		ch := writableChannel(row, "042")
 		ch.Data.TxFreqHz = codeplug.FreqField{State: codeplug.Known, Value: ch.Data.FreqHz + 600_000}
 		_, err := sess.WriteChannel(context.Background(), ch)
@@ -313,7 +311,7 @@ func TestWriteChannel_A23RefusesANonFMWrite(t *testing.T) {
 		// ONE session for all seven refusals, and the transcript assertion
 		// is stronger for it: seven refused writes in a row leave the port
 		// carrying nothing but the probe.
-		sess, p := openWriteSession(t, row, Simulated, writeImage{})
+		sess, p := openWriteSession(t, row, Simulated, radioImage{})
 		for _, mode := range []string{"LSB", "USB", "CW", "CW-R", "AM", "FSK", "FSK-R"} {
 			what := modelNameFor(row) + " " + mode
 			ch := writableChannel(row, "042")
@@ -329,7 +327,7 @@ func TestWriteChannel_A23RefusesANonFMWrite(t *testing.T) {
 		// The control, BOTH FM names, on the same profile and to the wire.
 		for _, mode := range []string{"FM", "FM-N"} {
 			what := modelNameFor(row) + " " + mode
-			sess, p := openWriteSession(t, row, Simulated, writeImage{})
+			sess, p := openWriteSession(t, row, Simulated, radioImage{})
 			ch := writableChannel(row, "042")
 			ch.Data.Mode = mode
 			if _, err := sess.WriteChannel(context.Background(), ch); err != nil {
@@ -361,7 +359,7 @@ func TestWriteChannel_A23RefusesANonFMWrite(t *testing.T) {
 // interesting statement that a mode this radio DOES have cannot be written
 // because one byte beside it has no printed meaning there.
 func TestWriteChannel_AModeThisRowDoesNotPublishIsNotA23(t *testing.T) {
-	sess, p := openWriteSession(t, RowSG, Simulated, writeImage{})
+	sess, p := openWriteSession(t, RowSG, Simulated, radioImage{})
 	ch := writableChannel(RowSG, "042")
 	ch.Data.Mode = "C4FM"
 	_, err := sess.WriteChannel(context.Background(), ch)
@@ -409,7 +407,7 @@ func TestWriteChannel_A13A14RefusesChannelWritesOnAnSWhoseFVIsHighOrUnreadable(t
 		{"SG at 2.00 refuses nothing", RowSG, "FV2.00;", false, ""},
 		{"SG with an unreadable FV refuses nothing", RowSG, "FVWXYZ;", false, ""},
 	} {
-		sess, p := openWriteSession(t, tc.row, Simulated, writeImage{radioImage: radioImage{fvAnswer: tc.fv}})
+		sess, p := openWriteSession(t, tc.row, Simulated, radioImage{fvAnswer: tc.fv})
 		_, err := sess.WriteChannel(context.Background(), writableChannel(tc.row, "042"))
 		if !tc.refused {
 			if err != nil {
@@ -446,7 +444,7 @@ func TestWriteChannel_Decision14RefusesAKnown1750HzToneRx(t *testing.T) {
 	}
 	for _, row := range bothRows {
 		what := modelNameFor(row)
-		sess, p := openWriteSession(t, row, Simulated, writeImage{})
+		sess, p := openWriteSession(t, row, Simulated, radioImage{})
 		ch := writableChannel(row, "042")
 		ch.Data.ToneRx = codeplug.ToneField{State: codeplug.Known, Value: tone1750}
 		_, err := sess.WriteChannel(context.Background(), ch)
@@ -459,7 +457,7 @@ func TestWriteChannel_Decision14RefusesAKnown1750HzToneRx(t *testing.T) {
 
 		// The control, on the same profile and to the wire: 100.0 Hz, which
 		// is index 12 on both charts.
-		ctrl, cp := openWriteSession(t, row, Simulated, writeImage{})
+		ctrl, cp := openWriteSession(t, row, Simulated, radioImage{})
 		ok := writableChannel(row, "042")
 		ok.Data.ToneRx = codeplug.ToneField{State: codeplug.Known, Value: 1000}
 		if _, err := ctrl.WriteChannel(context.Background(), ok); err != nil {
@@ -480,7 +478,7 @@ func TestWriteChannel_Decision14RefusesAKnown1750HzToneRx(t *testing.T) {
 // TN's chart runs 00-42 and 1750 Hz is its last entry (590:2296-2309), so a
 // TRANSMIT tone of 1750 Hz is an ordinary, printed, writable value.
 func TestWriteChannel_A1750HzToneTxIsWritten(t *testing.T) {
-	sess, p := openWriteSession(t, RowSG, Simulated, writeImage{})
+	sess, p := openWriteSession(t, RowSG, Simulated, radioImage{})
 	ch := writableChannel(RowSG, "042")
 	ch.Data.ToneTx = codeplug.ToneField{State: codeplug.Known, Value: 17500}
 	if _, err := sess.WriteChannel(context.Background(), ch); err != nil {
@@ -522,7 +520,7 @@ func TestWriteChannel_TheLadderRefusesBeforeItReachesARow(t *testing.T) {
 			return codeplug.Channel{Slot: "042"}
 		}, driver.ErrWriteRefused},
 	} {
-		sess, p := openWriteSession(t, tc.row, Simulated, writeImage{})
+		sess, p := openWriteSession(t, tc.row, Simulated, radioImage{})
 		_, err := sess.WriteChannel(context.Background(), tc.ch(tc.row))
 		if !errors.Is(err, tc.is) {
 			t.Errorf("%s: err = %v, want %v", tc.name, err, tc.is)
@@ -537,7 +535,7 @@ func TestWriteChannel_TheLadderRefusesBeforeItReachesARow(t *testing.T) {
 // (590:1579-1581, A5, erratum E19), this milestone never builds it
 // (decision 8), and spec.FieldErase is nowhere write-Supported.
 func TestWriteChannel_AnEraseNamesFieldEraseAndTheStandingRule(t *testing.T) {
-	sess, _ := openWriteSession(t, RowSG, Simulated, writeImage{})
+	sess, _ := openWriteSession(t, RowSG, Simulated, radioImage{})
 	_, err := sess.WriteChannel(context.Background(), codeplug.Channel{Slot: "042"})
 	var ref *driver.WriteRefusedError
 	if !errors.As(err, &ref) {
@@ -558,7 +556,7 @@ func TestWriteChannel_AnEraseNamesFieldEraseAndTheStandingRule(t *testing.T) {
 // closing review's C-M1, and MEDIUM-1's sharpening of it — a value with no
 // State recorded at all (codeplug.Absent, the zero) is the same malformation.
 func TestWriteChannel_AnIncoherentFieldIsRefusedNotInterpreted(t *testing.T) {
-	sess, p := openWriteSession(t, RowSG, Simulated, writeImage{})
+	sess, p := openWriteSession(t, RowSG, Simulated, radioImage{})
 	for _, tc := range []struct {
 		name  string
 		edit  func(*codeplug.ChannelData)
@@ -609,7 +607,7 @@ func TestWriteChannel_AnIncoherentFieldIsRefusedNotInterpreted(t *testing.T) {
 // two adjacent capability rungs fired. The SG row below is the control that
 // the same value is not refused where the row publishes it.
 func TestWriteChannel_AFieldTheRowDoesNotPublishIsRefusedPreWireNamingTheField(t *testing.T) {
-	sess, p := openWriteSession(t, RowS, Simulated, writeImage{})
+	sess, p := openWriteSession(t, RowS, Simulated, radioImage{})
 	ch := writableChannel(RowS, "042")
 	ch.Data.Filter = codeplug.StringField{State: codeplug.Known, Value: filterALabel}
 	_, err := sess.WriteChannel(context.Background(), ch)
@@ -627,7 +625,7 @@ func TestWriteChannel_AFieldTheRowDoesNotPublishIsRefusedPreWireNamingTheField(t
 	assertNoWireTraffic(t, p, "a filter write on the S row")
 
 	// The control: the same value on the row that publishes the labels.
-	ctrl, cp := openWriteSession(t, RowSG, Simulated, writeImage{})
+	ctrl, cp := openWriteSession(t, RowSG, Simulated, radioImage{})
 	if _, err := ctrl.WriteChannel(context.Background(), writableChannel(RowSG, "042")); err != nil {
 		t.Fatalf("the SG control was refused: %v", err)
 	}
@@ -642,7 +640,7 @@ func TestWriteChannel_AFieldTheRowDoesNotPublishIsRefusedPreWireNamingTheField(t
 // Icom, or a GUI paste — must be REFUSED rather than have the value silently
 // dropped from a frame that has nowhere to put it.
 func TestWriteChannel_ATierFieldTheRecordCannotExpressIsRefused(t *testing.T) {
-	sess, p := openWriteSession(t, RowSG, Simulated, writeImage{})
+	sess, p := openWriteSession(t, RowSG, Simulated, radioImage{})
 	for _, tc := range []struct {
 		name  string
 		edit  func(*codeplug.ChannelData)
