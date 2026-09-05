@@ -127,6 +127,17 @@
   README.md's Windows paragraph already states, now stated here too so
   a reader who only sees the release page (where the asset choice is
   actually made) gets it as well.
+
+  SYNC 05/09/2026, POST-LEG (Tier 0 P2, Windows packaging): the
+  evidence section's Windows bullet is trued from the ARM64 VM
+  verification session that ran the same day (docs/hardware-notes.md's
+  "Windows (ARM64 VM) session — 05/09/2026") — installed and
+  launch-tested with a real FT-710 attached, the Silicon Labs CP210x
+  driver installed by hand (Windows Update supplied nothing on ARM64),
+  two writes made and the radio restored byte-identical. amd64 stays as
+  the PRE-LEG sentence had it: built and CLI-run in CI only, no amd64
+  Windows machine tried. No other evidence sentence, row of the
+  per-model support table, or model count changed with this sync.
 -->
 
 Open Rig Programmer __VERSION__ — an open-source, cross-platform
@@ -464,9 +475,16 @@ What this release has **not** been exercised against:
   empty slot at all: the record's Select-group setting has no honest
   default to write, so the write path refuses rather than inventing one —
   the same refusal the IC-7300s make, for the same reason.
-- **Windows.** The installers and CLI zips are built by the release
-  pipeline on a Windows x64 host and checked there; no person has yet
-  installed them and no radio has been connected on Windows.
+- **Windows.** Installed and launch-tested on a Windows 11 ARM64 virtual
+  machine with a real FT-710 attached (05/09/2026): Windows Update
+  supplied no CP210x driver on ARM64, so the Silicon Labs CP210x
+  Universal Windows Driver was installed by hand; SmartScreen and
+  WebView2 behaved as documented; two writes were made from the GUI and
+  the CLI and the radio was read back byte-identical to its pre-session
+  state afterwards. **amd64 is built and its CLI run in CI only** — no
+  amd64 Windows machine, physical or virtual, has run this project's
+  code, and no physical Windows machine of either architecture has been
+  tried.
 
 Anything the project has not observed is labelled as such in the code
 and documentation rather than assumed. Reports from real hardware —
