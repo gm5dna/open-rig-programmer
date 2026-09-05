@@ -67,10 +67,23 @@ func TestZeroValue(t *testing.T) {
 // modeNibbles is the FT-991A's mode legend beside the FTdx10's, nibble by
 // nibble, as the two manuals print them.
 //
-// FT991A is transcribed from the FIVE identical FT-991A legends — MR's P6 at
-// ft991a_layout.txt:973-975, MT's at 1006-1008, MW's at 1044-1046, IF's at
-// 789-791 and OI's at 1124-1126 — and FTdx10 from that radio's four
-// (ftdx10_layout.txt:1146-1149, 1192-1194, 1227-1229, 1267-1269).
+// FT991A is transcribed from the FIVE identical FT-991A memory legends —
+// MR's P6 at ft991a_layout.txt:973-975, MT's at 1006-1008, MW's at
+// 1044-1046, IF's at 789-791 and OI's at 1124-1126 — and FTdx10 from that
+// radio's five (ftdx10_layout.txt: IF 999-1001, MR 1192-1194, MT 1227-1229,
+// MW 1267-1269, OI 1349-1352).
+//
+// BOTH SIDES DELIBERATELY LEAVE THE MD LEGEND OUT, because on this radio MD
+// is the rival spelling: ft991a_layout.txt:927-929 prints "3: CW-U" and
+// "7: CW-L" where the five memory legends print "3: CW" and "7: CW-R". The
+// FTdx10's MD P2
+// legend (ftdx10_layout.txt:1146-1149) agrees with that radio's memory five
+// on every nibble, so including it would change nothing here; it is held out
+// so that the comparison is memory-legend against memory-legend, which is
+// the only comparison this package treats as like for like. (The FTdx10's OI
+// printing carries a defect of its own — 1352 reads "E: PSK E: DATA-FM-N",
+// a duplicated key where "F:" belongs — which does not touch the fourteen
+// nibbles compared below.)
 //
 // SEVEN AGREE AND SEVEN DISAGREE over the fourteen nibbles both radios fill,
 // which is the whole reason neither package references the other's table.
