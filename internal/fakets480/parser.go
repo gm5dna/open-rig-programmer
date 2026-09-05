@@ -302,6 +302,12 @@ func parseChannelDigits(bank byte, twoDigits string) (int, bool) {
 		return 0, false
 	}
 	n := int(twoDigits[0]-'0')*10 + int(twoDigits[1]-'0')
+	// THE BOUND CANNOT FIRE ON THIS RADIO, and it is here anyway because a
+	// bound is consulted from the same place as its datum — a standing rule of
+	// this repository. Two digits cannot spell a number outside 00-99, so the
+	// served space and the expressible space coincide; on the 590 pair the
+	// same check is live, because their byte 4 carries a hundreds digit. If
+	// recP3Len ever grew, this line is what would keep the range honest.
 	if n < lowestChannel || n > highestChannel {
 		return 0, false
 	}
