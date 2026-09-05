@@ -3,9 +3,13 @@
 This document records the findings of open-rig-programmer's live
 sessions against physical FT-710 hardware: M5a (read-only
 characterisation, 13/07/2026), M5b (write trials, the same day's
-evening — see "M5b write trials" below) and M8c (menu/EX read
+evening — see "M5b write trials" below), M8c (menu/EX read
 characterisation, 24/07/2026 — see "M8c settings read-characterisation"
-near the end). It is the authoritative source
+near the end) and the Windows (ARM64 VM) session (05/09/2026 — see
+"Windows (ARM64 VM) session — 05/09/2026" near the end): the first time
+this project's code ran against the radio on Windows, and the first
+time through a virtual machine's USB passthrough rather than a port on
+the controller's own host. It is the authoritative source
 the rest of the repository cites (via "HW-CONFIRMED 2026-07-13"
 comments) whenever a design decision changed, or was strengthened, as a
 direct result of these sessions. Every raw transcript this document
@@ -399,6 +403,11 @@ Recorded here, honestly, rather than silently assumed:
   impossible" finding is macOS-only; deferred to M7's pre-release Linux
   hardware session, which as of 26/08/2026 has still not run (see the
   next subsection).
+- **amd64 Windows, Windows 10, and a physical Windows machine** — a
+  real-radio Windows session has since run (05/09/2026, see "Windows
+  (ARM64 VM) session — 05/09/2026" below), but only against a Windows 11
+  ARM64 virtual machine; that section's own "Explicitly not probed"
+  carries the detail.
 
 ### Linux hardware: still pending (annotation added 26/08/2026)
 
@@ -1105,6 +1114,247 @@ passive read leaves unknown, not as a to-do list.
 | Front-panel ground truth | Recorded only — it is the evidence that decoding is correct, and changes no code |
 | 6–7 ms latency | Recorded only; pacing unchanged (ledgered as a knob) |
 | Node-name rotation | Recorded only — see "Port mapping" |
+
+## Windows (ARM64 VM) session — 05/09/2026
+
+The first time this project's code ran against the real FT-710 on
+Windows, and the first time the radio was reached through a virtual
+machine's USB passthrough rather than a port on the controller's own
+host. Everything below is evidence from **one Windows 11 ARM64 VM, one
+radio, one firmware version, one session** — it says nothing about
+amd64 Windows, Windows 10, or a physical Windows machine (see
+"Explicitly not probed" below).
+
+### Session metadata
+
+- **Date**: 5 September 2026.
+- **Radio**: Yaesu FT-710, UK market variant, CAT ID `0800`, firmware
+  V01-12 (front panel) — the same radio as M5a/M5b/M8c.
+- **Host**: macOS orchestrating a UTM virtual machine — Microsoft
+  Windows 11 Pro, `OsVersion 10.0.26100` (build 26100), "ARM 64-bit
+  Processor" / ARM64-based PC, Windows PowerShell 5.1.26100.4202.
+  OpenSSH Server was enabled on the VM for this session so the
+  orchestrator could drive PowerShell over SSH with an ed25519 key.
+- **Radio interface**: the same model of Silicon Labs CP2105 USB
+  adapter as every earlier session (VID:PID `10C4:EA70`), passed
+  through to the VM whole via UTM's USB menu.
+- **Build under test**: `rigprog` and the GUI at `v1.3.0-rc.2` (branch
+  `windows` @ `23d920e`), fetched into the VM over HTTP from the host
+  and verified with `certutil`'s SHA-256 against `SHA256SUMS` before
+  use.
+- **Controller**: PowerShell over SSH for every read/probe/diff step;
+  the GUI trial edit and the restoration write's confirmation prompt
+  were driven by Stuart's own hands, not scripted.
+
+### Safety preamble
+
+Recorded before any CAT frame was sent, the same preamble M5a/M5b/M8c
+used:
+
+- RPTT SELECT was OFF (radio in SSB) — recorded before any port was
+  opened.
+- A full SD-card backup of the radio's configuration was taken.
+- RF output at minimum (5 W). Stuart present, watching the TX
+  indicator, for the entire session, at every open.
+- No other application had the radio's serial ports open.
+
+**No TX key-up occurred at any point in this session.** Stuart
+confirmed the TX indicator stayed OFF through: a host-Mac probe pair
+run earlier the same morning, before passthrough (the macOS half of
+the same check, repeated with this session's build); both VM probes
+of COM3 and COM4;
+the smoke script's full 117-slot read; the GUI connect, read and Send;
+the CLI restoration write; and the final read.
+
+### Port mapping
+
+Windows enumerates the CP2105's two USB interfaces as two separate
+serial devices, exactly as its datasheet describes; unlike macOS, they
+are not distinguished by name at the `rigprog ports` level.
+
+| Port | `rigprog ports` score | Description | `probe` result |
+| --- | --- | --- | --- |
+| COM3 | 50 | "CP2105 Dual USB to UART Bridge Controller" (device-level, VID:PID `10C4:EA70`) | Answers — FT-710, CAT ID `0800`, region `no-60m`, USB serial empty |
+| COM4 | 50 | "CP2105 Dual USB to UART Bridge Controller" (identical string) | Fails to open — `transport: open COM4: Invalid serial port` (exit 1) |
+
+Both ports tie at score 50 with the identical device-level description
+string; `rigprog ports` gives no Enhanced/Standard hint on Windows at
+all. Exactly one port answers `ID;` (COM3, the Enhanced UART); the
+other (COM4, the Standard UART) is unopenable — the same shape macOS
+shows, for a different underlying reason (macOS's Standard node fails
+to *configure*; Windows' Standard port fails to *open*). USB serial
+number came back empty in the `probe` output on Windows too, despite
+the composite parent device's own instance ID carrying the adapter's
+serial (`01600D4F`) — session identity binding still falls back to the
+port path here, as it does on macOS.
+
+**Fleet note.** The Enhanced/Standard *description* rule this
+project's port-ranking heuristic could in principle use — picking the
+CAT-capable port out by its friendly name — has now been observed on
+both platforms this project has real-hardware evidence for, and it
+**fires on neither**. On macOS, re-checked the same day as this
+session, all four CP2105 nodes on the host carried the identical
+generic description "CP2105 Dual USB to UART Bridge Controller" and
+tied at score 53. On Windows, both COM ports carry that same
+device-level string and tie at score 50. In both cases, the
+per-interface friendly name — from the device's own USB interface
+strings before any driver is installed ("Enhanced Com Port"/"Standard
+Com Port"), and from the vendor driver's own friendly names afterwards
+(see "Driver" below) — is visible only in Device Manager and never
+reaches `rigprog ports` at all — the ranking code sees the
+device-level product string, not the interface-level one. **No
+document in this project may claim the Enhanced port ranks first, on
+any platform**; `rigprog probe --port <name>` against each listed port
+remains the only reliable check.
+
+### Driver
+
+Windows 11 on ARM64 has **no in-box CP210x driver**. Immediately after
+passthrough, Device Manager showed both CP2105 interfaces (`…&MI_00`
+"Enhanced Com Port", `…&MI_01` "Standard Com Port") in the
+`CM_PROB_FAILED_INSTALL` error state — no driver bound, no COM ports, an
+empty `SERIALCOMM` map — while the composite USB parent device itself
+enumerated fine under Microsoft's own `usbccgp` driver. Rescanning and
+waiting roughly three minutes did not change this: Windows Update
+supplied no CP210x driver in that window, with no policy blocking
+driver search and the VM's internet connection working.
+
+The fix was Silicon Labs' own "CP210x Universal Windows Driver"
+package, version 11.6.0.420 (`DriverVer 08/14/2026`), fetched from
+silabs.com on the host and served to the VM (zip SHA-256
+`ce40eb9cdb52726e98986e03ed506e17aa5aa771cc0ff3e9c376be399e07f992`).
+Although the package's own release notes list only x64/x86 support, the
+zip in fact ships an `arm64\silabser.sys` and an
+`[SiLabsModelsSection.NTarm64…]` INF section covering
+`VID_10C4&PID_EA70&MI_00`/`MI_01`; `pnputil /add-driver silabser.inf
+/install` installed it on both interfaces (exit 0, "Published Name:
+oem10.inf"). After that, Device Manager showed both interfaces bound
+and OK: "Silicon Labs Dual CP2105 USB to UART Bridge: Enhanced COM Port
+(COM3)" and "… Standard COM Port (COM4)" — the driver's own friendly
+names carry the Enhanced/Standard wording that `rigprog ports` cannot
+see (see the fleet note above).
+
+**Practical consequence for a Windows-on-ARM user**: do not wait for
+Windows Update to find this driver — install the Silicon Labs CP210x
+Universal Windows Driver package by hand. `docs/windows-setup.md` §1 is
+written from this finding.
+
+### Open-time behaviour
+
+As on macOS, no TX key-up was observed at any port open on Windows: the
+two VM probes (COM3 answering, COM4 failing to open), the smoke
+script's full 117-slot read, the GUI's connect/read/Send, the CLI
+restoration write, and the final read all passed with the TX indicator
+OFF throughout, Stuart watching. This is the Windows half of the
+`InitialStatusBits`-low open-time property M5a already established for
+macOS, re-confirmed on the same session day immediately before
+passthrough with this session's own build; it now holds on both
+platforms this project has hardware evidence for.
+
+### GUI and Demo
+
+Before passthrough, the GUI launched from the Windows Start menu with
+the port picker correctly reporting "No ports found" (no radio attached
+yet), status bar "Idle v1.3.0-rc.2", "Saved · 0 validation issues". The
+built-in Demo workflow (Demo connect → read → edit a tag → Send)
+completed end to end on Windows with no radio involved: "Send complete:
+1 written, 1 verified, 0 skipped (blocked), 116 unchanged", writing a
+snapshot and journal under `%AppData%\rigprog\snapshots\` — the Windows
+form of the same `os.UserConfigDir()`-based path this project uses
+everywhere. Microsoft's WebView2 Evergreen runtime (152.0.4191.62) was
+already present on the VM before the installer ran, so the NSIS
+bootstrapper's WebView2-install step had nothing to do.
+
+A full 117-slot read of the real radio over COM3 completed in about 5
+seconds.
+
+### The two writes and restoration
+
+The trial slot was memory M-96, confirmed **populated** in this
+session's own baseline read (7,030,000 Hz, CW-U, no tag) before either
+write — the FT-710 has no CAT erase, so restoring an empty slot would
+have been refused as a blocked erase rather than sent; using a
+populated slot and changing one field (its tag) kept the restoration a
+genuine, sendable write.
+
+1. **Write 1 — GUI (10:15).** Connected to COM3 ("FT-710 · ID 0800 ·
+   COM3 · read 10:15"), read the radio, set M-96's tag to `WINTEST`, and
+   Send: "Send complete: 1 written, 1 verified, 0 skipped (blocked), 116
+   unchanged". This is the first write this project's code has ever
+   made to a real radio from Windows. The GUI was then disconnected.
+2. **Confirm, by CLI, exactly what changed.** With the GUI disconnected,
+   `rigprog.exe diff --port COM3 --model FT-710 baseline.json` against a
+   fresh read reported exactly the trial edit and nothing else:
+   `Modified: M-96: freq 7030000→7030000 Hz, mode CW-U→CW-U, tag
+   "WINTEST"→""`; `Added 0, Modified 1, Erased 0, Blocked 0, Unchanged
+   116`.
+3. **Write 2 — CLI restoration (10:18:58, Stuart, interactive).**
+   `rigprog.exe write --port COM3 --model FT-710 --firmware V01-12
+   baseline.json`, run by Stuart in the VM's own PowerShell so the
+   interactive "Send 1 change(s) to the radio? Type "yes":" confirmation
+   was answered by a human, not a flag — `--yes` was **not** used. The
+   plan, verify-read, write and verify steps all completed: Written 1,
+   Verified 1, SkippedBlocked 0, Unchanged 116.
+4. **Final read (10:21:14).** `rigprog.exe read --port COM3 --out
+   after.json`, exit 0. `after.json` compared **IDENTICAL** to this
+   session's own `baseline.json` after normalising `read_at`, checked
+   independently in the VM (PowerShell) and on the host (`diff` of the
+   files copied off by `scp`), across all 117 slots. **The radio's
+   memory contents were restored byte-for-byte; this session left
+   nothing on the radio.** Three snapshot+journal pairs (Demo send, GUI
+   send, CLI write) remain under `%AppData%\rigprog\snapshots\` —
+   deliberately: a package never deletes user data, and this is the
+   user's own session history, not radio state.
+
+### Uninstall
+
+Uninstalling via Settings → Apps removed exactly what the installer put
+down — `C:\Program Files\Open Rig Programmer\`, the Start-menu and
+Public Desktop shortcuts, and the Programs-and-Features entry — and
+left `%AppData%\rigprog` (all three snapshot+journal pairs) and the
+per-user WebView2 profile folder in place, as designed. No `rigprog`
+process remained running afterwards.
+
+### Explicitly not probed
+
+Recorded honestly, in the same spirit as M5a's own list:
+
+- **amd64 Windows.** Every Windows finding in this section is from an
+  **ARM64** VM. The amd64 GUI has still never been launched by a person
+  on any Windows machine — register entry **W12** stays ASSUMED.
+- **Windows 10.** The VM ran Windows 11 Pro (build 26100) only; nothing
+  here has been tried on Windows 10.
+- **A physical Windows machine.** This entire session ran inside a UTM
+  virtual machine; no physical Windows PC — ARM64 or amd64 — has run
+  this project's code. Register entry **W2** (whether an x64 machine's
+  Windows Update supplies the CP210x driver on its own) stays ASSUMED
+  for a related reason: this session's VM was ARM64, and Windows Update
+  did not supply the driver there either (see "Driver" above), so W2's
+  x64-specific claim is untouched by this evidence.
+- **Windows Update driver delivery beyond about three minutes.** This
+  session waited roughly three minutes after a rescan before installing
+  the Silicon Labs package by hand; whether Windows Update would
+  eventually deliver a CP210x driver given longer, or on a different
+  Windows build or update channel, was not tested.
+
+### Consequences applied
+
+| Finding | Register entry | Consequence |
+| --- | --- | --- |
+| No in-box ARM64 CP210x driver; Windows Update supplied nothing in ~3 min; Silicon Labs' universal package (v11.6.0.420) works on ARM64 despite its release notes | W1 (lifted, qualified) | `docs/windows-setup.md` §1 names the package and says install it by hand rather than waiting on Windows Update |
+| Exactly one COM port answers `ID;`; the other fails to open | W3 (lifted) | `docs/windows-setup.md` §2 restated from evidence rather than inference |
+| Both COM ports tie at score 50 with the identical device-level description; no Enhanced/Standard hint | W4 (lifted, shape a) | Fleet note above; `docs/windows-setup.md` §2 restated from evidence |
+| USB serial empty in `probe` output on Windows | W5 (observed) | Recorded only; no code change |
+| No TX key-up at any open, read or write, on Windows | W6 (lifted, Windows half) | Recorded only — confirms the existing open-time design holds on Windows |
+| 117-slot read, GUI send, CLI write+verify all completed on Windows | W7 (lifted) | Recorded only |
+| WebView2 Evergreen present before install; bootstrapper idle | W8 (lifted) | Recorded only |
+| SmartScreen showed exactly the documented dialogue | W9 (lifted) | Recorded only |
+| Defender did not quarantine or block any binary | W10 (lifted) | Recorded only |
+| UTM passed the composite CP2105 through; Windows enumerated the parent and both interfaces | W11 (lifted) | Recorded only |
+| Driver friendly names carry "Enhanced COM Port"/"Standard COM Port" (Device Manager only, not `rigprog ports`) | W13 (lifted) | Fleet note above |
+
+W2 (x64 driver delivery) and W12 (amd64 GUI) stay **ASSUMED** — see
+"Explicitly not probed" above.
 
 ## Cross-references
 

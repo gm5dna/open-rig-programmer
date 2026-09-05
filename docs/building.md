@@ -87,8 +87,9 @@ git checkout -- app/frontend/wailsjs/ app/build/windows/installer/wails_tools.ns
 `app/build/windows/README.md` covers which files under that directory
 are template-generated versus hand-edited, and the same churn rule in
 full; `docs/windows-setup.md` covers what the installer does once it
-runs on a real machine, which nobody has yet done on Windows for this
-project (see its "Status" section).
+runs on a real machine — confirmed on a Windows 11 ARM64 VM,
+05/09/2026; amd64 and a physical machine of either architecture
+remain untried (see its "Status" section).
 
 ## Repository layout
 
