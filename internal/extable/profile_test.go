@@ -548,6 +548,19 @@ func TestRegistry_HoldsEveryModel(t *testing.T) {
 	// deleted, and sharedGenerateDatum is what states it —
 	// TestSharedPackageNeedsAllKeysToDiffer proves it both fires and
 	// does not fire, so the widening cannot quietly become no rule at all.
+	//
+	// RECORDED, because the widening did not reach them: five tests
+	// OUTSIDE this package still express the narrower reading, selecting
+	// a registration by Package alone and fataling unless exactly one
+	// matches — the three core/cat/<model>/staleness_test.go files
+	// (ft891, ftdx10, ftdx101), core/cat/ft891/dialect_test.go and
+	// core/driver/ft891/settings_test.go. Every one is CORRECT for its
+	// own package, which holds exactly one registration, so none was
+	// edited. A test written for a family
+	// whose sibling inventories share a directory cannot copy them: it
+	// must select its profile by VarName or OutFile (or Lookup by name),
+	// never by Package alone, which selects both siblings and then
+	// refuses the pair it was handed.
 	for _, v := range sharedGenerateDatum(got) {
 		t.Error(v)
 	}
@@ -613,10 +626,18 @@ func sharedGenerateDatum(ps []NamedProfile) []string {
 }
 
 // TestSharedPackageNeedsAllKeysToDiffer is the red proof each way for
-// the widening above: the rule must ADMIT a shared package when all three
-// keys differ, and must still REFUSE each key on its own. A widening proved
-// only in the permissive direction is indistinguishable from deleting the
-// assertion.
+// the widening above: the rule must ADMIT a shared package when all four
+// collision keys — OutFile, VarName, ManualCSV and ObservedCSV — differ,
+// and must still REFUSE each key on its own. A widening proved only in the
+// permissive direction is indistinguishable from deleting the assertion.
+//
+// The fourth key carries ONE exception, and the first row below is its
+// pin: a blank ObservedCSV is not a collision, because "" is what every
+// ObservationsAbsent profile declares (Validate refuses any other value
+// under that policy) and validateRegistry itself never adds a blank input
+// to its map. Two absent siblings share the empty string and nothing else,
+// so that row's pair must be PERMITTED even though one of the four keys is
+// byte-equal across it.
 //
 // Every profile here is test-local. The three Kenwood registrations land in
 // their own tasks with their own CSVs; nothing in this test registers
@@ -647,7 +668,10 @@ func TestSharedPackageNeedsAllKeysToDiffer(t *testing.T) {
 		{
 			// The shape this widening exists for: one driver's two sibling
 			// inventories in one package directory.
-			"one package, all three keys differ",
+			// Both profiles carry a blank ObservedCSV (fixtureAbsent is
+			// ObservationsAbsent), so this row is also the pin for the
+			// fourth key's empty-string exception.
+			"one package, no collision key shared (both ObservedCSVs blank)",
 			single("ts590", "exinventory590s_gen.go", "exItems590S", "menu590s.csv"),
 			single("ts590", "exinventory590sg_gen.go", "exItems590SG", "menu590sg.csv"),
 			"", false,
