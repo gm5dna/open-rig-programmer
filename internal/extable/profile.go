@@ -88,7 +88,9 @@ func (t TypeRefPolicy) String() string {
 // EXAddressTriple/EXAddressPair, and the correspondence is a fact about the
 // two radios' charts rather than a type relationship: a Pair profile's CSV
 // carries P3 == 0 on every row, which is exactly what core/cat's rule V12
-// requires of a Pair dialect's inventory.
+// requires of a Pair dialect's inventory. AddressSingle has no core/cat
+// counterpart at all: the family whose chart takes that shape renders through
+// core/kw, which is a different package with its own address type.
 type AddressForm int
 
 const (
@@ -99,6 +101,12 @@ const (
 	// be 0. ParseCSV refuses any other value rather than dropping it: a
 	// component that reaches no frame must not reach the inventory either.
 	AddressPair
+	// AddressSingle: the chart prints ONE menu number and that number is the
+	// whole address, so every row's p2 AND p3 columns must be 0. ParseCSV
+	// refuses any other value rather than dropping it, for the reason
+	// AddressPair refuses a non-zero p3 — this form simply carries the rule
+	// one component further down.
+	AddressSingle
 )
 
 func (a AddressForm) String() string {
@@ -107,6 +115,8 @@ func (a AddressForm) String() string {
 		return "AddressTriple"
 	case AddressPair:
 		return "AddressPair"
+	case AddressSingle:
+		return "AddressSingle"
 	default:
 		return fmt.Sprintf("AddressForm(%d)", int(a))
 	}
@@ -291,7 +301,7 @@ func (p Profile) Validate() error {
 		return fmt.Errorf("extable: profile %s: TypeRefPolicy %v must be set explicitly", p.Model, p.Types)
 	}
 	switch p.Addresses {
-	case AddressTriple, AddressPair:
+	case AddressTriple, AddressPair, AddressSingle:
 	default:
 		return fmt.Errorf("extable: profile %s: AddressForm %v must be set explicitly", p.Model, p.Addresses)
 	}
