@@ -123,13 +123,14 @@ type framing struct {
 // The seam's claims, asserted by the COMPILER rather than left to the one
 // call site that happens to exercise each: this package's Command satisfies
 // the neutral Command interface, its FrameAccumulator satisfies
-// Accumulator and the adapter is a complete Framing. The additive optional
-// hook this dialect exists to use, transport.FatalFramer, is asserted the
-// same way in fatal.go, beside the method that implements it.
+// Accumulator, the adapter is a complete Framing, and — the additive
+// optional hook this dialect exists to use, and the whole of Q13 Option A —
+// a transport.FatalFramer.
 var (
 	_ transport.Command     = Command{}
 	_ transport.Accumulator = (*accumulator)(nil)
 	_ transport.Framing     = framing{}
+	_ transport.FatalFramer = framing{}
 )
 
 // NewFraming returns the transport.Framing for book: the Kenwood side of
@@ -161,6 +162,49 @@ func (f framing) NewAccumulator(max int) transport.Accumulator {
 // "?;" — and never "E;" or "O;". See frame.go's IsRejection for why the
 // distinction is the whole acknowledgement design.
 func (f framing) IsRejection(frame []byte) bool { return IsRejection(frame) }
+
+// IsFatal implements the OPTIONAL transport.FatalFramer hook, and taking it
+// is this milestone's Q13 Option A: "E;" and "O;" end the STREAM, as
+// distinct from IsRejection's "this COMMAND was refused".
+//
+// WHY THE HOOK AND NOT ONE OF THE THREE PLACES A Framing ALREADY HAS.
+// IsRejection would collapse the tokens into ErrRejected — a refusal, not a
+// link failure, and indistinguishable from "?;". A driver-level matcher
+// would miss them entirely on a ClassWrite, which is what MW is, and that
+// is the one place the token matters most. An unrecognised frame is merely
+// counted. None of the three closes the three residual windows spec
+// §"Where E; and O; live" names, and only this one does.
+//
+// WHAT TAKING IT BUYS, at exactly the strength the engine delivers. A fatal
+// frame is RECEIVED when its publication has taken and released the
+// engine's fatal gate, and the guarantee is then: NO FRAME LEAVES THE HOST
+// AFTER A FATAL FRAME THE ENGINE HAS RECEIVED. It is a theorem, not a hope
+// — the gate totally orders the publication against the final write, so
+// either the publication went first (the write's closed recheck sees the
+// closure and writes nothing) or the write went first (the frame left
+// BEFORE the fatal frame was received). All three windows the accumulator
+// route left open are closed: the same-chunk answer, the entry purge's
+// bound, and the post-purge race.
+//
+// The typed cause is a *StreamError carrying the token and THAT BOOK'S own
+// sentence (E13), never a sentinel: the engine records the value closePort
+// is given and every subsequent closed-engine error wraps it, so a driver
+// recovers it with errors.As and can quote the document.
+//
+// NEITHER TOKEN IS EVER RETRIED and neither is ever matched as an answer.
+//
+// TestFatalTokens_FourStatesTwoTokensTwoBooks is the injection matrix;
+// TestFatalTokens_SameChunk_SuppressesTheAnswerItArrivedWith and
+// TestFatalTokens_PostPurgeRace_NoFrameLeavesAfterAReceivedFatalFrame are
+// core/transport's two adversarial pins re-run through this accumulator and
+// this cause. doc.go carries the commitment and the residual liveness facts.
+func (f framing) IsFatal(frame []byte) error {
+	token := streamErrorToken(frame)
+	if token == "" {
+		return nil
+	}
+	return newStreamError(token, f.book)
+}
 
 // Allow is the outbound write gate: the last defence before a physical
 // radio sees these bytes.
