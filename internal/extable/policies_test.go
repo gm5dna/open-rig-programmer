@@ -31,6 +31,11 @@ func TestPolicyStrings(t *testing.T) {
 	}{
 		{AddressTriple.String(), "AddressTriple"},
 		{AddressPair.String(), "AddressPair"},
+		// AddressSingle's own case lives here, not in addresssingle_test.go,
+		// so the "one table of every policy string" idiom stays whole: the
+		// next form's missing String() case should be obvious from this one
+		// table, not from having to remember a form has its own file too.
+		{AddressSingle.String(), "AddressSingle"},
 		{AddressForm(0).String(), "AddressForm(0)"},
 		{LabelsRequired.String(), "LabelsRequired"},
 		{LabelsAbsent.String(), "LabelsAbsent"},
@@ -204,20 +209,34 @@ func TestRenderGo_LabelsAbsentEmitsEmptyLabels(t *testing.T) {
 // The table is keyed by lookup name and its size is compared against the
 // registry's, so a FIFTH registration fails here rather than slipping through
 // a sweep that never looked at it.
+//
+// ceiling is here for the reason the other four columns are: it is a
+// per-registration fact that TestRegistry_HoldsEveryModel's name-list pin and
+// this test's own length check both make loud on a fifth registration
+// (MEDIUM-3), but neither previously carried DigitsCeiling itself — only the
+// four hand-written per-model tests did, and nothing forces a fifth of those
+// to exist. A Kenwood stanza that copy-pastes core/cat's MaxDigitsCeiling
+// (247) onto a profile rendering into core/kw would otherwise pass every
+// test in this package; naming the ceiling here, in the one sweep a fifth
+// registration cannot dodge, closes that gap in this file rather than
+// leaving it to core/kw's own ceiling test alone.
 func TestRegisteredProfiles_DeclareTodaysBehaviourExplicitly(t *testing.T) {
 	want := map[string]struct {
 		addr      AddressForm
 		labels    Labels
 		textRows  TextRows
 		textWidth int
+		ceiling   int
 	}{
-		"ft710":   {AddressTriple, LabelsRequired, TextRowsAllowed, 12},
-		"ftdx10":  {AddressTriple, LabelsRequired, TextRowsAllowed, 12},
-		"ftdx101": {AddressTriple, LabelsRequired, TextRowsAllowed, 12},
+		"ft710":   {AddressTriple, LabelsRequired, TextRowsAllowed, 12, MaxDigitsCeiling},
+		"ftdx10":  {AddressTriple, LabelsRequired, TextRowsAllowed, 12, MaxDigitsCeiling},
+		"ftdx101": {AddressTriple, LabelsRequired, TextRowsAllowed, 12, MaxDigitsCeiling},
 		// The FT-891's chart prints a four-digit MENU Number, no group
 		// labels and no free-text row: core/cat/ft891/table2.csv's
 		// provenance header records all three as readings of that chart.
-		"ft891": {AddressPair, LabelsAbsent, TextRowsAbsent, 0},
+		// Its DigitsCeiling is still core/cat's — the FT-891 renders into
+		// core/cat/ft891, not a package of its own.
+		"ft891": {AddressPair, LabelsAbsent, TextRowsAbsent, 0, MaxDigitsCeiling},
 	}
 	regs := RegisteredProfiles()
 	if len(regs) != len(want) {
@@ -231,6 +250,9 @@ func TestRegisteredProfiles_DeclareTodaysBehaviourExplicitly(t *testing.T) {
 		}
 		if np.Profile.Addresses != w.addr {
 			t.Errorf("%s: Addresses = %v, want %v", np.Name, np.Profile.Addresses, w.addr)
+		}
+		if np.Profile.DigitsCeiling != w.ceiling {
+			t.Errorf("%s: DigitsCeiling = %d, want %d", np.Name, np.Profile.DigitsCeiling, w.ceiling)
 		}
 		if np.Profile.LabelPolicy != w.labels {
 			t.Errorf("%s: LabelPolicy = %v, want %v", np.Name, np.Profile.LabelPolicy, w.labels)
