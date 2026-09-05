@@ -120,8 +120,10 @@ Universal Windows Driver by hand (see
 [docs/windows-setup.md](docs/windows-setup.md)); x64 is expected to get
 one from Windows Update automatically, but that has not been tried.
 The radio's USB adapter shows two COM ports in Device Manager, and
-unlike macOS, Windows lists both as usable, tied and indistinguishable
-by name — probe each one (`.\rigprog.exe probe --port COM3`,
+unlike macOS, Windows enumerates both as ordinary COM ports, tied and
+indistinguishable by name — but only one of the two actually opens; the
+other failing to open outright is expected, not a fault. Probe each
+one (`.\rigprog.exe probe --port COM3`,
 `.\rigprog.exe probe --port COM4`, and so on) to find the one that
 answers. `rigprog.exe` is not on `PATH`, so run it from the folder
 that holds it — the zip's extraction folder, or `C:\Program
