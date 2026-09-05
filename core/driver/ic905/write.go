@@ -286,13 +286,24 @@ func (s *Session) bankFor(slot string) (spec.BankID, bool) {
 // the user stands (re-discover the radio, which re-runs the walk and is
 // enough whenever the slot is inside its reach), followed by the honest
 // bound for when it does not.
+//
+// THE RULE STANDS; THE BOUND'S OWN WORDING WAS LATER FOUND FALSE (side
+// lanes fix round 1, review icom-minors-review-opus.md MEDIUM-1/item-4).
+// "This build offers no setting that widens it" was untrue: the package
+// exports WithFullInventoryWalk (ic905.go:80), and internal/wiring's row
+// simply does not pass it — the same over-claim struck from the IC-R8600's
+// same-named rung (icr8600/write.go). Naming that option while saying in
+// the same clause that no registered composition passes it does not name
+// a remedy the user cannot reach; it explains why the setting they might
+// go looking for is not there, which is what the rule above already asks
+// for. The bound below now matches the R8600's wording.
 func (s *Session) occupiedSurprise(slot string, readReturnedRecord bool) error {
 	if !readReturnedRecord || s.knownOccupied(slot) {
 		return nil
 	}
 	return &driver.WriteRefusedError{
 		Slot:   slot,
-		Reason: "this session's inventory does not list this slot, but the radio answered the pre-write read with a record: the discovery walk never saw it, so writing would overwrite a channel nothing has read. Re-discover the radio; if the slot is still not listed it lies outside the bounded walk — group 0 in full, then channel 00 of every other group and the rest of a group whose 00 answered — and this build offers no setting that widens it",
+		Reason: "this session's inventory does not list this slot, but the radio answered the pre-write read with a record: the discovery walk never saw it, so writing would overwrite a channel nothing has read. Re-discover the radio; if the slot is still not listed it lies outside the bounded walk — group 0 in full, then channel 00 of every other group and the rest of a group whose 00 answered — and nothing on this build's command line or in its window widens it (the driver's own WithFullInventoryWalk is a Go-level option no registered composition passes)",
 	}
 }
 

@@ -901,6 +901,17 @@ func NewIC7300MK2RealDriver() driver.Driver {
 // bank. No IC-705 has been written to by this project, and the
 // capability gate refuses before any frame is built.
 //
+// NO ic705.WithFullInventoryWalk() HERE, DELIBERATELY (side lanes fix
+// round 1, review icom-minors-review-opus.md LOW-3). Like the IC-905's
+// and IC-R8600's same-named option, it is a Go-only opt-in for callers
+// using core/driver/ic705 directly; no CLI flag or GUI control exposes
+// it. The registry therefore keeps the bounded default — the ten display
+// groups G01-G10, each in full — on the same operational grounds those
+// two rows state. internal/radiotext's IC-705 ProbeFirmwareNote and this
+// driver's own occupied-surprise refusal (write.go:354) both now lean on
+// that omission being a recorded choice rather than an oversight; this
+// comment is what makes the two agree in writing.
+//
 // THE FAIL-SAFE DIRECTION IS UNCHANGED: an unrecognised Profile value
 // selects the all-Unverified set too (ic705.go's Capabilities switch),
 // never the simulator's write-Supported one, and the one named exception
