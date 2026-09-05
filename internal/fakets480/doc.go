@@ -45,13 +45,23 @@
 // birth, ahead of the gen/ subdirectory a later task of this milestone's plan
 // brings in.
 //
-// # A SIBLING of internal/fakets590, not a copy of it
+// # A SIBLING of internal/fakets590, a re-skin of its scaffold
 //
 // The two Kenwood fakes share a shape — the pipe-and-goroutine Radio, the
 // bounded reassembler, the "?;" convention, the per-command handlers, the
-// Image contract, the options — and share NO CODE and NO TABLE. The hard
-// rule above forbids the import that would let them, and the radios do not
-// in fact agree: this book gives several bytes of the same 50-byte grid
+// Image contract, the options — and share NO PACKAGE, NO TABLE AND NO
+// LEGEND: every offset, width, legend and validator in this file is
+// re-derived from this book, independently of internal/fakets590's. What IS
+// shared, and is shared deliberately, is the pipe/reassembler/dispatch
+// scaffold around those tables: the hard rule above forbids importing it, so
+// the only way to reuse it at all is to copy the source, the same trade
+// imports_test.go names for itself. Roughly two thirds of this package's
+// top-level function bodies are byte-identical to internal/fakets590's for
+// that reason — checked against this book and correct for the TS-480 — so a
+// defect in the copied scaffold (not in a table or a legend) would sit in
+// both Kenwood fakes at once, and the next auditor changing either file
+// should check the other. The radios do not in fact agree in what the
+// tables say: this book gives several bytes of the same 50-byte grid
 // entirely different jobs, and gives two of its own error tokens different
 // causes. Every divergence below is this book's, not a preference:
 //
@@ -78,8 +88,11 @@
 //     erratum E13.
 //   - THERE IS NO FV AND NO READABLE FIRMWARE VERSION. "FV" appears nowhere
 //     in this document, which carries no revision number and no firmware
-//     statement either (erratum E15). TY is the nearest command and reports
-//     a hardware variant.
+//     statement either (erratum E15) — the one place the word "firmware"
+//     itself appears is the FV command's own heading, "Sets or reads the
+//     microprocessor fimware type" (480:1621, erratum E10), under which the
+//     chart is empty. TY is the nearest command and reports a hardware
+//     variant, which is what E10 and E15 jointly record.
 //
 // # What this fake deliberately does NOT model
 //
@@ -251,14 +264,30 @@
 //     "O;" (480:143-144), which is a different event and is modelled by
 //     WithStreamError instead.
 //
+//  15. A REFUSAL TO A CONTROL BYTE IS ALWAYS ANSWERED. This book gives a
+//     control character in a parameter TWO printed outcomes, not one: "Do
+//     not use the control characters 00 to 1Fh since they are either
+//     IGNORED or cause a '?' answer" (480:127-129). validNameField refuses
+//     one on every call, so this fake always takes the second branch and
+//     never the first — a real TS-480 may instead say nothing at all. No
+//     design A-number covers this choice; it is this package's own, unlifted,
+//     and its lift is a hardware trial: send an MW carrying a 00-1Fh byte in
+//     P16 to a real TS-480 and record whether it answers "?;" or stays
+//     silent for the reply-timeout window.
+//
 // # What is NOT in this register, and why
 //
-// THE "?;" CONVENTION ITSELF. On the Yaesu side this is an inherited
-// convention with no line to cite. Here the book prints its own error table
-// with two named causes (480:126-135), so using "?;" for every refusal is
-// transcription, not assumption. The NOTE beneath it — that the message may
-// not appear at all (480:136-138) — is likewise printed, and is played by
-// WithTransientNAKSuppressed rather than assumed away.
+// THE "?;" CONVENTION ITSELF, AS VOCABULARY. On the Yaesu side this is an
+// inherited convention with no line to cite. Here the book prints its own
+// error table with two named causes (480:126-135), so USING "?;" AS THE
+// TOKEN for a refusal is transcription, not assumption. Which refusals
+// exist, and whether every one of them answers rather than sometimes
+// staying silent, are separate questions — the control-character case is
+// the one place this book itself offers a second outcome, and that choice
+// is entry 15 above, not this paragraph. The NOTE beneath the error table —
+// that the message may not appear at all after a Set (480:136-138) — is
+// likewise printed, and is played by WithTransientNAKSuppressed rather than
+// assumed away.
 //
 // THE COMMAND-NAME CASE FOLD. "A command consists of 2 alphabetical
 // characters. You may use either lower or upper case characters."

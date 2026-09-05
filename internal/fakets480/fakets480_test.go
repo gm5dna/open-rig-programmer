@@ -211,8 +211,11 @@ func TestWithTYAnswer_IsAnsweredVerbatim(t *testing.T) {
 // TestWithTYAnswer_RefusesAFixtureNoRadioCouldSend. P1 is two bytes on the
 // wire (480:1634), so a fixture of any other width could not be sent by any
 // radio; and a ';' anywhere in the answer is a SECOND FRAME to the host's
-// own reassembler, not a byte of this one. Panicking is New's reasoning: the
-// argument is a fixture constant.
+// own reassembler, not a byte of this one. Panicking is the reasoning
+// core/kw.MustNewLayout applies to the same kind of argument: the value is a
+// fixture constant, known at compile time, so a bad one is a programming
+// error and must stop the programme rather than be threaded through an
+// error nobody can act on.
 func TestWithTYAnswer_RefusesAFixtureNoRadioCouldSend(t *testing.T) {
 	for _, tt := range []struct {
 		name     string

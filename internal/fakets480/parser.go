@@ -259,7 +259,14 @@ func validP1(b byte) bool { return b == '0' || b == '1' }
 
 // validModeByte reports whether b is a nibble the MD legend prints
 // (480:843-854). ALL TEN ARE ADMITTED, including the two this book calls
-// "Not used for the TS-480" — see handleMW.
+// "No mode (Not used for the TS-480)" and "Tune (Not used for the
+// TS-480)" (480:843, 480:853) — see handleMW. Nothing says what a Set
+// carrying one of those two does — the design's A18b, whose lift is a
+// hardware trial — so handleMW's rejection arm for this check fires only on
+// a byte that fails isDigit; it stores every admitted nibble rather than
+// inventing a refusal, which is what lets a test drive core/kw's own build
+// refusal against a real fake (doc.go's register entry A SET CARRYING AN
+// UNUSED MODE NIBBLE IS STORED).
 func validModeByte(b byte) bool { return isDigit(b) }
 
 // validLockoutByte: "Lockout status. 0: Lockout OFF, 1: Lockout ON."
@@ -279,7 +286,10 @@ func validToneModeByte(b byte) bool { return b >= '0' && b <= '2' }
 // does not exclude 0x7F or above. The bound applied here is A2's, whose claim
 // stops at 0x7E: 0x7F and above is unevidenced AND unclaimed, and refusing it
 // is this programme's own charset rule rather than a statement about the
-// radio.
+// radio. A REFUSAL TO A CONTROL BYTE IS ALWAYS ANSWERED here with "?;":
+// 480:127-129 prints that outcome as one of two, the other being silence,
+// and always taking the first is this package's own choice, unlifted — see
+// doc.go's register.
 func validNameField(field []byte) bool {
 	for _, b := range field {
 		if b < 0x20 || b > 0x7e {
@@ -430,14 +440,8 @@ func (r *Radio) handleMW(body []byte) []byte {
 	case !allDigits(s.Freq):
 		return rejection
 	case !validModeByte(s.Mode):
-		// ALL TEN NIBBLES ARE ADMITTED, the two this book calls "No mode
-		// (Not used for the TS-480)" and "Tune (Not used for the TS-480)"
-		// included (480:843, 480:853). Nothing says what a Set carrying one
-		// does — that is the design's A18b, whose lift is a hardware trial —
-		// so this fake stores the nibble rather than inventing a refusal,
-		// which is what lets a test drive core/kw's own build refusal against
-		// a real fake. doc.go's register entry A SET CARRYING AN UNUSED MODE
-		// NIBBLE IS STORED.
+		// Refuses only a non-digit byte — every admitted nibble, unused
+		// ones included, is stored instead of refused; see validModeByte.
 		return rejection
 	case !validLockoutByte(s.Lockout):
 		return rejection
