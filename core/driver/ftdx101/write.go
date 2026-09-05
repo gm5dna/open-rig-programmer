@@ -352,20 +352,38 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 
 	// FieldState sanity before anything else trusts .State: a malformed field
 	// (an unrecognised State, or a non-Known value smuggled alongside a
-	// value) is refused, not interpreted. TagDisplay is checked here for
-	// exactly the same reason as its two neighbours and for no other: an
+	// value) is refused, not interpreted. TagDisplay is included for exactly
+	// the same reason as its neighbours and for no other: an
 	// Unavailable-with-a-true-Value BoolField is incoherent whatever the
 	// radio can express, and this driver must not read a coherent meaning out
 	// of it. This rung SURVIVES the named inversion — it is not the FT-710's
 	// non-Known refusal wearing a different hat.
-	if err := ch.Data.CTCSSTone.Valid(s.caps); err != nil {
-		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{spec.FieldCTCSSTone}, Reason: err.Error()}
-	}
-	if err := ch.Data.ScanSkip.Valid(); err != nil {
-		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{spec.FieldScanSkip}, Reason: err.Error()}
-	}
-	if err := ch.Data.TagDisplay.Valid(); err != nil {
-		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{spec.FieldTagDisplay}, Reason: err.Error()}
+	//
+	// EVERY FieldState field of ch.Data, not the three (CTCSSTone, ScanSkip,
+	// TagDisplay) this rung used to check — the write-gate sweep's item (i),
+	// and the same gap the FT-891's C-M1 found: a tier field carrying State
+	// Unavailable and a non-zero Value passed both codeplug.Validate (which
+	// skips every non-Recorded field outright) and the old three-field list,
+	// and requestedFields is Known-only, so nothing ever named it and the
+	// malformed value was silently DROPPED from the frame rather than
+	// refused. TestWriteChannel_IncoherentFieldStateRefusedBeforeWire is the
+	// pin, and its comment quotes the pre-fix transcript (the 41-byte Set
+	// sent unchanged on BOTH models, TxFreqHz simply absent from it).
+	//
+	// THE WALK IS THE FLEET'S, driver.CheckFieldStates, not a fourth private
+	// copy: its doc comment carries the four-rule stance, of which the
+	// load-bearing one HERE is that codeplug.Absent is ADMITTED. Every
+	// ChannelData this driver's own read path produces states each field
+	// positively, but a hand-built one — the GUI's, a test's, a caller's
+	// composite literal — leaves the untouched ones Absent, and refusing
+	// those would refuse every ordinary MODIFY.
+	// TestWriteChannel_AbsentFieldStatesStillWrite is that half's pin.
+	//
+	// MODEL-INDEPENDENT, like the rest of this ladder: the walk asks this
+	// SESSION's own capabilities, so the D and the MP each judge a Known
+	// value against their own vocabulary without this code naming either.
+	if field, err := driver.CheckFieldStates(s.caps, *ch.Data); err != nil {
+		return res, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{field}, Reason: err.Error()}
 	}
 
 	// THE write gate (defence in depth below the clone service): every
