@@ -213,7 +213,7 @@ func (r *Radio) sleepInterruptible(d time.Duration) bool {
 func (r *Radio) serve() {
 	defer r.wg.Done()
 
-	acc := newReassembler(maxAccumulatorBytes)
+	acc := newReassembler()
 	buf := make([]byte, 4096)
 	for {
 		n, err := r.fakeConn.Read(buf)

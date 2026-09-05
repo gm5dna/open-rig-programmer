@@ -35,6 +35,7 @@ var registerEntries = []string{
 	"THE DEFAULT FIRMWARE STRING",
 	"AUTOMATIC-INFORMATION SUPPRESSION",
 	"THE FRAME ACCUMULATOR'S CAP AND RESYNC",
+	"THE S ROW'S CEILING IS UNSTATED",
 }
 
 // normalise strips Go comment markers and collapses every run of whitespace to
@@ -157,12 +158,22 @@ func TestPROVENANCECarriesA27Verbatim(t *testing.T) {
 	// The family-level entries an image rides on, BY NUMBER (the plan's P19).
 	// A11 is deliberately NOT among them: no image is shipped for 110-119, so
 	// nothing here rides on what an extension channel holds.
+	//
+	// These two checks run against the RAW markdown (before the "*" markup
+	// stripper above runs), and match the bullet form the file actually uses
+	// — "- **A1** — …" — as "**A1**". A plain substring search on the
+	// stripped text is vacuous here: Contains(prov, "A1") is also satisfied
+	// by "A10", "A11" and "A18a", so a missing A1 bullet would never be
+	// caught. "**A1**" cannot collide with "**A10**" or "**A18a**" because
+	// the two asterisks immediately follow the digits only in A1's own
+	// bullet.
+	raw := string(b)
 	for _, entry := range []string{"A1", "A3", "A4", "A10", "A18a", "A27"} {
-		if !strings.Contains(prov, entry) {
-			t.Errorf("PROVENANCE.md does not name %s, one of the family-level entries an image rides on", entry)
+		if !strings.Contains(raw, "**"+entry+"**") {
+			t.Errorf("PROVENANCE.md does not carry the bullet **%s**, one of the family-level entries an image rides on", entry)
 		}
 	}
-	if strings.Contains(prov, "A11 (") {
+	if strings.Contains(raw, "**A11**") {
 		t.Error("PROVENANCE.md lists A11 among the entries the images ride on — no image is shipped for 110-119, so nothing rides on it")
 	}
 }

@@ -141,7 +141,7 @@
 //     prints the rule for its own answer — "For a response command, a space
 //     is entered for a channel number less than 100" (590:1336-1337) — and
 //     both memory charts refer their P2/P3 cells to MC (590:1452-1453,
-//     590:1538-1539). Reading that cross-reference as carrying the SPACE
+//     590:1539-1540). Reading that cross-reference as carrying the SPACE
 //     CONVENTION and not merely the numbering is this fake's step. It is
 //     deliberately the opposite spelling to the one core/kw emits, which
 //     always writes '0' and accepts either: a fake that echoed the request's
@@ -234,6 +234,16 @@
 //     own bounded-input policy. No Kenwood book prints a buffer size; what it
 //     prints is that a receive-buffer overrun produces "O;" (590:113), which
 //     is a different event and is modelled by WithStreamError instead.
+//
+//  15. THE S ROW'S CEILING IS UNSTATED. highestChannel = 109 serves both
+//     rows, but the two rows reach it on different grounds. On the SG, 110
+//     onwards is the printed extension range and stopping short of it is
+//     entry 10's deliberate narrowing under A11. On the S, the book never
+//     prints a ceiling at all — nothing says a TS-590S refuses "MR0110;" —
+//     so 109 there is the design's own A12, unlifted, and
+//     core/kw/ts590/layout.go names A12 for this same row. This fake stops
+//     at 109 on the S because that is as far as the book's section-defined
+//     channels go, not because a ceiling has been observed.
 //
 // # What is NOT in this register, and why
 //

@@ -160,7 +160,7 @@ func DefaultImage() map[recordKey]MemState {
 	// two carry the same frequency because the book prints only one, and
 	// that is a state the book itself describes: "When registering a section
 	// defined channel and parameter P1 is set to 1, the Start and End
-	// frequencies are the same." (590:1532-1536).
+	// frequencies are the same." (590:1537-1538).
 	img[recordKey{channel: 100, half: HalfRXOrStart}] = defaultRecord()
 	img[recordKey{channel: 100, half: HalfTXOrEnd}] = defaultRecord()
 

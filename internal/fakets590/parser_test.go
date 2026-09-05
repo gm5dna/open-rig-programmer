@@ -299,7 +299,7 @@ func TestMR_TheSecondHalfOfASimplexChannelIsEmpty(t *testing.T) {
 // It is NOT a claim that any TS-590 refuses MR. It plays the second cause the
 // error table itself prints — "Command was not executed due to the current
 // status of the transceiver (even though the command syntax was correct)"
-// (590:101-103).
+// (590:100-105).
 func TestWithMemoryReadUnsupported_RefusesEveryMR(t *testing.T) {
 	_, conn := newTestRadio(t, RowSG, WithMemoryReadUnsupported())
 
