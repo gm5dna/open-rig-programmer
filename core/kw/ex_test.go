@@ -55,18 +55,47 @@ func TestBuildEXRead_FailsClosedOnAnAddressThatIsNotAKenwoodOne(t *testing.T) {
 	}
 }
 
-// TestBuildEXRead_KnowsNothingOfMEMBERSHIP records what this builder does
-// NOT check, because a reader will otherwise assume it does. Which addresses
-// exist is the per-radio INVENTORY's business — 88 rows on the TS-590S, 100
-// on the TS-590SG, 61 on the TS-480 (A26) — and those inventories live in
-// core/kw/ts590 and core/kw/ts480, which import this package. A membership
-// test here would be an import cycle, and a Layout that carried a copy of an
-// inventory would be a second copy of a generated artefact.
-func TestBuildEXRead_KnowsNothingOfMEMBERSHIP(t *testing.T) {
-	// 200 is outside every printed Kenwood menu domain and still builds:
-	// the frame is well formed, and nothing here claims the radio has it.
-	if _, err := layout590SG().BuildEXRead(EXAddress{P1: 200}); err != nil {
-		t.Errorf("BuildEXRead refused address 200: membership is the inventory's rule, not this builder's, and a refusal here would be a claim this package cannot support (%v)", err)
+// TestBuildEXRead_BoundsTheDomainAndKnowsNothingOfMEMBERSHIP separates the
+// two questions a reader will otherwise run together.
+//
+// THE PRINTED DOMAIN IS THIS BUILDER'S, because it is one number per row on
+// the row's own chart — "000 ~ 087: Menu number (TS-590S)" (590:543), "000 ~
+// 099: Menu number (TS-590SG)" (590:544), "000 ~ 060: Menu No." (480:401) —
+// carried as the MaxEXAddress axis and read from the same place the outbound
+// gate reads it.
+//
+// MEMBERSHIP IS NOT. Which addresses inside that domain a radio has, what
+// each is called and how wide its answer is are the per-radio INVENTORY's
+// business — 88 rows on the TS-590S, 100 on the TS-590SG, 61 on the TS-480
+// (A26) — and those inventories live in core/kw/ts590 and core/kw/ts480,
+// which import this package. A membership test here would be an import
+// cycle, and a Layout that carried a copy of an inventory would be a second
+// copy of a generated artefact.
+func TestBuildEXRead_BoundsTheDomainAndKnowsNothingOfMEMBERSHIP(t *testing.T) {
+	// 200 is outside every printed Kenwood menu domain, and every row
+	// refuses it — the domain is the row's, so the refusal is too.
+	for _, l := range []Layout{layout590S(), layout590SG(), layout480()} {
+		if _, err := l.BuildEXRead(EXAddress{P1: 200}); err == nil {
+			t.Errorf("%s: BuildEXRead built a read of menu 200, past every domain any of the three books prints", l.Model())
+		}
+	}
+	// 088 is the SG's and not the S's, which is the whole reason the bound
+	// is per row rather than per family: the two inventories are one
+	// identifier apart in core/kw/ts590.
+	if _, err := layout590SG().BuildEXRead(EXAddress{P1: 88}); err != nil {
+		t.Errorf("the TS-590SG refused menu 088, inside its printed domain 000 ~ 099 (590:544): %v", err)
+	}
+	if _, err := layout590S().BuildEXRead(EXAddress{P1: 88}); err == nil {
+		t.Error("the TS-590S built a read of menu 088, one past the domain its own book prints, 000 ~ 087 (590:543)")
+	}
+	if _, err := layout480().BuildEXRead(EXAddress{P1: 61}); err == nil {
+		t.Error("the TS-480 built a read of menu 061, one past its printed domain 000 ~ 060 (480:401)")
+	}
+	// Nothing here claims the radio HAS the addresses it does build: the
+	// inventory is never consulted, so an address inside the domain builds
+	// whether or not a row for it was ever transcribed.
+	if _, err := layout480().BuildEXRead(EXAddress{P1: 60}); err != nil {
+		t.Errorf("the TS-480 refused menu 060, the last address its own book prints (480:401): %v", err)
 	}
 }
 
@@ -189,8 +218,14 @@ func TestParseEXAnswer_RefusesAnInventoryRowWithNoWidth(t *testing.T) {
 // three-digit conversion would fold "EX3000000;" onto address 044 — a frame
 // the builder can never produce, admitted by its own gate. The round-trip
 // comparison is what refuses it.
+//
+// THIS DECODER IS DELIBERATELY LAYOUT-FREE and so its domain is the whole of
+// what an EXAddress can hold, 000 to 255. The per-row printed domain is the
+// GATE's bound, applied on top of this by validEXRead and pinned by
+// TestAllowedCommand_BoundsTheEXAddressToTheRowsPrintedMenuDomain, which is
+// why the builder loop below stops at the TS-590SG's own ceiling of 099.
 func TestExReadAddress_AdmitsExactlyWhatTheBuilderCanProduce(t *testing.T) {
-	for _, p1 := range []uint8{0, 1, 87, 99, 100, 255} {
+	for _, p1 := range []uint8{0, 1, 87, 99} {
 		cmd, err := layout590SG().BuildEXRead(EXAddress{P1: p1})
 		if err != nil {
 			t.Fatalf("BuildEXRead(%d): %v", p1, err)

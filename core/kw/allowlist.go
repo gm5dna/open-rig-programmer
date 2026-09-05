@@ -45,23 +45,25 @@ import (
 //     about the method's existence says which radio it speaks for — or that
 //     it speaks for one at all. The slot-aware checks give the refusal for
 //     free wherever slot data is consulted (an empty slot space matches no
-//     slot), but "ID;", "AI;", "AI0;", "MC;" and every EX read consult no
-//     layout datum, and the Configured guard is what closes them.
+//     slot), and the EX read is closed for every address but 000 by a zero
+//     MaxEXAddress — but "ID;", "AI;", "AI0;", "MC;" and "EX0000000;"
+//     consult no layout datum they can fail on, and the Configured guard is
+//     what closes them.
 //
 // IT GATES FOR THE LAYOUT IT IS CALLED ON, AND FOR NO OTHER — but not every
 // check below reads the receiver in the same way, and the three tiers are a
 // genuine property of the gate worth stating rather than an accident: MR,
-// MW and MC's Set half are PER-RADIO (slot space, mode legend, the four
-// byte-28/39-40/41 policies, P2 policy); FV and TY are PER-BOOK; ID, AI,
-// MC's read half and every EX read are PER-FAMILY — validEXRead in
-// particular admits "EX000;" through "EX255;" identically on all three
-// rows, because membership is the inventory's business (ex.go) and there is
-// nothing else in an EX read to vary. What is true on every tier, and is
-// the safety point this gate exists for, is that a frame legal on one
-// Kenwood row is refused by a layout describing another: a TS-480 MW whose
-// P14 is an ST step index is refused by a 590 row, a read of extension
-// channel 110 is refused by the TS-590S (A12), "FV;" is refused by the 480
-// and "TY;" by the 590 pair. A gate that re-validated against a
+// MW, MC's Set half and the EX read are PER-RADIO (slot space, mode legend,
+// the four byte-28/39-40/41 policies, P2 policy, and the printed menu
+// domain); FV and TY are PER-BOOK; ID, AI and MC's read half are
+// PER-FAMILY, because there is nothing in any of those three frames to
+// vary. What is true on every tier, and is the safety point this gate
+// exists for, is that a frame legal on one Kenwood row is refused by a
+// layout describing another: a TS-480 MW whose P14 is an ST step index is
+// refused by a 590 row, a read of extension channel 110 is refused by the
+// TS-590S (A12), an EX read of menu 088 is refused by the TS-590S and
+// admitted by the TS-590SG (590:543 against 590:544), "FV;" is refused by
+// the 480 and "TY;" by the 590 pair. A gate that re-validated against a
 // package-level datum would accept, on any radio, whatever one radio
 // accepts — a safety failure rather than merely a correctness one.
 //
@@ -289,9 +291,17 @@ func (l Layout) validMWCommand(frame []byte) bool {
 // exReadAddress is the shared decoder (ex.go), and it compares a RE-RENDERED
 // address with the field rather than trusting the digits, so no frame this
 // gate admits is one BuildEXRead could not have emitted.
+//
+// THE ADDRESS IS THEN BOUNDED BY THIS ROW'S OWN PRINTED MENU DOMAIN, read
+// from the same axis BuildEXRead reads (Layout.MaxEXAddress, transcribed
+// from 590:543, 590:544 and 480:401). exReadAddress is the FORM decoder and
+// is deliberately layout-free — 000 to 255 is what an EXAddress can hold —
+// so this is where the row's book comes in, and it is what keeps EX on the
+// same per-row footing as MR, MW and MC's Set half rather than leaving it
+// the one grammar a sibling row's frame could pass.
 func (l Layout) validEXRead(frame []byte) bool {
-	_, err := exReadAddress(frame)
-	return err == nil
+	addr, err := exReadAddress(frame)
+	return err == nil && addr.P1 <= l.maxEXAddress
 }
 
 // NewFramingFor returns the transport.Framing for a CONFIGURED LAYOUT: the

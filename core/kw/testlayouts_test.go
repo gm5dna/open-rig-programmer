@@ -20,9 +20,9 @@ package kw
 // does not import these.
 //
 // THE THIRD FIXTURE IS THE TS-590S, not a second copy of the SG. The two 590
-// rows share the grid and differ on byte 28 alone (A14/A12), so a fixture
-// pair that held only the SG and the 480 could not tell a per-BOOK axis from
-// a per-ROW one.
+// rows share the grid and differ on byte 28, the slot ceiling and the
+// printed EX menu domain (A14/A12, 590:543-544), so a fixture pair that held
+// only the SG and the 480 could not tell a per-BOOK axis from a per-ROW one.
 
 // layout590SG is the TS-590SG row.
 func layout590SG() Layout {
@@ -46,7 +46,9 @@ func layout590SG() Layout {
 		Byte41: Byte41Lockout,
 		// P7 prints four values, 3 being "Cross Tone ON" (590:1549-1553).
 		ToneModes: ToneModesFour,
-		ModeNames: modeNames590(),
+		// "000 ~ 099: Menu number (TS-590SG)" (590:544).
+		MaxEXAddress: 99,
+		ModeNames:    modeNames590(),
 		// 000-099 ordinary memory and 100-109 the section-defined pairs on
 		// both 590 rows; 110-119 the SG's extension channels
 		// (590:1345-1347). What the DRIVER publishes as a bank is a
@@ -75,7 +77,10 @@ func layout590S() Layout {
 		Byte41:   Byte41Lockout,
 
 		ToneModes: ToneModesFour,
-		ModeNames: modeNames590(),
+		// "000 ~ 087: Menu number (TS-590S)" (590:543), the line above the
+		// SG's on the same chart.
+		MaxEXAddress: 87,
+		ModeNames:    modeNames590(),
 		Slots: []SlotRange{
 			{Class: SlotMemory, Lo: 0, Hi: 99},
 			{Class: SlotScan, Lo: 100, Hi: 109},
@@ -104,7 +109,9 @@ func layout480() Layout {
 		Byte41: Byte41FixedZero,
 		// P7 prints three values and no cross tone (480:964).
 		ToneModes: ToneModesThree,
-		ModeNames: modeNames480(),
+		// "000 ~ 060: Menu No." (480:401).
+		MaxEXAddress: 60,
+		ModeNames:    modeNames480(),
 		// "00 ~ 99: Memory channel number" (480:955), one flat bank
 		// (480:830-838). Channels 90-99 also answer a second frame
 		// (480:943-944) but they are ordinary memories in this record, so

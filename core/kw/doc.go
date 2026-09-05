@@ -529,7 +529,7 @@
 //	     whether the same rule holds inside a memory frame. ONCE PER
 //	     REGISTRY ROW: on a TS-590S, on a TS-590SG and on a TS-480. The TN
 //	     sentence sits under a block headed "[TS-590S / TS-590SG common]"
-//	     (590:2287), so THAT half is documented for both 590 rows — but CN
+//	     (590:2288), so THAT half is documented for both 590 rows — but CN
 //	     is unprinted on both, what the rule does INSIDE an MW record is
 //	     unprinted on all three, and clamp-versus-refuse is firmware
 //	     behaviour rather than a family property. EACH TRIAL LIFTS ITS OWN
