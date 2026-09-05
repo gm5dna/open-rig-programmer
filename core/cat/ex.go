@@ -7,7 +7,9 @@ import "fmt"
 // exReadLen is the length of an EX read request for THIS DIALECT:
 // "EX"(2) + address(d.EXAddressWidth()) + ";"(1). Reference: the EX
 // grammar block's Read frame — "E X P1 P1 P2 P2 P3 P3 ;" (FT-710 manual
-// extract line ~629) is 9 bytes; a four-digit family's is 7.
+// extract line ~629) is 9 bytes under EXAddressTriple; a four-digit
+// family's is 7 under EXAddressPair; a three-digit family's is 6 under
+// EXAddressSingle.
 //
 // It was a package const of 9 until the FT-891 Stage 0 seam, consulted
 // THROUGH a Dialect receiver by validEXRead — the exact shape this package
@@ -39,7 +41,8 @@ func (d Dialect) exAnswerMaxLen() int {
 }
 
 // BuildEXRead builds this dialect's EX read frame for addr — 9 bytes under
-// EXAddressTriple, 7 under EXAddressPair. Reference: the EX grammar
+// EXAddressTriple, 7 under EXAddressPair, 6 under EXAddressSingle.
+// Reference: the EX grammar
 // block's Read frame (manual extract line ~629). The only
 // validation is membership of THIS DIALECT'S inventory
 // (d.KnownEXAddress) — never a numeric range check on P1/P2/P3, mirroring
@@ -77,7 +80,7 @@ func (d Dialect) BuildEXRead(addr EXAddress) (Command, error) {
 }
 
 // ParseEXAnswer parses an EX Answer frame ("EX" + this dialect's address
-// field, six digits or four + a raw P4 body of 1 to d.exP4MaxBytes() bytes
+// field, six digits, four or three + a raw P4 body of 1 to d.exP4MaxBytes() bytes
 // + ";", reference: the EX grammar block's Answer frame, manual extract
 // line ~629) and returns the address and the raw P4 body.
 //

@@ -16,8 +16,20 @@ import "fmt"
 // It has NO wire rendering of its own. How many digits the field carries is
 // a fact of the RADIO, not of the address — see EXAddressForm and
 // wireEXAddress — so a caller renders through Dialect.EXWire.
+// The components are uint16 rather than uint8 because the DOMAIN is
+// form-dependent and the widest form's is 0..999 (EXAddressSingle's own
+// three-digit field). Under uint8 the TYPE would be the bound — 255, a
+// number matching no document: not the wire's three-digit capacity, not any
+// chart's row count — and V8's Single clause would be vacuous whatever
+// number it stated. Widening makes wireEXAddress's render and V8's rule two
+// halves of one fact, which is this package's standing rule that a bound is
+// consulted from the same place as its datum.
+//
+// Nothing about the wire moves with it: String() renders %02d, a MINIMUM
+// width, and every generated inventory writes UNTYPED constant literals
+// whose text is unchanged.
 type EXAddress struct {
-	P1, P2, P3 uint8
+	P1, P2, P3 uint16
 }
 
 // wireEXAddress renders a as the CAT address field of a dialect declaring
@@ -25,7 +37,9 @@ type EXAddress struct {
 // P3", the FT-710/FTdx10/FTdx101 grammar blocks), four under EXAddressPair
 // — a's own (P1,P2) components with P3 dropped; that naming is this
 // package's, not necessarily the radio's own — see EXAddressPair's doc
-// comment (dialectconfig.go) for the FT-891 naming caveat.
+// comment (dialectconfig.go) for the FT-891 naming caveat — and THREE under
+// EXAddressSingle, a's P1 alone with both P2 and P3 dropped, which is the
+// FT-991A's chart shape (one printed menu number per row, 001-153).
 //
 // IT IS THE ONLY PLACE AN ADDRESS BECOMES WIRE DIGITS. Until this seam that
 // place was EXAddress.Wire(), a method on the ADDRESS — which carries no
@@ -35,10 +49,10 @@ type EXAddress struct {
 // for anything holding a Dialect, and validateEXItems, which has
 // cfg.EXAddressForm in scope before any Dialect exists.
 //
-// Dropping P3 under Pair is safe ONLY because V12 requires every Pair
-// member's P3 to be zero (dialectvalidate.go); the rule and this render are
-// the two halves of one fact. TestWireEXAddress_RendersPerForm pins both
-// branches.
+// Dropping P3 under Pair — and P2 as well as P3 under Single — is safe ONLY
+// because V12 requires those components to be zero under the form that drops
+// them (dialectvalidate.go); the rule and this render are the two halves of
+// one fact. TestWireEXAddress_RendersPerForm pins all three branches.
 //
 // An unspecified form renders "": a dialect that never declared one has no
 // wire address at all, NewDialect refuses to build such a dialect, and the
@@ -52,6 +66,8 @@ func wireEXAddress(form EXAddressForm, a EXAddress) string {
 		return fmt.Sprintf("%02d%02d%02d", a.P1, a.P2, a.P3)
 	case EXAddressPair:
 		return fmt.Sprintf("%02d%02d", a.P1, a.P2)
+	case EXAddressSingle:
+		return fmt.Sprintf("%03d", a.P1)
 	default:
 		return ""
 	}
@@ -142,17 +158,21 @@ func (d Dialect) NewEXAddress(p1, p2, p3 int) (EXAddress, error) {
 
 // ParseEXAddress parses THIS DIALECT'S wire address field — six ASCII
 // digits ("010203") under EXAddressTriple, four ("0803") under
-// EXAddressPair — into an address that is a member of its inventory. It
+// EXAddressPair, three ("153") under EXAddressSingle — into an address that
+// is a member of its inventory. It
 // performs only a shape check (exactly the declared width, all ASCII
 // digits) followed by a membership lookup; it applies NO numeric range
 // logic to the parsed components. A malformed shape or a non-member address
 // yields a *ParseError.
 //
-// The two widths carry SEPARATE refusal sentences rather than one composed
-// from a number. The six-digit spellings are shipped text, pinned verbatim
-// in core/cat/testdata/parser-corpus.golden, and had to survive this change
-// byte for byte; the four-digit ones are their counterparts.
-// TestParseEXAddress_RefusalTextNamesTheFormsWidthInWords pins all four.
+// The three widths carry SEPARATE refusal sentences rather than one composed
+// from a number. The six-digit spellings are shipped text — "EX address must
+// be exactly six digits" is pinned verbatim in
+// core/cat/testdata/parser-corpus.golden — and had to survive this change
+// byte for byte; the four- and three-digit ones are their counterparts.
+// TestParseEXAddress_RefusalTextNamesTheFormsWidthInWords pins all six, and
+// is the ONLY thing pinning five of them: the golden carries one sentence
+// from this function, not four.
 //
 // A dialect with no declared form refuses every field, and says so: it has
 // no address width, so there is no shape to check. That branch is
@@ -182,6 +202,19 @@ func (d Dialect) ParseEXAddress(wire string) (EXAddress, error) {
 		// lookup below can match — not a default standing in for an absent
 		// datum.
 		return d.NewEXAddress(twoDigitsAt(wire, 0), twoDigitsAt(wire, 2), 0)
+	case EXAddressSingle:
+		if len(wire) != 3 {
+			return EXAddress{}, newParseError([]byte(wire), "EX address must be exactly three digits")
+		}
+		if !allASCIIDigits(wire) {
+			return EXAddress{}, newParseError([]byte(wire), "EX address must be three ASCII digits")
+		}
+		// Neither P2 nor P3 is on the wire, and V12 has already required
+		// every member of a Single inventory to have both zero, so 0 is the
+		// only value the lookup below can match — not a default standing in
+		// for an absent datum. The Pair arm above gives the same reason for
+		// its one dropped component.
+		return d.NewEXAddress(threeDigitsAt(wire, 0), 0, 0)
 	default:
 		return EXAddress{}, newParseError([]byte(wire), "EX address: this dialect declares no EXAddressForm, so it has no address field")
 	}
@@ -201,4 +234,14 @@ func allASCIIDigits(s string) bool {
 // have already established that s is all digits and long enough.
 func twoDigitsAt(s string, i int) int {
 	return int(s[i]-'0')*10 + int(s[i+1]-'0')
+}
+
+// threeDigitsAt reads the three-digit decimal component at offset i, the
+// EXAddressSingle field's whole content. Callers have already established
+// that s is all digits and long enough. It is a sibling of twoDigitsAt
+// rather than a width-parameterised version of it: each form's parse arm
+// reads its own field, and a shared helper taking a width would put the
+// width somewhere other than the arm that knows it.
+func threeDigitsAt(s string, i int) int {
+	return int(s[i]-'0')*100 + int(s[i+1]-'0')*10 + int(s[i+2]-'0')
 }
