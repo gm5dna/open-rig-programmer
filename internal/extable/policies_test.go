@@ -218,8 +218,15 @@ func TestRenderGo_LabelsAbsentEmitsEmptyLabels(t *testing.T) {
 // to exist. A Kenwood stanza that copy-pastes core/cat's MaxDigitsCeiling
 // (247) onto a profile rendering into core/kw would otherwise pass every
 // test in this package; naming the ceiling here, in the one sweep a fifth
-// registration cannot dodge, closes that gap in this file rather than
-// leaving it to core/kw's own ceiling test alone.
+// registration cannot dodge, makes that registration STATE its ceiling a
+// second time, in a second file.
+//
+// WHAT THAT DOES NOT DO is make the mistake impossible: a stanza that
+// writes MaxDigitsCeiling and a want row here that repeats it agree with
+// each other and pass. The column forces the copy-paste to be made twice
+// in two adjacent files; the gap itself closes only when core/kw's own
+// ceiling test asserts its constant against the REGISTERED profile's
+// DigitsCeiling rather than against a literal.
 func TestRegisteredProfiles_DeclareTodaysBehaviourExplicitly(t *testing.T) {
 	want := map[string]struct {
 		addr      AddressForm
