@@ -29,6 +29,8 @@ jobs:
         # win-code follow-up.
         os: [ubuntu-latest, macos-latest, windows-2025]
     runs-on: ${{ matrix.os }}
+    # Job-level, so it caps all three matrix legs, not only windows-2025 —
+    # chosen because Windows is the slowest of the three (the plan's value).
     timeout-minutes: 45
     steps:
       - name: Checkout
