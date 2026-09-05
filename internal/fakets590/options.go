@@ -59,6 +59,100 @@ func WithFirmwareVersion(s string) Option {
 	}
 }
 
+// WithFactoryImage REPLACES the fake's entire record map with img's output.
+// Pass it BEFORE any WithChannel, WithSplitChannel or WithEmptyChannel option
+// in the same New call, or the image will overwrite them. Without this option,
+// New defaults to DefaultImage.
+//
+// It exists for the case internal/wiring's per-model FakeSessionOpts variable
+// documents: a test that needs a fake rig with a non-default inventory,
+// reached through the EXACT code path a real "--fake" invocation uses rather
+// than by hand-building a session that bypasses the constructor.
+func WithFactoryImage(img Image) Option {
+	return func(r *Radio) {
+		r.records = img()
+	}
+}
+
+// WithChannel overlays ONE half of one channel — the P1='0' record, which is
+// a simplex channel's data, a split channel's receive frequency, or a
+// section-defined channel's start frequency (590:1441-1451). Use
+// WithSplitChannel for the pair.
+//
+// No validation is applied: the record is stored verbatim, so a test may
+// craft a channel whose ANSWER is deliberately malformed — a mode nibble the
+// MD legend does not print, a tone index above the printed chart, a name byte
+// outside A2's charset — and drive a real driver's parse-error path through a
+// real fake rather than through a scripted transcript. That is why MemState's
+// fields are raw wire bytes at all.
+//
+// Overlay semantics: it is applied to whatever record map is already present.
+func WithChannel(channel int, s MemState) Option {
+	return func(r *Radio) {
+		r.records[recordKey{channel: channel, half: HalfRXOrStart}] = s
+	}
+}
+
+// WithSplitChannel overlays BOTH halves of one channel: the P1='0' record and
+// the P1='1' one.
+//
+// It is ONE option because the two frames are one pair, and its name carries
+// the ordinary-memory reading — "When reading the transmit frequency of the
+// split channel in transmit mode, enter 1." (590:1444-1447). On a
+// section-defined channel, 100-109, the SAME pair is the start and the end
+// frequency (590:1449-1451), so this is also how a section channel's two
+// halves are staged; the byte is overloaded, not the option.
+//
+// No validation, and overlay semantics, exactly as WithChannel.
+func WithSplitChannel(channel int, rxOrStart, txOrEnd MemState) Option {
+	return func(r *Radio) {
+		r.records[recordKey{channel: channel, half: HalfRXOrStart}] = rxOrStart
+		r.records[recordKey{channel: channel, half: HalfTXOrEnd}] = txOrEnd
+	}
+}
+
+// WithEmptyChannel removes BOTH halves of channel from the record map, so a
+// subsequent MR of either half answers the empty record — "If the selected
+// channel is empty, P4 ~ P15 will be 0 and P16 will be blank."
+// (590:1492-1493).
+//
+// IT INTRODUCES NO NEW ASSUMED BEHAVIOUR: it only removes map entries, which
+// triggers the fake's existing documented empty-channel answer. This is the
+// test-only seam for forcing a channel the default image populates to read
+// back empty — the shape internal/fakeft891's WithEXUnavailable has, one
+// radio family over — so that a driver's empty-channel handling can be pinned
+// against a channel a test names rather than against whichever channel the
+// image happens not to fill.
+//
+// Overlay semantics: it is applied to whatever record map is already present,
+// so it must be given AFTER any WithFactoryImage in the same New call.
+func WithEmptyChannel(channel int) Option {
+	return func(r *Radio) {
+		delete(r.records, recordKey{channel: channel, half: HalfRXOrStart})
+		delete(r.records, recordKey{channel: channel, half: HalfTXOrEnd})
+	}
+}
+
+// WithMemoryReadUnsupported makes an MR of ANY channel answer "?;" while MW
+// and MC are untouched.
+//
+// IT MAKES DECISION 5's RULE REACHABLE END TO END. A "?;" on this radio is a
+// definitive rejection: it is never retried, and it is never read as "the
+// channel is absent". With this option a session can read a rejection for
+// every channel while MC still answers, which is what drives
+// core/driver/ts590's typed whole-read failure through a real fake instead of
+// a scripted transcript.
+//
+// NOT A CLAIM THAT ANY TS-590 REFUSES MR. It plays the SECOND cause the error
+// table itself prints — "Command was not executed due to the current status
+// of the transceiver (even though the command syntax was correct)"
+// (590:101-103) — which is a state, not a defect.
+func WithMemoryReadUnsupported() Option {
+	return func(r *Radio) {
+		r.memoryReadUnsupported = true
+	}
+}
+
 // WithTransientNAKSuppressed makes the fake DROP every "?;" it would
 // otherwise send, answering nothing at all instead.
 //
