@@ -1187,14 +1187,30 @@ describe('empty states', () => {
 // missing by anatomy, tx_frequency and tone_tx, because this radio has no
 // transmitter; data_mode is missing because its record has no such byte.
 //
-// TIER_UI_SPEC's bank below is a VERBATIM COPY of the JSON Go serves for
-// it — app/uispec_test.go's icr8600MEMBankJSON, asserted against the real
-// registration by TestGetUISpec_ICR8600MEMBank_IsTheJSGridFixture, whose
-// failure message names this constant. Update it from that test, never by
-// hand. That includes the Display strings: codeplug.DisplaySlot returns a
-// slot of any length but three unchanged (core/codeplug/channel.go), so
-// this receiver's own group-and-channel form is what the app really
-// renders, and it is what every accessible name below is built from.
+// ONLY TIER_UI_SPEC.Banks[0] BELOW IS GO-PINNED (fix round 2, LOW-B): it
+// is a VERBATIM COPY of the JSON Go serves for it — app/uispec_test.go's
+// icr8600MEMBankJSON, asserted against the real registration by
+// TestGetUISpec_ICR8600MEMBank_IsTheJSGridFixture. Update Banks[0] from
+// that test's failure output, never by hand — though the failure
+// message itself reads as though the whole constant were pinned ("update
+// … TIER_UI_SPEC with the new value"); it names only Banks[0], since that
+// is all the Go test constructs or compares. That includes the Display
+// strings: codeplug.DisplaySlot returns a slot of any length but three
+// unchanged (core/codeplug/channel.go), so this receiver's own
+// group-and-channel form is what the app really renders, and it is what
+// every accessible name below is built from.
+//
+// Everything else in the object — Live, ClarMaxHz/ClarStepHz,
+// GridLegendNote, TagMaxBytes and, in particular, Tones — is UI_SPEC's,
+// the FT-710's own values, spread in as SCAFFOLDING so the tests below
+// exercise the editors this bank's ten pre-tier columns share with every
+// other radio (Mode/Shift/CTCSS/Frequency/Tag/Clarifier), not a claim
+// about what the IC-R8600 serves. Tones is the sharpest divergence: the
+// FT-710's two-tone chart here is what the SERVED-list tone tests below
+// exercise, but this radio's own GetUISpec answer is `Tones: []` (every
+// Icom driver declares CTCSSTones nil) — TIER_UI_SPEC_NO_TONES, below, is
+// the shape this radio actually serves, and the tone tests against it are
+// the real case (fix round 2, MED-A).
 
 const TIER_UI_SPEC = {
 	...UI_SPEC,

@@ -253,8 +253,17 @@
 	//   freq / int / text → the free-text editor, committed through the
 	//     PASTE parser (grid/columns.js's parsePasteCell) so an edit and a
 	//     paste of the same text produce the identical field object.
-	//   tone → the same UISpec-served tone list the CTCSS Tone column uses.
-	//   bool → the same one-keystroke toggle Tag display uses.
+	//   tone → the same UISpec-served tone list the CTCSS Tone column
+	//     uses, WHEN the radio serves one — falling through to the same
+	//     free-text editor the seven unserved vocabularies below use when
+	//     that list is empty (tierTextColumn), which fix round 2 (MED-A)
+	//     found true of every radio that renders this column today: every
+	//     registered Icom driver declares CTCSSTones nil and a numeric
+	//     range instead, so GetUISpec's own Tones list arrives empty.
+	//   bool → a three-way select ({— not set, On, Off}) while the cell is
+	//     unanswered, then the one-keystroke flip Tag display uses once it
+	//     is Known — see isToggleColumn for why the FIRST answer is CHOSEN
+	//     rather than manufactured (fix round 1, MED-2).
 	//
 	// NO SELECT FOR THE TEXT KINDS (duplex, tone_mode, dtcs_polarity,
 	// filter, tuning_step, preamp, antenna), deliberately, and the reason
