@@ -307,11 +307,14 @@ certutil -hashfile <file> SHA256
 
 ## Checking which version you have
 
-`rigprog version` (`rigprog.exe version` on Windows) prints it; the GUI
-shows it at the right-hand end of the status bar. Quote that string in
-any bug report. A build that reports `dev (unreleased build)` did not
-come from this release page — if you downloaded it here, please say so
-in the report, because that would be a packaging fault.
+`rigprog version` prints it; on Windows the installer adds nothing to
+PATH, so run `"C:\Program Files\Open Rig Programmer\rigprog.exe"
+version` for the installed CLI, or `rigprog.exe version` from wherever
+you unpacked the zip. The GUI shows it at the right-hand end of the
+status bar. Quote that string in any bug report. A build that reports
+`dev (unreleased build)` did not come from this release page — if you
+downloaded it here, please say so in the report, because that would be
+a packaging fault.
 
 ## Firmware requirement
 
