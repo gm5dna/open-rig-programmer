@@ -271,25 +271,31 @@ if [ -f "$nsi" ]; then
   code="$(nsi_source "$nsi")"
 
   # Target-specific, single-line, literal-`$INSTDIR`/`$AppData` greps are
-  # dodged three ways: `!define`-indirecting the target
+  # dodged four ways: `!define`-indirecting the target
   # (`!define UNROOT "$INSTDIR"` then `RMDir /r "${UNROOT}"`), a
-  # backslash line-continuation between `/r` and the target, or
+  # backslash line-continuation between `/r` and the target,
   # reordering flags (`RMDir /REBOOTOK /r "..."` — `/r` no longer
-  # anchors the match). None of those change what the line does, so the
-  # rule is now blanket and target-agnostic: no `RMDir` invocation in
-  # the whole nsi may carry a `/r` flag, in any position, on any target
-  # — this repository's uninstall Section never needs a recursive
-  # remove (see the Section's own comment), so the flag itself is the
-  # hazard. Tokenising after nsi_source() (continuations already
-  # folded) sidesteps all three dodges at once.
+  # anchors the match), or spelling the command or the flag in another
+  # case (`rmdir /r "..."`, `RMDIR /R "..."` — NSIS command and flag
+  # names are case-insensitive, so a plain `==` compare walks straight
+  # past a lowercase spelling; this is not hypothetical, it is how the
+  # closing review's own mutation evaded the previous version of this
+  # check). None of those change what the line does, so the rule is now
+  # blanket, target-agnostic and case-agnostic: no `RMDir` invocation in
+  # the whole nsi may carry a `/r` flag, in any position, on any target,
+  # spelt in any case — this repository's uninstall Section never needs
+  # a recursive remove (see the Section's own comment), so the flag
+  # itself is the hazard. Tokenising after nsi_source() (continuations
+  # already folded) and comparing with toupper() sidesteps all four
+  # dodges at once.
   rmdir_r_hit="$(printf '%s\n' "$code" | awk '
     {
       n = split($0, toks, /[ \t]+/)
       for (i = 1; i <= n; i++) {
-        if (toks[i] == "RMDir") {
+        if (toupper(toks[i]) == "RMDIR") {
           for (j = i + 1; j <= n; j++) {
             t = toks[j]
-            if (t == "/r" || t == "/R") { print; next }
+            if (toupper(t) == "/R") { print; next }
             if (substr(t, 1, 1) != "/") break
           }
         }
@@ -315,8 +321,8 @@ $rmdir_r_hit"
     # install Section) satisfy "precedes $INSTDIR" even though the
     # uninstall Section itself never ran it, leaving RMDir "$INSTDIR"
     # to execute with its working directory still inside $INSTDIR.
-    temp_pos="$(printf '%s\n' "$uninstall_block" | grep -n 'SetOutPath[[:space:]]\+"\$TEMP"' | head -1 | cut -d: -f1)"
-    instdir_pos="$(printf '%s\n' "$uninstall_block" | grep -n 'RMDir[[:space:]]\+"\$INSTDIR"' | head -1 | cut -d: -f1)"
+    temp_pos="$(printf '%s\n' "$uninstall_block" | grep -in 'SetOutPath[[:space:]]\+"\$TEMP"' | head -1 | cut -d: -f1)"
+    instdir_pos="$(printf '%s\n' "$uninstall_block" | grep -in 'RMDir[[:space:]]\+"\$INSTDIR"' | head -1 | cut -d: -f1)"
     if [ -z "$temp_pos" ]; then
       err "nsi: no SetOutPath \"\$TEMP\" line found in the uninstall Section (needed before removing \$INSTDIR)"
     elif [ -z "$instdir_pos" ]; then
@@ -325,21 +331,21 @@ $rmdir_r_hit"
       err "nsi: SetOutPath \"\$TEMP\" (uninstall Section line $temp_pos) does not precede RMDir \"\$INSTDIR\" (line $instdir_pos)"
     fi
 
-    bad_rigprog="$(printf '%s\n' "$uninstall_block" | grep -i 'rigprog' | grep -Ev 'Delete[[:space:]]+"\$INSTDIR\\rigprog\.exe"')"
+    bad_rigprog="$(printf '%s\n' "$uninstall_block" | grep -i 'rigprog' | grep -Eiv 'Delete[[:space:]]+"\$INSTDIR\\rigprog\.exe"')"
     [ -z "$bad_rigprog" ] || err "nsi: uninstall Section mentions rigprog outside the Delete \"\$INSTDIR\\rigprog.exe\" line:
 $bad_rigprog"
-    printf '%s\n' "$uninstall_block" | grep -Eq 'Delete[[:space:]]+"\$INSTDIR\\rigprog\.exe"' \
+    printf '%s\n' "$uninstall_block" | grep -Eiq 'Delete[[:space:]]+"\$INSTDIR\\rigprog\.exe"' \
       || err "nsi: uninstall Section has no Delete \"\$INSTDIR\\rigprog.exe\" line"
   fi
 
   amd64_block="$(printf '%s\n' "$code" | sed -n '/IsNativeAMD64/,/EndIf/p')"
-  printf '%s\n' "$amd64_block" | grep -Eq 'File[[:space:]].*dist\\amd64\\rigprog\.exe' \
+  printf '%s\n' "$amd64_block" | grep -Eiq 'File[[:space:]].*dist\\amd64\\rigprog\.exe' \
     || err "nsi: no File line for dist\\amd64\\rigprog.exe inside an IsNativeAMD64 branch"
   arm64_block="$(printf '%s\n' "$code" | sed -n '/IsNativeARM64/,/EndIf/p')"
-  printf '%s\n' "$arm64_block" | grep -Eq 'File[[:space:]].*dist\\arm64\\rigprog\.exe' \
+  printf '%s\n' "$arm64_block" | grep -Eiq 'File[[:space:]].*dist\\arm64\\rigprog\.exe' \
     || err "nsi: no File line for dist\\arm64\\rigprog.exe inside an IsNativeARM64 branch"
 
-  printf '%s\n' "$code" | grep -Eq 'File[[:space:]].*LICENSE"' \
+  printf '%s\n' "$code" | grep -Eiq 'File[[:space:]].*LICENSE"' \
     || err "nsi: no File line for LICENSE"
 else
   err "nsi source missing: $nsi"
