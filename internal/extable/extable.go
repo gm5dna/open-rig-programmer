@@ -45,8 +45,9 @@ const numColumns = 10
 // emitted into the generated Go); Digits is the manual's Digits column:
 // within the profile's MinDigits..MaxDigits for a numeric field, or exactly
 // the profile's TextWidth for a text item (1..4 and 12 respectively for the
-// FT-710); Text marks those text items; and ManualLine is the source line
-// in the manual extract the row was transcribed from.
+// FT-710); Text marks those text items; Parameterless marks the rows whose
+// chart line names no field at all; and ManualLine is the source line in the
+// manual extract the row was transcribed from.
 type Row struct {
 	P1, P2, P3 int
 	P1Label    string
@@ -55,8 +56,23 @@ type Row struct {
 	P4         string
 	Digits     int
 	Text       bool
-	ManualLine int
+	// Parameterless is true for a row whose Digits cell is the single
+	// hyphen parameterlessDigits, admitted only on an address the profile's
+	// ParameterlessAddresses names. Digits is then LEFT AT ITS ZERO VALUE
+	// and this flag is the only thing that says so: a Digits of 0 meaning
+	// "no parameter" would be the omitted-semantic-defaulted hazard M9c-1
+	// exists to refuse, and a -1 sentinel would be a width no type admits.
+	// See ParameterlessRows; TestParseCSV_ParameterlessRow pins the shape.
+	Parameterless bool
+	ManualLine    int
 }
+
+// parameterlessDigits is the Digits cell a chart draws for a row with no
+// parameter — one hyphen, which is what the FT-991A's chart prints at menu
+// 087 (docs/fixtures-private/manuals/ft991a_layout.txt:623). It is tested
+// for BEFORE strconv.Atoi below, so Atoi never sees a hyphen and its own
+// refusal keeps meaning "this cell is not a number".
+const parameterlessDigits = "-"
 
 // ParseCSV decodes the Table 2 CSV against the model profile p, which it
 // validates first. Lines beginning with '#' are treated as provenance
@@ -68,7 +84,10 @@ type Row struct {
 // AddressPair, a non-zero P2 or P3 under AddressSingle, a text row under
 // TextRowsAbsent, a non-text row whose Digits falls outside the profile's
 // MinDigits..MaxDigits, a text row whose Digits is not the profile's
-// TextWidth, an address component outside 0..99 each fail with a non-nil
+// TextWidth, an address component outside 0..99, a hyphen Digits cell on an
+// address the profile's ParameterlessAddresses does not name (or under
+// ParameterlessRefused at all), and a numeric Digits cell on an address it
+// does name, each fail with a non-nil
 // error rather than being guessed at. The returned rows preserve CSV order.
 func ParseCSV(p Profile, data []byte) ([]Row, error) {
 	// The registry validates registered profiles, but nothing forces a
@@ -184,8 +203,29 @@ func parseRecord(p Profile, rec []string) (Row, error) {
 	if strings.TrimSpace(row.P4) == "" {
 		return Row{}, fmt.Errorf("blank p4")
 	}
-	if row.Digits, err = strconv.Atoi(rec[7]); err != nil {
-		return Row{}, fmt.Errorf("bad digits %q: %w", rec[7], err)
+	// The parameterless hyphen is ruled on BEFORE the Atoi, and it is ruled
+	// on PER ADDRESS: the profile's ParameterlessExcluded policy licenses
+	// the hyphen on the addresses it names and nowhere else, so a stray
+	// hyphen anywhere in a 153-row chart is still a transcription error.
+	// The converse is checked too — a declared address carrying a NUMBER is
+	// a width smuggled onto a row the profile says has none — because a
+	// policy enforced in one direction only would let either source drift.
+	parameterless := isParameterlessAddress(p, row.P1, row.P2, row.P3)
+	if rec[7] == parameterlessDigits {
+		if p.ParameterlessPolicy != ParameterlessExcluded {
+			return Row{}, fmt.Errorf("row (%s) has a %q digits cell under %v — this model's chart prints no parameterless row, so a hyphen there is a transcription error", row.Name, parameterlessDigits, p.ParameterlessPolicy)
+		}
+		if !parameterless {
+			return Row{}, fmt.Errorf("row (%s) has a %q digits cell, but address %d/%d/%d is not one this profile's ParameterlessAddresses names", row.Name, parameterlessDigits, row.P1, row.P2, row.P3)
+		}
+		row.Parameterless = true
+	} else {
+		if parameterless {
+			return Row{}, fmt.Errorf("row (%s) at address %d/%d/%d is declared parameterless, but its digits cell is %q — a declared exclusion may not carry a width", row.Name, row.P1, row.P2, row.P3, rec[7])
+		}
+		if row.Digits, err = strconv.Atoi(rec[7]); err != nil {
+			return Row{}, fmt.Errorf("bad digits %q: %w", rec[7], err)
+		}
 	}
 	if row.Text, err = strconv.ParseBool(rec[8]); err != nil {
 		return Row{}, fmt.Errorf("bad text flag %q: %w", rec[8], err)
@@ -211,10 +251,27 @@ func parseRecord(p Profile, rec []string) (Row, error) {
 		if row.Digits != p.TextWidth {
 			return Row{}, fmt.Errorf("text row (%s) must have digits %d, got %d", row.Name, p.TextWidth, row.Digits)
 		}
-	} else if row.Digits < p.MinDigits || row.Digits > p.MaxDigits {
+	} else if !row.Parameterless && (row.Digits < p.MinDigits || row.Digits > p.MaxDigits) {
+		// The MinDigits..MaxDigits check is skipped for a parameterless row
+		// ALONE — it has no width to bound, and 0 is not one. Everything
+		// else about the row, its printed cells included, is transcribed and
+		// checked exactly as any other row's.
 		return Row{}, fmt.Errorf("non-text row (%s) digits must be %d..%d, got %d", row.Name, p.MinDigits, p.MaxDigits, row.Digits)
 	}
 	return row, nil
+}
+
+// isParameterlessAddress reports whether the profile names (p1,p2,p3) as a
+// row its chart prints with no parameter. It reads the ADDRESS SET, which is
+// the datum — never a count of it — so parseRecord and RenderGo below rule on
+// the same fact rather than on two proxies for it.
+func isParameterlessAddress(p Profile, p1, p2, p3 int) bool {
+	for _, a := range p.ParameterlessAddresses {
+		if a == [3]int{p1, p2, p3} {
+			return true
+		}
+	}
+	return false
 }
 
 // observedColumns is the fixed observation CSV column count:
@@ -441,6 +498,36 @@ func RenderGo(p Profile, rows []Row, observed map[string]Observed) ([]byte, erro
 	for _, l := range p.DocLines {
 		fmt.Fprintf(&buf, "// %s\n", l)
 	}
+	// The exclusion is recorded in the generated header BY ADDRESS, so a
+	// reader of the artefact alone can see which of the chart's rows is
+	// missing and why, without holding the profile beside it. Under
+	// ParameterlessRefused the set is empty and nothing is emitted, which is
+	// what keeps the four registered inventories byte-identical.
+	// TestRenderGo_ParameterlessAddressIsAbsentByAddress pins both halves.
+	if len(p.ParameterlessAddresses) > 0 {
+		buf.WriteString("//\n")
+		fmt.Fprintf(&buf, "// EXCLUDED, by address, under %v: ", p.ParameterlessPolicy)
+		excl := append([][3]int(nil), p.ParameterlessAddresses...)
+		sort.Slice(excl, func(i, j int) bool {
+			a, b := excl[i], excl[j]
+			if a[0] != b[0] {
+				return a[0] < b[0]
+			}
+			if a[1] != b[1] {
+				return a[1] < b[1]
+			}
+			return a[2] < b[2]
+		})
+		for i, a := range excl {
+			if i > 0 {
+				buf.WriteString(", ")
+			}
+			fmt.Fprintf(&buf, "%d/%d/%d", a[0], a[1], a[2])
+		}
+		buf.WriteString(".\n")
+		buf.WriteString("// The chart prints that row with no parameter at all, so it is transcribed\n")
+		buf.WriteString("// and counted but names no field an EX frame could read or write.\n")
+	}
 	fmt.Fprintf(&buf, "var %s = []%sEXItem{\n", p.VarName, qual)
 	// Under LabelsAbsent the generated item carries "" for both labels.
 	// ParseCSV has already required the columns to be BLANK, which admits a
@@ -452,7 +539,18 @@ func RenderGo(p Profile, rows []Row, observed map[string]Observed) ([]byte, erro
 			sorted[i].P1Label, sorted[i].P2Label = "", ""
 		}
 	}
+	emitted := 0
 	for _, r := range sorted {
+		// A row the profile names as parameterless is omitted BY ADDRESS —
+		// the profile's own datum — rather than by the Row flag alone. The
+		// two agree by construction after parseRecord, but RenderGo is a
+		// separate entry point and a caller may hand it rows it did not
+		// parse; keying on the set means the omitted row is the DECLARED
+		// one, never merely a row that happened to arrive flagged.
+		if isParameterlessAddress(p, r.P1, r.P2, r.P3) {
+			continue
+		}
+		emitted++
 		// The observation lookup key follows THIS PROFILE'S OWN address
 		// form (S0-close review, LOW-3) rather than always being rendered
 		// six digits wide: under AddressPair the wire field carries P1 and
@@ -497,6 +595,16 @@ func RenderGo(p Profile, rows []Row, observed map[string]Observed) ([]byte, erro
 			r.Digits, r.Text, obs.ReadWidth, strconv.Quote(obs.ReadShape), r.ManualLine)
 	}
 	buf.WriteString("}\n")
+	// The accounting the exclusion owes: ExpectedRows counts the chart's
+	// printed rows, the declared set says how many of them name no field, and
+	// what is emitted is the difference. The check catches the case the
+	// address-keyed skip above cannot — a profile declaring an address its
+	// CSV never carries, which would silently emit one item too many while
+	// every count in the profile still looked consistent.
+	// TestRenderGo_ParameterlessArithmetic pins it.
+	if want := p.ExpectedRows - len(p.ParameterlessAddresses); emitted != want {
+		return nil, fmt.Errorf("extable: profile %s: emitted %d items, want %d — ExpectedRows %d less the %d address(es) ParameterlessAddresses names, so a declared exclusion is missing from the inventory", p.Model, emitted, want, p.ExpectedRows, len(p.ParameterlessAddresses))
+	}
 
 	formatted, err := format.Source(buf.Bytes())
 	if err != nil {
