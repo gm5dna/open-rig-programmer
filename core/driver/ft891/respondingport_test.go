@@ -108,6 +108,11 @@ type slotImage struct {
 	// for a read of it. Task 3's surface; nil serves "?;" for every
 	// address.
 	exAnswers map[string]string
+	// exSilent names EX addresses whose read draws NO REPLY AT ALL —
+	// mtSilent's counterpart for this same surface, and for the identical
+	// reason: a self-consistent slotImage answer (even "?;") cannot stand
+	// in for the transport genuinely hearing nothing back.
+	exSilent map[string]bool
 	// rejectSets makes every combined MT Set answer "?;" instead of the
 	// silence the ASSUMED convention reads as accepted — the write path's
 	// radio-rejected row.
@@ -219,8 +224,8 @@ func (p *respondingPort) record(frame string) {
 // entries that hold the convention, and why the default is a NAK.
 //
 // SILENCE HAS TWO MEANINGS HERE and they are not confusable in practice: a
-// fire-and-forget Set's silence is the ASSUMED success signal, while an MT
-// read's silence (mtSilent) is a radio that did not answer a read at all,
+// fire-and-forget Set's silence is the ASSUMED success signal, while a read's
+// silence (mtSilent, exSilent) is a radio that did not answer a read at all,
 // which the engine turns into a timeout. Only the second is a fault being
 // scripted.
 func (img slotImage) reply(frame string, mrSeen map[string]int, mtWritten map[string]string) string {
@@ -273,7 +278,11 @@ func (img slotImage) reply(frame string, mrSeen map[string]int, mtWritten map[st
 		}
 		return ""
 	case strings.HasPrefix(frame, "EX") && len(frame) == exReadFrameLen:
-		if ans, ok := img.exAnswers[frame[2:6]]; ok {
+		addr := frame[2:6]
+		if img.exSilent[addr] {
+			return ""
+		}
+		if ans, ok := img.exAnswers[addr]; ok {
 			return ans
 		}
 		return "?;"
