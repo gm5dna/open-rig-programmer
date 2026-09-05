@@ -36,13 +36,12 @@ var allSpecFields = []spec.Field{
 // profiles is the two declared Profile values with their read/write pair, so
 // every per-profile table below covers both.
 var profiles = []struct {
-	name  string
-	rw    spec.FieldSupport
-	caps  func() spec.Capabilities
-	value Profile
+	name string
+	rw   spec.FieldSupport
+	caps func() spec.Capabilities
 }{
-	{"unverified", spec.FieldSupport{Read: spec.Unverified, Write: spec.Unverified}, CapabilitiesUnverified, RealHardware},
-	{"simulated", spec.FieldSupport{Read: spec.Supported, Write: spec.Supported}, CapabilitiesSimulated, Simulated},
+	{"unverified", spec.FieldSupport{Read: spec.Unverified, Write: spec.Unverified}, CapabilitiesUnverified},
+	{"simulated", spec.FieldSupport{Read: spec.Supported, Write: spec.Supported}, CapabilitiesSimulated},
 }
 
 func TestAllSpecFields_IsTwentySeven(t *testing.T) {
