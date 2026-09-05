@@ -731,23 +731,6 @@ func TestReadChannel_IsAtomicUnderOpMu(t *testing.T) {
 	}
 }
 
-// TestWriteChannel_RefusedUntilTask12 pins the placeholder ts590.go carries
-// so that *Session satisfies driver.Session, and IS REPLACED ALONG WITH IT by
-// Stage 2 task 12. Every call is refused before a frame is built.
-func TestWriteChannel_RefusedUntilTask12(t *testing.T) {
-	sess, p := openTestSession(t, RowSG, radioImage{})
-	res, err := sess.WriteChannel(context.Background(), codeplug.Channel{Slot: "042", Data: &codeplug.ChannelData{FreqHz: 145_500_000, Mode: "FM"}})
-	if err == nil {
-		t.Fatal("the placeholder WriteChannel accepted a write")
-	}
-	if len(res.Steps) != 0 {
-		t.Errorf("WriteResult.Steps = %v, want an empty (non-nil) slice", res.Steps)
-	}
-	if got := p.Transcript(); len(got) != 3 {
-		t.Errorf("transcript = %v, want the probe's three frames and no write frame", got)
-	}
-}
-
 // TestReadAll_FailsWholeOnTheFirstRefusalOrTimeout pins the consequence of
 // the two typed refusals above, walked the way core/clone's ReadAll walks a
 // bank: the FIRST error ends the read, and every later slot goes unasked.
