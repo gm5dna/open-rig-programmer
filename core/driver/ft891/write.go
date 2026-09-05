@@ -554,9 +554,12 @@ func buildWriteCommand(dialect cat.Dialect, ch codeplug.Channel) (cat.Command, e
 	// uint32 because a NEWCAT memory frame carries nine digits and can
 	// express nothing wider, so a bare cast would truncate an out-of-range
 	// value into a plausible small one and send it. The arm is unreachable
-	// for this radio — codeplug.Validate has already refused anything above
-	// its 56 MHz ceiling — and it is a refusal, not a cast, so it stays
-	// unreachable by construction rather than by habit.
+	// for any channel that came through codeplug.Validate, which refuses
+	// anything above this radio's 56 MHz ceiling before WriteChannel ever
+	// sees it — true of the clone service's caller, not of WriteChannel
+	// itself, which does not call Validate. It is a refusal, not a cast,
+	// so it stays unreachable-for-that-caller by construction rather than
+	// by habit.
 	freqHz, err := cat.MemoryFreqHz(data.FreqHz)
 	if err != nil {
 		return cat.Command{}, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{spec.FieldFrequency}, Reason: err.Error()}
