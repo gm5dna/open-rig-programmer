@@ -230,10 +230,40 @@ if [ -f "$nsi" ]; then
   code="$(nsi_source "$nsi")"
   code_numbered="$(nsi_source "$nsi" | grep -n '')"
 
-  printf '%s\n' "$code" | grep -Eiq 'RMDir[[:space:]]*/r[[:space:]]*"?\$INSTDIR' \
-    && err "nsi: found a recursive RMDir /r on \$INSTDIR (classic NSIS hazard)"
-  printf '%s\n' "$code" | grep -Eiq 'RMDir[[:space:]]*/r[[:space:]]*"?\$(AppData|APPDATA)' \
-    && err "nsi: found a recursive RMDir /r under \$AppData (deletes user data)"
+  # Target-specific, single-line, literal-`$INSTDIR`/`$AppData` greps are
+  # dodged three ways: `!define`-indirecting the target
+  # (`!define UNROOT "$INSTDIR"` then `RMDir /r "${UNROOT}"`), a
+  # backslash line-continuation between `/r` and the target, or
+  # reordering flags (`RMDir /REBOOTOK /r "..."` — `/r` no longer
+  # anchors the match). None of those change what the line does, so the
+  # rule is now blanket and target-agnostic: no `RMDir` invocation in
+  # the whole nsi may carry a `/r` flag, in any position, on any target
+  # — this repository's uninstall Section never needs a recursive
+  # remove (see the Section's own comment), so the flag itself is the
+  # hazard. Tokenising after nsi_source() (continuations already
+  # folded) sidesteps all three dodges at once.
+  rmdir_r_hit="$(printf '%s\n' "$code" | awk '
+    {
+      n = split($0, toks, /[ \t]+/)
+      for (i = 1; i <= n; i++) {
+        if (toks[i] == "RMDir") {
+          for (j = i + 1; j <= n; j++) {
+            t = toks[j]
+            if (t == "/r" || t == "/R") { print; next }
+            if (substr(t, 1, 1) != "/") break
+          }
+        }
+      }
+    }
+  ')"
+  [ -z "$rmdir_r_hit" ] || err "nsi: found a recursive RMDir /r (classic NSIS hazard, any flag order or target):
+$rmdir_r_hit"
+
+  # Indirection is not needed anywhere in this nsi and is how the
+  # hazard above hides, so ban it outright: no !define's value may name
+  # any of the directories a recursive remove would be dangerous on.
+  printf '%s\n' "$code" | grep -Eiq '^[[:space:]]*!define[[:space:]]+[A-Za-z0-9_]+[[:space:]]+.*\$(INSTDIR|AppData|APPDATA|LOCALAPPDATA|PROGRAMFILES)' \
+    && err "nsi: a !define's value contains \$INSTDIR/\$AppData/\$LOCALAPPDATA/\$PROGRAMFILES (indirection is not needed here and is how the RMDir /r check above gets dodged)"
 
   temp_line="$(printf '%s\n' "$code_numbered" | grep -E 'SetOutPath[[:space:]]+"\$TEMP"' | head -1 | cut -d: -f1)"
   instdir_line="$(printf '%s\n' "$code_numbered" | grep -E 'RMDir[[:space:]]+"\$INSTDIR"' | head -1 | cut -d: -f1)"
