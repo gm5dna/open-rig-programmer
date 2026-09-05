@@ -66,6 +66,20 @@ const (
 // reviewable test change. Making this constant load-bearing on its own
 // would mean a one-character edit could unlock a write.
 //
+// THE FLIP MUST ALSO RE-PUT MATRIX §7 CELL 7 — the milestone's ruled
+// [STUART] decision on writable DCS states — AND THE REGISTER ENTRY
+// A DCS-STATE CHANNEL'S CODE SURVIVES A REWRITE TOGETHER (matrix erratum
+// M-E12, folding §3.11): cell 7's writable-DCS-state ruling is mitigated
+// today only by nothing being written while this constant is false, and
+// that entry — a DCS-state channel's code surviving a rewrite — is the
+// hazard the mitigation defers, so the DCS-write decision is RE-TAKEN with
+// trial evidence in hand at the flip rather than inherited through it
+// unexamined. This driver publishes all five P8 values as writable
+// (ctcssStates), so the flip is the moment a real FT-991A becomes reachable
+// with a '3' or a '4' on the wire and no way to write or read the code it
+// implies. The consent option's own comment (ft991a.go) names the hazard;
+// this is the checklist a future implementer will actually read.
+//
 // The pin: TestWriteTrialsComplete_PinnedFalse asserts both halves — the
 // constant is false, AND the RealHardware baseline is genuinely
 // nothing-writable, so a constant-only edit cannot pass while leaving the
@@ -303,14 +317,21 @@ func ctcssStates() []spec.ToneState {
 //     read of this bank cannot reach the field".
 //
 //   - spec.FieldCTCSSTone, spec.FieldToneTx, spec.FieldToneRx,
-//     spec.FieldDTCSCode, spec.FieldDTCSPolarity and spec.FieldScanSkip are
-//     the zero FieldSupport on the WEAKER ground: the register entry
-//     TONE-NUMBER, DCS-CODE AND SCAN-SKIP UNREACHABILITY (matrix §2.4). The
+//     spec.FieldDTCSCode and spec.FieldScanSkip are the zero FieldSupport
+//     on the WEAKER ground: three register entries, one per claim (matrix
+//     §2.4, split by erratum M-E10 because each has its own lifting
+//     capture). TONE-NUMBER UNREACHABILITY covers FieldCTCSSTone,
+//     FieldToneTx and FieldToneRx; DCS-CODE UNREACHABILITY covers
+//     FieldDTCSCode; SCAN-SKIP UNREACHABILITY covers FieldScanSkip. The
 //     41-position record accounts for every one of its positions and none
 //     of them is a tone number, a DCS code or a skip flag, and P9 is
 //     documented "00: (Fixed)" (layout 1012) — but nothing verifies that no
 //     OTHER command could reach a channel's stored tone on this radio, and
 //     the FT-710's answer that none can is that radio's hardware finding.
+//     spec.FieldDTCSPolarity IS NOT ON THIS LIST and must not be added to
+//     it: it is a different claim in kind — a MANUAL-EVIDENCED ABSENCE from
+//     the record, graded at matrix §1.20 and covered by the last bullet
+//     below — and none of these three entries' captures tests polarity.
 //     THIS RADIO'S GAP IS ITS OWN AND IT IS USER-VISIBLE: its P8 can SAY
 //     DCS and its record cannot carry the code, so this programme can read
 //     and write "this channel uses DCS encode+decode" while being unable to
@@ -350,8 +371,9 @@ func bankFields(rw, clar spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 		// FT-891's most distinctive cell. See the doc comment.
 		spec.FieldTagDisplay: {},
 
-		// The register's TONE-NUMBER, DCS-CODE AND SCAN-SKIP
-		// UNREACHABILITY entry.
+		// The register's TONE-NUMBER UNREACHABILITY and SCAN-SKIP
+		// UNREACHABILITY entries respectively — separate entries with
+		// separate captures (matrix erratum M-E10).
 		spec.FieldCTCSSTone: {},
 		spec.FieldScanSkip:  {},
 		// No erase command exists in this radio's command set at all.

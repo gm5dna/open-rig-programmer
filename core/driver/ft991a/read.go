@@ -140,14 +140,24 @@ func mtSpec(d cat.Dialect) (transport.CommandSpec, error) {
 // half agrees: caps.go grades spec.FieldTagDisplay the zero FieldSupport on
 // both banks.
 //
+// THAT IS A FACT ABOUT THE LEGEND, NOT ABOUT WHAT BYTE A REAL ANSWER
+// CARRIES (matrix §2.3 as folded by erratum M-E9). The legend printing
+// "0: (Fixed)" is what this manual states; that a genuine answer really
+// puts '0' there is the further, ASSUMED step, and it is the register's
+// THE PRINTED-FIXED BYTES ARE ANSWERED AS PRINTED entry — which is why a
+// real FT-991A answering some other byte would fail the parse outright
+// (cat.P11Fixed) rather than reach this mapping at all.
+//
 // TxClar CAN come back TRUE, which is the other half of M-E3: under the
 // dialect's MemoryP5 = cat.P5TxClar the parser carries byte 21 through as a
 // live TX-clarifier state, where the FT-891's P5Fixed makes it always false.
 //
 // CTCSSTone and ScanSkip come back codeplug.Unknown, ALWAYS: the register's
-// TONE-NUMBER, DCS-CODE AND SCAN-SKIP UNREACHABILITY entry. "Unknown" means
-// "preserve whatever the radio has" to every write path downstream, which is
-// the only honest instruction for a field this driver cannot see.
+// TONE-NUMBER UNREACHABILITY and SCAN-SKIP UNREACHABILITY entries — two
+// entries, because their lifting captures are two (matrix erratum M-E10).
+// "Unknown" means "preserve whatever the radio has" to every write path
+// downstream, which is the only honest instruction for a field this driver
+// cannot see.
 //
 // KIND CHECKING IS THE PARSER'S, not this driver's, and on this radio the
 // read domain is TRANSCRIBED rather than assumed: MT's own P7 legend prints
@@ -157,11 +167,20 @@ func mtSpec(d cat.Dialect) (transport.CommandSpec, error) {
 // SEVEN-value IF P7 (792-793) and two-value OI P7 (1127) are deliberately
 // not read across into the memory record's — see doc.go.
 //
-// Error typing, three classes, none a bare fmt.Errorf: PARSE failures stay
-// *cat.ParseError under a wrap (errors.As finds them, and the wrap adds the
-// slot the bare parser could not know); the SLOT-ECHO check raises this
-// driver's own *AnswerMismatchError; and a transport failure — timeout
-// included — reaches the caller as itself under the same slot-naming wrap.
+// Error typing, three classes on the answering path, none a bare fmt.Errorf:
+// PARSE failures stay *cat.ParseError under a wrap (errors.As finds them, and
+// the wrap adds the slot the bare parser could not know); the SLOT-ECHO check
+// raises this driver's own *AnswerMismatchError; and a transport failure —
+// timeout included — reaches the caller as itself under the same slot-naming
+// wrap.
+//
+// THREE DEFENSIVE ARMS SIT OUTSIDE THAT ACCOUNT and each IS a bare
+// fmt.Errorf, deliberately: the unmapped-CTCSS and unmapped-shift guards,
+// both unreachable after the dialect's own per-radio validation and kept so
+// that a widened dialect refuses rather than mislabels; and mtSpec's
+// geometry refusal, which is the ONE error here that names no slot because
+// it is a fact about the DIALECT and would fail identically for every slot
+// (naming one would suggest the failure was that slot's).
 func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channel, error) {
 	// Held for the WHOLE operation — see the doc comment and the Session
 	// type's.
@@ -282,24 +301,28 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 			// masked.
 			TxClar: m.TxClar,
 			CTCSS:  ctcss,
-			// The register's TONE-NUMBER, DCS-CODE AND SCAN-SKIP
-			// UNREACHABILITY entry: no tone number is readable. NOTE THE
-			// GAP THIS RADIO HAS AND ITS SIBLINGS DO NOT — the CTCSS field
-			// above can say "DCS-ENC-DEC" while this one can never say
-			// which code, because the 41-position record has no DCS code
-			// field at all.
+			// The register's TONE-NUMBER UNREACHABILITY entry: no tone
+			// number is readable. NOTE THE GAP THIS RADIO HAS AND ITS
+			// SIBLINGS DO NOT — the CTCSS field above can say "DCS-ENC-DEC"
+			// while this one can never say which code, because the
+			// 41-position record has no DCS code field at all. That second
+			// half is the register's DCS-CODE UNREACHABILITY entry, kept
+			// separate from this one because its capture is separate.
 			CTCSSTone: codeplug.ToneField{State: codeplug.Unknown},
 			Shift:     shift,
-			// The register's TONE-NUMBER, DCS-CODE AND SCAN-SKIP
-			// UNREACHABILITY entry: no scan-skip flag is readable.
+			// The register's SCAN-SKIP UNREACHABILITY entry: no scan-skip
+			// flag is readable.
 			ScanSkip: codeplug.BoolField{State: codeplug.Unknown},
 			Tag:      tag,
-			// UNAVAILABLE, never Known and never Unknown: MT's P11 is
-			// printed "0: (Fixed)" (layout 1015), so this radio's memory
-			// frame has no display flag at all. See the method doc comment
-			// — this is the FT-891's cell inverted, and the honest reading
-			// is "this radio's frame has no such field", which is STRONGER
-			// than "this read could not reach it".
+			// UNAVAILABLE, never Known and never Unknown: MT's P11 LEGEND
+			// is printed "0: (Fixed)" (layout 1015), so the frame this
+			// driver reads declares no display flag. See the method doc
+			// comment — this is the FT-891's cell inverted, and the honest
+			// reading is "this radio's frame has no such field", which is
+			// STRONGER than "this read could not reach it". What a real
+			// answer puts at byte 28 is the register's THE PRINTED-FIXED
+			// BYTES ARE ANSWERED AS PRINTED entry, not this mapping's
+			// claim.
 			TagDisplay: codeplug.BoolField{State: codeplug.Unavailable},
 			// The seventeen fields the Icom model extensions added to the
 			// neutral memory model (design D4/D8). UNAVAILABLE on this
