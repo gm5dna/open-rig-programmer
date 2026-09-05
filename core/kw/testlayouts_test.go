@@ -70,7 +70,7 @@ func layout590S() Layout {
 		Model:    "TS-590S",
 		P2:       P2HundredsDigit,
 		Byte19:   Byte19DataMode,
-		Byte28:   Byte28FilterEither, // "always \"0\"" in firmware 1.xx (590:1564)
+		Byte28:   Byte28FilterEither, // "always \"0\"" in firmware 1.xx (590:1478; E7)
 		Byte3940: Byte3940FMNarrowFlag,
 		Byte41:   Byte41Lockout,
 

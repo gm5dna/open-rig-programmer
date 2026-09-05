@@ -205,11 +205,20 @@ func (s Slot) String() string {
 // frequency on the 480 (480:951); on a section-defined channel it selects
 // the START or the END frequency instead — "set parameter P1 to 0 to enter
 // the Start frequency, then set P1 to 1 to set the End frequency"
-// (590:1529-1531, and 480:986-987 for that radio's 90-99). A builder that
-// took P1 from a channel's split state would write '0' into a section
-// channel's END slot, putting the START frequency where the user had edited
-// the END: a silent data loss, and exactly the class of error decision 11
-// exists to prevent.
+// (590:1529-1531). A builder that took P1 from a channel's split state would
+// write '0' into a section channel's END slot, putting the START frequency
+// where the user had edited the END: a silent data loss, and exactly the
+// class of error decision 11 exists to prevent.
+//
+// THE 480 PRINTS THE SAME OVERLOAD AND THIS PROGRAMME DOES NOT USE IT.
+// "Memory channel 90 ~ 99: P1=0 (start frequency), P1=1 (end frequency)"
+// (480:986-987) is really printed, but the spec rules the other way for that
+// radio: it gets no scan bank, its 90-99 are ordinary memories that also
+// answer a second frame, and "the P1=1 half of 90-99 is unreachable through
+// this programme" (spec :711-718, decision 15, matrix erratum M-E2).
+// layout480 declares a flat 000-099 SlotMemory accordingly, so SlotScan is a
+// 590-only class here and the citation above is context, not a rule this
+// codec applies to the 480.
 //
 // So: '0' for an ordinary memory slot and for a section channel's LOWER
 // half; '1' for a section channel's UPPER half.
@@ -220,9 +229,10 @@ func (s Slot) String() string {
 // ten SG slots are omitted from the driver's published banks until A11
 // lifts, so nothing this programme ships reaches this arm.
 //
-// TestSlotP1_IsDerivedFromTheClassNotTheSplitState pins all three arms, and
-// TestBuildMWSet_UpperHalfWritesP1One is the red proof that the U case is
-// not simply '0'.
+// TestBuildMWSet_P1IsDerivedFromTheSlotClassNotTheSplitState pins all three
+// arms, and its SCAN 'U' case is the red proof that the upper half is not
+// simply '0': an implementation returning '0' unconditionally passes every
+// other case in this package and fails only there.
 func (s Slot) P1() byte {
 	if s.class == SlotScan && s.half == ScanUpper {
 		return '1'

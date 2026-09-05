@@ -45,14 +45,39 @@ func answer590() recordFields {
 	}
 }
 
-// answer480 is the same channel as a TS-480 would answer it: byte 19 is the
-// lockout there and byte 41 a printed constant, so the same bytes mean
-// different things and the fixture must say so.
+// answer480 is the same channel as a TS-480 would answer it.
+//
+// IT MUST CARRY A BYTE THAT ACTUALLY DIVERGES, or it is answer590 under
+// another name. Byte 19 is the lockout here and byte 41 a printed constant,
+// but both hold '0' on both rows, so those two lines say nothing on their
+// own. P14 is where the fixture earns its keep: it is the tuning step index
+// on this radio (480:979), and "03" is a legal one in either of ST's two
+// mode-conditional ranges (480:1494-1500) and a value the 590 book never
+// prints for P14, whose only legend is "00: FM Normal / 01: FM Narrow"
+// (590:1569-1571).
 func answer480() recordFields {
 	f := answer590()
-	f.p6 = "0"  // lockout OFF (480:962), NOT the data mode
-	f.p15 = "0" // "Always 0 for the TS-480." (480:982)
+	f.p6 = "0"   // lockout OFF (480:962), NOT the data mode
+	f.p14 = "03" // ST step index 3, which no 590 row would admit
+	f.p15 = "0"  // "Always 0 for the TS-480." (480:982)
 	return f
+}
+
+// TestAnswer480_CarriesAByteNo590RowWouldAdmit keeps the fixture above
+// honest. A TS-480 fixture that was byte-identical to the 590 one would let
+// every table below claim to test two radios while testing one frame twice,
+// and the collapse would be invisible: the two rows' happy paths assert the
+// same decoded fields.
+func TestAnswer480_CarriesAByteNo590RowWouldAdmit(t *testing.T) {
+	if answer480() == answer590() {
+		t.Fatal("answer480 is byte-identical to answer590, so no test using it states anything about the TS-480's own reading of the grid")
+	}
+	if _, err := layout480().ParseMRAnswer(answer480().frame(t)); err != nil {
+		t.Fatalf("the TS-480 refused its own fixture: %v", err)
+	}
+	if _, err := layout590SG().ParseMRAnswer(answer480().frame(t)); err == nil {
+		t.Error("the TS-590SG accepted the TS-480 fixture; its P14 prints only \"00\" FM Normal and \"01\" FM Narrow (590:1569-1571)")
+	}
 }
 
 // frame renders f, asserting the total width so a mis-sized part cannot
@@ -355,15 +380,19 @@ func TestParseMRAnswer_RefusesASlotOutsideThisLayoutsSpace(t *testing.T) {
 	}
 }
 
-// TestParseMRAnswer_EveryPrintedFixedByteIsRequiredOnParse is A24: on the
-// TS-480 a hard-wired byte is REQUIRED on parse, not merely emitted on
-// build. The 480's general permission at 480:108-110 — digits for a
-// parameter "not applicable to this transceiver" may be any character but a
-// control code or ';' — governs the SET side, so strictness on the ANSWER
-// side is this programme's choice and is recorded as such.
+// TestParseMRAnswer_EveryPrintedFixedByteIsRequiredOnParse is DECISION 7 on
+// both rows: a hard-wired byte is REQUIRED on parse, not merely emitted on
+// build, for the 480's sixteen and the 590 pair's thirteen alike (spec
+// :1531-1533).
 //
-// It runs per LAYOUT, because the two rows hard-wire different sets: the
-// 590SG's thirteen bytes against the 480's sixteen.
+// A24 IS THE 480'S HALF ALONE. That book carries a general permission the
+// 590 book does not — digits for a parameter "not applicable to this
+// transceiver" may be any character but a control code or ';' (480:108-110)
+// — which governs the SET side, so strictness on the ANSWER side is this
+// programme's choice there and A24 records it, with L-HW-18 to lift it. The
+// 590 rows' strictness is decision 7 and no hardware item covers it.
+//
+// It runs per LAYOUT, because the two rows hard-wire different sets.
 func TestParseMRAnswer_EveryPrintedFixedByteIsRequiredOnParse(t *testing.T) {
 	for _, tt := range []struct {
 		name   string
@@ -396,7 +425,7 @@ func TestParseMRAnswer_RefusesAFrameOfTheWrongWidth(t *testing.T) {
 		name  string
 		frame []byte
 	}{
-		{"the 42-byte erase form's width", full[:41:41]},
+		{"the 42-byte erase form's width", full[:42:42]},
 		{"one byte short", full[:49:49]},
 		{"one byte long", append(append([]byte{}, full...), '0')},
 	} {
@@ -465,6 +494,42 @@ func TestParseMRAnswer_RefusesANameByteOutsideA2sCharset(t *testing.T) {
 		if _, err := layout590SG().ParseMRAnswer(f.frame(t)); err == nil {
 			t.Errorf("ParseMRAnswer accepted a name byte %#02x", b)
 		}
+	}
+}
+
+// TestParseMRAnswer_TheNameIsRightTrimmedAndOnlyRightTrimmed is A1's rule as
+// A1 states it: P16 is padded with SPACES on write and RIGHT-trimmed on read
+// (the 480's KY gives the same-document precedent, 480:785-787).
+//
+// TRIMMING BOTH ENDS WOULD EAT A LEGITIMATE BYTE. A leading space is a
+// printable character inside A2's charset and a name a user may have given a
+// channel; only the trailing run is padding this codec put there. A parser
+// that trimmed both ends would round-trip " A" to "A" and report success,
+// which is a silent edit of the user's own text.
+func TestParseMRAnswer_TheNameIsRightTrimmedAndOnlyRightTrimmed(t *testing.T) {
+	f := answer590()
+	f.p16 = " A      "
+	rec, err := layout590SG().ParseMRAnswer(f.frame(t))
+	if err != nil {
+		t.Fatalf("ParseMRAnswer = %v, want nil", err)
+	}
+	if rec.Name != " A" {
+		t.Errorf("Name = %q, want %q — only the trailing padding is this codec's, and the leading space is the user's byte", rec.Name, " A")
+	}
+
+	// And the write side pads it back to the same eight bytes.
+	slot, err := layout590SG().NewSlot(7, ScanHalfNone)
+	if err != nil {
+		t.Fatalf("NewSlot: %v", err)
+	}
+	back := populatedRecord(slot)
+	back.Name = rec.Name
+	cmd, err := layout590SG().BuildMWSet(back)
+	if err != nil {
+		t.Fatalf("BuildMWSet = %v, want nil", err)
+	}
+	if got := string(cmd.Bytes()[recNameOff : recNameOff+recNameLen]); got != f.p16 {
+		t.Errorf("P16 round-tripped to %q, want the %q it was read from", got, f.p16)
 	}
 }
 

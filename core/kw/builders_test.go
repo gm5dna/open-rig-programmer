@@ -331,9 +331,11 @@ func TestBuildMWSet_RefusesAnEmptyRecord(t *testing.T) {
 	}
 }
 
-// TestBuildMWSet_ZeroLayoutBuildsNothing, and TestBuildMRRead_ZeroLayout
-// likewise: a gate that authorised bytes on behalf of no radio is the one
-// failure the whole layout arrangement exists to prevent.
+// TestBuildMWSet_ZeroLayoutBuildsNothing covers all three of the zero
+// Layout's gates — the MW Set, the MR read and NewSlot — because a gate that
+// authorised bytes on behalf of no radio is the one failure the whole layout
+// arrangement exists to prevent, and one of the three passing while another
+// did not would be a partial answer.
 func TestBuildMWSet_ZeroLayoutBuildsNothing(t *testing.T) {
 	var l Layout
 	if _, err := l.BuildMWSet(Record{}); err == nil {
