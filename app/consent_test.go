@@ -150,11 +150,22 @@ func (r *realSessionRecorder) only(t *testing.T) realSessionCall {
 // os.UserConfigDir(), and no test may write into the developer's own
 // config directory. The consent store is NOT covered by this — it has its
 // own seam (tempUserConfig), which every caller of this helper also uses.
+//
+// All four variables are set because os.UserConfigDir reads a different
+// one on each platform: XDG_CONFIG_HOME (with HOME as its fallback) on
+// unix, and %AppData% on Windows — which no amount of HOME setting
+// redirects, so without the AppData line this test would create a real
+// directory in the runner's own roaming profile. LocalAppData goes with
+// it for os.UserCacheDir, on the same reasoning. Go looks environment
+// variables up case-insensitively on Windows, so the mixed-case spellings
+// that platform uses are the ones written here.
 func containSnapshotDir(t *testing.T) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
+	t.Setenv("AppData", home)
+	t.Setenv("LocalAppData", home)
 }
 
 // TestGetUnverifiedWriteConsent_TheThreeStates pins the distinction the
