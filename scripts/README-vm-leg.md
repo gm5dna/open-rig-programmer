@@ -49,11 +49,12 @@ preamble"):
    one `rigprog probe` on the host Mac with the `InitialStatusBits`
    build, Stuart watching TX (W6's macOS half) — this happens BEFORE
    passthrough, not on the VM, and is the orchestrator's job.
-3. Download the rehearsal-tag (`v1.3.0-rc.1`) Windows assets from the
-   draft GitHub release and verify them against its `SHA256SUMS`
-   BEFORE installing anything:
+3. Download the rehearsal tag's Windows assets (the exact tag varies
+   run to run — `v1.3.0-rc.2` was current on 05/09/2026) from the draft
+   GitHub release and verify them against its `SHA256SUMS` BEFORE
+   installing anything:
    ```powershell
-   certutil -hashfile open-rig-programmer-v1.3.0-rc.1-windows-arm64-installer.exe SHA256
+   certutil -hashfile open-rig-programmer-<rehearsal-tag>-windows-arm64-installer.exe SHA256
    ```
    Compare the printed hash against the matching line in `SHA256SUMS`
    by eye. Note in the evidence HOW the files reached the VM (browser
@@ -69,7 +70,7 @@ preamble"):
 2. **Confirm the install.** `Open Rig Programmer.exe`, `rigprog.exe`
    and `LICENSE` are in the install directory; a Start-menu entry
    exists; Programs-and-Features shows the numeric version (e.g.
-   `1.3.0`, no leading `v`, no `-rc.1` suffix).
+   `1.3.0`, no leading `v`, no `-rc.N` suffix).
    - Right-click `Open Rig Programmer.exe` → *Properties* → *Details*:
      record the Product version and File version shown (expected: the
      numeric tag). If either is blank, that is a finding for the
