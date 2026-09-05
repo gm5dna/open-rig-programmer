@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
@@ -703,31 +702,5 @@ func TestSession_DoesNotReportRegion(t *testing.T) {
 	_, sess := openSession(t, Simulated, slotImage{})
 	if _, ok := any(sess).(driver.RegionReporter); ok {
 		t.Error("the FT-991A Session implements driver.RegionReporter — nothing in Open asks the radio anything that could answer it")
-	}
-}
-
-// TestWriteChannel_RefusedUntilTask11 pins the PLACEHOLDER, and is replaced
-// along with it: the write path is task 11's, and until it lands every call
-// is refused with a typed *driver.WriteRefusedError before any frame is
-// built or any byte reaches the wire.
-//
-// It is not a partial choreography and deliberately not an attempt at one.
-// For the RealHardware and fail-safe profiles the refusal is the correct
-// behaviour regardless — their capability gate would refuse anyway,
-// writeTrialsComplete being false — and for the Simulated profile it is a
-// temporary, visible gap.
-func TestWriteChannel_RefusedUntilTask11(t *testing.T) {
-	p, sess := openSession(t, Simulated, slotImage{})
-	before := len(p.Transcript())
-
-	res, err := sess.WriteChannel(testCtx(t), codeplug.Channel{Slot: "001"})
-	if !errors.Is(err, driver.ErrWriteRefused) {
-		t.Fatalf("WriteChannel = %v, want errors.Is match against driver.ErrWriteRefused", err)
-	}
-	if len(res.Steps) != 0 {
-		t.Errorf("WriteResult.Steps = %+v, want none — the placeholder builds no frame", res.Steps)
-	}
-	if got := len(p.Transcript()); got != before {
-		t.Errorf("the port received %d frames during a refused write, want 0 — nothing may reach the wire", got-before)
 	}
 }

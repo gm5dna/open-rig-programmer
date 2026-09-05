@@ -9,7 +9,6 @@ import (
 	"sync"
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
-	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
@@ -316,7 +315,7 @@ func (d *ft991aDriver) profileRecognised() bool {
 //
 // What opMu guards is a whole DRIVER OPERATION (spec erratum S-E4, matrix
 // M-E2), and this session has more than one kind of those: a read, a write
-// (task 11) and a settings read (task 12) must not interleave their frames
+// (write.go) and a settings read (task 12) must not interleave their frames
 // even though the engine would happily serialise them one exchange at a
 // time. The concurrency pin plan P12 asks for is that two racing
 // ReadChannels cannot interleave two MT frames.
@@ -371,41 +370,6 @@ func (s *Session) Diagnostics() driver.SessionDiagnostics {
 // Close implements driver.Session. Idempotent: transport.Engine.Close
 // already guarantees repeat calls return the same result.
 func (s *Session) Close() error { return s.eng.Close() }
-
-// WriteChannel implements driver.Session — AND IS A PLACEHOLDER THAT TASK 11
-// REPLACES WHOLE. It exists in this commit because driver.Session requires
-// the method and *Session must satisfy that interface for Open to return one
-// at all; it deliberately does NOT attempt a partial choreography. All four
-// registered Yaesu siblings' skeletons carried the identical placeholder for
-// the identical reason.
-//
-// Every call is refused with a typed *driver.WriteRefusedError before any
-// frame is built or any byte reaches the wire — which is the correct
-// behaviour for the RealHardware and fail-safe profiles regardless (their
-// capability gate would refuse anyway, writeTrialsComplete being false), and
-// a temporary, visible gap for the Simulated profile, whose six Supported
-// writes have nothing behind them until the MT-only Set lands.
-//
-// Task 11 replaces this with the real ladder in the matrix's §3.6 order —
-// ParseSlot, an EMPTY-CHANNEL rung before any ch.Data dereference,
-// driver.CheckFieldStates over EVERY field (the 05/09 Yaesu write-gate
-// sweep's stance, plan P12), the CAPABILITY GATE, then core/cat's own
-// builders as the backstop — and ONE BuildMTSetCombined frame, with no
-// read-back inside WriteChannel at all (core/clone owns verification).
-//
-// TWO RUNGS THE FT-891 HAS MUST NOT BE COPIED INTO IT (matrix erratum M-E3,
-// doc.go's own section): there is NO TxClar refusal, because P5 is a live
-// TX-clarifier state on this radio and core/cat ACCEPTS a TxClar-true record
-// under cat.P5TxClar; and there is NO TagDisplay rung, because P11 is
-// printed "(Fixed)" and the field does not exist here at all.
-// TestWriteChannel_RefusedUntilTask11 pins this placeholder and is replaced
-// along with it.
-func (s *Session) WriteChannel(_ context.Context, ch codeplug.Channel) (driver.WriteResult, error) {
-	return driver.WriteResult{Steps: []driver.WriteStep{}}, &driver.WriteRefusedError{
-		Slot:   ch.Slot,
-		Reason: "the FT-991A driver's write path is not implemented yet (Stage 2 task 11 lands the MT-only combined Set); no frame is built and nothing reaches the wire",
-	}
-}
 
 // ErrAnswerMismatch is the sentinel a caller should compare against (via
 // errors.Is) when a slot-addressed answer names a DIFFERENT slot than the
