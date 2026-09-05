@@ -72,11 +72,13 @@ var singleDialect = mustFixtureDialect(DialectConfig{
 		EmergencyWire: "",
 		NoneWire:      "000",
 		MCSelects:     MCSelectsAll,
+		PMSForm:       PMSFormToken, // the SLOT lane's axis: this fixture varies the EX form only
 	},
 	EXItems:       singleEXItems,
 	EXAddressForm: EXAddressSingle,
 	MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	ToneStates:    ToneStatesCTCSS, // the SLOT lane's axis: three states, as every token dialect
 	MemoryP5:      P5TxClar,
 	MWWriteKind:   KindMemory,
 })
