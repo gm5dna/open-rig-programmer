@@ -124,9 +124,12 @@ var openPort = func(path string, mode *serial.Mode) (serialPort, error) {
 // configured as the port is configured. Leaving the field nil is NOT
 // neutral there — nil means DTR_CONTROL_ENABLE|RTS_CONTROL_ENABLE, both
 // lines asserted, which is exactly the dangerous state. Register entry W6
-// (ASSUMED): no hardware has yet watched a Windows open, nor the changed
-// macOS path, for TX key-up. Pinned by
-// TestOpenSerial_RequestsRTSAndDTRLowAtOpen in port_test.go.
+// (LIFTED, 05/09/2026): a Windows 11 ARM64 VM session with a real FT-710
+// attached watched a Windows open for TX key-up, and the same
+// verification bar's host-Mac step watched the changed macOS path the
+// same way — see docs/hardware-notes.md's "Windows (ARM64 VM) session"
+// section. Pinned by TestOpenSerial_RequestsRTSAndDTRLowAtOpen in
+// port_test.go.
 //
 // Second, immediately after opening it still drives both lines low
 // explicitly (SetRTS(false), SetDTR(false)) before returning the port to

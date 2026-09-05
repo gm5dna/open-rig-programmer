@@ -78,11 +78,20 @@ literal values). It does NOT rewrite `app/wails.json`: that file's
 `info.productVersion` is stamped only by the release job and by the
 local dry-run script, and each of those restores the file itself
 afterwards — the build never touches it. Restore the two files a build
-DOES change before committing anything:
+DOES change before committing anything — but only if you had no
+uncommitted edits of your own in either one; check `git diff` first,
+and if you did, restore your own saved copies instead of discarding
+them (the same advice `app/README.md` gives for the frontend's build
+collateral):
 
 ```sh
 git checkout -- app/frontend/wailsjs/ app/build/windows/installer/wails_tools.nsh
 ```
+
+The release job and the local dry-run script never take this
+shortcut: both save the exact pre-build bytes first and restore those
+exact bytes afterwards, never a blind `git checkout --` (see
+`app/build/windows/README.md`'s "Template-generated files" section).
 
 `app/build/windows/README.md` covers which files under that directory
 are template-generated versus hand-edited, and the same churn rule in

@@ -130,14 +130,16 @@ preamble"):
      small, reversible change (e.g. its tag).
    - **Send — this is write 1 of 2.** Screenshot the confirmation and
      the result; screenshot the status bar showing the version.
-6. **CLI: the restoration — write 2 of 2.**
+6. **CLI: the restoration — write 2 of 2.** `rigprog.exe` is not on
+   `PATH` (the installer never adds it) — invoke it by its installed
+   full path:
    ```powershell
-   rigprog.exe diff --port COMn --model FT-710 baseline.json
+   & "C:\Program Files\Open Rig Programmer\rigprog.exe" diff --port COMn --model FT-710 baseline.json
    ```
    Confirm the diff shows exactly the M-96 (or named alternative)
    change from step 5, nothing else. Then:
    ```powershell
-   rigprog.exe write --port COMn --model FT-710 --firmware <version read off the front panel> baseline.json
+   & "C:\Program Files\Open Rig Programmer\rigprog.exe" write --port COMn --model FT-710 --firmware <version read off the front panel> baseline.json
    ```
    Answer the interactive confirmation prompt yourself — this is the
    point of running it by hand rather than from a script. Use `--yes`
@@ -149,7 +151,7 @@ preamble"):
 
    Then:
    ```powershell
-   rigprog.exe read --port COMn --model FT-710 --out after.json
+   & "C:\Program Files\Open Rig Programmer\rigprog.exe" read --port COMn --model FT-710 --out after.json
    ```
    and confirm `after.json` is byte-identical to `baseline.json` after
    normalising `read_at` (a regex replace of the `"read_at":"..."`
