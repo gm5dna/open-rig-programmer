@@ -556,25 +556,79 @@ func TestReadChannel_TheCODECStillParsesAnExtensionChannel(t *testing.T) {
 // TestReadChannel_AnAnswerNamingAnotherSlotIsRefused: the driver refuses to
 // map a reply onto the wrong slot rather than storing one channel's content
 // under another's identifier.
+//
+// ONE CASE, WHERE THIS TEST ONCE HAD TWO. The other — channel 042's read
+// answered with channel 043's record — no longer reaches this refusal at all
+// and no longer can: kw.Layout.MRAnswerMatcher correlates on the ANSWERED
+// CHANNEL NUMBER, so another channel's frame is not this read's answer and is
+// never delivered. That case moved to
+// TestReadChannel_ALateAnswerIsNeverTheNextReadsAnswer, where it is pinned as
+// a timeout; it was adjusted rather than deleted, because the hazard it
+// describes is real and only its verdict changed.
+//
+// WHAT SURVIVES HERE IS THE HALF THE MATCHER DELIBERATELY DOES NOT JUDGE: a
+// section channel answering the OTHER half of its own pair. Both frames name
+// channel 100, so the matcher correlates the answer and the DRIVER refuses
+// it — which is the division kw.Layout.MRAnswerMatcher's doc comment states
+// (the slot is the correlation key; the half is the driver's check on a frame
+// already correlated), and it is why a wrong half is a precise, reportable
+// mismatch rather than a silent timeout.
 func TestReadChannel_AnAnswerNamingAnotherSlotIsRefused(t *testing.T) {
 	sess, _ := openTestSession(t, RowS, radioImage{mrAnswers: map[string]string{
-		mrAddr("042"): populatedMR("043"),
-		// A section channel answering the OTHER half of its own pair is the
-		// same mistake one level finer, and P1 is what distinguishes them.
 		mrAddr("100L"): populatedMR("100U"),
 	}})
-	for _, tc := range []struct{ requested, answered string }{
-		{"042", "043"},
-		{"100L", "100U"},
-	} {
-		_, err := sess.ReadChannel(context.Background(), tc.requested)
-		if !errors.Is(err, ErrAnswerMismatch) {
-			t.Errorf("ReadChannel(%q) against an answer naming %q: err = %v, want ErrAnswerMismatch", tc.requested, tc.answered, err)
-		}
-		var mismatch *AnswerMismatchError
-		if errors.As(err, &mismatch) && (mismatch.Requested != tc.requested || mismatch.Answered != tc.answered) {
-			t.Errorf("AnswerMismatchError = %q/%q, want %q/%q", mismatch.Requested, mismatch.Answered, tc.requested, tc.answered)
-		}
+	_, err := sess.ReadChannel(context.Background(), "100L")
+	if !errors.Is(err, ErrAnswerMismatch) {
+		t.Errorf("ReadChannel(\"100L\") against an answer naming \"100U\": err = %v, want ErrAnswerMismatch", err)
+	}
+	var mismatch *AnswerMismatchError
+	if errors.As(err, &mismatch) && (mismatch.Requested != "100L" || mismatch.Answered != "100U") {
+		t.Errorf("AnswerMismatchError = %q/%q, want \"100L\"/\"100U\"", mismatch.Requested, mismatch.Answered)
+	}
+}
+
+// TestReadChannel_ALateAnswerIsNeverTheNextReadsAnswer is the driver-level
+// consumer of kw.Layout.MRAnswerMatcher, and the sequence it transcribes is
+// the ordinary one that matcher exists for (core/kw/matcher.go): a read of
+// one channel times out, the next read goes out, and the FIRST read's very
+// late answer arrives while the second is waiting.
+//
+// Every memory answer on this family is 50 bytes and starts "MR", and the
+// channel number sits at P2/P3 rather than immediately after the command
+// name, so kw.PrefixLenMatcher — which this read path used until T13 — cannot
+// tell one channel's answer from another's. Under it the late frame WAS
+// delivered as the second read's answer and the driver refused it with
+// *AnswerMismatchError (this test's own red proof: err was
+// `ts590: requested slot "008" but the answer names slot "007"`). The refusal
+// was honest but the verdict was wrong: the frame was never this read's
+// answer, so the right outcome is that it is not correlated at all, the
+// read's one retry goes out, and a radio that still says nothing times the
+// read out.
+//
+// THE LATENESS IS TRANSCRIBED, NOT RACED. The scripted radio is silent for
+// 007 and serves 007's record when 008 is asked — which puts the same frame
+// in front of the same matcher at the same moment as the real sequence would,
+// deterministically. Racing a genuine late write against a net.Pipe would pin
+// the scheduler, not the matcher.
+func TestReadChannel_ALateAnswerIsNeverTheNextReadsAnswer(t *testing.T) {
+	sess, _ := openTestSession(t, RowSG, radioImage{
+		mrSilent:  map[string]bool{mrAddr("007"): true},
+		mrAnswers: map[string]string{mrAddr("008"): populatedMR("007")},
+	})
+	if _, err := sess.ReadChannel(context.Background(), "007"); !errors.Is(err, transport.ErrTimeout) {
+		t.Fatalf("ReadChannel(\"007\") against a silent radio: err = %v, want a timeout", err)
+	}
+
+	ch, err := sess.ReadChannel(context.Background(), "008")
+	if err == nil {
+		t.Fatalf("ReadChannel(\"008\") accepted channel 007's answer and returned %+v", ch.Data)
+	}
+	if !errors.Is(err, transport.ErrTimeout) {
+		t.Errorf("errors.Is(err, transport.ErrTimeout) = false for %v — 007's answer is not 008's, so it must never be correlated as one", err)
+	}
+	var mismatch *AnswerMismatchError
+	if errors.As(err, &mismatch) {
+		t.Errorf("the late frame reached the parser and was refused as %v — MRAnswerMatcher must skip it before it is ever delivered", mismatch)
 	}
 }
 
@@ -817,6 +871,14 @@ func TestReadAll_FailsWholeOnTheFirstRefusalOrTimeout(t *testing.T) {
 //
 // RED PROOF, observed before the guard existed: the read SUCCEEDED and
 // returned FreqHz=145500000 from an answer the driver never asked for.
+//
+// IT IS ALSO THE DRIVER-LEVEL PIN THAT kw.Layout.MRAnswerMatcher IGNORES P1,
+// which is what keeps this refusal REACHABLE at all. The frame here names the
+// requested channel and the wrong half; a matcher that compared P1 as well
+// would skip it, and the precise, attributable mismatch below would become a
+// bare timeout. The negative assertion states that in as many words, so a
+// later widening of the matcher fails here rather than degrading this
+// diagnosis silently.
 func TestReadChannel_AnAnswerWhoseP1DisagreesIsRefusedOnAMEMSlot(t *testing.T) {
 	for _, row := range bothRows {
 		f := populatedFields("042")
@@ -827,6 +889,9 @@ func TestReadChannel_AnAnswerWhoseP1DisagreesIsRefusedOnAMEMSlot(t *testing.T) {
 		ch, err := sess.ReadChannel(context.Background(), "042")
 		if err == nil {
 			t.Fatalf("%s: ReadChannel(\"042\") accepted a P1='1' answer and stored %+v", modelNameFor(row), ch.Data)
+		}
+		if errors.Is(err, transport.ErrTimeout) {
+			t.Errorf("%s: the answer was never correlated (%v) — MRAnswerMatcher must compare the SLOT and not P1, so that a wrong half is reported rather than timed out", modelNameFor(row), err)
 		}
 		if !errors.Is(err, ErrAnswerMismatch) {
 			t.Errorf("%s: errors.Is(err, ErrAnswerMismatch) = false for %v", modelNameFor(row), err)
