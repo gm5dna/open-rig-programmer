@@ -59,8 +59,10 @@
 #   quirk 7's "00 : OFF" -- see the NORMALISATION RULE there.
 #   P4 CHARACTERS are NOT transliterated. This extraction is ASCII except
 #   for 36 occurrences of U+2013 EN DASH, every one of them a MINUS SIGN
-#   (027 TIME ZONE's "UTC -12:00", and the signed ranges at 035, 039, 064,
-#   065, 112, 120, 123, 126, 129, 132, 135). Ranges are the ASCII TILDE
+#   (027 TIME ZONE's "UTC -12:00" -- ASCII hyphen here because this
+#   comment block is itself ASCII-only; the data row carries U+2013 --
+#   and the signed ranges at 035, 039, 064, 065, 112, 120, 123, 126, 129,
+#   132, 135). Ranges are the ASCII TILDE
 #   "~" throughout, where the FT-891's extraction rendered them "-".
 #   Neither is normalised to the other -- each transcription records the
 #   characters its own source presented.
@@ -78,12 +80,12 @@
 #      "0: 6 dB/oct 1: 18 dB/oct", which needs one, and it prints 2. Every
 #      other HCUT FREQ/SLOPE pair in this chart -- 043/044, 052/053,
 #      094/095, 104/105 -- prints 2 then 1. This one is FIRST in the list
-#      because it is the quirk the CROSS-CHECK CANNOT CATCH: it is a
-#      transposition of two printed cells, both legs transcribe what is
-#      printed, and they therefore AGREE. Three-way agreement is not
-#      evidence about these two rows. The printed values are what this
-#      file carries, and this repository has no FT-991A to ask which of
-#      the two orderings the radio answers.
+#      because it is a transposition of two printed cells: any two
+#      independent transcriptions of this chart will agree with each
+#      other and with the printed page, so their agreement is NOT
+#      evidence about which of these two rows is correct. The printed
+#      values are what this file carries, and this repository has no
+#      FT-991A to ask which of the two orderings the radio answers.
 #   2. 028 GPS/232C SELECT (558) prints "0: GPS1 1: GPS2 3: RS232C" -- an
 #      option list with the key "2:" SKIPPED. Whether the radio's P2
 #      domain really has a hole at 2 or the chart lost an entry is not
@@ -97,9 +99,10 @@
 #   4. 100 RTTY SHIFT FREQ (636) prints "1: 170 Hz 1: 200 Hz 2: 425 Hz
 #      3: 850 Hz" -- the index "1" TWICE, and no "0:" entry. The FT-710's
 #      and the FTdx10's charts carry a duplicate SHIFT FREQUENCY index
-#      too, so this is a family-wide printing habit rather than a one-off;
-#      it is still a defect, and a consumer that keys an option list by
-#      its index will lose one of the two.
+#      too, as core/cat/ft891/table2.csv's header records, so this is a
+#      family-wide printing habit rather than a one-off; it is still a
+#      defect, and a consumer that keys an option list by its index will
+#      lose one of the two.
 #   5. 101 RTTY MARK FREQ (637) prints "1: 1275 Hz 2: 2125 Hz" -- another
 #      list with NO "0:" entry, this one with no duplicate.
 #   6. 116 SCP SPAN FREQ (652) BEGINS AT "03:": "03: 50 kHz 04: 100 kHz
@@ -131,12 +134,13 @@
 #
 # NO GROUP LABELS. The chart's columns are "P1 | Function | P2 | Digits"
 #   and nothing else. The FT-710's and the FTdx10's charts print a
-#   parenthesised group name in their P1 and P2 columns ("01 (MODE SSB)");
-#   this one prints only the three-digit MENU Number. Both label columns
-#   are therefore blank on every row and the profile declares LabelsAbsent,
-#   under which ParseCSV REFUSES a non-blank label column: an invented
-#   group name would be words put in a manual's mouth. Nothing downstream
-#   may supply one either.
+#   parenthesised group name in their P1 and P2 columns ("01 (MODE SSB)"),
+#   as core/cat/ft891/table2.csv's header records; this one prints only the
+#   three-digit MENU Number. Both label columns are therefore blank on
+#   every row and the profile declares LabelsAbsent, under which ParseCSV
+#   REFUSES a non-blank label column: an invented group name would be
+#   words put in a manual's mouth. Nothing downstream may supply one
+#   either.
 #
 # NO TEXT ITEMS. No row's parameter column describes free text; there is
 #   no "(up to N characters) (ASCII)" anywhere in this chart. The nearest

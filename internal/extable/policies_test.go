@@ -205,18 +205,20 @@ func TestRenderGo_LabelsAbsentEmitsEmptyLabels(t *testing.T) {
 // rather than inherit it.
 //
 // Until the FT-891 there was one population and the assertion could be a
-// blanket "all three are six-digit, labelled and text-bearing". There are now
-// two, so the expectations are stated PER REGISTRATION: the FT-710, FTdx10
-// and FTdx101D/MP keep the values whose byte identity this guard protects,
-// and the FT-891 declares the opposite of all three at once. Keeping it a
-// blanket over RegisteredProfiles() would have meant weakening it to the
-// intersection of two charts, which is no assertion at all.
+// blanket "all three are six-digit, labelled and text-bearing". There are
+// now three, so the expectations are stated PER REGISTRATION: the FT-710,
+// FTdx10 and FTdx101D/MP keep the values whose byte identity this guard
+// protects; the FT-891 declares the opposite of all three at once; and the
+// FT-991A is a third population again — the registry's first AddressSingle
+// profile and its first ParameterlessExcluded one. Keeping it a blanket
+// over RegisteredProfiles() would have meant weakening it to the
+// intersection of three charts, which is no assertion at all.
 //
 // The table is keyed by lookup name and its size is compared against the
 // registry's, so a SIXTH registration fails here rather than slipping through
 // a sweep that never looked at it.
 //
-// ceiling is here for the reason the other four columns are: it is a
+// ceiling is here for the reason the other six columns are: it is a
 // per-registration fact that TestRegistry_HoldsEveryModel's name-list pin and
 // this test's own length check both make loud on a further registration
 // (MEDIUM-3), but neither previously carried DigitsCeiling itself — only the
