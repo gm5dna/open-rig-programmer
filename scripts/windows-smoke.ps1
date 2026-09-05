@@ -24,7 +24,7 @@
 # `rigprog ports`, a `rigprog probe` of every COM port found (expected:
 # exactly one succeeds), and — on the one that answered — a
 # read/export/import round trip compared byte-for-byte after
-# normalising the read_at timestamp.
+# normalising the read_at and generator fields.
 
 #Requires -Version 5.1
 [CmdletBinding()]
@@ -179,16 +179,27 @@ Invoke-Captured -Name 'export' -Exe $RigProg -Arguments @('export', '--csv', $ba
 # silently widen a guard this script has no need to widen.
 Invoke-Captured -Name 'import' -Exe $RigProg -Arguments @('import', '--csv', $baselineCsv, '--into', $baselineJson, '--out', $roundtripJson, '--model', $Model) | Out-Null
 
-# --- 7. Compare baseline.json and roundtrip.json, normalising read_at ---
+# --- 7. Compare baseline.json and roundtrip.json, normalising read_at
+# and generator ---
 # read_at is a wall-clock timestamp set at read time; export and import
 # never touch it, so this is expected to already be identical, but
 # normalise it anyway (a regex replace on the raw text, not a
 # JSON-aware reparse, so the rest of the file is compared exactly as
 # written) so a clock-formatting quirk cannot masquerade as, or hide, a
-# real discrepancy.
+# real discrepancy. generator is normalised the same way: `read` sets
+# it via clone.Service (generatorID "open-rig-programmer/core/clone"),
+# while `import` always overwrites it with the CLI's own
+# "rigprog/<version>" stamp (cmd/rigprog/import.go, base.Generator =
+# cliGeneratorID) — so a round trip through import always changes this
+# field even when nothing else does. Confirmed the ONLY difference on
+# the 05/09/2026 VM run (evidence/vm-smoke/20260905-101214/): the
+# round-trip compare said DIFFERENT before this fix, purely because of
+# the generator field, with every channel identical.
 function Get-NormalisedJsonText {
     param([string]$Path)
-    (Get-Content -LiteralPath $Path -Raw) -replace '"read_at"\s*:\s*"[^"]*"', '"read_at":"NORMALISED"'
+    (Get-Content -LiteralPath $Path -Raw) `
+        -replace '"read_at"\s*:\s*"[^"]*"', '"read_at":"NORMALISED"' `
+        -replace '"generator"\s*:\s*"[^"]*"', '"generator":"NORMALISED"'
 }
 
 $baselineNorm = Get-NormalisedJsonText -Path $baselineJson
@@ -197,10 +208,10 @@ $identical = $baselineNorm -ceq $roundtripNorm
 
 $compareReport = Join-Path $session 'compare-baseline-roundtrip.txt'
 if ($identical) {
-    "IDENTICAL after normalising read_at: $baselineJson vs $roundtripJson" | Set-Content -Encoding utf8 -Path $compareReport
-    Write-SmokeLog 'Export/import round trip: IDENTICAL (after normalising read_at)'
+    "IDENTICAL after normalising read_at and generator: $baselineJson vs $roundtripJson" | Set-Content -Encoding utf8 -Path $compareReport
+    Write-SmokeLog 'Export/import round trip: IDENTICAL (after normalising read_at and generator)'
 } else {
-    "DIFFERENT after normalising read_at: $baselineJson vs $roundtripJson" | Set-Content -Encoding utf8 -Path $compareReport
+    "DIFFERENT after normalising read_at and generator: $baselineJson vs $roundtripJson" | Set-Content -Encoding utf8 -Path $compareReport
     Write-SmokeLog 'Export/import round trip: DIFFERENT — see compare-baseline-roundtrip.txt. This is a FAIL: do not continue to the writes in scripts/README-vm-leg.md until this is understood.'
 }
 
