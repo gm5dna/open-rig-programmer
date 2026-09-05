@@ -30,11 +30,18 @@ import (
 // need and what a self-consistent fake will never produce.
 //
 // WHAT IT KNOWS, and how to extend it: AI (any AI frame, answered with
-// silence), ID;, and the 6-byte MT READ. ANY OTHER frame is answered "?;",
-// which is also how this file serves the negative pins: an MR frame, or an
-// MT read of a slot outside 001-117, is a frame this driver must never
-// build, and if one is ever built it appears in the transcript and is
-// rejected rather than quietly answered.
+// silence), ID;, the 6-byte MT READ, and the 41-byte combined MT SET. ANY
+// OTHER frame is answered "?;", which is also how this file serves the
+// negative pins: an MR frame, or an MT read of a slot outside 001-117, is a
+// frame this driver must never build, and if one is ever built it appears
+// in the transcript and is rejected rather than quietly answered.
+//
+// THE TWO MT LENGTHS ARE THE ONLY MT FRAMES ADMITTED, and an MT frame of
+// any OTHER length falls through to "?;" rather than being taken for a Set.
+// The FT-891's helper matches a bare "MT" prefix for its Set arm; this one
+// does not, because a driver bug that built a short or long MT frame would
+// be answered with silence there — i.e. read as ACCEPTED — where here it is
+// rejected loudly.
 //
 // THE ACKNOWLEDGEMENT SEMANTICS OF THOSE ANSWERS ARE AN ASSUMED CONVENTION
 // APPLIED, NOT AN OBSERVED RADIO TRANSCRIBED — no FT-991A has ever been
@@ -86,6 +93,36 @@ type slotImage struct {
 	// unexpected frame the engine must surface and count without failing the
 	// read. Transport safety obligation 3.
 	junkBefore map[string]string
+	// rejectSets makes every combined MT Set answer "?;" instead of the
+	// silence the ASSUMED convention reads as accepted — the write path's
+	// radio-rejected row (the register's THE ACKNOWLEDGEMENT CONVENTIONS
+	// entry, applied in its rejecting direction).
+	rejectSets bool
+	// junkAfterSet is a frame served in the error window AFTER an accepted
+	// Set: neither the silence that means "accepted" nor the "?;" that
+	// means "rejected", but a THIRD thing the radio might say. The engine
+	// must count it (transport safety obligation 3) and still report the
+	// write as accepted, because nothing rejected it. This is the
+	// wrong-answer row of the write path, and no self-consistent fake can
+	// produce it.
+	junkAfterSet string
+	// echoSets makes an ACCEPTED combined MT Set become that slot's MT
+	// answer from then on, VERBATIM — available at all only because this
+	// radio's MT Set and MT Answer share the SAME 41 positions (the one
+	// chart at layout 998-1033 under one prefix), so the bytes the driver
+	// wrote are already a well-formed answer.
+	//
+	// It is the narrowest possible memory, and it is here for ONE thing:
+	// core/clone owns write-then-verify (plan P12), so that pair cannot be
+	// exercised at all against a peer that answers the same way forever.
+	// Deliberately NOT a step towards internal/fakeft991a — no field but
+	// the slot is interpreted (positions 3-5, so the echo is per-slot at
+	// all), nothing is validated, no state is modelled, and a Set this
+	// driver got wrong would be echoed back just as wrongly. What it
+	// demonstrates is that this driver's write and its read agree about
+	// every position of the frame; whether a REAL FT-991A reports back what
+	// it was told is not settleable by any test.
+	echoSets bool
 }
 
 // newRespondingPort starts a scripted radio serving img and registers its
@@ -128,6 +165,11 @@ func (p *respondingPort) Transcript() []string {
 func (p *respondingPort) serve(img slotImage) {
 	buf := make([]byte, 256)
 	var acc []byte
+	// mtWritten holds the Sets echoSets has accepted, per slot. It is local
+	// to this one goroutine — serve is the sole reader and sole writer of
+	// the pipe's remote end, so nothing else touches it and no lock is
+	// needed.
+	mtWritten := map[string]string{}
 	for {
 		n, err := p.remote.Read(buf)
 		if n > 0 {
@@ -140,7 +182,7 @@ func (p *respondingPort) serve(img slotImage) {
 				frame := string(acc[:i+1])
 				acc = acc[i+1:]
 				p.record(frame)
-				if reply := img.reply(frame); reply != "" {
+				if reply := img.reply(frame, mtWritten); reply != "" {
 					if _, werr := p.remote.Write([]byte(reply)); werr != nil {
 						return
 					}
@@ -164,12 +206,15 @@ func (p *respondingPort) record(frame string) {
 // See respondingPort's doc comment for the command classes, the register
 // entry that holds the convention, and why the default is a NAK.
 //
-// SILENCE HERE MEANS ONE THING ONLY on this driver's read path: a radio that
-// did not answer a read, which the engine turns into a timeout. (The
-// fire-and-forget Set whose silence means "accepted" is task 11's, and this
-// helper does not model it yet — an MT Set falls through to the default NAK,
-// which is what any frame this task's driver never builds should get.)
-func (img slotImage) reply(frame string) string {
+// SILENCE HAS TWO MEANINGS HERE and they are not confusable in practice: a
+// fire-and-forget Set's silence is the ASSUMED SUCCESS signal (the shared
+// register's THE ACKNOWLEDGEMENT CONVENTIONS entry), while a READ's silence
+// (mtSilent) is a radio that did not answer at all, which the engine turns
+// into a timeout. Only the second is a fault being scripted; the first is
+// the ordinary accepted write.
+//
+// mtWritten is serve's per-slot memory of the Sets echoSets has accepted.
+func (img slotImage) reply(frame string, mtWritten map[string]string) string {
 	switch {
 	case frame == "ID;":
 		return "ID" + img.catID + ";"
@@ -180,11 +225,28 @@ func (img slotImage) reply(frame string) string {
 		if img.mtSilent[slot] {
 			return ""
 		}
+		// An echoed Set takes priority over the static image: it is the
+		// LATER statement about the same slot. See echoSets.
+		if ans, ok := mtWritten[slot]; ok {
+			return ans
+		}
 		ans, ok := img.mtAnswers[slot]
 		if !ok {
 			return "?;"
 		}
 		return img.junkBefore[slot] + ans
+	case strings.HasPrefix(frame, "MT") && len(frame) == mtAnswerLen:
+		// A combined MT SET — the ONE frame this driver's write path
+		// builds, and the same 41 positions as the Answer above (layout
+		// 998-1033). Fire-and-forget on the ASSUMED convention, so silence
+		// is what an accepted Set draws.
+		if img.rejectSets {
+			return "?;"
+		}
+		if img.echoSets {
+			mtWritten[frame[2:5]] = frame
+		}
+		return img.junkAfterSet
 	default:
 		return "?;"
 	}
@@ -198,7 +260,9 @@ func (img slotImage) reply(frame string) string {
 // wrong shape.
 const mtReadFrameLen = 6
 
-// mtAnswerLen is the length of this radio's combined MT answer: 41 bytes,
+// mtAnswerLen is the length of this radio's combined MT answer — AND of its
+// combined MT SET, which is the same chart under the same prefix, so this
+// one const is what tells a Set apart from a read in reply below: 41 bytes,
 // "MT" + the 28-position field block + P11 at 28 + a 12-byte P12 tag at
 // 29-40 + ';' at 41 (the Answer chart, layout 1019-1033).
 //
