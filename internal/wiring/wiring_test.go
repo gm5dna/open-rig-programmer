@@ -19,6 +19,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/clone"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ft891"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
@@ -2035,21 +2036,46 @@ func assertNoConsentAnywhere(t *testing.T, what string, caps spec.Capabilities) 
 // SessionOptions{ConsentUnverifiedWrites: true}, the session the real wiring
 // path returns must carry the consent transform — MEM's frequency write,
 // spec.Unverified in each of these radios' real-hardware baselines (no
-// FTdx10, FTDX101D, FTDX101MP, IC-7610, IC-7300 or IC-7300MK2 has been
-// written to by this project), becomes spec.ConsentedUnverified — and must
-// carry it on the write side only.
+// FTdx10, FTDX101D, FTDX101MP, IC-7610, IC-7300, IC-7300MK2 or FT-891 has
+// been written to by this project), becomes spec.ConsentedUnverified — and
+// must carry it on the write side only.
 //
 // EVERY consent-eligible model, one subtest each, deliberately: the rows
 // differ in which driver package they reach (ftdx10; ftdx101 twice over two
-// constructors; and, since Wave 4, ic7610, ic7300 and ic7300mk2, three
-// separate driver packages), and a table that threaded the option through
-// one row and dropped it in another would leave a user's recorded consent
-// silently inert for that radio. The FT-710 is not here because its row's
-// option is a proven no-op (its real-hardware set has no Unverified write to
+// constructors; ic7610, ic7300 and ic7300mk2 since Wave 4; and, since Tier
+// 1's FT-891, ft891, the first Yaesu row added since this table was
+// written), and a table that threaded the option through one row and
+// dropped it in another would leave a user's recorded consent silently
+// inert for that radio. The FT-710 is not here because its row's option is
+// a proven no-op (its real-hardware set has no Unverified write to
 // transform); core/driver/ft710's own tests own that proof, and
 // TestRealDriverFor_DefaultPathByteIdentical below covers its default path.
+//
+// COMPLETENESS GUARD: every OTHER registered model is consent-eligible
+// (TestNeedsUnverifiedConsent_PerModel says so per model), so a registration
+// that added neither a subtest here nor a review-visible reason to skip one
+// would escape silently — the FT-891's did, twice, which is why this guard
+// exists. It walks SupportedModels() and asks NeedsUnverifiedConsent rather
+// than hand-counting, so it stays true of a model this table has not met
+// yet.
 func TestOpenRealSessionWith_ConsentedSessionCaps(t *testing.T) {
-	for _, model := range []string{FTdx10Model, FTdx101DModel, FTdx101MPModel, IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model, IC7851Model, IC7850Model, IC7760Model, IC7100Model, ICR8600Model} {
+	models := []string{FTdx10Model, FTdx101DModel, FTdx101MPModel, IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, IC9700Model, IC905Model, IC7851Model, IC7850Model, IC7760Model, IC7100Model, ICR8600Model, FT891Model}
+
+	tested := make(map[string]bool, len(models))
+	for _, m := range models {
+		tested[m] = true
+	}
+	for _, m := range SupportedModels() {
+		eligible, err := NeedsUnverifiedConsent(m)
+		if err != nil {
+			t.Fatalf("NeedsUnverifiedConsent(%q): unexpected error: %v", m, err)
+		}
+		if eligible && !tested[m] {
+			t.Fatalf("%q is consent-eligible (NeedsUnverifiedConsent) but has no subtest in this table — its consent transform would be untested at session level", m)
+		}
+	}
+
+	for _, model := range models {
 		t.Run(model, func(t *testing.T) {
 			fakePortSeam(t, model)
 
@@ -2137,10 +2163,21 @@ func TestOpenRealSessionFor_DelegatesZeroOptions(t *testing.T) {
 // stayed green. Comparing realDriverFor(model, true) against the
 // constructor call the row is supposed to make sees exactly that.
 //
-// wantConsent is nil on the four Yaesu rows, which no review deferred and
-// which the table above already covers on the false arm.
+// wantConsent is nil on the four ORIGINAL Yaesu rows (FT-710, FTdx10,
+// FTdx101D, FTdx101MP), which no review deferred and which the table above
+// already covers on the false arm. The FT-891 breaks that pattern
+// deliberately: its consent arm IS pinned here, on the same terms as the
+// IC-7760/IC-7100/IC-R8600 rows below — core/driver/ft891's New takes the
+// profile as an argument, so a consent arm that had quietly passed
+// ft891.Simulated would be caught only here.
+//
+// COMPLETENESS GUARD: this table carries exactly one row per registered
+// model (unlike TestOpenRealSessionWith_ConsentedSessionCaps above, which
+// carries only the consent-eligible ones), so a registration that added no
+// row here would escape the default-path byte-identity pin altogether —
+// which is exactly what happened to the FT-891 before this guard existed.
 func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
-	for _, tc := range []struct {
+	table := []struct {
 		model       string
 		want        func() driver.Driver
 		wantConsent func() driver.Driver
@@ -2206,7 +2243,23 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		{model: ICR8600Model, want: NewICR8600RealDriver, wantConsent: func() driver.Driver {
 			return icr8600.New(icr8600.RealHardware, icr8600.WithConsentedUnverifiedWrites())
 		}},
-	} {
+		// The FT-891 (Tier 1), on exactly the same terms as the IC-7760,
+		// IC-7100 and IC-R8600 rows above: core/driver/ft891's New takes
+		// the profile as an argument, so its consent arm NAMES
+		// ft891.RealHardware rather than leaving the profile to an
+		// option's absence, and this row is where a consent arm that had
+		// quietly passed ft891.Simulated would be caught — the property
+		// wiring.go's own FT891Model comment claims this test proves.
+		{model: FT891Model, want: NewFT891RealDriver, wantConsent: func() driver.Driver {
+			return ft891.New(ft891.RealHardware, ft891.WithConsentedUnverifiedWrites())
+		}},
+	}
+
+	if models := SupportedModels(); len(table) != len(models) {
+		t.Fatalf("SupportedModels() = %v — this table has %d rows and must name every registered model", models, len(table))
+	}
+
+	for _, tc := range table {
 		got, err := realDriverFor(tc.model, false)
 		if err != nil {
 			t.Fatalf("realDriverFor(%q, false): unexpected error: %v", tc.model, err)
