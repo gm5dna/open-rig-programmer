@@ -130,7 +130,93 @@
 //     acknowledge a Set by accident. What a real radio does on the wire after
 //     an accepted MW has not been observed by this project — the design's A6.
 //
-//  2. THE DEFAULT TY ANSWER. P1's two bytes are printed "Reserved"
+//  2. SET-DIRECTION FIELD STRICTNESS. Every wire-level validator in
+//     parser.go — P1's two values, the bank byte's single printed value, the
+//     two-digit channel number, the eleven-digit frequency, the mode nibble,
+//     the lockout flag, the three-value tone mode, the two-digit tone
+//     indices, the two-digit step index, the SIX printed-constant runs and
+//     the name charset — is ASSUMED to be what the radio itself enforces. The
+//     book prints the legends; it never says what a radio does with a Set
+//     that leaves one. On the printed-constant runs the assumption has its
+//     own design entry, A24, because this book's general note expressly
+//     permits a Set to fill an inapplicable parameter with "any character
+//     except the ASCII control codes (00 to 1Fh) and the terminator (;)"
+//     (480:108-111) — so strictness there is this programme's rule rather
+//     than a deduction. Nothing here NORMALISES: a byte outside its legend is
+//     refused, never quietly corrected, because a driver that sent one would
+//     otherwise pass its own tests and fail on hardware.
+//
+//  3. AN UNWRITTEN CHANNEL ANSWERS THE ZERO RECORD, AND THIS IS THE FAKE
+//     ASSERTING A4. This document says NOTHING about an empty channel
+//     anywhere — not that an MR of one answers rather than refusing, and not
+//     what such an answer would hold. The 590 pair's book prints "If the
+//     selected channel is empty, P4 ~ P15 will be 0 and P16 will be blank."
+//     (590:1492-1493); reading that sentence across to this radio is the
+//     design's A4, whose lift L-HW-3 is THE TS-480 ROW'S RELEASE GATE. NO
+//     RADIO HAS CONFIRMED EITHER HALF. The zero shape is at least internally
+//     consistent with this row's own hard-wired bytes, which are '0' runs
+//     already (480:910-939), and its mode nibble '0' is what this book calls
+//     "No mode (Not used for the TS-480)" (480:843) rather than an
+//     empty-channel marker — the 590 pair's A18a reading is not available
+//     here. The eight-space name is the design's A3, likewise unlifted on
+//     this row.
+//
+//  4. THE TRANSMIT HALF OF A CHANNEL WITH NO STORED RECORD answers the same
+//     zero record. What an MR with P1=1 answers where nothing has been
+//     written is unprinted here — the design's A9, which gates every Kenwood
+//     channel write on all three rows — and this fake gives it the shape
+//     entry 3 already carries rather than inventing a rejection or echoing
+//     the receive frequency back as a transmit one, which would be a silent
+//     split-flattening manufactured inside the test double.
+//
+//  5. A SET CARRYING AN UNUSED MODE NIBBLE IS STORED. The MD legend prints
+//     nibbles 0 and 8 as "No mode (Not used for the TS-480)" and "Tune (Not
+//     used for the TS-480)" (480:843, 480:853) and nothing says what a Set
+//     carrying one does — the design's A18b, whose lift is a hardware trial.
+//     This fake stores the nibble rather than inventing a refusal, which is
+//     what lets a test drive core/kw's own build refusal against a real fake.
+//
+//  6. TONE INDICES ARE STORED, NOT RANGE-CHECKED. TN prints "00 ~ 42"
+//     (480:1557) and CN "00 ~ 41" (480:337), both referring their tables out
+//     to the instruction manual (480:1559-1560, 480:339-340), and neither
+//     says anything about what happens inside a memory frame — the design's
+//     A21, unlifted, and on this row not even the 590 pair's "43 or higher
+//     results in an error" sentence is printed. Only the field's SHAPE is
+//     enforced here. Refusing would assert A21 as a fact about the radio and
+//     would put the codec's own refusal out of reach of a real fake.
+//
+//  7. THE STEP INDEX IS STORED, NOT RANGE-CHECKED, and this is the field the
+//     whole TS-480 write refusal turns on. P14 says only "Step size. Refer to
+//     the ST command." (480:937, 480:979), and ST's legend is
+//     MODE-CONDITIONAL over two different ranges — 00 ~ 04 for SSB/CW/FSK and
+//     00 ~ 09 for AM/FM, where 00 means 0.5 kHz in the first and 5 kHz in the
+//     second (480:1494-1500). A record carries no way to know which range
+//     applies without reading its own mode nibble, and no printed value is a
+//     "no change" value: that is the design's A22, which is why every TS-480
+//     channel write in this programme is refused. A fake that range-checked
+//     P14 would have to pick one of the two legends, and would be asserting
+//     A22 lifted.
+//
+//  8. A SET DOES NOT MOVE THE SELECTED CHANNEL. Nothing in the MW block
+//     mentions the selection (480:949-987). A fake that moved it would let a
+//     driver depend on a side-effect the book does not describe.
+//
+//  9. THE SELECTED CHANNEL AT CONSTRUCTION is 00. A radio that has had no MC
+//     Set is sitting on some channel and this book prints no power-on value
+//     for the selection anywhere. This fake takes the lowest number in its
+//     slot space.
+//
+//  10. THE DEFAULT IMAGE'S RECORD COMPOSITION. Every BYTE of every shipped
+//     record is a printed constant, the printed example frequency (480:549),
+//     a printed legend value, or the eight-space name — but no MR, MW or MC
+//     frame is printed as a literal anywhere in either Kenwood book, so the
+//     CROSS-FIELD COMBINATION has never been printed or observed. That is the
+//     design's A27, and PROVENANCE.md carries its sentence verbatim together
+//     with the family-level entries an image rides on. The records are not
+//     observed contents and not factory defaults, and no byte is invented,
+//     derived from another model, or padded to make a test pass.
+//
+//  11. THE DEFAULT TY ANSWER. P1's two bytes are printed "Reserved"
 //     (480:1623) and given no legend anywhere, so the shipped value takes the
 //     character every OTHER hard-wired field in this book prints, "Always 0"
 //     (480:953, 480:973, 480:975, 480:982). P2's shipped value is the FIRST
@@ -139,14 +225,14 @@
 //     WithTYAnswer is how a test reaches the other three variants, the fifth
 //     the document does not print, and the high bytes P1 may carry.
 //
-//  3. THE INITIAL AI VALUE IS THE POWER-OFF ONE. This book prints no
+//  12. THE INITIAL AI VALUE IS THE POWER-OFF ONE. This book prints no
 //     power-on value for AI. What it does print is "When the transceiver is
 //     turned OFF, the AI parameter becomes 0." (480:196-198), and this fake
 //     reads that ONE STEP ONWARD — a radio that has been turned off and on
 //     again reports 0 — rather than inventing a value. The 590 pair's book
 //     states its initial state outright (590:81-82) and needs no such step.
 //
-//  4. AUTOMATIC-INFORMATION SUPPRESSION. This fake never PUSHES anything
+//  13. AUTOMATIC-INFORMATION SUPPRESSION. This fake never PUSHES anything
 //     unsolicited, whatever AI is set to, AND ON THIS RADIO THAT IS A LARGER
 //     GAP THAN ON THE 590 PAIR, because this book describes the push
 //     concretely: "When the extended AI format is selected, the transceiver
@@ -158,7 +244,7 @@
 //     silent, and the engine's drain-to-quiet discipline is exercised against
 //     internal/fakeradio's own AI-flood facts instead.
 //
-//  5. THE FRAME ACCUMULATOR'S CAP AND RESYNC. The 256-byte bound, the single
+//  14. THE FRAME ACCUMULATOR'S CAP AND RESYNC. The 256-byte bound, the single
 //     "?;" per overflow and the discard-to-next-';' resync are this package's
 //     own bounded-input policy. No Kenwood book prints a buffer size; what
 //     this one prints is that data received but not fully processed produces
@@ -184,4 +270,17 @@
 // so refusing "FV;" is transcription rather than a modelling decision — and
 // is the one refusal in this package that is a fact about the radio rather
 // than about the fake.
+//
+// THE ABSENCE OF AN ERASE FORM. The 590 pair's book describes a short MW that
+// erases a channel (590:1579-1581); this one describes none, so a 42-byte MW
+// is not a documented frame on this radio at all and is refused by the same
+// width rule that refuses any other malformed width. Nothing is assumed away:
+// there is nothing printed to assume about. This programme builds no erase
+// frame on any radio in any case — a standing rule of this repository.
+//
+// THE FIFTY-BYTE WIDTH, THE FIELD OFFSETS AND EVERY LEGEND. Counted and
+// transcribed off the two position charts (480:923-943, 480:955-976). Where
+// this package and core/kw agree about a byte position, that is two
+// independent readings of one chart agreeing — which is the whole point of
+// the hard rule — and not a shared definition.
 package fakets480

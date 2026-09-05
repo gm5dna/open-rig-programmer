@@ -76,6 +76,86 @@ func WithTYAnswer(reserved string, variant byte) Option {
 	}
 }
 
+// WithFactoryImage REPLACES the fake's entire record map with img's output.
+// Pass it BEFORE any WithChannel or WithEmptyChannel option in the same New
+// call, or the image will overwrite them. Without this option, New defaults
+// to DefaultImage.
+//
+// It exists for the case internal/wiring's per-model FakeSessionOpts variable
+// documents: a test that needs a fake rig with a non-default inventory,
+// reached through the EXACT code path a real "--fake" invocation uses rather
+// than by hand-building a session that bypasses the constructor.
+func WithFactoryImage(img Image) Option {
+	return func(r *Radio) {
+		r.records = img()
+	}
+}
+
+// WithChannel overlays ONE half of one channel — the P1='0' record, which is
+// the receive frequency of any channel and the start frequency of 90-99
+// (480:908, 480:943-944). That is the ONLY half decision 15 publishes as a
+// slot on this row, which is why there is no WithSplitChannel here where
+// internal/fakets590 has one: nothing this programme sends carries P1=1 on a
+// TS-480, and an option for it would invite an image for a slot the row does
+// not publish (P19). A test that needs the upper half staged writes it with
+// an MW, exactly as TestMW_TheTwoHalvesAreSeparateRecords does.
+//
+// No validation is applied: the record is stored verbatim, so a test may
+// craft a channel whose ANSWER is deliberately malformed — a mode nibble the
+// MD legend does not print, a tone index above the printed chart, a step
+// index outside either of ST's two ranges, a name byte outside A2's charset —
+// and drive a real driver's parse-error path through a real fake rather than
+// through a scripted transcript. That is why MemState's fields are raw wire
+// bytes at all.
+//
+// Overlay semantics: it is applied to whatever record map is already present.
+func WithChannel(channel int, s MemState) Option {
+	return func(r *Radio) {
+		r.records[recordKey{channel: channel, half: HalfRXOrStart}] = s
+	}
+}
+
+// WithEmptyChannel removes BOTH halves of channel from the record map, so a
+// subsequent MR of either half answers the ZERO record.
+//
+// IT INTRODUCES NO NEW ASSUMED BEHAVIOUR OF ITS OWN: it only removes map
+// entries, which triggers the fake's existing zero-record answer — an answer
+// that IS an assumption on this row, the design's A4, and is registered as
+// one under doc.go's entry AN UNWRITTEN CHANNEL ANSWERS THE ZERO RECORD.
+// This is the test-only seam for forcing a channel the default
+// image populates to read back empty, so that a driver's empty-channel
+// handling can be pinned against a channel a test names rather than against
+// whichever channel the image happens not to fill.
+//
+// Overlay semantics: it is applied to whatever record map is already present,
+// so it must be given AFTER any WithFactoryImage in the same New call.
+func WithEmptyChannel(channel int) Option {
+	return func(r *Radio) {
+		delete(r.records, recordKey{channel: channel, half: HalfRXOrStart})
+		delete(r.records, recordKey{channel: channel, half: HalfTXOrEnd})
+	}
+}
+
+// WithMemoryReadUnsupported makes an MR of ANY channel answer "?;" while MW
+// and MC are untouched.
+//
+// IT MAKES DECISION 5's RULE REACHABLE END TO END. A "?;" on this radio is a
+// definitive rejection: it is never retried, and it is never read as "the
+// channel is absent". With this option a session can read a rejection for
+// every channel while MC still answers, which is what drives
+// core/driver/ts480's typed whole-read failure through a real fake instead of
+// a scripted transcript.
+//
+// NOT A CLAIM THAT ANY TS-480 REFUSES MR. It plays the SECOND cause the error
+// table itself prints — "Command was not executed due to the current status
+// of the transceiver (even though the command syntax was correct)"
+// (480:130-135) — which is a state, not a defect.
+func WithMemoryReadUnsupported() Option {
+	return func(r *Radio) {
+		r.memoryReadUnsupported = true
+	}
+}
+
 // WithTransientNAKSuppressed makes the fake DROP every "?;" it would
 // otherwise send, answering nothing at all instead.
 //
