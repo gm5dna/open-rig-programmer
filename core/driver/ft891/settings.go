@@ -282,7 +282,7 @@ func exSpec(dialect cat.Dialect, addr cat.EXAddress) transport.CommandSpec {
 //     (read.go: the parser's verdict stays the parser's, the driver adds the
 //     context the parser cannot know).
 //
-// THE REJECTION MAPPING ADDS NO FOURTH READING OF THIS RADIO'S "?;", and
+// THE REJECTION MAPPING ADDS NO FIFTH READING OF THIS RADIO'S "?;", and
 // that is worth saying on a radio where the unattributed NAK already carries
 // four distinct meanings (matrix §3.8.1-§3.8.4, doc.go's register). Those
 // four are INTERPRETATIONS — each says what the radio MEANT by declining —
