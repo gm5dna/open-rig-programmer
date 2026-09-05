@@ -71,43 +71,63 @@ func checkRecordLen(command string, got int, frame []byte) error {
 	}
 }
 
-// ParseMRAnswer decodes a 50-byte MR answer under THIS LAYOUT'S reading of
-// the shared grid.
+// ParseMRAnswer decodes a 50-byte MR ANSWER under THIS LAYOUT'S reading of
+// the shared grid — the frame a radio sends.
+//
+// It refuses an "MW" prefix rather than treating the two frames as
+// interchangeable, even though the fifty bytes after the prefix are the same
+// fifty bytes: MR has no Set and MW has no Answer on either radio (erratum
+// E17). parseRecordFrame is where that rule and every field check live, and
+// it is the same decoder the outbound gate runs an MW Set through.
+func (l Layout) ParseMRAnswer(frame []byte) (Record, error) {
+	return l.parseRecordFrame("MR", "MR answer", frame)
+}
+
+// parseRecordFrame is the ONE decoder for the shared 50-byte grid, in
+// whichever direction the frame is travelling: command is the two-letter
+// name required at positions 1-2 and what names the frame in every refusal.
+//
+// IT IS PARAMETERISED BECAUSE THE OUTBOUND GATE MUST RE-VALIDATE AN MW
+// FIELD BY FIELD (allowlist.go), and the only honest way to do that is
+// through the same decoder ParseMRAnswer uses. A second copy of these
+// checks, written for the write direction, would be one edit from
+// disagreeing with this one — and the disagreement would be a frame the
+// parser refuses and the gate admits, which is the wrong way round for the
+// last defence before a physical radio.
 //
 // THE ORDER OF THE STRUCTURAL CHECKS IS DELIBERATE AND PINNED: a frame that
 // is wrong in several ways reports its length first, then its prefix, then
 // its terminator, then a hard-wired byte, and only then a field. See
 // TestParseMRAnswer_ChecksLengthThenPrefixThenTerminator.
 //
-// MR HAS NO SET AND MW HAS NO ANSWER on either radio; on the 2003 document
-// that is visible only as an empty chart under a printed label (480:911 for
-// MR Set, 480:980 and 480:985 for MW Read and Answer), which is erratum E17.
-// So this method refuses an "MW" prefix rather than treating the two frames
-// as interchangeable, even though the fifty bytes after the prefix are the
-// same fifty bytes.
-func (l Layout) ParseMRAnswer(frame []byte) (Record, error) {
+// THE PREFIX IS STILL REQUIRED EXACTLY, AND NEITHER NAME IS AN ALTERNATIVE
+// SPELLING OF THE OTHER: MR has no Set and MW has no Answer on either radio.
+// On the 2003 document that is visible only as an empty chart under a
+// printed label (480:911 for MR Set, 480:980 and 480:985 for MW Read and
+// Answer), which is erratum E17.
+func (l Layout) parseRecordFrame(command, what string, frame []byte) (Record, error) {
 	if !l.Configured() {
-		return Record{}, newParseError(frame, "MR answer: this layout is unconfigured and describes no radio, so no byte of this frame has a meaning to read")
+		return Record{}, newParseError(frame, "%s: this layout is unconfigured and describes no radio, so no byte of this frame has a meaning to read", what)
 	}
-	if err := checkRecordLen("MR", len(frame), frame); err != nil {
+	if err := checkRecordLen(command, len(frame), frame); err != nil {
 		return Record{}, err
 	}
-	if frame[recPrefixOff] != 'M' || frame[recPrefixOff+1] != 'R' {
-		return Record{}, newParseError(frame, "MR answer: missing %q prefix — MW has no Answer on either radio (480:985, erratum E17), so an %q frame is not an alternative spelling of this one", "MR", frame[:recPrefixLen])
+	if frame[recPrefixOff] != command[0] || frame[recPrefixOff+1] != command[1] {
+		return Record{}, newParseError(frame, "%s: missing %q prefix — MR has no Set and MW has no Answer on either radio (480:911, 480:985, erratum E17), so an %q frame is not an alternative spelling of this one", what, command, frame[:recPrefixLen])
 	}
 	if frame[recTermOff] != ';' {
-		return Record{}, newParseError(frame, "MR answer: missing ';' terminator at position %d", recTermOff+1)
+		return Record{}, newParseError(frame, "%s: missing ';' terminator at position %d", what, recTermOff+1)
 	}
-	if err := l.checkPrintedFixed("MR answer", frame); err != nil {
+	if err := l.checkPrintedFixed(what, frame); err != nil {
 		return Record{}, err
 	}
 
 	p1 := frame[recP1Off]
 	if p1 != '0' && p1 != '1' {
-		return Record{}, newParseError(frame, "MR answer: P1 is %q, and both books print only '0' and '1' (590:1519-1520, 480:951)", p1)
+		return Record{}, newParseError(frame, "%s: P1 is %q, and both books print only '0' and '1' (590:1519-1520, 480:951)", what, p1)
 	}
 
-	slot, err := l.parseSlot(frame, p1)
+	slot, err := l.parseSlot(what, frame, p1)
 	if err != nil {
 		return Record{}, err
 	}
@@ -128,7 +148,7 @@ func (l Layout) ParseMRAnswer(frame []byte) (Record, error) {
 	// of the FRAME and is applied on both rows: it makes no claim that a
 	// TS-480 ever sends one.
 	if isEmptyWindow(frame) {
-		name, err := parseName(frame)
+		name, err := parseName(what, frame)
 		if err != nil {
 			return Record{}, err
 		}
@@ -139,63 +159,63 @@ func (l Layout) ParseMRAnswer(frame []byte) (Record, error) {
 
 	mode, ok := l.ParseMode(frame[recModeOff])
 	if !ok {
-		return Record{}, newParseError(frame, "MR answer: P5 is %q, which the %s's MD legend does not name as a mode; a frame whose P4-P15 are not all zero is not the empty channel of 590:1492-1493 (A18a)", frame[recModeOff], l.model)
+		return Record{}, newParseError(frame, "%s: P5 is %q, which the %s's MD legend does not name as a mode; a frame whose P4-P15 are not all zero is not the empty channel of 590:1492-1493 (A18a)", what, frame[recModeOff], l.model)
 	}
 	rec.Mode = mode
 
 	freq, err := parseDigits(frame[recFreqOff:recFreqOff+recFreqDigits], "P4, the frequency")
 	if err != nil {
-		return Record{}, newParseError(frame, "MR answer: %v", err)
+		return Record{}, newParseError(frame, "%s: %v", what, err)
 	}
 	rec.FreqHz = freq
 
 	if b := frame[recByte19Off]; b == '0' || b == '1' {
 		rec.Byte19 = b
 	} else {
-		return Record{}, newParseError(frame, "MR answer: byte 19 is %q, and it is %v on the %s, whose book prints only '0' and '1' there", b, l.byte19, l.model)
+		return Record{}, newParseError(frame, "%s: byte 19 is %q, and it is %v on the %s, whose book prints only '0' and '1' there", what, b, l.byte19, l.model)
 	}
 
 	tone := ToneMode(frame[recToneModeOff])
 	if !l.ValidToneMode(tone) {
-		return Record{}, newParseError(frame, "MR answer: P7 is %q, and the %s prints %s", byte(tone), l.model, l.toneModeText())
+		return Record{}, newParseError(frame, "%s: P7 is %q, and the %s prints %s", what, byte(tone), l.model, l.toneModeText())
 	}
 	rec.ToneMode = tone
 
 	toneIdx, err := parseDigits(frame[recToneOff:recToneOff+recToneDigits], "P8, the tone number")
 	if err != nil {
-		return Record{}, newParseError(frame, "MR answer: %v", err)
+		return Record{}, newParseError(frame, "%s: %v", what, err)
 	}
 	if toneIdx > MaxToneIndex {
-		return Record{}, newParseError(frame, "MR answer: P8 is %d, and TN prints 00 ~ %d (590:2291, 480:1557); an index outside its own chart is refused rather than clamped (A21)", toneIdx, MaxToneIndex)
+		return Record{}, newParseError(frame, "%s: P8 is %d, and TN prints 00 ~ %d (590:2291, 480:1557); an index outside its own chart is refused rather than clamped (A21)", what, toneIdx, MaxToneIndex)
 	}
 	rec.ToneIndex = int(toneIdx)
 
 	ctcssIdx, err := parseDigits(frame[recCTCSSOff:recCTCSSOff+recCTCSSDigits], "P9, the CTCSS number")
 	if err != nil {
-		return Record{}, newParseError(frame, "MR answer: %v", err)
+		return Record{}, newParseError(frame, "%s: %v", what, err)
 	}
 	if ctcssIdx > MaxCTCSSIndex {
-		return Record{}, newParseError(frame, "MR answer: P9 is %d, and CN prints 00 ~ %d (590:411, 480:337); an index outside its own chart is refused rather than clamped (A21)", ctcssIdx, MaxCTCSSIndex)
+		return Record{}, newParseError(frame, "%s: P9 is %d, and CN prints 00 ~ %d (590:411, 480:337); an index outside its own chart is refused rather than clamped (A21)", what, ctcssIdx, MaxCTCSSIndex)
 	}
 	rec.CTCSSIndex = int(ctcssIdx)
 
 	if err := l.checkByte28(frame[recByte28Off]); err != nil {
-		return Record{}, newParseError(frame, "MR answer: %v", err)
+		return Record{}, newParseError(frame, "%s: %v", what, err)
 	}
 	rec.Byte28 = frame[recByte28Off]
 
 	b3940 := string(frame[recByte3940Off : recByte3940Off+recByte3940Len])
 	if err := l.checkByte3940(b3940); err != nil {
-		return Record{}, newParseError(frame, "MR answer: %v", err)
+		return Record{}, newParseError(frame, "%s: %v", what, err)
 	}
 	rec.Byte3940 = b3940
 
 	if err := l.checkByte41(frame[recByte41Off]); err != nil {
-		return Record{}, newParseError(frame, "MR answer: %v", err)
+		return Record{}, newParseError(frame, "%s: %v", what, err)
 	}
 	rec.Byte41 = frame[recByte41Off]
 
-	name, err := parseName(frame)
+	name, err := parseName(what, frame)
 	if err != nil {
 		return Record{}, err
 	}
@@ -209,8 +229,9 @@ func (l Layout) ParseMRAnswer(frame []byte) (Record, error) {
 //
 // A SPACE IS A LEGAL "NUMERIC" BYTE HERE. MR/MW's P2 and P3 are "Channel
 // number (refer to the MC command)" — 590:1452-1453 in the MR ANSWER's own
-// chart, which is the frame this method parses, and 590:1539-1540 in MW's,
-// which is where slotWire reads it — and MC's own chart prints the
+// chart and 590:1539-1540 in MW's, and this method decodes both, since
+// parseRecordFrame serves the answer parser and the outbound gate alike —
+// and MC's own chart prints the
 // convention: "When entering a setting command, enter 0 or a
 // space for a channel number less than 100. For a response command, a space
 // is entered for a channel number less than 100." (590:1334-1337). So the
@@ -219,10 +240,15 @@ func (l Layout) ParseMRAnswer(frame []byte) (Record, error) {
 // nearly every record the 590 pair send. That MR and MW inherit MC's
 // convention at all is A10 — those two frames only say "refer to the MC
 // command" — and A10's other half is the build side, where this codec always
-// emits '0' (slotWire, builders.go). P3 is not affected: MC prints "When the
+// emits '0' (slotWire, builders.go). THE OUTBOUND GATE DOES NOT WIDEN ITSELF
+// ON THAT ASSUMPTION: an MW offered to it is decoded here and then
+// re-encoded through slotWire, so a space-spelled one differs from the frame
+// the builder would have emitted and is refused there rather than here. (MC
+// is the opposite case and the gate says so: its space IS printed.)
+// P3 is not affected: MC prints "When the
 // channel number is less than 10 ... the first digit is \"0\""
 // (590:1342-1343), so those two bytes are always digits.
-func (l Layout) parseSlot(frame []byte, p1 byte) (Slot, error) {
+func (l Layout) parseSlot(what string, frame []byte, p1 byte) (Slot, error) {
 	hundreds := 0
 	p2 := frame[recP2Off]
 	switch l.p2 {
@@ -233,7 +259,7 @@ func (l Layout) parseSlot(frame []byte, p1 byte) (Slot, error) {
 		case p2 >= '0' && p2 <= '9':
 			hundreds = int(p2 - '0')
 		default:
-			return Slot{}, newParseError(frame, "MR answer: byte 4 is %q; on the %s it is the channel's hundreds digit, which MC prints as a digit or a space below 100 (590:1332-1337)", p2, l.model)
+			return Slot{}, newParseError(frame, "%s: byte 4 is %q; on the %s it is the channel's hundreds digit, which MC prints as a digit or a space below 100 (590:1332-1337)", what, p2, l.model)
 		}
 	case P2FixedZero:
 		// checkPrintedFixed has already required '0' here, which is what the
@@ -241,20 +267,20 @@ func (l Layout) parseSlot(frame []byte, p1 byte) (Slot, error) {
 		// exhaustive rather than one being an implicit default.
 		hundreds = 0
 	default:
-		return Slot{}, newParseError(frame, "MR answer: byte 4's policy is unset on this layout")
+		return Slot{}, newParseError(frame, "%s: byte 4's policy is unset on this layout", what)
 	}
 
 	digits := frame[recP3Off : recP3Off+recP3Digits]
 	for i, b := range digits {
 		if b < '0' || b > '9' {
-			return Slot{}, newParseError(frame, "MR answer: P3 byte %d is %q; MC prints both digits of the channel number, zero-padded below 10 (590:1342-1343, 480:955)", i+1, b)
+			return Slot{}, newParseError(frame, "%s: P3 byte %d is %q; MC prints both digits of the channel number, zero-padded below 10 (590:1342-1343, 480:955)", what, i+1, b)
 		}
 	}
 	number := hundreds*100 + int(digits[0]-'0')*10 + int(digits[1]-'0')
 
 	class := l.classOf(number)
 	if class == SlotClassInvalid {
-		return Slot{}, newParseError(frame, "MR answer: slot %d is outside the %s's slot space %s", number, l.model, l.slotSpaceText())
+		return Slot{}, newParseError(frame, "%s: slot %d is outside the %s's slot space %s", what, number, l.model, l.slotSpaceText())
 	}
 	half := ScanHalfNone
 	if class == SlotScan {
@@ -277,11 +303,11 @@ func (l Layout) parseSlot(frame []byte, p1 byte) (Slot, error) {
 // The charset check is A2's, whose claim is BOUNDED AT 0x7F: 0x80-0xFF is
 // unevidenced and unclaimed, so this codec refuses those bytes by its own
 // rule and says nothing about what a radio would do with one.
-func parseName(frame []byte) (string, error) {
+func parseName(what string, frame []byte) (string, error) {
 	raw := frame[recNameOff : recNameOff+recNameLen]
 	for i, b := range raw {
 		if err := checkNameByte(b); err != nil {
-			return "", newParseError(frame, "MR answer: P16 byte %d: %v", i+1, err)
+			return "", newParseError(frame, "%s: P16 byte %d: %v", what, i+1, err)
 		}
 	}
 	return strings.TrimRight(string(raw), " "), nil
