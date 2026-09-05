@@ -1235,6 +1235,15 @@ const TIER_UI_SPEC = {
  * them, and columnsFor renders one column per entry. */
 const ICR8600_TIER_FIELDS = TIER_UI_SPEC.Banks[0].Fields
 
+/** TIER_UI_SPEC's `Tones` is UI_SPEC's — the FT-710's own two-tone chart,
+ * kept there so the served-list tests exercise the shared select editor
+ * (see the tone-kind tests below). It is NOT what the IC-R8600 serves:
+ * every Icom driver declares `CTCSSTones: nil`, and GetUISpec always
+ * serialises that as `Tones: []` (app/uispec.go — `make([]ToneView, 0,
+ * …)`, never omitted), which is the REAL shape this radio's own tests
+ * (fix round 2, MED-A) drive. */
+const TIER_UI_SPEC_NO_TONES = { ...TIER_UI_SPEC, Tones: [] }
+
 /** A populated IC-R8600 row with every tier field still UNANSWERED — the
  * state a radio read leaves them in, and the one the defect made
  * unanswerable except by paste. @param {Record<string, unknown>} extra */
@@ -1454,6 +1463,88 @@ describe('tier-column editing', () => {
 		// legitimate answer to give.
 		await fireEvent.blur(select)
 		expect(updateChannel).not.toHaveBeenCalled()
+	})
+
+	// --- a tone kind with NO served list (fix round 2, MED-A) --------------
+	//
+	// Every registered Icom driver declares `CTCSSTones: nil` and a
+	// numeric range instead (core/spec/capabilities.go), so GetUISpec
+	// serves `Tones: []` for the only radios that render a tier tone
+	// column at all — the two tests above drive a chart (TIER_UI_SPEC's
+	// FT-710-borrowed `Tones`) no radio with a tone_tx/tone_rx column
+	// actually serves. Before this fix a Known cell on such a radio opened
+	// a select with NOTHING in it: the value vanished from view with no
+	// entry to keep or re-choose. The two tests below are the real case,
+	// on TIER_UI_SPEC_NO_TONES.
+
+	it('a Known tone cell with a SERVED list opens the select on its current value, no placeholder', async () => {
+		appState.setCodeplug({
+			Schema: 1,
+			Generator: 'test',
+			Radio: { model: 'IC-R8600', cat_id: '96', read_at: null, region: 'GB' },
+			Channels: [{ slot: ROW, data: tierData({ tone_rx: { state: 'known', value: 885 } }) }],
+			WorkingPath: '',
+			Dirty: false,
+			BaselineStale: false,
+		})
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, TONE_RX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+
+		const select = screen.getByRole('combobox', { name: `RX tone, ${ROW}` })
+		// No head-of-list placeholder once the cell is Known — only the
+		// select an UNANSWERED cell opens carries one (see above).
+		expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['67.0 Hz', '88.5 Hz'])
+		expect(/** @type {HTMLSelectElement} */ (select).value).toBe('885')
+	})
+
+	it('a Known tone cell with NO served tone list edits as free text, opening on its own display spelling', async () => {
+		appState.setUISpec(TIER_UI_SPEC_NO_TONES)
+		appState.setCodeplug({
+			Schema: 1,
+			Generator: 'test',
+			Radio: { model: 'IC-R8600', cat_id: '96', read_at: null, region: 'GB' },
+			Channels: [{ slot: ROW, data: tierData({ tone_rx: { state: 'known', value: 885 } }) }],
+			WorkingPath: '',
+			Dirty: false,
+			BaselineStale: false,
+		})
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, TONE_RX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+
+		// A text input, not a combobox-with-nothing-in-it: the widget the
+		// defect left behind.
+		expect(screen.queryByRole('combobox', { name: `RX tone, ${ROW}` })).not.toBeInTheDocument()
+		const input = screen.getByRole('textbox', { name: `RX tone, ${ROW}` })
+		// Opens on the SAME spelling displayValue would render for it
+		// (toneDisplay's own table-or-arithmetic fallback), so an untouched
+		// commit round-trips.
+		expect(input).toHaveValue('88.5 Hz')
+
+		await fireEvent.input(input, { target: { value: '100.0 Hz' } })
+		await fireEvent.keyDown(input, { key: 'Enter' })
+
+		// The SAME field a paste of that text would produce — parsed
+		// through parsePasteCell exactly as the other free-text tier
+		// kinds are, per ruling §4.
+		const columns = columnsFor(TIER_UI_SPEC_NO_TONES.Banks[0])
+		const pasted = parsePasteCell(columns[TONE_RX], '100.0 Hz', TIER_UI_SPEC_NO_TONES)
+		expect(pasted.ok).toBe(true)
+		expect(updateChannelMock.mock.calls[0][0].data.tone_rx).toEqual(pasted.ok && pasted.patch.tone_rx)
+	})
+
+	it('an UNANSWERED tone cell with no served tone list opens the free-text editor empty', async () => {
+		appState.setUISpec(TIER_UI_SPEC_NO_TONES)
+		const { container } = render(ChannelGrid)
+		const cellEl = cell(container, 0, TONE_RX)
+		cellEl.focus()
+		await fireEvent.keyDown(cellEl, { key: 'Enter' })
+
+		expect(screen.queryByRole('combobox', { name: `RX tone, ${ROW}` })).not.toBeInTheDocument()
+		expect(screen.getByRole('textbox', { name: `RX tone, ${ROW}` })).toHaveValue('')
 	})
 
 	// --- the first answer to a tier bool (fix round 1, MED-2) -------------

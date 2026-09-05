@@ -26,6 +26,7 @@
 		cloneData,
 		parsePasteCell,
 		tierColumnFor,
+		toneDisplay,
 	} from './grid/columns.js'
 	import { hzToMHz, mhzToHz } from './grid/freq.js'
 	import { initialFocus, moveFocus, clampFocus } from './grid/nav.js'
@@ -270,12 +271,22 @@
 	// here; until one is served, this stays free text.
 
 	/** The TierColumn whose editor is the free-text one — the freq, int and
-	 * text kinds. null for a non-tier column, and for the tone and bool
-	 * kinds, which have their own paths above.
+	 * text kinds, PLUS the tone kind when the UISpec serves no tone list
+	 * to pick from (fix round 2, MED-A): every Icom driver today declares
+	 * `CTCSSTones: nil` and a numeric range instead, so `Tones` reaches
+	 * here as `[]`, and a select built from it would offer nothing to
+	 * keep or choose for a Known cell. That is the same gap the file
+	 * header above describes for the seven unserved vocabularies, and the
+	 * same answer: free text, parsed by the same paste parser, when the
+	 * backend serves no list. null for a non-tier column, for a tone
+	 * column when a list IS served (the select stays, and shows the
+	 * current value selected), and for the bool kind, which has its own
+	 * path above.
 	 * @param {ReturnType<typeof columnsFor>[number]} column */
 	function tierTextColumn(column) {
 		const tier = tierColumnFor(column)
-		if (!tier || tier.kind === 'tone' || tier.kind === 'bool') return null
+		if (!tier || tier.kind === 'bool') return null
+		if (tier.kind === 'tone' && (appState.uiSpec?.Tones?.length ?? 0) > 0) return null
 		return tier
 	}
 
@@ -335,13 +346,31 @@
 	 * arrives as {"state":"known"} alone. Opening such a cell EMPTY would
 	 * make it unre-committable, an emptied editor being the no-op below —
 	 * pinned by the two "a Known ZERO opens the … editor on zero" tests, and
-	 * displayValue normalises the same way.
+	 * displayValue normalises the same way. (fix round 2, LOW-C: the
+	 * fallback triggers on an OMITTED `value` key only, not on any
+	 * non-number — that shape is not reachable from Go, and stringifying
+	 * one it were would be a lie about a real answer.)
+	 *
+	 * A TONE reaches this function only when tierTextColumn has already
+	 * decided the UISpec serves no tone list (fix round 2, MED-A): its
+	 * text is the identical spelling displayValue renders for the same
+	 * field — toneDisplay's own table-or-arithmetic answer — so committing
+	 * it untouched round-trips through parseTierCell's tone case exactly
+	 * as the freq/int kinds do.
 	 * @param {{key: string, kind: string}} tier @param {ChannelData | null} data */
 	function tierEditText(tier, data) {
 		const f = tierField(tier, data)
 		if (f?.state !== 'known') return ''
-		if (tier.kind === 'freq') return hzToMHz(typeof f.value === 'number' ? f.value : 0)
-		if (tier.kind === 'int') return String(typeof f.value === 'number' ? f.value : 0)
+		if (tier.kind === 'freq') return hzToMHz(f.value === undefined ? 0 : f.value)
+		if (tier.kind === 'int') return String(f.value === undefined ? 0 : f.value)
+		if (tier.kind === 'tone') {
+			const spec = appState.uiSpec
+			// Reached only when tierTextColumn has already found the spec's
+			// Tones list empty, so a spec DOES exist here (openEditor's own
+			// guard) — the narrowing is for the type checker, not a real case.
+			if (typeof f.value !== 'number' || !spec) return ''
+			return toneDisplay(f.value, spec)
+		}
 		return f.value == null ? '' : String(f.value)
 	}
 
