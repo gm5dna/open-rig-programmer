@@ -48,6 +48,12 @@ func WithLatency(d time.Duration) Option {
 // not list — and drive a real driver's parse-error path through a real fake
 // rather than through a scripted transcript. That is the reason MemState's
 // answer-side fields are fields at all (see MemState.P11 and MemState.Kind).
+//
+// The zero value is a trap for a literal that means to omit only one field:
+// unlike P11 (see MemState.P11), a zero Kind or ClarSign puts a NUL on the
+// wire rather than a printed byte, and a zero Freq or ClarMag shortens the
+// answer instead of padding it — MemState has no exported constructor, so a
+// caller building one field at a time must set every wire-bearing field.
 func WithSlot(slot string, s MemState) Option {
 	return func(r *Radio) {
 		r.slots[slot] = s
