@@ -11,11 +11,18 @@ import (
 	"strings"
 )
 
-// MaxDigitsCeiling is the largest width any profile may declare. It mirrors
-// core/cat's maxEXDigits, which refuses a wider P4 because the answer frame
-// would exceed DefaultMaxFrame. Refusing here means a bad profile fails at
-// registry construction rather than two packages downstream inside
-// NewDialect's V8 rule. core/cat/exdigits_ceiling_test.go pins the two equal.
+// MaxDigitsCeiling is CORE/CAT'S width ceiling, and so the value every
+// profile that renders into core/cat carries in its own DigitsCeiling field.
+// It mirrors core/cat's maxEXDigits, which refuses a wider P4 because the
+// answer frame would exceed DefaultMaxFrame. Declaring it here means a bad
+// profile fails at registry construction rather than two packages downstream
+// inside NewDialect's V8 rule, and core/cat/exdigits_ceiling_test.go pins the
+// two equal.
+//
+// It is NOT the bound Validate consults. That is Profile.DigitsCeiling, for
+// the reason recorded there: a profile rendering into a different package has
+// a different frame budget, and bounding it by this one would be a bound
+// consulted from one place with its datum taken from another.
 const MaxDigitsCeiling = 247
 
 // ObservationPolicy declares whether a model has hardware READ observations.
@@ -88,7 +95,9 @@ func (t TypeRefPolicy) String() string {
 // EXAddressTriple/EXAddressPair, and the correspondence is a fact about the
 // two radios' charts rather than a type relationship: a Pair profile's CSV
 // carries P3 == 0 on every row, which is exactly what core/cat's rule V12
-// requires of a Pair dialect's inventory.
+// requires of a Pair dialect's inventory. AddressSingle has no core/cat
+// counterpart at all: the family whose chart takes that shape renders through
+// core/kw, which is a different package with its own address type.
 type AddressForm int
 
 const (
@@ -99,6 +108,24 @@ const (
 	// be 0. ParseCSV refuses any other value rather than dropping it: a
 	// component that reaches no frame must not reach the inventory either.
 	AddressPair
+	// AddressSingle: the chart prints ONE menu number and that number is the
+	// whole address, so every row's p2 AND p3 columns must be 0. ParseCSV
+	// refuses any other value rather than dropping it, for the reason
+	// AddressPair refuses a non-zero p3 — this form simply carries the rule
+	// one component further down.
+	//
+	// P1's WIDTH AND DOMAIN ARE A PER-FORM FACT, owned by the arms that
+	// implement the form and not by this constant: parseRecord's 0..99
+	// component cap (TestParseCSV_AddressSingleP1DomainIs0To99 pins it as
+	// this form's bound), ParseObservedCSV's exactly-two-digits column
+	// check, and RenderGo's "%02d" observation key. The last two are the
+	// two sides of one join and agree only while the domain is two digits,
+	// so a radio whose single menu number runs wider widens them together;
+	// widening one side alone makes every observation miss, on a complete
+	// CSV, silently. Recorded at the Stage 0 close, when no registration
+	// carried this form yet and neither observation path could run on a
+	// Single row.
+	AddressSingle
 )
 
 func (a AddressForm) String() string {
@@ -107,6 +134,8 @@ func (a AddressForm) String() string {
 		return "AddressTriple"
 	case AddressPair:
 		return "AddressPair"
+	case AddressSingle:
+		return "AddressSingle"
 	default:
 		return fmt.Sprintf("AddressForm(%d)", int(a))
 	}
@@ -202,6 +231,21 @@ type Profile struct {
 	LabelPolicy   Labels
 	TextRowPolicy TextRows
 
+	// DigitsCeiling is the largest width THIS profile's family admits, and
+	// it is what bounds MaxDigits, TextWidth and MaxObservedWidth. It is a
+	// PER-FAMILY datum because the bound is a property of the family's own
+	// frame budget: the four Yaesu profiles render into core/cat and carry
+	// MaxDigitsCeiling, which core/cat/exdigits_ceiling_test.go pins to that
+	// package's maxEXDigits; a profile rendering into another package
+	// supplies that package's own constant and pins the pair there.
+	//
+	// Reading MaxDigitsCeiling directly here instead would be a bound
+	// consulted from one place with its datum taken from another — the
+	// defect shape this type's own doc comment above says it exists to
+	// prevent, and the one that appeared four times across M9b. Zero is
+	// refused, as every other omitted semantic on this type is.
+	// TestProfileValidate_CeilingComesFromTheProfile pins both directions.
+	DigitsCeiling int
 	// MinDigits and MaxDigits bound a non-text row's Digits column.
 	MinDigits int
 	MaxDigits int
@@ -291,7 +335,7 @@ func (p Profile) Validate() error {
 		return fmt.Errorf("extable: profile %s: TypeRefPolicy %v must be set explicitly", p.Model, p.Types)
 	}
 	switch p.Addresses {
-	case AddressTriple, AddressPair:
+	case AddressTriple, AddressPair, AddressSingle:
 	default:
 		return fmt.Errorf("extable: profile %s: AddressForm %v must be set explicitly", p.Model, p.Addresses)
 	}
@@ -319,6 +363,11 @@ func (p Profile) Validate() error {
 		name string
 		val  int
 	}{
+		// DigitsCeiling is swept here, ahead of the ceiling comparison
+		// below, because a zero one would otherwise be READ as a bound and
+		// refuse every width — the omitted-semantic trap the two parsers'
+		// own self-validation calls exist to avoid.
+		{"DigitsCeiling", p.DigitsCeiling},
 		{"MinDigits", p.MinDigits},
 		{"MaxDigits", p.MaxDigits},
 		{"MaxObservedWidth", p.MaxObservedWidth},
@@ -339,8 +388,11 @@ func (p Profile) Validate() error {
 		{"TextWidth", p.TextWidth},
 		{"MaxObservedWidth", p.MaxObservedWidth},
 	} {
-		if f.val > MaxDigitsCeiling {
-			return fmt.Errorf("extable: profile %s: %s %d exceeds the %d-byte ceiling core/cat enforces", p.Model, f.name, f.val, MaxDigitsCeiling)
+		// The bound is the PROFILE'S, not this package's constant: see
+		// DigitsCeiling's own doc comment for why, and
+		// TestProfileValidate_CeilingComesFromTheProfile for the pin.
+		if f.val > p.DigitsCeiling {
+			return fmt.Errorf("extable: profile %s: %s %d exceeds the %d-digit ceiling this profile declares", p.Model, f.name, f.val, p.DigitsCeiling)
 		}
 	}
 	switch p.Observations {
@@ -417,6 +469,11 @@ var ft710Profile = Profile{
 	LabelPolicy:   LabelsRequired,
 	TextRowPolicy: TextRowsAllowed,
 
+	// DigitsCeiling is core/cat's own MaxDigitsCeiling because this profile
+	// renders into core/cat: the ceiling and the frames it bounds belong to
+	// the same package. The three profiles below carry it for the same
+	// reason, and a profile rendering elsewhere would not.
+	DigitsCeiling:    MaxDigitsCeiling,
 	MinDigits:        1,
 	MaxDigits:        4,
 	TextWidth:        12,
@@ -467,9 +524,11 @@ var ftdx10Profile = Profile{
 	LabelPolicy:   LabelsRequired,
 	TextRowPolicy: TextRowsAllowed,
 
-	MinDigits: 1,
-	MaxDigits: 4,
-	TextWidth: 12,
+	// core/cat's ceiling, because this profile renders into core/cat.
+	DigitsCeiling: MaxDigitsCeiling,
+	MinDigits:     1,
+	MaxDigits:     4,
+	TextWidth:     12,
 	// MaxObservedWidth is an INERT API-REQUIRED SENTINEL here. Validate
 	// demands a positive value from every profile, but this profile declares
 	// ObservationsAbsent — no FTdx10 hardware exists to this project, so no
@@ -522,9 +581,11 @@ var ftdx101Profile = Profile{
 	LabelPolicy:   LabelsRequired,
 	TextRowPolicy: TextRowsAllowed,
 
-	MinDigits: 1,
-	MaxDigits: 4,
-	TextWidth: 12,
+	// core/cat's ceiling, because this profile renders into core/cat.
+	DigitsCeiling: MaxDigitsCeiling,
+	MinDigits:     1,
+	MaxDigits:     4,
+	TextWidth:     12,
 	// MaxObservedWidth is an INERT API-REQUIRED SENTINEL here, exactly as
 	// on the ftdx10 profile: ObservationsAbsent means no observation CSV
 	// is ever parsed and this bound is never consulted. No hardware claim.
@@ -591,9 +652,11 @@ var ft891Profile = Profile{
 	LabelPolicy:   LabelsAbsent,
 	TextRowPolicy: TextRowsAbsent,
 
-	MinDigits: 1,
-	MaxDigits: 5,
-	TextWidth: 0,
+	// core/cat's ceiling, because this profile renders into core/cat.
+	DigitsCeiling: MaxDigitsCeiling,
+	MinDigits:     1,
+	MaxDigits:     5,
+	TextWidth:     0,
 	// MaxObservedWidth is an INERT API-REQUIRED SENTINEL here, exactly as
 	// on the ftdx10 and ftdx101 profiles: ObservationsAbsent means no
 	// observation CSV is ever parsed and this bound is never consulted. It
