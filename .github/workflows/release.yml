@@ -27,6 +27,36 @@
 # a cross-arch build even on a matching OS (building the amd64 slice on
 # an arm64 runner, or vice versa), so leaving CGO_ENABLED unset would
 # silently drop the enumerator's darwin backend and fail to link.
+#
+# Windows: go.bug.st/serial's Windows implementation is also cgo-free,
+# but its two halves differ: the port (serial_windows.go) is
+# CreateFile/DCB/overlapped I/O via golang.org/x/sys/windows and
+# syscall, while the enumerator (enumerator/usb_windows.go) is a
+# setupapi walk plus a USB hub IOCTL, reached via
+# windows.NewLazySystemDLL("setupapi.dll") — no cgo either way, so the
+# `windows` job below builds both CLI arches with CGO_ENABLED=0.
+# windows-2025 ships no NSIS (Windows2025-Readme, read 04/09/2026), so the
+# job fetches the official 3.12 distribution zip, verifies it against a
+# pinned sha256, and puts it on PATH as a WINDOWS-NATIVE path
+# (`${GITHUB_WORKSPACE}\nsis-3.12`) rather than the MSYS-style path Git
+# Bash would otherwise put there: Go's `exec.LookPath`, which `wails build
+# -nsis` uses to find `makensis`, cannot see an MSYS `/d/a/...` path, and
+# `wails build -nsis` prints a warning and exits 0 with no installer if it
+# fails to find one — a silent, not a loud, failure. NSIS's
+# VIProductVersion and the PE VERSIONINFO both need a plain X.Y.Z number,
+# so this job stamps `app/wails.json`'s info.productVersion from the tag
+# before building (the committed file deliberately omits it, the same
+# reasoning as the darwin job's Info.plist stamp below). arm64 is
+# CROSS-compiled on this x64 host: `wails build -platform
+# windows/amd64,windows/arm64 -nsis` builds both GUI installers in one
+# process and the arm64 slice is never run here — only the amd64 CLI is
+# run; its GUI, like arm64's, is never launched by anyone (spec decision
+# 1: "its GUI never launched by anyone"; register W12 stays ASSUMED).
+# This job also asserts the tag matches this
+# workflow's own trigger shape (`^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$`,
+# tighter than the `on.push.tags: v*` glob below) before building anything
+# — deliberately the whole release's gate, since no other job here has
+# ever checked the tag is well-formed before using it.
 
 name: Release
 
@@ -344,12 +374,188 @@ jobs:
           path: open-rig-programmer_*.deb
           if-no-files-found: error
 
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Tag shape
+        run: |
+          set -eu
+          # Every other job here has always assumed the tag pushed to
+          # trigger this workflow (`on.push.tags: v*`) is well-formed;
+          # this job is the first to check, and its failure blocks
+          # `release:` (via `needs:` below) — deliberately, per the
+          # design's decision 5.
+          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || {
+            echo "::error::tag ${VERSION} does not match ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?\$"
+            exit 1
+          }
+          NUMERIC=${VERSION#v}
+          NUMERIC=${NUMERIC%%-*}
+          echo "NUMERIC=$NUMERIC" >> "$GITHUB_ENV"
+          echo "tag ${VERSION} -> numeric version ${NUMERIC}"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Tools on the image
+        run: |
+          set -eu
+          jq --version
+          command -v 7z
+          # Not `7z i | head`: under this job's `defaults.run.shell: bash`
+          # every run step is `bash -eo pipefail`, and `head` closing the
+          # pipe early on 7z's (long) format-list output can raise SIGPIPE
+          # in 7z and fail the step on nothing.
+          7z i > /dev/null
+
+      - name: Install NSIS 3.12
+        run: |
+          set -eu
+          # Not on the windows-2025 image (Windows2025-Readme, read
+          # 04/09/2026) — fetched from the official distribution, pinned
+          # by sha256 (computed by the orchestrator 04/09/2026), same
+          # version as the Mac's local makensis (3.12).
+          curl -fsSL --retry 3 -o nsis-3.12.zip "https://downloads.sourceforge.net/project/nsis/NSIS%203/3.12/nsis-3.12.zip"
+          wc -c nsis-3.12.zip
+          echo "56581f90db321581c5381193d796fffcf2d24b2f8fed2160a6c6a3baa67f2c4f  nsis-3.12.zip" | sha256sum -c
+          7z x -y nsis-3.12.zip
+          # A WINDOWS-NATIVE path, not the MSYS one Git Bash would derive
+          # from $PWD: Go's exec.LookPath (which `wails build -nsis` uses
+          # to find makensis) cannot see an MSYS `/d/a/...` path, and
+          # `wails build -nsis` then silently skips the installer and
+          # exits 0.
+          # The single backslash reaching echo's argument comes from
+          # double-quote stripping of "\\" (POSIX-defined), not from
+          # echo's own non-portable escape interpretation, which is never
+          # invoked here (no -e, no \n) — the disable below is that.
+          # shellcheck disable=SC2028
+          echo "${GITHUB_WORKSPACE}\\nsis-3.12" >> "$GITHUB_PATH"
+
+      - name: makensis is visible
+        shell: pwsh
+        run: |
+          $v = (makensis -VERSION)
+          Write-Host "makensis -VERSION reports: $v"
+          if ($v -ne "v3.12") {
+            throw "makensis -VERSION printed '$v', want v3.12"
+          }
+
+      - name: Add Go bin to PATH
+        run: echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Install Wails CLI
+        run: go install "github.com/wailsapp/wails/v2/cmd/wails@${WAILS_VERSION}"
+
+      - name: Stamp productVersion
+        run: |
+          set -eu
+          # wails.json's info block deliberately omits productVersion (the
+          # darwin job's Info.plist comment explains why); NSIS's
+          # VIProductVersion and the PE VERSIONINFO both need a plain
+          # X.Y.Z number, so it is written here, into the checkout only.
+          jq --arg v "$NUMERIC" '.info.productVersion=$v' app/wails.json > tmp && mv tmp app/wails.json
+          cat app/wails.json
+
+      - name: Build rigprog.exe (amd64)
+        env:
+          CGO_ENABLED: '0'
+          GOOS: windows
+          GOARCH: amd64
+        run: go build -trimpath -ldflags="-s -w -X ${VERSION_PKG}.version=${VERSION}" -o app/dist/amd64/rigprog.exe ./cmd/rigprog
+
+      - name: Build rigprog.exe (arm64)
+        env:
+          CGO_ENABLED: '0'
+          GOOS: windows
+          GOARCH: arm64
+        run: go build -trimpath -ldflags="-s -w -X ${VERSION_PKG}.version=${VERSION}" -o app/dist/arm64/rigprog.exe ./cmd/rigprog
+
+      - name: rigprog.exe reports the tag
+        run: |
+          set -eu
+          # amd64 only: this x64 runner cannot run the arm64 slice, and
+          # both arches take the same ldflags — proving the stamp on the
+          # one that runs proves the mechanism (the darwin/linux jobs'
+          # pattern).
+          reported="$(app/dist/amd64/rigprog.exe version | head -1 | cut -d' ' -f2)"
+          echo "rigprog.exe reports: ${reported} (tag: ${VERSION})"
+          test "${reported}" = "${VERSION}"
+          ! app/dist/amd64/rigprog.exe version | grep -q 'unreleased build'
+
+      - name: rigprog.exe ports runs
+        run: |
+          set -eu
+          app/dist/amd64/rigprog.exe ports
+
+      - name: wails build (windows/amd64,windows/arm64) -nsis
+        working-directory: app
+        run: wails build -platform windows/amd64,windows/arm64 -nsis -ldflags "-X ${VERSION_PKG}.version=${VERSION}"
+
+      - name: Installers exist
+        working-directory: app
+        run: |
+          set -eu
+          test -f "build/bin/Open Rig Programmer-amd64-installer.exe"
+          test -f "build/bin/Open Rig Programmer-arm64-installer.exe"
+
+      - name: Version resource
+        shell: pwsh
+        working-directory: app
+        run: |
+          $numeric = $env:NUMERIC
+          $failed = $false
+          foreach ($arch in @("amd64", "arm64")) {
+            $path = "build/bin/open-rig-programmer-$arch.exe"
+            $actual = (Get-Item $path).VersionInfo.ProductVersion
+            Write-Host "$path ProductVersion: $actual (want $numeric)"
+            if ($actual -ne $numeric) {
+              $failed = $true
+            }
+          }
+          if ($failed) {
+            throw "a raw GUI exe's ProductVersion did not match $numeric"
+          }
+
+      - name: Name the assets
+        run: |
+          set -eu
+          mkdir -p out
+          mv "app/build/bin/Open Rig Programmer-amd64-installer.exe" "out/open-rig-programmer-${VERSION}-windows-amd64-installer.exe"
+          mv "app/build/bin/Open Rig Programmer-arm64-installer.exe" "out/open-rig-programmer-${VERSION}-windows-arm64-installer.exe"
+          (cd app/dist/amd64 && 7z a "../../../out/rigprog-${VERSION}-windows-amd64.zip" rigprog.exe)
+          (cd app/dist/arm64 && 7z a "../../../out/rigprog-${VERSION}-windows-arm64.zip" rigprog.exe)
+
+      - name: Check the Windows assets
+        run: bash app/build/windows/check-windows.sh "$VERSION" out
+
+      - name: Upload artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: out/*
+          if-no-files-found: error
+
   release:
     needs:
       - cli-darwin-universal
       - cli-linux
       - gui-darwin-universal
       - gui-linux
+      - windows
     runs-on: ubuntu-latest
     permissions:
       contents: write
