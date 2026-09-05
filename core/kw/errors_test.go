@@ -113,7 +113,10 @@ func TestRejectionError_NamesBothCausesAndTheTransientSentence(t *testing.T) {
 		{Book480, "480:130-135", "480:136-138"},
 	} {
 		t.Run(tt.book.String(), func(t *testing.T) {
-			e := NewRejectionError(tt.book, "MC007;")
+			e, err := NewRejectionError(tt.book, "MC007;")
+			if err != nil {
+				t.Fatalf("NewRejectionError(%v): %v", tt.book, err)
+			}
 			if !errors.Is(e, transport.ErrRejected) {
 				t.Error("errors.Is(e, transport.ErrRejected) = false — the typed rejection must WRAP the transport sentinel, not replace it")
 			}
@@ -138,28 +141,122 @@ func TestRejectionError_NamesBothCausesAndTheTransientSentence(t *testing.T) {
 	}
 }
 
+// TestTypedErrors_QuoteNoDocumentTheyWereNotGiven is MEDIUM-3's pin, on the
+// two types whose Error() methods pick their citations with an if.
+//
+// Both structs are EXPORTED with EXPORTED FIELDS, so a zero Book reaches
+// Error() by a route no constructor can close. Written as
+// `cite := "590:..."; if e.Book == Book480 { ... }`, a value that names no
+// document quoted the TS-590's line numbers — the exact fail-open
+// ErrUnconfiguredBook exists to prevent, in the one package whose headline
+// erratum (E13) is that the two books disagree. An error that cannot name
+// its document must cite no lines at all and SAY that it cannot.
+func TestTypedErrors_QuoteNoDocumentTheyWereNotGiven(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		msg  string
+	}{
+		{"rejection", (&RejectionError{Book: BookUnset, Command: "MC007;"}).Error()},
+		{"timeout", (&TimeoutError{Book: BookUnset, Command: "MR0007;"}).Error()},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, forbidden := range []string{"590:", "480:"} {
+				if strings.Contains(tt.msg, forbidden) {
+					t.Errorf("Error() = %q — it quotes %s though it was given no document to speak for", tt.msg, forbidden)
+				}
+			}
+			if !strings.Contains(tt.msg, BookUnset.String()) {
+				t.Errorf("Error() = %q, want it to say plainly that it names no document (%q)", tt.msg, BookUnset.String())
+			}
+		})
+	}
+}
+
 // TestTimeoutError_IsNeverAnInferenceOfAbsence is the sharpest of the three
 // and the reason the family exists at all. Both books say the NAK itself is
 // unreliable — "Occasionally, this message may not appear due to
 // microprocessor transients in the transceiver" (590:106-108, 480:136-138)
 // — so a read that times out carries NO information: it is neither "absent"
 // nor "rejected". The message must say so, in the place a user reads it.
+//
+// BOTH BOOKS ARE EXERCISED, as RejectionError's twin already was: the 480
+// leg of the citation branch had no test at all, so nothing said which
+// document a TS-480 session's timeout would quote.
 func TestTimeoutError_IsNeverAnInferenceOfAbsence(t *testing.T) {
-	e := NewTimeoutError(Book590, "MR0007;")
-	if !errors.Is(e, transport.ErrTimeout) {
-		t.Error("errors.Is(e, transport.ErrTimeout) = false — the typed timeout must WRAP the transport sentinel")
+	for _, tt := range []struct {
+		book     Book
+		citation string
+	}{
+		{Book590, "590:106-108"},
+		{Book480, "480:136-138"},
+	} {
+		t.Run(tt.book.String(), func(t *testing.T) {
+			e, err := NewTimeoutError(tt.book, "MR0007;")
+			if err != nil {
+				t.Fatalf("NewTimeoutError(%v): %v", tt.book, err)
+			}
+			if !errors.Is(e, transport.ErrTimeout) {
+				t.Error("errors.Is(e, transport.ErrTimeout) = false — the typed timeout must WRAP the transport sentinel")
+			}
+			if errors.Is(e, transport.ErrRejected) {
+				t.Error("a timeout matches transport.ErrRejected — silence is not a refusal")
+			}
+			msg := e.Error()
+			for _, want := range []string{"MR0007;", tt.citation, "not evidence"} {
+				if !strings.Contains(msg, want) {
+					t.Errorf("Error() = %q, want it to contain %q", msg, want)
+				}
+			}
+			if other := "480:136-138"; tt.book == Book480 {
+				other = "590:106-108"
+				if strings.Contains(msg, other) {
+					t.Errorf("Error() = %q — a TS-480 session's timeout quotes the 590 book", msg)
+				}
+			} else if strings.Contains(msg, other) {
+				t.Errorf("Error() = %q — a 590 session's timeout quotes the 480 book", msg)
+			}
+			var to *TimeoutError
+			if !errors.As(error(e), &to) {
+				t.Error("errors.As could not recover *TimeoutError")
+			}
+		})
 	}
-	if errors.Is(e, transport.ErrRejected) {
-		t.Error("a timeout matches transport.ErrRejected — silence is not a refusal")
-	}
-	msg := e.Error()
-	for _, want := range []string{"MR0007;", "590:106-108", "not evidence"} {
-		if !strings.Contains(msg, want) {
-			t.Errorf("Error() = %q, want it to contain %q", msg, want)
+}
+
+// TestNewRejectionError_RefusesAnUnsetBook and its twin below are MEDIUM-3's
+// other half: the constructors are EXPORTED, and an exported constructor of
+// a document-quoting error must refuse a book that names no document rather
+// than build a value whose Error() then has to apologise for it.
+//
+// NewFraming's rule, applied where the drivers at T11-T14 will meet it —
+// they pass a real book, so this closes a door before anyone opens it.
+func TestNewRejectionError_RefusesAnUnsetBook(t *testing.T) {
+	for _, b := range []Book{BookUnset, Book(99)} {
+		e, err := NewRejectionError(b, "MC007;")
+		if err == nil {
+			t.Fatalf("NewRejectionError(%v) returned %v and no error", b, e)
+		}
+		if !errors.Is(err, ErrUnconfiguredBook) {
+			t.Errorf("NewRejectionError(%v) error = %v, want errors.Is match against ErrUnconfiguredBook", b, err)
+		}
+		if e != nil {
+			t.Errorf("NewRejectionError(%v) returned %v alongside its error, want nil", b, e)
 		}
 	}
-	var to *TimeoutError
-	if !errors.As(error(e), &to) {
-		t.Error("errors.As could not recover *TimeoutError")
+}
+
+// TestNewTimeoutError_RefusesAnUnsetBook — see the twin above.
+func TestNewTimeoutError_RefusesAnUnsetBook(t *testing.T) {
+	for _, b := range []Book{BookUnset, Book(99)} {
+		e, err := NewTimeoutError(b, "MR0007;")
+		if err == nil {
+			t.Fatalf("NewTimeoutError(%v) returned %v and no error", b, e)
+		}
+		if !errors.Is(err, ErrUnconfiguredBook) {
+			t.Errorf("NewTimeoutError(%v) error = %v, want errors.Is match against ErrUnconfiguredBook", b, err)
+		}
+		if e != nil {
+			t.Errorf("NewTimeoutError(%v) returned %v alongside its error, want nil", b, e)
+		}
 	}
 }
