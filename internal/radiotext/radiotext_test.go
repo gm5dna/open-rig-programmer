@@ -190,12 +190,19 @@ func TestTextFields_CoversEveryFieldOfText(t *testing.T) {
 // rather than needing this file edited once per existing entry.
 // ---------------------------------------------------------------------
 
-// yaesuModels is the four registered models whose radiotext entry predates
+// yaesuModels is the FIVE registered models whose radiotext entry predates
 // (and is unrelated to) any CI-V vocabulary — the set catFamilyVocabulary
 // below must NOT be checked against, since every one of these radios'
 // prose legitimately says "CAT".
+//
+// The FT-891 (Tier 1) is the fifth, and it belongs here for exactly the
+// reason the other four do and for no other: it speaks CAT, so its own
+// prose says "CAT" throughout and the vocabulary check must skip it. It is
+// otherwise an ordinary entry — one registered model, one driver package,
+// one simulator.
 var yaesuModels = map[string]bool{
 	"FT-710": true, "FTdx10": true, "FTdx101D": true, "FTdx101MP": true,
+	"FT-891": true,
 }
 
 // catFamilyVocabulary is the Yaesu CAT-protocol vocabulary every Icom
@@ -267,10 +274,16 @@ func TestSkipByteIdenticalSibling_ExactlyThePair(t *testing.T) {
 // TestRadiotext_FTdx10Verbatim always checked ("CAT" family tokens
 // excluded — see catFamilyVocabulary).
 var ownParticulars = map[string][]string{
-	"FT-710":     {"FT-710", "V01-10", "[V/M]", "[ERASE]", "hardware-verified"},
-	"FTdx10":     {"FTdx10"},
-	"FTdx101D":   {"FTdx101D"},
-	"FTdx101MP":  {"FTdx101MP"},
+	"FT-710":    {"FT-710", "V01-10", "[V/M]", "[ERASE]", "hardware-verified"},
+	"FTdx10":    {"FTdx10"},
+	"FTdx101D":  {"FTdx101D"},
+	"FTdx101MP": {"FTdx101MP"},
+	// The FT-891's own name, and nothing else. Its prose carries no
+	// address hex (it is not a CI-V radio) and no hardware finding to
+	// guard (no FT-891 has ever answered a frame), so the bare name is
+	// the whole of this radio's distinguishing evidence — the three
+	// FTdx entries' shape, not the FT-710's five-token one.
+	"FT-891":     {"FT-891"},
 	"IC-7610":    {"IC-7610", "98h"},
 	"IC-7300":    {"IC-7300", "94h"},
 	"IC-7300MK2": {"IC-7300MK2", "B6h"},
@@ -936,6 +949,14 @@ func TestFor_UnknownModel(t *testing.T) {
 		// no other does — dropping the R, which is the letter that says
 		// "receiver".
 		"ICR8600", "ic-r8600", "IC-R8600 ", " IC-R8600", "R8600", "IC-8600",
+		// FT-891 near misses (Tier 1, the first Yaesu registration since
+		// M9d-2): the no-hyphen spelling other Yaesu software commonly
+		// uses, the lowercase slug this project's own ModelSlug produces
+		// ("ft-891" — a real string in this build, which is exactly why it
+		// must not resolve here), a trailing- and a leading-space variant,
+		// the space-for-hyphen spelling Yaesu's own marketing uses, and
+		// the bare model number.
+		"FT891", "ft-891", "FT-891 ", " FT-891", "FT 891", "891",
 	} {
 		got, ok := radiotext.For(model)
 		if ok {
@@ -1345,5 +1366,124 @@ func TestRadiotext_ICR8600ProbeNote_DoesNotOverstateTheWalkBound(t *testing.T) {
 		if !strings.Contains(got.ProbeFirmwareNote, want) {
 			t.Errorf("ProbeFirmwareNote = %q, want it to contain %q (the honest form used at core/driver/icr8600/write.go:215)", got.ProbeFirmwareNote, want)
 		}
+	}
+}
+
+// TestRadiotext_FT891Verbatim pins every FT-891 Text field byte for byte
+// (Tier 1 task 7, landed with that model's wiring registration —
+// internal/wiring's TestEverySupportedModelHasRadiotext refuses a registered
+// model with no prose, which is what makes this entry part of registration
+// rather than a later nicety).
+//
+// THE HONESTY RULE APPLIES UNCHANGED. No FT-891 has ever been asked anything
+// by this project (core/driver/ft891/doc.go), no FT-891 OPERATING manual is
+// held — only the CAT Operation Reference Manual, rev 1909-C — and no write
+// trial has happened (that driver's writeTrialsComplete is false). Every
+// string therefore says what is actually known, including where something is
+// NOT known, and borrows the wording of no other entry: not the FT-710's
+// (whose hedgeless sentences are ITS hardware evidence), not the FTdx10's or
+// the FTdx101 pair's (whose hedges are about different radios and different
+// manuals), and not any Icom entry's.
+//
+// WHAT THIS ENTRY CAN SAY THAT ITS YAESU SIBLINGS' CANNOT, and why it is
+// written fresh rather than adapted: this radio's CAT manual prints its whole
+// command set in one Control Command List, so the ERASE absence is
+// manual-evidenced here rather than merely unclaimed (matrix §2.6); its menu
+// chart prints a CAT RATE row with four rates and no factory marking (matrix
+// §1.11-1.12, erratum M-E4), so the ASSUMED default speed can be stated with
+// the menu number a user would have to visit; its connection section
+// describes a USB-to-DUAL-UART bridge and never says which endpoint carries
+// CAT (matrix §3.13); and its MT block contradicts its own Control Command
+// List about whether a memory channel may be READ at all (matrix §3.12,
+// driver register entry 7 "MT READ IS SUPPORTED FOR MEMORY AND PMS"). The
+// last two are the plan's named requirements for this field, alongside the
+// baud sentence.
+//
+// assertNotBorrowedFromAnyOtherModel runs against every OTHER registered
+// entry, derived from wiring.SupportedModels() rather than a list fixed at
+// this registration, so a later registration is covered here too.
+func TestRadiotext_FT891Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure:   "The FT-891 has no CAT erase command, and on this radio that absence is documented rather than merely unclaimed: the CAT manual prints the whole command set in one Control Command List and no memory-erase command appears in it. A channel can therefore be cleared only at the radio itself, and this build does not describe how — no FT-891 operating manual is held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Follow the memory-channel erase procedure in the radio's own operating manual.",
+		FirmwareGuidance: "No minimum firmware version is established for the FT-891: nothing this project holds states one, and no FT-891 has been asked. There is no version query in this build's CAT vocabulary for this radio either — it is the identity read, the memory read pair, the one combined memory set and the menu read, and nothing else — so read the version off the radio's own display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established.",
+		GridLegendNote:   "Tone and Scan Skip are neither read nor written for the FT-891 by this build: its combined memory record carries a CTCSS on/off state byte and nothing else of either kind — no tone-number byte and no scan-skip flag in any of the record's 41 positions — so set both at the radio. Two further columns behave differently here from the file you may be importing. A CHIRP file's CW, CWR and RTTY rows are not imported on this radio: they map to the sideband-specific names CW-U, CW-L and RTTY-U, and this radio's own mode legend prints CW, CW-R, RTTY-LSB and RTTY-USB instead, so such a row is blocked rather than written as a mode the radio has never been shown to have. And a transmit-clarifier flag carried in from another radio's file is refused at the write rather than sent: this radio's memory record prints that position as fixed, so there is no transmit clarifier here to set.",
+		// Deliberately empty, exactly as every other model's is whose
+		// write-trial guard is false: this field states what IS and is NOT
+		// hardware-verified about preservation across a rewrite, and with
+		// core/driver/ft891's writeTrialsComplete false there is no
+		// verification of any kind to report. Any sentence here would be a
+		// hardware claim about a radio nobody here has touched.
+		ToneScanSkipVerification: "",
+		// Byte-identical to EraseProcedure, as every other entry's is: the
+		// delete dialogue and the blocked-erase review answer the same
+		// question, and splitting the wording would only invite one copy to
+		// drift into a procedure the other refuses to state.
+		EraseDialogNote: "The FT-891 has no CAT erase command, and on this radio that absence is documented rather than merely unclaimed: the CAT manual prints the whole command set in one Control Command List and no memory-erase command appears in it. A channel can therefore be cleared only at the radio itself, and this build does not describe how — no FT-891 operating manual is held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Follow the memory-channel erase procedure in the radio's own operating manual.",
+		// The two tooltips DIFFER, unlike the FTdx10's identical pair,
+		// because this radio's two absences are differently evidenced in the
+		// record itself: no tone-NUMBER byte, and no scan-skip FLAG (matrix
+		// §2.3). Neither claims a preservation finding — there is none.
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "not read or written over CAT by this build — this radio's memory record has no tone-number byte at all, and whether a rewrite preserves the tone has never been tested",
+			ScanSkip: "not read or written over CAT by this build — this radio's memory record has no scan-skip flag at all, and whether a rewrite preserves the marking has never been tested",
+		},
+		// A placeholder LABEL, not an example: no FT-891 version string has
+		// been seen here, so there is no format to exemplify.
+		FirmwarePlaceholder: "as shown on the FT-891's own display",
+		ProbeFirmwareNote:   "Firmware version has no CAT query in this build — check the radio's display. No minimum version is established for the FT-891: this build knows of none to require. Its opening speed of 38400 is ASSUMED, not read off the radio: this radio's CAT manual prints the four rates its CAT RATE menu row offers — 4800, 9600, 19200 and 38400 — and marks none of them as the factory setting, and neither this build's command line nor its window offers a way to open at another rate, so a radio set differently has to be put back at menu 0506 before it will answer. Two more things about this radio are worth knowing before blaming the port. Its rear-panel USB socket is a built-in USB-to-dual-UART bridge, so the radio enumerates TWO serial devices, and the manual mentions the second only in the word \"Dual\" — it never says which of the two carries CAT — so if one is silent, try the other before concluding the cable or the speed is wrong. And this manual contradicts itself about READING a memory channel: its Control Command List marks the combined MEMORY WRITE & TAG command settable only, while that same command's own detail block, on the same printed page, gives it a read request and a full answer chart. This build asks the detail block's question and cross-checks the answer against the plain memory read, so a read refused for a channel that is plainly occupied is the manual's own ambiguity surfacing, not a fault in the port — one such read of a channel you know is populated is what would settle it.",
+	}
+
+	got, ok := radiotext.For("FT-891")
+	if !ok {
+		t.Fatal(`For("FT-891") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"FT-891\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "FT-891", got)
+}
+
+// TestRadiotext_FT891ProbeNote_CarriesItsThreeNamedFacts pins the three
+// things the Tier 1 plan (task 7) requires of THIS field by name, rather
+// than leaving them to the verbatim comparison above, which would also
+// catch a regression but only by accident — a reworded note that quietly
+// dropped one of the three would still be "verbatim" once someone updated
+// the literal.
+//
+// The three are: the ASSUMED opening speed with the menu row a user would
+// have to visit to change the radio's own (matrix §1.12, erratum M-E4 —
+// there is no baud override on this build's command line or in its window,
+// so menu 0506 is the only remedy); the two-UART caveat (matrix §3.13 —
+// the manual names the second endpoint only in the word "Dual"); and the
+// MT-Read contradiction (matrix §3.12 — the Control Command List against
+// the MT detail block, which is why a user meeting
+// ft891.ErrMTReadRejectedForOccupiedSlot is entitled to know the ambiguity
+// started in the manual and not in this software).
+func TestRadiotext_FT891ProbeNote_CarriesItsThreeNamedFacts(t *testing.T) {
+	got, ok := radiotext.For("FT-891")
+	if !ok {
+		t.Fatal(`For("FT-891") ok = false, want true`)
+	}
+	for _, want := range []string{
+		// The baud sentence, and the menu number that is its only remedy.
+		"38400 is ASSUMED",
+		"menu 0506",
+		// The two-UART caveat.
+		"USB-to-dual-UART bridge",
+		"never says which of the two carries CAT",
+		// The MT-Read contradiction.
+		"contradicts itself",
+		"Control Command List",
+	} {
+		if !strings.Contains(got.ProbeFirmwareNote, want) {
+			t.Errorf("ProbeFirmwareNote = %q,\nwant it to contain %q", got.ProbeFirmwareNote, want)
+		}
+	}
+	// The note must not promise a way out this build does not offer: there
+	// is no baud override anywhere in the CLI or the GUI (matrix §1.12), so
+	// the sentence has to say so rather than implying a flag exists.
+	if !strings.Contains(got.ProbeFirmwareNote, "neither this build's command line nor its window offers a way to open at another rate") {
+		t.Errorf("ProbeFirmwareNote = %q,\nwant it to state that no baud override exists in either face of this build", got.ProbeFirmwareNote)
 	}
 }
