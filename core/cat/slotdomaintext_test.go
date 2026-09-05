@@ -4,6 +4,7 @@ package cat
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -190,6 +191,21 @@ func TestSlotDomainText_NamesNoBankItsDialectLacks(t *testing.T) {
 				}
 				if d.PMSForm() == PMSFormNumeric && strings.Contains(sentence, "P1L") {
 					t.Errorf("%q names the token PMS form on a numeric-PMS dialect", sentence)
+				}
+				// The none form is this dialect's datum in exactly the way
+				// the memory range, the PMS domain and the special banks
+				// are, and it was the last literal left in the two
+				// renderers. It was false on noneWireDialect, whose none
+				// form is "900" and whose "000" is an ordinary writable
+				// memory channel: the sentence offered "memory 000-005" and
+				// rejected "000" in the same breath (Stage 0 close review,
+				// seat 2 MEDIUM-3).
+				if nw := d.slots.noneWire; nw != "" {
+					if !strings.Contains(sentence, strconv.Quote(nw)) {
+						t.Errorf("%q does not name this dialect's own none form %q", sentence, nw)
+					}
+				} else if strings.Contains(sentence, `"000"`) {
+					t.Errorf("%q names the FT-710's none form on a dialect that has no none form at all", sentence)
 				}
 			}
 		})

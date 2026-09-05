@@ -259,10 +259,13 @@ func (d Dialect) BuildMTSet(s Slot, display bool, tag string) (Command, error) {
 		return Command{}, newParseError(nil, fmt.Sprintf("MT: short-form Set called on a %v dialect — use the combined-form API", d.mt.Form))
 	}
 	if !d.mtSlotValid(s) {
-		// Composed from this dialect's own slot space (S0.2): the domains
-		// and the special-bank clause were literals true only of the
-		// token-PMS radios. The four token dialects render byte-for-byte
-		// what stood here, so frame-corpus.golden does not move. ONE
+		// Composed from this dialect's own slot space (S0.2): the domains,
+		// the special-bank clause and the none form were literals true only
+		// of the token-PMS radios. The four token dialects render
+		// byte-for-byte what stood here, so frame-corpus.golden does not
+		// move — measured over all five registered dialects by
+		// TestSlotDomainRefusals_EveryRegisteredDialectIsByteIdentical
+		// (core/transport). ONE
 		// renderer, shared with validateCombinedMTFields, because the two
 		// forms refuse in identical words and two copies of a sentence that
 		// must agree is the drift this package keeps paying for.

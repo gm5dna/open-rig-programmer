@@ -162,7 +162,13 @@ func TestParseObservedCSV_AddressSingleKeysOnP1Alone(t *testing.T) {
 			t.Errorf("%s: ParseObservedCSV accepted p1 %q under AddressSingle", tc.name, tc.p1)
 			continue
 		}
-		if !strings.Contains(err.Error(), "must be exactly three digits") {
+		// It names the component P1, as parseRecord's own domain refusal
+		// does ("address component P1 must be 0..999"), rather than the
+		// 0-based loop index its two-digit sibling carries: a user reading
+		// "component 0" beside a chart whose columns are P1/P2/P3 has to
+		// guess (Stage 0 close review, seat 1 LOW-2). The two-digit
+		// sentence is shipped text and keeps its index.
+		if !strings.Contains(err.Error(), "address component P1 must be exactly three digits") {
 			t.Errorf("%s: ParseObservedCSV refused with %q, which does not say the P1 column is three digits", tc.name, err)
 		}
 	}

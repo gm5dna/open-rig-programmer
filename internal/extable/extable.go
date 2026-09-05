@@ -419,7 +419,12 @@ func ParseObservedCSV(p Profile, data []byte) (map[string]Observed, error) {
 		for c := 0; c < 3; c++ {
 			if c == 0 && p.Addresses == AddressSingle {
 				if !isThreeDigits(rec[c]) {
-					return nil, fmt.Errorf("extable: observation row %d: address component %d must be exactly three digits under %v", i+1, c, p.Addresses)
+					// "P1", not the loop's 0-based c: this arm runs for c ==
+					// 0 alone, and parseRecord's own domain refusal for the
+					// same column says "address component P1". The two-digit
+					// sentence below keeps its index because it is SHIPPED
+					// TEXT; this one was new (seat 1 LOW-2).
+					return nil, fmt.Errorf("extable: observation row %d: address component P1 must be exactly three digits under %v", i+1, p.Addresses)
 				}
 				continue
 			}

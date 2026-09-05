@@ -82,8 +82,9 @@ func (d Dialect) validateMWFields(m MemoryData) error {
 	if !d.writableSlot(m.Slot) {
 		// THE WORDING IS FROZEN, and still says "Writable()" although M9d
 		// removed that method. The FT-710's render of it is baked into six
-		// lines of core/cat/testdata/frame-corpus.golden, one of the ten
-		// paths the milestone golden gate forbids moving; rewording it here
+		// lines of core/cat/testdata/frame-corpus.golden, one of the
+		// twenty paths the milestone golden gate forbids moving (twenty-five
+		// once the FT-991A's own artefacts join them); rewording it here
 		// would move that golden. Harmless in practice — the parenthetical
 		// spells the rule out in full, so the message stands alone without
 		// the symbol — but it is frozen deliberately, not by oversight.
@@ -92,14 +93,17 @@ func (d Dialect) validateMWFields(m MemoryData) error {
 		//
 		// WHAT S0.2 CHANGED IS WHERE THE BYTES COME FROM, not what they
 		// are. The sentence is composed by Dialect.mwSlotDomainRefusal
-		// (slot.go) from this dialect's own memory range, PMS domain and
-		// declared special banks, because all three were literals true only
-		// of the token-PMS radios: the FT-991A's pairs are 100-117 and it
-		// has neither a 5 MHz bank nor an emergency channel. All four token
-		// dialects render byte-for-byte what stood here, so the corpus does
-		// not move — proved directly by
-		// TestSlotDomainText_FT710SentencesAreByteIdentical and, on the
-		// whole corpus, by the golden itself.
+		// (slot.go) from this dialect's own memory range, PMS domain,
+		// declared special banks and none form, because all four were
+		// literals true only of the token-PMS radios: the FT-991A's pairs
+		// are 100-117 and it has neither a 5 MHz bank nor an emergency
+		// channel. All four token dialects render byte-for-byte what stood
+		// here, so the corpus does not move — proved directly by
+		// TestSlotDomainText_FT710SentencesAreByteIdentical, on the OTHER
+		// FOUR registered dialects by
+		// TestSlotDomainRefusals_EveryRegisteredDialectIsByteIdentical
+		// (core/transport, which can import them where this package cannot),
+		// and, on the whole corpus, by the golden itself.
 		return newParseError([]byte(m.Slot.Wire()), d.mwSlotDomainRefusal())
 	}
 
