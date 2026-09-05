@@ -119,6 +119,14 @@
   milestone's Task 7) has not run; Task 8 trues it from that session's
   evidence. No row of the per-model support table, no model count, and
   no other evidence sentence changed with this sync.
+
+  FIX ROUND 1 (05/09/2026, cross-check with lane D's t4-docs-review-
+  opus.md finding 5): the Downloads section gains a one-sentence note
+  that the four Windows rows are native-only (amd64 refuses to run on
+  ARM64, even though ARM64 Windows can emulate x64) — the same rule
+  README.md's Windows paragraph already states, now stated here too so
+  a reader who only sees the release page (where the asset choice is
+  actually made) gets it as well.
 -->
 
 Open Rig Programmer __VERSION__ — an open-source, cross-platform
@@ -290,6 +298,10 @@ on the Mint releases built from those — not on anything older. On
 other distributions, take the CLI tarball or build the GUI from source
 (`wails build -tags webkit2_41` in `app/`); either way,
 `docs/linux-setup.md` covers the serial-port setup.
+
+The four Windows rows are native-only: the amd64 installer (or zip)
+refuses to run on an ARM64 machine, even though ARM64 Windows can
+emulate x64 programs — install the arm64 file on an ARM64 PC.
 
 `SHA256SUMS` (attached below) covers every file above. Verify with:
 
