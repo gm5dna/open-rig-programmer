@@ -75,12 +75,13 @@ the Enhanced port ranks first on Windows, or on any platform.** Use
 `rigprog probe --port COMn` against each listed port in turn — that is
 the authoritative, active check (it sends the FT-710's CAT identity
 query and only the CAT-capable port answers), not the port's ranking or
-its number:
+its number. `rigprog.exe` is not on `PATH` (§5 below), so run it from
+the folder that holds it:
 
-```sh
-rigprog ports
-rigprog probe --port COM3
-rigprog probe --port COM4
+```powershell
+.\rigprog.exe ports
+.\rigprog.exe probe --port COM3
+.\rigprog.exe probe --port COM4
 ```
 
 ## 3. SmartScreen and Defender

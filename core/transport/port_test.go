@@ -244,7 +244,11 @@ func containsAll(s string, subs ...string) bool {
 // RTS_CONTROL_ENABLE in the DCB the library hands SetCommState
 // (serial_windows.go:401-411), i.e. both lines asserted for the whole window
 // between the open and this package's SetRTS/SetDTR calls. See decision 6
-// and register entry W6 (ASSUMED — no hardware has watched this yet).
+// and register entry W6 (LIFTED, 05/09/2026 Windows 11 ARM64 VM
+// session with a real FT-710 attached — docs/hardware-notes.md's
+// "Windows (ARM64 VM) session" section). This test itself remains a
+// seam test, not a hardware run: it still only pins the shape the open
+// seam is handed.
 func TestOpenSerial_RequestsRTSAndDTRLowAtOpen(t *testing.T) {
 	fp := &fakeSerialPort{}
 	cm := withFakeOpenPort(t, fp, nil)

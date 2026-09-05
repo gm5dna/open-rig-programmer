@@ -271,23 +271,34 @@ if [ -f "$nsi" ]; then
   code="$(nsi_source "$nsi")"
 
   # Target-specific, single-line, literal-`$INSTDIR`/`$AppData` greps are
-  # dodged four ways: `!define`-indirecting the target
+  # dodged five ways: `!define`-indirecting the target
   # (`!define UNROOT "$INSTDIR"` then `RMDir /r "${UNROOT}"`), a
   # backslash line-continuation between `/r` and the target,
   # reordering flags (`RMDir /REBOOTOK /r "..."` — `/r` no longer
-  # anchors the match), or spelling the command or the flag in another
+  # anchors the match), spelling the command or the flag in another
   # case (`rmdir /r "..."`, `RMDIR /R "..."` — NSIS command and flag
   # names are case-insensitive, so a plain `==` compare walks straight
   # past a lowercase spelling; this is not hypothetical, it is how the
   # closing review's own mutation evaded the previous version of this
-  # check). None of those change what the line does, so the rule is now
-  # blanket, target-agnostic and case-agnostic: no `RMDir` invocation in
-  # the whole nsi may carry a `/r` flag, in any position, on any target,
-  # spelt in any case — this repository's uninstall Section never needs
-  # a recursive remove (see the Section's own comment), so the flag
-  # itself is the hazard. Tokenising after nsi_source() (continuations
-  # already folded) and comparing with toupper() sidesteps all four
-  # dodges at once.
+  # check), or `!define`-indirecting the COMMAND WORD itself
+  # (`!define REMOVE RMDir` then `${REMOVE} /r "$INSTDIR"` — neither
+  # this walk, which looks for the literal token `RMDIR`, nor the
+  # indirection ban below, which only inspects a define's VALUE for a
+  # directory name, ever sees "RMDir" and "/r" on the same line, because
+  # the command word itself has been aliased away). None of those
+  # change what the line does, so the rule is now blanket,
+  # target-agnostic, case-agnostic AND alias-agnostic: no `RMDir`
+  # invocation in the whole nsi may carry a `/r` flag, in any position,
+  # on any target, spelt in any case — this repository's uninstall
+  # Section never needs a recursive remove (see the Section's own
+  # comment), so the flag itself is the hazard. Tokenising after
+  # nsi_source() (continuations already folded) and comparing with
+  # toupper() sidesteps the first four dodges; the fifth (the aliased
+  # command word) is closed separately below by banning the whole
+  # token `/r` outright, since RMDir is the only NSIS command that
+  # accepts it at all — no command-word match is needed to catch an
+  # alias of a command this project never has a legitimate reason to
+  # invoke with that flag.
   rmdir_r_hit="$(printf '%s\n' "$code" | awk '
     {
       n = split($0, toks, /[ \t]+/)
@@ -305,11 +316,34 @@ if [ -f "$nsi" ]; then
   [ -z "$rmdir_r_hit" ] || err "nsi: found a recursive RMDir /r (classic NSIS hazard, any flag order or target):
 $rmdir_r_hit"
 
+  # Fifth evasion, closed directly: RMDir is the only NSIS command that
+  # takes a /r flag at all, and this nsi never needs one (see above), so
+  # the token itself — not any particular command word spelling — is
+  # the hazard. A blanket, whole-nsi, case-insensitive ban on the token
+  # `/r` catches `${REMOVE} /r "$INSTDIR"` even when `REMOVE` is a
+  # `!define`d alias for `RMDir` that the command-word-specific walk
+  # above never sees.
+  slash_r_hit="$(printf '%s\n' "$code" | awk '
+    {
+      n = split($0, toks, /[ \t]+/)
+      for (i = 1; i <= n; i++) {
+        if (toupper(toks[i]) == "/R") { print; next }
+      }
+    }
+  ')"
+  [ -z "$slash_r_hit" ] || err "nsi: found the token /r outside a comment (RMDir is the only NSIS command that takes it, and this installer never needs it — an aliased command word, e.g. !define REMOVE RMDir, would otherwise dodge the RMDir-specific check above):
+$slash_r_hit"
+
   # Indirection is not needed anywhere in this nsi and is how the
   # hazard above hides, so ban it outright: no !define's value may name
-  # any of the directories a recursive remove would be dangerous on.
+  # any of the directories a recursive remove would be dangerous on, or
+  # be a command word itself (RMDir/Delete/Exec/ExecWait/nsExec) —
+  # aliasing a command word lets `${THATDEFINE}` invoke it under a name
+  # none of the command-specific checks in this file search for.
   printf '%s\n' "$code" | grep -Eiq '^[[:space:]]*!define[[:space:]]+[A-Za-z0-9_]+[[:space:]]+.*\$(INSTDIR|AppData|APPDATA|LOCALAPPDATA|PROGRAMFILES)' \
     && err "nsi: a !define's value contains \$INSTDIR/\$AppData/\$LOCALAPPDATA/\$PROGRAMFILES (indirection is not needed here and is how the RMDir /r check above gets dodged)"
+  printf '%s\n' "$code" | grep -Eiq '^[[:space:]]*!define[[:space:]]+[A-Za-z0-9_]+[[:space:]]+"?(RMDIR|DELETE|EXEC|EXECWAIT|NSEXEC)"?[[:space:]]*$' \
+    && err "nsi: a !define's value is itself a command word (RMDir/Delete/Exec/ExecWait/nsExec) — aliasing a command word under another name is how the command-specific checks above get dodged"
 
   uninstall_block="$(printf '%s\n' "$code" | sed -nE '/Section[[:space:]]+"[Uu]ninstall"/,/SectionEnd/p')"
   if [ -z "$uninstall_block" ]; then

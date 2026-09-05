@@ -248,10 +248,15 @@ func TestRankPorts_NilEntry_Skipped(t *testing.T) {
 
 // --- Windows COM-port shapes (decision 7) ---
 //
-// None of the three cases below has been observed: no hardware has yet run
-// this code on Windows. They pin what rankPorts DOES with each of the two
-// shapes the enumerator library can produce there, so that a later change
-// to the ranking policy cannot silently alter the Windows answer.
+// The expected shape (case (a) below) is now confirmed: a Windows 11
+// ARM64 VM session with a real FT-710 attached, 05/09/2026
+// (docs/hardware-notes.md's "Windows (ARM64 VM) session" section), ran
+// this code on Windows and saw exactly the tie this test pins. Cases
+// (b) and (c) remain unobserved — the session's hub/port lookup
+// succeeded, so only case (a) actually occurred. They still pin what
+// rankPorts DOES with each of the two shapes the enumerator library
+// can produce there, so that a later change to the ranking policy
+// cannot silently alter the Windows answer.
 //
 // Which shape appears depends on one thing. retrievePortDetailsFromDevInfo
 // (usb_windows.go:199-219) first fills Product from the device's
@@ -270,10 +275,12 @@ func TestRankPorts_NilEntry_Skipped(t *testing.T) {
 // so it still ties at the bare 50 like case (a). Record it for W4.
 // Register entries W4 (which shape appears, and the iProduct wording) and
 // W13 (that the friendly name says "Enhanced"/"Standard" at all) are both
-// ASSUMED. W4 lifts from `rigprog ports` output on the VM; W13 lifts from
-// Device Manager's port names there instead — on the expected tie shape
-// the friendly name never reaches `rigprog ports` at all, so `rigprog
-// ports` cannot be W13's evidence.
+// LIFTED, 05/09/2026 (docs/hardware-notes.md's "Windows (ARM64 VM)
+// session" section, "Consequences applied" table). W4 lifts from
+// `rigprog ports` output on the VM (shape (a), the tie above); W13
+// lifts from Device Manager's port names there instead — on the
+// confirmed tie shape the friendly name never reaches `rigprog ports`
+// at all, so `rigprog ports` could not be W13's evidence.
 //
 // Consequence, and the reason case (a) exists: on the expected Windows
 // shape the two ports TIE, and the CAT port is NOT identifiable from the
@@ -285,7 +292,7 @@ func TestRankPorts_Windows_CP2105_DeviceLevelProduct_TiesAndKeepsBoth(t *testing
 	// COM ports carry the SAME device-level iProduct string. That string
 	// contains neither "Enhanced" nor "Standard", so neither the +20 nor
 	// the -20 applies and both sit on the bare CP2105 50.
-	const product = "CP2105 Dual USB to UART Bridge Controller" // ASSUMED wording (W4)
+	const product = "CP2105 Dual USB to UART Bridge Controller" // LIFTED wording (W4), 05/09/2026 VM session
 	ports := []*enumerator.PortDetails{
 		{Name: "COM4", IsUSB: true, VID: "10C4", PID: "EA70", Product: product},
 		{Name: "COM3", IsUSB: true, VID: "10C4", PID: "EA70", Product: product},
