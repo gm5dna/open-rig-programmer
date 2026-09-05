@@ -244,7 +244,7 @@ func TestRedProof_AWidthOnlyPerturbationChangesTheProjection(t *testing.T) {
 				t.Fatalf("reading %s: %v", charts[c].outPath, err)
 			}
 			if got := renderData(t, c, []byte(strings.Join(lines, "\n"))); bytes.Equal(got, want) {
-				t.Error("widening menu 040 from one digit to two produced byte-identical output — the projection does not depend on the digits column")
+				t.Error("widening menu 010 from one digit to two produced byte-identical output — the projection does not depend on the digits column")
 			}
 		})
 	}

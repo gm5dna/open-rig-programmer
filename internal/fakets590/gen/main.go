@@ -93,8 +93,8 @@ const (
 // menuNumberDigits is the width of B's address cell: the chart's three-digit
 // Menu number, "000 ~ 087: Menu number (TS-590S)" / "000 ~ 099: Menu number
 // (TS-590SG)" as the EX block prints it (590:543-544). It is the WHOLE
-// address on this family — P2 and P3 are printed constants of the frame, not
-// address components (590:546-550).
+// address on this family — P2, P3 and P4 are printed constants of the frame,
+// not address components (590:546-553).
 const menuNumberDigits = 3
 
 // maxWidth is the widest raw P5 field either 590 chart declares: 8. It comes

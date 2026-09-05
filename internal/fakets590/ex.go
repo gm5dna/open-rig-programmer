@@ -200,7 +200,7 @@ func EXDefaults(row Row) map[string]string {
 
 // exBodyLen is the length of an EX READ body — the frame bytes after "EX" and
 // before the ';': P1(3) + P2(2) + P3(1) + P4(1). SEVEN, making the whole read
-// frame ten bytes (590:549-552).
+// frame ten bytes (590:551-552).
 const exBodyLen = 7
 
 // The three printed constants of the EX frame, named once because the answer

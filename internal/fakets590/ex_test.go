@@ -16,7 +16,8 @@ import (
 
 // exAnswerFrame assembles the answer the book prints for menu with raw P5 p5.
 func exAnswerFrame(menu int, p5 string) string {
-	return fmt.Sprintf("EX%03d00%s%s;", menu, "00", p5)
+	// EX  P1P1P1  P2P2  P3  P4  P5...  ;
+	return fmt.Sprintf("EX%03d%s%c%c%s;", menu, "00", '0', '0', p5)
 }
 
 // exReadFrame assembles the ten-byte read the book prints for menu.
@@ -254,8 +255,9 @@ func TestWithEXSetting_IsDeliberatelyLooseAboutTheInventory(t *testing.T) {
 	}
 	_, conn := newTestRadio(t, RowS,
 		WithEXSetting("088", "9"),  // an address the S's chart does not print
-		WithEXSetting("001", "AB"), // shorter than nothing, wider than one: menu 001 prints one digit
-		WithEXSetting("002", "1234"))
+		WithEXSetting("001", "AB"), // wider than one: menu 001 prints one digit
+		WithEXSetting("002", "1234"),
+		WithEXSetting("034", "1")) // shorter than two: menu 034 prints two digits
 	for _, tt := range []struct {
 		menu int
 		p5   string
@@ -263,10 +265,24 @@ func TestWithEXSetting_IsDeliberatelyLooseAboutTheInventory(t *testing.T) {
 		{88, "9"},
 		{1, "AB"},
 		{2, "1234"},
+		{34, "1"},
 	} {
 		if got, want := exchange(t, conn, exReadFrame(tt.menu)), exAnswerFrame(tt.menu, tt.p5); got != want {
 			t.Errorf("menu %03d -> %q, want %q", tt.menu, got, want)
 		}
+	}
+}
+
+// TestWithEXSetting_EmptyP5AnswersAReadShapedFrame pins today's behaviour at
+// the loose option's shortest possible end. buildEXAnswer's ten fixed
+// positions plus zero P5 bytes is ten bytes total — byte-for-byte the same
+// shape as the READ this handler answers, so an empty P5 makes the fake
+// answer with what looks like a read request. This is not a claim about any
+// radio; it is what this seam does today, unchanged.
+func TestWithEXSetting_EmptyP5AnswersAReadShapedFrame(t *testing.T) {
+	_, conn := newTestRadio(t, RowS, WithEXSetting("088", ""))
+	if got, want := exchange(t, conn, exReadFrame(88)), exReadFrame(88); got != want {
+		t.Errorf("empty P5 at menu 088 -> %q, want %q (byte-identical to the read frame)", got, want)
 	}
 }
 
