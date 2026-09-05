@@ -403,10 +403,10 @@
 //     legends and NEVER a shipped default, so there is nothing to source a real
 //     one from. The uniformity is the point: a placeholder that is obviously
 //     uniform is harder to mistake for evidence than a plausible-looking spread
-//     of values, and this matters beyond the test suite, because
-//     `rigprog read --settings --fake --model FT-991A` renders these bytes to a
-//     user who must not read them as what an FT-991A ships with. It is
-//     internal/fakeradio's convention, adopted whole.
+//     of values, and this matters beyond the test suite, because once task 15a
+//     registers the model, `rigprog read --settings --fake --model FT-991A`
+//     will render these bytes to a user who must not read them as what an
+//     FT-991A ships with. It is internal/fakeradio's convention, adopted whole.
 //     WHAT IS NOT ASSUMED HERE IS THE WIDTH. Each item's field width is
 //     transcribed, not guessed, including the eight-wide one (151 PRESET
 //     FREQUENCY) that this radio's alphabet had to be widened for — and the
@@ -431,10 +431,11 @@
 //     "P1 : 001 - 153 (MENU Number)", which is exactly the first and last rows
 //     transcribed, so enforcing it as a range would add a second authority over
 //     one fact AND would admit 087.
-//     THIS IS ASSUMED HERE WHERE THE FT-710'S IS OBSERVED: M8c put two
-//     out-of-chart EX addresses to a real FT-710 and both drew "?;"
-//     (docs/hardware-notes.md), which is that radio's finding on that radio's
-//     six-digit grammar, and is not borrowed. No FT-991A has been asked.
+//     THIS IS ASSUMED HERE WHERE THE FT-710'S IS OBSERVED: M8c put six
+//     out-of-chart EX addresses to a real FT-710 (four of them also outside
+//     the printed P1/P2/P3 ranges) and all six drew "?;" (docs/hardware-notes.md),
+//     which is that radio's finding on that radio's six-digit grammar, and is
+//     not borrowed. No FT-991A has been asked.
 //     STAGE R LIFTS IT WITH: one EX read of an address the chart does not carry
 //     — "EX154;" will do, one past the chart's last — and one of "EX087;", with
 //     the port watched. An answer rather than "?;" to either would mean the

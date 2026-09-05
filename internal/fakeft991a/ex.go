@@ -76,7 +76,10 @@ import "strings"
 // registered sibling's is six. The chart's MENU Number is the whole address:
 // 087 is P1=87, with P2 and P3 zero (core/cat's EXAddressSingle).
 // Answer frame: "EX" + address(3) + P4(n) + ";", where n is the address's own
-// width: 1-8 raw ASCII digits. There is no text item on this chart, and its
+// width: 1-8 raw ASCII digits. (The manual labels this cell P2 —
+// ft991a_layout.txt:522,528; P4 is the project's cross-radio name for the EX
+// value, from the FT-710's P1/P2/P3 address, and is fleet-wide convention, not
+// this chart's own vocabulary.) There is no text item on this chart, and its
 // transcription carries no column that could describe one (gen/main.go's
 // widthToken).
 // Set frame: same shape with a P4 payload — NOT modelled; see handleEX.
@@ -99,11 +102,11 @@ type exItem struct {
 // INVENTED — doc.go's register entry THE EX MENU VALUES ARE INVENTED. The
 // FT-991A chart documents each item's VALID RANGE and its option legends and
 // never a shipped default, so there is nothing to source a real one from; and
-// `rigprog read --settings --fake --model FT-991A` renders these bytes to a
-// user, who must not read them as what an FT-991A ships with. It is
-// fakeradio's convention, adopted because a placeholder that is obviously
-// uniform is harder to mistake for evidence than a plausible-looking spread of
-// values.
+// once task 15a registers the model, `rigprog read --settings --fake --model
+// FT-991A` will render these bytes to a user, who must not read them as what
+// an FT-991A ships with. It is fakeradio's convention, adopted because a
+// placeholder that is obviously uniform is harder to mistake for evidence
+// than a plausible-looking spread of values.
 const exDefaultDigit = '0'
 
 // exMaxWidth is the widest raw P4 field this chart declares, and the top of the

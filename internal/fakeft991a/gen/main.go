@@ -328,10 +328,11 @@ func sortedAddrs() []string {
 // on the whole question is the cross-check, whose dialect side comes from
 // transcription A — which does carry a text column.
 func widthToken(digits string) (byte, error) {
-	n, err := strconv.Atoi(strings.TrimSpace(digits))
-	if err != nil {
-		return 0, fmt.Errorf("digits cell %q is not a number: %w", digits, err)
+	s := strings.TrimSpace(digits)
+	if len(s) != 1 || !isDigit(s[0]) {
+		return 0, fmt.Errorf("digits cell %q is not exactly one ASCII digit", digits)
 	}
+	n := int(s[0] - '0')
 	if n < 1 || n > maxWidth {
 		return 0, fmt.Errorf("digits %d is outside 1-%d: the inventory has no token for it, and this three-column schema carries nothing from which a wider or a text field could be described", n, maxWidth)
 	}

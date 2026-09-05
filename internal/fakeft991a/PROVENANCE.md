@@ -182,9 +182,9 @@ Two consequences worth stating plainly:
   value from. The values this fake answers with are therefore **invented** —
   a numeric item answers *n* × `'0'` — by `internal/fakeradio`'s convention.
   That is `doc.go`'s register entry **THE EX MENU VALUES ARE INVENTED**, and it
-  matters beyond the test suite: `rigprog read --settings --fake --model FT-991A`
-  renders those bytes to a user, who must not read them as what an FT-991A ships
-  with.
+  matters beyond the test suite: once task 15a registers the model,
+  `rigprog read --settings --fake --model FT-991A` will render those bytes to a
+  user, who must not read them as what an FT-991A ships with.
 * Only **widths and shapes** are modelled. Nothing in this package interprets
   what a menu item means; the names live in the dialect's inventory, which is
   the layer that has a reason to know them.

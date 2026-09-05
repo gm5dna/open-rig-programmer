@@ -268,6 +268,21 @@ func TestWidthToken_TheAlphabetIsExactlyOneToEight(t *testing.T) {
 	}
 }
 
+// TestWidthToken_RefusesByExactShape pins the same rule parseMenuNumber
+// already states for the address cell onto the digits cell: a cell is
+// admitted only by its EXACT SHAPE (one ASCII digit), never by what
+// strconv.Atoi happens to parse. "+4" and "04" are both syntactically valid
+// input to Atoi and both denote 4, but neither is the one-byte cell this
+// chart's B ever prints, so both must be refused rather than silently read
+// as width 4.
+func TestWidthToken_RefusesByExactShape(t *testing.T) {
+	for _, s := range []string{"+4", "04", "-4", "44", "", "a"} {
+		if _, err := widthToken(s); err == nil {
+			t.Errorf("widthToken(%q) returned no error; want a refusal — not exactly one ASCII digit", s)
+		}
+	}
+}
+
 // --- The parameterless token: a red proof each way (plan P18) ---
 
 // TestParseB_TheParameterlessTokenIsExcludedOnItsOwnAddressAndRefusedElsewhere
@@ -414,7 +429,7 @@ func TestParseB_Refusals(t *testing.T) {
 		{
 			name:    "non-numeric Digits",
 			csv:     header + "001,AGC FAST DELAY,four\n",
-			wantErr: "is not a number",
+			wantErr: "not exactly one ASCII digit",
 		},
 		{
 			name:    "Digits 9 — one past this chart's widest",
@@ -429,7 +444,7 @@ func TestParseB_Refusals(t *testing.T) {
 		{
 			name:    "Digits 12 — the FTdx10's text width, which this schema cannot describe",
 			csv:     header + "001,MY CALL.,12\n",
-			wantErr: "no token for it",
+			wantErr: "not exactly one ASCII digit",
 		},
 	}
 	for _, tt := range tests {

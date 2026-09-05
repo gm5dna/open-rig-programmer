@@ -84,9 +84,10 @@ import (
 // EX address set against the fake's, reporting BOTH diff directions so a report
 // can quote the exact addresses without re-deriving the diff.
 func TestEXInventoryCrossCheck_FT991AAddressSetsIdentical(t *testing.T) {
+	dialect := ft991a.Dialect()
 	dialectAddrs := make(map[string]bool)
-	for _, item := range ft991a.Dialect().EXItems() {
-		dialectAddrs[ft991a.Dialect().EXWire(item.Addr)] = true
+	for _, item := range dialect.EXItems() {
+		dialectAddrs[dialect.EXWire(item.Addr)] = true
 	}
 	fakeAddrs := fakeft991a.EXDefaults()
 
@@ -100,7 +101,7 @@ func TestEXInventoryCrossCheck_FT991AAddressSetsIdentical(t *testing.T) {
 	// to agree about that before they can meaningfully agree about membership:
 	// a four- or six-digit render on either side would make every address miss,
 	// which is a true failure but an unhelpfully phrased one.
-	if got := ft991a.Dialect().EXAddressWidth(); got != 3 {
+	if got := dialect.EXAddressWidth(); got != 3 {
 		t.Fatalf("ft991a.Dialect().EXAddressWidth() = %d, want 3 — this radio's EX address is the chart's whole three-digit MENU Number (core/cat's EXAddressSingle)", got)
 	}
 
@@ -188,13 +189,14 @@ func TestEXInventoryCrossCheck_FT991ARow087IsAbsentFromBothSides(t *testing.T) {
 // Addresses missing from one side entirely are reported by the set test above
 // and skipped here, to avoid a duplicate and less specific failure.
 func TestEXInventoryCrossCheck_FT991AWidthsAndShapesAgree(t *testing.T) {
+	dialect := ft991a.Dialect()
 	fakeAddrs := fakeft991a.EXDefaults()
 
 	var mismatches []string
 	checked, widest := 0, 0
 	widestAt := ""
-	for _, item := range ft991a.Dialect().EXItems() {
-		addr := ft991a.Dialect().EXWire(item.Addr)
+	for _, item := range dialect.EXItems() {
+		addr := dialect.EXWire(item.Addr)
 		p4, ok := fakeAddrs[addr]
 		if !ok {
 			continue // reported by TestEXInventoryCrossCheck_FT991AAddressSetsIdentical
@@ -315,9 +317,11 @@ func TestEXFT991ARoundTrip_AllAddressesRawPort(t *testing.T) {
 		}
 		if gotAddr != item.Addr {
 			t.Errorf("%v: answer echoed address %v, want %v", item.Addr, gotAddr, item.Addr)
+			continue
 		}
 		if len(gotRaw) != item.Digits {
 			t.Errorf("%v (%s): answered %d raw P4 bytes (%q), want %d per the dialect's inventory", item.Addr, item.Name, len(gotRaw), gotRaw, item.Digits)
+			continue
 		}
 		wantRaw, ok := fakeDefaults[dialect.EXWire(item.Addr)]
 		if !ok {
