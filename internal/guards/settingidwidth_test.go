@@ -36,7 +36,7 @@ import (
 // "ASCII" — passed the list green. A guard whose pattern is narrower than
 // the prose it guards is precisely the defect it was written to catch, so
 // staleRe below matches on the SHAPE of a width statement rather than on
-// any list of wordings; see its own comment for the four shapes and the
+// any list of wordings; see its own comment for the five shapes and the
 // samples that pin each.
 //
 // HOW IT WORKS, in two passes rather than one. A file that correctly
@@ -84,32 +84,51 @@ import (
 // field, the form"), core/driver/<model>, internal/fake*. Each such
 // statement is true as written and becomes FALSE if generalised, which is
 // the opposite of the drift this guard catches. Counted with the two
-// passes below at the time of writing: 66 of them in non-test files
-// outside the scoped directories, 144 across every .go file including
-// tests. A guard that swept them would need an allowlist longer than the
-// rule.
+// passes below, over every git-tracked .go file, at the time of writing:
+// 99 of them in non-test files outside the scoped directories, and 227
+// across every .go file including tests — 50 of that last number are this
+// file's own samples and prose, which the guard never scans. Re-measure
+// before citing either; the passes widened at the Stage 0 close and both
+// numbers moved with them. A guard that swept them would need an
+// allowlist longer than the rule.
 //
 // TWO out-of-scope statements are NOT of that kind, and neither is this
-// guard's to fix. internal/extable states a six-digit key width three
-// times, about the Triple address FORM rather than any radio; that
-// package is being widened with a three-digit AddressSingle in this same
-// milestone, so keeping those three consistent belongs to that work.
-// core/csvio's chirp reader says "a six-digit value could genuinely
-// exceed nothing" about a CSV numeric bound — nothing to do with a
-// setting ID at all.
+// guard's to fix. internal/extable states a six-digit width six times,
+// about the Triple address FORM rather than any radio, and each is true
+// as written; that package was widened with a three-digit AddressSingle
+// in this same milestone, and keeping those statements consistent
+// belonged to that work rather than to a guard. core/csvio's chirp reader
+// says "a six-digit value could genuinely exceed nothing" about a CSV
+// numeric bound — nothing to do with a setting ID at all.
 //
-// _test.go files are out of scope because their width statements belong to
-// a fixture's radio — with exactly ONE exception, found by sweeping and
-// classifying every test-file hit. core/driver/ft891's settings test
-// stated the CONTRACT, not its fixture (its
-// TestCloneReadSettings_WalksTheWholeDescriptor doc comment names both
-// codeplug.MenuSnapshot.Validate and isSettingIDWidth), so it was widened
-// by hand in the same change that widened the rule rather than left for a
-// guard that will never look at it. app/settings_test.go pins an FT-710
-// read and says so ("a 6-digit TargetID"); that test is deliberately NOT
-// generalised to the Kenwood width, because a Kenwood-width test belongs
-// with the Kenwood registration rather than retrofitted onto an FT-710
-// fixture.
+// _test.go files are out of scope, and the reason is an allowlist that
+// would have to grow rather than an absence of hits. Re-swept at the
+// Stage 0 close with the widened staleRe, the _test.go files of the five
+// directories above carried SIX statements. Two stated the CONTRACT and
+// were widened BY HAND rather than left to a guard that will never look
+// at them:
+//
+//   - core/driver/ft891/settings_test.go, whose
+//     TestCloneReadSettings_WalksTheWholeDescriptor doc comment names
+//     both codeplug.MenuSnapshot.Validate and isSettingIDWidth (widened
+//     with the rule itself, in core/driver/ft891 — a subdirectory, so
+//     out of this guard's reach twice over);
+//   - core/clone/settings_test.go, at BOTH its preflight tests (the
+//     bad-shape negative and the four-digit positive control), widened
+//     at the Stage 0 close.
+//
+// The other four cannot be widened and would each need an allowlist
+// entry, which is what keeps the exclusion: app/settings_test.go states
+// the FT-710's own 6-digit TargetID twice, in a doc comment and in an
+// assertion message, and that test is deliberately NOT generalised to the
+// Kenwood width (a Kenwood-width test belongs with the Kenwood
+// registration rather than retrofitted onto an FT-710 fixture); and
+// core/codeplug's two width tables label one admitted width per row ("six
+// digits (the triple form)"), which is exactly how a table of the three
+// widths must read. Narrowing the test sweep to CONTRACT-shaped
+// statements does not avoid those entries either: the two table labels
+// sit inside tests whose names begin TestMenuSnapshotValidate, so any
+// proximity test for the contract's own nouns matches them.
 var settingIDWidthScopedDirs = []string{
 	"app",
 	"cmd/rigprog",
@@ -155,7 +174,14 @@ var settingIDWidthAllowlist = map[string]string{
 // the spellings this repository uses for them. Occurrences are blanked
 // before staleRe runs — see this file's doc comment for why the two-pass
 // shape is necessary rather than merely tidy.
-var admittedRe = regexp.MustCompile(`(?i)(?:exactly )?(?:three|3), (?:exactly )?(?:four|4) or (?:exactly )?(?:six|6)`)
+//
+// IT IS ANCHORED ON TOKEN BOUNDARIES because blanking is destructive: what
+// it blanks, staleRe can no longer see. Without the \b at each end the
+// pattern matched an admitted-looking SUBSTRING of a malformed set and
+// blanked the evidence out of it — "3, 4 or 60 digits" lost its "3, 4 or
+// 6" and "13, 4 or 6 digits" lost the same, leaving remainders no arm of
+// staleRe fires on. Both are pinned in TestSettingIDWidthPatterns.
+var admittedRe = regexp.MustCompile(`(?i)\b(?:exactly )?(?:three|3), (?:exactly )?(?:four|4) or (?:exactly )?(?:six|6)\b`)
 
 // staleRe matches a statement of any OTHER width set. It runs over text
 // admittedRe has already blanked, so what it finds is prose that still
@@ -170,24 +196,40 @@ var admittedRe = regexp.MustCompile(`(?i)(?:exactly )?(?:three|3), (?:exactly )?
 // guard is a WIDTH SET, so each half generalises over the numeral or the
 // count word:
 //
-//   - six alone, hyphenated, with the numeral or the word, and tolerating
-//     a wrap between the hyphen and its noun ("6-\n// digit" normalises
-//     to "6- digit");
+//   - six alone before a width noun (digits or characters), whether
+//     hyphenated, spaced or separated by "exactly"/"ASCII", with the
+//     numeral or the word, and tolerating a wrap between a hyphen and
+//     its noun ("6-\n// digit" normalises to "6- digit"). The
+//     un-hyphenated forms are the ones a revert would actually write,
+//     because the two width statements most worth reverting are
+//     predicative: "id must be exactly 6 ASCII digits";
 //   - four-and-six joined by "or" or "to", either spelling, either or
 //     both emphasised with "exactly", and named as ASCII digits or as
 //     characters;
 //   - four-and-six with no noun at all, after "either" or "exactly";
+//   - the OPENING of an admitted-looking three-width set that admittedRe
+//     declined to blank. A correct statement is blanked whole, so
+//     surviving "3, 4 or" means the set is malformed — a width glued to
+//     another digit, which is how "3, 4 or 60 digits" reads;
 //   - the COUNT word, which a find-and-replace over the numerals leaves
 //     behind: two (or "both") widths where the rule now has three.
 //
 // It is still a regexp over prose and not a parser, so what it pins is
-// exactly the twenty-one samples of TestSettingIDWidthPatterns, eight of
-// them escapes that the phrasing-list version let through. Read that
-// table as the enumeration of the guard's reach.
+// exactly the twenty-nine samples of TestSettingIDWidthPatterns: eight
+// escapes the phrasing-list version let through, seven more demonstrated
+// against this shape-matching version by the Stage 0 closing review, and
+// the statements the tree carries now. Read that table as the enumeration
+// of the guard's reach.
+//
+// One gap is left open deliberately, because closing it was not this
+// round's ruling: the count-word arm still wants "widths" adjacent to the
+// count word, so an adjective between them ("two admitted widths")
+// escapes.
 var staleRe = regexp.MustCompile(`(?i)` +
-	`(?:six|6)-[\s]*digit` +
+	`(?:six|6)[\s-]+(?:exactly[\s-]+)?(?:ascii[\s-]+)?(?:digit|char)` +
 	`|(?:four|4)[\s-]*(?:or|to)[\s-]*(?:exactly[\s-]*)?(?:six|6)[\s-]*(?:ascii[\s-]*)?(?:digit|char)` +
 	`|(?:either|exactly)[\s-]+(?:four|4)[\s-]+or[\s-]+(?:exactly[\s-]+)?(?:six|6)` +
+	`|(?:three|3),[\s-]*(?:exactly[\s-]*)?(?:four|4)[\s-]*or` +
 	`|(?:two|2|both)[\s-]+(?:exact[\s-]+)?(?:ex[\s-]+address[\s-]+)?widths`)
 
 // TestNoStaleSettingIDWidthProse is the guard proper.
@@ -302,12 +344,38 @@ func TestSettingIDWidthPatterns(t *testing.T) {
 		{"the count word as a bare count of widths", "the rule names two exact widths", true},
 		{"the count word implied rather than spelled", "an ID may take both widths", true},
 
+		// The five samples below are the escapes the Stage 0 closing
+		// review demonstrated against the SHAPE-matching pattern that
+		// replaced the phrasing list. All five state the old six-only
+		// rule with no hyphen, which is the form a revert would
+		// actually take: this repository's two highest-value width
+		// statements are predicative, not attributive — MenuEntryError
+		// .Reason is "id must be exactly 3, 4 or 6 ASCII digits" and
+		// MenuSnapshot.Validate's bullet is "every ID is exactly 3, 4
+		// or 6 ASCII digits", and narrowing either one back drops the
+		// hyphen the earlier pattern required.
+		{"the six-only form spelled out, unhyphenated", "every ID is exactly six ASCII digits", true},
+		{"the six-only form as a numeral, unhyphenated", "id must be exactly 6 ASCII digits", true},
+		{"the six-only form counted in characters", "id is always 6 ASCII characters", true},
+		{"the six-only form with the noun before the adjective", "the ID is 6 ASCII digits wide", true},
+		{"the six-only form spaced rather than hyphenated", "IDs are 6 digit", true},
+
+		// The two samples below are malformed width SETS that the
+		// blanking pass concealed while admittedRe matched without
+		// token boundaries: the admitted-looking substring was blanked
+		// out of the middle of stale text, and staleRe then ran over
+		// prose with the evidence removed. Each names a width that is
+		// not one of the three.
+		{"an admitted-looking set whose last width is not six", "IDs are 3, 4 or 60 digits", true},
+		{"an admitted-looking set whose first width is not three", "IDs are 13, 4 or 6 digits", true},
+
 		{"the three-width numeric form", "id must be exactly 3, 4 or 6 ASCII digits", false},
 		{"the three-width spelled form", "TargetID is three, four or six ASCII digits", false},
 		{"the three-width emphatic form", "exactly THREE, exactly FOUR or exactly SIX ASCII digits", false},
 		{"the corrected count word, which must not fire", "id must be exactly 3, 4 or 6 ASCII digits — the three EX address widths", false},
 		{"a four-digit statement, which was never the stale one", "a Pair-form dialect renders four digits, not six", false},
 		{"a range this rule refuses to be, stated as a range", "three exact widths rather than a 3..6 range", false},
+		{"one width named with no width noun after it, as menus.go names it", "six for a (P1,P2,P3) MENU Number", false},
 		{"prose that names the truncation without naming a width", "the truncated (P1,P2,P3) address it was written to catch", false},
 	} {
 		got := staleRe.MatchString(blankAll(tc.text, admittedRe))
