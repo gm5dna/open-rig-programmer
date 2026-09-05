@@ -3,6 +3,7 @@
 package cat
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -192,5 +193,49 @@ func TestSlotDomainText_NamesNoBankItsDialectLacks(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestMemorySlot_RangeTextNamesItsOwnDialect closes the asymmetry the
+// adversarial review recorded as finding L3.
+//
+// PMSSlot's out-of-range sentence names the RECEIVER's cap (slot.go, "PMS
+// pair out of range 1-%d"), which is the principle S0.2 exists to establish:
+// a bound is consulted from the same place as its datum. Four lines above
+// it, MemorySlot's said "memory channel out of range 1-99" as a literal —
+// already false for peerDialect, whose memories are 100-200, and false for
+// every future radio that does not happen to share the FT-710's bank.
+//
+// The FT-710's own sentence does not move a byte, which is the constraint on
+// every render this lane touched.
+func TestMemorySlot_RangeTextNamesItsOwnDialect(t *testing.T) {
+	if _, err := FT710.MemorySlot(0); err == nil {
+		t.Fatal("MemorySlot(0) was accepted")
+	} else if want := "memory channel out of range 1-99"; !strings.Contains(err.Error(), want) {
+		t.Errorf("the FT-710's refusal is %q, want it to contain %q byte for byte", err, want)
+	}
+
+	// peerDialect's memories are 100-200, so the literal was simply wrong
+	// there. Its own numbers, and a channel inside the FT-710's range that
+	// this radio does not have, are the two halves of the same statement.
+	if _, err := peerDialect.MemorySlot(50); err == nil {
+		t.Fatal("peerDialect.MemorySlot(50) was accepted — its memories start at 100")
+	} else if want := "memory channel out of range 100-200"; !strings.Contains(err.Error(), want) {
+		t.Errorf("peerDialect's refusal is %q, want it to contain %q", err, want)
+	}
+
+	// Stated over every dialect this package can see, so a fixture added
+	// later cannot acquire a sentence about somebody else's memory bank.
+	for _, nd := range allTestDialects() {
+		d := nd.dia
+		_, err := d.MemorySlot(d.slots.memoryHi + 1)
+		if err == nil {
+			t.Errorf("%s: MemorySlot(%d) was accepted, one past its own memoryHi", nd.name, d.slots.memoryHi+1)
+			continue
+		}
+		want := fmt.Sprintf("memory channel out of range %d-%d", d.slots.memoryLo, d.slots.memoryHi)
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: refusal %q does not contain %q", nd.name, err, want)
+		}
 	}
 }

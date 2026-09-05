@@ -197,7 +197,26 @@ func validatePMSForm(cfg DialectConfig) error {
 		if hi := s.PMSNumericLo + 2*s.PMSPairs - 1; hi > maxSlotDecimal {
 			return fmt.Errorf("cat: Slots.PMSNumericLo %d with PMSPairs %d reaches %d, want <= %d — a slot wire form is 3 digits, so the pairs above that could never be built or parsed", s.PMSNumericLo, s.PMSPairs, hi, maxSlotDecimal)
 		}
+		// The same dead configuration the default arm refuses by name, seen
+		// from inside the numeric form: a base with no pairs numbers nothing,
+		// and pmsCap() returning 0 makes every PMS route error anyway. It was
+		// ACCEPTED here whilst being refused there, which is the asymmetry
+		// the adversarial review recorded as finding L1.
+		if s.PMSPairs < 1 {
+			return fmt.Errorf("cat: Slots.PMSPairs is %d under %v with PMSNumericLo %d — a numeric base with nothing to number is dead configuration", s.PMSPairs, s.PMSForm, s.PMSNumericLo)
+		}
 	default:
+		// A value that is not the ZERO one is no member of this type at all,
+		// and it is refused UNCONDITIONALLY — the rule V14 (validateMemoryP5)
+		// and V16 (validateToneStates) apply to their own enums. Only
+		// PMSSlotForm(0) can be a legitimate omission, and only for a dialect
+		// that declares no PMS pairs and no numeric base; a garbage value is
+		// a transcription error whether or not there are pairs beside it, and
+		// this was the one place in the lane where an undeclared enum value
+		// survived construction (finding L1).
+		if s.PMSForm != PMSSlotForm(0) {
+			return fmt.Errorf("cat: Slots.PMSForm is %v, which is not a declared member — declare PMSFormToken or PMSFormNumeric (an omitted config semantic is refused, never defaulted, and an undeclared one all the more so)", s.PMSForm)
+		}
 		if s.PMSPairs > 0 {
 			return fmt.Errorf("cat: Slots.PMSForm is %v with PMSPairs %d — declare PMSFormToken or PMSFormNumeric explicitly (an omitted config semantic is refused, never defaulted; the two forms put different bytes on the wire, and writableSlot admits either)", s.PMSForm, s.PMSPairs)
 		}
