@@ -24,9 +24,8 @@ import (
 
 // TestEX_ReadsAnswerTheInventorysOwnWidth walks a sample of the chart from both
 // ends and both sides of the excluded row, and asserts the whole answer frame
-// byte for byte. The widths are re-read here from the committed transcription
-// (transcription-b.csv), not from EXDefaults(), so a projection that lost or
-// shifted a width fails.
+// byte for byte. The widths are transcribed by hand below, not read from
+// EXDefaults(), so a projection that lost or shifted a width fails.
 func TestEX_ReadsAnswerTheInventorysOwnWidth(t *testing.T) {
 	_, conn := newTestRadio(t)
 
