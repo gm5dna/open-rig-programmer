@@ -658,14 +658,15 @@ func withEveryTierFieldKnown(data codeplug.ChannelData) codeplug.ChannelData {
 
 // TestWriteChannel_KnownTierFieldRefusedBeforeWire is the tier half of the
 // gate's stated contract: a value the caller explicitly marked Known must be
-// REFUSED rather than silently dropped, for the ten fields the Icom tier
-// added as much as for the tone and skip this driver has always refused.
+// REFUSED rather than silently dropped, for the seventeen fields the Icom
+// tier added as much as for the tone and skip this driver has always
+// refused.
 //
 // The channel is otherwise the ORDINARY FTdx10 channel this profile accepts,
 // so the refusal is attributable to the one Known tier value and to nothing
 // else. TxFrequency is this driver's chosen representative — the FT-710 pins
-// ToneMode and the FTdx101 DTCSCode, so the three tests between them
-// exercise three of the ten.
+// Offset and the FTdx101 pins DataMode, so the three tests between them
+// exercise three of the seventeen.
 //
 // The MECHANISM is a lookup MISS: this radio's capability map (caps.go's
 // bankFields) has no entry for spec.FieldTxFrequency on any bank, so
