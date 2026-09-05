@@ -18,26 +18,6 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
-// openWriteSession opens row at profile against a scripted radio serving img.
-//
-// THE PROFILE IS AN ARGUMENT AND NOT A DEFAULT, and that is plan P7's H2 in
-// one signature: the capability-gate rung is pinned on an unconsented
-// RealHardware session and every SEMANTIC rung on a session that has already
-// passed that gate (Simulated, or RealHardware with consent). A helper that
-// chose the profile for its callers is exactly how a whole ladder of
-// semantic pins goes green with none of the rungs implemented.
-func openWriteSession(t *testing.T, row Row, profile Profile, img radioImage, opts ...Option) (*Session, *respondingPort) {
-	t.Helper()
-	p := newRespondingPort(t, row, img)
-	d := New(row, profile, append([]Option{testTiming()}, opts...)...)
-	sess, err := d.Open(context.Background(), p.Port(), driver.Identity{Port: "/dev/test"})
-	if err != nil {
-		t.Fatalf("Open(%s): %v", modelNameFor(row), err)
-	}
-	t.Cleanup(func() { _ = sess.Close() })
-	return sess.(*Session), p
-}
-
 // probeFrames is what every session sends before anything a test asked for:
 // Init's AI0; and the two-frame identity probe (plan P9).
 var probeFrames = []string{"AI0;", "ID;", "FV;"}

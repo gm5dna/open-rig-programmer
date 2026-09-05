@@ -44,8 +44,10 @@ const (
 // all three Kenwood profiles register LabelsAbsent and every EXItem's P1Label
 // and P2Label is "" (core/kw's EXItem states it). So the two nodes exist to
 // satisfy the neutral type, and they are named for the radio's own word for
-// the surface: both books head the address column "Menu number" / "Menu No."
-// (590:543-544, 480:401).
+// the surface: both books head the address column of every EX parameter list
+// "Menu" (590:566 the TS-590S list, 590:746 the TS-590SG list, 480:424 and
+// 480:498 the 480's two lists). 590:543-544 and 480:401 are cited elsewhere
+// in this file for the printed menu DOMAIN, not for this string.
 //
 // The FT-891 met the same shortage and fell back to STRUCTURE — the two-digit
 // prefix of its four-digit address, as both ID and Label
@@ -234,6 +236,19 @@ func (e *UnknownSettingError) Error() string {
 // TestExSpec_CarriesTheFullAddressAndAdmitsAVariableWidth is the
 // negative-space proof.
 //
+// THE MATCHER ALSO ADMITS A FRAME OF EXACTLY kw.EXReadLen — the read frame's
+// own ten-byte shape, one byte short of kw.EXMinAnswerLen — which is a real
+// property of a full-address EX matcher and not a bug in this one:
+// core/kw/golden_test.go's a_commands_own_read_frame_is_not_its_answer
+// subtest excludes EX from its general "a command's own read is never
+// correlated as its answer" check for exactly this reason, and records that
+// it is A25's assumption that Kenwood radios do not echo the host's own
+// frames back on the line that keeps an echoed read from being delivered as
+// this read's answer. A25 is unlifted (core/kw/doc.go). If it ever turns out
+// false, ParseEXAnswer's own ten-byte-is-the-read check catches the echo one
+// layer down, so this driver refuses loudly rather than returning a wrong
+// value.
+//
 // THE EXACT LENGTH IS LEFT 0 — VARIABLE LENGTH, and this is the ONE frame in
 // this family that is. P5 is "a string of alphanumeric characters for the Menu
 // setting (variable length)" with no printed ceiling anywhere (590:555-556),
@@ -281,13 +296,15 @@ func (s *Session) exSpec(id string) transport.CommandSpec {
 // RATHER THAN THIS RADIO'S:
 //
 //   - A "?;" maps to SettingValue{State: SettingUnavailable} with NO error,
-//     which is driver.SettingsReader's own stated contract. It adds no fifth
-//     reading of this family's unattributed NAK (whose four registered ones
-//     are read.go's and doc.go's): the address was a member of this row's own
-//     printed inventory before the frame went out, so a "?;" here records that
-//     the radio declined to report a setting it declares, and guesses nothing
-//     about why. This is the ONE path in this driver where a rejection does
-//     not fail the operation whole — ReadChannel's does (decision 5) — because
+//     which is driver.SettingsReader's own stated contract. It adds no new
+//     reading of this family's unattributed NAK beyond the three already
+//     registered — the probe's (ts590.go), ReadChannel's (read.go) and
+//     WriteChannel's (write.go), plus the no-discovery ground (doc.go): the
+//     address was a member of this row's own printed inventory before the
+//     frame went out, so a "?;" here records that the radio declined to
+//     report a setting it declares, and guesses nothing about why. This is
+//     the ONE path in this driver where a rejection does not fail the
+//     operation whole — ReadChannel's does (decision 5) — because
 //     a channel read has no neutral state meaning "the radio declined" and the
 //     settings seam has exactly one.
 //   - SILENCE stays a failure, typed by wireFailure as *kw.TimeoutError, which

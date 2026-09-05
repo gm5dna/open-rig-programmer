@@ -219,11 +219,31 @@ func TestSettingsDescriptor_AnUnsetRowPublishesNothing(t *testing.T) {
 // a caller that mutated what it was given cannot change what the next caller
 // receives. driver.SettingsDescriptor.Clone's own doc comment records why that
 // independence is load-bearing.
+//
+// ALL THREE ACCESSORS ARE MUTATED HERE, not just the package-level func: the
+// package func, StaticSettingsDescriptor and Session.SettingsDescriptor route
+// through the same buildSettingsSurface tree (TestSettingsDescriptor_Three-
+// GettersOneTree ties them together), but that test does not itself prove
+// each one clones — only that the three agree. If either accessor were ever
+// given its own body that skipped Clone, this test bites on that accessor's
+// own mutation rather than relying on another accessor's fetch to notice.
 func TestSettingsDescriptor_IsADefensiveCopy(t *testing.T) {
+	sess, _ := openTestSession(t, RowSG, radioImage{})
+	static := New(RowSG, Simulated).(*ts590Driver).StaticSettingsDescriptor()
+	fromSession := sess.SettingsDescriptor()
+
 	d := SettingsDescriptor(RowSG)
 	d.Version = "mutated"
 	d.Menus[0].Label = "mutated"
 	d.Menus[0].Groups[0].Items[0].Label = "mutated"
+
+	static.Version = "mutated"
+	static.Menus[0].Label = "mutated"
+	static.Menus[0].Groups[0].Items[0].Label = "mutated"
+
+	fromSession.Version = "mutated"
+	fromSession.Menus[0].Label = "mutated"
+	fromSession.Menus[0].Groups[0].Items[0].Label = "mutated"
 
 	fresh := SettingsDescriptor(RowSG)
 	if fresh.Version == "mutated" || fresh.Menus[0].Label == "mutated" || fresh.Menus[0].Groups[0].Items[0].Label == "mutated" {
@@ -499,6 +519,23 @@ func TestExSpec_CarriesTheFullAddressAndAdmitsAVariableWidth(t *testing.T) {
 	}
 	if n := sess.exSpec("042").RetryReads; n != 0 {
 		t.Errorf("exSpec RetryReads = %d, want 0 — a settings timeout is never retried into a second frame", n)
+	}
+}
+
+// TestReadSetting_AForeignAddressAnswerIsNeverCorrelated is exSpec's
+// end-to-end proof on the driver, the settings path's counterpart to
+// TestReadChannel_ALateAnswerIsNeverTheNextReadsAnswer: TestExSpec_Carries-
+// TheFullAddressAndAdmitsAVariableWidth exercises the matcher in isolation
+// and core/kw pins ParseEXAnswer's own address check, but nothing until this
+// test proves the driver itself never delivers a neighbour's answer as this
+// read's own. radioImage.exAnswers is keyed by the address REQUESTED, so
+// scripting "042" to reply with "043"'s frame is a foreign answer arriving on
+// the wire this read opened.
+func TestReadSetting_AForeignAddressAnswerIsNeverCorrelated(t *testing.T) {
+	sess, _ := openTestSession(t, RowSG, radioImage{exAnswers: map[string]string{"042": exAnswer("043", "1")}})
+	_, err := sess.ReadSetting(context.Background(), "042")
+	if !errors.Is(err, transport.ErrTimeout) {
+		t.Errorf("errors.Is(err, transport.ErrTimeout) = false for %v; a foreign address's answer must not be correlated as this read's own", err)
 	}
 }
 

@@ -4,11 +4,13 @@ package ts590
 
 import (
 	"bytes"
+	"context"
 	"net"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/kw"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -99,6 +101,16 @@ type radioImage struct {
 	// signal (A6): no Kenwood radio has ever been written to by this
 	// project, and it is because the convention is assumed that
 	// WriteChannel reports Sent and never Confirmed.
+	//
+	// THE DEFAULT CHANGED FROM "?;" TO SILENCE when mwPort folded into this
+	// one scripted radio (the write path's own Opus review, T12 fix round 1):
+	// the two-port version answered an unrecognised or unscripted MW with
+	// "?;" by default, and this one falls through to silence unless mwReject
+	// asks for the rejection explicitly. No read or settings test sends an
+	// MW, and assertNoWireTraffic bites on the transcript regardless of what
+	// this arm answers, so no test lost force — recorded here only so the
+	// change is not invisible to whoever next writes a read-path test that
+	// happens to touch the write path.
 	mwReject bool
 }
 
@@ -133,6 +145,32 @@ func (p *respondingPort) Transcript() []string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return append([]string(nil), p.received...)
+}
+
+// openWriteSession opens row at profile against a scripted radio serving img.
+//
+// THE PROFILE IS AN ARGUMENT AND NOT A DEFAULT, and that is plan P7's H2 in
+// one signature: the capability-gate rung is pinned on an unconsented
+// RealHardware session and every SEMANTIC rung on a session that has already
+// passed that gate (Simulated, or RealHardware with consent). A helper that
+// chose the profile for its callers is exactly how a whole ladder of
+// semantic pins goes green with none of the rungs implemented.
+//
+// THE GENERAL HELPER, NOT A WRITE-PATH ONE, so it lives beside
+// newRespondingPort rather than in write_test.go: openTestSession
+// (ts590_test.go) delegates to it for every read and settings test in the
+// package, and a reader looking for the session-opening machinery should
+// find it beside the scripted radio it opens against.
+func openWriteSession(t *testing.T, row Row, profile Profile, img radioImage, opts ...Option) (*Session, *respondingPort) {
+	t.Helper()
+	p := newRespondingPort(t, row, img)
+	d := New(row, profile, append([]Option{testTiming()}, opts...)...)
+	sess, err := d.Open(context.Background(), p.Port(), driver.Identity{Port: "/dev/test"})
+	if err != nil {
+		t.Fatalf("Open(%s): %v", modelNameFor(row), err)
+	}
+	t.Cleanup(func() { _ = sess.Close() })
+	return sess.(*Session), p
 }
 
 // serve reads the driver's bytes, splits them into ';'-terminated frames,
