@@ -261,10 +261,19 @@ func TestRankPorts_NilEntry_Skipped(t *testing.T) {
 // DEVICE-level string, identical for both UARTs of one CP2105. So the
 // expected Windows shape is case (a): the friendly name is thrown away and
 // both ports arrive with the same Product, scoring the same. Case (b) is
-// the fallback, seen only when the hub walk or the descriptor read fails.
+// the fallback, seen only when the hub/port lookup fails or the device
+// descriptor read fails — the friendly name then survives unmodified. A
+// third shape exists too: if the hub/port lookup and the device
+// descriptor read both succeed but the STRING-descriptor read then
+// fails, usb_windows.go:218 still assigns unconditionally and discards
+// the error, so Product becomes "" — neither "Enhanced" nor "Standard",
+// so it still ties at the bare 50 like case (a). Record it for W4.
 // Register entries W4 (which shape appears, and the iProduct wording) and
 // W13 (that the friendly name says "Enhanced"/"Standard" at all) are both
-// ASSUMED and lift only from `rigprog ports` on the VM.
+// ASSUMED. W4 lifts from `rigprog ports` output on the VM; W13 lifts from
+// Device Manager's port names there instead — on the expected tie shape
+// the friendly name never reaches `rigprog ports` at all, so `rigprog
+// ports` cannot be W13's evidence.
 //
 // Consequence, and the reason case (a) exists: on the expected Windows
 // shape the two ports TIE, and the CAT port is NOT identifiable from the

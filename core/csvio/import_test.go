@@ -846,6 +846,16 @@ func TestImport_CRLFAndBOM_ImportIdentically(t *testing.T) {
 // one leading BOM, and only at the very start. A second BOM is data — it is
 // part of the first column's name, and the header error must still say so
 // rather than silently accepting a column called "BOM+slot".
+//
+// Observed and accepted, no change: because the residual BOM is still
+// part of the column name, that name matches neither the wanted "slot"
+// nor anything else, so the header error names it as BOTH unknown (a
+// column beginning with a byte-order mark is not a recognised column)
+// and missing (plain "slot" was never seen) — the same doubled wording a
+// genuinely misspelt column produces. Strip-one over strip-all is still
+// the right call (a doubled BOM is evidence of a double-processed file
+// this repository should refuse, not paper over); this is just naming
+// the one rough edge the choice leaves behind.
 func TestImport_BOMStrippedOnlyOnce(t *testing.T) {
 	fixture, err := os.ReadFile(filepath.Join("testdata", "canonical-v1-export.csv"))
 	if err != nil {
