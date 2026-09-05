@@ -367,6 +367,28 @@ type Engine struct {
 
 	mu sync.Mutex // serialises Do/DrainToQuiet: "single outstanding request"
 
+	// fatalGate serialises the fatal publication (readLoop, on a frame
+	// the framing's optional FatalFramer calls fatal) against the FINAL
+	// WRITE (gatedWrite), and NOTHING ELSE in this engine takes it —
+	// nothing at all takes it on an engine whose framing does not
+	// implement FatalFramer, which is every model registered before the
+	// hook (gatedWrite dispatches such a write straight to base's
+	// unlocked path). It cannot be mu: Do holds mu for its whole call
+	// INCLUDING its read wait, and readLoop is the only producer for the
+	// channel that wait receives on, so a readLoop that took mu to
+	// publish would block on a mutex held by the one goroutine that could
+	// release it. The lock order and why it cannot cycle are stated as a
+	// theorem on gatedWrite.
+	fatalGate sync.Mutex
+	// fatal is framing's FatalFramer view, resolved ONCE in
+	// NewEngineWith — nil for a framing that does not implement the
+	// optional interface, which is every framing registered before it
+	// (catFraming, civ's). Immutable after construction, so readLoop
+	// reads it without synchronisation, exactly as it reads framing.
+	// Resolving it here rather than asserting per chunk is what makes
+	// the hook free for a framing that does not implement it.
+	fatal FatalFramer
+
 	events chan readerEvent // reader goroutine -> whichever call holds mu
 
 	closeCh      chan struct{} // closed exactly once, unblocks any select waiting on it
@@ -487,6 +509,19 @@ func NewEngineWith(p Port, f Framing, opts ...Option) (*Engine, error) {
 		events:      make(chan readerEvent, 16),
 		closeCh:     make(chan struct{}),
 		readerDone:  make(chan struct{}),
+	}
+	// The OPTIONAL FatalFramer is resolved HERE, once, beside the framing
+	// it comes from — never on a hot path. For core/cat and core/civ,
+	// which do not implement it, this leaves e.fatal nil and both hot
+	// sites ONE nil-field check and nothing else: no type assertion per
+	// chunk, no lock taken, no other branch, no byte changed.
+	// TestFatalFramer_ResolvedOnceAtConstruction pins the resolution;
+	// TestFatalFramer_AbsentIsInert,
+	// TestFatalFramer_AbsentWriteRacingCloseGoesOutAsBaseDid and
+	// TestFatalFramer_AbsentExchangeDoesNotQueueBehindTheFatalGate pin
+	// the inertness — the last two on the write path specifically.
+	if ff, ok := f.(FatalFramer); ok {
+		e.fatal = ff
 	}
 	for _, opt := range opts {
 		opt(e)
@@ -734,13 +769,25 @@ func (e *Engine) Do(ctx context.Context, cmd Command, spec CommandSpec) ([]byte,
 		// next NoteSent. A gate refusal is a driver bug that fails
 		// closed either way; letting foreign code between the check and
 		// the write would be a defect in the safety mechanism itself.
+		// On a FatalFramer engine, gatedWrite's closed recheck is a
+		// SECOND such refusal of the same noted frame, eight lines
+		// below, and the reasoning transfers unchanged: the port is
+		// closed, so no echo can follow and the recorded expectation
+		// is about a frame that never arrives.
 		e.framing.NoteSent(frame)
 		if !e.allow(frame) {
 			return nil, fmt.Errorf("%w: %s", ErrDisallowedCommand, cmd.String())
 		}
-		if _, err := e.port.Write(frame); err != nil {
-			e.closePort(err)
-			return nil, e.closedErr()
+		// The write goes out through gatedWrite, NOT directly: for a
+		// FatalFramer engine the closed recheck and the write are one
+		// critical section on fatalGate, the same lock readLoop's fatal
+		// publication takes; for every other framing gatedWrite
+		// dispatches straight to base's unlocked write. The gate opens
+		// AFTER the framing's Allow above, never before it — safety
+		// obligation 1 gates the bytes, and only then does the engine
+		// decide whether the link is still fit to carry them.
+		if _, err := e.gatedWrite(frame); err != nil {
+			return nil, err
 		}
 
 		if spec.Class == ClassWrite {
@@ -802,6 +849,158 @@ func (e *Engine) Do(ctx context.Context, cmd Command, spec CommandSpec) ([]byte,
 	// receives as ITS OWN answer (see doc.go and the finding this fixes).
 	e.suspect = true
 	return nil, lastErr
+}
+
+// gatedWrite is Do's FINAL step — the port write, and, for a FatalFramer
+// engine ONLY, the closed recheck that has to be atomic with it as one
+// critical section on fatalGate, the dedicated lock readLoop's fatal
+// publication takes (see FatalFramer). It is called with e.mu held, after
+// the framing's NoteSent and after the gate (safety obligation 1), and it
+// writes the very slice the gate approved.
+//
+// TWO PATHS, DISPATCHED ON e.fatal, AND THE FIRST OF THEM IS BASE'S. A
+// framing that does not implement FatalFramer — catFraming, core/civ's,
+// every model registered before this hook — reaches writeFrame directly:
+// the same e.port.Write with the same error branch it had before, no lock
+// acquired, no e.closed reread — the absent path executes base's
+// instructions unchanged, and a nil-field check is the whole addition
+// needed to reach them. That is what makes the additivity claim TRUE
+// rather than merely small, and it is what two pins hold it to.
+// TestFatalFramer_AbsentWriteRacingCloseGoesOutAsBaseDid is the
+// discriminating one: a Do that has ALREADY lost the race with
+// Engine.Close still transmits, and still returns base's error value.
+// TestFatalFramer_AbsentExchangeDoesNotQueueBehindTheFatalGate is its
+// liveness half: a goroutine holding fatalGate cannot delay such an
+// exchange at all. Both go red the moment the gate is made unconditional
+// again.
+//
+// The recheck is therefore paid for ONLY by a FatalFramer engine, and
+// there it is a deliberate behaviour change: a Do racing a close returns
+// without having transmitted, where base transmitted and learnt of the
+// closure from its read wait. The error VALUE is the same on both routes
+// — each ends in the same e.closedErr() — so what moves is the write
+// itself and the moment of the return, never the text a caller sees.
+//
+// WHY A SCOPED HELPER, AND WHY ONLY THIS FORM. Every path taken after the
+// Lock must release it, and there are three: the closed recheck's early
+// return, the write-error branch (which closes the port and returns before
+// any trailing statement could run), and ordinary success. A single
+// trailing Unlock would leave fatalGate held forever on a write error. A
+// `defer e.fatalGate.Unlock()` written in DO'S BODY is worse still — it
+// releases at Do's return, and Do does not return until after its read
+// wait, nextEvent's blocking receive on e.events, whose only producer is
+// the readLoop that must take fatalGate to publish. That is a hang, in the
+// package every registered radio goes through. Confining the lock to this
+// helper is what makes all three paths release it at the same return.
+// TestFatalFramer_GateIsNeverHeldAcrossAChannelReceive fails as a bounded
+// timeout if anyone reintroduces that form.
+//
+// THE LOCK ORDER, AS A THEOREM, IN TWO CLAUSES — and the second is the
+// load-bearing one:
+//
+//  1. Do takes e.mu and THEN fatalGate; readLoop takes fatalGate and NEVER
+//     e.mu. One direction, so no cycle.
+//  2. This function performs, under fatalGate, no channel receive and no
+//     channel send, no nextEvent call, no wait on readLoop of any kind and
+//     no take of e.mu — one atomic load and Port.Write, plus, on failure,
+//     closePort. The one channel operation it can reach, closePort's
+//     close(e.closeCh), cannot block, and that is why it does not threaten
+//     the clause. It may block ONLY on the Port's own Write or Close:
+//     closePort's sync.Once can wait on another goroutine already inside
+//     it, but that goroutine is running Port.Close, and the four callers
+//     that reach closePort that way — Engine.Close, readLoop's terminal
+//     path, handleReaderErr and drainToQuietLocked — none of them holds
+//     fatalGate. So the wait is bounded by the driver and cannot close a
+//     cycle.
+//
+// Clause 1 alone holds under the struck defer-in-Do form too, which is
+// exactly why clause 2 has to be stated: it is the half that is false
+// there.
+//
+// Two foreign calls therefore sit inside the gate — Port.Write here, and
+// Port.Close reached through closePort — and fatalGate serialises those
+// two against each other, not universally: Engine.Close, a terminal read
+// error and a consumed reader error each reach closePort without it. A
+// Port.Close that blocks can thus stall one gatedWrite for its duration,
+// and that cost is accepted: the Do it stalls is one whose only possible
+// outcome is already closedErr.
+func (e *Engine) gatedWrite(frame []byte) (int, error) {
+	if e.fatal == nil {
+		return e.writeFrame(frame)
+	}
+	e.fatalGate.Lock()
+	defer e.fatalGate.Unlock()
+
+	// The recheck is the whole point of the gate: Do's only other
+	// e.closed read is at its entry, before the purge, and nothing
+	// between there and here re-reads it. Under the gate, a closure the
+	// publication has completed is visible HERE, and one it has not
+	// completed cannot begin until this section ends.
+	if e.closed.Load() {
+		return 0, e.closedErr()
+	}
+	return e.writeFrame(frame)
+}
+
+// writeFrame is base's write step, unmoved: the port write and the error
+// branch that closes the port and returns closedErr. It takes no lock of
+// its own, so gatedWrite's two paths run the SAME code — shared rather
+// than duplicated, so that "identical to base" is a property of the source
+// and not a claim about two copies staying in step. Called from the gated
+// path with fatalGate held, and from the absent path with nothing held.
+func (e *Engine) writeFrame(frame []byte) (int, error) {
+	n, err := e.port.Write(frame)
+	if err != nil {
+		e.closePort(err)
+		return n, e.closedErr()
+	}
+	return n, nil
+}
+
+// publishFatal is the reader goroutine's side of the same critical
+// section: it closes the port with the TYPED cause the framing's IsFatal
+// returned (FatalFramer clause 2), under fatalGate, so the closure is
+// either wholly before or wholly after any gatedWrite — never interleaved
+// with one.
+//
+// closeOnce inside closePort keeps the FIRST cause any caller supplies, so
+// this publication is authoritative only when it wins that race; when
+// Engine.Close, a terminal read error, a consumed reader error or
+// gatedWrite's own error branch got there first, the typed cause is
+// dropped and the earlier one stands. That is FatalFramer's second
+// liveness fact, and TestFatalFramer_OtherCloseFirst_TypedCauseDoesNotSurvive
+// pins it.
+func (e *Engine) publishFatal(cause error) {
+	e.fatalGate.Lock()
+	e.closePort(cause)
+	e.fatalGate.Unlock()
+}
+
+// fatalCause consults the framing's optional FatalFramer over the COMPLETE
+// result of one Accumulator.Push and returns the first fatal frame's typed
+// cause, or nil.
+//
+// WHOLE-CHUNK, BEFORE DELIVERY (FatalFramer clause 1). Consulting frame by
+// frame inside readLoop's existing delivery loop would reproduce the very
+// window this hook closes: a chunk of "«matching answer»;E;" would deliver
+// the answer, waitForAnswer would report SUCCESS, and the link failure
+// would land on the next command instead.
+// TestFatalFramer_SameChunk_FatalSuppressesTheAnswerItArrivedWith is the pin.
+//
+// The nil check below is this hook's ENTIRE cost at this hot site to a
+// framing that does not implement it — no type assertion, no lock. The
+// same check at the other hot site, gatedWrite's dispatch, is the whole
+// of it there.
+func (e *Engine) fatalCause(frames [][]byte) error {
+	if e.fatal == nil {
+		return nil
+	}
+	for _, f := range frames {
+		if cause := e.fatal.IsFatal(f); cause != nil {
+			return cause
+		}
+	}
+	return nil
 }
 
 // isCtxErr reports whether err is ctx's own cancellation/deadline error,
@@ -1251,6 +1450,36 @@ func (e *Engine) readLoop() {
 		n, err := e.port.Read(buf)
 		if n > 0 {
 			frames, ferr := acc.Push(buf[:n])
+			// The optional FatalFramer is consulted over the WHOLE
+			// Push result first, and a fatal frame anywhere in it
+			// SUPPRESSES every frame of that chunk — including any
+			// that preceded it — rather than merely preceding them.
+			// Suppression, not ordering, is what stops a matching
+			// answer in the same chunk being reported as a success.
+			//
+			// The publication then runs BEFORE any sendEvent for this
+			// chunk, exactly as the terminal-read-error path below
+			// closes first and sends best-effort afterwards, and for
+			// the same reason: closePort closes closeCh, so the send
+			// cannot block forever if nobody is consuming e.events.
+			// A waiter that misses the event observes closeCh in its
+			// own select and gets the same typed cause through
+			// closedErr, so nothing is lost either way.
+			//
+			// ferr, AND any error returned by the same Read call, are
+			// deliberately not forwarded here: this branch returns
+			// before the `if err != nil` below, so a Read that gave
+			// (n > 0, io.EOF) — the ordinary way a device disappears
+			// mid-chunk — loses its EOF too. Both are dropped for one
+			// reason: the port is closed with a strictly stronger and
+			// more informative cause, and neither a chunk's
+			// accumulator error nor a generic EOF can outrank the
+			// framing's own reason for the link having ended.
+			if cause := e.fatalCause(frames); cause != nil {
+				e.publishFatal(cause)
+				e.sendEvent(readerEvent{err: cause}) // best-effort
+				return
+			}
 			for _, f := range frames {
 				if !e.sendEvent(readerEvent{frame: f}) {
 					return
