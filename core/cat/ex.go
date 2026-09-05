@@ -39,7 +39,8 @@ func (d Dialect) exAnswerMaxLen() int {
 }
 
 // BuildEXRead builds this dialect's EX read frame for addr — 9 bytes under
-// EXAddressTriple, 7 under EXAddressPair. Reference: the EX grammar
+// EXAddressTriple, 7 under EXAddressPair, 6 under EXAddressSingle.
+// Reference: the EX grammar
 // block's Read frame (manual extract line ~629). The only
 // validation is membership of THIS DIALECT'S inventory
 // (d.KnownEXAddress) — never a numeric range check on P1/P2/P3, mirroring
@@ -77,7 +78,7 @@ func (d Dialect) BuildEXRead(addr EXAddress) (Command, error) {
 }
 
 // ParseEXAnswer parses an EX Answer frame ("EX" + this dialect's address
-// field, six digits or four + a raw P4 body of 1 to d.exP4MaxBytes() bytes
+// field, six digits, four or three + a raw P4 body of 1 to d.exP4MaxBytes() bytes
 // + ";", reference: the EX grammar block's Answer frame, manual extract
 // line ~629) and returns the address and the raw P4 body.
 //

@@ -113,7 +113,7 @@ type Dialect struct {
 	slots     slotSpace
 
 	exItems    []EXItem
-	exAddrForm EXAddressForm        // this dialect's OWN EX address field width (six digits or four)
+	exAddrForm EXAddressForm        // this dialect's OWN EX address field width (six digits, four or three)
 	exMembers  map[EXAddress]bool   // this dialect's OWN membership index
 	exByTriple map[[3]int]EXAddress // this dialect's OWN decimal-triple index
 	exP4Max    int                  // this dialect's OWN widest P4 answer field, derived from exItems
@@ -371,7 +371,7 @@ func (d Dialect) EXAddresses() []EXAddress {
 func (d Dialect) KnownEXAddress(a EXAddress) bool { return d.exMembers[a] }
 
 // EXWire renders a as THIS DIALECT'S EX address field: six digits under
-// EXAddressTriple, four under EXAddressPair.
+// EXAddressTriple, four under EXAddressPair, three under EXAddressSingle.
 //
 // It is the method every caller outside this package uses, and it replaced
 // EXAddress.Wire() — a method on the address, which carries no family and
@@ -380,9 +380,9 @@ func (d Dialect) KnownEXAddress(a EXAddress) bool { return d.exMembers[a] }
 func (d Dialect) EXWire(a EXAddress) string { return wireEXAddress(d.exAddrForm, a) }
 
 // EXAddressWidth is the byte width of this dialect's EX address field: 6
-// under EXAddressTriple, 4 under EXAddressPair, 0 for a dialect that
-// declares no form (only the inert zero Dialect, since V12 refuses such a
-// config).
+// under EXAddressTriple, 4 under EXAddressPair, 3 under EXAddressSingle,
+// 0 for a dialect that declares no form (only the inert zero Dialect, since
+// V12 refuses such a config).
 //
 // It MEASURES the renderer rather than repeating its widths in a second
 // switch. A bound consulted from somewhere other than its own datum is the
