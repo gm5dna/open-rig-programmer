@@ -1153,16 +1153,16 @@ used:
 
 - RPTT SELECT was OFF (radio in SSB) — recorded before any port was
   opened.
-- A full SD-card backup of the radio's configuration was taken and
-  verified present.
+- A full SD-card backup of the radio's configuration was taken.
 - RF output at minimum (5 W). Stuart present, watching the TX
   indicator, for the entire session, at every open.
 - No other application had the radio's serial ports open.
 
 **No TX key-up occurred at any point in this session.** Stuart
 confirmed the TX indicator stayed OFF through: a host-Mac probe pair
-run immediately before passthrough (the macOS half of the same check,
-repeated with this session's build); both VM probes of COM3 and COM4;
+run earlier the same morning, before passthrough (the macOS half of
+the same check, repeated with this session's build); both VM probes
+of COM3 and COM4;
 the smoke script's full 117-slot read; the GUI connect, read and Send;
 the CLI restoration write; and the final read.
 
@@ -1197,9 +1197,11 @@ session, all four CP2105 nodes on the host carried the identical
 generic description "CP2105 Dual USB to UART Bridge Controller" and
 tied at score 53. On Windows, both COM ports carry that same
 device-level string and tie at score 50. In both cases, the
-per-interface friendly name Windows only shows once the vendor driver
-is installed ("Enhanced Com Port"/"Standard Com Port", see "Driver"
-below) never reaches `rigprog ports` at all — the ranking code sees the
+per-interface friendly name — from the device's own USB interface
+strings before any driver is installed ("Enhanced Com Port"/"Standard
+Com Port"), and from the vendor driver's own friendly names afterwards
+(see "Driver" below) — is visible only in Device Manager and never
+reaches `rigprog ports` at all — the ranking code sees the
 device-level product string, not the interface-level one. **No
 document in this project may claim the Enhanced port ranks first, on
 any platform**; `rigprog probe --port <name>` against each listed port
