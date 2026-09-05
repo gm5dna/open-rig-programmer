@@ -369,8 +369,16 @@ func TestSettingsDescriptor_IsADefensiveCopy(t *testing.T) {
 
 	for _, tt := range getters {
 		t.Run(tt.name, func(t *testing.T) {
-			if !reflect.DeepEqual(tt.get(), SettingsDescriptor()) {
-				t.Fatalf("%s differs from the package-level tree — this driver's settings surface depends only on the static EX inventory, never on anything a live session discovers", tt.name)
+			// Compared against a FRESHLY BUILT tree, never against another
+			// getter: all three getters delegate to the same package-level
+			// original, so comparing one against another is self-referential
+			// and cannot tell a dropped Clone() from a correct one — both
+			// sides would be looking at the same mutated shared value. A
+			// fresh buildSettingsDescriptor(catDialect) shares no structure
+			// with anything tt.get() can return, so it is the only baseline
+			// that goes red when the getter under test stops copying.
+			if !reflect.DeepEqual(tt.get(), buildSettingsDescriptor(catDialect)) {
+				t.Fatalf("%s differs from a freshly built tree — this driver's settings surface depends only on the static EX inventory, never on anything a live session discovers", tt.name)
 			}
 
 			mine := tt.get()
@@ -382,8 +390,8 @@ func TestSettingsDescriptor_IsADefensiveCopy(t *testing.T) {
 			mine.Menus[0].Groups[0].Items[0] = driver.SettingItem{ID: "MUTATED", Label: "MUTATED", Display: "MUTATED"}
 			mine.Menus = append(mine.Menus, driver.SettingMenu{ID: "EXTRA"})
 
-			if !reflect.DeepEqual(tt.get(), SettingsDescriptor()) {
-				t.Errorf("after a caller mutated its own copy, %s no longer matches the package-level tree — the getters must hand out independent trees", tt.name)
+			if !reflect.DeepEqual(tt.get(), buildSettingsDescriptor(catDialect)) {
+				t.Errorf("after a caller mutated its own copy, %s no longer matches a freshly built tree — the getters must hand out independent trees", tt.name)
 			}
 		})
 	}
@@ -750,6 +758,13 @@ func TestParseEXResponse_Table(t *testing.T) {
 				if mm.Requested != firstSettingAddr || mm.Answered != widestSettingAddr {
 					t.Errorf("mismatch = {Requested:%q Answered:%q}, want {%q %q}", mm.Requested, mm.Answered, firstSettingAddr, widestSettingAddr)
 				}
+				// NO errors.Is sentinel: that is the other half of this
+				// type's own claim (settings.go), and it was previously
+				// unpinned — ft891's identical check
+				// (ft891/settings_test.go:790-791).
+				if errors.Is(err, ErrAnswerMismatch) {
+					t.Error("an EX address mismatch satisfies errors.Is(err, ErrAnswerMismatch) — that sentinel answers \"did the radio answer about the wrong CHANNEL?\", which this is not")
+				}
 				return
 			}
 			if tt.wantParseErr {
@@ -790,6 +805,9 @@ func TestSession_ReadSetting_TimeoutIsTypedAndRetriedOnce(t *testing.T) {
 	}
 	if !errors.Is(err, transport.ErrTimeout) {
 		t.Errorf("errors.Is(err, transport.ErrTimeout) = false — the transport's own error must survive ReadSetting's wrap: got %v", err)
+	}
+	if !strings.Contains(err.Error(), firstSettingAddr) {
+		t.Errorf("error text %q does not name the failing address %q — this path's ordinary address-naming wrap (settings.go)", err.Error(), firstSettingAddr)
 	}
 
 	wantFrame := "EX" + firstSettingAddr + ";"
@@ -964,18 +982,22 @@ func TestReadSetting_IsAtomicUnderOpMu(t *testing.T) {
 // descriptor's items on the wire.
 //
 // IT IS THE PREFLIGHT THAT MATTERS MOST, and on this radio more than on any
-// sibling. core/clone/settings.go probes an all-MenuUnsupported
-// codeplug.MenuSnapshot built from the descriptor's item IDs BEFORE any wire
-// exchange, and codeplug.MenuSnapshot.Validate requires every ID to be
-// EXACTLY 3, 4 or 6 ASCII digits (core/codeplug/menus.go's
-// isSettingIDWidth). THIS IS THE FIRST RADIO IN THE FLEET TO USE THE
-// THREE-DIGIT ARM, which exists only because of the Kenwood base dependency
-// this milestone consumes — so a descriptor that padded its menu numbers to
-// four digits, printing an ID no FT-991A document contains, would still
-// pass every assertion in this file and fail HERE, with zero frames sent
-// (plan P9). Neither package-level test can see this: the driver's own tests
-// validate the descriptor but know nothing of the snapshot rule, and
-// core/clone's tests use their own fixtures.
+// sibling — for widths the preflight actually catches. core/clone/settings.go
+// probes an all-MenuUnsupported codeplug.MenuSnapshot built from the
+// descriptor's item IDs BEFORE any wire exchange, and
+// codeplug.MenuSnapshot.Validate requires every ID to be EXACTLY 3, 4 or 6
+// ASCII digits (core/codeplug/menus.go's isSettingIDWidth). THIS IS THE
+// FIRST RADIO IN THE FLEET TO USE THE THREE-DIGIT ARM, which exists only
+// because of the Kenwood base dependency this milestone consumes — so a
+// descriptor padded to FIVE or SEVEN digits, printing an ID no FT-991A
+// document contains, would still pass every assertion in this file and fail
+// HERE, with zero frames sent. A FOUR-digit pad would not: four is a legal
+// snapshot width, so it sails through this preflight and is refused one
+// layer down instead, by this driver's own ParseEXAddress — zero frames
+// either way, but a different gate (plan P9 erratum; probes D/E). Neither
+// package-level test can see the width classes this preflight DOES catch:
+// the driver's own tests validate the descriptor but know nothing of the
+// snapshot rule, and core/clone's tests use their own fixtures.
 //
 // The answers are built from the INVENTORY's declared width per item, not
 // from one shared literal, so the walk exercises the full 1..8-byte P4 range

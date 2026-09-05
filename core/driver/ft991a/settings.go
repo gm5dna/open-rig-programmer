@@ -108,10 +108,15 @@ var ft991aSettingsDescriptor = buildSettingsDescriptor(catDialect)
 // six ASCII digits, and this is the first radio in the fleet to use the
 // three-digit arm. PADDING A MENU NUMBER TO FOUR DIGITS — printing an ID no
 // FT-991A document contains — IS FORBIDDEN (plan P9).
-// TestCloneReadSettings_WalksTheWholeDescriptor is where that rule bites:
-// core/clone/settings.go probes an all-MenuUnsupported snapshot built from
-// these IDs BEFORE any wire exchange, so a mis-shaped ID is refused with
-// zero frames sent rather than after reading the whole radio.
+// TestCloneReadSettings_WalksTheWholeDescriptor is where that rule bites, but
+// NOT through the gate the plan and matrix §3.9 name: core/clone/settings.go
+// probes an all-MenuUnsupported snapshot BEFORE any wire exchange, and that
+// preflight refuses every width core/codeplug's isSettingIDWidth rejects
+// (five, seven, …) — but FOUR IS A LEGAL SNAPSHOT WIDTH, so a four-digit pad
+// sails through the preflight and is refused one layer down, by THIS
+// DRIVER'S OWN ParseEXAddress. Zero frames either way, so the safety claim
+// holds; the "zero frames" guarantee for a four-digit pad is the driver's,
+// not the preflight's (P9 erratum, orchestrator's to record).
 //
 // DIALECT-PARAMETERISED THROUGHOUT, which is what lets this be another
 // instance of the sibling template rather than a copy of its output: the
@@ -124,8 +129,11 @@ var ft991aSettingsDescriptor = buildSettingsDescriptor(catDialect)
 // RAW VALUES ONLY, AND NO VALUE SEMANTICS AT ALL. The tree carries an
 // address, a name and a display form per item; it does not carry an item's
 // value legend, its units, its enumerated options or its default, and
-// ReadSetting below returns the P4 body verbatim. That is why
-// core/cat/ft991a/doc.go's recorded CHART PRINTING DEFECTS do not bite this
+// ReadSetting below returns the P4 body verbatim — this chart prints that
+// field as P2 (layout 520); core/cat names it P4 fleet-wide, after the
+// FT-710's grammar (core/cat/ft991a/table2.csv:41 records the terms clash).
+// Said once, here; every other occurrence below keeps the fleet name. That is
+// why core/cat/ft991a/doc.go's recorded CHART PRINTING DEFECTS do not bite this
 // surface: every one of them lives in a value legend, and this driver
 // interprets no legend (matrix §3.9). They become questions the moment a
 // caller tries to render a menu value as a MEANING rather than as the bytes
