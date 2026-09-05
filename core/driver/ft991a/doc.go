@@ -129,8 +129,8 @@
 // THE MUTEX IS STILL EARNED, and by a different property. transport.Engine
 // serialises each individual exchange, so one MT read needs no lock of its
 // own — but opMu guards a whole DRIVER OPERATION (spec erratum S-E4, matrix
-// M-E2), and this session has more than one kind: a read, a write (task 11)
-// and a settings read (task 12) must not interleave their frames. The
+// M-E2), and this session has more than one kind: a read, a write
+// (write.go) and a settings read (task 12) must not interleave their frames. The
 // concurrency pin is that two racing ReadChannels cannot interleave two MT
 // frames. IT IS NOT HELD ACROSS WRITE-THEN-VERIFY: that pair belongs to
 // core/clone, as the driver interface assigns it, and holding a driver lock
@@ -312,8 +312,8 @@
 //     into a one-byte field and which byte the wire wants is undecided
 //     (matrix erratum M-E4).
 //   - THE DCS STATES' SET ACCEPTANCE — caps.go's ctcssStates, which
-//     publishes all five P8 values as writable, and (task 11) the write
-//     path that may put '3' or '4' on the wire.
+//     publishes all five P8 values as writable, and write.go's ctcssByName
+//     and buildWriteCommand, which may put '3' or '4' on the wire.
 //   - ROW 087 RADIO ID'S EXCLUSION — the settings descriptor (task 12),
 //     whose item count is the dialect's inventory: 152 items for a chart
 //     printing 153 rows.
@@ -330,8 +330,8 @@
 //     GUI, so a wrong value leaves a real FT-991A reachable only through
 //     its own menu.
 //   - THE ACKNOWLEDGEMENT CONVENTIONS — read.go's reading of "?;" as a
-//     rejection at all, and (task 11) the write path's reading of silence
-//     as acceptance. This manual describes no ACK/NAK vocabulary beyond the
+//     rejection at all, and write.go's mtSetSpec, whose fire-and-forget
+//     class reads silence as acceptance and a "?;" as the rejection. This manual describes no ACK/NAK vocabulary beyond the
 //     "?;" every Yaesu CAT manual in this repository shows for a rejected
 //     command, and it never says whether an accepted Set answers at all.
 //

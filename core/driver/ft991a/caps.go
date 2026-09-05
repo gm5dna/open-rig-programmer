@@ -302,7 +302,7 @@ func ctcssStates() []spec.ToneState {
 //     every block carrying the grid (MR 971, MT 1004, MW 1042, IF 787, OI
 //     1122), so the TX half is a live state rather than a printed
 //     constant. That is matrix erratum M-E3's first half, and it is why
-//     this driver has no TxClar pre-wire refusal for task 11 to write:
+//     write.go has no TxClar pre-wire refusal, where the FT-891's does:
 //     under cat.P5TxClar the codec ACCEPTS a TxClar-true record, so
 //     copying the FT-891's rung would refuse, on every write, a field this
 //     radio's five legends print as live.
