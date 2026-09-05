@@ -169,7 +169,7 @@
 // clarifier's 10 Hz step and 9990 ceiling, the clarifier's minus-direction
 // byte, the combined answer's P7 read domain, the MC answer domain beyond
 // memory and PMS) are CITED here where this fake depends on them — all eight
-// are — and never re-registered. Likewise the driver's fifteen, which land
+// are — and never re-registered. Likewise the driver's sixteen, which land
 // with core/driver/ft891.
 //
 //  1. EMPTY-SLOT ANSWERS. A slot this fake holds no state for answers "?;" to

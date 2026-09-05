@@ -1928,7 +1928,7 @@ func TestGetUISpec_RegisteredIC705_EveryBankFieldsAndTagDisplay(t *testing.T) {
 // driver's own slots.go builds), not hand-typed — the same
 // recompute-rather-than-hardcode discipline
 // TestGetUISpec_SlotClassification_DenseBanksUnchangedByWithinSpace uses
-// for the four Yaesu models — because hand-typing 321 slot strings is 321
+// for the five Yaesu models — because hand-typing 321 slot strings is 321
 // chances to mistype one, exactly the risk core/driver/ic9700/slots.go's
 // own bankSlots doc comment names. The sanity-check loop below confirms
 // three REAL addresses are actually present in that recomputed list, so
