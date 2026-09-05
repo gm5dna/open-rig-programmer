@@ -130,8 +130,10 @@ func unavailableTierFields() codeplug.ChannelData {
 //     "Unknown" — which means "the radio has one and this read did not
 //     learn it" — would be a different and false claim.
 //
-// CTCSSTone and ScanSkip are Unknown: the register's TONE-NUMBER, DCS-CODE
-// AND SCAN-SKIP UNREACHABILITY entry, nothing readable.
+// CTCSSTone and ScanSkip are Unknown: the register's TONE-NUMBER
+// UNREACHABILITY and SCAN-SKIP UNREACHABILITY entries respectively, nothing
+// readable under either. They are two entries and not one because their
+// lifting captures are two (matrix erratum M-E10).
 func TestReadChannel_MappingsFromThePositionChart(t *testing.T) {
 	_, sess := openSession(t, Simulated, readTestImage())
 

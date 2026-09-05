@@ -142,9 +142,15 @@ var tierFieldsMustBeEmpty = map[string]bool{
 	"PreampOptions":  true,
 	"AntennaOptions": true,
 	// §1.28: empty selects the pre-Icom family default (printable ASCII
-	// 0x20-0x7E less ';'), which is the STRICT subset of the alphabet this
-	// manual's own sentence at layout 108-109 would admit — narrowing, not
-	// widening, is the direction that cannot put an unexpected byte on the
+	// 0x20-0x7E less ';'). MT's P12 legend says only "TAG Characters (up to
+	// 12 characters) (ASCII)" (layout 1017) and names no set, and THIS
+	// MANUAL HAS NO STATEMENT ABOUT THE TAG'S OWN BYTE ALPHABET AT ALL.
+	// Layout 106-109 is NOT that statement and must not be read as one
+	// (matrix erratum M-E8): under its governing conditional, "If a
+	// particular parameter is not applicable to the FT-991A", it is a
+	// filler-byte rule for a parameter this radio does not implement. So
+	// nothing points either way, and "" is the conservative direction —
+	// narrowing, not widening, is what cannot put an unexpected byte on the
 	// wire.
 	"TagCharset": true,
 	// §1.10: this radio names a tone by INDEX into CTCSSTones (CN's P3,
