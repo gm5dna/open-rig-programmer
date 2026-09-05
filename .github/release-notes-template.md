@@ -310,9 +310,12 @@ other distributions, take the CLI tarball or build the GUI from source
 (`wails build -tags webkit2_41` in `app/`); either way,
 `docs/linux-setup.md` covers the serial-port setup.
 
-The four Windows rows are native-only: the amd64 installer (or zip)
+The installer's architecture check is native-only: the amd64 installer
 refuses to run on an ARM64 machine, even though ARM64 Windows can
-emulate x64 programs — install the arm64 file on an ARM64 PC.
+emulate x64 programs — install the arm64 installer on an ARM64 PC. The
+CLI zip carries no such check — it is a plain executable, and an amd64
+`rigprog.exe` extracted from it will very likely run on ARM64 Windows
+under emulation, but this project has not tried it either way.
 
 `SHA256SUMS` (attached below) covers every file above. Verify with:
 
