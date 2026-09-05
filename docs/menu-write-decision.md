@@ -115,6 +115,7 @@ All of the following, not any one of them:
 3. **The prerequisites in place** — v1.0.0 shipped, and the codec
    dialect seam (M9b) landed first, so that loosening the allowlist
    happens once, in the dialect-parameterised gate, rather than twice.
+   (Both have since happened; conditions 1 and 2 have not been met.)
 
 If it is reopened, the version to build is a **deliberately small
 subset** — cosmetic, reversible, front-panel-checkable items such as
@@ -131,4 +132,4 @@ hardware than 296 typed descriptors.
 - `core/cat/table2-corrections.csv` — the machine-readable record of the
   two manual corrections.
 - `core/cat/allowlist.go` (`validEXRead`) — where the refusal lives.
-- `README.md`, "Planned features" — the user-facing statement.
+- `README.md`, "Limits", and `docs/radio-notes.md` — the user-facing statement.

@@ -1,6 +1,7 @@
-# Building from source, and the repository layout
+# Developing
 
-Moved verbatim from the README on 28/08/2026.
+Building from source, the layout of the repository, the documentation map,
+the private evidence records, and how a release is made.
 
 ## Building from source
 
@@ -81,8 +82,8 @@ afterwards — the build never touches it. Restore the two files a build
 DOES change before committing anything — but only if you had no
 uncommitted edits of your own in either one; check `git diff` first,
 and if you did, restore your own saved copies instead of discarding
-them (the same advice `app/README.md` gives for the frontend's build
-collateral):
+them (the macOS section below gives the same advice for the frontend's
+build collateral):
 
 ```sh
 git checkout -- app/frontend/wailsjs/ app/build/windows/installer/wails_tools.nsh
@@ -108,5 +109,69 @@ remain untried (see its "Status" section).
 | `cmd/rigprog/` | The CLI. |
 | `app/` | Wails v2 + Svelte desktop GUI. |
 | `internal/` | The radio simulators — `fakeradio`, `fakedx10`, `fakedx101`, `fakeft891` for Yaesu; `fakeic7610`, `fakeic7300`, `fakeic7300mk2`, `fakeic705`, `fakeic9700`, `fakeic905`, `fakeic7851`, `fakeic7760`, `fakeic7100`, `fakeicr8600` for Icom — composition-root wiring, the shared settings store the CLI and GUI both use for unverified-write consent (`userconfig`), menu-table generator (`extable`), and the import-graph guard tests (`guards`). |
-| `docs/` | Hardware findings, Linux and Windows setup, the menu-write decision, and the fixture redaction policy. |
+| `docs/` | See the docs map below. |
 | `docs/fixtures-private/` | Git-ignored. Raw radio backups and serial captures — never committed. |
+
+## macOS: a local `wails build` may fail its signing step
+
+In an iCloud-synced checkout, `wails build`'s final ad-hoc codesign
+step can fail with `resource fork, Finder information, or similar
+detritus not allowed`: freshly written files carry
+`com.apple.provenance` extended attributes. The build itself has
+completed by then; only the self-sign step failed. CI is unaffected.
+
+```sh
+xattr -cr "app/build/bin/Open Rig Programmer.app"
+codesign --force --deep -s - "app/build/bin/Open Rig Programmer.app"
+codesign -dv "app/build/bin/Open Rig Programmer.app"   # confirm: Signature=adhoc
+```
+
+`wails build` also runs `npm install`, which can leave
+`app/frontend/package-lock.json` or `package.json.md5` showing as
+modified with no real change; `git checkout --` those unless you meant
+a dependency change, and never commit build collateral.
+
+## Docs map
+
+| File | For whom | What |
+| --- | --- | --- |
+| `README.md` | Radio owners | What it is, install, first use, safety, limits, help wanted |
+| `docs/radio-notes.md` | Radio owners | Per-radio capabilities, refusals and guesses, with pointers to the evidence |
+| `docs/linux-setup.md`, `docs/windows-setup.md` | Radio owners | Serial-port setup per platform, with each page's own evidence status |
+| `docs/menu-write-decision.md` | Both | Why menu settings are read but never written (a decision record) |
+| `docs/icom-models.md` | Reviewers | Every Icom limitation with the code and manual citation behind it |
+| `docs/hardware-notes.md` | Reviewers | Evidence record: every session against real hardware, by milestone code; section titles are cited from code and must not change |
+| `docs/fixtures.md`, `docs/fixtures-history.md` | Contributors | The fixture redaction policy, and the one audit run under it |
+| `docs/developing.md` | Contributors | This page |
+| `.github/release-notes-template.md` | Contributors | The body of every GitHub release |
+| `CHANGELOG.md` | Everyone | What changed in each release |
+
+## Private records
+
+Three directories are git-ignored and exist only on the maintainer's
+disk: `docs/superpowers/` (specifications, plans, capability matrices
+and baseline manifests), `.superpowers/` (session ledgers, reviews and
+handoffs) and `docs/fixtures-private/` (raw radio captures and the
+makers' manuals). Code comments, provenance files and this repository's
+evidence records cite them by path so that the evidence chain is
+traceable by the maintainer, but nothing in the build or the tests
+reads them: `internal/guards/freshclone_test.go` proves a fresh clone
+builds and tests without any of them. A citation into one of those
+paths is a pointer to a private record, not a missing file.
+
+## Releasing
+
+1. Write the version's entry in `CHANGELOG.md` (move the *Unreleased*
+   items under the new heading) and paste it into the release-notes
+   template's "What changed in this version".
+2. Check the template's Downloads table and first-launch sections still
+   match the README's "Install" and "First use".
+3. Rehearse with an `rc` tag if the shipped bytes changed shape
+   (`git tag v1.4.0-rc.1 && git push origin v1.4.0-rc.1`), check the
+   draft's assets, then delete the tag and the draft.
+4. Tag on `main` with an annotated tag whose message is the changelog
+   entry, push it, and let `release.yml` build every artefact into a
+   **draft** release. The workflow never publishes; publishing is a
+   separate, human decision.
+5. Publish the draft. `CHANGELOG.md`'s compare links and the README's
+   Releases link need no change.
