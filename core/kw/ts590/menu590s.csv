@@ -1,0 +1,242 @@
+# TS-590S EX Command Parameter List -- EX menu inventory.
+#
+# THIS FILE IS THE TS-590S's CHART AND ONLY THE TS-590S's. The same book
+#   prints a SECOND list, "EX Command Parameter List (for TS-590SG)", whose
+#   addresses collide with these and mean different things -- 000 is Display
+#   brightness here and Firmware Version, read only, there. Neither list may
+#   ever be read for the other radio, and this transcription was made without
+#   the SG's list being read at all (see METHOD below).
+#
+# Source: Kenwood TS-590S/TS-590SG PC CONTROL COMMAND Reference Guide,
+#   January/30/2019, document code B5A-0316-20/01, (C) 2019 JVC KENWOOD
+#   Corporation (docs/fixtures-private/manuals/ts590sg_pc_rev3.pdf,
+#   gitignored; SHA-256
+#   619f14667ddfa463c03068399be2f697570a4939c90beed7cf83a28e23a7e9a4;
+#   35 PDF pages, printed folios 1-33; the date is on the cover, the document
+#   code on the back page beside the copyright line, layout line 2699).
+#   The chart is the one headed "EX Command Parameter List (for TS-590S)".
+#
+# METHOD: LAYOUT-TEXT-LED, PDF-CHECKED, and BLIND to every other chart. The
+#   working text was the layout extraction
+#   docs/fixtures-private/manuals/ts590sg_pc_rev3_layout.txt, where this
+#   chart spans lines 564-741 -- the heading at 564, the column header at
+#   566-568, the first row 000 at 569, the last row 087 at 741, with the
+#   header reprinted at 585-587 and 697-699 where the chart crosses a page.
+#   The rendered PDF's ruled cells arbitrated: PDF pages 8, 9 and 10 =
+#   printed folios 7, 8 and 9, rendered at 300 dpi with pdftoppm, and every
+#   row's Function, parameter cells and last populated column was read off
+#   the rendered page as well as off the layout. Rows 000-010 are on folio 7,
+#   011-059 on folio 8, 060-087 on folio 9.
+#   NOT READ, deliberately: the TS-590SG's list, the TS-480's list, any
+#   second transcription of this chart, and any boundary ledger. This is
+#   transcription A of a blind chain; the cross-check task binds the legs
+#   afterwards.
+# Transcribed: 05/09/2026. Values are the manual's own; this file makes no
+#   claim about what any radio does. No TS-590S hardware is available to this
+#   project, so there is no observation CSV and no corrections file.
+#
+# Columns: p1,p2,p3,p1_label,p2_label,name,p4,digits,text,manual_line
+#   p1           the printed Menu (P1) number, decimal 0..87. It is the WHOLE
+#                address -- extable's AddressSingle, core/kw's EXAddress,
+#                whose wire form is the three digits "000".."087" (the EX
+#                frame is "E X P1 P1 P1 P2 P2 P3 P4 ;", layout 552).
+#   p2,p3        0 on EVERY row. The frame's own P2 is "Always 00" and its P3
+#                "Always 0" (layout 546-550), so neither carries any part of
+#                this chart's number; ParseCSV under AddressSingle REFUSES a
+#                non-zero value here rather than dropping it.
+#   p1_label     EMPTY on every row.
+#   p2_label     EMPTY on every row. This chart prints no group labels at all
+#                -- extable's LabelsAbsent. See NO GROUP LABELS below.
+#   name         chart Function column, verbatim (see WHITESPACE below)
+#   p4           the row's Command Parameter (P5) cells, verbatim, left to
+#                right, space-separated (audit trail only -- it is not
+#                emitted into the generated Go).
+#                THE COLUMN-NAME COLLISION, worth reading twice: this
+#                family's EX parameter is P5, not P4. The ten-column CSV
+#                shape is shared with the four Yaesu profiles, so the column
+#                keeps the name p4. The CSV's own p2 column is the ADDRESS's
+#                second component and has nothing to do with the chart.
+#   digits       the width of the widest P5 CODE the row can carry. It is
+#                DERIVED from the chart's column headers, not printed as a
+#                number anywhere -- see DIGITS below.
+#   text         true on menu 087 alone. See THE ONE TEXT ROW below.
+#   manual_line  line in ts590sg_pc_rev3_layout.txt carrying the row's Menu
+#                number
+#
+# DIGITS -- how the width was read, since this chart prints no Digits column.
+#   Unlike a Yaesu MENU chart, this one has no width column. What it prints
+#   is a grid whose column HEADERS are the P5 codes themselves: "0 1 2 3 4 5
+#   6 7 8 9 10 ~" (layout 568, 587, 699). A row's P5 is therefore the header
+#   over its rightmost populated cell, and digits is that header's character
+#   width:
+#     - a row whose cells stop at or before header 9 carries a one-character
+#       code -- digits 1. Seventy-five rows.
+#     - a row that reaches the "10 ~" column carries a two-character code --
+#       digits 2. FOUR rows, and they are the whole reason this radio's
+#       MaxDigits is not 1: 034 (up to 1000, steps of 50), 036 (up to 4.0,
+#       steps of 0.1), 057 (up to 60, steps of 1) and 070 (up to 100, steps
+#       of 5). Each was confirmed twice -- mechanically, by the token offsets
+#       of layout lines 645/647, 649/650, 685/687 and 712/713 against their
+#       page's own "10 ~" header offset, and visually on folios 8 and 9.
+#     - a row whose parameter cell PRINTS its own width takes the printed
+#       one: menus 079-086 share a single merged cell reading "000 ~ 255
+#       (3-digit)" (layout 735) -- digits 3, on eight rows.
+#   A UNIT ANNOTATION IS NOT A CODE. Several Function names end in a
+#   parenthesised unit -- "(Hz)" on 011, 020, 025-028, 034, 046, "(kHz)" on
+#   014-016, "(MHz)" on 010, "(ms)" on 035, "(minutes)" on 078, "(seconds)"
+#   on 057 -- and in the layout extraction some of those sit on their own
+#   continuation line. They belong to the Function column, never to the "10 ~"
+#   cell, and none of them widened a row here. The four rows above reach the
+#   "10 ~" column because a RANGE is printed in it, not a unit.
+#
+# THE ONE TEXT ROW. Menu 087 Power on message prints "Power on Message (up to
+#   8 ASCII characters)" (layout 741) across the whole parameter area: a
+#   free-text field, transcribed text=true, digits=8, which is the profile's
+#   TextWidth and the only value ParseCSV admits for a text row. Every other
+#   row is a selector over printed codes and is text=false, INCLUDING the
+#   eight PF rows, whose "000 ~ 255 (3-digit)" is a fixed-width numeric field
+#   and not free text -- the FT-891's version rows are the precedent
+#   (core/cat/ft891/table2.csv, digits 4 and text false on 18/01/00 MAIN
+#   VERSION and its two siblings). "text" marks the row a transcriber must
+#   STOP at, not any row whose parameter happens to be characters.
+#
+# WHITESPACE. Runs of whitespace are collapsed to a single space in name and
+#   in p4, and a Function or parameter that WRAPS over two or three layout
+#   lines is joined in reading order with one space. Both are forced by the
+#   source: this chart's cells are justified, so the extraction and the
+#   render alike print gaps of arbitrary width inside a cell, and most
+#   Function names here wrap. No other normalisation was applied -- the
+#   chart's own wording, spelling and punctuation are transcribed as found,
+#   American spellings ("color", "equalizer") included.
+#
+# PRINTED QUIRKS RECORDED, NOT RESOLVED
+#   1. INCONSISTENT INTERNAL SPACING IN THE Mic PF ROWS. Menus 082-086 print
+#      "Mic  PF 2 function" .. "Mic  PF (UP) function" with a visibly wider
+#      gap after "Mic" than menu 081's "Mic PF 1 function" -- in the render
+#      as well as in the layout, so it is not a justification artefact of one
+#      of them. Under the whitespace rule above all six Mic rows are
+#      transcribed with one space. The gap carries no information; recording
+#      it here is what keeps the normalisation visible.
+#   2. THE PF ROWS SHARE ONE CELL. Menus 079-086 have no parameter cells of
+#      their own: one merged cell spans all eight rows (layout 735-737), so
+#      all eight carry the same p4 text. The instruction manual it defers to
+#      is not in this repository, and nothing here expands the 000-255 domain
+#      into names.
+#   3. "Side tone/ pitch frequency setting" (034), "Voice/ message playback
+#      repeat" (056) and "Voice/ message playback repeat duration" (057)
+#      print a space AFTER the solidus and none before. Transcribed as
+#      printed.
+#   4. THE CELL CONTENTS ARE NOT THE CODES, and on this chart the difference
+#      is large. Menu 061 COM port communication speed prints "115200" in its
+#      last cell but that cell sits under header 5, so its P5 is "5" and its
+#      digits is 1, not 6; 015 prints "6.25" under header 1; 026 prints
+#      "3000" under header 5. Recorded because a transcriber who measured the
+#      printed VALUES rather than the column HEADERS would widen most of this
+#      chart, and nothing in the chart itself would contradict them.
+#   5. NO GAP AND NO DUPLICATE in the menu numbers: 000..087 inclusive, every
+#      number once, checked mechanically over all 88 rows.
+#
+# NO GROUP LABELS. The chart's columns are "Menu (P1) | Function | Command
+#   Parameter (P5)" and nothing else. The FT-710's and the FTdx10's charts
+#   print a parenthesised group name in their P1 and P2 columns; this one
+#   prints only the three-digit Menu number. Both label columns are therefore
+#   blank on every row and the profile declares LabelsAbsent, under which
+#   ParseCSV REFUSES a non-blank label column: an invented group name would
+#   be words put in a manual's mouth. Nothing downstream may supply one.
+#
+# HEADER-VS-CHART. The EX command's own grammar block states
+#   "000 ~ 087: Menu number (TS-590S)" (layout 543); the chart's first row is
+#   000 and its last is 087, and every number between them is present exactly
+#   once. Grammar block and chart AGREE, and the agreement is recorded
+#   because its absence would be the more interesting fact.
+#
+# Counts: 88 rows, 000..087. Digits 1: 75 rows. Digits 2: 4 (034, 036, 057,
+#   070). Digits 3: 8 (079-086). Digits 8, text: 1 (087).
+0,0,0,,,Display brightness,OFF 1 2 3 4 5 6,1,false,569
+1,0,0,,,Back light color,1 2,1,false,570
+2,0,0,,,Panel key response for double function,1 2 3,1,false,571
+3,0,0,,,Beep volume,OFF 1 2 3 4 5 6 7 8 9,1,false,573
+4,0,0,,,Sidetone volume,OFF 1 2 3 4 5 6 7 8 9,1,false,574
+5,0,0,,,Message playback volume,OFF 1 2 3 4 5 6 7 8 9,1,false,575
+6,0,0,,,Voice guide volume,OFF 1 2 3 4 5 6 7,1,false,576
+7,0,0,,,Voice guide speed,0 1 2 3 4,1,false,577
+8,0,0,,,Voice guide language,EN JP,1,false,578
+9,0,0,,,Auto announcement,OFF ON,1,false,579
+10,0,0,,,MHz step (MHz),0.1 0.5 1,1,false,580
+11,0,0,,,Tuning control adjustment rate (Hz),250 500 1000,1,false,589
+12,0,0,,,MULTI/CH control rounding off process,OFF ON,1,false,592
+13,0,0,,,Dedicated step change inside the BC band (AM),OFF ON,1,false,595
+14,0,0,,,MULTI/CH control step change for SSB/CW/FSK (kHz),0.5 1 2.5 5 10,1,false,598
+15,0,0,,,MULTI/CH control step change for AM (kHz),5 6.25 10 12.5 15 20 25 30 50 100,1,false,601
+16,0,0,,,MULTI/CH control step change for FM (kHz),5 6.25 10 12.5 15 20 25 30 50 100,1,false,604
+17,0,0,,,Maximum number of Quick Memory channels,3 5 10,1,false,607
+18,0,0,,,Temporary variable of the standard memory frequency,OFF ON,1,false,610
+19,0,0,,,Program Scan slow down function,OFF ON,1,false,613
+20,0,0,,,Program Scan slow down frequency range (Hz),100 200 300 400 500,1,false,616
+21,0,0,,,Program Scan hold,OFF ON,1,false,618
+22,0,0,,,Scan Resume method,TO CO,1,false,619
+23,0,0,,,Auto mode change,OFF ON,1,false,620
+24,0,0,,,Following speed setting of AUTO NOTCH,0 1 2 3 4,1,false,622
+25,0,0,,,SSB/AM Low Cut transmit filter (Hz),10 100 200 300 400 500,1,false,625
+26,0,0,,,SSB/AM High Cut transmit filter (Hz),2500 2600 2700 2800 2900 3000,1,false,628
+27,0,0,,,SSB-DATA Low Cut transmit filter (Hz),10 100 200 300 400 500,1,false,631
+28,0,0,,,SSB-DATA High Cut transmit filter (Hz),2500 2600 2700 2800 2900 3000,1,false,634
+29,0,0,,,Effective change of Speech Processor,SOFT HARD,1,false,637
+30,0,0,,,Transmit equalizer,OFF HB1 HB2 FP BB1 BB2 C U,1,false,639
+31,0,0,,,Receive equalizer,OFF HB1 HB2 FP BB1 BB2 FLAT U,1,false,640
+32,0,0,,,Electronic keyer operation mode,A B,1,false,642
+33,0,0,,,Insert keying ON/OFF,OFF ON,1,false,644
+34,0,0,,,Side tone/ pitch frequency setting (Hz),300 350 400 450 500 550 600 650 700 750 up to 1000 (steps of 50),2,false,646
+35,0,0,,,CW clipping (ms),1 2 4 6,1,false,648
+36,0,0,,,Keying weight ratio,AUTO 2.5 2.6 2.7 2.8 2.9 3.0 3.1 3.2 3.3 up to 4.0 (steps of 0.1),2,false,650
+37,0,0,,,Reverse keying auto weight ratio,OFF ON,1,false,652
+38,0,0,,,Bug key function,OFF ON,1,false,654
+39,0,0,,,Paddle dot/dash replacement setting,OFF ON,1,false,656
+40,0,0,,,Mic paddle function,PF PA,1,false,658
+41,0,0,,,Auto CW TX in SSB mode,OFF ON,1,false,659
+42,0,0,,,Frequency correction for changing SSB to CW mode,OFF ON,1,false,661
+43,0,0,,,Break-in null configuration at time of keying speed configuration,OFF ON,1,false,664
+44,0,0,,,FSK shift,170 200 425 850,1,false,666
+45,0,0,,,FSK keying polarity,OFF ON,1,false,667
+46,0,0,,,FSK tone frequency (Hz),1275 2125,1,false,668
+47,0,0,,,Mic gain for FM,1 2 3,1,false,669
+48,0,0,,,Power fine,OFF ON,1,false,670
+49,0,0,,,Time-out Timer,OFF 3 5 10 20 30,1,false,671
+50,0,0,,,Configuring the Transverter function and power down,OFF 1 2,1,false,673
+51,0,0,,,TX hold when AT completes the tuning,OFF ON,1,false,676
+52,0,0,,,AT operation when receiving,OFF ON,1,false,678
+53,0,0,,,HF linear amplifier control,OFF 1 2 3,1,false,679
+54,0,0,,,50 MHz linear amplifier control,OFF 1 2 3,1,false,680
+55,0,0,,,Constant recording,OFF ON,1,false,681
+56,0,0,,,Voice/ message playback repeat,OFF ON,1,false,683
+57,0,0,,,Voice/ message playback repeat duration (seconds),0 1 2 3 4 5 6 7 8 9 up to 60 (steps of 1),2,false,686
+58,0,0,,,Split transfer function,OFF ON,1,false,688
+59,0,0,,,Write split transfer data to the VFO,OFF ON,1,false,690
+60,0,0,,,Transmit inhibit,OFF ON,1,false,700
+61,0,0,,,COM port communication speed,4800 9600 19200 38400 57600 115200,1,false,701
+62,0,0,,,USB port communication speed,4800 9600 19200 38400 57600 115200,1,false,703
+63,0,0,,,DATA modulation line,ACC2 USB,1,false,705
+64,0,0,,,USB audio input level,0 1 2 3 4 5 6 7 8 9,1,false,706
+65,0,0,,,USB audio output level,0 1 2 3 4 5 6 7 8 9,1,false,707
+66,0,0,,,ACC2 terminal AF input level,0 1 2 3 4 5 6 7 8 9,1,false,708
+67,0,0,,,ACC2 terminal AF output level,0 1 2 3 4 5 6 7 8 9,1,false,709
+68,0,0,,,External AF output beep mix,OFF ON,1,false,710
+69,0,0,,,DATA VOX,OFF ON,1,false,711
+70,0,0,,,DATA VOX delay,0 5 10 15 20 25 30 35 40 45 up to 100 (steps of 5),2,false,713
+71,0,0,,,DATA VOX gain for USB audio input,0 1 2 3 4 5 6 7 8 9,1,false,715
+72,0,0,,,DATA VOX gain for ACC2 terminal input,0 1 2 3 4 5 6 7 8 9,1,false,718
+73,0,0,,,PKS polarity change,OFF ON,1,false,720
+74,0,0,,,Busy transmit inhibit,OFF ON,1,false,721
+75,0,0,,,CTCSS mute operation change,1 2,1,false,723
+76,0,0,,,PSQ control signal logic selection,LO OPEN,1,false,726
+77,0,0,,,PSQ control signal output condition,OFF BSY SQL SND BSY-SND SQL-SND,1,false,729
+78,0,0,,,APO function (minutes),OFF 60 120 180,1,false,731
+79,0,0,,,Panel PF A function,"000 ~ 255 (3-digit) Refer to the TS-590S instruction manual for the numbers and functions. (When the function is turned OFF, 255 is used.)",3,false,732
+80,0,0,,,Panel PF B function,"000 ~ 255 (3-digit) Refer to the TS-590S instruction manual for the numbers and functions. (When the function is turned OFF, 255 is used.)",3,false,733
+81,0,0,,,Mic PF 1 function,"000 ~ 255 (3-digit) Refer to the TS-590S instruction manual for the numbers and functions. (When the function is turned OFF, 255 is used.)",3,false,734
+82,0,0,,,Mic PF 2 function,"000 ~ 255 (3-digit) Refer to the TS-590S instruction manual for the numbers and functions. (When the function is turned OFF, 255 is used.)",3,false,735
+83,0,0,,,Mic PF 3 function,"000 ~ 255 (3-digit) Refer to the TS-590S instruction manual for the numbers and functions. (When the function is turned OFF, 255 is used.)",3,false,737
+84,0,0,,,Mic PF 4 function,"000 ~ 255 (3-digit) Refer to the TS-590S instruction manual for the numbers and functions. (When the function is turned OFF, 255 is used.)",3,false,738
+85,0,0,,,Mic PF (DWN) function,"000 ~ 255 (3-digit) Refer to the TS-590S instruction manual for the numbers and functions. (When the function is turned OFF, 255 is used.)",3,false,739
+86,0,0,,,Mic PF (UP) function,"000 ~ 255 (3-digit) Refer to the TS-590S instruction manual for the numbers and functions. (When the function is turned OFF, 255 is used.)",3,false,740
+87,0,0,,,Power on message,Power on Message (up to 8 ASCII characters),8,true,741
