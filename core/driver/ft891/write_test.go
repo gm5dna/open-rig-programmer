@@ -27,8 +27,19 @@ import (
 // Every field is stated: a write of this radio's combined form carries the
 // whole record whether or not a value changed, so a channel with an
 // unstated field would be testing a default rather than a decision.
+//
+// THE SEVENTEEN ICOM-TIER FIELDS ARE tierUnavailable'D, not left at their
+// zero value (C-M1, closing review wave 2): a zero FieldState is
+// codeplug.Absent, which is NOT one of the three states Valid() accepts —
+// fieldStateChecks (write.go) now walks every one of them, so a channel
+// fixture leaving them Absent would report "invalid State" for a field
+// nobody meant to say anything about. tierUnavailable is the SAME
+// production shape read.go's channelData actually produces (plan P12: every
+// FT-891 read sets all seventeen Unavailable), so this fixture stays an
+// honest "otherwise writable" channel rather than one that happens to dodge
+// a check no real FT-891 channel would ever fail.
 func writableChannel() codeplug.Channel {
-	return codeplug.Channel{Slot: "001", Data: &codeplug.ChannelData{
+	d := tierUnavailable(codeplug.ChannelData{
 		FreqHz:     14_250_000,
 		Mode:       "USB",
 		ClarHz:     -150,
@@ -40,7 +51,8 @@ func writableChannel() codeplug.Channel {
 		Tag:        "CALLING",
 		TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: true},
 		ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
-	}}
+	})
+	return codeplug.Channel{Slot: "001", Data: &d}
 }
 
 // writableChannelFrame is the 41-byte combined MT Set writableChannel()
@@ -108,19 +120,22 @@ func TestWriteChannel_OneCombinedMTSetFrame(t *testing.T) {
 			// CTCSS off, MINUS shift, a two-character tag whose 12-byte
 			// wire field is fill-padded, and the TAG display flag OFF.
 			name: "PMS, TAG display OFF",
-			ch: codeplug.Channel{Slot: "P9U", Data: &codeplug.ChannelData{
-				FreqHz:     30_000,
-				Mode:       "AM-N",
-				ClarHz:     9990,
-				RxClar:     false,
-				TxClar:     false,
-				CTCSS:      "OFF",
-				CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
-				Shift:      "MINUS",
-				Tag:        "AB",
-				TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
-				ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
-			}},
+			ch: func() codeplug.Channel {
+				d := tierUnavailable(codeplug.ChannelData{
+					FreqHz:     30_000,
+					Mode:       "AM-N",
+					ClarHz:     9990,
+					RxClar:     false,
+					TxClar:     false,
+					CTCSS:      "OFF",
+					CTCSSTone:  codeplug.ToneField{State: codeplug.Unknown},
+					Shift:      "MINUS",
+					Tag:        "AB",
+					TagDisplay: codeplug.BoolField{State: codeplug.Known, Value: false},
+					ScanSkip:   codeplug.BoolField{State: codeplug.Unknown},
+				})
+				return codeplug.Channel{Slot: "P9U", Data: &d}
+			}(),
 			//   MT|P9U|000030000|+|9990|0|0|D|0|0|00|2|0|AB__________|;
 			frame: "MTP9U000030000+999000D000020AB          ;",
 		},
@@ -256,6 +271,36 @@ func TestWriteChannel_RefusalLadder(t *testing.T) {
 			reason: `invalid State "bogus"`,
 		},
 		{
+			// C-M1 (closing review wave 2, ACCEPT MEDIUM): this rung used to
+			// check only CTCSSTone/ScanSkip/TagDisplay, and TxFreqHz — one
+			// of the seventeen Icom-tier fields — was NOT among them.
+			// codeplug.Validate also does not catch it (it skips every
+			// non-Recorded field outright), and requestedFields is
+			// Known-only, so nothing named TxFreqHz at all: this exact
+			// channel reached buildWriteCommand and went out on the wire
+			// with the malformed value silently DROPPED.
+			//
+			// RED-PROOF (captured against the pre-fix write.go, then
+			// reverted — not re-run as part of this suite): with only the
+			// three-field rung in place, this sub-test's own body — same
+			// channel, same assertions — produced no refusal at all:
+			//
+			//	WriteChannel = {Steps:[{Command:MT Sent:true Confirmed:true}]}, err = <nil>
+			//	frames sent: [MT001014250000-0150102010011CALLING     ;]
+			//
+			// i.e. the 41-byte MT Set went out exactly as writableChannel()
+			// alone would have produced it — TxFreqHz has no place in this
+			// radio's combined frame at all, so the caller's explicit
+			// Known-shaped claim (Unavailable, yet carrying Value 1) was
+			// simply thrown away rather than refused.
+			name: "an incoherent TxFreqHz field is refused, not interpreted (C-M1)",
+			ch: withData(func(d *codeplug.ChannelData) {
+				d.TxFreqHz = codeplug.FreqField{State: codeplug.Unavailable, Value: 1}
+			}),
+			fields: []spec.Field{spec.FieldTxFrequency},
+			reason: "must have zero Value",
+		},
+		{
 			name: "a Known CTCSS tone the record cannot express",
 			ch: withData(func(d *codeplug.ChannelData) {
 				d.CTCSSTone = codeplug.ToneField{State: codeplug.Known, Value: 1000}
@@ -271,12 +316,20 @@ func TestWriteChannel_RefusalLadder(t *testing.T) {
 			reason: "not write-Supported",
 		},
 		{
+			// C-M1: fieldStateChecks passes Duplex.Valid THIS RADIO'S OWN
+			// (empty) DuplexOptions, so a Known value is now caught HERE,
+			// by the FieldState rung's own vocabulary check, rather than
+			// reaching the capability gate further down — an empty vocab
+			// fails closed for every Known value (StringField.Valid's own
+			// doc comment), which on this radio is every Icom-tier
+			// StringField there is. Still the same field named, still a
+			// refusal, still no frame; only WHICH rung catches it moved.
 			name: "a Known Icom-tier field this frame has no room for",
 			ch: withData(func(d *codeplug.ChannelData) {
 				d.Duplex = codeplug.StringField{State: codeplug.Known, Value: "DUP+"}
 			}),
 			fields: []spec.Field{spec.FieldDuplex},
-			reason: "not write-Supported",
+			reason: "not one of this radio's values",
 		},
 		// The seven D8 receiver-tier fields (HIGH-1): before this fix,
 		// tierRequestedFields carried only the ten D4 fields, so a Known
@@ -294,14 +347,22 @@ func TestWriteChannel_RefusalLadder(t *testing.T) {
 			reason: "not write-Supported",
 		},
 		{
+			// C-M1: same move as Duplex's above — TuningSteps is one of
+			// the twelve EMPTY vocab/table caps fields on this radio, so
+			// fieldStateChecks' StringField.Valid catches a Known value
+			// first.
 			name: "a Known TuningStep this frame has no room for",
 			ch: withData(func(d *codeplug.ChannelData) {
 				d.TuningStep = codeplug.StringField{State: codeplug.Known, Value: "5"}
 			}),
 			fields: []spec.Field{spec.FieldTuningStep},
-			reason: "not write-Supported",
+			reason: "not one of this radio's values",
 		},
 		{
+			// ProgramTuningStepHz is a FreqField: Valid() takes no
+			// vocab/table at all, so it stays coherence-only and this row
+			// is unaffected by C-M1 — still caught by the capability gate
+			// further down, as before.
 			name: "a Known ProgramTuningStep this frame has no room for",
 			ch: withData(func(d *codeplug.ChannelData) {
 				d.ProgramTuningStepHz = codeplug.FreqField{State: codeplug.Known, Value: 5000}
@@ -310,28 +371,34 @@ func TestWriteChannel_RefusalLadder(t *testing.T) {
 			reason: "not write-Supported",
 		},
 		{
+			// C-M1: AttenuatorDB is one of the twelve EMPTY caps fields
+			// (s.caps.AttenuatorDB is nil on this radio), so
+			// fieldStateChecks' IntField.Valid catches a Known value
+			// first, the same move as Duplex's above.
 			name: "a Known Attenuator this frame has no room for",
 			ch: withData(func(d *codeplug.ChannelData) {
 				d.AttenuatorDB = codeplug.IntField{State: codeplug.Known, Value: 20}
 			}),
 			fields: []spec.Field{spec.FieldAttenuator},
-			reason: "not write-Supported",
+			reason: "not one of this radio's values",
 		},
 		{
+			// C-M1: same move as Duplex's above.
 			name: "a Known Preamp this frame has no room for",
 			ch: withData(func(d *codeplug.ChannelData) {
 				d.Preamp = codeplug.StringField{State: codeplug.Known, Value: "1"}
 			}),
 			fields: []spec.Field{spec.FieldPreamp},
-			reason: "not write-Supported",
+			reason: "not one of this radio's values",
 		},
 		{
+			// C-M1: same move as Duplex's above.
 			name: "a Known Antenna this frame has no room for",
 			ch: withData(func(d *codeplug.ChannelData) {
 				d.Antenna = codeplug.StringField{State: codeplug.Known, Value: "ANT1"}
 			}),
 			fields: []spec.Field{spec.FieldAntenna},
-			reason: "not write-Supported",
+			reason: "not one of this radio's values",
 		},
 		{
 			name: "a Known IPPlus this frame has no room for",
@@ -833,6 +900,52 @@ func TestRequestedFields_MembershipAndOrder(t *testing.T) {
 			t.Errorf("tierRequestedFields names\n %v\nbut spec.AllFields() carries the tier-added\n %v\n(the two must be the same seventeen fields in the same order)", gotTier, wantTier)
 		}
 	})
+}
+
+// TestFieldStateChecks_CoversExactlyTheFieldStateFields is C-M1's own pin
+// (closing review wave 2), the same fallback shape as
+// TestRequestedFields_MembershipAndOrder's "the seventeen are exactly
+// spec.AllFields()'s tier-added tail" subtest above: codeplug exports no
+// enumeration of "every field that carries a FieldState" bound to
+// ChannelData, so this derives the TWENTY independently from
+// spec.AllFields() (minus the seven plain fields ChannelData carries with
+// no FieldState at all) and requires EXACT membership and order against
+// fieldStateChecks' own list. A spec.Field this table forgets to mirror —
+// or that AllFields gains and this table does not — fails HERE rather than
+// silently letting a future field's malformed value reach the wire
+// unchecked, which is exactly the shape of gap C-M1 found.
+func TestFieldStateChecks_CoversExactlyTheFieldStateFields(t *testing.T) {
+	// The seven ChannelData carries with NO FieldState at all: FreqHz,
+	// Mode, ClarHz, CTCSS and Shift are plain uint64/string/int, Tag is a
+	// plain string, and FieldErase has no ChannelData field whatsoever (an
+	// empty channel IS the erase request — channel.go's Empty).
+	plain := map[spec.Field]bool{
+		spec.FieldFrequency:  true,
+		spec.FieldMode:       true,
+		spec.FieldClarifier:  true,
+		spec.FieldCTCSSState: true,
+		spec.FieldShift:      true,
+		spec.FieldTag:        true,
+		spec.FieldErase:      true,
+	}
+	var want []spec.Field
+	for _, f := range spec.AllFields() {
+		if !plain[f] {
+			want = append(want, f)
+		}
+	}
+	if len(want) != 20 {
+		t.Fatalf("spec.AllFields() minus the seven plain fields has %d entries, want 20 — this test's own derivation is wrong, not fieldStateChecks", len(want))
+	}
+
+	checks := fieldStateChecks(CapabilitiesSimulated(), *writableChannel().Data)
+	got := make([]spec.Field, len(checks))
+	for i, c := range checks {
+		got[i] = c.field
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("fieldStateChecks names\n %v\nbut spec.AllFields() minus the seven plain fields is\n %v\n(the two must be exactly the same twenty fields, in the same order)", got, want)
+	}
 }
 
 // TestMTSetSpec_IsFireAndForgetAndNeverRetries pins the transport spec the
