@@ -104,14 +104,24 @@ func (m *MenuSnapshot) Clone() *MenuSnapshot {
 // "five digits" case pins.
 //
 // WHAT ADMITTING THREE COSTS, named rather than left for a later reader to
-// discover: it re-opens that same failure mode one width down. A (P1,P2)
-// Pair address truncated from four digits to three now validates, where
-// before it did not. This milestone judges the cost acceptable because a
-// Kenwood setting ID is never DERIVED from a Yaesu one — the inventories
-// come from different generated files, different internal/extable profiles
-// and different radios — so no real path produces a truncated Pair address
-// that this widened validator would then accept. Three exact widths, not a
-// range, is what keeps five refused.
+// discover: it re-opens that same failure mode one width down, and it does
+// so twice. A (P1,P2) Pair address truncated from four digits to three now
+// validates, and so does a (P1,P2,P3) Triple address truncated to three —
+// the very form the paragraph above names as what the rule was written to
+// catch. Neither validated before.
+//
+// The mitigation is partial, and is recorded as partial. A Kenwood setting
+// ID is never DERIVED from a Yaesu one — the inventories come from
+// different generated files, different internal/extable profiles and
+// different radios — so no CROSS-FAMILY path produces a truncated address
+// that this widened validator would then accept. That argument does not
+// reach the within-family case: a driver that renders one of its own
+// radio's addresses into the wrong width, three digits where it meant six,
+// is a formatting bug inside a single inventory, and this widening stops
+// the validator catching it. What the rule still reaches after this change
+// is narrow in any case — five-digit and seven-or-more-digit shapes — and
+// a six-to-four truncation already passed before this milestone. Three
+// exact widths, not a range, is what keeps five refused.
 func isSettingIDWidth(id string) bool {
 	if len(id) != 3 && len(id) != 4 && len(id) != 6 {
 		return false
