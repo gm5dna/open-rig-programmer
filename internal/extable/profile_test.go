@@ -511,7 +511,10 @@ func TestFTdx101Profile_MatchesTodaysConstants(t *testing.T) {
 // ordering the CLI's -profile listing and every registry-selected staleness
 // test see. ASCII puts "ft891" second, between the FT-710 and the FTdx10,
 // which is not the order the models were added in — pinning it by value is
-// how that stops being a surprise.
+// how that stops being a surprise. The three Kenwood names sort after all
+// four Yaesu ones only because "t" follows "f"; that is an accident of the
+// lookup names, not a family grouping the registry knows about, so it too is
+// pinned by value here rather than assumed.
 //
 // (Named for two models until M9d-1; the FTdx101D/MP made "both" wrong.)
 func TestRegistry_HoldsEveryModel(t *testing.T) {
@@ -520,7 +523,7 @@ func TestRegistry_HoldsEveryModel(t *testing.T) {
 	for _, np := range got {
 		names = append(names, np.Name)
 	}
-	want := []string{"ft710", "ft891", "ftdx10", "ftdx101"}
+	want := []string{"ft710", "ft891", "ftdx10", "ftdx101", "ts480", "ts590s", "ts590sg"}
 	if len(names) != len(want) {
 		t.Fatalf("RegisteredProfiles() names = %v, want %v", names, want)
 	}
@@ -529,7 +532,7 @@ func TestRegistry_HoldsEveryModel(t *testing.T) {
 			t.Fatalf("RegisteredProfiles() names = %v, want %v", names, want)
 		}
 	}
-	wantModels := []string{"FT-710", "FT-891", "FTdx10", "FTdx101D/MP"}
+	wantModels := []string{"FT-710", "FT-891", "FTdx10", "FTdx101D/MP", "TS-480", "TS-590S", "TS-590SG"}
 	for i := range wantModels {
 		if got[i].Profile.Model != wantModels[i] {
 			t.Errorf("models[%d] = %q, want %q", i, got[i].Profile.Model, wantModels[i])
