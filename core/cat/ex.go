@@ -4,34 +4,43 @@ package cat
 
 import "fmt"
 
-// exReadLen is the fixed length of an EX read request: "EX" + 6-digit
-// address + ";". Reference: the EX grammar block's Read frame ("E X P1 P1
-// P2 P2 P3 P3 ;", manual extract line ~629), 9 bytes.
-const exReadLen = 9
-
-// exAnswerMinLen is the smallest EX Answer frame any dialect can send:
-// "EX"(2) + address(6) + P4(1) + ";"(1). Reference: the EX grammar block's
-// Answer frame ("E X P1 P1 P2 P2 P3 P3 P4 ~ P4 ;", manual extract line
-// ~629). One byte is the narrowest P4 a menu item can have — the FT-710's
-// narrowest Table 2 Digits value, e.g. CAT-1 RATE — and a dialect whose
-// own narrowest item is wider is not made unsafe by the slack: the P4 body
-// is returned verbatim and no width policy is enforced here (see
-// Dialect.ParseEXAnswer).
+// exReadLen is the length of an EX read request for THIS DIALECT:
+// "EX"(2) + address(d.EXAddressWidth()) + ";"(1). Reference: the EX
+// grammar block's Read frame — "E X P1 P1 P2 P2 P3 P3 ;" (FT-710 manual
+// extract line ~629) is 9 bytes; a four-digit family's is 7.
 //
-// The UPPER bound is per-dialect and lives on the receiver, not here:
-// Dialect.exAnswerMaxLen, over Dialect.exP4MaxBytes (dialect.go).
-const exAnswerMinLen = 2 + 6 + 1 + 1
+// It was a package const of 9 until the FT-891 Stage 0 seam, consulted
+// THROUGH a Dialect receiver by validEXRead — the exact shape this package
+// keeps eliminating: a bound taken from one radio and applied to every
+// other. TestEveryDialect_FrameLengthsFollowTheAddressWidth holds all three
+// lengths here to the width they derive from.
+func (d Dialect) exReadLen() int { return 2 + d.EXAddressWidth() + 1 }
+
+// exAnswerMinLen is the smallest EX Answer frame THIS DIALECT can send:
+// "EX"(2) + address(d.EXAddressWidth()) + P4(1) + ";"(1). Reference: the EX
+// grammar block's Answer frame ("E X P1 P1 P2 P2 P3 P3 P4 ~ P4 ;", manual
+// extract line ~629). One byte is the narrowest P4 a menu item can have —
+// the FT-710's narrowest Table 2 Digits value, e.g. CAT-1 RATE — and a
+// dialect whose own narrowest item is wider is not made unsafe by the
+// slack: the P4 body is returned verbatim and no width policy is enforced
+// here (see Dialect.ParseEXAnswer).
+//
+// The UPPER bound is also per-dialect: Dialect.exAnswerMaxLen, over
+// Dialect.exP4MaxBytes (dialect.go).
+func (d Dialect) exAnswerMinLen() int { return 2 + d.EXAddressWidth() + 1 + 1 }
 
 // exAnswerMaxLen is the largest EX Answer frame THIS DIALECT can send:
-// "EX"(2) + address(6) + P4(d.exP4MaxBytes()) + ";"(1). The P4 term is
-// derived from this dialect's own inventory, so a radio whose menu carries
-// a field wider than the FT-710's widest is bounded by its own data.
+// "EX"(2) + address(d.EXAddressWidth()) + P4(d.exP4MaxBytes()) + ";"(1).
+// Both variable terms are derived from this dialect's own data, so a radio
+// whose address field is narrower or whose menu carries a field wider than
+// the FT-710's is bounded by itself.
 func (d Dialect) exAnswerMaxLen() int {
-	return 2 + 6 + d.exP4MaxBytes() + 1
+	return 2 + d.EXAddressWidth() + d.exP4MaxBytes() + 1
 }
 
-// BuildEXRead builds the 9-byte EX read frame for addr. Reference: the EX
-// grammar block's Read frame (manual extract line ~629). The only
+// BuildEXRead builds this dialect's EX read frame for addr — 9 bytes under
+// EXAddressTriple, 7 under EXAddressPair. Reference: the EX grammar
+// block's Read frame (manual extract line ~629). The only
 // validation is membership of THIS DIALECT'S inventory
 // (d.KnownEXAddress) — never a numeric range check on P1/P2/P3, mirroring
 // Dialect.NewEXAddress/Dialect.ParseEXAddress in exinventory.go. This rejects both the zero value and the P1==05
@@ -40,21 +49,37 @@ func (d Dialect) exAnswerMaxLen() int {
 // has no P1==05 group, so no (05,*,*) triple is ever a member. M8c put two
 // such addresses to a real radio and both were rejected with "?;", which
 // supports that reading without surveying the whole P1=05 space.
+//
+// THE NON-MEMBER REFUSAL REPORTS THE WIRE RENDER under EXAddressTriple, so
+// that core/cat/testdata/frame-corpus.golden line 357 — which pins this
+// refusal's input bytes verbatim ("000000") — stays byte-identical, per
+// the milestone's standing claim that no existing golden moves through
+// Stage 0. Under EXAddressPair the wire render drops P3 (EXWire renders
+// only P1 and P2 for that form), so a Pair non-member refusal reports the
+// debug String() form instead — the only rendering that names all three
+// components. TestBuildEXRead_UsesThisDialectsWidth pins both sides: the
+// Triple refusal's reported input unchanged, the Pair refusal's naming all
+// three components.
 func (d Dialect) BuildEXRead(addr EXAddress) (Command, error) {
+	wire := d.EXWire(addr)
 	if !d.KnownEXAddress(addr) {
-		return Command{}, newParseError([]byte(addr.Wire()), "EX: address is not a known Table 2 member")
+		reported := wire
+		if d.exAddrForm == EXAddressPair {
+			reported = addr.String()
+		}
+		return Command{}, newParseError([]byte(reported), "EX: address is not a known Table 2 member")
 	}
-	frame := make([]byte, 0, exReadLen)
+	frame := make([]byte, 0, d.exReadLen())
 	frame = append(frame, 'E', 'X')
-	frame = append(frame, addr.Wire()...)
+	frame = append(frame, wire...)
 	frame = append(frame, ';')
 	return newCommand(frame), nil
 }
 
-// ParseEXAnswer parses an EX Answer frame ("EX" + 6-digit address + a raw
-// P4 body of 1 to d.exP4MaxBytes() bytes + ";", reference: the EX grammar
-// block's Answer frame, manual extract line ~629) and returns the address
-// and the raw P4 body.
+// ParseEXAnswer parses an EX Answer frame ("EX" + this dialect's address
+// field, six digits or four + a raw P4 body of 1 to d.exP4MaxBytes() bytes
+// + ";", reference: the EX grammar block's Answer frame, manual extract
+// line ~629) and returns the address and the raw P4 body.
 //
 // THE LENGTH BOUND IS THIS DIALECT'S OWN, derived from its inventory's
 // widest Digits (dialect.go's maxEXP4Bytes). It was a package const until
@@ -64,8 +89,9 @@ func (d Dialect) BuildEXRead(addr EXAddress) (Command, error) {
 // For the FT-710 the derived bound is the same 12, so nothing about this
 // parser's FT-710 behaviour changed.
 //
-// SHAPE (total length bounds, "EX" prefix, ';' terminator, six ASCII
-// digits in the address field) and MEMBERSHIP of the address in THIS
+// SHAPE (total length bounds, "EX" prefix, ';' terminator, exactly
+// d.EXAddressWidth() ASCII digits in the address field) and MEMBERSHIP of
+// the address in THIS
 // DIALECT'S inventory are both strictly enforced, via d.ParseEXAddress
 // applied to the address
 // field — mirroring ParseMCAnswer's precedent of applying mcValid to the
@@ -93,9 +119,18 @@ func (d Dialect) BuildEXRead(addr EXAddress) (Command, error) {
 // and any Set-direction width policy needs M8f evidence — none of the
 // above is evidence about what the radio ACCEPTS.
 func (d Dialect) ParseEXAnswer(frame []byte) (EXAddress, string, error) {
-	maxLen := d.exAnswerMaxLen()
-	if len(frame) < exAnswerMinLen || len(frame) > maxLen {
-		return EXAddress{}, "", newParseError(frame, fmt.Sprintf("EX answer must be %d-%d bytes", exAnswerMinLen, maxLen))
+	// The form check comes FIRST, before the length window, so that a
+	// dialect with no declared form is refused for the reason that is true
+	// of it — it has no address field — rather than by a length window that
+	// a zero width has collapsed. Only the zero Dialect reaches it: V12
+	// refuses a formless config.
+	width := d.EXAddressWidth()
+	if width == 0 {
+		return EXAddress{}, "", newParseError(frame, "EX answer: this dialect declares no EXAddressForm, so it has no address field")
+	}
+	minLen, maxLen := d.exAnswerMinLen(), d.exAnswerMaxLen()
+	if len(frame) < minLen || len(frame) > maxLen {
+		return EXAddress{}, "", newParseError(frame, fmt.Sprintf("EX answer must be %d-%d bytes", minLen, maxLen))
 	}
 	if frame[0] != 'E' || frame[1] != 'X' {
 		return EXAddress{}, "", newParseError(frame, "EX answer missing \"EX\" prefix")
@@ -103,10 +138,10 @@ func (d Dialect) ParseEXAnswer(frame []byte) (EXAddress, string, error) {
 	if frame[len(frame)-1] != ';' {
 		return EXAddress{}, "", newParseError(frame, "EX answer missing ';' terminator")
 	}
-	addr, err := d.ParseEXAddress(string(frame[2:8]))
+	addr, err := d.ParseEXAddress(string(frame[2 : 2+width]))
 	if err != nil {
 		return EXAddress{}, "", newParseError(frame, "EX answer: invalid or unknown address field")
 	}
-	raw := string(frame[8 : len(frame)-1])
+	raw := string(frame[2+width : len(frame)-1])
 	return addr, raw, nil
 }

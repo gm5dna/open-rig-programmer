@@ -51,7 +51,7 @@ var (
 func exItemByAddr(t *testing.T, dialect cat.Dialect, wire string) cat.EXItem {
 	t.Helper()
 	for _, it := range dialect.EXItems() {
-		if it.Addr.Wire() == wire {
+		if modelD.dialect.EXWire(it.Addr) == wire {
 			return it
 		}
 	}
@@ -189,16 +189,16 @@ func TestSettingsDescriptor_ShapeFromTheInventory(t *testing.T) {
 		} else if menuLabel[menuID] != it.P1Label {
 			// The linear pass takes the FIRST row's label for a menu. That is
 			// only lossless while every row of a P1 agrees about it.
-			t.Errorf("inventory row %s carries P1Label %q but menu %q was opened with %q — the descriptor's menu label would depend on row order", it.Addr.Wire(), it.P1Label, menuID, menuLabel[menuID])
+			t.Errorf("inventory row %s carries P1Label %q but menu %q was opened with %q — the descriptor's menu label would depend on row order", modelD.dialect.EXWire(it.Addr), it.P1Label, menuID, menuLabel[menuID])
 		}
 		if _, seen := groupLabel[groupID]; !seen {
 			groupLabel[groupID] = it.P2Label
 			menuGroupIDs[menuID] = append(menuGroupIDs[menuID], groupID)
 		} else if groupLabel[groupID] != it.P2Label {
-			t.Errorf("inventory row %s carries P2Label %q but group %q was opened with %q — the descriptor's group label would depend on row order", it.Addr.Wire(), it.P2Label, groupID, groupLabel[groupID])
+			t.Errorf("inventory row %s carries P2Label %q but group %q was opened with %q — the descriptor's group label would depend on row order", modelD.dialect.EXWire(it.Addr), it.P2Label, groupID, groupLabel[groupID])
 		}
 		groupItems[groupID] = append(groupItems[groupID], driver.SettingItem{
-			ID:      it.Addr.Wire(),
+			ID:      modelD.dialect.EXWire(it.Addr),
 			Label:   it.Name,
 			Display: fmt.Sprintf("%02d-%02d-%02d", it.Addr.P1, it.Addr.P2, it.Addr.P3),
 		})
@@ -373,8 +373,8 @@ func TestSettingsDescriptor_TheOneTextItem(t *testing.T) {
 		t.Fatalf("the inventory carries %d Text items, want exactly 1 (%v)", len(text), text)
 	}
 	got := text[0]
-	if got.Addr.Wire() != textSettingAddr {
-		t.Errorf("the Text item is at %q, want %q", got.Addr.Wire(), textSettingAddr)
+	if modelD.dialect.EXWire(got.Addr) != textSettingAddr {
+		t.Errorf("the Text item is at %q, want %q", modelD.dialect.EXWire(got.Addr), textSettingAddr)
 	}
 	if got.Digits != 12 {
 		t.Errorf("the Text item declares Digits %d, want 12 (\"Up to 12 characters\")", got.Digits)
@@ -570,9 +570,9 @@ func TestExSpec_FullAddressPrefixAndVariableLength(t *testing.T) {
 	a := exItemByAddr(t, modelD.dialect, numericSettingAddr).Addr
 	b := exItemByAddr(t, modelD.dialect, textSettingAddr).Addr
 
-	specA := exSpec(a)
+	specA := exSpec(modelD.dialect, a)
 	if specA.Class != transport.ClassRead {
-		t.Errorf("exSpec(%s).Class = %v, want transport.ClassRead", a.Wire(), specA.Class)
+		t.Errorf("exSpec(%s).Class = %v, want transport.ClassRead", modelD.dialect.EXWire(a), specA.Class)
 	}
 	if specA.RetryReads != 1 {
 		t.Errorf("exSpec.RetryReads = %d, want 1 (an EX read is idempotent)", specA.RetryReads)
@@ -584,19 +584,19 @@ func TestExSpec_FullAddressPrefixAndVariableLength(t *testing.T) {
 	// they pinned is the one that matters and is stronger stated this way
 	// — a's spec accepts a's own answer and REFUSES b's, which is exactly
 	// the wrong-address correlation a bare "EX" prefix would permit.
-	ownAnswer := "EX" + a.Wire() + "1;"
-	othersAnswer := "EX" + b.Wire() + "1;"
+	ownAnswer := "EX" + modelD.dialect.EXWire(a) + "1;"
+	othersAnswer := "EX" + modelD.dialect.EXWire(b) + "1;"
 	if !specA.Match([]byte(ownAnswer)) {
-		t.Errorf("exSpec(%s).Match(%q) = false, want true — that is this address's own answer", a.Wire(), ownAnswer)
+		t.Errorf("exSpec(%s).Match(%q) = false, want true — that is this address's own answer", modelD.dialect.EXWire(a), ownAnswer)
 	}
 	if specA.Match([]byte(othersAnswer)) {
-		t.Errorf("exSpec(%s).Match(%q) = true, want false — a shared prefix is exactly what lets one address's answer be correlated as another's", a.Wire(), othersAnswer)
+		t.Errorf("exSpec(%s).Match(%q) = true, want false — a shared prefix is exactly what lets one address's answer be correlated as another's", modelD.dialect.EXWire(a), othersAnswer)
 	}
 	// Variable length: two answers of different widths, both this
 	// address's, both matched.
-	wide := "EX" + a.Wire() + "123456789012;"
+	wide := "EX" + modelD.dialect.EXWire(a) + "123456789012;"
 	if !specA.Match([]byte(wide)) {
-		t.Errorf("exSpec(%s).Match(%q) = false, want true — the length must stay variable: this inventory's P4 widths run 1..12 bytes", a.Wire(), wide)
+		t.Errorf("exSpec(%s).Match(%q) = false, want true — the length must stay variable: this inventory's P4 widths run 1..12 bytes", modelD.dialect.EXWire(a), wide)
 	}
 
 	// The width claim the variable length exists for, taken from the
@@ -826,17 +826,17 @@ func TestParseEXResponse_Table(t *testing.T) {
 			}{
 				{
 					name:  "a well-formed answer for the requested address",
-					frame: "EX" + requested.Wire() + "1234;",
-					want:  driver.SettingValue{ID: requested.Wire(), Raw: "1234", State: driver.SettingKnown},
+					frame: "EX" + modelD.dialect.EXWire(requested) + "1234;",
+					want:  driver.SettingValue{ID: modelD.dialect.EXWire(requested), Raw: "1234", State: driver.SettingKnown},
 				},
 				{
 					name:  "the rejection frame",
 					frame: "?;",
-					want:  driver.SettingValue{ID: requested.Wire(), State: driver.SettingUnavailable},
+					want:  driver.SettingValue{ID: modelD.dialect.EXWire(requested), State: driver.SettingUnavailable},
 				},
 				{
 					name:         "a well-formed answer for a DIFFERENT known address",
-					frame:        "EX" + other.Wire() + "5;",
+					frame:        "EX" + modelD.dialect.EXWire(other) + "5;",
 					wantErr:      true,
 					wantMismatch: true,
 				},
@@ -862,8 +862,8 @@ func TestParseEXResponse_Table(t *testing.T) {
 							if !errors.As(err, &mismatch) {
 								t.Fatalf("error %v (%T), want *SettingAnswerMismatchError", err, err)
 							}
-							if mismatch.Requested != requested.Wire() || mismatch.Answered != other.Wire() {
-								t.Errorf("mismatch = %+v, want Requested=%q Answered=%q", mismatch, requested.Wire(), other.Wire())
+							if mismatch.Requested != modelD.dialect.EXWire(requested) || mismatch.Answered != modelD.dialect.EXWire(other) {
+								t.Errorf("mismatch = %+v, want Requested=%q Answered=%q", mismatch, modelD.dialect.EXWire(requested), modelD.dialect.EXWire(other))
 							}
 							// It must NOT be mistakable for the slot-worded
 							// error this package already has: two different

@@ -72,7 +72,7 @@ type Capabilities struct {
 	// CTCSSToneRange is the ALTERNATIVE to CTCSSTones for a radio whose
 	// tone field is a NUMBER rather than an index into a chart — every
 	// CI-V model in the Icom tier. Nil for a radio that declares a list
-	// (all four Yaesu models); a radio declares one or the other, never
+	// (all five Yaesu models); a radio declares one or the other, never
 	// both, and Validate refuses both.
 	//
 	// A POINTER, so presence is the declaration — see ToneRange. Ask

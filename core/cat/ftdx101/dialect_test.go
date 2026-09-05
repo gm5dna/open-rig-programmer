@@ -751,7 +751,7 @@ func TestEXAnswerBound(t *testing.T) {
 			if len(body) != maxDigits {
 				t.Fatalf("the test's P4 body is %d bytes, want %d", len(body), maxDigits)
 			}
-			frame := []byte("EX" + addr.Wire() + body + ";")
+			frame := []byte("EX" + d.EXWire(addr) + body + ";")
 			gotAddr, gotBody, err := d.ParseEXAnswer(frame)
 			if err != nil {
 				t.Errorf("ParseEXAnswer(%q) = %v — a %d-byte P4 is this dialect's own widest item, so its parser must read one", frame, err, maxDigits)
@@ -764,9 +764,209 @@ func TestEXAnswerBound(t *testing.T) {
 				}
 			}
 
-			over := []byte("EX" + addr.Wire() + body + "X" + ";")
+			over := []byte("EX" + d.EXWire(addr) + body + "X" + ";")
 			if _, _, err := d.ParseEXAnswer(over); err == nil {
 				t.Errorf("ParseEXAnswer(%q) ACCEPTED a %d-byte P4, one past this dialect's widest inventory item — the bound is not deriving from this inventory", over, maxDigits+1)
+			}
+		})
+	}
+}
+
+// --- FT-891 Stage 0 (S0.2): the MC send domain ---
+
+// TestMCSelects_MatchesTheMCLegend pins the cat.MCSelectsAll both models
+// declare against the legend it is transcribed from.
+//
+// This manual's MC block prints all four slot classes — "001-099 (Memory
+// Channel), P1L -P9U (PMS), 5xx (5MHz BAND), EMG (EMERGENCY CH)" (rev
+// 2308-L, layout 1225-1227) — so an MC Set may select every one of them on
+// this radio. The FT-891's MC block prints memory and PMS only, which is the
+// disagreement the cat.MCSlotPolicy axis exists to carry; without this pin
+// the declaration in dialect.go would be a comment claiming more than any
+// test holds.
+func TestMCSelects_MatchesTheMCLegend(t *testing.T) {
+	for _, m := range bothModels() {
+		t.Run(m.name, func(t *testing.T) {
+			d := m.d
+
+			sixty, err := d.SixtyMSlot(1)
+			if err != nil {
+				t.Fatalf("SixtyMSlot(1): %v", err)
+			}
+			emg := d.EMGSlot()
+			if emg.Wire() == "" {
+				t.Fatal("EMGSlot() is empty — this manual's MC legend names EMG (EMERGENCY CH)")
+			}
+			mem, err := d.MemorySlot(1)
+			if err != nil {
+				t.Fatalf("MemorySlot(1): %v", err)
+			}
+			pms, err := d.PMSSlot(1, false)
+			if err != nil {
+				t.Fatalf("PMSSlot(1, false): %v", err)
+			}
+
+			for _, s := range []cat.Slot{mem, pms, sixty, emg} {
+				cmd, err := d.BuildMCSet(s)
+				if err != nil {
+					t.Errorf("BuildMCSet(%q) = %v — every one of the four classes this manual's MC legend prints must build", s.Wire(), err)
+					continue
+				}
+				if !d.AllowedCommand(cmd.Bytes()) {
+					t.Errorf("its own gate refused BuildMCSet(%q)'s frame %q", s.Wire(), cmd.Bytes())
+				}
+			}
+		})
+	}
+}
+
+// --- FT-891 Stage 0 (S0.3): the MT read domain ---
+
+// TestMTReadSlots_MatchesTheMTLegend pins the cat.MTReadsReadable both
+// models declare against the legend it is transcribed from.
+//
+// This manual's MT block prints the same four slot classes its MR block does
+// (rev 2308-L, layout 1312), so an MT read may name every slot this
+// dialect can read — which is what cat.Dialect.readableSlot has always
+// admitted here. The FT-891's MT legend prints memory and PMS only, and the
+// axis exists to carry that disagreement.
+func TestMTReadSlots_MatchesTheMTLegend(t *testing.T) {
+	for _, m := range bothModels() {
+		t.Run(m.name, func(t *testing.T) {
+			d := m.d
+
+			sixty, err := d.SixtyMSlot(1)
+			if err != nil {
+				t.Fatalf("SixtyMSlot(1): %v", err)
+			}
+			emg := d.EMGSlot()
+			if emg.Wire() == "" {
+				t.Fatal("EMGSlot() is empty — this manual's MT legend names EMG (EMERGENCY CH)")
+			}
+			mem, err := d.MemorySlot(1)
+			if err != nil {
+				t.Fatalf("MemorySlot(1): %v", err)
+			}
+			pms, err := d.PMSSlot(1, false)
+			if err != nil {
+				t.Fatalf("PMSSlot(1, false): %v", err)
+			}
+
+			for _, s := range []cat.Slot{mem, pms, sixty, emg} {
+				cmd, err := d.BuildMTRead(s)
+				if err != nil {
+					t.Errorf("BuildMTRead(%q) = %v — every one of the four classes this manual's MT legend prints must build", s.Wire(), err)
+					continue
+				}
+				if !d.AllowedCommand(cmd.Bytes()) {
+					t.Errorf("its own gate refused BuildMTRead(%q)'s frame %q", s.Wire(), cmd.Bytes())
+				}
+			}
+		})
+	}
+}
+
+// --- FT-891 Stage 0 (S0.4): byte 21 of the shared memory block ---
+
+// TestMemoryP5_MatchesTheP5Legend pins the cat.P5TxClar both models declare
+// against the legend it is transcribed from.
+//
+// This manual prints P5 "0: TX CLAR \"OFF\" 1: TX CLAR \"ON\"" FOUR times,
+// and this radio's own printings are what is cited: IF (rev 2308-L, layout
+// 1088), MR (layout 1285), MT (layout 1320) and MW (layout 1360) — so byte
+// 21 carries this radio's TX clarifier flag and both of its values are
+// writable. The FT-891 prints "0: (Fixed)" on every one of those blocks,
+// which is the disagreement the cat.MemoryP5Policy axis carries.
+func TestMemoryP5_MatchesTheP5Legend(t *testing.T) {
+	for _, m := range bothModels() {
+		t.Run(m.name, func(t *testing.T) {
+			d := m.d
+
+			if got := d.MemoryP5(); got != cat.P5TxClar {
+				t.Fatalf("MemoryP5() = %v, want P5TxClar", got)
+			}
+
+			slot, err := d.MemorySlot(7)
+			if err != nil {
+				t.Fatalf("MemorySlot(7): %v", err)
+			}
+			for _, tx := range []bool{false, true} {
+				rec := cat.MemoryData{
+					Slot: slot, FreqHz: 14_250_000, TxClar: tx,
+					Mode: cat.ModeUSB, Kind: d.MWWriteKind(),
+					CTCSS: cat.CTCSSOff, Shift: cat.ShiftSimplex,
+				}
+				cmd, err := d.BuildMWSet(rec)
+				if err != nil {
+					t.Errorf("BuildMWSet with TxClar %v = %v — this manual prints P5 as the TX clarifier flag, so both values must be writable", tx, err)
+					continue
+				}
+				want := byte('0')
+				if tx {
+					want = '1'
+				}
+				// Position 21, 1-indexed as the manual's table numbers it.
+				if got := cmd.Bytes()[20]; got != want {
+					t.Errorf("BuildMWSet with TxClar %v emitted %q, whose position 21 is %q, want %q", tx, cmd.Bytes(), got, want)
+				}
+				if !d.AllowedCommand(cmd.Bytes()) {
+					t.Errorf("its own gate refused %q", cmd.Bytes())
+				}
+			}
+		})
+	}
+}
+
+// --- FT-891 Stage 0 (S0.6): byte 28 of the combined MT record ---
+
+// TestMTP11_MatchesTheP11Legend pins the cat.P11Fixed both models declare
+// against the legend it is transcribed from.
+//
+// This manual's MT block prints "P11 0: (Fixed)" (rev 2308-L, layout 1329),
+// so byte 28 of the combined record is schema and carries no state: the
+// display-less builder and parser are this radio's pair, and the
+// display-bearing ones must refuse it. The FT-891 prints `P11 0: TAG "OFF"
+// 1: TAG "ON"` there, which is the disagreement the cat.MTP11Policy axis
+// carries.
+func TestMTP11_MatchesTheP11Legend(t *testing.T) {
+	for _, mo := range bothModels() {
+		t.Run(mo.name, func(t *testing.T) {
+			d := mo.d
+
+			if got := d.MTP11(); got != cat.P11Fixed {
+				t.Fatalf("MTP11() = %v, want P11Fixed", got)
+			}
+
+			slot, err := d.MemorySlot(7)
+			if err != nil {
+				t.Fatalf("MemorySlot(7): %v", err)
+			}
+			m := cat.MemoryData{
+				Slot: slot, FreqHz: 14_250_000,
+				Mode: cat.ModeUSB, Kind: cat.CombinedMTSetKind,
+				CTCSS: cat.CTCSSOff, Shift: cat.ShiftSimplex,
+			}
+
+			cmd, err := d.BuildMTSetCombined(m, "CQ")
+			if err != nil {
+				t.Fatalf("BuildMTSetCombined = %v — under P11Fixed this is the radio's own builder", err)
+			}
+			// Position 28, 1-indexed as the manual's table numbers it.
+			if got := cmd.Bytes()[27]; got != '0' {
+				t.Errorf("BuildMTSetCombined emitted %q, whose position 28 is %q, want '0' — the legend prints it \"(Fixed)\"", cmd.Bytes(), got)
+			}
+			if !d.AllowedCommand(cmd.Bytes()) {
+				t.Errorf("its own gate refused %q", cmd.Bytes())
+			}
+			if _, _, err := d.ParseMTAnswerCombined(cmd.Bytes()); err != nil {
+				t.Errorf("ParseMTAnswerCombined(%q) = %v", cmd.Bytes(), err)
+			}
+
+			if got, err := d.BuildMTSetCombinedDisplay(m, "CQ", true); err == nil {
+				t.Errorf("BuildMTSetCombinedDisplay succeeded, emitting %q — this manual prints byte 28 \"(Fixed)\"", got.Bytes())
+			}
+			if _, _, _, err := d.ParseMTAnswerCombinedDisplay(cmd.Bytes()); err == nil {
+				t.Error("ParseMTAnswerCombinedDisplay accepted a frame whose byte 28 this manual prints \"(Fixed)\" — reporting schema as state")
 			}
 		})
 	}

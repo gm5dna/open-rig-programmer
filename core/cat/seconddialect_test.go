@@ -15,8 +15,9 @@ type namedDialect struct {
 }
 
 // allTestDialects is every CONFIGURED dialect this package can see: the
-// real one plus the five fictions in this file — three SHORT-form and two
-// COMBINED-form. Tests asserting a property that must hold of ANY dialect
+// real one plus the six fictions in this file — four SHORT-form and two
+// COMBINED-form, one of the four (pairDialect) declaring the FOUR-DIGIT EX
+// address form. Tests asserting a property that must hold of ANY dialect
 // walk this, so adding a dialect later cannot quietly skip them.
 //
 // The zero Dialect is deliberately absent: it is unconfigured by design
@@ -50,6 +51,16 @@ func allTestDialects() []namedDialect {
 		{"peerDialect", peerDialect},
 		{"combinedDialect", combinedDialect},
 		{"combinedPeerDialect", combinedPeerDialect},
+		{"pairDialect", pairDialect},
+
+		// The FT-891 Stage 0 axes' disagreeing fixtures, appended: see the
+		// block at the end of this file for what each one varies and why a
+		// fixture that agreed with the registered dialects would prove
+		// nothing about the axis it names.
+		{"mcMemoryPMSDialect", mcMemoryPMSDialect},
+		{"mtReadMemoryPMSDialect", mtReadMemoryPMSDialect},
+		{"p5FixedDialect", p5FixedDialect},
+		{"combinedTagDisplayDialect", combinedTagDisplayDialect},
 	}
 }
 
@@ -74,11 +85,14 @@ var testDialect = mustFixtureDialect(DialectConfig{
 		PMSPairs:      2,  // FT-710: 9
 		EmergencyWire: "", // no emergency channel
 		NoneWire:      "000",
+		MCSelects:     MCSelectsAll,
 	},
-	EXItems:     nil,
-	MT:          MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
-	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-	MWWriteKind: KindMemory,
+	EXItems:       nil,
+	EXAddressForm: EXAddressTriple,
+	MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:      P5TxClar,
+	MWWriteKind:   KindMemory,
 })
 
 // noneWireDialect exists for ONE attribute: slotSpace.noneWire, the only
@@ -104,11 +118,14 @@ var noneWireDialect = mustFixtureDialect(DialectConfig{
 		PMSPairs:      0,
 		EmergencyWire: "",
 		NoneWire:      "900", // FT-710: "000"
+		MCSelects:     MCSelectsAll,
 	},
-	EXItems:     nil,
-	MT:          MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
-	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-	MWWriteKind: KindMemory,
+	EXItems:       nil,
+	EXAddressForm: EXAddressTriple,
+	MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:      P5TxClar,
+	MWWriteKind:   KindMemory,
 })
 
 // peerDialect is the dialect that makes this file's proof complete, and it
@@ -160,11 +177,14 @@ var peerDialect = mustFixtureDialect(DialectConfig{
 		PMSPairs:      4,     // FT-710: 9
 		EmergencyWire: "XYZ", // FT-710: "EMG", present but different
 		NoneWire:      "777", // FT-710: "000"
+		MCSelects:     MCSelectsAll,
 	},
-	EXItems:     peerEXItems,
-	MT:          MTPolicy{Form: MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
-	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-	MWWriteKind: KindMemory,
+	EXItems:       peerEXItems,
+	EXAddressForm: EXAddressTriple,
+	MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:      P5TxClar,
+	MWWriteKind:   KindMemory,
 })
 
 // ft710P4MaxBytes is the FT-710's own widest P4 answer field: 12, the
@@ -352,7 +372,7 @@ func TestSecondDialect_EXMembershipIsHonoured(t *testing.T) {
 		t.Fatal("FT710 has no EX addresses")
 	}
 	if testDialect.KnownEXAddress(ft710Addrs[0]) {
-		t.Errorf("testDialect claims to know EX address %s — its inventory is empty, so this is reading a global", ft710Addrs[0].Wire())
+		t.Errorf("testDialect claims to know EX address %s — its inventory is empty, so this is reading a global", FT710.EXWire(ft710Addrs[0]))
 	}
 	if _, err := testDialect.BuildEXRead(ft710Addrs[0]); err == nil {
 		t.Error("testDialect built an EX read for an address it does not have")
@@ -379,18 +399,18 @@ func TestSecondDialect_EXLookupsHonourTheirReceiver(t *testing.T) {
 	}
 
 	// ParseEXAddress: the wire form, which routes through NewEXAddress.
-	if _, err := FT710.ParseEXAddress(a.Wire()); err != nil {
-		t.Errorf("FT710.ParseEXAddress(%q) failed for its own member: %v", a.Wire(), err)
+	if _, err := FT710.ParseEXAddress(FT710.EXWire(a)); err != nil {
+		t.Errorf("FT710.ParseEXAddress(%q) failed for its own member: %v", FT710.EXWire(a), err)
 	}
-	if _, err := testDialect.ParseEXAddress(a.Wire()); err == nil {
-		t.Errorf("testDialect.ParseEXAddress(%q) succeeded for an address it does not have", a.Wire())
+	if _, err := testDialect.ParseEXAddress(FT710.EXWire(a)); err == nil {
+		t.Errorf("testDialect.ParseEXAddress(%q) succeeded for an address it does not have", FT710.EXWire(a))
 	}
 
 	// ParseEXAnswer: a frame-level entry point into the same membership
 	// rule. This is the read direction's equivalent of the allowlist case
 	// below — a hardwired membership check inside a PARSER is invisible to
 	// every builder-side assertion.
-	answer := []byte("EX" + a.Wire() + "0;")
+	answer := []byte("EX" + FT710.EXWire(a) + "0;")
 	if _, _, err := FT710.ParseEXAnswer(answer); err != nil {
 		t.Errorf("FT710.ParseEXAnswer(%q) failed for its own member: %v", answer, err)
 	}
@@ -802,22 +822,22 @@ func TestPeerDialect_EXInventoryIsItsOwn(t *testing.T) {
 	own := peerEXItems[0].Addr
 
 	if FT710.KnownEXAddress(own) {
-		t.Fatalf("premise broken: FT710 claims to know %s", own.Wire())
+		t.Fatalf("premise broken: FT710 claims to know %s", peerDialect.EXWire(own))
 	}
 	if !peerDialect.KnownEXAddress(own) {
-		t.Errorf("peerDialect does not know %s, its OWN inventory member — KnownEXAddress is reading a global index", own.Wire())
+		t.Errorf("peerDialect does not know %s, its OWN inventory member — KnownEXAddress is reading a global index", peerDialect.EXWire(own))
 	}
 	if _, err := peerDialect.NewEXAddress(9, 1, 1); err != nil {
 		t.Errorf("peerDialect.NewEXAddress(9,1,1) failed for its own member: %v", err)
 	}
-	if _, err := peerDialect.ParseEXAddress(own.Wire()); err != nil {
-		t.Errorf("peerDialect.ParseEXAddress(%q) failed for its own member: %v", own.Wire(), err)
+	if _, err := peerDialect.ParseEXAddress(peerDialect.EXWire(own)); err != nil {
+		t.Errorf("peerDialect.ParseEXAddress(%q) failed for its own member: %v", peerDialect.EXWire(own), err)
 	}
 	if _, err := peerDialect.BuildEXRead(own); err != nil {
-		t.Errorf("peerDialect.BuildEXRead failed for its own member %s: %v", own.Wire(), err)
+		t.Errorf("peerDialect.BuildEXRead failed for its own member %s: %v", peerDialect.EXWire(own), err)
 	}
-	if _, _, err := peerDialect.ParseEXAnswer([]byte("EX" + own.Wire() + "123;")); err != nil {
-		t.Errorf("peerDialect.ParseEXAnswer failed for its own member %s: %v", own.Wire(), err)
+	if _, _, err := peerDialect.ParseEXAnswer([]byte("EX" + peerDialect.EXWire(own) + "123;")); err != nil {
+		t.Errorf("peerDialect.ParseEXAnswer failed for its own member %s: %v", peerDialect.EXWire(own), err)
 	}
 	// The P4 body above is 3 bytes, INSIDE the FT-710's 12: this assertion
 	// proves membership, and is blind to the answer-length bound. That is
@@ -867,7 +887,7 @@ func TestPeerDialect_EXInventoryIsItsOwn(t *testing.T) {
 	}
 	for i, it := range peerEXItems {
 		if addrs[i] != it.Addr {
-			t.Errorf("peerDialect.EXAddresses()[%d] = %s, want %s — the length comes from this dialect and the content from a package global", i, addrs[i].Wire(), it.Addr.Wire())
+			t.Errorf("peerDialect.EXAddresses()[%d] = %s, want %s — the length comes from this dialect and the content from a package global", i, peerDialect.EXWire(addrs[i]), peerDialect.EXWire(it.Addr))
 		}
 	}
 
@@ -876,13 +896,13 @@ func TestPeerDialect_EXInventoryIsItsOwn(t *testing.T) {
 	// meaningful if peerEXItems is ever extended.
 	for _, a := range addrs {
 		if FT710.KnownEXAddress(a) {
-			t.Errorf("peerDialect.EXAddresses() reported %s, which is a member of the FT-710's inventory — this is a global leaking through", a.Wire())
+			t.Errorf("peerDialect.EXAddresses() reported %s, which is a member of the FT-710's inventory — this is a global leaking through", peerDialect.EXWire(a))
 		}
 	}
 
 	// And the FT-710 must refuse peerDialect's address.
-	if _, err := FT710.ParseEXAddress(own.Wire()); err == nil {
-		t.Errorf("FT710.ParseEXAddress(%q) succeeded for an address it does not have", own.Wire())
+	if _, err := FT710.ParseEXAddress(peerDialect.EXWire(own)); err == nil {
+		t.Errorf("FT710.ParseEXAddress(%q) succeeded for an address it does not have", peerDialect.EXWire(own))
 	}
 }
 
@@ -930,13 +950,13 @@ func TestPeerDialect_EXAnswerLengthBoundIsItsOwn(t *testing.T) {
 	}
 
 	// THE PEER, at its maximum and one byte past it.
-	atMax := "EX" + wide.Addr.Wire() + strings.Repeat("W", wide.Digits) + ";"
+	atMax := "EX" + peerDialect.EXWire(wide.Addr) + strings.Repeat("W", wide.Digits) + ";"
 	if _, raw, err := peerDialect.ParseEXAnswer([]byte(atMax)); err != nil {
 		t.Errorf("peerDialect.ParseEXAnswer(%q) REJECTED its own valid answer at its own maximum width of %d — the length bound is the FT-710's, not this dialect's: %v", atMax, wide.Digits, err)
 	} else if len(raw) != wide.Digits {
 		t.Errorf("peerDialect.ParseEXAnswer(%q) returned a %d-byte P4, want %d", atMax, len(raw), wide.Digits)
 	}
-	overMax := "EX" + wide.Addr.Wire() + strings.Repeat("W", wide.Digits+1) + ";"
+	overMax := "EX" + peerDialect.EXWire(wide.Addr) + strings.Repeat("W", wide.Digits+1) + ";"
 	if _, raw, err := peerDialect.ParseEXAnswer([]byte(overMax)); err == nil {
 		t.Errorf("peerDialect.ParseEXAnswer(%q) ACCEPTED a %d-byte P4, one past its own maximum, returning %q — the bound is not being enforced at all", overMax, wide.Digits+1, raw)
 	}
@@ -954,19 +974,19 @@ func TestPeerDialect_EXAnswerLengthBoundIsItsOwn(t *testing.T) {
 	if !found {
 		t.Fatalf("fixture broken: no FT-710 inventory item has Digits == %d, so there is no address at which to test its own maximum", ft710P4MaxBytes)
 	}
-	ft710AtMax := "EX" + ownTwelve.Wire() + strings.Repeat("0", ft710P4MaxBytes) + ";"
+	ft710AtMax := "EX" + FT710.EXWire(ownTwelve) + strings.Repeat("0", ft710P4MaxBytes) + ";"
 	if _, raw, err := FT710.ParseEXAnswer([]byte(ft710AtMax)); err != nil {
 		t.Errorf("FT710.ParseEXAnswer(%q) rejected a %d-byte P4 at its own %d-digit item — the FT-710's bound has NARROWED: %v", ft710AtMax, ft710P4MaxBytes, ft710P4MaxBytes, err)
 	} else if len(raw) != ft710P4MaxBytes {
 		t.Errorf("FT710.ParseEXAnswer(%q) returned a %d-byte P4, want %d", ft710AtMax, len(raw), ft710P4MaxBytes)
 	}
-	ft710OverMax := "EX" + ownTwelve.Wire() + strings.Repeat("0", ft710P4MaxBytes+1) + ";"
+	ft710OverMax := "EX" + FT710.EXWire(ownTwelve) + strings.Repeat("0", ft710P4MaxBytes+1) + ";"
 	if _, raw, err := FT710.ParseEXAnswer([]byte(ft710OverMax)); err == nil {
 		t.Errorf("FT710.ParseEXAnswer(%q) ACCEPTED a %d-byte P4 at its own address, returning %q — the FT-710's bound has WIDENED, most likely to the widest inventory in the process rather than to its own", ft710OverMax, ft710P4MaxBytes+1, raw)
 	}
 	// And at the peer's width specifically, which is the value a
 	// process-wide maximum would have taken.
-	ft710AtPeerWidth := "EX" + ownTwelve.Wire() + strings.Repeat("0", wide.Digits) + ";"
+	ft710AtPeerWidth := "EX" + FT710.EXWire(ownTwelve) + strings.Repeat("0", wide.Digits) + ";"
 	if _, raw, err := FT710.ParseEXAnswer([]byte(ft710AtPeerWidth)); err == nil {
 		t.Errorf("FT710.ParseEXAnswer(%q) ACCEPTED a %d-byte P4 — the peer dialect's width, at an FT-710 address — returning %q: the bound is shared across dialects", ft710AtPeerWidth, wide.Digits, raw)
 	}
@@ -986,8 +1006,8 @@ func TestPeerDialect_EXAnswerLengthBoundIsItsOwn(t *testing.T) {
 func TestEveryDialect_EXAnswerBoundIsWellOrdered(t *testing.T) {
 	dialects := append(allTestDialects(), namedDialect{"zero", Dialect{}})
 	for _, d := range dialects {
-		if got := d.dia.exAnswerMaxLen(); got < exAnswerMinLen {
-			t.Errorf("%s: exAnswerMaxLen() = %d, below exAnswerMinLen (%d) — the answer-length range is inverted, so this dialect rejects every EX answer on length before membership is ever consulted", d.name, got, exAnswerMinLen)
+		if got := d.dia.exAnswerMaxLen(); got < d.dia.exAnswerMinLen() {
+			t.Errorf("%s: exAnswerMaxLen() = %d, below exAnswerMinLen (%d) — the answer-length range is inverted, so this dialect rejects every EX answer on length before membership is ever consulted", d.name, got, d.dia.exAnswerMinLen())
 		}
 	}
 
@@ -995,9 +1015,9 @@ func TestEveryDialect_EXAnswerBoundIsWellOrdered(t *testing.T) {
 	// right reason: it is a member of nothing. The frame is exactly
 	// exAnswerMinLen bytes, so the length check cannot be what refuses it.
 	ft710Addr := FT710.EXAddresses()[0]
-	minimal := []byte("EX" + ft710Addr.Wire() + "0;")
-	if len(minimal) != exAnswerMinLen {
-		t.Fatalf("fixture broken: %q is %d bytes, want exAnswerMinLen (%d)", minimal, len(minimal), exAnswerMinLen)
+	minimal := []byte("EX" + FT710.EXWire(ft710Addr) + "0;")
+	if len(minimal) != FT710.exAnswerMinLen() {
+		t.Fatalf("fixture broken: %q is %d bytes, want exAnswerMinLen (%d)", minimal, len(minimal), FT710.exAnswerMinLen())
 	}
 	for _, d := range []namedDialect{{"testDialect", testDialect}, {"noneWireDialect", noneWireDialect}, {"zero", Dialect{}}} {
 		if _, _, err := d.dia.ParseEXAnswer(minimal); err == nil {
@@ -1523,11 +1543,14 @@ var combinedDialect = mustFixtureDialect(DialectConfig{
 		PMSPairs:      9,
 		EmergencyWire: "EMG",
 		NoneWire:      "000",
+		MCSelects:     MCSelectsAll,
 	},
-	EXItems:     combinedEXItems,
-	MT:          MTPolicy{Form: MTFormCombined, TagMaxBytes: 6, TagFill: ' '},
-	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-	MWWriteKind: KindMemory,
+	EXItems:       combinedEXItems,
+	EXAddressForm: EXAddressTriple,
+	MT:            MTPolicy{Form: MTFormCombined, P11: P11Fixed, ReadSlots: MTReadsReadable, TagMaxBytes: 6, TagFill: ' '},
+	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:      P5TxClar,
+	MWWriteKind:   KindMemory,
 })
 
 // combinedEXItems is combinedDialect's own small inventory. Its P1 group is
@@ -1572,9 +1595,203 @@ var combinedPeerDialect = mustFixtureDialect(DialectConfig{
 		PMSPairs:      4,     // FT-710: 9
 		EmergencyWire: "XYZ", // FT-710: "EMG"
 		NoneWire:      "777", // FT-710: "000"
+		MCSelects:     MCSelectsAll,
 	},
-	EXItems:     peerEXItems,
-	MT:          MTPolicy{Form: MTFormCombined, TagMaxBytes: 12, TagFill: '_'},
+	EXItems:       peerEXItems,
+	EXAddressForm: EXAddressTriple,
+	MT:            MTPolicy{Form: MTFormCombined, P11: P11Fixed, ReadSlots: MTReadsReadable, TagMaxBytes: 12, TagFill: '_'},
+	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:      P5TxClar,
+	MWWriteKind:   KindMemTune,
+})
+
+// pairEXItems is the four-digit form's inventory: two items in a P1=08
+// group the FT-710 does not have, BOTH with P3 == 0.
+//
+// P3 == 0 is not decoration — it is what V12 requires of every member of a
+// EXAddressPair dialect, because a four-digit field renders P1 and P2 only
+// and a non-zero P3 would be dropped from every frame silently. The
+// disagreeing fixture in exaddressform_test.go asserts the refusal.
+//
+// The second item's Digits is 5, which is WIDER than the FT-710's numeric
+// maximum of 4: the FT-891's own chart carries two five-digit rows, and a
+// fixture that stayed inside 1..4 would let a P4 bound taken from the
+// FT-710 pass unnoticed here exactly as peerEXItems' 16-byte item exists to
+// prevent for the answer bound.
+var pairEXItems = []EXItem{
+	{Addr: EXAddress{P1: 8, P2: 1, P3: 0}, P1Label: "PAIR SETTING", P2Label: "PAIR GROUP", Name: "PAIR ITEM ONE", Digits: 2},
+	{Addr: EXAddress{P1: 8, P2: 3, P3: 0}, P1Label: "PAIR SETTING", P2Label: "PAIR GROUP", Name: "PAIR ITEM TWO", Digits: 5},
+}
+
+// pairDialect is the fixture that makes the EX address WIDTH a variable
+// rather than a constant, and it is in allTestDialects() so that every
+// gate, conformance and round-trip property in this package runs over a
+// four-digit dialect as well as a six-digit one.
+//
+// Its EX read frame is SEVEN bytes ("EX" + 4 + ";"), against the FT-710's
+// nine. Before EXAddressForm existed every one of those lengths was the
+// package constant exReadLen = 9, consulted through a Dialect receiver —
+// the seam shape this file exists to catch — so a fixture that merely had a
+// different INVENTORY could never see it. This one can: a length hardwired
+// to 9 refuses this dialect's own builder's output at its own gate, which
+// TestEveryDialect_BuiltFramesAreCleanAndGateAdmissible reports.
+//
+// Everything else is deliberately unremarkable (short MT form, a small
+// memory range, no 60m bank, no emergency channel) so that a failure here
+// points at the address width and not at some second difference.
+var pairDialect = mustFixtureDialect(DialectConfig{
+	CATID: "6666",
+	ModeNames: map[Mode]string{
+		ModeLSB: "LSB-PAIR",
+		ModeUSB: "USB-PAIR",
+	},
+	Slots: SlotSpace{
+		MemoryLo: 1, MemoryHi: 20,
+		SixtyLo: 0, SixtyHi: 0,
+		PMSPairs:      2,
+		EmergencyWire: "",
+		NoneWire:      "000",
+		MCSelects:     MCSelectsAll, // unremarkable, as the doc comment says: the address width is this fixture's one variable
+	},
+	EXItems:       pairEXItems,
+	EXAddressForm: EXAddressPair, // the FT-891's four-digit field (EXAddressPair's doc comment, dialectconfig.go, has the naming caveat)
+	MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:      P5TxClar,
+	MWWriteKind:   KindMemory,
+})
+
+// --- FT-891 Stage 0: one fixture per new dialect axis ---
+//
+// Each of the four axes added in Stage 0 (S0.2 MCSelects, S0.3
+// MTPolicy.ReadSlots, S0.4 MemoryP5, S0.6 MTPolicy.P11) declares TODAY'S
+// behaviour by name on every dialect above, so a fixture that only ever saw
+// those entries would exercise one value of each and prove nothing. These
+// four are the DISAGREEING side, and they are appended to allTestDialects()
+// so that every property this package states over "any dialect" is stated
+// over the narrow reading as well as the wide one.
+//
+// They vary ONE axis each, against an otherwise FT-710-shaped slot space
+// (memory 1-99, PMS 1-9, a 60m bank and an EMG channel) — because the whole
+// point of each is a slot class or a byte that the narrow reading refuses
+// and the wide one admits, and a fixture lacking that class would have
+// nothing to refuse.
+
+// mcMemoryPMSDialect declares MCSelectsMemoryPMS: its MC Set may name a
+// memory or PMS slot and nothing else, while its MR/MT reads keep the full
+// readable space. That is the FT-891's printed shape (S0.2) and no
+// registered dialect's.
+var mcMemoryPMSDialect = mustFixtureDialect(DialectConfig{
+	CATID:     "4444",
+	ModeNames: map[Mode]string{ModeUnset: "-", ModeUSB: "USB-MC", ModeLSB: "LSB-MC"},
+	Slots: SlotSpace{
+		MemoryLo: 1, MemoryHi: 99,
+		SixtyLo: 501, SixtyHi: 599,
+		PMSPairs:      9,
+		EmergencyWire: "EMG",
+		NoneWire:      "000",
+		MCSelects:     MCSelectsMemoryPMS, // THE AXIS UNDER TEST
+	},
+	EXItems:       nil,
+	EXAddressForm: EXAddressTriple, // the wide reading: this fixture varies ONE axis, and it is not the address form
+	MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:      P5TxClar,
+	MWWriteKind:   KindMemory,
+})
+
+// mtReadMemoryPMSDialect declares MTReadsMemoryPMS: its MT READ may name a
+// memory or PMS slot and nothing else, while its MR read keeps the whole
+// readable slot space. That is the FT-891's printed shape (S0.3) — its MT
+// legend prints `001 - 099 / P1L - P9U` where its MR legend prints the 5xx
+// and EMG banks too — and no registered dialect's.
+//
+// Its MCSelects is MCSelectsAll, so the ONE axis this fixture varies is the
+// MT read domain: a refusal seen here cannot be the MC policy's.
+var mtReadMemoryPMSDialect = mustFixtureDialect(DialectConfig{
+	CATID:     "3333",
+	ModeNames: map[Mode]string{ModeUnset: "-", ModeUSB: "USB-MTR", ModeLSB: "LSB-MTR"},
+	Slots: SlotSpace{
+		MemoryLo: 1, MemoryHi: 99,
+		SixtyLo: 501, SixtyHi: 599,
+		PMSPairs:      9,
+		EmergencyWire: "EMG",
+		NoneWire:      "000",
+		MCSelects:     MCSelectsAll,
+	},
+	EXItems:       nil,
+	EXAddressForm: EXAddressTriple, // the wide reading: this fixture varies ONE axis, and it is not the address form
+	MT: MTPolicy{
+		Form:        MTFormShort,
+		ReadSlots:   MTReadsMemoryPMS, // THE AXIS UNDER TEST
+		TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' ',
+	},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-	MWWriteKind: KindMemTune,
+	MemoryP5:    P5TxClar,
+	MWWriteKind: KindMemory,
+})
+
+// p5FixedDialect declares MemoryP5: P5Fixed — byte 21 of the shared memory
+// block is schema, not the TX clarifier flag. That is the FT-891's printed
+// shape (S0.4): "0: (Fixed)" on its MR, MT, MW and IF blocks alike, where
+// every registered dialect prints `0: TX CLAR "OFF" 1: TX CLAR "ON"`.
+//
+// Its MC and MT-read domains are the wide ones, so the ONE axis this fixture
+// varies is P5: a refusal seen here cannot be another policy's.
+var p5FixedDialect = mustFixtureDialect(DialectConfig{
+	CATID:     "2222",
+	ModeNames: map[Mode]string{ModeUnset: "-", ModeUSB: "USB-P5", ModeLSB: "LSB-P5"},
+	Slots: SlotSpace{
+		MemoryLo: 1, MemoryHi: 99,
+		SixtyLo: 501, SixtyHi: 599,
+		PMSPairs:      9,
+		EmergencyWire: "EMG",
+		NoneWire:      "000",
+		MCSelects:     MCSelectsAll,
+	},
+	EXItems:       nil,
+	EXAddressForm: EXAddressTriple, // the wide reading: this fixture varies ONE axis, and it is not the address form
+	MT: MTPolicy{
+		Form: MTFormShort, ReadSlots: MTReadsReadable,
+		TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' ',
+	},
+	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:    P5Fixed, // THE AXIS UNDER TEST
+	MWWriteKind: KindMemory,
+})
+
+// combinedTagDisplayDialect declares MTP11Policy P11TagDisplay: byte 28 of
+// its combined record is a live TAG ON/OFF flag rather than the printed
+// "0: (Fixed)" every registered combined-form sibling carries. That is the
+// FT-891's printed shape (S0.6).
+//
+// Its geometry deliberately disagrees with BOTH existing combined fixtures —
+// a 9-byte tag field filled with '.', against combinedDialect's 6/' ' and
+// combinedPeerDialect's 12/'_' — so a length or fill byte hardwired to
+// either of theirs is refused here as well.
+//
+// Its MC, MT-read and P5 policies are all the wide readings, so the ONE axis
+// this fixture varies is P11.
+var combinedTagDisplayDialect = mustFixtureDialect(DialectConfig{
+	CATID:     "0999",
+	ModeNames: map[Mode]string{ModeUnset: "-", ModeUSB: "USB-P11", ModeLSB: "LSB-P11"},
+	Slots: SlotSpace{
+		MemoryLo: 1, MemoryHi: 99,
+		SixtyLo: 501, SixtyHi: 599,
+		PMSPairs:      9,
+		EmergencyWire: "EMG",
+		NoneWire:      "000",
+		MCSelects:     MCSelectsAll,
+	},
+	EXItems:       nil,
+	EXAddressForm: EXAddressTriple, // the wide reading: this fixture varies ONE axis, and it is not the address form
+	MT: MTPolicy{
+		Form: MTFormCombined, ReadSlots: MTReadsReadable,
+		P11:         P11TagDisplay, // THE AXIS UNDER TEST
+		TagMaxBytes: 9,
+		TagFill:     '.',
+	},
+	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:    P5TxClar,
+	MWWriteKind: KindMemory,
 })

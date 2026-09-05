@@ -38,14 +38,17 @@ func fictionalRadioConfig() cat.DialectConfig {
 			PMSPairs:      9,
 			EmergencyWire: "",
 			NoneWire:      "000",
+			MCSelects:     cat.MCSelectsAll,
 		},
 		EXItems: []cat.EXItem{
 			{Addr: cat.EXAddress{P1: 1, P2: 1, P3: 1}, P1Label: "RADIO", P2Label: "GROUP", Name: "ITEM", Digits: 3},
 			{Addr: cat.EXAddress{P1: 1, P2: 1, P3: 2}, P1Label: "RADIO", P2Label: "GROUP", Name: "TEXT ITEM", Digits: 16, Text: true},
 		},
-		MT:          cat.MTPolicy{Form: cat.MTFormShort, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
-		Clarifier:   cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
-		MWWriteKind: cat.KindMemory,
+		EXAddressForm: cat.EXAddressTriple,
+		MT:            cat.MTPolicy{Form: cat.MTFormShort, ReadSlots: cat.MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
+		Clarifier:     cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+		MemoryP5:      cat.P5TxClar,
+		MWWriteKind:   cat.KindMemory,
 	}
 }
 

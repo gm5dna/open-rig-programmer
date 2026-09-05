@@ -31,8 +31,8 @@
   for each release; the rest of the file describes the product as it
   stands.
 
-  SYNC 05/09/2026 (v1.2.3): the app-icon bullet (Tier 0 P3, merged to main
-  before the sweep) added to the section below.
+  SYNC 05/09/2026 (v1.2.3): the app-icon bullet (Tier 0 P3) was added to
+  v1.2.3's section on main before that tag; v1.2.4's section replaces it.
 
   SYNC 04/09/2026 (v1.2.3): the "What changed in this version" section
   rewritten for the parked-decisions sweep — the Absent-field send-gate
@@ -107,61 +107,90 @@
   the table, so the "Yaesu and Icom models" phrasing in the opening
   paragraph now reads "models" rather than "transceivers", and the
   bounded-walk footnote covers three models rather than two.
+
+  SYNC 05/09/2026 (v1.2.4), TIER 1: SIXTEEN registered models — the
+  fifteen above plus the FT-891, whose protocol facts come from Yaesu's
+  CAT Operation Reference Manual revision 1909-C. It is the FIRST YAESU
+  MODEL ADDED SINCE v1.0.0, so several counts that had been stable
+  through the whole Icom tier move with it: every "fourteen
+  manual-derived models" count became FIFTEEN, the opening paragraph's
+  "fourteen further ... thirteen transceivers and one receiver" became
+  "fifteen further ... fourteen transceivers and one receiver", and the
+  menu-settings bullet's per-model address counts gained a fourth
+  figure (FT-891: 159). The "What changed in this version" section is
+  rewritten for the registration; the erase bullet's "four Yaesu
+  models" became five. The "ten Icom drivers expose no settings
+  surface" count was also corrected to eleven — it had been stale since
+  the additions tier, and leaving it wrong while its neighbours moved
+  would have been worse than fixing it here.
+
+  TASK 8 GATE: the "every one of their stored comparison baselines is
+  byte for byte identical" sentence a few paragraphs below is task 8's
+  finding, not task 7's — it must be REMOVED or reworded if the
+  byte-identity run at the release tip moves anything beyond the seven
+  model-list artefacts (bare.stderr, help.stdout, nosuchcmd.stderr,
+  nomodel.stderr, consent-badmodel.stderr, consent-empty.stdout,
+  consent-seeded.stdout).
 -->
 
 Open Rig Programmer __VERSION__ — an open-source, cross-platform
 memory-channel programmer for the Yaesu FT-710, built as a free
-alternative to RT Systems' YPS-FT710, with fourteen further Yaesu and
-Icom models — thirteen transceivers and one receiver — registered for
+alternative to RT Systems' YPS-FT710, with fifteen further Yaesu and
+Icom models — fourteen transceivers and one receiver — registered for
 reading and for opt-in writes (see below).
 
 ## What changed in this version
 
-- **An unanswered field can no longer slip past the send gate by being
-  saved and reloaded.** On the Icom models a memory channel carries fields
-  the Yaesu frame does not have — duplex, offset, tone mode, filter and the
-  like — and a channel that says nothing about one of them (a channel built
-  by hand, or imported from a spreadsheet) is refused until you answer it.
-  Before this release, saving such a codeplug and opening it again quietly
-  turned "nothing said" into "not available on this radio", which the gate
-  accepts. A saved file now keeps the distinction, so the same refusal
-  greets the channel after a reload as before it. The same fix applies to
-  CSV export and import. To answer the field, paste a value into the cell
-  (or type one into the CSV column) or leave the cell empty in the CSV,
-  which records it as "unknown, keep whatever the radio has". Codeplug files
-  written before this release are unaffected: every file this program wrote
-  for the radio it names still loads and re-saves byte for byte. A hand-edited sparse file —
-  one that omitted a field's state — gains an explicit empty state key on
-  its first save and keeps the schema its remaining fields need: a file
-  omitting only one of the ten Icom-tier states re-saves at schema 4; one
-  omitting a receiver state re-saves at schema 5.
-- **IC-7610, IC-7760 and IC-7851: a frequency the radio's record cannot hold
-  is refused when it is read, not later.** A record whose decoded frequency
-  lies beyond what that model's memory record can hold (and, on the
-  IC-7851, outside its declared receive range) is reported as out of
-  domain at the read, with the measured value and the limit, instead of
-  arriving in the grid as a value the send gate would then refuse without
-  saying why.
-- **IC-R8600: the probe note now says how much of the memory the bounded
-  walk covers**, in the same terms the write refusal already used: nothing
-  on this build's command line or in its window widens it, and a channel
-  stored outside the walk is simply not listed, so its absence from the
-  grid is not evidence that the receiver's channel is empty.
+- **The Yaesu FT-891 is now supported**, for reading and for opt-in
+  writes, on the same terms as every other manual-derived model here: its
+  99 memories and 9 PMS pairs, its 159 menu (EX) addresses, CSV and CHIRP
+  import and export, and writes that stay refused until you switch them on
+  for that radio. No FT-891 has ever been connected to this program.
+  Everything about it comes from Yaesu's CAT Operation Reference Manual
+  revision 1909-C and from a simulator built independently from the same
+  manual. Three things about it are worth knowing before you start, and
+  the program says all three where you meet them. **Its speed is a
+  guess**: the manual prints the four rates its CAT RATE menu row offers
+  and marks none of them the factory setting, so the program opens at
+  38400 and the only remedy for a radio set differently is menu 0506 on
+  the radio itself — there is no speed setting in this program. **Its USB
+  socket is a dual-UART bridge**, so the radio appears as two serial
+  ports and the manual never says which of them carries CAT; if the first
+  is silent, try the other. And **the manual contradicts itself about
+  whether a memory channel may be read at all** — its command list marks
+  the combined memory command write-only, while that command's own page
+  prints a read request and a full answer chart — so this build asks the
+  page's question and cross-checks the answer against the plain memory
+  read. A read refused for a channel that is plainly in use is reported
+  as the manual's ambiguity rather than swallowed.
+- **The FT-891 refuses two things a file written for another radio can
+  carry.** A CHIRP file's `CW`, `CWR` and `RTTY` rows are not imported on
+  this radio: they resolve to the sideband-specific names `CW-U`, `CW-L`
+  and `RTTY-U`, and this radio's own mode list prints `CW`, `CW-R`,
+  `RTTY-LSB` and `RTTY-USB` instead, so such a row is blocked with the
+  reason shown rather than written as a mode the radio has never been
+  shown to have. Resolving that naming difference is a question for the
+  whole fleet — the same three rows already block on every Icom model —
+  and is deliberately not settled here. And a transmit-clarifier flag
+  carried in from another radio's file is refused at the write rather
+  than sent: that position in this radio's memory record is printed as
+  fixed.
+- **Menu (EX) setting IDs may now be four digits as well as six.** The
+  FT-891 numbers its menu with a four-digit address where the other three
+  Yaesu radios use six, so codeplug files, CSV exports and the command
+  line accept either width. Files written before this release are
+  unaffected.
 
-- **The application has an icon of its own.** The channel-list mark replaces
-  the Wails template's placeholder on macOS, Windows and Linux; it is drawn
-  once as an SVG (app/build/appicon.svg) and every raster the three
-  platforms need is derived from it by scripts/render-icons.sh, so the
-  shipping .app, the Windows .ico and the .deb's desktop entry all show the
-  same mark.
-
-Everything else in this release is internal hardening and carries no change
-a user can see: an enumeration of every channel field so each driver's
-capability audit must account for all of them, one shared shape for the
-wrong-radio-by-record-length refusal across the four drivers that make it,
-a stricter rule for the page-span citations the provenance tests accept, and
-corrections to comments and test prose. No model was registered, no radio
-was connected, and the support table below is unchanged.
+Everything else in this release is internal and carries no change a user
+can see. Adding this radio needed five new protocol axes — how a menu
+address is spelt, which memory slots the channel-select command admits,
+whether the combined memory command may be read at all, and the meanings
+of two bytes in the memory record that every other Yaesu radio here
+prints as fixed — and each of those is now something a radio DECLARES
+rather than inherits. **No existing radio's behaviour changed: every one
+of their stored comparison baselines is byte for byte identical**, and the
+only difference anywhere in this release's output is the one further model
+name in the lists of supported radios.
 
 ## What it does
 
@@ -183,8 +212,8 @@ was connected, and the support table below is unchanged.
 - **Read the radio's menu (EX) settings**, on the Yaesu models, into
   the same file and view or export them — every documented menu
   address for the connected model (FT-710: 296; FTdx10: 197;
-  FTdx101D/MP: 193). None of the ten Icom drivers expose a settings
-  surface.
+  FTdx101D/MP: 193; FT-891: 159). None of the eleven Icom drivers expose
+  a settings surface.
 - Both a **desktop GUI** and a **`rigprog` CLI**, sharing one core.
 
 ## Supported radios, and what "supported" means for each
@@ -195,6 +224,7 @@ was connected, and the support table below is unchanged.
 | FTdx10 | Yes | ⚠️ **Opt-in** (unverified writes, off by default) | Yes | CAT manual + simulator only; no real radio has been connected |
 | FTdx101D | Yes | ⚠️ **Opt-in** (unverified writes, off by default) | Yes | CAT manual + simulator only; no real radio has been connected |
 | FTdx101MP | Yes | ⚠️ **Opt-in** (unverified writes, off by default) | Yes | CAT manual + simulator only; no real radio has been connected |
+| FT-891 | Yes | ⚠️ **Opt-in** (unverified writes, off by default) | Yes | CAT manual (rev 1909-C) + simulator only; no real radio has been connected. Its CAT speed is assumed — the manual prints four rates and marks none the factory setting, so a radio set differently must be changed at menu 0506. Its USB socket presents two serial ports and the manual does not say which carries CAT. CHIRP `CW`, `CWR` and `RTTY` rows are not imported: they resolve to names this radio's mode list does not print |
 | IC-7610 | Yes | ⚠️ **Opt-in** (unverified writes, off by default) | No | CI-V guide + simulator only; no real radio has been connected |
 | IC-7300 | Yes | ⚠️ **Opt-in** (unverified writes, off by default) | No | CI-V guide + simulator only; no real radio has been connected |
 | IC-7300MK2 | Yes | ⚠️ **Opt-in** (unverified writes, off by default) | No | CI-V guide + simulator only; no real radio has been connected |
@@ -214,7 +244,7 @@ outside that walk's range is simply not read; its absence is not evidence
 the channel is empty. See docs/icom-models.md for each
 model's exact bound.
 
-Writes to the fourteen manual-derived models are refused until you enable
+Writes to the fifteen manual-derived models are refused until you enable
 unverified writes for that radio, one radio at a time — `rigprog
 settings unverified-writes <model> on` (say `rigprog settings
 unverified-writes FTdx10 on`, or `rigprog settings unverified-writes
@@ -230,7 +260,7 @@ its writes are hardware-verified, so it has nothing to consent to.
 Consent changes what the tool is allowed to send, not how it sends it
 — the read-before-write, the snapshot, the reviewed diff and the
 per-channel verify all still run; README.md's *Switching on writes for an unverified radio*
-section has the full mechanism. Each of those fourteen models has a
+section has the full mechanism. Each of those fifteen models has a
 driver carrying a register of every assumption it makes and the
 specific capture from a real radio that would verify it — if you own one of these radios and
 want to help, open an issue.
@@ -244,7 +274,7 @@ want to help, open an issue.
   establishes what the radio accepts in the write direction. The
   reasoning, and what would have to change to revisit it, is in
   `docs/menu-write-decision.md`.
-- **It cannot erase a channel over CAT.** The four Yaesu models have
+- **It cannot erase a channel over CAT.** The five Yaesu models have
   no CAT erase command at all; the app says so, and tells you the
   front-panel procedure, rather than silently doing nothing. The eleven
   Icom models are different: their documents print a clear form for a
@@ -353,13 +383,30 @@ What this release has **not** been exercised against:
   `docs/linux-setup.md` carries the port-setup instructions and the
   full status; treat the first Linux session as exploratory and
   read-only first.
-- **Any FTdx10, FTdx101D or FTdx101MP.** Everything about those three
-  models is derived from the manufacturer's CAT reference manuals
+- **Any FTdx10, FTdx101D, FTdx101MP or FT-891.** Everything about those
+  four models is derived from the manufacturer's CAT reference manuals
   through a documented transcription-and-cross-check process, and
   exercised against simulators built independently from the same
-  manuals. No real radio of any of the three has ever been connected.
+  manuals. No real radio of any of the four has ever been connected.
   That is why their writes are opt-in rather than on by default,
   needing your explicit consent.
+
+  The FT-891 is the newest of the four and the one with most still
+  unsettled. Its CAT speed is assumed: the manual prints the four rates
+  its CAT RATE menu row offers, marks none of them the factory setting,
+  and this program offers no way to open at another rate — so a radio set
+  differently must be put back at menu 0506 before it will answer. Its
+  USB connection is a dual-UART bridge, so the radio appears as two
+  serial ports and the manual names the second one only in the word
+  "Dual", never saying which carries CAT. And the manual contradicts
+  itself about whether a memory channel may be read: its command list
+  marks the combined memory command write-only, while that command's own
+  page prints a read request and a full answer chart. This build asks the
+  page's question and cross-checks against the plain memory read, so a
+  read refused for a channel that is plainly in use is reported as what
+  it is rather than read as an empty channel. A single read of a
+  known-occupied channel on a real FT-891 would settle it, and is the
+  most valuable thing an owner of one could send in.
 - **Any IC-7610, IC-7300, IC-7300MK2, IC-705, IC-9700, IC-905,
   IC-7851, IC-7850, IC-7760, IC-7100 or IC-R8600.** Everything about
   these eleven models is derived from Icom's own published documentation
@@ -416,6 +463,6 @@ What this release has **not** been exercised against:
 
 Anything the project has not observed is labelled as such in the code
 and documentation rather than assumed. Reports from real hardware —
-especially the fourteen manual-derived, opt-in-write models, and the
+especially the fifteen manual-derived, opt-in-write models, and the
 FT-710 on Linux — are the most valuable contribution this project can
 receive right now.

@@ -408,7 +408,7 @@ var ftdx101mpText = Text{
 // evidence to a radio in an entirely different family.
 // TestRadiotext_IC7610Verbatim pins every string, and its own
 // non-borrowing check refuses any field that is byte-identical to, or
-// carries a particular of, any of the four Yaesu entries.
+// carries a particular of, any of the five Yaesu entries.
 //
 // WHAT IS DIFFERENT ABOUT THIS RADIO, AND WHY IT SHOWS IN THE PROSE:
 //
@@ -1607,6 +1607,97 @@ var icr8600Text = Text{
 	ProbeFirmwareNote: "Firmware version has no query in this build — check the receiver's display. No minimum version is established for the IC-R8600: this build knows of none to require. This driver talks only to CI-V address 96h, with no --civ-address option to change it and no way to detect a receiver set to a different address; and its opening speed of 19200 is assumed on both halves — this receiver's CI-V Reference Guide prints no factory default speed, mentions no automatic setting, and never lists the rates its menu offers, so the rate AND the list it was chosen from are both assumed. The guide's own advice is to set the address, the speed and the transceive function in the receiver's Set mode before controlling it, which is the first thing to check. Two more things about this receiver are worth knowing before blaming the port. It has FOUR possible control terminals — a remote jack, a front and a rear USB port, and a network connection — and this build talks over USB, so if one port is silent, check which terminal the receiver has been told to use before concluding the cable is wrong. Neither the transceive setting nor the echo-back setting of either USB port has a printed default, so this build cannot tell you whether unsolicited frames should be expected of the receiver's own accord; any that arrive are counted and ignored, never acted on. Opening this receiver also discovers its Memories bank's occupied slots by a BOUNDED walk — group 0 in full, then channel 00 of every other group, reading the rest of a group only where its channel 00 answered — not the whole 100x100 space, and nothing on this build's command line or in its window widens it (the driver's own WithFullInventoryWalk is a Go-level option no registered composition passes): a channel stored outside that walk is simply not listed here, so its absence from the grid is not evidence that the receiver's channel is empty. If nothing answers, check the receiver's address and speed before assuming the port is wrong.",
 }
 
+// ft891Text is the FT-891's entry (Tier 1 task 7, landed with that model's
+// wiring registration — internal/wiring's TestEverySupportedModelHasRadiotext
+// refuses a registered model with no prose, which is what makes this entry
+// part of registration rather than a later nicety).
+//
+// THE HONESTY RULE APPLIES UNCHANGED. NOTHING BELOW IS INVENTED. No FT-891
+// has ever been asked anything by this project (core/driver/ft891/doc.go), no
+// FT-891 OPERATING manual is held — only the CAT Operation Reference Manual,
+// rev 1909-C — and no write trial has happened (that driver's
+// writeTrialsComplete is false). Every string says what is actually known,
+// including where something is NOT known, and borrows the wording of no other
+// entry: not the FT-710's, whose hedgeless sentences are ITS hardware
+// evidence; not the FTdx10's or the FTdx101 pair's, whose hedges are about
+// different radios and different manuals; and not any Icom entry's.
+// assertNotBorrowedFromAnyOtherModel (radiotext_test.go) pins the
+// non-borrowing mechanically and field by field.
+//
+// WHAT THIS ENTRY CAN SAY THAT THE OTHER YAESU ENTRIES CANNOT is the point of
+// writing it fresh rather than adapting one of theirs. Four facts are this
+// radio's own, each with its home in the capability matrix:
+//
+//   - The ERASE absence is MANUAL-EVIDENCED here (matrix §2.6): the Control
+//     Command List (layout 111-147, printed folio 3) is this radio's entire
+//     CAT command set and holds no memory-erase command. The FTdx10's entry
+//     can only say its driver claims none.
+//   - The DEFAULT SPEED is ASSUMED (matrix §1.12, erratum M-E4; the driver
+//     register's entry "DefaultBaud 38400"), and the menu chart names the row
+//     a user would have to visit — 0506 CAT RATE, four rates, none marked
+//     factory (matrix §1.11, layout 553). No baud override exists in the CLI
+//     or the GUI, so that menu row is the ONLY remedy for a radio set
+//     differently, and the note says so.
+//   - The CONNECTION is a built-in USB-to-DUAL-UART bridge and this manual
+//     names the second endpoint only in the word "Dual" (matrix §3.13). The
+//     FTdx101 pair's manual NAMES its two virtual ports; this one does not,
+//     so where their prose can tell a user which port carries CAT, this one
+//     can only tell them to try both.
+//   - The MT-READ CONTRADICTION (matrix §3.12): the Control Command List
+//     marks the combined MEMORY WRITE & TAG command Set-only while that
+//     command's own detail block, on the same printed page, prints a read
+//     request and a full answer chart. The driver reads the detail block's
+//     way and cross-checks (core/driver/ft891/read.go; driver register entry
+//     7), and a user whose session fails with
+//     ErrMTReadRejectedForOccupiedSlot is entitled to know the ambiguity
+//     started in the manual rather than in this software.
+//
+// TWO FURTHER SENTENCES SIT IN GridLegendNote BY PLAN, and both describe a
+// refusal a user will otherwise meet without explanation: a CHIRP file's CW,
+// CWR and RTTY rows are not imported on this radio (they resolve to CW-U,
+// CW-L and RTTY-U, which this radio's own mode legend does not print — the
+// fleet-wide resolution of that naming difference is deferred, plan decision
+// P9), and a transmit-clarifier flag arriving in another radio's file is
+// refused at the write (plan decision P5 — byte 21 of this record is printed
+// "0: (Fixed)").
+//
+// TestRadiotext_FT891Verbatim pins every string, and
+// TestRadiotext_FT891ProbeNote_CarriesItsThreeNamedFacts pins the three the
+// plan requires by name, so a well-meant later edit that firmed up a hedge or
+// dropped a caveat fails there rather than quietly telling a user something
+// no one established.
+var ft891Text = Text{
+	EraseProcedure:   "The FT-891 has no CAT erase command, and on this radio that absence is documented rather than merely unclaimed: the CAT manual prints the whole command set in one Control Command List and no memory-erase command appears in it. A channel can therefore be cleared only at the radio itself, and this build does not describe how — no FT-891 operating manual is held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Follow the memory-channel erase procedure in the radio's own operating manual.",
+	FirmwareGuidance: "No minimum firmware version is established for the FT-891: nothing this project holds states one, and no FT-891 has been asked. There is no version query in this build's CAT vocabulary for this radio either — it is the identity read, the memory read pair, the one combined memory set and the menu read, and nothing else — so read the version off the radio's own display and enter it here, where it is recorded with the send rather than checked against a threshold nobody has established.",
+	GridLegendNote:   "Tone and Scan Skip are neither read nor written for the FT-891 by this build: its combined memory record carries a CTCSS on/off state byte and nothing else of either kind — no tone-number byte and no scan-skip flag in any of the record's 41 positions — so set both at the radio. Two further columns behave differently here from the file you may be importing. A CHIRP file's CW, CWR and RTTY rows are not imported on this radio: they map to the sideband-specific names CW-U, CW-L and RTTY-U, and this radio's own mode legend prints CW, CW-R, RTTY-LSB and RTTY-USB instead, so such a row is blocked rather than written as a mode the radio has never been shown to have. And a transmit-clarifier flag carried in from another radio's file is refused at the write rather than sent: this radio's memory record prints that position as fixed, so there is no transmit clarifier here to set.",
+	// DELIBERATELY EMPTY, exactly as every entry's is whose write-trial
+	// guard is false, and for the same reason: this field states what IS
+	// and is NOT hardware-verified about preservation across a rewrite,
+	// and with core/driver/ft891's writeTrialsComplete false there is no
+	// verification of any kind to report. internal/wiring's
+	// TestEverySupportedModelHasRadiotext requires EraseProcedure,
+	// FirmwareGuidance and ProbeFirmwareNote and deliberately excludes
+	// this one.
+	ToneScanSkipVerification: "",
+	// Byte-identical to EraseProcedure, as every other entry's is.
+	EraseDialogNote: "The FT-891 has no CAT erase command, and on this radio that absence is documented rather than merely unclaimed: the CAT manual prints the whole command set in one Control Command List and no memory-erase command appears in it. A channel can therefore be cleared only at the radio itself, and this build does not describe how — no FT-891 operating manual is held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Follow the memory-channel erase procedure in the radio's own operating manual.",
+	// The two tooltips DIFFER, unlike the FTdx10's identical pair, because
+	// this radio's two absences are differently evidenced INSIDE the record
+	// (matrix §2.3): there is no tone-NUMBER byte, and there is no
+	// scan-skip FLAG. Neither claims a preservation finding, because there
+	// is none — the ASSUMED half of that register entry is the step from
+	// "the record has no such position" to "this radio cannot reach the
+	// field at all", and neither tooltip takes it.
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "not read or written over CAT by this build — this radio's memory record has no tone-number byte at all, and whether a rewrite preserves the tone has never been tested",
+		ScanSkip: "not read or written over CAT by this build — this radio's memory record has no scan-skip flag at all, and whether a rewrite preserves the marking has never been tested",
+	},
+	// A placeholder LABEL, not an example: no FT-891 version string has
+	// been seen here, so there is no format to exemplify.
+	FirmwarePlaceholder: "as shown on the FT-891's own display",
+	ProbeFirmwareNote:   "Firmware version has no CAT query in this build — check the radio's display. No minimum version is established for the FT-891: this build knows of none to require. Its opening speed of 38400 is ASSUMED, not read off the radio: this radio's CAT manual prints the four rates its CAT RATE menu row offers — 4800, 9600, 19200 and 38400 — and marks none of them as the factory setting, and neither this build's command line nor its window offers a way to open at another rate, so a radio set differently has to be put back at menu 0506 before it will answer. Two more things about this radio are worth knowing before blaming the port. Its rear-panel USB socket is a built-in USB-to-dual-UART bridge, so the radio enumerates TWO serial devices, and the manual mentions the second only in the word \"Dual\" — it never says which of the two carries CAT — so if one is silent, try the other before concluding the cable or the speed is wrong. And this manual contradicts itself about READING a memory channel: its Control Command List marks the combined MEMORY WRITE & TAG command settable only, while that same command's own detail block, on the same printed page, gives it a read request and a full answer chart. This build asks the detail block's question and cross-checks the answer against the plain memory read, so a read refused for a channel that is plainly occupied is the manual's own ambiguity surfacing, not a fault in the port — one such read of a channel you know is populated is what would settle it.",
+}
+
 // texts is the registry For consults, keyed by the exact model string a
 // driver.Driver.Model() (or driver.Identity/spec.Capabilities.Model)
 // call returns, e.g. "FT-710".
@@ -1639,17 +1730,18 @@ var texts = map[string]Text{
 	"IC-7760":    ic7760Text,
 	"IC-7100":    ic7100Text,
 	"IC-R8600":   icr8600Text,
+	"FT-891":     ft891Text,
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",
 // "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700",
-// "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100" and "IC-R8600" are
-// populated — the FIFTEEN models internal/wiring registers AS OF the
-// additions tier's FOURTH and last registration (Tier 4b), a count a
-// sixteenth registration would falsify; any other model — including "", a
-// future driver not yet given an entry, or a near-miss typo ("FT-DX10",
-// "IC7610", "IC7300", "IC705", "IC9700", "IC905", "IC7851", "IC7760",
-// "IC7100" or "ICR8600", say) — returns the zero Text and false.
+// "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600" and
+// "FT-891" are populated — the SIXTEEN models internal/wiring registers AS
+// OF Tier 1's FT-891 registration, a count a seventeenth would falsify; any
+// other model — including "", a future driver not yet given an entry, or a
+// near-miss typo ("FT-DX10", "IC7610", "IC7300", "IC705", "IC9700",
+// "IC905", "IC7851", "IC7760", "IC7100", "ICR8600", "FT891" or "ft-891",
+// say) — returns the zero Text and false.
 // Callers must never treat a zero Text as if it were real advisory copy.
 //
 // THE MATCH IS EXACT AND CASE-SENSITIVE, and for the FTDX101 pair that is

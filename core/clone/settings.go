@@ -86,15 +86,15 @@ func (s *Service) ReadSettings(ctx context.Context) (*codeplug.MenuSnapshot, err
 	}
 
 	// SettingsDescriptor.Validate accepts any non-empty, unique opaque item
-	// ID, but a MenuSnapshot requires every ID to be exactly 6 ASCII digits
-	// (see MenuSnapshot.Validate). Without this preflight a custom
-	// SettingsReader minting a mis-shaped ID would pass descriptor
-	// validation, be READ against the wire, and fail only AFTER every read
-	// when the built snapshot is validated. Probe the snapshot rule up front
-	// by validating an all-MenuUnsupported snapshot built from the
-	// descriptor (Complete stays false, so the only per-entry rules that
-	// fire are the 6-ASCII-digit ID shape and ID uniqueness) — a bad ID is
-	// then refused with zero wire exchanges, exactly like the
+	// ID, but a MenuSnapshot requires every ID to be exactly 4 or exactly 6
+	// ASCII digits — the two EX address widths (see MenuSnapshot.Validate).
+	// Without this preflight a custom SettingsReader minting a mis-shaped ID
+	// would pass descriptor validation, be READ against the wire, and fail
+	// only AFTER every read when the built snapshot is validated. Probe the
+	// snapshot rule up front by validating an all-MenuUnsupported snapshot
+	// built from the descriptor (Complete stays false, so the only
+	// per-entry rules that fire are the ID shape and ID uniqueness) — a bad
+	// ID is then refused with zero wire exchanges, exactly like the
 	// capability-absence and malformed-descriptor cases above.
 	total := 0
 	probe := &codeplug.MenuSnapshot{}
