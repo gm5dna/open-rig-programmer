@@ -121,8 +121,12 @@ Universal Windows Driver by hand (see
 one from Windows Update automatically, but that has not been tried.
 The radio's USB adapter shows two COM ports in Device Manager, and
 unlike macOS, Windows lists both as usable, tied and indistinguishable
-by name — probe each one (`rigprog probe --port COM3`, `rigprog probe
---port COM4`, and so on) to find the one that answers.
+by name — probe each one (`.\rigprog.exe probe --port COM3`,
+`.\rigprog.exe probe --port COM4`, and so on) to find the one that
+answers. `rigprog.exe` is not on `PATH`, so run it from the folder
+that holds it — the zip's extraction folder, or `C:\Program
+Files\Open Rig Programmer\` after an installer run (see
+[docs/windows-setup.md](docs/windows-setup.md)).
 
 **In the app**: choose the radio and the port, connect (or press
 *Demo* to try it with a simulated radio), read, edit in the grid, then
@@ -134,7 +138,7 @@ is about to make, and anything it refuses to make, with the reason.
 ```sh
 rigprog ports                                  # list likely serial ports
 rigprog probe --port /dev/cu.SLAB_USBtoUART    # confirm which radio answers
-rigprog probe --port COM3                      # Windows: the port name from Device Manager
+.\rigprog.exe probe --port COM3                # Windows: the port name from Device Manager
 rigprog read  --port ... --out radio.json      # save the radio's memories to a file
 rigprog diff  --port ... edited.json           # preview what would change
 rigprog write --port ... edited.json           # send the changes
