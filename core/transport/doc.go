@@ -43,6 +43,37 @@
 // for CAT is byte-identical across the change: the same frames, the same
 // prefixes and lengths, the same timings.
 //
+// # Stream-fatal frames (the optional FatalFramer)
+//
+// A Framing may also implement FatalFramer, the only optional interface
+// in this package: IsFatal names a frame that means "this STREAM is
+// finished" as distinct from IsRejection's "this COMMAND was refused".
+// It exists for Kenwood's E; and O;, which are link-level failures that
+// arrive as ordinary frames — countable as unexpected, or worse, matched
+// as an answer on the very chunk that carried the failure.
+//
+// A framing that does NOT implement it is unaffected: Engine resolves the
+// interface once, at construction, leaving one nil-field check per read
+// chunk and one on the way to a write that is otherwise byte for byte and
+// step for step the write this package made before the hook existed.
+//
+// For a framing that does, the guarantee is: NO FRAME LEAVES THE HOST
+// AFTER A FATAL FRAME THE ENGINE HAS RECEIVED — received meaning the
+// publication has taken and released fatalGate, the engine's second
+// mutex. That gate totally orders the reader goroutine's publication
+// (which closes the Port with the framing's own typed cause, so a driver
+// recovers it with errors.As) against Do's final write and the closed
+// recheck that shares its critical section. Either the publication went
+// first, and the recheck sees the closure and writes nothing, or the
+// write went first, and the frame left BEFORE the fatal frame was
+// received. There is no third interleaving. Why that cannot deadlock is
+// a two-clause theorem on Engine.gatedWrite — the load-bearing half being
+// that the gated section performs no channel operation, takes no engine
+// lock and waits on the reader goroutine in no way. The two facts the
+// guarantee is NARROWER than (a blocking Port.Write holds the gate; the
+// typed cause survives only when the publication wins the first close)
+// are stated on FatalFramer itself, and pinned rather than asserted.
+//
 // # The no-sequence-numbers problem
 //
 // The wire protocol (core/cat) has no request IDs, no sequence numbers, and
@@ -246,7 +277,12 @@
 //     second, independently obtained copy. THE ORDER IS LOAD-BEARING:
 //     the framing's hook runs first and the gate second, so the gate
 //     judges the slice after the last foreign code has touched it and
-//     nothing at all runs between the check and the write. NoteSent's
+//     NO FOREIGN CALLBACK AND NO FRAME-MUTATING OPERATION runs between
+//     the check and the write. What does run there, and only on an
+//     engine whose framing implements FatalFramer, is the engine's own
+//     fatal gate and the closed recheck inside it — a mutex acquisition
+//     and an atomic load, neither of which reads or touches the slice
+//     (see "Stream-fatal frames" above). NoteSent's
 //     contract (copy what you need; retain nothing, mutate nothing) is
 //     what keeps the echo hook from weakening this, and the ordering is
 //     what makes a violation of it harmless rather than a way to divert

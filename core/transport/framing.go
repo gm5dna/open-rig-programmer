@@ -179,11 +179,24 @@ type Framing interface {
 // ADDITIVE, and inert unless implemented. Framing itself is unchanged, and
 // a framing that does not implement this interface is unaffected in every
 // respect: Engine resolves the type assertion ONCE, where it stores the
-// framing, so both hot sites (readLoop's chunk scan and the gated write)
-// are a nil-field check — no lock taken, no branch entered, no byte
-// changed. TestFatalFramer_AbsentIsInert pins that for a framing without
-// it; TestFatalFramer_ResolvedOnceAtConstruction pins the resolution for
-// one with it.
+// framing, so both hot sites — readLoop's chunk scan and Engine.gatedWrite
+// — are ONE nil-field check and nothing else. No lock is taken, no closed
+// recheck is made, no byte and no timing changes: gatedWrite dispatches
+// such a write straight to the direct Port.Write it made before this hook
+// existed. Three tests pin that rather than asserting it.
+// TestFatalFramer_AbsentIsInert covers the resolution and an ordinary
+// exchange; TestFatalFramer_AbsentWriteRacingCloseGoesOutAsBaseDid pins
+// the write path where it could differ — a Do that has already lost the
+// race with Close still transmits, and returns the same error value it
+// returned before; TestFatalFramer_AbsentExchangeDoesNotQueueBehindTheFatalGate
+// pins that a goroutine holding the gate cannot delay such an exchange.
+// TestFatalFramer_ResolvedOnceAtConstruction pins the resolution for a
+// framing that DOES implement the interface.
+//
+// The closed recheck below is therefore a change for a FatalFramer engine
+// and for no other: on such an engine a Do racing a close now returns
+// without transmitting, where before it transmitted and learnt of the
+// closure from its read wait. The error VALUE is the same either way.
 //
 // WHY IT EXISTS. Kenwood's E; and O; are link-level failures that arrive
 // as ordinary frames. Without this hook the engine has only three places
@@ -208,12 +221,13 @@ type Framing interface {
 // TWO LIVENESS FACTS, stated because the guarantee above is narrower than
 // "the port closes immediately in every state" and must not be read as it:
 //
-//  1. Port.Write runs INSIDE the gate and this contract specifies no write
-//     timeout for it. A write that blocks — a wedged line, a stalled USB
-//     endpoint — holds the gate until the underlying driver returns, so a
-//     fatal frame arriving during that write is received only once the
-//     write returns. This is not a deadlock: the write side never waits on
-//     the reader goroutine (see Engine.gatedWrite's lock-order theorem).
+//  1. On an engine that implements this interface, Port.Write runs INSIDE
+//     the gate and this contract specifies no write timeout for it. A
+//     write that blocks — a wedged line, a stalled USB endpoint — holds
+//     the gate until the underlying driver returns, so a fatal frame
+//     arriving during that write is received only once the write returns.
+//     This is not a deadlock: the write side never waits on the reader
+//     goroutine (see Engine.gatedWrite's lock-order theorem).
 //  2. The typed cause is universal ONLY when the fatal publication wins
 //     the FIRST close. closePort keeps the first cause any caller supplies,
 //     and Engine.Close, a terminal read error, a consumed reader error and
@@ -237,5 +251,11 @@ type FatalFramer interface {
 	// the complete result of one Accumulator.Push before any frame from
 	// that chunk is delivered. It must not block and — like Match,
 	// AllowFunc and NoteSent — must not mutate or retain the frame.
+	//
+	// The cause must not WRAP a *FrameTooLongError. The engine delivers
+	// it as an ordinary reader error as well as closing the port, and
+	// the consumer of that event tests for *FrameTooLongError first, so
+	// a wrapped one would be reported to a caller as recoverable stream
+	// contamination rather than as the link having ended.
 	IsFatal(frame []byte) error
 }
