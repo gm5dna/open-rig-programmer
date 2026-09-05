@@ -397,18 +397,25 @@ func baseCapabilities(memFields, pmsFields map[spec.Field]spec.FieldSupport) spe
 		// (its own register entry, MTPolicy.TagFill, cited not restated);
 		// the WIDTH is the manual's.
 		TagLen: 12,
-		// Clarifier policy, from the dialect and ASSUMED IN BOTH HALVES —
-		// the DIALECT register's single entry "ClarifierPolicy.StepHz = 10
-		// AND ClarifierPolicy.MaxAbsHz = 9990", cited here and
-		// deliberately not re-registered as this driver's own. THE MANUAL
-		// PRINTS 9999, not 9990, on every block carrying the field (MR
-		// 967, MT 1003, MW 1040, IF 781, OI 1126) and states NO step
-		// anywhere; 9999 is not a multiple of the inherited 10, so 9990 is
-		// the largest multiple of the assumed step inside the printed
-		// range — a deduction from an assumption, not a transcription
-		// (matrix §1.7, §1.8).
-		ClarMaxHz:  9990,
-		ClarStepHz: 10,
+		// Clarifier policy, CONSULTED FROM THE DIALECT (C-H2, closing
+		// review wave 2: caps.go used to hard-code 9990/10 here, a second
+		// transcription of the DIALECT register's single entry
+		// "ClarifierPolicy.StepHz = 10 AND ClarifierPolicy.MaxAbsHz = 9990"
+		// that write.go's buildWriteCommand already reads through
+		// catDialect.Clarifier() — a bound and its datum living in two
+		// places, able to drift silently if either changed alone). Now
+		// there is exactly ONE literal 9990/10 pair in this package: the
+		// dialect's, cited here and still deliberately not re-registered as
+		// this driver's own. THE MANUAL PRINTS 9999, not 9990, on every
+		// block carrying the field (MR 967, MT 1003, MW 1040, IF 781, OI
+		// 1126) and states NO step anywhere; 9999 is not a multiple of the
+		// inherited 10, so 9990 is the largest multiple of the assumed step
+		// inside the printed range — a deduction from an assumption, not a
+		// transcription (matrix §1.7, §1.8).
+		// TestCapabilities_ClarifierDerivesFromDialect pins the identity,
+		// not merely the values, against catDialect.Clarifier().
+		ClarMaxHz:  catDialect.Clarifier().MaxAbsHz,
+		ClarStepHz: catDialect.Clarifier().StepHz,
 		// The 50-tone chart, MANUAL-EVIDENCED (matrix §1.9): Table 1,
 		// layout 420-429, printed folio 6, entries 000-049, 67.0-254.1 Hz,
 		// spot-checked element for element against spec.standardCTCSSTones

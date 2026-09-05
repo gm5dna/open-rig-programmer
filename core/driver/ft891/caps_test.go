@@ -562,6 +562,40 @@ func TestClarifierIsNeverInert(t *testing.T) {
 	}
 }
 
+// TestCapabilities_ClarifierDerivesFromDialect is C-H2 (closing review wave
+// 2, ACCEPT as a standing-rule breach): a bound must be consulted from the
+// same place as its datum. Before this fix caps.go carried its own literal
+// 9990/10, a second transcription of the value write.go's buildWriteCommand
+// already reads through catDialect.Clarifier() — able to drift silently if
+// either literal were ever edited alone.
+//
+// THE PIN IS IDENTITY WITH THE DIALECT, not merely today's values: it must
+// fail if caps.go ever goes back to a literal that happens to still read
+// 9990/10, which a bare "== 9990" assertion (TestBaseline_Shape's, kept
+// unchanged above) cannot catch. See this test's own red-proof: with caps.go
+// reverted to a hard-coded ClarMaxHz 9999 (this dialect's own MaxAbsHz is
+// 9990), this test fails while a bare "== 9990" check would not even notice
+// unless it too happened to assert 9999.
+func TestCapabilities_ClarifierDerivesFromDialect(t *testing.T) {
+	want := catDialect.Clarifier()
+	for _, tt := range []struct {
+		name string
+		caps spec.Capabilities
+	}{
+		{"Unverified", CapabilitiesUnverified()},
+		{"Simulated", CapabilitiesSimulated()},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.caps.ClarMaxHz != want.MaxAbsHz {
+				t.Errorf("ClarMaxHz = %d, want catDialect.Clarifier().MaxAbsHz = %d — the bound must be CONSULTED from the dialect, not a second literal that can drift from it", tt.caps.ClarMaxHz, want.MaxAbsHz)
+			}
+			if tt.caps.ClarStepHz != want.StepHz {
+				t.Errorf("ClarStepHz = %d, want catDialect.Clarifier().StepHz = %d — the bound must be CONSULTED from the dialect, not a second literal that can drift from it", tt.caps.ClarStepHz, want.StepHz)
+			}
+		})
+	}
+}
+
 // TestDiscoveredBankFields_TagAndTagDisplayAreZero is matrix §2.5, and it
 // is the plan's P4: the FT-891's discovered banks are read by MR ALONE, and
 // the MR Answer is 28 positions carrying neither a tag nor a display flag
