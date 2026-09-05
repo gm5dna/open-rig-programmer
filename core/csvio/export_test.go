@@ -421,3 +421,47 @@ func TestExport_FullImageRoundTripSlotOrder(t *testing.T) {
 		}
 	}
 }
+
+// TestExport_NoBOM_AndLFLineEndings pins the other half of decision 8: this
+// package READS a byte-order mark and CRLF because Windows spreadsheets
+// write them, but it never WRITES either. Export's output is LF-terminated
+// and starts with the first header cell.
+//
+// A BOM here would be the more tempting mistake — it is what makes Excel
+// open a UTF-8 CSV without mangling accented characters — but it would
+// change every exported byte, break the byte-identity claim the release
+// rests on, and confuse every non-BOM-aware reader including this
+// package's own pre-change Import. encoding/csv writes LF unless UseCRLF
+// is set; it is not set, and this test is what says so.
+func TestExport_NoBOM_AndLFLineEndings(t *testing.T) {
+	var buf bytes.Buffer
+	if err := Export(&buf, []codeplug.Channel{{Slot: "001", Data: &codeplug.ChannelData{
+		FreqHz: 145500000, Mode: "FM", Shift: "SIMPLEX", CTCSS: "OFF",
+	}}}); err != nil {
+		t.Fatalf("Export: %v", err)
+	}
+	out := buf.Bytes()
+
+	if bytes.HasPrefix(out, []byte("\xEF\xBB\xBF")) {
+		t.Error("Export wrote a UTF-8 BOM; it must never write one")
+	}
+	if !bytes.HasPrefix(out, []byte("slot,")) {
+		t.Errorf("Export output begins %q, want it to begin with the first header cell", string(out[:min(16, len(out))]))
+	}
+	if bytes.Contains(out, []byte("\r")) {
+		t.Error("Export wrote a CR; output line endings must stay LF on every platform")
+	}
+	if !bytes.HasSuffix(out, []byte("\n")) {
+		t.Error("Export output does not end with a newline")
+	}
+
+	// The round trip closes on itself: what Export writes is exactly the
+	// shape Import's LF path reads, no strip needed.
+	got, err := Import(bytes.NewReader(out))
+	if err != nil {
+		t.Fatalf("Import(Export output)): %v", err)
+	}
+	if len(got) != 1 || got[0].Slot != "001" {
+		t.Errorf("round trip = %+v, want the one 001 channel", got)
+	}
+}

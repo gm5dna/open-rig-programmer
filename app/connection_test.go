@@ -406,10 +406,18 @@ func TestConnect_ResolvedModelThreadsIntoWiring(t *testing.T) {
 
 	// connect() creates the snapshot directory for real, under
 	// os.UserConfigDir(); contain it in a temp HOME so this test writes
-	// nothing into the developer's own config directory.
+	// nothing into the developer's own config directory. os.UserConfigDir
+	// has three branches (Go 1.25 os/file.go): darwin reads HOME directly,
+	// windows reads %AppData% (which no amount of HOME setting
+	// redirects), and every other unix reads XDG_CONFIG_HOME then HOME.
+	// AppData and LocalAppData are set here belt-and-braces, so no
+	// per-user Windows location can leak outside the temporary HOME —
+	// see consent_test.go's containSnapshotDir.
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
+	t.Setenv("AppData", home)
+	t.Setenv("LocalAppData", home)
 
 	orig := supportedModels
 	supportedModels = func() []string { return append(orig(), testModel) }

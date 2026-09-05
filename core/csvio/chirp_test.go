@@ -3,10 +3,13 @@
 package csvio
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -1789,6 +1792,103 @@ func TestSanitizeCHIRPName(t *testing.T) {
 			}
 			if e.Blocking {
 				t.Errorf("LossEntry.Blocking = true, want false (non-blocking)")
+			}
+		})
+	}
+}
+
+// --- line endings and the byte-order mark (decision 8) ---
+
+// TestImportCHIRP_CRLFAndBOM_ImportIdentically is the CHIRP twin of
+// TestImport_CRLFAndBOM_ImportIdentically: a CHIRP CSV saved by a Windows
+// spreadsheet — CRLF, and CRLF behind a UTF-8 BOM — must yield the same
+// channels AND the same loss report as the LF original.
+//
+// The report matters as much as the channels here: a BOM stuck to
+// "Location" did not merely rename a column, it made a core column look
+// missing, so ImportCHIRP refused the file outright rather than reporting
+// what it could not carry.
+func TestImportCHIRP_CRLFAndBOM_ImportIdentically(t *testing.T) {
+	fixture, err := os.ReadFile(filepath.Join("testdata", "chirp_sample.csv"))
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	lf, crlf, bomCRLF := csvTwins(t, fixture)
+
+	wantChannels, wantReport, err := ImportCHIRP(bytes.NewReader(lf), ft710LikeCapabilities())
+	if err != nil {
+		t.Fatalf("ImportCHIRP(LF): unexpected error: %v", err)
+	}
+	if len(wantChannels) == 0 || len(wantReport.Entries) == 0 {
+		t.Fatalf("fixture yielded %d channels and %d loss entries — it cannot pin anything", len(wantChannels), len(wantReport.Entries))
+	}
+
+	for _, tc := range []struct {
+		name string
+		in   []byte
+	}{
+		{"CRLF", crlf},
+		{"BOM+CRLF", bomCRLF},
+		{"BOM+LF", append([]byte("\xEF\xBB\xBF"), lf...)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			gotChannels, gotReport, err := ImportCHIRP(bytes.NewReader(tc.in), ft710LikeCapabilities())
+			if err != nil {
+				t.Fatalf("ImportCHIRP(%s): unexpected error: %v", tc.name, err)
+			}
+			if !channelsEqual(t, gotChannels, wantChannels) {
+				t.Errorf("ImportCHIRP(%s) produced different channels from the LF original", tc.name)
+			}
+			if !reflect.DeepEqual(gotReport, wantReport) {
+				t.Errorf("ImportCHIRP(%s) loss report differs from the LF original:\n got  %+v\n want %+v", tc.name, gotReport.Entries, wantReport.Entries)
+			}
+		})
+	}
+}
+
+// TestImportCHIRP_MissingCoreColumnStillRefused pins that stripping the BOM
+// did not soften the core-column gate: a header genuinely missing Location
+// is still refused, with the same text whether or not a BOM precedes it.
+func TestImportCHIRP_MissingCoreColumnStillRefused(t *testing.T) {
+	const wrong = "Frequency,Mode\n146.500000,FM\n"
+
+	_, _, errBare := ImportCHIRP(strings.NewReader(wrong), ft710LikeCapabilities())
+	_, _, errBOM := ImportCHIRP(strings.NewReader("\xEF\xBB\xBF"+wrong), ft710LikeCapabilities())
+
+	if errBare == nil || errBOM == nil {
+		t.Fatalf("want an error from both, got %v (bare) and %v (BOM)", errBare, errBOM)
+	}
+	if errBare.Error() != errBOM.Error() {
+		t.Errorf("error text differs:\n bare = %q\n BOM  = %q", errBare, errBOM)
+	}
+	if !strings.Contains(errBare.Error(), "Location") {
+		t.Errorf("error = %q, want it to name the missing core column", errBare)
+	}
+}
+
+// TestImportCHIRP_EmptyAndBOMOnlyInput is the CHIRP twin of
+// TestImport_EmptyAndBOMOnlyInput: the degenerate inputs the strip must
+// survive without panicking or succeeding.
+func TestImportCHIRP_EmptyAndBOMOnlyInput(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   string
+	}{
+		{"empty", ""},
+		{"BOM only", "\xEF\xBB\xBF"},
+		{"truncated BOM", "\xEF\xBB"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, _, err := ImportCHIRP(strings.NewReader(tc.in), ft710LikeCapabilities())
+			if err == nil {
+				t.Fatalf("ImportCHIRP(%s): want an error, got %d channels", tc.name, len(got))
+			}
+			var pe *ParseError
+			if !errors.As(err, &pe) {
+				t.Fatalf("error is %T, want *ParseError", err)
+			}
+			if pe.Line != 1 {
+				t.Errorf("ParseError.Line = %d, want 1", pe.Line)
 			}
 		})
 	}

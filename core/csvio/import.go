@@ -283,6 +283,12 @@ func validateImportHeader(got []string) error {
 // callers must run it before treating an imported codeplug as
 // send-ready.
 //
+// Encoding: a single leading UTF-8 byte-order mark is dropped before
+// anything else (skipUTF8BOM), so a file saved by Excel as "CSV UTF-8"
+// imports like any other; CRLF line endings need no handling of their own,
+// encoding/csv drops the CR itself. Nothing else about the encoding is
+// interpreted. Export writes neither a BOM nor a CR.
+//
 // Header: validated against Export's header — an unknown column is an
 // error naming it, a missing required column is an error naming it, and
 // "display" is optional and, when present, ignored (Import never reads
@@ -325,7 +331,10 @@ func validateImportHeader(got []string) error {
 // reinterpretation can only bite pre-E1 files. See
 // TestImport_PreE1EmptyTagDisplayCell_ReinterpretedAsUnknown.
 func Import(r io.Reader) ([]codeplug.Channel, error) {
-	cr := csv.NewReader(r)
+	// A leading UTF-8 BOM is dropped before the CSV reader sees it —
+	// otherwise it sticks to the first header cell and this file is
+	// rejected for a column it plainly has. See skipUTF8BOM.
+	cr := csv.NewReader(skipUTF8BOM(r))
 	cr.FieldsPerRecord = -1
 
 	gotHeader, err := cr.Read()
