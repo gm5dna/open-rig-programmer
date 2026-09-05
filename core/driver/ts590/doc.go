@@ -29,8 +29,9 @@
 //
 // The codec, the frame grammars and the outbound gate are core/kw's; the two
 // rows' layout values are core/kw/ts590's. This package holds the neutral
-// capability table, the identity probe, the read choreography and — from
-// Stage 2 task 12 — the write refusal ladder.
+// capability table, the identity probe, the read choreography, the write
+// refusal ladder (Stage 2 task 12) and the two settings descriptors with the
+// menu read behind them (task 13, settings.go).
 //
 // # The Kenwood DRIVER register
 //
