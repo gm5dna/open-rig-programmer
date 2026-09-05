@@ -240,8 +240,10 @@ func (s *Session) bankNames() string {
 // read's own — and kw.Layout.ParseMRAnswer then refuses it, because
 // checkPrintedFixed runs first and requires the '0' this book prints
 // ("Always 0 for the TS-480.", 480:953). THE OUTCOME A USER SEES IS A NAMED
-// PARSE REFUSAL CITING 480:953, NEVER A TIMEOUT, and that is the right side to
-// err on: the frame really was the answer to this read, so reporting it as
+// PARSE REFUSAL NAMING POSITION 4-4, THE PRINTED "0", THE MODEL AND A24
+// (decision 7) — NOT the line 480:953, which lives at
+// core/kw/ts480/layout.go:103 — NEVER A TIMEOUT, and that is the right side
+// to err on: the frame really was the answer to this read, so reporting it as
 // "no answer" would hide a radio disagreeing with its own book behind a
 // symptom that looks like a dead cable.
 // TestReadChannel_ASpaceInByteFourIsCORRELATEDANDTHENREFUSED pins both halves.

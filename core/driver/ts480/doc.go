@@ -22,20 +22,26 @@
 // invent one: reading "?;" as "absent" is exactly what this milestone refuses
 // to do.
 //
-// The gate, transcribed because every value in this package is conditional on
-// it: the evidence artefact is internal/wiring/testdata/ts480-a4-observation.json,
+// The gate is REAL TODAY, but by absence rather than by an enforcement
+// mechanism: this row is missing from realDrivers, fakeDrivers and
+// SupportedModels(), verified by grep, so nothing wires it in. The
+// enforcement mechanism itself does not exist yet — it is T19's. T19 lands
+// the evidence artefact, internal/wiring/testdata/ts480-a4-observation.json,
 // TRACKED IN GIT — deliberately not under docs/superpowers/ or any
 // fixtures-private path, both of which are gitignored, so an artefact there
 // would be absent in a fresh clone and the guard would read "no evidence" on a
-// machine that had simply not been given the file. The guard is
+// machine that had simply not been given the file — and the guard itself,
 // internal/wiring's, in three legs: absent → ABSENT (a branch, not a skip),
 // present → PRESENT only after parsing it and asserting the bar, and a
 // non-vacuity leg so that a file recording zero trials fails loudly rather
-// than counting as absence. A4's lift is L-HW-3, hardware confirmation item 3.
+// than counting as absence (plan P3). A4's lift is L-HW-3, hardware
+// confirmation item 3.
 //
 // A future registration is TEN edits and not one, and the plan's P3 carries
-// the list; nine of the ten fail loudly in the suite the moment the row
-// registers without them, and the tenth at the byte-identity gate.
+// the list; nine of the ten will fail loudly in the suite once T18 lands its
+// two new completeness checks (internal/guards' simulatedProfiles and
+// core/csvio's per-row CHIRP pin are both SILENT today), and the tenth at the
+// byte-identity gate.
 //
 // # Provenance
 //
@@ -106,7 +112,7 @@
 //	      control line: it hands transport.NewEngineWith the port it was given
 //	      and changes nothing about it. NEITHER BOOK STATES A REST STATE for
 //	      either line. This radio's own RTS/CTS sentence — "The required
-//	      control is achieved by using the RTS and CTS lines" (480:36-40) — is
+//	      control is achieved by using the RTS and CTS lines" (480:38-40) — is
 //	      about the flow-control PROTOCOL, not about a line's level at open,
 //	      and the 590 pair's "Flow Control — Hardware flow control is
 //	      possible" (590:60) is weaker still.
@@ -154,6 +160,10 @@
 //     no revision number, no part code and no firmware statement — erratum
 //     E15 — so kw.Layout.BuildFVRead refuses a Book480 layout outright and the
 //     probe's third frame is "TY;", a HARDWARE VARIANT read (480:1621-1634).
+//     TY's OWN heading, "Sets or reads the microprocessor fimware type"
+//     (480:1621), reads as the one sentence that contradicts E15 — it does
+//     not: TY has an empty Set chart and is read-only despite the heading,
+//     which is erratum E10, sitting beside E15 rather than against it.
 //     The two are read with OPPOSITE failure policies and the asymmetry is the
 //     design's own rule: an unexpected TY P2 REFUSES the session, because P2 is
 //     a printed four-value legend and a fifth value means an unread variant
@@ -202,6 +212,14 @@
 //     because a rung below A22 could never execute. write.go carries the whole
 //     relationship at the site.
 //
+//  7. BYTE 19 AND BYTE 41 SWAP ROLES. Byte 19 is the channel LOCKOUT here
+//     (480:962) and the hard-wired "Always 0" byte at 41 (480:973), where the
+//     590 pair read the same neutral scan_skip field from byte 41
+//     (590:1572-1574) and carry data mode at byte 19 (590:1546-1548). §5 calls
+//     this the sharpest single argument for two capability tables rather than
+//     one, and no roadmap line states it — bankFields and channelData's doc
+//     comments both carry it at the site (caps.go, read.go).
+//
 // # What this package deliberately does NOT do
 //
 //   - NO DISCOVERY, on two independent grounds either of which would suffice
@@ -223,4 +241,10 @@
 //     with ActionUnsupported exactly as they do on the eleven Icom models and
 //     the FT-891. Kenwood spells RTTY "FSK", which adds a third spelling family
 //     to a deferred fleet-wide question; it is recorded and acted on nowhere.
+//   - NO MEMORY-GROUP MEMBERSHIP. The radio has ten memory groups and an SU
+//     command selecting which are scanned (480:1508-1534), but no memory-frame
+//     field carries group membership, so no codeplug round trip preserves it
+//     (§3.10: "the loss is silent unless it is written down"). T18
+//     (radiotext) is the permanent home for this record; until then this
+//     bullet is it.
 package ts480

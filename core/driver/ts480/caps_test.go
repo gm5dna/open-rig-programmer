@@ -307,7 +307,7 @@ func TestBankFields_NameEveryOneOfTheTwentySeven(t *testing.T) {
 }
 
 // TestBankFields_MatrixGrades is §2.1's TS-480 column: FIVE graded fields and
-// twenty-two zeroed, with the five zeroes that are NOT family facts each
+// twenty-two zeroed, with the six zeroes that are NOT family facts each
 // carrying its own distinct reason.
 func TestBankFields_MatrixGrades(t *testing.T) {
 	graded := map[spec.Field]bool{
@@ -337,12 +337,12 @@ func TestBankFields_MatrixGrades(t *testing.T) {
 	}
 }
 
-// TestBankFields_TheFiveZeroesThatAreNotFamilyFacts is the plan's own list,
-// and each of the five has a DISTINCT reason that a single "not in the
+// TestBankFields_TheSixZeroesThatAreNotFamilyFacts is the plan's own list,
+// and each of the six has a DISTINCT reason that a single "not in the
 // record" would flatten. It is a documentation pin as much as a value one:
 // the reasons live in unexpressedFields, which the fleet audit walks, and
-// this test is what stops one of the five being folded into another's wording.
-func TestBankFields_TheFiveZeroesThatAreNotFamilyFacts(t *testing.T) {
+// this test is what stops one of the six being folded into another's wording.
+func TestBankFields_TheSixZeroesThatAreNotFamilyFacts(t *testing.T) {
 	reasons := unexpressedFields()
 	for field, wantSubstring := range map[spec.Field]string{
 		// M-E2: 90-99 are ordinary memories that also answer a second
@@ -368,7 +368,7 @@ func TestBankFields_TheFiveZeroesThatAreNotFamilyFacts(t *testing.T) {
 			t.Errorf("%s's reason %q does not name %q", field, got, wantSubstring)
 		}
 	}
-	// The five reasons must be five DIFFERENT sentences: a reader who found
+	// The six reasons must be six DIFFERENT sentences: a reader who found
 	// the same words under tx_frequency and tuning_step would learn nothing
 	// about why either is zero.
 	seen := map[string]spec.Field{}

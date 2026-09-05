@@ -184,7 +184,7 @@ func memSlots(l kw.Layout) []string {
 // value. There is no per-bank variation and no per-row variation to carry:
 // this row has ONE bank and IS one row.
 //
-// The five zeroes that are NOT family facts — the ones a reader would expect
+// The six zeroes that are NOT family facts — the ones a reader would expect
 // to be graded, having read the 590 pair's table — each carry their own
 // reason, and caps_test.go's unexpressedFields holds the long form:
 //
@@ -227,7 +227,7 @@ func bankFields(rw spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 		spec.FieldScanSkip: rw,
 		spec.FieldToneMode: rw, // P7 at byte 20, THREE values (480:964)
 
-		// The five the doc comment above accounts for one by one.
+		// The six the doc comment above accounts for one by one.
 		spec.FieldTxFrequency: {},
 		spec.FieldToneTx:      {},
 		spec.FieldToneRx:      {},

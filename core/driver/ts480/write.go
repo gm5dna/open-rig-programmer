@@ -83,6 +83,13 @@ func (e *RefusalError) Unwrap() error { return &e.WriteRefusedError }
 // requestedFieldRules pairs each spec.Field with the predicate that reports
 // whether a write of this channel actually REQUESTS it.
 //
+// "REQUESTED" MEANS SOMETHING NARROWER HERE THAN IN core/driver/ts590: there
+// "requested" tracks what the frame carries, because that pair's frame always
+// carries it; here — since no frame is ever built — it tracks only what the
+// CALLER asked for, which is why tone_tx/tone_rx/data_mode are conditional
+// rather than unconditional (see below) and why L-HW-16 inherits an
+// obligation from it.
+//
 // TWENTY-SIX ENTRIES — every spec.Field but spec.FieldErase, in the same order
 // this package's own literal list carries them (caps_test.go's allSpecFields;
 // plan P5 forbids a Kenwood file naming spec.AllFields). FieldErase is not a
@@ -208,6 +215,15 @@ func requestedFields(data codeplug.ChannelData) []spec.Field {
 // (480:1494-1500), because a two-legend field cannot be settled from one class
 // and a partial result lifts nothing.
 //
+// THAT COMMIT ALSO INHERITS AN OBLIGATION FROM requestedFieldRules: the
+// record carries P8 and P9 on every write (480:966, 480:969), but tone_tx and
+// tone_rx are named here only when the caller asked for them, so an ordinary
+// tone-OFF channel never names them at the gate. The builder needs either an
+// explicit default for those two bytes on a tone-OFF write, or the table
+// returned to unconditional naming of tone_tx/tone_rx with the standalone Q2
+// rung ordered ahead of the gate rather than folded into it as a subsidiary
+// cause.
+//
 // ONE TYPED REFUSAL, TWO CAUSES, AND Q2 IS NOT A RUNG WHILE A22 STANDS
 // (Codex HIGH 2; spec §Error handling; plan P7). Revision 2 ordered A22 ahead
 // of a separate Q2 rung and asked for two separately recoverable typed errors.
@@ -312,10 +328,17 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 	// stated stance; no Kenwood field is Inert today, since Inert is a
 	// HARDWARE finding and no Kenwood radio has been asked anything.
 	//
-	// ON THIS ROW IT IS ALSO WHERE A CLONED TS-590SG CHANNEL IS REFUSED: a
-	// Known filter, tone_tx or data_mode carried in from a sibling radio names
-	// a field this record cannot express, and it is refused HERE with the
-	// field named rather than dropped from a frame with nowhere to put it.
+	// A cloned TS-590SG channel carrying a Known filter or tone_tx/tone_rx is
+	// refused ONE RUNG ABOVE, not here: CheckFieldStates rejects a Known
+	// Filter because StringField.Valid fails closed against a nil
+	// caps.Filters, and a Known tone_tx/tone_rx the same way because
+	// ToneField.Valid's AdmitsTone fails closed against a nil CTCSSTones.
+	// The general rule is that an empty-vocabulary conditional can never fire
+	// through WriteChannel: CheckFieldStates always answers first. Of the
+	// three fields a clone can carry, only a Known data_mode survives to
+	// reach THIS gate, because BoolField.Valid accepts any Known value
+	// regardless of vocabulary — it is refused HERE, with the field named,
+	// rather than dropped from a frame with nowhere to put it.
 	var unwritable []spec.Field
 	for _, f := range requestedFields(data) {
 		fs := s.caps.FieldSupport(bank.ID, f)
@@ -350,6 +373,12 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 //
 // THE VALUE COMPARED AGAINST IS THE CAPABILITY TABLE'S OWN "OFF", read from
 // the same place the read path maps P7 through, so the two cannot drift.
+//
+// Fields NAMES ONLY THE PRIMARY CAUSE'S FIELD, spec.FieldTuningStep, EVEN ON
+// THE TWO-CAUSE SHAPE: when Q2 also fires, tone_tx/tone_rx are not added to
+// it. Nothing is hidden from a caller that looks — Causes carries Q2 and
+// Reason names the tone fields at length — but a caller reading Fields alone
+// sees only tuning_step.
 func (s *Session) refuseUnderA22(slotID string, data codeplug.ChannelData) *RefusalError {
 	causes := []string{registerA22}
 	reason := "A22: no TS-480 P14 value is known to be a \"no change\" value, so this programme cannot write bytes 39-40 at all and EVERY TS-480 channel write is refused (decision 12). Those two bytes are the tuning step on this radio — \"Step size. Refer to the ST command.\" (480:979) — and ST's legend is mode-conditional over two different ranges, 00 ~ 04 for SSB/CW/FSK and 00 ~ 09 for AM/FM, with index 00 meaning 0.5 kHz in the first and 5 kHz in the second (480:1494-1500). No flat capability vocabulary is truthful over two legends, so tuning_step is published Unsupported, the source channel never retains the raw index, and there is nothing to put in those bytes but a guess. The lift is L-HW-16, one trial per ST mode class"

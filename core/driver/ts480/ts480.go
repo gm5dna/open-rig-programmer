@@ -200,7 +200,9 @@ func (d *ts480Driver) idSpec() transport.CommandSpec {
 // VARIANT (480:1621-1634), because THIS RADIO HAS NO CAT-READABLE FIRMWARE
 // VERSION AT ALL — no revision number, no part code and no firmware statement
 // anywhere in the book, which is erratum E15 and is why kw.Layout.BuildFVRead
-// refuses a Book480 layout outright.
+// refuses a Book480 layout outright. TY's own heading, "Sets or reads the
+// microprocessor fimware type" (480:1621), is E10 and not a counter-example:
+// the Set chart is empty, so TY is read-only despite the heading.
 func (d *ts480Driver) tySpec() transport.CommandSpec {
 	return d.readSpec(kw.PrefixLenMatcher("TY", kw.TYAnswerLen), 1)
 }
