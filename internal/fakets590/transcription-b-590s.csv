@@ -1,0 +1,89 @@
+menu_number,name,digits,text
+000,Display brightness,1,0
+001,Back light color,1,0
+002,Panel key response for double function,1,0
+003,Beep volume,1,0
+004,Sidetone volume,1,0
+005,Message playback volume,1,0
+006,Voice guide volume,1,0
+007,Voice guide speed,1,0
+008,Voice guide language,1,0
+009,Auto announcement,1,0
+010,MHz step (MHz),1,0
+011,Tuning control adjustment rate (Hz),1,0
+012,MULTI/CH control rounding off process,1,0
+013,Dedicated step change inside the BC band (AM),1,0
+014,MULTI/CH control step change for SSB/CW/FSK (kHz),1,0
+015,MULTI/CH control step change for AM (kHz),1,0
+016,MULTI/CH control step change for FM (kHz),1,0
+017,Maximum number of Quick Memory channels,1,0
+018,Temporary variable of the standard memory frequency,1,0
+019,Program Scan slow down function,1,0
+020,Program Scan slow down frequency range (Hz),1,0
+021,Program Scan hold,1,0
+022,Scan Resume method,1,0
+023,Auto mode change,1,0
+024,Following speed setting of AUTO NOTCH,1,0
+025,SSB/AM Low Cut transmit filter (Hz),1,0
+026,SSB/AM High Cut transmit filter (Hz),1,0
+027,SSB-DATA Low Cut transmit filter (Hz),1,0
+028,SSB-DATA High Cut transmit filter (Hz),1,0
+029,Effective change of Speech Processor,1,0
+030,Transmit equalizer,1,0
+031,Receive equalizer,1,0
+032,Electronic keyer operation mode,1,0
+033,Insert keying ON/OFF,1,0
+034,Side tone/ pitch frequency setting (Hz),2,0
+035,CW clipping (ms),1,0
+036,Keying weight ratio,2,0
+037,Reverse keying auto weight ratio,1,0
+038,Bug key function,1,0
+039,Paddle dot/dash replacement setting,1,0
+040,Mic paddle function,1,0
+041,Auto CW TX in SSB mode,1,0
+042,Frequency correction for changing SSB to CW mode,1,0
+043,Break-in null configuration at time of keying speed configuration,1,0
+044,FSK shift,1,0
+045,FSK keying polarity,1,0
+046,FSK tone frequency (Hz),1,0
+047,Mic gain for FM,1,0
+048,Power fine,1,0
+049,Time-out Timer,1,0
+050,Configuring the Transverter function and power down,1,0
+051,TX hold when AT completes the tuning,1,0
+052,AT operation when receiving,1,0
+053,HF linear amplifier control,1,0
+054,50 MHz linear amplifier control,1,0
+055,Constant recording,1,0
+056,Voice/ message playback repeat,1,0
+057,Voice/ message playback repeat duration (seconds),2,0
+058,Split transfer function,1,0
+059,Write split transfer data to the VFO,1,0
+060,Transmit inhibit,1,0
+061,COM port communication speed,1,0
+062,USB port communication speed,1,0
+063,DATA modulation line,1,0
+064,USB audio input level,1,0
+065,USB audio output level,1,0
+066,ACC2 terminal AF input level,1,0
+067,ACC2 terminal AF output level,1,0
+068,External AF output beep mix,1,0
+069,DATA VOX,1,0
+070,DATA VOX delay,2,0
+071,DATA VOX gain for USB audio input,1,0
+072,DATA VOX gain for ACC2 terminal input,1,0
+073,PKS polarity change,1,0
+074,Busy transmit inhibit,1,0
+075,CTCSS mute operation change,1,0
+076,PSQ control signal logic selection,1,0
+077,PSQ control signal output condition,1,0
+078,APO function (minutes),1,0
+079,Panel PF A function,3,0
+080,Panel PF B function,3,0
+081,Mic PF 1 function,3,0
+082,Mic  PF 2 function,3,0
+083,Mic  PF 3 function,3,0
+084,Mic  PF 4 function,3,0
+085,Mic  PF (DWN) function,3,0
+086,Mic  PF (UP) function,3,0
+087,Power on message,8,1
