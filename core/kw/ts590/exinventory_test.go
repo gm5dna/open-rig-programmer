@@ -20,7 +20,9 @@ import (
 // the file split forbids.
 //
 // So what is pinned here is the DECLARATION SURFACE: the three accessor
-// names and their exact signature. Values are pinned by lane P's own
+// names, their exact signature, and WHICH VARIABLE EACH ONE READS — that
+// last by a difference the test makes and undoes for itself, never by an
+// absolute row count. Values are pinned by lane P's own
 // staleness tests (each asserting its inventory's length equals that
 // profile's ExpectedRows, so an ungenerated bootstrap file fails loudly
 // rather than presenting an empty menu table as a valid one) and by T10's
@@ -45,8 +47,24 @@ var (
 // one variable would be the exact cross-model borrowing this package is
 // split to prevent.
 //
-// "Different inventories" is asserted structurally, without reading either
-// one: the two accessors must not be the same function value.
+// "DIFFERENT INVENTORIES" IS PROVED BY A DIFFERENCE THIS TEST ITSELF MAKES,
+// which is what lets it be proved without reading either inventory. The test
+// appends one zero item to a COPY of exItems590S, rebinds the variable to
+// it, and requires exactly two things: EXItemsS' length moved by one, so it
+// reads exItems590S; and EXItemsSG' length did not move, so it does not.
+// Either half of the borrowing is caught — if both accessors read
+// exItems590S the second assertion fails, and if both read exItems590SG the
+// first does. The original is restored before the test returns.
+//
+// It asserts no absolute row count, no name and no width: the only numbers
+// it uses are the lengths it measured a line earlier and the delta it
+// created. So it holds identically over the empty bootstrap declarations and
+// over lane P's generated tables, and it needs no edit when generation runs.
+//
+// The two accessors are NOT compared as function values. Go func values are
+// comparable only to nil, and the reflect.Pointer route proves nothing about
+// the subject anyway: two distinct functions reading ONE variable — the bug
+// — have two distinct code pointers.
 func TestAccessors_AreCallableAndDistinct(t *testing.T) {
 	gotS := EXItemsS()
 	gotSG := EXItemsSG()
@@ -58,5 +76,17 @@ func TestAccessors_AreCallableAndDistinct(t *testing.T) {
 	}
 	if len(gotS) != len(EXItemsS()) {
 		t.Error("EXItemsS() is not stable across calls")
+	}
+
+	origS := exItems590S
+	t.Cleanup(func() { exItems590S = origS })
+	wasS, wasSG := len(EXItemsS()), len(EXItemsSG())
+
+	exItems590S = append(append([]kw.EXItem(nil), origS...), kw.EXItem{})
+	if got := len(EXItemsS()); got != wasS+1 {
+		t.Errorf("one item was added to exItems590S and EXItemsS() went from %d to %d, want %d — EXItemsS does not read exItems590S", wasS, got, wasS+1)
+	}
+	if got := len(EXItemsSG()); got != wasSG {
+		t.Errorf("only exItems590S was changed and EXItemsSG() went from %d to %d — the two accessors read ONE inventory, which is the S/SG table sharing this package is split to prevent", wasSG, got)
 	}
 }
