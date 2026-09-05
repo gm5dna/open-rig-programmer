@@ -68,8 +68,9 @@
 // write went first, and the frame left BEFORE the fatal frame was
 // received. There is no third interleaving. Why that cannot deadlock is
 // a two-clause theorem on Engine.gatedWrite — the load-bearing half being
-// that the gated section performs no channel operation, takes no engine
-// lock and waits on the reader goroutine in no way. The two facts the
+// that the gated section performs no channel receive or send, takes no
+// engine lock but closePort's sync.Once, whose wait is bounded by the
+// driver, and waits on the reader goroutine in no way. The two facts the
 // guarantee is NARROWER than (a blocking Port.Write holds the gate; the
 // typed cause survives only when the publication wins the first close)
 // are stated on FatalFramer itself, and pinned rather than asserted.

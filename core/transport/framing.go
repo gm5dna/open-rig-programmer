@@ -181,9 +181,11 @@ type Framing interface {
 // respect: Engine resolves the type assertion ONCE, where it stores the
 // framing, so both hot sites — readLoop's chunk scan and Engine.gatedWrite
 // — are ONE nil-field check and nothing else. No lock is taken, no closed
-// recheck is made, no byte and no timing changes: gatedWrite dispatches
-// such a write straight to the direct Port.Write it made before this hook
-// existed. Three tests pin that rather than asserting it.
+// recheck is made: the absent path executes base's Port.Write unchanged,
+// and that nil-field check is the whole addition needed to reach it —
+// gatedWrite dispatches such a write straight to the direct Port.Write it
+// made before this hook existed. Three tests pin that rather than
+// asserting it.
 // TestFatalFramer_AbsentIsInert covers the resolution and an ordinary
 // exchange; TestFatalFramer_AbsentWriteRacingCloseGoesOutAsBaseDid pins
 // the write path where it could differ — a Do that has already lost the
