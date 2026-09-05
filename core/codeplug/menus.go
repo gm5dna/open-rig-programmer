@@ -29,8 +29,10 @@ const (
 type MenuEntry struct {
 	// ID is the stable menu identifier: exactly 3, 4 or 6 ASCII digits —
 	// the EX address in its dialect's wire form (P1P2P3 under
-	// EXAddressTriple, P1P2 under EXAddressPair, a bare Kenwood MENU
-	// number under core/kw; cat.Dialect.EXWire renders each Yaesu form).
+	// EXAddressTriple, P1P2 under EXAddressPair, bare P1 under
+	// EXAddressSingle — the FT-991A; cat.Dialect.EXWire renders each of
+	// those three Yaesu forms — or a bare Kenwood MENU number under
+	// core/kw).
 	// Not always six: the S0-close review's LOW-4 finding was this comment
 	// still promising P1P2P3 unconditionally after the FT-891's narrower
 	// wire form was added, and the Kenwood line narrowed it again. See
@@ -89,8 +91,9 @@ func (m *MenuSnapshot) Clone() *MenuSnapshot {
 // width belongs to the RADIO and not to this package. All three widths the
 // project's dialects express are admitted: six for a (P1,P2,P3) MENU Number
 // — the FT-710, FTdx10 and FTdx101, core/cat's EXAddressTriple — four for a
-// (P1,P2) one, core/cat's EXAddressPair, and three for a Kenwood MENU
-// number, which core/kw addresses as a bare three-digit field. This is a
+// (P1,P2) one, core/cat's EXAddressPair — and three for either a bare P1
+// under core/cat's EXAddressSingle (the FT-991A) or a Kenwood MENU number,
+// which core/kw addresses as its own bare three-digit field. This is a
 // validator rule only: no serialised field changed and the schema did not
 // move. TestMenuSnapshotValidate_SettingIDWidths and
 // TestMenuSnapshotValidate_ThreeDigitIDs pin the three widths and the
