@@ -401,7 +401,7 @@ type BankView struct {
 	// grid render a column for a field only where the radio has one
 	// (app/frontend/src/lib/grid/columns.js's columnsFor).
 	//
-	// It is EMPTY on every bank of all four Yaesu models, whose grids are
+	// It is EMPTY on every bank of all five Yaesu models, whose grids are
 	// therefore exactly the ten columns they have always had — which was
 	// the point: the tier added no visible change until a radio that has
 	// the fields arrived. The IC-7610 (registered in Wave 4) is that

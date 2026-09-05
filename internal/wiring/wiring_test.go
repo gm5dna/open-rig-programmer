@@ -441,10 +441,11 @@ func TestOpenFakeSessionFor_EveryRegisteredModel_ReadsEveryDefaultSlot(t *testin
 			// bump a Yaesu codeplug's schema and break byte identity.
 			//
 			// What this actually exercises, and no more: the schema-3
-			// arm by the four Yaesu models (FT-710, FTdx10, FTdx101D,
-			// FTdx101MP), and the >= 4 arm by the IC-R8600 alone,
+			// arm by the five Yaesu models (FT-710, FTdx10, FTdx101D,
+			// FTdx101MP, FT-891 — the FT-891 reaches none of the tier
+			// fields either), and the >= 4 arm by the IC-R8600 alone,
 			// whose fake ships populated default slots at schema 5.
-			// Those five are also the only models the Absent sweep
+			// Those six are also the only models the Absent sweep
 			// above is non-vacuous for. The other ten Icom fakes have
 			// EMPTY default images — nothing to read a tier state from
 			// — so both the sweep and the >= 4 arm say nothing about
@@ -2588,7 +2589,7 @@ func registerFramingFixture(t *testing.T, model string, stopBits int) {
 }
 
 // TestOpenRealSessionFor_StopBitsFollowAReportingDriver is spec D3.1's
-// half that the four registered Yaesu models cannot prove: a driver
+// half that the five registered Yaesu models cannot prove: a driver
 // implementing driver.SerialFramingReporter has its answer carried into
 // the port's own configuration, so an Icom radio's 8-N-1 line is opened
 // 8-N-1 rather than at transport's fixed 8-N-2.
@@ -2648,7 +2649,7 @@ func TestOpenRealSessionFor_StopBitsRefuseAnImpossibleReport(t *testing.T) {
 	}
 }
 
-// yaesuModels names the four registered Yaesu models, BY NAME rather than
+// yaesuModels names the five registered Yaesu models, BY NAME rather than
 // by "every registered model" — the scoping Wave 4's IC-7610 registration
 // (task R1) forced on the three tests below. Before Wave 4, SupportedModels()
 // and "every registered model" were the same set and a hardcoded
@@ -2693,7 +2694,7 @@ var yaesuModels = []string{DefaultModel, FTdx10Model, FTdx101DModel, FTdx101MPMo
 // MEMBERSHIP HERE IS ABOUT THE MAKER, NOT ABOUT SERIAL FRAMING, and the
 // IC-7100 is why that distinction now has to be stated: it is the first
 // Icom row that implements NO driver.SerialFramingReporter, so it opens
-// at 8-N-2 like the four Yaesu rows. It still belongs in this list —
+// at 8-N-2 like the five Yaesu rows. It still belongs in this list —
 // TestYaesuAndIcomModelsPartitionSupportedModels partitions
 // SupportedModels() by maker — and its framing coverage is
 // TestOpenRealSessionFor_IC7100OpensAtEightNTwo rather than an
@@ -2730,7 +2731,7 @@ func TestYaesuAndIcomModelsPartitionSupportedModels(t *testing.T) {
 
 // TestOpenRealSessionFor_EveryYaesuModelOpensAtEightNTwo is the pin the
 // adjudication asks for, on the honest observable: the PORT CONFIGURATION
-// each of the four registered Yaesu models is opened with. None of them
+// each of the five registered Yaesu models is opened with. None of them
 // implements SerialFramingReporter, so each must still reach the serial
 // layer at transport.DefaultStopBits — before and after E2, unchanged.
 //
@@ -2748,7 +2749,7 @@ func TestOpenRealSessionFor_EveryYaesuModelOpensAtEightNTwo(t *testing.T) {
 				t.Fatalf("realDriverFor(%q): %v", model, err)
 			}
 			if r, ok := d.(driver.SerialFramingReporter); ok {
-				t.Fatalf("%s implements SerialFramingReporter (reporting %d) — the four Yaesu models must not, so that 8-N-2 stays their port configuration by default rather than by a driver's statement", model, r.StopBits())
+				t.Fatalf("%s implements SerialFramingReporter (reporting %d) — the five Yaesu models must not, so that 8-N-2 stays their port configuration by default rather than by a driver's statement", model, r.StopBits())
 			}
 
 			got := recordSerialConfig(t)

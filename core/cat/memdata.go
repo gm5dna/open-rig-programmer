@@ -566,7 +566,7 @@ func (e *FreqTooWideError) Error() string {
 // MemoryData from a codeplug.ChannelData calls this and propagates the
 // error.
 //
-// For the four Yaesu NEWCAT models registered today the error arm is
+// For the five Yaesu NEWCAT models registered today the error arm is
 // UNREACHABLE in practice — codeplug.Validate has already rejected any
 // frequency above those radios' 75 MHz ceiling, and the write path
 // refuses a channel Validate rejected — so this is defence in depth at a

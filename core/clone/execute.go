@@ -182,7 +182,7 @@ func writableFieldsMismatch(want, got codeplug.ChannelData) []spec.Field {
 // core/driver/*/read.go), and comparing that against anything would
 // abort a write that in fact landed perfectly.
 //
-// For the four Yaesu models registered today the rule means this
+// For the five Yaesu models registered today the rule means this
 // function never contributes a field at all: both sides are Unavailable,
 // so no comparison is even attempted, and their verify behaviour is
 // unchanged.
