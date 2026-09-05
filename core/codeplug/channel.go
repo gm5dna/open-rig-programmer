@@ -40,7 +40,18 @@ type ChannelData struct {
 	RxClar bool `json:"rx_clar,omitempty"`
 	// TxClar is whether the clarifier applies to transmit.
 	TxClar bool `json:"tx_clar,omitempty"`
-	// CTCSS is the CTCSS mode: "OFF", "ENC-DEC", or "ENC".
+	// CTCSS is the CTCSS state, as an OPAQUE STRING from the radio's own
+	// spec.Capabilities.CTCSSStates vocabulary — "OFF", "ENC-DEC" or "ENC"
+	// on every model registered before Tier 1's FT-991A, and those three
+	// plus "DCS-ENC-DEC" and "DCS-ENC" on that radio, whose P8 legend
+	// prints five. This package never enumerates the set: Validate checks
+	// the value against caps' own list, and
+	// TestValidate_AcceptsADCSStateChannel and
+	// TestSaveLoad_PreservesADCSState (dcsstate_roundtrip_test.go) are what
+	// pin that a state this comment does not name still round-trips.
+	// (Matrix erratum M-E2: this comment named the family three as though
+	// they were the field's domain, after S0.4 landed tests in this very
+	// package that contradict it.)
 	CTCSS string `json:"ctcss"`
 	// CTCSSTone is the CTCSS tone, meaningful when CTCSS is not "OFF".
 	CTCSSTone ToneField `json:"ctcss_tone"`

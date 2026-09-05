@@ -66,16 +66,21 @@ func TestTierFieldStates_MatchAllFields(t *testing.T) {
 // Fatalf — forwards to the embedded real testing.TB, so the helper runs
 // exactly as it does at its driver call sites.
 //
-// FOURTEEN of those, counted rather than guessed — one per driver package
+// FIFTEEN of those, counted rather than guessed — one per driver package
 // but the IC-R8600's, which reports the seven D8 fields Known and so
 // calls AssertFreshReadSaveLoadNormalised instead, and but the FT-891's
 // (Tier 1), which calls it TWICE — once per read.go path (the combined MT
 // form and the MR-only form), both against its own single model. They
-// cover fifteen of the sixteen registered models: the ftdx101 and ic7851
-// packages each run their one call over a pair of constructors, so two
-// models come out of each, while the FT-891's two calls both cover the
-// same one. This comment said "fifteen" until the count was checked, and
-// at that point the IC-7850 was in fact covered by nothing.
+// cover sixteen of the seventeen registered models: the ftdx101 and
+// ic7851 packages each run their one call over a pair of constructors, so
+// two models come out of each, while the FT-891's two calls both cover
+// the same one. This comment said "fifteen" until the count was checked,
+// and at that point the IC-7850 was in fact covered by nothing.
+//
+// Tier 1's SECOND registration moved both numbers by one and neither by
+// more: core/driver/ft991a calls this helper ONCE (that radio has a
+// single read path — one combined MT exchange, no MR-only form and no
+// discovery — so there is no second path to cover), for its one model.
 type errorRecorder struct {
 	testing.TB
 	errs []string

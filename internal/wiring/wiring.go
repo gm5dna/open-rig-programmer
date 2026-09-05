@@ -1560,14 +1560,14 @@ func SynthesiseDiscoveredBanks(model string, slots []string) ([]spec.Bank, bool)
 // it reports other than 1 or 2.
 //
 // STILL NOT A spec.Capabilities FIELD. The M9c-5 (E2) rule — a framing
-// field only with hardware evidence — is untouched, and the four
+// field only with hardware evidence — is untouched, and the six
 // registered Yaesu models still reach the serial layer at
 // transport.DefaultStopBits, because none of them implements the
 // interface. What D3.1 adds is somewhere for a driver that DOES have a
 // framing fact to put it, and the Icom models are that case — all of them
 // but the IC-7100, whose manual states no serial format for the CI-V link
 // at all and which therefore implements NOTHING here and reaches the
-// serial layer at transport.DefaultStopBits like the Yaesu four
+// serial layer at transport.DefaultStopBits like the Yaesu six
 // (core/driver/ic7100/doc.go's framing paragraph).
 //
 // ZERO IS REFUSED WITH THE REST, and that is the rule's whole substance.
