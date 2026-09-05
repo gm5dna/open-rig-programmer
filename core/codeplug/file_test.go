@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -157,7 +158,20 @@ func TestSave_EndsWithNewline(t *testing.T) {
 
 // TestSave_Permissions0600 checks that a saved file has mode 0600 — a
 // deliberate, privacy-lean default, since a codeplug can carry callsigns.
+//
+// Skipped on Windows, following internal/userconfig's precedent
+// (userconfig_test.go:443-445) for the same assertion about the same
+// privacy-lean mode: Windows has no Unix permission bits, os.Chmod there
+// only toggles the read-only attribute, and Stat reports a synthesised
+// 0666/0444. There is no weaker Windows form of THIS claim to fall back
+// on — the mode Save asks for reaches no ACL — so the claim is skipped
+// where the platform cannot express it, never weakened where it can.
+// Save's other properties (atomicity, no stray temp file, the trailing
+// newline) are asserted on every platform by the tests around this one.
 func TestSave_Permissions0600(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix permission bits are not meaningful on Windows")
+	}
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.rop.json")
 
