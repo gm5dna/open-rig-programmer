@@ -18,7 +18,7 @@
 //
 // # Provenance
 //
-// Every capability value comes from the A4 capability matrix
+// Every capability value comes from the A4-format capability matrix
 // (docs/superpowers/kenwood-590sg-480-capability-matrix.md), which derives
 // each from the "TS-590S/TS-590SG PC Control Command Reference Guide" — cited
 // throughout as 590:LINE against that document's own layout extraction — and

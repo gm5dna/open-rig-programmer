@@ -128,6 +128,49 @@ func (e *AnswerMismatchError) Error() string {
 // Unwrap lets errors.Is(err, ErrAnswerMismatch) match.
 func (e *AnswerMismatchError) Unwrap() error { return ErrAnswerMismatch }
 
+// AnswerP1MismatchError reports an MR answer whose P1 names a different half
+// of the addressing than the read asked for, on a slot whose IDENTIFIER
+// cannot carry that difference.
+//
+// IT IS THE MEM SLOT'S CASE, and it exists because Slot.String() is not a
+// complete rendering of what was addressed. On a section channel P1 IS in the
+// identifier ("100L" against "100U"), so AnswerMismatchError catches a wrong
+// half there; on a MEM slot the string is three digits and P1 is discarded.
+// An answer carrying P1='1' is the TRANSMIT side of a split channel
+// (590:1519-1520), so accepting one for the P1='0' read this driver sends
+// would store a transmit frequency as the channel's receive frequency and
+// leave TxFreqHz Unavailable — silent loss that codeplug.Validate cannot see,
+// which is what decision 11 and M-E2 exist to prevent.
+//
+// The comparison is the read-side twin of one core/kw's builder already makes
+// (kw.BuildMWSet refuses a record whose AnswerP1 disagrees with its slot's
+// class, 590:1529-1531). It is NOT reachable from this driver's own traffic
+// today — plan P13 sends P1=1 only on a SCAN 'U' slot — so what it refuses is
+// a radio, a cable or a stale frame contradicting the request; it becomes
+// live in the driver's own choreography the day A9 lifts and P1=1 reads of
+// ordinary memories begin. TestReadChannel_AnAnswerWhoseP1DisagreesIsRefusedOnAMEMSlot
+// pins it on both rows.
+//
+// It shares AnswerMismatchError's sentinel because a caller asking "did this
+// answer name what I asked for?" is asking one question, and the two types
+// are what distinguish the two ways the answer can differ.
+type AnswerP1MismatchError struct {
+	// Slot is the identifier both the request and the answer named.
+	Slot string
+	// Requested is the P1 byte the read sent, derived from the slot's class.
+	Requested byte
+	// Answered is P1 exactly as the answer carried it.
+	Answered byte
+}
+
+// Error implements the error interface.
+func (e *AnswerP1MismatchError) Error() string {
+	return fmt.Sprintf("ts590: slot %q was read with P1=%q but the answer carries P1=%q — on this radio P1=1 is the transmit side of a split channel (590:1519-1520), and storing it as the channel's frequency would lose the difference silently", e.Slot, e.Requested, e.Answered)
+}
+
+// Unwrap lets errors.Is(err, ErrAnswerMismatch) match.
+func (e *AnswerP1MismatchError) Unwrap() error { return ErrAnswerMismatch }
+
 // parseSlotID splits a canonical slot identifier into the channel number and,
 // for a section-defined channel, which of its two frequencies is meant.
 //
@@ -223,7 +266,7 @@ func (s *Session) bankNames() string {
 // builds, because both books say the NAK is unreliable (590:106-108,
 // 480:136-138) and a timeout is therefore neither "absent" nor "rejected".
 func (s *Session) mrSpec() transport.CommandSpec {
-	return s.spec("MR", kw.RecordLen, 1)
+	return s.newReadSpec("MR", kw.RecordLen, 1)
 }
 
 // ReadChannel implements driver.Session: ONE MR frame per slot, and nothing
@@ -307,22 +350,11 @@ func (s *Session) ReadChannel(ctx context.Context, id string) (codeplug.Channel,
 		return codeplug.Channel{}, fmt.Errorf("ts590: ReadChannel %s: %w", id, err)
 	}
 	frame, err := s.eng.Do(ctx, cmd, s.mrSpec())
-	switch {
-	case errors.Is(err, transport.ErrRejected):
-		rej, nerr := kw.NewRejectionError(s.layout.Book(), "MR")
-		if nerr != nil {
-			// Unreachable: a configured layout always names a book.
-			return codeplug.Channel{}, fmt.Errorf("ts590: ReadChannel %s: %w", id, err)
-		}
-		return codeplug.Channel{}, fmt.Errorf("ts590: ReadChannel %s: %w", id, rej)
-	case errors.Is(err, transport.ErrTimeout):
-		to, nerr := kw.NewTimeoutError(s.layout.Book(), "MR")
-		if nerr != nil {
-			return codeplug.Channel{}, fmt.Errorf("ts590: ReadChannel %s: %w", id, err)
-		}
-		return codeplug.Channel{}, fmt.Errorf("ts590: ReadChannel %s: %w", id, to)
-	case err != nil:
-		return codeplug.Channel{}, fmt.Errorf("ts590: ReadChannel %s: MR: %w", id, err)
+	if err != nil {
+		// wireFailure is what types a "?;" and a timeout — see there, and
+		// see this function's own doc comment for what each means on this
+		// family. It is shared with the probe so one rule is applied once.
+		return codeplug.Channel{}, fmt.Errorf("ts590: ReadChannel %s: %w", id, wireFailure(s.layout, "MR", err))
 	}
 
 	rec, err := s.layout.ParseMRAnswer(frame)
@@ -331,6 +363,12 @@ func (s *Session) ReadChannel(ctx context.Context, id string) (codeplug.Channel,
 	}
 	if got := rec.Slot.String(); got != id {
 		return codeplug.Channel{}, &AnswerMismatchError{Requested: id, Answered: got}
+	}
+	if want := slot.P1(); rec.AnswerP1 != want {
+		// The half of the addressing the identifier does not carry — see
+		// AnswerP1MismatchError. On a SCAN slot the check above has already
+		// caught a wrong half, so this one is the MEM slot's.
+		return codeplug.Channel{}, &AnswerP1MismatchError{Slot: id, Requested: want, Answered: rec.AnswerP1}
 	}
 	if rec.Empty {
 		// A18a, and it is DOCUMENTARY FACT on these rows: "If the selected

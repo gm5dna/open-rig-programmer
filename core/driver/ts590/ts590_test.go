@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/kw"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -234,6 +235,13 @@ func TestOpen_WrongRadio(t *testing.T) {
 // is one worked example, "for firmware version 1.00, it reads FV1.00;"
 // (590:1035). So the parse may fail without the session failing — see
 // TestOpen_AnUnparseableFVOpensASession.
+//
+// THE SG LEG EXERCISES THE SAME PARSER, NOT A13'S CLAIM. A13 is explicitly
+// unclaimed on that row (core/kw/doc.go: no session has read an SG's FV
+// answer, and nothing downstream reads FV to decide anything there), and
+// parseFirmwareVersion is row-independent; running both rows pins that it
+// stays row-independent, and attributes no SG parse to a claim A13 does not
+// make.
 func TestOpen_FVIsParsedUnderA13sGrammar(t *testing.T) {
 	for _, tc := range []struct {
 		answer       string
@@ -286,19 +294,34 @@ func TestOpen_AnUnparseableFVOpensASession(t *testing.T) {
 	}
 }
 
-// TestOpen_AnFVThatDoesNotANSWERRefusesTheSession is the other side of that
-// asymmetry, and it is not the same situation. FV's EXISTENCE is printed for
-// both rows (590:1034-1037); a radio that answered ID; and then says nothing,
-// or rejects, is outside a document that is complete here, and the standing
-// rule is to refuse there and degrade only where the document is thin.
-func TestOpen_AnFVThatDoesNotANSWERRefusesTheSession(t *testing.T) {
+// TestOpen_AProbeFrameThatDoesNotANSWERRefusesTheSession is the other side of
+// that asymmetry, and it is not the same situation. FV's EXISTENCE is printed
+// for both rows (590:1034-1037), as ID's is; a radio that says nothing, or
+// rejects, is outside a document that is complete here, and the standing rule
+// is to refuse there and degrade only where the document is thin.
+//
+// IT ALSO PINS THE TYPE, WHICH IS THE POINT OF THE SECOND ASSERTION. The two
+// wire events are reported with core/kw's own typed errors on the PROBE path
+// exactly as on the read path — a "?;" naming the two indistinguishable
+// causes and the transient-suppression sentence, silence saying in as many
+// words that it is not an inference of absence — and the command each names
+// is the frame that actually failed. errors.Is alone cannot see that: it
+// passes on the bare transport error too.
+//
+// RED PROOF, observed before wireFailure was applied to the probe: both ID
+// rows and both FV rows failed at "errors.As(err, **kw.TimeoutError) = false"
+// / "**kw.RejectionError = false", the message being the transport's own.
+func TestOpen_AProbeFrameThatDoesNotANSWERRefusesTheSession(t *testing.T) {
 	for _, tc := range []struct {
-		name string
-		img  radioImage
-		is   error
+		name    string
+		img     radioImage
+		is      error
+		command string
 	}{
-		{"silence", radioImage{fvSilent: true}, transport.ErrTimeout},
-		{"a rejection", radioImage{fvReject: true}, transport.ErrRejected},
+		{"ID silence", radioImage{idSilent: true}, transport.ErrTimeout, "ID"},
+		{"ID rejected", radioImage{idReject: true}, transport.ErrRejected, "ID"},
+		{"FV silence", radioImage{fvSilent: true}, transport.ErrTimeout, "FV"},
+		{"FV rejected", radioImage{fvReject: true}, transport.ErrRejected, "FV"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := newRespondingPort(t, RowS, tc.img)
@@ -306,10 +329,26 @@ func TestOpen_AnFVThatDoesNotANSWERRefusesTheSession(t *testing.T) {
 			sess, err := d.Open(context.Background(), p.Port(), driver.Identity{})
 			if err == nil {
 				_ = sess.Close()
-				t.Fatal("Open succeeded against a radio that never answered FV;")
+				t.Fatalf("Open succeeded against a radio that never answered %s;", tc.command)
 			}
 			if !errors.Is(err, tc.is) {
 				t.Errorf("errors.Is(err, %v) = false for %v", tc.is, err)
+			}
+			var (
+				rejection *kw.RejectionError
+				timeout   *kw.TimeoutError
+				gotCmd    string
+			)
+			switch {
+			case errors.As(err, &rejection):
+				gotCmd = rejection.Command
+			case errors.As(err, &timeout):
+				gotCmd = timeout.Command
+			default:
+				t.Fatalf("neither *kw.RejectionError nor *kw.TimeoutError for %v — the probe path must type these two the way the read path does", err)
+			}
+			if gotCmd != tc.command {
+				t.Errorf("the typed error names command %q, want %q", gotCmd, tc.command)
 			}
 		})
 	}
@@ -382,3 +421,25 @@ var (
 	_ driver.SerialFramingReporter = (*ts590Driver)(nil)
 	_ driver.DiagnosticsReporter   = (*Session)(nil)
 )
+
+// TestOpen_TheFVAnswerIsReadableForTheProbeNote pins the design's stated
+// mitigation for the S row's firmware-blind filter grade: the raw FV bytes
+// reach a caller REGARDLESS OF PARSE, so an owner of a 2.xx TS-590S can see
+// that their radio has a capability this row does not publish.
+//
+// The unparseable row is the one that matters — a session whose grammar
+// assumption (A13) failed must still be able to report what it was told.
+func TestOpen_TheFVAnswerIsReadableForTheProbeNote(t *testing.T) {
+	for _, tc := range []struct{ answer, want string }{
+		{"FV1.00;", "1.00"},
+		{"FV2.12;", "2.12"},
+		{"FVWXYZ;", "WXYZ"}, // A13's grammar fails; the bytes still surface
+	} {
+		for _, row := range bothRows {
+			sess, _ := openTestSession(t, row, radioImage{fvAnswer: tc.answer})
+			if got := sess.FirmwareAnswer(); got != tc.want {
+				t.Errorf("%s %q: FirmwareAnswer() = %q, want the four characters verbatim %q", modelNameFor(row), tc.answer, got, tc.want)
+			}
+		}
+	}
+}

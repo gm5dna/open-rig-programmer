@@ -600,23 +600,28 @@ func TestReadChannel_AShortMRAnswerNeverReachesTheParser(t *testing.T) {
 	// terminator, so the frame is one byte short of the printed grid and is
 	// otherwise well formed.
 	short := populatedMR("042")[:kw.RecordLen-2] + ";"
-	sess, p := openTestSession(t, RowSG, radioImage{
-		mrAnswers: map[string]string{mrAddr("042"): short},
-	})
-	_, err := sess.ReadChannel(context.Background(), "042")
-	if !errors.Is(err, transport.ErrTimeout) {
-		t.Errorf("a 49-byte MR answer: err = %v, want a timeout — an exact-width matcher must not correlate it", err)
-	}
-	if errors.Is(err, kw.ErrParse) {
-		t.Errorf("a 49-byte MR answer reached the parser: %v", err)
-	}
-	if got := p.Transcript(); len(got) < 4 || got[3] != "MR0042;" {
-		t.Errorf("transcript = %v, want the MR read to have gone out", got)
-	}
+	// BOTH ROWS, because the width predicate is one predicate: core/kw's
+	// checkRecordLen is not row-conditional, and running the pair is what
+	// stops that becoming an assumption.
+	for _, row := range bothRows {
+		sess, p := openTestSession(t, row, radioImage{
+			mrAnswers: map[string]string{mrAddr("042"): short},
+		})
+		_, err := sess.ReadChannel(context.Background(), "042")
+		if !errors.Is(err, transport.ErrTimeout) {
+			t.Errorf("%s: a 49-byte MR answer: err = %v, want a timeout — an exact-width matcher must not correlate it", modelNameFor(row), err)
+		}
+		if errors.Is(err, kw.ErrParse) {
+			t.Errorf("%s: a 49-byte MR answer reached the parser: %v", modelNameFor(row), err)
+		}
+		if got := p.Transcript(); len(got) < 4 || got[3] != "MR0042;" {
+			t.Errorf("%s: transcript = %v, want the MR read to have gone out", modelNameFor(row), got)
+		}
 
-	// The codec's own width predicate, on the same bytes.
-	_, perr := sess.layout.ParseMRAnswer([]byte(short))
-	assertKenwoodRecordLengthMismatch(t, perr, "MR", kw.RecordLen-1, kw.RecordLen)
+		// The codec's own width predicate, on the same bytes.
+		_, perr := sess.layout.ParseMRAnswer([]byte(short))
+		assertKenwoodRecordLengthMismatch(t, perr, "MR", kw.RecordLen-1, kw.RecordLen)
+	}
 }
 
 // assertKenwoodRecordLengthMismatch pins the record-length refusal contract:
@@ -810,5 +815,45 @@ func TestReadAll_FailsWholeOnTheFirstRefusalOrTimeout(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestReadChannel_AnAnswerWhoseP1DisagreesIsRefusedOnAMEMSlot is the MEM half
+// of the answer-mismatch guard, and it is a DIFFERENT fact from the SCAN half
+// above. On a section channel P1 is folded into the slot's own string ("100L"
+// against "100U"), so the string comparison catches a wrong half; on a MEM
+// slot Slot.String() renders three digits and discards P1 entirely.
+//
+// An MR answer carrying P1='1' is the TRANSMIT side of a split channel
+// (590:1519-1520). Accepting one for the P1='0' read this driver sent would
+// store a transmit frequency as the channel's receive frequency with TxFreqHz
+// left Unavailable — the silent loss decision 11 exists to prevent, and one
+// codeplug.Validate cannot see. The write side has made the same comparison
+// since core/kw's builder (kw.BuildMWSet refuses a record whose AnswerP1
+// disagrees with its slot's class, 590:1529-1531); this is the read side's.
+//
+// RED PROOF, observed before the guard existed: the read SUCCEEDED and
+// returned FreqHz=145500000 from an answer the driver never asked for.
+func TestReadChannel_AnAnswerWhoseP1DisagreesIsRefusedOnAMEMSlot(t *testing.T) {
+	for _, row := range bothRows {
+		f := populatedFields("042")
+		f.p1 = '1'
+		sess, _ := openTestSession(t, row, radioImage{mrAnswers: map[string]string{
+			mrAddr("042"): f.frame(),
+		}})
+		ch, err := sess.ReadChannel(context.Background(), "042")
+		if err == nil {
+			t.Fatalf("%s: ReadChannel(\"042\") accepted a P1='1' answer and stored %+v", modelNameFor(row), ch.Data)
+		}
+		if !errors.Is(err, ErrAnswerMismatch) {
+			t.Errorf("%s: errors.Is(err, ErrAnswerMismatch) = false for %v", modelNameFor(row), err)
+		}
+		var mismatch *AnswerP1MismatchError
+		if !errors.As(err, &mismatch) {
+			t.Fatalf("%s: errors.As(err, **AnswerP1MismatchError) = false for %v", modelNameFor(row), err)
+		}
+		if mismatch.Slot != "042" || mismatch.Requested != '0' || mismatch.Answered != '1' {
+			t.Errorf("%s: AnswerP1MismatchError = %q %q/%q, want \"042\" '0'/'1'", modelNameFor(row), mismatch.Slot, mismatch.Requested, mismatch.Answered)
+		}
 	}
 }

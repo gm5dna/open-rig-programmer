@@ -59,6 +59,12 @@ type radioImage struct {
 	// selects the row's own, so only a wrong-radio test says anything
 	// about it.
 	catID string
+	// idSilent makes "ID;" draw no reply at all, and idReject makes it
+	// answer "?;" — the identity probe's two transport-level failure rows,
+	// which no self-consistent radio image can express and which the FV
+	// pair below has needed since the probe was written.
+	idSilent bool
+	idReject bool
 	// fvAnswer is the WHOLE frame "FV;" is answered with. Empty selects
 	// "FV1.00;", the book's own worked example (590:1035).
 	fvAnswer string
@@ -164,6 +170,12 @@ func (p *respondingPort) record(frame string) {
 func (img radioImage) reply(frame string) string {
 	switch {
 	case frame == "ID;":
+		switch {
+		case img.idSilent:
+			return ""
+		case img.idReject:
+			return "?;"
+		}
 		return "ID" + img.catID + ";"
 	case frame == "FV;":
 		switch {
