@@ -500,10 +500,12 @@ var mtVectors = []struct {
 // byte-compares it with the golden — then asserts the frame is admissible
 // outbound.
 //
-// THE DISPLAY-LESS PAIR IS THE ONLY PAIR THIS DIALECT HAS, and the subtest
-// at the end of the loop's first iteration proves it rather than assuming
-// it: under cat.P11Fixed, core/cat's display-bearing
-// BuildMTSetCombinedDisplay and ParseMTAnswerCombinedDisplay refuse outright.
+// THE DISPLAY-LESS PAIR IS THE ONLY PAIR THIS DIALECT HAS, and the check
+// above the loop proves the parse half of it rather than assuming it: under
+// cat.P11Fixed, ParseMTAnswerCombinedDisplay refuses outright. The build
+// half — that BuildMTSetCombinedDisplay refuses too — is pinned separately
+// by dialect_test.go's TestDifferencePinMTP11 (its BuildMTSetCombinedDisplay
+// assertion), not here.
 // dialect_test.go's TestDifferencePinMTP11 holds both halves of that against
 // the FT-891, where the refusals run the other way.
 //
@@ -553,6 +555,12 @@ func TestGoldenMTCombinedSetVectors(t *testing.T) {
 			}
 			if got := v.frame[24:26]; got != "00" {
 				t.Fatalf("P9 (positions 25-26) of the golden is %q, want \"00\" — the legend prints \"P9 00: (Fixed)\". THIS IS A STOP.", got)
+			}
+			// P3's sign byte (position 15): read off the file, uniformly
+			// with the other INHERITED-ASSUMED positions above, rather than
+			// bound only through ClarHz and the rebuild.
+			if got := v.frame[14]; got != '+' && got != '-' {
+				t.Fatalf("P3 (position 15) of the golden is %q, want '+' or '-' — this dialect's memory codec's clarifier sign byte. THIS IS A STOP.", got)
 			}
 
 			m, tag, err := d.ParseMTAnswerCombined([]byte(v.frame))
@@ -693,6 +701,18 @@ func TestGoldenMTReadRequest(t *testing.T) {
 	if !d.AllowedCommand([]byte(mtReadRequest)) {
 		t.Errorf("AllowedCommand refused the MT read request %q — THIS IS A STOP.", mtReadRequest)
 	}
+
+	// mtReadRequest is re-typed from the golden's COMMENT block, which
+	// loadGoldenVectors skips — the freeze above does not reach it. Assert
+	// it verbatim against the frozen file's bytes, so an edit to this const
+	// is caught by the same mechanism that protects every other byte here.
+	raw, err := os.ReadFile(filepath.Join(goldenDir, "mt-vectors.golden"))
+	if err != nil {
+		t.Fatalf("reading mt-vectors.golden: %v", err)
+	}
+	if !strings.Contains(string(raw), mtReadRequest) {
+		t.Errorf("mtReadRequest %q does not appear verbatim in mt-vectors.golden — the const has drifted from the frozen comment it was transcribed from", mtReadRequest)
+	}
 }
 
 // mwVectors states, as literals, what each MW vector's bytes encode.
@@ -735,12 +755,24 @@ func TestGoldenMTReadRequest(t *testing.T) {
 //
 // The six cases mirror MT vectors 1 and 5-9 (the tag-carrying positions do
 // not exist here: the MW chart stops at 28 and its legend has no P11 or
-// P12). THERE IS NO PMS MW VECTOR, unlike the FT-891's file — this radio's
-// MW legend prints only "P1 001-117 (Memory Channel)" and never decomposes
-// the span (mw-vectors.golden's "SLOT-RANGE LEGEND" note), so the derivation
+// P12). mw-vectors.golden's own trailing comment says "three cases" mirror
+// MT 1, 5 and 6 — stale against the file's actual six vectors; recorded
+// here, not fixed there, because the file is frozen.
+//
+// THERE IS NO PMS MW VECTOR, unlike the FT-891's file — this radio's MW
+// legend prints only "P1 001-117 (Memory Channel)" and never decomposes the
+// span (mw-vectors.golden's "SLOT-RANGE LEGEND" note), so the derivation
 // declined to spell a PMS slot under a command whose own legend does not.
-// The PMS half of the write domain is exercised by the MT vector at channel
-// 100 instead.
+// That evidence gap is acceptable; what is NOT is treating the MT ch100
+// vector as covering it — MT and MW do NOT share a slot predicate (MT's
+// combined Set gates on d.mtSlotValid, mtcombined.go:110-111; MW gates on
+// d.writableSlot, mw.go:81-82; mtcombined.go:90-94 says the split is
+// deliberate and the two rules are free to diverge), so the MT ch100 vector
+// exercises mtSlotValid(PMS) and cannot stand in for writableSlot(PMS).
+// TestGoldenMWSetVectors therefore also builds a PMS-slot MW frame — a
+// constructed record, not a golden vector, exactly as its TxClar
+// counterpart is — so the write gate's PMS arm is exercised by this package
+// at least once.
 var mwVectors = []struct {
 	name    string
 	channel int // P1, positions 3-5, through MemorySlot
@@ -785,7 +817,7 @@ var mwVectors = []struct {
 
 // TestGoldenMWSetVectors builds each MW Set frame from the hand-decomposed
 // record and byte-compares it with the golden, then asserts admissibility —
-// and, in the same subtest, builds the ONE record the goldens never wrote.
+// and, once after the loop, builds the TWO records the goldens never wrote.
 //
 // THE TX-CLARIFIER HALF IS THE EVIDENCE GAP MADE MECHANICAL, and it is the
 // mirror image of core/cat/ft891/golden_test.go's refusal half. Byte 21 is
@@ -796,7 +828,20 @@ var mwVectors = []struct {
 // and that it differs from the golden at position 21 and at no other
 // position: the state the derivation did not write is still held to the
 // position the chart gives it. dialect_test.go's TestDifferencePinMemoryP5
-// carries the FT-891 counter-example, where the same record is refused.
+// carries the FT-891 counter-example, where the same record is refused. It
+// is checked once, against vector 0, rather than inside every subtest: what
+// it proves ("and at no other position") does not depend on which vector it
+// is run against, so six repetitions would prove nothing six extra times.
+//
+// THE PMS HALF OF THE WRITE DOMAIN IS THE OTHER GAP MADE MECHANICAL. MW's
+// own legend never decomposes its P1 span, so the derivation wrote no PMS
+// vector here (mw-vectors.golden's "SLOT-RANGE LEGEND" note) — but MW's
+// write-direction slot predicate, d.writableSlot (mw.go:81-82), is a
+// DIFFERENT rule from MT's, d.mtSlotValid (mtcombined.go:110-111; the split
+// is deliberate, mtcombined.go:90-94), so the MT ch100 vector's PMS pass
+// does not exercise this one. This builds a PMS-slot MW frame directly, a
+// constructed record rather than a golden vector, exactly as the TxClar
+// counterpart above is.
 func TestGoldenMWSetVectors(t *testing.T) {
 	d := ft991a.Dialect()
 	vs := loadGoldenVectors(t, "mw-vectors.golden")
@@ -808,6 +853,10 @@ func TestGoldenMWSetVectors(t *testing.T) {
 		"mw_ch013_145m100_fm_p8_3_dcs_encdec",
 		"mw_ch014_145m100_fm_p8_4_dcs_enc",
 	)
+
+	// The record vector 0 decomposes to, kept for the two constructed
+	// counterparts run once after the loop below.
+	var firstRecord cat.MemoryData
 
 	for i, want := range mwVectors {
 		v := vs[i]
@@ -834,6 +883,11 @@ func TestGoldenMWSetVectors(t *testing.T) {
 			}
 			if got := v.frame[24:26]; got != "00" {
 				t.Fatalf("P9 (positions 25-26) of the golden is %q, want \"00\". THIS IS A STOP.", got)
+			}
+			// P3's sign byte (position 15): read off the file, uniformly
+			// with the other positions above.
+			if got := v.frame[14]; got != '+' && got != '-' {
+				t.Fatalf("P3 (position 15) of the golden is %q, want '+' or '-' — this dialect's memory codec's clarifier sign byte. THIS IS A STOP.", got)
 			}
 
 			slot, err := d.MemorySlot(want.channel)
@@ -865,27 +919,71 @@ func TestGoldenMWSetVectors(t *testing.T) {
 				t.Errorf("AllowedCommand refused a Set-direction golden frame %q — THIS IS A STOP.", v.frame)
 			}
 
-			txClar := m
-			txClar.TxClar = true
-			withTx, err := d.BuildMWSet(txClar)
-			if err != nil {
-				t.Fatalf("BuildMWSet REFUSED a TxClar-true record: %v. Under %v byte 21 is a live TX-clarifier flag on this radio (ft991a_layout.txt:1042), so the record is one the manual describes.", err, d.MemoryP5())
-			}
-			if got := string(withTx.Bytes()); len(got) != len(v.frame) {
-				t.Fatalf("the TxClar-true frame is %d bytes against the golden's %d", len(got), len(v.frame))
-			} else {
-				for pos := 1; pos <= len(got); pos++ {
-					same := got[pos-1] == v.frame[pos-1]
-					if pos == 21 && same {
-						t.Errorf("the TxClar-true frame matches the golden at position 21 (%q) — the TX-clarifier flag is not reaching byte 21", got[20])
-					}
-					if pos != 21 && !same {
-						t.Errorf("the TxClar-true frame differs from the golden at position %d (%q against %q) — only byte 21 carries this flag", pos, got[pos-1], v.frame[pos-1])
-					}
-				}
+			if i == 0 {
+				// Held here rather than in a closure, so the constructed
+				// counterparts below can reuse it verbatim.
+				firstRecord = m
 			}
 		})
 	}
+
+	// The TxClar-true counterpart, checked once (see the doc comment for
+	// why one vector is enough): it differs from golden vector 0 at
+	// position 21 and at no other position.
+	t.Run("constructed_txclar_true_counterpart", func(t *testing.T) {
+		v := vs[0]
+		txClar := firstRecord
+		txClar.TxClar = true
+		withTx, err := d.BuildMWSet(txClar)
+		if err != nil {
+			t.Fatalf("BuildMWSet REFUSED a TxClar-true record: %v. Under %v byte 21 is a live TX-clarifier flag on this radio (ft991a_layout.txt:1042), so the record is one the manual describes.", err, d.MemoryP5())
+		}
+		got := string(withTx.Bytes())
+		if len(got) != len(v.frame) {
+			t.Fatalf("the TxClar-true frame is %d bytes against the golden's %d", len(got), len(v.frame))
+		}
+		for pos := 1; pos <= len(got); pos++ {
+			same := got[pos-1] == v.frame[pos-1]
+			if pos == 21 && same {
+				t.Errorf("the TxClar-true frame matches the golden at position 21 (%q) — the TX-clarifier flag is not reaching byte 21", got[20])
+			}
+			if pos != 21 && !same {
+				t.Errorf("the TxClar-true frame differs from the golden at position %d (%q against %q) — only byte 21 carries this flag", pos, got[pos-1], v.frame[pos-1])
+			}
+		}
+	})
+
+	// The PMS-slot counterpart: a constructed record, not a golden vector,
+	// naming PMS pair 1 lower ("100"). See the doc comment — this is the
+	// hole M1 of the s1-t8 review names: MT ch100's admission does not
+	// exercise MW's own writableSlot PMS arm, so this does.
+	t.Run("constructed_pms_slot_counterpart", func(t *testing.T) {
+		slot, err := d.PMSSlot(1, false)
+		if err != nil {
+			t.Fatalf("PMSSlot(1, false): %v", err)
+		}
+		if got := slot.Wire(); got != "100" {
+			t.Fatalf("PMSSlot(1, false).Wire() = %q, want %q", got, "100")
+		}
+		if !slot.IsPMS() {
+			t.Fatalf("PMSSlot(1, false).IsPMS() = false")
+		}
+		m := firstRecord
+		m.Slot = slot
+		built, err := d.BuildMWSet(m)
+		if err != nil {
+			t.Fatalf("BuildMWSet refused a PMS-slot record naming %q: %v — this dialect's MW write gate (d.writableSlot) must admit PMS as well as memory slots", slot.Wire(), err)
+		}
+		if got, want := len(built.Bytes()), 28; got != want {
+			t.Fatalf("BuildMWSet on a PMS slot built %d bytes, want %d", got, want)
+		}
+		if got := string(built.Bytes())[2:5]; got != "100" {
+			t.Errorf("the built frame's P1 (positions 3-5) is %q, want %q", got, "100")
+		}
+		if !d.AllowedCommand(built.Bytes()) {
+			t.Errorf("AllowedCommand refused a PMS-slot MW frame %q — THIS IS A STOP: MW's write gate must admit its own builder's output.", built.Bytes())
+		}
+	})
 }
 
 // mrReadVectors states which slot each MR Read request names, and by which
@@ -1155,6 +1253,23 @@ const (
 // the comparison is made here, where the golden supplies the WANT side.
 func TestGoldenIDFrames(t *testing.T) {
 	d := ft991a.Dialect()
+
+	// idReadRequest and idAnswerFrame are re-typed from mc-vectors.golden's
+	// COMMENT block, which loadGoldenVectors skips — the freeze above does
+	// not reach them, and idAnswerFrame is load-bearing for this dialect's
+	// CATID (the doc comment above). Assert both verbatim against the
+	// frozen file's bytes, so an edit to either const is caught by the same
+	// mechanism that protects every other byte here.
+	raw, err := os.ReadFile(filepath.Join(goldenDir, "mc-vectors.golden"))
+	if err != nil {
+		t.Fatalf("reading mc-vectors.golden: %v", err)
+	}
+	if !strings.Contains(string(raw), idAnswerFrame) {
+		t.Errorf("idAnswerFrame %q does not appear verbatim in mc-vectors.golden — the const has drifted from the frozen comment it was transcribed from", idAnswerFrame)
+	}
+	if !strings.Contains(string(raw), idReadRequest) {
+		t.Errorf("idReadRequest %q does not appear verbatim in mc-vectors.golden — the const has drifted from the frozen comment it was transcribed from", idReadRequest)
+	}
 
 	if got := string(d.BuildIDRead().Bytes()); got != idReadRequest {
 		t.Errorf("BuildIDRead built %q, want %q — the ID block's Read chart", got, idReadRequest)
@@ -1465,14 +1580,23 @@ func TestGoldenCountedGeometry(t *testing.T) {
 	if _, err := d.ParseMRAnswer(mrAnswer); err != nil {
 		t.Errorf("ParseMRAnswer refused a 28-byte frame (%q): %v — the MR Answer chart is the MW Set chart under another prefix", mrAnswer, err)
 	}
+	if _, err := d.ParseMRAnswer(mrAnswer[:27]); err == nil {
+		t.Errorf("ParseMRAnswer accepted a 27-byte frame — the MR Answer chart runs to 28")
+	}
 	if _, err := d.ParseMRAnswer(append(mrAnswer[:27:27], '0', ';')); err == nil {
 		t.Errorf("ParseMRAnswer accepted a 29-byte frame — the MR Answer chart runs to 28")
 	}
 	if _, err := d.ParseMCAnswer(mcSet.Bytes()); err != nil {
 		t.Errorf("ParseMCAnswer refused a 6-byte frame (%q): %v — the MC Answer chart is the MC Set chart", mcSet.Bytes(), err)
 	}
+	if _, err := d.ParseMCAnswer(mcSet.Bytes()[:5]); err == nil {
+		t.Errorf("ParseMCAnswer accepted a 5-byte frame — the MC Answer chart runs to 6")
+	}
 	if _, err := d.ParseMCAnswer([]byte("MC0012;")); err == nil {
 		t.Errorf("ParseMCAnswer accepted a 7-byte frame — the MC Answer chart runs to 6")
+	}
+	if _, err := d.ParseIDAnswer([]byte(idAnswerFrame)[:6]); err == nil {
+		t.Errorf("ParseIDAnswer accepted a 6-byte frame — the ID Answer chart runs to 7")
 	}
 	if _, err := d.ParseIDAnswer([]byte("ID06700;")); err == nil {
 		t.Errorf("ParseIDAnswer accepted an 8-byte frame — the ID Answer chart runs to 7")
@@ -1480,9 +1604,10 @@ func TestGoldenCountedGeometry(t *testing.T) {
 }
 
 // spliceSlot returns frame with its P1 field (positions 3-5) replaced by
-// wire, which may be a different length: the MT, MW, MR, MC and EX frames
-// all put their three-position address immediately after the two command
-// letters, so one splice serves every family.
+// wire: the MT, MW, MR and MC frames all put their three-position address
+// immediately after the two command letters, so one splice serves the four
+// families it is used on below (EX's address is elsewhere in its frame and
+// is not spliced here). The only call passes a 3-character wire.
 func spliceSlot(frame, wire string) string {
 	return frame[:2] + wire + frame[5:]
 }
