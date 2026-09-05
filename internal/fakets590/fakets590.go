@@ -87,7 +87,11 @@ type Radio struct {
 	// writes fakeConn. It indexes the scripted stream errors.
 	exchanges int
 
-	mu sync.Mutex
+	mu      sync.Mutex
+	records map[recordKey]MemState
+	// currentChannel is what an "MC;" reports. It moves only by an MC Set;
+	// nothing here models a front panel.
+	currentChannel int
 	// ai is '0', '2' or '4' — the whole of this book's AI legend
 	// (590:159-162). OFF at construction, a MANUAL FACT: "Turn this
 	// function on using the AI command (the initial state is OFF)"
@@ -131,8 +135,14 @@ func New(row Row, opts ...Option) *Radio {
 		// test reaches the versions A13 and A14 turn on.
 		firmware:     defaultFirmware,
 		streamErrors: map[int]StreamError{},
-		ai:           aiOff,
-		shutdown:     make(chan struct{}),
+		records:      DefaultImage(),
+		// A radio that has had no MC Set is sitting on SOME channel, and
+		// this book prints no power-on value anywhere, so the fake takes the
+		// lowest number its slot space has and says so — doc.go's register
+		// entry THE SELECTED CHANNEL AT CONSTRUCTION.
+		currentChannel: lowestChannel,
+		ai:             aiOff,
+		shutdown:       make(chan struct{}),
 	}
 	for _, opt := range opts {
 		opt(r)
