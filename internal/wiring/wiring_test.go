@@ -2732,6 +2732,14 @@ func TestOpenRealSessionFor_StopBitsRefuseAnImpossibleReport(t *testing.T) {
 // (core/driver/ft891/caps.go, matrix §1.9-1.10 — this radio names a tone
 // by INDEX into its own 50-entry chart), which is the second test's Yaesu
 // shape rather than the Icom one.
+//
+// THE FT-991A (Tier 1's second) BELONGS HERE ON EXACTLY THOSE TERMS. It
+// implements no driver.SerialFramingReporter either — its framing is an
+// ASSUMED entry in core/cat/ft991a's own register, FRAMING: 8 DATA BITS,
+// NO PARITY, TWO STOP BITS — and its CTCSSToneRange is nil beside a
+// populated CTCSSTones (matrix §1.9-1.10). Its FIVE-member CTCSSStates is
+// not a membership question: this list is about the maker, and the
+// vocabulary's width belongs to the tests that read it.
 var yaesuModels = []string{DefaultModel, FTdx10Model, FTdx101DModel, FTdx101MPModel, FT891Model, FT991AModel}
 
 // icomModels names every registered Icom model, on the same by-name
@@ -2768,6 +2776,15 @@ var icomModels = []string{IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, 
 // wrong-manufacturer failure mode (§ this file's own history) but, taken
 // alone, would let a future YAESU registration add a model to
 // SupportedModels() that is named in neither yaesuModels nor icomModels —
+// A THIRD MAKER BREAKS THIS ASSERTION, AND THAT IS ON PURPOSE. The sum is
+// EXHAUSTIVE over two lists, so the FT-991A satisfied it by joining
+// yaesuModels while a KENWOOD registration satisfies neither and fails
+// here — loudly, at the moment the model is registered, rather than by
+// quietly escaping the three Yaesu-only tests. Widening the partition (a
+// third list, or a maker-keyed one) is that lane's work and not this one's;
+// it is recorded in the FT-991A milestone's cross-lane HANDOFF so the
+// collision is met on paper first.
+//
 // silently escaping every one of the three Yaesu-only tests below, which
 // only ever iterate yaesuModels, and never being flagged as the omission
 // it is. This test is the alarm for exactly that: the two lists together
