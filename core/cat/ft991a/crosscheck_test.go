@@ -129,8 +129,12 @@ const (
 )
 
 // The spaced-colon pin. Four rows open their option list "00 : OFF" where
-// their two siblings of the same shape open "00: OFF" — a printed
-// inconsistency BOTH quarantined derivations noticed independently
+// the two other PRMTRC EQ FREQ rows of the same shape — 122 PRMTRC EQ2 FREQ
+// and 131 P-PRMTRC EQ2 FREQ — open "00: OFF" tight (twelve rows in A open
+// "00: OFF" in all; these two are the ones sharing the spaced four's family,
+// and the tight-colon leg below checks only these two by name, not the
+// wider twelve) — a printed inconsistency BOTH quarantined derivations
+// noticed independently
 // (testdata/ledger.md defect 11 and testdata/transcription-b.md §4.9 name
 // the same six rows) and which table2.csv's header records as a
 // NORMALISATION RULE: the spaced colon is transcribed verbatim and never
@@ -176,17 +180,28 @@ var wideRows = []struct {
 // test.
 const widestRowDigits = 8
 
+// widestRowAddr names the one row wideRows says carries widestRowDigits, as
+// misspeltRowAddr already does for its own row, so that reordering the
+// wideRows literal above can never silently change what "the widest row"
+// means to the leg that checks it.
+const widestRowAddr menuAddr = 151
+
 // The printed-quirk pins. Two of this chart's printed defects fall in a
 // column BOTH transcriptions carry, so both derivations read the same wrong
 // cell and agree perfectly — which is exactly the class no leg of this
 // cross-check can catch:
 //
 //   - 068 DATA HCUT FREQ and 069 DATA HCUT SLOPE PRINT EACH OTHER'S DIGITS.
-//     068's parameter needs two digits and prints 1; 069's needs one and
-//     prints 2. Every other HCUT FREQ/SLOPE pair in the chart prints 2 then
-//     1, which is why the four of them are pinned alongside: if a sibling
-//     ever went the same way, the "one pair is transposed" claim would be
-//     wrong and this test would say so.
+//     transcription-b.md §4 item 2 reads the printed legends and makes the
+//     case: 068's legend needs two digits but prints 1; 069's needs one but
+//     prints 2 (this file never reads either row's p4 itself, so that
+//     reasoning is transcription B's, not a derivation of this test's).
+//     The same item names NINE untransposed LCUT/HCUT FREQ/SLOPE pairs that
+//     all print FREQ = 2, SLOPE = 1; this leg pins only the four HCUT ones
+//     — 041/042, 050/051, 066/067, 092/093 and 102/103 are the five LCUT
+//     pairs it leaves unpinned — because the four HCUT pairs are 068/069's
+//     own shape and that is enough for "if a sibling ever went the same
+//     way, this test would say so".
 //   - 088 GM DISPLY is printed without the A of DISPLAY. B's record
 //     (testdata/transcription-b.md, Reconciliation) is a three-look
 //     settlement of exactly this cell, and A transcribed the same spelling.
@@ -243,15 +258,39 @@ var frozenEvidenceSHA256 = map[string]string{
 	"ledger.md":           "f034a5b13d3aaaa7747061e25223b261cc7892df84922f3d621f17509c51712f",
 }
 
+// futureGoldenFreezeFiles names the six artefacts commit 8f2bad4 also
+// imported but that THIS file never reads — evidence leg G, the five
+// *.golden frame vectors and their provenance.md — so that the converse leg
+// below can tell "not frozen by anyone" from "frozen by the frame-geometry
+// task's own test", which core/cat/ft891/golden_test.go's precedent shows
+// is the right place for that freeze. Naming them here does not vouch for
+// their bytes: TestQuarantinedEvidenceFrozen never hashes a file in this
+// list, and it is the frame-geometry task's own test that must.
+var futureGoldenFreezeFiles = map[string]bool{
+	"mt-vectors.golden": true,
+	"mw-vectors.golden": true,
+	"mr-vectors.golden": true,
+	"mc-vectors.golden": true,
+	"ex-vectors.golden": true,
+	"provenance.md":     true,
+}
+
 // TestQuarantinedEvidenceFrozen recomputes each quarantined artefact's
 // SHA-256 and compares it with the value commit 8f2bad4 recorded, so that
 // the freeze is self-enforcing in CI rather than a fact recoverable only by
 // git archaeology. Every leg of the cross-check below reads bytes this test
 // has vouched for.
 //
-// The second half is the one that catches the interesting case: both files
-// this test PARSES must be covered by the map above, so a leg could not be
-// re-pointed at an unfrozen artefact and still look bound.
+// The second half is the one that catches the interesting case, following
+// core/cat/ft891/golden_test.go's TestGoldenVectorsFrozen precedent: it
+// globs testdata/* — the whole directory, not just the two paths this file
+// happens to parse — and requires EVERY file present to be covered by
+// EITHER this map OR futureGoldenFreezeFiles above. Without the glob, a new
+// unfrozen file could be added beside the four this file hashes and pass a
+// test that only ever looked up names it already knew; without the second
+// list, the six files that belong to task 8 would have to be hashed here
+// too, which is a freeze this file has no standing to enforce for evidence
+// it never reads.
 func TestQuarantinedEvidenceFrozen(t *testing.T) {
 	for name, want := range frozenEvidenceSHA256 {
 		path := filepath.Join("testdata", name)
@@ -271,10 +310,22 @@ func TestQuarantinedEvidenceFrozen(t *testing.T) {
 				path, want, got, name)
 		}
 	}
-	for _, path := range []string{transcriptionBPath, pageLedgerPath} {
-		if _, ok := frozenEvidenceSHA256[filepath.Base(path)]; !ok {
-			t.Errorf("%s is read by this cross-check but has no recorded SHA-256: every artefact a leg parses must be frozen by a commit that records its hash", path)
+	present, err := filepath.Glob(filepath.Join("testdata", "*"))
+	if err != nil {
+		t.Fatalf("globbing testdata: %v", err)
+	}
+	if len(present) == 0 {
+		t.Fatal("no files found under testdata — the quarantined evidence is missing")
+	}
+	for _, path := range present {
+		name := filepath.Base(path)
+		if _, ok := frozenEvidenceSHA256[name]; ok {
+			continue
 		}
+		if futureGoldenFreezeFiles[name] {
+			continue
+		}
+		t.Errorf("%s is present under testdata but is covered by neither frozenEvidenceSHA256 (this file's own freeze) nor futureGoldenFreezeFiles (the six artefacts task 8's own test freezes): every file under testdata must be frozen by one test or the other", path)
 	}
 }
 
@@ -488,8 +539,8 @@ func TestCrossCheck_A_B_Ledger(t *testing.T) {
 		if widest != p.MaxDigits {
 			t.Errorf("the widest Digits observed is %d, the registered profile's MaxDigits is %d", widest, p.MaxDigits)
 		}
-		if len(widestAt) != 1 || widestAt[0] != wideRows[len(wideRows)-1].addr {
-			t.Errorf("the rows carrying the widest Digits %d are %v, the chart pin says exactly one, %s", widest, widestAt, wideRows[len(wideRows)-1].addr)
+		if len(widestAt) != 1 || widestAt[0] != widestRowAddr {
+			t.Errorf("the rows carrying the widest Digits %d are %v, the chart pin says exactly one, %s", widest, widestAt, widestRowAddr)
 		}
 		var wantOver4 []menuAddr
 		for _, w := range wideRows {
@@ -624,13 +675,15 @@ func checkDeclaredNormalisations(t *testing.T, p extable.Profile, aRows map[menu
 		if !sameAddrs(firedOn, want) {
 			t.Errorf("the 087 Digits normalisation fired on %v; the profile declares it over exactly %v (Profile.ParameterlessAddresses). It is declared per ADDRESS: firing anywhere else, or not firing where it was declared, is a STOP for arbitration and never an edit to either artefact", firedOn, want)
 		}
-		// Each leg's own spelling, stated separately, so that a leg quietly
-		// adopting the other's convention is caught even though the
-		// normalisation would still make the two agree.
+		// B's own spelling, stated here so that B quietly adopting A's
+		// convention is caught even though the normalisation would still
+		// make the two agree (probe 3 in the review). A's spelling needs no
+		// twin of this check: ParseCSV itself refuses a "?" at a declared
+		// address and a "-" at an undeclared one (probe 2 and probe 6), so
+		// `a[m].Digits != parameterlessDigitsA` can only ever equal
+		// `!aRows[m].Parameterless`, which the flag check below already
+		// asserts under its own name.
 		for _, m := range want {
-			if got := a[m].Digits; got != parameterlessDigitsA {
-				t.Errorf("MENU number %s: transcription A (%s) spells the parameterless Digits cell %q, P18 says A writes %q (the chart's own glyph, which ParameterlessExcluded keys on)", m, p.ManualCSV, got, parameterlessDigitsA)
-			}
 			if got := b[m].Digits; got != parameterlessDigitsB {
 				t.Errorf("MENU number %s: transcription B (%s) spells the parameterless Digits cell %q, P18 says B writes %q (its brief's rule for a cell that is not an integer)", m, transcriptionBPath, got, parameterlessDigitsB)
 			}
@@ -643,8 +696,8 @@ func checkDeclaredNormalisations(t *testing.T, p extable.Profile, aRows map[menu
 				t.Errorf("MENU number %s: the profile declares it parameterless but ParseCSV did not flag transcription A's row (%s)", m, p.ManualCSV)
 			}
 		}
-		for m, r := range aRows {
-			if r.Parameterless && !parameterless[m] {
+		for _, m := range sortedAddrs(a) {
+			if aRows[m].Parameterless && !parameterless[m] {
 				t.Errorf("MENU number %s: ParseCSV flagged transcription A's row (%s) parameterless, but the profile does not name that address", m, p.ManualCSV)
 			}
 		}
@@ -866,8 +919,8 @@ func loadPageLedger(t *testing.T) map[int]ledgerRow {
 		// and once at the head of the pdf_page cell, which spells it
 		// "8 (folio 7)" — so the two are bound to each other here. Nothing
 		// else in the cross-check would notice them disagreeing.
-		anchor, _, _ := strings.Cut(rec[6], " ")
-		if got := atoiOrFatal(t, where, "pdf_page", anchor); got != page {
+		pageHead, _, _ := strings.Cut(rec[6], " ")
+		if got := atoiOrFatal(t, where, "pdf_page", pageHead); got != page {
 			t.Fatalf("%s: the p1 column is %d but pdf_page %q names page %d", where, page, rec[6], got)
 		}
 		if _, dup := out[page]; dup {
