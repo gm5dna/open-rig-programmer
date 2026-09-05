@@ -7,7 +7,7 @@ template and its check script. Built by `release.yml`'s `windows` job
 (added by the same milestone; one `wails build -platform
 windows/amd64,windows/arm64 -nsis` run, CLIs built first) and by the
 maintainer's local rehearsal script (not part of this repository — see
-`docs/building.md` for building from source); run on a Windows 11
+`docs/developing.md` for building from source); run on a Windows 11
 ARM64 VM by this project, 05/09/2026 (see `docs/windows-setup.md`'s
 "Status" section) — amd64 and a physical machine of either
 architecture remain untried.

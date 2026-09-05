@@ -1,6 +1,6 @@
 # Icom models — per-model limitations and evidence
 
-Moved verbatim from the README on 28/08/2026 so the README can stay short. Every claim below cites the code that makes it true; the citations are for reviewers and contributors.
+The evidence behind the Icom entries in `docs/radio-notes.md`. Every claim below cites the code that makes it true; the citations are for reviewers and contributors.
 ## The eleven Icom models
 
 IC-7610, IC-7300, IC-7300MK2, IC-705, IC-9700, IC-905, IC-7851,

@@ -1,5 +1,26 @@
 # Hardware notes: live sessions against a real FT-710
 
+> **Evidence record.** This file is a chronological log of the
+> project's sessions against real hardware, organised by the milestone
+> code each session ran under. It is not a user guide: for what a radio
+> can do, read [radio-notes.md](radio-notes.md); for setting up a serial
+> port, [linux-setup.md](linux-setup.md) or
+> [windows-setup.md](windows-setup.md). Section titles below are cited
+> from code comments and tests and must not be renamed.
+>
+> | Session | Date | Platform | What it established | Section |
+> | --- | --- | --- | --- | --- |
+> | M5a | 13/07/2026 | macOS | FT-710 read characterisation: port mapping, frame formats, timing, the 60m regional finding | "Session metadata" to "Consequences applied" |
+> | M5b | 13/07/2026 | macOS | FT-710 write trials: set semantics, the P7 kind matrix, tone preservation, no CAT erase, restoration; Batch 9 closed the mode/tag/PMS gap | "M5b write-trial protocol" onward |
+> | P7 field report | 30/08/2026 | macOS | A CAT-written PMS slot's kind byte drifts to 0 on the radio; the read no longer refuses it | "P7 kind drift on a CAT-written PMS slot" |
+> | M8c | 24/07/2026 | macOS | FT-710 menu (EX) read characterisation: every documented address read twice, byte-identical | "M8c settings read-characterisation" |
+> | Linux VM | 23/08/2026 | Ubuntu 24.04 VMs | Package install, launch and removal only; no radio attached | recorded in linux-setup.md, "Status" |
+> | Windows VM | 05/09/2026 | Windows 11 ARM64 VM | Driver, COM-port mapping, installer, GUI and CLI writes with a real FT-710, restored byte-identical | "Windows (ARM64 VM) session — 05/09/2026" |
+>
+> Milestone codes: M5 was the first hardware milestone (a: reads, b:
+> writes), M8 the menu-settings milestone (c: its hardware leg), M9 the
+> dialect seam that later moved the `core/cat` symbols named below.
+
 This document records the findings of open-rig-programmer's live
 sessions against physical FT-710 hardware: M5a (read-only
 characterisation, 13/07/2026), M5b (write trials, the same day's
@@ -1363,7 +1384,7 @@ W2 (x64 driver delivery) and W12 (amd64 GUI) stay **ASSUMED** — see
 
 ## Cross-references
 
-- Findings ledger: `.superpowers/sdd/progress.md`, "M5a LIVE SESSION
+- Findings ledger (private, not in the repository): `.superpowers/sdd/progress.md`, "M5a LIVE SESSION
   (13/07/2026)" and "M5b LIVE TRIALS COMPLETE" sections, and the
   M5b-FLIP PRECONDITION review item (write-capability-split decision —
   adjudicated RATIFIED-AS-NOT-NEEDED; restated in
