@@ -99,7 +99,32 @@ Windows Defender may also scan the download; it did not quarantine or
 block any binary this project ran that session — **confirmed, register
 entry W10, LIFTED**.
 
-## 4. Where things live
+## 4. The CLI zip
+
+The verification session above used the installer throughout, not the
+CLI zip — the three points below are **untested by this project**.
+
+A zip downloaded through a browser and extracted with Explorer marks
+the files it contains with the mark-of-the-web, the same zone
+information that triggers SmartScreen on the installer (§3 above); a
+`rigprog.exe` extracted that way may show the same "Windows protected
+your PC" dialogue on its first run, with the same **More info** → **Run
+anyway** remedy. If it does not appear, or you would rather avoid it,
+right-click the **zip** (before extracting) → **Properties** →
+**Unblock**, then extract.
+
+`rigprog.exe` is a console program: double-clicking it in Explorer
+opens and immediately closes a window, because there is no interactive
+session to hold it open. Run it from PowerShell or Windows Terminal
+instead — the same way the CLI is used from `C:\Program Files\Open Rig
+Programmer\` after an installer run.
+
+If Windows Update does not supply the CP210x driver (§1 above), Silicon
+Labs' driver downloads are at
+<https://www.silabs.com/developer-tools/usb-to-uart-bridge-vcp-drivers> —
+the "CP210x Universal Windows Driver" package.
+
+## 5. Where things live
 
 The installer (machine-scoped, admin required) puts everything under
 `C:\Program Files\Open Rig Programmer\`: `Open Rig Programmer.exe` (the
@@ -161,7 +186,7 @@ no `rigprog` process remained running
 `app/build/windows/README.md` for the uninstall Section's exact
 contents.
 
-## 5. Status
+## 6. Status
 
 **An ARM64 verification session has run** (05/09/2026): a Windows 11
 Pro ARM64 virtual machine (UTM, on this project's own macOS host), a
