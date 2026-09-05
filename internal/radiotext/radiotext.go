@@ -408,7 +408,7 @@ var ftdx101mpText = Text{
 // evidence to a radio in an entirely different family.
 // TestRadiotext_IC7610Verbatim pins every string, and its own
 // non-borrowing check refuses any field that is byte-identical to, or
-// carries a particular of, any of the four Yaesu entries.
+// carries a particular of, any of the five Yaesu entries.
 //
 // WHAT IS DIFFERENT ABOUT THIS RADIO, AND WHY IT SHOWS IN THE PROSE:
 //

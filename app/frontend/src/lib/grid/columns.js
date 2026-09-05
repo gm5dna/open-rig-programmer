@@ -51,7 +51,7 @@ export const COLUMNS = [
  * ChannelData key the column edits; `field` is the spec.Field it
  * decorates IssueViews from, and the two agree by construction here.
  *
- * On the four Yaesu models every bank's Fields list is empty, so none of
+ * On the five Yaesu models every bank's Fields list is empty, so none of
  * these renders and the grid is exactly the ten-column grid it has
  * always been. The registered IC-7610 is the first radio for which any
  * of them renders: its memory record maps tone_mode, tone_tx, tone_rx
@@ -99,7 +99,7 @@ const TIER_BY_ID = new Map(TIER_COLUMNS.map((c) => [c.id, c]))
  * rules are state-based (isCellEditable), and re-deriving their
  * VISIBILITY from capabilities is a separate decision nobody has taken —
  * while a tier column has no such history and would be meaningless on a
- * radio with no such field. On the four Yaesu models Fields is empty on
+ * radio with no such field. On the five Yaesu models Fields is empty on
  * every bank, so this returns exactly COLUMNS and their grid does not
  * change by so much as a column; on the IC-7610 it appends that radio's
  * own four.
@@ -352,7 +352,7 @@ export function newChannelData(uiSpec, bank, freqHz) {
 		// that says the answer is not yet in hand, which is the true
 		// thing about a row that has just been created. No value is
 		// invented, and a field the bank does not reach gets no key at
-		// all, leaving it absent. On the four Yaesu models Fields is
+		// all, leaving it absent. On the five Yaesu models Fields is
 		// empty on every bank, so this adds nothing; on the IC-7610 it
 		// adds that radio's own four.
 		...tierDefaults(bank),

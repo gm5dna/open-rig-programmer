@@ -265,7 +265,7 @@ var tierRequestedFields = []struct {
 //     ASSUMED register's TONE AND SCAN-SKIP UNREACHABILITY entry for what
 //     that does and does not establish), so silently dropping a value the
 //     caller explicitly marked Known would be a lie. The same holds for any
-//     of the ten Icom-tier fields.
+//     of the seventeen Icom-tier fields.
 //
 //   - A DISCOVERED 5xx/EMG slot is refused by the same gate on every
 //     profile: readOnlyFields (caps.go) forces every Write on those banks
