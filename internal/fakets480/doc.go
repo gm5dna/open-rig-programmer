@@ -96,15 +96,16 @@
 //
 // # What this fake deliberately does NOT model
 //
-// EX (MENU), IN EITHER DIRECTION. This book prints a full EX chart
-// (480:399-416) and the best-documented menu legend of any radio in this
-// programme, and the fake's inventory is to come from its own copy of that
-// chart's independent transcription — the two-source evidence design this
-// project uses on the Yaesu side. That work is the NEXT task of this
-// milestone's plan; until it lands, an EX frame draws "?;". That is a
-// MODELLING GAP, KNOWN-DIVERGENT from the documented grammar, and it is not
-// a claim that this radio refuses EX. TestEX_IsNotModelledYet pins the gap's
-// shape so that adding EX has to change a test rather than fill a silence.
+// THE EX (MENU) SET. The EX READ is modelled — ex.go, from this package's own
+// copy of transcription B — and the Set is not. The book prints one
+// (480:399-406), and core/kw builds none either: the Set and the Answer share
+// an identical wire shape, so admitting the Set would admit a captured answer
+// being written back. A Set-shaped body therefore falls through handleEX's
+// read check to "?;", which on this radio has a sharp illustration — the book
+// prints "EX00000003;" as an ANSWER (480:416), and the same ten bytes sent the
+// other way are refused. That is a MODELLING GAP, KNOWN-DIVERGENT from the
+// documented grammar, and it is not a claim that this radio refuses EX Set.
+// TestEX_MalformedAndSetShapedBodiesAreRefused pins the gap's shape.
 //
 // FAULT INJECTION beyond the book. There is no dropped-reply, garbled-byte,
 // spurious-frame or chunked-write option here. Those exercise
@@ -274,6 +275,28 @@
 //     and its lift is a hardware trial: send an MW carrying a 00-1Fh byte in
 //     P16 to a real TS-480 and record whether it answers "?;" or stays
 //     silent for the reply-timeout window.
+//
+//  16. THE EX MENU VALUES ARE INVENTED. Every menu's default raw P5 is its
+//     printed width in '0' bytes. The parameter list prints each menu's
+//     available SETTINGS and never a shipped default (480:424-539), so there
+//     is nothing to source a real one from — and `rigprog read --settings
+//     --fake` renders these bytes to a user, who must not read them as what a
+//     TS-480 ships with. The placeholder is uniform on purpose: an obviously
+//     uniform value is harder to mistake for evidence than a plausible-looking
+//     spread. ONE ADDRESS IS NOT ARBITRARY, and the coincidence is recorded
+//     rather than leant on: at menu 000 the book prints a complete worked
+//     answer, "EX00000000; (Display illumination OFF)" (480:415), whose P5 is
+//     exactly this byte. What the table DOES carry everywhere is each menu's
+//     WIDTH, which is transcribed (ex.go).
+//
+//  17. AN OUT-OF-INVENTORY EX ADDRESS ANSWERS "?;". A well-formed read naming
+//     a menu number this chart does not print draws the rejection, with the
+//     state unchanged. The chart prints no such row and the book says nothing
+//     about what happens at one; "?;" is the error table's first cause — a
+//     syntactically correct command the transceiver cannot execute
+//     (480:130-138) — applied to a menu the radio has none of. The sharp case
+//     is 061: one past this chart's domain (480:401) and a real menu on both
+//     590 rows, which is why no Kenwood fake may borrow another's inventory.
 //
 // # What is NOT in this register, and why
 //
