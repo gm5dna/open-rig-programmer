@@ -983,8 +983,10 @@ func (e *Engine) publishFatal(cause error) {
 // would land on the next command instead.
 // TestFatalFramer_SameChunk_FatalSuppressesTheAnswerItArrivedWith is the pin.
 //
-// The nil check below is the ENTIRE cost of this hook to a framing that
-// does not implement it — no assertion, no lock, no branch entered.
+// The nil check below is this hook's ENTIRE cost at this hot site to a
+// framing that does not implement it — no type assertion, no lock. The
+// same check at the other hot site, gatedWrite's dispatch, is the whole
+// of it there.
 func (e *Engine) fatalCause(frames [][]byte) error {
 	if e.fatal == nil {
 		return nil
