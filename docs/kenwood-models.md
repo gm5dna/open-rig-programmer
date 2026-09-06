@@ -201,22 +201,36 @@ the whole read path, the 61-item menu read, and a write path that refuses
 everything. It is absent from the model list, from the real-driver table
 and from the simulated-driver table, so nothing can select it.
 
-**Why.** One reading of the manual makes the frequency stored in a memory
-channel a STEP COUNT rather than a plain number of hertz, and nothing in
-the book settles which reading is right (register entry A4). Registering
-the radio on the wrong reading would mean this program writing channels
-nobody could check, and reading channels it would report wrongly. The
-gate is a single observation from a real TS-480 — one channel read, with
-what came back — and until it exists the row stays unselectable.
+**Why.** Register entry A4, which reads in full: "An `MR` of an empty
+channel **answers** (with P4–P15 zero) rather than rejecting, on the
+TS-480 too." That is documented for the TS-590SG (`590:1492-1493`) and
+printed NOWHERE in the 2003 TS-480 book, which says nothing about an
+empty channel at all. If A4 is false — if an `MR` of an unwritten channel
+answers `?;` — then decision 5 makes that `?;` a definitive rejection,
+the session read fails whole, and a fresh TS-480 out of the box cannot be
+read at all. Registering the row would mean shipping a radio that may not
+answer its first channel.
 
-**How the absence is enforced.** By absence today, and by a guard from
-task 19: `internal/wiring/testdata/ts480-a4-observation.json` is the
-evidence artefact, tracked in git precisely so that a fresh clone cannot
-read "no evidence" merely because a file was never handed to it, and the
-guard has three legs — absent means ABSENT (a branch, not a skip),
-present means present only after parsing the file and checking the bar it
-records, and a non-vacuity leg so that a file recording zero trials fails
-loudly rather than counting as absence.
+**The gate is L-HW-3, hardware confirmation item 3, and it is not one
+read.** It is a valid zero record on at least **three separate channels**,
+each confirmed unwritten from the radio's front panel, across at least
+**two sessions**, with no silence and no `?;` among them, every request
+and answer kept as the exact bytes that went over the wire, and an
+**observer named**. `internal/wiring/testdata/README.md` is written for
+the person who would take that observation, and
+`checkTS480ObservationBar` in `internal/wiring/ts480gate_test.go` is what
+decides — if that guard and this page ever disagree, the guard is what
+ships.
+
+**How the absence is enforced.** By absence, and by the guard in
+`internal/wiring/ts480gate_test.go`.
+`internal/wiring/testdata/ts480-a4-observation.json` is where the
+observation goes, on a path tracked in git precisely so that a fresh
+clone cannot read "no evidence" merely because a file was never handed to
+it, and the guard has three legs — absent means ABSENT (a branch, not a
+skip), present means present only after parsing the file and checking the
+bar it records, and a non-vacuity leg so that a file recording zero
+trials fails loudly rather than counting as absence.
 
 **Registering it later is TEN edits, not one**, and nine of the ten now
 fail loudly in the test suite the moment the row appears without them —

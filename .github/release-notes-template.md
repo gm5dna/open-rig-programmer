@@ -84,10 +84,14 @@ describes under *Switching on writes for an unverified radio*.
   a dead port), and a CHIRP file's `CW`, `CWR` and `RTTY` rows are not
   imported on these radios.
 - **The Kenwood TS-480 is NOT selectable**, although its driver ships in
-  this build. One reading of its manual makes a memory channel's stored
-  frequency a step count rather than a plain number of hertz, and nothing
-  in the manual settles it; the radio stays unavailable until someone
-  reads one channel off a real TS-480 and reports what came back.
+  this build. Nothing in its 2003 manual says what a memory channel that
+  has never been written answers when it is read; the TS-590SG's manual
+  says an all-zero record, and if a TS-480 rejects that read instead, a
+  brand-new one cannot be read by this program at all. It stays
+  unavailable until somebody observes what a real TS-480 answers — at
+  least three unwritten channels, each confirmed at the front panel,
+  across at least two sessions, with the exact bytes kept and an observer
+  named; `internal/wiring/testdata/README.md` says how.
 - **The application has an icon of its own** on all three platforms.
 - The README is rewritten for radio owners; per-radio limits live in
   `docs/radio-notes.md`; a `CHANGELOG.md` lists every release.
