@@ -22,4 +22,38 @@
 // guard's threat model is our own composition, not external importers. The compiler-enforced version
 // of this boundary (a separate write-capability split) is a ledgered
 // M5b-flip precondition.
+//
+// # Slot-domain refusals name only the banks their dialect declares
+//
+// The MW and MT slot refusals used to spell "memory 001-099", "P1L-P9U"
+// and "5xx/EMG" as literals. Since S0.2 they are composed from the
+// receiver's own slot space (Dialect.mwSlotDomainRefusal and
+// mtSlotDomainRefusal, slot.go), because all three are false on a radio
+// whose PMS pairs are decimal channel numbers and which has neither a 5 MHz
+// bank nor an emergency channel — a shape the FT-991A's manual prints. A
+// diagnostic quoting the old text would have told such a radio's owner it
+// had banks awaiting hardware verification that it does not have.
+//
+// THE M5a POLICY CITATION IS UNCHANGED WHEREVER A RADIO HAS THE BANKS THAT
+// POLICY GOVERNS. It appears in the MT sentence exactly when the dialect
+// declares a 5 MHz bank or an emergency channel, which is every dialect
+// registered today, so all four render byte-for-byte what they always did
+// and core/cat/testdata/frame-corpus.golden does not move. On a dialect
+// with neither bank the clause is absent.
+//
+// THE NONE FORM IS DERIVED TOO. The sentences quoted "000" as a literal
+// until the Stage 0 close review (seat 2, MEDIUM-3) measured it against
+// noneWireDialect, whose none form is "900" and for which "000" is an
+// ordinary writable memory channel: the MW sentence offered "memory
+// 000-005" and rejected "000" in the same breath. It now comes from
+// slotSpace.noneWire through Dialect.noneFormText, and is omitted entirely
+// by a dialect that declares no none form. All six registered dialects
+// declare NoneWire "000", so this too moves no byte —
+// TestSlotDomainRefusals_EveryTokenPMSDialectIsByteIdentical
+// (core/transport) is the measurement rather than the claim, over the FIVE
+// TOKEN-PMS SIBLINGS, which is what it measures and all it measures. The
+// sixth, the FT-991A, composes DIFFERENT sentences by design (numeric PMS,
+// no 5 MHz bank, no emergency channel) and so shares no frozen constant with
+// them; its shape is held by TestSlotDomainText_NumericPMSDialect on a
+// synthetic dialect in this package.
 package cat

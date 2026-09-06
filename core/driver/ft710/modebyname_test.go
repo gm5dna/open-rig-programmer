@@ -41,6 +41,7 @@ func ft710EquivalentConfig() cat.DialectConfig {
 			MemoryLo: 1, MemoryHi: 99,
 			SixtyLo: 501, SixtyHi: 599,
 			PMSPairs:      9,
+			PMSForm:       cat.PMSFormToken,
 			EmergencyWire: "EMG",
 			NoneWire:      "000",
 			MCSelects:     cat.MCSelectsAll,
@@ -49,6 +50,7 @@ func ft710EquivalentConfig() cat.DialectConfig {
 		MT:            cat.MTPolicy{Form: cat.MTFormShort, ReadSlots: cat.MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 		Clarifier:     cat.ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 		MemoryP5:      cat.P5TxClar,
+		ToneStates:    cat.ToneStatesCTCSS,
 		MWWriteKind:   cat.KindMemory,
 	}
 }

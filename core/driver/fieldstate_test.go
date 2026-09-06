@@ -45,9 +45,9 @@ func walkCaps() spec.Capabilities {
 
 // TestFieldStateWalk_CoversEveryFieldStateField is the fleet's ONE coverage
 // pin, shared by every driver that calls the walk (FT-710, FTdx10, FTdx101,
-// FT-891) rather than restated once per package: the walk's field list does
-// not depend on which radio's capabilities it is handed, so a per-driver
-// copy of this assertion would be the same assertion four times.
+// FT-891, FT-991A) rather than restated once per package: the walk's field
+// list does not depend on which radio's capabilities it is handed, so a
+// per-driver copy of this assertion would be the same assertion five times.
 //
 // codeplug exports no enumeration of "every ChannelData field that carries
 // a FieldState", so the wanted set is derived INDEPENDENTLY from
@@ -80,7 +80,8 @@ func walkCaps() spec.Capabilities {
 //   - each driver's own TestWriteChannel_KnownD8TierFieldsRefusedBeforeWire
 //     (or equivalent) additionally pins the MEMBER binding — not the
 //     vocabulary argument, since every Yaesu vocabulary is empty — for
-//     TuningStep, Attenuator, Preamp and Antenna, at all four drivers.
+//     TuningStep, Attenuator, Preamp and Antenna, at all five drivers
+//     that call this walk (ft710, ftdx10, ftdx101, ft891, ft991a).
 //
 // That leaves the eleven non-vocab-keyed fields' member bindings pinned
 // only where the two rows above happen to name them (five of the eleven);

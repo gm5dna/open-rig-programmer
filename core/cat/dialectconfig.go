@@ -29,12 +29,31 @@ type SlotSpace struct {
 	// PMSPairs is the number of programmable-memory-scan pairs, e.g. 9 for
 	// P1L..P9U. 0 means the family has none.
 	//
-	// The wire form's pair number is a SINGLE ASCII digit, so this can
-	// never validly exceed 9. NewDialect rejects a larger value rather than
-	// clamping it: a dialect declaring 12 pairs is a transcription error,
-	// and silently giving it 9 hides the mistake at the point it is easiest
-	// to find.
+	// UNDER PMSFormToken the wire form's pair number is a SINGLE ASCII
+	// digit, so this can never validly exceed 9. NewDialect rejects a
+	// larger value rather than clamping it (V3): a dialect declaring 12
+	// pairs is a transcription error, and silently giving it 9 hides the
+	// mistake at the point it is easiest to find. Under PMSFormNumeric the
+	// pair number never reaches the wire at all, so that ceiling does not
+	// apply and the operative bound is V15's — the numeric range must end
+	// at or below 999, the largest a 3-digit slot form can express.
 	PMSPairs int
+
+	// PMSForm is the WIRE FORM this family's PMS pairs take. It has no
+	// default — see PMSSlotForm — and V15 refuses the zero value whenever
+	// PMSPairs > 0.
+	PMSForm PMSSlotForm
+
+	// PMSNumericLo is the decimal wire number of pair 1's LOWER slot under
+	// PMSFormNumeric, e.g. 100 on the FT-991A, whose pairs then run
+	// 100..117. Must be exactly 0 under PMSFormToken, where the pairs carry
+	// no decimal numbering at all.
+	//
+	// The range's upper end is DERIVED from this and PMSPairs rather than
+	// declared beside them: two fields that must always agree is the defect
+	// this package keeps paying for, and a bound is consulted from the same
+	// place as its datum.
+	PMSNumericLo int
 
 	// EmergencyWire is the emergency channel's wire form, e.g. "EMG". ""
 	// means the family has none.
@@ -55,10 +74,54 @@ type SlotSpace struct {
 	MCSelects MCSlotPolicy
 }
 
+// PMSSlotForm names the WIRE FORM a family's PMS pair slots take.
+//
+// Its zero value is deliberately NOT a valid form, so a config that omits
+// it is refused rather than defaulting to one — the M9c-1 ruling, and
+// MTForm's and EXAddressForm's own reason. The cost of a default here is
+// concrete and it is a WRITE cost: Dialect.writableSlot returns true for
+// every PMS slot, so a numeric-PMS radio silently given the token form
+// would have "MW P1L…;" and "MT P1L…;" BUILT for it and admitted by its own
+// outbound gate — frames its manual never prints. That is the standing rule
+// "every frame sent is one the documents describe", broken by a default.
+//
+// The form is DATA on the DIALECT rather than a property of a pair number,
+// exactly as EXAddressForm is data on the dialect rather than on an
+// EXAddress: pair 1's lower slot is "P1L" for one radio and "100" for
+// another, and nothing about the pair itself says which.
+type PMSSlotForm int
+
+const (
+	// PMSFormToken is the "P<n><L|U>" token every registered dialect's slot
+	// legend prints — FT-710, FTdx10, FTdx101D/MP and FT-891, each citing
+	// its own manual at its own declaration. The pair number is one ASCII
+	// digit between 'P' and 'L'/'U', which is where V3's 0..9 ceiling comes
+	// from.
+	PMSFormToken PMSSlotForm = iota + 1
+	// PMSFormNumeric is the form in which pair k's lower and upper slots
+	// are CONSECUTIVE DECIMAL CHANNEL NUMBERS continuing the memory range,
+	// starting at SlotSpace.PMSNumericLo. The pair number never reaches the
+	// wire, so a numeric-PMS dialect builds and accepts no token form at
+	// all.
+	PMSFormNumeric
+)
+
+// String names the form, so a refusal can quote it.
+func (f PMSSlotForm) String() string {
+	switch f {
+	case PMSFormToken:
+		return "PMSFormToken"
+	case PMSFormNumeric:
+		return "PMSFormNumeric"
+	default:
+		return fmt.Sprintf("PMSSlotForm(%d)", int(f))
+	}
+}
+
 // MCSlotPolicy names the SEND-side slot domain of the MC command.
 //
 // It exists because the MC legend is NOT the MR legend on every radio. Each
-// of the three registered dialects prints all four classes — memory, PMS,
+// of the four registered dialects prints all four classes — memory, PMS,
 // 5xx and EMG — against MC; a family whose MC block prints only memory and
 // PMS must not have an MC Set built for a bank its manual never lists there,
 // and must not have one admitted by its own outbound gate either.
@@ -74,7 +137,7 @@ type SlotSpace struct {
 type MCSlotPolicy int
 
 const (
-	// MCSelectsAll is the three registered dialects' domain: memory, PMS,
+	// MCSelectsAll is the four registered dialects' domain: memory, PMS,
 	// 60m and EMG — every slot class outside the "000" none form.
 	MCSelectsAll MCSlotPolicy = iota + 1
 	// MCSelectsMemoryPMS is the narrower domain: memory and PMS only.
@@ -169,6 +232,26 @@ const (
 	// elsewhere that mentions this form's naming should point here rather
 	// than restate it.
 	EXAddressPair
+	// EXAddressSingle is the three-digit field EXAddress's P1 component
+	// renders as, with P2 and P3 both dropped. Under it every EXItems
+	// member must have P2 == 0 AND P3 == 0 (V12): the render drops both,
+	// and a component silently dropped from every frame is exactly the
+	// failure this validator exists to make impossible — the Pair rule one
+	// component further down.
+	//
+	// Its member is the FT-991A, whose chart prints ONE menu number per row
+	// ("P1 : 001 - 153", ft991a_layout.txt) rather than a group/subgroup/
+	// item triple, so the printed number IS the whole address.
+	//
+	// P1's DOMAIN is wider under this form than under the other two: 0..999,
+	// the three-digit field's own capacity, against 0..99. That bound lives
+	// with the render it belongs to — maxEXComponentSingleP1 beside
+	// maxEXComponent in dialectvalidate.go, applied by V8 — and is the
+	// reason EXAddress's components are uint16 rather than uint8: under
+	// uint8 the TYPE would be the bound and V8's Single clause would be
+	// vacuous whatever number it stated. TestValidateEXItems_ComponentBound-
+	// IsFormDependent pins the disagreement between the forms.
+	EXAddressSingle
 )
 
 func (f EXAddressForm) String() string {
@@ -177,6 +260,8 @@ func (f EXAddressForm) String() string {
 		return "EXAddressTriple"
 	case EXAddressPair:
 		return "EXAddressPair"
+	case EXAddressSingle:
+		return "EXAddressSingle"
 	default:
 		return fmt.Sprintf("EXAddressForm(%d)", int(f))
 	}
@@ -206,7 +291,7 @@ func (f EXAddressForm) String() string {
 type MTReadSlotPolicy int
 
 const (
-	// MTReadsReadable is the three registered dialects' domain: every slot
+	// MTReadsReadable is the four registered dialects' domain: every slot
 	// this dialect's ParseSlot accepts except the "000" none form —
 	// Dialect.readableSlot, the rule MR reads by.
 	MTReadsReadable MTReadSlotPolicy = iota + 1
@@ -373,7 +458,7 @@ type MTPolicy struct {
 // MemoryP5Policy names what byte 21 of the shared 28-position memory field
 // block — P5, memdata.go's memTxClarOffset — MEANS on one family.
 //
-// The three registered dialects print `P5 0: TX CLAR "OFF" 1: TX CLAR "ON"`
+// The four registered dialects print `P5 0: TX CLAR "OFF" 1: TX CLAR "ON"`
 // against MR, MT and MW alike, so the byte carries MemoryData.TxClar. The
 // FT-891 prints `0: (Fixed)` on every one of those blocks and on IF: the
 // byte is schema there, not state, and this codec must neither emit a '1'
@@ -393,7 +478,7 @@ type MTPolicy struct {
 type MemoryP5Policy int
 
 const (
-	// P5TxClar is the three registered dialects' reading: byte 21 is the
+	// P5TxClar is the four registered dialects' reading: byte 21 is the
 	// TX clarifier flag, '0' off and '1' on, in both directions.
 	P5TxClar MemoryP5Policy = iota + 1
 	// P5Fixed is the FT-891's: byte 21 is printed "0: (Fixed)" on every
@@ -411,6 +496,51 @@ func (p MemoryP5Policy) String() string {
 		return "P5Fixed"
 	default:
 		return fmt.Sprintf("MemoryP5Policy(%d)", int(p))
+	}
+}
+
+// ToneStateDomain names the set of values byte 24 of the shared memory
+// field block — P8, memdata.go's memCTCSSOffset — may hold on one family.
+//
+// Every registered dialect's P8 legend prints three states, "0: CTCSS OFF
+// 1: CTCSS ENC/DEC 2: CTCSS ENC", which is the domain cat.ParseCTCSSState
+// has always enforced for every radio. The FT-991A prints FIVE on all five
+// blocks that carry P8, adding "3: DCS ENC/DEC" and "4: DCS ENC" — the
+// first Yaesu memory record in this fleet with a DCS state.
+//
+// IT GOVERNS BOTH DIRECTIONS, and the write direction is why it is dialect
+// data. Under ToneStatesCTCSS a record carrying a DCS state is REFUSED by
+// the builders and by the outbound gate alike, rather than encoded: a P8
+// byte a radio's manual does not print is a frame that manual never
+// describes. Under ToneStatesCTCSSAndDCS both are accepted in either
+// direction.
+//
+// Its zero value is deliberately NOT a domain, so a config omitting it is
+// refused (V16) rather than defaulted. Defaulting to the three-state
+// reading would silently drop a real DCS state on the floor; defaulting to
+// the five-state one would authorise this codec to send four sibling radios
+// a byte none of their manuals prints. Neither default is safe, which is
+// exactly when a field must be declared.
+type ToneStateDomain int
+
+const (
+	// ToneStatesCTCSS is the four registered dialects' domain: '0'-'2'.
+	ToneStatesCTCSS ToneStateDomain = iota + 1
+	// ToneStatesCTCSSAndDCS is the FT-991A's: '0'-'4', the three CTCSS
+	// states plus the two DCS ones. The STATE only — the DCS code itself
+	// is not a field of this record.
+	ToneStatesCTCSSAndDCS
+)
+
+// String names the domain, so a refusal can quote it.
+func (t ToneStateDomain) String() string {
+	switch t {
+	case ToneStatesCTCSS:
+		return "ToneStatesCTCSS"
+	case ToneStatesCTCSSAndDCS:
+		return "ToneStatesCTCSSAndDCS"
+	default:
+		return fmt.Sprintf("ToneStateDomain(%d)", int(t))
 	}
 }
 
@@ -472,6 +602,11 @@ type DialectConfig struct {
 	// default: see MemoryP5Policy.
 	MemoryP5 MemoryP5Policy
 
+	// ToneStates is the domain of byte 24 of the shared memory field block
+	// — P8 — on this family: the three CTCSS states, or those plus the two
+	// DCS ones. It has no default: see ToneStateDomain.
+	ToneStates ToneStateDomain
+
 	// MWWriteKind is the single P7 "kind" byte this family accepts on
 	// EVERY memory write, e.g. KindMemory for the FT-710.
 	//
@@ -530,7 +665,7 @@ func validWireString(s string) bool {
 // after the fact by whoever built it is not a gate.
 //
 // Validation is exhaustive rather than advisory. See dialectvalidate.go for
-// the fourteen rules and, for each, the concrete failure it prevents — three
+// the sixteen rules and, for each, the concrete failure it prevents — three
 // of them (the wire-byte domain on mode keys, on special slot forms, and on
 // the MT clear byte) exist specifically because a caller-built dialect
 // could otherwise put a byte no CAT reference documents inside a frame this
@@ -552,13 +687,15 @@ func NewDialect(cfg DialectConfig) (Dialect, error) {
 		catID:     cfg.CATID,
 		modeNames: modes,
 		slots: slotSpace{
-			memoryLo: cfg.Slots.MemoryLo,
-			memoryHi: cfg.Slots.MemoryHi,
-			sixtyLo:  cfg.Slots.SixtyLo,
-			sixtyHi:  cfg.Slots.SixtyHi,
-			pmsPairs: cfg.Slots.PMSPairs,
-			emgWire:  cfg.Slots.EmergencyWire,
-			noneWire: cfg.Slots.NoneWire,
+			memoryLo:     cfg.Slots.MemoryLo,
+			memoryHi:     cfg.Slots.MemoryHi,
+			sixtyLo:      cfg.Slots.SixtyLo,
+			sixtyHi:      cfg.Slots.SixtyHi,
+			pmsPairs:     cfg.Slots.PMSPairs,
+			pmsForm:      cfg.Slots.PMSForm,
+			pmsNumericLo: cfg.Slots.PMSNumericLo,
+			emgWire:      cfg.Slots.EmergencyWire,
+			noneWire:     cfg.Slots.NoneWire,
 
 			mcSelects: cfg.Slots.MCSelects,
 		},
@@ -571,6 +708,7 @@ func NewDialect(cfg DialectConfig) (Dialect, error) {
 		mt:          cfg.MT,
 		clar:        cfg.Clarifier,
 		memoryP5:    cfg.MemoryP5,
+		toneStates:  cfg.ToneStates,
 		mwWriteKind: cfg.MWWriteKind,
 	}, nil
 }

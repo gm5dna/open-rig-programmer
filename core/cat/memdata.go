@@ -161,28 +161,90 @@ func validKindByte(b byte) bool {
 // byte. Reference: "CTCSS: 0 off, 1 ENC/DEC, 2 ENC".
 type CTCSSState byte
 
-// CTCSSState constants for the 3 states in the reference table.
+// CTCSSState constants for the 3 states in the FT-710's reference table,
+// and the TWO MORE the FT-991A's P8 legend prints.
+//
+// WHICH OF THEM A GIVEN RADIO HAS IS DIALECT DATA (DialectConfig.
+// ToneStates): the FT-991A prints five on all five blocks that carry P8,
+// where every registered sibling prints "0/1/2" only. The constants are
+// declared here for both, because a byte alias's members are the wire
+// vocabulary this codec can express; whether a particular dialect may
+// EMIT one is Dialect.ParseCTCSSState's question, not this list's.
 const (
 	CTCSSOff    CTCSSState = '0'
 	CTCSSEncDec CTCSSState = '1'
 	CTCSSEnc    CTCSSState = '2'
+	// CTCSSDCSEncDec and CTCSSDCSEnc are the FT-991A's "3: DCS ENC/DEC"
+	// and "4: DCS ENC". They carry the STATE only: the DCS code itself is
+	// not in this record — that radio's CN command carries it — so nothing
+	// here implies a code can be read or written.
+	CTCSSDCSEncDec CTCSSState = '3'
+	CTCSSDCSEnc    CTCSSState = '4'
 )
 
 // ctcssNames maps every valid CTCSSState to its reference display name.
 var ctcssNames = map[CTCSSState]string{
-	CTCSSOff:    "off",
-	CTCSSEncDec: "ENC/DEC",
-	CTCSSEnc:    "ENC",
+	CTCSSOff:       "off",
+	CTCSSEncDec:    "ENC/DEC",
+	CTCSSEnc:       "ENC",
+	CTCSSDCSEncDec: "DCS ENC/DEC",
+	CTCSSDCSEnc:    "DCS ENC",
 }
 
 // ParseCTCSSState parses a single P8 wire byte into a CTCSSState. Anything
 // other than '0', '1' or '2' is rejected with a *ParseError.
+//
+// IT IS THE LEGACY THREE-STATE DOMAIN, DELIBERATELY UNCHANGED, and it is
+// retained rather than widened or deleted. Its refusal text is pinned four
+// times in core/cat/testdata/parser-corpus.golden, and it has a consumer
+// outside this package (core/cat/dialecttest) as well as core/transport's
+// tests, so removing it would be a public API break inconsistent with a
+// MINOR release. The PER-RADIO domain travels on Dialect.ParseCTCSSState
+// instead, which is what every codec and gate site in this package
+// consults. TestParseCTCSSState_PackageFunctionIsUNCHANGED holds this one.
 func ParseCTCSSState(c byte) (CTCSSState, error) {
 	switch c {
 	case '0', '1', '2':
 		return CTCSSState(c), nil
 	default:
 		return 0, newParseError([]byte{c}, "invalid CTCSS code: want '0'-'2'")
+	}
+}
+
+// ParseCTCSSState parses a single P8 wire byte UNDER THIS DIALECT'S
+// declared state domain: '0'-'2' under ToneStatesCTCSS, '0'-'4' under
+// ToneStatesCTCSSAndDCS.
+//
+// EVERY CODEC AND GATE SITE IN THIS PACKAGE GOES THROUGH IT, and there are
+// three: parseMemoryFields (the parse), validateMWFields and
+// validateCombinedMTFields (the two halves of the OUTBOUND WRITE GATE,
+// which the builders and AllowedCommand share). Widening only the parse
+// site would have let a MemoryData{CTCSS: CTCSSState('3')} be built,
+// admitted and SENT to an FTdx10, FTdx101D/MP, FT-891 or FT-710, whose
+// manuals print P8 0/1/2 only.
+//
+// Under ToneStatesCTCSS the behaviour AND THE TEXT are the package
+// function's, byte for byte, so nothing a three-state dialect refuses
+// reads any differently than it did. The zero Dialect declares no domain
+// and accepts nothing, consistent with the rest of this type.
+func (d Dialect) ParseCTCSSState(c byte) (CTCSSState, error) {
+	switch d.toneStates {
+	case ToneStatesCTCSSAndDCS:
+		switch c {
+		case '0', '1', '2', '3', '4':
+			return CTCSSState(c), nil
+		default:
+			return 0, newParseError([]byte{c}, "invalid CTCSS code: want '0'-'4'")
+		}
+	case ToneStatesCTCSS:
+		return ParseCTCSSState(c)
+	default:
+		// An omitted config semantic refuses rather than defaults. V16
+		// keeps every constructed dialect out of this branch; the zero
+		// Dialect reaches it, and answering "the FT-710's domain" for a
+		// receiver describing no radio is exactly the seam defect this
+		// package exists to prevent.
+		return 0, newParseError([]byte{c}, "invalid CTCSS code: this dialect declares no P8 state domain")
 	}
 }
 
@@ -432,7 +494,11 @@ func (d Dialect) parseMemoryFields(frame []byte, wantPrefix string) (MemoryData,
 		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: kind field (P7) must be one of '0','1','2','3','4','5'", wantPrefix))
 	}
 
-	ctcss, err := ParseCTCSSState(frame[memCTCSSOffset])
+	// P8, BY THIS DIALECT'S OWN DOMAIN (S0.3): three CTCSS states, or
+	// those plus the two DCS ones the FT-991A's legend prints. Through the
+	// RECEIVER, never the package function, which is the legacy three-state
+	// domain and is retained for its external callers only.
+	ctcss, err := d.ParseCTCSSState(frame[memCTCSSOffset])
 	if err != nil {
 		return MemoryData{}, newParseError(frame, fmt.Sprintf("%s frame: CTCSS field (P8) invalid", wantPrefix))
 	}
@@ -566,11 +632,14 @@ func (e *FreqTooWideError) Error() string {
 // MemoryData from a codeplug.ChannelData calls this and propagates the
 // error.
 //
-// For the five Yaesu NEWCAT models registered today the error arm is
+// For the six Yaesu NEWCAT models registered today the error arm is
 // UNREACHABLE in practice — codeplug.Validate has already rejected any
-// frequency above those radios' 75 MHz ceiling, and the write path
-// refuses a channel Validate rejected — so this is defence in depth at a
-// type boundary, tested directly rather than left to be discovered.
+// frequency above those radios' own declared ceilings, the highest of them
+// the FT-991A's 470 MHz, and the write path refuses a channel Validate
+// rejected — so this is defence in depth at a type boundary, tested
+// directly rather than left to be discovered. THE CEILING IS PER MODEL AND
+// NOT THE FAMILY'S: it read "75 MHz" while every registered model was HF,
+// and the sixth is the first with VHF/UHF.
 func MemoryFreqHz(v uint64) (uint32, error) {
 	if v > memFreqMax {
 		return 0, &FreqTooWideError{FreqHz: v}

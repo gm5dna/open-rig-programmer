@@ -64,7 +64,7 @@ var modeNames = map[cat.Mode]string{
 }
 
 // dialect is the FT-891, built once at init and validated by
-// cat.MustNewDialect's fourteen rules. EVERY FIELD IS SET EXPLICITLY,
+// cat.MustNewDialect's sixteen rules. EVERY FIELD IS SET EXPLICITLY,
 // including the two the combined MT form requires to be zero: a field left
 // out of this literal would be indistinguishable from a field deliberately
 // zeroed, and V9's "an inapplicable field must be explicitly zero" rule is
@@ -109,6 +109,13 @@ var dialect = cat.MustNewDialect(cat.DialectConfig{
 		SixtyLo: 501, SixtyHi: 510,
 		// "P1L - P9U (PMS)" on all three memory blocks (961, 999, 1036).
 		PMSPairs: 9,
+		// Those same three legends spell the pairs as a TOKEN, so the pair
+		// number is a wire byte on this radio and there is no decimal
+		// numbering to declare. Not an assumption: this is the legend,
+		// transcribed. The FT-991A's MC legend gives its pairs decimal
+		// channel numbers continuing the memory range instead, which is
+		// the disagreement this axis carries.
+		PMSForm: cat.PMSFormToken,
 		// "EMG (Emergency)", MR's legend (ft891_layout.txt:964). MT's and
 		// MW's do not print it; that is what MT.ReadSlots carries.
 		EmergencyWire: "EMG",
@@ -187,13 +194,20 @@ var dialect = cat.MustNewDialect(cat.DialectConfig{
 		MaxAbsHz: 9990,
 	},
 	// The FT-891's memory blocks print "P5 0: (Fixed)" on every one of them
-	// — MR 971, MT 1006, MW 1042, IF 783 and OI 1129 — where the three registered
-	// dialects print `P5 0: TX CLAR "OFF" 1: TX CLAR "ON"`. So byte 21 is
+	// — MR 971, MT 1006, MW 1042, IF 783 and OI 1129 — where the four other
+	// registered dialects print `P5 0: TX CLAR "OFF" 1: TX CLAR "ON"`, the
+	// FT-991A's included (core/cat/ft991a/dialect.go's P5TxClar). So byte 21 is
 	// schema on this radio and carries no TX clarifier state in either
 	// direction. Not an assumption: this is the legend, transcribed.
 	// TestDifferencePinMemoryP5 holds it against the FTdx10, which builds a
 	// TxClar-true record this dialect refuses.
 	MemoryP5: cat.P5Fixed,
+	// The FT-891's P8 legend prints THREE states — "0: CTCSS \"OFF\"
+	// 1: CTCSS ENC/DEC 2: CTCSS ENC" (ft891_layout.txt:977) — and nothing
+	// beyond '2'. Not an assumption: this is the legend, transcribed. The
+	// FT-991A's prints two DCS states as well, which is the disagreement
+	// this axis carries.
+	ToneStates: cat.ToneStatesCTCSS,
 	// The FT-891's MW legend prints "P7 0: (Fixed)" (ft891_layout.txt:1047),
 	// and cat.CombinedMTSetKind is the byte '0' — so the constant on the
 	// right is the correct SPELLING of what this radio documents. That the

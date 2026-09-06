@@ -50,7 +50,7 @@ func TestAllowedCommand_RejectTable(t *testing.T) {
 			// shifts every later ordinal in this file and fails
 			// TestEvidenceLiterals_OrderedRecordsSurvive, whose own
 			// message says "Do NOT regenerate the golden file" — and
-			// core/cat/testdata/ is one of the ten paths the milestone
+			// core/cat/testdata/ is one of the twenty paths the milestone
 			// golden gate forbids moving. Deliberate, not an oversight;
 			// reword it only in a change ALLOWED to regenerate the
 			// evidence-literal pin. The case itself is unaffected: what it

@@ -3,13 +3,17 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/csvio"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
+	"github.com/gm5dna/open-rig-programmer/internal/csvmerge"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx10"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx101"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeft891"
@@ -299,6 +303,44 @@ var ft891CoreSeven = []spec.Field{
 var ft891CoreFive = []spec.Field{
 	spec.FieldFrequency, spec.FieldMode, spec.FieldClarifier,
 	spec.FieldShift, spec.FieldCTCSSState,
+}
+
+// ft991aCoreSix is the core set the FT-991A's two STATIC banks derive — MEM
+// and PMS alike, since core/driver/ft991a/caps.go builds one bankFields
+// product for both (capability matrix §2.7: this radio's memory-channel
+// surface is printed once and carries no per-bank qualifier). It has no
+// DISCOVERED bank to give a second set to: this driver's Open probes
+// nothing at all (matrix §3.4).
+//
+// SAME MEMBERS AS ftdx10CoreSix, AND A SEPARATE VARIABLE ANYWAY, for the
+// reason ft891CoreSeven is one: the coincidence is independent evidence, not
+// a shared derivation. core/driver/ft991a imports no sibling driver, and its
+// bankFields was written from the FT-991A CAT manual alone (capability
+// matrix §2.1, a layout line per cell). What that manual happens to grade
+// the same way is the six fields its combined 41-position MT record carries
+// — frequency, mode, clarifier, shift, CTCSS state and tag.
+//
+// THE SEVENTH IS WHERE THIS RADIO PARTS FROM THE FT-891, AND IT PARTS THE
+// OTHER WAY. On the FT-891, byte 28 of the same-shaped record is printed
+// `0: TAG "OFF" 1: TAG "ON"` — a live flag, so FieldTagDisplay survives its
+// derivation. On the FT-991A that position is a MANUAL-EVIDENCED ABSENCE
+// (matrix §2.3): the field carries the zero FieldSupport, so it drops out
+// here exactly as it does on the FTdx10 and the FTdx101 pair, and this set
+// is six rather than seven. Reusing ft891CoreSeven and removing a member
+// would have hidden that inversion behind an edit; deriving it afresh
+// states it.
+//
+// FieldCTCSSTone and FieldScanSkip are absent for the reason every Yaesu
+// model's are, though on this radio the tone half is differently evidenced:
+// the tone NUMBER and the DCS CODE are a different command's live state (CN,
+// matrix §2.4), and no position in the 41-byte record marks a scan skip.
+// FieldErase is absent structurally — this radio's Control Command List
+// holds no erase command at all (§2.6). The five-state CTCSS STATE is
+// present here as one member like any other: this set is about which fields
+// the record carries, not how wide their vocabularies are.
+var ft991aCoreSix = []spec.Field{
+	spec.FieldFrequency, spec.FieldMode, spec.FieldClarifier,
+	spec.FieldShift, spec.FieldCTCSSState, spec.FieldTag,
 }
 
 // ic7610CoreThree is the core set every IC-7610 bank derives, on every
@@ -943,6 +985,18 @@ func TestBankCoreFields_EveryRegisteredModel_Membership(t *testing.T) {
 		// TestBankReadOnly_RegisteredFT891_RealHardwareProfile, through the
 		// option variable.
 		"FT-891": ft891CoreSeven,
+		// The FT-991A (Tier 1's second). SIX fields, its own variable,
+		// reached by this radio's own evidence rather than by reusing the
+		// FTdx10's identically-membered list — see ft991aCoreSix's doc
+		// comment for why byte 28 is a manual-evidenced ABSENCE here where
+		// it is a live flag on the FT-891, which is the inversion this
+		// separate variable exists to state.
+		//
+		// ONE ENTRY COVERS BOTH STATIC BANKS AND THERE ARE NO OTHERS: this
+		// driver discovers nothing at Open (matrix §3.4), so unlike the
+		// FT-891's row there is no second, discovered-bank set to assert
+		// anywhere else.
+		"FT-991A": ft991aCoreSix,
 	}
 	models := wiring.SupportedModels()
 	if len(models) == 0 {
@@ -1928,7 +1982,7 @@ func TestGetUISpec_RegisteredIC705_EveryBankFieldsAndTagDisplay(t *testing.T) {
 // driver's own slots.go builds), not hand-typed — the same
 // recompute-rather-than-hardcode discipline
 // TestGetUISpec_SlotClassification_DenseBanksUnchangedByWithinSpace uses
-// for the five Yaesu models — because hand-typing 321 slot strings is 321
+// for the six Yaesu models — because hand-typing 321 slot strings is 321
 // chances to mistype one, exactly the risk core/driver/ic9700/slots.go's
 // own bankSlots doc comment names. The sanity-check loop below confirms
 // three REAL addresses are actually present in that recomputed list, so
@@ -3007,12 +3061,23 @@ func TestGetUISpec_SlotClassification_OfflineWorkingCopy(t *testing.T) {
 // "ZZZ", which nothing claims — GetUISpec's orphan case, and the pin that
 // the widened rule admits nothing it should not.
 func TestGetUISpec_SlotClassification_DenseBanksUnchangedByWithinSpace(t *testing.T) {
-	// FIVE models since Tier 1, not four: the FT-891's two STATIC banks are
-	// dense too (MEM "001".."099", PMS "P1L".."P9U"), so the same "nothing
-	// about their grids may move by so much as a slot" promise covers it.
-	// Its discovered 60M/EMG banks are not static and never reach this test;
-	// the Sparse Fatalf below is what would say so if that ever changed.
-	for _, model := range []string{wiring.DefaultModel, "FTdx10", "FTdx101D", "FTdx101MP", "FT-891"} {
+	// SIX models since Tier 1's second registration, not five: the FT-891's
+	// two STATIC banks are dense (MEM "001".."099", PMS "P1L".."P9U") and
+	// so are the FT-991A's (MEM "001".."099", PMS "100".."117"), so the
+	// same "nothing about their grids may move by so much as a slot"
+	// promise covers both. The FT-891's discovered 60M/EMG banks are not
+	// static and never reach this test, and the FT-991A has no discovered
+	// bank at all; the Sparse Fatalf below is what would say so if either
+	// ever changed.
+	//
+	// THE FT-991A's PMS SLOTS ARE THE ONES THIS TEST MOST WANTS. They are
+	// decimal wire numbers where every sibling's are "P1L".."P9U" (plan
+	// decision P20), and codeplug.DisplaySlot passes "100".."117" through
+	// its default arm unchanged while prefixing "001".."099" as "M-01".."M-99"
+	// — so this model exercises BOTH arms of that function inside one
+	// working copy, and the byte-identical comparison below is what would
+	// catch a per-model display override arriving without a decision.
+	for _, model := range []string{wiring.DefaultModel, "FTdx10", "FTdx101D", "FTdx101MP", "FT-891", "FT-991A"} {
 		t.Run(model, func(t *testing.T) {
 			caps, err := wiring.StaticCapabilities(model)
 			if err != nil {
@@ -4535,6 +4600,253 @@ func TestGetUISpec_RegisteredFT891_TagDisplayDefaults(t *testing.T) {
 	for _, bank := range offline.Banks {
 		if bank.TagDisplayDefault != knownOff {
 			t.Errorf("offline FT-891 bank %s TagDisplayDefault = %+v, want %+v", bank.ID, bank.TagDisplayDefault, knownOff)
+		}
+	}
+}
+
+// --- The FT-991A (Tier 1 task 15a) ---
+
+// TestGetUISpec_RegisteredFT991A_FiveStateVocabularyReachesTheGrid is the
+// FIVE-STATE round trip through GetUISpec itself, against the REGISTERED
+// radio rather than a fixture.
+//
+// Stage 0's TestGetUISpec_CarriesAFiveStateVocabularyThroughToTheGrid
+// (app/dcsstate_uispec_test.go) had to state this over capsForModel's test
+// seam and a synthetic model, because no registered radio declared five
+// states then. This is the same property against the real registration, and
+// against BOTH faces a user can reach it from: the static RealHardware
+// baseline the offline grid is built from, and a live session on the
+// registered fake.
+//
+// WHAT WOULD FAIL HERE AND NOWHERE ELSE. app/uispec.go builds the picker as
+// `ctcssStateOptions := ctcssStateValues(caps.CTCSSStates)` — through the
+// helper, from the radio's OWN list. A driver or a UI seam that reached for
+// spec.StandardCTCSSStates() instead would still pass every length-agnostic
+// check in this package, and would silently offer this radio's owner three
+// options where its P8 legend prints five (matrix §1.17, §3.7). The ORDER is
+// asserted too, because the picker's order is the legend's order and a set
+// comparison would let it drift.
+func TestGetUISpec_RegisteredFT991A_FiveStateVocabularyReachesTheGrid(t *testing.T) {
+	want := []string{"OFF", "ENC-DEC", "ENC", "DCS-ENC-DEC", "DCS-ENC"}
+
+	// 1. OFFLINE: the static baseline, resolved through the working copy's
+	// model exactly as a user who has loaded a file but connected nothing
+	// reaches it.
+	a, _ := newTestApp(t)
+	a.mu.Lock()
+	a.working = &codeplug.Codeplug{
+		Schema:   codeplug.CurrentSchema,
+		Radio:    codeplug.RadioInfo{Model: "FT-991A"},
+		Channels: []codeplug.Channel{{Slot: "001"}},
+	}
+	a.mu.Unlock()
+	offline, err := a.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (offline, FT-991A working copy): unexpected error: %v", err)
+	}
+	if offline.Live {
+		t.Fatal("Live = true while disconnected, want false")
+	}
+	if !reflect.DeepEqual(offline.CTCSSStateOptions, want) {
+		t.Errorf("offline CTCSSStateOptions = %v, want %v — this radio's P8 legend prints FIVE states and the picker is built from its own list, never from the family three", offline.CTCSSStateOptions, want)
+	}
+
+	// 2. LIVE: a session on the registered fake, which is where a
+	// capability set assembled at Open (rather than statically) would
+	// diverge.
+	sess, closeAll, err := wiring.OpenFakeSessionFor(testAppCtx(t), "FT-991A")
+	if err != nil {
+		t.Fatalf("wiring.OpenFakeSessionFor(\"FT-991A\"): unexpected error: %v", err)
+	}
+	t.Cleanup(func() { _ = closeAll() })
+	b, _ := newTestApp(t)
+	connectDirect(t, b, sess, nil)
+	live, err := b.GetUISpec()
+	if err != nil {
+		t.Fatalf("GetUISpec (connected to the FT-991A fake): unexpected error: %v", err)
+	}
+	if !live.Live {
+		t.Error("Live = false, want true (connected to the registered fake)")
+	}
+	if !reflect.DeepEqual(live.CTCSSStateOptions, want) {
+		t.Errorf("live CTCSSStateOptions = %v, want %v", live.CTCSSStateOptions, want)
+	}
+}
+
+// TestImportCHIRP_RegisteredFT991A_BlankToneNeitherClobbersNorInventsADCSState
+// makes a piece of REASONING into a checked fact.
+//
+// core/csvio/chirp.go's toneStateFor resolves a CTCSS state BY SEMANTICS —
+// it walks caps.CTCSSStates for the member whose Semantics field matches —
+// and importCHIRPToneCTCSS asks it for exactly three of them: spec.ToneOff
+// for a blank Tone column, spec.ToneEncode for "Tone", spec.ToneEncodeDecode
+// for "TSQL". It never asks for either DCS semantics, and "DTCS"/"Cross"
+// rows are refused outright. Therefore a CHIRP import can neither PRODUCE a
+// DCS state nor, since MergeCHIRP replaces only the slots the file names,
+// disturb one already held at a slot the file leaves alone.
+//
+// That reasoning was sound before this radio existed and untestable against
+// a registered model, because no registered radio declared a DCS state to
+// get wrong. It is testable now, and both halves are asserted here:
+//
+//  1. THE UNTOUCHED CHANNEL IS PRESERVED. Slot "002" holds DCS-ENC-DEC and
+//     the CHIRP file names only Location 1; after the import it still holds
+//     DCS-ENC-DEC. A merge that rebuilt every slot from the file — or a
+//     future "blank the rest" convenience — would reset it to the off state
+//     and lose a setting the file never mentioned.
+//  2. THE IMPORTED ROW IS THE OFF STATE, NOT A DCS ONE. Slot "001"'s blank
+//     Tone column resolves to "OFF" exactly. A toneStateFor that resolved
+//     POSITIONALLY rather than by semantics would still pick index 0 here
+//     and pass; one that took the LAST match, or that was ever widened to
+//     prefer a richer state, would hand this radio's owner "DCS-ENC" for a
+//     row that asked for no tone at all. The assertion is on the value, so
+//     it fails either way round.
+func TestImportCHIRP_RegisteredFT991A_BlankToneNeitherClobbersNorInventsADCSState(t *testing.T) {
+	caps, err := wiring.StaticCapabilities("FT-991A")
+	if err != nil {
+		t.Fatalf("wiring.StaticCapabilities(\"FT-991A\"): unexpected error: %v", err)
+	}
+	// The premise: this radio really does declare both DCS states, so the
+	// assertions below are not vacuous.
+	var dcsStates int
+	for _, st := range caps.CTCSSStates {
+		if st.Semantics == spec.ToneDCSEncodeDecode || st.Semantics == spec.ToneDCSEncode {
+			dcsStates++
+		}
+	}
+	if dcsStates != 2 {
+		t.Fatalf("the registered FT-991A declares %d DCS state(s), want 2 — this test's whole premise is that a CHIRP import has DCS states available to get wrong", dcsStates)
+	}
+
+	// Location 1 is memory slot "001"; the Tone column is present and
+	// BLANK, which is the case under test.
+	const chirp = "Location,Name,Frequency,Duplex,Tone,rToneFreq,cToneFreq,Mode,Skip\n" +
+		"1,ONE,145.500000,,,88.5,88.5,FM,\n"
+	imported, report, err := csvio.ImportCHIRP(strings.NewReader(chirp), caps)
+	if err != nil {
+		t.Fatalf("csvio.ImportCHIRP: unexpected error: %v", err)
+	}
+	if report.HasBlocking() {
+		t.Fatalf("csvio.ImportCHIRP reported blocking loss on an ordinary FM row: %+v", report)
+	}
+	if len(imported) != 1 {
+		t.Fatalf("csvio.ImportCHIRP returned %d channels, want 1", len(imported))
+	}
+
+	working := &codeplug.Codeplug{
+		Schema:    codeplug.CurrentSchema,
+		Generator: "test",
+		Radio:     codeplug.RadioInfo{Model: "FT-991A"},
+		Channels: []codeplug.Channel{
+			{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 144000000, Mode: "FM", CTCSS: "DCS-ENC", Shift: "SIMPLEX"}},
+			{Slot: "002", Data: &codeplug.ChannelData{FreqHz: 145600000, Mode: "FM", CTCSS: "DCS-ENC-DEC", Shift: "SIMPLEX"}},
+		},
+	}
+	if err := csvmerge.MergeCHIRP(working, imported); err != nil {
+		t.Fatalf("csvmerge.MergeCHIRP: unexpected error: %v", err)
+	}
+
+	if got := working.Channels[1].Data.CTCSS; got != "DCS-ENC-DEC" {
+		t.Errorf("slot 002 ctcss = %q after a CHIRP import that never named it, want %q — a merge must not disturb a slot the file leaves alone, and on this radio that slot can hold a state the importer cannot even express", got, "DCS-ENC-DEC")
+	}
+	if got := working.Channels[0].Data.CTCSS; got != "OFF" {
+		t.Errorf("slot 001 ctcss = %q after a CHIRP row with a BLANK Tone column, want \"OFF\" — toneStateFor resolves spec.ToneOff BY SEMANTICS, so a five-state vocabulary must still yield the off state and never a DCS one", got)
+	}
+}
+
+// TestFT991A_NativeCSVAndCodeplugRoundTripADCSState is the pair of round
+// trips beside the UISpec one: a working copy holding both DCS states
+// survives native-CSV export/import and codeplug save/load byte for byte.
+//
+// AGAINST THE REGISTERED RADIO'S OWN VOCABULARY, which is what makes it
+// different from the Stage 0 pins in core/csvio and core/codeplug: those
+// asserted the same property over a synthetic five-state fixture, because
+// nothing declared one yet. Here the state strings are read out of
+// wiring.StaticCapabilities("FT-991A"), so a driver that renamed either DCS
+// state without the file layers noticing fails here rather than at a user's
+// next reload.
+//
+// PMS slots "100" and "117" are deliberately among the channels: they are
+// this radio's own decimal wire numbers (plan decision P20), and a file
+// layer that quietly reformatted a slot string would be caught by the same
+// comparison.
+func TestFT991A_NativeCSVAndCodeplugRoundTripADCSState(t *testing.T) {
+	caps, err := wiring.StaticCapabilities("FT-991A")
+	if err != nil {
+		t.Fatalf("wiring.StaticCapabilities(\"FT-991A\"): unexpected error: %v", err)
+	}
+	stateFor := func(sem spec.ToneSemantics) string {
+		t.Helper()
+		for _, st := range caps.CTCSSStates {
+			if st.Semantics == sem {
+				return st.Value
+			}
+		}
+		t.Fatalf("the registered FT-991A declares no state with semantics %v — this test reads its vocabulary from the radio rather than restating it", sem)
+		return ""
+	}
+	dcsEncDec, dcsEnc := stateFor(spec.ToneDCSEncodeDecode), stateFor(spec.ToneDCSEncode)
+
+	channels := []codeplug.Channel{
+		{Slot: "001", Data: &codeplug.ChannelData{FreqHz: 145500000, Mode: "FM", CTCSS: dcsEncDec, Shift: "SIMPLEX"}},
+		{Slot: "100", Data: &codeplug.ChannelData{FreqHz: 145600000, Mode: "FM", CTCSS: dcsEnc, Shift: "SIMPLEX"}},
+		{Slot: "117", Data: &codeplug.ChannelData{FreqHz: 145700000, Mode: "FM", CTCSS: stateFor(spec.ToneEncodeDecode), Shift: "SIMPLEX"}},
+	}
+
+	// 1. Native CSV.
+	var buf bytes.Buffer
+	if err := csvio.Export(&buf, channels); err != nil {
+		t.Fatalf("csvio.Export: unexpected error: %v", err)
+	}
+	back, err := csvio.Import(bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatalf("csvio.Import: unexpected error: %v", err)
+	}
+	if len(back) != len(channels) {
+		t.Fatalf("csvio.Import returned %d channels, want %d", len(back), len(channels))
+	}
+	for i := range channels {
+		if back[i].Slot != channels[i].Slot {
+			t.Errorf("native CSV round trip moved slot %q to %q", channels[i].Slot, back[i].Slot)
+		}
+		if back[i].Data == nil {
+			t.Fatalf("channel %q came back empty from the native CSV round trip", channels[i].Slot)
+		}
+		if got, want := back[i].Data.CTCSS, channels[i].Data.CTCSS; got != want {
+			t.Errorf("native CSV round trip: slot %q ctcss = %q, want %q", channels[i].Slot, got, want)
+		}
+	}
+
+	// 2. Codeplug save/load.
+	path := filepath.Join(t.TempDir(), "ft991a.json")
+	cp := &codeplug.Codeplug{
+		Schema:    codeplug.CurrentSchema,
+		Generator: "test",
+		Radio:     codeplug.RadioInfo{Model: "FT-991A", CATID: caps.CATID},
+		Channels:  channels,
+	}
+	if err := codeplug.Save(path, cp); err != nil {
+		t.Fatalf("codeplug.Save: unexpected error: %v", err)
+	}
+	loaded, err := codeplug.Load(path)
+	if err != nil {
+		t.Fatalf("codeplug.Load: unexpected error: %v", err)
+	}
+	if loaded.Schema != cp.Schema {
+		t.Errorf("save/load moved the schema to %d, want %d — a DCS state is an ordinary string and must force no new schema", loaded.Schema, cp.Schema)
+	}
+	if len(loaded.Channels) != len(channels) {
+		t.Fatalf("codeplug.Load returned %d channels, want %d", len(loaded.Channels), len(channels))
+	}
+	for i := range channels {
+		if loaded.Channels[i].Slot != channels[i].Slot {
+			t.Errorf("save/load moved slot %q to %q", channels[i].Slot, loaded.Channels[i].Slot)
+		}
+		if loaded.Channels[i].Data == nil {
+			t.Fatalf("channel %q came back empty from save/load", channels[i].Slot)
+		}
+		if got, want := loaded.Channels[i].Data.CTCSS, channels[i].Data.CTCSS; got != want {
+			t.Errorf("save/load: slot %q ctcss = %q, want %q", channels[i].Slot, got, want)
 		}
 	}
 }

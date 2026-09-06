@@ -55,8 +55,8 @@ would settle it).
 ### FT-891 (opt-in)
 
 Reads the 99 memories, the 9 PMS pairs and the 159 menu settings; its
-menu addresses are four digits where the other Yaesu radios use six,
-and files accept either.
+menu addresses are four digits, other Yaesu radios use three or six,
+and files accept any of the three widths.
 
 Refused: tone and scan-skip cannot be set over CAT (the memory record
 has no tone-number byte and no scan-skip flag), and a transmit-clarifier
@@ -80,6 +80,56 @@ settle it.
 
 Evidence: `core/driver/ft891/doc.go`; the manual is Yaesu's CAT
 Operation Reference Manual 1909-C.
+
+### FT-991A (opt-in)
+
+Reads the 99 memories, the 9 PMS pairs and 152 menu settings. Two
+things this radio shows differently from the others are worth knowing
+before they surprise you.
+
+The **PMS pairs are listed as the channel numbers 100 to 117**, which
+is what the radio's CAT record uses, while the radio's own front panel
+and manual print the same eighteen slots as `P-1L` to `P-9U`. The
+numbers are the wire's and the letters are the panel's; they name the
+same slots in the same order.
+
+The **settings list shows 152 items where the radio's menu chart prints
+153 rows**. Row 087, RADIO ID, is left out because the chart gives it
+neither a width nor a parameter — ten printed hyphens and nothing else
+— so the program cannot size an answer to it and will not send a
+question it cannot read. A single `EX087;` read on a real FT-991A would
+settle it.
+
+Refused: the tone frequency number, the DCS code and scan skip are not
+part of what this program writes to a channel. The memory record does
+carry a five-state tone byte — CTCSS off, CTCSS encode and decode,
+CTCSS encode, DCS encode and decode, DCS encode — which the program
+reads and writes; what it has no field for is *which* tone or *which*
+DCS code. The radio does have a CAT command for those two, `CN`, and it
+can set as well as report them — but what it sets is the tone and code
+the radio is using now, not what a channel holds, and this program does
+not send it. Scan skip has no position anywhere in the memory record.
+Set the number, the code and the skip marking at the radio. A CHIRP file's `DTCS` and `Cross` rows are therefore still
+refused, and the reason given says so: this radio writes the DCS state
+but not the DCS code. A CHIRP file's `CW`, `CWR` and `RTTY` rows are
+not imported either, for the FT-891's reason — they resolve to names
+this radio's mode list does not print (it prints `CW`, `CW-R`,
+`RTTY-LSB` and `RTTY-USB`). And C4FM is one of this radio's fourteen
+modes that CHIRP has no name for at all, so no CHIRP file can describe a
+C4FM channel.
+
+Guesses: its **speed**. The menu row that sets the rate for the socket
+this program uses is 031 CAT RATE, which lists 4800, 9600, 19200 and
+38400 and marks none as the factory setting, so the program opens at
+38400; if your radio is set differently, change menu 031, because the
+program has no speed setting. Menu 029 is not that row — 029 sets the
+rate of the rear-panel RS-232C jack, a different port. Its **socket**:
+the USB connection is a built-in dual-UART bridge, so the radio appears
+as two serial ports and the manual never says which carries CAT; if the
+first is silent, try the other.
+
+Evidence: `core/driver/ft991a/doc.go`; the manual is Yaesu's CAT
+Operation Reference Book 1711-D.
 
 ## Icom
 
@@ -216,6 +266,7 @@ by revision in the code that transcribes it.
 | FTdx10 | Yaesu CAT Operation Reference Manual 2308-F |
 | FTdx101D, FTdx101MP | Yaesu CAT Operation Reference Manual 2308-L |
 | FT-891 | Yaesu CAT Operation Reference Manual 1909-C |
+| FT-991A | Yaesu CAT Operation Reference Book 1711-D |
 | IC-7610 | Icom CI-V Reference Guide rev 4 |
 | IC-7300 | Icom Full Manual §19, rev 12b |
 | IC-7300MK2 | Icom CI-V Reference Guide rev 0 |

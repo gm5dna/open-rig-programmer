@@ -140,14 +140,19 @@ func validToneModeSemantics(s ToneModeSemantics) bool {
 	}
 }
 
-// validToneSemantics reports whether s is one of the three declared,
+// validToneSemantics reports whether s is one of the five declared,
 // meaningful ToneSemantics constants. ToneSemanticsUnspecified (the zero
 // value) is deliberately excluded: a ToneState whose Semantics was simply
 // never set must fail here, not silently read as ToneOff — see
 // ToneSemantics' doc comment.
+//
+// The two DCS members were appended for a radio whose CTCSS state field
+// names DCS as well as CTCSS. They widen what a profile MAY declare and
+// nothing else: no registered model's CTCSSStates moves, and the
+// uniqueness rule below is unchanged.
 func validToneSemantics(s ToneSemantics) bool {
 	switch s {
-	case ToneOff, ToneEncode, ToneEncodeDecode:
+	case ToneOff, ToneEncode, ToneEncodeDecode, ToneDCSEncodeDecode, ToneDCSEncode:
 		return true
 	default:
 		return false
@@ -212,10 +217,10 @@ func validToneSemantics(s ToneSemantics) bool {
 //     never the zero value, ShiftUnspecified: see ShiftDirection's doc
 //     comment for why the zero value must not be allowed to mean
 //     anything.
-//   - Every CTCSSStates entry's Semantics must be one of the three
+//   - Every CTCSSStates entry's Semantics must be one of the five
 //     declared ToneSemantics constants (ToneOff/ToneEncode/
-//     ToneEncodeDecode) — never the zero value, ToneSemanticsUnspecified
-//     — for the same reason.
+//     ToneEncodeDecode/ToneDCSEncodeDecode/ToneDCSEncode) — never the
+//     zero value, ToneSemanticsUnspecified — for the same reason.
 //   - No two ShiftOptions may express the same ShiftDirection.
 //   - No two CTCSSStates may express the same Semantics.
 //

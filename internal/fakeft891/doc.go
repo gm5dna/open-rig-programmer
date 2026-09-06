@@ -194,7 +194,7 @@
 //     MT's own detail block prints a filled Read chart and a filled Answer
 //     chart (ft891_layout.txt:1016, 1018-1027). THE CONTROL COMMAND LIST SAYS
 //     THE OPPOSITE — "MT | MEMORY WRITE & TAG | Set O | Read X | Ans. X"
-//     (166) — and both cannot be true. This radio is the only one of the four
+//     (166) — and both cannot be true. This radio is the only one of the six
 //     registered Yaesu models whose two records disagree, and
 //     core/cat/ft891/doc.go records the disagreement without resolving it.
 //     The geometry witness found direct evidence that these charts DO contain

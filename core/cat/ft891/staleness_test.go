@@ -29,10 +29,10 @@ import (
 //
 // Scope is deliberately package-local, not registry-wide. Profile carries no
 // package-directory datum and its paths are resolved relative to the working
-// directory, so no single test can verify every profile's files; core/cat's
-// and the two FTdx packages' own staleness tests cover the other three
-// profiles unchanged, and the four package-local tests together cover all
-// four.
+// directory, so no single test can verify every profile's files; core/cat's,
+// the two FTdx packages' and core/cat/ft991a's own staleness tests cover the
+// other four profiles unchanged, and the five package-local tests together
+// cover all five.
 func TestEXInventoryGenerated_NotStale(t *testing.T) {
 	var matches []extable.NamedProfile
 	for _, np := range extable.RegisteredProfiles() {

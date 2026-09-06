@@ -10,9 +10,20 @@ import "sort"
 type slotSpace struct {
 	memoryLo, memoryHi int    // inclusive decimal range, e.g. 1..99
 	sixtyLo, sixtyHi   int    // inclusive decimal range, e.g. 501..599; 0,0 if absent
-	pmsPairs           int    // e.g. 9 -> P1L..P9U; valid range 0..9 — the pair number is a single wire digit ('1'-'9'), so this can never validly exceed 9; consumers must go through pmsCap() rather than trust this raw; 0 if absent
+	pmsPairs           int    // e.g. 9 -> P1L..P9U (token form) or 100..117 (numeric form); consumers must go through pmsCap() rather than trust this raw; 0 if absent
 	emgWire            string // "" if this family has no emergency channel
 	noneWire           string // the "VFO or MT or QMB" form, e.g. "000"
+
+	// pmsForm is the WIRE FORM the pairs above take — the "P<n><L|U>"
+	// token or consecutive decimal channel numbers — and pmsNumericLo is
+	// pair 1's lower wire number under the numeric form (0 under the
+	// token form). Both live here, beside pmsPairs, because they are
+	// statements about THIS slot space; and they are dialect data at all
+	// because they reach the OUTBOUND WRITE GATE through classifySlot,
+	// which decides writableSlot for every MW and combined-MT frame (see
+	// PMSSlotForm, dialectconfig.go).
+	pmsForm      PMSSlotForm
+	pmsNumericLo int
 
 	// mcSelects is the SEND-side domain of the MC command — which of the
 	// classes above an MC Set may name. It lives here, beside the ranges it
@@ -113,7 +124,7 @@ type Dialect struct {
 	slots     slotSpace
 
 	exItems    []EXItem
-	exAddrForm EXAddressForm        // this dialect's OWN EX address field width (six digits or four)
+	exAddrForm EXAddressForm        // this dialect's OWN EX address field width (six digits, four or three)
 	exMembers  map[EXAddress]bool   // this dialect's OWN membership index
 	exByTriple map[[3]int]EXAddress // this dialect's OWN decimal-triple index
 	exP4Max    int                  // this dialect's OWN widest P4 answer field, derived from exItems
@@ -149,6 +160,15 @@ type Dialect struct {
 	// from the same place as its datum, which is why encodeMemoryFields and
 	// parseMemoryFields take this receiver rather than a package global.
 	memoryP5 MemoryP5Policy
+
+	// toneStates is the domain of byte 24 of that same block — P8 — on this
+	// family: the three CTCSS states, or those plus the two DCS ones
+	// (ToneStateDomain, dialectconfig.go). Dialect data for memoryP5's
+	// reason: it reaches the OUTBOUND WRITE GATE through the same
+	// validateMWFields and validateCombinedMTFields the builders use, so a
+	// wrong value here can authorise a P8 byte a radio's manual does not
+	// print.
+	toneStates ToneStateDomain
 }
 
 // ModeByName resolves a display name to this dialect's own mode nibble.
@@ -178,8 +198,15 @@ var FT710 = Dialect{
 		memoryLo: 1, memoryHi: 99,
 		sixtyLo: 501, sixtyHi: 599,
 		pmsPairs: 9,
-		emgWire:  "EMG",
-		noneWire: "000",
+		// The FT-710 reference's slot table prints the pairs as the
+		// "P1L-P9U | PMS pairs (9 lower/upper pairs)" TOKEN, so this
+		// radio's pair number is a wire byte and there is no decimal
+		// numbering to declare. Pinned by
+		// TestPMSForm_RegisteredDialectDeclaresTheTokenForm.
+		pmsForm:      PMSFormToken,
+		pmsNumericLo: 0,
+		emgWire:      "EMG",
+		noneWire:     "000",
 
 		// The FT-710 CAT manual's MC block prints all four classes against
 		// this command: "001-099 / P1L-P9U / 5xx: (5MHz BAND) / EMG:
@@ -220,6 +247,14 @@ var FT710 = Dialect{
 	// has always carried here. Pinned by memoryp5_test.go's
 	// TestMemoryP5_RegisteredDialectsCarryTheTxClarifier.
 	memoryP5: P5TxClar,
+
+	// The FT-710 CAT manual gives P8 as "CTCSS: 0 off, 1 ENC/DEC, 2 ENC"
+	// and nothing beyond '2' — the domain cat.ParseCTCSSState has always
+	// enforced here. The FT-991A's P8 legend prints two DCS states as well,
+	// which is the disagreement the ToneStateDomain axis carries. Pinned by
+	// tonestates_test.go's
+	// TestToneStates_RegisteredDialectDeclaresTheCTCSSDomain.
+	toneStates: ToneStatesCTCSS,
 
 	mwWriteKind: KindMemory,
 }
@@ -371,7 +406,7 @@ func (d Dialect) EXAddresses() []EXAddress {
 func (d Dialect) KnownEXAddress(a EXAddress) bool { return d.exMembers[a] }
 
 // EXWire renders a as THIS DIALECT'S EX address field: six digits under
-// EXAddressTriple, four under EXAddressPair.
+// EXAddressTriple, four under EXAddressPair, three under EXAddressSingle.
 //
 // It is the method every caller outside this package uses, and it replaced
 // EXAddress.Wire() — a method on the address, which carries no family and
@@ -380,9 +415,9 @@ func (d Dialect) KnownEXAddress(a EXAddress) bool { return d.exMembers[a] }
 func (d Dialect) EXWire(a EXAddress) string { return wireEXAddress(d.exAddrForm, a) }
 
 // EXAddressWidth is the byte width of this dialect's EX address field: 6
-// under EXAddressTriple, 4 under EXAddressPair, 0 for a dialect that
-// declares no form (only the inert zero Dialect, since V12 refuses such a
-// config).
+// under EXAddressTriple, 4 under EXAddressPair, 3 under EXAddressSingle,
+// 0 for a dialect that declares no form (only the inert zero Dialect, since
+// V12 refuses such a config).
 //
 // It MEASURES the renderer rather than repeating its widths in a second
 // switch. A bound consulted from somewhere other than its own datum is the
@@ -391,18 +426,62 @@ func (d Dialect) EXWire(a EXAddress) string { return wireEXAddress(d.exAddrForm,
 // identity directly.
 func (d Dialect) EXAddressWidth() int { return len(wireEXAddress(d.exAddrForm, EXAddress{})) }
 
-// pmsCap returns this dialect's PMS pair count, clamped to 9. The wire
-// form's pair digit is a single ASCII byte ('1'-'9'), so pmsPairs can
-// never validly exceed 9 no matter what a dialect's data configures —
-// codex review Important-2 measured an uncapped pmsPairs building
-// multi-byte wire forms ("P12L") that the SAME dialect's own ParseSlot
-// then rejected. classifySlot and PMSSlot both consume this rather than
-// the raw field, so the cap is expressed exactly once.
+// PMSForm reports the WIRE FORM this family's PMS pairs take: the
+// "P<n><L|U>" token (PMSFormToken) or consecutive decimal channel numbers
+// (PMSFormNumeric). The zero Dialect reports the zero form, which
+// NewDialect refuses to construct for any family that has pairs.
+//
+// Exported for the same reason MCSelects and MTReadSlots are:
+// core/cat/dialecttest cannot see the unexported field, and it must branch
+// on this to know which PMS wire forms a dialect MUST build and which it
+// MUST be seen to REFUSE (checkPMSSlotForm).
+func (d Dialect) PMSForm() PMSSlotForm { return d.slots.pmsForm }
+
+// PMSNumericLo reports the decimal wire number of pair 1's LOWER slot under
+// PMSFormNumeric, and 0 under PMSFormToken. Exported alongside PMSForm, and
+// for the same reason: the conformance suite outside this package must be
+// able to say WHICH numbers a numeric dialect's pairs occupy without
+// re-deriving them from a builder it is testing.
+func (d Dialect) PMSNumericLo() int { return d.slots.pmsNumericLo }
+
+// pmsCap returns this dialect's PMS pair count, clamped to 9 UNDER THE
+// TOKEN FORM. The token wire form's pair digit is a single ASCII byte
+// ('1'-'9'), so pmsPairs can never validly exceed 9 there no matter what a
+// dialect's data configures — codex review Important-2 measured an uncapped
+// pmsPairs building multi-byte wire forms ("P12L") that the SAME dialect's
+// own ParseSlot then rejected. classifySlot and PMSSlot both consume this
+// rather than the raw field, so the cap is expressed exactly once.
+//
+// UNDER PMSFormNumeric THE CLAMP DOES NOT APPLY, because its reason does
+// not: the pair number is never on the wire, the slots are ordinary decimal
+// channel numbers, and the bound that does apply is V15's — the range must
+// end at or below 999. Clamping there would silently give a dialect
+// declaring twelve numeric pairs nine of them, which is the hazard V3
+// refuses (a wrong count is rejected, never clamped) reintroduced one layer
+// down. TestV3_PairBoundIsFormAware pins both halves.
 func (d Dialect) pmsCap() int {
+	if d.slots.pmsForm == PMSFormNumeric {
+		return d.slots.pmsPairs
+	}
 	if d.slots.pmsPairs > 9 {
 		return 9
 	}
 	return d.slots.pmsPairs
+}
+
+// numericPMSRange returns the inclusive decimal range this dialect's PMS
+// pairs occupy under PMSFormNumeric, and whether it has one at all.
+//
+// DERIVED from pmsNumericLo and pmsCap() rather than stored, so there is no
+// second field for the range's top to disagree with — the bound is
+// consulted from the same place as its datum. validateSixtyRange (V6)
+// computes the same interval from the CONFIG, before any Dialect exists.
+func (d Dialect) numericPMSRange() (lo, hi int, ok bool) {
+	pc := d.pmsCap()
+	if d.slots.pmsForm != PMSFormNumeric || pc <= 0 {
+		return 0, 0, false
+	}
+	return d.slots.pmsNumericLo, d.slots.pmsNumericLo + 2*pc - 1, true
 }
 
 // classifySlot reports what kind of slot, if any, wire represents under
@@ -434,11 +513,25 @@ func (d Dialect) classifySlot(wire string) slotKind {
 			// ASSUMED: the reference marks 5xx numbering as unverified.
 			return slotKind60m
 		default:
+			// The NUMERIC PMS arm. It fires only under PMSFormNumeric, and
+			// V6 forbids its interval overlapping either range above, so
+			// the order of these cases decides nothing a config could
+			// exercise (see slot.go's invariant note).
+			if lo, hi, ok := d.numericPMSRange(); ok && n >= lo && n <= hi {
+				return slotKindPMS
+			}
 			return slotKindInvalid
 		}
 	}
 
-	if pc := d.pmsCap(); pc > 0 &&
+	// THE TOKEN ARM IS GUARDED BY THE FORM, not by the pair count alone.
+	// Until S0.1 its only guard was pmsCap() > 0, so a dialect declaring
+	// nine pairs classified "P1L" as PMS whatever its manual printed —
+	// and writableSlot returns true for slotKindPMS, so a numeric-PMS
+	// radio would have had "MW P1L…;" BUILT for it and admitted by its own
+	// gate. The numeric arm above does not close that; this guard does.
+	// TestClassifySlot_TokenBranchIsGuardedByTheForm pins it.
+	if pc := d.pmsCap(); d.slots.pmsForm == PMSFormToken && pc > 0 &&
 		wire[0] == 'P' &&
 		wire[1] >= '1' && wire[1] <= byte('0'+pc) &&
 		(wire[2] == 'L' || wire[2] == 'U') {

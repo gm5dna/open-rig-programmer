@@ -121,10 +121,11 @@ func Run(t *testing.T, d cat.Dialect) {
 	}
 
 	r := &conformanceRun{
-		t:        t,
-		d:        d,
-		frames:   map[string]int{},
-		refusals: map[string]int{},
+		t:           t,
+		d:           d,
+		frames:      map[string]int{},
+		refusals:    map[string]int{},
+		acceptances: map[string]int{},
 	}
 
 	r.checkAnswerBounds()
@@ -152,6 +153,19 @@ type conformanceRun struct {
 	frames   map[string]int
 	refusals map[string]int
 	total    int
+
+	// acceptances counts the ACCEPTANCES a check needed to see, per kind,
+	// and it is the third map for the same reason the second exists.
+	//
+	// A check whose whole content is "this dialect must NOT refuse X" fails
+	// silently when it never runs: no error is exactly what passing looks
+	// like. The five-state arm of checkToneStateDomain was in that state —
+	// three required refusal counters on the three-state side, none at all on
+	// the five-state side (adversarial review, finding L4) — and its early
+	// returns mean not running is a reachable outcome, not a hypothetical.
+	// Kept apart from frames because these are not per-builder frame counts
+	// and their failure message has to say something else.
+	acceptances map[string]int
 
 	// mtMin/mtMax are MTAnswerBounds' answer, captured once and re-used to
 	// judge the length of every MT Set frame the dialect builds.
@@ -414,6 +428,8 @@ func (r *conformanceRun) checkSlotFrames() {
 
 	r.checkMCSendDomain()
 	r.checkMTReadDomain()
+	r.checkPMSSlotForm()
+	r.checkToneStateDomain()
 	r.checkOverlongMTFrameIsRefused()
 }
 
@@ -470,6 +486,268 @@ func (r *conformanceRun) checkMCSendDomain() {
 		}
 	}
 }
+
+// checkPMSSlotForm holds this dialect's PMS pairs to the WIRE FORM it
+// declares, in BOTH directions.
+//
+// The axis is not a policy like MCSelects or MTReadSlots: it decides WHICH
+// BYTES a builder emits. Under cat.PMSFormToken pair k is "P<k><L|U>" and
+// no decimal wire number is ever a PMS slot; under cat.PMSFormNumeric pair
+// k is a pair of consecutive decimal channel numbers and the token form is
+// not a wire form this radio has at all. Getting it wrong is a WRITE
+// defect: cat.Dialect.writableSlot admits every PMS slot, so a numeric-PMS
+// radio classifying "P1L" as PMS would have "MW P1L…;" built for it and
+// admitted by its own gate — a frame its manual never prints.
+//
+// So both halves are asserted here rather than only the positive one: what
+// PMSSlot BUILDS must round-trip through this dialect's own ParseSlot as a
+// PMS slot, and every form of the OTHER shape must be refused. The refusal
+// counter is keyed by form so that a dialect of either kind must be SEEN to
+// refuse the other's forms, never merely to have none to offer.
+func (r *conformanceRun) checkPMSSlotForm() {
+	r.t.Helper()
+
+	form := r.d.PMSForm()
+	// A dialect with no pairs declares no form (V15 requires one only when
+	// PMSPairs > 0), and has nothing for this check to hold.
+	if _, err := r.d.PMSSlot(1, false); err != nil {
+		return
+	}
+
+	// The positive half: every pair this dialect can build must come back
+	// from its own ParseSlot as a PMS slot, in the declared shape.
+	//
+	// IT SWEEPS UNTIL THIS DIALECT'S OWN PMSSlot STOPS BUILDING, not to a
+	// fixed nine. pmsCap() clamps to nine under PMSFormToken ONLY — the pair
+	// number is one ASCII wire byte there, which TestV3_PairBoundIsFormAware
+	// pins — so a numeric dialect may legally declare more, and a fixed
+	// bound left every pair past the ninth built by PMSSlot, classified by
+	// classifySlot and never seen by this suite (Stage 0 close review, seat
+	// 2 LOW-3). maxSweptPMSPairs is a runaway guard on a loop whose real
+	// bound is the receiver, not a domain: a numeric pair costs two channels
+	// inside 000-999, so no dialect can offer 500 of them.
+	for pair := 1; pair <= maxSweptPMSPairs; pair++ {
+		if _, err := r.d.PMSSlot(pair, false); err != nil {
+			break
+		}
+		for _, upper := range []bool{false, true} {
+			s, err := r.d.PMSSlot(pair, upper)
+			if err != nil {
+				continue
+			}
+			isToken := len(s.Wire()) == 3 && s.Wire()[0] == 'P' &&
+				(s.Wire()[2] == 'L' || s.Wire()[2] == 'U')
+			if (form == cat.PMSFormToken) != isToken {
+				r.t.Errorf("%s: PMSSlot(%d, %t) built %q under %v — the token form is \"P<n><L|U>\" and the numeric form is a decimal channel number, and a builder emitting the other one puts bytes on the wire this dialect's manual does not print", r.name(), pair, upper, s.Wire(), form)
+				continue
+			}
+			back, err := r.d.ParseSlot(s.Wire())
+			if err != nil {
+				r.t.Errorf("%s: its own ParseSlot refused %q, which its own PMSSlot(%d, %t) built: %v", r.name(), s.Wire(), pair, upper, err)
+				continue
+			}
+			if !back.IsPMS() {
+				r.t.Errorf("%s: ParseSlot(%q) classified its own PMSSlot(%d, %t) output as something other than PMS — the constructor and the classifier disagree", r.name(), s.Wire(), pair, upper)
+			}
+		}
+	}
+
+	// The negative half: every form of the OTHER shape is refused.
+	switch form {
+	case cat.PMSFormNumeric:
+		for pair := 1; pair <= 9; pair++ {
+			for _, suffix := range []byte{'L', 'U'} {
+				wire := string([]byte{'P', byte('0' + pair), suffix})
+				s, err := r.d.ParseSlot(wire)
+				if err == nil && s.IsPMS() {
+					r.t.Errorf("%s: ParseSlot(%q) = a PMS slot under %v — this dialect's pairs are decimal channel numbers, so no token form is a slot it has", r.name(), wire, form)
+					continue
+				}
+				r.refusals["token PMS form refused under PMSFormNumeric"]++
+			}
+		}
+	case cat.PMSFormToken:
+		// Every three-digit form this dialect classifies at all must be a
+		// memory, 60m, EMG or none slot — never PMS, because under the
+		// token form no decimal number is one.
+		//
+		// THE COUNTER SAYS THE SWEEP RAN, AND NOTHING MORE, because nothing
+		// more is true. It was called "decimal PMS form refused under
+		// PMSFormToken" and incremented only on the error branch, which is
+		// most of 000-999 on any dialect: it was non-zero before this axis
+		// existed and would stay non-zero if the whole numeric arm of
+		// classifySlot were deleted (adversarial review, finding L5). There
+		// is no honest refusal to count on this side — a token dialect has no
+		// numeric PMS range to refuse, and that ABSENCE is exactly what the
+		// IsPMS() assertion below states — so the counter is named for the
+		// only thing it witnesses: every three-digit form in the space is
+		// declined as PMS, whether by not classifying at all or by
+		// classifying as some other bank, and it counts them all. Its twin
+		// "token PMS form refused under PMSFormNumeric" IS a genuine refusal
+		// count and keeps its name.
+		for n := 0; n <= 999; n++ {
+			wire := threeDigits(n)
+			r.refusals["three-digit form declined as PMS under PMSFormToken"]++
+			s, err := r.d.ParseSlot(wire)
+			if err != nil {
+				continue // not a slot this dialect has, in any bank
+			}
+			if s.IsPMS() {
+				r.t.Errorf("%s: ParseSlot(%q) = a PMS slot under %v — this dialect's pairs are the \"P<n><L|U>\" token, so no decimal channel number is one", r.name(), wire, form)
+			}
+		}
+	default:
+		// A THIRD PMS form would take this whole check out of the suite
+		// silently, which is the hazard the counters above exist for
+		// (Stage 0 close review, seat 2 LOW-4). Production switches on this
+		// axis all refuse; this one is the suite's own, and says so here.
+		r.t.Errorf("%s: declares PMS form %v, which this check does not enumerate — add its arm here, or the wire form of a whole class of slots is conformed by nothing", r.name(), form)
+	}
+}
+
+// maxSweptPMSPairs bounds checkPMSSlotForm's positive sweep. It is a
+// runaway guard, NOT this suite's opinion about how many pairs a dialect may
+// declare: the loop's real bound is where the receiver's own PMSSlot stops
+// building. A numeric pair occupies two consecutive channels inside the
+// three-digit space, so 500 pairs is already more than any slot space can
+// hold, and reaching this bound means PMSSlot answered for a pair no wire
+// form could carry.
+const maxSweptPMSPairs = 500
+
+// checkToneStateDomain holds this dialect to its declared P8 domain in
+// THREE places, which is how many places decide it.
+//
+// A DCS state ('3' or '4') must be refused by a three-state dialect at
+// BuildMWSet, at BuildMTSetCombined AND at AllowedCommand — it cannot be
+// BUILT by any route, and a frame forged elsewhere cannot get past the gate
+// either. Widening only the parse site would have let a MemoryData carrying
+// CTCSSState('3') be built, admitted and SENT to a radio whose manual prints
+// P8 0/1/2 only, which is what makes this a write-direction check rather
+// than a codec nicety.
+//
+// The forged frame is spliced from one this SAME dialect built and its own
+// gate admits, so the only difference the gate can be reacting to is P8.
+func (r *conformanceRun) checkToneStateDomain() {
+	r.t.Helper()
+
+	domain := r.d.ToneStates()
+	if len(r.emittable) == 0 || len(r.slots) == 0 {
+		return
+	}
+	ctcss, shift, ok := r.mustParseStates()
+	if !ok {
+		return
+	}
+	mem, found := r.firstWritableSlot(r.emittable[0], ctcss, shift)
+	if !found {
+		return // checkMemoryWrites has already reported this
+	}
+	base := recordFor(mem, r.emittable[0], r.d.MWWriteKind(), 0, ctcss, shift)
+
+	clean, err := r.d.BuildMWSet(base)
+	if err != nil {
+		r.t.Errorf("%s: BuildMWSet refused a plain CTCSS-off record for slot %q: %v", r.name(), mem.Wire(), err)
+		return
+	}
+	if !r.d.AllowedCommand(clean.Bytes()) {
+		r.t.Errorf("%s: its own gate refused its own MW frame %q", r.name(), clean.Bytes())
+		return
+	}
+
+	for _, state := range []cat.CTCSSState{cat.CTCSSDCSEncDec, cat.CTCSSDCSEnc} {
+		m := base
+		m.CTCSS = state
+
+		_, mwErr := r.d.BuildMWSet(m)
+		forged := append([]byte(nil), clean.Bytes()...)
+		forged[ctcssOffsetInMemoryFrame] = state.Wire()
+		gateOK := r.d.AllowedCommand(forged)
+
+		mtBuilt := false
+		if r.d.MTForm() == cat.MTFormCombined {
+			combined := m
+			combined.Kind = cat.CombinedMTSetKind
+			cmd, mtErr := r.buildCombined(combined, "TAG", true)
+			mtBuilt = mtErr == nil && !cmd.IsZero()
+		}
+
+		switch domain {
+		case cat.ToneStatesCTCSS:
+			if mwErr == nil {
+				r.t.Errorf("%s: BuildMWSet built an MW frame carrying P8 %q under %v — this radio's legend prints 0/1/2 only", r.name(), state.Wire(), domain)
+			} else {
+				r.refusals["DCS state refused at BuildMWSet under ToneStatesCTCSS"]++
+			}
+			if gateOK {
+				r.t.Errorf("%s: its own gate ADMITTED the forged MW frame %q, whose P8 is %q, under %v", r.name(), forged, state.Wire(), domain)
+			} else {
+				r.refusals["DCS state refused at the gate under ToneStatesCTCSS"]++
+			}
+			if r.d.MTForm() == cat.MTFormCombined {
+				if mtBuilt {
+					r.t.Errorf("%s: BuildMTSetCombined built a combined MT frame carrying P8 %q under %v", r.name(), state.Wire(), domain)
+				} else {
+					r.refusals["DCS state refused at BuildMTSetCombined under ToneStatesCTCSS"]++
+				}
+			}
+		case cat.ToneStatesCTCSSAndDCS:
+			// EVERY leg of this arm is COUNTED, for the reason the
+			// three-state arm's refusal counters exist. This arm asserts
+			// absences of errors, so an arm that never ran looks exactly like
+			// an arm that ran and found nothing wrong: the early returns
+			// above, or a fixture with no writable slot, would have taken the
+			// whole five-state axis out of the suite silently. The adversarial
+			// review recorded that asymmetry as finding L4;
+			// checkConformanceCoverage requires these three by name.
+			if mwErr != nil {
+				r.t.Errorf("%s: BuildMWSet refused P8 %q under %v (%v) — this radio's legend prints it", r.name(), state.Wire(), domain, mwErr)
+			} else {
+				r.acceptances["DCS state accepted at BuildMWSet under ToneStatesCTCSSAndDCS"]++
+			}
+			if !gateOK {
+				r.t.Errorf("%s: its own gate refused the MW frame %q, whose P8 %q its own legend prints, under %v", r.name(), forged, state.Wire(), domain)
+			} else {
+				r.acceptances["DCS state accepted at the gate under ToneStatesCTCSSAndDCS"]++
+			}
+			// The combined MT builder is a SEPARATE consultation of the same
+			// domain, so it gets its own assertion in this direction too: a
+			// site left on the package-level three-state parser would refuse
+			// here while MW happily built the frame.
+			if r.d.MTForm() == cat.MTFormCombined {
+				if !mtBuilt {
+					r.t.Errorf("%s: BuildMTSetCombined refused P8 %q under %v — this radio's legend prints it, and MW built it", r.name(), state.Wire(), domain)
+				} else {
+					r.acceptances["DCS state accepted at BuildMTSetCombined under ToneStatesCTCSSAndDCS"]++
+				}
+			}
+			// And the parse direction: a '3' or '4' must come back as the
+			// state rather than as an error.
+			answer := append([]byte("MR"), forged[2:]...)
+			back, err := r.d.ParseMRAnswer(answer)
+			if err != nil {
+				r.t.Errorf("%s: ParseMRAnswer(%q) refused P8 %q under %v: %v", r.name(), answer, state.Wire(), domain, err)
+			} else if back.CTCSS != state {
+				r.t.Errorf("%s: ParseMRAnswer decoded P8 %q as %v, want %v", r.name(), state.Wire(), back.CTCSS, state)
+			} else {
+				r.acceptances["DCS state decoded by ParseMRAnswer under ToneStatesCTCSSAndDCS"]++
+			}
+		default:
+			// A THIRD tone-state domain would silently take the whole P8
+			// write-direction check out of the suite (seat 2 LOW-4). V16
+			// refuses an undeclared domain in production; this is the
+			// suite's own enumeration saying it is not complete.
+			r.t.Errorf("%s: declares tone-state domain %v, which this check does not enumerate — add its arm here, or nothing conforms P8 on radios of that kind", r.name(), domain)
+		}
+	}
+}
+
+// ctcssOffsetInMemoryFrame is P8's byte offset in the 28-byte MR/MW field
+// block (position 24, 1-indexed). core/cat holds the offsets unexported, so
+// the one this suite needs is written here with its position — and the
+// splice is taken from a frame the dialect itself built and its own gate
+// admitted, so a wrong offset would corrupt some other field and show up as
+// a refusal on the FIVE-state arm rather than passing silently.
+const ctcssOffsetInMemoryFrame = 23
 
 // checkMTReadDomain is checkMCSendDomain's counterpart for MT: BuildMTRead
 // against the gate's own verdict on "MT"+s.Wire()+";", held to this
@@ -1214,9 +1492,18 @@ func (r *conformanceRun) checkMemoryWrites() {
 		return
 	}
 
-	// The CTCSS and shift wire spaces, exhaustively, through the exported
-	// parsers. Both are byte-alias types, so these are the only exported
-	// route to a value a builder will accept.
+	// The CTCSS and shift wire spaces, exhaustively, through the PACKAGE-LEVEL
+	// parsers. Both are byte-alias types, so a parser is how this suite gets a
+	// value a builder will accept without hardcoding one.
+	//
+	// cat.ParseCTCSSState rather than r.d.ParseCTCSSState DELIBERATELY. Since
+	// the P8 domain became dialect data there are two routes, and this matrix
+	// wants the frozen three-state one: what it is written to catch is a
+	// BuildMWSet that refuses a state every dialect accepts, and holding it to
+	// '0'-'2' keeps that meaning identical on a three-state and a five-state
+	// radio. The DOMAIN axis — that a five-state dialect accepts '3'/'4' and a
+	// three-state one refuses them at all three deciding sites — is
+	// checkToneStateDomain's, above, and is not restated here.
 	for c := 0; c < 256; c++ {
 		state, err := cat.ParseCTCSSState(byte(c))
 		if err != nil {
@@ -1466,6 +1753,11 @@ func (r *conformanceRun) checkNonVacuity() {
 		"clarifier past MaxAbsHz",
 		"malformed frame at the gate",
 	}
+	// requiredAcceptances is the mirror list for checks whose content is that
+	// this dialect must NOT refuse something. Empty for a dialect that has no
+	// such check to satisfy; see conformanceRun.acceptances for why they
+	// cannot be left to the two lists above.
+	var requiredAcceptances []string
 	// The over-long-answer counter, split by which parser
 	// checkOverlongMTFrameIsRefused actually had to call (S0-close review's
 	// MEDIUM-3 fix): short form has one API, but combined form has two, and
@@ -1508,6 +1800,52 @@ func (r *conformanceRun) checkNonVacuity() {
 	if r.d.MTReadSlots() == cat.MTReadsMemoryPMS {
 		requiredRefusals = append(requiredRefusals, "MT read refused for 60m/EMG under MTReadsMemoryPMS")
 	}
+	// The P8 state domain. A three-state dialect must be SEEN to refuse a
+	// DCS state at each of the three places that decide it; a five-state one
+	// has nothing to refuse there, and is required instead to be SEEN to
+	// accept one at each of the four places that decide it. The five-state
+	// arm is all absences of errors, so without these it would pass by
+	// never running at all — finding L4.
+	if len(r.emittable) > 0 && len(r.slots) > 0 {
+		switch r.d.ToneStates() {
+		case cat.ToneStatesCTCSS:
+			requiredRefusals = append(requiredRefusals,
+				"DCS state refused at BuildMWSet under ToneStatesCTCSS",
+				"DCS state refused at the gate under ToneStatesCTCSS")
+			if r.d.MTForm() == cat.MTFormCombined {
+				requiredRefusals = append(requiredRefusals, "DCS state refused at BuildMTSetCombined under ToneStatesCTCSS")
+			}
+		case cat.ToneStatesCTCSSAndDCS:
+			requiredAcceptances = append(requiredAcceptances,
+				"DCS state accepted at BuildMWSet under ToneStatesCTCSSAndDCS",
+				"DCS state accepted at the gate under ToneStatesCTCSSAndDCS",
+				"DCS state decoded by ParseMRAnswer under ToneStatesCTCSSAndDCS")
+			if r.d.MTForm() == cat.MTFormCombined {
+				requiredAcceptances = append(requiredAcceptances, "DCS state accepted at BuildMTSetCombined under ToneStatesCTCSSAndDCS")
+			}
+		default:
+			// A domain neither arm names requires nothing, so the whole P8
+			// axis would be non-vacuous by vacuity — the failure this
+			// function exists to prevent (seat 2 LOW-4).
+			r.t.Errorf("%s: declares tone-state domain %v, which the coverage ledger does not enumerate — its P8 legs would be required of nothing", r.name(), r.d.ToneStates())
+		}
+	}
+	// The PMS wire form, counted against the form the dialect declares. A
+	// dialect with no pairs declares no form and checkPMSSlotForm returns
+	// early, so neither counter is required of it.
+	if _, err := r.d.PMSSlot(1, false); err == nil {
+		switch r.d.PMSForm() {
+		case cat.PMSFormNumeric:
+			requiredRefusals = append(requiredRefusals, "token PMS form refused under PMSFormNumeric")
+		case cat.PMSFormToken:
+			requiredRefusals = append(requiredRefusals, "three-digit form declined as PMS under PMSFormToken")
+		default:
+			// As the tone-state arm above: a third form would require
+			// neither counter, and checkPMSSlotForm's own sweep would be
+			// witnessed by nothing (seat 2 LOW-4).
+			r.t.Errorf("%s: declares PMS form %v, which the coverage ledger does not enumerate — its slot-form legs would be required of nothing", r.name(), r.d.PMSForm())
+		}
+	}
 	switch r.d.MemoryP5() {
 	case cat.P5Fixed:
 		required = append(required, "MW set (P5 fixed)")
@@ -1536,6 +1874,12 @@ func (r *conformanceRun) checkNonVacuity() {
 		}
 	}
 
+	for _, what := range requiredAcceptances {
+		if r.acceptances[what] == 0 {
+			r.t.Errorf("%s: no %q was observed — a check that asserts this dialect does NOT refuse something passes by never running, so the acceptance itself has to be counted", r.name(), what)
+		}
+	}
+
 	if r.exactTagRoundTrips == 0 {
 		r.t.Errorf("%s: not one non-empty tag survived build -> parse intact (%d came back trimmed) — this suite offers tags with four different final bytes precisely so that a dialect's fill and pad bytes cannot spoil them all, so a dialect losing every one of them has an MT tag codec that does not round-trip", r.name(), r.trimmedTagRoundTrips)
 	}
@@ -1543,8 +1887,8 @@ func (r *conformanceRun) checkNonVacuity() {
 		r.t.Errorf("%s: only %d frames were built and checked in total; a dialect with a slot space, a mode table and a menu produces hundreds — this walk is not reaching the builders", r.name(), r.total)
 	}
 
-	r.t.Logf("%s (%v): %d frames checked across %d slots and %d modes; per builder: %v; refusals seen: %v; tag round trips: %d exact, %d trimmed",
-		r.name(), r.d.MTForm(), r.total, len(r.slots), len(r.modes), r.frames, r.refusals, r.exactTagRoundTrips, r.trimmedTagRoundTrips)
+	r.t.Logf("%s (%v): %d frames checked across %d slots and %d modes; per builder: %v; refusals seen: %v; acceptances seen: %v; tag round trips: %d exact, %d trimmed",
+		r.name(), r.d.MTForm(), r.total, len(r.slots), len(r.modes), r.frames, r.refusals, r.acceptances, r.exactTagRoundTrips, r.trimmedTagRoundTrips)
 }
 
 // RunZeroValue holds the ZERO cat.Dialect to the one property it has: it

@@ -72,7 +72,7 @@ type Capabilities struct {
 	// CTCSSToneRange is the ALTERNATIVE to CTCSSTones for a radio whose
 	// tone field is a NUMBER rather than an index into a chart — every
 	// CI-V model in the Icom tier. Nil for a radio that declares a list
-	// (all five Yaesu models); a radio declares one or the other, never
+	// (all six Yaesu models); a radio declares one or the other, never
 	// both, and Validate refuses both.
 	//
 	// A POINTER, so presence is the declaration — see ToneRange. Ask
@@ -112,8 +112,10 @@ type Capabilities struct {
 	// that state requires a known CTCSS tone to accompany it (see
 	// ToneState.RequiresTone). Typically built from StandardCTCSSStates().
 	// Every entry's Semantics must be one of ToneOff/ToneEncode/
-	// ToneEncodeDecode (never the zero value, ToneSemanticsUnspecified) —
-	// see Validate.
+	// ToneEncodeDecode/ToneDCSEncodeDecode/ToneDCSEncode (never the zero
+	// value, ToneSemanticsUnspecified) — see Validate. The two DCS members
+	// exist for a radio whose CTCSS state field names DCS states too; a
+	// model built from StandardCTCSSStates() declares the family three.
 	CTCSSStates []ToneState
 
 	// The vocabularies the Icom tier adds (design D4). EVERY ONE OF THEM
