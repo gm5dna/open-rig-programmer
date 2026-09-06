@@ -63,8 +63,18 @@ describes under *Switching on writes for an unverified radio*.
   model — and they are the first radios here whose tone and scan-skip
   columns can actually be read and written. Both read the 100 memory
   channels, the 10 programmable scan ranges and the menu settings (88
-  items on the S, 100 on the SG). A split channel is refused rather than
-  written back as simplex, and only FM channels are written. On the
+  items on the S, 100 on the SG). **A memory channel is written back only
+  once you supply its transmit frequency**, and a channel read off the
+  radio does not carry one: the manual never says what these radios
+  answer for the transmit side of a simplex channel, so the program
+  leaves it unavailable rather than guessing and refuses the write
+  (register entry A9). Reading the memories, editing them and sending
+  them straight back is therefore refused on every memory channel until
+  you fill that column in — typing the receive frequency there writes the
+  channel as simplex, which is what the one frame this program sends can
+  express. A genuine split is refused even then, and a scan range is not
+  affected. Only FM channels are written, and a 1750 Hz receive tone is
+  refused where a 1750 Hz transmit tone is written. On the
   TS-590S alone the filter column cannot be set at all, and channel
   writes are refused on a radio reporting firmware 2.00 or later: the
   manual guarantees the relevant byte is unused only on the 1.xx

@@ -15,8 +15,16 @@ tag. The full release notes for each version are on the
 - **Kenwood TS-590S and TS-590SG**: read, opt-in write, menu-settings
   read, CSV and CHIRP, on the same terms as every other manual-derived
   radio. They are the first radios here whose tone and scan-skip columns
-  can be read and written. A split channel is refused rather than written
-  back as simplex, and only FM channels are written; on the TS-590S alone
+  can be read and written. A memory channel is written back only once
+  you supply its transmit frequency, and a channel read off the radio
+  does not carry one: the manual never says what these radios answer for
+  the transmit side of a simplex channel, so the program leaves it
+  unavailable rather than guessing and refuses the write, naming register
+  entry A9. The ordinary round trip — read the memories, edit, send them
+  back — is therefore refused on every memory channel until you fill that
+  column in; a genuine split is refused even then, and a scan range is not
+  affected. Only FM channels are written, and a 1750 Hz receive tone is
+  refused where a 1750 Hz transmit tone is written. On the TS-590S alone
   the filter column cannot be set and channel writes are refused on
   firmware 2.00 or later, which the manual stops guaranteeing at exactly
   that point. `rigprog probe` prints the radio's own firmware answer
