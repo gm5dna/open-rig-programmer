@@ -472,8 +472,9 @@ var FT891FakeSessionOpts []fakeft891.Option
 // row's variable would COMPILE and quietly seed one demo radio from the
 // other's seam. Reading each variable inside its own row's closure is the
 // only thing keeping the two apart, exactly as it is for the FTdx101 pair,
-// and TestOpenFakeSessionFor_TS590SOptionSourceIsItsOwn and its SG twin pin
-// that each variable reaches its own rig and NOT the sibling's.
+// and TestOpenFakeSessionFor_TS590SOptionSourceIsItsOwn and
+// TestOpenFakeSessionFor_TS590SGOptionSourceIsItsOwn pin that each variable
+// reaches its own rig and NOT the sibling's.
 //
 // LEFT AT THEIR NIL ZERO VALUES BOTH DEMO RADIOS SHIP THE SAME FOUR
 // POPULATED RECORDS — memory channels 000, 001 and 002 and both halves of
