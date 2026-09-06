@@ -38,10 +38,16 @@
 // confirmation item 3.
 //
 // A future registration is TEN edits and not one, and the plan's P3 carries
-// the list; nine of the ten will fail loudly in the suite once T18 lands its
-// two new completeness checks (internal/guards' simulatedProfiles and
-// core/csvio's per-row CHIRP pin are both SILENT today), and the tenth at the
-// byte-identity gate.
+// the list; NINE OF THE TEN NOW FAIL LOUDLY in the suite, and the tenth only
+// at the byte-identity gate. The last two of the nine became loud at T18,
+// which landed the two completeness checks this package's own bullet used to
+// say were missing: internal/guards' simulatedProfiles gained a models column
+// and a union-equality guard against wiring.SupportedModels(), plus a
+// separately named assertion that this row has NO guard row while it is
+// unregistered; and core/csvio gained a general CHIRP-fixture completeness
+// check keyed off the same registry, through a test-only internal/wiring
+// import that leaves production core/csvio untouched. Registering this row
+// without either edit is now a red test rather than a silence.
 //
 // # Provenance
 //
@@ -244,7 +250,8 @@
 //   - NO MEMORY-GROUP MEMBERSHIP. The radio has ten memory groups and an SU
 //     command selecting which are scanned (480:1508-1534), but no memory-frame
 //     field carries group membership, so no codeplug round trip preserves it
-//     (§3.10: "the loss is silent unless it is written down"). T18
-//     (radiotext) is the permanent home for this record; until then this
-//     bullet is it.
+//     (§3.10: "the loss is silent unless it is written down"). T18 landed the
+//     permanent home for this record: internal/radiotext's ts480Text says so
+//     in the grid legend, in prose a user reads, and this bullet is now the
+//     driver-side cross-reference rather than the only copy.
 package ts480
