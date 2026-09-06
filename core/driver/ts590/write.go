@@ -315,7 +315,7 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 
 	if ch.Empty() {
 		// AN EMPTY CHANNEL IS AN ERASE REQUEST, AND IT IS REFUSED
-		// (decision 8, §2.8). The only clear either book prints is a side
+		// (decision 8, §2.8). The only clear THE 590 BOOK prints is a side
 		// effect of a short MW — "If you do not specify one digit in P16
 		// and execute all the parameters from P4 to P15 set to 0, the
 		// channels specified by P2 and P3 will be erased" (590:1579-1581) —
@@ -324,13 +324,19 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 		// refuses any MW that is not exactly 50 bytes, and spec.FieldErase
 		// is nowhere write-Supported.
 		//
+		// THE 480 BOOK PRINTS NO MEMORY-CLEAR ROUTE AT ALL — its MW section
+		// ends without the sentence above (480:949), and its only printed
+		// "clear" is RC, which clears the RIT offset (480:1205). This rung
+		// is on the 590 rows, so it cites the 590 book alone; saying "either
+		// book" attributed to the 480 a form its own book does not print.
+		//
 		// The rung must also stay AHEAD of the field checks below
 		// STRUCTURALLY and not merely by preference: an empty channel has
 		// no Data at all, and those checks dereference it.
 		return res, &driver.WriteRefusedError{
 			Slot:   ch.Slot,
 			Fields: []spec.Field{spec.FieldErase},
-			Reason: "this milestone builds no erase: the only clear either book prints is a side effect of a short MW whose length is a reading rather than a printed number (590:1579-1581, A5), core/kw admits an MW of exactly 50 bytes and no other, and FieldErase is not write-Supported on any bank of either row",
+			Reason: "this milestone builds no erase: the only clear this radio's own book prints is a side effect of a short MW whose length is a reading rather than a printed number (590:1579-1581, A5), core/kw admits an MW of exactly 50 bytes and no other, and FieldErase is not write-Supported on any bank of either row",
 		}
 	}
 	data := *ch.Data
