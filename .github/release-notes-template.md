@@ -55,9 +55,10 @@ describes under *Switching on writes for an unverified radio*.
   are not imported: they resolve to names this radio's own mode list
   does not print (it prints `CW`, `CW-R`, `RTTY-LSB` and `RTTY-USB`), so
   the row is blocked rather than guessed at. C4FM is one of its fourteen
-  modes and CHIRP has no name for it at all, so a C4FM channel cannot go
-  out to a CHIRP file as itself. Scan skip has no place in this radio's
-  memory record, so a CHIRP `Skip` cell is reported and dropped.
+  modes and CHIRP has no name for it at all, so no CHIRP file can
+  describe a C4FM channel. And scan skip has no place in this radio's
+  memory record, so a `Skip` cell asking for one is dropped and the loss
+  reported, row by row.
 - **Its CAT speed is a guess** (38400; menu 031 CAT RATE on the radio is
   the only remedy — menu 029 is the rear-panel RS-232C jack, a different
   port), and its USB socket is a dual-UART bridge presenting two serial
