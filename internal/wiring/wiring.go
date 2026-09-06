@@ -66,6 +66,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic905"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
 	"github.com/gm5dna/open-rig-programmer/core/driver/icr8600"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ts590"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -456,6 +457,68 @@ const ICR8600Model = "IC-R8600"
 // driver's claim.
 const FT891Model = "FT-891"
 
+// TS590SModel and TS590SGModel name the TS-590S's and TS-590SG's
+// realDrivers/fakeDrivers keys, each of which must equal
+// ts590.New(row, ...).Model() for ITS OWN row — pinned, like every constant
+// above, by TestDriverTableKeysMatchDriverModel walking both tables on BOTH
+// consent arms.
+//
+// TIER 6's REGISTRATION, and the registry's FIRST KENWOOD ROWS. They are a
+// SIBLING PAIR on the FTdx101D/FTdx101MP footing, not two independent
+// models: core/driver/ts590 drives both radios from one type and
+// core/kw/ts590 holds two layout values, so the pair gets TWO rows here for
+// the reason that pair does — this table is keyed by MODEL and a user
+// selects a radio, not a family. The spelling is the ID legend's own,
+// hyphen included ("021: TS-590S" at 590:1114, "023: TS-590SG" at
+// 590:1116; capability matrix §1.1), and unlike the FTdx10's FT-DX10
+// near-miss there is no rival spelling to reconcile.
+//
+// THE ROW IS A REQUIRED ARGUMENT, WHICH IS STRICTER THAN THE FTdx101 PAIR'S
+// TWO CONSTRUCTORS. core/driver/ts590 offers ONE New taking the row FIRST
+// (ts590.go, `func New(row Row, profile Profile, opts ...Option)`) and the
+// zero Row names neither radio: a driver built without one publishes the
+// zero capability set and refuses to Open. So a registration that forgot a
+// row fails closed rather than silently choosing a sibling — but one that
+// passed the WRONG row builds a perfectly valid driver for the other radio,
+// which is what TestRealDriverFor_DefaultPathByteIdentical's two rows and
+// TestOpenFakeSessionFor_EveryRegisteredModel's identity check exist to
+// catch.
+//
+// TWO SLUGS EXIST HERE TOO, and they differ from the Go package slug in the
+// same way the FT-891's do (plan decision P2). The PACKAGE slug is "ts590"
+// — core/driver/ts590, core/kw/ts590, internal/fakets590, and
+// internal/extable's two profile keys "ts590s"/"ts590sg". ModelSlug, which
+// names each radio's snapshot and journal directory, gives "ts-590s" and
+// "ts-590sg": the hyphen in the model name is collapsed to a separator, not
+// deleted. TestModelSlug pins both, and TestModelSlugsUnique pins that
+// neither collides — which matters more here than anywhere else in this
+// file, "TS-590S" being a strict PREFIX of "TS-590SG".
+//
+// TWO STATIC BANKS EACH AND NOTHING DISCOVERED. MEM ("000".."099") and SCAN
+// ("100L","100U".."109L","109U") are declared statically and DENSE on both
+// rows, and NO discovery frame of any kind is ever built (decision 5,
+// matrix §3.4): the slot space is fully printed in the book, so a discovery
+// walk would be asking a question the manual answers, and the books say the
+// NAK is unreliable, so silence would carry no information anyway. The SG's
+// 110-119 are NOT published (Stuart decision row 6, plan P11): the printed
+// phrase that would make them ordinary records is unconfirmed, and an
+// unreached part of a radio is not a bank.
+//
+// BOTH ROWS IMPLEMENT driver.SerialFramingReporter AND RETURN 1, unlike
+// every Yaesu row above and like most Icom rows: these manuals print the
+// framing outright (matrix §3.1), so this is documentary rather than
+// assumed. stopBitsFor is what carries it to the port, and
+// TestStopBitsFor_EveryKenwoodDriverReportsOne is the pin — including for
+// the TS-480, which is BUILT AND NOT REGISTERED (plan decision P3) and has
+// no constant here at all. That absence is deliberate and is what task 19's
+// three-leg gate makes legible; a TS480Model constant added here without
+// the rest of the ten-edit registration list would be the beginning of a
+// half-registered radio.
+const (
+	TS590SModel  = "TS-590S"
+	TS590SGModel = "TS-590SG"
+)
+
 // realDrivers is the model-keyed table of real-hardware driver
 // constructors: model name -> a constructor building THAT model's
 // real-profile driver.Driver. It is the single source of truth
@@ -637,6 +700,34 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 			return ft891.New(ft891.RealHardware, ft891.WithConsentedUnverifiedWrites())
 		}
 		return NewFT891RealDriver()
+	},
+	// TWO ROWS OVER ONE CONSTRUCTOR, and each names its OWN row
+	// explicitly: core/driver/ts590's New takes the ROW as its first
+	// argument and the profile as its second, so both arms of both rows
+	// have to say which radio they are for. There is no bare New and no
+	// default row — the zero Row publishes the zero capability set and
+	// refuses to Open — so a forgotten row fails closed; a CROSSED one
+	// does not, and TestRealDriverFor_DefaultPathByteIdentical compares
+	// each arm against the constructor call the row is supposed to make
+	// for exactly that reason.
+	//
+	// The consent arms name ts590.RealHardware for the reason every
+	// profile-argument row above does: the option changes the SESSION's
+	// effective capabilities and never the profile it was built from, and
+	// this driver's zero Profile IS RealHardware, so a consent arm that
+	// had quietly passed ts590.Simulated would be caught by that test
+	// rather than by a fail-safe.
+	TS590SModel: func(consent bool) driver.Driver {
+		if consent {
+			return ts590.New(ts590.RowS, ts590.RealHardware, ts590.WithConsentedUnverifiedWrites())
+		}
+		return NewTS590SRealDriver()
+	},
+	TS590SGModel: func(consent bool) driver.Driver {
+		if consent {
+			return ts590.New(ts590.RowSG, ts590.RealHardware, ts590.WithConsentedUnverifiedWrites())
+		}
+		return NewTS590SGRealDriver()
 	},
 }
 
@@ -1171,6 +1262,55 @@ func NewICR8600RealDriver() driver.Driver {
 // it to decide the radio is consent-eligible at all.
 func NewFT891RealDriver() driver.Driver {
 	return ft891.New(ft891.RealHardware)
+}
+
+// NewTS590SRealDriver builds the ts590 driver for a real-hardware session
+// against the TS-590S: profile ts590.RealHardware, the zero value, with the
+// ROW named explicitly because it has no usable zero. It is the pair's half
+// of the realDrivers table, split out for the same reason every constructor
+// above it is (a test can pin the capability set the real wiring path
+// implies without opening a port).
+//
+// TWO FUNCTIONS OVER ONE PACKAGE, deliberately, and the shape is the
+// IC-7851 pair's rather than the FTdx101's: core/driver/ts590 offers no
+// per-row constructor of its own, so the sibling choice has to be made
+// somewhere, and making it HERE — once per row, in a named function — is
+// what lets each table row be compared against the exact call it is
+// supposed to make.
+//
+// READ/PROBE/SETTINGS ONLY for every unconsented caller, by the same
+// mechanism every unproven row above uses: both writeTrialsComplete guards
+// are FALSE (core/driver/ts590/caps.go keeps one per row, since evidence
+// for one sibling is never evidence for the other), so a RealHardware
+// TS-590 driver publishes every candidate field's Read AND Write as
+// spec.Unverified — nothing writable on either bank. No Kenwood radio has
+// ever answered a frame put to it by this project, which is why the READ
+// labels are Unverified here too rather than Supported (matrix §2.1). The
+// capability gate refuses before any frame is built, so registering these
+// rows adds a read, probe and menu-read path against real hardware and, for
+// an unconsented session, no write path — see core/driver/ts590/doc.go's
+// Kenwood driver register and core/kw/doc.go's ASSUMED register for what a
+// session with a real radio would lift.
+//
+// The CONSENTED row is a different construction —
+// ts590.New(row, RealHardware, WithConsentedUnverifiedWrites()), built only
+// when the user's recorded grant says so — and even then every pre-wire
+// refusal of the write ladder still fires: consent widens WHAT may be
+// attempted, never HOW carefully (matrix §2.1). The driver's STATIC
+// Capabilities is untouched, which is what lets NeedsUnverifiedConsent read
+// it to decide each row is consent-eligible at all.
+func NewTS590SRealDriver() driver.Driver {
+	return ts590.New(ts590.RowS, ts590.RealHardware)
+}
+
+// NewTS590SGRealDriver builds the TS-590SG's real-hardware driver. See
+// NewTS590SRealDriver for the pair's shared reasoning; the only difference
+// between the two calls is the row, which is the only difference between
+// the two radios this package can express — and the reason a copy-paste
+// that left both calls on ts590.RowS would build a working driver for the
+// wrong radio rather than failing.
+func NewTS590SGRealDriver() driver.Driver {
+	return ts590.New(ts590.RowSG, ts590.RealHardware)
 }
 
 // openSerial is OpenRealSessionWith's test seam (and so OpenRealSessionFor's

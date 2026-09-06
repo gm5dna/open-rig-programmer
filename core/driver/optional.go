@@ -184,3 +184,35 @@ type DiscoveredBankSynthesizer interface {
 	// are OMITTED, never guessed into a bank.
 	SynthesiseDiscoveredBanks(slots []string) []spec.Bank
 }
+
+// FirmwareAnswerReporter is an OPTIONAL capability a driver.Session's
+// CONCRETE type may implement: return, VERBATIM, whatever the radio
+// answered when this session asked it for its firmware version. Deliberately
+// NOT added to driver.Session itself, for the same reason RegionReporter,
+// SettingsReader and DiagnosticsReporter are not: whether a radio has a
+// firmware query at all is a per-driver matter, and most registered models
+// have none (their radiotext prose says so, and says to read the version off
+// the radio's own display instead).
+//
+// INTRODUCED FOR THE TS-590 PAIR (Tier 6, task 18), and for a reason that is
+// about honesty rather than convenience. Those two radios DO answer a
+// firmware query, as the second frame of their identity probe, and on the
+// TS-590S row that answer CHANGES WHAT THE PROGRAMME WILL DO: a radio
+// reporting 2.00 or later, or reporting something the driver cannot read as a
+// version, has its channel writes refused, because the manual's guarantee
+// about one byte of the memory record covers the 1.xx firmware and stops
+// there (that driver's register entries A13 and A14). A user whose writes are
+// refused is entitled to see the exact bytes the decision was taken on —
+// including when the refusal is the UNPARSEABLE arm, where the driver's own
+// reading of the answer is precisely what is in doubt.
+//
+// VERBATIM IS THE CONTRACT. The value is what the radio sent, not a parsed,
+// normalised or validated version string: a caller that renders it must
+// render it as received (quoted, so a stray or non-printing byte is visible),
+// and must not compare it against anything. A session whose probe collected
+// no answer returns "".
+type FirmwareAnswerReporter interface {
+	// FirmwareAnswer returns the radio's own firmware answer verbatim, or
+	// "" if this session never obtained one.
+	FirmwareAnswer() string
+}
