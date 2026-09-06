@@ -326,7 +326,7 @@ type memoryFields struct {
 // P5, position 21, is NOT a field of the struct above, and that is this
 // radio's own legend: `P5 0: (Fixed)` is printed on every FT-891 block
 // carrying the 28-position grid — MR 971, MT 1006, MW 1042, IF 783, OI 1129
-// — where the three registered siblings print `0: TX CLAR "OFF" 1: TX CLAR
+// — where the four registered siblings print `0: TX CLAR "OFF" 1: TX CLAR
 // "ON"`. So a well-formed answer's byte 21 is always '0' and a test cannot
 // vary it by accident.
 //
