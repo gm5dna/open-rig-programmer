@@ -17,8 +17,8 @@ import (
 // codeplug.MenuSnapshot.Descriptor carries through verbatim so a snapshot
 // can later be checked against the descriptor version that produced it.
 //
-// A DIFFERENT string from every sibling's, necessarily: the four
-// descriptors describe four radios' menus (159 items here, 197 on the
+// A DIFFERENT string from every sibling's, necessarily: the five
+// descriptors describe five radios' menus (159 items here, 197 on the
 // FTdx10, 296 on the FT-710), so a snapshot taken from one must never
 // validate against another. The "@1" is this shape's own generation — a
 // later change to how THIS driver builds its tree increments it here alone.

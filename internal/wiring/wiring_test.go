@@ -38,6 +38,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx10"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx101"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeft891"
+	"github.com/gm5dna/open-rig-programmer/internal/fakeft991a"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7851"
 	"github.com/gm5dna/open-rig-programmer/internal/radiotext"
 )
@@ -1249,12 +1250,15 @@ func (d baudFixtureDriver) Open(context.Context, transport.Port, driver.Identity
 // Capabilities().DefaultBaud, which for the FT-710 is 38400 — the same
 // value transport.DefaultBaud carries, so this is a no-change pin for that
 // model and the baseline the disagreeing-driver test below is measured
-// against. The FTdx10 (M9c-6) and the FTDX101D and FTDX101MP (M9d-2) do not
-// change that: every one of their DefaultBauds is 38400 too — an ASSUMED
-// entry in each driver's own register, with its own named per-model lift,
-// and NOT a coincidence to rely on — so all four registered models still
-// agree with transport's default and only the fixture below can tell the
-// two sources apart. Stop bits are asserted too, because they are the
+// against. The FTdx10 (M9c-6), the FTDX101D and FTDX101MP (M9d-2) and Tier
+// 1's FT-891 and FT-991A do not change that: every one of their
+// DefaultBauds is 38400 too — an ASSUMED entry in each driver's own
+// register, with its own named per-model lift, and NOT a coincidence to
+// rely on — so all SIX registered YAESU models still agree with transport's
+// default and only the fixture below can tell the two sources apart. The
+// eleven Icom models do NOT agree (19200 each), which is why the derivation
+// is load-bearing in production and not only under this fixture. Stop bits
+// are asserted too, because they are the
 // half that deliberately did NOT become model-derived (see the call
 // site's recorded decision).
 func TestOpenRealSessionFor_BaudIsTheDriversDefault(t *testing.T) {
@@ -1936,6 +1940,17 @@ func TestModelSlug(t *testing.T) {
 		// package slug here would silently write this radio's snapshots
 		// somewhere no reader looks for them.
 		{"FT-891", "ft-891"},
+		// Tier 1's FT-991A, on the FT-891's terms above and for the same
+		// reason (plan decision P13, spec erratum S-E2): the Go PACKAGE
+		// slug is "ft991a" (core/driver/ft991a, core/cat/ft991a,
+		// internal/fakeft991a, internal/extable's profile key) and THIS —
+		// the model slug — is "ft-991a". Without this row nothing in the
+		// tree pins the VALUE: TestModelSlugsUnique walks
+		// SupportedModels() but pins distinctness and non-emptiness only,
+		// so a slug that collapsed to "ft991a" or "ft-991-a" would still
+		// be unique and still be wrong, and wiring.go's FT991AModel doc
+		// comment says this test is what pins it.
+		{"FT-991A", "ft-991a"},
 		{"FTX-1", "ftx-1"},
 	} {
 		if got := ModelSlug(tc.model); got != tc.want {
@@ -2198,11 +2213,14 @@ func TestOpenRealSessionFor_DelegatesZeroOptions(t *testing.T) {
 //
 // wantConsent is nil on the four ORIGINAL Yaesu rows (FT-710, FTdx10,
 // FTdx101D, FTdx101MP), which no review deferred and which the table above
-// already covers on the false arm. The FT-891 breaks that pattern
-// deliberately: its consent arm IS pinned here, on the same terms as the
-// IC-7760/IC-7100/IC-R8600 rows below — core/driver/ft891's New takes the
-// profile as an argument, so a consent arm that had quietly passed
-// ft891.Simulated would be caught only here.
+// already covers on the false arm. BOTH TIER 1 ROWS BREAK THAT PATTERN
+// DELIBERATELY: the FT-891's and the FT-991A's consent arms are pinned
+// here, on the same terms as the IC-7760/IC-7100/IC-R8600 rows below —
+// core/driver/ft891's New and core/driver/ft991a's each take the profile as
+// an argument, so a consent arm that had quietly passed ft891.Simulated or
+// ft991a.Simulated would be caught only here. The FT-991A's case is the
+// sharper of the two: its zero Profile IS RealHardware
+// (core/driver/ft991a/caps.go), so a slip there would not even fail safe.
 //
 // COMPLETENESS GUARD: this table carries exactly one row per registered
 // model (unlike TestOpenRealSessionWith_ConsentedSessionCaps above, which
@@ -2776,20 +2794,21 @@ var icomModels = []string{IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, 
 // wrong-manufacturer failure mode (§ this file's own history) but, taken
 // alone, would let a future YAESU registration add a model to
 // SupportedModels() that is named in neither yaesuModels nor icomModels —
-// A THIRD MAKER BREAKS THIS ASSERTION, AND THAT IS ON PURPOSE. The sum is
-// EXHAUSTIVE over two lists, so the FT-991A satisfied it by joining
-// yaesuModels while a KENWOOD registration satisfies neither and fails
-// here — loudly, at the moment the model is registered, rather than by
-// quietly escaping the three Yaesu-only tests. Widening the partition (a
-// third list, or a maker-keyed one) is that lane's work and not this one's;
-// it is recorded in the FT-991A milestone's cross-lane HANDOFF so the
-// collision is met on paper first.
-//
 // silently escaping every one of the three Yaesu-only tests below, which
 // only ever iterate yaesuModels, and never being flagged as the omission
 // it is. This test is the alarm for exactly that: the two lists together
 // must account for every currently-registered model, or something did not
 // get added to the list its manufacturer belongs to.
+//
+// A THIRD MAKER BREAKS THIS ASSERTION, AND THAT IS ON PURPOSE. The sum is
+// EXHAUSTIVE over two lists, so the FT-991A satisfied it by joining
+// yaesuModels while a KENWOOD registration satisfies neither and fails
+// here — loudly, at the moment the model is registered, rather than by
+// quietly escaping the three Yaesu-only tests. Widening the partition (a
+// third list, or a maker-keyed one) is that lane's work and not this
+// one's; it is recorded in the FT-991A milestone's progress log, and will
+// move to that milestone's cross-lane HANDOFF at its close, so the
+// collision is met on paper first.
 func TestYaesuAndIcomModelsPartitionSupportedModels(t *testing.T) {
 	models := SupportedModels()
 	if len(yaesuModels)+len(icomModels) != len(models) {
@@ -2834,7 +2853,7 @@ func TestOpenRealSessionFor_EveryYaesuModelOpensAtEightNTwo(t *testing.T) {
 
 // TestEveryYaesuModelDeclaresAToneListAndNoRange is E3's Yaesu pin, taken
 // at the composition root because it is the one place that can see all
-// four registered models at once.
+// six registered Yaesu models at once (it iterates yaesuModels).
 //
 // The tier added an OPTIONAL numeric tone domain (spec.Capabilities.
 // CTCSSToneRange) for CI-V models whose tone field is a number rather than
@@ -3935,6 +3954,79 @@ func TestOpenFakeSessionFor_FT891MTReadRejectionEndToEnd(t *testing.T) {
 	}
 	if !errors.Is(err, cat.ErrRejected) {
 		t.Error("ReadAll: errors.Is(err, cat.ErrRejected) = false, want true")
+	}
+}
+
+// TestOpenFakeSessionFor_FT991AOptionSourceIsItsOwn pins M9c-5 E5's design
+// for this model, on the FT-891's shape
+// (TestOpenFakeSessionFor_FT891OptionSourceIsItsOwn above): the FT991A
+// fakeDrivers entry reads its OWN option source, inside its own newRadio
+// closure, at CALL time.
+//
+// IT IS THE HALF THE TYPE SYSTEM DOES NOT CARRY, and fake.go's
+// FT991AFakeSessionOpts doc comment says so in terms. That variable is
+// []fakeft991a.Option and no other model's variable has that element type,
+// so a closure reaching for a sibling's options is a COMPILE error — which
+// is why there is no "another model ignored it" assertion here. What no
+// compiler can catch is a closure that reads the right variable and then
+// DROPS it (a missing "..." spread, or a New() call with no arguments at
+// all): that builds, and without this test it would pass every other test
+// in the tree while silently ignoring every option the DCS and settings
+// legs feed through this seam.
+//
+// THE LEVER IS fakeft991a.WithDCSChannels(), and the DEFAULT-IMAGE HALF IS
+// ASSERTED FIRST because it is what makes the pin non-vacuous: MEM slots
+// "003" and "004" are EMPTY in internal/fakeft991a's DefaultImage, empty ON
+// PURPOSE (plan decision P14 — a default image carrying a DCS state would
+// push the new five-state vocabulary through every fleet-wide pin that
+// predates it), and the option is the only way this package can get one.
+// So a fake that shipped a DCS channel by default, or a driver that read
+// P8 as something else, fails here rather than making the assertions below
+// pass whether or not the option ever reached the rig.
+func TestOpenFakeSessionFor_FT991AOptionSourceIsItsOwn(t *testing.T) {
+	ctx := testCtx(t)
+	// internal/fakeft991a's dcsChannelSlots, in its own order: "003" takes
+	// P8 '3' (DCS ENC/DEC) and "004" takes P8 '4' (DCS ENC).
+	wantStates := []struct{ slot, ctcss string }{
+		{"003", "DCS-ENC-DEC"},
+		{"004", "DCS-ENC"},
+	}
+
+	plain, closePlain, err := OpenFakeSessionFor(ctx, FT991AModel)
+	if err != nil {
+		t.Fatalf("OpenFakeSessionFor(%q) with no options: unexpected error: %v", FT991AModel, err)
+	}
+	t.Cleanup(func() { _ = closePlain() })
+	for _, w := range wantStates {
+		ch, err := plain.ReadChannel(ctx, w.slot)
+		if err != nil {
+			t.Fatalf("ReadChannel(%q) on the DEFAULT FT-991A fake: unexpected error: %v", w.slot, err)
+		}
+		if ch.Data != nil {
+			t.Fatalf("the DEFAULT FT-991A fake populates MEM slot %q (CTCSS %q) — plan P14 constrains that image to carry NO DCS channel, and the option-fed assertions below would pass without the option", w.slot, ch.Data.CTCSS)
+		}
+	}
+
+	prev := FT991AFakeSessionOpts
+	FT991AFakeSessionOpts = []fakeft991a.Option{fakeft991a.WithDCSChannels()}
+	t.Cleanup(func() { FT991AFakeSessionOpts = prev })
+
+	sess, closeAll, err := OpenFakeSessionFor(ctx, FT991AModel)
+	if err != nil {
+		t.Fatalf("OpenFakeSessionFor(%q) with options: unexpected error: %v", FT991AModel, err)
+	}
+	t.Cleanup(func() { _ = closeAll() })
+	for _, w := range wantStates {
+		ch, err := sess.ReadChannel(ctx, w.slot)
+		if err != nil {
+			t.Fatalf("ReadChannel(%q): unexpected error: %v", w.slot, err)
+		}
+		if ch.Data == nil {
+			t.Fatalf("MEM slot %q is still empty — fakeft991a.WithDCSChannels() did not reach the FT-991A's rig", w.slot)
+		}
+		if ch.Data.CTCSS != w.ctcss {
+			t.Errorf("ReadChannel(%q): CTCSS = %q, want %q — the option reached the rig only if this radio's P8 state comes back through the registered read path", w.slot, ch.Data.CTCSS, w.ctcss)
+		}
 	}
 }
 
