@@ -1658,12 +1658,22 @@ var icr8600Text = Text{
 // FT-891 OPERATING manual is held — only the CAT Operation Reference Manual,
 // rev 1909-C — and no write trial has happened (that driver's
 // writeTrialsComplete is false). Every string says what is actually known,
-// including where something is NOT known, and borrows the wording of no other
-// entry: not the FT-710's, whose hedgeless sentences are ITS hardware
+// including where something is NOT known, and borrows no other entry's
+// EVIDENCE: no other radio's fact, no other radio's hedge, no other radio's
+// particular. Not the FT-710's, whose hedgeless sentences are ITS hardware
 // evidence; not the FTdx10's or the FTdx101 pair's, whose hedges are about
 // different radios and different manuals; and not any Icom entry's.
-// assertNotBorrowedFromAnyOtherModel (radiotext_test.go) pins the
-// non-borrowing mechanically and field by field.
+//
+// THAT IS A CLAIM ABOUT EVIDENCE, NOT ABOUT PHRASING, and it was narrowed to
+// that when the FT-991A registered: its ProbeFirmwareNote shares a 38-word
+// run with this one, every word of it a statement about THIS BUILD that is
+// identically true of both radios, so paraphrasing the overlap into a
+// difference would be the dishonest move. What
+// assertNotBorrowedFromAnyOtherModel (radiotext_test.go) MECHANICALLY pins
+// is exactly two things — that no field is byte-identical in full to another
+// registered model's same field, and that no field carries another model's
+// particular (its name, or a CI-V address) — and nothing about phrasing at
+// all.
 //
 // WHAT THIS ENTRY CAN SAY THAT THE OTHER YAESU ENTRIES CANNOT is the point of
 // writing it fresh rather than adapting one of theirs. Four facts are this

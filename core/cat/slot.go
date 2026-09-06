@@ -354,7 +354,7 @@ func (d Dialect) pmsDomainText() string {
 // and "" when it has neither.
 //
 // IT DERIVES FROM THE DECLARED BANKS, NOT FROM THE PMS FORM. The two
-// questions give the same answer on all four dialects registered today,
+// questions give the same answer on all five dialects registered today,
 // which is exactly why the choice has to be made deliberately: a future
 // token-PMS radio without a 5 MHz bank must not inherit the FT-710's
 // sentence, and a bank is consulted from the same place as its datum.

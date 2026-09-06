@@ -194,8 +194,9 @@ var dialect = cat.MustNewDialect(cat.DialectConfig{
 		MaxAbsHz: 9990,
 	},
 	// The FT-891's memory blocks print "P5 0: (Fixed)" on every one of them
-	// — MR 971, MT 1006, MW 1042, IF 783 and OI 1129 — where the three registered
-	// dialects print `P5 0: TX CLAR "OFF" 1: TX CLAR "ON"`. So byte 21 is
+	// — MR 971, MT 1006, MW 1042, IF 783 and OI 1129 — where the four other
+	// registered dialects print `P5 0: TX CLAR "OFF" 1: TX CLAR "ON"`, the
+	// FT-991A's included (core/cat/ft991a/dialect.go's P5TxClar). So byte 21 is
 	// schema on this radio and carries no TX clarifier state in either
 	// direction. Not an assumption: this is the legend, transcribed.
 	// TestDifferencePinMemoryP5 holds it against the FTdx10, which builds a
