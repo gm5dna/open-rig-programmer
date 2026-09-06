@@ -1,0 +1,113 @@
+# Command: EX (Read frame - all positions - plus the Answer/Set shape)
+# Radio: Kenwood TS-590S / TS-590SG
+# Title (cover, verbatim): "TS-590S TS-590SG / PC CONTROL COMMAND / Reference Guide"
+# Printed revision: NONE printed; cover carries "JVCKENWOOD Corporation" and
+#   "January/30/2019".
+# Source page: printed folio "- 7 -"  ==  PDF page 8 of 35
+#   (the EX Command Parameter Lists that follow it run from folio 7 to folio 11 /
+#    PDF pp. 8-12; they were consulted only for the P5 value legends quoted below)
+# Charts used: the Set, Read and Answer charts of the EX block
+# Derivation date: 05/09/2026
+# NO code, no generator, no other file and no other document was consulted.
+#
+# COUNTED FRAME LENGTHS (two independent counts of the printed numbered rulers; the
+# EX charts print TWO ruler rows for Set and for Answer, so both were counted, and the
+# block was re-rendered at 600 dpi because the rulers interleave with the legend text):
+#   EX Read   = 10 positions  (single ruler row 1-10; terminator in cell 10)
+#   EX Set    = 18 positions AS ILLUSTRATED  (ruler rows 1-10 and 11-20; the chart
+#               fills cells 1..17 and puts ";" in cell 18, i.e. it draws P5 as EIGHT
+#               characters).  The true length is VARIABLE - see the P5 note.
+#   EX Answer = 18 positions AS ILLUSTRATED  (identical shape to Set)
+#
+# ---------------------------------------------------------------------------
+# CHARTS, position by position (printed cell contents):
+#
+#   Set / Answer, ruler row 1-10:
+#     1 E   2 X   3 P1  4 P1  5 P1  6 P2  7 P2  8 P3  9 P4  10 P5
+#   Set / Answer, ruler row 11-20:
+#     11 P5  12 P5  13 P5  14 P5  15 P5  16 P5  17 P5  18 ;   19 empty  20 empty
+#
+#   Read, ruler row 1-10:
+#     1 E   2 X   3 P1  4 P1  5 P1  6 P2  7 P2  8 P3  9 P4  10 ;
+#
+# Field map:
+#   pos 1-2    "EX"
+#   pos 3-5    P1   (3 characters, menu number)
+#   pos 6-7    P2   (2 characters)
+#   pos 8      P3   (1 character)
+#   pos 9      P4   (1 character)
+#   pos 10..   P5   (variable length; drawn as 8 characters, pos 10..17)
+#   last       ";"  (drawn in pos 18 for Set/Answer, pos 10 for Read)
+#
+# ---------------------------------------------------------------------------
+# LEGEND, VERBATIM ("[TS-590S / TS-590SG common]" / "Parameters:"):
+#
+#   P1
+#     000 ~ 087:  Menu number (TS-590S)
+#     000 ~ 099:  Menu number (TS-590SG)
+#
+#   THE P2 / P3 / P4 "Always" LEGENDS, VERBATIM:
+#   P2
+#     00:  Always 00
+#   P3
+#     0:  Always 0
+#   P4
+#     0:  Always 0
+#
+#   THE P5 VARIABLE-LENGTH NOTE, VERBATIM:
+#   P5
+#     String of alphanumeric characters for the Menu setting
+#     (variable length)
+#
+#   * Refer to the following table for the menus corresponding to
+#     parameter P1, and the available settings corresponding to
+#     parameter P5.
+#
+# EVERY POSITION THE CHART PRINTS AS FIXED / "Always" (by position number):
+#   positions 6,7  (P2)  -- "00:  Always 00"
+#   position  8    (P3)  -- "0:  Always 0"
+#   position  9    (P4)  -- "0:  Always 0"
+#   (P1 and P5 are the only variable fields.)
+#
+# ---------------------------------------------------------------------------
+# BYTES WHOSE VALUE THE MANUAL DOES NOT DETERMINE  -> INHERITED-ASSUMED
+#
+#   [E1] The LENGTH of P5, and therefore the position of the terminator, for any
+#        particular menu number.  The legend says only "(variable length)"; it gives
+#        no per-menu width.  The chart draws 8 characters.  Where a vector below uses
+#        a width other than the drawn 8, that width is ASSUMED from the P5 value
+#        legend printed in the EX Command Parameter List for that menu number, which
+#        is a table of VALUES, not of widths.
+#   [E2] Padding of a P5 string shorter than the field the radio expects.  The book
+#        prints NOTHING about padding P5 - no justification, no pad character.  In
+#        the 8-character vector below, "MYCALL" is left-justified and padded on the
+#        right with two ASCII spaces: that padding is ASSUMED.
+#   [E3] The particular menu numbers and P5 values below are ASSUMED illustrative
+#        choices; only the field widths of P1..P4 and the P5 value legends are
+#        documented.  The two P5 legends leant on here read VERBATIM:
+#          TS-590SG menu 001 "Power on message" -> "Power on Message (up to 8 ASCII
+#          characters)"  (folio 9 / PDF p.10)
+#          TS-590SG menu 002 "Display brightness" -> "OFF | 1 | 2 | 3 | 4 | 5 | 6"
+#          (folio 9 / PDF p.10)
+#
+# Hardware status: UNVERIFIED for every vector in this file.
+#
+# ---------------------------------------------------------------------------
+# VECTORS  (name <TAB> frame bytes verbatim; a space inside a frame is a real space)
+#
+# --- Read frames: all 10 positions, every one determined by the chart + legends ---
+ex590_read_menu000	EX0000000;
+ex590_read_menu001	EX0010000;
+ex590_read_menu002	EX0020000;
+ex590_read_menu087_last_590S	EX0870000;
+ex590_read_menu099_last_590SG	EX0990000;
+#
+# --- Set / Answer shape, EXACTLY as the chart draws it: P5 eight characters, ";" in
+#     position 18.  P5 = "MYCALL" + two assumed pad spaces (see [E2]). ---
+ex590_set_menu001_poweron_msg_8	EX0010000MYCALL  ;
+ex590_answer_menu001_poweron_msg_8	EX0010000MYCALL  ;
+#
+# --- Set / Answer with a ONE-character P5 (11 positions).  The chart never draws
+#     this shape; the length is ASSUMED from the menu-002 value legend (see [E1]). ---
+ex590_set_menu002_brightness_3	EX00200003;
+ex590_answer_menu002_brightness_3	EX00200003;

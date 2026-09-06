@@ -1,0 +1,68 @@
+# Command: MC (Read, Set and Answer frames)
+# Radio: Kenwood TS-480HX / TS-480SAT
+# Title (cover, verbatim): "PC CONTROL COMMAND REFERENCE FOR THE TS-480HX/ SAT
+#   TRANSCEIVER"
+# Printed revision: NONE printed; cover carries "KENWOOD CORPORATION",
+#   "(c) 2003/11/28" and the printing code line "09 08 07 06 05 04 03 02 01 00".
+# Source page: printed folio "12"  ==  PDF page 13 of 26
+# Charts used: the Set, Read and Answer charts of the MC block
+# Derivation date: 05/09/2026
+# NO code, no generator, no other file and no other document was consulted.
+#
+# COUNTED FRAME LENGTHS (two independent counts of the printed numbered ruler):
+#   MC Set    = 6 positions
+#   MC Read   = 3 positions
+#   MC Answer = 6 positions
+#   (identical to the TS-590 book's MC lengths)
+#
+# CHARTS, position by position:
+#   Set:     1 M  2 C  3 P1  4 P2  5 P2  6 ;      (7..10 empty)
+#   Read:    1 M  2 C  3 ;                        (4..10 empty)
+#   Answer:  1 M  2 C  3 P1  4 P2  5 P2  6 ;      (7..10 empty)
+#
+# Field map:
+#   pos 1-2  "MC"
+#   pos 3    P1  (1 character)
+#   pos 4-5  P2  (2 characters)
+#   pos 6    ";"
+#
+# ---------------------------------------------------------------------------
+# CHANNEL-NUMBER LEGEND, VERBATIM (the complete right-hand column; block description
+# reads "Recalls or reads the Memory channel."):
+#
+#   Parameters:
+#   P1
+#     0: Always 0 for the TS-480 (Memory bank number).
+#   P2
+#     00 ~ 99: Channel number
+#
+#   THAT IS THE WHOLE LEGEND.  This book prints NO P-channel wording and NO
+#   extension-channel wording for MC - no "P00 ~ P09", no "E00 ~ E09", no 100~119
+#   mapping.  The only channel-range wording anywhere near it is elsewhere in the
+#   book and is quoted here so the absence is on the record:
+#     MR / MW (folio 13-14) VERBATIM: "Memory channel 90 ~ 99: / P1=0 (start
+#       frequency), P1=1 (end frequency)"
+#     SS (folio 20 / PDF p.21) VERBATIM: "0 ~ 9: Memory Channel number for the Program
+#       Scan / (0: Memory Channel 90 ~ 9: Memory channel 99)"
+#
+# EVERY POSITION THE CHART PRINTS AS FIXED / "Always" (by position number):
+#   position 3 (P1) -- "0: Always 0 for the TS-480 (Memory bank number)."
+#   (The TS-590 book's MC has NO fixed position at all - see FINDING F8.)
+#
+# ---------------------------------------------------------------------------
+# BYTES WHOSE VALUE THE MANUAL DOES NOT DETERMINE  -> INHERITED-ASSUMED
+#   [C1] The particular channel numbers below are ASSUMED illustrative values.
+#   Every byte's WIDTH and every fixed byte's VALUE is documented.
+#
+# Hardware status: UNVERIFIED for every vector in this file.
+#
+# ---------------------------------------------------------------------------
+# VECTORS  (name <TAB> frame bytes verbatim)
+#
+mc480_read	MC;
+mc480_set_ch00	MC000;
+mc480_set_ch03	MC003;
+mc480_set_ch90_program_scan_lower	MC090;
+mc480_set_ch99_top_of_range	MC099;
+mc480_answer_ch03	MC003;
+mc480_answer_ch99	MC099;

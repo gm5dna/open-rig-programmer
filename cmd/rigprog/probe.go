@@ -107,14 +107,17 @@ func wrongRadioMessage(model string, wr *driver.WrongRadioError) string {
 // using ImageUS) without going through flag parsing or a wiring
 // constructor that always picks the default fakeradio image.
 //
-// Region and Diagnostics are read via the OPTIONAL driver.RegionReporter/
-// driver.DiagnosticsReporter capabilities (core/driver/optional.go, task
-// 37): sess's concrete type may not implement either — a future second
-// driver may implement neither. Region's absence renders "Region:        -";
-// Diagnostics' absence omits the "Unexpected frames" line (and its
-// stderr warning) entirely, rather than a fabricated zero. Every FT-710
-// session implements both today, so this task changes nothing observable
-// for FT-710.
+// Region, the firmware answer and Diagnostics are read via the OPTIONAL
+// driver.RegionReporter/driver.FirmwareAnswerReporter/
+// driver.DiagnosticsReporter capabilities (core/driver/optional.go, task 37;
+// the middle one added at Tier 6 task 18): sess's concrete type may implement
+// none of them. Region's absence renders "Region:        -"; the firmware
+// answer's absence and Diagnostics' absence OMIT their lines entirely, rather
+// than a fabricated dash or zero — for the firmware answer that distinction
+// is the whole point, since "this radio has no firmware query" and "the radio
+// answered nothing" are different facts and only one of them is true of most
+// registered models. Every FT-710 session implements Region and Diagnostics
+// and not the firmware answer.
 func writeProbeReport(stdout, stderr io.Writer, model string, sess driver.Session) {
 	id := sess.Identity()
 	caps := sess.Capabilities()
@@ -137,6 +140,24 @@ func writeProbeReport(stdout, stderr io.Writer, model string, sess driver.Sessio
 	_, hasEMG := caps.Bank(spec.BankEMG)
 	fmt.Fprintf(stdout, "60 m channels: %d\n", count60m)
 	fmt.Fprintf(stdout, "EMG channel:   %s\n", yesNo(hasEMG))
+
+	// The radio's own firmware answer, VERBATIM and %q-quoted, for the
+	// sessions whose concrete type has one to give (driver.
+	// FirmwareAnswerReporter — the TS-590 pair today, and nothing else).
+	// Absent capability, absent line: a fabricated "-" would read as "the
+	// radio answered nothing" where the truth is "this radio has no such
+	// question".
+	//
+	// QUOTED RATHER THAN BARE, and never compared against anything here.
+	// This is the mitigation for the TS-590S's A13: that row refuses channel
+	// writes on a firmware answer of 2.00 or later AND on one it cannot read
+	// as a version at all, and in the second case the driver's own reading is
+	// exactly what is in doubt — so the bytes have to reach the user
+	// unedited, with any stray or non-printing character visible rather than
+	// swallowed.
+	if fr, ok := sess.(driver.FirmwareAnswerReporter); ok {
+		fmt.Fprintf(stdout, "Firmware answer: %q\n", fr.FirmwareAnswer())
+	}
 
 	if dr, ok := sess.(driver.DiagnosticsReporter); ok {
 		diag := dr.Diagnostics()

@@ -14,7 +14,7 @@
 -->
 
 Open Rig Programmer __VERSION__: a free memory-channel programmer for
-Yaesu and Icom radios. Read the memories into a file, edit them in a
+Yaesu, Icom and Kenwood radios. Read the memories into a file, edit them in a
 grid or a spreadsheet, send them back over the radio's ordinary USB
 cable. Desktop app and `rigprog` command line for macOS, Windows and
 Linux.
@@ -64,10 +64,53 @@ describes under *Switching on writes for an unverified radio*.
   different port), and its USB socket is a dual-UART bridge presenting two serial
   ports with no statement of which carries CAT: if one is silent, try
   the other.
+- **The Kenwood TS-590S and TS-590SG are now supported**, for reading and
+  for opt-in writes, on the same terms as every other manual-derived
+  model — and they are the first radios here whose tone and scan-skip
+  columns can actually be read and written. Both read the 100 memory
+  channels, the 10 programmable scan ranges and the menu settings (88
+  items on the S, 100 on the SG). **A memory channel is written back only
+  once you supply its transmit frequency**, and a channel read off the
+  radio does not carry one: the manual never says what these radios
+  answer for the transmit side of a simplex channel, so the program
+  leaves it unavailable rather than guessing and refuses the write
+  (register entry A9). Reading the memories, editing them and sending
+  them straight back is therefore refused on every memory channel until
+  you fill that column in — typing the receive frequency there writes the
+  channel as simplex, which is what the one frame this program sends can
+  express. A genuine split is refused even then, and a scan range is not
+  affected. Only FM channels are written, and a 1750 Hz receive tone is
+  refused where a 1750 Hz transmit tone is written. On the
+  TS-590S alone the filter column cannot be set at all, and channel
+  writes are refused on a radio reporting firmware 2.00 or later — or a
+  firmware version the program cannot read: the manual guarantees the
+  relevant byte is unused only on the 1.xx firmware, and a version that
+  cannot be compared cannot be shown to be a 1.xx one. `rigprog probe`
+  prints the radio's own firmware answer verbatim so you can see what
+  that decision was taken on. Their speed is a guess (9600; there is no
+  speed setting, and a wrong speed looks like a dead port).
+  **CHIRP import is not available for these two radios in this release:
+  every row is blocked.** A CHIRP file's blank `Duplex` column means
+  simplex, and these radios declare no shift vocabulary at all — their
+  memory record carries no duplex selector — so every ordinary row is
+  refused on that column and the import writes nothing; `CW`, `CWR` and
+  `RTTY` rows are refused a second time on the mode besides. The
+  program's own CSV import and export are unaffected.
+- **The Kenwood TS-480 is NOT selectable**, although its driver ships in
+  this build. Nothing in its 2003 manual says what a memory channel that
+  has never been written answers when it is read; the TS-590SG's manual
+  says an all-zero record, and if a TS-480 rejects that read instead, a
+  brand-new one cannot be read by this program at all. It stays
+  unavailable until somebody observes what a real TS-480 answers — at
+  least three unwritten channels, each confirmed at the front panel,
+  across at least two sessions, with the exact bytes kept and an observer
+  named; `internal/wiring/testdata/README.md` says how.
 
 No existing radio's behaviour changed. The stored comparison output of
 every previously registered radio is byte for byte identical apart from
-the lists of supported models, which gain the FT-991A.
+the lists of supported models, which gain the FT-991A, the TS-590S and
+the TS-590SG. The TS-480 appears in no list, because it is not
+registered.
 
 ## Downloads
 

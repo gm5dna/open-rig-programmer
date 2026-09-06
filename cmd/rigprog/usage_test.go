@@ -96,19 +96,21 @@ func TestUsageText_DiffExport_AlreadyFlagsFirst(t *testing.T) {
 // own sorted order, and says "radios" (plural, model-neutral) rather than
 // naming one radio outright.
 //
-// "Yaesu and Icom radios", not "Yaesu radios", since Wave 4 task R1
-// registered the IC-7610: the manufacturer word itself is a hand-written
-// literal too, exactly like the "FT-710" this doc comment already
-// describes replacing, and it was rewritten deliberately rather than left
-// to quietly misdescribe a mixed registry. This pin is what makes that
-// rewrite a visible, intentional edit rather than a drift.
+// "Yaesu, Icom and Kenwood radios", not "Yaesu radios": the manufacturer
+// word itself is a hand-written literal too, exactly like the "FT-710"
+// this doc comment already describes replacing, and it is rewritten at
+// each new manufacturer rather than left to quietly misdescribe a mixed
+// registry. Wave 4 task R1 made it "Yaesu and Icom" when the IC-7610
+// registered; the TS-590 pair makes it three. This pin is what makes each
+// such rewrite a visible, intentional edit rather than a drift — the
+// interpolated model list moves on its own, the clause does not.
 func TestPrintUsage_RegistryDriven(t *testing.T) {
 	var buf bytes.Buffer
 	printUsage(&buf)
 	out := buf.String()
 
-	if !strings.Contains(out, "Yaesu and Icom radios") {
-		t.Errorf("printUsage output = %q, want it to say \"Yaesu and Icom radios\" (manufacturer-neutral across both registered families)", out)
+	if !strings.Contains(out, "Yaesu, Icom and Kenwood radios") {
+		t.Errorf("printUsage output = %q, want it to say \"Yaesu, Icom and Kenwood radios\" (manufacturer-neutral across all three registered families)", out)
 	}
 	for _, model := range wiring.SupportedModels() {
 		if !strings.Contains(out, model) {

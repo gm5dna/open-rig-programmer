@@ -1,9 +1,10 @@
 # Open Rig Programmer
 
-A free memory-channel programmer for Yaesu and Icom radios. Read the
-radio's memories into a file, edit them in a grid or a spreadsheet,
-and send them back over the radio's ordinary USB cable. A desktop app
-and a command-line tool, `rigprog`, for macOS, Windows and Linux.
+A free memory-channel programmer for Yaesu, Icom and Kenwood radios.
+Read the radio's memories into a file, edit them in a grid or a
+spreadsheet, and send them back over the radio's ordinary USB cable.
+A desktop app and a command-line tool, `rigprog`, for macOS, Windows
+and Linux.
 
 ![The channel grid, connected to the built-in demo radio](docs/images/app-demo.png)
 
@@ -13,7 +14,7 @@ and a command-line tool, `rigprog`, for macOS, Windows and Linux.
   spreadsheet, drag to copy, swap or move, and a picker for every
   column the radio understands.
 - **Reads and writes over the USB cable**, with the radio's menu
-  settings shown alongside on the Yaesu models.
+  settings shown alongside on the Yaesu and Kenwood models.
 - **Imports and exports CSV**, including CHIRP's, and reports anything
   a file cannot carry.
 - **Keeps your radio safe**: it reads before it writes, saves a
@@ -32,13 +33,13 @@ and a command-line tool, `rigprog`, for macOS, Windows and Linux.
 | **FTdx10**, **FTdx101D**, **FTdx101MP**, **FT-891**, **FT-991A** | ✅ | ⚠️ opt-in |
 | **IC-7610**, **IC-7300**, **IC-7300MK2**, **IC-705**, **IC-9700**, **IC-905**, **IC-7851**, **IC-7850**, **IC-7760**, **IC-7100** | ✅ | ⚠️ opt-in |
 | **IC-R8600** (a receiver) | ✅ | ⚠️ opt-in |
+| **TS-590S**, **TS-590SG** | ✅ | ⚠️ opt-in |
 
 Only the FT-710 has ever been connected to this program. The others
 were built from the makers' protocol manuals and tested against
 simulators: reading them is safe, and writing stays switched off until
 you switch it on for that radio. Per-radio detail, including where the
 program is guessing, is in [docs/radio-notes.md](docs/radio-notes.md).
-Kenwood radios are next.
 
 ## Install
 

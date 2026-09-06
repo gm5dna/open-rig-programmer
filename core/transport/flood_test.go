@@ -18,7 +18,7 @@ import (
 // registers, with no off-switch shipped — is a stream that never goes
 // quiet, and every loop in this package whose exit condition is "silence"
 // would wait for it forever. (internal/wiring/wiring_test.go's icomModels
-// is the registered set and TestYaesuAndIcomModelsPartitionSupportedModels pins
+// is the registered set and TestMakerModelListsPartitionSupportedModels pins
 // it; the count is deliberately not repeated here, because one radio that
 // never goes quiet is the whole hazard and a number only goes stale.)
 //

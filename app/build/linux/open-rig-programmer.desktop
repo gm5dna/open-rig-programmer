@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=Open Rig Programmer
-Comment=Memory-channel programmer for Yaesu and Icom transceivers
+Comment=Memory-channel programmer for Yaesu, Icom and Kenwood transceivers
 Exec=open-rig-programmer
 Icon=open-rig-programmer
 Terminal=false

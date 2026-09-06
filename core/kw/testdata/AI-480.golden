@@ -1,0 +1,70 @@
+# Command: AI (Set frame(s))
+# Radio: Kenwood TS-480HX / TS-480SAT
+# Title (cover, verbatim): "PC CONTROL COMMAND REFERENCE FOR THE TS-480HX/ SAT
+#   TRANSCEIVER"
+# Printed revision: NONE printed; cover carries "KENWOOD CORPORATION",
+#   "(c) 2003/11/28" and the printing code line "09 08 07 06 05 04 03 02 01 00".
+# Source page: printed folio "3"  ==  PDF page 4 of 26
+# Charts used: the Set chart of the AI block (Read and Answer charts recorded below
+#   for completeness of the position map)
+# Derivation date: 05/09/2026
+# NO code, no generator, no other file and no other document was consulted.
+#
+# COUNTED FRAME LENGTHS (two independent counts of the printed numbered ruler):
+#   AI Set    = 4 positions
+#   AI Read   = 3 positions
+#   AI Answer = 4 positions
+#   (identical to the TS-590 book's AI lengths)
+#
+# CHARTS, position by position:
+#   Set:     1 A  2 I  3 P1  4 ;      (5..10 empty)
+#   Read:    1 A  2 I  3 ;            (4..10 empty)
+#   Answer:  1 A  2 I  3 P1  4 ;      (5..10 empty)
+#
+# Field map (Set):
+#   pos 1-2  "AI"
+#   pos 3    P1  (one character)
+#   pos 4    ";"
+#
+# ---------------------------------------------------------------------------
+# LEGEND, VERBATIM (the complete right-hand column; block description reads
+# "Sets or reads the Auto Information (AI) function ON/ OFF."):
+#
+#   Parameters:
+#   P1
+#     0: AI OFF
+#     1: Only old AI format is ON
+#     2: Only extended AI format is ON
+#     3: Both formats are ON
+#
+#   When the extended AI format is selected, the transceiver
+#   automatically sends the parameters.
+#   When the old AI is ON and the IF parameters change, the
+#   transceiver sends the IF command every 1.5 seconds.
+#   When the transceiver is turned OFF, the AI parameter
+#   becomes 0.
+#
+#   (Four consecutive values 0,1,2,3 - a DIFFERENT value set and different meanings
+#    from the TS-590 book's AI, which prints only 0, 2 and 4.  See FINDING F9.)
+#
+# POSITIONS THE CHART PRINTS AS FIXED / "Always": NONE in the AI block.
+#
+# ---------------------------------------------------------------------------
+# BYTES WHOSE VALUE THE MANUAL DOES NOT DETERMINE  -> INHERITED-ASSUMED
+#   NONE.  Every byte of every vector below is determined by the printed chart and
+#   the printed legend.
+#
+# Hardware status: UNVERIFIED for every vector in this file.
+#
+# ---------------------------------------------------------------------------
+# VECTORS  (name <TAB> frame bytes verbatim)
+#
+ai480_set_off	AI0;
+ai480_set_old_format_only	AI1;
+ai480_set_extended_format_only	AI2;
+ai480_set_both_formats	AI3;
+ai480_read	AI;
+ai480_answer_off	AI0;
+ai480_answer_old_format_only	AI1;
+ai480_answer_extended_format_only	AI2;
+ai480_answer_both_formats	AI3;
