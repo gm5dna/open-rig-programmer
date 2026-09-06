@@ -1585,11 +1585,15 @@ func TestSupportedModels_ContainsEveryRegisteredModel(t *testing.T) {
 // fields this test DOES require are populated for it, and none of them
 // borrows a word of the FT-710's wording.
 //
-// THREE OF THE FOUR REGISTERED MODELS ARE NOW IN THAT POSITION. M9d-2
-// registered the FTDX101D and FTDX101MP with writeTrialsCompleteD and
+// SIXTEEN OF THE SEVENTEEN REGISTERED MODELS ARE NOW IN THAT POSITION,
+// and the FT-710 is the one exception: it is the only entry in
+// internal/radiotext with a non-empty ToneScanSkipVerification, because it
+// is the only model with write trials behind it. M9d-2 started the run by
+// registering the FTDX101D and FTDX101MP with writeTrialsCompleteD and
 // writeTrialsCompleteMP both false, and both entries leave
 // ToneScanSkipVerification empty on the same grounds
-// (TestRadiotext_FTdx101DVerbatim and its MP sibling assert it). The
+// (TestRadiotext_FTdx101DVerbatim and its MP sibling assert it); every
+// Icom registration, the FT-891 and the FT-991A followed. The
 // exclusion is therefore the ordinary case for a newly registered radio and
 // the FT-710's populated field is the exception — which is the right way
 // round: a radio earns that sentence with write trials, it does not start

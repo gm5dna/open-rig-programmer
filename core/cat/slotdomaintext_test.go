@@ -92,7 +92,7 @@ func TestSlotDomainText_NumericPMSDialect(t *testing.T) {
 // makes over the alternative: the clause is keyed on whether this dialect
 // HAS the banks, not on its PMS form. A future token-PMS radio with no 5
 // MHz bank must not inherit the FT-710's sentence, and the two questions
-// are only accidentally the same on the four dialects registered today.
+// are only accidentally the same on the five dialects registered today.
 func TestSpecialBankText_DerivesFromTheDECLAREDBanks(t *testing.T) {
 	base := pmsFormBaseConfig() // memory 001-099, 9 token pairs, no 60m, no EMG
 

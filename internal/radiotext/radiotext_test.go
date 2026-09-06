@@ -1429,10 +1429,14 @@ func TestRadiotext_ProbeNote_DoesNotOverstateTheWalkBound(t *testing.T) {
 // held — only the CAT Operation Reference Manual, rev 1909-C — and no write
 // trial has happened (that driver's writeTrialsComplete is false). Every
 // string therefore says what is actually known, including where something is
-// NOT known, and borrows the wording of no other entry: not the FT-710's
-// (whose hedgeless sentences are ITS hardware evidence), not the FTdx10's or
-// the FTdx101 pair's (whose hedges are about different radios and different
-// manuals), and not any Icom entry's.
+// NOT known, and borrows no other entry's EVIDENCE — no other radio's fact,
+// hedge or particular: not the FT-710's (whose hedgeless sentences are ITS
+// hardware evidence), not the FTdx10's or the FTdx101 pair's (whose hedges
+// are about different radios and different manuals), and not any Icom
+// entry's. That is a claim about evidence and not about phrasing: the
+// mechanical check is whole-field byte-identity plus particulars, and this
+// entry does share a 38-word BUILD-fact run with the FT-991A's (see
+// ft991aText's own doc comment).
 //
 // WHAT THIS ENTRY CAN SAY THAT ITS YAESU SIBLINGS' CANNOT, and why it is
 // written fresh rather than adapted: this radio's CAT manual prints its whole

@@ -80,7 +80,8 @@ func walkCaps() spec.Capabilities {
 //   - each driver's own TestWriteChannel_KnownD8TierFieldsRefusedBeforeWire
 //     (or equivalent) additionally pins the MEMBER binding — not the
 //     vocabulary argument, since every Yaesu vocabulary is empty — for
-//     TuningStep, Attenuator, Preamp and Antenna, at all four drivers.
+//     TuningStep, Attenuator, Preamp and Antenna, at all five drivers
+//     that call this walk (ft710, ftdx10, ftdx101, ft891, ft991a).
 //
 // That leaves the eleven non-vocab-keyed fields' member bindings pinned
 // only where the two rows above happen to name them (five of the eleven);
