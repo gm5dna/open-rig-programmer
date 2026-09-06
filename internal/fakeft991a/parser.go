@@ -212,6 +212,13 @@ func mcSettableSlot(kind slotKind) bool { return kind == slotMemory || kind == s
 // register entry "THE cat.ModeUnset MEMBER OF THE MODE TABLE" (cited):
 // parsers must accept a placeholder even where builders must never emit one.
 //
+// IT IS NOT THE PREDICATE AN INCOMING SET IS JUDGED BY. parseMemoryBlock uses
+// image.go's validModeBuildByte — this predicate minus the placeholder —
+// because a Set's P6 vocabulary is the printed legend alone (the closing
+// review's C-M2). This one states the LEGEND-plus-placeholder domain, which is
+// what the register entry is about, and is the base the build-direction
+// predicate narrows.
+//
 // NOTE THE DIVERGENCES FROM BOTH SIBLINGS. internal/fakeft891 refuses 'A'
 // (its legend prints "A: -", a hole) and 'E'; internal/fakedx10 accepts 'F'
 // (its legend fills it with DATA-FM-N). This one takes 1..9 and A..E, and its
@@ -450,7 +457,19 @@ func parseMemoryBlock(block []byte, wantKind byte) (slot string, s MemState, ok 
 		return "", MemState{}, false
 	}
 	mode := block[blkMode]
-	if !validModeWireByte(mode) {
+	// THE BUILD-DIRECTION PREDICATE, not validModeWireByte, and the
+	// distinction is the whole of the closing review's C-M2: this function
+	// only ever sees an INCOMING SET (handleMT's and handleMW's Set arms
+	// are its only callers), and a Set's P6 vocabulary is the printed legend
+	// alone — `1`-`9`, `A`-`E` (ft991a_layout.txt:1006-1008). The '0'
+	// placeholder appears in NO legend of this radio; it exists so a PARSER
+	// can read an answer carrying it (the dialect's register entry "THE
+	// cat.ModeUnset MEMBER OF THE MODE TABLE"), and core/cat's own builder
+	// refuses to emit it in a Set (mtcombined.go's Set-frame check).
+	// Accepting it here modelled a permissiveness no evidence supports, and
+	// then stored a byte this fake would answer with. Pinned by
+	// TestMTSet_RejectionsLeaveTheChannelUntouched's ModeUnset row.
+	if !validModeBuildByte(mode) {
 		return "", MemState{}, false
 	}
 	if block[blkKind] != wantKind {

@@ -467,6 +467,17 @@ func TestMTSet_RejectionsLeaveTheChannelUntouched(t *testing.T) {
 		{"RX clarifier flag outside 0/1", ordinaryChannel("001", mtSetKindFixed).with(func(f *combinedFrame) { f.rxClar = '2' }).frame()},
 		{"TX clarifier flag outside 0/1", ordinaryChannel("001", mtSetKindFixed).with(func(f *combinedFrame) { f.txClar = '2' }).frame()},
 		{"mode nibble the legend does not print", ordinaryChannel("001", mtSetKindFixed).with(func(f *combinedFrame) { f.mode = 'F' }).frame()},
+		// The closing review's C-M2. P6's SET vocabulary is the printed
+		// legend and nothing else: `1`-`9`, `A`-`E`
+		// (ft991a_layout.txt:1006-1008). '0' is the "-" placeholder that
+		// appears in NO legend of this radio — a PARSE-direction courtesy
+		// the dialect registers ("THE cat.ModeUnset MEMBER OF THE MODE
+		// TABLE") so an answer carrying it can be read, not a value a Set
+		// may carry. core/cat refuses to BUILD it (mtcombined.go's
+		// Set-frame check), so a fake that accepted it modelled a
+		// permissiveness no evidence supports AND stored a byte it would
+		// then answer with.
+		{"the ModeUnset placeholder, which no Set legend prints", ordinaryChannel("001", mtSetKindFixed).with(func(f *combinedFrame) { f.mode = '0' }).frame()},
 		{"P7 not the Set chart's fixed 0", ordinaryChannel("001", kindMemory).frame()},
 		{"P8 past the five printed states", ordinaryChannel("001", mtSetKindFixed).with(func(f *combinedFrame) { f.ctcss = '5' }).frame()},
 		{"P9 not the fixed 00", ordinaryChannel("001", mtSetKindFixed).with(func(f *combinedFrame) { f.p9 = "01" }).frame()},
@@ -555,8 +566,14 @@ func TestMTSet_AcceptsTheClarifierRangeThisManualPrints(t *testing.T) {
 // legend runs 1..9 then A..E with NO hole and no 'F'
 // (ft991a_layout.txt:1006-1008), where the FT-891 prints "A: -" and the FTdx10
 // fills 'F' — the reason this table is transcribed afresh rather than
-// borrowed. The '0' placeholder is accepted additionally and is the DIALECT's
-// assumption ("THE cat.ModeUnset MEMBER OF THE MODE TABLE").
+// borrowed.
+//
+// FOURTEEN, NOT FIFTEEN: the '0' placeholder is NOT a fifteenth Set value.
+// It is the DIALECT's parse-direction assumption ("THE cat.ModeUnset MEMBER
+// OF THE MODE TABLE"), which is why validModeWireByte admits it and the
+// build-direction validModeBuildByte — the predicate incoming Sets are
+// judged by — does not. Its refusal has its own row in
+// TestMTSet_RejectionsLeaveTheChannelUntouched (the closing review's C-M2).
 func TestMTSet_AcceptsEveryModeNibbleTheLegendPrints(t *testing.T) {
 	printed := []byte("123456789ABCDE")
 	for _, m := range printed {
@@ -573,6 +590,9 @@ func TestMTSet_AcceptsEveryModeNibbleTheLegendPrints(t *testing.T) {
 	}
 	if !validModeWireByte('0') {
 		t.Error("the '0' placeholder must be accepted on the parse side — the dialect's ModeUnset member")
+	}
+	if validModeBuildByte('0') {
+		t.Error("the '0' placeholder must NOT be accepted on the build side, which is what an incoming Set is judged by (C-M2)")
 	}
 	if validModeWireByte('F') {
 		t.Error("'F' is printed in none of this radio's five mode legends and must be refused")
