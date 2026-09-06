@@ -185,9 +185,12 @@ func TestTextFields_CoversEveryFieldOfText(t *testing.T) {
 //
 // assertNotBorrowedFromAnyOtherModel and particularsAgainstEveryOtherModel
 // replace all of that with ONE mechanism, keyed off
-// wiring.SupportedModels() — the registry itself — so a sixteenth
-// registration extends every existing entry's check on its next run,
-// rather than needing this file edited once per existing entry.
+// wiring.SupportedModels() — the registry itself — so EVERY LATER
+// registration extends every existing entry's check on its next run, rather
+// than needing this file edited once per existing entry. No count is written
+// here, deliberately: a number in prose is one registration away from being
+// false, and the mechanism this paragraph describes is what makes counting
+// unnecessary.
 // ---------------------------------------------------------------------
 
 // yaesuModels is the FIVE registered models whose radiotext entry predates
@@ -295,6 +298,30 @@ var ownParticulars = map[string][]string{
 	"IC-7760":    {"IC-7760", "B2h"},
 	"IC-7100":    {"IC-7100", "88h"},
 	"IC-R8600":   {"IC-R8600", "96h"},
+	// The two REGISTERED Kenwood rows (Tier 6). Each entry is the bare
+	// name and nothing else: this family's prose carries no address hex
+	// (it is not a CI-V family) and no finding from a real radio to
+	// guard, so the name is the whole of each row's distinguishing
+	// evidence — the three FTdx entries' shape, not the FT-710's
+	// five-token one.
+	//
+	// "TS-590S" IS A STRICT PREFIX OF "TS-590SG", which no earlier pair
+	// in this table is. stripOwnName's word-boundary match is what keeps
+	// that honest in both directions: checking the SG's prose, "TS-590S"
+	// is a particular of another model, and the SG's own name is stripped
+	// by a pattern that does not fire inside it; checking the S's prose,
+	// its own name is stripped by a pattern that does NOT match inside
+	// "TS-590SG", so a genuine borrowing of the sibling's name is still
+	// caught.
+	//
+	// NO "TS-480" ENTRY, deliberately: that row is not registered
+	// (internal/wiring, plan decision P3), so
+	// particularsAgainstEveryOtherModel — which ranges
+	// wiring.SupportedModels() — never looks it up, and the panic that
+	// would fire on a missing entry is exactly the loud failure edit 6 of
+	// the registration commit's ten-edit list is meant to be.
+	"TS-590S":  {"TS-590S"},
+	"TS-590SG": {"TS-590SG"},
 }
 
 // particularsAgainstEveryOtherModel returns every particular model's own
@@ -957,6 +984,20 @@ func TestFor_UnknownModel(t *testing.T) {
 		// the space-for-hyphen spelling Yaesu's own marketing uses, and
 		// the bare model number.
 		"FT891", "ft-891", "FT-891 ", " FT-891", "FT 891", "891",
+		// TS-590S and TS-590SG near misses (Tier 6, the first Kenwood
+		// registration): the no-hyphen spellings, the lowercase slugs this
+		// project's own ModelSlug produces ("ts-590s" and "ts-590sg" — real
+		// strings in this build, which is exactly why they must not resolve
+		// here), trailing- and leading-space variants, the space-for-hyphen
+		// spelling, and the bare model number. Both rows are listed
+		// explicitly rather than assumed distinct by construction: "TS-590S"
+		// is a strict PREFIX of "TS-590SG", so a lookup that had been made
+		// loose would answer the S's prose to an SG typo.
+		"TS590S", "ts-590s", "TS-590S ", " TS-590S", "TS 590S", "590",
+		"TS590SG", "ts-590sg", "TS-590SG ", " TS-590SG", "TS 590SG", "TS 590", "TS-590 ", "TS-590",
+		// The TS-480's near misses — and NOT the registry spelling. See the
+		// paragraph below for why "TS-480" itself must never join this list.
+		"TS480", "ts-480", "TS-480 ", " TS-480", "TS 480", "480",
 	} {
 		got, ok := radiotext.For(model)
 		if ok {
@@ -965,6 +1006,26 @@ func TestFor_UnknownModel(t *testing.T) {
 		if got != (radiotext.Text{}) {
 			t.Errorf("For(%q) = %#v, want the zero Text", model, got)
 		}
+	}
+
+	// THE ONE SPELLING THAT MUST NOT BE ON THE LIST ABOVE, asserted here
+	// explicitly with its reason rather than left as a silent omission (Tier
+	// 6, plan decision P17 / M4). "TS-480" is the REGISTRY spelling, and
+	// this milestone lands its texts entry while deliberately NOT
+	// registering the row, so For("TS-480") answers ok. The near-miss list
+	// above carries "TS480" — which stays — and a later reader adding
+	// "TS-480" beside it by reflex would be asserting the opposite of what
+	// this package does.
+	//
+	// The assertion is stated in BOTH directions on purpose: it fails if the
+	// entry is ever dropped from texts (the registration commit's edit 4
+	// would then stop being a no-op), and it names the near-miss that must
+	// keep missing, so the two facts cannot drift apart.
+	if _, ok := radiotext.For("TS-480"); !ok {
+		t.Error(`For("TS-480") ok = false, want true — this build carries the TS-480's prose although internal/wiring does not register the row (plan P17); dropping the entry would leave that prose unwritten and unreviewed until the registration commit`)
+	}
+	if _, ok := radiotext.For("TS480"); ok {
+		t.Error(`For("TS480") ok = true, want false — the hyphenless spelling is a near miss and must keep missing, even though the hyphenated registry spelling now resolves`)
 	}
 }
 
@@ -1510,4 +1571,236 @@ func TestRadiotext_FT891ProbeNote_CarriesItsThreeNamedFacts(t *testing.T) {
 	if !strings.Contains(got.ProbeFirmwareNote, "neither this build's command line nor its window offers a way to open at another rate") {
 		t.Errorf("ProbeFirmwareNote = %q,\nwant it to state that no baud override exists in either face of this build", got.ProbeFirmwareNote)
 	}
+}
+
+// TestRadiotext_TS590SVerbatim pins every TS-590S Text field byte for byte
+// (Tier 6 task 18, landed with that row's wiring registration —
+// internal/wiring's TestEverySupportedModelHasRadiotext refuses a registered
+// model with no prose, which is what makes this entry part of registration
+// rather than a later nicety).
+//
+// THE HONESTY RULE APPLIES UNCHANGED, and this family starts further back
+// than any registered before it. No Kenwood radio has ever answered a frame
+// put to it by this project; only the PC CONTROL COMMAND REFERENCE is held
+// here, not the instruction manual, which is why every "clear it at the
+// radio" sentence declines to say how; and this row's write trials have not
+// happened. Every string says what is actually known, including where
+// something is not, and borrows the wording of no other entry — not the
+// FT-710's (whose hedgeless sentences are ITS evidence from a real radio),
+// not the hedged Yaesu entries' (different radios, different manuals), and
+// not any Icom entry's.
+//
+// WHAT THIS ENTRY CAN SAY THAT NO EARLIER ONE COULD: tone and scan skip are
+// READ AND WRITTEN here. Every registered radio before this family had at
+// least one of the two unreachable, so every earlier tooltip and legend says
+// some version of "not carried by this radio's protocol"; this record carries
+// a tone mode, two tone numbers and a channel-lockout flag, so this entry has
+// to say the opposite and could not have been adapted from any of them.
+//
+// THE VOCABULARY CHECK RUNS AGAINST THIS PROSE, unlike the five Yaesu
+// entries' (plan decision P17): Kenwood is deliberately NOT in yaesuModels,
+// because these books say "PC control command" and never the Yaesu family's
+// word, so borrowing a Yaesu sentence would be caught by the vocabulary scan
+// as well as by the byte-identity one.
+func TestRadiotext_TS590SVerbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure:           "The TS-590S has no erase command this build will send, and the absence is a CHOICE over the weakest evidence in the book rather than a plain gap. The only clearing route either Kenwood book prints is a side effect of a shortened memory-write frame — leave one digit of the name field unspecified, set every other parameter to zero, and the channel is erased — and the LENGTH of that short frame is a reading of the sentence rather than a number the book prints anywhere. This build therefore admits a memory-write frame of exactly 50 bytes and no other, so the short form cannot be sent even by accident. A channel can be cleared only at the radio itself, and this build does not describe how: no TS-590S instruction manual is held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Follow the memory-channel clearing procedure in the radio's own instruction manual.",
+		FirmwareGuidance:         "The TS-590S reports its own firmware version and this build asks for it, as the second frame of a two-frame probe, and prints the four characters the radio answered. ONE VERSION MATTERS ON THIS ROW. The position in the memory record that selects filter A or B is guaranteed to be zero only on the 1.xx firmware — the book says so in as many words, twice, in slightly different wording — and says nothing at all about 2.00 and later. So this build refuses channel writes to a TS-590S that reports 2.00 or later, and to one whose answer it cannot read as a version at all. That refusal is conservative rather than evidenced: nobody here has seen a 2.00 radio answer anything, and the alternative would be to write a byte whose meaning the book stops guaranteeing at exactly that point. Reading is never blocked by the version. No minimum firmware version is established for this radio: nothing this project holds states one.",
+		GridLegendNote:           "Tone and Scan Skip ARE read and written on the TS-590S, unlike the Yaesu radios this programme also supports: its 50-byte memory record carries a tone mode, separate transmit and receive tone numbers and a channel-lockout flag, so those columns behave like any other. Three other columns behave differently here from the file you may be importing. A SPLIT CHANNEL IS REFUSED RATHER THAN FLATTENED: this radio expresses a split as two frames over one channel number, this build sends one, and a channel whose transmit frequency differs from its receive frequency is refused at the write instead of being written as simplex and read back as though it had never been split. THE FILTER COLUMN CANNOT BE SET ON THIS ROW AT ALL: the record position that carries it is guaranteed to be zero only on the 1.xx firmware, and one entry in the model list cannot say 'settable above 2.00', so this build declines to set it on any TS-590S and publishes the cost rather than hiding it. And a CHIRP file's CW, CWR and RTTY rows are not imported: those map to the sideband-specific names CW-U, CW-L and RTTY-U, and this radio's own mode legend prints CW, CW-R, FSK and FSK-R instead, so such a row is blocked rather than written as a mode the radio has never been shown to have.",
+		ToneScanSkipVerification: "",
+		EraseDialogNote:          "The TS-590S has no erase command this build will send, and the absence is a CHOICE over the weakest evidence in the book rather than a plain gap. The only clearing route either Kenwood book prints is a side effect of a shortened memory-write frame — leave one digit of the name field unspecified, set every other parameter to zero, and the channel is erased — and the LENGTH of that short frame is a reading of the sentence rather than a number the book prints anywhere. This build therefore admits a memory-write frame of exactly 50 bytes and no other, so the short form cannot be sent even by accident. A channel can be cleared only at the radio itself, and this build does not describe how: no TS-590S instruction manual is held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Follow the memory-channel clearing procedure in the radio's own instruction manual.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "read and written over this radio's PC-control interface on a TS-590S, so nothing here is preserved: the 50-byte memory record carries a tone mode and separate transmit and receive tone numbers. Whether a rewrite preserves them has never been tested on a real radio",
+			ScanSkip: "read and written over this radio's PC-control interface on a TS-590S, so nothing here is preserved: the 50-byte memory record carries a channel-lockout flag. Whether a rewrite preserves it has never been tested on a real radio",
+		},
+		FirmwarePlaceholder: "as answered by the TS-590S itself, for example 1.00",
+		ProbeFirmwareNote:   "Firmware version IS readable on this radio, and the probe reads it: two frames go out, an identity request and then a version request, and the four characters that come back are printed in the report above. THIS ROW IS THE ONE WHERE THE ANSWER CHANGES WHAT THIS BUILD WILL DO: a TS-590S reporting 2.00 or later, or reporting something that cannot be read as a version at all, is refused for channel writes, because the book's guarantee about the filter position in a memory record covers the 1.xx firmware and stops there. A version this build cannot parse gives a read-only session rather than a refused one — refusing the session outright would make a perfectly good radio unreadable on the strength of a grammar assumed from a single worked example in the book. Its opening speed of 9600 is ASSUMED, not read off the radio, and it is an operational assumption rather than a cautious one: neither Kenwood book prints a factory speed anywhere, a wrong speed is not a safe speed but an unreachable radio, and the symptom is a timeout that looks exactly like a dead port or a bad cable. This build offers NO way to open at another speed — not on the command line and not in the window — and it never probes the port at several speeds to find out, so a radio set to anything else has to be put back to 9600 at its own menu before it will answer. The printed rate list is 9600, 19200, 38400, 57600 and 115200; 4800 is on the radio's list too and is deliberately absent from this build's, because each book attaches a condition to it that a flat list of speeds cannot express.",
+	}
+
+	got, ok := radiotext.For("TS-590S")
+	if !ok {
+		t.Fatal(`For("TS-590S") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"TS-590S\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "TS-590S", got)
+}
+
+// TestRadiotext_TS590SGVerbatim is its sibling's twin, on the same terms.
+// See TestRadiotext_TS590SVerbatim for the honesty rule this family is
+// written under, and TestRadiotext_TS590SAndSGDifferInMoreThanTheModelName
+// for what the two entries may NOT share.
+func TestRadiotext_TS590SGVerbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure:           "The TS-590SG has no erase command this build will send, and the absence is a CHOICE over the weakest evidence in the book rather than a plain gap. The only clearing route either Kenwood book prints is a side effect of a shortened memory-write frame — leave one digit of the name field unspecified, set every other parameter to zero, and the channel is erased — and the LENGTH of that short frame is a reading of the sentence rather than a number the book prints anywhere. This build therefore admits a memory-write frame of exactly 50 bytes and no other, so the short form cannot be sent even by accident. A channel can be cleared only at the radio itself, and this build does not describe how: no TS-590SG instruction manual is held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Follow the memory-channel clearing procedure in the radio's own instruction manual.",
+		FirmwareGuidance:         "The TS-590SG reports its own firmware version and this build asks for it, as the second frame of a two-frame probe, and prints the four characters the radio answered — and then branches on nothing. NO VERSION MATTERS ON THIS ROW. The position in the memory record that selects filter A or B is live on every TS-590SG the book describes, so there is no threshold to compare a version against and no write refusal keyed to one; the version is reported because a reader is entitled to see what the radio said, not because this build acts on it. No minimum firmware version is established for this radio either: nothing this project holds states one, and no TS-590SG has ever been asked.",
+		GridLegendNote:           "Tone and Scan Skip ARE read and written on the TS-590SG, unlike the Yaesu radios this programme also supports: its 50-byte memory record carries a tone mode, separate transmit and receive tone numbers and a channel-lockout flag, so those columns behave like any other. THE FILTER COLUMN IS SETTABLE ON THIS ROW, which is the one memory-channel difference between the two TS-590 entries in the model list: the record position that selects filter A or B is live on every radio this book describes, with no firmware condition attached to it. Two other columns still behave differently here from the file you may be importing. A SPLIT CHANNEL IS REFUSED RATHER THAN FLATTENED: this radio expresses a split as two frames over one channel number, this build sends one, and a channel whose transmit frequency differs from its receive frequency is refused at the write instead of being written as simplex and read back as though it had never been split. And a CHIRP file's CW, CWR and RTTY rows are not imported: those map to the sideband-specific names CW-U, CW-L and RTTY-U, and this radio's own mode legend prints CW, CW-R, FSK and FSK-R instead, so such a row is blocked rather than written as a mode the radio has never been shown to have.",
+		ToneScanSkipVerification: "",
+		EraseDialogNote:          "The TS-590SG has no erase command this build will send, and the absence is a CHOICE over the weakest evidence in the book rather than a plain gap. The only clearing route either Kenwood book prints is a side effect of a shortened memory-write frame — leave one digit of the name field unspecified, set every other parameter to zero, and the channel is erased — and the LENGTH of that short frame is a reading of the sentence rather than a number the book prints anywhere. This build therefore admits a memory-write frame of exactly 50 bytes and no other, so the short form cannot be sent even by accident. A channel can be cleared only at the radio itself, and this build does not describe how: no TS-590SG instruction manual is held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Follow the memory-channel clearing procedure in the radio's own instruction manual.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "read and written over this radio's PC-control interface on a TS-590SG, so nothing here is preserved: the 50-byte memory record carries a tone mode and separate transmit and receive tone numbers. Whether a rewrite preserves them has never been tested on a real radio",
+			ScanSkip: "read and written over this radio's PC-control interface on a TS-590SG, so nothing here is preserved: the 50-byte memory record carries a channel-lockout flag. Whether a rewrite preserves it has never been tested on a real radio",
+		},
+		FirmwarePlaceholder: "as answered by the TS-590SG itself, for example 1.00",
+		ProbeFirmwareNote:   "Firmware version IS readable on this radio, and the probe reads it: two frames go out, an identity request and then a version request, and the four characters that come back are printed in the report above. NOTHING ON THIS ROW BRANCHES ON THE ANSWER — the filter position in a memory record is live on every TS-590SG the book describes — so the version is reported and not acted on. A version this build cannot parse still gives a working session: the grammar is assumed from a single worked example in the book, and refusing a radio over an assumption would cost more than it buys. Its opening speed of 9600 is ASSUMED, not read off the radio, and it is an operational assumption rather than a cautious one: neither Kenwood book prints a factory speed anywhere, a wrong speed is not a safe speed but an unreachable radio, and the symptom is a timeout that looks exactly like a dead port or a bad cable. This build offers NO way to open at another speed — not on the command line and not in the window — and it never probes the port at several speeds to find out, so a radio set to anything else has to be put back to 9600 at its own menu before it will answer. The printed rate list is 9600, 19200, 38400, 57600 and 115200; 4800 is on the radio's list too and is deliberately absent from this build's, because each book attaches a condition to it that a flat list of speeds cannot express.",
+	}
+
+	got, ok := radiotext.For("TS-590SG")
+	if !ok {
+		t.Fatal(`For("TS-590SG") ok = false, want true — the model is registered in internal/wiring, so it must have prose`)
+	}
+	if got != want {
+		t.Errorf("For(\"TS-590SG\") = %#v,\nwant %#v", got, want)
+	}
+
+	assertNotBorrowedFromAnyOtherModel(t, "TS-590SG", got)
+}
+
+// TestRadiotext_TS480Verbatim is the ONE verbatim pin in this file whose
+// model internal/wiring does NOT register (plan decision P17, Stuart
+// decision row 5), and both halves of that need saying.
+//
+// IT IS WRITTEN AGAINST radiotext.For AND NOT AGAINST THE texts MAP. The map
+// is unexported (radiotext.go) and this file is package radiotext_test, an
+// external test package, so the map is not reachable from here at all. For
+// resolves straight out of it independently of wiring.SupportedModels(), is
+// exported, and is what a future caller will use — so it is both the only
+// available surface and the honest one.
+//
+// THE ENTRY DELIBERATELY PRECEDES THE ROW. core/driver/ts480 is built and its
+// registration is gated on an observation from a real radio that nobody has;
+// landing the prose now is what keeps it under the same non-borrowing and
+// vocabulary discipline as every other entry from birth, instead of arriving
+// unreviewed inside the registration commit. Nothing in the shipped binary
+// can reach it meanwhile: every caller of For passes a registered model.
+func TestRadiotext_TS480Verbatim(t *testing.T) {
+	want := radiotext.Text{
+		EraseProcedure:           "The TS-480 has no erase command this build will send. Its book prints the same shortened-memory-write side effect the TS-590 pair's does, and the same objection applies: the length of that short frame is a reading of the sentence rather than a number printed anywhere, so this build admits a memory-write frame of exactly 50 bytes and no other. It would refuse a channel write in any case — no channel write of any kind is sent to this radio by this build — so clearing a channel is doubly a front-panel job here. This build does not describe how: no TS-480 instruction manual is held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Follow the memory-channel clearing procedure in the radio's own instruction manual.",
+		FirmwareGuidance:         "The TS-480 has NO READABLE FIRMWARE VERSION AT ALL, and that is a documented absence rather than a command this build declines to send: there is no version query in this radio's whole printed command set, no revision number, no part code and no firmware statement anywhere in the book. The second frame of this radio's probe asks a different question — it reads the hardware VARIANT, the printed four-value field that distinguishes the plain radio from the ones with the internal antenna tuner or the external display head — and an unexpected value there refuses the session outright, because that field is a complete printed legend and a value outside it means a variant whose behaviour this build would be inventing. Read the version off the radio's own display if you need it; nothing here can ask for it, and no minimum version is established.",
+		GridLegendNote:           "NO CHANNEL WRITE OF ANY KIND IS SENT TO A TS-480 BY THIS BUILD, so every column of this grid is a reading rather than an instruction: the step the memory record carries has no printed legend on this radio, the frequency it holds is a step count rather than a plain number of hertz on one reading of the book, and writing a channel on that reading would be writing a value nobody here can check. Reading is unaffected. Three further things a file can carry are lost on this radio and worth knowing before a round trip. MEMORY GROUP MEMBERSHIP CANNOT BE PRESERVED: this radio has ten memory groups and a command that chooses which of them are scanned, but no memory frame carries a channel's group and no command reads or writes one, so a channel saved to a file and sent back would lose which group it belonged to — there is nothing to refuse and no column to grade, which is why it is written here. THE TRANSMIT AND RECEIVE TONE NUMBERS ARE NOT SET either: this radio's two printed tone charts do not agree with one another about how many tones there are, so this build reads the tone mode and declines to choose a number. And a CHIRP file's CW, CWR and RTTY rows are not imported: those map to the sideband-specific names CW-U, CW-L and RTTY-U, and this radio's own mode legend prints CW, CWR, FSK and FSR instead.",
+		ToneScanSkipVerification: "",
+		EraseDialogNote:          "The TS-480 has no erase command this build will send. Its book prints the same shortened-memory-write side effect the TS-590 pair's does, and the same objection applies: the length of that short frame is a reading of the sentence rather than a number printed anywhere, so this build admits a memory-write frame of exactly 50 bytes and no other. It would refuse a channel write in any case — no channel write of any kind is sent to this radio by this build — so clearing a channel is doubly a front-panel job here. This build does not describe how: no TS-480 instruction manual is held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Follow the memory-channel clearing procedure in the radio's own instruction manual.",
+		PreservationTooltips: radiotext.PreservationTooltips{
+			Tone:     "read but never written on a TS-480: the memory record carries a tone mode, which this build reads, and two tone numbers it declines to set because the radio's own two tone charts disagree about how many tones there are. Nothing is written to this radio at all, so nothing here can be lost by a rewrite",
+			ScanSkip: "read but never written on a TS-480: the memory record carries a channel-lockout flag, which this build reads. Nothing is written to this radio at all, so nothing here can be lost by a rewrite",
+		},
+		FirmwarePlaceholder: "as shown on the TS-480's own display; this radio has no version to ask for",
+		ProbeFirmwareNote:   "Firmware version is NOT readable on this radio and this build does not pretend otherwise: there is no version query in its printed command set at all, so check the radio's own display. Two frames still go out at the probe, an identity request and then a HARDWARE VARIANT request, and the second is where this radio differs from its two TS-590 stablemates — it reports which of the four printed variants answered, and an unexpected value REFUSES the session, where an unreadable version on a TS-590 only degrades it to reading. The asymmetry is deliberate: refuse where the book is complete and the radio is outside it, degrade where the book is thin and this build may have guessed its grammar wrong. Its opening speed of 9600 is ASSUMED, not read off the radio, and it is an operational assumption rather than a cautious one: neither Kenwood book prints a factory speed anywhere, a wrong speed is not a safe speed but an unreachable radio, and the symptom is a timeout that looks exactly like a dead port or a bad cable. This build offers NO way to open at another speed — not on the command line and not in the window — and it never probes the port at several speeds to find out, so a radio set to anything else has to be put back to 9600 at its own menu before it will answer. The printed rate list is 9600, 19200, 38400, 57600 and 115200; 4800 is on the radio's list too and is deliberately absent from this build's, because each book attaches a condition to it that a flat list of speeds cannot express.",
+	}
+
+	got, ok := radiotext.For("TS-480")
+	if !ok {
+		t.Fatal(`For("TS-480") ok = false, want true — this entry deliberately precedes the registry row (plan P17), so it must exist even though SupportedModels() does not name the model`)
+	}
+	if got != want {
+		t.Errorf("For(\"TS-480\") = %#v,\nwant %#v", got, want)
+	}
+
+	// THE NON-BORROWING PIN, and it is the second of this entry's two pins
+	// (plan decision P17). It runs exactly as every registered model's does
+	// — assertNotBorrowedFromAnyOtherModel ranges wiring.SupportedModels(),
+	// and "TS-480" is simply absent from that range, so there is no
+	// self-comparison to skip and no ownParticulars entry needed for it.
+	// What it proves is what matters: this radio's prose is not any other
+	// registered radio's, byte for byte or particular by particular — its
+	// two Kenwood stablemates included, whose book it shares nothing with
+	// but a manufacturer.
+	assertNotBorrowedFromAnyOtherModel(t, "TS-480", got)
+}
+
+// TestRadiotext_TS590SAndSGDifferInMoreThanTheModelName is the INVERSE of
+// TestRadiotext_FTdx101DAndMPDifferOnlyInTheModelName, and the inversion is
+// the point rather than a variation on a theme.
+//
+// The FTdx101 pair share one manual that prints their memory surface once,
+// with no model qualifier, so their entries may differ ONLY where they name
+// the model and a substitution proves it. The TS-590 pair share one manual
+// that QUALIFIES BY ROW: the record position selecting filter A or B is
+// guaranteed zero only on the S row's 1.xx firmware (590:1478, 590:1564), so
+// the S declines to set the filter column and refuses channel writes above
+// that firmware, and the SG does neither. An entry pair that differed only in
+// the model name would therefore be WRONG — it would mean one of the two
+// entries had been produced by substituting the other's, and one of those two
+// radios would be told something the book does not say about it.
+//
+// So this test asserts the opposite of its FTdx101 counterpart: the
+// substitution must FAIL, and it must fail on NAMED facts rather than
+// anywhere at all, so that a later edit which flattened the pair into one
+// prose block is caught with the specific difference it destroyed.
+func TestRadiotext_TS590SAndSGDifferInMoreThanTheModelName(t *testing.T) {
+	s, ok := radiotext.For("TS-590S")
+	if !ok {
+		t.Fatal(`For("TS-590S") ok = false, want true`)
+	}
+	sg, ok := radiotext.For("TS-590SG")
+	if !ok {
+		t.Fatal(`For("TS-590SG") ok = false, want true`)
+	}
+	if s == sg {
+		t.Fatal("the TS-590S's and TS-590SG's entries are byte-identical — each radio's prose must at least name its own model")
+	}
+
+	// The substitution the FTdx101 pair's test requires to SUCCEED must fail
+	// here. The direction is SG -> S for the reason that test's direction is
+	// forced: "TS-590S" is a substring of "TS-590SG", so substituting the
+	// S's name into the SG's prose would be ill-defined.
+	sFields := textFields(s)
+	sgFields := textFields(sg)
+	substituted := 0
+	for field, sgVal := range sgFields {
+		if strings.ReplaceAll(sgVal, "TS-590SG", "TS-590S") == sFields[field] {
+			substituted++
+		}
+	}
+	// Some fields legitimately survive the substitution — a clearing
+	// procedure and an input hint carry no row-qualified fact — so the count
+	// is not pinned; naming it would be a maintenance trap. What matters is
+	// that not ALL of them do, and that the fields carrying the FILTER and
+	// FIRMWARE facts do not, which the named assertions below state directly.
+	if substituted == len(sFields) {
+		t.Error("every TS-590SG field reduces to the TS-590S's by substituting the model name — one of these entries was produced from the other, and the pair's row-qualified differences (the filter column, the firmware write refusal) have been lost")
+	}
+
+	// THE NAMED DIFFERENCES, so the assertion above cannot be satisfied by
+	// some incidental wording change while the substantive facts drift into
+	// agreement.
+	sJoined := strings.Join(fieldValues(sFields), "\n")
+	sgJoined := strings.Join(fieldValues(sgFields), "\n")
+	for _, tc := range []struct {
+		what  string
+		sOnly string
+		sgHas string
+	}{
+		{
+			what:  "the filter column",
+			sOnly: "THE FILTER COLUMN CANNOT BE SET ON THIS ROW AT ALL",
+			sgHas: "THE FILTER COLUMN IS SETTABLE ON THIS ROW",
+		},
+		{
+			what:  "the firmware write refusal",
+			sOnly: "ONE VERSION MATTERS ON THIS ROW",
+			sgHas: "NO VERSION MATTERS ON THIS ROW",
+		},
+	} {
+		if !strings.Contains(sJoined, tc.sOnly) {
+			t.Errorf("%s: the TS-590S's prose no longer says %q", tc.what, tc.sOnly)
+		}
+		if strings.Contains(sgJoined, tc.sOnly) {
+			t.Errorf("%s: the TS-590SG's prose says %q, which is a fact about the S row alone", tc.what, tc.sOnly)
+		}
+		if !strings.Contains(sgJoined, tc.sgHas) {
+			t.Errorf("%s: the TS-590SG's prose no longer says %q", tc.what, tc.sgHas)
+		}
+	}
+}
+
+// fieldValues returns a field map's values, for a whole-entry substring scan.
+func fieldValues(m map[string]string) []string {
+	out := make([]string, 0, len(m))
+	for _, v := range m {
+		out = append(out, v)
+	}
+	return out
 }
