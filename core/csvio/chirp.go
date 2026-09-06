@@ -833,9 +833,28 @@ func importCHIRPToneCTCSS(line int, cell func(string) string, data *codeplug.Cha
 	case "DTCS", "Cross":
 		data.CTCSS = ""
 		data.CTCSSTone = codeplug.ToneField{State: codeplug.Unknown}
+		// The REFUSAL is the same on every radio and rests on the DCS
+		// CODE, which no registered radio's memory record has a field
+		// for. The REASON is not: a record that can name a DCS state
+		// (spec.ToneDCSEncodeDecode or spec.ToneDCSEncode, the two
+		// members S0.4 added) is one this programme writes DCS states
+		// to, so telling that user there is "no DCS memory write" denies
+		// something it does. The FT-991A is the first such radio
+		// (capability matrix §2.4); the split is asked of the
+		// capabilities, so a second one needs no edit here, and every
+		// model registered before it keeps the original sentence byte
+		// for byte. TestImportCHIRP_DTCSRefusalReasonFollowsTheRecord
+		// pins both branches over every fixture, in full rather than by
+		// substring.
+		_, dcsEncDec := toneStateFor(caps, spec.ToneDCSEncodeDecode)
+		_, dcsEnc := toneStateFor(caps, spec.ToneDCSEncode)
+		detail := fmt.Sprintf("%s CAT has no DCS memory write; %s tone squelch cannot be imported", caps.Model, toneRaw)
+		if dcsEncDec || dcsEnc {
+			detail = fmt.Sprintf("%s CAT writes the DCS state but not the DCS code; %s tone squelch cannot be imported", caps.Model, toneRaw)
+		}
 		entries = append(entries, LossEntry{
 			Line: line, Column: "Tone", Value: toneRaw, Action: ActionUnsupported, Blocking: true,
-			Detail: fmt.Sprintf("%s CAT has no DCS memory write; %s tone squelch cannot be imported", caps.Model, toneRaw),
+			Detail: detail,
 		})
 	default:
 		data.CTCSS = ""

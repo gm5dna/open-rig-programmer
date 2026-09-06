@@ -806,27 +806,36 @@ func ftdx101LikeCapabilities(model, catID string) spec.Capabilities {
 	return caps
 }
 
-// registeredRadioCapabilities returns one fixture per model registered in
-// internal/wiring's driver tables, each mirroring that model's real
-// scan-skip support. It is a table of FIXTURES rather than a walk of the
-// registry for the layering reason ft710LikeCapabilities gives — core/csvio
-// must not import core/driver, and internal/wiring imports every driver —
-// so each entry cites the caps site it mirrors, and drift between the two
-// is caught end-to-end by the CLI byte-identity baseline, which does use
-// the real drivers.
+// registeredRadioCapabilities returns one fixture per YAESU model
+// registered in internal/wiring's driver tables, each mirroring that
+// model's real scan-skip support. It is a table of FIXTURES rather than a
+// walk of the registry for the layering reason ft710LikeCapabilities gives
+// — core/csvio must not import core/driver, and internal/wiring imports
+// every driver — so each entry cites the caps site it mirrors, and drift
+// between the two is caught end-to-end by the CLI byte-identity baseline,
+// which does use the real drivers.
+//
+// THE ELEVEN ICOM MODELS ARE NOT HERE and never have been: their CHIRP
+// behaviour is driven through tier_test.go's icomCHIRPCapabilities and
+// receiverCHIRPCapabilities, one fixture for the tier's shape rather than
+// one per model, because what the Icom branch turns on is the tier's field
+// set and not any per-model datum. Their scan_skip is the zero
+// FieldSupport too, so they take the same branch as the six below.
 //
 // Every registered model's scan_skip is the zero FieldSupport today, which
 // is exactly why the caps-aware branch (M9d-2 task 8, spec decision 5) is
 // the one every real import takes: FT-710 (ft710/caps.go's bankFields —
 // the 28-byte MR/MW layout has no scan-skip position), FTdx10
 // (ftdx10/caps.go's bankFields), FTdx101D and FTdx101MP
-// (ftdx101/caps.go's bankFields, one map for both siblings). The
-// writable-radio branch has no registered radio at all and is pinned
+// (ftdx101/caps.go's bankFields, one map for both siblings), FT-891
+// (ft891/caps.go's bankFields) and FT-991A (ft991a/caps.go's bankFields).
+// The writable-radio branch has no registered radio at all and is pinned
 // separately against writableCapabilities.
 //
-// THE LIST IS HAND-WRITTEN AND THIS TEST CANNOT NOTICE A FIFTH MODEL.
+// THE LIST IS HAND-WRITTEN AND THIS TEST CANNOT NOTICE A SEVENTH MODEL.
 // Registering one adds no row here by itself, so this table would go on
-// claiming to cover "every registered radio" while silently skipping it.
+// claiming to cover "every registered Yaesu radio" while silently skipping
+// it.
 // The registry-walk pin lives where the registry does —
 // internal/wiring.SupportedModels and
 // TestSupportedModels_ContainsEveryRegisteredModel (internal/wiring/
@@ -849,6 +858,15 @@ func registeredRadioCapabilities() []spec.Capabilities {
 		// it lands in the caps-aware branch with the other four and the
 		// Unreachable precondition below holds for it unchanged.
 		ft891LikeCapabilities(),
+		// The FT-991A (Tier 1), the same two-place change. Its scan_skip
+		// is the zero FieldSupport as well (ft991a/caps.go's bankFields,
+		// capability matrix §2.4: no position in the 41-position record
+		// marks a channel for scan skip), so it lands in the caps-aware
+		// branch with the other five. Its CTCSSStates do NOT match the
+		// others — five members, the last two DCS — which is what
+		// TestImportCHIRP_DTCSRefusalReasonFollowsTheRecord drives, and
+		// that test fails outright if this row is dropped.
+		ft991aLikeCapabilities(),
 	}
 }
 
@@ -1961,10 +1979,14 @@ func ft891LikeCapabilities() spec.Capabilities {
 // records a LIMITATION rather than celebrating a behaviour.
 //
 // chirpModeMap resolves CHIRP's "CW" to "CW-U", its "CWR" to "CW-L" and its
-// "RTTY" to "RTTY-U" — the sideband-specific names three of the four
-// registered Yaesu models print. The FT-891 prints "CW", "CW-R",
-// "RTTY-LSB" and "RTTY-USB", so none of those three mapped names is in its
-// caps.Modes and containsMode says no. Each such row therefore BLOCKS with
+// "RTTY" to "RTTY-U" — the sideband-specific names FOUR OF THE SIX
+// registered Yaesu models print (the FT-710's core/cat mode table, the
+// FTdx10's, and the FTdx101 pair's shared one). The FT-891 prints "CW",
+// "CW-R", "RTTY-LSB" and "RTTY-USB", so none of those three mapped names is
+// in its caps.Modes and containsMode says no; the FT-991A's legend prints
+// the same four names and blocks the same three rows for the same reason
+// (core/cat/ft991a/dialect.go's modeNames), which is why this is a count
+// of models rather than of makers. Each such row therefore BLOCKS with
 // a Blocking ActionUnsupported entry naming the Mode column — exactly what
 // every Icom model already does with the same three rows, and for the same
 // reason: a mapped mode the radio does not list must be refused, never
@@ -2080,4 +2102,181 @@ func TestImportCHIRP_FT891BlocksCWAndRTTYRows(t *testing.T) {
 			}
 		}
 	})
+}
+
+// ft991aLikeCapabilities mirrors the FT-991A fields ImportCHIRP consults
+// (core/driver/ft991a/caps.go). Hand-built rather than the real driver's
+// Capabilities for the layering reason ft710LikeCapabilities gives:
+// core/csvio sits BELOW core/driver in the import graph and must not
+// depend on it, even in tests.
+//
+// TWO FIELDS ARE WHY THIS FIXTURE EXISTS rather than a reuse of the
+// FT-891's, and both are load-bearing below.
+//
+// CTCSSStates HAS FIVE MEMBERS, and it is the first registered radio's
+// that does. The record's P8 legend prints "0: CTCSS \"OFF\" 1: CTCSS
+// ENC/DEC 2: CTCSS ENC 3: DCS ENC/DEC 4: DCS ENC" (capability matrix
+// §1.17), so this radio's memory record can SAY a channel uses DCS where
+// every sibling's can only say CTCSS. The DCS half is what
+// TestImportCHIRP_DTCSRefusalReasonFollowsTheRecord's DCS branch is
+// about; the first three members are byte-identical to
+// spec.StandardCTCSSStates() because the radio's own legend is.
+//
+// FieldTagDisplay IS THE ZERO FieldSupport, the FTdx10's shape and the
+// inversion of the FT-891's: MT position 28 prints "0: (Fixed)" on this
+// radio (matrix §2.3), so there is no display flag for ImportCHIRP to
+// derive a tag_display from.
+//
+// Modes are the fourteen the dialect transcribes ('1'..'9' then 'A'..'E',
+// no hole and no 'F' — core/cat/ft991a/dialect.go's modeNames), and they
+// include this radio's C4FM, which CHIRP has no name for at all. Like the
+// FT-891's, this legend prints "CW", "CW-R", "RTTY-LSB" and "RTTY-USB"
+// rather than the sideband-specific family names, so CHIRP's CW, CWR and
+// RTTY rows block here for the same reason they block there.
+//
+// PMS IS ABSENT FROM THIS FIXTURE for the reason the FT-891's is:
+// ImportCHIRP writes into the MEMORY bank alone. The real driver's PMS
+// bank is the wire numbers "100".."117" (plan P20), and nothing
+// ImportCHIRP consults can see it.
+func ft991aLikeCapabilities() spec.Capabilities {
+	caps := ft710LikeCapabilities()
+	caps.Model = "FT-991A"
+	caps.CATID = "0670"
+	rw := spec.FieldSupport{Read: spec.Supported, Write: spec.Supported}
+	banks := make([]spec.Bank, len(caps.Banks))
+	copy(banks, caps.Banks)
+	for i := range banks {
+		banks[i].Fields = map[spec.Field]spec.FieldSupport{
+			spec.FieldFrequency:  rw,
+			spec.FieldMode:       rw,
+			spec.FieldClarifier:  rw,
+			spec.FieldCTCSSState: rw,
+			spec.FieldShift:      rw,
+			spec.FieldTag:        rw,
+			// P11 is SCHEMA here, not a live flag: the FT-891's cell
+			// inverted (matrix §2.3).
+			spec.FieldTagDisplay: {},
+			// No tone-NUMBER byte and no skip flag in the 41-position
+			// record; both are ASSUMED-register entries (matrix §2.4).
+			spec.FieldCTCSSTone: {},
+			spec.FieldScanSkip:  {},
+		}
+	}
+	caps.Banks = banks
+	caps.Modes = []string{
+		"LSB", "USB", "CW", "FM", "AM", "RTTY-LSB",
+		"CW-R", "DATA-LSB", "RTTY-USB", "DATA-FM", "FM-N", "DATA-USB",
+		"AM-N", "C4FM",
+	}
+	caps.CTCSSStates = []spec.ToneState{
+		{Value: "OFF", Semantics: spec.ToneOff},
+		{Value: "ENC-DEC", Semantics: spec.ToneEncodeDecode},
+		{Value: "ENC", Semantics: spec.ToneEncode},
+		{Value: "DCS-ENC-DEC", Semantics: spec.ToneDCSEncodeDecode},
+		{Value: "DCS-ENC", Semantics: spec.ToneDCSEncode},
+	}
+	return caps
+}
+
+// declaresADCSState reports whether this radio's memory record can name a
+// DCS state at all — either of the two spec.ToneSemantics members S0.4
+// added. It is the question the DTCS/Cross refusal's REASON turns on, and
+// it is asked of the capabilities rather than of the model name so that a
+// second such radio needs no edit here.
+func declaresADCSState(caps spec.Capabilities) bool {
+	_, encDec := toneStateFor(caps, spec.ToneDCSEncodeDecode)
+	_, enc := toneStateFor(caps, spec.ToneDCSEncode)
+	return encDec || enc
+}
+
+// TestImportCHIRP_DTCSRefusalReasonFollowsTheRecord drives the DTCS/Cross
+// refusal over EVERY fixture in registeredRadioCapabilities and pins that
+// the refusal's REASON is derived from the radio's own record while the
+// BLOCKING is not.
+//
+// The blocking half never varies and never should: CHIRP's DTCS and Cross
+// rows carry a DCS CODE, no registered radio's memory record has a field
+// for one (the FT-991A's included — matrix §1.21 and §2.4: the chart
+// exists, the state exists, the per-channel code field does not), so the
+// row is refused rather than imported as something else.
+//
+// THE REASON WAS FALSE ON EXACTLY ONE RADIO. "%s CAT has no DCS memory
+// write" is true of every model registered before the FT-991A, whose
+// records carry a three-state CTCSS byte and nothing DCS-shaped at all.
+// The FT-991A's record carries a five-state byte whose last two values
+// ARE DCS states, and this driver writes them (matrix §2.4, and the
+// dialect register's "THE DCS STATES' SET ACCEPTANCE"), so on that radio
+// the sentence denied something the programme does. What cannot be
+// carried is the CODE, and that is now what the entry says.
+//
+// THE SPLIT IS ON CAPABILITIES, NOT ON A MODEL NAME, which is what keeps
+// the sixteen models registered before this one byte-identical: a fixture
+// that declares neither DCS member takes the original sentence
+// unchanged, and this test asserts that text in full rather than by
+// substring. Fleet-wide byte identity is task 16's per-model CHIRP
+// baseline legs; this is the per-branch pin underneath them.
+//
+// THE TWO PRECONDITION FATALS ARE THE COVERAGE ASSERTION the plan's M7
+// asks for: dropping the FT-991A row from registeredRadioCapabilities
+// leaves no fixture declaring a DCS state, and this test goes red
+// immediately rather than quietly pinning one branch. That is the only
+// completeness pressure on that hand-written table from inside this
+// package.
+func TestImportCHIRP_DTCSRefusalReasonFollowsTheRecord(t *testing.T) {
+	const csv = "Location,Name,Frequency,Tone,rToneFreq,cToneFreq,Mode\n" +
+		"1,DCSCH,145.500000,DTCS,88.5,88.5,FM\n" +
+		"2,CROSSCH,145.525000,Cross,88.5,88.5,FM\n"
+
+	var withDCS, withoutDCS int
+	for _, caps := range registeredRadioCapabilities() {
+		if declaresADCSState(caps) {
+			withDCS++
+		} else {
+			withoutDCS++
+		}
+		t.Run(caps.Model, func(t *testing.T) {
+			channels, report, err := ImportCHIRP(strings.NewReader(csv), caps)
+			if err != nil {
+				t.Fatalf("ImportCHIRP() error = %v", err)
+			}
+			if len(channels) != 2 {
+				t.Fatalf("imported %d channels, want 2", len(channels))
+			}
+			for i, raw := range []string{"DTCS", "Cross"} {
+				want := LossEntry{
+					Line: i + 2, Column: "Tone", Value: raw,
+					Action: ActionUnsupported, Blocking: true,
+					Detail: fmt.Sprintf("%s CAT has no DCS memory write; %s tone squelch cannot be imported", caps.Model, raw),
+				}
+				if declaresADCSState(caps) {
+					want.Detail = fmt.Sprintf("%s CAT writes the DCS state but not the DCS code; %s tone squelch cannot be imported", caps.Model, raw)
+				}
+				var got []LossEntry
+				for _, e := range entriesForLine(report, want.Line) {
+					if e.Column == "Tone" {
+						got = append(got, e)
+					}
+				}
+				if len(got) != 1 || got[0] != want {
+					t.Errorf("%s Tone entries = %+v, want exactly [%+v]", raw, got, want)
+				}
+				// The channel is refused, not half-imported: neither the
+				// state nor a tone survives a blocked row.
+				if ch := channels[i]; ch.Data != nil {
+					if ch.Data.CTCSS != "" {
+						t.Errorf("%s row imported CTCSS %q — a refused row must carry no state", raw, ch.Data.CTCSS)
+					}
+					if ch.Data.CTCSSTone.State != codeplug.Unknown {
+						t.Errorf("%s row imported CTCSSTone %+v, want {Unknown}", raw, ch.Data.CTCSSTone)
+					}
+				}
+			}
+		})
+	}
+	if withDCS == 0 {
+		t.Fatal("no fixture in registeredRadioCapabilities declares a DCS state — the FT-991A's row is what makes the DCS branch reachable from here; without it this test pins only half of what it claims")
+	}
+	if withoutDCS == 0 {
+		t.Fatal("every fixture declares a DCS state — the original sentence's branch, and with it the byte identity of every model registered before the FT-991A, is no longer covered")
+	}
 }
