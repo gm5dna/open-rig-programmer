@@ -92,11 +92,6 @@ describes under *Switching on writes for an unverified radio*.
 - The README is rewritten for radio owners; per-radio limits live in
   `docs/radio-notes.md`; a `CHANGELOG.md` lists every release.
 
-<!-- TASK 20 GATE: the sentence below is a byte-identity claim. It may not
-     be published until task 20's byte-identity run has been captured and
-     its designed deltas checked against the manifest. Update the model
-     names it lists to match whatever that run actually shows, then delete
-     this comment. -->
 Everything else is internal and carries no change a user can see. The
 stored comparison output of every previously registered radio is
 unchanged apart from the lists of supported models, which gain the
