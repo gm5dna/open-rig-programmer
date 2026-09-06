@@ -4,8 +4,11 @@ package guards
 
 import (
 	"go/ast"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
 
 // TestSimulatedProfileTokensConfinement is the DATA-DRIVEN, N-driver
@@ -82,16 +85,28 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 	// the same token and agree trivially; the PAIRING clause is what earns
 	// the second row, because a registration that wired both models to
 	// fakedx101.NewD would satisfy the D row and fail the MP one.
+	// THE models COLUMN IS NEW AT TIER 6 (M8, tightened at Codex re-review
+	// MED-1a), and it exists because a row cannot stand for "one model"
+	// without saying WHICH. This table's cardinality is one row per fake
+	// CONSTRUCTOR, not per registered model: the FTdx101 pair earns two rows
+	// from its two constructors, while the IC-7851/IC-7850 pair shares one
+	// constructor and is ONE row for TWO registered models. A bare
+	// len(SupportedModels()) comparison would therefore already have been
+	// wrong before any Kenwood row existed. Each row now NAMES every
+	// SupportedModels() entry its confinement clause protects, and the guard
+	// below asserts that the UNION of those names equals SupportedModels()
+	// as a set — see assertEveryRegisteredModelIsConfined.
 	simulatedProfiles := []struct {
-		pkg          string // base name of core/driver/<pkg>
-		token        string // the simulated-profile constant, e.g. "Simulated"
-		fakeCtor     string // "<pkgbase>.<Func>" the sole file must also call — for messages and the func name
-		fakeCtorPath string // the constructor package's FULL import path, below modulePrefix (e.g. "internal/fakeradio")
+		pkg          string   // base name of core/driver/<pkg>
+		token        string   // the simulated-profile constant, e.g. "Simulated"
+		fakeCtor     string   // "<pkgbase>.<Func>" the sole file must also call — for messages and the func name
+		fakeCtorPath string   // the constructor package's FULL import path, below modulePrefix (e.g. "internal/fakeradio")
+		models       []string // every wiring.SupportedModels() entry this row's confinement protects
 	}{
-		{"ft710", "Simulated", "fakeradio.New", "internal/fakeradio"},
-		{"ftdx10", "Simulated", "fakedx10.New", "internal/fakedx10"},
-		{"ftdx101", "Simulated", "fakedx101.NewD", "internal/fakedx101"},
-		{"ftdx101", "Simulated", "fakedx101.NewMP", "internal/fakedx101"},
+		{"ft710", "Simulated", "fakeradio.New", "internal/fakeradio", []string{"FT-710"}},
+		{"ftdx10", "Simulated", "fakedx10.New", "internal/fakedx10", []string{"FTdx10"}},
+		{"ftdx101", "Simulated", "fakedx101.NewD", "internal/fakedx101", []string{"FTdx101D"}},
+		{"ftdx101", "Simulated", "fakedx101.NewMP", "internal/fakedx101", []string{"FTdx101MP"}},
 		// The IC-7610 (Wave 4 task R1), this project's first non-Yaesu
 		// row: one package, one Simulated token and one fake constructor —
 		// the ftdx10 shape, not the ftdx101 shared-driver/two-siblings
@@ -103,7 +118,7 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// expression fakeic7610.New(...) is still there, nested inside it,
 		// and fileHasCall's ast.Inspect walk finds it regardless of what
 		// encloses it.
-		{"ic7610", "Simulated", "fakeic7610.New", "internal/fakeic7610"},
+		{"ic7610", "Simulated", "fakeic7610.New", "internal/fakeic7610", []string{"IC-7610"}},
 		// The IC-7300 and IC-7300MK2 (Wave 4 task R3), this project's
 		// second Icom family and first Icom PAIR: two rows, not one,
 		// because — unlike the IC-7610 — this pair has SEPARATE driver
@@ -117,15 +132,15 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// finds each fakeic7300.New(...) / fakeic7300mk2.New(...) call
 		// expression exactly where the ic7610 row's comment says it
 		// would even if one had been wrapped.
-		{"ic7300", "Simulated", "fakeic7300.New", "internal/fakeic7300"},
-		{"ic7300mk2", "Simulated", "fakeic7300mk2.New", "internal/fakeic7300mk2"},
+		{"ic7300", "Simulated", "fakeic7300.New", "internal/fakeic7300", []string{"IC-7300"}},
+		{"ic7300mk2", "Simulated", "fakeic7300mk2.New", "internal/fakeic7300mk2", []string{"IC-7300MK2"}},
 		// The IC-705 (Wave 4 task R4), this project's third Icom
 		// registration and second lone-model one: one package, one
 		// Simulated token and one fake constructor, on the same ic7610
 		// shape as above (no adapter wraps fakeic705.New — its Port()
 		// already returns io.ReadWriteCloser — so the row's shape is the
 		// simpler of the two this table already carries).
-		{"ic705", "Simulated", "fakeic705.New", "internal/fakeic705"},
+		{"ic705", "Simulated", "fakeic705.New", "internal/fakeic705", []string{"IC-705"}},
 		// The IC-9700 (Wave 4 task R5), this project's fourth Icom
 		// registration and second lone-model one since the IC-705: one
 		// package, one Simulated token and one fake constructor, on the
@@ -134,14 +149,14 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// shape is the simpler of the two this table carries, three
 		// static banks notwithstanding: this table asks nothing about
 		// bank shape).
-		{"ic9700", "Simulated", "fakeic9700.New", "internal/fakeic9700"},
+		{"ic9700", "Simulated", "fakeic9700.New", "internal/fakeic9700", []string{"IC-9700"}},
 		// The IC-905 (Wave 4 task R6, the tier's LAST registration), this
 		// project's fifth Icom registration and third lone-model one
 		// since the IC-705: one package, one Simulated token and one
 		// fake constructor, on the same ic705/ic9700 shape as above (no
 		// adapter wraps fakeic905.New — its Port() already returns
 		// io.ReadWriteCloser).
-		{"ic905", "Simulated", "fakeic905.New", "internal/fakeic905"},
+		{"ic905", "Simulated", "fakeic905.New", "internal/fakeic905", []string{"IC-905"}},
 		// The IC-7851 and IC-7850 (Tier 4b, the additions tier's first
 		// registration): ONE row for TWO registered models, and the
 		// reason is the column definition rather than a relaxation. A row
@@ -167,7 +182,11 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// composite literal at both call sites, exactly as the IC-7610's
 		// does; fileHasCall's ast.Inspect walk finds the call regardless
 		// of what encloses it (see the ic7610 row's own note).
-		{"ic7851", "WithSimulatedProfile", "fakeic7851.New", "internal/fakeic7851"},
+		// TWO MODEL NAMES ON ONE ROW, the only such row today: one
+		// constructor confines both registry rows, and the union check
+		// below would report "IC-7850" as an unconfined registered model
+		// if this column named only the 7851.
+		{"ic7851", "WithSimulatedProfile", "fakeic7851.New", "internal/fakeic7851", []string{"IC-7851", "IC-7850"}},
 		// The IC-7760 (Tier 4b's second registration): ONE row for ONE
 		// registered model, and its token is a Profile CONSTANT again —
 		// core/driver/ic7760 takes its profile as New's first ARGUMENT,
@@ -182,7 +201,7 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// IC-7610's and the IC-7851 pair's do; fileHasCall's ast.Inspect
 		// walk finds the call regardless of what encloses it (see the
 		// ic7610 row's own note).
-		{"ic7760", "Simulated", "fakeic7760.New", "internal/fakeic7760"},
+		{"ic7760", "Simulated", "fakeic7760.New", "internal/fakeic7760", []string{"IC-7760"}},
 		// The IC-7100 (Tier 4b's third registration): ONE row for ONE
 		// registered model, and its token is a Profile CONSTANT again —
 		// core/driver/ic7100 takes its profile as New's first ARGUMENT
@@ -199,7 +218,7 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// way (see the ic7610 row's own note); the difference is recorded
 		// here only so a reader is not surprised to find no
 		// ic7100FakeAdapter beside the ic7610's and the ic7760's.
-		{"ic7100", "Simulated", "fakeic7100.New", "internal/fakeic7100"},
+		{"ic7100", "Simulated", "fakeic7100.New", "internal/fakeic7100", []string{"IC-7100"}},
 		// The IC-R8600 (Tier 4b's fourth and last registration): ONE row
 		// for ONE registered model, and its token is a Profile CONSTANT
 		// again — core/driver/icr8600 takes its profile as New's first
@@ -215,7 +234,7 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// adapter and there is no icr8600FakeAdapter to find beside the
 		// ic7610's and the ic7760's. fileHasCall's ast.Inspect walk finds
 		// the call either way (see the ic7610 row's own note).
-		{"icr8600", "Simulated", "fakeicr8600.New", "internal/fakeicr8600"},
+		{"icr8600", "Simulated", "fakeicr8600.New", "internal/fakeicr8600", []string{"IC-R8600"}},
 		// The FT-891 (Tier 1, the first YAESU registration since M9d-2):
 		// ONE row for ONE registered model, and its token is a Profile
 		// CONSTANT — core/driver/ft891 takes its profile as New's first
@@ -238,7 +257,47 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// file naming ft891.Simulated must also call fakeft891.New, so a
 		// Simulated FT-891 driver can never be wired to another model's
 		// rig or to a real port.
-		{"ft891", "Simulated", "fakeft891.New", "internal/fakeft891"},
+		{"ft891", "Simulated", "fakeft891.New", "internal/fakeft891", []string{"FT-891"}},
+		// The TS-590S and TS-590SG (Tier 6, the first KENWOOD registration):
+		// ONE row for TWO registered models, the IC-7851 pair's shape rather
+		// than the FTdx101's, and for the column's own reason. A row is
+		// (package, token, fake CONSTRUCTOR); core/driver/ts590 is one
+		// package with one simulated-profile selector, and internal/fakets590
+		// offers ONE constructor — fakets590.New — which both fakeDrivers
+		// rows call, differing in the ROW ARGUMENT they pass it. The
+		// FTdx101's two rows are earned by its two constructors; there is no
+		// second constructor here to earn a second row, and a duplicate row
+		// would assert the identical fact twice.
+		//
+		// WHICH SIBLING EACH CALL ASKED FOR IS NOT THIS GUARD'S QUESTION —
+		// this is an AST walk over call expressions and it cannot read an
+		// argument's meaning. internal/wiring's own
+		// TestOpenFakeSessionFor_EveryRegisteredModel is what catches a
+		// crossed row, by comparing each driver's static identity against
+		// what the rig answered.
+		//
+		// Its token is a Profile CONSTANT: core/driver/ts590's New takes the
+		// profile as its SECOND argument (the row is the first), so
+		// ts590.Simulated is the selector a stray non-test reference would
+		// have to smuggle in. The IC-7851 pair's WithSimulatedProfile row
+		// remains the one option-shaped exception in this table.
+		//
+		// The fakets590.New call sits BARE at both call sites, as the
+		// IC-7100's, IC-R8600's and FT-891's do: internal/fakets590's Port()
+		// already returns io.ReadWriteCloser, so no adapter wraps it.
+		{"ts590", "Simulated", "fakets590.New", "internal/fakets590", []string{"TS-590S", "TS-590SG"}},
+		// NO ts480 ROW, DELIBERATELY (plan decision P3). core/driver/ts480 is
+		// BUILT and NOT REGISTERED: it is absent from internal/wiring's
+		// realDrivers and fakeDrivers, so there is no fake-wiring call site
+		// for this guard's pairing clause to find and its non-vacuity clause
+		// would fail the row rather than confine anything. The absence is
+		// validated SEPARATELY and by name — see
+		// TestSimulatedProfiles_HasNoTS480RowUntilTheRowRegisters below — so
+		// that a premature ts480 row is caught by ITS OWN assertion rather
+		// than as a side effect of the union equality, which needs no
+		// exception for it: an unregistered model is simply absent from
+		// SupportedModels(). Adding this row is edit 8 of the ten-edit
+		// registration list (task 19).
 	}
 
 	// Non-vacuity: an empty table would make the loop below a no-op and
@@ -246,6 +305,23 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 	if len(simulatedProfiles) == 0 {
 		t.Fatal("simulatedProfiles is empty — this guard would pass vacuously; it must list every concrete driver")
 	}
+
+	// THE COMPLETENESS GUARD (M8). Until Tier 6 this file mentioned
+	// wiring.SupportedModels() nowhere at all — grep: zero — and the
+	// len(...) == 0 check above was its whole non-vacuity story, so a
+	// REGISTERED MODEL WITH NO ROW HERE WAS SILENTLY UNCONFINED: its
+	// simulated-profile token could appear in any number of non-test files
+	// and nothing would say so. That is the FT-891's HIGH-1 lesson (a
+	// hand-written table letting a new model escape) in a table that was
+	// worse off than the ones that lesson was drawn from, because those at
+	// least compared their length against the registry.
+	var models, pkgs []string
+	for _, prof := range simulatedProfiles {
+		models = append(models, prof.models...)
+		pkgs = append(pkgs, prof.pkg)
+	}
+	assertEveryRegisteredModelIsConfined(t, models)
+	assertNoTS480RowUntilTheRowRegisters(t, pkgs, models)
 
 	files := parseRepo(t)
 
@@ -343,4 +419,97 @@ func fileHasCall(f *ast.File, recv, fn string) bool {
 		return true
 	})
 	return found
+}
+
+// assertEveryRegisteredModelIsConfined is TestSimulatedProfileTokensConfinement's
+// completeness half (M8): the UNION of every simulatedProfiles row's models
+// column, as a set, must equal wiring.SupportedModels() as a set.
+//
+// NO EXCEPTION PARAMETER, deliberately (Codex re-review MED-1a). An
+// unregistered model — the TS-480 today — is simply absent from
+// SupportedModels() and needs no exemption; folding its absence in here as a
+// named exclusion would make a premature ts480 row look like the exception
+// working rather than the omission it is. That absence has its own assertion,
+// TestSimulatedProfiles_HasNoTS480RowUntilTheRowRegisters below.
+//
+// DUPLICATES ARE AN ERROR TOO, not merely tolerated: two rows claiming the
+// same model would make the union equality hold while one of the two rows
+// asserted nothing anybody had noticed.
+//
+// RED-PROVED TWO WAYS at the commit that added it (recorded, not re-run by
+// CI): adding a phantom name — "TS-999" — to some row's models fails here
+// with "named in simulatedProfiles but not registered"; removing "IC-7100"
+// from its row's models fails with "registered but no simulatedProfiles row
+// protects it".
+func assertEveryRegisteredModelIsConfined(t *testing.T, claimed []string) {
+	t.Helper()
+
+	registered := wiring.SupportedModels()
+	if len(registered) == 0 {
+		t.Fatal("wiring.SupportedModels() is empty — this completeness check would pass vacuously")
+	}
+
+	seen := make(map[string]bool, len(claimed))
+	for _, m := range claimed {
+		if seen[m] {
+			t.Errorf("simulatedProfiles names model %q on more than one row — each registered model is confined by exactly one row's clause, and a duplicate hides a row that protects nothing", m)
+			continue
+		}
+		seen[m] = true
+	}
+
+	for _, m := range registered {
+		if !seen[m] {
+			t.Errorf("model %q is registered in internal/wiring but no simulatedProfiles row names it — its driver's simulated-profile token is confined by nothing, so a stray non-test reference to it would be invisible to this guard", m)
+		}
+	}
+	for m := range seen {
+		if !slices.Contains(registered, m) {
+			t.Errorf("simulatedProfiles names model %q, which internal/wiring does not register — a row here must protect a model a user can actually select, or the confinement it claims is about nothing", m)
+		}
+	}
+}
+
+// assertNoTS480RowUntilTheRowRegisters is the TS-480's absence stated as its
+// OWN named assertion rather than as an exception folded into the union
+// equality above (plan decision P3; Codex re-review MED-1a). Kept separate so
+// that a premature ts480 row is caught by THIS check, with this reason,
+// rather than as a side effect of a check about registration.
+//
+// core/driver/ts480 is BUILT and NOT REGISTERED at this milestone's close:
+// there is no realDrivers row, no fakeDrivers row, and therefore no
+// fake-wiring call site for the confinement guard's pairing clause to find. A
+// ts480 row added to simulatedProfiles before the registration commit would
+// fail that guard's non-vacuity clause with a message about a broken AST walk
+// — a true failure with a misleading reason. This assertion says the real one.
+//
+// THE DAY THE ROW REGISTERS, THIS ASSERTION IS WHAT CHANGES, and that is the
+// design: registering the TS-480 means adding its simulatedProfiles row (edit
+// 8 of task 19's ten-edit list) and deleting this call in the same commit,
+// which is a visible, reviewable pair of edits rather than a silent one. The
+// SupportedModels() guard below is what stops the two drifting apart in the
+// meantime — once the model is registered, leaving this assertion in place is
+// itself a failure.
+//
+// RED PROOF (recorded, not re-run by CI): adding
+// {"ts480", "Simulated", "fakets480.New", "internal/fakets480", []string{"TS-480"}}
+// to simulatedProfiles fails HERE by name. The union equality would also fail
+// it, as a model internal/wiring does not register, but with a message about
+// registration rather than about this plan's deliberate omission.
+func assertNoTS480RowUntilTheRowRegisters(t *testing.T, pkgs, models []string) {
+	t.Helper()
+
+	if slices.Contains(wiring.SupportedModels(), "TS-480") {
+		t.Fatal(`wiring.SupportedModels() names "TS-480" — the row has been registered, so this assertion's premise is gone: give the TS-480 its simulatedProfiles row (task 19's edit 8) and delete this call in the same commit`)
+	}
+	for _, pkg := range pkgs {
+		if pkg == "ts480" {
+			t.Error(`simulatedProfiles has a "ts480" row while internal/wiring does not register the model (plan decision P3): core/driver/ts480 is built and unregistered, so ts480.Simulated has no fake-wiring call site to be paired against and this guard's non-vacuity clause would fail the row for a reason that has nothing to do with confinement`)
+		}
+	}
+	for _, m := range models {
+		if m == "TS-480" {
+			t.Error(`simulatedProfiles names the model "TS-480" while internal/wiring does not register it — the models column lists what a row's confinement PROTECTS, and there is nothing to protect until the row exists`)
+		}
+	}
 }
