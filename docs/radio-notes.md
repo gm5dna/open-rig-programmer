@@ -205,6 +205,58 @@ refused rather than allowed to overwrite a channel nothing read.
 
 Evidence: `docs/icom-models.md` (the IC-R8600 bullets).
 
+## Kenwood
+
+### TS-590S and TS-590SG (opt-in)
+
+Read the 100 memory channels, the 10 programmable scan ranges (each a
+start and an end frequency, listed as `100L`/`100U` and so on), and the
+menu settings: 88 of them on the TS-590S, 100 on the TS-590SG. Tone and
+scan skip ARE read and written on these radios, unlike every Yaesu model
+above: the memory record carries a tone mode, separate transmit and
+receive tone numbers and a channel-lockout flag.
+
+Refused: a **split channel**. These radios express a split as two
+frames over one channel number, the program sends one, and a channel
+whose transmit frequency differs from its receive frequency is refused
+at the write rather than silently written as simplex. On the **TS-590S
+only**, the **filter** column cannot be set at all, and channel writes
+are refused outright on a radio reporting **firmware 2.00 or later**:
+the manual guarantees the filter position in a memory record is unused
+only on the 1.xx firmware and says nothing about later versions, and one
+entry in the model list cannot say "settable above 2.00". The TS-590SG
+has no such condition and sets the filter normally. A CHIRP file's `CW`,
+`CWR` and `RTTY` rows are not imported on either radio: they resolve to
+names these radios' own mode list does not print (it prints `CW`,
+`CW-R`, `FSK` and `FSK-R`), so the row is blocked rather than guessed
+at. Channels cannot be deleted.
+
+Guesses: its **speed**. Neither Kenwood manual prints a factory rate, so
+the program opens at 9600; if your radio is set differently, change it
+at the radio's own menu, because the program has no speed setting and
+never probes for one. A wrong speed looks exactly like a dead port. The
+program also does not offer **4800**, which the radios do: each manual
+attaches a condition to that rate that a flat list of speeds cannot
+express.
+
+Not shown: the **band edges**. Neither manual prints a frequency range
+for these radios, so the program declares none rather than inventing
+one, and a frequency out of range is refused by the radio rather than by
+the program.
+
+### TS-480 (built, not selectable)
+
+The TS-480's driver exists in this program and the radio is **not in the
+model list**: you cannot select it. One reading of its manual makes the
+frequency stored in a memory channel a step count rather than a plain
+number of hertz, and nothing in the manual settles which reading is
+right. Registering the radio on the wrong reading would mean writing
+channels nobody could check, so it stays unavailable until someone reads
+one channel off a real TS-480 and reports what came back. If you own one,
+that single read is the most valuable thing you could send.
+
+Evidence: `docs/kenwood-models.md`.
+
 ## Sources
 
 Protocol facts come from the makers' published documents, each pinned
@@ -226,3 +278,5 @@ by revision in the code that transcribes it.
 | IC-7760 | Icom CI-V Reference Guide rev 2 |
 | IC-7100 | Icom Full Manual A7085-2EX-5, section 20 |
 | IC-R8600 | Icom CI-V Reference Guide rev 3a |
+| TS-590S, TS-590SG | Kenwood PC Control Command reference, revision 3 |
+| TS-480 (built, not selectable) | Kenwood PC Control Command reference, 2003 |

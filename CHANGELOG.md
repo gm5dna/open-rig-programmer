@@ -11,7 +11,31 @@ tag. The full release notes for each version are on the
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+- **Kenwood TS-590S and TS-590SG**: read, opt-in write, menu-settings
+  read, CSV and CHIRP, on the same terms as every other manual-derived
+  radio. They are the first radios here whose tone and scan-skip columns
+  can be read and written. A split channel is refused rather than written
+  back as simplex, and only FM channels are written; on the TS-590S alone
+  the filter column cannot be set and channel writes are refused on
+  firmware 2.00 or later, which the manual stops guaranteeing at exactly
+  that point. `rigprog probe` prints the radio's own firmware answer
+  verbatim.
+- Per-radio Kenwood detail in `docs/radio-notes.md`, with the evidence in
+  a new `docs/kenwood-models.md`.
+
+### Changed
+- Two completeness checks that were silently passing now walk the model
+  registry: the simulated-profile confinement guard and the CHIRP
+  fixtures. A radio registered without its row in either is now a test
+  failure rather than a silence.
+
+### Not included
+- **Kenwood TS-480**: the driver is written and shipped but the radio is
+  not selectable. One reading of its manual makes a memory channel's
+  stored frequency a step count rather than a plain number of hertz, and
+  nothing in the manual settles it. It stays unavailable until someone
+  reads one channel off a real TS-480 and reports what came back.
 
 ## [1.3.0] - 2026-09-05
 

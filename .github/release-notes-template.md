@@ -14,7 +14,7 @@
 -->
 
 Open Rig Programmer __VERSION__: a free memory-channel programmer for
-Yaesu and Icom radios. Read the memories into a file, edit them in a
+Yaesu, Icom and Kenwood radios. Read the memories into a file, edit them in a
 grid or a spreadsheet, send them back over the radio's ordinary USB
 cable. Desktop app and `rigprog` command line for macOS, Windows and
 Linux.
@@ -58,14 +58,40 @@ describes under *Switching on writes for an unverified radio*.
 - **Every Icom tier column has an editor in the grid**, chosen by the
   field's kind, and the connection bar says when the radio is a
   receiver.
+- **The Kenwood TS-590S and TS-590SG are now supported**, for reading and
+  for opt-in writes, on the same terms as every other manual-derived
+  model — and they are the first radios here whose tone and scan-skip
+  columns can actually be read and written. Both read the 100 memory
+  channels, the 10 programmable scan ranges and the menu settings (88
+  items on the S, 100 on the SG). A split channel is refused rather than
+  written back as simplex, and only FM channels are written. On the
+  TS-590S alone the filter column cannot be set at all, and channel
+  writes are refused on a radio reporting firmware 2.00 or later: the
+  manual guarantees the relevant byte is unused only on the 1.xx
+  firmware. `rigprog probe` prints the radio's own firmware answer
+  verbatim so you can see what that decision was taken on. Their speed is
+  a guess (9600; there is no speed setting, and a wrong speed looks like
+  a dead port), and a CHIRP file's `CW`, `CWR` and `RTTY` rows are not
+  imported on these radios.
+- **The Kenwood TS-480 is NOT selectable**, although its driver ships in
+  this build. One reading of its manual makes a memory channel's stored
+  frequency a step count rather than a plain number of hertz, and nothing
+  in the manual settles it; the radio stays unavailable until someone
+  reads one channel off a real TS-480 and reports what came back.
 - **The application has an icon of its own** on all three platforms.
 - The README is rewritten for radio owners; per-radio limits live in
   `docs/radio-notes.md`; a `CHANGELOG.md` lists every release.
 
+<!-- TASK 20 GATE: the sentence below is a byte-identity claim. It may not
+     be published until task 20's byte-identity run has been captured and
+     its designed deltas checked against the manifest. Update the model
+     names it lists to match whatever that run actually shows, then delete
+     this comment. -->
 Everything else is internal and carries no change a user can see. The
 stored comparison output of every previously registered radio is
 unchanged apart from the lists of supported models, which gain the
-FT-891.
+FT-891, the TS-590S and the TS-590SG. The TS-480 appears in no list,
+because it is not registered.
 
 ## Downloads
 
