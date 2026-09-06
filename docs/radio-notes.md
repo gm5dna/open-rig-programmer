@@ -100,14 +100,16 @@ neither a width nor a parameter — ten printed hyphens and nothing else
 question it cannot read. A single `EX087;` read on a real FT-991A would
 settle it.
 
-Refused: the tone frequency number, the DCS code and scan skip cannot
-be set over CAT. The memory record does carry a five-state tone byte —
-CTCSS off, CTCSS encode and decode, CTCSS encode, DCS encode and
-decode, DCS encode — which the program reads and writes; what it has no
-field for is *which* tone or *which* DCS code, both of which live on a
-separate command that reports what the radio is doing now rather than
-what a channel holds. Set the number, the code and the skip marking at
-the radio. A CHIRP file's `DTCS` and `Cross` rows are therefore still
+Refused: the tone frequency number, the DCS code and scan skip are not
+part of what this program writes to a channel. The memory record does
+carry a five-state tone byte — CTCSS off, CTCSS encode and decode,
+CTCSS encode, DCS encode and decode, DCS encode — which the program
+reads and writes; what it has no field for is *which* tone or *which*
+DCS code. The radio does have a CAT command for those two, `CN`, and it
+can set as well as report them — but what it sets is the tone and code
+the radio is using now, not what a channel holds, and this program does
+not send it. Scan skip has no position anywhere in the memory record.
+Set the number, the code and the skip marking at the radio. A CHIRP file's `DTCS` and `Cross` rows are therefore still
 refused, and the reason given says so: this radio writes the DCS state
 but not the DCS code. A CHIRP file's `CW`, `CWR` and `RTTY` rows are
 not imported either, for the FT-891's reason — they resolve to names

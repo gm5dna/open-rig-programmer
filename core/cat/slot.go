@@ -354,7 +354,7 @@ func (d Dialect) pmsDomainText() string {
 // and "" when it has neither.
 //
 // IT DERIVES FROM THE DECLARED BANKS, NOT FROM THE PMS FORM. The two
-// questions give the same answer on all five dialects registered today,
+// questions give the same answer on all six dialects registered today,
 // which is exactly why the choice has to be made deliberately: a future
 // token-PMS radio without a 5 MHz bank must not inherit the FT-710's
 // sentence, and a bank is consulted from the same place as its datum.
@@ -373,7 +373,7 @@ func (d Dialect) pmsDomainText() string {
 // BANK IS PARTIAL WOULD MOVE A REGISTERED DIALECT'S SHIPPED SENTENCE — the
 // FT-891's, from "5xx/EMG/\"000\" rejected" to "501-510/EMG/\"000\"
 // rejected" — which the Stage 0 close forbids and which
-// TestSlotDomainRefusals_EveryRegisteredDialectIsByteIdentical
+// TestSlotDomainRefusals_EveryTokenPMSDialectIsByteIdentical
 // (core/transport) now catches. The finding is therefore recorded here and
 // referred back, not applied: it is a byte-identity decision, not an
 // implementation choice.
@@ -411,7 +411,7 @@ func (d Dialect) specialBankText() string {
 // strconv.Quote rather than "\"" + s + "\"" so that the quoting is the wire
 // form's own, not a pair of bytes glued on: every registered dialect's
 // noneWire is three ASCII digits, for which the two spellings agree, and
-// TestSlotDomainRefusals_EveryRegisteredDialectIsByteIdentical
+// TestSlotDomainRefusals_EveryTokenPMSDialectIsByteIdentical
 // (core/transport) is what says they still do.
 // TestSlotDomainText_NamesNoBankItsDialectLacks holds the property.
 func (d Dialect) noneFormText() string {

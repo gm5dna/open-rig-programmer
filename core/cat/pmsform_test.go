@@ -321,12 +321,14 @@ func TestClassifySlot_TokenDialectsRefuseNumericPMS(t *testing.T) {
 // "THIS PACKAGE CAN SEE" IS HALF THE SPEC'S SENTENCE, and the other half is
 // discharged elsewhere: the spec asks for the property under EACH REGISTERED
 // dialect, and allTestDialects() reaches FT710 and this package's fixtures
-// but not ftdx10, ftdx101 or ft891, which import core/cat and so cannot be
-// imported back. Those three get the equivalent property from the
-// conformance suite's checkPMSSlotForm (core/cat/dialecttest), whose token
-// arm sweeps all of "000"-"999" asserting !IsPMS() and whose positive half
-// round-trips every pair their own PMSSlot builds. Between the two the
-// sentence holds for all five registered dialects; neither half states it
+// but not ftdx10, ftdx101, ft891 or ft991a, which import core/cat and so
+// cannot be imported back. Those four packages get the equivalent property
+// from the conformance suite's checkPMSSlotForm (core/cat/dialecttest),
+// which core/cat/ft991a/dialect_test.go runs like the other three: its token
+// arm sweeps all of "000"-"999" asserting !IsPMS(), its numeric arm refuses
+// every "P<n><L|U>", and its positive half round-trips every pair their own
+// PMSSlot builds. Between the two the
+// sentence holds for all six registered dialects; neither half states it
 // alone (Stage 0 close review, seat 1 LOW-7).
 func TestClassifierSweep_EveryWireFormHasExactlyOneKind(t *testing.T) {
 	for _, nd := range allTestDialects() {

@@ -47,9 +47,13 @@
 // ordinary writable memory channel: the MW sentence offered "memory
 // 000-005" and rejected "000" in the same breath. It now comes from
 // slotSpace.noneWire through Dialect.noneFormText, and is omitted entirely
-// by a dialect that declares no none form. Every registered dialect
-// declares NoneWire "000", so this too moves no byte —
-// TestSlotDomainRefusals_EveryRegisteredDialectIsByteIdentical
-// (core/transport) is the measurement, over all five, rather than the
-// claim.
+// by a dialect that declares no none form. All six registered dialects
+// declare NoneWire "000", so this too moves no byte —
+// TestSlotDomainRefusals_EveryTokenPMSDialectIsByteIdentical
+// (core/transport) is the measurement rather than the claim, over the FIVE
+// TOKEN-PMS SIBLINGS, which is what it measures and all it measures. The
+// sixth, the FT-991A, composes DIFFERENT sentences by design (numeric PMS,
+// no 5 MHz bank, no emergency channel) and so shares no frozen constant with
+// them; its shape is held by TestSlotDomainText_NumericPMSDialect on a
+// synthetic dialect in this package.
 package cat

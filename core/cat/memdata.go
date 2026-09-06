@@ -634,9 +634,12 @@ func (e *FreqTooWideError) Error() string {
 //
 // For the six Yaesu NEWCAT models registered today the error arm is
 // UNREACHABLE in practice — codeplug.Validate has already rejected any
-// frequency above those radios' 75 MHz ceiling, and the write path
-// refuses a channel Validate rejected — so this is defence in depth at a
-// type boundary, tested directly rather than left to be discovered.
+// frequency above those radios' own declared ceilings, the highest of them
+// the FT-991A's 470 MHz, and the write path refuses a channel Validate
+// rejected — so this is defence in depth at a type boundary, tested
+// directly rather than left to be discovered. THE CEILING IS PER MODEL AND
+// NOT THE FAMILY'S: it read "75 MHz" while every registered model was HF,
+// and the sixth is the first with VHF/UHF.
 func MemoryFreqHz(v uint64) (uint32, error) {
 	if v > memFreqMax {
 		return 0, &FreqTooWideError{FreqHz: v}

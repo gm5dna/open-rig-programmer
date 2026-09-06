@@ -101,7 +101,7 @@ func (d Dialect) validateMWFields(m MemoryData) error {
 		// here, so the corpus does not move — proved directly by
 		// TestSlotDomainText_FT710SentencesAreByteIdentical, on the OTHER
 		// FOUR registered dialects by
-		// TestSlotDomainRefusals_EveryRegisteredDialectIsByteIdentical
+		// TestSlotDomainRefusals_EveryTokenPMSDialectIsByteIdentical
 		// (core/transport, which can import them where this package cannot),
 		// and, on the whole corpus, by the golden itself.
 		return newParseError([]byte(m.Slot.Wire()), d.mwSlotDomainRefusal())
