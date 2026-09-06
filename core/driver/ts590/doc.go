@@ -69,8 +69,8 @@
 //	      about a radio nobody has connected.
 //
 //	      SCOPE: all three registry rows, PER (row, path).
-//	      LIFT: one session opened against each of the design's five (row,
-//	      path) legs with the control lines logged — the TS-590S's USB-B port
+//	      LIFT L-HW-21, one session opened against each of the design's five
+//	      (row, path) legs with the control lines logged — the TS-590S's USB-B port
 //	      and its RS-232C connector, the TS-590SG's USB-B port and its
 //	      RS-232C connector, and the TS-480's 9-pin D-sub, which is the only
 //	      path that radio has. EACH LEG LIFTS ITS OWN (row, path); a row is
