@@ -105,6 +105,18 @@ func TestDisplaySlot(t *testing.T) {
 		{"001", "M-01"},
 		{"099", "M-99"},
 		{"P1L", "P1L"},
+		// The FT-991A's PMS pairs, and the one three-digit form in the
+		// fleet that must NOT be prefixed (plan decision P20). The switch
+		// prefixes only '0'- and '5'-leading forms, so "100".."117" fall
+		// through its default arm unchanged — which is what that radio's
+		// grid, CSV and settings listing all show, while its own front
+		// panel and manual print "P-1L".."P-9U". These two rows are the
+		// pin under that decision: the divergence is deliberate and
+		// documented (the FT-991A's GridLegendNote and the release
+		// notes), and a per-model display override stays deferred to the
+		// FTX-1 milestone by this function's own doc comment.
+		{"100", "100"},
+		{"117", "117"},
 		{"501", "5-01"},
 		{"515", "5-15"},
 		{"EMG", "EMG"},
