@@ -267,13 +267,22 @@ the program.
 ### TS-480 (built, not selectable)
 
 The TS-480's driver exists in this program and the radio is **not in the
-model list**: you cannot select it. One reading of its manual makes the
-frequency stored in a memory channel a step count rather than a plain
-number of hertz, and nothing in the manual settles which reading is
-right. Registering the radio on the wrong reading would mean writing
-channels nobody could check, so it stays unavailable until someone reads
-one channel off a real TS-480 and reports what came back. If you own one,
-that single read is the most valuable thing you could send.
+model list**: you cannot select it. The reason is a question about an
+EMPTY channel. The TS-590SG's manual says that reading a memory channel
+that has never been written answers with an all-zero record; the 2003
+TS-480 manual says nothing about an empty channel anywhere. If a TS-480
+rejects that read instead of answering it, a brand-new TS-480 cannot be
+read by this program at all, and registering the radio would mean
+offering its owner a read that fails on the first channel.
+
+**What would lift it, and it is not one read.** A valid zero record on at
+least **three separate channels**, each confirmed unwritten at the
+radio's own front panel, across at least **two sessions**, with no
+silence and no `?;` among them, every request and answer kept as the
+exact bytes that went over the wire, and an **observer named**.
+`internal/wiring/testdata/README.md` is written for the person who would
+take that observation and says where it goes; a `go test` run is what
+checks it, not a judgement on release day.
 
 Evidence: `docs/kenwood-models.md`.
 

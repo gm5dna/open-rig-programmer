@@ -40,10 +40,14 @@ tag. The full release notes for each version are on the
 
 ### Not included
 - **Kenwood TS-480**: the driver is written and shipped but the radio is
-  not selectable. One reading of its manual makes a memory channel's
-  stored frequency a step count rather than a plain number of hertz, and
-  nothing in the manual settles it. It stays unavailable until someone
-  reads one channel off a real TS-480 and reports what came back.
+  not selectable. Nothing in its 2003 manual says what a memory channel
+  that has never been written answers when it is read; the TS-590SG's
+  manual says an all-zero record, and if a TS-480 rejects that read
+  instead, a brand-new one cannot be read by this program at all. It
+  stays unavailable until somebody observes what a real TS-480 answers —
+  at least three unwritten channels, each confirmed at the front panel,
+  across at least two sessions, with the exact bytes kept and an observer
+  named. `internal/wiring/testdata/README.md` says how.
 
 ## [1.3.0] - 2026-09-05
 
