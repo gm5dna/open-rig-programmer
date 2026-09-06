@@ -248,7 +248,7 @@
 // unprompted, is factory-ON on SOME of the Icom models this programme
 // registers, and no off-switch is shipped for it. (The registered set is
 // internal/wiring/wiring_test.go's icomModels, and
-// TestYaesuAndIcomModelsPartitionSupportedModels pins it against
+// TestMakerModelListsPartitionSupportedModels pins it against
 // SupportedModels(); a count written here would be stale by the next
 // family, and the argument never needed one — one such radio is enough.
 // "Some" is the honest quantifier: this project has asked no radio, and

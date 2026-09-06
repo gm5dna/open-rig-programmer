@@ -476,18 +476,24 @@ var FT891FakeSessionOpts []fakeft891.Option
 // TestOpenFakeSessionFor_TS590SGOptionSourceIsItsOwn pin that each variable
 // reaches its own rig and NOT the sibling's.
 //
-// LEFT AT THEIR NIL ZERO VALUES BOTH DEMO RADIOS SHIP THE SAME FOUR
-// POPULATED RECORDS — memory channels 000, 001 and 002 and both halves of
-// section-defined channel 100 — internal/fakets590's own DefaultImage, every
-// byte of it a printed constant, a printed example or the eight-space name
-// (plan decision P19, that package's PROVENANCE.md). The ">= 1 populated MEM
-// channel" half is what keeps this package's read-every-default-slot fleet
-// pin non-vacuous for both rows.
+// LEFT AT THEIR NIL ZERO VALUES BOTH DEMO RADIOS SHIP THE SAME FIVE
+// POPULATED RECORDS OVER FOUR CHANNELS — memory channels 000, 001 and 002,
+// one record each, and BOTH HALVES of section-defined channel 100 — which is
+// internal/fakets590's own DefaultImage, every byte of it a printed
+// constant, a printed example or the eight-space name (plan decision P19,
+// that package's PROVENANCE.md). Records and channels are counted separately
+// because 100's two halves are two records at one channel number. The
+// ">= 1 populated MEM channel" half is what keeps this package's
+// read-every-default-slot fleet pin non-vacuous for both rows.
 //
 // NO IMAGE EXISTS FOR THE SG's 110-119 AT ALL, and that is decision row 6
-// rather than an omission: those ten slots are not published on the SG row,
-// so there is no slot ID for an image to represent, and an MR/MW/MC naming
-// one is refused by the codec's own slot-domain rule.
+// rather than an omission — at THIS layer. The CODEC ADMITS those ten slots
+// deliberately (core/kw/ts590/layout.go: the book prints 110-119 for the SG
+// row, so an "MR0115;" answer must parse rather than be refused); what an
+// extension channel IS is never explained (A11), so the DRIVER publishes no
+// bank containing them and the fake therefore has no slot ID for an image to
+// represent. Codec domain and driver publication are two different
+// questions, and it is the second that closes here.
 //
 // No production flag or GUI control populates either — they add no second
 // ts590.Simulated reference to any non-test file, so

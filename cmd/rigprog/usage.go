@@ -23,14 +23,14 @@ import (
 // Every OTHER command in the list below is already model-neutral prose
 // (no subcommand name here ever mentioned FT-710 directly).
 //
-// "Yaesu" IS a hand-edit, and Wave 4 task R1 is where it stopped being
-// true: the IC-7610 is this project's first Icom registration, so the
-// word itself — unlike the model list and unlike every other command's
-// prose — was manufacturer-specific text nothing derived, and it is
-// rewritten here deliberately rather than silently drifting into a false
-// claim about a radio the CLI now also lists. TestPrintUsage_RegistryDriven
-// pins the replacement text.
-const topUsageTextTemplate = `rigprog is a command-line memory programmer for Yaesu and Icom radios (currently: %s).
+// THE MANUFACTURER CLAUSE IS A HAND-EDIT, and it is rewritten at every new
+// manufacturer: unlike the model list and unlike every other command's
+// prose, the word itself is manufacturer-specific text nothing derives, so
+// it drifts into a false claim about a radio the CLI now also lists unless
+// somebody changes it. Wave 4 task R1 made it "Yaesu and Icom" when the
+// IC-7610 became this project's first Icom registration; the TS-590 pair
+// makes it three. TestPrintUsage_RegistryDriven pins the current text.
+const topUsageTextTemplate = `rigprog is a command-line memory programmer for Yaesu, Icom and Kenwood radios (currently: %s).
 
 Usage:
   rigprog <command> [flags]

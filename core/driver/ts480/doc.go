@@ -221,7 +221,8 @@
 //     relationship at the site.
 //
 //  7. BYTE 19 AND BYTE 41 SWAP ROLES. Byte 19 is the channel LOCKOUT here
-//     (480:962) and the hard-wired "Always 0" byte at 41 (480:973), where the
+//     (480:962) and the hard-wired "Always 0" byte at 41 (480:982 — P15;
+//     480:973 is P11 at byte 28, this row's OTHER printed constant), where the
 //     590 pair read the same neutral scan_skip field from byte 41
 //     (590:1572-1574) and carry data mode at byte 19 (590:1546-1548). §5 calls
 //     this the sharpest single argument for two capability tables rather than

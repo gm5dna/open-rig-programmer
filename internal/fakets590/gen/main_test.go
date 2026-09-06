@@ -10,8 +10,9 @@ import (
 	"testing"
 )
 
-// The three artefacts of this generator, as the //go:generate directives in
-// ../ex.go name them, with ".." prepended because `go test` runs here.
+// The TWO charts this generator renders, as the //go:generate directives in
+// ../ex.go name them, with ".." prepended because `go test` runs here — one
+// per 590 row, each with its own transcription and its own generated file.
 //
 // render writes only the CSV's BASE NAME into its output, so reading the file
 // through "../" still produces the bytes the directive produces from

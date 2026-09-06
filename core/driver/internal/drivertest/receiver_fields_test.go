@@ -66,16 +66,22 @@ func TestTierFieldStates_MatchAllFields(t *testing.T) {
 // Fatalf — forwards to the embedded real testing.TB, so the helper runs
 // exactly as it does at its driver call sites.
 //
-// FOURTEEN of those, counted rather than guessed — one per driver package
-// but the IC-R8600's, which reports the seven D8 fields Known and so
-// calls AssertFreshReadSaveLoadNormalised instead, and but the FT-891's
-// (Tier 1), which calls it TWICE — once per read.go path (the combined MT
-// form and the MR-only form), both against its own single model. They
-// cover fifteen of the sixteen registered models: the ftdx101 and ic7851
-// packages each run their one call over a pair of constructors, so two
-// models come out of each, while the FT-891's two calls both cover the
-// same one. This comment said "fifteen" until the count was checked, and
-// at that point the IC-7850 was in fact covered by nothing.
+// SIXTEEN of those at this tip, counted rather than guessed — one per
+// driver package but the IC-R8600's, which reports the seven D8 fields
+// Known and so calls AssertFreshReadSaveLoadNormalised instead, and but the
+// FT-891's (Tier 1), which calls it TWICE — once per read.go path (the
+// combined MT form and the MR-only form), both against its own single
+// model. They cover seventeen of the eighteen registered models — every one
+// but the IC-R8600, which the Normalised variant covers — because the
+// ftdx101, ic7851 and ts590 packages each run their one call over a PAIR of
+// constructors or rows, so two models come out of each, while the FT-891's
+// two calls both cover the same one. The ts480 package's call covers a
+// model that is built and NOT registered, so it adds a call site without
+// adding a covered registered model. This comment said "fifteen" until the
+// count was checked, and at that point the IC-7850 was in fact covered by
+// nothing; it then went stale again across the FT-891 and Kenwood
+// registrations, which is the argument for recounting rather than
+// incrementing.
 type errorRecorder struct {
 	testing.TB
 	errs []string
