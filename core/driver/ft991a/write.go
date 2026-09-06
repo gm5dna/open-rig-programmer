@@ -453,7 +453,7 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 
 	// Build the frame before any wire traffic, so a mapping, a bound or a
 	// validation failure can still refuse the whole write cleanly.
-	cmd, err := buildWriteCommand(s.dialect, ch)
+	cmd, err := buildWriteCommand(s.dialect, s.caps, ch)
 	if err != nil {
 		return res, err
 	}
@@ -514,12 +514,17 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 // and each is inverted on the FT-991A (matrix erratum M-E3): its TagDisplay
 // refusal exists because byte 28 is a live flag there and it is SCHEMA here;
 // its TxClar refusal exists because byte 21 is fixed there and it is LIVE
-// here. What is left is the family's checklist — mode, CTCSS state and shift
-// resolved through the name maps, the clarifier bounds-checked against THIS
-// dialect's policy before the int16 conversion can wrap, the frequency
-// converted through the checked narrowing, and the builder given the last
-// word on everything else.
-func buildWriteCommand(dialect cat.Dialect, ch codeplug.Channel) (cat.Command, error) {
+// here. What is left is the family's checklist — mode (ModeUnset named
+// separately from an unknown spelling), CTCSS state and shift resolved
+// through the name maps, the clarifier bounds-checked against THIS dialect's
+// policy before the int16 conversion can wrap, the frequency bounds-checked
+// against THIS DRIVER'S declared range and then converted through the
+// checked narrowing, and the builder given the last word on everything else.
+//
+// caps is THIS SESSION'S effective capabilities, and it is a parameter for
+// the frequency rung alone: the range is the driver register's, so it is
+// consulted from the session that declares it rather than restated here.
+func buildWriteCommand(dialect cat.Dialect, caps spec.Capabilities, ch codeplug.Channel) (cat.Command, error) {
 	sl, err := dialect.ParseSlot(ch.Slot)
 	if err != nil {
 		return cat.Command{}, &driver.WriteRefusedError{Slot: ch.Slot, Reason: err.Error()}
@@ -539,6 +544,24 @@ func buildWriteCommand(dialect cat.Dialect, ch codeplug.Channel) (cat.Command, e
 		return cat.Command{}, &driver.WriteRefusedError{
 			Slot: ch.Slot, Fields: []spec.Field{spec.FieldMode},
 			Reason: fmt.Sprintf("mode %q is not a mode this radio supports", data.Mode),
+		}
+	}
+	// ModeUnset needs its OWN rung, because the check above cannot reach it:
+	// dialect.ModeByName("-") answers ok=true — the placeholder is a
+	// deliberate member of the mode table so that PARSERS accept a radio's
+	// '0', the SHARED register's THE cat.ModeUnset MEMBER OF THE MODE TABLE
+	// entry — so "-" passes the map lookup and would otherwise reach
+	// BuildMTSetCombined, whose own Set-frame check refuses it with an error
+	// carrying no field. That made the one mode-shaped refusal a caller can
+	// actually trip the one whose report named no field to fix (the closing
+	// review's O-L3). Named here instead; the builder's check stays as
+	// defence in depth for every other caller of it.
+	// TestWriteChannel_RefusalLadder's "a mode that resolves to
+	// cat.ModeUnset" row pins the field AND the reason.
+	if mode == cat.ModeUnset {
+		return cat.Command{}, &driver.WriteRefusedError{
+			Slot: ch.Slot, Fields: []spec.Field{spec.FieldMode},
+			Reason: fmt.Sprintf("mode %q is the parse-only placeholder cat.ModeUnset and must not be ModeUnset in a Set frame", data.Mode),
 		}
 	}
 	ctcss, ok := ctcssByName[data.CTCSS]
@@ -571,19 +594,49 @@ func buildWriteCommand(dialect cat.Dialect, ch codeplug.Channel) (cat.Command, e
 			Reason: fmt.Sprintf("clarifier %d Hz exceeds +/-%d Hz", data.ClarHz, clar.MaxAbsHz),
 		}
 	}
+	// THE RADIO'S OWN RANGE, checked before the ENCODING's width below —
+	// the closing review's C-H1. The two are different facts and only one of
+	// them was enforced here: cat.MemoryFreqHz bounds the nine-digit field
+	// (999 999 999), and this radio stores 30 000 - 470 000 000, so
+	// everything between the two ceilings went out on the wire. The FLEET's
+	// written contract is that a channel reaching WriteChannel came through
+	// codeplug.Validate, which refuses this range (validate.go) and which
+	// clone.PrepareSend does run — but WriteChannel is PUBLIC and calls no
+	// validator, so the contract held only for one of its callers. The bound
+	// is consulted from the same place as its datum: THIS SESSION'S caps,
+	// which is the DRIVER register's own entry "MinFreqHz 30 000 /
+	// MaxFreqHz 470 000 000 — THE FA/FB RANGE READ AS THE MEMORY-STORABLE
+	// RANGE" (doc.go), never a literal restated here.
+	//
+	// IT IS A VALUE REFUSAL, so it sits with the other value refusals —
+	// after the capability gate, which decisions.md cell 10 pins as coming
+	// first, and before the builders. Asking "may this session write the
+	// frequency field at all?" is the gate's question and is answered
+	// before this one, "is THIS frequency one the radio can store?", exactly
+	// as it is for the mode and clarifier rungs on either side.
+	// TestWriteChannel_FrequencyAgainstTheDeclaredRange walks both bounds a
+	// hertz either side.
+	if data.FreqHz < caps.MinFreqHz || data.FreqHz > caps.MaxFreqHz {
+		return cat.Command{}, &driver.WriteRefusedError{
+			Slot: ch.Slot, Fields: []spec.Field{spec.FieldFrequency},
+			Reason: fmt.Sprintf("frequency %d Hz is outside this radio's storable range %d-%d Hz", data.FreqHz, caps.MinFreqHz, caps.MaxFreqHz),
+		}
+	}
 	// The ONE checked conversion between the neutral model's uint64
 	// frequency and this protocol's uint32 (design D4): core/cat stays
 	// uint32 because a NEWCAT memory frame carries nine digits and can
 	// express nothing wider, so a bare cast would truncate an out-of-range
-	// value into a plausible small one and send it. The arm is unreachable
-	// for any channel that came through codeplug.Validate, which refuses
-	// anything above this radio's 470 MHz ceiling before WriteChannel ever
-	// sees it — true of the clone service's caller, not of WriteChannel
-	// itself, which does not call Validate. It is a refusal, not a cast, so
-	// it stays unreachable-for-that-caller by construction rather than by
-	// habit. (That the FA/FB range is also the MEMORY-STORABLE range is the
-	// DRIVER register's MinFreqHz 30 000 / MaxFreqHz 470 000 000 entry; this
-	// conversion is about the ENCODING's width, which is a different fact.)
+	// value into a plausible small one and send it. The arm is now
+	// unreachable for EVERY caller, because the range rung above refuses at
+	// 470 000 001 Hz and the encoding does not complain until 1 000 000 000
+	// — it used to be unreachable only for the clone service's caller, via
+	// that caller's own codeplug.Validate, which is the hole C-H1 named. It
+	// is kept because it is a refusal rather than a cast: the narrowing
+	// stays checked at the point where it happens rather than trusting the
+	// rung above to have run. (That the FA/FB range is also the
+	// MEMORY-STORABLE range is the DRIVER register's MinFreqHz 30 000 /
+	// MaxFreqHz 470 000 000 entry; this conversion is about the ENCODING's
+	// width, which is a different fact.)
 	freqHz, err := cat.MemoryFreqHz(data.FreqHz)
 	if err != nil {
 		return cat.Command{}, &driver.WriteRefusedError{Slot: ch.Slot, Fields: []spec.Field{spec.FieldFrequency}, Reason: err.Error()}
