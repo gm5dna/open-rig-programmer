@@ -507,14 +507,18 @@ func TestFTdx101Profile_MatchesTodaysConstants(t *testing.T) {
 // just each entry in isolation. TestRegistry_LookupAndEnumeration checks
 // that RegisteredProfiles is sorted and non-empty, which one entry already
 // satisfied; this asserts the EXACT set, so silently dropping a registration
-// — or adding a sixth without updating this pin — is a failure rather than a
+// — or adding another without updating this pin — is a failure rather than a
 // smaller happy enumeration. The sort order is asserted by value here, not
 // merely as "ascending": "ft710" < "ft891" < "ft991a" < "ftdx10" < "ftdx101"
 // is the ordering the CLI's -profile listing and every registry-selected
 // staleness test see. ASCII puts "ft891" and "ft991a" second and third,
 // between the FT-710 and the FTdx10 — a digit sorts below a letter, so both
 // FT-8/9 names precede every "ftdx" one — which is not the order the models
-// were added in; pinning it by value is how that stops being a surprise.
+// were added in; pinning it by value is how that stops being a surprise. The
+// three Kenwood names sort after every Yaesu one only because "t" follows
+// "f"; that is an accident of the lookup names, not a family
+// grouping the registry knows about, so it too is pinned by value here
+// rather than assumed.
 //
 // (Named for two models until M9d-1; the FTdx101D/MP made "both" wrong.)
 func TestRegistry_HoldsEveryModel(t *testing.T) {
@@ -523,7 +527,7 @@ func TestRegistry_HoldsEveryModel(t *testing.T) {
 	for _, np := range got {
 		names = append(names, np.Name)
 	}
-	want := []string{"ft710", "ft891", "ft991a", "ftdx10", "ftdx101"}
+	want := []string{"ft710", "ft891", "ft991a", "ftdx10", "ftdx101", "ts480", "ts590s", "ts590sg"}
 	if len(names) != len(want) {
 		t.Fatalf("RegisteredProfiles() names = %v, want %v", names, want)
 	}
@@ -532,7 +536,7 @@ func TestRegistry_HoldsEveryModel(t *testing.T) {
 			t.Fatalf("RegisteredProfiles() names = %v, want %v", names, want)
 		}
 	}
-	wantModels := []string{"FT-710", "FT-891", "FT-991A", "FTdx10", "FTdx101D/MP"}
+	wantModels := []string{"FT-710", "FT-891", "FT-991A", "FTdx10", "FTdx101D/MP", "TS-480", "TS-590S", "TS-590SG"}
 	for i := range wantModels {
 		if got[i].Profile.Model != wantModels[i] {
 			t.Errorf("models[%d] = %q, want %q", i, got[i].Profile.Model, wantModels[i])

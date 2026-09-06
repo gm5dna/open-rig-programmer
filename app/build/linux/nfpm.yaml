@@ -24,7 +24,7 @@ vendor: Open Rig Programmer
 homepage: https://github.com/gm5dna/open-rig-programmer
 license: GPL-3.0-or-later
 description: |
-  Memory-channel programmer for Yaesu and Icom radios.
+  Memory-channel programmer for Yaesu, Icom and Kenwood radios.
   Desktop GUI (open-rig-programmer) and command-line tool (rigprog)
   sharing one core. The FT-710 reads and writes, verified on a real
   radio; every other supported model reads, and writes only after

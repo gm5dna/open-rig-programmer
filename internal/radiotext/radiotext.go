@@ -1861,6 +1861,155 @@ var ft991aText = Text{
 	ProbeFirmwareNote:   "Firmware version has no CAT query in this build — read it off the radio's display. No minimum version is established for the FT-991A: this build knows of none to require. The 38400 this build opens at is ASSUMED, not read off the radio. The menu row that sets the rate for the socket this programme uses is 031 CAT RATE, which prints 4800, 9600, 19200 and 38400 and marks none of them as the factory setting, and neither this build's command line nor its window offers a way to open at another rate, so a radio set differently has to be put back at menu 031 before it will answer. Menu 029 is NOT that row: 029 232C RATE sets the rate of the rear-panel RS-232C jack, which is a different port from the one this programme opens, so changing it will not make this radio answer here. Two more things are worth knowing before blaming the port. This radio's rear-panel USB socket is a built-in USB-to-dual-UART bridge, so it enumerates TWO serial devices and the manual never says which of the two carries CAT — if one is silent, try the other before concluding the cable or the speed is wrong. And there is a second, entirely separate CAT path on the rear-panel RS-232C jack, gated by menu 028 GPS/232C SELECT; that row's own printed option list is defective in the manual this build was written from — it prints 0: GPS1, 1: GPS2 and 3: RS232C, with key 2 missing — so a reader who goes looking for that setting should expect the printed list and the radio's own to disagree.",
 }
 
+// ts590sText is the TS-590S's entry — Tier 6, landed with that row's wiring
+// registration, since internal/wiring's TestEverySupportedModelHasRadiotext
+// refuses a registered model with no prose.
+//
+// THE HONESTY RULE APPLIES UNCHANGED, and this family has less behind it than
+// any registered before it. No Kenwood radio has ever answered a frame put to
+// it by this project; only the PC CONTROL COMMAND REFERENCE is held here, not
+// the instruction manual; and this row's write trials have not happened
+// (core/driver/ts590's per-row write-trial guards are both false). Every
+// string therefore says what is actually known, including where something is
+// not, and borrows the wording of no other entry.
+//
+// WHAT THIS ENTRY MUST SAY THAT ITS SIBLING'S MUST NOT, and why the two are
+// written separately rather than one being a substitution of the other: the
+// record position that selects filter A or B is guaranteed zero only on this
+// row's 1.xx firmware (590:1478, 590:1564 — the differing wording is erratum
+// E7), so this row alone declines to set the filter column AND refuses
+// channel writes above that firmware. Both facts are in the erase-adjacent
+// fields here and absent from the SG's, which is what
+// TestRadiotext_TS590SAndSGDifferInMoreThanTheModelName pins.
+//
+// KENWOOD IS NOT ADDED TO radiotext_test's yaesuModels SKIP SET (plan
+// decision P17): these books say "PC control command" and never "CAT", so the
+// Yaesu vocabulary check runs against this prose as a positive discipline.
+var ts590sText = Text{
+	EraseProcedure:   "The TS-590S has no erase command this build will send, and the absence is a CHOICE over the weakest evidence in the book rather than a plain gap. The only clearing route this radio's own book prints is a side effect of a shortened memory-write frame — leave one digit of the name field unspecified, set every other parameter to zero, and the channel is erased — and the LENGTH of that short frame is a reading of the sentence rather than a number the book prints anywhere. This build therefore admits a memory-write frame of exactly 50 bytes and no other, so the short form cannot be sent even by accident. A channel can be cleared only at the radio itself, and this build does not describe how: no TS-590S instruction manual is held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Follow the memory-channel clearing procedure in the radio's own instruction manual.",
+	FirmwareGuidance: "The TS-590S reports its own firmware version and this build asks for it, as the second frame of a two-frame probe, and prints the four characters the radio answered. ONE VERSION MATTERS ON THIS ROW. The position in the memory record that selects filter A or B is guaranteed to be zero only on the 1.xx firmware — the book says so in as many words, twice, in slightly different wording — and says nothing at all about 2.00 and later. So this build refuses channel writes to a TS-590S that reports 2.00 or later, and to one whose answer it cannot read as a version at all. That refusal is conservative rather than evidenced: nobody here has seen a 2.00 radio answer anything, and the alternative would be to write a byte whose meaning the book stops guaranteeing at exactly that point. Reading is never blocked by the version. No minimum firmware version is established for this radio: nothing this project holds states one.",
+	GridLegendNote:   "Tone and Scan Skip ARE read and written on the TS-590S, unlike the Yaesu radios this programme also supports: its 50-byte memory record carries a tone mode, separate transmit and receive tone numbers and a channel-lockout flag. ONLY FM CHANNELS ARE EVER WRITTEN, and that is the BROADEST refusal on this radio rather than a detail: the two bytes the record carries beside the mode have only two printed meanings, \"00: FM Normal\" and \"01: FM Narrow\", and the book never says what either means in SSB, CW, AM or FSK — so a channel in any other mode is refused at the write, naming register entry A23, rather than sent with a byte whose meaning this build does not hold. Reading is unaffected in every mode. ONE TONE VALUE IS STILL REFUSED, and it is a disagreement between this radio's own two printed tone charts rather than a limit of this build: 1750 Hz is the last entry of the chart the tone-number command prints and has no entry at all in the chart the tone-squelch command prints, so a 1750 Hz TRANSMIT tone is written normally while a 1750 Hz RECEIVE tone is refused at the write, naming decision 14, rather than sent as a number the receive chart does not print. A MEMORY CHANNEL READ OFF THIS RADIO IS NOT WRITTEN BACK UNTIL YOU SUPPLY ITS TRANSMIT FREQUENCY, and that is the cost worth knowing before you plan a round trip. This radio expresses a split as two frames over one channel number, this build sends one, and what the second frame answers on a simplex channel is printed nowhere in the book — so a read leaves the transmit frequency unavailable rather than guessing at it, and a channel is written only when its transmit disposition is known. Read the memories, edit a name and send them straight back and EVERY memory channel is refused, naming register entry A9; fill the transmit frequency in yourself and the channel writes, typing the receive frequency there being the simplex channel the single frame this build sends can express. A GENUINE SPLIT IS STILL REFUSED RATHER THAN FLATTENED even then: a channel whose transmit frequency differs from its receive frequency has no second frame to go in, so it is refused instead of being written as simplex and read back as though it had never been split. A SCAN RANGE IS NOT AFFECTED by any of this, because in that bank the second frame carries a range's end frequency rather than a transmit frequency and there is no transmit disposition to require. A9 is assumed per row, and until it is lifted on this row — which would take somebody reading a simplex channel's transmit side off a real TS-590S and reporting what came back — this is what a memory write costs here. THE FILTER COLUMN CANNOT BE SET ON THIS ROW AT ALL: the record position that carries it is guaranteed to be zero only on the 1.xx firmware, and one entry in the model list cannot say 'settable above 2.00', so this build declines to set it on any TS-590S and publishes the cost rather than hiding it. CHANNEL WRITES ARE REFUSED OUTRIGHT on a TS-590S reporting firmware 2.00 or later, and equally on one whose firmware answer this build cannot read as a version at all, because a version that cannot be compared cannot be shown to be a 1.xx one; the session reads normally either way, naming register entries A13/A14. AND A CHIRP FILE CANNOT BE IMPORTED ON THIS RADIO AT ALL in this release: EVERY row is blocked. A CHIRP file's blank Duplex column is its ordinary simplex row, and this radio declares no shift vocabulary for that to land in — its 50-byte record carries no duplex selector of any kind — so every row is refused on that column and the import writes nothing. CW, CWR and RTTY rows are refused a second time besides, on the mode: those map to the sideband-specific names CW-U, CW-L and RTTY-U, and this radio's own mode legend prints CW, CW-R, FSK and FSK-R instead. This programme's own CSV import and export are unaffected.",
+	// DELIBERATELY EMPTY, exactly as every entry's is whose write-trial
+	// guard is false, and for the same reason: this field states what IS and
+	// is NOT verified on a real radio about preservation across a rewrite,
+	// and there has been no write trial of any kind on this family. Any
+	// sentence here would be a claim about hardware nobody here has touched.
+	// internal/wiring's TestEverySupportedModelHasRadiotext requires
+	// EraseProcedure, FirmwareGuidance and ProbeFirmwareNote and deliberately
+	// excludes this one.
+	ToneScanSkipVerification: "",
+	// Byte-identical to EraseProcedure, as every other entry's is.
+	EraseDialogNote: "The TS-590S has no erase command this build will send, and the absence is a CHOICE over the weakest evidence in the book rather than a plain gap. The only clearing route this radio's own book prints is a side effect of a shortened memory-write frame — leave one digit of the name field unspecified, set every other parameter to zero, and the channel is erased — and the LENGTH of that short frame is a reading of the sentence rather than a number the book prints anywhere. This build therefore admits a memory-write frame of exactly 50 bytes and no other, so the short form cannot be sent even by accident. A channel can be cleared only at the radio itself, and this build does not describe how: no TS-590S instruction manual is held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Follow the memory-channel clearing procedure in the radio's own instruction manual.",
+	// The two tooltips DIFFER, and on this family they say something no
+	// earlier entry's could: both columns ARE reachable here. The 50-byte
+	// record carries a tone mode, two tone numbers and a channel-lockout
+	// flag, so neither column is a preserved cell — which is why each
+	// tooltip says so rather than borrowing a Yaesu entry's "not readable
+	// over the protocol" wording. Neither claims a preservation finding,
+	// because there is none: no radio of this family has been written to.
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over this radio's PC-control interface on a TS-590S, so nothing here is preserved: the 50-byte memory record carries a tone mode and separate transmit and receive tone numbers. Whether a rewrite preserves them has never been tested on a real radio",
+		ScanSkip: "read and written over this radio's PC-control interface on a TS-590S, so nothing here is preserved: the 50-byte memory record carries a channel-lockout flag. Whether a rewrite preserves it has never been tested on a real radio",
+	},
+	FirmwarePlaceholder: "as answered by the TS-590S itself, for example 1.00",
+	ProbeFirmwareNote:   "Firmware version IS readable on this radio, and the probe reads it: two frames go out, an identity request and then a version request, and the four characters that come back are printed in the report above. THIS ROW IS THE ONE WHERE THE ANSWER CHANGES WHAT THIS BUILD WILL DO: a TS-590S reporting 2.00 or later, or reporting something that cannot be read as a version at all, is refused for channel writes, because the book's guarantee about the filter position in a memory record covers the 1.xx firmware and stops there. A version this build cannot parse gives a read-only session rather than a refused one — refusing the session outright would make a perfectly good radio unreadable on the strength of a grammar assumed from a single worked example in the book. Its opening speed of 9600 is ASSUMED, not read off the radio, and it is an operational assumption rather than a cautious one: neither Kenwood book prints a factory speed anywhere, a wrong speed is not a safe speed but an unreachable radio, and the symptom is a timeout that looks exactly like a dead port or a bad cable. This build offers NO way to open at another speed — not on the command line and not in the window — and it never probes the port at several speeds to find out, so a radio set to anything else has to be put back to 9600 at its own menu before it will answer. The printed rate list is 9600, 19200, 38400, 57600 and 115200; 4800 is on the radio's list too and is deliberately absent from this build's, because each book attaches a condition to it that a flat list of speeds cannot express.",
+}
+
+// ts590sgText is the TS-590SG's entry — Tier 6, the TS-590S's sibling and
+// deliberately NOT a substitution of it.
+//
+// THE PAIR SHARES ONE BOOK AND NOT ONE EVIDENCE BASE. One PC control command
+// reference covers both radios, so the frames, the 50-byte record and the
+// menu mechanism are common; what differs is what the book GUARANTEES per
+// row. The filter position is live on every TS-590SG (no firmware condition
+// at all), and the SG's menu chart has 100 rows where the S's has 88. So this
+// entry states a settable filter column and no firmware-conditional write
+// refusal, where its sibling's states the opposite of both — the two entries
+// differ in far more than the model name, unlike the FTdx101D/FTdx101MP pair,
+// and TestRadiotext_TS590SAndSGDifferInMoreThanTheModelName is what refuses a
+// later edit that quietly made one a copy of the other.
+var ts590sgText = Text{
+	EraseProcedure:   "The TS-590SG has no erase command this build will send, and the absence is a CHOICE over the weakest evidence in the book rather than a plain gap. The only clearing route this radio's own book prints is a side effect of a shortened memory-write frame — leave one digit of the name field unspecified, set every other parameter to zero, and the channel is erased — and the LENGTH of that short frame is a reading of the sentence rather than a number the book prints anywhere. This build therefore admits a memory-write frame of exactly 50 bytes and no other, so the short form cannot be sent even by accident. A channel can be cleared only at the radio itself, and this build does not describe how: no TS-590SG instruction manual is held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Follow the memory-channel clearing procedure in the radio's own instruction manual.",
+	FirmwareGuidance: "The TS-590SG reports its own firmware version and this build asks for it, as the second frame of a two-frame probe, and prints the four characters the radio answered — and then branches on nothing. NO VERSION MATTERS ON THIS ROW. The position in the memory record that selects filter A or B is live on every TS-590SG the book describes, so there is no threshold to compare a version against and no write refusal keyed to one; the version is reported because a reader is entitled to see what the radio said, not because this build acts on it. No minimum firmware version is established for this radio either: nothing this project holds states one, and no TS-590SG has ever been asked.",
+	GridLegendNote:   "Tone and Scan Skip ARE read and written on the TS-590SG, unlike the Yaesu radios this programme also supports: its 50-byte memory record carries a tone mode, separate transmit and receive tone numbers and a channel-lockout flag. ONLY FM CHANNELS ARE EVER WRITTEN, and that is the BROADEST refusal on this radio rather than a detail: the two bytes the record carries beside the mode have only two printed meanings, \"00: FM Normal\" and \"01: FM Narrow\", and the book never says what either means in SSB, CW, AM or FSK — so a channel in any other mode is refused at the write, naming register entry A23, rather than sent with a byte whose meaning this build does not hold. Reading is unaffected in every mode. ONE TONE VALUE IS STILL REFUSED, and it is a disagreement between this radio's own two printed tone charts rather than a limit of this build: 1750 Hz is the last entry of the chart the tone-number command prints and has no entry at all in the chart the tone-squelch command prints, so a 1750 Hz TRANSMIT tone is written normally while a 1750 Hz RECEIVE tone is refused at the write, naming decision 14, rather than sent as a number the receive chart does not print. THE FILTER COLUMN IS SETTABLE ON THIS ROW, which is the one memory-channel difference between the two TS-590 entries in the model list: the record position that selects filter A or B is live on every radio this book describes, with no firmware condition attached to it. A MEMORY CHANNEL READ OFF THIS RADIO IS NOT WRITTEN BACK UNTIL YOU SUPPLY ITS TRANSMIT FREQUENCY, and that is the cost worth knowing before you plan a round trip. This radio expresses a split as two frames over one channel number, this build sends one, and what the second frame answers on a simplex channel is printed nowhere in the book — so a read leaves the transmit frequency unavailable rather than guessing at it, and a channel is written only when its transmit disposition is known. Read the memories, edit a name and send them straight back and EVERY memory channel is refused, naming register entry A9; fill the transmit frequency in yourself and the channel writes, typing the receive frequency there being the simplex channel the single frame this build sends can express. A GENUINE SPLIT IS STILL REFUSED RATHER THAN FLATTENED even then: a channel whose transmit frequency differs from its receive frequency has no second frame to go in, so it is refused instead of being written as simplex and read back as though it had never been split. A SCAN RANGE IS NOT AFFECTED by any of this, because in that bank the second frame carries a range's end frequency rather than a transmit frequency and there is no transmit disposition to require. A9 is assumed per row, and until it is lifted on this row — which would take somebody reading a simplex channel's transmit side off a real TS-590SG and reporting what came back — this is what a memory write costs here. AND A CHIRP FILE CANNOT BE IMPORTED ON THIS RADIO AT ALL in this release: EVERY row is blocked. A CHIRP file's blank Duplex column is its ordinary simplex row, and this radio declares no shift vocabulary for that to land in — its 50-byte record carries no duplex selector of any kind — so every row is refused on that column and the import writes nothing. CW, CWR and RTTY rows are refused a second time besides, on the mode: those map to the sideband-specific names CW-U, CW-L and RTTY-U, and this radio's own mode legend prints CW, CW-R, FSK and FSK-R instead. This programme's own CSV import and export are unaffected.",
+	// DELIBERATELY EMPTY, exactly as every entry's is whose write-trial
+	// guard is false, and for the same reason: this field states what IS and
+	// is NOT verified on a real radio about preservation across a rewrite,
+	// and there has been no write trial of any kind on this family. Any
+	// sentence here would be a claim about hardware nobody here has touched.
+	// internal/wiring's TestEverySupportedModelHasRadiotext requires
+	// EraseProcedure, FirmwareGuidance and ProbeFirmwareNote and deliberately
+	// excludes this one.
+	ToneScanSkipVerification: "",
+	// Byte-identical to EraseProcedure, as every other entry's is.
+	EraseDialogNote: "The TS-590SG has no erase command this build will send, and the absence is a CHOICE over the weakest evidence in the book rather than a plain gap. The only clearing route this radio's own book prints is a side effect of a shortened memory-write frame — leave one digit of the name field unspecified, set every other parameter to zero, and the channel is erased — and the LENGTH of that short frame is a reading of the sentence rather than a number the book prints anywhere. This build therefore admits a memory-write frame of exactly 50 bytes and no other, so the short form cannot be sent even by accident. A channel can be cleared only at the radio itself, and this build does not describe how: no TS-590SG instruction manual is held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Follow the memory-channel clearing procedure in the radio's own instruction manual.",
+	// The two tooltips DIFFER, and on this family they say something no
+	// earlier entry's could: both columns ARE reachable here. The 50-byte
+	// record carries a tone mode, two tone numbers and a channel-lockout
+	// flag, so neither column is a preserved cell — which is why each
+	// tooltip says so rather than borrowing a Yaesu entry's "not readable
+	// over the protocol" wording. Neither claims a preservation finding,
+	// because there is none: no radio of this family has been written to.
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read and written over this radio's PC-control interface on a TS-590SG, so nothing here is preserved: the 50-byte memory record carries a tone mode and separate transmit and receive tone numbers. Whether a rewrite preserves them has never been tested on a real radio",
+		ScanSkip: "read and written over this radio's PC-control interface on a TS-590SG, so nothing here is preserved: the 50-byte memory record carries a channel-lockout flag. Whether a rewrite preserves it has never been tested on a real radio",
+	},
+	FirmwarePlaceholder: "as answered by the TS-590SG itself, for example 1.00",
+	ProbeFirmwareNote:   "Firmware version IS readable on this radio, and the probe reads it: two frames go out, an identity request and then a version request, and the four characters that come back are printed in the report above. NOTHING ON THIS ROW BRANCHES ON THE ANSWER — the filter position in a memory record is live on every TS-590SG the book describes — so the version is reported and not acted on. A version this build cannot parse still gives a working session: the grammar is assumed from a single worked example in the book, and refusing a radio over an assumption would cost more than it buys. Its opening speed of 9600 is ASSUMED, not read off the radio, and it is an operational assumption rather than a cautious one: neither Kenwood book prints a factory speed anywhere, a wrong speed is not a safe speed but an unreachable radio, and the symptom is a timeout that looks exactly like a dead port or a bad cable. This build offers NO way to open at another speed — not on the command line and not in the window — and it never probes the port at several speeds to find out, so a radio set to anything else has to be put back to 9600 at its own menu before it will answer. The printed rate list is 9600, 19200, 38400, 57600 and 115200; 4800 is on the radio's list too and is deliberately absent from this build's, because each book attaches a condition to it that a flat list of speeds cannot express.",
+}
+
+// ts480Text is the TS-480's entry, and it is the ONE ENTRY IN THIS FILE WHOSE
+// MODEL IS NOT REGISTERED (plan decision P17, Stuart decision row 5).
+// core/driver/ts480 is BUILT and deliberately NOT in internal/wiring's tables
+// at this milestone's close: registering it is gated on an observation from a
+// real radio that nobody has (plan decision P3, the ten-edit list). For is
+// consulted only for registered models, so this entry is INERT in the shipped
+// binary — no window and no command line can reach it — until the commit that
+// registers the row, at which point it is already here and already reviewed,
+// which is the whole point of landing it now.
+//
+// IT NEEDS A REGISTRY-INDEPENDENT SURFACE TO BE CHECKED AGAINST AT ALL.
+// radiotext_test's non-borrowing sweep ranges wiring.SupportedModels(), so an
+// unregistered row never enters its expectations; the pins for this entry are
+// therefore written against radiotext.For("TS-480") directly (the texts map
+// is unexported and the test file is an external test package, so the map
+// itself is unreachable from there).
+//
+// EVERYTHING THIS ENTRY SAYS IS ABOUT A RADIO THAT IS WRITTEN TO BY NOTHING.
+// Every channel write to a TS-480 is refused by this build, so the prose
+// describes a read-and-report radio; the group-membership loss the capability
+// matrix assigns to radiotext (§3.10) is recorded here and nowhere else,
+// because there is no field to grade and nothing to refuse.
+var ts480Text = Text{
+	EraseProcedure:   "The TS-480 has no erase command this build will send, and this radio's own book prints no clearing route for one to send: its memory-write section ends without the shortened-frame side effect the TS-590 book prints, and the only \"clear\" anywhere in its printed command set clears the RIT offset instead. This build admits a memory-write frame of exactly 50 bytes and no other in any case, so the TS-590's short form could not be sent here either. It would refuse a channel write in any case — no channel write of any kind is sent to this radio by this build — so clearing a channel is doubly a front-panel job here. This build does not describe how: no TS-480 instruction manual is held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Follow the memory-channel clearing procedure in the radio's own instruction manual.",
+	FirmwareGuidance: "The TS-480 has NO READABLE FIRMWARE VERSION AT ALL, and that is a documented absence rather than a command this build declines to send: there is no version query in this radio's whole printed command set, no revision number, no part code and no firmware statement anywhere in the book. The second frame of this radio's probe asks a different question — it reads the hardware VARIANT, the printed four-value field that distinguishes the plain radio from the ones with the internal antenna tuner or the external display head — and an unexpected value there refuses the session outright, because that field is a complete printed legend and a value outside it means a variant whose behaviour this build would be inventing. Read the version off the radio's own display if you need it; nothing here can ask for it, and no minimum version is established.",
+	GridLegendNote:   "NO CHANNEL WRITE OF ANY KIND IS SENT TO A TS-480 BY THIS BUILD, so every column of this grid is a reading rather than an instruction: the step the memory record carries has TWO different printed legends on this radio, one for SSB, CW and FSK and one for AM and FM, so the same stored index means 0.5 kHz on one mode and 5 kHz on another, and the book never says which value means leave the step as it is — so a channel write would have to send a step nobody here can check. Reading is unaffected. Three further things a file can carry are lost on this radio and worth knowing before a round trip. MEMORY GROUP MEMBERSHIP CANNOT BE PRESERVED: this radio has ten memory groups and a command that chooses which of them are scanned, but no memory frame carries a channel's group and no command reads or writes one, so a channel saved to a file and sent back would lose which group it belonged to — there is nothing to refuse and no column to grade, which is why it is written here. THE TRANSMIT AND RECEIVE TONE NUMBERS ARE NOT SET either: this radio's two printed tone charts do not agree with one another about how many tones there are, so this build reads the tone mode and declines to choose a number. And a CHIRP file cannot be imported on this radio at all: every row is blocked, because a CHIRP file's blank Duplex column is its ordinary simplex row and this radio declares no shift vocabulary for that to land in. CW, CWR and RTTY rows are refused a second time besides, on the mode: those map to the sideband-specific names CW-U, CW-L and RTTY-U, and the mode names this build publishes for this radio are CW, CW-R, FSK and FSK-R instead.",
+	// DELIBERATELY EMPTY, exactly as every entry's is whose write-trial
+	// guard is false, and for the same reason: this field states what IS and
+	// is NOT verified on a real radio about preservation across a rewrite,
+	// and there has been no write trial of any kind on this family. Any
+	// sentence here would be a claim about hardware nobody here has touched.
+	// internal/wiring's TestEverySupportedModelHasRadiotext requires
+	// EraseProcedure, FirmwareGuidance and ProbeFirmwareNote and deliberately
+	// excludes this one.
+	ToneScanSkipVerification: "",
+	// Byte-identical to EraseProcedure, as every other entry's is.
+	EraseDialogNote: "The TS-480 has no erase command this build will send, and this radio's own book prints no clearing route for one to send: its memory-write section ends without the shortened-frame side effect the TS-590 book prints, and the only \"clear\" anywhere in its printed command set clears the RIT offset instead. This build admits a memory-write frame of exactly 50 bytes and no other in any case, so the TS-590's short form could not be sent here either. It would refuse a channel write in any case — no channel write of any kind is sent to this radio by this build — so clearing a channel is doubly a front-panel job here. This build does not describe how: no TS-480 instruction manual is held here, and inventing front-panel key presses for a radio nobody here has touched would be worse than admitting the gap. Follow the memory-channel clearing procedure in the radio's own instruction manual.",
+	// The two tooltips DIFFER, and on this family they say something no
+	// earlier entry's could: both columns ARE reachable here. The 50-byte
+	// record carries a tone mode, two tone numbers and a channel-lockout
+	// flag, so neither column is a preserved cell — which is why each
+	// tooltip says so rather than borrowing a Yaesu entry's "not readable
+	// over the protocol" wording. Neither claims a preservation finding,
+	// because there is none: no radio of this family has been written to.
+	PreservationTooltips: PreservationTooltips{
+		Tone:     "read but never written on a TS-480: the memory record carries a tone mode, which this build reads, and two tone numbers it declines to set because the radio's own two tone charts disagree about how many tones there are. Nothing is written to this radio at all, so nothing here can be lost by a rewrite",
+		ScanSkip: "read but never written on a TS-480: the memory record carries a channel-lockout flag, which this build reads. Nothing is written to this radio at all, so nothing here can be lost by a rewrite",
+	},
+	FirmwarePlaceholder: "as shown on the TS-480's own display; this radio has no version to ask for",
+	ProbeFirmwareNote:   "Firmware version is NOT readable on this radio and this build does not pretend otherwise: there is no version query in its printed command set at all, so check the radio's own display. Two frames still go out at the probe, an identity request and then a HARDWARE VARIANT request, and the second is where this radio differs from its two TS-590 stablemates — it reports which of the four printed variants answered, and an unexpected value REFUSES the session, where an unreadable version on a TS-590 only degrades it to reading. The asymmetry is deliberate: refuse where the book is complete and the radio is outside it, degrade where the book is thin and this build may have guessed its grammar wrong. Its opening speed of 9600 is ASSUMED, not read off the radio, and it is an operational assumption rather than a cautious one: neither Kenwood book prints a factory speed anywhere, a wrong speed is not a safe speed but an unreachable radio, and the symptom is a timeout that looks exactly like a dead port or a bad cable. This build offers NO way to open at another speed — not on the command line and not in the window — and it never probes the port at several speeds to find out, so a radio set to anything else has to be put back to 9600 at its own menu before it will answer. The printed rate list is 9600, 19200, 38400, 57600 and 115200; 4800 is on the radio's list too and is deliberately absent from this build's, because each book attaches a condition to it that a flat list of speeds cannot express.",
+}
+
 // texts is the registry For consults, keyed by the exact model string a
 // driver.Driver.Model() (or driver.Identity/spec.Capabilities.Model)
 // call returns, e.g. "FT-710".
@@ -1895,20 +2044,46 @@ var texts = map[string]Text{
 	"IC-R8600":   icr8600Text,
 	"FT-891":     ft891Text,
 	"FT-991A":    ft991aText,
+	"TS-590S":    ts590sText,
+	"TS-590SG":   ts590sgText,
+	// THE ONE KEY HERE WHOSE MODEL internal/wiring DOES NOT REGISTER (plan
+	// decision P17, Stuart decision row 5). core/driver/ts480 is built and
+	// its row is deliberately absent from the driver tables until an
+	// observation from a real radio exists, so For("TS-480") answers ok
+	// while SupportedModels() does not name the model. Nothing in the
+	// shipped binary reaches this entry: every caller of For passes a
+	// registered model. It is here so that its prose is written and
+	// reviewed under the same non-borrowing and vocabulary discipline as
+	// every other entry, rather than arriving unreviewed inside the
+	// registration commit — and so that edit 4 of that commit's ten-edit
+	// list is already a no-op when it comes.
+	"TS-480": ts480Text,
 }
 
 // For returns model's radio-specific prose. "FT-710", "FTdx10", "FTdx101D",
 // "FTdx101MP", "IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700",
 // "IC-905", "IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600",
-// "FT-891" and "FT-991A" are populated — the SEVENTEEN models
-// internal/wiring registers AS OF Tier 1's FT-991A registration, a count an
-// eighteenth would falsify; any other model — including "", a future driver
-// not yet given an entry, a near-miss typo ("FT-DX10", "IC7610", "IC7300",
-// "IC705", "IC9700", "IC905", "IC7851", "IC7760", "IC7100", "ICR8600",
-// "FT891", "ft-891", "FT991A" or "ft-991a", say), OR A DIFFERENT REAL RADIO
-// THIS PROJECT DOES NOT SUPPORT ("FT-991", which is a shipping Yaesu product
-// in its own right and not a misspelling of anything here) — returns the
-// zero Text and false.
+// "FT-891", "FT-991A", "TS-590S", "TS-590SG" and "TS-480" are populated; any
+// other model — including "", a future driver not yet given an entry, a
+// near-miss typo ("FT-DX10", "IC7610", "IC7300", "IC705", "IC9700",
+// "IC905", "IC7851", "IC7760", "IC7100", "ICR8600", "FT891", "ft-891",
+// "FT991A", "ft-991a", "TS590SG", "ts-590sg", "TS 590" or "TS480", say), OR
+// A DIFFERENT REAL RADIO THIS PROJECT DOES NOT SUPPORT ("FT-991", which is a
+// shipping Yaesu product in its own right and not a misspelling of anything
+// here) — returns the zero Text and false.
+//
+// MORE POPULATED KEYS THAN REGISTERED MODELS, and the mismatch
+// is deliberate rather than stale: "TS-480" is populated here and is NOT in
+// internal/wiring's SupportedModels() (plan decision P17 — see that entry's
+// own doc comment and the texts map's note on the key). No count is written
+// into this sentence, because a count in prose is one registration away from
+// being false; TestEverySupportedModelHasRadiotext walks the registry and is
+// what actually holds the two in step.
+//
+// "TS-480" THEREFORE ANSWERS ok, and a near-miss list that added it as a
+// spelling expected to MISS would be asserting the opposite —
+// TestFor_UnknownModel carries "TS480" and deliberately not "TS-480" (M4),
+// with the reason stated there.
 // Callers must never treat a zero Text as if it were real advisory copy.
 //
 // THE MATCH IS EXACT AND CASE-SENSITIVE, and for the FTDX101 pair that is

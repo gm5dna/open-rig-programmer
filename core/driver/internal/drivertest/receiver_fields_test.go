@@ -66,26 +66,25 @@ func TestTierFieldStates_MatchAllFields(t *testing.T) {
 // Fatalf — forwards to the embedded real testing.TB, so the helper runs
 // exactly as it does at its driver call sites.
 //
-// FIFTEEN of those, counted rather than guessed — one per driver package
-// but the IC-R8600's, which reports the seven D8 fields Known and so
-// calls AssertFreshReadSaveLoadNormalised instead, and but the FT-891's
-// (Tier 1), which calls it TWICE — once per read.go path (the combined MT
-// form and the MR-only form), both against its own single model. They
-// cover sixteen of the seventeen registered models: the ftdx101 and
-// ic7851 packages each run their one call over a pair of constructors, so
-// two models come out of each, while the FT-891's two calls both cover
-// the same one.
-//
-// AN ERRATUM OLDER THAN THE NUMBER ABOVE, and worth keeping now that the
-// two coincide: back when there were FOURTEEN call sites this comment
-// claimed fifteen, and at that point the IC-7850 was in fact covered by
-// nothing. Both counts have been re-derived by `git grep` at every
-// registration since, this one included.
-//
-// Tier 1's SECOND registration moved both numbers by one and neither by
-// more: core/driver/ft991a calls this helper ONCE (that radio has a
-// single read path — one combined MT exchange, no MR-only form and no
-// discovery — so there is no second path to cover), for its one model.
+// SEVENTEEN of those at this tip, counted rather than guessed — one per
+// driver package but the IC-R8600's, which reports the seven D8 fields
+// Known and so calls AssertFreshReadSaveLoadNormalised instead, and but the
+// FT-891's (Tier 1), which calls it TWICE — once per read.go path (the
+// combined MT form and the MR-only form), both against its own single
+// model. They cover eighteen of the nineteen registered models — every one
+// but the IC-R8600, which the Normalised variant covers — because the
+// ftdx101, ic7851 and ts590 packages each run their one call over a PAIR of
+// constructors or rows, so two models come out of each, while the FT-891's
+// two calls both cover the same one. core/driver/ft991a calls this helper
+// ONCE, for its one model: that radio has a single read path — one combined
+// MT exchange, no MR-only form and no discovery — so there is no second
+// path to cover. The ts480 package's call covers a model that is built and
+// NOT registered, so it adds a call site without adding a covered
+// registered model. This comment said "fifteen" until the count was
+// checked, and at that point the IC-7850 was in fact covered by nothing; it
+// then went stale again across the FT-891, FT-991A and Kenwood
+// registrations, which is the argument for recounting rather than
+// incrementing.
 type errorRecorder struct {
 	testing.TB
 	errs []string

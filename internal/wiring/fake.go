@@ -23,6 +23,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic905"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic9700"
 	"github.com/gm5dna/open-rig-programmer/core/driver/icr8600"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ts590"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx10"
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx101"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeft891"
@@ -38,6 +39,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic9700"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeicr8600"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeradio"
+	"github.com/gm5dna/open-rig-programmer/internal/fakets590"
 )
 
 // FakeSessionOpts holds extra fakeradio.Option values applied, on top of
@@ -502,6 +504,55 @@ var FT891FakeSessionOpts []fakeft891.Option
 // test using it calls t.Parallel().
 var FT991AFakeSessionOpts []fakeft991a.Option
 
+// TS590SFakeSessionOpts and TS590SGFakeSessionOpts are the TS-590 pair's own
+// option sources: extra fakets590.Option values applied, on top of the
+// always-empty production default, to each sibling's fake rig on every
+// OpenFakeSessionFor call in this process. They are FakeSessionOpts'
+// TS-590 counterparts and, like every variable above, NOT a generalisation
+// of anything — separate variables, read at CALL time inside each row's own
+// newRadio closure below.
+//
+// A SHARED-TYPE HAZARD, like the FTdx101 and IC-7851 pairs' and unlike the
+// single-model variables above: internal/fakets590 simulates BOTH siblings
+// and its Option is a func(*fakets590.Radio), so a closure reading the other
+// row's variable would COMPILE and quietly seed one demo radio from the
+// other's seam. Reading each variable inside its own row's closure is the
+// only thing keeping the two apart, exactly as it is for the FTdx101 pair,
+// and TestOpenFakeSessionFor_TS590SOptionSourceIsItsOwn and
+// TestOpenFakeSessionFor_TS590SGOptionSourceIsItsOwn pin that each variable
+// reaches its own rig and NOT the sibling's.
+//
+// LEFT AT THEIR NIL ZERO VALUES BOTH DEMO RADIOS SHIP THE SAME FIVE
+// POPULATED RECORDS OVER FOUR CHANNELS — memory channels 000, 001 and 002,
+// one record each, and BOTH HALVES of section-defined channel 100 — which is
+// internal/fakets590's own DefaultImage, every byte of it a printed
+// constant, a printed example or the eight-space name (plan decision P19,
+// that package's PROVENANCE.md). Records and channels are counted separately
+// because 100's two halves are two records at one channel number. The
+// ">= 1 populated MEM channel" half is what keeps this package's
+// read-every-default-slot fleet pin non-vacuous for both rows.
+//
+// NO IMAGE EXISTS FOR THE SG's 110-119 AT ALL, and that is decision row 6
+// rather than an omission — at THIS layer. The CODEC ADMITS those ten slots
+// deliberately (core/kw/ts590/layout.go: the book prints 110-119 for the SG
+// row, so an "MR0115;" answer must parse rather than be refused); what an
+// extension channel IS is never explained (A11), so the DRIVER publishes no
+// bank containing them and the fake therefore has no slot ID for an image to
+// represent. Codec domain and driver publication are two different
+// questions, and it is the second that closes here.
+//
+// No production flag or GUI control populates either — they add no second
+// ts590.Simulated reference to any non-test file, so
+// TestSimulatedProfileTokensConfinement's new ts590 row keeps passing.
+//
+// A test that sets one MUST restore the previous value (e.g. via
+// t.Cleanup) — this is shared, unsynchronised package state, acceptable
+// only because no test using it calls t.Parallel().
+var (
+	TS590SFakeSessionOpts  []fakets590.Option
+	TS590SGFakeSessionOpts []fakets590.Option
+)
+
 // fakeRadio is everything OpenFakeSessionFor needs from a model's fake
 // rig: a port to hand the driver, and a way to shut the rig down
 // afterwards. Interface-typed rather than *fakeradio.Radio (M9c-5 E5)
@@ -623,6 +674,15 @@ var (
 	// was written against, not by maker and not by which tier registered
 	// it.
 	_ fakeRadio = (*fakeft991a.Radio)(nil)
+	// The TS-590 pair's (Tier 6) — DIRECTLY, and so still no fourth adapter:
+	// internal/fakets590's own Port() method is already declared to return
+	// io.ReadWriteCloser (internal/fakets590/fakets590.go, checked against
+	// source before this registration, per the task brief), so
+	// *fakets590.Radio satisfies fakeRadio as written. ONE assertion for the
+	// PAIR, the *fakedx101.Radio's shape: fakets590.New is a single
+	// constructor serving both rows through a REQUIRED row argument, so there
+	// is one type to prove and two table rows that depend on the proof.
+	_ fakeRadio = (*fakets590.Radio)(nil)
 )
 
 // ic7610FakeAdapter narrows *fakeic7610.Radio's Port() — which returns
@@ -990,6 +1050,45 @@ var fakeDrivers = map[string]fakeDriverEntry{
 	FT991AModel: {
 		newDriver: func() driver.Driver { return ft991a.New(ft991a.Simulated) },
 		newRadio:  func() fakeRadio { return fakeft991a.New(FT991AFakeSessionOpts...) },
+	},
+	// The TS-590S and TS-590SG (Tier 6, the registry's first Kenwood rows):
+	// TWO rows over ONE driver package, ONE simulator and ONE profile — the
+	// FTdx101D/FTdx101MP shape — and the standing warning applies twice
+	// over. Both writeTrialsComplete guards are false
+	// (core/driver/ts590/caps.go keeps one per row), so neither radio has a
+	// hardware-evidenced write path, and the Supported writes
+	// ts590.Simulated reaches here are a claim about internal/fakets590
+	// alone: that simulator stores and returns what the 50-byte MW carried.
+	// This pairing is the only place that Profile value is legal outside its
+	// own package, which is what internal/guards' ts590 row confines.
+	//
+	// EACH ROW NAMES ITS OWN ROW TWICE — once to the DRIVER and once to the
+	// FAKE — and that is what this pair costs over every single-model row
+	// above. ts590.RowS/RowSG selects the driver's identity, its byte-28
+	// policy and its slot ceiling; fakets590.RowS/RowSG selects what the rig
+	// answers "ID;" with. Four call sites, and a copy-paste that left any
+	// one of them on the sibling's row builds a session that reads and
+	// writes flawlessly and is simply the wrong radio — caught by
+	// TestOpenFakeSessionFor_EveryRegisteredModel's identity leg, where the
+	// driver's static CATID ("021" or "023") must equal what the rig
+	// answered.
+	//
+	// NO ADAPTER: this fake's Port() already returns io.ReadWriteCloser, so
+	// the *fakets590.Radio goes into the table as it stands (see the
+	// fakeRadio proof above).
+	//
+	// NOTHING IS EMPTIED HERE AND NOTHING IS SEEDED, unlike the IC905Model
+	// row above: internal/fakets590's DefaultImage is already what a demo
+	// radio should be (plan decision P19) — four populated records, every
+	// byte of them printed evidence, all decodable by core/kw's own parser,
+	// and no image at all for the SG's unpublished 110-119.
+	TS590SModel: {
+		newDriver: func() driver.Driver { return ts590.New(ts590.RowS, ts590.Simulated) },
+		newRadio:  func() fakeRadio { return fakets590.New(fakets590.RowS, TS590SFakeSessionOpts...) },
+	},
+	TS590SGModel: {
+		newDriver: func() driver.Driver { return ts590.New(ts590.RowSG, ts590.Simulated) },
+		newRadio:  func() fakeRadio { return fakets590.New(fakets590.RowSG, TS590SGFakeSessionOpts...) },
 	},
 }
 

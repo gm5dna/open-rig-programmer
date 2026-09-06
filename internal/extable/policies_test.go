@@ -271,6 +271,43 @@ func TestRegisteredProfiles_DeclareTodaysBehaviourExplicitly(t *testing.T) {
 		// DigitsCeiling is still core/cat's — the FT-991A renders into
 		// core/cat/ft991a, not a package of its own.
 		"ft991a": {AddressSingle, LabelsAbsent, TextRowsAbsent, ParameterlessExcluded, [][3]int{{87, 0, 0}}, 0, MaxDigitsCeiling},
+		// The TS-480's chart prints ONE three-digit Menu No. — the whole
+		// address — no group labels, and no free-text row:
+		// core/kw/ts480/menu480.csv's provenance header records all three
+		// as readings of that chart. Its ceiling is the LITERAL 246, not
+		// MaxDigitsCeiling: this profile renders into core/kw, whose EX
+		// answer has one more fixed byte than a Yaesu one, and core/kw's
+		// MaxEXDigits is the datum. The two differ by exactly one, which is
+		// why this row spells the number rather than a symbol — a stanza
+		// that copy-pasted 247 would pass every other test in this package,
+		// and core/kw/exdigits_ceiling_test.go is the twin pin.
+		"ts480": {AddressSingle, LabelsAbsent, TextRowsAbsent, ParameterlessRefused, nil, 0, 246},
+		// The TS-590S is one of the three Kenwood registrations, which
+		// are together the whole reason the ceiling column exists — none of
+		// them is "first": the registry is a map and ts480 heads the three
+		// under RegisteredProfiles' sort. Its inventory renders into core/kw,
+		// whose EX answer carries ten fixed bytes against a Yaesu one's
+		// nine, so its ceiling is core/kw.MaxEXDigits — 246, one less than
+		// core/cat's 247. A stanza that copy-pasted MaxDigitsCeiling would
+		// pass every other test in this package; it fails here.
+		//
+		// Its chart's shape, from core/kw/ts590/menu590s.csv's provenance
+		// header: one three-digit Menu number that is the whole address, no
+		// group labels, and one free-text row — menu 087 Power on message,
+		// eight ASCII characters.
+		"ts590s": {AddressSingle, LabelsAbsent, TextRowsAllowed, ParameterlessRefused, nil, 8, 246},
+		// The TS-590SG is the third of the Kenwood registrations that do
+		// NOT render into core/cat, and so carries the same non-default
+		// ceiling: 246 is core/kw's MaxEXDigits, spelt as a literal here because this
+		// package must not import the package it renders into.
+		// core/kw/exdigits_ceiling_test.go pins the profile field to that
+		// constant; this row pins it against a number a reader can check, so
+		// a stanza carrying core/cat's 247 fails in both places rather than
+		// passing every test in this one. Its chart prints one three-digit
+		// menu number that is the whole address (AddressSingle), no group
+		// labels, and one free-text row of eight characters — menu 001 Power
+		// on message. See core/kw/ts590/menu590sg.csv's provenance header.
+		"ts590sg": {AddressSingle, LabelsAbsent, TextRowsAllowed, ParameterlessRefused, nil, 8, 246},
 	}
 	regs := RegisteredProfiles()
 	if len(regs) != len(want) {

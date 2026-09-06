@@ -1324,7 +1324,7 @@ func (e *Engine) DrainToQuiet(ctx context.Context) error {
 // hold for a radio that BROADCASTS unprompted. Icom's transceive mode is
 // factory-ON on SOME of the Icom models this programme registers (the set
 // is internal/wiring/wiring_test.go's icomModels, pinned against
-// SupportedModels() by TestYaesuAndIcomModelsPartitionSupportedModels — a
+// SupportedModels() by TestMakerModelListsPartitionSupportedModels — a
 // count written here would be stale by the next family, and one such radio
 // is all the argument needs; "some" because no radio has been asked and
 // each model's default is an ASSUMED entry), and

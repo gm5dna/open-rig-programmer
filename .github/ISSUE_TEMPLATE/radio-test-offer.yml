@@ -30,6 +30,8 @@ body:
         - IC-905
         - IC-9700
         - IC-R8600
+        - TS-590S
+        - TS-590SG
         - FT-710 on Linux (the one platform the FT-710 has not been tried on)
         - FT-710 on Windows amd64 (only ARM64 has been tried)
     validations:

@@ -242,3 +242,60 @@ func TestCmdProbe_Help(t *testing.T) {
 		t.Errorf("cmdProbe([-h]): stderr = %q, want empty for explicit help", stderr.String())
 	}
 }
+
+// TestWriteProbeReport_TS590SGCarriesTheFirmwareAnswer pins Tier 6's probe
+// leg: the TS-590 pair answers a firmware query as the second frame of its
+// identity probe, and the report prints what the radio said, VERBATIM and
+// quoted, through the optional driver.FirmwareAnswerReporter capability.
+//
+// WHY THE LINE MATTERS ENOUGH TO PIN: on the TS-590S row this answer decides
+// whether channel writes proceed at all — a radio reporting 2.00 or later, or
+// an answer that row's driver cannot read as a version, is refused — so a user
+// whose writes are refused must be able to see the exact bytes the decision
+// was taken on. The SG is used here because both rows collect the answer the
+// same way and the SG is the row with the wider inventory — both rows are
+// registered unconditionally, so the choice is one of coverage, not of
+// availability.
+//
+// AND THE FT-710'S ABSENCE IS THE OTHER HALF. That session implements no such
+// capability (no Yaesu or Icom driver does), and the report must OMIT the line
+// rather than print an empty or dashed one: "this radio has no firmware query"
+// and "the radio answered nothing" are different facts, and rendering them
+// alike would be the report asserting the second.
+func TestWriteProbeReport_TS590SGCarriesTheFirmwareAnswer(t *testing.T) {
+	sess, closeAll, err := openFakeSession(testCtx(t), wiring.TS590SGModel)
+	if err != nil {
+		t.Fatalf("openFakeSession: %v", err)
+	}
+	t.Cleanup(func() { _ = closeAll() })
+
+	var stdout, stderr bytes.Buffer
+	writeProbeReport(&stdout, &stderr, wiring.TS590SGModel, sess)
+
+	out := stdout.String()
+	if !strings.Contains(out, "Firmware answer: ") {
+		t.Errorf("writeProbeReport stdout = %q, want a \"Firmware answer:\" line — this radio answers a firmware query and the report must show what it said", out)
+	}
+	// Quoted, so a stray or non-printing byte in a real radio's answer would
+	// be visible rather than swallowed. The fake's default answer is the
+	// book's own worked example.
+	if !strings.Contains(out, `Firmware answer: "1.00"`) {
+		t.Errorf("writeProbeReport stdout = %q, want it to carry the radio's answer verbatim and quoted", out)
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("writeProbeReport stderr = %q, want empty", stderr.String())
+	}
+
+	// The contrast: a registered model with no firmware query prints no such
+	// line at all.
+	ft710Sess, ft710Close, err := openFakeSession(testCtx(t), wiring.DefaultModel)
+	if err != nil {
+		t.Fatalf("openFakeSession(FT-710): %v", err)
+	}
+	t.Cleanup(func() { _ = ft710Close() })
+	var ft710Out, ft710Err bytes.Buffer
+	writeProbeReport(&ft710Out, &ft710Err, wiring.DefaultModel, ft710Sess)
+	if strings.Contains(ft710Out.String(), "Firmware answer:") {
+		t.Errorf("writeProbeReport(FT-710) stdout = %q, want NO firmware-answer line — that radio has no firmware query, and a line here would report an absence as an answer", ft710Out.String())
+	}
+}

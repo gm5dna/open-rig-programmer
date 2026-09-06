@@ -11,6 +11,10 @@ tag. The full release notes for each version are on the
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [1.4.0] - 2026-09-06
+
 ### Added
 - **Yaesu FT-991A**: read, opt-in write, menu-settings read, CSV and
   CHIRP, on the same terms as every other manual-derived radio. Its 99
@@ -29,6 +33,51 @@ tag. The full release notes for each version are on the
   name at all. Its CAT speed is a guess (38400; menu 031 CAT RATE on the
   radio is the only remedy), and its USB socket presents two serial
   ports with no statement of which carries CAT.
+- **Kenwood TS-590S and TS-590SG**: read, opt-in write, menu-settings
+  read and CSV, on the same terms as every other manual-derived radio.
+  **CHIRP import is not available for these two radios: every row is
+  blocked** — a CHIRP file's blank `Duplex` column means simplex, and
+  these radios declare no shift vocabulary at all, their memory record
+  carrying no duplex selector, so every ordinary row is refused on that
+  column and the import writes nothing (`CW`, `CWR` and `RTTY` rows are
+  refused on the mode besides). The program's own CSV import and export
+  are unaffected.
+  They are the first radios here whose tone and scan-skip columns
+  can be read and written. A memory channel is written back only once
+  you supply its transmit frequency, and a channel read off the radio
+  does not carry one: the manual never says what these radios answer for
+  the transmit side of a simplex channel, so the program leaves it
+  unavailable rather than guessing and refuses the write, naming register
+  entry A9. The ordinary round trip — read the memories, edit, send them
+  back — is therefore refused on every memory channel until you fill that
+  column in; a genuine split is refused even then, and a scan range is not
+  affected. Only FM channels are written, and a 1750 Hz receive tone is
+  refused where a 1750 Hz transmit tone is written. On the TS-590S alone
+  the filter column cannot be set and channel writes are refused on
+  firmware 2.00 or later — which the manual stops guaranteeing at exactly
+  that point — or on a firmware version the program cannot read, a
+  version that cannot be compared not being one that can be shown to be
+  1.xx. `rigprog probe` prints the radio's own firmware answer
+  verbatim.
+- Per-radio Kenwood detail in `docs/radio-notes.md`, with the evidence in
+  a new `docs/kenwood-models.md`.
+
+### Changed
+- Two completeness checks that were silently passing now walk the model
+  registry: the simulated-profile confinement guard and the CHIRP
+  fixtures. A radio registered without its row in either is now a test
+  failure rather than a silence.
+
+### Not included
+- **Kenwood TS-480**: the driver is written and shipped but the radio is
+  not selectable. Nothing in its 2003 manual says what a memory channel
+  that has never been written answers when it is read; the TS-590SG's
+  manual says an all-zero record, and if a TS-480 rejects that read
+  instead, a brand-new one cannot be read by this program at all. It
+  stays unavailable until somebody observes what a real TS-480 answers —
+  at least three unwritten channels, each confirmed at the front panel,
+  across at least two sessions, with the exact bytes kept and an observer
+  named. `internal/wiring/testdata/README.md` says how.
 
 ## [1.3.0] - 2026-09-05
 
@@ -122,7 +171,8 @@ tag. The full release notes for each version are on the
   and the safe-send ladder: read before write, snapshot, reviewed
   diff, per-channel read-back.
 
-[Unreleased]: https://github.com/gm5dna/open-rig-programmer/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/gm5dna/open-rig-programmer/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/gm5dna/open-rig-programmer/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/gm5dna/open-rig-programmer/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/gm5dna/open-rig-programmer/compare/v1.2.0...v1.2.1

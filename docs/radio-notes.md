@@ -255,6 +255,110 @@ refused rather than allowed to overwrite a channel nothing read.
 
 Evidence: `docs/icom-models.md` (the IC-R8600 bullets).
 
+## Kenwood
+
+### TS-590S and TS-590SG (opt-in)
+
+Read the 100 memory channels, the 10 programmable scan ranges (each a
+start and an end frequency, listed as `100L`/`100U` and so on), and the
+menu settings: 88 of them on the TS-590S, 100 on the TS-590SG. Tone and
+scan skip ARE read and written on these radios, unlike every Yaesu model
+above: the memory record carries a tone mode, separate transmit and
+receive tone numbers and a channel-lockout flag.
+
+Refused: **a memory channel whose transmit frequency you have not
+supplied yourself**, which is every channel as it comes off the radio.
+These radios express a split as two frames over one channel number, the
+program sends one, and what the second frame answers on a simplex
+channel is printed nowhere in the manual — so a read leaves the
+transmit frequency unavailable rather than guessing at it, and the
+write is refused, naming register entry A9. In practice that means
+reading the memories, editing a name and sending them straight back is
+refused on every memory channel until you fill the transmit frequency
+in; typing the receive frequency there is the simplex channel the one
+frame the program sends can express. A **genuine split** is refused
+even then, rather than silently written as simplex. A **scan range** is
+not affected: in that bank the second frame carries a range's end
+frequency rather than a transmit frequency, so there is no transmit
+disposition to require. The refusal lifts on a row only when somebody
+reads a simplex channel's transmit side off a real radio of that model
+and reports what came back.
+
+Also refused: **any channel that is not FM**. It is the broadest refusal
+on these radios, so it is worth knowing first: the two bytes the memory
+record carries beside the mode have only two printed meanings, "FM
+Normal" and "FM Narrow", and the manual never says what they mean in
+SSB, CW, AM or FSK — so an SSB or CW channel is refused rather than
+written with a byte whose meaning nobody here holds, naming register
+entry A23. Every other refusal below applies to the FM channels that
+remain. Reading is unaffected: a channel of any mode reads normally.
+
+Also refused: a **1750 Hz receive tone**. It is the last entry of the
+tone-number chart these radios print and has no entry at all in the
+tone-squelch chart, so the program writes it as a transmit tone and
+refuses it as a receive one.
+
+On the **TS-590S only**, the **filter** column cannot be set at all,
+and channel writes are refused outright on a radio reporting
+**firmware 2.00 or later — or a firmware version the program cannot
+read**:
+the manual guarantees the filter position in a memory record is unused
+only on the 1.xx firmware and says nothing about later versions, and one
+entry in the model list cannot say "settable above 2.00". A radio whose
+firmware answer does not come back in the one form the manual's worked
+example prints takes the same conservative branch, because a version
+that cannot be compared cannot be shown to be a 1.xx one; the session
+still reads normally. The TS-590SG has no such condition and sets the
+filter normally.
+
+**CHIRP import is not available on either radio in v1.4.0: every row is
+blocked.** A CHIRP file's blank `Duplex` column means simplex, and these
+radios declare no shift vocabulary at all — their memory record carries
+no duplex selector — so every ordinary row is refused on that column and
+the import writes nothing. (`CW`, `CWR` and `RTTY` rows are refused a
+second time besides, on the mode: they resolve to names these radios'
+own mode list does not print, which prints `CW`, `CW-R`, `FSK` and
+`FSK-R`.) The program's own CSV import and export are unaffected; only
+the CHIRP direction is closed, and opening it is a change to the shared
+importer every supported radio goes through rather than a Kenwood one.
+
+Channels cannot be deleted.
+
+Guesses: its **speed**. Neither Kenwood manual prints a factory rate, so
+the program opens at 9600; if your radio is set differently, change it
+at the radio's own menu, because the program has no speed setting and
+never probes for one. A wrong speed looks exactly like a dead port. The
+program also does not offer **4800**, which the radios do: each manual
+attaches a condition to that rate that a flat list of speeds cannot
+express.
+
+Not shown: the **band edges**. Neither manual prints a frequency range
+for these radios, so the program declares none rather than inventing
+one, and a frequency out of range is refused by the radio rather than by
+the program.
+
+### TS-480 (built, not selectable)
+
+The TS-480's driver exists in this program and the radio is **not in the
+model list**: you cannot select it. The reason is a question about an
+EMPTY channel. The TS-590SG's manual says that reading a memory channel
+that has never been written answers with an all-zero record; the 2003
+TS-480 manual says nothing about an empty channel anywhere. If a TS-480
+rejects that read instead of answering it, a brand-new TS-480 cannot be
+read by this program at all, and registering the radio would mean
+offering its owner a read that fails on the first channel.
+
+**What would lift it, and it is not one read.** A valid zero record on at
+least **three separate channels**, each confirmed unwritten at the
+radio's own front panel, across at least **two sessions**, with no
+silence and no `?;` among them, every request and answer kept as the
+exact bytes that went over the wire, and an **observer named**.
+`internal/wiring/testdata/README.md` is written for the person who would
+take that observation and says where it goes; a `go test` run is what
+checks it, not a judgement on release day.
+
+Evidence: `docs/kenwood-models.md`.
+
 ## Sources
 
 Protocol facts come from the makers' published documents, each pinned
@@ -277,3 +381,5 @@ by revision in the code that transcribes it.
 | IC-7760 | Icom CI-V Reference Guide rev 2 |
 | IC-7100 | Icom Full Manual A7085-2EX-5, section 20 |
 | IC-R8600 | Icom CI-V Reference Guide rev 3a |
+| TS-590S, TS-590SG | Kenwood PC Control Command reference, revision 3 |
+| TS-480 (built, not selectable) | Kenwood PC Control Command reference, 2003 |
