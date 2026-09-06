@@ -29,43 +29,44 @@ describes under *Switching on writes for an unverified radio*.
 
 ## What changed in this version
 
-- **Windows.** An installer (app + command line) and a command-line zip,
-  each for amd64 and ARM64, built on a Windows host by the release
-  pipeline. Installed and driven end to end on a Windows 11 ARM64
-  virtual machine with a real FT-710 attached (05/09/2026): driver,
-  serial ports, app, command line, two writes and a byte-identical
-  restore. The amd64 app has never been launched by anyone, and no
-  physical Windows PC of either architecture has been tried.
-- **The Yaesu FT-891 is now supported**, for reading and for opt-in
-  writes, on the same terms as every other manual-derived model. Its
-  menu addresses are four digits where the other Yaesu radios use six,
-  and files accept either. Its CAT speed is a guess (38400; menu 0506 on
-  the radio is the only remedy), its USB socket presents two serial
-  ports and the manual does not say which carries CAT, and the manual
-  contradicts itself about whether a memory channel may be read at all,
-  so a refused read of a channel plainly in use is reported as what it
-  is. A CHIRP file's `CW`, `CWR` and `RTTY` rows are not imported on
-  this radio.
-- **The serial port is opened with RTS and DTR requested low** on every
-  platform, so a radio wired for RTS/DTR keying is never keyed by the
-  act of connecting.
-- **CSV import tolerates a UTF-8 byte-order mark and CRLF line endings**,
-  as saved by Windows spreadsheets.
-- **An unanswered Icom field can no longer slip past the send gate** by
-  being saved and reloaded, or by a round trip through CSV. IC-7610,
-  IC-7760 and IC-7851 refuse a frequency the record cannot hold at read
-  time, with the value and the limit.
-- **Every Icom tier column has an editor in the grid**, chosen by the
-  field's kind, and the connection bar says when the radio is a
-  receiver.
-- **The application has an icon of its own** on all three platforms.
-- The README is rewritten for radio owners; per-radio limits live in
-  `docs/radio-notes.md`; a `CHANGELOG.md` lists every release.
+- **The Yaesu FT-991A is now supported**, for reading and for opt-in
+  writes, on the same terms as every other manual-derived model: its 99
+  memories, its 9 PMS pairs and its menu settings, CSV and CHIRP.
+- **The settings list shows 152 items where this radio's menu chart
+  prints 153 rows.** Row 087, RADIO ID, is left out because the chart
+  gives it neither a width nor a parameter — ten printed hyphens and
+  nothing else — so the program cannot size an answer to it and will not
+  send a question it cannot read. One `EX087;` read on a real FT-991A
+  would settle it.
+- **The PMS pairs are listed as the channel numbers 100 to 117**, which
+  is what this radio's own CAT record uses, while its front panel and
+  its manual print the same eighteen slots as `P-1L` to `P-9U`. The
+  numbers are the wire's and the letters are the panel's; they name the
+  same slots in the same order.
+- **This radio's memory channels can carry a DCS state**, the first here
+  that can: its tone byte has five values — CTCSS off, CTCSS encode and
+  decode, CTCSS encode, DCS encode and decode, DCS encode — and the
+  program reads and writes all five. What it cannot reach is *which*
+  tone or *which* DCS code, neither of which is a per-channel field on
+  this radio, so a CHIRP file's `DTCS` and `Cross` rows are still
+  refused — and the reason now says that the state can be written and
+  the code cannot, instead of denying the state.
+- **Three CHIRP limitations on this radio.** `CW`, `CWR` and `RTTY` rows
+  are not imported: they resolve to names this radio's own mode list
+  does not print (it prints `CW`, `CW-R`, `RTTY-LSB` and `RTTY-USB`), so
+  the row is blocked rather than guessed at. C4FM is one of its fourteen
+  modes and CHIRP has no name for it at all, so a C4FM channel cannot go
+  out to a CHIRP file as itself. Scan skip has no place in this radio's
+  memory record, so a CHIRP `Skip` cell is reported and dropped.
+- **Its CAT speed is a guess** (38400; menu 031 CAT RATE on the radio is
+  the only remedy — menu 029 is the rear-panel RS-232C jack, a different
+  port), and its USB socket is a dual-UART bridge presenting two serial
+  ports with no statement of which carries CAT: if one is silent, try
+  the other.
 
-Everything else is internal and carries no change a user can see. The
-stored comparison output of every previously registered radio is
-unchanged apart from the lists of supported models, which gain the
-FT-891.
+No existing radio's behaviour changed. The stored comparison output of
+every previously registered radio is byte for byte identical apart from
+the lists of supported models, which gain the FT-991A.
 
 ## Downloads
 

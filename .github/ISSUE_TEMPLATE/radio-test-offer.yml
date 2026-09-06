@@ -15,6 +15,7 @@ body:
       label: Radio
       options:
         - FT-891
+        - FT-991A
         - FTdx10
         - FTdx101D
         - FTdx101MP
