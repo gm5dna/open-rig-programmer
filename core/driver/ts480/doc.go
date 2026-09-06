@@ -22,20 +22,22 @@
 // invent one: reading "?;" as "absent" is exactly what this milestone refuses
 // to do.
 //
-// The gate is REAL TODAY, but by absence rather than by an enforcement
-// mechanism: this row is missing from realDrivers, fakeDrivers and
-// SupportedModels(), verified by grep, so nothing wires it in. The
-// enforcement mechanism itself does not exist yet — it is T19's. T19 lands
-// the evidence artefact, internal/wiring/testdata/ts480-a4-observation.json,
-// TRACKED IN GIT — deliberately not under docs/superpowers/ or any
-// fixtures-private path, both of which are gitignored, so an artefact there
-// would be absent in a fresh clone and the guard would read "no evidence" on a
-// machine that had simply not been given the file — and the guard itself,
-// internal/wiring's, in three legs: absent → ABSENT (a branch, not a skip),
-// present → PRESENT only after parsing it and asserting the bar, and a
-// non-vacuity leg so that a file recording zero trials fails loudly rather
-// than counting as absence (plan P3). A4's lift is L-HW-3, hardware
-// confirmation item 3.
+// The gate is REAL TODAY, and it is enforced rather than merely observed:
+// this row is missing from realDrivers, fakeDrivers and SupportedModels(),
+// and internal/wiring/ts480gate_test.go asserts that in three legs — absent
+// → ABSENT (a branch, not a skip), present → PRESENT only after parsing the
+// evidence artefact and holding it to the bar, and a non-vacuity leg so that
+// a file recording zero trials fails loudly rather than counting as absence
+// (plan P3). The artefact itself,
+// internal/wiring/testdata/ts480-a4-observation.json, DOES NOT EXIST AND IS
+// NOT THIS PROJECT'S TO WRITE: creating it is edit 1 of P3's ten and only a
+// person at a real TS-480 can do it. Its path is TRACKED IN GIT —
+// deliberately not under docs/superpowers/ or any fixtures-private path, both
+// of which are gitignored, so an artefact there would be absent in a fresh
+// clone and the guard would read "no evidence" on a machine that had simply
+// not been given the file. A4's lift is L-HW-3, hardware confirmation item 3,
+// and internal/wiring/testdata/README.md states the bar it must meet, for the
+// person who would take that observation.
 //
 // A future registration is TEN edits and not one, and the plan's P3 carries
 // the list; NINE OF THE TEN NOW FAIL LOUDLY in the suite, and the tenth only

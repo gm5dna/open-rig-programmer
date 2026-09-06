@@ -42,6 +42,20 @@ import (
 // disagreeing should fix the document to match this file, or change this file
 // deliberately and say so in the commit — not assume the prose is authority.
 //
+// AND WHAT THIS FILE ENFORCES IS STRICTER THAN THAT SENTENCE, DELIBERATELY:
+// it is A4 PLUS THE SHIPPING CODEC'S OWN READING OF THE FRAME. Every mr_answer
+// goes through kwts480.Layout().ParseMRAnswer and must come back Empty, and
+// that reading carries A3 — an empty channel's P16 is EIGHT SPACES, which is
+// this project's reading of the 590SG's "P16 will be blank" (590:1492-1493)
+// and is unlifted on the 480 — and A27, the printed-fixed bytes, likewise
+// unlifted for this row. So an answer with P4-P15 all zero but some other P16,
+// or some other printed-fixed byte, has LIFTED A4 and falsified A3 or A27
+// instead, and this guard still refuses it. That refusal is right — a row
+// whose codec disagrees with the radio in front of it must not register — but
+// it is a different finding, so checkTS480Trial's complaint says which: the
+// next move on that outcome is a core/kw change, not another session at the
+// radio.
+//
 // WHY THE ARTEFACT IS TRACKED IN GIT and not under docs/superpowers/ or
 // docs/fixtures-private/: both are gitignored, so an artefact there would be
 // absent in a fresh clone and in CI, and this guard would read "no evidence"
@@ -131,7 +145,11 @@ const ts480ObservationFile = "ts480-a4-observation.json"
 //   - ts480OutcomeSilence: a read timeout. INCONCLUSIVE, not "absent" —
 //     480:136-138 says the "?;" may be suppressed altogether, and decision 5
 //     forbids reading silence as absence. mr_answer is null on this outcome
-//     and on no other.
+//     and on no other — a schema rule the guard enforces ONE WAY ONLY, in
+//     checkTS480Trial: a null answer on any other outcome is refused, while an
+//     answer recorded beside an outcome of silence is not, because such a
+//     trial already fails the outcome clause and no further complaint would
+//     change what the file is worth.
 //   - ts480OutcomeLinkEvent: "E;" or "O;". INCONCLUSIVE — a link-health event,
 //     not an answer about the channel.
 //   - ts480OutcomeUnexpectedFrame: a 50-byte record that is not all-zero, or
@@ -238,6 +256,13 @@ func loadTS480Observation(path string) (ts480Observation, bool, error) {
 	if err := dec.Decode(&obs); err != nil {
 		return ts480Observation{}, true, fmt.Errorf("decode: %w", err)
 	}
+	// AND NOTHING AFTER IT. Decode reads one JSON value and stops, so a
+	// second document, or a paragraph of notes, appended to a valid one
+	// would otherwise be read straight past — the same class of slip
+	// DisallowUnknownFields is set for, in the same hand-written file.
+	if dec.More() {
+		return ts480Observation{}, true, fmt.Errorf("trailing data after the first JSON document — this file is one observation, not a log")
+	}
 	return obs, true, nil
 }
 
@@ -300,7 +325,7 @@ func checkTS480ObservationBar(obs ts480Observation) []string {
 	}
 
 	if len(obs.Sessions) < 2 {
-		bad("the file records %d session(s); the gate needs at least two, because one sitting cannot show that an answer survives a power cycle", len(obs.Sessions))
+		bad("the file records %d session(s); the gate needs at least two — and what makes them two is that they are two entries here, because a guard cannot tell a power cycle from a copy-paste: the weight is carried by the front-panel confirmations and by the three distinct channels rather than by this count alone", len(obs.Sessions))
 	}
 
 	channels := map[string]bool{}
@@ -376,14 +401,19 @@ func checkTS480Trial(where string, tr ts480Trial) []string {
 	}
 	rec, err := kwts480.Layout().ParseMRAnswer([]byte(*tr.MRAnswer))
 	if err != nil {
-		bad("mr_answer %q is not a record this row's codec accepts: %v", *tr.MRAnswer, err)
+		bad("mr_answer %q is not a record this row's codec accepts: %v — IF ITS P4-P15 ARE ALL ZERO and it is P16 or a printed-fixed byte that differs, then A4 is LIFTED and what this radio falsifies is A3 or A27: the next move is a core/kw change, not another session at the radio", *tr.MRAnswer, err)
 		return problems
 	}
 	if !rec.Empty {
 		bad("mr_answer decodes as a POPULATED channel, not the P4-P15 zero record A4 is about — the channel was not unwritten, and the trial must be repeated on one confirmed unwritten from the front panel")
 	}
 	if rec.Slot != slot {
-		bad("mr_answer names channel %v, not %v — an answer correlated to another channel evidences nothing about this one", rec.Slot, slot)
+		// Both in the TWO-DIGIT published form this row's channel
+		// identity actually is (core/driver/ts480's slotID, and MR's own
+		// P3, "00 ~ 99", 480:912) — printing kw.Slot's "%03d" String here
+		// would answer the observer in an identity their file does not
+		// use and this radio does not carry.
+		bad("mr_answer names channel %02d, not %s — an answer correlated to another channel evidences nothing about this one", rec.Slot.Number(), tr.Channel)
 	}
 	return problems
 }
@@ -418,8 +448,12 @@ func TestTS480RegistrationGate(t *testing.T) {
 func assertTS480RowIsAbsent(t *testing.T) {
 	t.Helper()
 	models := SupportedModels()
-	if len(models) == 0 {
-		t.Fatal("SupportedModels() is empty — every assertion here would hold vacuously")
+	// BOTH registry surfaces, not one. SupportedModels() is derived from
+	// realDrivers (wiring.go's SupportedModels), so an empty one covers that
+	// pair; fakeDrivers is an independent map, and "no TS-480 row in it"
+	// holds vacuously the day it is emptied or restructured.
+	if len(models) == 0 || len(fakeDrivers) == 0 {
+		t.Fatalf("SupportedModels() has %d entry(ies) and fakeDrivers %d — an assertion that this row is absent from an empty registry holds vacuously", len(models), len(fakeDrivers))
 	}
 	if _, ok := realDrivers[ts480RowKey]; ok {
 		t.Errorf("realDrivers carries %q while %s is absent: A4 is unlifted, and registering this row without the observation is what spec decision 10 removed the override to prevent", ts480RowKey, ts480ObservationFile)
@@ -462,6 +496,9 @@ func TestTS480ObservationBar_OverFixtures(t *testing.T) {
 		name string
 		// mutate edits the conforming document; nil leaves it conforming.
 		mutate func(t *testing.T, doc map[string]any)
+		// raw, when set, is written to the fixture path INSTEAD of the
+		// marshalled document, for the malformations a map cannot express.
+		raw string
 		// wantLoadErr, when set, is a substring of the error the loader
 		// must return. wantProblem, when set, is a substring of the bar's
 		// complaint. Both empty means the bar must be met.
@@ -475,6 +512,16 @@ func TestTS480ObservationBar_OverFixtures(t *testing.T) {
 			name:        "an unknown field is refused rather than read as a considered no",
 			mutate:      func(_ *testing.T, doc map[string]any) { doc["front_panel_confirmed"] = true },
 			wantLoadErr: "unknown field",
+		},
+		{
+			// json.Decoder stops at the end of the first value, so a
+			// second document — or a paragraph of notes — after a valid
+			// one would otherwise be read straight past, on the same
+			// decoder DisallowUnknownFields is set on to catch exactly
+			// this class of hand-written slip.
+			name:        "anything at all after the first document",
+			raw:         `{"assumption":"A4"} and then some notes the observer typed`,
+			wantLoadErr: "trailing data",
 		},
 		{
 			name:        "no sessions at all",
@@ -584,7 +631,10 @@ func TestTS480ObservationBar_OverFixtures(t *testing.T) {
 				other := ts480TrialAt(t, doc, 0, 1)["mr_answer"].(string)
 				ts480TrialAt(t, doc, 0, 0)["mr_answer"] = other
 			},
-			wantProblem: "names channel",
+			// Both channels in the TWO-DIGIT published form, which is
+			// what the observer's own file says and what this row puts
+			// on the wire — not kw.Slot.String's three digits.
+			wantProblem: "names channel 07, not 00",
 		},
 		{
 			name:        "the wrong assumption",
@@ -600,6 +650,26 @@ func TestTS480ObservationBar_OverFixtures(t *testing.T) {
 			name:        "nobody named as the observer",
 			mutate:      func(_ *testing.T, doc map[string]any) { doc["observer"] = "  " },
 			wantProblem: "observer is empty",
+		},
+		{
+			name:        "a radio.model naming some other row",
+			mutate:      func(t *testing.T, doc map[string]any) { ts480Radio(t, doc)["model"] = "TS-590SG" },
+			wantProblem: "radio.model is",
+		},
+		{
+			name:        "a session with no date",
+			mutate:      func(t *testing.T, doc map[string]any) { ts480SessionAt(t, doc, 1)["date"] = "  " },
+			wantProblem: "date is empty",
+		},
+		{
+			name:        "a session with no port",
+			mutate:      func(t *testing.T, doc map[string]any) { ts480SessionAt(t, doc, 1)["port"] = "" },
+			wantProblem: "port is empty",
+		},
+		{
+			name:        "a session with no baud",
+			mutate:      func(t *testing.T, doc map[string]any) { ts480SessionAt(t, doc, 1)["baud"] = 0 },
+			wantProblem: "baud is 0",
 		},
 		{
 			name: "another radio's ID answer",
@@ -629,6 +699,9 @@ func TestTS480ObservationBar_OverFixtures(t *testing.T) {
 			body, err := json.MarshalIndent(doc, "", "  ")
 			if err != nil {
 				t.Fatalf("marshal fixture: %v", err)
+			}
+			if tc.raw != "" {
+				body = []byte(tc.raw)
 			}
 			if err := os.WriteFile(path, body, 0o600); err != nil {
 				t.Fatalf("write fixture: %v", err)

@@ -1,8 +1,8 @@
 # `ts480-a4-observation.json` — the TS-480's evidence artefact
 
-This directory holds one file, and today it holds none: `ts480-a4-observation.json`
-does not exist, and that absence is what keeps the TS-480 out of this program's
-model list.
+This directory holds this README and, one day, one other file:
+`ts480-a4-observation.json` does not exist, and that absence is what keeps the
+TS-480 out of this program's model list.
 
 ## What it is for
 
@@ -19,10 +19,11 @@ directions, and it is the guard that decides — not a release-day judgement.
 
 ## The bar
 
-A valid zero record on **at least three separate unwritten channels**, in **at
-least two sessions**, with **no silence and no `?;`** among them. One silent trial
-proves nothing and must not be recorded as a pass; the manual says the `?;` may be
-suppressed altogether, so silence is inconclusive rather than absence.
+`checkTS480ObservationBar` in `../ts480gate_test.go` is the bar, and it is the
+only copy that decides anything. Read it before you sit down at the radio: it
+is short, it names every shortfall in one run rather than one at a time, and
+restating it here would make a third copy of a sentence that is meant to exist
+in two.
 
 ## Its shape
 
