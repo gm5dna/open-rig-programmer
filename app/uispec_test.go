@@ -2065,7 +2065,8 @@ func TestGetUISpec_RegisteredIC705_EveryBankFieldsAndTagDisplay(t *testing.T) {
 // driver's own slots.go builds), not hand-typed — the same
 // recompute-rather-than-hardcode discipline
 // TestGetUISpec_SlotClassification_DenseBanksUnchangedByWithinSpace uses
-// for the five Yaesu models — because hand-typing 321 slot strings is 321
+// for every dense-banked model it walks — because hand-typing 321 slot
+// strings is 321
 // chances to mistype one, exactly the risk core/driver/ic9700/slots.go's
 // own bankSlots doc comment names. The sanity-check loop below confirms
 // three REAL addresses are actually present in that recomputed list, so
@@ -3129,8 +3130,10 @@ func TestGetUISpec_SlotClassification_OfflineWorkingCopy(t *testing.T) {
 // membership of the static bank's Slots, and on a DENSE bank those are the
 // same question by construction: WithinSpace scans Slots and then answers
 // false unless the bank is Sparse (core/spec/bank.go). Every registered
-// Yaesu model is dense on every static bank, so nothing about their grids
-// may move by so much as a slot.
+// Yaesu model, and both TS-590 rows, are dense on every static bank, so
+// nothing about their grids may move by so much as a slot. The list the
+// test walks is the authority on which models those are; this sentence
+// names no count for the reason the list's own comment gives.
 //
 // The test does not restate the expected lists — it RECOMPUTES them with
 // the OLD rule (literal membership of each static bank's own Slots, in

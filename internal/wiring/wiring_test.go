@@ -2352,8 +2352,32 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		}},
 	}
 
-	if models := SupportedModels(); len(table) != len(models) {
-		t.Fatalf("SupportedModels() = %v — this table has %d rows and must name every registered model", models, len(table))
+	// MEMBERSHIP, not length. A length check passes a table that names one
+	// model twice and another not at all — precisely the crossed-pairing
+	// copy-paste the TS-590 comment above warns of, which would leave the
+	// SG's default path and consent arm unpinned while this test stayed
+	// green. Its sibling tables in this file walk SupportedModels() by
+	// name; this one was missed.
+	rows := make(map[string]bool, len(table))
+	for _, tc := range table {
+		if rows[tc.model] {
+			t.Fatalf("this table names %q twice — one row per registered model, so a duplicate means some other model has none", tc.model)
+		}
+		rows[tc.model] = true
+	}
+	models := SupportedModels()
+	for _, model := range models {
+		if !rows[model] {
+			t.Errorf("registered model %q has no row in this table, so its default-path byte identity and its consent arm are pinned by nothing", model)
+		}
+	}
+	for model := range rows {
+		if !slices.Contains(models, model) {
+			t.Errorf("this table names %q, which internal/wiring does not register", model)
+		}
+	}
+	if t.Failed() {
+		t.Fatalf("SupportedModels() = %v — this table must carry exactly one row per registered model", models)
 	}
 
 	for _, tc := range table {
@@ -2855,7 +2879,7 @@ func mustRealDriver(t *testing.T, model string) driver.Driver {
 // explicit and independent of whatever else gets registered later.
 //
 // FIVE SINCE TIER 1's FT-891, and that model is why this list is not
-// merely longer. TestYaesuAndIcomModelsPartitionSupportedModels below is
+// merely longer. TestMakerModelListsPartitionSupportedModels below is
 // the alarm for a Yaesu registration that joined SupportedModels() and
 // neither list; the FT-891 is the first registration since that alarm was
 // written to actually exercise it, and it belongs HERE rather than in
@@ -2882,7 +2906,7 @@ var yaesuModels = []string{DefaultModel, FTdx10Model, FTdx101DModel, FTdx101MPMo
 // IC-7100 is why that distinction now has to be stated: it is the first
 // Icom row that implements NO driver.SerialFramingReporter, so it opens
 // at 8-N-2 like the five Yaesu rows. It still belongs in this list —
-// TestYaesuAndIcomModelsPartitionSupportedModels partitions
+// TestMakerModelListsPartitionSupportedModels partitions
 // SupportedModels() by maker — and its framing coverage is
 // TestOpenRealSessionFor_IC7100OpensAtEightNTwo rather than an
 // OpensAtEightNOne mirror.
@@ -2914,7 +2938,7 @@ var icomModels = []string{IC7610Model, IC7300Model, IC7300MK2Model, IC705Model, 
 // (TestStopBitsFor_EveryKenwoodDriverReportsOne).
 var kenwoodModels = []string{TS590SModel, TS590SGModel}
 
-// TestYaesuAndIcomModelsPartitionSupportedModels restores the two-way
+// TestMakerModelListsPartitionSupportedModels restores the two-way
 // drift alarm the old len(models) != 4 pins gave for free and fix round 1
 // of the R1 review flagged as lost when those three pins were rescoped to
 // yaesuModels: with a hardcoded count, ANY registration change — a fifth
@@ -2982,7 +3006,7 @@ var kenwoodModels = []string{TS590SModel, TS590SGModel}
 // identity "0650" is 4 characters`. Drop IC7100Model from all three lists:
 // the union loses a member and this test fails with "registered but named in
 // none of the three lists". Both were run by hand at the registration commit.
-func TestYaesuAndIcomModelsPartitionSupportedModels(t *testing.T) {
+func TestMakerModelListsPartitionSupportedModels(t *testing.T) {
 	registered := make(map[string]bool, len(realDrivers))
 	for _, m := range SupportedModels() {
 		registered[m] = true

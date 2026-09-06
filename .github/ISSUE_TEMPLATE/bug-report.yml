@@ -28,6 +28,8 @@ body:
         - IC-905
         - IC-9700
         - IC-R8600
+        - TS-590S
+        - TS-590SG
         - Demo (simulated radio)
         - Not radio-specific
     validations:
