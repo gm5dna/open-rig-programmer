@@ -253,7 +253,9 @@ func TestCmdProbe_Help(t *testing.T) {
 // an answer that row's driver cannot read as a version, is refused — so a user
 // whose writes are refused must be able to see the exact bytes the decision
 // was taken on. The SG is used here because both rows collect the answer the
-// same way and only the SG's registration is unconditional in this build.
+// same way and the SG is the row with the wider inventory — both rows are
+// registered unconditionally, so the choice is one of coverage, not of
+// availability.
 //
 // AND THE FT-710'S ABSENCE IS THE OTHER HALF. That session implements no such
 // capability (no Yaesu or Icom driver does), and the report must OMIT the line

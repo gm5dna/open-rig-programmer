@@ -40,6 +40,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/internal/fakedx101"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeft891"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7851"
+	"github.com/gm5dna/open-rig-programmer/internal/fakets590"
 	"github.com/gm5dna/open-rig-programmer/internal/radiotext"
 )
 
@@ -1973,6 +1974,11 @@ func TestModelSlug(t *testing.T) {
 		// table's on all three.
 		{"TS-590S", "ts-590s"},
 		{"TS-590SG", "ts-590sg"},
+		// The TS-480 row is the only UNREGISTERED real model in this table
+		// (the "FTX-1" below is a fixture, not a radio this project holds a
+		// document for), which makes it look like a stray to a later reader
+		// tidying the table against SupportedModels(). It is not: it is P2/L7
+		// deliberately, for the reason the paragraph above gives. Leave it.
 		{"TS-480", "ts-480"},
 		{"FTX-1", "ftx-1"},
 	} {
@@ -2955,6 +2961,20 @@ var kenwoodModels = []string{TS590SModel, TS590SGModel}
 // it buys is exactly the failure mode M2 names: a model filed under the wrong
 // maker fails here, on a value read from its own driver, instead of quietly
 // acquiring another family's assertions.
+//
+// AND IT HAS A FALSE-POSITIVE MODE, which is recorded here so that the day it
+// fires nobody reaches for the tempting fix. A model filed CORRECTLY whose
+// family identity is a different width from its list-mates' — a future
+// Kenwood whose printed ID legend is not three digits, say — fails this leg
+// with a message about mis-filing when nothing is mis-filed. RELAXING THE
+// CHECK IS THE WRONG ANSWER: it is the only leg that sees a MOVE, and a
+// width test that admits several widths per list admits the mis-filing too.
+// The right answer is to make the exception visible — a fourth list for a
+// family that genuinely has a fourth identity form, or a per-model entry in
+// wantIdentityWidth carrying the citation for that model's own legend — so
+// that the exception is as reviewable as the rule. Two families sharing a
+// width is the other limit, and is not reachable across the three registered
+// today (4, 2 and 3, pairwise distinct); it would need the maker-keyed form.
 //
 // RED PROOF EACH WAY (recorded, not re-run by CI). Move FT891Model from
 // yaesuModels to icomModels: the union is unchanged and disjointness holds,
@@ -4162,6 +4182,105 @@ func TestOpenFakeSessionFor_FT891MTReadRejectionEndToEnd(t *testing.T) {
 // way this can fail loudly is an assertion somewhere that names both sides,
 // and this package is the one that already imports both.
 var _ driver.FirmwareAnswerReporter = (*ts590.Session)(nil)
+
+// The TS-590 pair's option-source probe, and the slots it turns on.
+//
+// internal/fakets590's DefaultImage populates memory channels 000, 001 and
+// 002 and both halves of section channel 100 (that package's PROVENANCE.md,
+// plan decision P19), so emptying ONE of them is a change a plain read can
+// see and the others stay as the non-vacuity control.
+const (
+	ts590OptionProbeChannel = 2
+	ts590OptionProbeSlot    = "002"
+	ts590OptionControlSlot  = "000"
+)
+
+// TestOpenFakeSessionFor_TS590SOptionSourceIsItsOwn is the FTdx101 pair's
+// test one family over, and it exists because the same hazard exists here
+// for the same reason: internal/fakets590 simulates BOTH siblings and its
+// Option is a func(*fakets590.Radio), so a closure in one row of
+// fakeDrivers that read the OTHER row's variable would compile and would
+// quietly seed one demo radio from the other's seam. Nothing else catches
+// that — the two variables are nil in production, and a crossed read is
+// invisible until somebody sets one.
+//
+// (Opus review of this task, MEDIUM-1: fake.go's own comment claimed these
+// two tests already existed. They did not. The claim is now true.)
+//
+// The fixture is fakets590.WithEmptyChannel rather than an added bank,
+// because this family discovers nothing at all: both rows' banks are static
+// (plan decision P11), so there is no discovery walk for a With5xx-shaped
+// option to show up in. Emptying a slot the default image populates is the
+// readable change this family does have, and it is a REMOVAL of map entries
+// rather than any new assumed behaviour (internal/fakets590/options.go).
+func TestOpenFakeSessionFor_TS590SOptionSourceIsItsOwn(t *testing.T) {
+	prev := TS590SFakeSessionOpts
+	TS590SFakeSessionOpts = []fakets590.Option{fakets590.WithEmptyChannel(ts590OptionProbeChannel)}
+	t.Cleanup(func() { TS590SFakeSessionOpts = prev })
+
+	// Reached the S, which is the var that was set.
+	assertTS590ProbeSlotEmptied(t, TS590SModel, true)
+	// Did NOT reach the SG, whose own var is untouched.
+	assertTS590ProbeSlotEmptied(t, TS590SGModel, false)
+}
+
+// TestOpenFakeSessionFor_TS590SGOptionSourceIsItsOwn is the mirror image,
+// and both directions are tested for the reason the FTdx101 pair's are: a
+// closure that read TS590SFakeSessionOpts in BOTH rows would pass the S's
+// test outright.
+func TestOpenFakeSessionFor_TS590SGOptionSourceIsItsOwn(t *testing.T) {
+	prev := TS590SGFakeSessionOpts
+	TS590SGFakeSessionOpts = []fakets590.Option{fakets590.WithEmptyChannel(ts590OptionProbeChannel)}
+	t.Cleanup(func() { TS590SGFakeSessionOpts = prev })
+
+	assertTS590ProbeSlotEmptied(t, TS590SGModel, true)
+	assertTS590ProbeSlotEmptied(t, TS590SModel, false)
+}
+
+// assertTS590ProbeSlotEmptied opens model's registered fake session and
+// asserts whether the probe slot reads back empty — Data nil being this
+// driver's spelling of "this slot is empty" (core/driver/ts590/read.go, the
+// book's "If the selected channel is empty, P4 ~ P15 will be 0 and P16 will
+// be blank").
+//
+// THE CONTROL SLOT IS ASSERTED POPULATED IN BOTH DIRECTIONS, for the reason
+// the FTdx101 helper asserts its static bank in both: a session that had
+// lost its whole image would otherwise satisfy the want==true case for
+// entirely the wrong reason, and a session that had lost nothing but was
+// reading some other rig's records would satisfy want==false.
+func assertTS590ProbeSlotEmptied(t *testing.T, model string, want bool) {
+	t.Helper()
+	ctx := testCtx(t)
+	sess, closeAll, err := OpenFakeSessionFor(ctx, model)
+	if err != nil {
+		t.Fatalf("OpenFakeSessionFor(%q): unexpected error: %v", model, err)
+	}
+	t.Cleanup(func() {
+		if err := closeAll(); err != nil {
+			t.Errorf("closeAll for %q: unexpected error: %v", model, err)
+		}
+	})
+
+	ctrl, err := sess.ReadChannel(ctx, ts590OptionControlSlot)
+	if err != nil {
+		t.Fatalf("%s: ReadChannel(%q): unexpected error: %v", model, ts590OptionControlSlot, err)
+	}
+	if ctrl.Data == nil {
+		t.Fatalf("%s: the control slot %q reads empty — this rig's default image populates it, so neither direction of this test asserts anything", model, ts590OptionControlSlot)
+	}
+
+	ch, err := sess.ReadChannel(ctx, ts590OptionProbeSlot)
+	if err != nil {
+		t.Fatalf("%s: ReadChannel(%q): unexpected error: %v", model, ts590OptionProbeSlot, err)
+	}
+	if got := ch.Data == nil; got != want {
+		if want {
+			t.Errorf("%s: slot %q reads populated, want empty — this row's fakets590.Option source did not reach its own rig", model, ts590OptionProbeSlot)
+		} else {
+			t.Errorf("%s: slot %q reads empty, want populated — this row's rig was seeded from the SIBLING's option source, which is the crossed-source hazard fake.go's comment describes", model, ts590OptionProbeSlot)
+		}
+	}
+}
 
 // TestOpenFakeSessionFor_TS590SGEndToEnd is Tier 6's registration leg, and
 // it is deliberately the WHOLE composition rather than four separate

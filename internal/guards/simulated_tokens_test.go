@@ -291,9 +291,9 @@ func TestSimulatedProfileTokensConfinement(t *testing.T) {
 		// realDrivers and fakeDrivers, so there is no fake-wiring call site
 		// for this guard's pairing clause to find and its non-vacuity clause
 		// would fail the row rather than confine anything. The absence is
-		// validated SEPARATELY and by name — see
-		// TestSimulatedProfiles_HasNoTS480RowUntilTheRowRegisters below — so
-		// that a premature ts480 row is caught by ITS OWN assertion rather
+		// validated SEPARATELY and by name — see the
+		// assertNoTS480RowUntilTheRowRegisters helper below, called from this
+		// test — so that a premature ts480 row is caught by ITS OWN assertion rather
 		// than as a side effect of the union equality, which needs no
 		// exception for it: an unregistered model is simply absent from
 		// SupportedModels(). Adding this row is edit 8 of the ten-edit
@@ -429,8 +429,8 @@ func fileHasCall(f *ast.File, recv, fn string) bool {
 // unregistered model — the TS-480 today — is simply absent from
 // SupportedModels() and needs no exemption; folding its absence in here as a
 // named exclusion would make a premature ts480 row look like the exception
-// working rather than the omission it is. That absence has its own assertion,
-// TestSimulatedProfiles_HasNoTS480RowUntilTheRowRegisters below.
+// working rather than the omission it is. That absence has its own assertion
+// with its own two messages, assertNoTS480RowUntilTheRowRegisters below.
 //
 // DUPLICATES ARE AN ERROR TOO, not merely tolerated: two rows claiming the
 // same model would make the union equality hold while one of the two rows

@@ -3144,8 +3144,9 @@ func TestGetUISpec_SlotClassification_OfflineWorkingCopy(t *testing.T) {
 // "ZZZ", which nothing claims — GetUISpec's orphan case, and the pin that
 // the widened rule admits nothing it should not.
 func TestGetUISpec_SlotClassification_DenseBanksUnchangedByWithinSpace(t *testing.T) {
-	// SEVEN models since Tier 6, and the list is RE-DERIVED at each
-	// registration rather than extended by reflex — the question this test
+	// THE LIST IS RE-DERIVED at each registration rather than extended by
+	// reflex, and no count is written here — a tally in a comment is one
+	// registration away from being false — the question this test
 	// asks of a model is "are ALL of its static banks dense?", and a model
 	// added here without that check would trip the Sparse Fatalf below
 	// rather than assert anything.
@@ -3154,8 +3155,10 @@ func TestGetUISpec_SlotClassification_DenseBanksUnchangedByWithinSpace(t *testin
 	// "P1L".."P9U"); its discovered 60M/EMG banks are not static and never
 	// reach this test. The TS-590S's and TS-590SG's two static banks are
 	// dense as well — MEM "000".."099" and SCAN "100L","100U".."109L","109U",
-	// with Sparse written explicitly false on every bank of both rows (plan
-	// decision P11) — and neither row discovers anything at all, so for the
+	// with Sparse left at its zero value, false, on every bank of both rows
+	// (core/driver/ts590/caps.go sets no Sparse field at all; caps_test.go's
+	// own pin is what holds that down, plan decision P11) — and neither row
+	// discovers anything at all, so for the
 	// Kenwood pair "every static bank" is simply "every bank". The SG's
 	// 110-119 are not slot IDs anywhere on that row (Stuart decision row 6),
 	// so there is no partial space here for a dense promise to be wrong

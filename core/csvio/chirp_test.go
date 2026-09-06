@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -2250,42 +2251,35 @@ func TestChirpFixtures_CoverEveryRegisteredModel(t *testing.T) {
 		}
 	}
 	for model := range have {
-		if !contains(registered, model) {
+		if !slices.Contains(registered, model) {
 			t.Errorf("chirpFixtures holds a fixture for %q, which internal/wiring does not register", model)
 		}
 	}
 	for _, model := range chirpFixtureExceptions {
-		if !contains(registered, model) {
+		if !slices.Contains(registered, model) {
 			t.Errorf("chirpFixtureExceptions names %q, which is not registered — the list is a debt ledger of REGISTERED models with no fixture, so a name that no longer registers must be deleted rather than carried", model)
 		}
 	}
 
-	// The exception list is pinned to exactly the eleven models it inherited,
-	// so a later registration cannot be excused by appending to it: the only
-	// admissible edit is a deletion, made in the commit that adds that
-	// model's fixture.
-	wantExceptions := []string{
-		"IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905",
-		"IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600",
+	// THE LEDGER MAY ONLY SHRINK, and the freeze is a COUNT here rather than
+	// a second copy of the eleven names (Opus review of Tier 6 task 18,
+	// LOW-2: the old wantExceptions literal sat twenty lines from the list it
+	// claimed to pin, so the "frozen" assertion compared the list against a
+	// copy of itself and both halves were one edit apart).
+	//
+	// A COUNT IS ENOUGH BECAUSE MEMBERSHIP IS ALREADY PINNED AGAINST
+	// internal/wiring, by the two loops above and not by any literal here: a
+	// name swapped INTO this list is either a model with a fixture, which
+	// fails the have && excepted branch, or one without, in which case the
+	// name it displaced fails the !have && !excepted branch. So substitution
+	// is covered by the registry walk and only GROWTH needs freezing.
+	//
+	// RED-PROVED (recorded, not re-run by CI): prepending "FT-891" — which
+	// has a fixture — fails both this cap and the have && excepted branch.
+	const inheritedExceptions = 11
+	if len(chirpFixtureExceptions) > inheritedExceptions {
+		t.Errorf("chirpFixtureExceptions has %d entries, want at most the %d it inherited (%v) — a newly registered model earns a FIXTURE, never an exception", len(chirpFixtureExceptions), inheritedExceptions, chirpFixtureExceptions)
 	}
-	if len(chirpFixtureExceptions) > len(wantExceptions) {
-		t.Errorf("chirpFixtureExceptions has %d entries, want at most the %d it inherited (%v) — a newly registered model earns a FIXTURE, never an exception", len(chirpFixtureExceptions), len(wantExceptions), wantExceptions)
-	}
-	for _, m := range chirpFixtureExceptions {
-		if !contains(wantExceptions, m) {
-			t.Errorf("chirpFixtureExceptions names %q, which is not one of the eleven inherited exceptions %v", m, wantExceptions)
-		}
-	}
-}
-
-// contains reports whether haystack holds needle.
-func contains(haystack []string, needle string) bool {
-	for _, s := range haystack {
-		if s == needle {
-			return true
-		}
-	}
-	return false
 }
 
 // TestImportCHIRP_TS590PairBlocksCWAndRTTYRows is Tier 6's per-row CHIRP pin
