@@ -113,8 +113,8 @@ but not the DCS code. A CHIRP file's `CW`, `CWR` and `RTTY` rows are
 not imported either, for the FT-891's reason — they resolve to names
 this radio's mode list does not print (it prints `CW`, `CW-R`,
 `RTTY-LSB` and `RTTY-USB`). And C4FM is one of this radio's fourteen
-modes that CHIRP has no name for at all, so a C4FM channel cannot be
-carried out to a CHIRP file as itself.
+modes that CHIRP has no name for at all, so no CHIRP file can describe a
+C4FM channel.
 
 Guesses: its **speed**. The menu row that sets the rate for the socket
 this program uses is 031 CAT RATE, which lists 4800, 9600, 19200 and
