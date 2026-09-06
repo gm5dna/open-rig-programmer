@@ -482,9 +482,11 @@ const FT891Model = "FT-891"
 // what names this radio's snapshot and journal directory, is "ft-991a":
 // the hyphen in the model name is collapsed to a separator, not deleted,
 // and the trailing A is lowercased with the rest. TestModelSlug pins the
-// second and TestModelSlugsUnique pins that it collides with no other
-// registered model's — "ft-891" and "ft-991a" being one character apart
-// in the middle rather than at either end.
+// second (its FT-991A row, added by the fix round that found the claim
+// standing without one) and TestModelSlugsUnique pins that it collides
+// with no other registered model's — which matters here because "ft-891"
+// and "ft-991a" differ only by an inserted "9" and a trailing "a", the
+// kind of near-miss a reader skims past.
 //
 // TWO STATIC BANKS AND NO DISCOVERED BANK AT ALL, which is where this row
 // differs from the FT-891's above. MEM ("001".."099") and PMS
@@ -1343,15 +1345,16 @@ type SessionOptions struct {
 // model) and why the static lookups below pass false.
 //
 // The port is opened at the DRIVER's own factory-default CAT baud
-// (Capabilities().DefaultBaud), not at transport's package default: all
-// FOUR registered values agree with transport's today (the FT-710's 38400,
-// the FTdx10's ASSUMED 38400 — core/driver/ftdx10's register entry, whose
-// lift is the rate a factory-configured radio's ID exchange answers at —
-// and the FTdx101D's and FTdx101MP's, ASSUMED 38400 on the same footing
-// and with the same per-model lift), so there is no behaviour change, but a
-// registered model whose radio ships at a different rate would otherwise
-// have been opened at the FT-710's — a radio-specific fact read from the
-// wrong radio's table.
+// (Capabilities().DefaultBaud), not at transport's package default. THE SIX
+// YAESU VALUES agree with transport's 38400 today — the FT-710's, read off
+// hardware; the FTdx10's, the FTdx101D's and the FTdx101MP's, each ASSUMED
+// 38400 in its own driver's register entry with its own named per-model
+// lift; and Tier 1's FT-891 and FT-991A, ASSUMED on the same footing — so
+// for those six this is a no-change derivation. THE ELEVEN ICOM VALUES DO
+// NOT: every registered Icom model's DefaultBaud is 19200, and each of
+// those is a port opened at a rate transport's default would have got
+// wrong. That is the whole point of reading the rate from the radio's own
+// table rather than from the FT-710's.
 // TestOpenRealSessionFor_BaudFollowsADisagreeingDriver proves the
 // derivation with a fixture that actually disagrees, since no registered
 // model does.

@@ -74,8 +74,13 @@ func TestTierFieldStates_MatchAllFields(t *testing.T) {
 // cover sixteen of the seventeen registered models: the ftdx101 and
 // ic7851 packages each run their one call over a pair of constructors, so
 // two models come out of each, while the FT-891's two calls both cover
-// the same one. This comment said "fifteen" until the count was checked,
-// and at that point the IC-7850 was in fact covered by nothing.
+// the same one.
+//
+// AN ERRATUM OLDER THAN THE NUMBER ABOVE, and worth keeping now that the
+// two coincide: back when there were FOURTEEN call sites this comment
+// claimed fifteen, and at that point the IC-7850 was in fact covered by
+// nothing. Both counts have been re-derived by `git grep` at every
+// registration since, this one included.
 //
 // Tier 1's SECOND registration moved both numbers by one and neither by
 // more: core/driver/ft991a calls this helper ONCE (that radio has a

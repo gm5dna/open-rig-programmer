@@ -408,7 +408,7 @@ var ftdx101mpText = Text{
 // evidence to a radio in an entirely different family.
 // TestRadiotext_IC7610Verbatim pins every string, and its own
 // non-borrowing check refuses any field that is byte-identical to, or
-// carries a particular of, any of the five Yaesu entries.
+// carries a particular of, any of the six Yaesu entries.
 //
 // WHAT IS DIFFERENT ABOUT THIS RADIO, AND WHY IT SHOWS IN THE PROSE:
 //
@@ -1750,12 +1750,29 @@ var ft891Text = Text{
 // no FT-991A OPERATING manual is held — only the CAT Operation Reference
 // Manual — and no write trial has happened (that driver's
 // writeTrialsComplete is false). Every string says what is actually known,
-// including where something is NOT known, and borrows the wording of no
-// other entry: not the FT-710's, whose hedgeless sentences are ITS hardware
+// including where something is NOT known, and borrows no other entry's
+// EVIDENCE: no other radio's fact, no other radio's hedge, no other radio's
+// particular. Not the FT-710's, whose hedgeless sentences are ITS hardware
 // evidence; not the FTdx10's, the FTdx101 pair's or the FT-891's, whose
 // hedges are about different radios and different manuals; and not any Icom
-// entry's. assertNotBorrowedFromAnyOtherModel (radiotext_test.go) pins the
-// non-borrowing mechanically and field by field.
+// entry's.
+//
+// THAT IS A CLAIM ABOUT EVIDENCE, NOT ABOUT PHRASING, and the distinction
+// is deliberate rather than a hedge. Some clauses here are word-for-word
+// what the FT-891's entry says — the longest shared run is 38 words in
+// ProbeFirmwareNote — and every one of them is a statement about THIS
+// BUILD ("neither this build's command line nor its window offers a way to
+// open at another rate") rather than about either radio. Those facts are
+// identically true of both, so paraphrasing them into a difference would be
+// the dishonest move, not the honest one.
+//
+// WHAT assertNotBorrowedFromAnyOtherModel (radiotext_test.go) MECHANICALLY
+// PINS IS EXACTLY TWO THINGS, and no more: that no field is byte-identical
+// IN FULL to another registered model's same field, and that no field
+// carries another model's particular (its name, or a CI-V address). There
+// is no phrase-level, run-length or similarity check of any kind; if this
+// milestone ever wants that stronger property, it is a new check and not a
+// stronger comment.
 //
 // WHAT THIS ENTRY CAN SAY THAT NO OTHER YAESU ENTRY CAN is the point of
 // writing it fresh rather than adapting one of theirs. Five facts are this

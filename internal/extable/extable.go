@@ -608,7 +608,7 @@ func RenderGo(p Profile, rows []Row, observed map[string]Observed) ([]byte, erro
 	// reader of the artefact alone can see which of the chart's rows is
 	// missing and why, without holding the profile beside it. Under
 	// ParameterlessRefused the set is empty and nothing is emitted, which is
-	// what keeps the four registered inventories byte-identical.
+	// what keeps the five registered inventories byte-identical.
 	// TestRenderGo_ParameterlessAddressIsAbsentByAddress pins both halves.
 	if len(p.ParameterlessAddresses) > 0 {
 		buf.WriteString("//\n")

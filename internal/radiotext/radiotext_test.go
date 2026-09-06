@@ -190,16 +190,16 @@ func TestTextFields_CoversEveryFieldOfText(t *testing.T) {
 // rather than needing this file edited once per existing entry.
 // ---------------------------------------------------------------------
 
-// yaesuModels is the FIVE registered models whose radiotext entry predates
+// yaesuModels is the SIX registered models whose radiotext entry predates
 // (and is unrelated to) any CI-V vocabulary — the set catFamilyVocabulary
 // below must NOT be checked against, since every one of these radios'
 // prose legitimately says "CAT".
 //
-// The FT-891 (Tier 1) is the fifth, and it belongs here for exactly the
-// reason the other four do and for no other: it speaks CAT, so its own
+// The FT-991A (Tier 1) is the sixth, and it belongs here for exactly the
+// reason the other five do and for no other: it speaks CAT, so its own
 // prose says "CAT" throughout and the vocabulary check must skip it. It is
 // otherwise an ordinary entry — one registered model, one driver package,
-// one simulator.
+// one simulator, exactly as the FT-891 before it was.
 var yaesuModels = map[string]bool{
 	"FT-710": true, "FTdx10": true, "FTdx101D": true, "FTdx101MP": true,
 	"FT-891": true, "FT-991A": true,
@@ -612,7 +612,7 @@ func TestRadiotext_FTdx101DAndMPDifferOnlyInTheModelName(t *testing.T) {
 // other model's is: core/driver/ic7610's writeTrialsComplete is false, so
 // there is no hardware-preservation verification of any kind to report.
 //
-// THE NON-BORROWING CHECK RUNS AGAINST ALL FOUR YAESU ENTRIES, not just
+// THE NON-BORROWING CHECK RUNS AGAINST ALL SIX YAESU ENTRIES, not just
 // the FT-710 and the FTdx10 the way the FTdx101 pair's does: this is the
 // first model with no Yaesu sibling to be careful about specifically, so
 // every prior entry is a borrowing risk, not just the two nearest ones.
@@ -1547,7 +1547,13 @@ func TestRadiotext_FT891ProbeNote_CarriesItsThreeNamedFacts(t *testing.T) {
 // manual is held — only the CAT Operation Reference Manual — and no write
 // trial has happened (that driver's writeTrialsComplete is false). Every
 // string therefore says what is actually known, including where something is
-// NOT known, and borrows the wording of no other entry.
+// NOT known, and borrows no other entry's EVIDENCE — no other radio's fact,
+// hedge or particular. Shared PHRASING is a different matter and is not
+// claimed against: some clauses are word-for-word the FT-891 entry's, and
+// each of those is a statement about this BUILD rather than about either
+// radio, identically true of both (see ft991aText's own doc comment). What
+// assertNotBorrowedFromAnyOtherModel below pins mechanically is whole-field
+// byte-identity plus particulars, not phrasing.
 //
 // WHAT THIS ENTRY CAN SAY THAT ITS YAESU SIBLINGS' CANNOT, and why it is
 // written fresh rather than adapted: this radio's memory record carries a
@@ -1633,15 +1639,23 @@ func TestRadiotext_FT991ANamedFacts(t *testing.T) {
 		// The baud sentence, and the menu row that is its only remedy.
 		"38400 this build opens at is ASSUMED",
 		"031 CAT RATE",
-		// Menu 029 named ONLY to exclude it.
-		"Menu 029 is NOT that row",
-		"different port from the one this programme opens",
+		// Menu 029 named ONLY to exclude it. The needles are the DATUM
+		// (the menu row's own number and printed label) and the shortest
+		// statement of the exclusion, on the FT-891 test's granularity
+		// above: a faithful reword survives both, a note that dropped the
+		// exclusion loses both.
+		"029 232C RATE",
+		"a different port",
 		// The two enumerated USB serial devices.
 		"USB-to-dual-UART bridge",
 		"never says which of the two carries CAT",
-		// The RS-232C gate and its own printed defect.
+		// The RS-232C gate and its own printed defect — the row's number
+		// and label, the printed key this build was written from, and the
+		// hole in the printed list, each as its own needle rather than as
+		// one long transcription of this note's own sentence.
 		"028 GPS/232C SELECT",
-		"0: GPS1, 1: GPS2 and 3: RS232C, with key 2 missing",
+		"3: RS232C",
+		"key 2 missing",
 	} {
 		if !strings.Contains(got.ProbeFirmwareNote, want) {
 			t.Errorf("ProbeFirmwareNote = %q,\nwant it to contain %q", got.ProbeFirmwareNote, want)
