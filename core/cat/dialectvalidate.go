@@ -38,16 +38,46 @@ const maxMTTagBytes = 64
 // maxSlotDecimal is the largest value a 3-digit numeric slot can express.
 const maxSlotDecimal = 999
 
-// maxEXComponent is the largest value an EXAddress component may hold.
+// maxEXComponent is the largest value an EXAddress component may hold
+// UNDER EXAddressTriple AND EXAddressPair, and — under EXAddressSingle —
+// the largest P2 and P3 may hold, which V12 separately requires to be zero.
 //
-// wireEXAddress renders each component with %02d, which is a MINIMUM
-// width, not an exact one: a component of 100 renders three digits and
-// produces a seven-byte address in a field the grammar fixes at six (or a
-// five-byte one in the four-digit field). The resulting frame is rejected
+// wireEXAddress renders each of those components with %02d, which is a
+// MINIMUM width, not an exact one: a component of 100 renders three digits
+// and produces a seven-byte address in a field the grammar fixes at six (or
+// a five-byte one in the four-digit field). The resulting frame is rejected
 // by the dialect's own gate and can never be reconstructed by its own
 // parser, because ParseEXAddress consumes exactly the declared width.
-// uint8 alone therefore does not constrain this enough.
+//
+// THE BOUND IS FORM-DEPENDENT, and this constant is only two thirds of it.
+// EXAddressSingle renders P1 with %03d into a three-digit field, so that
+// component's ceiling is maxEXComponentSingleP1 below. Both are applied by
+// V8 (validateEXItems), which selects between them on cfg.EXAddressForm.
+//
+// The type is NOT the bound. EXAddress's components were uint8 until the
+// FT-991A seam, and that paragraph used to end "uint8 alone therefore does
+// not constrain this enough" — true, but it invited the reading that the
+// type constrained it at all. It is uint16 now precisely so that the STATED
+// rule is the operative one: a P1 of 300 is representable, legal under
+// Single and refused under Triple by this constant, which is a disagreement
+// no uint8 field could express. TestValidateEXItems_ComponentBoundIsForm-
+// Dependent pins it.
 const maxEXComponent = 99
+
+// maxEXComponentSingleP1 is the largest P1 an EXAddressSingle dialect may
+// hold: the three-digit field's own capacity, 999.
+//
+// It is a SEPARATE constant rather than a number computed from a width,
+// because it is read beside maxEXComponent by the same rule and the two must
+// be legible together. wireEXAddress renders %03d under this form — again a
+// MINIMUM width — so a P1 of 1000 would produce a four-digit address in a
+// field the FT-991A's grammar fixes at three, built and gate-approved and
+// unparseable by this dialect's own ParseEXAddress.
+//
+// The FT-991A's chart stops at 153. The bound is the FIELD's, not the
+// chart's: membership is what refuses 154, and this rule exists for the
+// address the field could never carry at all.
+const maxEXComponentSingleP1 = 999
 
 // clarFieldMaxHz is the largest magnitude the 4-digit clarifier field can
 // carry, whatever a family's step size.
@@ -65,6 +95,7 @@ func validateDialectConfig(cfg DialectConfig) error {
 		validateCATID,         // V1
 		validateModeNames,     // V2
 		validatePMSPairs,      // V3
+		validatePMSForm,       // V15 — see its own comment for why it runs HERE
 		validateSpecialWires,  // V4
 		validateMemoryRange,   // V5
 		validateSixtyRange,    // V6
@@ -76,6 +107,7 @@ func validateDialectConfig(cfg DialectConfig) error {
 		validateEXAddressForm, // V12
 		validateMCSelects,     // V13
 		validateMemoryP5,      // V14
+		validateToneStates,    // V16
 	} {
 		if err := rule(cfg); err != nil {
 			return err
@@ -138,10 +170,114 @@ func validateModeNames(cfg DialectConfig) error {
 	return nil
 }
 
-// validatePMSPairs is V3.
+// validatePMSPairs is V3, and its ceiling is FORM-AWARE.
+//
+// The 0..9 bound is the TOKEN form's, and so is its reason: the pair number
+// sits between 'P' and 'L'/'U' as a single ASCII digit, so a tenth pair
+// builds a wire form this dialect's own ParseSlot rejects. That reason is
+// untrue under PMSFormNumeric, where the pair number never reaches the wire
+// at all and the slots are ordinary decimal channel numbers — the operative
+// ceiling there is V15's (the range must end at or below 999), derived from
+// the wire form the dialect actually builds. Dialect.pmsCap makes the same
+// split, so a numeric dialect declaring more than nine pairs is BUILT with
+// them rather than silently clamped.
+//
+// The token sentence is unchanged, byte for byte, and the test that pins it
+// is TestV3_PairBoundIsFormAware. An omitted form takes the token bound
+// here and is then refused by V15 at the next position, so no config
+// escapes a ceiling.
 func validatePMSPairs(cfg DialectConfig) error {
-	if n := cfg.Slots.PMSPairs; n < 0 || n > 9 {
+	n := cfg.Slots.PMSPairs
+	if n < 0 {
+		return fmt.Errorf("cat: Slots.PMSPairs is %d, want >= 0 — a negative pair count describes no slot either form could build", n)
+	}
+	if cfg.Slots.PMSForm != PMSFormNumeric && n > 9 {
 		return fmt.Errorf("cat: Slots.PMSPairs is %d, want 0..9 — the wire form's pair number is a single ASCII digit, so a larger value builds forms this dialect's own ParseSlot rejects", n)
+	}
+	return nil
+}
+
+// validatePMSForm is V15: the PMS wire form must be declared, never
+// inferred, and the numeric form's base must describe a range a 3-digit
+// slot can express — a promise this rule keeps for EVERY int pair count and
+// base, not only the ones whose arithmetic fits (see the ceiling clause).
+//
+// IT RUNS AT RULE POSITION 4, immediately after V3 and before V5/V6/V7, and
+// the position is load-bearing. validateDialectConfig returns the FIRST
+// error, and both V6 and V7 consult PMSForm and PMSNumericLo: a config with
+// PMSPairs 9 and PMSForm omitted would otherwise be diagnosed by V6 as
+// "memory range 1..99 overlaps PMS numeric range 0..17" — a range nobody
+// configured — instead of by this rule's honest "declare a form". The
+// package already documents the mirror hazard at renderEXAddressForV8,
+// where V8 needs a special renderer because it runs BEFORE V12. Inserting
+// here renumbers no V-LABEL: the V-numbers are comment labels, not indices,
+// which is why this rule is V15 in a slice it enters fourth. It does
+// renumber POSITIONS, and one comment in this file states one: V8 moved
+// from position 8 to 9, corrected in validateEXItems' own doc (Stage 0
+// close review, both seats, MEDIUM-2). A comment that states a position
+// rather than a label has to move with the slice.
+//
+// An omitted config semantic is REFUSED, never defaulted, and the cost of a
+// default is a WRITE cost — see PMSSlotForm's own doc comment.
+func validatePMSForm(cfg DialectConfig) error {
+	s := cfg.Slots
+	switch s.PMSForm {
+	case PMSFormToken:
+		if s.PMSNumericLo != 0 {
+			return fmt.Errorf("cat: Slots.PMSNumericLo is %d under %v, want exactly 0 — the token form's pairs carry no decimal numbering, so a base here describes nothing this dialect builds", s.PMSNumericLo, s.PMSForm)
+		}
+	case PMSFormNumeric:
+		if s.PMSNumericLo < 1 {
+			return fmt.Errorf("cat: Slots.PMSNumericLo is %d under %v, want >= 1 — pair 1's lower slot is a decimal channel number, and 0 collides with the \"000\" none form every registered family declares", s.PMSNumericLo, s.PMSForm)
+		}
+		// THE CEILING IS DERIVED BY DIVISION, BEFORE ANY MULTIPLICATION.
+		// This clause used to compute PMSNumericLo + 2*PMSPairs - 1 and
+		// compare that with 999, and the product WRAPS for a count near
+		// math.MaxInt: base 1 with math.MaxInt pairs reached -2, which is
+		// below the ceiling, so NewDialect ACCEPTED a dialect whose
+		// PMSSlot(500, true) rendered the four-byte wire "1000" that the
+		// same dialect's ParseSlot refuses (Codex third seat, MEDIUM C-M1).
+		// A base near math.MaxInt wrapped on the ADDITION for the same
+		// reason. V3 has already refused a negative count and the clause
+		// above has already put the base at >= 1, so maxPairs is the exact
+		// largest count whose top slot still fits three digits — clamped at
+		// 0 so a base past the ceiling reports "at most 0 pairs" rather
+		// than a wrapped negative. TestV15_PairCountBoundIsOverflowSafe
+		// pins both wrapping shapes and the exact ceiling either side.
+		//
+		// It is also what keeps every LATER derivation of the same interval
+		// safe: numericPMSInterval below and Dialect.numericPMSRange both
+		// repeat the multiplication, and both now run only over counts this
+		// rule has bounded at 499 or fewer.
+		if maxPairs := max(0, (maxSlotDecimal-s.PMSNumericLo+1)/2); s.PMSPairs > maxPairs {
+			return fmt.Errorf("cat: Slots.PMSNumericLo %d with PMSPairs %d, want at most %d pairs — a slot wire form is 3 digits, and pair n's upper slot is PMSNumericLo + 2n - 1, so the pairs reaching past %d could never be built or parsed", s.PMSNumericLo, s.PMSPairs, maxPairs, maxSlotDecimal)
+		}
+		// The same dead configuration the default arm refuses by name, seen
+		// from inside the numeric form: a base with no pairs numbers nothing,
+		// and pmsCap() returning 0 makes every PMS route error anyway. It was
+		// ACCEPTED here whilst being refused there, which is the asymmetry
+		// the adversarial review recorded as finding L1.
+		if s.PMSPairs < 1 {
+			return fmt.Errorf("cat: Slots.PMSPairs is %d under %v with PMSNumericLo %d — a numeric base with nothing to number is dead configuration", s.PMSPairs, s.PMSForm, s.PMSNumericLo)
+		}
+	default:
+		// A value that is not the ZERO one is no member of this type at all,
+		// and it is refused UNCONDITIONALLY — the rule V14 (validateMemoryP5)
+		// and V16 (validateToneStates) apply to their own enums. Only
+		// PMSSlotForm(0) can be a legitimate omission, and only for a dialect
+		// that declares no PMS pairs and no numeric base; a garbage value is
+		// a transcription error whether or not there are pairs beside it, and
+		// this was the one place in the lane where an undeclared enum value
+		// survived construction (finding L1).
+		if s.PMSForm != PMSSlotForm(0) {
+			return fmt.Errorf("cat: Slots.PMSForm is %v, which is not a declared member — declare PMSFormToken or PMSFormNumeric (an omitted config semantic is refused, never defaulted, and an undeclared one all the more so)", s.PMSForm)
+		}
+		if s.PMSPairs > 0 {
+			return fmt.Errorf("cat: Slots.PMSForm is %v with PMSPairs %d — declare PMSFormToken or PMSFormNumeric explicitly (an omitted config semantic is refused, never defaulted; the two forms put different bytes on the wire, and writableSlot admits either)", s.PMSForm, s.PMSPairs)
+		}
+		if s.PMSNumericLo != 0 {
+			return fmt.Errorf("cat: Slots.PMSNumericLo is %d with no PMSForm declared and no PMS pairs, want exactly 0 — a numeric base with nothing to number is dead configuration", s.PMSNumericLo)
+		}
 	}
 	return nil
 }
@@ -186,11 +322,21 @@ func validateMemoryRange(cfg DialectConfig) error {
 	return validateSlotRange("Slots.Memory", cfg.Slots.MemoryLo, cfg.Slots.MemoryHi)
 }
 
-// validateSixtyRange is V6: the same range rule, plus non-overlap.
+// validateSixtyRange is V6: the same range rule, plus non-overlap — now
+// over THREE numeric intervals rather than two.
 //
-// classifySlot tests the memory range BEFORE the 60m range, so an overlap
-// is not ambiguous at runtime — memory simply wins, and every colliding
-// slot is silently misclassified as an ordinary channel.
+// classifySlot tests the memory range BEFORE the 60m range and both before
+// the numeric PMS range, so an overlap is not ambiguous at runtime — the
+// earlier arm simply wins, and every colliding slot is silently
+// misclassified.
+//
+// THE THIRD INTERVAL IS PMSFormNumeric'S, and it is what makes slot.go's
+// "the four static kinds are not a second opinion" invariant true under
+// that form: PMSSlot hard-codes kind: slotKindPMS, so the numeric interval
+// must be disjoint from the other two or a slot the constructor calls PMS
+// is a memory channel to the same dialect's own classifier. Under
+// PMSFormToken there is no interval and these clauses are inert.
+// TestV15_PMSFormRefusals' two overlap cases pin them.
 func validateSixtyRange(cfg DialectConfig) error {
 	if err := validateSlotRange("Slots.Sixty", cfg.Slots.SixtyLo, cfg.Slots.SixtyHi); err != nil {
 		return err
@@ -199,7 +345,39 @@ func validateSixtyRange(cfg DialectConfig) error {
 	if s.MemoryHi > 0 && s.SixtyHi > 0 && s.MemoryLo <= s.SixtyHi && s.SixtyLo <= s.MemoryHi {
 		return fmt.Errorf("cat: memory range %d..%d overlaps 60m range %d..%d — classifySlot checks memory first, so every slot in the overlap would be classified as an ordinary channel", s.MemoryLo, s.MemoryHi, s.SixtyLo, s.SixtyHi)
 	}
+	// V15 has already run (rule position 4), so under the numeric form the
+	// base is >= 1 and the top is <= 999 before this arithmetic happens.
+	if lo, hi, ok := numericPMSInterval(s); ok {
+		if s.MemoryHi > 0 && s.MemoryLo <= hi && lo <= s.MemoryHi {
+			return fmt.Errorf("cat: memory range %d..%d overlaps PMS numeric range %d..%d — classifySlot checks memory first, so every PMS slot in the overlap would be classified as an ordinary channel", s.MemoryLo, s.MemoryHi, lo, hi)
+		}
+		if s.SixtyHi > 0 && s.SixtyLo <= hi && lo <= s.SixtyHi {
+			return fmt.Errorf("cat: 60m range %d..%d overlaps PMS numeric range %d..%d — classifySlot checks 60m first, so every PMS slot in the overlap would be classified as a 60m channel", s.SixtyLo, s.SixtyHi, lo, hi)
+		}
+	}
 	return nil
+}
+
+// numericPMSInterval returns the inclusive decimal range s's PMS pairs
+// occupy under PMSFormNumeric, and whether it has one at all.
+//
+// It is the CONFIG-side twin of Dialect.numericPMSRange, which the
+// classifier consults; the two compute the same arithmetic from the same
+// two fields, because a validator runs before any Dialect exists. Nothing
+// stores the range's top: it is derived from PMSNumericLo and PMSPairs in
+// both places, so there is no second field for either to drift from.
+//
+// THE MULTIPLICATION HERE CANNOT OVERFLOW, because V15's ceiling clause has
+// already refused every count above 499 — including the counts near
+// math.MaxInt whose doubling used to wrap past that clause itself and reach
+// this one (Codex third seat, MEDIUM C-M1). This helper is reached only
+// from V6, which runs at a later rule position, so an overflowing count is
+// unreachable here rather than merely unlikely.
+func numericPMSInterval(s SlotSpace) (lo, hi int, ok bool) {
+	if s.PMSForm != PMSFormNumeric || s.PMSPairs <= 0 {
+		return 0, 0, false
+	}
+	return s.PMSNumericLo, s.PMSNumericLo + 2*s.PMSPairs - 1, true
 }
 
 // validateSlotRange is the shared range rule for V5 and V6: absent is
@@ -254,7 +432,7 @@ func validateShadowing(cfg DialectConfig) error {
 				return fmt.Errorf("cat: %s is %q, which falls inside the 60m range %d..%d — classifySlot tests it first, so 60m slot %d would be unreachable", w.field, w.value, s.SixtyLo, s.SixtyHi, n)
 			}
 		}
-		if pmsWireInRange(w.value, s.PMSPairs) {
+		if pmsWireInRange(w.value, s) {
 			return fmt.Errorf("cat: %s is %q, which is also a PMS form this dialect can build (PMSPairs %d) — PMSSlot would return a wire form classifySlot reports as something else", w.field, w.value, s.PMSPairs)
 		}
 	}
@@ -276,14 +454,25 @@ func decimalWire(wire string) (int, bool) {
 	return int(wire[0]-'0')*100 + int(wire[1]-'0')*10 + int(wire[2]-'0'), true
 }
 
-// pmsWireInRange reports whether wire is a PMS form a dialect with pairs
-// pairs would build and classify, i.e. "P<1..pairs><L|U>".
-func pmsWireInRange(wire string, pairs int) bool {
-	if pairs <= 0 || len(wire) != 3 {
+// pmsWireInRange reports whether wire is a PMS form a dialect with slot
+// space s would build and classify.
+//
+// IT IS FORM-AWARE, and it has to be. Form-blind it asked one question —
+// "does this spell P<1..pairs><L|U>?" — which under PMSFormNumeric is the
+// wrong question in both directions: it would refuse a NoneWire of "P1L"
+// for a collision that cannot happen (that dialect builds no token form at
+// all) and would NOT refuse one of "100", which really is the wire form its
+// own PMSSlot builds for pair 1. V7 exists to catch exactly that shadowing.
+func pmsWireInRange(wire string, s SlotSpace) bool {
+	if s.PMSPairs <= 0 || len(wire) != 3 {
 		return false
 	}
+	if lo, hi, ok := numericPMSInterval(s); ok {
+		n, allDigits := decimalWire(wire)
+		return allDigits && n >= lo && n <= hi
+	}
 	return wire[0] == 'P' &&
-		wire[1] >= '1' && wire[1] <= byte('0'+pairs) &&
+		wire[1] >= '1' && wire[1] <= byte('0'+s.PMSPairs) &&
 		(wire[2] == 'L' || wire[2] == 'U')
 }
 
@@ -296,7 +485,7 @@ func pmsWireInRange(wire string, pairs int) bool {
 // sentences. TestValidateEXItems_TripleErrorTextIsByteIdentical pins all
 // three against their pre-seam spelling.
 //
-// V8 runs at rule position 8, four places before V12
+// V8 runs at rule position 9, four places before V12
 // (validateEXAddressForm) refuses a zero form — so a config that omits
 // EXAddressForm AND fails V8 reaches this renderer first, with
 // wireEXAddress(0, addr) returning "". renderEXAddressForV8 falls back to
@@ -308,10 +497,22 @@ func pmsWireInRange(wire string, pairs int) bool {
 func validateEXItems(cfg DialectConfig) error {
 	seen := make(map[EXAddress]int, len(cfg.EXItems))
 	for i, it := range cfg.EXItems {
-		for _, c := range []struct {
+		for ci, c := range []struct {
 			name string
-			v    uint8
+			v    uint16
 		}{{"P1", it.Addr.P1}, {"P2", it.Addr.P2}, {"P3", it.Addr.P3}} {
+			// P1 under EXAddressSingle is the ONE component with a wider
+			// domain: its field is three digits, so its ceiling is
+			// maxEXComponentSingleP1 and its refusal is its own sentence.
+			// The Triple/Pair sentence below is SHIPPED TEXT and must not
+			// move by a byte, which is why the two are separate literals
+			// rather than one composed from whichever number is in force.
+			if ci == 0 && cfg.EXAddressForm == EXAddressSingle {
+				if int(c.v) > maxEXComponentSingleP1 {
+					return fmt.Errorf("cat: EXItems[%d].Addr.P1 is %d, want <= %d under %v — wireEXAddress renders %%03d under this form, a MINIMUM width, so a larger P1 overruns the three-digit address field this dialect's own ParseEXAddress reads back", i, c.v, maxEXComponentSingleP1, cfg.EXAddressForm)
+				}
+				continue
+			}
 			if int(c.v) > maxEXComponent {
 				return fmt.Errorf("cat: EXItems[%d].Addr.%s is %d, want <= %d — wireEXAddress renders %%02d, a MINIMUM width, so a larger component overruns the fixed-width address field this dialect's own ParseEXAddress reads back", i, c.name, c.v, maxEXComponent)
 			}
@@ -483,9 +684,15 @@ func validMWWriteKindByte(b byte) bool {
 //
 // The Pair clause is the other half of wireEXAddress's four-digit render:
 // that render drops P3, so a member carrying a non-zero one would lose it
-// from every frame silently. The refusal names the offending index AND the
-// address as the frame would have carried it, through the same renderer, so
-// a three-hundred-row inventory does not have to be searched by hand.
+// from every frame silently. The Single clause is the same rule one
+// component further down — that render drops P2 as well as P3 — and it is
+// the half of the FT-991A's chart shape this validator owns: the printed
+// menu number IS the whole address, so any other component names something
+// no frame can carry. The refusal names the offending index AND the address
+// as the frame would have carried it, through the same renderer, so a
+// three-digit chart's inventory does not have to be searched by hand: the
+// DOMAIN a Single form's bound must cover is 0..999, of which the FT-991A's
+// own chart populates 153 rows.
 func validateEXAddressForm(cfg DialectConfig) error {
 	switch cfg.EXAddressForm {
 	case EXAddressTriple:
@@ -494,6 +701,13 @@ func validateEXAddressForm(cfg DialectConfig) error {
 		for i, it := range cfg.EXItems {
 			if it.Addr.P3 != 0 {
 				return fmt.Errorf("cat: EXItems[%d] (%s) has P3 %d under %v — the four-digit field renders P1 and P2 only, so a non-zero P3 would be dropped from every frame this dialect builds", i, wireEXAddress(cfg.EXAddressForm, it.Addr), it.Addr.P3, cfg.EXAddressForm)
+			}
+		}
+		return nil
+	case EXAddressSingle:
+		for i, it := range cfg.EXItems {
+			if it.Addr.P2 != 0 || it.Addr.P3 != 0 {
+				return fmt.Errorf("cat: EXItems[%d] (%s) has P2 %d and P3 %d under %v — the three-digit field renders P1 only, so a non-zero P2 or P3 would be dropped from every frame this dialect builds", i, wireEXAddress(cfg.EXAddressForm, it.Addr), it.Addr.P2, it.Addr.P3, cfg.EXAddressForm)
 			}
 		}
 		return nil
@@ -538,5 +752,29 @@ func validateMemoryP5(cfg DialectConfig) error {
 		return nil
 	default:
 		return fmt.Errorf("cat: MemoryP5 is %v, which is not a policy — declare P5TxClar or P5Fixed explicitly (byte 21 of the memory block is the TX clarifier flag on some radios and a printed-fixed '0' on others)", cfg.MemoryP5)
+	}
+}
+
+// validateToneStates is V16: the P8 state domain must be declared, never
+// inferred.
+//
+// An omitted config semantic is REFUSED, not defaulted, and here neither
+// default is safe. Defaulting to ToneStatesCTCSS would silently drop a real
+// DCS state on the floor for a radio whose legend prints five; defaulting
+// to ToneStatesCTCSSAndDCS would authorise this codec to emit P8 '3' or '4'
+// into an MW or combined-MT frame for the four registered siblings, whose
+// manuals print 0/1/2 only — built AND admitted by their own gates, since
+// this field reaches AllowedCommand through validateMWFields and
+// validateCombinedMTFields as well as through parseMemoryFields.
+//
+// It runs LAST, at rule position 16. Nothing else consults ToneStates, so
+// unlike V15 its position carries no diagnostic weight; appending keeps the
+// existing rules' order untouched.
+func validateToneStates(cfg DialectConfig) error {
+	switch cfg.ToneStates {
+	case ToneStatesCTCSS, ToneStatesCTCSSAndDCS:
+		return nil
+	default:
+		return fmt.Errorf("cat: ToneStates is %v, which is not a domain — declare ToneStatesCTCSS or ToneStatesCTCSSAndDCS explicitly (P8 prints three states on some radios and five on others, and a state this dialect cannot express must be refused rather than encoded)", cfg.ToneStates)
 	}
 }

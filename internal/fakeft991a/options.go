@@ -1,0 +1,152 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package fakeft991a
+
+import "time"
+
+// Option configures a *Radio at construction time. See New.
+//
+// THE SET IS THE SMALLEST OF ANY FAKE IN THIS REPOSITORY, and every absence is
+// a decision rather than an omission:
+//
+//   - NO FAULT INJECTION. doc.go's "What this fake deliberately does NOT
+//     model" lists the seven faults internal/fakeradio carries and states why
+//     none is copied — in short, they exercise core/transport.Engine, which is
+//     one model-independent implementation already covered by fakeradio's
+//     fault suite, and no wiring, CLI or GUI path uses faults against a fake
+//     rig. WithLatency stays because it is not a fault: it is the knob Close's
+//     promptness is proven against.
+//   - NO WithMTReadUnsupported(). internal/fakeft891 has one because that
+//     manual contradicts itself about MT's very availability. THIS ONE DOES
+//     NOT: the availability row gives MT "O O O X" (ft991a_layout.txt:181) and
+//     its own detail block prints a Read chart and a full Answer chart
+//     (998-1033), and the two agree. There is no second radio to play, and
+//     this milestone's plan decision P14 says so in terms.
+//   - TWO EX OPTIONS AND NO MORE. WithEXSetting and WithEXUnavailable are
+//     internal/fakeft891's pair, verbatim in shape; between them they cover
+//     both directions a menu reader needs staged (a value it did not expect,
+//     and an address that answers as unavailable) without teaching this fake
+//     any behaviour the register does not already carry.
+//   - NO BANK OPTIONS. internal/fakeft891 has With5MHz and WithEMG because
+//     that radio's legends print those banks; "5xx", "5 MHz" and "EMG" appear
+//     in no slot legend of this manual, so there is nothing to populate.
+type Option func(*Radio)
+
+// WithLatency makes every reply the fake sends wait d before being written to
+// the port — a per-reply delay, applied once per exchange.
+//
+// The wait is interruptible: a Close during it abandons the reply and returns
+// promptly (Radio.shutdown), so a test may script a multi-second latency
+// without a multi-second teardown — TestClose_IsPromptDespiteAPendingLatency.
+func WithLatency(d time.Duration) Option {
+	return func(r *Radio) {
+		r.latency = d
+	}
+}
+
+// WithSlot overlays one slot's state onto whatever image is already present.
+//
+// No validation is applied: the state is stored verbatim, so a test may craft
+// a slot whose ANSWER is deliberately malformed — a P11 that is not the fixed
+// '0', a P7 outside the printed {'0','1'} pair, a mode nibble the legend does
+// not list — and drive a real driver's parse-error path through a real fake
+// rather than through a scripted transcript. That is the reason MemState's
+// answer-side fields are fields at all (see MemState.P11 and MemState.Kind).
+//
+// The zero value is a trap for a literal that means to omit only one field:
+// unlike P11 (see MemState.P11), a zero Kind or ClarSign puts a NUL on the
+// wire rather than a printed byte, and a zero Freq or ClarMag shortens the
+// answer instead of padding it — MemState has no exported constructor, so a
+// caller building one field at a time must set every wire-bearing field.
+func WithSlot(slot string, s MemState) Option {
+	return func(r *Radio) {
+		r.slots[slot] = s
+	}
+}
+
+// WithEXSetting overlays one EX (MENU) address's raw P4 verbatim — the same
+// overlay semantics as WithSlot: it is applied to whatever exSettings already
+// holds (EXDefaults(), seeded in New), with no shape or range validation, so
+// several WithEXSetting options may be given, including for an address the
+// generated inventory does not know about. Such an address becomes answerable
+// even though EXDefaults() never produced it, because the option does not
+// consult exItems — which is deliberate: it is how a test reaches a wire
+// behaviour the transcription does not describe, WITHOUT editing the projection
+// of transcription B that the cross-check depends on. Editing that projection
+// to make a test possible would quietly dissolve the cross-check's whole point.
+//
+// The address is this radio's THREE digits ("027"), not the FT-891's four or a
+// sibling's six.
+func WithEXSetting(addr, p4 string) Option {
+	return func(r *Radio) {
+		r.exSettings[addr] = p4
+	}
+}
+
+// WithEXUnavailable removes addr from the fake's EX (MENU) address map, applied
+// to whatever exSettings already holds (EXDefaults() by default, or a prior
+// WithEXSetting in the same Option list), so a subsequent EX read of addr
+// answers "?;" — indistinguishable from an address the chart never enumerated
+// (ex.go's handleEX, doc.go's register entry AN OUT-OF-INVENTORY EX ADDRESS
+// ANSWERS "?;").
+//
+// It introduces no NEW assumed behaviour: it only removes a map entry, which
+// triggers the fake's existing documented "?;". This is the test-only seam for
+// forcing a KNOWN, otherwise-valid address to answer as unavailable — what a
+// settings reader maps to an unavailable setting — so that such a test need not
+// depend on a genuinely out-of-inventory address that no SettingsDescriptor
+// would ever offer an ID for in the first place.
+func WithEXUnavailable(addr string) Option {
+	return func(r *Radio) {
+		delete(r.exSettings, addr)
+	}
+}
+
+// WithFactoryImage REPLACES the fake's entire slot map with img's output. Pass
+// it BEFORE any WithSlot or WithDCSChannels option in the same New call, or
+// the image will overwrite them. Without this option, New defaults to
+// DefaultImage.
+//
+// It exists for the case internal/wiring's per-model FakeSessionOpts variable
+// documents: a test that needs a fake rig with a non-default inventory,
+// reached through the EXACT code path a real "--fake" invocation uses rather
+// than by hand-building a session that bypasses the constructor.
+func WithFactoryImage(img Image) Option {
+	return func(r *Radio) {
+		r.slots = img()
+	}
+}
+
+// dcsChannelSlots are the two memory channels WithDCSChannels populates, one
+// per DCS state. Both are absent from DefaultImage, so the option adds rather
+// than shadows.
+var dcsChannelSlots = []string{"003", "004"}
+
+// WithDCSChannels populates one memory channel at P8 '3' (DCS ENC/DEC) and one
+// at P8 '4' (DCS ENC), at invented placeholder frequencies in FM — the two
+// states of the five-value P8 legend that the DEFAULT IMAGE DELIBERATELY LACKS.
+//
+// THE SPLIT IS THIS MILESTONE'S PLAN, DECISION P14, and the reason is a fleet
+// one rather than a taste one: this radio's P8 is the first Yaesu memory
+// record in this project with a DCS state, and a default image carrying one
+// would push a value through every fleet-wide pin that predates the five-state
+// vocabulary. So the default image round-trips as any sibling's would, and a
+// test that wants the new axis asks for it here.
+//
+// The frequencies and the mode are placeholders like every other value in this
+// package's fixtures (doc.go's register entry THE DEFAULT IMAGE'S CONTENT IS
+// INVENTED): no FT-991A's memory contents have been read, and DCS is a value
+// of P8 rather than a property of a band.
+//
+// Overlay semantics, like WithSlot: it adds to whatever image is already
+// present, so it must be given AFTER any WithFactoryImage in the same New
+// call.
+func WithDCSChannels() Option {
+	return func(r *Radio) {
+		for i, state := range []byte{'3', '4'} {
+			s := defaultState(uint64(145_500_000+i*25_000), modeFM)
+			s.CTCSS = state
+			r.slots[dcsChannelSlots[i]] = s
+		}
+	}
+}

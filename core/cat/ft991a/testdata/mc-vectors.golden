@@ -1,0 +1,76 @@
+# MC (MEMORY CHANNEL) — Set-direction wire frames, hand-derived
+#
+# Manual: "FT-991A HF/VHF/UHF ALL MODE TRANSCEIVER — CAT Operation Reference Manual",
+#   YAESU MUSEN CO., LTD., Copyright 2017.
+# Printed revision: "1711-D" (back cover, PDF page 20). No revision on the title page.
+# Chart used: the MC command detail block, printed folio 11 = PDF page 12.
+#   Layout counted from the SET chart (the brief asks for Set frames). The ANSWER chart in
+#   the same block was counted independently and is the identical 6-position layout; the
+#   READ chart is a 3-position layout ("M C ;"). All three are recorded below.
+# Derivation date: 05/09/2026.
+# NO code, no generator, no other file and no other document was consulted.
+#
+# COUNTED FRAME LENGTH (Set): 6 bytes, terminator included.
+#   Count A (left-to-right): 1 "M", 2 "C", 3 P1, 4 P1, 5 P1, 6 ";", 7..10 empty.
+#   Count B (row totals): 1 printed row x 10 numbered cells; filled cells = 6. Agree; no
+#   third look needed. Chart and legend cropped and re-rendered at 600 dpi.
+#   Read chart: 3 bytes ("M C ;", cells 1..3 filled, 4..10 empty).
+#   Answer chart: 6 bytes ("M C P1 P1 P1 ;", cells 1..6 filled).
+#
+# POSITION-BY-POSITION FIELD MAP (Set chart, MC block, printed folio 11)
+#   pos 1      "M"                     printed literally
+#   pos 2      "C"                     printed literally
+#   pos 3-5    P1  (3 positions)       MC legend, verbatim and complete:
+#                                        "P1   001 - 117: Memory Channel Number"
+#                                        "     001 - 099: Regular Memory Channel"
+#                                        "     100: P-1L    101: P-1U ~ 116: P-9L    117: P-9U"
+#   pos 6      ";"                     terminator, printed literally
+#
+# DO THE MC AND THE MR/MT/MW SLOT LEGENDS LIST THE SAME RANGES? — BOTH recorded verbatim,
+# not resolved.
+#   MC legend (printed folio 11, PDF page 12), verbatim:
+#     "P1   001 - 117: Memory Channel Number"
+#     "     001 - 099: Regular Memory Channel"
+#     "     100: P-1L    101: P-1U ~ 116: P-9L    117: P-9U"
+#   MR legend (printed folio 12, PDF page 13), verbatim:  "P0/1  001-117 (Memory Channel)"
+#   MT legend (printed folio 12, PDF page 13), verbatim:  "P0/1  001-117 (Memory Channel)"
+#   MW legend (printed folio 12, PDF page 13), verbatim:  "P1  001-117 (Memory Channel)"
+#   They do NOT list the same ranges: MC is the only legend in this manual that breaks the
+#   span down into a regular range and a PMS range and that spells any PMS slot. MR, MT and
+#   MW print the outer span 001-117 and nothing else. The outer spans themselves match.
+#   Recorded, not resolved.
+#
+# ID COMMAND ANSWER FRAME, exactly as printed (ID block, printed folio 10 = PDF page 11)
+#   Answer chart positions: 1 "I", 2 "D", 3 P1, 4 P1, 5 P1, 6 P1, 7 ";" — counted 7 bytes.
+#   Legend, verbatim: "P1   0670: FT-991A"
+#   Answer frame:                                    ID0670;
+#   (For completeness: the ID Read request chart prints "I D ;" — 3 bytes: ID;
+#    and the ID Set chart is printed as an empty grid.)
+#
+# MODE LEGEND ON THE MEMORY COMMANDS vs ON THE MD COMMAND — BOTH verbatim, not resolved
+#   On the memory commands MR, MT and MW (printed folio 12, PDF page 13), P6 reads:
+#     "P6  MODE  1: LSB   2: USB   3: CW   4: FM   5: AM   6: RTTY-LSB   7: CW-R"
+#     "          8: DATA-LSB   9: RTTY-USB   A: DATA-FM   B: FM-N   C: DATA-USB"
+#     "          D: AM-N   E: C4FM"
+#   On the MD (OPERATING MODE) command (printed folio 11, PDF page 12), P2 reads:
+#     "P2   MODE        1: LSB    2: USB    3: CW-U    4: FM    5: AM    6: RTTY-LSB"
+#     "                 7: CW-L    8: DATA-LSB    9: RTTY-USB    A: DATA-FM"
+#     "                 B: FM-N    C: DATA-USB    D: AM-N    E: C4FM"
+#   They differ at two indices: index 3 is "CW" on the memory commands and "CW-U" on MD;
+#   index 7 is "CW-R" on the memory commands and "CW-L" on MD. Every other index and label
+#   is identical. Recorded, not resolved.
+#   (A third mode legend, identical to the memory-command wording, is printed on the IF
+#   command, printed folio 10 = PDF page 11.)
+#
+# BYTES THE MANUAL DETERMINES vs INHERITED-ASSUMED
+#   Manual-determined: "MC"; the 3-digit P1 width (counted); ";"; the P1 range 001-117 and
+#   the PMS slot numbers and spellings quoted above.
+#   INHERITED-ASSUMED: none. Every byte of every MC vector below is fixed by the chart and
+#   the legend.
+#
+# Hardware status: UNVERIFIED. No frame below has been sent to or read from a radio.
+#
+mc_ch012_regular_memory_channel	MC012;
+mc_ch099_last_regular_memory_channel	MC099;
+mc_ch100_first_pms_slot_p_1l	MC100;
+mc_ch117_last_pms_slot_p_9u	MC117;

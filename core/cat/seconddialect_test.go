@@ -52,6 +52,7 @@ func allTestDialects() []namedDialect {
 		{"combinedDialect", combinedDialect},
 		{"combinedPeerDialect", combinedPeerDialect},
 		{"pairDialect", pairDialect},
+		{"singleDialect", singleDialect},
 
 		// The FT-891 Stage 0 axes' disagreeing fixtures, appended: see the
 		// block at the end of this file for what each one varies and why a
@@ -61,6 +62,11 @@ func allTestDialects() []namedDialect {
 		{"mtReadMemoryPMSDialect", mtReadMemoryPMSDialect},
 		{"p5FixedDialect", p5FixedDialect},
 		{"combinedTagDisplayDialect", combinedTagDisplayDialect},
+
+		// The FT-991A Stage 0 axes' disagreeing fixtures, appended in
+		// turn: see the block at the very end of this file.
+		{"numericPMSDialect", numericPMSDialect},
+		{"dcsStatesDialect", dcsStatesDialect},
 	}
 }
 
@@ -82,7 +88,8 @@ var testDialect = mustFixtureDialect(DialectConfig{
 	Slots: SlotSpace{
 		MemoryLo: 1, MemoryHi: 5, // FT-710: 1-99
 		SixtyLo: 0, SixtyHi: 0, // no 60m bank at all
-		PMSPairs:      2,  // FT-710: 9
+		PMSPairs:      2, // FT-710: 9
+		PMSForm:       PMSFormToken,
 		EmergencyWire: "", // no emergency channel
 		NoneWire:      "000",
 		MCSelects:     MCSelectsAll,
@@ -92,6 +99,7 @@ var testDialect = mustFixtureDialect(DialectConfig{
 	MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MemoryP5:      P5TxClar,
+	ToneStates:    ToneStatesCTCSS,
 	MWWriteKind:   KindMemory,
 })
 
@@ -125,6 +133,7 @@ var noneWireDialect = mustFixtureDialect(DialectConfig{
 	MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MemoryP5:      P5TxClar,
+	ToneStates:    ToneStatesCTCSS,
 	MWWriteKind:   KindMemory,
 })
 
@@ -174,7 +183,8 @@ var peerDialect = mustFixtureDialect(DialectConfig{
 	Slots: SlotSpace{
 		MemoryLo: 100, MemoryHi: 200, // FT-710: 1-99, disjoint
 		SixtyLo: 600, SixtyHi: 620, // FT-710: 501-599, present but renumbered
-		PMSPairs:      4,     // FT-710: 9
+		PMSPairs:      4, // FT-710: 9
+		PMSForm:       PMSFormToken,
 		EmergencyWire: "XYZ", // FT-710: "EMG", present but different
 		NoneWire:      "777", // FT-710: "000"
 		MCSelects:     MCSelectsAll,
@@ -184,6 +194,7 @@ var peerDialect = mustFixtureDialect(DialectConfig{
 	MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MemoryP5:      P5TxClar,
+	ToneStates:    ToneStatesCTCSS,
 	MWWriteKind:   KindMemory,
 })
 
@@ -1541,6 +1552,7 @@ var combinedDialect = mustFixtureDialect(DialectConfig{
 		MemoryLo: 1, MemoryHi: 99,
 		SixtyLo: 501, SixtyHi: 599,
 		PMSPairs:      9,
+		PMSForm:       PMSFormToken,
 		EmergencyWire: "EMG",
 		NoneWire:      "000",
 		MCSelects:     MCSelectsAll,
@@ -1550,6 +1562,7 @@ var combinedDialect = mustFixtureDialect(DialectConfig{
 	MT:            MTPolicy{Form: MTFormCombined, P11: P11Fixed, ReadSlots: MTReadsReadable, TagMaxBytes: 6, TagFill: ' '},
 	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MemoryP5:      P5TxClar,
+	ToneStates:    ToneStatesCTCSS,
 	MWWriteKind:   KindMemory,
 })
 
@@ -1592,7 +1605,8 @@ var combinedPeerDialect = mustFixtureDialect(DialectConfig{
 	Slots: SlotSpace{
 		MemoryLo: 100, MemoryHi: 200, // FT-710: 1-99, disjoint
 		SixtyLo: 600, SixtyHi: 620, // FT-710: 501-599, present but renumbered
-		PMSPairs:      4,     // FT-710: 9
+		PMSPairs:      4, // FT-710: 9
+		PMSForm:       PMSFormToken,
 		EmergencyWire: "XYZ", // FT-710: "EMG"
 		NoneWire:      "777", // FT-710: "000"
 		MCSelects:     MCSelectsAll,
@@ -1602,6 +1616,7 @@ var combinedPeerDialect = mustFixtureDialect(DialectConfig{
 	MT:            MTPolicy{Form: MTFormCombined, P11: P11Fixed, ReadSlots: MTReadsReadable, TagMaxBytes: 12, TagFill: '_'},
 	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MemoryP5:      P5TxClar,
+	ToneStates:    ToneStatesCTCSS,
 	MWWriteKind:   KindMemTune,
 })
 
@@ -1649,6 +1664,7 @@ var pairDialect = mustFixtureDialect(DialectConfig{
 		MemoryLo: 1, MemoryHi: 20,
 		SixtyLo: 0, SixtyHi: 0,
 		PMSPairs:      2,
+		PMSForm:       PMSFormToken,
 		EmergencyWire: "",
 		NoneWire:      "000",
 		MCSelects:     MCSelectsAll, // unremarkable, as the doc comment says: the address width is this fixture's one variable
@@ -1658,6 +1674,7 @@ var pairDialect = mustFixtureDialect(DialectConfig{
 	MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MemoryP5:      P5TxClar,
+	ToneStates:    ToneStatesCTCSS,
 	MWWriteKind:   KindMemory,
 })
 
@@ -1688,6 +1705,7 @@ var mcMemoryPMSDialect = mustFixtureDialect(DialectConfig{
 		MemoryLo: 1, MemoryHi: 99,
 		SixtyLo: 501, SixtyHi: 599,
 		PMSPairs:      9,
+		PMSForm:       PMSFormToken,
 		EmergencyWire: "EMG",
 		NoneWire:      "000",
 		MCSelects:     MCSelectsMemoryPMS, // THE AXIS UNDER TEST
@@ -1697,6 +1715,7 @@ var mcMemoryPMSDialect = mustFixtureDialect(DialectConfig{
 	MT:            MTPolicy{Form: MTFormShort, ReadSlots: MTReadsReadable, TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' '},
 	Clarifier:     ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MemoryP5:      P5TxClar,
+	ToneStates:    ToneStatesCTCSS,
 	MWWriteKind:   KindMemory,
 })
 
@@ -1715,6 +1734,7 @@ var mtReadMemoryPMSDialect = mustFixtureDialect(DialectConfig{
 		MemoryLo: 1, MemoryHi: 99,
 		SixtyLo: 501, SixtyHi: 599,
 		PMSPairs:      9,
+		PMSForm:       PMSFormToken,
 		EmergencyWire: "EMG",
 		NoneWire:      "000",
 		MCSelects:     MCSelectsAll,
@@ -1728,6 +1748,7 @@ var mtReadMemoryPMSDialect = mustFixtureDialect(DialectConfig{
 	},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MemoryP5:    P5TxClar,
+	ToneStates:  ToneStatesCTCSS,
 	MWWriteKind: KindMemory,
 })
 
@@ -1745,6 +1766,7 @@ var p5FixedDialect = mustFixtureDialect(DialectConfig{
 		MemoryLo: 1, MemoryHi: 99,
 		SixtyLo: 501, SixtyHi: 599,
 		PMSPairs:      9,
+		PMSForm:       PMSFormToken,
 		EmergencyWire: "EMG",
 		NoneWire:      "000",
 		MCSelects:     MCSelectsAll,
@@ -1757,6 +1779,7 @@ var p5FixedDialect = mustFixtureDialect(DialectConfig{
 	},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MemoryP5:    P5Fixed, // THE AXIS UNDER TEST
+	ToneStates:  ToneStatesCTCSS,
 	MWWriteKind: KindMemory,
 })
 
@@ -1779,6 +1802,7 @@ var combinedTagDisplayDialect = mustFixtureDialect(DialectConfig{
 		MemoryLo: 1, MemoryHi: 99,
 		SixtyLo: 501, SixtyHi: 599,
 		PMSPairs:      9,
+		PMSForm:       PMSFormToken,
 		EmergencyWire: "EMG",
 		NoneWire:      "000",
 		MCSelects:     MCSelectsAll,
@@ -1793,5 +1817,109 @@ var combinedTagDisplayDialect = mustFixtureDialect(DialectConfig{
 	},
 	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 	MemoryP5:    P5TxClar,
+	ToneStates:  ToneStatesCTCSS,
+	MWWriteKind: KindMemory,
+})
+
+// --- FT-991A Stage 0: the PMS wire-form axis ---
+//
+// numericPMSDialect declares PMSFormNumeric: its PMS pairs are the
+// consecutive decimal channel numbers 100..117 rather than the "P1L"-"P9U"
+// token every dialect above builds. That is the FT-991A's printed shape
+// (S0.1) — its MC legend gives one contiguous 3-digit number line,
+// "001 - 099: Regular Memory Channel" then "100: P-1L 101: P-1U ~ 116:
+// P-9L 117: P-9U" — and no registered dialect's.
+//
+// A fixture is REQUIRED here rather than optional, and for a sharper reason
+// than the four above. Every one of those varies a policy the wide dialects
+// also declare; this one varies WHICH BYTES A BUILDER EMITS. Without it the
+// token branch of classifySlot is exercised by eleven dialects and its new
+// PMSFormToken guard by none, so a guard deleted in a later edit would go
+// green — and the frame it would then let through, "MW P1L…;" on a radio
+// whose manual prints no token form, is precisely what the axis exists to
+// prevent.
+//
+// Its slot space is otherwise the FT-991A's: memory 001-099, NO 60m bank
+// and NO emergency channel, which is also what makes it the fixture S0.2's
+// bank-derived refusal sentence is measured on.
+var numericPMSDialect = mustFixtureDialect(DialectConfig{
+	CATID:     "0670",
+	ModeNames: map[Mode]string{ModeUnset: "-", ModeUSB: "USB-NUM", ModeLSB: "LSB-NUM"},
+	Slots: SlotSpace{
+		MemoryLo: 1, MemoryHi: 99,
+		SixtyLo: 0, SixtyHi: 0,
+		PMSPairs:      9,
+		PMSForm:       PMSFormNumeric, // THE AXIS UNDER TEST
+		PMSNumericLo:  100,            // pairs 1..9 occupy 100..117
+		EmergencyWire: "",
+		NoneWire:      "000",
+		MCSelects:     MCSelectsAll,
+	},
+	EXItems:       nil,
+	EXAddressForm: EXAddressTriple, // the wide reading: this fixture varies ONE axis, and it is not the address form
+	MT: MTPolicy{
+		Form: MTFormShort, ReadSlots: MTReadsReadable,
+		TagMaxBytes: 12, ClearTagByte: ' ', PadByte: ' ',
+	},
+	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:    P5TxClar,
+	ToneStates:  ToneStatesCTCSS,
+	MWWriteKind: KindMemory,
+})
+
+// dcsStatesDialect declares ToneStatesCTCSSAndDCS: byte 24 of its memory
+// block may hold '3' or '4' as well as '0'-'2'. That is the FT-991A's
+// printed shape (S0.3) — its P8 legend prints "3: DCS ENC/DEC 4: DCS ENC"
+// on all five blocks that carry the field — and no registered dialect's.
+//
+// The AXIS it varies is the tone one: its PMS form is the token one, so a
+// DCS record built or refused here cannot be numericPMSDialect's slot space
+// doing the work. Its slot space is otherwise FT-710-shaped, because the
+// properties this fixture has to satisfy are the ordinary build/parse/gate
+// ones and a fixture with nothing to write would exercise none of them.
+//
+// ITS MT FORM IS THE COMBINED ONE, and that is not a second axis — it is
+// what makes the first axis visible at the SECOND gate site. P8 is checked
+// in two independent places, validateMWFields (mw.go) and
+// validateCombinedMTFields (mtcombined.go), and only a dialect that reaches
+// BOTH can tell a widened site from an unwidened one. Whilst this fixture
+// was MTFormShort the combined site had no in-package witness at all:
+// reverting mtcombined.go's d.ParseCTCSSState to the package-level function
+// left the whole of core/cat green and only core/cat/dialecttest complained,
+// measured by the adversarial review as finding MEDIUM-1.
+// TestToneStates_FiveStateCombinedFormBuildsADCSRecord (tonestates_test.go)
+// is the witness, and it asserts this form and P11 policy before it asserts
+// anything else.
+//
+// P11Fixed rather than P11TagDisplay because the display-less builder pair
+// is the one whose refusal leg TestToneStates_ADCSRecordCannotBeBuilt walks;
+// combinedTagDisplayDialect already carries the flag reading.
+//
+// Its tag geometry — 8 bytes filled with '-' — disagrees with all three
+// combined fixtures above (6/' ', 12/'_', 9/'.') on both dimensions the
+// combined record derives from its receiver, for the reason combinedDialect's
+// own comment gives.
+var dcsStatesDialect = mustFixtureDialect(DialectConfig{
+	CATID:     "0671",
+	ModeNames: map[Mode]string{ModeUnset: "-", ModeUSB: "USB-DCS", ModeLSB: "LSB-DCS"},
+	Slots: SlotSpace{
+		MemoryLo: 1, MemoryHi: 99,
+		SixtyLo: 501, SixtyHi: 599,
+		PMSPairs:      9,
+		PMSForm:       PMSFormToken,
+		EmergencyWire: "EMG",
+		NoneWire:      "000",
+		MCSelects:     MCSelectsAll,
+	},
+	EXItems:       nil,
+	EXAddressForm: EXAddressTriple,
+	MT: MTPolicy{
+		Form: MTFormCombined, ReadSlots: MTReadsReadable,
+		P11:         P11Fixed,
+		TagMaxBytes: 8, TagFill: '-',
+	},
+	Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
+	MemoryP5:    P5TxClar,
+	ToneStates:  ToneStatesCTCSSAndDCS, // THE AXIS UNDER TEST
 	MWWriteKind: KindMemory,
 })

@@ -45,8 +45,9 @@ const numColumns = 10
 // emitted into the generated Go); Digits is the manual's Digits column:
 // within the profile's MinDigits..MaxDigits for a numeric field, or exactly
 // the profile's TextWidth for a text item (1..4 and 12 respectively for the
-// FT-710); Text marks those text items; and ManualLine is the source line
-// in the manual extract the row was transcribed from.
+// FT-710); Text marks those text items; Parameterless marks the rows whose
+// chart line names no field at all; and ManualLine is the source line in the
+// manual extract the row was transcribed from.
 type Row struct {
 	P1, P2, P3 int
 	P1Label    string
@@ -55,8 +56,23 @@ type Row struct {
 	P4         string
 	Digits     int
 	Text       bool
-	ManualLine int
+	// Parameterless is true for a row whose Digits cell is the single
+	// hyphen parameterlessDigits, admitted only on an address the profile's
+	// ParameterlessAddresses names. Digits is then LEFT AT ITS ZERO VALUE
+	// and this flag is the only thing that says so: a Digits of 0 meaning
+	// "no parameter" would be the omitted-semantic-defaulted hazard M9c-1
+	// exists to refuse, and a -1 sentinel would be a width no type admits.
+	// See ParameterlessRows; TestParseCSV_ParameterlessRow pins the shape.
+	Parameterless bool
+	ManualLine    int
 }
+
+// parameterlessDigits is the Digits cell a chart draws for a row with no
+// parameter — one hyphen, which is what the FT-991A's chart prints at menu
+// 087 (docs/fixtures-private/manuals/ft991a_layout.txt:623). It is tested
+// for BEFORE strconv.Atoi below, so Atoi never sees a hyphen and its own
+// refusal keeps meaning "this cell is not a number".
+const parameterlessDigits = "-"
 
 // ParseCSV decodes the Table 2 CSV against the model profile p, which it
 // validates first. Lines beginning with '#' are treated as provenance
@@ -65,11 +81,17 @@ type Row struct {
 // or whitespace-only) P1Label or P2Label under LabelsRequired — or a
 // NON-blank one under LabelsAbsent — a blank Name or P4, a non-positive
 // ManualLine, a duplicate (P1,P2,P3) triple, a non-zero P3 under
-// AddressPair, a text row under TextRowsAbsent, a non-text row whose Digits
-// falls outside the profile's MinDigits..MaxDigits, a text row whose Digits
-// is not the profile's TextWidth, an address component outside 0..99 each
-// fail with a non-nil error rather than being guessed at. The returned rows
-// preserve CSV order.
+// AddressPair, a non-zero P2 or P3 under AddressSingle, a text row under
+// TextRowsAbsent, a non-text row whose Digits falls outside the profile's
+// MinDigits..MaxDigits, a text row whose Digits is not the profile's
+// TextWidth, an address component outside the DOMAIN THIS PROFILE'S OWN FORM
+// gives it (0..99 per component under AddressTriple and AddressPair; 0..999
+// for P1 under AddressSingle, whose field is three digits wide), a hyphen
+// Digits cell on an
+// address the profile's ParameterlessAddresses does not name (or under
+// ParameterlessRefused at all), and a numeric Digits cell on an address it
+// does name, each fail with a non-nil
+// error rather than being guessed at. The returned rows preserve CSV order.
 func ParseCSV(p Profile, data []byte) ([]Row, error) {
 	// The registry validates registered profiles, but nothing forces a
 	// caller through the registry — the test fixtures do not go through it.
@@ -94,6 +116,19 @@ func ParseCSV(p Profile, data []byte) ([]Row, error) {
 			return nil, fmt.Errorf("extable: CSV data row %d: %w", i+1, err)
 		}
 		key := [3]int{row.P1, row.P2, row.P3}
+		// %02d here is a MINIMUM width, and it is LEFT ALONE deliberately.
+		// Under AddressSingle a P1 of 153 renders "153" and one of 8 renders
+		// "08", which is fine because this is a DIAGNOSTIC and not a join
+		// token: nothing reads it back. The two %02d sites that ARE join
+		// tokens — ParseObservedCSV's key and RenderGo's lookup — became
+		// %03d under Single at the FT-991A seam, and this one is named here
+		// so a later sweep can see it was considered rather than missed, and
+		// so nobody "fixes" it and moves a shipped refusal string. A FOURTH
+		// %02d address-key site exists outside this package —
+		// internal/extable/observe/main.go's isText map — and stays %02d
+		// deliberately too: that tool is hard-wired to FT710Profile() and
+		// can only ever see a Triple chart, so it is named at its own site
+		// rather than repeated here.
 		if seen[key] {
 			return nil, fmt.Errorf("extable: CSV data row %d: duplicate (P1,P2,P3) triple %02d/%02d/%02d", i+1, row.P1, row.P2, row.P3)
 		}
@@ -116,26 +151,62 @@ func parseRecord(p Profile, rec []string) (Row, error) {
 	if row.P3, err = strconv.Atoi(rec[2]); err != nil {
 		return Row{}, fmt.Errorf("bad P3 %q: %w", rec[2], err)
 	}
-	for i, v := range []int{row.P1, row.P2, row.P3} {
-		if v < 0 || v > 99 {
-			return Row{}, fmt.Errorf("address component P%d must be 0..99, got %d", i+1, v)
-		}
-	}
 	// A SWITCH, not an if/else with an implicit AddressTriple arm — the
 	// shape ParseObservedCSV below already takes, and for the same reason:
 	// Profile.Validate (profile.go) has already required p.Addresses to be
-	// one of the two known forms, but THIS is the site that reads it, and an
+	// one of the three known forms, but THIS is the site that reads it, and an
 	// omitted config semantic is refused here too rather than defaulted to
 	// the permissive arm.
 	//
-	// Under AddressPair the radio's field carries P1 and P2 only, so a
-	// non-zero p3 names a component no frame can express. Refused rather
-	// than dropped — a value silently discarded here would reach the
-	// generated inventory as a 0 that nothing recorded having changed.
+	// Under AddressPair the radio's field carries P1 and P2 only, and under
+	// AddressSingle P1 alone, so a non-zero component beyond the field names
+	// something no frame can express. Refused rather than dropped — a value
+	// silently discarded here would reach the generated inventory as a 0 that
+	// nothing recorded having changed.
+	//
+	// THE COMPONENT DOMAIN IS CHECKED INSIDE THIS SWITCH, not before it,
+	// because it is the FORM'S fact: a component's bound is the capacity of
+	// the field it renders into, and the three forms have three fields.
+	// It sat above the switch while every form's components were two digits
+	// wide, which made 0..99 look like a property of an address rather than
+	// of a wire field, and made rows 100-153 of a single-number chart
+	// untranscribable.
 	switch p.Addresses {
 	case AddressTriple:
-		// All three components are on the wire; nothing further to check.
+		// All three components are on the wire, each two digits of a
+		// six-digit field; nothing further to check.
+		if err := checkTwoDigitComponents(row); err != nil {
+			return Row{}, err
+		}
 	case AddressPair:
+		if err := checkTwoDigitComponents(row); err != nil {
+			return Row{}, err
+		}
+		if row.P3 != 0 {
+			return Row{}, fmt.Errorf("p3 must be 0 under %v, got %d", p.Addresses, row.P3)
+		}
+	case AddressSingle:
+		// P1 IS the whole address here and its field is three digits, so
+		// its domain is 0..999 — the field's capacity, not the chart's row
+		// count, which membership is what refuses. The refusal names the
+		// FORM as well as the number: a sentence quoting a bound without
+		// saying which form is in force leaves a reader to guess which of
+		// two rules they broke.
+		// TestParseCSV_AddressSingleP1DomainIs0To999 pins the whole domain,
+		// 001 to 153 included, and
+		// TestParseCSV_TheOtherFormsKeepTheTwoDigitDomain the disagreement.
+		if row.P1 < 0 || row.P1 > singleP1Ceiling {
+			return Row{}, fmt.Errorf("address component P1 must be 0..%d under %v, got %d", singleP1Ceiling, p.Addresses, row.P1)
+		}
+		// The same rule one component further down: the chart prints ONE
+		// menu number and it is the whole address, so p2 joins p3 in having
+		// to be 0. TestParseCSV_AddressSingleRefusesNonZeroP2AndP3 pins both,
+		// and pins that AddressPair still accepts the p2 its own field
+		// carries. Neither needs a domain check of its own: 0 is the only
+		// value either may hold.
+		if row.P2 != 0 {
+			return Row{}, fmt.Errorf("p2 must be 0 under %v, got %d", p.Addresses, row.P2)
+		}
 		if row.P3 != 0 {
 			return Row{}, fmt.Errorf("p3 must be 0 under %v, got %d", p.Addresses, row.P3)
 		}
@@ -171,8 +242,29 @@ func parseRecord(p Profile, rec []string) (Row, error) {
 	if strings.TrimSpace(row.P4) == "" {
 		return Row{}, fmt.Errorf("blank p4")
 	}
-	if row.Digits, err = strconv.Atoi(rec[7]); err != nil {
-		return Row{}, fmt.Errorf("bad digits %q: %w", rec[7], err)
+	// The parameterless hyphen is ruled on BEFORE the Atoi, and it is ruled
+	// on PER ADDRESS: the profile's ParameterlessExcluded policy licenses
+	// the hyphen on the addresses it names and nowhere else, so a stray
+	// hyphen anywhere in a 153-row chart is still a transcription error.
+	// The converse is checked too — a declared address carrying a NUMBER is
+	// a width smuggled onto a row the profile says has none — because a
+	// policy enforced in one direction only would let either source drift.
+	parameterless := isParameterlessAddress(p, row.P1, row.P2, row.P3)
+	if rec[7] == parameterlessDigits {
+		if p.ParameterlessPolicy != ParameterlessExcluded {
+			return Row{}, fmt.Errorf("row (%s) has a %q digits cell under %v — this model's chart prints no parameterless row, so a hyphen there is a transcription error", row.Name, parameterlessDigits, p.ParameterlessPolicy)
+		}
+		if !parameterless {
+			return Row{}, fmt.Errorf("row (%s) has a %q digits cell, but address %d/%d/%d is not one this profile's ParameterlessAddresses names", row.Name, parameterlessDigits, row.P1, row.P2, row.P3)
+		}
+		row.Parameterless = true
+	} else {
+		if parameterless {
+			return Row{}, fmt.Errorf("row (%s) at address %d/%d/%d is declared parameterless, but its digits cell is %q — a declared exclusion may not carry a width", row.Name, row.P1, row.P2, row.P3, rec[7])
+		}
+		if row.Digits, err = strconv.Atoi(rec[7]); err != nil {
+			return Row{}, fmt.Errorf("bad digits %q: %w", rec[7], err)
+		}
 	}
 	if row.Text, err = strconv.ParseBool(rec[8]); err != nil {
 		return Row{}, fmt.Errorf("bad text flag %q: %w", rec[8], err)
@@ -198,10 +290,57 @@ func parseRecord(p Profile, rec []string) (Row, error) {
 		if row.Digits != p.TextWidth {
 			return Row{}, fmt.Errorf("text row (%s) must have digits %d, got %d", row.Name, p.TextWidth, row.Digits)
 		}
-	} else if row.Digits < p.MinDigits || row.Digits > p.MaxDigits {
+	} else if !row.Parameterless && (row.Digits < p.MinDigits || row.Digits > p.MaxDigits) {
+		// The MinDigits..MaxDigits check is skipped for a parameterless row
+		// ALONE — it has no width to bound, and 0 is not one. Everything
+		// else about the row, its printed cells included, is transcribed and
+		// checked exactly as any other row's.
 		return Row{}, fmt.Errorf("non-text row (%s) digits must be %d..%d, got %d", row.Name, p.MinDigits, p.MaxDigits, row.Digits)
 	}
 	return row, nil
+}
+
+// singleP1Ceiling is the largest P1 an AddressSingle chart may print: the
+// capacity of the three-digit menu-number field the form renders into. It is
+// core/cat's maxEXComponentSingleP1 stated on this side of the seam, as the
+// two-digit forms' 99 is core/cat's maxEXComponent — the two packages have
+// no import relationship (this one RENDERS core/cat source text) so each
+// states the bound its own parser enforces, and core/cat's V8 is what refuses
+// an inventory that disagrees.
+//
+// The FT-991A's own chart stops at 153. That is not this bound: membership
+// refuses 154, and this refuses the address the FIELD could never carry.
+const singleP1Ceiling = 999
+
+// checkTwoDigitComponents applies the two-digit component domain — the one
+// AddressTriple and AddressPair render every component into — to all three of
+// row's components.
+//
+// Its sentence is SHIPPED TEXT, unchanged since before the address form
+// existed, and it is a separate literal from AddressSingle's rather than one
+// composed from whichever bound is in force, because a composed sentence
+// would have moved this one for every model in the repository the day a
+// third form arrived.
+func checkTwoDigitComponents(row Row) error {
+	for i, v := range []int{row.P1, row.P2, row.P3} {
+		if v < 0 || v > 99 {
+			return fmt.Errorf("address component P%d must be 0..99, got %d", i+1, v)
+		}
+	}
+	return nil
+}
+
+// isParameterlessAddress reports whether the profile names (p1,p2,p3) as a
+// row its chart prints with no parameter. It reads the ADDRESS SET, which is
+// the datum — never a count of it — so parseRecord and RenderGo below rule on
+// the same fact rather than on two proxies for it.
+func isParameterlessAddress(p Profile, p1, p2, p3 int) bool {
+	for _, a := range p.ParameterlessAddresses {
+		if a == [3]int{p1, p2, p3} {
+			return true
+		}
+	}
+	return false
 }
 
 // observedColumns is the fixed observation CSV column count:
@@ -226,23 +365,29 @@ type Observed struct {
 // FT-710, core/cat/table2-observed.csv, but the path is the profile's
 // ObservedCSV, not this one — into observations keyed by THIS PROFILE'S
 // OWN address form (S0-close review's MEDIUM-2 finding): six digits under
-// AddressTriple, e.g. "010321", or four under AddressPair, e.g. "0801". The
-// key follows p.Addresses for the same reason RenderGo's lookup does (see
-// that function's matching comment) — it is a CSV join token, not a wire
-// render, but the two sides of the join must agree on its shape or a
-// complete Pair-form observation CSV can never be found by RenderGo's own
-// lookup, however exhaustively it was captured. Lines beginning with '#'
-// are provenance comments and are skipped, as in ParseCSV.
+// AddressTriple, e.g. "010321", four under AddressPair, e.g. "0801", or
+// three under AddressSingle, e.g. "008". The key follows p.Addresses for the same
+// reason RenderGo's lookup does (see that function's matching comment) — it
+// is a CSV join token, not a wire render, but the two sides of the join must
+// agree on its shape or a complete narrow-form observation CSV can never be
+// found by RenderGo's own lookup, however exhaustively it was captured.
+// Lines beginning with '#' are provenance comments and are skipped, as in
+// ParseCSV.
 //
 // Parsing is strict for privacy as much as correctness: each address
-// component must be exactly two digits, each width an integer in 1..the
+// component must be exactly two digits — EXCEPT p1 under AddressSingle,
+// whose field is three digits wide and whose column must therefore be
+// exactly three, with its own refusal sentence, because a sentence saying
+// "two" would be simply false of the only component that form puts on the
+// wire — each width an integer in 1..the
 // profile's MaxObservedWidth, and each shape one of the three known
 // classes, so a row cannot carry free text. Under AddressPair the p3
-// column must additionally be "0" — mirroring parseRecord's own P3 rule
-// for the inventory CSV — and is not part of the key: a Pair-form radio's
-// wire field carries P1 and P2 only, so a component the wire can never
-// express must be refused, not silently folded into a six-digit key
-// nothing else can produce. Duplicates are rejected. Error text names the
+// column must additionally be "0" — and under AddressSingle the p2 column
+// as well — mirroring parseRecord's own rules for the inventory CSV, and
+// neither is part of the key: those forms' wire fields carry P1 and P2, or
+// P1 alone, so a component the wire can never express must be refused, not
+// silently folded into a wider key nothing else can produce.
+// Duplicates are rejected. Error text names the
 // row and address only — never another field — so a malformed artefact
 // cannot leak captured content through a build log.
 //
@@ -266,7 +411,23 @@ func ParseObservedCSV(p Profile, data []byte) (map[string]Observed, error) {
 
 	out := make(map[string]Observed, len(records))
 	for i, rec := range records {
+		// The SHAPE check is form-dependent for the same reason the domain
+		// is: a column's width is the width of the field it stands for. Only
+		// p1 under AddressSingle differs, and its sentence branches with it
+		// — the two-digit one below is SHIPPED TEXT and is what the other two
+		// forms (and this form's own p2/p3 columns) still refuse with.
 		for c := 0; c < 3; c++ {
+			if c == 0 && p.Addresses == AddressSingle {
+				if !isThreeDigits(rec[c]) {
+					// "P1", not the loop's 0-based c: this arm runs for c ==
+					// 0 alone, and parseRecord's own domain refusal for the
+					// same column says "address component P1". The two-digit
+					// sentence below keeps its index because it is SHIPPED
+					// TEXT; this one was new (seat 1 LOW-2).
+					return nil, fmt.Errorf("extable: observation row %d: address component P1 must be exactly three digits under %v", i+1, p.Addresses)
+				}
+				continue
+			}
 			if !isTwoDigits(rec[c]) {
 				return nil, fmt.Errorf("extable: observation row %d: address component %d must be exactly two digits", i+1, c)
 			}
@@ -274,7 +435,7 @@ func ParseObservedCSV(p Profile, data []byte) (map[string]Observed, error) {
 		// The key follows p.Addresses — RenderGo's lookup key's own form,
 		// not always six digits (S0-close review, MEDIUM-2). A switch, not
 		// an AddressTriple-shaped default: p.Validate above has already
-		// required p.Addresses to be one of the two known forms, but this
+		// required p.Addresses to be one of the three known forms, but this
 		// switch is the site that actually reads it, and an omitted config
 		// semantic is refused here too, not defaulted to the wider key.
 		var addr string
@@ -291,6 +452,25 @@ func ParseObservedCSV(p Profile, data []byte) (map[string]Observed, error) {
 				return nil, fmt.Errorf("extable: observation row %d: p3 must be 0 under %v, got %q", i+1, p.Addresses, rec[2])
 			}
 			addr = rec[0] + rec[1]
+		case AddressSingle:
+			// Neither p2 nor p3 is on the wire under this form, so both are
+			// checked and dropped and the key is P1 alone — the same THREE
+			// digits RenderGo's own "%03d" lookup renders below, which is
+			// what makes a captured observation findable at all. The column
+			// has already been required to be exactly three digits above, so
+			// taking it verbatim IS the fixed-width token; a %02d key would
+			// render 153 as "153" and 8 as "08", and the two sides would
+			// agree only by accident.
+			// TestParseObservedCSV_AddressSingleKeysOnP1Alone pins the key
+			// and TestParseObservedCSV_AddressSingleRefusesNonZeroP2AndP3
+			// the two refusals.
+			if p2, err := strconv.Atoi(rec[1]); err != nil || p2 != 0 {
+				return nil, fmt.Errorf("extable: observation row %d: p2 must be 0 under %v, got %q", i+1, p.Addresses, rec[1])
+			}
+			if p3, err := strconv.Atoi(rec[2]); err != nil || p3 != 0 {
+				return nil, fmt.Errorf("extable: observation row %d: p3 must be 0 under %v, got %q", i+1, p.Addresses, rec[2])
+			}
+			addr = rec[0]
 		default:
 			return nil, fmt.Errorf("extable: profile %s: AddressForm %v must be set explicitly", p.Model, p.Addresses)
 		}
@@ -317,6 +497,19 @@ func isTwoDigits(s string) bool {
 		return false
 	}
 	return s[0] >= '0' && s[0] <= '9' && s[1] >= '0' && s[1] <= '9'
+}
+
+// isThreeDigits reports whether s is exactly three ASCII digits — the p1
+// column's shape under AddressSingle, whose wire field is three digits wide.
+// A sibling of isTwoDigits rather than a width-parameterised version of it,
+// for the reason core/cat's threeDigitsAt is a sibling of twoDigitsAt: each
+// form's own arm names its own width, and a shared helper taking a width
+// would put that width somewhere other than the arm that knows it.
+func isThreeDigits(s string) bool {
+	if len(s) != 3 {
+		return false
+	}
+	return s[0] >= '0' && s[0] <= '9' && s[1] >= '0' && s[1] <= '9' && s[2] >= '0' && s[2] <= '9'
 }
 
 // RenderGo renders rows as the profile's generated inventory file, joined
@@ -411,6 +604,36 @@ func RenderGo(p Profile, rows []Row, observed map[string]Observed) ([]byte, erro
 	for _, l := range p.DocLines {
 		fmt.Fprintf(&buf, "// %s\n", l)
 	}
+	// The exclusion is recorded in the generated header BY ADDRESS, so a
+	// reader of the artefact alone can see which of the chart's rows is
+	// missing and why, without holding the profile beside it. Under
+	// ParameterlessRefused the set is empty and nothing is emitted, which is
+	// what keeps the five registered inventories byte-identical.
+	// TestRenderGo_ParameterlessAddressIsAbsentByAddress pins both halves.
+	if len(p.ParameterlessAddresses) > 0 {
+		buf.WriteString("//\n")
+		fmt.Fprintf(&buf, "// EXCLUDED, by address, under %v: ", p.ParameterlessPolicy)
+		excl := append([][3]int(nil), p.ParameterlessAddresses...)
+		sort.Slice(excl, func(i, j int) bool {
+			a, b := excl[i], excl[j]
+			if a[0] != b[0] {
+				return a[0] < b[0]
+			}
+			if a[1] != b[1] {
+				return a[1] < b[1]
+			}
+			return a[2] < b[2]
+		})
+		for i, a := range excl {
+			if i > 0 {
+				buf.WriteString(", ")
+			}
+			fmt.Fprintf(&buf, "%d/%d/%d", a[0], a[1], a[2])
+		}
+		buf.WriteString(".\n")
+		buf.WriteString("// The chart prints that row with no parameter at all, so it is transcribed\n")
+		buf.WriteString("// and counted but names no field an EX frame could read or write.\n")
+	}
 	fmt.Fprintf(&buf, "var %s = []%sEXItem{\n", p.VarName, qual)
 	// Under LabelsAbsent the generated item carries "" for both labels.
 	// ParseCSV has already required the columns to be BLANK, which admits a
@@ -422,26 +645,50 @@ func RenderGo(p Profile, rows []Row, observed map[string]Observed) ([]byte, erro
 			sorted[i].P1Label, sorted[i].P2Label = "", ""
 		}
 	}
+	emitted := 0
 	for _, r := range sorted {
+		// A row the profile names as parameterless is omitted BY ADDRESS —
+		// the profile's own datum — rather than by the Row flag alone. The
+		// two agree by construction after parseRecord, but RenderGo is a
+		// separate entry point and a caller may hand it rows it did not
+		// parse; keying on the set means the omitted row is the DECLARED
+		// one, never merely a row that happened to arrive flagged.
+		if isParameterlessAddress(p, r.P1, r.P2, r.P3) {
+			continue
+		}
+		emitted++
 		// The observation lookup key follows THIS PROFILE'S OWN address
 		// form (S0-close review, LOW-3) rather than always being rendered
 		// six digits wide: under AddressPair the wire field carries P1 and
-		// P2 only (parseRecord above refuses a non-zero P3), so a Pair
-		// radio's own observation CSV can never carry a six-digit address —
-		// keying the lookup that way would refuse every row's observation,
-		// however complete the CSV was. It is a CSV join token, not a wire
-		// render — core/cat's wireEXAddress is the wire-side counterpart —
-		// so it is derived here rather than through that renderer.
+		// P2 only (parseRecord above refuses a non-zero P3), and under
+		// AddressSingle P1 alone, so those radios' own observation CSVs can
+		// never carry a six-digit address — keying the lookup that way would
+		// refuse every row's observation, however complete the CSV was. It
+		// is a CSV join token, not a wire render — core/cat's wireEXAddress
+		// is the wire-side counterpart — so it is derived here rather than
+		// through that renderer.
 		// A SWITCH, not an if/else with an implicit AddressPair arm, for the
 		// reason parseRecord's own switch above gives: Profile.Validate has
-		// already required one of the two known forms, and this site refuses
-		// an unset one rather than quietly rendering the narrower key.
+		// already required one of the three known forms, and this site
+		// refuses an unset one rather than quietly rendering a key of the
+		// wrong width.
 		var addr string
 		switch p.Addresses {
 		case AddressTriple:
 			addr = fmt.Sprintf("%02d%02d%02d", r.P1, r.P2, r.P3)
 		case AddressPair:
 			addr = fmt.Sprintf("%02d%02d", r.P1, r.P2)
+		case AddressSingle:
+			// P1 alone, THREE digits: the chart's menu number IS the address,
+			// its field is three digits wide, and ParseObservedCSV builds the
+			// same key from the same column (which it has required to be
+			// exactly three digits). %02d would be a MINIMUM width here — it
+			// renders 153 as "153" but 8 as "08" — so a complete capture of a
+			// 153-row chart would miss on every row below 100 while looking
+			// like it agreed on the rest.
+			// TestRenderGo_SingleProfileKeysObservationsByThreeDigitForm goes
+			// through both sides of the join, so a disagreement fails there.
+			addr = fmt.Sprintf("%03d", r.P1)
 		default:
 			return nil, fmt.Errorf("extable: profile %s: AddressForm %v must be set explicitly", p.Model, p.Addresses)
 		}
@@ -459,6 +706,16 @@ func RenderGo(p Profile, rows []Row, observed map[string]Observed) ([]byte, erro
 			r.Digits, r.Text, obs.ReadWidth, strconv.Quote(obs.ReadShape), r.ManualLine)
 	}
 	buf.WriteString("}\n")
+	// The accounting the exclusion owes: ExpectedRows counts the chart's
+	// printed rows, the declared set says how many of them name no field, and
+	// what is emitted is the difference. The check catches the case the
+	// address-keyed skip above cannot — a profile declaring an address its
+	// CSV never carries, which would silently emit one item too many while
+	// every count in the profile still looked consistent.
+	// TestRenderGo_ParameterlessArithmetic pins it.
+	if want := p.ExpectedRows - len(p.ParameterlessAddresses); emitted != want {
+		return nil, fmt.Errorf("extable: profile %s: emitted %d items, want %d — ExpectedRows %d less the %d address(es) ParameterlessAddresses names, so a declared exclusion is missing from the inventory", p.Model, emitted, want, p.ExpectedRows, len(p.ParameterlessAddresses))
+	}
 
 	formatted, err := format.Source(buf.Bytes())
 	if err != nil {

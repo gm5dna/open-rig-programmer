@@ -1,0 +1,89 @@
+# MR (MEMORY CHANNEL READ) — Read-request and Answer wire frames, hand-derived
+#
+# Manual: "FT-991A HF/VHF/UHF ALL MODE TRANSCEIVER — CAT Operation Reference Manual",
+#   YAESU MUSEN CO., LTD., Copyright 2017.
+# Printed revision: "1711-D" (back cover, PDF page 20). No revision on the title page.
+# Charts used: the MR command detail block, printed folio 12 = PDF page 13.
+#   The READ chart supplies the request layout (it is the only MR chart with a request in
+#   it — the MR Set chart is printed as an empty grid). The ANSWER chart supplies the
+#   answer layout; it is the only chart in the block that carries the returned parameters.
+# Derivation date: 05/09/2026.
+# NO code, no generator, no other file and no other document was consulted.
+#
+# COUNTED FRAME LENGTHS
+#   Read request: 6 bytes, terminator included.
+#     Count A (left-to-right): 1 "M", 2 "R", 3 P0, 4 P0, 5 P0, 6 ";", 7..10 empty.
+#     Count B (row totals): 1 printed row x 10 numbered cells; filled cells = 6. Agree.
+#   Answer: 28 bytes, terminator included.
+#     Count A (left-to-right): row 1 = 1..10 all filled, row 2 = 11..20 all filled,
+#     row 3 = 21..30 with 21..28 filled (";" in cell 28) and 29, 30 empty.
+#     Count B (row totals): 3 rows x 10 = 30 numbered positions; filled 10+10+8 = 28. Agree.
+#   No third look was needed for either. Chart and legend re-rendered and cropped at
+#   600 dpi; the clarifier-direction glyph checked at 1800 dpi.
+#
+# POSITION-BY-POSITION FIELD MAP — READ chart (MR block, printed folio 12)
+#   pos 1      "M"                     printed literally
+#   pos 2      "R"                     printed literally
+#   pos 3-5    P0  (3 positions)       legend: "P0/1  001-117 (Memory Channel)"
+#   pos 6      ";"                     terminator, printed literally
+#
+# POSITION-BY-POSITION FIELD MAP — ANSWER chart (MR block, printed folio 12)
+#   pos 1      "M"                     printed literally
+#   pos 2      "R"                     printed literally
+#   pos 3-5    P1  (3 positions)       legend: "P0/1  001-117 (Memory Channel)"
+#   pos 6-14   P2  (9 positions)       legend: "P2    VFO-A Frequency (Hz)"
+#   pos 15-19  P3  (5 positions)       legend: "P3  Clarifier Direction +: Plus Shift, --: Minus Shift"
+#                                              "Clarifier Offset: 0000 - 9999 (Hz)"
+#   pos 20     P4  (1 position)        legend: "P4  0: RX CLAR "OFF"    1: RX CLAR "ON""
+#   pos 21     P5  (1 position)        legend: "P5  0: TX CLAR "OFF"    1: TX CLAR "ON""
+#   pos 22     P6  (1 position)        MODE legend, verbatim and complete:
+#                                        "P6  MODE  1: LSB   2: USB   3: CW   4: FM   5: AM   6: RTTY-LSB   7: CW-R"
+#                                        "          8: DATA-LSB   9: RTTY-USB   A: DATA-FM   B: FM-N   C: DATA-USB"
+#                                        "          D: AM-N   E: C4FM"
+#   pos 23     P7  (1 position)        legend: "P7  0: VFO  1: Memory"
+#   pos 24     P8  (1 position)        legend: "P8  0: CTCSS "OFF"   1: CTCSS ENC/DEC   2: CTCSS ENC   3: DCS ENC/DEC"
+#                                              "4: DCS ENC"
+#   pos 25-26  P9  (2 positions)       legend: "P9  00: (Fixed)"
+#   pos 27     P10 (1 position)        legend: "P10 0: Simplex    1: Plus Shift    2: Minus Shift"
+#   pos 28     ";"                     terminator, printed literally
+#
+#   The MR Answer chart prints NO tag field and no tag ON/OFF flag position.
+#
+# SLOT RANGES THE MR LEGEND LISTS
+#   The MR legend lists exactly ONE range, verbatim: "P0/1  001-117 (Memory Channel)".
+#   It lists NO other ranges, and it does not spell a PMS slot. There is therefore no
+#   "other range the MR legend lists" from which to take a further slot. The PMS slot
+#   numbers and spellings used in the vector NAMES below (100 = P-1L, 117 = P-9U) are taken
+#   from the MC legend on printed folio 11 (PDF page 12), which is the only place in this
+#   manual that breaks 001-117 down. Recorded, not resolved.
+#
+# BYTES THE MANUAL DETERMINES vs INHERITED-ASSUMED (Answer vectors)
+#   Manual-determined: "MR"; every field width (counted); ";"; P1 range; P2 unit and width;
+#   P3 offset range; every P4/P5/P6/P8/P10 index and label; P9 = "00" ("(Fixed)").
+#   INHERITED-ASSUMED (1) — P7 VALUE: the legend documents both values ("0: VFO 1: Memory")
+#     but the manual never states which one a memory-channel answer carries. Both Answer
+#     vectors below use "1" (Memory), because the frame reports a memory channel.
+#   INHERITED-ASSUMED (2) — MINUS CLARIFIER DIRECTION BYTE: as for MT and MW, the legend
+#     prints "--:" (two hyphen glyphs at 1800 dpi) while the chart allows one position.
+#     The Answer vectors below happen to carry "+" and so do not exercise this, but the
+#     assumption stands for any minus-direction MR answer.
+#   INHERITED-ASSUMED (3) — the Answer frames below are constructed, not captured. Nothing
+#     in the manual says what a radio actually returns for any given channel.
+#
+# COMMAND-LIST vs DETAIL-BLOCK, MR directions — BOTH readings recorded verbatim, unresolved
+#   Command list, printed folio 3 (PDF page 4), row verbatim:
+#     "MR | MEMORY READ | Set: X | Read: O | Ans.: O | AI: X"
+#   Detail block, printed folio 12 (PDF page 13):
+#     Set row: chart printed EMPTY; Read row: chart printed and filled (6 positions);
+#     Answer row: chart printed and filled (28 positions).
+#   The two readings AGREE. (The command list names it "MEMORY READ"; the detail block
+#   heads it "MEMORY CHANNEL READ".)
+#
+# Hardware status: UNVERIFIED. No frame below has been sent to or read from a radio.
+#
+mr_read_ch001_ordinary	MR001;
+mr_read_ch099_last_regular	MR099;
+mr_read_ch100_pms_p_1l	MR100;
+mr_read_ch117_pms_p_9u	MR117;
+mr_answer_ch001_7m100_lsb_memory	MR001007100000+000000110000;
+mr_answer_ch100_pms_p_1l_7m000_lsb_memory	MR100007000000+000000110000;

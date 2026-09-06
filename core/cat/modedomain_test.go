@@ -39,6 +39,7 @@ func TestParseMode_RefusalNamesThisDialectsOwnDomain(t *testing.T) {
 		},
 		Slots: SlotSpace{
 			MemoryLo: 1, MemoryHi: 99, PMSPairs: 9,
+			PMSForm:  PMSFormToken,
 			NoneWire: "000", MCSelects: MCSelectsMemoryPMS,
 		},
 		EXAddressForm: EXAddressPair, // the FT-891's shape throughout, as the comment above says
@@ -48,6 +49,7 @@ func TestParseMode_RefusalNamesThisDialectsOwnDomain(t *testing.T) {
 		},
 		Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 		MemoryP5:    P5Fixed,
+		ToneStates:  ToneStatesCTCSS,
 		MWWriteKind: KindMemory,
 	})
 
@@ -81,6 +83,7 @@ func TestParseMode_RefusalNamesThisDialectsOwnDomain(t *testing.T) {
 		},
 		Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 		MemoryP5:    P5TxClar,
+		ToneStates:  ToneStatesCTCSS,
 		MWWriteKind: KindMemory,
 	})
 	if got, want := single.modeDomainText(), "'2'"; got != want {

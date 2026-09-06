@@ -11,7 +11,24 @@ tag. The full release notes for each version are on the
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+- **Yaesu FT-991A**: read, opt-in write, menu-settings read, CSV and
+  CHIRP, on the same terms as every other manual-derived radio. Its 99
+  memories and 9 PMS pairs, and 152 of the 153 menu rows its chart
+  prints — row 087, RADIO ID, is left out because the chart gives it
+  neither a width nor a parameter, so the program cannot size an answer
+  to it. The PMS pairs are listed as the channel numbers 100 to 117,
+  which is what the radio's CAT record uses, where the radio's own panel
+  and manual print `P-1L` to `P-9U`. Its memory record carries a
+  five-state tone byte, including two DCS states, which the program
+  reads and writes; the tone number and the DCS code are not per-channel
+  fields on this radio and are not touched. In CHIRP files, `DTCS` and
+  `Cross` rows are refused (the state can be written, the code cannot),
+  `CW`, `CWR` and `RTTY` rows are not imported (this radio's legend
+  prints `CW`, `CW-R`, `RTTY-LSB` and `RTTY-USB`), and C4FM has no CHIRP
+  name at all. Its CAT speed is a guess (38400; menu 031 CAT RATE on the
+  radio is the only remedy), and its USB socket presents two serial
+  ports with no statement of which carries CAT.
 
 ## [1.3.0] - 2026-09-05
 

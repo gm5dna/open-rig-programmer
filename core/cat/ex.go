@@ -7,7 +7,9 @@ import "fmt"
 // exReadLen is the length of an EX read request for THIS DIALECT:
 // "EX"(2) + address(d.EXAddressWidth()) + ";"(1). Reference: the EX
 // grammar block's Read frame — "E X P1 P1 P2 P2 P3 P3 ;" (FT-710 manual
-// extract line ~629) is 9 bytes; a four-digit family's is 7.
+// extract line ~629) is 9 bytes under EXAddressTriple; a four-digit
+// family's is 7 under EXAddressPair; a three-digit family's is 6 under
+// EXAddressSingle.
 //
 // It was a package const of 9 until the FT-891 Stage 0 seam, consulted
 // THROUGH a Dialect receiver by validEXRead — the exact shape this package
@@ -39,7 +41,8 @@ func (d Dialect) exAnswerMaxLen() int {
 }
 
 // BuildEXRead builds this dialect's EX read frame for addr — 9 bytes under
-// EXAddressTriple, 7 under EXAddressPair. Reference: the EX grammar
+// EXAddressTriple, 7 under EXAddressPair, 6 under EXAddressSingle.
+// Reference: the EX grammar
 // block's Read frame (manual extract line ~629). The only
 // validation is membership of THIS DIALECT'S inventory
 // (d.KnownEXAddress) — never a numeric range check on P1/P2/P3, mirroring
@@ -50,21 +53,29 @@ func (d Dialect) exAnswerMaxLen() int {
 // such addresses to a real radio and both were rejected with "?;", which
 // supports that reading without surveying the whole P1=05 space.
 //
-// THE NON-MEMBER REFUSAL REPORTS THE WIRE RENDER under EXAddressTriple, so
-// that core/cat/testdata/frame-corpus.golden line 357 — which pins this
-// refusal's input bytes verbatim ("000000") — stays byte-identical, per
-// the milestone's standing claim that no existing golden moves through
-// Stage 0. Under EXAddressPair the wire render drops P3 (EXWire renders
-// only P1 and P2 for that form), so a Pair non-member refusal reports the
-// debug String() form instead — the only rendering that names all three
-// components. TestBuildEXRead_UsesThisDialectsWidth pins both sides: the
-// Triple refusal's reported input unchanged, the Pair refusal's naming all
-// three components.
+// THE NON-MEMBER REFUSAL REPORTS THE WIRE RENDER ONLY UNDER EXAddressTriple,
+// where the six-digit field carries all three components. Reporting it there
+// keeps core/cat/testdata/frame-corpus.golden line 357 — which pins this
+// refusal's input bytes verbatim ("000000") — byte-identical, per the
+// milestone's standing claim that no existing golden moves through Stage 0.
+//
+// EVERY LOSSY FORM REPORTS THE DEBUG String() FORM INSTEAD, which is the
+// only rendering that names all three components: EXWire drops P3 under
+// EXAddressPair and drops both P2 and P3 under EXAddressSingle. The Single
+// form's loss is the sharper one, because a three-digit render of a
+// non-member can BE a member's wire — under an inventory holding 001, the
+// address (01,03,07) reported `input="001"` and named the very item it had
+// just refused (Codex third seat, LOW C-L1). The test that meant to cover
+// this asserted only that an error existed. The condition is now the
+// form's lossiness rather than a named form, so a fourth form added later
+// is safe by default. TestBuildEXRead_UsesThisDialectsWidth pins the
+// Triple and Pair frames; TestBuildEXRead_SingleIsSixBytesAndGateAdmissible
+// pins the Single one.
 func (d Dialect) BuildEXRead(addr EXAddress) (Command, error) {
 	wire := d.EXWire(addr)
 	if !d.KnownEXAddress(addr) {
 		reported := wire
-		if d.exAddrForm == EXAddressPair {
+		if d.exAddrForm != EXAddressTriple {
 			reported = addr.String()
 		}
 		return Command{}, newParseError([]byte(reported), "EX: address is not a known Table 2 member")
@@ -77,7 +88,7 @@ func (d Dialect) BuildEXRead(addr EXAddress) (Command, error) {
 }
 
 // ParseEXAnswer parses an EX Answer frame ("EX" + this dialect's address
-// field, six digits or four + a raw P4 body of 1 to d.exP4MaxBytes() bytes
+// field, six digits, four or three + a raw P4 body of 1 to d.exP4MaxBytes() bytes
 // + ";", reference: the EX grammar block's Answer frame, manual extract
 // line ~629) and returns the address and the raw P4 body.
 //

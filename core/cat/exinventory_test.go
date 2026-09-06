@@ -9,7 +9,7 @@ import (
 // findItem returns the inventory item at (p1,p2,p3), or ok=false. It scans
 // EXItems() rather than the generator's own maps, so the spot-check tests
 // exercise the public surface end to end.
-func findItem(t *testing.T, p1, p2, p3 uint8) (EXItem, bool) {
+func findItem(t *testing.T, p1, p2, p3 uint16) (EXItem, bool) {
 	t.Helper()
 	for _, it := range FT710.EXItems() {
 		if it.Addr == (EXAddress{p1, p2, p3}) {
@@ -22,11 +22,11 @@ func findItem(t *testing.T, p1, p2, p3 uint8) (EXItem, bool) {
 // TestEXInventory_CountsPerGroup pins the per-P1 item counts and the grand
 // total. These numbers are the milestone's load-bearing cross-check.
 func TestEXInventory_CountsPerGroup(t *testing.T) {
-	perP1 := map[uint8]int{}
+	perP1 := map[uint16]int{}
 	for _, it := range FT710.EXItems() {
 		perP1[it.Addr.P1]++
 	}
-	want := map[uint8]int{1: 94, 2: 31, 3: 65, 4: 16, 6: 90}
+	want := map[uint16]int{1: 94, 2: 31, 3: 65, 4: 16, 6: 90}
 	for p1, n := range want {
 		if perP1[p1] != n {
 			t.Errorf("P1=%d: got %d items, want %d", p1, perP1[p1], n)
@@ -46,16 +46,16 @@ func TestEXInventory_CountsPerGroup(t *testing.T) {
 func TestEXInventory_MenuAndGroupStructure(t *testing.T) {
 	items := FT710.EXItems()
 
-	menus := map[uint8]bool{}
-	subgroups := map[[2]uint8]bool{}
-	p1Labels := map[uint8]string{}
-	p2Labels := map[[2]uint8]string{}
+	menus := map[uint16]bool{}
+	subgroups := map[[2]uint16]bool{}
+	p1Labels := map[uint16]string{}
+	p2Labels := map[[2]uint16]string{}
 
 	var prev EXAddress
 	for i, it := range items {
 		a := it.Addr
 		menus[a.P1] = true
-		subgroups[[2]uint8{a.P1, a.P2}] = true
+		subgroups[[2]uint16{a.P1, a.P2}] = true
 
 		if it.P1Label == "" {
 			t.Errorf("item %v has empty P1Label", a)
@@ -71,7 +71,7 @@ func TestEXInventory_MenuAndGroupStructure(t *testing.T) {
 		} else {
 			p1Labels[a.P1] = it.P1Label
 		}
-		key := [2]uint8{a.P1, a.P2}
+		key := [2]uint16{a.P1, a.P2}
 		if got, ok := p2Labels[key]; ok {
 			if got != it.P2Label {
 				t.Errorf("(P1=%d,P2=%d) label not constant: %q vs %q", a.P1, a.P2, got, it.P2Label)
@@ -180,7 +180,7 @@ func TestEXInventory_NoDuplicatesSortedAndWireStable(t *testing.T) {
 // expectation cites the manual extract line it was read from.
 func TestEXInventory_SpotChecksAgainstManual(t *testing.T) {
 	spots := []struct {
-		p1, p2, p3 uint8
+		p1, p2, p3 uint16
 		name       string
 		digits     int
 		text       bool

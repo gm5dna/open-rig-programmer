@@ -11,11 +11,18 @@ import (
 	"strings"
 )
 
-// MaxDigitsCeiling is the largest width any profile may declare. It mirrors
-// core/cat's maxEXDigits, which refuses a wider P4 because the answer frame
-// would exceed DefaultMaxFrame. Refusing here means a bad profile fails at
-// registry construction rather than two packages downstream inside
-// NewDialect's V8 rule. core/cat/exdigits_ceiling_test.go pins the two equal.
+// MaxDigitsCeiling is CORE/CAT'S width ceiling, and so the value every
+// profile that renders into core/cat carries in its own DigitsCeiling field.
+// It mirrors core/cat's maxEXDigits, which refuses a wider P4 because the
+// answer frame would exceed DefaultMaxFrame. Declaring it here means a bad
+// profile fails at registry construction rather than two packages downstream
+// inside NewDialect's V8 rule, and core/cat/exdigits_ceiling_test.go pins the
+// two equal.
+//
+// It is NOT the bound Validate consults. That is Profile.DigitsCeiling, for
+// the reason recorded there: a profile rendering into a different package has
+// a different frame budget, and bounding it by this one would be a bound
+// consulted from one place with its datum taken from another.
 const MaxDigitsCeiling = 247
 
 // ObservationPolicy declares whether a model has hardware READ observations.
@@ -77,18 +84,25 @@ func (t TypeRefPolicy) String() string {
 	}
 }
 
-// AddressForm, Labels and TextRows are the three CHART-SHAPE policies. Each
-// zero value is refused by Profile.Validate for the reason ObservationPolicy
-// and TypeRefPolicy are: an omitted semantic must refuse, never default.
+// AddressForm, Labels, TextRows and ParameterlessRows are the four
+// CHART-SHAPE policies. Each zero value is refused by Profile.Validate for
+// the reason ObservationPolicy and TypeRefPolicy are: an omitted semantic
+// must refuse, never default.
 //
 // THEY ARE extable's OWN TYPES, not core/cat's. This package imports no
 // core/cat — it is build-time tooling that RENDERS core/cat source text, and
 // an import would make the transcoder depend on the package it generates
-// into. AddressTriple/AddressPair correspond one-for-one with core/cat's
-// EXAddressTriple/EXAddressPair, and the correspondence is a fact about the
-// two radios' charts rather than a type relationship: a Pair profile's CSV
-// carries P3 == 0 on every row, which is exactly what core/cat's rule V12
-// requires of a Pair dialect's inventory.
+// into. All three correspond ONE-FOR-ONE with core/cat's forms —
+// AddressTriple with EXAddressTriple, AddressPair with EXAddressPair,
+// AddressSingle with EXAddressSingle — and each correspondence is a fact
+// about the radios' charts rather than a type relationship: a Pair
+// profile's CSV carries P3 == 0 on every row and a Single profile's carries
+// P2 AND P3 == 0, which is exactly what core/cat's rule V12 requires of a
+// Pair and a Single dialect's inventory. This comment used to say
+// AddressSingle had no core/cat counterpart and rendered through a separate
+// Kenwood package; cat.EXAddressSingle is the seam the FT-991A milestone
+// added, and the generated ft991a inventory is what consumes it (Codex
+// third seat, LOW C-L2).
 type AddressForm int
 
 const (
@@ -99,6 +113,31 @@ const (
 	// be 0. ParseCSV refuses any other value rather than dropping it: a
 	// component that reaches no frame must not reach the inventory either.
 	AddressPair
+	// AddressSingle: the chart prints ONE menu number and that number is the
+	// whole address, so every row's p2 AND p3 columns must be 0. ParseCSV
+	// refuses any other value rather than dropping it, for the reason
+	// AddressPair refuses a non-zero p3 — this form simply carries the rule
+	// one component further down.
+	//
+	// P1's WIDTH AND DOMAIN ARE A PER-FORM FACT, owned by the arms that
+	// implement the form and not by this constant: parseRecord's 0..999
+	// domain check (TestParseCSV_AddressSingleP1DomainIs0To999 pins it, and
+	// TestParseCSV_TheOtherFormsKeepTheTwoDigitDomain pins that the other
+	// two forms keep 0..99), ParseObservedCSV's exactly-three-digits column
+	// check, and RenderGo's "%03d" observation key. The last two are the two
+	// sides of one join and agree only while both render the same width, so
+	// they widen together; widening one side alone makes every observation
+	// miss, on a complete CSV, silently.
+	//
+	// The domain WAS 0..99, a package-wide cap that sat above the form
+	// switch, and the FT-991A milestone widened it: that radio's chart is
+	// "P1 : 001 - 153" over 153 contiguous rows, so 54 of them were
+	// untranscribable and the generator would have failed on row 100. The
+	// Kenwood charts that first carried this form stop at 099 and are
+	// unaffected — 0..99 is a subset of 0..999 — but their observation KEY
+	// moved from "08" to "008" with the rest, which is the half a "wider
+	// domain is a superset" argument does not cover.
+	AddressSingle
 )
 
 func (a AddressForm) String() string {
@@ -107,6 +146,8 @@ func (a AddressForm) String() string {
 		return "AddressTriple"
 	case AddressPair:
 		return "AddressPair"
+	case AddressSingle:
+		return "AddressSingle"
 	default:
 		return fmt.Sprintf("AddressForm(%d)", int(a))
 	}
@@ -167,6 +208,66 @@ func (t TextRows) String() string {
 	}
 }
 
+// ParameterlessRows declares whether the model's chart prints a row with NO
+// PARAMETER: a menu number that occupies a line of the chart but names no
+// settable field, so its parameter column and its Digits cell are drawn as
+// hyphens. The FT-991A's chart has exactly one — 087 RADIO ID, whose
+// parameter column is ten hyphens and whose Digits cell is a single hyphen —
+// and the four charts registered before it have none.
+//
+// IT IS INDEPENDENT OF AddressForm. A four-digit chart may print a
+// parameterless row and a single-number chart may have none; the two
+// policies answer different questions about a chart and neither constrains
+// the other. TestParseCSV_ParameterlessIsIndependentOfAddressForm pins the
+// independence on a Pair-form fixture.
+//
+// The excluded row is TRANSCRIBED (its printed cells reach Row verbatim) and
+// COUNTED (ExpectedRows is the chart's own row count), and it is omitted from
+// the generated inventory, because an EX item with no field is not an address
+// anything may read or write.
+//
+// ParameterlessExcluded × ObservationsRequired, stated because the policy is
+// radio-independent and the combination is reachable: RenderGo's
+// ObservationsRequired arm compares len(observed) against len(rows), and
+// under Excluded the inventory it renders is len(rows) −
+// len(ParameterlessAddresses) items, so a complete observation sweep of the
+// REGISTRABLE addresses is one short of that comparison. No registered
+// profile meets it: every profile in the registry today declares
+// ParameterlessRefused, so the only Excluded profiles that exist are this
+// package's own test fixtures, and the FT-991A's stanza — the first Excluded
+// one the registry will hold — is planned as ObservationsAbsent, which does
+// not reach this arm either. (This sentence said "the only Excluded profile
+// this repository has declares ObservationsAbsent", which described a
+// registered profile that does not yet exist — Stage 0 close review, seat 1
+// LOW-3.) So the arm is left exactly as it was rather than changed against a
+// case nothing exercises. The first profile that does meet it owns the
+// change, and this comment is the record that the arithmetic was known and
+// deferred, not missed.
+type ParameterlessRows int
+
+const (
+	// ParameterlessRefused: the chart prints no such row, so a hyphen in a
+	// Digits cell is a transcription error and ParseCSV refuses it naming
+	// the row. ParameterlessAddresses must be empty.
+	ParameterlessRefused ParameterlessRows = iota + 1
+	// ParameterlessExcluded: the chart prints one or more, each named in
+	// ParameterlessAddresses. A hyphen is admitted on THOSE addresses alone,
+	// and a numeric width on one of them is refused — the licence is per
+	// address, never per policy.
+	ParameterlessExcluded
+)
+
+func (p ParameterlessRows) String() string {
+	switch p {
+	case ParameterlessRefused:
+		return "ParameterlessRefused"
+	case ParameterlessExcluded:
+		return "ParameterlessExcluded"
+	default:
+		return fmt.Sprintf("ParameterlessRows(%d)", int(p))
+	}
+}
+
 // Profile is every fact about one radio model that the transcoder needs and
 // that differs between models. It is the single source those facts have: the
 // generator and every staleness test read the same value, so they cannot
@@ -196,12 +297,42 @@ type Profile struct {
 	ManualCSV   string
 	ObservedCSV string // must be empty iff Observations is ObservationsAbsent
 
-	// Addresses, LabelPolicy and TextRowPolicy are the chart-shape
-	// policies. Each has no default; see AddressForm, Labels and TextRows.
-	Addresses     AddressForm
-	LabelPolicy   Labels
-	TextRowPolicy TextRows
+	// Addresses, LabelPolicy, TextRowPolicy and ParameterlessPolicy are the
+	// chart-shape policies. Each has no default; see AddressForm, Labels,
+	// TextRows and ParameterlessRows.
+	Addresses           AddressForm
+	LabelPolicy         Labels
+	TextRowPolicy       TextRows
+	ParameterlessPolicy ParameterlessRows
 
+	// ParameterlessAddresses names every (P1,P2,P3) the chart prints with no
+	// parameter. It is a SET OF ADDRESSES and there is deliberately no
+	// count beside it: a count is a bound consulted from somewhere other
+	// than its datum, and a count-only gate would accept an inventory that
+	// omitted the WRONG row and still satisfied the arithmetic. RenderGo
+	// therefore excludes BY ADDRESS and then checks the count that follows.
+	//
+	// Non-empty iff ParameterlessPolicy is ParameterlessExcluded, and its
+	// members must be distinct: a duplicate would make
+	// ExpectedRows − len(ParameterlessAddresses) understate the inventory.
+	// TestProfileValidate_Parameterless pins both rules.
+	ParameterlessAddresses [][3]int
+
+	// DigitsCeiling is the largest width THIS profile's family admits, and
+	// it is what bounds MaxDigits, TextWidth and MaxObservedWidth. It is a
+	// PER-FAMILY datum because the bound is a property of the family's own
+	// frame budget: the five Yaesu profiles render into core/cat and carry
+	// MaxDigitsCeiling, which core/cat/exdigits_ceiling_test.go pins to that
+	// package's maxEXDigits; a profile rendering into another package
+	// supplies that package's own constant and pins the pair there.
+	//
+	// Reading MaxDigitsCeiling directly here instead would be a bound
+	// consulted from one place with its datum taken from another — the
+	// defect shape this type's own doc comment above says it exists to
+	// prevent, and the one that appeared four times across M9b. Zero is
+	// refused, as every other omitted semantic on this type is.
+	// TestProfileValidate_CeilingComesFromTheProfile pins both directions.
+	DigitsCeiling int
 	// MinDigits and MaxDigits bound a non-text row's Digits column.
 	MinDigits int
 	MaxDigits int
@@ -291,7 +422,7 @@ func (p Profile) Validate() error {
 		return fmt.Errorf("extable: profile %s: TypeRefPolicy %v must be set explicitly", p.Model, p.Types)
 	}
 	switch p.Addresses {
-	case AddressTriple, AddressPair:
+	case AddressTriple, AddressPair, AddressSingle:
 	default:
 		return fmt.Errorf("extable: profile %s: AddressForm %v must be set explicitly", p.Model, p.Addresses)
 	}
@@ -315,10 +446,46 @@ func (p Profile) Validate() error {
 	default:
 		return fmt.Errorf("extable: profile %s: TextRows %v must be set explicitly", p.Model, p.TextRowPolicy)
 	}
+	// The exclusion SET is validated inside this switch, as TextWidth is
+	// inside the one above and for the same reason: whether it may be
+	// populated is the policy's to say, in both directions. A Refused
+	// profile carrying an address would declare an exclusion nothing acts
+	// on; an Excluded profile carrying none would declare a regime with no
+	// subject.
+	switch p.ParameterlessPolicy {
+	case ParameterlessExcluded:
+		if len(p.ParameterlessAddresses) == 0 {
+			return fmt.Errorf("extable: profile %s: ParameterlessAddresses is empty under %v — the policy names the rows by address, so a chart that prints one must say which", p.Model, p.ParameterlessPolicy)
+		}
+		seen := make(map[[3]int]bool, len(p.ParameterlessAddresses))
+		for _, a := range p.ParameterlessAddresses {
+			if seen[a] {
+				return fmt.Errorf("extable: profile %s: ParameterlessAddresses lists %d/%d/%d twice — a duplicate would make ExpectedRows minus the excluded count understate the inventory", p.Model, a[0], a[1], a[2])
+			}
+			seen[a] = true
+		}
+		// ExpectedRows COUNTS the excluded rows — they are printed, so they
+		// are transcribed — and the inventory is what remains, so a chart
+		// consisting only of parameterless rows would generate nothing.
+		if p.ExpectedRows <= len(p.ParameterlessAddresses) {
+			return fmt.Errorf("extable: profile %s: ExpectedRows %d does not exceed the %d excluded address(es) — the count includes them, so the inventory would be empty", p.Model, p.ExpectedRows, len(p.ParameterlessAddresses))
+		}
+	case ParameterlessRefused:
+		if len(p.ParameterlessAddresses) != 0 {
+			return fmt.Errorf("extable: profile %s: ParameterlessAddresses names %d address(es) under %v — this chart prints no parameterless row, so there is nothing to exclude", p.Model, len(p.ParameterlessAddresses), p.ParameterlessPolicy)
+		}
+	default:
+		return fmt.Errorf("extable: profile %s: ParameterlessRows %v must be set explicitly", p.Model, p.ParameterlessPolicy)
+	}
 	for _, f := range []struct {
 		name string
 		val  int
 	}{
+		// DigitsCeiling is swept here, ahead of the ceiling comparison
+		// below, because a zero one would otherwise be READ as a bound and
+		// refuse every width — the omitted-semantic trap the two parsers'
+		// own self-validation calls exist to avoid.
+		{"DigitsCeiling", p.DigitsCeiling},
 		{"MinDigits", p.MinDigits},
 		{"MaxDigits", p.MaxDigits},
 		{"MaxObservedWidth", p.MaxObservedWidth},
@@ -339,8 +506,11 @@ func (p Profile) Validate() error {
 		{"TextWidth", p.TextWidth},
 		{"MaxObservedWidth", p.MaxObservedWidth},
 	} {
-		if f.val > MaxDigitsCeiling {
-			return fmt.Errorf("extable: profile %s: %s %d exceeds the %d-byte ceiling core/cat enforces", p.Model, f.name, f.val, MaxDigitsCeiling)
+		// The bound is the PROFILE'S, not this package's constant: see
+		// DigitsCeiling's own doc comment for why, and
+		// TestProfileValidate_CeilingComesFromTheProfile for the pin.
+		if f.val > p.DigitsCeiling {
+			return fmt.Errorf("extable: profile %s: %s %d exceeds the %d-digit ceiling this profile declares", p.Model, f.name, f.val, p.DigitsCeiling)
 		}
 	}
 	switch p.Observations {
@@ -369,10 +539,16 @@ func (p Profile) Validate() error {
 	return nil
 }
 
-// clone returns a copy whose DocLines cannot be mutated into the registry.
+// clone returns a copy whose DocLines and ParameterlessAddresses cannot be
+// mutated into the registry. Both are slices, so a bare struct copy would
+// hand every caller the registry's own backing array — and for
+// ParameterlessAddresses that would let one caller silently change which
+// address a later generation omits.
+// TestProfileValidate_ParameterlessAddressesAreCopied pins the second half.
 func (p Profile) clone() Profile {
 	c := p
 	c.DocLines = append([]string(nil), p.DocLines...)
+	c.ParameterlessAddresses = append([][3]int(nil), p.ParameterlessAddresses...)
 	return c
 }
 
@@ -412,11 +588,18 @@ var ft710Profile = Profile{
 
 	// Today's behaviour, said out loud rather than inherited: the FT-710's
 	// Table 2 prints a (P1,P2,P3) MENU Number, group labels in both label
-	// columns, and six 12-byte free-text rows.
-	Addresses:     AddressTriple,
-	LabelPolicy:   LabelsRequired,
-	TextRowPolicy: TextRowsAllowed,
+	// columns, and six 12-byte free-text rows. Every row names a field, so
+	// the chart prints no parameterless row.
+	Addresses:           AddressTriple,
+	LabelPolicy:         LabelsRequired,
+	TextRowPolicy:       TextRowsAllowed,
+	ParameterlessPolicy: ParameterlessRefused,
 
+	// DigitsCeiling is core/cat's own MaxDigitsCeiling because this profile
+	// renders into core/cat: the ceiling and the frames it bounds belong to
+	// the same package. The three profiles below carry it for the same
+	// reason, and a profile rendering elsewhere would not.
+	DigitsCeiling:    MaxDigitsCeiling,
 	MinDigits:        1,
 	MaxDigits:        4,
 	TextWidth:        12,
@@ -462,14 +645,18 @@ var ftdx10Profile = Profile{
 
 	// Today's behaviour, said out loud rather than inherited: the FTdx10's
 	// chart prints a (P1,P2,P3) MENU Number, both group labels, and one
-	// 12-byte text row (MY CALL. at 04/01/01).
-	Addresses:     AddressTriple,
-	LabelPolicy:   LabelsRequired,
-	TextRowPolicy: TextRowsAllowed,
+	// 12-byte text row (MY CALL. at 04/01/01). Every row names a field, so
+	// the chart prints no parameterless row.
+	Addresses:           AddressTriple,
+	LabelPolicy:         LabelsRequired,
+	TextRowPolicy:       TextRowsAllowed,
+	ParameterlessPolicy: ParameterlessRefused,
 
-	MinDigits: 1,
-	MaxDigits: 4,
-	TextWidth: 12,
+	// core/cat's ceiling, because this profile renders into core/cat.
+	DigitsCeiling: MaxDigitsCeiling,
+	MinDigits:     1,
+	MaxDigits:     4,
+	TextWidth:     12,
 	// MaxObservedWidth is an INERT API-REQUIRED SENTINEL here. Validate
 	// demands a positive value from every profile, but this profile declares
 	// ObservationsAbsent — no FTdx10 hardware exists to this project, so no
@@ -517,14 +704,18 @@ var ftdx101Profile = Profile{
 
 	// Today's behaviour, said out loud rather than inherited: the FTdx101's
 	// chart prints a (P1,P2,P3) MENU Number, both group labels, and one
-	// 12-byte text row.
-	Addresses:     AddressTriple,
-	LabelPolicy:   LabelsRequired,
-	TextRowPolicy: TextRowsAllowed,
+	// 12-byte text row. Every row names a field, so the chart prints no
+	// parameterless row.
+	Addresses:           AddressTriple,
+	LabelPolicy:         LabelsRequired,
+	TextRowPolicy:       TextRowsAllowed,
+	ParameterlessPolicy: ParameterlessRefused,
 
-	MinDigits: 1,
-	MaxDigits: 4,
-	TextWidth: 12,
+	// core/cat's ceiling, because this profile renders into core/cat.
+	DigitsCeiling: MaxDigitsCeiling,
+	MinDigits:     1,
+	MaxDigits:     4,
+	TextWidth:     12,
 	// MaxObservedWidth is an INERT API-REQUIRED SENTINEL here, exactly as
 	// on the ftdx10 profile: ObservationsAbsent means no observation CSV
 	// is ever parsed and this bound is never consulted. No hardware claim.
@@ -586,14 +777,18 @@ var ft891Profile = Profile{
 
 	// The FT-891's chart, said out loud: a four-digit MENU Number whose
 	// two halves are the whole address (every row's p3 is 0), no group
-	// labels in either column, and no text row.
-	Addresses:     AddressPair,
-	LabelPolicy:   LabelsAbsent,
-	TextRowPolicy: TextRowsAbsent,
+	// labels in either column, and no text row. Every row names a field, so
+	// the chart prints no parameterless row.
+	Addresses:           AddressPair,
+	LabelPolicy:         LabelsAbsent,
+	TextRowPolicy:       TextRowsAbsent,
+	ParameterlessPolicy: ParameterlessRefused,
 
-	MinDigits: 1,
-	MaxDigits: 5,
-	TextWidth: 0,
+	// core/cat's ceiling, because this profile renders into core/cat.
+	DigitsCeiling: MaxDigitsCeiling,
+	MinDigits:     1,
+	MaxDigits:     5,
+	TextWidth:     0,
 	// MaxObservedWidth is an INERT API-REQUIRED SENTINEL here, exactly as
 	// on the ftdx10 and ftdx101 profiles: ObservationsAbsent means no
 	// observation CSV is ever parsed and this bound is never consulted. It
@@ -624,12 +819,100 @@ var ft891Profile = Profile{
 	},
 }
 
+// ft991aProfile carries the FT-991A's menu-chart transcription facts. It is
+// the registry's first AddressSingle entry and its first ParameterlessExcluded
+// one, which is what those two policies were added for: this chart prints ONE
+// three-digit MENU Number that is the whole EX address, and one of its 153
+// rows names no settable field at all.
+//
+// Evidence, all from CAT manual rev 1711-D's menu chart (see
+// core/cat/ft991a/table2.csv's own provenance header, which records the
+// chart's printed quirks):
+//
+//   - The chart's grammar block prints "P1 : 001 - 153 (MENU Number)"
+//     (ft991a_layout.txt:520) and the chart's own rows run 001 to 153 with no
+//     gap and no repeat, so the address is P1 ALONE and every row's p2 and p3
+//     are 0 — extable's AddressSingle, core/cat's EXAddressSingle.
+//   - MaxDigits is 8, from ONE row: 151 PRESET FREQUENCY (ft991a_layout.txt:692),
+//     "00030000 ~ 47000000". It is a reading of THIS chart, not a widening of
+//     the other four profiles' 4 and 5.
+//   - 087 RADIO ID (ft991a_layout.txt:623) prints ten hyphens for its
+//     parameter and a single hyphen for its Digits. ParameterlessAddresses
+//     names it {87,0,0} so that ParseCSV admits the hyphen THERE and refuses
+//     it on the other 152 rows, and so that RenderGo omits that one address
+//     from the inventory: a menu number naming no field is not an address an
+//     EX frame could read or write.
+//
+// TextWidth is 0, which under TextRowsAbsent is the only value Validate
+// admits: this chart prints no free-text row, and spelling 12 here out of
+// resemblance to the FT-710 family would state two incompatible things about
+// one chart.
+//
+// Deliberately NOT given a named accessor, for the reason the ftdx10, ftdx101
+// and ft891 profiles are not: its consumers reach it through
+// Lookup/RegisteredProfiles.
+var ft991aProfile = Profile{
+	Model:       "FT-991A",
+	Package:     "ft991a",
+	Types:       TypesImported,
+	ImportPath:  "github.com/gm5dna/open-rig-programmer/core/cat",
+	ImportAlias: "cat",
+	VarName:     "exItems",
+	OutFile:     "exinventory_gen.go",
+	ManualCSV:   "table2.csv",
+
+	// The FT-991A's chart, said out loud: a three-digit MENU Number that is
+	// the whole address (every row's p2 AND p3 are 0), no group labels in
+	// either column, no text row, and ONE row that names no field.
+	Addresses:              AddressSingle,
+	LabelPolicy:            LabelsAbsent,
+	TextRowPolicy:          TextRowsAbsent,
+	ParameterlessPolicy:    ParameterlessExcluded,
+	ParameterlessAddresses: [][3]int{{87, 0, 0}},
+
+	// core/cat's ceiling, because this profile renders into core/cat.
+	DigitsCeiling: MaxDigitsCeiling,
+	MinDigits:     1,
+	MaxDigits:     8,
+	TextWidth:     0,
+	// MaxObservedWidth is an INERT API-REQUIRED SENTINEL here, exactly as on
+	// the ftdx10, ftdx101 and ft891 profiles: ObservationsAbsent means no
+	// observation CSV is ever parsed and this bound is never consulted. It
+	// carries NO hardware claim about the FT-991A — no FT-991A has ever been
+	// asked anything — and must not be read as one; the moment observations
+	// do exist it is re-derived from them rather than kept. It is spelt 12
+	// only because a sentinel has to be spelt something, and 12 is NOT this
+	// radio's text width: this chart has no text row at all, nor its widest
+	// Digits, which is 8.
+	MaxObservedWidth: 12,
+	// ExpectedRows COUNTS 087, the parameterless row: the chart prints it, so
+	// it is transcribed and counted, and the inventory is the 152 that remain
+	// after ParameterlessAddresses excludes it BY ADDRESS. RenderGo checks
+	// that arithmetic itself.
+	ExpectedRows: 153,
+
+	Observations: ObservationsAbsent,
+	DocLines: []string{
+		"exItems is the FT-991A's EX address inventory, sorted by (P1,P2,P3),",
+		"built from ONE source: the manual transcription in table2.csv (the",
+		"FT-991A CAT Operation Reference Manual rev 1711-D's menu chart). The",
+		"FT-991A's EX address is a SINGLE component: the chart's three-digit",
+		"MENU Number is P1, every item's P2 and P3 are 0, and the chart prints",
+		"no group labels, so every P1Label and P2Label is \"\". There are no",
+		"hardware READ observations to join — no FT-991A has ever been asked",
+		"anything — so every item carries the absence sentinels",
+		"ObservedReadWidth 0 and ObservedReadShape \"\". Regenerate with",
+		"`go generate ./core/cat/ft991a`; do not edit by hand.",
+	},
+}
+
 // registry maps a lookup name to its profile. It is validated at init, so an
 // inconsistent profile panics the build tooling rather than emitting a wrong
 // inventory.
 var registry = mustRegistry(map[string]Profile{
 	"ft710":   ft710Profile,
 	"ft891":   ft891Profile,
+	"ft991a":  ft991aProfile,
 	"ftdx10":  ftdx10Profile,
 	"ftdx101": ftdx101Profile,
 })

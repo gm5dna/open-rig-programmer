@@ -203,6 +203,7 @@ func TestMemoryP5_CombinedMTCarriesTheSamePolicy(t *testing.T) {
 		ModeNames: map[Mode]string{ModeUnset: "-", ModeUSB: "USB"},
 		Slots: SlotSpace{
 			MemoryLo: 1, MemoryHi: 99, PMSPairs: 9,
+			PMSForm:  PMSFormToken,
 			NoneWire: "000", MCSelects: MCSelectsAll,
 		},
 		EXAddressForm: EXAddressTriple, // not this fixture's axis: P5 is
@@ -212,6 +213,7 @@ func TestMemoryP5_CombinedMTCarriesTheSamePolicy(t *testing.T) {
 		},
 		Clarifier:   ClarifierPolicy{StepHz: 10, MaxAbsHz: 9990},
 		MemoryP5:    P5Fixed,
+		ToneStates:  ToneStatesCTCSS,
 		MWWriteKind: KindMemory,
 	}
 	fixed, err := NewDialect(cfg)

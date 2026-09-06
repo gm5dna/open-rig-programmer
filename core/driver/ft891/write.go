@@ -489,8 +489,9 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 //
 //  2. A TRUE TxClar. This radio's P5 legend prints `0: (Fixed)` on every
 //     block carrying the 28-position grid — MR 971, MT 1006, MW 1042, IF
-//     783, OI 1129 — where the three registered sibling dialects print
-//     `0: TX CLAR "OFF" 1: TX CLAR "ON"`. It is transcribed, not assumed.
+//     783, OI 1129 — where the four registered sibling dialects print
+//     `0: TX CLAR "OFF" 1: TX CLAR "ON"`, the FT-991A's included. It is
+//     transcribed, not assumed.
 //     THE REFUSAL IS EXPLICIT RATHER THAN A CAPABILITY GRADE, and matrix
 //     §2.2 is why: ClarHz, RxClar and TxClar are three Go fields under ONE
 //     spec.Field, spec.FieldClarifier (core/codeplug/diff.go:127-129), so

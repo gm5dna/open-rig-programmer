@@ -114,6 +114,16 @@ func (d Dialect) MTP11() MTP11Policy { return d.mt.P11 }
 // it at all.
 func (d Dialect) MemoryP5() MemoryP5Policy { return d.memoryP5 }
 
+// ToneStates reports the domain of byte 24 of the shared memory field block
+// on this family: the three CTCSS states (ToneStatesCTCSS) or those plus
+// the two DCS ones (ToneStatesCTCSSAndDCS). The zero Dialect reports the
+// zero domain, which NewDialect refuses to construct.
+//
+// Exported for the same reason MemoryP5 is: core/cat/dialecttest cannot see
+// the unexported field, and it must branch on this to know whether a
+// DCS-state record is one this dialect MUST build or one it MUST refuse.
+func (d Dialect) ToneStates() ToneStateDomain { return d.toneStates }
+
 // MCSelects reports the SEND-side slot domain of this family's MC (memory
 // channel recall) command: memory and PMS only (MCSelectsMemoryPMS) or
 // every slot class this dialect classifies outside "000" (MCSelectsAll).
@@ -249,7 +259,19 @@ func (d Dialect) BuildMTSet(s Slot, display bool, tag string) (Command, error) {
 		return Command{}, newParseError(nil, fmt.Sprintf("MT: short-form Set called on a %v dialect — use the combined-form API", d.mt.Form))
 	}
 	if !d.mtSlotValid(s) {
-		return Command{}, newParseError([]byte(s.Wire()), "MT: slot must be memory (001-099) or PMS (P1L-P9U); 5xx/EMG rejected by project policy pending M5a, \"000\"/invalid rejected per reference")
+		// Composed from this dialect's own slot space (S0.2): the domains,
+		// the special-bank clause and the none form were literals true only
+		// of the token-PMS radios. The four token dialects render
+		// byte-for-byte what stood here, so frame-corpus.golden does not
+		// move — measured over all five token-PMS dialects by
+		// TestSlotDomainRefusals_EveryTokenPMSDialectIsByteIdentical
+		// (core/transport); the sixth registered dialect, the FT-991A,
+		// composes different text by design and is held instead by
+		// TestSlotDomainText_NumericPMSDialect. ONE
+		// renderer, shared with validateCombinedMTFields, because the two
+		// forms refuse in identical words and two copies of a sentence that
+		// must agree is the drift this package keeps paying for.
+		return Command{}, newParseError([]byte(s.Wire()), d.mtSlotDomainRefusal())
 	}
 	if !d.validMTTag(tag) {
 		return Command{}, newParseError([]byte(tag), fmt.Sprintf("MT: tag must be 0-%d bytes of printable ASCII 0x20-0x7E, excluding ';', with no control bytes", d.mt.TagMaxBytes))
@@ -337,8 +359,10 @@ func (d Dialect) mtReadSlotValid(s Slot) bool {
 // WRITE-DIRECTION POLICY: reading a tag has no side effect and carries none
 // of the hardware-verification concern the project policy above is about.
 // What bounds them instead is the dialect's own MT slot legend, carried as
-// MTPolicy.ReadSlots: under MTReadsReadable — the three registered dialects,
-// whose MT blocks print 5xx and EMG alongside memory and PMS — this admits
+// MTPolicy.ReadSlots: under MTReadsReadable — the four registered dialects,
+// whose MT slot legend spans every class their own manual gives it (5xx and
+// EMG alongside memory and PMS where the radio has those banks, memory and
+// PMS alone on the FT-991A, which has neither) — this admits
 // exactly what Dialect.readableSlot admits and not a byte moves; under
 // MTReadsMemoryPMS the 5xx and EMG banks are refused here and at the gate,
 // and MR is the only command that reads them. "000" remains rejected under

@@ -392,9 +392,9 @@ func (d Dialect) validMCCommand(frame []byte) bool {
 
 // validEXRead reports whether frame is a legal EX READ: exactly THIS
 // DIALECT'S d.exReadLen() bytes — 9 under EXAddressTriple, 7 under
-// EXAddressPair — with an address ParseEXAddress accepts, the same
-// membership rule BuildEXRead enforces (shared, not duplicated: the
-// "cannot drift apart" rule).
+// EXAddressPair, 6 under EXAddressSingle — with an address ParseEXAddress
+// accepts, the same membership rule BuildEXRead enforces (shared, not
+// duplicated: the "cannot drift apart" rule).
 //
 // The length and the address slice both come from d.EXAddressWidth(), the
 // same datum the builder measures. Until the FT-891 Stage 0 seam both were

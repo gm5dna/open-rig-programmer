@@ -81,15 +81,30 @@ func (d Dialect) BuildMWSet(m MemoryData) (Command, error) {
 func (d Dialect) validateMWFields(m MemoryData) error {
 	if !d.writableSlot(m.Slot) {
 		// THE WORDING IS FROZEN, and still says "Writable()" although M9d
-		// removed that method. This exact string is baked into six lines of
-		// core/cat/testdata/frame-corpus.golden, one of the ten paths the
-		// milestone golden gate forbids moving; rewording it here would
-		// move that golden. Harmless in practice — the parenthetical spells
-		// the rule out in full, so the message stands alone without the
-		// symbol — but it is frozen deliberately, not by oversight. Reword
-		// it in a change that is ALLOWED to regenerate the frame corpus,
-		// never on its own.
-		return newParseError([]byte(m.Slot.Wire()), "MW: slot must be Writable() (memory 001-099 or PMS P1L-P9U; 5xx/EMG/\"000\" rejected)")
+		// removed that method. The FT-710's render of it is baked into six
+		// lines of core/cat/testdata/frame-corpus.golden, one of the
+		// twenty paths the milestone golden gate forbids moving (twenty-five
+		// once the FT-991A's own artefacts join them); rewording it here
+		// would move that golden. Harmless in practice — the parenthetical
+		// spells the rule out in full, so the message stands alone without
+		// the symbol — but it is frozen deliberately, not by oversight.
+		// Reword it in a change that is ALLOWED to regenerate the frame
+		// corpus, never on its own.
+		//
+		// WHAT S0.2 CHANGED IS WHERE THE BYTES COME FROM, not what they
+		// are. The sentence is composed by Dialect.mwSlotDomainRefusal
+		// (slot.go) from this dialect's own memory range, PMS domain,
+		// declared special banks and none form, because all four were
+		// literals true only of the token-PMS radios: the FT-991A's pairs
+		// are 100-117 and it has neither a 5 MHz bank nor an emergency
+		// channel. All four token dialects render byte-for-byte what stood
+		// here, so the corpus does not move — proved directly by
+		// TestSlotDomainText_FT710SentencesAreByteIdentical, on the OTHER
+		// FOUR registered dialects by
+		// TestSlotDomainRefusals_EveryTokenPMSDialectIsByteIdentical
+		// (core/transport, which can import them where this package cannot),
+		// and, on the whole corpus, by the golden itself.
+		return newParseError([]byte(m.Slot.Wire()), d.mwSlotDomainRefusal())
 	}
 
 	// Kind-on-write pairing, from THIS DIALECT'S policy.
@@ -169,7 +184,7 @@ func (d Dialect) validateMWFields(m MemoryData) error {
 	// CTCSSState/Shift are byte-alias types exactly like Mode: never trust
 	// a caller-forged value (e.g. CTCSSState('9')). Re-validate via their
 	// own Parse functions for the same reason as the Mode check above.
-	if _, err := ParseCTCSSState(m.CTCSS.Wire()); err != nil {
+	if _, err := d.ParseCTCSSState(m.CTCSS.Wire()); err != nil {
 		return newParseError([]byte{m.CTCSS.Wire()}, "MW: CTCSS field (P8) is not a valid CTCSSState")
 	}
 	if _, err := ParseShift(m.Shift.Wire()); err != nil {

@@ -224,7 +224,7 @@ var tierFields = []spec.Field{
 // reachable" with no special-casing — caps that say nothing about a
 // field are not evidence that the radio has one.
 //
-// AN OPEN LIST, NOT A SNAPSHOT: every bank of all five registered Yaesu
+// AN OPEN LIST, NOT A SNAPSHOT: every bank of all six registered Yaesu
 // models reaches none of the ten tier fields, so their grids' column sets
 // stay empty; every registered Icom model returns its OWN bank's own
 // reachable set, independently derived from that model's own record —
@@ -580,10 +580,7 @@ func (a *App) GetUISpec() (UISpecView, error) {
 	for i, o := range caps.ShiftOptions {
 		shiftOptions[i] = o.Value
 	}
-	ctcssStateOptions := make([]string, len(caps.CTCSSStates))
-	for i, s := range caps.CTCSSStates {
-		ctcssStateOptions[i] = s.Value
-	}
+	ctcssStateOptions := ctcssStateValues(caps.CTCSSStates)
 
 	// Prose fields (task 41, M9a-5): served from internal/radiotext rather
 	// than hardcoded in this package or the frontend — see UISpecView's
@@ -626,4 +623,21 @@ func (a *App) GetUISpec() (UISpecView, error) {
 		},
 		FirmwarePlaceholder: text.FirmwarePlaceholder,
 	}, nil
+}
+
+// ctcssStateValues extracts the grid's CTCSS-state option list from a
+// radio's declared vocabulary, preserving that vocabulary's own order.
+//
+// A FUNCTION rather than four lines inline, so the property can be pinned
+// on a vocabulary no registered model declares yet: since the FT-991A's P8
+// legend prints five states, spec.ToneSemantics carries two DCS members,
+// and this list must pass every state its radio declares through unfiltered
+// rather than knowing about the family three. TestCTCSSStateValues_* holds
+// both halves.
+func ctcssStateValues(states []spec.ToneState) []string {
+	out := make([]string, len(states))
+	for i, s := range states {
+		out[i] = s.Value
+	}
+	return out
 }

@@ -25,7 +25,8 @@ func isCancelled(err error) bool {
 // event per callback. clone.Progress's fourth parameter (name) carries
 // EITHER a channel slot (every phase ReadAll/PrepareSend/Execute use) OR,
 // for phase "read-settings" (clone.Service.ReadSettings, task 33), a
-// four- or six-digit setting ID — see that phase string's own doc comment
+// setting ID of exactly 3, 4 or 6 ASCII digits — see that phase string's
+// own doc comment
 // (core/clone/settings.go). This callback tells the two apart by phase and
 // populates ProgressEvent's fields accordingly (see that type's own doc
 // comment, types.go, for exactly which fields each branch sets):
