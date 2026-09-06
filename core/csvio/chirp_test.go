@@ -15,6 +15,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
+	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
 
 // wantEntry is the subset of LossEntry the fixture-driven table asserts:
@@ -806,37 +807,33 @@ func ftdx101LikeCapabilities(model, catID string) spec.Capabilities {
 	return caps
 }
 
-// registeredRadioCapabilities returns one fixture per model registered in
-// internal/wiring's driver tables, each mirroring that model's real
-// scan-skip support. It is a table of FIXTURES rather than a walk of the
-// registry for the layering reason ft710LikeCapabilities gives — core/csvio
-// must not import core/driver, and internal/wiring imports every driver —
-// so each entry cites the caps site it mirrors, and drift between the two
-// is caught end-to-end by the CLI byte-identity baseline, which does use
-// the real drivers.
+// unreachableScanSkipCapabilities returns one fixture per registered model
+// whose scan_skip is UNREACHABLE — the models the caps-aware branch (M9d-2
+// task 8, spec decision 5) applies to. It is a table of FIXTURES rather than
+// a walk of the registry for the layering reason ft710LikeCapabilities gives
+// — core/csvio must not import core/driver, and internal/wiring imports every
+// driver — so each entry cites the caps site it mirrors, and drift between
+// the two is caught end-to-end by the CLI byte-identity baseline, which does
+// use the real drivers.
 //
-// Every registered model's scan_skip is the zero FieldSupport today, which
-// is exactly why the caps-aware branch (M9d-2 task 8, spec decision 5) is
-// the one every real import takes: FT-710 (ft710/caps.go's bankFields —
-// the 28-byte MR/MW layout has no scan-skip position), FTdx10
-// (ftdx10/caps.go's bankFields), FTdx101D and FTdx101MP
-// (ftdx101/caps.go's bankFields, one map for both siblings). The
-// writable-radio branch has no registered radio at all and is pinned
-// separately against writableCapabilities.
+// RENAMED AT TIER 6, AND THE OLD NAME WAS A CLAIM THIS FUNCTION NEVER MADE
+// GOOD. It was registeredRadioCapabilities, documented as "one fixture per
+// model registered in internal/wiring's driver tables"; it has in fact never
+// held more than the Yaesu rows, and the eleven Icom models registered
+// between M9d-2 and Tier 4b have no CHIRP fixture in this file at all.
+// chirpFixtures below is what now carries the whole set this file DOES cover,
+// and assertEveryRegisteredModelHasACHIRPFixture is what measures it against
+// the registry.
 //
-// THE LIST IS HAND-WRITTEN AND THIS TEST CANNOT NOTICE A FIFTH MODEL.
-// Registering one adds no row here by itself, so this table would go on
-// claiming to cover "every registered radio" while silently skipping it.
-// The registry-walk pin lives where the registry does —
-// internal/wiring.SupportedModels and
-// TestSupportedModels_ContainsEveryRegisteredModel (internal/wiring/
-// wiring_test.go), which walks the real tables — and it does not know
-// about this file. Registering a model is therefore a two-place change:
-// its row goes here as well, mirroring that driver's own scan-skip
-// support, whichever branch it lands in. A model whose scan-skip is
-// genuinely writable belongs in the literal-branch test instead, and the
-// Unreachable precondition assertion below is what will say so.
-func registeredRadioCapabilities() []spec.Capabilities {
+// THE MEMBERSHIP RULE IS THE UNREACHABLE ONE, and it is a precondition rather
+// than a preference: TestImportCHIRP_ScanSkipIsCapabilityAware Fatals on a
+// fixture whose scan_skip is reachable, because that radio takes the LITERAL
+// branch and every assertion in that test is about the other one. The TS-590
+// pair is the first registered family of which that is true — its 50-byte
+// record carries a channel-lockout flag at a printed position — so those two
+// fixtures live in chirpFixtures and NOT here, and
+// TestImportCHIRP_TS590PairTakesTheLiteralScanSkipBranch is their coverage.
+func unreachableScanSkipCapabilities() []spec.Capabilities {
 	return []spec.Capabilities{
 		ft710LikeCapabilities(),
 		ftdx10LikeCapabilities(),
@@ -897,7 +894,7 @@ func TestImportCHIRP_ScanSkipIsCapabilityAware(t *testing.T) {
 		"2,SKIPPED,145.525000,,,,,FM,S\n" +
 		"3,ODD,145.550000,,,,,FM,P\n"
 
-	for _, caps := range registeredRadioCapabilities() {
+	for _, caps := range unreachableScanSkipCapabilities() {
 		t.Run(caps.Model, func(t *testing.T) {
 			fs := caps.FieldSupport(spec.BankMemory, spec.FieldScanSkip)
 			if !fs.Unreachable() {
@@ -2080,4 +2077,403 @@ func TestImportCHIRP_FT891BlocksCWAndRTTYRows(t *testing.T) {
 			}
 		}
 	})
+}
+
+// ts590LikeCapabilities mirrors the TS-590 pair's fields ImportCHIRP consults
+// (core/driver/ts590/caps.go). Hand-built rather than the real driver's
+// Capabilities for the layering reason ft710LikeCapabilities gives:
+// core/csvio sits BELOW core/driver in the import graph and must not depend
+// on it, even in tests.
+//
+// TWO THINGS ARE MIRRORED FAITHFULLY AND THE REST IS INHERITED UNEXAMINED,
+// exactly as ftdx101LikeCapabilities' doc comment says of its own fixture.
+// The two are:
+//
+//  1. Modes — this radio's own nine names, in its wire-code order, derived by
+//     that driver from the layout's MD legend (590:1353-1363) rather than
+//     transcribed twice. None of "CW-U", "CW-L" or "RTTY-U" is among them,
+//     which is what TestImportCHIRP_TS590PairBlocksCWAndRTTYRows turns on.
+//  2. The MEM bank's Fields, and in particular a REACHABLE scan_skip: byte 41
+//     of the 50-byte record is a channel-lockout flag (590:1572-1574), so
+//     this is the first registered family for which a CHIRP Skip cell has
+//     somewhere to go.
+//
+// Everything else — the tone chart, the shift and CTCSS-state vocabularies,
+// the tag charset — is ft710LikeCapabilities' and is NOT a claim about a
+// Kenwood radio. No test here asks this fixture a question about any of them,
+// and a test that needed one would have to widen the fixture first rather
+// than trust it. TagLen IS corrected to 8 (590:1576) because the name-length
+// path reads it.
+//
+// PMS/SCAN IS ABSENT FROM THIS FIXTURE and that is deliberate, not an
+// omission: ImportCHIRP writes into the MEMORY bank alone (memBank), so a
+// second bank would change nothing any assertion below can see. The real
+// driver has one, and its per-bank field differences are asserted where they
+// are visible — app/uispec_test.go's
+// TestBankTierFields_RegisteredTS590Pair_PerBank.
+//
+// model/catID pick the sibling: "TS-590S"/"021" or "TS-590SG"/"023"
+// (core/driver/ts590/caps.go's modelNameS/modelNameSG and catIDS/catIDSG).
+// The two differ in NOTHING this package can see — the one memory-channel
+// difference between the rows is the FILTER column, which ImportCHIRP does
+// not consult — so both fixtures are built from one constructor rather than
+// two, and the tests still name them separately because the registry does.
+func ts590LikeCapabilities(model, catID string) spec.Capabilities {
+	caps := ft710LikeCapabilities()
+	caps.Model = model
+	caps.CATID = catID
+	caps.TagLen = 8
+	caps.Modes = []string{"LSB", "USB", "CW", "FM", "FM-N", "AM", "FSK", "CW-R", "FSK-R"}
+	rw := spec.FieldSupport{Read: spec.Unverified, Write: spec.Unverified}
+	banks := make([]spec.Bank, len(caps.Banks))
+	copy(banks, caps.Banks)
+	for i := range banks {
+		banks[i].Fields = map[spec.Field]spec.FieldSupport{
+			spec.FieldFrequency: rw,
+			spec.FieldMode:      rw,
+			spec.FieldTag:       rw,
+			// THE ONE THAT MATTERS HERE. Every registered radio before this
+			// family grades scan_skip the zero FieldSupport; this record
+			// carries a channel-lockout flag, so a CHIRP Skip cell imports
+			// literally rather than being dropped with a loss entry.
+			spec.FieldScanSkip: rw,
+			// No per-channel clarifier field, no shift selector and no
+			// ctcss_state/ctcss_tone pair anywhere in the 47 accounted
+			// parameter bytes: this record expresses tone as a mode selector
+			// with two independent indices, which is the
+			// tone_mode/tone_tx/tone_rx vocabulary, and repeater operation
+			// as an independent transmit frequency rather than a shift.
+			spec.FieldClarifier:  {},
+			spec.FieldShift:      {},
+			spec.FieldCTCSSState: {},
+			spec.FieldCTCSSTone:  {},
+			// No tag-display flag anywhere in either row's record.
+			spec.FieldTagDisplay: {},
+		}
+	}
+	caps.Banks = banks
+	return caps
+}
+
+// chirpFixtures is every capability fixture in this file that stands for a
+// REGISTERED model — the unreachable-scan-skip set plus the TS-590 pair,
+// which takes the other branch. It is the set
+// assertEveryRegisteredModelHasACHIRPFixture measures against the registry.
+func chirpFixtures() []spec.Capabilities {
+	out := unreachableScanSkipCapabilities()
+	return append(out,
+		ts590LikeCapabilities("TS-590S", "021"),
+		ts590LikeCapabilities("TS-590SG", "023"),
+	)
+}
+
+// chirpFixtureExceptions names every registered model that has NO CHIRP
+// capability fixture in this file, and it is a DEBT LEDGER rather than a
+// policy: eleven Icom models were registered between M9d-2 and Tier 4b
+// without one, and this milestone neither created that gap nor is the right
+// place to close it.
+//
+// THE PLAN ASKED FOR AN EMPTY EXCEPTION SET (Codex re-review MED-1b) AND
+// THAT IS NOT REACHABLE FROM THIS TASK. Closing the gap means inventing
+// eleven Icom fixtures — a Modes list and a per-bank field map per radio,
+// each a claim about a radio this milestone has read nothing about — and
+// enrolling all eleven in TestImportCHIRP_ScanSkipIsCapabilityAware, whose
+// per-row loss-entry assertions would then be running against fixture content
+// nobody had checked against those drivers. Writing eleven radios' worth of
+// unevidenced capability data to satisfy a completeness check would be the
+// exact failure this project's evidence rules exist to prevent, so the check
+// lands with the gap NAMED instead of hidden. The exception list is pinned to
+// exactly these eleven and may only SHRINK.
+//
+// WHAT THE CHECK STILL BUYS, WHICH IS THE WHOLE POINT OF LANDING IT (plan
+// decision P3, row 9 of the ten-edit list): the TS-480 is not on this list,
+// so the day its row registers without a fixture here, this check FAILS —
+// which is what makes edit 9 loud where it was silent. So does any future
+// registration.
+var chirpFixtureExceptions = []string{
+	"IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905",
+	"IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600",
+}
+
+// TestChirpFixtures_CoverEveryRegisteredModel is the GENERAL CHIRP
+// completeness check (Codex HIGH 3, tightened at Codex re-review MED-1b),
+// and it lands HERE, in package csvio, next to the expectations themselves —
+// it cannot be reached from internal/wiring, which is why revision 2's
+// central leg was impossible: these fixtures are test-only symbols in this
+// package's test binary and no import from internal/wiring reaches them.
+//
+// THE internal/wiring IMPORT IS TEST-ONLY, confined to this _test.go file
+// exactly as the rest of chirp_test.go is, so production core/csvio
+// (chirp.go, export.go, import.go, tone.go) gains no new dependency. The
+// package's own layering rule — "core/csvio sits below core/driver and must
+// not import it, even in tests" — is untouched, because this import is of
+// internal/wiring, not core/driver.
+//
+// IT REPLACES A STALE CLAIM. unreachableScanSkipCapabilities' doc comment
+// used to say that "the registry-walk pin … does not know about this file".
+// It now does, deliberately, through this one test-only import, and that
+// comment has been rewritten to say so.
+//
+// RED-PROVED (recorded, not re-run by CI): removing ft891LikeCapabilities()
+// from unreachableScanSkipCapabilities fails here with `"FT-891" is
+// registered but has no CHIRP capability fixture`. Adding "FT-891" to
+// chirpFixtureExceptions to silence it fails the exception-list pin below
+// instead.
+func TestChirpFixtures_CoverEveryRegisteredModel(t *testing.T) {
+	registered := wiring.SupportedModels()
+	if len(registered) == 0 {
+		t.Fatal("wiring.SupportedModels() is empty — this check would pass vacuously")
+	}
+
+	have := map[string]bool{}
+	for _, caps := range chirpFixtures() {
+		if caps.Model == "" {
+			t.Fatal("a fixture in chirpFixtures has an empty Model — it stands for no registered radio and this check cannot see it")
+		}
+		if have[caps.Model] {
+			t.Errorf("chirpFixtures holds two fixtures for %q", caps.Model)
+		}
+		have[caps.Model] = true
+	}
+
+	excepted := map[string]bool{}
+	for _, m := range chirpFixtureExceptions {
+		excepted[m] = true
+	}
+
+	for _, model := range registered {
+		switch {
+		case have[model] && excepted[model]:
+			t.Errorf("%q has a CHIRP capability fixture AND is named in chirpFixtureExceptions — the exception list may only shrink, so delete its entry", model)
+		case !have[model] && !excepted[model]:
+			t.Errorf("%q is registered in internal/wiring but has no CHIRP capability fixture here — this file's per-row CHIRP expectations silently skip it. Add its fixture, mirroring that driver's own caps; a model whose scan-skip is reachable goes into chirpFixtures directly rather than into unreachableScanSkipCapabilities", model)
+		}
+	}
+	for model := range have {
+		if !contains(registered, model) {
+			t.Errorf("chirpFixtures holds a fixture for %q, which internal/wiring does not register", model)
+		}
+	}
+	for _, model := range chirpFixtureExceptions {
+		if !contains(registered, model) {
+			t.Errorf("chirpFixtureExceptions names %q, which is not registered — the list is a debt ledger of REGISTERED models with no fixture, so a name that no longer registers must be deleted rather than carried", model)
+		}
+	}
+
+	// The exception list is pinned to exactly the eleven models it inherited,
+	// so a later registration cannot be excused by appending to it: the only
+	// admissible edit is a deletion, made in the commit that adds that
+	// model's fixture.
+	wantExceptions := []string{
+		"IC-7610", "IC-7300", "IC-7300MK2", "IC-705", "IC-9700", "IC-905",
+		"IC-7851", "IC-7850", "IC-7760", "IC-7100", "IC-R8600",
+	}
+	if len(chirpFixtureExceptions) > len(wantExceptions) {
+		t.Errorf("chirpFixtureExceptions has %d entries, want at most the %d it inherited (%v) — a newly registered model earns a FIXTURE, never an exception", len(chirpFixtureExceptions), len(wantExceptions), wantExceptions)
+	}
+	for _, m := range chirpFixtureExceptions {
+		if !contains(wantExceptions, m) {
+			t.Errorf("chirpFixtureExceptions names %q, which is not one of the eleven inherited exceptions %v", m, wantExceptions)
+		}
+	}
+}
+
+// contains reports whether haystack holds needle.
+func contains(haystack []string, needle string) bool {
+	for _, s := range haystack {
+		if s == needle {
+			return true
+		}
+	}
+	return false
+}
+
+// TestImportCHIRP_TS590PairBlocksCWAndRTTYRows is Tier 6's per-row CHIRP pin
+// (plan decision P16), and it records a LIMITATION rather than celebrating a
+// behaviour — the FT-891's own pin, applied to a third spelling family.
+//
+// chirpModeMap resolves CHIRP's "CW" to "CW-U", its "CWR" to "CW-L" and its
+// "RTTY" to "RTTY-U" — the sideband-specific names three registered Yaesu
+// models print. These radios print "CW", "CW-R", "FSK" and "FSK-R", so none
+// of those three mapped names is in either row's caps.Modes and containsMode
+// says no. Each such row therefore BLOCKS with a Blocking ActionUnsupported
+// entry naming the Mode column — exactly what the eleven Icom models and the
+// FT-891 already do with the same three rows, and for the same reason: a
+// mapped mode the radio does not list must be refused, never written as a
+// mode the radio has never been shown to have.
+//
+// KENWOOD SPELLS RTTY "FSK", which is a THIRD spelling family in this
+// registry rather than a second, and the resolution is DEFERRED rather than
+// decided against these radios (plan decision P16; the FT-891's spec erratum
+// S-E3). Teaching chirpModeMap to consult caps for a sideband-agnostic
+// alternative would change eleven Icom models' and the FT-891's CHIRP outcome
+// as well as these two, and every one of those models' byte-identity
+// baselines with it, so it is a fleet question and a recorded roadmap
+// follow-up. What this test does is make the answer EXPLICIT, so the day that
+// question is settled the change shows up here as a deliberate edit rather
+// than as a baseline that silently moved.
+//
+// THE FIVE ONE-NAME ROWS ARE THE OTHER HALF, and they are what stops this
+// test passing because the import refuses everything: FM, NFM, AM, USB and
+// LSB each map to a name both rows' legends do print.
+//
+// BOTH ROWS, not one: the two share a mode legend today, so the second
+// subtest is a coincidence of one book rather than a derived fact, and a
+// future divergence must fail here rather than be hidden by a single-row
+// test standing in for a pair.
+func TestImportCHIRP_TS590PairBlocksCWAndRTTYRows(t *testing.T) {
+	for _, caps := range []spec.Capabilities{
+		ts590LikeCapabilities("TS-590S", "021"),
+		ts590LikeCapabilities("TS-590SG", "023"),
+	} {
+		t.Run(caps.Model, func(t *testing.T) {
+			// Precondition, stated rather than assumed: the three mapped
+			// names are genuinely absent from this row's mode list. If a
+			// later edit added them, every blocking assertion below would
+			// become false and this test would be pinning nothing.
+			for _, absent := range []string{"CW-U", "CW-L", "RTTY-U"} {
+				if containsMode(caps, absent) {
+					t.Fatalf("fixture precondition: %q IS in the %s's Modes — this test is about the three names its legend does NOT print", absent, caps.Model)
+				}
+			}
+
+			t.Run("CW, CWR and RTTY block", func(t *testing.T) {
+				const csv = "Location,Name,Frequency,Mode\n" +
+					"1,MORSE,7.030000,CW\n" +
+					"2,MORSER,7.031000,CWR\n" +
+					"3,TELETYPE,14.080000,RTTY\n"
+
+				channels, report, err := ImportCHIRP(strings.NewReader(csv), caps)
+				if err != nil {
+					t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+				}
+				if !report.HasBlocking() {
+					t.Fatalf("HasBlocking() = false, want true: %+v", report.Entries)
+				}
+				for i, want := range []struct {
+					line   int
+					raw    string
+					mapped string
+				}{
+					// LossEntry.Line counts the FILE's lines, so the header
+					// is 1 and the three data rows are 2, 3 and 4.
+					{2, "CW", "CW-U"},
+					{3, "CWR", "CW-L"},
+					{4, "RTTY", "RTTY-U"},
+				} {
+					var modeEntries []LossEntry
+					for _, e := range entriesForLine(report, want.line) {
+						if e.Column == "Mode" {
+							modeEntries = append(modeEntries, e)
+						}
+					}
+					if len(modeEntries) != 1 {
+						t.Errorf("row %d: %d Mode entries, want exactly 1: %+v", i+1, len(modeEntries), modeEntries)
+						continue
+					}
+					e := modeEntries[0]
+					if e.Action != ActionUnsupported || !e.Blocking {
+						t.Errorf("row %d: Mode entry = %+v, want a Blocking ActionUnsupported one", i+1, e)
+					}
+					if e.Value != want.raw {
+						t.Errorf("row %d: entry Value = %q, want the CHIRP cell %q", i+1, e.Value, want.raw)
+					}
+					// The detail must name BOTH names, so a user can see
+					// that the refusal is about a NAME this radio's legend
+					// does not print rather than about a mode it lacks.
+					if !strings.Contains(e.Detail, want.raw) || !strings.Contains(e.Detail, want.mapped) {
+						t.Errorf("row %d: Detail = %q, want it to name both the CHIRP mode %q and the mapped name %q", i+1, e.Detail, want.raw, want.mapped)
+					}
+				}
+				for _, ch := range channels {
+					if ch.Data != nil && ch.Data.Mode != "" {
+						t.Errorf("channel %q imported Mode %q — a blocked row must not carry a mode at all", ch.Slot, ch.Data.Mode)
+					}
+				}
+			})
+
+			t.Run("the five one-name rows import", func(t *testing.T) {
+				const csv = "Location,Name,Frequency,Mode\n" +
+					"1,SIMPLEX,145.500000,FM\n" +
+					"2,NARROW,145.525000,NFM\n" +
+					"3,AIRBAND,118.000000,AM\n" +
+					"4,UPPER,14.250000,USB\n" +
+					"5,LOWER,7.100000,LSB\n"
+
+				channels, report, err := ImportCHIRP(strings.NewReader(csv), caps)
+				if err != nil {
+					t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+				}
+				if report.HasBlocking() {
+					t.Fatalf("HasBlocking() = true, want false — these five CHIRP names all map to modes this radio's legend prints: %+v", report.Entries)
+				}
+				want := []string{"FM", "FM-N", "AM", "USB", "LSB"}
+				if len(channels) != len(want) {
+					t.Fatalf("len(channels) = %d, want %d", len(channels), len(want))
+				}
+				for i, w := range want {
+					if channels[i].Data == nil {
+						t.Errorf("channels[%d].Data is nil, want an imported channel", i)
+						continue
+					}
+					if got := channels[i].Data.Mode; got != w {
+						t.Errorf("channels[%d].Data.Mode = %q, want %q", i, got, w)
+					}
+				}
+			})
+		})
+	}
+}
+
+// TestImportCHIRP_TS590PairTakesTheLiteralScanSkipBranch is the other half of
+// the TS-590 pair's CHIRP posture, and it is the first time a REGISTERED
+// model reaches this branch at all.
+//
+// TestImportCHIRP_ScanSkipLiteralOnAWritableRadio pins the same rule against
+// a synthetic fixture, and has had to since M9d-2 task 8, because until Tier
+// 6 every registered radio's scan_skip was the zero FieldSupport. These two
+// rows' 50-byte record carries a channel-lockout flag at a printed position
+// (590:1572-1574), so a CHIRP Skip cell means exactly what it says here:
+// blank is a real "do not skip" and "S" is a real "skip", both {Known}, and
+// nothing is dropped or reported.
+//
+// It is ALSO what keeps the fixture honest. ts590LikeCapabilities claims a
+// reachable scan_skip; if that claim were quietly reverted to the zero
+// FieldSupport — the shape every other fixture in this file has — the two
+// rows would silently start importing Unknown with a loss entry, and the
+// mode test above would not notice.
+func TestImportCHIRP_TS590PairTakesTheLiteralScanSkipBranch(t *testing.T) {
+	const csv = "Location,Name,Frequency,Duplex,Tone,rToneFreq,cToneFreq,Mode,Skip\n" +
+		"1,BLANK,145.500000,,,,,FM,\n" +
+		"2,SKIPPED,145.525000,,,,,FM,S\n"
+
+	for _, caps := range []spec.Capabilities{
+		ts590LikeCapabilities("TS-590S", "021"),
+		ts590LikeCapabilities("TS-590SG", "023"),
+	} {
+		t.Run(caps.Model, func(t *testing.T) {
+			if fs := caps.FieldSupport(spec.BankMemory, spec.FieldScanSkip); fs.Unreachable() {
+				t.Fatalf("fixture precondition: %s scan_skip = %+v, want REACHABLE — this record carries a channel-lockout flag, and the whole point of this test is that these are the first registered radios of which that is true", caps.Model, fs)
+			}
+
+			channels, report, err := ImportCHIRP(strings.NewReader(csv), caps)
+			if err != nil {
+				t.Fatalf("ImportCHIRP: unexpected error: %v", err)
+			}
+			if len(channels) != 2 {
+				t.Fatalf("imported %d channels, want 2", len(channels))
+			}
+			for i, want := range []bool{false, true} {
+				if channels[i].Data == nil {
+					t.Fatalf("channels[%d].Data = nil", i)
+				}
+				if got := channels[i].Data.ScanSkip; got != (codeplug.BoolField{State: codeplug.Known, Value: want}) {
+					t.Errorf("channels[%d].ScanSkip = %+v, want {Known,%v} — this radio's record has somewhere to put it", i, got, want)
+				}
+			}
+			if entries := skipEntries(report); len(entries) != 0 {
+				t.Errorf("Skip entries = %+v, want none — nothing is lost when the radio can carry the flag", entries)
+			}
+		})
+	}
 }

@@ -317,9 +317,11 @@ func currentCaps(conn *connectionState, working *codeplug.Codeplug) (spec.Capabi
 // returns) and normaliseTierFieldsForOwnModel (fileio.go, the file's own
 // model) — so this package's own tests can exercise the working-copy-
 // model resolution above against a model name wiring itself does not
-// register. internal/wiring registers sixteen models today (five Yaesu,
-// eleven Icom rows), and this seam is still needed —
-// more so, not less: what these tests need is an
+// register. internal/wiring registers five Yaesu rows, eleven Icom rows and
+// (since Tier 6) two Kenwood rows; no total is written here, because a tally
+// in prose is one registration away from being false and
+// wiring.SupportedModels() is the only honest count. This seam is still
+// needed — more so, not less: what these tests need is an
 // UNREGISTRABLE name whose resolution is theirs to control, which no real
 // registered model can be. Reassigned ONLY by tests (e.g.
 // TestCurrentCaps_DisconnectedUsesWorkingCopyModel), restored via
