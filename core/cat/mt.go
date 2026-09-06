@@ -357,8 +357,10 @@ func (d Dialect) mtReadSlotValid(s Slot) bool {
 // WRITE-DIRECTION POLICY: reading a tag has no side effect and carries none
 // of the hardware-verification concern the project policy above is about.
 // What bounds them instead is the dialect's own MT slot legend, carried as
-// MTPolicy.ReadSlots: under MTReadsReadable — the three registered dialects,
-// whose MT blocks print 5xx and EMG alongside memory and PMS — this admits
+// MTPolicy.ReadSlots: under MTReadsReadable — the four registered dialects,
+// whose MT slot legend spans every class their own manual gives it (5xx and
+// EMG alongside memory and PMS where the radio has those banks, memory and
+// PMS alone on the FT-991A, which has neither) — this admits
 // exactly what Dialect.readableSlot admits and not a byte moves; under
 // MTReadsMemoryPMS the 5xx and EMG banks are refused here and at the gate,
 // and MR is the only command that reads them. "000" remains rejected under

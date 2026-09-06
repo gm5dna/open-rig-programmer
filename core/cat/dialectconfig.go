@@ -121,7 +121,7 @@ func (f PMSSlotForm) String() string {
 // MCSlotPolicy names the SEND-side slot domain of the MC command.
 //
 // It exists because the MC legend is NOT the MR legend on every radio. Each
-// of the three registered dialects prints all four classes — memory, PMS,
+// of the four registered dialects prints all four classes — memory, PMS,
 // 5xx and EMG — against MC; a family whose MC block prints only memory and
 // PMS must not have an MC Set built for a bank its manual never lists there,
 // and must not have one admitted by its own outbound gate either.
@@ -137,7 +137,7 @@ func (f PMSSlotForm) String() string {
 type MCSlotPolicy int
 
 const (
-	// MCSelectsAll is the three registered dialects' domain: memory, PMS,
+	// MCSelectsAll is the four registered dialects' domain: memory, PMS,
 	// 60m and EMG — every slot class outside the "000" none form.
 	MCSelectsAll MCSlotPolicy = iota + 1
 	// MCSelectsMemoryPMS is the narrower domain: memory and PMS only.
@@ -291,7 +291,7 @@ func (f EXAddressForm) String() string {
 type MTReadSlotPolicy int
 
 const (
-	// MTReadsReadable is the three registered dialects' domain: every slot
+	// MTReadsReadable is the four registered dialects' domain: every slot
 	// this dialect's ParseSlot accepts except the "000" none form —
 	// Dialect.readableSlot, the rule MR reads by.
 	MTReadsReadable MTReadSlotPolicy = iota + 1
@@ -458,7 +458,7 @@ type MTPolicy struct {
 // MemoryP5Policy names what byte 21 of the shared 28-position memory field
 // block — P5, memdata.go's memTxClarOffset — MEANS on one family.
 //
-// The three registered dialects print `P5 0: TX CLAR "OFF" 1: TX CLAR "ON"`
+// The four registered dialects print `P5 0: TX CLAR "OFF" 1: TX CLAR "ON"`
 // against MR, MT and MW alike, so the byte carries MemoryData.TxClar. The
 // FT-891 prints `0: (Fixed)` on every one of those blocks and on IF: the
 // byte is schema there, not state, and this codec must neither emit a '1'
@@ -478,7 +478,7 @@ type MTPolicy struct {
 type MemoryP5Policy int
 
 const (
-	// P5TxClar is the three registered dialects' reading: byte 21 is the
+	// P5TxClar is the four registered dialects' reading: byte 21 is the
 	// TX clarifier flag, '0' off and '1' on, in both directions.
 	P5TxClar MemoryP5Policy = iota + 1
 	// P5Fixed is the FT-891's: byte 21 is printed "0: (Fixed)" on every

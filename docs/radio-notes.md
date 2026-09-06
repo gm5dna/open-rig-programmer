@@ -55,8 +55,8 @@ would settle it).
 ### FT-891 (opt-in)
 
 Reads the 99 memories, the 9 PMS pairs and the 159 menu settings; its
-menu addresses are four digits where the other Yaesu radios use six,
-and files accept either.
+menu addresses are four digits, other Yaesu radios use three or six,
+and files accept any of the three widths.
 
 Refused: tone and scan-skip cannot be set over CAT (the memory record
 has no tone-number byte and no scan-skip flag), and a transmit-clarifier

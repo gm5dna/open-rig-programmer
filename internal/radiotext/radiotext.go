@@ -1666,14 +1666,15 @@ var icr8600Text = Text{
 //
 // THAT IS A CLAIM ABOUT EVIDENCE, NOT ABOUT PHRASING, and it was narrowed to
 // that when the FT-991A registered: its ProbeFirmwareNote shares a 38-word
-// run with this one, every word of it a statement about THIS BUILD that is
-// identically true of both radios, so paraphrasing the overlap into a
-// difference would be the dishonest move. What
-// assertNotBorrowedFromAnyOtherModel (radiotext_test.go) MECHANICALLY pins
-// is exactly two things — that no field is byte-identical in full to another
-// registered model's same field, and that no field carries another model's
-// particular (its name, or a CI-V address) — and nothing about phrasing at
-// all.
+// run with this one, identically true of both radios — the first eight
+// words a statement about each radio's own manual, the rest about THIS
+// BUILD — so paraphrasing the overlap into a difference would be the
+// dishonest move. What assertNotBorrowedFromAnyOtherModel (radiotext_test.go)
+// MECHANICALLY pins is two things, with one declared exemption — that no
+// field is byte-identical in full to another registered model's same field
+// except for the one pair named in skipByteIdenticalSibling, and that no
+// field carries another model's particular (its name, or a CI-V address) —
+// and nothing about phrasing at all.
 //
 // WHAT THIS ENTRY CAN SAY THAT THE OTHER YAESU ENTRIES CANNOT is the point of
 // writing it fresh rather than adapting one of theirs. Four facts are this
