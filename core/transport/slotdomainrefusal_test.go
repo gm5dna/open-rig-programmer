@@ -12,23 +12,33 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/cat/ftdx101"
 )
 
-// The two slot-domain refusal sentences, byte for byte, as every dialect
-// this repository registers renders them today.
+// The two slot-domain refusal sentences, byte for byte, as every TOKEN-PMS
+// dialect this repository registers renders them today.
 //
 // They are CONSTANTS here rather than a per-dialect table because the claim
-// is that all five agree: S0.2 replaced two hardcoded sentences with
-// Dialect.mwSlotDomainRefusal/mtSlotDomainRefusal, composed from the
-// receiver's own memory range, PMS domain and declared special banks, on the
-// argument that every registered dialect composes back to the frozen text.
+// is that all five token-PMS dialects agree: S0.2 replaced two hardcoded
+// sentences with Dialect.mwSlotDomainRefusal/mtSlotDomainRefusal, composed
+// from the receiver's own memory range, PMS domain and declared special
+// banks, on the argument that each of them composes back to the frozen text.
 // One shared constant is that argument written down; a table of five would
 // let a drifting dialect be "fixed" by editing its own row.
+//
+// THE SIXTH REGISTERED DIALECT IS NOT AMONG THEM AND CANNOT BE: the FT-991A's
+// PMS pairs are the decimal channels 100-117 and it declares neither a 5 MHz
+// bank nor an emergency channel, so its composed sentences are DIFFERENT
+// text by design and sharing these constants would be meaningless. Its shape
+// is covered on a synthetic numeric-PMS dialect inside core/cat, by
+// TestSlotDomainText_NumericPMSDialect. That is why this test's name says
+// token-PMS and not "every registered dialect", which is what it said until
+// the FT-991A milestone's closing review (O-M3) — the name is the claim, and
+// the claim had quietly become false.
 const (
 	frozenMWSlotDomainRefusal = `MW: slot must be Writable() (memory 001-099 or PMS P1L-P9U; 5xx/EMG/"000" rejected)`
 	frozenMTSlotDomainRefusal = `MT: slot must be memory (001-099) or PMS (P1L-P9U); 5xx/EMG rejected by project policy pending M5a, "000"/invalid rejected per reference`
 )
 
-// TestSlotDomainRefusals_EveryRegisteredDialectIsByteIdentical pins the
-// composed MW and MT slot-domain sentences for ALL FIVE registered dialects.
+// TestSlotDomainRefusals_EveryTokenPMSDialectIsByteIdentical pins the
+// composed MW and MT slot-domain sentences for ALL FIVE token-PMS dialects.
 //
 // WHY IT LIVES IN core/transport. The FT-710's own sentences are pinned
 // inside core/cat (TestSlotDomainText_FT710SentencesAreByteIdentical) and its
@@ -44,7 +54,7 @@ const (
 // It is deliberately a WHOLE-SENTENCE comparison of ParseError.Reason and not
 // a Contains: the sentences are the thing being frozen, and a substring test
 // would pass on a sentence that had grown a clause.
-func TestSlotDomainRefusals_EveryRegisteredDialectIsByteIdentical(t *testing.T) {
+func TestSlotDomainRefusals_EveryTokenPMSDialectIsByteIdentical(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		d    cat.Dialect

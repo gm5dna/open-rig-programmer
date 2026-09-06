@@ -823,6 +823,40 @@ func TestIdentityPinTagWidth(t *testing.T) {
 	}
 }
 
+// TestIdentityPinClarifierPolicy pins BOTH halves of the register entry
+// "ClarifierPolicy.StepHz = 10 AND ClarifierPolicy.MaxAbsHz = 9990" in the
+// package that declares them.
+//
+// It exists because of the baseline manifest's negative result M05, which the
+// closing review ruled on: mutating StepHz 10 -> 5 left THIS package green.
+// The ceiling was caught (a golden frame carries the clarifier at 9990) and
+// the STEP was caught only one layer out, in core/driver/ft991a. The full gate
+// runs both, so no mutation of the value could ever have shipped — but the
+// entry is ONE entry precisely because ONE capture settles both halves, and a
+// register whose two halves are red-proofed at different altitudes invites a
+// partial lift. A line each puts them back at the same altitude.
+//
+// 9990 IS A DEDUCTION FROM THE STEP, not a second transcription: this manual
+// prints "0000 - 9999 (Hz)" on all five blocks that carry the clarifier grid
+// and states no step at all, so 9990 is the largest multiple of the ASSUMED
+// 10 Hz step inside the printed range. That relationship is asserted here too
+// — change the step alone and the pair stops cohering, which is the shape a
+// partial lift would have.
+func TestIdentityPinClarifierPolicy(t *testing.T) {
+	clar := ft991a.Dialect().Clarifier()
+	if got, want := clar.StepHz, 10; got != want {
+		t.Errorf("ClarifierPolicy.StepHz = %d, want %d — the ASSUMED register entry \"ClarifierPolicy.StepHz = 10 AND ClarifierPolicy.MaxAbsHz = 9990\", which no capture has lifted", got, want)
+	}
+	if got, want := clar.MaxAbsHz, 9990; got != want {
+		t.Errorf("ClarifierPolicy.MaxAbsHz = %d, want %d — the same entry's other half", got, want)
+	}
+	// The deduction, stated as a relation: the ceiling is the largest
+	// multiple of the step inside the manual's printed 0000-9999.
+	if clar.StepHz <= 0 || clar.MaxAbsHz%clar.StepHz != 0 || 9999-clar.MaxAbsHz >= clar.StepHz {
+		t.Errorf("MaxAbsHz %d is not the largest multiple of StepHz %d inside the printed 0000-9999", clar.MaxAbsHz, clar.StepHz)
+	}
+}
+
 // TestIdentityPinMWWriteKind pins the MW P7 byte.
 //
 // THE CAVEAT IS THE POINT, and it is the FT-891 test's caveat repeated

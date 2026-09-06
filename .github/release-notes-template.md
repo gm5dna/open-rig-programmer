@@ -60,8 +60,8 @@ describes under *Switching on writes for an unverified radio*.
   memory record, so a `Skip` cell asking for one is dropped and the loss
   reported, row by row.
 - **Its CAT speed is a guess** (38400; menu 031 CAT RATE on the radio is
-  the only remedy — menu 029 is the rear-panel RS-232C jack, a different
-  port), and its USB socket is a dual-UART bridge presenting two serial
+  the only remedy — menu 029 sets the rear-panel RS-232C jack's rate, a
+  different port), and its USB socket is a dual-UART bridge presenting two serial
   ports with no statement of which carries CAT: if one is silent, try
   the other.
 

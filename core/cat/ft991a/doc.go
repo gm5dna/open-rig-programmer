@@ -313,7 +313,16 @@
 //     dialect's 9990 is the largest multiple of the assumed step inside the
 //     printed range, a deduction from the assumption rather than a
 //     transcription, and a radio that really does step 1 Hz would reach a
-//     9999 this dialect refuses to build.
+//     9999 this dialect refuses to build. THE READ DIRECTION IS THE HALF A
+//     USER WOULD MEET FIRST, and it is the worse half: memdata.go applies
+//     the same policy on PARSE, so an ANSWER carrying a magnitude the
+//     manual's own printed range admits — 9995, say — is a *cat.ParseError,
+//     and a whole-codeplug read stops dead on a channel that is plainly in
+//     use rather than merely refusing to write it (FT-991A closing review,
+//     O-M2). The assumption is fleet-inherited — every registered dialect
+//     declares this same pair — so this is the family's exposure stated
+//     where this radio's widest printed-to-declared gap is, not a defect of
+//     this dialect.
 //     STAGE R LIFTS IT WITH: one MR read of a channel whose clarifier has
 //     been set to its MAXIMUM from the front panel. The magnitude that comes
 //     back shows the ceiling directly (9999 or 9990), and the front panel's

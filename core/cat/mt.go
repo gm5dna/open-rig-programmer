@@ -263,9 +263,11 @@ func (d Dialect) BuildMTSet(s Slot, display bool, tag string) (Command, error) {
 		// the special-bank clause and the none form were literals true only
 		// of the token-PMS radios. The four token dialects render
 		// byte-for-byte what stood here, so frame-corpus.golden does not
-		// move — measured over all five registered dialects by
-		// TestSlotDomainRefusals_EveryRegisteredDialectIsByteIdentical
-		// (core/transport). ONE
+		// move — measured over all five token-PMS dialects by
+		// TestSlotDomainRefusals_EveryTokenPMSDialectIsByteIdentical
+		// (core/transport); the sixth registered dialect, the FT-991A,
+		// composes different text by design and is held instead by
+		// TestSlotDomainText_NumericPMSDialect. ONE
 		// renderer, shared with validateCombinedMTFields, because the two
 		// forms refuse in identical words and two copies of a sentence that
 		// must agree is the drift this package keeps paying for.
