@@ -4,6 +4,7 @@ package ft991a
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -619,12 +620,14 @@ func TestWriteChannel_RefusalLadder(t *testing.T) {
 			fields: []spec.Field{spec.FieldClarifier},
 		},
 		{
-			// Three inputs land in buildWriteCommand's UNFIELDED catch-all
-			// (task 11 review, LOW-2): every adjacent refusal names a
-			// spec.Field and this one does not, because BuildMTSetCombined's
-			// error carries no field of its own. Pinned here AS IT STANDS
-			// TODAY — no Fields — so the shape does not drift unnoticed; a
-			// fielded catch-all is a fleet follow-up, not this task's.
+			// TWO inputs land in buildWriteCommand's UNFIELDED catch-all
+			// (task 11 review, LOW-2; it was three until the closing
+			// review's O-L3 gave ModeUnset its own named rung below): every
+			// adjacent refusal names a spec.Field and this one does not,
+			// because BuildMTSetCombined's error carries no field of its
+			// own. Pinned here AS IT STANDS TODAY — no Fields — so the
+			// shape does not drift unnoticed; a fielded catch-all is a
+			// fleet follow-up, not this task's.
 			//
 			// 155 Hz is inside the dialect's declared +/-9990 Hz ceiling and
 			// not a multiple of the ASSUMED 10 Hz step, so it clears the
@@ -647,15 +650,20 @@ func TestWriteChannel_RefusalLadder(t *testing.T) {
 			reason: "tag must be 0-12 bytes",
 		},
 		{
-			// Same catch-all again, and the one the mode rung's OWN ok check
-			// cannot catch: dialect.ModeByName("-") answers ok=true (it is
-			// cat.ModeUnset, the SHARED register's own ASSUMED member), so
-			// write.go's mode rung admits it and only the builder's
-			// Set-frame check refuses — pre-wire, same as the other two.
+			// NOT the catch-all: the closing review's O-L3. The mode rung's
+			// OWN ok check cannot catch this — dialect.ModeByName("-")
+			// answers ok=true, it being cat.ModeUnset, the SHARED
+			// register's own ASSUMED member — so until this rung existed
+			// the value fell through to the builder's Set-frame check and
+			// was refused with NO Fields, making the one mode-shaped
+			// refusal a caller can actually trip the one whose report named
+			// no field. It is refused BY NAME in the mode rung now, still
+			// pre-wire, and the builder keeps its own check behind it.
 			name: "a mode that resolves to cat.ModeUnset",
 			ch: withData(func(d *codeplug.ChannelData) {
 				d.Mode = "-"
 			}),
+			fields: []spec.Field{spec.FieldMode},
 			reason: "must not be ModeUnset",
 		},
 	} {
@@ -685,6 +693,84 @@ func TestWriteChannel_RefusalLadder(t *testing.T) {
 			}
 			if after := p.Transcript(); len(after) != before {
 				t.Errorf("the refusal sent %v — every rung of this ladder is PRE-WIRE", after[before:])
+			}
+		})
+	}
+}
+
+// TestWriteChannel_FrequencyAgainstTheDeclaredRange walks BOTH ends of this
+// driver's own declared frequency range, one hertz inside and one hertz
+// outside each.
+//
+// The closing review's C-H1: `cat.MemoryFreqHz` bounds the nine-digit
+// ENCODING (999 999 999) and nothing bounded the RADIO, so before the rung
+// this test pins existed, `Session.WriteChannel` — which is public, and does
+// NOT call `codeplug.Validate` — put 470 000 001 Hz on the wire, one hertz
+// above the ceiling this very driver declares. The clone service's callers
+// are safe by a DIFFERENT route (`clone.PrepareSend` runs `codeplug.Validate`,
+// which refuses the range), and that route is not this driver's to rely on:
+// the bound is the DRIVER register's own entry "MinFreqHz 30 000 /
+// MaxFreqHz 470 000 000 — THE FA/FB RANGE READ AS THE MEMORY-STORABLE
+// RANGE", so it is consulted where its datum lives.
+//
+// Both bounds are read from THIS SESSION'S caps in the assertions too, not
+// restated as literals: a caps edit must move the refusal, not the test's
+// idea of it. The four frequencies themselves ARE literals, because they are
+// what the register entry claims.
+func TestWriteChannel_FrequencyAgainstTheDeclaredRange(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		freqHz  uint64
+		refused bool
+	}{
+		{name: "the declared floor is written", freqHz: 30_000},
+		{name: "one hertz below the declared floor is refused", freqHz: 29_999, refused: true},
+		{name: "the declared ceiling is written", freqHz: 470_000_000},
+		{name: "one hertz above the declared ceiling is refused", freqHz: 470_000_001, refused: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			p, sess := openSession(t, Simulated, slotImage{})
+			before := len(p.Transcript())
+			if tt.freqHz == 30_000 && sess.caps.MinFreqHz != 30_000 {
+				t.Fatalf("caps.MinFreqHz = %d, want 30000 — this test's four literals are the register entry's", sess.caps.MinFreqHz)
+			}
+			if tt.freqHz == 470_000_000 && sess.caps.MaxFreqHz != 470_000_000 {
+				t.Fatalf("caps.MaxFreqHz = %d, want 470000000 — this test's four literals are the register entry's", sess.caps.MaxFreqHz)
+			}
+
+			ch := withData(func(d *codeplug.ChannelData) { d.FreqHz = tt.freqHz })
+			res, err := sess.WriteChannel(testCtx(t), ch)
+			sent := p.Transcript()[before:]
+
+			if !tt.refused {
+				if err != nil {
+					t.Fatalf("WriteChannel = %v, want nil — %d Hz is inside the declared range", err, tt.freqHz)
+				}
+				if len(sent) != 1 {
+					t.Fatalf("wire carried %q, want exactly one frame", sent)
+				}
+				// Positions 6-14 of the 41-byte chart: P2, nine digits.
+				if got, want := sent[0][5:14], fmt.Sprintf("%09d", tt.freqHz); got != want {
+					t.Errorf("frame's P2 = %q, want %q (frame %q)", got, want, sent[0])
+				}
+				return
+			}
+
+			var wre *driver.WriteRefusedError
+			if !errors.As(err, &wre) {
+				t.Fatalf("WriteChannel = %v (%T) and the wire carried %q, want a *driver.WriteRefusedError and nothing sent — %d Hz is outside %d..%d", err, err, sent, tt.freqHz, sess.caps.MinFreqHz, sess.caps.MaxFreqHz)
+			}
+			if want := []spec.Field{spec.FieldFrequency}; !reflect.DeepEqual(wre.Fields, want) {
+				t.Errorf("WriteRefusedError.Fields = %v, want %v", wre.Fields, want)
+			}
+			if !strings.Contains(wre.Reason, "outside this radio's") {
+				t.Errorf("WriteRefusedError.Reason = %q, want it to name the radio's declared range", wre.Reason)
+			}
+			if res.Steps == nil || len(res.Steps) != 0 {
+				t.Errorf("WriteResult.Steps = %#v, want an EMPTY, non-nil slice — nothing was attempted", res.Steps)
+			}
+			if len(sent) != 0 {
+				t.Errorf("the refusal sent %q — this rung is PRE-WIRE", sent)
 			}
 		})
 	}
