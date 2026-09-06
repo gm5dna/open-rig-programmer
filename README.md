@@ -1,10 +1,10 @@
 # Open Rig Programmer
 
-A free memory-channel programmer for Yaesu, Icom and Kenwood
-radios. Read the
-radio's memories into a file, edit them in a grid or a spreadsheet,
-and send them back over the radio's ordinary USB cable. A desktop app
-and a command-line tool, `rigprog`, for macOS, Windows and Linux.
+A free memory-channel programmer for Yaesu, Icom and Kenwood radios.
+Read the radio's memories into a file, edit them in a grid or a
+spreadsheet, and send them back over the radio's ordinary USB cable.
+A desktop app and a command-line tool, `rigprog`, for macOS, Windows
+and Linux.
 
 ![The channel grid, connected to the built-in demo radio](docs/images/app-demo.png)
 

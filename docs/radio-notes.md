@@ -216,12 +216,32 @@ scan skip ARE read and written on these radios, unlike every Yaesu model
 above: the memory record carries a tone mode, separate transmit and
 receive tone numbers and a channel-lockout flag.
 
-Refused: a **split channel**. These radios express a split as two
-frames over one channel number, the program sends one, and a channel
-whose transmit frequency differs from its receive frequency is refused
-at the write rather than silently written as simplex. On the **TS-590S
-only**, the **filter** column cannot be set at all, and channel writes
-are refused outright on a radio reporting **firmware 2.00 or later**:
+Refused: **a memory channel whose transmit frequency you have not
+supplied yourself**, which is every channel as it comes off the radio.
+These radios express a split as two frames over one channel number, the
+program sends one, and what the second frame answers on a simplex
+channel is printed nowhere in the manual — so a read leaves the
+transmit frequency unavailable rather than guessing at it, and the
+write is refused, naming register entry A9. In practice that means
+reading the memories, editing a name and sending them straight back is
+refused on every memory channel until you fill the transmit frequency
+in; typing the receive frequency there is the simplex channel the one
+frame the program sends can express. A **genuine split** is refused
+even then, rather than silently written as simplex. A **scan range** is
+not affected: in that bank the second frame carries a range's end
+frequency rather than a transmit frequency, so there is no transmit
+disposition to require. The refusal lifts on a row only when somebody
+reads a simplex channel's transmit side off a real radio of that model
+and reports what came back.
+
+Also refused: a **1750 Hz receive tone**. It is the last entry of the
+tone-number chart these radios print and has no entry at all in the
+tone-squelch chart, so the program writes it as a transmit tone and
+refuses it as a receive one.
+
+On the **TS-590S only**, the **filter** column cannot be set at all,
+and channel writes are refused outright on a radio reporting
+**firmware 2.00 or later**:
 the manual guarantees the filter position in a memory record is unused
 only on the 1.xx firmware and says nothing about later versions, and one
 entry in the model list cannot say "settable above 2.00". The TS-590SG

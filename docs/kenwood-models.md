@@ -40,16 +40,37 @@ widens what may be attempted, never how carefully it is attempted.
   reason (`core/driver/ts590/write.go`, the `tx_frequency` rungs; the
   matrix's §2.4 and plan decision P12).
 
-- **A memory channel is not written back unchanged, either.** The same
-  arithmetic bites a plain round trip: what an `MR` with P1=1 answers on
-  a SIMPLEX channel is printed nowhere in the book, so a fresh read never
-  learns a channel's transmit side and reports it unavailable, and the
-  write refuses rather than guess (register entry A9,
-  `core/driver/ts590/write.go`). A scan-range write is NOT refused for
-  this reason: in that bank P1 selects a range's start or end frequency
-  rather than a transmit frequency, so there is no transmit disposition
-  to require (matrix erratum M-E2, pinned per bank by
-  `app/uispec_test.go`'s `TestBankTierFields_RegisteredTS590Pair_PerBank`).
+- **A memory channel is written back only once its transmit frequency is
+  SUPPLIED.** The same arithmetic bites a plain round trip: what an `MR`
+  with P1=1 answers on a SIMPLEX channel is printed nowhere in the book,
+  so a fresh read never learns a channel's transmit side and reports it
+  unavailable, and the write refuses rather than guess (register entry
+  A9, `core/driver/ts590/write.go`). A channel is written only when its
+  `tx_frequency` state is `Known`, which today means the user set it, so
+  the ordinary round trip — read the memories, edit, send them back — is
+  refused on EVERY memory channel until that column is filled in. A
+  scan-range write is NOT refused for this reason: in that bank P1
+  selects a range's start or end frequency rather than a transmit
+  frequency, so there is no transmit disposition to require (matrix
+  erratum M-E2, pinned per bank by `app/uispec_test.go`'s
+  `TestBankTierFields_RegisteredTS590Pair_PerBank`). A9 lifts PER ROW,
+  and only on an observation of what a real radio of that row answers.
+  The cost is published to users in `internal/radiotext`'s two 590
+  `GridLegendNote`s, in `docs/radio-notes.md` and in the release notes,
+  and `TestRadiotext_TS590Pair_GridLegendCarriesItsTwoPublishedCosts`
+  pins that it stays there.
+
+- **A 1750 Hz RECEIVE tone is refused; a 1750 Hz TRANSMIT tone is
+  written.** `TN`'s printed chart runs 00-42 and its last entry is 1750
+  Hz; the `CN` tone-squelch chart prints 00-41 and has no equivalent.
+  `spec.Capabilities` carries ONE tone domain and one predicate for both
+  directions, so the 43-entry list admits as a `tone_rx` a value the
+  receive chart does not print. The resolution is to publish 43 and
+  refuse a `Known` `tone_rx` of 1750 Hz in the write path (design
+  decision 14, matrix erratum M-E1, `core/driver/ts590/write.go`'s
+  `registerDecision14`), rather than to claim a narrower domain in the
+  capability table. A 1750 Hz `tone_rx` cannot come off a radio in the
+  first place: `core/kw` bounds P9 at `CN`'s own 41.
 
 - **Only FM channels are written.** No `MW` P14 value is known to be
   meaningful outside FM, so a write of a channel in any other mode is
