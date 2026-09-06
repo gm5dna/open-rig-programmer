@@ -13,8 +13,15 @@ tag. The full release notes for each version are on the
 
 ### Added
 - **Kenwood TS-590S and TS-590SG**: read, opt-in write, menu-settings
-  read, CSV and CHIRP, on the same terms as every other manual-derived
-  radio. They are the first radios here whose tone and scan-skip columns
+  read and CSV, on the same terms as every other manual-derived radio.
+  **CHIRP import is not available for these two radios: every row is
+  blocked** — a CHIRP file's blank `Duplex` column means simplex, and
+  these radios declare no shift vocabulary at all, their memory record
+  carrying no duplex selector, so every ordinary row is refused on that
+  column and the import writes nothing (`CW`, `CWR` and `RTTY` rows are
+  refused on the mode besides). The program's own CSV import and export
+  are unaffected.
+  They are the first radios here whose tone and scan-skip columns
   can be read and written. A memory channel is written back only once
   you supply its transmit frequency, and a channel read off the radio
   does not carry one: the manual never says what these radios answer for
@@ -26,8 +33,10 @@ tag. The full release notes for each version are on the
   affected. Only FM channels are written, and a 1750 Hz receive tone is
   refused where a 1750 Hz transmit tone is written. On the TS-590S alone
   the filter column cannot be set and channel writes are refused on
-  firmware 2.00 or later, which the manual stops guaranteeing at exactly
-  that point. `rigprog probe` prints the radio's own firmware answer
+  firmware 2.00 or later — which the manual stops guaranteeing at exactly
+  that point — or on a firmware version the program cannot read, a
+  version that cannot be compared not being one that can be shown to be
+  1.xx. `rigprog probe` prints the radio's own firmware answer
   verbatim.
 - Per-radio Kenwood detail in `docs/radio-notes.md`, with the evidence in
   a new `docs/kenwood-models.md`.

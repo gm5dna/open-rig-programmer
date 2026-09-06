@@ -76,13 +76,20 @@ describes under *Switching on writes for an unverified radio*.
   affected. Only FM channels are written, and a 1750 Hz receive tone is
   refused where a 1750 Hz transmit tone is written. On the
   TS-590S alone the filter column cannot be set at all, and channel
-  writes are refused on a radio reporting firmware 2.00 or later: the
-  manual guarantees the relevant byte is unused only on the 1.xx
-  firmware. `rigprog probe` prints the radio's own firmware answer
-  verbatim so you can see what that decision was taken on. Their speed is
-  a guess (9600; there is no speed setting, and a wrong speed looks like
-  a dead port), and a CHIRP file's `CW`, `CWR` and `RTTY` rows are not
-  imported on these radios.
+  writes are refused on a radio reporting firmware 2.00 or later — or a
+  firmware version the program cannot read: the manual guarantees the
+  relevant byte is unused only on the 1.xx firmware, and a version that
+  cannot be compared cannot be shown to be a 1.xx one. `rigprog probe`
+  prints the radio's own firmware answer verbatim so you can see what
+  that decision was taken on. Their speed is a guess (9600; there is no
+  speed setting, and a wrong speed looks like a dead port).
+  **CHIRP import is not available for these two radios in this release:
+  every row is blocked.** A CHIRP file's blank `Duplex` column means
+  simplex, and these radios declare no shift vocabulary at all — their
+  memory record carries no duplex selector — so every ordinary row is
+  refused on that column and the import writes nothing; `CW`, `CWR` and
+  `RTTY` rows are refused a second time on the mode besides. The
+  program's own CSV import and export are unaffected.
 - **The Kenwood TS-480 is NOT selectable**, although its driver ships in
   this build. Nothing in its 2003 manual says what a memory channel that
   has never been written answers when it is read; the TS-590SG's manual

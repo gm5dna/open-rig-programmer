@@ -234,6 +234,15 @@ disposition to require. The refusal lifts on a row only when somebody
 reads a simplex channel's transmit side off a real radio of that model
 and reports what came back.
 
+Also refused: **any channel that is not FM**. It is the broadest refusal
+on these radios, so it is worth knowing first: the two bytes the memory
+record carries beside the mode have only two printed meanings, "FM
+Normal" and "FM Narrow", and the manual never says what they mean in
+SSB, CW, AM or FSK — so an SSB or CW channel is refused rather than
+written with a byte whose meaning nobody here holds, naming register
+entry A23. Every other refusal below applies to the FM channels that
+remain. Reading is unaffected: a channel of any mode reads normally.
+
 Also refused: a **1750 Hz receive tone**. It is the last entry of the
 tone-number chart these radios print and has no entry at all in the
 tone-squelch chart, so the program writes it as a transmit tone and
@@ -241,15 +250,29 @@ refuses it as a receive one.
 
 On the **TS-590S only**, the **filter** column cannot be set at all,
 and channel writes are refused outright on a radio reporting
-**firmware 2.00 or later**:
+**firmware 2.00 or later — or a firmware version the program cannot
+read**:
 the manual guarantees the filter position in a memory record is unused
 only on the 1.xx firmware and says nothing about later versions, and one
-entry in the model list cannot say "settable above 2.00". The TS-590SG
-has no such condition and sets the filter normally. A CHIRP file's `CW`,
-`CWR` and `RTTY` rows are not imported on either radio: they resolve to
-names these radios' own mode list does not print (it prints `CW`,
-`CW-R`, `FSK` and `FSK-R`), so the row is blocked rather than guessed
-at. Channels cannot be deleted.
+entry in the model list cannot say "settable above 2.00". A radio whose
+firmware answer does not come back in the one form the manual's worked
+example prints takes the same conservative branch, because a version
+that cannot be compared cannot be shown to be a 1.xx one; the session
+still reads normally. The TS-590SG has no such condition and sets the
+filter normally.
+
+**CHIRP import is not available on either radio in v1.4.0: every row is
+blocked.** A CHIRP file's blank `Duplex` column means simplex, and these
+radios declare no shift vocabulary at all — their memory record carries
+no duplex selector — so every ordinary row is refused on that column and
+the import writes nothing. (`CW`, `CWR` and `RTTY` rows are refused a
+second time besides, on the mode: they resolve to names these radios'
+own mode list does not print, which prints `CW`, `CW-R`, `FSK` and
+`FSK-R`.) The program's own CSV import and export are unaffected; only
+the CHIRP direction is closed, and opening it is a change to the shared
+importer every supported radio goes through rather than a Kenwood one.
+
+Channels cannot be deleted.
 
 Guesses: its **speed**. Neither Kenwood manual prints a factory rate, so
 the program opens at 9600; if your radio is set differently, change it

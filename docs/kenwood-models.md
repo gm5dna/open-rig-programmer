@@ -57,7 +57,7 @@ widens what may be attempted, never how carefully it is attempted.
   and only on an observation of what a real radio of that row answers.
   The cost is published to users in `internal/radiotext`'s two 590
   `GridLegendNote`s, in `docs/radio-notes.md` and in the release notes,
-  and `TestRadiotext_TS590Pair_GridLegendCarriesItsTwoPublishedCosts`
+  and `TestRadiotext_TS590Pair_GridLegendCarriesItsPublishedCosts`
   pins that it stays there.
 
 - **A 1750 Hz RECEIVE tone is refused; a 1750 Hz TRANSMIT tone is
@@ -77,12 +77,17 @@ widens what may be attempted, never how carefully it is attempted.
   refused, naming register entry A23. Reading is unaffected — every mode
   reads normally.
 
-- **No channel can be deleted.** The only clearing route either Kenwood
-  book prints is a side effect of a SHORTENED memory-write frame, and the
-  length of that short frame is a reading of one sentence rather than a
-  number printed anywhere (register entry A5, errata schedule E19). The
-  codec admits a 50-byte `MW` and no other (`core/kw`'s outbound gate),
-  so the short form cannot be sent even by accident.
+- **No channel can be deleted.** The only clearing route the **590 book**
+  prints is a side effect of a SHORTENED memory-write frame (590:1579),
+  and the length of that short frame is a reading of one sentence rather
+  than a number printed anywhere (register entry A5, errata schedule
+  E19). The codec admits a 50-byte `MW` and no other (`core/kw`'s
+  outbound gate), so the short form cannot be sent even by accident.
+  **The 480 book prints no memory-clear route at all** — its `MW` section
+  ends without that sentence (480:949), and its only printed "clear" is
+  `RC`, which clears the RIT offset (480:1205) — so the TS-480 is a radio
+  whose own book gives no clearing route rather than one whose printed
+  route this program declines to send.
 
 - **No band edges are published.** `MinFreqHz` and `MaxFreqHz` are both
   ZERO on all three rows (`core/driver/ts590/caps.go`,
@@ -112,26 +117,44 @@ widens what may be attempted, never how carefully it is attempted.
   requires one, which is a per-session port setting this program does not
   vary by baud (matrix §1.11, erratum M-E4).
 
-- **A CHIRP file's `CW`, `CWR` and `RTTY` rows are not imported.** Those
-  resolve to the sideband-specific names `CW-U`, `CW-L` and `RTTY-U`,
-  and these radios' own mode legend prints `CW`, `CW-R`, `FSK` and
-  `FSK-R`, so each such row is blocked with a reason naming both the
-  CHIRP name and the name it mapped to, exactly as the eleven Icom models
-  and the FT-891 already block them
-  (`core/csvio/chirp_test.go`'s `TestImportCHIRP_TS590PairBlocksCWAndRTTYRows`).
-  **Kenwood spells RTTY "FSK"**, which makes a THIRD spelling family in
-  this registry; teaching the importer to consult the radio's own legend
-  for a sideband-agnostic alternative would change every Icom model's and
-  the FT-891's CHIRP outcome as well, so it is a fleet question recorded
-  as a follow-up and acted on nowhere.
+- **CHIRP import is not available for the TS-590S/SG in v1.4.0: every row
+  is blocked.** A CHIRP file's blank `Duplex` column means simplex, and
+  this family declares no shift vocabulary at all — the 50-byte record
+  carries no duplex selector, so `ShiftOptions` is empty
+  (`core/driver/ts590/caps.go`, matrix §1.16) — so every ordinary row is
+  refused with a blocking entry on that column and the import writes
+  nothing. Reading, writing and this programme's own CSV import and
+  export are unaffected; only the CHIRP direction is closed. Making that
+  refusal non-blocking would be a change to the shared importer that
+  every registered radio goes through, so it is a fleet question recorded
+  as a roadmap follow-up rather than a Kenwood one
+  (`core/csvio/chirp_test.go`'s
+  `TestImportCHIRP_TS590PairBlocksCWAndRTTYRows`).
+
+- **A CHIRP file's `CW`, `CWR` and `RTTY` rows are refused a second time,
+  on the `Mode` column.** Those resolve to the sideband-specific names
+  `CW-U`, `CW-L` and `RTTY-U`, and these radios' own mode legend prints
+  `CW`, `CW-R`, `FSK` and `FSK-R`, so each such row is blocked with a
+  reason naming both the CHIRP name and the name it mapped to, exactly as
+  the eleven Icom models and the FT-891 already block them. **Kenwood
+  spells RTTY "FSK"**, which makes a THIRD spelling family in this
+  registry; teaching the importer to consult the radio's own legend for a
+  sideband-agnostic alternative would change every Icom model's and the
+  FT-891's CHIRP outcome as well, so it is a fleet question recorded as a
+  follow-up and acted on nowhere. It would not open CHIRP import here on
+  its own: the `Duplex` refusal above stands independently of it.
 
 - **Tone and scan skip ARE reachable here**, which no registered radio
   before this family could say. The 50-byte record carries a tone mode, a
   transmit tone number, a receive tone number and a channel-lockout flag
   at printed positions, so those columns read and write like any other
-  and a CHIRP `Skip` cell imports literally instead of being dropped
+  and a CHIRP `Skip` cell is carried literally instead of being dropped
   (`core/csvio/chirp_test.go`'s
-  `TestImportCHIRP_TS590PairTakesTheLiteralScanSkipBranch`). The Kenwood
+  `TestImportCHIRP_TS590PairTakesTheLiteralScanSkipBranch`) — the
+  importer's own step, reached whatever the row's fate: while the
+  `Duplex` refusal above stands, no CHIRP row completes an import here at
+  all, so that is a property of the mapping rather than something an
+  owner can use in v1.4.0. The Kenwood
   tone chart has 43 entries and is NOT this project's shared 50-tone
   chart — it is that chart minus eight interstitial tones, so every index
   above 25 differs — and `core/driver/ts590` transcribes its own copy,
