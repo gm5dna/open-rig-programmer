@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
 	// ALIASED deliberately: the dialect package's own name is also
@@ -478,6 +479,14 @@ type Session struct {
 	dialect cat.Dialect
 	id      driver.Identity
 	caps    spec.Capabilities // effective; never mutated after Open
+
+	// opMu serialises whole DRIVER OPERATIONS on this session, which is a
+	// larger claim than the engine's own per-exchange mutex: it covers the
+	// work an operation does around its exchanges, not just the exchange.
+	// Every operation takes it, single-frame ones included, so the rule is
+	// one rule rather than a list of exceptions that a second frame added
+	// to any of them would silently invalidate.
+	opMu sync.Mutex
 }
 
 // Identity implements driver.Session.
