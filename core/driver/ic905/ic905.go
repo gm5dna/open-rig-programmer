@@ -514,27 +514,12 @@ func (s *Session) memoryReadSpec() transport.CommandSpec {
 // 6. civ decodes the address and hands it back; comparing it is the
 // driver's job, and storing a channel under the wrong slot would corrupt
 // a codeplug silently.
-var ErrAnswerMismatch = errors.New("ic905: the memory answer names a different channel than was requested")
+var ErrAnswerMismatch = driver.ErrAnswerMismatch
 
-// AnswerMismatchError reports the requested and the answered address. It
-// is this PACKAGE's own typed error in this package's own namespace: the
-// other drivers have same-shaped ones and none imports another, because a
-// caller distinguishing which radio's read went wrong needs distinct
-// types.
-type AnswerMismatchError struct {
-	// Requested is the address the read asked for.
-	Requested civ.ChannelAddress
-	// Answered is the address the reply actually decoded to.
-	Answered civ.ChannelAddress
-}
-
-// Error implements the error interface.
-func (e *AnswerMismatchError) Error() string {
-	return fmt.Sprintf("ic905: requested channel %s but the answer names %s — refusing to map a reply onto the wrong channel", e.Requested, e.Answered)
-}
-
-// Unwrap lets errors.Is(err, ErrAnswerMismatch) match.
-func (e *AnswerMismatchError) Unwrap() error { return ErrAnswerMismatch }
+// AnswerMismatchError reports the requested and the answered address; the
+// shared form (driver.AnswerMismatchError) carries the model name so this
+// package needs no typed error of its own.
+type AnswerMismatchError = driver.AnswerMismatchError[civ.ChannelAddress]
 
 // recordAt performs ONE 1A 00 read of addr and returns its RAW record
 // bytes, undecoded.
@@ -580,7 +565,7 @@ func (s *Session) recordAt(ctx context.Context, addr civ.ChannelAddress) (record
 	}
 	if got != addr {
 		s.answerMismatches.Add(1)
-		return nil, false, &AnswerMismatchError{Requested: addr, Answered: got}
+		return nil, false, &AnswerMismatchError{Model: "ic905", Requested: addr, Answered: got}
 	}
 	return rec, true, nil
 }

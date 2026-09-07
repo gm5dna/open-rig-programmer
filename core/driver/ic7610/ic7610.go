@@ -172,9 +172,11 @@ func (e *RecordLengthMismatchError) Unwrap() []error {
 
 // ErrAnswerMismatch is the sentinel for tier ruling T2: a memory answer
 // whose decoded channel address is not the one that was asked for.
-var ErrAnswerMismatch = errors.New("ic7610: a memory answer named a channel other than the one requested")
+var ErrAnswerMismatch = driver.ErrAnswerMismatch
 
-// AnswerMismatchError reports T2's failure, naming both channels.
+// AnswerMismatchError reports T2's failure, naming both channels; the
+// shared form (driver.AnswerMismatchError) carries the model name so this
+// package needs no typed error of its own.
 //
 // IT EXISTS BECAUSE THE MATCHER CANNOT CATCH THIS. The landed
 // civ.Profile.MemoryAnswerMatcher is deliberately ENVELOPE-ONLY — it
@@ -185,21 +187,7 @@ var ErrAnswerMismatch = errors.New("ic7610: a memory answer named a channel othe
 // before any caching, before record mapping, before the E6 template check
 // and before a write merge. A record silently mis-attributed to the wrong
 // channel is the corruption this whole project refuses.
-//
-// core/driver/ftdx101's AnswerMismatchError is the precedent.
-type AnswerMismatchError struct {
-	// Want is the channel the driver asked about.
-	Want civ.ChannelAddress
-	// Got is the channel the answer actually named.
-	Got civ.ChannelAddress
-}
-
-func (e *AnswerMismatchError) Error() string {
-	return fmt.Sprintf("ic7610: asked about %s and was answered about %s — the memory-answer matcher is envelope-only, so this is the driver's check (tier ruling T2)", e.Want, e.Got)
-}
-
-// Unwrap lets errors.Is(err, ErrAnswerMismatch) match.
-func (e *AnswerMismatchError) Unwrap() error { return ErrAnswerMismatch }
+type AnswerMismatchError = driver.AnswerMismatchError[civ.ChannelAddress]
 
 // Open implements driver.Driver.
 //
@@ -394,7 +382,7 @@ func probeSlot(ctx context.Context, eng *transport.Engine, p civ.Profile, a civ.
 		return nil, false, fmt.Errorf("ic7610: Open: probing %s: %w", a, err)
 	}
 	if got != a {
-		return nil, false, &AnswerMismatchError{Want: a, Got: got}
+		return nil, false, &AnswerMismatchError{Model: "ic7610", Requested: a, Answered: got}
 	}
 	return raw, false, nil
 }

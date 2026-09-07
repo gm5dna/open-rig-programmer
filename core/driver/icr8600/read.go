@@ -18,18 +18,12 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
-var ErrAnswerMismatch = errors.New("icr8600: the memory answer names a different channel than was requested")
+var ErrAnswerMismatch = driver.ErrAnswerMismatch
 
-type AnswerMismatchError struct {
-	Requested civ.ChannelAddress
-	Answered  civ.ChannelAddress
-}
-
-func (e *AnswerMismatchError) Error() string {
-	return fmt.Sprintf("icr8600: requested %s but the answer names %s", e.Requested, e.Answered)
-}
-
-func (e *AnswerMismatchError) Unwrap() error { return ErrAnswerMismatch }
+// AnswerMismatchError reports the requested and the answered address; the
+// shared form (driver.AnswerMismatchError) carries the model name so this
+// package needs no typed error of its own.
+type AnswerMismatchError = driver.AnswerMismatchError[civ.ChannelAddress]
 
 func slotAddress(slot string) (civ.ChannelAddress, error) {
 	g, c, ok := spec.ParseSparseSlot(slot)
@@ -127,7 +121,7 @@ func (s *Session) recordAt(ctx context.Context, addr civ.ChannelAddress) ([]byte
 	}
 	if got != addr {
 		s.answerMismatches.Add(1)
-		return nil, false, &AnswerMismatchError{Requested: addr, Answered: got}
+		return nil, false, &AnswerMismatchError{Model: "icr8600", Requested: addr, Answered: got}
 	}
 	return record, true, nil
 }

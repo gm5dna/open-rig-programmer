@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/kw"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
@@ -84,15 +85,11 @@ func (e *UnknownSlotError) Unwrap() error { return ErrUnknownSlot }
 // when a slot-addressed answer does not name what the read asked for. The
 // errors actually returned are *AnswerMismatchError and
 // *AnswerP1MismatchError.
-var ErrAnswerMismatch = errors.New("ts480: answer does not name what was requested")
+var ErrAnswerMismatch = driver.ErrAnswerMismatch
 
-// AnswerMismatchError reports the requested and the answered channel.
-//
-// It is THIS package's OWN typed error, in this package's own namespace: the
-// sibling drivers have same-shaped ones and none imports another, because a
-// caller distinguishing which radio's read went wrong needs distinct types and
-// a shared one would put a radio-specific failure on a seam meant to be
-// neutral.
+// AnswerMismatchError reports the requested and the answered channel; the
+// shared form (driver.AnswerMismatchError) carries the model name so this
+// package needs no typed error of its own.
 //
 // IT IS NOT REACHABLE THROUGH THE CORRELATION PATH, and that is by design
 // rather than by luck: kw.Layout.MRAnswerMatcher already compares the answered
@@ -101,20 +98,7 @@ var ErrAnswerMismatch = errors.New("ts480: answer does not name what was request
 // somehow arrived correlated and then decoded to a different channel — a
 // contradiction rather than a stale frame — and refusing beats storing one
 // channel's content under another's identifier.
-type AnswerMismatchError struct {
-	// Requested is the slot identifier the read asked for.
-	Requested string
-	// Answered is the slot identifier the reply actually named.
-	Answered string
-}
-
-// Error implements the error interface.
-func (e *AnswerMismatchError) Error() string {
-	return fmt.Sprintf("ts480: requested slot %q but the answer names slot %q — refusing to map a reply onto the wrong slot", e.Requested, e.Answered)
-}
-
-// Unwrap lets errors.Is(err, ErrAnswerMismatch) match.
-func (e *AnswerMismatchError) Unwrap() error { return ErrAnswerMismatch }
+type AnswerMismatchError = driver.AnswerMismatchError[string]
 
 // AnswerP1MismatchError reports an MR answer whose P1 names a different half
 // of the addressing than the read asked for.
@@ -381,7 +365,7 @@ func (s *Session) ReadChannel(ctx context.Context, id string) (codeplug.Channel,
 	// row's identifiers are two digits (slotID, caps.go). Comparing strings
 	// here would refuse every genuine answer.
 	if got := rec.Slot.Number(); got != number {
-		return codeplug.Channel{}, &AnswerMismatchError{Requested: id, Answered: slotID(got)}
+		return codeplug.Channel{}, &AnswerMismatchError{Model: "ts480", Requested: id, Answered: slotID(got)}
 	}
 	if want := slot.P1(); rec.AnswerP1 != want {
 		return codeplug.Channel{}, &AnswerP1MismatchError{Slot: id, Requested: want, Answered: rec.AnswerP1}

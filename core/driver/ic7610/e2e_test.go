@@ -716,8 +716,8 @@ func TestE2E_AnswerForAnotherChannelIsRefused(t *testing.T) {
 	if !errors.As(err, &mismatch) {
 		t.Fatalf("err = %v, want an *AnswerMismatchError naming both channels", err)
 	}
-	if mismatch.Want.Channel != 5 || mismatch.Got.Channel != 6 {
-		t.Errorf("*AnswerMismatchError = {Want: %s, Got: %s}, want {ch5, ch6}", mismatch.Want, mismatch.Got)
+	if mismatch.Requested.Channel != 5 || mismatch.Answered.Channel != 6 {
+		t.Errorf("*AnswerMismatchError = {Requested: %s, Answered: %s}, want {ch5, ch6}", mismatch.Requested, mismatch.Answered)
 	}
 	if got := s.AnswerMismatches(); got != before+1 {
 		t.Errorf("the mismatch diagnostic went %d -> %d, want one increment", before, got)
