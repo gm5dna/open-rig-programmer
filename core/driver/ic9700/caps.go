@@ -3,6 +3,7 @@
 package ic9700
 
 import (
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -15,19 +16,14 @@ import (
 // recognise selects the same fail-safe, and the consent transform is
 // applied only for a RECOGNISED value (see profileRecognised), so an
 // unrecognised profile goes on writing nothing however the consent option
-// is set.
-type Profile int
+// is set. Shared with every other driver package (core/driver.Profile);
+// this package keeps its own Simulated selector, which
+// internal/guards.TestSimulatedProfileTokensConfinement requires.
+type Profile = driver.Profile
 
 const (
-	// RealHardware is a session with a physical IC-9700. While
-	// writeTrialsComplete is false it selects CapabilitiesUnverified —
-	// every write column Unverified, nothing writable without the user's
-	// recorded consent.
-	RealHardware Profile = iota
-	// Simulated is a session backed by internal/fakeic9700, where
-	// hardware safety is moot: writes are Supported so the fake exercises
-	// the same choreography a consented real session would.
-	Simulated
+	RealHardware = driver.RealHardware
+	Simulated    = driver.Simulated
 )
 
 // writeTrialsComplete is FALSE, and every claim this package makes about

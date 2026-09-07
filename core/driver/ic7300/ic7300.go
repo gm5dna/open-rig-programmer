@@ -195,7 +195,7 @@ func (d *ic7300Driver) open(ctx context.Context, eng *transport.Engine, fr trans
 		fr:      fr,
 		statser: statser,
 		id:      id,
-		caps:    d.sessionCapabilities(),
+		caps:    d.SessionCaps(d.Capabilities()),
 		probe:   probe,
 	}, nil
 }
@@ -282,18 +282,6 @@ func wrongRecordLength(p civ.Profile, e *civ.RecordLengthError, observedID strin
 	}
 	return fmt.Errorf("ic7300: Open: the radio answered a %d-byte memory record, which the %s does not declare and which matches no registered sibling's length — NO model is claimed for it: %w",
 		e.Got, p.Model(), e)
-}
-
-// sessionCapabilities is the driver's static baseline plus the user's
-// consent, and consent is applied ONLY to a profile this driver recognises:
-// a forged Profile value must not pick up a consented capability set on the
-// way past.
-func (d *ic7300Driver) sessionCapabilities() spec.Capabilities {
-	caps := d.Capabilities()
-	if d.consentUnverifiedWrites && d.profileRecognised() {
-		caps = spec.ConsentUnverifiedWrites(caps)
-	}
-	return caps
 }
 
 // Session is one open, probed connection to an IC-7300.

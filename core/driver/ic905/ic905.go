@@ -103,7 +103,7 @@ func WithFullInventoryWalk() Option {
 // consults writeTrialsComplete, because consent is a user accepting an
 // unverified write, not evidence that the write has been proven.
 func WithConsentedUnverifiedWrites() Option {
-	return func(d *ic905Driver) { d.consentUnverifiedWrites = true }
+	return func(d *ic905Driver) { d.Consented = true }
 }
 
 // New builds the IC-905 driver for profile. RealHardware — the ZERO
@@ -117,7 +117,7 @@ func WithConsentedUnverifiedWrites() Option {
 // NewD and NewMP because it drives two; this package's model is fixed by
 // the package.
 func New(profile Profile, opts ...Option) driver.Driver {
-	d := &ic905Driver{profile: profile}
+	d := &ic905Driver{Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)
 	}
@@ -126,14 +126,10 @@ func New(profile Profile, opts ...Option) driver.Driver {
 
 // ic905Driver implements driver.Driver for the Icom IC-905.
 type ic905Driver struct {
-	profile Profile
+	driver.Base
 	// transportLogger, when non-nil, is threaded into every Session's
 	// transport.Engine at Open time — see WithTransportLogger.
 	transportLogger transport.Logger
-	// consentUnverifiedWrites records the user's consent to unverified
-	// writes — set only by WithConsentedUnverifiedWrites, read only by
-	// sessionCapabilities. FALSE is the zero value and the default.
-	consentUnverifiedWrites bool
 	// siblingLengths is the Wave-4 attribution table — see
 	// SiblingLengths. Nil is the Wave-3 default.
 	siblingLengths SiblingLengths
@@ -156,7 +152,7 @@ func (d *ic905Driver) Model() string { return civic905.Model }
 // describes the model with, and what offline synthesis classifies
 // against — none of which has a radio to ask.
 func (d *ic905Driver) Capabilities() spec.Capabilities {
-	switch d.profile {
+	switch d.Profile {
 	case Simulated:
 		return capabilitiesSimulated()
 	case RealHardware:
@@ -186,18 +182,6 @@ func (d *ic905Driver) Capabilities() spec.Capabilities {
 	}
 }
 
-// profileRecognised reports whether this driver's profile is one of the
-// package's declared Profile constants — the same set Capabilities'
-// switch names explicitly, restated here so the consent gate cannot drift
-// open for a profile that switch would fail safe on.
-func (d *ic905Driver) profileRecognised() bool {
-	switch d.profile {
-	case Simulated, RealHardware:
-		return true
-	}
-	return false
-}
-
 // sessionCapabilities is the ONE place a session's effective capability
 // set is assembled: effectiveCapabilities' product — the static baseline
 // with the sparse MEM bank's discovered inventory materialised — with the
@@ -221,10 +205,7 @@ func (d *ic905Driver) sessionCapabilities(discovered []string, catID string) spe
 	// stays untransformed even with the option — the fail-safe direction
 	// ("no value a caller can pass produces a writable session") survives
 	// consent.
-	if d.consentUnverifiedWrites && d.profileRecognised() {
-		caps = spec.ConsentUnverifiedWrites(caps)
-	}
-	return caps
+	return d.SessionCaps(caps)
 }
 
 // StopBits reports the CI-V link's stop-bit count, 8-N-1, per spec D3.1.

@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	civic7100 "github.com/gm5dna/open-rig-programmer/core/civ/ic7100"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -14,12 +15,15 @@ func slotName(bank byte, channel int) string {
 }
 
 // Profile selects the evidence gate used by New. RealHardware is the zero
-// value so an uninitialised profile fails safe.
-type Profile int
+// value so an uninitialised profile fails safe. Shared with every other
+// driver package (core/driver.Profile); this package keeps its own
+// Simulated selector, which
+// internal/guards.TestSimulatedProfileTokensConfinement requires.
+type Profile = driver.Profile
 
 const (
-	RealHardware Profile = iota
-	Simulated
+	RealHardware = driver.RealHardware
+	Simulated    = driver.Simulated
 )
 
 // writeTrialsComplete remains false until the named Stage-W hardware lifts

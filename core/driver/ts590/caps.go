@@ -3,6 +3,7 @@
 package ts590
 
 import (
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/kw"
 	// ALIASED deliberately: the layout package's own name is also "ts590",
 	// and an unaliased import would put a second meaning on the spelling
@@ -114,17 +115,14 @@ func layoutFor(r Row) (kw.Layout, bool) {
 // NEVER towards the simulator's, whose Supported writes are a claim about
 // internal/fakets590 and about nothing else. Any OTHER unrecognised Profile
 // value fails the same way, through Capabilities' explicit default arm.
-type Profile int
+// Shared with every other driver package (core/driver.Profile); this
+// package keeps its own Simulated selector, which
+// internal/guards.TestSimulatedProfileTokensConfinement requires.
+type Profile = driver.Profile
 
 const (
-	// RealHardware is the profile for sessions against a physical radio.
-	// While writeTrialsComplete is false it selects CapabilitiesUnverified:
-	// reads labelled Unverified, every candidate field's Write Unverified,
-	// nothing writable.
-	RealHardware Profile = iota
-	// Simulated is the profile for internal/fakets590-backed sessions ONLY
-	// (the CLI's --fake mode, the GUI's demo mode).
-	Simulated
+	RealHardware = driver.RealHardware
+	Simulated    = driver.Simulated
 )
 
 // writeTrialsComplete is THIS package's hardware write guard for BOTH of its

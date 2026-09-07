@@ -41,12 +41,12 @@ func WithFullInventoryWalk() Option {
 // WithConsentedUnverifiedWrites records the user's session-local consent.
 // It changes no static capability and never consents FieldErase.
 func WithConsentedUnverifiedWrites() Option {
-	return func(d *icr8600Driver) { d.consented = true }
+	return func(d *icr8600Driver) { d.Consented = true }
 }
 
 // New returns the one-radio IC-R8600 driver.
 func New(profile Profile, opts ...Option) driver.Driver {
-	d := &icr8600Driver{profile: profile}
+	d := &icr8600Driver{Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)
 	}
@@ -54,8 +54,7 @@ func New(profile Profile, opts ...Option) driver.Driver {
 }
 
 type icr8600Driver struct {
-	profile           Profile
-	consented         bool
+	driver.Base
 	fullInventoryWalk bool
 	transportOptions  []transport.Option
 	// Non-zero only in focused tests. Production deliberately takes the
@@ -67,7 +66,7 @@ type icr8600Driver struct {
 func (d *icr8600Driver) Model() string { return civicr8600.Model }
 
 func (d *icr8600Driver) Capabilities() spec.Capabilities {
-	switch d.profile {
+	switch d.Profile {
 	case Simulated:
 		return CapabilitiesSimulated()
 	case RealHardware:
@@ -75,10 +74,6 @@ func (d *icr8600Driver) Capabilities() spec.Capabilities {
 	default:
 		return CapabilitiesUnverified()
 	}
-}
-
-func (d *icr8600Driver) profileRecognised() bool {
-	return d.profile == RealHardware || d.profile == Simulated
 }
 
 func (d *icr8600Driver) sessionCapabilities(discovered []string, catID string) spec.Capabilities {
@@ -89,10 +84,7 @@ func (d *icr8600Driver) sessionCapabilities(discovered []string, catID string) s
 		}
 	}
 	caps.CATID = catID
-	if d.consented && d.profileRecognised() {
-		caps = spec.ConsentUnverifiedWrites(caps)
-	}
-	return caps
+	return d.SessionCaps(caps)
 }
 
 // Open sends only the address-matched 19 00 read and 1A 00 memory reads. The

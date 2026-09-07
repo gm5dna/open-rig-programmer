@@ -4,6 +4,7 @@ package ic905
 
 import (
 	civic905 "github.com/gm5dna/open-rig-programmer/core/civ/ic905"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -51,20 +52,14 @@ const writeTrialsComplete = false
 // towards the simulator's, whose Supported writes are a claim about
 // internal/fakeic905 and about nothing else. Any OTHER unrecognised
 // Profile value fails the same way, through Capabilities' explicit
-// default arm.
-type Profile int
+// default arm. Shared with every other driver package
+// (core/driver.Profile); this package keeps its own Simulated selector,
+// which internal/guards.TestSimulatedProfileTokensConfinement requires.
+type Profile = driver.Profile
 
 const (
-	// RealHardware is the profile for sessions against a physical radio.
-	// While writeTrialsComplete is false it selects the all-Unverified
-	// capability set: reads labelled Unverified, every candidate field's
-	// Write Unverified, nothing writable.
-	RealHardware Profile = iota
-	// Simulated is the profile for internal/fakeic905-backed sessions
-	// ONLY (the CLI's --fake mode, the GUI's demo mode): Write Supported
-	// for the twelve fields the 1A 00 record can express, so the write
-	// choreography can be exercised end to end with no hardware at risk.
-	Simulated
+	RealHardware = driver.RealHardware
+	Simulated    = driver.Simulated
 )
 
 // dtcsCodes generates the 512 DTCS codes this radio expresses: three

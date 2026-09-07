@@ -32,7 +32,7 @@ const probeSlotCount = 10
 // independently evidenced profile and address; the selected row is explicit
 // because the admitted probe cannot distinguish them (spec D1.2).
 func New7851(opts ...Option) driver.Driver {
-	d := &ic7851Driver{model: "IC-7851", profile: RealHardware}
+	d := &ic7851Driver{model: "IC-7851", Base: driver.Base{Profile: RealHardware}}
 	for _, opt := range opts {
 		opt(d)
 	}
@@ -41,7 +41,7 @@ func New7851(opts ...Option) driver.Driver {
 
 // New7850 is the IC-7850 row over the same implementation and profile.
 func New7850(opts ...Option) driver.Driver {
-	d := &ic7851Driver{model: "IC-7850", profile: RealHardware}
+	d := &ic7851Driver{model: "IC-7850", Base: driver.Base{Profile: RealHardware}}
 	for _, opt := range opts {
 		opt(d)
 	}
@@ -73,20 +73,19 @@ func WithTransportLogger(l transport.Logger) Option {
 // the transform (spec D4), and an unrecognised Profile is not transformed
 // at all, so no value a caller can pass produces a writable session.
 func WithConsentedUnverifiedWrites() Option {
-	return func(d *ic7851Driver) { d.consented = true }
+	return func(d *ic7851Driver) { d.Consented = true }
 }
 
 // WithSimulatedProfile selects the in-process fake capability arm. It is
 // intended only for quarantined fake/e2e tests; the default is RealHardware.
 func WithSimulatedProfile() Option {
-	return func(d *ic7851Driver) { d.profile = Simulated }
+	return func(d *ic7851Driver) { d.Profile = Simulated }
 }
 
 // ic7851Driver implements driver.Driver for the Icom IC-7851.
 type ic7851Driver struct {
-	model     string
-	profile   Profile
-	consented bool
+	model string
+	driver.Base
 	// transportOpts are this driver's own options translated into the
 	// transport's, ready for the transport.NewEngineWith call inside Open.
 	transportOpts []transport.Option
@@ -100,7 +99,7 @@ func (d *ic7851Driver) Model() string { return d.model }
 // driver's profile, before any radio has been probed.
 func (d *ic7851Driver) Capabilities() spec.Capabilities {
 	var caps spec.Capabilities
-	switch d.profile {
+	switch d.Profile {
 	case Simulated:
 		caps = capabilitiesSimulated()
 	case RealHardware:
@@ -369,7 +368,7 @@ func (d *ic7851Driver) open(ctx context.Context, eng *transport.Engine, stats ci
 		eng:    eng,
 		stats:  stats,
 		id:     id,
-		caps:   d.sessionCapabilities(),
+		caps:   d.SessionCaps(d.Capabilities()),
 		report: report,
 	}, nil
 }
@@ -417,28 +416,6 @@ func probeSlot(ctx context.Context, eng *transport.Engine, p civ.Profile, a civ.
 		return nil, false, &AnswerMismatchError{Want: a, Got: got}
 	}
 	return raw, false, nil
-}
-
-// sessionCapabilities is the ONE place a session's effective capability
-// set is assembled: this driver's static set, then — only when the driver
-// was built with WithConsentedUnverifiedWrites AND its profile is one of
-// the declared constants — the consent transform.
-//
-// An unrecognised profile stays untransformed even with the option, so the
-// fail-safe direction survives consent. Applying the transform here,
-// before the Session exists, keeps the set WriteChannel enforces and the
-// set Capabilities() hands out the same value.
-func (d *ic7851Driver) sessionCapabilities() spec.Capabilities {
-	caps := d.Capabilities()
-	if !d.consented {
-		return caps
-	}
-	switch d.profile {
-	case RealHardware, Simulated:
-		return spec.ConsentUnverifiedWrites(caps)
-	default:
-		return caps
-	}
 }
 
 // Session is one open, probed connection to an IC-7851.

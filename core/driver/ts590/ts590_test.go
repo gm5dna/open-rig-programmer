@@ -358,7 +358,7 @@ func TestOpen_AProbeFrameThatDoesNotANSWERRefusesTheSession(t *testing.T) {
 // Capabilities internal/wiring publishes is untouched.
 func TestOpen_ConsentTransformsTheSessionSetOnly(t *testing.T) {
 	for _, row := range bothRows {
-		sess, _ := openTestSession(t, row, radioImage{}, func(d *ts590Driver) { d.profile = RealHardware })
+		sess, _ := openTestSession(t, row, radioImage{}, func(d *ts590Driver) { d.Profile = RealHardware })
 		mem, _ := sess.Capabilities().Bank(spec.BankMemory)
 		if mem.Fields[spec.FieldFrequency].CanWrite() {
 			t.Errorf("%s: an UNCONSENTED RealHardware session can write", modelNameFor(row))

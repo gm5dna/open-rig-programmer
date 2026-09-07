@@ -46,7 +46,7 @@ func WithTransportLogger(l transport.Logger) Option {
 // fail-safe even WITH the option, and spec.FieldErase is exempt inside the
 // transform itself, so no consent can mint an erase.
 func WithConsentedUnverifiedWrites() Option {
-	return func(d *Driver) { d.consentUnverifiedWrites = true }
+	return func(d *Driver) { d.Consented = true }
 }
 
 // WithFullInventoryWalk makes Open read EVERY address in this radio's
@@ -85,7 +85,7 @@ func withEngineOptions(opts ...transport.Option) Option {
 // deliberately selects the same fail-safe: the failure direction for a
 // forged or corrupted Profile is always "nothing writable".
 func New(profile Profile, opts ...Option) driver.Driver {
-	d := &Driver{profile: profile}
+	d := &Driver{Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)
 	}
@@ -94,11 +94,10 @@ func New(profile Profile, opts ...Option) driver.Driver {
 
 // Driver implements driver.Driver for the Icom IC-705.
 type Driver struct {
-	profile                 Profile
-	transportLogger         transport.Logger
-	consentUnverifiedWrites bool
-	fullInventoryWalk       bool
-	engineOptions           []transport.Option
+	driver.Base
+	transportLogger   transport.Logger
+	fullInventoryWalk bool
+	engineOptions     []transport.Option
 }
 
 // Compile-time proof of the seams this driver satisfies. StopBits is the
@@ -143,7 +142,7 @@ func (d *Driver) Model() string { return capabilitiesUnverified().Model }
 // consent transform's output, because internal/wiring reads exactly this
 // value to decide whether consent is needed at all.
 func (d *Driver) Capabilities() spec.Capabilities {
-	switch d.profile {
+	switch d.Profile {
 	case Simulated:
 		return capabilitiesSimulated()
 	case RealHardware:
@@ -269,7 +268,7 @@ func (d *Driver) open(ctx context.Context, eng *transport.Engine, stats civ.Accu
 		eng:   eng,
 		stats: stats,
 		id:    id,
-		caps:  d.sessionCapabilities(),
+		caps:  d.SessionCaps(d.Capabilities()),
 		info:  info,
 	}
 	// The inventory walk is the LAST thing Open does, and deliberately:
@@ -398,35 +397,6 @@ func allFF(record []byte) bool {
 		}
 	}
 	return true
-}
-
-// sessionCapabilities is the ONE place a session's effective capability
-// set is assembled: this driver's static baseline, then — only when it was
-// built with WithConsentedUnverifiedWrites AND its profile is one of the
-// declared constants — the consent transform. An unrecognised profile
-// stays untransformed even with the option, so the fail-safe direction
-// survives consent.
-//
-// Applying it HERE, before the Session exists, keeps the set WriteChannel
-// enforces (s.caps) and the set Capabilities() hands out the same value.
-func (d *Driver) sessionCapabilities() spec.Capabilities {
-	caps := d.Capabilities()
-	if d.consentUnverifiedWrites && d.profileRecognised() {
-		caps = spec.ConsentUnverifiedWrites(caps)
-	}
-	return caps
-}
-
-// profileRecognised reports whether this driver's profile is one of the
-// declared Profile constants — the same set Capabilities' switch names
-// explicitly, restated here so the consent gate cannot drift open for a
-// profile that switch would fail safe on.
-func (d *Driver) profileRecognised() bool {
-	switch d.profile {
-	case Simulated, RealHardware:
-		return true
-	}
-	return false
 }
 
 // SessionInfo is the MODEL surface for what a probe and an inventory walk

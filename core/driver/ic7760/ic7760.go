@@ -36,7 +36,7 @@ func probeSchedule() [12]civ.ChannelAddress {
 // driver is for is fixed by the package rather than by a value a caller
 // could get wrong.
 func New(profile Profile, opts ...Option) driver.Driver {
-	d := &ic7760Driver{profile: profile}
+	d := &ic7760Driver{Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)
 	}
@@ -68,13 +68,12 @@ func WithTransportLogger(l transport.Logger) Option {
 // the transform (spec D4), and an unrecognised Profile is not transformed
 // at all, so no value a caller can pass produces a writable session.
 func WithConsentedUnverifiedWrites() Option {
-	return func(d *ic7760Driver) { d.consented = true }
+	return func(d *ic7760Driver) { d.Consented = true }
 }
 
 // ic7760Driver implements driver.Driver for the Icom IC-7760.
 type ic7760Driver struct {
-	profile   Profile
-	consented bool
+	driver.Base
 	// transportOpts are this driver's own options translated into the
 	// transport's, ready for the transport.NewEngineWith call inside Open.
 	transportOpts []transport.Option
@@ -87,7 +86,7 @@ func (d *ic7760Driver) Model() string { return "IC-7760" }
 // Capabilities implements driver.Driver: the STATIC baseline for this
 // driver's profile, before any radio has been probed.
 func (d *ic7760Driver) Capabilities() spec.Capabilities {
-	switch d.profile {
+	switch d.Profile {
 	case Simulated:
 		return capabilitiesSimulated()
 	case RealHardware:
@@ -354,7 +353,7 @@ func (d *ic7760Driver) open(ctx context.Context, eng *transport.Engine, stats ci
 		eng:    eng,
 		stats:  stats,
 		id:     id,
-		caps:   d.sessionCapabilities(),
+		caps:   d.SessionCaps(d.Capabilities()),
 		report: report,
 	}, nil
 }
@@ -402,28 +401,6 @@ func probeSlot(ctx context.Context, eng *transport.Engine, p civ.Profile, a civ.
 		return nil, false, &AnswerMismatchError{Want: a, Got: got}
 	}
 	return raw, false, nil
-}
-
-// sessionCapabilities is the ONE place a session's effective capability
-// set is assembled: this driver's static set, then — only when the driver
-// was built with WithConsentedUnverifiedWrites AND its profile is one of
-// the declared constants — the consent transform.
-//
-// An unrecognised profile stays untransformed even with the option, so the
-// fail-safe direction survives consent. Applying the transform here,
-// before the Session exists, keeps the set WriteChannel enforces and the
-// set Capabilities() hands out the same value.
-func (d *ic7760Driver) sessionCapabilities() spec.Capabilities {
-	caps := d.Capabilities()
-	if !d.consented {
-		return caps
-	}
-	switch d.profile {
-	case RealHardware, Simulated:
-		return spec.ConsentUnverifiedWrites(caps)
-	default:
-		return caps
-	}
 }
 
 // Session is one open, probed connection to an IC-7760.

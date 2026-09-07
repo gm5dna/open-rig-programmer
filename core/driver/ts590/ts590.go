@@ -99,7 +99,7 @@ func WithTransportLogger(l transport.Logger) Option {
 // CONSENT WIDENS WHAT MAY BE ATTEMPTED, NEVER HOW CAREFULLY (matrix §2.1):
 // every pre-wire refusal of the write ladder still fires ahead of it.
 func WithConsentedUnverifiedWrites() Option {
-	return func(d *ts590Driver) { d.consentUnverifiedWrites = true }
+	return func(d *ts590Driver) { d.Consented = true }
 }
 
 // withTiming overrides the transport deadlines every read this driver's
@@ -120,7 +120,7 @@ func withTiming(readTimeout, settle time.Duration) Option {
 // unrecognised Profile value deliberately selects the same fail-safe.
 // Options: WithTransportLogger, WithConsentedUnverifiedWrites.
 func New(row Row, profile Profile, opts ...Option) driver.Driver {
-	d := &ts590Driver{row: row, profile: profile}
+	d := &ts590Driver{row: row, Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)
 	}
@@ -129,13 +129,9 @@ func New(row Row, profile Profile, opts ...Option) driver.Driver {
 
 // ts590Driver implements driver.Driver for one of the two TS-590 rows.
 type ts590Driver struct {
-	row     Row
-	profile Profile
-	// consentUnverifiedWrites records the user's consent to unverified
-	// writes — set only by WithConsentedUnverifiedWrites, read only by
-	// sessionCapabilities. FALSE is the zero value and the default.
-	consentUnverifiedWrites bool
-	transportOptions        []transport.Option
+	row Row
+	driver.Base
+	transportOptions []transport.Option
 	// Non-zero only in focused tests; see withTiming.
 	readTimeout time.Duration
 	settle      time.Duration
@@ -156,7 +152,7 @@ func (d *ts590Driver) Capabilities() spec.Capabilities {
 		// than a guess at which sibling was meant.
 		return spec.Capabilities{}
 	}
-	switch d.profile {
+	switch d.Profile {
 	case Simulated:
 		return CapabilitiesSimulated(d.row)
 	case RealHardware:
@@ -352,7 +348,7 @@ func (d *ts590Driver) open(ctx context.Context, eng *transport.Engine, layout kw
 		row:         d.row,
 		layout:      layout,
 		id:          id,
-		caps:        d.sessionCapabilities(),
+		caps:        d.SessionCaps(d.Capabilities()),
 		newReadSpec: d.readSpec,
 	}
 	s.fvAnswer = fv
@@ -440,34 +436,6 @@ func parseFirmwareVersion(answer string) (major, minor int, ok bool) {
 		}
 	}
 	return int(answer[0] - '0'), int(answer[2]-'0')*10 + int(answer[3]-'0'), true
-}
-
-// sessionCapabilities is the ONE place a session's effective capability set
-// is assembled: this row's profile baseline, then — only when this driver was
-// built with WithConsentedUnverifiedWrites AND its profile is one of the
-// declared constants — the consent transform. An unrecognised profile stays
-// untransformed even with the option, so the fail-safe direction ("no value a
-// caller can pass produces a writable session") survives consent.
-//
-// There is no discovery term: no Kenwood bank is discovered (matrix §3.4).
-func (d *ts590Driver) sessionCapabilities() spec.Capabilities {
-	caps := d.Capabilities()
-	if d.consentUnverifiedWrites && d.profileRecognised() {
-		caps = spec.ConsentUnverifiedWrites(caps)
-	}
-	return caps
-}
-
-// profileRecognised reports whether this driver's profile is one of the
-// package's declared Profile constants — the same set the capability switch
-// names explicitly, restated here so the consent gate cannot drift open for a
-// profile the switch would fail safe on.
-func (d *ts590Driver) profileRecognised() bool {
-	switch d.profile {
-	case Simulated, RealHardware:
-		return true
-	}
-	return false
 }
 
 // Session is one open, identity-probed TS-590 connection. Safe for concurrent

@@ -498,7 +498,8 @@ func TestConsent_NeverConsentsErase(t *testing.T) {
 
 // TestConsent_RefusesAnUnrecognisedProfile: a profile the Capabilities
 // switch would fail safe on must not have consent drift open on it.
-// profileRecognised restates the declared set for exactly that reason.
+// driver.Base.Recognised restates the declared set for exactly that
+// reason.
 func TestConsent_RefusesAnUnrecognisedProfile(t *testing.T) {
 	t.Parallel()
 	for _, tt := range []struct {
@@ -516,8 +517,8 @@ func TestConsent_RefusesAnUnrecognisedProfile(t *testing.T) {
 			if !ok {
 				t.Fatal("New did not return an *ic905Driver")
 			}
-			if got := d.profileRecognised(); got != tt.recognised {
-				t.Errorf("profileRecognised() = %v, want %v", got, tt.recognised)
+			if got := d.Recognised(); got != tt.recognised {
+				t.Errorf("Recognised() = %v, want %v", got, tt.recognised)
 			}
 			caps := d.sessionCapabilities(nil, "AC:94")
 			writable := caps.FieldSupport(spec.BankMemory, spec.FieldFrequency).CanWrite()

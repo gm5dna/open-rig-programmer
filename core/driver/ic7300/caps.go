@@ -36,36 +36,17 @@ const (
 // caps_test.go names what a flip must be accompanied by.
 const writeTrialsComplete = false
 
-// Profile selects which capability description a driver value publishes.
-//
-// Two profiles, mirroring core/driver/ftdx101's: the fail-safe one a real
-// radio gets, and the one the fake gets. The ZERO VALUE IS THE SAFE ONE —
-// RealHardware — so a caller that forgets to choose gets the profile that
-// writes nothing, not the profile that writes everything.
-type Profile int
+// Profile selects which capability description a driver value publishes:
+// the fail-safe one a real radio gets, and the one the fake gets. Shared
+// with every other driver package (core/driver.Profile); this package
+// keeps its own Simulated selector, which
+// internal/guards.TestSimulatedProfileTokensConfinement requires.
+type Profile = driver.Profile
 
 const (
-	// RealHardware is the fail-safe profile: every field this record
-	// carries is graded Unverified, which is unwritable, because no
-	// IC-7300 has ever been asked anything (writeTrialsComplete).
-	RealHardware Profile = iota
-	// Simulated is the profile a fake radio gets: the same fields graded
-	// Supported, so the write choreography is exercisable without a
-	// consent flag and without ever touching hardware.
-	Simulated
+	RealHardware = driver.RealHardware
+	Simulated    = driver.Simulated
 )
-
-// String renders the profile for diagnostics.
-func (p Profile) String() string {
-	switch p {
-	case RealHardware:
-		return "RealHardware"
-	case Simulated:
-		return "Simulated"
-	default:
-		return fmt.Sprintf("Profile(%d)", int(p))
-	}
-}
 
 // memSlots is the MEM bank's canonical slot inventory: "001".."099",
 // M-CH01..M-CH99 as the front panel names them (D11).
@@ -343,20 +324,13 @@ func capabilitiesSimulated() spec.Capabilities {
 // two things a driver must be able to answer before any port exists — which
 // model it is, and what that model can do.
 type ic7300Driver struct {
-	profile Profile
+	driver.Base
 
 	// transportLogger, when set, is handed to the engine so a session's
 	// wire traffic can be traced. Nil by default: a driver that logged
 	// unasked would write a user's memory contents somewhere they did not
 	// choose.
 	transportLogger transport.Logger
-
-	// consentUnverifiedWrites records that the user explicitly accepted
-	// writing fields no IC-7300 has ever confirmed. It is applied at
-	// SESSION capability assembly, never here: Driver.Capabilities is the
-	// static baseline, and consent is a property of a session the user
-	// asked for.
-	consentUnverifiedWrites bool
 }
 
 // New returns a driver value for the IC-7300 under the given profile.
@@ -372,7 +346,7 @@ type ic7300Driver struct {
 // two-result type assertion, never by a concrete type a caller would have to
 // import this package to name.
 func New(p Profile, opts ...Option) driver.Driver {
-	d := &ic7300Driver{profile: p}
+	d := &ic7300Driver{Base: driver.Base{Profile: p}}
 	for _, opt := range opts {
 		opt(d)
 	}
@@ -387,7 +361,7 @@ type Option func(*ic7300Driver)
 // second key to the hardware-write gate (spec.Support's own words), and it
 // is applied only to a profile this driver recognises.
 func WithConsentedUnverifiedWrites() Option {
-	return func(d *ic7300Driver) { d.consentUnverifiedWrites = true }
+	return func(d *ic7300Driver) { d.Consented = true }
 }
 
 // Model is the display name and registry key. It equals
@@ -401,7 +375,7 @@ func (d *ic7300Driver) Model() string { return "IC-7300" }
 // construction mistake, and the safe answer to a construction mistake is
 // the description that writes nothing.
 func (d *ic7300Driver) Capabilities() spec.Capabilities {
-	switch d.profile {
+	switch d.Profile {
 	case Simulated:
 		return capabilitiesSimulated()
 	case RealHardware:
@@ -409,16 +383,4 @@ func (d *ic7300Driver) Capabilities() spec.Capabilities {
 	default:
 		return capabilitiesUnverified()
 	}
-}
-
-// profileRecognised reports whether this driver's profile is one of the two
-// declared constants. Consent is applied only to a recognised profile —
-// mirroring core/driver/ftdx101 — so a forged profile value cannot pick up
-// a consented capability set on the way past.
-func (d *ic7300Driver) profileRecognised() bool {
-	switch d.profile {
-	case Simulated, RealHardware:
-		return true
-	}
-	return false
 }
