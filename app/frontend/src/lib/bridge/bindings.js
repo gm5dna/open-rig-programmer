@@ -19,7 +19,7 @@
 // `transfer.active` bookkeeping is NOT uniform across every call — this
 // is the one subtlety Task 17/18 need to know before adding more actions
 // here:
-//   - readRadio/diffAgainstRadio/prepareSend/readSettingsRadio: the bound
+//   - readRadio/prepareSend/readSettingsRadio: the bound
 //     call itself blocks until the whole operation is over, so a plain
 //     try/finally around the call is correct: it starts the transfer, and
 //     clears `active` the moment the call settles either way. PrepareSend
@@ -448,36 +448,6 @@ export async function readRadio() {
 	}
 }
 
-export async function getCodeplug() {
-	try {
-		const view = await App.GetCodeplug()
-		appState.setCodeplug(view)
-		await refreshUISpec()
-		return view
-	} catch (err) {
-		reportError(err, 'loading codeplug')
-		throw err
-	}
-}
-
-/** Fetches GetSettings into appState.settings — the working copy's OWN
- * settings content (never the live radio — see readSettingsRadio for
- * that). Ordinary throw-and-report shape, unlike the internal
- * refreshSettingsQuiet() helper this same module uses to hook readRadio/
- * loadFile/importers (task 36, M8b-6): this export exists for any direct
- * caller that wants to await it and handle its own failure, mirroring
- * getCodeplug's identical role alongside refreshCodeplugQuiet. */
-export async function getSettings() {
-	try {
-		const view = await App.GetSettings()
-		appState.setSettings(view)
-		return view
-	} catch (err) {
-		reportError(err, 'loading settings')
-		throw err
-	}
-}
-
 /** @param {import('../../../wailsjs/go/models').codeplug.Channel} channel */
 export async function updateChannel(channel) {
 	try {
@@ -502,18 +472,6 @@ export async function updateChannels(channels) {
 		return result
 	} catch (err) {
 		reportError(err, 'updating channels')
-		throw err
-	}
-}
-
-export async function validate() {
-	try {
-		const result = await App.Validate()
-		appState.setIssues(result.Issues)
-		appState.setIssuesAdvisory(result.Advisory)
-		return result
-	} catch (err) {
-		reportError(err, 'validating')
 		throw err
 	}
 }
@@ -572,18 +530,6 @@ async function revalidateQuiet() {
 	}
 }
 
-export async function diffAgainstRadio() {
-	appState.beginTransfer('diff')
-	try {
-		return await App.DiffAgainstRadio()
-	} catch (err) {
-		reportError(err, 'comparing with radio')
-		throw err
-	} finally {
-		appState.endTransfer()
-	}
-}
-
 export async function prepareSend() {
 	appState.beginTransfer('prepare')
 	try {
@@ -601,13 +547,12 @@ export async function prepareSend() {
  * an already-loaded working copy (Go's own typed refusals), reserves the
  * App-level exclusive-operation slot for its whole duration. The bound
  * call itself blocks until the whole read is over (like readRadio/
- * diffAgainstRadio/prepareSend above, unlike confirmSend — see this
- * module's doc comment), so a plain try/finally around it is correct:
- * begins the transfer, and clears `active` the moment the call settles
- * either way. Stores the returned SettingsView (the merged working copy)
- * straight into appState.settings — no separate refresh call needed, the
- * same way readRadio's own CodeplugView return needs no follow-up
- * getCodeplug(). */
+ * prepareSend above, unlike confirmSend — see this module's doc
+ * comment), so a plain try/finally around it is correct: begins the
+ * transfer, and clears `active` the moment the call settles either way.
+ * Stores the returned SettingsView (the merged working copy) straight
+ * into appState.settings — no separate refresh call needed, the same way
+ * readRadio's own CodeplugView return needs no follow-up fetch. */
 export async function readSettingsRadio() {
 	appState.beginTransfer('settings')
 	try {
@@ -651,10 +596,6 @@ export async function cancelTransfer() {
 		reportError(err, 'cancelling transfer')
 		throw err
 	}
-}
-
-export async function isDirty() {
-	return App.IsDirty()
 }
 
 /** @param {string} path */

@@ -751,21 +751,6 @@ describe('settingsSpec refresh triggers (task 36: Live flips with the connection
 	})
 })
 
-describe('getSettings (task 36, M8b-6)', () => {
-	it('stores the settings view in appState and returns it', async () => {
-		const view = await bindings.getSettings()
-		expect(window.go.main.App.GetSettings).toHaveBeenCalledTimes(1)
-		expect(view).toEqual(SETTINGS_VIEW)
-		expect(appState.settings).toEqual(SETTINGS_VIEW)
-	})
-
-	it('alerts and rethrows on rejection (ordinary throw-and-report shape, unlike refreshSettingsSpec)', async () => {
-		window.go.main.App.GetSettings.mockRejectedValue('app: nothing loaded')
-		await expect(bindings.getSettings()).rejects.toBe('app: nothing loaded')
-		expect(appState.alerts[0].message).toContain('loading settings')
-	})
-})
-
 describe('settings-content refresh triggers (task 36: readRadio/loadFile/a successful import replace the working copy, so each refreshes appState.settings too — none of their own results carries it)', () => {
 	it('readRadio refreshes settings content after storing the codeplug', async () => {
 		const view = { Schema: 1, Generator: 'x', Radio: {}, Channels: [{ slot: '001' }], WorkingPath: '', Dirty: false, BaselineStale: false }

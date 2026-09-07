@@ -125,9 +125,9 @@ type App struct {
 	// opBusy names the App-level operation currently holding Fix 2's
 	// exclusive-operation reservation (Codex M6 #2, adjudicated HIGH:
 	// "the controller does not reserve App-wide operations") — "" when
-	// free, else one of "ReadRadio"/"DiffAgainstRadio"/"PrepareSend"/
+	// free, else one of "ReadRadio"/"PrepareSend"/
 	// "ReadSettingsRadio" (task 35), the four long-running methods that
-	// read (or, for PrepareSend/DiffAgainstRadio, used to read outside mu)
+	// read (or, for PrepareSend, used to read outside mu)
 	// `working`. transfer.running is a SEPARATE, pre-existing reservation
 	// (ConfirmSend's own) that composes with this one rather than
 	// double-booking — see checkNotBusyLocked/reserveOpLocked in

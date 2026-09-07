@@ -151,15 +151,15 @@ func classifySettingsOutcome(err error) (outcome, message string) {
 //
 // Reserves the App-level exclusive-operation slot (a.opBusy) for its whole
 // duration via reserveOpLocked("ReadSettingsRadio") — the same Fix 2
-// reservation ReadRadio/DiffAgainstRadio/PrepareSend already take (see
+// reservation ReadRadio/PrepareSend already take (see
 // reservation.go): refused with a typed *OperationBusyError while any of
-// those three (or another ReadSettingsRadio) holds it, and itself refuses
-// a concurrently-attempted holder of any of the others. Like ReadRadio/
-// DiffAgainstRadio (and unlike PrepareSend/ConfirmSend), it does NOT
+// those two (or another ReadSettingsRadio) holds it, and itself refuses
+// a concurrently-attempted holder of any of the others. Like ReadRadio
+// (and unlike PrepareSend/ConfirmSend), it does NOT
 // explicitly check a.transfer.running — a ReadSettingsRadio call made
 // during a running send instead collides with clone.Service's OWN op
 // lock, surfacing a friendlyErr-wrapped *clone.BusyError, exactly as
-// ReadRadio/DiffAgainstRadio already do (see reserveOpLocked's doc
+// ReadRadio already does (see reserveOpLocked's doc
 // comment).
 //
 // Before releasing the reservation lock, builds a.settingsDisplay (see
