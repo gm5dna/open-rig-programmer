@@ -172,18 +172,15 @@ func parseSlotID(id string) (int, error) {
 // bankFor returns the bank of THIS SESSION's published capabilities that holds
 // id, and whether any does.
 //
-// It walks the session's own effective set rather than a package-level table,
+// It reads the session's own effective set rather than a package-level table,
 // so a slot is admitted only if the very capabilities this session handed its
 // caller say it exists.
 func (s *Session) bankFor(id string) (spec.Bank, bool) {
-	for _, b := range s.caps.Banks {
-		for _, slot := range b.Slots {
-			if slot == id {
-				return b, true
-			}
-		}
+	bankID, ok := s.caps.BankOf(id)
+	if !ok {
+		return spec.Bank{}, false
 	}
-	return spec.Bank{}, false
+	return s.caps.Bank(bankID)
 }
 
 // bankNames renders this session's bank inventory for a refusal, so the
