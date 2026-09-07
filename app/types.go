@@ -483,8 +483,9 @@ type UISpecView struct {
 	ToneScanSkipVerification string
 	// EraseDialogNote is the "no CAT erase command" explanation shown when
 	// a user asks to delete a channel, or reviews a blocked-erase entry
-	// before sending — served from internal/radiotext.Text.EraseDialogNote
-	// (task 41).
+	// before sending — served from internal/radiotext.Text.EraseProcedure
+	// (task 41; the two fields were found identical and merged into one
+	// in the v1.4.1 sweep).
 	EraseDialogNote string
 	// PreservationTooltips holds the per-column preserved-cell tooltips
 	// the channel grid shows for its Tone and Scan Skip columns — served
