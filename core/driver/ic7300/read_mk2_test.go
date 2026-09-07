@@ -286,6 +286,13 @@ func TestReadChannel_AnswerAddressMismatchIsAnError_MK2(t *testing.T) {
 	if !errors.Is(err, ErrAnswerMismatch) {
 		t.Fatalf("ReadChannel error = %v, want ErrAnswerMismatch — civ's MemoryAnswerMatcher is ENVELOPE-ONLY by design, so the channel address is the driver's to check (T2, D20)", err)
 	}
+	// THE PREFIX IS THIS MODEL'S, and it is pinned because one package now
+	// mints both radios' messages: an MK2 refusal opening "ic7300:" would
+	// put the sibling's name in front of the MK2's evidence
+	// (modelParams.errPrefix).
+	if want := "ic7300mk2: requested g0/ch9 but the answer names g0/ch10 — refusing to map a reply onto the wrong slot"; err.Error() != want {
+		t.Errorf("ReadChannel error text = %q, want %q", err.Error(), want)
+	}
 	if !ch.Empty() {
 		t.Error("a mismatched answer produced channel data — refusing to map a reply onto the wrong slot is the whole point")
 	}

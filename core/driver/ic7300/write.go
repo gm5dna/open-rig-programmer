@@ -190,7 +190,7 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 
 	prev, raw, exists, err := s.preservationRead(ctx, addr)
 	if err != nil {
-		return res, fmt.Errorf("ic7300: WriteChannel %s: preservation read: %w", ch.Slot, err)
+		return res, fmt.Errorf("%s: WriteChannel %s: preservation read: %w", s.m.errPrefix, ch.Slot, err)
 	}
 
 	rec, err := s.buildRecord(ch.Slot, bank, addr, data, prev, raw, exists)
@@ -223,12 +223,12 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 			// Sent true, Confirmed false. An FA says the radio would not take
 			// the frame, and nothing about why.
 			res.Steps[setStep].Sent = true
-			return res, fmt.Errorf("ic7300: WriteChannel %s: the radio refused the memory set (FA): %w", ch.Slot, err)
+			return res, fmt.Errorf("%s: WriteChannel %s: the radio refused the memory set (FA): %w", s.m.errPrefix, ch.Slot, err)
 		}
 		// Transport-level failure or timeout: the frame's fate is NOT
 		// attributable — the host cannot tell whether it reached the radio —
 		// so Sent stays false and the error carries the distinction.
-		return res, fmt.Errorf("ic7300: WriteChannel %s: memory set: %w", ch.Slot, err)
+		return res, fmt.Errorf("%s: WriteChannel %s: memory set: %w", s.m.errPrefix, ch.Slot, err)
 	}
 	// Confirmed means the radio's own FB arrived. On CI-V that is a real
 	// acknowledgement rather than CAT's "no rejection was heard".
@@ -396,7 +396,7 @@ func (s *Session) preservationRead(ctx context.Context, want civ.ChannelAddress)
 	}
 	if got != want {
 		s.noteAnswerMismatch()
-		return civ.MemoryRecord{}, nil, false, &AnswerMismatchError{Model: "ic7300", Requested: want.String(), Answered: got.String()}
+		return civ.MemoryRecord{}, nil, false, &AnswerMismatchError{Model: s.m.errPrefix, Requested: want.String(), Answered: got.String()}
 	}
 	if allFF(raw) {
 		return civ.MemoryRecord{}, raw, false, nil
@@ -446,10 +446,10 @@ func (s *Session) buildRecord(slot string, bank spec.BankID, addr civ.ChannelAdd
 		// profile does not declare. Asserted rather than assumed, because the
 		// cost of being wrong is an E6 check against a template of the wrong
 		// width.
-		return civ.MemoryRecord{}, fmt.Errorf("ic7300: WriteChannel %s: no layout for the %d-byte record just read", slot, len(raw))
+		return civ.MemoryRecord{}, fmt.Errorf("%s: WriteChannel %s: no layout for the %d-byte record just read", s.m.errPrefix, slot, len(raw))
 	}
 	if len(layout.Fixed) != len(raw) {
-		return civ.MemoryRecord{}, fmt.Errorf("ic7300: WriteChannel %s: this layout's Fixed template is %d bytes against a %d-byte record — E6's unmapped-region check needs a full-length template", slot, len(layout.Fixed), len(raw))
+		return civ.MemoryRecord{}, fmt.Errorf("%s: WriteChannel %s: this layout's Fixed template is %d bytes against a %d-byte record — E6's unmapped-region check needs a full-length template", s.m.errPrefix, slot, len(layout.Fixed), len(raw))
 	}
 	if raw[0]&0xF0 != layout.Fixed[0]&0xF0 {
 		return civ.MemoryRecord{}, &driver.WriteRefusedError{
@@ -460,7 +460,7 @@ func (s *Session) buildRecord(slot string, bank spec.BankID, addr civ.ChannelAdd
 
 	selectName, ok := prev.Select.Get()
 	if !ok {
-		return civ.MemoryRecord{}, fmt.Errorf("ic7300: WriteChannel %s: the record just read carries no SELECT value, which this profile's layout maps", slot)
+		return civ.MemoryRecord{}, fmt.Errorf("%s: WriteChannel %s: the record just read carries no SELECT value, which this profile's layout maps", s.m.errPrefix, slot)
 	}
 	// THE WHOLE BYTE, and that is only correct because E6's check ran two
 	// statements above. ③'s HIGH nibble is the split flag, and the compare

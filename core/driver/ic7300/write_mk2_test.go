@@ -653,6 +653,11 @@ func TestWriteChannel_PreservationReadAddressMismatchIsRefused_MK2(t *testing.T)
 			if !errors.Is(err, ErrAnswerMismatch) {
 				t.Fatalf("WriteChannel error = %v, want ErrAnswerMismatch — civ's MemoryAnswerMatcher is ENVELOPE-ONLY by design, so the channel address is the driver's to check, on this path as much as on the read path (T2, D20)", err)
 			}
+			// The MK2's own prefix on the write path too — see the read
+			// path's twin pin, and modelParams.errPrefix.
+			if want := "ic7300mk2: WriteChannel 009: preservation read: ic7300mk2: requested g0/ch9 but the answer names g0/ch10 — refusing to map a reply onto the wrong slot"; err.Error() != want {
+				t.Errorf("WriteChannel error text = %q, want %q", err.Error(), want)
+			}
 			if errors.Is(err, driver.ErrWriteRefused) {
 				t.Errorf("the refusal is a *driver.WriteRefusedError (%v) — a misaddressed answer is not a fact about the requested slot, and reporting it as a create refusal would name the wrong problem on a slot that may be populated", err)
 			}

@@ -68,7 +68,7 @@ func (d *ic7300Driver) Open(ctx context.Context, port transport.Port, id driver.
 	fr, err := civ.NewFraming(p)
 	if err != nil {
 		_ = port.Close()
-		return nil, fmt.Errorf("ic7300: Open: %w", err)
+		return nil, fmt.Errorf("%s: Open: %w", d.m.errPrefix, err)
 	}
 
 	// THE TWO-RESULT ASSERTION, and it must stay two-result (D22). The
@@ -78,7 +78,7 @@ func (d *ic7300Driver) Open(ctx context.Context, port transport.Port, id driver.
 	statser, ok := fr.(civ.AccumulatorStatsReporter)
 	if !ok {
 		_ = port.Close()
-		return nil, fmt.Errorf("ic7300: Open: the CI-V framing adapter does not report accumulator statistics — this driver's diagnostics come from the ADAPTER's counters, never from the engine's, because the accumulator has already swallowed every broadcast before the engine could count one")
+		return nil, fmt.Errorf("%s: Open: the CI-V framing adapter does not report accumulator statistics — this driver's diagnostics come from the ADAPTER's counters, never from the engine's, because the accumulator has already swallowed every broadcast before the engine could count one", d.m.errPrefix)
 	}
 
 	// transport.NewEngineWith is GUARDED — internal/guards'
@@ -89,7 +89,7 @@ func (d *ic7300Driver) Open(ctx context.Context, port transport.Port, id driver.
 	eng, err := transport.NewEngineWith(port, fr)
 	if err != nil {
 		_ = port.Close()
-		return nil, fmt.Errorf("ic7300: Open: %w", err)
+		return nil, fmt.Errorf("%s: Open: %w", d.m.errPrefix, err)
 	}
 
 	sess, err := d.open(ctx, eng, fr, statser, id)
@@ -134,21 +134,21 @@ func (d *ic7300Driver) open(ctx context.Context, eng *transport.Engine, fr trans
 	// which drain is the first one.
 	if err := eng.Init(ctx); err != nil {
 		if !errors.Is(err, transport.ErrDrainCapExceeded) {
-			return nil, fmt.Errorf("ic7300: Open: %w", err)
+			return nil, fmt.Errorf("%s: Open: %w", d.m.errPrefix, err)
 		}
 		probe.InitDrainCapExceeded = true
 	}
 
 	idCmd, err := p.BuildTransceiverIDRead()
 	if err != nil {
-		return nil, fmt.Errorf("ic7300: Open: %w", err)
+		return nil, fmt.Errorf("%s: Open: %w", d.m.errPrefix, err)
 	}
 	// retryReads is ONE — a behavioural parameter stated here rather than
 	// left to the signature. Retrying a read is safe: it is idempotent, and
 	// a CI-V read changes nothing.
 	frame, err := eng.Do(ctx, idCmd, civ.CIVReadSpec(p.TransceiverIDAnswerMatcher(), 1))
 	if err != nil {
-		return nil, fmt.Errorf("ic7300: Open: 19 00 identity read: %w", err)
+		return nil, fmt.Errorf("%s: Open: 19 00 identity read: %w", d.m.errPrefix, err)
 	}
 	// THE TOKEN IS RECORDED AND NEVER MATCHED (D5 entry 7,
 	// `ic7300-id-token`). The reply value is undocumented on every model in
@@ -157,7 +157,7 @@ func (d *ic7300Driver) open(ctx context.Context, eng *transport.Engine, fr trans
 	// and `from` bytes, which the matcher and the parser both check.
 	token, err := p.ParseTransceiverID(frame)
 	if err != nil {
-		return nil, fmt.Errorf("ic7300: Open: 19 00 identity read: %w", err)
+		return nil, fmt.Errorf("%s: Open: 19 00 identity read: %w", d.m.errPrefix, err)
 	}
 	id.CATID = fmt.Sprintf("%02x:%s", p.RadioAddress(), token)
 
@@ -191,7 +191,7 @@ func (d *ic7300Driver) probeForFingerprint(ctx context.Context, eng *transport.E
 		want := civ.ChannelAddress{Channel: n}
 		cmd, err := p.BuildMemoryRead(want)
 		if err != nil {
-			return fmt.Errorf("ic7300: Open: probe of channel %d: %w", n, err)
+			return fmt.Errorf("%s: Open: probe of channel %d: %w", d.m.errPrefix, n, err)
 		}
 		frame, err := eng.Do(ctx, cmd, civ.CIVReadSpec(p.MemoryAnswerMatcher(), 1))
 		probe.ProbeSlotsRead = n
@@ -204,7 +204,7 @@ func (d *ic7300Driver) probeForFingerprint(ctx context.Context, eng *transport.E
 			continue
 		}
 		if err != nil {
-			return fmt.Errorf("ic7300: Open: probe of channel %d: %w", n, err)
+			return fmt.Errorf("%s: Open: probe of channel %d: %w", d.m.errPrefix, n, err)
 		}
 
 		got, _, rerr := p.MemoryAnswerRecord(frame)
@@ -213,7 +213,7 @@ func (d *ic7300Driver) probeForFingerprint(ctx context.Context, eng *transport.E
 			if errors.As(rerr, &lenErr) {
 				return wrongRecordLength(d.m, p, lenErr, id.CATID)
 			}
-			return fmt.Errorf("ic7300: Open: probe of channel %d: %w", n, rerr)
+			return fmt.Errorf("%s: Open: probe of channel %d: %w", d.m.errPrefix, n, rerr)
 		}
 		// THE ADDRESS CHECK PRECEDES EVERY USE OF THE ANSWER (ruling T2,
 		// plan decision D20). civ's MemoryAnswerMatcher is ENVELOPE-ONLY by
@@ -221,7 +221,7 @@ func (d *ic7300Driver) probeForFingerprint(ctx context.Context, eng *transport.E
 		// at the channel — so the address is the DRIVER's to check, here and
 		// in every other read path.
 		if got != want {
-			return &AnswerMismatchError{Model: "ic7300", Requested: want.String(), Answered: got.String()}
+			return &AnswerMismatchError{Model: d.m.errPrefix, Requested: want.String(), Answered: got.String()}
 		}
 		probe.Fingerprinted = true
 		return nil
@@ -254,10 +254,10 @@ func wrongRecordLength(m modelParams, p civ.Profile, e *civ.RecordLengthError, o
 			WantModel: p.Model(),
 			GotModel:  model,
 		}
-		return fmt.Errorf("ic7300: Open: the radio answered a %d-byte memory record where the %s's is %d — both lengths are ASSUMED derivations from printed field widths (neither document prints a record total), so the attribution is provisional: %w",
+		return fmt.Errorf("%s: Open: the radio answered a %d-byte memory record where the %s's is %d — both lengths are ASSUMED derivations from printed field widths (neither document prints a record total), so the attribution is provisional: %w", m.errPrefix,
 			e.Got, p.Model(), p.BuildRecordLength(), wrong)
 	}
-	return fmt.Errorf("ic7300: Open: the radio answered a %d-byte memory record, which the %s does not declare and which matches no registered sibling's length — NO model is claimed for it: %w",
+	return fmt.Errorf("%s: Open: the radio answered a %d-byte memory record, which the %s does not declare and which matches no registered sibling's length — NO model is claimed for it: %w", m.errPrefix,
 		e.Got, p.Model(), e)
 }
 

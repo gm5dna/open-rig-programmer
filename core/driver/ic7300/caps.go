@@ -91,6 +91,17 @@ type modelParams struct {
 	// name is the model's display name and driver-registry key. It is what
 	// Model() and Capabilities().Model return.
 	name string
+	// errPrefix is the token every error this package mints for this model
+	// begins with: "ic7300: ReadChannel 003: …", "ic7300mk2: …".
+	//
+	// PER MODEL, NOT PER PACKAGE, and that is a deliberate departure from
+	// core/driver/ftdx101, whose two radios share one "ftdx101:" prefix.
+	// These two do not share a document: an MK2 refusal quotes the MK2's
+	// guide, cites its pages and names its `ic7300mk2-…` lift tokens, and a
+	// message opening "ic7300:" would put the IC-7300's name in front of the
+	// IC-7300MK2's evidence. The two prefixes are what the two packages
+	// printed before the fold, unchanged.
+	errPrefix string
 	// profile is that model's CI-V profile: the ONE place this package
 	// names an instance from core/civ for that radio. Everything
 	// wire-shaped derives from it — the framing, the record geometry, the
@@ -153,8 +164,9 @@ type modelParams struct {
 // FULL MANUAL through core/civ/ic7300 and from that model's own capability
 // matrix. Nothing here is read from the MK2's document.
 var model7300 = modelParams{
-	name:    "IC-7300",
-	profile: ic7300civ.Profile(),
+	name:      "IC-7300",
+	errPrefix: "ic7300",
+	profile:   ic7300civ.Profile(),
 	// Matrix §3.4, PDF p.126: CI-V Address (Default: 94h).
 	catID: "94",
 	// FALSE, and it is a decision rather than an oversight. The MK2's
@@ -197,8 +209,9 @@ var model7300 = modelParams{
 // document — where the two rows agree, they agree because two documents
 // say the same thing, never because one row was copied.
 var modelMK2 = modelParams{
-	name:    "IC-7300MK2",
-	profile: ic7300mk2civ.Profile(),
+	name:      "IC-7300MK2",
+	errPrefix: "ic7300mk2",
+	profile:   ic7300mk2civ.Profile(),
 	// Matrix §3.4: CI-V Address (Default: B6h). The IC-7300 answers at
 	// 94h, which is why the two cannot confuse each other in the field.
 	catID: "b6",
