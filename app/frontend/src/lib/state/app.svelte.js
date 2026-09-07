@@ -591,8 +591,8 @@ class AppState {
 		this.dirty = dirty
 	}
 
-	/** Marks a transfer as starting. `kind` is 'read'|'diff'|'prepare'|
-	 * 'send'. Resets progress to zero so a stale reading from a previous
+	/** Marks a transfer as starting. `kind` is 'read'|'prepare'|'send'|
+	 * 'settings'. Resets progress to zero so a stale reading from a previous
 	 * transfer never flashes before the first real progress event. Also
 	 * clears `lastOutcome` — a new operation supersedes whatever the
 	 * previous one left behind, so a consumer keyed on lastOutcome (e.g.

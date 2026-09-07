@@ -507,10 +507,10 @@ describe('applyTransferDone marks the baseline stale after a send (task 18)', ()
 		expect(appState.codeplug.BaselineStale).toBe(false)
 	})
 
-	it('leaves BaselineStale alone for a read/diff transfer', () => {
+	it('leaves BaselineStale alone for a non-send transfer', () => {
 		appState.setCodeplug({ Schema: 1, Generator: 'x', Radio: {}, Channels: [], WorkingPath: '', Dirty: false, BaselineStale: false })
-		appState.beginTransfer('diff')
-		appState.applyTransferDone({ Kind: 'diff', Outcome: 'ok', Report: null, Message: '' })
+		appState.beginTransfer('read')
+		appState.applyTransferDone({ Kind: 'read', Outcome: 'ok', Report: null, Message: '' })
 		expect(appState.codeplug.BaselineStale).toBe(false)
 	})
 
