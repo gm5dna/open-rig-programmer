@@ -27,16 +27,17 @@ import (
 //	generated from TRANSCRIPTION A (core/kw/ts590/menu590s.csv and
 //	menu590sg.csv) by internal/extable;
 //
-//	the FAKE's inventories (fakets590.EXDefaults(row)) are generated from
-//	TRANSCRIPTION B (internal/fakets590's own copies) by
-//	internal/fakets590/gen, which imports nothing project-internal at all.
+//	the FAKE's inventories (fakets590.EXDefaults(row)) are parsed at init from
+//	its own embedded copies of TRANSCRIPTION B (internal/fakets590's own
+//	copies) by internal/fakets590/exinventory.go, which imports nothing
+//	project-internal at all.
 //
 // A and B are two independent derivations of one printed chart: A
 // layout-text-led and PDF-checked, B derived PDF-primary by a quarantined
 // agent with no repository access and no sight of A, the page ledger or any
-// row count. The two GENERATORS are independent too — that is what the fake's
-// recursive no-imports fence enforces, gen/ included. So a mis-read row in
-// either transcription, or a defect in either generator, surfaces HERE as a
+// row count. The two PARSERS are independent too, not generators — that is
+// what the fake's recursive no-imports fence enforces. So a mis-read row in
+// either transcription, or a defect in either parser, surfaces HERE as a
 // mismatch rather than as two tables quietly agreeing on the same wrong
 // number.
 //
@@ -70,7 +71,7 @@ import (
 // core/kw/ts590/crosscheck_test.go names it, requires the DIGITS to agree
 // there, and treats any new divergence as a STOP. The fake's generator
 // therefore does not project the flag at all
-// (internal/fakets590/gen/main.go's widthToken), so every address it answers
+// (internal/fakets590/exinventory.go's widthToken), so every address it answers
 // replies with its width in '0' bytes — and the SHAPE assertion below is
 // written against that, with the codec's own text rows named as the deliberate
 // state rather than left for a reader to notice.
@@ -201,7 +202,7 @@ func TestEXInventoryCrossCheck_TS590AddressesAndWidthsAgree(t *testing.T) {
 //
 // The two perturbations are the two defect classes the plan names: a dropped
 // row, and a width-only change. The fake's generator refuses the first at
-// projection (internal/fakets590/gen's projectWidths) and cannot see the
+// projection (internal/fakets590/exinventory.go's projectWidths) and cannot see the
 // second at all, which is exactly why the second has to be caught here.
 func TestEXInventoryCrossCheck_TS590RedProofs(t *testing.T) {
 	items := ts590.EXItemsSG()
