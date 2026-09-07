@@ -1,29 +1,38 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Package ic7300 is the Icom IC-7300 driver: ONE driver package for ONE
-// registered radio model, over the CI-V codec in core/civ and this model's
-// own profile in core/civ/ic7300.
+// Package ic7300 is the Icom IC-7300 driver: one driver package for the
+// IC-7300 and the IC-7300MK2, over the CI-V codec in core/civ and each
+// model's own profile in core/civ/ic7300 and core/civ/ic7300mk2. New
+// builds the IC-7300; NewMK2 builds the MK2.
 //
-// ONE MODEL PER PACKAGE, and the IC-7300MK2 has its own
-// (core/driver/ic7300mk2). That is the OPPOSITE of core/driver/ftdx101,
-// which drives two radios from one package — and the difference is
-// evidential, not stylistic. Yaesu prints ONE CAT manual for the FTDX101D
-// and the FTDX101MP and distinguishes them in three places. Icom prints two
-// entirely separate documents here, and each is SILENT ABOUT THE OTHER
-// RADIO: the IC-7300's 180-page full manual contains no occurrence of MK2,
-// MKII, MK-2 or Mark II anywhere (matrix §4), and the MK2's 27-page CI-V
-// Reference Guide never mentions the IC-7300 (its own §4). Both matrices'
-// §4 close with the same rule in terms: no assumption in one may be read as
-// covering the other model, and no lift in one lifts anything for the
-// sibling. A parameterised driver would carry that separation as a table
-// and invite exactly the borrowing the two documents forbid.
+// TWO MODELS, TWO ROWS, TWO SETS OF EVIDENCE. Until the v1.4.1 sweep the
+// MK2 had a package of its own, and its doc.go — kept whole, as this
+// package's doc_mk2.go — argued for that separation on evidential rather
+// than stylistic grounds. The argument stands and the packaging has
+// changed: Icom prints two entirely separate documents for these radios,
+// and each is SILENT ABOUT THE OTHER — the IC-7300's 180-page full manual
+// contains no occurrence of MK2, MKII, MK-2 or Mark II anywhere (matrix
+// §4), and the MK2's 27-page CI-V Reference Guide never mentions the
+// IC-7300 (its own §4). Both matrices' §4 close with the same rule in
+// terms: no assumption in one may be read as covering the other model, and
+// no lift in one lifts anything for the sibling.
 //
-// It therefore does NOT import core/driver/ic7300mk2, nor any other driver
-// package, and neither imports this one. Where a decision here looks like
-// the MK2's, the comment at the decision says whether the agreement is a
-// manual fact of THIS radio, a structural requirement, or an assumption —
-// in which case it is in the register below, scoped to this model, naming a
-// capture ON AN IC-7300.
+// WHAT THAT RULE FORBIDS IS A VALUE DERIVED FROM THE OTHER RADIO'S MANUAL,
+// and nothing here is. caps.go's modelParams table holds two rows, each
+// populated from its own document — separate CI-V addresses, name widths,
+// rate lists, frequency bounds, scan-edge rules and record-length hints —
+// and the four long refusal texts are carried VERBATIM from the two
+// packages the table replaced, page references and lift tokens included, so
+// that no sentence acquires the other radio's authority on the way past.
+// The write guards stay separate too (writeTrialsComplete7300 and
+// writeTrialsCompleteMK2), because the evidence is per model and one
+// constant could not express a one-model flip. Where a comment states a
+// fact for both radios it says which document each half comes from.
+//
+// This package imports no other driver package, and none imports it. The
+// two fakes stay separate as well (internal/fakeic7300 and
+// internal/fakeic7300mk2, independently written), and each model's
+// end-to-end tests run against its own.
 //
 // # Provenance
 //

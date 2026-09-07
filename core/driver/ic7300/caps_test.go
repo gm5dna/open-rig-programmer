@@ -74,8 +74,8 @@ func TestAllFieldsCoversThePreD8SpecFields(t *testing.T) {
 }
 
 func TestWriteTrialsComplete_PinnedFalse(t *testing.T) {
-	if writeTrialsComplete {
-		t.Fatal("writeTrialsComplete = true for the IC-7300: no IC-7300 has ever been asked anything by this project (matrix §3.14), so no write trial has completed. If a trial really has been performed, revert this test alongside the flip and state the evidence.")
+	if writeTrialsComplete7300 {
+		t.Fatal("writeTrialsComplete7300 = true for the IC-7300: no IC-7300 has ever been asked anything by this project (matrix §3.14), so no write trial has completed. If a trial really has been performed, revert this test alongside the flip and state the evidence.")
 	}
 	caps := New(RealHardware).Capabilities()
 	for _, b := range caps.Banks {

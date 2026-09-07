@@ -27,7 +27,6 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
-	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300mk2"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7610"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7760"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7851"
@@ -2163,7 +2162,7 @@ func assertNoConsentAnywhere(t *testing.T, what string, caps spec.Capabilities) 
 //
 // EVERY consent-eligible model, one subtest each, deliberately: the rows
 // differ in which driver package they reach (ftdx10; ftdx101 twice over two
-// constructors; ic7610, ic7300 and ic7300mk2 since Wave 4; and, since Tier
+// constructors; ic7610 and ic7300's New/NewMK2 pair since Wave 4; and, since Tier
 // 1's FT-891, ft891, the first Yaesu row added since this table was
 // written), and a table that threaded the option through one row and
 // dropped it in another would leave a user's recorded consent silently
@@ -2316,8 +2315,8 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		{model: IC7300Model, want: func() driver.Driver { return ic7300.New(ic7300.RealHardware) }, wantConsent: func() driver.Driver {
 			return ic7300.New(ic7300.RealHardware, ic7300.WithConsentedUnverifiedWrites())
 		}},
-		{model: IC7300MK2Model, want: func() driver.Driver { return ic7300mk2.New(ic7300mk2.RealHardware) }, wantConsent: func() driver.Driver {
-			return ic7300mk2.New(ic7300mk2.RealHardware, ic7300mk2.WithConsentedUnverifiedWrites())
+		{model: IC7300MK2Model, want: func() driver.Driver { return ic7300.NewMK2(ic7300.RealHardware) }, wantConsent: func() driver.Driver {
+			return ic7300.NewMK2(ic7300.RealHardware, ic7300.WithConsentedUnverifiedWrites())
 		}},
 		{model: IC705Model, want: func() driver.Driver { return ic705.New(ic705.RealHardware) }, wantConsent: func() driver.Driver {
 			return ic705.New(ic705.RealHardware, ic705.WithConsentedUnverifiedWrites())
@@ -3350,7 +3349,8 @@ func TestOpenRealSessionFor_IC7300OpensAtEightNOne(t *testing.T) {
 // mirror of TestOpenRealSessionFor_IC7300OpensAtEightNOne — a SEPARATE
 // proof against a SEPARATE driver package, not a loop over the pair, on
 // the same footing as every other model-specific test in this file: the
-// IC-7300MK2's StopBits() (core/driver/ic7300mk2's own doc.go) is its OWN
+// IC-7300MK2's StopBits() (core/driver/ic7300/doc_mk2.go, that model's own
+// document record) is its OWN
 // ASSUMED tier convention, and no lift on the sibling proves anything
 // about it.
 func TestOpenRealSessionFor_IC7300MK2OpensAtEightNOne(t *testing.T) {
@@ -3363,7 +3363,7 @@ func TestOpenRealSessionFor_IC7300MK2OpensAtEightNOne(t *testing.T) {
 		t.Fatalf("%s does not implement driver.SerialFramingReporter — every registered Icom driver is expected to (spec D3.1)", IC7300MK2Model)
 	}
 	if got := r.StopBits(); got != 1 {
-		t.Fatalf("%s.StopBits() = %d, want 1 (8-N-1, an ASSUMED tier convention per core/driver/ic7300mk2/doc.go, not a reading of this radio's own document)", IC7300MK2Model, got)
+		t.Fatalf("%s.StopBits() = %d, want 1 (8-N-1, an ASSUMED tier convention per core/driver/ic7300/doc_mk2.go, not a reading of this radio's own document)", IC7300MK2Model, got)
 	}
 
 	got := recordSerialConfig(t)

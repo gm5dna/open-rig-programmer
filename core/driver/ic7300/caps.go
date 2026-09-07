@@ -3,7 +3,13 @@
 package ic7300
 
 import (
+	"github.com/gm5dna/open-rig-programmer/core/civ"
 	ic7300civ "github.com/gm5dna/open-rig-programmer/core/civ/ic7300"
+	// ALIASED for the same reason ic7300civ is: the two CI-V profile
+	// packages are this package's ONLY named instances from core/civ, one
+	// per model, and each appears at exactly ONE call site — the model row
+	// below that carries it.
+	ic7300mk2civ "github.com/gm5dna/open-rig-programmer/core/civ/ic7300mk2"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
@@ -17,7 +23,8 @@ const (
 	bankScanLabel   = "Scan edges (P1/P2)"
 )
 
-// writeTrialsComplete is FALSE, and it is the whole write guard.
+// writeTrialsComplete7300 is the IC-7300's hardware write guard, and it is
+// FALSE.
 //
 // NO IC-7300 HAS EVER BEEN ASKED ANYTHING BY THIS PROJECT. Matrix §3.14
 // states it for this model alone — "The registered sibling's FALSE is not
@@ -29,9 +36,23 @@ const (
 // hardware today, and it opens it for the caller's own explicitly accepted
 // risk, never for this table's authority.
 //
-// Flipping it is a HARDWARE milestone with evidence, per model. The pin in
-// caps_test.go names what a flip must be accompanied by.
-const writeTrialsComplete = false
+// Flipping it is a HARDWARE milestone with evidence, ON AN IC-7300. The pin
+// in caps_test.go names what a flip must be accompanied by.
+const writeTrialsComplete7300 = false
+
+// writeTrialsCompleteMK2 is the IC-7300MK2's, and it is FALSE for the MK2's
+// OWN reasons.
+//
+// TWO CONSTANTS, NOT ONE, and that is the point of them. Matrix §3.14
+// states this model's FALSE in its own terms — "The registered sibling's
+// FALSE is not stated here" — so the IC-7300's pin lifts nothing for this
+// radio and this one lifts nothing for the IC-7300. The evidence is per
+// model, and a single shared constant could not express a one-model flip.
+// core/driver/ftdx101 keeps writeTrialsCompleteD and writeTrialsCompleteMP
+// apart for exactly this reason.
+//
+// Flipping it is a HARDWARE milestone with evidence, ON AN IC-7300MK2.
+const writeTrialsCompleteMK2 = false
 
 // Profile selects which capability description a driver value publishes:
 // the fail-safe one a real radio gets, and the one the fake gets. Shared
@@ -44,6 +65,200 @@ const (
 	RealHardware = driver.RealHardware
 	Simulated    = driver.Simulated
 )
+
+// modelParams is everything that differs between the two radios this
+// package drives, on core/driver/ftdx101's shape.
+//
+// IT IS A TABLE OF SEPARATELY-SOURCED VALUES, NOT A SHARED READING, and
+// that distinction is the whole reason this struct may exist at all. Both
+// matrices' §4 close with the same rule in terms: no assumption in one
+// document may be read as covering the other model, and no lift in one
+// lifts anything for the sibling. What that rule forbids is a value
+// DERIVED from the other radio's manual; what it does not forbid is two
+// values, each cited to its own document, standing in adjacent rows. Every
+// field below is populated twice, once per model, each from that model's
+// own evidence — and the four long refusal strings are carried VERBATIM
+// from the two packages this table replaced, lift tokens and page
+// references included, precisely so that no sentence acquires the other
+// radio's authority on the way past.
+//
+// It is UNEXPORTED, and so is every function taking one, because the
+// exported surface is two thin constructors: New (the IC-7300) and NewMK2.
+// An exported model enum's zero value would need its own fail-safe arm, and
+// a registration-table closure holding a model value could hold a forged
+// one.
+type modelParams struct {
+	// name is the model's display name and driver-registry key. It is what
+	// Model() and Capabilities().Model return.
+	name string
+	// errPrefix is the token every error this package mints for this model
+	// begins with: "ic7300: ReadChannel 003: …", "ic7300mk2: …".
+	//
+	// PER MODEL, NOT PER PACKAGE, and that is a deliberate departure from
+	// core/driver/ftdx101, whose two radios share one "ftdx101:" prefix.
+	// These two do not share a document: an MK2 refusal quotes the MK2's
+	// guide, cites its pages and names its `ic7300mk2-…` lift tokens, and a
+	// message opening "ic7300:" would put the IC-7300's name in front of the
+	// IC-7300MK2's evidence. The two prefixes are what the two packages
+	// printed before the fold, unchanged.
+	errPrefix string
+	// profile is that model's CI-V profile: the ONE place this package
+	// names an instance from core/civ for that radio. Everything
+	// wire-shaped derives from it — the framing, the record geometry, the
+	// name charset, the address.
+	//
+	// A VALUE, NOT THE Profile CONSTRUCTOR FUNCTION, and that is
+	// load-bearing rather than a style choice. internal/wiring's
+	// TestRealDriverFor_DefaultPathByteIdentical compares two driver values
+	// with reflect.DeepEqual to prove the consent-false arm carries no
+	// smuggled option, and DeepEqual reports two non-nil funcs UNEQUAL even
+	// when they are the same function — a func field here would fail that
+	// guard for every model in the table. civ.Profile carries no func
+	// fields, so the value compares.
+	profile civ.Profile
+	// catID is the CI-V ADDRESS HEX, not a CAT ID, LOWERCASE to match the
+	// runtime form Go's "%02x" verb produces in Identity.CATID (core/clone
+	// persists this exact value into a codeplug file's RadioInfo.CATID and
+	// downstream comparisons are case-sensitive).
+	catID string
+	// scanNoBlank is the SCAN bank's spec.Bank.NoBlank.
+	scanNoBlank bool
+	// tagLen is the name field's width in bytes.
+	tagLen int
+	// bauds is the CAT serial rate list this model's document names.
+	bauds []int
+	// minFreqHz and maxFreqHz are spec.Capabilities' two frequency bounds.
+	minFreqHz uint64
+	maxFreqHz uint64
+	// foreignRecordLengths attributes a record length this model does not
+	// declare to the sibling that does.
+	//
+	// ONE ENTRY EACH, and it is a HINT rather than a distinctness claim
+	// (plan decision D10). BOTH lengths are ASSUMED derivations from
+	// printed field widths — neither document prints a record total —
+	// which is why the error text carries the word *provisional* and names
+	// both numbers. Cross-model record-length distinctness is a TIER-level
+	// check belonging to registration, and it is what may add or correct
+	// entries here. DO NOT ADD A SECOND ENTRY to either row from this
+	// package.
+	foreignRecordLengths map[int]string
+	// txFreqSpan and tagSpan are the two record spans the mandatory-field
+	// refusals print. They differ in the two documents' own typography
+	// (the IC-7300's en dash, the MK2's tilde) and, for the name field, in
+	// its end circled numeral — the width difference tagLen carries.
+	txFreqSpan string
+	tagSpan    string
+	// eraseReason, maxFreqReason, selectNibbleReason and scanEdgeReason are
+	// the four refusal texts whose wording is this model's own reading of
+	// its own document, lift tokens and page references included. They are
+	// PINNED BYTE-FOR-BYTE by write_test.go and are carried verbatim.
+	// maxFreqReason and scanEdgeReason are fmt format strings; the other
+	// two are literal.
+	eraseReason        string
+	maxFreqReason      string
+	selectNibbleReason string
+	scanEdgeReason     string
+}
+
+// model7300 is the IC-7300, whose every value below comes from the IC-7300
+// FULL MANUAL through core/civ/ic7300 and from that model's own capability
+// matrix. Nothing here is read from the MK2's document.
+var model7300 = modelParams{
+	name:      "IC-7300",
+	errPrefix: "ic7300",
+	profile:   ic7300civ.Profile(),
+	// Matrix §3.4, PDF p.126: CI-V Address (Default: 94h).
+	catID: "94",
+	// FALSE, and it is a decision rather than an oversight. The MK2's
+	// document prints "P1 and P2 cannot be cleared" and its SCAN bank is
+	// NoBlank as a result; THIS document says nothing of the kind (matrix
+	// §1b, register entry `ic7300-scan-edge-noblank`, lift
+	// `ic7300-scan-edge-read`), and borrowing the sibling's sentence is
+	// exactly the cross-model contamination both matrices' §4 forbid.
+	scanNoBlank: false,
+	// ⑱–㉗, ten bytes (matrix §3.9, PDF p.169 "Up to 10 characters.").
+	tagLen: 10,
+	// The [USB] rate list (matrix §1 row 9; this tier connects over USB,
+	// PDF p.160 "◇ CI-V connection").
+	bauds: []int{4800, 9600, 19200, 38400, 57600, 115200},
+	// The COVERAGE floor (PDF p.150). The encoding admits 0 Hz, so
+	// 30 000 is the tighter documented bound at this end.
+	minFreqHz: 30_000,
+	// The STORABLE ceiling (PDF p.167): the record's 10 MHz digit is
+	// capped at 6 and the 100 MHz and 1 GHz digits are printed fixed 0.
+	// The 74 800 000 figure on PDF p.150 is TUNING COVERAGE, and
+	// publishing it would let a codeplug carry a value this encoder must
+	// afterwards refuse. In each direction the tighter of the two printed
+	// bounds governs (plan decision D6). Matrix Erratum 4(a) marked §1 row
+	// 12 PENDING this plan's explicit decision; the decision landed as
+	// matrix ERRATUM 10, which discharges that PENDING marker — so 4(a) is
+	// closed rather than outstanding.
+	maxFreqHz:            69_999_999,
+	foreignRecordLengths: map[int]string{45: "IC-7300MK2 (provisional)"},
+	txFreqSpan:           "❹–⑧",
+	tagSpan:              "⑱–㉗",
+	eraseReason:          "this tier ships no erase path: the document prints two clear forms and neither is implemented, and spec.ConsentUnverifiedWrites refuses to consent an erase at any label",
+	maxFreqReason:        "%d Hz is above what a memory channel can store on this model (%d Hz): the record's 10 MHz digit is capped at 6, and the 74.8 MHz figure is tuning COVERAGE rather than storable frequency",
+	selectNibbleReason:   "the slot is empty and this is a CREATE: record byte ③'s SELECT nibble has no honest source — no spec.Field carries the SELECT group (the tier forbids mapping it as scan_skip), and writing OFF would put the channel into a scan group the caller never chose. Behind it the two tone spans have no documented default either (`ic7300-documented-default-tone-absent`). Write into a slot the radio already holds, or lift `ic7300-select-nibble-on-create`",
+	scanEdgeReason:       "record byte ③ is %#02x on a scan edge, and this document prints \"Set both 0 for P1 and P2.\" — the SELECT group is %q, and writing it back would send a value the manual says these two slots must not carry (the value is the radio's own, so it is refused rather than rewritten)",
+}
+
+// modelMK2 is the IC-7300MK2, whose every value below comes from that
+// radio's OWN 27-page CI-V Reference Guide through core/civ/ic7300mk2 and
+// from its own capability matrix. Nothing here is read from the IC-7300's
+// document — where the two rows agree, they agree because two documents
+// say the same thing, never because one row was copied.
+var modelMK2 = modelParams{
+	name:      "IC-7300MK2",
+	errPrefix: "ic7300mk2",
+	profile:   ic7300mk2civ.Profile(),
+	// Matrix §3.4: CI-V Address (Default: B6h). The IC-7300 answers at
+	// 94h, which is why the two cannot confuse each other in the field.
+	catID: "b6",
+	// TRUE, and MANUAL-EVIDENCED on this model: P1 and P2 cannot be
+	// cleared (PDF p.4, the 0B row "ⓘ P1 and P2 cannot be cleared."; PDF
+	// p.17, "* Except for \"01 00\" and \"01 01\" (P1/P2)."). NoBlank is
+	// the WHOLE-BANK form and this bank is exactly those two slots, so the
+	// fact is stated once and cannot drift out of step with a list of slot
+	// strings — which is why RequiredSlots stays empty (D8).
+	scanNoBlank: true,
+	// ⑱ ~ ㉝, SIXTEEN bytes (matrix §3.9). The IC-7300's field is ten; the
+	// two record lengths differ by exactly this six.
+	tagLen: 16,
+	// THIS DOCUMENT PRINTS NO RATE LIST (matrix §1 #9). The only rates it
+	// names anywhere are the three rows of the `18 01` FE-count table — A
+	// WAKE-UP-COMMAND TABLE, NOT A SUPPORTED-RATE LIST, and this comment
+	// says so in those words because the distinction is the whole content
+	// of the derivation. Publishing the three it names is the conservative
+	// reading; the IC-7300's six-rate [USB] list is that radio's and is not
+	// borrowed. Register entry `ic7300mk2-baud-list`, lift MK2-R21, beside
+	// `ic7300mk2-auto-baud-absent` (this document prints no Auto setting at
+	// all, where the IC-7300 ships both baud items on it).
+	bauds: []int{4800, 9600, 19200},
+	// DELIBERATELY ZERO, AND IT IS NOT A FLOOR. This document prints no
+	// tuning floor anywhere (matrix §1 #11), and taking the IC-7300's
+	// 30 000 Hz would be exactly the cross-model contamination both
+	// matrices' §4 forbid. A zero here DISABLES the lower-bound check
+	// (core/spec/capabilities.go); it does not assert a known 0 Hz floor,
+	// and it is in caps_test.go's deliberatelyZero audit map for that
+	// reason. A populated channel at 0 Hz is separately rejected by
+	// core/codeplug's own validator, so nothing is admitted that should
+	// not be. Register entry `ic7300mk2-min-frequency`, lift MK2-R15
+	// (capture `ic7300mk2-tuning-range`).
+	minFreqHz: 0,
+	// The ENCODING ceiling, and MANUAL-EVIDENCED (matrix §1 #12, PDF
+	// p.16): the 10 MHz digit runs `0 ~ 7` and the 1 GHz and 100 MHz
+	// digits are printed fixed `0`. Register entry
+	// `ic7300mk2-max-frequency`, lift MK2-R15.
+	maxFreqHz:            79_999_999,
+	foreignRecordLengths: map[int]string{39: "IC-7300 (provisional)"},
+	txFreqSpan:           "❹ ~ ⑧",
+	tagSpan:              "⑱ ~ ㉝",
+	eraseReason:          "this tier ships no erase path: the document prints two clear forms — a truncated 1A 00 set, and command 0B, whose own row says P1 and P2 cannot be cleared — and neither is implemented; spec.ConsentUnverifiedWrites refuses to consent an erase at any label",
+	maxFreqReason:        "%d Hz is above what a memory channel can store on this model (%d Hz): the record's 10 MHz digit runs 0 ~ 7 and its 1 GHz and 100 MHz digits are printed fixed 0 (PDF p.16)",
+	selectNibbleReason:   "the slot is empty and this is a CREATE: record byte ③'s SELECT nibble has no honest source — no spec.Field carries the SELECT group (§3.16 A10 reads it as group membership, the opposite sense to a skip flag), and writing OFF would put the channel into a scan group the caller never chose. Behind it the two tone spans have no documented default either (`ic7300mk2-documented-default-tone-absent`). Write into a slot the radio already holds, or lift `ic7300mk2-select-nibble-on-create`",
+	scanEdgeReason:       "record byte ③ is %#02x on a scan edge, and this document prints \"Set 00 for P1 and P2.\" (PDF p.17) — the SELECT group is %q, and writing it back would send a value the document says these two slots must not carry (the value is the radio's own, so it is refused rather than rewritten)",
+}
 
 // memSlots is the MEM bank's canonical slot inventory: "001".."099",
 // M-CH01..M-CH99 as the front panel names them (D11).
@@ -75,12 +290,15 @@ func scanSlots() []string {
 //
 // The nine graded rw are exactly the fields the 1A 00 record carries:
 //
-//   - frequency, tx_frequency — ④–⑧ and ❹–⑧, five packed-BCD bytes each.
-//     The transmit frequency is a DISTINCT field, so a split channel round
+//   - frequency, tx_frequency — ④–⑧ and ❹–⑧ (the MK2 document's own
+//     typography is ④ ~ ⑧ and ❹ ~ ⑧), five packed-BCD bytes each. The
+//     transmit frequency is a DISTINCT field, so a split channel round
 //     trips.
 //   - mode, filter, data_mode, tone_mode — ⑨, ⑩ and ⑪'s two nibbles.
 //   - tone_tx, tone_rx — ⑫–⑭ and ⑮–⑰, BCD tenths of a hertz.
-//   - tag — ⑱–㉗, ten bytes.
+//   - tag — ⑱–㉗, ten bytes on the IC-7300; ⑱ ~ ㉝, SIXTEEN on the MK2.
+//     The two record lengths differ by exactly that six, and each width is
+//     its own model's manual fact (modelParams.tagLen).
 //
 // The eleven graded ZERO, each for a stated reason:
 //
@@ -160,17 +378,22 @@ func bankFields(rw spec.FieldSupport) map[spec.Field]spec.FieldSupport {
 //
 // Additions design D4.2 moved the pinned count from twenty-seven to
 // twenty-eight by requiring this driver's transmitter anatomy explicitly.
-func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) spec.Capabilities {
+func baseCapabilities(m modelParams, memFields, scanFields map[spec.Field]spec.FieldSupport) spec.Capabilities {
 	return spec.Capabilities{
-		// Matrix §1 row 1.
-		Model: "IC-7300",
+		// Matrix §1 row 1 (§1 #1 in the MK2's matrix).
+		Model: m.name,
 		// The CI-V ADDRESS HEX, not a CAT ID: CI-V has no ID string, and
 		// spec D3.2 fixes the address as this field's content. The 19 00
 		// token this driver observes at Open is APPENDED to the session's
-		// Identity.CATID ("94:<token>") and compared against nothing — the
-		// reply value is undocumented on every model in this tier.
-		// Matrix §3.4, PDF p.126: CI-V Address (Default: 94h).
-		CATID:    "94",
+		// Identity.CATID ("94:<token>" on the IC-7300, "b6:<token>" on the
+		// MK2 — ic7300.go's fmt.Sprintf("%02x:%s", p.RadioAddress(), token))
+		// and compared against nothing — the reply value is undocumented on
+		// every model in this tier. Each address is its own model's manual
+		// fact; see modelParams.catID and the two rows above it. LOWERCASE,
+		// matching the runtime form "%02x" always produces, because
+		// core/clone persists this exact value into a codeplug file's
+		// RadioInfo.CATID and downstream comparisons are case-sensitive.
+		CATID:    m.catID,
 		Transmit: spec.HasTransmitter,
 		Banks: []spec.Bank{
 			{
@@ -186,14 +409,12 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 				ID:    spec.BankScan,
 				Label: bankScanLabel,
 				Slots: scanSlots(),
-				// FALSE, and it is a decision rather than an oversight.
-				// The MK2's document prints "P1 and P2 cannot be cleared"
-				// and its SCAN bank is NoBlank as a result; THIS document
-				// says nothing of the kind (matrix §1b, register entry
-				// `ic7300-scan-edge-noblank`, lift `ic7300-scan-edge-read`),
-				// and borrowing the sibling's sentence is exactly the
-				// cross-model contamination both matrices' §4 forbid.
-				NoBlank: false,
+				// PER MODEL, and the two rows above carry each document's
+				// own sentence: the MK2's prints "P1 and P2 cannot be
+				// cleared" and its SCAN bank is NoBlank as a result; the
+				// IC-7300's says nothing of the kind and its bank is not.
+				// Neither sentence lifts anything for the other model.
+				NoBlank: m.scanNoBlank,
 				Fields:  scanFields,
 			},
 		},
@@ -203,8 +424,10 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 		// carrying it fails the read with a *civ.ParseError naming the byte
 		// and the offset (plan decision D12).
 		Modes: []string{"LSB", "USB", "AM", "CW", "RTTY", "FM", "CW-R", "RTTY-R"},
-		// ⑱–㉗, ten bytes (matrix §3.9, PDF p.169 "Up to 10 characters.").
-		TagLen: 10,
+		// The name field's width, per model (matrix §3.9 in both): ⑱–㉗,
+		// ten bytes on the IC-7300 (PDF p.169 "Up to 10 characters.");
+		// ⑱ ~ ㉝, sixteen on the MK2.
+		TagLen: m.tagLen,
 		// DELIBERATELY ZERO: there is no clarifier/RIT field in the 1A 00
 		// record at all (matrix §1 rows 6 and 7 grade both a poor fit).
 		// Graded, not silently omitted.
@@ -230,32 +453,41 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 		// out-of-domain tone (zero included) to Unknown rather than handing
 		// up a Known value codeplug.ToneField.Valid would refuse.
 		CTCSSToneRange: &spec.ToneRange{MinDeciHz: 1, MaxDeciHz: 2999, StepDeciHz: 1},
-		// The [USB] rate list (matrix §1 row 9; this tier connects over USB,
-		// PDF p.160 "◇ CI-V connection").
-		Bauds: []int{4800, 9600, 19200, 38400, 57600, 115200},
-		// A CHOICE, and doc.go argues it: there is NO numeric factory
-		// default — both baud items ship set to `Auto` (matrix §3.3,
-		// MANUAL-EVIDENCED) — so 19200 is chosen as the highest rate present
-		// in BOTH the [USB] list and the [REMOTE] list (4800/9600/19200),
-		// which is the one rate that still works when the user has
-		// `CI-V USB Port` set to `Link to [REMOTE]` (matrix §3.16 A4).
-		// Register entry `ic7300-default-open-baud`, lift `ic7300-open-rate`.
+		// The serial rate list, per model. The IC-7300's is its printed
+		// [USB] list (matrix §1 row 9; this tier connects over USB, PDF
+		// p.160 "◇ CI-V connection"); the MK2's document prints no rate
+		// list at all and its three come from its own `18 01` table, as
+		// modelParams.bauds records. Neither list is borrowed.
+		Bauds: m.bauds,
+		// A CHOICE ON BOTH MODELS, AND THE SAME NUMBER FOR DIFFERENT
+		// REASONS — which is why it is a shared literal rather than a
+		// modelParams row: neither derivation is read from the other
+		// document. On the IC-7300 there is NO numeric factory default
+		// (both baud items ship set to `Auto`, matrix §3.3,
+		// MANUAL-EVIDENCED), so 19200 is the highest rate present in BOTH
+		// the [USB] and [REMOTE] lists (4800/9600/19200) — the one rate
+		// that still works when `CI-V USB Port` is set to `Link to
+		// [REMOTE]` (matrix §3.16 A4); register entry
+		// `ic7300-default-open-baud`, lift `ic7300-open-rate`. On the MK2
+		// the document prints no factory default either (matrix §1 #10,
+		// §3.3), so opening at the highest rate it names anywhere is the
+		// derivation; register entry `ic7300mk2-default-baud`, lift
+		// MK2-R6.
 		DefaultBaud: 19200,
-		// The COVERAGE floor (PDF p.150). The encoding admits 0 Hz, so
-		// 30 000 is the tighter documented bound at this end.
-		MinFreqHz: 30_000,
-		// The STORABLE ceiling (PDF p.167): the record's 10 MHz digit is
-		// capped at 6 and the 100 MHz and 1 GHz digits are printed fixed 0.
-		// The 74 800 000 figure on PDF p.150 is TUNING COVERAGE, and
-		// publishing it would let a codeplug carry a value this encoder must
-		// afterwards refuse. In each direction the tighter of the two
-		// printed bounds governs (plan decision D6). Matrix Erratum 4(a)
-		// marked §1 row 12 PENDING this plan's explicit decision; the
-		// decision landed as matrix ERRATUM 10, which discharges that
-		// PENDING marker — so 4(a) is closed rather than outstanding.
-		MaxFreqHz: 69_999_999,
-		// DELIBERATELY EMPTY: nothing in this document is declared
-		// never-empty (matrix §1 row 13; plan decision D8).
+		// The two frequency bounds, per model, each from its own document
+		// (modelParams.minFreqHz / maxFreqHz carry the readings). The
+		// IC-7300 publishes a 30 kHz COVERAGE floor and a 69 999 999 Hz
+		// STORABLE ceiling; the MK2's document prints no floor at all, so
+		// its minimum is a deliberate zero rather than a borrowed 30 000,
+		// and its ceiling is that record's own encoding limit.
+		MinFreqHz: m.minFreqHz,
+		MaxFreqHz: m.maxFreqHz,
+		// DELIBERATELY EMPTY ON BOTH, for each model's own reason (plan
+		// decision D8). The IC-7300 declares nothing never-empty at all
+		// (matrix §1 row 13). The MK2 does say P1 and P2 cannot be
+		// cleared, and the SCAN bank's NoBlank above states that once; a
+		// RequiredSlots list would say the same thing a second time and
+		// give it a second place to drift.
 		RequiredSlots: nil,
 		// DELIBERATELY EMPTY: no shift or duplex field exists on this model
 		// (matrix §1 row 14). Enabler E5b is what admits the shape: no bank
@@ -267,9 +499,11 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 		CTCSSStates: nil,
 		// DELIBERATELY EMPTY: MANUAL-EVIDENCED absence (matrix §1b, duplex).
 		DuplexOptions: nil,
-		// ⑪'s LOW nibble: "0: OFF, 1: TONE, 2: TSQL" (PDF p.169's ⑪ detail
-		// box). Three values, three distinct semantics, so no entry needs
-		// spec.ToneMode.Canonical.
+		// ⑪'s LOW nibble: "0: OFF, 1: TONE, 2: TSQL" (the IC-7300's PDF
+		// p.169 ⑪ detail box; the MK2's own B leg reads the same nibble
+		// assignment directly from its arrow labels, DATA left, TONE
+		// right). Three values, three distinct semantics, so no entry
+		// needs spec.ToneMode.Canonical.
 		ToneModes: []spec.ToneMode{
 			{Value: "OFF", Semantics: spec.ToneModeOff},
 			{Value: "TONE", Semantics: spec.ToneModeCTCSS},
@@ -281,13 +515,20 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 		// than filled.
 		DTCSPolarities: nil,
 		DTCSCodes:      nil,
-		// ⑩ / ❿, the whole byte (PDF p.167, "② Filter").
+		// ⑩ / ❿, the whole byte (the IC-7300's PDF p.167, "② Filter"; the
+		// MK2's own ⑩ / ❿ column).
 		Filters: []string{"FIL1", "FIL2", "FIL3"},
-		// TAKEN FROM THE PROFILE, never restated. The 95 bytes are the
-		// codec's own charset, so the driver's advertised set and the set
-		// civ's validName enforces cannot drift apart — and a name this
+		// TAKEN FROM THIS MODEL'S PROFILE, never restated. The bytes are
+		// the codec's own charset, so the driver's advertised set and the
+		// set civ's validName enforces cannot drift apart — and a name this
 		// driver advertises as legal is one BuildMemorySet will accept.
-		TagCharset: string(ic7300civ.Profile().NameCharset()),
+		//
+		// ON THE MK2, 0x60 IS IN IT AND ITS GLYPH IS NOT ESTABLISHED: that
+		// document's PDF p.18 Symbols table draws the same glyph against
+		// both 27 and 60 (§3.16 A2). NameCharset is a byte SET, not a glyph
+		// map, so both are legal name bytes and 0x60 must never be silently
+		// rendered or rewritten as 0x27 (plan decision D13).
+		TagCharset: string(m.profile.NameCharset()),
 	}
 }
 
@@ -296,26 +537,40 @@ func baseCapabilities(memFields, scanFields map[spec.Field]spec.FieldSupport) sp
 // therefore UNWRITABLE (spec.FieldSupport.CanWrite). It is what
 // writeTrialsComplete == false means in capability terms, and it is the
 // profile a real IC-7300 gets.
-func capabilitiesUnverified() spec.Capabilities {
+func capabilitiesUnverified(m modelParams) spec.Capabilities {
 	rw := spec.FieldSupport{Read: spec.Unverified, Write: spec.Unverified}
-	return baseCapabilities(bankFields(rw), bankFields(rw))
+	return baseCapabilities(m, bankFields(rw), bankFields(rw))
 }
 
 // capabilitiesSimulated is the profile a fake radio gets: the same fields
 // graded Supported, so the write choreography is exercisable end to end
 // without a consent flag and without any claim about hardware.
-func capabilitiesSimulated() spec.Capabilities {
+func capabilitiesSimulated(m modelParams) spec.Capabilities {
 	rw := spec.FieldSupport{Read: spec.Supported, Write: spec.Supported}
-	return baseCapabilities(bankFields(rw), bankFields(rw))
+	return baseCapabilities(m, bankFields(rw), bankFields(rw))
 }
 
-// ic7300Driver is this package's driver.Driver implementation.
+// ic7300Driver is this package's driver.Driver implementation, for BOTH
+// radios: the model it is driving is the modelParams row it carries.
 //
-// Task 14 gives it Open, the probe and the session; this file gives it the
-// two things a driver must be able to answer before any port exists — which
-// model it is, and what that model can do.
+// ic7300.go gives it Open, the probe and the session; this file gives it
+// the two things a driver must be able to answer before any port exists —
+// which model it is, and what that model can do.
 type ic7300Driver struct {
 	driver.Base
+	// m is this driver value's model row, fixed at construction by New or
+	// NewMK2 and never mutated. Every model-conditional value the driver
+	// and its sessions publish or print is read from it.
+	m modelParams
+}
+
+// newDriver is the one constructor both exported ones call.
+func newDriver(m modelParams, p Profile, opts ...Option) driver.Driver {
+	d := &ic7300Driver{Base: driver.Base{Profile: p}, m: m}
+	for _, opt := range opts {
+		opt(d)
+	}
+	return d
 }
 
 // New returns a driver value for the IC-7300 under the given profile.
@@ -323,35 +578,42 @@ type ic7300Driver struct {
 // The zero Profile is RealHardware, the fail-safe one, so a caller that
 // passes nothing at all gets the description that writes nothing.
 //
-// IT WILL RETURN THE NEUTRAL driver.Driver once the Session is complete
-// (write.go), and everything above this package holds the seam rather than
-// this type. The two optional capabilities this driver additionally
-// implements — driver.SerialFramingReporter on the DRIVER,
-// driver.DiagnosticsReporter on the SESSION — are reached by the house's
-// two-result type assertion, never by a concrete type a caller would have to
-// import this package to name.
+// IT RETURNS THE NEUTRAL driver.Driver, and everything above this package
+// holds the seam rather than this type. The two optional capabilities this
+// driver additionally implements — driver.SerialFramingReporter on the
+// DRIVER, driver.DiagnosticsReporter on the SESSION — are reached by the
+// house's two-result type assertion, never by a concrete type a caller
+// would have to import this package to name.
 func New(p Profile, opts ...Option) driver.Driver {
-	d := &ic7300Driver{Base: driver.Base{Profile: p}}
-	for _, opt := range opts {
-		opt(d)
-	}
-	return d
+	return newDriver(model7300, p, opts...)
+}
+
+// NewMK2 returns a driver value for the IC-7300MK2. Same reasoning as New
+// in every respect, including the fail-safe profile arm; the MK2's own
+// write guard is writeTrialsCompleteMK2, and it is false for the MK2's own
+// reasons.
+func NewMK2(p Profile, opts ...Option) driver.Driver {
+	return newDriver(modelMK2, p, opts...)
 }
 
 // Option configures a driver value at construction.
 type Option func(*ic7300Driver)
 
 // WithConsentedUnverifiedWrites records that the user has explicitly
-// accepted writing fields that no IC-7300 has ever confirmed. It is the
-// second key to the hardware-write gate (spec.Support's own words), and it
-// is applied only to a profile this driver recognises.
+// accepted writing fields that no radio of this model has ever confirmed.
+// It is the second key to the hardware-write gate (spec.Support's own
+// words), and it is applied only to a profile this driver recognises.
+//
+// PER DRIVER, THEREFORE PER MODEL: an option passed to New reaches the
+// IC-7300's sessions and no MK2's, which is the right granularity for a
+// consent the user gives about a radio in front of them.
 func WithConsentedUnverifiedWrites() Option {
 	return func(d *ic7300Driver) { d.Consented = true }
 }
 
 // Model is the display name and registry key. It equals
 // Capabilities().Model, which driver.Registry.Register enforces.
-func (d *ic7300Driver) Model() string { return "IC-7300" }
+func (d *ic7300Driver) Model() string { return d.m.name }
 
 // Capabilities returns the STATIC baseline for this driver's profile.
 //
@@ -362,10 +624,10 @@ func (d *ic7300Driver) Model() string { return "IC-7300" }
 func (d *ic7300Driver) Capabilities() spec.Capabilities {
 	switch d.Profile {
 	case Simulated:
-		return capabilitiesSimulated()
+		return capabilitiesSimulated(d.m)
 	case RealHardware:
-		return capabilitiesUnverified()
+		return capabilitiesUnverified(d.m)
 	default:
-		return capabilitiesUnverified()
+		return capabilitiesUnverified(d.m)
 	}
 }

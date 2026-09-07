@@ -27,10 +27,11 @@ import (
 // the wrong channel, a stream that never goes quiet — which is exactly what
 // the error paths need and what a self-consistent fake will never produce.
 //
-// IT IS ALSO NOT SHARED WITH core/driver/ic7300mk2, which has its own copy.
-// A shared peer would be the sibling-borrowing both matrices' §4 forbid, and
-// it would hide a wrong address byte: this one answers from 0x94 and only
-// from 0x94.
+// IT IS ALSO NOT SHARED WITH THE MK2'S PEER, which is this file's twin in
+// respondingport_mk2_test.go — two peers in one package since the fold, and
+// still two. A shared peer would be the sibling-borrowing both matrices' §4
+// forbid, and it would hide a wrong address byte: this one answers from 0x94
+// and only from 0x94.
 //
 // THE ACKNOWLEDGEMENT SEMANTICS ARE AN ASSUMED CONVENTION APPLIED, NOT AN
 // OBSERVED RADIO TRANSCRIBED — no IC-7300 has ever been connected to this
