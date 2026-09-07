@@ -475,7 +475,7 @@ func TestNoProductionFileNamesTheSharedToneChart(t *testing.T) {
 }
 
 // TestCapabilities_ASessionHandsOutDefensiveCopies is the T11 review's M2 one
-// row over: cloneCapabilities' claim is load-bearing for the write gate, and
+// row over: spec.Capabilities.Clone's claim is load-bearing for the write gate, and
 // it is asserted THROUGH AN OPENED SESSION rather than against a freshly
 // constructed set — which would be trivially true whatever the function did,
 // since baseCapabilities allocates on every call.
