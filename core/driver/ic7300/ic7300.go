@@ -337,7 +337,7 @@ func (s *Session) Identity() driver.Identity { return s.id }
 // copy — including the tone RANGE, which is a pointer and would otherwise be
 // shared with every caller.
 func (s *Session) Capabilities() spec.Capabilities {
-	return cloneCapabilities(s.caps)
+	return s.caps.Clone()
 }
 
 // CIVDiagnostics is this driver's MODEL-SPECIFIC diagnostics surface.

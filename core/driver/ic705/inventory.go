@@ -116,7 +116,7 @@ func (s *Session) materialiseInventory(ctx context.Context, full bool) error {
 	// The session's own copy, so nothing this writes can be observed
 	// through the driver's baseline or through a set already handed to a
 	// caller.
-	caps := cloneCapabilities(s.caps)
+	caps := s.caps.Clone()
 	for i := range caps.Banks {
 		if caps.Banks[i].ID == spec.BankMemory {
 			caps.Banks[i].Slots = slots

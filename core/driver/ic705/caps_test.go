@@ -489,7 +489,7 @@ func TestCloneCapabilitiesSharesNoStorage(t *testing.T) {
 	// mutable through what it handed out — this is the project's
 	// hardware-write gate data.
 	src := capabilitiesUnverified()
-	cp := cloneCapabilities(src)
+	cp := src.Clone()
 	cp.Banks[0].Slots = append(cp.Banks[0].Slots, "G01-001")
 	cp.Banks[0].Fields[spec.FieldFrequency] = spec.FieldSupport{Read: spec.Supported, Write: spec.Supported}
 	cp.Modes[0] = "TAMPERED"

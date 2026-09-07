@@ -508,49 +508,6 @@ func capabilitiesSimulated() spec.Capabilities {
 	return baseCapabilities(spec.FieldSupport{Read: spec.Supported, Write: spec.Supported})
 }
 
-// cloneCapabilities returns a deep copy of caps: Banks (each with fresh
-// Slots and Fields) and every other slice independently allocated, so
-// mutating the copy can never reach the original.
-//
-// Load-bearing for the write gate, exactly as in the Yaesu drivers:
-// Session.Capabilities hands copies out, and a caller mutating one must
-// never alter what WriteChannel enforces.
-//
-// CTCSSToneRange is a POINTER, so a shallow copy would share the pointee
-// and a caller could move this radio's declared tone domain out from
-// under the session's own validation. It is copied by value into a fresh
-// allocation here.
-func cloneCapabilities(caps spec.Capabilities) spec.Capabilities {
-	out := caps
-	out.Banks = make([]spec.Bank, 0, len(caps.Banks))
-	for _, b := range caps.Banks {
-		// Capabilities.Bank returns a defensive copy (fresh Slots and
-		// Fields) — reuse that guarantee rather than restating per-field
-		// copying here. The ok result is discarded safely because b came
-		// out of caps.Banks and Bank scans that same slice for b.ID, and
-		// spec.Validate refuses a duplicate BankID (TestProfiles_Validate
-		// runs it over both profiles).
-		cp, _ := caps.Bank(b.ID)
-		out.Banks = append(out.Banks, cp)
-	}
-	out.Modes = append([]string(nil), caps.Modes...)
-	out.CTCSSTones = append([]spec.Tone(nil), caps.CTCSSTones...)
-	out.Bauds = append([]int(nil), caps.Bauds...)
-	out.RequiredSlots = append([]string(nil), caps.RequiredSlots...)
-	out.ShiftOptions = append([]spec.ShiftOption(nil), caps.ShiftOptions...)
-	out.CTCSSStates = append([]spec.ToneState(nil), caps.CTCSSStates...)
-	out.DuplexOptions = append([]spec.DuplexOption(nil), caps.DuplexOptions...)
-	out.ToneModes = append([]spec.ToneMode(nil), caps.ToneModes...)
-	out.DTCSPolarities = append([]string(nil), caps.DTCSPolarities...)
-	out.DTCSCodes = append([]int(nil), caps.DTCSCodes...)
-	out.Filters = append([]string(nil), caps.Filters...)
-	if caps.CTCSSToneRange != nil {
-		r := *caps.CTCSSToneRange
-		out.CTCSSToneRange = &r
-	}
-	return out
-}
-
 // effectiveCapabilities builds a Session's capability set: a deep copy of
 // the profile baseline with the MEM bank's SPARSE inventory materialised
 // from discovered.
@@ -568,7 +525,7 @@ func cloneCapabilities(caps spec.Capabilities) spec.Capabilities {
 // discovered is copied, never aliased: the session must not hold a slice
 // the walk's caller can still write to.
 func effectiveCapabilities(base spec.Capabilities, discovered []string) spec.Capabilities {
-	caps := cloneCapabilities(base)
+	caps := base.Clone()
 	for i := range caps.Banks {
 		if caps.Banks[i].ID != spec.BankMemory {
 			continue

@@ -455,42 +455,7 @@ func (s *Session) Identity() driver.Identity { return s.id }
 // session's own value; a caller that could reach into what Capabilities
 // handed out and flip a FieldSupport would otherwise be editing the write
 // gate from outside it.
-func (s *Session) Capabilities() spec.Capabilities { return cloneCapabilities(s.caps) }
-
-// cloneCapabilities deep-copies a capability set: every slice freshly
-// allocated, every bank re-copied through spec.Capabilities.Bank (which
-// already returns fresh Slots and Fields), and the tone RANGE — a POINTER,
-// so `out := caps` would have aliased it — copied as a struct.
-//
-// The ok result of Bank is discarded, and what makes that safe is that b
-// came out of caps.Banks and Bank scans that same slice for b.ID, so the
-// lookup cannot miss; the only way it could serve the wrong bank is a
-// duplicate BankID, which spec.Capabilities.Validate refuses outright and
-// TestBaseline_Validate runs over both profiles.
-func cloneCapabilities(caps spec.Capabilities) spec.Capabilities {
-	out := caps
-	out.Banks = make([]spec.Bank, 0, len(caps.Banks))
-	for _, b := range caps.Banks {
-		cp, _ := caps.Bank(b.ID)
-		out.Banks = append(out.Banks, cp)
-	}
-	out.Modes = append([]string(nil), caps.Modes...)
-	out.CTCSSTones = append([]spec.Tone(nil), caps.CTCSSTones...)
-	out.Bauds = append([]int(nil), caps.Bauds...)
-	out.RequiredSlots = append([]string(nil), caps.RequiredSlots...)
-	out.ShiftOptions = append([]spec.ShiftOption(nil), caps.ShiftOptions...)
-	out.CTCSSStates = append([]spec.ToneState(nil), caps.CTCSSStates...)
-	out.DuplexOptions = append([]spec.DuplexOption(nil), caps.DuplexOptions...)
-	out.ToneModes = append([]spec.ToneMode(nil), caps.ToneModes...)
-	out.DTCSPolarities = append([]string(nil), caps.DTCSPolarities...)
-	out.DTCSCodes = append([]int(nil), caps.DTCSCodes...)
-	out.Filters = append([]string(nil), caps.Filters...)
-	if caps.CTCSSToneRange != nil {
-		r := *caps.CTCSSToneRange
-		out.CTCSSToneRange = &r
-	}
-	return out
-}
+func (s *Session) Capabilities() spec.Capabilities { return s.caps.Clone() }
 
 // Close implements driver.Session. Idempotent, because Engine.Close is.
 func (s *Session) Close() error { return s.eng.Close() }
