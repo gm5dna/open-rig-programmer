@@ -648,7 +648,7 @@ func TestOpen_ProbeAnswerForAnotherChannelIsRefused(t *testing.T) {
 }
 
 // TestSessionCapabilities_IsADefensiveDeepCopy pins the claim
-// cloneCapabilities' doc comment makes: THE COPY IS LOAD-BEARING.
+// spec.Capabilities.Clone's doc comment makes: THE COPY IS LOAD-BEARING.
 //
 // WriteChannel's capability gate re-checks against s.caps, the session's
 // own value. A caller who could reach into what Capabilities() handed out

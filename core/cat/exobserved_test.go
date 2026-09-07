@@ -293,12 +293,13 @@ func TestCorrectionsCSV_WidthCorrectionAgreesWithTheObservations(t *testing.T) {
 }
 
 // TestObservedCSV_IsCanonicallyRendered pins the artefact's exact shape as
-// the derivation tool emits it: the pinned header, then one data row per
-// address in ascending address order, no blank lines, no trailing
-// whitespace. Without this a reordered or whitespace-drifted file would
-// still satisfy every semantic test while no longer being what the tool
-// produces — and the difference between "derived" and "hand-edited" is the
-// whole basis for trusting it.
+// the derivation tool (internal/extable/observe, removed in v1.4.1) used to
+// emit it: the pinned header, then one data row per address in ascending
+// address order, no blank lines, no trailing whitespace. The committed
+// core/cat/table2-observed.csv is now the pinned record — nothing
+// regenerates it — and without this test a reordered or whitespace-drifted
+// file would still satisfy every semantic test while no longer matching
+// that record.
 func TestObservedCSV_IsCanonicallyRendered(t *testing.T) {
 	data, err := os.ReadFile(observedPath)
 	if err != nil {
