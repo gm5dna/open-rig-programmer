@@ -11,6 +11,20 @@ import (
 // ErrLayoutInvalid is the sentinel every NewLayout refusal wraps.
 var ErrLayoutInvalid = errors.New("kw: invalid record layout")
 
+// enumName renders one of this package's small named-constant enums: the
+// case name if v is a key of names, or unset (the type's own zero-value
+// name) for anything else — including a value NewLayout has already
+// refused, so a config that reaches String() before validation still
+// gets a real word rather than a number. Shared by every enum String()
+// below, so a constant added to one of them is one map entry away from a
+// self-naming diagnostic rather than a rewritten switch.
+func enumName[T ~int](v T, unset string, names map[T]string) string {
+	if n, ok := names[v]; ok {
+		return n
+	}
+	return unset
+}
+
 // P2Policy says what byte 4 of a memory record means on one radio.
 //
 // The zero value is P2Unset and NewLayout refuses it, which is this type's
@@ -35,14 +49,10 @@ const (
 
 // String renders p for refusals and logs.
 func (p P2Policy) String() string {
-	switch p {
-	case P2HundredsDigit:
-		return "P2HundredsDigit"
-	case P2FixedZero:
-		return "P2FixedZero"
-	default:
-		return "P2Unset"
-	}
+	return enumName(p, "P2Unset", map[P2Policy]string{
+		P2HundredsDigit: "P2HundredsDigit",
+		P2FixedZero:     "P2FixedZero",
+	})
 }
 
 // Byte19Meaning says what byte 19 (P6) of a memory record means.
@@ -64,14 +74,10 @@ const (
 
 // String renders b for refusals and logs.
 func (b Byte19Meaning) String() string {
-	switch b {
-	case Byte19DataMode:
-		return "Byte19DataMode"
-	case Byte19Lockout:
-		return "Byte19Lockout"
-	default:
-		return "Byte19Unset"
-	}
+	return enumName(b, "Byte19Unset", map[Byte19Meaning]string{
+		Byte19DataMode: "Byte19DataMode",
+		Byte19Lockout:  "Byte19Lockout",
+	})
 }
 
 // Byte28Policy says what byte 28 (P11) of a memory record is on one row.
@@ -109,16 +115,11 @@ const (
 
 // String renders b for refusals and logs.
 func (b Byte28Policy) String() string {
-	switch b {
-	case Byte28FilterLive:
-		return "Byte28FilterLive"
-	case Byte28FilterEither:
-		return "Byte28FilterEither"
-	case Byte28FixedZero:
-		return "Byte28FixedZero"
-	default:
-		return "Byte28Unset"
-	}
+	return enumName(b, "Byte28Unset", map[Byte28Policy]string{
+		Byte28FilterLive:   "Byte28FilterLive",
+		Byte28FilterEither: "Byte28FilterEither",
+		Byte28FixedZero:    "Byte28FixedZero",
+	})
 }
 
 // Byte3940Meaning says what bytes 39-40 (P14) of a memory record mean.
@@ -140,14 +141,10 @@ const (
 
 // String renders b for refusals and logs.
 func (b Byte3940Meaning) String() string {
-	switch b {
-	case Byte3940FMNarrowFlag:
-		return "Byte3940FMNarrowFlag"
-	case Byte3940StepIndex:
-		return "Byte3940StepIndex"
-	default:
-		return "Byte3940Unset"
-	}
+	return enumName(b, "Byte3940Unset", map[Byte3940Meaning]string{
+		Byte3940FMNarrowFlag: "Byte3940FMNarrowFlag",
+		Byte3940StepIndex:    "Byte3940StepIndex",
+	})
 }
 
 // Byte41Meaning says what byte 41 (P15) of a memory record means: the
@@ -165,14 +162,10 @@ const (
 
 // String renders b for refusals and logs.
 func (b Byte41Meaning) String() string {
-	switch b {
-	case Byte41Lockout:
-		return "Byte41Lockout"
-	case Byte41FixedZero:
-		return "Byte41FixedZero"
-	default:
-		return "Byte41Unset"
-	}
+	return enumName(b, "Byte41Unset", map[Byte41Meaning]string{
+		Byte41Lockout:   "Byte41Lockout",
+		Byte41FixedZero: "Byte41FixedZero",
+	})
 }
 
 // ToneModeSet says how many values byte 20 (P7) admits on one radio: four
@@ -190,14 +183,10 @@ const (
 
 // String renders s for refusals and logs.
 func (s ToneModeSet) String() string {
-	switch s {
-	case ToneModesFour:
-		return "ToneModesFour"
-	case ToneModesThree:
-		return "ToneModesThree"
-	default:
-		return "ToneModesUnset"
-	}
+	return enumName(s, "ToneModesUnset", map[ToneModeSet]string{
+		ToneModesFour:  "ToneModesFour",
+		ToneModesThree: "ToneModesThree",
+	})
 }
 
 // SlotClass is what one memory slot NUMBER means in a layout's slot space.
@@ -232,16 +221,11 @@ const (
 
 // String renders c for refusals and logs.
 func (c SlotClass) String() string {
-	switch c {
-	case SlotMemory:
-		return "SlotMemory"
-	case SlotScan:
-		return "SlotScan"
-	case SlotExtension:
-		return "SlotExtension"
-	default:
-		return "SlotClassInvalid"
-	}
+	return enumName(c, "SlotClassInvalid", map[SlotClass]string{
+		SlotMemory:    "SlotMemory",
+		SlotScan:      "SlotScan",
+		SlotExtension: "SlotExtension",
+	})
 }
 
 // SlotRange is one inclusive band of slot numbers of a single class.
