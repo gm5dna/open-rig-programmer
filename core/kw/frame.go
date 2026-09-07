@@ -2,15 +2,6 @@
 
 package kw
 
-// Frame is a single Kenwood wire frame: a command name, its parameters and
-// the trailing ';' terminator. Both books describe the same envelope — a
-// command name of two (590:12-13, 480:76) or, contradicting itself two
-// pages later, two or three characters (590:62; VS0 exists at 590:2496 —
-// erratum E3), parameters of "predetermined" width per command (590:70-76,
-// 480:92-106), and ';' as the terminator, whose position "differs depending
-// on the command used" (590:87-91, 480:113-118).
-type Frame []byte
-
 const (
 	// rejectionFrame is the radio's one and only NAK. It means EITHER
 	// "Command syntax was incorrect" OR "Command was not executed due to

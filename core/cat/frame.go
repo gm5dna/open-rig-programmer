@@ -2,11 +2,6 @@
 
 package cat
 
-// Frame is a single CAT wire frame: a command, its parameters, and the
-// trailing ';' terminator. Reference: "General framing — ASCII command
-// frames terminated by ';'."
-type Frame []byte
-
 // rejectionFrame is the radio's one and only NAK. Reference golden vector
 // G12: "?;" — rejection reply.
 const rejectionFrame = "?;"

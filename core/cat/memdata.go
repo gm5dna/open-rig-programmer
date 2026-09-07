@@ -599,27 +599,6 @@ func (d Dialect) encodeMemoryFields(frame []byte, m MemoryData) error {
 	return nil
 }
 
-// FreqTooWideError reports that a frequency taken from the neutral
-// memory model does not fit this package's internal uint32 frequency
-// representation, so no MR/MW/MT frame could carry it.
-//
-// It exists because the Icom tier widened
-// codeplug.ChannelData.FreqHz to uint64 (design D4, adjudication 5 — the
-// IC-905 reaches 10 GHz) while core/cat deliberately KEPT its uint32:
-// this package encodes a 9-digit NEWCAT frequency field whose ceiling is
-// 999,999,999, so a wider internal type would express nothing this
-// protocol can send. The conversion between the two therefore happens at
-// the driver seam, and it is CHECKED — see MemoryFreqHz.
-type FreqTooWideError struct {
-	// FreqHz is the offending value, in hertz.
-	FreqHz uint64
-}
-
-// Error implements the error interface.
-func (e *FreqTooWideError) Error() string {
-	return fmt.Sprintf("cat: frequency %d Hz is too large for this protocol's memory frame (maximum %d Hz)", e.FreqHz, memFreqMax)
-}
-
 // MemoryFreqHz converts a neutral-model frequency into the uint32
 // MemoryData.FreqHz carries, refusing anything this protocol's 9-digit
 // frequency field could not hold.
@@ -642,7 +621,7 @@ func (e *FreqTooWideError) Error() string {
 // and the sixth is the first with VHF/UHF.
 func MemoryFreqHz(v uint64) (uint32, error) {
 	if v > memFreqMax {
-		return 0, &FreqTooWideError{FreqHz: v}
+		return 0, fmt.Errorf("cat: frequency %d Hz is too large for this protocol's memory frame (maximum %d Hz)", v, memFreqMax)
 	}
 	return uint32(v), nil
 }

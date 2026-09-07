@@ -734,4 +734,3 @@ func validateFrameBound(cfg ProfileConfig) error {
 	}
 	return nil
 }
-

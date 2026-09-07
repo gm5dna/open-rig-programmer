@@ -26,24 +26,13 @@ func validSupport(s Support) bool {
 	}
 }
 
-// validateVocab checks that a capability vocabulary list — ShiftOptions,
-// or CTCSSStates' Values — is non-empty and contains no blank or
-// duplicate entries. fieldName names the field for the returned problem
-// strings, e.g. "ShiftOptions".
-func validateVocab(fieldName string, values []string) []string {
-	var problems []string
-	if len(values) == 0 {
-		problems = append(problems, fmt.Sprintf("%s must not be empty", fieldName))
-	}
-	return append(problems, validateVocabEntries(fieldName, values)...)
-}
-
-// validateVocabEntries is validateVocab WITHOUT the non-empty rule: the
-// blank and duplicate checks alone. It exists for the Icom tier's paired
-// vocabularies (design D4), where an EMPTY list is a legitimate positive
-// statement — "this radio expresses no such vocabulary" — as long as the
-// other half of the pair is present. Validate applies the non-empty rule
-// to the pair, not to each member.
+// validateVocabEntries checks a capability vocabulary list — ShiftOptions,
+// or CTCSSStates' Values — for blank or duplicate entries, without a
+// non-empty rule. It exists for the Icom tier's paired vocabularies
+// (design D4), where an EMPTY list is a legitimate positive statement —
+// "this radio expresses no such vocabulary" — as long as the other half
+// of the pair is present. Validate applies the non-empty rule to the
+// pair, not to each member.
 func validateVocabEntries(fieldName string, values []string) []string {
 	var problems []string
 	seen := make(map[string]bool, len(values))
