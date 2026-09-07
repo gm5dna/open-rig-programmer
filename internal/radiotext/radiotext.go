@@ -603,17 +603,17 @@ var ic7300Text = Text{
 //
 // THE HONESTY RULE APPLIES UNCHANGED, and the pairing sharpens it rather
 // than loosening it: no IC-7300MK2 has ever been asked anything by this
-// project (core/driver/ic7300mk2/doc.go) — every value comes from the
+// project (core/driver/ic7300/doc_mk2.go) — every value comes from the
 // IC-7300MK2 CI-V REFERENCE GUIDE, through core/civ/ic7300mk2's profile,
 // none from a hardware finding — and no write trial has happened
-// (writeTrialsComplete, core/driver/ic7300mk2/caps.go, is its OWN
+// (writeTrialsCompleteMK2, core/driver/ic7300/caps.go, is its OWN
 // constant, false for its OWN reasons: that package's own comment states
 // "The registered sibling's FALSE is not stated here").
 //
 // THIS ENTRY CARRIES NO OTHER RADIO'S EVIDENCE OR PARTICULARS FROM
 // ic7300Text, and that is the one fact this doc comment exists to say
 // loudest: the two Icom documents this pair is built from are MUTUALLY
-// SILENT about each other (core/driver/ic7300mk2/doc.go's own package
+// SILENT about each other (core/driver/ic7300/doc_mk2.go's own package
 // comment), so an entry that read like ic7300Text with the model name
 // substituted would misattribute one radio's evidence to the other —
 // exactly the failure mode the FTdx101D/MP pair is EXEMPT from (their
@@ -633,14 +633,14 @@ var ic7300Text = Text{
 //     Icom entry.
 //   - This driver's CI-V address is fixed at B6h (core/civ/ic7300mk2/
 //     profile.go) — the sibling answers at 94h, and IN THE FIELD THE TWO
-//     CANNOT CONFUSE EACH OTHER (core/driver/ic7300mk2/doc.go's "The
+//     CANNOT CONFUSE EACH OTHER (core/driver/ic7300/doc_mk2.go's "The
 //     wrong-sibling fingerprint" section) — with no --civ-address option
 //     to change it and no way to detect a radio set to a different
 //     address.
 //   - The default baud, 19200, is a CONSERVATIVE DERIVATION from a table
 //     this document prints for an ENTIRELY DIFFERENT PURPOSE — the `18 01`
 //     wake-up-command FE-count table, NOT a supported-rate list
-//     (core/driver/ic7300mk2/doc.go's own emphatic section on this). This
+//     (core/driver/ic7300/doc_mk2.go's own emphatic section on this). This
 //     document — a CI-V REFERENCE GUIDE, not a full operating manual —
 //     prints NO rate list and NO factory default at all, which is a
 //     WEAKER evidential footing than the IC-7300's own six-rate [USB]
@@ -659,7 +659,7 @@ var ic7300mk2Text = Text{
 	// The CI-V protocol prints two erase command forms — a 1A 00 set with
 	// a truncated data area, and a separate command 0B, whose own printed
 	// row states plainly that P1 and P2 cannot be cleared
-	// (core/driver/ic7300mk2/doc.go's "Erase: two printed forms, neither
+	// (core/driver/ic7300/doc_mk2.go's "Erase: two printed forms, neither
 	// shipped") — but this build sends neither: no IC-7300MK2 has ever
 	// confirmed what either does, and sending an unconfirmed erase command
 	// risks clearing the wrong channel rather than the intended one. This

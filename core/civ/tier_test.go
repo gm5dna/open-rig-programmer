@@ -7,7 +7,7 @@
 // drivers' doc comments says so in its own words (core/driver/ic9700/ic9700.go's
 // probeFingerprint: "Cross-model record-length distinctness is a
 // TIER-level Wave-4 check needing a registry-wide table of accepted
-// lengths"; core/driver/ic7300mk2/doc.go's "The wrong-sibling
+// lengths"; core/driver/ic7300/doc_mk2.go's "The wrong-sibling
 // fingerprint" section: "Cross-model record-length distinctness is a
 // TIER-level check belonging to registration"). This file is that check.
 //
@@ -46,7 +46,7 @@
 // answer at all and the open times out. THE LENGTH FINGERPRINT IS
 // THEREFORE DEFENCE IN DEPTH, NOT THE PRIMARY DISCRIMINATOR: it protects
 // against SAME-ADDRESS confusion only — a radio moved onto this address,
-// or a bus mis-set — which is exactly what core/driver/ic7300mk2/doc.go
+// or a bus mis-set — which is exactly what core/driver/ic7300/doc_mk2.go
 // and core/driver/ic905's Open comment both already say.
 //
 // WITH ONE EXCEPTION, AND IT IS NOT A MOVED ADDRESS. The IC-7851 and the
