@@ -13,28 +13,11 @@ import (
 	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
 
-// openRealSession, openFakeSession, and validateModel used to be defined
-// in this file alongside ft710Model/newRegistry/newRealDriver
-// (task-11/task-12), then task-15 extracted the session-construction
-// plumbing into internal/wiring so app/ (the M6 GUI) could share it. Task
-// 40 (M9a-4, the CLI neutralisation) migrated this file's own two
-// aliases off internal/wiring's Task-39 compatibility wrappers
-// (wiring.OpenRealSession/wiring.OpenFakeSession, which were
-// DefaultModel-only and returned the concrete *ft710.Session) onto the
-// model-keyed wiring.OpenRealSessionFor/wiring.OpenFakeSessionFor, which
-// return driver.Session — so cmd/rigprog no longer needs to import
-// core/driver/ft710 at all. Task 41 (M9a-5, app/'s own neutralisation)
-// migrated app/ off those same wrappers too and, once grep confirmed
-// nothing anywhere still called them, deleted the wrappers and their
-// UnexpectedSessionTypeError/UnexpectedFakeSessionTypeError types from
-// internal/wiring outright.
-//
-// newRegistry/newRealDriver, this file's own thin aliases of
-// internal/wiring's NewRegistry/NewRealDriver, were untouched by that
-// migration but had already gone unused by any caller (openRealSession
-// and openFakeSession call wiring.NewRegistry/wiring.NewRealDriver
-// directly via wiring.OpenRealSessionFor/wiring.OpenFakeSessionFor) —
-// task 44 deleted both, confirmed dead by grep repo-wide first.
+// openRealSession/openFakeSession open a session via internal/wiring's
+// model-keyed OpenRealSessionFor/OpenFakeSessionFor (returning
+// driver.Session, never a concrete *ft710.Session, so this file needs no
+// core/driver/ft710 import), translating its typed errors back to this
+// command's own wording — see openRealSession's doc comment.
 
 // userConfigPath resolves this machine's shared settings file — the store
 // holding the user's recorded consent decisions (internal/userconfig). It is

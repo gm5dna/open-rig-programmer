@@ -217,8 +217,8 @@ func (a *App) bumpWorkingRevLocked() {
 	a.workingRev++
 }
 
-// currentModel is THE model resolver for this package (M9c-5 E4): the one
-// answer to "which radio is this?" that every model-keyed lookup here —
+// currentModel is THE model resolver for this package: the one answer to
+// "which radio is this?" that every model-keyed lookup here —
 // capabilities, snapshot directory, bank synthesis, prose, settings
 // descriptor — is required to consume, so no site re-derives it and
 // drifts from the others. It returns a model NAME (the driver.Registry
@@ -233,36 +233,26 @@ func (a *App) bumpWorkingRevLocked() {
 //     the session was opened under.
 //  2. Otherwise the working copy's own Radio.Model
 //     (core/codeplug/radioinfo.go), but ONLY when capsForModel recognises
-//     it. This is Fix B1's rule (Codex fix-B review, HIGH: "offline
-//     import transforms data against the WRONG model's capabilities, and
-//     the result can later pass the send gate"), generalised from
-//     currentCaps to every site: an offline import or edit against a
-//     working copy that is NOT an FT-710 must be transformed/validated
-//     against THAT radio's own vocabulary, never silently against the
-//     FT-710's.
+//     it: an offline import or edit against a working copy that is NOT
+//     an FT-710 must be transformed/validated against THAT radio's own
+//     vocabulary, never silently against the FT-710's.
 //  3. Otherwise wiring.DefaultModel (the FT-710) — when working is nil,
 //     its Radio.Model is "", or that model names no registered driver (a
 //     model this build does not carry a driver for: a future radio's
-//     dialect landing before its driver, an FT-991A file written by
-//     someone else, or a hand-edited/corrupt file — the FTdx10 is
-//     REGISTERED since M9c-6, and the FTdx101D and FTdx101MP since M9d-2,
-//     so all three resolve at step 2 like any other model. This example
-//     has been re-picked TWICE for that reason, which is itself the
-//     warning: naming a real radio here dates the comment the moment that
-//     radio's driver lands, so the name chosen is one no milestone plans).
-//     Refuse-before-corrupt: an unresolvable
-//     model degrades to a KNOWN-safe baseline rather than being handed on
-//     to lookups that would all fail on it at once. wiring.DefaultModel is
-//     a hardcoded, always-registered model name (internal/wiring's own
-//     TestStaticCapabilities_FT710EqualsDriver pins this), so this tail
-//     cannot itself fail to resolve.
+//     dialect landing before its driver, a file written by another
+//     build, or a hand-edited/corrupt one). Refuse-before-corrupt: an
+//     unresolvable model degrades to a KNOWN-safe baseline rather than
+//     being handed on to lookups that would all fail on it at once.
+//     wiring.DefaultModel is a hardcoded, always-registered model name
+//     (internal/wiring's own TestStaticCapabilities_FT710EqualsDriver
+//     pins this), so this tail cannot itself fail to resolve.
 //
 // Step 2's recognition check is the whole reason this is a resolver
-// rather than a field read (M9c-5 E4's design note): handing a RAW,
-// unrecognised Radio.Model to wiring.SynthesiseDiscoveredBanks would make
-// it report ok == false and SILENTLY DROP a legacy file's discovered
-// 60m/EMG channels out of the grid — data loaded but invisible, the exact
-// failure synthesiseDiscoveredBanks exists to prevent.
+// rather than a field read: handing a RAW, unrecognised Radio.Model to
+// wiring.SynthesiseDiscoveredBanks would make it report ok == false and
+// SILENTLY DROP a legacy file's discovered 60m/EMG channels out of the
+// grid — data loaded but invisible, the exact failure
+// synthesiseDiscoveredBanks exists to prevent.
 func currentModel(conn *connectionState, working *codeplug.Codeplug) string {
 	if conn != nil {
 		return conn.session.Capabilities().Model
