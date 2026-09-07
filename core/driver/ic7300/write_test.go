@@ -510,7 +510,7 @@ func TestWriteChannel_RefusesEverythingWithoutConsent(t *testing.T) {
 	for _, slot := range []string{"001", "P1"} {
 		before := len(peer.Received())
 		if _, err := sess.WriteChannel(context.Background(), channelFor(slot)); !errors.Is(err, driver.ErrWriteRefused) {
-			t.Errorf("WriteChannel(%q) = %v, want ErrWriteRefused — writeTrialsComplete is FALSE, so a RealHardware session writes nothing without the user's recorded consent", slot, err)
+			t.Errorf("WriteChannel(%q) = %v, want ErrWriteRefused — writeTrialsComplete7300 is FALSE, so a RealHardware session writes nothing without the user's recorded consent", slot, err)
 		}
 		if after := len(peer.Received()); after != before {
 			t.Errorf("WriteChannel(%q) reached the wire on an unconsented session", slot)

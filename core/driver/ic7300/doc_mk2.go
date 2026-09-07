@@ -1,5 +1,27 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+package ic7300
+
+// THE IC-7300MK2'S OWN DOCUMENT RECORD, kept whole and kept SEPARATE.
+//
+// This is core/driver/ic7300mk2/doc.go as it stood when that package was
+// folded into this one (audit finding 8). It is a FREE-FLOATING comment,
+// not a package doc comment and not attached to any declaration, for the
+// same reason the two matrices' §4 forbid lending: everything below is a
+// reading of the IC-7300MK2's 27-page CI-V Reference Guide and of nothing
+// else, and it must stay legible as that radio's record rather than merge
+// into doc.go's account of the IC-7300's 180-page full manual. Its
+// citations, its ASSUMED register and its lift tokens are the evidence
+// behind modelMK2's row in caps.go, and they are what a reader following
+// an `ic7300mk2-…` token from a refusal message arrives at.
+//
+// The one sentence in it that the fold has overtaken is its opening claim
+// that the two radios have separate driver PACKAGES. They no longer do:
+// they have separate modelParams ROWS, separate civ profiles, separate
+// fakes, separate write guards and separate evidence, in one package. What
+// the rule forbids is a value derived from the other radio's manual, and
+// the table does not do that; see modelParams' own comment.
+//
 // Package ic7300mk2 is the Icom IC-7300MK2 driver: ONE driver package for
 // ONE registered radio model, over the CI-V codec in core/civ and this
 // model's own profile in core/civ/ic7300mk2.
@@ -550,4 +572,3 @@
 // outside this package. No ReadAll — that is clone.Service's, walking
 // Session.Capabilities().Banks and calling ReadChannel per slot. No
 // read-back verification after a write — that is the clone service's too.
-package ic7300mk2

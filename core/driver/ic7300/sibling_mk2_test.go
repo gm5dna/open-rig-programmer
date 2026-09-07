@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package ic7300mk2_test
+package ic7300_test
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	ic7300mk2civ "github.com/gm5dna/open-rig-programmer/core/civ/ic7300mk2"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
-	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300mk2"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7300"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7300mk2"
@@ -34,7 +34,7 @@ import (
 // irrelevant here — the length is the whole of the evidence — but it must be
 // storable, or the fake would refuse the seed and the probe would meet an
 // empty radio instead of a foreign record.
-func ic7300Record() []byte {
+func ic7300RecordMK2() []byte {
 	rec := make([]byte, 39)
 	rec[0] = 0x00                                     // ③
 	copy(rec[1:6], []byte{0x00, 0x00, 0x25, 0x14, 0}) // ④–⑧ — 14.250 MHz
@@ -59,13 +59,13 @@ func ic7300Record() []byte {
 // confuse each other: the MK2 driver talks to B6h and the IC-7300 fake answers
 // only to 94h, so the probe times out. This test exists so that nobody reads
 // Case 2 as a field behaviour.
-func TestSibling_IC7300AtItsOwnAddressSimplyTimesOut(t *testing.T) {
+func TestSibling_IC7300AtItsOwnAddressSimplyTimesOut_MK2(t *testing.T) {
 	// SEEDED, so the timeout is attributable to the ADDRESS and not merely to
 	// an empty radio: this fake would answer a correctly addressed read.
-	radio := fakeic7300.New(fakeic7300.WithChannel("001", ic7300Record()))
+	radio := fakeic7300.New(fakeic7300.WithChannel("001", ic7300RecordMK2()))
 	defer radio.Close()
 
-	_, err := ic7300mk2.New(ic7300mk2.Simulated).
+	_, err := ic7300.NewMK2(ic7300.Simulated).
 		Open(context.Background(), radio.Port(), driver.Identity{Port: "fake"})
 	if err == nil {
 		t.Fatal("Open succeeded against an IC-7300 fake at 94h — the IC-7300MK2 driver addresses B6h and must get no answer at all")
@@ -82,18 +82,18 @@ func TestSibling_IC7300AtItsOwnAddressSimplyTimesOut(t *testing.T) {
 // collision the length fingerprint exists to catch: an IC-7300 answering at
 // B6h with its own 39-byte records. A simulator configuration, NOT a claim
 // that any radio behaves so — the two models ship at 94h and B6h.
-func TestSibling_A39ByteRecordAtB6hIsWrongRadioProvisionally(t *testing.T) {
+func TestSibling_A39ByteRecordAtB6hIsWrongRadioProvisionally_MK2(t *testing.T) {
 	// SEED AN OCCUPIED SLOT. Open scans MEM 1..8, and an unpopulated fake
 	// answers FA to every one of them, which opens the session UNFINGERPRINTED
 	// — the test would fail to exercise the fingerprint at all. The seeded
 	// record is this fake's own 39-byte shape, which is the whole point.
 	radio := fakeic7300.New(
 		fakeic7300.WithRadioAddress(0xB6),
-		fakeic7300.WithChannel("001", ic7300Record()),
+		fakeic7300.WithChannel("001", ic7300RecordMK2()),
 	)
 	defer radio.Close()
 
-	_, err := ic7300mk2.New(ic7300mk2.Simulated).
+	_, err := ic7300.NewMK2(ic7300.Simulated).
 		Open(context.Background(), radio.Port(), driver.Identity{Port: "fake"})
 	var wrong *driver.WrongRadioError
 	if !errors.As(err, &wrong) {
@@ -132,11 +132,11 @@ func TestSibling_A39ByteRecordAtB6hIsWrongRadioProvisionally(t *testing.T) {
 // THE FAKE IS THIS DRIVER'S OWN, at its own address, which makes the statement
 // sharper: even a radio that identifies correctly at B6h is refused when it
 // answers a length nobody declares, and no model is named for it.
-func TestSibling_AnUnknownLengthIsRefusedWithoutNamingAModel(t *testing.T) {
+func TestSibling_AnUnknownLengthIsRefusedWithoutNamingAModel_MK2(t *testing.T) {
 	radio := fakeic7300mk2.New(fakeic7300mk2.WithRawChannel("001", make([]byte, 40)))
 	defer radio.Close()
 
-	_, err := ic7300mk2.New(ic7300mk2.Simulated).
+	_, err := ic7300.NewMK2(ic7300.Simulated).
 		Open(context.Background(), radio.Port(), driver.Identity{Port: "fake"})
 	if err == nil {
 		t.Fatal("Open succeeded against a radio answering a 40-byte record — no model in this tier declares that length")
@@ -156,12 +156,12 @@ func TestSibling_AnUnknownLengthIsRefusedWithoutNamingAModel(t *testing.T) {
 // The civ layer refuses independently of the driver, so the property does not
 // rest on the probe alone: a future driver that forgot its table would still
 // meet a typed refusal from the codec.
-func TestSibling_CIVRefusesTheForeignRecordLength(t *testing.T) {
+func TestSibling_CIVRefusesTheForeignRecordLength_MK2(t *testing.T) {
 	// A 1A 00 answer TO this controller FROM B6h carrying a 39-byte record:
 	// the frame the synthetic collision above puts on the wire. Built by hand
 	// so this test does not depend on the fake at all.
 	frame := []byte{0xFE, 0xFE, 0xE0, 0xB6, 0x1A, 0x00, 0x00, 0x01}
-	frame = append(frame, ic7300Record()...)
+	frame = append(frame, ic7300RecordMK2()...)
 	frame = append(frame, 0xFD)
 
 	_, err := ic7300mk2civ.Profile().ParseMemoryAnswer(frame)

@@ -44,7 +44,6 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
-	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300mk2"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7610"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7760"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7851"
@@ -139,22 +138,24 @@ const IC7610Model = "IC-7610"
 // same string, and a typo in one alone would build a model openable for
 // real but not simulated.
 //
-// THIS IS THE SECOND ICOM REGISTRATION, and the FIRST
-// PAIR — the IC-7300 and IC-7300MK2 register together, in the same
-// commit, over separate driver packages and separate fakes
-// (core/driver/ic7300 / core/driver/ic7300mk2, internal/fakeic7300 /
-// internal/fakeic7300mk2), because the two documents are mutually silent
-// about each other (core/driver/ic7300/doc.go's package comment) and one
-// driver package would have carried that separation as a table rather
-// than as two packages that cannot borrow from each other by construction.
+// THIS IS THE SECOND ICOM REGISTRATION, and the FIRST PAIR — the IC-7300
+// and IC-7300MK2 register together, over ONE driver package
+// (core/driver/ic7300, New and NewMK2) and SEPARATE fakes
+// (internal/fakeic7300 / internal/fakeic7300mk2). The two documents are
+// mutually silent about each other, so the separation the pair needs is
+// carried by that package's modelParams rows — two rows, each populated
+// from its own manual and neither derived from the other — and by the two
+// independently written fakes each model's end-to-end tests run against.
+// It was two packages until the v1.4.1 sweep folded them
+// (core/driver/ic7300/doc.go's package comment, and doc_mk2.go for the
+// MK2's own record).
 const IC7300Model = "IC-7300"
 
 // IC7300MK2Model names the IC-7300MK2's realDrivers/fakeDrivers key, which
-// must equal ic7300mk2.New(...).Model(). See IC7300Model for the pairing
-// rationale, which applies here unchanged: a SEPARATE constant, a
-// SEPARATE driver package, a SEPARATE fake, because the two Icom
-// documents this pair is built from never reference each other and no
-// lift in one is a lift for the sibling.
+// must equal ic7300.NewMK2(...).Model(). See IC7300Model for the pairing
+// rationale: a SEPARATE constant, a SEPARATE modelParams row, a SEPARATE
+// fake, because the two Icom documents this pair is built from never
+// reference each other and no lift in one is a lift for the sibling.
 const IC7300MK2Model = "IC-7300MK2"
 
 // IC705Model names the IC-705's realDrivers/fakeDrivers key, which must
@@ -635,9 +636,9 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 	},
 	IC7300MK2Model: func(consent bool) driver.Driver {
 		if consent {
-			return ic7300mk2.New(ic7300mk2.RealHardware, ic7300mk2.WithConsentedUnverifiedWrites())
+			return ic7300.NewMK2(ic7300.RealHardware, ic7300.WithConsentedUnverifiedWrites())
 		}
-		return ic7300mk2.New(ic7300mk2.RealHardware)
+		return ic7300.NewMK2(ic7300.RealHardware)
 	},
 	IC705Model: func(consent bool) driver.Driver {
 		if consent {

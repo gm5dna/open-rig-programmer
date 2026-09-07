@@ -99,11 +99,11 @@ func allFF(rec []byte) bool {
 func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channel, error) {
 	want, _, ok := parseSlot(slot)
 	if !ok {
-		return codeplug.Channel{}, fmt.Errorf("ic7300: ReadChannel: %q is not a slot this radio has — its slots are 001..099, P1 and P2", slot)
+		return codeplug.Channel{}, fmt.Errorf("%s: ReadChannel: %q is not a slot this radio has — its slots are 001..099, P1 and P2", s.m.errPrefix, slot)
 	}
 	cmd, err := s.p.BuildMemoryRead(want)
 	if err != nil {
-		return codeplug.Channel{}, fmt.Errorf("ic7300: ReadChannel %s: %w", slot, err)
+		return codeplug.Channel{}, fmt.Errorf("%s: ReadChannel %s: %w", s.m.errPrefix, slot, err)
 	}
 
 	// retryReads is ONE, stated rather than left to the signature: a read is
@@ -117,16 +117,16 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 		return codeplug.Channel{Slot: slot}, nil
 	}
 	if err != nil {
-		return codeplug.Channel{}, fmt.Errorf("ic7300: ReadChannel %s: %w", slot, err)
+		return codeplug.Channel{}, fmt.Errorf("%s: ReadChannel %s: %w", s.m.errPrefix, slot, err)
 	}
 
 	got, raw, err := s.p.MemoryAnswerRecord(frame)
 	if err != nil {
-		return codeplug.Channel{}, fmt.Errorf("ic7300: ReadChannel %s: %w", slot, err)
+		return codeplug.Channel{}, fmt.Errorf("%s: ReadChannel %s: %w", s.m.errPrefix, slot, err)
 	}
 	if got != want {
 		s.noteAnswerMismatch()
-		return codeplug.Channel{}, &AnswerMismatchError{Model: "ic7300", Requested: want.String(), Answered: got.String()}
+		return codeplug.Channel{}, &AnswerMismatchError{Model: s.m.errPrefix, Requested: want.String(), Answered: got.String()}
 	}
 	if allFF(raw) {
 		return codeplug.Channel{Slot: slot}, nil
@@ -134,11 +134,11 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 
 	rec, err := s.p.ParseMemoryAnswer(frame)
 	if err != nil {
-		return codeplug.Channel{}, fmt.Errorf("ic7300: ReadChannel %s: %w", slot, err)
+		return codeplug.Channel{}, fmt.Errorf("%s: ReadChannel %s: %w", s.m.errPrefix, slot, err)
 	}
 	data, err := s.channelData(rec)
 	if err != nil {
-		return codeplug.Channel{}, fmt.Errorf("ic7300: ReadChannel %s: %w", slot, err)
+		return codeplug.Channel{}, fmt.Errorf("%s: ReadChannel %s: %w", s.m.errPrefix, slot, err)
 	}
 	return codeplug.Channel{Slot: slot, Data: data}, nil
 }

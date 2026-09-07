@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package ic7300mk2
+package ic7300
 
 import (
 	"reflect"
@@ -23,7 +23,7 @@ import (
 // receiver fields are outside the write guard below. They are graded absent
 // on this transceiver, and TestFieldAuditCoversEverySpecField now requires
 // that exclusion to stay explicit without changing this matrix row set.
-var allFields = []spec.Field{
+var allFieldsMK2 = []spec.Field{
 	spec.FieldFrequency,
 	spec.FieldMode,
 	spec.FieldClarifier,
@@ -47,7 +47,7 @@ var allFields = []spec.Field{
 	spec.FieldDataMode,
 }
 
-var deliberatelyUnexpressedFields = map[spec.Field]string{
+var deliberatelyUnexpressedFieldsMK2 = map[spec.Field]string{
 	spec.FieldTuningStepEnabled: "additions design D8 — the IC-7300MK2 memory frame carries no tuning-step-enabled field",
 	spec.FieldTuningStep:        "additions design D8 — the IC-7300MK2 memory frame carries no tuning-step field",
 	spec.FieldProgramTuningStep: "additions design D8 — the IC-7300MK2 memory frame carries no programmable-tuning-step field",
@@ -57,16 +57,16 @@ var deliberatelyUnexpressedFields = map[spec.Field]string{
 	spec.FieldIPPlus:            "additions design D8 — the IC-7300MK2 memory frame carries no IP+ field",
 }
 
-func TestFieldAuditCoversEverySpecField(t *testing.T) {
-	drivertest.AssertFieldAuditCoversEverySpecField(t, "allFields", allFields, deliberatelyUnexpressedFields)
+func TestFieldAuditCoversEverySpecField_MK2(t *testing.T) {
+	drivertest.AssertFieldAuditCoversEverySpecField(t, "allFields", allFieldsMK2, deliberatelyUnexpressedFieldsMK2)
 }
 
-func TestAllFieldsCoversThePreD8SpecFields(t *testing.T) {
-	if len(allFields) != 20 {
-		t.Fatalf("allFields has %d entries, want 20 — the ten pre-tier Fields plus the ten the Icom tier added; a Field missing from this slice is a Field the write guard below never checks. This is NOT core/spec/field.go's whole count: D8 took that to twenty-seven on 28/08/2026 and this pin does not track it", len(allFields))
+func TestAllFieldsCoversThePreD8SpecFields_MK2(t *testing.T) {
+	if len(allFieldsMK2) != 20 {
+		t.Fatalf("allFields has %d entries, want 20 — the ten pre-tier Fields plus the ten the Icom tier added; a Field missing from this slice is a Field the write guard below never checks. This is NOT core/spec/field.go's whole count: D8 took that to twenty-seven on 28/08/2026 and this pin does not track it", len(allFieldsMK2))
 	}
 	seen := map[spec.Field]bool{}
-	for _, f := range allFields {
+	for _, f := range allFieldsMK2 {
 		if seen[f] {
 			t.Errorf("allFields lists %s twice", f)
 		}
@@ -74,13 +74,13 @@ func TestAllFieldsCoversThePreD8SpecFields(t *testing.T) {
 	}
 }
 
-func TestWriteTrialsComplete_PinnedFalse(t *testing.T) {
-	if writeTrialsComplete {
+func TestWriteTrialsComplete_PinnedFalse_MK2(t *testing.T) {
+	if writeTrialsCompleteMK2 {
 		t.Fatal("writeTrialsComplete = true for the IC-7300MK2: no IC-7300MK2 has ever been asked anything by this project. Matrix §3.14 states this model's FALSE in its own terms — \"The registered sibling's FALSE is not stated here\" — so the IC-7300's pin lifts nothing for this radio and vice versa. If a trial really has been performed ON AN IC-7300MK2, revert this test alongside the flip and state the evidence.")
 	}
-	caps := New(RealHardware).Capabilities()
+	caps := NewMK2(RealHardware).Capabilities()
 	for _, b := range caps.Banks {
-		for _, f := range allFields {
+		for _, f := range allFieldsMK2 {
 			if caps.FieldSupport(b.ID, f).CanWrite() {
 				t.Errorf("bank %s field %s: CanWrite() = true on the RealHardware profile — the write guard is broken", b.ID, f)
 			}
@@ -96,16 +96,16 @@ func TestWriteTrialsComplete_PinnedFalse(t *testing.T) {
 // satisfy the validator would be dishonest and is refused: this test cannot
 // pass before E5b lands, and that is a sequencing fact, not a defect in the
 // capabilities.
-func TestCapabilities_Validate(t *testing.T) {
+func TestCapabilities_Validate_MK2(t *testing.T) {
 	for _, p := range []Profile{RealHardware, Simulated} {
-		if err := New(p).Capabilities().Validate(); err != nil {
+		if err := NewMK2(p).Capabilities().Validate(); err != nil {
 			t.Errorf("profile %v: Capabilities().Validate(): %v — if this is the ShiftOptions/DuplexOptions non-empty rule, enabler E5b has not landed and Stage 2 started too early", p, err)
 		}
 	}
 }
 
-func TestCapabilities_TheNumbersFromTheMatrix(t *testing.T) {
-	caps := New(RealHardware).Capabilities()
+func TestCapabilities_TheNumbersFromTheMatrix_MK2(t *testing.T) {
+	caps := NewMK2(RealHardware).Capabilities()
 	if caps.Model != "IC-7300MK2" {
 		t.Errorf("Model = %q, want %q", caps.Model, "IC-7300MK2")
 	}
@@ -157,8 +157,8 @@ func TestCapabilities_TheNumbersFromTheMatrix(t *testing.T) {
 	}
 }
 
-func TestConsentOpensExactlyTheWritableFields(t *testing.T) {
-	base := New(RealHardware).Capabilities()
+func TestConsentOpensExactlyTheWritableFields_MK2(t *testing.T) {
+	base := NewMK2(RealHardware).Capabilities()
 	consented := spec.ConsentUnverifiedWrites(base)
 	if consented.FieldSupport(spec.BankMemory, spec.FieldErase).CanWrite() {
 		t.Error("erase CanWrite() after consent — spec.ConsentUnverifiedWrites must never consent erase (spec D4, adjudication 19)")
@@ -176,7 +176,7 @@ func TestConsentOpensExactlyTheWritableFields(t *testing.T) {
 // omission: a zero MaxFreqHz reads as "no ceiling" to every validator, and a
 // zero TagLen makes CHIRP import truncate every imported name to nothing and
 // report it as an approximated loss rather than refusing.
-func TestCapabilities_EveryFieldExplicit(t *testing.T) {
+func TestCapabilities_EveryFieldExplicit_MK2(t *testing.T) {
 	// Each entry is a field this radio genuinely has no value for, with the
 	// matrix reading that says so. Adding a name here is a decision; leaving
 	// a field out of the struct is not.
@@ -197,7 +197,7 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 		"CTCSSTones":             "the tone domain is CTCSSToneRange {1, 2999, 1} deciHz, not a list — matrix §1 #8 grades this model's list empty in terms, so no deviation arises here (D16)",
 		"MinFreqHz":              "no tuning floor is printed in this document; a zero DISABLES the lower-bound check rather than asserting a 0 Hz floor (core/spec/capabilities.go) — entry ic7300mk2-min-frequency, lift MK2-R15",
 	}
-	caps := New(RealHardware).Capabilities()
+	caps := NewMK2(RealHardware).Capabilities()
 	v := reflect.ValueOf(caps)
 	ty := v.Type()
 	if ty.NumField() == 0 {
@@ -227,8 +227,8 @@ func TestCapabilities_EveryFieldExplicit(t *testing.T) {
 
 // The bank inventory D11 fixes: MEM 001..099 and SCAN P1/P2, flat, dense,
 // with no CALL bank and no group addressing.
-func TestBanks_TheInventoryFromD11(t *testing.T) {
-	caps := New(RealHardware).Capabilities()
+func TestBanks_TheInventoryFromD11_MK2(t *testing.T) {
+	caps := NewMK2(RealHardware).Capabilities()
 	mem, ok := caps.Bank(spec.BankMemory)
 	if !ok {
 		t.Fatal("no MEM bank")
@@ -252,8 +252,8 @@ func TestBanks_TheInventoryFromD11(t *testing.T) {
 
 // A test the IC-7300 does not have, because the IC-7300's document does not
 // say this and this one does.
-func TestScanBankIsNoBlank(t *testing.T) {
-	caps := New(RealHardware).Capabilities()
+func TestScanBankIsNoBlank_MK2(t *testing.T) {
+	caps := NewMK2(RealHardware).Capabilities()
 	for _, b := range caps.Banks {
 		switch b.ID {
 		case spec.BankScan:
@@ -273,8 +273,8 @@ func TestScanBankIsNoBlank(t *testing.T) {
 
 // The tag charset is TAKEN FROM the profile rather than restated, so the
 // driver's advertised charset and the codec's cannot drift.
-func TestTagCharsetComesFromTheProfile(t *testing.T) {
-	caps := New(RealHardware).Capabilities()
+func TestTagCharsetComesFromTheProfile_MK2(t *testing.T) {
+	caps := NewMK2(RealHardware).Capabilities()
 	if len(caps.TagCharset) != 95 {
 		t.Errorf("TagCharset is %d bytes, want 95 (space + 10 digits + 26 upper + 26 lower + 32 symbols)", len(caps.TagCharset))
 	}
