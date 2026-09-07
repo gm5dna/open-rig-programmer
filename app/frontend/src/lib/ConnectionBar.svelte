@@ -47,11 +47,10 @@
 	})
 
 	const busy = $derived(appState.connecting)
-	const canPickPort = $derived(!appState.connected && !busy)
-	/** The model picker's gate — deliberately the same one the port picker
-	 * uses: a session's model is fixed the moment it opens, so the choice
-	 * can only be changed while disconnected and idle. */
-	const canPickModel = $derived(!appState.connected && !busy)
+	/** The port AND model pickers' shared gate: a session's port and model
+	 * are both fixed the moment it opens, so either choice can only be
+	 * changed while disconnected and idle. */
+	const canPickConnectionInputs = $derived(!appState.connected && !busy)
 
 	/** @param {Event & {currentTarget: HTMLSelectElement}} e */
 	function onModelChange(e) {
@@ -134,7 +133,7 @@
 			id="model-select"
 			class="model-select"
 			value={appState.selectedModel}
-			disabled={!canPickModel}
+			disabled={!canPickConnectionInputs}
 			onchange={onModelChange}
 			title="Which radio to open a session as"
 		>
@@ -153,7 +152,7 @@
 		<select
 			id="port-select"
 			bind:value={selectedPort}
-			disabled={!canPickPort || appState.portsLoading}
+			disabled={!canPickConnectionInputs || appState.portsLoading}
 		>
 			<option value="" disabled>
 				{appState.portsLoading ? 'Scanning…' : appState.ports.length ? 'Select a port…' : 'No ports found'}
