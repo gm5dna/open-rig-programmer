@@ -600,8 +600,8 @@ func (r *Radio) handleTY(body []byte) []byte {
 	}
 	out := make([]byte, 0, 2+tyReservedLen+1+1)
 	out = append(out, 'T', 'Y')
-	out = append(out, r.tyReserved...)
-	out = append(out, r.tyVariant, ';')
+	out = append(out, defaultTYReserved...)
+	out = append(out, defaultTYVariant, ';')
 	return out
 }
 

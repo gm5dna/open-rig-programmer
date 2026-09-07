@@ -435,28 +435,10 @@ func TestWithoutAnswerAddress_TheAnswerNamesWhatWasAsked(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// WithEchoBack
+// The line never echoes
 // ---------------------------------------------------------------------------
 
-func TestWithEchoBack_EchoesBeforeAnswering(t *testing.T) {
-	c := newClient(t, WithEchoBack())
-	c.send(cmdTransceiverID, subTransceiverID)
-
-	wantFrame(t, c.recv(), []byte{0xFE, 0xFE, 0xA2, 0xE0, 0x19, 0x00, 0xFD})
-	wantFrame(t, c.recv(), []byte{0xFE, 0xFE, 0xE0, 0xA2, 0x19, 0x00, 0xA2, 0xFD})
-}
-
-// TestWithEchoBack_EchoesEvenWhatItWillNotAnswer: the echo is a property of the
-// line, so it happens before the radio decides the frame is somebody else's.
-func TestWithEchoBack_EchoesEvenWhatItWillNotAnswer(t *testing.T) {
-	c := newClient(t, WithEchoBack())
-	c.sendRaw(buildFrame(0x94, controllerAddress, cmdTransceiverID, subTransceiverID))
-
-	wantFrame(t, c.recv(), []byte{0xFE, 0xFE, 0x94, 0xE0, 0x19, 0x00, 0xFD})
-	c.quiet(150 * time.Millisecond)
-}
-
-func TestWithoutEchoBack_NothingIsEchoed(t *testing.T) {
+func TestNothingIsEchoed(t *testing.T) {
 	c := newClient(t)
 	c.send(cmdTransceiverID, subTransceiverID)
 	wantFrame(t, c.recv(), []byte{0xFE, 0xFE, 0xE0, 0xA2, 0x19, 0x00, 0xA2, 0xFD})

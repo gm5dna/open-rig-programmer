@@ -12,7 +12,6 @@ type config struct {
 	recordLen        int
 	emptyFF, echo    bool
 	flood, addressed time.Duration
-	shortSetAck      bool
 	channels         map[int][]byte
 }
 type Option func(*config)
@@ -42,10 +41,6 @@ func WithAllFFEmpty() Option                     { return func(c *config) { c.em
 func WithUSBEcho() Option                        { return func(c *config) { c.echo = true } }
 func WithTransceiveFlood(d time.Duration) Option { return func(c *config) { c.flood = d } }
 func WithAddressedFlood(d time.Duration) Option  { return func(c *config) { c.addressed = d } }
-
-// WithShortSetAcknowledgement makes the otherwise refused short-set edge
-// explicit; the open behaviour is registered as ic7851-write-ack-fb.
-func WithShortSetAcknowledgement() Option { return func(c *config) { c.shortSetAck = true } }
 func WithChannel(addr string, record []byte) Option {
 	return func(c *config) {
 		ch, ok := parseChannel(addr)

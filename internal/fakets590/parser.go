@@ -575,7 +575,7 @@ func (r *Radio) handleFV(body []byte) []byte {
 	}
 	out := make([]byte, 0, 2+firmwareFieldLen+1)
 	out = append(out, 'F', 'V')
-	out = append(out, r.firmware...)
+	out = append(out, defaultFirmware...)
 	out = append(out, ';')
 	return out
 }

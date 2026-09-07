@@ -177,67 +177,6 @@ func TestTY_HasNoSetDirection(t *testing.T) {
 	assertRejected(t, conn, "TY000;")
 }
 
-// TestWithTYAnswer_IsAnsweredVerbatim. The option exists to make two driver
-// paths reachable through a real fake rather than through a scripted
-// transcript: the session refusal of a FIFTH variant (P2='4', which the
-// document does not print — 480:1626-1629 prints exactly four), and P1's
-// OPAQUE bytes, which are the one field in this family admitted above 0x7E.
-//
-// Nothing is validated but the width and the terminator: interpreting P1 is
-// no part of this radio's own document, and a fake that applied a grammar to
-// it would be asserting one.
-func TestWithTYAnswer_IsAnsweredVerbatim(t *testing.T) {
-	for _, tt := range []struct {
-		name     string
-		reserved string
-		variant  byte
-		want     string
-	}{
-		{"the second printed variant", "00", '1', "TY001;"},
-		{"the fourth printed variant", "00", '3', "TY003;"},
-		{"a fifth variant the book does not print", "00", '4', "TY004;"},
-		{"reserved bytes above 0x7E", "\x7f\xff", '0', "TY\x7f\xff0;"},
-		{"reserved bytes that are ordinary text", "AB", '2', "TYAB2;"},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			_, conn := newTestRadio(t, WithTYAnswer(tt.reserved, tt.variant))
-			if got := exchange(t, conn, "TY;"); got != tt.want {
-				t.Errorf("TY; -> %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-// TestWithTYAnswer_RefusesAFixtureNoRadioCouldSend. P1 is two bytes on the
-// wire (480:1634), so a fixture of any other width could not be sent by any
-// radio; and a ';' anywhere in the answer is a SECOND FRAME to the host's
-// own reassembler, not a byte of this one. Panicking is the reasoning
-// core/kw.MustNewLayout applies to the same kind of argument: the value is a
-// fixture constant, known at compile time, so a bad one is a programming
-// error and must stop the programme rather than be threaded through an
-// error nobody can act on.
-func TestWithTYAnswer_RefusesAFixtureNoRadioCouldSend(t *testing.T) {
-	for _, tt := range []struct {
-		name     string
-		reserved string
-		variant  byte
-	}{
-		{"one reserved byte", "0", '0'},
-		{"three reserved bytes", "000", '0'},
-		{"a terminator inside P1", "0;", '0'},
-		{"a terminator as the variant", "00", ';'},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			defer func() {
-				if recover() == nil {
-					t.Error("accepted, want a panic")
-				}
-			}()
-			_ = New(WithTYAnswer(tt.reserved, tt.variant))
-		})
-	}
-}
-
 // TestFV_IsNotACommandOfThisRadio. "FV" appears NOWHERE in the 2003 TS-480
 // document — no chart, no mention — so refusing it is a fact about this
 // radio and not a modelling gap: this book's nearest equivalent is TY, which

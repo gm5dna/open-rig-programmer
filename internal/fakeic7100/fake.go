@@ -333,7 +333,7 @@ func (r *Radio) setIsAcceptable(record []byte) bool {
 	default:
 		return false
 	}
-	if len(record) == recordLength && !r.cfg.unequalTXOK && !txBlockMatchesRX(record) {
+	if len(record) == recordLength && !txBlockMatchesRX(record) {
 		return false
 	}
 	return true

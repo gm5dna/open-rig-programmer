@@ -16,8 +16,8 @@
 // WithUSBEcho enables exact line echo (ic7851-echo-link-to-remote), while the
 // two flood options expose the assumed broadcast destination and synthetic
 // controller-addressed traffic (ic7851-broadcast-address-form). Short sets
-// are refused by default; WithShortSetAcknowledgement exposes the open edge
-// under ic7851-write-ack-fb. TestNoCoreImports pins the stdlib-only fence,
+// are refused, and the open edge under ic7851-write-ack-fb is recorded in the
+// register rather than modelled. TestNoCoreImports pins the stdlib-only fence,
 // and the package tests pin the wire grammar independently of these builders.
 //
 // THE ONE EXCEPTION IS internal/fakepipe (added 06/09/2026): the net.Pipe pair,

@@ -33,7 +33,6 @@ type config struct {
 	acceptedLength int
 
 	allFFEmpty     bool
-	unequalTXOK    bool
 	shortSetsOK    bool
 	echoBack       bool
 	noSetAnswer    bool
@@ -156,18 +155,6 @@ func WithAcceptedRecordLength(n int) Option {
 // "About clearing operation" block.
 func WithAllFFEmptyRecord() Option {
 	return func(c *config) { c.allFFEmpty = true }
-}
-
-// WithUnequalTransmitBlockAccepted stops the radio refusing a set whose
-// transmit duplicate differs from its receive payload.
-//
-// The default refuses, which is this package's reading of the printed NOTE.
-// The NOTE's own words are advisory — "We recommend that you set the same data
-// as (5)-(51)" — and the document never says what a radio does with a set whose
-// blocks differ, so the refusal is an assumption and this is the other reading.
-// See doc.go, entry 6 (ic7100-tx-block-mandatory).
-func WithUnequalTransmitBlockAccepted() Option {
-	return func(c *config) { c.unequalTXOK = true }
 }
 
 // WithShortSetsAccepted makes the radio store a set that stops before the

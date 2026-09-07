@@ -16,12 +16,8 @@ type Radio struct {
 	addr                         byte
 	id                           []byte
 	echo                         bool
-	fullRecord                   bool
 	emptyReply                   byte
-	emptyRecordFF                bool
 	recordLen                    int
-	scanEdgeLen                  int
-	broadcastTo                  byte
 	mu                           sync.Mutex
 	slots                        map[int]MemState
 	commands                     [][2]byte
@@ -35,10 +31,10 @@ func New(opts ...Option) *Radio {
 	for _, o := range opts {
 		o(&c)
 	}
-	r := &Radio{pipe: fakepipe.New(), addr: c.addr, id: c.id, echo: c.echo, fullRecord: c.fullRecord, emptyReply: c.emptyReply, emptyRecordFF: c.emptyRecordFF, recordLen: c.recordLen, scanEdgeLen: c.scanEdgeLen, broadcastTo: c.broadcastTo, slots: make(map[int]MemState), out: make(chan []byte, 128)}
+	r := &Radio{pipe: fakepipe.New(), addr: c.addr, id: c.id, echo: c.echo, emptyReply: c.emptyReply, recordLen: c.recordLen, slots: make(map[int]MemState), out: make(chan []byte, 128)}
 	r.pipe.Latency = c.latency
 	for ch, v := range c.channels {
-		if n := c.recordLenFor(ch); len(v) != n {
+		if n := c.recordLen; len(v) != n {
 			panic(fmt.Sprintf("fakeic7760: channel %d record has length %d, want %d", ch, len(v), n))
 		}
 		r.slots[ch] = MemState{Raw: append([]byte(nil), v...)}
@@ -145,11 +141,13 @@ func (r *Radio) read(hi, lo byte) []byte {
 	if !set {
 		return reply(r.addr, r.emptyReply)
 	}
-	// Reading a stored all-FF record back as "empty" is the ASSUMED register
-	// entry ic7760-empty-reply-ff, and it is a different question from the
-	// outbound clear form refused in write below.
-	// TestTheInboundAllFFRecordInterpretationIsOptional pins both halves.
-	if r.emptyRecordFF && allFF(m.Raw) {
+	// A stored all-FF record reads back as an empty channel — register entry
+	// ic7760-empty-reply-ff, and a SEPARATE question from the outbound clear
+	// form. The only FF the guide prints in the memory context is a value the
+	// controller SENDS to erase; nothing licenses reading it backwards, and no
+	// driver has ever asked for the other reading, so the tier's assumption is
+	// what this fake does, full stop.
+	if allFF(m.Raw) {
 		return reply(r.addr, r.emptyReply)
 	}
 	out := append([]byte{0x1A, 0, hi, lo}, m.Raw...)
@@ -170,7 +168,11 @@ func (r *Radio) write(hi, lo byte, v []byte) []byte {
 		return reply(r.addr, CodeNG)
 	}
 	n := r.recordLenFor(ch)
-	if len(v) > n || (len(v) != n && r.fullRecord) {
+	// A 1A 00 set must carry the WHOLE layout — register entry
+	// ic7760-write-full-record. The guide prints no statement permitting a
+	// short set, and the tier sends the full layout always, so this fake
+	// insists and there is nothing to switch.
+	if len(v) != n {
 		return reply(r.addr, CodeNG)
 	}
 	r.mu.Lock()
@@ -191,7 +193,7 @@ func wire(to, from byte, p ...byte) []byte {
 // reply is an answer to the controller: to=E0, from=this radio.
 func reply(addr byte, p ...byte) []byte { return wire(AddrController, addr, p...) }
 func (r *Radio) StartBroadcastFlood(d time.Duration) {
-	r.startFlood(r.broadcastTo, d, &r.broadcastStop)
+	r.startFlood(AddrBroadcast, d, &r.broadcastStop)
 }
 func (r *Radio) StartAddressedFlood(d time.Duration) {
 	r.startFlood(AddrController, d, &r.addressedStop)
@@ -216,7 +218,7 @@ func (r *Radio) startFlood(to byte, d time.Duration, slot *chan struct{}) {
 			case <-t.C:
 				// An unsolicited frame comes FROM the radio, so only the
 				// destination varies between the two floods: the assumed
-				// broadcast form (ic7760-broadcast-form, WithBroadcastForm)
+				// broadcast form (ic7760-broadcast-form)
 				// and the synthetic controller-addressed one.
 				// TestTheBroadcastFormIsConfigurable pins both.
 				out := append([]byte{0x19, 0}, r.id...)
@@ -243,14 +245,11 @@ func (r *Radio) StopFloods() {
 	}
 }
 
-// recordLenFor is the accepted record length for one slot; see
-// WithScanEdgeRecordShape.
-func (r *Radio) recordLenFor(ch int) int {
-	if (ch == ChanP1 || ch == ChanP2) && r.scanEdgeLen > 0 {
-		return r.scanEdgeLen
-	}
-	return r.recordLen
-}
+// recordLenFor is the accepted record length for one slot. That a 1A 00 read
+// of 01 00 or 01 01 returns the same record-only shape as a memory channel is
+// ASSUMED — register entry ic7760-scan-edge-record-shape — so the scan edges
+// take the same length as every memory channel.
+func (r *Radio) recordLenFor(int) int { return r.recordLen }
 
 // allFF reports whether a stored record is every-byte FF. Its meaning is the
 // caller's question, not this helper's.

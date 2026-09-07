@@ -34,31 +34,6 @@ func WithLatency(d time.Duration) Option {
 	}
 }
 
-// WithFirmwareVersion sets the four characters this radio answers to "FV;"
-// (590:1030-1037), replacing the book's worked example "1.00" (590:1035).
-//
-// IT EXISTS TO MAKE TWO DRIVER REFUSALS REACHABLE THROUGH A REAL FAKE. On the
-// TS-590S row, channel writes are refused when the FV answer is 2.00 or later
-// (A14 — byte 28 may be live there, 590:1478) or when it does not parse as
-// A13's assumed "M.NN" form. Without this option both rungs would have to be
-// pinned against a scripted transcript, and a scripted transcript proves the
-// driver reads its own script.
-//
-// The string is answered VERBATIM and no grammar is applied to it: deciding
-// what "2.00" or "1.xx" means is the driver's job, and a fake that validated
-// the field would be asserting A13 as a fact about the radio. The WIDTH is
-// enforced, because the chart counts four P1 bytes and a field of any other
-// width could not be sent by any radio; a bad fixture panics, which is New's
-// reasoning (fakets590.go) one layer up — every call site passes a constant.
-func WithFirmwareVersion(s string) Option {
-	if len(s) != firmwareFieldLen {
-		panic(fmt.Sprintf("fakets590: firmware version %q is %d bytes; FV's P1 field is %d (590:1037)", s, len(s), firmwareFieldLen))
-	}
-	return func(r *Radio) {
-		r.firmware = s
-	}
-}
-
 // WithFactoryImage REPLACES the fake's entire record map with img's output.
 // Pass it BEFORE any WithChannel, WithSplitChannel or WithEmptyChannel option
 // in the same New call, or the image will overwrite them. Without this option,

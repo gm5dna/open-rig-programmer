@@ -24,8 +24,6 @@ type Radio struct {
 	// The fields below are populated only while New's options run and never
 	// mutated afterwards, so serve() and the parser may read them without
 	// r.mu.
-	tyReserved             string
-	tyVariant              byte
 	memoryReadUnsupported  bool
 	transientNAKSuppressed bool
 	streamErrors           map[int]StreamError
@@ -64,8 +62,6 @@ type Radio struct {
 func New(opts ...Option) *Radio {
 	r := &Radio{
 		pipe:         fakepipe.New(),
-		tyReserved:   defaultTYReserved,
-		tyVariant:    defaultTYVariant,
 		streamErrors: map[int]StreamError{},
 		records:      DefaultImage(),
 		// EXDefaults returns a fresh map, so two radios never share menu

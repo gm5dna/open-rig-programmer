@@ -224,35 +224,6 @@ func TestFV_AnswersFourCharacters(t *testing.T) {
 	}
 }
 
-// TestWithFirmwareVersion_IsAnsweredVerbatim: the option exists so that the
-// TS-590S write refusals A13 (an FV this programme cannot parse as M.NN) and
-// A14 (an S at 2.00 or later, whose byte 28 may be live) can be reached
-// through a real fake instead of a scripted transcript. The fake applies no
-// grammar of its own to the string — deciding what "2.00" means is the
-// driver's job, and a fake that validated the field would be asserting A13.
-func TestWithFirmwareVersion_IsAnsweredVerbatim(t *testing.T) {
-	for _, ver := range []string{"2.04", "1.xx", "    "} {
-		t.Run(ver, func(t *testing.T) {
-			_, conn := newTestRadio(t, RowS, WithFirmwareVersion(ver))
-			if got, want := exchange(t, conn, "FV;"), "FV"+ver+";"; got != want {
-				t.Errorf("FV; -> %q, want %q", got, want)
-			}
-		})
-	}
-}
-
-// TestWithFirmwareVersion_RefusesAWidthTheChartCannotCarry: the field is four
-// bytes on the wire, so a fixture of any other width could not be sent by any
-// radio. Panicking is New's reasoning: the argument is a fixture constant.
-func TestWithFirmwareVersion_RefusesAWidthTheChartCannotCarry(t *testing.T) {
-	defer func() {
-		if recover() == nil {
-			t.Fatal("WithFirmwareVersion(\"1.0\") was accepted — the chart's P1 is four bytes (590:1037)")
-		}
-	}()
-	_ = New(RowS, WithFirmwareVersion("1.0"))
-}
-
 // --- AI: the initial state is a MANUAL FACT (590:81-82) ---
 
 // TestAI_InitialStateIsOffAndASetIsSilent pins three things at once:

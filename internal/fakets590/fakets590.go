@@ -79,7 +79,6 @@ type Radio struct {
 	// The fields below are populated only while New's options run and never
 	// mutated afterwards, so serve() and the parser may read them without
 	// r.mu.
-	firmware               string
 	memoryReadUnsupported  bool
 	transientNAKSuppressed bool
 	streamErrors           map[int]StreamError
@@ -121,13 +120,8 @@ func New(row Row, opts ...Option) *Radio {
 		panic(fmt.Sprintf("fakets590: New called with row %v — the row is REQUIRED and has no default (the two siblings differ at ID, 590:1114-1116, and at byte 28, 590:1478)", row))
 	}
 	r := &Radio{
-		pipe: fakepipe.New(),
-		row:  row,
-		// The book's ONE worked example of an FV answer, "for firmware
-		// version 1.00, it reads 'FV1.00;'" (590:1035). It is a default
-		// rather than a claim about any radio: WithFirmwareVersion is how a
-		// test reaches the versions A13 and A14 turn on.
-		firmware:     defaultFirmware,
+		pipe:         fakepipe.New(),
+		row:          row,
 		streamErrors: map[int]StreamError{},
 		records:      DefaultImage(),
 		// THIS ROW's menu table, never the other's (ex.go). EXDefaults
