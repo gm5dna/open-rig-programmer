@@ -13,9 +13,9 @@ core/cat/ftdx10/testdata/transcription-b.csv
 SHA-256 (both files, 30/07/2026):
 `e412e73c49cc2d388dd9085942588bd05ad5b4957fd809812a798d9dd38e1a78`
 
-It is the ONLY source of this package's EX (MENU) inventory. The generator
-under `gen/` reads it and emits `exinventory_gen.go`; `ex.go` expands that into
-the address → raw-P4 map the fake answers EX reads from.
+It is the ONLY source of this package's EX (MENU) inventory. `exinventory.go`
+embeds it and projects it at init; `ex.go` expands that into the address →
+raw-P4 map the fake answers EX reads from.
 
 ## What the artefact is
 
@@ -36,7 +36,7 @@ header, and the orchestrator accepted the delivered file **verbatim** — eviden
 integrity over format compliance. Every adaptation therefore lives in the code
 that reads it, never in the artefact. `core/cat/ftdx10/crosscheck_test.go`
 records the three adjudications in full (the schema adapter, label
-normalisation, and P4 deliberately not being bound); this package's `gen/`
+normalisation, and P4 deliberately not being bound); this package's `exinventory.go`
 re-derives the same two things it needs — the wire digits inside the label cells,
 and the text discriminator `Digits == 12` **and** `P4` beginning `"Up to"` — from
 **B's own columns**.
@@ -58,7 +58,7 @@ an accident of layout:
 | side | source | generator |
 | --- | --- | --- |
 | dialect (`core/cat/ftdx10/exinventory_gen.go`) | transcription **A** (`table2.csv`) | `internal/extable` |
-| this fake (`exinventory_gen.go`) | transcription **B** (this file) | `internal/fakedx10/gen` (stdlib only) |
+| this fake (`exGroups`) | transcription **B** (this file) | `exinventory.go` (stdlib only) |
 
 `core/transport/ex_crosscheck_ftdx10_test.go` then proves the two inventories
 agree — address for address, width for width, and over the wire. Because the two
@@ -67,7 +67,7 @@ transcription, or in either generator, surfaces as a **cross-check mismatch**. I
 this fake derived its inventory from A, from the dialect, or with `extable`'s
 parser, both sides would rest on one reading of the chart and one parser, and a
 shared mistake would reproduce itself identically into both tables and be
-invisible. That is why `gen/` is stdlib-only and why
+invisible. That is why `exinventory.go` is stdlib-only and why
 `imports_test.go`'s `TestNoCoreImports` walks subdirectories: the fence is what
 keeps the independence mechanical rather than a matter of good intentions.
 

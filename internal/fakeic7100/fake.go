@@ -17,7 +17,7 @@ import (
 // flood can outrun a slow drain, which is the condition WithBroadcasts and
 // WithAddressedFlood exist to create — net.Pipe itself is a rendezvous, so a
 // direct write would wedge the emitter the moment the consumer stopped
-// reading.
+// reading. It is deep rather than unbounded; send drops when it is full.
 const outQueueDepth = 1024
 
 // Radio is a fake IC-7100 on the far end of a pipe. It answers CI-V frames the
@@ -172,11 +172,19 @@ func (r *Radio) emitEvery(d time.Duration, f []byte) {
 
 // send queues one whole frame for the writer goroutine. It never touches the
 // wire itself: a radio talking to a hung-up line is not an error the radio can
-// do anything about, and a Close mid-queue abandons the frame.
+// do anything about.
+//
+// IT NEVER BLOCKS, and that is the point. send runs on the goroutine that also
+// READS the port, so blocking on a full queue would stop the fake reading, and
+// the consumer's next write would then block on net.Pipe's rendezvous against
+// a fake that had stopped listening — both ends waiting for each other. A full
+// queue drops the frame instead, which is what a real line does with bytes
+// nobody is draining.
 func (r *Radio) send(f []byte) {
 	select {
 	case r.out <- f:
 	case <-r.pipe.Done():
+	default:
 	}
 }
 
