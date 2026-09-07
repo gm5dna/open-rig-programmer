@@ -314,9 +314,12 @@ func (d *ft891Driver) SynthesiseDiscoveredBanks(slots []string) []spec.Bank {
 // interface assigns it, and holding a driver lock across it would serialise
 // two operations the seam deliberately keeps separate.
 //
-// The FTdx10's Session has no opMu and says so at length; that is that
-// driver's consequence of its own one-exchange choreography and NOT a shape
-// to copy here.
+// EVERY YAESU DRIVER HERE HOLDS THE SAME LOCK, including the FTdx10 and
+// the FTdx101, whose operations are one exchange each: one rule about what
+// excludes what is easier to keep true than a per-radio exception. The
+// shared bodies in core/driver/internal/yaesu take no lock of their own —
+// they document that their caller holds it — so the mutex is acquired in
+// exactly one place per method.
 type Session struct {
 	eng *transport.Engine
 	// opMu serialises whole driver operations — see the type's doc comment.

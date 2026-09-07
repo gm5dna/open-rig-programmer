@@ -394,16 +394,24 @@ func (d *ftdx101Driver) SynthesiseDiscoveredBanks(slots []string) []spec.Bank {
 // it. Safe for concurrent use — transport.Engine serialises every
 // individual exchange, and everything else here is immutable after Open.
 //
-// There is NO operation mutex, and that is a consequence of the MT-only
-// choreography rather than an omission: every logical operation this
-// session performs is exactly ONE wire exchange (ReadChannel's combined MT
-// read; the combined MT Set the write path will send), so there is no gap
-// between two frames of the same operation for a concurrent operation to
-// land in. The FT-710's Session holds an opMu precisely because its
-// operations are two exchanges each (MR+MT, MW+MT) and a concurrent write
-// landing between a read's two halves tears the channel — frequency from
-// one moment, tag from another. See doc.go: a future FTdx101 operation
-// needing two frames needs an opMu with it.
+// ONE OPERATION MUTEX PER SESSION, taken by ReadSetting and by
+// WriteChannel and never re-entered: a whole driver operation excludes
+// another, which is a larger claim than the engine's own per-exchange
+// lock because it covers the work an operation does around its
+// exchanges. Every one of these radios states the rule the same way, so
+// there is one rule rather than a per-radio exception that a second
+// frame added to any operation would silently invalidate.
+//
+// This radio's operations happen to be ONE wire exchange each today
+// (ReadChannel's combined MT read; WriteChannel's combined MT Set,
+// write.go), so the lock costs nothing here; holding it anyway is what
+// makes the FT-710's two-exchange choreography (MR+MT, MW+MT) a
+// difference in the radio rather than a difference in the rule.
+//
+// THE SHARED BODIES TAKE NO LOCK. core/driver/internal/yaesu's
+// WriteChannel and ReadSetting document that their caller holds it, so
+// the mutex is taken in exactly one place per method and cannot be
+// re-entered from inside.
 type Session struct {
 	eng *transport.Engine
 	// dialect is the CAT dialect this session's every codec call goes
