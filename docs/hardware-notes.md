@@ -1126,7 +1126,7 @@ passive read leaves unknown, not as a to-do list.
 
 | Finding | Consequence |
 | --- | --- |
-| All 296 readable, two identical sweeps | `core/cat/table2-observed.csv` (per-address observed read width and shape, values-free), derived by `internal/extable/observe` and pinned by tests |
+| All 296 readable, two identical sweeps | `core/cat/table2-observed.csv` (per-address observed read width and shape, values-free), derived at the time by `internal/extable/observe` (removed in v1.4.1) and now the pinned record itself |
 | Observed widths/shapes | `cat.EXItem.ObservedReadWidth`/`ObservedReadShape` carried through the generated inventory; `core/transport/ex_crosscheck_test.go` gains a third cross-check comparing the fake's runtime answers against them |
 | TONE FREQ width (manual 2, observed 3) | `core/cat/table2-corrections.csv`; `internal/fakeradio`'s `exHardwareOverrides` (the manual transcriptions in `table2.csv` and `exGroups` are deliberately left alone) |
 | SHIFT FREQUENCY duplicated enum code | `core/cat/table2-corrections.csv` — the only machine-readable home for a chart-text correction |

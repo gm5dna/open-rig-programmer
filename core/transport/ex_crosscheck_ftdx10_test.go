@@ -23,17 +23,18 @@ import (
 //	the DIALECT's inventory (ftdx10.Dialect().EXItems()) is generated from
 //	TRANSCRIPTION A (core/cat/ftdx10/table2.csv) by internal/extable;
 //
-//	the FAKE's inventory (fakedx10.EXDefaults()) is generated from
-//	TRANSCRIPTION B (internal/fakedx10/transcription-b.csv, its own copy) by
-//	internal/fakedx10/gen, which imports nothing project-internal at all.
+//	the FAKE's inventory (fakedx10.EXDefaults()) is parsed at init from its
+//	own embedded copy of TRANSCRIPTION B (internal/fakedx10/transcription-b.csv)
+//	by internal/fakedx10/exinventory.go, which imports nothing
+//	project-internal at all.
 //
 // A and B are two independent derivations of one printed chart (manual rev
 // 2308-F, Table 2 "MENU Chart"): A layout-text-led and PDF-checked, B derived
 // PDF-primary by a quarantined agent with no repository access and no sight of A,
-// the group-boundary ledger or any row count. The two GENERATORS are independent
-// too — that is what the fake's recursive no-imports fence enforces, gen/
-// included. So a mis-read row in either transcription, or a defect in either
-// generator, surfaces HERE as a mismatch rather than as two tables quietly
+// the group-boundary ledger or any row count. The two PARSERS are independent
+// too, not generators — that is what the fake's recursive no-imports fence
+// enforces. So a mis-read row in either transcription, or a defect in either
+// parser, surfaces HERE as a mismatch rather than as two tables quietly
 // agreeing on the same wrong number.
 //
 // It lives in core/transport for the reason its FT-710 sibling does: this is the

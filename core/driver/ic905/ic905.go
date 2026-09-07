@@ -650,8 +650,8 @@ func (s *Session) Identity() driver.Identity { return s.id }
 
 // Capabilities implements driver.Session: the EFFECTIVE capability set
 // (profile baseline, the discovered sparse inventory, the observed
-// identity token), as a deep copy per call — see cloneCapabilities for
-// why the copy is load-bearing.
+// identity token), as a deep copy per call — see spec.Capabilities.Clone
+// for why the copy is load-bearing.
 func (s *Session) Capabilities() spec.Capabilities {
 	return s.caps.Clone()
 }

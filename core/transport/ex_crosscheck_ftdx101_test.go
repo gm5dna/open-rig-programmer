@@ -24,18 +24,19 @@ import (
 //	the DIALECT's inventory (ftdx101.DialectD().EXItems()) is generated from
 //	TRANSCRIPTION A (core/cat/ftdx101/table2.csv) by internal/extable;
 //
-//	the FAKE's inventory (fakedx101.EXDefaults()) is generated from
-//	TRANSCRIPTION B (internal/fakedx101/transcription-b.csv, its own copy) by
-//	internal/fakedx101/gen, which imports nothing project-internal at all.
+//	the FAKE's inventory (fakedx101.EXDefaults()) is parsed at init from its
+//	own embedded copy of TRANSCRIPTION B (internal/fakedx101/transcription-b.csv)
+//	by internal/fakedx101/exinventory.go, which imports nothing
+//	project-internal at all.
 //
 // A and B are two independent derivations of one printed chart (manual rev
 // 2308-L, Table 2 "MENU Chart"): A layout-text-led and PDF-checked, B derived
 // PDF-primary by a quarantined agent with no repository access, no sight of A or
 // of the group-boundary ledger, and no row count or address given — B's own
 // header block records that no text layer was consulted at all. The two
-// GENERATORS are independent too — that is what the fake's recursive no-imports
-// fence enforces, gen/ included. So a mis-read row in either transcription, or a
-// defect in either generator, surfaces HERE as a mismatch rather than as two
+// PARSERS are independent too, not generators — that is what the fake's
+// recursive no-imports fence enforces. So a mis-read row in either transcription, or a
+// defect in either parser, surfaces HERE as a mismatch rather than as two
 // tables quietly agreeing on the same wrong number.
 //
 // core/cat/ftdx101/crosscheck_test.go binds A, B and the LEDGER to one another

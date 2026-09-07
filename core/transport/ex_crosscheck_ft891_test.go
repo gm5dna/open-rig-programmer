@@ -23,17 +23,18 @@ import (
 //	the DIALECT's inventory (ft891.Dialect().EXItems()) is generated from
 //	TRANSCRIPTION A (core/cat/ft891/table2.csv) by internal/extable;
 //
-//	the FAKE's inventory (fakeft891.EXDefaults()) is generated from
-//	TRANSCRIPTION B (internal/fakeft891/transcription-b.csv, its own copy) by
-//	internal/fakeft891/gen, which imports nothing project-internal at all.
+//	the FAKE's inventory (fakeft891.EXDefaults()) is parsed at init from its
+//	own embedded copy of TRANSCRIPTION B (internal/fakeft891/transcription-b.csv)
+//	by internal/fakeft891/exinventory.go, which imports nothing
+//	project-internal at all.
 //
 // A and B are two independent derivations of one printed chart (manual rev
 // 1909-C, the MENU chart following the EX block): A layout-text-led and
 // PDF-checked, B derived PDF-primary by a quarantined agent with no repository
 // access and no sight of A, the group-boundary ledger or any row count. The two
-// GENERATORS are independent too — that is what the fake's recursive no-imports
-// fence enforces, gen/ included. So a mis-read row in either transcription, or
-// a defect in either generator, surfaces HERE as a mismatch rather than as two
+// PARSERS are independent too, not generators — that is what the fake's
+// recursive no-imports fence enforces. So a mis-read row in either transcription, or
+// a defect in either parser, surfaces HERE as a mismatch rather than as two
 // tables quietly agreeing on the same wrong number.
 //
 // # What is DIFFERENT here, and it is not only the address width
@@ -44,7 +45,7 @@ import (
 // length — so a projection that lost the text discriminator would pass a
 // width-only comparison. This chart has no text row, and B's three-column
 // schema carries no cell from which one could be identified
-// (internal/fakeft891/gen/main.go's widthToken refuses rather than guessing).
+// (internal/fakeft891/exinventory.go's widthToken refuses rather than guessing).
 //
 // That makes the shape half MORE important here, not less, and it is asserted
 // in the direction the asymmetry demands: the fake's side cannot see a text

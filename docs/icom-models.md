@@ -43,8 +43,9 @@ Three costs are shared by all eleven:
   refusal NAMES a wrong radio depends on the model, and attribution is
   not the default: IC-7300, IC-7300MK2, IC-705 and IC-905 each mint a
   `driver.WrongRadioError` naming what they found
-  (`core/driver/ic7300/ic7300.go:270`; `core/driver/ic7300mk2/ic7300mk2.go:272`;
-  `core/driver/ic705/ic705.go:364`; `core/driver/ic905/ic905.go:495`).
+  (`core/driver/ic7300/ic7300.go:247`, shared by both IC-7300 rows since
+  the v1.4.1 fold; `core/driver/ic705/ic705.go:364`;
+  `core/driver/ic905/ic905.go:495`).
   The IC-7100 mints one too but names NOBODY: it carries the two
   record-only lengths and leaves both model fields empty unless a caller
   supplies an attribution table, and no registered composition supplies
@@ -108,16 +109,15 @@ Three costs are shared by all eleven:
   - **IC-7300 and IC-7300MK2**: a Select-group channel writes
     normally — the SELECT nibble round-trips, carried through
     unchanged from the record the radio holds
-    (`core/driver/ic7300/write.go:455-477`;
-    `core/driver/ic7300mk2/write.go:463-485`). What is refused instead
-    is a Split-ON channel: it reads normally but cannot be written
-    back, because the split flag shares record byte ③ with the SELECT
-    nibble and the profile leaves the whole byte's high nibble
-    unmapped (`core/driver/ic7300/doc.go:174-178`;
-    `core/driver/ic7300mk2/doc.go:187-195`). Both also refuse a CREATE
-    into an empty slot, since the SELECT nibble has no honest default
-    to write (`core/driver/ic7300/write.go:433`;
-    `core/driver/ic7300mk2/write.go:441`).
+    (`core/driver/ic7300/write.go:445-483`, shared by both models since
+    the v1.4.1 fold). What is refused instead is a Split-ON channel: it
+    reads normally but cannot be written back, because the split flag
+    shares record byte ③ with the SELECT nibble and the profile leaves
+    the whole byte's high nibble unmapped (`core/driver/ic7300/doc.go:174-178`
+    for the IC-7300; `core/driver/ic7300/doc_mk2.go:197-215` for the
+    IC-7300MK2). Both also refuse a CREATE into an empty slot, since the
+    SELECT nibble has no honest default to write
+    (`core/driver/ic7300/write.go:435-440`, the same shared function).
   - **IC-R8600**: three costs. The first is the IC-7300s' own, and it
     applies here for the same reason: a CREATE into an empty slot is
     refused, since the record's SELECT group has no honest default to
@@ -154,7 +154,7 @@ differs, and none of it is a reading of a printed factory value:
 - **IC-7300MK2** — a conservative derivation from a wake-up-command
   table this guide prints for an unrelated purpose; it names no baud
   list and no factory default at all
-  (`core/driver/ic7300mk2/doc.go:301-317`).
+  (`core/driver/ic7300/doc_mk2.go:323-338`).
 - **IC-705** — ASSUMED, and so is the whole baud list: this radio's
   CI-V Reference Guide prints no baud information for the CI-V port at
   all (`core/driver/ic705/caps.go:197-205`; matrix §1 #9).
