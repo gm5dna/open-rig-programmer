@@ -61,21 +61,17 @@ func (realClock) Sleep(d time.Duration)                  { time.Sleep(d) }
 const (
 	// DefaultTimeout is how long Do waits for a matching answer frame (a
 	// ClassRead or ClassWriteWithAck command's Match) before giving up.
-	// PRE-HARDWARE ESTIMATE — to be measured at M5a.
 	DefaultTimeout = 1 * time.Second
 	// DefaultErrorWindow is how long a fire-and-forget Do listens for a
-	// delayed "?;" rejection before declaring success. PRE-HARDWARE
-	// ESTIMATE — to be measured at M5a.
+	// delayed "?;" rejection before declaring success.
 	DefaultErrorWindow = 150 * time.Millisecond
 	// DefaultSettle is the pacing delay Do applies after a completed
 	// exchange, before releasing its internal mutex for the next Do call.
-	// PRE-HARDWARE ESTIMATE — to be measured at M5a.
 	DefaultSettle = 20 * time.Millisecond
 	// QuietPeriod is the DEFAULT DrainPolicy.IdleGap: how long a drain
 	// must observe silence on the port — no frame, no accumulator error
 	// — before declaring it drained. It is what catFraming's policy
-	// supplies, so it remains CAT's operative value. PRE-HARDWARE
-	// ESTIMATE — to be measured at M5a.
+	// supplies, so it remains CAT's operative value.
 	QuietPeriod = 200 * time.Millisecond
 	// maxPurgeFrames bounds Do's entry purge (purgeBufferedLocked): the
 	// most already-buffered frames one purge will discard before giving
@@ -93,13 +89,9 @@ const (
 // all and Engine.Do refuses it with ErrInvalidSpec, without writing
 // anything.
 //
-// D2 made it explicit. Before, the class was INFERRED — a spec with an
-// empty ExpectPrefix was a fire-and-forget write, one with a prefix was a
-// read — which meant "this command mutates the radio and must never be
-// retransmitted" and "the author left a field blank" were the same value.
-// The distinction is safety obligation 2's whole subject, and CI-V adds a
-// third case (an acknowledged write) that no prefix could have keyed at
-// all.
+// The distinction is safety obligation 2's whole subject: a write must
+// never be silently retransmitted, and CI-V's acknowledged write is a
+// third case that "read" and "write" alone cannot express.
 type Class int
 
 const (
@@ -172,7 +164,7 @@ type CommandSpec struct {
 	// (ClassRead, ClassWriteWithAck). <= 0 selects DefaultTimeout.
 	// Unused for ClassWrite. It is an ABSOLUTE deadline, taken when the
 	// wait begins and honoured ahead of any queued event, so no arrival
-	// rate can extend it (D2, starvation deadlines).
+	// rate can extend it.
 	Timeout time.Duration
 	// ErrorWindow bounds how long a ClassWrite Do listens for a delayed
 	// rejection before declaring success. <= 0 selects
@@ -244,16 +236,13 @@ type readerEvent struct {
 // package global, so an Engine gates for the radio of the driver that
 // built it and for no other.
 //
-// It is no longer a CONSTRUCTOR PARAMETER (M9c-5, E3). NewEngine takes the
-// cat.Dialect whole and takes d.AllowedCommand itself — the method value
-// matches this signature exactly — so the gate and the session-init frame
-// (Init, d.BuildAISet(false)) provably come from ONE value. Passing the
-// two separately made it structurally possible to gate for one radio and
-// initialise for another; nothing had ever done so, and no defect existed
-// (see Init's ledger note), but the shape allowed it and the type does not
-// have to. Reaching for a package-level allowlist instead would gate every
-// radio by whatever the FT-710 permits, which is a safety failure rather
-// than merely a correctness one.
+// NewEngine takes the cat.Dialect whole and takes d.AllowedCommand itself
+// — the method value matches this signature exactly — so the gate and the
+// session-init frame (Init, d.BuildAISet(false)) provably come from ONE
+// value: a gate and an init frame can never belong to different radios.
+// Reaching for a package-level allowlist instead would gate every radio by
+// whatever the FT-710 permits, which is a safety failure rather than
+// merely a correctness one.
 //
 // An unconfigured (zero) cat.Dialect is refused by NewEngine
 // (ErrUnconfiguredDialect) before the reader goroutine is even started; a
@@ -403,13 +392,13 @@ type Engine struct {
 // NewEngine constructs an Engine over p, bound to the cat.Dialect d, and
 // starts its reader goroutine. Options: WithLogger, WithClock, WithMaxFrame.
 //
-// THE DIALECT IS THE BINDING, and it is REQUIRED (M9c-5, E3). Both the
-// outbound write gate (d.AllowedCommand — see AllowFunc) and the
-// session-init frame (d.BuildAISet(false) — see Init) derive from this one
-// value, so an Engine cannot gate for one radio while initialising for
-// another. It is a plain parameter rather than a defaulted Option
-// precisely because a default does not enforce same-dialect binding: a
-// caller could supply one half and inherit the other.
+// THE DIALECT IS THE BINDING, and it is REQUIRED. Both the outbound write
+// gate (d.AllowedCommand — see AllowFunc) and the session-init frame
+// (d.BuildAISet(false) — see Init) derive from this one value, so an
+// Engine cannot gate for one radio while initialising for another. It is
+// a plain parameter rather than a defaulted Option precisely because a
+// default does not enforce same-dialect binding: a caller could supply
+// one half and inherit the other.
 //
 // FAIL-CLOSED AT CONSTRUCTION: an UNCONFIGURED (zero) dialect is refused
 // with an error wrapping ErrUnconfiguredDialect, returning a nil *Engine —
@@ -421,17 +410,12 @@ type Engine struct {
 // non-nil AllowedCommand method value that would have satisfied any nil
 // check while describing no radio at all.
 //
-// That is a claim about this constructor, not about the type, and the
-// difference is real (M9b fix wave, Codex finding 3): Engine is exported,
-// so any package may write `var e transport.Engine`, `new(transport.Engine)`
-// or an empty literal, and neither this function nor the AST guard in
-// internal/guards prohibits an external type use. Such a value is not a
-// write-safety failure — it has no usable port, and its nil allow makes Do
-// fail closed with ErrNoAllowlist — but it exists, and the earlier wording
-// here ("an ungated Engine cannot exist") said otherwise.
-//
-// Do re-checks the gate before every write regardless (defence in depth:
-// this is the last line before a physical radio).
+// That guarantee is about this constructor, not about the type: Engine is
+// exported, so any package may write `var e transport.Engine` or an empty
+// literal. Such a value has no usable port, and its nil allow makes Do
+// fail closed with ErrNoAllowlist — Do re-checks the gate before every
+// write regardless (defence in depth: this is the last line before a
+// physical radio).
 //
 // NewEngine does NOT take ownership of p on the refusal path: it has not
 // touched the port at all by then, so closing it stays the caller's
@@ -447,22 +431,20 @@ func NewEngine(p Port, d cat.Dialect, opts ...Option) (*Engine, error) {
 // NewEngineWith constructs an Engine over p, bound to the Framing f, and
 // starts its reader goroutine. Options: WithLogger, WithClock, WithMaxFrame.
 //
-// It is the GENERAL constructor D2 introduced: Engine's state machine is
-// neutral between wire protocols, and f supplies the six things that are
-// not — accumulator, rejection detection, gate, init sequence, drain
-// policy, echo notification. NewEngine is the thin CAT wrapper over it
-// (catFraming), preserved unchanged for every Yaesu driver; the CI-V
-// Framing is supplied by civ.NewFraming, the adapter over core/civ, which
-// imports THIS package and not the other way round (spec D2, and
-// core/civ/framing.go's own header).
+// It is the GENERAL constructor: Engine's state machine is neutral between
+// wire protocols, and f supplies the six things that are not — accumulator,
+// rejection detection, gate, init sequence, drain policy, echo
+// notification. NewEngine is the thin CAT wrapper over it (catFraming),
+// preserved unchanged for every Yaesu driver; the CI-V Framing is supplied
+// by civ.NewFraming, the adapter over core/civ, which imports THIS package
+// and not the other way round.
 //
 // EVERYTHING NewEngine'S DOC COMMENT SAYS ABOUT WHO CHOOSES THE GATE
 // APPLIES HERE, AND MORE SO. The caller supplies the framing, and the
 // framing supplies the gate; a call site in app/ or cmd/ could hand over a
 // framing of its own devising and gate for a radio no policy layer above
 // it authorised. That choice belongs to the driver layer, and
-// internal/guards' TestNewEngineReachableOnlyFromDriver covers BOTH
-// constructors by name for exactly that reason.
+// internal/guards enforces both constructors are reachable only from one.
 //
 // FAIL-CLOSED AT CONSTRUCTION: a nil framing is refused with an error
 // wrapping ErrNoFraming, returning a nil *Engine, BEFORE the reader
@@ -474,7 +456,7 @@ func NewEngine(p Port, d cat.Dialect, opts ...Option) (*Engine, error) {
 // gate's own zero-value refusal). Do re-checks the gate before every write
 // regardless (defence in depth: this is the last line before a physical
 // radio) — ErrNoAllowlist, whose only reachable source is a hand-built
-// Engine, exactly as before D2.
+// Engine.
 //
 // NewEngineWith does NOT take ownership of p on the refusal path: it has
 // not touched the port at all by then.
@@ -499,11 +481,6 @@ func NewEngineWith(p Port, f Framing, opts ...Option) (*Engine, error) {
 	// which do not implement it, this leaves e.fatal nil and both hot
 	// sites ONE nil-field check and nothing else: no type assertion per
 	// chunk, no lock taken, no other branch, no byte changed.
-	// TestFatalFramer_ResolvedOnceAtConstruction pins the resolution;
-	// TestFatalFramer_AbsentIsInert,
-	// TestFatalFramer_AbsentWriteRacingCloseGoesOutAsBaseDid and
-	// TestFatalFramer_AbsentExchangeDoesNotQueueBehindTheFatalGate pin
-	// the inertness — the last two on the write path specifically.
 	if ff, ok := f.(FatalFramer); ok {
 		e.fatal = ff
 	}
@@ -534,28 +511,15 @@ func (e *Engine) UnexpectedFrames() int64 {
 // documented default a fresh CAT session should establish), built by the
 // Engine's own dialect — the same value its gate came from (see NewEngine
 // and catFraming): one binding, so the frame Init sends and the gate that
-// judges it can never belong to different radios. The bytes are unchanged
-// across D2 ("AI0;"), pinned by TestEngine_Init_WritesExactlyAI0.
+// judges it can never belong to different radios.
 //
 // FOR CI-V THE SEQUENCE IS EMPTY, and that is a safety property rather
-// than an omission (D2, adjudication 3): Init performs NO radio mutation
-// for CI-V. Transceive broadcasts are excluded structurally, by address
-// matching, instead of by writing a transceive-off setting — so opening a
-// session touches nothing outside the consent regime. Init then reduces to
-// the drain alone, which is bounded by DrainPolicy's absolute cap and so
-// cannot fail the open by waiting forever on a line that never goes quiet.
-//
-// M9b's ledger note here is CLOSED, and its premise CORRECTED (M9c-5,
-// E3). It read: this is the one place a HARDWIRED cat.FT710 frame meets
-// an INJECTED gate, and a second dialect whose gate did not admit the
-// FT-710's AI0; form would make Init fail closed — safe, but baffling to
-// diagnose. THAT FAILURE COULD NOT OCCUR. AllowedCommand sees bytes, not
-// provenance; every configured dialect builds exactly "AI0;" and every
-// configured dialect's gate admits that form, so no fixture could ever
-// have demonstrated the refusal, and none was ever observed. What the
-// hardwiring actually was is architectural impurity — a package-level
-// dialect reached for inside a type that already held one — and taking
-// the dialect whole at construction removes it.
+// than an omission: Init performs NO radio mutation for CI-V. Transceive
+// broadcasts are excluded structurally, by address matching, instead of by
+// writing a transceive-off setting — so opening a session touches nothing
+// outside the consent regime. Init then reduces to the drain alone, which
+// is bounded by DrainPolicy's absolute cap and so cannot fail the open by
+// waiting forever on a line that never goes quiet.
 func (e *Engine) Init(ctx context.Context) error {
 	for _, cmd := range e.framing.InitSequence() {
 		if _, err := e.Do(ctx, cmd, CommandSpec{Class: ClassWrite}); err != nil {
@@ -633,11 +597,10 @@ func (e *Engine) Init(ctx context.Context) error {
 // exhausted), Do sets e.suspect before returning ErrTimeout: the matching
 // answer may still be in flight, and the entry quarantine on the NEXT Do
 // call is what prevents it from being mistaken for that call's own answer
-// (this is the fix for the worst-case finding: a slow reply arriving after
-// a read's final timeout must never be consumed by a later, different
-// read). A ctx cancellation observed while waiting ALSO sets e.suspect
-// (the frame was already written; the outcome is unknown) and returns
-// ctx's error immediately, without retrying.
+// — a slow reply arriving after a read's final timeout must never be
+// consumed by a later, different read. A ctx cancellation observed while
+// waiting ALSO sets e.suspect (the frame was already written; the outcome
+// is unknown) and returns ctx's error immediately, without retrying.
 //
 // If ctx is already cancelled/expired, Do fails immediately with ctx's own
 // error and writes nothing at all — checked both at entry (before the
@@ -743,8 +706,7 @@ func (e *Engine) Do(ctx context.Context, cmd Command, spec CommandSpec) ([]byte,
 		// THEN the gate judges exactly what goes out, then it goes out.
 		// (The contract still forbids mutating or retaining it; this
 		// ordering is what makes a violation harmless rather than a
-		// safety hole. TestNoteSent_DoesNotRetainOrMutateTheEngineSlice
-		// pins both halves.)
+		// safety hole.)
 		//
 		// The cost is that a frame the gate then REFUSES has still been
 		// noted. That is sound: a refusal writes nothing, so no echo
@@ -843,20 +805,14 @@ func (e *Engine) Do(ctx context.Context, cmd Command, spec CommandSpec) ([]byte,
 // writes the very slice the gate approved.
 //
 // TWO PATHS, DISPATCHED ON e.fatal, AND THE FIRST OF THEM IS BASE'S. A
-// framing that does not implement FatalFramer — catFraming, core/civ's,
-// every model registered before this hook — reaches writeFrame directly:
-// the same e.port.Write with the same error branch it had before, no lock
-// acquired, no e.closed reread — the absent path executes base's
-// instructions unchanged, and a nil-field check is the whole addition
-// needed to reach them. That is what makes the additivity claim TRUE
-// rather than merely small, and it is what two pins hold it to.
-// TestFatalFramer_AbsentWriteRacingCloseGoesOutAsBaseDid is the
-// discriminating one: a Do that has ALREADY lost the race with
-// Engine.Close still transmits, and still returns base's error value.
-// TestFatalFramer_AbsentExchangeDoesNotQueueBehindTheFatalGate is its
-// liveness half: a goroutine holding fatalGate cannot delay such an
-// exchange at all. Both go red the moment the gate is made unconditional
-// again.
+// framing that does not implement FatalFramer — catFraming, core/civ's —
+// reaches writeFrame directly: the same e.port.Write with the same error
+// branch it had before, no lock acquired, no e.closed reread — the absent
+// path executes base's instructions unchanged, and a nil-field check is
+// the whole addition needed to reach them. That is the additivity
+// guarantee: a Do that has ALREADY lost the race with Engine.Close still
+// transmits and returns base's error value, and a goroutine holding
+// fatalGate cannot delay such an exchange at all.
 //
 // The recheck is therefore paid for ONLY by a FatalFramer engine, and
 // there it is a deliberate behaviour change: a Do racing a close returns
@@ -876,8 +832,6 @@ func (e *Engine) Do(ctx context.Context, cmd Command, spec CommandSpec) ([]byte,
 // the readLoop that must take fatalGate to publish. That is a hang, in the
 // package every registered radio goes through. Confining the lock to this
 // helper is what makes all three paths release it at the same return.
-// TestFatalFramer_GateIsNeverHeldAcrossAChannelReceive fails as a bounded
-// timeout if anyone reintroduces that form.
 //
 // THE LOCK ORDER, AS A THEOREM, IN TWO CLAUSES — and the second is the
 // load-bearing one:
@@ -896,10 +850,6 @@ func (e *Engine) Do(ctx context.Context, cmd Command, spec CommandSpec) ([]byte,
 //     path, handleReaderErr and drainToQuietLocked — none of them holds
 //     fatalGate. So the wait is bounded by the driver and cannot close a
 //     cycle.
-//
-// Clause 1 alone holds under the struck defer-in-Do form too, which is
-// exactly why clause 2 has to be stated: it is the half that is false
-// there.
 //
 // Two foreign calls therefore sit inside the gate — Port.Write here, and
 // Port.Close reached through closePort — and fatalGate serialises those
@@ -951,9 +901,7 @@ func (e *Engine) writeFrame(frame []byte) (int, error) {
 // this publication is authoritative only when it wins that race; when
 // Engine.Close, a terminal read error, a consumed reader error or
 // gatedWrite's own error branch got there first, the typed cause is
-// dropped and the earlier one stands. That is FatalFramer's second
-// liveness fact, and TestFatalFramer_OtherCloseFirst_TypedCauseDoesNotSurvive
-// pins it.
+// dropped and the earlier one stands.
 func (e *Engine) publishFatal(cause error) {
 	e.fatalGate.Lock()
 	e.closePort(cause)
@@ -969,7 +917,6 @@ func (e *Engine) publishFatal(cause error) {
 // window this hook closes: a chunk of "«matching answer»;E;" would deliver
 // the answer, waitForAnswer would report SUCCESS, and the link failure
 // would land on the next command instead.
-// TestFatalFramer_SameChunk_FatalSuppressesTheAnswerItArrivedWith is the pin.
 //
 // The nil check below is this hook's ENTIRE cost at this hot site to a
 // framing that does not implement it — no type assertion, no lock. The
@@ -1052,7 +999,7 @@ func (e *Engine) quarantineAfterWrite() {
 // found this way (contamination or the port going away) is handled
 // exactly as it would be anywhere else and returned to the caller.
 //
-// BOUNDED TWICE (D2, starvation deadlines): by a frame count
+// BOUNDED TWICE: by a frame count
 // (maxPurgeFrames) and by an absolute deadline (DrainPolicy.Cap from when
 // the purge started). The loop's exit condition — "e.events is empty" —
 // is one a stream that never goes quiet never satisfies: the reader
@@ -1067,7 +1014,7 @@ func (e *Engine) quarantineAfterWrite() {
 // the answer wait carries its own absolute deadline, so the exchange
 // completes or times out on schedule instead of hanging here. Failing the
 // call instead would mean a transceive-broadcasting radio could never be
-// talked to at all, which is the outcome D2 exists to prevent.
+// talked to at all.
 func (e *Engine) purgeBufferedLocked() error {
 	deadline := e.clk.Now().Add(e.drainPolicy.Cap)
 	for n := 0; ; n++ {
@@ -1126,13 +1073,12 @@ type waitOutcome struct {
 // nextEvent waits for the next readerEvent.
 //
 // THE ABSOLUTE DEADLINE IS CHECKED FIRST, ahead of everything including
-// already-buffered events (D2, starvation deadlines). This ordering is the
-// whole mechanism: an Icom transceive flood — factory-ON on SOME of the
-// Icom models this programme registers, with no off-switch this tier ships
-// — keeps e.events permanently
-// non-empty, and the buffered-events priority check below would then take
-// the event branch on EVERY iteration, so the timeout channel and
-// ctx.Done() would never be selected on at all. A context deadline cannot
+// already-buffered events. This ordering is the whole mechanism: an Icom
+// transceive flood — factory-ON on some Icom models this programme
+// registers, with no off-switch this tier ships — keeps e.events
+// permanently non-empty, and the buffered-events priority check below
+// would then take the event branch on EVERY iteration, so the timeout
+// channel and ctx.Done() would never be selected on at all. A context deadline cannot
 // fix that, because ctx.Done() lives in the very select the flood wins.
 // Comparing the clock before touching the channel is what makes the bound
 // hold at any arrival rate. A zero deadline means "no absolute bound"
@@ -1198,8 +1144,6 @@ func (e *Engine) nextEvent(ctx context.Context, timeout <-chan time.Time, deadli
 // closed, so an event visible now was queued no later than the closure and
 // must reach the caller's normal processing before ErrPortClosed is
 // surfaced — once the queue is empty, closure is reported.
-// TestEngine_NextEventAfterClose_PrefersQueuedReply pins this ordering
-// without scheduler timing.
 func (e *Engine) nextEventAfterClose() waitOutcome {
 	select {
 	case ev := <-e.events:
@@ -1290,25 +1234,14 @@ func (e *Engine) DrainToQuiet(ctx context.Context) error {
 // previously-uncertain exchange has now definitively finished — there is
 // nothing further it could deliver.
 //
-// STARVATION IS NOW BOUNDED, NOT ARGUED AWAY (D2). A continuous flood of
-// inbound frames keeps postponing "quiet achieved" by repeatedly
-// re-arming the idle timer below before it fires; the earlier reasoning
-// here — that the accumulator's maximum frame length would trip
-// CONTAMINATED first, and that 38400 baud cannot deliver constant traffic
-// — held for a Yaesu link answering only what it was asked, and does NOT
-// hold for a radio that BROADCASTS unprompted. Icom's transceive mode is
-// factory-ON on SOME of the Icom models this programme registers (the set
-// is internal/wiring/wiring_test.go's icomModels, pinned against
-// SupportedModels() by TestMakerModelListsPartitionSupportedModels — a
-// count written here would be stale by the next family, and one such radio
-// is all the argument needs; "some" because no radio has been asked and
-// each model's default is an ASSUMED entry), and
-// no off-switch is shipped: a well-formed frame every few
-// milliseconds, forever, is the normal operating condition, and every one
-// of those frames re-arms the timer without ever tripping the length cap.
+// STARVATION IS BOUNDED, NOT ARGUED AWAY. A continuous flood of inbound
+// frames (see nextEvent's doc comment for why one is a normal operating
+// condition on some Icom models) keeps postponing "quiet achieved" by
+// repeatedly re-arming the idle timer below before it fires, without ever
+// tripping the accumulator's own length cap.
 //
-// So the drain now carries an ABSOLUTE CAP (DrainPolicy.Cap), taken when
-// the drain starts, honoured by nextEvent AHEAD of any queued event, and
+// So the drain carries an ABSOLUTE CAP (DrainPolicy.Cap), taken when the
+// drain starts, honoured by nextEvent AHEAD of any queued event, and
 // reported as ErrDrainCapExceeded — distinct from "quiet achieved" (the
 // idle timer firing), because a flood must never be reported as a
 // successfully drained port.
@@ -1319,10 +1252,8 @@ func (e *Engine) DrainToQuiet(ctx context.Context) error {
 // enough to block there is stopped instead by capC, a channel firing at
 // the cap that no arrival can re-arm — without it, a single stale frame
 // arriving just under the cap would re-arm the idle timer and carry the
-// drain to Cap+IdleGap, which is not what "absolute ceiling" means and is
-// LATER than the pre-D2 internal quarantines (which hard-failed at
-// 2*QuietPeriod on their context). With both, the drain fails at Cap, full
-// stop — the doc's claim and the old timing, exactly.
+// drain to Cap+IdleGap, which is not what "absolute ceiling" means. With
+// both, the drain fails at Cap, full stop.
 func (e *Engine) drainToQuietLocked(ctx context.Context) error {
 	if e.closed.Load() {
 		return e.closedErr()
