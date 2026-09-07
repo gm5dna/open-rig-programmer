@@ -20,6 +20,15 @@
 // the record would agree with itself end to end and every test would go green
 // while proving nothing.
 //
+// THE ONE EXCEPTION IS internal/fakepipe (added 06/09/2026): the net.Pipe pair,
+// the goroutine bookkeeping, the interruptible latency wait and the raw write.
+// It is permitted because it is PROTOCOL-FREE — it sees []byte and a duration
+// and nothing else, so it carries no framing, no field layout and no reply
+// building. A bug in it therefore cannot make a wrong codec look right; it can
+// only stop bytes moving, which this package's own tests notice at once.
+// Everything above the wire — the reassembler, the parser, the image, the
+// replies — stays here, written independently.
+//
 // # WHERE THIS FAKE'S KNOWLEDGE CAME FROM
 //
 // Two kinds of fact, from two separate places, and no third place.

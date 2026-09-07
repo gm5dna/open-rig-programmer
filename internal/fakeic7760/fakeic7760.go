@@ -5,10 +5,14 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"github.com/gm5dna/open-rig-programmer/internal/fakepipe"
 )
 
 type Radio struct {
-	host, device                 net.Conn
+	// pipe is internal/fakepipe: the net.Pipe pair and the goroutines
+	// servicing it, protocol-free (see doc.go).
+	pipe                         *fakepipe.Pipe
 	addr                         byte
 	id                           []byte
 	echo                         bool
@@ -18,15 +22,11 @@ type Radio struct {
 	recordLen                    int
 	scanEdgeLen                  int
 	broadcastTo                  byte
-	latency                      time.Duration
 	mu                           sync.Mutex
 	slots                        map[int]MemState
 	commands                     [][2]byte
 	bytesWritten                 []byte
-	closed                       chan struct{}
 	out                          chan []byte
-	once                         sync.Once
-	wg                           sync.WaitGroup
 	broadcastStop, addressedStop chan struct{}
 }
 
@@ -35,56 +35,46 @@ func New(opts ...Option) *Radio {
 	for _, o := range opts {
 		o(&c)
 	}
-	h, d := net.Pipe()
-	r := &Radio{host: h, device: d, addr: c.addr, id: c.id, echo: c.echo, fullRecord: c.fullRecord, emptyReply: c.emptyReply, emptyRecordFF: c.emptyRecordFF, recordLen: c.recordLen, scanEdgeLen: c.scanEdgeLen, broadcastTo: c.broadcastTo, latency: c.latency, slots: make(map[int]MemState), closed: make(chan struct{}), out: make(chan []byte, 128)}
+	r := &Radio{pipe: fakepipe.New(), addr: c.addr, id: c.id, echo: c.echo, fullRecord: c.fullRecord, emptyReply: c.emptyReply, emptyRecordFF: c.emptyRecordFF, recordLen: c.recordLen, scanEdgeLen: c.scanEdgeLen, broadcastTo: c.broadcastTo, slots: make(map[int]MemState), out: make(chan []byte, 128)}
+	r.pipe.Latency = c.latency
 	for ch, v := range c.channels {
 		if n := c.recordLenFor(ch); len(v) != n {
 			panic(fmt.Sprintf("fakeic7760: channel %d record has length %d, want %d", ch, len(v), n))
 		}
 		r.slots[ch] = MemState{Raw: append([]byte(nil), v...)}
 	}
-	r.wg.Add(2)
-	go r.serve()
-	go r.writer()
+	r.serve()
+	r.pipe.Go(r.writer)
 	r.StartBroadcastFlood(c.broadcast)
 	r.StartAddressedFlood(c.addressed)
 	return r
 }
-func (r *Radio) Port() net.Conn { return r.host }
+func (r *Radio) Port() net.Conn { return r.pipe.Host() }
 func (r *Radio) Close() error {
 	r.StopFloods()
-	r.once.Do(func() { close(r.closed); _ = r.device.Close() })
-	r.wg.Wait()
-	return nil
+	return r.pipe.Close()
 }
 func (r *Radio) serve() {
-	defer r.wg.Done()
 	a := newReassembler(4096)
-	b := make([]byte, 4096)
-	for {
-		n, e := r.device.Read(b)
-		if n > 0 {
+	r.pipe.Go(func() {
+		r.pipe.ReadLoop(func(b []byte) {
 			r.mu.Lock()
-			r.bytesWritten = append(r.bytesWritten, b[:n]...)
+			r.bytesWritten = append(r.bytesWritten, b...)
 			r.mu.Unlock()
-			for _, f := range a.push(b[:n]) {
+			for _, f := range a.push(b) {
 				r.dispatch(f)
 			}
-		}
-		if e != nil {
-			return
-		}
-	}
+		})
+	})
 }
 func (r *Radio) writer() {
-	defer r.wg.Done()
 	for {
 		select {
 		case b := <-r.out:
-			if _, err := r.device.Write(b); err != nil {
+			if !r.pipe.WriteNow(b) {
 				return
 			}
-		case <-r.closed:
+		case <-r.pipe.Done():
 			return
 		}
 	}
@@ -92,7 +82,7 @@ func (r *Radio) writer() {
 func (r *Radio) emit(b []byte) {
 	select {
 	case r.out <- append([]byte(nil), b...):
-	case <-r.closed:
+	case <-r.pipe.Done():
 	default:
 	}
 }
@@ -117,12 +107,8 @@ func (r *Radio) dispatch(raw []byte) {
 	if p == nil {
 		return
 	}
-	if r.latency > 0 {
-		select {
-		case <-time.After(r.latency):
-		case <-r.closed:
-			return
-		}
+	if !r.pipe.Sleep(r.pipe.Latency) {
+		return
 	}
 	r.emit(p)
 }
@@ -220,10 +206,9 @@ func (r *Radio) startFlood(to byte, d time.Duration, slot *chan struct{}) {
 	}
 	s := make(chan struct{})
 	*slot = s
-	r.wg.Add(1)
-	r.mu.Unlock()
-	go func() {
-		defer r.wg.Done()
+	// Started while mu is held, so a concurrent Close (StopFloods takes mu)
+	// cannot reach the pipe's Wait between here and the goroutine registering.
+	r.pipe.Go(func() {
 		t := time.NewTicker(d)
 		defer t.Stop()
 		for {
@@ -238,11 +223,12 @@ func (r *Radio) startFlood(to byte, d time.Duration, slot *chan struct{}) {
 				r.emit(wire(to, r.addr, out...))
 			case <-s:
 				return
-			case <-r.closed:
+			case <-r.pipe.Done():
 				return
 			}
 		}
-	}()
+	})
+	r.mu.Unlock()
 }
 func (r *Radio) StopFloods() {
 	r.mu.Lock()
