@@ -18,11 +18,12 @@
 // other.
 //
 // It is build-time tooling ONLY. Its importers are the generator
-// (internal/extable/gen, invoked by `go generate ./core/cat`), the
-// observation derivation tool (internal/extable/observe), and the core/cat
-// staleness test that re-derives the generated file from both sources and
-// byte-compares it. Nothing here talks to a session, a driver, the
-// allowlist, or the wire.
+// (internal/extable/gen, invoked by `go generate ./core/cat`) and the
+// core/cat staleness test that re-derives the generated file from both
+// sources and byte-compares it. The observation derivation tool
+// (internal/extable/observe) was removed in v1.4.1; the committed
+// core/cat/table2-observed.csv it produced is now the pinned record.
+// Nothing here talks to a session, a driver, the allowlist, or the wire.
 package extable
 
 import (
@@ -124,11 +125,12 @@ func ParseCSV(p Profile, data []byte) ([]Row, error) {
 		// %03d under Single at the FT-991A seam, and this one is named here
 		// so a later sweep can see it was considered rather than missed, and
 		// so nobody "fixes" it and moves a shipped refusal string. A FOURTH
-		// %02d address-key site exists outside this package —
-		// internal/extable/observe/main.go's isText map — and stays %02d
-		// deliberately too: that tool is hard-wired to FT710Profile() and
-		// can only ever see a Triple chart, so it is named at its own site
-		// rather than repeated here.
+		// %02d address-key site once existed outside this package, in
+		// internal/extable/observe/main.go's isText map — that tool was
+		// hard-wired to FT710Profile() and could only ever see a Triple
+		// chart. It was removed in v1.4.1; the committed
+		// core/cat/table2-observed.csv it produced is now the pinned
+		// record, so the site is gone rather than named here.
 		if seen[key] {
 			return nil, fmt.Errorf("extable: CSV data row %d: duplicate (P1,P2,P3) triple %02d/%02d/%02d", i+1, row.P1, row.P2, row.P3)
 		}
