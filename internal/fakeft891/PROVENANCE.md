@@ -19,8 +19,8 @@ commit `adf3d21`'s freeze block. The two facts are one fact, and this note
 records it a second time only so that a reader of THIS directory can check the
 copy without first learning the dialect's test layout.
 
-It is the ONLY source of this package's EX (MENU) inventory. The generator
-under `gen/` reads it and emits `exinventory_gen.go`; `ex.go` expands that into
+It is the ONLY source of this package's EX (MENU) inventory. `exinventory.go`
+embeds it and projects it at init; `ex.go` expands that into
 the address → raw-P4 map the fake answers EX reads from.
 
 ## What the artefact is
@@ -91,7 +91,7 @@ not an accident of layout:
 | side | source | generator |
 | --- | --- | --- |
 | dialect (`core/cat/ft891/exinventory_gen.go`) | transcription **A** (`table2.csv`) | `internal/extable` |
-| this fake (`exinventory_gen.go`) | transcription **B** (this file) | `internal/fakeft891/gen` (stdlib only) |
+| this fake (`exGroups`) | transcription **B** (this file) | `exinventory.go` (stdlib only) |
 
 `core/transport/ex_crosscheck_ft891_test.go` then proves the two inventories
 agree — address for address and width for width, and over the wire. Because the
@@ -100,7 +100,7 @@ either transcription, or in either generator, surfaces as a **cross-check
 mismatch**. If this fake derived its inventory from A, from the dialect, or with
 `extable`'s parser, both sides would rest on one reading of the chart and one
 parser, and a shared mistake would reproduce itself identically into both tables
-and be invisible. That is why `gen/` is stdlib-only and why `imports_test.go`'s
+and be invisible. That is why `exinventory.go` is stdlib-only and why `imports_test.go`'s
 `TestNoCoreImports` walks subdirectories: the fence is what keeps the
 independence mechanical rather than a matter of good intentions.
 

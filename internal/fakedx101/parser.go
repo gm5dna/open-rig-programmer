@@ -3,7 +3,6 @@
 package fakedx101
 
 import (
-	"bytes"
 	"fmt"
 	"strings"
 )
@@ -826,6 +825,24 @@ func (r *Radio) handleAI(body []byte) []byte {
 
 // --- Top-level dispatch ---
 
+// upperASCII folds the two ASCII bytes of a command name to upper case and
+// leaves every other byte alone.
+//
+// NOT bytes.ToUpper or strings.ToUpper: those are Unicode-aware, so a body
+// carrying arbitrary line noise comes back re-encoded and of a DIFFERENT
+// LENGTH — longer for an invalid byte (U+FFFD), shorter for a valid sequence
+// that case-folds to fewer bytes ("\u0131" is two bytes and uppercases to one).
+// A fake whose whole job is byte-exact wire behaviour folds ASCII and touches
+// nothing else.
+func upperASCII(name [2]byte) [2]byte {
+	for i, b := range name {
+		if b >= 'a' && b <= 'z' {
+			name[i] = b - 'a' + 'A'
+		}
+	}
+	return name
+}
+
 // handleFrame parses one complete, ';'-terminated frame (as produced by
 // reassembler.push) and returns the reply to send: nil for a fire-and-forget
 // success, or a non-nil frame — a real answer, or rejection — otherwise.
@@ -856,11 +873,7 @@ func (r *Radio) handleFrame(frame []byte) []byte {
 	if len(body) < 2 {
 		return rejection
 	}
-	// The fold is bytes.ToUpper, which is Unicode-aware: a body whose first two
-	// bytes are not ASCII comes back re-encoded (U+FFFD) and possibly longer,
-	// so the first two bytes are taken. Such a frame matches no command name
-	// and falls to rejection below either way.
-	cmd := [2]byte(bytes.ToUpper(body[:2])[:2])
+	cmd := upperASCII([2]byte{body[0], body[1]})
 	rest := body[2:]
 
 	switch cmd {

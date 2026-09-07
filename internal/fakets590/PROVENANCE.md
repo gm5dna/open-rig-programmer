@@ -127,12 +127,12 @@ Both have landed:
   `core/transport/ex_crosscheck_ts590_test.go` asserts the copies are still
   byte-identical to them, because "the codec from A versus the fake from B"
   holds only for as long as this side's copy really is B.
-- `internal/fakets590/gen` projects each copy into `exinventory590s_gen.go` and
-  `exinventory590sg_gen.go`. It imports nothing project-internal — in
+- `exinventory.go` embeds both copies and projects them at init. It imports
+  nothing project-internal — in
   particular not `internal/extable`, which generates the CODEC's side — so a
   shared parsing bug cannot reproduce itself identically into both inventories
-  and be invisible. `imports_test.go` enforces that recursively, `gen/`
-  included.
+  and be invisible. `imports_test.go` enforces that recursively, this
+  directory and every one beneath it.
 - `core/transport/ex_crosscheck_ts590_test.go` compares the two sides address
   for address and width for width, on both rows, and drives every address over
   the wire.
@@ -167,4 +167,4 @@ briefed with different definitions of "text row", and the one address where they
 differ on this pair — the SG's menu 000, "Version information (4 ASCII
 characters) read only" — is transcribed by A as a fixed-width numeric row. A
 fake that projected B's flag would answer spaces at an address the repository
-has ruled numeric. See `gen/main.go`'s `widthToken`.
+has ruled numeric. See `exinventory.go`'s `widthToken`.
