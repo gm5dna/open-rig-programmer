@@ -15,7 +15,7 @@ type Option func(*Radio)
 // proven against — a Close during a scripted delay must not have to wait the
 // delay out — and the knob a timeout test needs to reach a timeout.
 func WithLatency(d time.Duration) Option {
-	return func(r *Radio) { r.latency = d }
+	return func(r *Radio) { r.pipe.Latency = d }
 }
 
 // WithRecord seeds one memory slot with a record.

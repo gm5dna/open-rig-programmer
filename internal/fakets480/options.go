@@ -31,7 +31,7 @@ type Option func(*Radio)
 // TestClose_IsPromptDespiteAPendingLatency.
 func WithLatency(d time.Duration) Option {
 	return func(r *Radio) {
-		r.latency = d
+		r.pipe.Latency = d
 	}
 }
 

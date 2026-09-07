@@ -6,6 +6,8 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"github.com/gm5dna/open-rig-programmer/internal/fakepipe"
 )
 
 // Radio is a simulated IC-7610: an in-memory duplex pipe presenting the host
@@ -14,8 +16,11 @@ import (
 //
 // A Radio is safe for concurrent use — see doc.go, "Concurrency and the pipe".
 type Radio struct {
-	hostConn net.Conn // returned by Port(); the caller's end
-	fakeConn net.Conn // serviced by serve(); the radio's own end
+	// pipe is the in-memory duplex connection and the goroutines servicing
+	// it: internal/fakepipe, the one package the fakes share. It carries the
+	// net.Pipe pair, the interruptible latency wait and the raw write, and NO
+	// protocol at all — see doc.go's sibling section.
+	pipe *fakepipe.Pipe
 
 	// Fixed at construction, before any goroutine starts, and never mutated
 	// afterwards — so serve(), the writer and the flood goroutines may all
@@ -23,7 +28,6 @@ type Radio struct {
 	idToken   []byte
 	usbEcho   bool
 	recordLen int
-	latency   time.Duration
 
 	mu           sync.Mutex
 	slots        map[int]MemState
@@ -43,15 +47,6 @@ type Radio struct {
 	// (rather than a direct write) means a flood or an unread answer can never
 	// wedge the goroutine that is reading the host's commands.
 	out *outQueue
-
-	// shutdown is closed exactly once, by closePipes, when the radio goes
-	// away. Every wait in this package selects against it, so Close never has
-	// to sit out a scripted latency or a flood interval.
-	shutdown chan struct{}
-
-	closeOnce sync.Once
-	closeErr  error
-	wg        sync.WaitGroup
 }
 
 // New constructs a simulated IC-7610 and starts its servicing goroutines.
@@ -69,22 +64,18 @@ func New(opts ...Option) *Radio {
 		opt(&cfg)
 	}
 
-	hostConn, fakeConn := net.Pipe()
 	r := &Radio{
-		hostConn:  hostConn,
-		fakeConn:  fakeConn,
+		pipe:      fakepipe.New(),
 		idToken:   cfg.idToken,
 		usbEcho:   cfg.usbEcho,
 		recordLen: cfg.recordLen,
-		latency:   cfg.latency,
 		slots:     make(map[int]MemState),
 		out:       newOutQueue(maxQueuedFrames),
-		shutdown:  make(chan struct{}),
 	}
+	r.pipe.Latency = cfg.latency
 
-	r.wg.Add(2)
-	go r.serve()
-	go r.writer()
+	r.serve()
+	r.pipe.Go(r.writer)
 
 	// The two construction-time floods, started after the goroutines that
 	// carry them and independently of each other. A non-positive interval
@@ -102,85 +93,43 @@ func New(opts ...Option) *Radio {
 // read and write deadlines on it. A test driving a fake radio needs a deadline
 // far more than a real serial port does: without one, a test that expects an
 // answer the radio has decided not to give hangs instead of failing.
-func (r *Radio) Port() net.Conn { return r.hostConn }
+func (r *Radio) Port() net.Conn { return r.pipe.Host() }
 
 // Close shuts the fake radio down: it stops any floods, closes the RADIO's own
 // end of the pipe, and waits for every goroutine to exit. Safe to call more
 // than once.
 //
-// Deliberately closes only fakeConn, not hostConn. That is a property of
-// net.Pipe rather than of this radio: Close() reports io.ErrClosedPipe to a
-// Read or Write made against the end YOU YOURSELF closed, while a Read on the
-// other, still-open end sees io.EOF — which is exactly the signal a host should
-// get from "the radio went away". A caller that wants to release its own Port()
-// handle may still call r.Port().Close() itself.
+// It is prompt despite a scripted latency or a flood interval, and it
+// deliberately leaves the HOST end open, so a read there sees io.EOF — exactly
+// the signal a host should get from "the radio went away". See
+// internal/fakepipe's Shutdown for why that direction matters.
 func (r *Radio) Close() error {
 	r.StopFloods()
-	err := r.closePipes()
-	r.wg.Wait()
-	return err
-}
-
-// closePipes is the idempotent, race-safe close of the radio's own pipe end.
-// Factored out of Close so that anything running inside a serving goroutine
-// could shut the pipe without deadlocking on r.wg.
-func (r *Radio) closePipes() error {
-	r.closeOnce.Do(func() {
-		// Close shutdown FIRST, so anything parked in a latency wait or a
-		// flood interval wakes at once, before (or regardless of) noticing the
-		// pipe itself close.
-		close(r.shutdown)
-		r.closeErr = r.fakeConn.Close()
-	})
-	return r.closeErr
+	return r.pipe.Close()
 }
 
 // closed reports whether the radio has been shut down.
 func (r *Radio) closed() bool {
 	select {
-	case <-r.shutdown:
+	case <-r.pipe.Done():
 		return true
 	default:
 		return false
 	}
 }
 
-// sleepInterruptible waits d, returning early (false) if the radio shuts down
-// first. Returns true when the full d genuinely elapsed; d <= 0 returns true at
-// once.
-func (r *Radio) sleepInterruptible(d time.Duration) bool {
-	if d <= 0 {
-		return true
-	}
-	timer := time.NewTimer(d)
-	defer timer.Stop()
-	select {
-	case <-timer.C:
-		return true
-	case <-r.shutdown:
-		return false
-	}
-}
-
-// serve is the Radio's reading goroutine: it takes bytes off the pipe, records
+// serve starts the Radio's reading goroutine: it takes bytes off the pipe, records
 // them, reassembles frames and dispatches each one.
 func (r *Radio) serve() {
-	defer r.wg.Done()
-
 	acc := newReassembler(maxAccumulatorBytes)
-	buf := make([]byte, 4096)
-	for {
-		n, err := r.fakeConn.Read(buf)
-		if n > 0 {
-			r.recordBytes(buf[:n])
-			for _, f := range acc.push(buf[:n]) {
+	r.pipe.Go(func() {
+		r.pipe.ReadLoop(func(b []byte) {
+			r.recordBytes(b)
+			for _, f := range acc.push(b) {
 				r.dispatch(f)
 			}
-		}
-		if err != nil {
-			return
-		}
-	}
+		})
+	})
 }
 
 // dispatch handles one complete frame: the echo, then the answer.
@@ -202,7 +151,7 @@ func (r *Radio) dispatch(f frame) {
 	if reply == nil {
 		return
 	}
-	if !r.sleepInterruptible(r.latency) {
+	if !r.pipe.Sleep(r.pipe.Latency) {
 		return
 	}
 	r.emit(reply, nil)
@@ -214,7 +163,7 @@ func (r *Radio) dispatch(f frame) {
 // than queueing it behind a reader that may never come.
 func (r *Radio) emit(b []byte, abort <-chan struct{}) {
 	select {
-	case <-r.shutdown:
+	case <-r.pipe.Done():
 		return
 	case <-abort:
 		return
@@ -223,20 +172,19 @@ func (r *Radio) emit(b []byte, abort <-chan struct{}) {
 	r.out.push(b)
 }
 
-// writer is the one goroutine that ever writes to fakeConn.
+// writer is the one goroutine that ever writes the radio's pipe end.
 //
 // Write errors are not reported: a write failing because the peer has gone away
 // — closed the port, or stopped reading and then shut down — is an expected
 // outcome of a test ending, not a bug in the fake.
 func (r *Radio) writer() {
-	defer r.wg.Done()
 	for {
 		for {
 			b, ok := r.out.pop()
 			if !ok {
 				break
 			}
-			if _, err := r.fakeConn.Write(b); err != nil {
+			if !r.pipe.WriteNow(b) {
 				return
 			}
 			if r.closed() {
@@ -245,7 +193,7 @@ func (r *Radio) writer() {
 		}
 		select {
 		case <-r.out.signal:
-		case <-r.shutdown:
+		case <-r.pipe.Done():
 			return
 		}
 	}
@@ -318,16 +266,14 @@ func (r *Radio) startFlood(to byte, every time.Duration) {
 	}
 	stop := make(chan struct{})
 	*slot = stop
-	r.wg.Add(1)
+	// Started while mu is held, so a concurrent Close (StopFloods takes mu)
+	// cannot reach the pipe's Wait between here and the goroutine registering.
+	r.pipe.Go(func() { r.flood(to, every, stop) })
 	r.mu.Unlock()
-
-	go r.flood(to, every, stop)
 }
 
 // flood emits one frame every `every` until it is stopped or the radio closes.
 func (r *Radio) flood(to byte, every time.Duration, stop <-chan struct{}) {
-	defer r.wg.Done()
-
 	ticker := time.NewTicker(every)
 	defer ticker.Stop()
 	f := r.floodFrame(to)
@@ -336,7 +282,7 @@ func (r *Radio) flood(to byte, every time.Duration, stop <-chan struct{}) {
 		select {
 		case <-stop:
 			return
-		case <-r.shutdown:
+		case <-r.pipe.Done():
 			return
 		case <-ticker.C:
 			r.emit(f, stop)

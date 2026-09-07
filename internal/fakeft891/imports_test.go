@@ -42,8 +42,19 @@ const modulePrefix = "github.com/gm5dna/open-rig-programmer/"
 // isForbiddenImport reports whether path is a project-internal import — which
 // fakeft891 must never have, in this directory or any beneath it (see doc.go,
 // THE HARD RULE): it may depend only on the standard library.
+// fakepipeImport is the ONE project-internal import this package may have.
+//
+// internal/fakepipe is PROTOCOL-FREE plumbing — the net.Pipe pair, the
+// goroutine bookkeeping, the interruptible latency wait, the raw write — and
+// nothing else: not a framing byte, not a field layout, not a reply. It is the
+// single share Stuart permitted on 06/09/2026, and it is safe precisely
+// because a bug in it cannot make a wrong codec look right; it can only stop
+// bytes moving, which this package's own tests notice at once. Everything
+// above the wire stays here, written independently (see doc.go).
+const fakepipeImport = modulePrefix + "internal/fakepipe"
+
 func isForbiddenImport(path string) bool {
-	return strings.HasPrefix(path, modulePrefix)
+	return path != fakepipeImport && strings.HasPrefix(path, modulePrefix)
 }
 
 // TestIsForbiddenImport pins isForbiddenImport's behaviour directly,
@@ -65,6 +76,7 @@ func TestIsForbiddenImport(t *testing.T) {
 		{"internal/fakeradio — the other sibling fake", "github.com/gm5dna/open-rig-programmer/internal/fakeradio", true},
 		{"internal/extable — gen/ must not reach for it", "github.com/gm5dna/open-rig-programmer/internal/extable", true},
 		{"fakeft891 itself", "github.com/gm5dna/open-rig-programmer/internal/fakeft891", true},
+		{"internal/fakepipe — protocol-free plumbing, the one permitted share", fakepipeImport, false},
 		{"stdlib", "io", false},
 		{"stdlib nested", "go/parser", false},
 		{"third party", "github.com/wailsapp/wails/v2", false},
