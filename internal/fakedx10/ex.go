@@ -7,8 +7,6 @@ import (
 	"strings"
 )
 
-//go:generate go run github.com/gm5dna/open-rig-programmer/internal/fakedx10/gen -csv transcription-b.csv -out exinventory_gen.go
-
 // This file is fakedx10's own, independent model of the FTdx10's EX (MENU)
 // command — READ ONLY, exactly as internal/fakeradio models the FT-710's (its
 // register item 24): the manual documents a Set form and this fake does not
@@ -27,9 +25,10 @@ import (
 //
 //   - the DIALECT's inventory (core/cat/ftdx10/exinventory_gen.go) is generated
 //     from TRANSCRIPTION A (core/cat/ftdx10/table2.csv) by internal/extable;
-//   - THIS inventory is generated from TRANSCRIPTION B by internal/fakedx10/gen,
+//   - THIS inventory is generated from TRANSCRIPTION B by exinventory.go,
 //     which imports nothing project-internal at all — not extable, not core/cat
-//     (the recursive fence in imports_test.go enforces it, gen/ included);
+//     (the recursive fence in imports_test.go enforces it for this directory
+//     and every one beneath it);
 //   - core/transport/ex_crosscheck_ftdx10_test.go proves the two agree, address
 //     for address and width for width, and drives every address over the wire.
 //
@@ -95,8 +94,8 @@ const exTextWidth = 12
 // factory-image constants (image.go). exGroups is a generated package-level
 // table, so a token outside {'1'..'4','T'} is a defect in the generator or a
 // hand-edit of its output — a programming error to catch at init, never a
-// runtime input. gen/main.go's widthToken refuses to emit one, and
-// gen/main_test.go's staleness check refuses a generated file that has drifted
+// runtime input. exinventory.go's widthToken refuses to emit one, and
+// exinventory_test.go's staleness check refuses a generated file that has drifted
 // from the CSV, so reaching this panic means one of those two was bypassed.
 func buildEXDefaults() map[string]string {
 	out := make(map[string]string)
@@ -110,7 +109,7 @@ func buildEXDefaults() map[string]string {
 			case w >= '1' && w <= '4':
 				out[addr] = strings.Repeat(string(exDefaultDigit), int(w-'0'))
 			default:
-				panic(fmt.Sprintf("fakedx10: exGroups P1=%s P2=%s item %d: malformed width token %q — regenerate with `go generate ./internal/fakedx10`", g.p1, g.p2, i+1, w))
+				panic(fmt.Sprintf("fakedx10: exGroups P1=%s P2=%s item %d: malformed width token %q — a defect in this package's projection of transcription B (exinventory.go)", g.p1, g.p2, i+1, w))
 			}
 		}
 	}

@@ -7,8 +7,6 @@ import (
 	"strings"
 )
 
-//go:generate go run github.com/gm5dna/open-rig-programmer/internal/fakets480/gen -csv transcription-b-480.csv -out exinventory_gen.go
-
 // This file is fakets480's own, independent model of the TS-480's EX (MENU)
 // command — READ ONLY, exactly as internal/fakeft891 models the FT-891's: the
 // book documents a Set form and this fake does not implement it (doc.go's
@@ -29,8 +27,9 @@ import (
 //   - the CODEC's inventory (core/kw/ts480/exinventory_gen.go) is generated
 //     from TRANSCRIPTION A (core/kw/ts480/menu480.csv) by internal/extable;
 //   - THIS inventory is generated from TRANSCRIPTION B by
-//     internal/fakets480/gen, which imports nothing project-internal at all
-//     (the recursive fence in imports_test.go enforces it, gen/ included, and
+//     exinventory.go, which imports nothing project-internal at all
+//     (the recursive fence in imports_test.go enforces it for this directory
+//     and every one beneath it, and
 //     TestNoCoreImports_ReachesTheGenerator proves the scan really gets
 //     there);
 //   - core/transport/ex_crosscheck_ts480_test.go proves the two agree, address
@@ -105,8 +104,8 @@ const exDefaultDigit = '0'
 // EX block prints the rule in prose — "A string of characters (Variable
 // length) Normally 1-digit for the TS-480. Menu No. 32, 35 and 48 ~ 52 use
 // 2-digit parameters." (480:409-411) — and the ceiling it names is two.
-// gen/main.go's maxWidth carries the same number on the generator's side, and
-// gen/main_test.go pins the set of two-wide rows from the committed CSV.
+// exinventory.go's maxWidth carries the same number on the generator's side, and
+// exinventory_test.go pins the set of two-wide rows from the committed CSV.
 const exMaxWidth = 2
 
 // buildEXDefaults expands the generated exWidths480 into the full address ->
@@ -116,22 +115,22 @@ const exMaxWidth = 2
 // factory-image constants (image.go). exWidths480 is a generated package-level
 // table, so a token outside '1'..'2' is a defect in the generator or a
 // hand-edit of its output — a programming error to catch at init, never a
-// runtime input. gen/main.go's widthToken REFUSES to emit one (with the
+// runtime input. exinventory.go's widthToken REFUSES to emit one (with the
 // offending CSV line named, which is why the alphabet's top is proved there
-// rather than discovered here), and gen/main_test.go's staleness check refuses
+// rather than discovered here), and exinventory_test.go's staleness check refuses
 // a generated file that has drifted from the CSV, so reaching this panic means
 // one of those two was bypassed.
 func buildEXDefaults() map[string]string {
 	out := make(map[string]string, len(exWidths480))
 	// Indexed by BYTE, not by rune: the table is one ASCII digit per menu
-	// (gen/main.go's widthToken), so a byte index is the intended menu number
+	// (exinventory.go's widthToken), so a byte index is the intended menu number
 	// and `range` over the string would give a rune index instead — the same
 	// value here because the alphabet is ASCII, but not what the loop means to
 	// compute.
 	for menu := 0; menu < len(exWidths480); menu++ {
 		w := exWidths480[menu]
 		if w < '1' || w > '0'+exMaxWidth {
-			panic(fmt.Sprintf("fakets480: menu %03d: malformed width token %q — regenerate with `go generate ./internal/fakets480`", menu, w))
+			panic(fmt.Sprintf("fakets480: menu %03d: malformed width token %q — a defect in this package's projection of transcription B (exinventory.go)", menu, w))
 		}
 		out[exWire(menu)] = strings.Repeat(string(exDefaultDigit), int(w-'0'))
 	}

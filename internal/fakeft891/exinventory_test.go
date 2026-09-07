@@ -1,124 +1,28 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package main
+package fakeft891
 
 import (
-	"bytes"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
 
-// This file is the CI guard for fakeft891's EX generator, and it lives HERE
-// rather than in package fakeft891 for one structural reason: the projection
-// logic is in `package main`, which no Go package can import. A staleness test
-// in fakeft891 would have to re-implement the projection to compare against it,
-// and a check written against a second implementation of the thing it is
-// checking is a weaker check than running the real one.
+// This file is the CI guard for the EX projection in exinventory.go: it runs
+// the REAL parse over the REAL committed CSV and states, as literals, what that
+// artefact structurally contains.
 //
-// So the test runs the ACTUAL generator's parse and render over the ACTUAL
-// committed CSV and byte-compares the result with the committed
-// exinventory_gen.go — the discipline of core/cat/ft891/staleness_test.go,
-// which does the same thing for the dialect through internal/extable. CI runs
-// plain `go test ./...` and never `go generate`, so without this a CSV edit that
-// was not regenerated, or a hand-edit of the generated file, would ship
-// silently.
+// It used to live in exinventory.go and compare a rendered file with
+// the committed exinventory_gen.go. There is no generated file any more — the
+// CSV is embedded and projected at init (06/09/2026) — so staleness cannot
+// happen and the render tests went with it. What remains is the part that was
+// always the real check: the structural counts and every refusal.
 //
-// Paths are relative to this directory, which is the working directory for
-// `go test` (the precedent is internal/fakedx10/gen/main_test.go, which reads
-// ../transcription-b.csv the same way). Nothing project-internal is imported,
-// here or in the command itself — imports_test.go's recursive fence enforces
-// that for this directory too.
-
-const (
-	csvPath = "../transcription-b.csv"
-	genPath = "../exinventory_gen.go"
-)
-
-// generate is the whole pipeline over a byte slice: what main() does between
-// reading the CSV and writing the file.
-func generate(t *testing.T, data []byte, name string) []byte {
-	t.Helper()
-	rows, err := parseB(data)
-	if err != nil {
-		t.Fatalf("parseB: %v", err)
-	}
-	groups, err := groupRows(rows)
-	if err != nil {
-		t.Fatalf("groupRows: %v", err)
-	}
-	out, err := render(groups, name)
-	if err != nil {
-		t.Fatalf("render: %v", err)
-	}
-	return out
-}
-
-// TestGeneratedInventory_NotStale re-derives the compact inventory from its ONE
-// source — this package's copy of transcription B — and byte-compares the
-// rendered file with the committed exinventory_gen.go.
-//
-// On failure: run `go generate ./internal/fakeft891` and commit the result. Do
-// NOT hand-edit the generated file, and do not "fix" the CSV to match it: the
-// CSV is a committed, hash-frozen evidential artefact (see PROVENANCE.md).
-func TestGeneratedInventory_NotStale(t *testing.T) {
-	data, err := os.ReadFile(csvPath)
-	if err != nil {
-		t.Fatalf("reading %s: %v", csvPath, err)
-	}
-	want := generate(t, data, csvPath)
-
-	got, err := os.ReadFile(genPath)
-	if err != nil {
-		t.Fatalf("reading %s: %v", genPath, err)
-	}
-
-	if !bytes.Equal(got, want) {
-		t.Errorf("%s is stale relative to %s (committed %d bytes, regenerated %d bytes); run `go generate ./internal/fakeft891` and commit the result.\nFirst divergence: %s",
-			genPath, csvPath, len(got), len(want), firstDiff(got, want))
-	}
-}
-
-// TestRender_IsDeterministic renders the committed CSV twice, through two
-// independent parses, and requires byte equality. The staleness test's byte
-// comparison is only meaningful if the generator is deterministic: a table
-// emitted from a map range, or comments aligned by anything other than
-// go/format, would make it fail at random.
-func TestRender_IsDeterministic(t *testing.T) {
-	data, err := os.ReadFile(csvPath)
-	if err != nil {
-		t.Fatalf("reading %s: %v", csvPath, err)
-	}
-	first := generate(t, data, csvPath)
-	second := generate(t, data, csvPath)
-	if !bytes.Equal(first, second) {
-		t.Errorf("two renders of %s differ (%d vs %d bytes) — the generator is not deterministic.\nFirst divergence: %s",
-			csvPath, len(first), len(second), firstDiff(first, second))
-	}
-	if len(first) == 0 {
-		t.Fatal("render produced no bytes — this test would pass vacuously")
-	}
-}
-
-// TestRender_EmbedsOnlyTheBaseName pins the property the two tests above depend
-// on: the committed bytes must not record where the generator was invoked from,
-// or this test package (which reads ../transcription-b.csv) could never render
-// the file the //go:generate directive produces from transcription-b.csv.
-func TestRender_EmbedsOnlyTheBaseName(t *testing.T) {
-	data, err := os.ReadFile(csvPath)
-	if err != nil {
-		t.Fatalf("reading %s: %v", csvPath, err)
-	}
-	out := string(generate(t, data, csvPath))
-	if strings.Contains(out, "../") {
-		t.Errorf("rendered output contains a relative path component %q — only the CSV's base name may be embedded", "../")
-	}
-	if base := filepath.Base(csvPath); !strings.Contains(out, base) {
-		t.Errorf("rendered output does not mention %q anywhere — the generated-by marker has lost its source", base)
-	}
-}
+// The CSV is read by name rather than through the embedded transcriptionB in
+// the counts test, because reading the file the //go:embed directive names is
+// what proves the directive points where this test thinks it does.
+const csvPath = "transcription-b.csv"
 
 // TestCommittedCSV_StructuralCounts is this package's own recount of the
 // committed artefact, written as literals rather than derived from anything the
@@ -265,8 +169,6 @@ func TestWidthToken_TheAlphabetIsExactlyOneToFive(t *testing.T) {
 		}
 	}
 }
-
-// --- Negative coverage: every refusal the projection makes ---
 
 // TestParseB_Refusals drives each malformed-input class through parseB over a
 // minimal scratch CSV. These are the checks that make the generator refuse
@@ -429,43 +331,4 @@ func TestGroupRows_Refusals(t *testing.T) {
 	if len(groups) != 2 || groups[0].widths != "44" || groups[1].widths != "4" {
 		t.Fatalf("groupRows(well-formed) = %+v, want two groups with widths \"44\" and \"4\"", groups)
 	}
-}
-
-// TestRender_RefusesAnEmptyInventory pins the last refusal: rendering nothing
-// would emit a syntactically valid file declaring an empty table, and a fake
-// with an empty EX inventory answers "?;" to every menu read — a silent,
-// plausible-looking regression rather than a failure.
-func TestRender_RefusesAnEmptyInventory(t *testing.T) {
-	if _, err := render(nil, csvPath); err == nil {
-		t.Error("render(nil) returned no error; want a refusal")
-	}
-}
-
-// firstDiff describes where two byte slices first differ, quoting the
-// surrounding line so a staleness failure names the ROW rather than an offset —
-// which is what makes the failure message the input to a decision (regenerate?
-// or arbitrate the CSV?) rather than a puzzle.
-func firstDiff(got, want []byte) string {
-	n := min(len(got), len(want))
-	for i := 0; i < n; i++ {
-		if got[i] != want[i] {
-			return fmt.Sprintf("at byte %d:\n  committed:    %q\n  regenerated:  %q", i, lineAt(got, i), lineAt(want, i))
-		}
-	}
-	if len(got) != len(want) {
-		return fmt.Sprintf("one is a prefix of the other (committed %d bytes, regenerated %d bytes)", len(got), len(want))
-	}
-	return "no difference"
-}
-
-// lineAt returns the whole line containing offset i.
-func lineAt(b []byte, i int) string {
-	start := bytes.LastIndexByte(b[:i], '\n') + 1
-	end := bytes.IndexByte(b[i:], '\n')
-	if end < 0 {
-		end = len(b)
-	} else {
-		end += i
-	}
-	return string(b[start:end])
 }

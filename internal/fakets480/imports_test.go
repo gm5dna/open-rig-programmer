@@ -19,19 +19,18 @@ import (
 // one: it walks the tree rather than calling parser.ParseDir("."), which
 // reads one directory and stops. internal/fakets590 carries the same copy for
 // the same reason, and the two are not one file for the reason the rule
-// exists.
-//
-// THE FENCE IS RECURSIVE FROM BIRTH HERE, ahead of the subdirectory it has to
-// cover. internal/fakets480/gen/ — the stdlib-only generator for this row's
-// transcription-B copy — arrives at a later task of this milestone's plan,
-// and it is the piece most likely to reach for internal/extable, the A-side
-// machinery whose Digits parsing was a known defect locus. That is exactly
-// the import this package must not have: one parser on both sides of the EX
-// cross-check would reproduce a shared parsing bug into both inventories
-// invisibly.
-// TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory below is
-// the fence's own red proof, run green, and it stands in that position until
-// the directory arrives.
+// exists.//
+// THE SCAN IS RECURSIVE, and that is not a stylistic preference: this package
+// once carried a stdlib-only generator in gen/, the piece most likely to reach
+// for internal/extable — the A-side machinery whose Digits parsing was a known
+// defect locus, and exactly the import this package must not have, because one
+// parser on both sides of the EX cross-check would reproduce a shared parsing
+// bug into both inventories invisibly. That generator is gone (the CSV is
+// embedded and projected in exinventory.go since 06/09/2026) and no
+// subdirectory remains, but the fence stays recursive so that the next one to
+// arrive lands inside it rather than in front of it.
+// TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory below is the
+// fence's own red proof, run green, against a temporary tree of its own making.
 
 // modulePrefix is this project's module path (go.mod: "module
 // github.com/gm5dna/open-rig-programmer") — NOT the repository directory name
@@ -211,8 +210,8 @@ func writeTree(t *testing.T, files map[string]string) string {
 }
 
 // fenceTestTree is the tree both self-tests below run against: one clean file
-// in the root, one VIOLATING file in a subdirectory (gen/, by name — the shape
-// this package's generator will have), one violating _test.go beside it, and
+// in the root, one VIOLATING file in a subdirectory (gen/, by name — where this
+// package's generator used to live), one violating _test.go beside it, and
 // one violating file under testdata. Only the subdirectory's non-test file may
 // be reported.
 func fenceTestTree(t *testing.T) string {
@@ -227,13 +226,13 @@ func fenceTestTree(t *testing.T) string {
 
 // TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory is the
 // fence's own red proof, run green: it proves the scan WOULD bite a violation
-// placed where this package's EX generator is going to live, and that it bites
+// placed in a subdirectory, and that it bites
 // there and nowhere else — the _test.go file beside it and the testdata
 // fixture are both skipped by design.
 //
-// It is the test that makes the fence meaningful BEFORE gen/ exists, which is
-// the whole reason the recursive form lands with the package core rather than
-// with the generator.
+// It is what keeps the fence meaningful with no subdirectory present at all,
+// which is the whole reason the recursive form is a property of the SCAN rather
+// than of whatever happens to sit beside it.
 func TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory(t *testing.T) {
 	root := fenceTestTree(t)
 
@@ -302,39 +301,5 @@ func TestScanForbiddenImports_IsRecursiveWhereParseDirIsNot(t *testing.T) {
 	}
 	if len(res.violations) != 1 {
 		t.Fatalf("the walking scan found %d violations, want 1 — the subdirectory violation ParseDir cannot see", len(res.violations))
-	}
-}
-
-// TestNoCoreImports_ReachesTheGenerator makes TestNoCoreImports's coverage of
-// gen/ VISIBLE rather than merely intended. That test reports violations, so
-// it passes whether the walk reached the generator or never descended into it
-// at all — a silent regression in the walk would look exactly like a clean
-// tree. This one asserts the scan actually parsed the file, by name.
-//
-// It is the standing half of the fence's red proof: the tree fixture above
-// proves the scan WOULD bite a violation in gen/, and this proves it is
-// looking at the real gen/ while doing so.
-func TestNoCoreImports_ReachesTheGenerator(t *testing.T) {
-	fset := token.NewFileSet()
-	const genMain = "gen/main.go"
-	if _, err := parser.ParseFile(fset, genMain, nil, parser.ImportsOnly); err != nil {
-		t.Fatalf("parsing %s: %v — the generator this package's EX inventory comes from is not where the fence expects it", genMain, err)
-	}
-
-	var seen int
-	err := filepath.WalkDir(".", func(path string, d fs.DirEntry, werr error) error {
-		if werr != nil {
-			return werr
-		}
-		if !d.IsDir() && filepath.ToSlash(path) == genMain {
-			seen++
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("WalkDir: %v", err)
-	}
-	if seen != 1 {
-		t.Errorf("the walk visited %s %d times, want 1 — TestNoCoreImports scans the same tree, so a zero here means its coverage of gen/ is vacuous", genMain, seen)
 	}
 }

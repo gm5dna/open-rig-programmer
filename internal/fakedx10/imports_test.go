@@ -17,17 +17,18 @@ import (
 // copied because the rule it enforces forbids importing anything to share
 // (see doc.go, THE HARD RULE, and its "sibling, not a refactor" section), and
 // extended because fakeradio's version is NON-RECURSIVE: it uses
-// parser.ParseDir("."), which reads one directory and stops.
-//
-// That is a real hole here, not a stylistic one. internal/fakedx10/gen/ is a
-// stdlib-only generator that must be inside the fence — it is the piece most
-// likely to reach for internal/extable, the A-side machinery whose Digits
-// parsing was a known defect locus, which is exactly the import this package
-// must not have (ex.go states why: one parser on both sides of the EX
-// cross-check would reproduce a shared parsing bug into both inventories
-// invisibly). The fence landed with the package core, BEFORE that subdirectory
-// existed, and TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory
-// proved it would bite when the directory arrived — which it now has.
+// parser.ParseDir("."), which reads one directory and stops.//
+// THE SCAN IS RECURSIVE, and that is not a stylistic preference: this package
+// once carried a stdlib-only generator in gen/, the piece most likely to reach
+// for internal/extable — the A-side machinery whose Digits parsing was a known
+// defect locus, and exactly the import this package must not have, because one
+// parser on both sides of the EX cross-check would reproduce a shared parsing
+// bug into both inventories invisibly. That generator is gone (the CSV is
+// embedded and projected in exinventory.go since 06/09/2026) and no
+// subdirectory remains, but the fence stays recursive so that the next one to
+// arrive lands inside it rather than in front of it.
+// TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory below is the
+// fence's own red proof, run green, against a temporary tree of its own making.
 
 // modulePrefix is this project's module path (go.mod: "module
 // github.com/gm5dna/open-rig-programmer") — NOT the repository directory name
@@ -206,7 +207,7 @@ func writeTree(t *testing.T, files map[string]string) string {
 }
 
 // fenceTestTree is the tree both self-tests below run against: one clean file
-// in the root, one VIOLATING file in a subdirectory (gen/, by name — the real
+// in the root, one VIOLATING file in a subdirectory (gen/, by name — where
 // one's shape), one violating _test.go beside it, and one violating file under
 // testdata. Only the subdirectory's non-test file may be reported.
 func fenceTestTree(t *testing.T) string {

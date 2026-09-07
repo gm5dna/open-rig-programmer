@@ -191,7 +191,7 @@ func TestEXSetShaped_NotModelled(t *testing.T) {
 //
 // The numbers are literals, read off the CSV's group boundaries, not derived
 // from exGroups — a count computed from the table it is checking proves nothing.
-// gen/main_test.go pins the same totals from the CSV side, and
+// exinventory_test.go pins the same totals from the CSV side, and
 // core/transport/ex_crosscheck_ftdx101_test.go binds them to the DIALECT's
 // independently generated inventory; three derivations, one fact.
 func TestEXDefaults_CountsPerGroup(t *testing.T) {
@@ -241,7 +241,7 @@ func TestEXGroups_EighteenDistinctSubgroups(t *testing.T) {
 
 // TestEXDefaults_AddressesAreContiguousFromP3One pins the property the compact
 // widths string encodes: within every subgroup the P3 items run 01, 02, 03 … with
-// no gaps, because the string's index IS the item index. gen/groupRows refuses to
+// no gaps, because the string's index IS the item index. groupRows refuses to
 // emit a gap; this is the same property asserted from the expanded map, so a
 // hand-edit of the generated file that inserted or dropped a token is caught on
 // this side too.

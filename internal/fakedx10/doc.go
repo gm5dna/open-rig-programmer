@@ -40,9 +40,9 @@
 // TestNoCoreImports (imports_test.go) enforces it with a go/parser scan, and
 // that scan WALKS SUBDIRECTORIES — the one deliberate improvement on
 // fakeradio's copy of the same test, whose parser.ParseDir(".") is
-// non-recursive and would leave the EX inventory's generator in gen/ outside
-// the fence entirely. That generator is the piece the rule bites hardest for:
-// it must not reach for internal/extable, the machinery that generates the
+// non-recursive and would leave any subdirectory outside the fence entirely.
+// The EX projection is the piece the rule bites hardest for: it must not reach
+// for internal/extable, the machinery that generates the
 // DIALECT's inventory from transcription A, because one parser on both sides of
 // the cross-check would reproduce a shared parsing bug into both inventories
 // invisibly (ex.go states the mechanism in full).

@@ -29,7 +29,7 @@
 // internal/fakeradio or any sibling fake. Standard library only, in every
 // non-test file, in this directory AND every directory beneath it. The fence
 // was RECURSIVE FROM BIRTH, ahead of the subdirectory it had to cover:
-// internal/fakeft991a/gen — the stdlib-only generator for this radio's
+// exinventory.go — the stdlib-only generator for this radio's
 // transcription B — is the piece most likely to reach for internal/extable, the
 // A-side machinery whose Digits parsing was a known defect locus, which is
 // exactly the import this package must not have (one parser on both sides of
@@ -38,7 +38,7 @@
 // TestScanForbiddenImports_CatchesAForbiddenImportInASubdirectory proved the
 // fence would bite there before the directory existed, and now that it does,
 // TestNoCoreImports_ReachesTheGenerator asserts by PATH that the real scan
-// reaches the real gen/main.go.
+// reaches the real exinventory.go.
 //
 // Every byte offset, field width and validation rule below is re-derived from
 // the FT-991A CAT Operation Reference Manual's own position charts (revision
@@ -420,7 +420,7 @@
 //     transcribed, not guessed, including the eight-wide one (151 PRESET
 //     FREQUENCY) that this radio's alphabet had to be widened for — and the
 //     widening is proved from the artefact rather than declared
-//     (gen/main_test.go's TestParseB_TheOnlyEightWideRowIs151, against
+//     (exinventory_test.go's TestParseB_TheOnlyEightWideRowIs151, against
 //     core/cat/ft991a/crosscheck_test.go's widestRowAddr from the other
 //     transcription).
 //     STAGE R LIFTS IT WITH: an EX read sweep of a factory-condition FT-991A.
