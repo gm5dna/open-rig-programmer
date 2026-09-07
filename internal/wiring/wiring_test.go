@@ -22,6 +22,8 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft891"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ft991a"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx10"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ftdx101"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
@@ -749,7 +751,7 @@ func TestOpenFakeSessionFor_FTdx10SimulatedWriteRoundTrip(t *testing.T) {
 	})
 
 	// 1. Identity: the rig answered as this model's own radio.
-	wantCATID := NewFTdx10RealDriver().Capabilities().CATID
+	wantCATID := ftdx10.New(ftdx10.RealHardware).Capabilities().CATID
 	if wantCATID == "" {
 		t.Fatal("the ftdx10 driver declares an empty CATID — the identity check below would pass vacuously")
 	}
@@ -965,7 +967,7 @@ func ftdx101WritableChannel(slot string) codeplug.Channel {
 // Unverified while writeTrialsCompleteD is false, so the capability gate
 // refuses before a frame is built.
 func TestOpenFakeSessionFor_FTdx101DSimulatedWriteRoundTrip(t *testing.T) {
-	assertFTdx101WriteRoundTrip(t, FTdx101DModel, NewFTdx101DRealDriver())
+	assertFTdx101WriteRoundTrip(t, FTdx101DModel, ftdx101.NewD(ftdx101.RealHardware))
 }
 
 // TestOpenFakeSessionFor_FTdx101MPSimulatedWriteRoundTrip is the same trip
@@ -976,7 +978,7 @@ func TestOpenFakeSessionFor_FTdx101DSimulatedWriteRoundTrip(t *testing.T) {
 // this test green if it shared the D's session. The identity assertion
 // inside is what catches that, and it needs its own open to make it.
 func TestOpenFakeSessionFor_FTdx101MPSimulatedWriteRoundTrip(t *testing.T) {
-	assertFTdx101WriteRoundTrip(t, FTdx101MPModel, NewFTdx101MPRealDriver())
+	assertFTdx101WriteRoundTrip(t, FTdx101MPModel, ftdx101.NewMP(ftdx101.RealHardware))
 }
 
 // assertFTdx101WriteRoundTrip is the shared body of the two tests above.
@@ -1833,9 +1835,9 @@ func TestSynthesiseDiscoveredBanks_FTdx10MatchesDriver(t *testing.T) {
 		t.Fatalf("SynthesiseDiscoveredBanks(%q, ...): ok = false, want true (the ftdx10 driver implements driver.DiscoveredBankSynthesizer — its absence would drop discovered banks from the GUI silently)", FTdx10Model)
 	}
 
-	synth, synthOK := NewFTdx10RealDriver().(driver.DiscoveredBankSynthesizer)
+	synth, synthOK := ftdx10.New(ftdx10.RealHardware).(driver.DiscoveredBankSynthesizer)
 	if !synthOK {
-		t.Fatal("NewFTdx10RealDriver() does not implement driver.DiscoveredBankSynthesizer — sanity check failed")
+		t.Fatal("ftdx10.New(ftdx10.RealHardware) does not implement driver.DiscoveredBankSynthesizer — sanity check failed")
 	}
 	want := synth.SynthesiseDiscoveredBanks(slots)
 	if len(want) == 0 {
@@ -1862,13 +1864,13 @@ func TestSynthesiseDiscoveredBanks_FTdx10MatchesDriver(t *testing.T) {
 // driver's classification instead, which is the property that matters and
 // the one that would survive the models diverging.
 func TestSynthesiseDiscoveredBanks_FTdx101DMatchesDriver(t *testing.T) {
-	assertSynthesiseMatchesDriver(t, FTdx101DModel, NewFTdx101DRealDriver())
+	assertSynthesiseMatchesDriver(t, FTdx101DModel, ftdx101.NewD(ftdx101.RealHardware))
 }
 
 // TestSynthesiseDiscoveredBanks_FTdx101MPMatchesDriver: see the D's doc
 // comment. Separate because the MP's registration is a separate fact.
 func TestSynthesiseDiscoveredBanks_FTdx101MPMatchesDriver(t *testing.T) {
-	assertSynthesiseMatchesDriver(t, FTdx101MPModel, NewFTdx101MPRealDriver())
+	assertSynthesiseMatchesDriver(t, FTdx101MPModel, ftdx101.NewMP(ftdx101.RealHardware))
 }
 
 // assertSynthesiseMatchesDriver is the shared body of the two FTdx101
@@ -2276,7 +2278,7 @@ func TestOpenRealSessionFor_DelegatesZeroOptions(t *testing.T) {
 // count is not written down, because it would be stale the next time a
 // driver gains one and the argument never needed it — whose
 // whole point is that internal/wiring's rows deliberately do NOT pass it
-// (NewIC905RealDriver's own doc comment says so), and an extra option
+// (realDrivers' IC905Model row says so), and an extra option
 // added to a consent arm by a later edit would widen a discovery walk for
 // every consenting user while every capability assertion in this file
 // stayed green. Comparing realDriverFor(model, true) against the
@@ -2305,25 +2307,25 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		wantConsent func() driver.Driver
 	}{
 		{model: DefaultModel, want: NewRealDriver},
-		{model: FTdx10Model, want: NewFTdx10RealDriver},
-		{model: FTdx101DModel, want: NewFTdx101DRealDriver},
-		{model: FTdx101MPModel, want: NewFTdx101MPRealDriver},
-		{model: IC7610Model, want: NewIC7610RealDriver, wantConsent: func() driver.Driver {
+		{model: FTdx10Model, want: func() driver.Driver { return ftdx10.New(ftdx10.RealHardware) }},
+		{model: FTdx101DModel, want: func() driver.Driver { return ftdx101.NewD(ftdx101.RealHardware) }},
+		{model: FTdx101MPModel, want: func() driver.Driver { return ftdx101.NewMP(ftdx101.RealHardware) }},
+		{model: IC7610Model, want: func() driver.Driver { return ic7610.New(ic7610.RealHardware) }, wantConsent: func() driver.Driver {
 			return ic7610.New(ic7610.RealHardware, ic7610.WithConsentedUnverifiedWrites())
 		}},
-		{model: IC7300Model, want: NewIC7300RealDriver, wantConsent: func() driver.Driver {
+		{model: IC7300Model, want: func() driver.Driver { return ic7300.New(ic7300.RealHardware) }, wantConsent: func() driver.Driver {
 			return ic7300.New(ic7300.RealHardware, ic7300.WithConsentedUnverifiedWrites())
 		}},
-		{model: IC7300MK2Model, want: NewIC7300MK2RealDriver, wantConsent: func() driver.Driver {
+		{model: IC7300MK2Model, want: func() driver.Driver { return ic7300mk2.New(ic7300mk2.RealHardware) }, wantConsent: func() driver.Driver {
 			return ic7300mk2.New(ic7300mk2.RealHardware, ic7300mk2.WithConsentedUnverifiedWrites())
 		}},
-		{model: IC705Model, want: NewIC705RealDriver, wantConsent: func() driver.Driver {
+		{model: IC705Model, want: func() driver.Driver { return ic705.New(ic705.RealHardware) }, wantConsent: func() driver.Driver {
 			return ic705.New(ic705.RealHardware, ic705.WithConsentedUnverifiedWrites())
 		}},
-		{model: IC9700Model, want: NewIC9700RealDriver, wantConsent: func() driver.Driver {
+		{model: IC9700Model, want: func() driver.Driver { return ic9700.New(ic9700.RealHardware) }, wantConsent: func() driver.Driver {
 			return ic9700.New(ic9700.RealHardware, ic9700.WithConsentedUnverifiedWrites())
 		}},
-		{model: IC905Model, want: NewIC905RealDriver, wantConsent: func() driver.Driver {
+		{model: IC905Model, want: func() driver.Driver { return ic905.New(ic905.RealHardware) }, wantConsent: func() driver.Driver {
 			return ic905.New(ic905.RealHardware, ic905.WithConsentedUnverifiedWrites())
 		}},
 		// The IC-7851 pair. Both rows are listed, and for this family
@@ -2333,10 +2335,10 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		// and still report a plausible model — and would be caught only
 		// here, where each row's default and consent arms are compared
 		// against the constructor that row is supposed to call.
-		{model: IC7851Model, want: NewIC7851RealDriver, wantConsent: func() driver.Driver {
+		{model: IC7851Model, want: func() driver.Driver { return ic7851.New7851() }, wantConsent: func() driver.Driver {
 			return ic7851.New7851(ic7851.WithConsentedUnverifiedWrites())
 		}},
-		{model: IC7850Model, want: NewIC7850RealDriver, wantConsent: func() driver.Driver {
+		{model: IC7850Model, want: func() driver.Driver { return ic7851.New7850() }, wantConsent: func() driver.Driver {
 			return ic7851.New7850(ic7851.WithConsentedUnverifiedWrites())
 		}},
 		// The IC-7760. Its consent arm NAMES ic7760.RealHardware, because
@@ -2344,7 +2346,7 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		// row is also where a consent arm that had quietly passed
 		// ic7760.Simulated (the one edit that would hand a real radio the
 		// simulator's write-Supported capability set) would be caught.
-		{model: IC7760Model, want: NewIC7760RealDriver, wantConsent: func() driver.Driver {
+		{model: IC7760Model, want: func() driver.Driver { return ic7760.New(ic7760.RealHardware) }, wantConsent: func() driver.Driver {
 			return ic7760.New(ic7760.RealHardware, ic7760.WithConsentedUnverifiedWrites())
 		}},
 		// The IC-7100, on exactly the same terms: its consent arm NAMES
@@ -2353,7 +2355,7 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		// that had quietly passed ic7100.Simulated — the one edit that
 		// would hand a real radio the simulator's write-Supported
 		// capability set — would be caught.
-		{model: IC7100Model, want: NewIC7100RealDriver, wantConsent: func() driver.Driver {
+		{model: IC7100Model, want: func() driver.Driver { return ic7100.New(ic7100.RealHardware) }, wantConsent: func() driver.Driver {
 			return ic7100.New(ic7100.RealHardware, ic7100.WithConsentedUnverifiedWrites())
 		}},
 		// The IC-R8600, on exactly the same terms: its consent arm NAMES
@@ -2362,7 +2364,7 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		// that had quietly passed icr8600.Simulated — the one edit that
 		// would hand a real receiver the simulator's write-Supported
 		// capability set — would be caught.
-		{model: ICR8600Model, want: NewICR8600RealDriver, wantConsent: func() driver.Driver {
+		{model: ICR8600Model, want: func() driver.Driver { return icr8600.New(icr8600.RealHardware) }, wantConsent: func() driver.Driver {
 			return icr8600.New(icr8600.RealHardware, icr8600.WithConsentedUnverifiedWrites())
 		}},
 		// The FT-891 (Tier 1), on exactly the same terms as the IC-7760,
@@ -2372,7 +2374,7 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		// option's absence, and this row is where a consent arm that had
 		// quietly passed ft891.Simulated would be caught — the property
 		// wiring.go's own FT891Model comment claims this test proves.
-		{model: FT891Model, want: NewFT891RealDriver, wantConsent: func() driver.Driver {
+		{model: FT891Model, want: func() driver.Driver { return ft891.New(ft891.RealHardware) }, wantConsent: func() driver.Driver {
 			return ft891.New(ft891.RealHardware, ft891.WithConsentedUnverifiedWrites())
 		}},
 		// The FT-991A (Tier 1's second), on exactly the same terms as the
@@ -2383,7 +2385,7 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		// had quietly passed ft991a.Simulated would be caught. That
 		// driver's zero Profile value IS RealHardware, so the mistake
 		// would not be caught by a fail-safe.
-		{model: FT991AModel, want: NewFT991ARealDriver, wantConsent: func() driver.Driver {
+		{model: FT991AModel, want: func() driver.Driver { return ft991a.New(ft991a.RealHardware) }, wantConsent: func() driver.Driver {
 			return ft991a.New(ft991a.RealHardware, ft991a.WithConsentedUnverifiedWrites())
 		}},
 		// The TS-590S and TS-590SG (Tier 6), and this pair asks MORE of
@@ -2400,10 +2402,10 @@ func TestRealDriverFor_DefaultPathByteIdentical(t *testing.T) {
 		// whose Model() is "TS-590S" for both keys, and it is caught here
 		// and by TestDriverTableKeysMatchDriverModel, which compares each
 		// key against its own driver's Model() on BOTH consent arms.
-		{model: TS590SModel, want: NewTS590SRealDriver, wantConsent: func() driver.Driver {
+		{model: TS590SModel, want: func() driver.Driver { return ts590.New(ts590.RowS, ts590.RealHardware) }, wantConsent: func() driver.Driver {
 			return ts590.New(ts590.RowS, ts590.RealHardware, ts590.WithConsentedUnverifiedWrites())
 		}},
-		{model: TS590SGModel, want: NewTS590SGRealDriver, wantConsent: func() driver.Driver {
+		{model: TS590SGModel, want: func() driver.Driver { return ts590.New(ts590.RowSG, ts590.RealHardware) }, wantConsent: func() driver.Driver {
 			return ts590.New(ts590.RowSG, ts590.RealHardware, ts590.WithConsentedUnverifiedWrites())
 		}},
 	}
@@ -3445,7 +3447,7 @@ func TestOpenRealSessionFor_IC9700OpensAtEightNOne(t *testing.T) {
 // bank's discovery walk has no bearing on framing, which is a serial-link
 // property, not a bank one, and realDriverFor(IC905Model, false) builds
 // the driver with NO ic905.WithFullInventoryWalk() option (see
-// NewIC905RealDriver's own doc comment), which this test does not exercise
+// realDrivers' IC905Model row), which this test does not exercise
 // either way since it never reaches Open on a real port.
 func TestOpenRealSessionFor_IC905OpensAtEightNOne(t *testing.T) {
 	d, err := realDriverFor(IC905Model, false)
@@ -3738,9 +3740,9 @@ func TestSynthesiseDiscoveredBanks_FT891MatchesDriver(t *testing.T) {
 		t.Fatalf("SynthesiseDiscoveredBanks(%q, ...): ok = false, want true (the ft891 driver implements driver.DiscoveredBankSynthesizer — its absence would drop discovered banks from the GUI silently)", FT891Model)
 	}
 
-	synth, synthOK := NewFT891RealDriver().(driver.DiscoveredBankSynthesizer)
+	synth, synthOK := ft891.New(ft891.RealHardware).(driver.DiscoveredBankSynthesizer)
 	if !synthOK {
-		t.Fatal("NewFT891RealDriver() does not implement driver.DiscoveredBankSynthesizer — sanity check failed")
+		t.Fatal("ft891.New(ft891.RealHardware) does not implement driver.DiscoveredBankSynthesizer — sanity check failed")
 	}
 	want := synth.SynthesiseDiscoveredBanks(slots)
 	if len(want) != 2 {
@@ -3941,7 +3943,7 @@ func TestOpenFakeSessionFor_FT891SimulatedWriteRoundTrip(t *testing.T) {
 			})
 
 			// 1. Identity: the rig answered as this model's own radio.
-			wantCATID := NewFT891RealDriver().Capabilities().CATID
+			wantCATID := ft891.New(ft891.RealHardware).Capabilities().CATID
 			if wantCATID == "" {
 				t.Fatal("the ft891 driver declares an empty CATID — the identity check below would pass vacuously")
 			}
@@ -4396,7 +4398,7 @@ func TestOpenFakeSessionFor_FT991ACloneWriteVerifyRoundTrip(t *testing.T) {
 	})
 
 	// The rig answered as this model's own radio, not as a sibling's.
-	wantCATID := NewFT991ARealDriver().Capabilities().CATID
+	wantCATID := ft991a.New(ft991a.RealHardware).Capabilities().CATID
 	if wantCATID == "" {
 		t.Fatal("the ft991a driver declares an empty CATID — the identity check below would pass vacuously")
 	}
