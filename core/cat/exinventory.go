@@ -4,7 +4,10 @@ package cat
 
 //go:generate go run github.com/gm5dna/open-rig-programmer/internal/extable/gen -profile ft710
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+)
 
 // EXAddress is one FT-710 menu/EX address: the (P1,P2,P3) triple carried by
 // an EX command. Reference: the manual's EX grammar block (manual extract
@@ -186,27 +189,27 @@ func (d Dialect) ParseEXAddress(wire string) (EXAddress, error) {
 		if len(wire) != 6 {
 			return EXAddress{}, newParseError([]byte(wire), "EX address must be exactly six digits")
 		}
-		if !allASCIIDigits(wire) {
+		if !allDigits([]byte(wire)) {
 			return EXAddress{}, newParseError([]byte(wire), "EX address must be six ASCII digits")
 		}
-		return d.NewEXAddress(twoDigitsAt(wire, 0), twoDigitsAt(wire, 2), twoDigitsAt(wire, 4))
+		return d.NewEXAddress(digitsAt(wire, 0, 2), digitsAt(wire, 2, 4), digitsAt(wire, 4, 6))
 	case EXAddressPair:
 		if len(wire) != 4 {
 			return EXAddress{}, newParseError([]byte(wire), "EX address must be exactly four digits")
 		}
-		if !allASCIIDigits(wire) {
+		if !allDigits([]byte(wire)) {
 			return EXAddress{}, newParseError([]byte(wire), "EX address must be four ASCII digits")
 		}
 		// P3 is not on the wire, and V12 has already required every member
 		// of a Pair inventory to have P3 == 0, so 0 is the only value the
 		// lookup below can match — not a default standing in for an absent
 		// datum.
-		return d.NewEXAddress(twoDigitsAt(wire, 0), twoDigitsAt(wire, 2), 0)
+		return d.NewEXAddress(digitsAt(wire, 0, 2), digitsAt(wire, 2, 4), 0)
 	case EXAddressSingle:
 		if len(wire) != 3 {
 			return EXAddress{}, newParseError([]byte(wire), "EX address must be exactly three digits")
 		}
-		if !allASCIIDigits(wire) {
+		if !allDigits([]byte(wire)) {
 			return EXAddress{}, newParseError([]byte(wire), "EX address must be three ASCII digits")
 		}
 		// Neither P2 nor P3 is on the wire, and V12 has already required
@@ -214,34 +217,16 @@ func (d Dialect) ParseEXAddress(wire string) (EXAddress, error) {
 		// only value the lookup below can match — not a default standing in
 		// for an absent datum. The Pair arm above gives the same reason for
 		// its one dropped component.
-		return d.NewEXAddress(threeDigitsAt(wire, 0), 0, 0)
+		return d.NewEXAddress(digitsAt(wire, 0, 3), 0, 0)
 	default:
 		return EXAddress{}, newParseError([]byte(wire), "EX address: this dialect declares no EXAddressForm, so it has no address field")
 	}
 }
 
-// allASCIIDigits reports whether every byte of s is '0'..'9'.
-func allASCIIDigits(s string) bool {
-	for i := 0; i < len(s); i++ {
-		if s[i] < '0' || s[i] > '9' {
-			return false
-		}
-	}
-	return true
-}
-
-// twoDigitsAt reads the two-digit decimal component at offset i. Callers
-// have already established that s is all digits and long enough.
-func twoDigitsAt(s string, i int) int {
-	return int(s[i]-'0')*10 + int(s[i+1]-'0')
-}
-
-// threeDigitsAt reads the three-digit decimal component at offset i, the
-// EXAddressSingle field's whole content. Callers have already established
-// that s is all digits and long enough. It is a sibling of twoDigitsAt
-// rather than a width-parameterised version of it: each form's parse arm
-// reads its own field, and a shared helper taking a width would put the
-// width somewhere other than the arm that knows it.
-func threeDigitsAt(s string, i int) int {
-	return int(s[i]-'0')*100 + int(s[i+1]-'0')*10 + int(s[i+2]-'0')
+// digitsAt parses the decimal substring s[i:j] to an int. Callers have
+// already established, via allDigits, that s is all digits and long
+// enough, so the parse cannot fail.
+func digitsAt(s string, i, j int) int {
+	n, _ := strconv.Atoi(s[i:j])
+	return n
 }

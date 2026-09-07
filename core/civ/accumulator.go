@@ -2,6 +2,8 @@
 
 package civ
 
+import "bytes"
+
 // DefaultMaxFrame is the maximum frame length, in bytes, a FrameAccumulator
 // enforces when NewFrameAccumulator is given a non-positive maxFrame.
 //
@@ -312,10 +314,12 @@ func (a *FrameAccumulator) takeEcho(frame []byte) bool {
 // indexPreamblePair returns the index of the first PreambleByte of the
 // first preamble PAIR at or after from, or -1.
 func indexPreamblePair(buf []byte, from int) int {
-	for j := from; j+1 < len(buf); j++ {
-		if buf[j] == PreambleByte && buf[j+1] == PreambleByte {
-			return j
-		}
+	if from >= len(buf) {
+		return -1
 	}
-	return -1
+	i := bytes.Index(buf[from:], []byte{PreambleByte, PreambleByte})
+	if i < 0 {
+		return -1
+	}
+	return from + i
 }

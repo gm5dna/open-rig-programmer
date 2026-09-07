@@ -4,6 +4,7 @@ package codeplug
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/gm5dna/open-rig-programmer/core/spec"
@@ -37,25 +38,14 @@ type Issue struct {
 	Msg string
 }
 
-// containsString reports whether s appears in list.
-func containsString(list []string, s string) bool {
-	for _, x := range list {
-		if x == s {
-			return true
-		}
-	}
-	return false
-}
-
 // findToneState returns the spec.ToneState in states whose Value equals
 // value, and true, or the zero spec.ToneState and false if none matches.
 func findToneState(states []spec.ToneState, value string) (spec.ToneState, bool) {
-	for _, s := range states {
-		if s.Value == value {
-			return s, true
-		}
+	i := slices.IndexFunc(states, func(s spec.ToneState) bool { return s.Value == value })
+	if i < 0 {
+		return spec.ToneState{}, false
 	}
-	return spec.ToneState{}, false
+	return states[i], true
 }
 
 // toneStateValues returns the Value of every entry in states, in order —
@@ -104,12 +94,11 @@ func AdmitsProgramTuningStep(caps spec.Capabilities, v uint64) bool {
 // findChannel returns the Channel in channels with the given slot, and
 // true, or the zero Channel and false if no channel has that slot.
 func findChannel(channels []Channel, slot string) (Channel, bool) {
-	for _, ch := range channels {
-		if ch.Slot == slot {
-			return ch, true
-		}
+	i := slices.IndexFunc(channels, func(ch Channel) bool { return ch.Slot == slot })
+	if i < 0 {
+		return Channel{}, false
 	}
-	return Channel{}, false
+	return channels[i], true
 }
 
 // Validate checks cp against caps and returns every Issue found. It never
@@ -310,7 +299,7 @@ func validateChannelData(slot string, bank spec.BankID, d ChannelData, caps spec
 		}
 	}
 
-	if !containsString(caps.Modes, d.Mode) {
+	if !slices.Contains(caps.Modes, d.Mode) {
 		issues = append(issues, Issue{
 			Slot: slot, Field: spec.FieldMode, Severity: SeverityError,
 			Msg: fmt.Sprintf("slot %q: mode %q is not one of this radio's supported modes", slot, d.Mode),
@@ -398,7 +387,7 @@ func validateChannelData(slot string, bank spec.BankID, d ChannelData, caps spec
 
 	// The Yaesu shift vocabulary check, capability-keyed on caps' own
 	// ShiftOptions for exactly the reason the CTCSS check above gives.
-	if len(caps.ShiftOptions) > 0 && !containsString(shiftOptionValues(caps.ShiftOptions), d.Shift) {
+	if len(caps.ShiftOptions) > 0 && !slices.Contains(shiftOptionValues(caps.ShiftOptions), d.Shift) {
 		issues = append(issues, Issue{
 			Slot: slot, Field: spec.FieldShift, Severity: SeverityError,
 			Msg: fmt.Sprintf("slot %q: shift %q must be one of %s", slot, d.Shift, quotedList(shiftOptionValues(caps.ShiftOptions))),
@@ -592,10 +581,5 @@ func toneModeValues(modes []spec.ToneMode) []string {
 // HasErrors reports whether issues contains at least one SeverityError
 // Issue. Warnings alone do not block a send.
 func HasErrors(issues []Issue) bool {
-	for _, i := range issues {
-		if i.Severity == SeverityError {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(issues, func(i Issue) bool { return i.Severity == SeverityError })
 }

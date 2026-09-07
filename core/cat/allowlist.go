@@ -2,6 +2,8 @@
 
 package cat
 
+import "bytes"
+
 // AllowedCommand reports whether frame is safe to write to the radio: it
 // is EXACTLY one of the seven command grammars this package knows how to
 // build — ID read, AI read/set, MR read, MW set, MT read/set, MC
@@ -132,15 +134,8 @@ func (d Dialect) AllowedCommand(frame []byte) bool {
 // exactlyOneTrailingSemicolon reports whether frame contains exactly one
 // ';' byte, and that byte is the very last byte of frame.
 func exactlyOneTrailingSemicolon(frame []byte) bool {
-	count := 0
-	semiPos := -1
-	for i, b := range frame {
-		if b == ';' {
-			count++
-			semiPos = i
-		}
-	}
-	return count == 1 && semiPos == len(frame)-1
+	i := bytes.IndexByte(frame, ';')
+	return i >= 0 && i == len(frame)-1
 }
 
 // validIDCommand reports whether frame is the ID read request. ID has no

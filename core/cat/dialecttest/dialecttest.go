@@ -46,6 +46,7 @@
 package dialecttest
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -366,7 +367,7 @@ func (r *conformanceRun) checkFixedFrames() {
 // is swept because a dialect's slot classification is data: nothing outside
 // it can enumerate the slots it has.
 func threeDigits(n int) string {
-	return string([]byte{byte('0' + n/100), byte('0' + (n/10)%10), byte('0' + n%10)})
+	return fmt.Sprintf("%03d", n)
 }
 
 // checkSlotFrames discovers this dialect's slot space and drives every

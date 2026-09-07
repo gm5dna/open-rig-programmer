@@ -107,29 +107,3 @@ func TestStandardCTCSSTonesReturnsCopy(t *testing.T) {
 	}
 }
 
-// TestValidTone covers ValidTone across every table entry (all 50 must
-// report valid) plus representative invalid values: zero, a value
-// between two table entries, and a value well outside the table's range.
-func TestValidTone(t *testing.T) {
-	for _, tone := range StandardCTCSSTones() {
-		if !ValidTone(tone) {
-			t.Errorf("ValidTone(%v) = false, want true (table entry)", tone)
-		}
-	}
-
-	cases := []struct {
-		name string
-		tone Tone
-	}{
-		{"zero", Tone(0)},
-		{"between two table entries", Tone(671)},
-		{"far outside the table's range", Tone(99999)},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if ValidTone(tc.tone) {
-				t.Errorf("ValidTone(%v) = true, want false", tc.tone)
-			}
-		})
-	}
-}

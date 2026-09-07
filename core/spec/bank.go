@@ -4,6 +4,7 @@ package spec
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -156,10 +157,8 @@ func ParseSparseSlot(slot string) (group, channel int, ok bool) {
 // materialised, and an address outside that list is a perfectly legal
 // place for the user to ADD a channel.
 func (b Bank) WithinSpace(slot string) bool {
-	for _, s := range b.Slots {
-		if s == slot {
-			return true
-		}
+	if slices.Contains(b.Slots, slot) {
+		return true
 	}
 	if !b.Sparse {
 		return false

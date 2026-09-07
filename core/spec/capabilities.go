@@ -4,7 +4,9 @@ package spec
 
 import (
 	"fmt"
+	"maps"
 	"slices"
+	"strings"
 )
 
 // Transmit describes whether the radio has transmit hardware. It is a
@@ -208,12 +210,7 @@ func (c Capabilities) TagByteOK(b byte) bool {
 	if c.TagCharset == "" {
 		return b >= 0x20 && b <= 0x7E && b != ';'
 	}
-	for i := 0; i < len(c.TagCharset); i++ {
-		if c.TagCharset[i] == b {
-			return true
-		}
-	}
-	return false
+	return strings.IndexByte(c.TagCharset, b) >= 0
 }
 
 // TagCharsetDescription names this radio's tag charset for a
@@ -255,18 +252,8 @@ func (c Capabilities) Bank(id BankID) (Bank, bool) {
 // non-nil value), preserving the zero-value distinction callers may
 // depend on (e.g. Bank() returning the zero Bank for an absent ID).
 func copyBank(b Bank) Bank {
-	if b.Slots != nil {
-		slots := make([]string, len(b.Slots))
-		copy(slots, b.Slots)
-		b.Slots = slots
-	}
-	if b.Fields != nil {
-		fields := make(map[Field]FieldSupport, len(b.Fields))
-		for f, fs := range b.Fields {
-			fields[f] = fs
-		}
-		b.Fields = fields
-	}
+	b.Slots = slices.Clone(b.Slots)
+	b.Fields = maps.Clone(b.Fields)
 	return b
 }
 
