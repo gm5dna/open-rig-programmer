@@ -4,6 +4,7 @@ package codeplug
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
@@ -212,10 +213,8 @@ type StringField struct {
 func (f StringField) Valid(vocab []string) error {
 	switch f.State {
 	case Known:
-		for _, v := range vocab {
-			if v == f.Value {
-				return nil
-			}
+		if slices.Contains(vocab, f.Value) {
+			return nil
 		}
 		return fmt.Errorf("codeplug: StringField: Known value %q is not one of this radio's values for the field", f.Value)
 	case Unknown, Unavailable:
@@ -245,10 +244,8 @@ type IntField struct {
 func (f IntField) Valid(table []int) error {
 	switch f.State {
 	case Known:
-		for _, v := range table {
-			if v == f.Value {
-				return nil
-			}
+		if slices.Contains(table, f.Value) {
+			return nil
 		}
 		return fmt.Errorf("codeplug: IntField: Known value %d is not one of this radio's values for the field", f.Value)
 	case Unknown, Unavailable:

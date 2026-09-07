@@ -156,7 +156,7 @@ func (p Profile) validMemoryCommand(body []byte) bool {
 	if err != nil {
 		return false
 	}
-	if err := p.validateRecordFieldsAt(rec, layoutIndex); err != nil {
+	if err := p.validateRecordFields(rec, layoutIndex); err != nil {
 		return false
 	}
 	again, err := p.encodeRecordAt(rec, layoutIndex)

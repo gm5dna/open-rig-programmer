@@ -38,46 +38,43 @@ const nameLength = 16
 // `06` IS ABSENT FROM THE PRINTED TABLE and no value is invented for it —
 // see doc.go, which also records where this package's treatment of that
 // hole and the matrix's wording part company.
-func modeEnum() map[byte]string {
-	return map[byte]string{
-		0x00: "LSB",
-		0x01: "USB",
-		0x02: "AM",
-		0x03: "CW",
-		0x04: "RTTY",
-		0x05: "FM",
-		0x07: "CW-R",
-		0x08: "RTTY-R",
-	}
+//
+// A var, not a func: both layouts below reference the same map, which is
+// safe because nothing mutates a FieldSpan's Enum after construction —
+// FieldSpan.clone() is what hands a copy to any caller outside this
+// package.
+var modeEnum = map[byte]string{
+	0x00: "LSB",
+	0x01: "USB",
+	0x02: "AM",
+	0x03: "CW",
+	0x04: "RTTY",
+	0x05: "FM",
+	0x07: "CW-R",
+	0x08: "RTTY-R",
 }
 
 // filterEnum is ⑩ / ❿, the whole byte. PDF p.16, "②Filter".
-func filterEnum() map[byte]string {
-	return map[byte]string{
-		0x01: "FIL1",
-		0x02: "FIL2",
-		0x03: "FIL3",
-	}
+var filterEnum = map[byte]string{
+	0x01: "FIL1",
+	0x02: "FIL2",
+	0x03: "FIL3",
 }
 
 // dataModeEnum is ⑪'s HIGH nibble. On this model the assignment is read
 // off the inset's own arrow labels — DATA left, TONE right (PDF p.17) —
 // rather than by following leaders, which is why the MK2's B leg records
 // it directly.
-func dataModeEnum() map[byte]string {
-	return map[byte]string{
-		0x0: "OFF",
-		0x1: "ON",
-	}
+var dataModeEnum = map[byte]string{
+	0x0: "OFF",
+	0x1: "ON",
 }
 
 // toneModeEnum is ⑪'s LOW nibble: TONE 0=OFF, 1=TONE, 2=TSQL.
-func toneModeEnum() map[byte]string {
-	return map[byte]string{
-		0x0: "OFF",
-		0x1: "TONE",
-		0x2: "TSQL",
-	}
+var toneModeEnum = map[byte]string{
+	0x0: "OFF",
+	0x1: "TONE",
+	0x2: "TSQL",
 }
 
 // selectEnum is ③'s LOW nibble, and its LOW nibble only (D14). PDF p.17's
@@ -85,13 +82,11 @@ func toneModeEnum() map[byte]string {
 // 1=ON, and the inset's two up-arrows label the LEFT nibble SPLIT and the
 // RIGHT nibble SELECT. The SPLIT half is deliberately UNMAPPED and lives
 // under the Fixed template (E6).
-func selectEnum() map[byte]string {
-	return map[byte]string{
-		0x0: "OFF",
-		0x1: "SEL1",
-		0x2: "SEL2",
-		0x3: "SEL3",
-	}
+var selectEnum = map[byte]string{
+	0x0: "OFF",
+	0x1: "SEL1",
+	0x2: "SEL2",
+	0x3: "SEL3",
 }
 
 // profile is the IC-7300MK2's civ.Profile. Every value is a compile-time
@@ -145,17 +140,17 @@ var profile = civ.MustNewProfile(civ.ProfileConfig{
 		Fields: []civ.FieldSpan{
 			// ③ low nibble — SELECT. The high nibble is SPLIT and is
 			// UNMAPPED.
-			{Field: civ.FieldSelect, Offset: 0, Length: 1, Nibble: civ.NibbleLow, Encoding: civ.EncodingEnum, Enum: selectEnum()},
+			{Field: civ.FieldSelect, Offset: 0, Length: 1, Nibble: civ.NibbleLow, Encoding: civ.EncodingEnum, Enum: selectEnum},
 			// ④ ~ ⑧ — RX frequency, five packed-BCD bytes, least
 			// significant pair first (PDF p.16's per-nibble weights).
 			{Field: civ.FieldRXFrequency, Offset: 1, Length: 5, Encoding: civ.EncodingBCDNumber, Order: civ.OrderLittleEndian, Scale: 1},
 			// ⑨ — operating mode.
-			{Field: civ.FieldMode, Offset: 6, Length: 1, Encoding: civ.EncodingEnum, Enum: modeEnum()},
+			{Field: civ.FieldMode, Offset: 6, Length: 1, Encoding: civ.EncodingEnum, Enum: modeEnum},
 			// ⑩ — filter.
-			{Field: civ.FieldFilter, Offset: 7, Length: 1, Encoding: civ.EncodingEnum, Enum: filterEnum()},
+			{Field: civ.FieldFilter, Offset: 7, Length: 1, Encoding: civ.EncodingEnum, Enum: filterEnum},
 			// ⑪ high / low — data mode and tone type.
-			{Field: civ.FieldDataMode, Offset: 8, Length: 1, Nibble: civ.NibbleHigh, Encoding: civ.EncodingEnum, Enum: dataModeEnum()},
-			{Field: civ.FieldToneMode, Offset: 8, Length: 1, Nibble: civ.NibbleLow, Encoding: civ.EncodingEnum, Enum: toneModeEnum()},
+			{Field: civ.FieldDataMode, Offset: 8, Length: 1, Nibble: civ.NibbleHigh, Encoding: civ.EncodingEnum, Enum: dataModeEnum},
+			{Field: civ.FieldToneMode, Offset: 8, Length: 1, Nibble: civ.NibbleLow, Encoding: civ.EncodingEnum, Enum: toneModeEnum},
 			// ⑫ ~ ⑭ — repeater tone. THE HEADING PRINTS NOTHING BENEATH
 			// IT (§3.16 A6); this encoding is p.23's, ASSUMED, registered
 			// as ic7300mk2-tone-tx-encoding with lift MK2-R17.
@@ -167,10 +162,10 @@ var profile = civ.MustNewProfile(civ.ProfileConfig{
 			// field ids the decoder requires to AGREE with their RX
 			// copies.
 			{Field: civ.FieldTXFrequency, Offset: 15, Length: 5, Encoding: civ.EncodingBCDNumber, Order: civ.OrderLittleEndian, Scale: 1},
-			{Field: civ.FieldMode, Offset: 20, Length: 1, Encoding: civ.EncodingEnum, Enum: modeEnum()},
-			{Field: civ.FieldFilter, Offset: 21, Length: 1, Encoding: civ.EncodingEnum, Enum: filterEnum()},
-			{Field: civ.FieldDataMode, Offset: 22, Length: 1, Nibble: civ.NibbleHigh, Encoding: civ.EncodingEnum, Enum: dataModeEnum()},
-			{Field: civ.FieldToneMode, Offset: 22, Length: 1, Nibble: civ.NibbleLow, Encoding: civ.EncodingEnum, Enum: toneModeEnum()},
+			{Field: civ.FieldMode, Offset: 20, Length: 1, Encoding: civ.EncodingEnum, Enum: modeEnum},
+			{Field: civ.FieldFilter, Offset: 21, Length: 1, Encoding: civ.EncodingEnum, Enum: filterEnum},
+			{Field: civ.FieldDataMode, Offset: 22, Length: 1, Nibble: civ.NibbleHigh, Encoding: civ.EncodingEnum, Enum: dataModeEnum},
+			{Field: civ.FieldToneMode, Offset: 22, Length: 1, Nibble: civ.NibbleLow, Encoding: civ.EncodingEnum, Enum: toneModeEnum},
 			{Field: civ.FieldToneTX, Offset: 23, Length: 3, Encoding: civ.EncodingBCDNumber, Order: civ.OrderBigEndian, Scale: 1},
 			{Field: civ.FieldToneRX, Offset: 26, Length: 3, Encoding: civ.EncodingBCDNumber, Order: civ.OrderBigEndian, Scale: 1},
 			// ⑱ ~ ㉝ — the memory name, sixteen bytes.

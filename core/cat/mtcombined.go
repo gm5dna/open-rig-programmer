@@ -84,8 +84,8 @@ func (d Dialect) mtCombinedLen() int {
 // policy to m, returning a *ParseError describing the first violation found,
 // or nil if m is safe to encode UNDER THIS DIALECT.
 //
-// It is validateMWFields' complete checklist (mw.go) with exactly two
-// substitutions and nothing dropped:
+// It is validateSetFields (mw.go), MW's and MT's shared checklist, with
+// exactly two substitutions:
 //
 //  1. the slot predicate is MT's OWN write policy, d.mtSlotValid — memory
 //     and PMS slots only, 5xx/EMG refused by project decision pending
@@ -95,87 +95,21 @@ func (d Dialect) mtCombinedLen() int {
 //  2. the kind is the FORM's schema constant, CombinedMTSetKind, NOT this
 //     dialect's mwWriteKind. See that constant's doc comment.
 //
-// Everything else is MW's rule, for MW's reason: Mode, CTCSSState and Shift
-// are byte-alias types, so a caller-forged value must be re-validated
-// through this dialect's own ParseMode and through ParseCTCSSState/
-// ParseShift; ModeUnset is separately refused, because parsers must accept
-// the '-' placeholder and builders must never emit it; the clarifier is
-// bounded by THIS DIALECT'S policy; and the frequency must be nonzero as
-// well as fitting the 9-digit field.
-//
 // One shared Dialect method rather than a body inside the builder, because
 // the outbound write gate runs the SAME policy against a decoded wire frame
 // (M9c-3 task 5): the rules governing what may reach a radio as a combined
 // MT Set live in exactly one place, as MW's do.
 func (d Dialect) validateCombinedMTFields(m MemoryData) error {
-	if !d.mtSlotValid(m.Slot) {
-		// Composed from this dialect's own slot space (S0.2), and it is the
-		// SAME renderer BuildMTSet uses: the two forms refuse in identical
-		// words, and they now do so from one place. See mt.go.
-		return newParseError([]byte(m.Slot.Wire()), d.mtSlotDomainRefusal())
-	}
-
+	// Composed from this dialect's own slot space (S0.2), and it is the
+	// SAME renderer BuildMTSet uses: the two forms refuse in identical
+	// words, and they now do so from one place. See mt.go.
+	//
 	// The combined Set's P7 is the FORM's constant, and this is the
 	// validate-don't-rewrite posture MW takes with its own kind: a record
 	// carrying anything else is refused rather than silently corrected, so a
 	// caller that believed it was writing a VFO or Memory record finds out.
-	if m.Kind != CombinedMTSetKind {
-		return newParseError([]byte{m.Kind}, fmt.Sprintf("MT: Kind must be %q, the combined Set's fixed P7 — the reference documents it \"(Fixed)\" in the SET direction, not \"VFO\", and it is deliberately not this dialect's MW write kind", CombinedMTSetKind))
-	}
-
-	// Mode is a raw byte alias (mode.go): never trust a caller-forged value.
-	// Re-validate via THIS DIALECT'S ParseMode and separately reject
-	// ModeUnset, which parsers must accept and builders must never emit.
-	validMode, err := d.ParseMode(m.Mode.Wire())
-	if err != nil {
-		return newParseError([]byte{m.Mode.Wire()}, "MT: mode field (P6) is not a valid Mode")
-	}
-	if validMode == ModeUnset {
-		return newParseError([]byte{m.Mode.Wire()}, "MT: mode field (P6) must not be ModeUnset in a Set frame")
-	}
-
-	if !d.validClarHz(m.ClarHz) {
-		return newParseError([]byte(fmt.Sprintf("%d", m.ClarHz)), fmt.Sprintf("MT: ClarHz must be a multiple of %d Hz, magnitude <= %d", d.clar.StepHz, d.clar.MaxAbsHz))
-	}
-
-	if m.FreqHz == 0 || m.FreqHz > memFreqMax {
-		return newParseError([]byte(fmt.Sprintf("%d", m.FreqHz)), "MT: FreqHz must be nonzero and fit in 9 digits (<= 999999999)")
-	}
-
-	// P5, BY THIS DIALECT'S OWN READING. Under P5Fixed byte 21 is printed
-	// "(Fixed)" on this radio's memory blocks, so a record asking for the TX
-	// clarifier is REFUSED rather than quietly encoded as '0': a caller that
-	// believed it was writing the clarifier finds out, which is the
-	// validate-don't-rewrite posture this validator takes with every other
-	// field. This is the WRITE-direction check on a caller-supplied
-	// MemoryData; a FORGED wire frame is instead refused earlier, by
-	// parseMemoryFields (memdata.go), which the gate's combined-MT grammar
-	// check reaches before this validator ever runs.
-	//
-	// A SWITCH, not an if with an implicit "everything else passes" arm: see
-	// parseMemoryFields' matching comment (memdata.go) — an omitted config
-	// semantic refuses rather than defaults, and NewDialect's V14 already
-	// keeps every registered dialect from reaching the default case.
-	switch d.memoryP5 {
-	case P5Fixed:
-		if m.TxClar {
-			return newParseError([]byte{boolDigit(m.TxClar)}, fmt.Sprintf("MT: TxClar must be false under %v — this dialect's manual prints P5 (position 21) \"(Fixed)\", so there is no TX clarifier flag to set", d.memoryP5))
-		}
-	case P5TxClar:
-	default:
-		return newParseError(nil, "MT: P5 (position 21) policy unset — refusing to guess whether the byte is fixed schema or the TX clarifier flag")
-	}
-
-	// CTCSSState/Shift are byte-alias types exactly like Mode: re-validate
-	// via their own Parse functions for the same reason.
-	if _, err := d.ParseCTCSSState(m.CTCSS.Wire()); err != nil {
-		return newParseError([]byte{m.CTCSS.Wire()}, "MT: CTCSS field (P8) is not a valid CTCSSState")
-	}
-	if _, err := ParseShift(m.Shift.Wire()); err != nil {
-		return newParseError([]byte{m.Shift.Wire()}, "MT: shift field (P10) is not a valid Shift")
-	}
-
-	return nil
+	return d.validateSetFields(m, "MT", d.mtSlotValid, d.mtSlotDomainRefusal(),
+		CombinedMTSetKind, fmt.Sprintf("MT: Kind must be %q, the combined Set's fixed P7 — the reference documents it \"(Fixed)\" in the SET direction, not \"VFO\", and it is deliberately not this dialect's MW write kind", CombinedMTSetKind))
 }
 
 // BuildMTSetCombined builds a COMBINED-form MT (memory channel tag) Set

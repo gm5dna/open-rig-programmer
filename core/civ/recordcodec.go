@@ -8,8 +8,9 @@ import (
 )
 
 // validateRecordFields reports whether rec is a record THIS profile can
-// write at length: every field the layout maps is present, no field it does
-// not map is, and every value fits its own span.
+// write at the layout named by layoutIndex: every field the layout maps
+// is present, no field it does not map is, and every value fits its own
+// span.
 //
 // GATE-REACHING, and the reason this package can claim its gate admits
 // exactly what its builders produce. BuildMemorySet calls it before
@@ -29,18 +30,7 @@ import (
 // would be silently dropped, writing a record the caller did not ask for.
 // Neither is a state a caller can distinguish from success afterwards,
 // which is why both refuse here.
-func (p Profile) validateRecordFields(rec MemoryRecord, length int) error {
-	if !p.Configured() {
-		return fmt.Errorf("civ: unconfigured profile validates no record")
-	}
-	i, ok := p.layoutByLength[length]
-	if !ok {
-		return &RecordLengthError{Want: p.RecordLengths(), Got: length}
-	}
-	return p.validateRecordFieldsAt(rec, i)
-}
-
-func (p Profile) validateRecordFieldsAt(rec MemoryRecord, layoutIndex int) error {
+func (p Profile) validateRecordFields(rec MemoryRecord, layoutIndex int) error {
 	layout := p.layouts[layoutIndex]
 	byID := p.fieldsByIDByLayout[layoutIndex]
 
@@ -137,7 +127,7 @@ func (p Profile) encodeRecord(rec MemoryRecord, length int) ([]byte, error) {
 }
 
 func (p Profile) encodeRecordAt(rec MemoryRecord, layoutIndex int) ([]byte, error) {
-	if err := p.validateRecordFieldsAt(rec, layoutIndex); err != nil {
+	if err := p.validateRecordFields(rec, layoutIndex); err != nil {
 		return nil, err
 	}
 	layout := p.layouts[layoutIndex]

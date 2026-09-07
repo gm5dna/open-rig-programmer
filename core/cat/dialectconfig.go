@@ -4,6 +4,19 @@ package cat
 
 import "fmt"
 
+// enumName renders one of this package's small named-constant enums: the
+// case name if v is a key of names, or "label(N)" otherwise — e.g. an
+// int-convertible value nobody declared a constant for. Shared by every
+// enum String() below, so a constant added to one of them is one map
+// entry away from a self-naming diagnostic rather than a rewritten
+// switch.
+func enumName[T ~int](v T, label string, names map[T]string) string {
+	if n, ok := names[v]; ok {
+		return n
+	}
+	return fmt.Sprintf("%s(%d)", label, int(v))
+}
+
 // SlotSpace is the exported description of one radio family's memory slot
 // numbering: which 3-byte wire forms exist and what each means.
 //
@@ -108,14 +121,10 @@ const (
 
 // String names the form, so a refusal can quote it.
 func (f PMSSlotForm) String() string {
-	switch f {
-	case PMSFormToken:
-		return "PMSFormToken"
-	case PMSFormNumeric:
-		return "PMSFormNumeric"
-	default:
-		return fmt.Sprintf("PMSSlotForm(%d)", int(f))
-	}
+	return enumName(f, "PMSSlotForm", map[PMSSlotForm]string{
+		PMSFormToken:   "PMSFormToken",
+		PMSFormNumeric: "PMSFormNumeric",
+	})
 }
 
 // MCSlotPolicy names the SEND-side slot domain of the MC command.
@@ -146,14 +155,10 @@ const (
 
 // String names the policy, so a refusal can quote it.
 func (p MCSlotPolicy) String() string {
-	switch p {
-	case MCSelectsAll:
-		return "MCSelectsAll"
-	case MCSelectsMemoryPMS:
-		return "MCSelectsMemoryPMS"
-	default:
-		return fmt.Sprintf("MCSlotPolicy(%d)", int(p))
-	}
+	return enumName(p, "MCSlotPolicy", map[MCSlotPolicy]string{
+		MCSelectsAll:       "MCSelectsAll",
+		MCSelectsMemoryPMS: "MCSelectsMemoryPMS",
+	})
 }
 
 // MTForm names the FRAME SHAPE a family's MT command takes.
@@ -183,16 +188,11 @@ const (
 )
 
 func (f MTForm) String() string {
-	switch f {
-	case MTFormUnspecified:
-		return "MTFormUnspecified"
-	case MTFormShort:
-		return "MTFormShort"
-	case MTFormCombined:
-		return "MTFormCombined"
-	default:
-		return fmt.Sprintf("MTForm(%d)", int(f))
-	}
+	return enumName(f, "MTForm", map[MTForm]string{
+		MTFormUnspecified: "MTFormUnspecified",
+		MTFormShort:       "MTFormShort",
+		MTFormCombined:    "MTFormCombined",
+	})
 }
 
 // EXAddressForm names the WIRE WIDTH a family's EX address field takes.
@@ -255,16 +255,11 @@ const (
 )
 
 func (f EXAddressForm) String() string {
-	switch f {
-	case EXAddressTriple:
-		return "EXAddressTriple"
-	case EXAddressPair:
-		return "EXAddressPair"
-	case EXAddressSingle:
-		return "EXAddressSingle"
-	default:
-		return fmt.Sprintf("EXAddressForm(%d)", int(f))
-	}
+	return enumName(f, "EXAddressForm", map[EXAddressForm]string{
+		EXAddressTriple: "EXAddressTriple",
+		EXAddressPair:   "EXAddressPair",
+		EXAddressSingle: "EXAddressSingle",
+	})
 }
 
 // MTReadSlotPolicy names the slot domain of the MT READ request.
@@ -302,14 +297,10 @@ const (
 
 // String names the policy, so a refusal can quote it.
 func (p MTReadSlotPolicy) String() string {
-	switch p {
-	case MTReadsReadable:
-		return "MTReadsReadable"
-	case MTReadsMemoryPMS:
-		return "MTReadsMemoryPMS"
-	default:
-		return fmt.Sprintf("MTReadSlotPolicy(%d)", int(p))
-	}
+	return enumName(p, "MTReadSlotPolicy", map[MTReadSlotPolicy]string{
+		MTReadsReadable:  "MTReadsReadable",
+		MTReadsMemoryPMS: "MTReadsMemoryPMS",
+	})
 }
 
 // MTP11Policy names what byte 28 of the COMBINED MT record — P11, the byte
@@ -345,14 +336,10 @@ const (
 
 // String names the policy, so a refusal can quote it.
 func (p MTP11Policy) String() string {
-	switch p {
-	case P11Fixed:
-		return "P11Fixed"
-	case P11TagDisplay:
-		return "P11TagDisplay"
-	default:
-		return fmt.Sprintf("MTP11Policy(%d)", int(p))
-	}
+	return enumName(p, "MTP11Policy", map[MTP11Policy]string{
+		P11Fixed:      "P11Fixed",
+		P11TagDisplay: "P11TagDisplay",
+	})
 }
 
 // MTPolicy carries the MT command's dialect-varying dimensions, ACROSS BOTH
@@ -489,14 +476,10 @@ const (
 
 // String names the policy, so a refusal can quote it.
 func (p MemoryP5Policy) String() string {
-	switch p {
-	case P5TxClar:
-		return "P5TxClar"
-	case P5Fixed:
-		return "P5Fixed"
-	default:
-		return fmt.Sprintf("MemoryP5Policy(%d)", int(p))
-	}
+	return enumName(p, "MemoryP5Policy", map[MemoryP5Policy]string{
+		P5TxClar: "P5TxClar",
+		P5Fixed:  "P5Fixed",
+	})
 }
 
 // ToneStateDomain names the set of values byte 24 of the shared memory
@@ -534,14 +517,10 @@ const (
 
 // String names the domain, so a refusal can quote it.
 func (t ToneStateDomain) String() string {
-	switch t {
-	case ToneStatesCTCSS:
-		return "ToneStatesCTCSS"
-	case ToneStatesCTCSSAndDCS:
-		return "ToneStatesCTCSSAndDCS"
-	default:
-		return fmt.Sprintf("ToneStateDomain(%d)", int(t))
-	}
+	return enumName(t, "ToneStateDomain", map[ToneStateDomain]string{
+		ToneStatesCTCSS:       "ToneStatesCTCSS",
+		ToneStatesCTCSSAndDCS: "ToneStatesCTCSSAndDCS",
+	})
 }
 
 // ClarifierPolicy bounds MemoryData.ClarHz for one family.

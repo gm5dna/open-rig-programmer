@@ -124,14 +124,8 @@ func (l Layout) AllowedCommand(frame []byte) bool {
 // suffix-only check would admit "ID;ID;", which is two commands the radio
 // would execute in turn — the injection this gate exists to refuse.
 func exactlyOneTrailingSemicolon(frame []byte) bool {
-	count, pos := 0, -1
-	for i, b := range frame {
-		if b == ';' {
-			count++
-			pos = i
-		}
-	}
-	return count == 1 && pos == len(frame)-1
+	i := bytes.IndexByte(frame, ';')
+	return i >= 0 && i == len(frame)-1
 }
 
 // validIDCommand admits the ID READ and nothing else. ID has no Set form on

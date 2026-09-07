@@ -51,6 +51,11 @@ func bcdSpan(id civ.FieldID, offset, length int, order civ.ByteOrder, scale uint
 // conservative: later write preservation can refuse any record whose DSQL,
 // CSQL or D-STAR bytes differ instead of inventing a writable interpretation.
 // TestGoldenSetRecord pins these exact regions against the golden vector.
+//
+// Sliced directly (fixedTemplateBytes[:]) into the layout below rather than
+// copied first: nothing in profile construction mutates a layout's Fixed,
+// and RecordLayout.clone() (record.go) is what defensively copies it for
+// any caller outside this package.
 var fixedTemplateBytes = [RecordLength]byte{
 	10: 0x00, 20: 0x00,
 	24: 'C', 25: 'Q', 26: 'C', 27: 'Q', 28: 'C', 29: 'Q', 30: ' ', 31: ' ',
@@ -60,11 +65,6 @@ var fixedTemplateBytes = [RecordLength]byte{
 	71: 'C', 72: 'Q', 73: 'C', 74: 'Q', 75: 'C', 76: 'Q', 77: ' ', 78: ' ',
 	79: ' ', 80: ' ', 81: ' ', 82: ' ', 83: ' ', 84: ' ', 85: ' ', 86: ' ',
 	87: ' ', 88: ' ', 89: ' ', 90: ' ', 91: ' ', 92: ' ', 93: ' ', 94: ' ',
-}
-
-func fixedTemplate() []byte {
-	out := fixedTemplateBytes
-	return out[:]
 }
 
 // recordFields maps only fields represented by civ.MemoryRecord. The DSQL,
@@ -127,7 +127,7 @@ var profile = civ.MustNewProfile(civ.ProfileConfig{
 	Layouts: []civ.RecordLayout{{
 		Length: RecordLength,
 		Fields: recordFields(),
-		Fixed:  fixedTemplate(),
+		Fixed:  fixedTemplateBytes[:],
 	}},
 	Discriminator: civ.DiscriminatorSingleLength,
 	BuildLength:   RecordLength,

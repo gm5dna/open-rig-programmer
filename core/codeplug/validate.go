@@ -4,6 +4,7 @@ package codeplug
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/gm5dna/open-rig-programmer/core/spec"
@@ -37,47 +38,37 @@ type Issue struct {
 	Msg string
 }
 
-// containsString reports whether s appears in list.
-func containsString(list []string, s string) bool {
-	for _, x := range list {
-		if x == s {
-			return true
-		}
-	}
-	return false
-}
-
 // findToneState returns the spec.ToneState in states whose Value equals
 // value, and true, or the zero spec.ToneState and false if none matches.
 func findToneState(states []spec.ToneState, value string) (spec.ToneState, bool) {
-	for _, s := range states {
-		if s.Value == value {
-			return s, true
-		}
+	i := slices.IndexFunc(states, func(s spec.ToneState) bool { return s.Value == value })
+	if i < 0 {
+		return spec.ToneState{}, false
 	}
-	return spec.ToneState{}, false
+	return states[i], true
 }
 
-// toneStateValues returns the Value of every entry in states, in order —
-// for building a caps-driven vocabulary list for an error message
-// without re-deriving a []string by hand at the call site.
+// valuesOf returns the Value of every entry in items, in order, via the
+// caller's own accessor — for building a caps-driven vocabulary list for
+// an error message without re-deriving a []string by hand at the call
+// site. Shared by toneStateValues, shiftOptionValues, duplexOptionValues
+// and toneModeValues below, whose item types differ.
+func valuesOf[T any](items []T, value func(T) string) []string {
+	out := make([]string, len(items))
+	for i, it := range items {
+		out[i] = value(it)
+	}
+	return out
+}
+
+// toneStateValues returns the Value of every entry in states, in order.
 func toneStateValues(states []spec.ToneState) []string {
-	values := make([]string, len(states))
-	for i, s := range states {
-		values[i] = s.Value
-	}
-	return values
+	return valuesOf(states, func(s spec.ToneState) string { return s.Value })
 }
 
-// shiftOptionValues returns the Value of every entry in opts, in order —
-// for building a caps-driven vocabulary list for an error message
-// without re-deriving a []string by hand at the call site.
+// shiftOptionValues returns the Value of every entry in opts, in order.
 func shiftOptionValues(opts []spec.ShiftOption) []string {
-	values := make([]string, len(opts))
-	for i, o := range opts {
-		values[i] = o.Value
-	}
-	return values
+	return valuesOf(opts, func(o spec.ShiftOption) string { return o.Value })
 }
 
 // quotedList formats vals as a comma-separated list of double-quoted
@@ -104,12 +95,11 @@ func AdmitsProgramTuningStep(caps spec.Capabilities, v uint64) bool {
 // findChannel returns the Channel in channels with the given slot, and
 // true, or the zero Channel and false if no channel has that slot.
 func findChannel(channels []Channel, slot string) (Channel, bool) {
-	for _, ch := range channels {
-		if ch.Slot == slot {
-			return ch, true
-		}
+	i := slices.IndexFunc(channels, func(ch Channel) bool { return ch.Slot == slot })
+	if i < 0 {
+		return Channel{}, false
 	}
-	return Channel{}, false
+	return channels[i], true
 }
 
 // Validate checks cp against caps and returns every Issue found. It never
@@ -310,7 +300,7 @@ func validateChannelData(slot string, bank spec.BankID, d ChannelData, caps spec
 		}
 	}
 
-	if !containsString(caps.Modes, d.Mode) {
+	if !slices.Contains(caps.Modes, d.Mode) {
 		issues = append(issues, Issue{
 			Slot: slot, Field: spec.FieldMode, Severity: SeverityError,
 			Msg: fmt.Sprintf("slot %q: mode %q is not one of this radio's supported modes", slot, d.Mode),
@@ -398,7 +388,7 @@ func validateChannelData(slot string, bank spec.BankID, d ChannelData, caps spec
 
 	// The Yaesu shift vocabulary check, capability-keyed on caps' own
 	// ShiftOptions for exactly the reason the CTCSS check above gives.
-	if len(caps.ShiftOptions) > 0 && !containsString(shiftOptionValues(caps.ShiftOptions), d.Shift) {
+	if len(caps.ShiftOptions) > 0 && !slices.Contains(shiftOptionValues(caps.ShiftOptions), d.Shift) {
 		issues = append(issues, Issue{
 			Slot: slot, Field: spec.FieldShift, Severity: SeverityError,
 			Msg: fmt.Sprintf("slot %q: shift %q must be one of %s", slot, d.Shift, quotedList(shiftOptionValues(caps.ShiftOptions))),
@@ -525,94 +515,48 @@ func validateTierFields(slot string, bank spec.BankID, d ChannelData, caps spec.
 		})
 	}
 
-	if !reachable(spec.FieldTxFrequency) {
-		unreachableClaim(spec.FieldTxFrequency, d.TxFreqHz.State)
-	} else if !absent(spec.FieldTxFrequency, d.TxFreqHz.State) {
-		add(spec.FieldTxFrequency, d.TxFreqHz.Valid())
+	// validFor pairs each tier field with its OWN validation call, KEYED
+	// BY FIELD rather than by TierFields' position — so a reordering of
+	// that table can never silently pair a field with the wrong
+	// validator. This cannot live in the shared table itself (see
+	// TierFields' doc comment): every field asks a different question of
+	// caps, from no arguments (TxFreqHz) to a vocabulary (Duplex) to the
+	// whole Capabilities (ToneTx) to a second check beyond Valid
+	// (ProgramTuningStepHz).
+	validFor := map[spec.Field]func() error{
+		spec.FieldTxFrequency:       func() error { return d.TxFreqHz.Valid() },
+		spec.FieldDuplex:            func() error { return d.Duplex.Valid(duplexOptionValues(caps.DuplexOptions)) },
+		spec.FieldOffset:            func() error { return d.OffsetHz.Valid() },
+		spec.FieldToneMode:          func() error { return d.ToneMode.Valid(toneModeValues(caps.ToneModes)) },
+		spec.FieldToneTx:            func() error { return d.ToneTx.Valid(caps) },
+		spec.FieldToneRx:            func() error { return d.ToneRx.Valid(caps) },
+		spec.FieldDTCSCode:          func() error { return d.DTCSCode.Valid(caps.DTCSCodes) },
+		spec.FieldDTCSPolarity:      func() error { return d.DTCSPolarity.Valid(caps.DTCSPolarities) },
+		spec.FieldFilter:            func() error { return d.Filter.Valid(caps.Filters) },
+		spec.FieldDataMode:          func() error { return d.DataMode.Valid() },
+		spec.FieldTuningStepEnabled: func() error { return d.TuningStepEnabled.Valid() },
+		spec.FieldTuningStep:        func() error { return d.TuningStep.Valid(caps.TuningSteps) },
+		spec.FieldProgramTuningStep: func() error {
+			if err := d.ProgramTuningStepHz.Valid(); err != nil {
+				return err
+			}
+			if d.ProgramTuningStepHz.State == Known && !AdmitsProgramTuningStep(caps, d.ProgramTuningStepHz.Value) {
+				return fmt.Errorf("codeplug: FreqField: Known value %d Hz is not admitted by this radio's range", d.ProgramTuningStepHz.Value)
+			}
+			return nil
+		},
+		spec.FieldAttenuator: func() error { return d.AttenuatorDB.Valid(caps.AttenuatorDB) },
+		spec.FieldPreamp:     func() error { return d.Preamp.Valid(caps.PreampOptions) },
+		spec.FieldAntenna:    func() error { return d.Antenna.Valid(caps.AntennaOptions) },
+		spec.FieldIPPlus:     func() error { return d.IPPlus.Valid() },
 	}
-	if !reachable(spec.FieldDuplex) {
-		unreachableClaim(spec.FieldDuplex, d.Duplex.State)
-	} else if !absent(spec.FieldDuplex, d.Duplex.State) {
-		add(spec.FieldDuplex, d.Duplex.Valid(duplexOptionValues(caps.DuplexOptions)))
-	}
-	if !reachable(spec.FieldOffset) {
-		unreachableClaim(spec.FieldOffset, d.OffsetHz.State)
-	} else if !absent(spec.FieldOffset, d.OffsetHz.State) {
-		add(spec.FieldOffset, d.OffsetHz.Valid())
-	}
-	if !reachable(spec.FieldToneMode) {
-		unreachableClaim(spec.FieldToneMode, d.ToneMode.State)
-	} else if !absent(spec.FieldToneMode, d.ToneMode.State) {
-		add(spec.FieldToneMode, d.ToneMode.Valid(toneModeValues(caps.ToneModes)))
-	}
-	if !reachable(spec.FieldToneTx) {
-		unreachableClaim(spec.FieldToneTx, d.ToneTx.State)
-	} else if !absent(spec.FieldToneTx, d.ToneTx.State) {
-		add(spec.FieldToneTx, d.ToneTx.Valid(caps))
-	}
-	if !reachable(spec.FieldToneRx) {
-		unreachableClaim(spec.FieldToneRx, d.ToneRx.State)
-	} else if !absent(spec.FieldToneRx, d.ToneRx.State) {
-		add(spec.FieldToneRx, d.ToneRx.Valid(caps))
-	}
-	if !reachable(spec.FieldDTCSCode) {
-		unreachableClaim(spec.FieldDTCSCode, d.DTCSCode.State)
-	} else if !absent(spec.FieldDTCSCode, d.DTCSCode.State) {
-		add(spec.FieldDTCSCode, d.DTCSCode.Valid(caps.DTCSCodes))
-	}
-	if !reachable(spec.FieldDTCSPolarity) {
-		unreachableClaim(spec.FieldDTCSPolarity, d.DTCSPolarity.State)
-	} else if !absent(spec.FieldDTCSPolarity, d.DTCSPolarity.State) {
-		add(spec.FieldDTCSPolarity, d.DTCSPolarity.Valid(caps.DTCSPolarities))
-	}
-	if !reachable(spec.FieldFilter) {
-		unreachableClaim(spec.FieldFilter, d.Filter.State)
-	} else if !absent(spec.FieldFilter, d.Filter.State) {
-		add(spec.FieldFilter, d.Filter.Valid(caps.Filters))
-	}
-	if !reachable(spec.FieldDataMode) {
-		unreachableClaim(spec.FieldDataMode, d.DataMode.State)
-	} else if !absent(spec.FieldDataMode, d.DataMode.State) {
-		add(spec.FieldDataMode, d.DataMode.Valid())
-	}
-	if !reachable(spec.FieldTuningStepEnabled) {
-		unreachableClaim(spec.FieldTuningStepEnabled, d.TuningStepEnabled.State)
-	} else if !absent(spec.FieldTuningStepEnabled, d.TuningStepEnabled.State) {
-		add(spec.FieldTuningStepEnabled, d.TuningStepEnabled.Valid())
-	}
-	if !reachable(spec.FieldTuningStep) {
-		unreachableClaim(spec.FieldTuningStep, d.TuningStep.State)
-	} else if !absent(spec.FieldTuningStep, d.TuningStep.State) {
-		add(spec.FieldTuningStep, d.TuningStep.Valid(caps.TuningSteps))
-	}
-	if !reachable(spec.FieldProgramTuningStep) {
-		unreachableClaim(spec.FieldProgramTuningStep, d.ProgramTuningStepHz.State)
-	} else if !absent(spec.FieldProgramTuningStep, d.ProgramTuningStepHz.State) {
-		if err := d.ProgramTuningStepHz.Valid(); err != nil {
-			add(spec.FieldProgramTuningStep, err)
-		} else if d.ProgramTuningStepHz.State == Known && !AdmitsProgramTuningStep(caps, d.ProgramTuningStepHz.Value) {
-			add(spec.FieldProgramTuningStep, fmt.Errorf("codeplug: FreqField: Known value %d Hz is not admitted by this radio's range", d.ProgramTuningStepHz.Value))
+	for _, tf := range TierFields {
+		state := *tf.State(&d)
+		if !reachable(tf.Field) {
+			unreachableClaim(tf.Field, state)
+		} else if !absent(tf.Field, state) {
+			add(tf.Field, validFor[tf.Field]())
 		}
-	}
-	if !reachable(spec.FieldAttenuator) {
-		unreachableClaim(spec.FieldAttenuator, d.AttenuatorDB.State)
-	} else if !absent(spec.FieldAttenuator, d.AttenuatorDB.State) {
-		add(spec.FieldAttenuator, d.AttenuatorDB.Valid(caps.AttenuatorDB))
-	}
-	if !reachable(spec.FieldPreamp) {
-		unreachableClaim(spec.FieldPreamp, d.Preamp.State)
-	} else if !absent(spec.FieldPreamp, d.Preamp.State) {
-		add(spec.FieldPreamp, d.Preamp.Valid(caps.PreampOptions))
-	}
-	if !reachable(spec.FieldAntenna) {
-		unreachableClaim(spec.FieldAntenna, d.Antenna.State)
-	} else if !absent(spec.FieldAntenna, d.Antenna.State) {
-		add(spec.FieldAntenna, d.Antenna.Valid(caps.AntennaOptions))
-	}
-	if !reachable(spec.FieldIPPlus) {
-		unreachableClaim(spec.FieldIPPlus, d.IPPlus.State)
-	} else if !absent(spec.FieldIPPlus, d.IPPlus.State) {
-		add(spec.FieldIPPlus, d.IPPlus.Valid())
 	}
 	return issues
 }
@@ -621,29 +565,16 @@ func validateTierFields(slot string, bank spec.BankID, d ChannelData, caps spec.
 // — caps' own duplex vocabulary as the plain []string StringField.Valid
 // takes.
 func duplexOptionValues(opts []spec.DuplexOption) []string {
-	values := make([]string, len(opts))
-	for i, o := range opts {
-		values[i] = o.Value
-	}
-	return values
+	return valuesOf(opts, func(o spec.DuplexOption) string { return o.Value })
 }
 
 // toneModeValues returns the Value of every entry in modes, in order.
 func toneModeValues(modes []spec.ToneMode) []string {
-	values := make([]string, len(modes))
-	for i, m := range modes {
-		values[i] = m.Value
-	}
-	return values
+	return valuesOf(modes, func(m spec.ToneMode) string { return m.Value })
 }
 
 // HasErrors reports whether issues contains at least one SeverityError
 // Issue. Warnings alone do not block a send.
 func HasErrors(issues []Issue) bool {
-	for _, i := range issues {
-		if i.Severity == SeverityError {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(issues, func(i Issue) bool { return i.Severity == SeverityError })
 }

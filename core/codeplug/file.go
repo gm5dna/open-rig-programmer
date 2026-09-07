@@ -454,21 +454,36 @@ func Load(path string) (*Codeplug, error) {
 	return cp, nil
 }
 
+// decodeStrict runs the strict decode every loadVN performs before its own
+// schema-specific work: decode into v with unknown fields refused, refuse
+// trailing data after the top-level JSON value, and refuse a duplicate
+// key anywhere exempt does not excuse. One body rather than five copies,
+// so the three rules cannot drift apart between schemas — v's own type
+// selects which schema's shape is decoded, and exempt selects which
+// legacy "menus" exemption applies (menusWholeExempt for v1,
+// menusLegacyExempt for v2 onward).
+func decodeStrict(b []byte, path string, v any, exempt exemptFunc) error {
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(v); err != nil {
+		return fmt.Errorf("codeplug: load %s: %w", path, wrapDecodeError(err))
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return fmt.Errorf("codeplug: load %s: trailing data after the top-level JSON value", path)
+	}
+	if err := checkDuplicateKeys(b, exempt); err != nil {
+		return fmt.Errorf("codeplug: load %s: %w", path, err)
+	}
+	return nil
+}
+
 // loadV5 strictly decodes the current schema through the live shape.
 // Schema 5 introduced the seven receiver fields, so the live shape is
 // exactly the versioned shape until the next schema change freezes it.
 func loadV5(b []byte, path string) (*Codeplug, error) {
 	var cp Codeplug
-	dec := json.NewDecoder(bytes.NewReader(b))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&cp); err != nil {
-		return nil, fmt.Errorf("codeplug: load %s: %w", path, wrapDecodeError(err))
-	}
-	if _, err := dec.Token(); err != io.EOF {
-		return nil, fmt.Errorf("codeplug: load %s: trailing data after the top-level JSON value", path)
-	}
-	if err := checkDuplicateKeys(b, menusLegacyExempt); err != nil {
-		return nil, fmt.Errorf("codeplug: load %s: %w", path, err)
+	if err := decodeStrict(b, path, &cp, menusLegacyExempt); err != nil {
+		return nil, err
 	}
 	if err := cp.Menus.Validate(); err != nil {
 		return nil, fmt.Errorf("codeplug: load %s: %w", path, err)
@@ -482,16 +497,8 @@ func loadV5(b []byte, path string) (*Codeplug, error) {
 // older file format could not express them.
 func loadV4(b []byte, path string) (*Codeplug, error) {
 	var v4 codeplugV4
-	dec := json.NewDecoder(bytes.NewReader(b))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&v4); err != nil {
-		return nil, fmt.Errorf("codeplug: load %s: %w", path, wrapDecodeError(err))
-	}
-	if _, err := dec.Token(); err != io.EOF {
-		return nil, fmt.Errorf("codeplug: load %s: trailing data after the top-level JSON value", path)
-	}
-	if err := checkDuplicateKeys(b, menusLegacyExempt); err != nil {
-		return nil, fmt.Errorf("codeplug: load %s: %w", path, err)
+	if err := decodeStrict(b, path, &v4, menusLegacyExempt); err != nil {
+		return nil, err
 	}
 	if err := v4.Menus.Validate(); err != nil {
 		return nil, fmt.Errorf("codeplug: load %s: %w", path, err)
@@ -594,16 +601,8 @@ type codeplugV3 struct {
 // version header does not support.
 func loadV3(b []byte, path string) (*Codeplug, error) {
 	var v3 codeplugV3
-	dec := json.NewDecoder(bytes.NewReader(b))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&v3); err != nil {
-		return nil, fmt.Errorf("codeplug: load %s: %w", path, wrapDecodeError(err))
-	}
-	if _, err := dec.Token(); err != io.EOF {
-		return nil, fmt.Errorf("codeplug: load %s: trailing data after the top-level JSON value", path)
-	}
-	if err := checkDuplicateKeys(b, menusLegacyExempt); err != nil {
-		return nil, fmt.Errorf("codeplug: load %s: %w", path, err)
+	if err := decodeStrict(b, path, &v3, menusLegacyExempt); err != nil {
+		return nil, err
 	}
 	for _, c := range v3.Channels {
 		if c.Data != nil && c.Data.FreqHz > math.MaxUint32 {
@@ -690,29 +689,22 @@ func migrateV3ChannelData(d *channelDataV3) *ChannelData {
 // migrations, so a schema-1, schema-2 and schema-3 file cannot end up
 // disagreeing about what they say concerning fields none of them has.
 func withUnavailableTierFields(d *ChannelData) *ChannelData {
-	d.TxFreqHz = FreqField{State: Unavailable}
-	d.Duplex = StringField{State: Unavailable}
-	d.OffsetHz = FreqField{State: Unavailable}
-	d.ToneMode = StringField{State: Unavailable}
-	d.ToneTx = ToneField{State: Unavailable}
-	d.ToneRx = ToneField{State: Unavailable}
-	d.DTCSCode = IntField{State: Unavailable}
-	d.DTCSPolarity = StringField{State: Unavailable}
-	d.Filter = StringField{State: Unavailable}
-	d.DataMode = BoolField{State: Unavailable}
+	for _, tf := range TierFields {
+		if !tf.Receiver {
+			tf.SetState(d, Unavailable)
+		}
+	}
 	return withUnavailableReceiverFields(d)
 }
 
 // withUnavailableReceiverFields is the schema-4-to-5 migration shared
 // with tests that construct an explicitly schema-4-representable value.
 func withUnavailableReceiverFields(d *ChannelData) *ChannelData {
-	d.TuningStepEnabled = BoolField{State: Unavailable}
-	d.TuningStep = StringField{State: Unavailable}
-	d.ProgramTuningStepHz = FreqField{State: Unavailable}
-	d.AttenuatorDB = IntField{State: Unavailable}
-	d.Preamp = StringField{State: Unavailable}
-	d.Antenna = StringField{State: Unavailable}
-	d.IPPlus = BoolField{State: Unavailable}
+	for _, tf := range TierFields {
+		if tf.Receiver {
+			tf.SetState(d, Unavailable)
+		}
+	}
 	return d
 }
 
@@ -737,29 +729,25 @@ func withUnavailableReceiverFields(d *ChannelData) *ChannelData {
 // ChannelData must produce exactly what the legacy migration produces, so
 // a missing or misdirected row fails there rather than silently leaving
 // one field un-normalised.
-var tierFieldNormalisers = []struct {
+var tierFieldNormalisers = func() []struct {
 	field       spec.Field
 	absent      func(*ChannelData) bool
 	unavailable func(*ChannelData)
-}{
-	{spec.FieldTxFrequency, func(d *ChannelData) bool { return d.TxFreqHz.State == Absent }, func(d *ChannelData) { d.TxFreqHz = FreqField{State: Unavailable} }},
-	{spec.FieldDuplex, func(d *ChannelData) bool { return d.Duplex.State == Absent }, func(d *ChannelData) { d.Duplex = StringField{State: Unavailable} }},
-	{spec.FieldOffset, func(d *ChannelData) bool { return d.OffsetHz.State == Absent }, func(d *ChannelData) { d.OffsetHz = FreqField{State: Unavailable} }},
-	{spec.FieldToneMode, func(d *ChannelData) bool { return d.ToneMode.State == Absent }, func(d *ChannelData) { d.ToneMode = StringField{State: Unavailable} }},
-	{spec.FieldToneTx, func(d *ChannelData) bool { return d.ToneTx.State == Absent }, func(d *ChannelData) { d.ToneTx = ToneField{State: Unavailable} }},
-	{spec.FieldToneRx, func(d *ChannelData) bool { return d.ToneRx.State == Absent }, func(d *ChannelData) { d.ToneRx = ToneField{State: Unavailable} }},
-	{spec.FieldDTCSCode, func(d *ChannelData) bool { return d.DTCSCode.State == Absent }, func(d *ChannelData) { d.DTCSCode = IntField{State: Unavailable} }},
-	{spec.FieldDTCSPolarity, func(d *ChannelData) bool { return d.DTCSPolarity.State == Absent }, func(d *ChannelData) { d.DTCSPolarity = StringField{State: Unavailable} }},
-	{spec.FieldFilter, func(d *ChannelData) bool { return d.Filter.State == Absent }, func(d *ChannelData) { d.Filter = StringField{State: Unavailable} }},
-	{spec.FieldDataMode, func(d *ChannelData) bool { return d.DataMode.State == Absent }, func(d *ChannelData) { d.DataMode = BoolField{State: Unavailable} }},
-	{spec.FieldTuningStepEnabled, func(d *ChannelData) bool { return d.TuningStepEnabled.State == Absent }, func(d *ChannelData) { d.TuningStepEnabled = BoolField{State: Unavailable} }},
-	{spec.FieldTuningStep, func(d *ChannelData) bool { return d.TuningStep.State == Absent }, func(d *ChannelData) { d.TuningStep = StringField{State: Unavailable} }},
-	{spec.FieldProgramTuningStep, func(d *ChannelData) bool { return d.ProgramTuningStepHz.State == Absent }, func(d *ChannelData) { d.ProgramTuningStepHz = FreqField{State: Unavailable} }},
-	{spec.FieldAttenuator, func(d *ChannelData) bool { return d.AttenuatorDB.State == Absent }, func(d *ChannelData) { d.AttenuatorDB = IntField{State: Unavailable} }},
-	{spec.FieldPreamp, func(d *ChannelData) bool { return d.Preamp.State == Absent }, func(d *ChannelData) { d.Preamp = StringField{State: Unavailable} }},
-	{spec.FieldAntenna, func(d *ChannelData) bool { return d.Antenna.State == Absent }, func(d *ChannelData) { d.Antenna = StringField{State: Unavailable} }},
-	{spec.FieldIPPlus, func(d *ChannelData) bool { return d.IPPlus.State == Absent }, func(d *ChannelData) { d.IPPlus = BoolField{State: Unavailable} }},
-}
+} {
+	out := make([]struct {
+		field       spec.Field
+		absent      func(*ChannelData) bool
+		unavailable func(*ChannelData)
+	}, len(TierFields))
+	for i, tf := range TierFields {
+		out[i] = struct {
+			field       spec.Field
+			absent      func(*ChannelData) bool
+			unavailable func(*ChannelData)
+		}{tf.Field, func(d *ChannelData) bool { return *tf.State(d) == Absent }, func(d *ChannelData) { tf.SetState(d, Unavailable) }}
+	}
+	return out
+}()
 
 // NormaliseTierFields resolves, on every populated channel of cp, each of
 // the seventeen fields the two Icom model extensions added from ABSENT to
@@ -921,16 +909,8 @@ type codeplugV1 struct {
 // the result to the current schema.
 func loadV2(b []byte, path string) (*Codeplug, error) {
 	var v2 codeplugV2
-	dec := json.NewDecoder(bytes.NewReader(b))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&v2); err != nil {
-		return nil, fmt.Errorf("codeplug: load %s: %w", path, wrapDecodeError(err))
-	}
-	if _, err := dec.Token(); err != io.EOF {
-		return nil, fmt.Errorf("codeplug: load %s: trailing data after the top-level JSON value", path)
-	}
-	if err := checkDuplicateKeys(b, menusLegacyExempt); err != nil {
-		return nil, fmt.Errorf("codeplug: load %s: %w", path, err)
+	if err := decodeStrict(b, path, &v2, menusLegacyExempt); err != nil {
+		return nil, err
 	}
 	if err := v2.Menus.Validate(); err != nil {
 		return nil, fmt.Errorf("codeplug: load %s: %w", path, err)
@@ -954,16 +934,8 @@ func loadV2(b []byte, path string) (*Codeplug, error) {
 // (schemaFor), which for a schema-1 file is schema 3 again.
 func loadV1(b []byte, path string) (*Codeplug, error) {
 	var v1 codeplugV1
-	dec := json.NewDecoder(bytes.NewReader(b))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&v1); err != nil {
-		return nil, fmt.Errorf("codeplug: load %s: %w", path, wrapDecodeError(err))
-	}
-	if _, err := dec.Token(); err != io.EOF {
-		return nil, fmt.Errorf("codeplug: load %s: trailing data after the top-level JSON value", path)
-	}
-	if err := checkDuplicateKeys(b, menusWholeExempt); err != nil {
-		return nil, fmt.Errorf("codeplug: load %s: %w", path, err)
+	if err := decodeStrict(b, path, &v1, menusWholeExempt); err != nil {
+		return nil, err
 	}
 
 	cp := &Codeplug{

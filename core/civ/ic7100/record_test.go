@@ -122,7 +122,7 @@ func TestRecordFixedTemplate(t *testing.T) {
 		{"duplicate CSQL", 67, 68}, {"duplicate UR", 71, 79},
 		{"duplicate R1", 79, 87}, {"duplicate R2", 87, 95},
 	} {
-		if got, want := record[region.lo:region.hi], fixedTemplate()[region.lo:region.hi]; !bytes.Equal(got, want) {
+		if got, want := record[region.lo:region.hi], fixedTemplateBytes[region.lo:region.hi]; !bytes.Equal(got, want) {
 			t.Errorf("%s fixed bytes = % X, want % X", region.name, got, want)
 		}
 	}

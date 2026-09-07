@@ -2,6 +2,8 @@
 
 package spec
 
+import "slices"
+
 // ShiftDirection is the semantic content of a repeater shift option:
 // which way the transmit frequency moves relative to receive, if at all.
 // Generic code (a CSV importer mapping a foreign dialect's "+"/"-", the
@@ -142,9 +144,7 @@ var standardShiftOptions = []ShiftOption{
 // independently-allocated slice, so a caller is free to mutate its own
 // copy without affecting this package's data or any other caller's copy.
 func StandardShiftOptions() []ShiftOption {
-	out := make([]ShiftOption, len(standardShiftOptions))
-	copy(out, standardShiftOptions)
-	return out
+	return slices.Clone(standardShiftOptions)
 }
 
 // standardCTCSSStates is the CTCSS state vocabulary shared across the

@@ -113,10 +113,9 @@
 //	six bytes iff freqHz > 9,999,999,999
 //
 // That equivalence is why the record carrying no band field costs
-// nothing on the write path. NeedsWideFrequency and
-// RecordLengthForFrequency (length.go) pin it, so that the one-line
-// change ic905-R-06 would authorise is already written down and tested
-// even while BuildLength is 64.
+// nothing on the write path. NeedsWideFrequency (length.go) pins it, so
+// that the one-line change ic905-R-06 would authorise is already
+// written down and tested even while BuildLength is 64.
 //
 // # Encodings, and the units they carry
 //

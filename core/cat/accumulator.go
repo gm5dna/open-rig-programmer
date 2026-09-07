@@ -2,6 +2,8 @@
 
 package cat
 
+import "bytes"
+
 // DefaultMaxFrame is the maximum frame length, in bytes, FrameAccumulator
 // enforces when NewFrameAccumulator is given a non-positive maxFrame.
 const DefaultMaxFrame = 256
@@ -95,7 +97,5 @@ func (a *FrameAccumulator) Push(chunk []byte) (frames [][]byte, err error) {
 // copyBytes returns an independent copy of b, so the result never aliases
 // b's backing array.
 func copyBytes(b []byte) []byte {
-	out := make([]byte, len(b))
-	copy(out, b)
-	return out
+	return bytes.Clone(b)
 }
