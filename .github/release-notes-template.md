@@ -29,88 +29,29 @@ describes under *Switching on writes for an unverified radio*.
 
 ## What changed in this version
 
-- **The Yaesu FT-991A is now supported**, for reading and for opt-in
-  writes, on the same terms as every other manual-derived model: its 99
-  memories, its 9 PMS pairs and its menu settings, CSV and CHIRP.
-- **The settings list shows 152 items where this radio's menu chart
-  prints 153 rows.** Row 087, RADIO ID, is left out because the chart
-  gives it neither a width nor a parameter — ten printed hyphens and
-  nothing else — so the program cannot size an answer to it and will not
-  send a question it cannot read. One `EX087;` read on a real FT-991A
-  would settle it.
-- **The PMS pairs are listed as the channel numbers 100 to 117**, which
-  is what this radio's own CAT record uses, while its front panel and
-  its manual print the same eighteen slots as `P-1L` to `P-9U`. The
-  numbers are the wire's and the letters are the panel's; they name the
-  same slots in the same order.
-- **This radio's memory channels can carry a DCS state**, the first here
-  that can: its tone byte has five values — CTCSS off, CTCSS encode and
-  decode, CTCSS encode, DCS encode and decode, DCS encode — and the
-  program reads and writes all five. What it cannot reach is *which*
-  tone or *which* DCS code, neither of which is a per-channel field on
-  this radio, so a CHIRP file's `DTCS` and `Cross` rows are still
-  refused — and the reason now says that the state can be written and
-  the code cannot, instead of denying the state.
-- **Three CHIRP limitations on this radio.** `CW`, `CWR` and `RTTY` rows
-  are not imported: they resolve to names this radio's own mode list
-  does not print (it prints `CW`, `CW-R`, `RTTY-LSB` and `RTTY-USB`), so
-  the row is blocked rather than guessed at. C4FM is one of its fourteen
-  modes and CHIRP has no name for it at all, so no CHIRP file can
-  describe a C4FM channel. And scan skip has no place in this radio's
-  memory record, so a `Skip` cell asking for one is dropped and the loss
-  reported, row by row.
-- **Its CAT speed is a guess** (38400; menu 031 CAT RATE on the radio is
-  the only remedy — menu 029 sets the rear-panel RS-232C jack's rate, a
-  different port), and its USB socket is a dual-UART bridge presenting two serial
-  ports with no statement of which carries CAT: if one is silent, try
-  the other.
-- **The Kenwood TS-590S and TS-590SG are now supported**, for reading and
-  for opt-in writes, on the same terms as every other manual-derived
-  model — and they are the first radios here whose tone and scan-skip
-  columns can actually be read and written. Both read the 100 memory
-  channels, the 10 programmable scan ranges and the menu settings (88
-  items on the S, 100 on the SG). **A memory channel is written back only
-  once you supply its transmit frequency**, and a channel read off the
-  radio does not carry one: the manual never says what these radios
-  answer for the transmit side of a simplex channel, so the program
-  leaves it unavailable rather than guessing and refuses the write
-  (register entry A9). Reading the memories, editing them and sending
-  them straight back is therefore refused on every memory channel until
-  you fill that column in — typing the receive frequency there writes the
-  channel as simplex, which is what the one frame this program sends can
-  express. A genuine split is refused even then, and a scan range is not
-  affected. Only FM channels are written, and a 1750 Hz receive tone is
-  refused where a 1750 Hz transmit tone is written. On the
-  TS-590S alone the filter column cannot be set at all, and channel
-  writes are refused on a radio reporting firmware 2.00 or later — or a
-  firmware version the program cannot read: the manual guarantees the
-  relevant byte is unused only on the 1.xx firmware, and a version that
-  cannot be compared cannot be shown to be a 1.xx one. `rigprog probe`
-  prints the radio's own firmware answer verbatim so you can see what
-  that decision was taken on. Their speed is a guess (9600; there is no
-  speed setting, and a wrong speed looks like a dead port).
-  **CHIRP import is not available for these two radios in this release:
-  every row is blocked.** A CHIRP file's blank `Duplex` column means
-  simplex, and these radios declare no shift vocabulary at all — their
-  memory record carries no duplex selector — so every ordinary row is
-  refused on that column and the import writes nothing; `CW`, `CWR` and
-  `RTTY` rows are refused a second time on the mode besides. The
-  program's own CSV import and export are unaffected.
-- **The Kenwood TS-480 is NOT selectable**, although its driver ships in
-  this build. Nothing in its 2003 manual says what a memory channel that
-  has never been written answers when it is read; the TS-590SG's manual
-  says an all-zero record, and if a TS-480 rejects that read instead, a
-  brand-new one cannot be read by this program at all. It stays
-  unavailable until somebody observes what a real TS-480 answers — at
-  least three unwritten channels, each confirmed at the front panel,
-  across at least two sessions, with the exact bytes kept and an observer
-  named; `internal/wiring/testdata/README.md` says how.
-
-No existing radio's behaviour changed. The stored comparison output of
-every previously registered radio is byte for byte identical apart from
-the lists of supported models, which gain the FT-991A, the TS-590S and
-the TS-590SG. The TS-480 appears in no list, because it is not
-registered.
+- **A simplification sweep, and no new capability.** Nine lanes removed
+  about 10,600 net lines across the tree without changing what any
+  radio is sent or told: the frozen command-line capture (608 artefacts
+  across every supported model) is byte-for-byte identical to v1.4.0,
+  every golden vector, transcription CSV and evidence checksum is
+  untouched, and every fence test still stands.
+- **The desktop app's dialogs are now the platform's own.** Confirmations
+  and the send flow use the browser's native `<dialog>` element, so
+  Escape, focus containment and focus return come from the platform
+  rather than from hand-written code. This is the one change a user can
+  see.
+- **Under the hood.** The five Yaesu drivers share one write, settings
+  and probe body, each radio contributing only its own differences. The
+  IC-7300 and IC-7300MK2 drivers are one package driven by a per-model
+  table, as the FTdx101D and FTdx101MP already were. The simulated
+  radios share one protocol-free pipe chassis and parse their own
+  transcription CSVs at start-up instead of carrying generated tables,
+  while still importing nothing from the codec they test. Hand-rolled
+  helpers gave way to the standard library throughout.
+- **Not included: folding the IC-7610, IC-7760 and IC-7851 drivers into
+  one package.** Their provenance pins are per-model registers by
+  construction; a fold would disable them rather than refactor them, so
+  it waits for a milestone that first decides what replaces the pin.
 
 ## Downloads
 

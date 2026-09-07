@@ -13,6 +13,35 @@ tag. The full release notes for each version are on the
 
 Nothing yet.
 
+## [1.4.1] - 2026-09-07
+
+### Changed
+- **A simplification sweep, and no new capability.** Nine lanes removed
+  about 10,600 net lines across the tree without changing what any
+  radio is sent or told: the frozen command-line capture (608 artefacts
+  across every supported model) is byte-for-byte identical to v1.4.0,
+  every golden vector, transcription CSV and evidence checksum is
+  untouched, and every fence test still stands.
+- **The desktop app's dialogs are now the platform's own.** Confirmations
+  and the send flow use the browser's native `<dialog>` element, so
+  Escape, focus containment and focus return come from the platform
+  rather than from hand-written code. This is the one change a user can
+  see.
+- **Under the hood.** The five Yaesu drivers share one write, settings
+  and probe body, each radio contributing only its own differences. The
+  IC-7300 and IC-7300MK2 drivers are one package driven by a per-model
+  table, as the FTdx101D and FTdx101MP already were. The simulated
+  radios share one protocol-free pipe chassis and parse their own
+  transcription CSVs at start-up instead of carrying generated tables,
+  while still importing nothing from the codec they test. Hand-rolled
+  helpers gave way to the standard library throughout.
+
+### Not included
+- **Folding the IC-7610, IC-7760 and IC-7851 drivers into one package.**
+  Their provenance pins are per-model registers by construction; a fold
+  would disable them rather than refactor them, so it waits for a
+  milestone that first decides what replaces the pin.
+
 ## [1.4.0] - 2026-09-06
 
 ### Added
