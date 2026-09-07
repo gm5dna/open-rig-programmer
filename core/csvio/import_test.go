@@ -153,7 +153,7 @@ func TestExportImport_FullImageRoundTrip(t *testing.T) {
 // TestExportImport_ApostropheTagRoundTrip covers a tag whose first byte
 // is a legitimate apostrophe (legal per the FT-710 tag charset): Export
 // must double-escape it (to two leading apostrophes) so that Import's
-// unconditional single-apostrophe strip (unescapeFormulaCell) returns
+// unconditional single-apostrophe strip (strings.TrimPrefix(s, "'")) returns
 // exactly the original tag rather than silently dropping the leading
 // apostrophe.
 func TestExportImport_ApostropheTagRoundTrip(t *testing.T) {
@@ -621,7 +621,7 @@ func TestParseToneFieldCell(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := parseToneFieldCell(tc.in)
+			got, err := parseToneFieldCell(tc.in, "ctcss_tone", false)
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("parseToneFieldCell(%q) error = nil, want non-nil", tc.in)
@@ -661,7 +661,7 @@ func TestParseBoolFieldCell(t *testing.T) {
 		t.Run(column, func(t *testing.T) {
 			for _, tc := range states {
 				t.Run(tc.name, func(t *testing.T) {
-					got, err := parseBoolFieldCell(tc.in, column)
+					got, err := parseBoolFieldCell(tc.in, column, false)
 					if err != nil {
 						t.Fatalf("parseBoolFieldCell(%q, %q) unexpected error: %v", tc.in, column, err)
 					}
@@ -671,7 +671,7 @@ func TestParseBoolFieldCell(t *testing.T) {
 				})
 			}
 			t.Run("diagnostic names this column", func(t *testing.T) {
-				_, err := parseBoolFieldCell("maybe", column)
+				_, err := parseBoolFieldCell("maybe", column, false)
 				if err == nil {
 					t.Fatalf("parseBoolFieldCell(%q, %q) error = nil, want non-nil", "maybe", column)
 				}

@@ -76,14 +76,23 @@ const (
 // exportFieldState renders the three non-Known states, and reports
 // whether it handled f. A Known state is the caller's business, since
 // only the caller knows how to render its own value.
-func exportFieldState(state codeplug.FieldState) (string, bool) {
+//
+// allowAbsent distinguishes a TIER column, which can spell Absent
+// ("absent" — the file says nothing about this field, since a pre-tier
+// schema has no column for it at all), from a pre-tier column, which
+// has no such state and treats Absent as not-yet-known ("") exactly as
+// it always treated Unknown.
+func exportFieldState(state codeplug.FieldState, allowAbsent bool) (string, bool) {
 	switch state {
 	case codeplug.Known:
 		return "", false
 	case codeplug.Unavailable:
 		return cellUnavailable, true
 	case codeplug.Absent:
-		return cellAbsent, true
+		if allowAbsent {
+			return cellAbsent, true
+		}
+		return "", true
 	default: // Unknown, or any unrecognised state: treat as not-yet-known.
 		return "", true
 	}
@@ -92,7 +101,7 @@ func exportFieldState(state codeplug.FieldState) (string, bool) {
 // exportFreqField renders a FreqField as a tier column: a plain decimal
 // hertz value when Known, and the reserved spellings otherwise.
 func exportFreqField(f codeplug.FreqField) string {
-	if s, done := exportFieldState(f.State); done {
+	if s, done := exportFieldState(f.State, true); done {
 		return s
 	}
 	return strconv.FormatUint(f.Value, 10)
@@ -102,7 +111,7 @@ func exportFreqField(f codeplug.FreqField) string {
 // wire-form vocabulary value when Known, and the reserved spellings
 // otherwise.
 func exportStringField(f codeplug.StringField) string {
-	if s, done := exportFieldState(f.State); done {
+	if s, done := exportFieldState(f.State, true); done {
 		return s
 	}
 	return f.Value
@@ -110,32 +119,10 @@ func exportStringField(f codeplug.StringField) string {
 
 // exportIntField renders an IntField as a tier column.
 func exportIntField(f codeplug.IntField) string {
-	if s, done := exportFieldState(f.State); done {
+	if s, done := exportFieldState(f.State, true); done {
 		return s
 	}
 	return strconv.Itoa(f.Value)
-}
-
-// exportTierToneField renders a ToneField as a TIER column. It differs
-// from exportToneField (the ctcss_tone column) in one way only: it can
-// also spell Absent, which the pre-tier column has no state for.
-func exportTierToneField(f codeplug.ToneField) string {
-	if s, done := exportFieldState(f.State); done {
-		return s
-	}
-	return fmt.Sprintf("%.1f", f.Value.Hz())
-}
-
-// exportTierBoolField renders a BoolField as a TIER column, with the
-// same one difference from exportBoolField.
-func exportTierBoolField(f codeplug.BoolField) string {
-	if s, done := exportFieldState(f.State); done {
-		return s
-	}
-	if f.Value {
-		return "yes"
-	}
-	return "no"
 }
 
 // tierCells renders one channel's ten version-2 columns, in tierColumns
@@ -152,12 +139,12 @@ func tierCells(ch codeplug.Channel) []string {
 		exportStringField(d.Duplex),
 		exportFreqField(d.OffsetHz),
 		exportStringField(d.ToneMode),
-		exportTierToneField(d.ToneTx),
-		exportTierToneField(d.ToneRx),
+		exportToneField(d.ToneTx, true),
+		exportToneField(d.ToneRx, true),
 		exportIntField(d.DTCSCode),
 		exportStringField(d.DTCSPolarity),
 		exportStringField(d.Filter),
-		exportTierBoolField(d.DataMode),
+		exportBoolField(d.DataMode, true),
 	}
 }
 
@@ -167,13 +154,13 @@ func receiverCells(ch codeplug.Channel) []string {
 	}
 	d := ch.Data
 	return []string{
-		exportTierBoolField(d.TuningStepEnabled),
+		exportBoolField(d.TuningStepEnabled, true),
 		exportStringField(d.TuningStep),
 		exportFreqField(d.ProgramTuningStepHz),
 		exportIntField(d.AttenuatorDB),
 		exportStringField(d.Preamp),
 		exportStringField(d.Antenna),
-		exportTierBoolField(d.IPPlus),
+		exportBoolField(d.IPPlus, true),
 	}
 }
 
@@ -246,9 +233,9 @@ var plainSignedInt = regexp.MustCompile(`^[+-]?[0-9]+$`)
 // A cell that already begins with a literal apostrophe (a legitimate
 // value: the apostrophe is in the radio's tag charset) is ALSO escaped, by
 // prefixing a second apostrophe — otherwise Import's unescape
-// (unescapeFormulaCell, which unconditionally strips exactly one leading
-// apostrophe) would strip the data's own apostrophe rather than an
-// escape, silently corrupting it on round trip. Prefixing a second
+// (strings.TrimPrefix(s, "'"), which unconditionally strips exactly one
+// leading apostrophe) would strip the data's own apostrophe rather than
+// an escape, silently corrupting it on round trip. Prefixing a second
 // apostrophe means unescape strips exactly the one escaping added, and
 // the data's own leading apostrophe survives.
 //
@@ -291,35 +278,32 @@ func yesEmpty(b bool) string {
 	return ""
 }
 
-// exportToneField renders a ToneField as this schema's ctcss_tone
-// column: a decimal Hz value with one decimal place when Known (e.g.
-// "88.5"), "" when Unknown, "n/a" when Unavailable.
-func exportToneField(f codeplug.ToneField) string {
-	switch f.State {
-	case codeplug.Known:
-		return fmt.Sprintf("%.1f", f.Value.Hz())
-	case codeplug.Unavailable:
-		return "n/a"
-	default: // Unknown, or any other value: treat as not-yet-known.
-		return ""
+// exportToneField renders a ToneField as a CSV cell: a decimal Hz value
+// with one decimal place when Known (e.g. "88.5"), and the reserved
+// spellings otherwise (see exportFieldState). allowAbsent is false for
+// this schema's pre-tier ctcss_tone column, which has no Absent state of
+// its own and treats it as not-yet-known; true for a tier column
+// (ToneTx, ToneRx), which can spell it "absent".
+func exportToneField(f codeplug.ToneField, allowAbsent bool) string {
+	if s, done := exportFieldState(f.State, allowAbsent); done {
+		return s
 	}
+	return fmt.Sprintf("%.1f", f.Value.Hz())
 }
 
-// exportBoolField renders a BoolField as this schema's BoolField columns
-// (scan_skip, and tag_display since M9c-5's E1d) are spelled: "yes"/"no"
-// when Known, "" when Unknown, "n/a" when Unavailable.
-func exportBoolField(f codeplug.BoolField) string {
-	switch f.State {
-	case codeplug.Known:
-		if f.Value {
-			return "yes"
-		}
-		return "no"
-	case codeplug.Unavailable:
-		return "n/a"
-	default:
-		return ""
+// exportBoolField renders a BoolField as a CSV cell: "yes"/"no" when
+// Known, and the reserved spellings otherwise (see exportFieldState).
+// allowAbsent is false for this schema's pre-tier BoolField columns
+// (scan_skip, and tag_display since M9c-5's E1d); true for a tier column
+// (DataMode, TuningStepEnabled, IPPlus).
+func exportBoolField(f codeplug.BoolField, allowAbsent bool) string {
+	if s, done := exportFieldState(f.State, allowAbsent); done {
+		return s
 	}
+	if f.Value {
+		return "yes"
+	}
+	return "no"
 }
 
 // exportRow builds one CSV row for ch, in header order. An empty channel
@@ -344,7 +328,7 @@ func exportRow(ch codeplug.Channel, tier, receiver bool) []string {
 		row[5] = yesEmpty(d.RxClar)
 		row[6] = yesEmpty(d.TxClar)
 		row[7] = d.CTCSS
-		row[8] = exportToneField(d.CTCSSTone)
+		row[8] = exportToneField(d.CTCSSTone, false)
 		row[9] = d.Shift
 		row[10] = d.Tag
 		// M9c-5 (E1d): the four-state BoolField spelling, the same one
@@ -353,8 +337,8 @@ func exportRow(ch codeplug.Channel, tier, receiver bool) []string {
 		// consequence of the field gaining a state: "" is needed as the
 		// spelling for Unknown, and can no longer double as "off". See
 		// Import's own doc comment for what that means for a pre-E1 file.
-		row[11] = exportBoolField(d.TagDisplay)
-		row[12] = exportBoolField(d.ScanSkip)
+		row[11] = exportBoolField(d.TagDisplay, false)
+		row[12] = exportBoolField(d.ScanSkip, false)
 	}
 
 	if tier {

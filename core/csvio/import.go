@@ -75,20 +75,26 @@ var knownColumnSet = func() map[string]bool {
 	return set
 }()
 
-// parseTierState maps a tier column's reserved spellings onto their
+// parseTierState maps a column's reserved spellings onto their
 // FieldStates, reporting whether it recognised one. A cell it does not
 // recognise is a Known value, which only the caller can parse.
+// allowAbsent is false for a pre-tier column, which has no Absent state
+// and so must not recognise the cellAbsent spelling as anything but an
+// unparseable value.
 //
 // See export.go's cellUnavailable/cellAbsent for the spellings and the
 // vocabulary reservation they imply.
-func parseTierState(s string) (codeplug.FieldState, bool) {
+func parseTierState(s string, allowAbsent bool) (codeplug.FieldState, bool) {
 	switch s {
 	case "":
 		return codeplug.Unknown, true
 	case cellUnavailable:
 		return codeplug.Unavailable, true
 	case cellAbsent:
-		return codeplug.Absent, true
+		if allowAbsent {
+			return codeplug.Absent, true
+		}
+		return "", false
 	default:
 		return "", false
 	}
@@ -97,7 +103,7 @@ func parseTierState(s string) (codeplug.FieldState, bool) {
 // parseFreqFieldCell parses a tier frequency column (tx_frequency,
 // offset): the reserved spellings, or a plain decimal hertz value.
 func parseFreqFieldCell(s, column string) (codeplug.FreqField, error) {
-	if state, ok := parseTierState(s); ok {
+	if state, ok := parseTierState(s, true); ok {
 		return codeplug.FreqField{State: state}, nil
 	}
 	v, err := strconv.ParseUint(s, 10, 64)
@@ -112,7 +118,7 @@ func parseFreqFieldCell(s, column string) (codeplug.FreqField, error) {
 // other cell parser here: whether the value is in this radio's
 // vocabulary is codeplug.Validate's question.
 func parseStringFieldCell(s string) codeplug.StringField {
-	if state, ok := parseTierState(s); ok {
+	if state, ok := parseTierState(s, true); ok {
 		return codeplug.StringField{State: state}
 	}
 	return codeplug.StringField{State: codeplug.Known, Value: s}
@@ -120,7 +126,7 @@ func parseStringFieldCell(s string) codeplug.StringField {
 
 // parseIntFieldCell parses a tier integer column (dtcs_code).
 func parseIntFieldCell(s, column string) (codeplug.IntField, error) {
-	if state, ok := parseTierState(s); ok {
+	if state, ok := parseTierState(s, true); ok {
 		return codeplug.IntField{State: state}, nil
 	}
 	v, err := strconv.Atoi(s)
@@ -130,25 +136,44 @@ func parseIntFieldCell(s, column string) (codeplug.IntField, error) {
 	return codeplug.IntField{State: codeplug.Known, Value: v}, nil
 }
 
-// parseTierToneFieldCell parses a tier tone column (tone_tx, tone_rx).
-// It differs from parseToneFieldCell (the ctcss_tone column) in one way
-// only: it also recognises the Absent spelling, which the pre-tier
-// column has no state for.
-func parseTierToneFieldCell(s, column string) (codeplug.ToneField, error) {
-	if state, ok := parseTierState(s); ok {
+// parseToneFieldCell parses a CTCSS tone column: the reserved spellings,
+// or a decimal Hz value (e.g. "88.5") parsed EXACTLY (see
+// parseExactToneDeciHz — no floating point, and no more than one decimal
+// place of precision; "88.54" is a *ParseError, not silently rounded to
+// "88.5"). It does not check the value against spec.StandardCTCSSTones —
+// that is codeplug.ToneField.Valid's job (semantic), not this syntactic
+// parse's.
+//
+// allowAbsent is false for the pre-tier ctcss_tone column, which has no
+// Absent state and does not recognise the cellAbsent spelling as
+// anything but an unparseable value; true for a tier tone column
+// (tone_tx, tone_rx).
+func parseToneFieldCell(s, column string, allowAbsent bool) (codeplug.ToneField, error) {
+	if state, ok := parseTierState(s, allowAbsent); ok {
 		return codeplug.ToneField{State: state}, nil
 	}
 	deciHz, err := parseExactToneDeciHz(s)
 	if err != nil {
-		return codeplug.ToneField{}, fmt.Errorf("%s must be \"\", %q, %q or a decimal Hz value with at most one decimal place, got %q", column, cellUnavailable, cellAbsent, s)
+		if allowAbsent {
+			return codeplug.ToneField{}, fmt.Errorf("%s must be \"\", %q, %q or a decimal Hz value with at most one decimal place, got %q", column, cellUnavailable, cellAbsent, s)
+		}
+		return codeplug.ToneField{}, fmt.Errorf("%s must be \"\", %q or a decimal Hz value with at most one decimal place, got %q", column, cellUnavailable, s)
 	}
 	return codeplug.ToneField{State: codeplug.Known, Value: spec.Tone(deciHz)}, nil
 }
 
-// parseTierBoolFieldCell parses a tier boolean column (data_mode), with
-// the same one difference from parseBoolFieldCell.
-func parseTierBoolFieldCell(s, column string) (codeplug.BoolField, error) {
-	if state, ok := parseTierState(s); ok {
+// parseBoolFieldCell parses a boolean column: the reserved spellings, or
+// "yes"/"no". column is the column's name, used ONLY for the
+// diagnostic — it was hardcoded "scan_skip" while scan_skip was the sole
+// pre-tier BoolField column, and became a parameter at M9c-5 (E1d) when
+// tag_display joined it, so that a bad tag_display cell is never
+// reported as a scan_skip problem.
+//
+// allowAbsent is false for scan_skip/tag_display, which have no Absent
+// state; true for a tier boolean column (data_mode, tuning_step_enabled,
+// ip_plus).
+func parseBoolFieldCell(s, column string, allowAbsent bool) (codeplug.BoolField, error) {
+	if state, ok := parseTierState(s, allowAbsent); ok {
 		return codeplug.BoolField{State: state}, nil
 	}
 	switch s {
@@ -157,17 +182,11 @@ func parseTierBoolFieldCell(s, column string) (codeplug.BoolField, error) {
 	case "no":
 		return codeplug.BoolField{State: codeplug.Known, Value: false}, nil
 	default:
-		return codeplug.BoolField{}, fmt.Errorf("%s must be \"\", %q, %q, \"yes\" or \"no\", got %q", column, cellUnavailable, cellAbsent, s)
+		if allowAbsent {
+			return codeplug.BoolField{}, fmt.Errorf("%s must be \"\", %q, %q, \"yes\" or \"no\", got %q", column, cellUnavailable, cellAbsent, s)
+		}
+		return codeplug.BoolField{}, fmt.Errorf("%s must be \"\", %q, \"yes\" or \"no\", got %q", column, cellUnavailable, s)
 	}
-}
-
-// unescapeFormulaCell undoes EscapeCell: a single leading apostrophe, if
-// present, is stripped.
-func unescapeFormulaCell(s string) string {
-	if strings.HasPrefix(s, "'") {
-		return s[1:]
-	}
-	return s
 }
 
 // parseYesEmpty parses this schema's "yes"/"" boolean convention.
@@ -179,49 +198,6 @@ func parseYesEmpty(s string) (bool, error) {
 		return true, nil
 	default:
 		return false, fmt.Errorf("must be \"yes\" or empty, got %q", s)
-	}
-}
-
-// parseToneFieldCell parses this schema's ctcss_tone column: "" ->
-// Unknown, "n/a" -> Unavailable, otherwise a decimal Hz value (e.g.
-// "88.5") -> Known, parsed EXACTLY (see parseExactToneDeciHz — no
-// floating point, and no more than one decimal place of precision;
-// "88.54" is a *ParseError, not silently rounded to "88.5"). It does not
-// check the value against spec.StandardCTCSSTones — that is
-// codeplug.ToneField.Valid's job (semantic), not this syntactic parse's.
-func parseToneFieldCell(s string) (codeplug.ToneField, error) {
-	switch s {
-	case "":
-		return codeplug.ToneField{State: codeplug.Unknown}, nil
-	case "n/a":
-		return codeplug.ToneField{State: codeplug.Unavailable}, nil
-	default:
-		deciHz, err := parseExactToneDeciHz(s)
-		if err != nil {
-			return codeplug.ToneField{}, fmt.Errorf("ctcss_tone must be \"\", \"n/a\" or a decimal Hz value with at most one decimal place, got %q", s)
-		}
-		return codeplug.ToneField{State: codeplug.Known, Value: spec.Tone(deciHz)}, nil
-	}
-}
-
-// parseBoolFieldCell parses one of this schema's BoolField columns: "" ->
-// Unknown, "n/a" -> Unavailable, "yes"/"no" -> Known. column is the
-// column's name, used ONLY for the diagnostic — it was hardcoded
-// "scan_skip" while scan_skip was the sole BoolField column, and became a
-// parameter at M9c-5 (E1d) when tag_display joined it, so that a bad
-// tag_display cell is never reported as a scan_skip problem.
-func parseBoolFieldCell(s, column string) (codeplug.BoolField, error) {
-	switch s {
-	case "":
-		return codeplug.BoolField{State: codeplug.Unknown}, nil
-	case "n/a":
-		return codeplug.BoolField{State: codeplug.Unavailable}, nil
-	case "yes":
-		return codeplug.BoolField{State: codeplug.Known, Value: true}, nil
-	case "no":
-		return codeplug.BoolField{State: codeplug.Known, Value: false}, nil
-	default:
-		return codeplug.BoolField{}, fmt.Errorf("%s must be \"\", \"n/a\", \"yes\" or \"no\", got %q", column, s)
 	}
 }
 
@@ -409,7 +385,7 @@ func Import(r io.Reader) ([]codeplug.Channel, error) {
 			if !ok {
 				return ""
 			}
-			return unescapeFormulaCell(record[i])
+			return strings.TrimPrefix(record[i], "'")
 		}
 
 		slot := cell("slot")
@@ -471,7 +447,7 @@ func Import(r io.Reader) ([]codeplug.Channel, error) {
 
 		data.CTCSS = cell("ctcss")
 
-		toneField, err := parseToneFieldCell(cell("ctcss_tone"))
+		toneField, err := parseToneFieldCell(cell("ctcss_tone"), "ctcss_tone", false)
 		if err != nil {
 			return nil, &ParseError{Line: line, Reason: err.Error()}
 		}
@@ -489,13 +465,13 @@ func Import(r io.Reader) ([]codeplug.Channel, error) {
 		// this is a no-op for any file this package itself wrote.
 		data.Tag = strings.TrimRight(cell("tag"), " ")
 
-		tagDisplay, err := parseBoolFieldCell(cell("tag_display"), "tag_display")
+		tagDisplay, err := parseBoolFieldCell(cell("tag_display"), "tag_display", false)
 		if err != nil {
 			return nil, &ParseError{Line: line, Reason: err.Error()}
 		}
 		data.TagDisplay = tagDisplay
 
-		scanSkip, err := parseBoolFieldCell(cell("scan_skip"), "scan_skip")
+		scanSkip, err := parseBoolFieldCell(cell("scan_skip"), "scan_skip", false)
 		if err != nil {
 			return nil, &ParseError{Line: line, Reason: err.Error()}
 		}
@@ -559,13 +535,13 @@ func parseTierCells(data *codeplug.ChannelData, cell func(string) string) error 
 
 	data.ToneMode = parseStringFieldCell(cell("tone_mode"))
 
-	toneTx, err := parseTierToneFieldCell(cell("tone_tx"), "tone_tx")
+	toneTx, err := parseToneFieldCell(cell("tone_tx"), "tone_tx", true)
 	if err != nil {
 		return err
 	}
 	data.ToneTx = toneTx
 
-	toneRx, err := parseTierToneFieldCell(cell("tone_rx"), "tone_rx")
+	toneRx, err := parseToneFieldCell(cell("tone_rx"), "tone_rx", true)
 	if err != nil {
 		return err
 	}
@@ -580,7 +556,7 @@ func parseTierCells(data *codeplug.ChannelData, cell func(string) string) error 
 	data.DTCSPolarity = parseStringFieldCell(cell("dtcs_polarity"))
 	data.Filter = parseStringFieldCell(cell("filter"))
 
-	dataMode, err := parseTierBoolFieldCell(cell("data_mode"), "data_mode")
+	dataMode, err := parseBoolFieldCell(cell("data_mode"), "data_mode", true)
 	if err != nil {
 		return err
 	}
@@ -591,7 +567,7 @@ func parseTierCells(data *codeplug.ChannelData, cell func(string) string) error 
 
 func parseReceiverCells(data *codeplug.ChannelData, cell func(string) string) error {
 	var err error
-	data.TuningStepEnabled, err = parseTierBoolFieldCell(cell("tuning_step_enabled"), "tuning_step_enabled")
+	data.TuningStepEnabled, err = parseBoolFieldCell(cell("tuning_step_enabled"), "tuning_step_enabled", true)
 	if err != nil {
 		return err
 	}
@@ -606,7 +582,7 @@ func parseReceiverCells(data *codeplug.ChannelData, cell func(string) string) er
 	}
 	data.Preamp = parseStringFieldCell(cell("preamp"))
 	data.Antenna = parseStringFieldCell(cell("antenna"))
-	data.IPPlus, err = parseTierBoolFieldCell(cell("ip_plus"), "ip_plus")
+	data.IPPlus, err = parseBoolFieldCell(cell("ip_plus"), "ip_plus", true)
 	return err
 }
 

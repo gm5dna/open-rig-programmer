@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"time"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
@@ -26,7 +25,6 @@ import (
 // *codeplug.Codeplug value passed in), can never change what a plan built
 // from it writes. See PrepareSend's doc comment.
 type SendPlan struct {
-	preparedAt time.Time
 	identity   driver.Identity
 	generation int64
 
@@ -250,7 +248,6 @@ func (s *Service) PrepareSend(ctx context.Context, file *codeplug.Codeplug) (*Se
 	}
 
 	plan := &SendPlan{
-		preparedAt:      s.now(),
 		identity:        s.sess.Identity(),
 		generation:      s.generation,
 		baseline:        copyChannels(baseline.Channels),
