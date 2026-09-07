@@ -585,7 +585,7 @@ func (a *App) GetUISpec() (UISpecView, error) {
 		ClarStepHz:                caps.ClarStepHz,
 		GridLegendNote:            text.GridLegendNote,
 		ToneScanSkipVerification:  text.ToneScanSkipVerification,
-		EraseDialogNote:           text.EraseDialogNote,
+		EraseDialogNote:           text.EraseProcedure,
 		PreservationTooltips: PreservationTooltipsView{
 			Tone:     text.PreservationTooltips.Tone,
 			ScanSkip: text.PreservationTooltips.ScanSkip,
