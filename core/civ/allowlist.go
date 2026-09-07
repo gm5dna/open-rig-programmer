@@ -51,7 +51,7 @@ package civ
 //
 // THE SET GRAMMAR IS RE-VALIDATED BY DECODE, VALIDATE AND RE-ENCODE. The
 // frame's record is decoded with this profile's own layout, run through
-// validateRecordFieldsAt — the SAME validator BuildMemorySet uses — and then
+// validateRecordFields — the SAME validator BuildMemorySet uses — and then
 // re-encoded; the frame is admitted only if the bytes come back identical.
 // That last step is what makes "admits ONLY builder-producible frames"
 // literally true rather than approximately: a frame whose unmapped bytes
@@ -156,7 +156,7 @@ func (p Profile) validMemoryCommand(body []byte) bool {
 	if err != nil {
 		return false
 	}
-	if err := p.validateRecordFieldsAt(rec, layoutIndex); err != nil {
+	if err := p.validateRecordFields(rec, layoutIndex); err != nil {
 		return false
 	}
 	again, err := p.encodeRecordAt(rec, layoutIndex)

@@ -7,7 +7,7 @@ import (
 	"math"
 )
 
-// validateRecordFieldsAt reports whether rec is a record THIS profile can
+// validateRecordFields reports whether rec is a record THIS profile can
 // write at the layout named by layoutIndex: every field the layout maps
 // is present, no field it does not map is, and every value fits its own
 // span.
@@ -30,7 +30,7 @@ import (
 // would be silently dropped, writing a record the caller did not ask for.
 // Neither is a state a caller can distinguish from success afterwards,
 // which is why both refuse here.
-func (p Profile) validateRecordFieldsAt(rec MemoryRecord, layoutIndex int) error {
+func (p Profile) validateRecordFields(rec MemoryRecord, layoutIndex int) error {
 	layout := p.layouts[layoutIndex]
 	byID := p.fieldsByIDByLayout[layoutIndex]
 
@@ -96,7 +96,7 @@ func (p Profile) validateSpanValue(rec MemoryRecord, sp FieldSpan) error {
 // than its own field, every byte in its own charset.
 //
 // GATE-REACHING, a Profile method, and shared by the builder and the gate
-// — validateRecordFieldsAt's rule, applied to the one field whose domain is
+// — validateRecordFields's rule, applied to the one field whose domain is
 // profile data rather than layout data.
 func (p Profile) validName(s string) error {
 	if p.nameLength == 0 {
@@ -127,7 +127,7 @@ func (p Profile) encodeRecord(rec MemoryRecord, length int) ([]byte, error) {
 }
 
 func (p Profile) encodeRecordAt(rec MemoryRecord, layoutIndex int) ([]byte, error) {
-	if err := p.validateRecordFieldsAt(rec, layoutIndex); err != nil {
+	if err := p.validateRecordFields(rec, layoutIndex); err != nil {
 		return nil, err
 	}
 	layout := p.layouts[layoutIndex]
