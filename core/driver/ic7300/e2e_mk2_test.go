@@ -20,7 +20,7 @@ import (
 
 // This file is the END-TO-END half of this driver's evidence: the driver
 // against a fake IC-7300MK2 written by an author who never saw
-// core/civ/ic7300mk2, core/driver/ic7300mk2 or this plan, and who re-derived
+// core/civ/ic7300mk2, core/driver/ic7300's MK2 half or this plan, and who re-derived
 // the record's length, offsets and vocabularies from the same two committed
 // evidence artefacts the dialect was built from.
 //

@@ -405,10 +405,10 @@ var ic7300CoreThree = []spec.Field{
 }
 
 // ic7300mk2CoreThree is the IC-7300MK2's own core set, on the same
-// independent-evidence footing as ic7300CoreThree: core/driver/ic7300mk2's
+// independent-evidence footing as ic7300CoreThree: core/driver/ic7300's
 // bankFields was written from the IC-7300MK2 CI-V Reference Guide alone
 // (that document is mutually silent with the IC-7300's, per
-// core/driver/ic7300mk2/doc.go's package comment) and happens to grade the
+// core/driver/ic7300/doc_mk2.go's package comment) and happens to grade the
 // same three candidates non-zero.
 var ic7300mk2CoreThree = []spec.Field{
 	spec.FieldFrequency, spec.FieldMode, spec.FieldTag,
@@ -433,9 +433,10 @@ var ic7300TierFields = []string{"tx_frequency", "tone_mode", "tone_tx", "tone_rx
 
 // ic7300mk2TierFields is the IC-7300MK2's own tier-field set. Its 1A 00
 // record maps the SAME nine wire-carried fields as the IC-7300's, in the
-// same shape (core/driver/ic7300mk2/caps.go's bankFields is structurally
-// identical to the IC-7300's, independently written from a different
-// document), so this list has the same MEMBERS as ic7300TierFields — a
+// same shape (core/driver/ic7300/caps.go's bankFields is now the one
+// function shared by both models — the fold found the two
+// independently-written, different-document versions were already
+// structurally identical), so this list has the same MEMBERS as ic7300TierFields — a
 // separate variable for the same independent-evidence reason
 // ic7300mk2CoreThree is one rather than a reuse of ic7300CoreThree.
 var ic7300mk2TierFields = []string{"tx_frequency", "tone_mode", "tone_tx", "tone_rx", "filter", "data_mode"}
