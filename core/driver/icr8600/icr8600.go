@@ -21,16 +21,6 @@ import (
 // Option configures the driver and every session it opens.
 type Option func(*icr8600Driver)
 
-// WithTransportLogger exposes transport contamination and quarantine
-// diagnostics without changing protocol behaviour.
-func WithTransportLogger(l transport.Logger) Option {
-	return func(d *icr8600Driver) {
-		if l != nil {
-			d.transportOptions = append(d.transportOptions, transport.WithLogger(l))
-		}
-	}
-}
-
 // WithFullInventoryWalk makes Open read the whole zero-based 100 × 100
 // memory space instead of the bounded default walk. It is opt-in because
 // 10,000 CI-V exchanges can make Open take minutes on a physical receiver.
@@ -56,7 +46,6 @@ func New(profile Profile, opts ...Option) driver.Driver {
 type icr8600Driver struct {
 	driver.Base
 	fullInventoryWalk bool
-	transportOptions  []transport.Option
 	// Non-zero only in focused tests. Production deliberately takes the
 	// transport defaults until Stage R measures this radio.
 	readTimeout time.Duration
@@ -98,7 +87,7 @@ func (d *icr8600Driver) Open(ctx context.Context, port transport.Port, id driver
 		return nil, fmt.Errorf("icr8600: Open: framing: %w", err)
 	}
 	stats, _ := framing.(civ.AccumulatorStatsReporter)
-	eng, err := transport.NewEngineWith(port, framing, d.transportOptions...)
+	eng, err := transport.NewEngineWith(port, framing)
 	if err != nil {
 		_ = port.Close()
 		return nil, fmt.Errorf("icr8600: Open: %w", err)

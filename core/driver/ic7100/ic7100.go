@@ -45,15 +45,6 @@ type Option func(*ic7100Driver)
 // tier integration owns any later cross-model attribution.
 type SiblingLengths map[int]string
 
-// WithTransportLogger supplies transport diagnostics to opened sessions.
-func WithTransportLogger(logger transport.Logger) Option {
-	return func(d *ic7100Driver) {
-		if logger != nil {
-			d.transportLogger = logger
-		}
-	}
-}
-
 // WithConsentedUnverifiedWrites records user consent for this session only.
 // The static capability set remains Unverified and FieldErase remains zero.
 func WithConsentedUnverifiedWrites() Option {
@@ -83,8 +74,7 @@ func New(profile Profile, opts ...Option) driver.Driver {
 
 type ic7100Driver struct {
 	driver.Base
-	transportLogger transport.Logger
-	siblingLengths  SiblingLengths
+	siblingLengths SiblingLengths
 }
 
 func (d *ic7100Driver) Model() string { return "IC-7100" }
@@ -110,11 +100,7 @@ func (d *ic7100Driver) Open(ctx context.Context, port transport.Port, id driver.
 		_ = port.Close()
 		return nil, fmt.Errorf("ic7100: Open: CI-V framing does not report accumulator statistics")
 	}
-	var options []transport.Option
-	if d.transportLogger != nil {
-		options = append(options, transport.WithLogger(d.transportLogger))
-	}
-	eng, err := transport.NewEngineWith(port, framing, options...)
+	eng, err := transport.NewEngineWith(port, framing)
 	if err != nil {
 		_ = port.Close()
 		return nil, fmt.Errorf("ic7100: Open: %w", err)

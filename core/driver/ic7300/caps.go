@@ -6,7 +6,6 @@ import (
 	ic7300civ "github.com/gm5dna/open-rig-programmer/core/civ/ic7300"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
-	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
 // The bank labels this driver publishes. Two banks, and only two: MEM and
@@ -317,12 +316,6 @@ func capabilitiesSimulated() spec.Capabilities {
 // model it is, and what that model can do.
 type ic7300Driver struct {
 	driver.Base
-
-	// transportLogger, when set, is handed to the engine so a session's
-	// wire traffic can be traced. Nil by default: a driver that logged
-	// unasked would write a user's memory contents somewhere they did not
-	// choose.
-	transportLogger transport.Logger
 }
 
 // New returns a driver value for the IC-7300 under the given profile.

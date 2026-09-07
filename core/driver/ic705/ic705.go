@@ -20,19 +20,6 @@ import (
 // its Open call establishes.
 type Option func(*Driver)
 
-// WithTransportLogger sets the transport.Logger every Session this driver
-// Opens threads into its transport.Engine. Without it the engine's
-// diagnostics — unexpected frames, quarantine drains, contamination
-// (transport safety obligation 3: "surfaced, never silently discarded") —
-// fall into the engine's own drop-everything default. A nil l is ignored.
-func WithTransportLogger(l transport.Logger) Option {
-	return func(d *Driver) {
-		if l != nil {
-			d.transportLogger = l
-		}
-	}
-}
-
 // WithConsentedUnverifiedWrites records that the USER has consented to
 // writing this radio's Unverified fields, and builds a driver whose
 // SESSIONS carry the consent transform: at session-capability assembly
@@ -95,7 +82,6 @@ func New(profile Profile, opts ...Option) driver.Driver {
 // Driver implements driver.Driver for the Icom IC-705.
 type Driver struct {
 	driver.Base
-	transportLogger   transport.Logger
 	fullInventoryWalk bool
 	engineOptions     []transport.Option
 }
@@ -186,13 +172,7 @@ const probeSlots = 16
 // releases it on success, and Open itself closes it before returning an
 // error.
 func (d *Driver) Open(ctx context.Context, port transport.Port, id driver.Identity) (driver.Session, error) {
-	opts := make([]transport.Option, 0, len(d.engineOptions)+1)
-	if d.transportLogger != nil {
-		opts = append(opts, transport.WithLogger(d.transportLogger))
-	}
-	opts = append(opts, d.engineOptions...)
-
-	eng, stats, err := newEngine(port, opts...)
+	eng, stats, err := newEngine(port, d.engineOptions...)
 	if err != nil {
 		// newEngine has not taken the port on this path (civ.NewFraming
 		// refuses before the engine is constructed, and NewEngineWith
