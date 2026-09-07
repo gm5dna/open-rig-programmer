@@ -51,18 +51,6 @@ func New7850(opts ...Option) driver.Driver {
 // Option configures a driver at construction.
 type Option func(*ic7851Driver)
 
-// WithTransportLogger threads l into every session's transport.Engine at
-// Open time.
-//
-// It appends to the driver's OWN []transport.Option, built at
-// construction. A driver Option is not a transport.Option and the two must
-// not be conflated: the engine is constructed inside Open, where the
-// driver's opts are long out of scope, so the translated slice has to be
-// carried on the driver value.
-func WithTransportLogger(l transport.Logger) Option {
-	return func(d *ic7851Driver) { d.transportOpts = append(d.transportOpts, transport.WithLogger(l)) }
-}
-
 // WithConsentedUnverifiedWrites records the user's consent to writes this
 // project has never verified against an IC-7851.
 //
@@ -86,9 +74,6 @@ func WithSimulatedProfile() Option {
 type ic7851Driver struct {
 	model string
 	driver.Base
-	// transportOpts are this driver's own options translated into the
-	// transport's, ready for the transport.NewEngineWith call inside Open.
-	transportOpts []transport.Option
 }
 
 // Model implements driver.Driver. It must equal Capabilities().Model and
@@ -241,7 +226,7 @@ func (d *ic7851Driver) Open(ctx context.Context, port transport.Port, id driver.
 		_ = port.Close()
 		return nil, fmt.Errorf("ic7851: the CI-V framing does not report accumulator stats — this driver's diagnostics require civ.AccumulatorStatsReporter")
 	}
-	eng, err := transport.NewEngineWith(port, framing, d.transportOpts...)
+	eng, err := transport.NewEngineWith(port, framing)
 	if err != nil {
 		// NewEngineWith has not taken the port on this path (it refuses
 		// before touching it), so closing it here is Open's own ownership

@@ -87,19 +87,6 @@ type CIVDiagnostics struct {
 // Option configures a driver built by New.
 type Option func(*ic9700Driver)
 
-// WithTransportLogger sets the transport.Logger every Session this driver
-// Opens threads into its transport.Engine. Without it the engine's
-// diagnostics — unexpected frames, quarantine drains, contamination —
-// fall into the engine's own drop-everything default with no way for a
-// caller to receive them. A nil l is ignored.
-func WithTransportLogger(l transport.Logger) Option {
-	return func(d *ic9700Driver) {
-		if l != nil {
-			d.transportLogger = l
-		}
-	}
-}
-
 // WithConsentedUnverifiedWrites records that the USER has consented to
 // writing this radio's Unverified fields, and builds a driver whose
 // SESSIONS carry the consent transform: at session-capability assembly
@@ -139,7 +126,6 @@ func New(profile Profile, opts ...Option) driver.Driver {
 // ic9700Driver implements driver.Driver for the Icom IC-9700.
 type ic9700Driver struct {
 	driver.Base
-	transportLogger transport.Logger
 }
 
 // Model implements driver.Driver.
@@ -206,11 +192,7 @@ func (d *ic9700Driver) Open(ctx context.Context, port transport.Port, id driver.
 		return nil, fmt.Errorf("ic9700: the CI-V framing does not report accumulator stats")
 	}
 
-	var engOpts []transport.Option
-	if d.transportLogger != nil {
-		engOpts = append(engOpts, transport.WithLogger(d.transportLogger))
-	}
-	eng, err := transport.NewEngineWith(port, framing, engOpts...)
+	eng, err := transport.NewEngineWith(port, framing)
 	if err != nil {
 		// NewEngineWith has not taken the port on this path, so closing
 		// it is Open's own ownership obligation rather than a double

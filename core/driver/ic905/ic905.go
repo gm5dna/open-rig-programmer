@@ -19,23 +19,8 @@ import (
 )
 
 // Option configures the driver New builds — and, through it, every
-// Session its Open call establishes. See WithTransportLogger and
-// WithConsentedUnverifiedWrites.
+// Session its Open call establishes. See WithConsentedUnverifiedWrites.
 type Option func(*ic905Driver)
-
-// WithTransportLogger sets the transport.Logger every Session this driver
-// Opens threads into its transport.Engine. Without it, the engine's
-// diagnostics — unexpected frames, quarantine drains, contamination
-// (transport safety obligation 3: "surfaced, never silently discarded") —
-// fall into the engine's own drop-everything default with no way for a
-// caller of this driver to receive them. A nil l is ignored.
-func WithTransportLogger(l transport.Logger) Option {
-	return func(d *ic905Driver) {
-		if l != nil {
-			d.transportLogger = l
-		}
-	}
-}
 
 // SiblingLengths maps a record length to the model that accepts it: the
 // seam through which a Wave-4 tier check can teach this driver to
@@ -127,9 +112,6 @@ func New(profile Profile, opts ...Option) driver.Driver {
 // ic905Driver implements driver.Driver for the Icom IC-905.
 type ic905Driver struct {
 	driver.Base
-	// transportLogger, when non-nil, is threaded into every Session's
-	// transport.Engine at Open time — see WithTransportLogger.
-	transportLogger transport.Logger
 	// siblingLengths is the Wave-4 attribution table — see
 	// SiblingLengths. Nil is the Wave-3 default.
 	siblingLengths SiblingLengths
@@ -277,11 +259,7 @@ func (d *ic905Driver) Open(ctx context.Context, port transport.Port, id driver.I
 	// legal and Diagnostics905 handles it.
 	stats, _ := framing.(civ.AccumulatorStatsReporter)
 
-	var engOpts []transport.Option
-	if d.transportLogger != nil {
-		engOpts = append(engOpts, transport.WithLogger(d.transportLogger))
-	}
-	eng, err := transport.NewEngineWith(port, framing, engOpts...)
+	eng, err := transport.NewEngineWith(port, framing)
 	if err != nil {
 		_ = port.Close()
 		return nil, fmt.Errorf("ic905: Open: %w", err)

@@ -58,11 +58,6 @@ var foreignRecordLengths = map[int]string{
 	45: "IC-7300MK2 (provisional)",
 }
 
-// WithTransportLogger hands the engine a logger for wire tracing.
-func WithTransportLogger(l transport.Logger) Option {
-	return func(d *ic7300Driver) { d.transportLogger = l }
-}
-
 // StopBits is how many stop bits this radio's CI-V port expects.
 //
 // ONE, ASSUMED at spec D5 entry 8, lift `ic7300-framing`. THE HAZARD, stated
@@ -101,16 +96,12 @@ func (d *ic7300Driver) Open(ctx context.Context, port transport.Port, id driver.
 		return nil, fmt.Errorf("ic7300: Open: the CI-V framing adapter does not report accumulator statistics — this driver's diagnostics come from the ADAPTER's counters, never from the engine's, because the accumulator has already swallowed every broadcast before the engine could count one")
 	}
 
-	var engOpts []transport.Option
-	if d.transportLogger != nil {
-		engOpts = append(engOpts, transport.WithLogger(d.transportLogger))
-	}
 	// transport.NewEngineWith is GUARDED — internal/guards'
 	// TestNewEngineReachableOnlyFromDriver covers both constructors by
 	// name — so this call appears HERE and nowhere else in the package.
 	// Nothing local is built: no adapter, no matcher, no DrainPolicy
 	// constant copied from the CAT side.
-	eng, err := transport.NewEngineWith(port, fr, engOpts...)
+	eng, err := transport.NewEngineWith(port, fr)
 	if err != nil {
 		_ = port.Close()
 		return nil, fmt.Errorf("ic7300: Open: %w", err)

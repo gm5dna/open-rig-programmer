@@ -70,19 +70,6 @@ func (e *RowUnsetError) Unwrap() error { return ErrRowUnset }
 // its Open call establishes.
 type Option func(*ts590Driver)
 
-// WithTransportLogger sets the transport.Logger every Session this driver
-// Opens threads into its transport.Engine. Without it, the engine's
-// diagnostics — unexpected frames, quarantine drains, contamination — fall
-// into the engine's own drop-everything default with no way for a caller of
-// this driver to receive them. A nil l is ignored.
-func WithTransportLogger(l transport.Logger) Option {
-	return func(d *ts590Driver) {
-		if l != nil {
-			d.transportOptions = append(d.transportOptions, transport.WithLogger(l))
-		}
-	}
-}
-
 // WithConsentedUnverifiedWrites records that the USER has consented to
 // writing this radio's Unverified fields, and builds a driver whose SESSIONS
 // carry the consent transform: at session-capability assembly every
@@ -118,7 +105,7 @@ func withTiming(readTimeout, settle time.Duration) Option {
 // no usable zero (see Row); RealHardware — the ZERO Profile — selects the
 // all-Unverified capability set while writeTrialsComplete is false, and ANY
 // unrecognised Profile value deliberately selects the same fail-safe.
-// Options: WithTransportLogger, WithConsentedUnverifiedWrites.
+// Option: WithConsentedUnverifiedWrites.
 func New(row Row, profile Profile, opts ...Option) driver.Driver {
 	d := &ts590Driver{row: row, Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
@@ -131,7 +118,6 @@ func New(row Row, profile Profile, opts ...Option) driver.Driver {
 type ts590Driver struct {
 	row Row
 	driver.Base
-	transportOptions []transport.Option
 	// Non-zero only in focused tests; see withTiming.
 	readTimeout time.Duration
 	settle      time.Duration
@@ -299,7 +285,7 @@ func (d *ts590Driver) Open(ctx context.Context, port transport.Port, id driver.I
 		_ = port.Close()
 		return nil, fmt.Errorf("ts590: Open: framing: %w", err)
 	}
-	eng, err := transport.NewEngineWith(port, framing, d.transportOptions...)
+	eng, err := transport.NewEngineWith(port, framing)
 	if err != nil {
 		// NewEngineWith has not taken the port on this path, so closing it
 		// here is Open's own ownership obligation, not a double close.
