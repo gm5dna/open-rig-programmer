@@ -217,27 +217,12 @@ func normaliseTierFieldsForOwnModel(cp *codeplug.Codeplug) {
 // sharing one explicitly-named directory is exactly the collision this
 // rule exists to prevent. A model whose ModelSlug is "" (no
 // alphanumeric characters at all) is refused with an error rather than
-// silently falling back to the base directory — filepath.Join drops
-// empty elements, so an unguarded empty slug would resolve to exactly
-// wiring.DefaultModel's own path, the very collision this rule exists
-// to prevent. Deliberately duplicated from internal/wiring's own
-// ResolveSnapshotDir rather than shared: see that function's doc
-// comment (internal/wiring/wiring.go) for why.
+// silently falling back to the base directory. A thin alias of
+// internal/wiring's own ResolveSnapshotDir, which app/ already shares —
+// the "deliberately duplicated" reasoning this doc comment used to give
+// is stale (Stuart, ponytail audit 2026-09-06): wiring already exports
+// it and this package already imports wiring, so there is nothing left
+// to duplicate for. No test pins wiring's own "wiring: " error prefix.
 func resolveSnapshotDir(override, model string) (string, error) {
-	base := override
-	if base == "" {
-		cfgDir, err := os.UserConfigDir()
-		if err != nil {
-			return "", fmt.Errorf("determining default snapshot directory: %w", err)
-		}
-		base = filepath.Join(cfgDir, "rigprog", "snapshots")
-	}
-	if model == wiring.DefaultModel {
-		return base, nil
-	}
-	slug := wiring.ModelSlug(model)
-	if slug == "" {
-		return "", fmt.Errorf("resolving snapshot directory: model %q has no filesystem-safe characters to slug — refusing to fall back to the base directory and collide with %s's", model, wiring.DefaultModel)
-	}
-	return filepath.Join(base, slug), nil
+	return wiring.ResolveSnapshotDir(override, model)
 }
