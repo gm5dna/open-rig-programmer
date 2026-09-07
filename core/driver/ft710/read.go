@@ -202,7 +202,7 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 		return codeplug.Channel{}, fmt.Errorf("ft710: ReadChannel %s: %w", sl.Wire(), err)
 	}
 	if m.Slot.Wire() != sl.Wire() {
-		return codeplug.Channel{}, &AnswerMismatchError{Requested: sl.Wire(), Answered: m.Slot.Wire()}
+		return codeplug.Channel{}, &AnswerMismatchError{Model: params.Name, Requested: sl.Wire(), Answered: m.Slot.Wire()}
 	}
 	if !kindAccepted(sl, m.Kind) {
 		return codeplug.Channel{}, &KindMismatchError{Slot: sl.Wire(), Got: m.Kind, Want: acceptedKinds(sl)}
@@ -228,7 +228,7 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 		return codeplug.Channel{}, fmt.Errorf("ft710: ReadChannel %s: %w", sl.Wire(), err)
 	}
 	if tslot.Wire() != sl.Wire() {
-		return codeplug.Channel{}, &AnswerMismatchError{Requested: sl.Wire(), Answered: tslot.Wire()}
+		return codeplug.Channel{}, &AnswerMismatchError{Model: params.Name, Requested: sl.Wire(), Answered: tslot.Wire()}
 	}
 
 	ctcss, ok := ctcssNames[m.CTCSS]

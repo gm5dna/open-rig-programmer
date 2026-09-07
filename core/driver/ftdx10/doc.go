@@ -324,7 +324,7 @@
 //     for.
 //
 //  7. "?;" ON A 5xx/EMG DISCOVERY PROBE MEANS ABSENT FROM THIS RADIO
-//     (ftdx10.go's discoverInventory/probeSlot). Discovery treats a
+//     (Open's shared discovery sweep, yaesu.DiscoverInventory/ProbeSlot). Discovery treats a
 //     rejection as "this radio does not have that channel" and a
 //     well-formed answer as "it does". "?;" is the protocol's SINGLE
 //     unattributed NAK (cat.ErrRejected's own doc comment): it is also

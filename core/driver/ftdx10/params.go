@@ -14,7 +14,6 @@ var params = yaesu.Params{
 	Name:              "ftdx10",
 	Model:             modelName,
 	Dialect:           catDialect,
-	CATID:             catID,
 	DescriptorVersion: settingsDescriptorVersion,
 	// The manual charts this menu as P1 menus of P2 groups (the shared
 	// nil default), and prints each item's position as the "P1-P2-P3"
@@ -33,4 +32,7 @@ var params = yaesu.Params{
 	BuildMT: func(d cat.Dialect, m cat.MemoryData, tag string, _ bool) (cat.Command, error) {
 		return d.BuildMTSetCombined(m, tag)
 	},
+
+	Probe:     yaesu.ProbeMT,
+	MTRetries: 1,
 }

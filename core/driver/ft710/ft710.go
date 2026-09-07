@@ -436,7 +436,7 @@ func probeSlot(ctx context.Context, dialect cat.Dialect, eng *transport.Engine, 
 		return false, err
 	}
 	if m.Slot.Wire() != slot.Wire() {
-		return false, &AnswerMismatchError{Requested: slot.Wire(), Answered: m.Slot.Wire()}
+		return false, &AnswerMismatchError{Model: params.Name, Requested: slot.Wire(), Answered: m.Slot.Wire()}
 	}
 	return true, nil
 }
@@ -823,26 +823,17 @@ func (e *KindMismatchError) Error() string {
 // Unwrap lets errors.Is(err, ErrKindMismatch) match.
 func (e *KindMismatchError) Unwrap() error { return ErrKindMismatch }
 
-// ErrAnswerMismatch is the sentinel a caller should compare against (via
-// errors.Is) when a slot-addressed answer (MR, MT) names a DIFFERENT
-// slot than the one just requested. The transport's quarantine
-// discipline makes this unlikely (a stale same-shape reply should have
-// been drained), but the driver still refuses to map an answer onto the
-// wrong slot. The error actually returned is an *AnswerMismatchError.
-var ErrAnswerMismatch = errors.New("ft710: answer names a different slot than was requested")
+// ErrAnswerMismatch is the sentinel a caller compares against (via
+// errors.Is) to ask "did a radio answer about the wrong channel?" —
+// the shared one, so the question can be put once rather than once
+// per driver package. The error actually returned is an
+// *AnswerMismatchError naming both addresses.
+var ErrAnswerMismatch = driver.ErrAnswerMismatch
 
-// AnswerMismatchError reports the requested and the answered slot.
-type AnswerMismatchError struct {
-	// Requested is the slot the read asked for.
-	Requested string
-	// Answered is the slot the reply actually named.
-	Answered string
-}
-
-// Error implements the error interface.
-func (e *AnswerMismatchError) Error() string {
-	return fmt.Sprintf("ft710: requested slot %q but the answer names slot %q — refusing to map a reply onto the wrong slot", e.Requested, e.Answered)
-}
-
-// Unwrap lets errors.Is(err, ErrAnswerMismatch) match.
-func (e *AnswerMismatchError) Unwrap() error { return ErrAnswerMismatch }
+// AnswerMismatchError reports that a memory answer's decoded slot was
+// not the one asked for, naming both. THE CHECK IS THIS DRIVER'S
+// BECAUSE NOTHING BELOW IT MAKES ONE: a NEWCAT prefix matcher checks
+// the command name, so an answer for another slot satisfies the read's
+// spec perfectly well, and a record mis-attributed to the wrong slot is
+// the corruption this project refuses.
+type AnswerMismatchError = driver.AnswerMismatchError[string]

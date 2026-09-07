@@ -4,12 +4,11 @@ package ft991a
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"sync"
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
+	"github.com/gm5dna/open-rig-programmer/core/driver/internal/yaesu"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -145,22 +144,6 @@ func (d *ft991aDriver) Capabilities() spec.Capabilities {
 	}
 }
 
-// idSpec is the transport spec for the ID; probe: a fixed 7-byte answer
-// ("ID0670;"). The length is core/cat's idAnswerLen, and core/cat/ft991a's
-// reused-command verification checked this radio's own ID frame table
-// against it (layout 771-779: no Set, Read "ID;" three bytes at 776, Answer
-// seven at 779) before the shared codec was accepted — see that package's
-// doc.go. One retry: an identity read is idempotent and Open should survive
-// a single swallowed reply.
-//
-// ONE RETRY HERE AND NONE ON THE MT READ, and the asymmetry is deliberate
-// (read.go's mtSpec says the other half): a retried ID probe cannot be
-// confused with anything, because Open has no second frame whose meaning
-// depends on how many times the first was asked.
-func idSpec() transport.CommandSpec {
-	return transport.CATReadSpec("ID", 7, 1)
-}
-
 // Open implements driver.Driver: it builds a transport.Engine over port,
 // establishes the session (Init: AI0 + drain-to-quiet), probes ID; and
 // verifies this really is an FT-991A (a typed *driver.WrongRadioError
@@ -201,18 +184,13 @@ func idSpec() transport.CommandSpec {
 // unconfigured dialect outright, so there is no ungated path through here
 // even if the field were somehow left zero.
 func (d *ft991aDriver) Open(ctx context.Context, port transport.Port, id driver.Identity) (driver.Session, error) {
-	var engOpts []transport.Option
-	if d.transportLogger != nil {
-		engOpts = append(engOpts, transport.WithLogger(d.transportLogger))
-	}
-	eng, err := transport.NewEngine(port, d.dialect, engOpts...)
+	eng, err := yaesu.NewEngine(port, d.dialect, d.transportLogger, &params)
 	if err != nil {
-		// NewEngine has not taken the port on this path (it refuses before
-		// touching it), so closing it here is Open's own ownership
-		// obligation, not a double close.
-		_ = port.Close()
-		return nil, fmt.Errorf("ft991a: Open: %w", err)
+		// NewEngine has closed the port itself on this path — Open's
+		// ownership obligation, discharged there in one place.
+		return nil, err
 	}
+
 	sess, err := d.open(ctx, eng, id)
 	if err != nil {
 		_ = eng.Close()
@@ -224,41 +202,9 @@ func (d *ft991aDriver) Open(ctx context.Context, port transport.Port, id driver.
 // open is Open's body, factored so the error path can close eng in exactly
 // one place.
 func (d *ft991aDriver) open(ctx context.Context, eng *transport.Engine, id driver.Identity) (*Session, error) {
-	if err := eng.Init(ctx); err != nil {
-		return nil, fmt.Errorf("ft991a: Open: %w", err)
-	}
-
-	// Identity probe: the ID; answer is authoritative, and anything other
-	// than the FT-991A's "0670" (layout 772) means the wrong radio — or
-	// something else that speaks CAT — is on this port. That matters more
-	// here than on most: this radio shares a connector, a baud menu and a
-	// CAT grammar with every registered Yaesu sibling, and differs from
-	// them in axes a wrong-radio session would silently mis-encode — a
-	// five-state P8, a numeric PMS form, a fixed P11 and a live P5.
-	frame, err := eng.Do(ctx, d.dialect.BuildIDRead(), idSpec())
+	got, err := yaesu.Handshake(ctx, eng, d.dialect, &params, yaesu.Want{CATID: catID, Model: modelName})
 	if err != nil {
-		return nil, fmt.Errorf("ft991a: Open: ID probe: %w", err)
-	}
-	got, err := d.dialect.ParseIDAnswer(frame)
-	if err != nil {
-		return nil, fmt.Errorf("ft991a: Open: ID probe: %w", err)
-	}
-	if got != catID {
-		// WantModel populated, GotModel deliberately EMPTY (plan P10,
-		// matrix §3.10). driver.WrongRadioError.Error() renders its NAMED
-		// form only when BOTH are present, while cmd/rigprog's probe
-		// formatter keys on GotModel alone — so a driver filling one alone
-		// would render the same refusal two different ways.
-		//
-		// THERE IS NO SIBLING ID TABLE, and in particular NO attempt to
-		// name "FT-991" on the GOT side. That radio is a DIFFERENT REAL
-		// RADIO rather than a typo of this one, and this project has never
-		// seen its ID answer: putting a guessed name in a refusal about
-		// identity would be the one place a guess is least excusable. "With
-		// names" is satisfied on the WANT side only, and the rendered text
-		// is pinned verbatim by TestOpen_WrongRadio because rendered
-		// refusals are recorded in baselines.
-		return nil, &driver.WrongRadioError{Want: catID, Got: got, WantModel: modelName}
+		return nil, err
 	}
 	id.CATID = got
 
@@ -374,31 +320,17 @@ func (s *Session) Diagnostics() driver.SessionDiagnostics {
 // already guarantees repeat calls return the same result.
 func (s *Session) Close() error { return s.eng.Close() }
 
-// ErrAnswerMismatch is the sentinel a caller should compare against (via
-// errors.Is) when a slot-addressed answer names a DIFFERENT slot than the
-// one just requested. The transport's quarantine discipline makes this
-// unlikely (a stale same-shape reply should have been drained), but the
-// driver still refuses to map an answer onto the wrong slot. The error
-// actually returned is an *AnswerMismatchError.
-var ErrAnswerMismatch = errors.New("ft991a: answer names a different slot than was requested")
+// ErrAnswerMismatch is the sentinel a caller compares against (via
+// errors.Is) to ask "did a radio answer about the wrong channel?" —
+// the shared one, so the question can be put once rather than once
+// per driver package. The error actually returned is an
+// *AnswerMismatchError naming both addresses.
+var ErrAnswerMismatch = driver.ErrAnswerMismatch
 
-// AnswerMismatchError reports the requested and the answered slot. It is
-// this driver's OWN typed error, in this driver's own namespace: four
-// sibling drivers have same-shaped ones and none imports another — a caller
-// distinguishing which radio's read went wrong needs distinct types, and a
-// shared one would put a radio-specific failure on a seam that is meant to
-// be neutral.
-type AnswerMismatchError struct {
-	// Requested is the slot the read asked for.
-	Requested string
-	// Answered is the slot the reply actually named.
-	Answered string
-}
-
-// Error implements the error interface.
-func (e *AnswerMismatchError) Error() string {
-	return fmt.Sprintf("ft991a: requested slot %q but the answer names slot %q — refusing to map a reply onto the wrong slot", e.Requested, e.Answered)
-}
-
-// Unwrap lets errors.Is(err, ErrAnswerMismatch) match.
-func (e *AnswerMismatchError) Unwrap() error { return ErrAnswerMismatch }
+// AnswerMismatchError reports that a memory answer's decoded slot was
+// not the one asked for, naming both. THE CHECK IS THIS DRIVER'S
+// BECAUSE NOTHING BELOW IT MAKES ONE: a NEWCAT prefix matcher checks
+// the command name, so an answer for another slot satisfies the read's
+// spec perfectly well, and a record mis-attributed to the wrong slot is
+// the corruption this project refuses.
+type AnswerMismatchError = driver.AnswerMismatchError[string]

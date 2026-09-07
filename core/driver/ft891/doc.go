@@ -453,7 +453,7 @@
 //     claim.
 //
 //  10. "?;" ON A 5xx/EMG DISCOVERY PROBE MEANS ABSENT FROM THIS RADIO
-//     (ft891.go's discoverInventory/probeSlot). Discovery treats a
+//     (Open's shared discovery sweep, yaesu.DiscoverInventory/ProbeSlot). Discovery treats a
 //     rejection as "this radio does not have that channel" and a
 //     well-formed MR answer as "it does". The FT-710's equivalent
 //     interpretation is hardware-confirmed for THAT radio (live probes of

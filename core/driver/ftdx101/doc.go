@@ -266,7 +266,7 @@
 //     caps.go's modeNames excludes from the advertised mode list, so that
 //     no user is offered a mode core/cat refuses to emit.
 //   - "SlotSpace.SixtyLo/SixtyHi = 501/599" — the extent of the discovery
-//     walk (ftdx101.go's discoverInventory), which asks the dialect for
+//     walk (Open's shared discovery sweep, yaesu.DiscoverInventory), which asks the dialect for
 //     successive 5xx ordinals until it refuses rather than writing a bound
 //     down.
 //   - "The combined MT answer's EXACT length (consumed here as
@@ -417,7 +417,7 @@
 //     skip flag.
 //
 //  7. "?;" ON A 5xx/EMG DISCOVERY PROBE MEANS ABSENT FROM THIS RADIO
-//     (ftdx101.go's discoverInventory/probeSlot). Discovery treats a
+//     (Open's shared discovery sweep, yaesu.DiscoverInventory/ProbeSlot). Discovery treats a
 //     rejection as "this radio does not have that channel" and a
 //     well-formed answer as "it does". "?;" is the protocol's SINGLE
 //     unattributed NAK (cat.ErrRejected's own doc comment): it is also what
