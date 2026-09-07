@@ -233,17 +233,6 @@ func (spec CommandSpec) withDefaults() CommandSpec {
 	return spec
 }
 
-// matches reports whether frame is this command's answer, per the codec's
-// own Match. A nil Match never matches — validate has already refused
-// every spec that would reach a wait with one, so this is defence in depth
-// against a hand-built spec bypassing Do.
-func (spec CommandSpec) matches(frame []byte) bool {
-	if spec.Match == nil {
-		return false
-	}
-	return spec.Match(frame)
-}
-
 // readerEvent is one unit the reader goroutine hands to whichever of
 // Do/DrainToQuiet is currently consuming e.events (there is at most one,
 // serialised by e.mu — see Engine's doc comment): either a complete frame,
@@ -351,8 +340,8 @@ type Engine struct {
 	// returned — see ErrNoFraming.
 	framing Framing
 	// drainPolicy is framing.DrainPolicy(), resolved ONCE at
-	// construction (see DrainPolicy.withDefaults for why once matters:
-	// an absolute cap a framing could widen mid-drain is not a cap).
+	// construction: an absolute cap a framing could widen mid-drain is
+	// not a cap.
 	drainPolicy DrainPolicy
 	// allow is the outbound write gate, taken from framing at
 	// construction (f.Allow) and never nil for an Engine NewEngineWith
@@ -504,7 +493,7 @@ func NewEngineWith(p Port, f Framing, opts ...Option) (*Engine, error) {
 		logger:      nopLogger{},
 		clk:         realClock{},
 		framing:     f,
-		drainPolicy: f.DrainPolicy().withDefaults(),
+		drainPolicy: f.DrainPolicy(),
 		allow:       f.Allow,
 		events:      make(chan readerEvent, 16),
 		closeCh:     make(chan struct{}),
@@ -1251,7 +1240,11 @@ func (e *Engine) waitForAnswer(ctx context.Context, spec CommandSpec) ([]byte, e
 		if e.framing.IsRejection(ev.frame) {
 			return nil, ErrRejected
 		}
-		if spec.matches(ev.frame) {
+		// spec.Match is nil-checked here (rather than earlier) as
+		// defence in depth against a hand-built spec bypassing Do's
+		// validate: every spec that reaches a wait has already been
+		// refused a nil Match.
+		if spec.Match != nil && spec.Match(ev.frame) {
 			return ev.frame, nil
 		}
 		e.countUnexpected(ev.frame)

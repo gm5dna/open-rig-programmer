@@ -64,7 +64,9 @@ type Accumulator interface {
 type DrainPolicy struct {
 	// IdleGap is how long the line must be silent — no frame, no
 	// accumulator error — before the engine calls it drained. Any
-	// activity re-arms it. <= 0 selects QuietPeriod.
+	// activity re-arms it. Every Framing this repository ships sets it
+	// explicitly (catFraming uses QuietPeriod; civ and kw use their own
+	// DrainIdleGap).
 	IdleGap time.Duration
 	// Cap is the ABSOLUTE ceiling on one drain, measured from when that
 	// drain started and honoured ahead of any queued event AND inside
@@ -72,25 +74,10 @@ type DrainPolicy struct {
 	// single frame can extend it. A drain still short of quiet when Cap
 	// elapses fails with ErrDrainCapExceeded rather than continuing;
 	// Cap is the LAST instant it can succeed at, not a floor it is
-	// measured from. <= 0 selects 2*IdleGap — room for one genuine
-	// IdleGap of silence even if a single stale frame arrives partway
-	// through and postpones "quiet" once.
+	// measured from. Every Framing this repository ships sets it
+	// explicitly too (catFraming uses 2*QuietPeriod; civ and kw use
+	// their own DrainCap).
 	Cap time.Duration
-}
-
-// withDefaults returns a copy of p with every non-positive field replaced
-// by its documented default. Engine resolves the policy ONCE, at
-// construction, and holds the resolved value: a framing that returned a
-// different policy per call could otherwise widen its own deadlines
-// mid-drain, which is exactly what an absolute cap must not permit.
-func (p DrainPolicy) withDefaults() DrainPolicy {
-	if p.IdleGap <= 0 {
-		p.IdleGap = QuietPeriod
-	}
-	if p.Cap <= 0 {
-		p.Cap = 2 * p.IdleGap
-	}
-	return p
 }
 
 // Framing is the protocol seam Engine is generalised over (D2): everything

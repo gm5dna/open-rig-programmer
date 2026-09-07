@@ -7,18 +7,8 @@ import (
 	"fmt"
 
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 )
-
-// regioner is the optional accessor a driver.Session's concrete type may
-// implement to report its discovered regulatory region (e.g. "UK", "US") —
-// see core/driver/ft710.Session.Region, whose doc comment explains why
-// this is deliberately NOT part of the driver.Session interface: region
-// derivation is a per-driver discovery quirk, not a seam-level contract.
-// ReadAll type-asserts for it rather than importing any driver package, so
-// this generic layer never learns a specific radio's quirks.
-type regioner interface {
-	Region() string
-}
 
 // ReadAll reads every memory slot in the session's current effective
 // capabilities, bank by bank, slot by slot, in Capabilities.Banks/Bank.Slots
@@ -28,11 +18,11 @@ type regioner interface {
 //
 // The returned Codeplug's Radio carries: Model and CATID from the
 // session's capabilities, ReadAt from the injected clock, Port/USBSerial
-// from the session's Identity, Region from the session's optional Region()
-// accessor (see regioner; empty when the concrete session does not expose
-// one), and BaselineDigest — codeplug.Digest of the channels just read, so
-// a later PrepareSend/Execute pair can detect any change to this exact
-// read.
+// from the session's Identity, Region from the session's optional
+// driver.RegionReporter accessor (empty when the concrete session does not
+// implement it), and BaselineDigest — codeplug.Digest of the channels just
+// read, so a later PrepareSend/Execute pair can detect any change to this
+// exact read.
 //
 // Progress is reported once per slot, phase "read", 1-based done against
 // the total slot count across every bank. ctx is checked between slots
@@ -84,7 +74,7 @@ func (s *Service) readAll(ctx context.Context) (*codeplug.Codeplug, error) {
 
 	id := s.sess.Identity()
 	region := ""
-	if r, ok := s.sess.(regioner); ok {
+	if r, ok := s.sess.(driver.RegionReporter); ok {
 		region = r.Region()
 	}
 
