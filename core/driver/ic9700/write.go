@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
@@ -301,7 +302,7 @@ func knownString(f codeplug.StringField) string {
 // than a tri-state field — it predates the pattern. The question asked is
 // the same one.
 func (s *Session) validateKnownValues(slot string, data codeplug.ChannelData) error {
-	if data.Mode != "" && !contains(s.caps.Modes, data.Mode) {
+	if data.Mode != "" && !slices.Contains(s.caps.Modes, data.Mode) {
 		return refuse(slot, []spec.Field{spec.FieldMode},
 			"mode %q is not one of this radio's modes %v", data.Mode, s.caps.Modes)
 	}
@@ -688,14 +689,4 @@ func (s *Session) frequencyInBand(slot string, field spec.Field, hz uint64) erro
 	}
 	return refuse(slot, []spec.Field{field},
 		"%s %d Hz is outside this radio's %d..%d Hz band plan", field, hz, s.caps.MinFreqHz, s.caps.MaxFreqHz)
-}
-
-// contains reports whether list holds v.
-func contains(list []string, v string) bool {
-	for _, x := range list {
-		if x == v {
-			return true
-		}
-	}
-	return false
 }

@@ -126,7 +126,7 @@ func (s *Session) ReadChannel(ctx context.Context, slot string) (codeplug.Channe
 	}
 	if got != want {
 		s.noteAnswerMismatch()
-		return codeplug.Channel{}, &AnswerMismatchError{Requested: want.String(), Answered: got.String()}
+		return codeplug.Channel{}, &AnswerMismatchError{Model: "ic7300", Requested: want.String(), Answered: got.String()}
 	}
 	if allFF(raw) {
 		return codeplug.Channel{Slot: slot}, nil

@@ -163,7 +163,7 @@ func (s *Session) readRaw(ctx context.Context, a civ.ChannelAddress) (civ.Memory
 	}
 	if got != a { // T2, BEFORE any use of raw
 		s.answerMismatches.Add(1)
-		return civ.MemoryRecord{}, nil, false, &AnswerMismatchError{Want: a, Got: got}
+		return civ.MemoryRecord{}, nil, false, &AnswerMismatchError{Model: "ic7610", Requested: a, Answered: got}
 	}
 	if recordIsAbsent(raw) {
 		return civ.MemoryRecord{}, nil, true, nil

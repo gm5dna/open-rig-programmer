@@ -5,6 +5,7 @@ package ts480
 import (
 	"fmt"
 
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/kw"
 	// ALIASED deliberately: the layout package's own name is also "ts480",
 	// and an unaliased import would put a second meaning on the spelling
@@ -49,17 +50,14 @@ func layout() kw.Layout { return kwts480.Layout() }
 // towards the simulator's, whose Supported writes are a claim about
 // internal/fakets480 and about nothing else. Any OTHER unrecognised Profile
 // value fails the same way, through Capabilities' explicit default arm.
-type Profile int
+// Shared with every other driver package (core/driver.Profile); this
+// package keeps its own Simulated selector, which
+// internal/guards.TestSimulatedProfileTokensConfinement requires.
+type Profile = driver.Profile
 
 const (
-	// RealHardware is the profile for sessions against a physical radio.
-	// While writeTrialsComplete is false it selects CapabilitiesUnverified:
-	// reads labelled Unverified, every candidate field's Write Unverified,
-	// nothing writable.
-	RealHardware Profile = iota
-	// Simulated is the profile for internal/fakets480-backed sessions ONLY
-	// (the CLI's --fake mode, the GUI's demo mode).
-	Simulated
+	RealHardware = driver.RealHardware
+	Simulated    = driver.Simulated
 )
 
 // writeTrialsComplete is THIS row's hardware write guard, and it is FALSE: no
@@ -564,60 +562,4 @@ func CapabilitiesUnverified() spec.Capabilities {
 // refusal can be seen at all.
 func CapabilitiesSimulated() spec.Capabilities {
 	return baseCapabilities(spec.FieldSupport{Read: spec.Supported, Write: spec.Supported})
-}
-
-// cloneCapabilities returns a deep copy of caps: the bank (with fresh Slots
-// and Fields) and every populated slice independently allocated, so mutating
-// the copy can never reach the original.
-//
-// Load-bearing for the write gate, exactly as in the sibling drivers:
-// Session.Capabilities hands copies out, and a caller mutating one must never
-// alter what WriteChannel enforces.
-// TestCapabilities_ASessionHandsOutDefensiveCopies witnesses it THROUGH A
-// SESSION, which is the only place the copy can be observed — a test against a
-// freshly constructed set would pass whatever this function did, since
-// baseCapabilities allocates on every call (the T11 review's M2, one row
-// over).
-func cloneCapabilities(caps spec.Capabilities) spec.Capabilities {
-	out := caps
-	out.Banks = make([]spec.Bank, 0, len(caps.Banks))
-	for _, b := range caps.Banks {
-		// Capabilities.Bank returns a defensive copy (fresh Slots and
-		// Fields) — reuse that guarantee rather than restating per-field
-		// copying here.
-		//
-		// THE ok RESULT IS DISCARDED, AND HERE IS WHAT MAKES THAT SAFE: b
-		// came out of caps.Banks and Bank scans that same slice for b.ID, so
-		// the lookup cannot miss. The only way it could return the WRONG
-		// bank is a DUPLICATE BankID, which spec.Capabilities.Validate
-		// refuses outright and which construction rules out here anyway —
-		// baseCapabilities appends exactly one MEM bank and nothing is
-		// discovered on any Kenwood row.
-		cp, _ := caps.Bank(b.ID)
-		out.Banks = append(out.Banks, cp)
-	}
-	out.Modes = append([]string(nil), caps.Modes...)
-	out.CTCSSTones = append([]spec.Tone(nil), caps.CTCSSTones...)
-	out.Bauds = append([]int(nil), caps.Bauds...)
-	out.RequiredSlots = append([]string(nil), caps.RequiredSlots...)
-	out.ShiftOptions = append([]spec.ShiftOption(nil), caps.ShiftOptions...)
-	out.CTCSSStates = append([]spec.ToneState(nil), caps.CTCSSStates...)
-	out.DuplexOptions = append([]spec.DuplexOption(nil), caps.DuplexOptions...)
-	out.ToneModes = append([]spec.ToneMode(nil), caps.ToneModes...)
-	out.DTCSPolarities = append([]string(nil), caps.DTCSPolarities...)
-	out.DTCSCodes = append([]int(nil), caps.DTCSCodes...)
-	out.Filters = append([]string(nil), caps.Filters...)
-	out.TuningSteps = append([]string(nil), caps.TuningSteps...)
-	out.AttenuatorDB = append([]int(nil), caps.AttenuatorDB...)
-	out.PreampOptions = append([]string(nil), caps.PreampOptions...)
-	out.AntennaOptions = append([]string(nil), caps.AntennaOptions...)
-	if caps.CTCSSToneRange != nil {
-		r := *caps.CTCSSToneRange
-		out.CTCSSToneRange = &r
-	}
-	if caps.ProgramTuningStepRange != nil {
-		r := *caps.ProgramTuningStepRange
-		out.ProgramTuningStepRange = &r
-	}
-	return out
 }

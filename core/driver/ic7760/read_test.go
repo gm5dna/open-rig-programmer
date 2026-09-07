@@ -522,8 +522,8 @@ func TestReadChannel_AnswerForAnotherChannelIsCaughtBeforeAnyUse(t *testing.T) {
 			if !errors.As(err, &mismatch) {
 				t.Fatalf("err = %v, want an *AnswerMismatchError naming both channels", err)
 			}
-			if mismatch.Want.Channel != 42 || mismatch.Got.Channel != 7 {
-				t.Errorf("*AnswerMismatchError = {Want: %s, Got: %s}, want {ch42, ch7}", mismatch.Want, mismatch.Got)
+			if mismatch.Requested.Channel != 42 || mismatch.Answered.Channel != 7 {
+				t.Errorf("*AnswerMismatchError = {Requested: %s, Answered: %s}, want {ch42, ch7}", mismatch.Requested, mismatch.Answered)
 			}
 			if got := s.AnswerMismatches(); got != before+1 {
 				t.Errorf("the diagnostic counter went %d -> %d, want one increment", before, got)

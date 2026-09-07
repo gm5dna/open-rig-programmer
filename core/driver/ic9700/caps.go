@@ -3,6 +3,7 @@
 package ic9700
 
 import (
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -15,19 +16,14 @@ import (
 // recognise selects the same fail-safe, and the consent transform is
 // applied only for a RECOGNISED value (see profileRecognised), so an
 // unrecognised profile goes on writing nothing however the consent option
-// is set.
-type Profile int
+// is set. Shared with every other driver package (core/driver.Profile);
+// this package keeps its own Simulated selector, which
+// internal/guards.TestSimulatedProfileTokensConfinement requires.
+type Profile = driver.Profile
 
 const (
-	// RealHardware is a session with a physical IC-9700. While
-	// writeTrialsComplete is false it selects CapabilitiesUnverified —
-	// every write column Unverified, nothing writable without the user's
-	// recorded consent.
-	RealHardware Profile = iota
-	// Simulated is a session backed by internal/fakeic9700, where
-	// hardware safety is moot: writes are Supported so the fake exercises
-	// the same choreography a consented real session would.
-	Simulated
+	RealHardware = driver.RealHardware
+	Simulated    = driver.Simulated
 )
 
 // writeTrialsComplete is FALSE, and every claim this package makes about
@@ -365,49 +361,4 @@ func CapabilitiesUnverified() spec.Capabilities {
 // may not offer a capability the shipped driver has no frame for.
 func CapabilitiesSimulated() spec.Capabilities {
 	return capabilities(spec.Supported)
-}
-
-// cloneCapabilities returns a deep copy of caps: Banks (with their Slots
-// and Fields) and every other slice or pointer freshly allocated.
-//
-// THE COPY IS LOAD-BEARING, not hygiene. What Session.Capabilities hands
-// out is this project's hardware-write gate data
-// (spec.FieldSupport.CanWrite), and the session's own WriteChannel
-// re-checks against the value it KEEPS. An aliasing copy would let a
-// caller who tweaked a returned FieldSupport — to experiment, or by
-// accident — silently redefine the gate every other caller enforces.
-//
-// It mirrors core/driver/ftdx101's function of the same name and extends
-// it by the Icom tier's own fields: the two duplex/tone vocabularies, the
-// DTCS table and polarity list, the filter list, and the tone RANGE, which
-// is a POINTER and would otherwise be shared outright.
-func cloneCapabilities(caps spec.Capabilities) spec.Capabilities {
-	out := caps
-	out.Banks = make([]spec.Bank, 0, len(caps.Banks))
-	for _, b := range caps.Banks {
-		// Capabilities.Bank returns a defensive copy (fresh Slots and
-		// Fields); reuse that guarantee rather than restating per-field
-		// copying here. The ok result cannot be false: b came out of
-		// caps.Banks and Bank scans that same slice for b.ID, and
-		// Validate refuses a duplicate BankID, which is the only way the
-		// lookup could serve the wrong one.
-		cp, _ := caps.Bank(b.ID)
-		out.Banks = append(out.Banks, cp)
-	}
-	out.Modes = append([]string(nil), caps.Modes...)
-	out.CTCSSTones = append([]spec.Tone(nil), caps.CTCSSTones...)
-	if caps.CTCSSToneRange != nil {
-		r := *caps.CTCSSToneRange
-		out.CTCSSToneRange = &r
-	}
-	out.Bauds = append([]int(nil), caps.Bauds...)
-	out.RequiredSlots = append([]string(nil), caps.RequiredSlots...)
-	out.ShiftOptions = append([]spec.ShiftOption(nil), caps.ShiftOptions...)
-	out.CTCSSStates = append([]spec.ToneState(nil), caps.CTCSSStates...)
-	out.DuplexOptions = append([]spec.DuplexOption(nil), caps.DuplexOptions...)
-	out.ToneModes = append([]spec.ToneMode(nil), caps.ToneModes...)
-	out.DTCSPolarities = append([]string(nil), caps.DTCSPolarities...)
-	out.DTCSCodes = append([]int(nil), caps.DTCSCodes...)
-	out.Filters = append([]string(nil), caps.Filters...)
-	return out
 }

@@ -70,19 +70,6 @@ func (e *RowUnsetError) Unwrap() error { return ErrRowUnset }
 // its Open call establishes.
 type Option func(*ts590Driver)
 
-// WithTransportLogger sets the transport.Logger every Session this driver
-// Opens threads into its transport.Engine. Without it, the engine's
-// diagnostics — unexpected frames, quarantine drains, contamination — fall
-// into the engine's own drop-everything default with no way for a caller of
-// this driver to receive them. A nil l is ignored.
-func WithTransportLogger(l transport.Logger) Option {
-	return func(d *ts590Driver) {
-		if l != nil {
-			d.transportOptions = append(d.transportOptions, transport.WithLogger(l))
-		}
-	}
-}
-
 // WithConsentedUnverifiedWrites records that the USER has consented to
 // writing this radio's Unverified fields, and builds a driver whose SESSIONS
 // carry the consent transform: at session-capability assembly every
@@ -99,7 +86,7 @@ func WithTransportLogger(l transport.Logger) Option {
 // CONSENT WIDENS WHAT MAY BE ATTEMPTED, NEVER HOW CAREFULLY (matrix §2.1):
 // every pre-wire refusal of the write ladder still fires ahead of it.
 func WithConsentedUnverifiedWrites() Option {
-	return func(d *ts590Driver) { d.consentUnverifiedWrites = true }
+	return func(d *ts590Driver) { d.Consented = true }
 }
 
 // withTiming overrides the transport deadlines every read this driver's
@@ -118,9 +105,9 @@ func withTiming(readTimeout, settle time.Duration) Option {
 // no usable zero (see Row); RealHardware — the ZERO Profile — selects the
 // all-Unverified capability set while writeTrialsComplete is false, and ANY
 // unrecognised Profile value deliberately selects the same fail-safe.
-// Options: WithTransportLogger, WithConsentedUnverifiedWrites.
+// Option: WithConsentedUnverifiedWrites.
 func New(row Row, profile Profile, opts ...Option) driver.Driver {
-	d := &ts590Driver{row: row, profile: profile}
+	d := &ts590Driver{row: row, Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)
 	}
@@ -129,13 +116,8 @@ func New(row Row, profile Profile, opts ...Option) driver.Driver {
 
 // ts590Driver implements driver.Driver for one of the two TS-590 rows.
 type ts590Driver struct {
-	row     Row
-	profile Profile
-	// consentUnverifiedWrites records the user's consent to unverified
-	// writes — set only by WithConsentedUnverifiedWrites, read only by
-	// sessionCapabilities. FALSE is the zero value and the default.
-	consentUnverifiedWrites bool
-	transportOptions        []transport.Option
+	row Row
+	driver.Base
 	// Non-zero only in focused tests; see withTiming.
 	readTimeout time.Duration
 	settle      time.Duration
@@ -156,7 +138,7 @@ func (d *ts590Driver) Capabilities() spec.Capabilities {
 		// than a guess at which sibling was meant.
 		return spec.Capabilities{}
 	}
-	switch d.profile {
+	switch d.Profile {
 	case Simulated:
 		return CapabilitiesSimulated(d.row)
 	case RealHardware:
@@ -303,7 +285,7 @@ func (d *ts590Driver) Open(ctx context.Context, port transport.Port, id driver.I
 		_ = port.Close()
 		return nil, fmt.Errorf("ts590: Open: framing: %w", err)
 	}
-	eng, err := transport.NewEngineWith(port, framing, d.transportOptions...)
+	eng, err := transport.NewEngineWith(port, framing)
 	if err != nil {
 		// NewEngineWith has not taken the port on this path, so closing it
 		// here is Open's own ownership obligation, not a double close.
@@ -352,7 +334,7 @@ func (d *ts590Driver) open(ctx context.Context, eng *transport.Engine, layout kw
 		row:         d.row,
 		layout:      layout,
 		id:          id,
-		caps:        d.sessionCapabilities(),
+		caps:        d.SessionCaps(d.Capabilities()),
 		newReadSpec: d.readSpec,
 	}
 	s.fvAnswer = fv
@@ -442,34 +424,6 @@ func parseFirmwareVersion(answer string) (major, minor int, ok bool) {
 	return int(answer[0] - '0'), int(answer[2]-'0')*10 + int(answer[3]-'0'), true
 }
 
-// sessionCapabilities is the ONE place a session's effective capability set
-// is assembled: this row's profile baseline, then — only when this driver was
-// built with WithConsentedUnverifiedWrites AND its profile is one of the
-// declared constants — the consent transform. An unrecognised profile stays
-// untransformed even with the option, so the fail-safe direction ("no value a
-// caller can pass produces a writable session") survives consent.
-//
-// There is no discovery term: no Kenwood bank is discovered (matrix §3.4).
-func (d *ts590Driver) sessionCapabilities() spec.Capabilities {
-	caps := d.Capabilities()
-	if d.consentUnverifiedWrites && d.profileRecognised() {
-		caps = spec.ConsentUnverifiedWrites(caps)
-	}
-	return caps
-}
-
-// profileRecognised reports whether this driver's profile is one of the
-// package's declared Profile constants — the same set the capability switch
-// names explicitly, restated here so the consent gate cannot drift open for a
-// profile the switch would fail safe on.
-func (d *ts590Driver) profileRecognised() bool {
-	switch d.profile {
-	case Simulated, RealHardware:
-		return true
-	}
-	return false
-}
-
 // Session is one open, identity-probed TS-590 connection. Safe for concurrent
 // use.
 //
@@ -530,7 +484,7 @@ func (s *Session) Identity() driver.Identity { return s.id }
 // deep copy per call. The copy is load-bearing for the write gate exactly as
 // in the sibling drivers — a caller mutating what it was handed must never
 // alter what WriteChannel enforces.
-func (s *Session) Capabilities() spec.Capabilities { return cloneCapabilities(s.caps) }
+func (s *Session) Capabilities() spec.Capabilities { return s.caps.Clone() }
 
 // FirmwareAnswer returns the FV probe's P1 EXACTLY AS THE RADIO ANSWERED IT —
 // the four characters verbatim, whether or not this programme could read them
@@ -569,13 +523,7 @@ func (s *Session) FirmwareAnswer() string { return s.fvAnswer }
 // accessors, which are otherwise unreachable. It satisfies the optional
 // driver.DiagnosticsReporter capability.
 func (s *Session) Diagnostics() driver.SessionDiagnostics {
-	n := s.eng.UnexpectedFrames()
-	if n < 0 {
-		// Unreachable (the engine only ever increments), but never let a
-		// negative int64 wrap into an absurd uint64.
-		n = 0
-	}
-	return driver.SessionDiagnostics{UnexpectedFrames: uint64(n)}
+	return driver.SessionDiagnostics{UnexpectedFrames: uint64(s.eng.UnexpectedFrames())}
 }
 
 // Close implements driver.Session. Idempotent: transport.Engine.Close already

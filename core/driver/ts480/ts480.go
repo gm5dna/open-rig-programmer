@@ -62,19 +62,6 @@ func siblingModelName(id string) string {
 // its Open call establishes.
 type Option func(*ts480Driver)
 
-// WithTransportLogger sets the transport.Logger every Session this driver
-// Opens threads into its transport.Engine. Without it, the engine's
-// diagnostics — unexpected frames, quarantine drains, contamination — fall
-// into the engine's own drop-everything default with no way for a caller of
-// this driver to receive them. A nil l is ignored.
-func WithTransportLogger(l transport.Logger) Option {
-	return func(d *ts480Driver) {
-		if l != nil {
-			d.transportOptions = append(d.transportOptions, transport.WithLogger(l))
-		}
-	}
-}
-
 // WithConsentedUnverifiedWrites records that the USER has consented to writing
 // this radio's Unverified fields, and builds a driver whose SESSIONS carry the
 // consent transform: at session-capability assembly every write-side
@@ -96,7 +83,7 @@ func WithTransportLogger(l transport.Logger) Option {
 //
 // CONSENT WIDENS WHAT MAY BE ATTEMPTED, NEVER HOW CAREFULLY (matrix §2.1).
 func WithConsentedUnverifiedWrites() Option {
-	return func(d *ts480Driver) { d.consentUnverifiedWrites = true }
+	return func(d *ts480Driver) { d.Consented = true }
 }
 
 // withTiming overrides the transport deadlines every read this driver's
@@ -114,7 +101,7 @@ func withTiming(readTimeout, settle time.Duration) Option {
 // New builds the TS-480 driver for profile. RealHardware — the ZERO Profile —
 // selects the all-Unverified capability set while writeTrialsComplete is
 // false, and ANY unrecognised Profile value deliberately selects the same
-// fail-safe. Options: WithTransportLogger, WithConsentedUnverifiedWrites.
+// fail-safe. Option: WithConsentedUnverifiedWrites.
 //
 // IT TAKES NO ROW, where core/driver/ts590.New takes a required one. That
 // package serves two registry rows out of one book; this serves one. TY's four
@@ -122,7 +109,7 @@ func withTiming(readTimeout, settle time.Duration) Option {
 // model expresses none of the difference between them (decision 4) — so there
 // is nothing for a caller to choose and nothing to fail closed on.
 func New(profile Profile, opts ...Option) driver.Driver {
-	d := &ts480Driver{profile: profile}
+	d := &ts480Driver{Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)
 	}
@@ -131,12 +118,7 @@ func New(profile Profile, opts ...Option) driver.Driver {
 
 // ts480Driver implements driver.Driver for the single TS-480 row.
 type ts480Driver struct {
-	profile Profile
-	// consentUnverifiedWrites records the user's consent to unverified
-	// writes — set only by WithConsentedUnverifiedWrites, read only by
-	// sessionCapabilities. FALSE is the zero value and the default.
-	consentUnverifiedWrites bool
-	transportOptions        []transport.Option
+	driver.Base
 	// Non-zero only in focused tests; see withTiming.
 	readTimeout time.Duration
 	settle      time.Duration
@@ -149,7 +131,7 @@ func (d *ts480Driver) Model() string { return modelName }
 // profile. There is NO discovery on any Kenwood row (matrix §3.4), so a
 // Session's effective set differs from this one only by the consent transform.
 func (d *ts480Driver) Capabilities() spec.Capabilities {
-	switch d.profile {
+	switch d.Profile {
 	case Simulated:
 		return CapabilitiesSimulated()
 	case RealHardware:
@@ -303,7 +285,7 @@ func (d *ts480Driver) Open(ctx context.Context, port transport.Port, id driver.I
 		_ = port.Close()
 		return nil, fmt.Errorf("ts480: Open: framing: %w", err)
 	}
-	eng, err := transport.NewEngineWith(port, framing, d.transportOptions...)
+	eng, err := transport.NewEngineWith(port, framing)
 	if err != nil {
 		// NewEngineWith has not taken the port on this path, so closing it
 		// here is Open's own ownership obligation, not a double close.
@@ -351,7 +333,7 @@ func (d *ts480Driver) open(ctx context.Context, eng *transport.Engine, l kw.Layo
 		eng:         eng,
 		layout:      l,
 		id:          id,
-		caps:        d.sessionCapabilities(),
+		caps:        d.SessionCaps(d.Capabilities()),
 		newReadSpec: d.readSpec,
 		ty:          ty,
 	}, nil
@@ -418,34 +400,6 @@ func (d *ts480Driver) probeTY(ctx context.Context, eng *transport.Engine, l kw.L
 	return answer, nil
 }
 
-// sessionCapabilities is the ONE place a session's effective capability set is
-// assembled: this row's profile baseline, then — only when this driver was
-// built with WithConsentedUnverifiedWrites AND its profile is one of the
-// declared constants — the consent transform. An unrecognised profile stays
-// untransformed even with the option, so the fail-safe direction ("no value a
-// caller can pass produces a writable session") survives consent.
-//
-// There is no discovery term: no Kenwood bank is discovered (matrix §3.4).
-func (d *ts480Driver) sessionCapabilities() spec.Capabilities {
-	caps := d.Capabilities()
-	if d.consentUnverifiedWrites && d.profileRecognised() {
-		caps = spec.ConsentUnverifiedWrites(caps)
-	}
-	return caps
-}
-
-// profileRecognised reports whether this driver's profile is one of the
-// package's declared Profile constants — the same set the capability switch
-// names explicitly, restated here so the consent gate cannot drift open for a
-// profile the switch would fail safe on.
-func (d *ts480Driver) profileRecognised() bool {
-	switch d.profile {
-	case Simulated, RealHardware:
-		return true
-	}
-	return false
-}
-
 // Session is one open, identity-probed TS-480 connection. Safe for concurrent
 // use.
 //
@@ -493,7 +447,7 @@ func (s *Session) Identity() driver.Identity { return s.id }
 // deep copy per call. The copy is load-bearing for the write gate exactly as
 // in the sibling drivers — a caller mutating what it was handed must never
 // alter what WriteChannel enforces.
-func (s *Session) Capabilities() spec.Capabilities { return cloneCapabilities(s.caps) }
+func (s *Session) Capabilities() spec.Capabilities { return s.caps.Clone() }
 
 // Variant returns the probe's TY answer: the hardware variant this radio
 // reported and P1's two reserved bytes, both exactly as they arrived.
@@ -526,13 +480,7 @@ func (s *Session) Variant() kw.TYAnswer { return s.ty }
 // accessors, which are otherwise unreachable. It satisfies the optional
 // driver.DiagnosticsReporter capability.
 func (s *Session) Diagnostics() driver.SessionDiagnostics {
-	n := s.eng.UnexpectedFrames()
-	if n < 0 {
-		// Unreachable (the engine only ever increments), but never let a
-		// negative int64 wrap into an absurd uint64.
-		n = 0
-	}
-	return driver.SessionDiagnostics{UnexpectedFrames: uint64(n)}
+	return driver.SessionDiagnostics{UnexpectedFrames: uint64(s.eng.UnexpectedFrames())}
 }
 
 // Close implements driver.Session. Idempotent: transport.Engine.Close already

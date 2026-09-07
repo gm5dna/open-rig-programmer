@@ -88,7 +88,7 @@ func (s *Session) readRaw(ctx context.Context, want civ.ChannelAddress) (rawReco
 	}
 	if got != want {
 		s.mismatches.Add(1)
-		return rawRecord{}, &AnswerMismatchError{Requested: want, Answered: got}
+		return rawRecord{}, &AnswerMismatchError{Model: "ic705", Requested: want, Answered: got}
 	}
 	if allFF(record) {
 		// The other unverified empty shape (D5 entry 2(b), lift

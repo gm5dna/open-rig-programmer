@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -572,7 +573,7 @@ func outsideVocabulary(d codeplug.ChannelData, caps spec.Capabilities) (spec.Fie
 		{spec.FieldToneMode, d.ToneMode.Value, toneModes,
 			"the record's ⑪ low nibble is a tone-mode enum, and PDF p.12's ⑪ sub-diagram prints these three values"},
 	} {
-		if containsVocab(v.vocab, v.value) {
+		if slices.Contains(v.vocab, v.value) {
 			continue
 		}
 		return v.field, fmt.Sprintf(
@@ -580,19 +581,6 @@ func outsideVocabulary(d codeplug.ChannelData, caps spec.Capabilities) (spec.Fie
 			v.value, v.where, quoted(v.vocab))
 	}
 	return "", ""
-}
-
-// containsVocab is exact string membership. NOT case-folded and not
-// trimmed: a vocabulary value is a wire code's agreed spelling, and
-// quietly accepting "usb" for "USB" would be this driver deciding what a
-// user meant.
-func containsVocab(vocab []string, value string) bool {
-	for _, v := range vocab {
-		if v == value {
-			return true
-		}
-	}
-	return false
 }
 
 // quoted renders a vocabulary for a refusal message.

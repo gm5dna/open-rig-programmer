@@ -87,19 +87,6 @@ type CIVDiagnostics struct {
 // Option configures a driver built by New.
 type Option func(*ic9700Driver)
 
-// WithTransportLogger sets the transport.Logger every Session this driver
-// Opens threads into its transport.Engine. Without it the engine's
-// diagnostics — unexpected frames, quarantine drains, contamination —
-// fall into the engine's own drop-everything default with no way for a
-// caller to receive them. A nil l is ignored.
-func WithTransportLogger(l transport.Logger) Option {
-	return func(d *ic9700Driver) {
-		if l != nil {
-			d.transportLogger = l
-		}
-	}
-}
-
 // WithConsentedUnverifiedWrites records that the USER has consented to
 // writing this radio's Unverified fields, and builds a driver whose
 // SESSIONS carry the consent transform: at session-capability assembly
@@ -118,7 +105,7 @@ func WithTransportLogger(l transport.Logger) Option {
 // user accepting an unverified write, not a claim that the write has been
 // proven.
 func WithConsentedUnverifiedWrites() Option {
-	return func(d *ic9700Driver) { d.consentUnverifiedWrites = true }
+	return func(d *ic9700Driver) { d.Consented = true }
 }
 
 // New builds the IC-9700 driver for profile.
@@ -129,7 +116,7 @@ func WithConsentedUnverifiedWrites() Option {
 // failure direction for a forged or corrupted Profile is always "nothing
 // writable", never a writable set.
 func New(profile Profile, opts ...Option) driver.Driver {
-	d := &ic9700Driver{profile: profile}
+	d := &ic9700Driver{Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)
 	}
@@ -138,11 +125,7 @@ func New(profile Profile, opts ...Option) driver.Driver {
 
 // ic9700Driver implements driver.Driver for the Icom IC-9700.
 type ic9700Driver struct {
-	profile         Profile
-	transportLogger transport.Logger
-	// consentUnverifiedWrites records the user's consent — set only by
-	// WithConsentedUnverifiedWrites, read only by sessionCapabilities.
-	consentUnverifiedWrites bool
+	driver.Base
 }
 
 // Model implements driver.Driver.
@@ -151,34 +134,13 @@ func (d *ic9700Driver) Model() string { return "IC-9700" }
 // Capabilities implements driver.Driver: the STATIC baseline for this
 // driver's profile, with no session state and no consent.
 func (d *ic9700Driver) Capabilities() spec.Capabilities {
-	if d.profile == Simulated {
+	if d.Profile == Simulated {
 		return CapabilitiesSimulated()
 	}
 	// RealHardware, and every unrecognised value, land here: while
 	// writeTrialsComplete is false there is no hardware-verified profile
 	// for a real-radio session to select.
 	return CapabilitiesUnverified()
-}
-
-// profileRecognised reports whether this driver's Profile is one this
-// package declares. The consent transform is applied only for a
-// recognised one, so a forged value cannot be consented into writability.
-func (d *ic9700Driver) profileRecognised() bool {
-	return d.profile == RealHardware || d.profile == Simulated
-}
-
-// sessionCapabilities is the EFFECTIVE set a session carries: the static
-// baseline, plus the consent transform when — and only when — the option
-// was passed AND the Profile is recognised.
-//
-// spec.ConsentUnverifiedWrites is the project's ONE definition of what
-// consent means and is never reimplemented here.
-func (d *ic9700Driver) sessionCapabilities() spec.Capabilities {
-	caps := d.Capabilities()
-	if d.consentUnverifiedWrites && d.profileRecognised() {
-		caps = spec.ConsentUnverifiedWrites(caps)
-	}
-	return caps
 }
 
 // StopBits reports the CI-V link's stop-bit count, satisfying the optional
@@ -230,11 +192,7 @@ func (d *ic9700Driver) Open(ctx context.Context, port transport.Port, id driver.
 		return nil, fmt.Errorf("ic9700: the CI-V framing does not report accumulator stats")
 	}
 
-	var engOpts []transport.Option
-	if d.transportLogger != nil {
-		engOpts = append(engOpts, transport.WithLogger(d.transportLogger))
-	}
-	eng, err := transport.NewEngineWith(port, framing, engOpts...)
+	eng, err := transport.NewEngineWith(port, framing)
 	if err != nil {
 		// NewEngineWith has not taken the port on this path, so closing
 		// it is Open's own ownership obligation rather than a double
@@ -258,7 +216,7 @@ func (d *ic9700Driver) open(ctx context.Context, eng *transport.Engine, stats ci
 		eng:     eng,
 		stats:   stats,
 		profile: p,
-		caps:    d.sessionCapabilities(),
+		caps:    d.SessionCaps(d.Capabilities()),
 		raw:     map[string][]byte{},
 	}
 
@@ -523,7 +481,7 @@ func (s *Session) Identity() driver.Identity { return s.id }
 // what a caller was handed can never alter what this session's own write
 // gate enforces.
 func (s *Session) Capabilities() spec.Capabilities {
-	return cloneCapabilities(s.caps)
+	return s.caps.Clone()
 }
 
 // Diagnostics implements driver.DiagnosticsReporter — the NEUTRAL
@@ -535,13 +493,7 @@ func (s *Session) Capabilities() spec.Capabilities {
 // because the accumulator dropped every broadcast first. CIVDiagnostics is
 // where the numbers that mean something live.
 func (s *Session) Diagnostics() driver.SessionDiagnostics {
-	n := s.eng.UnexpectedFrames()
-	if n < 0 {
-		// Unreachable (the engine only ever increments), but never let a
-		// negative int64 wrap into an absurd uint64.
-		n = 0
-	}
-	return driver.SessionDiagnostics{UnexpectedFrames: uint64(n)}
+	return driver.SessionDiagnostics{UnexpectedFrames: uint64(s.eng.UnexpectedFrames())}
 }
 
 // CIVDiagnostics returns this session's CI-V diagnostics: what the probe

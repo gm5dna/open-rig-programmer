@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -926,7 +927,7 @@ func unsayable(d codeplug.ChannelData, caps spec.Capabilities) (spec.Field, stri
 		{spec.FieldDTCSPolarity, d.DTCSPolarity.State == codeplug.Known, d.DTCSPolarity.Value, caps.DTCSPolarities,
 			"the record's ㉒ is a polarity enum, and PDF p.24 (folio 23) prints one nibble per direction"},
 	} {
-		if !v.known || containsVocab(v.vocab, v.value) {
+		if !v.known || slices.Contains(v.vocab, v.value) {
 			continue
 		}
 		return v.field, fmt.Sprintf(
@@ -974,16 +975,6 @@ func unsayable(d codeplug.ChannelData, caps spec.Capabilities) (spec.Field, stri
 		}
 	}
 	return "", ""
-}
-
-// containsVocab is EXACT string membership — see unsayable.
-func containsVocab(vocab []string, value string) bool {
-	for _, v := range vocab {
-		if v == value {
-			return true
-		}
-	}
-	return false
 }
 
 // quotedVocab renders a vocabulary for a refusal message.
