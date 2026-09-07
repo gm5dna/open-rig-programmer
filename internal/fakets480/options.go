@@ -4,7 +4,6 @@ package fakets480
 
 import (
 	"fmt"
-	"strings"
 	"time"
 )
 
@@ -32,50 +31,6 @@ type Option func(*Radio)
 func WithLatency(d time.Duration) Option {
 	return func(r *Radio) {
 		r.pipe.Latency = d
-	}
-}
-
-// WithTYAnswer sets the two reserved bytes and the variant digit this radio
-// answers to "TY;" (480:1621-1634), replacing the shipped "00" and '0'.
-//
-// IT EXISTS TO MAKE TWO DRIVER PATHS REACHABLE THROUGH A REAL FAKE. The
-// first is the session refusal of a FIFTH variant: this document prints
-// exactly four, '0'..'3' (480:1626-1629), and decision 4 refuses anything
-// else rather than reporting it as unknown or defaulting it to one of the
-// four — a refusal that cannot be exercised unless something can answer a
-// '4'. The second is P1's OPAQUE bytes, which are the one field in this
-// family admitted above 0x7E, and which a caller rendering a probe note must
-// %q-quote. Without this option both would have to be pinned against a
-// scripted transcript, and a scripted transcript proves the driver reads its
-// own script.
-//
-// THE BYTES ARE ANSWERED VERBATIM AND NO GRAMMAR IS APPLIED. Deciding what a
-// variant digit means is the driver's job, and a fake that validated the
-// field would be asserting a grammar this document does not print — for P1
-// it prints one word, "Reserved" (480:1623).
-//
-// TWO FIXTURE SHAPES PANIC, and neither is a value judgement about the
-// bytes. P1 is TWO bytes on the wire (480:1634), so a field of any other
-// width could not be sent by any radio; and a ';' anywhere in the answer is a
-// SECOND FRAME to the host's own reassembler rather than a byte of this one,
-// which is also this document's own general rule for a parameter
-// (480:108-111, 480:127-129). Everything else is admitted, control codes
-// included, so that a driver's refusal of those is reachable too. A bad
-// fixture panics rather than returning an error nobody can act on: every
-// call site passes a compile-time-known constant, the same reasoning
-// core/kw.MustNewLayout applies one layer down (internal/fakets590 cites it
-// for the same choice; this package's own New takes no row and has nothing
-// to refuse there).
-func WithTYAnswer(reserved string, variant byte) Option {
-	if len(reserved) != tyReservedLen {
-		panic(fmt.Sprintf("fakets480: TY reserved field %q is %d bytes; P1 is %d (480:1634)", reserved, len(reserved), tyReservedLen))
-	}
-	if strings.ContainsRune(reserved, ';') || variant == ';' {
-		panic(fmt.Sprintf("fakets480: TY answer %q/%q carries a ';' — the terminator ends a frame (480:113-118), so such an answer is two frames and not one", reserved, variant))
-	}
-	return func(r *Radio) {
-		r.tyReserved = reserved
-		r.tyVariant = variant
 	}
 }
 

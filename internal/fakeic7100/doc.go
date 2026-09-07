@@ -154,8 +154,8 @@
 //     data as (5)-(51)" — a description and an advisory, not a stated rule.
 //     The document never says what a radio does with a set whose blocks differ,
 //     nor whether a set that stops short of the full record is accepted at all.
-//     This fake refuses both; WithUnequalTransmitBlockAccepted and
-//     WithShortSetsAccepted build the radio that does not.
+//     This fake refuses both; WithShortSetsAccepted builds the radio that
+//     accepts a short set.
 //     LIFT: write a channel with the transmit block deliberately differing from
 //     the receive block and split OFF, read it back, and record which block the
 //     radio kept; and send a set that stops after (51) and record the answer.

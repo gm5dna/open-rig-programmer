@@ -114,6 +114,4 @@
 //     second; one that wants to prove noise is ignored needs the first.
 //   - WithAnswerAddress: an answer that is perfectly well formed and names the
 //     wrong channel.
-//   - WithEchoBack: a line that echoes, so that the driver's own frames come
-//     back at it before the answer does.
 package fakeic9700

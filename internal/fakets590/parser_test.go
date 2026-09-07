@@ -480,7 +480,7 @@ func TestMW_StoresAToneIndexOutsideThePrintedRange(t *testing.T) {
 func TestMW_AcceptsByte28EitherWayOnBothRows(t *testing.T) {
 	for _, row := range []Row{RowS, RowSG} {
 		for _, filter := range []byte{'0', '1'} {
-			r, conn := newTestRadio(t, row, WithFirmwareVersion("1.00"))
+			r, conn := newTestRadio(t, row)
 			f := newRecordFrame("MW", '0', '0', "07")
 			f.filter = filter
 			writeFrame(t, conn, f.String())

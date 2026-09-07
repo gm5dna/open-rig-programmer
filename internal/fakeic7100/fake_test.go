@@ -384,27 +384,6 @@ func TestSetWithAnUnequalTransmitBlockIsRefused(t *testing.T) {
 	}
 }
 
-func TestSetWithAnUnequalTransmitBlockCanBeAccepted(t *testing.T) {
-	// The other reading of the printed NOTE — "We recommend" is advisory, and
-	// the document never says the radio refuses.
-	rec := equalBlockRecord("SPLIT")
-	rec[1+47] ^= 0x01
-
-	r := New(WithUnequalTransmitBlockAccepted())
-	defer r.Close()
-
-	req := append([]byte{0xFE, 0xFE, 0x88, 0xE0, 0x1A, 0x00, 0x01, 0x00, 0x01}, rec...)
-	req = append(req, 0xFD)
-
-	got := exchange(t, r, 1, req)
-	assertFrames(t, got, [][]byte{{0xFE, 0xFE, 0xE0, 0x88, 0xFB, 0xFD}})
-
-	held, ok := r.Slot(1, 1)
-	if !ok || !bytes.Equal(held, rec) {
-		t.Error("the record was not stored verbatim once the equality rule was turned off")
-	}
-}
-
 func TestSetOfTheWrongLengthIsRefused(t *testing.T) {
 	r := New()
 	defer r.Close()

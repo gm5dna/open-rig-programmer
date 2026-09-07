@@ -188,7 +188,7 @@
 //     acceptance to its firmware string would be the fake asserting the
 //     design's A14; that decision belongs to the driver's write path, where
 //     the design puts it. So both values are accepted and answered on both
-//     rows, and WithFirmwareVersion changes only what "FV;" says.
+//     rows, and the FV answer is a fixed string that says nothing about it.
 //
 //  8. A SET DOES NOT MOVE THE SELECTED CHANNEL. Nothing in the MW block
 //     mentions the selection (590:1516-1581). A fake that moved it would let

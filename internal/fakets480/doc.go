@@ -243,9 +243,10 @@
 //     character every OTHER hard-wired field in this book prints, "Always 0"
 //     (480:953, 480:973, 480:975, 480:982). P2's shipped value is the FIRST
 //     of the four printed variants, "0: TS-480HX (200 W)" (480:1626). Neither
-//     is a claim about any radio: no TS-480 has answered this project, and
-//     WithTYAnswer is how a test reaches the other three variants, the fifth
-//     the document does not print, and the high bytes P1 may carry.
+//     is a claim about any radio: no TS-480 has answered this project. The
+//     shipped values were reachable through a WithTYAnswer option until
+//     06/09/2026; no driver was ever built against another variant, so the
+//     answer is now fixed at what the book prints.
 //
 //  12. THE INITIAL AI VALUE IS THE POWER-OFF ONE. This book prints no
 //     power-on value for AI. What it does print is "When the transceiver is

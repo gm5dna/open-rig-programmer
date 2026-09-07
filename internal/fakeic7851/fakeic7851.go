@@ -27,13 +27,13 @@ type MemState struct{ Raw []byte }
 type Radio struct {
 	// pipe is internal/fakepipe: the net.Pipe pair and the goroutines
 	// servicing it, protocol-free (see doc.go).
-	pipe                       *fakepipe.Pipe
-	addr                       byte
-	model                      string
-	recordLen                  int
-	emptyFF, echo, shortSetAck bool
-	mu                         sync.Mutex
-	slots                      map[int][]byte
+	pipe          *fakepipe.Pipe
+	addr          byte
+	model         string
+	recordLen     int
+	emptyFF, echo bool
+	mu            sync.Mutex
+	slots         map[int][]byte
 }
 
 func New(opts ...Option) *Radio {
@@ -41,7 +41,7 @@ func New(opts ...Option) *Radio {
 	for _, o := range opts {
 		o(&c)
 	}
-	r := &Radio{pipe: fakepipe.New(), addr: c.addr, model: c.model, recordLen: c.recordLen, emptyFF: c.emptyFF, echo: c.echo, shortSetAck: c.shortSetAck, slots: c.channels}
+	r := &Radio{pipe: fakepipe.New(), addr: c.addr, model: c.model, recordLen: c.recordLen, emptyFF: c.emptyFF, echo: c.echo, slots: c.channels}
 	r.serve()
 	if c.flood > 0 {
 		r.pipe.Go(func() { r.floodLoop(0, c.flood) })
@@ -182,10 +182,11 @@ func (r *Radio) memory(f wireFrame, p []byte) []byte {
 		}
 		return r.answer(f, append([]byte{0x1a, 0, p[1], p[2]}, b...)...)
 	}
+	// A short set, and the printed one-byte clear form, are both refused. The
+	// open edge is registered as ic7851-write-ack-fb; a
+	// WithShortSetAcknowledgement option modelled the other reading until
+	// 06/09/2026 and nothing ever called it.
 	if len(rest) == 1 && rest[0] == 0xff || len(rest) != r.recordLen {
-		if r.shortSetAck && len(rest) > 1 && !(len(rest) == 1 && rest[0] == 0xff) {
-			return r.answer(f, 0xfb)
-		}
 		return r.answer(f, 0xfa)
 	}
 	r.mu.Lock()

@@ -159,17 +159,17 @@ func (r *Radio) send(f []byte) {
 	_, _ = r.toController.Write(f)
 }
 
-// handle records one received frame, echoes it if asked, and answers it.
+// handle records one received frame and answers it.
+//
+// NOTHING IS EVER ECHOED. A line that echoes was a knob here until 06/09/2026;
+// no driver was ever built against one, and modelling a line condition nothing
+// meets is a second radio to keep true.
 func (r *Radio) handle(body []byte) {
 	received := canonicalFrame(body)
 
 	r.mu.Lock()
 	r.transcript = append(r.transcript, received)
 	r.mu.Unlock()
-
-	if r.cfg.echoBack {
-		r.send(received)
-	}
 
 	f, ok := parseFrame(body)
 	if !ok {
