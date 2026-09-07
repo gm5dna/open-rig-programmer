@@ -12,22 +12,22 @@ import * as bindings from '../bindings.js'
 
 function resetState() {
 	appState.clearConnection()
-	appState.setPorts([])
+	appState.ports = []
 	appState.setPortsLoading(false)
 	appState.setConnecting(false)
-	appState.setUISpec(null)
-	appState.setSettingsSpec(null)
+	appState.uiSpec = null
+	appState.settingsSpec = null
 	appState.setSettings(null)
-	appState.setActiveView('channels')
-	appState.setAppVersion(null)
-	appState.setSupportedModels([])
-	appState.setSelectedModel('')
+	appState.activeView = 'channels'
+	appState.appVersion = null
+	appState.supportedModels = []
+	appState.selectedModel = ''
 	// Task 14 (M9d): the consent surface's own state — not connection-scoped
 	// (see each field's doc comment in app.svelte.js), so reset explicitly.
 	appState.setUnverifiedConsentPrompt(null)
-	appState.setUnverifiedConsents([])
-	appState.closeUnverifiedGrants()
-	appState.setSendDialogOpen(false)
+	appState.unverifiedConsents = []
+	appState.unverifiedGrantsOpen = false
+	appState.sendDialogOpen = false
 	appState.alerts = []
 }
 
@@ -241,7 +241,7 @@ describe('connect / connectDemo / disconnect', () => {
 	// forward appState.selectedModel. An untouched picker is '' — pinned by
 	// the two tests above, which are exactly today's behaviour.
 	it('connect forwards the picked model from appState.selectedModel', async () => {
-		appState.setSelectedModel('FTdx10')
+		appState.selectedModel = 'FTdx10'
 		window.go.main.App.Connect.mockResolvedValue({ Model: 'FTdx10', CATID: '0761', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false })
 
 		await bindings.connect('/dev/tty.usb')
@@ -250,7 +250,7 @@ describe('connect / connectDemo / disconnect', () => {
 	})
 
 	it('connectDemo forwards the picked model too — the demo path opens that model\'s own simulator', async () => {
-		appState.setSelectedModel('FTDX101MP')
+		appState.selectedModel = 'FTDX101MP'
 		window.go.main.App.ConnectDemo.mockResolvedValue({ Model: 'FTDX101MP', CATID: '0681', Port: 'fake', USBSerial: 'SIM0001', Region: '', Demo: true })
 
 		await bindings.connectDemo()
@@ -259,7 +259,7 @@ describe('connect / connectDemo / disconnect', () => {
 	})
 
 	it('disconnect clears the connection on success', async () => {
-		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false })
+		appState.connection = { Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false }
 		window.go.main.App.Disconnect.mockResolvedValue(undefined)
 
 		await bindings.disconnect()
@@ -268,7 +268,7 @@ describe('connect / connectDemo / disconnect', () => {
 	})
 
 	it('disconnect (Fix 1, Codex M6 #1, adjudicated HIGH) preserves the loaded codeplug, dirty flag and workingPath — a disconnect must never strand unsaved work', async () => {
-		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false })
+		appState.connection = { Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false }
 		appState.setCodeplug({
 			Schema: 1, Generator: 'x', Radio: {},
 			Channels: [{ slot: '001', data: { freq_hz: 7100000 } }],
@@ -289,7 +289,7 @@ describe('connect / connectDemo / disconnect', () => {
 	})
 
 	it('disconnect leaves state untouched and alerts on rejection', async () => {
-		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false })
+		appState.connection = { Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false }
 		window.go.main.App.Disconnect.mockRejectedValue(new Error('busy'))
 
 		await expect(bindings.disconnect()).rejects.toThrow('busy')
@@ -455,7 +455,7 @@ describe('UISpec refresh triggers (task 17: banks change with the session/workin
 	})
 
 	it('disconnect refreshes the spec (back to the offline baseline)', async () => {
-		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false })
+		appState.connection = { Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false }
 		window.go.main.App.Disconnect.mockResolvedValue(undefined)
 		await bindings.disconnect()
 		expect(window.go.main.App.GetUISpec).toHaveBeenCalledTimes(1)
@@ -492,7 +492,7 @@ describe('validation lifecycle (Fix 5, adjudicated MED, Codex M6 #5)', () => {
 		// issues, then connects to a live radio.
 		appState.setCodeplug({ Schema: 1, Generator: 'x', Radio: {}, Channels: [{ slot: '001', data: null }], WorkingPath: '/tmp/a.json', Dirty: false, BaselineStale: false })
 		appState.setIssues([])
-		appState.setIssuesAdvisory(true)
+		appState.issuesAdvisory = true
 
 		window.go.main.App.Connect.mockResolvedValue({ Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false })
 		const authoritativeIssues = [{ Slot: '501', Field: '', Severity: 'error', Msg: 'not part of any bank this radio supports' }]
@@ -513,9 +513,9 @@ describe('validation lifecycle (Fix 5, adjudicated MED, Codex M6 #5)', () => {
 	})
 
 	it('disconnect re-runs Validate, reverting to advisory', async () => {
-		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false })
+		appState.connection = { Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false }
 		appState.setCodeplug({ Schema: 1, Generator: 'x', Radio: {}, Channels: [{ slot: '001', data: null }], WorkingPath: '/tmp/a.json', Dirty: false, BaselineStale: false })
-		appState.setIssuesAdvisory(false)
+		appState.issuesAdvisory = false
 		window.go.main.App.Disconnect.mockResolvedValue(undefined)
 		const advisoryIssues = [{ Slot: '001', Field: 'freq', Severity: 'warning', Msg: 'advisory only' }]
 		window.go.main.App.Validate.mockResolvedValue({ Issues: advisoryIssues, Advisory: true })
@@ -731,7 +731,7 @@ describe('settingsSpec refresh triggers (task 36: Live flips with the connection
 	})
 
 	it('disconnect refreshes the settings spec (back to the offline baseline)', async () => {
-		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false })
+		appState.connection = { Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false }
 		window.go.main.App.Disconnect.mockResolvedValue(undefined)
 		await bindings.disconnect()
 		expect(window.go.main.App.GetSettingsSpec).toHaveBeenCalledTimes(1)
@@ -748,21 +748,6 @@ describe('settingsSpec refresh triggers (task 36: Live flips with the connection
 		window.go.main.App.ReadRadio.mockResolvedValue(view)
 		await bindings.readRadio()
 		expect(window.go.main.App.GetSettingsSpec).not.toHaveBeenCalled()
-	})
-})
-
-describe('getSettings (task 36, M8b-6)', () => {
-	it('stores the settings view in appState and returns it', async () => {
-		const view = await bindings.getSettings()
-		expect(window.go.main.App.GetSettings).toHaveBeenCalledTimes(1)
-		expect(view).toEqual(SETTINGS_VIEW)
-		expect(appState.settings).toEqual(SETTINGS_VIEW)
-	})
-
-	it('alerts and rethrows on rejection (ordinary throw-and-report shape, unlike refreshSettingsSpec)', async () => {
-		window.go.main.App.GetSettings.mockRejectedValue('app: nothing loaded')
-		await expect(bindings.getSettings()).rejects.toBe('app: nothing loaded')
-		expect(appState.alerts[0].message).toContain('loading settings')
 	})
 })
 
@@ -999,8 +984,8 @@ describe('applyUnverifiedWriteConsent — the bridge-owned reconnect (task 14)',
 	}
 
 	function connectedUnarmed() {
-		appState.setConnection(NEEDS_CONSENT_INFO)
-		appState.setUISpec(specArmed(false))
+		appState.connection = NEEDS_CONSENT_INFO
+		appState.uiSpec = specArmed(false)
 	}
 
 	it('accepting for the CONNECTED model disconnects FIRST, then persists, then re-opens the same port and model', async () => {
@@ -1064,8 +1049,8 @@ describe('applyUnverifiedWriteConsent — the bridge-owned reconnect (task 14)',
 	})
 
 	it('REVOKING an armed connected session runs the whole orchestration (disconnect → persist false → reconnect)', async () => {
-		appState.setConnection({ ...NEEDS_CONSENT_INFO, UnverifiedConsentRecorded: true })
-		appState.setUISpec(specArmed(true))
+		appState.connection = { ...NEEDS_CONSENT_INFO, UnverifiedConsentRecorded: true }
+		appState.uiSpec = specArmed(true)
 		const order = recordCallOrder()
 
 		await bindings.applyUnverifiedWriteConsent('FTdx10', false)
@@ -1086,7 +1071,7 @@ describe('applyUnverifiedWriteConsent — the bridge-owned reconnect (task 14)',
 	// visible, recoverable, and was accepted at adjudication.
 
 	it('REVOKING the connected model with NO uiSpec at all (a failed spec fetch) still runs the whole orchestration', async () => {
-		appState.setConnection({ ...NEEDS_CONSENT_INFO, UnverifiedConsentRecorded: true })
+		appState.connection = { ...NEEDS_CONSENT_INFO, UnverifiedConsentRecorded: true }
 		// No setUISpec: this is exactly the state a failed GetUISpec leaves
 		// behind, and the state whose false-y read used to skip the reconnect.
 		expect(appState.uiSpec).toBeNull()
@@ -1104,8 +1089,8 @@ describe('applyUnverifiedWriteConsent — the bridge-owned reconnect (task 14)',
 		// the grant), but the spec in hand says otherwise. The old oracle
 		// believed the spec and persisted directly; the live session stayed
 		// writable.
-		appState.setConnection({ ...NEEDS_CONSENT_INFO, UnverifiedConsentRecorded: true })
-		appState.setUISpec(specArmed(false))
+		appState.connection = { ...NEEDS_CONSENT_INFO, UnverifiedConsentRecorded: true }
+		appState.uiSpec = specArmed(false)
 		const order = recordCallOrder()
 
 		await bindings.applyUnverifiedWriteConsent('FTdx10', false)
@@ -1115,8 +1100,8 @@ describe('applyUnverifiedWriteConsent — the bridge-owned reconnect (task 14)',
 	})
 
 	it('GRANTING a session whose uiSpec already reads consented reconnects anyway — the accepted cost of not trusting the spec', async () => {
-		appState.setConnection({ ...NEEDS_CONSENT_INFO, UnverifiedConsentRecorded: true })
-		appState.setUISpec(specArmed(true))
+		appState.connection = { ...NEEDS_CONSENT_INFO, UnverifiedConsentRecorded: true }
+		appState.uiSpec = specArmed(true)
 		const order = recordCallOrder()
 
 		await bindings.applyUnverifiedWriteConsent('FTdx10', true)
@@ -1152,8 +1137,8 @@ describe('applyUnverifiedWriteConsent — the bridge-owned reconnect (task 14)',
 	})
 
 	it('persists directly for a DEMO session on the same model — a demo never spends consent, so there is nothing to re-open', async () => {
-		appState.setConnection({ ...NEEDS_CONSENT_INFO, Demo: true })
-		appState.setUISpec(specArmed(false))
+		appState.connection = { ...NEEDS_CONSENT_INFO, Demo: true }
+		appState.uiSpec = specArmed(false)
 
 		await bindings.applyUnverifiedWriteConsent('FTdx10', true)
 

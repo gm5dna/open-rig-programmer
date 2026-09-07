@@ -76,14 +76,14 @@ function codeplugFixture() {
 }
 
 function connect() {
-	appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false })
+	appState.connection = { Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usb', USBSerial: '', Region: '', Demo: false }
 }
 
 function resetState() {
 	appState.clearConnection()
-	appState.setSettingsSpec(null)
+	appState.settingsSpec = null
 	appState.setSettings(null)
-	appState.setActiveView('channels')
+	appState.activeView = 'channels'
 	appState.alerts = []
 }
 
@@ -95,7 +95,7 @@ beforeEach(() => {
 
 describe('rendering from spec + entries only', () => {
 	it('renders menu tabs, subgroup headings and item rows (Display/Label/Value) from the synthetic spec', () => {
-		appState.setSettingsSpec(SETTINGS_SPEC)
+		appState.settingsSpec = SETTINGS_SPEC
 		appState.setCodeplug(codeplugFixture())
 		appState.setSettings(settingsFixture())
 		render(SettingsViewer)
@@ -110,7 +110,7 @@ describe('rendering from spec + entries only', () => {
 	})
 
 	it('renders nothing menu-specific without a spec', () => {
-		appState.setSettingsSpec(null)
+		appState.settingsSpec = null
 		appState.setCodeplug(codeplugFixture())
 		appState.setSettings(settingsFixture())
 		render(SettingsViewer)
@@ -123,7 +123,7 @@ describe('rendering from spec + entries only', () => {
 
 describe('menu tablist keyboard (own fresh markup — behavioural parity with ChannelGrid’s bank tablist)', () => {
 	beforeEach(() => {
-		appState.setSettingsSpec(SETTINGS_SPEC)
+		appState.settingsSpec = SETTINGS_SPEC
 		appState.setCodeplug(codeplugFixture())
 		appState.setSettings(settingsFixture())
 	})
@@ -185,7 +185,7 @@ describe('menu tablist keyboard (own fresh markup — behavioural parity with Ch
 
 describe('value/state rendering', () => {
 	beforeEach(() => {
-		appState.setSettingsSpec(SETTINGS_SPEC)
+		appState.settingsSpec = SETTINGS_SPEC
 		appState.setCodeplug(codeplugFixture())
 	})
 
@@ -236,7 +236,7 @@ describe('value/state rendering', () => {
 
 describe('empty states', () => {
 	beforeEach(() => {
-		appState.setSettingsSpec(SETTINGS_SPEC)
+		appState.settingsSpec = SETTINGS_SPEC
 	})
 
 	it('shows guidance and no tablist when no codeplug is loaded', () => {
@@ -273,7 +273,7 @@ describe('empty states', () => {
 
 describe('read button — single-reason disabled tooltip (mirrors sendBlockedReason)', () => {
 	beforeEach(() => {
-		appState.setSettingsSpec(SETTINGS_SPEC)
+		appState.settingsSpec = SETTINGS_SPEC
 	})
 
 	function readButton() {

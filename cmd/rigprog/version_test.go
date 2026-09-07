@@ -133,7 +133,7 @@ func TestCliGeneratorID_CarriesTheBuildVersion(t *testing.T) {
 	if cliGeneratorID != want {
 		t.Errorf("cliGeneratorID = %q, want %q", cliGeneratorID, want)
 	}
-	if !strings.HasPrefix(cliGeneratorID, cliGeneratorPrefix) {
-		t.Errorf("cliGeneratorID = %q, want the stable prefix %q", cliGeneratorID, cliGeneratorPrefix)
+	if !strings.HasPrefix(cliGeneratorID, "rigprog/") {
+		t.Errorf("cliGeneratorID = %q, want the stable prefix %q", cliGeneratorID, "rigprog/")
 	}
 }

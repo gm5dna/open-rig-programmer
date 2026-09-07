@@ -4,14 +4,12 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
 
 	"github.com/gm5dna/open-rig-programmer/core/clone"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
-	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/internal/wiring"
 )
 
@@ -26,14 +24,8 @@ func cmdDiff(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	fake := fs.Bool("fake", false, "use the in-process simulated radio")
 	model := fs.String("model", wiring.DefaultModel, "radio model to target")
 
-	if err := fs.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			printDiffUsage(stdout)
-			return exitSuccess
-		}
-		fmt.Fprintf(stderr, "rigprog diff: %v\n", err)
-		printDiffUsage(stderr)
-		return exitUsage
+	if ok, code := parseArgs(fs, args, "diff", printDiffUsage, stdout, stderr); !ok {
+		return code
 	}
 	if fs.NArg() != 1 {
 		fmt.Fprintln(stderr, "rigprog diff: exactly one FILE argument is required")
@@ -42,14 +34,7 @@ func cmdDiff(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 	file := fs.Arg(0)
 
-	if !validateModel(stderr, "diff", *model, printDiffUsage) {
-		return exitUsage
-	}
-
-	havePort := *port != ""
-	if havePort == *fake { // both true, or both false
-		fmt.Fprintln(stderr, "rigprog diff: exactly one of --port or --fake is required")
-		printDiffUsage(stderr)
+	if !validateSessionArgs(stderr, "diff", *model, *port, *fake, printDiffUsage) {
 		return exitUsage
 	}
 
@@ -62,16 +47,7 @@ func cmdDiff(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return code
 	}
 
-	var (
-		sess     driver.Session
-		closeAll func() error
-		err      error
-	)
-	if *fake {
-		sess, closeAll, err = openFakeSession(ctx, *model)
-	} else {
-		sess, closeAll, err = openRealSession(ctx, *model, *port)
-	}
+	sess, closeAll, err := openSession(ctx, *model, *port, *fake)
 	if err != nil {
 		if isCancelled(err) {
 			fmt.Fprintln(stderr, "rigprog diff: cancelled")

@@ -19,7 +19,7 @@
 // `transfer.active` bookkeeping is NOT uniform across every call — this
 // is the one subtlety Task 17/18 need to know before adding more actions
 // here:
-//   - readRadio/diffAgainstRadio/prepareSend/readSettingsRadio: the bound
+//   - readRadio/prepareSend/readSettingsRadio: the bound
 //     call itself blocks until the whole operation is over, so a plain
 //     try/finally around the call is correct: it starts the transfer, and
 //     clears `active` the moment the call settles either way. PrepareSend
@@ -56,6 +56,38 @@ function reportError(err, context) {
 	appState.pushAlert(`${context}: ${describeError(err)}`)
 }
 
+/** Runs `fn`, alerting and rethrowing on rejection — the one shape shared
+ * by every wrapper below that must fail loudly (the caller needs to know
+ * the action did not happen). `context` is the alert-strip prefix.
+ * @template T
+ * @param {string} context
+ * @param {() => Promise<T>} fn
+ * @returns {Promise<T>} */
+async function call(context, fn) {
+	try {
+		return await fn()
+	} catch (err) {
+		reportError(err, context)
+		throw err
+	}
+}
+
+/** Like {@link call}, but for the enrichment/refresh steps that must NEVER
+ * turn a succeeded primary action into a rejection (refreshUISpec and
+ * friends): alerts on rejection and resolves to null instead of
+ * rethrowing.
+ * @template T
+ * @param {string} context
+ * @param {() => Promise<T>} fn
+ * @returns {Promise<T | null>} */
+async function callQuiet(context, fn) {
+	try {
+		return await call(context, fn)
+	} catch {
+		return null
+	}
+}
+
 let transferEventsInitialised = false
 
 /**
@@ -70,21 +102,18 @@ let transferEventsInitialised = false
  * @returns {Promise<import('../../../wailsjs/go/models').main.UISpecView | null>}
  */
 export async function refreshUISpec() {
-	try {
+	return callQuiet('loading the grid layout', async () => {
 		const spec = await App.GetUISpec()
-		appState.setUISpec(spec)
+		appState.uiSpec = spec
 		return spec
-	} catch (err) {
-		reportError(err, 'loading the grid layout')
-		return null
-	}
+	})
 }
 
 /**
  * Fetches GetSettingsSpec into appState.settingsSpec — the settings menu/
  * group/item STRUCTURE the settings viewer renders its tablist and tables
- * from (never a value — see getSettings/readSettingsRadio for that).
- * Mirrors refreshUISpec exactly (task 36, M8b-6): works offline, and is
+ * from (never a value — see readSettingsRadio for that). Mirrors
+ * refreshUISpec exactly (task 36, M8b-6): works offline, and is
  * deliberately NEVER-throws, since it runs as an enrichment step inside
  * connect/connectDemo/disconnect (Live flips with the connection) and a
  * failed spec refresh must not turn a succeeded primary call into a
@@ -96,14 +125,11 @@ export async function refreshUISpec() {
  * @returns {Promise<import('../../../wailsjs/go/models').main.SettingsSpecView | null>}
  */
 export async function refreshSettingsSpec() {
-	try {
+	return callQuiet('loading the settings layout', async () => {
 		const spec = await App.GetSettingsSpec()
-		appState.setSettingsSpec(spec)
+		appState.settingsSpec = spec
 		return spec
-	} catch (err) {
-		reportError(err, 'loading the settings layout')
-		return null
-	}
+	})
 }
 
 /**
@@ -119,14 +145,11 @@ export async function refreshSettingsSpec() {
  * @returns {Promise<import('../../../wailsjs/go/models').main.VersionView | null>}
  */
 export async function refreshAppVersion() {
-	try {
+	return callQuiet('reading the app version', async () => {
 		const version = await App.GetAppVersion()
-		appState.setAppVersion(version)
+		appState.appVersion = version
 		return version
-	} catch (err) {
-		reportError(err, 'reading the app version')
-		return null
-	}
+	})
 }
 
 /** Subscribes to transfer:progress/transfer:done exactly once (idempotent
@@ -152,12 +175,11 @@ export function setWindowTitle(title) {
 export async function listPorts() {
 	appState.setPortsLoading(true)
 	try {
-		const ports = await App.ListPorts()
-		appState.setPorts(ports)
-		return ports
-	} catch (err) {
-		reportError(err, 'listing ports')
-		throw err
+		return await call('listing ports', async () => {
+			const ports = await App.ListPorts()
+			appState.ports = ports ?? []
+			return ports
+		})
 	} finally {
 		appState.setPortsLoading(false)
 	}
@@ -177,14 +199,11 @@ export async function listPorts() {
  * internal/wiring.DefaultModel. The alert strip still carries the message.
  * @returns {Promise<string[] | null>} */
 export async function refreshSupportedModels() {
-	try {
+	return callQuiet('listing supported radios', async () => {
 		const models = await App.GetSupportedModels()
-		appState.setSupportedModels(models)
+		appState.supportedModels = models ?? []
 		return models
-	} catch (err) {
-		reportError(err, 'listing supported radios')
-		return null
-	}
+	})
 }
 
 /** M9c-5 (E4): App.Connect/App.ConnectDemo take a model name, and the
@@ -209,48 +228,46 @@ export async function refreshSupportedModels() {
  * radio", which would silently open a DIFFERENT model than the one whose
  * consent was just recorded. Defaulting to appState.selectedModel leaves
  * every other call site (and its tests) exactly as it was.
- * @param {string} portPath
- * @param {string} [model] */
-export async function connect(portPath, model = appState.selectedModel) {
+ *
+ * connect() and connectDemo() share their body (openSession, below) —
+ * the only difference is which Go method opens the session and which
+ * alert-strip context describes it; connect() alone also raises the
+ * arming dialogue afterward.
+ * @param {() => Promise<import('../../../wailsjs/go/models').main.ConnectionInfo>} openGoSession
+ * @param {string} context */
+async function openSession(openGoSession, context) {
 	appState.setConnecting(true)
 	try {
-		const info = await App.Connect(portPath, model)
-		appState.setConnection(info)
-		await refreshUISpec()
-		await refreshSettingsSpec() // task 36: Live flips true now connected
-		await revalidateQuiet() // Fix 5: caps just became authoritative
-		// Task 14 (M9d): the arming dialogue, asked once per radio — after
-		// the spec refresh, so the amber indicator is already truthful about
-		// the session behind the dialogue.
-		await raiseConsentPromptIfDue()
-		return info
-	} catch (err) {
-		reportError(err, 'connecting')
-		throw err
+		return await call(context, async () => {
+			const info = await openGoSession()
+			appState.connection = info
+			await refreshUISpec()
+			await refreshSettingsSpec() // task 36: Live flips true now connected
+			await revalidateQuiet() // Fix 5: caps just became authoritative
+			return info
+		})
 	} finally {
 		appState.setConnecting(false)
 	}
 }
 
+/** @param {string} portPath
+ * @param {string} [model] */
+export async function connect(portPath, model = appState.selectedModel) {
+	const info = await openSession(() => App.Connect(portPath, model), 'connecting')
+	// Task 14 (M9d): the arming dialogue, asked once per radio — after
+	// the spec refresh, so the amber indicator is already truthful about
+	// the session behind the dialogue.
+	await raiseConsentPromptIfDue()
+	return info
+}
+
 export async function connectDemo() {
-	appState.setConnecting(true)
-	try {
-		// See connect(): the same picked model, and '' still means the
-		// default. The demo path opens THAT model's own simulator (Go's
-		// wiring.OpenFakeSessionFor looks it up), so a user can try any
-		// registered radio with no hardware on the cable.
-		const info = await App.ConnectDemo(appState.selectedModel)
-		appState.setConnection(info)
-		await refreshUISpec()
-		await refreshSettingsSpec() // task 36: Live flips true now connected
-		await revalidateQuiet() // Fix 5: caps just became authoritative
-		return info
-	} catch (err) {
-		reportError(err, 'starting demo mode')
-		throw err
-	} finally {
-		appState.setConnecting(false)
-	}
+	// See connect(): the same picked model, and '' still means the
+	// default. The demo path opens THAT model's own simulator (Go's
+	// wiring.OpenFakeSessionFor looks it up), so a user can try any
+	// registered radio with no hardware on the cable.
+	return openSession(() => App.ConnectDemo(appState.selectedModel), 'starting demo mode')
 }
 
 /** Fix 1 (adjudicated HIGH, Codex M6 #1): clears ONLY connection-scoped
@@ -261,16 +278,13 @@ export async function connectDemo() {
  * wrongly-disabled Save button. uiSpec is refreshed back to the offline
  * baseline as before (task 36: so is settingsSpec — Live back to false). */
 export async function disconnect() {
-	try {
+	return call('disconnecting', async () => {
 		await App.Disconnect()
 		appState.disconnectConnection()
 		await refreshUISpec() // back to the offline baseline spec
 		await refreshSettingsSpec() // task 36: same, for the settings spec
 		await revalidateQuiet() // Fix 5: caps just reverted to advisory
-	} catch (err) {
-		reportError(err, 'disconnecting')
-		throw err
-	}
+	})
 }
 
 // --- Task 14 (M9d): the unverified-write consent surface ----------------
@@ -325,11 +339,9 @@ export async function disconnect() {
 async function raiseConsentPromptIfDue() {
 	if (!appState.unverifiedConsentDue) return
 	const model = appState.connection?.Model ?? ''
-	try {
+	await callQuiet('reading the unverified-write consent state', async () => {
 		appState.setUnverifiedConsentPrompt(await App.GetUnverifiedWriteConsent(model))
-	} catch (err) {
-		reportError(err, 'reading the unverified-write consent state')
-	}
+	})
 }
 
 /** Fetches ListUnverifiedWriteConsents into appState.unverifiedConsents —
@@ -345,14 +357,11 @@ async function raiseConsentPromptIfDue() {
  * place, with the alert strip carrying the message.
  * @returns {Promise<import('../../../wailsjs/go/models').main.UnverifiedWriteConsentView[] | null>} */
 export async function refreshUnverifiedConsents() {
-	try {
+	return callQuiet('listing unverified-write consents', async () => {
 		const rows = await App.ListUnverifiedWriteConsents()
-		appState.setUnverifiedConsents(rows)
+		appState.unverifiedConsents = rows ?? []
 		return rows
-	} catch (err) {
-		reportError(err, 'listing unverified-write consents')
-		return null
-	}
+	})
 }
 
 /** The store write on its own — reported AND rethrown, because every
@@ -362,12 +371,7 @@ export async function refreshUnverifiedConsents() {
  * @param {string} model
  * @param {boolean} on */
 async function persistUnverifiedWriteConsent(model, on) {
-	try {
-		await App.SetUnverifiedWriteConsent(model, on)
-	} catch (err) {
-		reportError(err, 'recording the unverified-write decision')
-		throw err
-	}
+	return call('recording the unverified-write decision', () => App.SetUnverifiedWriteConsent(model, on))
 }
 
 /** Records a consent decision, re-opening the live session when — and only
@@ -416,7 +420,7 @@ export async function applyUnverifiedWriteConsent(model, on, known = {}) {
 	// too. Announced here, immediately after the disconnect that made it
 	// unspendable, rather than after the reconnect — it is stale from this
 	// moment whether or not the session comes back.
-	appState.invalidatePreparedPlan()
+	appState.preparedPlanEpoch += 1
 	// 3. Persist.
 	await persistUnverifiedWriteConsent(model, on)
 	await refreshUnverifiedConsents()
@@ -434,88 +438,39 @@ export async function applyUnverifiedWriteConsent(model, on, known = {}) {
 export async function readRadio() {
 	appState.beginTransfer('read')
 	try {
-		const view = await App.ReadRadio()
-		appState.setCodeplug(view)
-		await refreshUISpec()
-		await refreshSettingsQuiet() // task 36: the new working copy's settings content
-		await revalidateQuiet() // Fix 5: CodeplugView carries no Issues
-		return view
-	} catch (err) {
-		reportError(err, 'reading radio')
-		throw err
+		return await call('reading radio', async () => {
+			const view = await App.ReadRadio()
+			appState.setCodeplug(view)
+			await refreshUISpec()
+			await refreshSettingsQuiet() // task 36: the new working copy's settings content
+			await revalidateQuiet() // Fix 5: CodeplugView carries no Issues
+			return view
+		})
 	} finally {
 		appState.endTransfer()
 	}
 }
 
-export async function getCodeplug() {
-	try {
-		const view = await App.GetCodeplug()
-		appState.setCodeplug(view)
-		await refreshUISpec()
-		return view
-	} catch (err) {
-		reportError(err, 'loading codeplug')
-		throw err
-	}
-}
-
-/** Fetches GetSettings into appState.settings — the working copy's OWN
- * settings content (never the live radio — see readSettingsRadio for
- * that). Ordinary throw-and-report shape, unlike the internal
- * refreshSettingsQuiet() helper this same module uses to hook readRadio/
- * loadFile/importers (task 36, M8b-6): this export exists for any direct
- * caller that wants to await it and handle its own failure, mirroring
- * getCodeplug's identical role alongside refreshCodeplugQuiet. */
-export async function getSettings() {
-	try {
-		const view = await App.GetSettings()
-		appState.setSettings(view)
-		return view
-	} catch (err) {
-		reportError(err, 'loading settings')
-		throw err
-	}
-}
-
 /** @param {import('../../../wailsjs/go/models').codeplug.Channel} channel */
 export async function updateChannel(channel) {
-	try {
+	return call('updating channel', async () => {
 		const result = await App.UpdateChannel(channel)
 		appState.applyChannelEdits([channel])
 		appState.setIssues(result.Issues)
 		appState.setDirty(result.Dirty)
 		return result
-	} catch (err) {
-		reportError(err, 'updating channel')
-		throw err
-	}
+	})
 }
 
 /** @param {import('../../../wailsjs/go/models').codeplug.Channel[]} channels */
 export async function updateChannels(channels) {
-	try {
+	return call('updating channels', async () => {
 		const result = await App.UpdateChannels(channels)
 		appState.applyChannelEdits(channels)
 		appState.setIssues(result.Issues)
 		appState.setDirty(result.Dirty)
 		return result
-	} catch (err) {
-		reportError(err, 'updating channels')
-		throw err
-	}
-}
-
-export async function validate() {
-	try {
-		const result = await App.Validate()
-		appState.setIssues(result.Issues)
-		appState.setIssuesAdvisory(result.Advisory)
-		return result
-	} catch (err) {
-		reportError(err, 'validating')
-		throw err
-	}
+	})
 }
 
 /** Fix 4 (adjudicated MED, Codex M6 #4): refreshes appState.codeplug
@@ -526,12 +481,10 @@ export async function validate() {
  * throws, like refreshUISpec()/revalidateQuiet() — a failed refresh must
  * not turn a succeeded merge into a rejection. */
 async function refreshCodeplugQuiet() {
-	try {
+	await callQuiet('loading codeplug', async () => {
 		const view = await App.GetCodeplug()
 		appState.setCodeplug(view)
-	} catch (err) {
-		reportError(err, 'loading codeplug')
-	}
+	})
 }
 
 /** Task 36 (M8b-6) counterpart to refreshCodeplugQuiet: readRadio/loadFile/
@@ -542,12 +495,10 @@ async function refreshCodeplugQuiet() {
  * failed settings-content refresh must not turn a succeeded primary
  * action into a rejection; the alert strip still carries the message. */
 async function refreshSettingsQuiet() {
-	try {
+	await callQuiet('loading settings', async () => {
 		const view = await App.GetSettings()
 		appState.setSettings(view)
-	} catch (err) {
-		reportError(err, 'loading settings')
-	}
+	})
 }
 
 /** Fix 5 (adjudicated MED, Codex M6 #5): re-runs authoritative Validate
@@ -563,34 +514,17 @@ async function refreshSettingsQuiet() {
  * rejection; the alert strip still carries the message. */
 async function revalidateQuiet() {
 	if (appState.codeplug === null) return
-	try {
+	await callQuiet('validating', async () => {
 		const result = await App.Validate()
 		appState.setIssues(result.Issues)
-		appState.setIssuesAdvisory(result.Advisory)
-	} catch (err) {
-		reportError(err, 'validating')
-	}
-}
-
-export async function diffAgainstRadio() {
-	appState.beginTransfer('diff')
-	try {
-		return await App.DiffAgainstRadio()
-	} catch (err) {
-		reportError(err, 'comparing with radio')
-		throw err
-	} finally {
-		appState.endTransfer()
-	}
+		appState.issuesAdvisory = result.Advisory
+	})
 }
 
 export async function prepareSend() {
 	appState.beginTransfer('prepare')
 	try {
-		return await App.PrepareSend()
-	} catch (err) {
-		reportError(err, 'preparing send')
-		throw err
+		return await call('preparing send', () => App.PrepareSend())
 	} finally {
 		appState.endTransfer()
 	}
@@ -601,75 +535,62 @@ export async function prepareSend() {
  * an already-loaded working copy (Go's own typed refusals), reserves the
  * App-level exclusive-operation slot for its whole duration. The bound
  * call itself blocks until the whole read is over (like readRadio/
- * diffAgainstRadio/prepareSend above, unlike confirmSend — see this
- * module's doc comment), so a plain try/finally around it is correct:
- * begins the transfer, and clears `active` the moment the call settles
- * either way. Stores the returned SettingsView (the merged working copy)
- * straight into appState.settings — no separate refresh call needed, the
- * same way readRadio's own CodeplugView return needs no follow-up
- * getCodeplug(). */
+ * prepareSend above, unlike confirmSend — see this module's doc
+ * comment), so a plain try/finally around it is correct: begins the
+ * transfer, and clears `active` the moment the call settles either way.
+ * Stores the returned SettingsView (the merged working copy) straight
+ * into appState.settings — no separate refresh call needed, the same way
+ * readRadio's own CodeplugView return needs no follow-up fetch. */
 export async function readSettingsRadio() {
 	appState.beginTransfer('settings')
 	try {
-		const view = await App.ReadSettingsRadio()
-		appState.setSettings(view)
-		// Fix 1 (adjudicated HIGH, Codex M8b #1): Go's ReadSettingsRadio sets
-		// dirty=true (the merged settings ARE an unsaved change), but this
-		// wrapper never mirrored it — so the unsaved-changes guards (ActionBar
-		// Open/Read, the status bar and title) saw a clean state and could
-		// silently discard a freshly-read settings snapshot. Sync the true
-		// dirty state back from Go via the existing IsDirty binding.
-		appState.setDirty(await App.IsDirty())
-		return view
-	} catch (err) {
-		reportError(err, 'reading settings')
-		throw err
+		return await call('reading settings', async () => {
+			const view = await App.ReadSettingsRadio()
+			appState.setSettings(view)
+			// Fix 1 (adjudicated HIGH, Codex M8b #1): Go's ReadSettingsRadio sets
+			// dirty=true (the merged settings ARE an unsaved change), but this
+			// wrapper never mirrored it — so the unsaved-changes guards (ActionBar
+			// Open/Read, the status bar and title) saw a clean state and could
+			// silently discard a freshly-read settings snapshot. Sync the true
+			// dirty state back from Go via the existing IsDirty binding.
+			appState.setDirty(await App.IsDirty())
+			return view
+		})
 	} finally {
 		appState.endTransfer()
 	}
 }
 
 /** See this module's doc comment: does NOT clear `active` on success —
- * only the eventual transfer:done (Kind "send") event does that.
+ * only the eventual transfer:done (Kind "send") event does that. `call()`
+ * already reports on rejection, so the catch here only needs to clear
+ * `active` for the synchronous-refusal case before rethrowing.
  * @param {string} confirmationDigest
  * @param {string} firmware */
 export async function confirmSend(confirmationDigest, firmware) {
 	appState.beginTransfer('send')
 	try {
-		await App.ConfirmSend(confirmationDigest, firmware)
+		await call('sending to radio', () => App.ConfirmSend(confirmationDigest, firmware))
 	} catch (err) {
 		appState.endTransfer()
-		reportError(err, 'sending to radio')
 		throw err
 	}
 }
 
 export async function cancelTransfer() {
-	try {
-		await App.CancelTransfer()
-	} catch (err) {
-		reportError(err, 'cancelling transfer')
-		throw err
-	}
-}
-
-export async function isDirty() {
-	return App.IsDirty()
+	return call('cancelling transfer', () => App.CancelTransfer())
 }
 
 /** @param {string} path */
 export async function saveFile(path) {
-	try {
+	return call('saving file', async () => {
 		await App.SaveFile(path)
 		// Fix 4 (adjudicated MED, Codex M8b #4): reflect Go's TRUE post-save
 		// dirty state rather than forcing false — SaveFile leaves dirty true
 		// when a mutation (e.g. a settings read) landed mid-save, so the
 		// stale-on-disk/clean-in-memory silent-loss window never opens.
 		appState.setDirty(await App.IsDirty())
-	} catch (err) {
-		reportError(err, 'saving file')
-		throw err
-	}
+	})
 }
 
 /** Returns the chosen path, or "" if the user cancelled the save dialog
@@ -679,27 +600,27 @@ export async function saveFile(path) {
  * not reopen this same dialogue) are only updated when a path actually
  * came back. */
 export async function saveFileAs() {
-	try {
+	return call('saving file', async () => {
 		const path = await App.SaveFileAs()
 		if (path) {
 			// Fix 4 (Codex M8b #4): honour Go's true post-save dirty state
 			// (may still be true if a mutation landed mid-save), not a forced
 			// false — see saveFile's own comment.
 			appState.setDirty(await App.IsDirty())
-			appState.setWorkingPath(path)
+			// Defensive: SaveFileAs itself requires a working copy, so this
+			// should always be non-null — mirrors applyChannelEdits' same
+			// defensive null check.
+			if (appState.codeplug !== null) appState.codeplug.WorkingPath = path
 		}
 		return path
-	} catch (err) {
-		reportError(err, 'saving file')
-		throw err
-	}
+	})
 }
 
 /** Returns the loaded codeplug view, or null if the user cancelled the
  * open dialog — see this module's doc comment on LoadFile's zero-value
  * cancel contract. `appState.codeplug` is left untouched on cancel. */
 export async function loadFile() {
-	try {
+	return call('opening file', async () => {
 		const view = await App.LoadFile()
 		if (!view || !view.Channels || view.Channels.length === 0) {
 			return null
@@ -709,50 +630,35 @@ export async function loadFile() {
 		await refreshSettingsQuiet() // task 36: the new working copy's settings content
 		await revalidateQuiet() // Fix 5: shows a loaded-invalid-file's issues immediately
 		return view
-	} catch (err) {
-		reportError(err, 'opening file')
-		throw err
-	}
+	})
+}
+
+/** Shared body for importCSV/importCHIRP, which differ only in which Go
+ * import dialog runs and the alert-strip context describing it.
+ * @param {() => Promise<import('../../../wailsjs/go/models').main.ImportResultView>} runImport
+ * @param {string} context */
+async function importFile(runImport, context) {
+	return call(context, async () => {
+		const result = await runImport()
+		if (result.Merged) {
+			await refreshCodeplugQuiet() // Fix 4: the grid must show the merged Channels
+			await refreshUISpec()
+			await refreshSettingsQuiet() // task 36: the merged working copy's settings content
+			await revalidateQuiet() // Fix 5: refreshes Issues+Advisory together
+		}
+		return result
+	})
 }
 
 export async function importCSV() {
-	try {
-		const result = await App.ImportCSV()
-		if (result.Merged) {
-			await refreshCodeplugQuiet() // Fix 4: the grid must show the merged Channels
-			await refreshUISpec()
-			await refreshSettingsQuiet() // task 36: the merged working copy's settings content
-			await revalidateQuiet() // Fix 5: refreshes Issues+Advisory together
-		}
-		return result
-	} catch (err) {
-		reportError(err, 'importing CSV')
-		throw err
-	}
+	return importFile(App.ImportCSV, 'importing CSV')
 }
 
 export async function importCHIRP() {
-	try {
-		const result = await App.ImportCHIRP()
-		if (result.Merged) {
-			await refreshCodeplugQuiet() // Fix 4: the grid must show the merged Channels
-			await refreshUISpec()
-			await refreshSettingsQuiet() // task 36: the merged working copy's settings content
-			await revalidateQuiet() // Fix 5: refreshes Issues+Advisory together
-		}
-		return result
-	} catch (err) {
-		reportError(err, 'importing CHIRP')
-		throw err
-	}
+	return importFile(App.ImportCHIRP, 'importing CHIRP')
 }
 
 /** Returns the chosen path, or "" if the user cancelled the save dialog. */
 export async function exportCSV() {
-	try {
-		return await App.ExportCSV()
-	} catch (err) {
-		reportError(err, 'exporting CSV')
-		throw err
-	}
+	return call('exporting CSV', () => App.ExportCSV())
 }

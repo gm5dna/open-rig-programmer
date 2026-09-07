@@ -26,6 +26,12 @@
 
 	const hasCodeplug = $derived(appState.codeplug !== null)
 	const transferBusy = $derived(appState.transfer.active)
+	/** Save/Save As/Import CSV/Import CHIRP/Export CSV share this exact
+	 * disabled-reason tooltip (their `disabled` conditions themselves
+	 * still vary — Save/Save As also gate on savePending). */
+	const needsCodeplugTooltip = $derived(
+		!hasCodeplug ? 'Open or read a codeplug first' : transferBusy ? 'A transfer is already running' : ''
+	)
 
 	let savePending = $state(false)
 
@@ -59,7 +65,7 @@
 	// would invalidate the very plan being reviewed. Pure frontend UI state
 	// — see app.svelte.js's module comment on why a component sets it.
 	$effect(() => {
-		appState.setSendDialogOpen(sendPlan !== null)
+		appState.sendDialogOpen = sendPlan !== null
 	})
 
 	// --- Read Radio / Open, with the dirty guard --------------------------
@@ -193,26 +199,13 @@
 
 	// --- Import / Export --------------------------------------------------
 
-	async function handleImportCSV() {
+	/** @param {() => Promise<ImportResultView>} runImport @param {'CSV' | 'CHIRP'} format */
+	async function handleImport(runImport, format) {
 		try {
-			const result = await importCSV()
+			const result = await runImport()
 			if (result.Cancelled) return
 			if (!result.Merged || result.LossEntries?.length) {
-				importResult = { format: 'CSV', result }
-			} else {
-				appState.pushAlert(`Imported ${result.Path}`, 'info')
-			}
-		} catch {
-			// Alert strip already carries the message.
-		}
-	}
-
-	async function handleImportCHIRP() {
-		try {
-			const result = await importCHIRP()
-			if (result.Cancelled) return
-			if (!result.Merged || result.LossEntries?.length) {
-				importResult = { format: 'CHIRP', result }
+				importResult = { format, result }
 			} else {
 				appState.pushAlert(`Imported ${result.Path}`, 'info')
 			}
@@ -259,13 +252,13 @@
 			label="Save"
 			onclick={handleSave}
 			disabled={!hasCodeplug || savePending || transferBusy}
-			tooltip={!hasCodeplug ? 'Open or read a codeplug first' : transferBusy ? 'A transfer is already running' : ''}
+			tooltip={needsCodeplugTooltip}
 		/>
 		<ToolButton
 			label="Save As…"
 			onclick={handleSaveAs}
 			disabled={!hasCodeplug || savePending || transferBusy}
-			tooltip={!hasCodeplug ? 'Open or read a codeplug first' : transferBusy ? 'A transfer is already running' : ''}
+			tooltip={needsCodeplugTooltip}
 		/>
 	</div>
 
@@ -273,21 +266,21 @@
 		<span class="tool-group-label">Data</span>
 		<ToolButton
 			label="Import CSV…"
-			onclick={handleImportCSV}
+			onclick={() => handleImport(importCSV, 'CSV')}
 			disabled={!hasCodeplug || transferBusy}
-			tooltip={!hasCodeplug ? 'Open or read a codeplug first' : transferBusy ? 'A transfer is already running' : ''}
+			tooltip={needsCodeplugTooltip}
 		/>
 		<ToolButton
 			label="Import CHIRP…"
-			onclick={handleImportCHIRP}
+			onclick={() => handleImport(importCHIRP, 'CHIRP')}
 			disabled={!hasCodeplug || transferBusy}
-			tooltip={!hasCodeplug ? 'Open or read a codeplug first' : transferBusy ? 'A transfer is already running' : ''}
+			tooltip={needsCodeplugTooltip}
 		/>
 		<ToolButton
 			label="Export CSV…"
 			onclick={handleExportCSV}
 			disabled={!hasCodeplug || transferBusy}
-			tooltip={!hasCodeplug ? 'Open or read a codeplug first' : transferBusy ? 'A transfer is already running' : ''}
+			tooltip={needsCodeplugTooltip}
 		/>
 	</div>
 </div>

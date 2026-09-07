@@ -7,10 +7,13 @@
 	// — every menu/group/item label and ID is spec-supplied; the synthetic
 	// vitest fixture (SettingsViewer.test.js) proves it.
 	//
-	// Own menu-level tablist (the spec's Menus): fresh markup, NOT copied
-	// from ChannelGrid.svelte, but BEHAVIOURALLY the same complete tab
-	// pattern (roving tabindex, ArrowLeft/Right wrap, Home/End,
-	// aria-selected, aria-controls -> a single shared tabpanel).
+	// Own menu-level tablist (the spec's Menus): fresh markup, but the
+	// SAME complete tab pattern as App.svelte's view switch and
+	// ChannelGrid's bank tabs (roving tabindex, ArrowLeft/Right wrap,
+	// Home/End, aria-selected, aria-controls -> a single shared
+	// tabpanel) — the keyboard half of that pattern is tabKeydown.js,
+	// shared by all three; only the markup and the select-and-focus step
+	// stay per-component.
 	//
 	// Empty states (brief §"Decided design"): no codeplug -> guidance
 	// text; no settings snapshot yet -> the SAME "Read settings from
@@ -22,6 +25,7 @@
 	// spec) -> their own section.
 	import { appState } from './state/app.svelte.js'
 	import { readSettingsRadio } from './bridge/bindings.js'
+	import { tabKeydown } from './tabKeydown.js'
 	import ToolButton from './ToolButton.svelte'
 
 	/** @typedef {import('../../wailsjs/go/models').main.SettingMenuView} SettingMenuView */
@@ -49,15 +53,10 @@
 
 	/** @param {KeyboardEvent} e @param {number} index */
 	function onMenuTabKeydown(e, index) {
-		let target = null
-		if (e.key === 'ArrowRight') target = (index + 1) % menus.length
-		else if (e.key === 'ArrowLeft') target = (index - 1 + menus.length) % menus.length
-		else if (e.key === 'Home') target = 0
-		else if (e.key === 'End') target = menus.length - 1
-		if (target === null || menus.length === 0) return
-		e.preventDefault()
-		selectMenu(menus[target].ID)
-		document.getElementById(`settings-menu-tab-${menus[target].ID}`)?.focus()
+		tabKeydown(e, index, menus.length, (target) => {
+			selectMenu(menus[target].ID)
+			document.getElementById(`settings-menu-tab-${menus[target].ID}`)?.focus()
+		})
 	}
 
 	// --- entries: joined to spec items by ID -------------------------------

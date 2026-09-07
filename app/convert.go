@@ -43,8 +43,8 @@ func diffEntryToView(e codeplug.DiffEntry) DiffEntryView {
 
 // buildDiffSummary groups result's entries by kind (Added/Modified/
 // Erased — Unchanged entries are counted but never listed, matching the
-// CLI's writeDiffReport/writePlanSummary grouping), shared by
-// DiffAgainstRadio and PrepareSend.
+// CLI's writeDiffReport/writePlanSummary grouping), used by
+// PrepareSend.
 func buildDiffSummary(result codeplug.DiffResult) DiffSummaryView {
 	summary := DiffSummaryView{
 		Counts: DiffCounts{Added: result.Added, Modified: result.Modified, Erased: result.Erased, Blocked: result.Blocked, Unchanged: result.Unchanged},

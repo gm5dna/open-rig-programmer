@@ -3,7 +3,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -23,14 +22,8 @@ func cmdPorts(args []string, stdout, stderr io.Writer) int {
 	fs.SetOutput(io.Discard) // this function owns all usage/error output.
 	fake := fs.Bool("fake", false, "not accepted by ports; use \"rigprog probe --fake\" instead")
 
-	if err := fs.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			printPortsUsage(stdout)
-			return exitSuccess
-		}
-		fmt.Fprintf(stderr, "rigprog ports: %v\n", err)
-		printPortsUsage(stderr)
-		return exitUsage
+	if ok, code := parseArgs(fs, args, "ports", printPortsUsage, stdout, stderr); !ok {
+		return code
 	}
 	if *fake {
 		fmt.Fprintln(stderr, "rigprog ports: --fake is not accepted (ports enumerates real serial devices only; use \"rigprog probe --fake\" to exercise the simulator)")

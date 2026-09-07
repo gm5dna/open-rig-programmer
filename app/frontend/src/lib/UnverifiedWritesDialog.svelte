@@ -116,7 +116,7 @@
 	}
 
 	function close() {
-		appState.closeUnverifiedGrants()
+		appState.unverifiedGrantsOpen = false
 	}
 </script>
 

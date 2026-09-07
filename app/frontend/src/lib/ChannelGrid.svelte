@@ -32,6 +32,7 @@
 	import { initialFocus, moveFocus, clampFocus } from './grid/nav.js'
 	import { parseBlock, mapPasteToChannels } from './grid/paste.js'
 	import { createEditQueue } from './grid/editQueue.js'
+	import { tabKeydown } from './tabKeydown.js'
 	import {
 		initialDragState,
 		beginDrag,
@@ -204,15 +205,10 @@
 
 	/** @param {KeyboardEvent} e @param {number} index */
 	function onTabKeydown(e, index) {
-		let target = null
-		if (e.key === 'ArrowRight') target = (index + 1) % banks.length
-		else if (e.key === 'ArrowLeft') target = (index - 1 + banks.length) % banks.length
-		else if (e.key === 'Home') target = 0
-		else if (e.key === 'End') target = banks.length - 1
-		if (target === null || banks.length === 0) return
-		e.preventDefault()
-		selectBank(banks[target].ID)
-		document.getElementById(`bank-tab-${banks[target].ID}`)?.focus()
+		tabKeydown(e, index, banks.length, (target) => {
+			selectBank(banks[target].ID)
+			document.getElementById(`bank-tab-${banks[target].ID}`)?.focus()
+		})
 	}
 
 	// --- editing ----------------------------------------------------------

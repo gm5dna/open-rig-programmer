@@ -4,17 +4,21 @@
 	// in-app components with focus management (trap focus in the modal,
 	// Escape closes where safe — never mid-transfer)"; NEVER a native
 	// alert/confirm/prompt). Every task-18 dialogue (send review/transfer,
-	// dirty-guard, import result) wraps its content in this — it owns
-	// nothing about WHAT it shows, only the modal mechanics.
+	// dirty-guard, import result, confirm) wraps its content in this — it
+	// owns nothing about WHAT it shows, only the modal mechanics.
 	//
-	// Focus trap: Tab/Shift-Tab cycle within the dialog's own focusable
-	// elements only (never escaping to the page behind); the element that
-	// had focus before the modal opened is restored when it closes.
-	// `closable` gates BOTH Escape and a backdrop click — the send-flow
-	// dialogue passes `closable={false}` while its transfer is actually
-	// running, so a transfer can never be dismissed out from under the
-	// user by an accidental Escape or click (the brief's "never
-	// mid-transfer").
+	// A native <dialog> shown via showModal() gives Tab/Shift-Tab focus
+	// containment and the ::backdrop overlay for free (ponytail audit
+	// 2026-09-06, finding 44) — no hand-rolled focus trap needed. It does
+	// NOT give initial focus on the first focusable descendant (the HTML
+	// spec's own focusing steps only honour an explicit `autofocus`
+	// attribute, which none of our dynamic children declare) or restore
+	// focus to the trigger on close, so both stay explicit below, same as
+	// before. `closable` gates BOTH Escape (via the 'cancel' event) and a
+	// backdrop click — the send-flow dialogue passes `closable={false}`
+	// while its transfer is actually running, so a transfer can never be
+	// dismissed out from under the user by an accidental Escape or click
+	// (the brief's "never mid-transfer").
 
 	/** @type {{
 	 *   labelledBy: string,
@@ -24,7 +28,7 @@
 	 * }} */
 	let { labelledBy, closable = true, onclose = () => {}, children } = $props()
 
-	/** @type {HTMLElement | undefined} */
+	/** @type {HTMLDialogElement | undefined} */
 	let dialogEl = $state(undefined)
 	/** @type {Element | null} */
 	let previouslyFocused = null
@@ -32,95 +36,65 @@
 	const FOCUSABLE_SELECTOR =
 		'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
-	/** @returns {HTMLElement[]} */
-	function focusableElements() {
-		if (!dialogEl) return []
-		return Array.from(dialogEl.querySelectorAll(FOCUSABLE_SELECTOR)).filter(
-			/** @returns {el is HTMLElement} */
-			(el) => el instanceof HTMLElement && el.offsetParent !== null
-		)
-	}
-
 	// Focused synchronously, NOT via tick().then(...): $effect already runs
 	// after this component (and its snippet children) have committed to
 	// the DOM, so dialogEl and its descendants are present by the time
-	// this body runs. An earlier version deferred through tick(), which
-	// left a real (if narrow) window where a Tab pressed immediately after
-	// mount could race the deferred initial-focus microtask and have its
-	// effect undone — caught by Modal.test.js's Tab-wrap tests failing
-	// intermittently depending on await timing.
+	// this body runs. showModal() itself must run here too (not in
+	// markup) — the dialog must already be in the DOM to open it.
 	$effect(() => {
 		previouslyFocused = document.activeElement
-		const first = focusableElements()[0]
-		;(first ?? dialogEl)?.focus()
+		dialogEl?.showModal()
+		const first = dialogEl?.querySelector(FOCUSABLE_SELECTOR)
+		;(/** @type {HTMLElement | null} */ (first) ?? dialogEl)?.focus()
 		return () => {
 			if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus()
 		}
 	})
 
-	/** @param {KeyboardEvent} e */
-	function onKeydown(e) {
-		if (e.key === 'Escape') {
-			if (!closable) return
-			e.preventDefault()
-			onclose()
-			return
-		}
-		if (e.key !== 'Tab') return
-		const items = focusableElements()
-		if (items.length === 0) {
-			e.preventDefault()
-			return
-		}
-		const first = items[0]
-		const last = items[items.length - 1]
-		if (e.shiftKey && document.activeElement === first) {
-			e.preventDefault()
-			last.focus()
-		} else if (!e.shiftKey && document.activeElement === last) {
-			e.preventDefault()
-			first.focus()
-		}
+	/** The 'cancel' event fires on Escape, before the dialog closes —
+	 * cancelable, so preventDefault() here is what keeps it open while
+	 * !closable (mirrors the old keydown handler's early return).
+	 * @param {Event} e */
+	function onCancel(e) {
+		if (!closable) e.preventDefault()
 	}
 
-	function onBackdropClick() {
-		if (closable) onclose()
+	/** A click that lands on the dialog element ITSELF (never a
+	 * descendant — the ::backdrop pseudo-element is not a real hit-testable
+	 * child, so a genuine backdrop click always targets dialogEl directly)
+	 * closes it, gated by `closable` exactly like Escape.
+	 * @param {MouseEvent} e */
+	function onBackdropClick(e) {
+		if (e.target === dialogEl && closable) onclose()
 	}
 </script>
 
-<div class="modal-backdrop" onclick={onBackdropClick} role="presentation">
-	<div
-		class="modal-panel"
-		role="dialog"
-		aria-modal="true"
-		aria-labelledby={labelledBy}
-		tabindex="-1"
-		bind:this={dialogEl}
-		onkeydown={onKeydown}
-		onclick={(e) => e.stopPropagation()}
-	>
-		{@render children?.()}
-	</div>
-</div>
+<!-- svelte-ignore a11y_no_redundant_roles -- explicit role="dialog" kept
+     (finding 44: "keep aria-labelledby/role semantics") for the tests
+     and any tooling that queries it, even though <dialog> implies it. -->
+<dialog
+	bind:this={dialogEl}
+	class="modal-panel"
+	role="dialog"
+	aria-modal="true"
+	aria-labelledby={labelledBy}
+	tabindex="-1"
+	oncancel={onCancel}
+	onclose={() => onclose()}
+	onclick={onBackdropClick}
+>
+	{@render children?.()}
+</dialog>
 
 <style>
-	.modal-backdrop {
-		position: fixed;
-		inset: 0;
-		z-index: 100;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: var(--space-5);
-		background: rgba(8, 11, 16, 0.72);
-	}
-
 	/* A lifted panel — outset shadow, the inverse of the radio badge's
 	 * inset "readout" bezel — so a modal reads as something ABOVE the
 	 * instrument panel, not another sunken readout. */
 	.modal-panel {
 		width: min(640px, 100%);
-		max-height: min(720px, 100%);
+		max-height: min(720px, calc(100% - 2 * var(--space-5)));
+		margin: auto;
+		padding: 0;
 		display: flex;
 		flex-direction: column;
 		background: var(--colour-panel-raised);
@@ -128,6 +102,10 @@
 		border-radius: var(--radius-md);
 		box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
 		overflow: hidden;
+	}
+
+	.modal-panel::backdrop {
+		background: rgba(8, 11, 16, 0.72);
 	}
 
 	@media (prefers-reduced-motion: no-preference) {

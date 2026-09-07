@@ -239,7 +239,7 @@ func (a *App) connect(demo bool, portPath, requestedModel string) (ConnectionInf
 // Disconnect closes the current session. Refuses while a transfer is
 // running (task-15 brief §2) — cancel or wait for it first — or while
 // Fix 2's App-level exclusive-operation reservation is held by a
-// concurrently-running ReadRadio/DiffAgainstRadio/PrepareSend/
+// concurrently-running ReadRadio/PrepareSend/
 // ReadSettingsRadio (task 35) (adjudicated HIGH, Codex M6 #2: without
 // this, clearConnection() could render Idle on the frontend while a read
 // was still using the session underneath it).

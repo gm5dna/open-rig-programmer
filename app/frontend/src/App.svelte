@@ -13,6 +13,7 @@
 	import StatusBar from './lib/StatusBar.svelte'
 	import { appState } from './lib/state/app.svelte.js'
 	import { initTransferEvents, refreshUISpec, refreshSettingsSpec, refreshAppVersion, setWindowTitle } from './lib/bridge/bindings.js'
+	import { tabKeydown } from './lib/tabKeydown.js'
 
 	$effect(() => {
 		initTransferEvents()
@@ -43,20 +44,15 @@
 	/** @param {'channels' | 'settings'} id */
 	function selectView(id) {
 		if (appState.activeView === id) return
-		appState.setActiveView(id)
+		appState.activeView = id
 	}
 
 	/** @param {KeyboardEvent} e @param {number} index */
 	function onViewTabKeydown(e, index) {
-		let target = null
-		if (e.key === 'ArrowRight') target = (index + 1) % VIEWS.length
-		else if (e.key === 'ArrowLeft') target = (index - 1 + VIEWS.length) % VIEWS.length
-		else if (e.key === 'Home') target = 0
-		else if (e.key === 'End') target = VIEWS.length - 1
-		if (target === null) return
-		e.preventDefault()
-		selectView(VIEWS[target].id)
-		document.getElementById(`view-tab-${VIEWS[target].id}`)?.focus()
+		tabKeydown(e, index, VIEWS.length, (target) => {
+			selectView(VIEWS[target].id)
+			document.getElementById(`view-tab-${VIEWS[target].id}`)?.focus()
+		})
 	}
 
 	// Title bar (task-18: "Open Rig Programmer — <filename>[*]", dirty

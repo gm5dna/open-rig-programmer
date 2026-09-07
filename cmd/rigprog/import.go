@@ -128,14 +128,8 @@ func cmdImport(args []string, stdout, stderr io.Writer) int {
 	model := fs.String("model", wiring.DefaultModel, "radio model to validate against")
 	force := fs.Bool("force", false, "overwrite --out if it already exists (required if --out equals --into)")
 
-	if err := fs.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			printImportUsage(stdout)
-			return exitSuccess
-		}
-		fmt.Fprintf(stderr, "rigprog import: %v\n", err)
-		printImportUsage(stderr)
-		return exitUsage
+	if ok, code := parseArgs(fs, args, "import", printImportUsage, stdout, stderr); !ok {
+		return code
 	}
 	if fs.NArg() > 0 {
 		fmt.Fprintf(stderr, "rigprog import: unexpected argument %q\n", fs.Arg(0))
@@ -271,8 +265,7 @@ func cmdImport(args []string, stdout, stderr io.Writer) int {
 
 	// This is a NEW artefact this command produced, not a re-save of
 	// whatever produced --into — always set Generator, unconditionally
-	// (unlike read's applyDefaultGenerator, which only fills an empty
-	// one).
+	// (unlike read's own "if empty" fill).
 	base.Generator = cliGeneratorID
 
 	// caps was fetched above, ahead of the --csv/--chirp branch.

@@ -61,13 +61,13 @@ const UI_SPEC = {
 
 function resetState() {
 	appState.clearConnection()
-	appState.setPorts([])
+	appState.ports = []
 	appState.setPortsLoading(false)
 	appState.setConnecting(false)
-	appState.setUISpec(null)
-	appState.setSettingsSpec(null)
+	appState.uiSpec = null
+	appState.settingsSpec = null
 	appState.setSettings(null)
-	appState.setActiveView('channels')
+	appState.activeView = 'channels'
 	appState.alerts = []
 }
 
@@ -77,7 +77,7 @@ beforeEach(() => {
 
 describe('Channels|Settings view switch', () => {
 	it('opens on Channels by default, rendering ChannelGrid', () => {
-		appState.setUISpec(UI_SPEC)
+		appState.uiSpec = UI_SPEC
 		appState.setCodeplug(codeplugFixture())
 		render(App)
 		expect(screen.getByRole('tab', { name: 'Channels' })).toHaveAttribute('aria-selected', 'true')
@@ -86,8 +86,8 @@ describe('Channels|Settings view switch', () => {
 	})
 
 	it('switching to Settings renders SettingsViewer; back to Channels renders ChannelGrid, appState intact both ways', async () => {
-		appState.setUISpec(UI_SPEC)
-		appState.setSettingsSpec(SETTINGS_SPEC)
+		appState.uiSpec = UI_SPEC
+		appState.settingsSpec = SETTINGS_SPEC
 		appState.setCodeplug(codeplugFixture())
 		appState.setSettings({ HasSnapshot: true, Descriptor: '', Complete: true, HasLegacy: false, Entries: [] })
 		render(App)
@@ -110,7 +110,7 @@ describe('Channels|Settings view switch', () => {
 	})
 
 	it('keyboard: ArrowRight moves the view tab, roving tabindex follows', async () => {
-		appState.setUISpec(UI_SPEC)
+		appState.uiSpec = UI_SPEC
 		render(App)
 		const channelsTab = screen.getByRole('tab', { name: 'Channels' })
 		expect(channelsTab).toHaveAttribute('tabindex', '0')

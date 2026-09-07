@@ -21,16 +21,16 @@ import { listPorts, refreshSupportedModels, connect, connectDemo } from '../brid
 
 function resetState() {
 	appState.clearConnection()
-	appState.setPorts([])
+	appState.ports = []
 	appState.setPortsLoading(false)
 	appState.setConnecting(false)
-	appState.setSupportedModels([])
-	appState.setSelectedModel('')
-	appState.setUISpec(null)
+	appState.supportedModels = []
+	appState.selectedModel = ''
+	appState.uiSpec = null
 	appState.setUnverifiedConsentPrompt(null)
-	appState.setUnverifiedConsents([])
-	appState.closeUnverifiedGrants()
-	appState.setSendDialogOpen(false)
+	appState.unverifiedConsents = []
+	appState.unverifiedGrantsOpen = false
+	appState.sendDialogOpen = false
 	appState.alerts = []
 }
 
@@ -50,10 +50,10 @@ describe('ConnectionBar', () => {
 	})
 
 	it('renders every port from appState as a select option', () => {
-		appState.setPorts([
+		appState.ports = [
 			{ Path: '/dev/tty.usbserial-A', Description: 'Silicon Labs CP210x', Score: 10, Hints: ['likely'] },
 			{ Path: '/dev/tty.usbserial-B', Description: '', Score: 1, Hints: [] },
-		])
+		]
 		render(ConnectionBar)
 
 		expect(screen.getByRole('option', { name: /\/dev\/tty\.usbserial-A.*Silicon Labs CP210x.*likely/ })).toBeInTheDocument()
@@ -61,7 +61,7 @@ describe('ConnectionBar', () => {
 	})
 
 	it('the demo control is a separate, clearly-labelled button — not a dropdown option', () => {
-		appState.setPorts([{ Path: '/dev/tty.usbserial-A', Description: 'FTDI', Score: 5, Hints: [] }])
+		appState.ports = [{ Path: '/dev/tty.usbserial-A', Description: 'FTDI', Score: 5, Hints: [] }]
 		render(ConnectionBar)
 
 		const demoButton = screen.getByRole('button', { name: 'Demo (simulated radio)' })
@@ -73,7 +73,7 @@ describe('ConnectionBar', () => {
 	})
 
 	it('clicking Connect calls the connect binding with the selected port', async () => {
-		appState.setPorts([{ Path: '/dev/tty.usbserial-A', Description: 'FTDI', Score: 5, Hints: [] }])
+		appState.ports = [{ Path: '/dev/tty.usbserial-A', Description: 'FTDI', Score: 5, Hints: [] }]
 		render(ConnectionBar)
 
 		const select = screen.getByLabelText('Port')
@@ -93,13 +93,13 @@ describe('ConnectionBar', () => {
 	})
 
 	it('Connect is disabled until a port is selected', () => {
-		appState.setPorts([{ Path: '/dev/tty.usbserial-A', Description: 'FTDI', Score: 5, Hints: [] }])
+		appState.ports = [{ Path: '/dev/tty.usbserial-A', Description: 'FTDI', Score: 5, Hints: [] }]
 		render(ConnectionBar)
 		expect(screen.getByRole('button', { name: 'Connect' })).toBeDisabled()
 	})
 
 	it('renders a ConnectionInfo badge once connected, distinguishing a live connection', () => {
-		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usbserial-A', USBSerial: '', Region: '', Demo: false })
+		appState.connection = { Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usbserial-A', USBSerial: '', Region: '', Demo: false }
 		render(ConnectionBar)
 
 		expect(screen.getByText(/FT-710/)).toBeInTheDocument()
@@ -109,14 +109,14 @@ describe('ConnectionBar', () => {
 	})
 
 	it('renders a visibly distinct DEMO badge for a demo connection', () => {
-		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: 'fake', USBSerial: 'SIM0001', Region: '', Demo: true })
+		appState.connection = { Model: 'FT-710', CATID: '0800', Port: 'fake', USBSerial: 'SIM0001', Region: '', Demo: true }
 		render(ConnectionBar)
 
 		expect(screen.getByText('DEMO')).toBeInTheDocument()
 	})
 
 	it('disables port selection, Connect and Demo once connected, and shows Disconnect instead', () => {
-		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usbserial-A', USBSerial: '', Region: '', Demo: false })
+		appState.connection = { Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usbserial-A', USBSerial: '', Region: '', Demo: false }
 		render(ConnectionBar)
 
 		expect(screen.getByLabelText('Port')).toBeDisabled()
@@ -126,7 +126,7 @@ describe('ConnectionBar', () => {
 	})
 
 	it('Disconnect is disabled while a transfer is active (Codex M6 #2, adjudicated HIGH, remedy 2d — mirrors Go now refusing Disconnect during the reservation)', () => {
-		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usbserial-A', USBSerial: '', Region: '', Demo: false })
+		appState.connection = { Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usbserial-A', USBSerial: '', Region: '', Demo: false }
 		appState.beginTransfer('read')
 		render(ConnectionBar)
 
@@ -141,7 +141,7 @@ describe('ConnectionBar model picker (task 13, M9d)', () => {
 	})
 
 	it('renders the Radio select as exactly Default plus one option per supported model, in the order Go gave them', () => {
-		appState.setSupportedModels(['FT-710', 'FTDX101D', 'FTdx10'])
+		appState.supportedModels = ['FT-710', 'FTDX101D', 'FTdx10']
 		render(ConnectionBar)
 
 		// Scoped to the model select (the port picker has options of its
@@ -159,7 +159,7 @@ describe('ConnectionBar model picker (task 13, M9d)', () => {
 	})
 
 	it('starts on the default option, whose value is "" — an untouched picker connects exactly as before it existed', () => {
-		appState.setSupportedModels(['FT-710', 'FTdx10'])
+		appState.supportedModels = ['FT-710', 'FTdx10']
 		render(ConnectionBar)
 
 		const select = /** @type {HTMLSelectElement} */ (screen.getByLabelText('Radio'))
@@ -168,8 +168,8 @@ describe('ConnectionBar model picker (task 13, M9d)', () => {
 	})
 
 	it('choosing a radio stores it in appState.selectedModel, which is what the bridge forwards', async () => {
-		appState.setSupportedModels(['FT-710', 'FTdx10'])
-		appState.setPorts([{ Path: '/dev/tty.usbserial-A', Description: 'FTDI', Score: 5, Hints: [] }])
+		appState.supportedModels = ['FT-710', 'FTdx10']
+		appState.ports = [{ Path: '/dev/tty.usbserial-A', Description: 'FTDI', Score: 5, Hints: [] }]
 		render(ConnectionBar)
 
 		await fireEvent.change(screen.getByLabelText('Radio'), { target: { value: 'FTdx10' } })
@@ -184,7 +184,7 @@ describe('ConnectionBar model picker (task 13, M9d)', () => {
 	})
 
 	it('the choice also reaches the demo path — clicking Demo after picking a radio leaves the choice in place for connectDemo to forward', async () => {
-		appState.setSupportedModels(['FT-710', 'FTdx10'])
+		appState.supportedModels = ['FT-710', 'FTdx10']
 		render(ConnectionBar)
 
 		await fireEvent.change(screen.getByLabelText('Radio'), { target: { value: 'FTdx10' } })
@@ -195,15 +195,15 @@ describe('ConnectionBar model picker (task 13, M9d)', () => {
 	})
 
 	it('the radio picker is disabled once connected — the model is fixed for the life of a session', () => {
-		appState.setSupportedModels(['FT-710', 'FTdx10'])
-		appState.setConnection({ Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usbserial-A', USBSerial: '', Region: '', Demo: false })
+		appState.supportedModels = ['FT-710', 'FTdx10']
+		appState.connection = { Model: 'FT-710', CATID: '0800', Port: '/dev/tty.usbserial-A', USBSerial: '', Region: '', Demo: false }
 		render(ConnectionBar)
 
 		expect(screen.getByLabelText('Radio')).toBeDisabled()
 	})
 
 	it('the radio picker is disabled while a connect attempt is in flight', () => {
-		appState.setSupportedModels(['FT-710', 'FTdx10'])
+		appState.supportedModels = ['FT-710', 'FTdx10']
 		appState.setConnecting(true)
 		render(ConnectionBar)
 
@@ -233,15 +233,15 @@ describe('ConnectionBar unverified-write consent affordances (task 14, M9d)', ()
 	})
 
 	it('shows no amber indicator when the live spec reports no consented writes', () => {
-		appState.setConnection({ Model: 'FTdx10', CATID: '0761', Port: 'COM3', USBSerial: '', Region: '', Demo: false, NeedsUnverifiedConsent: true, UnverifiedConsentRecorded: true })
-		appState.setUISpec(specArmed(false))
+		appState.connection = { Model: 'FTdx10', CATID: '0761', Port: 'COM3', USBSerial: '', Region: '', Demo: false, NeedsUnverifiedConsent: true, UnverifiedConsentRecorded: true }
+		appState.uiSpec = specArmed(false)
 		render(ConnectionBar)
 
 		expect(screen.queryByRole('button', { name: /unverified writes enabled/i })).not.toBeInTheDocument()
 	})
 
 	it('shows the amber indicator when the live spec DOES carry consented writes, and it opens the same panel', async () => {
-		appState.setUISpec(specArmed(true))
+		appState.uiSpec = specArmed(true)
 		render(ConnectionBar)
 
 		const badge = screen.getByRole('button', { name: /unverified writes enabled/i })
@@ -270,28 +270,28 @@ describe('ConnectionBar receiver label (UISpecView.Transmit)', () => {
 	const connected = { Model: 'IC-R8600', CATID: '96', Port: '/dev/tty.usbserial-A', USBSerial: '', Region: '', Demo: false }
 
 	it('labels a receive_only radio "Receive only" beside its model', () => {
-		appState.setConnection(connected)
-		appState.setUISpec({ Transmit: 'receive_only', Banks: [] })
+		appState.connection = connected
+		appState.uiSpec = { Transmit: 'receive_only', Banks: [] }
 		render(ConnectionBar)
 		expect(screen.getByText(/Receive only/)).toBeInTheDocument()
 	})
 
 	it('says nothing for a transceiver, and nothing for an unspecified Transmit', () => {
-		appState.setConnection({ ...connected, Model: 'FT-710', CATID: '0800' })
-		appState.setUISpec({ Transmit: 'has_transmitter', Banks: [] })
+		appState.connection = { ...connected, Model: 'FT-710', CATID: '0800' }
+		appState.uiSpec = { Transmit: 'has_transmitter', Banks: [] }
 		const { unmount } = render(ConnectionBar)
 		expect(screen.queryByText(/Receive only/)).not.toBeInTheDocument()
 		unmount()
 
 		// The zero value: a capability set that never stated its anatomy
 		// says nothing rather than guessing either way.
-		appState.setUISpec({ Transmit: '', Banks: [] })
+		appState.uiSpec = { Transmit: '', Banks: [] }
 		render(ConnectionBar)
 		expect(screen.queryByText(/Receive only/)).not.toBeInTheDocument()
 	})
 
 	it('says nothing while nothing is connected — the label describes the radio on the cable', () => {
-		appState.setUISpec({ Transmit: 'receive_only', Banks: [] })
+		appState.uiSpec = { Transmit: 'receive_only', Banks: [] }
 		render(ConnectionBar)
 		expect(screen.getByText('Not connected')).toBeInTheDocument()
 		expect(screen.queryByText(/Receive only/)).not.toBeInTheDocument()

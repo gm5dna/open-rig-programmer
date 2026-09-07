@@ -53,8 +53,6 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return cmdImport(rest, stdout, stderr)
 	case cmd == "settings":
 		return cmdSettings(rest, stdout, stderr)
-	case notImplemented[cmd]:
-		return cmdNotImplemented(cmd, stderr)
 	default:
 		fmt.Fprintf(stderr, "rigprog: unknown subcommand %q\n\n", cmd)
 		printUsage(stderr)
