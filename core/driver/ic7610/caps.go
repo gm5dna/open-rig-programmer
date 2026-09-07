@@ -3,8 +3,6 @@
 package ic7610
 
 import (
-	"fmt"
-
 	civic7610 "github.com/gm5dna/open-rig-programmer/core/civ/ic7610"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
@@ -131,13 +129,7 @@ var deliberatelyZero = map[string]string{
 // Matrix §1b — the two-byte channel selector runs 1..99 for the memories
 // (BCD "00 01".."00 99"), and civ.ProfileConfig.ChannelLo/ChannelHi carry
 // the same range. Ninety-nine, not a hundred: there is no channel 000.
-func memSlots() []string {
-	slots := make([]string, 0, 99)
-	for i := 1; i <= 99; i++ {
-		slots = append(slots, fmt.Sprintf("%03d", i))
-	}
-	return slots
-}
+func memSlots() []string { return spec.NumberedSlots(1, 99, "%03d") }
 
 // scanSlots is the SCAN bank's inventory: the two scan edges.
 //

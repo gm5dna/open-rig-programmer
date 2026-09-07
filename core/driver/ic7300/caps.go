@@ -3,8 +3,6 @@
 package ic7300
 
 import (
-	"fmt"
-
 	ic7300civ "github.com/gm5dna/open-rig-programmer/core/civ/ic7300"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
@@ -55,13 +53,7 @@ const (
 // BCD bytes and nothing else, so every slot in the range is addressable and
 // the bank lists all of them; spec.Bank.Sparse and its three companions
 // stay zero, which spec.Capabilities.Validate enforces as a set.
-func memSlots() []string {
-	slots := make([]string, 0, 99)
-	for n := 1; n <= 99; n++ {
-		slots = append(slots, fmt.Sprintf("%03d", n))
-	}
-	return slots
-}
+func memSlots() []string { return spec.NumberedSlots(1, 99, "%03d") }
 
 // scanSlots is the SCAN bank's inventory: "P1" and "P2", which is what the
 // manual prints and what codeplug.DisplaySlot's identity fallback passes
