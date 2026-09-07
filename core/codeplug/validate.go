@@ -525,94 +525,46 @@ func validateTierFields(slot string, bank spec.BankID, d ChannelData, caps spec.
 		})
 	}
 
-	if !reachable(spec.FieldTxFrequency) {
-		unreachableClaim(spec.FieldTxFrequency, d.TxFreqHz.State)
-	} else if !absent(spec.FieldTxFrequency, d.TxFreqHz.State) {
-		add(spec.FieldTxFrequency, d.TxFreqHz.Valid())
+	// validFor pairs TierFields' order with each field's OWN validation
+	// call, in TierFields order. This cannot live in the shared table
+	// (see TierFields' doc comment): every field asks a different
+	// question of caps, from no arguments (TxFreqHz) to a vocabulary
+	// (Duplex) to the whole Capabilities (ToneTx) to a second check
+	// beyond Valid (ProgramTuningStepHz).
+	validFor := [len(TierFields)]func() error{
+		func() error { return d.TxFreqHz.Valid() },
+		func() error { return d.Duplex.Valid(duplexOptionValues(caps.DuplexOptions)) },
+		func() error { return d.OffsetHz.Valid() },
+		func() error { return d.ToneMode.Valid(toneModeValues(caps.ToneModes)) },
+		func() error { return d.ToneTx.Valid(caps) },
+		func() error { return d.ToneRx.Valid(caps) },
+		func() error { return d.DTCSCode.Valid(caps.DTCSCodes) },
+		func() error { return d.DTCSPolarity.Valid(caps.DTCSPolarities) },
+		func() error { return d.Filter.Valid(caps.Filters) },
+		func() error { return d.DataMode.Valid() },
+		func() error { return d.TuningStepEnabled.Valid() },
+		func() error { return d.TuningStep.Valid(caps.TuningSteps) },
+		func() error {
+			if err := d.ProgramTuningStepHz.Valid(); err != nil {
+				return err
+			}
+			if d.ProgramTuningStepHz.State == Known && !AdmitsProgramTuningStep(caps, d.ProgramTuningStepHz.Value) {
+				return fmt.Errorf("codeplug: FreqField: Known value %d Hz is not admitted by this radio's range", d.ProgramTuningStepHz.Value)
+			}
+			return nil
+		},
+		func() error { return d.AttenuatorDB.Valid(caps.AttenuatorDB) },
+		func() error { return d.Preamp.Valid(caps.PreampOptions) },
+		func() error { return d.Antenna.Valid(caps.AntennaOptions) },
+		func() error { return d.IPPlus.Valid() },
 	}
-	if !reachable(spec.FieldDuplex) {
-		unreachableClaim(spec.FieldDuplex, d.Duplex.State)
-	} else if !absent(spec.FieldDuplex, d.Duplex.State) {
-		add(spec.FieldDuplex, d.Duplex.Valid(duplexOptionValues(caps.DuplexOptions)))
-	}
-	if !reachable(spec.FieldOffset) {
-		unreachableClaim(spec.FieldOffset, d.OffsetHz.State)
-	} else if !absent(spec.FieldOffset, d.OffsetHz.State) {
-		add(spec.FieldOffset, d.OffsetHz.Valid())
-	}
-	if !reachable(spec.FieldToneMode) {
-		unreachableClaim(spec.FieldToneMode, d.ToneMode.State)
-	} else if !absent(spec.FieldToneMode, d.ToneMode.State) {
-		add(spec.FieldToneMode, d.ToneMode.Valid(toneModeValues(caps.ToneModes)))
-	}
-	if !reachable(spec.FieldToneTx) {
-		unreachableClaim(spec.FieldToneTx, d.ToneTx.State)
-	} else if !absent(spec.FieldToneTx, d.ToneTx.State) {
-		add(spec.FieldToneTx, d.ToneTx.Valid(caps))
-	}
-	if !reachable(spec.FieldToneRx) {
-		unreachableClaim(spec.FieldToneRx, d.ToneRx.State)
-	} else if !absent(spec.FieldToneRx, d.ToneRx.State) {
-		add(spec.FieldToneRx, d.ToneRx.Valid(caps))
-	}
-	if !reachable(spec.FieldDTCSCode) {
-		unreachableClaim(spec.FieldDTCSCode, d.DTCSCode.State)
-	} else if !absent(spec.FieldDTCSCode, d.DTCSCode.State) {
-		add(spec.FieldDTCSCode, d.DTCSCode.Valid(caps.DTCSCodes))
-	}
-	if !reachable(spec.FieldDTCSPolarity) {
-		unreachableClaim(spec.FieldDTCSPolarity, d.DTCSPolarity.State)
-	} else if !absent(spec.FieldDTCSPolarity, d.DTCSPolarity.State) {
-		add(spec.FieldDTCSPolarity, d.DTCSPolarity.Valid(caps.DTCSPolarities))
-	}
-	if !reachable(spec.FieldFilter) {
-		unreachableClaim(spec.FieldFilter, d.Filter.State)
-	} else if !absent(spec.FieldFilter, d.Filter.State) {
-		add(spec.FieldFilter, d.Filter.Valid(caps.Filters))
-	}
-	if !reachable(spec.FieldDataMode) {
-		unreachableClaim(spec.FieldDataMode, d.DataMode.State)
-	} else if !absent(spec.FieldDataMode, d.DataMode.State) {
-		add(spec.FieldDataMode, d.DataMode.Valid())
-	}
-	if !reachable(spec.FieldTuningStepEnabled) {
-		unreachableClaim(spec.FieldTuningStepEnabled, d.TuningStepEnabled.State)
-	} else if !absent(spec.FieldTuningStepEnabled, d.TuningStepEnabled.State) {
-		add(spec.FieldTuningStepEnabled, d.TuningStepEnabled.Valid())
-	}
-	if !reachable(spec.FieldTuningStep) {
-		unreachableClaim(spec.FieldTuningStep, d.TuningStep.State)
-	} else if !absent(spec.FieldTuningStep, d.TuningStep.State) {
-		add(spec.FieldTuningStep, d.TuningStep.Valid(caps.TuningSteps))
-	}
-	if !reachable(spec.FieldProgramTuningStep) {
-		unreachableClaim(spec.FieldProgramTuningStep, d.ProgramTuningStepHz.State)
-	} else if !absent(spec.FieldProgramTuningStep, d.ProgramTuningStepHz.State) {
-		if err := d.ProgramTuningStepHz.Valid(); err != nil {
-			add(spec.FieldProgramTuningStep, err)
-		} else if d.ProgramTuningStepHz.State == Known && !AdmitsProgramTuningStep(caps, d.ProgramTuningStepHz.Value) {
-			add(spec.FieldProgramTuningStep, fmt.Errorf("codeplug: FreqField: Known value %d Hz is not admitted by this radio's range", d.ProgramTuningStepHz.Value))
+	for i, tf := range TierFields {
+		state := *tf.State(&d)
+		if !reachable(tf.Field) {
+			unreachableClaim(tf.Field, state)
+		} else if !absent(tf.Field, state) {
+			add(tf.Field, validFor[i]())
 		}
-	}
-	if !reachable(spec.FieldAttenuator) {
-		unreachableClaim(spec.FieldAttenuator, d.AttenuatorDB.State)
-	} else if !absent(spec.FieldAttenuator, d.AttenuatorDB.State) {
-		add(spec.FieldAttenuator, d.AttenuatorDB.Valid(caps.AttenuatorDB))
-	}
-	if !reachable(spec.FieldPreamp) {
-		unreachableClaim(spec.FieldPreamp, d.Preamp.State)
-	} else if !absent(spec.FieldPreamp, d.Preamp.State) {
-		add(spec.FieldPreamp, d.Preamp.Valid(caps.PreampOptions))
-	}
-	if !reachable(spec.FieldAntenna) {
-		unreachableClaim(spec.FieldAntenna, d.Antenna.State)
-	} else if !absent(spec.FieldAntenna, d.Antenna.State) {
-		add(spec.FieldAntenna, d.Antenna.Valid(caps.AntennaOptions))
-	}
-	if !reachable(spec.FieldIPPlus) {
-		unreachableClaim(spec.FieldIPPlus, d.IPPlus.State)
-	} else if !absent(spec.FieldIPPlus, d.IPPlus.State) {
-		add(spec.FieldIPPlus, d.IPPlus.Valid())
 	}
 	return issues
 }
