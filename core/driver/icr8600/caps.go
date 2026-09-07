@@ -145,36 +145,3 @@ func CapabilitiesUnverified() spec.Capabilities {
 func CapabilitiesSimulated() spec.Capabilities {
 	return baseCapabilities(spec.FieldSupport{Read: spec.Supported, Write: spec.Supported})
 }
-
-func cloneCapabilities(caps spec.Capabilities) spec.Capabilities {
-	out := caps
-	out.Banks = make([]spec.Bank, 0, len(caps.Banks))
-	for _, b := range caps.Banks {
-		cp, _ := caps.Bank(b.ID)
-		out.Banks = append(out.Banks, cp)
-	}
-	out.Modes = append([]string(nil), caps.Modes...)
-	out.CTCSSTones = append([]spec.Tone(nil), caps.CTCSSTones...)
-	if caps.CTCSSToneRange != nil {
-		r := *caps.CTCSSToneRange
-		out.CTCSSToneRange = &r
-	}
-	out.Bauds = append([]int(nil), caps.Bauds...)
-	out.RequiredSlots = append([]string(nil), caps.RequiredSlots...)
-	out.ShiftOptions = append([]spec.ShiftOption(nil), caps.ShiftOptions...)
-	out.CTCSSStates = append([]spec.ToneState(nil), caps.CTCSSStates...)
-	out.DuplexOptions = append([]spec.DuplexOption(nil), caps.DuplexOptions...)
-	out.ToneModes = append([]spec.ToneMode(nil), caps.ToneModes...)
-	out.DTCSPolarities = append([]string(nil), caps.DTCSPolarities...)
-	out.DTCSCodes = append([]int(nil), caps.DTCSCodes...)
-	out.Filters = append([]string(nil), caps.Filters...)
-	out.TuningSteps = append([]string(nil), caps.TuningSteps...)
-	if caps.ProgramTuningStepRange != nil {
-		r := *caps.ProgramTuningStepRange
-		out.ProgramTuningStepRange = &r
-	}
-	out.AttenuatorDB = append([]int(nil), caps.AttenuatorDB...)
-	out.PreampOptions = append([]string(nil), caps.PreampOptions...)
-	out.AntennaOptions = append([]string(nil), caps.AntennaOptions...)
-	return out
-}

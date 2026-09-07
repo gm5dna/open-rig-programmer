@@ -523,7 +523,7 @@ func (s *Session) Identity() driver.Identity { return s.id }
 // what a caller was handed can never alter what this session's own write
 // gate enforces.
 func (s *Session) Capabilities() spec.Capabilities {
-	return cloneCapabilities(s.caps)
+	return s.caps.Clone()
 }
 
 // Diagnostics implements driver.DiagnosticsReporter — the NEUTRAL

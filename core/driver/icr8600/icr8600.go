@@ -200,7 +200,7 @@ func (s *Session) memoryReadSpec() transport.CommandSpec {
 
 func (s *Session) Identity() driver.Identity { return s.id }
 
-func (s *Session) Capabilities() spec.Capabilities { return cloneCapabilities(s.caps) }
+func (s *Session) Capabilities() spec.Capabilities { return s.caps.Clone() }
 
 func (s *Session) Close() error { return s.eng.Close() }
 

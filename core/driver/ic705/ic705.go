@@ -508,7 +508,7 @@ func (s *Session) Identity() driver.Identity { return s.id }
 // Capabilities implements driver.Session: the EFFECTIVE set — the static
 // baseline, plus this radio's own materialised memory inventory, plus
 // consent if the user gave it — as a deep copy per call.
-func (s *Session) Capabilities() spec.Capabilities { return cloneCapabilities(s.caps) }
+func (s *Session) Capabilities() spec.Capabilities { return s.caps.Clone() }
 
 // SessionInfo reports what the probe and the inventory walk learned, plus
 // the counters this session accrues as it runs. See SessionInfo for why

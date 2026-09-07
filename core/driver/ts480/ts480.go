@@ -493,7 +493,7 @@ func (s *Session) Identity() driver.Identity { return s.id }
 // deep copy per call. The copy is load-bearing for the write gate exactly as
 // in the sibling drivers — a caller mutating what it was handed must never
 // alter what WriteChannel enforces.
-func (s *Session) Capabilities() spec.Capabilities { return cloneCapabilities(s.caps) }
+func (s *Session) Capabilities() spec.Capabilities { return s.caps.Clone() }
 
 // Variant returns the probe's TY answer: the hardware variant this radio
 // reported and P1's two reserved bytes, both exactly as they arrived.

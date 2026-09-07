@@ -337,42 +337,6 @@ func capabilitiesSimulated() spec.Capabilities {
 	return baseCapabilities(bankFields(rw), bankFields(rw))
 }
 
-// cloneCapabilities returns a deep copy of caps: Banks (with their Slots
-// and Fields), every slice, and the tone RANGE pointer.
-//
-// THE POINTER IS THE ONE THAT BITES. spec.Capabilities.CTCSSToneRange is a
-// *ToneRange, so a shallow copy would hand every caller the same range
-// value a session enforces against; a caller widening its Max would widen
-// the gate. spec.ConsentUnverifiedWrites copies it for exactly this reason,
-// and this function must too.
-func cloneCapabilities(caps spec.Capabilities) spec.Capabilities {
-	out := caps
-	if caps.Banks != nil {
-		out.Banks = make([]spec.Bank, 0, len(caps.Banks))
-		for _, b := range caps.Banks {
-			// Capabilities.Bank already returns a defensive copy.
-			cp, _ := caps.Bank(b.ID)
-			out.Banks = append(out.Banks, cp)
-		}
-	}
-	out.Modes = append([]string(nil), caps.Modes...)
-	out.CTCSSTones = append([]spec.Tone(nil), caps.CTCSSTones...)
-	if caps.CTCSSToneRange != nil {
-		r := *caps.CTCSSToneRange
-		out.CTCSSToneRange = &r
-	}
-	out.Bauds = append([]int(nil), caps.Bauds...)
-	out.RequiredSlots = append([]string(nil), caps.RequiredSlots...)
-	out.ShiftOptions = append([]spec.ShiftOption(nil), caps.ShiftOptions...)
-	out.CTCSSStates = append([]spec.ToneState(nil), caps.CTCSSStates...)
-	out.DuplexOptions = append([]spec.DuplexOption(nil), caps.DuplexOptions...)
-	out.ToneModes = append([]spec.ToneMode(nil), caps.ToneModes...)
-	out.DTCSPolarities = append([]string(nil), caps.DTCSPolarities...)
-	out.DTCSCodes = append([]int(nil), caps.DTCSCodes...)
-	out.Filters = append([]string(nil), caps.Filters...)
-	return out
-}
-
 // ic7300Driver is this package's driver.Driver implementation.
 //
 // Task 14 gives it Open, the probe and the session; this file gives it the
