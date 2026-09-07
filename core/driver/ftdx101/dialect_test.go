@@ -8,6 +8,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
 	catftdx101 "github.com/gm5dna/open-rig-programmer/core/cat/ftdx101"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
 
@@ -147,7 +148,7 @@ func TestOpen_UnconfiguredDialectRefusesToOpen(t *testing.T) {
 
 	// Deliberately NOT via NewD/NewMP: a hand-built driver with the zero
 	// modelParams, and so the zero dialect.
-	d := &ftdx101Driver{profile: Simulated}
+	d := &ftdx101Driver{Base: driver.Base{Profile: Simulated}}
 
 	sess, err := d.Open(testCtx(t), p.Port(), testIdentity)
 	if err == nil {

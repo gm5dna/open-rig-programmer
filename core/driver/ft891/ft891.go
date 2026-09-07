@@ -57,7 +57,7 @@ func WithTransportLogger(l transport.Logger) Option {
 // proven.
 func WithConsentedUnverifiedWrites() Option {
 	return func(d *ft891Driver) {
-		d.consentUnverifiedWrites = true
+		d.Consented = true
 	}
 }
 
@@ -69,7 +69,7 @@ func WithConsentedUnverifiedWrites() Option {
 // writable", never a writable set. Options: WithTransportLogger,
 // WithConsentedUnverifiedWrites.
 func New(profile Profile, opts ...Option) driver.Driver {
-	d := &ft891Driver{profile: profile, dialect: catDialect}
+	d := &ft891Driver{Base: driver.Base{Profile: profile}, dialect: catDialect}
 	for _, opt := range opts {
 		opt(d)
 	}
@@ -78,7 +78,7 @@ func New(profile Profile, opts ...Option) driver.Driver {
 
 // ft891Driver implements driver.Driver for the Yaesu FT-891.
 type ft891Driver struct {
-	profile Profile
+	driver.Base
 	// dialect is the CAT dialect every codec call this driver makes — and
 	// every Session it Opens makes — goes through. Set from catDialect in
 	// New; no Option touches it.
@@ -95,7 +95,6 @@ type ft891Driver struct {
 	// consentUnverifiedWrites records the user's consent to unverified
 	// writes — set only by WithConsentedUnverifiedWrites, read only by
 	// sessionCapabilities. FALSE is the zero value and the default.
-	consentUnverifiedWrites bool
 }
 
 // Model implements driver.Driver.
@@ -105,7 +104,7 @@ func (d *ft891Driver) Model() string { return modelName }
 // driver's profile — no discovered banks (see Session.Capabilities for the
 // effective, per-radio set).
 func (d *ft891Driver) Capabilities() spec.Capabilities {
-	switch d.profile {
+	switch d.Profile {
 	case Simulated:
 		return CapabilitiesSimulated()
 	case RealHardware:
@@ -208,24 +207,13 @@ func (d *ft891Driver) open(ctx context.Context, eng *transport.Engine, id driver
 // the transform here, before the Session exists, keeps the set WriteChannel
 // enforces (s.caps) and the set Capabilities() hands out the same value.
 func (d *ft891Driver) sessionCapabilities(slots60m []string, emg bool) spec.Capabilities {
-	caps := effectiveCapabilities(d.Capabilities(), slots60m, emg)
-	if d.consentUnverifiedWrites && d.profileRecognised() {
-		caps = spec.ConsentUnverifiedWrites(caps)
-	}
-	return caps
+	return d.SessionCaps(effectiveCapabilities(d.Capabilities(), slots60m, emg))
 }
 
 // profileRecognised reports whether this driver's profile is one of the
-// package's declared Profile constants — the same set the capability switch
-// names explicitly, restated here so the consent gate cannot drift open for
-// a profile the switch would fail safe on.
-func (d *ft891Driver) profileRecognised() bool {
-	switch d.profile {
-	case Simulated, RealHardware:
-		return true
-	}
-	return false
-}
+// declared constants — driver.Base's shared predicate, kept under the
+// name this package's tests put the question by.
+func (d *ft891Driver) profileRecognised() bool { return d.Recognised() }
 
 // SynthesiseDiscoveredBanks implements the optional
 // driver.DiscoveredBankSynthesizer capability (core/driver/optional.go): it
@@ -349,9 +337,9 @@ func (s *Session) Identity() driver.Identity { return s.id }
 
 // Capabilities implements driver.Session: the EFFECTIVE capability set
 // (profile baseline plus the discovered read-only 60M/EMG banks), as a deep
-// copy per call — see cloneCapabilities for why the copy is load-bearing.
+// copy per call — see spec.Capabilities.Clone for why the copy is load-bearing.
 func (s *Session) Capabilities() spec.Capabilities {
-	return cloneCapabilities(s.caps)
+	return s.caps.Clone()
 }
 
 // Diagnostics reports this session's transport-level health counters as a
@@ -363,13 +351,7 @@ func (s *Session) Capabilities() spec.Capabilities {
 // rather than part of driver.Session, because which diagnostics exist is a
 // per-driver matter.
 func (s *Session) Diagnostics() driver.SessionDiagnostics {
-	n := s.eng.UnexpectedFrames()
-	if n < 0 {
-		// Unreachable (the engine only ever increments), but never let a
-		// negative int64 wrap into an absurd uint64.
-		n = 0
-	}
-	return driver.SessionDiagnostics{UnexpectedFrames: uint64(n)}
+	return driver.SessionDiagnostics{UnexpectedFrames: uint64(s.eng.UnexpectedFrames())}
 }
 
 // Close implements driver.Session. Idempotent: transport.Engine.Close

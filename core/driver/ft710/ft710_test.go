@@ -369,11 +369,12 @@ func TestSession_CapabilitiesDefensiveCopy(t *testing.T) {
 	}
 }
 
-// TestCloneCapabilities_VocabIndependence checks that cloneCapabilities
+// TestCloneCapabilities_VocabIndependence checks that the shared
+// spec.Capabilities.Clone
 // deep-copies ShiftOptions and CTCSSStates (task 38/M9a-2): mutating
 // either slice on the clone must never be observable through the
 // original Capabilities value or through a second, separate clone —
-// exactly the load-bearing guarantee cloneCapabilities' doc comment
+// exactly the load-bearing guarantee spec.Capabilities.Clone's doc comment
 // already claims for Modes/CTCSSTones/Bauds/RequiredSlots, now extended
 // to the two vocab slices.
 func TestCloneCapabilities_VocabIndependence(t *testing.T) {
@@ -390,7 +391,7 @@ func TestCloneCapabilities_VocabIndependence(t *testing.T) {
 		},
 	}
 
-	clone := cloneCapabilities(orig)
+	clone := orig.Clone()
 	clone.ShiftOptions[0] = spec.ShiftOption{Value: "TAMPERED"}
 	clone.CTCSSStates[0] = spec.ToneState{Value: "TAMPERED", Semantics: spec.ToneEncode}
 	clone.ShiftOptions = append(clone.ShiftOptions, spec.ShiftOption{Value: "EXTRA"})
@@ -412,12 +413,12 @@ func TestCloneCapabilities_VocabIndependence(t *testing.T) {
 	// A second, independent clone of the (still-unaffected) original must
 	// also be unaffected — confirming the tampering never reached the
 	// shared source either.
-	again := cloneCapabilities(orig)
+	again := orig.Clone()
 	if again.ShiftOptions[0].Value != "SIMPLEX" || len(again.ShiftOptions) != 3 {
-		t.Errorf("cloneCapabilities(orig).ShiftOptions = %+v after a prior clone was mutated, want unaffected [SIMPLEX PLUS MINUS]", again.ShiftOptions)
+		t.Errorf("orig.Clone().ShiftOptions = %+v after a prior clone was mutated, want unaffected [SIMPLEX PLUS MINUS]", again.ShiftOptions)
 	}
 	if again.CTCSSStates[0] != (spec.ToneState{Value: "OFF", Semantics: spec.ToneOff}) || len(again.CTCSSStates) != 3 {
-		t.Errorf("cloneCapabilities(orig).CTCSSStates = %+v after a prior clone was mutated, want unaffected", again.CTCSSStates)
+		t.Errorf("orig.Clone().CTCSSStates = %+v after a prior clone was mutated, want unaffected", again.CTCSSStates)
 	}
 }
 

@@ -119,7 +119,7 @@ func WithTransportLogger(l transport.Logger) Option {
 // proven.
 func WithConsentedUnverifiedWrites() Option {
 	return func(d *ftdx101Driver) {
-		d.consentUnverifiedWrites = true
+		d.Consented = true
 	}
 }
 
@@ -147,7 +147,7 @@ func NewMP(profile Profile, opts ...Option) driver.Driver {
 // fallback: there is no bare New, for the same reason core/cat/ftdx101
 // offers no bare Dialect().
 func newDriver(m modelParams, profile Profile, opts ...Option) driver.Driver {
-	d := &ftdx101Driver{model: m, profile: profile}
+	d := &ftdx101Driver{model: m, Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)
 	}
@@ -171,8 +171,8 @@ type ftdx101Driver struct {
 	// the value the driver or session carries, so a hand-built driver with
 	// a zero modelParams fails closed rather than silently borrowing one
 	// model's dialect (see TestOpen_UnconfiguredDialectRefusesToOpen).
-	model   modelParams
-	profile Profile
+	model modelParams
+	driver.Base
 	// transportLogger, when non-nil, is threaded into every Session's
 	// transport.Engine at Open time — see WithTransportLogger.
 	transportLogger transport.Logger
@@ -181,7 +181,6 @@ type ftdx101Driver struct {
 	// sessionCapabilities. FALSE is the zero value and the default, so a
 	// driver built without the option behaves exactly as it did before the
 	// option existed.
-	consentUnverifiedWrites bool
 }
 
 // Model implements driver.Driver.
@@ -191,7 +190,7 @@ func (d *ftdx101Driver) Model() string { return d.model.name }
 // driver's model and profile — no discovered banks (see
 // Session.Capabilities for the effective, per-radio set).
 func (d *ftdx101Driver) Capabilities() spec.Capabilities {
-	switch d.profile {
+	switch d.Profile {
 	case Simulated:
 		return capabilitiesSimulated(d.model)
 	case RealHardware:
@@ -302,26 +301,13 @@ func (d *ftdx101Driver) open(ctx context.Context, eng *transport.Engine, id driv
 // the transform here, before the Session exists, keeps the set WriteChannel
 // enforces (s.caps) and the set Capabilities() hands out the same value.
 func (d *ftdx101Driver) sessionCapabilities(slots60m []string, emg bool) spec.Capabilities {
-	caps := effectiveCapabilities(d.model.dialect, d.Capabilities(), slots60m, emg)
-	if d.consentUnverifiedWrites && d.profileRecognised() {
-		caps = spec.ConsentUnverifiedWrites(caps)
-	}
-	return caps
+	return d.SessionCaps(effectiveCapabilities(d.model.dialect, d.Capabilities(), slots60m, emg))
 }
 
 // profileRecognised reports whether this driver's profile is one of the
-// package's declared Profile constants — the same set Capabilities' switch
-// names explicitly, restated here so the consent gate cannot drift open for
-// a profile that switch would fail safe on. It carries no model dimension
-// because Profile carries none: which radio a driver is for is fixed by
-// which constructor built it (plan D1).
-func (d *ftdx101Driver) profileRecognised() bool {
-	switch d.profile {
-	case Simulated, RealHardware:
-		return true
-	}
-	return false
-}
+// declared constants — driver.Base's shared predicate, kept under the
+// name this package's tests put the question by.
+func (d *ftdx101Driver) profileRecognised() bool { return d.Recognised() }
 
 // SynthesiseDiscoveredBanks implements the optional
 // driver.DiscoveredBankSynthesizer capability (core/driver/optional.go): it
@@ -447,9 +433,9 @@ func (s *Session) Identity() driver.Identity { return s.id }
 
 // Capabilities implements driver.Session: the EFFECTIVE capability set
 // (profile baseline plus the discovered read-only 60M/EMG banks), as a deep
-// copy per call — see cloneCapabilities for why the copy is load-bearing.
+// copy per call — see spec.Capabilities.Clone for why the copy is load-bearing.
 func (s *Session) Capabilities() spec.Capabilities {
-	return cloneCapabilities(s.caps)
+	return s.caps.Clone()
 }
 
 // Diagnostics reports this session's transport-level health counters as a
@@ -461,13 +447,7 @@ func (s *Session) Capabilities() spec.Capabilities {
 // concrete *Session rather than part of driver.Session, because which
 // diagnostics exist is a per-driver matter.
 func (s *Session) Diagnostics() driver.SessionDiagnostics {
-	n := s.eng.UnexpectedFrames()
-	if n < 0 {
-		// Unreachable (the engine only ever increments), but never let a
-		// negative int64 wrap into an absurd uint64.
-		n = 0
-	}
-	return driver.SessionDiagnostics{UnexpectedFrames: uint64(n)}
+	return driver.SessionDiagnostics{UnexpectedFrames: uint64(s.eng.UnexpectedFrames())}
 }
 
 // Close implements driver.Session. Idempotent: transport.Engine.Close

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeradio"
 )
@@ -87,7 +88,7 @@ func TestOpen_UnconfiguredDialectRefusesToOpen(t *testing.T) {
 	t.Cleanup(func() { _ = r.Close() })
 
 	// Deliberately NOT via New: a hand-built driver with the zero dialect.
-	d := &ft710Driver{profile: Simulated}
+	d := &ft710Driver{Base: driver.Base{Profile: Simulated}}
 
 	sess, err := d.Open(testCtx(t), r.Port(), testIdentity)
 	if err == nil {
