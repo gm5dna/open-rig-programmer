@@ -46,9 +46,11 @@ package wiring
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
-	"sort"
+	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/gm5dna/open-rig-programmer/core/driver"
@@ -810,12 +812,7 @@ var realDrivers = map[string]func(consent bool) driver.Driver{
 // session against, sorted, so a caller (a CLI listing supported radios, a
 // GUI picker) gets deterministic output.
 func SupportedModels() []string {
-	models := make([]string, 0, len(realDrivers))
-	for m := range realDrivers {
-		models = append(models, m)
-	}
-	sort.Strings(models)
-	return models
+	return slices.Sorted(maps.Keys(realDrivers))
 }
 
 // UnknownModelError is returned by every model-keyed lookup in this
@@ -1249,25 +1246,15 @@ func (e *OpenSessionError) Error() string {
 
 func (e *OpenSessionError) Unwrap() error { return e.Cause }
 
+// modelSlugNonAlnum matches a run of characters ModelSlug does not keep.
+var modelSlugNonAlnum = regexp.MustCompile(`[^a-z0-9]+`)
+
 // ModelSlug turns a model name into a filesystem-safe directory
 // component: lowercased, with each run of non-alphanumeric characters
 // collapsed to a single "-" (e.g. "FTDX101D/MP" -> "ftdx101d-mp"). Used
 // to give each model its own snapshot/journal directory.
 func ModelSlug(model string) string {
-	var b strings.Builder
-	dash := false
-	for _, r := range strings.ToLower(model) {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-			b.WriteRune(r)
-			dash = false
-			continue
-		}
-		if !dash && b.Len() > 0 {
-			b.WriteByte('-')
-			dash = true
-		}
-	}
-	return strings.TrimSuffix(b.String(), "-")
+	return strings.Trim(modelSlugNonAlnum.ReplaceAllString(strings.ToLower(model), "-"), "-")
 }
 
 // ResolveSnapshotDir returns the snapshot/journal directory a
