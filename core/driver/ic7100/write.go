@@ -158,7 +158,7 @@ func (s *Session) readRawForWrite(ctx context.Context, slot string, want civ.Cha
 	}
 	if got != want {
 		s.noteMismatch()
-		return nil, nil, false, &AnswerMismatchError{Requested: want, Answered: got}
+		return nil, nil, false, &AnswerMismatchError{Model: "ic7100", Requested: want, Answered: got}
 	}
 	if allFF(raw) {
 		return answer, raw, false, nil

@@ -393,7 +393,7 @@ func (s *Session) preservationRead(ctx context.Context, want civ.ChannelAddress)
 	}
 	if got != want {
 		s.noteAnswerMismatch()
-		return civ.MemoryRecord{}, nil, false, &AnswerMismatchError{Requested: want.String(), Answered: got.String()}
+		return civ.MemoryRecord{}, nil, false, &AnswerMismatchError{Model: "ic7300", Requested: want.String(), Answered: got.String()}
 	}
 	if allFF(raw) {
 		return civ.MemoryRecord{}, raw, false, nil

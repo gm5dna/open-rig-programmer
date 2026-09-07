@@ -244,7 +244,7 @@ func (d *ic7300Driver) probeForFingerprint(ctx context.Context, eng *transport.E
 		// at the channel — so the address is the DRIVER's to check, here and
 		// in every other read path.
 		if got != want {
-			return &AnswerMismatchError{Requested: want.String(), Answered: got.String()}
+			return &AnswerMismatchError{Model: "ic7300", Requested: want.String(), Answered: got.String()}
 		}
 		probe.Fingerprinted = true
 		return nil
@@ -407,15 +407,11 @@ func (s *Session) Close() error { return s.eng.Close() }
 
 // ErrAnswerMismatch is the sentinel for a memory answer that names a
 // different channel than the one requested.
-//
-// IT IS THIS DRIVER'S OWN, minted here rather than imported from
-// core/driver/ftdx101, whose ErrAnswerMismatch is the precedent for the
-// shape. No driver package imports another: a shared sentinel would make one
-// radio's diagnostics another's.
-var ErrAnswerMismatch = errors.New("ic7300: answer names a different channel than was requested")
+var ErrAnswerMismatch = driver.ErrAnswerMismatch
 
 // AnswerMismatchError reports that a 1A 00 answer's decoded channel address
-// was not the one asked for.
+// was not the one asked for; the shared form (driver.AnswerMismatchError)
+// carries the model name so this package needs no typed error of its own.
 //
 // THE CHECK IS THE DRIVER'S BECAUSE NOTHING BELOW IT MAKES ONE.
 // civ.Profile.MemoryAnswerMatcher is envelope-only by design — it matches
@@ -424,17 +420,4 @@ var ErrAnswerMismatch = errors.New("ic7300: answer names a different channel tha
 // codeplug would be corrupted silently. It is checked BEFORE the empty
 // recognition, the template check, the record mapping and the write merge
 // alike.
-type AnswerMismatchError struct {
-	// Requested is the channel address the read asked for.
-	Requested string
-	// Answered is the channel address the answer carried.
-	Answered string
-}
-
-// Error implements the error interface.
-func (e *AnswerMismatchError) Error() string {
-	return fmt.Sprintf("ic7300: requested channel %s but the answer names %s — refusing to map a reply onto the wrong slot", e.Requested, e.Answered)
-}
-
-// Unwrap lets errors.Is(err, ErrAnswerMismatch) match.
-func (e *AnswerMismatchError) Unwrap() error { return ErrAnswerMismatch }
+type AnswerMismatchError = driver.AnswerMismatchError[string]

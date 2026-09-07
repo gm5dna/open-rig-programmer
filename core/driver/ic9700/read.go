@@ -9,6 +9,7 @@ import (
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
 )
@@ -28,21 +29,12 @@ import (
 // core/driver/ftdx101's same-shaped pair is the precedent; this is this
 // package's own, in its own namespace, because a caller distinguishing
 // which radio's read went wrong needs distinct types.
-var ErrAnswerMismatch = errors.New("ic9700: answer names a different slot than was requested")
+var ErrAnswerMismatch = driver.ErrAnswerMismatch
 
-// AnswerMismatchError reports the requested and the answered address.
-type AnswerMismatchError struct {
-	Requested civ.ChannelAddress
-	Answered  civ.ChannelAddress
-}
-
-func (e *AnswerMismatchError) Error() string {
-	return fmt.Sprintf("ic9700: requested %v but the answer names %v — refusing to map a reply onto the wrong slot",
-		e.Requested, e.Answered)
-}
-
-// Unwrap lets errors.Is(err, ErrAnswerMismatch) match.
-func (e *AnswerMismatchError) Unwrap() error { return ErrAnswerMismatch }
+// AnswerMismatchError reports the requested and the answered address; the
+// shared form (driver.AnswerMismatchError) carries the model name so this
+// package needs no typed error of its own.
+type AnswerMismatchError = driver.AnswerMismatchError[civ.ChannelAddress]
 
 // ReadChannel implements driver.Session: one `1A 00` read of one memory
 // slot, mapped into the neutral codeplug model.
@@ -126,7 +118,7 @@ func (s *Session) readChannelRaw(ctx context.Context, slot string) (codeplug.Cha
 	// below this line runs for a mismatched answer.
 	if got != addr {
 		s.noteAnswerMismatch()
-		return codeplug.Channel{}, nil, civ.MemoryRecord{}, &AnswerMismatchError{Requested: addr, Answered: got}
+		return codeplug.Channel{}, nil, civ.MemoryRecord{}, &AnswerMismatchError{Model: "ic9700", Requested: addr, Answered: got}
 	}
 
 	if allFF(record) {

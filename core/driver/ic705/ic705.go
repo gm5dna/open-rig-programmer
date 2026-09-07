@@ -369,7 +369,7 @@ func fingerprintProbe(ctx context.Context, eng *transport.Engine) (bool, error) 
 			return false, fmt.Errorf("ic705: Open: probe slot %q: %w", slot, err)
 		}
 		if got != addr {
-			return false, &AnswerMismatchError{Requested: addr, Answered: got}
+			return false, &AnswerMismatchError{Model: "ic705", Requested: addr, Answered: got}
 		}
 		if allFF(record) {
 			// The other unverified empty-channel shape (D5 entry 2(b),
@@ -530,22 +530,9 @@ func (s *Session) Close() error { return s.eng.Close() }
 // quarantine discipline makes a stale same-shape reply unlikely, and
 // "unlikely" is not the standard for silently relabelling one channel's
 // contents with another channel's name.
-var ErrAnswerMismatch = errors.New("ic705: memory answer names a different channel than was requested")
+var ErrAnswerMismatch = driver.ErrAnswerMismatch
 
-// AnswerMismatchError reports the requested and the answered address. It
-// is this PACKAGE's own typed error, in this package's own namespace: the
-// Yaesu drivers have same-shaped ones and none imports another, because a
-// caller distinguishing which radio's read went wrong needs distinct
-// types.
-type AnswerMismatchError struct {
-	Requested civ.ChannelAddress
-	Answered  civ.ChannelAddress
-}
-
-// Error implements the error interface.
-func (e *AnswerMismatchError) Error() string {
-	return fmt.Sprintf("ic705: requested channel %v but the answer names %v — refusing to map a reply onto the wrong channel", e.Requested, e.Answered)
-}
-
-// Unwrap lets errors.Is(err, ErrAnswerMismatch) match.
-func (e *AnswerMismatchError) Unwrap() error { return ErrAnswerMismatch }
+// AnswerMismatchError reports the requested and the answered address; the
+// shared form (driver.AnswerMismatchError) carries the model name so this
+// package needs no typed error of its own.
+type AnswerMismatchError = driver.AnswerMismatchError[civ.ChannelAddress]

@@ -636,8 +636,8 @@ func TestOpen_ProbeAnswerForAnotherChannelIsRefused(t *testing.T) {
 			if !errors.As(err, &mismatch) {
 				t.Fatalf("err = %v, want an *AnswerMismatchError (tier ruling T2 applies to the probe's answers too)", err)
 			}
-			if mismatch.Want.Channel != 1 || mismatch.Got.Channel != tt.wantGot {
-				t.Errorf("*AnswerMismatchError = {Want: %s, Got: %s}, want {ch1, ch%d}", mismatch.Want, mismatch.Got, tt.wantGot)
+			if mismatch.Requested.Channel != 1 || mismatch.Answered.Channel != tt.wantGot {
+				t.Errorf("*AnswerMismatchError = {Requested: %s, Answered: %s}, want {ch1, ch%d}", mismatch.Requested, mismatch.Answered, tt.wantGot)
 			}
 			// Driver.Open takes ownership of the port on BOTH outcomes.
 			if _, rerr := p.Port().Read(make([]byte, 1)); rerr == nil {
