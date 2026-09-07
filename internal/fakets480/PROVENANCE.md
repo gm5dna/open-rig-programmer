@@ -156,11 +156,12 @@ programme (`480:424-539`), and the whole of it is now transcribed twice.
   `core/transport/ex_crosscheck_ts480_test.go` asserts the copy is still
   byte-identical to it, because "the codec from A versus the fake from B" holds
   only for as long as this side's copy really is B.
-- `internal/fakets480/gen` projects the copy into `exinventory_gen.go`. It
+- `exinventory.go` embeds the copy and projects it at init. It
   imports nothing project-internal — in particular not `internal/extable`,
   which generates the CODEC's side — so a shared parsing bug cannot reproduce
   itself identically into both inventories and be invisible.
-  `imports_test.go` enforces that recursively, `gen/` included.
+  `imports_test.go` enforces that recursively, this directory and every one
+  beneath it.
 - `core/transport/ex_crosscheck_ts480_test.go` compares the two sides address
   for address and width for width, and drives every address over the wire.
 
@@ -211,4 +212,4 @@ ruling that the flag is a CONVENTION and the digits are the datum: B applied a
 structural test and flagged menus 048-052, whose merged cell prints the NUMERIC
 legend `00 ~ 99 (2-digit)`, while transcription A marks no text row at all on
 this chart. A fake that projected B's flag would answer spaces at five
-addresses the repository has ruled numeric. See `gen/main.go`'s `widthToken`.
+addresses the repository has ruled numeric. See `exinventory.go`'s `widthToken`.

@@ -4,8 +4,6 @@ package fakeft991a
 
 import "strings"
 
-//go:generate go run github.com/gm5dna/open-rig-programmer/internal/fakeft991a/gen -csv transcription-b.csv -out exinventory_gen.go
-
 // This file is fakeft991a's own, independent model of the FT-991A's EX (MENU)
 // command — READ ONLY, exactly as internal/fakeft891 models the FT-891's,
 // internal/fakedx10 the FTdx10's and internal/fakeradio the FT-710's: the
@@ -26,10 +24,9 @@ import "strings"
 //   - the DIALECT's inventory (core/cat/ft991a/exinventory_gen.go) is generated
 //     from TRANSCRIPTION A (core/cat/ft991a/table2.csv) by internal/extable;
 //   - THIS inventory is generated from TRANSCRIPTION B by
-//     internal/fakeft991a/gen, which imports nothing project-internal at all —
+//     exinventory.go, which imports nothing project-internal at all —
 //     not extable, not core/cat (the recursive fence in imports_test.go
-//     enforces it, gen/ included, and TestNoCoreImports_ReachesTheGenerator
-//     proves the scan really gets there);
+//     enforces it for this directory and every one beneath it);
 //   - core/transport/ex_crosscheck_ft991a_test.go proves the two agree, address
 //     for address and width for width, and drives every address over the wire.
 //
@@ -54,10 +51,10 @@ import "strings"
 // RADIO ID prints a single hyphen for its Digits and ten spaced hyphens for its
 // parameter, so it names no field an EX frame could read or write. The dialect
 // omits it under internal/extable's ParameterlessExcluded, keyed on
-// transcription A's raw '-'; this fake omits it under gen/main.go's
+// transcription A's raw '-'; this fake omits it under exinventory.go's
 // parameterlessAddrs, keyed on transcription B's '?'. ONE GLYPH IS PRINTED ON
 // THE PAGE and the two transcriptions spell it under different conventions —
-// this milestone's plan decision P18, stated in full at gen/main.go's
+// this milestone's plan decision P18, stated in full at exinventory.go's
 // parameterlessToken. An EX read of 087 therefore draws "?;", the same answer
 // as an address the chart never carried, which is doc.go's register entry AN
 // OUT-OF-INVENTORY EX ADDRESS ANSWERS "?;" and not a separate behaviour.
@@ -80,7 +77,7 @@ import "strings"
 // ft991a_layout.txt:522,528; P4 is the project's cross-radio name for the EX
 // value, from the FT-710's P1/P2/P3 address, and is fleet-wide convention, not
 // this chart's own vocabulary.) There is no text item on this chart, and its
-// transcription carries no column that could describe one (gen/main.go's
+// transcription carries no column that could describe one (exinventory.go's
 // widthToken).
 // Set frame: same shape with a P4 payload — NOT modelled; see handleEX.
 
@@ -92,7 +89,7 @@ type exItem struct {
 	// addr is the three-digit wire address, as the frame carries it.
 	addr string
 	// width is the width token: '1'..'8', a numeric field of that many raw
-	// ASCII bytes. There is no text token — gen/main.go's widthToken says what
+	// ASCII bytes. There is no text token — exinventory.go's widthToken says what
 	// that does and does not claim.
 	width byte
 }
@@ -115,7 +112,7 @@ const exDefaultDigit = '0'
 // EIGHT, where the FT-891's numeric alphabet stops at five and the FTdx10's at
 // four. It comes from exactly ONE row — 151 PRESET FREQUENCY, whose
 // "00030000 ~ 47000000" parameter is eight digits wide — and both sides of the
-// evidence pin that address independently: gen/main_test.go's
+// evidence pin that address independently: exinventory_test.go's
 // TestParseB_TheOnlyEightWideRowIs151 from B, and
 // core/cat/ft991a/crosscheck_test.go's widestRowAddr/widestRowDigits from A.
 //
@@ -133,9 +130,9 @@ const exMaxWidth = 8
 // factory-image constants (image.go). exItems is a generated package-level
 // table, so a token outside '1'..'8' is a defect in the generator or a
 // hand-edit of its output — a programming error to catch at init, never a
-// runtime input. gen/main.go's widthToken REFUSES to emit one (with the
+// runtime input. exinventory.go's widthToken REFUSES to emit one (with the
 // offending CSV line named, which is why the '8' is proved there rather than
-// discovered here), and gen/main_test.go's staleness check refuses a generated
+// discovered here), and exinventory_test.go's staleness check refuses a generated
 // file that has drifted from the CSV, so reaching this panic means one of those
 // two was bypassed.
 //
@@ -148,7 +145,7 @@ func expandEXItems(items []exItem) map[string]string {
 	out := make(map[string]string, len(items))
 	for _, it := range items {
 		if it.width < '1' || it.width > '0'+exMaxWidth {
-			panic("fakeft991a: exItems " + it.addr + ": malformed width token " + string(it.width) + " — regenerate with `go generate ./internal/fakeft991a`")
+			panic("fakeft991a: exItems " + it.addr + ": malformed width token " + string(it.width) + " — a defect in this package's projection of transcription B (exinventory.go)")
 		}
 		out[it.addr] = strings.Repeat(string(rune(exDefaultDigit)), int(it.width-'0'))
 	}

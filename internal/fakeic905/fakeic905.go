@@ -4,9 +4,10 @@ package fakeic905
 
 import (
 	"io"
-	"net"
 	"sync"
 	"time"
+
+	"github.com/gm5dna/open-rig-programmer/internal/fakepipe"
 )
 
 // eventQueueDepth is how many reassembled frames may wait for the serve loop.
@@ -30,8 +31,13 @@ const readChunkBytes = 4096
 // called from goroutines other than whatever is reading or writing Port(). Run
 // tests with -race.
 type Radio struct {
-	hostConn net.Conn // returned by Port(); the consumer's end
-	fakeConn net.Conn // the radio's own end, read and written only by this package
+	// pipe is the in-memory duplex connection and the goroutines servicing
+	// it: internal/fakepipe, the one package the fakes share. It carries the
+	// net.Pipe pair, the close and the raw write, and NO protocol at all —
+	// see doc.go's sibling section. (The scheduled reply latency below is
+	// this package's own, because it is a timing SHAPE this radio wanted and
+	// not plumbing.)
+	pipe *fakepipe.Pipe
 
 	// The fields below are populated while New runs its options, before any
 	// goroutine starts, and never mutated afterwards, so the serve loop reads
@@ -54,11 +60,6 @@ type Radio struct {
 	// elapsed. The replies themselves queue in replyQ, so they are written in
 	// the order they were produced whatever the timers do.
 	replyReady chan struct{}
-
-	shutdown  chan struct{}
-	closeOnce sync.Once
-	closeErr  error
-	wg        sync.WaitGroup
 }
 
 // New constructs a simulated IC-905 and starts its servicing goroutines.
@@ -70,54 +71,37 @@ type Radio struct {
 //
 // Close it when done: a Radio owns goroutines and a pipe.
 func New(opts ...Option) *Radio {
-	hostConn, fakeConn := net.Pipe()
-
 	r := &Radio{
-		hostConn:      hostConn,
-		fakeConn:      fakeConn,
+		pipe:          fakepipe.New(),
 		identityToken: append([]byte(nil), defaultIdentityToken...),
 		events:        make(chan accEvent, eventQueueDepth),
 		records:       defaultImage(),
 		replyReady:    make(chan struct{}, eventQueueDepth),
-		shutdown:      make(chan struct{}),
 	}
 	for _, opt := range opts {
 		opt(r)
 	}
 
-	r.wg.Add(2)
-	go r.readLoop()
-	go r.serve()
+	r.pipe.Go(r.readLoop)
+	r.pipe.Go(r.serve)
 	return r
 }
 
 // Port returns the consumer's end of the fake's in-memory duplex connection.
 // Repeated calls return the same connection.
-func (r *Radio) Port() io.ReadWriteCloser { return r.hostConn }
+func (r *Radio) Port() io.ReadWriteCloser { return r.pipe.Host() }
 
 // Close shuts the fake radio down and waits for its goroutines to exit. Safe to
 // call more than once.
 //
-// It closes only the RADIO's end of the pipe. Close on a net.Pipe reports
-// io.ErrClosedPipe to reads and writes made against the end you closed
-// yourself, whilst the other, still-open end sees io.EOF — which is exactly the
-// signal a host should get from "the radio went away". Closing the consumer's
-// end here too would turn that into io.ErrClosedPipe, a worse signal. A
-// consumer that wants to release its own handle may call r.Port().Close().
+// It closes only the RADIO's end of the pipe, so a read on the consumer's
+// end sees io.EOF — the signal a host should get from "the radio went away".
+// See internal/fakepipe's Shutdown for why that direction matters.
 //
 // It does NOT wait out a pending WithLatency delay: the delay is scheduled
 // rather than slept through, so a test may script seconds of latency and still
 // tear down at once.
-func (r *Radio) Close() error {
-	r.closeOnce.Do(func() {
-		// shutdown closes FIRST, so anything parked on a channel send wakes
-		// before, or regardless of, the pipe closing under it.
-		close(r.shutdown)
-		r.closeErr = r.fakeConn.Close()
-	})
-	r.wg.Wait()
-	return r.closeErr
-}
+func (r *Radio) Close() error { return r.pipe.Close() }
 
 // Record returns the raw record bytes the fake currently holds for a channel,
 // so a consumer can compare a write byte for byte, and whether it holds any.
@@ -171,32 +155,29 @@ func (r *Radio) recordFrame(frame []byte) {
 	r.frames = append(r.frames, append([]byte(nil), frame...))
 }
 
-// readLoop is the only goroutine that ever reads fakeConn. It reassembles
+// readLoop is the only goroutine that ever reads the pipe. It reassembles
 // frames and hands each event to the serve loop.
 func (r *Radio) readLoop() {
-	defer r.wg.Done()
 	defer close(r.events)
 
 	acc := newReassembler(maxBodyBytes)
-	buf := make([]byte, readChunkBytes)
-	for {
-		n, err := r.fakeConn.Read(buf)
-		if n > 0 {
-			for _, ev := range acc.push(buf[:n]) {
-				select {
-				case r.events <- ev:
-				case <-r.shutdown:
-					return
-				}
+	stopped := false
+	r.pipe.ReadLoop(func(b []byte) {
+		for _, ev := range acc.push(b) {
+			if stopped {
+				return
+			}
+			select {
+			case r.events <- ev:
+			case <-r.pipe.Done():
+				stopped = true
+				return
 			}
 		}
-		if err != nil {
-			return
-		}
-	}
+	})
 }
 
-// serve is the only goroutine that ever writes fakeConn. It answers requests
+// serve is the only goroutine that ever writes the pipe. It answers requests
 // and drives both floods.
 //
 // THE FLOODS ARE TICKER CASES IN THE SAME SELECT AS REQUEST HANDLING, which is
@@ -205,8 +186,6 @@ func (r *Radio) readLoop() {
 // readLoop, and a scripted latency is a scheduled timer rather than a sleep, so
 // the tickers keep firing throughout both.
 func (r *Radio) serve() {
-	defer r.wg.Done()
-
 	broadcastC, stopBroadcast := tickerFor(r.broadcastInterval)
 	defer stopBroadcast()
 	addressedC, stopAddressed := tickerFor(r.addressedInterval)
@@ -214,7 +193,7 @@ func (r *Radio) serve() {
 
 	for {
 		select {
-		case <-r.shutdown:
+		case <-r.pipe.Done():
 			return
 
 		case ev, ok := <-r.events:
@@ -270,7 +249,7 @@ func (r *Radio) scheduleReply(reply []byte) {
 	time.AfterFunc(r.latency, func() {
 		select {
 		case r.replyReady <- struct{}{}:
-		case <-r.shutdown:
+		case <-r.pipe.Done():
 		}
 	})
 }
@@ -293,9 +272,4 @@ func (r *Radio) popReply() []byte {
 // Errors are not reported: a write failing because the consumer has gone away —
 // closed the port, or stopped reading — is an expected outcome of a test double
 // being torn down, not a bug in the fake.
-func (r *Radio) rawWrite(data []byte) {
-	if len(data) == 0 {
-		return
-	}
-	_, _ = r.fakeConn.Write(data)
-}
+func (r *Radio) rawWrite(data []byte) { r.pipe.WriteNow(data) }

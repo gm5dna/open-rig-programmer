@@ -1,28 +1,36 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package main
+package fakets590
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"strings"
 	"testing"
 )
 
-// The TWO charts this generator renders, as the //go:generate directives in
-// ../ex.go name them, with ".." prepended because `go test` runs here — one
-// per 590 row, each with its own transcription and its own generated file.
+// This file is the CI guard for the EX projections in exinventory.go: it runs
+// the REAL parse over the REAL committed CSVs and states, as literals, what
+// those artefacts structurally contain.
 //
-// render writes only the CSV's BASE NAME into its output, so reading the file
-// through "../" still produces the bytes the directive produces from
-// "transcription-b-590s.csv" — which is what makes the staleness comparison
-// below a byte comparison rather than a path lottery.
+// It used to live in this package's gen/ directory and compare rendered bytes
+// with a committed generated file. There is no generated file any more — the
+// CSV is embedded and projected at init (06/09/2026) — so staleness cannot
+// happen and the render tests went with it. What remains is the part that was
+// always the real check: the printed row count, the red proofs and every
+// refusal. The width perturbation, which used to compare rendered bytes,
+// now compares the PROJECTION itself against the one the package holds.
+
+// The TWO charts this package projects — one per 590 row, each with its own
+// transcription. They are read by name rather than through the embedded
+// byte slices, so that reading the files the //go:embed directives name proves
+// the directives point where this test thinks they do.
 var charts = []struct {
 	name    string
 	csvPath string
-	outPath string
-	varName string
+	// widths is the projection this package holds for the chart, for the
+	// perturbation proof to differ from.
+	widths string
 	// menus is the number of rows this chart's own book prints, written as a
 	// literal from the EX block's printed domain ("000 ~ 087: Menu number
 	// (TS-590S)", "000 ~ 099: Menu number (TS-590SG)", 590:543-544) rather
@@ -30,73 +38,27 @@ var charts = []struct {
 	// proves nothing.
 	menus int
 }{
-	{"TS-590S", "../transcription-b-590s.csv", "../exinventory590s_gen.go", "exWidths590S", 88},
-	{"TS-590SG", "../transcription-b-590sg.csv", "../exinventory590sg_gen.go", "exWidths590SG", 100},
+	{"TS-590S", "transcription-b-590s.csv", exWidths590S, 88},
+	{"TS-590SG", "transcription-b-590sg.csv", exWidths590SG, 100},
 }
 
-// renderChart runs the whole projection over one chart's committed CSV and
-// returns the generated file's bytes.
-func renderChart(t *testing.T, c int) []byte {
+// dropRow returns the CSV with the row whose menu_number is menu removed.
+func dropRow(t *testing.T, data []byte, menu int) []byte {
 	t.Helper()
-	data, err := os.ReadFile(charts[c].csvPath)
-	if err != nil {
-		t.Fatalf("reading %s: %v", charts[c].csvPath, err)
+	prefix := fmt.Sprintf("%03d,", menu)
+	var kept []string
+	found := false
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, prefix) {
+			found = true
+			continue
+		}
+		kept = append(kept, line)
 	}
-	return renderData(t, c, data)
-}
-
-// renderData is renderChart over supplied bytes, for the perturbation proofs.
-func renderData(t *testing.T, c int, data []byte) []byte {
-	t.Helper()
-	rows, err := parseB(data)
-	if err != nil {
-		t.Fatalf("parseB(%s): %v", charts[c].name, err)
+	if !found {
+		t.Fatalf("no row starts %q — the perturbation did nothing and the proof below would be vacuous", prefix)
 	}
-	widths, err := projectWidths(rows)
-	if err != nil {
-		t.Fatalf("projectWidths(%s): %v", charts[c].name, err)
-	}
-	out, err := render(widths, rows, charts[c].csvPath, charts[c].varName)
-	if err != nil {
-		t.Fatalf("render(%s): %v", charts[c].name, err)
-	}
-	return out
-}
-
-// TestGeneratedFilesAreNotStale is the staleness gate: each committed
-// generated file must be byte-identical to what this generator produces from
-// the committed CSV beside it.
-//
-// It is what makes "DO NOT EDIT" true rather than merely asked for. A
-// hand-edit of either generated table — or a CSV corrected without
-// regenerating — would otherwise leave the fake answering one thing while the
-// artefact it claims to be a projection of says another, which is exactly the
-// drift the two-source cross-check assumes cannot happen on this side.
-func TestGeneratedFilesAreNotStale(t *testing.T) {
-	for c := range charts {
-		t.Run(charts[c].name, func(t *testing.T) {
-			want, err := os.ReadFile(charts[c].outPath)
-			if err != nil {
-				t.Fatalf("reading %s: %v", charts[c].outPath, err)
-			}
-			if got := renderChart(t, c); !bytes.Equal(got, want) {
-				t.Errorf("%s is stale (%d bytes committed, %d bytes generated): run `go generate ./internal/fakets590`", charts[c].outPath, len(want), len(got))
-			}
-		})
-	}
-}
-
-// TestGenerationIsIdempotent: two runs over equal input produce byte-identical
-// output. Without it the staleness test above could fail intermittently for a
-// reason that had nothing to do with the CSV.
-func TestGenerationIsIdempotent(t *testing.T) {
-	for c := range charts {
-		t.Run(charts[c].name, func(t *testing.T) {
-			if first, second := renderChart(t, c), renderChart(t, c); !bytes.Equal(first, second) {
-				t.Error("two runs over the same CSV produced different bytes")
-			}
-		})
-	}
+	return []byte(strings.Join(kept, "\n"))
 }
 
 // TestTheCommittedArtefactsCarryThePrintedRowCounts pins each projection's
@@ -154,27 +116,6 @@ func TestTheWidestTokenIsEightAndItComesFromThePowerOnMessage(t *testing.T) {
 	}
 }
 
-// --- The red proofs: what a perturbed artefact does ---
-
-// dropRow returns the CSV with the row whose menu_number is menu removed.
-func dropRow(t *testing.T, data []byte, menu int) []byte {
-	t.Helper()
-	prefix := fmt.Sprintf("%03d,", menu)
-	var kept []string
-	found := false
-	for _, line := range strings.Split(string(data), "\n") {
-		if strings.HasPrefix(line, prefix) {
-			found = true
-			continue
-		}
-		kept = append(kept, line)
-	}
-	if !found {
-		t.Fatalf("no row starts %q — the perturbation did nothing and the proof below would be vacuous", prefix)
-	}
-	return []byte(strings.Join(kept, "\n"))
-}
-
 // TestRedProof_ADroppedRowIsRefused. A row lost from a transcription is the
 // defect this compact form is most exposed to, because the string's index IS
 // the menu number: silently indexing past a gap would renumber every menu
@@ -210,7 +151,7 @@ func TestRedProof_ADroppedRowIsRefused(t *testing.T) {
 // side, which comes from the other transcription.
 //
 // This proof pins the first half: change one digits cell and nothing else, and
-// the generated bytes differ from the committed ones. If they did not, the
+// the projection differs from the one this package holds. If it did not, the
 // cross-check would have nothing to compare.
 func TestRedProof_AWidthOnlyPerturbationChangesTheProjection(t *testing.T) {
 	for c := range charts {
@@ -240,18 +181,20 @@ func TestRedProof_AWidthOnlyPerturbationChangesTheProjection(t *testing.T) {
 				t.Fatalf("no row starts %q — the perturbation did nothing", prefix)
 			}
 
-			want, err := os.ReadFile(charts[c].outPath)
+			rows, err := parseB([]byte(strings.Join(lines, "\n")))
 			if err != nil {
-				t.Fatalf("reading %s: %v", charts[c].outPath, err)
+				t.Fatalf("parseB after widening menu 010: %v", err)
 			}
-			if got := renderData(t, c, []byte(strings.Join(lines, "\n"))); bytes.Equal(got, want) {
-				t.Error("widening menu 010 from one digit to two produced byte-identical output — the projection does not depend on the digits column")
+			got, err := projectWidths(rows)
+			if err != nil {
+				t.Fatalf("projectWidths after widening menu 010: %v", err)
+			}
+			if got == charts[c].widths {
+				t.Error("widening menu 010 from one digit to two produced an identical projection — it does not depend on the digits column")
 			}
 		})
 	}
 }
-
-// --- What the parser refuses, and why each refusal is a refusal ---
 
 // TestParseB_RefusesAMalformedArtefact. Every case is a shape this committed,
 // hash-frozen artefact could only acquire by being edited or mis-delivered, so
@@ -333,18 +276,5 @@ func TestRecordLines_CountsAQuotedCellCorrectly(t *testing.T) {
 				t.Errorf("recordLines(%q) = %v, want %v", tt.csv, got, tt.want)
 			}
 		})
-	}
-}
-
-// TestRender_WritesOnlyTheCSVsBaseName, which is what lets this test file read
-// the artefacts through "../" and still compare bytes with the file the
-// //go:generate directive produced from a bare filename.
-func TestRender_WritesOnlyTheCSVsBaseName(t *testing.T) {
-	out := renderChart(t, 0)
-	if !bytes.Contains(out, []byte("transcription-b-590s.csv")) {
-		t.Error("the generated file does not name its source CSV")
-	}
-	if bytes.Contains(out, []byte("../")) {
-		t.Error("the generated file carries a relative path — where the generator was invoked from has leaked into the committed bytes")
 	}
 }

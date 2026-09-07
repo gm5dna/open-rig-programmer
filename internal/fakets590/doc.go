@@ -37,9 +37,8 @@
 // to mean anything, and it can only disagree if it was built from the manual
 // rather than from the code.
 //
-// The fence is enforced mechanically and recursively (imports_test.go), from
-// birth, ahead of the gen/ subdirectory a later task of this milestone's plan
-// brings in.
+// The fence is enforced mechanically and recursively (imports_test.go): this
+// directory and every one beneath it.
 //
 // # A SIBLING of internal/fakeft891, not a refactor of it
 //
@@ -70,6 +69,15 @@
 //     "MR P1 P2 P3 P3 ;" reads either half of a channel (590:1440-1442) where
 //     every Yaesu read frame names a slot and nothing else.
 //   - THE CHANNEL NUMBER'S HUNDREDS DIGIT MAY BE A SPACE (590:1332-1337).
+//
+// THE ONE EXCEPTION IS internal/fakepipe (added 06/09/2026): the net.Pipe pair,
+// the goroutine bookkeeping, the interruptible latency wait and the raw write.
+// It is permitted because it is PROTOCOL-FREE — it sees []byte and a duration
+// and nothing else, so it carries no framing, no field layout and no reply
+// building. A bug in it therefore cannot make a wrong codec look right; it can
+// only stop bytes moving, which this package's own tests notice at once.
+// Everything above the wire — the reassembler, the parser, the image, the
+// replies — stays here, written independently.
 //
 // # What this fake deliberately does NOT model
 //
@@ -180,7 +188,7 @@
 //     acceptance to its firmware string would be the fake asserting the
 //     design's A14; that decision belongs to the driver's write path, where
 //     the design puts it. So both values are accepted and answered on both
-//     rows, and WithFirmwareVersion changes only what "FV;" says.
+//     rows, and the FV answer is a fixed string that says nothing about it.
 //
 //  8. A SET DOES NOT MOVE THE SELECTED CHANNEL. Nothing in the MW block
 //     mentions the selection (590:1516-1581). A fake that moved it would let

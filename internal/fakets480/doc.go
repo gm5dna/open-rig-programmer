@@ -41,9 +41,17 @@
 // to mean anything, and it can only disagree if it was built from the manual
 // rather than from the code.
 //
-// The fence is enforced mechanically and recursively (imports_test.go), from
-// birth, ahead of the gen/ subdirectory a later task of this milestone's plan
-// brings in.
+// The fence is enforced mechanically and recursively (imports_test.go): this
+// directory and every one beneath it.
+//
+// THE ONE EXCEPTION IS internal/fakepipe (added 06/09/2026): the net.Pipe pair,
+// the goroutine bookkeeping, the interruptible latency wait and the raw write.
+// It is permitted because it is PROTOCOL-FREE — it sees []byte and a duration
+// and nothing else, so it carries no framing, no field layout and no reply
+// building. A bug in it therefore cannot make a wrong codec look right; it can
+// only stop bytes moving, which this package's own tests notice at once.
+// Everything above the wire — the reassembler, the parser, the image, the
+// replies — stays here, written independently.
 //
 // # A SIBLING of internal/fakets590, a re-skin of its scaffold
 //
@@ -235,9 +243,10 @@
 //     character every OTHER hard-wired field in this book prints, "Always 0"
 //     (480:953, 480:973, 480:975, 480:982). P2's shipped value is the FIRST
 //     of the four printed variants, "0: TS-480HX (200 W)" (480:1626). Neither
-//     is a claim about any radio: no TS-480 has answered this project, and
-//     WithTYAnswer is how a test reaches the other three variants, the fifth
-//     the document does not print, and the high bytes P1 may carry.
+//     is a claim about any radio: no TS-480 has answered this project. The
+//     shipped values were reachable through a WithTYAnswer option until
+//     06/09/2026; no driver was ever built against another variant, so the
+//     answer is now fixed at what the book prints.
 //
 //  12. THE INITIAL AI VALUE IS THE POWER-OFF ONE. This book prints no
 //     power-on value for AI. What it does print is "When the transceiver is

@@ -59,7 +59,7 @@ func TestEX_ReadsAnswerTheInventorysOwnWidth(t *testing.T) {
 //
 // The two sides reach that conclusion independently: the dialect's from
 // transcription A's raw '-' through internal/extable's ParameterlessExcluded,
-// this fake's from transcription B's '?' through gen/main.go's
+// this fake's from transcription B's '?' through exinventory.go's
 // parameterlessAddrs. If either side ever admitted the row, the transport
 // cross-check's address-set leg would fail; this test is the local statement,
 // so a reader of this package alone can see that the absence is designed.

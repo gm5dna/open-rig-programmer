@@ -40,9 +40,9 @@
 // TestNoCoreImports (imports_test.go) enforces it with a go/parser scan, and
 // that scan WALKS SUBDIRECTORIES — the one deliberate improvement on
 // fakeradio's copy of the same test, whose parser.ParseDir(".") is
-// non-recursive and would leave the EX inventory's generator in gen/ outside
-// the fence entirely. That generator is the piece the rule bites hardest for:
-// it must not reach for internal/extable, the machinery that generates the
+// non-recursive and would leave any subdirectory outside the fence entirely.
+// The EX projection is the piece the rule bites hardest for: it must not reach
+// for internal/extable, the machinery that generates the
 // DIALECT's inventory from transcription A, because one parser on both sides of
 // the cross-check would reproduce a shared parsing bug into both inventories
 // invisibly (ex.go states the mechanism in full).
@@ -86,6 +86,15 @@
 //     banks are OPTIONS a test asks for (With5xx, WithEMG), never regions,
 //     and core/driver/ftdx10 deliberately implements no RegionReporter.
 //   - No fault injection — see the next section.
+//
+// THE ONE EXCEPTION IS internal/fakepipe (added 06/09/2026): the net.Pipe pair,
+// the goroutine bookkeeping, the interruptible latency wait and the raw write.
+// It is permitted because it is PROTOCOL-FREE — it sees []byte and a duration
+// and nothing else, so it carries no framing, no field layout and no reply
+// building. A bug in it therefore cannot make a wrong codec look right; it can
+// only stop bytes moving, which this package's own tests notice at once.
+// Everything above the wire — the reassembler, the parser, the image, the
+// replies — stays here, written independently.
 //
 // # What this fake deliberately does NOT model
 //

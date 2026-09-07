@@ -26,7 +26,7 @@ type Option func(*Radio)
 // promptly, so a test may script a multi-second latency without a multi-second
 // teardown.
 func WithLatency(d time.Duration) Option {
-	return func(r *Radio) { r.latency = d }
+	return func(r *Radio) { r.pipe.Latency = d }
 }
 
 // WithIDToken fixes the data area of the answer to the identity read `19 00`.

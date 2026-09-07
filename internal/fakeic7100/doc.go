@@ -32,6 +32,15 @@
 // in the same place, which is evidence. Where one of them imported the other,
 // agreement would be a tautology and the evidence would be worth nothing.
 //
+// THE ONE EXCEPTION IS internal/fakepipe (added 06/09/2026): the net.Pipe pair,
+// the goroutine bookkeeping, the interruptible latency wait and the raw write.
+// It is permitted because it is PROTOCOL-FREE — it sees []byte and a duration
+// and nothing else, so it carries no framing, no field layout and no reply
+// building. A bug in it therefore cannot make a wrong codec look right; it can
+// only stop bytes moving, which this package's own tests notice at once.
+// Everything above the wire — the reassembler, the parser, the image, the
+// replies — stays here, written independently.
+//
 // # WHERE THIS FAKE'S KNOWLEDGE CAME FROM
 //
 // Two kinds of fact, from two artefacts, and no third place. PROVENANCE.md
@@ -145,8 +154,8 @@
 //     data as (5)-(51)" — a description and an advisory, not a stated rule.
 //     The document never says what a radio does with a set whose blocks differ,
 //     nor whether a set that stops short of the full record is accepted at all.
-//     This fake refuses both; WithUnequalTransmitBlockAccepted and
-//     WithShortSetsAccepted build the radio that does not.
+//     This fake refuses both; WithShortSetsAccepted builds the radio that
+//     accepts a short set.
 //     LIFT: write a channel with the transmit block deliberately differing from
 //     the receive block and split OFF, read it back, and record which block the
 //     radio kept; and send a set that stops after (51) and record the answer.

@@ -667,6 +667,24 @@ func (r *Radio) handleAI(body []byte) []byte {
 
 // --- Top-level dispatch ---
 
+// upperASCII folds the two ASCII bytes of a command name to upper case and
+// leaves every other byte alone.
+//
+// NOT bytes.ToUpper or strings.ToUpper: those are Unicode-aware, so a body
+// carrying arbitrary line noise comes back re-encoded and of a DIFFERENT
+// LENGTH — longer for an invalid byte (U+FFFD), shorter for a valid sequence
+// that case-folds to fewer bytes ("\u0131" is two bytes and uppercases to one).
+// A fake whose whole job is byte-exact wire behaviour folds ASCII and touches
+// nothing else.
+func upperASCII(name [2]byte) [2]byte {
+	for i, b := range name {
+		if b >= 'a' && b <= 'z' {
+			name[i] = b - 'a' + 'A'
+		}
+	}
+	return name
+}
+
 // handleFrame parses one complete, ';'-terminated frame (as produced by
 // reassembler.push) and returns the reply to send: nil for a
 // fire-and-forget success, or a non-nil frame (a real answer, or
@@ -681,7 +699,7 @@ func (r *Radio) handleFrame(frame []byte) []byte {
 	if len(body) < 2 {
 		return rejection
 	}
-	cmd := [2]byte{toUpperASCII(body[0]), toUpperASCII(body[1])}
+	cmd := upperASCII([2]byte{body[0], body[1]})
 	rest := body[2:]
 
 	// Reference: "the radio accepts upper or lower case" for command
@@ -705,11 +723,4 @@ func (r *Radio) handleFrame(frame []byte) []byte {
 	default:
 		return rejection
 	}
-}
-
-func toUpperASCII(b byte) byte {
-	if b >= 'a' && b <= 'z' {
-		return b - 'a' + 'A'
-	}
-	return b
 }

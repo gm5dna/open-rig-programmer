@@ -6,7 +6,18 @@ import (
 	"io"
 	"sync"
 	"time"
+
+	"github.com/gm5dna/open-rig-programmer/internal/fakepipe"
 )
+
+// out is the radio's output queue, drained by one writer goroutine. Every
+// byte the radio sends goes through it: answers and unsolicited frames alike.
+// One writer means two frames can never interleave mid-frame; a queue means a
+// flood can outrun a slow drain, which is the condition WithBroadcasts and
+// WithAddressedFlood exist to create — net.Pipe itself is a rendezvous, so a
+// direct write would wedge the emitter the moment the consumer stopped
+// reading. It is deep rather than unbounded; send drops when it is full.
+const outQueueDepth = 1024
 
 // Radio is a fake IC-9700 on the far end of a pipe. It answers CI-V frames the
 // way the printed wire facts say the transceiver does, out of a memory image
@@ -14,11 +25,15 @@ import (
 type Radio struct {
 	cfg config
 
-	// toRadio carries what the controller wrote; toController carries what the
-	// radio said.
-	toRadio      *pipe
-	toController *pipe
-	port         *port
+	// pipe is the in-memory duplex connection and the goroutines servicing it:
+	// internal/fakepipe, the one package the fakes share, and protocol-free by
+	// construction (see doc.go). port wraps its host end so that a driver
+	// closing its port closes the whole radio.
+	pipe *fakepipe.Pipe
+	port *port
+
+	// out is the output queue; see outQueueDepth.
+	out chan []byte
 
 	// mu guards the image and the transcript. The image is reachable from the
 	// serve goroutine only, but the transcript is read by whoever calls
@@ -26,14 +41,6 @@ type Radio struct {
 	mu         sync.Mutex
 	image      *image
 	transcript [][]byte
-
-	// writeMu serialises whole frames onto the wire, so that an answer and a
-	// broadcast cannot interleave their bytes into one unparseable mess.
-	writeMu sync.Mutex
-
-	done      chan struct{}
-	closeOnce sync.Once
-	wg        sync.WaitGroup
 }
 
 // New returns a fake IC-9700 attached to a transport.Port-shaped pipe.
@@ -53,16 +60,15 @@ func New(opts ...Option) *Radio {
 	img.setServedLength(cfg.recordLength)
 
 	r := &Radio{
-		cfg:          cfg,
-		toRadio:      newPipe(),
-		toController: newPipe(),
-		image:        img,
-		done:         make(chan struct{}),
+		cfg:   cfg,
+		pipe:  fakepipe.New(),
+		out:   make(chan []byte, outQueueDepth),
+		image: img,
 	}
 	r.port = &port{radio: r}
 
-	r.wg.Add(1)
-	go r.serve()
+	r.serve()
+	r.pipe.Go(r.writer)
 
 	// The two flood species differ in exactly one byte — the to address — and
 	// that byte is the whole point of having both: a to=00 broadcast is dropped
@@ -71,12 +77,14 @@ func New(opts ...Option) *Radio {
 	// answer this fake can emit without claiming anything about a memory
 	// record.
 	if d := cfg.broadcasts; d > 0 {
-		r.wg.Add(1)
-		go r.emitEvery(d, buildFrame(broadcastAddress, radioAddress, cmdTransceiverID, subTransceiverID, radioAddress))
+		r.pipe.Go(func() {
+			r.emitEvery(d, buildFrame(broadcastAddress, radioAddress, cmdTransceiverID, subTransceiverID, radioAddress))
+		})
 	}
 	if d := cfg.flood; d > 0 {
-		r.wg.Add(1)
-		go r.emitEvery(d, buildFrame(controllerAddress, radioAddress, cmdTransceiverID, subTransceiverID, radioAddress))
+		r.pipe.Go(func() {
+			r.emitEvery(d, buildFrame(controllerAddress, radioAddress, cmdTransceiverID, subTransceiverID, radioAddress))
+		})
 	}
 
 	return r
@@ -88,13 +96,7 @@ func (r *Radio) Port() io.ReadWriteCloser { return r.port }
 // Close stops the radio and wakes anything blocked on its port. It is safe to
 // call more than once, and safe to call from the port's own Close.
 func (r *Radio) Close() error {
-	r.closeOnce.Do(func() {
-		close(r.done)
-		r.toRadio.Close()
-		r.toController.Close()
-	})
-	r.wg.Wait()
-	return nil
+	return r.pipe.Close()
 }
 
 // Transcript returns every frame the fake received, in order.
@@ -114,21 +116,29 @@ func (r *Radio) Transcript() [][]byte {
 	return out
 }
 
-// serve reads the controller's bytes until the pipe closes, handing every whole
-// frame to handle.
+// serve starts the goroutine that reads the controller's bytes until the pipe
+// closes, handing every whole frame to handle.
 func (r *Radio) serve() {
-	defer r.wg.Done()
-
 	acc := newAccumulator()
-	buf := make([]byte, 512)
-	for {
-		n, err := r.toRadio.Read(buf)
-		if n > 0 {
-			for _, body := range acc.feed(buf[:n]) {
+	r.pipe.Go(func() {
+		r.pipe.ReadLoop(func(b []byte) {
+			for _, body := range acc.feed(b) {
 				r.handle(body)
 			}
-		}
-		if err != nil {
+		})
+	})
+}
+
+// writer is the one goroutine that ever writes the radio's end of the pipe.
+// A write that fails means the consumer has gone away, which ends it.
+func (r *Radio) writer() {
+	for {
+		select {
+		case b := <-r.out:
+			if !r.pipe.WriteNow(b) {
+				return
+			}
+		case <-r.pipe.Done():
 			return
 		}
 	}
@@ -136,13 +146,11 @@ func (r *Radio) serve() {
 
 // emitEvery sends the same frame every d until the radio closes.
 func (r *Radio) emitEvery(d time.Duration, f []byte) {
-	defer r.wg.Done()
-
 	t := time.NewTicker(d)
 	defer t.Stop()
 	for {
 		select {
-		case <-r.done:
+		case <-r.pipe.Done():
 			return
 		case <-t.C:
 			r.send(f)
@@ -150,26 +158,35 @@ func (r *Radio) emitEvery(d time.Duration, f []byte) {
 	}
 }
 
-// send writes one whole frame to the controller. A write to a closed pipe is
-// ignored: a radio talking to a hung-up line is not an error the radio can do
-// anything about.
+// send queues one whole frame for the writer goroutine. It never touches the
+// wire itself: a radio talking to a hung-up line is not an error the radio can
+// do anything about.
+//
+// IT NEVER BLOCKS, and that is the point. send runs on the goroutine that also
+// READS the port, so blocking on a full queue would stop the fake reading, and
+// the consumer's next write would then block on net.Pipe's rendezvous against
+// a fake that had stopped listening — both ends waiting for each other. A full
+// queue drops the frame instead, which is what a real line does with bytes
+// nobody is draining.
 func (r *Radio) send(f []byte) {
-	r.writeMu.Lock()
-	defer r.writeMu.Unlock()
-	_, _ = r.toController.Write(f)
+	select {
+	case r.out <- f:
+	case <-r.pipe.Done():
+	default:
+	}
 }
 
-// handle records one received frame, echoes it if asked, and answers it.
+// handle records one received frame and answers it.
+//
+// NOTHING IS EVER ECHOED. A line that echoes was a knob here until 06/09/2026;
+// no driver was ever built against one, and modelling a line condition nothing
+// meets is a second radio to keep true.
 func (r *Radio) handle(body []byte) {
 	received := canonicalFrame(body)
 
 	r.mu.Lock()
 	r.transcript = append(r.transcript, received)
 	r.mu.Unlock()
-
-	if r.cfg.echoBack {
-		r.send(received)
-	}
 
 	f, ok := parseFrame(body)
 	if !ok {

@@ -1,24 +1,34 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Command gen projects internal/fakeft891's own copy of TRANSCRIPTION B into
-// the fake's compact EX (MENU) inventory, emitting exinventory_gen.go. It is
-// invoked by the //go:generate directive in internal/fakeft891/ex.go, whose
-// working directory is internal/fakeft891 — hence the relative paths on the
-// directive's flags.
+package fakeft891
+
+import (
+	"bytes"
+	_ "embed"
+	"encoding/csv"
+	"fmt"
+	"slices"
+	"strconv"
+	"strings"
+)
+
+// transcriptionB is this package's OWN COPY of the FT-891's transcription B,
+// embedded and parsed here at init. PROVENANCE.md records where the copy came
+// from and why it is a copy rather than a move; core/transport's cross-check
+// reads the same file by path, so it must not move.
 //
 // # STANDARD LIBRARY ONLY, and why that is the whole point
 //
-// This command imports nothing project-internal, and in particular NOT
+// The parsing below imports nothing project-internal, and in particular NOT
 // internal/extable — the machinery that generates the DIALECT's inventory from
-// transcription A. fakeft891's recursive no-imports fence (imports_test.go,
-// TestNoCoreImports) enforces that mechanically for this directory, and the
-// reason is the design this file exists to serve:
+// transcription A. imports_test.go's recursive fence enforces that
+// mechanically, and the reason is the design this file exists to serve:
 //
 //	the dialect's inventory is generated from transcription A by
-//	internal/extable; this fake's is generated from transcription B by the
-//	code below; and core/transport's cross-check proves the two agree.
+//	internal/extable; this fake's is derived from transcription B by the code
+//	below; and core/transport's cross-check proves the two agree.
 //
-// A defect in either transcription, or in either generator, therefore surfaces
+// A defect in either transcription, or in either derivation, therefore surfaces
 // as a cross-check MISMATCH. Reaching for extable here — even for something as
 // innocent as its CSV row parser — would put one parser on both sides of that
 // comparison, and a shared parsing bug would reproduce itself identically into
@@ -26,55 +36,56 @@
 // FT-710's own Digits-column misreading (spec REVISION 3, D-baud) is a
 // reminder of.
 //
-// So the CSV reading below is written afresh against B's OWN schema.
-//
-// # A NEW GENERATOR, not internal/fakedx10/gen's with the paths changed
-//
-// The FTdx10's B is six columns (P1,P2,P3,Function,P4,Digits) with the group
-// labels wrapped inside the address cells. The FT-891's is three
-// (menu_number,name,digits), and the three differences are structural
-// properties of the printed chart, each of which removes machinery rather than
-// renaming it:
-//
-//   - THE ADDRESS IS A PAIR. This chart prints a four-digit MENU Number whose
-//     two halves ARE the address — 0803 is (P1,P2) = (08,03) — and every row's
-//     P3 is zero (core/cat's EXAddressPair). So a GROUP here is one two-digit
-//     P1 prefix and its items are indexed by P2; the FTdx10's (P1,P2) subgroup
-//     key with a P3 item index has no counterpart.
-//   - THERE ARE NO GROUP LABELS. The chart prints no label columns at all, so
-//     there is no "NN (LABEL)" wrapper to split, nothing to check for
-//     agreement across a group's rows, and nothing to emit as a comment.
-//   - THERE IS NO TEXT ROW, AND NO COLUMN THAT COULD IDENTIFY ONE. B carries
-//     no parameter-legend column, so the FTdx10 generator's text discriminator
-//     — Digits == 12 AND a P4 cell beginning "Up to" — is not merely
-//     unnecessary, it is INEXPRESSIBLE. Every row is therefore projected as
-//     numeric. That is a statement about the delivered SCHEMA and not a claim
-//     about the radio: see widthToken.
+// So the CSV reading below is written afresh against B's OWN schema. It was a
+// generator emitting a checked-in exinventory_gen.go until 06/09/2026; the
+// generated file and the second copy of the parser it needed are gone, and the
+// projection now happens at init from the same bytes.
 //
 // # What is projected, and what is deliberately dropped
 //
-// The output models WIRE BEHAVIOUR ONLY — how many P2 items each P1 group has,
+// The result models WIRE BEHAVIOUR ONLY — how many P2 items each P1 group has,
 // and each item's raw P4 reply WIDTH. B's name column (the item's human name)
-// is NOT emitted: this fake answers menu reads, it does not interpret menu
+// is NOT kept: this fake answers menu reads, it does not interpret menu
 // meanings, and the dialect is the layer that carries names. The name is read
 // only so that a malformed row can be NAMED in an error message, and so that a
 // blank cell — the signature of a misparsed row — is refused rather than
 // silently projected.
-package main
+//
+//go:embed transcription-b.csv
+var transcriptionB []byte
 
-import (
-	"bytes"
-	"encoding/csv"
-	"flag"
-	"fmt"
-	"go/format"
-	"log"
-	"os"
-	"path/filepath"
-	"slices"
-	"strconv"
-	"strings"
-)
+// exGroups is this fake's EX (MENU) inventory in compact form: one entry per P1
+// group, in the chart's own order, with one width token per P2 item in P2 order
+// starting at 01. A token is '1'..'5' — a numeric field of that many raw ASCII
+// bytes. There is NO text token: this chart's transcription carries no column
+// from which a text item could be identified, so every row is projected as
+// numeric (widthToken says what that does and does not claim). ex.go expands
+// this into the address -> default raw P4 map the fake answers from.
+//
+// THE ADDRESS IS A PAIR: the chart's four-digit MENU Number is P1 then P2, and
+// every item's P3 is zero (core/cat's EXAddressPair), which is why this radio's
+// EX read frame is seven bytes where every registered sibling's is nine.
+//
+// 18 groups, 159 items — ex_test.go pins both counts against the chart rather
+// than against this table.
+var exGroups = mustGroups(transcriptionB)
+
+// mustGroups is the init-time projection. Every malformed input PANICS rather
+// than yielding a shorter table: this CSV is a committed, hash-frozen
+// evidential artefact, so anything the projection cannot read is a finding, and
+// a fake that quietly answered from a truncated inventory would be worse than
+// one that refuses to start.
+func mustGroups(data []byte) []group {
+	rows, err := parseB(data)
+	if err != nil {
+		panic("fakeft891: transcription-b.csv: " + err.Error())
+	}
+	groups, err := groupRows(rows)
+	if err != nil {
+		panic("fakeft891: transcription-b.csv: " + err.Error())
+	}
+	return groups
+}
 
 // bHeader is transcription B's exact header row, as delivered and committed.
 // It is pinned so that a schema change fails LOUDLY here rather than being
@@ -102,7 +113,7 @@ const menuNumberDigits = 4
 // exactly two rows (0803 OTHER DISP, 0804 OTHER SHIFT), whose signed
 // "-3000 Hz - 0 - +3000 Hz" parameter counts its sign as a digit. It is spelt
 // here as the number B's own digits column prints for those rows, and pinned
-// independently from both sides — gen/main_test.go's
+// independently from both sides — exinventory_test.go's
 // TestParseB_TheOnlyFiveWideRowsAre0803And0804 from B, and
 // core/cat/ft891/crosscheck_test.go's widestRowDigits from A.
 const maxWidth = 5
@@ -119,58 +130,15 @@ type row struct {
 	// bytes. There is no text token — see widthToken.
 	token byte
 	// line is the 1-based physical line in the CSV, header included, for
-	// error messages and for the emitted provenance comment.
+	// error messages.
 	line int
 }
 
 // group is one P1 group's projection: a widths string with one token per P2
 // item, in P2 order starting at 01.
 type group struct {
-	p1        string
-	widths    string
-	firstLine int
-	lastLine  int
-}
-
-func main() {
-	log.SetFlags(0)
-	log.SetPrefix("fakeft891/gen: ")
-
-	csvPath := flag.String("csv", "", "path to this package's copy of transcription B (required)")
-	outPath := flag.String("out", "", "path of the generated Go file to write (required)")
-	flag.Parse()
-
-	// No positional operands, and no defaulted paths. Silently ignoring an
-	// operand — or defaulting a path — would let a mistyped invocation read as
-	// a successful run that generated something other than what was asked for
-	// (internal/extable/gen's own reasoning, which is about invocation
-	// discipline rather than about EX tables, and is worth sharing).
-	if flag.NArg() > 0 {
-		log.Fatalf("unexpected positional arguments %v — gen takes only -csv and -out", flag.Args())
-	}
-	if *csvPath == "" || *outPath == "" {
-		log.Fatal("-csv and -out are both required; see the //go:generate directive in ex.go")
-	}
-
-	data, err := os.ReadFile(*csvPath)
-	if err != nil {
-		log.Fatalf("reading %s: %v", *csvPath, err)
-	}
-	rows, err := parseB(data)
-	if err != nil {
-		log.Fatalf("parsing %s: %v", *csvPath, err)
-	}
-	groups, err := groupRows(rows)
-	if err != nil {
-		log.Fatalf("grouping %s: %v", *csvPath, err)
-	}
-	out, err := render(groups, *csvPath)
-	if err != nil {
-		log.Fatalf("rendering %s: %v", *outPath, err)
-	}
-	if err := os.WriteFile(*outPath, out, 0o644); err != nil {
-		log.Fatalf("writing %s: %v", *outPath, err)
-	}
+	p1     string
+	widths string
 }
 
 // parseB parses transcription B into rows, in file order. Every malformed
@@ -268,8 +236,6 @@ func splitMenuNumber(cell string) (p1 string, p2 int, err error) {
 	return s[:2], int(s[2]-'0')*10 + int(s[3]-'0'), nil
 }
 
-func isDigit(b byte) bool { return b >= '0' && b <= '9' }
-
 // groupRows folds rows into one group per P1, in file order, and enforces
 // every structural property the compact widths-string form depends on:
 //
@@ -293,7 +259,7 @@ func groupRows(rows []row) ([]group, error) {
 				return nil, fmt.Errorf("line %d: group %s opens at P2=%02d, want 01", r.line, r.p1, r.p2)
 			}
 			groups = append(groups, group{
-				p1: r.p1, widths: string(r.token), firstLine: r.line, lastLine: r.line,
+				p1: r.p1, widths: string(r.token),
 			})
 			seen[r.p1] = len(groups) - 1
 			continue
@@ -306,91 +272,6 @@ func groupRows(rows []row) ([]group, error) {
 			return nil, fmt.Errorf("line %d: group %s item %d has P2=%02d, want %02d — P2 must run consecutively from 01", r.line, r.p1, want, r.p2, want)
 		}
 		g.widths += string(r.token)
-		g.lastLine = r.line
 	}
 	return groups, nil
-}
-
-// render emits the generated Go file. csvPath names the source; only its BASE
-// NAME is written into the output, so where the generator was invoked from
-// cannot leak into the committed bytes — which is what lets gen's own staleness
-// test read the CSV as "../transcription-b.csv" and still render the file the
-// //go:generate directive produces from "transcription-b.csv".
-//
-// The output is DETERMINISTIC: groups are emitted in the file order groupRows
-// validated (which the chart fixes, and which is P1-ascending in the committed
-// artefact), every value derives from the parsed rows, nothing is ranged over a
-// map, and the whole buffer is run through go/format — so two runs over equal
-// input produce byte-identical, gofmt-clean output. That is what makes the
-// staleness test's byte comparison (gen/main_test.go) a meaningful check rather
-// than a formatting lottery.
-func render(groups []group, csvPath string) ([]byte, error) {
-	if len(groups) == 0 {
-		return nil, fmt.Errorf("no groups to render")
-	}
-	csvName := filepath.Base(csvPath)
-	items := 0
-	for _, g := range groups {
-		items += len(g.widths)
-	}
-
-	var buf bytes.Buffer
-	buf.WriteString("// SPDX-License-Identifier: GPL-3.0-or-later\n\n")
-	fmt.Fprintf(&buf, "// Code generated by internal/fakeft891/gen from %s. DO NOT EDIT.\n\n", csvName)
-	buf.WriteString("package fakeft891\n\n")
-	buf.WriteString("// exGroups is this fake's EX (MENU) inventory in compact form: one entry per\n")
-	buf.WriteString("// P1 group, in the chart's own order, with one width token per P2 item in P2\n")
-	buf.WriteString("// order starting at 01. A token is '1'..'5' — a numeric field of that many raw\n")
-	buf.WriteString("// ASCII bytes. There is NO text token: this chart's transcription carries no\n")
-	buf.WriteString("// column from which a text item could be identified, so every row is projected\n")
-	buf.WriteString("// as numeric (gen/main.go's widthToken says what that does and does not claim).\n")
-	buf.WriteString("// ex.go expands this into the address -> default raw P4 map the fake answers\n")
-	buf.WriteString("// from, and states what the table does and does not claim.\n")
-	buf.WriteString("//\n")
-	buf.WriteString("// THE ADDRESS IS A PAIR: the chart's four-digit MENU Number is P1 then P2, and\n")
-	buf.WriteString("// every item's P3 is zero (core/cat's EXAddressPair), which is why this radio's\n")
-	buf.WriteString("// EX read frame is seven bytes where every registered sibling's is nine.\n")
-	buf.WriteString("//\n")
-	fmt.Fprintf(&buf, "// It is a PROJECTION OF TRANSCRIPTION B (%s), derived from that\n", csvName)
-	buf.WriteString("// artefact's digits column alone. The dialect's inventory\n")
-	buf.WriteString("// (core/cat/ft891/exinventory_gen.go) is generated from transcription A by\n")
-	buf.WriteString("// different code, and core/transport's cross-check proves the two agree — so a\n")
-	buf.WriteString("// defect in either transcription or either generator shows up there.\n")
-	buf.WriteString("//\n")
-	fmt.Fprintf(&buf, "// %s, %s. Regenerate with `go generate ./internal/fakeft891`;\n", plural(len(groups), "group"), plural(items, "item"))
-	buf.WriteString("// gen/main_test.go refuses a file that has drifted from the CSV.\n")
-	buf.WriteString("var exGroups = []struct{ p1, widths string }{\n")
-	for _, g := range groups {
-		fmt.Fprintf(&buf, "\t{%s, %s}, // %s — %s %s\n",
-			strconv.Quote(g.p1), strconv.Quote(g.widths),
-			plural(len(g.widths), "item"), csvName, lineRange(g.firstLine, g.lastLine))
-	}
-	buf.WriteString("}\n")
-
-	formatted, err := format.Source(buf.Bytes())
-	if err != nil {
-		return nil, fmt.Errorf("formatting generated Go: %w", err)
-	}
-	return formatted, nil
-}
-
-// plural renders a count with its noun, pluralised. A generated comment reading
-// "1 items" is the kind of small wrongness that makes a reader distrust the
-// numbers beside it.
-func plural(n int, noun string) string {
-	if n == 1 {
-		return fmt.Sprintf("%d %s", n, noun)
-	}
-	return fmt.Sprintf("%d %ss", n, noun)
-}
-
-// lineRange renders a group's CSV extent, collapsing a single-row group to one
-// line number rather than printing "lines 130-130". The FT-891's chart has such
-// a group — 17 RESET, one item — so this branch is exercised by the committed
-// artefact rather than only by a hypothetical.
-func lineRange(first, last int) string {
-	if first == last {
-		return fmt.Sprintf("line %d", first)
-	}
-	return fmt.Sprintf("lines %d-%d", first, last)
 }

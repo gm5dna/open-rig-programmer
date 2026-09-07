@@ -5,28 +5,24 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"github.com/gm5dna/open-rig-programmer/internal/fakepipe"
 )
 
 type Radio struct {
-	host, device                 net.Conn
+	// pipe is internal/fakepipe: the net.Pipe pair and the goroutines
+	// servicing it, protocol-free (see doc.go).
+	pipe                         *fakepipe.Pipe
 	addr                         byte
 	id                           []byte
 	echo                         bool
-	fullRecord                   bool
 	emptyReply                   byte
-	emptyRecordFF                bool
 	recordLen                    int
-	scanEdgeLen                  int
-	broadcastTo                  byte
-	latency                      time.Duration
 	mu                           sync.Mutex
 	slots                        map[int]MemState
 	commands                     [][2]byte
 	bytesWritten                 []byte
-	closed                       chan struct{}
 	out                          chan []byte
-	once                         sync.Once
-	wg                           sync.WaitGroup
 	broadcastStop, addressedStop chan struct{}
 }
 
@@ -35,56 +31,46 @@ func New(opts ...Option) *Radio {
 	for _, o := range opts {
 		o(&c)
 	}
-	h, d := net.Pipe()
-	r := &Radio{host: h, device: d, addr: c.addr, id: c.id, echo: c.echo, fullRecord: c.fullRecord, emptyReply: c.emptyReply, emptyRecordFF: c.emptyRecordFF, recordLen: c.recordLen, scanEdgeLen: c.scanEdgeLen, broadcastTo: c.broadcastTo, latency: c.latency, slots: make(map[int]MemState), closed: make(chan struct{}), out: make(chan []byte, 128)}
+	r := &Radio{pipe: fakepipe.New(), addr: c.addr, id: c.id, echo: c.echo, emptyReply: c.emptyReply, recordLen: c.recordLen, slots: make(map[int]MemState), out: make(chan []byte, 128)}
+	r.pipe.Latency = c.latency
 	for ch, v := range c.channels {
-		if n := c.recordLenFor(ch); len(v) != n {
+		if n := c.recordLen; len(v) != n {
 			panic(fmt.Sprintf("fakeic7760: channel %d record has length %d, want %d", ch, len(v), n))
 		}
 		r.slots[ch] = MemState{Raw: append([]byte(nil), v...)}
 	}
-	r.wg.Add(2)
-	go r.serve()
-	go r.writer()
+	r.serve()
+	r.pipe.Go(r.writer)
 	r.StartBroadcastFlood(c.broadcast)
 	r.StartAddressedFlood(c.addressed)
 	return r
 }
-func (r *Radio) Port() net.Conn { return r.host }
+func (r *Radio) Port() net.Conn { return r.pipe.Host() }
 func (r *Radio) Close() error {
 	r.StopFloods()
-	r.once.Do(func() { close(r.closed); _ = r.device.Close() })
-	r.wg.Wait()
-	return nil
+	return r.pipe.Close()
 }
 func (r *Radio) serve() {
-	defer r.wg.Done()
 	a := newReassembler(4096)
-	b := make([]byte, 4096)
-	for {
-		n, e := r.device.Read(b)
-		if n > 0 {
+	r.pipe.Go(func() {
+		r.pipe.ReadLoop(func(b []byte) {
 			r.mu.Lock()
-			r.bytesWritten = append(r.bytesWritten, b[:n]...)
+			r.bytesWritten = append(r.bytesWritten, b...)
 			r.mu.Unlock()
-			for _, f := range a.push(b[:n]) {
+			for _, f := range a.push(b) {
 				r.dispatch(f)
 			}
-		}
-		if e != nil {
-			return
-		}
-	}
+		})
+	})
 }
 func (r *Radio) writer() {
-	defer r.wg.Done()
 	for {
 		select {
 		case b := <-r.out:
-			if _, err := r.device.Write(b); err != nil {
+			if !r.pipe.WriteNow(b) {
 				return
 			}
-		case <-r.closed:
+		case <-r.pipe.Done():
 			return
 		}
 	}
@@ -92,7 +78,7 @@ func (r *Radio) writer() {
 func (r *Radio) emit(b []byte) {
 	select {
 	case r.out <- append([]byte(nil), b...):
-	case <-r.closed:
+	case <-r.pipe.Done():
 	default:
 	}
 }
@@ -117,12 +103,8 @@ func (r *Radio) dispatch(raw []byte) {
 	if p == nil {
 		return
 	}
-	if r.latency > 0 {
-		select {
-		case <-time.After(r.latency):
-		case <-r.closed:
-			return
-		}
+	if !r.pipe.Sleep(r.pipe.Latency) {
+		return
 	}
 	r.emit(p)
 }
@@ -159,11 +141,13 @@ func (r *Radio) read(hi, lo byte) []byte {
 	if !set {
 		return reply(r.addr, r.emptyReply)
 	}
-	// Reading a stored all-FF record back as "empty" is the ASSUMED register
-	// entry ic7760-empty-reply-ff, and it is a different question from the
-	// outbound clear form refused in write below.
-	// TestTheInboundAllFFRecordInterpretationIsOptional pins both halves.
-	if r.emptyRecordFF && allFF(m.Raw) {
+	// A stored all-FF record reads back as an empty channel — register entry
+	// ic7760-empty-reply-ff, and a SEPARATE question from the outbound clear
+	// form. The only FF the guide prints in the memory context is a value the
+	// controller SENDS to erase; nothing licenses reading it backwards, and no
+	// driver has ever asked for the other reading, so the tier's assumption is
+	// what this fake does, full stop.
+	if allFF(m.Raw) {
 		return reply(r.addr, r.emptyReply)
 	}
 	out := append([]byte{0x1A, 0, hi, lo}, m.Raw...)
@@ -184,7 +168,11 @@ func (r *Radio) write(hi, lo byte, v []byte) []byte {
 		return reply(r.addr, CodeNG)
 	}
 	n := r.recordLenFor(ch)
-	if len(v) > n || (len(v) != n && r.fullRecord) {
+	// A 1A 00 set must carry the WHOLE layout — register entry
+	// ic7760-write-full-record. The guide prints no statement permitting a
+	// short set, and the tier sends the full layout always, so this fake
+	// insists and there is nothing to switch.
+	if len(v) != n {
 		return reply(r.addr, CodeNG)
 	}
 	r.mu.Lock()
@@ -205,7 +193,7 @@ func wire(to, from byte, p ...byte) []byte {
 // reply is an answer to the controller: to=E0, from=this radio.
 func reply(addr byte, p ...byte) []byte { return wire(AddrController, addr, p...) }
 func (r *Radio) StartBroadcastFlood(d time.Duration) {
-	r.startFlood(r.broadcastTo, d, &r.broadcastStop)
+	r.startFlood(AddrBroadcast, d, &r.broadcastStop)
 }
 func (r *Radio) StartAddressedFlood(d time.Duration) {
 	r.startFlood(AddrController, d, &r.addressedStop)
@@ -220,10 +208,9 @@ func (r *Radio) startFlood(to byte, d time.Duration, slot *chan struct{}) {
 	}
 	s := make(chan struct{})
 	*slot = s
-	r.wg.Add(1)
-	r.mu.Unlock()
-	go func() {
-		defer r.wg.Done()
+	// Started while mu is held, so a concurrent Close (StopFloods takes mu)
+	// cannot reach the pipe's Wait between here and the goroutine registering.
+	r.pipe.Go(func() {
 		t := time.NewTicker(d)
 		defer t.Stop()
 		for {
@@ -231,18 +218,19 @@ func (r *Radio) startFlood(to byte, d time.Duration, slot *chan struct{}) {
 			case <-t.C:
 				// An unsolicited frame comes FROM the radio, so only the
 				// destination varies between the two floods: the assumed
-				// broadcast form (ic7760-broadcast-form, WithBroadcastForm)
+				// broadcast form (ic7760-broadcast-form)
 				// and the synthetic controller-addressed one.
 				// TestTheBroadcastFormIsConfigurable pins both.
 				out := append([]byte{0x19, 0}, r.id...)
 				r.emit(wire(to, r.addr, out...))
 			case <-s:
 				return
-			case <-r.closed:
+			case <-r.pipe.Done():
 				return
 			}
 		}
-	}()
+	})
+	r.mu.Unlock()
 }
 func (r *Radio) StopFloods() {
 	r.mu.Lock()
@@ -257,14 +245,11 @@ func (r *Radio) StopFloods() {
 	}
 }
 
-// recordLenFor is the accepted record length for one slot; see
-// WithScanEdgeRecordShape.
-func (r *Radio) recordLenFor(ch int) int {
-	if (ch == ChanP1 || ch == ChanP2) && r.scanEdgeLen > 0 {
-		return r.scanEdgeLen
-	}
-	return r.recordLen
-}
+// recordLenFor is the accepted record length for one slot. That a 1A 00 read
+// of 01 00 or 01 01 returns the same record-only shape as a memory channel is
+// ASSUMED — register entry ic7760-scan-edge-record-shape — so the scan edges
+// take the same length as every memory channel.
+func (r *Radio) recordLenFor(int) int { return r.recordLen }
 
 // allFF reports whether a stored record is every-byte FF. Its meaning is the
 // caller's question, not this helper's.

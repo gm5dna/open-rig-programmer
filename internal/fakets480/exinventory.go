@@ -1,66 +1,70 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Command gen projects internal/fakets480's own copy of TRANSCRIPTION B into
-// this fake's compact EX (MENU) inventory, emitting exinventory_gen.go. It is
-// invoked by the //go:generate directive in internal/fakets480/ex.go, whose
-// working directory is internal/fakets480 — hence the relative paths on the
-// directive's flags.
-//
-// # STANDARD LIBRARY ONLY, and why that is the whole point
-//
-// This command imports nothing project-internal, and in particular NOT
-// internal/extable — the machinery that generates the CODEC's inventory from
-// transcription A. fakets480's recursive no-imports fence (imports_test.go,
-// TestNoCoreImports) enforces that mechanically for this directory, and the
-// reason is the design this file exists to serve:
-//
-//	the codec's inventory (core/kw/ts480/exinventory_gen.go) is generated
-//	from transcription A by internal/extable; this fake's is generated from
-//	transcription B by the code below; and core/transport's cross-check
-//	proves the two agree.
-//
-// A defect in either transcription, or in either generator, therefore
-// surfaces as a cross-check MISMATCH. Reaching for extable here — even for
-// something as innocent as its CSV row parser — would put one parser on both
-// sides of that comparison, and a shared parsing bug would reproduce itself
-// identically into both inventories and be invisible.
-//
-// So the CSV reading below is written afresh against B's OWN schema.
-//
-// # A SIBLING of internal/fakets590/gen, not an import of it
-//
-// The two Kenwood charts share a transcription schema, and this generator is
-// deliberately a second copy of that one rather than a shared package. THE
-// HARD RULE (doc.go) forbids this directory from importing anything
-// project-internal, and a shared "kenwood B projector" would be exactly that
-// — a package both fakes reach for, whose bug would land identically in both
-// inventories and be invisible to a comparison of them. The two copies differ
-// where the two books differ, and maxWidth is where that shows.
-//
-// # What is projected, and what is deliberately dropped
-//
-// The output models WIRE BEHAVIOUR ONLY — how many menu numbers the chart
-// has, and each one's raw P5 reply WIDTH. B's name column is NOT emitted:
-// this fake answers menu reads, it does not interpret menu meanings, and the
-// codec's inventory is the layer that carries names. The name is read only so
-// that a malformed row can be NAMED in an error message, and so that a blank
-// cell — the signature of a misparsed row — is refused rather than silently
-// projected.
-package main
+package fakets480
 
 import (
 	"bytes"
+	_ "embed"
 	"encoding/csv"
-	"flag"
 	"fmt"
-	"go/format"
-	"log"
-	"os"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 )
+
+// # STANDARD LIBRARY ONLY, and why that is the whole point
+//
+// The parsing below imports nothing project-internal, and in particular NOT
+// internal/extable — the machinery that derives the DIALECT's inventory from
+// transcription A. imports_test.go's recursive fence enforces that
+// mechanically, and the reason is the design this file exists to serve: the
+// dialect's inventory comes from transcription A by one piece of code, this
+// fake's from transcription B by the code below, and core/transport's
+// cross-check proves the two agree. One parser on both sides of that
+// comparison would reproduce a shared parsing bug into both inventories
+// invisibly.
+//
+// It was a generator emitting a checked-in table until 06/09/2026. The
+// generated file, and the second copy of the parser it needed, are gone; the
+// projection now happens at init from the same committed bytes. The CSV itself
+// has NOT moved — core/transport's cross-check reads it by path.
+
+// transcriptionB480 is this package's OWN COPY of transcription B, embedded and
+// projected here at init. PROVENANCE.md records where the copy came from and
+// why it is a copy rather than a move.
+//
+//go:embed transcription-b-480.csv
+var transcriptionB480 []byte
+
+// exWidths480 is this radio's EX (MENU) inventory in compact form: ONE WIDTH
+// TOKEN PER MENU NUMBER, and THE STRING'S INDEX IS THE MENU NUMBER — this chart
+// runs from 000 with no gaps (480:401). A token is '1' or '2', a field of that
+// many raw ASCII bytes of P5 (480:409-411). There is no text token:
+// transcription B's text column is validated and deliberately not projected
+// (widthToken says why, and what that does and does not claim). ex.go expands
+// this into the address -> default raw P5 map the fake answers from.
+//
+// THE ADDRESS IS A SINGLE COMPONENT: the chart's three-digit Menu number is the
+// whole of it, and the frame's P2, P3 and P4 are printed constants, each
+// "Always 0 for the TS-480" (480:402-407), rather than address parts.
+var exWidths480 = mustWidths("transcription-b-480.csv", transcriptionB480)
+
+// mustWidths is the init-time projection. Every malformed input PANICS rather
+// than yielding a shorter table: this CSV is a committed, hash-frozen
+// evidential artefact, so anything the projection cannot read is a finding, and
+// a fake answering from a truncated inventory would be worse than one that
+// refuses to start.
+func mustWidths(name string, data []byte) string {
+	rows, err := parseB(data)
+	if err != nil {
+		panic("fakets480: " + name + ": " + err.Error())
+	}
+	widths, err := projectWidths(rows)
+	if err != nil {
+		panic("fakets480: " + name + ": " + err.Error())
+	}
+	return widths
+}
 
 // bHeader is transcription B's exact header row, as delivered and committed.
 // It is pinned so that a schema change fails LOUDLY here rather than being
@@ -113,46 +117,6 @@ type row struct {
 	// RECORD's starting line, which is not the record's index plus two on a
 	// chart whose names carry embedded commas or newlines.
 	line int
-}
-
-func main() {
-	log.SetFlags(0)
-	log.SetPrefix("fakets480/gen: ")
-
-	csvPath := flag.String("csv", "", "path to this package's copy of transcription B (required)")
-	outPath := flag.String("out", "", "path of the generated Go file to write (required)")
-	flag.Parse()
-
-	// No positional operands, and no defaulted paths. Silently ignoring an
-	// operand — or defaulting a path — would let a mistyped invocation read
-	// as a successful run that generated something other than what was asked
-	// for.
-	if flag.NArg() > 0 {
-		log.Fatalf("unexpected positional arguments %v — gen takes only -csv and -out", flag.Args())
-	}
-	if *csvPath == "" || *outPath == "" {
-		log.Fatal("-csv and -out are both required; see the //go:generate directive in ex.go")
-	}
-
-	data, err := os.ReadFile(*csvPath)
-	if err != nil {
-		log.Fatalf("reading %s: %v", *csvPath, err)
-	}
-	rows, err := parseB(data)
-	if err != nil {
-		log.Fatalf("parsing %s: %v", *csvPath, err)
-	}
-	widths, err := projectWidths(rows)
-	if err != nil {
-		log.Fatalf("projecting %s: %v", *csvPath, err)
-	}
-	out, err := render(widths, rows, *csvPath)
-	if err != nil {
-		log.Fatalf("rendering %s: %v", *outPath, err)
-	}
-	if err := os.WriteFile(*outPath, out, 0o644); err != nil {
-		log.Fatalf("writing %s: %v", *outPath, err)
-	}
 }
 
 // parseB parses transcription B into rows, in file order. Every malformed
@@ -331,81 +295,4 @@ func projectWidths(rows []row) (string, error) {
 		b.WriteByte(r.token)
 	}
 	return b.String(), nil
-}
-
-// chunk is how many width tokens one emitted string line carries. TEN, so that
-// a line's first menu number is a round ten and a reader can find a given menu
-// by counting lines rather than characters.
-const chunk = 10
-
-// render emits the generated Go file. csvPath names the source; only its BASE
-// NAME is written into the output, so where the generator was invoked from
-// cannot leak into the committed bytes — which is what lets gen's own
-// staleness test read the CSV as "../transcription-b-480.csv" and still render
-// the file the //go:generate directive produces from "transcription-b-480.csv".
-//
-// The output is DETERMINISTIC: the widths string comes from the parsed rows in
-// the file order projectWidths validated, nothing is ranged over a map, and
-// the whole buffer is run through go/format — so two runs over equal input
-// produce byte-identical, gofmt-clean output. That is what makes the staleness
-// test's byte comparison (gen/main_test.go) a meaningful check rather than a
-// formatting lottery.
-func render(widths string, rows []row, csvPath string) ([]byte, error) {
-	if widths == "" {
-		return nil, fmt.Errorf("no rows to render")
-	}
-	csvName := filepath.Base(csvPath)
-
-	var buf bytes.Buffer
-	buf.WriteString("// SPDX-License-Identifier: GPL-3.0-or-later\n\n")
-	fmt.Fprintf(&buf, "// Code generated by internal/fakets480/gen from %s. DO NOT EDIT.\n\n", csvName)
-	buf.WriteString("package fakets480\n\n")
-	buf.WriteString("// exWidths480 is this radio's EX (MENU) inventory in compact form: ONE\n")
-	buf.WriteString("// WIDTH TOKEN PER MENU NUMBER, and THE STRING'S INDEX IS THE MENU NUMBER —\n")
-	buf.WriteString("// this chart runs from 000 with no gaps (480:401). A token is '1' or '2', a\n")
-	buf.WriteString("// field of that many raw ASCII bytes of P5 (480:409-411). There is no text\n")
-	buf.WriteString("// token: transcription B's text column is validated and deliberately not\n")
-	buf.WriteString("// projected (gen/main.go's widthToken says why, and what that does and does\n")
-	buf.WriteString("// not claim). ex.go expands this into the address -> default raw P5 map the\n")
-	buf.WriteString("// fake answers from.\n")
-	buf.WriteString("//\n")
-	buf.WriteString("// THE ADDRESS IS A SINGLE COMPONENT: the chart's three-digit Menu number is\n")
-	buf.WriteString("// the whole of it, and the frame's P2, P3 and P4 are printed constants, each\n")
-	buf.WriteString("// \"Always 0 for the TS-480\" (480:402-407), rather than address parts.\n")
-	buf.WriteString("//\n")
-	buf.WriteString("// It is a PROJECTION OF TRANSCRIPTION B — this package's own copy,\n")
-	fmt.Fprintf(&buf, "// %s — derived from that artefact's digits\n", csvName)
-	buf.WriteString("// column alone. The codec's inventory (core/kw/ts480) is generated from\n")
-	buf.WriteString("// transcription A by different code, and core/transport's cross-check proves\n")
-	buf.WriteString("// the two agree — so a defect in either transcription or either generator\n")
-	buf.WriteString("// shows up there.\n")
-	buf.WriteString("//\n")
-	fmt.Fprintf(&buf, "// %d menus, 000 to %03d. Regenerate with `go generate ./internal/fakets480`;\n", len(widths), len(widths)-1)
-	buf.WriteString("// gen/main_test.go refuses a file that has drifted from the CSV.\n")
-	buf.WriteString("var exWidths480 = \"\" +\n")
-	for start := 0; start < len(widths); start += chunk {
-		end := min(start+chunk, len(widths))
-		plus := " +"
-		if end == len(widths) {
-			plus = ""
-		}
-		fmt.Fprintf(&buf, "\t%s%s // menus %03d-%03d — %s %s\n",
-			strconv.Quote(widths[start:end]), plus,
-			start, end-1, csvName, lineRange(rows[start].line, rows[end-1].line))
-	}
-
-	formatted, err := format.Source(buf.Bytes())
-	if err != nil {
-		return nil, fmt.Errorf("formatting generated Go: %w", err)
-	}
-	return formatted, nil
-}
-
-// lineRange renders a chunk's CSV extent, collapsing a single-row chunk to one
-// line number rather than printing "lines 62-62".
-func lineRange(first, last int) string {
-	if first == last {
-		return fmt.Sprintf("line %d", first)
-	}
-	return fmt.Sprintf("lines %d-%d", first, last)
 }

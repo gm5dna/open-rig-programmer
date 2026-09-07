@@ -15,6 +15,10 @@ package fakets480
 // line references here are citations in the sense core/kw/doc.go uses them:
 // they name where the chart is, they are not links.
 
+import (
+	"strings"
+)
+
 // --- General framing ---
 
 // rejection is the protocol's one and only NAK, "?;". This book's error
@@ -142,13 +146,12 @@ func (a *reassembler) push(chunk []byte) []accEvent {
 
 func isDigit(b byte) bool { return b >= '0' && b <= '9' }
 
+// allDigits reports whether s is a non-empty run of ASCII digits. The
+// predicate is spelt out rather than taken from unicode: a wire field is ASCII
+// or it is not this radio's, and unicode.IsDigit would admit other scripts'
+// decimal digits.
 func allDigits(s string) bool {
-	for i := 0; i < len(s); i++ {
-		if !isDigit(s[i]) {
-			return false
-		}
-	}
-	return len(s) > 0
+	return s != "" && strings.IndexFunc(s, func(r rune) bool { return r < '0' || r > '9' }) < 0
 }
 
 // --- The channel number, and the 50-byte memory record ---
@@ -600,8 +603,8 @@ func (r *Radio) handleTY(body []byte) []byte {
 	}
 	out := make([]byte, 0, 2+tyReservedLen+1+1)
 	out = append(out, 'T', 'Y')
-	out = append(out, r.tyReserved...)
-	out = append(out, r.tyVariant, ';')
+	out = append(out, defaultTYReserved...)
+	out = append(out, defaultTYVariant, ';')
 	return out
 }
 
@@ -666,13 +669,22 @@ func (r *Radio) handleAI(body []byte) []byte {
 
 // --- Top-level dispatch ---
 
-// toUpperASCII folds one ASCII lower-case byte to upper case and leaves every
-// other byte alone. Used on COMMAND NAMES ONLY — see handleFrame.
-func toUpperASCII(b byte) byte {
-	if b >= 'a' && b <= 'z' {
-		return b - 'a' + 'A'
+// upperASCII folds the two ASCII bytes of a command name to upper case and
+// leaves every other byte alone.
+//
+// NOT bytes.ToUpper or strings.ToUpper: those are Unicode-aware, so a body
+// carrying arbitrary line noise comes back re-encoded and of a DIFFERENT
+// LENGTH — longer for an invalid byte (U+FFFD), shorter for a valid sequence
+// that case-folds to fewer bytes ("\u0131" is two bytes and uppercases to one).
+// A fake whose whole job is byte-exact wire behaviour folds ASCII and touches
+// nothing else.
+func upperASCII(name [2]byte) [2]byte {
+	for i, b := range name {
+		if b >= 'a' && b <= 'z' {
+			name[i] = b - 'a' + 'A'
+		}
 	}
-	return b
+	return name
 }
 
 // handleFrame parses one complete, ';'-terminated frame (as produced by
@@ -704,7 +716,7 @@ func (r *Radio) handleFrame(frame []byte) []byte {
 	if len(body) < 2 {
 		return rejection
 	}
-	cmd := [2]byte{toUpperASCII(body[0]), toUpperASCII(body[1])}
+	cmd := upperASCII([2]byte{body[0], body[1]})
 	rest := body[2:]
 
 	switch cmd {

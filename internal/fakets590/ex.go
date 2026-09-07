@@ -7,9 +7,6 @@ import (
 	"strings"
 )
 
-//go:generate go run github.com/gm5dna/open-rig-programmer/internal/fakets590/gen -csv transcription-b-590s.csv -out exinventory590s_gen.go -var exWidths590S
-//go:generate go run github.com/gm5dna/open-rig-programmer/internal/fakets590/gen -csv transcription-b-590sg.csv -out exinventory590sg_gen.go -var exWidths590SG
-
 // This file is fakets590's own, independent model of the EX (MENU) command on
 // both 590 rows — READ ONLY, exactly as internal/fakeft891 models the
 // FT-891's: the book documents a Set form and this fake does not implement it
@@ -31,8 +28,9 @@ import (
 //     exinventory590sg_gen.go) are generated from TRANSCRIPTION A
 //     (core/kw/ts590/menu590s.csv and menu590sg.csv) by internal/extable;
 //   - THESE inventories are generated from TRANSCRIPTION B by
-//     internal/fakets590/gen, which imports nothing project-internal at all
-//     (the recursive fence in imports_test.go enforces it, gen/ included, and
+//     exinventory.go, which imports nothing project-internal at all
+//     (the recursive fence in imports_test.go enforces it for this directory
+//     and every one beneath it, and
 //     TestNoCoreImports_ReachesTheGenerator proves the scan really gets
 //     there);
 //   - core/transport/ex_crosscheck_ts590_test.go proves the two agree,
@@ -101,8 +99,8 @@ const exDefaultDigit = '0'
 // up to 8 ASCII characters", menu 087 on the S and the same string renumbered
 // to 001 on the SG (590:741, 590:750) — which is also the widest P5 the
 // printed frame grid has room for, reaching position 17 before the ';'
-// (590:545-547). gen/main.go's maxWidth carries the same number on the
-// generator's side, and gen/main_test.go pins it from the committed CSVs.
+// (590:545-547). exinventory.go's maxWidth carries the same number on the
+// generator's side, and exinventory_test.go pins it from the committed CSVs.
 const exMaxWidth = 8
 
 // widthsFor returns the generated widths table for row: one width token per
@@ -129,23 +127,23 @@ func widthsFor(row Row) string {
 // factory-image constants (image.go). The widths tables are generated
 // package-level constants, so a token outside '1'..'8' is a defect in the
 // generator or a hand-edit of its output — a programming error to catch at
-// init, never a runtime input. gen/main.go's widthToken REFUSES to emit one
+// init, never a runtime input. exinventory.go's widthToken REFUSES to emit one
 // (with the offending CSV line named, which is why the alphabet's top is
-// proved there rather than discovered here), and gen/main_test.go's staleness
+// proved there rather than discovered here), and exinventory_test.go's staleness
 // check refuses a generated file that has drifted from the CSV, so reaching
 // this panic means one of those two was bypassed.
 func buildEXDefaults(row Row) map[string]string {
 	widths := widthsFor(row)
 	out := make(map[string]string, len(widths))
 	// Indexed by BYTE, not by rune: the table is one ASCII digit per menu
-	// (gen/main.go's widthToken), so a byte index is the intended menu number
+	// (exinventory.go's widthToken), so a byte index is the intended menu number
 	// and `range` over the string would give a rune index instead — the same
 	// value here because the alphabet is ASCII, but not what the loop means to
 	// compute.
 	for menu := 0; menu < len(widths); menu++ {
 		w := widths[menu]
 		if w < '1' || w > '0'+exMaxWidth {
-			panic(fmt.Sprintf("fakets590: %v menu %03d: malformed width token %q — regenerate with `go generate ./internal/fakets590`", row, menu, w))
+			panic(fmt.Sprintf("fakets590: %v menu %03d: malformed width token %q — a defect in this package's projection of transcription B (exinventory.go)", row, menu, w))
 		}
 		out[exWire(menu)] = strings.Repeat(string(exDefaultDigit), int(w-'0'))
 	}

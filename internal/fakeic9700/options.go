@@ -25,7 +25,6 @@ type config struct {
 	broadcasts    time.Duration
 	flood         time.Duration
 	answerAddress []byte
-	echoBack      bool
 }
 
 // WithSlot seeds one memory channel with a raw record.
@@ -108,15 +107,6 @@ func WithAddressedFlood(d time.Duration) Option {
 func WithAnswerAddress(band, channel int) Option {
 	addr := mustChannelAddress("WithAnswerAddress", band, channel)
 	return func(c *config) { c.answerAddress = addr }
-}
-
-// WithEchoBack echoes every received frame before answering it.
-//
-// The echo is the frame as normalised on receipt — exactly two preamble bytes,
-// however many arrived — because that is the frame the fake received, and it is
-// what Transcript reports too.
-func WithEchoBack() Option {
-	return func(c *config) { c.echoBack = true }
 }
 
 func mustChannelAddress(option string, band, channel int) []byte {

@@ -40,10 +40,10 @@ func ngFrame(from byte) []byte { return radioFrame(from, codeNG) }
 
 func writeBytes(t *testing.T, r *Radio, b []byte) {
 	t.Helper()
-	if err := r.hostConn.SetWriteDeadline(time.Now().Add(2 * time.Second)); err != nil {
+	if err := r.pipe.Host().SetWriteDeadline(time.Now().Add(2 * time.Second)); err != nil {
 		t.Fatalf("SetWriteDeadline: %v", err)
 	}
-	if _, err := r.hostConn.Write(b); err != nil {
+	if _, err := r.pipe.Host().Write(b); err != nil {
 		t.Fatalf("writing %X: %v", b, err)
 	}
 }
@@ -51,13 +51,13 @@ func writeBytes(t *testing.T, r *Radio, b []byte) {
 // readFrame reads until one complete frame has arrived from the radio.
 func readFrame(t *testing.T, r *Radio) []byte {
 	t.Helper()
-	if err := r.hostConn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+	if err := r.pipe.Host().SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
 		t.Fatalf("SetReadDeadline: %v", err)
 	}
 	f := newFramer(maxFrameBytes)
 	buf := make([]byte, 512)
 	for {
-		n, err := r.hostConn.Read(buf)
+		n, err := r.pipe.Host().Read(buf)
 		if n > 0 {
 			if frames := f.push(buf[:n]); len(frames) > 0 {
 				return frames[0]
@@ -89,7 +89,7 @@ func drain(r *Radio) <-chan []byte {
 		f := newFramer(maxFrameBytes)
 		buf := make([]byte, 512)
 		for {
-			n, err := r.hostConn.Read(buf)
+			n, err := r.pipe.Host().Read(buf)
 			for _, frame := range f.push(buf[:n]) {
 				select {
 				case out <- frame:
@@ -904,11 +904,11 @@ func TestWithAddressedFloodTargetsTheController(t *testing.T) {
 
 func TestUnsolicitedTrafficIsOffUnlessAskedFor(t *testing.T) {
 	r := newRadio(t)
-	if err := r.hostConn.SetReadDeadline(time.Now().Add(200 * time.Millisecond)); err != nil {
+	if err := r.pipe.Host().SetReadDeadline(time.Now().Add(200 * time.Millisecond)); err != nil {
 		t.Fatalf("SetReadDeadline: %v", err)
 	}
 	buf := make([]byte, 64)
-	n, err := r.hostConn.Read(buf)
+	n, err := r.pipe.Host().Read(buf)
 	if err == nil {
 		t.Fatalf("read %d unsolicited bytes (% X) from a radio with no broadcast or flood option", n, buf[:n])
 	}
