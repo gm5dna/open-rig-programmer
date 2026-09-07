@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package ic7300mk2_test
+package ic7300_test
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/civ"
 	"github.com/gm5dna/open-rig-programmer/core/codeplug"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
-	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300mk2"
+	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/internal/fakeic7300mk2"
 )
@@ -60,23 +60,23 @@ import (
 // every one of the twelve fields on every set, ⑮ ~ ⑰'s per-digit legend and
 // ⑱ ~ ㉝'s printed character codes included — so a record this function builds
 // is one the fake will store.
-func e2eRecordBytes(sel byte, hz uint64, tag string) []byte {
+func e2eRecordBytesMK2(sel byte, hz uint64, tag string) []byte {
 	rec := make([]byte, 45)
-	rec[0] = sel                    // ③ — Split OFF (high), SELECT group (low)
-	copy(rec[1:6], bcdFreqLE(hz))   // ④ ~ ⑧
-	rec[6] = 0x01                   // ⑨ — USB
-	rec[7] = 0x01                   // ⑩ — FIL1
-	rec[8] = 0x00                   // ⑪ — data mode OFF (high), tone mode OFF (low)
-	copy(rec[9:12], toneBCD(885))   // ⑫ ~ ⑭ — 88.5 Hz
-	copy(rec[12:15], toneBCD(1230)) // ⑮ ~ ⑰ — 123.0 Hz, DIFFERENT from ⑫ ~ ⑭ so
+	rec[0] = sel                       // ③ — Split OFF (high), SELECT group (low)
+	copy(rec[1:6], bcdFreqLEMK2(hz))   // ④ ~ ⑧
+	rec[6] = 0x01                      // ⑨ — USB
+	rec[7] = 0x01                      // ⑩ — FIL1
+	rec[8] = 0x00                      // ⑪ — data mode OFF (high), tone mode OFF (low)
+	copy(rec[9:12], toneBCDMK2(885))   // ⑫ ~ ⑭ — 88.5 Hz
+	copy(rec[12:15], toneBCDMK2(1230)) // ⑮ ~ ⑰ — 123.0 Hz, DIFFERENT from ⑫ ~ ⑭ so
 	//                                 a span swap cannot hide behind one value
-	copy(rec[15:20], bcdFreqLE(hz)) // ❹ ~ ⑧ — the transmit frequency
-	rec[20] = 0x01                  // ❾
-	rec[21] = 0x01                  // ❿
-	rec[22] = 0x00                  // ⓫
-	copy(rec[23:26], toneBCD(885))  // ⓬ ~ ⓮
-	copy(rec[26:29], toneBCD(1230)) // ⓯ ~ ⓱
-	name := rec[29:45]              // ⑱ ~ ㉝ — SIXTEEN bytes on this model
+	copy(rec[15:20], bcdFreqLEMK2(hz)) // ❹ ~ ⑧ — the transmit frequency
+	rec[20] = 0x01                     // ❾
+	rec[21] = 0x01                     // ❿
+	rec[22] = 0x00                     // ⓫
+	copy(rec[23:26], toneBCDMK2(885))  // ⓬ ~ ⓮
+	copy(rec[26:29], toneBCDMK2(1230)) // ⓯ ~ ⓱
+	name := rec[29:45]                 // ⑱ ~ ㉝ — SIXTEEN bytes on this model
 	for i := range name {
 		// The space. This document prints NO pad byte at all, and the fake
 		// refuses 0x00 for that reason; the space is a printed code, which is
@@ -90,7 +90,7 @@ func e2eRecordBytes(sel byte, hz uint64, tag string) []byte {
 // bcdFreqLE packs hz as five packed-BCD bytes, LEAST significant pair first —
 // the order the strip's five-cell diagram prints. Hand-rolled here rather than
 // taken from core/civ, for e2eRecordBytes' reason.
-func bcdFreqLE(hz uint64) []byte {
+func bcdFreqLEMK2(hz uint64) []byte {
 	out := make([]byte, 5)
 	for i := 0; i < 5; i++ {
 		pair := hz % 100
@@ -102,7 +102,7 @@ func bcdFreqLE(hz uint64) []byte {
 
 // toneBCD packs a tone in TENTHS of a hertz as three packed-BCD bytes, MOST
 // significant pair first.
-func toneBCD(deciHz uint64) []byte {
+func toneBCDMK2(deciHz uint64) []byte {
 	return []byte{
 		byte(deciHz/100000%10)<<4 | byte(deciHz/10000%10),
 		byte(deciHz/1000%10)<<4 | byte(deciHz/100%10),
@@ -111,7 +111,7 @@ func toneBCD(deciHz uint64) []byte {
 }
 
 // e2eExpected is the codeplug.ChannelData the record above must decode to.
-func e2eExpected(slot string, hz uint64, tag string) codeplug.Channel {
+func e2eExpectedMK2(slot string, hz uint64, tag string) codeplug.Channel {
 	return codeplug.Channel{
 		Slot: slot,
 		Data: &codeplug.ChannelData{
@@ -138,7 +138,7 @@ func e2eExpected(slot string, hz uint64, tag string) codeplug.Channel {
 // compareChannel reports every field on which got differs from want, by name.
 // A whole-struct DeepEqual would say "these differ" and leave the reader to
 // find out where, on a struct with twenty members.
-func compareChannel(t *testing.T, what string, got, want codeplug.Channel) {
+func compareChannelMK2(t *testing.T, what string, got, want codeplug.Channel) {
 	t.Helper()
 	if got.Slot != want.Slot {
 		t.Errorf("%s: Slot = %q, want %q", what, got.Slot, want.Slot)
@@ -185,9 +185,9 @@ func compareChannel(t *testing.T, what string, got, want codeplug.Channel) {
 // openFake opens a consented Simulated session against radio and registers the
 // teardown in the order the resources require: the SESSION first (it owns the
 // port), then the radio.
-func openFake(t *testing.T, radio *fakeic7300mk2.Radio) driver.Session {
+func openFakeMK2(t *testing.T, radio *fakeic7300mk2.Radio) driver.Session {
 	t.Helper()
-	sess, err := ic7300mk2.New(ic7300mk2.Simulated, ic7300mk2.WithConsentedUnverifiedWrites()).
+	sess, err := ic7300.NewMK2(ic7300.Simulated, ic7300.WithConsentedUnverifiedWrites()).
 		Open(context.Background(), radio.Port(), driver.Identity{Port: "fake"})
 	if err != nil {
 		t.Fatalf("Open against the fake: %v", err)
@@ -197,9 +197,9 @@ func openFake(t *testing.T, radio *fakeic7300mk2.Radio) driver.Session {
 }
 
 // civDiag reaches this driver's model-specific diagnostics surface.
-func civDiag(t *testing.T, sess driver.Session) ic7300mk2.CIVDiagnostics {
+func civDiagMK2(t *testing.T, sess driver.Session) ic7300.CIVDiagnostics {
 	t.Helper()
-	s, ok := sess.(*ic7300mk2.Session)
+	s, ok := sess.(*ic7300.Session)
 	if !ok {
 		t.Fatalf("session is %T, not *ic7300mk2.Session", sess)
 	}
@@ -208,12 +208,12 @@ func civDiag(t *testing.T, sess driver.Session) ic7300mk2.CIVDiagnostics {
 
 // The full sequence spec D3.2 names: an address-matched identity reply, then a
 // bounded occupied-slot search that confirms the record length.
-func TestE2E_ProbeFingerprintsAgainstTheFake(t *testing.T) {
-	radio := fakeic7300mk2.New(fakeic7300mk2.WithChannel("001", e2eRecordBytes(0x00, 14_100_000, "TESTING NAME0123")))
+func TestE2E_ProbeFingerprintsAgainstTheFake_MK2(t *testing.T) {
+	radio := fakeic7300mk2.New(fakeic7300mk2.WithChannel("001", e2eRecordBytesMK2(0x00, 14_100_000, "TESTING NAME0123")))
 	defer radio.Close()
-	sess := openFake(t, radio)
+	sess := openFakeMK2(t, radio)
 
-	d := civDiag(t, sess)
+	d := civDiagMK2(t, sess)
 	if !d.Fingerprinted {
 		t.Error("Fingerprinted = false — the fake answered a record at its own derived length, and that length is what the probe fingerprints on")
 	}
@@ -241,7 +241,7 @@ func TestE2E_ProbeFingerprintsAgainstTheFake(t *testing.T) {
 
 // Every populated slot in the fake's image reads back field for field, and
 // every unpopulated one reads back EMPTY rather than erroring.
-func TestE2E_ReadAllSlots(t *testing.T) {
+func TestE2E_ReadAllSlots_MK2(t *testing.T) {
 	seeded := map[string]struct {
 		sel byte
 		hz  uint64
@@ -255,11 +255,11 @@ func TestE2E_ReadAllSlots(t *testing.T) {
 	}
 	var opts []fakeic7300mk2.Option
 	for slot, s := range seeded {
-		opts = append(opts, fakeic7300mk2.WithChannel(slot, e2eRecordBytes(s.sel, s.hz, s.tag)))
+		opts = append(opts, fakeic7300mk2.WithChannel(slot, e2eRecordBytesMK2(s.sel, s.hz, s.tag)))
 	}
 	radio := fakeic7300mk2.New(opts...)
 	defer radio.Close()
-	sess := openFake(t, radio)
+	sess := openFakeMK2(t, radio)
 
 	read := 0
 	for _, b := range sess.Capabilities().Banks {
@@ -270,7 +270,7 @@ func TestE2E_ReadAllSlots(t *testing.T) {
 			}
 			read++
 			if s, ok := seeded[slot]; ok {
-				compareChannel(t, slot, ch, e2eExpected(slot, s.hz, s.tag))
+				compareChannelMK2(t, slot, ch, e2eExpectedMK2(slot, s.hz, s.tag))
 				continue
 			}
 			if !ch.Empty() {
@@ -290,14 +290,14 @@ func TestE2E_ReadAllSlots(t *testing.T) {
 // driver REFUSES for want of an honest SELECT value — so an e2e that wrote
 // into a blank slot would contradict the unit design it exists to confirm.
 // The create case has its own witness below.
-func TestE2E_WriteOneAndReadItBack(t *testing.T) {
-	radio := fakeic7300mk2.New(fakeic7300mk2.WithChannel("001", e2eRecordBytes(0x00, 14_100_000, "TESTING NAME0123")))
+func TestE2E_WriteOneAndReadItBack_MK2(t *testing.T) {
+	radio := fakeic7300mk2.New(fakeic7300mk2.WithChannel("001", e2eRecordBytesMK2(0x00, 14_100_000, "TESTING NAME0123")))
 	defer radio.Close()
-	sess := openFake(t, radio)
+	sess := openFakeMK2(t, radio)
 
 	const newHz = 14_105_000
 	const newTag = "REWRITTEN NAME12"
-	want := e2eExpected("001", newHz, newTag)
+	want := e2eExpectedMK2("001", newHz, newTag)
 
 	res, err := sess.WriteChannel(context.Background(), want)
 	if err != nil {
@@ -314,7 +314,7 @@ func TestE2E_WriteOneAndReadItBack(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadChannel after the write: %v", err)
 	}
-	compareChannel(t, "read-back", got, want)
+	compareChannelMK2(t, "read-back", got, want)
 
 	// AND THE RADIO'S OWN BYTES, which is the half a read-back cannot check:
 	// a driver whose encoder and decoder shared one wrong offset would read
@@ -326,7 +326,7 @@ func TestE2E_WriteOneAndReadItBack(t *testing.T) {
 	if len(stored) != 45 {
 		t.Fatalf("the fake stored %d bytes, want 45", len(stored))
 	}
-	expect := e2eRecordBytes(0x00, newHz, newTag)
+	expect := e2eRecordBytesMK2(0x00, newHz, newTag)
 	if string(stored) != string(expect) {
 		t.Errorf("the fake stored\n  % X\nwant\n  % X\n— the driver's encoder and the fake's independently derived offsets disagree", stored, expect)
 	}
@@ -335,20 +335,20 @@ func TestE2E_WriteOneAndReadItBack(t *testing.T) {
 // The create rung, end to end, so the user-facing honesty row has a pin: a
 // write to a slot the fake holds EMPTY is refused, and no set frame reaches
 // the wire.
-func TestE2E_CreateIntoAnEmptySlotIsRefused(t *testing.T) {
-	radio := fakeic7300mk2.New(fakeic7300mk2.WithChannel("001", e2eRecordBytes(0x00, 14_100_000, "TESTING NAME0123")))
+func TestE2E_CreateIntoAnEmptySlotIsRefused_MK2(t *testing.T) {
+	radio := fakeic7300mk2.New(fakeic7300mk2.WithChannel("001", e2eRecordBytesMK2(0x00, 14_100_000, "TESTING NAME0123")))
 	defer radio.Close()
-	sess := openFake(t, radio)
+	sess := openFakeMK2(t, radio)
 
 	before := len(radio.Received())
-	_, err := sess.WriteChannel(context.Background(), e2eExpected("050", 21_200_000, "NEW ONE"))
+	_, err := sess.WriteChannel(context.Background(), e2eExpectedMK2("050", 21_200_000, "NEW ONE"))
 	if !errors.Is(err, driver.ErrWriteRefused) {
 		t.Fatalf("WriteChannel into an empty slot = %v, want ErrWriteRefused — an empty slot has no SELECT group to preserve and no spec.Field carries one, so writing OFF would put the channel into a scan group the caller never chose", err)
 	}
 	if !strings.Contains(err.Error(), "SELECT") {
 		t.Errorf("refusal %q does not name the SELECT nibble", err)
 	}
-	if n := countSets(radio.Received()[before:]); n != 0 {
+	if n := countSetsMK2(radio.Received()[before:]); n != 0 {
 		t.Errorf("%d set frames reached the radio on a refused create", n)
 	}
 	if _, ok := radio.Channel("050"); ok {
@@ -357,17 +357,17 @@ func TestE2E_CreateIntoAnEmptySlotIsRefused(t *testing.T) {
 }
 
 // The fake refuses the documented clear forms and the driver never builds one.
-func TestE2E_RefusesErase(t *testing.T) {
-	radio := fakeic7300mk2.New(fakeic7300mk2.WithChannel("001", e2eRecordBytes(0x02, 14_100_000, "TESTING NAME0123")))
+func TestE2E_RefusesErase_MK2(t *testing.T) {
+	radio := fakeic7300mk2.New(fakeic7300mk2.WithChannel("001", e2eRecordBytesMK2(0x02, 14_100_000, "TESTING NAME0123")))
 	defer radio.Close()
-	sess := openFake(t, radio)
+	sess := openFakeMK2(t, radio)
 
 	// A full read-write-read cycle, so the scan below covers every frame this
 	// driver is capable of emitting.
 	if _, err := sess.ReadChannel(context.Background(), "001"); err != nil {
 		t.Fatalf("ReadChannel: %v", err)
 	}
-	if _, err := sess.WriteChannel(context.Background(), e2eExpected("001", 14_105_000, "REWRITTEN NAME12")); err != nil {
+	if _, err := sess.WriteChannel(context.Background(), e2eExpectedMK2("001", 14_105_000, "REWRITTEN NAME12")); err != nil {
 		t.Fatalf("WriteChannel: %v", err)
 	}
 	if _, err := sess.ReadChannel(context.Background(), "001"); err != nil {
@@ -411,12 +411,12 @@ func TestE2E_RefusesErase(t *testing.T) {
 // An empty radio (every slot FA) opens UNFINGERPRINTED, with the diagnostic
 // recorded and no error. It is the commonest state a new radio is in, and
 // refusing to open one would be refusing the radio.
-func TestE2E_EmptyRadioOpens(t *testing.T) {
+func TestE2E_EmptyRadioOpens_MK2(t *testing.T) {
 	radio := fakeic7300mk2.New()
 	defer radio.Close()
-	sess := openFake(t, radio)
+	sess := openFakeMK2(t, radio)
 
-	d := civDiag(t, sess)
+	d := civDiagMK2(t, sess)
 	if d.Fingerprinted {
 		t.Error("Fingerprinted = true against a radio holding nothing — no record was seen, so no length was checked")
 	}
@@ -438,13 +438,13 @@ func TestE2E_EmptyRadioOpens(t *testing.T) {
 // address filter BEFORE any engine event exists, so they cost the exchange
 // nothing but noise — and the adapter counts them, which is how a user would
 // ever learn the line was busy.
-func TestE2E_SurvivesAContinuousFlood(t *testing.T) {
+func TestE2E_SurvivesAContinuousFlood_MK2(t *testing.T) {
 	radio := fakeic7300mk2.New(
-		fakeic7300mk2.WithChannel("001", e2eRecordBytes(0x00, 14_100_000, "TESTING NAME0123")),
+		fakeic7300mk2.WithChannel("001", e2eRecordBytesMK2(0x00, 14_100_000, "TESTING NAME0123")),
 		fakeic7300mk2.WithTransceiveBroadcasts(2*time.Millisecond),
 	)
 	defer radio.Close()
-	sess := openFake(t, radio)
+	sess := openFakeMK2(t, radio)
 
 	read := 0
 	for _, b := range sess.Capabilities().Banks {
@@ -458,7 +458,7 @@ func TestE2E_SurvivesAContinuousFlood(t *testing.T) {
 	if read != 101 {
 		t.Fatalf("read %d slots, want 101", read)
 	}
-	if n := civDiag(t, sess).Unexpected; n == 0 {
+	if n := civDiagMK2(t, sess).Unexpected; n == 0 {
 		t.Error("AccumulatorStats().Unexpected = 0 after a whole inventory read under a flood — the broadcasts are dropped by the address filter and COUNTED there, and a zero means the driver is reading the wrong counter")
 	}
 }
@@ -466,12 +466,12 @@ func TestE2E_SurvivesAContinuousFlood(t *testing.T) {
 // The ③ byte survives a read-modify-write: no spec.Field carries the SELECT
 // group, so a driver that did not carry it through would move the user's
 // channel out of its scan group on every write.
-func TestE2E_SelectByteSurvivesAWrite(t *testing.T) {
+func TestE2E_SelectByteSurvivesAWrite_MK2(t *testing.T) {
 	for _, sel := range []byte{0x00, 0x01, 0x02, 0x03} {
-		radio := fakeic7300mk2.New(fakeic7300mk2.WithChannel("001", e2eRecordBytes(sel, 14_100_000, "TESTING NAME0123")))
-		sess := openFake(t, radio)
+		radio := fakeic7300mk2.New(fakeic7300mk2.WithChannel("001", e2eRecordBytesMK2(sel, 14_100_000, "TESTING NAME0123")))
+		sess := openFakeMK2(t, radio)
 
-		if _, err := sess.WriteChannel(context.Background(), e2eExpected("001", 14_105_000, "REWRITTEN NAME12")); err != nil {
+		if _, err := sess.WriteChannel(context.Background(), e2eExpectedMK2("001", 14_105_000, "REWRITTEN NAME12")); err != nil {
 			radio.Close()
 			t.Fatalf("③ = %#02x: WriteChannel: %v", sel, err)
 		}
@@ -498,13 +498,13 @@ func TestE2E_SelectByteSurvivesAWrite(t *testing.T) {
 // The driver ships no erase path at all, so the assertion is doubled: nothing
 // aimed at 01 00 or 01 01 ever leaves as a clear, AND an empty channel at P1
 // is refused by name before any wire traffic.
-func TestE2E_ScanEdgesAreNeverCleared(t *testing.T) {
+func TestE2E_ScanEdgesAreNeverCleared_MK2(t *testing.T) {
 	radio := fakeic7300mk2.New(
-		fakeic7300mk2.WithChannel("P1", e2eRecordBytes(0x00, 14_000_000, "EDGE LOW")),
-		fakeic7300mk2.WithChannel("P2", e2eRecordBytes(0x00, 14_350_000, "EDGE HIGH")),
+		fakeic7300mk2.WithChannel("P1", e2eRecordBytesMK2(0x00, 14_000_000, "EDGE LOW")),
+		fakeic7300mk2.WithChannel("P2", e2eRecordBytesMK2(0x00, 14_350_000, "EDGE HIGH")),
 	)
 	defer radio.Close()
-	sess := openFake(t, radio)
+	sess := openFakeMK2(t, radio)
 
 	if caps, _ := sess.Capabilities().Bank(spec.BankScan); !caps.NoBlank {
 		t.Error("SCAN.NoBlank = false — this document says P1 and P2 cannot be cleared, and the whole-bank form is where that is said once")
@@ -526,7 +526,7 @@ func TestE2E_ScanEdgesAreNeverCleared(t *testing.T) {
 
 	// Nothing aimed at either scan edge is a clear, in any of the printed
 	// forms, across the whole transcript.
-	for _, why := range scanEdgeClears(radio.Received()) {
+	for _, why := range scanEdgeClearsMK2(radio.Received()) {
 		t.Error(why)
 	}
 }
@@ -535,8 +535,8 @@ func TestE2E_ScanEdgesAreNeverCleared(t *testing.T) {
 // nine-byte READ (preamble, the two addresses, 1A 00, the two channel bytes,
 // FD) and the 54-byte SET that carries a whole 45-byte record.
 const (
-	readFrameLen = 9
-	setFrameLen  = 54
+	readFrameLenMK2 = 9
+	setFrameLenMK2  = 54
 )
 
 // scanEdgeClears returns one message per frame in frames that is a CLEAR aimed
@@ -557,7 +557,7 @@ const (
 // FD is one instance of it, and a form this document does not print would be
 // caught by the same rule rather than slipping past a check written for the
 // one shape somebody thought of.
-func scanEdgeClears(frames [][]byte) []string {
+func scanEdgeClearsMK2(frames [][]byte) []string {
 	var out []string
 	for i, f := range frames {
 		cn, sc, ok := civ.FrameCommand(f)
@@ -568,16 +568,16 @@ func scanEdgeClears(frames [][]byte) []string {
 			out = append(out, fmt.Sprintf("frame %d = % X is a 0B memory clear — this document's own 0B row prints \"P1 and P2 cannot be cleared\", and this tier ships no erase path at any address", i, f))
 			continue
 		}
-		if cn != 0x1A || sc != 0x00 || len(f) < readFrameLen {
+		if cn != 0x1A || sc != 0x00 || len(f) < readFrameLenMK2 {
 			continue
 		}
-		if f[6] != bankScanEdgeWire {
+		if f[6] != bankScanEdgeWireMK2 {
 			continue // a memory channel, not a scan edge
 		}
-		if len(f) == readFrameLen || len(f) == setFrameLen {
+		if len(f) == readFrameLenMK2 || len(f) == setFrameLenMK2 {
 			continue // a read, or a full set: both legitimate
 		}
-		if len(f) == readFrameLen+1 && f[8] == 0xFF {
+		if len(f) == readFrameLenMK2+1 && f[8] == 0xFF {
 			out = append(out, fmt.Sprintf("frame %d = % X is the printed single-FF clear recipe aimed at scan edge %02X %02X", i, f, f[6], f[7]))
 			continue
 		}
@@ -591,7 +591,7 @@ func scanEdgeClears(frames [][]byte) []string {
 // parseSlot, for the reason every fixture in these files is: a test that asked
 // the code under test which addresses to watch would watch whichever ones that
 // code had decided on.
-const bankScanEdgeWire = 0x01
+const bankScanEdgeWireMK2 = 0x01
 
 // TestScanEdgeClearDetectorReportsAPlantedClear is the detector's own witness.
 //
@@ -602,7 +602,7 @@ const bankScanEdgeWire = 0x01
 // property as delivered. This test is what makes that failure mode impossible
 // to repeat, because a detector that cannot see a clear now fails HERE, loudly,
 // with a count.
-func TestScanEdgeClearDetectorReportsAPlantedClear(t *testing.T) {
+func TestScanEdgeClearDetectorReportsAPlantedClear_MK2(t *testing.T) {
 	// Two planted clears, one at each scan edge, in the form this document
 	// prints — and, around them, every legitimate frame the driver really does
 	// emit, so the detector is shown to discriminate rather than merely to
@@ -615,10 +615,10 @@ func TestScanEdgeClearDetectorReportsAPlantedClear(t *testing.T) {
 		{0xFE, 0xFE, 0xB6, 0xE0, 0x1A, 0x00, 0x01, 0x01, 0xFF, 0xFD}, // PLANTED: single-FF clear at P2
 	}
 	// A full, legitimate SET at P1: 54 bytes, which must NOT be reported.
-	set := append([]byte{0xFE, 0xFE, 0xB6, 0xE0, 0x1A, 0x00, 0x01, 0x00}, e2eRecordBytes(0x00, 14_000_000, "EDGE LOW")...)
+	set := append([]byte{0xFE, 0xFE, 0xB6, 0xE0, 0x1A, 0x00, 0x01, 0x00}, e2eRecordBytesMK2(0x00, 14_000_000, "EDGE LOW")...)
 	planted = append(planted, append(set, 0xFD))
 
-	got := scanEdgeClears(planted)
+	got := scanEdgeClearsMK2(planted)
 	if len(got) != 2 {
 		t.Fatalf("the detector reported %d of 2 planted scan-edge clears:\n  %s\n— a detector that cannot see a planted clear cannot see a real one, and the test it serves would pass while asserting nothing", len(got), strings.Join(got, "\n  "))
 	}
@@ -642,17 +642,17 @@ func TestScanEdgeClearDetectorReportsAPlantedClear(t *testing.T) {
 	// AND THE NEGATIVE HALF: a transcript of nothing but legitimate traffic
 	// reports nothing. Without this, a detector that reported every frame
 	// would satisfy the count above and be equally useless.
-	if got := scanEdgeClears(planted[:3]); len(got) != 0 {
+	if got := scanEdgeClearsMK2(planted[:3]); len(got) != 0 {
 		t.Errorf("the detector reported %v over a transcript of an identity read, a memory read and a scan-edge read — all three are legitimate", got)
 	}
-	if got := scanEdgeClears(planted[5:]); len(got) != 0 {
+	if got := scanEdgeClearsMK2(planted[5:]); len(got) != 0 {
 		t.Errorf("the detector reported %v over a full 54-byte set at P1 — a set is a write, not a clear", got)
 	}
 }
 
 // countSets counts 1A 00 SET frames — a 1A 00 frame longer than the nine-byte
 // read — among frames.
-func countSets(frames [][]byte) int {
+func countSetsMK2(frames [][]byte) int {
 	n := 0
 	for _, f := range frames {
 		if cn, sc, ok := civ.FrameCommand(f); ok && cn == 0x1A && sc == 0x00 && len(f) > 9 {

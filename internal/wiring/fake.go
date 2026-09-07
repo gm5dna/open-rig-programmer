@@ -16,7 +16,6 @@ import (
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic705"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7100"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300"
-	"github.com/gm5dna/open-rig-programmer/core/driver/ic7300mk2"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7610"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7760"
 	"github.com/gm5dna/open-rig-programmer/core/driver/ic7851"
@@ -679,7 +678,7 @@ var fakeDrivers = map[string]fakeDriverEntry{
 		newRadio:  func() fakeRadio { return fakeic7300.New() },
 	},
 	IC7300MK2Model: {
-		newDriver: func() driver.Driver { return ic7300mk2.New(ic7300mk2.Simulated) },
+		newDriver: func() driver.Driver { return ic7300.NewMK2(ic7300.Simulated) },
 		newRadio:  func() fakeRadio { return fakeic7300mk2.New() },
 	},
 	IC705Model: {

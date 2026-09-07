@@ -9,7 +9,6 @@ import (
 	"sync"
 
 	"github.com/gm5dna/open-rig-programmer/core/civ"
-	ic7300civ "github.com/gm5dna/open-rig-programmer/core/civ/ic7300"
 	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 	"github.com/gm5dna/open-rig-programmer/core/transport"
@@ -44,20 +43,6 @@ var (
 // layout is not established.
 const probeSlots = 8
 
-// foreignRecordLengths attributes a record length this model does not
-// declare to the sibling that does.
-//
-// ONE ENTRY, and it is a HINT rather than a distinctness claim (plan
-// decision D10). BOTH lengths are ASSUMED derivations from printed field
-// widths — neither document prints a record total — which is why the error
-// text carries the word *provisional* and names both numbers. Cross-model
-// record-length distinctness is a TIER-level check belonging to
-// registration, and it is what may add or correct entries here. DO NOT ADD A
-// SECOND ENTRY from this package.
-var foreignRecordLengths = map[int]string{
-	45: "IC-7300MK2 (provisional)",
-}
-
 // StopBits is how many stop bits this radio's CI-V port expects.
 //
 // ONE, ASSUMED at spec D5 entry 8, lift `ic7300-framing`. THE HAZARD, stated
@@ -74,7 +59,7 @@ func (d *ic7300Driver) StopBits() int { return 1 }
 // the cleanup, open is the body and may return an error from anywhere
 // without leaking a port. Open takes ownership of port on BOTH outcomes.
 func (d *ic7300Driver) Open(ctx context.Context, port transport.Port, id driver.Identity) (driver.Session, error) {
-	p := ic7300civ.Profile()
+	p := d.m.profile
 
 	// E1's constructor. It REFUSES an unconfigured profile, which a plain
 	// interface nil-check could not see: the Framing built from a zero
@@ -134,7 +119,7 @@ type probeReport struct {
 
 // open runs the whole probe against an engine that already exists.
 func (d *ic7300Driver) open(ctx context.Context, eng *transport.Engine, fr transport.Framing, statser civ.AccumulatorStatsReporter, id driver.Identity) (*Session, error) {
-	p := ic7300civ.Profile()
+	p := d.m.profile
 	var probe probeReport
 
 	// THE CI-V INIT SEQUENCE IS EMPTY, so this writes NOTHING: it is a
@@ -186,6 +171,7 @@ func (d *ic7300Driver) open(ctx context.Context, eng *transport.Engine, fr trans
 		fr:      fr,
 		statser: statser,
 		id:      id,
+		m:       d.m,
 		caps:    d.SessionCaps(d.Capabilities()),
 		probe:   probe,
 	}, nil
@@ -225,7 +211,7 @@ func (d *ic7300Driver) probeForFingerprint(ctx context.Context, eng *transport.E
 		if rerr != nil {
 			var lenErr *civ.RecordLengthError
 			if errors.As(rerr, &lenErr) {
-				return wrongRecordLength(p, lenErr, id.CATID)
+				return wrongRecordLength(d.m, p, lenErr, id.CATID)
 			}
 			return fmt.Errorf("ic7300: Open: probe of channel %d: %w", n, rerr)
 		}
@@ -256,8 +242,8 @@ func (d *ic7300Driver) probeForFingerprint(ctx context.Context, eng *transport.E
 // *provisional*; a reader must be able to tell a fingerprint from a
 // certainty. A length in no table claims NO model at all, because guessing
 // one from a number nobody has seen would be worse than saying nothing.
-func wrongRecordLength(p civ.Profile, e *civ.RecordLengthError, observedID string) error {
-	if model, ok := foreignRecordLengths[e.Got]; ok {
+func wrongRecordLength(m modelParams, p civ.Profile, e *civ.RecordLengthError, observedID string) error {
+	if model, ok := m.foreignRecordLengths[e.Got]; ok {
 		wrong := &driver.WrongRadioError{
 			// The ADDRESS HEX, which is what CATID means in this tier.
 			Want: fmt.Sprintf("%02x", p.RadioAddress()),
@@ -275,10 +261,15 @@ func wrongRecordLength(p civ.Profile, e *civ.RecordLengthError, observedID strin
 		e.Got, p.Model(), e)
 }
 
-// Session is one open, probed connection to an IC-7300.
+// Session is one open, probed connection to an IC-7300 or an IC-7300MK2.
 type Session struct {
 	eng *transport.Engine
 	p   civ.Profile
+	// m is the model row the driver that opened this session carries. It
+	// is what the write path's refusal texts and spans are read from, so a
+	// refusal an MK2 session mints prints the MK2's own document's wording
+	// and lift tokens.
+	m modelParams
 
 	// fr is the framing value this session's engine was built from, RETAINED
 	// because it is the only handle to the adapter's counters (D22). The

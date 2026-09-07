@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package ic7300mk2
+package ic7300
 
 import (
 	"context"
@@ -21,7 +21,7 @@ import (
 
 // setFrames returns every 1A 00 SET frame the peer saw. A set is a 1A 00
 // frame longer than the nine-byte read.
-func setFrames(peer *respondingPort) [][]byte {
+func setFramesMK2(peer *respondingPortMK2) [][]byte {
 	var out [][]byte
 	for _, f := range peer.Received() {
 		if cn, sc, ok := civ.FrameCommand(f); ok && cn == 0x1A && sc == 0x00 && len(f) > 9 {
@@ -33,15 +33,15 @@ func setFrames(peer *respondingPort) [][]byte {
 
 // recordOf returns the record bytes of a 1A 00 set frame: everything after
 // FE FE <to> <from> 1A 00 <ch-hi> <ch-lo> and before the terminating FD.
-func recordOf(frame []byte) []byte { return frame[8 : len(frame)-1] }
+func recordOfMK2(frame []byte) []byte { return frame[8 : len(frame)-1] }
 
 // --- The refusal ladder, in order, each with its own test. ---
 
-func TestWriteChannel_RefusesAnUnparseableSlot(t *testing.T) {
-	peer := newRespondingPort(t, withRecord(1, populatedRecord))
-	sess := openSession(t, peer, WithConsentedUnverifiedWrites())
+func TestWriteChannel_RefusesAnUnparseableSlot_MK2(t *testing.T) {
+	peer := newRespondingPortMK2(t, withRecordMK2(1, populatedRecordMK2))
+	sess := openSessionMK2(t, peer, WithConsentedUnverifiedWrites())
 	for _, slot := range []string{"", "1", "0001", "100", "000", "P3", "M-01"} {
-		ch := channelFor(slot)
+		ch := channelForMK2(slot)
 		before := len(peer.Received())
 		_, err := sess.WriteChannel(context.Background(), ch)
 		if !errors.Is(err, driver.ErrWriteRefused) {
@@ -58,10 +58,10 @@ func TestWriteChannel_RefusesAnUnparseableSlot(t *testing.T) {
 // has. The session's effective banks are narrowed here to make the rung
 // reachable, which is the only way to reach it on a model whose two banks
 // are both static.
-func TestWriteChannel_RefusesASlotInNoBank(t *testing.T) {
-	peer := newRespondingPort(t, withRecord(100, populatedRecord))
-	sess := openSession(t, peer, WithConsentedUnverifiedWrites())
-	s := session(t, sess)
+func TestWriteChannel_RefusesASlotInNoBank_MK2(t *testing.T) {
+	peer := newRespondingPortMK2(t, withRecordMK2(100, populatedRecordMK2))
+	sess := openSessionMK2(t, peer, WithConsentedUnverifiedWrites())
+	s := sessionMK2(t, sess)
 	var kept []spec.Bank
 	for _, b := range s.caps.Banks {
 		if b.ID != spec.BankScan {
@@ -71,7 +71,7 @@ func TestWriteChannel_RefusesASlotInNoBank(t *testing.T) {
 	s.caps.Banks = kept
 
 	before := len(peer.Received())
-	_, err := sess.WriteChannel(context.Background(), channelFor("P1"))
+	_, err := sess.WriteChannel(context.Background(), channelForMK2("P1"))
 	if !errors.Is(err, driver.ErrWriteRefused) {
 		t.Fatalf("WriteChannel error = %v, want ErrWriteRefused — \"this radio has no such channel\" and \"this channel is not writable\" are different refusals and must read differently", err)
 	}
@@ -82,9 +82,9 @@ func TestWriteChannel_RefusesASlotInNoBank(t *testing.T) {
 
 // erase, and it must precede the FieldState checks STRUCTURALLY: an empty
 // channel has no Data at all, and every check below it dereferences one.
-func TestWriteChannel_RefusesAnEmptyChannel(t *testing.T) {
-	peer := newRespondingPort(t, withRecord(1, populatedRecord))
-	sess := openSession(t, peer, WithConsentedUnverifiedWrites())
+func TestWriteChannel_RefusesAnEmptyChannel_MK2(t *testing.T) {
+	peer := newRespondingPortMK2(t, withRecordMK2(1, populatedRecordMK2))
+	sess := openSessionMK2(t, peer, WithConsentedUnverifiedWrites())
 	_, err := sess.WriteChannel(context.Background(), codeplug.Channel{Slot: "001"})
 	if !errors.Is(err, driver.ErrWriteRefused) {
 		t.Fatalf("WriteChannel(empty) = %v, want ErrWriteRefused", err)
@@ -94,13 +94,13 @@ func TestWriteChannel_RefusesAnEmptyChannel(t *testing.T) {
 	}
 }
 
-func TestWriteChannel_RefusesAFieldThisSessionCannotWrite(t *testing.T) {
-	peer := newRespondingPort(t, withRecord(1, populatedRecord))
+func TestWriteChannel_RefusesAFieldThisSessionCannotWrite_MK2(t *testing.T) {
+	peer := newRespondingPortMK2(t, withRecordMK2(1, populatedRecordMK2))
 	// NO CONSENT: the RealHardware profile grades every field Unverified,
 	// which is unwritable, because no IC-7300 has ever been asked anything.
-	sess := openSession(t, peer)
+	sess := openSessionMK2(t, peer)
 	before := len(peer.Received())
-	_, err := sess.WriteChannel(context.Background(), channelFor("001"))
+	_, err := sess.WriteChannel(context.Background(), channelForMK2("001"))
 	if !errors.Is(err, driver.ErrWriteRefused) {
 		t.Fatalf("WriteChannel error = %v, want ErrWriteRefused", err)
 	}
@@ -118,10 +118,10 @@ func TestWriteChannel_RefusesAFieldThisSessionCannotWrite(t *testing.T) {
 	}
 }
 
-func TestWriteChannel_RefusesAKnownValueForAFieldTheRecordLacks(t *testing.T) {
-	peer := newRespondingPort(t, withRecord(1, populatedRecord))
-	sess := openSession(t, peer, WithConsentedUnverifiedWrites())
-	ch := channelFor("001")
+func TestWriteChannel_RefusesAKnownValueForAFieldTheRecordLacks_MK2(t *testing.T) {
+	peer := newRespondingPortMK2(t, withRecordMK2(1, populatedRecordMK2))
+	sess := openSessionMK2(t, peer, WithConsentedUnverifiedWrites())
+	ch := channelForMK2("001")
 	ch.Data.ScanSkip = codeplug.BoolField{State: codeplug.Known, Value: true}
 	before := len(peer.Received())
 	_, err := sess.WriteChannel(context.Background(), ch)
@@ -143,29 +143,29 @@ func TestWriteChannel_RefusesAKnownValueForAFieldTheRecordLacks(t *testing.T) {
 // single read rather than among the locally decidable rungs: the SELECT
 // value it judges is the one the RADIO holds, and no field of the channel
 // carries it (D4). One read reaches the wire and no set does.
-func TestWriteChannel_ScanEdgeRefusesANonZeroSelectByte(t *testing.T) {
-	rec := append([]byte(nil), populatedRecord...)
+func TestWriteChannel_ScanEdgeRefusesANonZeroSelectByte_MK2(t *testing.T) {
+	rec := append([]byte(nil), populatedRecordMK2...)
 	rec[0] = 0x01 // ③: SELECT = SEL1 on a scan edge
-	peer := newRespondingPort(t, withRecord(100, rec))
-	sess := openSession(t, peer, WithConsentedUnverifiedWrites())
-	_, err := sess.WriteChannel(context.Background(), channelFor("P1"))
+	peer := newRespondingPortMK2(t, withRecordMK2(100, rec))
+	sess := openSessionMK2(t, peer, WithConsentedUnverifiedWrites())
+	_, err := sess.WriteChannel(context.Background(), channelForMK2("P1"))
 	if !errors.Is(err, driver.ErrWriteRefused) {
 		t.Fatalf("WriteChannel error = %v, want ErrWriteRefused", err)
 	}
 	if !strings.Contains(err.Error(), "P1") {
 		t.Errorf("refusal %q does not name the slot", err)
 	}
-	if n := len(setFrames(peer)); n != 0 {
+	if n := len(setFramesMK2(peer)); n != 0 {
 		t.Errorf("%d set frames reached the wire despite the scan-edge refusal", n)
 	}
 }
 
 // --- The choreography. ---
 
-func TestWriteChannel_SendsOneSetAndWaitsForFB(t *testing.T) {
-	peer := newRespondingPort(t, withRecord(1, populatedRecord))
-	sess := openSession(t, peer, WithConsentedUnverifiedWrites())
-	res, err := sess.WriteChannel(context.Background(), channelFor("001"))
+func TestWriteChannel_SendsOneSetAndWaitsForFB_MK2(t *testing.T) {
+	peer := newRespondingPortMK2(t, withRecordMK2(1, populatedRecordMK2))
+	sess := openSessionMK2(t, peer, WithConsentedUnverifiedWrites())
+	res, err := sess.WriteChannel(context.Background(), channelForMK2("001"))
 	if err != nil {
 		t.Fatalf("WriteChannel: %v", err)
 	}
@@ -175,22 +175,22 @@ func TestWriteChannel_SendsOneSetAndWaitsForFB(t *testing.T) {
 	if !res.Steps[0].Sent || !res.Steps[0].Confirmed {
 		t.Errorf("Steps[0] = %+v, want Sent and Confirmed — a CI-V memory set is ACKNOWLEDGED, so Confirmed here means the radio's own FB arrived, not merely that nothing was heard", res.Steps[0])
 	}
-	sets := setFrames(peer)
+	sets := setFramesMK2(peer)
 	if len(sets) != 1 {
 		t.Fatalf("the peer saw %d set frames, want exactly 1", len(sets))
 	}
 	if len(sets[0]) != 54 {
 		t.Errorf("the set frame is %d bytes, want 54 (2 preamble + 2 address + 2 command + 2 channel + 45 record + 1 terminator)", len(sets[0]))
 	}
-	if d := civDiagnostics(t, sess); d.Acknowledgements == 0 {
+	if d := civDiagnosticsMK2(t, sess); d.Acknowledgements == 0 {
 		t.Error("AccumulatorStats().Acknowledgements = 0 after a confirmed set — the FB is counted where it arrives")
 	}
 }
 
-func TestWriteChannel_FAIsAnAttributableRefusal(t *testing.T) {
-	peer := newRespondingPort(t, withRecord(1, populatedRecord), withRejectSets())
-	sess := openSession(t, peer, WithConsentedUnverifiedWrites())
-	res, err := sess.WriteChannel(context.Background(), channelFor("001"))
+func TestWriteChannel_FAIsAnAttributableRefusal_MK2(t *testing.T) {
+	peer := newRespondingPortMK2(t, withRecordMK2(1, populatedRecordMK2), withRejectSetsMK2())
+	sess := openSessionMK2(t, peer, WithConsentedUnverifiedWrites())
+	res, err := sess.WriteChannel(context.Background(), channelForMK2("001"))
 	if err == nil {
 		t.Fatal("WriteChannel succeeded against a radio that answered FA")
 	}
@@ -202,11 +202,11 @@ func TestWriteChannel_FAIsAnAttributableRefusal(t *testing.T) {
 	}
 }
 
-func TestWriteChannel_ZeroFramesWhenTheGateRefuses(t *testing.T) {
-	peer := newRespondingPort(t, withRecord(1, populatedRecord))
-	sess := openSession(t, peer) // no consent
+func TestWriteChannel_ZeroFramesWhenTheGateRefuses_MK2(t *testing.T) {
+	peer := newRespondingPortMK2(t, withRecordMK2(1, populatedRecordMK2))
+	sess := openSessionMK2(t, peer) // no consent
 	before := len(peer.Received())
-	res, err := sess.WriteChannel(context.Background(), channelFor("001"))
+	res, err := sess.WriteChannel(context.Background(), channelForMK2("001"))
 	if !errors.Is(err, driver.ErrWriteRefused) {
 		t.Fatalf("error = %v, want ErrWriteRefused", err)
 	}
@@ -224,10 +224,10 @@ func TestWriteChannel_ZeroFramesWhenTheGateRefuses(t *testing.T) {
 // A ClassWriteWithAck command is NEVER retransmitted on timeout (spec D2).
 // The proof is a frame count, not a comment: a peer that answers the read
 // and then goes silent must see the set frame exactly once.
-func TestWriteChannel_TimeoutIsNEVERRetransmitted(t *testing.T) {
-	peer := newRespondingPort(t, withRecord(1, populatedRecord), withNoAnswerToSets())
-	sess := openSession(t, peer, WithConsentedUnverifiedWrites())
-	res, err := sess.WriteChannel(context.Background(), channelFor("001"))
+func TestWriteChannel_TimeoutIsNEVERRetransmitted_MK2(t *testing.T) {
+	peer := newRespondingPortMK2(t, withRecordMK2(1, populatedRecordMK2), withNoAnswerToSetsMK2())
+	sess := openSessionMK2(t, peer, WithConsentedUnverifiedWrites())
+	res, err := sess.WriteChannel(context.Background(), channelForMK2("001"))
 	if err == nil {
 		t.Fatal("WriteChannel succeeded against a peer that never acknowledges")
 	}
@@ -249,12 +249,12 @@ func TestWriteChannel_TimeoutIsNEVERRetransmitted(t *testing.T) {
 
 // E6: the unmapped region must equal the Fixed template, or the write is
 // REFUSED. On this pair that region is byte ③'s high nibble — the split flag.
-func TestWriteChannel_SplitONChannelIsRefusedNotCleared(t *testing.T) {
-	rec := append([]byte(nil), populatedRecord...)
+func TestWriteChannel_SplitONChannelIsRefusedNotCleared_MK2(t *testing.T) {
+	rec := append([]byte(nil), populatedRecordMK2...)
 	rec[0] |= 0x10 // Split ON, as the radio would store it
-	peer := newRespondingPort(t, withRecord(1, rec))
-	sess := openSession(t, peer, WithConsentedUnverifiedWrites())
-	_, err := sess.WriteChannel(context.Background(), channelFor("001"))
+	peer := newRespondingPortMK2(t, withRecordMK2(1, rec))
+	sess := openSessionMK2(t, peer, WithConsentedUnverifiedWrites())
+	_, err := sess.WriteChannel(context.Background(), channelForMK2("001"))
 	if !errors.Is(err, driver.ErrWriteRefused) {
 		t.Fatalf("WriteChannel error = %v, want ErrWriteRefused — enablers E6: a slot may be written ONLY when its unmapped regions equal the profile's Fixed template, and writing this one would clear the user's split flag", err)
 	}
@@ -269,17 +269,17 @@ func TestWriteChannel_SplitONChannelIsRefusedNotCleared(t *testing.T) {
 }
 
 // A Split-OFF channel writes normally: the refusal must not be a blanket one.
-func TestWriteChannel_SplitOFFChannelWritesNormally(t *testing.T) {
-	peer := newRespondingPort(t, withRecord(1, populatedRecord))
-	sess := openSession(t, peer, WithConsentedUnverifiedWrites())
-	if _, err := sess.WriteChannel(context.Background(), channelFor("001")); err != nil {
+func TestWriteChannel_SplitOFFChannelWritesNormally_MK2(t *testing.T) {
+	peer := newRespondingPortMK2(t, withRecordMK2(1, populatedRecordMK2))
+	sess := openSessionMK2(t, peer, WithConsentedUnverifiedWrites())
+	if _, err := sess.WriteChannel(context.Background(), channelForMK2("001")); err != nil {
 		t.Fatalf("WriteChannel: %v — E6 refuses a NON-CONFORMING unmapped region, not every write", err)
 	}
-	sets := setFrames(peer)
+	sets := setFramesMK2(peer)
 	if len(sets) != 1 {
 		t.Fatalf("the peer saw %d set frames, want 1", len(sets))
 	}
-	if got := recordOf(sets[0])[0] & 0xF0; got != 0x00 {
+	if got := recordOfMK2(sets[0])[0] & 0xF0; got != 0x00 {
 		t.Errorf("③'s high nibble goes out as %#02x, want 0x00 — Split OFF is what the Fixed template declares", got)
 	}
 }
@@ -287,7 +287,7 @@ func TestWriteChannel_SplitOFFChannelWritesNormally(t *testing.T) {
 // THE PAIRED PIN. Without this, a later edit that MAPS ③'s high nibble turns
 // the E6 test above into a no-op: the check would compare a nibble the codec
 // now owns, and a Split-ON record would sail through.
-func TestSplitNibbleIsUnmapped(t *testing.T) {
+func TestSplitNibbleIsUnmapped_MK2(t *testing.T) {
 	layouts := ic7300mk2civ.Profile().Layouts()
 	if len(layouts) != 1 {
 		t.Fatalf("the profile declares %d layouts, want 1", len(layouts))
@@ -312,45 +312,45 @@ func TestSplitNibbleIsUnmapped(t *testing.T) {
 }
 
 // The SELECT value the radio holds is carried through unchanged.
-func TestWriteChannel_SelectNibbleRoundTripsUnchanged(t *testing.T) {
+func TestWriteChannel_SelectNibbleRoundTripsUnchanged_MK2(t *testing.T) {
 	for _, nibble := range []byte{0x00, 0x01, 0x02, 0x03} {
-		rec := append([]byte(nil), populatedRecord...)
+		rec := append([]byte(nil), populatedRecordMK2...)
 		rec[0] = nibble
-		peer := newRespondingPort(t, withRecord(1, rec))
-		sess := openSession(t, peer, WithConsentedUnverifiedWrites())
-		if _, err := sess.WriteChannel(context.Background(), channelFor("001")); err != nil {
+		peer := newRespondingPortMK2(t, withRecordMK2(1, rec))
+		sess := openSessionMK2(t, peer, WithConsentedUnverifiedWrites())
+		if _, err := sess.WriteChannel(context.Background(), channelForMK2("001")); err != nil {
 			t.Fatalf("③ = %#02x: WriteChannel: %v", nibble, err)
 		}
-		sets := setFrames(peer)
+		sets := setFramesMK2(peer)
 		if len(sets) != 1 {
 			t.Fatalf("③ = %#02x: %d set frames, want 1", nibble, len(sets))
 		}
-		if got := recordOf(sets[0])[0]; got != nibble {
+		if got := recordOfMK2(sets[0])[0]; got != nibble {
 			t.Errorf("③ went out as %#02x, want %#02x — no spec.Field carries the SELECT group (D4), so a driver that did not carry it through would silently move the user's channel out of its scan group", got, nibble)
 		}
 	}
 }
 
 // D18: a CREATE has nothing to preserve and invents nothing — it refuses.
-func TestWriteChannel_CreateRefusesRatherThanInventingTheSelectNibble(t *testing.T) {
+func TestWriteChannel_CreateRefusesRatherThanInventingTheSelectNibble_MK2(t *testing.T) {
 	for _, tc := range []struct {
 		name string
-		opts []peerOption
+		opts []peerOptionMK2
 	}{
 		{"answers FA", nil},
-		{"answers an all-FF record", []peerOption{withRecord(10, allFFRecord())}},
+		{"answers an all-FF record", []peerOptionMK2{withRecordMK2(10, allFFRecordMK2())}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			peer := newRespondingPort(t, tc.opts...)
-			sess := openSession(t, peer, WithConsentedUnverifiedWrites())
-			_, err := sess.WriteChannel(context.Background(), channelFor("010"))
+			peer := newRespondingPortMK2(t, tc.opts...)
+			sess := openSessionMK2(t, peer, WithConsentedUnverifiedWrites())
+			_, err := sess.WriteChannel(context.Background(), channelForMK2("010"))
 			if !errors.Is(err, driver.ErrWriteRefused) {
 				t.Fatalf("WriteChannel error = %v, want ErrWriteRefused — an empty slot has no SELECT value to preserve, and no spec.Field carries one (D4), so writing OFF would put the channel in a scan group the user never chose", err)
 			}
 			if !strings.Contains(err.Error(), "SELECT") {
 				t.Errorf("refusal %q does not name the SELECT nibble", err)
 			}
-			if n := len(setFrames(peer)); n != 0 {
+			if n := len(setFramesMK2(peer)); n != 0 {
 				t.Errorf("%d set frames reached the wire on a refused create", n)
 			}
 		})
@@ -361,11 +361,11 @@ func TestWriteChannel_CreateRefusesRatherThanInventingTheSelectNibble(t *testing
 // wrote FreqHz into the TX field when TxFreqHz was not Known; that
 // manufactured a value from Absent/Unknown/Unavailable and could overwrite a
 // split channel's distinct transmit frequency.
-func TestWriteChannel_NonKnownTxFrequencyIsRefusedNotSubstituted(t *testing.T) {
-	ch := channelFor("001")
+func TestWriteChannel_NonKnownTxFrequencyIsRefusedNotSubstituted_MK2(t *testing.T) {
+	ch := channelForMK2("001")
 	ch.Data.TxFreqHz = codeplug.FreqField{State: codeplug.Unknown}
-	peer := newRespondingPort(t, withRecord(1, populatedRecord))
-	sess := openSession(t, peer, WithConsentedUnverifiedWrites())
+	peer := newRespondingPortMK2(t, withRecordMK2(1, populatedRecordMK2))
+	sess := openSessionMK2(t, peer, WithConsentedUnverifiedWrites())
 	_, err := sess.WriteChannel(context.Background(), ch)
 	if !errors.Is(err, driver.ErrWriteRefused) {
 		t.Fatalf("WriteChannel error = %v, want ErrWriteRefused", err)
@@ -373,7 +373,7 @@ func TestWriteChannel_NonKnownTxFrequencyIsRefusedNotSubstituted(t *testing.T) {
 	if !strings.Contains(err.Error(), string(spec.FieldTxFrequency)) {
 		t.Errorf("refusal %q does not name tx_frequency", err)
 	}
-	if n := len(setFrames(peer)); n != 0 {
+	if n := len(setFramesMK2(peer)); n != 0 {
 		t.Errorf("%d set frames reached the wire", n)
 	}
 }
@@ -384,7 +384,7 @@ func TestWriteChannel_NonKnownTxFrequencyIsRefusedNotSubstituted(t *testing.T) {
 // of the mandatory set, because a non-Known tone is PRESERVED from the
 // just-read record rather than refused. The test below this one is their
 // witness, and it is what replaces the two dropped rows.
-func TestWriteChannel_NonKnownMandatoryFieldsAreRefused(t *testing.T) {
+func TestWriteChannel_NonKnownMandatoryFieldsAreRefused_MK2(t *testing.T) {
 	for _, tc := range []struct {
 		field  spec.Field
 		break_ func(*codeplug.ChannelData)
@@ -399,9 +399,9 @@ func TestWriteChannel_NonKnownMandatoryFieldsAreRefused(t *testing.T) {
 		{spec.FieldTag, func(d *codeplug.ChannelData) { d.Tag = "TAB\there" }, "a byte outside this radio's charset would be refused by the codec anyway, and is named here"},
 	} {
 		t.Run(string(tc.field)+"/"+tc.why, func(t *testing.T) {
-			peer := newRespondingPort(t, withRecord(1, populatedRecord))
-			sess := openSession(t, peer, WithConsentedUnverifiedWrites())
-			ch := channelFor("001")
+			peer := newRespondingPortMK2(t, withRecordMK2(1, populatedRecordMK2))
+			sess := openSessionMK2(t, peer, WithConsentedUnverifiedWrites())
+			ch := channelForMK2("001")
 			tc.break_(ch.Data)
 			before := len(peer.Received())
 			_, err := sess.WriteChannel(context.Background(), ch)
@@ -422,26 +422,26 @@ func TestWriteChannel_NonKnownMandatoryFieldsAreRefused(t *testing.T) {
 // not refused and not synthesised. The value is the one the radio itself
 // holds, which is available because the preservation read is mandatory
 // before any write anyway.
-func TestWriteChannel_NonKnownTonesArePreservedFromTheRecord(t *testing.T) {
-	ch := channelFor("001")
+func TestWriteChannel_NonKnownTonesArePreservedFromTheRecord_MK2(t *testing.T) {
+	ch := channelForMK2("001")
 	ch.Data.ToneTx = codeplug.ToneField{State: codeplug.Unknown}
 	ch.Data.ToneRx = codeplug.ToneField{State: codeplug.Unavailable}
-	peer := newRespondingPort(t, withRecord(1, populatedRecord))
-	sess := openSession(t, peer, WithConsentedUnverifiedWrites())
+	peer := newRespondingPortMK2(t, withRecordMK2(1, populatedRecordMK2))
+	sess := openSessionMK2(t, peer, WithConsentedUnverifiedWrites())
 	if _, err := sess.WriteChannel(context.Background(), ch); err != nil {
 		t.Fatalf("WriteChannel: %v — a non-Known tone is preserved, not refused: requesting the field would ask the gate about a value the caller never set", err)
 	}
-	sets := setFrames(peer)
+	sets := setFramesMK2(peer)
 	if len(sets) != 1 {
 		t.Fatalf("%d set frames, want 1", len(sets))
 	}
-	rec := recordOf(sets[0])
+	rec := recordOfMK2(sets[0])
 	for _, span := range []struct {
 		name string
 		off  int
 	}{{"⑫ ~ ⑭", 9}, {"⑮ ~ ⑰", 12}, {"⓬ ~ ⓮", 23}, {"⓯ ~ ⓱", 26}} {
 		got := rec[span.off : span.off+3]
-		want := populatedRecord[span.off : span.off+3]
+		want := populatedRecordMK2[span.off : span.off+3]
 		if string(got) != string(want) {
 			t.Errorf("%s went out as % X, want % X — the preserved value is the one the RADIO holds, taken from the record just read", span.name, got, want)
 		}
@@ -449,9 +449,9 @@ func TestWriteChannel_NonKnownTonesArePreservedFromTheRecord(t *testing.T) {
 }
 
 // D15: the read and the set are one critical section.
-func TestWriteChannel_ReadAndSetAreSerialised(t *testing.T) {
-	peer := newRespondingPort(t, withRecord(1, populatedRecord))
-	sess := openSession(t, peer, WithConsentedUnverifiedWrites())
+func TestWriteChannel_ReadAndSetAreSerialised_MK2(t *testing.T) {
+	peer := newRespondingPortMK2(t, withRecordMK2(1, populatedRecordMK2))
+	sess := openSessionMK2(t, peer, WithConsentedUnverifiedWrites())
 	openFrames := len(peer.Received())
 
 	const writers = 4
@@ -460,7 +460,7 @@ func TestWriteChannel_ReadAndSetAreSerialised(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if _, err := sess.WriteChannel(context.Background(), channelFor("001")); err != nil {
+			if _, err := sess.WriteChannel(context.Background(), channelForMK2("001")); err != nil {
 				t.Errorf("WriteChannel: %v", err)
 			}
 		}()
@@ -482,19 +482,19 @@ func TestWriteChannel_ReadAndSetAreSerialised(t *testing.T) {
 }
 
 // The duplicated TX block always goes out, in full.
-func TestWriteChannel_AlwaysSendsTheFullRecordIncludingTheTXBlock(t *testing.T) {
-	peer := newRespondingPort(t, withRecord(1, populatedRecord))
-	sess := openSession(t, peer, WithConsentedUnverifiedWrites())
-	if _, err := sess.WriteChannel(context.Background(), channelFor("001")); err != nil {
+func TestWriteChannel_AlwaysSendsTheFullRecordIncludingTheTXBlock_MK2(t *testing.T) {
+	peer := newRespondingPortMK2(t, withRecordMK2(1, populatedRecordMK2))
+	sess := openSessionMK2(t, peer, WithConsentedUnverifiedWrites())
+	if _, err := sess.WriteChannel(context.Background(), channelForMK2("001")); err != nil {
 		t.Fatalf("WriteChannel: %v", err)
 	}
-	rec := recordOf(setFrames(peer)[0])
+	rec := recordOfMK2(setFramesMK2(peer)[0])
 	if len(rec) != 45 {
 		t.Fatalf("the record is %d bytes, want the whole 45 — the driver has no way to send half a record, and D5 entry 4 (lift MK2-W2) records that the full form is required", len(rec))
 	}
 	// ❹ ~ ⑧ is the TRANSMIT frequency, a distinct field.
-	if string(rec[15:20]) != string(populatedRecord[15:20]) {
-		t.Errorf("❹ ~ ⑧ = % X, want % X", rec[15:20], populatedRecord[15:20])
+	if string(rec[15:20]) != string(populatedRecordMK2[15:20]) {
+		t.Errorf("❹ ~ ⑧ = % X, want % X", rec[15:20], populatedRecordMK2[15:20])
 	}
 	// ❾ ~ ⓱ MIRROR ⑨ ~ ⑰: nine bytes with no neutral codeplug field of their
 	// own, so the encoder writes the receive side's values into both copies.
@@ -504,12 +504,12 @@ func TestWriteChannel_AlwaysSendsTheFullRecordIncludingTheTXBlock(t *testing.T) 
 }
 
 // Consent.
-func TestWriteChannel_RefusesEverythingWithoutConsent(t *testing.T) {
-	peer := newRespondingPort(t, withRecord(1, populatedRecord), withRecord(100, populatedRecord))
-	sess := openSession(t, peer)
+func TestWriteChannel_RefusesEverythingWithoutConsent_MK2(t *testing.T) {
+	peer := newRespondingPortMK2(t, withRecordMK2(1, populatedRecordMK2), withRecordMK2(100, populatedRecordMK2))
+	sess := openSessionMK2(t, peer)
 	for _, slot := range []string{"001", "P1"} {
 		before := len(peer.Received())
-		if _, err := sess.WriteChannel(context.Background(), channelFor(slot)); !errors.Is(err, driver.ErrWriteRefused) {
+		if _, err := sess.WriteChannel(context.Background(), channelForMK2(slot)); !errors.Is(err, driver.ErrWriteRefused) {
 			t.Errorf("WriteChannel(%q) = %v, want ErrWriteRefused — writeTrialsComplete is FALSE, so a RealHardware session writes nothing without the user's recorded consent", slot, err)
 		}
 		if after := len(peer.Received()); after != before {
@@ -518,9 +518,9 @@ func TestWriteChannel_RefusesEverythingWithoutConsent(t *testing.T) {
 	}
 }
 
-func TestWriteChannel_ErasesNothingEvenWithConsent(t *testing.T) {
-	peer := newRespondingPort(t, withRecord(1, populatedRecord))
-	sess := openSession(t, peer, WithConsentedUnverifiedWrites())
+func TestWriteChannel_ErasesNothingEvenWithConsent_MK2(t *testing.T) {
+	peer := newRespondingPortMK2(t, withRecordMK2(1, populatedRecordMK2))
+	sess := openSessionMK2(t, peer, WithConsentedUnverifiedWrites())
 	if got := sess.Capabilities().FieldSupport(spec.BankMemory, spec.FieldErase); got.CanWrite() {
 		t.Fatalf("MEM/erase = %+v after consent — spec.ConsentUnverifiedWrites excludes FieldErase STRUCTURALLY, so no profile's labels can mint a consented erase", got)
 	}
@@ -539,7 +539,7 @@ func TestWriteChannel_ErasesNothingEvenWithConsent(t *testing.T) {
 // D17's set, with the predicate each field's REAL representation permits.
 // FieldErase is absent BY DESIGN: it has no ChannelData member (erasure is
 // Channel.Data == nil) and is refused at ladder rung 3.
-func TestRequestedFields_MembershipAndOrder(t *testing.T) {
+func TestRequestedFields_MembershipAndOrder_MK2(t *testing.T) {
 	want := []spec.Field{
 		// Unconditional: the seven the 1A 00 record always carries.
 		spec.FieldFrequency, spec.FieldMode, spec.FieldTag,
@@ -550,15 +550,15 @@ func TestRequestedFields_MembershipAndOrder(t *testing.T) {
 		spec.FieldDuplex, spec.FieldOffset, spec.FieldToneTx, spec.FieldToneRx,
 		spec.FieldDTCSCode, spec.FieldDTCSPolarity,
 	}
-	got := requestedFields(everyFieldSet())
+	got := requestedFields(everyFieldSetMK2())
 	if !slices.Equal(got, want) {
 		t.Errorf("requestedFields = %v,\nwant %v", got, want)
 	}
 	if len(want) != 19 {
 		t.Errorf("requestedFields covers %d fields, want 19", len(want))
 	}
-	if len(allFields) != 20 || !slices.Contains(allFields, spec.FieldErase) {
-		t.Fatalf("allFields = %v — the pin below assumes the twenty spec.Fields including erase", allFields)
+	if len(allFieldsMK2) != 20 || !slices.Contains(allFieldsMK2, spec.FieldErase) {
+		t.Fatalf("allFields = %v — the pin below assumes the twenty spec.Fields including erase", allFieldsMK2)
 	}
 	// The twentieth is erase, and its absence here is the design.
 	if slices.Contains(got, spec.FieldErase) {
@@ -568,7 +568,7 @@ func TestRequestedFields_MembershipAndOrder(t *testing.T) {
 	// unconditional fields plus whichever tones it actually carries, and
 	// NOTHING ELSE. That is what makes an ordinary write possible at all:
 	// every one of the ten fields this radio cannot express answers false.
-	ordinary := *channelFor("001").Data
+	ordinary := *channelForMK2("001").Data
 	if got, w := requestedFields(ordinary), append(append([]spec.Field(nil), want[:7]...), spec.FieldToneTx, spec.FieldToneRx); !slices.Equal(got, w) {
 		t.Errorf("a channel this driver produced requests %v, want %v", got, w)
 	}
@@ -583,17 +583,17 @@ func TestRequestedFields_MembershipAndOrder(t *testing.T) {
 // field this radio cannot express is refused BY NAME, before any wire
 // traffic. The witness is a TRANSCRIPT DELTA of zero: scanning for set
 // frames would have let a premature READ through.
-func TestWriteChannel_RefusesEveryRequestedUnsupportedField(t *testing.T) {
+func TestWriteChannel_RefusesEveryRequestedUnsupportedField_MK2(t *testing.T) {
 	for _, f := range []spec.Field{
 		spec.FieldClarifier, spec.FieldCTCSSState, spec.FieldCTCSSTone, spec.FieldShift,
 		spec.FieldTagDisplay, spec.FieldScanSkip,
 		spec.FieldDuplex, spec.FieldOffset, spec.FieldDTCSCode, spec.FieldDTCSPolarity,
 	} {
 		t.Run(string(f), func(t *testing.T) {
-			peer := newRespondingPort(t, withRecord(1, populatedRecord))
-			sess := openSession(t, peer, WithConsentedUnverifiedWrites())
+			peer := newRespondingPortMK2(t, withRecordMK2(1, populatedRecordMK2))
+			sess := openSessionMK2(t, peer, WithConsentedUnverifiedWrites())
 			before := len(peer.Received())
-			_, err := sess.WriteChannel(context.Background(), channelRequesting(f))
+			_, err := sess.WriteChannel(context.Background(), channelRequestingMK2(f))
 			if !errors.Is(err, driver.ErrWriteRefused) {
 				t.Fatalf("WriteChannel error = %v, want ErrWriteRefused", err)
 			}
@@ -608,9 +608,9 @@ func TestWriteChannel_RefusesEveryRequestedUnsupportedField(t *testing.T) {
 }
 
 // The twentieth field, at its own rung: an empty channel is an erase request.
-func TestWriteChannel_EmptyChannelIsRefusedAsErase(t *testing.T) {
-	peer := newRespondingPort(t, withRecord(1, populatedRecord))
-	sess := openSession(t, peer, WithConsentedUnverifiedWrites())
+func TestWriteChannel_EmptyChannelIsRefusedAsErase_MK2(t *testing.T) {
+	peer := newRespondingPortMK2(t, withRecordMK2(1, populatedRecordMK2))
+	sess := openSessionMK2(t, peer, WithConsentedUnverifiedWrites())
 	before := len(peer.Received())
 	_, err := sess.WriteChannel(context.Background(), codeplug.Channel{Slot: "001"})
 	if !errors.Is(err, driver.ErrWriteRefused) || !strings.Contains(err.Error(), string(spec.FieldErase)) {
@@ -633,33 +633,33 @@ func TestWriteChannel_EmptyChannelIsRefusedAsErase(t *testing.T) {
 // SELECT nibble — a plausible-looking refusal about the wrong thing, on a
 // slot that may well be populated. Asserting ErrAnswerMismatch rather than
 // merely "some error" is what makes the sub-case discriminate.
-func TestWriteChannel_PreservationReadAddressMismatchIsRefused(t *testing.T) {
+func TestWriteChannel_PreservationReadAddressMismatchIsRefused_MK2(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		rec  []byte
 	}{
-		{"a populated record for the wrong channel", populatedRecord},
-		{"an all-FF record for the wrong channel", allFFRecord()},
+		{"a populated record for the wrong channel", populatedRecordMK2},
+		{"an all-FF record for the wrong channel", allFFRecordMK2()},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			// Channel 9 is past the open probe's bound, so the misdirection
 			// is met for the first time HERE, on the write path.
-			peer := newRespondingPort(t,
-				withRecord(9, tc.rec),
-				withAnswerAddressedElsewhere(9, 10),
+			peer := newRespondingPortMK2(t,
+				withRecordMK2(9, tc.rec),
+				withAnswerAddressedElsewhereMK2(9, 10),
 			)
-			sess := openSession(t, peer, WithConsentedUnverifiedWrites())
-			_, err := sess.WriteChannel(context.Background(), channelFor("009"))
+			sess := openSessionMK2(t, peer, WithConsentedUnverifiedWrites())
+			_, err := sess.WriteChannel(context.Background(), channelForMK2("009"))
 			if !errors.Is(err, ErrAnswerMismatch) {
 				t.Fatalf("WriteChannel error = %v, want ErrAnswerMismatch — civ's MemoryAnswerMatcher is ENVELOPE-ONLY by design, so the channel address is the driver's to check, on this path as much as on the read path (T2, D20)", err)
 			}
 			if errors.Is(err, driver.ErrWriteRefused) {
 				t.Errorf("the refusal is a *driver.WriteRefusedError (%v) — a misaddressed answer is not a fact about the requested slot, and reporting it as a create refusal would name the wrong problem on a slot that may be populated", err)
 			}
-			if n := len(setFrames(peer)); n != 0 {
+			if n := len(setFramesMK2(peer)); n != 0 {
 				t.Errorf("%d set frames reached the wire after a mismatched preservation read", n)
 			}
-			if n := civDiagnostics(t, sess).AnswerMismatches; n != 1 {
+			if n := civDiagnosticsMK2(t, sess).AnswerMismatches; n != 1 {
 				t.Errorf("AnswerMismatches = %d, want 1 — the refusal carries a diagnostic count beside it, on this path too", n)
 			}
 		})
@@ -669,16 +669,16 @@ func TestWriteChannel_PreservationReadAddressMismatchIsRefused(t *testing.T) {
 // A LATER quarantine drain failure is fail-closed on the write path too: the
 // flood starts once the preservation read has gone out, so Do's post-write
 // quarantine and the next exchange meet a line that never goes quiet.
-func TestWriteChannel_LaterDrainFailureFailsClosed(t *testing.T) {
-	peer := newRespondingPort(t, withRecord(1, populatedRecord), withNoAnswerToSets())
-	sess := openSession(t, peer, WithConsentedUnverifiedWrites())
-	if _, err := sess.WriteChannel(context.Background(), channelFor("001")); err == nil {
+func TestWriteChannel_LaterDrainFailureFailsClosed_MK2(t *testing.T) {
+	peer := newRespondingPortMK2(t, withRecordMK2(1, populatedRecordMK2), withNoAnswerToSetsMK2())
+	sess := openSessionMK2(t, peer, WithConsentedUnverifiedWrites())
+	if _, err := sess.WriteChannel(context.Background(), channelForMK2("001")); err == nil {
 		t.Fatal("WriteChannel succeeded against a peer that never acknowledges a set")
 	}
 	// The engine is now SUSPECT: the acknowledgement never arrived, so the
 	// next exchange must drain before it trusts anything as its own answer.
-	go peer.flood(peerControllerAddr, 5*time.Millisecond)
-	_, err := sess.WriteChannel(context.Background(), channelFor("001"))
+	go peer.flood(peerControllerAddrMK2, 5*time.Millisecond)
+	_, err := sess.WriteChannel(context.Background(), channelForMK2("001"))
 	if err == nil {
 		t.Fatal("a second write succeeded on a suspect engine over a line that never goes quiet — Do's entry quarantine exists to stop an abandoned exchange's reply being read as this one's answer")
 	}
@@ -691,8 +691,8 @@ func TestWriteChannel_LaterDrainFailureFailsClosed(t *testing.T) {
 // answers true, so requestedFields returns its whole membership. It is a
 // fixture for the pin above and nothing else: no radio would ever produce
 // one, which is exactly why it is written by hand here.
-func everyFieldSet() codeplug.ChannelData {
-	d := *channelFor("001").Data
+func everyFieldSetMK2() codeplug.ChannelData {
+	d := *channelForMK2("001").Data
 	d.ClarHz = 100
 	d.RxClar = true
 	d.TxClar = true
@@ -710,8 +710,8 @@ func everyFieldSet() codeplug.ChannelData {
 
 // channelRequesting returns an otherwise ordinary channel for slot 001 that
 // REQUESTS exactly one extra field: the ten-case table's input.
-func channelRequesting(f spec.Field) codeplug.Channel {
-	ch := channelFor("001")
+func channelRequestingMK2(f spec.Field) codeplug.Channel {
+	ch := channelForMK2("001")
 	d := ch.Data
 	switch f {
 	case spec.FieldClarifier:

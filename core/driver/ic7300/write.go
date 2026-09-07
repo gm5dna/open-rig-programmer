@@ -138,7 +138,7 @@ func (s *Session) WriteChannel(ctx context.Context, ch codeplug.Channel) (driver
 		return res, &driver.WriteRefusedError{
 			Slot:   ch.Slot,
 			Fields: []spec.Field{spec.FieldErase},
-			Reason: "this tier ships no erase path: the document prints two clear forms and neither is implemented, and spec.ConsentUnverifiedWrites refuses to consent an erase at any label",
+			Reason: s.m.eraseReason,
 		}
 	}
 	data := *ch.Data
@@ -317,7 +317,7 @@ func (s *Session) mandatoryFields(slot string, d codeplug.ChannelData) error {
 		return refuse(spec.FieldFrequency, "%v", err)
 	}
 	if d.TxFreqHz.State != codeplug.Known {
-		return refuse(spec.FieldTxFrequency, "the record's transmit-frequency field (❹–⑧) cannot be omitted, and %q is not a value: nothing is synthesised for it, and substituting the receive frequency would overwrite a split channel's own transmit frequency", d.TxFreqHz.State)
+		return refuse(spec.FieldTxFrequency, "the record's transmit-frequency field (%s) cannot be omitted, and %q is not a value: nothing is synthesised for it, and substituting the receive frequency would overwrite a split channel's own transmit frequency", s.m.txFreqSpan, d.TxFreqHz.State)
 	}
 	if err := s.frequencyInRange(d.TxFreqHz.Value); err != nil {
 		return refuse(spec.FieldTxFrequency, "%v", err)
@@ -337,10 +337,11 @@ func (s *Session) mandatoryFields(slot string, d codeplug.ChannelData) error {
 	if d.ToneMode.State != codeplug.Known {
 		return refuse(spec.FieldToneMode, "the record's tone-mode nibble (⑪ low) cannot be omitted, and %q is not a value", d.ToneMode.State)
 	}
-	// An EMPTY tag is a legitimate blank name — the field is always ten bytes
-	// and is padded with 0x20 — so only length and charset are refused here.
+	// An EMPTY tag is a legitimate blank name — the field is always its
+	// model's full width and is padded with 0x20 — so only length and
+	// charset are refused here.
 	if len(d.Tag) > s.caps.TagLen {
-		return refuse(spec.FieldTag, "the name field (⑱–㉗) is %d bytes and %q is %d: truncating it would write a name the caller did not choose", s.caps.TagLen, d.Tag, len(d.Tag))
+		return refuse(spec.FieldTag, "the name field (%s) is %d bytes and %q is %d: truncating it would write a name the caller did not choose", s.m.tagSpan, s.caps.TagLen, d.Tag, len(d.Tag))
 	}
 	for i := 0; i < len(d.Tag); i++ {
 		if !s.caps.TagByteOK(d.Tag[i]) {
@@ -353,15 +354,16 @@ func (s *Session) mandatoryFields(slot string, d codeplug.ChannelData) error {
 // frequencyInRange refuses a frequency this MEMORY CHANNEL cannot store.
 //
 // The ceiling is the RECORD's, not the tuning range's: the frequency field's
-// 10 MHz digit is capped at 6 and its two highest digits are printed fixed
-// zero, so a value above it is one the encoder must afterwards refuse.
-// Refusing here names the field; refusing at the encoder would not.
+// top digits are printed capped, so a value above it is one the encoder must
+// afterwards refuse. Refusing here names the field; refusing at the encoder
+// would not. The message is the MODEL's — each document prints its own
+// per-digit legend, and modelParams.maxFreqReason carries each verbatim.
 func (s *Session) frequencyInRange(hz uint64) error {
 	if s.caps.MinFreqHz != 0 && hz < s.caps.MinFreqHz {
 		return fmt.Errorf("%d Hz is below this radio's documented floor of %d Hz", hz, s.caps.MinFreqHz)
 	}
 	if s.caps.MaxFreqHz != 0 && hz > s.caps.MaxFreqHz {
-		return fmt.Errorf("%d Hz is above what a memory channel can store on this model (%d Hz): the record's 10 MHz digit is capped at 6, and the 74.8 MHz figure is tuning COVERAGE rather than storable frequency", hz, s.caps.MaxFreqHz)
+		return fmt.Errorf(s.m.maxFreqReason, hz, s.caps.MaxFreqHz)
 	}
 	return nil
 }
@@ -423,15 +425,18 @@ func (s *Session) preservationRead(ctx context.Context, want civ.ChannelAddress)
 //     every unmapped nibble, so a driver that neither carried the flag
 //     through nor refused would silently clear it and no layer above could
 //     see it happen.
-//   - THE SCAN-BANK CONSTRAINT. P1 and P2 must carry a zero ③ (matrix
-//     §3.16 A8, "ⓘSet both 0 for P1 and P2."). It is READ-DEPENDENT for
+//   - THE SCAN-BANK CONSTRAINT. P1 and P2 must carry a zero ③ — the
+//     IC-7300's matrix §3.16 A8, "ⓘSet both 0 for P1 and P2."; the MK2's
+//     own PDF p.17, "Set 00 for P1 and P2." Each document's sentence is
+//     quoted in that model's own modelParams.scanEdgeReason and neither is
+//     read as evidence about the other radio. It is READ-DEPENDENT for
 //     exactly E6's reason — the value it judges is the one the radio holds —
 //     so it sits here rather than among the locally decidable rungs.
 func (s *Session) buildRecord(slot string, bank spec.BankID, addr civ.ChannelAddress, d codeplug.ChannelData, prev civ.MemoryRecord, raw []byte, exists bool) (civ.MemoryRecord, error) {
 	if !exists {
 		return civ.MemoryRecord{}, &driver.WriteRefusedError{
 			Slot:   slot,
-			Reason: "the slot is empty and this is a CREATE: record byte ③'s SELECT nibble has no honest source — no spec.Field carries the SELECT group (the tier forbids mapping it as scan_skip), and writing OFF would put the channel into a scan group the caller never chose. Behind it the two tone spans have no documented default either (`ic7300-documented-default-tone-absent`). Write into a slot the radio already holds, or lift `ic7300-select-nibble-on-create`",
+			Reason: s.m.selectNibbleReason,
 		}
 	}
 
@@ -467,7 +472,7 @@ func (s *Session) buildRecord(slot string, bank spec.BankID, addr civ.ChannelAdd
 	if bank == spec.BankScan && raw[0] != 0x00 {
 		return civ.MemoryRecord{}, &driver.WriteRefusedError{
 			Slot:   slot,
-			Reason: fmt.Sprintf("record byte ③ is %#02x on a scan edge, and this document prints \"Set both 0 for P1 and P2.\" — the SELECT group is %q, and writing it back would send a value the manual says these two slots must not carry (the value is the radio's own, so it is refused rather than rewritten)", raw[0], selectName),
+			Reason: fmt.Sprintf(s.m.scanEdgeReason, raw[0], selectName),
 		}
 	}
 
@@ -493,7 +498,8 @@ func (s *Session) buildRecord(slot string, bank spec.BankID, addr civ.ChannelAdd
 	// rather than mandatory.
 	rec.ToneTXDeciHz = preservedTone(d.ToneTx, prev.ToneTXDeciHz)
 	rec.ToneRXDeciHz = preservedTone(d.ToneRx, prev.ToneRXDeciHz)
-	// ⑱–㉗, padded to ten bytes by the codec.
+	// ⑱–㉗ (⑱ ~ ㉝ on the MK2), padded to the model's full width by the
+	// codec.
 	rec.Name = civ.Available(d.Tag)
 	return rec, nil
 }

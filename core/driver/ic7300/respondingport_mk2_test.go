@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package ic7300mk2
+package ic7300
 
 import (
 	"context"
@@ -27,10 +27,11 @@ import (
 // the wrong channel, a stream that never goes quiet — which is exactly what
 // the error paths need and what a self-consistent fake will never produce.
 //
-// IT IS ALSO NOT SHARED WITH core/driver/ic7300, which has its own copy. A
-// shared peer would be the sibling-borrowing both matrices' §4 forbid, and
-// it would hide a wrong address byte: this one answers from 0xB6 and only
-// from 0xB6.
+// IT IS ALSO NOT SHARED WITH THE IC-7300'S PEER, which is this file's twin
+// in respondingport_test.go — two peers in one package since the fold, and
+// still two. A shared peer would be the sibling-borrowing both matrices' §4
+// forbid, and it would hide a wrong address byte: this one answers from 0xB6
+// and only from 0xB6.
 //
 // THE ACKNOWLEDGEMENT SEMANTICS ARE AN ASSUMED CONVENTION APPLIED, NOT AN
 // OBSERVED RADIO TRANSCRIBED — no IC-7300 has ever been connected to this
@@ -39,7 +40,7 @@ import (
 // read of an unwritten channel draws FA is D5 entry 2(a). Both are entries
 // with named lifts, and this file APPLIES them so the driver can be
 // exercised, it does not evidence them.
-type respondingPort struct {
+type respondingPortMK2 struct {
 	host   net.Conn
 	remote net.Conn
 
@@ -75,15 +76,15 @@ type respondingPort struct {
 }
 
 // peerOption configures a scripted radio.
-type peerOption func(*respondingPort)
+type peerOptionMK2 func(*respondingPortMK2)
 
 // The two CI-V addresses this scripted radio uses. WRITTEN OUT, not taken
 // from the profile under test: a fixture that derived its address from the
 // code under test would answer at whatever address that code asked for,
 // including a wrong one.
 const (
-	peerRadioAddr      = 0xB6
-	peerControllerAddr = 0xE0
+	peerRadioAddrMK2      = 0xB6
+	peerControllerAddrMK2 = 0xE0
 )
 
 // populatedRecord is the 45 record bytes of this model's golden set vector
@@ -102,7 +103,7 @@ const (
 // distinguishes most-significant-pair-first from its reverse, while 100.0 Hz
 // encodes as the palindrome `00 10 00`, which does not. That is a property
 // of the vector's chosen value and not of the layout.
-var populatedRecord = []byte{
+var populatedRecordMK2 = []byte{
 	0x00,                         // ③ — SELECT OFF (low nibble), Split OFF (high nibble)
 	0x00, 0x00, 0x10, 0x14, 0x00, // ④ ~ ⑧ — 14 100 000 Hz, least significant pair first
 	0x01,             // ⑨ — USB
@@ -122,10 +123,10 @@ var populatedRecord = []byte{
 
 // newRespondingPort starts a scripted radio and registers its cleanup. The
 // returned value IS the transport.Port a driver Opens.
-func newRespondingPort(t *testing.T, opts ...peerOption) *respondingPort {
+func newRespondingPortMK2(t *testing.T, opts ...peerOptionMK2) *respondingPortMK2 {
 	t.Helper()
 	host, remote := net.Pipe()
-	p := &respondingPort{
+	p := &respondingPortMK2{
 		host:       host,
 		remote:     remote,
 		idToken:    []byte{0x00},
@@ -141,7 +142,7 @@ func newRespondingPort(t *testing.T, opts ...peerOption) *respondingPort {
 	})
 	go p.serve()
 	if p.floodPeriod > 0 && p.floodAfterFrames == 0 {
-		go p.flood(peerControllerAddr, p.floodPeriod)
+		go p.flood(peerControllerAddrMK2, p.floodPeriod)
 	}
 	if p.broadcastPeriod > 0 {
 		go p.flood(0x00, p.broadcastPeriod)
@@ -152,9 +153,9 @@ func newRespondingPort(t *testing.T, opts ...peerOption) *respondingPort {
 // Read, Write and Close make this a transport.Port: the driver's end of the
 // pipe. The driver takes ownership of it, so a test never closes it —
 // newRespondingPort's cleanup does.
-func (p *respondingPort) Read(b []byte) (int, error)  { return p.host.Read(b) }
-func (p *respondingPort) Write(b []byte) (int, error) { return p.host.Write(b) }
-func (p *respondingPort) Close() error {
+func (p *respondingPortMK2) Read(b []byte) (int, error)  { return p.host.Read(b) }
+func (p *respondingPortMK2) Write(b []byte) (int, error) { return p.host.Write(b) }
+func (p *respondingPortMK2) Close() error {
 	var err error
 	p.closeOnce.Do(func() { err = p.host.Close() })
 	return err
@@ -163,7 +164,7 @@ func (p *respondingPort) Close() error {
 // Received returns DEFENSIVE COPIES of every complete frame this radio saw,
 // in arrival order. Copies, because the caller counts and compares them
 // while the serve goroutine is still appending.
-func (p *respondingPort) Received() [][]byte {
+func (p *respondingPortMK2) Received() [][]byte {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	out := make([][]byte, len(p.received))
@@ -174,75 +175,75 @@ func (p *respondingPort) Received() [][]byte {
 }
 
 // withIDToken sets the data area of the 19 00 answer. Default {0x00}.
-func withIDToken(token []byte) peerOption {
-	return func(p *respondingPort) { p.idToken = append([]byte(nil), token...) }
+func withIDTokenMK2(token []byte) peerOptionMK2 {
+	return func(p *respondingPortMK2) { p.idToken = append([]byte(nil), token...) }
 }
 
 // withRecord makes channel occupied, answering a read of it with rec.
-func withRecord(channel int, rec []byte) peerOption {
-	return func(p *respondingPort) { p.records[channel] = append([]byte(nil), rec...) }
+func withRecordMK2(channel int, rec []byte) peerOptionMK2 {
+	return func(p *respondingPortMK2) { p.records[channel] = append([]byte(nil), rec...) }
 }
 
 // withRecordOfLength makes channel occupied by a record of n bytes whose
 // CONTENT is irrelevant — the length is the whole point. Zero bytes, not
 // 0xFF, so a length test cannot be confused with the empty-record question.
-func withRecordOfLength(channel int, n int) peerOption {
-	return func(p *respondingPort) { p.records[channel] = make([]byte, n) }
+func withRecordOfLengthMK2(channel int, n int) peerOptionMK2 {
+	return func(p *respondingPortMK2) { p.records[channel] = make([]byte, n) }
 }
 
 // withAnswerAddressedElsewhere answers a read of channel with a record
 // whose ADDRESS FIELD names answerChannel: the wrong-slot reply the
 // driver's own address check exists to catch, since civ's memory-answer
 // matcher is envelope-only and deliberately does not look at the channel.
-func withAnswerAddressedElsewhere(channel, answerChannel int) peerOption {
-	return func(p *respondingPort) { p.misaddress[channel] = answerChannel }
+func withAnswerAddressedElsewhereMK2(channel, answerChannel int) peerOptionMK2 {
+	return func(p *respondingPortMK2) { p.misaddress[channel] = answerChannel }
 }
 
 // withMisaddressedIDAnswer answers the 19 00 read with a frame addressed to
 // a DIFFERENT controller. The accumulator's address filter drops it, so the
 // probe sees silence — which is the point: an identity reply for somebody
 // else is not this radio identifying itself.
-func withMisaddressedIDAnswer() peerOption {
-	return func(p *respondingPort) { p.misaddressedID = true }
+func withMisaddressedIDAnswerMK2() peerOptionMK2 {
+	return func(p *respondingPortMK2) { p.misaddressedID = true }
 }
 
 // withSilentReads answers no 1A 00 READ at all: neither a record nor an FA.
 // The timeout case for a read, as distinct from the empty-channel case.
-func withSilentReads() peerOption {
-	return func(p *respondingPort) { p.silentReads = true }
+func withSilentReadsMK2() peerOptionMK2 {
+	return func(p *respondingPortMK2) { p.silentReads = true }
 }
 
 // withNoAnswerToSets never answers a 1A 00 set: the write-timeout case.
-func withNoAnswerToSets() peerOption {
-	return func(p *respondingPort) { p.noAnswerToSets = true }
+func withNoAnswerToSetsMK2() peerOptionMK2 {
+	return func(p *respondingPortMK2) { p.noAnswerToSets = true }
 }
 
 // withRejectSets answers every 1A 00 set with FA: the attributable refusal.
-func withRejectSets() peerOption {
-	return func(p *respondingPort) { p.rejectSets = true }
+func withRejectSetsMK2() peerOptionMK2 {
+	return func(p *respondingPortMK2) { p.rejectSets = true }
 }
 
 // withBroadcasts emits unsolicited `to = 00` transceive frames forever.
 // They are filtered by civ.FrameAccumulator's address check BEFORE any
 // engine event, so they can never reach the drain cap — which is exactly
 // what the (a) half of the flood pair asserts.
-func withBroadcasts(period time.Duration) peerOption {
-	return func(p *respondingPort) { p.broadcastPeriod = period }
+func withBroadcastsMK2(period time.Duration) peerOptionMK2 {
+	return func(p *respondingPortMK2) { p.broadcastPeriod = period }
 }
 
 // withAddressedFlood emits never-quiet frames addressed to the CONTROLLER,
 // forever. These are NOT filtered: they become engine events, and they are
 // the only thing that can reach DrainPolicy.Cap.
-func withAddressedFlood(period time.Duration) peerOption {
-	return func(p *respondingPort) { p.floodPeriod = period }
+func withAddressedFloodMK2(period time.Duration) peerOptionMK2 {
+	return func(p *respondingPortMK2) { p.floodPeriod = period }
 }
 
 // withAddressedFloodAfter is withAddressedFlood delayed until the radio has
 // received n frames, so a test can let the line be QUIET through Init and
 // then start the flood — which is how the fail-closed half of the drain
 // rule is driven, Init's own nonfatal drain having already succeeded.
-func withAddressedFloodAfter(frames int, period time.Duration) peerOption {
-	return func(p *respondingPort) {
+func withAddressedFloodAfterMK2(frames int, period time.Duration) peerOptionMK2 {
+	return func(p *respondingPortMK2) {
 		p.floodPeriod = period
 		p.floodAfterFrames = frames
 	}
@@ -253,7 +254,7 @@ func withAddressedFloodAfter(frames int, period time.Duration) peerOption {
 //
 // Frame splitting rather than whole-read matching: the transport writes one
 // frame per call today, but nothing in the Port contract promises that.
-func (p *respondingPort) serve() {
+func (p *respondingPortMK2) serve() {
 	buf := make([]byte, 256)
 	var acc []byte
 	for {
@@ -261,7 +262,7 @@ func (p *respondingPort) serve() {
 		if n > 0 {
 			acc = append(acc, buf[:n]...)
 			for {
-				i := indexByte(acc, 0xFD)
+				i := indexByteMK2(acc, 0xFD)
 				if i < 0 {
 					break
 				}
@@ -269,7 +270,7 @@ func (p *respondingPort) serve() {
 				acc = acc[i+1:]
 				count := p.record(frame)
 				if p.floodAfterFrames > 0 && count == p.floodAfterFrames {
-					go p.flood(peerControllerAddr, p.floodPeriod)
+					go p.flood(peerControllerAddrMK2, p.floodPeriod)
 				}
 				if reply := p.reply(frame); reply != nil {
 					if _, werr := p.remote.Write(reply); werr != nil {
@@ -284,7 +285,7 @@ func (p *respondingPort) serve() {
 	}
 }
 
-func indexByte(b []byte, c byte) int {
+func indexByteMK2(b []byte, c byte) int {
 	for i, x := range b {
 		if x == c {
 			return i
@@ -294,7 +295,7 @@ func indexByte(b []byte, c byte) int {
 }
 
 // record appends one received frame and returns how many have arrived.
-func (p *respondingPort) record(frame []byte) int {
+func (p *respondingPortMK2) record(frame []byte) int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.received = append(p.received, frame)
@@ -304,10 +305,10 @@ func (p *respondingPort) record(frame []byte) int {
 // flood writes a well-formed frame addressed to `to` every period until the
 // pipe goes away. `to = 0x00` is the transceive broadcast form; `to = 0xE0`
 // is the controller-addressed traffic the accumulator does not filter.
-func (p *respondingPort) flood(to byte, period time.Duration) {
+func (p *respondingPortMK2) flood(to byte, period time.Duration) {
 	// A `00` "send frequency data" frame carrying five BCD bytes: the shape
 	// a transceive radio emits when its VFO moves.
-	frame := []byte{0xFE, 0xFE, to, peerRadioAddr, 0x00, 0x00, 0x00, 0x25, 0x14, 0x00, 0xFD}
+	frame := []byte{0xFE, 0xFE, to, peerRadioAddrMK2, 0x00, 0x00, 0x00, 0x25, 0x14, 0x00, 0xFD}
 	for {
 		if _, err := p.remote.Write(frame); err != nil {
 			return
@@ -317,8 +318,8 @@ func (p *respondingPort) flood(to byte, period time.Duration) {
 }
 
 // answer wraps body in a frame FROM this radio TO the controller.
-func answerFrame(body ...byte) []byte {
-	out := []byte{0xFE, 0xFE, peerControllerAddr, peerRadioAddr}
+func answerFrameMK2(body ...byte) []byte {
+	out := []byte{0xFE, 0xFE, peerControllerAddrMK2, peerRadioAddrMK2}
 	out = append(out, body...)
 	return append(out, 0xFD)
 }
@@ -326,10 +327,10 @@ func answerFrame(body ...byte) []byte {
 // reply returns the bytes this radio answers frame with, or nil for
 // silence. See respondingPort's doc comment for which register entry holds
 // each convention.
-func (p *respondingPort) reply(frame []byte) []byte {
+func (p *respondingPortMK2) reply(frame []byte) []byte {
 	// Only frames addressed to THIS radio from the controller are answered
 	// at all; anything else is somebody else's traffic.
-	if len(frame) < 6 || frame[0] != 0xFE || frame[1] != 0xFE || frame[2] != peerRadioAddr || frame[3] != peerControllerAddr {
+	if len(frame) < 6 || frame[0] != 0xFE || frame[1] != 0xFE || frame[2] != peerRadioAddrMK2 || frame[3] != peerControllerAddrMK2 {
 		return nil
 	}
 	cn, sc := frame[4], frame[5]
@@ -337,31 +338,31 @@ func (p *respondingPort) reply(frame []byte) []byte {
 	case cn == 0x19 && sc == 0x00:
 		if p.misaddressedID {
 			// Addressed to a controller that is not ours.
-			out := []byte{0xFE, 0xFE, 0xE1, peerRadioAddr, 0x19, 0x00}
+			out := []byte{0xFE, 0xFE, 0xE1, peerRadioAddrMK2, 0x19, 0x00}
 			out = append(out, p.idToken...)
 			return append(out, 0xFD)
 		}
 		body := []byte{0x19, 0x00}
 		body = append(body, p.idToken...)
-		return answerFrame(body...)
+		return answerFrameMK2(body...)
 
 	case cn == 0x1A && sc == 0x00 && len(frame) == 9:
 		// A READ: FE FE 94 E0 1A 00 <hi> <lo> FD.
 		if p.silentReads {
 			return nil
 		}
-		ch := bcdChannel(frame[6], frame[7])
+		ch := bcdChannelMK2(frame[6], frame[7])
 		rec, ok := p.records[ch]
 		if !ok {
-			return answerFrame(0xFA)
+			return answerFrameMK2(0xFA)
 		}
 		hi, lo := frame[6], frame[7]
 		if other, misdirect := p.misaddress[ch]; misdirect {
-			hi, lo = bcdBytes(other)
+			hi, lo = bcdBytesMK2(other)
 		}
 		body := []byte{0x1A, 0x00, hi, lo}
 		body = append(body, rec...)
-		return answerFrame(body...)
+		return answerFrameMK2(body...)
 
 	case cn == 0x1A && sc == 0x00:
 		// A SET.
@@ -369,12 +370,12 @@ func (p *respondingPort) reply(frame []byte) []byte {
 			return nil
 		}
 		if p.rejectSets {
-			return answerFrame(0xFA)
+			return answerFrameMK2(0xFA)
 		}
-		return answerFrame(0xFB)
+		return answerFrameMK2(0xFB)
 
 	default:
-		return answerFrame(0xFA)
+		return answerFrameMK2(0xFA)
 	}
 }
 
@@ -382,13 +383,13 @@ func (p *respondingPort) reply(frame []byte) []byte {
 // significant pair first. Written out here rather than taken from the codec
 // for the reason peerRadioAddr is: a fixture must not learn the encoding
 // from the code it is testing.
-func bcdChannel(hi, lo byte) int {
+func bcdChannelMK2(hi, lo byte) int {
 	return int(hi>>4)*1000 + int(hi&0x0F)*100 + int(lo>>4)*10 + int(lo&0x0F)
 }
 
 // bcdBytes is bcdChannel's inverse, for the answers this radio addresses
 // deliberately wrongly.
-func bcdBytes(n int) (hi, lo byte) {
+func bcdBytesMK2(n int) (hi, lo byte) {
 	return byte((n/1000)%10<<4 | (n/100)%10), byte((n/10)%10<<4 | n%10)
 }
 
@@ -400,9 +401,9 @@ func bcdBytes(n int) (hi, lo byte) {
 // user's own grant, and a test that does not is exercising the guard. A
 // Simulated-profile session would make both cases pass for the wrong
 // reason.
-func openSession(t *testing.T, p transport.Port, opts ...Option) driver.Session {
+func openSessionMK2(t *testing.T, p transport.Port, opts ...Option) driver.Session {
 	t.Helper()
-	sess, err := New(RealHardware, opts...).Open(context.Background(), p, driver.Identity{Port: "test"})
+	sess, err := NewMK2(RealHardware, opts...).Open(context.Background(), p, driver.Identity{Port: "test"})
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -419,7 +420,7 @@ func openSession(t *testing.T, p transport.Port, opts ...Option) driver.Session 
 // request only the seven unconditional fields plus nothing else: a Known
 // value in any of them would be a request this radio cannot honour, and
 // would be refused by name.
-func channelFor(slot string) codeplug.Channel {
+func channelForMK2(slot string) codeplug.Channel {
 	return codeplug.Channel{
 		Slot: slot,
 		Data: &codeplug.ChannelData{
