@@ -158,62 +158,17 @@ func changedFields(before, after ChannelData) []spec.Field {
 	if before.ScanSkip != after.ScanSkip {
 		out = append(out, spec.FieldScanSkip)
 	}
-	// The Icom tier's ten (design D4), appended after the pre-tier nine
-	// so no existing BlockReason's field list is reordered. Each is
-	// compared as a WHOLE STRUCT, exactly as CTCSSTone and ScanSkip are,
-	// so a state transition counts as a change like a value change —
-	// including a transition out of Absent, which is a channel gaining a
-	// field it did not previously speak about.
-	if before.TxFreqHz != after.TxFreqHz {
-		out = append(out, spec.FieldTxFrequency)
-	}
-	if before.Duplex != after.Duplex {
-		out = append(out, spec.FieldDuplex)
-	}
-	if before.OffsetHz != after.OffsetHz {
-		out = append(out, spec.FieldOffset)
-	}
-	if before.ToneMode != after.ToneMode {
-		out = append(out, spec.FieldToneMode)
-	}
-	if before.ToneTx != after.ToneTx {
-		out = append(out, spec.FieldToneTx)
-	}
-	if before.ToneRx != after.ToneRx {
-		out = append(out, spec.FieldToneRx)
-	}
-	if before.DTCSCode != after.DTCSCode {
-		out = append(out, spec.FieldDTCSCode)
-	}
-	if before.DTCSPolarity != after.DTCSPolarity {
-		out = append(out, spec.FieldDTCSPolarity)
-	}
-	if before.Filter != after.Filter {
-		out = append(out, spec.FieldFilter)
-	}
-	if before.DataMode != after.DataMode {
-		out = append(out, spec.FieldDataMode)
-	}
-	if before.TuningStepEnabled != after.TuningStepEnabled {
-		out = append(out, spec.FieldTuningStepEnabled)
-	}
-	if before.TuningStep != after.TuningStep {
-		out = append(out, spec.FieldTuningStep)
-	}
-	if before.ProgramTuningStepHz != after.ProgramTuningStepHz {
-		out = append(out, spec.FieldProgramTuningStep)
-	}
-	if before.AttenuatorDB != after.AttenuatorDB {
-		out = append(out, spec.FieldAttenuator)
-	}
-	if before.Preamp != after.Preamp {
-		out = append(out, spec.FieldPreamp)
-	}
-	if before.Antenna != after.Antenna {
-		out = append(out, spec.FieldAntenna)
-	}
-	if before.IPPlus != after.IPPlus {
-		out = append(out, spec.FieldIPPlus)
+	// The Icom tier's seventeen (TierFields, ChannelData's own
+	// declaration order), appended after the pre-tier nine so no
+	// existing BlockReason's field list is reordered. Each is compared
+	// as a WHOLE STRUCT via TierField.Equal, exactly as CTCSSTone and
+	// ScanSkip are above, so a state transition counts as a change like
+	// a value change — including a transition out of Absent, which is a
+	// channel gaining a field it did not previously speak about.
+	for _, tf := range TierFields {
+		if !tf.Equal(before, after) {
+			out = append(out, tf.Field)
+		}
 	}
 	return out
 }
@@ -277,28 +232,22 @@ func addedFields(data ChannelData) []spec.Field {
 // UNAVAILABLE — a read says so directly, a load of a schema-1/2/3 file
 // migrates to it (design D4, decision 1), and Absent is neither Known
 // either — which is why the pre-tier world's Diff output is unchanged.
-var tierAddedFieldFor = []struct {
+var tierAddedFieldFor = func() []struct {
 	field   spec.Field
 	present func(ChannelData) bool
-}{
-	{spec.FieldTxFrequency, func(d ChannelData) bool { return d.TxFreqHz.State == Known }},
-	{spec.FieldDuplex, func(d ChannelData) bool { return d.Duplex.State == Known }},
-	{spec.FieldOffset, func(d ChannelData) bool { return d.OffsetHz.State == Known }},
-	{spec.FieldToneMode, func(d ChannelData) bool { return d.ToneMode.State == Known }},
-	{spec.FieldToneTx, func(d ChannelData) bool { return d.ToneTx.State == Known }},
-	{spec.FieldToneRx, func(d ChannelData) bool { return d.ToneRx.State == Known }},
-	{spec.FieldDTCSCode, func(d ChannelData) bool { return d.DTCSCode.State == Known }},
-	{spec.FieldDTCSPolarity, func(d ChannelData) bool { return d.DTCSPolarity.State == Known }},
-	{spec.FieldFilter, func(d ChannelData) bool { return d.Filter.State == Known }},
-	{spec.FieldDataMode, func(d ChannelData) bool { return d.DataMode.State == Known }},
-	{spec.FieldTuningStepEnabled, func(d ChannelData) bool { return d.TuningStepEnabled.State == Known }},
-	{spec.FieldTuningStep, func(d ChannelData) bool { return d.TuningStep.State == Known }},
-	{spec.FieldProgramTuningStep, func(d ChannelData) bool { return d.ProgramTuningStepHz.State == Known }},
-	{spec.FieldAttenuator, func(d ChannelData) bool { return d.AttenuatorDB.State == Known }},
-	{spec.FieldPreamp, func(d ChannelData) bool { return d.Preamp.State == Known }},
-	{spec.FieldAntenna, func(d ChannelData) bool { return d.Antenna.State == Known }},
-	{spec.FieldIPPlus, func(d ChannelData) bool { return d.IPPlus.State == Known }},
-}
+} {
+	out := make([]struct {
+		field   spec.Field
+		present func(ChannelData) bool
+	}, len(TierFields))
+	for i, tf := range TierFields {
+		out[i] = struct {
+			field   spec.Field
+			present func(ChannelData) bool
+		}{tf.Field, func(d ChannelData) bool { return *tf.State(&d) == Known }}
+	}
+	return out
+}()
 
 // unconditionallyAdded is the set of fields addedFields emits for EVERY
 // channel, whatever it contains — the always-transmitted six (frequency,
