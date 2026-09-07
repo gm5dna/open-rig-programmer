@@ -124,20 +124,15 @@ const (
 	ClassWriteWithAck
 )
 
+// classNames is Class.String's lookup table, indexed by Class value.
+var classNames = [...]string{"ClassUnset", "ClassRead", "ClassWrite", "ClassWriteWithAck"}
+
 // String renders c for diagnostics.
 func (c Class) String() string {
-	switch c {
-	case ClassUnset:
-		return "ClassUnset"
-	case ClassRead:
-		return "ClassRead"
-	case ClassWrite:
-		return "ClassWrite"
-	case ClassWriteWithAck:
-		return "ClassWriteWithAck"
-	default:
+	if c < 0 || int(c) >= len(classNames) {
 		return fmt.Sprintf("Class(%d)", int(c))
 	}
+	return classNames[c]
 }
 
 // isWrite reports whether c mutates the radio — the property that makes
@@ -1214,21 +1209,22 @@ func (e *Engine) nextEventAfterClose() waitOutcome {
 	}
 }
 
-// waitForAnswer waits, within spec.Timeout, for a frame matching spec (a
-// read's answer, or an acknowledged write's ack), a rejection, or one of
-// the terminal conditions (contamination, port closed, context
-// cancellation). Non-matching frames are logged, counted, and do not
-// consume any extra time budget beyond the single spec.Timeout window
+// wait waits, within d, for a frame satisfying match (nil means none is
+// looked for, only rejection matters — the fire-and-forget case), a
+// rejection, or one of the terminal conditions (contamination, port
+// closed, context cancellation). Non-matching frames are logged, counted,
+// and do not consume any extra time budget beyond the single window
 // already in force — which is an ABSOLUTE deadline (see nextEvent), so a
 // continuous flood of non-matching frames ends this wait on time rather
-// than starving it.
-func (e *Engine) waitForAnswer(ctx context.Context, spec CommandSpec) ([]byte, error) {
-	timeout := e.clk.After(spec.Timeout)
-	deadline := e.clk.Now().Add(spec.Timeout)
+// than starving it. onTimeout is what the deadline elapsing returns:
+// ErrTimeout for waitForAnswer, nil (success) for waitFireAndForget.
+func (e *Engine) wait(ctx context.Context, d time.Duration, match func([]byte) bool, onTimeout error) ([]byte, error) {
+	timeout := e.clk.After(d)
+	deadline := e.clk.Now().Add(d)
 	for {
 		out := e.nextEvent(ctx, timeout, deadline, nil)
 		if out.timedOut || out.deadlineHit {
-			return nil, ErrTimeout
+			return nil, onTimeout
 		}
 		if !out.hasEvent {
 			return nil, out.err
@@ -1240,42 +1236,28 @@ func (e *Engine) waitForAnswer(ctx context.Context, spec CommandSpec) ([]byte, e
 		if e.framing.IsRejection(ev.frame) {
 			return nil, ErrRejected
 		}
-		// spec.Match is nil-checked here (rather than earlier) as
-		// defence in depth against a hand-built spec bypassing Do's
-		// validate: every spec that reaches a wait has already been
-		// refused a nil Match.
-		if spec.Match != nil && spec.Match(ev.frame) {
+		if match != nil && match(ev.frame) {
 			return ev.frame, nil
 		}
 		e.countUnexpected(ev.frame)
 	}
 }
 
+// waitForAnswer waits, within spec.Timeout, for a frame matching spec (a
+// read's answer, or an acknowledged write's ack). spec.Match is
+// nil-checked by wait (rather than earlier) as defence in depth against a
+// hand-built spec bypassing Do's validate: every spec that reaches a wait
+// has already been refused a nil Match.
+func (e *Engine) waitForAnswer(ctx context.Context, spec CommandSpec) ([]byte, error) {
+	return e.wait(ctx, spec.Timeout, spec.Match, ErrTimeout)
+}
+
 // waitFireAndForget listens for spec.ErrorWindow after a fire-and-forget
 // write: a rejection arriving in that window is a rejection; any other
 // frame is logged and counted but does not end the wait early; the window
-// elapsing with nothing rejecting is success ((nil, nil)). The window is
-// an ABSOLUTE deadline for the same reason a read's Timeout is.
+// elapsing with nothing rejecting is success ((nil, nil)).
 func (e *Engine) waitFireAndForget(ctx context.Context, window time.Duration) ([]byte, error) {
-	timeout := e.clk.After(window)
-	deadline := e.clk.Now().Add(window)
-	for {
-		out := e.nextEvent(ctx, timeout, deadline, nil)
-		if out.timedOut || out.deadlineHit {
-			return nil, nil
-		}
-		if !out.hasEvent {
-			return nil, out.err
-		}
-		ev := out.ev
-		if ev.err != nil {
-			return nil, e.handleReaderErr(ev.err)
-		}
-		if e.framing.IsRejection(ev.frame) {
-			return nil, ErrRejected
-		}
-		e.countUnexpected(ev.frame)
-	}
+	return e.wait(ctx, window, nil, nil)
 }
 
 // DrainToQuiet reads and discards (logging and counting each as
