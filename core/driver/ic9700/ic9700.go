@@ -493,13 +493,7 @@ func (s *Session) Capabilities() spec.Capabilities {
 // because the accumulator dropped every broadcast first. CIVDiagnostics is
 // where the numbers that mean something live.
 func (s *Session) Diagnostics() driver.SessionDiagnostics {
-	n := s.eng.UnexpectedFrames()
-	if n < 0 {
-		// Unreachable (the engine only ever increments), but never let a
-		// negative int64 wrap into an absurd uint64.
-		n = 0
-	}
-	return driver.SessionDiagnostics{UnexpectedFrames: uint64(n)}
+	return driver.SessionDiagnostics{UnexpectedFrames: uint64(s.eng.UnexpectedFrames())}
 }
 
 // CIVDiagnostics returns this session's CI-V diagnostics: what the probe

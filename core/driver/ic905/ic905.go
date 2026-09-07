@@ -34,19 +34,6 @@ type Option func(*ic905Driver)
 // cannot name what it found.
 type SiblingLengths map[int]string
 
-// WithSiblingRecordLengths supplies the table above. Wave 4 populates it
-// from the registry in the same commit that registers the tier's models
-// and runs the distinctness check; until then the branch exists, is
-// reachable, and is proven by test with a synthetic table.
-func WithSiblingRecordLengths(l SiblingLengths) Option {
-	return func(d *ic905Driver) {
-		d.siblingLengths = make(SiblingLengths, len(l))
-		for n, model := range l {
-			d.siblingLengths[n] = model
-		}
-	}
-}
-
 // WithFullInventoryWalk makes Open discover the WHOLE 100 × 100 memory
 // space instead of the bounded default walk.
 //
@@ -720,13 +707,7 @@ type Diagnostics struct {
 // Diagnostics implements the optional driver.DiagnosticsReporter with the
 // NEUTRAL snapshot, so the optional capability keeps its declared shape.
 func (s *Session) Diagnostics() driver.SessionDiagnostics {
-	n := s.eng.UnexpectedFrames()
-	if n < 0 {
-		// Unreachable (the engine only ever increments), but never let a
-		// negative int64 wrap into an absurd uint64.
-		n = 0
-	}
-	return driver.SessionDiagnostics{UnexpectedFrames: uint64(n)}
+	return driver.SessionDiagnostics{UnexpectedFrames: uint64(s.eng.UnexpectedFrames())}
 }
 
 // Diagnostics905 returns the full per-model snapshot, SUMMED LIVE from
