@@ -57,7 +57,7 @@ func WithTransportLogger(logger transport.Logger) Option {
 // WithConsentedUnverifiedWrites records user consent for this session only.
 // The static capability set remains Unverified and FieldErase remains zero.
 func WithConsentedUnverifiedWrites() Option {
-	return func(d *ic7100Driver) { d.consentUnverifiedWrites = true }
+	return func(d *ic7100Driver) { d.Consented = true }
 }
 
 // WithSiblingRecordLengths supplies the tier-integration attribution table.
@@ -74,7 +74,7 @@ func WithSiblingRecordLengths(lengths SiblingLengths) Option {
 // New constructs the IC-7100 driver. It intentionally returns only the
 // neutral driver seam and does not register the model.
 func New(profile Profile, opts ...Option) driver.Driver {
-	d := &ic7100Driver{profile: profile}
+	d := &ic7100Driver{Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)
 	}
@@ -82,31 +82,18 @@ func New(profile Profile, opts ...Option) driver.Driver {
 }
 
 type ic7100Driver struct {
-	profile                 Profile
-	transportLogger         transport.Logger
-	consentUnverifiedWrites bool
-	siblingLengths          SiblingLengths
+	driver.Base
+	transportLogger transport.Logger
+	siblingLengths  SiblingLengths
 }
 
 func (d *ic7100Driver) Model() string { return "IC-7100" }
 
 func (d *ic7100Driver) Capabilities() spec.Capabilities {
-	if d.profile == Simulated {
+	if d.Profile == Simulated {
 		return CapabilitiesSimulated()
 	}
 	return CapabilitiesUnverified()
-}
-
-func (d *ic7100Driver) recognised() bool {
-	return d.profile == RealHardware || d.profile == Simulated
-}
-
-func (d *ic7100Driver) sessionCapabilities() spec.Capabilities {
-	caps := d.Capabilities()
-	if d.consentUnverifiedWrites && d.recognised() {
-		caps = spec.ConsentUnverifiedWrites(caps)
-	}
-	return caps
 }
 
 // Open takes ownership of port, sends no Init mutation, requires an
@@ -142,7 +129,7 @@ func (d *ic7100Driver) Open(ctx context.Context, port transport.Port, id driver.
 
 func (d *ic7100Driver) open(ctx context.Context, eng *transport.Engine, stats civ.AccumulatorStatsReporter, id driver.Identity) (*Session, error) {
 	p := civic7100.Profile()
-	s := &Session{eng: eng, stats: stats, profile: p, caps: d.sessionCapabilities(), siblingLengths: d.siblingLengths}
+	s := &Session{eng: eng, stats: stats, profile: p, caps: d.SessionCaps(d.Capabilities()), siblingLengths: d.siblingLengths}
 	if err := eng.Init(ctx); err != nil {
 		if !errors.Is(err, transport.ErrDrainCapExceeded) {
 			return nil, fmt.Errorf("ic7100: Open: %w", err)

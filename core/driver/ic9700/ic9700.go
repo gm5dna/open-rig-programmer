@@ -118,7 +118,7 @@ func WithTransportLogger(l transport.Logger) Option {
 // user accepting an unverified write, not a claim that the write has been
 // proven.
 func WithConsentedUnverifiedWrites() Option {
-	return func(d *ic9700Driver) { d.consentUnverifiedWrites = true }
+	return func(d *ic9700Driver) { d.Consented = true }
 }
 
 // New builds the IC-9700 driver for profile.
@@ -129,7 +129,7 @@ func WithConsentedUnverifiedWrites() Option {
 // failure direction for a forged or corrupted Profile is always "nothing
 // writable", never a writable set.
 func New(profile Profile, opts ...Option) driver.Driver {
-	d := &ic9700Driver{profile: profile}
+	d := &ic9700Driver{Base: driver.Base{Profile: profile}}
 	for _, opt := range opts {
 		opt(d)
 	}
@@ -138,11 +138,8 @@ func New(profile Profile, opts ...Option) driver.Driver {
 
 // ic9700Driver implements driver.Driver for the Icom IC-9700.
 type ic9700Driver struct {
-	profile         Profile
+	driver.Base
 	transportLogger transport.Logger
-	// consentUnverifiedWrites records the user's consent — set only by
-	// WithConsentedUnverifiedWrites, read only by sessionCapabilities.
-	consentUnverifiedWrites bool
 }
 
 // Model implements driver.Driver.
@@ -151,34 +148,13 @@ func (d *ic9700Driver) Model() string { return "IC-9700" }
 // Capabilities implements driver.Driver: the STATIC baseline for this
 // driver's profile, with no session state and no consent.
 func (d *ic9700Driver) Capabilities() spec.Capabilities {
-	if d.profile == Simulated {
+	if d.Profile == Simulated {
 		return CapabilitiesSimulated()
 	}
 	// RealHardware, and every unrecognised value, land here: while
 	// writeTrialsComplete is false there is no hardware-verified profile
 	// for a real-radio session to select.
 	return CapabilitiesUnverified()
-}
-
-// profileRecognised reports whether this driver's Profile is one this
-// package declares. The consent transform is applied only for a
-// recognised one, so a forged value cannot be consented into writability.
-func (d *ic9700Driver) profileRecognised() bool {
-	return d.profile == RealHardware || d.profile == Simulated
-}
-
-// sessionCapabilities is the EFFECTIVE set a session carries: the static
-// baseline, plus the consent transform when — and only when — the option
-// was passed AND the Profile is recognised.
-//
-// spec.ConsentUnverifiedWrites is the project's ONE definition of what
-// consent means and is never reimplemented here.
-func (d *ic9700Driver) sessionCapabilities() spec.Capabilities {
-	caps := d.Capabilities()
-	if d.consentUnverifiedWrites && d.profileRecognised() {
-		caps = spec.ConsentUnverifiedWrites(caps)
-	}
-	return caps
 }
 
 // StopBits reports the CI-V link's stop-bit count, satisfying the optional
@@ -258,7 +234,7 @@ func (d *ic9700Driver) open(ctx context.Context, eng *transport.Engine, stats ci
 		eng:     eng,
 		stats:   stats,
 		profile: p,
-		caps:    d.sessionCapabilities(),
+		caps:    d.SessionCaps(d.Capabilities()),
 		raw:     map[string][]byte{},
 	}
 

@@ -4,6 +4,7 @@ package icr8600
 
 import (
 	civicr8600 "github.com/gm5dna/open-rig-programmer/core/civ/icr8600"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -14,12 +15,15 @@ import (
 const writeTrialsComplete = false
 
 // Profile selects the evidence grading New uses. The zero value is the
-// fail-safe physical-radio profile.
-type Profile int
+// fail-safe physical-radio profile. Shared with every other driver
+// package (core/driver.Profile); this package keeps its own Simulated
+// selector, which internal/guards.TestSimulatedProfileTokensConfinement
+// requires.
+type Profile = driver.Profile
 
 const (
-	RealHardware Profile = iota
-	Simulated
+	RealHardware = driver.RealHardware
+	Simulated    = driver.Simulated
 )
 
 func dtcsCodes() []int {

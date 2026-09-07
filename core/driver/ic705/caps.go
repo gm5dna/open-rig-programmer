@@ -4,6 +4,7 @@ package ic705
 
 import (
 	civic705 "github.com/gm5dna/open-rig-programmer/core/civ/ic705"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -28,24 +29,15 @@ import (
 // one-character edit unlocks nothing on its own.
 const writeTrialsComplete = false
 
-// Profile selects which capability description a driver hands out.
-//
-// The zero value is RealHardware ON PURPOSE, and every unrecognised value
-// fails safe to the same set: the failure direction for a forged or
-// corrupted Profile is always "nothing writable", never a writable set.
-type Profile int
+// Profile selects which capability description a driver hands out. Shared
+// with every other driver package (core/driver.Profile); this package
+// keeps its own Simulated selector, which
+// internal/guards.TestSimulatedProfileTokensConfinement requires.
+type Profile = driver.Profile
 
 const (
-	// RealHardware is the profile for sessions against a physical radio.
-	// While writeTrialsComplete is false it selects the all-Unverified
-	// set: reads labelled Unverified, every mapped field's Write
-	// Unverified, nothing writable.
-	RealHardware Profile = iota
-	// Simulated is the profile for internal/fakeic705-backed sessions ONLY
-	// (the CLI's --fake mode, the GUI's demo mode): Write Supported for
-	// the thirteen fields this record expresses, so the write choreography
-	// can be exercised end to end with no hardware at risk.
-	Simulated
+	RealHardware = driver.RealHardware
+	Simulated    = driver.Simulated
 )
 
 // The two bank labels, kept beside the namespaces they describe.

@@ -585,8 +585,8 @@ func TestConsent_TransformsTheSessionSetOnly(t *testing.T) {
 		t.Error("a consented session's frequency field is still unwritable; the consent transform did not run")
 	}
 
-	unrecognised := &ts480Driver{profile: Profile(9), consentUnverifiedWrites: true}
-	if unrecognised.sessionCapabilities().FieldSupport(spec.BankMemory, spec.FieldFrequency).CanWrite() {
+	unrecognised := &ts480Driver{Base: driver.Base{Profile: Profile(9), Consented: true}}
+	if unrecognised.SessionCaps(unrecognised.Capabilities()).FieldSupport(spec.BankMemory, spec.FieldFrequency).CanWrite() {
 		t.Error("consent widened an UNRECOGNISED profile; the fail-safe direction must survive consent")
 	}
 }

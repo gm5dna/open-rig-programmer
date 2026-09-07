@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	civic7851 "github.com/gm5dna/open-rig-programmer/core/civ/ic7851"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -51,21 +52,15 @@ const writeTrialsComplete7850 = false
 // and about nothing else. Any other unrecognised Profile value fails the
 // same way, through Capabilities' explicit default arm.
 //
-// No model dimension: this family has one member.
-type Profile int
+// No model dimension: this family has one member. Shared with every other
+// driver package (core/driver.Profile); this package keeps its own
+// Simulated selector, which
+// internal/guards.TestSimulatedProfileTokensConfinement requires.
+type Profile = driver.Profile
 
 const (
-	// RealHardware is the profile for sessions against a physical radio.
-	// While the model's write-trial guard is false it selects the all-Unverified
-	// capability set: reads labelled Unverified, every mapped field's
-	// Write Unverified, nothing writable without recorded consent.
-	RealHardware Profile = iota
-	// Simulated is the profile for internal/fakeic7851-backed sessions
-	// ONLY (the CLI's --fake mode, the GUI's demo mode): Read and Write
-	// Supported for exactly the seven fields the 1A 00 record maps, so the
-	// write choreography can be exercised end to end with no hardware at
-	// risk.
-	Simulated
+	RealHardware = driver.RealHardware
+	Simulated    = driver.Simulated
 )
 
 // The numeric bounds this driver DECLARES and, at WriteChannel's rung 4,
