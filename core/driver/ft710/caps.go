@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/gm5dna/open-rig-programmer/core/cat"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -115,20 +116,18 @@ var catID = catDialect.CATID()
 // Supported reads (and pre-flip, writes) were never a claim about real
 // hardware. Any OTHER unrecognised Profile value fails harder still, to
 // the all-Unverified fail-safe (see ft710Driver.Capabilities).
-type Profile int
+type Profile = driver.Profile
 
+// RealHardware and Simulated are this package's own names for the shared
+// profile constants — AN ALIAS AND UNTYPED RE-DECLARATIONS, never a fresh
+// named type. The alias keeps this package's Profile and driver.Profile
+// the SAME type, so driver.Base can be embedded, while the selector
+// internal/wiring names stays this package's own: TestSimulatedProfile
+// TokensConfinement walks for it by package-local name, and that is what
+// confines the fake-only profile to one non-test file in the repository.
 const (
-	// RealHardware is the profile for sessions against a physical radio:
-	// CapabilitiesRealHardware now writeTrialsComplete is true (the M5b
-	// flip — write-Supported for exactly the six hardware-verified
-	// fields); it would fall back to the all-Unverified
-	// CapabilitiesUnverified were the flip ever reverted.
-	RealHardware Profile = iota
-	// Simulated is the profile for fakeradio-backed sessions ONLY (the
-	// CLI's --fake mode, the GUI's demo mode): Write = Supported for the
-	// fields the codec can express, so write paths can be exercised
-	// end-to-end with no hardware at risk.
-	Simulated
+	RealHardware = driver.RealHardware
+	Simulated    = driver.Simulated
 )
 
 // modeTable is the single source of truth pairing each selectable cat
@@ -207,13 +206,7 @@ func modeNames() []string {
 }
 
 // memSlots returns the MEM bank's slot inventory: "001".."099".
-func memSlots() []string {
-	slots := make([]string, 0, 99)
-	for n := 1; n <= 99; n++ {
-		slots = append(slots, fmt.Sprintf("%03d", n))
-	}
-	return slots
-}
+func memSlots() []string { return spec.NumberedSlots(1, 99, "%03d") }
 
 // pmsSlots returns the PMS bank's slot inventory: "P1L","P1U".."P9U".
 func pmsSlots() []string {

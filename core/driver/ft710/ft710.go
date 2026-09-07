@@ -79,7 +79,7 @@ func WithTransportLogger(l transport.Logger) Option {
 // write, not evidence that the write has been proven.
 func WithConsentedUnverifiedWrites() Option {
 	return func(d *ft710Driver) {
-		d.consentUnverifiedWrites = true
+		d.Consented = true
 	}
 }
 
@@ -107,7 +107,7 @@ var catDialect = cat.FT710
 // a writable set. See Profile and writeTrialsComplete. Options:
 // WithTransportLogger, WithConsentedUnverifiedWrites.
 func New(profile Profile, opts ...Option) driver.Driver {
-	d := &ft710Driver{profile: profile, dialect: catDialect}
+	d := &ft710Driver{Base: driver.Base{Profile: profile}, dialect: catDialect}
 	for _, opt := range opts {
 		opt(d)
 	}
@@ -116,7 +116,7 @@ func New(profile Profile, opts ...Option) driver.Driver {
 
 // ft710Driver implements driver.Driver for the Yaesu FT-710.
 type ft710Driver struct {
-	profile Profile
+	driver.Base
 	// dialect is the CAT dialect every codec call this driver makes — and
 	// every Session it Opens makes — goes through. Set from catDialect in
 	// New; no Option touches it.
@@ -135,7 +135,6 @@ type ft710Driver struct {
 	// sessionCapabilities. FALSE is the zero value and the default, so a
 	// driver built without the option behaves exactly as it did before the
 	// option existed.
-	consentUnverifiedWrites bool
 }
 
 // Model implements driver.Driver.
@@ -145,7 +144,7 @@ func (d *ft710Driver) Model() string { return modelName }
 // driver's profile — no discovered banks (see Session.Capabilities for
 // the effective, per-radio set).
 func (d *ft710Driver) Capabilities() spec.Capabilities {
-	switch d.profile {
+	switch d.Profile {
 	case Simulated:
 		return CapabilitiesSimulated()
 	case RealHardware:
@@ -323,26 +322,13 @@ func (d *ft710Driver) open(ctx context.Context, eng *transport.Engine, id driver
 // WriteChannel enforces (s.caps) and the set Session.Capabilities hands
 // out the same value.
 func (d *ft710Driver) sessionCapabilities(slots60m []string, emg bool) spec.Capabilities {
-	caps := effectiveCapabilities(d.Capabilities(), slots60m, emg)
-	if d.consentUnverifiedWrites && d.profileRecognised() {
-		caps = spec.ConsentUnverifiedWrites(caps)
-	}
-	return caps
+	return d.SessionCaps(effectiveCapabilities(d.Capabilities(), slots60m, emg))
 }
 
 // profileRecognised reports whether this driver's profile is one of the
-// package's declared Profile constants — the same set the capability
-// switch names explicitly (Capabilities' Simulated and RealHardware arms),
-// restated here so the consent gate cannot drift open for a profile the
-// switch would fail safe on. TestProfileRecognised_MatchesTheDeclaredConstants
-// is what holds the two switches together.
-func (d *ft710Driver) profileRecognised() bool {
-	switch d.profile {
-	case Simulated, RealHardware:
-		return true
-	}
-	return false
-}
+// declared constants — driver.Base's shared predicate, kept under the
+// name this package's tests put the question by.
+func (d *ft710Driver) profileRecognised() bool { return d.Recognised() }
 
 // nopLogger is the fallback transport.Logger when no WithTransportLogger
 // was supplied: it drops everything, mirroring transport's own default.
@@ -482,7 +468,7 @@ func deriveRegion(count60m int, emg, overflow60m bool) string {
 // all (cat.Dialect.writableSlot), so no profile — not even Simulated —
 // may claim them writable.
 func effectiveCapabilities(base spec.Capabilities, slots60m []string, emg bool) spec.Capabilities {
-	caps := cloneCapabilities(base)
+	caps := base.Clone()
 
 	if len(slots60m) > 0 {
 		caps.Banks = append(caps.Banks, spec.Bank{
@@ -641,61 +627,6 @@ func readOnlyFields(base spec.Capabilities) map[spec.Field]spec.FieldSupport {
 	return fields
 }
 
-// cloneCapabilities returns a deep copy of caps: Banks (with fresh Slots
-// and Fields per bank) and every other slice independently allocated, so
-// mutating the copy can never reach the original. This is load-bearing
-// for the write gate: Session.Capabilities hands copies out, and a
-// caller mutating one must never alter what WriteChannel enforces.
-func cloneCapabilities(caps spec.Capabilities) spec.Capabilities {
-	out := caps
-	out.Banks = make([]spec.Bank, 0, len(caps.Banks))
-	for _, b := range caps.Banks {
-		// Capabilities.Bank returns a defensive copy of the bank (fresh
-		// Slots and Fields) — reuse that guarantee instead of restating
-		// the per-field copying here.
-		//
-		// THE ok RESULT IS DISCARDED, AND HERE IS WHAT MAKES THAT SAFE: b
-		// came out of caps.Banks and Bank scans that same slice for b.ID,
-		// so the lookup cannot miss. The only way it could return the WRONG
-		// bank is a DUPLICATE BankID — the first match served twice, the
-		// second bank silently dropped from the clone — and
-		// spec.Capabilities.Validate refuses a duplicate BankID outright
-		// (core/spec/validate.go's bank loop), with TestProfiles_Validate
-		// running it over all three of this package's profiles.
-		//
-		// THAT VALIDATION COVERS THE BASELINES, and the load-bearing caller
-		// is Session.Capabilities passing s.caps — effectiveCapabilities'
-		// output, discovered banks and all. Several session tests do
-		// Validate that set (TestOpen_DefaultImage_NoSixtyMetreBank,
-		// TestOpen_USImage), but what closes it in production is
-		// CONSTRUCTION, not validation: effectiveCapabilities appends at
-		// most one spec.Bank60m and at most one spec.BankEMG to a baseline
-		// holding MEM and PMS, so four distinct IDs at most.
-		//
-		// SynthesiseDiscoveredBanks is this driver's one caller that
-		// continues past effectiveCapabilities, and its extra step is
-		// harmless here: for duplicate offline EMG input it REPLACES the
-		// reused EMG bank's Slots (see its doc comment), touching a slot
-		// list rather than an ID, so it can neither mint the duplicate ID
-		// this discard would misbehave on nor write through to anything —
-		// the banks it mutates are the fresh copies this function has just
-		// allocated.
-		//
-		// A zero Bank reaching out would be quiet rather than loud: no
-		// Slots, no Fields, so a bank the app cannot show and, FieldSupport's
-		// zero being Unsupported, one nothing may be written to.
-		cp, _ := caps.Bank(b.ID)
-		out.Banks = append(out.Banks, cp)
-	}
-	out.Modes = append([]string(nil), caps.Modes...)
-	out.CTCSSTones = append([]spec.Tone(nil), caps.CTCSSTones...)
-	out.Bauds = append([]int(nil), caps.Bauds...)
-	out.RequiredSlots = append([]string(nil), caps.RequiredSlots...)
-	out.ShiftOptions = append([]spec.ShiftOption(nil), caps.ShiftOptions...)
-	out.CTCSSStates = append([]spec.ToneState(nil), caps.CTCSSStates...)
-	return out
-}
-
 // Session is the FT-710's driver.Session: one open, identity-verified,
 // inventory-discovered connection. Safe for concurrent use — the
 // underlying transport.Engine serialises every INDIVIDUAL exchange, and
@@ -734,9 +665,9 @@ func (s *Session) Identity() driver.Identity { return s.id }
 
 // Capabilities implements driver.Session: the EFFECTIVE capability set
 // (baseline + discovered read-only 60M/EMG banks), as a deep copy per
-// call — see cloneCapabilities for why the copy is load-bearing.
+// call — see spec.Capabilities.Clone for why the copy is load-bearing.
 func (s *Session) Capabilities() spec.Capabilities {
-	return cloneCapabilities(s.caps)
+	return s.caps.Clone()
 }
 
 // Region reports the regulatory region Open's discovery implied ("UK",
@@ -768,13 +699,7 @@ type SessionDiagnostics = driver.SessionDiagnostics
 // concrete *Session rather than part of driver.Session: which diagnostics
 // exist is a per-driver matter, not (yet) a seam-level contract.
 func (s *Session) Diagnostics() SessionDiagnostics {
-	n := s.eng.UnexpectedFrames()
-	if n < 0 {
-		// Unreachable (the engine only ever increments), but never let a
-		// negative int64 wrap into an absurd uint64.
-		n = 0
-	}
-	return SessionDiagnostics{UnexpectedFrames: uint64(n)}
+	return SessionDiagnostics{UnexpectedFrames: uint64(s.eng.UnexpectedFrames())}
 }
 
 // Close implements driver.Session. Idempotent: transport.Engine.Close

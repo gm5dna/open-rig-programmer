@@ -4,6 +4,7 @@ package ftdx10
 
 import (
 	"github.com/gm5dna/open-rig-programmer/core/cat"
+	"github.com/gm5dna/open-rig-programmer/core/driver"
 	"github.com/gm5dna/open-rig-programmer/core/spec"
 )
 
@@ -80,19 +81,18 @@ var catID = catDialect.CATID()
 // internal/fakedx10 and about nothing else. Any OTHER unrecognised
 // Profile value fails the same way, through Capabilities' explicit
 // default arm.
-type Profile int
+type Profile = driver.Profile
 
+// RealHardware and Simulated are this package's own names for the shared
+// profile constants — AN ALIAS AND UNTYPED RE-DECLARATIONS, never a fresh
+// named type. The alias keeps this package's Profile and driver.Profile
+// the SAME type, so driver.Base can be embedded, while the selector
+// internal/wiring names stays this package's own: TestSimulatedProfile
+// TokensConfinement walks for it by package-local name, and that is what
+// confines the fake-only profile to one non-test file in the repository.
 const (
-	// RealHardware is the profile for sessions against a physical radio.
-	// While writeTrialsComplete is false it selects
-	// CapabilitiesUnverified: reads labelled Unverified, every candidate
-	// field's Write Unverified, nothing writable.
-	RealHardware Profile = iota
-	// Simulated is the profile for internal/fakedx10-backed sessions ONLY
-	// (the CLI's --fake mode, the GUI's demo mode): Write Supported for
-	// the six fields the combined MT form can express, so the write
-	// choreography can be exercised end to end with no hardware at risk.
-	Simulated
+	RealHardware = driver.RealHardware
+	Simulated    = driver.Simulated
 )
 
 // modeNames returns the selectable mode display names this radio's
@@ -459,54 +459,6 @@ func readOnlyFields(base spec.Capabilities) map[spec.Field]spec.FieldSupport {
 	return fields
 }
 
-// cloneCapabilities returns a deep copy of caps: Banks (each with fresh
-// Slots and Fields) and every other slice independently allocated, so
-// mutating the copy can never reach the original.
-//
-// Load-bearing for the write gate, exactly as in the FT-710's driver:
-// Session.Capabilities hands copies out, and a caller mutating one must
-// never alter what WriteChannel enforces.
-func cloneCapabilities(caps spec.Capabilities) spec.Capabilities {
-	out := caps
-	out.Banks = make([]spec.Bank, 0, len(caps.Banks))
-	for _, b := range caps.Banks {
-		// Capabilities.Bank returns a defensive copy (fresh Slots and
-		// Fields) — reuse that guarantee rather than restating per-field
-		// copying here.
-		//
-		// THE ok RESULT IS DISCARDED, AND HERE IS WHAT MAKES THAT SAFE:
-		// b came out of caps.Banks and Bank scans that same slice for
-		// b.ID, so the lookup cannot miss. The only way it could return
-		// the WRONG bank is a DUPLICATE BankID — the first match served
-		// twice, the second bank silently dropped from the clone — and
-		// spec.Capabilities.Validate refuses a duplicate BankID outright
-		// (core/spec/validate.go's bank loop), with TestProfiles_Validate
-		// running it over both profiles.
-		//
-		// THAT VALIDATION COVERS THE BASELINES ONLY, and the load-bearing
-		// caller is Session.Capabilities (ftdx10.go), which passes s.caps
-		// — effectiveCapabilities' output, discovered banks and all, which
-		// no Validate run in this tree sees. What closes it there is
-		// CONSTRUCTION, not validation: effectiveCapabilities appends at
-		// most one spec.Bank60m and at most one spec.BankEMG to a baseline
-		// holding MEM and PMS, so four distinct IDs at most.
-		//
-		// A zero Bank reaching out would be quiet rather than loud: no
-		// Slots, no Fields, so a bank the app cannot show and,
-		// FieldSupport's zero being Unsupported, one nothing may be
-		// written to.
-		cp, _ := caps.Bank(b.ID)
-		out.Banks = append(out.Banks, cp)
-	}
-	out.Modes = append([]string(nil), caps.Modes...)
-	out.CTCSSTones = append([]spec.Tone(nil), caps.CTCSSTones...)
-	out.Bauds = append([]int(nil), caps.Bauds...)
-	out.RequiredSlots = append([]string(nil), caps.RequiredSlots...)
-	out.ShiftOptions = append([]spec.ShiftOption(nil), caps.ShiftOptions...)
-	out.CTCSSStates = append([]spec.ToneState(nil), caps.CTCSSStates...)
-	return out
-}
-
 // effectiveCapabilities builds a Session's capability set: a deep copy of
 // the profile baseline plus one READ-ONLY bank per discovered inventory —
 // 60M when any 5xx slot answered, EMG when EMG did, in that fixed order.
@@ -517,7 +469,7 @@ func cloneCapabilities(caps spec.Capabilities) spec.Capabilities {
 // slots outright). That is a statement about the protocol, not about the
 // radio's factory contents.
 func effectiveCapabilities(base spec.Capabilities, slots60m []string, emg bool) spec.Capabilities {
-	caps := cloneCapabilities(base)
+	caps := base.Clone()
 
 	if len(slots60m) > 0 {
 		caps.Banks = append(caps.Banks, spec.Bank{
