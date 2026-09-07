@@ -188,3 +188,36 @@ func validateModel(stderr io.Writer, cmdName, model string, printUsage func(io.W
 	printUsage(stderr)
 	return false
 }
+
+// validateSessionArgs validates --model (validateModel) and requires
+// exactly one of --port/--fake — probe/read/diff/write's shared
+// pre-flight check, run before any side-effecting step (a directory
+// created, a session opened). Returns false after writing a usage
+// diagnostic to stderr (an unknown --model, or neither/both of port and
+// fake); the caller returns exitUsage immediately, exactly as each of
+// these commands did by hand before this helper existed.
+func validateSessionArgs(stderr io.Writer, cmdName, model, port string, fake bool, printUsage func(io.Writer)) bool {
+	if !validateModel(stderr, cmdName, model, printUsage) {
+		return false
+	}
+	havePort := port != ""
+	if havePort == fake { // both true, or both false
+		fmt.Fprintf(stderr, "rigprog %s: exactly one of --port or --fake is required\n", cmdName)
+		printUsage(stderr)
+		return false
+	}
+	return true
+}
+
+// openSession opens a real or fake session per fake, once
+// validateSessionArgs has already approved --model/--port/--fake — the
+// fake-or-real branch every radio-touching subcommand repeats. Error
+// interpretation (probe's own WrongRadioError handling, read/diff/
+// write's own isCancelled handling) differs per caller, so it stays at
+// each call site, unchanged.
+func openSession(ctx context.Context, model, port string, fake bool) (driver.Session, func() error, error) {
+	if fake {
+		return openFakeSession(ctx, model)
+	}
+	return openRealSession(ctx, model, port)
+}

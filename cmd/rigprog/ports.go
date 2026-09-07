@@ -3,7 +3,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -25,14 +24,8 @@ func cmdPorts(args []string, stdout, stderr io.Writer) int {
 	// No --fake flag is registered: it is simply an unrecognised flag,
 	// refused by fs.Parse itself like any other — the usage text below
 	// (portsUsageText) already explains why ("--fake is not accepted").
-	if err := fs.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			printPortsUsage(stdout)
-			return exitSuccess
-		}
-		fmt.Fprintf(stderr, "rigprog ports: %v\n", err)
-		printPortsUsage(stderr)
-		return exitUsage
+	if ok, code := parseArgs(fs, args, "ports", printPortsUsage, stdout, stderr); !ok {
+		return code
 	}
 	if fs.NArg() > 0 {
 		fmt.Fprintf(stderr, "rigprog ports: unexpected argument %q\n", fs.Arg(0))

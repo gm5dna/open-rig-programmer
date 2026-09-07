@@ -23,14 +23,8 @@ func cmdExport(args []string, stdout, stderr io.Writer) int {
 	csvOut := fs.String("csv", "", "output CSV file path (required)")
 	force := fs.Bool("force", false, "overwrite --csv if it already exists")
 
-	if err := fs.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			printExportUsage(stdout)
-			return exitSuccess
-		}
-		fmt.Fprintf(stderr, "rigprog export: %v\n", err)
-		printExportUsage(stderr)
-		return exitUsage
+	if ok, code := parseArgs(fs, args, "export", printExportUsage, stdout, stderr); !ok {
+		return code
 	}
 	if fs.NArg() != 1 {
 		fmt.Fprintln(stderr, "rigprog export: exactly one FILE argument is required")

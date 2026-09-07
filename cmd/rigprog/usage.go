@@ -3,6 +3,8 @@
 package main
 
 import (
+	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"strings"
@@ -362,4 +364,23 @@ abort against.
 // printSettingsUsage writes "rigprog settings"'s usage text to w.
 func printSettingsUsage(w io.Writer) {
 	fmt.Fprint(w, settingsUsageText)
+}
+
+// parseArgs runs fs.Parse(args) for "rigprog <name>" and handles the two
+// outcomes every subcommand's flag block used to spell out by hand,
+// byte-for-byte identically: --help (printUsage to stdout, exitSuccess)
+// and any other parse error (printUsage to stderr, after this command's
+// own "rigprog <name>: <err>" line, exitUsage). ok=false means the
+// caller should return code immediately, having written nothing more.
+func parseArgs(fs *flag.FlagSet, args []string, name string, printUsage func(io.Writer), stdout, stderr io.Writer) (ok bool, code int) {
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			printUsage(stdout)
+			return false, exitSuccess
+		}
+		fmt.Fprintf(stderr, "rigprog %s: %v\n", name, err)
+		printUsage(stderr)
+		return false, exitUsage
+	}
+	return true, 0
 }
