@@ -3,8 +3,10 @@
 package civ
 
 import (
+	"maps"
 	"math"
-	"sort"
+	"slices"
+	"strconv"
 )
 
 // maxChannelDecimal is the largest channel number a two-byte packed-BCD
@@ -279,11 +281,7 @@ func validateLayoutSet(cfg ProfileConfig) error {
 		return invalidProfile("BuildLength is 0 under %v, want one of the declared record lengths", cfg.Discriminator)
 	}
 	if _, ok := seen[cfg.BuildLength]; !ok {
-		lengths := make([]int, 0, len(seen))
-		for n := range seen {
-			lengths = append(lengths, n)
-		}
-		sort.Ints(lengths)
+		lengths := slices.Sorted(maps.Keys(seen))
 		return invalidProfile("BuildLength is %d, which is not one of the accepted lengths %v — the builder would emit a record this profile's own parser refuses", cfg.BuildLength, lengths)
 	}
 	return nil
@@ -339,12 +337,7 @@ func validateModeLayouts(cfg ProfileConfig) error {
 		}
 	}
 
-	headLen := cfg.Layouts[0].Length
-	for _, l := range cfg.Layouts[1:] {
-		if l.Length < headLen {
-			headLen = l.Length
-		}
-	}
+	headLen := slices.MinFunc(cfg.Layouts, func(a, b RecordLayout) int { return a.Length - b.Length }).Length
 	wantHead := modeHeadFields(cfg.Layouts[0], cfg.ModeKey, headLen)
 	wantFixed := fixedPrefix(cfg.Layouts[0], headLen)
 	for i := 1; i < len(cfg.Layouts); i++ {
@@ -380,29 +373,11 @@ func fixedPrefix(l RecordLayout, n int) []byte {
 }
 
 func equalFieldSpans(a, b []FieldSpan) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i].Field != b[i].Field || a[i].Offset != b[i].Offset || a[i].Length != b[i].Length ||
-			a[i].Nibble != b[i].Nibble || a[i].Encoding != b[i].Encoding || a[i].Order != b[i].Order ||
-			a[i].Scale != b[i].Scale || !equalEnum(a[i].Enum, b[i].Enum) {
-			return false
-		}
-	}
-	return true
-}
-
-func equalEnum(a, b map[byte]string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for key, value := range a {
-		if b[key] != value {
-			return false
-		}
-	}
-	return true
+	return slices.EqualFunc(a, b, func(x, y FieldSpan) bool {
+		return x.Field == y.Field && x.Offset == y.Offset && x.Length == y.Length &&
+			x.Nibble == y.Nibble && x.Encoding == y.Encoding && x.Order == y.Order &&
+			x.Scale == y.Scale && maps.Equal(x.Enum, y.Enum)
+	})
 }
 
 // validateLayoutFields is V6: every span, on its own terms.
@@ -416,7 +391,7 @@ func validateLayoutFields(cfg ProfileConfig) error {
 	for li, l := range cfg.Layouts {
 		for fi, sp := range l.Fields {
 			where := func() string {
-				return "Layouts[" + itoaSmall(li) + "].Fields[" + itoaSmall(fi) + "]"
+				return "Layouts[" + strconv.Itoa(li) + "].Fields[" + strconv.Itoa(fi) + "]"
 			}
 			kind, known := sp.Field.kind()
 			if !known {
@@ -483,13 +458,7 @@ func validateLayoutFields(cfg ProfileConfig) error {
 					return invalidProfile("%s (%s) carries Scale/Order under EncodingEnum — inapplicable fields must be zero", where(), sp.Field)
 				}
 				names := make(map[string]byte, len(sp.Enum))
-				keys := make([]int, 0, len(sp.Enum))
-				for k := range sp.Enum {
-					keys = append(keys, int(k))
-				}
-				sort.Ints(keys)
-				for _, k := range keys {
-					v := byte(k)
+				for _, v := range slices.Sorted(maps.Keys(sp.Enum)) {
 					name := sp.Enum[v]
 					if name == "" {
 						return invalidProfile("%s (%s) Enum[%#02x] is empty — a nameless value could never be written back", where(), sp.Field, v)
@@ -723,14 +692,9 @@ func nibbleDomain(l RecordLayout, spanIndex int, fixed byte) []byte {
 		return []byte{fixed & 0x0F}
 	}
 	enum := l.Fields[spanIndex].Enum
-	keys := make([]int, 0, len(enum))
-	for k := range enum {
-		keys = append(keys, int(k))
-	}
-	sort.Ints(keys)
-	out := make([]byte, 0, len(keys))
-	for _, k := range keys {
-		out = append(out, byte(k)&0x0F)
+	out := make([]byte, 0, len(enum))
+	for _, k := range slices.Sorted(maps.Keys(enum)) {
+		out = append(out, k&0x0F)
 	}
 	return out
 }
@@ -742,7 +706,7 @@ func nibbleSource(l RecordLayout, spanIndex int) string {
 	if spanIndex < 0 {
 		return "the Fixed template"
 	}
-	return "Fields[" + itoaSmall(spanIndex) + "] (" + string(l.Fields[spanIndex].Field) + ")'s Enum"
+	return "Fields[" + strconv.Itoa(spanIndex) + "] (" + string(l.Fields[spanIndex].Field) + ")'s Enum"
 }
 
 // validateFrameBound is V9: this profile's own frame ceiling must fit the
@@ -771,16 +735,3 @@ func validateFrameBound(cfg ProfileConfig) error {
 	return nil
 }
 
-// itoaSmall renders a small non-negative int without pulling strconv into
-// every error path's format string.
-func itoaSmall(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var b []byte
-	for n > 0 {
-		b = append([]byte{byte('0' + n%10)}, b...)
-		n /= 10
-	}
-	return string(b)
-}

@@ -2,7 +2,11 @@
 
 package civ
 
-import "strings"
+import (
+	"bytes"
+	"fmt"
+	"strings"
+)
 
 // The four structural bytes of a CI-V frame.
 //
@@ -154,23 +158,15 @@ func IsAcknowledgement(frame []byte) bool {
 // for. Hex pairs are also what every Icom document prints, so a diagnostic
 // line can be compared with the manual directly.
 func hexFrame(b []byte) string {
-	const digits = "0123456789abcdef"
-	var sb strings.Builder
-	sb.Grow(3 * len(b))
+	parts := make([]string, len(b))
 	for i, by := range b {
-		if i > 0 {
-			sb.WriteByte(' ')
-		}
-		sb.WriteByte(digits[by>>4])
-		sb.WriteByte(digits[by&0x0F])
+		parts[i] = fmt.Sprintf("%02x", by)
 	}
-	return sb.String()
+	return strings.Join(parts, " ")
 }
 
 // copyBytes returns an independent copy of b, so the result never aliases
 // b's backing array.
 func copyBytes(b []byte) []byte {
-	out := make([]byte, len(b))
-	copy(out, b)
-	return out
+	return bytes.Clone(b)
 }

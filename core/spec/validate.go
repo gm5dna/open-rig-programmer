@@ -4,7 +4,8 @@ package spec
 
 import (
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strings"
 )
 
@@ -23,16 +24,6 @@ func validSupport(s Support) bool {
 	default:
 		return false
 	}
-}
-
-// containsInt reports whether v appears in list.
-func containsInt(list []int, v int) bool {
-	for _, x := range list {
-		if x == v {
-			return true
-		}
-	}
-	return false
 }
 
 // validateVocab checks that a capability vocabulary list — ShiftOptions,
@@ -343,13 +334,7 @@ func (c Capabilities) Validate() error {
 		// Iterate Fields in a deterministic (sorted) order: map
 		// iteration order is randomised by Go, and this function's error
 		// message should not be.
-		fieldNames := make([]string, 0, len(b.Fields))
-		for f := range b.Fields {
-			fieldNames = append(fieldNames, string(f))
-		}
-		sort.Strings(fieldNames)
-		for _, fn := range fieldNames {
-			f := Field(fn)
+		for _, f := range slices.Sorted(maps.Keys(b.Fields)) {
 			fs := b.Fields[f]
 			if !validSupport(fs.Read) {
 				problems = append(problems, fmt.Sprintf("bank %s field %s: Read support %d is out of range", b.ID, f, fs.Read))
@@ -387,7 +372,7 @@ func (c Capabilities) Validate() error {
 		problems = append(problems, fmt.Sprintf("DefaultBaud %d must be greater than zero", c.DefaultBaud))
 	}
 
-	if !containsInt(c.Bauds, c.DefaultBaud) {
+	if !slices.Contains(c.Bauds, c.DefaultBaud) {
 		problems = append(problems, fmt.Sprintf("DefaultBaud %d is not present in Bauds %v", c.DefaultBaud, c.Bauds))
 	}
 
@@ -412,18 +397,9 @@ func (c Capabilities) Validate() error {
 	problems = append(problems, c.programTuningStepRangeProblems()...)
 
 	for _, requiredSlot := range c.RequiredSlots {
-		found := false
-		for _, bank := range c.Banks {
-			for _, slot := range bank.Slots {
-				if slot == requiredSlot {
-					found = true
-					break
-				}
-			}
-			if found {
-				break
-			}
-		}
+		found := slices.ContainsFunc(c.Banks, func(bank Bank) bool {
+			return slices.Contains(bank.Slots, requiredSlot)
+		})
 		if !found {
 			problems = append(problems, fmt.Sprintf("RequiredSlot %q not found in any bank's Slots", requiredSlot))
 		}

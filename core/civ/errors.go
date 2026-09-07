@@ -114,10 +114,7 @@ func (e *ParseError) Unwrap() error { return ErrParse }
 // newParseError builds a ParseError from the offending input, copying and
 // truncating it.
 func newParseError(input []byte, format string, args ...any) *ParseError {
-	n := len(input)
-	if n > maxParseErrorFrameLen {
-		n = maxParseErrorFrameLen
-	}
+	n := min(len(input), maxParseErrorFrameLen)
 	return &ParseError{Frame: copyBytes(input[:n]), Reason: fmt.Sprintf(format, args...)}
 }
 

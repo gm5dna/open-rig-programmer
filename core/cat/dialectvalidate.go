@@ -443,15 +443,10 @@ func validateShadowing(cfg DialectConfig) error {
 // whether it was all digits, mirroring classifySlot's own test rather than
 // re-deriving it differently.
 func decimalWire(wire string) (int, bool) {
-	if len(wire) != 3 {
+	if len(wire) != 3 || !allDigits([]byte(wire)) {
 		return 0, false
 	}
-	for i := 0; i < len(wire); i++ {
-		if wire[i] < '0' || wire[i] > '9' {
-			return 0, false
-		}
-	}
-	return int(wire[0]-'0')*100 + int(wire[1]-'0')*10 + int(wire[2]-'0'), true
+	return digitsAt(wire, 0, 3), true
 }
 
 // pmsWireInRange reports whether wire is a PMS form a dialect with slot

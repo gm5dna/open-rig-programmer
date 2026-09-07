@@ -6,7 +6,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"sort"
+	"slices"
+	"strings"
 )
 
 // Digest computes a hex-encoded SHA-256 digest over channels, canonicalised
@@ -77,11 +78,8 @@ import (
 // limitation here (and on RadioInfo.BaselineDigest) is the whole of the
 // mitigation, deliberately.
 func Digest(channels []Channel) string {
-	sorted := make([]Channel, len(channels))
-	copy(sorted, channels)
-	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].Slot < sorted[j].Slot
-	})
+	sorted := slices.Clone(channels)
+	slices.SortFunc(sorted, func(a, b Channel) int { return strings.Compare(a.Slot, b.Slot) })
 
 	b, err := json.Marshal(sorted)
 	if err != nil {
