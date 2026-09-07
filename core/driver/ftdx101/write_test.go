@@ -1209,7 +1209,7 @@ func TestRequestedFields_MembershipAndOrder(t *testing.T) {
 
 		gotTier := make([]spec.Field, len(tierRequestedFields))
 		for i, tr := range tierRequestedFields {
-			gotTier[i] = tr.field
+			gotTier[i] = tr.Field
 		}
 		if !slices.Equal(gotTier, wantTier) {
 			t.Errorf("tierRequestedFields names\n %v\nbut spec.AllFields() carries the tier-added\n %v\n(the two must be the same seventeen fields in the same order)", gotTier, wantTier)

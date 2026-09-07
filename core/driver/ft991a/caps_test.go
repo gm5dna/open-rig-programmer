@@ -759,7 +759,7 @@ func TestBankFieldMapsAreNotShared(t *testing.T) {
 // and a caller mutating one must never alter what the write gate enforces.
 func TestCloneCapabilities_IsADeepCopy(t *testing.T) {
 	base := CapabilitiesSimulated()
-	cp := cloneCapabilities(base)
+	cp := base.Clone()
 
 	cp.Banks[0].Slots[0] = "CLOBBERED"
 	cp.Banks[0].Fields[spec.FieldFrequency] = spec.FieldSupport{}
@@ -772,6 +772,6 @@ func TestCloneCapabilities_IsADeepCopy(t *testing.T) {
 
 	again := CapabilitiesSimulated()
 	if !reflect.DeepEqual(base, again) {
-		t.Error("mutating cloneCapabilities' product reached the original — the copy is not deep, and Session.Capabilities' defensive-copy guarantee rests on it")
+		t.Error("mutating Clone's product reached the original — the copy is not deep, and Session.Capabilities' defensive-copy guarantee rests on it")
 	}
 }
